@@ -41,6 +41,9 @@ function(check_submodules_present)
 endfunction()
 # check_submodules_present()
 
+set(GLM_ROOT_DIR "D:\\Lib\\vcpkg\\packages\\glm_x86-windows\\include")
+set(SDL2_PATH    "D:\\Lib\\vcpkg\\packages\\sdl2_x86-windows")
+
 # Dependencies
 find_package(OpenGL REQUIRED)
 find_package(SDL2 REQUIRED)
