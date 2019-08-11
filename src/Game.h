@@ -52,6 +52,11 @@ namespace LHScriptX
 class Script;
 }
 
+namespace Entities
+{
+class EntityManager;
+}
+
 namespace Video
 {
 class VideoPlayer;
@@ -101,6 +106,7 @@ class Game
 	std::unique_ptr<Water> _water;
 	std::unique_ptr<LHScriptX::Script> _scriptx;
 	std::unique_ptr<LHVM::LHVM> _lhvm;
+	std::unique_ptr<Entities::EntityManager> _ecs;
 
 	bool _wireframe;
 	bool _waterDebug;

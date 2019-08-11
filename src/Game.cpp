@@ -44,6 +44,7 @@
 #include <Graphics/Texture2D.h>
 #include <Graphics/VertexBuffer.h>
 #include <LHScriptX/Script.h>
+#include <Entities/EntityManager.h>
 #include <LHVMViewer.h>
 #include <glm/gtx/intersect.hpp>
 
@@ -72,7 +73,8 @@ void GLAPIENTRY MessageCallback(GLenum source, GLenum type, GLuint id, GLenum se
 Game::Game(int argc, char** argv):
     _running(true), _wireframe(false), _waterDebug(false), _timeOfDay(1.0f), _bumpmapStrength(1.0f), _smallBumpmapStrength(1.0f),
     _fileSystem(std::make_unique<FileSystem>()),
-    _shaderManager(std::make_unique<ShaderManager>())
+    _shaderManager(std::make_unique<ShaderManager>()),
+    _ecs(std::make_unique<Entities::EntityManager>())
 {
 	int windowWidth = 1280, windowHeight = 1024;
 	DisplayMode displayMode = DisplayMode::Windowed;
@@ -238,6 +240,8 @@ void Game::Run()
 
 void Game::drawScene(const Camera& camera, bool drawWater)
 {
+	//_ecs->Update();
+
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
