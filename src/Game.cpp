@@ -459,7 +459,7 @@ const std::string& Game::GetGamePath()
 
 		// no key? guess
 #ifdef _WIN32
-		sGamePath = std::string("C:\\Program Files (x86)\\Lionhead Studios Ltd\\Black & White");
+		sGamePath = std::string("D:\\Programs\\Lionhead Studios Ltd\\Black & White");
 #else
 		sGamePath = std::string("/mnt/windows/Program Files (x86/Lionhead Studios Ltd/Black & White");
 #endif // _WIN32
