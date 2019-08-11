@@ -41,14 +41,17 @@ function(check_submodules_present)
 endfunction()
 # check_submodules_present()
 
-set(GLM_ROOT_DIR "D:\\Lib\\vcpkg\\packages\\glm_x86-windows\\include")
-set(SDL2_PATH    "D:\\Lib\\vcpkg\\packages\\sdl2_x86-windows")
+set(GLEW_ROOT_DIR "D:\\Lib\\glew-2.1.0")
+set(SDL2_PATH "D:\\Lib\\SDL2-2.0.10")
+set(GLM_ROOT_DIR "D:\\Lib\\glm-0.9.9.5")
 
 # Dependencies
 find_package(OpenGL REQUIRED)
 find_package(SDL2 REQUIRED)
 find_package(GLEW2 REQUIRED)
-find_package(GLM REQUIRED)
+find_package(glm REQUIRED)
+
+set(GLEW_LIBRARY "D:\\Lib\\glew-2.1.0\\lib\\Release\\x64\\glew32s.lib")
 
 # Include git hash in source
 include(cmake/GetGitRevisionDescription.cmake)
