@@ -23,7 +23,18 @@
 #include <stdexcept>
 #include <stdint.h>
 
+constexpr size_t StrLen(const char* s) noexcept
+{
+	return *s ? 1 + StrLen(s + 1) : 0;
+}
+
 using namespace OpenBlack;
+
+struct G3DMeshes
+{
+	char magic[4];
+	uint32_t meshCount;
+};
 
 // Just enough for us to parse
 struct L3DSMiniHeader
@@ -31,16 +42,6 @@ struct L3DSMiniHeader
 	char magic[4];
 	uint32_t unknown;
 	uint32_t l3dSize;
-};
-
-struct G3DHiResTexture
-{
-	uint32_t size;
-	uint32_t id;
-	uint32_t type;
-
-	uint32_t dxSize;
-	// surface desc shit.
 };
 
 struct DDSurfaceDesc
@@ -51,83 +52,140 @@ struct DDSurfaceDesc
 	uint32_t width;
 };
 
-MeshPack::MeshPack(OSFile* file):
-    m_meshCount(0)
+struct G3DHiResTexture
 {
-	// LiOnHeAd and a block header, but we already know it's high res textures
-	file->Seek(8, LH_SEEK_MODE::Set);
+	uint32_t size;
+	uint32_t id;
+	uint32_t type;
 
-	int totalTextures = 110;
+	uint32_t dxSize;
+	DDSurfaceDesc dxSurfDesc;
+};
 
-	Textures = new GLuint[totalTextures];
-	glGenTextures(totalTextures, Textures);
+struct G3DBlockHeader
+{
+	char blockName[32];
+	uint32_t blockSize;
+};
 
-	for (int i = 0; i < totalTextures; i++)
+MeshPack::MeshPack(OSFile* file):
+    _meshCount(0)
+{
+	std::vector<char> fileData;
+	size_t size = file->Size();
+	fileData.resize(size);
+
+	// We now access the data using the vector's underlying array
+	const auto rawFileData = fileData.data();
+	file->Read(rawFileData, size);
+	file->Close();
+
+	const int totalTextures            = 110;
+	const auto modelMagic              = std::string("MKJC");
+	constexpr auto lionheadMagicLength = StrLen("LiOnHeAd");
+	auto* blockHeaderOffset            = rawFileData + lionheadMagicLength;
+	// The end of the contiguous array of file data
+	const auto rawFileDataEndOffset = &rawFileData[size - 1];
+
+	G3DMeshes* meshes        = nullptr;
+	G3DHiResTexture* texture = nullptr;
+
+	textures.insert(textures.end(), totalTextures, 0);
+	glGenTextures(totalTextures, textures.data());
+
+	// High resolution textures
+	for (auto i = 0; i < totalTextures; i++)
 	{
-		// skip block header
-		file->Seek(36, LH_SEEK_MODE::Current);
+		auto blockHeader           = reinterpret_cast<G3DBlockHeader*>(blockHeaderOffset);
+		const auto blockName       = std::string(blockHeader->blockName);
+		const auto dataAfterHeader = blockHeaderOffset + sizeof(G3DBlockHeader);
 
-		G3DHiResTexture* hiresTexture = new G3DHiResTexture;
-		file->Read(hiresTexture, sizeof(G3DHiResTexture));
+		texture = reinterpret_cast<G3DHiResTexture*>(dataAfterHeader);
 
-		void* surfaceDesc = malloc(hiresTexture->dxSize - 4);
-		file->Read(surfaceDesc, hiresTexture->dxSize - 4);
+		// Reset error flag before call
+		errno             = 0;
+		const uint32_t id = strtoul(blockHeader->blockName, nullptr, 16);
 
-		DDSurfaceDesc* desc = (DDSurfaceDesc*)surfaceDesc;
+		if (errno)
+		{
+			throw std::runtime_error("Invalid block header texture ID. Unable to parse as an integer");
+		}
 
-		glBindTexture(GL_TEXTURE_2D, Textures[hiresTexture->id - 1]);
+		assert(id == texture->id);
+		auto* desc       = static_cast<DDSurfaceDesc*>(&texture->dxSurfDesc);
+		auto descAddress = reinterpret_cast<uint8_t*>(&texture->dxSurfDesc + desc->size);
 
+		glBindTexture(GL_TEXTURE_2D, textures[texture->id - 1]);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-		if (hiresTexture->type == 1)
+		if (texture->type == 1)
 		{
 			glCompressedTexImage2DARB(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGBA_S3TC_DXT1_EXT,
-			                          desc->width, desc->height, 0, ((desc->width + 3) / 4) * ((desc->height + 3) / 4) * 8, (uint8_t*)surfaceDesc + desc->size);
+			                          desc->width, desc->height, 0, ((desc->width + 3) / 4) * ((desc->height + 3) / 4) * 8, descAddress);
 		}
-		else if (hiresTexture->type == 2)
+		else if (texture->type == 2)
 		{
 			glCompressedTexImage2DARB(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGBA_S3TC_DXT3_EXT,
-			                          desc->width, desc->height, 0, ((desc->width + 3) / 4) * ((desc->height + 3) / 4) * 16, (uint8_t*)surfaceDesc + desc->size);
+			                          desc->width, desc->height, 0, ((desc->width + 3) / 4) * ((desc->height + 3) / 4) * 16, descAddress);
+		}
+		else
+		{
+			throw std::runtime_error("Invalid G3D high resolution texture type");
 		}
 
-		free(surfaceDesc);
+		blockHeaderOffset += 36l + blockHeader->blockSize;
 	}
 
-	// each high res texture is actually a lionhead block...
-	// char textureid[32];
-	// uint32_t size;
-	// AWKWARD...............
-
-	LHSegment meshesSegment;
-	file->GetSegment("MESHES", &meshesSegment, true);
-
-	printf("Meshes Segment %s of %d bytes\n", meshesSegment.Name, meshesSegment.SegmentSize);
-
-	uint8_t* data         = (uint8_t*)meshesSegment.SegmentData;
-	uint32_t* meshCount   = (uint32_t*)(data + 4);
-	uint32_t* meshOffsets = (uint32_t*)(data + 8);
-
-	m_meshCount = *meshCount;
-
-	printf("%d meshes\n", *meshCount);
-
-	Models = new L3DModel*[*meshCount];
-
-	for (uint32_t i = 0; i < *meshCount; i++)
+	while (blockHeaderOffset < rawFileDataEndOffset)
 	{
-		L3DSMiniHeader* header = (L3DSMiniHeader*)(data + meshOffsets[i]);
+		const auto blockHeader     = reinterpret_cast<G3DBlockHeader*>(blockHeaderOffset);
+		const auto blockName       = std::string(blockHeader->blockName);
+		const auto dataAfterHeader = blockHeaderOffset + sizeof(G3DBlockHeader);
 
-		L3DModel* model = new L3DModel();
-		model->LoadFromL3D(data + meshOffsets[i], header->l3dSize, true);
+		if (blockName == "MESHES")
+		{
+			meshes                      = reinterpret_cast<G3DMeshes*>(dataAfterHeader);
+			constexpr auto stringLength = sizeof(meshes->magic) / sizeof(meshes->magic[0]);
+			std::string meshMagic(meshes->magic, stringLength);
 
-		Models[i] = model;
+			if (meshMagic != modelMagic)
+			{
+				throw std::runtime_error("Invalid G3D L3D Mesh magic header bytes");
+			}
+
+			if (meshes->meshCount != 626)
+			{
+				throw std::runtime_error("Invalid G3D L3D Mesh count");
+			}
+
+			auto* meshOffsets = reinterpret_cast<uint32_t*>(dataAfterHeader + sizeof(G3DMeshes));
+
+			for (uint32_t i = 0; i < meshes->meshCount; i++)
+			{
+				const auto header = reinterpret_cast<L3DSMiniHeader*>(dataAfterHeader + meshOffsets[i]);
+				auto model = std::make_shared<SkinnedModel>();
+				auto* modelData   = dataAfterHeader + meshOffsets[i];
+				model->LoadFromL3D(modelData, header->l3dSize);
+				models.push_back(model);
+			}
+		}
+		else if (blockName == "INFO")
+		{
+			// Skip
+		}
+		else if (blockName == "LOW")
+		{
+			// Low resolution textures; skipping
+		}
+
+		blockHeaderOffset += 36l + blockHeader->blockSize;
 	}
 }
 
 uint32_t MeshPack::GetMeshCount()
 {
-	return m_meshCount;
+	return _meshCount;
 }

@@ -60,10 +60,10 @@ void MeshViewer::GUI()
 
 	ImGui::Separator();
 
-	L3DModel* model = GetCurrentModel();
+	SkinnedModel* model = GetCurrentModel();
 	if (model != nullptr)
 	{
-		ImGui::Text("# Submeshes: %d", model->GetSubMeshCount());
+		//ImGui::Text("# Submeshes: %d", model->GetSubMeshCount());
 	}
 
 	ImGui::End();
@@ -71,16 +71,16 @@ void MeshViewer::GUI()
 
 void MeshViewer::Render()
 {
-	L3DModel* model = GetCurrentModel();
+	SkinnedModel* model = GetCurrentModel();
 	if (model == nullptr)
 	{
 		return;
 	}
 
-	model->Draw();
+	//model->Draw();
 }
 
-L3DModel* MeshViewer::GetCurrentModel()
+SkinnedModel* MeshViewer::GetCurrentModel()
 {
 	MeshPack meshPack = Game::instance()->GetMeshPack();
 
@@ -89,5 +89,5 @@ L3DModel* MeshViewer::GetCurrentModel()
 		return nullptr;
 	}
 
-	return meshPack.Models[m_currentMesh];
+	return meshPack.models[m_currentMesh].get();
 }

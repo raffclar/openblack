@@ -18,51 +18,52 @@
  * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <3D/MeshPack.h>
 #include <3D/SkinnedModel.h>
 #include <Common/OSFile.h>
-#include <stdexcept>
-#include <stdint.h>
-
+#include <Game.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/transform.hpp>
+#include <stdexcept>
+#include <stdint.h>
 
 using namespace OpenBlack;
 using namespace OpenBlack::Graphics;
 
 enum class L3DFlag : uint32_t
 {
-	Unknown1 = 1 << 0,
-	Unknown2 = 1 << 1,
-	Unknown3 = 1 << 2,
-	Unknown4 = 1 << 3,
-	Unknown5 = 1 << 4,
-	Unknown6 = 1 << 5,
-	Unknown7 = 1 << 6,
-	Unknown8 = 1 << 7,
-	HasBones = 1 << 8,
-	Unknown10 = 1 << 9,
-	Unknown11 = 1 << 10,
-	Unknown12 = 1 << 11,
-	Unknown13 = 1 << 12,
-	NoDraw = 1 << 13,
-	Unknown15 = 1 << 14,
+	Unknown1                 = 1 << 0,
+	Unknown2                 = 1 << 1,
+	Unknown3                 = 1 << 2,
+	Unknown4                 = 1 << 3,
+	Unknown5                 = 1 << 4,
+	Unknown6                 = 1 << 5,
+	Unknown7                 = 1 << 6,
+	Unknown8                 = 1 << 7,
+	HasBones                 = 1 << 8,
+	Unknown10                = 1 << 9,
+	Unknown11                = 1 << 10,
+	Unknown12                = 1 << 11,
+	Unknown13                = 1 << 12,
+	NoDraw                   = 1 << 13,
+	Unknown15                = 1 << 14,
 	ContainsLandscapeFeature = 1 << 15,
-	Unknown17 = 1 << 16,
-	Unknown18 = 1 << 17,
-	ContainsUV2 = 1 << 18,
-	ContainsNameData = 1 << 19,
-	ContainsExtraMetrics = 1 << 20,
-	ContainsEBone = 1 << 21,
-	ContainsTnLData = 1 << 22,
-	ContainsNewEP = 1 << 23,
-	Unknown25 = 1 << 24,
-	Unknown26 = 1 << 25,
-	Unknown27 = 1 << 26,
-	Unknown28 = 1 << 27,
-	Unknown29 = 1 << 28,
-	Unknown30 = 1 << 29,
-	Unknown31 = 1 << 30,
+	Unknown17                = 1 << 16,
+	Unknown18                = 1 << 17,
+	ContainsUV2              = 1 << 18,
+	ContainsNameData         = 1 << 19,
+	ContainsExtraMetrics     = 1 << 20,
+	ContainsEBone            = 1 << 21,
+	ContainsTnLData          = 1 << 22,
+	ContainsNewEP            = 1 << 23,
+	Unknown25                = 1 << 24,
+	Unknown26                = 1 << 25,
+	Unknown27                = 1 << 26,
+	Unknown28                = 1 << 27,
+	Unknown29                = 1 << 28,
+	Unknown30                = 1 << 29,
+	Unknown31                = 1 << 30,
 };
 
 struct L3DHeader
@@ -216,7 +217,7 @@ void SkinnedModel::LoadFromL3D(void* data_, size_t size)
 			VertexBuffer* vertexBuffer = new VertexBuffer(verts.data(), subMesh->numVerticies, sizeof(SkinnedModel_Vertex));
 			IndexBuffer* indexBuffer   = new IndexBuffer(trianglesOffset, subMesh->numTriangles * 3, GL_UNSIGNED_SHORT);
 
-			_submeshes.emplace_back(std::make_unique<Mesh>(vertexBuffer, indexBuffer, decl));
+			_submeshes.push_back(std::make_unique<Mesh>(vertexBuffer, indexBuffer, decl));
 			_submeshSkinMap[sm] = subMesh->skinID;
 		}
 
@@ -255,7 +256,7 @@ void SkinnedModel::LoadFromL3D(void* data_, size_t size)
 		break;
 	}
 
-	// Inside packed meshes, there are no skins.
+	// Inside packed meshes, there are no skins
 	uint32_t* skinOffsets = (uint32_t*)(buffer + header->skinListOffset);
 
 	for (uint32_t s = 0; s < header->numSkins; s++)
@@ -268,13 +269,25 @@ void SkinnedModel::LoadFromL3D(void* data_, size_t size)
 void SkinnedModel::Draw(ShaderProgram* program)
 {
 	program->SetUniformValue("u_boneMatrices[0]", _boneMatrices.size(), _boneMatrices.data());
+	auto& textureBinds = Game::instance()->GetMeshPack().textures;
 
 	for (size_t i = 0; i < _submeshes.size(); i++)
 	{
 		if (_textures[_submeshSkinMap[i]] != nullptr)
+		{
 			_textures[_submeshSkinMap[i]]->Bind(0);
-
-		_submeshes[i]->Draw();
+			_submeshes[i]->Draw();
+		}
+		else if (i < textureBinds.size())
+		{
+			//auto index       = _submeshSkinMap[i];
+			//auto textureBind = textureBinds[index];
+			//glBindTexture(GL_TEXTURE_2D, textureBind);
+			glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+			_submeshes[i]->Draw();
+			glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+			//glBindTexture(GL_TEXTURE_2D, GL_NONE);
+		}
 	}
 }
 

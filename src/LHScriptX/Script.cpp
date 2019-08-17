@@ -23,6 +23,8 @@
 #include <LHScriptX/Lexer.h>
 #include <LHScriptX/Script.h>
 #include <iostream>
+#include <Entities/EntityManager.h>
+#include <3D/LandIsland.h>
 
 using namespace OpenBlack;
 using namespace OpenBlack::LHScriptX;
@@ -115,6 +117,19 @@ void Script::runCommand(const std::string& identifier, const std::vector<Token>&
 	// todo handle this
 	if (command_signature == nullptr)
 		return;
+
+	if (command_signature->name == std::string("CREATE_VILLAGER_POS"))
+	{
+		auto coords = args[0].StringValue();
+		auto ecs = _game->GetEntityManager();
+		auto pos = coords.find_first_of(',');
+		auto first = std::stof(coords.substr(pos + 1));
+		auto last  = std::stof(coords.substr(0, pos));
+		auto island = _game->GetLandIsland();
+		auto _modelPosition = glm::vec2(last, first);
+		ecs->DebugCreateEntities(last, island->GetHeightAt(_modelPosition) + 17, first);
+
+	}
 
 	// turn tokens into parameters
 

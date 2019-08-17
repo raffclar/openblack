@@ -1,10 +1,10 @@
-#include <Entities/Component.h>
+#pragma once
+#include <Entities/Components/Component.h>
 
 namespace OpenBlack
 {
 namespace Entities
 {
-
 enum class VillageEthnicities
 {
 	GLOBAL,
@@ -35,11 +35,26 @@ enum class VillagerTasks
 
 class Villager: Component
 {
-  private:
+public:
+	explicit Villager(EntityId id, VillageEthnicities ethnicity, VillagerTypes role, VillagerTasks task, uint32_t age, uint32_t health, uint32_t hunger)
+		: Component(id),
+		  _ethnicity(ethnicity),
+		  _role(role),
+		  _task(task),
+		  _age(age),
+		  _health(health),
+		  _hunger(hunger)
+	{
+	}
+
+private:
+	VillageEthnicities _ethnicity;
+	VillagerTypes _role;
+	VillagerTasks _task;
+
 	uint32_t _age;
 	uint32_t _health;
 	uint32_t _hunger;
-	VillagerTasks _task;
 };
 } // namespace Entities
 } // namespace OpenBlack

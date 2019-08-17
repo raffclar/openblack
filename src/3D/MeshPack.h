@@ -25,21 +25,22 @@
 #include <3D/L3DModel.h>
 #include <Common/OSFile.h>
 #include <Graphics/Texture2DArray.h>
+#include "SkinnedModel.h"
 
 namespace OpenBlack
 {
 class MeshPack
 {
-  public:
+public:
 	MeshPack(OSFile* allMeshes);
 
-	L3DModel** Models;
-	GLuint* Textures;
+	std::vector<std::shared_ptr<SkinnedModel>> models;
+	std::vector<GLuint> textures;
 
 	uint32_t GetMeshCount();
 
-  private:
-	uint32_t m_meshCount;
+private:
+	uint32_t _meshCount;
 };
 } // namespace OpenBlack
 

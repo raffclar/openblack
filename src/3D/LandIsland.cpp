@@ -37,7 +37,7 @@ const float LandIsland::CellSize   = 10.0f;
 LandIsland::LandIsland():
     _lowresCount(0), _materialCount(0), _blockIndexLookup { 0 }, _noiseMap(nullptr)
 {
-	auto file           = Game::instance()->GetFileSystem().Open("Data/Textures/smallbumpa.raw", FileMode::Read);
+	auto file           = Game::instance()->GetFileSystem().Open("Data/textures/smallbumpa.raw", FileMode::Read);
 	uint8_t* smallbumpa = new uint8_t[file->Size()];
 	file->Read(smallbumpa, file->Size());
 	file->Close();
@@ -207,7 +207,7 @@ void LandIsland::convertRGB5ToRGB8(uint16_t* rgba5, uint32_t* rgba8, size_t pixe
 }
 
 /*
-	Dumps Textures from VRAM using a FBO (Works on OpenGL 3.2+)
+	Dumps textures from VRAM using a FBO (Works on OpenGL 3.2+)
 	A better way would be glGetTexSubImage from OpenGL 4.5.
 */
 void LandIsland::DumpTextures()

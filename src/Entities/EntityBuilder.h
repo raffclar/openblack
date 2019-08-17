@@ -1,20 +1,26 @@
-#include <Entities/Components/Component.h>
+#include <Entities/EntityId.h>
 #include <Entities/Components/Villager.h>
+#include <optional>
 
 namespace OpenBlack
 {
 namespace Entities
 {
-
 class EntityBuilder
 {
   public:
-	EntityBuilder SetBuilding(VillageEthnicities ethnicity);
-	EntityBuilder SetVillager(VillageEthnicities ethnicity, VillagerType type, uint32_t age);
-	EntityBuilder SetPosition();
+	EntityBuilder& SetBuilding(VillageEthnicities ethnicity);
+	EntityBuilder& SetVillager(VillageEthnicities ethnicity, VillagerTypes type, uint32_t age);
+	EntityBuilder& SetPosition();
 	EntityId Create();
+
+	struct EntityResult
+	{
+		EntityId id;
+		std::optional<Villager> villager;
+	};
   private:
-	EntityManager _entityManager;
+	
 };
 } // namespace Entities
 } // namespace OpenBlack

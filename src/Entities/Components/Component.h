@@ -8,7 +8,18 @@ namespace Entities
 {
 class Component
 {
-  private:
+public:
+	explicit Component(EntityId entityId):
+		_entity(entityId)
+	{
+	}
+
+	EntityId getEntityId()
+	{
+		return _entity;
+	}
+
+private:
 	EntityId _entity;
 };
 } // namespace Entities

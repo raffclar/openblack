@@ -38,7 +38,7 @@ class MeshViewer
   private:
 	int m_currentMesh;
 
-	L3DModel* GetCurrentModel();
+	SkinnedModel* GetCurrentModel();
 };
 } // namespace OpenBlack
 

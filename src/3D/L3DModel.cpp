@@ -242,7 +242,7 @@ void L3DModel::Draw()
 		if (m_bPackedMesh)
 		{
 			MeshPack meshPack = Game::instance()->GetMeshPack();
-			glBindTexture(GL_TEXTURE_2D, meshPack.Textures[_submeshSkinIds[subMesh] - 1]);
+			glBindTexture(GL_TEXTURE_2D, meshPack.textures[_submeshSkinIds[subMesh] - 1]);
 			_submeshes[subMesh]->Draw();
 			glBindTexture(GL_TEXTURE_2D, GL_NONE);
 		}

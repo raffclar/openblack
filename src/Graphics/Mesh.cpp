@@ -80,10 +80,20 @@ const GLuint Mesh::GetType() const noexcept
 void Mesh::Draw()
 {
 	glBindVertexArray(_vao);
+
+	auto ic = (_indexBuffer != nullptr) ? _indexBuffer->GetSize() : 0;
+	auto vc = _vertexBuffer->GetVertexCount();
+
 	if (_indexBuffer != nullptr && _indexBuffer->GetCount() > 0)
 		glDrawElements(_type, _indexBuffer->GetCount(), _indexBuffer->GetType(), 0);
 	else
 		glDrawArrays(_type, 0, _vertexBuffer->GetVertexCount());
+
+	GLenum e = 0;
+	while (e = glGetError())
+	{
+		printf("AA");
+	}
 }
 
 void Mesh::bindVertexDecl()

@@ -20,12 +20,6 @@
 
 #include "Game.h"
 
-#include <SDL.h>
-#include <glm/glm.hpp>
-#include <glm/gtc/type_ptr.hpp>
-#include <iostream>
-#include <sstream>
-#include <string>
 #include "GitSHA1.h"
 
 #include <3D/Camera.h>
@@ -37,6 +31,7 @@
 #include <Common/CmdLineArgs.h>
 #include <Common/FileSystem.h>
 #include <Common/OSFile.h>
+#include <Entities/EntityManager.h>
 #include <Graphics/DebugDraw.h>
 #include <Graphics/IndexBuffer.h>
 #include <Graphics/ShaderManager.h>
@@ -44,11 +39,18 @@
 #include <Graphics/Texture2D.h>
 #include <Graphics/VertexBuffer.h>
 #include <LHScriptX/Script.h>
-#include <Entities/EntityManager.h>
 #include <LHVMViewer.h>
+#include <SDL.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/intersect.hpp>
+#include <iostream>
+#include <sstream>
+#include <string>
 
 #define IMGUI_IMPL_OPENGL_LOADER_GLEW
+
+#include "AllMeshes.h"
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_impl_opengl3.h>
@@ -113,7 +115,6 @@ Game::Game(int argc, char** argv):
 
 	// allocate vertex buffers for our debug draw
 	DebugDraw::Init();
-
 	sInstance = this;
 }
 
@@ -136,7 +137,30 @@ void Game::Run()
 	_modelRotation = glm::vec3(180.0f, 111.0f, 0.0f);
 	_modelScale    = glm::vec3(0.5f);
 
+	OSFile file   = OSFile();
+	auto meshPath = GetGamePath() + "/Data/AllMeshes.g3d";
+	file.Open(meshPath.c_str(), LH_FILE_MODE::Read);
+	_meshPack = std::make_unique<MeshPack>(&file);
+
 	//_videoPlayer = std::make_unique<Video::VideoPlayer>(GetGamePath() + "/Data/logo.bik");
+
+	auto meshPack = GetMeshPack();
+
+	size_t offset = 0;
+
+	for (int i = 0; i < sizeof(gG3DStringList) / sizeof(gG3DStringList[0]); i++)
+	{
+		auto str = gG3DStringList[i];
+
+		if (str == "MSH_B_AMCN_WONDER")
+		{
+			offset = i;
+			break;
+		}
+	}
+
+	std::shared_ptr<SkinnedModel> skinnedModel();
+	
 
 	_testModel = std::make_unique<SkinnedModel>();
 	_testModel->LoadFromFile(GetGamePath() + "/Data/CreatureMesh/C_Tortoise_Base.l3d");
@@ -235,13 +259,12 @@ void Game::Run()
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
 		_window->SwapWindow();
+		this->_ecs->Update();
 	}
 }
 
 void Game::drawScene(const Camera& camera, bool drawWater)
 {
-	//_ecs->Update();
-
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -285,9 +308,9 @@ void Game::drawScene(const Camera& camera, bool drawWater)
 	glm::mat4 modelMatrix = glm::mat4(1.0f);
 	modelMatrix           = glm::translate(modelMatrix, _modelPosition);
 
-	modelMatrix = glm::rotate(modelMatrix, glm::radians(_modelRotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-	modelMatrix = glm::rotate(modelMatrix, glm::radians(_modelRotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-	modelMatrix = glm::rotate(modelMatrix, glm::radians(_modelRotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+	//modelMatrix = glm::rotate(modelMatrix, glm::radians(_modelRotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+	//modelMatrix = glm::rotate(modelMatrix, glm::radians(_modelRotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+	//modelMatrix = glm::rotate(modelMatrix, glm::radians(_modelRotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
 
 	modelMatrix = glm::scale(modelMatrix, _modelScale);
 
@@ -295,7 +318,8 @@ void Game::drawScene(const Camera& camera, bool drawWater)
 	objectShader->Bind();
 	objectShader->SetUniformValue("u_viewProjection", camera.GetViewProjectionMatrix());
 	objectShader->SetUniformValue("u_modelTransform", modelMatrix);
-	_testModel->Draw(objectShader);
+	//_testModel->Draw(objectShader);
+	_ecs->DrawModels(camera, *_shaderManager);
 
 	glDisable(GL_CULL_FACE);
 }

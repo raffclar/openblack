@@ -80,12 +80,13 @@ class Game
 	MeshPack& GetMeshPack() { return *_meshPack; }
 	FileSystem& GetFileSystem() { return *_fileSystem; }
 	Graphics::ShaderManager& GetShaderManager() { return *_shaderManager; }
+	Entities::EntityManager* GetEntityManager() { return _ecs.get(); }
+	LandIsland* GetLandIsland() { return _landIsland.get(); }
 
 	static Game* instance()
 	{
 		return sInstance;
 	}
-
   private:
 	void drawScene(const Camera& camera, bool drawWater);
 

@@ -27,11 +27,15 @@
 #include <Graphics/Texture2D.h>
 #include <glm/gtc/quaternion.hpp>
 #include <map>
+#include <utility>
 
 using namespace OpenBlack::Graphics;
 
 namespace OpenBlack
 {
+
+typedef uint32_t SkinId;
+
 class SkinnedModel
 {
   public:
@@ -45,8 +49,9 @@ class SkinnedModel
   private:
 	uint32_t _flags;
 
-	std::map<uint32_t, std::unique_ptr<Texture2D>> _textures;
-	std::map<uint32_t, uint32_t> _submeshSkinMap;
+	std::map<SkinId, std::unique_ptr<Texture2D>> _textures;
+	// Map submesh index to their required skin IDs
+	std::map<uint32_t, SkinId> _submeshSkinMap;
 	std::vector<std::unique_ptr<Mesh>> _submeshes;
 
 	struct SkinnedModel_Bone
