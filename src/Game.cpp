@@ -159,9 +159,6 @@ void Game::Run()
 		}
 	}
 
-	std::shared_ptr<SkinnedModel> skinnedModel();
-	
-
 	_testModel = std::make_unique<SkinnedModel>();
 	_testModel->LoadFromFile(GetGamePath() + "/Data/CreatureMesh/C_Tortoise_Base.l3d");
 
@@ -314,14 +311,17 @@ void Game::drawScene(const Camera& camera, bool drawWater)
 
 	modelMatrix = glm::scale(modelMatrix, _modelScale);
 
+
 	ShaderProgram* objectShader = _shaderManager->GetShader("SkinnedMesh");
 	objectShader->Bind();
 	objectShader->SetUniformValue("u_viewProjection", camera.GetViewProjectionMatrix());
 	objectShader->SetUniformValue("u_modelTransform", modelMatrix);
 	//_testModel->Draw(objectShader);
-	_ecs->DrawModels(camera, *_shaderManager);
 
 	glDisable(GL_CULL_FACE);
+
+	_ecs->DrawModels(camera, *_shaderManager);
+
 }
 
 void Game::guiLoop()
