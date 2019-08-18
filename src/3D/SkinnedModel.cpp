@@ -281,7 +281,7 @@ void SkinnedModel::Draw(ShaderProgram* program)
 			auto index       = _submeshSkinMap[i];
 
 			// skip
-			if (index = 0xFFFFFFFF)
+			if (index == -1)
 				continue;
 
 			auto textureBind = textureBinds[index - 1];
