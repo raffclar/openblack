@@ -256,7 +256,7 @@ void Game::Run()
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
 		_window->SwapWindow();
-		this->_ecs->Update();
+		this->_ecs->DrawModels(*_camera, *_shaderManager);
 	}
 }
 
