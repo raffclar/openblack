@@ -23,20 +23,7 @@ void EntityManager::DebugCreateEntities(float x, float y, float z)
 	auto game = Game::instance();
 	auto meshPack = game->GetMeshPack();
 
-	size_t offset = 0;
-
-	for (int i = 0; i < sizeof(gG3DStringList) / sizeof(gG3DStringList[0]); i++)
-	{
-		auto str = gG3DStringList[i];
-
-		if (str == std::string("MSH_F_CREATURE_CAVE"))
-		{
-			offset = i;
-			break;
-		}
-	}
-
-	std::shared_ptr<SkinnedModel> skinnedModel(meshPack.models[offset]);
+	std::shared_ptr<SkinnedModel> skinnedModel(meshPack.models[0]);
 
 	auto id       = _villagerComponents.size();
 	auto villager = Villager(id, VillageEthnicities::CELTIC, VillagerTypes::FARMER, VillagerTasks::IDLE, 18, 100, 0);
@@ -54,7 +41,7 @@ void EntityManager::DrawModels(const Camera& camera, ShaderManager& shaderManage
 
 		auto _modelPosition = glm::vec3(marker.x, marker.y, marker.z);
 		auto _modelRotation = glm::vec3(180.0f, 111.0f, 0.0f);
-		auto _modelScale    = glm::vec3(0.5f);
+		auto _modelScale    = glm::vec3(2.5f);
 
 		auto model            = com.GetModel();
 		glm::mat4 modelMatrix = glm::mat4(1.0f);
