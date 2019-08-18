@@ -193,8 +193,6 @@ void SkinnedModel::LoadFromL3D(void* data_, size_t size)
 			L3D_Triangle* trianglesOffset = static_cast<L3D_Triangle*>((void*)(buffer + subMesh->trianglesOffset));
 			LH3D_BoneVert* boneVertOffset = static_cast<LH3D_BoneVert*>((void*)(buffer + subMesh->boneVertLUTOffset));
 
-			//Mesh* sub = new Mesh();
-
 			VertexDecl decl(4);
 			decl[0] = VertexAttrib(0, 3, GL_FLOAT, false, false, sizeof(SkinnedModel_Vertex), (GLvoid*)offsetof(SkinnedModel_Vertex, pos));
 			decl[1] = VertexAttrib(1, 2, GL_FLOAT, false, false, sizeof(SkinnedModel_Vertex), (GLvoid*)offsetof(SkinnedModel_Vertex, uv));
@@ -280,12 +278,11 @@ void SkinnedModel::Draw(ShaderProgram* program)
 		}
 		else if (i < textureBinds.size())
 		{
-			//auto index       = _submeshSkinMap[i];
-			//auto textureBind = textureBinds[index];
-			//glBindTexture(GL_TEXTURE_2D, textureBind);
-			glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+			auto index       = _submeshSkinMap[i];
+			auto textureBind = textureBinds[index];
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, textureBind);
 			_submeshes[i]->Draw();
-			glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 			//glBindTexture(GL_TEXTURE_2D, GL_NONE);
 		}
 	}
