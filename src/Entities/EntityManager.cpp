@@ -1,49 +1,44 @@
 #include "EntityManager.h"
 
-#include "AllMeshes.h"
 
 #include <3D/Camera.h>
 #include <3D/MeshPack.h>
-#include <Entities/Components/Villager.h>
 #include <Game.h>
 #include <Graphics/ShaderManager.h>
 #include <vector>
+#include <Entities/Components/Transform.h>
+#include <Entities/Components/Model.h>
+#include <Entities/Components/Villager.h>
 
 namespace OpenBlack::Entities
 {
-void EntityManager::AddVillager(EntityId id, Villager villager, Model model, Marker marker)
-{
-	_villagerComponents.insert(std::make_pair(id, villager));
-	_modelComponents.insert(std::make_pair(id, model));
-	_markerComponents.insert(std::make_pair(id, marker));
-}
 
 void EntityManager::DebugCreateEntities(float x, float y, float z)
 {
-	auto game = Game::instance();
-	auto meshPack = game->GetMeshPack();
-
-	std::shared_ptr<SkinnedModel> skinnedModel(meshPack.models[0]);
-
-	auto id       = _villagerComponents.size();
-	auto villager = Villager(id, VillageEthnicities::CELTIC, VillagerTypes::FARMER, VillagerTasks::IDLE, 18, 100, 0);
-	auto model    = Model(id, skinnedModel);
-	auto marker   = Marker(id, x, y, z);
-	AddVillager(id, villager, model, marker);
+	auto entity = _registry.create();
+	_registry.assign<Transform>(entity, x, y, z, 2.5f, 180.0f, 111.0f, 0.0f);
+	uint32_t meshId = 0;
+	_registry.assign<Model>(entity, meshId);
+	uint32_t health = 100;
+	uint32_t age = 18;
+	uint32_t hunger = 100;
+	_registry.assign<Villager>(entity, health, age, hunger);
 }
 
 void EntityManager::DrawModels(const Camera& camera, ShaderManager& shaderManager)
 {
-	for (const auto& kv : _modelComponents)
-	{
-		auto com    = kv.second;
-		auto marker = _markerComponents.find(com.getEntityId())->second;
+	auto meshPack = Game::instance()->GetMeshPack();
+	auto view = _registry.view<Model, Transform>();
 
-		auto _modelPosition = glm::vec3(marker.x, marker.y, marker.z);
+	for (auto entity : view)
+	{
+		auto& model = view.get<Model>(entity);
+		auto& position = view.get<Transform>(entity);
+
+		auto _modelPosition = glm::vec3(position.x, position.y, position.z);
 		auto _modelRotation = glm::vec3(180.0f, 111.0f, 0.0f);
 		auto _modelScale    = glm::vec3(2.5f);
 
-		auto model            = com.GetModel();
 		glm::mat4 modelMatrix = glm::mat4(1.0f);
 		modelMatrix           = glm::translate(modelMatrix, _modelPosition);
 
@@ -57,57 +52,8 @@ void EntityManager::DrawModels(const Camera& camera, ShaderManager& shaderManage
 		objectShader->Bind();
 		objectShader->SetUniformValue("u_viewProjection", camera.GetViewProjectionMatrix());
 		objectShader->SetUniformValue("u_modelTransform", modelMatrix);
-		model->Draw(objectShader);
-	}
-}
 
-void EntityManager::Update()
-{
-	RemoveInactive();
-}
-
-void EntityManager::RemoveInactive()
-{
-	std::vector<EntityId> to_remove;
-
-	for (const auto& kv : _entities)
-	{
-		auto id     = kv.first;
-		auto entity = kv.second;
-
-		if (!entity.active)
-		{
-			to_remove.push_back(id);
-		}
-	}
-
-	for (const auto& id : to_remove)
-	{
-		_entities.erase(id);
-		_villagerComponents.erase(id);
-		_buildingComponents.erase(id);
-		_modelComponents.erase(id);
-		_markerComponents.erase(id);
-	}
-}
-
-void EntityManager::UpdateVillagers()
-{
-	for (const auto& kv : _villagerComponents)
-	{
-		auto com = kv.second;
-		// Update age
-		// Update health
-		// Update hunger
-		// Update task
-	}
-}
-
-void EntityManager::UpdateBuildings()
-{
-	for (const auto& kv : _buildingComponents)
-	{
-		auto com = kv.second;
+		meshPack.models[model.meshId]->Draw(objectShader);
 	}
 }
 
