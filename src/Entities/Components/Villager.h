@@ -1,10 +1,5 @@
-#pragma once
-#include <Entities/Components/Component.h>
+#include <cstdint>
 
-namespace OpenBlack
-{
-namespace Entities
-{
 enum class VillageEthnicities
 {
 	GLOBAL,
@@ -33,28 +28,9 @@ enum class VillagerTasks
 	IDLE
 };
 
-class Villager: Component
+struct Villager
 {
-public:
-	explicit Villager(EntityId id, VillageEthnicities ethnicity, VillagerTypes role, VillagerTasks task, uint32_t age, uint32_t health, uint32_t hunger)
-		: Component(id),
-		  _ethnicity(ethnicity),
-		  _role(role),
-		  _task(task),
-		  _age(age),
-		  _health(health),
-		  _hunger(hunger)
-	{
-	}
-
-private:
-	VillageEthnicities _ethnicity;
-	VillagerTypes _role;
-	VillagerTasks _task;
-
-	uint32_t _age;
-	uint32_t _health;
-	uint32_t _hunger;
+	uint32_t health;
+	uint32_t age;
+	uint32_t hunger;
 };
-} // namespace Entities
-} // namespace OpenBlack

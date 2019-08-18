@@ -1,26 +1,6 @@
-#pragma once
-#include <3D/SkinnedModel.h>
-#include <Entities/Components/Component.h>
+#include <cstdint>
 
-namespace OpenBlack
+struct Model
 {
-namespace Entities
-{
-class Model: public Component
-{
-public:
-	explicit Model(EntityId entityId, std::shared_ptr<SkinnedModel> model):
-		Component(entityId), _model(model)
-	{
-	}
-
-	std::shared_ptr<SkinnedModel> GetModel()
-	{
-		return _model;
-	}
-
-private:
-	std::shared_ptr<SkinnedModel> _model;
+	uint32_t meshId;
 };
-} // namespace Entities
-} // namespace OpenBlack
