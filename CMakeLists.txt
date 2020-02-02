@@ -54,11 +54,13 @@ if(CMAKE_VERSION VERSION_GREATER 3.15 OR CMAKE_VERSION VERSION_EQUAL 3.15)
   find_package(glm REQUIRED)
   find_package(EnTT 3.7.0 CONFIG REQUIRED) # only available as a config
   find_package(cxxopts REQUIRED)
+  find_package(Bullet REQUIRED)
 else()
   find_package(spdlog 1.3.0 CONFIG QUIET)
   find_package(glm CONFIG QUIET)
   find_package(EnTT 3.7.0 CONFIG REQUIRED) # only available as a config
   find_package(cxxopts CONFIG REQUIRED)
+  find_package(bullet CONFIG REQUIRED)
 
   if(NOT DEFINED spdlog_DIR)
     find_package(spdlog 1.3.0 MODULE REQUIRED)
@@ -70,6 +72,10 @@ else()
 
   if(NOT DEFINED cxxopts_DIR)
     find_package(cxxopts MODULE REQUIRED)
+  endif()
+
+  if(NOT DEFINED bullet_DIR)
+    find_package(bullet MODULE REQUIRED)
   endif()
 endif()
 
