@@ -16,6 +16,9 @@
 
 #include <cstdint>
 
+class btBvhTriangleMeshShape;
+class btRigidBody;
+
 namespace openblack
 {
 
@@ -42,6 +45,11 @@ struct LandVertex
 
 class LandIsland;
 
+namespace dynamics
+{
+class LandBlockBulletMeshInterface;
+}
+
 class LandBlock
 {
 public:
@@ -57,6 +65,9 @@ public:
 private:
 	std::unique_ptr<lnd::LNDBlock> _block;
 	std::unique_ptr<graphics::Mesh> _mesh;
+	std::unique_ptr<dynamics::LandBlockBulletMeshInterface> _dynamics_mesh_interface;
+	std::unique_ptr<btBvhTriangleMeshShape> _physics_mesh;
+	std::unique_ptr<btRigidBody> _rigid_body;
 
 	const bgfx::Memory* buildVertexList(LandIsland& island);
 

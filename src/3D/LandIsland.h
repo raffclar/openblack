@@ -21,6 +21,11 @@
 namespace openblack
 {
 
+namespace dynamics
+{
+class DynamicsSystem;
+}
+
 namespace lnd
 {
 struct LNDCountry;
@@ -36,6 +41,8 @@ public:
 	~LandIsland();
 
 	void LoadFromFile(const std::string& filename);
+
+	void RegisterRigidBodies(dynamics::DynamicsSystem& dynamics);
 
 	[[nodiscard]] float GetHeightAt(glm::vec2) const;
 	[[nodiscard]] const LandBlock* GetBlock(const glm::u8vec2& coordinates) const;

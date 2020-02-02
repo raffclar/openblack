@@ -13,8 +13,11 @@
 #include "Common/FileSystem.h"
 #include "Common/IStream.h"
 #include "Common/stb_image_write.h"
+#include "Dynamics/DynamicsSystem.h"
+#include "Dynamics/LandBlockBulletMeshInterface.h"
 #include "Game.h"
 
+#include <BulletDynamics/Dynamics/btRigidBody.h>
 #include <spdlog/spdlog.h>
 
 #include <LNDFile.h>
@@ -193,4 +196,12 @@ void LandIsland::DumpMaps() const
 	fclose(fptr);
 
 	delete[] data;
+}
+
+void LandIsland::RegisterRigidBodies(dynamics::DynamicsSystem& dynamics)
+{
+	for (auto& block : _landBlocks)
+	{
+		dynamics.AddRigidBody(block._rigid_body.get());
+	}
 }
