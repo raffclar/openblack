@@ -38,6 +38,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/intersect.hpp>
+#include <glm/gtx/transform.hpp>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
@@ -66,8 +67,8 @@ Game::Game(Arguments&& args)
     , _config()
     , _gameSpeedMultiplier(1.0f)
     , _frameCount(0)
+    , _handPose()
     , _turnCount(0)
-    , _intersection()
 {
 	std::function<std::shared_ptr<spdlog::logger>(const std::string&)> CreateLogger;
 	if (!args.logFile.empty() && args.logFile != "stdout")
@@ -268,6 +269,7 @@ bool Game::Update()
 		auto profilerScopedUpdateUniforms = _profiler->BeginScoped(Profiler::Stage::UpdateUniforms);
 
 		// Update Debug Cross
+		Transform intersectionTransform;
 		{
 			glm::ivec2 screenSize {};
 			if (_window)
@@ -275,6 +277,7 @@ bool Game::Update()
 				_window->GetSize(screenSize.x, screenSize.y);
 			}
 
+			const auto scale = glm::vec3(50.0f, 50.0f, 50.0f);
 			if (screenSize.x > 0 && screenSize.y > 0)
 			{
 				glm::vec3 rayOrigin, rayDirection;
@@ -282,7 +285,7 @@ bool Game::Update()
 
 				if (auto hit = _dynamicsSystem->RayCastClosestHit(rayOrigin, rayDirection, 1e10f))
 				{
-					_intersection = *hit;
+					intersectionTransform = *hit;
 				}
 				else // For the water
 				{
@@ -291,25 +294,28 @@ bool Game::Update()
 					const auto plane_normal = glm::vec3(0.0f, 1.0f, 0.0f);
 					if (glm::intersectRayPlane(rayOrigin, rayDirection, plane_origin, plane_normal, intersectDistance))
 					{
-						_intersection = rayOrigin + rayDirection * intersectDistance;
+						intersectionTransform.position = rayOrigin + rayDirection * intersectDistance;
+						intersectionTransform.rotation = glm::mat3(1.0f);
 					}
 				}
 			}
-			_renderer->UpdateDebugCrossUniforms(_intersection, 50.0f);
+			intersectionTransform.scale = scale;
+			_handPose = static_cast<glm::mat4>(intersectionTransform);
+			_renderer->UpdateDebugCrossUniforms(_handPose);
 		}
 
 		// Update Hand
 		if (!_handGripping)
 		{
+			const glm::vec3 handOffset(0, 4.0f, 0);
 			const glm::mat4 modelRotationCorrection = glm::eulerAngleX(glm::radians(90.0f));
-			auto& handTransform = _entityRegistry->Get<entities::components::Transform>(_handEntity);
-			handTransform.position = _intersection;
+
+			auto& handTransform = _entityRegistry->Get<Transform>(_handEntity);
+			handTransform.position = intersectionTransform.position;
 			auto cameraRotation = _camera->GetRotation();
-
-			auto handHeight = GetLandIsland().GetHeightAt(glm::vec2(handTransform.position.x, handTransform.position.z)) + 4.0f;
-
 			handTransform.rotation = glm::eulerAngleY(glm::radians(-cameraRotation.y)) * modelRotationCorrection;
-			handTransform.position = glm::vec3(handTransform.position.x, handHeight, handTransform.position.z);
+			handTransform.rotation = intersectionTransform.rotation * handTransform.rotation;
+			handTransform.position += intersectionTransform.rotation * handOffset;
 			_entityRegistry->Context().renderContext.dirty = true;
 		}
 
