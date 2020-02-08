@@ -25,6 +25,11 @@ class DebugLines;
 class ShaderManager;
 } // namespace openblack::graphics
 
+namespace openblack::dynamics
+{
+class DynamicsSystem;
+}
+
 namespace openblack::entities
 {
 class Registry
@@ -32,6 +37,8 @@ class Registry
 public:
 	Registry();
 
+	void RegisterRigidBodies(dynamics::DynamicsSystem& dynamics);
+	void UpdatePhysicsTransforms();
 	void PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams);
 	decltype(auto) Create() { return _registry.create(); }
 	template <typename Component, typename... Args>

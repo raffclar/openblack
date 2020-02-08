@@ -43,21 +43,6 @@ DynamicsSystem::DynamicsSystem()
           std::make_unique<btDiscreteDynamicsWorld>(_dispatcher.get(), _broadphase.get(), _solver.get(), _configuration.get()))
 {
 	_world->setGravity(btVector3(0, -10, 0));
-
-	//  auto child_shape = std::make_unique<btSphereShape>(btScalar(0.5));
-	//  auto col_shape = std::make_unique<btCompoundShape>();
-	//  col_shape->addChildShape(btTransform::getIdentity(), child_shape.get());
-	//
-	//  btScalar mass = 10.0f;
-	//  btVector3 localInertia(0, 0, 0);
-	//  col_shape->calculateLocalInertia(mass, localInertia);
-	//  auto body = std::make_unique<btRigidBody>(mass, nullptr, col_shape.get(), localInertia);
-	//  btTransform startTransform;
-	//  startTransform.setIdentity();
-	//  startTransform.setOrigin(btVector3(1500, 100, 2100));
-	//  body->setWorldTransform(startTransform);
-	//  body->setUserIndex(-1);
-	//  dynamicsWorld->addRigidBody(body.get());
 }
 
 void DynamicsSystem::Reset()

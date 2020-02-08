@@ -9,14 +9,11 @@
 
 #include "FeatureScriptCommands.h"
 
-#include <tuple>
-
-#include <glm/gtx/euler_angles.hpp>
-#include <glm/gtx/string_cast.hpp>
-#include <spdlog/spdlog.h>
-
 #include "3D/Camera.h"
+#include "3D/L3DMesh.h"
 #include "3D/LandIsland.h"
+#include "3D/MeshLookup.h"
+#include "3D/MeshPack.h"
 #include "AllMeshes.h"
 #include "Entities/Components/Abode.h"
 #include "Entities/Components/AnimatedStatic.h"
@@ -24,6 +21,7 @@
 #include "Entities/Components/Footpath.h"
 #include "Entities/Components/Forest.h"
 #include "Entities/Components/Mesh.h"
+#include "Entities/Components/RigidBody.h"
 #include "Entities/Components/Stream.h"
 #include "Entities/Components/Town.h"
 #include "Entities/Components/Transform.h"
@@ -33,6 +31,13 @@
 #include "Enums.h"
 #include "Game.h"
 #include "ScriptingBindingUtils.h"
+
+#include <BulletCollision/CollisionShapes/btConvexShape.h>
+#include <glm/gtx/string_cast.hpp>
+#include <glm/gtx/euler_angles.hpp>
+#include <spdlog/spdlog.h>
+
+#include <tuple>
 
 using namespace openblack;
 using namespace openblack::lhscriptx;
@@ -836,6 +841,59 @@ void FeatureScriptCommands::CreateBonfire(glm::vec3 position, float rotation, fl
 {
 	auto& registry = Game::instance()->GetEntityRegistry();
 	const auto entity = registry.Create();
+	const auto position = GetHorizontalPosition(params[0].GetString());
+	auto type = GetFeatureInfo(params[1].GetString());
+	float rotation = GetRadians(params[2].GetNumber());
+	float size = GetSize(params[3].GetNumber());
+	const auto meshId = featureMeshLookup[type];
+	L3DMesh& mesh = Game::instance()->GetMeshPack().GetMesh(static_cast<uint32_t>(meshId));
+
+	const glm::vec3 pos(position.x, island.GetHeightAt(position), position.y);
+	const glm::mat3 rot = glm::eulerAngleY(rotation);
+	const glm::vec3 scale(size);
+
+	if (mesh.HasPhysicsMesh())
+	{
+		auto& shape = mesh.GetPhysicsMesh();
+		btVector3 bodyInertia(0, 0, 0);
+		shape.calculateLocalInertia(mesh.GetMass(), bodyInertia);
+
+		btTransform startTransform;
+		startTransform.setIdentity();
+		startTransform.setOrigin(btVector3(pos.x, pos.y, pos.z));
+
+		btRigidBody::btRigidBodyConstructionInfo rbInfo(mesh.GetMass(), nullptr, &shape, bodyInertia);
+
+		registry.Assign<RigidBody>(entity, rbInfo, startTransform);
+	}
+
+	registry.Assign<Feature>(entity, type);
+	registry.Assign<Transform>(entity, pos, rot, scale);
+}
+
+void FeatureScriptCommands::SetInteractDesire(const ScriptCommandContext& ctx)
+{
+	// std::cout << std::string {} + "Function " + __func__ + " not implemented.
+	// " + __FILE__ + ":" + std::to_string(__LINE__) << std::endl;
+}
+
+void FeatureScriptCommands::ToggleComputerPlayer(const ScriptCommandContext& ctx)
+{
+	// std::cout << std::string {} + "Function " + __func__ + " not implemented.
+	// " + __FILE__ + ":" + std::to_string(__LINE__) << std::endl;
+}
+
+void FeatureScriptCommands::SetComputerPlayerCreatureLike(const ScriptCommandContext& ctx)
+{
+	// std::cout << std::string {} + "Function " + __func__ + " not implemented.
+	// " + __FILE__ + ":" + std::to_string(__LINE__) << std::endl;
+}
+
+void FeatureScriptCommands::MultiplayerDebug(const ScriptCommandContext& ctx)
+{
+	// std::cout << std::string {} + "Function " + __func__ + " not implemented.
+	// " + __FILE__ + ":" + std::to_string(__LINE__) << std::endl;
+}
 
 	registry.Assign<Transform>(entity, position, glm::eulerAngleY(-rotation), glm::vec3(scale));
 	const auto& mobile = registry.Assign<MobileStatic>(entity, MobileStatic::Info::Bonfire);

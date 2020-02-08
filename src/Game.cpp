@@ -223,8 +223,12 @@ bool Game::Update()
 	    std::chrono::duration_cast<std::chrono::microseconds>(_profiler->_entries[_profiler->GetEntryIndex(0)]._frameStart -
 	                                                          _profiler->_entries[_profiler->GetEntryIndex(-1)]._frameStart);
 
-	// Physics
-	_dynamicsSystem->Update(deltaTime);
+	if (_frameCount > 0)
+	{
+		// Physics
+		_dynamicsSystem->Update(deltaTime);
+		_entityRegistry->UpdatePhysicsTransforms();
+	}
 
 	// Input events
 	{
@@ -383,6 +387,7 @@ bool Game::Run()
 		return false;
 	}
 	LoadMap(_fileSystem->ScriptsPath() / "Land1.txt");
+	_entityRegistry->RegisterRigidBodies(*_dynamicsSystem);
 
 	// _lhvm = std::make_unique<LHVM::LHVM>();
 	// _lhvm->LoadBinary(GetGamePath() + fileSystem->QuestsPath() / "challenge.chl");
