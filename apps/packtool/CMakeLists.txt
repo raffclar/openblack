@@ -4,7 +4,7 @@ set(PACKTOOL
 
 source_group(apps\\packtool FILES ${PACKTOOL})
 
-# set(CMAKE_CXX_CLANG_TIDY clang-tidy -checks=-*,readability-*)
+set(CMAKE_CXX_CLANG_TIDY clang-tidy -checks=-*,readability-*)
 add_executable(packtool ${PACKTOOL})
 
 target_link_libraries(packtool

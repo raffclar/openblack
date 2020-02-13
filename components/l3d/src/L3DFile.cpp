@@ -497,7 +497,7 @@ void L3DFile::ReadFile(std::istream& stream)
 			uint32_t vertexLength = 0;
 			uint32_t indexLength = 0;
 			uint32_t vertexGroupLength = 0;
-			for (auto& primitive : GetPrimitiveSpan(i))
+			for (const auto& primitive : GetPrimitiveSpan(i))
 			{
 				vertexLength += primitive.numVertices;
 				indexLength += primitive.numTriangles * 3;
@@ -544,7 +544,7 @@ void L3DFile::WriteFile(std::ostream& stream) const
 		skinOffsetsBase += sizeof(_skins[0]);
 	}
 	uint32_t totalPrimitives = 0;
-	for (auto& header : _submeshHeaders)
+	for (const auto& header : _submeshHeaders)
 	{
 		totalPrimitives += header.numPrimitives;
 	}
@@ -708,8 +708,8 @@ void L3DFile::Write(const std::string& file)
 	{
 		// TODO Set flags
 		header.primitivesOffset =
-		    header.numPrimitives ? static_cast<uint32_t>(primitiveOffsetBase) : std::numeric_limits<uint32_t>::max();
-		header.bonesOffset = header.numBones ? static_cast<uint32_t>(boneBase) : std::numeric_limits<uint32_t>::max();
+		    header.numPrimitives > 0 ? static_cast<uint32_t>(primitiveOffsetBase) : std::numeric_limits<uint32_t>::max();
+		header.bonesOffset = header.numBones > 0 ? static_cast<uint32_t>(boneBase) : std::numeric_limits<uint32_t>::max();
 		primitiveBase += header.numPrimitives * sizeof(L3DPrimitiveHeader);
 		boneBase += header.numBones * sizeof(L3DBone);
 	}
@@ -726,7 +726,7 @@ void L3DFile::AddPrimitives(const std::vector<L3DPrimitiveHeader>& headers)
 {
 	_primitiveSpans.emplace_back(_primitiveHeaders, static_cast<uint32_t>(_primitiveHeaders.size()),
 	                             static_cast<uint32_t>(headers.size()));
-	for (auto& header : headers)
+	for (const auto& header : headers)
 	{
 		_primitiveHeaders.push_back(header);
 	}
@@ -735,7 +735,7 @@ void L3DFile::AddPrimitives(const std::vector<L3DPrimitiveHeader>& headers)
 void L3DFile::AddVertices(const std::vector<L3DVertex>& vertices)
 {
 	_vertexSpans.emplace_back(_vertices, static_cast<uint32_t>(_vertices.size()), static_cast<uint32_t>(vertices.size()));
-	for (auto& vertex : vertices)
+	for (const auto& vertex : vertices)
 	{
 		_vertices.push_back(vertex);
 	}
@@ -744,7 +744,7 @@ void L3DFile::AddVertices(const std::vector<L3DVertex>& vertices)
 void L3DFile::AddIndices(const std::vector<uint16_t>& indices)
 {
 	_indexSpans.emplace_back(_indices, static_cast<uint32_t>(_indices.size()), static_cast<uint32_t>(indices.size()));
-	for (auto& index : indices)
+	for (const auto& index : indices)
 	{
 		_indices.push_back(index);
 	}
@@ -753,7 +753,7 @@ void L3DFile::AddIndices(const std::vector<uint16_t>& indices)
 void L3DFile::AddBones(const std::vector<L3DBone>& bones)
 {
 	_boneSpans.emplace_back(_bones, static_cast<uint32_t>(_bones.size()), static_cast<uint32_t>(bones.size()));
-	for (auto& bone : bones)
+	for (const auto& bone : bones)
 	{
 		_bones.push_back(bone);
 	}
