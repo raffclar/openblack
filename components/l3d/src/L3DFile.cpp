@@ -668,7 +668,7 @@ void L3DFile::Write(const std::string& file)
 	_header.skinOffsetsOffset = _header.skinCount > 0 ? static_cast<uint32_t>(offset) : std::numeric_limits<uint32_t>::max();
 	offset += _header.skinCount * sizeof(uint32_t);
 	_header.pointOffset = _header.pointCount > 0 ? static_cast<uint32_t>(offset) : std::numeric_limits<uint32_t>::max();
-	offset += _header.pointCount * sizeof(_points[0]);
+	// offset += _header.pointCount * sizeof(_points[0]);
 	_header.extraDataOffset = std::numeric_limits<uint32_t>::max();
 
 	size_t submeshOffsetsBase = sizeof(L3DHeader);

@@ -29,7 +29,7 @@ enum class FileMode
 	Append
 };
 
-class FileStream: public IStream
+class FileStream final: public IStream
 {
 public:
 	FileStream(const fs::path& filename, FileMode mode);

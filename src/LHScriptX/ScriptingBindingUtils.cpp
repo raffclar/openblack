@@ -6,6 +6,18 @@
 namespace openblack::lhscriptx
 {
 
+template <>
+ParameterType ParameterTypeStaticLookUp<glm::vec3> = ParameterType::Vector;
+
+template <>
+ParameterType ParameterTypeStaticLookUp<const std::string&> = ParameterType::String;
+
+template <>
+ParameterType ParameterTypeStaticLookUp<float> = ParameterType::Float;
+
+template <>
+ParameterType ParameterTypeStaticLookUp<int32_t> = ParameterType::Number;
+
 glm::vec2 GetHorizontalPosition(const std::string& str)
 {
 	const auto pos = str.find_first_of(',');

@@ -103,7 +103,7 @@ void Sky::CalculateTextures()
 
 	uint16_t* day = _bitmaps[0].data();
 	uint16_t* dusk = _bitmaps[1].data();
-	uint16_t* night = _bitmaps[2].data();
+	// uint16_t* night = _bitmaps[2].data();
 
 	Interpolate555Texture(bitmap.data(), day, dusk, _timeOfDay);
 

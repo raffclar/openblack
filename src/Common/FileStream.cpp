@@ -33,6 +33,7 @@ FileStream::FileStream(const fs::path& path, FileMode mode)
 		break;
 	case FileMode::Append:
 		recognisedMode = L"ab";
+		break;
 	}
 
 #ifdef _WIN32

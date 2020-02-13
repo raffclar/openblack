@@ -333,7 +333,7 @@ void Console::DrawWindow(Game& game)
 		if (s[0])
 			ExecCommand(s, game);
 
-		strcpy(_input_buffer.data(), "");
+		_input_buffer[0] = '\0';
 
 		_reclaim_focus = true;
 	}
