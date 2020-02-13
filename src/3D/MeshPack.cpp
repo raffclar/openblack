@@ -37,7 +37,7 @@ void MeshPack::LoadFromFile(const fs::path& path)
 	catch (std::runtime_error& err)
 	{
 		spdlog::error("Failed to open {}: {}", path.generic_string(), err.what());
-		return;
+		throw err;
 	}
 
 	loadTextures(pack.GetTextures());

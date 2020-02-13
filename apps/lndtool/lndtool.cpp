@@ -444,38 +444,40 @@ int WriteFile(const Arguments::Write& args)
 	return EXIT_SUCCESS;
 }
 
-bool parseOptions(int argc, char** argv, Arguments& args, int& return_code)
+bool parseOptions([[maybe_unused]] int argc, [[maybe_unused]] char** argv, [[maybe_unused]] Arguments& args,
+                  [[maybe_unused]] int& return_code) noexcept
 {
 	cxxopts::Options options("lndtool", "Inspect and extract files from LionHead LND files.");
 
-	// clang-format off
-	options.add_options()
-		("h,help", "Display this help message.")
-		("subcommand", "Subcommand.", cxxopts::value<std::string>())
-	;
-	options.positional_help("[read|write] [OPTION...]");
-	options.add_options("read")
-		("H,header", "Print Header Contents.", cxxopts::value<std::vector<std::string>>())
-		("l,low-resolution-textures", "Print Low Resolution Texture Contents.", cxxopts::value<std::vector<std::string>>())
-		("b,blocks", "Print Block Contents.", cxxopts::value<std::vector<std::string>>())
-		("c,country", "Print Country Contents.", cxxopts::value<std::vector<std::string>>())
-		("m,material", "Print Material Contents.", cxxopts::value<std::vector<std::string>>())
-		("x,extra", "Print Extra Content.", cxxopts::value<std::vector<std::string>>())
-		("u,unaccounted", "Print Unaccounted bytes Content.", cxxopts::value<std::vector<std::string>>())
-	;
-	options.add_options("write")
-		("o,output", "Output file (required).", cxxopts::value<std::string>())
-		("terrain-type", "Type of terrain (required).", cxxopts::value<uint16_t>())
-		("noise-map", "File with R8 bytes for noise map.", cxxopts::value<std::string>())
-		("bump-map", "File with R8 bytes for bump map.", cxxopts::value<std::string>())
-		("material-array", "Files with RGB5A1 bytes for material array (comma-separated).", cxxopts::value<std::vector<std::string>>())
-	;
-	// clang-format on
-
-	options.parse_positional({"subcommand"});
-
 	try
 	{
+		// clang-format off
+		options.add_options()
+			("h,help", "Display this help message.")
+			("subcommand", "Subcommand.", cxxopts::value<std::string>())
+		;
+		options.positional_help("[read|write] [OPTION...]");
+
+		options.add_options("read")
+			("H,header", "Print Header Contents.", cxxopts::value<std::vector<std::string>>())
+			("l,low-resolution-textures", "Print Low Resolution Texture Contents.", cxxopts::value<std::vector<std::string>>())
+			("b,blocks", "Print Block Contents.", cxxopts::value<std::vector<std::string>>())
+			("c,country", "Print Country Contents.", cxxopts::value<std::vector<std::string>>())
+			("m,material", "Print Material Contents.", cxxopts::value<std::vector<std::string>>())
+			("x,extra", "Print Extra Content.", cxxopts::value<std::vector<std::string>>())
+			("u,unaccounted", "Print Unaccounted bytes Content.", cxxopts::value<std::vector<std::string>>())
+		;
+		options.add_options("write")
+			("o,output", "Output file (required).", cxxopts::value<std::string>())
+			("terrain-type", "Type of terrain (required).", cxxopts::value<uint16_t>())
+			("noise-map", "File with R8 bytes for noise map.", cxxopts::value<std::string>())
+			("bump-map", "File with R8 bytes for bump map.", cxxopts::value<std::string>())
+			("material-array", "Files with RGB5A1 bytes for material array (comma-separated).", cxxopts::value<std::vector<std::string>>())
+		;
+		// clang-format on
+
+		options.parse_positional({"subcommand"});
+
 		auto result = options.parse(argc, argv);
 		if (result["help"].as<bool>())
 		{
@@ -559,6 +561,10 @@ bool parseOptions(int argc, char** argv, Arguments& args, int& return_code)
 		}
 	}
 	catch (cxxopts::OptionParseException& err)
+	{
+		std::cerr << err.what() << std::endl;
+	}
+	catch (std::exception& err)
 	{
 		std::cerr << err.what() << std::endl;
 	}

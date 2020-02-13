@@ -4,7 +4,12 @@ set(PACKTOOL
 
 source_group(apps\\packtool FILES ${PACKTOOL})
 
-set(CMAKE_CXX_CLANG_TIDY clang-tidy -checks=-*,readability-*,clang-analyzer-*)
+find_program(CLANG_TIDY clang-tidy)
+if (CLANG_TIDY)
+	set(CMAKE_CXX_CLANG_TIDY
+		clang-tidy;
+		--checks=-*,readability-*,clang-analyzer-*,bugprone-*)
+endif()
 add_executable(packtool ${PACKTOOL})
 
 target_link_libraries(packtool

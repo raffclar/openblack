@@ -18,7 +18,7 @@
 #include <windows.h>
 #endif
 
-bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return_code)
+bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return_code) noexcept
 {
 	cxxopts::Options options("openblack", "Open source reimplementation of the game Black & White (2001).");
 
@@ -29,24 +29,24 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 	    "openblack.log";
 #endif
 
-	// clang-format off
-	options.add_options()
-		("h,help", "Display this help message.")
-		("g,game-path", "Path to the Data/ and Scripts/ directories of the original Black & White game. (Required)", cxxopts::value<std::string>())
-		("W,width", "Window resolution in the x axis.", cxxopts::value<uint16_t>()->default_value("1280"))
-		("H,height", "Window resolution in the y axis.", cxxopts::value<uint16_t>()->default_value("1024"))
-		("s,gui-scale", "Scaling of the GUI", cxxopts::value<float>()->default_value("1.0"))
-		("V,vsync", "Enable Vertical Sync.")
-		("m,window-mode", "Which mode to run window.", cxxopts::value<std::string>()->default_value("windowed"))
-		("b,backend-type", "Which backend to use for rendering.", cxxopts::value<std::string>()->default_value("OpenGL"))
-		("n,num-frames-to-simulate", "Number of frames to simulate before quitting.", cxxopts::value<uint32_t>()->default_value("0"))
-		("l,log-file", "Output file for logs, 'stdout' for terminal output.", cxxopts::value<std::string>()->default_value(defaultLogFile))
-		("L,log-level", "Level of logging.", cxxopts::value<uint32_t>()->default_value("0"))
-	;
-	// clang-format on
-
 	try
 	{
+		// clang-format off
+		options.add_options()
+			("h,help", "Display this help message.")
+			("g,game-path", "Path to the Data/ and Scripts/ directories of the original Black & White game. (Required)", cxxopts::value<std::string>())
+			("W,width", "Window resolution in the x axis.", cxxopts::value<uint16_t>()->default_value("1280"))
+			("H,height", "Window resolution in the y axis.", cxxopts::value<uint16_t>()->default_value("1024"))
+			("s,gui-scale", "Scaling of the GUI", cxxopts::value<float>()->default_value("1.0"))
+			("V,vsync", "Enable Vertical Sync.")
+			("m,window-mode", "Which mode to run window.", cxxopts::value<std::string>()->default_value("windowed"))
+			("b,backend-type", "Which backend to use for rendering.", cxxopts::value<std::string>()->default_value("OpenGL"))
+			("n,num-frames-to-simulate", "Number of frames to simulate before quitting.", cxxopts::value<uint32_t>()->default_value("0"))
+			("l,log-file", "Output file for logs, 'stdout' for terminal output.", cxxopts::value<std::string>()->default_value(defaultLogFile))
+			("L,log-level", "Level of logging.", cxxopts::value<uint32_t>()->default_value("0"))
+		;
+		// clang-format on
+
 		auto result = options.parse(argc, argv);
 		if (result["help"].as<bool>())
 		{
@@ -138,6 +138,14 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		return_code = EXIT_FAILURE;
 		return false;
 	}
+	catch (std::exception& err)
+	{
+		std::cerr << err.what() << std::endl;
+		std::cerr << options.help() << std::endl;
+
+		return_code = EXIT_FAILURE;
+		return false;
+	}
 
 	return true;
 }
@@ -152,29 +160,14 @@ int main(int argc, char** argv)
 	    "\n";
 	// clang-format on
 
-#ifdef NDEBUG
-	try
+	openblack::Arguments args;
+	int return_code = EXIT_FAILURE;
+	if (!parseOptions(argc, argv, args, return_code))
 	{
-#endif
-		openblack::Arguments args;
-		int return_code = EXIT_FAILURE;
-		if (!parseOptions(argc, argv, args, return_code))
-		{
-			return return_code;
-		}
-		auto game = std::make_unique<openblack::Game>(std::move(args));
-		game->Run();
-#ifdef NDEBUG
+		return return_code;
 	}
-	catch (std::runtime_error& e)
-	{
-		// Only catch runtime_error as these should be user issues.
-		// Catching other types would just make debugging them more difficult.
-
-		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Fatal error", e.what(), nullptr);
-		return EXIT_FAILURE;
-	}
-#endif
+	auto game = std::make_unique<openblack::Game>(std::move(args));
+	game->Run();
 
 	return EXIT_SUCCESS;
 }

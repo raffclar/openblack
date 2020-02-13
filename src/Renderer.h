@@ -136,7 +136,7 @@ public:
 
 	void ConfigureView(graphics::RenderPass viewId, uint16_t width, uint16_t height) const;
 
-	void DrawScene(const MeshPack& meshPack, const DrawSceneDesc& desc) const;
+	void DrawScene(const MeshPack& meshPack, const DrawSceneDesc& desc) const noexcept;
 	void DrawMesh(const L3DMesh& mesh, const MeshPack& meshPack, const L3DMeshSubmitDesc& desc, uint8_t subMeshIndex) const;
 	void Frame();
 

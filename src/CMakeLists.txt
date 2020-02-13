@@ -1,4 +1,10 @@
-set(CMAKE_CXX_CLANG_TIDY clang-tidy -checks=-*,clang-analyzer-*)
+find_program(CLANG_TIDY clang-tidy)
+if (CLANG_TIDY)
+  set(CMAKE_CXX_CLANG_TIDY
+    clang-tidy;
+    --checks=-*,clang-analyzer-*,bugprone-*,-bugprone-narrowing-conversions;
+    --warnings-as-errors=*)
+endif()
 
 file(GLOB_RECURSE OPENBLACK_SOURCES "${CMAKE_CURRENT_LIST_DIR}/*.cpp")
 file(GLOB_RECURSE OPENBLACK_HEADERS "${CMAKE_CURRENT_LIST_DIR}/*.h")

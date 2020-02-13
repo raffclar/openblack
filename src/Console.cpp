@@ -130,14 +130,14 @@ int Console::InputTextCallback(ImGuiInputTextCallbackData* data)
 			int match_len = (int)(word_end - word_start);
 			for (;;)
 			{
-				int c = 0;
+				char c = '\0';
 				bool all_candidates_matches = true;
 				for (size_t i = 0; i < candidates.size() && all_candidates_matches; i++)
 					if (i == 0)
 					{
 						c = candidates[i][match_len];
 					}
-					else if (c == 0 || c != candidates[i][match_len])
+					else if (c == '\0' || c != candidates[i][match_len])
 					{
 						all_candidates_matches = false;
 					}

@@ -104,12 +104,12 @@ public:
 		uint32_t numFramesToSimulate {0};
 	};
 
-	Game(Arguments&& args);
+	explicit Game(Arguments&& args) noexcept;
 	virtual ~Game();
 
 	bool ProcessEvents(const SDL_Event& event);
-	bool Update();
-	void Run();
+	bool Update() noexcept;
+	void Run() noexcept;
 
 	void LoadMap(const fs::path& path);
 	void LoadLandscape(const fs::path& path);

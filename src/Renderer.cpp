@@ -278,7 +278,7 @@ void Renderer::DrawMesh(const L3DMesh& mesh, const MeshPack& meshPack, const L3D
 	}
 }
 
-void Renderer::DrawScene(const MeshPack& meshPack, const DrawSceneDesc& drawDesc) const
+void Renderer::DrawScene(const MeshPack& meshPack, const DrawSceneDesc& drawDesc) const noexcept
 {
 	// Reflection Pass
 	{

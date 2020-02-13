@@ -1012,38 +1012,38 @@ int ExtractFile(const Arguments::Extract& args)
 	return EXIT_SUCCESS;
 }
 
-bool parseOptions(int argc, char** argv, Arguments& args, int& return_code)
+bool parseOptions(int argc, char** argv, Arguments& args, int& return_code) noexcept
 {
 	cxxopts::Options options("l3dtool", "Inspect and extract files from LionHead L3D files.");
 
-	// clang-format off
-	options.add_options()
-		("h,help", "Display this help message.")
-		("subcommand", "Subcommand.", cxxopts::value<std::string>())
-	;
-	options.positional_help("[read|write|extract] [OPTION...]");
-	options.add_options("read")
-		("H,header", "Print Header Contents.", cxxopts::value<std::vector<std::string>>())
-		("m,mesh-header", "Print Mesh Headers.", cxxopts::value<std::vector<std::string>>())
-		("s,skins", "Print Skins.", cxxopts::value<std::vector<std::string>>())
-		("p,points", "Print Points.", cxxopts::value<std::vector<std::string>>())
-		("P,primitive-header", "Print Primitive Headers.", cxxopts::value<std::vector<std::string>>())
-		("b,bones", "Print Bones.", cxxopts::value<std::vector<std::string>>())
-		("V,vertices", "Print Vertices.", cxxopts::value<std::vector<std::string>>())
-		("I,indices", "Print Indices.", cxxopts::value<std::vector<std::string>>())
-		("L,look-up-tables", "Print Look Up Table Data.", cxxopts::value<std::vector<std::string>>())
-		("B,vertex-blend-values", "Print Vertex Blend Values.", cxxopts::value<std::vector<std::string>>())
-	;
-	options.add_options("write/extract from and to glTF format")
-		("o,output", "Output file (required).", cxxopts::value<std::string>())
-		("i,input-mesh", "Input file (required).", cxxopts::value<std::string>())
-	;
-	// clang-format on
-
-	options.parse_positional({"subcommand"});
-
 	try
 	{
+		// clang-format off
+		options.add_options()
+			("h,help", "Display this help message.")
+			("subcommand", "Subcommand.", cxxopts::value<std::string>())
+		;
+		options.positional_help("[read|write|extract] [OPTION...]");
+		options.add_options("read")
+			("H,header", "Print Header Contents.", cxxopts::value<std::vector<std::string>>())
+			("m,mesh-header", "Print Mesh Headers.", cxxopts::value<std::vector<std::string>>())
+			("s,skins", "Print Skins.", cxxopts::value<std::vector<std::string>>())
+			("p,points", "Print Points.", cxxopts::value<std::vector<std::string>>())
+			("P,primitive-header", "Print Primitive Headers.", cxxopts::value<std::vector<std::string>>())
+			("b,bones", "Print Bones.", cxxopts::value<std::vector<std::string>>())
+			("V,vertices", "Print Vertices.", cxxopts::value<std::vector<std::string>>())
+			("I,indices", "Print Indices.", cxxopts::value<std::vector<std::string>>())
+			("L,look-up-tables", "Print Look Up Table Data.", cxxopts::value<std::vector<std::string>>())
+			("B,vertex-blend-values", "Print Vertex Blend Values.", cxxopts::value<std::vector<std::string>>())
+		;
+		options.add_options("write/extract from and to  glTF format")
+			("o,output", "Output file (required).", cxxopts::value<std::string>())
+			("i,input-mesh", "Input file (required).", cxxopts::value<std::string>())
+			;
+		// clang-format on
+
+		options.parse_positional({"subcommand"});
+
 		auto result = options.parse(argc, argv);
 		if (result["help"].as<bool>())
 		{
@@ -1150,6 +1150,10 @@ bool parseOptions(int argc, char** argv, Arguments& args, int& return_code)
 		}
 	}
 	catch (cxxopts::OptionParseException& err)
+	{
+		std::cerr << err.what() << std::endl;
+	}
+	catch (std::exception& err)
 	{
 		std::cerr << err.what() << std::endl;
 	}

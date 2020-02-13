@@ -53,7 +53,7 @@ const std::string kWindowTitle = "openblack";
 
 Game* Game::sInstance = nullptr;
 
-Game::Game(Arguments&& args)
+Game::Game(Arguments&& args) noexcept
     : _eventManager(std::make_unique<EventManager>())
     , _fileSystem(std::make_unique<FileSystem>())
     , _entityRegistry(std::make_unique<entities::Registry>())
@@ -178,7 +178,7 @@ bool Game::ProcessEvents(const SDL_Event& event)
 	return true;
 }
 
-bool Game::Update()
+bool Game::Update() noexcept
 {
 	_profiler->Frame();
 	auto deltaTime =
@@ -270,7 +270,7 @@ bool Game::Update()
 	return _config.numFramesToSimulate == 0 || _frameCount < _config.numFramesToSimulate;
 }
 
-void Game::Run()
+void Game::Run() noexcept
 {
 	// Create profiler
 	_profiler = std::make_unique<Profiler>();
@@ -301,8 +301,16 @@ void Game::Run()
 	_sky = std::make_unique<Sky>();
 	_water = std::make_unique<Water>();
 
-	LoadVariables();
-	LoadMap(_fileSystem->ScriptsPath() / "Land1.txt");
+	try
+	{
+		LoadVariables();
+		LoadMap(_fileSystem->ScriptsPath() / "Land1.txt");
+	}
+	catch (std::runtime_error& err)
+	{
+		spdlog::error(err.what());
+		return;
+	}
 
 	// _lhvm = std::make_unique<LHVM::LHVM>();
 	// _lhvm->LoadBinary(GetGamePath() + fileSystem->QuestsPath() / "challenge.chl");

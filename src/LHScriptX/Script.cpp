@@ -14,10 +14,18 @@
 
 #include <spdlog/spdlog.h>
 
-#include <iostream>
+#include <array>
+#include <string_view>
 
 using namespace openblack;
 using namespace openblack::lhscriptx;
+
+namespace
+{
+constexpr std::array<std::string_view, 5> ParameterTypeStrings {
+    "None", "String", "Float", "Number", "Vector",
+};
+}
 
 void Script::Load(const std::string& source)
 {
@@ -155,9 +163,12 @@ void Script::runCommand(const std::string& identifier, const std::vector<Token>&
 	// Validate the typing of the given arguments against what is expected
 	for (auto i = 0u; i < parameters.size(); i++)
 	{
-		if (parameters[i].GetType() != expected_parameters[i])
+		const auto& type = parameters[i].GetType();
+		if (type != expected_parameters[i])
 		{
-			std::runtime_error("Invalid script argument type");
+			spdlog::error("{}: Invalid script argument type. Expected {} but got {}.", identifier,
+			              ParameterTypeStrings[static_cast<uint32_t>(expected_parameters[i])],
+			              ParameterTypeStrings[static_cast<uint32_t>(type)]);
 		}
 	}
 

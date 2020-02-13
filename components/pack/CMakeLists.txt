@@ -1,7 +1,12 @@
 file(GLOB SOURCES "${CMAKE_CURRENT_LIST_DIR}/src/*.cpp")
 file(GLOB HEADERS "${CMAKE_CURRENT_LIST_DIR}/include/*.h")
 
-set(CMAKE_CXX_CLANG_TIDY clang-tidy -checks=-*,readability-*)
+find_program(CLANG_TIDY clang-tidy)
+if (CLANG_TIDY)
+	set(CMAKE_CXX_CLANG_TIDY
+		clang-tidy;
+		--checks=-*,readability-*,clang-analyzer-*,bugprone-*)
+endif()
 add_library(pack STATIC ${SOURCES} ${HEADERS})
 target_include_directories(pack
 	PUBLIC

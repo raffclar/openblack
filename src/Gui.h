@@ -76,7 +76,7 @@ public:
 	bool ProcessEventSdl2(const SDL_Event& event);
 	void NewFrame(GameWindow* window);
 	bool Loop(Game& game, const Renderer& renderer);
-	void Draw();
+	void Draw() noexcept;
 
 private:
 	Gui(ImGuiContext* imgui, bgfx::ViewId viewId, std::unique_ptr<MeshViewer>&& meshViewer,

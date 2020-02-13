@@ -4,7 +4,13 @@ set(LNDTOOL
 
 source_group(apps\\lndtool FILES ${LNDTOOL})
 
-set(CMAKE_CXX_CLANG_TIDY clang-tidy -checks=-*,readability-*,clang-analyzer-*)
+find_program(CLANG_TIDY clang-tidy)
+if (CLANG_TIDY)
+	set(CMAKE_CXX_CLANG_TIDY
+		clang-tidy;
+		--checks=-*,readability-*,clang-analyzer-*,bugprone-*;
+		--warnings-as-errors=*)
+endif()
 add_executable(lndtool ${LNDTOOL})
 
 target_link_libraries(lndtool

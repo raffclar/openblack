@@ -6,7 +6,12 @@ set(ANMTOOL
 
 source_group(apps\\anmtool FILES ${ANMTOOL})
 
-set(CMAKE_CXX_CLANG_TIDY clang-tidy -checks=-*,readability-*,clang-analyzer-*)
+find_program(CLANG_TIDY clang-tidy)
+if (CLANG_TIDY)
+	set(CMAKE_CXX_CLANG_TIDY
+		clang-tidy;
+		--checks=-*,readability-*,clang-analyzer-*,bugprone-*)
+endif()
 add_executable(anmtool ${ANMTOOL})
 
 target_link_libraries(anmtool

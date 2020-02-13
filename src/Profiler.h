@@ -87,7 +87,7 @@ public:
 	void Frame();
 	void Begin(Stage stage);
 	void End(Stage stage);
-	inline ScopedSection BeginScoped(Stage stage) { return ScopedSection(this, stage); }
+	inline ScopedSection BeginScoped(Stage stage) noexcept { return ScopedSection(this, stage); }
 
 	[[nodiscard]] uint8_t GetEntryIndex(int8_t offset) const { return (_currentEntry + _bufferSize + offset) % _bufferSize; }
 

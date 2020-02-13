@@ -294,7 +294,7 @@ struct Arguments
 	std::string outFilename;
 };
 
-bool parseOptions(int argc, char** argv, Arguments& args, int& return_code)
+bool parseOptions(int argc, char** argv, Arguments& args, int& return_code) noexcept
 {
 	cxxopts::Options options("packtool", "Inspect and extract files from LionHead pack files.");
 
@@ -425,6 +425,10 @@ bool parseOptions(int argc, char** argv, Arguments& args, int& return_code)
 		}
 	}
 	catch (cxxopts::OptionParseException& err)
+	{
+		std::cerr << err.what() << std::endl;
+	}
+	catch (std::exception& err)
 	{
 		std::cerr << err.what() << std::endl;
 	}
