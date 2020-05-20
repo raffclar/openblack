@@ -55,7 +55,12 @@ const RegistryContext& Registry::Context() const
 
 void Registry::RegisterRigidBodies(dynamics::DynamicsSystem& dynamics)
 {
-	_registry.view<RigidBody>().each([&dynamics](RigidBody& body) { dynamics.AddRigidBody(&body.handle); });
+	_registry.view<RigidBody>().each([this, &dynamics](entt::entity entity, RigidBody& body) {
+		body.handle.setUserIndex(static_cast<int>(dynamics::RigidBodyType::Entity));
+		body.handle.setUserIndex2(0); // TODO
+		body.handle.setUserPointer(this);
+		dynamics.AddRigidBody(&body.handle);
+	});
 }
 
 void Registry::PrepareDrawDescs(bool drawBoundingBox)

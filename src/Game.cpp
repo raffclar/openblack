@@ -289,7 +289,7 @@ bool Game::Update()
 
 				if (auto hit = _dynamicsSystem->RayCastClosestHit(rayOrigin, rayDirection, 1e10f))
 				{
-					intersectionTransform = *hit;
+					intersectionTransform = hit->first;
 				}
 				else // For the water
 				{

@@ -24,6 +24,7 @@
 
 #include <BulletCollision/BroadphaseCollision/btDbvtBroadphase.h>
 #include <BulletCollision/CollisionDispatch/btCollisionDispatcher.h>
+#include <BulletCollision/CollisionDispatch/btCollisionObject.h>
 #include <BulletCollision/CollisionDispatch/btDefaultCollisionConfiguration.h>
 #include <BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.h>
 #include <BulletDynamics/Dynamics/btDiscreteDynamicsWorld.h>
@@ -76,7 +77,8 @@ void DynamicsSystem::AddRigidBody(btRigidBody* object)
 	_world->addRigidBody(object);
 }
 
-std::optional<Transform> DynamicsSystem::RayCastClosestHit(const glm::vec3& origin, const glm::vec3& direction, float t_max)
+const std::optional<std::pair<Transform, RigidBodyDetails>>
+DynamicsSystem::RayCastClosestHit(const glm::vec3& origin, const glm::vec3& direction, float t_max) const
 {
 	auto from = btVector3(origin.x, origin.y, origin.z);
 	auto to = from + t_max * btVector3(direction.x, direction.y, direction.z);
@@ -93,5 +95,8 @@ std::optional<Transform> DynamicsSystem::RayCastClosestHit(const glm::vec3& orig
 	const auto up = glm::vec3(0, 1, 0);
 	auto rotation = glm::orientation(normal, up);
 
-	return std::make_optional(Transform {translation, rotation, glm::vec3(1.0f)});
+	return std::make_optional(std::make_pair(
+	    Transform {translation, rotation, glm::vec3(1.0f)},
+	    RigidBodyDetails {static_cast<RigidBodyType>(callback.m_collisionObject->getUserIndex()),
+	                      callback.m_collisionObject->getUserIndex2(), callback.m_collisionObject->getUserPointer()}));
 }

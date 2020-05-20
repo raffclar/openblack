@@ -200,8 +200,11 @@ void LandIsland::DumpMaps() const
 
 void LandIsland::RegisterRigidBodies(dynamics::DynamicsSystem& dynamics)
 {
-	for (auto& block : _landBlocks)
+	for (uint32_t i = 0; i < _landBlocks.size(); ++i)
 	{
-		dynamics.AddRigidBody(block._rigid_body.get());
+		_landBlocks[i]._rigid_body->setUserIndex(static_cast<int>(dynamics::RigidBodyType::Terrain));
+		_landBlocks[i]._rigid_body->setUserIndex2(i);
+		_landBlocks[i]._rigid_body->setUserPointer(reinterpret_cast<void*>(this));
+		dynamics.AddRigidBody(_landBlocks[i]._rigid_body.get());
 	}
 }

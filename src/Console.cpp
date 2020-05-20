@@ -13,7 +13,10 @@
 
 #include <imgui.h>
 
+#include "3D/Camera.h"
+#include "Dynamics/DynamicsSystem.h"
 #include "Entities/Components/Transform.h"
+#include "Entities/Registry.h"
 #include "LHScriptX/FeatureScriptCommands.h"
 #include "LHScriptX/Script.h"
 
@@ -221,6 +224,44 @@ void Console::DrawWindow(Game& game)
 	if (!_open)
 	{
 		return;
+	}
+
+	ImGuiIO& io = ImGui::GetIO();
+
+	glm::ivec2 screenSize {};
+	if (game.GetWindow())
+	{
+		game.GetWindow()->GetSize(screenSize.x, screenSize.y);
+	}
+	glm::ivec2 mousePosition {};
+	SDL_GetMouseState(&mousePosition.x, &mousePosition.y);
+	if (!io.WantCaptureMouse && screenSize.x > 0 && screenSize.y > 0)
+	{
+		glm::vec3 rayOrigin, rayDirection;
+		game.GetCamera().DeprojectScreenToWorld(mousePosition, screenSize, rayOrigin, rayDirection);
+		if (auto hit = game.GetDynamicsSystem().RayCastClosestHit(rayOrigin, rayDirection, 1e10f))
+		{
+			if (hit->second.userData)
+			{
+				switch (hit->second.type)
+				{
+				case dynamics::RigidBodyType::Terrain:
+				{
+					auto landIsland = reinterpret_cast<const LandIsland*>(hit->second.userData);
+					auto blockIndex = hit->second.id;
+					ImGui::SetTooltip("Block Index: %d", blockIndex);
+				}
+				break;
+				case dynamics::RigidBodyType::Entity:
+				{
+					auto registry = reinterpret_cast<const openblack::entities::Registry*>(hit->second.userData);
+					auto entity = hit->second.id;
+					ImGui::SetTooltip("Entity %d", entity);
+				}
+				break;
+				}
+			}
+		}
 	}
 
 	ImGui::SetNextWindowSize(ImVec2(520, 600), ImGuiCond_FirstUseEver);
@@ -435,12 +476,10 @@ void Console::ProcessEventSdl2(const SDL_Event& event)
 	switch (event.type)
 	{
 	case SDL_MOUSEBUTTONDOWN:
-	{
 		if (event.button.clicks == 2 && !io.WantCaptureMouse)
 		{
 			_insert_hand_position = true;
 		}
-	}
-	break;
+		break;
 	}
 }

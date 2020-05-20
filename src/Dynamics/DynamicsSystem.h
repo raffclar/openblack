@@ -23,6 +23,7 @@
 #include <chrono>
 #include <memory>
 #include <optional>
+#include <tuple>
 
 #include <glm/fwd.hpp>
 
@@ -40,6 +41,19 @@ struct Transform;
 
 namespace openblack::dynamics
 {
+enum class RigidBodyType
+{
+	Terrain,
+	Entity,
+};
+
+struct RigidBodyDetails
+{
+	RigidBodyType type;
+	int id;
+	const void* userData;
+};
+
 class DynamicsSystem
 {
 public:
@@ -49,7 +63,8 @@ public:
 	void Reset();
 	void Update(std::chrono::microseconds& dt);
 	void AddRigidBody(btRigidBody* object);
-	std::optional<Transform> RayCastClosestHit(const glm::vec3& origin, const glm::vec3& direction, float t_max);
+	const std::optional<std::pair<Transform, RigidBodyDetails>>
+	RayCastClosestHit(const glm::vec3& origin, const glm::vec3& direction, float t_max) const;
 
 private:
 	/// collision configuration contains default setup for memory, collision setup
