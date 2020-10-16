@@ -146,7 +146,7 @@ void ANMFile::ReadFile(std::istream& stream)
 		stream.seekg(_header.frames_base + i * sizeof(uint32_t));
 
 		// In Keyframe offset block
-		uint32_t offset;
+		uint32_t offset = 0;
 		stream.read(reinterpret_cast<char*>(&offset), sizeof(offset));
 
 		// Keyframe pointer
@@ -159,7 +159,7 @@ void ANMFile::ReadFile(std::istream& stream)
 
 		// Bone block
 		stream.seekg(offset);
-		uint32_t bone_count;
+		uint32_t bone_count = 0;
 		stream.read(reinterpret_cast<char*>(&bone_count), sizeof(bone_count));
 
 		stream.read(reinterpret_cast<char*>(&_keyframes[i].time), sizeof(_keyframes[i].time));

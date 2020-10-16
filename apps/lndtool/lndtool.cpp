@@ -48,7 +48,7 @@ int PrintRawBytes(const void* data, std::size_t size)
 
 int PrintHeader(openblack::lnd::LNDFile& lnd)
 {
-	auto& header = lnd.GetHeader();
+	const auto& header = lnd.GetHeader();
 
 	std::printf("file: %s\n", lnd.GetFilename().c_str());
 	std::printf("block count: %u\n", header.blockCount);
@@ -70,11 +70,11 @@ int PrintHeader(openblack::lnd::LNDFile& lnd)
 
 int PrintLowRes(openblack::lnd::LNDFile& lnd)
 {
-	auto& textures = lnd.GetLowResolutionTextures();
+	const auto& textures = lnd.GetLowResolutionTextures();
 
 	std::printf("file: %s\n", lnd.GetFilename().c_str());
 	uint32_t i = 0;
-	for (auto& texture : textures)
+	for (const auto& texture : textures)
 	{
 		std::printf("texture #%u:\n", i++);
 		std::printf("unknown header:\n");
@@ -88,11 +88,11 @@ int PrintLowRes(openblack::lnd::LNDFile& lnd)
 
 int PrintBlocks(openblack::lnd::LNDFile& lnd)
 {
-	auto& blocks = lnd.GetBlocks();
+	const auto& blocks = lnd.GetBlocks();
 
 	std::printf("file: %s\n", lnd.GetFilename().c_str());
 	uint32_t i = 0;
-	for (auto& block : blocks)
+	for (const auto& block : blocks)
 	{
 		std::printf("block #%u:\n", i++);
 		std::printf("cells:\n");
@@ -133,7 +133,7 @@ int PrintBlocks(openblack::lnd::LNDFile& lnd)
 			}
 			return ret;
 		};
-		for (auto& cell : block.cells)
+		for (const auto& cell : block.cells)
 		{
 			std::printf("    %u: r %u, g %u, b %u, luminosity %u, altitude %u, saveColor %u, country %u properties %s "
 			            "flags 0x%02X\n",
@@ -188,16 +188,16 @@ int PrintBlocks(openblack::lnd::LNDFile& lnd)
 
 int PrintCountries(openblack::lnd::LNDFile& lnd)
 {
-	auto& countries = lnd.GetCountries();
+	const auto& countries = lnd.GetCountries();
 
 	std::printf("file: %s\n", lnd.GetFilename().c_str());
 	uint32_t i = 0;
-	for (auto& country : countries)
+	for (const auto& country : countries)
 	{
 		std::printf("country #%u:\n", i++);
 		std::printf("materials:\n");
 		uint32_t j = 0;
-		for (auto& material : country.materials)
+		for (const auto& material : country.materials)
 		{
 			std::printf("    %3u: indices %3u %3u coefficient 0x%02X\n", j++, material.indices[0], material.indices[1],
 			            material.coefficient);
@@ -210,11 +210,11 @@ int PrintCountries(openblack::lnd::LNDFile& lnd)
 
 int PrintMaterials(openblack::lnd::LNDFile& lnd)
 {
-	auto& materials = lnd.GetMaterials();
+	const auto& materials = lnd.GetMaterials();
 
 	std::printf("file: %s\n", lnd.GetFilename().c_str());
 	uint32_t k = 0;
-	for (auto& material : materials)
+	for (const auto& material : materials)
 	{
 		std::printf("material #%u:\n", k++);
 		std::printf("type: #%u:\n", material.type);
@@ -232,7 +232,7 @@ int PrintMaterials(openblack::lnd::LNDFile& lnd)
 				{
 					for (uint16_t i = 0; i < subsample; ++i)
 					{
-						auto& color =
+						const auto& color =
 						    material.texels[x * subsample + i + (y * subsample + j) * openblack::lnd::LNDMaterial::width];
 						red += color.R;
 						green += color.G;
@@ -255,7 +255,7 @@ int PrintMaterials(openblack::lnd::LNDFile& lnd)
 
 int PrintExtra(openblack::lnd::LNDFile& lnd)
 {
-	auto& extra = lnd.GetExtra();
+	const auto& extra = lnd.GetExtra();
 
 	std::printf("file: %s\n", lnd.GetFilename().c_str());
 	constexpr uint16_t subsample = 8;
@@ -305,7 +305,7 @@ int PrintExtra(openblack::lnd::LNDFile& lnd)
 
 int PrintUnaccounted(openblack::lnd::LNDFile& lnd)
 {
-	auto& unaccounted = lnd.GetUnaccounted();
+	const auto& unaccounted = lnd.GetUnaccounted();
 
 	std::printf("file: %s\n", lnd.GetFilename().c_str());
 	PrintRawBytes(unaccounted.data(), unaccounted.size());
@@ -348,7 +348,7 @@ int WriteFile(const Arguments::Write& args)
 
 	openblack::lnd::LNDMaterial material;
 	material.type = args.terrainType;
-	for (auto& filename : args.materialArray)
+	for (const auto& filename : args.materialArray)
 	{
 		std::ifstream stream(filename, std::ios::binary);
 		if (!stream.is_open())

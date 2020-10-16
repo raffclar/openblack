@@ -13,6 +13,7 @@
 #include <cxxopts.hpp>
 #include <fstream>
 #include <string>
+#include <string_view>
 
 int PrintRawBytes(const void* data, std::size_t size)
 {
