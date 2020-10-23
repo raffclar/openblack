@@ -48,6 +48,9 @@ GameWindow::GameWindow(const std::string& title, int width, int height, DisplayM
 
 		if (SDL_InitSubSystem(SDL_INIT_TIMER) != 0)
 			throw std::runtime_error("Could not initialize SDL Timer Subsystem: " + std::string(SDL_GetError()));
+
+		if (SDL_InitSubSystem(SDL_INIT_AUDIO) != 0)
+			throw std::runtime_error("Could not initialize SDL Audio Subsystem: " + std::string(SDL_GetError()));
 	}
 
 	SDL_ShowCursor(SDL_DISABLE);
