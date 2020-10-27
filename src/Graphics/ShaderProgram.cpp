@@ -75,7 +75,7 @@ void ShaderProgram::SetUniformValue(const char* uniformName, const void* value) 
 	}
 	else
 	{
-		spdlog::warn("Could not find uniform {}", uniformName);
+		spdlog::warn("ShaderProgram: {}:{}: Could not find uniform {}", __FILE__, __LINE__, uniformName);
 	}
 }
 
