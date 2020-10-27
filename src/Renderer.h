@@ -65,6 +65,7 @@ constexpr std::array Shaders {
     ShaderDefinition {"Object", "vs_object", "fs_object"},
     ShaderDefinition {"ObjectInstanced", "vs_object_instanced", "fs_object"},
     ShaderDefinition {"Water", "vs_water", "fs_water"},
+	ShaderDefinition {"Tree", "vs_tree", "fs_object"},
 };
 
 class Renderer

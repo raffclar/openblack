@@ -321,6 +321,7 @@ void Renderer::DrawPass(const MeshPack& meshPack, const DrawSceneDesc& desc) con
 	_shaderManager->SetCamera(desc.viewId, *desc.camera);
 
 	auto objectShader = _shaderManager->GetShader("Object");
+	auto treeShader = _shaderManager->GetShader("Tree");
 	auto waterShader = _shaderManager->GetShader("Water");
 	auto terrainShader = _shaderManager->GetShader("Terrain");
 	auto debugShader = _shaderManager->GetShader("DebugLine");
@@ -406,7 +407,10 @@ void Renderer::DrawPass(const MeshPack& meshPack, const DrawSceneDesc& desc) con
 		if (desc.drawEntities)
 		{
 			L3DMeshSubmitDesc submitDesc = {};
-			submitDesc.program = objectShaderInstanced;
+//			submitDesc.program = objectShaderInstanced;
+			submitDesc.program = treeShader;
+			submitDesc.program->SetUniformValue("u_noise", &desc.timeOfDay);
+
 			// clang-format off
 			submitDesc.state = 0u
 				| BGFX_STATE_WRITE_MASK
