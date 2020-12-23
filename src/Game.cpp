@@ -9,6 +9,8 @@
 
 #include "Game.h"
 
+#include "Sound/SoundHandler.h"
+#include "Sound/SoundPack.h"
 #include "3D/AnimationPack.h"
 #include "3D/Camera.h"
 #include "3D/L3DAnim.h"
@@ -57,6 +59,7 @@ Game::Game(Arguments&& args)
     : _eventManager(std::make_unique<EventManager>())
     , _fileSystem(std::make_unique<FileSystem>())
     , _entityRegistry(std::make_unique<entities::Registry>())
+    , _soundHandler(audio::createSoundHandler())
     , _config()
     , _frameCount(0)
     , _intersection()
@@ -128,7 +131,19 @@ bool Game::ProcessEvents(const SDL_Event& event)
 	static bool leftMouseButton = false;
 
 	if ((event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) && event.button.button == SDL_BUTTON_LEFT)
+	{
+		// Hand is still considered up
+		if (event.type == SDL_MOUSEBUTTONDOWN && !leftMouseButton)
+		{
+			auto& handTransform = _entityRegistry->Get<Transform>(_handEntity);
+			auto& hand = _entityRegistry->Get<Hand>(_handEntity);
+			auto velocity = glm::vec3(.0f);
+			auto radius = glm::vec2(1.f);
+			_soundHandler->CreateEmitter(hand.GrabLandSoundIds(), handTransform.position, velocity, radius, 1.f, true);
+		}
+
 		leftMouseButton = !leftMouseButton;
+	}
 
 	_handGripping = leftMouseButton;
 
@@ -267,6 +282,12 @@ bool Game::Update()
 		}
 	} // Update Uniforms
 
+	// Update Audio System
+	{
+		auto updateAudio = _profiler->BeginScoped(Profiler::Stage::AudioSystem);
+		_soundHandler->Tick();
+	} // Update Audio System
+
 	return _config.numFramesToSimulate == 0 || _frameCount < _config.numFramesToSimulate;
 }
 
@@ -274,6 +295,17 @@ void Game::Run()
 {
 	// Create profiler
 	_profiler = std::make_unique<Profiler>();
+
+	// Load all sound packs in the Audio directory
+	auto soundPackPaths = _fileSystem->GetAllFilePaths("Audio", ".sad");
+
+	for (auto path : soundPackPaths)
+	{
+		auto soundPack = std::make_unique<audio::SoundPack>();
+		soundPack->LoadFromFile(path);
+		// Takes ownership of the pack
+		_soundHandler->RegisterSoundPack(soundPack);
+	}
 
 	// create our camera
 	_camera = std::make_unique<Camera>();

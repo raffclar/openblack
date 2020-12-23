@@ -53,7 +53,7 @@ public:
 
 		if (item == lookup.end())
 		{
-			spdlog::error("Unknown item. Using Dummy mesh.");
+//			spdlog::error("Unknown item. Using Dummy mesh.");
 			return static_cast<MeshId>(meshId);
 		}
 

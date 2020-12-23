@@ -40,6 +40,9 @@
 #include "LHVMViewer.h"
 #include "MeshViewer.h"
 #include "Profiler.h"
+#include "Sound/SoundHandler.h"
+#include "Sound/SoundPack.h"
+#include "Sound/AudioDebug.h"
 
 using namespace openblack;
 
@@ -539,6 +542,11 @@ bool Gui::Loop(Game& game, const Renderer& renderer)
 				config.showProfiler = true;
 			}
 
+			if (ImGui::MenuItem("Open Sound Player"))
+			{
+				config.showSoundPlayer = true;
+			}
+
 			if (ImGui::MenuItem("Console"))
 			{
 				_console->Open();
@@ -640,6 +648,9 @@ bool Gui::Loop(Game& game, const Renderer& renderer)
 
 	if (config.waterDebug)
 		game.GetWater().DebugGUI();
+
+	if (config.showSoundPlayer)
+		ShowSoundPlayerWindow(game);
 
 	ImGui::Render();
 
@@ -923,4 +934,9 @@ void Gui::ShowProfilerWindow(Game& game)
 		ImGui::Columns(1);
 	}
 	ImGui::End();
+}
+
+void Gui::ShowSoundPlayerWindow(Game& game)
+{
+	audio::AudioDebug::ShowDebugGui(game);
 }

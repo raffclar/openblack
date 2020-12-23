@@ -51,6 +51,8 @@ void MemoryStream::Seek(std::size_t position, SeekMode seek)
 
 void MemoryStream::Read(void* buffer, std::size_t length)
 {
+	if (length > _size - (_position + 1))
+		length = (_size - (_position + 1));
 	std::copy_n(reinterpret_cast<const uint8_t*>(_data) + _position, length, reinterpret_cast<uint8_t*>(buffer));
 	_position += length;
 }

@@ -118,6 +118,7 @@ target_link_libraries(
           pack
           lnd
           anm
+          sad
           imgui
           imgui-flame-graph
           ScriptLibrary
@@ -127,7 +128,10 @@ target_link_libraries(
           spdlog::spdlog
           EnTT::EnTT
           bgfx::bgfx
-          cxxopts::cxxopts)
+          OpenAL::OpenAL
+          cxxopts::cxxopts
+          ${FFMPEG_LIBRARIES}
+)
 if(UNIX)
   find_library(WAYLAND wayland-egl)
   if(WAYLAND)

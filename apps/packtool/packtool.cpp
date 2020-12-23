@@ -284,7 +284,7 @@ struct Arguments
 		Mesh,
 		Animation,
 		Body,
-		WriteMeshPack,
+		WriteSounds,
 		WriteAnimationPack,
 	};
 	std::vector<std::string> filenames;
@@ -332,7 +332,7 @@ bool parseOptions(int argc, char** argv, Arguments& args, int& return_code)
 		}
 		if (result["write-mesh"].count() > 0)
 		{
-			args.mode = Arguments::Mode::WriteMeshPack;
+			args.mode = Arguments::Mode::WriteSounds;
 			args.outFilename = result["write-mesh"].as<std::string>();
 			return true;
 		}
@@ -443,7 +443,7 @@ int main(int argc, char* argv[])
 		return return_code;
 	}
 
-	if (args.mode == Arguments::Mode::WriteMeshPack)
+	if (args.mode == Arguments::Mode::WriteSounds)
 	{
 		return WriteMeshFile(args.outFilename);
 	}

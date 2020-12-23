@@ -9,29 +9,17 @@
 
 #pragma once
 
-#include "3D/L3DMesh.h"
-#include "Graphics/Mesh.h"
-#include "Graphics/Texture2D.h"
+#include "Game.h"
 
-#include <Sound/Sound.h>
-#include <memory>
-
-namespace openblack
+namespace openblack::audio
 {
-enum class HandRenderType
-{
-	Model,
-	Symbol
-};
-
-class Hand
+class AudioDebug
 {
 public:
-	void Init();
-	static const std::vector<audio::SoundId>& GrabLandSoundIds() { return Hand::_grabLandSounds; };
+	static void ShowDebugGui(Game& game);
 private:
-	HandRenderType handType;
-	std::unique_ptr<L3DMesh> m_HandModel;
-	static const std::vector<audio::SoundId> _grabLandSounds;
+	static void AudioPlayer(Game& game, const std::vector<std::shared_ptr<SoundPack>>& soundPacks);
+	static void AudioSettings(Game& game);
+	static std::string _selectedPack;
 };
-} // namespace openblack
+}

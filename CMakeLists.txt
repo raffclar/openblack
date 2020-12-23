@@ -42,11 +42,17 @@ endif()
 if(CMAKE_VERSION VERSION_GREATER 3.15 OR CMAKE_VERSION VERSION_EQUAL 3.15)
   set(CMAKE_FIND_PACKAGE_PREFER_CONFIG ON)
 
+  find_package(OpenAL REQUIRED)
+  find_package(FFmpeg REQUIRED COMPONENTS AVCODEC AVFORMAT AVUTIL)
+  find_package(implot REQUIRED)
   find_package(spdlog 1.3.0 REQUIRED)
   find_package(glm REQUIRED)
   find_package(EnTT 3.5.0 CONFIG REQUIRED) # only available as a config
   find_package(cxxopts REQUIRED)
 else()
+  find_package(OpenAL CONFIG REQUIRED)
+  find_package(FFmpeg CONFIG REQUIRED COMPONENTS AVCODEC AVFORMAT AVUTIL)
+  find_package(implot CONFIG REQUIRED)
   find_package(spdlog 1.3.0 CONFIG QUIET)
   find_package(glm CONFIG QUIET)
   find_package(EnTT 3.5.0 CONFIG REQUIRED) # only available as a config
@@ -82,8 +88,7 @@ Or set the variable OPENBLACK_BUILD_BGFX to build it with the project. \
   endif()
 else()
   message(AUTHOR_WARNING "Using OPENBLACK_BUILD_BGFX, if you are not developing use an install target instead.")
-
-  FetchContent_Declare(
+FetchContent_Declare(
     bgfx
     GIT_REPOSITORY https://github.com/openblack/bgfx.cmake.git
     GIT_TAG master
@@ -135,12 +140,14 @@ include(CMakeModules/Shaders.cmake)
 
 add_subdirectory(components/l3d)
 add_subdirectory(components/pack)
+add_subdirectory(components/sad)
 add_subdirectory(components/lnd)
 add_subdirectory(components/anm)
 add_subdirectory(components/ScriptLibrary)
 add_subdirectory(src)
 add_subdirectory(apps/l3dtool)
 add_subdirectory(apps/packtool)
+add_subdirectory(apps/sadtool)
 add_subdirectory(apps/lndtool)
 add_subdirectory(apps/anmtool)
 add_subdirectory(ci/mock)

@@ -5865,7 +5865,7 @@ void ImGui::End()
         EndColumns();
     PopClipRect();   // Inner window clip rectangle
 
-    // Stop logging
+    // Destroy logging
     if (!(window->Flags & ImGuiWindowFlags_ChildWindow))    // FIXME: add more options for scope of logging
         LogFinish();
 

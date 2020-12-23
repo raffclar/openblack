@@ -19,6 +19,7 @@ namespace fs = std::experimental::filesystem;
 #include <memory>
 #include <string>
 #include <vector>
+#include <map>
 
 #include <SDL.h>
 #include <bgfx/bgfx.h>
@@ -26,6 +27,7 @@ namespace fs = std::experimental::filesystem;
 #include <glm/glm.hpp>
 
 #include <LHVM/LHVM.h>
+#include <Sound/SoundPack.h>
 
 #include "GameWindow.h"
 
@@ -46,6 +48,12 @@ class L3DMesh;
 class Sky;
 class Water;
 struct Transform;
+
+namespace audio
+{
+class SoundPack;
+class SoundHandler;
+}
 
 namespace lhscriptx
 {
@@ -83,6 +91,7 @@ public:
 		bool waterDebug {false};
 		bool showProfiler {false};
 		bool showLandIsland {false};
+		bool showSoundPlayer {false};
 
 		bool drawSky {true};
 		bool drawWater {true};
@@ -135,6 +144,7 @@ public:
 	Transform& GetHandTransform();
 	AnimationPack& GetAnimationPack() { return *_animationPack; }
 	MeshPack& GetMeshPack() { return *_meshPack; }
+	audio::SoundHandler& GetSoundHandler() const { return *_soundHandler; }
 	[[nodiscard]] const LHVM::LHVM* GetLhvm() { return _lhvm.get(); }
 	FileSystem& GetFileSystem() { return *_fileSystem; }
 	entities::Registry& GetEntityRegistry() { return *_entityRegistry; }
@@ -162,6 +172,7 @@ private:
 	std::unique_ptr<LandIsland> _landIsland;
 	std::unique_ptr<MeshPack> _meshPack;
 	std::unique_ptr<AnimationPack> _animationPack;
+	std::unique_ptr<audio::SoundHandler> _soundHandler;
 
 	// std::unique_ptr<L3DMesh> _testModel;
 	std::unique_ptr<L3DMesh> _testModel;
