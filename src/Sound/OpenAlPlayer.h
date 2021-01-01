@@ -31,10 +31,11 @@ public:
 	std::string GetName() const override  { return "OpenAL Player"; };
 	float GetVolume() const override { return _volume; };
 	void SetVolume(float volume) override;
-	void OpenAlPlayer::SetListenerPosition(glm::vec3 pos, glm::vec3 vel, glm::vec3 front, glm::vec3 up) const override;
+	void UpdateListenerState(glm::vec3 pos, glm::vec3 vel, glm::vec3 front, glm::vec3 up) const override;
 
 	void SetupEmitter(AudioEmitter& emitter, Sound& sound) const override;
 	void PlayEmitter(AudioEmitter& emitter) const override;
+	void UpdateEmitterState(AudioEmitter& emitter) const override;
 	void CleanUpEmitter(AudioEmitter& emitter) const override;
 	void StopEmitter(AudioEmitter& emitter) const override;
 	float GetAudioProgress(AudioEmitter& emitter) const override;
@@ -43,7 +44,7 @@ public:
 	float GetVolume(AudioSourceId id) const override;
 	const AudioStatus GetAudioStatus(AudioSourceId id) const override;
 private:
-	void Stop(AudioSourceId sourceId, AudioBufferId bufferId) const;
+	void Stop(AudioSourceId sourceId) const;
 	void Destroy(AudioSourceId sourceId, AudioBufferId bufferId) const;
 	static void DeleteAlDevice(ALCdevice* device);
 	static void DeleteAlContext(ALCcontext* context);

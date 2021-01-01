@@ -606,8 +606,12 @@ bool Gui::Loop(Game& game, const Renderer& renderer)
 	{
 		auto camPos = game.GetCamera().GetPosition();
 		auto camRot = game.GetCamera().GetRotation();
+		auto camFor = game.GetCamera().GetForward();
+		auto camTop = game.GetCamera().GetUp();
 		ImGui::Text("Camera Position: (%.1f,%.1f, %.1f)", camPos.x, camPos.y, camPos.z);
 		ImGui::Text("Camera Rotation: (%.1f,%.1f, %.1f)", camRot.x, camRot.y, camRot.z);
+		ImGui::Text("Camera Forward: (%.1f,%.1f, %.1f)", camFor.x, camFor.y, camFor.z);
+		ImGui::Text("Camera Top: (%.1f,%.1f, %.1f)", camTop.x, camTop.y, camTop.z);
 
 		if (ImGui::IsMousePosValid())
 			ImGui::Text("Mouse Position: (%.1f,%.1f)", io.MousePos.x, io.MousePos.y);

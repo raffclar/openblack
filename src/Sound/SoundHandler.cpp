@@ -9,10 +9,12 @@
 
 #include "SoundHandler.h"
 
+#include "3D/Camera.h"
+#include <Game.h>
 #include <fstream>
+#include <random>
 #include <stdexcept>
 #include <vector>
-#include <random>
 
 namespace openblack::audio
 {
@@ -36,32 +38,36 @@ void SoundHandler::RegisterSoundPack(std::unique_ptr<SoundPack>& soundPack)
 	for (auto& [id, sound] : last->GetSounds()) _soundIdLookup[id] = last;
 }
 
-void SoundHandler::Tick()
+void SoundHandler::Tick(Game& game)
 {
 	// De-allocate sound player resources for stopped emitters
 
 	// Update player state
 
-
 	// Update listener states
+	auto& cam = game.GetCamera();
+	auto pos = cam.GetPosition();
+	auto vel = cam.GetVelocity();
+	auto forward = cam.GetForward();
+	auto top = cam.GetUp();
+	_audioPlayer->UpdateListenerState(pos, vel, forward, top);
 
 	// Update active user emitter states
+	for (auto& [emitterId, emitter] : _emitters) _audioPlayer->UpdateEmitterState(emitter);
 
 	// Sort activated emitters
 
 	// Release hardware resources
-//	_audioPlayer->CleanUp(_emitters);
 	// Assign hardware resources
-
 	// Update emitters with hardware resources
 
 	// Cull emitters stopped emitters
 	for (auto iterator = _emitters.begin(); iterator != _emitters.end();)
 	{
 		auto& [id, emitter] = *iterator;
-		auto audioStatus = emitter.audioSourceId;
+		auto audioStatus = _audioPlayer->GetAudioStatus(emitter.audioSourceId);
 
-		if (_audioPlayer->GetAudioStatus(audioStatus) == AudioStatus::Stopped)
+		if (audioStatus != AudioStatus::Playing && audioStatus != AudioStatus::Paused)
 		{
 			_audioPlayer->CleanUpEmitter(emitter);
 			iterator = _emitters.erase(iterator);

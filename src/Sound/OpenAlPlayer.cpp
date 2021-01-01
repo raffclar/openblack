@@ -52,7 +52,7 @@ OpenAlPlayer::OpenAlPlayer()
 	, _context(alcCreateContext(_device.get(), nullptr), DeleteAlContext)
 {
 	alCheckCall(alcMakeContextCurrent(_context.get()));
-	SetListenerPosition(glm::vec3(1), glm::vec3(0), glm::vec3(0), glm::vec3(0));
+	UpdateListenerState(glm::vec3(1), glm::vec3(0), glm::vec3(0), glm::vec3(0));
 	_volume = 0;
 }
 
@@ -92,21 +92,34 @@ void OpenAlPlayer::PlayEmitter(AudioEmitter& emitter) const
 {
 	auto soundSource = emitter.audioSourceId;
 	auto soundBuffer = emitter.audioBufferId;
-
-	if (emitter.world)
-	{
-		auto pos = emitter.position;
-		auto vel = emitter.velocity;
-		alCheckCall(alSource3f(soundSource, AL_POSITION, pos.x, pos.y, pos.z));
-		alCheckCall(alSource3f(soundSource, AL_VELOCITY, vel.x, vel.y, vel.z));
-	}
-
+	UpdateEmitterState(emitter);
 	alCheckCall(alSourcef(soundSource, AL_PITCH, 1.f));
 	alCheckCall(alSourcef(soundSource, AL_GAIN, 1.f));
 	alCheckCall(alSourcei(soundSource, AL_LOOPING, AL_FALSE));
 	alCheckCall(alSourcei(soundSource, AL_BUFFER, soundBuffer));
 	alCheckCall(alSourcef(soundSource, AL_GAIN, _volume));
 	alCheckCall(alSourcePlay(soundSource));
+}
+
+void OpenAlPlayer::UpdateEmitterState(AudioEmitter& emitter) const
+{
+	glm::vec3 pos;
+	glm::vec3 vel;
+
+	if (!emitter.world)
+	{
+		alCheckCall(alGetListener3f(AL_POSITION, &pos.z, &pos.y, &pos.x));
+		alCheckCall(alGetListener3f(AL_VELOCITY, &vel.z, &vel.y, &vel.x));
+	}
+	else
+	{
+		pos = emitter.position;
+		vel = emitter.velocity;
+	}
+
+	alCheckCall(alSource3f(emitter.audioSourceId, AL_POSITION, pos.z, pos.y, pos.x));
+	alCheckCall(alSource3f(emitter.audioSourceId, AL_VELOCITY, vel.z, vel.y, vel.x));
+	alCheckCall(alSourcef(emitter.audioSourceId, AL_GAIN, _volume));
 }
 
 void OpenAlPlayer::CleanUpEmitter(AudioEmitter& emitter) const
@@ -132,7 +145,7 @@ void OpenAlPlayer::CleanUp(std::map<AudioEmitterId, AudioEmitter>& emitters)
 	}
 }
 
-void OpenAlPlayer::Stop(AudioSourceId sourceId, AudioBufferId bufferId) const
+void OpenAlPlayer::Stop(AudioSourceId sourceId) const
 {
 	ALint status;
 	alCheckCall(alGetSourcei(sourceId, AL_SOURCE_STATE, &status));
@@ -184,10 +197,10 @@ float OpenAlPlayer::GetAudioProgress(AudioEmitter& emitter) const
 	return offset / (float)size;
 }
 
-void OpenAlPlayer::SetListenerPosition(glm::vec3 pos, glm::vec3 vel, glm::vec3 front, glm::vec3 up) const
+void OpenAlPlayer::UpdateListenerState(glm::vec3 pos, glm::vec3 vel, glm::vec3 front, glm::vec3 up) const
 {
-	ALfloat listenerOri[] = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f};
-	alCheckCall(alListener3f(AL_POSITION, 0, 0, 1.0f));
-	alCheckCall(alListener3f(AL_VELOCITY, 0, 0, 0));
+	alCheckCall(alListener3f(AL_POSITION, pos.z, pos.y, pos.x));
+	alCheckCall(alListener3f(AL_VELOCITY, vel.z, vel.y, vel.x));
+	ALfloat listenerOri[] = {front.x, front.y, front.z, up.x, up.y, up.z};
 	alCheckCall(alListenerfv(AL_ORIENTATION, listenerOri));
 }

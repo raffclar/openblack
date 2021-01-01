@@ -31,11 +31,12 @@ public:
 	[[nodiscard]] virtual std::string GetName() const = 0;
 	[[nodiscard]] virtual float GetVolume() const = 0;
 	virtual void SetVolume(float volume) = 0;
-	virtual void SetListenerPosition(glm::vec3 pos, glm::vec3 vel, glm::vec3 front, glm::vec3 up) const = 0;
+	virtual void UpdateListenerState(glm::vec3 pos, glm::vec3 vel, glm::vec3 front, glm::vec3 up) const = 0;
 
 	// Emitter sound control. Used for 3D sounds
 	virtual void SetupEmitter(AudioEmitter& emitter, Sound& sound) const = 0;
 	virtual void PlayEmitter(AudioEmitter& emitter) const = 0;
+	virtual void UpdateEmitterState(AudioEmitter& emitter) const = 0;
 	virtual void CleanUpEmitter(AudioEmitter& emitter) const = 0;
 	virtual void StopEmitter(AudioEmitter& emitter) const = 0;
 	[[nodiscard]] virtual float GetAudioProgress(AudioEmitter& emitter) const = 0;
@@ -53,12 +54,13 @@ public:
 	void CleanUp(std::map<AudioEmitterId, AudioEmitter>& emitters) override {};
 	std::string GetName() const override { return "Mock Audio Player"; }
 	void SetVolume(float volume) override { _volume = volume; }
-	void SetListenerPosition(glm::vec3, glm::vec3, glm::vec3, glm::vec3) const override {};
+	void UpdateListenerState(glm::vec3, glm::vec3, glm::vec3, glm::vec3) const override {};
 	float GetVolume() const override { return _volume; }
 	void SetVolume(AudioSourceId id, float volume) override {}
 	float GetVolume(AudioSourceId id) const override { return _volume; }
 	void SetupEmitter(AudioEmitter&, Sound&) const override {};
 	void PlayEmitter(AudioEmitter& emitter) const override {}
+	void UpdateEmitterState(AudioEmitter& emitter) const override {};
 	void StopEmitter(AudioEmitter& emitter) const override {};
 	const AudioStatus GetAudioStatus(AudioSourceId id) const override { return AudioStatus::Paused; }
 	float GetAudioProgress(AudioEmitter&) const override { return 0; }

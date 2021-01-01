@@ -139,7 +139,7 @@ bool Game::ProcessEvents(const SDL_Event& event)
 			auto& hand = _entityRegistry->Get<Hand>(_handEntity);
 			auto velocity = glm::vec3(.0f);
 			auto radius = glm::vec2(1.f);
-			_soundHandler->CreateEmitter(hand.GrabLandSoundIds(), handTransform.position, velocity, radius, 1.f, true);
+			_soundHandler->CreateEmitter(hand.GrabLandSoundIds(), handTransform.position, velocity, radius, 1.f, false);
 		}
 
 		leftMouseButton = !leftMouseButton;
@@ -285,7 +285,7 @@ bool Game::Update()
 	// Update Audio System
 	{
 		auto updateAudio = _profiler->BeginScoped(Profiler::Stage::AudioSystem);
-		_soundHandler->Tick();
+		_soundHandler->Tick(*this);
 	} // Update Audio System
 
 	return _config.numFramesToSimulate == 0 || _frameCount < _config.numFramesToSimulate;

@@ -20,6 +20,11 @@
 #include <type_traits>
 #include <vector>
 
+namespace openblack
+{
+class Game;
+}
+
 namespace openblack::audio
 {
 
@@ -44,7 +49,7 @@ public:
 	void ReplaceAudioPlayer(std::unique_ptr<AudioPlayer> audioPlayer) { _audioPlayer.reset(audioPlayer.release()); }
 	const std::unique_ptr<AudioPlayer>& GetPlayer() const { return _audioPlayer; }
 	void SetGlobalVolume(float volume);
-	void Tick();
+	void Tick(Game& game);
 private:
 	std::unique_ptr<AudioPlayer> _audioPlayer;
 	std::unique_ptr<AudioLoader> _audioLoader;
