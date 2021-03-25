@@ -53,9 +53,35 @@ public:
 	void SetGamePath(const fs::path& path) { _gamePath = path; }
 	[[nodiscard]] const fs::path& GetGamePath() const { return _gamePath; }
 
+	std::vector<std::filesystem::path> GetAllFilePaths(const std::string& path, const std::string& ext, bool recursive)
+	{
+		auto foundPath = FindPath(path);
+		if(recursive)
+			return GetAllFilePaths(std::filesystem::recursive_directory_iterator(foundPath), ext);
+		else
+			return GetAllFilePaths(std::filesystem::directory_iterator(foundPath), ext);
+	}
+
 	std::vector<std::byte> ReadAll(const fs::path& path);
 
 private:
+	template<typename DirectoryIter>
+	std::vector<std::filesystem::path> GetAllFilePaths(DirectoryIter it, const std::string& ext)
+	{
+		std::vector<std::filesystem::path> paths;
+
+		for (auto entry : it)
+		{
+			if (entry.is_directory())
+				continue;
+			if (entry.path().extension() != ext)
+				continue;
+			paths.push_back(entry.path());
+		}
+
+		return paths;
+	}
+
 	fs::path _gamePath;
 };
 
