@@ -31,6 +31,7 @@ namespace fs = std::experimental::filesystem;
 
 #include "GameWindow.h"
 #include "InfoConstants.h"
+#include "LevelLocator.h"
 
 namespace openblack
 {
@@ -40,6 +41,7 @@ class FileSystem;
 class GameWindow;
 class Gui;
 class EventManager;
+class LevelLocator;
 class MeshPack;
 class LandIsland;
 class Profiler;
@@ -165,6 +167,7 @@ public:
 	const entities::components::Transform& GetHandTransform() const;
 	entities::components::Transform& GetHandTransform();
 	AnimationPack& GetAnimationPack() { return *_animationPack; }
+	LevelLocator& GetLevelLocator() { return *_levelLocator; }
 	MeshPack& GetMeshPack() { return *_meshPack; }
 	[[nodiscard]] const LHVM::LHVM* GetLhvm() { return _lhvm.get(); }
 	FileSystem& GetFileSystem() { return *_fileSystem; }
@@ -196,6 +199,7 @@ private:
 	std::unique_ptr<LandIsland> _landIsland;
 	std::unique_ptr<MeshPack> _meshPack;
 	std::unique_ptr<AnimationPack> _animationPack;
+	std::unique_ptr<LevelLocator> _levelLocator;
 
 	// std::unique_ptr<L3DMesh> _testModel;
 	std::unique_ptr<L3DMesh> _testModel;
