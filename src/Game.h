@@ -31,6 +31,7 @@ namespace fs = std::experimental::filesystem;
 
 #include "GameWindow.h"
 #include "InfoConstants.h"
+#include "3D/MeshLocator.h"
 #include "LevelLocator.h"
 
 namespace openblack
@@ -172,6 +173,7 @@ public:
 	FileSystem& GetFileSystem() { return *_fileSystem; }
 	entities::Registry& GetEntityRegistry() { return *_entityRegistry; }
 	[[nodiscard]] entities::Registry& GetEntityRegistry() const { return *_entityRegistry; }
+	[[nodiscard]] MeshLocator GetMeshLocator() const { return *_meshLocator; }
 	const InfoConstants& GetInfoConstants() { return _infoConstants; } ///< Access should be only read-only
 	Config& GetConfig() { return _config; }
 	[[nodiscard]] const Config& GetConfig() const { return _config; }
@@ -209,6 +211,7 @@ private:
 	std::unique_ptr<lhscriptx::Script> _scriptx;
 	std::unique_ptr<LHVM::LHVM> _lhvm;
 	std::unique_ptr<entities::Registry> _entityRegistry;
+	std::unique_ptr<MeshLocator> _meshLocator;
 
 	InfoConstants _infoConstants;
 	Config _config;
