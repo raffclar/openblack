@@ -17,7 +17,7 @@ namespace openblack
 class Level
 {
 public:
-	Level(std::filesystem::path path) : _scriptPath(path), _name(path.filename().string()) {}
+	Level(std::filesystem::path path) : _name(path.filename().string()), _scriptPath(path) {}
 	const std::string& GetName() const { return _name; };
 	const std::filesystem::path& GetScriptPath() const { return _scriptPath; };
 private:
