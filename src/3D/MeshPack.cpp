@@ -26,6 +26,11 @@
 namespace openblack
 {
 
+MeshPack::MeshPack(bool enableUnknownMeshes)
+	: _enableUnknownMeshes(enableUnknownMeshes)
+{
+}
+
 bool MeshPack::LoadFromFile(const fs::path& path)
 {
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading Mesh Pack from file: {}", path.generic_string());
