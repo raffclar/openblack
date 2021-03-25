@@ -32,6 +32,13 @@ Token Lexer::GetToken()
 		unsigned char cc = *current_;
 		switch (cc)
 		{
+		case '/':
+			// Comment syntax. Ignore the rest of the line
+			if (*(current_ + 1) == '/')
+			{
+				currentLine_++;
+			}
+			break;
 		case ' ':
 		case '\t':
 		case '\r':
