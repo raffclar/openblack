@@ -321,7 +321,7 @@ inline glm::vec3 GetSize(int size)
 void FeatureScriptCommands::SetATownInfluenceMultiplier(int32_t townId, float mult)
 {
 	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-						__func__);
+	                    __func__);
 }
 
 void FeatureScriptCommands::CreateMist(glm::vec3 position, float param_2, int32_t param_3, float param_4, float param_5)

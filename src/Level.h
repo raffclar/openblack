@@ -9,8 +9,8 @@
 
 #pragma once
 
-#include <string>
 #include <filesystem>
+#include <string>
 
 namespace openblack
 {
@@ -18,14 +18,15 @@ class Level
 {
 public:
 	Level(std::filesystem::path path)
-        : _scriptPath(path)
+	    : _scriptPath(path)
 	{
 	}
 
 	std::string GetName() const { return _scriptPath.filename().string(); };
 	const std::filesystem::path& GetScriptPath() const { return _scriptPath; };
+
 private:
 	std::string _name;
 	std::filesystem::path _scriptPath;
 };
-}
+} // namespace openblack

@@ -27,7 +27,7 @@ namespace openblack
 {
 
 MeshPack::MeshPack(bool enableUnknownMeshes)
-	: _enableUnknownMeshes(enableUnknownMeshes)
+    : _enableUnknownMeshes(enableUnknownMeshes)
 {
 }
 
@@ -102,7 +102,10 @@ void MeshPack::loadMeshes(const std::vector<std::vector<uint8_t>>& meshes)
 {
 	if (meshes.size() > MeshNames.size() && !_enableUnknownMeshes)
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Cannot load meshes. The number of meshes to load ({}) does not match the number of stored mesh names ({}).", meshes.size(), MeshNames.size());
+		SPDLOG_LOGGER_ERROR(
+		    spdlog::get("game"),
+		    "Cannot load meshes. The number of meshes to load ({}) does not match the number of stored mesh names ({}).",
+		    meshes.size(), MeshNames.size());
 		return;
 	}
 
@@ -119,9 +122,11 @@ void MeshPack::loadMeshes(const std::vector<std::vector<uint8_t>>& meshes)
 		if (i < MeshNames.size())
 		{
 			name = MeshNames[i].data();
-		} else
+		}
+		else
 		{
-			SPDLOG_LOGGER_WARN(spdlog::get("game"), "There are more meshes than mesh names; Using mesh name \"{}\" instead.", name);
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "There are more meshes than mesh names; Using mesh name \"{}\" instead.",
+			                   name);
 		}
 
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "L3DMesh {} {}", i, name);

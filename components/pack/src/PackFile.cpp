@@ -286,7 +286,8 @@ void PackFile::ExtractTexturesFromBlock()
 		if (ddsHeader.pitchOrLinearSize == 0 && ddsHeader.format.fourCC == std::string("DXT5"))
 		{
 			auto blockSize = 16;
-			ddsHeader.pitchOrLinearSize = ((ddsHeader.width + 3) / 4) * ((ddsHeader.height + 3) / 4) * blockSize;;
+			ddsHeader.pitchOrLinearSize = ((ddsHeader.width + 3) / 4) * ((ddsHeader.height + 3) / 4) * blockSize;
+			;
 		}
 		else if (header.ddsSize - sizeof(ddsHeader) - sizeof(uint32_t) != ddsHeader.pitchOrLinearSize)
 		{

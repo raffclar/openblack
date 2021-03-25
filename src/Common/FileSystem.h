@@ -56,7 +56,7 @@ public:
 	std::vector<std::filesystem::path> GetAllFilePaths(const std::string& path, const std::string& ext, bool recursive) const
 	{
 		auto foundPath = FindPath(path);
-		if(recursive)
+		if (recursive)
 			return GetAllFilePaths(std::filesystem::recursive_directory_iterator(foundPath), ext);
 		else
 			return GetAllFilePaths(std::filesystem::directory_iterator(foundPath), ext);
@@ -65,7 +65,7 @@ public:
 	std::vector<std::byte> ReadAll(const fs::path& path);
 
 private:
-	template<typename DirectoryIter>
+	template <typename DirectoryIter>
 	std::vector<std::filesystem::path> GetAllFilePaths(DirectoryIter it, const std::string& ext) const
 	{
 		std::vector<std::filesystem::path> paths;
