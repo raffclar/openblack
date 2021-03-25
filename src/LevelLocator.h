@@ -19,7 +19,7 @@ namespace openblack
 class LevelLocator
 {
 public:
-	void LoadLevels(const FileSystem& fs);
+	bool LoadLevels(const FileSystem& fs);
 	const std::vector<Level>& GetCampaigns() const { return _campaigns; };
 	const std::vector<Level>& GetPlaygrounds() const { return _playgrounds; };
 

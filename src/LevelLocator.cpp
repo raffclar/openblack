@@ -11,10 +11,16 @@
 
 using namespace openblack;
 
-void LevelLocator::LoadLevels(const FileSystem& fs)
+bool LevelLocator::LoadLevels(const FileSystem& fs)
 {
 	_campaigns.clear();
 	_playgrounds.clear();
+
+	if (!fs.Exists(fs.ScriptsPath()))
+	{
+		return false;
+	}
+
 	auto campaignPaths = fs.GetAllFilePaths(fs.ScriptsPath().string(), _levelExt, false);
 
 	for (auto path : campaignPaths)
@@ -22,10 +28,19 @@ void LevelLocator::LoadLevels(const FileSystem& fs)
 		_campaigns.emplace_back(Level(std::move(path)));
 	}
 
-	auto playGroundPaths = fs.GetAllFilePaths((fs.ScriptsPath() / "Playgrounds").string(), _levelExt, false);
+	auto playgroundsPath = fs.ScriptsPath() / "Playgrounds";
+
+	if (!fs.Exists(playgroundsPath))
+	{
+		return false;
+	}
+
+	auto playGroundPaths = fs.GetAllFilePaths((playgroundsPath).string(), _levelExt, false);
 
 	for (auto path : playGroundPaths)
 	{
 		_playgrounds.emplace_back(Level(std::move(path)));
 	}
+
+	return true;
 }
