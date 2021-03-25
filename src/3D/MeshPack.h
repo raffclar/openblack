@@ -64,6 +64,7 @@ private:
 	void loadTextures(const std::map<std::string, pack::G3DTexture>& textures);
 	void loadMeshes(const std::vector<std::vector<uint8_t>>& meshes);
 
+	bool _enableUnknownMeshes = false;
 	MeshesVec _meshes;
 	TexturesVec _textures;
 };
