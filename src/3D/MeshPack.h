@@ -47,7 +47,10 @@ class MeshPack
 	};
 
 public:
-	MeshPack() = default;
+	MeshPack(bool enableUnknownMeshes)
+        : _enableUnknownMeshes(enableUnknownMeshes)
+	{
+	}
 
 	bool LoadFromFile(const fs::path& path);
 

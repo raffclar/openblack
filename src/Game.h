@@ -41,7 +41,6 @@ class FileSystem;
 class GameWindow;
 class Gui;
 class EventManager;
-class LevelLocator;
 class MeshPack;
 class LandIsland;
 class Profiler;
