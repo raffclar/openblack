@@ -16,6 +16,7 @@
 #include <entt/entity/fwd.hpp>
 #include <glm/fwd.hpp>
 
+#include "3D/L3DMesh.h"
 #include "AllMeshes.h"
 #include "Common/MeshLookup.h"
 #include "Components/Footpath.h"
@@ -39,6 +40,7 @@ struct RenderContext
 	std::unique_ptr<graphics::DebugLines> boundingBox;
 	std::unique_ptr<graphics::DebugLines> streams;
 	std::unique_ptr<graphics::DebugLines> footpaths;
+	std::unique_ptr<graphics::DebugLines> cameraPaths;
 
 	struct InstancedDrawDesc
 	{

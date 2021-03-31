@@ -131,7 +131,7 @@ void Registry::PrepareDrawUploadUniforms(bool drawBoundingBox)
 	}
 }
 
-void Registry::PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams)
+void Registry::PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams, bool drawCameraPaths)
 {
 	auto& renderCtx = Context().renderContext;
 
@@ -146,6 +146,29 @@ void Registry::PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawSt
 		{
 			renderCtx.boundingBox = graphics::DebugLines::CreateBox(glm::vec4(1.0f, 0.0f, 0.0f, 0.5f));
 		}
+
+//		renderCtx.cameraPaths.reset();
+//		if (drawCameraPaths)
+//		{
+//			std::vector<graphics::DebugLines::Vertex> edges;
+//			Each<const CameraSceneNode, const Transform>([&edges, this](const auto entity, const CameraSceneNode& sceneNode, const Transform& transform) {
+//			  if (sceneNode.nextNode == entt::null)
+//			  {
+//				  return;
+//			  }
+//
+//			  const auto color = glm::vec4(0, 1, 0, 1);
+//			  const auto offset = glm::vec3(0, 1, 0);
+//			  auto destination = Get<Transform>(sceneNode.nextNode);
+//			  edges.push_back({glm::vec4(transform.position + offset, 1.0f), color});
+//			  edges.push_back({glm::vec4(destination.position + offset, 1.0f), color});
+//			});
+//
+//			if (!edges.empty())
+//			{
+//				renderCtx.cameraPaths = graphics::DebugLines::CreateDebugLines(edges.data(), edges.size());
+//			}
+//		}
 
 		renderCtx.footpaths.reset();
 		if (drawFootpaths)

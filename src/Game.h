@@ -29,9 +29,10 @@ namespace fs = std::experimental::filesystem;
 
 #include <LHVM/LHVM.h>
 
+#include "CreatureBody.h"
+#include "TempleStructure.h"
 #include "GameWindow.h"
 #include "InfoConstants.h"
-#include "3D/MeshLocator.h"
 #include "LevelLocator.h"
 
 namespace openblack
@@ -43,6 +44,7 @@ class GameWindow;
 class Gui;
 class EventManager;
 class MeshPack;
+class MeshLocator;
 class LandIsland;
 class Profiler;
 class Renderer;
@@ -111,6 +113,7 @@ public:
 		bool waterDebug {false};
 		bool showProfiler {false};
 		bool showLandIsland {false};
+		bool showTempleDebug {false};
 		bool showVillagerNames {false};
 		bool debugVillagerNames {false};
 
@@ -123,6 +126,7 @@ public:
 		bool drawBoundingBoxes {false};
 		bool drawFootpaths {false};
 		bool drawStreams {false};
+		bool drawCameraPaths {false};
 
 		float timeOfDay {1.0f};
 		float bumpMapStrength {1.0f};
@@ -173,13 +177,18 @@ public:
 	FileSystem& GetFileSystem() { return *_fileSystem; }
 	entities::Registry& GetEntityRegistry() { return *_entityRegistry; }
 	[[nodiscard]] entities::Registry& GetEntityRegistry() const { return *_entityRegistry; }
-	[[nodiscard]] MeshLocator GetMeshLocator() const { return *_meshLocator; }
+	[[nodiscard]] MeshLocator& GetMeshLocator() const { return *_meshLocator; }
+	[[nodiscard]] CreatureBody& GetCreatureBody() const { return *_creatureBody; }
+	[[nodiscard]] TempleStructure& GetTempleStructure() const { return *_templeStructure; }
 	const InfoConstants& GetInfoConstants() { return _infoConstants; } ///< Access should be only read-only
 	Config& GetConfig() { return _config; }
 	[[nodiscard]] const Config& GetConfig() const { return _config; }
 	[[nodiscard]] uint16_t GetTurn() const { return _turnCount; }
 	[[nodiscard]] std::chrono::duration<float, std::milli> GetDeltaTime() const { return _turnDeltaTime; }
 	[[nodiscard]] const glm::ivec2& GetMousePosition() const { return _mousePosition; }
+	void PlayCameraScene(CameraPath& camPath, glm::vec3 startPosition);
+	void EnterTemple();
+	void ExitTemple();
 
 	static Game* instance() { return sInstance; }
 
@@ -201,6 +210,8 @@ private:
 	std::unique_ptr<MeshPack> _meshPack;
 	std::unique_ptr<AnimationPack> _animationPack;
 	std::unique_ptr<LevelLocator> _levelLocator;
+	std::unique_ptr<CreatureBody> _creatureBody;
+	std::unique_ptr<TempleStructure> _templeStructure;
 
 	// std::unique_ptr<L3DMesh> _testModel;
 	std::unique_ptr<L3DMesh> _testModel;

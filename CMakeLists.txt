@@ -136,6 +136,7 @@ add_subdirectory(external/imgui)
 include(CMakeModules/Shaders.cmake)
 
 add_subdirectory(components/l3d)
+add_subdirectory(components/cam)
 add_subdirectory(components/pack)
 add_subdirectory(components/lnd)
 add_subdirectory(components/anm)

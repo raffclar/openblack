@@ -15,6 +15,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIsland.h"
 #include "3D/MeshPack.h"
+#include "3D/MeshLocator.h"
 #include "3D/Sky.h"
 #include "3D/Water.h"
 #include "Common/EventManager.h"
@@ -62,6 +63,8 @@ Game::Game(Arguments&& args)
     : _eventManager(std::make_unique<EventManager>())
     , _fileSystem(std::make_unique<FileSystem>())
     , _levelLocator(std::make_unique<LevelLocator>())
+    , _creatureBody(std::make_unique<CreatureBody>())
+    , _templeStructure(std::make_unique<TempleStructure>())
     , _entityRegistry(std::make_unique<entities::Registry>())
     , _config()
     , _gameSpeedMultiplier(1.0f)
@@ -307,7 +310,7 @@ bool Game::Update()
 			auto updateEntities = _profiler->BeginScoped(Profiler::Stage::UpdateEntities);
 			if (_config.drawEntities)
 			{
-				_entityRegistry->PrepareDraw(_config.drawBoundingBoxes, _config.drawFootpaths, _config.drawStreams);
+				_entityRegistry->PrepareDraw(_config.drawBoundingBoxes, _config.drawFootpaths, _config.drawStreams, _config.drawCameraPaths);
 			}
 		}
 	} // Update Uniforms
@@ -334,6 +337,11 @@ bool Game::Run()
 	{
 		return false;
 	}
+
+	_meshLocator = std::make_unique<MeshLocator>();
+	_creatureBody->LoadCreatureMeshes();
+	_templeStructure->LoadOutsideTempleMeshes();
+	_templeStructure->LoadInteriorTempleAssets();
 
 	_animationPack = std::make_unique<AnimationPack>();
 	if (!_animationPack->LoadFromFile(_fileSystem->DataPath() / "AllAnims.anm"))
@@ -578,4 +586,18 @@ const fs::path& Game::GetGamePath()
 	}
 
 	return _gamePath;
+}
+
+void Game::PlayCameraScene(CameraPath& camPath, glm::vec3 startPosition)
+{
+	Game::instance()->GetCamera().PlayPath(camPath, startPosition);
+}
+
+void Game::EnterTemple()
+{
+	_templeStructure->EnterTemple();
+}
+void Game::ExitTemple()
+{
+	_templeStructure->ExitTemple();
 }

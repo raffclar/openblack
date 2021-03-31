@@ -10,6 +10,7 @@
 #pragma once
 
 #include "Common/MeshLookup.h"
+#include <3D/L3DMesh.h>
 
 namespace openblack::entities::components
 {

@@ -4,7 +4,7 @@ $output v_position, v_texcoord0, v_normal
 #if BGFX_SHADER_LANGUAGE_HLSL == 3
 #define BGFX_CONFIG_MAX_BONES 48
 #else
-#define BGFX_CONFIG_MAX_BONES 64
+#define BGFX_CONFIG_MAX_BONES 128
 #endif
 
 #include <bgfx_shader.sh>
@@ -23,7 +23,6 @@ void main()
 	model[1] = i_data1;
 	model[2] = i_data2;
 	model[3] = i_data3;
-
 	v_position = instMul(model, mul(u_model[modelIndex], vec4(a_position.xyz, 1.0f)));
 	v_texcoord0 = vec4(a_texcoord0, 0.0f, 0.0f);
 	v_normal = a_normal;

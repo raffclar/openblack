@@ -10,6 +10,7 @@
 #pragma once
 
 #include "FileStream.h"
+#include "StringUtilities.h"
 
 #include <cstddef>
 #include <list>
@@ -62,7 +63,7 @@ public:
 			return GetAllFilePaths(std::filesystem::directory_iterator(foundPath), ext);
 	}
 
-	std::vector<std::byte> ReadAll(const fs::path& path);
+	std::vector<uint8_t> ReadAll(const fs::path& path);
 
 private:
 	template <typename DirectoryIter>
@@ -74,8 +75,13 @@ private:
 		{
 			if (entry.is_directory())
 				continue;
-			if (entry.path().extension() != ext)
+
+			auto curExt = entry.path().extension().string();
+			LowerCase(curExt);
+
+			if (curExt != ext)
 				continue;
+
 			paths.push_back(entry.path());
 		}
 

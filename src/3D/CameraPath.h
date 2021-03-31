@@ -9,21 +9,29 @@
 
 #pragma once
 
-#include "L3DMesh.h"
-#include "MeshPack.h"
-#include <Common/FileSystem.h>
+#include "Entities/Components/CameraSceneNode.h"
+#include "Common/FileSystem.h"
 
-#include <map>
+#include <glm/vec3.hpp>
 
 namespace openblack
 {
-class MeshLocator
+
+struct CameraPoint
+{
+	glm::vec3 position;
+	glm::vec3 rotation;
+};
+
+class CameraPath
 {
 public:
-	bool LoadLooseMeshFiles(std::filesystem::path path);
-	std::map<std::string, MeshId>& GetMeshes() { return _meshes; };
+	CameraPath() {};
+	~CameraPath() = default;
+	bool LoadFromFile(const fs::path& path);
+	const std::vector<CameraPoint>& GetPoints() const { return _points; }
+
 private:
-	void LoadMeshes(std::vector<std::filesystem::path> paths);
-	std::map<std::string, MeshId> _meshes;
+	std::vector<CameraPoint> _points;
 };
 }

@@ -9,21 +9,35 @@
 
 #pragma once
 
-#include "L3DMesh.h"
-#include "MeshPack.h"
-#include <Common/FileSystem.h>
+#include "Temple.h"
 
-#include <map>
+#include <string>
 
-namespace openblack
+namespace openblack::entities::components
 {
-class MeshLocator
+enum class TempleIndoorRoom
 {
-public:
-	bool LoadLooseMeshFiles(std::filesystem::path path);
-	std::map<std::string, MeshId>& GetMeshes() { return _meshes; };
-private:
-	void LoadMeshes(std::vector<std::filesystem::path> paths);
-	std::map<std::string, MeshId> _meshes;
+	ChallengeRoom,
+	CreatureCave,
+	CreditsRoom,
+	MainRoom,
+	MultiplayerRoom,
+	OptionsRoom,
+	SaveGameRoom
+};
+
+struct Temple
+{
+	std::string owner;
+};
+
+struct TempleWorshipSite
+{
+	std::string owner;
+};
+
+struct TempleInterior
+{
+	TempleIndoorRoom room;
 };
 }

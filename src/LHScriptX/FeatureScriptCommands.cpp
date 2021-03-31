@@ -11,15 +11,18 @@
 
 #include <tuple>
 
+#include <Entities/Components/Temple.h>
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/Camera.h"
 #include "3D/LandIsland.h"
+#include "3D/MeshPack.h"
 #include "AllMeshes.h"
 #include "Entities/Components/Abode.h"
 #include "Entities/Components/AnimatedStatic.h"
+#include "Entities/Components/Creature.h"
 #include "Entities/Components/Field.h"
 #include "Entities/Components/Footpath.h"
 #include "Entities/Components/Forest.h"
@@ -47,19 +50,6 @@ const constexpr ParameterType TVector = ParameterType::Vector;
 namespace
 {
 std::unordered_map<std::string, Abode::Info> abodeIdLookup {
-    // Norse
-    {"NORSE_ABODE_TOWN_CENTRE", Abode::Info::NorseTownCentre},
-    {"NORSE_ABODE_STORAGE_PIT", Abode::Info::NorseStoragePit},
-    {"NORSE_ABODE_GRAVEYARD", Abode::Info::NorseGraveyard},
-    {"NORSE_ABODE_WORKSHOP", Abode::Info::NorseWorkshop},
-    {"NORSE_ABODE_CRECHE", Abode::Info::NorseCreche},
-    {"NORSE_ABODE_A", Abode::Info::NorseHut},
-    {"NORSE_ABODE_B", Abode::Info::NorseShackX},
-    {"NORSE_ABODE_C", Abode::Info::NorseShackY},
-    {"NORSE_ABODE_D", Abode::Info::NorseTent},
-    {"NORSE_ABODE_E", Abode::Info::NorseTempleX},
-    {"NORSE_ABODE_F", Abode::Info::NorseTempleY},
-    {"NORSE_ABODE_WONDER", Abode::Info::NorseWonder},
     // Celtic
     {"CELTIC_ABODE_TOWN_CENTRE", Abode::Info::CelticTownCentre},
     {"CELTIC_ABODE_STORAGE_PIT", Abode::Info::CelticStoragePit},
@@ -73,8 +63,34 @@ std::unordered_map<std::string, Abode::Info> abodeIdLookup {
     {"CELTIC_ABODE_E", Abode::Info::CelticTempleX},
     {"CELTIC_ABODE_F", Abode::Info::CelticTempleY},
     {"CELTIC_ABODE_WONDER", Abode::Info::CelticWonder},
-    // Japanese
-    {"JAPANESE_ABODE_TOWN_CENTRE", Abode::Info::JapaneseTownCentre},
+    // African
+	{"AFRICAN_ABODE_TOWN_CENTRE", Abode::Info::AfricanTownCentre},
+	{"AFRICAN_ABODE_STORAGE_PIT", Abode::Info::AfricanStoragePit},
+	{"AFRICAN_ABODE_GRAVEYARD", Abode::Info::AfricanGraveyard},
+	{"AFRICAN_ABODE_WORKSHOP", Abode::Info::AfricanWorkshop},
+	{"AFRICAN_ABODE_CRECHE", Abode::Info::AfricanCreche},
+	{"AFRICAN_ABODE_A", Abode::Info::AfricanHut},
+	{"AFRICAN_ABODE_B", Abode::Info::AfricanShackX},
+	{"AFRICAN_ABODE_C", Abode::Info::AfricanShackY},
+	{"AFRICAN_ABODE_D", Abode::Info::AfricanTent},
+	{"AFRICAN_ABODE_E", Abode::Info::AfricanTempleX},
+	{"AFRICAN_ABODE_F", Abode::Info::AfricanTempleY},
+	{"AFRICAN_ABODE_WONDER", Abode::Info::AfricanWonder},
+	// Aztec
+	{"AZTEC_ABODE_TOWN_CENTRE", Abode::Info::AztecTownCentre},
+	{"AZTEC_ABODE_STORAGE_PIT", Abode::Info::AztecStoragePit},
+	{"AZTEC_ABODE_GRAVEYARD", Abode::Info::AztecGraveyard},
+	{"AZTEC_ABODE_WORKSHOP", Abode::Info::AztecGraveyard},
+	{"AZTEC_ABODE_CRECHE", Abode::Info::AztecCreche},
+	{"AZTEC_ABODE_A", Abode::Info::AztecHut},
+	{"AZTEC_ABODE_B", Abode::Info::AztecShackX},
+	{"AZTEC_ABODE_C", Abode::Info::AztecShackY},
+	{"AZTEC_ABODE_D", Abode::Info::AztecTent},
+	{"AZTEC_ABODE_E", Abode::Info::AztecTempleX},
+	{"AZTEC_ABODE_F", Abode::Info::AztecTempleY},
+	{"AZTEC_ABODE_WONDER", Abode::Info::AztecWonder},
+	// Japanese
+	{"JAPANESE_ABODE_TOWN_CENTRE", Abode::Info::JapaneseTownCentre},
     {"JAPANESE_ABODE_STORAGE_PIT", Abode::Info::JapaneseStoragePit},
     {"JAPANESE_ABODE_GRAVEYARD", Abode::Info::JapaneseGraveyard},
     {"JAPANESE_ABODE_WORKSHOP", Abode::Info::JapaneseWorkshop},
@@ -86,21 +102,60 @@ std::unordered_map<std::string, Abode::Info> abodeIdLookup {
     {"JAPANESE_ABODE_E", Abode::Info::JapaneseTempleX},
     {"JAPANESE_ABODE_F", Abode::Info::JapaneseTempleY},
     {"JAPANESE_ABODE_WONDER", Abode::Info::JapaneseWonder},
-    // Aztec
-    {"AZTEC_ABODE_TOWN_CENTRE", Abode::Info::AztecTownCentre},
-    {"AZTEC_ABODE_STORAGE_PIT", Abode::Info::AztecStoragePit},
-    {"AZTEC_ABODE_GRAVEYARD", Abode::Info::AztecGraveyard},
-    {"AZTEC_ABODE_WORKSHOP", Abode::Info::AztecGraveyard},
-    {"AZTEC_ABODE_CRECHE", Abode::Info::AztecCreche},
-    {"AZTEC_ABODE_A", Abode::Info::AztecHut},
-    {"AZTEC_ABODE_B", Abode::Info::AztecShackX},
-    {"AZTEC_ABODE_C", Abode::Info::AztecShackY},
-    {"AZTEC_ABODE_D", Abode::Info::AztecTent},
-    {"AZTEC_ABODE_E", Abode::Info::AztecTempleX},
-    {"AZTEC_ABODE_F", Abode::Info::AztecTempleY},
-    {"AZTEC_ABODE_WONDER", Abode::Info::AztecWonder},
-    // Tibetan
-    {"TIBETAN_ABODE_TOWN_CENTRE", Abode::Info::TibetanTownCentre},
+	// American Indian
+	{"INDIAN_ABODE_TOWN_CENTRE", Abode::Info::IndianTownCentre},
+	{"INDIAN_ABODE_STORAGE_PIT", Abode::Info::IndianStoragePit},
+	{"INDIAN_ABODE_GRAVEYARD", Abode::Info::IndianGraveyard},
+	{"INDIAN_ABODE_WORKSHOP", Abode::Info::IndianWorkshop},
+	{"INDIAN_ABODE_CRECHE", Abode::Info::IndianCreche},
+	{"INDIAN_ABODE_A", Abode::Info::IndianHut},
+	{"INDIAN_ABODE_B", Abode::Info::IndianShackX},
+	{"INDIAN_ABODE_C", Abode::Info::IndianShackY},
+	{"INDIAN_ABODE_D", Abode::Info::IndianTent},
+	{"INDIAN_ABODE_E", Abode::Info::IndianTempleX},
+	{"INDIAN_ABODE_F", Abode::Info::IndianTempleY},
+	{"INDIAN_ABODE_WONDER", Abode::Info::IndianWonder},
+    // Egyptian
+	{"EGYPTIAN_ABODE_TOWN_CENTRE", Abode::Info::AfricanTownCentre},
+	{"EGYPTIAN_ABODE_STORAGE_PIT", Abode::Info::AfricanStoragePit},
+	{"EGYPTIAN_ABODE_GRAVEYARD", Abode::Info::AfricanGraveyard},
+	{"EGYPTIAN_ABODE_WORKSHOP", Abode::Info::AfricanWorkshop},
+	{"EGYPTIAN_ABODE_CRECHE", Abode::Info::AfricanCreche},
+	{"EGYPTIAN_ABODE_A", Abode::Info::AfricanHut},
+	{"EGYPTIAN_ABODE_B", Abode::Info::AfricanShackX},
+	{"EGYPTIAN_ABODE_C", Abode::Info::AfricanShackY},
+	{"EGYPTIAN_ABODE_D", Abode::Info::AfricanTent},
+	{"EGYPTIAN_ABODE_E", Abode::Info::AfricanTempleX},
+	{"EGYPTIAN_ABODE_F", Abode::Info::AfricanTempleY},
+	{"EGYPTIAN_ABODE_WONDER", Abode::Info::AfricanWonder},
+	// Greek
+	{"GREEK_ABODE_TOWN_CENTRE", Abode::Info::GreekTownCentre},
+	{"GREEK_ABODE_STORAGE_PIT", Abode::Info::GreekStoragePit},
+	{"GREEK_ABODE_GRAVEYARD", Abode::Info::GreekGraveyard},
+	{"GREEK_ABODE_WORKSHOP", Abode::Info::GreekWorkshop},
+	{"GREEK_ABODE_CRECHE", Abode::Info::GreekCreche},
+	{"GREEK_ABODE_A", Abode::Info::GreekHut},
+	{"GREEK_ABODE_B", Abode::Info::GreekShackX},
+	{"GREEK_ABODE_C", Abode::Info::GreekShackY},
+	{"GREEK_ABODE_D", Abode::Info::GreekTent},
+	{"GREEK_ABODE_E", Abode::Info::GreekTempleX},
+	{"GREEK_ABODE_F", Abode::Info::GreekTempleY},
+	{"GREEK_ABODE_WONDER", Abode::Info::GreekWonder},
+	// Norse
+	{"NORSE_ABODE_TOWN_CENTRE", Abode::Info::NorseTownCentre},
+	{"NORSE_ABODE_STORAGE_PIT", Abode::Info::NorseStoragePit},
+	{"NORSE_ABODE_GRAVEYARD", Abode::Info::NorseGraveyard},
+	{"NORSE_ABODE_WORKSHOP", Abode::Info::NorseWorkshop},
+	{"NORSE_ABODE_CRECHE", Abode::Info::NorseCreche},
+	{"NORSE_ABODE_A", Abode::Info::NorseHut},
+	{"NORSE_ABODE_B", Abode::Info::NorseShackX},
+	{"NORSE_ABODE_C", Abode::Info::NorseShackY},
+	{"NORSE_ABODE_D", Abode::Info::NorseTent},
+	{"NORSE_ABODE_E", Abode::Info::NorseTempleX},
+	{"NORSE_ABODE_F", Abode::Info::NorseTempleY},
+	{"NORSE_ABODE_WONDER", Abode::Info::NorseWonder},
+	// Tibetan
+	{"TIBETAN_ABODE_TOWN_CENTRE", Abode::Info::TibetanTownCentre},
     {"TIBETAN_ABODE_STORAGE_PIT", Abode::Info::TibetanStoragePit},
     {"TIBETAN_ABODE_GRAVEYARD", Abode::Info::TibetanGraveyard},
     {"TIBETAN_ABODE_WORKSHOP", Abode::Info::TibetanWorkshop},
@@ -112,32 +167,6 @@ std::unordered_map<std::string, Abode::Info> abodeIdLookup {
     {"TIBETAN_ABODE_E", Abode::Info::TibetanTempleX},
     {"TIBETAN_ABODE_F", Abode::Info::TibetanTempleY},
     {"TIBETAN_ABODE_WONDER", Abode::Info::TibetanWonder},
-    // American Indian
-    {"INDIAN_ABODE_TOWN_CENTRE", Abode::Info::IndianTownCentre},
-    {"INDIAN_ABODE_STORAGE_PIT", Abode::Info::IndianStoragePit},
-    {"INDIAN_ABODE_GRAVEYARD", Abode::Info::IndianGraveyard},
-    {"INDIAN_ABODE_WORKSHOP", Abode::Info::IndianWorkshop},
-    {"INDIAN_ABODE_CRECHE", Abode::Info::IndianCreche},
-    {"INDIAN_ABODE_A", Abode::Info::IndianHut},
-    {"INDIAN_ABODE_B", Abode::Info::IndianShackX},
-    {"INDIAN_ABODE_C", Abode::Info::IndianShackY},
-    {"INDIAN_ABODE_D", Abode::Info::IndianTent},
-    {"INDIAN_ABODE_E", Abode::Info::IndianTempleX},
-    {"INDIAN_ABODE_F", Abode::Info::IndianTempleY},
-    {"INDIAN_ABODE_WONDER", Abode::Info::IndianWonder},
-    // Greek
-    {"GREEK_ABODE_TOWN_CENTRE", Abode::Info::GreekTownCentre},
-    {"GREEK_ABODE_STORAGE_PIT", Abode::Info::GreekStoragePit},
-    {"GREEK_ABODE_GRAVEYARD", Abode::Info::GreekGraveyard},
-    {"GREEK_ABODE_WORKSHOP", Abode::Info::GreekWorkshop},
-    {"GREEK_ABODE_CRECHE", Abode::Info::GreekCreche},
-    {"GREEK_ABODE_A", Abode::Info::GreekHut},
-    {"GREEK_ABODE_B", Abode::Info::GreekShackX},
-    {"GREEK_ABODE_C", Abode::Info::GreekShackY},
-    {"GREEK_ABODE_D", Abode::Info::GreekTent},
-    {"GREEK_ABODE_E", Abode::Info::GreekTempleX},
-    {"GREEK_ABODE_F", Abode::Info::GreekTempleY},
-    {"GREEK_ABODE_WONDER", Abode::Info::GreekWonder},
 };
 
 std::unordered_map<std::string, Feature::Info> featureInfoLookup {
@@ -145,9 +174,18 @@ std::unordered_map<std::string, Feature::Info> featureInfoLookup {
     {"Pilar3 Lime", Feature::Info::Pilar3Lime},
     {"Aztec Statue Feature", Feature::Info::AztcStatue},
     {"Spikey Pilar Lime", Feature::Info::SpikeyPilarLime},
+	{"Spikey Pilar Volcanic", Feature::Info::SpikeyPilarVolcanic},
+	{"Prison Pillar 1", Feature::Info::PrisonPillar_1},
+	{"Prison Pillar 2", Feature::Info::PrisonPillar_2},
+	{"Prison Pillar 3", Feature::Info::PrisonPillar_3},
     {"Pilar2 Lime", Feature::Info::Pilar2Lime},
     {"Crater", Feature::Info::Crater},
     {"Pier", Feature::Info::Pier},
+	{"Spiky Pilar Lime", Feature::Info::SpikeyPilarLime},
+	{"Pilar2 Lime", Feature::Info::Pilar2Lime},
+	{"Tibetan Large Pillar Feature", Feature::Info::TibtLargePiller},
+	{"Aztec Statue Feature", Feature::Info::AztcStatue},
+	{"Aztec Suntemple Feature", Feature::Info::AztcSuntemple},
 };
 
 const auto tribeLookup = makeLookup<Tribe>(TribeStrs);
@@ -463,16 +501,24 @@ void FeatureScriptCommands::CreateVillagerPos(glm::vec3 position, [[maybe_unused
 	                      static_cast<int8_t>(0));
 }
 
-void FeatureScriptCommands::CreateCitadel(glm::vec3 position, int32_t, const std::string&, int32_t, int32_t)
+void FeatureScriptCommands::CreateCitadel(glm::vec3 position, int32_t, const std::string& affiliation, int32_t rotation, int32_t size)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	auto& registry = Game::instance()->GetEntityRegistry();
+	const auto entity = registry.Create();
+	registry.Assign<Transform>(entity, position, GetRotation(rotation), GetSize(size));
+	auto& temple = registry.Assign<Temple>(entity, affiliation);
+	registry.Assign<Mesh>(entity, Game::instance()->GetTempleStructure().GetTempleMeshId(temple), static_cast<int8_t>(0),
+						  static_cast<int8_t>(0));
 }
 
-void FeatureScriptCommands::CreatePlannedCitadel(int32_t, glm::vec3 position, int32_t, const std::string&, int32_t, int32_t)
+void FeatureScriptCommands::CreatePlannedCitadel(int32_t townId, glm::vec3 position, int32_t _, const std::string& affiliation, int32_t rotation, int32_t size)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	auto& registry = Game::instance()->GetEntityRegistry();
+	const auto entity = registry.Create();
+	registry.Assign<Transform>(entity, position, GetRotation(rotation), GetSize(size));
+	auto& temple = registry.Assign<Temple>(entity, affiliation);
+	registry.Assign<Mesh>(entity, Game::instance()->GetTempleStructure().GetTempleMeshId(temple), static_cast<int8_t>(0),
+						  static_cast<int8_t>(0));
 }
 
 void FeatureScriptCommands::CreateCreaturePen(glm::vec3 position, int32_t, int32_t, int32_t, int32_t, int32_t)
@@ -481,11 +527,15 @@ void FeatureScriptCommands::CreateCreaturePen(glm::vec3 position, int32_t, int32
 	// __func__);
 }
 
-void FeatureScriptCommands::CreateWorshipSite(glm::vec3 position, int32_t, const std::string&, const std::string&, int32_t,
-                                              int32_t)
+void FeatureScriptCommands::CreateWorshipSite(glm::vec3 position, int32_t civilisation, const std::string& affiliation, const std::string& civilisationWorshippers, int32_t rotation,
+                                              int32_t size)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	auto& registry = Game::instance()->GetEntityRegistry();
+	const auto entity = registry.Create();
+	registry.Assign<Transform>(entity, position, GetRotation(rotation), GetSize(size));
+	auto& site = registry.Assign<TempleWorshipSite>(entity, affiliation);
+	registry.Assign<Mesh>(entity, Game::instance()->GetTempleStructure().GetTempleWorshipSiteMeshId(site), static_cast<int8_t>(0),
+						  static_cast<int8_t>(0));
 }
 
 void FeatureScriptCommands::CreatePlannedWorshipSite(glm::vec3 position, int32_t, const std::string&, const std::string&,
@@ -655,7 +705,12 @@ void FeatureScriptCommands::CreateCreature(glm::vec3 position, int32_t, int32_t)
 void FeatureScriptCommands::CreateCreatureFromFile(const std::string& playerName, int32_t creatureType,
                                                    const std::string& creatureMind, glm::vec3 position)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX Function {} not implemented.", __func__);
+	auto& registry = Game::instance()->GetEntityRegistry();
+	const auto entity = registry.Create();
+	auto& creature = registry.Assign<Creature>(entity, playerName, CreatureBody::Species(creatureType), creatureMind);
+	auto meshId = Game::instance()->GetCreatureBody().GetMeshId(creature);
+	registry.Assign<entities::components::Mesh>(entity, meshId);
+	registry.Assign<Transform>(entity, position, glm::eulerAngleY(glm::radians(180.0f)), glm::vec3(1.0f));
 }
 
 void FeatureScriptCommands::CreateFlock(int32_t, glm::vec3, glm::vec3, int32_t, int32_t, int32_t)
@@ -870,16 +925,26 @@ void FeatureScriptCommands::MultiplayerDebug(int32_t, int32_t)
 	// __func__);
 }
 
-void FeatureScriptCommands::CreateStreetLantern(glm::vec3 position, int32_t)
+void FeatureScriptCommands::CreateStreetLantern(glm::vec3 position, int32_t type)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	auto& registry = Game::instance()->GetEntityRegistry();
+	const auto entity = registry.Create();
+	registry.Assign<Transform>(entity, position, glm::eulerAngleY(glm::radians(180.0f)), glm::vec3(1.0f));
+
+	// Any value other than 7 creates a bonfire. Weird but ok
+	auto lanternOrBonfire = type == 7 ? MobileStatic::Info::StreetLantern : MobileStatic::Info::Bonfire;
+
+	const auto& mobile = registry.Assign<MobileStatic>(entity, lanternOrBonfire);
+	registry.Assign<Mesh>(entity, mobileStaticMeshLookup[mobile.type], static_cast<int8_t>(0), static_cast<int8_t>(1));
 }
 
 void FeatureScriptCommands::CreateStreetLight(glm::vec3 position)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	auto& registry = Game::instance()->GetEntityRegistry();
+	const auto entity = registry.Create();
+	registry.Assign<Transform>(entity, position, glm::eulerAngleY(glm::radians(180.0f)), glm::vec3(1.0f));
+	const auto& mobile = registry.Assign<MobileStatic>(entity, MobileStatic::Info::StreetLantern);
+	registry.Assign<Mesh>(entity, mobileStaticMeshLookup[mobile.type], static_cast<int8_t>(0), static_cast<int8_t>(1));
 }
 
 void FeatureScriptCommands::SetLandNumber(int32_t number)

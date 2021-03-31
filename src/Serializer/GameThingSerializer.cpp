@@ -132,7 +132,7 @@ std::vector<T> GameThingSerializer::DeserializeList()
 	list.reserve(count);
 	for (uint32_t i = 0; i < count; ++i)
 	{
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "i={}", i);
+//		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "i={}", i);
 		auto ptr = std::dynamic_pointer_cast<T>(DeserializeOne(GameThingTypeEnum<T>));
 		if (ptr)
 		{

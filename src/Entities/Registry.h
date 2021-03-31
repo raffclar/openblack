@@ -32,8 +32,15 @@ class Registry
 public:
 	Registry();
 
-	void PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams);
+	void PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams, bool drawCameraPaths);
 	decltype(auto) Create() { return _registry.create(); }
+	decltype(auto) Destroy(entt::entity entity) { return _registry.destroy(entity); }
+	template <typename Component>
+	decltype(auto) Destroy()
+	{
+		auto entities = _registry.view<Component>();
+		return _registry.destroy(entities.begin(), entities.end());
+	};
 	template <typename Component, typename... Args>
 	decltype(auto) Assign(entt::entity entity, [[maybe_unused]] Args&&... args)
 	{
@@ -98,6 +105,21 @@ public:
 	decltype(auto) Size() const
 	{
 		return _registry.view<Components...>().size();
+	}
+	template <typename Component>
+	decltype(auto) OnConstruct()
+	{
+		return _registry.on_construct<Component>();
+	}
+	template <typename Component>
+	decltype(auto) OnUpdate()
+	{
+		return _registry.on_update<Component>();
+	}
+	template <typename Component>
+	decltype(auto) OnDestroy()
+	{
+		return _registry.on_destroy<Component>();
 	}
 
 private:

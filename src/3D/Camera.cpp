@@ -13,6 +13,8 @@
 
 #include <glm/gtx/euler_angles.hpp>
 
+#include <cmath>
+
 using namespace openblack;
 
 glm::mat4 Camera::getRotationMatrix() const
@@ -185,7 +187,51 @@ void Camera::handleMouseInput(const SDL_Event& e)
 
 void Camera::Update(std::chrono::microseconds dt)
 {
-	_position += _velocity * (_movementSpeed * dt.count());
+	if (_playingPath)
+	{
+		auto targetPosition = _playingPathStartPosition + _playingPathTrail[_playingPathIndex].position;
+		auto targetRotation = _playingPathStartPosition + _playingPathTrail[_playingPathIndex].rotation;
+		auto tD = glm::length(_position);
+		auto tT = glm::length(targetPosition);
+		auto speed = 0.25 * (_movementSpeed * dt.count());
+		_playingPathProgress += (tD / tT) / speed;
+		auto shit = glm::lerp(_playingPathPrevPosition, targetPosition, _playingPathProgress);
+		_position = shit;
+
+		if (_playingPathProgress >= 1.0f)
+//		if (glm::all(glm::epsilonEqual(_position, target, 0.0001f)))
+		{
+			if (_playingPathIndex + 1 == _playingPathTrail.size())
+			{
+				// Finished
+				_playingPath = false;
+				_playingPathPrevPosition = _position;
+				_playingPathIndex = 0;
+				_playingPathProgress = 0;
+			} else
+			{
+				_playingPathIndex++;
+				_playingPathPrevPosition = _position;
+				_playingPathProgress = 0;
+			}
+		}
+	}
+	else
+	{
+		_position += _velocity * (_movementSpeed * dt.count());
+	}
+}
+void Camera::PlayPath(const CameraPath& camPath, glm::vec3 startPosition)
+{
+	_playingPathTrail.clear();
+	auto& points = camPath.GetPoints();
+	_playingPath = true;
+	_playingPathTrail = std::vector<CameraPoint>(points.begin(), points.end());
+	_playingPathStartPosition = startPosition;
+	_position = startPosition + _playingPathTrail[0].position;
+	_playingPathIndex = 0;
+	_playingPathPrevPosition = startPosition;
+	_playingPathProgress = 0;
 }
 
 glm::mat4 ReflectionCamera::GetViewMatrix() const

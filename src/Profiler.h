@@ -41,6 +41,7 @@ public:
 		MainPassDrawIsland,
 		MainPassDrawModels,
 		MainPassDrawDebugCross,
+		TransparencyPass,
 		GuiDraw,
 		RendererFrame,
 
@@ -90,6 +91,7 @@ public:
 	    "Draw Island",       //
 	    "Draw Models",       //
 	    "Draw Debug Cross",  //
+	    "Draw Transparency", //
 	    "Encode GUI Draw",   //
 	    "Renderer Frame",    //
 	};

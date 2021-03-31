@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include "CameraPath.h"
+
 #include <SDL_events.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -16,6 +18,7 @@
 
 #include <chrono>
 #include <memory>
+#include <vector>
 
 namespace openblack
 {
@@ -71,6 +74,7 @@ public:
 	void handleMouseInput(const SDL_Event&);
 
 	[[nodiscard]] glm::mat4 getRotationMatrix() const;
+	void PlayPath(const CameraPath& camPath, glm::vec3 startPosition);
 
 protected:
 	glm::vec3 _position;
@@ -78,6 +82,13 @@ protected:
 	glm::vec3 _dv;
 
 	glm::mat4 _projectionMatrix;
+
+	bool _playingPath = false;
+	std::vector<CameraPoint> _playingPathTrail;
+	size_t _playingPathIndex;
+	float _playingPathProgress = 0;
+	glm::vec3 _playingPathStartPosition;
+	glm::vec3 _playingPathPrevPosition;
 
 	glm::vec3 _velocity;
 	float _movementSpeed;

@@ -10,6 +10,7 @@
 #include "MeshPack.h"
 
 #include "3D/L3DMesh.h"
+#include "3D/MeshLocator.h"
 #include "AllMeshes.h"
 #include "Common/FileSystem.h"
 #include "Common/MemoryStream.h"
@@ -17,6 +18,9 @@
 #include "Game.h"
 #include "Graphics/Texture2D.h"
 
+extern "C" {
+#include "miniz.c"
+}
 #include <PackFile.h>
 #include <spdlog/spdlog.h>
 
@@ -31,23 +35,65 @@ MeshPack::MeshPack(bool enableUnknownMeshes)
 {
 }
 
-bool MeshPack::LoadFromFile(const fs::path& path)
+MeshId MeshPack::LoadFromFile(const fs::path& path)
 {
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading Mesh Pack from file: {}", path.generic_string());
-	pack::PackFile pack;
+	auto pathExt = path.extension().string();
+	LowerCase(pathExt);
 
-	try
-	{
-		pack.Open(Game::instance()->GetFileSystem().FindPath(path).u8string());
-	}
-	catch (std::runtime_error& err)
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to open {}: {}", path.generic_string(), err.what());
-		return false;
-	}
+//	try
+//	{
+		if (pathExt == ".g3d")
+		{
+			pack::PackFile pack;
+			pack.Open(Game::instance()->GetFileSystem().FindPath(path).u8string());
+			loadTextures(pack.GetTextures());
+			loadMeshes(pack.GetMeshes());
+			return MeshId(_meshes.size() - 1);
+		}
+		else if (pathExt == ".l3d")
+		{
+			auto mesh = std::make_unique<L3DMesh>();
+			mesh->LoadFromFile(path);
+			auto meshId = MeshId(_meshes.size());
+			_meshes.emplace_back(std::move(mesh));
+			MeshNames.emplace_back(path.stem().string());
+			return meshId;
+		}
+		else if (pathExt == ".zzz")
+		{
+			if (path.stem().string() == "credits_l3d")
+			{
+				printf("fucked");
+			}
 
-	loadTextures(pack.GetTextures());
-	loadMeshes(pack.GetMeshes());
+			auto stream = Game::instance()->GetFileSystem().Open(path, FileMode::Read);
+			uint32_t decompressedSize = 0;
+			auto buffer = std::vector<uint8_t>(stream->Size() - sizeof(decompressedSize));
+			stream->Read(reinterpret_cast<uint32_t*>(&decompressedSize), sizeof(decompressedSize));
+			stream->Read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+			auto decompressedBuffer = std::vector<uint8_t>(decompressedSize);
+			auto r = uncompress(decompressedBuffer.data(), reinterpret_cast<mz_ulong*>(&decompressedSize), buffer.data(), buffer.size());
+
+			if (r != MZ_OK)
+			{
+				return false;
+			}
+
+			// Load the decompressed mesh
+			auto mesh = std::make_unique<L3DMesh>();
+			mesh->LoadFromBuffer(decompressedBuffer);
+			auto meshId = MeshId(_meshes.size());
+			_meshes.emplace_back(std::move(mesh));
+			MeshNames.emplace_back(path.stem().string());
+			return meshId;
+		}
+//	}
+//	catch (std::runtime_error& err)
+//	{
+//		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to open {}: {}", path.generic_string(), err.what());
+//		return false;
+//	}
 
 	return true;
 }

@@ -9,21 +9,16 @@
 
 #pragma once
 
-#include "L3DMesh.h"
-#include "MeshPack.h"
-#include <Common/FileSystem.h>
+#include "Creature.h"
+#include <CreatureBody.h>
 
-#include <map>
+namespace openblack::entities::components
+{
 
-namespace openblack
+struct Creature
 {
-class MeshLocator
-{
-public:
-	bool LoadLooseMeshFiles(std::filesystem::path path);
-	std::map<std::string, MeshId>& GetMeshes() { return _meshes; };
-private:
-	void LoadMeshes(std::vector<std::filesystem::path> paths);
-	std::map<std::string, MeshId> _meshes;
+	std::string owner;
+	CreatureBody::Species species;
+	std::string mindName;
 };
 }

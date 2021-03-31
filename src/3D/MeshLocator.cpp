@@ -8,9 +8,39 @@
  *****************************************************************************/
 
 #include "MeshLocator.h"
+#include "Game.h"
 
-bool MeshLocator::LoadMeshFiles()
+#include <locale>
+
+using namespace openblack;
+
+bool MeshLocator::LoadLooseMeshFiles(std::filesystem::path path)
 {
-	fs.
+	_meshes.clear();
+	auto& fs = Game::instance()->GetFileSystem();
+
+	if (!fs.Exists(path))
+	{
+		return false;
+	}
+
+	LoadMeshes(fs.GetAllFilePaths(path.string(), ".zzz", true));
+	LoadMeshes(fs.GetAllFilePaths(path.string(), ".l3d", true));
+
 	return true;
+}
+void MeshLocator::LoadMeshes(std::vector<std::filesystem::path> paths)
+{
+	for (auto& path : paths)
+	{
+		if (path.string() == "D:\\black_and_white\\Black&White\\Data\\CreatureMesh\\zombie_ape.l3d")
+		{
+			printf("AAA");
+		}
+
+		auto meshId = Game::instance()->GetMeshPack().LoadFromFile(path);
+		auto name = path.stem().string();
+		LowerCase(name);
+		_meshes.emplace(name, std::move(meshId));
+	}
 }

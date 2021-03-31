@@ -36,7 +36,9 @@ Token Lexer::GetToken()
 			// Comment syntax. Ignore the rest of the line
 			if (*(current_ + 1) == '/')
 			{
-				currentLine_++;
+				// Skip line
+				while (*current_ != '\n' && current_ != end_)
+					current_++;
 			}
 			break;
 		case ' ':

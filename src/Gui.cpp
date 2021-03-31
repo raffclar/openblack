@@ -499,6 +499,7 @@ bool Gui::Loop(Game& game, const Renderer& renderer)
 	LHVMViewer::Draw(game.GetLhvm());
 	ShowLandIslandWindow(game);
 	ShowProfilerWindow(game);
+	ShowTempleInteriorWindow(game);
 	ShowWaterFramebuffer(game);
 
 	ImGui::Render();
@@ -682,6 +683,11 @@ bool Gui::ShowMenu(Game& game)
 				config.showProfiler = true;
 			}
 
+			if (ImGui::MenuItem("Open Temple Debug"))
+			{
+				config.showTempleDebug = true;
+			}
+
 			if (ImGui::MenuItem("Console"))
 			{
 				_console->Open();
@@ -717,7 +723,7 @@ bool Gui::ShowMenu(Game& game)
 				ImGui::Checkbox("Bounding Boxes", &config.drawBoundingBoxes);
 				ImGui::Checkbox("Footpaths", &config.drawFootpaths);
 				ImGui::Checkbox("Streams", &config.drawStreams);
-
+				ImGui::Checkbox("Camera Paths", &config.drawCameraPaths);
 				ImGui::EndMenu();
 			}
 
@@ -1268,4 +1274,48 @@ void Gui::ShowCameraPositionOverlay(const Game& game)
 		ImGui::Text("Game Turn: %u (%.3f ms)", game.GetTurn(), game.GetDeltaTime().count());
 	}
 	ImGui::End();
+}
+
+void Gui::ShowTempleInteriorWindow(Game& game)
+{
+	auto& config = game.GetConfig();
+
+	if (!config.showTempleDebug)
+	{
+		return;
+	}
+
+	if (ImGui::Begin("Temple Debug", &config.showTempleDebug))
+	{
+		auto& temple = game.GetTempleStructure();
+		if (!temple.IsInsideTemple() && ImGui::Button("Enter Temple"))
+		{
+			game.EnterTemple();
+		}
+
+		if (temple.IsInsideTemple() && ImGui::Button("Exit Temple"))
+		{
+			game.ExitTemple();
+		}
+
+		ImGui::Separator();
+
+		if (temple.IsInsideTemple())
+		{
+			auto roomCount = static_cast<int>(TempleStructure::TempleRoom::Count);
+
+			for (auto i = 0; i < roomCount; i++)
+			{
+				auto room = TempleStructure::TempleRoom(i);
+				auto label = "Enter " + TempleStructure::GetRoomName(room);
+
+				if (ImGui::Button(label.c_str()))
+				{
+					temple.MoveToRoom(room);
+				}
+			}
+		}
+
+		ImGui::End();
+	}
 }
