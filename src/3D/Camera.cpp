@@ -1,45 +1,33 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
-#include <3D/Camera.h>
+#include "Camera.h"
+#include <3D/LandIsland.h>
 #include <Game.h>
 
-using namespace OpenBlack;
+#include <glm/gtx/euler_angles.hpp>
+
+using namespace openblack;
 
 glm::mat4 Camera::getRotationMatrix() const
 {
-	glm::mat4 pitch, yaw, roll = glm::mat4(1.0f);
+	return glm::eulerAngleZXY(_rotation.z, _rotation.x, _rotation.y);
+}
 
-	pitch = glm::rotate(glm::mat4(1.0f), _rotation.x, glm::vec3(1.0f, 0.0f, 0.0f));
-	yaw   = glm::rotate(glm::mat4(1.0f), _rotation.y, glm::vec3(0.0f, 1.0f, 0.0f));
-	roll  = glm::rotate(glm::mat4(1.0f), _rotation.z, glm::vec3(0.0f, 0.0f, 1.0f));
-
-	return roll * pitch * yaw;
+glm::mat4 Camera::GetViewMatrix() const
+{
+	return getRotationMatrix() * glm::translate(glm::mat4(1.0f), -_position);
 }
 
 glm::mat4 Camera::GetViewProjectionMatrix() const
 {
-	glm::mat4 mRotation = getRotationMatrix();
-	glm::mat4 mView     = mRotation * glm::translate(glm::mat4(1.0f), -_position);
-
-	return GetProjectionMatrix() * mView;
+	return GetProjectionMatrix() * GetViewMatrix();
 }
 
 void Camera::SetProjectionMatrixPerspective(float fov, float aspect, float nearclip, float farclip)
@@ -49,22 +37,33 @@ void Camera::SetProjectionMatrixPerspective(float fov, float aspect, float nearc
 
 glm::vec3 Camera::GetForward() const
 {
-	glm::mat4 mRotation = getRotationMatrix();
-	return -glm::vec3(mRotation[0][2], mRotation[1][2], mRotation[2][2]);
+	// Forward is +1 in openblack but is -1 in OpenGL
+	glm::mat3 mRotation = glm::transpose(getRotationMatrix());
+	return mRotation * glm::vec3(0, 0, 1);
 }
 
 glm::vec3 Camera::GetRight() const
 {
-	glm::mat4 mRotation = getRotationMatrix();
-	return glm::vec3(mRotation[0][0], mRotation[1][0], mRotation[2][0]);
+	glm::mat3 mRotation = glm::transpose(getRotationMatrix());
+	return mRotation * glm::vec3(1, 0, 0);
 }
 
 glm::vec3 Camera::GetUp() const
 {
-	return glm::normalize(glm::cross(GetRight(), GetForward()));
+	glm::mat3 mRotation = glm::transpose(getRotationMatrix());
+	return mRotation * glm::vec3(0, 1, 0);
 }
 
-void Camera::DeprojectScreenToWorld(const glm::ivec2 screenPosition, const glm::ivec2 screenSize, glm::vec3& out_worldOrigin, glm::vec3& out_worldDirection)
+std::unique_ptr<Camera> Camera::Reflect(const glm::vec4& relectionPlane) const
+{
+	auto reflectionCamera = std::make_unique<ReflectionCamera>(_position, glm::degrees(_rotation), relectionPlane);
+	reflectionCamera->SetProjectionMatrix(_projectionMatrix);
+
+	return reflectionCamera;
+}
+
+void Camera::DeprojectScreenToWorld(const glm::ivec2 screenPosition, const glm::ivec2 screenSize, glm::vec3& out_worldOrigin,
+                                    glm::vec3& out_worldDirection)
 {
 	const float normalizedX = (float)screenPosition.x / (float)screenSize.x;
 	const float normalizedY = (float)screenPosition.y / (float)screenSize.y;
@@ -72,17 +71,19 @@ void Camera::DeprojectScreenToWorld(const glm::ivec2 screenPosition, const glm::
 	const float screenSpaceX = (normalizedX - 0.5f) * 2.0f;
 	const float screenSpaceY = ((1.0f - normalizedY) - 0.5f) * 2.0f;
 
-	// The start of the ray trace is defined to be at mousex,mousey,1 in projection space (z=0 is near, z=1 is far - this gives us better precision)
-	// To get the direction of the ray trace we need to use any z between the near and the far plane, so let's use (mousex, mousey, 0.5)
+	// The start of the ray trace is defined to be at mousex,mousey,1 in
+	// projection space (z=0 is near, z=1 is far - this gives us better
+	// precision) To get the direction of the ray trace we need to use any z
+	// between the near and the far plane, so let's use (mousex, mousey, 0.5)
 	const glm::vec4 rayStartProjectionSpace = glm::vec4(screenSpaceX, screenSpaceY, 0.0f, 1.0f);
-	const glm::vec4 rayEndProjectionSpace   = glm::vec4(screenSpaceX, screenSpaceY, 0.5f, 1.0f);
+	const glm::vec4 rayEndProjectionSpace = glm::vec4(screenSpaceX, screenSpaceY, 0.5f, 1.0f);
 
 	// Calculate our inverse view projection matrix
 	glm::mat4 inverseViewProj = glm::inverse(GetViewProjectionMatrix());
 
 	// Get our homogeneous coordinates for our start and end ray positions
 	const glm::vec4 hgRayStartWorldSpace = inverseViewProj * rayStartProjectionSpace;
-	const glm::vec4 hgRayEndWorldSpace   = inverseViewProj * rayEndProjectionSpace;
+	const glm::vec4 hgRayEndWorldSpace = inverseViewProj * rayEndProjectionSpace;
 
 	glm::vec3 rayStartWorldSpace(hgRayStartWorldSpace.x, hgRayStartWorldSpace.y, hgRayStartWorldSpace.z);
 	glm::vec3 rayEndWorldSpace(hgRayEndWorldSpace.x, hgRayEndWorldSpace.y, hgRayEndWorldSpace.z);
@@ -97,7 +98,7 @@ void Camera::DeprojectScreenToWorld(const glm::ivec2 screenPosition, const glm::
 	const glm::vec3 rayDirWorldSpace = glm::normalize(rayEndWorldSpace - rayStartWorldSpace);
 
 	// finally, store the results in the outputs
-	out_worldOrigin    = rayStartWorldSpace;
+	out_worldOrigin = rayStartWorldSpace;
 	out_worldDirection = rayDirWorldSpace;
 }
 
@@ -116,27 +117,24 @@ void Camera::handleKeyboardInput(const SDL_Event& e)
 		return;
 
 	if (e.key.keysym.scancode == SDL_SCANCODE_W)
-		_velocity.z += (e.type == SDL_KEYDOWN) ? -1.0f : 1.0f;
+		_dv.z += (e.type == SDL_KEYDOWN) ? 1.0f : -1.0f;
 	else if (e.key.keysym.scancode == SDL_SCANCODE_S)
-		_velocity.z += (e.type == SDL_KEYDOWN) ? 1.0f : -1.0f;
+		_dv.z += (e.type == SDL_KEYDOWN) ? -1.0f : 1.0f;
 	else if (e.key.keysym.scancode == SDL_SCANCODE_A)
-		_velocity.x += (e.type == SDL_KEYDOWN) ? -1.0f : 1.0f;
+		_dv.x += (e.type == SDL_KEYDOWN) ? -1.0f : 1.0f;
 	else if (e.key.keysym.scancode == SDL_SCANCODE_D)
-		_velocity.x += (e.type == SDL_KEYDOWN) ? 1.0f : -1.0f;
+		_dv.x += (e.type == SDL_KEYDOWN) ? 1.0f : -1.0f;
 	else if (e.key.keysym.scancode == SDL_SCANCODE_LCTRL)
-		_velocity.y -= (e.type == SDL_KEYDOWN) ? 1.0f : -1.0f;
+		_dv.y += (e.type == SDL_KEYDOWN) ? -1.0f : 1.0f;
 	else if (e.key.keysym.scancode == SDL_SCANCODE_SPACE)
-		_velocity.y += (e.type == SDL_KEYDOWN) ? 1.0f : -1.0f;
+		_dv.y += (e.type == SDL_KEYDOWN) ? 1.0f : -1.0f;
+
+	glm::mat3 rotation = glm::transpose(GetViewMatrix());
+	_velocity = rotation * _dv;
 }
 
 void Camera::handleMouseInput(const SDL_Event& e)
 {
-	if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP)
-	{
-		if (e.button.button == SDL_BUTTON_MIDDLE)
-			SDL_SetRelativeMouseMode((e.type == SDL_MOUSEBUTTONDOWN) ? SDL_TRUE : SDL_FALSE);
-	}
-
 	// Holding down the middle mouse button enables free look.
 	if (e.type == SDL_MOUSEMOTION && e.motion.state & SDL_BUTTON(SDL_BUTTON_MIDDLE))
 	{
@@ -146,12 +144,64 @@ void Camera::handleMouseInput(const SDL_Event& e)
 		rot.x -= e.motion.yrel * _freeLookSensitivity * 0.1f;
 
 		SetRotation(rot);
+		glm::mat3 viewRotation = glm::transpose(GetViewMatrix());
+		_velocity = viewRotation * _dv;
+	}
+	else if (e.type == SDL_MOUSEMOTION && e.motion.state & SDL_BUTTON(SDL_BUTTON_LEFT))
+	{
+		const auto& land = Game::instance()->GetLandIsland();
+		auto momentum = _position.y / 300;
+		auto forward = GetForward() * static_cast<float>(e.motion.yrel * momentum);
+		auto right = GetRight() * -static_cast<float>(e.motion.xrel * momentum);
+		auto futurePosition = _position + forward + right;
+		auto height = land.GetHeightAt(glm::vec2(futurePosition.x + 5, futurePosition.z + 5)) + 13.0f;
+		futurePosition.y = std::max(height, _position.y);
+		_position = futurePosition;
 	}
 }
 
-void Camera::Update(double dt)
+void Camera::Update(std::chrono::microseconds dt)
 {
-	_position += GetForward() * (float)(_velocity.z * _movementSpeed * dt);
-	_position += GetUp() * (float)(_velocity.y * _movementSpeed * dt);
-	_position += GetRight() * (float)(_velocity.x * _movementSpeed * dt);
+	_position += _velocity * (_movementSpeed * dt.count());
+}
+
+glm::mat4 ReflectionCamera::GetViewMatrix() const
+{
+	glm::mat4 mRotation = getRotationMatrix();
+	glm::mat4 mView = mRotation * glm::translate(glm::mat4(1.0f), -_position);
+
+	// M''camera = Mreflection * Mcamera * Mflip
+	glm::mat4x4 reflectionMatrix;
+	reflectMatrix(reflectionMatrix, _reflectionPlane);
+
+	return mView * reflectionMatrix;
+}
+
+/*
+              | 1-2Nx2   -2NxNy  -2NxNz  -2NxD |
+Mreflection = |  -2NxNy 1-2Ny2   -2NyNz  -2NyD |
+              |  -2NxNz  -2NyNz 1-2Nz2   -2NzD |
+              |    0       0       0       1   |
+*/
+void ReflectionCamera::reflectMatrix(glm::mat4x4& m, const glm::vec4& plane) const
+{
+	m[0][0] = (1.0f - 2.0f * plane[0] * plane[0]);
+	m[1][0] = (-2.0f * plane[0] * plane[1]);
+	m[2][0] = (-2.0f * plane[0] * plane[2]);
+	m[3][0] = (-2.0f * plane[3] * plane[0]);
+
+	m[0][1] = (-2.0f * plane[1] * plane[0]);
+	m[1][1] = (1.0f - 2.0f * plane[1] * plane[1]);
+	m[2][1] = (-2.0f * plane[1] * plane[2]);
+	m[3][1] = (-2.0f * plane[3] * plane[1]);
+
+	m[0][2] = (-2.0f * plane[2] * plane[0]);
+	m[1][2] = (-2.0f * plane[2] * plane[1]);
+	m[2][2] = (1.0f - 2.0f * plane[2] * plane[2]);
+	m[3][2] = (-2.0f * plane[3] * plane[2]);
+
+	m[0][3] = 0.0f;
+	m[1][3] = 0.0f;
+	m[2][3] = 0.0f;
+	m[3][3] = 1.0f;
 }

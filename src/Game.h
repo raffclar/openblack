@@ -1,125 +1,197 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
 #pragma once
-#ifndef OPENBLACK_GAME_H
-#define OPENBLACK_GAME_H
+
+#ifdef HAS_FILESYSTEM
+#include <filesystem>
+namespace fs = std::filesystem;
+#else
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#endif // HAS_FILESYSTEM
+#include <memory>
+#include <string>
+#include <vector>
+#include <map>
+
+#include <SDL.h>
+#include <bgfx/bgfx.h>
+#include <entt/entity/fwd.hpp>
+#include <glm/glm.hpp>
+
+#include <LHVM/LHVM.h>
+#include <Sound/SoundPack.h>
 
 #include "GameWindow.h"
 
-#include <LHVM/LHVM.h>
-#include <glm/glm.hpp>
-#include <string>
-#include <vector>
-
-namespace OpenBlack
+namespace openblack
 {
+class AnimationPack;
 class Camera;
 class FileSystem;
+class GameWindow;
+class Gui;
+class EventManager;
 class MeshPack;
-class MeshViewer;
 class LandIsland;
-class L3DModel;
-class SkinnedModel;
+class Profiler;
+class Renderer;
+class L3DAnim;
+class L3DMesh;
 class Sky;
 class Water;
+struct Transform;
 
-namespace Graphics
+namespace audio
 {
-class ShaderProgram;
-class ShaderManager;
-} // namespace Graphics
+class SoundPack;
+class SoundHandler;
+}
 
-namespace LHScriptX
+namespace lhscriptx
 {
 class Script;
 }
 
-namespace Video
+namespace entities
 {
-class VideoPlayer;
+class Registry;
 }
+
+struct Arguments
+{
+	std::string executablePath;
+	int windowWidth;
+	int windowHeight;
+	bool vsync;
+	openblack::DisplayMode displayMode;
+	bgfx::RendererType::Enum rendererType;
+	std::string gamePath;
+	float scale;
+	uint32_t numFramesToSimulate;
+	std::string logFile;
+	uint32_t logLevel;
+};
 
 class Game
 {
-  public:
-	Game(int argc, char** argv);
-	~Game();
+public:
+	struct Config
+	{
+		Config() {}
 
+		bool wireframe {false};
+		bool waterDebug {false};
+		bool showProfiler {false};
+		bool showLandIsland {false};
+		bool showSoundPlayer {false};
+
+		bool drawSky {true};
+		bool drawWater {true};
+		bool drawIsland {true};
+		bool drawEntities {true};
+		bool drawTestModel {true};
+		bool drawDebugCross {true};
+		bool drawBoundingBoxes {false};
+		bool drawFootpaths {false};
+		bool drawStreams {false};
+
+		float timeOfDay {1.0f};
+		float bumpMapStrength {1.0f};
+		float smallBumpMapStrength {1.0f};
+
+		bool bgfxDebug {false};
+		bool running {false};
+
+		uint32_t numFramesToSimulate {0};
+	};
+
+	Game(Arguments&& args);
+	virtual ~Game();
+
+	bool ProcessEvents(const SDL_Event& event);
+	bool Update();
 	void Run();
 
-	void LoadMap(const std::string& name);
-	void LoadLandscape(const std::string& name);
+	void LoadMap(const fs::path& path);
+	void LoadLandscape(const fs::path& path);
 
-	const std::string& GetGamePath();
+	void LoadVariables();
 
-	GameWindow& GetWindow() { return *_window; }
+	void SetGamePath(const fs::path& path);
+	const fs::path& GetGamePath();
+
+	GameWindow* GetWindow() { return _window.get(); }
+	[[nodiscard]] const GameWindow& GetWindow() const { return *_window; }
 	Camera& GetCamera() { return *_camera; }
+	[[nodiscard]] Profiler& GetProfiler() const { return *_profiler; }
+	[[nodiscard]] Renderer& GetRenderer() const { return *_renderer; }
+	[[nodiscard]] Camera& GetCamera() const { return *_camera; }
+	[[nodiscard]] Sky& GetSky() const { return *_sky; }
+	[[nodiscard]] Water& GetWater() const { return *_water; }
+	LandIsland& GetLandIsland() { return *_landIsland; }
+	[[nodiscard]] LandIsland& GetLandIsland() const { return *_landIsland; }
+	[[nodiscard]] L3DMesh& GetTestModel() const { return *_testModel; }
+	[[nodiscard]] L3DMesh& GetHandModel() const { return *_handModel; }
+	const Transform& GetHandTransform() const;
+	Transform& GetHandTransform();
+	AnimationPack& GetAnimationPack() { return *_animationPack; }
 	MeshPack& GetMeshPack() { return *_meshPack; }
+	audio::SoundHandler& GetSoundHandler() const { return *_soundHandler; }
+	[[nodiscard]] const LHVM::LHVM* GetLhvm() { return _lhvm.get(); }
 	FileSystem& GetFileSystem() { return *_fileSystem; }
-	Graphics::ShaderManager& GetShaderManager() { return *_shaderManager; }
+	entities::Registry& GetEntityRegistry() { return *_entityRegistry; }
+	[[nodiscard]] entities::Registry& GetEntityRegistry() const { return *_entityRegistry; }
+	Config& GetConfig() { return _config; }
+	[[nodiscard]] const Config& GetConfig() const { return _config; }
+	[[nodiscard]] const glm::ivec2& GetMousePosition() const { return _mousePosition; }
 
-	static Game* instance()
-	{
-		return sInstance;
-	}
+	static Game* instance() { return sInstance; }
 
-  private:
-	void drawScene(const Camera& camera, bool drawWater);
-
+private:
 	static Game* sInstance;
 
-	std::unique_ptr<Graphics::ShaderManager> _shaderManager;
+	/// path to Lionhead Studios Ltd/Black & White folder
+	fs::path _gamePath;
 
 	std::unique_ptr<GameWindow> _window;
+	std::unique_ptr<Renderer> _renderer;
+	std::unique_ptr<Gui> _gui;
 	std::unique_ptr<Camera> _camera;
+	std::unique_ptr<Profiler> _profiler;
+	std::unique_ptr<EventManager> _eventManager;
 
 	std::unique_ptr<FileSystem> _fileSystem;
 	std::unique_ptr<LandIsland> _landIsland;
 	std::unique_ptr<MeshPack> _meshPack;
-	//std::unique_ptr<Video::VideoPlayer> _videoPlayer;
+	std::unique_ptr<AnimationPack> _animationPack;
+	std::unique_ptr<audio::SoundHandler> _soundHandler;
 
-	std::unique_ptr<SkinnedModel> _testModel;
+	// std::unique_ptr<L3DMesh> _testModel;
+	std::unique_ptr<L3DMesh> _testModel;
+	std::unique_ptr<L3DAnim> _testAnimation;
+	std::unique_ptr<L3DMesh> _handModel;
 	std::unique_ptr<Sky> _sky;
 	std::unique_ptr<Water> _water;
-	std::unique_ptr<LHScriptX::Script> _scriptx;
+	std::unique_ptr<lhscriptx::Script> _scriptx;
 	std::unique_ptr<LHVM::LHVM> _lhvm;
+	std::unique_ptr<entities::Registry> _entityRegistry;
 
-	bool _wireframe;
-	bool _waterDebug;
+	Config _config;
 
-	float _timeOfDay;
-	float _bumpmapStrength;
-	float _smallBumpmapStrength;
+	uint32_t _frameCount;
 
 	glm::ivec2 _mousePosition;
 	glm::vec3 _intersection;
 
-	glm::vec3 _modelPosition;
-	glm::vec3 _modelRotation;
-	glm::vec3 _modelScale;
-
-	bool _running;
-
-	void guiLoop();
+	entt::entity _handEntity;
+	bool _handGripping;
 };
-} // namespace OpenBlack
-
-#endif
+} // namespace openblack

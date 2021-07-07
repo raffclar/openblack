@@ -1,54 +1,86 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
-#include <Graphics/ShaderManager.h>
+#include "ShaderManager.h"
 
-using namespace OpenBlack::Graphics;
+#include <cstdint> // Shaders below need uint8_t
+
+#include "Shaders/fs_line.bin.h"
+#include "Shaders/fs_object.bin.h"
+#include "Shaders/fs_terrain.bin.h"
+#include "Shaders/fs_water.bin.h"
+#include "Shaders/vs_line.bin.h"
+#include "Shaders/vs_line_instanced.bin.h"
+#include "Shaders/vs_object.bin.h"
+#include "Shaders/vs_object_instanced.bin.h"
+#include "Shaders/vs_terrain.bin.h"
+#include "Shaders/vs_water.bin.h"
+
+#include "3D/Camera.h"
+
+#include <bgfx/embedded_shader.h>
+
+namespace openblack::graphics
+{
+
+const bgfx::EmbeddedShader s_embeddedShaders[] = {BGFX_EMBEDDED_SHADER(vs_line),    BGFX_EMBEDDED_SHADER(vs_line_instanced),
+                                                  BGFX_EMBEDDED_SHADER(fs_line),
+
+                                                  BGFX_EMBEDDED_SHADER(vs_object),  BGFX_EMBEDDED_SHADER(vs_object_instanced),
+                                                  BGFX_EMBEDDED_SHADER(fs_object),
+
+                                                  BGFX_EMBEDDED_SHADER(vs_terrain), BGFX_EMBEDDED_SHADER(fs_terrain),
+
+                                                  BGFX_EMBEDDED_SHADER(vs_water),   BGFX_EMBEDDED_SHADER(fs_water),
+
+                                                  BGFX_EMBEDDED_SHADER_END()};
 
 ShaderManager::~ShaderManager()
 {
 	// delete all mapped shaders
 	ShaderMap::iterator iter;
-	for (iter = _shaderPrograms.begin(); iter != _shaderPrograms.end(); ++iter)
-		delete iter->second;
+	for (iter = _shaderPrograms.begin(); iter != _shaderPrograms.end(); ++iter) delete iter->second;
 
 	_shaderPrograms.clear();
 }
 
-ShaderProgram* OpenBlack::Graphics::ShaderManager::LoadShader(const std::string& name, const std::string& vertexShaderFile, const std::string& fragmentShaderFile)
+const ShaderProgram* ShaderManager::LoadShader(const std::string& name, const std::string& vertexShaderName,
+                                               const std::string& fragmentShaderName)
 {
+	bgfx::RendererType::Enum type = bgfx::getRendererType();
+
 	ShaderMap::iterator i = _shaderPrograms.find(name);
 	if (i != _shaderPrograms.end())
 		return i->second;
 
-	ShaderProgram* program = new ShaderProgram(vertexShaderFile, fragmentShaderFile);
-	_shaderPrograms[name]  = program;
+	ShaderProgram* program =
+	    new ShaderProgram(name, bgfx::createEmbeddedShader(s_embeddedShaders, type, vertexShaderName.c_str()),
+	                      bgfx::createEmbeddedShader(s_embeddedShaders, type, fragmentShaderName.c_str()));
+	_shaderPrograms[name] = program;
 	return program;
 }
 
-ShaderProgram* OpenBlack::Graphics::ShaderManager::GetShader(const std::string& name)
+const ShaderProgram* ShaderManager::GetShader(const std::string& name) const
 {
-	ShaderMap::iterator i = _shaderPrograms.find(name);
+	auto i = _shaderPrograms.find(name);
 	if (i != _shaderPrograms.end())
 		return i->second;
 
 	// todo: return an empty shader?
 	return nullptr;
 }
+
+void ShaderManager::SetCamera(graphics::RenderPass viewId, const Camera& camera)
+{
+	auto view = camera.GetViewMatrix();
+	auto proj = camera.GetProjectionMatrix();
+	bgfx::setViewTransform(static_cast<bgfx::ViewId>(viewId), &view, &proj);
+}
+
+} // namespace openblack::graphics

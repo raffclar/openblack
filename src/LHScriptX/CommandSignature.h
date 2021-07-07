@@ -1,34 +1,25 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
 #pragma once
 
-#include <Common/Types.h>
+#include <array>
 #include <functional>
+#include <string>
+#include <vector>
 
-namespace OpenBlack
+namespace openblack
 {
 class Game;
 }
 
-namespace OpenBlack::LHScriptX
+namespace openblack::lhscriptx
 {
 enum class ParameterType
 {
@@ -41,22 +32,35 @@ enum class ParameterType
 
 class ScriptCommandParameter
 {
-  public:
-	ScriptCommandParameter(ParameterType type = ParameterType::None):
-	    _type(type) {}
-	ScriptCommandParameter(const std::string& value):
-	    _type(ParameterType::String) { SetString(value); }
-	ScriptCommandParameter(float value):
-	    _type(ParameterType::Float) { SetFloat(value); }
-	ScriptCommandParameter(int32_t value):
-	    _type(ParameterType::Number) { SetNumber(value); }
+public:
+	ScriptCommandParameter(ParameterType type = ParameterType::None)
+	    : _type(type)
+	{
+	}
+	ScriptCommandParameter(const std::string value)
+	    : _type(ParameterType::String)
+	{
+		// TODO: Hacky, avoid new
+		_value._string = new std::string();
+		*_value._string = value;
+	}
+	ScriptCommandParameter(float value)
+	    : _type(ParameterType::Float)
+	{
+		SetFloat(value);
+	}
+	ScriptCommandParameter(int32_t value)
+	    : _type(ParameterType::Number)
+	{
+		SetNumber(value);
+	}
 	ScriptCommandParameter(float x, float y, float z) { SetVector(x, y, z); }
 
-	ParameterType GetType() const { return _type; };
+	[[nodiscard]] ParameterType GetType() const { return _type; };
 
-	std::string& GetString() const { return *_value._string; }
-	float GetFloat() const { return _value._float; }
-	int32_t GetNumber() const { return _value._number; }
+	[[nodiscard]] std::string& GetString() const { return *_value._string; }
+	[[nodiscard]] float GetFloat() const { return _value._float; }
+	[[nodiscard]] int32_t GetNumber() const { return _value._number; }
 	void GetVector(float& x, float& y, float& z) const;
 
 	void SetString(const std::string& value) { *_value._string = value; }
@@ -69,10 +73,11 @@ class ScriptCommandParameter
 		_value._vector[2] = z;
 	}
 
-  private:
+private:
 	ParameterType _type;
 
-	union {
+	union
+	{
 		std::string* _string;
 		float _float;
 		int32_t _number;
@@ -84,24 +89,20 @@ typedef std::vector<ScriptCommandParameter> ScriptCommandParameters;
 
 class ScriptCommandContext
 {
-  public:
-	ScriptCommandContext(Game* game, const ScriptCommandParameters* parameters):
-	    _game(game), _parameters(parameters) {}
-
-	Game& GetGame() const { return *_game; }
-
-
-
-	const ScriptCommandParameters& GetParameters() const { return *_parameters; }
-
-	const ScriptCommandParameter& operator[](unsigned int arg) const
+public:
+	ScriptCommandContext(Game* game, const ScriptCommandParameters* parameters)
+	    : _game(game)
+	    , _parameters(parameters)
 	{
-		return _parameters->at(arg);
 	}
 
-	template <class T>
-	T GetParameter(unsigned int arg) const;
-  private:
+	[[nodiscard]] Game& GetGame() const { return *_game; }
+
+	[[nodiscard]] const ScriptCommandParameters& GetParameters() const { return *_parameters; }
+
+	const ScriptCommandParameter& operator[](uint32_t arg) const { return _parameters->at(arg); }
+
+private:
 	Game* _game;
 	const ScriptCommandParameters* _parameters;
 };
@@ -111,7 +112,7 @@ typedef std::function<void(const ScriptCommandContext&)> ScriptCommand;
 struct ScriptCommandSignature
 {
 	const char name[128];
-	ScriptCommand command;
-	ParameterType parameters[12];
+	const ScriptCommand command;
+	const std::array<ParameterType, 9> parameters;
 };
-} // namespace OpenBlack::LHScriptX
+} // namespace openblack::lhscriptx

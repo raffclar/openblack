@@ -1,45 +1,32 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
 #pragma once
-#ifndef OPENBLACK_LHVMVIEWER_H
-#define OPENBLACK_LHVMVIEWER_H
 
 #include <LHVM/LHVM.h>
-#include <imgui/imgui.h>
+#include <imgui.h>
 
-namespace OpenBlack
+#include <cstdint>
+
+namespace openblack
 {
 class LHVMViewer
 {
-  public:
-	static void Draw(OpenBlack::LHVM::LHVM*);
-	static void DrawScriptsTab(OpenBlack::LHVM::LHVM*);
-	static void DrawScriptDisassembly(OpenBlack::LHVM::LHVM*, OpenBlack::LHVM::VMScript&);
+public:
+	static void Draw(const openblack::LHVM::LHVM*);
+	static void DrawScriptsTab(const openblack::LHVM::LHVM*);
+	static void DrawScriptDisassembly(const openblack::LHVM::LHVM*, openblack::LHVM::VMScript&);
 
-	static void DrawVariable(OpenBlack::LHVM::LHVM*, OpenBlack::LHVM::VMScript&, uint32_t idx);
-	static std::string DataToString(uint32_t data, OpenBlack::LHVM::VMInstruction::DataType type);
+	static void DrawVariable(const openblack::LHVM::LHVM*, openblack::LHVM::VMScript&, uint32_t idx);
+	static std::string DataToString(uint32_t data, openblack::LHVM::VMInstruction::DataType type);
 
-	static int SelectedScriptID;
-	static void SelectScript(int idx);
+	static uint32_t SelectedScriptID;
+	static void SelectScript(uint32_t idx);
 };
-} // namespace OpenBlack
-
-#endif
+} // namespace openblack

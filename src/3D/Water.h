@@ -1,82 +1,49 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
 #pragma once
-#ifndef OPENBLACK_3D_WATER_H
-#define OPENBLACK_3D_WATER_H
 
-#include <3D/Camera.h>
-#include <Graphics/Mesh.h>
-#include <Graphics/ShaderProgram.h>
-#include <Graphics/FrameBuffer.h>
-#include <glm/glm.hpp>
+#include "Graphics/RenderPass.h"
 
-namespace OpenBlack
+#include <glm/vec4.hpp>
+
+#include <memory>
+
+namespace openblack
 {
 
-class ReflectionCamera: public Camera
+namespace graphics
 {
-  public:
-	ReflectionCamera():
-	    ReflectionCamera(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(0.0f)) {}
-	ReflectionCamera(glm::vec3 position, glm::vec3 rotation, glm::vec3 reflectionPlane):
-	    Camera(position, rotation), _reflectionPlane(reflectionPlane) {}
-	glm::mat4 GetViewProjectionMatrix() const;
-
-  private:
-	glm::vec3 _reflectionPlane;
-	void reflectMatrix(glm::mat4x4& m, const glm::vec4& plane) const;
-};
+class FrameBuffer;
+class Mesh;
+class ShaderProgram;
+class Texture2D;
+} // namespace graphics
 
 class Water
 {
-  public:
+public:
 	Water();
 	~Water() = default;
 
-	void Draw(ShaderProgram& program);
-
-	void BeginReflection(const Camera& sceneCamera);
-	void EndReflection();
-
+	[[nodiscard]] glm::vec4 GetReflectionPlane() const { return glm::vec4(0.0f, 1.0f, 0.0f, 0.0f); };
+	[[nodiscard]] graphics::FrameBuffer& GetFrameBuffer() const;
 	void DebugGUI();
 
-	ReflectionCamera& GetReflectionCamera() { return _reflectionCamera; }
-
-	void ReflectMatrix(glm::mat4x4& m, const glm::vec4& plane);
-
-  private:
-	struct WaterVertex
-	{
-		glm::vec2 position;
-	};
+private:
+	friend class Renderer;
 
 	void createMesh();
 
-	std::unique_ptr<Mesh> _mesh;
-	std::unique_ptr<ShaderProgram> _shaderProgram;
-	std::unique_ptr<FrameBuffer> _reflectionFrameBuffer;
-
-	ReflectionCamera _reflectionCamera;
+	std::unique_ptr<graphics::Mesh> _mesh;
+	std::unique_ptr<graphics::FrameBuffer> _reflectionFrameBuffer;
+	std::unique_ptr<graphics::Texture2D> _texture;
 };
 
-} // namespace OpenBlack
-
-#endif
+} // namespace openblack

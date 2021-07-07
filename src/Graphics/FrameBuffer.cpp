@@ -1,55 +1,68 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
-#include <Graphics/FrameBuffer.h>
+#include "FrameBuffer.h"
+
+#include <array>
 #include <cassert>
-#include <stdexcept>
 
-namespace OpenBlack::Graphics
+using namespace openblack::graphics;
+
+FrameBuffer::FrameBuffer(const std::string& name, uint16_t width, uint16_t height, Format colorFormat,
+                         std::optional<Format> depthStencilFormat)
+    : _name(std::move(name))
+    , _handle(BGFX_INVALID_HANDLE)
+    , _width(width)
+    , _height(height)
+    , _colorFormat(colorFormat)
+    , _depthStencilFormat(depthStencilFormat)
+    , _colorAttachment(_name + "_color")
+    , _depthStencilAttachment(_name + "_depthStencil")
 {
+	_colorAttachment._handle = BGFX_INVALID_HANDLE;
+	_colorAttachment._info.width = width;
+	_colorAttachment._info.height = height;
+	_colorAttachment._info.numLayers = 1;
 
-FrameBuffer::FrameBuffer(GLsizei width, GLsizei height, GLenum format) :
-    _handle(0), _width(width), _height(height), _format(format)
-{
-	glGenFramebuffers(1, &_handle);
-	assert(_handle);
+	_depthStencilAttachment._handle = BGFX_INVALID_HANDLE;
+	_depthStencilAttachment._info.width = width;
+	_depthStencilAttachment._info.height = height;
+	_depthStencilAttachment._info.numLayers = 1;
 
-	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, _handle);
+	if (depthStencilFormat)
+	{
+		std::array<bgfx::TextureHandle, 2> textures = {
+		    bgfx::createTexture2D(width, height, false, 1, getBgfxTextureFormat(colorFormat), BGFX_TEXTURE_RT),
+		    bgfx::createTexture2D(width, height, false, 1, getBgfxTextureFormat(depthStencilFormat.value()), BGFX_TEXTURE_RT),
+		};
+		_handle = bgfx::createFrameBuffer(textures.size(), textures.data());
+		_colorAttachment._handle = bgfx::getTexture(_handle, 0);
+		_depthStencilAttachment._handle = bgfx::getTexture(_handle, 1);
+	}
+	else
+	{
+		_handle = bgfx::createFrameBuffer(_width, _height, getBgfxTextureFormat(colorFormat), BGFX_TEXTURE_RT);
+		_colorAttachment._handle = bgfx::getTexture(_handle, 0);
+	}
 
-	_texture = new Texture2D(_width, _height, GL_RGBA, _format, GL_UNSIGNED_BYTE, NULL);
-	glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, _texture->GetHandle(), 0);
-
-	if (glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-		throw std::runtime_error("failed to create framebuffer");
-
-	// unbind it (restore state in future?)
-	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+	assert(bgfx::isValid(_handle));
 }
 
 FrameBuffer::~FrameBuffer()
 {
-	if (_handle != 0)
-		glDeleteFramebuffers(1, &_handle);
-
-	if (_texture != nullptr)
-		delete _texture;
+	if (bgfx::isValid(_handle))
+	{
+		bgfx::destroy(_handle);
+	}
 }
 
+void FrameBuffer::Bind(RenderPass viewId) const
+{
+	bgfx::setViewFrameBuffer(static_cast<uint8_t>(viewId), _handle);
 }

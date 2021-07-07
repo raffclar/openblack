@@ -1,153 +1,106 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
 #include "LandIsland.h"
 
-#include <Common/FileSystem.h>
-#include <Common/OSFile.h>
-#include <Game.h>
-#include <inttypes.h>
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "Common/FileSystem.h"
+#include "Common/IStream.h"
+#include "Common/stb_image_write.h"
+#include "Game.h"
+
+#include <spdlog/spdlog.h>
+
+#include <LNDFile.h>
 #include <stdexcept>
 
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include <Common/stb_image_write.h>
-
-using namespace OpenBlack;
+using namespace openblack;
+using namespace openblack::graphics;
 
 const float LandIsland::HeightUnit = 0.67f;
-const float LandIsland::CellSize   = 10.0f;
+const float LandIsland::CellSize = 10.0f;
 
-LandIsland::LandIsland():
-    _lowresCount(0), _materialCount(0), _blockIndexLookup { 0 }, _noiseMap(nullptr)
+LandIsland::LandIsland()
+    : _blockIndexLookup {0}
 {
-	auto file           = Game::instance()->GetFileSystem().Open("Data/Textures/smallbumpa.raw", FileMode::Read);
-	uint8_t* smallbumpa = new uint8_t[file->Size()];
+	auto& filesystem = Game::instance()->GetFileSystem();
+	auto file = filesystem.Open(filesystem.TexturePath() / "smallbumpa.raw", FileMode::Read);
+	auto* smallbumpa = new uint8_t[file->Size()];
 	file->Read(smallbumpa, file->Size());
-	file->Close();
 
-	_textureSmallBump = std::make_unique<Texture2D>(256, 256, GL_R8, GL_RED, GL_UNSIGNED_BYTE, smallbumpa);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	_textureSmallBump = std::make_unique<Texture2D>("LandIslandSmallBump");
+	_textureSmallBump->Create(256, 256, 1, Format::R8, Wrapping::Repeat, smallbumpa, file->Size());
 	delete[] smallbumpa;
 }
 
-LandIsland::~LandIsland()
+LandIsland::~LandIsland() = default;
+
+void LandIsland::LoadFromFile(const std::string& filename)
 {
-	if (_noiseMap != nullptr)
-		delete[] _noiseMap;
-}
+	spdlog::debug("Loading Land from file: {}", filename);
+	lnd::LNDFile lnd;
 
-/*
-Loads from the original Black & White .lnd file format and
-converts the data into our own
-*/
-void LandIsland::LoadFromFile(File& file)
-{
-	uint32_t blockCount, countryCount, blockSize, matSize, countrySize;
-
-	file.ReadBytes(&blockCount, 4);
-	file.ReadBytes(_blockIndexLookup.data(), 1024);
-	file.ReadBytes(&_materialCount, 4);
-	file.ReadBytes(&countryCount, 4);
-
-	// todo: lets assert these against sizeof(LandBlock) etc..
-	file.ReadBytes(&blockSize, 4);
-	file.ReadBytes(&matSize, 4);
-	file.ReadBytes(&countrySize, 4);
-	file.ReadBytes(&_lowresCount, 4);
-
-	// skip over low resolution textures
-	// for future reference these are formatted GL_COMPRESSED_RGBA_S3TC_DXT3_EXT
-	for (unsigned int i = 0; i < _lowresCount; i++)
+	try
 	{
-		uint32_t textureSize;
-		file.Seek(16, FileSeekMode::Current);
-		file.ReadBytes(&textureSize, 4);
-		file.Seek(textureSize - 4, FileSeekMode::Current);
+		lnd.Open(filename);
+	}
+	catch (std::runtime_error& err)
+	{
+		spdlog::error("Failed to open lnd file from filesystem {}: {}", filename, err.what());
+		return;
 	}
 
-	blockCount--; // take away a block from the count, because it's not in the file?
-	_landBlocks.reserve(blockCount);
-	for (uint32_t i = 0; i < blockCount; i++)
+	std::memcpy(_blockIndexLookup.data(), lnd.GetHeader().lookUpTable, _blockIndexLookup.size() * sizeof(_blockIndexLookup[0]));
+
+	auto& lndBlocks = lnd.GetBlocks();
+	spdlog::debug("[LandIsland] loading {} blocks", lndBlocks.size());
+	_landBlocks.resize(lndBlocks.size());
+	for (size_t i = 0; i < _landBlocks.size(); i++)
 	{
-		uint8_t* blockData = new uint8_t[blockSize];
-		file.ReadBytes(blockData, blockSize);
-
-		_landBlocks.push_back(LandBlock());
-		_landBlocks[i].Load(blockData, blockSize);
-
-		delete[] blockData;
+		_landBlocks[i]._block = std::make_unique<lnd::LNDBlock>(lndBlocks[i]);
 	}
 
-	_countries.reserve(countryCount);
-	for (uint32_t i = 0; i < countryCount; i++)
+	spdlog::debug("[LandIsland] loading {} countries", lnd.GetCountries().size());
+	_countries = lnd.GetCountries();
+
+	auto materialCount = lnd.GetMaterials().size();
+	spdlog::debug("[LandIsland] loading {} textures", materialCount);
+	std::vector<uint16_t> rgba5TextureData;
+	rgba5TextureData.resize(lnd::LNDMaterial::width * lnd::LNDMaterial::height * lnd.GetMaterials().size());
+	for (size_t i = 0; i < lnd.GetMaterials().size(); i++)
 	{
-		Country country;
-		file.ReadBytes(&country, sizeof(Country));
-		_countries.push_back(country);
+		std::memcpy(&rgba5TextureData[lnd::LNDMaterial::width * lnd::LNDMaterial::height * i], lnd.GetMaterials()[i].texels,
+		            sizeof(lnd.GetMaterials()[i].texels));
 	}
-
-	_materialArray = std::make_shared<Texture2DArray>(256, 256, _materialCount, GL_RGBA8);
-	for (uint32_t i = 0; i < _materialCount; i++)
-	{
-		uint16_t* rgba5TextureData = new uint16_t[256 * 256];
-		uint32_t* rgba8TextureData = new uint32_t[256 * 256];
-
-		uint16_t terrainType;
-		file.ReadBytes(&terrainType, 2);
-		file.ReadBytes(rgba5TextureData, 256 * 256 * sizeof(uint16_t));
-
-		convertRGB5ToRGB8(rgba5TextureData, rgba8TextureData, 256 * 256);
-		_materialArray->SetTexture(i, 256, 256, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, rgba8TextureData);
-
-		delete[] rgba5TextureData;
-		delete[] rgba8TextureData;
-	}
+	_materialArray = std::make_unique<Texture2D>("LandIslandMaterialArray");
+	_materialArray->Create(lnd::LNDMaterial::width, lnd::LNDMaterial::height, materialCount, Format::RGB5A1,
+	                       Wrapping::ClampEdge, rgba5TextureData.data(), rgba5TextureData.size() * sizeof(rgba5TextureData[0]));
 
 	// read noise map into Texture2D
-	_noiseMap = new uint8_t[256 * 256];
-	file.ReadBytes(_noiseMap, 256 * 256);
-	_textureNoiseMap = std::make_shared<Texture2D>(256, 256, GL_RED, GL_RED, GL_UNSIGNED_BYTE, _noiseMap);
+	std::memcpy(_noiseMap.data(), lnd.GetExtra().noise.texels, _noiseMap.size() * sizeof(_noiseMap[0]));
+	_textureNoiseMap = std::make_unique<Texture2D>("LandIslandNoiseMap");
+	_textureNoiseMap->Create(lnd::LNDBumpMap::width, lnd::LNDBumpMap::height, 1, Format::R8, Wrapping::ClampEdge,
+	                         _noiseMap.data(), _noiseMap.size() * sizeof(_noiseMap[0]));
 
 	// read bump map into Texture2D
-	uint8_t* bumpMapTextureData = new uint8_t[256 * 256];
-	file.ReadBytes(bumpMapTextureData, 256 * 256);
-	_textureBumpMap = std::make_shared<Texture2D>(256, 256, GL_RED, GL_RED, GL_UNSIGNED_BYTE, bumpMapTextureData);
-	delete[] bumpMapTextureData;
-
-	file.Close();
+	_textureBumpMap = std::make_unique<Texture2D>("LandIslandBumpMap");
+	_textureBumpMap->Create(lnd::LNDBumpMap::width, lnd::LNDBumpMap::height, 1, Format::R8, Wrapping::ClampEdge,
+	                        lnd.GetExtra().bump.texels, sizeof(lnd.GetExtra().bump.texels));
 
 	// build the meshes (we could move this elsewhere)
-	for (auto& block : _landBlocks)
-		block.BuildMesh(*this);
+	for (auto& block : _landBlocks) block.BuildMesh(*this);
+	bgfx::frame();
 }
 
-/*const uint8_t LandIsland::GetAltitudeAt(glm::ivec2 vec) const
+float LandIsland::GetHeightAt(glm::vec2 vec) const
 {
-	return uint8_t();
-}
-*/
-
-const float LandIsland::GetHeightAt(glm::vec2 vec) const
-{
-	return GetCell(vec.x * 0.1f, vec.y * 0.1f).Altitude() * LandIsland::HeightUnit;
+	return GetCell(vec * 0.1f).altitude * LandIsland::HeightUnit;
 }
 
 uint8_t LandIsland::GetNoise(int x, int y)
@@ -155,86 +108,51 @@ uint8_t LandIsland::GetNoise(int x, int y)
 	return _noiseMap[(y & 0xFF) + 256 * (x & 0xFF)];
 }
 
-const LandBlock* LandIsland::GetBlock(int8_t x, int8_t z) const
+const LandBlock* LandIsland::GetBlock(const glm::u8vec2& coordinates) const
 {
 	// our blocks can only be between [0-31, 0-31]
-	if (x < 0 || x > 32 || z < 0 || z > 32)
+	if (coordinates.x > 32 || coordinates.y > 32)
 		return nullptr;
 
-	const uint8_t blockIndex = _blockIndexLookup[x * 32 + z];
+	const uint8_t blockIndex = _blockIndexLookup[coordinates.x * 32 + coordinates.y];
 	if (blockIndex == 0)
 		return nullptr;
 
 	return &_landBlocks[blockIndex - 1];
 }
 
-const LandCell EmptyCell;
-
-const LandCell& LandIsland::GetCell(int x, int z) const
+constexpr lnd::LNDCell EmptyCell() noexcept
 {
-	if (x < 0 || x > 511 || z < 0 || z > 511)
-		return EmptyCell; // return empty water cell
+	lnd::LNDCell cell {};
+	cell.properties.fullWater = true;
+	return cell;
+}
 
-	const uint8_t blockIndex = _blockIndexLookup[32 * (x >> 4) + (z >> 4)];
+constexpr lnd::LNDCell s_EmptyCell = EmptyCell();
+
+const lnd::LNDCell& LandIsland::GetCell(const glm::u16vec2& coordinates) const
+{
+	if (coordinates.x > 511 || coordinates.y > 511)
+	{
+		return s_EmptyCell;
+	}
+
+	const uint16_t lookupIndex = ((coordinates.x & ~0xFU) << 1U) | (coordinates.y >> 4U);
+	const uint16_t cellIndex = (coordinates.x & 0xFU) * 0x11u + (coordinates.y & 0xFU);
+
+	const uint8_t blockIndex = _blockIndexLookup[lookupIndex];
 
 	if (blockIndex == 0)
-		return EmptyCell; // return empty water cell
-
-	return _landBlocks[blockIndex - 1].GetCells()[(z & 0xF) + 17 * (x & 0xF)];
-}
-
-void LandIsland::Draw(ShaderProgram& program)
-{
-	for (auto& block : _landBlocks)
-		block.Draw(program);
-}
-
-void LandIsland::convertRGB5ToRGB8(uint16_t* rgba5, uint32_t* rgba8, size_t pixels)
-{
-	for (size_t i = 0; i < pixels; i++)
 	{
-		uint16_t col = rgba5[i];
-
-		uint8_t r = (col & 0x7C00) >> 10;
-		uint8_t g = (col & 0x3E0) >> 5;
-		uint8_t b = (col & 0x1F);
-
-		((uint8_t*)rgba8)[i * 4 + 3] = r << 3; // 5
-		((uint8_t*)rgba8)[i * 4 + 2] = g << 3; // 5
-		((uint8_t*)rgba8)[i * 4 + 1] = b << 3; // 5
-		((uint8_t*)rgba8)[i * 4 + 0] = 255;
+		return s_EmptyCell;
 	}
+	assert(_landBlocks.size() >= blockIndex);
+	return _landBlocks[blockIndex - 1].GetCells()[cellIndex];
 }
 
-/*
-	Dumps Textures from VRAM using a FBO (Works on OpenGL 3.2+)
-	A better way would be glGetTexSubImage from OpenGL 4.5.
-*/
 void LandIsland::DumpTextures()
 {
-	GLuint textureID = _materialArray->GetHandle();
-
-	GLuint fboID = 0;
-	glGenFramebuffers(1, &fboID);
-	glBindFramebuffer(GL_READ_FRAMEBUFFER, fboID);
-
-	for (unsigned int i = 0; i < _materialCount; i++)
-	{
-		uint8_t* pixels = new uint8_t[256 * 256 * 4];
-
-		glFramebufferTextureLayer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, textureID, 0, i);
-		glReadPixels(0, 0, 256, 256, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-
-		auto filename = "dump/landtex" + std::to_string(i) + ".png";
-
-		printf("Writing texture %d to %s\n", i, filename.c_str());
-		stbi_write_png(filename.c_str(), 256, 256, 4, pixels, 256 * 4);
-
-		delete[] pixels;
-	}
-
-	glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-	glDeleteFramebuffers(1, &fboID);
+	_materialArray->DumpTexture();
 }
 
 void LandIsland::DumpMaps()
@@ -244,7 +162,7 @@ void LandIsland::DumpMaps()
 	// 32x32 block grid with 16x16 cells
 	// 512 x 512 pixels
 	// lets go with 3 channels for a laugh
-	uint8_t* data = new uint8_t[32 * 32 * cellsize * cellsize];
+	auto* data = new uint8_t[32 * 32 * cellsize * cellsize];
 
 	memset(data, 0x00, 32 * 32 * cellsize * cellsize);
 
@@ -252,20 +170,20 @@ void LandIsland::DumpMaps()
 	{
 		LandBlock& block = _landBlocks[b];
 
-		int mapx         = block.GetBlockPosition().x;
-		int mapz         = block.GetBlockPosition().y;
-		int lineStride   = 32 * cellsize;
+		int mapx = block.GetBlockPosition().x;
+		int mapz = block.GetBlockPosition().y;
+		int lineStride = 32 * cellsize;
 
 		for (int x = 0; x < cellsize; x++)
 		{
 			for (int y = 0; y < cellsize; y++)
 			{
-				LandCell cell = block.GetCells()[y * 17 + x];
+				auto cell = block.GetCells()[y * 17 + x];
 
 				int cellX = (mapx * cellsize) + x;
 				int cellY = (mapz * cellsize) + y;
 
-				data[(cellY * lineStride) + cellX] = cell.Altitude();
+				data[(cellY * lineStride) + cellX] = cell.altitude;
 			}
 		}
 	}

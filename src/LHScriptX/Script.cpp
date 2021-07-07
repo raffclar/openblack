@@ -1,46 +1,32 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
-#include <Common/OSFile.h>
-#include <LHScriptX/FeatureScriptCommands.h>
-#include <LHScriptX/Lexer.h>
-#include <LHScriptX/Script.h>
+#include "Script.h"
+
+#include "FeatureScriptCommands.h"
+#include "Lexer.h"
+
+#include <spdlog/spdlog.h>
+
 #include <iostream>
 
-using namespace OpenBlack;
-using namespace OpenBlack::LHScriptX;
+using namespace openblack;
+using namespace openblack::lhscriptx;
 
-void Script::LoadFromFile(File& file)
+void Script::Load(const std::string& source)
 {
-	size_t totalFileSize = file.Size();
+	Lexer lexer(source);
 
-	char* contents = new char[totalFileSize];
-	file.Read(contents, totalFileSize);
-
-	lexer_ = new Lexer(std::string(contents, totalFileSize));
-
-	const Token* token = this->peekToken();
-
+	const Token* token = this->peekToken(lexer);
 	while (!token->IsEOF())
 	{
-		token = this->peekToken();
+		token = this->peekToken(lexer);
 
 		if (token->IsIdentifier())
 		{
@@ -49,27 +35,27 @@ void Script::LoadFromFile(File& file)
 			if (!isCommand(identifier))
 				throw std::runtime_error("unknown command: " + identifier);
 
-			token = this->advanceToken();
+			token = this->advanceToken(lexer);
 			if (!token->IsOP(Operator::LeftParentheses))
 				throw std::runtime_error("expected ( after identifier " + identifier);
 
 			std::vector<Token> args;
 
 			// if it's an immediate right parentheses there are no args
-			token = this->advanceToken();
+			token = this->advanceToken(lexer);
 			if (!token->IsOP(Operator::RightParentheses))
 			{
 				while (true)
 				{
-					const Token* token = this->peekToken();
+					const Token* token = this->peekToken(lexer);
 					args.push_back(*token);
 
 					// consume the ,
-					token = this->advanceToken();
+					token = this->advanceToken(lexer);
 					if (!token->IsOP(Operator::Comma))
 						break;
 
-					this->advanceToken();
+					this->advanceToken(lexer);
 				}
 			}
 
@@ -77,19 +63,16 @@ void Script::LoadFromFile(File& file)
 				throw std::runtime_error("missing )");
 
 			// move token to whatever is after ')'
-			this->advanceToken();
+			this->advanceToken(lexer);
 
 			runCommand(identifier, args);
 		}
 
-		this->advanceToken();
+		this->advanceToken(lexer);
 	}
-
-	delete lexer_;
-	delete[] contents;
 }
 
-const bool Script::isCommand(const std::string& identifier) const
+bool Script::isCommand(const std::string& identifier) const
 {
 	// this could be done a lot better
 	for (const auto& signature : FeatureScriptCommands::Signatures)
@@ -97,6 +80,33 @@ const bool Script::isCommand(const std::string& identifier) const
 			return true;
 
 	return false;
+}
+
+ScriptCommandParameter GetParameter(Token& argument)
+{
+	const auto type = argument.GetType();
+
+	switch (type)
+	{
+	case Token::Type::Invalid:
+		throw std::runtime_error("Invalid token. Unable to proceed");
+	case Token::Type::EndOfFile:
+		throw std::runtime_error("Unexpected EOF in script");
+	case Token::Type::EndOfLine:
+		throw std::runtime_error("Unexpected EOL in script");
+	case Token::Type::Identifier:
+		return ScriptCommandParameter(argument.Identifier());
+	case Token::Type::String:
+		return ScriptCommandParameter(argument.StringValue());
+	case Token::Type::Integer:
+		return ScriptCommandParameter(*argument.IntegerValue());
+	case Token::Type::Float:
+		return ScriptCommandParameter(*argument.FloatValue());
+	case Token::Type::Operator:
+		throw std::runtime_error("Operator token as an argument is currently not supported");
+	default:
+		throw std::runtime_error("Missing switch case for script token argument");
+	}
 }
 
 void Script::runCommand(const std::string& identifier, const std::vector<Token>& args)
@@ -112,27 +122,58 @@ void Script::runCommand(const std::string& identifier, const std::vector<Token>&
 		break;
 	}
 
-	// todo handle this
 	if (command_signature == nullptr)
-		return;
+		throw std::runtime_error("Missing script command signature");
 
-	// turn tokens into parameters
+	// Turn tokens into parameters
+	auto parameters = ScriptCommandParameters();
 
-	ScriptCommandParameters parameters { ScriptCommandParameter(2.3000f) };
+	for (auto arg : args)
+	{
+		ScriptCommandParameter param = GetParameter(arg);
+		parameters.push_back(param);
+	}
+
+	const auto expected_parameters = command_signature->parameters;
+	uint32_t expected_size;
+	for (expected_size = 0; expected_size < expected_parameters.size(); ++expected_size)
+	{
+		// Looping until None because parameters is a fixed sized array.
+		// Last Argument is the one before the first None or the 9th
+		if (command_signature->parameters[expected_size] == ParameterType::None)
+		{
+			break;
+		}
+	}
+
+	// Validate the number of given arguments against what is expected
+	if (parameters.size() != expected_size)
+	{
+		throw std::runtime_error("Invalid number of script arguments");
+	}
+
+	// Validate the typing of the given arguments against what is expected
+	for (auto i = 0u; i < parameters.size(); i++)
+	{
+		if (parameters[i].GetType() != expected_parameters[i])
+		{
+			std::runtime_error("Invalid script argument type");
+		}
+	}
+
 	ScriptCommandContext ctx(_game, &parameters);
-
 	command_signature->command(ctx);
 }
 
-const Token* Script::peekToken()
+const Token* Script::peekToken(Lexer& lexer)
 {
 	if (token_.IsInvalid())
-		token_ = lexer_->GetToken();
+		token_ = lexer.GetToken();
 	return &token_;
 }
 
-const Token* Script::advanceToken()
+const Token* Script::advanceToken(Lexer& lexer)
 {
-	token_ = lexer_->GetToken();
+	token_ = lexer.GetToken();
 	return &token_;
 }

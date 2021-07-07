@@ -1,46 +1,68 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
 #pragma once
-#ifndef OPENBLACK_MESHPACK_H
-#define OPENBLACK_MESHPACK_H
 
-#include <3D/L3DModel.h>
-#include <Common/OSFile.h>
-#include <Graphics/Texture2DArray.h>
+#ifdef HAS_FILESYSTEM
+#include <filesystem>
+namespace fs = std::filesystem;
+#else
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#endif // HAS_FILESYSTEM
+#include <map>
+#include <memory>
+#include <vector>
 
-namespace OpenBlack
+namespace openblack
 {
+
+class IStream;
+class L3DMesh;
+
+namespace pack
+{
+struct G3DTexture;
+}
+
+namespace graphics
+{
+class Texture2D;
+}
+
 class MeshPack
 {
-  public:
-	MeshPack(OSFile* allMeshes);
+	enum class TextureType : uint32_t
+	{
+		DXT1 = 1,
+		DXT3 = 2,
+	};
 
-	L3DModel** Models;
-	GLuint* Textures;
+public:
+	MeshPack() = default;
 
-	uint32_t GetMeshCount();
+	void LoadFromFile(const fs::path& path);
 
-  private:
-	uint32_t m_meshCount;
+	using MeshesVec = std::vector<std::unique_ptr<L3DMesh>>;
+	using TexturesVec = std::vector<std::unique_ptr<graphics::Texture2D>>;
+
+	[[nodiscard]] const MeshesVec& GetMeshes() const { return _meshes; }
+	[[nodiscard]] const TexturesVec& GetTextures() const { return _textures; }
+
+	[[nodiscard]] const L3DMesh& GetMesh(int id) const { return *_meshes.at(id); }
+	[[nodiscard]] const graphics::Texture2D& GetTexture(int id) const { return *_textures.at(id); }
+
+private:
+	void loadTextures(const std::map<std::string, pack::G3DTexture>& textures);
+	void loadMeshes(const std::vector<std::vector<uint8_t>>& meshes);
+
+	MeshesVec _meshes;
+	TexturesVec _textures;
 };
-} // namespace OpenBlack
-
-#endif // OPENBLACK_MESHPACK_H
+} // namespace openblack

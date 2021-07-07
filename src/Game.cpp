@@ -1,471 +1,563 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
 #include "Game.h"
 
-#include <SDL.h>
-#include <glm/glm.hpp>
-#include <glm/gtc/type_ptr.hpp>
-#include <iostream>
-#include <sstream>
-#include <string>
+#include "Sound/SoundHandler.h"
+#include "Sound/SoundPack.h"
+#include "3D/AnimationPack.h"
+#include "3D/Camera.h"
+#include "3D/L3DAnim.h"
+#include "3D/L3DMesh.h"
+#include "3D/LandIsland.h"
+#include "3D/MeshPack.h"
+#include "3D/Sky.h"
+#include "3D/Water.h"
+#include "Common/EventManager.h"
+#include "Common/FileSystem.h"
+#include "Entities/Registry.h"
+#include "GameWindow.h"
 #include "GitSHA1.h"
+#include "Gui.h"
+#include "LHScriptX/Script.h"
+#include "MeshViewer.h"
+#include "Profiler.h"
+#include "Renderer.h"
+#include <Entities/Components/Hand.h>
+#include <Entities/Components/Transform.h>
 
-#include <3D/Camera.h>
-#include <3D/LandIsland.h>
-#include <3D/MeshPack.h>
-#include <3D/SkinnedModel.h>
-#include <3D/Sky.h>
-#include <3D/Water.h>
-#include <Common/CmdLineArgs.h>
-#include <Common/FileSystem.h>
-#include <Common/OSFile.h>
-#include <Graphics/DebugDraw.h>
-#include <Graphics/IndexBuffer.h>
-#include <Graphics/ShaderManager.h>
-#include <Graphics/ShaderProgram.h>
-#include <Graphics/Texture2D.h>
-#include <Graphics/VertexBuffer.h>
-#include <LHScriptX/Script.h>
-#include <LHVMViewer.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/constants.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/intersect.hpp>
+#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/spdlog.h>
 
-#define IMGUI_IMPL_OPENGL_LOADER_GLEW
+#include <cstdint>
+#include <string>
 
-#include <imgui/imgui.h>
-#include <imgui/imgui_impl_opengl3.h>
-#include <imgui/imgui_impl_sdl.h>
+#ifdef WIN32
+#include <Windows.h>
+#endif
 
-using namespace OpenBlack;
-using namespace OpenBlack::Graphics;
-using namespace OpenBlack::LHScriptX;
+using namespace openblack;
+using namespace openblack::lhscriptx;
 
 const std::string kBuildStr(kGitSHA1Hash, 8);
-const std::string kWindowTitle = "OpenBlack";
+const std::string kWindowTitle = "openblack";
 
 Game* Game::sInstance = nullptr;
 
-void GLAPIENTRY MessageCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam)
+Game::Game(Arguments&& args)
+    : _eventManager(std::make_unique<EventManager>())
+    , _fileSystem(std::make_unique<FileSystem>())
+    , _entityRegistry(std::make_unique<entities::Registry>())
+    , _soundHandler(audio::createSoundHandler())
+    , _config()
+    , _frameCount(0)
+    , _intersection()
 {
-	fprintf(stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
-	        (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
-	        type, severity, message);
-}
-
-Game::Game(int argc, char** argv):
-    _running(true), _wireframe(false), _waterDebug(false), _timeOfDay(1.0f), _bumpmapStrength(1.0f), _smallBumpmapStrength(1.0f),
-    _fileSystem(std::make_unique<FileSystem>()),
-    _shaderManager(std::make_unique<ShaderManager>())
-{
-	int windowWidth = 1280, windowHeight = 1024;
-	DisplayMode displayMode = DisplayMode::Windowed;
-
-	auto args = CmdLineArgs(argc, argv);
-	args.Get("w", windowWidth);
-	args.Get("h", windowHeight);
-
-	_window = std::make_unique<GameWindow>(kWindowTitle + " [" + kBuildStr + "]", windowWidth, windowHeight, displayMode);
-	_window->SetSwapInterval(1);
-
-	_fileSystem->SetGamePath(GetGamePath());
-	std::clog << "GamePath: " << _fileSystem->GetGamePath() << std::endl;
-
-	glEnable(GL_DEBUG_OUTPUT);
-	glDebugMessageCallback(MessageCallback, 0);
-	glDebugMessageControl(GL_DEBUG_SOURCE_API, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, 0, GL_FALSE);
-
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGuiIO& io    = ImGui::GetIO();
-	io.IniFilename = NULL;
-
-	ImGui::StyleColorsLight();
-
-	ImGuiStyle& style     = ImGui::GetStyle();
-	style.FrameBorderSize = 1.0f;
-
-	ImGui_ImplSDL2_InitForOpenGL(_window->GetHandle(), _window->GetGLContext());
-	ImGui_ImplOpenGL3_Init("#version 130");
-
-	_shaderManager->LoadShader("DebugLine", "shaders/line.vert", "shaders/line.frag");
-	_shaderManager->LoadShader("Terrain", "shaders/terrain.vert", "shaders/terrain.frag");
-	_shaderManager->LoadShader("SkinnedMesh", "shaders/skin.vert", "shaders/skin.frag");
-	_shaderManager->LoadShader("Water", "shaders/water.vert", "shaders/water.frag");
-
-	// allocate vertex buffers for our debug draw
-	DebugDraw::Init();
-
+	if (!args.logFile.empty() && args.logFile != "stdout")
+	{
+		auto logger = spdlog::basic_logger_mt("default_logger", args.logFile);
+		spdlog::set_default_logger(logger);
+	}
+	spdlog::set_level(static_cast<spdlog::level::level_enum>(spdlog::level::debug + args.logLevel));
 	sInstance = this;
+
+	std::string binaryPath = fs::path {args.executablePath}.parent_path().generic_string();
+	_config.numFramesToSimulate = args.numFramesToSimulate;
+	spdlog::info("current binary path: {}", binaryPath);
+	SetGamePath(args.gamePath);
+	if (args.rendererType != bgfx::RendererType::Noop)
+	{
+		_window = std::make_unique<GameWindow>(kWindowTitle + " [" + kBuildStr + "]", args.windowWidth, args.windowHeight,
+		                                       args.displayMode);
+	}
+	_renderer = std::make_unique<Renderer>(_window.get(), args.rendererType, args.vsync);
+	_fileSystem->SetGamePath(GetGamePath());
+	_handModel = std::make_unique<L3DMesh>();
+	_handModel->LoadFromFile(_fileSystem->CreatureMeshPath() / "Hand_Boned_Base2.l3d");
+	spdlog::debug("The GamePath is \"{}\".", _fileSystem->GetGamePath().generic_string());
+
+	_gui = Gui::create(_window.get(), graphics::RenderPass::ImGui, args.scale);
+
+	_eventManager->AddHandler(std::function([this](const SDL_Event& event) {
+		// If gui captures this input, do not propagate
+		if (!this->_gui->ProcessEventSdl2(event))
+		{
+			this->_camera->ProcessSDLEvent(event);
+			this->_config.running = this->ProcessEvents(event);
+		}
+	}));
 }
 
 Game::~Game()
 {
-	DebugDraw::Shutdown();
+	_water.reset();
+	_sky.reset();
+	_testModel.reset();
+	_handModel.reset();
+	_animationPack.reset();
+	_meshPack.reset();
+	_landIsland.reset();
+	_entityRegistry.reset();
+	_gui.reset();
+	_renderer.reset();
+	_window.reset();
+	_eventManager.reset();
 	SDL_Quit(); // todo: move to GameWindow
+}
+
+const Transform& Game::GetHandTransform() const
+{
+	return _entityRegistry->Get<Transform>(_handEntity);
+}
+
+Transform& Game::GetHandTransform()
+{
+	return _entityRegistry->Get<Transform>(_handEntity);
+}
+
+bool Game::ProcessEvents(const SDL_Event& event)
+{
+	static bool leftMouseButton = false;
+
+	if ((event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) && event.button.button == SDL_BUTTON_LEFT)
+	{
+		// Hand is still considered up
+		if (event.type == SDL_MOUSEBUTTONDOWN && !leftMouseButton)
+		{
+			auto& handTransform = _entityRegistry->Get<Transform>(_handEntity);
+			auto& hand = _entityRegistry->Get<Hand>(_handEntity);
+			auto velocity = glm::vec3(.0f);
+			auto radius = glm::vec2(1.f);
+			_soundHandler->CreateEmitter(hand.GrabLandSoundIds(), handTransform.position, velocity, radius, 1.f, false);
+		}
+
+		leftMouseButton = !leftMouseButton;
+	}
+
+	_handGripping = leftMouseButton;
+
+	switch (event.type)
+	{
+	case SDL_QUIT:
+		return false;
+	case SDL_WINDOWEVENT:
+		if (event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == _window->GetID())
+		{
+			return false;
+		}
+		break;
+	case SDL_KEYDOWN:
+		switch (event.key.keysym.sym)
+		{
+		case SDLK_ESCAPE:
+			return false;
+		case SDLK_f:
+			_window->SetFullscreen(true);
+			break;
+		case SDLK_F1:
+			_config.bgfxDebug = !_config.bgfxDebug;
+			break;
+		}
+		break;
+	case SDL_MOUSEMOTION:
+	{
+		SDL_GetMouseState(&_mousePosition.x, &_mousePosition.y);
+		break;
+	}
+	case SDL_MOUSEBUTTONUP:
+		switch (event.button.button)
+		{
+		case SDL_BUTTON_MIDDLE:
+		{
+			glm::ivec2 screenSize;
+			_window->GetSize(screenSize.x, screenSize.y);
+			SDL_SetRelativeMouseMode((event.type == SDL_MOUSEBUTTONDOWN) ? SDL_TRUE : SDL_FALSE);
+			SDL_WarpMouseInWindow(_window->GetHandle(), screenSize.x / 2, screenSize.y / 2);
+		}
+		break;
+		}
+		break;
+	}
+
+	return true;
+}
+
+bool Game::Update()
+{
+	_profiler->Frame();
+	auto deltaTime =
+	    std::chrono::duration_cast<std::chrono::microseconds>(_profiler->_entries[_profiler->GetEntryIndex(0)]._frameStart -
+	                                                          _profiler->_entries[_profiler->GetEntryIndex(-1)]._frameStart);
+
+	// Input events
+	{
+		auto sdlInput = _profiler->BeginScoped(Profiler::Stage::SdlInput);
+		SDL_Event e;
+		while (SDL_PollEvent(&e))
+		{
+			_eventManager->Create<SDL_Event>(e);
+		}
+	}
+
+	if (!this->_config.running)
+	{
+		return false;
+	}
+
+	// ImGui events + prepare
+	{
+		auto guiLoop = _profiler->BeginScoped(Profiler::Stage::GuiLoop);
+		if (_gui->Loop(*this, *_renderer))
+		{
+			return false; // Quit event
+		}
+	}
+
+	// Update Camera
+	{
+		_camera->Update(deltaTime);
+	}
+
+	// Update Uniforms
+	{
+		auto profilerScopedUpdateUniforms = _profiler->BeginScoped(Profiler::Stage::UpdateUniforms);
+
+		// Update Debug Cross
+		{
+			glm::ivec2 screenSize {};
+			if (_window)
+			{
+				_window->GetSize(screenSize.x, screenSize.y);
+			}
+
+			glm::vec3 rayOrigin, rayDirection;
+			_camera->DeprojectScreenToWorld(_mousePosition, screenSize, rayOrigin, rayDirection);
+
+			float intersectDistance = 0.0f;
+			bool intersects = glm::intersectRayPlane(rayOrigin, rayDirection, glm::vec3(0.0f, 0.0f, 0.0f), // plane origin
+			                                         glm::vec3(0.0f, 1.0f, 0.0f),                          // plane normal
+			                                         intersectDistance);
+
+			if (intersects)
+				_intersection = rayOrigin + rayDirection * intersectDistance;
+
+			_intersection.y = _landIsland->GetHeightAt(glm::vec2(_intersection.x, _intersection.z));
+
+			_renderer->UpdateDebugCrossUniforms(_intersection, 50.0f);
+		}
+
+		// Update Hand
+		if (!_handGripping)
+		{
+			const glm::mat4 modelRotationCorrection = glm::eulerAngleX(glm::radians(90.0f));
+			auto& handTransform = _entityRegistry->Get<Transform>(_handEntity);
+			handTransform.position = _intersection;
+			auto cameraRotation = _camera->GetRotation();
+
+			auto handHeight = GetLandIsland().GetHeightAt(glm::vec2(handTransform.position.x, handTransform.position.z)) + 4.0f;
+
+			handTransform.rotation = glm::eulerAngleY(glm::radians(-cameraRotation.y)) * modelRotationCorrection;
+			handTransform.position = glm::vec3(handTransform.position.x, handHeight, handTransform.position.z);
+			_entityRegistry->Context().renderContext.dirty = true;
+		}
+
+		// Update Entities
+		{
+			auto updateEntities = _profiler->BeginScoped(Profiler::Stage::UpdateEntities);
+			if (_config.drawEntities)
+			{
+				_entityRegistry->PrepareDraw(_config.drawBoundingBoxes, _config.drawFootpaths, _config.drawStreams);
+			}
+		}
+	} // Update Uniforms
+
+	// Update Audio System
+	{
+		auto updateAudio = _profiler->BeginScoped(Profiler::Stage::AudioSystem);
+		_soundHandler->Tick(*this);
+	} // Update Audio System
+
+	return _config.numFramesToSimulate == 0 || _frameCount < _config.numFramesToSimulate;
 }
 
 void Game::Run()
 {
+	// Create profiler
+	_profiler = std::make_unique<Profiler>();
+
+	// Load all sound packs in the Audio directory
+	auto soundPackPaths = _fileSystem->GetAllFilePaths("Audio", ".sad");
+
+	for (auto path : soundPackPaths)
+	{
+		auto soundPack = std::make_unique<audio::SoundPack>();
+		soundPack->LoadFromFile(path);
+		// Takes ownership of the pack
+		_soundHandler->RegisterSoundPack(soundPack);
+	}
+
 	// create our camera
 	_camera = std::make_unique<Camera>();
-	_camera->SetProjectionMatrixPerspective(70.0f, _window->GetAspectRatio(), 1.0f, 65536.0f);
+	auto aspect = _window ? _window->GetAspectRatio() : 1.0f;
+	_camera->SetProjectionMatrixPerspective(70.0f, aspect, 1.0f, 65536.0f);
 
-	_camera->SetPosition(glm::vec3(2441.865f, 24.764f, 1887.351f));
-	_camera->SetRotation(glm::vec3(12.0f, 117.0f, 0.0f));
+	_camera->SetPosition(glm::vec3(1441.56f, 24.764f, 2081.76f));
+	_camera->SetRotation(glm::vec3(0.0f, -45.0f, 0.0f));
 
-	_modelPosition = glm::vec3(2485.0f, 50.0f, 1907.0f);
-	_modelRotation = glm::vec3(180.0f, 111.0f, 0.0f);
-	_modelScale    = glm::vec3(0.5f);
+	_meshPack = std::make_unique<MeshPack>();
+	_meshPack->LoadFromFile(_fileSystem->DataPath() / "AllMeshes.g3d");
 
-	//_videoPlayer = std::make_unique<Video::VideoPlayer>(GetGamePath() + "/Data/logo.bik");
+	_animationPack = std::make_unique<AnimationPack>();
+	_animationPack->LoadFromFile(_fileSystem->DataPath() / "AllAnims.anm");
 
-	_testModel = std::make_unique<SkinnedModel>();
-	_testModel->LoadFromFile(GetGamePath() + "/Data/CreatureMesh/C_Tortoise_Base.l3d");
+	_testModel = std::make_unique<L3DMesh>();
+	_testModel->LoadFromFile(_fileSystem->MiscPath() / "coffre.l3d");
 
-	_sky   = std::make_unique<Sky>();
+	_testAnimation = std::make_unique<L3DAnim>();
+	_testAnimation->LoadFromFile(_fileSystem->MiscPath() / "coffre.anm");
+
+	_handModel = std::make_unique<L3DMesh>();
+	_handModel->LoadFromFile(_fileSystem->CreatureMeshPath() / "Hand_Boned_Base2.l3d");
+
+	_sky = std::make_unique<Sky>();
 	_water = std::make_unique<Water>();
 
-	LoadLandscape("./Data/Landscape/Land1.lnd");
-	LoadMap("./Scripts/Land1.txt");
+	LoadVariables();
+	LoadMap(_fileSystem->ScriptsPath() / "Land1.txt");
 
 	// _lhvm = std::make_unique<LHVM::LHVM>();
-	// _lhvm->LoadBinary(GetGamePath() + "/Scripts/Quests/challenge.chl");
+	// _lhvm->LoadBinary(GetGamePath() + fileSystem->QuestsPath() / "challenge.chl");
 
-	// measure our delta time
-	uint64_t now     = SDL_GetPerformanceCounter();
-	uint64_t last    = 0;
-	double deltaTime = 0.0;
-
-	_running = true;
-	SDL_Event e;
-	while (_running)
+	if (_window)
 	{
-		last = now;
-		now  = SDL_GetPerformanceCounter();
+		int width, height;
+		_window->GetSize(width, height);
+		_renderer->ConfigureView(graphics::RenderPass::Main, width, height);
+	}
+	{
+		uint16_t width, height;
+		_water->GetFrameBuffer().GetSize(width, height);
+		_renderer->ConfigureView(graphics::RenderPass::Reflection, width, height);
+	}
 
-		deltaTime = ((now - last) * 1000 / (double)SDL_GetPerformanceFrequency());
-
-		while (SDL_PollEvent(&e))
+	_frameCount = 0;
+	auto last_time = std::chrono::high_resolution_clock::now();
+	while (Update())
+	{
+		auto duration = std::chrono::high_resolution_clock::now() - last_time;
+		auto milliseconds = std::chrono::duration_cast<std::chrono::duration<uint32_t, std::milli>>(duration);
 		{
-			if (e.type == SDL_QUIT)
-				_running = false;
-			if (e.type == SDL_WINDOWEVENT && e.window.event == SDL_WINDOWEVENT_CLOSE && e.window.windowID == _window->GetID())
-				_running = false;
-			if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE)
-				_running = false;
-			if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_f)
-				_window->SetFullscreen(true);
-			if (e.type == SDL_MOUSEMOTION)
-			{
-				SDL_GetMouseState(&_mousePosition.x, &_mousePosition.y);
-				glm::ivec2 screenSize;
-				_window->GetSize(screenSize.x, screenSize.y);
+			auto section = _profiler->BeginScoped(Profiler::Stage::SceneDraw);
 
-				glm::vec3 rayOrigin, rayDirection;
-				_camera->DeprojectScreenToWorld(_mousePosition, screenSize, rayOrigin, rayDirection);
+			Renderer::DrawSceneDesc drawDesc {
+			    /*time =*/milliseconds.count(), // TODO get actual time
+			    /*viewId =*/graphics::RenderPass::Main,
+			    /*profiler =*/*_profiler,
+			    /*camera =*/_camera.get(),
+			    /*frameBuffer =*/nullptr,
+			    /*drawSky =*/_config.drawSky,
+			    /*sky =*/*_sky,
+			    /*drawWater =*/_config.drawWater,
+			    /*water =*/*_water,
+			    /*drawIsland =*/_config.drawIsland,
+			    /*island =*/*_landIsland,
+			    /*drawEntities =*/_config.drawEntities,
+			    /*entities =*/*_entityRegistry,
+			    /*drawTestModel =*/_config.drawEntities,
+			    /*testModel =*/*_testModel,
+			    /*testAnimation =*/*_testAnimation,
+			    /*drawDebugCross =*/_config.drawDebugCross,
+			    /*drawBoundingBoxes =*/_config.drawBoundingBoxes,
+			    /*cullBack =*/false,
+			    /*bgfxDebug =*/_config.bgfxDebug,
+			    /*wireframe =*/_config.wireframe,
+			    /*profile =*/_config.showProfiler,
+			    /*timeOfDay =*/_config.timeOfDay,
+			    /*bumpMapStrength =*/_config.bumpMapStrength,
+			    /*smallBumpMapStrength =*/_config.smallBumpMapStrength,
+			};
 
-				float intersectDistance = 0.0f;
-				bool intersects         = glm::intersectRayPlane(
-                    rayOrigin,
-                    rayDirection,
-                    glm::vec3(0.0f, 0.0f, 0.0f), // plane origin
-                    glm::vec3(0.0f, 1.0f, 0.0f), // plane normal
-                    intersectDistance);
-
-				if (intersects)
-					_intersection = rayOrigin + rayDirection * intersectDistance;
-
-				float height    = _landIsland->GetHeightAt(glm::vec2(_intersection.x, _intersection.z));
-				_intersection.y = height;
-			}
-
-			_camera->ProcessSDLEvent(e);
-
-			ImGui_ImplSDL2_ProcessEvent(&e);
+			_renderer->DrawScene(*_meshPack, drawDesc);
 		}
 
-		DebugDraw::Cross(_intersection, 50.0f);
+		{
+			auto section = _profiler->BeginScoped(Profiler::Stage::GuiDraw);
+			_gui->Draw();
+		}
 
-		_camera->Update(deltaTime);
-		_modelRotation.y = fmod(_modelRotation.y + float(deltaTime) * .1f, 360.f);
-
-		this->guiLoop();
-
-		ImGuiIO& io = ImGui::GetIO();
-		glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
-		glClearColor(39.0f / 255.0f, 70.0f / 255.0f, 89.0f / 255.0f, 1);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-		_water->BeginReflection(*_camera);
-		drawScene(_water->GetReflectionCamera(), false);
-		_water->EndReflection();
-
-		// reset viewport here, should be done in EndReflection
-		glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
-
-		drawScene(*_camera, true);
-
-		glDisable(GL_DEPTH_TEST);
-		glDisable(GL_BLEND);
-
-		ShaderProgram* debugShader = _shaderManager->GetShader("DebugLine");
-		debugShader->Bind();
-		debugShader->SetUniformValue("u_viewProjection", _camera->GetViewProjectionMatrix());
-		DebugDraw::DrawDebugLines();
-
-		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-		_window->SwapWindow();
+		{
+			auto section = _profiler->BeginScoped(Profiler::Stage::RendererFrame);
+			_renderer->Frame();
+		}
+		_frameCount++;
 	}
 }
 
-void Game::drawScene(const Camera& camera, bool drawWater)
+void Game::LoadMap(const fs::path& path)
 {
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	if (!_fileSystem->Exists(path))
+		throw std::runtime_error("Could not find script " + path.generic_string());
 
-	_sky->Draw(camera);
+	auto data = _fileSystem->ReadAll(path);
+	std::string source(reinterpret_cast<const char*>(data.data()), data.size());
 
-	glEnable(GL_CULL_FACE);
-	glCullFace(GL_BACK);
-	glFrontFace(GL_CCW);
+	// Reset everything. Deletes all entities and their components
+	_entityRegistry->Reset();
 
-	if (drawWater)
-	{
-		ShaderProgram* waterShader = _shaderManager->GetShader("Water");
-		waterShader->Bind();
-		waterShader->SetUniformValue("viewProj", camera.GetViewProjectionMatrix());
-		_water->Draw(*waterShader);
-	}
-
-	if (_wireframe)
-		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
-	ShaderProgram* terrainShader = _shaderManager->GetShader("Terrain");
-	terrainShader->Bind();
-	terrainShader->SetUniformValue("viewProj", camera.GetViewProjectionMatrix());
-	terrainShader->SetUniformValue("timeOfDay", _timeOfDay);
-	terrainShader->SetUniformValue("bumpmapStrength", _bumpmapStrength);
-	terrainShader->SetUniformValue("smallBumpmapStrength", _smallBumpmapStrength);
-	terrainShader->SetUniformValue("sMaterials", 0);
-	terrainShader->SetUniformValue("sBumpMap", 1);
-	terrainShader->SetUniformValue("sSmallBumpMap", 2);
-
-	_landIsland->GetMaterialArray()->Bind(0);
-	_landIsland->GetBumpMap()->Bind(1);
-	_landIsland->GetSmallBumpMap()->Bind(2);
-
-	_landIsland->Draw(*terrainShader);
-
-	if (_wireframe)
-		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-	glm::mat4 modelMatrix = glm::mat4(1.0f);
-	modelMatrix           = glm::translate(modelMatrix, _modelPosition);
-
-	modelMatrix = glm::rotate(modelMatrix, glm::radians(_modelRotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-	modelMatrix = glm::rotate(modelMatrix, glm::radians(_modelRotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-	modelMatrix = glm::rotate(modelMatrix, glm::radians(_modelRotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-
-	modelMatrix = glm::scale(modelMatrix, _modelScale);
-
-	ShaderProgram* objectShader = _shaderManager->GetShader("SkinnedMesh");
-	objectShader->Bind();
-	objectShader->SetUniformValue("u_viewProjection", camera.GetViewProjectionMatrix());
-	objectShader->SetUniformValue("u_modelTransform", modelMatrix);
-	_testModel->Draw(objectShader);
-
-	glDisable(GL_CULL_FACE);
-}
-
-void Game::guiLoop()
-{
-	ImGui_ImplOpenGL3_NewFrame();
-	ImGui_ImplSDL2_NewFrame(_window->GetHandle());
-	ImGui::NewFrame();
-
-	if (ImGui::BeginMainMenuBar())
-	{
-		if (ImGui::BeginMenu("File"))
-		{
-			if (ImGui::MenuItem("Quit", "Esc")) { _running = false; }
-			ImGui::EndMenu();
-		}
-
-		if (ImGui::BeginMenu("View"))
-		{
-			ImGui::Checkbox("Wireframe", &_wireframe);
-			ImGui::Checkbox("Water Debug", &_waterDebug);
-			ImGui::EndMenu();
-		}
-
-		if (ImGui::BeginMenu("Tools"))
-		{
-			if (ImGui::MenuItem("Dump Land Textures")) { _landIsland->DumpTextures(); }
-			ImGui::EndMenu();
-		}
-
-		ImGui::Text("%d, %d", _mousePosition.x, _mousePosition.y);
-
-		ImGui::SameLine(ImGui::GetWindowWidth() - 154.0f);
-		ImGui::Text("%.2f FPS (%.2f ms)", ImGui::GetIO().Framerate, 1000.0f / ImGui::GetIO().Framerate);
-
-		ImGui::EndMainMenuBar();
-	}
-
-	//ImGui::ShowDemoWindow();
-
-	ImGuiIO& io = ImGui::GetIO();
-	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - 8.0f, io.DisplaySize.y - 8.0f), ImGuiCond_Always, ImVec2(1.0f, 1.0f));
-	ImGui::SetNextWindowBgAlpha(0.35f);
-
-	if (ImGui::Begin("Camera position overlay", NULL, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav))
-	{
-		auto camPos = _camera->GetPosition();
-		auto camRot = _camera->GetRotation();
-		ImGui::Text("Camera Position: (%.1f,%.1f, %.1f)", camPos.x, camPos.y, camPos.z);
-		ImGui::Text("Camera Rotation: (%.1f,%.1f, %.1f)", camRot.x, camRot.y, camRot.z);
-
-		if (ImGui::IsMousePosValid())
-			ImGui::Text("Mouse Position: (%.1f,%.1f)", io.MousePos.x, io.MousePos.y);
-		else
-			ImGui::Text("Mouse Position: <invalid>");
-	}
-	ImGui::End();
-
-	if (_lhvm != nullptr)
-		LHVMViewer::Draw(_lhvm.get());
-
-	ImGui::Begin("Land Island");
-
-	ImGui::Text("Load Land Island:");
-	ImGui::BeginGroup();
-	if (ImGui::Button("1"))
-		LoadLandscape("./Data/Landscape/Land1.lnd");
-	ImGui::SameLine();
-	if (ImGui::Button("2"))
-		LoadLandscape("./Data/Landscape/Land2.lnd");
-	ImGui::SameLine();
-	if (ImGui::Button("3"))
-		LoadLandscape("./Data/Landscape/Land3.lnd");
-	ImGui::SameLine();
-	if (ImGui::Button("4"))
-		LoadLandscape("./Data/Landscape/Land4.lnd");
-	ImGui::SameLine();
-	if (ImGui::Button("5"))
-		LoadLandscape("./Data/Landscape/Land5.lnd");
-	ImGui::SameLine();
-	if (ImGui::Button("T"))
-		LoadLandscape("./Data/Landscape/LandT.lnd");
-	if (ImGui::Button("2P"))
-		LoadLandscape("./Data/Landscape/Multi_Player/MPM_2P_1.lnd");
-	ImGui::SameLine();
-	if (ImGui::Button("3P"))
-		LoadLandscape("./Data/Landscape/Multi_Player/MPM_3P_1.lnd");
-	ImGui::SameLine();
-	if (ImGui::Button("4P"))
-		LoadLandscape("./Data/Landscape/Multi_Player/MPM_4P_1.lnd");
-
-	ImGui::EndGroup();
-
-	ImGui::SliderFloat("Day", &_timeOfDay, 0.0f, 1.0f, "%.3f");
-	ImGui::SliderFloat("Bump", &_bumpmapStrength, 0.0f, 1.0f, "%.3f");
-	ImGui::SliderFloat("Small Bump", &_smallBumpmapStrength, 0.0f, 1.0f, "%.3f");
-
-	ImGui::Separator();
-
-	ImGui::Text("Block Count: %d", _landIsland->GetBlocks().size());
-	ImGui::Text("Country Count: %d", _landIsland->GetCountries().size());
-
-	ImGui::Separator();
-
-	if (ImGui::Button("Dump Textures"))
-		_landIsland->DumpTextures();
-
-	if (ImGui::Button("Dump Heightmap"))
-		_landIsland->DumpMaps();
-
-	ImGui::End();
-
-	if (_waterDebug)
-		_water->DebugGUI();
-
-	ImGui::Render();
-}
-
-void Game::LoadMap(const std::string& name)
-{
-	if (!_fileSystem->Exists(name))
-		throw std::runtime_error("Could not find script " + name);
-
-	auto file = _fileSystem->Open(name, FileMode::Read);
+	// We need a hand for the player
+	_handEntity = _entityRegistry->Create();
+	_entityRegistry->Assign<Hand>(_handEntity);
+	const auto rotation = glm::mat3(glm::eulerAngleXZ(glm::half_pi<float>(), glm::half_pi<float>()));
+	_entityRegistry->Assign<Transform>(_handEntity, glm::vec3(0), rotation, glm::vec3(0.02));
 
 	Script script(this);
-	script.LoadFromFile(*file);
+	script.Load(source);
 }
 
-void Game::LoadLandscape(const std::string& name)
+void Game::LoadLandscape(const fs::path& path)
 {
 	if (_landIsland)
 		_landIsland.reset();
 
-	if (!_fileSystem->Exists(name))
-		throw std::runtime_error("Could not find landscape " + name);
+	auto fixedName = Game::instance()->GetFileSystem().FindPath(FileSystem::FixPath(path));
 
-	auto file = _fileSystem->Open(name, FileMode::Read);
+	if (!_fileSystem->Exists(fixedName))
+		throw std::runtime_error("Could not find landscape " + path.generic_string());
 
 	_landIsland = std::make_unique<LandIsland>();
-	_landIsland->LoadFromFile(*file);
+	_landIsland->LoadFromFile(fixedName.u8string());
 }
 
-const std::string& Game::GetGamePath()
+void Game::LoadVariables()
 {
-	static std::string sGamePath;
+	return;
 
-	if (sGamePath.empty())
+	auto file = _fileSystem->Open(_fileSystem->ScriptsPath() / "info.dat", FileMode::Read);
+
+	// check magic header
+	constexpr char kLionheadMagic[] = "LiOnHeAd";
+
+	struct
 	{
-#ifdef _WIN32
-		DWORD dataLen  = 0;
-		LSTATUS status = RegGetValue(HKEY_CURRENT_USER, "SOFTWARE\\Lionhead Studios Ltd\\Black & White", "GameDir", RRF_RT_REG_SZ, nullptr, nullptr, &dataLen);
-		if (status == ERROR_SUCCESS)
-		{
-			char* path = new char[dataLen];
-			status     = RegGetValue(HKEY_CURRENT_USER, "SOFTWARE\\Lionhead Studios Ltd\\Black & White", "GameDir", RRF_RT_REG_SZ, nullptr, path, &dataLen);
+		char blockName[32];
+		uint32_t blockSize;
+		uint32_t position;
+	} header;
 
-			sGamePath = std::string(path);
-			return sGamePath;
-		}
+	char magic[8];
+	file->Read(magic, 8);
+	if (!std::equal(kLionheadMagic, kLionheadMagic + 8, magic))
+		throw std::runtime_error("invalid Lionhead file magic");
 
-		std::cerr << "Failed to find GameDir registry value, game not installed" << std::endl;
-#endif // _WIN32
+	char blockName[32];
+	file->Read(blockName, 32);
+	uint32_t size = file->ReadValue<uint32_t>();
 
-		// no key? guess
-#ifdef _WIN32
-		sGamePath = std::string("C:\\Program Files (x86)\\Lionhead Studios Ltd\\Black & White");
-#else
-		sGamePath = std::string("/mnt/windows/Program Files (x86/Lionhead Studios Ltd/Black & White");
-#endif // _WIN32
+	spdlog::debug("info.dat: block name = {} = {} bytes", blockName, size);
 
-		std::clog << "Guessing GamePath: " << sGamePath << std::endl;
+	struct MagicInfo
+	{
+		uint32_t typeEnum;          // ENUM_MAGIC_TYPE
+		uint32_t immersionTypeEnum; // ENUM_IMMERSION_EFFECT_TYPE
+		uint32_t stopImmersion;
+		float perceivedPower;
+		uint32_t particleTypeEnum;   // ENUM_PARTICLE_TYPE
+		uint32_t impressiveTypeEnum; // ENUM_IMPRESSIVE_TYPE
+		uint32_t spellSeedTypeEnum;  // ENUM_SPELL_SEED_TYPE
+		uint32_t gestureType;        // ENUM_GESTURE_TYPE
+		uint32_t powerupType;        // ENUM_POWER_UP_TYPE
+		uint32_t castRuleType;       // ENUM_CAST_RULE_TYPE
+		uint32_t IsSpellSeedDrawnInHand;
+		uint32_t IsSpellRecharged;
+		uint32_t IsCreatureCastFromAbove;
+		uint32_t OneOffSpellIsPlayful;
+		uint32_t OneOffSpellIsAggressive;
+		uint32_t OneOffSpellIsCompassionate;
+		uint32_t OneOffSpellIsToRestoreHealth;
+	};
+
+	for (auto i = 0; i < 10; i++)
+	{
+		MagicInfo info;
+		file->Read(&info, 0x48);
+
+		spdlog::debug("MAGIC_TYPE {}, PerceivedPower={}", info.typeEnum, info.perceivedPower);
 	}
 
-	return sGamePath;
+	// GMagicInfo: 0x48 bytes // DETAIL_MAGIC_GENERAL_INFO
+	// 10
+
+	// GMagicHealInfo: 0x48, 0x8 bytes // DETAIL_MAGIC_HEAL_INFO
+	// GMagicTeleportInfo: 0x48, 0x8 bytes // DETAIL_MAGIC_TELEPORT_INFO
+
+	// DETAIL_MAGIC_GENERAL_INFO
+	// DETAIL_MAGIC_HEAL_INFO
+	// DETAIL_MAGIC_TELEPORT_INFO
+	// DETAIL_MAGIC_FOREST_INFO
+	// DETAIL_MAGIC_FOOD_INFO
+	// DETAIL_MAGIC_STORM_AND_TORNADO_INFO
+	// DETAIL_MAGIC_SHIELD_ONE_INFO
+	// DETAIL_MAGIC_WOOD_INFO
+	// DETAIL_MAGIC_WATER_INFO
+	// DETAIL_MAGIC_FLOCK_FLYING_INFO
+	// DETAIL_MAGIC_FLOCK_GROUND_INFO
+	// DETAIL_MAGIC_CREATURE_SPELL_INFO
+}
+
+void Game::SetGamePath(const fs::path& gamePath)
+{
+	if (gamePath.empty())
+	{
+		return;
+	}
+	if (!fs::exists(gamePath))
+	{
+		spdlog::error("GamePath does not exist: '{}'", gamePath.generic_string());
+		return;
+	}
+	_gamePath = gamePath;
+}
+
+const fs::path& Game::GetGamePath()
+{
+	if (_gamePath.empty())
+	{
+#ifdef _WIN32
+		DWORD dataLen = 0;
+		LSTATUS status = RegGetValue(HKEY_CURRENT_USER, "SOFTWARE\\Lionhead Studios Ltd\\Black & White", "GameDir",
+		                             RRF_RT_REG_SZ, nullptr, nullptr, &dataLen);
+		if (status == ERROR_SUCCESS)
+		{
+			std::vector<char> path(dataLen);
+			status = RegGetValue(HKEY_CURRENT_USER, "SOFTWARE\\Lionhead Studios Ltd\\Black & White", "GameDir", RRF_RT_REG_SZ,
+			                     nullptr, path.data(), &dataLen);
+
+			_gamePath = fs::path(path.data());
+			return _gamePath;
+		}
+
+		spdlog::error("Failed to find the GameDir registry value, game not installed.");
+#endif // _WIN32
+
+		// no key, don't guess, let the user know to set the command param
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Game Path missing",
+		                         "Game path was not supplied, use the -g "
+		                         "command parameter to set it.",
+		                         nullptr);
+		spdlog::error("Failed to find the GameDir.");
+		exit(1);
+	}
+
+	return _gamePath;
 }

@@ -1,55 +1,48 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
 #pragma once
 
-#include <Graphics/OpenGL.h>
-#include <Graphics/Texture2D.h>
+#include "RenderPass.h"
+#include "Texture2D.h"
 
-namespace OpenBlack {
-namespace Graphics {
+#include <cstdint>
+#include <memory>
+#include <optional>
 
-class FrameBuffer {
+namespace openblack::graphics
+{
+
+class FrameBuffer
+{
 public:
 	FrameBuffer() = delete;
-	FrameBuffer(GLsizei width, GLsizei height, GLenum format);
+	FrameBuffer(const std::string& name, uint16_t width, uint16_t height, Format colorFormat,
+	            std::optional<Format> depthStencilFormat = {});
 	~FrameBuffer();
 
-	void Bind() { glBindFramebuffer(GL_DRAW_FRAMEBUFFER, _handle); }
-	void Unbind() { glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0); }
+	void Bind(RenderPass viewId) const;
 
-	Texture2D* GetTexture() { return _texture; }
+	Texture2D& GetColorAttachment() { return _colorAttachment; }
+	void GetSize(uint16_t& width, uint16_t& height) const { width = _width, height = _height; }
 
-	//inline void Bind() { glBindTexture(GL_TEXTURE_RECTANGLE, _textureID); }
-
-	const GLsizei GetWidth() const { return _width; }
-	const GLsizei GetHeight() const { return _height; }
 private:
-	GLuint _handle;
+	std::string _name;
+	bgfx::FrameBufferHandle _handle;
 
-	GLsizei _width;
-	GLsizei _height;
-	GLenum _format;
+	uint16_t _width;
+	uint16_t _height;
+	Format _colorFormat;
+	std::optional<Format> _depthStencilFormat;
 
-	Texture2D* _texture;
+	Texture2D _colorAttachment;
+	Texture2D _depthStencilAttachment;
 };
 
-}
-}
+} // namespace openblack::graphics

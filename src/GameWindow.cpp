@@ -1,46 +1,40 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
 #include "GameWindow.h"
 
+#include "Renderer.h"
+
+#include <SDL_syswm.h>
+#include <spdlog/spdlog.h>
+#if defined(SDL_VIDEO_DRIVER_WAYLAND)
+#include <wayland-egl.h>
+#endif // defined(SDL_VIDEO_DRIVER_WAYLAND)
+
 #include <iostream>
-#include <sstream>
-#define GLEW_STATIC
-#include <GL/glew.h>
 
-using namespace OpenBlack;
+using namespace openblack;
 
-GameWindow::GameWindow(const std::string& title, const SDL_DisplayMode& display, DisplayMode displaymode):
-    GameWindow::GameWindow(title, display.w, display.h, displaymode)
+void GameWindow::SDLDestroyer::operator()(SDL_Window* window) const
 {
+	SDL_DestroyWindow(window);
 }
 
-GameWindow::GameWindow(const std::string& title, int width, int height, DisplayMode displaymode)
+GameWindow::GameWindow(const std::string& title, int width, int height, DisplayMode displayMode)
 {
 	SDL_version compiledVersion, linkedVersion;
 	SDL_VERSION(&compiledVersion);
 	SDL_GetVersion(&linkedVersion);
 
-	std::clog << "Initializing SDL..." << std::endl;
-	std::clog << "SDL Version/Compiled " << uint32_t(compiledVersion.major) << "." << uint32_t(compiledVersion.minor) << "." << uint32_t(compiledVersion.patch) << "\n";
-	std::clog << "SDL Version/Linked " << uint32_t(linkedVersion.major) << "." << uint32_t(linkedVersion.minor) << "." << uint32_t(linkedVersion.patch) << "\n";
+	spdlog::info("Initializing SDL...");
+	spdlog::info("SDL Version/Compiled {}.{}.{}", compiledVersion.major, compiledVersion.minor, compiledVersion.patch);
+	spdlog::info("SDL Version/Linked {}.{}.{}", linkedVersion.major, linkedVersion.minor, linkedVersion.patch);
 
 	// Initialize SDL
 	if (SDL_WasInit(0) == 0)
@@ -54,74 +48,32 @@ GameWindow::GameWindow(const std::string& title, int width, int height, DisplayM
 
 		if (SDL_InitSubSystem(SDL_INIT_TIMER) != 0)
 			throw std::runtime_error("Could not initialize SDL Timer Subsystem: " + std::string(SDL_GetError()));
+
+		if (SDL_InitSubSystem(SDL_INIT_AUDIO) != 0)
+			throw std::runtime_error("Could not initialize SDL Audio Subsystem: " + std::string(SDL_GetError()));
 	}
 
 	SDL_ShowCursor(SDL_DISABLE);
 
-	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-
-	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
-
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-
-	uint32_t flags = SDL_WINDOW_OPENGL | SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_ALLOW_HIGHDPI;
-
-	if (displaymode == DisplayMode::Fullscreen)
+	uint32_t flags = SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
+	if (displayMode == DisplayMode::Fullscreen)
 		flags |= SDL_WINDOW_FULLSCREEN;
-	else if (displaymode == DisplayMode::Borderless)
+	else if (displayMode == DisplayMode::Borderless)
 		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 
-	auto window = std::unique_ptr<SDL_Window, SDLDestroyer>(SDL_CreateWindow(
-	    title.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-	    width, height, flags));
+	// Get SDL Window requirements from Renderer
+	const int x = SDL_WINDOWPOS_UNDEFINED;
+	const int y = SDL_WINDOWPOS_UNDEFINED;
+
+	auto window = std::unique_ptr<SDL_Window, SDLDestroyer>(SDL_CreateWindow(title.c_str(), x, y, width, height, flags));
 
 	if (window == nullptr)
 	{
-		throw std::runtime_error("Failed creating window: " + std::string(SDL_GetError()));
+		spdlog::error("Failed to create SDL2 window: '{}'", SDL_GetError());
+		throw std::runtime_error("Failed creating SDL2 window: " + std::string(SDL_GetError()));
 	}
+
 	_window = std::move(window);
-
-	// Create a debug context?
-	bool useDebug = true;
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, useDebug ? SDL_GL_CONTEXT_DEBUG_FLAG : 0);
-
-	auto context = SDL_GL_CreateContext(_window.get());
-
-	if (context == nullptr)
-	{
-		throw std::runtime_error("Could not create OpenGL context: " + std::string(SDL_GetError()));
-	}
-	else
-	{
-		_glcontext = std::unique_ptr<SDL_GLContext, SDLDestroyer>(&context);
-	}
-
-	std::clog << "OpenGL context successfully created." << std::endl;
-
-	int majorVersion, minorVersion;
-	SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &majorVersion);
-	SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, &minorVersion);
-
-	std::clog << "OpenGL version: " << majorVersion << "." << minorVersion << std::endl;
-
-	// initalize glew
-	glewExperimental = GL_TRUE;
-	GLenum err = glewInit();
-	if (GLEW_OK != err)
-	{
-		std::stringstream error;
-		error << "glewInit failed: " << glewGetErrorString(err) << std::endl;
-		throw std::runtime_error(error.str());
-	}
-
-	std::cout << "Using GLEW " << glewGetString(GLEW_VERSION) << std::endl;
 }
 
 SDL_Window* GameWindow::GetHandle() const
@@ -129,9 +81,75 @@ SDL_Window* GameWindow::GetHandle() const
 	return _window.get();
 }
 
-SDL_GLContext* GameWindow::GetGLContext() const
+void GameWindow::GetNativeHandles(void*& native_window, void*& native_display) const
 {
-	return _glcontext.get();
+	SDL_SysWMinfo wmi;
+	SDL_VERSION(&wmi.version);
+	if (!SDL_GetWindowWMInfo(_window.get(), &wmi))
+	{
+		throw std::runtime_error("Failed getting native window handles: " + std::string(SDL_GetError()));
+	}
+
+	// Linux
+#if defined(SDL_VIDEO_DRIVER_WAYLAND)
+	if (wmi.subsystem == SDL_SYSWM_WAYLAND)
+	{
+		auto win_impl = static_cast<wl_egl_window*>(SDL_GetWindowData(_window.get(), "wl_egl_window"));
+		if (!win_impl)
+		{
+			int width, height;
+			SDL_GetWindowSize(_window.get(), &width, &height);
+			struct wl_surface* surface = wmi.info.wl.surface;
+			if (!surface)
+			{
+				throw std::runtime_error("Failed getting native window handles: " + std::string(SDL_GetError()));
+			}
+			win_impl = wl_egl_window_create(surface, width, height);
+			SDL_SetWindowData(_window.get(), "wl_egl_window", win_impl);
+		}
+		native_window = reinterpret_cast<void*>(win_impl);
+		native_display = wmi.info.wl.display;
+	}
+	else
+#endif // defined(SDL_VIDEO_DRIVER_WAYLAND)
+#if defined(SDL_VIDEO_DRIVER_X11)
+	    if (wmi.subsystem == SDL_SYSWM_X11)
+	{
+		native_window = reinterpret_cast<void*>(wmi.info.x11.window);
+		native_display = wmi.info.x11.display;
+	}
+	else
+#endif // defined(SDL_VIDEO_DRIVER_X11) \
+       // Mac
+#if defined(SDL_VIDEO_DRIVER_COCOA)
+	    if (wmi.subsystem == SDL_SYSWM_COCOA)
+	{
+		native_window = wmi.info.cocoa.window;
+		native_display = nullptr;
+	}
+	else
+#endif // defined(SDL_VIDEO_DRIVER_COCOA) \
+       // Windows
+#if defined(SDL_VIDEO_DRIVER_WINDOWS)
+	    if (wmi.subsystem == SDL_SYSWM_WINDOWS)
+	{
+		native_window = wmi.info.win.window;
+		native_display = nullptr;
+	}
+	else
+#endif // defined(SDL_VIDEO_DRIVER_WINDOWS) \
+       // Steam Link
+#if defined(SDL_VIDEO_DRIVER_VIVANTE)
+	    if (wmi.subsystem == SDL_SYSWM_VIVANTE)
+	{
+		native_window = wmi.info.vivante.window;
+		native_display = wmi.info.vivante.display;
+	}
+	else
+#endif // defined(SDL_VIDEO_DRIVER_VIVANTE)
+	{
+		throw std::runtime_error("Unsupported platform or window manager: " + std::to_string(wmi.subsystem));
+	}
 }
 
 bool GameWindow::IsOpen() const
@@ -172,7 +190,7 @@ void GameWindow::SetMousePosition(int x, int y)
 	SDL_WarpMouseInWindow(_window.get(), x, y);
 }
 
-bool GameWindow::IsInputGrabbed()
+bool GameWindow::IsInputGrabbed() const
 {
 	return SDL_GetWindowGrab(_window.get()) != SDL_FALSE;
 }
@@ -185,17 +203,6 @@ std::string GameWindow::GetTitle() const
 void GameWindow::SetTitle(const std::string& str)
 {
 	SDL_SetWindowTitle(_window.get(), str.c_str());
-}
-
-int GameWindow::GetSwapInterval()
-{
-	return SDL_GL_GetSwapInterval();
-}
-
-void GameWindow::SetSwapInterval(int interval)
-{
-	// todo: throw on error
-	SDL_GL_SetSwapInterval(interval);
 }
 
 float GameWindow::GetAspectRatio() const
@@ -211,7 +218,7 @@ void GameWindow::SetPosition(int x, int y)
 	SDL_SetWindowPosition(_window.get(), x, y);
 }
 
-void GameWindow::GetPosition(int& x, int& y)
+void GameWindow::GetPosition(int& x, int& y) const
 {
 	SDL_GetWindowPosition(_window.get(), &x, &y);
 }
@@ -221,7 +228,7 @@ void GameWindow::SetMinimumSize(int width, int height)
 	SDL_SetWindowMinimumSize(_window.get(), width, height);
 }
 
-void GameWindow::GetMinimumSize(int& width, int& height)
+void GameWindow::GetMinimumSize(int& width, int& height) const
 {
 	SDL_GetWindowMinimumSize(_window.get(), &width, &height);
 }
@@ -231,7 +238,7 @@ void GameWindow::SetMaximumSize(int width, int height)
 	SDL_SetWindowMaximumSize(_window.get(), width, height);
 }
 
-void GameWindow::GetMaximumSize(int& width, int& height)
+void GameWindow::GetMaximumSize(int& width, int& height) const
 {
 	SDL_GetWindowMaximumSize(_window.get(), &width, &height);
 }
@@ -241,7 +248,7 @@ void GameWindow::SetSize(int width, int height)
 	SDL_SetWindowSize(_window.get(), width, height);
 }
 
-void GameWindow::GetSize(int& width, int& height)
+void GameWindow::GetSize(int& width, int& height) const
 {
 	SDL_GetWindowSize(_window.get(), &width, &height);
 }
@@ -292,11 +299,5 @@ void GameWindow::SetFullscreen(bool b)
 
 void GameWindow::Close()
 {
-	_glcontext.reset(nullptr);
 	_window.reset(nullptr);
-}
-
-void GameWindow::SwapWindow()
-{
-	SDL_GL_SwapWindow(_window.get());
 }

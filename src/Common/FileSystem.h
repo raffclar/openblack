@@ -1,33 +1,23 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
 #pragma once
 
-#include <Common/File.h>
-#include <filesystem>
+#include "FileStream.h"
+
+#include <cstddef>
 #include <list>
 #include <memory>
 #include <string>
 #include <vector>
 
-namespace OpenBlack
+namespace openblack
 {
 
 /*
@@ -35,20 +25,39 @@ FileSystem
  */
 class FileSystem
 {
-  public:
-	std::shared_ptr<File> Open(const std::filesystem::path& path, FileMode mode);
-	bool Exists(const std::filesystem::path& path);
+public:
+	static inline fs::path ScriptsPath() { return "Scripts"; }
 
-	void SetGamePath(const std::filesystem::path& path) { _gamePath = path; }
-	const std::filesystem::path& GetGamePath() const { return _gamePath; }
+	static inline fs::path PlaygroundPath() { return ScriptsPath() / "Playgrounds"; }
 
-	std::vector<std::filesystem::path> EnumFiles(const std::filesystem::path& directory);
+	static inline fs::path QuestsPath() { return ScriptsPath() / "Quests"; }
 
-	void Delete();
-	void Rename();
+	static inline fs::path DataPath() { return "Data"; }
 
-  private:
-	std::filesystem::path _gamePath;
+	static inline fs::path MiscPath() { return DataPath() / "Misc"; }
+
+	static inline fs::path TexturePath() { return DataPath() / "Textures"; }
+
+	static inline fs::path WeatherSystemPath() { return DataPath() / "WeatherSystem"; }
+
+	static inline fs::path CreatureMeshPath() { return DataPath() / "CreatureMesh"; }
+
+	static fs::path FixPath(const fs::path& path);
+
+	[[nodiscard]] fs::path FindPath(const fs::path& path) const;
+
+	std::unique_ptr<FileStream> Open(const fs::path& path, FileMode mode);
+	bool Exists(const fs::path& path);
+
+	void SetGamePath(const fs::path& path) { _gamePath = path; }
+	[[nodiscard]] const fs::path& GetGamePath() const { return _gamePath; }
+
+	std::vector<std::string> GetAllFilePaths(const std::string& path, const std::string& ext);
+
+	std::vector<std::byte> ReadAll(const fs::path& path);
+
+private:
+	fs::path _gamePath;
 };
 
-} // namespace OpenBlack
+} // namespace openblack

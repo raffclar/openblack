@@ -1,67 +1,25 @@
-/* OpenBlack - A reimplementation of Lionheads's Black & White engine
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
 #pragma once
-#ifndef OPENBLACK_SCRIPTLIBRARY_LHVM_OPCODENAMESH
-#define OPENBLACK_SCRIPTLIBRARY_LHVM_OPCODENAMESH
 
 #include <array>
 
-namespace OpenBlack {
-namespace LHVM {
+namespace openblack
+{
+namespace LHVM
+{
 
 static const std::array<std::string, 31> Opcode_Names = {
-	"END",
-    "WAIT",
-    "PUSH",
-    "POP",
-    "ADD",
-    "CALL",
-    "MINUS",
-    "UMINUS",
-    "TIMES",
-    "DIVIDE",
-    "MODULUS",
-    "NOT",
-    "AND",
-	"OR",
-    "EQ",
-    "NEQ",
-    "GEQ",
-    "LEQ",
-    "GT",
-    "LT",
-    "JUMP",
-    "SLEEP",
-    "EXCEPT",
-    "INTCAST",
-    "RUN",
-    "ENDEXCEPT",
-    "RETEXCEPT",
-	"FAILEXCEPT",
-    "BRKEXCEPT",
-    "SWAP",
-    "LINE"
-};
+    "END",    "WAIT",    "PUSH", "POP",       "ADD",       "CALL",       "MINUS",     "UMINUS", "TIMES", "DIVIDE", "MODULUS",
+    "NOT",    "AND",     "OR",   "EQ",        "NEQ",       "GEQ",        "LEQ",       "GT",     "LT",    "JUMP",   "SLEEP",
+    "EXCEPT", "INTCAST", "RUN",  "ENDEXCEPT", "RETEXCEPT", "FAILEXCEPT", "BRKEXCEPT", "SWAP",   "LINE"};
 
 }
-}
-
-#endif
+} // namespace openblack

@@ -1,45 +1,53 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
 #pragma once
-#ifndef OPENBLACK_MESHVIEWER_H
-#define OPENBLACK_MESHVIEWER_H
 
-#include <3D/MeshPack.h>
+#include <memory>
+#include <optional>
 
-namespace OpenBlack
+#include "AllMeshes.h"
+#include "Graphics/DebugLines.h"
+#include "Graphics/FrameBuffer.h"
+
+#include <imgui.h>
+
+namespace openblack
 {
+class Renderer;
+
+namespace graphics
+{
+class DebugLines;
+}
+
 class MeshViewer
 {
-  public:
-	MeshViewer();
-	~MeshViewer();
+public:
+	explicit MeshViewer();
+	void Open();
+	void DrawWindow();
+	void DrawScene(const Renderer& renderer);
 
-	void GUI();
-	void Render();
-
-  private:
-	int m_currentMesh;
-
-	L3DModel* GetCurrentModel();
+private:
+	bool _open;
+	static constexpr graphics::RenderPass _viewId = graphics::RenderPass::MeshViewer;
+	MeshPackId _selectedMesh;
+	int _selectedSubMesh;
+	std::optional<uint32_t> _selectedAnimation;
+	int _selectedFrame;
+	ImGuiTextFilter _filter;
+	uint32_t _meshFlagFilter;
+	bool _matchBones;
+	glm::vec3 _cameraPosition;
+	bool _viewBoundingBox;
+	std::unique_ptr<graphics::DebugLines> _boundingBox;
+	std::unique_ptr<graphics::FrameBuffer> _frameBuffer;
 };
-} // namespace OpenBlack
-
-#endif
+} // namespace openblack

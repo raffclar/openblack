@@ -1,63 +1,53 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
 #pragma once
-#ifndef OPENBLACK_INDEXBUFFER_H
-#define OPENBLACK_INDEXBUFFER_H
 
-#include "OpenGL.h"
+#include <bgfx/bgfx.h>
 
-#include <cstdio>
-#include <stdint.h>
+#include <cstddef>
+#include <cstdint>
+#include <string>
 
-namespace OpenBlack
-{
-namespace Graphics
+namespace openblack::graphics
 {
 class IndexBuffer
 {
-  public:
-	IndexBuffer()                         = delete;
-	IndexBuffer(const IndexBuffer& other) = delete;
-	IndexBuffer(IndexBuffer&&)            = default;
+public:
+	enum class Type : uint8_t
+	{
+		Uint16,
+		Uint32,
+	};
+	static std::size_t GetTypeSize(Type type);
 
-	IndexBuffer(const void* indices, std::size_t indicesCount, GLenum type);
+	IndexBuffer() = delete;
+	IndexBuffer(const IndexBuffer& other) = delete;
+	IndexBuffer(IndexBuffer&&) = default;
+
+	IndexBuffer(std::string name, const void* indices, size_t indicesCount, Type type);
+	IndexBuffer(std::string name, const bgfx::Memory* memory, Type type);
 
 	~IndexBuffer();
 
-	std::size_t GetCount() const;
-	std::size_t GetSize() const;
-	GLenum GetType() const;
-	GLuint GetIBO() const;
+	[[nodiscard]] uint32_t GetCount() const;
+	[[nodiscard]] std::size_t GetSize() const;
+	[[nodiscard]] std::size_t GetStride() const;
+	[[nodiscard]] Type GetType() const;
 
-  private:
-	std::size_t _count;
-	GLenum _type;
+	void Bind(uint32_t count, uint32_t startIndex = 0) const;
 
-	GLuint _ibo;
-	GLuint _hint;
-
-	static std::size_t GetTypeSize(GLenum type);
+private:
+	std::string _name;
+	uint32_t _count;
+	Type _type;
+	bgfx::IndexBufferHandle _handle;
 };
 
-} // namespace Graphics
-} // namespace OpenBlack
-
-#endif // OPENBLACK_INDEXBUFFER_H
+} // namespace openblack::graphics

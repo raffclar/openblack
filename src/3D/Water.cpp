@@ -1,164 +1,76 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
-#include <3D/Water.h>
-#include <imgui/imgui.h>
+#include "Water.h"
 
-using namespace OpenBlack;
+#include "Common/FileSystem.h"
+#include "Game.h"
+#include "Graphics/FrameBuffer.h"
+#include "Graphics/IndexBuffer.h"
+#include "Graphics/Mesh.h"
+#include "Graphics/ShaderProgram.h"
+#include "Graphics/Texture2D.h"
+#include "Graphics/VertexBuffer.h"
+#include "Gui.h"
 
-glm::mat4 ReflectionCamera::GetViewProjectionMatrix() const
-{
-	glm::mat4 mRotation = getRotationMatrix();
-	glm::mat4 mView     = mRotation * glm::translate(glm::mat4(1.0f), -_position);
+#include <glm/vec2.hpp>
+#include <imgui.h>
 
-	const glm::vec4 reflectionPlane = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
-
-	// M''camera = Mreflection * Mcamera * Mflip
-	glm::mat4x4 reflectionMatrix;
-	reflectMatrix(reflectionMatrix, reflectionPlane);
-
-	return GetProjectionMatrix() * mView * reflectionMatrix;
-}
-
-/*
-              | 1-2Nx2   -2NxNy  -2NxNz  -2NxD |
-Mreflection = |  -2NxNy 1-2Ny2   -2NyNz  -2NyD |
-              |  -2NxNz  -2NyNz 1-2Nz2   -2NzD |
-              |    0       0       0       1   |
-*/
-void ReflectionCamera::reflectMatrix(glm::mat4x4& m, const glm::vec4& plane) const
-{
-	m[0][0] = (1.0f - 2.0f * plane[0] * plane[0]);
-	m[1][0] = (-2.0f * plane[0] * plane[1]);
-	m[2][0] = (-2.0f * plane[0] * plane[2]);
-	m[3][0] = (-2.0f * plane[3] * plane[0]);
-
-	m[0][1] = (-2.0f * plane[1] * plane[0]);
-	m[1][1] = (1.0f - 2.0f * plane[1] * plane[1]);
-	m[2][1] = (-2.0f * plane[1] * plane[2]);
-	m[3][1] = (-2.0f * plane[3] * plane[1]);
-
-	m[0][2] = (-2.0f * plane[2] * plane[0]);
-	m[1][2] = (-2.0f * plane[2] * plane[1]);
-	m[2][2] = (1.0f - 2.0f * plane[2] * plane[2]);
-	m[3][2] = (-2.0f * plane[3] * plane[2]);
-
-	m[0][3] = 0.0f;
-	m[1][3] = 0.0f;
-	m[2][3] = 0.0f;
-	m[3][3] = 1.0f;
-}
-
+using namespace openblack;
+using namespace openblack::graphics;
 
 Water::Water()
 {
-	// _shaderProgram = std::make_unique<ShaderProgram>();
+	_reflectionFrameBuffer =
+	    std::make_unique<FrameBuffer>("Reflection", 1024, 1024, graphics::Format::RGBA8, graphics::Format::Depth24Stencil8);
 
-	// _waterShader = resourceCaches.shaderProgram->Request("water.program");
+	// water texture (256x256 RAW RGB 24bpp)
+	auto& filesystem = Game::instance()->GetFileSystem();
+	auto const& waterTextureData = filesystem.ReadAll(filesystem.TexturePath() / "Sky.raw");
+	const uint16_t textureWidth = 256, textureHeight = 256;
 
-	_reflectionFrameBuffer = std::make_unique<FrameBuffer>(1024, 1024, GL_RGBA);
+	_texture = std::make_unique<Texture2D>("Water");
+	_texture->Create(textureWidth, textureHeight, 1, Format::RGB8, Wrapping::ClampEdge, waterTextureData.data(),
+	                 waterTextureData.size());
 
 	createMesh();
 }
 
 void Water::createMesh()
 {
-	VertexDecl decl(1);
-	decl[0] = VertexAttrib(0, 2, GL_FLOAT, false, false, sizeof(glm::vec2), nullptr); // position
+	VertexDecl decl;
+	decl.reserve(1);
+	decl.emplace_back(VertexAttrib::Attribute::Position, 2, VertexAttrib::Type::Float);
 
 	static const glm::vec2 points[] = {
-		glm::vec2(-1.0f, 1.0f),
-		glm::vec2(1.0f, 1.0f),
-		glm::vec2(1.0f, -1.0f),
-		glm::vec2(-1.0f, -1.0f),
+	    glm::vec2(-70000.0f, 70000.0f),
+	    glm::vec2(70000.0f, 70000.0f),
+	    glm::vec2(70000.0f, -70000.0f),
+	    glm::vec2(-70000.0f, -70000.0f),
 	};
 
-	static const unsigned short indices[6] = { 2, 1, 0, 0, 3, 2 };
+	static const uint16_t indices[6] = {2, 1, 0, 0, 3, 2};
 
-	VertexBuffer* vertexBuffer = new VertexBuffer(points, 4, sizeof(glm::vec2));
-	IndexBuffer* indexBuffer   = new IndexBuffer(indices, 6, GL_UNSIGNED_SHORT);
+	auto vertexBuffer = new VertexBuffer("Water", points, 4, decl);
+	auto indexBuffer = new IndexBuffer("Water", indices, 6, IndexBuffer::Type::Uint16);
 
-	_mesh = std::make_unique<Mesh>(vertexBuffer, indexBuffer, decl, GL_TRIANGLES);
-}
-
-void Water::Draw(ShaderProgram& program)
-{
-	program.SetUniformValue("sReflection", 0);
-	_reflectionFrameBuffer->GetTexture()->Bind(0);
-
-	_mesh->Draw();
-}
-
-void Water::BeginReflection(const Camera& sceneCamera)
-{
-	_reflectionCamera = ReflectionCamera(
-	    sceneCamera.GetPosition(),
-	    sceneCamera.GetRotation(),
-	    glm::vec3(0.0f, 1.0f, 0.0f)
-	);
-	_reflectionCamera.SetProjectionMatrix(sceneCamera.GetProjectionMatrix());
-
-	glViewport(0, 0, _reflectionFrameBuffer->GetWidth(), _reflectionFrameBuffer->GetHeight());
-
-	_reflectionFrameBuffer->Bind();
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-}
-
-void Water::EndReflection()
-{
-	_reflectionFrameBuffer->Unbind();
-	// restore original view port
+	_mesh = std::make_unique<Mesh>(vertexBuffer, indexBuffer, graphics::Mesh::Topology::TriangleList);
 }
 
 void Water::DebugGUI()
 {
 	ImGui::Begin("Water Debug");
-	ImGui::Image((void*)(intptr_t)_reflectionFrameBuffer->GetTexture()->GetHandle(), ImVec2(256, 256), ImVec2(0, 1), ImVec2(1, 0));
+	ImGui::Image(_reflectionFrameBuffer->GetColorAttachment().GetNativeHandle(), ImVec2(256, 256), ImVec2(0, 1), ImVec2(1, 0));
 	ImGui::End();
 }
 
-/*
-              | 1-2Nx2   -2NxNy  -2NxNz  -2NxD |
-Mreflection = |  -2NxNy 1-2Ny2   -2NyNz  -2NyD |
-              |  -2NxNz  -2NyNz 1-2Nz2   -2NzD |
-              |    0       0       0       1   |
-*/
-void Water::ReflectMatrix(glm::mat4x4& m, const glm::vec4& plane)
+graphics::FrameBuffer& Water::GetFrameBuffer() const
 {
-	m[0][0] = (1.0f - 2.0f * plane[0] * plane[0]);
-	m[1][0] = (-2.0f * plane[0] * plane[1]);
-	m[2][0] = (-2.0f * plane[0] * plane[2]);
-	m[3][0] = (-2.0f * plane[3] * plane[0]);
-
-	m[0][1] = (-2.0f * plane[1] * plane[0]);
-	m[1][1] = (1.0f - 2.0f * plane[1] * plane[1]);
-	m[2][1] = (-2.0f * plane[1] * plane[2]);
-	m[3][1] = (-2.0f * plane[3] * plane[1]);
-
-	m[0][2] = (-2.0f * plane[2] * plane[0]);
-	m[1][2] = (-2.0f * plane[2] * plane[1]);
-	m[2][2] = (1.0f - 2.0f * plane[2] * plane[2]);
-	m[3][2] = (-2.0f * plane[3] * plane[2]);
-
-	m[0][3] = 0.0f;
-	m[1][3] = 0.0f;
-	m[2][3] = 0.0f;
-	m[3][3] = 1.0f;
+	return *_reflectionFrameBuffer;
 }

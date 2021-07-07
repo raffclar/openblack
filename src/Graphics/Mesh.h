@@ -1,85 +1,84 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
 #pragma once
-#ifndef OPENBLACK_GRAPHICS_MESH_H
-#define OPENBLACK_GRAPHICS_MESH_H
 
-#include <Graphics/IndexBuffer.h>
-#include <Graphics/VertexBuffer.h>
-#include <vector>
+#include "RenderPass.h"
 
-using namespace OpenBlack::Graphics;
+#include <cstdint>
+#include <memory>
 
-namespace OpenBlack
+namespace bgfx
 {
-namespace Graphics
+struct DynamicVertexBufferHandle;
+}
+
+namespace openblack::graphics
 {
 
-struct VertexAttrib
-{
-	GLuint index;         ///< Index of the vertex attribute.
-	GLint size;           ///< Number of components per vertex attribute, must be 1, 2, 3, 4.
-	GLenum type;          ///< Data type of each attribute component in the array.
-	GLsizei stride;       ///< Byte offset between consecutive vertex attributes.
-	const GLvoid* offset; ///< Offset of the first component of the first generic vertex attribute.
-	bool normalized;
-	bool integer;
-
-	VertexAttrib() {}
-	VertexAttrib(GLuint i, GLint s, GLenum t, GLsizei st = 0, const GLvoid* of = 0):
-	    index(i), size(s), type(t), stride(st), offset(of), normalized(false), integer(false) {}
-	VertexAttrib(GLuint i, GLint s, GLenum t, bool intg, bool norm, GLsizei st = 0, const GLvoid* of = 0):
-	    index(i), size(s), type(t), stride(st), offset(of), normalized(norm), integer(intg) {}
-};
-
-typedef std::vector<VertexAttrib> VertexDecl;
+class IndexBuffer;
+class ShaderProgram;
+class VertexBuffer;
 
 class Mesh
 {
-  public:
-	Mesh(VertexBuffer*, const VertexDecl& decl, GLuint type = GL_TRIANGLES);
-	Mesh(VertexBuffer*, IndexBuffer*, const VertexDecl& decl, GLuint type = GL_TRIANGLES);
+public:
+	enum class Topology
+	{
+		PointList,
+		LineList,
+		LineStrip,
+		TriangleList,
+		TriangleStrip,
+	};
+
+	explicit Mesh(VertexBuffer* vertexBuffer, IndexBuffer* indexBuffer = nullptr, Topology topology = Topology::TriangleList);
 	~Mesh();
 
-	std::shared_ptr<VertexBuffer> GetVertexBuffer();
-	std::shared_ptr<IndexBuffer> GetIndexBuffer();
+	[[nodiscard]] const VertexBuffer& GetVertexBuffer() const;
+	[[nodiscard]] const IndexBuffer& GetIndexBuffer() const;
+	[[nodiscard]] bool isIndexed() const;
 
-	const GLuint GetType() const noexcept;
+	[[nodiscard]] Topology GetTopology() const noexcept;
 
-	void Draw();
+	enum SkipState : uint8_t
+	{
+		SkipNone = 0b00000000,
+		SkipRenderState = 0b00000001,
+		SkipVertexBuffer = 0b00000010,
+		SkipIndexBuffer = 0b00000100,
+		SkipInstanceBuffer = 0b00001000,
+	};
 
-  protected:
-	std::shared_ptr<VertexBuffer> _vertexBuffer;
-	std::shared_ptr<IndexBuffer> _indexBuffer;
+	struct DrawDesc
+	{
+		graphics::RenderPass viewId;
+		const openblack::graphics::ShaderProgram& program;
+		uint32_t count;
+		uint32_t offset;
+		const bgfx::DynamicVertexBufferHandle* instanceBuffer;
+		uint32_t instanceStart;
+		uint32_t instanceCount;
+		uint64_t state;
+		uint32_t rgba;
+		uint8_t skip;
+		bool preserveState;
+	};
 
-  private:
-	GLuint _vao;
-	GLuint _type;
+	void Draw(const DrawDesc& desc) const;
 
-	VertexDecl _vertexDecl;
+protected:
+	std::unique_ptr<graphics::VertexBuffer> _vertexBuffer;
+	std::unique_ptr<graphics::IndexBuffer> _indexBuffer;
 
-	void bindVertexDecl();
+private:
+	Topology _topology;
 };
 
-} // namespace Graphics
-} // namespace OpenBlack
-
-#endif
+} // namespace openblack::graphics

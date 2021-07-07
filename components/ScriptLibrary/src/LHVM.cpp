@@ -1,35 +1,23 @@
-/* OpenBlack - A reimplementation of Lionheads's Black & White engine
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
 #include <LHVM/LHVM.h>
-#include <LHVM/VMInstruction.h>
 #include <LHVM/OpcodeNames.h>
-
+#include <LHVM/VMInstruction.h>
 #include <cstdio>
 #include <cstring>
 #include <stdexcept>
 
-namespace OpenBlack {
-namespace LHVM {
+namespace openblack::LHVM
+{
 
-void LHVM::LoadBinary(const std::string &filename)
+void LHVM::LoadBinary(const std::string& filename)
 {
 	std::FILE* file = std::fopen(filename.c_str(), "rb");
 	if (file == nullptr)
@@ -63,7 +51,7 @@ void LHVM::LoadBinary(const std::string &filename)
 	std::fclose(file);
 }
 
-void LHVM::loadVariables(std::FILE* file, std::vector<std::string> &variables)
+void LHVM::loadVariables(std::FILE* file, std::vector<std::string>& variables)
 {
 	int32_t count;
 	std::fread(&count, 4, 1, file);
@@ -79,10 +67,10 @@ void LHVM::loadVariables(std::FILE* file, std::vector<std::string> &variables)
 	{
 		// reset cur pointer to 0
 		char* cur = &buffer[0];
-
-		while (*(cur-1) != '\0') {
+		do
+		{
 			std::fread(cur++, 1, 1, file);
-		}
+		} while (*(cur - 1) != '\0');
 
 		// throw it into the std::string vector
 		variables.emplace_back(buffer);
@@ -103,13 +91,9 @@ void LHVM::loadCode(std::FILE* file)
 		uint32_t instruction[5]; // quick way to minimize code
 		std::fread(&instruction, 4, 5, file);
 
-		_instructions.emplace_back(
-			static_cast<VMInstruction::Opcode>(instruction[0]),
-			static_cast<VMInstruction::Access>(instruction[1]),
-			static_cast<VMInstruction::DataType>(instruction[2]),
-			instruction[3],
-			instruction[4]
-		);
+		_instructions.emplace_back(static_cast<VMInstruction::Opcode>(instruction[0]),
+		                           static_cast<VMInstruction::Access>(instruction[1]),
+		                           static_cast<VMInstruction::DataType>(instruction[2]), instruction[3], instruction[4]);
 	}
 }
 
@@ -144,10 +128,16 @@ void LHVM::loadScripts(std::FILE* file)
 	for (int32_t i = 0; i < count; i++)
 	{
 		char* cur = &script_name[0];
-		while (*(cur - 1) != '\0') { std::fread(cur++, 1, 1, file); }
+		do
+		{
+			std::fread(cur++, 1, 1, file);
+		} while (*(cur - 1) != '\0');
 
 		cur = &file_name[0];
-		while (*(cur - 1) != '\0') { std::fread(cur++, 1, 1, file); }
+		do
+		{
+			std::fread(cur++, 1, 1, file);
+		} while (*(cur - 1) != '\0');
 
 		uint32_t script_type, shit;
 		std::fread(&script_type, 4, 1, file);
@@ -161,16 +151,8 @@ void LHVM::loadScripts(std::FILE* file)
 		std::fread(&parameter_count, 4, 1, file);
 		std::fread(&script_id, 4, 1, file);
 
-		_scripts.emplace_back(
-			std::string(script_name),
-			std::string(file_name),
-			script_type,
-			shit,
-			variables,
-			instruction_address,
-			parameter_count,
-			script_id
-		);
+		_scripts.emplace_back(std::string(script_name), std::string(file_name), script_type, shit, variables,
+		                      instruction_address, parameter_count, script_id);
 	}
 }
 
@@ -184,19 +166,14 @@ void LHVM::loadData(std::FILE* file)
 }
 
 /*
-	a pretty long method to turn each different opcode into a somewhat
-	human readable string
+    a pretty long method to turn each different opcode into a somewhat
+    human readable string
 */
 std::string VMInstruction::Disassemble() const
 {
 	std::string opcode_name = Opcode_Names[(int)_code];
 
-
-
-
-
 	return opcode_name;
 }
 
-}
-}
+} // namespace openblack::LHVM

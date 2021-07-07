@@ -1,110 +1,77 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
 #pragma once
 
-#include <3D/LandBlock.h>
-#include <Common/File.h>
-#include <Graphics/Mesh.h>
-#include <Graphics/Texture2D.h>
-#include <Graphics/Texture2DArray.h>
+#include "Graphics/Mesh.h"
+#include "Graphics/Texture2D.h"
+#include "LandBlock.h"
+
 #include <array>
 #include <memory>
 #include <string>
 #include <vector>
 
-using namespace OpenBlack::Graphics;
+namespace openblack
+{
 
-namespace OpenBlack
+namespace lnd
 {
-struct MapMaterial
-{
-	uint32_t FirstMaterialIndex;
-	uint32_t SecondMaterialIndex;
-	uint32_t Coeficient;
-};
-
-struct Country
-{
-	uint32_t TerrainType;
-	MapMaterial MapMaterials[256]; // altitude 0-255
-};
+struct LNDCountry;
+}
 
 class LandIsland
 {
-  public:
+public:
 	static const float HeightUnit;
 	static const float CellSize;
 
 	LandIsland();
 	~LandIsland();
 
-	void LoadFromFile(File& file);
+	void LoadFromFile(const std::string& filename);
 
-	// const uint8_t GetAltitudeAt(glm::ivec2) const;
-
-	const float GetHeightAt(glm::vec2) const;
-	const LandBlock* GetBlock(int8_t x, int8_t y) const;
-	const LandCell& GetCell(int x, int y) const;
+	[[nodiscard]] float GetHeightAt(glm::vec2) const;
+	[[nodiscard]] const LandBlock* GetBlock(const glm::u8vec2& coordinates) const;
+	[[nodiscard]] const lnd::LNDCell& GetCell(const glm::u16vec2& coordinates) const;
 
 	// Debug
 	void DumpTextures();
 	void DumpMaps();
 
-  private:
-	std::vector<LandBlock> _landBlocks;
-	std::vector<Country> _countries;
-
-	unsigned int _materialCount;
-	unsigned int _lowresCount;
-
+private:
 	std::array<uint8_t, 1024> _blockIndexLookup;
+	std::vector<LandBlock> _landBlocks;
+	std::vector<lnd::LNDCountry> _countries;
 
 	// Renderer
-  public:
-	void Draw(ShaderProgram& program);
-	std::shared_ptr<Texture2DArray> GetMaterialArray() const { return _materialArray; }
-	std::shared_ptr<Texture2DArray> GetLowResArray() const { return _lowResTextureArray; }
-
-	const std::vector<LandBlock>& GetBlocks() const { return _landBlocks; }
-	const std::vector<Country>& GetCountries() const { return _countries; }
+public:
+	[[nodiscard]] const std::vector<LandBlock>& GetBlocks() const { return _landBlocks; }
+	[[nodiscard]] const std::vector<lnd::LNDCountry>& GetCountries() const { return _countries; }
+	[[nodiscard]] const graphics::Texture2D& GetAlbedoArray() const { return *_materialArray; }
+	[[nodiscard]] const graphics::Texture2D& GetBump() const { return *_textureBumpMap; }
+	[[nodiscard]] const graphics::Texture2D& GetSmallBump() const { return *_textureSmallBump; }
 
 	uint8_t GetNoise(int x, int y);
-	std::shared_ptr<Texture2D> GetNoiseMap() { return _textureNoiseMap; }
-	std::shared_ptr<Texture2D> GetBumpMap() { return _textureBumpMap; }
-	Texture2D* GetSmallBumpMap() { return _textureSmallBump.get(); }
+	graphics::Texture2D* GetSmallBumpMap() { return _textureSmallBump.get(); }
 
-  private:
-	void convertRGB5ToRGB8(uint16_t* rgba5, uint32_t* rgba8, size_t pixels);
+private:
+	std::unique_ptr<graphics::Texture2D> _materialArray;
+	std::unique_ptr<graphics::Texture2D> _countryLookup;
 
-	std::shared_ptr<Texture2DArray> _lowResTextureArray;
-	std::shared_ptr<Texture2DArray> _materialArray;
-	std::unique_ptr<Texture2D> _countryLookup;
+	std::unique_ptr<graphics::Texture2D> _textureNoiseMap;
+	std::unique_ptr<graphics::Texture2D> _textureBumpMap;
+	std::unique_ptr<graphics::Texture2D> _textureSmallBump;
 
-	std::shared_ptr<Texture2D> _textureNoiseMap;
-	std::shared_ptr<Texture2D> _textureBumpMap;
-	std::unique_ptr<Texture2D> _textureSmallBump;
-
-	uint8_t* _noiseMap;
+	std::array<uint8_t, 256 * 256> _noiseMap;
 };
-} // namespace OpenBlack
+} // namespace openblack
 
 /*
 LH3DIsland methods:

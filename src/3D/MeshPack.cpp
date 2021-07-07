@@ -1,133 +1,91 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
 #include "MeshPack.h"
 
+#include "3D/L3DMesh.h"
+#include "AllMeshes.h"
+#include "Common/FileSystem.h"
+#include "Common/MemoryStream.h"
+#include "Game.h"
+#include "Graphics/Texture2D.h"
+
+#include <PackFile.h>
+#include <spdlog/spdlog.h>
+
+#include <algorithm>
 #include <stdexcept>
-#include <stdint.h>
 
-using namespace OpenBlack;
-
-// Just enough for us to parse
-struct L3DSMiniHeader
+namespace openblack
 {
-	char magic[4];
-	uint32_t unknown;
-	uint32_t l3dSize;
-};
 
-struct G3DHiResTexture
+void MeshPack::LoadFromFile(const fs::path& path)
 {
-	uint32_t size;
-	uint32_t id;
-	uint32_t type;
+	spdlog::debug("Loading Mesh Pack from file: {}", path.generic_string());
+	pack::PackFile pack;
 
-	uint32_t dxSize;
-	// surface desc shit.
-};
-
-struct DDSurfaceDesc
-{
-	uint32_t size;
-	uint32_t flags;
-	uint32_t height;
-	uint32_t width;
-};
-
-MeshPack::MeshPack(OSFile* file):
-    m_meshCount(0)
-{
-	// LiOnHeAd and a block header, but we already know it's high res textures
-	file->Seek(8, LH_SEEK_MODE::Set);
-
-	int totalTextures = 110;
-
-	Textures = new GLuint[totalTextures];
-	glGenTextures(totalTextures, Textures);
-
-	for (int i = 0; i < totalTextures; i++)
+	try
 	{
-		// skip block header
-		file->Seek(36, LH_SEEK_MODE::Current);
-
-		G3DHiResTexture* hiresTexture = new G3DHiResTexture;
-		file->Read(hiresTexture, sizeof(G3DHiResTexture));
-
-		void* surfaceDesc = malloc(hiresTexture->dxSize - 4);
-		file->Read(surfaceDesc, hiresTexture->dxSize - 4);
-
-		DDSurfaceDesc* desc = (DDSurfaceDesc*)surfaceDesc;
-
-		glBindTexture(GL_TEXTURE_2D, Textures[hiresTexture->id - 1]);
-
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-		if (hiresTexture->type == 1)
-		{
-			glCompressedTexImage2DARB(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGBA_S3TC_DXT1_EXT,
-			                          desc->width, desc->height, 0, ((desc->width + 3) / 4) * ((desc->height + 3) / 4) * 8, (uint8_t*)surfaceDesc + desc->size);
-		}
-		else if (hiresTexture->type == 2)
-		{
-			glCompressedTexImage2DARB(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGBA_S3TC_DXT3_EXT,
-			                          desc->width, desc->height, 0, ((desc->width + 3) / 4) * ((desc->height + 3) / 4) * 16, (uint8_t*)surfaceDesc + desc->size);
-		}
-
-		free(surfaceDesc);
+		pack.Open(Game::instance()->GetFileSystem().FindPath(path).u8string());
+	}
+	catch (std::runtime_error& err)
+	{
+		spdlog::error("Failed to open {}: {}", path.generic_string(), err.what());
+		return;
 	}
 
-	// each high res texture is actually a lionhead block...
-	// char textureid[32];
-	// uint32_t size;
-	// AWKWARD...............
-
-	LHSegment meshesSegment;
-	file->GetSegment("MESHES", &meshesSegment, true);
-
-	printf("Meshes Segment %s of %d bytes\n", meshesSegment.Name, meshesSegment.SegmentSize);
-
-	uint8_t* data         = (uint8_t*)meshesSegment.SegmentData;
-	uint32_t* meshCount   = (uint32_t*)(data + 4);
-	uint32_t* meshOffsets = (uint32_t*)(data + 8);
-
-	m_meshCount = *meshCount;
-
-	printf("%d meshes\n", *meshCount);
-
-	Models = new L3DModel*[*meshCount];
-
-	for (uint32_t i = 0; i < *meshCount; i++)
-	{
-		L3DSMiniHeader* header = (L3DSMiniHeader*)(data + meshOffsets[i]);
-
-		L3DModel* model = new L3DModel();
-		model->LoadFromL3D(data + meshOffsets[i], header->l3dSize, true);
-
-		Models[i] = model;
-	}
+	loadTextures(pack.GetTextures());
+	loadMeshes(pack.GetMeshes());
 }
 
-uint32_t MeshPack::GetMeshCount()
+void MeshPack::loadTextures(const std::map<std::string, pack::G3DTexture>& textures)
 {
-	return m_meshCount;
+	// textures start at 1 - 0 would be an error texture
+	_textures.resize(static_cast<std::size_t>(textures.size() + 1));
+	_textures[0] = std::make_unique<graphics::Texture2D>("Error Texture");
+
+	for (auto const& [name, g3dTexture] : textures)
+	{
+		// some assumptions:
+		// - no mipmaps
+		// - no cubemap or volume textures
+		// - always dxt1 or dxt3
+		// - all are compressed
+
+		graphics::Format internalFormat;
+		if (g3dTexture.ddsHeader.format.fourCC == std::string("DXT1"))
+			internalFormat = graphics::Format::BlockCompression1;
+		else if (g3dTexture.ddsHeader.format.fourCC == std::string("DXT3"))
+			internalFormat = graphics::Format::BlockCompression2;
+		else
+			throw std::runtime_error("Unsupported compressed texture format");
+
+		_textures[g3dTexture.header.id] = std::make_unique<graphics::Texture2D>(name);
+		_textures[g3dTexture.header.id]->Create(g3dTexture.ddsHeader.width, g3dTexture.ddsHeader.height, 1, internalFormat,
+		                                        graphics::Wrapping::ClampEdge, g3dTexture.ddsData.data(),
+		                                        g3dTexture.ddsData.size());
+	}
+
+	spdlog::debug("MeshPack loaded {0} textures", textures.size());
 }
+
+void MeshPack::loadMeshes(const std::vector<std::vector<uint8_t>>& meshes)
+{
+	_meshes.resize(meshes.size());
+	for (uint32_t i = 0; i < _meshes.size(); i++)
+	{
+		// spdlog::debug("L3DMesh {} {}", i, MeshNames[i].data());
+		_meshes[i] = std::make_unique<L3DMesh>(MeshNames[i].data());
+		_meshes[i]->LoadFromBuffer(meshes[i]);
+	}
+
+	spdlog::debug("MeshPack loaded {0} meshes", meshes.size());
+}
+
+} // namespace openblack

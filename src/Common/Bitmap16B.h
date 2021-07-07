@@ -1,54 +1,48 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
 #pragma once
-#ifndef OPENBLACK_BITMAP16_H
-#define OPENBLACK_BITMAP16_H
 
-#include <stdint.h>
+#include <cstdint>
 #include <string>
 
-namespace OpenBlack
+#ifdef HAS_FILESYSTEM
+#include <filesystem>
+namespace fs = std::filesystem;
+#else
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#endif // HAS_FILESYSTEM
+
+namespace openblack
 {
 class Bitmap16B
 {
-  public:
+public:
 	Bitmap16B() = delete;
 
-	Bitmap16B(unsigned int width, unsigned int height);
-	Bitmap16B(const void* data, size_t size);
+	Bitmap16B(const void* data);
 	~Bitmap16B();
 
-	const unsigned int Width() const;
-	const unsigned int Height() const;
-	const uint16_t* Data() const;
+	[[nodiscard]] unsigned int Width() const { return _width; }
+	[[nodiscard]] unsigned int Height() const { return _height; }
+	uint16_t* Data() { return _data; }
+	[[nodiscard]] size_t Size() const { return _size; };
 
-  private:
+private:
 	unsigned int _width;
 	unsigned int _height;
 	uint16_t* _data;
+	size_t _size;
 
-  public:
-	static Bitmap16B* LoadFromFile(const std::string& file);
+public:
+	static Bitmap16B* LoadFromFile(const fs::path& path);
 };
 
-} // namespace OpenBlack
-
-#endif
+} // namespace openblack

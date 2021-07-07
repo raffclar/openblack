@@ -1,34 +1,26 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
-#include <LHScriptX/Lexer.h>
+#include "Lexer.h"
+
 #include <cctype>
+#include <utility>
 
-using namespace OpenBlack::LHScriptX;
+using namespace openblack::lhscriptx;
 
-Lexer::Lexer(const std::string& source):
-    source_(source), currentLine_(1)
+Lexer::Lexer(std::string source)
+    : source_(std::move(source))
+    , currentLine_(1)
 {
 	current_ = source_.begin();
-	end_     = source_.end();
-};
+	end_ = source_.end();
+}
 
 Token Lexer::GetToken()
 {
@@ -46,18 +38,17 @@ Token Lexer::GetToken()
 			current_++;
 
 			// skip over whitespace quickly
-			while (*current_ == ' ' || *current_ == '\t' || *current_ == '\r')
-				current_++;
+			while (*current_ == ' ' || *current_ == '\t' || *current_ == '\r') current_++;
 			break;
 		case '\n':
 			current_++;
 			currentLine_++;
 			return Token::MakeEOLToken();
 
-		// not sure if it's **** or just *, this can be drastically improved on though
+		// not sure if it's **** or just *, this can be drastically improved on
+		// though
 		case '*':
-			while (*current_ != '\n')
-				current_++;
+			while (*current_ != '\n') current_++;
 			break;
 
 		// handle potential rem/REM
@@ -66,8 +57,7 @@ Token Lexer::GetToken()
 			// todo: potential out of bounds here:
 			if ((current_[1] == 'e' || current_[1] == 'E') && (current_[2] == 'm' || current_[2] == 'M'))
 			{
-				while (*current_ != '\n')
-					current_++;
+				while (*current_ != '\n') current_++;
 				break;
 			}
 			return gatherIdentifer();
@@ -192,7 +182,7 @@ Token Lexer::gatherIdentifer()
 Token Lexer::gatherNumber()
 {
 	bool is_float = false;
-	bool is_neg   = false;
+	bool is_neg = false;
 
 	if (*current_ == '-')
 	{
@@ -239,8 +229,7 @@ Token Lexer::gatherString()
 	auto string_start = ++current_;
 
 	// todo: we should check for unterminated strings
-	while (hasMore() && *current_ != '"')
-		current_++;
+	while (hasMore() && *current_ != '"') current_++;
 
 	return Token::MakeStringToken(std::string(string_start, current_++));
 }

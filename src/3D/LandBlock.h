@@ -1,99 +1,65 @@
-/* OpenBlack - A reimplementation of Lionhead's Black & White.
+/*****************************************************************************
+ * Copyright (c) 2018-2020 openblack developers
  *
- * OpenBlack is the legal property of its developers, whose names
- * can be found in the AUTHORS.md file distributed with this source
- * distribution.
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
  *
- * OpenBlack is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 3
- * of the License, or (at your option) any later version.
- *
- * OpenBlack is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with OpenBlack. If not, see <http://www.gnu.org/licenses/>.
- */
+ * openblack is licensed under the GNU General Public License version 3.
+ *****************************************************************************/
 
 #pragma once
 
-#include "LandCell.h"
+#include "Graphics/Mesh.h"
+#include "Graphics/ShaderProgram.h"
 
-#include <Graphics/Mesh.h>
-#include <Graphics/OpenGL.h>
-#include <Graphics/ShaderProgram.h>
-#include <glm/glm.hpp>
-#include <array> 
-#include <stdexcept>
-#include <stdint.h>
+#include <glm/fwd.hpp>
 
-namespace OpenBlack
+#include <cstdint>
+
+namespace openblack
 {
+
+namespace lnd
+{
+struct LNDBlock;
+struct LNDCell;
+} // namespace lnd
 
 struct LandVertex
 {
-	GLfloat position[3];
-	GLfloat weight[3]; // interpolated
-	GLubyte firstMaterialID[3];
-	GLubyte secondMaterialID[3];
-	GLubyte materialBlendCoefficient[3];
-	GLubyte lightLevel;
-	GLfloat waterAlpha;
+	float position[3];
+	float weight[3];                     // interpolated
+	uint8_t firstMaterialID[4];          // force alignment 4 bytes to prevent packing
+	uint8_t secondMaterialID[4];         // force alignment 4 bytes to prevent packing
+	uint8_t materialBlendCoefficient[4]; // force alignment 4 bytes to prevent
+	                                     // packing
+	uint8_t lightLevel[4];               // aligned to 4 bytes
+	float waterAlpha;
 
-	LandVertex() { }
-	LandVertex(glm::vec3 _position, glm::vec3 _weight,
-	           GLubyte mat1, GLubyte mat2, GLubyte mat3,
-	           GLubyte mat4, GLubyte mat5, GLubyte mat6,
-	           GLubyte blend1, GLubyte blend2, GLubyte blend3,
-	           GLubyte _lightLevel, GLfloat _alpha)
-	{
-		position[0]                 = _position.x;
-		position[1]                 = _position.y;
-		position[2]                 = _position.z;
-		weight[0]                   = _weight.x;
-		weight[1]                   = _weight.y;
-		weight[2]                   = _weight.z;
-		firstMaterialID[0]          = mat1;
-		firstMaterialID[1]          = mat2;
-		firstMaterialID[2]          = mat3;
-		secondMaterialID[0]         = mat4;
-		secondMaterialID[1]         = mat5;
-		secondMaterialID[2]         = mat6;
-		materialBlendCoefficient[0] = blend1;
-		materialBlendCoefficient[1] = blend2;
-		materialBlendCoefficient[2] = blend3;
-		lightLevel                  = _lightLevel;
-		waterAlpha                  = _alpha;
-	}
+	LandVertex(const glm::vec3& _position, const glm::vec3& _weight, uint32_t mat[6], uint32_t blend[3], uint8_t _lightLevel,
+	           float _alpha);
 };
 
 class LandIsland;
 
 class LandBlock
 {
-  public:
-	LandBlock() :
-	    _index(0), _blockPosition(0, 0), _mapPosition(0, 0), _cells() {}
-
-	void Load(void* block, size_t block_size);
-	void Draw(ShaderProgram& program);
+public:
+	LandBlock() = default;
+	void Draw(graphics::RenderPass viewId, const graphics::ShaderProgram& program, bool cullBack) const;
 	void BuildMesh(LandIsland& island);
 
-	const LandCell* GetCells() const { return _cells.data(); };
-	const glm::ivec2& GetBlockPosition() { return _blockPosition; }
-	const glm::vec2& GetMapPosition() { return _mapPosition; }
+	[[nodiscard]] const graphics::Mesh& GetMesh() const { return *_mesh; }
+	[[nodiscard]] const lnd::LNDCell* GetCells() const;
+	[[nodiscard]] glm::ivec2 GetBlockPosition() const;
+	[[nodiscard]] glm::vec4 GetMapPosition() const;
 
+private:
+	std::unique_ptr<lnd::LNDBlock> _block;
+	std::unique_ptr<graphics::Mesh> _mesh;
 
-  private:
-	uint32_t _index; // the blocks index in the block array (do we need to know this?)
-	std::array<LandCell, 289> _cells;
-	glm::ivec2 _blockPosition; // position in the 32x32 block map
-	glm::vec2 _mapPosition; // absolute position in the world
-	std::unique_ptr<Mesh> _mesh;
+	const bgfx::Memory* buildVertexList(LandIsland& island);
 
-	std::vector<LandVertex> buildVertexList(LandIsland& island);
+	friend LandIsland;
 };
-} // namespace OpenBlack
+} // namespace openblack
