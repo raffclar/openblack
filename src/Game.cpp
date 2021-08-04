@@ -19,6 +19,7 @@
 #include "3D/Water.h"
 #include "Common/EventManager.h"
 #include "Common/FileSystem.h"
+#include "Entities/Components/Transform.h"
 #include "Entities/Components/Hand.h"
 #include "Entities/Components/Mesh.h"
 #include "Entities/Components/Transform.h"
@@ -273,7 +274,7 @@ bool Game::Update()
 		auto profilerScopedUpdateUniforms = _profiler->BeginScoped(Profiler::Stage::UpdateUniforms);
 
 		// Update Debug Cross
-		Transform intersectionTransform;
+		entities::components::Transform intersectionTransform;
 		{
 			glm::ivec2 screenSize {};
 			if (_window)
@@ -314,7 +315,7 @@ bool Game::Update()
 			const glm::vec3 handOffset(0, 4.0f, 0);
 			const glm::mat4 modelRotationCorrection = glm::eulerAngleX(glm::radians(90.0f));
 
-			auto& handTransform = _entityRegistry->Get<Transform>(_handEntity);
+			auto& handTransform = _entityRegistry->Get<entities::components::Transform>(_handEntity);
 			handTransform.position = intersectionTransform.position;
 			auto cameraRotation = _camera->GetRotation();
 			handTransform.rotation = glm::eulerAngleY(glm::radians(-cameraRotation.y)) * modelRotationCorrection;

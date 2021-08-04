@@ -77,7 +77,7 @@ void DynamicsSystem::AddRigidBody(btRigidBody* object)
 	_world->addRigidBody(object);
 }
 
-const std::optional<std::pair<Transform, RigidBodyDetails>>
+const std::optional<std::pair<entities::components::Transform, RigidBodyDetails>>
 DynamicsSystem::RayCastClosestHit(const glm::vec3& origin, const glm::vec3& direction, float t_max) const
 {
 	auto from = btVector3(origin.x, origin.y, origin.z);
@@ -96,7 +96,7 @@ DynamicsSystem::RayCastClosestHit(const glm::vec3& origin, const glm::vec3& dire
 	auto rotation = glm::orientation(normal, up);
 
 	return std::make_optional(std::make_pair(
-	    Transform {translation, rotation, glm::vec3(1.0f)},
+	    entities::components::Transform {translation, rotation, glm::vec3(1.0f)},
 	    RigidBodyDetails {static_cast<RigidBodyType>(callback.m_collisionObject->getUserIndex()),
 	                      callback.m_collisionObject->getUserIndex2(), callback.m_collisionObject->getUserPointer()}));
 }

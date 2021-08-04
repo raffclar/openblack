@@ -12,7 +12,7 @@
 #include "3D/Camera.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIsland.h"
-#include "3D/MeshLookup.h"
+#include "Common/MeshLookup.h"
 #include "3D/MeshPack.h"
 #include "AllMeshes.h"
 #include "Entities/Components/Abode.h"
@@ -837,20 +837,14 @@ void FeatureScriptCommands::LinkFootpath(int32_t footpathId)
 	                    __func__);
 }
 
-void FeatureScriptCommands::CreateBonfire(glm::vec3 position, float rotation, float param_3, float scale)
+void FeatureScriptCommands::CreateBonfire(glm::vec3 position, float rotation, float unknown, float scale)
 {
 	auto& registry = Game::instance()->GetEntityRegistry();
 	const auto entity = registry.Create();
-	const auto position = GetHorizontalPosition(params[0].GetString());
-	auto type = GetFeatureInfo(params[1].GetString());
-	float rotation = GetRadians(params[2].GetNumber());
-	float size = GetSize(params[3].GetNumber());
-	const auto meshId = featureMeshLookup[type];
-	L3DMesh& mesh = Game::instance()->GetMeshPack().GetMesh(static_cast<uint32_t>(meshId));
-
-	const glm::vec3 pos(position.x, island.GetHeightAt(position), position.y);
+	const auto& mobile = registry.Assign<MobileStatic>(entity, MobileStatic::Info::Bonfire);
+	const auto meshId = mobileStaticMeshLookup[mobile.type];
+	const L3DMesh& mesh = Game::instance()->GetMeshPack().GetMesh(meshId);
 	const glm::mat3 rot = glm::eulerAngleY(rotation);
-	const glm::vec3 scale(size);
 
 	if (mesh.HasPhysicsMesh())
 	{
@@ -860,44 +854,15 @@ void FeatureScriptCommands::CreateBonfire(glm::vec3 position, float rotation, fl
 
 		btTransform startTransform;
 		startTransform.setIdentity();
-		startTransform.setOrigin(btVector3(pos.x, pos.y, pos.z));
+		startTransform.setOrigin(btVector3(position.x, position.y, position.z));
 
-		btRigidBody::btRigidBodyConstructionInfo rbInfo(mesh.GetMass(), nullptr, &shape, bodyInertia);
-
+		btRigidBody::btRigidBodyConstructionInfo rbInfo(mesh.GetMass(), nullptr, (btCollisionShape *) &shape, bodyInertia);
 		registry.Assign<RigidBody>(entity, rbInfo, startTransform);
 	}
 
-	registry.Assign<Feature>(entity, type);
-	registry.Assign<Transform>(entity, pos, rot, scale);
-}
-
-void FeatureScriptCommands::SetInteractDesire(const ScriptCommandContext& ctx)
-{
-	// std::cout << std::string {} + "Function " + __func__ + " not implemented.
-	// " + __FILE__ + ":" + std::to_string(__LINE__) << std::endl;
-}
-
-void FeatureScriptCommands::ToggleComputerPlayer(const ScriptCommandContext& ctx)
-{
-	// std::cout << std::string {} + "Function " + __func__ + " not implemented.
-	// " + __FILE__ + ":" + std::to_string(__LINE__) << std::endl;
-}
-
-void FeatureScriptCommands::SetComputerPlayerCreatureLike(const ScriptCommandContext& ctx)
-{
-	// std::cout << std::string {} + "Function " + __func__ + " not implemented.
-	// " + __FILE__ + ":" + std::to_string(__LINE__) << std::endl;
-}
-
-void FeatureScriptCommands::MultiplayerDebug(const ScriptCommandContext& ctx)
-{
-	// std::cout << std::string {} + "Function " + __func__ + " not implemented.
-	// " + __FILE__ + ":" + std::to_string(__LINE__) << std::endl;
-}
-
-	registry.Assign<Transform>(entity, position, glm::eulerAngleY(-rotation), glm::vec3(scale));
-	const auto& mobile = registry.Assign<MobileStatic>(entity, MobileStatic::Info::Bonfire);
-	registry.Assign<Mesh>(entity, mobileStaticMeshLookup[mobile.type], static_cast<int8_t>(0), static_cast<int8_t>(1));
+//	registry.Assign<Feature>(entity, );
+	registry.Assign<Transform>(entity, position, rot, glm::vec3(scale));
+	registry.Assign<Mesh>(entity, meshId, static_cast<int8_t>(0), static_cast<int8_t>(1));
 }
 
 void FeatureScriptCommands::CreateBase(glm::vec3 position, int32_t)

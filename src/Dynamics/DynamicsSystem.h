@@ -34,9 +34,9 @@ struct btDbvtBroadphase;
 class btRigidBody;
 class btSequentialImpulseConstraintSolver;
 
-namespace openblack
+namespace openblack::entities::components
 {
-struct Transform;
+	struct Transform;
 }
 
 namespace openblack::dynamics
@@ -63,7 +63,7 @@ public:
 	void Reset();
 	void Update(std::chrono::microseconds& dt);
 	void AddRigidBody(btRigidBody* object);
-	const std::optional<std::pair<Transform, RigidBodyDetails>>
+	const std::optional<std::pair<entities::components::Transform, RigidBodyDetails>>
 	RayCastClosestHit(const glm::vec3& origin, const glm::vec3& direction, float t_max) const;
 
 private:
