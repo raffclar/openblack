@@ -111,6 +111,7 @@ private:
 	bool ShowMenu(Game& game);
 	void ShowVillagerNames(const Game& game);
 	void ShowCameraPositionOverlay(const Game& game);
+	void ShowTempleInteriorWindow(Game& game);
 
 	static const char* StaticGetClipboardText(void* ud) { return reinterpret_cast<Gui*>(ud)->GetClipboardText(); }
 	static void StaticSetClipboardText(void* ud, const char* text) { reinterpret_cast<Gui*>(ud)->SetClipboardText(text); }

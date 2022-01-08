@@ -45,6 +45,7 @@
 #include <Locator.h>
 #include <Resources/Resources.h>
 
+#include "Camera.h"
 #include "Console.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "LHVMViewer.h"
@@ -52,6 +53,7 @@
 #include "MeshViewer.h"
 #include "PathFinding.h"
 #include "Profiler.h"
+#include "Temple.h"
 #include "TextureViewer.h"
 
 // Turn off formatting because it adds spaces which break the stringifying
@@ -326,6 +328,8 @@ std::unique_ptr<Gui> Gui::Create(const GameWindow* window, graphics::RenderPass 
 	debugWindows.emplace_back(new LandIsland);
 	debugWindows.emplace_back(new LHVMViewer);
 	debugWindows.emplace_back(new PathFinding);
+	debugWindows.emplace_back(new TempleInterior);
+	debugWindows.emplace_back(new Camera);
 
 	auto gui = std::unique_ptr<Gui>(new Gui(imgui, static_cast<bgfx::ViewId>(viewId), std::move(debugWindows)));
 

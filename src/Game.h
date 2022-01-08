@@ -21,6 +21,8 @@
 #include <glm/glm.hpp>
 #include <spdlog/common.h>
 
+#include "3D/CreatureBody.h"
+#include "3D/TempleInterior.h"
 #include "GameWindow.h"
 #include "InfoConstants.h"
 
@@ -194,6 +196,7 @@ public:
 	FileSystem& GetFileSystem() { return *_fileSystem; }
 	ecs::Registry& GetEntityRegistry() { return *_entityRegistry; }
 	[[nodiscard]] ecs::Registry& GetEntityRegistry() const { return *_entityRegistry; }
+	[[nodiscard]] EventManager& GetEventManager() const { return *_eventManager; }
 	const InfoConstants& GetInfoConstants() { return _infoConstants; } ///< Access should be only read-only
 	[[nodiscard]] ecs::Map& GetEntityMap() { return *_entityMap; }
 	[[nodiscard]] const ecs::Map& GetEntityMap() const { return *_entityMap; }

@@ -11,6 +11,8 @@
 
 #include <tuple>
 
+#include <ECS/Archetypes/CreatureArchetype.h>
+#include <ECS/Components/Mesh.h>
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include <spdlog/spdlog.h>
@@ -21,6 +23,7 @@
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/BigForestArchetype.h"
 #include "ECS/Archetypes/BonfireArchetype.h"
+#include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/FieldArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
@@ -354,17 +357,16 @@ void FeatureScriptCommands::CreateVillagerPos(glm::vec3 abodePosition, glm::vec3
 	VillagerArchetype::Create(abodePosition, position, GVillagerInfo::Find(tribe, number), age);
 }
 
-void FeatureScriptCommands::CreateCitadel([[maybe_unused]] glm::vec3 position, int32_t, const std::string&, int32_t, int32_t)
+void FeatureScriptCommands::CreateCitadel(glm::vec3 position, int32_t, const std::string& affiliation, int32_t rotation,
+                                          int32_t size)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	CitadelArchetype::Create(position, affiliation, GetRotation(rotation), GetSize(size));
 }
 
-void FeatureScriptCommands::CreatePlannedCitadel(int32_t, [[maybe_unused]] glm::vec3 position, int32_t, const std::string&,
-                                                 int32_t, int32_t)
+void FeatureScriptCommands::CreatePlannedCitadel(int32_t townId, glm::vec3 position, int32_t, const std::string& affiliation,
+                                                 int32_t rotation, int32_t size)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	CitadelArchetype::CreatePlan(townId, position, affiliation, GetRotation(rotation), GetSize(size));
 }
 
 void FeatureScriptCommands::CreateCreaturePen([[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t, int32_t, int32_t)
@@ -494,11 +496,11 @@ void FeatureScriptCommands::CreateMobileUStatic(glm::vec3 position, MobileStatic
 	MobileStaticArchetype::Create(position, type, verticalOffset, xRotation, yRotation, zRotation, scale);
 }
 
-void FeatureScriptCommands::CreateDeadTree([[maybe_unused]] glm::vec3 position, const std::string&, int32_t, float, float,
-                                           float, float)
+void FeatureScriptCommands::CreateDeadTree([[maybe_unused]] glm::vec3 position, const std::string&, int32_t, float _,
+                                           float roll, float rotation, float pitch)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	auto scale = 1.0f;
+	TreeArchetype::Create(0, position, TreeInfo::Burnt, 1, rotation * 0.001f, scale * 0.001f, scale * 0.001f);
 }
 
 void FeatureScriptCommands::CreateScaffold(int32_t, [[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t)
@@ -525,11 +527,10 @@ void FeatureScriptCommands::CreateCreature(glm::vec3 position, int32_t param2, i
 	                    __LINE__, __func__, glm::to_string(position), param2, param3);
 }
 
-void FeatureScriptCommands::CreateCreatureFromFile(const std::string& playerName, int32_t creatureType,
+void FeatureScriptCommands::CreateCreatureFromFile(const std::string& playerName, CreatureType creatureType,
                                                    const std::string& creatureMind, glm::vec3 position)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}, {}, {}) not implemented.", __FILE__,
-	                    __LINE__, __func__, playerName, creatureType, creatureMind, glm::to_string(position));
+	CreatureArchetype::Create(playerName, creatureType, creatureMind, position);
 }
 
 void FeatureScriptCommands::CreateFlock(int32_t, glm::vec3, glm::vec3, int32_t, int32_t, int32_t)
