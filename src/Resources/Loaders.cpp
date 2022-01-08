@@ -9,7 +9,9 @@
 
 #include "Resources/Loaders.h"
 
+#include "3D/miniz.h"
 #include "Common/FileSystem.h"
+#include "Common/StringUtils.h"
 #include "Game.h"
 
 using namespace openblack;
@@ -29,9 +31,36 @@ entt::resource_handle<L3DMesh> L3DLoader::load(const std::string& debugName, con
 entt::resource_handle<L3DMesh> L3DLoader::load(const std::filesystem::path& path) const
 {
 	auto mesh = std::make_shared<L3DMesh>(path.stem().string());
-	if (!mesh->LoadFromFile(path))
+	auto pathExt = string_utils::LowerCase(path.extension().string());
+
+	if (pathExt == ".l3d")
 	{
-		throw std::runtime_error("Unable to load mesh");
+		if (!mesh->LoadFromFile(path))
+		{
+			throw std::runtime_error("Unable to load mesh");
+		}
+	}
+	else if (pathExt == ".zzz")
+	{
+		auto stream = Game::instance()->GetFileSystem().Open(path, FileMode::Read);
+		uint32_t decompressedSize = 0;
+		stream->Read(reinterpret_cast<uint32_t*>(&decompressedSize), sizeof(decompressedSize));
+		auto buffer = std::vector<uint8_t>(stream->Size() - sizeof(decompressedSize));
+		stream->Read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+		auto decompressedBuffer = std::vector<uint8_t>(decompressedSize);
+		auto r =
+			uncompress(decompressedBuffer.data(), reinterpret_cast<mz_ulong*>(&decompressedSize), buffer.data(), buffer.size());
+
+		if (r != MZ_OK)
+		{
+			throw std::runtime_error("Unable to decompress mesh");
+		}
+
+		// Load the decompressed mesh
+		if (!mesh->LoadFromBuffer(decompressedBuffer))
+		{
+			throw std::runtime_error("Unable to load decompressed mesh");
+		}
 	}
 
 	return mesh;
