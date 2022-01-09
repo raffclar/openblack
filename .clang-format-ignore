@@ -3,3 +3,5 @@ apps/anmtool/json.hpp
 apps/l3dtool/tiny_gltf.h
 apps/l3dtool/json.hpp
 src/Common/stb_image_write.h
+src/3D/miniz.h
+src/3D/miniz.c
