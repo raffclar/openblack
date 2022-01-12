@@ -12,6 +12,8 @@
     "ignore": [
         "externals/",
         "stb_image_write.h",
-        "tiny_gltf.h"
+        "tiny_gltf.h",
+        "miniz.h",
+        "miniz.c"
     ]
 }
