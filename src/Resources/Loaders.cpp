@@ -46,10 +46,17 @@ entt::resource_handle<L3DMesh> L3DLoader::load(const std::filesystem::path& path
 		uint32_t decompressedSize = 0;
 		stream->Read(reinterpret_cast<uint32_t*>(&decompressedSize), sizeof(decompressedSize));
 		auto buffer = std::vector<uint8_t>(stream->Size() - sizeof(decompressedSize));
+
+		if (buffer.size() > std::numeric_limits<mz_ulong>().max())
+		{
+			throw std::runtime_error("Unable to decompress mesh: compressed buffer is too large");
+		}
+
 		stream->Read(reinterpret_cast<char*>(buffer.data()), buffer.size());
 		auto decompressedBuffer = std::vector<uint8_t>(decompressedSize);
-		auto r =
-			uncompress(decompressedBuffer.data(), reinterpret_cast<mz_ulong*>(&decompressedSize), buffer.data(), buffer.size());
+		mz_ulong compressedBufferSize = buffer.size();
+		auto r = uncompress(decompressedBuffer.data(), reinterpret_cast<mz_ulong*>(&decompressedSize), buffer.data(),
+		                    compressedBufferSize);
 
 		if (r != MZ_OK)
 		{
