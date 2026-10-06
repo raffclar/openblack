@@ -85,7 +85,7 @@ inline constexpr std::array<std::string_view, 30> k_Keywords = {
     "else",     "while", "loop",   "wait",  "until",  "when",  "seconds",  "second",     "cinema", "camera",
     "dialogue", "dual",  "to",     "and",   "or",     "not",   "variable", "native",     "goto",   "challenge"};
 
-/// "script", "help script", "challenge help script"...
+/// "script", "help script", "challenge help script" (also read as "quest help script"), "multiplayer script"...
 [[nodiscard]] std::string_view ScriptKindKeyword(ScriptKind kind);
 [[nodiscard]] std::optional<ScriptKind> ParseScriptKind(std::string_view keywords);
 

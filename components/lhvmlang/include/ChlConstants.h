@@ -20,8 +20,10 @@
 namespace openblack::lhvm::chl
 {
 
-/// Named game constants, read from the script header files (enum declarations and #defines) that challenge scripts
-/// include. CHL lets a member be written without its enum's name as a prefix: SCRIPT_OBJECT_TYPE_HOUSE is also HOUSE.
+/// Named game constants, read from the files the script compiler takes them from: C headers (enum declarations and
+/// #defines) and the game's info tables (lines of a name and a value, grouped under "ENUM_NAME<tab>Value" lines).
+/// Scripts write a constant by its full name; short names such as HOUSE are aliases a script declares itself with
+/// "global constant".
 class ConstantTable
 {
 public:
@@ -30,10 +32,15 @@ public:
 	/// Read the enum declarations and #define constants of a C header. Returns the number of constants added.
 	size_t LoadHeader(std::string_view text);
 
-	/// The name to write for `value` as a member of `enumName`, prefix removed, if the enum has such a member
+	/// Read an info table: "#" comment lines, "GROUP<tab>Value" lines that start a group (ENUM_ and DETAIL_ are dropped
+	/// from the group's name), and "NAME<tab>value" lines. Returns the number of constants added.
+	size_t LoadInfo(std::string_view text);
+
+	/// The name of the first member of `enumName` worth `value`. An enum name ending in '*' searches every group whose
+	/// name starts with the rest.
 	[[nodiscard]] std::optional<std::string> NameOf(std::string_view enumName, int32_t value) const;
 
-	/// The value of a constant, written with or without its enum prefix
+	/// The value of a named constant
 	[[nodiscard]] std::optional<int32_t> ValueOf(std::string_view name) const;
 
 	[[nodiscard]] bool Empty() const { return _values.empty(); }

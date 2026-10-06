@@ -173,7 +173,7 @@ enum class ScriptKind : uint8_t
 	ChallengeHelpScript,
 	TempleHelpScript,
 	TempleSpecialScript,
-	Unknown,
+	MultiplayerScript,
 	MultiplayerHelpScript
 };
 

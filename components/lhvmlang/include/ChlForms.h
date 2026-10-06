@@ -15,7 +15,8 @@
 /// "move Boy position to [Girl] radius 5" for MOVE_GAME_THING(Boy, GET_POSITION(Girl), 5). Each form pairs a native
 /// function with a pattern that says how its arguments are written. The decompiler picks the first form whose fixed
 /// parts match a call; the compiler parses a statement against the patterns and pushes the arguments in parameter
-/// order (swapping the first two afterwards when the form is marked `swapped`).
+/// order (swapping the first two afterwards when the form is marked `swapped`, and negating the result when it is
+/// marked `negated`).
 ///
 /// Pattern syntax (items separated by spaces):
 ///
@@ -47,6 +48,8 @@ struct StatementForm
 	std::string_view pattern;
 	/// The original compiler pushes arguments 1 and 0 in that order and swaps them
 	bool swapped {false};
+	/// The form is a negative condition: the call's result followed by a logical not ("Victim not exists")
+	bool negated {false};
 };
 
 /// Every form, most specific first

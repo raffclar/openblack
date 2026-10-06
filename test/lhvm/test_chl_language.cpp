@@ -123,13 +123,26 @@ TEST(ChlLanguage, ConstantsFromHeaders)
 	)");
 	EXPECT_EQ(added, 7);
 	EXPECT_EQ(constants.ValueOf("SCRIPT_OBJECT_TYPE_HOUSE"), 16);
-	EXPECT_EQ(constants.ValueOf("HOUSE"), 16);
-	EXPECT_EQ(constants.ValueOf("NEXT"), 17);
+	EXPECT_FALSE(constants.ValueOf("HOUSE").has_value());
+	EXPECT_EQ(constants.ValueOf("SCRIPT_OBJECT_TYPE_NEXT"), 17);
 	EXPECT_EQ(constants.ValueOf("OTHER_B"), 3);
 	EXPECT_EQ(constants.ValueOf("LIMIT"), 42);
-	EXPECT_EQ(constants.NameOf("SCRIPT_OBJECT_TYPE", 1), "MARKER");
-	EXPECT_EQ(constants.NameOf("OTHER", -2), "A");
+	EXPECT_EQ(constants.NameOf("SCRIPT_OBJECT_TYPE", 1), "SCRIPT_OBJECT_TYPE_MARKER");
+	EXPECT_EQ(constants.NameOf("OTHER", -2), "OTHER_A");
 	EXPECT_FALSE(constants.NameOf("SCRIPT_OBJECT_TYPE", 99).has_value());
+}
+
+TEST(ChlLanguage, ConstantsFromInfoTables)
+{
+	ConstantTable constants;
+	const auto added = constants.LoadInfo("#comment\nENUM_MAGIC_TYPE\tValue\nMAGIC_TYPE_FIRE\t3\t\t\n"
+	                                      "ENUM_HELP_TEXT_NARRATOR\tValue\nHELP_TEXT_NARRATOR_HELLO\t7\r\n"
+	                                      "ENUM_HELP_TEXT\tValue\nHELP_TEXT_BYE\t8\n");
+	EXPECT_EQ(added, 3);
+	EXPECT_EQ(constants.NameOf("MAGIC_TYPE", 3), "MAGIC_TYPE_FIRE");
+	EXPECT_EQ(constants.NameOf("HELP_TEXT*", 7), "HELP_TEXT_NARRATOR_HELLO");
+	EXPECT_EQ(constants.NameOf("HELP_TEXT*", 8), "HELP_TEXT_BYE");
+	EXPECT_EQ(constants.ValueOf("HELP_TEXT_BYE"), 8);
 }
 
 TEST(ChlLanguage, Syntax)
@@ -140,6 +153,8 @@ TEST(ChlLanguage, Syntax)
 	EXPECT_EQ(FindOperator("-", false), Op::Sub);
 	EXPECT_EQ(ScriptKindKeyword(ScriptKind::ChallengeHelpScript), "challenge help script");
 	EXPECT_EQ(ParseScriptKind("help script"), ScriptKind::HelpScript);
+	EXPECT_EQ(ParseScriptKind("quest help script"), ScriptKind::ChallengeHelpScript);
+	EXPECT_EQ(ScriptKindKeyword(ScriptKind::MultiplayerScript), "multiplayer script");
 	EXPECT_EQ(FormatNumber(15.0f), "15");
 	EXPECT_EQ(FormatNumber(0.25f), "0.25");
 }

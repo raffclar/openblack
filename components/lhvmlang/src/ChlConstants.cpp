@@ -97,11 +97,6 @@ void ConstantTable::Add(std::string_view enumName, std::string_view member, int3
 {
 	_enums[std::string(enumName)][value].emplace_back(member);
 	_values.emplace(std::string(member), value);
-	const auto prefix = std::string(enumName) + "_";
-	if (member.size() > prefix.size() && member.starts_with(prefix))
-	{
-		_values.emplace(std::string(member.substr(prefix.size())), value);
-	}
 }
 
 size_t ConstantTable::LoadHeader(std::string_view text)
@@ -203,30 +198,90 @@ size_t ConstantTable::LoadHeader(std::string_view text)
 	return added;
 }
 
+size_t ConstantTable::LoadInfo(std::string_view text)
+{
+	size_t added = 0;
+	std::string group;
+	size_t start = 0;
+	while (start < text.size())
+	{
+		auto end = text.find('\n', start);
+		if (end == std::string_view::npos)
+		{
+			end = text.size();
+		}
+		auto line = text.substr(start, end - start);
+		start = end + 1;
+		// Two fields separated by tabs or spaces; anything after them is ignored
+		const auto first = line.find_first_not_of(" \t\r");
+		if (first == std::string_view::npos || line[first] == '#')
+		{
+			continue;
+		}
+		line = line.substr(first);
+		const auto nameEnd = line.find_first_of(" \t\r");
+		if (nameEnd == std::string_view::npos)
+		{
+			continue;
+		}
+		const auto name = line.substr(0, nameEnd);
+		auto rest = line.substr(nameEnd);
+		const auto valueStart = rest.find_first_not_of(" \t");
+		if (valueStart == std::string_view::npos)
+		{
+			continue;
+		}
+		rest = rest.substr(valueStart);
+		const auto value = rest.substr(0, rest.find_first_of(" \t\r"));
+		if (value == "Value")
+		{
+			group = std::string(name);
+			for (const std::string_view prefix : {"ENUM_", "DETAIL_"})
+			{
+				if (group.starts_with(prefix))
+				{
+					group = group.substr(prefix.size());
+				}
+			}
+			continue;
+		}
+		if (const auto number = ParseInteger(value))
+		{
+			Add(group, name, *number);
+			++added;
+		}
+	}
+	return added;
+}
+
 std::optional<std::string> ConstantTable::NameOf(std::string_view enumName, int32_t value) const
 {
+	const auto find = [value](const auto& members) -> std::optional<std::string> {
+		const auto member = members.find(value);
+		if (member == members.end() || member->second.empty())
+		{
+			return std::nullopt;
+		}
+		return member->second.front();
+	};
+	if (enumName.ends_with('*'))
+	{
+		const auto prefix = enumName.substr(0, enumName.size() - 1);
+		for (auto it = _enums.lower_bound(prefix); it != _enums.end() && it->first.starts_with(prefix); ++it)
+		{
+			if (auto name = find(it->second))
+			{
+				return name;
+			}
+		}
+		return std::nullopt;
+	}
 	const auto it = _enums.find(enumName);
 	if (it == _enums.end())
 	{
 		return std::nullopt;
 	}
-	const auto member = it->second.find(value);
-	if (member == it->second.end() || member->second.empty())
-	{
-		return std::nullopt;
-	}
-	const auto& name = member->second.front();
-	const auto prefix = std::string(enumName) + "_";
-	if (name.size() > prefix.size() && name.starts_with(prefix))
-	{
-		auto stripped = name.substr(prefix.size());
-		// Only drop the prefix when the short name means this constant
-		if (const auto found = ValueOf(stripped); found && *found == value)
-		{
-			return stripped;
-		}
-	}
-	return name;
+	return find(it->second);
 }
 
 std::optional<int32_t> ConstantTable::ValueOf(std::string_view name) const

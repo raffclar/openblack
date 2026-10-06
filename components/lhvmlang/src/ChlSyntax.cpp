@@ -24,7 +24,7 @@ constexpr std::array<std::string_view, 7> k_ScriptKindKeywords = {
     "challenge help script",
     "temple help script",
     "temple special script",
-    "unknown script",
+    "multiplayer script",
     "multiplayer help script",
 };
 
@@ -56,6 +56,11 @@ std::string_view ScriptKindKeyword(ScriptKind kind)
 
 std::optional<ScriptKind> ParseScriptKind(std::string_view keywords)
 {
+	// "quest help" is another spelling of "challenge help"
+	if (keywords == "quest help script")
+	{
+		return ScriptKind::ChallengeHelpScript;
+	}
 	for (size_t i = 0; i < k_ScriptKindKeywords.size(); ++i)
 	{
 		if (k_ScriptKindKeywords[i] == keywords)
