@@ -17,11 +17,14 @@
 #include <iostream>
 #include <map>
 #include <string>
+#include <string_view>
 
 #include <ChlConstants.h>
 #include <LHVMDecompiler.h>
 #include <LHVMFile.h>
 #include <cxxopts.hpp>
+
+#include "lhvmtool_compile.h"
 
 using namespace openblack::lhvm;
 
@@ -660,7 +663,7 @@ bool parseOptions(int argc, char** argv, Arguments& args, int& returnCode) noexc
 	    ("subcommand", "Subcommand.", cxxopts::value<std::string>()) //
 	    ("input", "Input file.", cxxopts::value<std::string>())      //
 	    ;
-	options.positional_help("[read|decompile FILE] [OPTION...]");
+	options.positional_help("[read|decompile FILE|compile SOURCES] [OPTION...]");
 	options.add_options("read")                                                     //
 	    ("I,info", "Print info.", cxxopts::value<std::string>())                    //
 	    ("A,all", "Print all relevant data.", cxxopts::value<std::string>())        //
@@ -802,6 +805,11 @@ bool parseOptions(int argc, char** argv, Arguments& args, int& returnCode) noexc
 
 int main(int argc, char* argv[]) noexcept
 {
+	if (argc > 1 && std::string_view(argv[1]) == "compile")
+	{
+		return RunCompile(argc - 1, argv + 1);
+	}
+
 	Arguments args;
 	int returnCode = EXIT_SUCCESS;
 	if (!parseOptions(argc, argv, args, returnCode))

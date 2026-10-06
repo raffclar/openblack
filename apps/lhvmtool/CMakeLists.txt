@@ -1,11 +1,11 @@
-set(LHVMTOOL lhvmtool.cpp)
+set(LHVMTOOL lhvmtool.cpp lhvmtool_compile.cpp lhvmtool_compile.h)
 
 source_group(apps\\lhvmtool FILES ${LHVMTOOL})
 
 add_executable(lhvmtool ${LHVMTOOL})
 
 target_compile_definitions(lhvmtool PRIVATE CXXOPTS_NO_EXCEPTIONS)
-target_link_libraries(lhvmtool PRIVATE ScriptLibrary lhvmdecompiler)
+target_link_libraries(lhvmtool PRIVATE ScriptLibrary lhvmdecompiler lhvmcompiler)
 target_include_directories(lhvmtool PRIVATE ${CXXOPTS_INCLUDE_DIRS})
 
 if (OPENBLACK_CLANG_TIDY_CHECKS)
