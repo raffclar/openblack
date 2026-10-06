@@ -9,6 +9,9 @@
 
 #include "ChlSyntax.h"
 
+#include <charconv>
+#include <cmath>
+
 #include <algorithm>
 #include <format>
 
@@ -73,7 +76,23 @@ std::optional<ScriptKind> ParseScriptKind(std::string_view keywords)
 
 std::string FormatNumber(float value)
 {
-	return std::format("{}", value);
+	auto text = std::format("{}", value);
+	if (text.find('e') == std::string::npos || !std::isfinite(value))
+	{
+		return text;
+	}
+	// The language has no exponents: the fewest decimals that read back as the same number
+	for (int decimals = 0; decimals < 64; ++decimals)
+	{
+		text = std::format("{:.{}f}", value, decimals);
+		float parsed = 0.0f;
+		const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), parsed);
+		if (error == std::errc() && parsed == value)
+		{
+			break;
+		}
+	}
+	return text;
 }
 
 } // namespace openblack::lhvm::chl

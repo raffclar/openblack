@@ -89,7 +89,8 @@ inline constexpr std::array<std::string_view, 30> k_Keywords = {
 [[nodiscard]] std::string_view ScriptKindKeyword(ScriptKind kind);
 [[nodiscard]] std::optional<ScriptKind> ParseScriptKind(std::string_view keywords);
 
-/// A float as CHL writes it: the shortest text that reads back to the same float, without a trailing ".0"
+/// A float as CHL writes it: the shortest text that reads back to the same float, without a trailing ".0" or an
+/// exponent
 [[nodiscard]] std::string FormatNumber(float value);
 
 } // namespace openblack::lhvm::chl

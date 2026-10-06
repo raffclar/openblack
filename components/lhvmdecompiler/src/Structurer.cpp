@@ -9,6 +9,8 @@
 
 #include "Structurer.h"
 
+#include <cmath>
+
 #include <algorithm>
 #include <format>
 #include <utility>
@@ -649,7 +651,9 @@ bool Structurer::ExecPure(uint32_t ip, std::vector<StackEntry>& stack, bool stri
 			break;
 		}
 		auto operand = PopSlot(stack, ip, strict, failed);
-		if (operand->kind == ExprKind::Literal && (operand->type == ValueType::Int || operand->type == ValueType::Float))
+		// Only a constant pushed as it is: negating an already negative one is written -(-N)
+		if (operand->kind == ExprKind::Literal && (operand->type == ValueType::Int || operand->type == ValueType::Float) &&
+		    !std::signbit(operand->number))
 		{
 			// Negative constants are compiled as a positive one and a negation
 			auto ips = operand->ips;

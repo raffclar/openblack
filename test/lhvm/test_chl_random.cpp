@@ -72,27 +72,29 @@ private:
 	{
 		if (depth <= 0 || Chance(30))
 		{
-			switch (Pick(0, 5))
+			switch (Pick(0, 7))
 			{
 			case 0:
 				return "X";
 			case 1:
 				return "Y";
 			case 2:
-				// A form whose last argument is an object, which can't take in what follows it. Forms ending with a
-				// position or a number are left out: see DISABLED_FormsEndingWithAPositionAreBracketed.
+				// Forms ending with an object, a position or a number
 				return "(size of Obj)";
 			case 3:
 				return "(8 of Obj)";
+			case 4:
+				return "(get distance from [Obj] to [1, 2, 3])";
+			case 5:
+				return "(number from 1 to X)";
 			default:
 				return Number();
 			}
 		}
 		if (Chance(15))
 		{
-			// No double negation: see DISABLED_DoubleNegationIsBracketed
 			const auto operand = Value(depth - 1);
-			return operand.starts_with('-') ? operand : "-" + operand;
+			return operand.starts_with('-') ? "-(" + operand + ")" : "-" + operand;
 		}
 		static constexpr std::array<std::string_view, 5> k_Operators = {"+", "-", "*", "/", "%"};
 		auto text = std::format("{} {} {}", Value(depth - 1), k_Operators[static_cast<size_t>(Pick(0, 4))], Value(depth - 1));
@@ -244,9 +246,9 @@ bool RoundTrips(const std::string& source, std::string& decompiledText)
 
 } // namespace
 
-// Known decompiler issues, kept here until it brackets these: a form's last argument takes in all that can follow it,
-// so "get distance from [A] to [B] / 2" divides the position [B]; and two minus signs together read as "--".
-TEST(ChlRandom, DISABLED_FormsEndingWithAPositionAreBracketed)
+// A form's last argument takes in all that can follow it, so "get distance from [A] to [B] / 2" would divide the
+// position [B]; and two minus signs together read as "--".
+TEST(ChlRandom, FormsEndingWithAPositionAreBracketed)
 {
 	std::string decompiled;
 	EXPECT_TRUE(RoundTrips(std::string(k_Globals) +
@@ -256,9 +258,25 @@ TEST(ChlRandom, DISABLED_FormsEndingWithAPositionAreBracketed)
 	    << decompiled;
 }
 
-TEST(ChlRandom, DISABLED_DoubleNegationIsBracketed)
+TEST(ChlRandom, DoubleNegationIsBracketed)
+{
+	for (const std::string value : {"-(-Y)", "-(-5)", "-(-(-0.5))", "-(get distance from [Obj] to [1, 2, 3]) / 2"})
+	{
+		std::string decompiled;
+		EXPECT_TRUE(RoundTrips(std::string(k_Globals) + "begin script Sample\nstart\n\tX = " + value + "\nend script Sample\n",
+		                       decompiled))
+		    << decompiled;
+	}
+}
+
+// The language has no exponents, however large or small the number
+TEST(ChlRandom, NumbersHaveNoExponent)
 {
 	std::string decompiled;
-	EXPECT_TRUE(RoundTrips(std::string(k_Globals) + "begin script Sample\nstart\n\tX = -(-Y)\nend script Sample\n", decompiled))
+	EXPECT_TRUE(
+	    RoundTrips(std::string(k_Globals) + "begin script Sample\nstart\n\tX = 2000000 + 900000 * 0.00001\nend script Sample\n",
+	               decompiled))
 	    << decompiled;
+	EXPECT_EQ(decompiled.find("e+"), std::string::npos) << decompiled;
+	EXPECT_EQ(decompiled.find("e-"), std::string::npos) << decompiled;
 }

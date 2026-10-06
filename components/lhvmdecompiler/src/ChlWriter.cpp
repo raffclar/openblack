@@ -229,8 +229,7 @@ uint8_t ChlWriter::Precedence(const ExprPtr& expr)
 		return k_FormPrecedence;
 	case ExprKind::NativeCall:
 	{
-		// Positions read as one phrase ("camera position", "hand position")
-		if (IsCallOf(expr, "GET_POSITION", 1) || expr->type == ValueType::Vector)
+		if (IsCallOf(expr, "GET_POSITION", 1))
 		{
 			return k_AtomPrecedence;
 		}
@@ -297,7 +296,9 @@ std::string ChlWriter::Expression(const ExprPtr& expr, uint8_t minPrecedence)
 		}
 		else
 		{
-			text = "-" + Expression(expr->args[0], GetOperator(Op::Neg).precedence);
+			// Two minus signs together would read as the decrement operator
+			auto operand = Expression(expr->args[0], GetOperator(Op::Neg).precedence);
+			text = operand.starts_with('-') ? "-(" + operand + ")" : "-" + operand;
 		}
 		break;
 	case ExprKind::Binary:
@@ -392,7 +393,10 @@ std::string ChlWriter::Argument(const ExprPtr& arg, ArgType type, const std::str
 		// "constant" takes the rest of the expression, so it needs no brackets of its own
 		return "constant " + Expression(arg->args[0]);
 	}
-	return Expression(arg, static_cast<uint8_t>(k_FormPrecedence + 1));
+	// A form as an argument is followed by the outer form's words, which it can't take in, so it needs no brackets;
+	// conditions and arithmetic do
+	const auto& inner = arg->kind == ExprKind::Cast && !arg->args.empty() ? arg->args[0] : arg;
+	return Expression(arg, inner->kind == ExprKind::NativeCall ? k_FormPrecedence : static_cast<uint8_t>(k_FormPrecedence + 1));
 }
 
 std::optional<std::string> ChlWriter::Items(const std::vector<PatternItem>& items, const ExprPtr& call,
@@ -426,11 +430,11 @@ std::optional<std::string> ChlWriter::Items(const std::vector<PatternItem>& item
 		return name;
 	};
 	std::vector<std::string> parts;
+	// A form whose last written part is a number or a position takes in an operator after it, like a prefix operator,
+	// so it needs brackets inside arithmetic. Only an object, which is a single name, can't.
+	std::optional<bool> greedy;
 	for (const auto& item : items)
 	{
-		// A form whose last written part is an expression takes everything after it, like a prefix operator
-		_greedy = item.kind == PatternItemKind::Argument &&
-		          (typeOf(item.argument) == ArgType::Float || typeOf(item.argument) == ArgType::Any);
 		if (item.argument >= static_cast<int>(args.size()))
 		{
 			return std::nullopt;
@@ -440,6 +444,7 @@ std::optional<std::string> ChlWriter::Items(const std::vector<PatternItem>& item
 		{
 		case PatternItemKind::Word:
 			parts.push_back(item.text);
+			greedy = false;
 			break;
 		case PatternItemKind::Argument:
 			if (item.enumName == "CURRENT_CHALLENGE")
@@ -459,9 +464,11 @@ std::optional<std::string> ChlWriter::Items(const std::vector<PatternItem>& item
 					return std::nullopt;
 				}
 				parts.push_back(Constant(arg, "ScriptCameraPosition"));
+				greedy = false;
 				break;
 			}
 			parts.push_back(Argument(arg, typeOf(item.argument), enumOf(item)));
+			greedy = typeOf(item.argument) != ArgType::Object;
 			break;
 		case PatternItemKind::Fixed:
 			if (!item.value || !(IsNumber(arg, *item.value) || (*item.value == 0.0 && IsOrigin(arg))))
@@ -477,6 +484,7 @@ std::optional<std::string> ChlWriter::Items(const std::vector<PatternItem>& item
 			if (arg->number != 0.0)
 			{
 				parts.push_back(item.text);
+				greedy = false;
 			}
 			break;
 		case PatternItemKind::Choice:
@@ -490,7 +498,11 @@ std::optional<std::string> ChlWriter::Items(const std::vector<PatternItem>& item
 			{
 				return std::nullopt;
 			}
-			parts.push_back(it->first);
+			if (!it->first.empty())
+			{
+				parts.push_back(it->first);
+				greedy = false;
+			}
 			break;
 		}
 		case PatternItemKind::Optional:
@@ -533,10 +545,12 @@ std::optional<std::string> ChlWriter::Items(const std::vector<PatternItem>& item
 				return std::nullopt;
 			}
 			parts.push_back(std::move(*inner));
+			greedy = _greedy;
 			break;
 		}
 		}
 	}
+	_greedy = greedy.value_or(false);
 	return Join(parts);
 }
 

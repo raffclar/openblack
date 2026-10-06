@@ -157,4 +157,7 @@ TEST(ChlLanguage, Syntax)
 	EXPECT_EQ(ScriptKindKeyword(ScriptKind::MultiplayerScript), "multiplayer script");
 	EXPECT_EQ(FormatNumber(15.0f), "15");
 	EXPECT_EQ(FormatNumber(0.25f), "0.25");
+	EXPECT_EQ(FormatNumber(2000000.0f), "2000000");
+	EXPECT_EQ(FormatNumber(900000.0f), "900000");
+	EXPECT_EQ(FormatNumber(0.00001f), "0.00001");
 }
