@@ -32,20 +32,15 @@ std::optional<LeashKey> creature_leash::KeyFor(BindableActionMap action)
 	}
 }
 
-std::optional<LeashType> creature_leash::StepKnown(LeashType selected, const std::bitset<k_Types.size()>& known, bool forwards)
+std::optional<LeashType> creature_leash::StepType(LeashType selected, const std::bitset<k_Types.size()>& known, bool up)
 {
+	// k_Types lists the leashes in number order, so one number up is one place on
+	static_assert(k_Types[0] == LeashType::Evil && k_Types[1] == LeashType::Rope && k_Types[2] == LeashType::Good);
 	const auto count = k_Types.size();
 	// From the learning leash when none is picked
-	auto index = IndexOf(selected).value_or(*IndexOf(LeashType::Rope));
-	for (size_t tries = 1; tries < count; ++tries)
-	{
-		index = forwards ? (index + 1) % count : (index + count - 1) % count;
-		if (known.test(index))
-		{
-			return k_Types.at(index);
-		}
-	}
-	return std::nullopt;
+	const auto from = IndexOf(selected).value_or(*IndexOf(LeashType::Rope));
+	const auto to = up ? (from + 1) % count : (from + count - 1) % count;
+	return known.test(to) ? std::optional(k_Types.at(to)) : std::nullopt;
 }
 
 KeyCommand creature_leash::CommandFor(LeashKey key, const KeyState& state)
@@ -73,7 +68,7 @@ KeyCommand creature_leash::CommandFor(LeashKey key, const KeyState& state)
 		return {.kind = Kind::PutOn, .type = knows(state.selected) ? state.selected : LeashType::Rope};
 	case LeashKey::PreviousLeash:
 	case LeashKey::NextLeash:
-		if (const auto next = StepKnown(state.selected, state.known, key == LeashKey::NextLeash))
+		if (const auto next = StepType(state.selected, state.known, key == LeashKey::PreviousLeash))
 		{
 			return {.kind = Kind::ChangeType, .type = *next};
 		}

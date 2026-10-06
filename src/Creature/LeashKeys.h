@@ -21,11 +21,20 @@
 #include "Enums.h"
 #include "Input/GameActionMapInterface.h"
 
-/// The leash's controls. The keyboard shortcuts, as the game binds them by default: L puts the picked leash on the
-/// player's creature, unties it back to the hand when it is tied to something, or takes it off; V and B pick the
-/// previous and next leash the creature knows, swapping the one it wears. Ctrl+L is the quick load, not the leash. The
-/// right mouse button clicked on the player's creature puts the leash on (see creature_hand::IsClick), and shaking the
-/// hand takes a leash held in the hand off again.
+/// The leash's controls, as the game binds and handles them by default.
+///
+/// L always toggles the leash on the player's creature: it puts the picked leash on, or unties it back to the hand
+/// when it is tied to something, or else takes it off. The game's leash key does nothing more, however many leashes
+/// the creature knows. Its leash picker, which offers the other leashes the creature knows as gestures to draw and
+/// lets a shake drop the leash, opens only from the drawn leash gesture, which openblack doesn't recognise yet.
+///
+/// V and B step the picked leash through the leashes by their numbers (aggression 1, learning 2, compassion 3), V up
+/// and B down, going round, though the game labels V "previous" and B "next". A step lands only on a leash the creature
+/// knows; when the leash it would land on is one it doesn't know, the key does nothing. The worn leash changes with
+/// it. Ctrl+L is the quick load, not the leash.
+///
+/// The right mouse button clicked on the player's creature puts the leash on (see creature_hand::IsClick), and shaking
+/// the hand takes a leash held in the hand off again.
 namespace openblack::creature_leash
 {
 
@@ -33,7 +42,9 @@ namespace openblack::creature_leash
 enum class LeashKey : uint8_t
 {
 	Leash,
+	/// V, which the game labels "previous leash": one leash number up
 	PreviousLeash,
+	/// B, which the game labels "next leash": one leash number down
 	NextLeash,
 };
 
@@ -74,9 +85,9 @@ struct KeyCommand
 /// What pressing the shortcut does to the player's creature. The leash key needs the learning leash known, as every
 /// leash does; the picked leash goes on when known, the learning leash otherwise.
 [[nodiscard]] KeyCommand CommandFor(LeashKey key, const KeyState& state);
-/// The next leash the creature knows after the picked one, going round, forwards or backwards; none when it knows no
-/// other
-[[nodiscard]] std::optional<LeashType> StepKnown(LeashType selected, const std::bitset<k_Types.size()>& known, bool forwards);
+/// The leash one number up or down from the picked one, going round from compassion to aggression and back, if the
+/// creature knows it; none when it doesn't, as the step skips nothing
+[[nodiscard]] std::optional<LeashType> StepType(LeashType selected, const std::bitset<k_Types.size()>& known, bool up);
 
 /// Shaking the hand: moving it quickly back and forth. The game recognises a shake as one of the gestures it matches
 /// drawn hand paths against; these thresholds are tuned to feel the same rather than taken from it. The cursor is

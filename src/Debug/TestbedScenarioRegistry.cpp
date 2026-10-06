@@ -1389,13 +1389,16 @@ void AddLeash(std::vector<Scenario>& all)
 	    .id = "leash.keys",
 	    .name = "The leash shortcuts",
 	    .facet = Facet::Leash,
-	    .description = "Your tiger knows all three leashes. The keys are pressed in turn: L puts the leash on, B picks "
-	                   "the next leash and V the previous one, swapping the one it wears, and L takes it off.",
-	    .expected = "The rope goes on, changes colour twice, and comes off. Pressing L, V and B yourself does the same.",
+	    .description = "Your tiger knows all three leashes. The keys are pressed in turn: L puts the learning leash "
+	                   "on, B steps down to the aggression leash, V steps back up to the learning leash and on up to "
+	                   "the compassion leash, and L takes it off, however many leashes it knows.",
+	    .expected = "The rope goes on, changes colour three times, and comes off; the readout names each leash. "
+	                "Pressing L, V and B yourself does the same.",
 	    .framing = {.shot = Shot::Testbed},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 60.0f})},
 	    .commands = {{.kind = Kind::LeashKey, .delaySeconds = 1.0f, .value = 0},
 	                 {.kind = Kind::LeashKey, .delaySeconds = 3.0f, .value = 2},
+	                 {.kind = Kind::LeashKey, .delaySeconds = 3.0f, .value = 1},
 	                 {.kind = Kind::LeashKey, .delaySeconds = 3.0f, .value = 1},
 	                 {.kind = Kind::LeashKey, .delaySeconds = 3.0f, .value = 0}},
 	    .repeatFrom = 0,

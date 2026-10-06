@@ -537,6 +537,8 @@ bool LeashSystem::ChangeType(entt::entity creature, LeashType type)
 	}
 	// The posts show the leash picked
 	registry.Each<LeashPost>([leashes](LeashPost& post) { post.selected = post.type == leashes->selected; });
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {}'s picked leash is now the {} leash", entt::to_integral(creature),
+	                   leash::Name(type));
 	return true;
 }
 

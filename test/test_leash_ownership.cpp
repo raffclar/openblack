@@ -184,20 +184,36 @@ TEST(LeashKeys, TheLeashKeyNeedsTheLearningLeash)
 	          (KeyCommand {.kind = Kind::PutOn, .type = LeashType::Rope}));
 }
 
-TEST(LeashKeys, PreviousAndNextGoRoundTheKnownLeashes)
+TEST(LeashKeys, VStepsUpAndBDownThroughTheLeashNumbers)
 {
 	const auto all = Knowing({LeashType::Evil, LeashType::Rope, LeashType::Good});
-	EXPECT_EQ(CommandFor(LeashKey::NextLeash, {.known = all, .selected = LeashType::Rope}),
-	          (KeyCommand {.kind = Kind::ChangeType, .type = LeashType::Good}));
-	EXPECT_EQ(CommandFor(LeashKey::NextLeash, {.known = all, .selected = LeashType::Good}),
-	          (KeyCommand {.kind = Kind::ChangeType, .type = LeashType::Evil}));
-	EXPECT_EQ(CommandFor(LeashKey::PreviousLeash, {.known = all, .selected = LeashType::Rope}),
-	          (KeyCommand {.kind = Kind::ChangeType, .type = LeashType::Evil}));
-	// Skipping the ones it doesn't know, and nothing when it knows no other
+	const auto change = [](LeashType type) { return KeyCommand {.kind = Kind::ChangeType, .type = type}; };
+	// V: aggression 1, learning 2, compassion 3, and round again
+	EXPECT_EQ(CommandFor(LeashKey::PreviousLeash, {.known = all, .selected = LeashType::Evil}), change(LeashType::Rope));
+	EXPECT_EQ(CommandFor(LeashKey::PreviousLeash, {.known = all, .selected = LeashType::Rope}), change(LeashType::Good));
+	EXPECT_EQ(CommandFor(LeashKey::PreviousLeash, {.known = all, .selected = LeashType::Good}), change(LeashType::Evil));
+	// B: 1, 3, 2, and round again
+	EXPECT_EQ(CommandFor(LeashKey::NextLeash, {.known = all, .selected = LeashType::Evil}), change(LeashType::Good));
+	EXPECT_EQ(CommandFor(LeashKey::NextLeash, {.known = all, .selected = LeashType::Good}), change(LeashType::Rope));
+	EXPECT_EQ(CommandFor(LeashKey::NextLeash, {.known = all, .selected = LeashType::Rope}), change(LeashType::Evil));
+}
+
+TEST(LeashKeys, AStepOntoAnUnknownLeashDoesNothing)
+{
+	// Knowing aggression and learning, V from learning would reach compassion, which it doesn't know, so it stays
 	const auto two = Knowing({LeashType::Evil, LeashType::Rope});
-	EXPECT_EQ(StepKnown(LeashType::Rope, two, true), LeashType::Evil);
+	EXPECT_FALSE(StepType(LeashType::Rope, two, true).has_value());
+	EXPECT_EQ(StepType(LeashType::Rope, two, false), LeashType::Evil);
+	EXPECT_EQ(CommandFor(LeashKey::PreviousLeash, {.known = two, .selected = LeashType::Rope}), KeyCommand {});
 	EXPECT_EQ(CommandFor(LeashKey::NextLeash, {.known = Knowing({LeashType::Rope}), .selected = LeashType::Rope}),
 	          KeyCommand {});
+}
+
+TEST(LeashKeys, TheLeashKeyTakesTheLeashOffHoweverManyItKnows)
+{
+	const auto all = Knowing({LeashType::Evil, LeashType::Rope, LeashType::Good});
+	EXPECT_EQ(CommandFor(LeashKey::Leash, {.worn = true, .known = all, .selected = LeashType::Good}),
+	          (KeyCommand {.kind = Kind::TakeOff}));
 }
 
 namespace

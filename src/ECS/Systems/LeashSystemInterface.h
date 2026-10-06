@@ -77,7 +77,8 @@ public:
 	/// creature and know the leash.
 	virtual bool PutOn(entt::entity creature, LeashType type) = 0;
 	virtual void TakeOff(entt::entity creature) = 0;
-	/// Unties a tied leash back to the hand, or else puts the picked leash on or takes it off
+	/// Unties a tied leash back to the hand, or else puts the picked leash on or takes it off. This is all the game's leash
+	/// key and its toggle-leash script command do, however many leashes the creature knows.
 	virtual bool Toggle(entt::entity creature) = 0;
 	/// Swaps the leash worn for another the creature knows, or picks the one to put on next
 	virtual bool ChangeType(entt::entity creature, LeashType type) = 0;
