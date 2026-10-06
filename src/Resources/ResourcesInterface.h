@@ -28,6 +28,7 @@ using SoundManager = ResourceManager<SoundLoader>;
 using GlowManager = ResourceManager<LightLoader>;
 using CameraPathManager = ResourceManager<CameraPathLoader>;
 using ParticleFileManager = ResourceManager<ParticleFileLoader>;
+using ParticleBitmapManager = ResourceManager<ParticleBitmapLoader>;
 
 class ResourcesInterface
 {
@@ -50,6 +51,8 @@ public:
 	virtual CameraPathManager& GetCameraPaths() = 0;
 	/// The particle effect files, by particles::ParticleFileId of their names
 	virtual ParticleFileManager& GetParticleFiles() = 0;
+	/// The light maps the particle effects stamp on the land, by their paths
+	virtual ParticleBitmapManager& GetParticleBitmaps() = 0;
 };
 
 } // namespace openblack::resources

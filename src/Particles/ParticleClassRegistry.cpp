@@ -13,6 +13,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "ParticleCreators.h"
+
 using namespace openblack::particles;
 
 namespace
@@ -76,14 +78,16 @@ const ParticleClassRegistry::AtomCondition* ParticleClassRegistry::FindAtomCondi
 	return Lookup(_atomConditions, className);
 }
 
-ParticleClassRegistry ParticleClassRegistry::WithAllClasses()
+ParticleClassRegistry ParticleClassRegistry::WithAllClasses(CreatorResourcesInterface* resources)
 {
 	ParticleClassRegistry registry;
 	RegisterCreators(registry);
+	RegisterDrawnCreators(registry, resources);
 	RegisterConditions(registry);
 	RegisterCreateRules(registry);
 	RegisterUpdateRules(registry);
 	RegisterCurveRules(registry);
+	RegisterHealRules(registry);
 	return registry;
 }
 

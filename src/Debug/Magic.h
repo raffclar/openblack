@@ -19,6 +19,7 @@
 #include "Enums.h"
 #include "Magic/SpellChants.h"
 #include "Magic/WorshipBattery.h"
+#include "Particles/ParticleDrawPath.h"
 #include "Window.h"
 
 namespace openblack::debug::gui
@@ -48,6 +49,10 @@ private:
 	void UpdateTimedEffects(float seconds) noexcept;
 	/// Where a spawned effect goes: the hand, or what the camera looks at, on the land
 	[[nodiscard]] glm::vec3 SpawnPoint() const noexcept;
+	/// What the particles drew in the last frame, by kind
+	void DrawParticleStats() const noexcept;
+	/// Gives an effect the creatures and villagers nearest its origin to act on
+	void GiveNearestTargets(uint32_t effect, const glm::vec3& origin) const noexcept;
 
 	void ResetSandbox() noexcept;
 	void CastInSandbox() noexcept;
@@ -86,6 +91,9 @@ private:
 	/// Seconds before it closes down, none to run until closed
 	float _closeAfter {0.0f};
 	bool _synced {false};
+	particles::draw::DrawPath _drawPath {particles::draw::DrawPath::Sorted};
+	/// The creatures and villagers nearest a spawned effect it is given to act on, as the heal miracle is given people
+	int _targets {0};
 	std::vector<std::string> _particleFiles;
 	struct TimedEffect
 	{

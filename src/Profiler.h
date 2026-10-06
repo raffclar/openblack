@@ -57,6 +57,7 @@ public:
 		FootprintPass,
 		ObjectShadowPass,
 		CreatureShadowPass,
+		ParticlesGather,
 		ReflectionPass,
 		ReflectionDrawSky,
 		ReflectionDrawWater,
@@ -64,6 +65,7 @@ public:
 		ReflectionDrawModels,
 		ReflectionDrawVegetation,
 		ReflectionDrawSprites,
+		ReflectionDrawParticles,
 		MainPass,
 		MainPassDrawSky,
 		MainPassDrawWater,
@@ -71,6 +73,7 @@ public:
 		MainPassDrawModels,
 		MainPassDrawVegetation,
 		MainPassDrawSprites,
+		MainPassDrawParticles,
 		GuiDraw,
 		RendererFrame,
 
@@ -110,6 +113,7 @@ public:
 	    "Footprint Pass",       //
 	    "Object Shadow Pass",   //
 	    "Creature Shadow Pass", //
+	    "Gather Particles",     //
 	    "Reflection Pass",      //
 	    "Draw Sky",             //
 	    "Draw Water",           //
@@ -117,6 +121,7 @@ public:
 	    "Draw Models",          //
 	    "Draw Vegetation",      //
 	    "Draw Sprites",         //
+	    "Draw Particles",       //
 	    "Main Pass",            //
 	    "Draw Sky",             //
 	    "Draw Water",           //
@@ -124,6 +129,7 @@ public:
 	    "Draw Models",          //
 	    "Draw Vegetation",      //
 	    "Draw Sprites",         //
+	    "Draw Particles",       //
 	    "Encode GUI Draw",      //
 	    "Renderer Frame",       //
 	};

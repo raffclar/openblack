@@ -10,6 +10,8 @@
 #include "ParticleEffect.h"
 
 #include <algorithm>
+#include <iterator>
+#include <ranges>
 
 #include <glm/matrix.hpp>
 
@@ -536,41 +538,117 @@ size_t Effect::CollectionCount() const
 	return total;
 }
 
-void Effect::CollectCollection(const Collection& collection, float t, std::vector<DrawAtom>& out, Creator::Kind kind) const
+std::optional<Effect::DrawAtom> Effect::Interpolate(const Atom& atom, float t, bool interpolated) const
 {
-	const float k = collection.interpolated ? std::clamp(t, 0.0f, 1.0f) : 1.0f;
-	for (const auto& atom : collection.atoms)
+	const float k = interpolated ? std::clamp(t, 0.0f, 1.0f) : 1.0f;
+	const auto& a = atom.previous;
+	const auto& b = atom.current;
+	const float alpha = (a.alpha + (b.alpha - a.alpha) * k) * _globalAlpha / 255.0f;
+	if (!atom.visible || !atom.drawn || atom.creator == nullptr)
 	{
-		if (atom->visible && atom->drawn && atom->creator != nullptr && atom->creator->kind == kind)
+		return std::nullopt;
+	}
+	// The drawn time lies between the last two steps; the effect's age is the current step's end
+	const float age = _age - (_dt * (1.0f - k)) - atom.birth;
+	return DrawAtom {
+	    .creator = atom.creator,
+	    .position = a.position + (b.position - a.position) * k,
+	    .rotation = a.rotation + (b.rotation - a.rotation) * k,
+	    .scale = a.scale + (b.scale - a.scale) * k,
+	    .stretch = a.stretch + (b.stretch - a.stretch) * k,
+	    .alpha = alpha,
+	    .frame = maths::LerpFrame(a.frame, b.frame, t, atom.creator->loopAnim),
+	    .rgb = {atom.rgba[0], atom.rgba[1], atom.rgba[2]},
+	    .age = std::max(age, 0.0f),
+	    .creatorValue = atom.creatorValue,
+	};
+}
+
+void Effect::WalkCollection(const Collection& collection, float t, DrawWalk& out) const
+{
+	// The newest atom first, as the game keeps its lists
+	const Creator* chainCreator = nullptr;
+	for (const auto& atom : std::ranges::reverse_view(collection.atoms))
+	{
+		const auto drawn = Interpolate(*atom, t, collection.interpolated);
+		if (!drawn.has_value())
 		{
-			const auto& a = atom->previous;
-			const auto& b = atom->current;
-			const float alpha = (a.alpha + (b.alpha - a.alpha) * k) * _globalAlpha / 255.0f;
-			if (alpha >= k_MinimumDrawnAlpha)
+			continue;
+		}
+		const auto kind = drawn->creator->kind;
+		if (kind == Creator::Kind::Chain)
+		{
+			chainCreator = drawn->creator;
+		}
+		else if (kind != Creator::Kind::Point && kind != Creator::Kind::Other && drawn->alpha >= k_MinimumDrawnAlpha)
+		{
+			out.steps.push_back({.chain = false, .index = static_cast<uint32_t>(out.atoms.size())});
+			out.atoms.push_back(*drawn);
+		}
+	}
+	// Then the ribbon through its joints, from the first made
+	if (chainCreator != nullptr)
+	{
+		const auto first = static_cast<uint32_t>(out.joints.size());
+		for (const auto& atom : collection.atoms)
+		{
+			if (atom->creator != nullptr && atom->creator->kind == Creator::Kind::Chain)
 			{
-				out.push_back({
-				    .creator = atom->creator,
-				    .position = a.position + (b.position - a.position) * k,
-				    .rotation = a.rotation + (b.rotation - a.rotation) * k,
-				    .scale = a.scale + (b.scale - a.scale) * k,
-				    .stretch = a.stretch + (b.stretch - a.stretch) * k,
-				    .alpha = alpha,
-				    .frame = maths::LerpFrame(a.frame, b.frame, t, atom->creator->loopAnim),
-				    .rgb = {atom->rgba[0], atom->rgba[1], atom->rgba[2]},
-				});
+				if (const auto joint = Interpolate(*atom, t, collection.interpolated))
+				{
+					out.joints.push_back(*joint);
+				}
 			}
 		}
-		for (const auto& sub : atom->subCollections)
+		const auto count = static_cast<uint32_t>(out.joints.size()) - first;
+		if (count >= 2)
 		{
-			CollectCollection(*sub, t, out, kind);
+			out.steps.push_back({.chain = true, .index = static_cast<uint32_t>(out.chains.size())});
+			out.chains.push_back({.creator = chainCreator, .firstJoint = first, .jointCount = count});
 		}
+		else
+		{
+			out.joints.resize(first);
+		}
+	}
+	// Then what is under each atom in turn
+	for (const auto& atom : std::ranges::reverse_view(collection.atoms))
+	{
+		for (const auto& sub : std::ranges::reverse_view(atom->subCollections))
+		{
+			WalkCollection(*sub, t, out);
+		}
+	}
+}
+
+void Effect::Walk(float t, DrawWalk& out) const
+{
+	for (const auto& root : std::ranges::reverse_view(_roots))
+	{
+		WalkCollection(*root, t, out);
 	}
 }
 
 void Effect::Collect(float t, std::vector<DrawAtom>& out, Creator::Kind kind) const
 {
-	for (const auto& root : _roots)
+	DrawWalk walk;
+	Walk(t, walk);
+	if (kind == Creator::Kind::Chain)
 	{
-		CollectCollection(*root, t, out, kind);
+		out.insert(out.end(), walk.joints.begin(), walk.joints.end());
+		return;
 	}
+	std::ranges::copy_if(walk.atoms, std::back_inserter(out),
+	                     [kind](const DrawAtom& atom) { return atom.creator->kind == kind; });
+}
+
+std::optional<entt::entity> Effect::TakeTarget()
+{
+	if (_targets.empty())
+	{
+		return std::nullopt;
+	}
+	const auto target = _targets.back();
+	_targets.pop_back();
+	return target;
 }

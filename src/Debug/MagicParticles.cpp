@@ -12,12 +12,19 @@
 
 #include <algorithm>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include <fmt/format.h>
+#include <glm/geometric.hpp>
 #include <imgui.h>
 
 #include "3D/LandIslandInterface.h"
 #include "Camera/Camera.h"
+#include "ECS/Components/Creature.h"
+#include "ECS/Components/Transform.h"
+#include "ECS/Components/Villager.h"
+#include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "Locator.h"
@@ -33,6 +40,7 @@ constexpr int k_PlayerCount = 8;
 constexpr float k_MaxMagnitude = 10.0f;
 constexpr float k_MaxHeight = 50.0f;
 constexpr float k_MaxCloseAfter = 30.0f;
+constexpr int k_MaxTargets = 10;
 
 std::string TypeLabel(ParticleType type)
 {
@@ -121,6 +129,30 @@ void Magic::DrawParticles() noexcept
 	ImGui::SliderInt("Player", &_player, 0, k_PlayerCount - 1);
 	ImGui::SliderFloat("Close after", &_closeAfter, 0.0f, k_MaxCloseAfter, _closeAfter > 0.0f ? "%.1f s" : "never");
 	ImGui::Checkbox("Synced random numbers", &_synced);
+	if (ImGui::BeginCombo("Drawn", particles::draw::k_DrawPathNames.at(static_cast<size_t>(_drawPath)).data()))
+	{
+		for (size_t i = 0; i < particles::draw::k_DrawPathNames.size(); ++i)
+		{
+			const auto path = static_cast<particles::draw::DrawPath>(i);
+			if (ImGui::Selectable(particles::draw::k_DrawPathNames.at(i).data(), path == _drawPath))
+			{
+				_drawPath = path;
+			}
+		}
+		ImGui::EndCombo();
+	}
+	if (ImGui::IsItemHovered())
+	{
+		ImGui::SetTooltip("Sorted: each sprite, model, mist and ribbon in its own place among what blends.\n"
+		                  "Queued: the whole effect at its origin, drawn in its own order, as some spot visuals are.\n"
+		                  "Immediate: drawn just after the hand, as the miracle in the hand is.");
+	}
+	ImGui::SliderInt("Targets", &_targets, 0, k_MaxTargets, _targets > 0 ? "%d nearest" : "none");
+	if (ImGui::IsItemHovered())
+	{
+		ImGui::SetTooltip("The creatures and villagers nearest the effect are given to it to act on, as the heal "
+		                  "miracle's chakra is given the people it heals.");
+	}
 
 	if (ImGui::Button("Spawn"))
 	{
@@ -129,6 +161,8 @@ void Magic::DrawParticles() noexcept
 		                    ? particles.Start(_particleFiles.at(static_cast<size_t>(_particleFile)), point, _magnitude, _synced)
 		                    : particles.Start(_particleType, point, _magnitude, _synced);
 		particles.SetPlayer(id, _player);
+		particles.SetDrawPath(id, _drawPath);
+		GiveNearestTargets(id, point);
 		if (id != ecs::systems::ParticleSystemInterface::k_NoEffect && _closeAfter > 0.0f)
 		{
 			_timedEffects.push_back({id, _closeAfter});
@@ -157,7 +191,43 @@ void Magic::DrawParticles() noexcept
 		}
 	}
 	ImGui::Separator();
+	DrawParticleStats();
 	DrawRunningEffects();
+}
+
+void Magic::DrawParticleStats() const noexcept
+{
+	const auto stats = Locator::particleSystem::value().GetDrawStats();
+	ImGui::Text("Drawn: %zu sprites, %zu ribbons, %zu models, %zu mists, %zu light maps, from %zu effects", stats.sprites,
+	            stats.chains, stats.meshes, stats.mists, stats.lightStamps, stats.effects);
+}
+
+void Magic::GiveNearestTargets(uint32_t effect, const glm::vec3& origin) const noexcept
+{
+	if (_targets <= 0 || !Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<std::pair<float, entt::entity>> nearest;
+	const auto add = [&nearest, &origin](entt::entity entity, const ecs::components::Transform& transform) {
+		nearest.emplace_back(glm::distance(transform.position, origin), entity);
+	};
+	registry.Each<const ecs::components::Creature, const ecs::components::Transform>(
+	    [&add](entt::entity entity, const ecs::components::Creature&, const ecs::components::Transform& transform) {
+		    add(entity, transform);
+	    });
+	registry.Each<const ecs::components::Villager, const ecs::components::Transform>(
+	    [&add](entt::entity entity, const ecs::components::Villager&, const ecs::components::Transform& transform) {
+		    add(entity, transform);
+	    });
+	std::ranges::sort(nearest, {}, &std::pair<float, entt::entity>::first);
+	const auto count = std::min(nearest.size(), static_cast<size_t>(_targets));
+	// The rules take the last given first: the nearest goes last
+	for (size_t i = count; i > 0; --i)
+	{
+		Locator::particleSystem::value().AddTarget(effect, nearest.at(i - 1).second);
+	}
 }
 
 void Magic::DrawRunningEffects() noexcept
@@ -165,11 +235,12 @@ void Magic::DrawRunningEffects() noexcept
 	auto& particles = Locator::particleSystem::value();
 	const auto effects = particles.GetEffects();
 	ImGui::Text("%zu running", effects.size());
-	if (!ImGui::BeginTable("ParticleEffects", 6, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY))
+	if (!ImGui::BeginTable("ParticleEffects", 7, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY))
 	{
 		return;
 	}
 	ImGui::TableSetupColumn("File");
+	ImGui::TableSetupColumn("Drawn");
 	ImGui::TableSetupColumn("Age");
 	ImGui::TableSetupColumn("Atoms");
 	ImGui::TableSetupColumn("Groups");
@@ -192,9 +263,23 @@ void Magic::DrawRunningEffects() noexcept
 			ImGui::SetTooltip("%s", list.c_str());
 		}
 		ImGui::TableNextColumn();
+		// Click to draw it the next way
+		if (ImGui::SmallButton(particles::draw::k_DrawPathNames.at(static_cast<size_t>(effect.path)).data()))
+		{
+			const auto next = (static_cast<size_t>(effect.path) + 1) % particles::draw::k_DrawPathNames.size();
+			particles.SetDrawPath(effect.id, static_cast<particles::draw::DrawPath>(next));
+		}
+		ImGui::TableNextColumn();
 		ImGui::Text("%.1f s", effect.age);
 		ImGui::TableNextColumn();
-		ImGui::Text("%zu", effect.atoms);
+		if (effect.targets > 0)
+		{
+			ImGui::Text("%zu (%zu to act on)", effect.atoms, effect.targets);
+		}
+		else
+		{
+			ImGui::Text("%zu", effect.atoms);
+		}
 		ImGui::TableNextColumn();
 		ImGui::Text("%zu", effect.collections);
 		ImGui::TableNextColumn();

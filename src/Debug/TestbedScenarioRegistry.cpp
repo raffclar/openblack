@@ -1514,6 +1514,87 @@ void AddParticles(std::vector<Scenario>& all)
 	          .restartSeconds = 4.0f},
 	         {.type = ParticleType::ForestCreated, .offset = {30.0f, 0.0f}, .magnitude = 1.0f, .restartSeconds = 6.0f}},
 	});
+
+	all.push_back({
+	    .id = "particles.models",
+	    .name = "Models among the sparks",
+	    .facet = Facet::Particles,
+	    .description = "Effects whose particles are models: the vortex rising where a magic object is made, the glowing "
+	                   "cone of the beam marking a place, the paper streamers of the ticker tape and the fireball's flash.",
+	    .expected = "A spinning additive vortex model rises and fades; a glowing cone turns to face the camera wherever it "
+	                "looks from; coloured streamers fall from a disk; the flash's model plays through its texture's frames.",
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, 0.0f}, {30.0f, 0.0f}}, .distance = 0.4f},
+	    .particles = {{.file = "SF_MagicObjectCreated2", .offset = {-30.0f, 0.0f}, .magnitude = 2.0f, .restartSeconds = 5.0f},
+	                  {.file = "SF_SeeThisBeam", .offset = {-10.0f, 0.0f}, .magnitude = 1.0f, .restartSeconds = 6.0f},
+	                  {.file = "SF_TickerTape", .offset = {10.0f, 0.0f}, .height = 15.0f, .restartSeconds = 6.0f},
+	                  {.file = "SF_Flash", .offset = {30.0f, 0.0f}, .height = 3.0f, .magnitude = 2.0f, .restartSeconds = 3.0f}},
+	});
+
+	all.push_back({
+	    .id = "particles.light_maps",
+	    .name = "Light on the land",
+	    .facet = Facet::Particles,
+	    .description = "Effects that light the ground under them, as fire and lightning do, at night so the light shows: "
+	                   "the ground effect's ring and the light a landscape vortex leaves, each many cells across.",
+	    .expected = "A ring of light spreads over the ground and fades, again and again; a steady pool of coloured light "
+	                "lies on the ground beside it, lighting what stands there too.",
+	    .environment = {.hour = 23.0f},
+	    .framing = {.shot = Shot::Overview, .include = {{-120.0f, 0.0f}, {120.0f, 0.0f}}, .distance = 0.4f},
+	    .particles = {{.file = "SF_GroundEffect", .offset = {-70.0f, 0.0f}, .magnitude = 2.0f, .restartSeconds = 4.0f},
+	                  {.file = "SF_LandscapeVortexLightMap", .offset = {70.0f, 0.0f}}},
+	});
+
+	all.push_back({
+	    .id = "particles.mist",
+	    .name = "Mist over the holders",
+	    .facet = Facet::Particles,
+	    .description = "The water and storm miracles' mists, as they sit over a holder, and the water miracle in the hand.",
+	    .expected = "Puffs of mist, shaped wider than tall, turn to face the camera, shrink seen edge on and grow seen from "
+	                "above, and play through their frames of the smoke texture.",
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 0.0f}, {20.0f, 0.0f}}, .distance = 0.3f},
+	    .particles = {{.file = "SF_WaterOnHolder", .offset = {-15.0f, 0.0f}, .height = 4.0f, .magnitude = 3.0f},
+	                  {.file = "SF_LightningStormOnHolder", .offset = {0.0f, 0.0f}, .height = 4.0f, .magnitude = 3.0f},
+	                  {.file = "SF_WaterInHand", .offset = {15.0f, 0.0f}, .height = 4.0f, .magnitude = 3.0f}},
+	});
+
+	all.push_back({
+	    .id = "particles.symbols_and_heal",
+	    .name = "Player symbols and the heal chakra",
+	    .facet = Facet::Particles,
+	    .description = "The player icon fountain throwing up the casting player's symbol in each player's colour, and the "
+	                   "heal miracle's chakra over two creatures.",
+	    .expected = "Symbols between two glows of the player's colour, one turning, arc up out of each fountain and fade; "
+	                "a chakra appears over each creature and follows it, a burst of sparks under it rising and fading.",
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, 0.0f}, {30.0f, 0.0f}}, .distance = 0.45f},
+	    .creatures = {{.offset = {15.0f, 0.0f}}, {.offset = {30.0f, 5.0f}}},
+	    .particles = {{.file = "SF_PlayerIconFountain", .offset = {-30.0f, 0.0f}, .magnitude = 2.0f, .player = 0},
+	                  {.file = "SF_PlayerIconFountain", .offset = {-15.0f, 0.0f}, .magnitude = 2.0f, .player = 1},
+	                  {.file = "SF_HealChakra",
+	                   .targetsCreatures = true,
+	                   .offset = {22.0f, 0.0f},
+	                   .magnitude = 2.0f,
+	                   .restartSeconds = 6.0f}},
+	});
+
+	all.push_back({
+	    .id = "particles.draw_paths",
+	    .name = "Sorted and queued sprites",
+	    .facet = Facet::Particles,
+	    .description = "The same smoke drawn three ways side by side: each puff in its own place among what blends, the "
+	                   "whole effect at its origin as some spot visuals are, and as the miracle in the hand is.",
+	    .expected = "The sorted smoke's puffs blend far to near from any side; the queued smoke draws newest first as one, "
+	                "so seen from above older puffs cover newer ones; the third matches the queued without a hand.",
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 0.0f}, {20.0f, 0.0f}}, .distance = 0.3f},
+	    .particles = {{.type = ParticleType::Smoke, .offset = {-20.0f, 0.0f}, .magnitude = 8.0f},
+	                  {.type = ParticleType::Smoke,
+	                   .path = particles::draw::DrawPath::Queued,
+	                   .offset = {0.0f, 0.0f},
+	                   .magnitude = 8.0f},
+	                  {.type = ParticleType::Smoke,
+	                   .path = particles::draw::DrawPath::Immediate,
+	                   .offset = {20.0f, 0.0f},
+	                   .magnitude = 8.0f}},
+	});
 }
 
 std::vector<Scenario> Build()
@@ -1744,9 +1825,13 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 	}
 	for (const auto& particle : scenario.particles)
 	{
-		if (particles::ParticleTypeFile(particle.type).empty())
+		if (particle.file.empty() && particles::ParticleTypeFile(particle.type).empty())
 		{
 			problems.emplace_back("a particle type that has no file");
+		}
+		if (particle.targetsCreatures && scenario.creatures.empty())
+		{
+			problems.emplace_back("a particle effect given creatures to act on, without creatures");
 		}
 		if (particle.magnitude < 0.0f || particle.restartSeconds < 0.0f)
 		{

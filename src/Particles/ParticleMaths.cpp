@@ -92,6 +92,17 @@ std::array<uint8_t, 4> maths::TintWithPlayerColour(std::array<uint8_t, 4> rgba, 
 	        static_cast<uint8_t>((rgba[2] * channels[2]) >> 8u), static_cast<uint8_t>((rgba[3] * 255u) >> 8u)};
 }
 
+float maths::ChakraFade(float age, float ageMax, float ageZero)
+{
+	const float t = age < ageMax ? age / ageMax : 1.0f - ((age - ageMax) / (ageZero - ageMax));
+	// Not a number, as at an age of 0 with no rise, counts as nothing
+	if (!(t > 0.0f))
+	{
+		return 0.0f;
+	}
+	return std::min(t, 1.0f);
+}
+
 int maths::SoundSizeFromRadius(float radius, float small, float medium)
 {
 	if (radius < small)

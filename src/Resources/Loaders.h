@@ -42,7 +42,8 @@ class L3DFile;
 namespace openblack::psys
 {
 struct ParticleFile;
-}
+struct StackedBitmap;
+} // namespace openblack::psys
 
 namespace openblack::pack
 {
@@ -164,6 +165,19 @@ struct LightLoader final: BaseLoader<Lights>
 struct ParticleFileLoader final: BaseLoader<psys::ParticleFile>
 {
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& directory, const std::string& name) const;
+};
+
+/// A particle light map: a file of frames of pitch by pitch texels of `channels` bytes, laid out in a grid
+struct ParticleBitmapLoader final: BaseLoader<psys::StackedBitmap>
+{
+	struct Layout
+	{
+		int pitch;
+		int channels;
+		int framesInFile;
+		int framesInUse;
+	};
+	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path, const Layout& layout) const;
 };
 
 struct CameraPathLoader final: BaseLoader<CameraPath>

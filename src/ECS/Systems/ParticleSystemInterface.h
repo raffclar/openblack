@@ -21,8 +21,8 @@
 #include <glm/vec3.hpp>
 
 #include "Enums.h"
+#include "Particles/ParticleDrawFrame.h"
 #include "Particles/ParticleSpellLink.h"
-#include "Particles/ParticleSprites.h"
 
 namespace openblack::particles
 {
@@ -33,7 +33,7 @@ namespace openblack::ecs::systems
 {
 
 /// The running particle effects: those miracles own and step themselves, the spot visuals scripts and the game place for
-/// a time, and any other effect, stepped once a game turn. Their sprites are drawn between the turns.
+/// a time, and any other effect, stepped once a game turn. What they draw is gathered between the turns.
 class ParticleSystemInterface
 {
 public:
@@ -41,23 +41,15 @@ public:
 	using EffectId = uint32_t;
 	static constexpr EffectId k_NoEffect = 0;
 
-	/// The sprites of one effect that share a sheet and a way of blending, for one instanced draw
-	struct SpriteBatch
+	/// How many things the last collected frame drew, for the debug window
+	struct DrawStats
 	{
-		entt::id_type texture;
-		entt::id_type alphaTexture;
-		graphics::render_modes::Mode mode;
-		/// Where it takes its place among the things that blend: its effect's origin
-		glm::vec3 sortPoint;
-		/// Its sprites in the frame's list, the farthest from the camera first
-		uint32_t first;
-		uint32_t count;
-	};
-	/// Every sprite to draw this frame
-	struct SpriteFrame
-	{
-		std::vector<particles::sprites::SpriteInstance> instances;
-		std::vector<SpriteBatch> batches;
+		size_t sprites;
+		size_t chains;
+		size_t meshes;
+		size_t mists;
+		size_t lightStamps;
+		size_t effects;
 	};
 
 	/// What the debug window shows of an effect
@@ -71,6 +63,9 @@ public:
 		size_t collections;
 		bool closing;
 		bool ownedBySpell;
+		particles::draw::DrawPath path;
+		/// Objects given to it that its rules haven't taken yet
+		size_t targets;
 		/// Seconds left of a spot visual's life, none for one that lasts until it is closed
 		std::optional<float> secondsLeft;
 		std::vector<std::string> unportedClasses;
@@ -95,6 +90,10 @@ public:
 
 	virtual void SetOrigin(EffectId id, glm::vec3 origin) = 0;
 	virtual void SetPlayer(EffectId id, int player) = 0;
+	/// How the effect is drawn: sorted with everything else that blends unless told otherwise
+	virtual void SetDrawPath(EffectId id, particles::draw::DrawPath path) = 0;
+	/// An object for the effect's rules to act on, such as a person for the heal miracle's chakra
+	virtual void AddTarget(EffectId id, entt::entity target) = 0;
 	/// The effect stops making particles and fades out as its file has it, or goes at once
 	virtual void CloseDown(EffectId id) = 0;
 	virtual void Delete(EffectId id) = 0;
@@ -106,8 +105,10 @@ public:
 	/// A new land: every effect goes
 	virtual void Reset() = 0;
 
-	/// The sprites drawn this frame, t of the way through the game turn, sorted from the camera
-	[[nodiscard]] virtual SpriteFrame CollectSprites(float turnFraction, const glm::vec3& camera) const = 0;
+	/// Everything the effects draw this frame, t of the way through the game turn, into a frame that is cleared first.
+	/// The frame doesn't depend on the camera: each pass orders it for its own (particles::draw::Order).
+	virtual void CollectDrawFrame(float turnFraction, particles::draw::Frame& frame) const = 0;
+	[[nodiscard]] virtual DrawStats GetDrawStats() const = 0;
 	[[nodiscard]] virtual std::vector<EffectInfo> GetEffects() const = 0;
 	/// The particle files' names, for the debug window
 	[[nodiscard]] virtual std::vector<std::string> GetFileNames() const = 0;

@@ -20,6 +20,7 @@
 
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "Particles/ParticleClassRegistry.h"
+#include "Particles/ParticleCreators.h"
 #include "Particles/ParticleEffect.h"
 #include "Particles/ParticleMaths.h"
 
@@ -30,7 +31,7 @@
 namespace openblack::ecs::systems
 {
 
-/// The particle effects' world: the land's height, the players' colours and the camera
+/// The particle effects' world: the land's height, the players' colours, the camera and the objects miracles act on
 class GameParticleWorld final: public particles::ParticleWorldInterface
 {
 public:
@@ -38,6 +39,28 @@ public:
 	[[nodiscard]] uint32_t PlayerColour(int player) const override;
 	[[nodiscard]] glm::vec3 CameraRight() const override;
 	[[nodiscard]] glm::vec3 CameraUp() const override;
+	[[nodiscard]] std::optional<TargetInfo> Target(entt::entity target, bool centre) const override;
+	[[nodiscard]] bool IsTargetHeld(entt::entity target) const override;
+	[[nodiscard]] bool IsTargetClaimed(entt::entity target) const override { return _claimed.contains(target); }
+	void ClaimTarget(entt::entity target, bool claimed) override;
+	void Reset() { _claimed.clear(); }
+
+private:
+	std::set<entt::entity> _claimed;
+};
+
+/// The models and light maps of the particle creators, found by their names and loaded once through the resource caches
+class GameCreatorResources final: public particles::CreatorResourcesInterface
+{
+public:
+	[[nodiscard]] std::optional<entt::id_type> MeshByName(std::string_view name) override;
+	[[nodiscard]] std::optional<entt::id_type> MeshByFile(std::string_view path) override;
+	[[nodiscard]] std::optional<entt::id_type> LightMap(std::string_view path, int pitch, int channels, int framesInFile,
+	                                                    int framesInUse) override;
+
+private:
+	/// The game's list of models by name, read when first needed
+	std::optional<std::map<std::string, int32_t, std::less<>>> _meshNames;
 };
 
 class ParticleSystem final: public ParticleSystemInterface
@@ -60,6 +83,8 @@ public:
 
 	void SetOrigin(EffectId id, glm::vec3 origin) override;
 	void SetPlayer(EffectId id, int player) override;
+	void SetDrawPath(EffectId id, particles::draw::DrawPath path) override;
+	void AddTarget(EffectId id, entt::entity target) override;
 	void CloseDown(EffectId id) override;
 	void Delete(EffectId id) override;
 	[[nodiscard]] bool IsRunning(EffectId id) const override;
@@ -68,7 +93,8 @@ public:
 	void ProcessTurn() override;
 	void Reset() override;
 
-	[[nodiscard]] SpriteFrame CollectSprites(float turnFraction, const glm::vec3& camera) const override;
+	void CollectDrawFrame(float turnFraction, particles::draw::Frame& frame) const override;
+	[[nodiscard]] DrawStats GetDrawStats() const override { return _drawStats; }
 	[[nodiscard]] std::vector<EffectInfo> GetEffects() const override;
 	[[nodiscard]] std::vector<std::string> GetFileNames() const override;
 	void SetPaused(bool paused) override { _paused = paused; }
@@ -86,6 +112,7 @@ private:
 		std::optional<int> turnsLeft;
 		/// An object it follows and ends with
 		entt::entity owner {entt::null};
+		particles::draw::DrawPath path {particles::draw::DrawPath::Sorted};
 	};
 
 	std::deque<Running>::iterator FindRunning(EffectId id);
@@ -95,6 +122,7 @@ private:
 	/// The sheets its sprites are drawn from, looked up whatever case the files spell their names in
 	void ResolveTextures(const particles::Effect& effect);
 
+	GameCreatorResources _resources;
 	particles::ParticleClassRegistry _classes;
 	GameParticleWorld _world;
 	particles::maths::ValueNoise _noise;
@@ -108,6 +136,9 @@ private:
 	std::map<std::string, std::string, std::less<>> _textureStems;
 	/// The particle classes already reported as not run yet
 	std::set<std::string, std::less<>> _reportedUnported;
+	/// What the last collected frame drew, and its walk, kept for its room
+	mutable DrawStats _drawStats {};
+	mutable particles::Effect::DrawWalk _walk;
 };
 
 } // namespace openblack::ecs::systems

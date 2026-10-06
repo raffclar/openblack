@@ -14,20 +14,26 @@
 #include <algorithm>
 #include <chrono>
 
+#include <EnumHeader.h>
 #include <ParticleFile.h>
+#include <StackedBitmap.h>
 #include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/AllMeshes.h"
 #include "3D/InfluenceCircle.h"
+#include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "Camera/Camera.h"
+#include "Common/GameRandom.h"
 #include "Common/StringUtils.h"
+#include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Graphics/ZSort.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Particles/ParticleTypes.h"
@@ -54,6 +60,25 @@ entt::id_type ParticleFileId(std::string_view name)
 {
 	return entt::hashed_string(fmt::format("particles/{}", name).c_str());
 }
+
+/// A path as the effect files give it, under the game's data folder, folders split by forward slashes
+std::filesystem::path DataRelative(std::string_view path)
+{
+	std::string name(path);
+	std::ranges::replace(name, '\\', '/');
+	if (name.starts_with("./"))
+	{
+		name.erase(0, 2);
+	}
+	if (string_utils::LowerCase(name).starts_with("data/"))
+	{
+		name.erase(0, 5);
+	}
+	return name;
+}
+
+/// The sheets the players' symbols are drawn with, whatever effect first shows one
+constexpr std::array<std::string_view, 2> k_SymbolTextures {"S_SpriteSheet3", "ChooseSymbol"};
 } // namespace
 
 float GameParticleWorld::LandHeight(glm::vec2 xz) const
@@ -76,8 +101,142 @@ glm::vec3 GameParticleWorld::CameraUp() const
 	return Locator::camera::has_value() ? Locator::camera::value().GetUp() : glm::vec3(0.0f, 1.0f, 0.0f);
 }
 
+std::optional<particles::ParticleWorldInterface::TargetInfo> GameParticleWorld::Target(entt::entity target, bool centre) const
+{
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(target))
+	{
+		return std::nullopt;
+	}
+	const auto* transform = registry.TryGet<ecs::components::Transform>(target);
+	if (transform == nullptr)
+	{
+		return std::nullopt;
+	}
+	// Its size from its model's box, scaled as it stands
+	TargetInfo info {.position = transform->position, .radius = 1.0f, .height = 1.0f};
+	if (const auto* mesh = registry.TryGet<ecs::components::Mesh>(target);
+	    mesh != nullptr && Locator::resources::has_value() && Locator::resources::value().GetMeshes().Contains(mesh->id))
+	{
+		const auto box = Locator::resources::value().GetMeshes().Handle(mesh->id)->GetBoundingBox();
+		const auto size = box.Size() * transform->scale;
+		info.radius = std::max(size.x, size.z) * 0.5f;
+		info.height = size.y;
+	}
+	if (centre)
+	{
+		info.position.y += info.height * 0.5f;
+	}
+	return info;
+}
+
+bool GameParticleWorld::IsTargetHeld(entt::entity target) const
+{
+	return Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == target;
+}
+
+void GameParticleWorld::ClaimTarget(entt::entity target, bool claimed)
+{
+	if (claimed)
+	{
+		_claimed.insert(target);
+	}
+	else
+	{
+		_claimed.erase(target);
+	}
+}
+
+std::optional<entt::id_type> GameCreatorResources::MeshByName(std::string_view name)
+{
+	if (!_meshNames.has_value())
+	{
+		_meshNames.emplace();
+		if (Locator::filesystem::has_value())
+		{
+			auto& fileSystem = Locator::filesystem::value();
+			const auto path = fileSystem.GetPath<filesystem::Path::Data>() / "AllMeshes.h";
+			if (fileSystem.Exists(path))
+			{
+				const auto bytes = fileSystem.ReadAll(path);
+				*_meshNames =
+				    psys::ParseEnumHeader(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+			}
+		}
+	}
+	const auto found = _meshNames->find(name);
+	if (found == _meshNames->end() || found->second <= 0 || found->second >= static_cast<int32_t>(MeshId::_COUNT))
+	{
+		return std::nullopt;
+	}
+	return resources::HashIdentifier(static_cast<MeshId>(found->second));
+}
+
+std::optional<entt::id_type> GameCreatorResources::MeshByFile(std::string_view path)
+{
+	if (!Locator::resources::has_value() || !Locator::filesystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto relative = DataRelative(path);
+	const auto id = entt::hashed_string(("particles/" + string_utils::LowerCase(relative.generic_string())).c_str()).value();
+	auto& meshes = Locator::resources::value().GetMeshes();
+	if (meshes.Contains(id))
+	{
+		return id;
+	}
+	auto& fileSystem = Locator::filesystem::value();
+	try
+	{
+		meshes.Load(id, resources::L3DLoader::FromDiskTag {},
+		            fileSystem.FindPath(fileSystem.GetPath<filesystem::Path::Data>() / relative));
+	}
+	catch (const std::exception& error)
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Particles: cannot load the model {}: {}", path, error.what());
+		return std::nullopt;
+	}
+	return id;
+}
+
+std::optional<entt::id_type> GameCreatorResources::LightMap(std::string_view path, int pitch, int channels, int framesInFile,
+                                                            int framesInUse)
+{
+	if (!Locator::resources::has_value() || !Locator::filesystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto relative = DataRelative(path);
+	const auto key = fmt::format("particles/{}/{}/{}/{}/{}", string_utils::LowerCase(relative.generic_string()), pitch,
+	                             channels, framesInFile, framesInUse);
+	const auto id = entt::hashed_string(key.c_str()).value();
+	auto& bitmaps = Locator::resources::value().GetParticleBitmaps();
+	if (bitmaps.Contains(id))
+	{
+		return id;
+	}
+	auto& fileSystem = Locator::filesystem::value();
+	try
+	{
+		bitmaps.Load(id, resources::ParticleBitmapLoader::FromDiskTag {},
+		             fileSystem.FindPath(fileSystem.GetPath<filesystem::Path::Data>() / relative),
+		             resources::ParticleBitmapLoader::Layout {
+		                 .pitch = pitch, .channels = channels, .framesInFile = framesInFile, .framesInUse = framesInUse});
+	}
+	catch (const std::exception& error)
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Particles: cannot load the light map {}: {}", path, error.what());
+		return std::nullopt;
+	}
+	return id;
+}
+
 ParticleSystem::ParticleSystem()
-    : _classes(particles::ParticleClassRegistry::WithAllClasses())
+    : _classes(particles::ParticleClassRegistry::WithAllClasses(&_resources))
 {
 }
 
@@ -188,6 +347,8 @@ ParticleSystemInterface::EffectId ParticleSystem::StartSpotVisual(SpotVisualType
 	{
 		it->turnsLeft = turns.value_or(static_cast<int>(info.life));
 		it->owner = owner;
+		// Some are drawn all together at their origin rather than each sprite in its own place
+		it->path = info.singleZSort == 1 ? particles::draw::DrawPath::Queued : particles::draw::DrawPath::Sorted;
 	}
 	return id;
 }
@@ -205,6 +366,22 @@ void ParticleSystem::SetPlayer(EffectId id, int player)
 	if (const auto it = FindRunning(id); it != _effects.end())
 	{
 		it->effect->SetPlayer(player);
+	}
+}
+
+void ParticleSystem::SetDrawPath(EffectId id, particles::draw::DrawPath path)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->path = path;
+	}
+}
+
+void ParticleSystem::AddTarget(EffectId id, entt::entity target)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->effect->AddTarget(target);
 	}
 }
 
@@ -292,6 +469,7 @@ void ParticleSystem::ProcessTurn()
 void ParticleSystem::Reset()
 {
 	_effects.clear();
+	_world.Reset();
 }
 
 void ParticleSystem::ResolveTextures(const particles::Effect& effect)
@@ -307,72 +485,69 @@ void ParticleSystem::ResolveTextures(const particles::Effect& effect)
 			}
 		});
 	}
+	const auto resolve = [this](std::string_view texture) {
+		if (texture.empty() || _textures.contains(texture))
+		{
+			return;
+		}
+		// The files don't always spell a sheet's name as it is on disk
+		const auto found = _textureStems.find(string_utils::LowerCase(std::string(texture)));
+		const auto stem = found != _textureStems.end() ? found->second : std::string(texture);
+		_textures.insert_or_assign(std::string(texture),
+		                           std::pair {entt::hashed_string(fmt::format("raw/{}", stem).c_str()).value(),
+		                                      entt::hashed_string(fmt::format("raw/{}a", stem).c_str()).value()});
+	};
 	for (const auto& object : effect.GetFile().objects)
 	{
 		const auto* creator = effect.FindCreator(object.name);
-		if (creator == nullptr || creator->kind != particles::Creator::Kind::Sprite || _textures.contains(creator->texture))
+		if (creator == nullptr)
 		{
 			continue;
 		}
-		// The files don't always spell a sheet's name as it is on disk
-		const auto found = _textureStems.find(string_utils::LowerCase(creator->texture));
-		const auto stem = found != _textureStems.end() ? found->second : creator->texture;
-		_textures.insert_or_assign(creator->texture,
-		                           std::pair {entt::hashed_string(fmt::format("raw/{}", stem).c_str()).value(),
-		                                      entt::hashed_string(fmt::format("raw/{}a", stem).c_str()).value()});
+		if (creator->kind == particles::Creator::Kind::Sprite || creator->kind == particles::Creator::Kind::Chain)
+		{
+			resolve(creator->texture);
+		}
+		else if (creator->kind == particles::Creator::Kind::Symbol)
+		{
+			std::ranges::for_each(k_SymbolTextures, resolve);
+		}
 	}
 }
 
-ParticleSystemInterface::SpriteFrame ParticleSystem::CollectSprites(float turnFraction, const glm::vec3& camera) const
+void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame& frame) const
 {
-	SpriteFrame frame;
-	std::vector<particles::Effect::DrawAtom> atoms;
-	struct Sorted
-	{
-		float key;
-		particles::sprites::SpriteInstance instance;
-		const particles::Creator* creator;
+	frame.Clear();
+	const particles::draw::Sources sources {
+	    .textures = [this](std::string_view texture) -> std::optional<std::pair<entt::id_type, entt::id_type>> {
+		    const auto found = _textures.find(texture);
+		    if (found == _textures.end())
+		    {
+			    return std::nullopt;
+		    }
+		    return found->second;
+	    },
+	    .playerColour = [this](int player) { return _world.PlayerColour(player); },
+	    .random =
+	        [](float range) {
+		        return Locator::gameRandom::has_value() ? Locator::gameRandom::value().LocalFloatRand(range) : 0.0f;
+	        },
 	};
-	std::vector<Sorted> sorted;
 	for (const auto& running : _effects)
 	{
-		atoms.clear();
-		sorted.clear();
-		// Each effect has batches of its own, sorted among the other things that blend by their farthest sprite
-		const auto effectFirstBatch = frame.batches.size();
-		running.effect->Collect(turnFraction, atoms, particles::Creator::Kind::Sprite);
-		for (const auto& atom : atoms)
-		{
-			const auto instance = particles::sprites::InstanceOf(atom);
-			sorted.push_back({graphics::zsort::Key(glm::vec3(instance.positionHalfWidth), camera), instance, atom.creator});
-		}
-		// The farthest first, so they blend over one another in order
-		std::ranges::stable_sort(sorted, std::greater {}, &Sorted::key);
-		for (const auto& sprite : sorted)
-		{
-			const auto texture = _textures.find(sprite.creator->texture);
-			if (texture == _textures.end())
-			{
-				continue;
-			}
-			const auto mode = particles::sprites::RenderMode(*sprite.creator);
-			if (frame.batches.size() == effectFirstBatch || frame.batches.back().texture != texture->second.first ||
-			    frame.batches.back().mode != mode)
-			{
-				frame.batches.push_back({
-				    .texture = texture->second.first,
-				    .alphaTexture = texture->second.second,
-				    .mode = mode,
-				    .sortPoint = glm::vec3(sprite.instance.positionHalfWidth),
-				    .first = static_cast<uint32_t>(frame.instances.size()),
-				    .count = 0,
-				});
-			}
-			frame.instances.push_back(sprite.instance);
-			++frame.batches.back().count;
-		}
+		_walk.Clear();
+		running.effect->Walk(turnFraction, _walk);
+		particles::draw::AddEffect(frame, _walk, running.path, running.effect->GetOrigin(), running.effect->GetPlayer(),
+		                           sources);
 	}
-	return frame;
+	_drawStats = {
+	    .sprites = frame.sprites.size(),
+	    .chains = frame.chains.size(),
+	    .meshes = frame.meshes.size(),
+	    .mists = frame.mists.size(),
+	    .lightStamps = frame.lightStamps.size(),
+	    .effects = frame.groups.size(),
+	};
 }
 
 std::vector<ParticleSystemInterface::EffectInfo> ParticleSystem::GetEffects() const
@@ -396,6 +571,8 @@ std::vector<ParticleSystemInterface::EffectInfo> ParticleSystem::GetEffects() co
 		    .collections = effect.CollectionCount(),
 		    .closing = effect.Closing(),
 		    .ownedBySpell = running.ownedBySpell,
+		    .path = running.path,
+		    .targets = effect.TargetCount(),
 		    .secondsLeft = secondsLeft,
 		    .unportedClasses = effect.UnportedClasses(),
 		});

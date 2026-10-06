@@ -35,6 +35,10 @@ namespace openblack::particles::maths
 /// the colour, alpha too, is then multiplied by the matching channel of that and shifted down a byte.
 [[nodiscard]] std::array<uint8_t, 4> TintWithPlayerColour(std::array<uint8_t, 4> rgba, uint32_t playerRgb, float blend);
 
+/// How far the burst under a heal chakra has faded in at an age: rising from 0 to 1 by ageMax, then back to 0 by
+/// ageZero, held within 0..1
+[[nodiscard]] float ChakraFade(float age, float ageMax, float ageZero);
+
 /// How big a sound is by how far its effect reaches: 3 (small) under the small radius, 2 (medium) under the medium one,
 /// else 1 (large)
 [[nodiscard]] int SoundSizeFromRadius(float radius, float small, float medium);

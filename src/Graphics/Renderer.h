@@ -32,6 +32,7 @@
 #include "Graphics/HandShadow.h"
 #include "Graphics/RenderPass.h"
 #include "Graphics/RendererInterface.h"
+#include "Particles/ParticleDrawFrame.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
@@ -112,8 +113,17 @@ private:
 	void DrawSnowfall(const DrawSceneDesc& desc) const;
 	/// The smoke from the homes' chimneys, each in its place among what blends, in the main view
 	void DrawChimneySmoke(const DrawSceneDesc& desc) const;
-	/// The particle effects' sprites, one instanced draw for each run of an effect's sprites on the same sheet
+	/// Gathers what the particle effects draw this frame, once for every pass
+	void CollectParticles() const;
+	/// The particle effects in the order the camera of the pass draws them, among the other things that blend: runs of
+	/// sprites that share a sheet as one instanced draw, ribbons, models and mists
 	void DrawParticles(const DrawSceneDesc& desc) const;
+	/// A particle's mist, in the translucent pass at a place among what blends
+	void DrawParticleMist(const DrawSceneDesc& desc, const particles::draw::MistDraw& mist, uint32_t depth) const;
+	/// A particle's model, in the translucent pass at a place among what blends
+	void DrawParticleMesh(const DrawSceneDesc& desc, const particles::draw::MeshDraw& mesh, uint32_t depth) const;
+	/// A frame of a particle light map as a texture of its colours, made when first stamped
+	[[nodiscard]] const Texture2D* ParticleLightMap(entt::id_type bitmap, int frame) const;
 	/// The border of the players' influence, in the main view
 	void DrawInfluenceBorder(const DrawSceneDesc& desc) const;
 	/// The ripples the hand makes crossing a border, each in its place among what blends, in the main view
@@ -326,6 +336,12 @@ private:
 	/// The land's light, or a texture to bind in its place before it is first built
 	[[nodiscard]] TextureHandle GetLandLightTexture() const;
 	std::unique_ptr<Mesh> _plane;
+	/// What the particle effects draw this frame, and the order of the pass being drawn, kept for their room
+	mutable particles::draw::Frame _particleFrame;
+	mutable std::vector<particles::draw::Command> _particleCommands;
+	mutable std::vector<uint32_t> _particleSpriteOrder;
+	/// The particle light maps' frames stamped so far, by light map and frame
+	mutable std::unordered_map<uint64_t, std::unique_ptr<Texture2D>> _particleLightMaps;
 };
 } // namespace graphics
 } // namespace openblack

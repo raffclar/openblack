@@ -23,6 +23,7 @@
 #include <PackFile.h>
 #include <ParticleFile.h>
 #include <RawImage.h>
+#include <StackedBitmap.h>
 #include <bgfx/bgfx.h>
 #include <spdlog/spdlog.h>
 
@@ -705,4 +706,16 @@ ParticleFileLoader::result_type ParticleFileLoader::operator()(FromDiskTag, cons
 		throw std::runtime_error("Particle file " + name + " cannot be read");
 	}
 	return std::make_shared<psys::ParticleFile>(std::move(*file));
+}
+
+ParticleBitmapLoader::result_type ParticleBitmapLoader::operator()(FromDiskTag, const std::filesystem::path& path,
+                                                                   const Layout& layout) const
+{
+	const auto bytes = Locator::filesystem::value().ReadAll(path);
+	auto bitmap = psys::LoadStackedBitmap(bytes, layout.pitch, layout.channels, layout.framesInFile, layout.framesInUse);
+	if (!bitmap.has_value())
+	{
+		throw std::runtime_error("Light map " + path.string() + " is not the size its effect says");
+	}
+	return std::make_shared<psys::StackedBitmap>(std::move(*bitmap));
 }

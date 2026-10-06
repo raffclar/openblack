@@ -44,7 +44,8 @@ constexpr float k_MinimumHalfWidth = 1e-4f;
 /// The sprite of a drawn atom
 [[nodiscard]] SpriteInstance InstanceOf(const Effect::DrawAtom& atom);
 
-/// The game's render mode a sprite creator draws in: added to what is behind or blended over it, writing depth or not
+/// The game's render mode a sprite or ribbon creator draws in: added to what is behind or blended over it, writing depth or
+/// not
 [[nodiscard]] graphics::render_modes::Mode RenderMode(const Creator& creator);
 
 /// The four corners of a sprite in the world, as the shader places them, in the order top left, top right, bottom

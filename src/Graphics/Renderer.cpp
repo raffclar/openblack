@@ -84,7 +84,6 @@
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
@@ -464,6 +463,7 @@ Renderer::Renderer(uint32_t bgfxReset, std::unique_ptr<BgfxCallback>&& bgfxCallb
 Renderer::~Renderer() noexcept
 {
 	_creatureSkins.clear();
+	_particleLightMaps.clear();
 	_snowDepth.reset();
 	_plane.reset();
 	_morphStreamLayouts.reset();
@@ -2562,54 +2562,6 @@ void Renderer::DrawChimneySmoke(const DrawSceneDesc& desc) const
 	});
 }
 
-void Renderer::DrawParticles(const DrawSceneDesc& desc) const
-{
-	if (desc.viewId != RenderPass::Main || !Locator::particleSystem::has_value() || !Locator::time::has_value() ||
-	    (Locator::temple::has_value() && Locator::temple::value().Active()))
-	{
-		return;
-	}
-	const auto origin = desc.camera->GetOrigin();
-	const auto frame = Locator::particleSystem::value().CollectSprites(Locator::time::value().GetTurnFraction(), origin);
-	if (frame.instances.empty())
-	{
-		return;
-	}
-	const auto& textures = Locator::resources::value().GetTextures();
-	const auto* program = _shaderManager->GetShader("ParticleInstanced");
-	const auto viewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
-	constexpr auto k_Stride = static_cast<uint16_t>(sizeof(particles::sprites::SpriteInstance));
-	for (const auto& batch : frame.batches)
-	{
-		if (!textures.Contains(batch.texture) || bgfx::getAvailInstanceDataBuffer(batch.count, k_Stride) < batch.count)
-		{
-			continue;
-		}
-		bgfx::InstanceDataBuffer instances;
-		bgfx::allocInstanceDataBuffer(&instances, batch.count, k_Stride);
-		std::memcpy(instances.data, &frame.instances.at(batch.first), static_cast<size_t>(batch.count) * k_Stride);
-		const auto texture = textures.Handle(batch.texture);
-		// A sheet without an alpha of its own takes its alpha from its red
-		const auto alphaTexture = textures.Contains(batch.alphaTexture) ? textures.Handle(batch.alphaTexture) : texture;
-		program->SetTextureSampler("s_diffuse", 0, *texture);
-		program->SetTextureSampler("s_alpha", 1, *alphaTexture);
-		_plane->GetVertexBuffer().Bind();
-		bgfx::setInstanceDataBuffer(&instances);
-		// Tested against depth, both sides, added to what is behind or blended over it as the creator asks
-		const auto& mode = render_modes::Desc(batch.mode);
-		uint64_t state = BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER;
-		state |= mode.blend == render_modes::Blend::Additive
-		             ? BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE)
-		             : BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA);
-		if (mode.zWrite)
-		{
-			state |= BGFX_STATE_WRITE_Z;
-		}
-		bgfx::setState(state);
-		program->Submit(viewId, zsort::Depth(batch.sortPoint, origin));
-	}
-}
-
 void Renderer::DrawWaterRings(const DrawSceneDesc& desc) const
 {
 	if (desc.viewId != RenderPass::Main || !Locator::waterRingSystem::has_value() ||
@@ -3352,6 +3304,16 @@ void Renderer::DrawLandColourPass(const DrawSceneDesc& drawDesc) const
 		      land_colour_stamps::CentredCorner(storm.flash.position, land_colour_stamps::k_LightningSide), strength,
 		      land_colour_stamps::Combine::Add);
 	});
+
+	// The particles' light maps light the ground under them
+	for (const auto& light : _particleFrame.lightStamps)
+	{
+		if (const auto* image = ParticleLightMap(light.bitmap, light.frame))
+		{
+			stamp(image->GetNativeHandle(), light.pitch, land_colour_stamps::CentredCorner(light.centre, light.pitch),
+			      land_colour_stamps::Strength(light.strength), land_colour_stamps::Combine::Add);
+		}
+	}
 }
 
 void Renderer::DrawLandAlphaPass(const DrawSceneDesc& drawDesc) const
@@ -3734,6 +3696,8 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 		_snowTexture = textures.Find(snow_cover::k_TextureId.value());
 		_snowAlphaTexture = textures.Find(snow_cover::k_AlphaTextureId.value());
 	}
+	// What the particle effects draw, once for the land's colours and every pass
+	CollectParticles();
 	// TODO(bwrsandman): Footprint framebuffer doesn't need to be updated each frame
 	DrawLandLuminosityPass(drawDesc);
 	DrawLandColourPass(drawDesc);

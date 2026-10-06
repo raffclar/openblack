@@ -13,12 +13,15 @@
 
 #include <array>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include <ParticleFile.h>
+#include <entt/entity/entity.hpp>
+#include <glm/gtc/type_precision.hpp>
 #include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -78,6 +81,29 @@ public:
 	[[nodiscard]] virtual glm::vec3 CameraUp() const = 0;
 	/// A particle starts a sound. The miracles' sounds are not played yet: the game's world leaves this empty.
 	virtual void StartSound(const Effect& /*effect*/, const Atom& /*atom*/, const ParticleSound& /*sound*/) {}
+
+	/// Where an object a rule acts on is and how big it is
+	struct TargetInfo
+	{
+		/// Where it stands, raised by half its height when asked for its centre
+		glm::vec3 position;
+		/// Its radius across the ground and its height
+		float radius;
+		float height;
+	};
+	/// An object a miracle gave its effect, none once it has gone
+	[[nodiscard]] virtual std::optional<TargetInfo> Target(entt::entity /*target*/, bool /*centre*/) const
+	{
+		return std::nullopt;
+	}
+	/// The object is in a hand, out of the miracle's reach
+	[[nodiscard]] virtual bool IsTargetHeld(entt::entity /*target*/) const { return false; }
+	/// A glow of a colour on the object, black for none, as the heal chakra lights the healed
+	virtual void SetTargetGlow(entt::entity /*target*/, glm::u8vec3 /*rgb*/) {}
+	/// Whether some effect already acts on the object, so that two heals don't both take one person; an effect claims an
+	/// object while it acts on it
+	[[nodiscard]] virtual bool IsTargetClaimed(entt::entity /*target*/) const { return false; }
+	virtual void ClaimTarget(entt::entity /*target*/, bool /*claimed*/) {}
 };
 
 /// What every effect works with: the particle classes, the world, the random numbers and the noise
@@ -98,7 +124,17 @@ struct Creator
 		Point,
 		/// A sprite from a sprite sheet, facing the screen or lying flat
 		Sprite,
-		/// Meshes, ribbons, mists and light maps, which are not drawn yet
+		/// A model, turned and scaled with its atom
+		Mesh,
+		/// One joint of a ribbon drawn through every joint of its collection
+		Chain,
+		/// A puff of mist, the mist mesh facing the camera
+		Mist,
+		/// A light stamped on the land's colour under it
+		LightMap,
+		/// The casting player's symbol between two glows
+		Symbol,
+		/// A class the game does not draw yet
 		Other,
 	};
 
@@ -169,6 +205,8 @@ struct DrawState
 struct AtomRuleData
 {
 	bool started {false};
+	/// An object the rule follows with the atom
+	entt::entity object {entt::null};
 	glm::vec4 a {0.0f};
 	glm::vec4 b {0.0f};
 };
@@ -202,6 +240,8 @@ struct Atom
 	bool playAnim {false};
 	/// How strongly gravity pulls it
 	float gravity {1.0f};
+	/// Values its creator gives it for drawing, such as a mist's shape and where its animation starts
+	glm::vec2 creatorValue {0.0f};
 	/// A number of its own in 0..255, drawn when it is made
 	uint32_t random {0};
 	DrawState previous;
@@ -315,6 +355,11 @@ public:
 	/// Whether the miracle acted on it; false without a miracle
 	bool SendSpellEvent(const SpellEventInfo& event) const;
 	[[nodiscard]] int PowerUpLevel() const { return _sink != nullptr ? _sink->PowerUpLevel() : -1; }
+	/// The objects the miracle wants its effect to act on, such as the people to heal; the rules take them, the last
+	/// given first
+	void AddTarget(entt::entity target) { _targets.push_back(target); }
+	[[nodiscard]] std::optional<entt::entity> TakeTarget();
+	[[nodiscard]] size_t TargetCount() const { return _targets.size(); }
 	/// An effect without a miracle counts as this computer's
 	[[nodiscard]] bool IsMyInterfaceCasting() const { return _sink == nullptr || _sink->IsMyInterfaceCasting(); }
 	[[nodiscard]] bool IsHumanPlayerCasting() const { return _sink != nullptr && _sink->IsHumanPlayerCasting(); }
@@ -367,10 +412,49 @@ public:
 		float alpha;
 		float frame;
 		std::array<uint8_t, 3> rgb;
+		/// Seconds it has lived, at the drawn time
+		float age {0.0f};
+		/// Its creator's values (Atom::creatorValue)
+		glm::vec2 creatorValue {0.0f};
 	};
-	/// Every visible atom of a kind, t of the way from the last step to the current one, the collections' atoms in turn
-	/// and then those under them. Atoms faded below one step of alpha are left out.
+	/// The ribbon through the joints of one collection
+	struct DrawChain
+	{
+		const Creator* creator;
+		/// Its joints in DrawWalk::joints, the first made first
+		uint32_t firstJoint;
+		uint32_t jointCount;
+	};
+	/// Everything an effect draws, in the order the game draws it all at once: each collection's atoms, the newest first,
+	/// then its ribbon, then the collections under each of its atoms in turn, walked the same way. The newest collections
+	/// come first too.
+	struct DrawWalk
+	{
+		/// A drawn atom, or with `chain` set a ribbon, by its index in atoms or chains
+		struct Step
+		{
+			bool chain;
+			uint32_t index;
+		};
+		std::vector<DrawAtom> atoms;
+		std::vector<DrawAtom> joints;
+		std::vector<DrawChain> chains;
+		std::vector<Step> steps;
+
+		void Clear()
+		{
+			atoms.clear();
+			joints.clear();
+			chains.clear();
+			steps.clear();
+		}
+	};
+	/// Every visible atom of a kind, t of the way from the last step to the current one, in the walk's order. Atoms faded
+	/// below one step of alpha are left out.
 	void Collect(float t, std::vector<DrawAtom>& out, Creator::Kind kind = Creator::Kind::Sprite) const;
+	/// Everything drawn, t of the way from the last step to the current one, appended to the walk. A ribbon needs two
+	/// joints; its joints are drawn whatever their alpha.
+	void Walk(float t, DrawWalk& out) const;
 	[[nodiscard]] size_t AtomCount() const { return _atomCount; }
 	[[nodiscard]] size_t CollectionCount() const;
 
@@ -379,7 +463,8 @@ private:
 	void UpdateCollection(Collection& collection);
 	void PostUpdate(Collection& collection, const glm::vec3& parentPosition, const glm::mat3& parentRotation,
 	                const glm::vec3& parentScale);
-	void CollectCollection(const Collection& collection, float t, std::vector<DrawAtom>& out, Creator::Kind kind) const;
+	void WalkCollection(const Collection& collection, float t, DrawWalk& out) const;
+	[[nodiscard]] std::optional<DrawAtom> Interpolate(const Atom& atom, float t, bool interpolated) const;
 	[[nodiscard]] bool AnyCreatorLeft(const Collection& collection) const;
 	void UpdateFloatProviders();
 
@@ -407,6 +492,7 @@ private:
 	int _player {-1};
 	float _globalAlpha {255.0f};
 	glm::vec3 _direction {0.0f};
+	std::vector<entt::entity> _targets;
 };
 
 } // namespace openblack::particles

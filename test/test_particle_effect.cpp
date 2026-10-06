@@ -13,7 +13,10 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <map>
 #include <memory>
+#include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -23,6 +26,8 @@
 #include "Common/GameRandom.h"
 #include "Common/Zip.h"
 #include "Particles/ParticleClassRegistry.h"
+#include "Particles/ParticleCreators.h"
+#include "Particles/ParticleDrawFrame.h"
 #include "Particles/ParticleEffect.h"
 
 using namespace openblack;
@@ -46,8 +51,35 @@ public:
 		sounds.push_back(sound.action.sound);
 	}
 
+	[[nodiscard]] std::optional<TargetInfo> Target(entt::entity target, bool centre) const override
+	{
+		const auto found = std::ranges::find(targets, target, &std::pair<entt::entity, glm::vec3>::first);
+		if (found == targets.end())
+		{
+			return std::nullopt;
+		}
+		return TargetInfo {
+		    .position = found->second + glm::vec3(0.0f, centre ? 1.0f : 0.0f, 0.0f), .radius = 3.0f, .height = 2.0f};
+	}
+	[[nodiscard]] bool IsTargetClaimed(entt::entity target) const override { return claimed.contains(target); }
+	void ClaimTarget(entt::entity target, bool claim) override
+	{
+		if (claim)
+		{
+			claimed.insert(target);
+		}
+		else
+		{
+			claimed.erase(target);
+		}
+	}
+	void SetTargetGlow(entt::entity target, glm::u8vec3 rgb) override { glows[target] = rgb; }
+
 	float landHeight {0.0f};
 	std::vector<std::string> sounds;
+	std::vector<std::pair<entt::entity, glm::vec3>> targets;
+	std::set<entt::entity> claimed;
+	std::map<entt::entity, glm::u8vec3> glows;
 };
 
 /// The game's generator on seeds of its own
@@ -341,6 +373,161 @@ TEST_F(ParticleEffectTest, SpritesTakeThePlayersColour)
 	EXPECT_EQ(world.sounds, (std::vector<std::string> {"SOUND_POP"}));
 }
 
+TEST_F(ParticleEffectTest, ItIsWalkedNewestFirstWithRibbonsAfterTheirAtomsAndChildrenLast)
+{
+	// Group 0 makes three sprites, each carrying a group 1 collection of one sprite; its collection also holds a ribbon
+	// of two joints
+	auto effect =
+	    Make(Header() + Object("ParticleSpriteCreator", "Sprite0", k_Sprite) +
+	         Object("ParticleSpriteCreator", "Sprite1", "PROPERTY InitialScale FLOAT 7\n") +
+	         Object("ParticleChainCreator", "Chain0", "PROPERTY TextureFileName STRING S_Lightning.raw\n") +
+	         Object("EmitterRuleSimple", "Emitter0",
+	                "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Sprite0\nPROPERTY EmissionFreq FLOAT 10\n"
+	                "PROPERTY Randomise BOOL 0\nPROPERTY Speed FLOAT 0\nPROPERTY MaxTotalAtomsToEmit INTEGER 3\n"
+	                "PROPERTY NextGroups ARRAY SIZE 1 1\n") +
+	         Object("CreateRuleSphere", "Joints0",
+	                "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Chain0\nPROPERTY NumAtoms INTEGER 2\n"
+	                "PROPERTY Radius FLOAT 5\n") +
+	         Object("CreateRuleAnAtom", "Child0", "PROPERTY Group INTEGER 1\nPROPERTY PCreator PERSIS_PNTR Sprite1\n"));
+	for (int i = 0; i < 5; ++i)
+	{
+		effect->Step(k_Step);
+	}
+	Effect::DrawWalk walk;
+	effect->Walk(1.0f, walk);
+	ASSERT_EQ(walk.atoms.size(), 6u);
+	ASSERT_EQ(walk.chains.size(), 1u);
+	EXPECT_EQ(walk.chains[0].jointCount, 2u);
+	ASSERT_EQ(walk.steps.size(), 7u);
+	// The three parents, the newest first by age, then the ribbon, then the children
+	for (size_t i = 0; i < 3; ++i)
+	{
+		EXPECT_FALSE(walk.steps[i].chain);
+		EXPECT_NEAR(walk.atoms[walk.steps[i].index].scale, 2.0f, k_Epsilon);
+	}
+	EXPECT_LT(walk.atoms[walk.steps[0].index].age, walk.atoms[walk.steps[1].index].age);
+	EXPECT_LT(walk.atoms[walk.steps[1].index].age, walk.atoms[walk.steps[2].index].age);
+	EXPECT_TRUE(walk.steps[3].chain);
+	for (size_t i = 4; i < 7; ++i)
+	{
+		EXPECT_NEAR(walk.atoms[walk.steps[i].index].scale, 7.0f, k_Epsilon);
+	}
+	// The children follow their parents' order: the newest parent's first
+	EXPECT_LT(walk.atoms[walk.steps[4].index].age, walk.atoms[walk.steps[6].index].age);
+}
+
+TEST_F(ParticleEffectTest, ABurstFliesOutOnceItsFuseHasBurnt)
+{
+	auto effect = Make(Header() + Object("ParticleSpriteCreator", "Sprite0", k_Sprite) +
+	                   Object("ConstFloatProvider", "Slow", "PROPERTY ConstValue FLOAT 4\n") +
+	                   Object("ConstFloatProvider", "Fast", "PROPERTY ConstValue FLOAT 6\n") +
+	                   Object("CreateRuleFusedSphericalExplode", "Burst0",
+	                          "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Sprite0\nPROPERTY NumAtoms INTEGER 30\n"
+	                          "PROPERTY MinSpeed PERSIS_PNTR Slow\nPROPERTY MaxSpeed PERSIS_PNTR Fast\n"
+	                          "PROPERTY FuseTime FLOAT 0.25\nPROPERTY ScaleYSpeed FLOAT 2\nPROPERTY OnlyHemisphere BOOL 1\n"));
+	effect->Step(k_Step);
+	effect->Step(k_Step);
+	EXPECT_EQ(effect->AtomCount(), 0u);
+	effect->Step(k_Step);
+	effect->Step(k_Step);
+	ASSERT_EQ(effect->AtomCount(), 30u);
+	effect->Step(k_Step);
+	// Only once, all upwards, at one speed between the two with the height doubled
+	EXPECT_EQ(effect->AtomCount(), 30u);
+}
+
+TEST_F(ParticleEffectTest, AHealChakraFollowsEachTargetAndLightsIt)
+{
+	constexpr auto k_Villager = static_cast<entt::entity>(5);
+	constexpr auto k_Gone = static_cast<entt::entity>(6);
+	world.targets = {{k_Villager, {10.0f, 0.0f, 20.0f}}};
+	FakeSpell spell;
+	auto effect = Make(
+	    Header() + Object("ParticlePointCreator", "Point0", "") + Object("ParticleSpriteCreator", "Sprite0", k_Sprite) +
+	    Object(
+	        "UR_HealSpellChakra", "Heal0",
+	        "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Point0\nPROPERTY NextGroups ARRAY SIZE 1 1\n"
+	        "PROPERTY TakeCentrePos BOOL 1\nPROPERTY ScalePropObjectSize BOOL 1\nPROPERTY MaxAlpha FLOAT 200\n"
+	        "PROPERTY AtomAgeMaxAlpha FLOAT 0.5\nPROPERTY AtomAgeZeroAlpha FLOAT 1.5\nPROPERTY SpecularColorR INTEGER 100\n") +
+	    Object("CreateRuleSphere", "Burst0",
+	           "PROPERTY Group INTEGER 1\nPROPERTY PCreator PERSIS_PNTR Sprite0\nPROPERTY NumAtoms INTEGER 4\n"));
+	effect->SetSink(&spell);
+	effect->AddTarget(k_Gone);
+	effect->AddTarget(k_Villager);
+	effect->Step(k_Step);
+	// The one still there is chakraed and healed, at its centre and its size
+	EXPECT_TRUE(world.claimed.contains(k_Villager));
+	ASSERT_EQ(spell.events.size(), 2u);
+	EXPECT_EQ(spell.events[1].type, SpellEventInfo::Type::Object);
+	EXPECT_EQ(spell.events[1].target, k_Villager);
+	EXPECT_EQ(effect->TargetCount(), 0u);
+	for (int i = 0; i < 5; ++i)
+	{
+		effect->Step(k_Step);
+	}
+	// Rising to full at half a second of the burst, lighting its target
+	ASSERT_TRUE(world.glows.contains(k_Villager));
+	EXPECT_GT(world.glows[k_Villager].r, 80);
+	// It moves with its target
+	world.targets[0].second = {30.0f, 0.0f, 20.0f};
+	effect->Step(k_Step);
+	std::vector<Effect::DrawAtom> sparks;
+	effect->Collect(1.0f, sparks);
+	ASSERT_EQ(sparks.size(), 4u);
+	// Gone: the chakra ends, lets the target go, and the effect waits for more
+	world.targets.clear();
+	effect->Step(k_Step);
+	EXPECT_FALSE(world.claimed.contains(k_Villager));
+	EXPECT_EQ(world.glows[k_Villager], glm::u8vec3(0));
+	EXPECT_FALSE(effect->Finished());
+	effect->CloseDown();
+	for (int i = 0; i < 3; ++i)
+	{
+		effect->Step(k_Step);
+	}
+}
+
+TEST_F(ParticleEffectTest, DrawnCreatorsMakeTheirAtoms)
+{
+	auto effect =
+	    Make(Header() + Object("ParticleMistCreator", "Mist0", "PROPERTY Ratio FLOAT 3\nPROPERTY InitialScale FLOAT 4\n") +
+	         Object("ParticleSymbolSpriteCreator", "Symbol0", "PROPERTY InitialScale FLOAT 2\n") +
+	         Object("ParticleLightMapCreator", "Light0",
+	                "PROPERTY NumFramesInFile INTEGER 4\n"
+	                "PROPERTY NumFramesInUse INTEGER 2\n") +
+	         Object("CreateRuleAnAtom", "A", "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Mist0\n") +
+	         Object("CreateRuleAnAtom", "B", "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Symbol0\n") +
+	         Object("CreateRuleAnAtom", "C", "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Light0\n"));
+	effect->Step(k_Step);
+	effect->Step(k_Step);
+	EXPECT_TRUE(effect->UnportedClasses().empty());
+	Effect::DrawWalk walk;
+	effect->Walk(1.0f, walk);
+	ASSERT_EQ(walk.atoms.size(), 3u);
+	const auto find = [&walk](Creator::Kind kind) {
+		return *std::ranges::find_if(walk.atoms, [kind](const auto& atom) { return atom.creator->kind == kind; });
+	};
+	const auto mist = find(Creator::Kind::Mist);
+	EXPECT_NEAR(mist.scale, 4.0f, k_Epsilon);
+	EXPECT_NEAR(mist.creatorValue.x, 3.0f, k_Epsilon);
+	EXPECT_GE(mist.creatorValue.y, 0.0f);
+	EXPECT_LT(mist.creatorValue.y, 16.0f);
+	EXPECT_NEAR(find(Creator::Kind::Symbol).scale, 2.0f, k_Epsilon);
+	// Without resources the light map has no bitmap, so it stamps nothing
+	EXPECT_EQ(static_cast<const LightMapCreator*>(find(Creator::Kind::LightMap).creator)->numFrames, 2);
+	draw::Frame frame;
+	draw::AddEffect(frame, walk, draw::DrawPath::Sorted, glm::vec3(0.0f), -1,
+	                {.textures = [](std::string_view) { return std::optional(std::pair<entt::id_type, entt::id_type>(1, 2)); },
+	                 .playerColour = [](int) { return 0x00FF00u; },
+	                 .random = {}});
+	// The mist, and the symbol's three sprites
+	EXPECT_EQ(frame.mists.size(), 1u);
+	EXPECT_EQ(frame.sprites.size(), 3u);
+	EXPECT_TRUE(frame.lightStamps.empty());
+	ASSERT_EQ(frame.groups.size(), 1u);
+	EXPECT_EQ(frame.groups[0].itemCount, 4u);
+}
+
 TEST_F(ParticleEffectTest, RandomNumbersAreDrawnOnlyInASteps)
 {
 	auto effect = Make(Header());
@@ -378,6 +565,14 @@ TEST_F(ParticleEffectTest, RunsEveryFileOfTheGame)
 		// Ten seconds of turns, then closing down for another ten
 		size_t most = 0;
 		size_t sprites = 0;
+		size_t drawn = 0;
+		Effect::DrawWalk walk;
+		draw::Frame frame;
+		const draw::Sources sources {
+		    .textures = [](std::string_view) { return std::optional(std::pair<entt::id_type, entt::id_type>(1, 2)); },
+		    .playerColour = [](int) { return 0xFFFFFFu; },
+		    .random = [](float) { return 0.0f; },
+		};
 		for (int step = 0; step < 200; ++step)
 		{
 			if (step == 100)
@@ -389,6 +584,11 @@ TEST_F(ParticleEffectTest, RunsEveryFileOfTheGame)
 			std::vector<Effect::DrawAtom> atoms;
 			effect->Collect(1.0f, atoms);
 			sprites = std::max(sprites, atoms.size());
+			walk.Clear();
+			effect->Walk(1.0f, walk);
+			frame.Clear();
+			draw::AddEffect(frame, walk, draw::DrawPath::Sorted, glm::vec3(0.0f), 0, sources);
+			drawn = std::max(drawn, frame.items.size());
 			if (effect->Finished())
 			{
 				break;
@@ -399,6 +599,15 @@ TEST_F(ParticleEffectTest, RunsEveryFileOfTheGame)
 		{
 			EXPECT_TRUE(effect->UnportedClasses().empty()) << name;
 			EXPECT_GT(sprites, 10u) << name;
+		}
+		// The player icon fountain's symbols and the heal chakra's sparks are run in full now
+		if (name == "SF_PlayerIconFountain_txt.zzz" || name == "SF_HealChakra_txt.zzz")
+		{
+			EXPECT_TRUE(effect->UnportedClasses().empty()) << name;
+		}
+		if (name == "SF_PlayerIconFountain_txt.zzz")
+		{
+			EXPECT_GT(drawn, 10u) << name;
 		}
 		++count;
 	}

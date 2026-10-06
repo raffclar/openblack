@@ -28,6 +28,7 @@
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreatureTattoo.h"
 #include "Enums.h"
+#include "Particles/ParticleDrawPath.h"
 
 /// The testbed's scenarios: ready-made set ups of the flat testbed that show one facet of the creatures at a time, such
 /// as a thirsty creature finding water or a lineup of bodies. Each is plain data: the land, time of day and weather,
@@ -206,6 +207,11 @@ struct ObjectSetup
 struct ParticleSetup
 {
 	ParticleType type {ParticleType::Smoke};
+	/// An effect file played in place of the type's, by its name, for the effects no particle type names
+	std::string_view file;
+	particles::draw::DrawPath path {particles::draw::DrawPath::Sorted};
+	/// The scenario's creatures are given to it to act on, as the heal miracle is given the people it heals
+	bool targetsCreatures {false};
 	glm::vec2 offset {0.0f};
 	/// Above the land
 	float height {0.0f};

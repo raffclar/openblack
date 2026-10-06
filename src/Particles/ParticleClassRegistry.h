@@ -20,6 +20,7 @@
 
 namespace openblack::particles
 {
+class CreatorResourcesInterface;
 
 /// The particle classes the game runs, by the class names the files use: the rules, the creators and the conditions.
 /// A class the files name that is not here does nothing. Each family of classes adds itself with its own Register
@@ -46,8 +47,8 @@ public:
 	[[nodiscard]] const CollectionCondition* FindCollectionCondition(std::string_view className) const;
 	[[nodiscard]] const AtomCondition* FindAtomCondition(std::string_view className) const;
 
-	/// A registry of every class the game runs
-	[[nodiscard]] static ParticleClassRegistry WithAllClasses();
+	/// A registry of every class the game runs; the creators of models and light maps find them through the resources
+	[[nodiscard]] static ParticleClassRegistry WithAllClasses(CreatorResourcesInterface* resources = nullptr);
 
 	/// The usual factory: T(object), or T() for a class without properties
 	template <class T>
@@ -85,5 +86,8 @@ void RegisterCreateRules(ParticleClassRegistry& registry);
 void RegisterUpdateRules(ParticleClassRegistry& registry);
 /// The rules that follow curves over an atom's life, and that line sprites up with their movement
 void RegisterCurveRules(ParticleClassRegistry& registry);
+/// The heal miracle's rules: the chakra over each person it heals, the burst of sparks under it, and the chakras'
+/// wiggle in the hand
+void RegisterHealRules(ParticleClassRegistry& registry);
 
 } // namespace openblack::particles

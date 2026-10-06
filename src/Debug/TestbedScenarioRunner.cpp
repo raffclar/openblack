@@ -934,8 +934,17 @@ uint32_t Runner::StartParticle(size_t index) const
 	const auto point = MapPoint(_middle, particle.offset);
 	const glm::vec3 position {point.x, Locator::terrainSystem::value().GetHeightAt(point) + particle.height, point.y};
 	auto& particles = Locator::particleSystem::value();
-	const auto effect = particles.Start(particle.type, position, particle.magnitude);
+	const auto effect = particle.file.empty() ? particles.Start(particle.type, position, particle.magnitude)
+	                                          : particles.Start(particle.file, position, particle.magnitude);
 	particles.SetPlayer(effect, particle.player);
+	particles.SetDrawPath(effect, particle.path);
+	if (particle.targetsCreatures)
+	{
+		for (const auto creature : _creatures)
+		{
+			particles.AddTarget(effect, creature);
+		}
+	}
 	return effect;
 }
 

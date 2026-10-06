@@ -34,6 +34,7 @@ public:
 	GlowManager& GetGlows() override { return _glows; }
 	CameraPathManager& GetCameraPaths() override { return _cameraPaths; }
 	ParticleFileManager& GetParticleFiles() override { return _particleFiles; }
+	ParticleBitmapManager& GetParticleBitmaps() override { return _particleBitmaps; }
 
 private:
 	MeshManager _meshes;
@@ -50,5 +51,6 @@ private:
 	GlowManager _glows;
 	CameraPathManager _cameraPaths;
 	ParticleFileManager _particleFiles;
+	ParticleBitmapManager _particleBitmaps;
 };
 } // namespace openblack::resources
