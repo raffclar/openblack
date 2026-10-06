@@ -26,7 +26,6 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
-#include "EngineConfig.h"
 #include "Game.h"
 #include "Locator.h"
 
@@ -154,10 +153,7 @@ void TestbedScenarios::RunRequested() noexcept
 			ids += fmt::format(" {}", each.id);
 		}
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "No testbed scenario {}; there are:{}", request->id, ids);
-		if (Locator::config::has_value())
-		{
-			Locator::config::value().running = false;
-		}
+		game->RequestQuit();
 		return;
 	}
 	const auto all = All();

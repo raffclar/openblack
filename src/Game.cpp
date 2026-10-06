@@ -810,7 +810,7 @@ bool Game::Update() noexcept
 	}
 	Locator::cameraPathSystem::value().Update(deltaTime);
 
-	if (!config.running)
+	if (!config.running || _quitRequested)
 	{
 		return false;
 	}
@@ -2039,7 +2039,7 @@ void Game::HandleInterfaceAction()
 	switch (action)
 	{
 	case Action::Quit:
-		Locator::config::value().running = false;
+		RequestQuit();
 		break;
 	case Action::StartSkirmish:
 	case Action::JoinOnline:

@@ -70,7 +70,6 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
-#include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "InfoConstants.h"
@@ -1395,9 +1394,9 @@ void Runner::Measure()
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Benchmark {}: frame mean {:.2f} ms p95 {:.2f} max {:.2f}; results {}",
 		                   _scenario->id, _liveResults.frame.average, _liveResults.frame.p95, _liveResults.frame.max,
 		                   written.has_value() ? written->generic_string() : "not written");
-		if (Locator::config::has_value())
+		if (auto* game = Game::Instance(); game != nullptr)
 		{
-			Locator::config::value().running = false;
+			game->RequestQuit();
 		}
 	}
 }

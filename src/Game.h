@@ -160,6 +160,9 @@ public:
 	[[nodiscard]] uint32_t GetTurn() const;
 	[[nodiscard]] bool IsPaused() const;
 	/// The scenario asked for on the command line, once: the scenarios' window runs it as the game starts
+	/// The game ends after this frame. Unlike the window's events, which say each time whether to go on, nothing takes
+	/// it back
+	void RequestQuit() { _quitRequested = true; }
 	[[nodiscard]] std::optional<ScenarioRequest> TakeScenarioRequest() { return std::exchange(_scenarioRequest, std::nullopt); }
 	[[nodiscard]] std::chrono::duration<float, std::milli> GetDeltaTime() const { return _turnDeltaTime; }
 	[[nodiscard]] const glm::ivec2& GetMousePosition() const { return _mousePosition; }
@@ -188,6 +191,7 @@ private:
 	std::filesystem::path _startMap;
 	bool _startTestbed {false};
 	std::optional<ScenarioRequest> _scenarioRequest;
+	bool _quitRequested {false};
 
 	std::chrono::steady_clock::time_point _lastGameLoopTime;
 	std::chrono::steady_clock::duration _turnDeltaTime;
