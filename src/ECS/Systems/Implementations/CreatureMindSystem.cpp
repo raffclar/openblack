@@ -39,6 +39,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -87,6 +88,7 @@ constexpr std::string_view k_SleepAction = "SleepOnTheSpot";
 constexpr std::string_view k_ExamineAction = "ExamineByPickingUp";
 constexpr std::string_view k_ThrowAboutAction = "PracticeThrow";
 constexpr std::string_view k_HurlAction = "Hurl";
+constexpr std::string_view k_FightAction = "Fight";
 /// A creature looks for things to pick up this far away at most, and for homes and trees to hurl them at
 constexpr float k_ObjectSearchDistance = 80.0f;
 constexpr float k_HurlSearchDistance = 120.0f;
@@ -690,8 +692,8 @@ void CreatureMindSystem::ProcessTurn()
 		    creature_desires::UpdateDesires(*mind.desires, k_TurnsPerSecond);
 
 		    auto* eyes = registry.TryGet<CreatureEyes>(entity);
-		    // Paused, or following the leash to the hand, the mind leaves the body alone
-		    if (mind.paused || mind.leash.obeying)
+		    // Paused, following the leash to the hand, fighting or knocked out, the mind leaves the body alone
+		    if (mind.paused || mind.leash.obeying || registry.AnyOf<CreatureFighting, CreatureKnockedOut>(entity))
 		    {
 			    return;
 		    }
@@ -1039,5 +1041,15 @@ void CreatureMindSystem::StandUp(entt::entity creature)
 	if (auto* body = Locator::entitiesRegistry::value().TryGet<CreatureAnimation>(creature))
 	{
 		body->body = creature_layers::EndLoop(body->body);
+	}
+}
+
+void CreatureMindSystem::FoughtFight(entt::entity creature, [[maybe_unused]] bool won)
+{
+	// Winning or losing, the fight is done. The game also has the loser learn from losing, which isn't known.
+	auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(creature);
+	if (mind != nullptr && mind->desires.has_value())
+	{
+		Satisfied(creature, *mind->desires, k_FightAction);
 	}
 }

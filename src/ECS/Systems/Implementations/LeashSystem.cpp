@@ -30,6 +30,7 @@
 #include "Creature/LeashRules.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
@@ -639,7 +640,8 @@ void LeashSystem::ProcessTurn()
 		auto* mind = MindOf(registry, entity);
 		const auto* body = registry.TryGet<const Creature>(entity);
 		const auto* transform = registry.TryGet<const Transform>(entity);
-		if (body == nullptr || transform == nullptr)
+		// Fighting or knocked out, the leash doesn't pull it about
+		if (body == nullptr || transform == nullptr || registry.AnyOf<CreatureFighting, CreatureKnockedOut>(entity))
 		{
 			continue;
 		}

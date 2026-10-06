@@ -57,6 +57,9 @@ public:
 	virtual bool Faint(entt::entity creature) = 0;
 	/// Wakes it, or ends whatever it is sitting, lying or squatting through
 	virtual void Wake(entt::entity creature) = 0;
+
+	/// A fight the creature was in ended, won or lost: fighting satisfies the desire it is for, and its body pays for it
+	virtual void FoughtFight(entt::entity creature, bool won) = 0;
 };
 
 } // namespace openblack::ecs::systems

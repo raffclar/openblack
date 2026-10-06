@@ -24,6 +24,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/SkyInterface.h"
 #include "Camera/Camera.h"
+#include "Creature/CreatureFight.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
@@ -37,6 +38,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -193,6 +195,10 @@ void Runner::Stop()
 	{
 		Locator::footprintSystem::value().SetAprilFoolsOverride(std::nullopt);
 	}
+	if (Locator::creatureFightSystem::has_value())
+	{
+		Locator::creatureFightSystem::value().SetAngerStartsFights(true);
+	}
 	if (Locator::skySystem::has_value())
 	{
 		Locator::skySystem::value().GetClock().SetRunning(true);
@@ -230,6 +236,10 @@ void Runner::SetUpEnvironment(const Environment& environment)
 	if (Locator::footprintSystem::has_value())
 	{
 		Locator::footprintSystem::value().SetAprilFoolsOverride(environment.aprilFools);
+	}
+	if (Locator::creatureFightSystem::has_value())
+	{
+		Locator::creatureFightSystem::value().SetAngerStartsFights(environment.angerStartsFights);
 	}
 }
 
@@ -474,6 +484,58 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 	}
 }
 
+std::string Runner::GiveFightCommand(entt::entity creature, const Command& command)
+{
+	if (!Locator::creatureFightSystem::has_value())
+	{
+		return "no fights";
+	}
+	auto& fights = Locator::creatureFightSystem::value();
+	switch (command.kind)
+	{
+	case Kind::StartFight:
+		if (const auto opponent = CreatureAt(command.value))
+		{
+			constexpr std::array<std::string_view, 4> k_Results {"started", "no opponent", "busy", "too weak"};
+			return std::string(k_Results.at(static_cast<size_t>(fights.StartFight(creature, *opponent))));
+		}
+		return "it is gone";
+	case Kind::FightBlow:
+	{
+		constexpr std::array k_Bands {creature_fight::Band::High, creature_fight::Band::Mid, creature_fight::Band::Low};
+		// As a click held for the charge, then let go
+		const bool queued = fights.QueueMove(creature, creature_fight::AttackMove(k_Bands.at(command.value)), true);
+		fights.ReleaseCharge(creature, command.chargeMs);
+		return queued ? fmt::format("{:.0f} ms", command.chargeMs) : "not fighting";
+	}
+	case Kind::FightBlock:
+		return fights.QueueMove(creature, creature_fight::BlockMove(), true) ? "" : "not fighting";
+	case Kind::FightStep:
+		return fights.QueueMove(creature, creature_fight::StepMove(static_cast<creature_fight::Step>(command.value)), true)
+		           ? ""
+		           : "not fighting";
+	case Kind::FightSpecial:
+		return fights.QueueMove(creature, {.kind = creature_fight::Move::Kind::Special}, true) ? "" : "not fighting";
+	case Kind::FightAuto:
+		fights.SetAutoFighting(creature, command.value != 0);
+		return fights.IsFighting(creature) ? "" : "not fighting";
+	case Kind::KnockOut:
+		fights.KnockOut(creature);
+		return {};
+	case Kind::BringRound:
+		fights.Resurrect(creature);
+		return {};
+	case Kind::TieLeashToCreature:
+		if (const auto other = CreatureAt(command.value); other.has_value() && Locator::leashSystem::has_value())
+		{
+			return Locator::leashSystem::value().TieTo(creature, *other) ? "tied" : "can't";
+		}
+		return "it is gone";
+	default:
+		return {};
+	}
+}
+
 bool Runner::IsFree(size_t creature) const
 {
 	const auto entity = CreatureAt(creature);
@@ -510,7 +572,7 @@ void Runner::Give(const Command& command)
 	const auto who = setup.label.empty() ? fmt::format("creature {}", command.creature) : std::string(setup.label);
 	// Lying out cold, it does nothing it is told until it comes round
 	if (const auto* needs = Locator::entitiesRegistry::value().TryGet<const CreatureNeeds>(*entity);
-	    needs != nullptr && needs->rest == CreatureNeeds::Rest::Unconscious)
+	    needs != nullptr && needs->rest == CreatureNeeds::Rest::Unconscious && command.kind != Kind::BringRound)
 	{
 		Log(fmt::format("{:.1f}s: {} {}: out cold", _seconds, who, Name(command.kind)));
 		return;
@@ -608,6 +670,17 @@ void Runner::Give(const Command& command)
 	case Kind::TakeOffLeash:
 	case Kind::ConfineToHome:
 		result = GiveLeashCommand(*entity, command);
+		break;
+	case Kind::StartFight:
+	case Kind::FightBlow:
+	case Kind::FightBlock:
+	case Kind::FightStep:
+	case Kind::FightSpecial:
+	case Kind::FightAuto:
+	case Kind::KnockOut:
+	case Kind::BringRound:
+	case Kind::TieLeashToCreature:
+		result = GiveFightCommand(*entity, command);
 		break;
 	case Kind::SetHour:
 		break;

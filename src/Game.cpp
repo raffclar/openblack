@@ -80,6 +80,7 @@
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
+#include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
@@ -232,8 +233,10 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 
 	// The hand grips the land, which the temple has none of: its camera takes the clicks
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	// Clicking a creature holds the hand to it to stroke or slap it, rather than gripping the land
+	// Clicking a creature holds the hand to it to stroke or slap it, rather than gripping the land. While the player's
+	// creature fights, clicks on the creatures and the arena's ground direct the fight instead.
 	auto& creatureHand = Locator::creatureHandSystem::value();
+	auto& fights = Locator::creatureFightSystem::value();
 	if (!inTemple && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT && !middleMouseButton)
 	{
 		const auto screenSize = Locator::windowing::value().GetSize();
@@ -242,10 +245,14 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		Locator::camera::value().DeprojectScreenToWorld(glm::vec2(event.button.x, event.button.y) /
 		                                                    static_cast<glm::vec2>(glm::max(screenSize, glm::ivec2(1))),
 		                                                rayOrigin, rayDirection);
-		if (!creatureHand.Grab(rayOrigin, rayDirection))
+		if (!fights.Press(rayOrigin, rayDirection) && !creatureHand.Grab(rayOrigin, rayDirection))
 		{
 			PlayHandGrabSound();
 		}
+	}
+	if (!leftMouseButton && fights.IsPressed())
+	{
+		fights.Release();
 	}
 	if (!leftMouseButton && creatureHand.GetCreature().has_value() && !creatureHand.IsHeldByCommand())
 	{
@@ -253,7 +260,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	}
 	const bool onCreature = creatureHand.GetCreature().has_value();
 
-	_handGripping = !inTemple && (middleMouseButton || (leftMouseButton && !onCreature));
+	_handGripping = !inTemple && (middleMouseButton || (leftMouseButton && !onCreature && !fights.IsPressed()));
 	_handRotating = !inTemple && middleMouseButton;
 
 	auto& window = Locator::windowing::value();
@@ -398,6 +405,8 @@ void Game::UpdateHandInterface()
 	_interface->SetCreaturePanel(std::nullopt);
 	// The temple places the hand's tooltip itself
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	// The fighters' health and stamina, while a fight is on
+	_interface->SetFightPanel(inTemple ? std::nullopt : Locator::creatureFightSystem::value().GetPanel());
 	if (inTemple)
 	{
 		return;
@@ -528,6 +537,11 @@ bool Game::GameLogicLoop() noexcept
 		// They walk up to the things they act on, and what they carry makes them stronger
 		auto creatureObjectActions = profiler.BeginScoped(Profiler::Stage::CreatureObjectActionUpdate);
 		Locator::creatureObjectActionSystem::value().ProcessTurn();
+	}
+	{
+		// Fights start and end, the fighters choose their moves, and creatures knocked out come round
+		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
+		Locator::creatureFightSystem::value().ProcessTurn();
 	}
 	{
 		auto actions = profiler.BeginScoped(Profiler::Stage::LivingActionUpdate);
@@ -768,6 +782,11 @@ bool Game::Update() noexcept
 	Locator::rainSystem::value().Update(std::chrono::duration<float>(gameTime).count(), camera.GetOrigin());
 	// The rings on the water grow and fade
 	Locator::waterRingSystem::value().Update(gameTime);
+	{
+		// The fight animations play, blows land and the fighters move as their animations carry them
+		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
+		Locator::creatureFightSystem::value().Update(gameTime);
+	}
 	{
 		// The creatures are drawn moving between the last two turns
 		auto creatureLocomotion = profiler.BeginScoped(Profiler::Stage::CreatureLocomotionUpdate);

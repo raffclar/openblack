@@ -19,6 +19,7 @@
 #include <glm/vec2.hpp>
 
 #include "Canvas.h"
+#include "Creature/CreatureFightHud.h"
 #include "Creature/CreatureStatusPanel.h"
 #include "DialogPainter.h"
 #include "GameFont.h"
@@ -85,6 +86,8 @@ public:
 	/// The creature's status panel shown this frame, or none. It shows its reward row when the values have a reward,
 	/// and near the top of the screen without one, as while the camera follows a creature.
 	void SetCreaturePanel(std::optional<creature_panel::Values> values) { _creaturePanel = values; }
+	/// The fight's panel shown this frame, or none: each fighter's name over its health and stamina
+	void SetFightPanel(std::optional<creature_fight_hud::Values> values) { _fightPanel = std::move(values); }
 
 private:
 	GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<graphics::Texture2D> atlas,
@@ -96,6 +99,8 @@ private:
 	void DrawToolTip(glm::u16vec2 resolution);
 	/// The creature's status panel, at the left of the screen
 	void DrawCreaturePanel(glm::u16vec2 resolution);
+	/// The fight's panel, at the top left of the screen
+	void DrawFightPanel(glm::u16vec2 resolution);
 	/// The tooltip's glow: a soft box of atmos.raw added round a rectangle
 	void DrawGlow(glm::vec2 min, glm::vec2 max, glm::vec4 colour);
 
@@ -116,6 +121,7 @@ private:
 	ScreenFade _screenFade;
 	std::optional<glm::vec2> _handOnScreen;
 	std::optional<creature_panel::Values> _creaturePanel;
+	std::optional<creature_fight_hud::Values> _fightPanel;
 	/// Whether the tooltip is left of the hand, which it moves to in the right third of the screen and from in the left
 	bool _toolTipOnLeft {false};
 	GameMenu::Action _action {GameMenu::Action::None};

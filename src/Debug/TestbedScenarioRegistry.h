@@ -65,6 +65,8 @@ enum class Facet : uint8_t
 	Hand,
 	/// Being led on the leashes, tied up and kept at home
 	Leash,
+	/// Fighting another creature, being knocked out and coming round
+	Combat,
 
 	_Count
 };
@@ -100,6 +102,8 @@ struct Environment
 	float bodyTimeScale {1.0f};
 	/// Whether creatures faint when exhausted, starved or out of life
 	bool fainting {true};
+	/// Whether angry creatures pick fights with others nearby by themselves
+	bool angerStartsFights {false};
 	/// Smiley faces for footprints as on the first of April, or by the date when not given
 	std::optional<bool> aprilFools;
 };
@@ -250,6 +254,20 @@ struct Command
 		UntieLeash,
 		TakeOffLeash,
 		ConfineToHome,
+		/// Fighting the other creature; then, in the fight, a blow high, in the middle or low charged for a while, a
+		/// block, a step forward, back, right or left, the special move, and fighting by itself or not, as the player's
+		/// clicks and the debug tools give them
+		StartFight,
+		FightBlow,
+		FightBlock,
+		FightStep,
+		FightSpecial,
+		FightAuto,
+		/// Being knocked out, as a fight's loser is, and brought round again
+		KnockOut,
+		BringRound,
+		/// Tying the leash it wears to the other creature, which has it fight that creature
+		TieLeashToCreature,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -260,7 +278,8 @@ struct Command
 	bool waitUntilFree {false};
 	/// The point gone to, fled from or faced, from the middle of the map
 	glm::vec2 point {0.0f};
-	/// The animation played, or the creature followed
+	/// The animation played, the creature followed or fought, the band of a blow (high, middle, low), the step
+	/// (forward, back, right, left), or whether it fights by itself (1) or not
 	size_t value {0};
 	/// The hour jumped to
 	float hour {12.0f};
@@ -276,6 +295,8 @@ struct Command
 	bool sweepsRight {false};
 	/// How far from where it stands it is kept
 	float radius {0.0f};
+	/// How long a blow's click is held, charging it
+	float chargeMs {0.0f};
 };
 [[nodiscard]] std::string_view Name(Command::Kind kind);
 

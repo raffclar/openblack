@@ -42,10 +42,6 @@ namespace feedback = openblack::creature_feedback;
 
 namespace
 {
-/// A creature of size 1 is about this many units tall
-constexpr float k_HeightAtSizeOne = 15.0f;
-/// The body is taken as capsules round its bones this thick, as shares of its height
-constexpr float k_BodyRadiusShare = 0.12f;
 /// The hand's speed is eased over about this many seconds, so one jerky frame doesn't slap
 constexpr float k_SpeedEaseSeconds = 0.05f;
 /// The hand shows its slap this long
@@ -73,20 +69,9 @@ const CreatureRig::ActionPoints* PointsOf(const Creature& creature)
 /// The creature's body as the hand can touch it this frame: capsules round its bones, in the world
 std::vector<feedback::Capsule> BodyOf(const Creature& creature, const CreatureAnimation& animation, const Transform& transform)
 {
-	std::vector<feedback::Capsule> capsules;
-	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
-	const auto radius = k_BodyRadiusShare * k_HeightAtSizeOne * creature.size;
-	const auto& parents = animation.skeleton.parents;
-	for (uint32_t bone = 0; bone < parents.size() && bone < animation.boneMatrices.size(); ++bone)
-	{
-		const auto parent = parents[bone];
-		const auto to = glm::vec3(creature::PosedBone(bone, animation.boneMatrices, placement)[3]);
-		const auto from = parent < animation.boneMatrices.size()
-		                      ? glm::vec3(creature::PosedBone(parent, animation.boneMatrices, placement)[3])
-		                      : to;
-		capsules.push_back({.from = from, .to = to, .radius = radius});
-	}
-	return capsules;
+	return feedback::BodyCapsules(animation.skeleton.parents, animation.boneMatrices,
+	                              creature::PlacementMatrix(transform.position, transform.rotation, transform.scale),
+	                              feedback::k_BodyRadiusShare * feedback::k_HeightAtSizeOne * creature.size);
 }
 
 /// Where each part of the body a stroke can land on is this frame, in the world
@@ -185,7 +170,7 @@ CreatureHandSystem::Update(const glm::vec3& rayOrigin, const glm::vec3& rayDirec
 	const auto& animation = registry.Get<const CreatureAnimation>(creatureEntity);
 	const auto& transform = registry.Get<const Transform>(creatureEntity);
 	const auto ms = seconds * 1000.0f;
-	const auto height = k_HeightAtSizeOne * creature.size;
+	const auto height = feedback::k_HeightAtSizeOne * creature.size;
 	const auto centre = transform.position + glm::vec3(0.0f, height * 0.5f, 0.0f);
 
 	// Held by a command, the hand stays on the part it last stroked, or where it last slapped, whatever the cursor does
@@ -350,7 +335,7 @@ bool CreatureHandSystem::Slap(entt::entity creature, float heightShare, bool gen
 		return false;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto height = k_HeightAtSizeOne * registry.Get<const Creature>(creature).size;
+	const auto height = feedback::k_HeightAtSizeOne * registry.Get<const Creature>(creature).size;
 	// As fast across the body as a gentle slap or a hard one is
 	const auto speed =
 	    (gentle ? (feedback::k_SlapSpeed + feedback::k_HardSlapSpeed) * 0.5f : feedback::k_HardSlapSpeed * 1.5f) * height;

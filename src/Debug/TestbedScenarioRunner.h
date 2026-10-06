@@ -33,7 +33,7 @@ public:
 	/// Loads the testbed and starts the scenario on it, in place of any other
 	void Start(const Scenario& scenario);
 	/// Stops giving commands and puts back the settings the scenario changed: the body time, fainting, the footprints'
-	/// smileys and the clock. What is on the land stays, to look at or carry on with by hand.
+	/// smileys, the clock and whether anger starts fights. What is on the land stays, to look at or carry on with by hand.
 	void Stop();
 	/// Once a frame
 	void Update(float seconds);
@@ -66,6 +66,8 @@ private:
 	std::string GiveObjectCommand(entt::entity creature, const Command& command);
 	std::string GiveHandCommand(entt::entity creature, const Command& command);
 	std::string GiveLeashCommand(entt::entity creature, const Command& command);
+	/// The commands of fights, and of being knocked out and brought round
+	std::string GiveFightCommand(entt::entity creature, const Command& command);
 	void UpdateCamera();
 	[[nodiscard]] bool IsFree(size_t creature) const;
 	[[nodiscard]] std::optional<entt::entity> CreatureAt(size_t index) const;

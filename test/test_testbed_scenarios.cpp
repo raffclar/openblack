@@ -18,6 +18,7 @@
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureFeedback.h"
+#include "Creature/CreatureFight.h"
 #include "Creature/CreatureLayers.h"
 #include "Debug/TestbedScenarioRegistry.h"
 
@@ -223,9 +224,73 @@ TEST(TestbedScenarios, CoversObjectsTheHandAndLeashes)
 	EXPECT_TRUE(commandsOf("leash.home").contains(Command::Kind::ConfineToHome));
 }
 
+TEST(TestbedScenarios, CoversFights)
+{
+	const auto commandsOf = [](std::string_view id) {
+		std::set<Command::Kind> kinds;
+		const auto* scenario = Find(id);
+		EXPECT_NE(scenario, nullptr) << id;
+		if (scenario != nullptr)
+		{
+			for (const auto& command : scenario->commands)
+			{
+				kinds.insert(command.kind);
+			}
+		}
+		return kinds;
+	};
+	EXPECT_TRUE(commandsOf("combat.ai_duel").contains(Command::Kind::FightAuto));
+	EXPECT_TRUE(commandsOf("combat.player").contains(Command::Kind::FightBlow));
+	EXPECT_TRUE(commandsOf("combat.player").contains(Command::Kind::FightStep));
+	EXPECT_TRUE(commandsOf("combat.blocking").contains(Command::Kind::FightBlock));
+	EXPECT_TRUE(commandsOf("combat.faint_recovery").contains(Command::Kind::KnockOut));
+	EXPECT_TRUE(commandsOf("combat.leash").contains(Command::Kind::TieLeashToCreature));
+
+	// Blows let go at once and held the full charge
+	std::set<float> charges;
+	for (const auto& command : Find("combat.charged")->commands)
+	{
+		if (command.kind == Command::Kind::FightBlow)
+		{
+			charges.insert(command.chargeMs);
+		}
+	}
+	EXPECT_EQ(charges, (std::set<float> {0.0f, creature_fight::k_MaxChargeMs}));
+	// Only the scenario about it lets anger start fights, so other angry creatures keep to themselves
+	for (const auto& scenario : All())
+	{
+		EXPECT_EQ(scenario.environment.angerStartsFights, scenario.id == "combat.anger") << scenario.id;
+	}
+	// The worn creature is left to rest
+	EXPECT_FALSE(Find("combat.faint_recovery")->creatures.front().hold);
+}
+
+TEST(TestbedScenarios, FightCommandsAreChecked)
+{
+	using Kind = Command::Kind;
+	Scenario scenario {
+	    .id = "test.fight",
+	    .name = "Fight",
+	    .description = "A fight",
+	    .expected = "Blows",
+	    .creatures = {{.species = CreatureType::Tiger}, {.species = CreatureType::Tiger, .offset = {40.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::StartFight, .value = 1},
+	                 {.kind = Kind::FightBlow, .value = 2, .chargeMs = 1200.0f},
+	                 {.kind = Kind::FightStep, .value = 3},
+	                 {.kind = Kind::TieLeashToCreature, .value = 1}},
+	};
+	EXPECT_TRUE(Problems(scenario).empty());
+	scenario.commands = {{.kind = Kind::StartFight, .value = 0},
+	                     {.kind = Kind::FightBlow, .value = 3},
+	                     {.kind = Kind::FightBlow, .chargeMs = 2000.0f},
+	                     {.kind = Kind::FightStep, .value = 4},
+	                     {.kind = Kind::TieLeashToCreature, .value = 2}};
+	EXPECT_EQ(Problems(scenario).size(), 5u);
+}
+
 TEST(TestbedScenarios, EveryCommandHasAName)
 {
-	for (size_t i = 0; i <= static_cast<size_t>(Command::Kind::ConfineToHome); ++i)
+	for (size_t i = 0; i <= static_cast<size_t>(Command::Kind::TieLeashToCreature); ++i)
 	{
 		EXPECT_FALSE(Name(static_cast<Command::Kind>(i)).empty()) << i;
 	}

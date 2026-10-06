@@ -42,6 +42,7 @@ public:
 	bool Puke(entt::entity creature) override;
 	bool Faint(entt::entity creature) override;
 	void Wake(entt::entity creature) override;
+	void FoughtFight(entt::entity creature, bool won) override;
 
 private:
 	/// Plans an activity in place of what the creature was doing, getting it up and stopping it first

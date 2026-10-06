@@ -239,6 +239,9 @@ void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creatu
 	animation.gesture = creature_layers::AdvanceGesture(
 	    animation.gesture, playbackMs,
 	    DurationOf(animation.gesture.animation.has_value() ? animationOf(*animation.gesture.animation) : nullptr));
+	animation.wobble = creature_layers::AdvanceGesture(
+	    animation.wobble, playbackMs,
+	    DurationOf(animation.wobble.animation.has_value() ? animationOf(*animation.wobble.animation) : nullptr));
 
 	// The head turns towards where the creature looks, from its eyes' height
 	const auto ahead = -(transform.rotation * k_MeshBack);
@@ -304,6 +307,15 @@ void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creatu
 		{
 			skeletal_animation::AddLayer(poses, *gesture, static_cast<uint32_t>(std::max(animation.gesture.timeMs, 0.0f)), 0,
 			                             animation.skeleton);
+		}
+	}
+	// A blow's wobble, relative to its first frame, the way the body plays
+	if (animation.wobble.animation.has_value())
+	{
+		if (const auto* wobble = animationOf(*animation.wobble.animation))
+		{
+			skeletal_animation::AddLayer(poses, *wobble, static_cast<uint32_t>(std::max(animation.wobble.timeMs, 0.0f)), 0,
+			                             animation.skeleton, mirror);
 		}
 	}
 	animation.boneMatrices = skeletal_animation::ComposeBoneMatrices(poses, animation.skeleton.parents);

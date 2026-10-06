@@ -63,6 +63,9 @@ private:
 	/// The picked creature's leashes: which it knows, the one it wears and how taut it is, buttons to put leashes on,
 	/// tie and untie them, and the rope drawn point by point over the scene
 	void DrawLeash(entt::entity entity) noexcept;
+	/// The picked creature's fights: starting one with another creature, both fighters' health, stamina, state and
+	/// queue, orders as the player's clicks give them, fighting by itself, and knocking it out and bringing it round
+	void DrawFight(entt::entity entity) noexcept;
 	/// The rope's points over the scene, coloured by how far each segment is stretched
 	void DrawRope(entt::entity entity) noexcept;
 	void DrawPlacing() noexcept;
@@ -138,6 +141,12 @@ private:
 	int _markSkin {0};
 	int _woundType {3};
 	int _woundColumn {3};
+	/// The creature to fight, by its place among the others nearest first, how long blows ordered here are charged,
+	/// whether a fight started here is fought by itself, and what became of the last fight started
+	int _fightOpponent {0};
+	float _fightChargeMs {0.0f};
+	bool _fightAuto {true};
+	std::string _lastFight;
 };
 
 } // namespace openblack::debug::gui

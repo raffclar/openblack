@@ -138,3 +138,31 @@ std::optional<float> creature_feedback::RayHit(const glm::vec3& origin, const gl
 	}
 	return nearest;
 }
+
+std::vector<Capsule> creature_feedback::BodyCapsules(std::span<const uint32_t> parents, std::span<const glm::mat4> boneMatrices,
+                                                     const glm::mat4& placement, float radius)
+{
+	std::vector<Capsule> capsules;
+	const auto at = [&](uint32_t bone) { return glm::vec3((placement * boneMatrices[bone])[3]); };
+	for (uint32_t bone = 0; bone < parents.size() && bone < boneMatrices.size(); ++bone)
+	{
+		const auto parent = parents[bone];
+		const auto to = at(bone);
+		const auto from = parent < boneMatrices.size() ? at(parent) : to;
+		capsules.push_back({.from = from, .to = to, .radius = radius});
+	}
+	return capsules;
+}
+
+float creature_feedback::DistanceOutside(const glm::vec3& point, std::span<const Capsule> capsules)
+{
+	float best = std::numeric_limits<float>::max();
+	for (const auto& capsule : capsules)
+	{
+		const auto axis = capsule.to - capsule.from;
+		const auto length = glm::dot(axis, axis);
+		const auto t = length > 0.0f ? std::clamp(glm::dot(point - capsule.from, axis) / length, 0.0f, 1.0f) : 0.0f;
+		best = std::min(best, glm::distance(point, capsule.from + (axis * t)) - capsule.radius);
+	}
+	return best;
+}

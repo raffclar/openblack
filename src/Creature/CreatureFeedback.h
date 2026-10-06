@@ -15,7 +15,9 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <vector>
 
+#include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
 /// How the player's hand rewards and punishes a creature. The hand can't pick a creature up: clicking one holds the
@@ -113,6 +115,15 @@ struct Capsule
 	glm::vec3 to;
 	float radius;
 };
+/// A creature of size 1 is about this many units tall
+constexpr float k_HeightAtSizeOne = 15.0f;
+/// The body is taken as capsules round its bones this thick, as shares of its height
+constexpr float k_BodyRadiusShare = 0.12f;
+/// The body as posed: a capsule from each bone to its parent, the bones' matrices in the mesh's space placed in the world
+[[nodiscard]] std::vector<Capsule> BodyCapsules(std::span<const uint32_t> parents, std::span<const glm::mat4> boneMatrices,
+                                                const glm::mat4& placement, float radius);
+/// How far a point is outside the body, or less than 0 inside it
+[[nodiscard]] float DistanceOutside(const glm::vec3& point, std::span<const Capsule> capsules);
 /// Where a line of sight first touches the body, as how many of the direction's lengths along it, if it does
 [[nodiscard]] std::optional<float> RayHit(const glm::vec3& origin, const glm::vec3& direction,
                                           std::span<const Capsule> capsules);

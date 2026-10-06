@@ -310,6 +310,7 @@ void CreatureSpawner::DrawSelected() noexcept
 		DrawMind(*_selected);
 		DrawBody(*_selected);
 		DrawLeash(*_selected);
+		DrawFight(*_selected);
 	}
 }
 

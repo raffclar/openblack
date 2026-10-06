@@ -60,6 +60,8 @@ struct CreatureAnimation
 	/// The face's expression and a gesture such as a nod, played on top of the body
 	creature_layers::FaceLayer face {};
 	creature_layers::GestureLayer gesture {};
+	/// The wobble a blow sends through the body, played once on top of it
+	creature_layers::GestureLayer wobble {};
 	/// Where the head turns to look, if anywhere, and how far it is turned right to left and down to up
 	std::optional<glm::vec3> lookAt;
 	creature_layers::LookAxis yaw {};

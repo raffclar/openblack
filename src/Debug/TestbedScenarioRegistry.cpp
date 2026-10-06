@@ -19,6 +19,7 @@
 #include <glm/geometric.hpp>
 
 #include "Creature/CreatureFeedback.h"
+#include "Creature/CreatureFight.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
 
@@ -1172,6 +1173,173 @@ void AddLeash(std::vector<Scenario>& all)
 	});
 }
 
+Command Fight(Kind kind, size_t creature, size_t value, float delay, float chargeMs = 0.0f)
+{
+	return {.kind = kind, .creature = creature, .delaySeconds = delay, .value = value, .chargeMs = chargeMs};
+}
+
+/// A content tiger for a fight, its owner, strength and alignment given
+CreatureSetup Fighter(glm::vec2 offset, float facing, std::string_view label, PlayerNames owner, float strength,
+                      float alignment)
+{
+	auto creature = Content(CreatureType::Tiger, offset, facing, label);
+	creature.owner = owner;
+	creature.strength = strength;
+	creature.alignment = alignment;
+	return creature;
+}
+
+void AddCombat(std::vector<Scenario>& all)
+{
+	constexpr size_t k_High = 0;
+	constexpr size_t k_Mid = 1;
+	constexpr size_t k_Low = 2;
+	constexpr size_t k_Forward = 0;
+	constexpr size_t k_Back = 1;
+	const glm::vec2 left {-25.0f, 40.0f};
+	const glm::vec2 right {25.0f, 40.0f};
+	const auto red = [&](PlayerNames owner, float strength, float alignment) {
+		return Fighter(left, 90.0f, "red", owner, strength, alignment);
+	};
+	const auto blue = [&](PlayerNames owner, float strength, float alignment) {
+		return Fighter(right, 270.0f, "blue", owner, strength, alignment);
+	};
+	const Framing ringside {.shot = Shot::Overview, .include = {{-45.0f, 40.0f}, {45.0f, 40.0f}}, .distance = 0.8f};
+
+	all.push_back({
+	    .id = "combat.ai_duel",
+	    .name = "Two tigers fight by themselves",
+	    .facet = Facet::Combat,
+	    .description = "Two somewhat evil tigers, so aggressive fighters, the red one stronger, are told to fight, and both "
+	                   "fight by themselves.",
+	    .expected = "They walk to their places either side of the arena, face each other and maybe taunt, then duel: "
+	                "blows high, in the middle and low with their hit wobbles and reeling, blocks and steps. The panel at "
+	                "the top left shows both fight healths falling. The loser faints, and the winner finishes and shows "
+	                "off.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+	});
+
+	all.push_back({
+	    .id = "combat.player",
+	    .name = "Directing the player's creature",
+	    .facet = Facet::Combat,
+	    .description = "The player's red tiger fights a blue tiger that fights by itself. The red one is given blows "
+	                   "high, in the middle and low, a step forward, a block and a fully charged high blow in turn, as "
+	                   "clicking the blue tiger's head, middle and legs, the ground ahead, and the red tiger itself would. "
+	                   "Click them yourself to direct it too.",
+	    .expected = "Each order plays at once: the blow chosen lands at the height asked for, stepping in first when "
+	                "out of reach; the block holds until the next order. Left alone for 15 seconds, it fights by "
+	                "itself.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.3f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightBlow, 0, k_High, 8.0f, 400.0f),
+	                 Fight(Kind::FightBlow, 0, k_Mid, 2.5f, 400.0f), Fight(Kind::FightBlow, 0, k_Low, 2.5f, 400.0f),
+	                 Fight(Kind::FightStep, 0, k_Forward, 2.5f), Fight(Kind::FightBlock, 0, 0, 2.0f),
+	                 Fight(Kind::FightBlow, 0, k_High, 3.0f, creature_fight::k_MaxChargeMs)},
+	    .repeatFrom = 1,
+	});
+
+	all.push_back({
+	    .id = "combat.blocking",
+	    .name = "Blocking an aggressive opponent",
+	    .facet = Facet::Combat,
+	    .description = "The player's red tiger blocks while an evil blue tiger, as aggressive as fighters get, attacks "
+	                   "it; every twelve seconds the red one steps back out of its block and blocks again.",
+	    .expected = "The red tiger raises its guard and holds it. Blows on it make it reel back in its block and take "
+	                "a tenth of the damage, leaving no wounds; the blue tiger attacks again and again.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.8f, -0.9f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightBlock, 0, 0, 7.0f),
+	                 Fight(Kind::FightStep, 0, k_Back, 12.0f), Fight(Kind::FightBlock, 0, 0, 1.5f)},
+	    .repeatFrom = 2,
+	});
+
+	all.push_back({
+	    .id = "combat.charged",
+	    .name = "Charged and quick blows",
+	    .facet = Facet::Combat,
+	    .description = "The player's red tiger strikes a good, defensive blue tiger with blows in the middle, in turn "
+	                   "let go at once and held the full 1.2 seconds.",
+	    .expected = "A quick click's blow plays at half speed and does little; a fully charged blow plays half as fast "
+	                "again as normal and takes three times as much off the blue tiger's fight health.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.9f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightBlow, 0, k_Mid, 8.0f, 0.0f),
+	                 Fight(Kind::FightBlow, 0, k_Mid, 4.0f, creature_fight::k_MaxChargeMs)},
+	    .repeatFrom = 1,
+	});
+
+	auto worn = Fighter({0.0f, 0.0f}, 0.0f, "worn", PlayerNames::PLAYER_ONE, 0.5f, 0.0f);
+	worn.hold = false;
+	worn.pauseMind = true;
+	worn.needs.life = 0.6f;
+	worn.needs.exhaustion = 0.7f;
+	all.push_back({
+	    .id = "combat.faint_recovery",
+	    .name = "Knocked out, taken home and back up",
+	    .facet = Facet::Combat,
+	    .description = "A worn tiger, life 0.6 and exhaustion 0.7, is given a home where it stands, walks 90 units away "
+	                   "and is knocked out there as a fight's loser is.",
+	    .expected = "It faints and lies out cold with its eyes closed for 12 seconds, is taken home, lies there a few "
+	                "seconds more, then rests until it is no more exhausted than 0.3, and gets up.",
+	    .framing = {.shot = Shot::Overview, .include = {{90.0f, 30.0f}, {-20.0f, 0.0f}}, .distance = 0.6f},
+	    .creatures = {worn},
+	    .commands = {{.kind = Kind::ConfineToHome, .delaySeconds = 0.5f, .radius = 400.0f},
+	                 Go(Kind::WalkTo, 0, {90.0f, 30.0f}, 0.5f, false),
+	                 Act(Kind::KnockOut, 0, 1.0f, true)},
+	});
+
+	all.push_back({
+	    .id = "combat.leash",
+	    .name = "Leashed onto another creature",
+	    .facet = Facet::Combat,
+	    .description = "The player's red tiger is put on the aggression leash, which is tied to the blue tiger.",
+	    .expected = "Tied to another creature, it fights it: both walk to the arena and duel, the red one fighting by "
+	                "itself once left alone for three seconds.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
+	    .commands = {Leash(0, LeashType::Evil, 1.0f), Fight(Kind::TieLeashToCreature, 0, 1, 2.0f)},
+	});
+
+	auto angry = red(PlayerNames::PLAYER_ONE, 0.6f, -0.3f);
+	angry.desires = OnlyDesire(Desire::Anger);
+	all.push_back({
+	    .id = "combat.anger",
+	    .name = "An angry creature picks a fight",
+	    .facet = Facet::Combat,
+	    .description = "A red tiger as angry as it gets, wanting nothing else, stands near a blue tiger, with angry "
+	                   "creatures picking fights.",
+	    .expected = "It picks a fight with the blue tiger by itself, and they duel. Once it is over, it waits two "
+	                "minutes before picking another.",
+	    .environment = {.angerStartsFights = true},
+	    .framing = ringside,
+	    .creatures = {angry, blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
+	});
+
+	auto lion = Fighter(left, 90.0f, "evil lion", PlayerNames::PLAYER_TWO, 1.0f, -0.9f);
+	lion.species = CreatureType::Lion;
+	lion.size = 1.3f;
+	auto small = Fighter(right, 270.0f, "small tiger", PlayerNames::PLAYER_ONE, 0.1f, 0.8f);
+	small.size = 0.8f;
+	small.needs.life = 0.3f;
+	// Left to heal as it rests after being knocked out
+	small.hold = false;
+	all.push_back({
+	    .id = "combat.evil_winner",
+	    .name = "An evil winner has a poo on the loser",
+	    .facet = Facet::Combat,
+	    .description = "A big, strong, evil lion fights a small, weak, good tiger with little life left, so starting "
+	                   "with little fight health, both by themselves.",
+	    .expected = "The tiger soon faints. The lion finishes, walks up to it and has a poo on it, rather than showing "
+	                "off as a good winner does.",
+	    .framing = ringside,
+	    .creatures = {lion, small},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 1, 1, 0.2f)},
+	});
+}
+
 std::vector<Scenario> Build()
 {
 	std::vector<Scenario> all;
@@ -1188,6 +1356,7 @@ std::vector<Scenario> Build()
 	AddObjects(all);
 	AddHand(all);
 	AddLeash(all);
+	AddCombat(all);
 	return all;
 }
 
@@ -1263,6 +1432,12 @@ std::string_view CommandProblem(const Command& command, std::span<const ObjectSe
 		           : "no such leash";
 	case Kind::ConfineToHome:
 		return command.radius > 0.0f ? "" : "keeps it nowhere";
+	case Kind::FightBlow:
+		return command.value < 3 && command.chargeMs >= 0.0f && command.chargeMs <= creature_fight::k_MaxChargeMs
+		           ? ""
+		           : "no such blow or charge";
+	case Kind::FightStep:
+		return command.value < 4 ? "" : "no such step";
 	default:
 		return "";
 	}
@@ -1273,7 +1448,7 @@ std::string_view testbed_scenarios::Name(Facet facet)
 {
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
 	    "Idle",     "Expressions", "Senses", "Needs",   "Growth", "Appearance", "Light",
-	    "Movement", "Footprints",  "Audio",  "Objects", "Hand",   "Leash",
+	    "Movement", "Footprints",  "Audio",  "Objects", "Hand",   "Leash",      "Combat",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
@@ -1292,27 +1467,55 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 39> k_Names {
-	    "walk to",      "run to",
-	    "follow",       "flee from",
-	    "turn to face", "face the camera",
-	    "stop",         "play action",
-	    "gesture",      "pull face",
-	    "sit down",     "stand up",
-	    "sleep",        "wake",
-	    "eat",          "drink",
-	    "poo",          "puke",
-	    "faint",        "stroke",
-	    "slap",         "set hour",
-	    "pick up",      "put down",
-	    "toss away",    "lob",
-	    "eat it",       "look it over",
-	    "throw at",     "knock down",
-	    "point at",     "hand strokes",
-	    "hand slaps",   "hand lets go",
-	    "put on leash", "tie leash to",
-	    "untie leash",  "take off leash",
+	constexpr std::array<std::string_view, 48> k_Names {
+	    "walk to",
+	    "run to",
+	    "follow",
+	    "flee from",
+	    "turn to face",
+	    "face the camera",
+	    "stop",
+	    "play action",
+	    "gesture",
+	    "pull face",
+	    "sit down",
+	    "stand up",
+	    "sleep",
+	    "wake",
+	    "eat",
+	    "drink",
+	    "poo",
+	    "puke",
+	    "faint",
+	    "stroke",
+	    "slap",
+	    "set hour",
+	    "pick up",
+	    "put down",
+	    "toss away",
+	    "lob",
+	    "eat it",
+	    "look it over",
+	    "throw at",
+	    "knock down",
+	    "point at",
+	    "hand strokes",
+	    "hand slaps",
+	    "hand lets go",
+	    "put on leash",
+	    "tie leash to",
+	    "untie leash",
+	    "take off leash",
 	    "keep at home",
+	    "start fight",
+	    "fight blow",
+	    "fight block",
+	    "fight step",
+	    "fight special",
+	    "fight by itself",
+	    "knock out",
+	    "bring round",
+	    "tie leash to creature",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
@@ -1441,9 +1644,10 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		{
 			problems.push_back(fmt::format("{}: no such creature", what));
 		}
-		if (command.kind == Kind::Follow && (command.value >= creatures || command.value == command.creature))
+		if ((command.kind == Kind::Follow || command.kind == Kind::StartFight || command.kind == Kind::TieLeashToCreature) &&
+		    (command.value >= creatures || command.value == command.creature))
 		{
-			problems.push_back(fmt::format("{}: follows no other creature", what));
+			problems.push_back(fmt::format("{}: acts on no other creature", what));
 		}
 		if (!ValidAnimation(command.kind, command.value))
 		{

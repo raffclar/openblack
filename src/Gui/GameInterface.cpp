@@ -292,6 +292,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	// The game leaves the creature's panel and the tooltip out under a dialog
 	if (!menuOpen)
 	{
+		DrawFightPanel(resolution);
 		DrawCreaturePanel(resolution);
 		DrawToolTip(resolution);
 	}
@@ -427,6 +428,36 @@ void GameInterface::DrawCreaturePanel(glm::u16vec2 resolution)
 		_canvas.DrawShape({inner, glm::vec2(inner.x + inset, inner.y), glm::vec2(inner.x + inset, innerMax.y),
 		                   glm::vec2(inner.x, innerMax.y)},
 		                  {black, clear, clear, black});
+	}
+}
+
+void GameInterface::DrawFightPanel(glm::u16vec2 resolution)
+{
+	if (!_fightPanel.has_value())
+	{
+		return;
+	}
+	const auto layout = creature_fight_hud::Compute(resolution);
+	const glm::vec4 shade {0.0f, 0.0f, 0.0f, 95.0f / 255.0f};
+	const glm::vec4 white {1.0f, 1.0f, 1.0f, 1.0f};
+	const glm::vec4 black {0.0f, 0.0f, 0.0f, 1.0f};
+	const auto quad = [this](const creature_fight_hud::Rect& rect, const glm::vec4& colour) {
+		_canvas.DrawShape({rect.min, glm::vec2(rect.max.x, rect.min.y), rect.max, glm::vec2(rect.min.x, rect.max.y)},
+		                  {colour, colour, colour, colour});
+	};
+	quad(layout.box, shade);
+	for (size_t i = 0; i < layout.rows.size(); ++i)
+	{
+		const auto& row = layout.rows.at(i);
+		const auto& side = _fightPanel->sides.at(i);
+		// The name in white over its black shadow
+		_painter.DrawString(row.name + 2.0f, side.name, layout.textSize, black);
+		_painter.DrawString(row.name, side.name, layout.textSize, white);
+		for (const auto& [bar, value] : {std::pair(row.health, side.health), std::pair(row.stamina, side.stamina)})
+		{
+			quad(bar, black);
+			quad(creature_fight_hud::Filled(bar, value), creature_fight_hud::BarColour(value));
+		}
 	}
 }
 
