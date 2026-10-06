@@ -10,19 +10,48 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 #include <deque>
+#include <filesystem>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
 
+#include "BenchmarkRecorder.h"
 #include "TestbedScenarioRegistry.h"
 
 namespace openblack::testbed_scenarios
 {
+
+/// How far spawning a scenario's crowd has got
+struct CrowdProgress
+{
+	size_t spawned {0};
+	size_t total {0};
+	/// The time spent spawning, apart from the rest of the frames it took
+	double spawnMs {0.0};
+	uint32_t spawnFrames {0};
+
+	[[nodiscard]] bool Done() const { return spawned >= total; }
+};
+
+/// How a crowd's frames are measured once it has all spawned
+struct BenchmarkSettings
+{
+	/// Frames left to settle first, as the crowd's minds and routes start
+	uint32_t warmUpFrames {120};
+	/// The last so many frames are measured
+	uint32_t frames {600};
+	/// Where the results are written, with .json and .csv after it, once that many frames are measured, after which the
+	/// game quits; for running a benchmark from the command line
+	std::optional<std::filesystem::path> autoSave;
+};
 
 /// Plays a scenario on the testbed: loads the testbed afresh, which clears away everything on it, sets the time of
 /// day, the weather and the creatures' body time, puts down the objects and creatures as the scenario has them, frames
@@ -48,6 +77,23 @@ public:
 	/// What became of the last commands, the newest last
 	[[nodiscard]] const std::deque<std::string>& GetLog() const { return _log; }
 
+	/// The scenario's crowd as it spawns, if it has one
+	[[nodiscard]] std::optional<CrowdProgress> GetCrowdProgress() const;
+	void SetBenchmarkSettings(BenchmarkSettings settings) { _benchmark = std::move(settings); }
+	[[nodiscard]] const BenchmarkSettings& GetBenchmarkSettings() const { return _benchmark; }
+	/// The frames still to settle before the crowd's frames are measured, and how many have been
+	[[nodiscard]] uint32_t GetWarmUpLeft() const;
+	[[nodiscard]] size_t GetMeasuredFrames() const { return _recorder ? _recorder->Count() : 0; }
+	/// The frames measured so far, summed up every so often as they are
+	[[nodiscard]] const benchmark::Results& GetLiveResults() const { return _liveResults; }
+	[[nodiscard]] std::span<const benchmark::StageInfo> GetStages() const;
+	/// How many entities there are of each kind
+	[[nodiscard]] std::vector<std::pair<std::string, size_t>> EntityCounts() const;
+	/// Writes the results of the frames measured so far to the path with .json and .csv after it, or to the benchmarks
+	/// folder under the scenario's id and the time when none is given; the JSON file's path, or none if they couldn't be
+	/// written
+	std::optional<std::filesystem::path> SaveResults(std::optional<std::filesystem::path> base = std::nullopt);
+
 	/// Puts the camera on a shot of one of the scenario's creatures, or of all of them; following and close ups keep
 	/// up with the creature until the camera is let go
 	void Frame(Shot shot, size_t creature, float distance = 1.0f);
@@ -59,6 +105,11 @@ private:
 	void SetUpEnvironment(const Environment& environment);
 	void PlaceObjects(const Scenario& scenario, glm::vec2 middle);
 	void PlaceCreatures(const Scenario& scenario, glm::vec2 middle);
+	/// Spawns the next batch of the crowd
+	void SpawnCrowd();
+	void SpawnCrowdMember(size_t index);
+	/// Takes the last frame's times from the profiler, once the crowd has spawned and settled
+	void Measure();
 	/// Starts the scenario's particle effect of that index
 	[[nodiscard]] uint32_t StartParticle(size_t index) const;
 	/// The scenario's dispensers and lone bubbles, after the testbed's grid stays or goes as it asks
@@ -114,6 +165,21 @@ private:
 	std::vector<bool> _started;
 
 	std::deque<std::string> _log;
+
+	/// The crowd laid out, the next of it to spawn, its homes and towns as they have spawned, and how long it took
+	std::vector<CrowdCreature> _crowdCreatures;
+	VillageLayout _village;
+	size_t _crowdNext {0};
+	std::vector<entt::entity> _crowdAbodes;
+	std::vector<entt::entity> _crowdEntities;
+	CrowdProgress _crowdProgress;
+
+	BenchmarkSettings _benchmark;
+	uint32_t _settledFrames {0};
+	std::unique_ptr<benchmark::Recorder> _recorder;
+	benchmark::Results _liveResults;
+	uint32_t _framesSinceSummary {0};
+	bool _saved {false};
 
 	std::optional<Shot> _shot;
 	size_t _shotCreature {0};

@@ -61,6 +61,8 @@ constexpr size_t k_LastPhase = 13;
 constexpr size_t k_Skills = 6;
 constexpr size_t k_Miracles = 42;
 constexpr size_t k_Deeds = 46;
+/// The seed of every benchmark's crowd, so that runs lay it out the same
+constexpr uint32_t k_BenchmarkSeed = 2026;
 /// The testbed's lake, from the middle of the map: the middle of its open water, half its width, and the width of the
 /// shallows round it
 constexpr glm::vec2 k_Lake = flat_land::k_LakeCentre - flat_land::k_MapMiddle;
@@ -1949,6 +1951,41 @@ void AddEditor(std::vector<Scenario>& all)
 	});
 }
 
+/// A benchmark of a crowd of the size, to compare runs of 100, 1,000 and 10,000 and see which costs grow faster than
+/// the crowd does
+void AddCrowd(std::vector<Scenario>& all, Crowd::Kind kind, size_t count, std::string_view id, std::string_view name)
+{
+	const bool creatures = kind == Crowd::Kind::Creatures;
+	all.push_back({
+	    .id = id,
+	    .name = name,
+	    .facet = Facet::Benchmark,
+	    .description = creatures ? "Creatures of every species and of four players, spread evenly over the land round the "
+	                               "middle and clear of the lake, the same way every run. Nothing holds them: their minds, "
+	                               "needs, walking and route finding all run as in the game."
+	                             : "Villagers of every tribe and role in towns of fifty, each a ring of huts about a storage "
+	                               "pit, spread evenly over the land round the middle and clear of the lake, the same way "
+	                               "every run, and left to go about their lives.",
+	    .expected = "They spawn a batch a frame, then the frames are measured once they have settled: the mean, 95th "
+	                "percentile and slowest frame and the costliest profiler stages show as it runs, and Save results "
+	                "writes them out to compare with the other sizes.",
+	    // The crowd is spread over the middle, where the miracle dispensers would stand
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .crowd = Crowd {.kind = kind, .count = count, .seed = k_BenchmarkSeed, .perFrame = creatures ? 100u : 250u},
+	});
+}
+
+void AddBenchmark(std::vector<Scenario>& all)
+{
+	AddCrowd(all, Crowd::Kind::Creatures, 100, "benchmark.creatures_100", "100 active creatures");
+	AddCrowd(all, Crowd::Kind::Creatures, 1'000, "benchmark.creatures_1000", "1,000 active creatures");
+	AddCrowd(all, Crowd::Kind::Creatures, 10'000, "benchmark.creatures_10000", "10,000 active creatures");
+	AddCrowd(all, Crowd::Kind::Villagers, 100, "benchmark.villagers_100", "100 active villagers");
+	AddCrowd(all, Crowd::Kind::Villagers, 1'000, "benchmark.villagers_1000", "1,000 active villagers");
+	AddCrowd(all, Crowd::Kind::Villagers, 10'000, "benchmark.villagers_10000", "10,000 active villagers");
+}
+
 std::vector<Scenario> Build()
 {
 	std::vector<Scenario> all;
@@ -1970,6 +2007,7 @@ std::vector<Scenario> Build()
 	AddParticles(all);
 	AddEditor(all);
 	AddMiracleScenarios(all);
+	AddBenchmark(all);
 	return all;
 }
 
@@ -2064,8 +2102,8 @@ std::string_view CommandProblem(const Command& command, std::span<const ObjectSe
 std::string_view testbed_scenarios::Name(Facet facet)
 {
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
-	    "Idle",  "Expressions", "Senses", "Needs", "Growth", "Appearance", "Light",     "Movement", "Footprints",
-	    "Audio", "Objects",     "Hand",   "Leash", "Combat", "Mind",       "Particles", "Editor",   "Miracles",
+	    "Idle",    "Expressions", "Senses", "Needs",  "Growth", "Appearance", "Light",  "Movement", "Footprints", "Audio",
+	    "Objects", "Hand",        "Leash",  "Combat", "Mind",   "Particles",  "Editor", "Miracles", "Benchmark",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
@@ -2183,9 +2221,13 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		problems.emplace_back("hour or body time out of range");
 	}
 	if (scenario.creatures.empty() && scenario.particles.empty() && scenario.miracles.empty() && scenario.dispensers.empty() &&
-	    !environment.dispenserGrid)
+	    !environment.dispenserGrid && !scenario.crowd.has_value())
 	{
-		problems.emplace_back("no creatures, particles, miracles or dispensers");
+		problems.emplace_back("no creatures, particles, miracles, dispensers or crowd");
+	}
+	if (scenario.crowd.has_value() && (scenario.crowd->count == 0 || scenario.crowd->perFrame == 0))
+	{
+		problems.emplace_back("a crowd of no one, or spawned none a frame");
 	}
 	for (const auto& miracle : scenario.miracles)
 	{

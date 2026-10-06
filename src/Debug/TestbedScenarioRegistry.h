@@ -29,6 +29,7 @@
 #include "Creature/CreatureTattoo.h"
 #include "Enums.h"
 #include "Particles/ParticleDrawPath.h"
+#include "TestbedCrowd.h"
 
 /// The testbed's scenarios: ready-made set ups of the flat testbed that show one facet of the creatures at a time, such
 /// as a thirsty creature finding water or a lineup of bodies. Each is plain data: the land, time of day and weather,
@@ -76,6 +77,9 @@ enum class Facet : uint8_t
 	Editor,
 	/// The miracles: dispensers, casting them and what they do, the creature spells among them
 	Miracles,
+	/// Crowds of hundreds to thousands of creatures or villagers, all fully simulated, for measuring how the game's
+	/// costs grow with their number
+	Benchmark,
 
 	_Count
 };
@@ -413,6 +417,9 @@ struct Scenario
 	std::vector<Command> commands;
 	/// After the last command, the commands go round again from this one
 	std::optional<size_t> repeatFrom;
+	/// A crowd spawned a batch a frame, after the creatures and objects above; the runner measures the frames once it
+	/// is all there
+	std::optional<Crowd> crowd;
 };
 
 /// The miracles' scenarios, added to every scenario by the registry

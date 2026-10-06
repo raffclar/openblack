@@ -15,6 +15,7 @@
 #include <string_view>
 
 #include <fmt/format.h>
+#include <spdlog/spdlog.h>
 
 #include "Creature/CreatureIdleMind.h"
 #include "CreatureSpawner.h"
@@ -25,6 +26,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
+#include "EngineConfig.h"
 #include "Game.h"
 #include "Locator.h"
 
@@ -56,6 +58,10 @@ constexpr std::array<float, 5> k_BodyTimes {1.0f, 10.0f, 100.0f, 1000.0f, 3600.0
 
 const ImVec4 k_RunColour {0.25f, 0.60f, 0.30f, 1.0f};
 const ImVec4 k_StopColour {0.85f, 0.30f, 0.25f, 1.0f};
+/// The costliest profiler stages a benchmark shows as it runs
+constexpr size_t k_TopStages = 12;
+/// A frame this long or less makes the target of 100 frames a second
+constexpr float k_TargetFrameMs = 10.0f;
 
 std::string_view SpeciesName(CreatureType species)
 {
@@ -123,13 +129,57 @@ void TestbedScenarios::UpdateAlways() noexcept
 	{
 		seconds = game->IsPaused() ? 0.0f : seconds / std::max(game->GetGameSpeed(), 0.01f);
 	}
+	RunRequested();
 	_runner.Update(seconds);
+}
+
+void TestbedScenarios::RunRequested() noexcept
+{
+	auto* game = Game::Instance();
+	if (game == nullptr)
+	{
+		return;
+	}
+	const auto request = game->TakeScenarioRequest();
+	if (!request.has_value())
+	{
+		return;
+	}
+	const auto* scenario = Find(request->id);
+	if (scenario == nullptr)
+	{
+		std::string ids;
+		for (const auto& each : All())
+		{
+			ids += fmt::format(" {}", each.id);
+		}
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "No testbed scenario {}; there are:{}", request->id, ids);
+		if (Locator::config::has_value())
+		{
+			Locator::config::value().running = false;
+		}
+		return;
+	}
+	const auto all = All();
+	_picked = static_cast<size_t>(scenario - all.data());
+	_facet = scenario->facet;
+	_runner.SetBenchmarkSettings({
+	    .warmUpFrames = request->warmUpFrames,
+	    .frames = request->frames,
+	    // Without a crowd there is nothing to measure, and the game carries on with the scenario
+	    .autoSave = scenario->crowd.has_value()
+	                    ? std::optional(request->results.value_or(std::filesystem::path("benchmarks") / scenario->id))
+	                    : std::nullopt,
+	});
+	_focus = 0;
+	_runner.Start(*scenario);
 }
 
 void TestbedScenarios::Draw() noexcept
 {
 	DrawPicker();
 	DrawControls();
+	DrawBenchmark();
 	DrawTime();
 	DrawCamera();
 	DrawCreatures();
@@ -245,6 +295,98 @@ void TestbedScenarios::DrawControls() noexcept
 			}
 			ImGui::TreePop();
 		}
+	}
+}
+
+void TestbedScenarios::DrawBenchmark() noexcept
+{
+	const auto progress = _runner.GetCrowdProgress();
+	if (!progress.has_value())
+	{
+		return;
+	}
+	ImGui::SeparatorText("Benchmark");
+	std::string counts;
+	for (const auto& [name, count] : _runner.EntityCounts())
+	{
+		counts += fmt::format("{}{} {}", counts.empty() ? "" : ", ", count, name);
+	}
+	ImGui::TextUnformatted(counts.c_str());
+
+	if (!progress->Done())
+	{
+		const auto fraction = static_cast<float>(progress->spawned) / static_cast<float>(std::max<size_t>(progress->total, 1));
+		ImGui::ProgressBar(fraction, ImVec2(-1.0f, 0.0f),
+		                   fmt::format("Spawning {} of {}", progress->spawned, progress->total).c_str());
+		return;
+	}
+	ImGui::Text("Spawned %zu in %.0f ms over %u frames", progress->total, progress->spawnMs, progress->spawnFrames);
+	ImGui::SetItemTooltip("The time spent creating the crowd's entities, apart from the rest of those frames");
+	if (const auto warmUp = _runner.GetWarmUpLeft(); warmUp > 0)
+	{
+		ImGui::Text("Settling: %u frames before measuring", warmUp);
+		return;
+	}
+
+	const auto& settings = _runner.GetBenchmarkSettings();
+	const auto& results = _runner.GetLiveResults();
+	ImGui::Text("Measured the last %zu of up to %u frames", _runner.GetMeasuredFrames(), settings.frames);
+	const auto frame = results.frame;
+	const auto colour = frame.average <= k_TargetFrameMs ? ImVec4(0.4f, 0.85f, 0.4f, 1.0f) : ImVec4(0.95f, 0.45f, 0.35f, 1.0f);
+	ImGui::TextColored(colour, "Frame: mean %.2f ms (%.0f FPS), p95 %.2f, max %.2f", static_cast<double>(frame.average),
+	                   frame.average > 0.0f ? 1000.0 / static_cast<double>(frame.average) : 0.0, static_cast<double>(frame.p95),
+	                   static_cast<double>(frame.max));
+	ImGui::Text("Update: mean %.2f ms, p95 %.2f   Render: mean %.2f ms, p95 %.2f", static_cast<double>(results.update.average),
+	            static_cast<double>(results.update.p95), static_cast<double>(results.render.average),
+	            static_cast<double>(results.render.p95));
+	ImGui::Text("Draw calls: mean %.0f, max %.0f", static_cast<double>(results.draws.average),
+	            static_cast<double>(results.draws.max));
+
+	const auto stages = _runner.GetStages();
+	if (!results.stages.empty() &&
+	    ImGui::BeginTable("Benchmark stages", 6,
+	                      ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_SizingFixedFit))
+	{
+		ImGui::TableSetupColumn("Stage");
+		ImGui::TableSetupColumn("");
+		ImGui::TableSetupColumn("Mean");
+		ImGui::TableSetupColumn("p95");
+		ImGui::TableSetupColumn("Max");
+		ImGui::TableSetupColumn("When run");
+		ImGui::TableHeadersRow();
+		for (size_t i = 0; i < std::min(k_TopStages, results.stages.size()); ++i)
+		{
+			const auto& stage = results.stages[i];
+			const auto& info = stages[stage.stage];
+			ImGui::TableNextRow();
+			ImGui::TableNextColumn();
+			ImGui::TextUnformatted(info.name.data(), info.name.data() + info.name.size());
+			ImGui::TableNextColumn();
+			ImGui::TextDisabled("%s", info.render ? "render" : "update");
+			ImGui::TableNextColumn();
+			ImGui::Text("%.2f", static_cast<double>(stage.perFrame.average));
+			ImGui::TableNextColumn();
+			ImGui::Text("%.2f", static_cast<double>(stage.perFrame.p95));
+			ImGui::TableNextColumn();
+			ImGui::Text("%.2f", static_cast<double>(stage.perFrame.max));
+			ImGui::TableNextColumn();
+			ImGui::Text("%.2f in %zu", static_cast<double>(stage.meanWhenRun), stage.framesRun);
+		}
+		ImGui::EndTable();
+	}
+
+	ImGui::BeginDisabled(_runner.GetMeasuredFrames() == 0);
+	if (ImGui::Button("Save results"))
+	{
+		const auto path = _runner.SaveResults();
+		_savedTo = path.has_value() ? path->generic_string() : "couldn't write them";
+	}
+	ImGui::EndDisabled();
+	ImGui::SetItemTooltip("Writes the frames measured so far to benchmarks/, as JSON and CSV, to compare with other runs");
+	if (!_savedTo.empty())
+	{
+		ImGui::SameLine();
+		ImGui::TextDisabled("%s", _savedTo.c_str());
 	}
 }
 

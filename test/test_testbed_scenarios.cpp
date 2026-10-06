@@ -638,3 +638,53 @@ TEST(TestbedDispenserGrid, StaysUnlessAScenarioAsksForNoneOrStandsOnIt)
 	ASSERT_NE(dispensers, nullptr);
 	EXPECT_TRUE(KeepsDispenserGrid(*dispensers));
 }
+
+TEST(TestbedScenarios, BenchmarksMeasureCrowdsOfEachSize)
+{
+	const std::array<std::pair<const char*, size_t>, 6> benchmarks {{
+	    {"benchmark.creatures_100", 100},
+	    {"benchmark.creatures_1000", 1'000},
+	    {"benchmark.creatures_10000", 10'000},
+	    {"benchmark.villagers_100", 100},
+	    {"benchmark.villagers_1000", 1'000},
+	    {"benchmark.villagers_10000", 10'000},
+	}};
+	for (const auto& [id, count] : benchmarks)
+	{
+		const auto* scenario = Find(id);
+		ASSERT_NE(scenario, nullptr) << id;
+		EXPECT_EQ(scenario->facet, Facet::Benchmark);
+		ASSERT_TRUE(scenario->crowd.has_value()) << id;
+		EXPECT_EQ(scenario->crowd->count, count);
+		EXPECT_GT(scenario->crowd->perFrame, 0u);
+		EXPECT_EQ(scenario->crowd->kind, std::string_view(id).find("creatures") != std::string_view::npos
+		                                     ? Crowd::Kind::Creatures
+		                                     : Crowd::Kind::Villagers);
+		EXPECT_TRUE(Problems(*scenario).empty()) << id;
+		// Nothing else on the land, so that only the crowd's size changes between them, and the same layout each run
+		EXPECT_TRUE(scenario->creatures.empty());
+		EXPECT_TRUE(scenario->objects.empty());
+		EXPECT_TRUE(scenario->commands.empty());
+		EXPECT_FALSE(scenario->environment.dispenserGrid);
+		EXPECT_EQ(scenario->crowd->seed, Find("benchmark.creatures_100")->crowd->seed);
+	}
+	EXPECT_EQ(Name(Facet::Benchmark), "Benchmark");
+	// Only benchmarks have crowds
+	for (const auto& scenario : All())
+	{
+		EXPECT_EQ(scenario.crowd.has_value(), scenario.facet == Facet::Benchmark) << scenario.id;
+	}
+}
+
+TEST(TestbedScenarios, CrowdsAreChecked)
+{
+	Scenario scenario {.id = "benchmark.bad", .name = "Bad", .description = "-", .expected = "-"};
+	scenario.environment.dispenserGrid = false;
+	EXPECT_FALSE(Problems(scenario).empty());
+	scenario.crowd = Crowd {.count = 10, .perFrame = 5};
+	EXPECT_TRUE(Problems(scenario).empty());
+	scenario.crowd->perFrame = 0;
+	EXPECT_FALSE(Problems(scenario).empty());
+	scenario.crowd = Crowd {.count = 0, .perFrame = 5};
+	EXPECT_FALSE(Problems(scenario).empty());
+}

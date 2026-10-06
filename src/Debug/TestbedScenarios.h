@@ -42,6 +42,10 @@ protected:
 private:
 	void DrawPicker() noexcept;
 	void DrawControls() noexcept;
+	/// The crowd of a benchmark as it spawns, and its frames as they are measured
+	void DrawBenchmark() noexcept;
+	/// Runs the scenario the command line asked for, once
+	void RunRequested() noexcept;
 	void DrawTime() noexcept;
 	void DrawCamera() noexcept;
 	void DrawCreatures() noexcept;
@@ -53,6 +57,8 @@ private:
 	size_t _picked {0};
 	/// The scenario's creature the camera shots are of
 	size_t _focus {0};
+	/// Where the last benchmark's results were written
+	std::string _savedTo;
 };
 
 } // namespace openblack::debug::gui
