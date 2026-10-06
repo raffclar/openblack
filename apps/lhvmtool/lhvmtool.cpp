@@ -9,11 +9,17 @@
 
 #include <cstdlib>
 
+#include <algorithm>
+#include <array>
+#include <filesystem>
 #include <format>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <string>
 
+#include <ChlConstants.h>
+#include <LHVMDecompiler.h>
 #include <LHVMFile.h>
 #include <cxxopts.hpp>
 
@@ -34,7 +40,8 @@ struct Arguments
 		Stack,
 		VarValues,
 		Tasks,
-		RuntimeInfo
+		RuntimeInfo,
+		Decompile
 	};
 	Mode mode {Mode::Header};
 	struct Read
@@ -42,6 +49,14 @@ struct Arguments
 		std::filesystem::path filename;
 		std::string objName;
 	} read;
+	struct Decompile
+	{
+		std::filesystem::path output;
+		std::filesystem::path headers;
+		bool stats {false};
+		bool addresses {false};
+		bool diagnostics {false};
+	} decompile;
 };
 
 int PrintInfo(const LHVMFile& file)
@@ -479,6 +494,163 @@ int PrintRuntimeInfo(const LHVMFile& file)
 	return EXIT_SUCCESS;
 }
 
+/// The script's text, each line prefixed with the first instruction address it stands for when asked
+std::string ScriptText(const DecompiledScript& script, bool addresses)
+{
+	if (!addresses)
+	{
+		return script.text;
+	}
+	std::string text;
+	size_t line = 0;
+	size_t start = 0;
+	while (start < script.text.size())
+	{
+		const auto end = script.text.find('\n', start);
+		const auto& ips = script.lines.at(line++);
+		text += ips.empty() ? std::string(8, ' ') : std::format("{:6}  ", ips.front());
+		text += script.text.substr(start, end - start + 1);
+		start = end + 1;
+	}
+	return text;
+}
+
+int Decompile(const LHVMFile& file, const Arguments& args)
+{
+	const auto program = ProgramView::From(file);
+	openblack::lhvm::chl::ConstantTable constants;
+	DecompileOptions options;
+	if (!args.decompile.headers.empty())
+	{
+		std::error_code ec;
+		for (const auto& entry : std::filesystem::directory_iterator(args.decompile.headers, ec))
+		{
+			const auto extension = entry.path().extension();
+			if (extension == ".h" || extension == ".txt")
+			{
+				std::ifstream stream(entry.path(), std::ios::binary);
+				const std::string text((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+				if (extension == ".h")
+				{
+					constants.LoadHeader(text);
+				}
+				else
+				{
+					constants.LoadInfo(text);
+				}
+			}
+		}
+		options.constants = &constants;
+	}
+
+	std::vector<DecompiledScript> scripts;
+	DecompiledProgram whole;
+	if (!args.read.objName.empty())
+	{
+		const auto& all = file.GetScripts();
+		const auto it = std::ranges::find(all, args.read.objName, &VMScript::name);
+		if (it == all.end())
+		{
+			std::fprintf(stderr, "Script not found\n");
+			return EXIT_FAILURE;
+		}
+		scripts.push_back(DecompileScript(program, static_cast<size_t>(std::distance(all.begin(), it)), options));
+	}
+	else
+	{
+		whole = DecompileAll(program, options);
+		scripts = std::move(whole.scripts);
+	}
+
+	if (args.decompile.output.empty())
+	{
+		std::string text = whole.header;
+		for (const auto& script : scripts)
+		{
+			text += (text.empty() ? "" : "\n") + ScriptText(script, args.decompile.addresses);
+		}
+		if (!whole.footer.empty())
+		{
+			text += "\n" + whole.footer;
+		}
+		std::fwrite(text.data(), 1, text.size(), stdout);
+	}
+	else
+	{
+		// One file per source file the scripts were compiled from, plus one for the globals
+		std::error_code ec;
+		std::filesystem::create_directories(args.decompile.output, ec);
+		std::map<std::string, std::string> files;
+		for (const auto& script : scripts)
+		{
+			const auto& vmScript = file.GetScripts().at(script.scriptIndex);
+			auto stem = std::filesystem::path(vmScript.filename).stem().string();
+			if (stem.empty())
+			{
+				stem = script.name;
+			}
+			auto& text = files[stem + ".txt"];
+			text += (text.empty() ? "" : "\n") + ScriptText(script, args.decompile.addresses);
+		}
+		if (!whole.header.empty() || !whole.footer.empty())
+		{
+			files["_globals.txt"] = whole.header + (whole.footer.empty() ? "" : "\n" + whole.footer);
+		}
+		for (const auto& [name, text] : files)
+		{
+			std::ofstream stream(args.decompile.output / name, std::ios::binary);
+			stream << text;
+		}
+		std::fprintf(stderr, "Wrote %zu files to %s\n", files.size(), args.decompile.output.string().c_str());
+	}
+
+	if (args.decompile.diagnostics)
+	{
+		static constexpr std::array<const char*, 3> k_Severity = {"info", "warning", "error"};
+		for (const auto& script : scripts)
+		{
+			for (const auto& diagnostic : script.diagnostics)
+			{
+				std::fprintf(stderr, "%s:%u: %s: %s\n", script.name.c_str(), diagnostic.ip,
+				             k_Severity.at(static_cast<size_t>(diagnostic.severity)), diagnostic.message.c_str());
+			}
+		}
+	}
+	if (args.decompile.stats)
+	{
+		DecompileStats stats;
+		for (const auto& script : scripts)
+		{
+			++stats.scripts;
+			stats.instructions += script.endIp - script.firstIp;
+			stats.unaccountedInstructions += script.unaccountedCount;
+			stats.unsupportedOpcodes += script.unsupportedCount;
+			stats.nativeCalls += script.nativeCallCount;
+			stats.gotos += script.gotoCount;
+			stats.clean += script.IsClean() ? 1 : 0;
+			stats.withGoto += script.gotoCount > 0 ? 1 : 0;
+			stats.withFallback += script.fallbackCount > 0 ? 1 : 0;
+		}
+		std::fprintf(stderr, "Scripts: %zu\n", stats.scripts);
+		std::fprintf(stderr, "Structured cleanly: %zu\n", stats.clean);
+		std::fprintf(stderr, "Needing goto: %zu (%zu gotos)\n", stats.withGoto, stats.gotos);
+		std::fprintf(stderr, "With other fallbacks: %zu\n", stats.withFallback);
+		std::fprintf(stderr, "Instructions: %zu\n", stats.instructions);
+		std::fprintf(stderr, "Instructions not shown: %zu\n", stats.unaccountedInstructions);
+		std::fprintf(stderr, "Unsupported instructions: %zu\n", stats.unsupportedOpcodes);
+		std::fprintf(stderr, "Native calls without a statement form: %zu\n", stats.nativeCalls);
+		for (const auto& script : scripts)
+		{
+			if (!script.IsClean())
+			{
+				std::fprintf(stderr, "  not clean: %s (goto %u, fallbacks %u, not shown %u)\n", script.name.c_str(),
+				             script.gotoCount, script.fallbackCount, script.unaccountedCount);
+			}
+		}
+	}
+	return EXIT_SUCCESS;
+}
+
 bool parseOptions(int argc, char** argv, Arguments& args, int& returnCode) noexcept
 {
 	cxxopts::Options options("lhvmtool", "Inspect and extract files from LionHead Virtual Machine files.");
@@ -486,8 +658,9 @@ bool parseOptions(int argc, char** argv, Arguments& args, int& returnCode) noexc
 	options.add_options()                                            //
 	    ("h,help", "Display this help message.")                     //
 	    ("subcommand", "Subcommand.", cxxopts::value<std::string>()) //
+	    ("input", "Input file.", cxxopts::value<std::string>())      //
 	    ;
-	options.positional_help("[read] [OPTION...]");
+	options.positional_help("[read|decompile FILE] [OPTION...]");
 	options.add_options("read")                                                     //
 	    ("I,info", "Print info.", cxxopts::value<std::string>())                    //
 	    ("A,all", "Print all relevant data.", cxxopts::value<std::string>())        //
@@ -504,7 +677,16 @@ bool parseOptions(int argc, char** argv, Arguments& args, int& returnCode) noexc
 	    ("n,name", "Object name", cxxopts::value<std::string>()->default_value("")) //
 	    ;
 
-	options.parse_positional({"subcommand"});
+	options.add_options("decompile")                                                              //
+	    ("o,output", "Write to this directory instead of stdout.", cxxopts::value<std::string>()) //
+	    ("headers", "Directory of script headers (.h) and info tables (.txt) to name constants.",
+	     cxxopts::value<std::string>())                                       //
+	    ("stats", "Print how well the scripts decompiled.")                   //
+	    ("addresses", "Prefix each line with its first instruction address.") //
+	    ("diagnostics", "Print the decompiler's diagnostics.")                //
+	    ;
+
+	options.parse_positional({"subcommand", "input"});
 	auto result = options.parse(argc, argv);
 	if (result["help"].as<bool>())
 	{
@@ -517,6 +699,24 @@ bool parseOptions(int argc, char** argv, Arguments& args, int& returnCode) noexc
 		std::cerr << options.help() << '\n';
 		returnCode = EXIT_FAILURE;
 		return false;
+	}
+	if (result["subcommand"].as<std::string>() == "decompile" && result["input"].count() > 0)
+	{
+		args.mode = Arguments::Mode::Decompile;
+		args.read.filename = result["input"].as<std::string>();
+		args.read.objName = result["name"].as<std::string>();
+		if (result["output"].count() > 0)
+		{
+			args.decompile.output = result["output"].as<std::string>();
+		}
+		if (result["headers"].count() > 0)
+		{
+			args.decompile.headers = result["headers"].as<std::string>();
+		}
+		args.decompile.stats = result["stats"].as<bool>();
+		args.decompile.addresses = result["addresses"].as<bool>();
+		args.decompile.diagnostics = result["diagnostics"].as<bool>();
+		return true;
 	}
 	if (result["subcommand"].as<std::string>() == "read")
 	{
@@ -610,6 +810,16 @@ int main(int argc, char* argv[]) noexcept
 	}
 
 	LHVMFile file;
+	if (args.mode == Arguments::Mode::Decompile)
+	{
+		file.Open(args.read.filename);
+		if (!file.IsLoaded())
+		{
+			std::fprintf(stderr, "Can't read %s\n", args.read.filename.string().c_str());
+			return EXIT_FAILURE;
+		}
+		return Decompile(file, args);
+	}
 	std::printf("Filename: %s\n", args.read.filename.string().c_str());
 
 	// Open file
