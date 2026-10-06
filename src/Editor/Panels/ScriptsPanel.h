@@ -62,6 +62,8 @@ private:
 		std::map<uint32_t, std::optional<scripts::DecompiledSource>> decompiled;
 	};
 
+	/// Loading another program, or the game's own again
+	void DrawLoading(lhvm::LHVM& vm) noexcept;
 	void Refresh(const lhvm::LHVM& vm, const scripts::Program& program) noexcept;
 	void DrawBrowser(const lhvm::LHVM& vm, const scripts::Program& program) noexcept;
 	void DrawCode(lhvm::LHVM& vm, const scripts::Program& program) noexcept;
@@ -97,6 +99,7 @@ private:
 	bool _followTask {true};
 	std::vector<float> _parameters;
 	std::string _lastStart;
+	std::string _loadMessage;
 	std::string _globalsFilter;
 	std::optional<uint32_t> _editingGlobal;
 	std::string _editText;

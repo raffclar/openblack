@@ -12,6 +12,7 @@
 #include <charconv>
 
 #include <algorithm>
+#include <filesystem>
 
 #include <LHVM.h>
 #include <fmt/format.h>
@@ -20,10 +21,13 @@
 #include <imgui_stdlib.h>
 #include <imgui_user.h>
 
+#include "Common/FileDialog.h"
 #include "Editor/EditorOutline.h"
 #include "Editor/EditorStyle.h"
 #include "Editor/Scripts/Decompiler.h"
+#include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
+#include "Windowing/WindowingInterface.h"
 #include "generated/scripting/UnimplementedNatives.h"
 
 namespace openblack::editor
@@ -105,6 +109,9 @@ const VMScript* ScriptById(const Program& program, uint32_t id)
 	return id >= 1 && id <= program.scripts.size() ? &program.scripts[id - 1] : nullptr;
 }
 
+/// The folder a program was last opened from, remembered between runs
+constexpr std::string_view k_ProgramFolderKey = "script_program_folder";
+
 constexpr ImGuiTableFlags k_ListFlags = ImGuiTableFlags_Resizable | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
                                         ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp;
 } // namespace
@@ -129,12 +136,14 @@ void ScriptsPanel::Draw() noexcept
 	        natives != nullptr ? std::span<const lhvm::NativeFunction>(*natives) : std::span<const lhvm::NativeFunction>(),
 	    .data = vm.GetData(),
 	};
+	DrawLoading(vm);
 	if (program.scripts.empty())
 	{
 		ImGui::TextDisabled("No script program is loaded");
 		return;
 	}
 	Refresh(vm, program);
+	ImGui::SameLine();
 
 	const auto coverage = CoverageOf(_caches.natives, k_UnimplementedNatives);
 	ImGui::Text("%zu scripts, %zu instructions, %zu tasks, %zu globals.", program.scripts.size(), program.code.size(),
@@ -156,6 +165,74 @@ void ScriptsPanel::Draw() noexcept
 	ImGui::BeginChild("Side", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders);
 	DrawSide(vm, program);
 	ImGui::EndChild();
+}
+
+void ScriptsPanel::DrawLoading(lhvm::LHVM& vm) noexcept
+{
+	const auto exists = [](const std::filesystem::path& folder) {
+		std::error_code error;
+		return std::filesystem::is_directory(folder, error);
+	};
+	std::filesystem::path quests;
+	if (Locator::filesystem::has_value())
+	{
+		quests = Locator::filesystem::value().GetPath<filesystem::Path::Quests>(true);
+	}
+	if (ImGui::SmallButton("Open program..."))
+	{
+		const auto outcome = file_dialog::Show({
+		    .mode = file_dialog::Mode::Open,
+		    .title = "Open a compiled script program",
+		    .filters = {{.name = "Script programs (*.chl)", .patterns = {"*.chl"}}, {.name = "All files", .patterns = {"*"}}},
+		    .startFolder = file_dialog::StartFolder(file_dialog::RememberedPath(k_ProgramFolderKey), quests, exists),
+		    .owner = Locator::windowing::has_value() ? Locator::windowing::value().GetNativeHandles().nativeWindow : nullptr,
+		});
+		switch (outcome.status)
+		{
+		case file_dialog::Status::Chosen:
+			file_dialog::RememberPath(k_ProgramFolderKey, outcome.path.parent_path());
+			// The machine reads it as the game reads its own program, stopping every task first
+			try
+			{
+				_loadMessage = vm.LoadBinary(outcome.path) == EXIT_SUCCESS
+				                   ? fmt::format("Loaded {}", outcome.path.filename().string())
+				                   : fmt::format("Couldn't read {}", outcome.path.filename().string());
+			}
+			catch (const std::exception& error)
+			{
+				_loadMessage = fmt::format("Couldn't read {}: {}", outcome.path.filename().string(), error.what());
+			}
+			break;
+		case file_dialog::Status::Cancelled:
+			break;
+		case file_dialog::Status::Unavailable:
+			_loadMessage = "No file dialog is available here";
+			break;
+		}
+	}
+	ImGui::SetItemTooltip("Loads a .chl into the script machine in place of the game's, stopping every task");
+	ImGui::SameLine();
+	if (ImGui::SmallButton("Game's program") && Locator::filesystem::has_value())
+	{
+		auto& fileSystem = Locator::filesystem::value();
+		const auto path = fileSystem.GetPath<filesystem::Path::Quests>() / "challenge.chl";
+		try
+		{
+			_loadMessage = fileSystem.Exists(path) && vm.LoadBinary(fileSystem.ReadAll(path)) == EXIT_SUCCESS
+			                   ? "Loaded the game's challenge.chl"
+			                   : "Couldn't read the game's challenge.chl";
+		}
+		catch (const std::exception& error)
+		{
+			_loadMessage = fmt::format("Couldn't read the game's challenge.chl: {}", error.what());
+		}
+	}
+	ImGui::SetItemTooltip("Loads the game's own challenge.chl again, stopping every task");
+	if (!_loadMessage.empty())
+	{
+		ImGui::SameLine();
+		ImGui::TextColored(style::k_Muted, "%s", _loadMessage.c_str());
+	}
 }
 
 void ScriptsPanel::Refresh(const lhvm::LHVM& vm, const Program& program) noexcept
