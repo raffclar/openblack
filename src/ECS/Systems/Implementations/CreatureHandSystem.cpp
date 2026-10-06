@@ -221,7 +221,7 @@ CreatureHandSystem::Update(const glm::vec3& rayOrigin, const glm::vec3& rayDirec
 			// The hand slaps either way, but it only counts when the creature can reel from it
 			contact->sinceSlapMs = 0.0f;
 			contact->slapShowMs = k_SlapShowMs;
-			if (minds.ForceAction(creatureEntity, slap->animation, slap->mirrored, std::nullopt, 0.0f,
+			if (minds.ForceAction(creatureEntity, slap->animation, slap->mirrored, std::nullopt,
 			                      feedback::k_SlapInterruptsAfter))
 			{
 				contact->sum = feedback::AfterSlap(contact->sum, slap->gentle);
@@ -237,8 +237,7 @@ CreatureHandSystem::Update(const glm::vec3& rayOrigin, const glm::vec3& rayDirec
 			const auto index = static_cast<size_t>(part);
 			if (feedback::StrokeDue(contact->lastPart, part, contact->sinceStrokeMs) &&
 			    minds.ForceAction(creatureEntity, feedback::k_RewardAnimations.at(index), feedback::k_RewardMirrored.at(index),
-			                      feedback::k_RewardFaces.at(index), feedback::k_RewardFaceSeconds,
-			                      feedback::k_StrokeInterruptsAfter))
+			                      feedback::RewardFace(part), feedback::k_StrokeInterruptsAfter))
 			{
 				contact->sum = feedback::AfterStroke(contact->sum);
 				contact->lastPart = part;
@@ -316,9 +315,9 @@ bool CreatureHandSystem::Stroke(entt::entity creature, feedback::BodyPart part)
 	}
 	const auto index = static_cast<size_t>(part);
 	contact->lastPart = part;
-	if (!Locator::creatureMindSystem::value().ForceAction(
-	        creature, feedback::k_RewardAnimations.at(index), feedback::k_RewardMirrored.at(index),
-	        feedback::k_RewardFaces.at(index), feedback::k_RewardFaceSeconds, feedback::k_StrokeInterruptsAfter))
+	if (!Locator::creatureMindSystem::value().ForceAction(creature, feedback::k_RewardAnimations.at(index),
+	                                                      feedback::k_RewardMirrored.at(index), feedback::RewardFace(part),
+	                                                      feedback::k_StrokeInterruptsAfter))
 	{
 		return false;
 	}
@@ -348,7 +347,7 @@ bool CreatureHandSystem::Slap(entt::entity creature, float heightShare, bool gen
 	contact->lastPoint = registry.Get<const Transform>(creature).position + glm::vec3(0.0f, heightShare * height, 0.0f);
 	contact->sinceSlapMs = 0.0f;
 	contact->slapShowMs = k_SlapShowMs;
-	if (!Locator::creatureMindSystem::value().ForceAction(creature, slap->animation, slap->mirrored, std::nullopt, 0.0f,
+	if (!Locator::creatureMindSystem::value().ForceAction(creature, slap->animation, slap->mirrored, std::nullopt,
 	                                                      feedback::k_SlapInterruptsAfter))
 	{
 		return false;

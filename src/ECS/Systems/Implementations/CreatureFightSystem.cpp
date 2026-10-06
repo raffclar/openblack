@@ -27,6 +27,7 @@
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
 #include "Creature/CreatureFeedback.h"
+#include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureMarks.h"
@@ -70,8 +71,8 @@ constexpr float k_FaceTurnRate = 3.0f;
 constexpr float k_BlowReachPerSize = 0.2f * 15.0f;
 /// Each blow is measured at this many moments through it, for its two striking bones, the hand and the foot
 constexpr int k_MeasureSamples = 24;
-/// A fighter growls through the fight
-constexpr size_t k_GrowlFace = creature_layers::animations::k_FirstFace + 2;
+/// A face is due again once its wait is within this much of over
+constexpr float k_FaceDue = 1e-3f;
 /// The stages before the duel give up waiting after this long
 constexpr float k_ApproachSeconds = 30.0f;
 constexpr float k_PooApproachSeconds = 20.0f;
@@ -593,7 +594,7 @@ void CreatureFightSystem::Faint(entt::entity creature, std::optional<glm::vec3> 
 	    .mirrored = std::bernoulli_distribution(0.5)(_random),
 	    .holdLoop = true,
 	};
-	animation.face.wanted.reset();
+	animation.face = creature_layers::RelaxFace(animation.face);
 	SetEyes(registry, creature, creature_eyes::Mode::Closed);
 	if (auto* needs = registry.TryGet<CreatureNeeds>(creature))
 	{
@@ -795,6 +796,16 @@ void CreatureFightSystem::ProcessStages()
 			continue;
 		}
 		fighting->stageSeconds += k_TurnSeconds;
+		// Squaring up to the opponent and fighting it, it shows its anger as it starts and every few seconds after
+		if (fighting->stage <= CreatureFighting::Stage::Duel && Locator::creatureMindSystem::has_value())
+		{
+			fighting->faceSeconds -= k_TurnSeconds;
+			if (fighting->faceSeconds < k_FaceDue)
+			{
+				Locator::creatureMindSystem::value().ShowFeeling(entity, creature_face::Cue::Anger);
+				fighting->faceSeconds = creature_mind::k_FaceRepeatSeconds;
+			}
+		}
 		const auto opponent = fighting->opponent;
 		const bool opponentHere = registry.Valid(opponent) && registry.AllOf<Creature, Transform>(opponent);
 		const auto& body = registry.Get<const Creature>(entity);
@@ -955,7 +966,6 @@ void CreatureFightSystem::BeginDuel(entt::entity creature)
 	}
 	MeasureBlows(creature);
 	fight::Enter(fighting.fighter, fight::State::Start);
-	registry.Get<CreatureAnimation>(creature).face.wanted = k_GrowlFace;
 }
 
 void CreatureFightSystem::MeasureBlows(entt::entity creature)
@@ -1449,7 +1459,8 @@ void CreatureFightSystem::Win(entt::entity winner, entt::entity loser)
 		fighting->stageSeconds = 0.0f;
 		fighting->played = false;
 		fight::Enter(fighting->fighter, fight::State::Finish);
-		registry.Get<CreatureAnimation>(winner).face.wanted.reset();
+		auto& won = registry.Get<CreatureAnimation>(winner);
+		won.face = creature_layers::RelaxFace(won.face);
 	}
 }
 
@@ -1503,7 +1514,7 @@ void CreatureFightSystem::Leave(entt::entity creature)
 		{
 			animation->body = {};
 		}
-		animation->face.wanted.reset();
+		animation->face = creature_layers::RelaxFace(animation->face);
 	}
 	if (_pressed.has_value() && _pressed->creature == creature)
 	{

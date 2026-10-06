@@ -18,6 +18,8 @@
 
 #include <glm/vec3.hpp>
 
+#include "Creature/CreatureFace.h"
+
 /// What a creature's body plays, layer by layer. The body plays one animation at a time: standing and breathing, an
 /// action that plays once (a yawn of tiredness, a wave), or a start, loop and end (sitting down, sitting, getting up).
 /// On top of it, the head turns towards what the creature looks at, the face pulls an expression, and a gesture such as
@@ -141,14 +143,25 @@ struct BodyAction
 /// stays where it was put.
 [[nodiscard]] BodyAction AdvanceBody(BodyAction body, float milliseconds, std::optional<uint32_t> duration);
 
-/// The face's expression, played on top of the body and looping. Changing it runs the expression back to its start
-/// first, a quarter as fast when no other is wanted, then plays the new one.
+/// The face's expression, played on top of the body. A face is pulled for some time: it plays through once and holds
+/// its last frame, the full expression, until that time is up. Then it relaxes, running back to its start a quarter as
+/// fast as it played. Pulling another face first runs the current one back to its start at full speed, then plays the
+/// new one. Pulling the face already held keeps holding it for the new time.
 struct FaceLayer
 {
 	std::optional<size_t> current;
 	float timeMs {0.0f};
 	std::optional<size_t> wanted;
+	/// How much longer the wanted face is held for
+	float remainingMs {0.0f};
+	/// Why the wanted face was pulled
+	creature_face::Cue cue {creature_face::Cue::None};
 };
+/// A face pulled for some milliseconds, or for an hour when none are given
+[[nodiscard]] FaceLayer PullFace(FaceLayer face, size_t animation, float milliseconds,
+                                 creature_face::Cue cue = creature_face::Cue::None);
+/// No face is wanted any more: the current one relaxes
+[[nodiscard]] FaceLayer RelaxFace(FaceLayer face);
 [[nodiscard]] FaceLayer AdvanceFace(FaceLayer face, float milliseconds, std::optional<uint32_t> duration);
 
 /// A gesture played once on top of the body, such as a nod or a yawn

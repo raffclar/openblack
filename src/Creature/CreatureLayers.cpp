@@ -26,6 +26,8 @@ constexpr float k_PlaybackRateAtSizeZero = 1.6f;
 constexpr float k_PlaybackSlowingPerSize = 0.425f;
 /// Faces run back to their start this much more slowly when no other face is wanted
 constexpr float k_FaceRelaxSlowing = 4.0f;
+/// A face pulled with no time given is held for an hour
+constexpr float k_FaceHeldUnlessTold = 3'600'000.0f;
 /// The head settles on its target, and looks only sideways when its target is this far round
 constexpr float k_Settled = 1e-4f;
 
@@ -222,25 +224,50 @@ BodyAction creature_layers::AdvanceBody(BodyAction body, float milliseconds, std
 	return body;
 }
 
+FaceLayer creature_layers::PullFace(FaceLayer face, size_t animation, float milliseconds, creature_face::Cue cue)
+{
+	face.wanted = animation;
+	face.remainingMs = milliseconds > 0.0f ? milliseconds : k_FaceHeldUnlessTold;
+	face.cue = cue;
+	return face;
+}
+
+FaceLayer creature_layers::RelaxFace(FaceLayer face)
+{
+	face.wanted.reset();
+	face.remainingMs = 0.0f;
+	face.cue = creature_face::Cue::None;
+	return face;
+}
+
 FaceLayer creature_layers::AdvanceFace(FaceLayer face, float milliseconds, std::optional<uint32_t> duration)
 {
+	// The wanted face is let go of once its time is up
+	face.remainingMs = std::max(face.remainingMs - milliseconds, 0.0f);
+	if (face.remainingMs <= 0.0f)
+	{
+		face = RelaxFace(face);
+	}
+
 	if (face.current == face.wanted)
 	{
-		if (face.current.has_value())
+		// The expression plays through once and holds its last frame
+		if (face.current.has_value() && duration.has_value())
 		{
-			const auto length = static_cast<float>(duration.value_or(0));
-			face.timeMs = length > 0.0f ? std::fmod(face.timeMs + milliseconds, length) : 0.0f;
+			face.timeMs = std::min(face.timeMs + milliseconds, static_cast<float>(*duration));
 		}
 		return face;
 	}
-	if (!face.current.has_value())
+	if (face.current.has_value())
 	{
-		face.current = face.wanted;
-		face.timeMs = 0.0f;
-		return face;
+		face.timeMs -= face.wanted.has_value() ? milliseconds : milliseconds / k_FaceRelaxSlowing;
+		if (face.timeMs <= 0.0f)
+		{
+			face.timeMs = 0.0f;
+			face.current.reset();
+		}
 	}
-	face.timeMs -= face.wanted.has_value() ? milliseconds : milliseconds / k_FaceRelaxSlowing;
-	if (face.timeMs <= 0.0f || !duration.has_value())
+	if (!face.current.has_value())
 	{
 		face.current = face.wanted;
 		face.timeMs = 0.0f;

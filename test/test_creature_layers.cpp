@@ -145,22 +145,22 @@ TEST(CreatureLayers, ABodyTimedByWhatPlaysItStaysWherePut)
 
 TEST(CreatureLayers, AFaceRunsBackBeforeTheNextStarts)
 {
-	FaceLayer face {.current = std::nullopt, .timeMs = 0.0f, .wanted = 16};
+	auto face = PullFace({}, 16, 5000.0f);
 	face = AdvanceFace(face, 100.0f, std::nullopt);
 	EXPECT_EQ(face.current, 16u);
 	face = AdvanceFace(face, 300.0f, 1000);
 	EXPECT_NEAR(face.timeMs, 300.0f, k_Tolerance);
-	// Another face is wanted: the smile runs back to its start at full speed, then the growl starts
-	face.wanted = 18;
+	// Another face is pulled: the smile runs back to its start at full speed, then the growl starts
+	face = PullFace(face, 18, 5000.0f);
 	face = AdvanceFace(face, 200.0f, 1000);
 	EXPECT_EQ(face.current, 16u);
 	EXPECT_NEAR(face.timeMs, 100.0f, k_Tolerance);
 	face = AdvanceFace(face, 200.0f, 1000);
 	EXPECT_EQ(face.current, 18u);
 	EXPECT_NEAR(face.timeMs, 0.0f, k_Tolerance);
-	// No face wanted: it relaxes a quarter as fast
+	// Relaxed: it runs back a quarter as fast
 	face = AdvanceFace(face, 400.0f, 1000);
-	face.wanted.reset();
+	face = RelaxFace(face);
 	face = AdvanceFace(face, 400.0f, 1000);
 	EXPECT_EQ(face.current, 18u);
 	EXPECT_NEAR(face.timeMs, 300.0f, k_Tolerance);
@@ -168,11 +168,69 @@ TEST(CreatureLayers, AFaceRunsBackBeforeTheNextStarts)
 	EXPECT_FALSE(face.current.has_value());
 }
 
-TEST(CreatureLayers, AFaceLoops)
+TEST(CreatureLayers, AFaceHoldsItsExpressionRatherThanLooping)
 {
-	FaceLayer face {.current = 20, .timeMs = 900.0f, .wanted = 20};
-	face = AdvanceFace(face, 300.0f, 1000);
-	EXPECT_NEAR(face.timeMs, 200.0f, k_Tolerance);
+	auto face = PullFace({}, 20, 3000.0f);
+	face = AdvanceFace(face, 10.0f, 250);
+	// Played through, it holds its last frame without starting over: the mouth doesn't open and close again
+	for (int frame = 0; frame < 100; ++frame)
+	{
+		face = AdvanceFace(face, 16.0f, 250);
+		EXPECT_EQ(face.current, 20u);
+		if (frame > 16)
+		{
+			EXPECT_NEAR(face.timeMs, 250.0f, k_Tolerance);
+		}
+	}
+}
+
+TEST(CreatureLayers, AFaceRelaxesWhenItsTimeIsUp)
+{
+	auto face = PullFace({}, 21, 1000.0f, creature_face::Cue::Sad);
+	EXPECT_EQ(face.cue, creature_face::Cue::Sad);
+	face = AdvanceFace(face, 1.0f, 250);
+	face = AdvanceFace(face, 500.0f, 250);
+	EXPECT_NEAR(face.timeMs, 250.0f, k_Tolerance);
+	face = AdvanceFace(face, 600.0f, 250);
+	// Let go of after a second, it runs back at a quarter speed, 150 ms of its expression in the last 600 ms
+	EXPECT_FALSE(face.wanted.has_value());
+	EXPECT_EQ(face.cue, creature_face::Cue::None);
+	EXPECT_EQ(face.current, 21u);
+	EXPECT_NEAR(face.timeMs, 100.0f, k_Tolerance);
+	face = AdvanceFace(face, 200.0f, 250);
+	EXPECT_NEAR(face.timeMs, 50.0f, k_Tolerance);
+	face = AdvanceFace(face, 1000.0f, 250);
+	EXPECT_FALSE(face.current.has_value());
+}
+
+TEST(CreatureLayers, AFacePulledWithoutATimeIsHeldForAnHour)
+{
+	auto face = PullFace({}, 18, 0.0f);
+	face = AdvanceFace(face, 30.0f * 60.0f * 1000.0f, 250);
+	EXPECT_EQ(face.wanted, 18u);
+	face = AdvanceFace(face, 31.0f * 60.0f * 1000.0f, 250);
+	EXPECT_FALSE(face.wanted.has_value());
+}
+
+TEST(CreatureLayers, PullingTheHeldFaceAgainKeepsHoldingIt)
+{
+	auto face = PullFace({}, 16, 500.0f);
+	face = AdvanceFace(face, 1.0f, 250);
+	face = AdvanceFace(face, 400.0f, 250);
+	face = PullFace(face, 16, 500.0f);
+	face = AdvanceFace(face, 400.0f, 250);
+	EXPECT_EQ(face.wanted, 16u);
+	EXPECT_EQ(face.current, 16u);
+	EXPECT_NEAR(face.timeMs, 250.0f, k_Tolerance);
+}
+
+TEST(CreatureLayers, AFaceTheSpeciesLacksStaysAtItsStart)
+{
+	auto face = PullFace({}, 26, 1000.0f);
+	face = AdvanceFace(face, 1.0f, std::nullopt);
+	face = AdvanceFace(face, 100.0f, std::nullopt);
+	EXPECT_EQ(face.current, 26u);
+	EXPECT_NEAR(face.timeMs, 0.0f, k_Tolerance);
 }
 
 TEST(CreatureLayers, AGesturePlaysOnce)

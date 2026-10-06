@@ -45,10 +45,11 @@ public:
 	bool PlayAction(entt::entity creature, size_t animation) override;
 	bool PlayGesture(entt::entity creature, size_t animation) override;
 	void PullFace(entt::entity creature, size_t animation) override;
+	std::optional<creature_face::Request> ShowFeeling(entt::entity creature, creature_face::Cue cue) override;
 	bool SitDown(entt::entity creature) override;
 	void StandUp(entt::entity creature) override;
 	void ReceiveFeedback(entt::entity creature, float feedback) override;
-	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<size_t> face, float faceSeconds,
+	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
 	                 float interruptsAfter) override;
 	bool Sleep(entt::entity creature) override;
 	bool Eat(entt::entity creature, std::optional<entt::entity> food) override;

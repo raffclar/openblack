@@ -26,6 +26,7 @@
 #include "3D/LandIslandInterface.h"
 #include "Camera/Camera.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureFace.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLocomotion.h"
@@ -550,11 +551,19 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 	const auto& body = animation->body;
 	ImGui::Text("Playing %s, %.0f ms%s", AnimationLabel(creature_layers::CurrentAnimation(body)).c_str(),
 	            static_cast<double>(body.timeMs), body.mirrored ? ", mirrored" : "");
-	ImGui::Text("Face %s%s%s", animation->face.current ? AnimationLabel(*animation->face.current).c_str() : "none",
-	            animation->face.wanted != animation->face.current ? " -> " : "",
-	            animation->face.wanted != animation->face.current
-	                ? (animation->face.wanted ? AnimationLabel(*animation->face.wanted).c_str() : "none")
-	                : "");
+	const auto& face = animation->face;
+	ImGui::Text("Face %s%s%s, %.0f ms in", face.current ? AnimationLabel(*face.current).c_str() : "none",
+	            face.wanted != face.current ? " -> " : "",
+	            face.wanted != face.current ? (face.wanted ? AnimationLabel(*face.wanted).c_str() : "relaxing") : "",
+	            static_cast<double>(face.timeMs));
+	if (face.wanted.has_value())
+	{
+		ImGui::Text("  pulled for %s, held %.1f s more", creature_face::Name(face.cue).data(),
+		            static_cast<double>(face.remainingMs) / 1000.0);
+	}
+	ImGui::Text("  next face in %.1f s, variety %u, attitude to the player %+.2f",
+	            static_cast<double>(std::max(idle.faceSeconds, 0.0f)), idle.faceVariety,
+	            static_cast<double>(mind->attitudeToPlayer));
 	ImGui::Text("Gesture %s", animation->gesture.animation ? AnimationLabel(*animation->gesture.animation).c_str() : "none");
 	if (mind->look.id.has_value() && animation->lookAt.has_value())
 	{
@@ -619,6 +628,28 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 		if (ImGui::SmallButton(AnimationLabel(animations::k_FirstFace + i).c_str()))
 		{
 			minds.PullFace(entity, animations::k_FirstFace + i);
+		}
+	}
+	ImGui::TextUnformatted("Feel");
+	ImGui::SetItemTooltip("Pulls the face the creature's mind would pull for a feeling or what it is doing");
+	constexpr std::array k_Feelings {
+	    creature_face::Cue::Idle,        creature_face::Cue::AttitudeToPlayer,
+	    creature_face::Cue::Curiosity,   creature_face::Cue::Anger,
+	    creature_face::Cue::Fear,        creature_face::Cue::Compassion,
+	    creature_face::Cue::Playfulness, creature_face::Cue::Smile,
+	    creature_face::Cue::Grimace,     creature_face::Cue::Amazed,
+	    creature_face::Cue::Puzzled,     creature_face::Cue::Frightened,
+	    creature_face::Cue::Sad,         creature_face::Cue::Exhausted,
+	};
+	for (size_t i = 0; i < k_Feelings.size(); ++i)
+	{
+		if (i % 5 != 0)
+		{
+			ImGui::SameLine();
+		}
+		if (ImGui::SmallButton(std::string(creature_face::Name(k_Feelings.at(i))).c_str()))
+		{
+			minds.ShowFeeling(entity, k_Feelings.at(i));
 		}
 	}
 	ImGui::BeginDisabled(busy);

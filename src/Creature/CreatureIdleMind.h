@@ -20,12 +20,14 @@
 #include <glm/vec2.hpp>
 
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureFace.h"
 
 /// What a creature does with itself while it has nothing better to do, decided once a game turn. It works through an
 /// agenda of steps: waiting while it looks about, playing an action, sitting for a while, going somewhere. When the
 /// agenda runs out it picks the next: showing the player its strongest desire, at most once a minute; else sitting down
 /// for a while; else hanging around, which is walking somewhere nearby and sitting there; else being idle, which is
-/// waiting a second or two then a tired yawn, twice. At the start of each step it pulls a face for three seconds.
+/// waiting a second or two then a tired yawn, twice. Each step pulls a face for what it does or feels as it starts, and
+/// again every few seconds while it lasts: idling, a random face for three seconds.
 ///
 /// Before any of that, a creature in need sees to it: hungry with food at hand it picks it up, looks it over and eats
 /// it, tired it sleeps on the spot, needing a poo it has one, thirsty with water in reach it goes and drinks. The
@@ -39,8 +41,10 @@ namespace openblack::creature_mind
 {
 /// The seconds between showing desires
 constexpr float k_ShowDesireSeconds = 60.0f;
-/// A face lasts this long
-constexpr float k_FaceSeconds = 3.0f;
+/// Each step pulls a face as it starts, and again this often for as long as it lasts: every four seconds and two turns
+constexpr float k_FaceRepeatSeconds = 4.2f;
+/// After each face it pulls, the creature's variety of faces moves on by up to this much less one
+constexpr uint32_t k_FaceVarietyStep = 7;
 /// Within this many seconds of being stroked or slapped, the creature shows its pleasure or sorrow at it
 constexpr float k_FeedbackSeconds = 10.0f;
 /// Idle waits are one second and up to one more
@@ -222,6 +226,8 @@ struct Step
 	std::optional<uint32_t> object;
 	/// What an object step does
 	ObjectOrder order {};
+	/// The face pulled as the step starts
+	creature_face::Cue face {creature_face::Cue::None};
 };
 
 struct IdleMind
@@ -232,8 +238,9 @@ struct IdleMind
 	bool stepStarted {false};
 	float stepSeconds {0.0f};
 	bool sitEnding {false};
-	/// Seconds the face is held for yet
+	/// Seconds until the step's face is pulled again, and the count that varies the faces it pulls
 	float faceSeconds {0.0f};
+	uint32_t faceVariety {0};
 	/// Seconds until it may show a desire again
 	float showDesireSeconds {0.0f};
 	/// The desire it showed last
@@ -303,6 +310,8 @@ struct Senses
 	Wants wants {};
 	bool rested {false};
 	HandsState hands {HandsState::Idle};
+	/// What picks the faces it pulls
+	creature_face::Feelings feelings {};
 };
 
 /// How the eyes should look
@@ -324,8 +333,9 @@ struct Commands
 	std::optional<std::array<size_t, 3>> startSequence;
 	bool holdLoop {false};
 	bool endSit {false};
-	/// A face to pull, or none to relax it
-	std::optional<std::optional<size_t>> face;
+	/// A face to pull, or to relax the face pulled
+	std::optional<creature_face::Request> face;
+	bool relaxFace {false};
 	Eyes eyes {Eyes::Unchanged};
 	/// Whether the head turns to whatever is interesting this turn
 	bool lookAbout {false};
@@ -406,6 +416,9 @@ struct NeedPlan
 void Plan(IdleMind& mind, Activity activity, std::vector<Step> agenda);
 /// The next agenda when the current runs out
 void ChooseNext(IdleMind& mind, const Senses& senses, const Random& random);
+/// Pulls a face for a reason, if the reason calls for one, and moves the variety of faces on
+[[nodiscard]] std::optional<creature_face::Request> PullFace(IdleMind& mind, creature_face::Cue cue, const Senses& senses,
+                                                             const Random& random);
 /// One game turn of the mind
 [[nodiscard]] Commands Think(IdleMind& mind, const Senses& senses, const Random& random);
 } // namespace openblack::creature_mind

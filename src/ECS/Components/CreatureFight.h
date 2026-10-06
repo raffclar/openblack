@@ -56,8 +56,9 @@ struct CreatureFighting
 	bool measured {false};
 	/// How far the action's own movement had carried it, as a share of the action
 	float movedShare {0.0f};
-	/// Seconds in the stage
+	/// Seconds in the stage, and until it next shows its anger in its face
 	float stageSeconds {0.0f};
+	float faceSeconds {0.0f};
 	/// Whether it has been told what to do in this stage yet, and has taunted its opponent
 	bool played {false};
 	bool taunted {false};

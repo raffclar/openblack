@@ -19,8 +19,10 @@
 #include <glm/geometric.hpp>
 
 #include "3D/FlatLand.h"
+#include "Creature/CreatureFace.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureFight.h"
+#include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Particles/ParticleTypes.h"
@@ -117,6 +119,12 @@ Command Slap(size_t creature, float height, bool gentle, bool sweepsRight, float
 	        .slapHeight = height,
 	        .gentle = gentle,
 	        .sweepsRight = sweepsRight};
+}
+
+/// Pulling the face the creature's mind would for a feeling
+Command Feel(size_t creature, creature_face::Cue cue, float delay)
+{
+	return {.kind = Kind::ShowFeeling, .creature = creature, .delaySeconds = delay, .value = static_cast<size_t>(cue)};
 }
 
 Command Leash(size_t creature, LeashType type, float delay)
@@ -266,11 +274,58 @@ void AddExpressions(std::vector<Scenario>& all)
 	    .facet = Facet::Expressions,
 	    .description = "A tiger whose mind is paused, close up, pulls each of its ten faces in turn, then plays each "
 	                   "gesture on top of its body.",
-	    .expected = "Smile, grimace, growl, scared, sad, amazed, puzzled, laugh, ooh and aah, each easing out of the last, "
-	                "then a nod, a shake of the head, a yawn, thirst, squirting water and talking.",
+	    .expected =
+	        "Smile, grimace, growl, scared, sad, amazed, puzzled, laugh, ooh and aah, each held then easing out of the last, "
+	        "then a nod, a shake of the head, a yawn, thirst, squirting water and talking.",
 	    .framing = {.shot = Shot::Head, .distance = 1.6f},
 	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = Content(), .hold = true, .pauseMind = true}},
 	    .commands = faces,
+	    .repeatFrom = 0,
+	});
+
+	// Each shows one feeling in its face as the game's minds do: as its activity starts and again every four seconds
+	struct Feeling
+	{
+		std::string_view label;
+		std::optional<creature_face::Cue> cue;
+	};
+	const std::array<Feeling, 7> k_Feelings {{
+	    {"stroked", std::nullopt},
+	    {"slapped", std::nullopt},
+	    {"frightened", creature_face::Cue::Fear},
+	    {"angry", creature_face::Cue::Anger},
+	    {"exhausted", creature_face::Cue::Exhausted},
+	    {"amazed", creature_face::Cue::Amazed},
+	    {"curious", creature_face::Cue::Curiosity},
+	}};
+	std::vector<CreatureSetup> feelers;
+	std::vector<Command> feelings {Act(Kind::Stroke, 0, 0.5f), Act(Kind::Slap, 1, 0.1f)};
+	for (size_t i = 0; i < k_Feelings.size(); ++i)
+	{
+		auto creature = Content(CreatureType::Tiger, {RowX(i, k_Feelings.size(), 24.0f), 0.0f}, 0.0f, k_Feelings.at(i).label);
+		creature.pauseMind = k_Feelings.at(i).cue.has_value();
+		feelers.push_back(creature);
+		if (const auto cue = k_Feelings.at(i).cue)
+		{
+			feelings.push_back(Feel(i, *cue, 0.1f));
+		}
+	}
+	feelings.push_back(Act(Kind::Stop, 0, creature_mind::k_FaceRepeatSeconds));
+	all.push_back({
+	    .id = "expressions.faces_emotions",
+	    .name = "Faces and emotions",
+	    .facet = Facet::Expressions,
+	    .description = "Seven tigers in a row, each feeling something different: one stroked and one slapped over and "
+	                   "over with their minds running, then (paused) frightened, angry, exhausted, amazed and curious, "
+	                   "each pulling its feeling's face every four seconds as its mind would.",
+	    .expected = "The stroked tiger shows it is happy with a smile, the slapped one sad with a sad face. The "
+	                "frightened one is scared or goes ooh, the angry one growls or grimaces, the exhausted one grimaces, "
+	                "the amazed one is amazed, the curious one puzzled, amazed or aah. Each face plays once and holds, "
+	                "then eases back; no mouth opens and closes over and over. The spawner's mind panel names each "
+	                "face's reason.",
+	    .framing = {.shot = Shot::Overview, .distance = 0.8f},
+	    .creatures = feelers,
+	    .commands = feelings,
 	    .repeatFrom = 0,
 	});
 
@@ -1757,7 +1812,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 54> k_Names {
+	constexpr std::array<std::string_view, 55> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -1768,6 +1823,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "play action",
 	    "gesture",
 	    "pull face",
+	    "show feeling",
 	    "sit down",
 	    "stand up",
 	    "sleep",
@@ -1980,6 +2036,7 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		if ((command.kind == Kind::SetDesire &&
 		     (command.value >= creature_desires::k_DesireCount || !InRange(command.amount, 0.0f, 1.0f))) ||
 		    (command.kind == Kind::SetPhase && command.value > k_LastPhase) ||
+		    (command.kind == Kind::ShowFeeling && command.value >= creature_face::k_CueCount) ||
 		    (command.kind == Kind::SeeSkill && command.value >= k_Skills) ||
 		    (command.kind == Kind::SeeMiracle && command.value >= k_Miracles) ||
 		    (command.kind == Kind::PlayerDid && command.value >= k_Deeds))

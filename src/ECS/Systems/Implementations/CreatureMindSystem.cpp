@@ -31,6 +31,7 @@
 #include "3D/SkyInterface.h"
 #include "Camera/Camera.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureFace.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
@@ -71,6 +72,8 @@ namespace openblack::ecs::systems::mind_detail
 {
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 constexpr float k_TurnsPerSecond = 1.0f / k_TurnSeconds;
+/// A face told to by hand is held this long
+constexpr float k_ToldFaceMs = 3000.0f;
 
 /// A creature looks for food and water this far away at most
 constexpr float k_FoodSearchDistance = 200.0f;
@@ -330,11 +333,22 @@ void Apply(const creature_mind::Commands& commands, CreatureAnimation& animation
 			animation.body = *body;
 		}
 	}
+	if (commands.relaxFace)
+	{
+		animation.face = creature_layers::RelaxFace(animation.face);
+	}
 	if (commands.face.has_value())
 	{
-		animation.face.wanted = *commands.face;
+		animation.face = creature_layers::PullFace(animation.face, creature_face::AnimationOf(commands.face->face),
+		                                           commands.face->milliseconds, commands.face->cue);
 	}
 	ApplyEyes(eyes, commands.eyes);
+}
+
+/// What, besides why, picks the faces the creature pulls
+creature_face::Feelings FeelingsOf(const CreatureMindState& mind)
+{
+	return {.variety = mind.idle.faceVariety, .attitudeToPlayer = mind.attitudeToPlayer, .idlePick = 0};
 }
 
 bool IsNight()
@@ -773,6 +787,7 @@ void CreatureMindSystem::ProcessTurn()
 		                     : creature_mind::Wants {},
 		        .rested = needs != nullptr && needs->rested,
 		        .hands = HandsOf(entity),
+		        .feelings = FeelingsOf(mind),
 		    };
 		    const auto commands = creature_mind::Think(mind.idle, senses, random);
 		    Apply(commands, animation, eyes);
@@ -858,12 +873,29 @@ void CreatureMindSystem::PullFace(entt::entity creature, size_t animation)
 	auto& registry = Locator::entitiesRegistry::value();
 	if (auto* body = registry.TryGet<CreatureAnimation>(creature))
 	{
-		body->face.wanted = animation;
+		body->face = creature_layers::PullFace(body->face, animation, k_ToldFaceMs, creature_face::Cue::Told);
 	}
-	if (auto* mind = registry.TryGet<CreatureMindState>(creature))
+}
+
+std::optional<creature_face::Request> CreatureMindSystem::ShowFeeling(entt::entity creature, creature_face::Cue cue)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* body = registry.TryGet<CreatureAnimation>(creature);
+	auto* mind = registry.TryGet<CreatureMindState>(creature);
+	if (body == nullptr || mind == nullptr)
 	{
-		mind->idle.faceSeconds = creature_mind::k_FaceSeconds;
+		return std::nullopt;
 	}
+	const auto random = [this](uint32_t range) {
+		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
+	};
+	const creature_mind::Senses senses {.feelings = FeelingsOf(*mind)};
+	const auto face = creature_mind::PullFace(mind->idle, cue, senses, random);
+	if (face.has_value())
+	{
+		body->face = creature_layers::PullFace(body->face, creature_face::AnimationOf(face->face), face->milliseconds, cue);
+	}
+	return face;
 }
 
 bool CreatureMindSystem::SitDown(entt::entity creature)
@@ -939,8 +971,8 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	}
 }
 
-bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<size_t> face,
-                                     float faceSeconds, float interruptsAfter)
+bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bool mirrored,
+                                     std::optional<creature_face::Request> face, float interruptsAfter)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* body = registry.TryGet<CreatureAnimation>(creature);
@@ -983,8 +1015,8 @@ bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bo
 	body->body = *played;
 	if (face.has_value())
 	{
-		body->face.wanted = *face;
-		mind->idle.faceSeconds = faceSeconds;
+		body->face =
+		    creature_layers::PullFace(body->face, creature_face::AnimationOf(face->face), face->milliseconds, face->cue);
 	}
 	// What it was doing is over; it decides afresh once the action has played
 	Abandon(*mind);

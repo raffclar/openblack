@@ -232,6 +232,8 @@ struct Command
 		PlayAction,
 		PlayGesture,
 		PullFace,
+		/// Pulling the face its mind would for a feeling or what it does (value, by the face cues)
+		ShowFeeling,
 		SitDown,
 		StandUp,
 		/// Seeing to a need now: sleeping, waking, eating the nearest food, drinking at the nearest water, having a

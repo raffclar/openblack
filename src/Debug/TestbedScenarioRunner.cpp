@@ -648,6 +648,12 @@ void Runner::Give(const Command& command)
 	case Kind::PullFace:
 		minds.PullFace(*entity, command.value);
 		break;
+	case Kind::ShowFeeling:
+		if (const auto face = minds.ShowFeeling(*entity, static_cast<creature_face::Cue>(command.value)))
+		{
+			result = creature_face::Name(face->face);
+		}
+		break;
 	case Kind::SitDown:
 		result = minds.SitDown(*entity) ? "sitting" : "busy";
 		break;

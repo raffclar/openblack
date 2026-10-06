@@ -237,7 +237,8 @@ TEST(CreatureIdleMind, BeingIdleIsWaitingThenYawningTwice)
 		{
 			EXPECT_EQ(mind.activity, creature_mind::Activity::BeIdle);
 			EXPECT_EQ(mind.agenda.size(), 4u);
-			EXPECT_EQ(commands.face, std::optional<size_t>(animations::k_FirstFace + 1));
+			ASSERT_TRUE(commands.face.has_value());
+			EXPECT_EQ(commands.face->face, creature_face::Face::Grimace);
 			EXPECT_TRUE(commands.lookAbout);
 		}
 		if (commands.playOnce.has_value())
@@ -264,24 +265,69 @@ TEST(CreatureIdleMind, BeingIdleIsWaitingThenYawningTwice)
 	EXPECT_EQ(eyes[2], creature_mind::Eyes::Sleepy);
 }
 
-TEST(CreatureIdleMind, AFaceIsHeldForThreeSeconds)
+TEST(CreatureIdleMind, IdleStepsPullAFaceAsTheyStartAndEveryFewSeconds)
 {
 	creature_mind::IdleMind mind;
 	FakeBody body;
-	std::optional<int> relaxed;
-	for (int turn = 0; turn < 60 && !relaxed; ++turn)
+	std::vector<int> pulled;
+	for (int turn = 0; turn < 60; ++turn)
 	{
 		const auto commands = creature_mind::Think(mind, body.Senses(), Always(1));
-		if (turn > 0 && commands.face.has_value() && !commands.face->has_value())
+		if (commands.face.has_value())
 		{
-			relaxed = turn;
+			pulled.push_back(turn);
+			EXPECT_FLOAT_EQ(commands.face->milliseconds, 3000.0f);
+			EXPECT_EQ(commands.face->cue, creature_face::Cue::Idle);
 		}
+		// The mind lets the face go by itself: the body does, once its time is up
+		EXPECT_FALSE(commands.relaxFace);
 		body.Obey(commands, 100);
 	}
-	// The yawn starts on turn 12 with a new face, which relaxes three seconds later, give or take a turn's rounding
-	ASSERT_TRUE(relaxed.has_value());
-	EXPECT_GE(*relaxed, 42);
-	EXPECT_LE(*relaxed, 43);
+	// Pulled as the wait starts and as the yawn starts, then again 42 turns into the long yawn, and not every turn
+	ASSERT_EQ(pulled.size(), 3u);
+	EXPECT_EQ(pulled[0], 0);
+	EXPECT_EQ(pulled[1], 12);
+	EXPECT_EQ(pulled[2], 12 + 42);
+}
+
+TEST(CreatureIdleMind, AgendasPullTheFacesOfWhatTheyDo)
+{
+	using creature_face::Cue;
+	const auto sleep = creature_mind::Sleep(Always(0));
+	ASSERT_EQ(sleep.size(), 3u);
+	EXPECT_EQ(sleep[0].face, Cue::Grimace);
+	// Asleep with its eyes closed it pulls no face
+	EXPECT_EQ(sleep[1].face, Cue::None);
+	EXPECT_EQ(sleep[2].face, Cue::Grimace);
+	EXPECT_EQ(creature_mind::Hurl(1, {}, Always(1)).back().face, Cue::Anger);
+	EXPECT_EQ(creature_mind::DestroyThing(1).back().face, Cue::Anger);
+	EXPECT_EQ(creature_mind::RunFrom({}).back().face, Cue::Fear);
+	EXPECT_EQ(creature_mind::ExamineByPickingUp(1, Always(0)).back().face, Cue::Curiosity);
+	EXPECT_EQ(creature_mind::ThrowAbout(1, Always(0)).back().face, Cue::Playfulness);
+	EXPECT_EQ(creature_mind::Poo(Always(1)).back().face, Cue::Smile);
+	EXPECT_EQ(creature_mind::Puke().back().face, Cue::Grimace);
+	EXPECT_EQ(creature_mind::Emote(animations::k_Happy).back().face, Cue::AttitudeToPlayer);
+	EXPECT_EQ(creature_mind::HangAround(Always(0)).front().face, Cue::Idle);
+	EXPECT_EQ(creature_mind::LookAt({}, 1.0f).back().face, Cue::Amazed);
+	EXPECT_EQ(creature_mind::PutDownHeld().back().face, Cue::None);
+	EXPECT_EQ(creature_mind::Faint().back().face, Cue::None);
+}
+
+TEST(CreatureIdleMind, EachFacePulledMovesTheVarietyOn)
+{
+	creature_mind::IdleMind mind;
+	const creature_mind::Senses senses {};
+	const auto first = creature_mind::PullFace(mind, creature_face::Cue::Fear, senses, Always(3));
+	ASSERT_TRUE(first.has_value());
+	EXPECT_EQ(first->face, creature_face::Face::Scared);
+	EXPECT_EQ(mind.faceVariety, 3u);
+	const auto second = creature_mind::PullFace(mind, creature_face::Cue::Fear, senses, Always(3));
+	ASSERT_TRUE(second.has_value());
+	EXPECT_EQ(second->face, creature_face::Face::Ooh);
+	EXPECT_EQ(mind.faceVariety, 6u);
+	// A reason that pulls no face leaves it be
+	EXPECT_FALSE(creature_mind::PullFace(mind, creature_face::Cue::None, senses, Always(3)).has_value());
+	EXPECT_EQ(mind.faceVariety, 6u);
 }
 
 TEST(CreatureIdleMind, NothingStartsWhileTheBodyIsBusy)

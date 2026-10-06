@@ -792,15 +792,6 @@ void CreatureLocomotionSystem::ProcessTurn()
 		    Measure(self, creature, transform);
 		    const auto moves = MovesOf(creature.species);
 
-		    if (self.puzzledMs > 0.0f)
-		    {
-			    self.puzzledMs -= k_TurnMs;
-			    if (self.puzzledMs <= 0.0f && animation.face.wanted == k_PuzzledFace)
-			    {
-				    animation.face.wanted.reset();
-			    }
-		    }
-
 		    // The route is planned a little each turn
 		    if (self.planner.has_value())
 		    {
@@ -859,8 +850,8 @@ void CreatureLocomotionSystem::ProcessTurn()
 				    }
 				    else if (choice == 1)
 				    {
-					    animation.face.wanted = k_PuzzledFace;
-					    self.puzzledMs = k_PuzzledMs;
+					    animation.face =
+					        creature_layers::PullFace(animation.face, k_PuzzledFace, k_PuzzledMs, creature_face::Cue::Lost);
 				    }
 				    else if (auto confused = creature_layers::PlayOnce(animation.body, creature_layers::animations::k_Confused,
 				                                                       std::bernoulli_distribution(0.5)(_random)))

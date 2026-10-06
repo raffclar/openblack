@@ -17,6 +17,8 @@
 #include <entt/entity/fwd.hpp>
 #include <glm/vec3.hpp>
 
+#include "Creature/CreatureFace.h"
+
 namespace openblack::creaturemind
 {
 struct MindFileData;
@@ -63,8 +65,10 @@ public:
 	virtual bool PlayAction(entt::entity creature, size_t animation) = 0;
 	/// Plays a gesture on top of the body, unless one already plays
 	virtual bool PlayGesture(entt::entity creature, size_t animation) = 0;
-	/// Pulls a face for a few seconds
+	/// Pulls a face for a few seconds, as told to by hand
 	virtual void PullFace(entt::entity creature, size_t animation) = 0;
+	/// Pulls the face a feeling or what it is doing calls for, as the creature's mind would; returns the face pulled
+	virtual std::optional<creature_face::Request> ShowFeeling(entt::entity creature, creature_face::Cue cue) = 0;
 	/// Sits down for a while, unless the body plays an action
 	virtual bool SitDown(entt::entity creature) = 0;
 	/// Gets up from sitting
@@ -74,9 +78,9 @@ public:
 	/// too slight to count only has it look at the player.
 	virtual void ReceiveFeedback(entt::entity creature, float feedback) = 0;
 	/// Plays an action at once, as stroking and slapping make it, unless the body is less than a share of the way through
-	/// what it plays; a face can be pulled with it for some seconds. Returns whether it played.
-	virtual bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<size_t> face,
-	                         float faceSeconds, float interruptsAfter) = 0;
+	/// what it plays; a face can be pulled with it. Returns whether it played.
+	virtual bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
+	                         float interruptsAfter) = 0;
 
 	/// Sees to a need now, in place of whatever it was doing: sleeps until rested, eats something (the nearest food when
 	/// none is given), goes and drinks at the nearest water, has a poo, is sick, or faints. Returns whether it could.

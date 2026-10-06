@@ -25,6 +25,8 @@ namespace
 {
 /// Random fractions of a second are drawn in this many steps
 constexpr uint32_t k_FractionSteps = 1000;
+/// A face is due again once its wait is within this much of over, so that the turns' rounding doesn't delay it
+constexpr float k_FaceDue = 1e-3f;
 
 float RandomFraction(const Random& random)
 {
@@ -53,6 +55,19 @@ Step Static(std::array<size_t, 3> sequence, float seconds)
 Step Action(size_t animation, bool sleepyEyes)
 {
 	return {.kind = Step::Kind::Action, .seconds = 0.0f, .animation = animation, .sleepyEyes = sleepyEyes};
+}
+
+/// Every step of an agenda pulls a face for what the creature does or feels, except while its eyes are closed
+std::vector<Step> WithFace(std::vector<Step> agenda, creature_face::Cue cue)
+{
+	for (auto& step : agenda)
+	{
+		if (!step.closedEyes && step.face == creature_face::Cue::None)
+		{
+			step.face = cue;
+		}
+	}
+	return agenda;
 }
 
 Step Object(ObjectOrder order, Effect effect = Effect::None)
@@ -116,19 +131,22 @@ std::vector<Step> creature_mind::BeIdle(const Random& random)
 	std::vector<Step> agenda;
 	for (int i = 0; i < k_IdleRepeats; ++i)
 	{
-		agenda.push_back({.kind = Step::Kind::Wait,
-		                  .seconds = k_IdleWaitSeconds + RandomFraction(random),
-		                  .animation = 0,
-		                  .sleepyEyes = false});
-		agenda.push_back({.kind = Step::Kind::Action, .seconds = 0.0f, .animation = animations::k_Tired, .sleepyEyes = true});
+		Step wait {.kind = Step::Kind::Wait, .seconds = k_IdleWaitSeconds + RandomFraction(random)};
+		wait.face = creature_face::Cue::Idle;
+		agenda.push_back(wait);
+		auto yawn = Action(animations::k_Tired, true);
+		yawn.face = creature_face::Cue::Idle;
+		agenda.push_back(yawn);
 	}
 	return agenda;
 }
 
 Step creature_mind::SitDown(const Random& random)
 {
-	return Static({animations::k_StartSit, animations::k_Sit, animations::k_EndSit},
-	              static_cast<float>(k_SitSeconds + random(k_SitExtraSeconds)));
+	auto sit = Static({animations::k_StartSit, animations::k_Sit, animations::k_EndSit},
+	                  static_cast<float>(k_SitSeconds + random(k_SitExtraSeconds)));
+	sit.face = creature_face::Cue::Idle;
+	return sit;
 }
 
 std::vector<Step> creature_mind::Sleep(const Random& random)
@@ -144,13 +162,15 @@ std::vector<Step> creature_mind::Sleep(const Random& random)
 	sleep.effect = Effect::Slept;
 	agenda.push_back(sleep);
 	agenda.push_back(Action(animations::k_Confused, true));
-	return agenda;
+	return WithFace(std::move(agenda), creature_face::Cue::Grimace);
 }
 
 std::vector<Step> creature_mind::Eat(uint32_t food)
 {
-	return {PickUp(food), Object({.kind = ObjectOrder::Kind::Keep, .animation = creature_object_actions::k_ExamineObject}),
-	        Object({.kind = ObjectOrder::Kind::Eat}, Effect::Eat)};
+	return WithFace({PickUp(food),
+	                 Object({.kind = ObjectOrder::Kind::Keep, .animation = creature_object_actions::k_ExamineObject}),
+	                 Object({.kind = ObjectOrder::Kind::Eat}, Effect::Eat)},
+	                creature_face::Cue::Curiosity);
 }
 
 std::vector<Step> creature_mind::ExamineByPickingUp(uint32_t object, const Random& random)
@@ -158,8 +178,9 @@ std::vector<Step> creature_mind::ExamineByPickingUp(uint32_t object, const Rando
 	const auto keep = creature_object_actions::k_FirstKeepAnimation +
 	                  random(static_cast<uint32_t>(creature_object_actions::k_KeepAnimationCount));
 	const auto letGo = random(k_PutDownLots) >= k_TossLots ? ObjectOrder::Kind::PutDown : ObjectOrder::Kind::Discard;
-	return {PickUp(object), Object({.kind = ObjectOrder::Kind::Keep, .animation = keep}, Effect::Examined),
-	        Object({.kind = letGo})};
+	return WithFace({PickUp(object), Object({.kind = ObjectOrder::Kind::Keep, .animation = keep}, Effect::Examined),
+	                 Object({.kind = letGo})},
+	                creature_face::Cue::Curiosity);
 }
 
 std::vector<Step> creature_mind::ThrowAbout(uint32_t object, const Random& random)
@@ -167,9 +188,10 @@ std::vector<Step> creature_mind::ThrowAbout(uint32_t object, const Random& rando
 	constexpr uint32_t k_Degrees = 360;
 	const auto angle = static_cast<float>(random(k_Degrees)) * std::numbers::pi_v<float> / 180.0f;
 	const auto distance = k_ThrowAroundDistance + static_cast<float>(random(k_ThrowAroundExtra));
-	return {PickUp(object),
-	        Object({.kind = ObjectOrder::Kind::ThrowNearby, .point = distance * glm::vec2(std::cos(angle), std::sin(angle))},
-	               Effect::ThrewAbout)};
+	return WithFace({PickUp(object), Object({.kind = ObjectOrder::Kind::ThrowNearby,
+	                                         .point = distance * glm::vec2(std::cos(angle), std::sin(angle))},
+	                                        Effect::ThrewAbout)},
+	                creature_face::Cue::Playfulness);
 }
 
 std::vector<Step> creature_mind::Hurl(uint32_t object, glm::vec2 target, const Random& random)
@@ -181,7 +203,7 @@ std::vector<Step> creature_mind::Hurl(uint32_t object, glm::vec2 target, const R
 	}
 	agenda.push_back(PickUp(object));
 	agenda.push_back(Object({.kind = ObjectOrder::Kind::Throw, .point = target}, Effect::Hurled));
-	return agenda;
+	return WithFace(std::move(agenda), creature_face::Cue::Anger);
 }
 
 std::vector<Step> creature_mind::PutDownHeld()
@@ -226,14 +248,14 @@ std::vector<Step> creature_mind::Poo(const Random& random)
 	auto poo = Static({animations::k_StartPoo, animations::k_Poo, animations::k_EndPoo}, k_PooSeconds);
 	poo.effect = Effect::Poo;
 	agenda.push_back(poo);
-	return agenda;
+	return WithFace(std::move(agenda), creature_face::Cue::Smile);
 }
 
 std::vector<Step> creature_mind::Puke()
 {
 	auto puke = Static({animations::k_StartPuke, animations::k_Puke, animations::k_EndPuke}, k_PukeSeconds);
 	puke.effect = Effect::Puke;
-	return {puke};
+	return WithFace({puke}, creature_face::Cue::Grimace);
 }
 
 std::vector<Step> creature_mind::Faint()
@@ -247,57 +269,57 @@ std::vector<Step> creature_mind::Faint()
 
 std::vector<Step> creature_mind::EatHeld()
 {
-	return {Object({.kind = ObjectOrder::Kind::Eat}, Effect::Eat)};
+	return WithFace({Object({.kind = ObjectOrder::Kind::Eat}, Effect::Eat)}, creature_face::Cue::Curiosity);
 }
 
 std::vector<Step> creature_mind::Emote(size_t animation)
 {
-	return {Action(animation, false)};
+	return WithFace({Action(animation, false)}, creature_face::Cue::AttitudeToPlayer);
 }
 
 std::vector<Step> creature_mind::FaceAndEmote(glm::vec2 point, size_t animation)
 {
 	Step turn {.kind = Step::Kind::Move};
 	turn.movement = {.kind = Movement::Kind::TurnToFace, .point = point};
-	return {turn, Action(animation, false)};
+	return WithFace({turn, Action(animation, false)}, creature_face::Cue::AttitudeToPlayer);
 }
 
 std::vector<Step> creature_mind::ApproachAndEmote(uint32_t object, size_t animation)
 {
 	Step approach {.kind = Step::Kind::Move};
 	approach.movement = {.kind = Movement::Kind::ToObject, .object = object, .maxDistance = k_ApproachDistance};
-	return {approach, Action(animation, false)};
+	return WithFace({approach, Action(animation, false)}, creature_face::Cue::AttitudeToPlayer);
 }
 
 std::vector<Step> creature_mind::LookAt(glm::vec2 point, float seconds)
 {
 	Step turn {.kind = Step::Kind::Move};
 	turn.movement = {.kind = Movement::Kind::TurnToFace, .point = point};
-	return {turn, {.kind = Step::Kind::Wait, .seconds = seconds}};
+	return WithFace({turn, {.kind = Step::Kind::Wait, .seconds = seconds}}, creature_face::Cue::Amazed);
 }
 
 std::vector<Step> creature_mind::FollowFor(uint32_t object, float seconds)
 {
 	Step follow {.kind = Step::Kind::Move, .seconds = seconds};
 	follow.movement = {.kind = Movement::Kind::Follow, .object = object, .maxDistance = k_FollowDistance};
-	return {follow};
+	return WithFace({follow}, creature_face::Cue::Amazed);
 }
 
 std::vector<Step> creature_mind::RunFrom(glm::vec2 point)
 {
 	Step flee {.kind = Step::Kind::Move};
 	flee.movement = {.kind = Movement::Kind::FleeFrom, .point = point, .run = true};
-	return {flee};
+	return WithFace({flee}, creature_face::Cue::Fear);
 }
 
 std::vector<Step> creature_mind::DestroyThing(uint32_t object)
 {
-	return {Object({.kind = ObjectOrder::Kind::Destroy, .object = object})};
+	return WithFace({Object({.kind = ObjectOrder::Kind::Destroy, .object = object})}, creature_face::Cue::Anger);
 }
 
 std::vector<Step> creature_mind::LookAbout(float seconds)
 {
-	return {{.kind = Step::Kind::Wait, .seconds = seconds}};
+	return WithFace({{.kind = Step::Kind::Wait, .seconds = seconds}}, creature_face::Cue::Idle);
 }
 
 std::optional<NeedPlan> creature_mind::ChooseNeed(const Wants& wants, const Random& random)
@@ -410,17 +432,18 @@ std::vector<Step> creature_mind::HangAround(const Random& random)
 	constexpr uint32_t k_Degrees = 360;
 	const auto angle = static_cast<float>(random(k_Degrees)) * std::numbers::pi_v<float> / 180.0f;
 	const auto distance = k_HangAroundDistance + static_cast<float>(random(k_HangAroundExtra));
-	return {{.kind = Step::Kind::Move,
-	         .seconds = 0.0f,
-	         .animation = 0,
-	         .sleepyEyes = false,
-	         .movement = {.kind = Movement::Kind::Nearby,
-	                      .point = distance * glm::vec2(std::cos(angle), std::sin(angle)),
-	                      .object = std::nullopt,
-	                      .run = false,
-	                      .minDistance = 0.0f,
-	                      .maxDistance = 1.0f}},
-	        SitDown(random)};
+	std::vector<Step> agenda {{.kind = Step::Kind::Move,
+	                           .seconds = 0.0f,
+	                           .animation = 0,
+	                           .sleepyEyes = false,
+	                           .movement = {.kind = Movement::Kind::Nearby,
+	                                        .point = distance * glm::vec2(std::cos(angle), std::sin(angle)),
+	                                        .object = std::nullopt,
+	                                        .run = false,
+	                                        .minDistance = 0.0f,
+	                                        .maxDistance = 1.0f}},
+	                          SitDown(random)};
+	return WithFace(std::move(agenda), creature_face::Cue::Idle);
 }
 
 void creature_mind::Plan(IdleMind& mind, Activity activity, std::vector<Step> agenda)
@@ -462,8 +485,8 @@ void creature_mind::ChooseNext(IdleMind& mind, const Senses& senses, const Rando
 		}
 		if (emote.has_value())
 		{
-			Plan(mind, Activity::ShowDesire,
-			     {{.kind = Step::Kind::Action, .seconds = 0.0f, .animation = *emote, .sleepyEyes = false}});
+			// Showing the player how it feels, its face shows what it thinks of them
+			Plan(mind, Activity::ShowDesire, Emote(*emote));
 			mind.showDesireSeconds = k_ShowDesireSeconds;
 			return;
 		}
@@ -488,19 +511,25 @@ void creature_mind::ChooseNext(IdleMind& mind, const Senses& senses, const Rando
 	}
 }
 
+std::optional<creature_face::Request> creature_mind::PullFace(IdleMind& mind, creature_face::Cue cue, const Senses& senses,
+                                                              const Random& random)
+{
+	mind.faceSeconds = k_FaceRepeatSeconds;
+	auto feelings = senses.feelings;
+	feelings.variety = mind.faceVariety;
+	feelings.idlePick = random(creature_face::k_IdleFaceCount);
+	const auto face = creature_face::Choose(cue, feelings);
+	if (face.has_value())
+	{
+		mind.faceVariety += random(k_FaceVarietyStep);
+	}
+	return face;
+}
+
 Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random& random)
 {
 	Commands commands;
 	mind.showDesireSeconds = std::max(mind.showDesireSeconds - senses.seconds, 0.0f);
-	if (mind.faceSeconds > 0.0f)
-	{
-		mind.faceSeconds -= senses.seconds;
-		if (mind.faceSeconds <= 0.0f)
-		{
-			commands.face = std::optional<size_t> {};
-		}
-	}
-
 	if (mind.step >= mind.agenda.size())
 	{
 		ChooseNext(mind, senses, random);
@@ -511,6 +540,15 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	}
 	const auto& step = mind.agenda[mind.step];
 	const bool sitting = step.kind == Step::Kind::Static && mind.stepStarted;
+	// A step that goes on pulls its face again every few seconds
+	if (mind.stepStarted && step.face != creature_face::Cue::None)
+	{
+		mind.faceSeconds -= senses.seconds;
+		if (mind.faceSeconds < k_FaceDue)
+		{
+			commands.face = PullFace(mind, step.face, senses, random);
+		}
+	}
 	// A sit nobody is waiting on any more ends
 	if (senses.bodyLooping && !sitting)
 	{
@@ -527,8 +565,8 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		}
 		mind.stepStarted = true;
 		mind.stepSeconds = 0.0f;
-		commands.face = animations::k_FirstFace + random(animations::k_IdleFaceCount);
-		mind.faceSeconds = k_FaceSeconds;
+		// Each step pulls the face it is meant to as it starts, held for as long as the face goes with
+		commands.face = PullFace(mind, step.face, senses, random);
 		switch (step.kind)
 		{
 		case Step::Kind::Action:
@@ -546,8 +584,8 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			{
 				commands.eyes = Eyes::Closed;
 				// Asleep or out cold, it pulls no face
-				commands.face = std::optional<size_t> {};
-				mind.faceSeconds = 0.0f;
+				commands.face.reset();
+				commands.relaxFace = true;
 			}
 			break;
 		case Step::Kind::Move:

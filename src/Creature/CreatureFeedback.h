@@ -20,6 +20,8 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
+#include "Creature/CreatureFace.h"
+
 /// How the player's hand rewards and punishes a creature. The hand can't pick a creature up: clicking one holds the
 /// hand to it instead. Held still over its body, the hand strokes it, and the creature plays a pleased animation for
 /// the part of the body stroked. Swept fast across it, the hand slaps it, high or low and hard or gently, and it reels.
@@ -42,11 +44,22 @@ enum class BodyPart : uint8_t
 constexpr size_t k_BodyPartCount = 9;
 
 /// For each part stroked: the pleased animation, whether it plays mirrored (the left side's are the right's mirrored),
-/// and the face pulled for two seconds
+/// and the face pulled for two seconds: an aah for the head and belly, an ooh for the groin and a smile elsewhere
 constexpr std::array<size_t, k_BodyPartCount> k_RewardAnimations {154, 155, 155, 157, 158, 159, 159, 161, 161};
 constexpr std::array<bool, k_BodyPartCount> k_RewardMirrored {false, false, true, false, false, false, true, false, true};
-constexpr std::array<size_t, k_BodyPartCount> k_RewardFaces {25, 16, 16, 25, 24, 16, 16, 16, 16};
-constexpr float k_RewardFaceSeconds = 2.0f;
+constexpr std::array<creature_face::Face, k_BodyPartCount> k_RewardFaces {
+    creature_face::Face::Aah,   creature_face::Face::Smile, creature_face::Face::Smile,
+    creature_face::Face::Aah,   creature_face::Face::Ooh,   creature_face::Face::Smile,
+    creature_face::Face::Smile, creature_face::Face::Smile, creature_face::Face::Smile,
+};
+constexpr float k_RewardFaceMs = 2000.0f;
+/// The face pulled being stroked on a part
+[[nodiscard]] constexpr creature_face::Request RewardFace(BodyPart part)
+{
+	return {.face = k_RewardFaces.at(static_cast<size_t>(part)),
+	        .milliseconds = k_RewardFaceMs,
+	        .cue = creature_face::Cue::Stroked};
+}
 
 /// The part nearest a point the hand touches, given where each part's bone is, in part order
 [[nodiscard]] BodyPart NearestPart(const glm::vec3& touch, std::span<const glm::vec3, k_BodyPartCount> parts);

@@ -91,11 +91,9 @@ struct CreatureLocomotion
 	/// How far it moved this turn
 	float distance {0.0f};
 
-	/// Fidgets while waiting for a route: milliseconds to the next, whether it has had its first, and how long a
-	/// puzzled face is held
+	/// Fidgets while waiting for a route: milliseconds to the next, and whether it has had its first
 	float fidgetMs {0.0f};
 	bool fidgeted {false};
-	float puzzledMs {0.0f};
 
 	/// Where it was at the start of this turn and where it is at its end, drawn between them
 	glm::vec3 fromPosition {0.0f};
