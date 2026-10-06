@@ -59,6 +59,7 @@ struct Arguments
 		bool stats {false};
 		bool addresses {false};
 		bool diagnostics {false};
+		bool sourceLines {false};
 	} decompile;
 };
 
@@ -523,6 +524,7 @@ int Decompile(const LHVMFile& file, const Arguments& args)
 	const auto program = ProgramView::From(file);
 	openblack::lhvm::chl::ConstantTable constants;
 	DecompileOptions options;
+	options.sourceLines = args.decompile.sourceLines;
 	if (!args.decompile.headers.empty())
 	{
 		std::error_code ec;
@@ -566,6 +568,10 @@ int Decompile(const LHVMFile& file, const Arguments& args)
 	}
 	const auto& scripts = whole.scripts;
 	const auto fileText = [&](const DecompiledFile& decompiledFile) {
+		if (whole.sourceLines)
+		{
+			return whole.FileText(decompiledFile);
+		}
 		std::string text = decompiledFile.header;
 		for (const auto index : decompiledFile.scripts)
 		{
@@ -686,7 +692,8 @@ bool parseOptions(int argc, char** argv, Arguments& args, int& returnCode) noexc
 	     cxxopts::value<std::string>())                                       //
 	    ("stats", "Print how well the scripts decompiled.")                   //
 	    ("addresses", "Prefix each line with its first instruction address.") //
-	    ("diagnostics", "Print the decompiler's diagnostics.")                //
+	    ("source-lines", "Place statements on their recorded source lines.")("diagnostics",
+	                                                                         "Print the decompiler's diagnostics.") //
 	    ;
 
 	options.parse_positional({"subcommand", "input"});
@@ -719,6 +726,7 @@ bool parseOptions(int argc, char** argv, Arguments& args, int& returnCode) noexc
 		args.decompile.stats = result["stats"].as<bool>();
 		args.decompile.addresses = result["addresses"].as<bool>();
 		args.decompile.diagnostics = result["diagnostics"].as<bool>();
+		args.decompile.sourceLines = result["source-lines"].as<bool>();
 		return true;
 	}
 	if (result["subcommand"].as<std::string>() == "read")

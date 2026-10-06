@@ -89,6 +89,10 @@ struct DecompileOptions
 	/// The challenge an earlier "challenge NAME" line of the same file names, if any. Snapshots and highlights take
 	/// their challenge from the last such line.
 	std::optional<int32_t> challenge;
+	/// Lay files out so each statement sits on the source line the bytecode records for it, padding with blank lines
+	/// where the original had comments or space (DecompiledProgram::FileText). Compiling the result then reproduces the
+	/// line numbers too, as far as the gaps allow.
+	bool sourceLines {false};
 	/// The script is a file of its own: the first challenge it needs is named above "begin script", where the grammar
 	/// allows it. Otherwise it is left to the caller to name at the top of the file (DecompiledScript::leadingChallenge).
 	bool standalone {true};
@@ -136,6 +140,9 @@ struct DecompiledScript
 	/// The syntax tree the text was written from
 	std::shared_ptr<const chl::Script> ast;
 
+	/// For every output line, the source line the bytecode records for its statement, or 0 when it has none
+	std::vector<uint32_t> sourceLines;
+
 	/// The "challenge NAME" line the script needs before any other, when none was in effect: written above "begin
 	/// script" when standalone, otherwise for the caller to write at the top of the file
 	std::string leadingChallenge;
@@ -179,6 +186,8 @@ struct DecompiledProgram
 	std::vector<DecompiledScript> scripts;
 	std::vector<DecompiledFile> files;
 	DecompileStats stats;
+	/// The files are laid out on their recorded source lines (DecompileOptions::sourceLines)
+	bool sourceLines {false};
 
 	/// The text of one file: its header and its scripts, separated by blank lines
 	[[nodiscard]] std::string FileText(const DecompiledFile& file) const;

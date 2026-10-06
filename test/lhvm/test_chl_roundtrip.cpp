@@ -158,10 +158,13 @@ size_t IdenticalScripts(const LHVMFile& original, const LHVMFile& compiled, std:
 	return identical;
 }
 
-void RoundTrip(const LHVMFile& original, const ConstantTable* constants, size_t expectedIdentical)
+/// Decompiles the program, compiles it again and compares. Returns the share of instructions whose source line came
+/// back the same.
+double RoundTrip(const LHVMFile& original, const ConstantTable* constants, size_t expectedIdentical, bool sourceLines = false)
 {
 	DecompileOptions decompileOptions;
 	decompileOptions.constants = constants;
+	decompileOptions.sourceLines = sourceLines;
 	const auto view = ProgramView::From(original);
 
 	// The program as the files it was compiled from
@@ -177,7 +180,11 @@ void RoundTrip(const LHVMFile& original, const ConstantTable* constants, size_t 
 	{
 		ADD_FAILURE() << diagnostic.ToString();
 	}
-	ASSERT_TRUE(compiled.program.has_value());
+	if (!compiled.program.has_value())
+	{
+		ADD_FAILURE() << "The decompiled program doesn't compile";
+		return 0.0;
+	}
 	EXPECT_EQ(compiled.program->GetVariablesNames(), original.GetVariablesNames());
 	EXPECT_EQ(compiled.program->GetAutostart(), original.GetAutostart());
 	EXPECT_EQ(compiled.program->GetInstructions().size(), original.GetInstructions().size());
@@ -191,6 +198,17 @@ void RoundTrip(const LHVMFile& original, const ConstantTable* constants, size_t 
 		std::printf("  differs: %s\n", name.c_str());
 	}
 	EXPECT_GE(identical, expectedIdentical);
+
+	const auto& before = original.GetInstructions();
+	const auto& after = compiled.program->GetInstructions();
+	size_t sameLine = 0;
+	for (size_t i = 0; i < std::min(before.size(), after.size()); ++i)
+	{
+		sameLine += before[i].line == after[i].line ? 1 : 0;
+	}
+	const auto share = before.empty() ? 0.0 : static_cast<double>(sameLine) / static_cast<double>(before.size());
+	std::printf("Source lines: %zu of %zu instructions (%.1f%%) keep their line\n", sameLine, before.size(), 100.0 * share);
+	return share;
 }
 
 /// Constants from a directory of script headers (.h) and info tables (.txt). A header the game ships itself (its
@@ -247,6 +265,23 @@ TEST(ChlRoundTrip, ChallengeChlWithHeaders)
 	ASSERT_TRUE(original.IsLoaded());
 	const auto constants = LoadConstants(headers, path->parent_path().parent_path().parent_path() / "Data");
 	RoundTrip(original, &constants, 514);
+}
+
+TEST(ChlRoundTrip, ChallengeChlOnItsSourceLines)
+{
+	const auto path = ChallengePath();
+	const char* headers = std::getenv("OPENBLACK_CHL_HEADERS");
+	if (!path || headers == nullptr)
+	{
+		GTEST_SKIP() << "Needs OPENBLACK_GAME_PATH and OPENBLACK_CHL_HEADERS (a directory of script headers)";
+	}
+	LHVMFile original;
+	original.Open(*path);
+	ASSERT_TRUE(original.IsLoaded());
+	const auto constants = LoadConstants(headers, path->parent_path().parent_path().parent_path() / "Data");
+	// Laid out on their recorded lines, most statements keep them: not all, as some sit closer together in the decompiled
+	// text than in the original, and some statements spanned several lines there
+	EXPECT_GE(RoundTrip(original, &constants, 514, true), 0.98);
 }
 
 TEST(ChlRoundTrip, OriginalSourcesCompileToTheGamesProgram)

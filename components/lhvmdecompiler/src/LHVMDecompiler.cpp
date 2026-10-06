@@ -275,6 +275,30 @@ DecompiledScript DecompileScript(const ProgramView& program, size_t scriptIndex,
 		std::ranges::sort(ips);
 		const auto [dupFirst, dupLast] = std::ranges::unique(ips);
 		ips.erase(dupFirst, dupLast);
+		// The source line of the statement: where its own instructions were compiled. Jumps and exception
+		// bookkeeping take the line current when they were patched, so they don't count.
+		uint32_t sourceLine = 0;
+		for (const auto ip : ips)
+		{
+			const auto& instruction = program.instructions[ip];
+			switch (instruction.code)
+			{
+			case Opcode::Jmp:
+			case Opcode::Wait:
+			case Opcode::Except:
+			case Opcode::EndExcept:
+			case Opcode::FailExcept:
+			case Opcode::BrkExcept:
+			case Opcode::End:
+				break;
+			default:
+				if (instruction.line != 0 && (sourceLine == 0 || instruction.line < sourceLine))
+				{
+					sourceLine = instruction.line;
+				}
+			}
+		}
+		result.sourceLines.push_back(sourceLine);
 		result.lines.push_back(std::move(ips));
 	}
 
@@ -320,6 +344,7 @@ DecompiledScript DecompileScript(const ProgramView& program, size_t scriptIndex,
 DecompiledProgram DecompileAll(const ProgramView& program, const DecompileOptions& options)
 {
 	DecompiledProgram result;
+	result.sourceLines = options.sourceLines;
 	// Files in program order: a new one starts where the scripts' recorded file name changes. Each declares the globals
 	// added since the previous file's scripts were compiled (a script records how many there were).
 	struct FileState
@@ -407,13 +432,35 @@ DecompiledProgram DecompileAll(const ProgramView& program, const DecompileOption
 std::string DecompiledProgram::FileText(const DecompiledFile& file) const
 {
 	std::string text = file.header;
+	auto line = static_cast<uint32_t>(std::ranges::count(text, '\n'));
 	for (const auto index : file.scripts)
 	{
+		const auto& script = scripts[index];
 		if (!text.empty())
 		{
 			text += '\n';
+			++line;
 		}
-		text += scripts[index].text;
+		if (!sourceLines)
+		{
+			text += script.text;
+			continue;
+		}
+		// Blank lines bring each statement down to its recorded line; one recorded earlier stays where it falls
+		size_t start = 0;
+		for (size_t i = 0; start < script.text.size(); ++i)
+		{
+			const auto target = i < script.sourceLines.size() ? script.sourceLines[i] : 0;
+			while (target > line + 1)
+			{
+				text += '\n';
+				++line;
+			}
+			const auto end = script.text.find('\n', start);
+			text += script.text.substr(start, end - start + 1);
+			++line;
+			start = end + 1;
+		}
 	}
 	return text;
 }
