@@ -387,11 +387,14 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		    {
 			    animation.breathPeriod = creature_animation::BreathPeriod(creature.size);
 		    }
-		    animation.breathPhase = creature_animation::AdvanceBreath(animation.breathPhase, seconds, animation.breathPeriod);
+		    // A frozen creature plays slower, down to not at all
+		    const float scale = animation.playbackScale;
+		    animation.breathPhase =
+		        creature_animation::AdvanceBreath(animation.breathPhase, seconds * scale, animation.breathPeriod);
 
 		    if (rig != nullptr)
 		    {
-			    PoseBody(animation, *rig, morph.drawn, transform, creature.size, gameTime.count(), seconds);
+			    PoseBody(animation, *rig, morph.drawn, transform, creature.size, gameTime.count() * scale, seconds * scale);
 		    }
 		    if (animation.boneMatrices.size() != base->GetBoneMatrices().size())
 		    {

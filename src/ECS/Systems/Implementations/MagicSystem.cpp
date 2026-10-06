@@ -40,6 +40,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/MagicPile.h"
 #include "ECS/Components/Mesh.h"
@@ -685,6 +686,10 @@ entt::entity MagicSystem::CastOnObject(MagicType type, PlayerNames player, entt:
 	auto& spell = EntityRegistry().Get<Spell>(entity);
 	spell.target = target;
 	AddEffectTarget(spell, target);
+	if (spell.spellClass == magic::SpellClass::Creature)
+	{
+		ReceiveCreatureSpell(target, entity, spell);
+	}
 	return entity;
 }
 
@@ -698,9 +703,228 @@ bool MagicSystem::CanCastOn(MagicType type, entt::entity target) const
 	// The creature spells are cast on creatures only
 	if (magic::ClassOf(type) == magic::SpellClass::Creature)
 	{
-		return registry.AllOf<Creature>(target);
+		return registry.AllOf<Creature>(target) && creature_spells::SpellOf(type).has_value();
 	}
 	return true;
+}
+
+void MagicSystem::ReceiveCreatureSpell(entt::entity creature, entt::entity miracle, Spell& spell)
+{
+	auto& registry = EntityRegistry();
+	const auto which = creature_spells::SpellOf(spell.magicType);
+	if (!which.has_value() || !registry.AllOf<Creature>(creature))
+	{
+		return;
+	}
+	auto* component = registry.TryGet<CreatureSpells>(creature);
+	if (component == nullptr)
+	{
+		component = &registry.Assign<CreatureSpells>(creature);
+	}
+	// The creature holds the spell for the miracle's time, made longer by the caster's tribal power; the miracle itself
+	// then runs until the creature lets it go
+	const float seconds = spell.duration > 0.0f ? spell.duration * TribalPower(spell) : spell.duration;
+	const auto result =
+	    creature_spells::Receive(component->spells, *which, creature_spells::TurnsOf(seconds, k_TurnsPerSecond), miracle);
+	spell.duration = magic::k_NoTimeLimit;
+	if (result.replaced != entt::null && result.replaced != miracle)
+	{
+		CloseDown(result.replaced);
+	}
+}
+
+void MagicSystem::ProcessCreatureSpells()
+{
+	auto& registry = EntityRegistry();
+	std::array<creature_spells::Timing, creature_spells::k_SpellCount> timings {};
+	for (size_t i = 0; i < timings.size(); ++i)
+	{
+		const auto type = static_cast<MagicType>(static_cast<size_t>(MagicType::CreatureSpellFreeze) + i);
+		if (const auto* info = magic::GetMagicInfoAs<GMagicCreatureSpellInfo>(Info(), type))
+		{
+			timings.at(i) = {.startSeconds = info->startTransitionDuration, .finishSeconds = info->finishTransitionDuration};
+		}
+	}
+	std::vector<entt::entity> creatures;
+	registry.Each<const CreatureSpells>([&](entt::entity entity, const CreatureSpells&) { creatures.push_back(entity); });
+	for (const auto entity : creatures)
+	{
+		auto& component = registry.Get<CreatureSpells>(entity);
+		const auto turn = creature_spells::Step(component.spells, timings, k_TurnsPerSecond);
+		for (const auto& event : turn.events)
+		{
+			ApplyCreatureSpell(entity, event);
+		}
+		for (const auto miracle : turn.ended)
+		{
+			CloseDown(miracle);
+		}
+	}
+}
+
+void MagicSystem::ApplyCreatureSpell(entt::entity entity, const creature_spells::TurnEvent& event)
+{
+	using creature_spells::Event;
+	using creature_spells::Spell;
+	auto& registry = EntityRegistry();
+	auto* creature = registry.TryGet<Creature>(entity);
+	auto& component = registry.Get<CreatureSpells>(entity);
+	if (creature == nullptr)
+	{
+		return;
+	}
+	auto& slot = component.spells[event.spell];
+	const auto effect = creature_spells::EffectOf(event.spell);
+	// The body value a spell pulls, if it pulls one
+	float* value = nullptr;
+	switch (event.spell)
+	{
+	case Spell::Small:
+	case Spell::Big:
+		value = &creature->size;
+		break;
+	case Spell::Weak:
+	case Spell::Strong:
+		value = &creature->strength;
+		break;
+	case Spell::Fat:
+	case Spell::Thin:
+		value = &creature->fatness;
+		break;
+	case Spell::Nice:
+	case Spell::Nasty:
+		value = &creature->alignment;
+		break;
+	default:
+		break;
+	}
+	auto* desires = registry.TryGet<CreatureMindState>(entity);
+	auto* animation = registry.TryGet<CreatureAnimation>(entity);
+	const auto desireOf = [&]() -> creature_desires::DesireState* {
+		if (!effect.desire.has_value() || desires == nullptr || !desires->desires.has_value())
+		{
+			return nullptr;
+		}
+		return &(*desires->desires)[static_cast<creature_desires::Desire>(*effect.desire)];
+	};
+	switch (event.event)
+	{
+	case Event::Start:
+		if (value != nullptr)
+		{
+			slot.before = *value;
+		}
+		if (event.spell == Spell::Freeze)
+		{
+			// Frozen where it stands, its mind still
+			if (desires != nullptr && !desires->paused)
+			{
+				desires->paused = true;
+				component.pausedMind = true;
+			}
+			if (Locator::creatureLocomotionSystem::has_value())
+			{
+				Locator::creatureLocomotionSystem::value().Stop(entity);
+			}
+		}
+		if (event.spell == Spell::Invisible)
+		{
+			component.invisible = true;
+			component.fizz = 0.0f;
+		}
+		if (auto* desire = desireOf())
+		{
+			// It wants this above all else
+			desire->activated = true;
+			desire->value = desire->max;
+		}
+		if (effect.soundAction != 0 && Locator::audio::has_value())
+		{
+			const std::array<int32_t, 5> keys {0, 0, 0, 0, effect.soundAction};
+			if (const auto* transform = registry.TryGet<const Transform>(entity))
+			{
+				Locator::audio::value().PlayAnimEffect(std::string(creature_audio::k_GenericBank), keys, entity,
+				                                       transform->position);
+			}
+		}
+		break;
+	case Event::Ease:
+		if (value != nullptr)
+		{
+			const float target = event.spell == Spell::Small || event.spell == Spell::Big
+			                         ? creature_spells::SizeTarget(event.spell, slot.before, creature_locomotion::k_MinSize,
+			                                                       creature_locomotion::k_MaxSize)
+			                         : creature_spells::Target(event.spell).value_or(slot.before);
+			*value = creature_spells::Ease(slot.before, target, event.ratio);
+		}
+		if (event.spell == Spell::Freeze)
+		{
+			component.freeze = event.ratio;
+			if (animation != nullptr)
+			{
+				animation->playbackScale = 1.0f - event.ratio;
+			}
+		}
+		if (event.spell == Spell::Invisible)
+		{
+			component.fizz = creature_spells::k_InvisibleFizz * event.ratio;
+		}
+		break;
+	case Event::Hold:
+		if (auto* desire = desireOf())
+		{
+			desire->value = desire->max;
+		}
+		// An itchy creature won't be led
+		if (event.spell == Spell::Itchy && Locator::leashSystem::has_value())
+		{
+			Locator::leashSystem::value().SetWorks(entity, false);
+		}
+		break;
+	case Event::BeginFinish:
+		break;
+	case Event::Finish:
+		if (value != nullptr)
+		{
+			*value = slot.before;
+		}
+		if (event.spell == Spell::Freeze)
+		{
+			component.freeze = 0.0f;
+			if (animation != nullptr)
+			{
+				animation->playbackScale = 1.0f;
+			}
+			if (desires != nullptr && component.pausedMind)
+			{
+				desires->paused = false;
+			}
+			component.pausedMind = false;
+		}
+		if (event.spell == Spell::Invisible)
+		{
+			component.invisible = false;
+			component.fizz = 0.0f;
+		}
+		if (event.spell == Spell::Itchy && Locator::leashSystem::has_value())
+		{
+			Locator::leashSystem::value().SetWorks(entity, true);
+		}
+		if (auto* desire = desireOf())
+		{
+			// What it wanted most it now wants least of all
+			float least = desire->max;
+			for (const auto& other : desires->desires->desires)
+			{
+				if (&other != desire && other.activated)
+				{
+					least = std::min(least, other.value);
+				}
+			}
+			desire->value = least / creature_spells::k_LeastDominantFactor;
+		}
+		break;
+	}
 }
 
 void MagicSystem::CloseDown(entt::entity entity)
@@ -834,6 +1058,7 @@ void MagicSystem::ProcessTurn()
 	_world.ProcessTurn();
 	_grid.Fade();
 	ProcessDispensers();
+	ProcessCreatureSpells();
 
 	// The held seed waits until it is ready, and its in-hand effect steps with the hand
 	if (_held.has_value())

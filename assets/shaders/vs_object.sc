@@ -177,11 +177,17 @@ void main()
 #ifdef USE_INSTANCING
 	// Some instances aren't drawn at all, such as a field's crop that is yet too small to show
 	hidden = i_data4.z > 0.5f;
+
 	if (u_window.x > 0.5f)
 	{
 		float grey = (i_data4.x > 0.5f && u_window.z > 0.5f) ? WindowGrey(origin) : -1.0f;
 		hidden = hidden || grey < 0.0f;
 		v_color0 = vec4(vec3_splat(max(grey, 0.0f) / 255.0f), 1.0f);
+	}
+	// An invisible creature fizzes out of sight by a negative share, which the fragment shader dissolves it by
+	if (i_data4.z < 0.0f)
+	{
+		v_color0.a = 1.0f + i_data4.z;
 	}
 #endif // USE_INSTANCING
 

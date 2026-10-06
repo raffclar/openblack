@@ -45,7 +45,7 @@ private:
 	void DrawSandbox() noexcept;
 	void DrawParticles() noexcept;
 	void DrawRunningEffects() noexcept;
-	/// The running miracles and the dispensers, and tools to cast and put them down
+	/// The running miracles, the dispensers and the creatures' spells, and tools to cast and put them down
 	void DrawMiracles() noexcept;
 	/// The spawned effects given a time close down when it is up
 	void UpdateTimedEffects(float seconds) noexcept;

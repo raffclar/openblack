@@ -19,6 +19,7 @@
 
 #include <entt/entity/entity.hpp>
 
+#include "Creature/CreatureSpells.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "Magic/MagicWorldInterface.h"
 #include "Magic/SpellBehaviours.h"
@@ -143,6 +144,11 @@ private:
 	void ProcessDispensers();
 	/// Whether a magic type may be cast on an object: a creature spell only on a creature
 	[[nodiscard]] bool CanCastOn(MagicType type, entt::entity target) const;
+	/// A creature spell's miracle hands its spell to the creature, which holds it for the miracle's time
+	void ReceiveCreatureSpell(entt::entity creature, entt::entity miracle, components::Spell& spell);
+	/// A turn of every creature's spells, and what each does to it
+	void ProcessCreatureSpells();
+	void ApplyCreatureSpell(entt::entity creature, const creature_spells::TurnEvent& event);
 	entt::entity MakeOrb(entt::entity dispenser);
 
 	/// What the hand hands a miracle it casts: where it is, the camera, how it moves

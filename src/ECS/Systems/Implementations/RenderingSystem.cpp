@@ -21,6 +21,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Mesh.h"
@@ -277,6 +278,20 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    {
 					    modelMatrix = vegetation.GetFieldMatrix(modelMatrix, transform.scale.y, swayable->swaySlot);
 				    }
+			    }
+		    }
+
+		    // A frozen creature takes an icy look, the land's light on it tinted blue as it freezes
+		    // and an invisible one fizzes out of sight
+		    if (const auto* spells = registry.TryGet<const CreatureSpells>(entity))
+		    {
+			    if (spells->freeze > 0.0f)
+			    {
+				    look.y = static_cast<float>(creature_spells::FrozenTint(spells->freeze));
+			    }
+			    if (spells->fizz > 0.0f)
+			    {
+				    look.z = -spells->fizz;
 			    }
 		    }
 

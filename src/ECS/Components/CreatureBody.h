@@ -67,6 +67,8 @@ struct CreatureAnimation
 	creature_layers::LookAxis yaw {};
 	creature_layers::LookAxis pitch {};
 
+	/// How fast the body plays its animations and breathes, 1 as it should and 0 frozen still
+	float playbackScale {1.0f};
 	/// How far through a breath the creature is, 0 to 1, and the seconds a breath takes now
 	float breathPhase {0.0f};
 	float breathPeriod {0.0f};

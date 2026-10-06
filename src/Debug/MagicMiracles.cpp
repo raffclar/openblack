@@ -20,7 +20,9 @@
 #include <imgui.h>
 
 #include "Camera/Camera.h"
+#include "Creature/CreatureSpells.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -36,8 +38,11 @@ using namespace openblack::debug::gui;
 
 namespace
 {
+constexpr std::array k_PhaseNames {"off", "waiting", "starting", "holding", "finishing"};
 constexpr std::array k_HandResults {"",          "took a miracle",   "readied", "cast",   "cast, held",
                                     "not ready", "can't cast there", "let go",  "dropped"};
+constexpr std::array k_CreatureSpellNames {"Freeze", "Small", "Big",    "Weak",       "Strong", "Fat", "Thin",    "Invisible",
+                                           "Nice",   "Nasty", "Hungry", "Frightened", "Tired",  "Ill", "Thirsty", "Itchy"};
 
 std::string MiracleName(MagicType type)
 {
@@ -211,5 +216,27 @@ void Magic::DrawMiracles() noexcept
 			}
 			ImGui::EndTable();
 		}
+	}
+
+	if (ImGui::CollapsingHeader("Creatures' spells", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		Locator::entitiesRegistry::value().Each<const ecs::components::CreatureSpells>(
+		    [](entt::entity entity, const ecs::components::CreatureSpells& component) {
+			    std::string line = fmt::format("Creature {}:", static_cast<uint32_t>(entity));
+			    for (size_t i = 0; i < creature_spells::k_SpellCount; ++i)
+			    {
+				    const auto& slot = component.spells.slots.at(i);
+				    if (slot.phase != creature_spells::Phase::Off)
+				    {
+					    line += fmt::format(" {} ({}, {} turns)", k_CreatureSpellNames.at(i),
+					                        k_PhaseNames.at(static_cast<size_t>(slot.phase)), slot.turnsLeft);
+				    }
+			    }
+			    ImGui::TextUnformatted(line.c_str());
+			    if (component.freeze > 0.0f || component.fizz > 0.0f)
+			    {
+				    ImGui::TextDisabled("  frozen %.2f, fizzed %.2f", component.freeze, component.fizz);
+			    }
+		    });
 	}
 }

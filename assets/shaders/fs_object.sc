@@ -32,6 +32,15 @@ void main()
 	{
 		discard;
 	}
+	// Fizzing out of sight: the share of it gone, in specks of the world picked at random, isn't drawn
+	if (v_color0.a < 1.0f)
+	{
+		float pick = fract(sin(dot(floor(v_position.xyz * 4.0f), vec3(12.9898f, 78.233f, 37.719f))) * 43758.5453f);
+		if (pick > v_color0.a)
+		{
+			discard;
+		}
+	}
 	// Snow covers the object where it shows, in its own light, over its own texture
 	float snowLevel = floor(v_snow.z * 255.0f + 0.5f);
 	if (snowLevel > 0.0f && SnowShows(snowLevel, texture2D(s_snowAlpha, v_snow.xy).r))
