@@ -309,7 +309,8 @@ SymbolSprites draw::SymbolOf(const Effect::DrawAtom& atom, uint32_t playerRgb, i
 	}};
 }
 
-void draw::AppendChain(std::vector<ChainVertex>& out, const Creator& creator, std::span<const Effect::DrawAtom> joints)
+void draw::AppendChain(std::vector<ChainVertex>& out, const Creator& creator, std::span<const Effect::DrawAtom> joints,
+                       int textureRepeats)
 {
 	if (joints.size() < 2)
 	{
@@ -321,7 +322,7 @@ void draw::AppendChain(std::vector<ChainVertex>& out, const Creator& creator, st
 	{
 		const auto& head = joints[static_cast<size_t>(i)];
 		const auto& tail = joints[static_cast<size_t>(i) + 1];
-		const auto uv = chain.SegmentUv(i, segments);
+		const auto uv = chain.SegmentUv(i, segments, textureRepeats);
 		const bool before = i > 0;
 		const bool after = i + 1 < segments;
 		const auto& previous = before ? joints[static_cast<size_t>(i) - 1].position : head.position;
@@ -388,7 +389,7 @@ void draw::AddEffect(Frame& frame, const Effect::DrawWalk& walk, DrawPath path, 
 		frame.chains.push_back({.material = material,
 		                        .firstVertex = static_cast<uint32_t>(frame.chainVertices.size()),
 		                        .segments = chain.jointCount - 1});
-		AppendChain(frame.chainVertices, *chain.creator, joints);
+		AppendChain(frame.chainVertices, *chain.creator, joints, chain.textureRepeats);
 	}
 	const auto count = static_cast<uint32_t>(frame.items.size()) - firstItem;
 	if (count > 0)

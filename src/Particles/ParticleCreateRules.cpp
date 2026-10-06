@@ -18,6 +18,7 @@
 #include <glm/geometric.hpp>
 
 #include "ParticleClassRegistry.h"
+#include "ParticleSounds.h"
 
 using namespace openblack::particles;
 using openblack::psys::ParticleObject;
@@ -31,14 +32,6 @@ constexpr float k_ConicalSpeedRange = 0.33f;
 /// The sound radii a single atom's sound is sized by, when the file gives none
 constexpr float k_DefaultSmallSoundRadius = 200.0f;
 constexpr float k_DefaultMediumSoundRadius = 500.0f;
-
-void StartSound(Effect& effect, const Atom& atom, const ParticleSound& sound)
-{
-	if (!sound.Silent())
-	{
-		effect.Services().world.StartSound(effect, atom, sound);
-	}
-}
 
 /// What every rule that makes atoms has: the creator of its atoms and the groups made under each
 class CreateRule: public Modifier
@@ -85,7 +78,7 @@ public:
 		{
 			played.size = maths::SoundSizeFromRadius(effect.FloatProvider(soundRadius, 0.0f), soundSmall, soundMedium);
 		}
-		StartSound(effect, atom, played);
+		StartAtomSound(effect, atom, played);
 		return false;
 	}
 
@@ -137,7 +130,7 @@ public:
 			atom.position += place + offset;
 			if (i == 0)
 			{
-				StartSound(effect, atom, sound);
+				StartAtomSound(effect, atom, sound);
 			}
 		}
 		return false;
@@ -330,7 +323,7 @@ protected:
 		const float across = std::sin(phi) * s;
 		atom.velocity = {std::cos(theta) * across, std::cos(phi) * s, std::sin(theta) * across};
 		atom.visible = initiallyVisible;
-		StartSound(effect, atom, sound);
+		StartAtomSound(effect, atom, sound);
 	}
 	[[nodiscard]] bool EmitsSeveral() const override { return multiple; }
 
@@ -462,7 +455,7 @@ private:
 		{
 			atom.baseScale *= collection.parent->ruleScale * collection.parent->baseScale;
 		}
-		StartSound(effect, atom, sound);
+		StartAtomSound(effect, atom, sound);
 	}
 
 	int maxAtoms;

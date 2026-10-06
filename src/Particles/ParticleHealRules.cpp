@@ -22,6 +22,7 @@
 
 #include "ParticleClassRegistry.h"
 #include "ParticleMaths.h"
+#include "ParticleSounds.h"
 
 using namespace openblack;
 using namespace openblack::particles;
@@ -30,14 +31,6 @@ using openblack::psys::ParticleObject;
 namespace
 {
 constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
-
-void StartSound(Effect& effect, const Atom& atom, const ParticleSound& sound)
-{
-	if (!sound.Silent())
-	{
-		effect.Services().world.StartSound(effect, atom, sound);
-	}
-}
 
 /// A chakra over each target the miracle gives the effect that no other effect has, which heals it as it appears. Each
 /// chakra follows its target, scaled to it when asked, and fades with the burst under it: up to full at one age of the
@@ -98,7 +91,7 @@ public:
 			if (&atom == newest && !data.started && effect.AtomAge(atom) > 0.0f)
 			{
 				data.started = true;
-				StartSound(effect, atom, soundHeal);
+				StartAtomSound(effect, atom, soundHeal);
 			}
 			bool done = false;
 			const auto info = data.object != entt::null ? world.Target(data.object, takeCentre) : std::nullopt;
@@ -217,7 +210,7 @@ public:
 			atom.velocity = glm::vec3(direction.x, direction.y * scaleYSpeed, direction.z) * speed;
 			if (i == 0)
 			{
-				StartSound(effect, atom, sound);
+				StartAtomSound(effect, atom, sound);
 			}
 		}
 		if (disableParent && collection.parent != nullptr)

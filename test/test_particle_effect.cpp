@@ -46,9 +46,9 @@ public:
 	[[nodiscard]] uint32_t PlayerColour(int /*player*/) const override { return 0xFF0000u; }
 	[[nodiscard]] glm::vec3 CameraRight() const override { return {1.0f, 0.0f, 0.0f}; }
 	[[nodiscard]] glm::vec3 CameraUp() const override { return {0.0f, 1.0f, 0.0f}; }
-	void StartSound(const Effect& /*effect*/, const Atom& /*atom*/, const ParticleSound& sound) override
+	void StartSound(const Effect& /*effect*/, const std::shared_ptr<ParticleSoundLink>& sound) override
 	{
-		sounds.push_back(sound.action.sound);
+		sounds.push_back(sound->sound.action.sound);
 	}
 
 	[[nodiscard]] std::optional<TargetInfo> Target(entt::entity target, bool centre) const override

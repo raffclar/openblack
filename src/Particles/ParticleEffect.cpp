@@ -128,6 +128,14 @@ Effect::Effect(std::shared_ptr<const psys::ParticleFile> file, EffectServices se
 	}
 }
 
+Atom::~Atom()
+{
+	for (const auto& sound : sounds)
+	{
+		sound->atom = nullptr;
+	}
+}
+
 Effect::~Effect() = default;
 
 void Effect::SetSink(SpellSink* sink)
@@ -326,6 +334,32 @@ Atom& Effect::NewAtom(Collection& collection, const Creator* creator, std::span<
 		}
 	}
 	return result;
+}
+
+void Effect::AddSubCollections(Atom& atom, std::span<const int> groups)
+{
+	for (const int group : groups)
+	{
+		if (group >= 0 && group < static_cast<int>(k_GroupCount))
+		{
+			CreateCollection(group, &atom, atom.subCollections);
+		}
+	}
+}
+
+Atom* Effect::NewAtomInGroup(int group, const Creator* creator)
+{
+	if (group < 0 || group >= static_cast<int>(k_GroupCount))
+	{
+		return nullptr;
+	}
+	auto found = std::ranges::find(_roots, group, [](const auto& root) { return root->group; });
+	if (found == _roots.end())
+	{
+		CreateCollection(group, nullptr, _roots);
+		found = std::prev(_roots.end());
+	}
+	return &NewAtom(**found, creator, {});
 }
 
 void Effect::CreateCollection(int group, Atom* parent, std::vector<std::unique_ptr<Collection>>& into)
@@ -604,7 +638,10 @@ void Effect::WalkCollection(const Collection& collection, float t, DrawWalk& out
 		if (count >= 2)
 		{
 			out.steps.push_back({.chain = true, .index = static_cast<uint32_t>(out.chains.size())});
-			out.chains.push_back({.creator = chainCreator, .firstJoint = first, .jointCount = count});
+			out.chains.push_back({.creator = chainCreator,
+			                      .firstJoint = first,
+			                      .jointCount = count,
+			                      .textureRepeats = collection.textureRepeats});
 		}
 		else
 		{

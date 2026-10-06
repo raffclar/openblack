@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <any>
 #include <array>
 #include <memory>
 #include <optional>
@@ -61,6 +62,42 @@ struct ParticleSound
 	[[nodiscard]] bool Silent() const { return action.sound.empty() || action.sound == "NO_SOUND"; }
 };
 
+/// A sound a particle started. The particle owns it: once the particle has gone, or stopped it, the world lets the
+/// sound die away, fading it by the fade step each turn when it has one.
+struct ParticleSoundLink
+{
+	ParticleSound sound;
+	/// The particle, while it keeps the sound
+	const Atom* atom {nullptr};
+	/// Where the particle was when it started the sound
+	glm::vec3 position {0.0f};
+	/// How much quieter it gets each turn once let go, out of 127
+	int fadeStep {0};
+};
+
+/// A shield a miracle's effect raised: a sphere that the other miracles' particles and bolts can't pass. The effect
+/// that raised it owns it; the world only keeps a weak hold, so the shield goes with the effect.
+struct ShieldSphere
+{
+	glm::vec3 centre {0.0f};
+	float radius {0.0f};
+	/// The miracle behind it, if any
+	entt::entity spell {entt::null};
+	/// The effect that raised it, for its sparks
+	const Effect* owner {nullptr};
+	/// Where it has been struck since its sparks last looked
+	std::vector<glm::vec3> impacts;
+};
+
+/// Something a lightning bolt may strike
+struct StrikeCandidate
+{
+	entt::entity object {entt::null};
+	/// Where it stands on the land, and how tall it is
+	glm::vec3 position {0.0f};
+	float height {0.0f};
+};
+
 /// What the effects need from the world. The game backs it with the land, the players and the camera; tests use a fake.
 class ParticleWorldInterface
 {
@@ -79,8 +116,32 @@ public:
 	/// The camera's right and up, for rules that line sprites up with what the camera sees
 	[[nodiscard]] virtual glm::vec3 CameraRight() const = 0;
 	[[nodiscard]] virtual glm::vec3 CameraUp() const = 0;
-	/// A particle starts a sound. The miracles' sounds are not played yet: the game's world leaves this empty.
-	virtual void StartSound(const Effect& /*effect*/, const Atom& /*atom*/, const ParticleSound& /*sound*/) {}
+	/// A particle starts a sound; the world keeps a weak hold on it to play it, keep a loop going and let it die away
+	virtual void StartSound(const Effect& /*effect*/, const std::shared_ptr<ParticleSoundLink>& /*sound*/) {}
+	/// Whether a point of the land is under water
+	[[nodiscard]] virtual bool IsWater(glm::vec3 /*point*/) const { return false; }
+	/// The land's normal at a point of the ground
+	[[nodiscard]] virtual glm::vec3 LandNormal(glm::vec2 /*xz*/) const { return {0.0f, 1.0f, 0.0f}; }
+	/// Whether it is raining or snowing at a point
+	[[nodiscard]] virtual bool IsRainingAt(glm::vec3 /*point*/) const { return false; }
+	/// The wind at a point, in metres a second
+	[[nodiscard]] virtual glm::vec3 WindAt(glm::vec3 /*point*/) const { return glm::vec3(0.0f); }
+	/// The objects standing within a radius of a point on the land that a lightning bolt may strike, nearest first
+	[[nodiscard]] virtual std::vector<StrikeCandidate> StrikeCandidates(glm::vec3 /*centre*/, float /*radius*/) const
+	{
+		return {};
+	}
+	/// Whether the land rises across the straight way between two points
+	[[nodiscard]] virtual bool LandBlocks(glm::vec3 /*from*/, glm::vec3 /*to*/) const { return false; }
+	/// A shield is raised; the effect keeps the sphere, the world finds it while it lives
+	virtual void AddShield(const std::shared_ptr<ShieldSphere>& /*shield*/) {}
+	/// The live shield holding a point, the sphere grown by a margin, if any
+	[[nodiscard]] virtual std::shared_ptr<ShieldSphere> FindShield(glm::vec3 /*point*/, float /*margin*/) const
+	{
+		return nullptr;
+	}
+	/// The live shield an effect raised, if any
+	[[nodiscard]] virtual std::shared_ptr<ShieldSphere> ShieldOf(const Effect& /*effect*/) const { return nullptr; }
 
 	/// Where an object a rule acts on is and how big it is
 	struct TargetInfo
@@ -219,7 +280,8 @@ struct Atom
 	Atom(Atom&&) = delete;
 	Atom& operator=(const Atom&) = delete;
 	Atom& operator=(Atom&&) = delete;
-	~Atom() = default;
+	/// Lets go of its sounds
+	~Atom();
 
 	Collection* collection {nullptr};
 	const Creator* creator {nullptr};
@@ -244,6 +306,10 @@ struct Atom
 	glm::vec2 creatorValue {0.0f};
 	/// A number of its own in 0..255, drawn when it is made
 	uint32_t random {0};
+	/// Turned away by a shield, or cooled, so that it no longer acts on what it meets
+	bool deflected {false};
+	/// The sounds it keeps going, the newest first
+	std::vector<std::shared_ptr<ParticleSoundLink>> sounds;
 	DrawState previous;
 	DrawState current;
 	/// It has been through a step's end, so it has somewhere to be drawn
@@ -266,6 +332,8 @@ struct Collection
 		glm::vec4 state {0.0f};
 		glm::vec4 extra {0.0f};
 		bool first {true};
+		/// Any further state a rule keeps for the collection, such as a lightning bolt's forks
+		std::any data;
 	};
 
 	int group {0};
@@ -277,6 +345,8 @@ struct Collection
 	bool interpolated {true};
 	/// In the frame of an ancestor atom whose group is a hierarchy
 	bool hierarchy {false};
+	/// How many times its ribbon repeats its frame, -1 for as its creator has it
+	int textureRepeats {-1};
 	std::vector<std::unique_ptr<Atom>> atoms;
 	std::vector<Slot> modifiers;
 };
@@ -387,6 +457,11 @@ public:
 	/// A new atom in the collection where its parent is, coloured and scaled by its creator, with its next groups'
 	/// collections made under it
 	Atom& NewAtom(Collection& collection, const Creator* creator, std::span<const int> nextGroups);
+	/// The groups' collections made under an atom that already exists
+	void AddSubCollections(Atom& atom, std::span<const int> groups);
+	/// A new atom in the first collection of a group made at the start, which is made when there is none; nullptr for no
+	/// such group
+	Atom* NewAtomInGroup(int group, const Creator* creator);
 	/// Where a collection's new atoms start: the effect's origin for a group made at the start; the parent atom's
 	/// point, or nothing at all in a hierarchy where the parent's frame already puts them there
 	[[nodiscard]] glm::vec3 SpawnPosition(const Collection& collection) const;
@@ -424,6 +499,8 @@ public:
 		/// Its joints in DrawWalk::joints, the first made first
 		uint32_t firstJoint;
 		uint32_t jointCount;
+		/// How many times it repeats its frame, -1 for as its creator has it
+		int textureRepeats {-1};
 	};
 	/// Everything an effect draws, in the order the game draws it all at once: each collection's atoms, the newest first,
 	/// then its ribbon, then the collections under each of its atoms in turn, walked the same way. The newest collections

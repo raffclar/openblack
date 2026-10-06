@@ -12,9 +12,11 @@
 #include <deque>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <entt/entity/entity.hpp>
 
@@ -43,10 +45,37 @@ public:
 	[[nodiscard]] bool IsTargetHeld(entt::entity target) const override;
 	[[nodiscard]] bool IsTargetClaimed(entt::entity target) const override { return _claimed.contains(target); }
 	void ClaimTarget(entt::entity target, bool claimed) override;
-	void Reset() { _claimed.clear(); }
+	void StartSound(const particles::Effect& effect, const std::shared_ptr<particles::ParticleSoundLink>& sound) override;
+	[[nodiscard]] bool IsWater(glm::vec3 point) const override;
+	[[nodiscard]] glm::vec3 LandNormal(glm::vec2 xz) const override;
+	[[nodiscard]] bool IsRainingAt(glm::vec3 point) const override;
+	[[nodiscard]] glm::vec3 WindAt(glm::vec3 point) const override;
+	[[nodiscard]] std::vector<particles::StrikeCandidate> StrikeCandidates(glm::vec3 centre, float radius) const override;
+	[[nodiscard]] bool LandBlocks(glm::vec3 from, glm::vec3 to) const override;
+	void AddShield(const std::shared_ptr<particles::ShieldSphere>& shield) override;
+	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const override;
+	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> ShieldOf(const particles::Effect& effect) const override;
+
+	/// Once a game turn: the sounds follow their particles, loops play on, and the sounds let go stop
+	void ProcessSounds();
+	[[nodiscard]] size_t SoundCount() const { return _sounds.size(); }
+	void Reset();
 
 private:
+	/// A sound a particle started, and what plays it
+	struct PlayingSound
+	{
+		std::shared_ptr<particles::ParticleSoundLink> link;
+		entt::entity emitter {entt::null};
+		bool letGo {false};
+	};
+	void Play(PlayingSound& sound) const;
+
 	std::set<entt::entity> _claimed;
+	std::vector<PlayingSound> _sounds;
+	mutable std::vector<std::weak_ptr<particles::ShieldSphere>> _shields;
+	/// The game's sound actions by name, read when first needed
+	mutable std::optional<std::map<std::string, int32_t, std::less<>>> _soundActions;
 };
 
 /// The models and light maps of the particle creators, found by their names and loaded once through the resource caches
@@ -84,6 +113,9 @@ public:
 	void SetOrigin(EffectId id, glm::vec3 origin) override;
 	void SetPlayer(EffectId id, int player) override;
 	void SetDrawPath(EffectId id, particles::draw::DrawPath path) override;
+	void SetDrawOffset(EffectId id, glm::vec3 offset) override;
+	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const override;
+	[[nodiscard]] size_t GetSoundCount() const override { return _world.SoundCount(); }
 	void AddTarget(EffectId id, entt::entity target) override;
 	void CloseDown(EffectId id) override;
 	void Delete(EffectId id) override;
@@ -113,6 +145,8 @@ private:
 		/// An object it follows and ends with
 		entt::entity owner {entt::null};
 		particles::draw::DrawPath path {particles::draw::DrawPath::Sorted};
+		/// Everything it draws is moved by this, as the miracle in the hand follows the hand between turns
+		glm::vec3 drawOffset {0.0f};
 	};
 
 	std::deque<Running>::iterator FindRunning(EffectId id);

@@ -89,5 +89,15 @@ void RegisterCurveRules(ParticleClassRegistry& registry);
 /// The heal miracle's rules: the chakra over each person it heals, the burst of sparks under it, and the chakras'
 /// wiggle in the hand
 void RegisterHealRules(ParticleClassRegistry& registry);
+/// The rules that keep the miracle held in the hand on it, and the sprinkling miracles' source on it
+void RegisterHandRules(ParticleClassRegistry& registry);
+/// The rules that start and stop the sounds particles keep going
+void RegisterSoundRules(ParticleClassRegistry& registry);
+/// The fireball's rules: its throw, flight, bounce, trail and the event it sends every step
+void RegisterFireballRules(ParticleClassRegistry& registry);
+/// The lightning bolt's rules: its targets, its forks and its strikes
+void RegisterLightningRules(ParticleClassRegistry& registry);
+/// The shield's rules: its sphere, its sparks and its dome, and what turns other effects' particles away from it
+void RegisterShieldRules(ParticleClassRegistry& registry);
 
 } // namespace openblack::particles

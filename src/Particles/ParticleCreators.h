@@ -110,7 +110,8 @@ struct ChainCreator final: Creator
 
 	/// The texture coordinates of a segment's four corners: its first joint's two sides, then its next joint's, the
 	/// first side of each ahead. U runs across the ribbon, V along it.
-	[[nodiscard]] std::array<glm::vec2, 4> SegmentUv(int segment, int segments) const;
+	/// A ribbon may repeat its frame a number of times of its own in place of the creator's (-1 for the creator's).
+	[[nodiscard]] std::array<glm::vec2, 4> SegmentUv(int segment, int segments, int repeatsOverride = -1) const;
 };
 
 /// A puff of mist for each atom, the mist mesh facing the camera and shrinking edge on

@@ -88,6 +88,11 @@ ParticleClassRegistry ParticleClassRegistry::WithAllClasses(CreatorResourcesInte
 	RegisterUpdateRules(registry);
 	RegisterCurveRules(registry);
 	RegisterHealRules(registry);
+	RegisterHandRules(registry);
+	RegisterSoundRules(registry);
+	RegisterFireballRules(registry);
+	RegisterLightningRules(registry);
+	RegisterShieldRules(registry);
 	return registry;
 }
 

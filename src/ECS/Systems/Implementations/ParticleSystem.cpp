@@ -15,24 +15,36 @@
 #include <chrono>
 
 #include <EnumHeader.h>
+#include <LNDFile.h>
 #include <ParticleFile.h>
 #include <StackedBitmap.h>
 #include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
+#include <glm/geometric.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/AllMeshes.h"
 #include "3D/InfluenceCircle.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "Audio/AudioManagerInterface.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Common/StringUtils.h"
+#include "ECS/Components/Abode.h"
+#include "ECS/Components/AudioEmitter.h"
+#include "ECS/Components/Creature.h"
+#include "ECS/Components/Feature.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Mobile.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Tree.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WeatherSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -76,6 +88,22 @@ std::filesystem::path DataRelative(std::string_view path)
 	}
 	return name;
 }
+
+/// The spells' sound bank, whose effects the particles' sounds are played from
+constexpr std::string_view k_SpellSoundBank = "spells.sad";
+/// The keys a particle's sound is looked up by besides its size and action: a middling alignment, the default object
+/// and grass under it
+constexpr int32_t k_SoundAlignment = 2;
+constexpr int32_t k_SoundObject = 1;
+constexpr int32_t k_SoundSurface = 1;
+/// A looping sound is only kept going this close to the camera
+constexpr float k_LoopCullDistance = 1200.0f;
+/// Points along a way tested for the land rising across it
+constexpr int k_LandBlockSamples = 16;
+/// Any rain or snow makes a fireball steam
+constexpr int k_SteamingRain = 0;
+/// The land's cells are this many units across
+constexpr float k_CellSize = 10.0f;
 
 /// The sheets the players' symbols are drawn with, whatever effect first shows one
 constexpr std::array<std::string_view, 2> k_SymbolTextures {"S_SpriteSheet3", "ChooseSymbol"};
@@ -149,6 +177,224 @@ void GameParticleWorld::ClaimTarget(entt::entity target, bool claimed)
 	{
 		_claimed.erase(target);
 	}
+}
+
+void GameParticleWorld::StartSound(const particles::Effect& /*effect*/,
+                                   const std::shared_ptr<particles::ParticleSoundLink>& sound)
+{
+	auto& playing = _sounds.emplace_back(PlayingSound {.link = sound});
+	Play(playing);
+}
+
+void GameParticleWorld::Play(PlayingSound& sound) const
+{
+	if (!Locator::audio::has_value() || !Locator::camera::has_value())
+	{
+		return;
+	}
+	if (!_soundActions.has_value())
+	{
+		_soundActions.emplace();
+		if (Locator::filesystem::has_value())
+		{
+			auto& fileSystem = Locator::filesystem::value();
+			const auto path = fileSystem.GetPath<filesystem::Path::Data>() / "SoundAction.h";
+			if (fileSystem.Exists(path))
+			{
+				const auto bytes = fileSystem.ReadAll(path);
+				*_soundActions =
+				    psys::ParseEnumHeader(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+			}
+		}
+	}
+	const auto action = _soundActions->find(sound.link->sound.action.sound);
+	if (action == _soundActions->end())
+	{
+		return;
+	}
+	const std::array<int32_t, 5> keys {sound.link->sound.size, k_SoundAlignment, k_SoundObject, k_SoundSurface, action->second};
+	const auto result =
+	    Locator::audio::value().PlayAnimEffect(std::string(k_SpellSoundBank), keys, entt::null, sound.link->position);
+	sound.emitter = result.emitter;
+}
+
+void GameParticleWorld::ProcessSounds()
+{
+	auto* registry = Locator::entitiesRegistry::has_value() ? &Locator::entitiesRegistry::value() : nullptr;
+	auto* audio = Locator::audio::has_value() ? &Locator::audio::value() : nullptr;
+	const auto playing = [&](const PlayingSound& sound) {
+		return audio != nullptr && sound.emitter != entt::null && audio->EmitterExists(sound.emitter) &&
+		       audio->GetStatus(sound.emitter) != audio::AudioStatus::Stopped;
+	};
+	std::erase_if(_sounds, [&](PlayingSound& sound) {
+		auto& link = *sound.link;
+		if (link.atom != nullptr)
+		{
+			if (link.atom->drawn)
+			{
+				link.position = link.atom->current.position;
+			}
+			if (registry != nullptr && sound.emitter != entt::null && registry->Valid(sound.emitter))
+			{
+				if (auto* emitter = registry->TryGet<ecs::components::AudioEmitter>(sound.emitter))
+				{
+					emitter->position = link.position;
+				}
+			}
+			// A loop plays on while its particle keeps it, near enough to be heard
+			const bool nearby = Locator::camera::has_value() &&
+			                    glm::distance(Locator::camera::value().GetOrigin(), link.position) < k_LoopCullDistance;
+			if (link.sound.action.looping && nearby && !playing(sound))
+			{
+				Play(sound);
+			}
+			return false;
+		}
+		if (!sound.letGo)
+		{
+			// Let go: a loop stops now, a sound that plays once plays out. There is no fading a sound out yet.
+			sound.letGo = true;
+			if (link.sound.action.looping && audio != nullptr && sound.emitter != entt::null &&
+			    audio->EmitterExists(sound.emitter))
+			{
+				audio->StopEmitter(sound.emitter);
+			}
+		}
+		return !playing(sound);
+	});
+}
+
+bool GameParticleWorld::IsWater(glm::vec3 point) const
+{
+	if (!Locator::terrainSystem::has_value() || point.x < 0.0f || point.z < 0.0f)
+	{
+		return true;
+	}
+	const auto cell = glm::u16vec2(glm::floor(glm::vec2(point.x, point.z) / k_CellSize));
+	const auto* landCell = Locator::terrainSystem::value().FindCell(cell);
+	return landCell == nullptr || landCell->properties.hasWater != 0;
+}
+
+glm::vec3 GameParticleWorld::LandNormal(glm::vec2 xz) const
+{
+	return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetNormalAt(xz) : glm::vec3(0.0f, 1.0f, 0.0f);
+}
+
+bool GameParticleWorld::IsRainingAt(glm::vec3 point) const
+{
+	if (!Locator::weatherSystem::has_value())
+	{
+		return false;
+	}
+	const auto weather = Locator::weatherSystem::value().GetWeather(point);
+	return weather.rain > k_SteamingRain || weather.snow > k_SteamingRain;
+}
+
+glm::vec3 GameParticleWorld::WindAt(glm::vec3 point) const
+{
+	if (!Locator::weatherSystem::has_value())
+	{
+		return glm::vec3(0.0f);
+	}
+	const auto weather = Locator::weatherSystem::value().GetWeather(point);
+	return {static_cast<float>(weather.windX), 0.0f, static_cast<float>(weather.windZ)};
+}
+
+std::vector<particles::StrikeCandidate> GameParticleWorld::StrikeCandidates(glm::vec3 centre, float radius) const
+{
+	std::vector<particles::StrikeCandidate> candidates;
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return candidates;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const float radiusSquared = radius * radius;
+	const auto consider = [&](entt::entity entity, const ecs::components::Transform& transform) {
+		const glm::vec2 across(transform.position.x - centre.x, transform.position.z - centre.z);
+		if (glm::dot(across, across) >= radiusSquared)
+		{
+			return;
+		}
+		const auto info = Target(entity, false);
+		candidates.push_back({.object = entity, .position = transform.position, .height = info ? info->height : 0.0f});
+	};
+	// Anything standing on the land may be struck: living things, trees, buildings, features and things lying about
+	registry.Each<const ecs::components::Creature, const ecs::components::Transform>(
+	    [&](entt::entity e, const auto&, const auto& t) { consider(e, t); });
+	registry.Each<const ecs::components::Villager, const ecs::components::Transform>(
+	    [&](entt::entity e, const auto&, const auto& t) { consider(e, t); });
+	registry.Each<const ecs::components::Tree, const ecs::components::Transform>(
+	    [&](entt::entity e, const auto&, const auto& t) { consider(e, t); });
+	registry.Each<const ecs::components::Abode, const ecs::components::Transform>(
+	    [&](entt::entity e, const auto&, const auto& t) { consider(e, t); });
+	registry.Each<const ecs::components::Feature, const ecs::components::Transform>(
+	    [&](entt::entity e, const auto&, const auto& t) { consider(e, t); });
+	registry.Each<const ecs::components::Pot, const ecs::components::Transform>(
+	    [&](entt::entity e, const auto&, const auto& t) { consider(e, t); });
+	registry.Each<const ecs::components::MobileObject, const ecs::components::Transform>(
+	    [&](entt::entity e, const auto&, const auto& t) { consider(e, t); });
+	std::ranges::sort(candidates, {}, [&centre](const particles::StrikeCandidate& c) {
+		const glm::vec2 across(c.position.x - centre.x, c.position.z - centre.z);
+		return glm::dot(across, across);
+	});
+	return candidates;
+}
+
+bool GameParticleWorld::LandBlocks(glm::vec3 from, glm::vec3 to) const
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return false;
+	}
+	const auto& land = Locator::terrainSystem::value();
+	// The ends themselves may touch the land
+	for (int i = 1; i < k_LandBlockSamples; ++i)
+	{
+		const float t = static_cast<float>(i) / static_cast<float>(k_LandBlockSamples);
+		const auto p = from + (to - from) * t;
+		if (land.GetHeightAt({p.x, p.z}) > p.y)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void GameParticleWorld::AddShield(const std::shared_ptr<particles::ShieldSphere>& shield)
+{
+	std::erase_if(_shields, [](const auto& weak) { return weak.expired(); });
+	_shields.push_back(shield);
+}
+
+std::shared_ptr<particles::ShieldSphere> GameParticleWorld::FindShield(glm::vec3 point, float margin) const
+{
+	for (const auto& weak : _shields)
+	{
+		if (auto shield = weak.lock(); shield && glm::distance(point, shield->centre) < shield->radius + margin)
+		{
+			return shield;
+		}
+	}
+	return nullptr;
+}
+
+std::shared_ptr<particles::ShieldSphere> GameParticleWorld::ShieldOf(const particles::Effect& effect) const
+{
+	for (const auto& weak : _shields)
+	{
+		if (auto shield = weak.lock(); shield && shield->owner == &effect)
+		{
+			return shield;
+		}
+	}
+	return nullptr;
+}
+
+void GameParticleWorld::Reset()
+{
+	_claimed.clear();
+	_sounds.clear();
+	_shields.clear();
 }
 
 std::optional<entt::id_type> GameCreatorResources::MeshByName(std::string_view name)
@@ -377,6 +623,19 @@ void ParticleSystem::SetDrawPath(EffectId id, particles::draw::DrawPath path)
 	}
 }
 
+void ParticleSystem::SetDrawOffset(EffectId id, glm::vec3 offset)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->drawOffset = offset;
+	}
+}
+
+std::shared_ptr<particles::ShieldSphere> ParticleSystem::FindShield(glm::vec3 point, float margin) const
+{
+	return _world.FindShield(point, margin);
+}
+
 void ParticleSystem::AddTarget(EffectId id, entt::entity target)
 {
 	if (const auto it = FindRunning(id); it != _effects.end())
@@ -464,6 +723,7 @@ void ParticleSystem::ProcessTurn()
 		}
 		++it;
 	}
+	_world.ProcessSounds();
 }
 
 void ParticleSystem::Reset()
@@ -537,6 +797,17 @@ void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame
 	{
 		_walk.Clear();
 		running.effect->Walk(turnFraction, _walk);
+		if (running.drawOffset != glm::vec3(0.0f))
+		{
+			for (auto& atom : _walk.atoms)
+			{
+				atom.position += running.drawOffset;
+			}
+			for (auto& joint : _walk.joints)
+			{
+				joint.position += running.drawOffset;
+			}
+		}
 		particles::draw::AddEffect(frame, _walk, running.path, running.effect->GetOrigin(), running.effect->GetPlayer(),
 		                           sources);
 	}

@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -27,7 +28,8 @@
 namespace openblack::particles
 {
 class Effect;
-}
+struct ShieldSphere;
+} // namespace openblack::particles
 
 namespace openblack::ecs::systems
 {
@@ -92,6 +94,13 @@ public:
 	virtual void SetPlayer(EffectId id, int player) = 0;
 	/// How the effect is drawn: sorted with everything else that blends unless told otherwise
 	virtual void SetDrawPath(EffectId id, particles::draw::DrawPath path) = 0;
+	/// Everything the effect draws is moved by this from where its last step left it, as the miracle in the hand follows
+	/// the hand between turns
+	virtual void SetDrawOffset(EffectId id, glm::vec3 offset) = 0;
+	/// The live shield holding a point, its sphere grown by a margin, if any
+	[[nodiscard]] virtual std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const = 0;
+	/// How many particle sounds are playing or dying away, for the debug window
+	[[nodiscard]] virtual size_t GetSoundCount() const = 0;
 	/// An object for the effect's rules to act on, such as a person for the heal miracle's chakra
 	virtual void AddTarget(EffectId id, entt::entity target) = 0;
 	/// The effect stops making particles and fades out as its file has it, or goes at once

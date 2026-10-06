@@ -209,12 +209,13 @@ void MeshCreator::InitAtom(Effect& effect, Atom& atom) const
 	atom.stretch = stretchY;
 }
 
-std::array<glm::vec2, 4> ChainCreator::SegmentUv(int segment, int segments) const
+std::array<glm::vec2, 4> ChainCreator::SegmentUv(int segment, int segments, int repeatsOverride) const
 {
 	// The ribbon is cut into repeats of the frame; the segment falls in repeat k, which holds n segments from its first,
 	// b. The last repeat shows the head's frame and the first the tail's.
 	const int s = std::max(1, segments);
-	const int repeats = std::max(1, texturesForWholeChain == -1 ? s : texturesForWholeChain);
+	const int wanted = repeatsOverride != -1 ? repeatsOverride : texturesForWholeChain;
+	const int repeats = std::max(1, wanted == -1 ? s : wanted);
 	const int k = ((segment + 1) * repeats - 1) / s;
 	const int b = k * s / repeats;
 	const int n = std::max(1, ((k + 1) * s / repeats) - b);

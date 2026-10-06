@@ -185,7 +185,8 @@ struct SymbolSprites
 [[nodiscard]] SymbolSprites SymbolOf(const Effect::DrawAtom& atom, uint32_t playerRgb, int player);
 
 /// The corners of a ribbon through its joints, four to a segment, its texture coordinates from its creator
-void AppendChain(std::vector<ChainVertex>& out, const Creator& creator, std::span<const Effect::DrawAtom> joints);
+void AppendChain(std::vector<ChainVertex>& out, const Creator& creator, std::span<const Effect::DrawAtom> joints,
+                 int textureRepeats = -1);
 /// Where a ribbon's corner lies seen from a point, as the vertex shader places it
 [[nodiscard]] glm::vec3 ChainCorner(const ChainVertex& vertex, const glm::vec3& eye);
 

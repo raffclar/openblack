@@ -14,7 +14,7 @@
 
 /// What a miracle and its particle effect tell each other: what the miracle gives the effect each step, the events the
 /// effect's rules send back (a particle landing, striking a target), and how far the miracle was powered up. The
-/// miracles themselves implement SpellSink; until they do, an effect simply has none.
+/// miracles implement SpellSink; an effect started without one simply has none.
 namespace openblack::particles
 {
 
@@ -31,6 +31,8 @@ struct ProcessInfo
 	float power {1.0f};
 	/// While false, the conditions that ask whether the miracle is still being cast fail
 	bool enabled {true};
+	/// How the caster spun the miracle as it let go, in radians a second, which curves a thrown fireball
+	float spin {0.0f};
 };
 
 /// An event a rule sends to the miracle
@@ -78,6 +80,8 @@ public:
 	[[nodiscard]] virtual bool IsMyInterfaceCasting() const { return false; }
 	/// Whether a human player, rather than a creature or a script, is casting it
 	[[nodiscard]] virtual bool IsHumanPlayerCasting() const { return false; }
+	/// The miracle's own entity, for the shields it raises
+	[[nodiscard]] virtual entt::entity Spell() const { return entt::null; }
 };
 
 } // namespace openblack::particles
