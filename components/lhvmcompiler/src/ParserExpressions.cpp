@@ -732,8 +732,31 @@ ExprPtr Parser::ParseExpression(uint8_t minPrecedence, ArgType expected)
 			_pos = saved;
 			return nullptr;
 		}
-		if (right->type == ValueType::Vector && resultType == ValueType::Float)
+		// Positions add to and subtract from positions, scale by a number on the left and divide by one. Anything else
+		// isn't position arithmetic, so the operator belongs to an enclosing expression: in "get distance from A to
+		// [B] - 1" the 1 is taken from the distance.
+		const bool leftVector = left->type == ValueType::Vector;
+		const bool rightVector = right->type == ValueType::Vector;
+		if (resultType != ValueType::Bool && (leftVector || rightVector))
 		{
+			bool valid = false;
+			if (*op == Op::Add || *op == Op::Sub)
+			{
+				valid = leftVector && rightVector;
+			}
+			else if (*op == Op::Mul)
+			{
+				valid = !leftVector && rightVector;
+			}
+			else if (*op == Op::Div)
+			{
+				valid = leftVector && !rightVector;
+			}
+			if (!valid)
+			{
+				_pos = saved;
+				break;
+			}
 			resultType = ValueType::Vector;
 		}
 		auto binary = std::make_shared<Expr>();

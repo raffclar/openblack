@@ -29,8 +29,8 @@ struct TypeOverride
 };
 
 // Places where the game's compiled scripts show a value of a different type than the signature table gives: these
-// "enable" flags are pushed as truth values, the player of TOGGLE_LEASH as a number, and the property read by
-// GET_PROPERTY is used as a number without conversion.
+// "enable" flags are pushed as truth values, the player of TOGGLE_LEASH as a number, the property read by
+// GET_PROPERTY is used as a number without conversion, and MUSIC_PLAYED is a condition.
 constexpr auto k_TypeOverrides = std::to_array<TypeOverride>({
     {.native = "ENABLE_DISABLE_ALIGNMENT_MUSIC", .index = 0, .type = ArgType::Bool},
     {.native = "GAME_TIME_ON_OFF", .index = 0, .type = ArgType::Bool},
@@ -39,6 +39,7 @@ constexpr auto k_TypeOverrides = std::to_array<TypeOverride>({
     {.native = "SET_LEASH_WORKS", .index = 0, .type = ArgType::Bool},
     {.native = "TOGGLE_LEASH", .index = 0, .type = ArgType::Float},
     {.native = "GET_PROPERTY", .index = -1, .type = ArgType::Float},
+    {.native = "MUSIC_PLAYED", .index = -1, .type = ArgType::Bool},
 });
 
 struct OverloadChoice
