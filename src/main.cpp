@@ -67,7 +67,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("screenshot-path", "Path of the request a screenshot of the backbuffer.", cxxopts::value<std::filesystem::path>()->default_value("screenshot.png"))
 		("frame-stats", "Log the average and 95th percentile frame time and the profiler stages every so many frames (0 for never).", cxxopts::value<uint32_t>()->default_value("0"))
 		("frame-stats-views", "With --frame-stats, also profile and log the GPU time of each render view.")
-		("scenario", "Start on the testbed and run the testbed scenario of this id, such as benchmark.creatures_1000.", cxxopts::value<std::string>())
+		("scenario", "Start on the testbed and run the testbed scenario of this id, such as benchmark.creatures_100.", cxxopts::value<std::string>())
 		("benchmark-warmup", "With --scenario, the frames a benchmark's crowd settles for once spawned, before it is measured.", cxxopts::value<uint32_t>()->default_value("120"))
 		("benchmark-frames", "With --scenario, the frames of a benchmark measured.", cxxopts::value<uint32_t>()->default_value("600"))
 		("benchmark-out", "With --scenario, where a benchmark writes its results (with .json and .csv after it); the game quits once they are written.", cxxopts::value<std::string>())

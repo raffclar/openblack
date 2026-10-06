@@ -641,13 +641,15 @@ TEST(TestbedDispenserGrid, StaysUnlessAScenarioAsksForNoneOrStandsOnIt)
 
 TEST(TestbedScenarios, BenchmarksMeasureCrowdsOfEachSize)
 {
-	const std::array<std::pair<const char*, size_t>, 6> benchmarks {{
+	const std::array<std::pair<const char*, size_t>, 8> benchmarks {{
+	    {"benchmark.creatures_10", 10},
+	    {"benchmark.creatures_25", 25},
+	    {"benchmark.creatures_50", 50},
 	    {"benchmark.creatures_100", 100},
-	    {"benchmark.creatures_1000", 1'000},
-	    {"benchmark.creatures_10000", 10'000},
 	    {"benchmark.villagers_100", 100},
+	    {"benchmark.villagers_250", 250},
+	    {"benchmark.villagers_500", 500},
 	    {"benchmark.villagers_1000", 1'000},
-	    {"benchmark.villagers_10000", 10'000},
 	}};
 	for (const auto& [id, count] : benchmarks)
 	{
@@ -669,6 +671,17 @@ TEST(TestbedScenarios, BenchmarksMeasureCrowdsOfEachSize)
 		EXPECT_EQ(scenario->crowd->seed, Find("benchmark.creatures_100")->crowd->seed);
 	}
 	EXPECT_EQ(Name(Facet::Benchmark), "Benchmark");
+	// No more than 100 creatures or 1,000 villagers
+	size_t crowds = 0;
+	for (const auto& scenario : All())
+	{
+		if (scenario.crowd.has_value())
+		{
+			++crowds;
+			EXPECT_LE(scenario.crowd->count, scenario.crowd->kind == Crowd::Kind::Creatures ? 100u : 1'000u) << scenario.id;
+		}
+	}
+	EXPECT_EQ(crowds, benchmarks.size());
 	// Only benchmarks have crowds
 	for (const auto& scenario : All())
 	{

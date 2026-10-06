@@ -1951,8 +1951,8 @@ void AddEditor(std::vector<Scenario>& all)
 	});
 }
 
-/// A benchmark of a crowd of the size, to compare runs of 100, 1,000 and 10,000 and see which costs grow faster than
-/// the crowd does
+/// A benchmark of a crowd of the size, to compare runs of several sizes and see which costs grow faster than the crowd
+/// does
 void AddCrowd(std::vector<Scenario>& all, Crowd::Kind kind, size_t count, std::string_view id, std::string_view name)
 {
 	const bool creatures = kind == Crowd::Kind::Creatures;
@@ -1978,12 +1978,15 @@ void AddCrowd(std::vector<Scenario>& all, Crowd::Kind kind, size_t count, std::s
 
 void AddBenchmark(std::vector<Scenario>& all)
 {
+	// Steps close enough together that a cost growing faster than the crowd shows between them
+	AddCrowd(all, Crowd::Kind::Creatures, 10, "benchmark.creatures_10", "10 active creatures");
+	AddCrowd(all, Crowd::Kind::Creatures, 25, "benchmark.creatures_25", "25 active creatures");
+	AddCrowd(all, Crowd::Kind::Creatures, 50, "benchmark.creatures_50", "50 active creatures");
 	AddCrowd(all, Crowd::Kind::Creatures, 100, "benchmark.creatures_100", "100 active creatures");
-	AddCrowd(all, Crowd::Kind::Creatures, 1'000, "benchmark.creatures_1000", "1,000 active creatures");
-	AddCrowd(all, Crowd::Kind::Creatures, 10'000, "benchmark.creatures_10000", "10,000 active creatures");
 	AddCrowd(all, Crowd::Kind::Villagers, 100, "benchmark.villagers_100", "100 active villagers");
+	AddCrowd(all, Crowd::Kind::Villagers, 250, "benchmark.villagers_250", "250 active villagers");
+	AddCrowd(all, Crowd::Kind::Villagers, 500, "benchmark.villagers_500", "500 active villagers");
 	AddCrowd(all, Crowd::Kind::Villagers, 1'000, "benchmark.villagers_1000", "1,000 active villagers");
-	AddCrowd(all, Crowd::Kind::Villagers, 10'000, "benchmark.villagers_10000", "10,000 active villagers");
 }
 
 std::vector<Scenario> Build()
