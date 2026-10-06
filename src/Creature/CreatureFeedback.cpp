@@ -142,13 +142,17 @@ std::optional<float> creature_feedback::RayHit(const glm::vec3& origin, const gl
 std::vector<Capsule> creature_feedback::BodyCapsules(std::span<const uint32_t> parents, std::span<const glm::mat4> boneMatrices,
                                                      const glm::mat4& placement, float radius)
 {
+	// Where each joint is in the world: only the placement of the bone's origin is needed, once for each bone
+	std::vector<glm::vec3> joints(boneMatrices.size());
+	std::ranges::transform(boneMatrices, joints.begin(),
+	                       [&placement](const glm::mat4& bone) { return glm::vec3(placement * bone[3]); });
 	std::vector<Capsule> capsules;
-	const auto at = [&](uint32_t bone) { return glm::vec3((placement * boneMatrices[bone])[3]); };
+	capsules.reserve(std::min(parents.size(), boneMatrices.size()));
 	for (uint32_t bone = 0; bone < parents.size() && bone < boneMatrices.size(); ++bone)
 	{
 		const auto parent = parents[bone];
-		const auto to = at(bone);
-		const auto from = parent < boneMatrices.size() ? at(parent) : to;
+		const auto to = joints[bone];
+		const auto from = parent < boneMatrices.size() ? joints[parent] : to;
 		capsules.push_back({.from = from, .to = to, .radius = radius});
 	}
 	return capsules;

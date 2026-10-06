@@ -55,6 +55,12 @@ void RenderingSystemCommon::SetDirty()
 	_renderContext.dirty = true;
 }
 
+void RenderingSystemCommon::SetLayoutDirty()
+{
+	_renderContext.dirty = true;
+	_renderContext.layoutDirty = true;
+}
+
 void RenderingSystemCommon::PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -78,8 +84,23 @@ void RenderingSystemCommon::PrepareDraw(bool drawBoundingBox, bool drawFootpaths
 		                                            glm::scale(transform.scale));
 	    });
 
-	if (_renderContext.dirty || _renderContext.hasBoundingBoxes != drawBoundingBox ||
-	    (_renderContext.footpaths != nullptr) != drawFootpaths || (_renderContext.streams != nullptr) != drawStreams)
+	const bool optionsChanged = _renderContext.hasBoundingBoxes != drawBoundingBox ||
+	                            (_renderContext.footpaths != nullptr) != drawFootpaths ||
+	                            (_renderContext.streams != nullptr) != drawStreams;
+	// While things only move, the draw lists stay as they are and only the instances are uploaded again
+	if (!_renderContext.layoutDirty && !optionsChanged)
+	{
+		if (_renderContext.dirty && !UploadUniformsKeepingDescs(drawBoundingBox))
+		{
+			_renderContext.layoutDirty = true;
+		}
+		else
+		{
+			_renderContext.dirty = false;
+		}
+	}
+
+	if (_renderContext.layoutDirty || optionsChanged)
 	{
 		PrepareDrawDescs(drawBoundingBox);
 		PrepareDrawUploadUniforms(drawBoundingBox);
@@ -136,6 +157,7 @@ void RenderingSystemCommon::PrepareDraw(bool drawBoundingBox, bool drawFootpaths
 		}
 
 		_renderContext.dirty = false;
+		_renderContext.layoutDirty = false;
 		_renderContext.hasBoundingBoxes = drawBoundingBox;
 	}
 }

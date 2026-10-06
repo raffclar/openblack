@@ -302,6 +302,33 @@ TEST(CreatureFeedback, TheHandTouchesTheBodyWhereTheLineOfSightMeetsIt)
 	EXPECT_FALSE(creature_feedback::RayHit(glm::vec3(0.0f, 5.0f, 20.0f), glm::vec3(0.0f, 0.0f, 1.0f), body).has_value());
 }
 
+TEST(CreatureFeedback, TheBodyIsACapsuleFromEachJointToItsParentsPlaced)
+{
+	// A root and two bones hanging off it, the last off the first, its own parent out of range
+	const std::array<uint32_t, 3> parents {0xFFFFFFFF, 0, 1};
+	const std::array<glm::mat4, 3> bones {
+	    glm::translate(glm::vec3(0.0f, 1.0f, 0.0f)),
+	    glm::translate(glm::vec3(0.0f, 3.0f, 0.0f)) * glm::eulerAngleY(0.5f),
+	    glm::translate(glm::vec3(2.0f, 3.0f, 0.0f)),
+	};
+	const auto placement = glm::translate(glm::vec3(10.0f, 0.0f, -4.0f)) * glm::scale(glm::vec3(2.0f));
+	const auto capsules = creature_feedback::BodyCapsules(parents, bones, placement, 0.5f);
+	ASSERT_EQ(capsules.size(), 3u);
+	// The root's capsule is only the point where it is
+	EXPECT_EQ(capsules[0].from, glm::vec3(10.0f, 2.0f, -4.0f));
+	EXPECT_EQ(capsules[0].to, glm::vec3(10.0f, 2.0f, -4.0f));
+	EXPECT_EQ(capsules[1].from, glm::vec3(10.0f, 2.0f, -4.0f));
+	EXPECT_EQ(capsules[1].to, glm::vec3(10.0f, 6.0f, -4.0f));
+	EXPECT_EQ(capsules[2].from, glm::vec3(10.0f, 6.0f, -4.0f));
+	EXPECT_EQ(capsules[2].to, glm::vec3(14.0f, 6.0f, -4.0f));
+	for (const auto& capsule : capsules)
+	{
+		EXPECT_FLOAT_EQ(capsule.radius, 0.5f);
+	}
+	// Each joint is where its whole posed matrix puts the bone's origin
+	EXPECT_EQ(capsules[1].to, glm::vec3((placement * bones[1])[3]));
+}
+
 TEST(CreatureObjectActions, TheTownFearsThrowingAndEatingVillagers)
 {
 	using creature_object_actions::AttitudeTo;

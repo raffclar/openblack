@@ -38,7 +38,7 @@ ShaderProgram::ShaderProgram(const std::string& name, ShaderHandle vertexShader,
 	for (uint16_t i = 0; i < numShaderUniforms; ++i)
 	{
 		bgfx::getUniformInfo(uniforms[i], info);
-		_uniforms.emplace(std::string(info.name), fromBgfx(uniforms[i]));
+		_uniforms.Add(info.name, fromBgfx(uniforms[i]));
 	}
 
 	numShaderUniforms = bgfx::getShaderUniforms(toBgfx(fragmentShader));
@@ -47,7 +47,7 @@ ShaderProgram::ShaderProgram(const std::string& name, ShaderHandle vertexShader,
 	for (uint16_t i = 0; i < numShaderUniforms; ++i)
 	{
 		bgfx::getUniformInfo(uniforms[i], info);
-		_uniforms.emplace(std::string(info.name), fromBgfx(uniforms[i]));
+		_uniforms.Add(info.name, fromBgfx(uniforms[i]));
 	}
 
 	// Two samplers at one stage would share a texture
@@ -56,8 +56,8 @@ ShaderProgram::ShaderProgram(const std::string& name, ShaderHandle vertexShader,
 		SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "{} Shader samples {} and {} at the same stage", name, first, second);
 	}
 	// A sampler the backend's build of the shader doesn't have can't be bound, nor needs to be
-	std::erase_if(_samplers, [this](const shader_samplers::Sampler& sampler) { return !_uniforms.contains(sampler.name); });
-	for (const auto& sampler : _samplers)
+	std::erase_if(_samplers, [this](const shader_samplers::Sampler& sampler) { return !_uniforms.Contains(sampler.name); });
+	for ([[maybe_unused]] const auto& sampler : _samplers)
 	{
 		SPDLOG_LOGGER_DEBUG(spdlog::get("graphics"), "{} Shader samples {} at stage {} (kind {})", name, sampler.name,
 		                    sampler.stage, static_cast<int>(sampler.dimension));
@@ -79,10 +79,9 @@ ShaderProgram::~ShaderProgram()
 
 void ShaderProgram::SetTextureSampler(const char* samplerName, uint8_t bindPoint, const Texture2D& texture) const
 {
-	auto uniform = _uniforms.find(samplerName);
-	if (uniform != _uniforms.cend())
+	if (const auto uniform = _uniforms.Find(samplerName))
 	{
-		bgfx::setTexture(bindPoint, toBgfx(uniform->second), toBgfx(texture.GetNativeHandle()));
+		bgfx::setTexture(bindPoint, toBgfx(*uniform), toBgfx(texture.GetNativeHandle()));
 		_samplerDefaults.Set(bindPoint);
 	}
 	else
@@ -93,16 +92,32 @@ void ShaderProgram::SetTextureSampler(const char* samplerName, uint8_t bindPoint
 
 void ShaderProgram::SetTextureSampler(const char* samplerName, uint8_t bindPoint, const graphics::TextureHandle& texture) const
 {
-	auto uniform = _uniforms.find(samplerName);
-	if (uniform != _uniforms.cend())
+	if (const auto uniform = _uniforms.Find(samplerName))
 	{
-		bgfx::setTexture(bindPoint, toBgfx(uniform->second), toBgfx(texture));
+		bgfx::setTexture(bindPoint, toBgfx(*uniform), toBgfx(texture));
 		_samplerDefaults.Set(bindPoint);
 	}
 	else
 	{
 		WarnMissing(samplerName);
 	}
+}
+
+void ShaderProgram::SetTextureSampler(UniformHandle sampler, uint8_t bindPoint, const Texture2D& texture) const
+{
+	bgfx::setTexture(bindPoint, toBgfx(sampler), toBgfx(texture.GetNativeHandle()));
+	_samplerDefaults.Set(bindPoint);
+}
+
+void ShaderProgram::SetTextureSampler(UniformHandle sampler, uint8_t bindPoint, const graphics::TextureHandle& texture) const
+{
+	bgfx::setTexture(bindPoint, toBgfx(sampler), toBgfx(texture));
+	_samplerDefaults.Set(bindPoint);
+}
+
+void ShaderProgram::SetUniformValue(UniformHandle uniform, const void* value) const
+{
+	bgfx::setUniform(toBgfx(uniform), value);
 }
 
 void ShaderProgram::Submit(uint16_t viewId, uint32_t depth, uint8_t discardFlags) const
@@ -112,7 +127,7 @@ void ShaderProgram::Submit(uint16_t viewId, uint32_t depth, uint8_t discardFlags
 		if (!_samplerDefaults.IsSet(sampler.stage))
 		{
 			const auto texture = _samplerDefaults.Texture(shader_samplers::DefaultTextureFor(sampler.dimension));
-			bgfx::setTexture(sampler.stage, toBgfx(_uniforms.at(sampler.name)), toBgfx(texture));
+			bgfx::setTexture(sampler.stage, toBgfx(*_uniforms.Find(sampler.name)), toBgfx(texture));
 			// Kept for the next draw as well when this one keeps its bindings
 			_samplerDefaults.Set(sampler.stage);
 		}
@@ -127,9 +142,9 @@ void ShaderProgram::SetUniformArray(const char* uniformName, const void* values,
 	{
 		return;
 	}
-	if (const auto uniform = _uniforms.find(uniformName); uniform != _uniforms.cend())
+	if (const auto uniform = _uniforms.Find(uniformName))
 	{
-		bgfx::setUniform(toBgfx(uniform->second), values, count);
+		bgfx::setUniform(toBgfx(*uniform), values, count);
 	}
 	else
 	{
@@ -139,10 +154,9 @@ void ShaderProgram::SetUniformArray(const char* uniformName, const void* values,
 
 void ShaderProgram::SetUniformValue(const char* uniformName, const void* value) const
 {
-	auto uniform = _uniforms.find(uniformName);
-	if (uniform != _uniforms.cend())
+	if (const auto uniform = _uniforms.Find(uniformName))
 	{
-		bgfx::setUniform(toBgfx(uniform->second), value);
+		bgfx::setUniform(toBgfx(*uniform), value);
 	}
 	else
 	{
@@ -153,7 +167,7 @@ void ShaderProgram::SetUniformValue(const char* uniformName, const void* value) 
 void ShaderProgram::WarnMissing(std::string_view name) const
 {
 	// Uniforms are set every frame, so each missing one is warned about once
-	if (_warnedMissing.emplace(name).second)
+	if (!_warnedMissing.contains(name) && _warnedMissing.emplace(name).second)
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "Could not find uniform {} in {} Shader", name, _name);
 	}

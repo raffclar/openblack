@@ -43,6 +43,7 @@
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/ShaderManager.h"
 #include "Locator.h"
+#include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack::ecs::systems;
@@ -52,9 +53,11 @@ RenderingSystem::~RenderingSystem() = default;
 
 void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 {
+	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::UpdateEntitiesDescs);
 	auto& registry = Locator::entitiesRegistry::value();
 
-	// Count number of instances
+	// Count number of instances. The draw lists are made from the components listed in k_ChangesDrawLayout, and made
+	// again only when an entity gains or loses one of them: a component they come to depend on belongs in that list.
 	uint32_t instanceCount = 0;
 	struct MeshInstances
 	{
@@ -116,6 +119,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 	// Determine uniform buffer offsets and instance count for draw
 	uint32_t offset = 0;
 	_renderContext.instancedDrawDescs.clear();
+	_instanceSlots.clear();
 	for (const auto& [meshId, desc] : meshIds)
 	{
 		const auto [drawDesc, inserted] = _renderContext.instancedDrawDescs.emplace(
@@ -123,6 +127,9 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		    std::forward_as_tuple(offset, desc.count, desc.morphWithTerrain, desc.castsShadow));
 		drawDesc->second.unlit = desc.unlit;
 		drawDesc->second.perEntity = desc.perEntity;
+		_instanceSlots.emplace(
+		    meshId,
+		    InstanceSlots {.offset = offset, .count = desc.count, .filled = 0, .perEntity = desc.perEntity, .height = 0.0f});
 		offset += desc.count;
 	}
 
@@ -179,30 +186,56 @@ void RenderingSystem::PrepareTreeDrawDescs(bool drawBoundingBox)
 	// Determine tree uniform buffer offsets and instance count for draw
 	uint32_t treeOffset = 0;
 	_renderContext.treeInstancedDrawDescs.clear();
+	_treeSlots.clear();
+	auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
 	for (const auto& [meshId, count] : treeMeshIds)
 	{
 		_renderContext.treeInstancedDrawDescs.emplace(std::piecewise_construct, std::forward_as_tuple(meshId),
 		                                              std::forward_as_tuple(treeOffset, count, false, true));
+		const auto height = meshes.Contains(meshId) ? meshes.Handle(meshId)->GetBoundingBox().Size().y : 0.0f;
+		_treeSlots.emplace(
+		    meshId, InstanceSlots {.offset = treeOffset, .count = count, .filled = 0, .perEntity = false, .height = height});
 		treeOffset += count;
 	}
 }
 
 void RenderingSystem::PrepareDrawUploadUniforms(bool drawBoundingBox)
 {
+	// Fresh draw lists have room for every instance
+	UploadInstances(drawBoundingBox);
+	UploadTreeInstances(drawBoundingBox);
+}
+
+bool RenderingSystem::UploadUniformsKeepingDescs(bool drawBoundingBox)
+{
+	return UploadInstances(drawBoundingBox) && UploadTreeInstances(drawBoundingBox);
+}
+
+bool RenderingSystem::UploadInstances(bool drawBoundingBox)
+{
+	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::UpdateEntitiesUniforms);
 	auto& registry = Locator::entitiesRegistry::value();
 
-	// Store offsets of uniforms for descs
-	std::map<entt::id_type, uint32_t> uniformOffsets;
+	for (auto& [meshId, slots] : _instanceSlots)
+	{
+		slots.filled = 0;
+	}
 
 	const auto& vegetation = Locator::vegetation::value();
 
 	// Set transforms for instanced draw at offsets
 	_renderContext.entityDraws.clear();
+	bool fits = true;
 	registry.Each<const Mesh, const Transform>(
-	    [this, &registry, &vegetation, &uniformOffsets, drawBoundingBox](entt::entity entity, const Mesh& mesh,
-	                                                                     const Transform& transform) {
-		    auto offset = uniformOffsets.insert(std::make_pair(mesh.id, 0));
-		    auto desc = _renderContext.instancedDrawDescs.find(mesh.id);
+	    [this, &registry, &vegetation, &fits, drawBoundingBox](entt::entity entity, const Mesh& mesh,
+	                                                           const Transform& transform) {
+		    // A mesh the draw lists don't have room for, which has changed since they were made
+		    const auto slots = _instanceSlots.find(mesh.id);
+		    if (!fits || slots == _instanceSlots.end() || slots->second.filled >= slots->second.count)
+		    {
+			    fits = false;
+			    return;
+		    }
 
 		    auto modelMatrix = glm::mat4(transform.rotation);
 		    modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
@@ -233,9 +266,9 @@ void RenderingSystem::PrepareDrawUploadUniforms(bool drawBoundingBox)
 			    }
 		    }
 
-		    const uint32_t idx = desc->second.offset + offset.first->second;
+		    const uint32_t idx = slots->second.offset + slots->second.filled;
 		    _renderContext.instanceUniforms[idx] = {.model = modelMatrix, .look = look};
-		    if (desc->second.perEntity)
+		    if (slots->second.perEntity)
 		    {
 			    _renderContext.entityDraws.push_back({.entity = entity, .instance = idx});
 		    }
@@ -246,44 +279,48 @@ void RenderingSystem::PrepareDrawUploadUniforms(bool drawBoundingBox)
 			    auto boxMatrix = modelMatrix * glm::translate(box.Center()) * glm::scale(box.Size());
 			    _renderContext.instanceUniforms[idx + (_renderContext.instanceUniforms.size() / 2)] = {.model = boxMatrix};
 		    }
-		    offset.first->second++;
+		    ++slots->second.filled;
 	    },
 	    entt::exclude<TempleInteriorPart, Tree, AtHome>);
 
-	if (!_renderContext.instanceUniforms.empty())
+	if (fits && !_renderContext.instanceUniforms.empty())
 	{
 		const auto size = static_cast<uint32_t>(_renderContext.instanceUniforms.size() * sizeof(RenderContext::ObjectInstance));
 		bgfx::update(toBgfx(_renderContext.instanceUniformBuffer), 0,
 		             bgfx::makeRef(_renderContext.instanceUniforms.data(), size));
 	}
-
-	// Upload tree uniforms separately
-	PrepareTreeDrawUploadUniforms(drawBoundingBox);
+	return fits;
 }
 
-void RenderingSystem::PrepareTreeDrawUploadUniforms(bool drawBoundingBox)
+bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 {
+	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::UpdateEntitiesTrees);
 	auto& registry = Locator::entitiesRegistry::value();
 
-	// Store offsets of tree uniforms
-	std::map<entt::id_type, uint32_t> treeUniformOffsets;
+	for (auto& [meshId, slots] : _treeSlots)
+	{
+		slots.filled = 0;
+	}
 	const auto& vegetation = Locator::vegetation::value();
-	auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
 
 	// Set the transforms of the trees, swaying or bent away from the hand
+	bool fits = true;
 	registry.Each<const Mesh, const Transform, const Tree, const Swayable>(
-	    [this, &treeUniformOffsets, drawBoundingBox, &vegetation, &meshes](const Mesh& mesh, const Transform& transform,
-	                                                                       const Tree& /*unused*/, const Swayable& swayable) {
-		    auto offset = treeUniformOffsets.insert(std::make_pair(mesh.id, 0));
-		    auto desc = _renderContext.treeInstancedDrawDescs.find(mesh.id);
+	    [this, &fits, drawBoundingBox, &vegetation](const Mesh& mesh, const Transform& transform, const Tree& /*unused*/,
+	                                                const Swayable& swayable) {
+		    const auto slots = _treeSlots.find(mesh.id);
+		    if (!fits || slots == _treeSlots.end() || slots->second.filled >= slots->second.count)
+		    {
+			    fits = false;
+			    return;
+		    }
 
-		    const uint32_t idx = desc->second.offset + offset.first->second;
+		    const uint32_t idx = slots->second.offset + slots->second.filled;
 		    auto modelMatrix = glm::mat4(transform.rotation);
 		    modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
 		    modelMatrix = glm::scale(modelMatrix, transform.scale);
-		    const auto height = meshes.Contains(mesh.id) ? meshes.Handle(mesh.id)->GetBoundingBox().Size().y : 0.0f;
-		    _renderContext.treeInstanceData[idx].modelMatrix =
-		        vegetation.GetTreeMatrix(modelMatrix, transform.position, transform.scale.y, height, swayable.swaySlot);
+		    _renderContext.treeInstanceData[idx].modelMatrix = vegetation.GetTreeMatrix(
+		        modelMatrix, transform.position, transform.scale.y, slots->second.height, swayable.swaySlot);
 
 		    if (drawBoundingBox && idx + _renderContext.treeInstanceData.size() / 2 < _renderContext.treeInstanceData.size())
 		    {
@@ -294,10 +331,10 @@ void RenderingSystem::PrepareTreeDrawUploadUniforms(bool drawBoundingBox)
 			    // Store bounding box matrix in the second half of the instance data array
 			    _renderContext.treeInstanceData[idx + (_renderContext.treeInstanceData.size() / 2)].modelMatrix = boxMatrix;
 		    }
-		    offset.first->second++;
+		    ++slots->second.filled;
 	    });
 
-	if (!_renderContext.treeInstanceData.empty())
+	if (fits && !_renderContext.treeInstanceData.empty())
 	{
 		const auto size =
 		    static_cast<uint32_t>(_renderContext.treeInstanceData.size() * sizeof(RenderContext::TreeInstanceData));
@@ -306,4 +343,5 @@ void RenderingSystem::PrepareTreeDrawUploadUniforms(bool drawBoundingBox)
 		bgfx::update(toBgfx(_renderContext.treeInstanceUniformBuffer), 0,
 		             bgfx::makeRef(_renderContext.treeInstanceData.data(), size));
 	}
+	return fits;
 }

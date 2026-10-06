@@ -15,6 +15,7 @@
 
 #include <chrono>
 #include <string>
+#include <unordered_map>
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -149,11 +150,30 @@ void VegetationSystem::Rustle(std::chrono::duration<float, std::milli> gameTime)
 	const auto idleChance = TreeRustle::IdleChance(gameTime);
 	const auto bank = std::string(TreeRustle::k_Bank);
 
+	// The trees share a few meshes, whose heights are looked up once each
+	std::unordered_map<entt::id_type, float> meshHeights;
+	const auto meshHeight = [&meshes, &meshHeights](entt::id_type id) {
+		const auto [found, inserted] = meshHeights.try_emplace(id, 0.0f);
+		if (inserted && meshes.Contains(id))
+		{
+			found->second = meshes.Handle(id)->GetBoundingBox().Size().y;
+		}
+		return found->second;
+	};
+
 	registry.Each<const Tree, const Transform, const Mesh, const Swayable>([&](entt::entity entity, const Tree& /*unused*/,
 	                                                                           const Transform& transform, const Mesh& mesh,
 	                                                                           const Swayable& /*unused*/) {
-		const auto height =
-		    meshes.Contains(mesh.id) ? transform.scale.y * meshes.Handle(mesh.id)->GetBoundingBox().Size().y : 0.0f;
+		// Only a tree near the camera or within a bend point's reach can rustle, and only for those does its height
+		// matter: the others are passed over before it is looked up
+		const bool nearBend = std::ranges::any_of(_bendPoints, [&transform](const BendPoint& point) {
+			return point.radius > 0.0f && glm::distance(glm::xz(transform.position), glm::xz(point.position)) < point.radius;
+		});
+		if (!nearBend && !TreeRustle::IsNearCamera(transform.position, camera))
+		{
+			return;
+		}
+		const auto height = transform.scale.y * meshHeight(mesh.id);
 		if (const auto bend = GetBend(transform.position, height))
 		{
 			audio.PlayAnimEffect(bank, TreeRustle::BendKeys(bend->amount).ToArray(), entity, transform.position);

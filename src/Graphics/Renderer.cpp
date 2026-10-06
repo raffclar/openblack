@@ -532,13 +532,13 @@ const Texture2D* GetTexture(uint32_t skinID, const std::unordered_map<SkinId, st
 
 	if (skinID != 0xFFFFFFFF)
 	{
-		if (meshSkins.find(skinID) != meshSkins.end())
+		if (const auto skin = meshSkins.find(skinID); skin != meshSkins.end())
 		{
-			texture = meshSkins.at(skinID).get();
+			texture = skin->second.get();
 		}
-		else if (textureManager.Contains(skinID))
+		else if (const auto* shared = textureManager.Find(skinID); shared != nullptr)
 		{
-			texture = &*textureManager.Handle(skinID);
+			texture = shared;
 		}
 		else
 		{
@@ -625,6 +625,19 @@ void BindBlendSources(const L3DMesh& mesh, const L3DSubMesh& subMesh,
 }
 } // namespace
 
+const Renderer::MeshUniforms& Renderer::MeshUniformsOf(const ShaderProgram& program) const
+{
+	const auto [found, inserted] = _meshUniforms.try_emplace(&program);
+	if (inserted)
+	{
+		for (size_t i = 0; i < k_MeshUniformNames.size(); ++i)
+		{
+			found->second.at(i) = program.FindUniform(k_MeshUniformNames.at(i));
+		}
+	}
+	return found->second;
+}
+
 void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSubMesh& subMesh, const L3DMeshSubmitDesc& desc,
                            bool preserveState, const TextureHandle* subMeshTexture, glm::vec3 glow) const
 {
@@ -686,16 +699,43 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 		}
 		return GetTexture(skinID, skins);
 	};
+	// The program's uniforms by handle: a draw sets them for every primitive
+	const auto& uniforms = MeshUniformsOf(*program);
+	const auto has = [&uniforms](MeshUniform uniform) { return uniforms[static_cast<size_t>(uniform)].has_value(); };
+	// Set by handle where the program has the uniform, or by name for its warning where it hasn't
+	const auto setUniform = [&uniforms, program](MeshUniform uniform, const void* value) {
+		if (const auto& handle = uniforms[static_cast<size_t>(uniform)])
+		{
+			program->SetUniformValue(*handle, value);
+		}
+		else
+		{
+			program->SetUniformValue(k_MeshUniformNames[static_cast<size_t>(uniform)].data(), value);
+		}
+	};
+	const auto setSampler = [&uniforms, program](MeshUniform sampler, uint8_t stage, const auto& texture) {
+		if (const auto& handle = uniforms[static_cast<size_t>(sampler)])
+		{
+			program->SetTextureSampler(*handle, stage, texture);
+		}
+		else
+		{
+			program->SetTextureSampler(k_MeshUniformNames[static_cast<size_t>(sampler)].data(), stage, texture);
+		}
+	};
+
 	bool lastPreserveState = false;
 	const auto& primitives = subMesh.GetPrimitives();
+	// Each primitive's skin is looked up once, as the next one's and then as its own
+	const Texture2D* nextTexture = primitives.empty() ? nullptr : skinOf(primitives.front().skinID);
 	for (auto it = primitives.begin(); it != primitives.end(); ++it)
 	{
 		const auto& prim = *it;
 
 		const bool hasNext = std::next(it) != primitives.end();
 
-		const Texture2D* texture = skinOf(prim.skinID);
-		const Texture2D* nextTexture = !hasNext ? nullptr : skinOf(std::next(it)->skinID);
+		const Texture2D* texture = nextTexture;
+		nextTexture = !hasNext ? nullptr : skinOf(std::next(it)->skinID);
 
 		// Primitives drawn with their own material's blending can't share render state, nor can a submesh with a texture
 		// of its own
@@ -709,66 +749,65 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			{
 				bgfx::setTransform(modelMatrices, desc.matrixCount);
 			}
-			if (program->HasUniform("u_depthBias"))
+			if (has(MeshUniform::DepthBias))
 			{
 				const glm::vec4 u_depthBias {desc.depthBias, 0.0f, 0.0f, 0.0f};
-				program->SetUniformValue("u_depthBias", &u_depthBias);
+				setUniform(MeshUniform::DepthBias, &u_depthBias);
 			}
-			if (program->HasUniform("u_tint"))
+			if (has(MeshUniform::Tint))
 			{
-				program->SetUniformValue("u_tint", &desc.tint);
+				setUniform(MeshUniform::Tint, &desc.tint);
 			}
-			if (program->HasUniform("u_glow"))
+			if (has(MeshUniform::Glow))
 			{
 				// A control's glow takes the place of the light's colour added
 				const glm::vec4 u_glow {glow != glm::vec3(0.0f) ? glow : desc.lightAdd, 0.0f};
-				program->SetUniformValue("u_glow", &u_glow);
+				setUniform(MeshUniform::Glow, &u_glow);
 			}
-			if (program->HasUniform("u_darkening"))
+			if (has(MeshUniform::Darkening))
 			{
 				const glm::vec4 u_darkening {1.0f - desc.lightMultiply, 0.0f};
-				program->SetUniformValue("u_darkening", &u_darkening);
+				setUniform(MeshUniform::Darkening, &u_darkening);
 			}
-			if (desc.morphTargets != nullptr && program->HasUniform("u_morphWeights"))
+			if (desc.morphTargets != nullptr && has(MeshUniform::MorphWeights))
 			{
 				const glm::vec4 u_morphWeights {desc.morphTargets->weights, 0.0f};
-				program->SetUniformValue("u_morphWeights", &u_morphWeights);
+				setUniform(MeshUniform::MorphWeights, &u_morphWeights);
 			}
-			if (desc.morphTargets != nullptr && program->HasUniform("u_vertexBlend"))
+			if (desc.morphTargets != nullptr && has(MeshUniform::VertexBlend))
 			{
 				BindBlendSources(mesh, subMesh, *desc.morphTargets, *program);
 			}
-			if (program->HasUniform("u_uvOffset"))
+			if (has(MeshUniform::UvOffset))
 			{
 				const glm::vec4 u_uvOffset {desc.uvOffset, 0.0f, 0.0f};
-				program->SetUniformValue("u_uvOffset", &u_uvOffset);
+				setUniform(MeshUniform::UvOffset, &u_uvOffset);
 			}
-			if (program->HasUniform("u_seaClip"))
+			if (has(MeshUniform::SeaClip))
 			{
 				// The sea mirrors only what stands above it
 				const bool reflection =
 				    desc.viewId == RenderPass::Reflection || desc.viewId == RenderPass::ReflectionTranslucent;
 				const glm::vec4 u_seaClip {reflection ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
-				program->SetUniformValue("u_seaClip", &u_seaClip);
+				setUniform(MeshUniform::SeaClip, &u_seaClip);
 			}
-			if (program->HasUniform("u_snow"))
+			if (has(MeshUniform::Snow))
 			{
 				// Snow shows where the primitive writes its depth, as the game draws it over the object at the same depth
-				const auto& textures = Locator::resources::value().GetTextures();
 				const auto* depth = desc.snow ? SnowDepth(_snowDepth, _snowRevision) : nullptr;
-				const bool snowed = depth != nullptr && prim.depthWrite && textures.Contains(snow_cover::k_TextureId.value()) &&
-				                    textures.Contains(snow_cover::k_AlphaTextureId.value());
+				const bool snowed =
+				    depth != nullptr && prim.depthWrite && _snowTexture != nullptr && _snowAlphaTexture != nullptr;
 				const glm::vec4 u_snow {snowed ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
-				program->SetUniformValue("u_snow", &u_snow);
+				setUniform(MeshUniform::Snow, &u_snow);
 				if (snowed)
 				{
-					program->SetTextureSampler("s_snowDepth", 11, *depth);
-					program->SetTextureSampler("s_snow", 12, *textures.Handle(snow_cover::k_TextureId.value()));
-					program->SetTextureSampler("s_snowAlpha", 13, *textures.Handle(snow_cover::k_AlphaTextureId.value()));
+					setSampler(MeshUniform::SnowDepth, 11, *depth);
+					setSampler(MeshUniform::SnowTexture, 12, *_snowTexture);
+					setSampler(MeshUniform::SnowAlpha, 13, *_snowAlphaTexture);
 				}
 				// Without snow its samplers get the program's white defaults when submitted
 			}
-			if (program->HasUniform("u_window"))
+			if (has(MeshUniform::Window))
 			{
 				// Window submeshes are lit by their houses at night
 				glm::vec4 u_window {subMesh.GetFlags().isWindow ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
@@ -778,9 +817,9 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 					u_window.y = clock.GetVisualTime();
 					u_window.z = clock.IsVisualNight() ? 1.0f : 0.0f;
 				}
-				program->SetUniformValue("u_window", &u_window);
+				setUniform(MeshUniform::Window, &u_window);
 			}
-			if (program->HasUniform("s_diffuse"))
+			if (has(MeshUniform::Diffuse))
 			{
 				// A primitive without a skin would otherwise sample whichever texture the draw before it left bound,
 				// changing as bgfx orders the draws. The sky has none either, but binds the sky's texture for it.
@@ -790,11 +829,11 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				}
 				else if (desc.skinTexture != nullptr && prim.skinID != 0xFFFFFFFF)
 				{
-					program->SetTextureSampler("s_diffuse", 0, *desc.skinTexture);
+					setSampler(MeshUniform::Diffuse, 0, *desc.skinTexture);
 				}
 				else if (texture != nullptr)
 				{
-					program->SetTextureSampler("s_diffuse", 0, *texture);
+					setSampler(MeshUniform::Diffuse, 0, *texture);
 				}
 				else if (!desc.isSky && _whiteTexture)
 				{
@@ -803,18 +842,18 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			}
 			if (program == desc.lightmapProgram)
 			{
-				program->SetTextureSampler("s_lightmap", 3, *lightmap);
+				setSampler(MeshUniform::Lightmap, 3, *lightmap);
 			}
-			if (desc.environment != nullptr && program->HasUniform("s_environment"))
+			if (desc.environment != nullptr && has(MeshUniform::Environment))
 			{
-				program->SetTextureSampler("s_environment", 5, *desc.environment);
+				setSampler(MeshUniform::Environment, 5, *desc.environment);
 			}
 			if (desc.morphWithTerrain)
 			{
-				program->SetTextureSampler("s_heightmap", 1, heightMap);   // vs
-				program->SetUniformValue("u_islandExtent", &islandExtent); // vs
+				setSampler(MeshUniform::Heightmap, 1, heightMap);     // vs
+				setUniform(MeshUniform::IslandExtent, &islandExtent); // vs
 			}
-			if (program->HasUniform("u_landLight"))
+			if (has(MeshUniform::LandLight))
 			{
 				// Objects in the world take the colour of the land's light where they stand; the sky and the temple's
 				// insides have lights of their own
@@ -824,23 +863,23 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
 				program->SetTextureSampler("s_landLight", 7, GetLandLightTexture());
 				program->SetTextureSampler("s_landColour", 8, GetLandColour());
-				program->SetUniformValue("u_islandExtent", &islandExtent);
-				program->SetUniformValue("u_landLight", &u_landLight);
+				setUniform(MeshUniform::IslandExtent, &islandExtent);
+				setUniform(MeshUniform::LandLight, &u_landLight);
 			}
-			if (program->HasUniform("u_haze"))
+			if (has(MeshUniform::Haze))
 			{
 				// The distance haze is the world's, not the sky's or the temple's
 				const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 				const bool hazed = !desc.isSky && !desc.drawAll && !inTemple;
 				const auto u_haze = hazed ? _haze[0] : glm::vec4(0.0f);
-				program->SetUniformValue("u_haze", &u_haze);
-				program->SetUniformValue("u_hazeColour", &_haze[1]);
+				setUniform(MeshUniform::Haze, &u_haze);
+				setUniform(MeshUniform::HazeColour, &_haze[1]);
 			}
-			if (program->HasUniform("u_modelLight"))
+			if (has(MeshUniform::ModelLight))
 			{
-				program->SetUniformValue("u_modelLight", &_modelLight);
+				setUniform(MeshUniform::ModelLight, &_modelLight);
 			}
-			if (program->HasUniform("u_creatureShadowInfo"))
+			if (has(MeshUniform::CreatureShadowInfo))
 			{
 				// They fall on what stands on the land, not on the creatures, nor in the reflection
 				const bool mainView = desc.viewId == RenderPass::Main || desc.viewId == RenderPass::Translucent;
@@ -848,7 +887,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				SetCreatureShadowUniforms(*program, desc.creatureShadows && mainView && !inTemple && !desc.isSky &&
 				                                        !desc.drawAll && desc.morphTargets == nullptr);
 			}
-			if (!desc.isSky && program->HasUniform("u_skyAlphaThreshold"))
+			if (!desc.isSky && has(MeshUniform::SkyAlphaThreshold))
 			{
 				const glm::vec4 u_skyAlphaThreshold = {
 				    Locator::skySystem::value().GetCurrentSkyType(),
@@ -856,7 +895,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				    0.0f,
 				    0.0f,
 				};
-				program->SetUniformValue("u_skyAlphaThreshold", &u_skyAlphaThreshold);
+				setUniform(MeshUniform::SkyAlphaThreshold, &u_skyAlphaThreshold);
 			}
 		}
 		else
@@ -2078,6 +2117,20 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 	}
 	const auto cloudColour = clouds::Colour(Locator::alignmentSystem::value().GetSkyAlignment(), fullLight);
 
+	// Looked up once for all the mists
+	const ProgramUniform s_diffuse {*program, "s_diffuse"};
+	const ProgramUniform s_alpha {*program, "s_alpha"};
+	const ProgramUniform s_landLuminosity {*program, "s_landLuminosity"};
+	const ProgramUniform s_landLight {*program, "s_landLight"};
+	const ProgramUniform s_landColour {*program, "s_landColour"};
+	const ProgramUniform u_islandExtent {*program, "u_islandExtent"};
+	const ProgramUniform u_landLightUniform {*program, "u_landLight"};
+	const ProgramUniform u_haze {*program, "u_haze"};
+	const ProgramUniform u_hazeColour {*program, "u_hazeColour"};
+	const ProgramUniform u_modelLight {*program, "u_modelLight"};
+	const ProgramUniform u_mistUniform {*program, "u_mist"};
+	const ProgramUniform u_mistColourUniform {*program, "u_mistColour"};
+
 	desc.entities.Each<const Mist, const ecs::components::Transform>([&](entt::entity entity, const Mist& mist,
 	                                                                     const ecs::components::Transform& transform) {
 		auto colour = mist.colour;
@@ -2118,18 +2171,18 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 			for (const auto& primitive : subMesh->GetPrimitives())
 			{
 				bgfx::setTransform(glm::value_ptr(model));
-				program->SetTextureSampler("s_diffuse", 0, *texture);
-				program->SetTextureSampler("s_alpha", 1, *alphaTexture);
-				program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
-				program->SetTextureSampler("s_landLight", 7, GetLandLightTexture());
-				program->SetTextureSampler("s_landColour", 8, GetLandColour());
-				program->SetUniformValue("u_islandExtent", &islandExtent);
-				program->SetUniformValue("u_landLight", &u_landLight);
-				program->SetUniformValue("u_haze", landLit ? &_haze[0] : &noHaze);
-				program->SetUniformValue("u_hazeColour", &_haze[1]);
-				program->SetUniformValue("u_modelLight", mist.shrinksEdgeOn ? &skyLight : &_modelLight);
-				program->SetUniformValue("u_mist", &u_mist);
-				program->SetUniformValue("u_mistColour", &u_mistColour);
+				s_diffuse.Set(0, *texture);
+				s_alpha.Set(1, *alphaTexture);
+				s_landLuminosity.Set(6, GetLandLuminosity());
+				s_landLight.Set(7, GetLandLightTexture());
+				s_landColour.Set(8, GetLandColour());
+				u_islandExtent.Set(&islandExtent);
+				u_landLightUniform.Set(&u_landLight);
+				u_haze.Set(landLit ? &_haze[0] : &noHaze);
+				u_hazeColour.Set(&_haze[1]);
+				u_modelLight.Set(mist.shrinksEdgeOn ? &skyLight : &_modelLight);
+				u_mistUniform.Set(&u_mist);
+				u_mistColourUniform.Set(&u_mistColour);
 				if (subMesh->GetMesh().IsIndexed())
 				{
 					subMesh->GetMesh().GetIndexBuffer().Bind(primitive.indicesCount, primitive.indicesOffset);
@@ -3597,18 +3650,41 @@ void Renderer::SetCreatureShadowUniforms(const ShaderProgram& program, bool rece
 	const glm::vec4 u_creatureShadowInfo {static_cast<float>(count), static_cast<float>(CreatureShadow::k_MaxShadows),
 	                                      1.0f / static_cast<float>(std::max<uint16_t>(width, 1)),
 	                                      1.0f / static_cast<float>(std::max<uint16_t>(height, 1))};
-	program.SetUniformValue("u_creatureShadowInfo", &u_creatureShadowInfo);
-	program.SetTextureSampler("s_creatureShadows", 14, _creatureShadowFrameBuffer->GetColorAttachment());
+	// By the handles the program's draws of meshes keep, as this is set for every primitive of them
+	const auto& uniforms = MeshUniformsOf(program);
+	const auto handle = [&uniforms](MeshUniform uniform) { return uniforms[static_cast<size_t>(uniform)]; };
+	const auto name = [](MeshUniform uniform) { return k_MeshUniformNames[static_cast<size_t>(uniform)].data(); };
+	if (const auto info = handle(MeshUniform::CreatureShadowInfo))
+	{
+		program.SetUniformValue(*info, &u_creatureShadowInfo);
+	}
+	else
+	{
+		program.SetUniformValue(name(MeshUniform::CreatureShadowInfo), &u_creatureShadowInfo);
+	}
+	if (const auto shadows = handle(MeshUniform::CreatureShadows))
+	{
+		program.SetTextureSampler(*shadows, 14, _creatureShadowFrameBuffer->GetColorAttachment());
+	}
+	else
+	{
+		program.SetTextureSampler(name(MeshUniform::CreatureShadows), 14, _creatureShadowFrameBuffer->GetColorAttachment());
+	}
 	if (count > 0)
 	{
-		program.SetUniformArray("u_creatureShadowMatrix", _creatureShadowMatrices.data(), count);
-		program.SetUniformArray("u_creatureShadow", _creatureShadowParameters.data(), count);
+		program.SetUniformArray(name(MeshUniform::CreatureShadowMatrix), _creatureShadowMatrices.data(), count);
+		program.SetUniformArray(name(MeshUniform::CreatureShadow), _creatureShadowParameters.data(), count);
 	}
 }
 
 void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 {
 	UploadCreatureSkins(drawDesc);
+	{
+		const auto& textures = Locator::resources::value().GetTextures();
+		_snowTexture = textures.Find(snow_cover::k_TextureId.value());
+		_snowAlphaTexture = textures.Find(snow_cover::k_AlphaTextureId.value());
+	}
 	// TODO(bwrsandman): Footprint framebuffer doesn't need to be updated each frame
 	DrawLandLuminosityPass(drawDesc);
 	DrawLandColourPass(drawDesc);
@@ -3866,8 +3942,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					                                 *textures.Handle(snow_cover::k_NoiseTextureId.value()));
 				}
 			};
-			// bgfx keeps a uniform for the draws after it in the order they come, but the blocks are drawn in another
-			// order, so each block sets them all
+			// What every block shares. bgfx gives a draw the uniforms set since the draw before it was submitted, and
+			// they stay for the draws after it in the order the view sorts them. The blocks share their program and
+			// state, so the view keeps them together, ordered by their distance with ties in the order they came. The
+			// nearest block is submitted first with all of these, so they reach every block after it; the textures
+			// stay bound from one block to the next.
 			const auto setTerrainUniforms = [&]() {
 				terrainShader->SetTextureSampler("s0_blockTextures", 0, island.GetBlockTextures());
 				terrainShader->SetTextureSampler("s9_landLuminosity", 9, GetLandLuminosity());
@@ -3896,22 +3975,38 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				setTerrainSnow();
 			};
 
-			for (size_t i = 0; const auto& block : island.GetBlocks())
-			{
-				setTerrainUniforms();
-				// pack uniforms
-				const glm::vec4 mapPositionAndSize = glm::vec4(block.GetMapPosition(), 160.0f, 160.0f);
-				terrainShader->SetUniformValue("u_blockPositionAndSize", &mapPositionAndSize);
-				const glm::vec4 u_block {static_cast<float>(i++), 0.0f, 0.0f, 0.0f};
-				terrainShader->SetUniformValue("u_block", &u_block);
-
-				block.BindVertices();
-
-				bgfx::setState(defaultState | (desc.cullBack ? BGFX_STATE_CULL_CCW : BGFX_STATE_CULL_CW), 0);
-				// The game draws the land's blocks the nearest first, which bgfx keeps by their distance
+			// The game draws the land's blocks the nearest first, which bgfx keeps by their distance
+			const auto& blocks = island.GetBlocks();
+			const auto blockDepth = [&](const auto& block) {
 				const auto centre = block.GetMapPosition() + glm::vec2(80.0f);
-				terrainShader->Submit(static_cast<bgfx::ViewId>(desc.viewId),
-				                      zsort::Depth(glm::vec3(centre.x, 0.0f, centre.y), cameraOrigin), discard);
+				return zsort::Depth(glm::vec3(centre.x, 0.0f, centre.y), cameraOrigin);
+			};
+			const ProgramUniform blockPositionUniform {*terrainShader, "u_blockPositionAndSize"};
+			const ProgramUniform blockUniform {*terrainShader, "u_block"};
+			const auto submitBlock = [&](size_t index) {
+				const auto& block = blocks[index];
+				const glm::vec4 mapPositionAndSize = glm::vec4(block.GetMapPosition(), 160.0f, 160.0f);
+				blockPositionUniform.Set(&mapPositionAndSize);
+				const glm::vec4 u_block {static_cast<float>(index), 0.0f, 0.0f, 0.0f};
+				blockUniform.Set(&u_block);
+				block.BindVertices();
+				bgfx::setState(defaultState | (desc.cullBack ? BGFX_STATE_CULL_CCW : BGFX_STATE_CULL_CW), 0);
+				terrainShader->Submit(static_cast<bgfx::ViewId>(desc.viewId), blockDepth(block), discard);
+			};
+			if (!blocks.empty())
+			{
+				const auto nearest = static_cast<size_t>(
+				    std::distance(blocks.begin(),
+				                  std::ranges::min_element(blocks, {}, [&](const auto& block) { return blockDepth(block); })));
+				setTerrainUniforms();
+				submitBlock(nearest);
+				for (size_t i = 0; i < blocks.size(); ++i)
+				{
+					if (i != nearest)
+					{
+						submitBlock(i);
+					}
+				}
 			}
 			_shaderManager->DiscardBindings();
 			DrawCreatureFootprints(desc);

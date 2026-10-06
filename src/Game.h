@@ -86,6 +86,10 @@ struct Arguments
 	bool startTestbed {false};
 	/// With a pool of sea in front of the camera, for checking what the water reflects
 	bool testbedWater {false};
+	/// Log frame time statistics every so many frames, never when 0
+	uint32_t frameStatsInterval {0};
+	/// With the frame statistics, the GPU time of each render view
+	bool frameStatsViews {false};
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> requestScreenshot;
 };
 

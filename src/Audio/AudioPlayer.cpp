@@ -146,7 +146,8 @@ void AudioPlayer::DeleteBuffer(BufferId id)
 
 SourceId AudioPlayer::CreateSource(float pitch, bool relative)
 {
-	unsigned int id;
+	// No source, 0, when there are none left to make
+	unsigned int id = 0;
 	alCheckCall(alGenSources(1, &id));
 	alCheckCall(alSourcef(id, AL_PITCH, pitch));
 	alCheckCall(alSourcei(id, AL_SOURCE_RELATIVE, relative));
@@ -282,7 +283,8 @@ void AudioPlayer::DeleteContext(ALCcontext* context)
 
 AudioStatus AudioPlayer::GetStatus(SourceId id) const
 {
-	ALint status;
+	// A source that couldn't be made, or is gone, has stopped
+	ALint status = AL_STOPPED;
 	alCheckCall(alGetSourcei(id, AL_SOURCE_STATE, &status));
 	switch (status)
 	{

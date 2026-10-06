@@ -68,11 +68,16 @@ struct TreeRustle
 		return {.object = audio::SoundObject::Tree, .action = audio::SoundAction::Tree};
 	}
 
+	/// Whether a tree standing at position is within the camera's reach across the ground, whatever its height
+	[[nodiscard]] static bool IsNearCamera(const glm::vec3& position, const glm::vec3& camera) noexcept
+	{
+		return std::abs(position.x - camera.x) <= k_CameraReach && std::abs(position.z - camera.z) <= k_CameraReach;
+	}
+
 	/// Whether a tree standing at position, height tall, rustles by itself with the camera at camera
 	[[nodiscard]] static bool IsAmongTree(const glm::vec3& position, float height, const glm::vec3& camera) noexcept
 	{
-		return std::abs(position.x - camera.x) <= k_CameraReach && std::abs(position.z - camera.z) <= k_CameraReach &&
-		       std::abs(camera.y - position.y) < k_CameraHeight && height > k_MinIdleHeight;
+		return IsNearCamera(position, camera) && std::abs(camera.y - position.y) < k_CameraHeight && height > k_MinIdleHeight;
 	}
 
 	/// A tree among the camera rustles this frame when a roll from 0 to this, less one, comes up 1: with a chance of

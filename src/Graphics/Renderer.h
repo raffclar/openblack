@@ -141,6 +141,77 @@ private:
 	void DrawCreatureShadowPass(const DrawSceneDesc& drawDesc) const;
 	/// Hands the creatures' shadows to a program that takes them, or none where it isn't to receive them
 	void SetCreatureShadowUniforms(const ShaderProgram& program, bool receives) const;
+	/// The uniforms the draws of meshes set, in the order of their names in the renderer
+	enum class MeshUniform : uint8_t
+	{
+		DepthBias,
+		Tint,
+		Glow,
+		Darkening,
+		MorphWeights,
+		VertexBlend,
+		UvOffset,
+		SeaClip,
+		Snow,
+		SnowDepth,
+		SnowTexture,
+		SnowAlpha,
+		Window,
+		Diffuse,
+		Lightmap,
+		Environment,
+		Heightmap,
+		IslandExtent,
+		LandLight,
+		LandLuminosity,
+		LandLightTexture,
+		LandColour,
+		Haze,
+		HazeColour,
+		ModelLight,
+		CreatureShadowInfo,
+		CreatureShadows,
+		CreatureShadowMatrix,
+		CreatureShadow,
+		SkyAlphaThreshold,
+
+		_count
+	};
+	static constexpr std::array<std::string_view, static_cast<size_t>(MeshUniform::_count)> k_MeshUniformNames {
+	    "u_depthBias",            //
+	    "u_tint",                 //
+	    "u_glow",                 //
+	    "u_darkening",            //
+	    "u_morphWeights",         //
+	    "u_vertexBlend",          //
+	    "u_uvOffset",             //
+	    "u_seaClip",              //
+	    "u_snow",                 //
+	    "s_snowDepth",            //
+	    "s_snow",                 //
+	    "s_snowAlpha",            //
+	    "u_window",               //
+	    "s_diffuse",              //
+	    "s_lightmap",             //
+	    "s_environment",          //
+	    "s_heightmap",            //
+	    "u_islandExtent",         //
+	    "u_landLight",            //
+	    "s_landLuminosity",       //
+	    "s_landLight",            //
+	    "s_landColour",           //
+	    "u_haze",                 //
+	    "u_hazeColour",           //
+	    "u_modelLight",           //
+	    "u_creatureShadowInfo",   //
+	    "s_creatureShadows",      //
+	    "u_creatureShadowMatrix", //
+	    "u_creatureShadow",       //
+	    "u_skyAlphaThreshold",    //
+	};
+	using MeshUniforms = std::array<std::optional<UniformHandle>, static_cast<size_t>(MeshUniform::_count)>;
+	/// A program's handles of the mesh uniforms it has, looked up by name the first time it draws a mesh
+	[[nodiscard]] const MeshUniforms& MeshUniformsOf(const ShaderProgram& program) const;
 	/// Draws a submesh, with a texture in place of its skins when given one
 	void DrawSubMesh(const L3DMesh& mesh, const L3DSubMesh& subMesh, const L3DMeshSubmitDesc& desc, bool preserveState,
 	                 const TextureHandle* texture = nullptr, glm::vec3 glow = glm::vec3(0.0f)) const;
@@ -213,6 +284,11 @@ private:
 	/// How strongly the sun glares, 0 to 255, easing towards how much of the sun shows
 	mutable float _sunGlare {0.0f};
 	mutable std::optional<TextureHandle> _landLightTexture;
+	/// The mesh uniforms of each program that has drawn a mesh; the programs live as long as the renderer
+	mutable std::unordered_map<const ShaderProgram*, MeshUniforms> _meshUniforms;
+	/// The snow's textures, looked up once a frame, null until they are loaded
+	mutable const Texture2D* _snowTexture {nullptr};
+	mutable const Texture2D* _snowAlphaTexture {nullptr};
 	/// How deep the snow lies over the island, refreshed when it changes
 	mutable std::unique_ptr<Texture2D> _snowDepth;
 	mutable std::optional<uint32_t> _snowRevision;

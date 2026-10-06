@@ -136,6 +136,16 @@ TEST(TreeRustle, TallTreesRustleAroundTheCamera)
 	EXPECT_FALSE(TreeRustle::IsAmongTree(tree, 10.0f, {100.0f, 25.0f, 200.0f}));
 }
 
+TEST(TreeRustle, NearTheCameraIsAcrossTheGroundWhateverTheHeight)
+{
+	const glm::vec3 tree {100.0f, 20.0f, 200.0f};
+	EXPECT_TRUE(TreeRustle::IsNearCamera(tree, {110.0f, 500.0f, 190.0f}));
+	EXPECT_FALSE(TreeRustle::IsNearCamera(tree, {110.5f, 20.0f, 200.0f}));
+	EXPECT_FALSE(TreeRustle::IsNearCamera(tree, {100.0f, 20.0f, 189.5f}));
+	// Every tree the camera is among is near it
+	EXPECT_TRUE(TreeRustle::IsNearCamera(tree, {110.0f, 37.0f, 190.0f}));
+}
+
 TEST(TreeRustle, AboutOnceASecondOfGameTime)
 {
 	using Milliseconds = std::chrono::duration<float, std::milli>;

@@ -46,6 +46,9 @@ public:
 		SdlInput,
 		UpdateUniforms,
 		UpdateEntities,
+		UpdateEntitiesDescs,
+		UpdateEntitiesUniforms,
+		UpdateEntitiesTrees,
 		UpdateAudio,
 		GuiLoop,
 		GameLogic,
@@ -95,6 +98,9 @@ public:
 	    "SDL Input",            //
 	    "Update Uniforms",      //
 	    "Entities",             //
+	    "Entity Draw Lists",    //
+	    "Entity Instances",     //
+	    "Tree Instances",       //
 	    "Audio",                //
 	    "GUI Loop",             //
 	    "Game Logic",           //
