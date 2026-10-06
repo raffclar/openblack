@@ -73,7 +73,11 @@ void Texture2D::CreateWithinFrame(uint16_t width, uint16_t height, uint16_t laye
 	}
 	_handle = fromBgfx(bgfx::createTexture2D(width, height, false, layers, toBgfx(format), flags,
 	                                         reinterpret_cast<const bgfx::Memory*>(memory)));
-	bgfx::setName(toBgfx(_handle), _name.c_str());
+	// Out of textures, it isn't made: only one that is can be named
+	if (bgfx::isValid(toBgfx(_handle)))
+	{
+		bgfx::setName(toBgfx(_handle), _name.c_str());
+	}
 
 	bgfx::TextureInfo textureInfo;
 	bgfx::calcTextureSize(textureInfo, width, height, 1, false, false, layers, toBgfx(format));
