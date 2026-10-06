@@ -26,7 +26,7 @@ class LeashSystem final: public LeashSystemInterface
 public:
 	void ProcessTurn() override;
 	void Update(float seconds) override;
-	void HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection) override;
+	void HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, bool actionTaken) override;
 
 	[[nodiscard]] bool Knows(entt::entity creature, LeashType type) const override;
 	void SetKnown(entt::entity creature, LeashType type, bool known) override;

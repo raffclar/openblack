@@ -1032,7 +1032,7 @@ void LeashSystem::Update(float seconds)
 	    });
 }
 
-void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection)
+void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, bool actionTaken)
 {
 	if (!Locator::gameActionSystem::has_value())
 	{
@@ -1055,7 +1055,7 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 		}
 	}
 
-	if (!pressed(BindableActionMap::ACTION) || glm::length(rayDirection) <= 0.0f)
+	if (actionTaken || !pressed(BindableActionMap::ACTION) || glm::length(rayDirection) <= 0.0f)
 	{
 		return;
 	}

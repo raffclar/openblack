@@ -256,6 +256,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	// The other button lets go of the miracle in the hand
 	if (!inTemple && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT)
 	{
+		_actionTakenByMagic = magic.GetHeldSeed().has_value();
 		magic.DiscardHeldSeed();
 	}
 	if (!magicTookPress && !magic.IsHandBusy() && !inTemple && event.type == SDL_MOUSEBUTTONDOWN &&
@@ -950,7 +951,8 @@ bool Game::Update() noexcept
 					// aren't updated then, so a key just pressed would read as pressed again every frame.
 					if (!Locator::debugGui::value().StealsFocus())
 					{
-						Locator::leashSystem::value().HandleInput(rayOrigin, rayDirection);
+						Locator::leashSystem::value().HandleInput(rayOrigin, rayDirection, _actionTakenByMagic);
+						_actionTakenByMagic = false;
 					}
 					if (auto hit = dynamicsSystem.RayCastClosestHit(rayOrigin, rayDirection, 1e10f))
 					{

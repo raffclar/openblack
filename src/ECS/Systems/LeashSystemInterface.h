@@ -49,8 +49,9 @@ public:
 	virtual void ProcessTurn() = 0;
 	/// Once a frame, some seconds of game time on: the ropes swing
 	virtual void Update(float seconds) = 0;
-	/// The leash hotkeys, and the Action button tapping what is along the cursor's ray
-	virtual void HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection) = 0;
+	/// The leash hotkeys, and the Action button tapping what is along the cursor's ray, unless the hand used the press
+	/// for something else, such as letting go of a miracle
+	virtual void HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, bool actionTaken) = 0;
 
 	/// Whether the creature knows a leash, which it must before it can wear it; the learning leash before any
 	[[nodiscard]] virtual bool Knows(entt::entity creature, LeashType type) const = 0;
