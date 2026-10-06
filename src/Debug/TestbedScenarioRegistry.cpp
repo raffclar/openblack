@@ -393,7 +393,7 @@ void AddNeeds(std::vector<Scenario>& all)
 	    .id = "needs.hunger",
 	    .name = "Hungry creature finds food",
 	    .facet = Facet::Needs,
-	    .description = "A hungry tiger with two lots of magic food on the land in front of it.",
+	    .description = "A hungry tiger with two pots of food on the land in front of it, each half a meal.",
 	    .expected = "It walks up to the nearer food and eats it, then, if still hungry, the other; its energy fills up "
 	                "and the hunger desire falls.",
 	    .framing = {.shot = Shot::Overview},
@@ -402,8 +402,8 @@ void AddNeeds(std::vector<Scenario>& all)
 	        .needs = {.energy = 0.2f, .dehydration = 0.0f, .poo = 0.0f},
 	        .desires = {{.desire = Desire::Hunger, .fraction = 0.9f}},
 	    }},
-	    .objects = {{.type = MobileObjectInfo::MagicFood, .offset = {0.0f, -50.0f}},
-	                {.type = MobileObjectInfo::MagicFood, .offset = {40.0f, -90.0f}}},
+	    .objects = {{.type = PotInfo::FoodPot, .offset = {0.0f, -50.0f}, .amount = 400},
+	                {.type = PotInfo::FoodPot, .offset = {40.0f, -90.0f}, .amount = 400}},
 	});
 
 	all.push_back({
@@ -503,6 +503,79 @@ void AddNeeds(std::vector<Scenario>& all)
 	                 Go(Kind::RunTo, 0, {150.0f, 0.0f}, 16.0f, false)},
 	    .repeatFrom = 1,
 
+	});
+
+	// The needs left to themselves: nothing is held and no desire is set, only the body's time runs faster, so the
+	// needs build up as they would in play and the creature's mind sees to them when it chooses to
+	all.push_back({
+	    .id = "needs.left_alone",
+	    .name = "Looks after itself",
+	    .facet = Facet::Needs,
+	    .description = "A tiger left to itself with three pots of food about it and the lake to the north, nothing held "
+	                   "and no desire set, its body's time ten times as fast.",
+	    .expected = "Over a few minutes its energy runs down, it gets hungry and goes to eat a pot of food, picking it up "
+	                "first; the meal fills it with poo and it goes; it tires and sleeps, and it gets thirsty and walks to "
+	                "the lake to drink. In between it sees to its other desires, such as calling for attention.",
+	    .environment = {.bodyTimeScale = 10.0f},
+	    .framing = {.shot = Shot::Follow, .distance = 1.5f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger}},
+	    .objects = {{.type = PotInfo::FoodPot, .offset = {40.0f, -40.0f}},
+	                {.type = PotInfo::FoodPot, .offset = {-60.0f, -30.0f}},
+	                {.type = PotInfo::FoodPot, .offset = {20.0f, -90.0f}}},
+	});
+
+	all.push_back({
+	    .id = "needs.gets_hungry",
+	    .name = "Gets hungry and eats",
+	    .facet = Facet::Needs,
+	    .description = "A tiger half full, two pots of food on the land in front of it, nothing held and no desire set, "
+	                   "its body's time ten times as fast.",
+	    .expected = "Its energy runs down and its hunger grows by itself until it is the strongest desire; it walks up "
+	                "to the nearer pot, picks it up, looks at it and eats it, and its energy fills up.",
+	    .environment = {.bodyTimeScale = 10.0f},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = {.energy = 0.55f}}},
+	    .objects = {{.type = PotInfo::FoodPot, .offset = {0.0f, -40.0f}},
+	                {.type = PotInfo::FoodPot, .offset = {50.0f, -80.0f}}},
+	});
+
+	all.push_back({
+	    .id = "needs.gets_thirsty",
+	    .name = "Gets thirsty and drinks at the lake",
+	    .facet = Facet::Needs,
+	    .description = "A tiger south of the lake and already rather thirsty, nothing held and no desire set, its body's "
+	                   "time ten times as fast.",
+	    .expected = "Its thirst grows until its desire for water is the strongest; it walks to the near edge of the lake, "
+	                "bends down and drinks, its thirst clears and it doesn't want water for a while.",
+	    .environment = {.bodyTimeScale = 10.0f},
+	    .framing = {.shot = Shot::Overview, .include = LakeInView()},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {0.0f, 80.0f}, .needs = {.dehydration = 0.5f}}},
+	});
+
+	all.push_back({
+	    .id = "needs.gets_tired",
+	    .name = "Gets tired at night and sleeps",
+	    .facet = Facet::Needs,
+	    .description = "Late evening with the clock running, a tiger a little worn out, nothing held and no desire set, "
+	                   "its body's time ten times as fast.",
+	    .expected = "As night falls its tiredness grows from the dark and its exhaustion; it may yawn, then lies down and "
+	                "sleeps with its eyes closed, resting, and wakes once rested, looking sleepy.",
+	    .environment = {.hour = 21.5f, .bodyTimeScale = 10.0f},
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = {.exhaustion = 0.5f}}},
+	});
+
+	all.push_back({
+	    .id = "needs.needs_to_poo",
+	    .name = "Needs to poo after a meal",
+	    .facet = Facet::Needs,
+	    .description = "A tiger that has just eaten, half full of poo, nothing held and no desire set, its body's time "
+	                   "ten times as fast.",
+	    .expected = "Its desire to poo grows from the poo inside it; it may show it needs to go, then squats and goes, a "
+	                "lump drops behind it and the desire is held back for a while.",
+	    .environment = {.bodyTimeScale = 10.0f},
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = {.poo = 0.6f}}},
 	});
 
 	all.push_back({

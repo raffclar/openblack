@@ -249,6 +249,8 @@ struct IdleMind
 	bool wakeWanted {false};
 	/// Counts the agendas planned, so that a new one can be told from the last
 	uint32_t serial {0};
+	/// The agenda was given up before its end, as a step it needed couldn't be done
+	bool gaveUp {false};
 };
 
 /// The needs it might see to, and the means at hand

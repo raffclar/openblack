@@ -697,6 +697,24 @@ TEST(CreatureNeedsMind, ItPicksFoodUpAndEatsIt)
 	EXPECT_EQ(commands.effect, creature_mind::Effect::Eat);
 }
 
+TEST(CreatureNeedsMind, FoodItCantPickUpIsGivenUpUneaten)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Eat, creature_mind::Eat(7u));
+	FakeBody body;
+	auto senses = body.Senses();
+	static_cast<void>(creature_mind::Think(mind, senses, Always(1)));
+	// Its hands couldn't get it: the rest of the agenda is no use, nothing is eaten, and the agenda was given up rather
+	// than carried out, so the hunger it served is still wanted
+	senses.hands = creature_mind::HandsState::Failed;
+	EXPECT_EQ(creature_mind::Think(mind, senses, Always(1)).effect, creature_mind::Effect::None);
+	EXPECT_GE(mind.step, mind.agenda.size());
+	EXPECT_TRUE(mind.gaveUp);
+	// The next agenda starts afresh
+	creature_mind::Plan(mind, creature_mind::Activity::Eat, creature_mind::Eat(8u));
+	EXPECT_FALSE(mind.gaveUp);
+}
+
 TEST(CreatureNeedsMind, ItDrinksAtTheWatersEdge)
 {
 	const auto agenda = creature_mind::Drink({100.0f, 200.0f}, {100.0f, 230.0f});

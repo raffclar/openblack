@@ -48,6 +48,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -402,6 +403,8 @@ std::optional<std::pair<entt::entity, glm::vec2>> NearestFood(ecs::Registry& reg
 	    [&](entt::entity entity, const Villager&, const Transform& at) { consider(entity, at); });
 	registry.Each<const MobileObject, const Transform>(
 	    [&](entt::entity entity, const MobileObject&, const Transform& at) { consider(entity, at); });
+	registry.Each<const Pot, const Transform>(
+	    [&](entt::entity entity, const Pot&, const Transform& at) { consider(entity, at); });
 	return nearest;
 }
 

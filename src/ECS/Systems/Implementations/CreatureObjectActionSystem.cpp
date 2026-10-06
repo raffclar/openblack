@@ -39,6 +39,7 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
@@ -744,13 +745,27 @@ std::optional<float> CreatureObjectActionSystem::FoodValueOf(entt::entity object
 		const auto kind = static_cast<size_t>(mobile->type);
 		value = kind < info.mobileObject.size() ? info.mobileObject.at(kind).foodValue : 0.0f;
 	}
+	else if (const auto* pot = registry.TryGet<const Pot>(object))
+	{
+		// A pot or pile of food is worth as much as the food in it. A storage pit's pile is eaten from where it lies,
+		// which isn't done here.
+		const auto kind = static_cast<size_t>(pot->type);
+		const bool food = kind < info.pot.size() && info.pot.at(kind).resourceType == ResourceType::Food &&
+		                  pot->type != PotInfo::StoragePitFoodPile;
+		value = food ? static_cast<float>(pot->amount) : 0.0f;
+	}
 	return value > 0.0f ? std::optional(value) : std::nullopt;
 }
 
 bool CreatureObjectActionSystem::CanPickUp(entt::entity object) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	return registry.Valid(object) && registry.AllOf<Transform>(object) && registry.AnyOf<MobileObject, Villager>(object);
+	if (!registry.Valid(object) || !registry.AllOf<Transform>(object))
+	{
+		return false;
+	}
+	// Of pots and piles, only food can be picked up, to eat
+	return registry.AnyOf<MobileObject, Villager>(object) || (registry.AllOf<Pot>(object) && FoodValueOf(object).has_value());
 }
 
 bool CreatureObjectActionSystem::CanDestroy(entt::entity target) const

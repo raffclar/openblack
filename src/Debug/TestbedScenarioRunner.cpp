@@ -37,6 +37,7 @@
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
+#include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Creature.h"
@@ -293,6 +294,10 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    {
 				    constexpr uint32_t k_AdultAge = 30;
 				    return ecs::archetypes::VillagerArchetype::Create(position, position, type, k_AdultAge);
+			    }
+			    else if constexpr (std::is_same_v<T, PotInfo>)
+			    {
+				    return ecs::archetypes::PotArchetype::Create(position, yaw, type, object.amount);
 			    }
 			    else
 			    {

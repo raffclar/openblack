@@ -44,8 +44,8 @@ constexpr float k_LowEnergyExtraExhaustion = 0.3f;
 /// difference counted in steps of this many degrees
 constexpr float k_WarmthThreshold = 0.6f;
 constexpr float k_WarmthPerDegree = 0.025f;
-/// A meal counts for at least this much of the creature's size
-constexpr float k_MinMealSize = 0.8f;
+/// A meal fills a creature for its size up to this size: bigger creatures fill up on as little as one this big
+constexpr float k_MaxMealSize = 0.8f;
 /// Asleep for fewer turns than this, it never wakes by itself; it wakes once fully rested in the day, or once nearly
 /// rested and asleep for long enough for its size
 constexpr uint32_t k_MinSleepTurns = 50;

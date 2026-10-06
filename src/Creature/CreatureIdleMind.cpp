@@ -456,6 +456,7 @@ void creature_mind::Plan(IdleMind& mind, Activity activity, std::vector<Step> ag
 	mind.stepSeconds = 0.0f;
 	mind.sitEnding = false;
 	mind.wakeWanted = false;
+	mind.gaveUp = false;
 }
 
 void creature_mind::ChooseNext(IdleMind& mind, const Senses& senses, const Random& random)
@@ -671,6 +672,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			// It couldn't, or was stopped: the rest of the agenda is no use without it
 			mind.step = mind.agenda.size();
 			mind.stepStarted = false;
+			mind.gaveUp = true;
 		}
 		break;
 	case Step::Kind::Move:

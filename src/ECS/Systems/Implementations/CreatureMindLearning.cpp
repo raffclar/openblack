@@ -42,6 +42,7 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -219,6 +220,12 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 	    [&](entt::entity entity, const Creature&, const Transform& at) { consider(entity, at); });
 	registry.Each<const MobileObject, const Transform>(
 	    [&](entt::entity entity, const MobileObject&, const Transform& at) { consider(entity, at); });
+	// Pots and piles of food are only ever eaten
+	if (target == Target::Food)
+	{
+		registry.Each<const Pot, const Transform>(
+		    [&](entt::entity entity, const Pot&, const Transform& at) { consider(entity, at); });
+	}
 	if (target == Target::Destroyable || target == Target::Tree || target == Target::Anything)
 	{
 		registry.Each<const Tree, const Transform>(
@@ -332,7 +339,7 @@ std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& 
 		common(types::k_Feature, k_Neutral, 0, 0, k_NoPlayer);
 		return belief;
 	}
-	if (registry.AllOf<MobileObject>(entity))
+	if (registry.AnyOf<MobileObject, Pot>(entity))
 	{
 		common(types::k_Other, k_Neutral, 1, 0, k_NoPlayer);
 		return belief;
@@ -457,9 +464,11 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 	auto& idle = mind.idle;
 	if (mind.planActive && (idle.serial != mind.planSerial || idle.step >= idle.agenda.size()))
 	{
-		// The plan is carried out: the desire it served is less, unless one of its steps saw to that already
+		// The plan is over. Carried out to its end, the desire it served is less, unless one of its steps saw to that
+		// already; cut short by something else (fainting, a fight, a more pressing plan) or given up, it is still wanted.
 		const auto plan = *mind.planner.current;
-		if (!mind.satisfiedByEffect && tables != nullptr && plan.action < tables->actions.size())
+		const bool carriedOut = idle.serial == mind.planSerial && !idle.gaveUp;
+		if (carriedOut && !mind.satisfiedByEffect && tables != nullptr && plan.action < tables->actions.size())
 		{
 			Satisfied(creature, *mind.desires, tables->actions[plan.action].name);
 		}

@@ -9,6 +9,9 @@
 
 #include <cmath>
 
+#include <array>
+#include <optional>
+
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureDesires.h"
@@ -261,23 +264,25 @@ TEST(CreaturePhysiology, EatingFillsItUpFattensAndBuildsPoo)
 	auto needs = Start(species);
 	needs.energy = 0.5f;
 	Shape shape {.fatness = 0.5f, .strength = 0.5f, .size = 1.0f};
+	// A creature of size 0.8 or more counts as 0.8 for a meal: 250 food is 250 / 800 of a meal
 	const auto gained = Eat(needs, shape, species, 250.0f);
-	EXPECT_FLOAT_EQ(gained, 0.25f);
-	EXPECT_FLOAT_EQ(needs.energy, 0.75f);
+	EXPECT_FLOAT_EQ(gained, 0.3125f);
+	EXPECT_FLOAT_EQ(needs.energy, 0.8125f);
 	EXPECT_FLOAT_EQ(shape.fatness, 0.5f);
-	EXPECT_FLOAT_EQ(needs.poo, 0.125f);
+	EXPECT_FLOAT_EQ(needs.poo, 0.15625f);
 	EXPECT_EQ(needs.meals, 1u);
 
 	// A big meal when full: energy up to its size, and the excess goes to fat
 	needs.energy = 1.0f;
 	shape.size = 1.5f;
-	Eat(needs, shape, species, 1500.0f);
+	EXPECT_FLOAT_EQ(Eat(needs, shape, species, 1500.0f), 1.875f);
 	EXPECT_FLOAT_EQ(needs.energy, 1.5f);
-	EXPECT_NEAR(shape.fatness, 0.6f, k_Tolerance);
-	// Small creatures count as size 0.8 for a meal
+	EXPECT_NEAR(shape.fatness, 0.6875f, k_Tolerance);
+	// Smaller creatures fill up on less
 	needs.energy = 0.0f;
 	shape.size = 0.2f;
-	EXPECT_FLOAT_EQ(Eat(needs, shape, species, 400.0f), 0.5f);
+	EXPECT_FLOAT_EQ(Eat(needs, shape, species, 100.0f), 0.5f);
+	EXPECT_FLOAT_EQ(needs.energy, 0.5f);
 	Poo(needs);
 	EXPECT_FLOAT_EQ(needs.poo, 0.0f);
 }
@@ -341,4 +346,64 @@ TEST(CreaturePhysiology, TheBodyDrivesItsDesireSources)
 	EXPECT_FLOAT_EQ(*SourceValue(sources::k_GetColder, needs, false), 0.0f);
 	EXPECT_FLOAT_EQ(*SourceValue(sources::k_Scratch, needs, false), 0.2f);
 	EXPECT_FALSE(SourceValue(sources::k_Sadness, needs, false).has_value());
+}
+
+TEST(CreaturePhysiology, LeftAloneItsBodyDrivesItsHungerThirstAndPoo)
+{
+	namespace sources = creature_desires::sources;
+	using creature_desires::Desire;
+	const auto species = Fake();
+	auto needs = Start(species);
+	needs.poo = 0.6f;
+	Shape shape {.fatness = 0.5f, .strength = 0.5f, .size = 1.0f};
+
+	// Each need's desire grows from its source once the source is well past its threshold
+	std::array<creature_desires::DesireSetup, creature_desires::k_DesireCount> setup {};
+	const auto need = [&setup](Desire desire, uint32_t source) {
+		setup.at(static_cast<size_t>(desire)) = {.max = 2.0f,
+		                                         .decayMin = 0.9f,
+		                                         .decayMax = 0.9f,
+		                                         .increaseSeconds = 2.0f,
+		                                         .sources = {{.type = source, .threshold = 0.5f}}};
+	};
+	need(Desire::Hunger, sources::k_HungerFromLowEnergy);
+	need(Desire::Water, sources::k_WaterFromDehydration);
+	need(Desire::Poo, sources::k_PooFromAmountOfPoo);
+	auto desires = creature_desires::Create(setup, [](float low, float) { return low; });
+	for (const auto desire : {Desire::Hunger, Desire::Water, Desire::Poo})
+	{
+		desires[desire].activated = true;
+	}
+	const auto read = [&needs](uint32_t type, const creature_desires::Desires&) { return SourceValue(type, needs, false); };
+
+	// Nothing holds the body: a second of turns at a time, it runs down by itself and its desires follow
+	constexpr float k_ActOnNeed = 0.3f;
+	std::optional<float> hungryAtEnergy;
+	std::optional<float> thirstyAtDehydration;
+	bool wantsToPoo = false;
+	for (int turn = 0; turn < 1000; ++turn)
+	{
+		TickTurn(needs, shape, species, Standing());
+		creature_desires::UpdateSources(desires, read);
+		creature_desires::UpdateDesires(desires, 10.0f);
+		if (!hungryAtEnergy.has_value() && desires[Desire::Hunger].value >= k_ActOnNeed)
+		{
+			hungryAtEnergy = needs.energy;
+		}
+		if (!thirstyAtDehydration.has_value() && desires[Desire::Water].value >= k_ActOnNeed)
+		{
+			thirstyAtDehydration = needs.dehydration;
+		}
+		wantsToPoo = wantsToPoo || desires[Desire::Poo].value >= k_ActOnNeed;
+	}
+	// Hungry enough to eat while it still has some energy, but not while it is full; the same for thirst
+	ASSERT_TRUE(hungryAtEnergy.has_value());
+	EXPECT_GT(*hungryAtEnergy, 0.0f);
+	EXPECT_LT(*hungryAtEnergy, 0.9f);
+	ASSERT_TRUE(thirstyAtDehydration.has_value());
+	EXPECT_GT(*thirstyAtDehydration, 0.1f);
+	EXPECT_LT(*thirstyAtDehydration, 1.0f);
+	// The poo inside it, which only meals add to, drives its desire to go
+	EXPECT_TRUE(wantsToPoo);
+	EXPECT_FLOAT_EQ(needs.poo, 0.6f);
 }

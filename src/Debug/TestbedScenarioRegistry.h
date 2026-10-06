@@ -186,13 +186,16 @@ struct CreatureSetup
 	std::string_view mindFile;
 };
 
-/// Something put on the land for the creatures: food, a tree, a feature such as a pillar of rock, or a villager
+/// Something put on the land for the creatures: an object, a tree, a feature such as a pillar of rock, a villager, or a
+/// pot or pile of food or wood
 struct ObjectSetup
 {
-	std::variant<MobileObjectInfo, TreeInfo, FeatureInfo, VillagerInfo> type;
+	std::variant<MobileObjectInfo, TreeInfo, FeatureInfo, VillagerInfo, PotInfo> type;
 	glm::vec2 offset {0.0f};
 	float scale {1.0f};
 	float yawDegrees {0.0f};
+	/// How much a pot holds, which for food is what it is worth to eat: a meal for a grown up creature by default
+	int32_t amount {800};
 };
 
 /// A particle effect played on the land

@@ -20,7 +20,7 @@
 #include "Creature/CreaturePhysiology.h"
 #include "CreatureSpawner.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
-#include "ECS/Archetypes/MobileObjectArchetype.h"
+#include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureMind.h"
@@ -46,8 +46,10 @@ namespace
 constexpr std::array<float, 5> k_TimeScales {1.0f, 10.0f, 100.0f, 1000.0f, 3600.0f};
 /// Food is dropped this far in front of the creature for its size
 constexpr float k_FoodAhead = 6.0f;
-/// The food dropped for a creature to eat
-constexpr auto k_FoodObject = MobileObjectInfo::MagicFood;
+/// The food dropped for a creature to eat: a pot of food, worth as much as the food in it, here a meal for a grown up
+/// creature
+constexpr auto k_FoodPot = PotInfo::FoodPot;
+constexpr int32_t k_FoodAmount = 800;
 
 constexpr float k_BarWidth = 160.0f;
 
@@ -224,9 +226,8 @@ void CreatureSpawner::DrawBody(entt::entity entity) noexcept
 		ahead.y = 0.0f;
 		ahead = glm::length(ahead) > 0.0f ? glm::normalize(ahead) : glm::vec3(0.0f, 0.0f, -1.0f);
 		const auto at = transform->position + (ahead * (k_FoodAhead * std::max(creature->size, 1.0f)));
-		ecs::archetypes::MobileObjectArchetype::Create(at, k_FoodObject, 0.0f, 1.0f);
-		const auto value = Locator::infoConstants::value().mobileObject.at(static_cast<size_t>(k_FoodObject)).foodValue;
-		_lastNeed = fmt::format("Dropped food worth {:.0f}", value);
+		ecs::archetypes::PotArchetype::Create(at, 0.0f, k_FoodPot, k_FoodAmount);
+		_lastNeed = fmt::format("Dropped a pot of {} food", k_FoodAmount);
 	}
 	if (!_lastNeed.empty())
 	{
