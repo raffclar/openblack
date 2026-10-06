@@ -25,6 +25,7 @@
 #include <bimg/bimg.h>
 #include <bx/file.h>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/norm.hpp>
 #include <glm/gtx/transform.hpp>
 #include <spdlog/spdlog.h>
 
@@ -3190,6 +3191,19 @@ void Renderer::UploadCreatureSkins(const DrawSceneDesc& drawDesc) const
 				texture = std::make_unique<Texture2D>("Creature Skin");
 				texture->CreateWithinFrame(creature_tattoo::k_SkinSize, creature_tattoo::k_SkinSize, 1, TextureFormat::BGRA4,
 				                           Wrapping::Repeat, Filter::Linear, nullptr);
+				// Out of textures, as with thousands of creatures: this one keeps its species' skin as it was made
+				if (!bgfx::isValid(toBgfx(texture->GetNativeHandle())))
+				{
+					texture.reset();
+					if (!_warnedOutOfSkins)
+					{
+						_warnedOutOfSkins = true;
+						SPDLOG_LOGGER_WARN(
+						    spdlog::get("graphics"),
+						    "Out of textures for the creatures' painted skins: the rest keep their species' skins");
+					}
+					continue;
+				}
 			}
 			texture->Update(painted.texels.data(), static_cast<uint32_t>(painted.texels.size() * sizeof(painted.texels[0])));
 			entry.drawn.emplace_back(painted.id, texture.get());
@@ -3697,8 +3711,56 @@ void Renderer::SetCreatureShadowUniforms(const ShaderProgram& program, bool rece
 	}
 }
 
+void Renderer::SelectDrawnCreatures(const DrawSceneDesc& drawDesc) const
+{
+	const auto& draws = Locator::rendereringSystem::value().GetContext().entityDraws;
+	_drawnCreatures.clear();
+	for (const auto& [entity, instance] : draws)
+	{
+		_drawnCreatures.push_back({.entity = entity, .instance = instance});
+	}
+	const auto cap = MaxCreaturesDrawn();
+	if (_drawnCreatures.size() <= cap || drawDesc.camera == nullptr)
+	{
+		return;
+	}
+	if (!_warnedCreatureCap)
+	{
+		_warnedCreatureCap = true;
+		SPDLOG_LOGGER_WARN(spdlog::get("graphics"),
+		                   "{} creatures to draw, more than the renderer can upload the bones of each frame: only the {} "
+		                   "nearest the camera are drawn",
+		                   _drawnCreatures.size(), cap);
+	}
+	const auto camera = drawDesc.camera->GetOrigin();
+	const auto distance = [&drawDesc, camera](const DrawnCreature& draw) {
+		const auto* transform = drawDesc.entities.TryGet<const ecs::components::Transform>(draw.entity);
+		return transform != nullptr ? glm::distance2(transform->position, camera) : std::numeric_limits<float>::max();
+	};
+	std::ranges::nth_element(_drawnCreatures, _drawnCreatures.begin() + static_cast<std::ptrdiff_t>(cap), std::less {},
+	                         distance);
+	_drawnCreatures.resize(cap);
+}
+
+size_t Renderer::MaxCreaturesDrawn()
+{
+	// Each creature's body is drawn a submesh at a time in several passes, with every bone's matrix uploaded with each
+	// draw, and the backends set aside a fixed amount of memory for each frame's uploads. Past this many creatures it
+	// would overflow, which the backends don't survive. Holding the bones in a buffer of their own would lift this.
+	switch (bgfx::getRendererType())
+	{
+	case bgfx::RendererType::Vulkan:
+		return k_MaxCreaturesDrawnVulkan;
+	case bgfx::RendererType::Direct3D12:
+		return k_MaxCreaturesDrawnDirect3D12;
+	default:
+		return std::numeric_limits<size_t>::max();
+	}
+}
+
 void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 {
+	SelectDrawnCreatures(drawDesc);
 	UploadCreatureSkins(drawDesc);
 	{
 		const auto& textures = Locator::resources::value().GetTextures();
@@ -4151,7 +4213,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 			}
 			// The creatures, each posed and shaped as it is, then its eyes
-			for (const auto& [entity, instance] : renderCtx.entityDraws)
+			for (const auto& [entity, instance] : _drawnCreatures)
 			{
 				const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
 				const auto* creature = desc.entities.TryGet<const ecs::components::Creature>(entity);

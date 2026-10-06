@@ -323,6 +323,23 @@ private:
 		std::vector<std::pair<uint32_t, const Texture2D*>> drawn;
 	};
 	mutable std::unordered_map<entt::entity, CreatureSkins> _creatureSkins;
+	/// Whether running out of textures for the creatures' skins has been logged
+	mutable bool _warnedOutOfSkins {false};
+	/// The creatures drawn this frame: all of them, or the nearest the camera when there are more than the backend can
+	/// upload the bones of
+	struct DrawnCreature
+	{
+		entt::entity entity;
+		uint32_t instance;
+	};
+	mutable std::vector<DrawnCreature> _drawnCreatures;
+	mutable bool _warnedCreatureCap {false};
+	/// Found by trial in a debug build, whose backends check the uploads: Vulkan overflowed with 65 creatures drawn and
+	/// Direct3D 12 with 850, and both held with 50 and 600
+	static constexpr size_t k_MaxCreaturesDrawnVulkan = 40;
+	static constexpr size_t k_MaxCreaturesDrawnDirect3D12 = 500;
+	void SelectDrawnCreatures(const DrawSceneDesc& drawDesc) const;
+	[[nodiscard]] static size_t MaxCreaturesDrawn();
 	/// Sampled by the primitives without a skin, as Direct3D's texture stages read white with no texture set
 	std::optional<TextureHandle> _whiteTexture;
 	/// u_modelLight: where the game's model light is this frame, and its ambient
