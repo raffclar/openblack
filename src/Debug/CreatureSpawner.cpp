@@ -33,6 +33,7 @@
 #include "Creature/CreatureLook.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureSkin.h"
+#include "Creature/LeashRules.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -45,6 +46,7 @@
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
@@ -940,6 +942,14 @@ entt::entity CreatureSpawner::SpawnAt(glm::vec3 position, float yawRadians) noex
 	const auto entity = CreatureArchetype::Create(position, _owner, _species, 0, yawRadians, _scale,
 	                                              {.alignment = _alignment, .fatness = _fatness, .strength = _strength});
 	auto& registry = Locator::entitiesRegistry::value();
+	if (Locator::leashSystem::has_value())
+	{
+		// Made for trying things out, it knows every leash, as creatures made by the original's debug tools do
+		for (const auto type : creature_leash::k_Types)
+		{
+			Locator::leashSystem::value().SetKnown(entity, type, true);
+		}
+	}
 	if (_spawnMind != nullptr && Locator::creatureMindSystem::has_value())
 	{
 		// The mind is taken up on the creature's first turn of thought

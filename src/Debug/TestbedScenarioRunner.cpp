@@ -154,6 +154,13 @@ glm::vec2 FieldsOfView(const Camera& camera)
 	const auto aspect = Locator::windowing::has_value() ? Locator::windowing::value().GetAspectRatio() : 1.0f;
 	return {horizontal, 2.0f * std::atan(std::tan(horizontal * 0.5f) / std::max(aspect, 0.1f))};
 }
+
+/// Why the leash was refused, for the readout
+std::string RefusedText(const ecs::systems::LeashSystemInterface& leashes)
+{
+	const auto refused = leashes.LastRefusal();
+	return refused.has_value() ? fmt::format("refused: {}", creature_leash::Describe(refused->why)) : "can't";
+}
 } // namespace
 
 void Runner::Start(const Scenario& scenario)
@@ -358,6 +365,19 @@ void Runner::PlaceCreatures(const Scenario& scenario, glm::vec2 middle)
 		{
 			LoadMindFile(entity, setup.mindFile);
 		}
+		if (Locator::leashSystem::has_value())
+		{
+			// Made for trying things out, it knows every leash, as creatures made by the original's debug tools do
+			auto& leashes = Locator::leashSystem::value();
+			for (const auto type : creature_leash::k_Types)
+			{
+				leashes.SetKnown(entity, type, true);
+			}
+			if (setup.leashable.has_value())
+			{
+				leashes.SetLeashable(entity, *setup.leashable);
+			}
+		}
 		if (Locator::creatureSkinSystem::has_value())
 		{
 			auto& skins = Locator::creatureSkinSystem::value();
@@ -524,7 +544,25 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 		{
 			return leashes.ChangeType(creature, command.leash) ? "changed" : "can't";
 		}
-		return leashes.PutOn(creature, command.leash) ? "on" : "can't";
+		return leashes.PutOn(creature, command.leash) ? "on" : RefusedText(leashes);
+	case Kind::MakeLeashable:
+		return leashes.SetLeashable(creature, true) ? "leashable" : RefusedText(leashes);
+	case Kind::HandTapLeash:
+		// As the player's Action button tapping it does
+		return leashes.TapCreature(command.player, creature) ? "on" : RefusedText(leashes);
+	case Kind::LeashKey:
+	{
+		// As the player pressing the key does, through the same call the controls make
+		constexpr std::array k_Keys {creature_leash::LeashKey::Leash, creature_leash::LeashKey::PreviousLeash,
+		                             creature_leash::LeashKey::NextLeash};
+		const auto before = leashes.TypeOf(creature);
+		if (!leashes.PressKey(command.player, k_Keys.at(command.value)))
+		{
+			return RefusedText(leashes);
+		}
+		const auto after = leashes.TypeOf(creature);
+		return after == LeashType::None ? "off" : before == after ? "same" : creature_leash::Name(after);
+	}
 	case Kind::TieLeash:
 		if (const auto object = ObjectAt(command.object))
 		{
@@ -736,6 +774,9 @@ void Runner::Give(const Command& command)
 	case Kind::UntieLeash:
 	case Kind::TakeOffLeash:
 	case Kind::ConfineToHome:
+	case Kind::MakeLeashable:
+	case Kind::HandTapLeash:
+	case Kind::LeashKey:
 		result = GiveLeashCommand(*entity, command);
 		break;
 	case Kind::StartFight:

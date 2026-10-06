@@ -19,6 +19,7 @@
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "Creature/LeashRules.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
@@ -45,6 +46,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "EditorMath.h"
@@ -457,8 +459,18 @@ entt::entity Place(const PlaceItem& item, glm::vec3 position, float yawRadians)
 	case PlaceKind::Creature:
 	{
 		const auto species = static_cast<CreatureType>(item.type);
-		return CreatureArchetype::Create(position, PlayerNames::PLAYER_ONE, species, 0, yawRadians,
-		                                 CreatureArchetype::StartScale(species), CreatureArchetype::StartBody(species));
+		const auto entity =
+		    CreatureArchetype::Create(position, PlayerNames::PLAYER_ONE, species, 0, yawRadians,
+		                              CreatureArchetype::StartScale(species), CreatureArchetype::StartBody(species));
+		// Placed to try things out, it knows every leash, as creatures made by the original's debug tools do
+		if (Locator::leashSystem::has_value())
+		{
+			for (const auto type : creature_leash::k_Types)
+			{
+				Locator::leashSystem::value().SetKnown(entity, type, true);
+			}
+		}
+		return entity;
 	}
 	case PlaceKind::Villager:
 	{

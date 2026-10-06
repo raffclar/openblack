@@ -169,6 +169,9 @@ struct CreatureSetup
 	/// Its facing as the spawner gives it: 0 faces south, towards the testbed's camera, and 180 faces north
 	float facingDegrees {0.0f};
 	PlayerNames owner {PlayerNames::PLAYER_ONE};
+	/// Whether it is the one creature its owner can lead on the leash. When not given, a player's first creature is
+	/// and the others aren't.
+	std::optional<bool> leashable;
 	/// Its alignment, fatness and strength, the species' start when not given, and its size, 1 when not given: a
 	/// creature well grown, about 15 units tall, rather than as small as a new one starts
 	std::optional<float> alignment;
@@ -321,6 +324,12 @@ struct Command
 		UntieLeash,
 		TakeOffLeash,
 		ConfineToHome,
+		/// Making it the one creature its owner can lead, which the owner's other creature stops being; the player's
+		/// hand tapping it to put the picked leash on, as the Action button does; the player pressing a leash shortcut
+		/// (value: 0 the leash key L, 1 the previous leash V, 2 the next leash B), which acts on the player's creature
+		MakeLeashable,
+		HandTapLeash,
+		LeashKey,
 		/// Fighting the other creature; then, in the fight, a blow high, in the middle or low charged for a while, a
 		/// block, a step forward, back, right or left, the special move, and fighting by itself or not, as the player's
 		/// clicks and the debug tools give them
@@ -350,6 +359,8 @@ struct Command
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
 	size_t creature {0};
+	/// The player whose hand or keys do it
+	PlayerNames player {PlayerNames::PLAYER_ONE};
 	/// Seconds after the last command before this one, counted once its creature is free when it waits for that
 	float delaySeconds {0.0f};
 	/// Waits until its creature has stopped moving and its body plays nothing, such as having arrived

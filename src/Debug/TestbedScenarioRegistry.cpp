@@ -1324,6 +1324,84 @@ void AddLeash(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "leash.hand",
+	    .name = "Leash your creature with the hand",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger stands to the north. The hand taps it, as the Action button (right click) does, "
+	                   "putting the learning leash on. Move the hand about to lead it; press L to take the leash off "
+	                   "again, or right click it yourself to put it back on.",
+	    .expected = "A rope runs from the hand to its collar; pulled taut, the tiger walks to the hand. The readout says "
+	                "\"on\".",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 60.0f})},
+	    .commands = {{.kind = Kind::HandTapLeash, .creature = 0, .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
+	    .id = "leash.someone_elses",
+	    .name = "Another player's creature refuses the leash",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger on the left and player two's lion on the right. Your hand taps the lion, then your "
+	                   "tiger.",
+	    .expected = "The lion is refused, as it belongs to another player, and the log says so; then your tiger is "
+	                "leashed. Right clicking the lion yourself is refused the same way.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Tiger, {-30.0f, 60.0f}),
+	                  [] {
+		                  auto lion = Content(CreatureType::Lion, {30.0f, 60.0f});
+		                  lion.owner = PlayerNames::PLAYER_TWO;
+		                  return lion;
+	                  }()},
+	    .commands = {{.kind = Kind::HandTapLeash, .creature = 1, .delaySeconds = 1.0f},
+	                 {.kind = Kind::HandTapLeash, .creature = 0, .delaySeconds = 2.0f}},
+	});
+
+	all.push_back({
+	    .id = "leash.only_leashable",
+	    .name = "Only the leashable one of two",
+	    .facet = Facet::Leash,
+	    .description = "You have two tigers: the left one is the one you can lead, the right one isn't. The hand taps "
+	                   "the right one, then the left one.",
+	    .expected = "The right tiger is refused as it isn't the one you can lead; the left one is leashed.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Tiger, {-30.0f, 60.0f}), Content(CreatureType::Tiger, {30.0f, 60.0f})},
+	    .commands = {{.kind = Kind::HandTapLeash, .creature = 1, .delaySeconds = 1.0f},
+	                 {.kind = Kind::HandTapLeash, .creature = 0, .delaySeconds = 2.0f}},
+	});
+
+	all.push_back({
+	    .id = "leash.switch",
+	    .name = "Switch the leashable creature",
+	    .facet = Facet::Leash,
+	    .description = "Your left tiger is on the leash. The right tiger is made the one you can lead, then the hand "
+	                   "taps the left one and the right one.",
+	    .expected = "Made leashable, the right tiger takes over: the left one's leash comes off and tapping it is "
+	                "refused, and the right one is leashed.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Tiger, {-30.0f, 60.0f}), Content(CreatureType::Tiger, {30.0f, 60.0f})},
+	    .commands = {{.kind = Kind::HandTapLeash, .creature = 0, .delaySeconds = 1.0f},
+	                 {.kind = Kind::MakeLeashable, .creature = 1, .delaySeconds = 4.0f},
+	                 {.kind = Kind::HandTapLeash, .creature = 0, .delaySeconds = 2.0f},
+	                 {.kind = Kind::HandTapLeash, .creature = 1, .delaySeconds = 2.0f}},
+	});
+
+	all.push_back({
+	    .id = "leash.keys",
+	    .name = "The leash shortcuts",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger knows all three leashes. The keys are pressed in turn: L puts the leash on, B picks "
+	                   "the next leash and V the previous one, swapping the one it wears, and L takes it off.",
+	    .expected = "The rope goes on, changes colour twice, and comes off. Pressing L, V and B yourself does the same.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 60.0f})},
+	    .commands = {{.kind = Kind::LeashKey, .delaySeconds = 1.0f, .value = 0},
+	                 {.kind = Kind::LeashKey, .delaySeconds = 3.0f, .value = 2},
+	                 {.kind = Kind::LeashKey, .delaySeconds = 3.0f, .value = 1},
+	                 {.kind = Kind::LeashKey, .delaySeconds = 3.0f, .value = 0}},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
 	    .id = "leash.home",
 	    .name = "Kept at home",
 	    .facet = Facet::Leash,
@@ -1892,6 +1970,10 @@ std::string_view CommandProblem(const Command& command, std::span<const ObjectSe
 		           : "no such leash";
 	case Kind::ConfineToHome:
 		return command.radius > 0.0f ? "" : "keeps it nowhere";
+	case Kind::LeashKey:
+		return command.value < 3 ? "" : "no such leash key";
+	case Kind::HandTapLeash:
+		return command.player < PlayerNames::_COUNT ? "" : "no such player";
 	case Kind::FightBlow:
 		return command.value < 3 && command.chargeMs >= 0.0f && command.chargeMs <= creature_fight::k_MaxChargeMs
 		           ? ""
@@ -1927,7 +2009,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 55> k_Names {
+	constexpr std::array<std::string_view, 58> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -1968,6 +2050,9 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "untie leash",
 	    "take off leash",
 	    "keep at home",
+	    "make leashable",
+	    "hand taps to leash",
+	    "leash key",
 	    "start fight",
 	    "fight blow",
 	    "fight block",

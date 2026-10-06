@@ -113,6 +113,42 @@ void CreatureSpawner::DrawLeash(entt::entity entity) noexcept
 	}
 	ImGui::SeparatorText("Leash");
 
+	// Who the creature belongs to, and whether it is the one creature its owner can lead
+	const auto& body = registry.Get<const Creature>(entity);
+	const auto ownerName = [](PlayerNames owner) {
+		return owner == PlayerNames::NEUTRAL ? std::string("Neutral") : fmt::format("Player {}", static_cast<int>(owner) + 1);
+	};
+	ImGui::SetNextItemWidth(k_BarWidth);
+	if (ImGui::BeginCombo("Owner", ownerName(body.owner).c_str()))
+	{
+		for (size_t i = 0; i < static_cast<size_t>(PlayerNames::_COUNT); ++i)
+		{
+			const auto owner = static_cast<PlayerNames>(i);
+			if (ImGui::Selectable(ownerName(owner).c_str(), owner == body.owner))
+			{
+				leashes.SetOwner(entity, owner);
+			}
+		}
+		ImGui::EndCombo();
+	}
+	ImGui::SameLine();
+	bool leashable = leashes.IsLeashable(entity);
+	ImGui::BeginDisabled(!leash::CanLead(body.owner));
+	if (ImGui::Checkbox("Leashable", &leashable))
+	{
+		leashes.SetLeashable(entity, leashable);
+	}
+	ImGui::EndDisabled();
+	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+	{
+		ImGui::SetTooltip("The one creature its owner can lead; making it so stops their other creature being it");
+	}
+	if (const auto refused = leashes.LastRefusal())
+	{
+		ImGui::TextDisabled("Last refused: player %d, creature %u: %s", static_cast<int>(refused->player) + 1,
+		                    entt::to_integral(refused->creature), leash::Describe(refused->why));
+	}
+
 	// Which leashes it knows, as the scripts grant them
 	ImGui::TextUnformatted("Knows:");
 	for (const auto type : leash::k_Types)
