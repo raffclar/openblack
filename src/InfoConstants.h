@@ -433,6 +433,10 @@ struct GWorshipSiteInfo: GCitadelPartInfo
 	float chantsToReserveForMaintaining; ///< read as a float; the file holds an int, so it reads as ~7e-43 (kept)
 	float artifactPowerupMultiplier;
 };
+static_assert(offsetof(GWorshipSiteInfo, chantsPerVillager) == 0x134);
+static_assert(offsetof(GWorshipSiteInfo, chantsToFillBattery) == 0x140);
+static_assert(offsetof(GWorshipSiteInfo, eachVillagerAddToFillBattery) == 0x144);
+static_assert(offsetof(GWorshipSiteInfo, chantsToReserveForMaintaining) == 0x148);
 
 struct GAbodeInfo: GMultiMapFixedInfo
 {
@@ -659,6 +663,9 @@ struct GMagicInfo
 	uint32_t oneOffSpellIsToRestoreHealth;
 	ParticleType particleTypeInHand;
 };
+static_assert(sizeof(GMagicInfo) == 0x48);
+static_assert(offsetof(GMagicInfo, isSpellRecharged) == 0x2c);
+static_assert(offsetof(GMagicInfo, isCreatureCastFromAbove) == 0x30);
 
 struct GMagicGeneralInfo: GMagicInfo
 {
@@ -1526,6 +1533,13 @@ struct GMagicEffectInfo: GEffectInfo
 	float aggressiveAttackValue;
 	float computerCastDuration;
 };
+static_assert(offsetof(GMagicEffectInfo, debugString) == 0x24);
+static_assert(offsetof(GMagicEffectInfo, initialChants) == 0x64);
+static_assert(offsetof(GMagicEffectInfo, costPerEvent) == 0x6c);
+static_assert(offsetof(GMagicEffectInfo, costPerGameTurn) == 0x70);
+static_assert(offsetof(GMagicEffectInfo, divideCostsByTribalPower) == 0x78);
+static_assert(offsetof(GMagicEffectInfo, agressiveRangeMin) == 0x94);
+static_assert(offsetof(GMagicEffectInfo, useTribalPowerMultiplier) == 0xbc);
 
 struct GTownDesireInfo
 {
@@ -1612,6 +1626,11 @@ struct GSpellSeedInfo: GObjectInfo
 	uint32_t unknown0x178;             ///< (unused by the game)
 	uint32_t unknown0x17C;             ///< 1 for FIRE, LIGHTNING_BOLT, HEAL, WEAK, STRONG (unused by the game)
 };
+static_assert(offsetof(GSpellSeedInfo, selectionGesture) == 0xf0);
+static_assert(offsetof(GSpellSeedInfo, magicTypes) == 0x114);
+static_assert(offsetof(GSpellSeedInfo, powerUpGestures) == 0x124);
+static_assert(offsetof(GSpellSeedInfo, exists) == 0x16c);
+static_assert(offsetof(GSpellSeedInfo, iconIndex) == 0x170);
 
 struct GCitadelHeartInfo: GCitadelPartInfo
 {

@@ -62,6 +62,7 @@
 #include "LHVMViewer.h"
 #include "LandIsland.h"
 #include "Locator.h"
+#include "Magic.h"
 #include "MeshViewer.h"
 #include "PathFinding.h"
 #include "Profiler.h"
@@ -124,6 +125,7 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 	debugWindows.emplace_back(new TempleInterior);
 	debugWindows.emplace_back(new gui::Camera);
 	debugWindows.emplace_back(new Weather);
+	debugWindows.emplace_back(new Magic);
 	auto spawner = std::make_unique<CreatureSpawner>();
 	debugWindows.emplace_back(new TestbedScenarios(*spawner));
 	debugWindows.emplace_back(std::move(spawner));
