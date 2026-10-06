@@ -1327,8 +1327,8 @@ void AddLeash(std::vector<Scenario>& all)
 	    .id = "leash.hand",
 	    .name = "Leash your creature with the hand",
 	    .facet = Facet::Leash,
-	    .description = "Your tiger stands to the north. The hand taps it, as the Action button (right click) does, "
-	                   "putting the learning leash on. Move the hand about to lead it; press L to take the leash off "
+	    .description = "Your tiger stands to the north. The hand clicks it with the right button, putting the learning "
+	                   "leash on. Move the hand about to lead it; press L or shake the hand to take the leash off "
 	                   "again, or right click it yourself to put it back on.",
 	    .expected = "A rope runs from the hand to its collar; pulled taut, the tiger walks to the hand. The readout says "
 	                "\"on\".",
@@ -1399,6 +1399,78 @@ void AddLeash(std::vector<Scenario>& all)
 	                 {.kind = Kind::LeashKey, .delaySeconds = 3.0f, .value = 1},
 	                 {.kind = Kind::LeashKey, .delaySeconds = 3.0f, .value = 0}},
 	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "leash.click_or_hold",
+	    .name = "Hold to stroke, right click to leash",
+	    .facet = Facet::Leash,
+	    .description = "The hand holds on to your tiger with the right button, stroking its head and belly, and lets go; "
+	                   "then it clicks the tiger, which puts the leash on. Try it yourself: holding the right button on "
+	                   "it for a second strokes it, sweeping the held hand across it slaps it, and a quick right click "
+	                   "leashes it.",
+	    .expected = "The hold strokes it without leashing it; the click then puts the rope on without stroking it.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 50.0f})},
+	    .commands = {Stroke(0, creature_feedback::BodyPart::Head, 1.0f),
+	                 Stroke(0, creature_feedback::BodyPart::Belly, 2.5f),
+	                 Act(Kind::HandLetGo, 0, 2.0f, true),
+	                 {.kind = Kind::HandTapLeash, .creature = 0, .delaySeconds = 2.0f}},
+	});
+
+	all.push_back({
+	    .id = "leash.shake",
+	    .name = "Shake the leash off",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger is clicked to put the leash on, and the hand is then shaken back and forth. Shake the "
+	                   "hand yourself (move the mouse quickly side to side with no button held) to try it.",
+	    .expected = "The rope goes on, and comes off once the hand is shaken; the readout says \"off\".",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 50.0f})},
+	    .commands = {{.kind = Kind::HandTapLeash, .creature = 0, .delaySeconds = 1.0f},
+	                 {.kind = Kind::LeashShake, .creature = 0, .delaySeconds = 4.0f}},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "leash.key_off",
+	    .name = "L takes the leash off",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger is clicked to put the leash on, then L is pressed.",
+	    .expected = "The rope goes on, then comes off with L.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 50.0f})},
+	    .commands = {{.kind = Kind::HandTapLeash, .creature = 0, .delaySeconds = 1.0f},
+	                 {.kind = Kind::LeashKey, .delaySeconds = 4.0f, .value = 0}},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "leash.guides_creature",
+	    .name = "Slapping Khazar's creature",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger on the left, Khazar's tortoise, the creature of the god who guides you, in the middle, "
+	                   "and Lethys's wolf on the right. The hand slaps the tortoise, then tries to slap the wolf, then "
+	                   "tries to leash the tortoise.",
+	    .expected = "The tortoise is slapped and reels. The wolf can't be held, nor the tortoise leashed, and the log "
+	                "says why.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Tiger, {-40.0f, 60.0f}),
+	                  [] {
+		                  auto tortoise = Content(CreatureType::Tortoise, {0.0f, 60.0f});
+		                  tortoise.owner = PlayerNames::PLAYER_THREE;
+		                  tortoise.guidesCreature = true;
+		                  return tortoise;
+	                  }(),
+	                  [] {
+		                  auto wolf = Content(CreatureType::Wolf, {40.0f, 60.0f});
+		                  wolf.owner = PlayerNames::PLAYER_FOUR;
+		                  return wolf;
+	                  }()},
+	    .commands = {Slap(1, 0.85f, false, true, 1.0f),
+	                 Act(Kind::HandLetGo, 1, 2.0f, true),
+	                 Slap(2, 0.85f, false, true, 1.0f),
+	                 {.kind = Kind::HandTapLeash, .creature = 1, .delaySeconds = 1.0f}},
 	});
 
 	all.push_back({
@@ -2009,7 +2081,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 58> k_Names {
+	constexpr std::array<std::string_view, 59> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -2053,6 +2125,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "make leashable",
 	    "hand taps to leash",
 	    "leash key",
+	    "shake the hand",
 	    "start fight",
 	    "fight blow",
 	    "fight block",

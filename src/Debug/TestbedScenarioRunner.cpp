@@ -373,6 +373,10 @@ void Runner::PlaceCreatures(const Scenario& scenario, glm::vec2 middle)
 			{
 				leashes.SetKnown(entity, type, true);
 			}
+			if (auto* owned = registry.TryGet<Creature>(entity))
+			{
+				owned->guidesCreature = setup.guidesCreature;
+			}
 			if (setup.leashable.has_value())
 			{
 				leashes.SetLeashable(entity, *setup.leashable);
@@ -550,6 +554,20 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 	case Kind::HandTapLeash:
 		// As the player's Action button tapping it does
 		return leashes.TapCreature(command.player, creature) ? "on" : RefusedText(leashes);
+	case Kind::LeashShake:
+	{
+		// A quick shake from side to side across the middle of the screen, sixty frames a second
+		constexpr int k_Samples = 16;
+		constexpr float k_Frame = 1.0f / 60.0f;
+		constexpr float k_Swing = 0.12f;
+		bool shaken = false;
+		for (int i = 0; i < k_Samples && !shaken; ++i)
+		{
+			const auto side = (i / 2) % 2 == 0 ? -1.0f : 1.0f;
+			shaken = leashes.TrackHand(command.player, {0.5f + (side * k_Swing), 0.5f}, k_Frame, true);
+		}
+		return shaken ? "off" : "no leash to shake off";
+	}
 	case Kind::LeashKey:
 	{
 		// As the player pressing the key does, through the same call the controls make
@@ -777,6 +795,7 @@ void Runner::Give(const Command& command)
 	case Kind::MakeLeashable:
 	case Kind::HandTapLeash:
 	case Kind::LeashKey:
+	case Kind::LeashShake:
 		result = GiveLeashCommand(*entity, command);
 		break;
 	case Kind::StartFight:
