@@ -1757,6 +1757,44 @@ void AddParticles(std::vector<Scenario>& all)
 	});
 }
 
+void AddEditor(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "editor.one_of_each",
+	    .name = "One of each kind to pick",
+	    .facet = Facet::Editor,
+	    .description = "A tiger, a villager, an oak, a pillar of rock and a ball, spread out in view, for trying the "
+	                   "editor (F2) on: the outliner lists each under its kind, a click on the land or in the list "
+	                   "picks one, and the inspector shows it.",
+	    .expected = "Each picks with a box drawn round it. The Move (E) and Rotate (R) tools drag the picked thing over "
+	                "the land and turn it; Ctrl+D copies it beside itself and Delete removes it. The tiger's inspector "
+	                "has every creature section.",
+	    .environment = {.clockRuns = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-25.0f, -10.0f}},
+	                {.type = TreeInfo::Oak, .offset = {-40.0f, 20.0f}},
+	                {.type = FeatureInfo::FatPilarChalk, .offset = {40.0f, 20.0f}},
+	                {.type = MobileObjectInfo::Ball, .offset = {20.0f, -15.0f}}},
+	});
+
+	all.push_back({
+	    .id = "editor.orbit_walker",
+	    .name = "A walking creature to orbit and follow",
+	    .facet = Facet::Editor,
+	    .description = "A tiger walks round a square 80 units across, again and again, for trying the editor's cameras "
+	                   "on it: pick it, then Orbit (O) or Follow (Shift+O).",
+	    .expected = "Orbiting, the camera keeps round the tiger as it walks, turned by dragging with the right button "
+	                "and drawn in and out by the wheel. Following, it eases along behind the tiger as it turns each "
+	                "corner. Free, or Escape, hands the camera back where it is.",
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, -40.0f}, {40.0f, 40.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {-40.0f, -40.0f})},
+	    .commands = {Go(Kind::WalkTo, 0, {40.0f, -40.0f}, 0.5f), Go(Kind::WalkTo, 0, {40.0f, 40.0f}, 0.5f),
+	                 Go(Kind::WalkTo, 0, {-40.0f, 40.0f}, 0.5f), Go(Kind::WalkTo, 0, {-40.0f, -40.0f}, 0.5f)},
+	    .repeatFrom = 0,
+	});
+}
+
 std::vector<Scenario> Build()
 {
 	std::vector<Scenario> all;
@@ -1776,6 +1814,7 @@ std::vector<Scenario> Build()
 	AddCombat(all);
 	AddMind(all);
 	AddParticles(all);
+	AddEditor(all);
 	return all;
 }
 
@@ -1866,8 +1905,8 @@ std::string_view CommandProblem(const Command& command, std::span<const ObjectSe
 std::string_view testbed_scenarios::Name(Facet facet)
 {
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
-	    "Idle",       "Expressions", "Senses",  "Needs", "Growth", "Appearance", "Light", "Movement",
-	    "Footprints", "Audio",       "Objects", "Hand",  "Leash",  "Combat",     "Mind",  "Particles",
+	    "Idle",  "Expressions", "Senses", "Needs", "Growth", "Appearance", "Light",     "Movement", "Footprints",
+	    "Audio", "Objects",     "Hand",   "Leash", "Combat", "Mind",       "Particles", "Editor",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }

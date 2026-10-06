@@ -72,6 +72,8 @@ enum class Facet : uint8_t
 	Mind,
 	/// The particle effects of the miracles and spot visuals
 	Particles,
+	/// Set ups for trying the in-game editor on: picking, moving and placing things, and its cameras
+	Editor,
 
 	_Count
 };
