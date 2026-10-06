@@ -30,6 +30,8 @@ public:
 
 private:
 	void DrawCreatures(EditorContext& context) noexcept;
+	/// The miracles' dispensers, or their bubbles on their own
+	void DrawMiracles(EditorContext& context) noexcept;
 	/// A searchable grid of a kind's types, those the filter lets through
 	void DrawList(EditorContext& context, PlaceKind kind, const std::vector<int32_t>& types) noexcept;
 	void LayOut(EditorContext& context, PlaceKind kind, const std::vector<int32_t>& types) noexcept;
@@ -37,6 +39,8 @@ private:
 	std::string _search;
 	/// The tribe the villagers and buildings are narrowed to, or the ones of no tribe after the last tribe
 	int _tribe {0};
+	/// Placing the miracles' dispensers (0) or their bubbles (1)
+	int _miracleKind {0};
 	std::string _lastLayout;
 };
 

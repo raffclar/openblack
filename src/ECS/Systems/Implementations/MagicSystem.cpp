@@ -1227,7 +1227,12 @@ entt::entity MagicSystem::CreateOneOffSeedFor(glm::vec3 position, MagicType type
 		return entt::null;
 	}
 	const auto step = magic::GetPowerUpGesture(magic::GetSpellSeedInfo(Info(), *seed), type);
-	return CreateOneOffSeed(position, *seed, step.level, 1.0f);
+	const auto orb = CreateOneOffSeed(position, *seed, step.level, 1.0f);
+	if (orb != entt::null)
+	{
+		EntityRegistry().Get<OneOffSpellSeed>(orb).magicType = type;
+	}
+	return orb;
 }
 
 entt::entity MagicSystem::MakeOrb(entt::entity entity)

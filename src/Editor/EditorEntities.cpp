@@ -35,7 +35,9 @@
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -43,10 +45,13 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "EditorMath.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/DispenserRules.h"
+#include "Magic/MagicTables.h"
 #include "Resources/ResourcesInterface.h"
 
 namespace openblack::editor
@@ -76,6 +81,23 @@ std::vector<std::string> NamesFrom(const std::array<Info, N>& table)
 	}
 	return names;
 }
+
+/// The miracles' names by magic type, as the tables spell them made readable, for those a dispenser can give
+std::vector<std::string> MiracleNames(const InfoConstants& info)
+{
+	const auto miracles = magic::DispensableMiracles();
+	const auto last = std::ranges::max(miracles, {}, [](MagicType type) { return static_cast<uint32_t>(type); });
+	std::vector<std::string> names(static_cast<size_t>(last) + 1);
+	for (const auto type : miracles)
+	{
+		const auto& raw = magic::GetMagicEffectInfo(info, type).debugString;
+		names.at(static_cast<size_t>(type)) = TitleCase(std::string_view(raw.data(), strnlen(raw.data(), raw.size())));
+	}
+	return names;
+}
+
+/// How high a bubble put down by the editor floats over the land
+constexpr float k_BubbleHeight = 3.0f;
 
 constexpr std::array<std::string_view, static_cast<size_t>(CreatureType::_COUNT)> k_SpeciesNames {
     "Unknown",    "Cow",        "Tiger", "Leopard", "Wolf", "Lion",     "Horse", "Tortoise", "Zebra",
@@ -158,6 +180,7 @@ std::optional<NameTables> NameTables::Load()
 	tables.features = NamesFrom(info.feature);
 	tables.mobileObjects = NamesFrom(info.mobileObject);
 	tables.mobileStatics = NamesFrom(info.mobileStatic);
+	tables.miracles = MiracleNames(info);
 	return tables;
 }
 
@@ -177,6 +200,9 @@ const std::vector<std::string>& NameTables::Of(PlaceKind kind) const
 		return features;
 	case PlaceKind::MobileObject:
 		return mobileObjects;
+	case PlaceKind::Dispenser:
+	case PlaceKind::MiracleBubble:
+		return miracles;
 	case PlaceKind::MobileStatic:
 	default:
 		return mobileStatics;
@@ -211,6 +237,10 @@ EntityKind KindOf(const ecs::Registry& registry, entt::entity entity)
 	if (registry.AllOf<Town>(entity))
 	{
 		return EntityKind::Town;
+	}
+	if (registry.AnyOf<SpellDispenser, OneOffSpellSeed>(entity))
+	{
+		return EntityKind::Miracle;
 	}
 	if (registry.AllOf<Abode>(entity))
 	{
@@ -260,6 +290,18 @@ std::optional<PlaceItem> ItemOf(const ecs::Registry& registry, entt::entity enti
 			return PlaceItem {.kind = PlaceKind::Villager, .type = static_cast<int32_t>(*type)};
 		}
 		return std::nullopt;
+	}
+	if (const auto* dispenser = registry.TryGet<SpellDispenser>(entity))
+	{
+		return PlaceItem {.kind = PlaceKind::Dispenser, .type = static_cast<int32_t>(dispenser->magicType)};
+	}
+	if (const auto* orb = registry.TryGet<OneOffSpellSeed>(entity))
+	{
+		if (orb->magicType == MagicType::None)
+		{
+			return std::nullopt;
+		}
+		return PlaceItem {.kind = PlaceKind::MiracleBubble, .type = static_cast<int32_t>(orb->magicType)};
 	}
 	if (registry.AllOf<Abode>(entity))
 	{
@@ -371,6 +413,10 @@ std::optional<uint32_t> MeshOf(const PlaceItem& item)
 	case PlaceKind::MobileStatic:
 		return index < info.mobileStatic.size() ? std::optional(resources::HashIdentifier(info.mobileStatic.at(index).meshId))
 		                                        : std::nullopt;
+	case PlaceKind::Dispenser:
+	case PlaceKind::MiracleBubble:
+		// Made by the magic system; no model to show while placing
+		return std::nullopt;
 	}
 	return std::nullopt;
 }
@@ -436,6 +482,15 @@ entt::entity Place(const PlaceItem& item, glm::vec3 position, float yawRadians)
 	case PlaceKind::MobileStatic:
 		return MobileStaticArchetype::Create(position, static_cast<MobileStaticInfo>(item.type), 0.0f, 0.0f, yawRadians, 0.0f,
 		                                     1.0f);
+	case PlaceKind::Dispenser:
+		return Locator::magicSystem::has_value()
+		           ? Locator::magicSystem::value().CreateDispenser(position, static_cast<MagicType>(item.type), yawRadians)
+		           : entt::null;
+	case PlaceKind::MiracleBubble:
+		return Locator::magicSystem::has_value()
+		           ? Locator::magicSystem::value().CreateOneOffSeedFor(position + glm::vec3(0.0f, k_BubbleHeight, 0.0f),
+		                                                               static_cast<MagicType>(item.type))
+		           : entt::null;
 	}
 	return entt::null;
 }
@@ -478,6 +533,11 @@ void Remove(entt::entity entity)
 	{
 		return;
 	}
+	// A dispenser goes with its bubble and swirl, a bubble with its seed
+	if (Locator::magicSystem::has_value() && Locator::magicSystem::value().Remove(entity))
+	{
+		return;
+	}
 	if (const auto* pit = registry.TryGet<StoragePit>(entity))
 	{
 		std::vector<entt::entity> piles(pit->woodPiles.begin(), pit->woodPiles.end());
@@ -510,6 +570,23 @@ void MoveTo(entt::entity entity, glm::vec3 position)
 	if (auto* fixed = registry.TryGet<Fixed>(entity))
 	{
 		fixed->boundingCenter += glm::vec2(delta.x, delta.z);
+	}
+	// A dispenser's bubble goes with it; a bubble floats where it is put, its seed with it
+	if (auto* dispenser = registry.TryGet<SpellDispenser>(entity))
+	{
+		dispenser->orbPosition += delta;
+		if (dispenser->orb != entt::null && registry.Valid(dispenser->orb))
+		{
+			MoveTo(dispenser->orb, registry.Get<Transform>(dispenser->orb).position + delta);
+		}
+	}
+	if (auto* orb = registry.TryGet<OneOffSpellSeed>(entity))
+	{
+		orb->position += delta;
+		if (orb->seedGraphic != entt::null && registry.Valid(orb->seedGraphic))
+		{
+			registry.Get<Transform>(orb->seedGraphic).position += delta;
+		}
 	}
 	if (auto* locomotion = registry.TryGet<CreatureLocomotion>(entity))
 	{

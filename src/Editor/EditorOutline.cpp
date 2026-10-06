@@ -21,8 +21,8 @@ namespace openblack::editor
 std::string_view Name(EntityKind kind)
 {
 	constexpr std::array<std::string_view, k_EntityKindCount> k_Names {
-	    "Creatures", "Villagers", "Animals",        "Towns",          "Buildings", "Fields",
-	    "Trees",     "Features",  "Mobile objects", "Mobile statics", "Stores",    "Others",
+	    "Creatures", "Villagers",      "Animals",        "Towns",  "Buildings", "Fields", "Trees",
+	    "Features",  "Mobile objects", "Mobile statics", "Stores", "Miracles",  "Others",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

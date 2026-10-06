@@ -28,6 +28,8 @@ struct OneOffSpellSeed
 	static constexpr std::string_view k_MeshFile = "Spells/Meshes/O_bibble_up.l3d";
 
 	SpellSeedType seedType {SpellSeedType::None};
+	/// The miracle it was made to give, none for one made from a seed alone
+	MagicType magicType {MagicType::None};
 	/// Where it floats; its transform turns about its middle from here to face the camera
 	glm::vec3 position {0.0f};
 	int powerUp {magic::k_BasePowerUpLevel};

@@ -38,6 +38,8 @@ enum class EntityKind : uint8_t
 	MobileObject,
 	MobileStatic,
 	Store,
+	/// Miracle dispensers and the bubbles they float
+	Miracle,
 	Other,
 
 	_Count

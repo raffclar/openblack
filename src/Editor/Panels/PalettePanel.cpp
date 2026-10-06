@@ -25,6 +25,7 @@
 #include "Editor/EditorStyle.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/DispenserRules.h"
 
 namespace openblack::editor
 {
@@ -48,6 +49,9 @@ float SpacingOf(PlaceKind kind)
 		return 30.0f;
 	case PlaceKind::MobileObject:
 		return 6.0f;
+	case PlaceKind::Dispenser:
+	case PlaceKind::MiracleBubble:
+		return 12.0f;
 	case PlaceKind::MobileStatic:
 	default:
 		return 16.0f;
@@ -175,6 +179,11 @@ void PalettePanel::Draw(EditorContext& context) noexcept
 		DrawList(context, PlaceKind::MobileStatic, AllOf(info.mobileStatic));
 		ImGui::EndTabItem();
 	}
+	if (ImGui::BeginTabItem("Miracles"))
+	{
+		DrawMiracles(context);
+		ImGui::EndTabItem();
+	}
 	ImGui::EndTabBar();
 }
 
@@ -203,6 +212,20 @@ void PalettePanel::DrawCreatures(EditorContext& context) noexcept
 	{
 		context.placement.item->type = static_cast<int32_t>(context.spawner.GetSpecies());
 	}
+}
+
+void PalettePanel::DrawMiracles(EditorContext& context) noexcept
+{
+	// A dispenser floats a new bubble a while after its last is taken; a bubble on its own gives its miracle once
+	ImGui::RadioButton("Dispensers", &_miracleKind, 0);
+	ImGui::SameLine();
+	ImGui::RadioButton("Bubbles", &_miracleKind, 1);
+	std::vector<int32_t> types;
+	for (const auto type : magic::DispensableMiracles())
+	{
+		types.push_back(static_cast<int32_t>(type));
+	}
+	DrawList(context, _miracleKind == 0 ? PlaceKind::Dispenser : PlaceKind::MiracleBubble, types);
 }
 
 void PalettePanel::DrawList(EditorContext& context, PlaceKind kind, const std::vector<int32_t>& types) noexcept

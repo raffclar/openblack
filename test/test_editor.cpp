@@ -232,6 +232,21 @@ TEST(EditorOutline, GroupsByKindInOrder)
 	EXPECT_EQ(RowLabel(entries.at(0)), "Oak  #1");
 }
 
+TEST(EditorOutline, GroupsTheMiraclesDispensersAndBubblesTogether)
+{
+	const std::vector<OutlineEntry> entries {
+	    {.entity = static_cast<entt::entity>(1), .kind = EntityKind::Miracle, .label = "Fireball"},
+	    {.entity = static_cast<entt::entity>(2), .kind = EntityKind::Tree, .label = "Oak"},
+	    {.entity = static_cast<entt::entity>(3), .kind = EntityKind::Miracle, .label = "Creature Spell Big"},
+	};
+	const auto groups = Group(entries, "");
+	ASSERT_EQ(groups.size(), 2u);
+	EXPECT_EQ(groups.at(1).kind, EntityKind::Miracle);
+	EXPECT_EQ(groups.at(1).entries.size(), 2u);
+	EXPECT_EQ(Name(EntityKind::Miracle), "Miracles");
+	EXPECT_EQ(Group(entries, "big").at(0).entries.size(), 0u);
+}
+
 TEST(EditorPalette, MakesNamesReadable)
 {
 	EXPECT_EQ(TitleCase("OAK_TREE_A"), "Oak Tree A");

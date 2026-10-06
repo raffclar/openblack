@@ -33,6 +33,10 @@ enum class PlaceKind : uint8_t
 	Feature,
 	MobileObject,
 	MobileStatic,
+	/// A miracle dispenser, its type the miracle it gives
+	Dispenser,
+	/// A one-shot miracle's bubble floating over the land, its type the miracle it gives
+	MiracleBubble,
 };
 
 /// Something picked in the palette to place: its kind and its type within the kind
