@@ -26,6 +26,7 @@
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Particles/ParticleTypes.h"
+#include "TestbedDispenserGrid.h"
 
 using namespace openblack;
 using namespace openblack::testbed_scenarios;
@@ -1815,6 +1816,7 @@ std::vector<Scenario> Build()
 	AddMind(all);
 	AddParticles(all);
 	AddEditor(all);
+	AddMiracleScenarios(all);
 	return all;
 }
 
@@ -1906,7 +1908,7 @@ std::string_view testbed_scenarios::Name(Facet facet)
 {
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
 	    "Idle",  "Expressions", "Senses", "Needs", "Growth", "Appearance", "Light",     "Movement", "Footprints",
-	    "Audio", "Objects",     "Hand",   "Leash", "Combat", "Mind",       "Particles", "Editor",
+	    "Audio", "Objects",     "Hand",   "Leash", "Combat", "Mind",       "Particles", "Editor",   "Miracles",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
@@ -2019,9 +2021,35 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 	{
 		problems.emplace_back("hour or body time out of range");
 	}
-	if (scenario.creatures.empty() && scenario.particles.empty())
+	if (scenario.creatures.empty() && scenario.particles.empty() && scenario.miracles.empty() && scenario.dispensers.empty() &&
+	    !environment.dispenserGrid)
 	{
-		problems.emplace_back("no creatures or particles");
+		problems.emplace_back("no creatures, particles, miracles or dispensers");
+	}
+	for (const auto& miracle : scenario.miracles)
+	{
+		const auto type = static_cast<size_t>(miracle.type);
+		if (type == 0 || type >= k_Miracles)
+		{
+			problems.emplace_back("a miracle of no such magic type");
+		}
+		if (miracle.target == MiracleCast::Target::Creature && miracle.creature >= scenario.creatures.size())
+		{
+			problems.emplace_back("a miracle cast on a creature that isn't there");
+		}
+		if (!ValidOffset(miracle.point) || !ValidOffset(miracle.handOffset) || miracle.delaySeconds < 0.0f ||
+		    miracle.holdSeconds.value_or(0.0f) < 0.0f || miracle.repeatSeconds.value_or(1.0f) <= 0.0f)
+		{
+			problems.emplace_back("a miracle's points or times out of range");
+		}
+	}
+	for (const auto& dispenser : scenario.dispensers)
+	{
+		const auto type = static_cast<size_t>(dispenser.type);
+		if (type == 0 || type >= k_Miracles || !ValidOffset(dispenser.offset))
+		{
+			problems.emplace_back("a dispenser of no such magic type, or off the map");
+		}
 	}
 	for (const auto& particle : scenario.particles)
 	{
@@ -2308,4 +2336,14 @@ std::vector<size_t> testbed_scenarios::Advance(Timeline& timeline, std::span<con
 		}
 	}
 	return due;
+}
+
+bool testbed_scenarios::KeepsDispenserGrid(const Scenario& scenario)
+{
+	if (!scenario.environment.dispenserGrid)
+	{
+		return false;
+	}
+	const auto onGrid = [](const auto& setup) { return testbed_dispensers::InGridArea(setup.offset); };
+	return std::ranges::none_of(scenario.creatures, onGrid) && std::ranges::none_of(scenario.objects, onGrid);
 }

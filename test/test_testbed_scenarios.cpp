@@ -22,6 +22,7 @@
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureLayers.h"
+#include "Debug/TestbedDispenserGrid.h"
 #include "Debug/TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -539,4 +540,101 @@ TEST(TestbedScenarios, MapPointsAreFromTheMiddle)
 	EXPECT_EQ(MapPoint({2560.0f, 2560.0f}, {10.0f, -20.0f}), glm::vec2(2570.0f, 2540.0f));
 	EXPECT_FLOAT_EQ(CreatureHeight(1.0f), 15.0f);
 	EXPECT_FLOAT_EQ(CreatureHeight(2.0f), 30.0f);
+}
+
+TEST(TestbedDispenserGrid, HasOneDispenserOfEveryMiracleTheCreatureSpellsAmongThem)
+{
+	const auto types = testbed_dispensers::GridMagicTypes();
+	const std::set<MagicType> unique(types.begin(), types.end());
+	EXPECT_EQ(unique.size(), types.size());
+	for (const auto spell : {MagicType::CreatureSpellFreeze, MagicType::CreatureSpellSmall, MagicType::CreatureSpellBig,
+	                         MagicType::CreatureSpellWeak, MagicType::CreatureSpellStrong, MagicType::CreatureSpellInvisible,
+	                         MagicType::CreatureSpellCompassion, MagicType::CreatureSpellAngry, MagicType::CreatureSpellItchy})
+	{
+		EXPECT_TRUE(unique.contains(spell));
+	}
+	for (const auto miracle : {MagicType::Fireball, MagicType::LightningBolt, MagicType::Heal, MagicType::Food, MagicType::Wood,
+	                           MagicType::Water, MagicType::Shield})
+	{
+		EXPECT_TRUE(unique.contains(miracle));
+	}
+}
+
+TEST(TestbedDispenserGrid, LaysOutRowsSouthOfTheMiddleClearOfTheLake)
+{
+	// The testbed's lake lies north of the middle, its shore reaching out round its open water
+	const float lakeSouthEdge =
+	    static_cast<float>(flat_land::k_LakeMinZ - flat_land::k_ShoreCells) * flat_land::k_CellSize - flat_land::k_MapMiddle.y;
+	// The testbed's camera starts south of the middle
+	constexpr float k_CameraBack = 120.0f;
+	using testbed_dispensers::k_GridColumns;
+	using testbed_dispensers::k_GridOrigin;
+	using testbed_dispensers::k_GridSpacing;
+	const auto count = testbed_dispensers::GridMagicTypes().size();
+	const auto offsets = testbed_dispensers::GridOffsets(count);
+	ASSERT_EQ(offsets.size(), count);
+	EXPECT_EQ(offsets.front(), k_GridOrigin);
+	// Along a row eastwards, then the next row a step south
+	EXPECT_EQ(offsets.at(1), k_GridOrigin + glm::vec2(k_GridSpacing.x, 0.0f));
+	EXPECT_EQ(offsets.at(k_GridColumns), k_GridOrigin + glm::vec2(0.0f, k_GridSpacing.y));
+	for (size_t i = 0; i < offsets.size(); ++i)
+	{
+		EXPECT_LT(offsets[i].y, 0.0f) << i;
+		EXPECT_LT(offsets[i].y, lakeSouthEdge) << i;
+		EXPECT_GT(offsets[i].y, -k_CameraBack + testbed_dispensers::k_GridClearance) << i;
+		EXPECT_TRUE(testbed_dispensers::InGridArea(offsets[i])) << i;
+		for (size_t j = i + 1; j < offsets.size(); ++j)
+		{
+			// Far enough apart for the hand to tap each bubble
+			EXPECT_GE(glm::distance(offsets[i], offsets[j]),
+			          std::min(std::abs(k_GridSpacing.x), std::abs(k_GridSpacing.y)) - k_Epsilon);
+		}
+	}
+	// Centred east to west on the middle
+	EXPECT_NEAR(k_GridOrigin.x + k_GridSpacing.x * static_cast<float>(k_GridColumns - 1) * 0.5f, 0.0f, k_Epsilon);
+}
+
+TEST(TestbedScenarios, CoversTheMiracles)
+{
+	std::set<MagicType> cast;
+	bool dispensers = false;
+	for (const auto& scenario : All())
+	{
+		if (scenario.facet != Facet::Miracles)
+		{
+			continue;
+		}
+		dispensers = dispensers || scenario.id == "miracles.dispensers";
+		for (const auto& miracle : scenario.miracles)
+		{
+			cast.insert(miracle.type);
+		}
+	}
+	EXPECT_TRUE(dispensers);
+	for (const auto miracle :
+	     {MagicType::Fireball, MagicType::LightningBolt, MagicType::Heal, MagicType::Food, MagicType::Wood, MagicType::Water,
+	      MagicType::Shield, MagicType::CreatureSpellFreeze, MagicType::CreatureSpellSmall, MagicType::CreatureSpellBig,
+	      MagicType::CreatureSpellWeak, MagicType::CreatureSpellStrong, MagicType::CreatureSpellInvisible,
+	      MagicType::CreatureSpellCompassion, MagicType::CreatureSpellAngry, MagicType::CreatureSpellItchy})
+	{
+		EXPECT_TRUE(cast.contains(miracle)) << static_cast<int>(miracle);
+	}
+}
+
+TEST(TestbedDispenserGrid, StaysUnlessAScenarioAsksForNoneOrStandsOnIt)
+{
+	Scenario scenario;
+	EXPECT_TRUE(KeepsDispenserGrid(scenario));
+	EXPECT_FALSE(testbed_dispensers::InGridArea({0.0f, 0.0f}));
+	scenario.creatures.push_back({.offset = {0.0f, 30.0f}});
+	EXPECT_TRUE(KeepsDispenserGrid(scenario));
+	scenario.objects.push_back({.offset = testbed_dispensers::k_GridOrigin});
+	EXPECT_FALSE(KeepsDispenserGrid(scenario));
+	scenario.objects.clear();
+	scenario.environment.dispenserGrid = false;
+	EXPECT_FALSE(KeepsDispenserGrid(scenario));
+	// The scenario of the dispensers keeps them
+	const auto* dispensers = Find("miracles.dispensers");
+	ASSERT_NE(dispensers, nullptr);
+	EXPECT_TRUE(KeepsDispenserGrid(*dispensers));
 }

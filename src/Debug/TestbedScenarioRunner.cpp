@@ -56,11 +56,16 @@
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
+#include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/MagicTables.h"
+#include "Magic/SpellRules.h"
+#include "TestbedDispenserGrid.h"
 #include "Windowing/WindowingInterface.h"
 
 using namespace openblack;
@@ -161,6 +166,7 @@ void Runner::Start(const Scenario& scenario)
 	_creatures.clear();
 	_objects.clear();
 	_particles.clear();
+	_miracles.clear();
 	_started.clear();
 	_log.clear();
 	_shot.reset();
@@ -181,6 +187,11 @@ void Runner::Start(const Scenario& scenario)
 	SetUpEnvironment(scenario.environment);
 	PlaceObjects(scenario, _middle);
 	PlaceCreatures(scenario, _middle);
+	PlaceDispensers(scenario);
+	for (const auto& miracle : scenario.miracles)
+	{
+		_miracles.push_back({.nextAt = miracle.delaySeconds, .letGoAt = std::nullopt, .spell = entt::null});
+	}
 	for (size_t i = 0; i < scenario.particles.size(); ++i)
 	{
 		_particles.push_back({StartParticle(i), 0.0f});
@@ -205,6 +216,18 @@ void Runner::Stop()
 		}
 	}
 	_particles.clear();
+	// Its held miracles stop
+	if (Locator::magicSystem::has_value())
+	{
+		for (const auto& miracle : _miracles)
+		{
+			if (miracle.letGoAt.has_value())
+			{
+				Locator::magicSystem::value().CloseDown(miracle.spell);
+			}
+		}
+	}
+	_miracles.clear();
 	// The hand lets go of a creature a scenario held it to
 	if (Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsHeldByCommand())
 	{
@@ -926,6 +949,7 @@ void Runner::Update(float seconds)
 	}
 	_seconds += seconds;
 	UpdateParticles(seconds);
+	UpdateMiracles();
 	ApplyStates();
 	const auto due = Advance(_timeline, _scenario->commands, _scenario->repeatFrom, seconds,
 	                         [this](size_t creature) { return IsFree(creature); });
@@ -933,6 +957,103 @@ void Runner::Update(float seconds)
 	{
 		Give(_scenario->commands[index]);
 	}
+}
+
+void Runner::PlaceDispensers(const Scenario& scenario)
+{
+	if (!KeepsDispenserGrid(scenario))
+	{
+		testbed_dispensers::RemoveGrid();
+	}
+	if (!Locator::magicSystem::has_value() || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	auto& magic = Locator::magicSystem::value();
+	for (const auto& dispenser : scenario.dispensers)
+	{
+		const auto point = MapPoint(_middle, dispenser.offset);
+		const float ground = Locator::terrainSystem::value().GetHeightAt(point);
+		if (dispenser.bubbleHeight.has_value())
+		{
+			magic.CreateOneOffSeedFor({point.x, ground + *dispenser.bubbleHeight, point.y}, dispenser.type);
+		}
+		else
+		{
+			magic.CreateDispenser({point.x, ground, point.y}, dispenser.type, 0.0f);
+		}
+	}
+}
+
+void Runner::UpdateMiracles()
+{
+	if (!Locator::magicSystem::has_value())
+	{
+		return;
+	}
+	for (size_t i = 0; i < _miracles.size(); ++i)
+	{
+		auto& miracle = _miracles.at(i);
+		const auto& setup = _scenario->miracles.at(i);
+		if (miracle.letGoAt.has_value() && _seconds >= *miracle.letGoAt)
+		{
+			Locator::magicSystem::value().CloseDown(miracle.spell);
+			miracle.letGoAt.reset();
+		}
+		if (!miracle.nextAt.has_value() || _seconds < *miracle.nextAt)
+		{
+			continue;
+		}
+		miracle.spell = CastMiracle(i);
+		Log(fmt::format("Cast {}{}", static_cast<int>(setup.type), miracle.spell == entt::null ? ", which failed" : ""));
+		if (setup.holdSeconds.has_value() && miracle.spell != entt::null)
+		{
+			miracle.letGoAt = _seconds + *setup.holdSeconds;
+		}
+		miracle.nextAt = setup.repeatSeconds.has_value() ? std::optional(*miracle.nextAt + *setup.repeatSeconds) : std::nullopt;
+	}
+}
+
+entt::entity Runner::CastMiracle(size_t index)
+{
+	if (!Locator::terrainSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return entt::null;
+	}
+	const auto& setup = _scenario->miracles.at(index);
+	const auto& info = Locator::infoConstants::value();
+	const auto& land = Locator::terrainSystem::value();
+	auto& magic = Locator::magicSystem::value();
+	// What a seed of it in the hand would cast: a sizing miracle at its usual size
+	const auto seed = magic::FindFirstSpellSeedForMagicType(info, setup.type).value_or(SpellSeedType::None);
+	float size = 1.0f;
+	if (const auto* radius = magic::GetMagicInfoAs<GMagicRadiusSpellInfo>(info, setup.type))
+	{
+		size = radius->radiusForNormalCost;
+	}
+	const auto cast = magic::SeedCastData(info, setup.type, seed, 1.0f, size);
+	std::optional<entt::entity> target;
+	auto point2 = MapPoint(_middle, setup.point);
+	glm::vec3 point {point2.x, land.GetHeightAt(point2), point2.y};
+	if (setup.target == MiracleCast::Target::Creature)
+	{
+		target = CreatureAt(setup.creature);
+		if (!target.has_value())
+		{
+			return entt::null;
+		}
+		point = Locator::entitiesRegistry::value().Get<Transform>(*target).position;
+	}
+	const auto hand2 = MapPoint(_middle, setup.handOffset);
+	const glm::vec3 hand {hand2.x, land.GetHeightAt(hand2) + setup.handHeight, hand2.y};
+	const auto toward = point - hand;
+	const particles::ProcessInfo process {
+	    .handPosition = hand,
+	    .cameraForward = glm::length(toward) > 0.0f ? glm::normalize(toward) : glm::vec3(0.0f, 0.0f, 1.0f),
+	    .direction = setup.throwVelocity,
+	};
+	return target.has_value() ? magic.CastOnObject(setup.type, PlayerNames::PLAYER_ONE, *target, cast, process)
+	                          : magic.CastAtPoint(setup.type, PlayerNames::PLAYER_ONE, point, cast, process);
 }
 
 uint32_t Runner::StartParticle(size_t index) const

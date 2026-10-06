@@ -61,6 +61,12 @@ private:
 	void PlaceCreatures(const Scenario& scenario, glm::vec2 middle);
 	/// Starts the scenario's particle effect of that index
 	[[nodiscard]] uint32_t StartParticle(size_t index) const;
+	/// The scenario's dispensers and lone bubbles, after the testbed's grid stays or goes as it asks
+	void PlaceDispensers(const Scenario& scenario);
+	/// Casts the scenario's miracles as their times come, and lets go of held ones when theirs are up
+	void UpdateMiracles();
+	/// Casts the scenario's miracle of that index; the running miracle, or none
+	entt::entity CastMiracle(size_t index);
 	void UpdateParticles(float seconds);
 	/// The needs and desires go on once the body and mind have started, and every frame for those that hold them
 	void ApplyStates();
@@ -96,6 +102,14 @@ private:
 		float seconds;
 	};
 	std::vector<RunningParticle> _particles;
+	/// The scenario's miracles: when each is next cast, and the one held in its hand until when
+	struct RunningMiracle
+	{
+		std::optional<float> nextAt;
+		std::optional<float> letGoAt;
+		entt::entity spell {entt::null};
+	};
+	std::vector<RunningMiracle> _miracles;
 	/// Whether each creature's needs and desires have been set as it started
 	std::vector<bool> _started;
 

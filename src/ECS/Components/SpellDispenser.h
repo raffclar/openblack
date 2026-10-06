@@ -33,4 +33,9 @@ struct SpellDispenser
 	uint32_t effect {0};
 };
 
+/// One of the dispensers the testbed lays out in a grid, cleared away when a scenario asks for none
+struct TestbedDispenser
+{
+};
+
 } // namespace openblack::ecs::components

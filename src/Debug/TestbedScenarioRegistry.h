@@ -74,6 +74,8 @@ enum class Facet : uint8_t
 	Particles,
 	/// Set ups for trying the in-game editor on: picking, moving and placing things, and its cameras
 	Editor,
+	/// The miracles: dispensers, casting them and what they do, the creature spells among them
+	Miracles,
 
 	_Count
 };
@@ -105,6 +107,8 @@ struct Environment
 	bool angerStartsFights {false};
 	/// Smiley faces for footprints as on the first of April, or by the date when not given
 	std::optional<bool> aprilFools;
+	/// The grid of every miracle's dispenser the testbed lays out in front of the camera stays, or is cleared away
+	bool dispenserGrid {true};
 };
 
 /// Where the camera looks as the scenario starts
@@ -217,6 +221,43 @@ struct ParticleSetup
 	int player {0};
 	/// Seconds after which it closes down and starts again, for effects that end; none to run until the scenario stops
 	float restartSeconds {0.0f};
+};
+
+/// A miracle dispenser, or a one-shot bubble on its own, put down for the scenario
+struct DispenserSetup
+{
+	MagicType type {MagicType::Fireball};
+	glm::vec2 offset {0.0f};
+	/// Only the bubble, floating this high above the land, without its dispenser
+	std::optional<float> bubbleHeight;
+};
+
+/// A miracle cast in the scenario, as if from a hand above the land
+struct MiracleCast
+{
+	enum class Target : uint8_t
+	{
+		/// At the point
+		Point,
+		/// On one of the scenario's creatures, by its place
+		Creature,
+	};
+	MagicType type {MagicType::Fireball};
+	Target target {Target::Point};
+	/// The point cast at, from the middle of the map
+	glm::vec2 point {0.0f};
+	size_t creature {0};
+	/// Where the hand casting it is, from the middle of the map, and how high above the land
+	glm::vec2 handOffset {0.0f};
+	float handHeight {15.0f};
+	/// The hand's movement as it lets go, which throws a fireball
+	glm::vec3 throwVelocity {0.0f};
+	/// Seconds after the scenario starts that it is cast
+	float delaySeconds {1.0f};
+	/// A miracle held in the hand (lightning, water, food, wood) runs this long, then stops; none to run its course
+	std::optional<float> holdSeconds;
+	/// Seconds after which it is cast again, none for once
+	std::optional<float> repeatSeconds;
 };
 
 /// Something a creature is told to do, in turn with the scenario's other commands
@@ -353,16 +394,24 @@ struct Scenario
 	std::vector<CreatureSetup> creatures;
 	std::vector<ObjectSetup> objects;
 	std::vector<ParticleSetup> particles;
+	std::vector<DispenserSetup> dispensers;
+	std::vector<MiracleCast> miracles;
 	std::vector<Command> commands;
 	/// After the last command, the commands go round again from this one
 	std::optional<size_t> repeatFrom;
 };
+
+/// The miracles' scenarios, added to every scenario by the registry
+void AddMiracleScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them
 [[nodiscard]] std::span<const Scenario> All();
 [[nodiscard]] const Scenario* Find(std::string_view id);
 /// What is wrong with a scenario's data, if anything, one line each
 [[nodiscard]] std::vector<std::string> Problems(const Scenario& scenario);
+/// Whether the testbed's grid of dispensers stays for a scenario: unless it asks for none, or one of its creatures or
+/// things would stand on it
+[[nodiscard]] bool KeepsDispenserGrid(const Scenario& scenario);
 
 /// A point given from the middle of the map, on the land
 [[nodiscard]] glm::vec2 MapPoint(glm::vec2 middle, glm::vec2 offset);
