@@ -86,6 +86,12 @@ struct DecompileOptions
 	const chl::ConstantTable* constants {nullptr};
 	/// Indentation for one nesting level
 	std::string indent {"\t"};
+	/// The challenge an earlier "challenge NAME" line of the same file names, if any. Snapshots and highlights take
+	/// their challenge from the last such line.
+	std::optional<int32_t> challenge;
+	/// The script is a file of its own: the first challenge it needs is named above "begin script", where the grammar
+	/// allows it. Otherwise it is left to the caller to name at the top of the file (DecompiledScript::leadingChallenge).
+	bool standalone {true};
 };
 
 enum class DiagnosticSeverity : uint8_t
@@ -130,6 +136,12 @@ struct DecompiledScript
 	/// The syntax tree the text was written from
 	std::shared_ptr<const chl::Script> ast;
 
+	/// The "challenge NAME" line the script needs before any other, when none was in effect: written above "begin
+	/// script" when standalone, otherwise for the caller to write at the top of the file
+	std::string leadingChallenge;
+	/// The challenge in effect after the script, to pass on to the next script of the same file
+	std::optional<int32_t> challenge;
+
 	/// True when the script was structured without goto or any low-level fallback
 	[[nodiscard]] bool IsClean() const { return gotoCount == 0 && fallbackCount == 0 && unaccountedCount == 0; }
 
@@ -150,16 +162,27 @@ struct DecompileStats
 	size_t gotos {0};
 };
 
+/// One of the source files the program was compiled from, as the original compiler read them: an optional challenge
+/// line, the globals the file declares, the scripts it runs at load, and its scripts
+struct DecompiledFile
+{
+	/// The source file name the scripts record
+	std::string name;
+	/// Everything before the first script
+	std::string header;
+	/// Indices into DecompiledProgram::scripts
+	std::vector<size_t> scripts;
+};
+
 struct DecompiledProgram
 {
-	/// Global declarations
-	std::string header;
-	/// The scripts run when the program loads
-	std::string footer;
 	std::vector<DecompiledScript> scripts;
+	std::vector<DecompiledFile> files;
 	DecompileStats stats;
 
-	/// The header, every script and the footer, separated by blank lines
+	/// The text of one file: its header and its scripts, separated by blank lines
+	[[nodiscard]] std::string FileText(const DecompiledFile& file) const;
+	/// Every file's text, one after the other
 	[[nodiscard]] std::string Text() const;
 };
 
@@ -167,7 +190,7 @@ struct DecompiledProgram
 [[nodiscard]] DecompiledScript DecompileScript(const ProgramView& program, size_t scriptIndex,
                                                const DecompileOptions& options = {});
 
-/// Decompile every script, and describe the globals in a header
+/// Decompile every script, grouped into the source files they came from
 [[nodiscard]] DecompiledProgram DecompileAll(const ProgramView& program, const DecompileOptions& options = {});
 
 /// Basic blocks and control flow edges of one script, for tools that want to draw or inspect the flow

@@ -236,7 +236,8 @@ void Check(const StatementForm& form, bool full, Outcome& outcome, std::set<std:
 	}
 
 	const auto view = ProgramView::From(*compiled.program);
-	const auto decompiled = DecompileScript(view, 0);
+	// The challenge the header names is in effect
+	const auto decompiled = DecompileScript(view, 0, {.challenge = 7, .standalone = false});
 	const auto again =
 	    Compile(std::vector<SourceFile> {{.name = "Sample.txt", .text = std::string(k_Header) + decompiled.text}});
 	if (!again.program)

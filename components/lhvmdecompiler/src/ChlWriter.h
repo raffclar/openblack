@@ -40,7 +40,14 @@ public:
 	ChlWriter(std::span<const NativeSignature> natives, const chl::ConstantTable* constants,
 	          std::vector<Diagnostic>& diagnostics);
 
-	void WriteScript(const chl::Script& script);
+	/// Write a script. `challenge` is the one in effect before it; `standalone` names the first one it needs above
+	/// "begin script" rather than leaving it to the caller.
+	void WriteScript(const chl::Script& script, std::optional<int32_t> challenge, bool standalone);
+
+	/// The challenge the script needed first when none was in effect, by name
+	[[nodiscard]] const std::string& LeadingChallenge() const { return _leadingChallenge; }
+	/// The challenge in effect after the script
+	[[nodiscard]] std::optional<int32_t> Challenge() const { return _challenge; }
 
 	/// The expression as CHL, bracketed when its precedence is below `minPrecedence`
 	[[nodiscard]] std::string Expression(const chl::ExprPtr& expr, uint8_t minPrecedence = 0);
@@ -75,6 +82,7 @@ private:
 	[[nodiscard]] std::optional<std::string> SpecialForm(const chl::ExprPtr& expr);
 	/// "P of O += e" and friends, if the statement is one
 	[[nodiscard]] std::optional<std::string> PropertyCompound(const chl::Stmt& stmt);
+	[[nodiscard]] std::string ChallengeName(int32_t id, uint32_t ip);
 	/// Snapshots and highlights, which take the current challenge as a hidden argument
 	[[nodiscard]] std::optional<std::string> ChallengeForm(const chl::ExprPtr& call);
 	[[nodiscard]] const NativeSignature* Signature(const chl::ExprPtr& call) const;
@@ -88,6 +96,10 @@ private:
 	/// The challenge the last "challenge" line named, and the one the line being written needs
 	std::optional<int32_t> _challenge;
 	std::optional<int32_t> _pendingChallenge;
+	std::string _leadingChallenge;
+	bool _standalone {true};
+	bool _inLocals {false};
+	size_t _scriptStart {0};
 	/// The form last written ends in an expression, which would take in an operator after it
 	bool _greedy {false};
 	uint32_t _gotos {0};

@@ -259,7 +259,9 @@ DecompiledScript DecompileScript(const ProgramView& program, size_t scriptIndex,
 
 	result.diagnostics = std::move(structurer->Diagnostics());
 	detail::ChlWriter writer(natives, options.constants, result.diagnostics);
-	writer.WriteScript(script);
+	writer.WriteScript(script, options.challenge, options.standalone);
+	result.leadingChallenge = writer.LeadingChallenge();
+	result.challenge = writer.Challenge();
 
 	for (const auto& line : writer.Lines())
 	{
@@ -318,20 +320,40 @@ DecompiledScript DecompileScript(const ProgramView& program, size_t scriptIndex,
 DecompiledProgram DecompileAll(const ProgramView& program, const DecompileOptions& options)
 {
 	DecompiledProgram result;
-	for (const auto& name : program.globalNames)
+	// Files in program order: a new one starts where the scripts' recorded file name changes. Each declares the globals
+	// added since the previous file's scripts were compiled (a script records how many there were).
+	struct FileState
 	{
-		result.header += "global " + name + "\n";
-	}
-	for (const auto id : program.autostart)
-	{
-		if (id >= 1 && id <= program.scripts.size())
-		{
-			result.footer += "run script " + program.scripts[id - 1].name + "\n";
-		}
-	}
+		std::vector<std::string> globals;
+		std::vector<std::string> autorun;
+		std::optional<int32_t> challenge;
+		std::string leadingChallenge;
+	};
+	std::vector<FileState> states;
+	size_t declared = 0;
 	for (size_t i = 0; i < program.scripts.size(); ++i)
 	{
-		auto script = DecompileScript(program, i, options);
+		const auto& vmScript = program.scripts[i];
+		if (result.files.empty() || result.files.back().name != vmScript.filename)
+		{
+			result.files.push_back({.name = vmScript.filename, .header = {}, .scripts = {}});
+			auto& state = states.emplace_back();
+			for (; declared < std::min<size_t>(vmScript.variablesOffset, program.globalNames.size()); ++declared)
+			{
+				state.globals.push_back(program.globalNames[declared]);
+			}
+		}
+		auto scriptOptions = options;
+		scriptOptions.challenge = states.back().challenge;
+		scriptOptions.standalone = false;
+		auto script = DecompileScript(program, i, scriptOptions);
+		auto& state = states.back();
+		state.challenge = script.challenge;
+		if (state.leadingChallenge.empty())
+		{
+			state.leadingChallenge = script.leadingChallenge;
+		}
+		result.files.back().scripts.push_back(i);
 		auto& stats = result.stats;
 		++stats.scripts;
 		stats.instructions += script.endIp - script.firstIp;
@@ -344,24 +366,68 @@ DecompiledProgram DecompileAll(const ProgramView& program, const DecompileOption
 		stats.withFallback += script.fallbackCount > 0 ? 1 : 0;
 		result.scripts.push_back(std::move(script));
 	}
+	if (declared < program.globalNames.size())
+	{
+		// Globals no script was compiled after
+		result.files.push_back({.name = "Globals.txt", .header = {}, .scripts = {}});
+		auto& state = states.emplace_back();
+		state.globals.assign(program.globalNames.begin() + static_cast<std::ptrdiff_t>(declared), program.globalNames.end());
+	}
+	// Scripts run at load are named in the file that defines them
+	for (const auto id : program.autostart)
+	{
+		for (size_t f = 0; f < result.files.size(); ++f)
+		{
+			if (std::ranges::find(result.files[f].scripts, static_cast<size_t>(id) - 1) != result.files[f].scripts.end())
+			{
+				states[f].autorun.push_back(program.scripts[id - 1].name);
+			}
+		}
+	}
+	for (size_t f = 0; f < result.files.size(); ++f)
+	{
+		auto& header = result.files[f].header;
+		const auto& state = states[f];
+		if (!state.leadingChallenge.empty())
+		{
+			header += "challenge " + state.leadingChallenge + "\n";
+		}
+		for (const auto& global : state.globals)
+		{
+			header += "global " + global + "\n";
+		}
+		for (const auto& name : state.autorun)
+		{
+			header += "run script " + name + "\n";
+		}
+	}
 	return result;
 }
 
-std::string DecompiledProgram::Text() const
+std::string DecompiledProgram::FileText(const DecompiledFile& file) const
 {
-	std::string text = header;
-	for (const auto& script : scripts)
+	std::string text = file.header;
+	for (const auto index : file.scripts)
 	{
 		if (!text.empty())
 		{
 			text += '\n';
 		}
-		text += script.text;
+		text += scripts[index].text;
 	}
-	if (!footer.empty())
+	return text;
+}
+
+std::string DecompiledProgram::Text() const
+{
+	std::string text;
+	for (const auto& file : files)
 	{
-		text += '\n';
-		text += footer;
+		if (!text.empty())
+		{
+			text += '\n';
+		}
+		text += FileText(file);
 	}
 	return text;
 }

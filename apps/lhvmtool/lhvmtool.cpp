@@ -546,7 +546,7 @@ int Decompile(const LHVMFile& file, const Arguments& args)
 		options.constants = &constants;
 	}
 
-	std::vector<DecompiledScript> scripts;
+	// One script on its own, or the whole program as the files it was compiled from
 	DecompiledProgram whole;
 	if (!args.read.objName.empty())
 	{
@@ -557,47 +557,47 @@ int Decompile(const LHVMFile& file, const Arguments& args)
 			std::fprintf(stderr, "Script not found\n");
 			return EXIT_FAILURE;
 		}
-		scripts.push_back(DecompileScript(program, static_cast<size_t>(std::distance(all.begin(), it)), options));
+		whole.scripts.push_back(DecompileScript(program, static_cast<size_t>(std::distance(all.begin(), it)), options));
+		whole.files.push_back({.name = it->filename, .header = {}, .scripts = {0}});
 	}
 	else
 	{
 		whole = DecompileAll(program, options);
-		scripts = std::move(whole.scripts);
 	}
+	const auto& scripts = whole.scripts;
+	const auto fileText = [&](const DecompiledFile& decompiledFile) {
+		std::string text = decompiledFile.header;
+		for (const auto index : decompiledFile.scripts)
+		{
+			text += (text.empty() ? "" : "\n") + ScriptText(scripts[index], args.decompile.addresses);
+		}
+		return text;
+	};
 
 	if (args.decompile.output.empty())
 	{
-		std::string text = whole.header;
-		for (const auto& script : scripts)
+		std::string text;
+		for (const auto& decompiledFile : whole.files)
 		{
-			text += (text.empty() ? "" : "\n") + ScriptText(script, args.decompile.addresses);
-		}
-		if (!whole.footer.empty())
-		{
-			text += "\n" + whole.footer;
+			text += (text.empty() ? "" : "\n") + fileText(decompiledFile);
 		}
 		std::fwrite(text.data(), 1, text.size(), stdout);
 	}
 	else
 	{
-		// One file per source file the scripts were compiled from, plus one for the globals
+		// One file per source file the scripts were compiled from
 		std::error_code ec;
 		std::filesystem::create_directories(args.decompile.output, ec);
 		std::map<std::string, std::string> files;
-		for (const auto& script : scripts)
+		for (const auto& decompiledFile : whole.files)
 		{
-			const auto& vmScript = file.GetScripts().at(script.scriptIndex);
-			auto stem = std::filesystem::path(vmScript.filename).stem().string();
-			if (stem.empty())
+			auto name = std::filesystem::path(decompiledFile.name).filename().string();
+			if (name.empty())
 			{
-				stem = script.name;
+				name = "Unnamed.txt";
 			}
-			auto& text = files[stem + ".txt"];
-			text += (text.empty() ? "" : "\n") + ScriptText(script, args.decompile.addresses);
-		}
-		if (!whole.header.empty() || !whole.footer.empty())
-		{
-			files["_globals.txt"] = whole.header + (whole.footer.empty() ? "" : "\n" + whole.footer);
+			auto& text = files[name];
+			text += (text.empty() ? "" : "\n") + fileText(decompiledFile);
 		}
 		for (const auto& [name, text] : files)
 		{

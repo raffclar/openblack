@@ -123,24 +123,30 @@ void ChlWriter::Line(int indent, std::string text, std::vector<uint32_t> ips)
 	if (_pendingChallenge && _pendingChallenge != _challenge)
 	{
 		// Snapshots and highlights belong to the challenge named last
+		const auto ip = ips.empty() ? 0 : ips.front();
+		const auto name = ChallengeName(*_pendingChallenge, ip);
+		if (!_challenge.has_value() && _leadingChallenge.empty())
+		{
+			// The first challenge the file needs: named at its top, as the original sources do
+			_leadingChallenge = name;
+			if (_standalone)
+			{
+				_lines.insert(_lines.begin() + static_cast<std::ptrdiff_t>(_scriptStart),
+				              {.indent = 0, .text = "challenge " + name, .ips = {}});
+			}
+		}
+		else
+		{
+			if (_inLocals)
+			{
+				_diagnostics.push_back(
+				    {.severity = DiagnosticSeverity::Warning,
+				     .ip = ip,
+				     .message = "A challenge named among the locals, which the original compiler can't read"});
+			}
+			_lines.push_back({.indent = indent, .text = "challenge " + name, .ips = {}});
+		}
 		_challenge = _pendingChallenge;
-		std::string name;
-		if (_constants != nullptr)
-		{
-			name = _constants->NameOf("ScriptChallengeEnums", *_challenge).value_or("");
-		}
-		if (name.starts_with("CHALLENGE_"))
-		{
-			name = name.substr(10);
-		}
-		if (name.empty())
-		{
-			name = std::to_string(*_challenge);
-			_diagnostics.push_back({.severity = DiagnosticSeverity::Info,
-			                        .ip = ips.empty() ? 0 : ips.front(),
-			                        .message = "Challenge written as a number: load the script headers to name it"});
-		}
-		_lines.push_back({.indent = indent, .text = "challenge " + name, .ips = {}});
 	}
 	_pendingChallenge.reset();
 	_lines.push_back({.indent = indent, .text = std::move(text), .ips = std::move(ips)});
@@ -1009,9 +1015,33 @@ void ChlWriter::Statement(const Stmt& stmt, int indent)
 	}
 }
 
-void ChlWriter::WriteScript(const Script& script)
+std::string ChlWriter::ChallengeName(int32_t id, uint32_t ip)
 {
-	_challenge.reset();
+	std::string name;
+	if (_constants != nullptr)
+	{
+		name = _constants->NameOf("ScriptChallengeEnums", id).value_or("");
+	}
+	if (name.starts_with("CHALLENGE_"))
+	{
+		name = name.substr(10);
+	}
+	if (name.empty())
+	{
+		name = std::to_string(id);
+		_diagnostics.push_back({.severity = DiagnosticSeverity::Info,
+		                        .ip = ip,
+		                        .message = "Challenge written as a number: load the script headers to name it"});
+	}
+	return name;
+}
+
+void ChlWriter::WriteScript(const Script& script, std::optional<int32_t> challenge, bool standalone)
+{
+	_challenge = challenge;
+	_standalone = standalone;
+	_leadingChallenge.clear();
+	_scriptStart = _lines.size();
 	auto opening = std::format("begin {} {}", ScriptKindKeyword(script.kind), script.name);
 	if (!script.params.empty())
 	{
@@ -1023,7 +1053,9 @@ void ChlWriter::WriteScript(const Script& script)
 		opening += ")";
 	}
 	Line(0, std::move(opening), script.beginIps);
+	_inLocals = true;
 	Statements(script.locals, 1);
+	_inLocals = false;
 	Line(0, "start", script.startIps);
 	Statements(script.body, 1);
 	Handlers(script.handlers, 1);

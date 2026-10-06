@@ -164,23 +164,12 @@ void RoundTrip(const LHVMFile& original, const ConstantTable* constants, size_t 
 	decompileOptions.constants = constants;
 	const auto view = ProgramView::From(original);
 
+	// The program as the files it was compiled from
+	const auto decompiled = DecompileAll(view, decompileOptions);
 	std::vector<SourceFile> sources;
-	for (const auto& layout : LayoutOf(original))
+	for (const auto& file : decompiled.files)
 	{
-		std::string text;
-		for (const auto& global : layout.globals)
-		{
-			text += "global " + global + "\n";
-		}
-		for (const auto& script : layout.autostart)
-		{
-			text += "run script " + script + "\n";
-		}
-		for (const auto index : layout.scripts)
-		{
-			text += "\n" + DecompileScript(view, index, decompileOptions).text;
-		}
-		sources.push_back({.name = layout.name, .text = std::move(text)});
+		sources.push_back({.name = file.name, .text = decompiled.FileText(file)});
 	}
 
 	const auto compiled = Compile(sources, {.constants = constants});

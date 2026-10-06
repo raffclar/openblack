@@ -172,12 +172,9 @@ TEST_P(ChlConstructs, CompileDecompileCompile)
 	ASSERT_TRUE(program.has_value()) << errors;
 
 	const auto view = ProgramView::From(*program);
-	std::string decompiled;
-	for (size_t i = 0; i < program->GetScripts().size(); ++i)
-	{
-		decompiled += "\n" + DecompileScript(view, i).text;
-	}
-	const auto again = CompileText(std::string(k_Globals) + decompiled, errors);
+	// The program as the file it came from: its challenge, its globals and its scripts
+	const auto decompiled = DecompileAll(view).Text();
+	const auto again = CompileText(decompiled, errors);
 	ASSERT_TRUE(again.has_value()) << "Decompiled as:\n" << decompiled << errors;
 	EXPECT_EQ(Code(*again), Code(*program)) << "Decompiled as:\n" << decompiled;
 

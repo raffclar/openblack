@@ -513,6 +513,54 @@ TEST(LhvmDecompiler, GotoFallback)
 	EXPECT_NE(script.text.find(name + ":\n"), std::string::npos) << script.text;
 }
 
+TEST(LhvmDecompiler, ChallengeNamedWhereTheGrammarAllows)
+{
+	ProgramBuilder b({"Obj"});
+	b.BeginScript("Lit", ScriptType::Script, {}, {"Highlight"});
+	// Highlight = create highlight 3 at [Obj], for challenge 7, among the locals
+	b.PushI(3);
+	b.Load(b.Global("Obj"));
+	b.Sys("GET_POSITION");
+	b.PushI(7);
+	b.Sys("CREATE_HIGHLIGHT");
+	b.Store(b.Local("Highlight"));
+	b.Start();
+	// A second highlight for challenge 8, in the body
+	b.Assign(b.Local("Highlight"));
+	b.PushI(4);
+	b.Load(b.Global("Obj"));
+	b.Sys("GET_POSITION");
+	b.PushI(8);
+	b.Sys("CREATE_HIGHLIGHT");
+	b.Store(b.Local("Highlight"));
+	b.EndScript();
+
+	// On its own, the script is a file: the first challenge goes above "begin script"
+	const auto alone = DecompileScript(b.View(), 0);
+	EXPECT_EQ(alone.text, "challenge 7\n"
+	                      "begin script Lit\n"
+	                      "\tHighlight = create highlight 3 at [Obj]\n"
+	                      "start\n"
+	                      "\tchallenge 8\n"
+	                      "\tHighlight = create highlight 4 at [Obj]\n"
+	                      "end script Lit\n");
+	EXPECT_EQ(alone.leadingChallenge, "7");
+	EXPECT_EQ(alone.challenge, 8);
+	ExpectAllShown(alone);
+
+	// With the challenge already named by the file, nothing is repeated
+	const auto inFile = DecompileScript(b.View(), 0, {.challenge = 7, .standalone = false});
+	EXPECT_EQ(inFile.text.find("challenge 7"), std::string::npos) << inFile.text;
+	EXPECT_TRUE(inFile.leadingChallenge.empty());
+
+	// As a file: the challenge, then the globals, then the scripts
+	const auto program = DecompileAll(b.View());
+	ASSERT_EQ(program.files.size(), 1);
+	EXPECT_EQ(program.files[0].header, "challenge 7\nglobal Obj\n");
+	EXPECT_EQ(program.Text().find("challenge 7"), 0);
+	EXPECT_EQ(program.Text().find("challenge 7", 1), std::string::npos) << program.Text();
+}
+
 TEST(LhvmDecompiler, LineMapAndControlFlowGraph)
 {
 	ProgramBuilder b({"X"});
