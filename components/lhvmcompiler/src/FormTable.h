@@ -40,9 +40,6 @@ struct CompiledForm
 	size_t argumentCount {0};
 };
 
-/// Forms of the original grammar the shared table (ChlForms.h) doesn't have, matched after the shared ones
-[[nodiscard]] std::span<const StatementForm> SupplementaryForms();
-
 /// The result and parameter types the compiler uses for a native function. The shared signature table is followed,
 /// except where the game's bytecode shows the original compiler treating a value differently.
 [[nodiscard]] ArgType ParameterType(const NativeSignature& signature, size_t index);

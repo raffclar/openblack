@@ -22,7 +22,10 @@
 ///
 ///     word            a literal keyword
 ///     $N              argument N (0-based parameter index), written as an expression of the parameter's type
-///     $N:ENUM         argument N, a constant of the script header enum ENUM (written by name when it is known)
+///     $N:ENUM         argument N, a constant of the script header enum ENUM (written by name when it is known).
+///                     Two names are special: $N:CAMERA is a camera position enum, written with or without its
+///                     challenge's prefix, and $N:CURRENT_CHALLENGE isn't written: it is the id of the challenge the
+///                     last "challenge NAME" line named.
 ///     $N=V            argument N always has the value V and isn't written
 ///     {words}$N       written when argument N is true (non-zero); argument N is false when the words are absent
 ///     (a=V|b=W)$N     one of the alternatives, giving argument N its value; words of one alternative are joined by +
@@ -50,6 +53,8 @@ struct StatementForm
 	bool swapped {false};
 	/// The form is a negative condition: the call's result followed by a logical not ("Victim not exists")
 	bool negated {false};
+	/// Which of the natives sharing this name the form calls (0 for the first), for the few names used twice
+	uint8_t overload {0};
 };
 
 /// Every form, most specific first

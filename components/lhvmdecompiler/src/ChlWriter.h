@@ -77,7 +77,7 @@ private:
 	[[nodiscard]] std::optional<std::string> PropertyCompound(const chl::Stmt& stmt);
 	/// Snapshots and highlights, which take the current challenge as a hidden argument
 	[[nodiscard]] std::optional<std::string> ChallengeForm(const chl::ExprPtr& call);
-	[[nodiscard]] const NativeSignature* Signature(const std::string& name, size_t argCount) const;
+	[[nodiscard]] const NativeSignature* Signature(const chl::ExprPtr& call) const;
 
 	std::span<const NativeSignature> _natives;
 	const chl::ConstantTable* _constants;

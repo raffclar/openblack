@@ -35,17 +35,18 @@ namespace
 
 constexpr std::string_view k_Header = "challenge 7\nglobal Obj\nglobal Other\nglobal Num\nglobal Pos\n";
 
-const NativeSignature* SignatureOf(const StatementForm& form, size_t argumentCount)
+/// The native the form calls: the form says which of those sharing its name
+const NativeSignature* SignatureOf(const StatementForm& form)
 {
-	const NativeSignature* found = nullptr;
+	size_t nth = 0;
 	for (const auto& signature : DefaultNativeSignatures())
 	{
-		if (signature.name == form.native && (found == nullptr || signature.params.size() == argumentCount))
+		if (signature.name == form.native && nth++ == form.overload)
 		{
-			found = &signature;
+			return &signature;
 		}
 	}
-	return found;
+	return nullptr;
 }
 
 size_t CountArguments(const std::vector<PatternItem>& items)
@@ -191,23 +192,7 @@ struct Outcome
 	size_t samples {0};
 	size_t roundTrips {0};
 	std::vector<std::string> failures;
-	std::vector<std::string> knownIssues;
 };
-
-/// Forms of natives that share their name with another: the decompiler writes the first native's form for both, so
-/// these don't round trip yet
-bool IsKnownIssue(const StatementForm& form)
-{
-	constexpr std::array<std::pair<std::string_view, std::string_view>, 4> k_Known = {{
-	    {"ENABLE_DISABLE_COMPUTER_PLAYER", "pause"},
-	    {"START_ANGLE_SOUND", "pitch"},
-	    {"GET_REAL_DAY", "weekday"},
-	    {"MUSIC_PLAYED", "music $0"},
-	}};
-	return std::ranges::any_of(k_Known, [&form](const auto& known) {
-		return form.native == known.first && form.pattern.find(known.second) != std::string_view::npos;
-	});
-}
 
 void Check(const StatementForm& form, bool full, Outcome& outcome, std::set<std::string>& seen)
 {
@@ -218,20 +203,17 @@ void Check(const StatementForm& form, bool full, Outcome& outcome, std::set<std:
 		return;
 	}
 	const auto items = ParsePattern(form.pattern);
-	if (items.empty() || form.pattern.find(">=") != std::string_view::npos)
+	if (items.empty())
 	{
 		return;
 	}
-	const auto* signature = SignatureOf(form, CountArguments(items));
-	const bool knownIssue = IsKnownIssue(form);
-	if (signature == nullptr || signature->stackIn < 0)
+	const auto* signature = SignatureOf(form);
+	if (signature == nullptr || signature->stackIn < 0 || signature->params.size() < CountArguments(items))
 	{
 		return;
 	}
 	const auto text = Spell(items, *signature, full);
-	// The signature table types MUSIC_PLAYED's result as a number; the grammar makes it a condition
-	const auto result = form.native == "MUSIC_PLAYED" ? ArgType::Bool : signature->returnType;
-	const auto source = Wrap(text, result, form.native == "GET_PROPERTY");
+	const auto source = Wrap(text, signature->returnType, form.native == "GET_PROPERTY");
 	if (!seen.insert(source).second)
 	{
 		return;
@@ -259,15 +241,13 @@ void Check(const StatementForm& form, bool full, Outcome& outcome, std::set<std:
 	    Compile(std::vector<SourceFile> {{.name = "Sample.txt", .text = std::string(k_Header) + decompiled.text}});
 	if (!again.program)
 	{
-		(knownIssue ? outcome.knownIssues : outcome.failures)
-		    .push_back(std::format("{}: decompiled as {} which doesn't compile: {}", label, decompiled.text,
-		                           again.diagnostics.empty() ? "" : again.diagnostics[0].message));
+		outcome.failures.push_back(std::format("{}: decompiled as {} which doesn't compile: {}", label, decompiled.text,
+		                                       again.diagnostics.empty() ? "" : again.diagnostics[0].message));
 		return;
 	}
 	if (Code(*again.program) != Code(*compiled.program))
 	{
-		(knownIssue ? outcome.knownIssues : outcome.failures)
-		    .push_back(std::format("{}: decompiled as {} which compiles differently", label, decompiled.text));
+		outcome.failures.push_back(std::format("{}: decompiled as {} which compiles differently", label, decompiled.text));
 		return;
 	}
 	++outcome.roundTrips;
@@ -289,10 +269,6 @@ TEST(ChlForms, EveryFormCompilesAndRoundTrips)
 	{
 		ADD_FAILURE() << failure;
 	}
-	for (const auto& issue : outcome.knownIssues)
-	{
-		std::printf("Known issue: %s\n", issue.c_str());
-	}
-	EXPECT_LE(outcome.knownIssues.size(), 7u);
+	EXPECT_EQ(outcome.roundTrips, outcome.samples);
 	EXPECT_GT(outcome.samples, StatementForms().size());
 }

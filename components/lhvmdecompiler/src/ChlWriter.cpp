@@ -94,9 +94,16 @@ ChlWriter::ChlWriter(std::span<const NativeSignature> natives, const ConstantTab
 	}
 }
 
-const NativeSignature* ChlWriter::Signature(const std::string& name, size_t argCount) const
+const NativeSignature* ChlWriter::Signature(const ExprPtr& call) const
 {
-	const auto it = _byName.find(name);
+	// The call knows its native's number; fall back to the name for trees made elsewhere
+	const auto id = static_cast<size_t>(call->number);
+	if (call->number >= 0 && id < _natives.size() && _natives[id].name == call->text)
+	{
+		return &_natives[id];
+	}
+	const auto argCount = call->args.size();
+	const auto it = _byName.find(call->text);
 	if (it == _byName.end())
 	{
 		return nullptr;
@@ -435,6 +442,25 @@ std::optional<std::string> ChlWriter::Items(const std::vector<PatternItem>& item
 			parts.push_back(item.text);
 			break;
 		case PatternItemKind::Argument:
+			if (item.enumName == "CURRENT_CHALLENGE")
+			{
+				// Not written: the challenge comes from the last "challenge NAME" line
+				if (!IsConstant(arg))
+				{
+					return std::nullopt;
+				}
+				_pendingChallenge = static_cast<int32_t>(arg->number);
+				break;
+			}
+			if (item.enumName == "CAMERA")
+			{
+				if (!IsConstant(arg))
+				{
+					return std::nullopt;
+				}
+				parts.push_back(Constant(arg, "ScriptCameraPosition"));
+				break;
+			}
 			parts.push_back(Argument(arg, typeOf(item.argument), enumOf(item)));
 			break;
 		case PatternItemKind::Fixed:
@@ -608,11 +634,6 @@ std::optional<std::string> ChlWriter::ChallengeForm(const ExprPtr& call)
 		return text;
 	};
 
-	if (IsCallOf(call, "CREATE_HIGHLIGHT", 3) && challenge(args[2]))
-	{
-		return "create highlight " + Argument(args[0], ArgType::Int, "HIGHLIGHT_INFO") + " at " +
-		       Argument(args[1], ArgType::Coord, {});
-	}
 	if (call->text == "SNAPSHOT" && args.size() >= 9 && IsConstant(args[0]) &&
 	    IsNumber(args[args.size() - 2], static_cast<double>(args.size() - 9)) && challenge(args.back()))
 	{
@@ -650,10 +671,16 @@ std::optional<std::string> ChlWriter::ChallengeForm(const ExprPtr& call)
 
 std::optional<std::string> ChlWriter::FormFor(const ExprPtr& call, bool negated)
 {
-	const auto* signature = Signature(call->text, call->args.size());
+	const auto* signature = Signature(call);
+	// Which of the natives sharing the call's name it is: only that one's forms spell it
+	size_t overload = 0;
+	if (const auto it = _byName.find(call->text); it != _byName.end() && signature != nullptr)
+	{
+		overload = static_cast<size_t>(std::ranges::find(it->second, signature) - it->second.begin());
+	}
 	for (const auto* form : FormsForNative(call->text))
 	{
-		if (form->swapped != call->swapped || form->negated != negated)
+		if (form->swapped != call->swapped || form->negated != negated || form->overload != overload)
 		{
 			continue;
 		}
@@ -694,17 +721,11 @@ std::string ChlWriter::NativeCall(const ExprPtr& call)
 	{
 		return std::move(*text);
 	}
-	// "marker at camera NAME": a marker at the focus of a camera position from the camera editor
-	if (IsCallOf(call, "CREATE", 3) && IsNumber(call->args[0], 1.0) && IsNumber(call->args[1], 0.0) &&
-	    IsCallOf(call->args[2], "CONVERT_CAMERA_FOCUS", 1) && IsConstant(call->args[2]->args[0]))
-	{
-		return "marker at camera " + Constant(call->args[2]->args[0], "ScriptCameraPosition");
-	}
 	if (auto text = FormFor(call, false))
 	{
 		return std::move(*text);
 	}
-	const auto* signature = Signature(call->text, call->args.size());
+	const auto* signature = Signature(call);
 	++_nativeCalls;
 	std::string text = "native " + call->text + "(";
 	for (size_t i = 0; i < call->args.size(); ++i)

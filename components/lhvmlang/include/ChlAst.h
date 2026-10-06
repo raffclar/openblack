@@ -53,7 +53,7 @@ enum class ExprKind : uint8_t
 	Unary,         ///< `op` (Neg or Not) applied to args[0]
 	Binary,        ///< args[0] `op` args[1]
 	Cast,          ///< args[0] converted to `type`. Implicit in CHL except int to float, written "variable X".
-	NativeCall,    ///< Native function `text`, arguments in parameter order
+	NativeCall,    ///< Native function `text` (number `number` in the native table), arguments in parameter order
 	VectorLiteral, ///< [args[0], args[1], args[2]]
 	Component,     ///< One number (`component` 0..2) of the position args[0]; not expressible in CHL
 	Elapsed,       ///< "args[0] seconds": true once that many seconds have passed since the condition was first tested

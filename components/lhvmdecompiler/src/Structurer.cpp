@@ -407,6 +407,8 @@ ExprPtr Structurer::MakeNativeCall(uint32_t ip, std::vector<StackEntry>& stack, 
 	call->kind = ExprKind::NativeCall;
 	call->sideEffects = true;
 	call->ips = {ip};
+	// Which native it is, to tell apart the few that share a name
+	call->number = id;
 	if (id >= _natives.size())
 	{
 		call->text = std::format("native_{}", id);

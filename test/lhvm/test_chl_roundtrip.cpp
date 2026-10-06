@@ -242,8 +242,7 @@ TEST(ChlRoundTrip, ChallengeChlWithoutHeaders)
 	LHVMFile original;
 	original.Open(*path);
 	ASSERT_TRUE(original.IsLoaded());
-	// The rest call one of two natives of the same name, which the decompiled text doesn't tell apart
-	RoundTrip(original, nullptr, 506);
+	RoundTrip(original, nullptr, 514);
 }
 
 TEST(ChlRoundTrip, ChallengeChlWithHeaders)
@@ -258,7 +257,7 @@ TEST(ChlRoundTrip, ChallengeChlWithHeaders)
 	original.Open(*path);
 	ASSERT_TRUE(original.IsLoaded());
 	const auto constants = LoadConstants(headers, path->parent_path().parent_path().parent_path() / "Data");
-	RoundTrip(original, &constants, 506);
+	RoundTrip(original, &constants, 514);
 }
 
 TEST(ChlRoundTrip, OriginalSourcesCompileToTheGamesProgram)
