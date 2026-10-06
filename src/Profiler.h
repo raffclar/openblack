@@ -162,6 +162,10 @@ public:
 		std::chrono::system_clock::time_point start;
 		std::chrono::system_clock::time_point end;
 		bool finalized = false;
+		/// The time spent in the stage over the whole frame, and how often it ran: a stage may run more than once a
+		/// frame, as in a game turn and again for the frame, where start and end only hold the last run
+		std::chrono::system_clock::duration total {};
+		uint16_t calls = 0;
 	};
 
 	struct Entry
