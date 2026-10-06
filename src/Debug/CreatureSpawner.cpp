@@ -752,17 +752,7 @@ void CreatureSpawner::DrawCreatures() noexcept
 	registry.Each<const Creature>([&creatures](entt::entity entity, const Creature&) { creatures.push_back(entity); });
 
 	ImGui::SeparatorText("On the land");
-	if (Locator::creatureHairSystem::has_value())
-	{
-		auto& hair = Locator::creatureHairSystem::value();
-		bool shown = hair.IsShown();
-		if (ImGui::Checkbox("Show hair", &shown))
-		{
-			hair.SetShown(shown);
-		}
-	}
-	DrawAudioSettings();
-	DrawFootprintSettings();
+	DrawSharedSettings();
 	ImGui::Text("%zu creature%s", creatures.size(), creatures.size() == 1 ? "" : "s");
 	if (_selected.has_value() && std::ranges::find(creatures, *_selected) == creatures.end())
 	{
@@ -823,6 +813,21 @@ void CreatureSpawner::DrawCreatures() noexcept
 		}
 		registry.Destroy(*remove);
 	}
+}
+
+void CreatureSpawner::DrawSharedSettings() noexcept
+{
+	if (Locator::creatureHairSystem::has_value())
+	{
+		auto& hair = Locator::creatureHairSystem::value();
+		bool shown = hair.IsShown();
+		if (ImGui::Checkbox("Show hair", &shown))
+		{
+			hair.SetShown(shown);
+		}
+	}
+	DrawAudioSettings();
+	DrawFootprintSettings();
 }
 
 void CreatureSpawner::Update() noexcept
@@ -927,7 +932,12 @@ void CreatureSpawner::Spawn(glm::vec2 screenCoord) noexcept
 entt::entity CreatureSpawner::SpawnAt(const glm::vec3& position) noexcept
 {
 	const auto degrees = _randomFacing ? std::uniform_real_distribution(0.0f, 360.0f)(_random) : _facingDegrees;
-	const auto entity = CreatureArchetype::Create(position, _owner, _species, 0, glm::radians(degrees), _scale,
+	return SpawnAt(position, glm::radians(degrees));
+}
+
+entt::entity CreatureSpawner::SpawnAt(glm::vec3 position, float yawRadians) noexcept
+{
+	const auto entity = CreatureArchetype::Create(position, _owner, _species, 0, yawRadians, _scale,
 	                                              {.alignment = _alignment, .fatness = _fatness, .strength = _strength});
 	auto& registry = Locator::entitiesRegistry::value();
 	if (_spawnMind != nullptr && Locator::creatureMindSystem::has_value())

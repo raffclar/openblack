@@ -54,12 +54,12 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "Editor/EditorWindow.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "ImGuiUtils.h"
-#include "LHVMViewer.h"
 #include "LandIsland.h"
 #include "Locator.h"
 #include "Magic.h"
@@ -119,7 +119,6 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 	debugWindows.emplace_back(new TextureViewer);
 	debugWindows.emplace_back(new Console);
 	debugWindows.emplace_back(new LandIsland);
-	debugWindows.emplace_back(new LHVMViewer);
 	debugWindows.emplace_back(new PathFinding);
 	debugWindows.emplace_back(new Audio);
 	debugWindows.emplace_back(new TempleInterior);
@@ -127,7 +126,10 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 	debugWindows.emplace_back(new Weather);
 	debugWindows.emplace_back(new Magic);
 	auto spawner = std::make_unique<CreatureSpawner>();
-	debugWindows.emplace_back(new TestbedScenarios(*spawner));
+	auto scenarios = std::make_unique<TestbedScenarios>(*spawner);
+	// The editor hosts the creature spawner's and the scenarios' windows, and the scripts
+	debugWindows.emplace_back(std::make_unique<editor::EditorWindow>(*spawner, *scenarios));
+	debugWindows.emplace_back(std::move(scenarios));
 	debugWindows.emplace_back(std::move(spawner));
 
 	auto gui = std::unique_ptr<DebugGuiInterface>(
@@ -581,6 +583,10 @@ bool Gui::ShowMenu() noexcept
 
 		if (ImGui::BeginMenu("Debug"))
 		{
+			if (ImGui::MenuItem("Editor", "F2"))
+			{
+				OpenWindow("Editor");
+			}
 			if (ImGui::BeginMenu("Windows"))
 			{
 				for (auto& window : _debugWindows)

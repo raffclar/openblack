@@ -47,6 +47,32 @@ public:
 	/// Picks a creature, as its Select button in the list does, and opens the window on it
 	void Select(entt::entity entity) noexcept;
 
+	/// The window's parts as the editor hosts them: the settings creatures are placed with, the switches for every
+	/// creature, and a creature's own sections
+	void DrawSpawnSettings() noexcept
+	{
+		DrawSpawnMind();
+		DrawSettings();
+	}
+	/// The debug file browser while it stands in for a file dialog, once a frame while hosted
+	void DrawDialogs() noexcept { DrawFileBrowser(); }
+	void DrawSharedSettings() noexcept;
+	void DrawCreature(entt::entity entity) noexcept
+	{
+		_selected = entity;
+		DrawSelected();
+	}
+	[[nodiscard]] std::optional<entt::entity> GetSelected() const noexcept { return _selected; }
+	[[nodiscard]] CreatureType GetSpecies() const noexcept { return _species; }
+	[[nodiscard]] float GetScale() const noexcept { return _scale; }
+	/// Places a creature as the settings say, with the mind and tattoos of the mind file it is to be spawned from, if
+	/// any, facing an angle about the up axis
+	entt::entity SpawnAt(glm::vec3 position, float yawRadians) noexcept;
+	/// While hosted, the clicks on the land that command the picked creature, and their orders
+	[[nodiscard]] bool HostedTakesEvent(const SDL_Event& event) const noexcept { return TakesEvent(event); }
+	void HostedProcessEvent(const SDL_Event& event) noexcept { ProcessEventOpen(event); }
+	void HostedUpdate() noexcept { Update(); }
+
 protected:
 	void Draw() noexcept override;
 	void Update() noexcept override;

@@ -26,7 +26,10 @@ public:
 	virtual ~Window() noexcept;
 
 	void WindowUpdate() noexcept;
-	void WindowDraw() noexcept;
+	/// Draws the window when it is open; a window laid out as several may draw them itself
+	virtual void WindowDraw() noexcept;
+	/// Draws the window's contents into whichever window is being drawn, for another window to host them
+	void DrawContents() noexcept { Draw(); }
 	/// Hands the event to the window, and whether the window takes it for itself, keeping it from the game
 	bool WindowProcessEvent(const SDL_Event& event) noexcept;
 	[[nodiscard]] bool IsOpen() const noexcept { return _open; }
