@@ -35,7 +35,10 @@ static const std::map<std::string_view, GraphicsBackend> k_GraphicsBackendString
 struct EngineConfig
 {
 	bool wireframe {false};
+	/// The villagers' names over their heads, as the Show Villager Names key toggles
 	bool showVillagerNames {false};
+	/// What the villagers are doing, their age, health and hunger, as the Show Villager Details key toggles
+	bool showVillagerDetails {false};
 	bool debugVillagerNames {false};
 	bool debugVillagerStates {false};
 	/// Each miracle dispenser is labelled with its miracle

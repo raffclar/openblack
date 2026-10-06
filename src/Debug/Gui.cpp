@@ -64,6 +64,7 @@
 #include "Game.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "ImGuiUtils.h"
+#include "KeyBindingsWindow.h"
 #include "LandIsland.h"
 #include "Locator.h"
 #include "Magic.h"
@@ -130,6 +131,7 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 	debugWindows.emplace_back(new gui::Camera);
 	debugWindows.emplace_back(new Weather);
 	debugWindows.emplace_back(new Magic);
+	debugWindows.emplace_back(new KeyBindingsWindow);
 	auto spawner = std::make_unique<CreatureSpawner>();
 	auto scenarios = std::make_unique<TestbedScenarios>(*spawner);
 	// The editor hosts the creature spawner's and the scenarios' windows, and the scripts
@@ -243,7 +245,8 @@ bool Gui::ProcessEvents(const SDL_Event& event) noexcept
 		break;
 	case SDL_KEYDOWN:
 	case SDL_KEYUP:
-		_stealsFocus = io.WantCaptureKeyboard;
+		// A window's own keys, as the editor's tools, and typing in a field are kept from the game's keys
+		_stealsFocus = io.WantCaptureKeyboard || takenByWindow;
 		break;
 	case SDL_WINDOWEVENT:
 		if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
@@ -608,6 +611,7 @@ bool Gui::ShowMenu() noexcept
 			if (ImGui::BeginMenu("Villager Names"))
 			{
 				ImGui::Checkbox("Show", &config.showVillagerNames);
+				ImGui::Checkbox("Show Details", &config.showVillagerDetails);
 				ImGui::Checkbox("Show States", &config.debugVillagerStates);
 				ImGui::Checkbox("Debug", &config.debugVillagerNames);
 
@@ -827,7 +831,7 @@ std::optional<glm::uvec4> Gui::RenderVillagerName(const std::vector<glm::vec4>& 
 		textColor = ImVec4(adjustedColor.r, adjustedColor.g, adjustedColor.b, adjustedColor.a);
 	}
 
-	const std::string fullText = name + "\n" + text;
+	const std::string fullText = text.empty() ? name : name + "\n" + text;
 
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 	glm::vec4 boxExtent;
@@ -934,7 +938,7 @@ void Gui::ShowVillagerNames() noexcept
 	using namespace ecs::systems;
 
 	const auto& config = Locator::config::value();
-	if (!config.showVillagerNames)
+	if (!config.showVillagerNames && !config.showVillagerDetails)
 	{
 		return;
 	}
@@ -977,8 +981,9 @@ void Gui::ShowVillagerNames() noexcept
 
 		    const std::string name = "Villager #" + std::to_string(i);
 		    const std::string stateHelpText = "TODO: STATE HELP TEXT";
-		    std::string details =
-		        fmt::format("{}\nA:{} L:{}%, H:{}%", stateHelpText, villager.age, villager.health, villager.hunger);
+		    std::string details = config.showVillagerDetails ? fmt::format("{}\nA:{} L:{}%, H:{}%", stateHelpText, villager.age,
+		                                                                   villager.health, villager.hunger)
+		                                                     : std::string();
 		    const auto& actionSystem = Locator::livingActionSystem::value();
 		    if (config.debugVillagerStates)
 		    {

@@ -373,7 +373,8 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		case SDLK_p:
 			Locator::time::value().SetPaused(!IsPaused());
 			break;
-		case SDLK_F1:
+		// F1 is the game's Help key, so the renderer's statistics are on F11
+		case SDLK_F11:
 			Locator::rendererInterface::value().SetDebug(!Locator::rendererInterface::value().GetDebug());
 			break;
 		case SDLK_1:
@@ -788,7 +789,8 @@ bool Game::Update() noexcept
 	// Input events
 	{
 		auto sdlInput = profiler.BeginScoped(Profiler::Stage::SdlInput);
-		if (!Locator::debugGui::value().StealsFocus())
+		// The debug windows' presses of the options screen's actions are made by the action map's frame
+		if (!Locator::debugGui::value().StealsFocus() || Locator::gameActionSystem::value().HasQueuedPresses())
 		{
 			Locator::gameActionSystem::value().Frame();
 		}
@@ -799,6 +801,7 @@ bool Game::Update() noexcept
 		}
 		camera.HandleActions(deltaTime);
 		ProcessTempleRoomKeys();
+		_shortcutKeys.Update();
 	}
 	Locator::cameraPathSystem::value().Update(deltaTime);
 

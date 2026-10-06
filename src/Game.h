@@ -21,6 +21,7 @@
 #include "Common/Zoomer.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "EngineConfig.h"
+#include "Input/ShortcutKeys.h"
 #include "Windowing/WindowingInterface.h" // For DisplayMode
 
 union SDL_Event;
@@ -192,6 +193,8 @@ private:
 	Zoomer _handGripBlend;
 	/// The way the surface the cursor is on in the temple faces, which the hand turns to
 	Zoomer3 _handTempleNormal {glm::vec3(0.0f, 1.0f, 0.0f)};
+	/// The options screen's one-press actions: the temple and realm keys, the villagers' names and details
+	input::ShortcutKeys _shortcutKeys;
 	/// Where the hand holds on while the camera turns
 	glm::vec3 _handHoldPoint {0.0f, 0.0f, 0.0f};
 	bool _handWasRotating {false};
