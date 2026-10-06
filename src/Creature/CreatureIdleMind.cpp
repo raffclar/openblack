@@ -103,6 +103,8 @@ std::string_view creature_mind::Name(Activity activity)
 		return "Hurling something";
 	case Activity::PutDown:
 		return "Putting something down";
+	case Activity::Planned:
+		return "Acting on a desire";
 	case Activity::None:
 	default:
 		return "Nothing";
@@ -243,6 +245,61 @@ std::vector<Step> creature_mind::Faint()
 	return {faint};
 }
 
+std::vector<Step> creature_mind::EatHeld()
+{
+	return {Object({.kind = ObjectOrder::Kind::Eat}, Effect::Eat)};
+}
+
+std::vector<Step> creature_mind::Emote(size_t animation)
+{
+	return {Action(animation, false)};
+}
+
+std::vector<Step> creature_mind::FaceAndEmote(glm::vec2 point, size_t animation)
+{
+	Step turn {.kind = Step::Kind::Move};
+	turn.movement = {.kind = Movement::Kind::TurnToFace, .point = point};
+	return {turn, Action(animation, false)};
+}
+
+std::vector<Step> creature_mind::ApproachAndEmote(uint32_t object, size_t animation)
+{
+	Step approach {.kind = Step::Kind::Move};
+	approach.movement = {.kind = Movement::Kind::ToObject, .object = object, .maxDistance = k_ApproachDistance};
+	return {approach, Action(animation, false)};
+}
+
+std::vector<Step> creature_mind::LookAt(glm::vec2 point, float seconds)
+{
+	Step turn {.kind = Step::Kind::Move};
+	turn.movement = {.kind = Movement::Kind::TurnToFace, .point = point};
+	return {turn, {.kind = Step::Kind::Wait, .seconds = seconds}};
+}
+
+std::vector<Step> creature_mind::FollowFor(uint32_t object, float seconds)
+{
+	Step follow {.kind = Step::Kind::Move, .seconds = seconds};
+	follow.movement = {.kind = Movement::Kind::Follow, .object = object, .maxDistance = k_FollowDistance};
+	return {follow};
+}
+
+std::vector<Step> creature_mind::RunFrom(glm::vec2 point)
+{
+	Step flee {.kind = Step::Kind::Move};
+	flee.movement = {.kind = Movement::Kind::FleeFrom, .point = point, .run = true};
+	return {flee};
+}
+
+std::vector<Step> creature_mind::DestroyThing(uint32_t object)
+{
+	return {Object({.kind = ObjectOrder::Kind::Destroy, .object = object})};
+}
+
+std::vector<Step> creature_mind::LookAbout(float seconds)
+{
+	return {{.kind = Step::Kind::Wait, .seconds = seconds}};
+}
+
 std::optional<NeedPlan> creature_mind::ChooseNeed(const Wants& wants, const Random& random)
 {
 	struct Need
@@ -370,6 +427,7 @@ void creature_mind::Plan(IdleMind& mind, Activity activity, std::vector<Step> ag
 {
 	mind.activity = activity;
 	mind.agenda = std::move(agenda);
+	++mind.serial;
 	mind.step = 0;
 	mind.stepStarted = false;
 	mind.stepSeconds = 0.0f;

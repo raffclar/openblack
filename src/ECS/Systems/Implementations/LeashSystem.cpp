@@ -602,7 +602,12 @@ void LeashSystem::Pull(entt::entity creature)
 	// The first pull stops whatever it was doing; pulled away from the same desire twice, it is held back a while
 	if (leashes.control == CreatureLeash::Control::Idle && mind != nullptr)
 	{
-		const auto desire = leash::DesireBehind(mind->idle.activity, mind->idle.shown);
+		// The desire behind a plan it carries out, else behind what it does with nothing better to do
+		const auto desire = mind->planActive && mind->planner.current.has_value()
+		                        ? std::optional(mind->planner.current->desire)
+		                        : leash::DesireBehind(mind->idle.activity, mind->idle.shown);
+		mind->planActive = false;
+		mind->planner.current.reset();
 		if (desire.has_value() && mind->desires.has_value())
 		{
 			if (const auto seconds = leash::RecordPull(leashes.pulls, *desire))

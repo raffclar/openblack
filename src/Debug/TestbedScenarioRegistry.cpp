@@ -50,6 +50,11 @@ constexpr float k_HoursPerDay = 24.0f;
 constexpr float k_MaxOffset = 2400.0f;
 /// A command that waits for its creature to be free first gives the last command this long to get it going
 constexpr float k_SettleSeconds = 0.5f;
+/// The last stage of growing up, and how many skills, miracles and deeds to copy the game's tables have
+constexpr size_t k_LastPhase = 13;
+constexpr size_t k_Skills = 6;
+constexpr size_t k_Miracles = 42;
+constexpr size_t k_Deeds = 46;
 
 Command Go(Kind kind, size_t creature, glm::vec2 point, float delay = 0.0f, bool wait = true)
 {
@@ -1340,6 +1345,134 @@ void AddCombat(std::vector<Scenario>& all)
 	});
 }
 
+void AddMind(std::vector<Scenario>& all)
+{
+	// The game's belief type for villagers, the deed of playing with a toy, and the first skill of the game's table
+	constexpr size_t k_VillagerBelief = 6;
+	constexpr size_t k_PlayWithToy = 41;
+	constexpr size_t k_FirstSkill = 0;
+	const auto setDesire = [](Desire desire, float amount, float delay) {
+		return Command {.kind = Kind::SetDesire,
+		                .creature = 0,
+		                .delaySeconds = delay,
+		                .value = static_cast<size_t>(desire),
+		                .amount = amount};
+	};
+
+	all.push_back({
+	    .id = "mind.reward_villagers",
+	    .name = "Learning: reward eating villagers, punish eating food",
+	    .facet = Facet::Mind,
+	    .description = "A hungry tiger with a villager right by it, lots of magic food close by and more villagers further "
+	                   "off. Every 18 seconds its "
+	                   "hunger is set to 40% of its most, enough for one meal. Whatever it eats, as soon as it has eaten, "
+	                   "it is stroked if it was a villager and slapped if it was anything else.",
+	    .expected = "First it eats the villager beside it and is stroked: with one example, its hunger tree finds "
+	                "everything good. Then it eats the nearest food and is slapped: now the tree tells them apart. From then "
+	                "on it walks past the food to eat villagers, the "
+	                "planner's goal usefulness for villagers near 0.8 and for food near 0. The spawner's Mind panel shows "
+	                "the tree and the thoughts.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .needs = {.energy = 0.3f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f},
+	        .desires = OnlyDesire(Desire::Hunger),
+	    }},
+	    .objects = {{.type = VillagerInfo::CelticLeaderMale, .offset = {12.0f, -12.0f}},
+	                {.type = MobileObjectInfo::MagicFood, .offset = {-25.0f, -25.0f}},
+	                {.type = MobileObjectInfo::MagicFood, .offset = {25.0f, -30.0f}},
+	                {.type = MobileObjectInfo::MagicFood, .offset = {0.0f, -40.0f}},
+	                {.type = MobileObjectInfo::MagicFood, .offset = {-35.0f, 15.0f}},
+	                {.type = MobileObjectInfo::MagicFood, .offset = {35.0f, 20.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {70.0f, -60.0f}},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {-70.0f, -60.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {80.0f, 30.0f}},
+	                {.type = VillagerInfo::CelticFishermanMale, .offset = {-80.0f, 40.0f}},
+	                {.type = VillagerInfo::CelticShepherdMale, .offset = {0.0f, 85.0f}},
+	                {.type = VillagerInfo::CelticTraderMale, .offset = {60.0f, 75.0f}}},
+	    .commands = {{.kind = Kind::RewardIf, .creature = 0, .delaySeconds = 1.0f, .value = k_VillagerBelief},
+	                 setDesire(Desire::Hunger, 0.4f, 1.0f),
+	                 Act(Kind::Stop, 0, 17.0f)},
+	    .repeatFrom = 1,
+	});
+
+	all.push_back({
+	    .id = "mind.community",
+	    .name = "Load a community creature mind",
+	    .facet = Facet::Mind,
+	    .description = "A wolf that takes up Tagana, a community-made creature (Yamac), from references/creature_saves, "
+	                   "with villagers, food, trees and a ball about it.",
+	    .expected = "Its name, desires, opinions and the examples of its decision trees come from the file (the spawner's "
+	                "Mind panel lists them, and its thoughts). The planner weighs what it has learnt: it goes for the "
+	                "things its trees rate well. Without the reference folder the wolf keeps a fresh mind and the log "
+	                "says why.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {.species = CreatureType::Wolf, .mindFile = "reference:Tagana"}},
+	    .objects = {{.type = MobileObjectInfo::MagicFood, .offset = {-30.0f, -30.0f}},
+	                {.type = MobileObjectInfo::Ball, .offset = {30.0f, -20.0f}},
+	                {.type = TreeInfo::Beech, .offset = {-50.0f, 40.0f}},
+	                {.type = TreeInfo::Beech, .offset = {55.0f, 45.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {60.0f, -50.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-60.0f, -55.0f}}},
+	});
+
+	std::vector<Command> phases;
+	for (size_t phase = 1; phase <= k_LastPhase; ++phase)
+	{
+		phases.push_back({.kind = Kind::SetPhase, .creature = 0, .delaySeconds = 8.0f, .value = phase});
+	}
+	all.push_back({
+	    .id = "mind.phases",
+	    .name = "Stages of growing up unlock desires",
+	    .facet = Facet::Mind,
+	    .description = "A cow that starts at the first stage of growing up and moves on a stage every eight seconds, "
+	                   "through all fourteen.",
+	    .expected = "At first only fear, tiredness, attention, showing how it is and the like are active; hunger, "
+	                "curiosity and play come at the second stage, water at the fourth, anger at the eleventh, compassion "
+	                "at the twelfth. The Mind panel's desires list grows, and the planner starts weighing what each new "
+	                "desire can do.",
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {CreatureSetup {.species = CreatureType::Cow, .phase = 0}},
+	    .objects = {{.type = MobileObjectInfo::MagicFood, .offset = {-30.0f, -30.0f}},
+	                {.type = MobileObjectInfo::Ball, .offset = {30.0f, -20.0f}}},
+	    .commands = phases,
+	});
+
+	all.push_back({
+	    .id = "mind.mimic",
+	    .name = "Mimic the player",
+	    .facet = Facet::Mind,
+	    .description = "A grown-up tiger with balls about it. Every 20 seconds the player plays with a toy near it, the "
+	                   "one deed creatures copy without the learning leash.",
+	    .expected = "Nine times in ten it notices: it turns to look where the player played; a few seconds later it "
+	                "picks up a ball and throws it about, copying the player; then for a while it wants to play. The "
+	                "Mind panel shows the stage of copying.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = Content()}},
+	    .objects = {{.type = MobileObjectInfo::Ball, .offset = {25.0f, -25.0f}},
+	                {.type = MobileObjectInfo::Ball, .offset = {-30.0f, -20.0f}}},
+	    .commands =
+	        {{.kind = Kind::PlayerDid, .creature = 0, .delaySeconds = 3.0f, .point = {30.0f, -30.0f}, .value = k_PlayWithToy},
+	         Act(Kind::Stop, 0, 20.0f)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "mind.watch_skill",
+	    .name = "Learn a skill by watching",
+	    .facet = Facet::Mind,
+	    .description = "A grown-up lion watches villagers build: it sees the skill now, again 4 seconds later and again "
+	                   "4 seconds after that.",
+	    .expected = "Once it has watched for longer than the skill takes to learn (6 seconds by the game's table) it "
+	                "knows it: its thoughts say it has learnt to build, and the Mind panel marks the skill known.",
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {CreatureSetup {.species = CreatureType::Lion, .needs = Content()}},
+	    .commands = {{.kind = Kind::SeeSkill, .creature = 0, .delaySeconds = 1.0f, .value = k_FirstSkill},
+	                 {.kind = Kind::SeeSkill, .creature = 0, .delaySeconds = 4.0f, .value = k_FirstSkill},
+	                 {.kind = Kind::SeeSkill, .creature = 0, .delaySeconds = 4.0f, .value = k_FirstSkill}},
+	});
+}
+
 std::vector<Scenario> Build()
 {
 	std::vector<Scenario> all;
@@ -1357,6 +1490,7 @@ std::vector<Scenario> Build()
 	AddHand(all);
 	AddLeash(all);
 	AddCombat(all);
+	AddMind(all);
 	return all;
 }
 
@@ -1447,8 +1581,8 @@ std::string_view CommandProblem(const Command& command, std::span<const ObjectSe
 std::string_view testbed_scenarios::Name(Facet facet)
 {
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
-	    "Idle",     "Expressions", "Senses", "Needs",   "Growth", "Appearance", "Light",
-	    "Movement", "Footprints",  "Audio",  "Objects", "Hand",   "Leash",      "Combat",
+	    "Idle",       "Expressions", "Senses",  "Needs", "Growth", "Appearance", "Light", "Movement",
+	    "Footprints", "Audio",       "Objects", "Hand",  "Leash",  "Combat",     "Mind",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
@@ -1467,7 +1601,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 48> k_Names {
+	constexpr std::array<std::string_view, 54> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -1516,6 +1650,12 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "knock out",
 	    "bring round",
 	    "tie leash to creature",
+	    "set desire",
+	    "set stage",
+	    "reward if",
+	    "see skill",
+	    "see miracle",
+	    "player did",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
@@ -1592,7 +1732,12 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		{
 			problems.push_back(fmt::format("{}: body out of range", who));
 		}
-		if (creature.phase && *creature.phase > 13)
+		if (!creature.mindFile.empty() && !creature.mindFile.starts_with("reference:") &&
+		    !creature.mindFile.starts_with("game:"))
+		{
+			problems.push_back(fmt::format("{}: a mind file is reference: or game:", who));
+		}
+		if (creature.phase && *creature.phase > k_LastPhase)
 		{
 			problems.push_back(fmt::format("{}: no such stage of growing up", who));
 		}
@@ -1660,6 +1805,15 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		if (!ValidOffset(command.point) || command.delaySeconds < 0.0f || !InRange(command.hour, 0.0f, k_HoursPerDay))
 		{
 			problems.push_back(fmt::format("{}: point, delay or hour out of range", what));
+		}
+		if ((command.kind == Kind::SetDesire &&
+		     (command.value >= creature_desires::k_DesireCount || !InRange(command.amount, 0.0f, 1.0f))) ||
+		    (command.kind == Kind::SetPhase && command.value > k_LastPhase) ||
+		    (command.kind == Kind::SeeSkill && command.value >= k_Skills) ||
+		    (command.kind == Kind::SeeMiracle && command.value >= k_Miracles) ||
+		    (command.kind == Kind::PlayerDid && command.value >= k_Deeds))
+		{
+			problems.push_back(fmt::format("{}: value {} out of range", what, command.value));
 		}
 	}
 	if (scenario.repeatFrom.has_value() && *scenario.repeatFrom >= scenario.commands.size())

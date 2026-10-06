@@ -11,9 +11,20 @@
 
 #include <cstddef>
 
+#include <memory>
 #include <optional>
 
 #include <entt/entity/fwd.hpp>
+#include <glm/vec3.hpp>
+
+namespace openblack::creaturemind
+{
+struct MindFileData;
+}
+namespace openblack::creature_mind_tables
+{
+struct Tables;
+}
 
 namespace openblack::ecs::systems
 {
@@ -27,6 +38,26 @@ public:
 	virtual ~CreatureMindSystemInterface() = default;
 
 	virtual void ProcessTurn() = 0;
+	/// Once a game turn after ProcessTurn: each creature plans two of its desires and changes what it does for a plan
+	/// pressing enough
+	virtual void PlanTurn() = 0;
+	/// Once a game turn after PlanTurn: what the leash taught, and copying the player, step on
+	virtual void LearnTurn() = 0;
+
+	/// Takes up a mind file's learning, desires and stage of growing up at the next turn
+	virtual void LoadMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind) = 0;
+	/// The creature's mind as a mind file of the current version, over the file it was loaded from, if it has a mind
+	[[nodiscard]] virtual std::optional<creaturemind::MindFileData> SaveMind(entt::entity creature) const = 0;
+	/// Forgets everything learnt: the desires start again as the species' do, with no opinions or examples
+	virtual void ClearLearning(entt::entity creature) = 0;
+	/// Creatures that can see the point watch an ordinary skill practised (by its row in the game's table), or a miracle
+	/// cast
+	virtual void SeeSkill(const glm::vec3& point, size_t skill) = 0;
+	virtual void SeeMiracle(const glm::vec3& point, size_t miracle) = 0;
+	/// The player did one of the deeds creatures copy (by its row in the game's table) at a point, maybe to something
+	virtual void PlayerDid(size_t deed, const glm::vec3& point, std::optional<entt::entity> object) = 0;
+	/// The game's tables the minds use, once the game's data is loaded
+	[[nodiscard]] virtual const creature_mind_tables::Tables* GetTables() = 0;
 
 	/// Plays an action once, unless the creature's body already plays one
 	virtual bool PlayAction(entt::entity creature, size_t animation) = 0;

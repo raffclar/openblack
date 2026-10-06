@@ -12,10 +12,14 @@
 #include <cmath>
 
 #include <algorithm>
+#include <filesystem>
+#include <memory>
 #include <ranges>
+#include <system_error>
 #include <type_traits>
 #include <variant>
 
+#include <MindFile.h>
 #include <fmt/format.h>
 #include <glm/gtx/vec_swizzle.hpp>
 #include <glm/trigonometric.hpp>
@@ -24,13 +28,16 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/SkyInterface.h"
 #include "Camera/Camera.h"
+#include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureLayers.h"
+#include "Creature/CreatureLearning.h"
 #include "Creature/CreatureObjectActions.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
+#include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureMind.h"
@@ -48,6 +55,7 @@
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
@@ -265,6 +273,11 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    {
 				    return ecs::archetypes::TreeArchetype::Create(0, position, type, true, yaw, object.scale, object.scale);
 			    }
+			    else if constexpr (std::is_same_v<T, VillagerInfo>)
+			    {
+				    constexpr uint32_t k_AdultAge = 30;
+				    return ecs::archetypes::VillagerArchetype::Create(position, position, type, k_AdultAge);
+			    }
 			    else
 			    {
 				    return ecs::archetypes::FeatureArchetype::Create(position, type, yaw, object.scale);
@@ -296,6 +309,10 @@ void Runner::PlaceCreatures(const Scenario& scenario, glm::vec2 middle)
 			{
 				mind->developmentPhase = *setup.phase;
 			}
+		}
+		if (!setup.mindFile.empty())
+		{
+			LoadMindFile(entity, setup.mindFile);
 		}
 		if (Locator::creatureSkinSystem::has_value())
 		{
@@ -684,8 +701,97 @@ void Runner::Give(const Command& command)
 		break;
 	case Kind::SetHour:
 		break;
+	case Kind::SetDesire:
+	case Kind::SetPhase:
+	case Kind::RewardIf:
+		result = TeachMind(*entity, command);
+		break;
+	case Kind::SeeSkill:
+		minds.SeeSkill(Locator::entitiesRegistry::value().Get<Transform>(*entity).position, command.value);
+		break;
+	case Kind::SeeMiracle:
+		minds.SeeMiracle(Locator::entitiesRegistry::value().Get<Transform>(*entity).position, command.value);
+		break;
+	case Kind::PlayerDid:
+	{
+		const auto& land = Locator::terrainSystem::value();
+		minds.PlayerDid(command.value, glm::vec3(point.x, land.GetHeightAt(point), point.y), std::nullopt);
+		break;
+	}
 	}
 	Log(fmt::format("{:.1f}s: {} {}{}{}", _seconds, who, Name(command.kind), result.empty() ? "" : ": ", result));
+}
+
+std::string Runner::TeachMind(entt::entity entity, const Command& command)
+{
+	auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(entity);
+	if (mind == nullptr)
+	{
+		return "no mind";
+	}
+	switch (command.kind)
+	{
+	case Kind::SetDesire:
+		if (mind->desires.has_value() && command.value < creature_desires::k_DesireCount)
+		{
+			auto& state = mind->desires->desires.at(command.value);
+			state.activated = true;
+			state.suppressedTurns = 0;
+			state.value = command.amount * std::max(state.max, 0.0f);
+			return fmt::format("{} {:.2f}", creature_desires::Name(static_cast<creature_desires::Desire>(command.value)),
+			                   state.value);
+		}
+		return "no desires yet";
+	case Kind::SetPhase:
+		mind->developmentPhase = static_cast<uint32_t>(command.value);
+		return fmt::format("stage {}", command.value);
+	case Kind::RewardIf:
+		// From now on each thing it does to something is judged as soon as it is done
+		mind->trainer = static_cast<uint32_t>(command.value);
+		return fmt::format("trained: stroked for a {}, slapped for anything else",
+		                   creature_tree::BeliefName(static_cast<uint32_t>(command.value)));
+	default:
+		return {};
+	}
+}
+
+void Runner::LoadMindFile(entt::entity entity, std::string_view name)
+{
+	constexpr std::string_view k_Reference = "reference:";
+	constexpr std::string_view k_Game = "game:";
+	constexpr std::string_view k_ReferenceFolder = "references/creature_saves";
+	constexpr int k_FolderSearchDepth = 6;
+	std::filesystem::path path;
+	if (name.starts_with(k_Reference))
+	{
+		// The community saves are looked for from the working directory up
+		std::error_code error;
+		auto folder = std::filesystem::current_path(error);
+		for (int i = 0; i < k_FolderSearchDepth && !error; ++i)
+		{
+			if (std::filesystem::is_directory(folder / k_ReferenceFolder, error))
+			{
+				path = folder / k_ReferenceFolder / name.substr(k_Reference.size());
+				break;
+			}
+			if (!folder.has_parent_path() || folder.parent_path() == folder)
+			{
+				break;
+			}
+			folder = folder.parent_path();
+		}
+	}
+	else if (name.starts_with(k_Game) && Locator::filesystem::has_value())
+	{
+		path = Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true) / name.substr(k_Game.size());
+	}
+	auto data = std::make_shared<creaturemind::MindFileData>();
+	const auto result = path.empty() ? creaturemind::MindResult::ErrCantOpen : creaturemind::ReadFile(path, *data);
+	if (result == creaturemind::MindResult::Success && Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().LoadMind(entity, data);
+	}
+	Log(fmt::format("mind file {}: {}", name, creaturemind::ResultToStr(result)));
 }
 
 void Runner::Frame(Shot shot, size_t creature, float distance)

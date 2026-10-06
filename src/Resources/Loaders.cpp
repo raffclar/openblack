@@ -224,9 +224,16 @@ LevelLoader::result_type LevelLoader::operator()(FromDiskTag, const std::filesys
 	return std::make_shared<Level>(Level::ParseLevel(path, landType));
 }
 
-CreatureMindLoader::result_type CreatureMindLoader::operator()(FromDiskTag, const std::filesystem::path& /*unused*/) const
+CreatureMindLoader::result_type CreatureMindLoader::operator()(FromDiskTag, const std::filesystem::path& creatureMindPath) const
 {
-	return std::make_shared<creature::CreatureMind>();
+	auto mind = std::make_shared<creature::CreatureMind>();
+	mind->result = creaturemind::ReadFile(creatureMindPath, mind->data);
+	if (!mind->Loaded())
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Creature mind {}: {}", creatureMindPath.generic_string(),
+		                   creaturemind::ResultToStr(mind->result));
+	}
+	return mind;
 }
 
 namespace

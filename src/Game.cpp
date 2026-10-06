@@ -529,6 +529,16 @@ bool Game::GameLogicLoop() noexcept
 		Locator::creatureMindSystem::value().ProcessTurn();
 	}
 	{
+		// They weigh their desires against what they could do about them, and change what they do for a pressing plan
+		auto creaturePlanner = profiler.BeginScoped(Profiler::Stage::CreaturePlannerUpdate);
+		Locator::creatureMindSystem::value().PlanTurn();
+	}
+	{
+		// They learn from what the leash shows them, and copy the player
+		auto creatureLearning = profiler.BeginScoped(Profiler::Stage::CreatureLearningUpdate);
+		Locator::creatureMindSystem::value().LearnTurn();
+	}
+	{
 		// They plan their routes and walk, run and turn
 		auto creatureLocomotion = profiler.BeginScoped(Profiler::Stage::CreatureLocomotionUpdate);
 		Locator::creatureLocomotionSystem::value().ProcessTurn();

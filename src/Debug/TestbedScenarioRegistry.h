@@ -67,6 +67,8 @@ enum class Facet : uint8_t
 	Leash,
 	/// Fighting another creature, being knocked out and coming round
 	Combat,
+	/// What it learns: from strokes and slaps, from mind files, as it grows up, and by copying the player
+	Mind,
 
 	_Count
 };
@@ -184,12 +186,15 @@ struct CreatureSetup
 	/// Wounds and burns, and drops of blood, on its skin
 	std::vector<creature_marks::Mark> wounds;
 	std::vector<creature_marks::Mark> blood;
+	/// A mind file it takes up as it starts: "reference:NAME" for one of the community saves (looked for in
+	/// references/creature_saves from the working directory up), "game:NAME" for one of the game's Scripts/CreatureMind
+	std::string_view mindFile;
 };
 
-/// Something put on the land for the creatures: food, a tree, or a feature such as a pillar of rock
+/// Something put on the land for the creatures: food, a tree, a feature such as a pillar of rock, or a villager
 struct ObjectSetup
 {
-	std::variant<MobileObjectInfo, TreeInfo, FeatureInfo> type;
+	std::variant<MobileObjectInfo, TreeInfo, FeatureInfo, VillagerInfo> type;
 	glm::vec2 offset {0.0f};
 	float scale {1.0f};
 	float yawDegrees {0.0f};
@@ -268,6 +273,17 @@ struct Command
 		BringRound,
 		/// Tying the leash it wears to the other creature, which has it fight that creature
 		TieLeashToCreature,
+		/// A desire (by value) is set to a fraction (amount) of its maximum; the creature grows up to a stage (by value)
+		SetDesire,
+		SetPhase,
+		/// From now on, each thing it does to something is judged once done, by the mind's trainer: stroked if the
+		/// thing is of a kind (value, the game's belief type, such as 6 for a villager), else slapped
+		RewardIf,
+		/// It watches a skill (value, by its row of the game's table) or a miracle near it; the player does one of the
+		/// deeds creatures copy (value) at the point
+		SeeSkill,
+		SeeMiracle,
+		PlayerDid,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -297,6 +313,8 @@ struct Command
 	float radius {0.0f};
 	/// How long a blow's click is held, charging it
 	float chargeMs {0.0f};
+	/// A desire's fraction of its maximum
+	float amount {1.0f};
 };
 [[nodiscard]] std::string_view Name(Command::Kind kind);
 

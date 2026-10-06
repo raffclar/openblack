@@ -68,6 +68,10 @@ private:
 	std::string GiveLeashCommand(entt::entity creature, const Command& command);
 	/// The commands of fights, and of being knocked out and brought round
 	std::string GiveFightCommand(entt::entity creature, const Command& command);
+	/// Sets a desire or the stage of growing up, or rewards what the creature last did by the kind of thing it was to
+	std::string TeachMind(entt::entity entity, const Command& command);
+	/// Loads a mind file named as a scenario names it into a creature
+	void LoadMindFile(entt::entity entity, std::string_view name);
 	void UpdateCamera();
 	[[nodiscard]] bool IsFree(size_t creature) const;
 	[[nodiscard]] std::optional<entt::entity> CreatureAt(size_t index) const;
@@ -84,6 +88,7 @@ private:
 	std::vector<entt::entity> _objects;
 	/// Whether each creature's needs and desires have been set as it started
 	std::vector<bool> _started;
+
 	std::deque<std::string> _log;
 
 	std::optional<Shot> _shot;

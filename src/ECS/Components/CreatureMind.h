@@ -9,11 +9,16 @@
 
 #pragma once
 
+#include <memory>
 #include <optional>
+
+#include <MindFile.h>
 
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLook.h"
+#include "Creature/CreatureMindModel.h"
+#include "Creature/CreaturePlanner.h"
 #include "Creature/LeashRules.h"
 
 namespace openblack::ecs::components
@@ -56,6 +61,27 @@ struct CreatureMindState
 
 	/// While paused, the mind leaves the body alone to be posed by hand
 	bool paused {false};
+
+	/// What it has learnt and remembers, set up with the desires (from its mind file when it has one)
+	std::optional<creature_mind_model::Learnt> learnt;
+	/// The plans it weighs, and the one it carries out
+	creature_planner::PlannerState planner {};
+	/// The agenda carries out the planner's plan; the step that ends it took down the desire already
+	bool planActive {false};
+	bool satisfiedByEffect {false};
+	/// The agenda carrying out the plan, and the last agenda remembered for feedback, by the idle mind's count of them
+	uint32_t planSerial {0};
+	uint32_t agendaSeen {0};
+	/// Game turns the mind has thought, and the turn it last planned
+	uint32_t turn {0};
+	uint32_t plannedTurn {0};
+	/// The trainer of the debug tools: each thing it does to something, once done, it is stroked for if the thing is of
+	/// this kind (by the game's belief types) and slapped for otherwise
+	std::optional<uint32_t> trainer;
+	/// A mind file to take up at the next turn, from the creature's mind resource or the debug tools; whether the
+	/// resource has been looked at
+	std::shared_ptr<const creaturemind::MindFileData> pendingFile;
+	bool resourceChecked {false};
 
 	/// What the leash tells the mind: the desire it forces, whether the creature is following it to the hand, and what
 	/// the player has shown it on the leash

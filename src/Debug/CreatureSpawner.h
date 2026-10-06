@@ -49,6 +49,9 @@ private:
 	void DrawSelected() noexcept;
 	/// The picked creature's mind: what it is doing, wants and looks at, and buttons to make it do things
 	void DrawMind(entt::entity entity) noexcept;
+	/// What the mind has learnt: the planner's plans, opinions, decision trees, recent actions and thoughts, and mind
+	/// files to load into it or save it to
+	void DrawLearning(entt::entity entity) noexcept;
 	/// The picked creature's body: its needs as bars to set, the body's time to speed up, and buttons to make it see to
 	/// a need
 	void DrawBody(entt::entity entity) noexcept;
@@ -119,6 +122,8 @@ private:
 	std::string _lastNeed;
 	std::mt19937 _random {std::random_device {}()};
 	std::optional<entt::entity> _selected;
+	/// The creature the selected tab was last brought to the front for
+	std::optional<entt::entity> _tabFor;
 	/// The thing to put by the creature, what it does to what it holds, and what became of the last thing it was told to
 	/// do with its hands
 	int _objectType {0};
@@ -147,6 +152,14 @@ private:
 	float _fightChargeMs {0.0f};
 	bool _fightAuto {true};
 	std::string _lastFight;
+	/// The folder mind files are listed from, where the mind is saved to, and what became of the last load or save
+	std::string _mindFolder;
+	std::string _mindSavePath {"openblack_creature_mind"};
+	std::string _lastMindFile;
+	/// The skill, miracle and player's deed picked to show the selected creature
+	int _skill {0};
+	int _miracle {0};
+	int _deed {0};
 };
 
 } // namespace openblack::debug::gui

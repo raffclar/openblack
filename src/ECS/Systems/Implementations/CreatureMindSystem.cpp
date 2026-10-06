@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <functional>
 #include <iterator>
 #include <limits>
 #include <random>
@@ -35,7 +36,9 @@
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLook.h"
 #include "Creature/CreaturePhysiology.h"
+#include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureRoute.h"
+#include "CreatureMindSystemDetail.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -64,7 +67,7 @@ using namespace openblack::ecs::components;
 namespace animations = openblack::creature_layers::animations;
 using creature_desires::Desire;
 
-namespace
+namespace openblack::ecs::systems::mind_detail
 {
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 constexpr float k_TurnsPerSecond = 1.0f / k_TurnSeconds;
@@ -142,6 +145,7 @@ std::array<creature_desires::DesireSetup, creature_desires::k_DesireCount> Setup
 		desire.decayMin = initial.field0x40;
 		desire.decayMax = initial.field0x44;
 		desire.increaseSeconds = PerSpecies(info.creatureDesireForType.at(d), row);
+		desire.weight = initial.field0x68;
 		const std::array<uint32_t, creature_desires::k_MaxSources> sourceTypes {
 		    initial.field0x0,  initial.field0x4,  initial.field0x8,  initial.field0xc,
 		    initial.field0x10, initial.field0x14, initial.field0x18, initial.field0x1c,
@@ -351,17 +355,32 @@ std::optional<float> FoodValueOf(entt::entity entity)
 	                                                        : std::nullopt;
 }
 
-/// The nearest food within reach of a point, and where it is
-std::optional<std::pair<entt::entity, glm::vec2>> NearestFood(ecs::Registry& registry, glm::vec2 from)
+/// The food within reach of a point the creature would most like to eat, and where it is: the nearest, unless it has
+/// learnt to prefer some kinds of food (weigh says how useful each is, 0.1 for food nothing is known about); food it has
+/// learnt is worse than that it leaves alone
+std::optional<std::pair<entt::entity, glm::vec2>> NearestFood(ecs::Registry& registry, glm::vec2 from,
+                                                              const std::function<float(entt::entity)>& weigh)
 {
+	constexpr float k_FoodDistanceWeight = 0.05f;
 	std::optional<std::pair<entt::entity, glm::vec2>> nearest;
-	float best = k_FoodSearchDistance;
+	float best = 0.0f;
 	const auto consider = [&](entt::entity entity, const Transform& at) {
 		const glm::vec2 point {at.position.x, at.position.z};
 		const auto distance = glm::distance(point, from);
-		if (distance <= best && !registry.AllOf<HeldByCreature>(entity) && FoodValueOf(entity).has_value())
+		if (distance > k_FoodSearchDistance || registry.AllOf<HeldByCreature>(entity) || !FoodValueOf(entity).has_value())
 		{
-			best = distance;
+			return;
+		}
+		const auto usefulness = weigh ? weigh(entity) : creature_planner::k_DefaultUsefulness;
+		if (usefulness < creature_planner::k_DefaultUsefulness)
+		{
+			return;
+		}
+		const auto score = usefulness * creature_planner::DistancePriority(false, distance, k_FoodDistanceWeight) +
+		                   1e-6f * (k_FoodSearchDistance - distance);
+		if (score > best)
+		{
+			best = score;
 			nearest = {entity, point};
 		}
 	};
@@ -465,7 +484,7 @@ std::optional<glm::vec2> NearestHurlTarget(ecs::Registry& registry, glm::vec2 fr
 
 /// The needs the mind might see to now, and the food and water at hand for them
 creature_mind::Wants WantsOf(ecs::Registry& registry, entt::entity creature, const creature_desires::Desires& desires,
-                             glm::vec2 position)
+                             glm::vec2 position, const std::function<float(entt::entity)>& weighFood)
 {
 	creature_mind::Wants wants {
 	    .hunger = DesireValue(desires, Desire::Hunger),
@@ -491,7 +510,7 @@ creature_mind::Wants WantsOf(ecs::Registry& registry, entt::entity creature, con
 	}
 	if (wants.hunger >= creature_mind::k_ActOnNeed)
 	{
-		if (const auto food = NearestFood(registry, position))
+		if (const auto food = NearestFood(registry, position, weighFood))
 		{
 			wants.food = entt::to_integral(food->first);
 			wants.foodPoint = food->second;
@@ -652,7 +671,9 @@ creature_mind::HandsState HandsOf(entt::entity creature)
 	}
 	return creature_mind::HandsState::Idle;
 }
-} // namespace
+} // namespace openblack::ecs::systems::mind_detail
+
+using namespace openblack::ecs::systems::mind_detail;
 
 void CreatureMindSystem::ProcessTurn()
 {
@@ -672,6 +693,23 @@ void CreatureMindSystem::ProcessTurn()
 		    if (!mind.desires.has_value())
 		    {
 			    mind.desires = creature_desires::Create(SetupFor(creature.species), uniform);
+		    }
+		    if (!mind.learnt.has_value())
+		    {
+			    SetUpLearning(entity, mind);
+		    }
+		    if (mind.pendingFile != nullptr)
+		    {
+			    TakeUpFile(entity, mind);
+		    }
+		    ++mind.turn;
+		    if (mind.learnt.has_value())
+		    {
+			    creature_learning::Age(mind.learnt->contexts, k_TurnSeconds);
+			    for (auto& turns : mind.learnt->turnsSinceDone)
+			    {
+				    turns = std::min(turns + 1, creature_planner::k_NoveltyTurns);
+			    }
 		    }
 		    if (mind.desiresPhase != mind.developmentPhase)
 		    {
@@ -708,6 +746,13 @@ void CreatureMindSystem::ProcessTurn()
 			    creature_mind::Plan(mind.idle, creature_mind::Activity::Faint, creature_mind::Faint());
 			    needs->faint.reset();
 		    }
+		    // Free to choose what to do next, it weighs every desire's plans first; the idle policy only chooses when
+		    // none is pressing enough
+		    if (!mind.planActive && mind.idle.step >= mind.idle.agenda.size() &&
+		        !(needs != nullptr && needs->faint.has_value()))
+		    {
+			    PlanCreature(entity, mind, true);
+		    }
 		    const bool moving =
 		        Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(entity);
 		    const creature_mind::Senses senses {
@@ -721,7 +766,10 @@ void CreatureMindSystem::ProcessTurn()
 		        .feedbackWasStroke = mind.feedbackWasStroke,
 		        // Food and water are only looked for when it is free to choose what to do next
 		        .wants = mind.idle.step >= mind.idle.agenda.size()
-		                     ? WantsOf(registry, entity, *mind.desires, glm::vec2(transform.position.x, transform.position.z))
+		                     ? WantsOf(registry, entity, *mind.desires, glm::vec2(transform.position.x, transform.position.z),
+		                               [&registry, &mind, entity](entt::entity food) {
+			                               return FoodUsefulness(registry, mind, entity, food);
+		                               })
 		                     : creature_mind::Wants {},
 		        .rested = needs != nullptr && needs->rested,
 		        .hands = HandsOf(entity),
@@ -731,6 +779,11 @@ void CreatureMindSystem::ProcessTurn()
 		    Move(entity, commands);
 		    Order(registry, entity, commands);
 		    TakeEffect(entity, commands, *mind.desires);
+		    if (commands.effect != creature_mind::Effect::None)
+		    {
+			    mind.satisfiedByEffect = true;
+		    }
+		    FollowAgenda(entity, mind);
 		    if (needs != nullptr)
 		    {
 			    needs->rest = creature_mind::IsUnconscious(mind.idle) ? CreatureNeeds::Rest::Unconscious
@@ -832,6 +885,7 @@ bool CreatureMindSystem::SitDown(entt::entity creature)
 	const auto random = [this](uint32_t range) {
 		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
 	};
+	Abandon(*mind);
 	creature_mind::Plan(mind->idle, creature_mind::Activity::Told, {creature_mind::SitDown(random)});
 	return true;
 }
@@ -876,22 +930,10 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 		mind->idle.step = 0;
 		mind->idle.stepStarted = false;
 	}
-	// Stroking makes it playful, showy and kind; slapping angry and fearful
-	if (mind->desires.has_value())
-	{
-		const auto amount = 0.5f * std::abs(feedback);
-		constexpr std::array k_Stroked {sources::k_PlayFromWatchingPlayer, sources::k_ManifestState,
-		                                sources::k_CompassionFromWatchingPlayer};
-		constexpr std::array k_Slapped {sources::k_AngerFromDamage, sources::k_FearFromDamage};
-		const auto pushed = feedback > 0.0f ? std::span<const uint32_t>(k_Stroked) : std::span<const uint32_t>(k_Slapped);
-		for (const auto type : pushed)
-		{
-			creature_desires::ChangeSource(*mind->desires, type, amount);
-		}
-	}
-	// The game reacts through its planner, which isn't here yet: the creature shows how it feels as soon as it is free
+	LearnFromFeedback(creature, *mind, feedback);
+	// It shows how it feels as soon as it is free, unless it is doing something again as it was stroked for
 	mind->idle.showDesireSeconds = 0.0f;
-	if (mind->idle.activity != creature_mind::Activity::ShowDesire)
+	if (!mind->planActive && mind->idle.activity != creature_mind::Activity::ShowDesire)
 	{
 		mind->idle.agenda.resize(std::min(mind->idle.agenda.size(), mind->idle.step + (mind->idle.stepStarted ? 1 : 0)));
 	}
@@ -945,6 +987,7 @@ bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bo
 		mind->idle.faceSeconds = faceSeconds;
 	}
 	// What it was doing is over; it decides afresh once the action has played
+	Abandon(*mind);
 	mind->idle.agenda.resize(std::min(mind->idle.agenda.size(), mind->idle.step));
 	mind->idle.stepStarted = false;
 	return true;
@@ -970,6 +1013,7 @@ bool CreatureMindSystem::Replan(entt::entity creature, creature_mind::Activity a
 	{
 		ApplyEyes(eyes, creature_mind::Eyes::Normal);
 	}
+	Abandon(*mind);
 	creature_mind::Plan(mind->idle, activity, std::move(agenda));
 	return true;
 }
@@ -987,7 +1031,7 @@ bool CreatureMindSystem::Eat(entt::entity creature, std::optional<entt::entity> 
 	const auto* transform = registry.TryGet<const Transform>(creature);
 	if (!food.has_value() && transform != nullptr)
 	{
-		if (const auto nearest = NearestFood(registry, glm::vec2(transform->position.x, transform->position.z)))
+		if (const auto nearest = NearestFood(registry, glm::vec2(transform->position.x, transform->position.z), {}))
 		{
 			food = nearest->first;
 		}

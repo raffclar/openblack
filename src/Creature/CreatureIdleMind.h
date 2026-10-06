@@ -83,6 +83,9 @@ constexpr uint32_t k_TossLots = 2;
 /// Throwing something about, it throws it this far away and up to this much further, in a random direction
 constexpr float k_ThrowAroundDistance = 30.0f;
 constexpr uint32_t k_ThrowAroundExtra = 21;
+/// Going up to something to act at it, it stops this close; following something, it keeps this close
+constexpr float k_ApproachDistance = 12.0f;
+constexpr float k_FollowDistance = 25.0f;
 /// Off to hurl something, it shows its anger first one time in this many
 constexpr uint32_t k_AngryBeforeHurlLots = 6;
 
@@ -110,6 +113,9 @@ enum class Activity : uint8_t
 	PlayWithObject,
 	Hurl,
 	PutDown,
+	/// Something else the planner chose to satisfy a desire: an emote, looking at or following something, running away,
+	/// destroying something, greeting something
+	Planned,
 };
 [[nodiscard]] std::string_view Name(Activity activity);
 
@@ -234,6 +240,8 @@ struct IdleMind
 	std::optional<creature_desires::Desire> shown;
 	/// Told to wake up, or to end whatever static step it is in
 	bool wakeWanted {false};
+	/// Counts the agendas planned, so that a new one can be told from the last
+	uint32_t serial {0};
 };
 
 /// The needs it might see to, and the means at hand
@@ -362,6 +370,24 @@ using Random = std::function<uint32_t(uint32_t)>;
 [[nodiscard]] std::vector<Step> Puke();
 /// Fainting where it stands, lying out cold a while, then getting up
 [[nodiscard]] std::vector<Step> Faint();
+/// Eating what it holds
+[[nodiscard]] std::vector<Step> EatHeld();
+/// Playing an action once on the spot
+[[nodiscard]] std::vector<Step> Emote(size_t animation);
+/// Turning to face a point, then playing an action
+[[nodiscard]] std::vector<Step> FaceAndEmote(glm::vec2 point, size_t animation);
+/// Walking up to something, then playing an action at it
+[[nodiscard]] std::vector<Step> ApproachAndEmote(uint32_t object, size_t animation);
+/// Turning to face something and watching it for some seconds
+[[nodiscard]] std::vector<Step> LookAt(glm::vec2 point, float seconds);
+/// Following something about for some seconds
+[[nodiscard]] std::vector<Step> FollowFor(uint32_t object, float seconds);
+/// Running away from a point
+[[nodiscard]] std::vector<Step> RunFrom(glm::vec2 point);
+/// Walking up to something and destroying it
+[[nodiscard]] std::vector<Step> DestroyThing(uint32_t object);
+/// Waiting a while, looking about
+[[nodiscard]] std::vector<Step> LookAbout(float seconds);
 /// The need to see to first, if any is strong enough and the means are at hand, and the agenda for it
 struct NeedPlan
 {

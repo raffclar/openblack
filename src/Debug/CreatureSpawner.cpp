@@ -14,6 +14,7 @@
 #include <functional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <SDL_events.h>
@@ -154,11 +155,32 @@ void CreatureSpawner::Select(entt::entity entity) noexcept
 
 void CreatureSpawner::Draw() noexcept
 {
-	DrawSettings();
-	ImGui::Separator();
-	DrawPlacing();
-	ImGui::Separator();
-	DrawCreatures();
+	if (!ImGui::BeginTabBar("CreatureSpawnerTabs"))
+	{
+		return;
+	}
+	if (ImGui::BeginTabItem("Spawn"))
+	{
+		DrawSettings();
+		ImGui::Separator();
+		DrawPlacing();
+		ImGui::EndTabItem();
+	}
+	if (ImGui::BeginTabItem("Creatures"))
+	{
+		DrawCreatures();
+		ImGui::EndTabItem();
+	}
+	// Selecting a creature brings its tab to the front, once
+	const bool justSelected = _selected.has_value() && _selected != _tabFor;
+	_tabFor = _selected;
+	if (_selected.has_value() &&
+	    ImGui::BeginTabItem("Selected", nullptr, justSelected ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None))
+	{
+		DrawSelected();
+		ImGui::EndTabItem();
+	}
+	ImGui::EndTabBar();
 }
 
 void CreatureSpawner::UseSpeciesDefaults() noexcept
@@ -240,8 +262,6 @@ void CreatureSpawner::DrawSettings() noexcept
 		ImGui::SetTooltip("How far the body is pulled from its base mesh towards each axis' mesh, -1 to 1");
 	}
 
-	DrawSelected();
-
 	ImGui::SeparatorText("Facing");
 	ImGui::Checkbox("Random", &_randomFacing);
 	if (!_randomFacing)
@@ -301,17 +321,31 @@ void CreatureSpawner::DrawSelected() noexcept
 	{
 		_selected.reset();
 	}
-	if (_selected.has_value())
+	if (!_selected.has_value() || !ImGui::BeginTabBar("SelectedCreatureTabs"))
 	{
-		DrawAppearance(*_selected);
-		DrawAudio(*_selected);
-		DrawMovement(*_selected);
-		DrawHands(*_selected);
-		DrawMind(*_selected);
-		DrawBody(*_selected);
-		DrawLeash(*_selected);
-		DrawFight(*_selected);
+		return;
 	}
+	const auto entity = *_selected;
+	const std::array<std::pair<const char*, void (CreatureSpawner::*)(entt::entity) noexcept>, 9> k_Tabs {{
+	    {"Looks", &CreatureSpawner::DrawAppearance},
+	    {"Audio", &CreatureSpawner::DrawAudio},
+	    {"Movement", &CreatureSpawner::DrawMovement},
+	    {"Hands", &CreatureSpawner::DrawHands},
+	    {"Mind", &CreatureSpawner::DrawMind},
+	    {"Learning", &CreatureSpawner::DrawLearning},
+	    {"Body", &CreatureSpawner::DrawBody},
+	    {"Leash", &CreatureSpawner::DrawLeash},
+	    {"Fight", &CreatureSpawner::DrawFight},
+	}};
+	for (const auto& [label, draw] : k_Tabs)
+	{
+		if (ImGui::BeginTabItem(label))
+		{
+			(this->*draw)(entity);
+			ImGui::EndTabItem();
+		}
+	}
+	ImGui::EndTabBar();
 }
 
 void CreatureSpawner::DrawMovement(entt::entity entity) noexcept

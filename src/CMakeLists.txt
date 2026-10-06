@@ -124,6 +124,8 @@ target_link_libraries(
           LinearMath
           minizip::minizip
   PUBLIC spdlog::spdlog
+         # The mind file's types are part of the creature mind component
+         creaturemind
 )
 target_include_directories(openblack_lib PRIVATE ${CXXOPTS_INCLUDE_DIRS})
 

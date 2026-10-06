@@ -123,6 +123,8 @@ struct Source
 	float threshold {1.0f};
 	/// Each turn the value is multiplied by this, so that values nothing renews fade
 	float multiplier {1.0f};
+	/// How much the source has driven its desire since the creature last decided on it, which says why it wants it
+	float drive {0.0f};
 };
 
 struct DesireState
@@ -136,6 +138,8 @@ struct DesireState
 	float increaseSeconds {1.0f};
 	/// Turns left during which the desire can't grow
 	uint32_t suppressedTurns {0};
+	/// How much the desire matters to the creature, which feedback can change
+	float weight {1.0f};
 	std::vector<Source> sources;
 };
 
@@ -156,6 +160,7 @@ struct DesireSetup
 	float decayMin {1.0f};
 	float decayMax {1.0f};
 	float increaseSeconds {1.0f};
+	float weight {1.0f};
 	std::vector<Source> sources;
 };
 

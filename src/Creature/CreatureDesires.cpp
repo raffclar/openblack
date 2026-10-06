@@ -137,6 +137,7 @@ Desires creature_desires::Create(const std::array<DesireSetup, k_DesireCount>& s
 		desire.max = from.max;
 		desire.decay = uniform(from.decayMin, from.decayMax);
 		desire.increaseSeconds = from.increaseSeconds;
+		desire.weight = from.weight;
 		for (const auto& source : from.sources)
 		{
 			if (source.type < k_NoSource && desire.sources.size() < k_MaxSources)
@@ -193,9 +194,11 @@ void creature_desires::UpdateDesires(Desires& desires, float turnsPerSecond)
 			continue;
 		}
 		float drive = 0.0f;
-		for (const auto& source : desire.sources)
+		for (auto& source : desire.sources)
 		{
-			drive += Sigmoid(source.threshold, source.value);
+			const auto sourceDrive = Sigmoid(source.threshold, source.value);
+			source.drive += sourceDrive;
+			drive += sourceDrive;
 		}
 		const auto increase =
 		    desire.increaseSeconds > 0.0f && turnsPerSecond > 0.0f ? drive / (turnsPerSecond * desire.increaseSeconds) : 0.0f;
