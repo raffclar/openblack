@@ -177,18 +177,9 @@ void Sound(entt::entity entity, const Creature& creature, const Transform& trans
 }
 
 /// The layers of the body as they are posed this frame
-struct Layers
+creature_audio::Layers LayersOf(const CreatureAnimation& animation)
 {
-	std::optional<creature_audio::Played> body;
-	std::optional<creature_audio::Played> gesture;
-	std::optional<creature_audio::Played> face;
-	std::vector<creature_audio::Played> slots;
-	std::optional<size_t> soundingSlot;
-};
-
-Layers LayersOf(const CreatureAnimation& animation)
-{
-	Layers layers;
+	creature_audio::Layers layers;
 	// The animations played by weight stand in for the body's own action
 	if (animation.slots.empty() && creature_layers::IsPlaying(animation.body))
 	{
@@ -262,32 +253,7 @@ void CreatureAudioSystem::Update(std::chrono::duration<float, std::milli> gameTi
 		    };
 
 		    // Every layer's events since the last frame, queued in order of when they fall within the frame
-		    std::vector<creature_audio::FiredEvent> queue;
-		    const auto enqueue = [&queue](const std::vector<creature_audio::FiredEvent>& fired) {
-			    for (const auto& event : fired)
-			    {
-				    creature_audio::Enqueue(queue, event);
-			    }
-		    };
-		    enqueue(creature_audio::LayerEvents(heard.body, layers.body, true, infoOf));
-		    if (layers.soundingSlot.has_value())
-		    {
-			    // The heaviest slot sounds from where it was last frame; one just brought in sounds from the next
-			    const auto& current = layers.slots[*layers.soundingSlot];
-			    const auto previous = std::ranges::find(heard.slots, current.animation, &creature_audio::Played::animation);
-			    enqueue(creature_audio::LayerEvents(previous != heard.slots.end() ? std::optional(*previous) : std::nullopt,
-			                                        current, false, infoOf));
-		    }
-		    enqueue(creature_audio::LayerEvents(heard.gesture, layers.gesture, true, infoOf));
-		    // A face sounds as it is pulled, not again each time the expression loops round
-		    enqueue(creature_audio::FaceEvents(heard.face, layers.face, heard.faceLooped, infoOf));
-
-		    heard.body = layers.body;
-		    heard.gesture = layers.gesture;
-		    heard.face = layers.face;
-		    heard.slots = layers.slots;
-		    heard.soundingSlot =
-		        layers.soundingSlot.has_value() ? std::optional(layers.slots[*layers.soundingSlot].animation) : std::nullopt;
+		    const auto queue = creature_audio::FrameEvents(heard.last, layers, gameTime.count(), infoOf);
 
 		    auto creatureGate = gate;
 		    creatureGate.localPlayersCreature = creature.owner == k_LocalPlayer;

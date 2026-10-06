@@ -108,6 +108,25 @@ using InfoOf = std::function<std::optional<AnimationInfo>(size_t animation)>;
 /// blending into a run steps once rather than twice. Nothing when none weighs anything.
 [[nodiscard]] std::optional<size_t> SoundingSlot(std::span<const float> weights);
 
+/// Where each layer of the body is posed in a frame: its action, gesture and face, and the animations played together by
+/// weight, with the one among them whose events sound
+struct Layers
+{
+	std::optional<Played> body;
+	std::optional<Played> gesture;
+	std::optional<Played> face;
+	std::vector<Played> slots;
+	std::optional<size_t> soundingSlot;
+	/// The face has looped round since it was pulled, and makes no more sounds
+	bool faceLooped {false};
+};
+
+/// The events the body's layers pass between the frame they were last heard in and this one, which took elapsedMs of
+/// game time, queued in order of when they fall within the frame; the layers are kept in last for the next frame.
+/// Nothing plays on in a frame in which no time passes, whatever the layers show, so it passes nothing and the layers
+/// are next compared with how they were before it: the sounds don't depend on how finely the time is cut into frames.
+[[nodiscard]] std::vector<FiredEvent> FrameEvents(Layers& last, const Layers& current, float elapsedMs, const InfoOf& infoOf);
+
 /// The size key: 1 (large) above a size of 4/3, 3 (small) up to 2/3, otherwise 2 (medium)
 [[nodiscard]] audio::SoundSize SizeKey(float size);
 /// The alignment key from -1 to 1, which no creature bank tells apart

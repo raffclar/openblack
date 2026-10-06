@@ -119,6 +119,9 @@ struct BodyAction
 	bool endWanted {false};
 	/// The loop holds its last frame rather than playing, as lying where it fell
 	bool holdLoop {false};
+	/// Its time is set each frame by what plays it, as a fight plays its fighters' moves at their own pace, so the frame
+	/// doesn't move it on as well
+	bool timedByPlayer {false};
 };
 
 [[nodiscard]] bool IsPlaying(const BodyAction& body);
@@ -134,7 +137,8 @@ struct BodyAction
 /// A sequence's loop ends and its end plays
 [[nodiscard]] BodyAction EndLoop(BodyAction body);
 /// The body some milliseconds on, given how long the animation it plays now lasts, or nothing when the species has no
-/// such animation. Each animation starts from its beginning, without blending into the last.
+/// such animation. Each animation starts from its beginning, without blending into the last. A body timed by what plays it
+/// stays where it was put.
 [[nodiscard]] BodyAction AdvanceBody(BodyAction body, float milliseconds, std::optional<uint32_t> duration);
 
 /// The face's expression, played on top of the body and looping. Changing it runs the expression back to its start

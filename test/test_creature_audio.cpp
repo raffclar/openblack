@@ -7,6 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+
+#include <algorithm>
 #include <array>
 #include <map>
 #include <vector>
@@ -252,4 +255,105 @@ TEST(CreatureAudio, Gate)
 		EXPECT_FALSE(IsHeard(EventKind::Voice, gate));
 	}
 	EXPECT_FALSE(IsHeard(EventKind::HairGroup, open));
+}
+
+namespace
+{
+/// A move played once over 500 ms, roaring and stepping, and a walk looping over 2000 ms
+constexpr std::array k_Move {Roar(0), Step(18), Step(256)};
+constexpr size_t k_MoveAnimation = 2;
+constexpr size_t k_WalkAnimation = 1;
+
+std::optional<AnimationInfo> MoveOrWalk(size_t index)
+{
+	if (index == k_MoveAnimation)
+	{
+		return AnimationInfo {.events = k_Move, .durationMs = 500, .looping = false};
+	}
+	if (index == k_WalkAnimation)
+	{
+		return AnimationInfo {.events = k_Walk, .durationMs = 2000, .looping = true};
+	}
+	return std::nullopt;
+}
+
+/// The events heard over some seconds of game time at a frame rate, the game time of each frame counted in whole
+/// milliseconds as the game clock counts it: a move played over and over at a little under its own speed, the way a
+/// fighter repeats one, while a walk loops underneath
+std::vector<int32_t> HeardAt(float framesPerSecond, float seconds)
+{
+	const InfoOf infoOf = MoveOrWalk;
+	Layers last;
+	std::vector<int32_t> heard;
+	float moveMs = 0.0f;
+	float walkMs = 0.0f;
+	int64_t clockMs = 0;
+	const auto frames = static_cast<int64_t>(seconds * framesPerSecond);
+	for (int64_t frame = 1; frame <= frames; ++frame)
+	{
+		const auto now = static_cast<int64_t>(static_cast<double>(frame) * 1000.0 / framesPerSecond);
+		const auto elapsed = static_cast<float>(now - clockMs);
+		clockMs = now;
+		moveMs += elapsed * 0.99f;
+		if (moveMs >= 500.0f)
+		{
+			moveMs = std::fmod(moveMs, 500.0f);
+		}
+		walkMs = std::fmod(walkMs + elapsed, 2000.0f);
+		Layers current {
+		    .body = Played {k_MoveAnimation, moveMs},
+		    .slots = {Played {k_WalkAnimation, walkMs}},
+		    .soundingSlot = 0,
+		};
+		for (const auto t : Times(FrameEvents(last, current, elapsed, infoOf)))
+		{
+			heard.push_back(t);
+		}
+	}
+	return heard;
+}
+} // namespace
+
+TEST(CreatureAudio, NothingSoundsInAFrameWithoutTime)
+{
+	const InfoOf infoOf = MoveOrWalk;
+	Layers last {.body = Played {k_MoveAnimation, 70.5f}};
+	// No time passed, so a move shown a little further back hasn't started again
+	EXPECT_TRUE(FrameEvents(last, Layers {.body = Played {k_MoveAnimation, 70.3f}}, 0.0f, infoOf).empty());
+	EXPECT_EQ(last.body, (Played {k_MoveAnimation, 70.5f}));
+	// Nor does it end when it isn't shown, or when another is
+	EXPECT_TRUE(FrameEvents(last, Layers {}, 0.0f, infoOf).empty());
+	EXPECT_TRUE(FrameEvents(last, Layers {.body = Played {k_WalkAnimation, 0.0f}}, 0.0f, infoOf).empty());
+	// Played on, it passes only what is new since it was last heard
+	EXPECT_TRUE(FrameEvents(last, Layers {.body = Played {k_MoveAnimation, 72.0f}}, 1.0f, infoOf).empty());
+	EXPECT_EQ(Times(FrameEvents(last, Layers {.body = Played {k_MoveAnimation, 300.0f}}, 1.0f, infoOf)),
+	          (std::vector<int32_t> {256}));
+}
+
+TEST(CreatureAudio, FrameEventsMatchTheLayers)
+{
+	const InfoOf infoOf = MoveOrWalk;
+	Layers last;
+	// A move started sounds from its beginning, and the walk brought in part way sounds from the next frame
+	const Layers first {
+	    .body = Played {k_MoveAnimation, 20.0f}, .slots = {Played {k_WalkAnimation, 100.0f}}, .soundingSlot = 0};
+	EXPECT_EQ(Times(FrameEvents(last, first, 20.0f, infoOf)), (std::vector<int32_t> {0, 18}));
+	const Layers second {
+	    .body = Played {k_MoveAnimation, 40.0f}, .slots = {Played {k_WalkAnimation, 140.0f}}, .soundingSlot = 0};
+	EXPECT_EQ(Times(FrameEvents(last, second, 20.0f, infoOf)), (std::vector<int32_t> {133}));
+}
+
+TEST(CreatureAudio, SoundsDoNotDependOnTheFrameRate)
+{
+	// Ten seconds at 60 frames a second; at the higher rates most frames take no whole millisecond at all
+	const auto expected = HeardAt(60.0f, 10.0f);
+	// The move of three events started twenty times, and two steps each of five times through the walk
+	EXPECT_EQ(expected.size(), 20u * 3u + 10u);
+	for (const auto rate : {30.0f, 144.0f, 800.0f, 1000.0f, 2400.0f, 7000.0f})
+	{
+		const auto heard = HeardAt(rate, 10.0f);
+		EXPECT_EQ(heard.size(), expected.size()) << rate << " frames a second";
+		EXPECT_EQ(std::ranges::count(heard, 18), std::ranges::count(expected, 18)) << rate << " frames a second";
+		EXPECT_EQ(std::ranges::count(heard, 133), std::ranges::count(expected, 133)) << rate << " frames a second";
+	}
 }

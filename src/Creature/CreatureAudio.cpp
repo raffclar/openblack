@@ -153,6 +153,37 @@ std::vector<FiredEvent> creature_audio::FaceEvents(const std::optional<Played>& 
 	return EventsPassed(info->events, previous->timeMs, current->timeMs, info->durationMs, false);
 }
 
+std::vector<FiredEvent> creature_audio::FrameEvents(Layers& last, const Layers& current, float elapsedMs, const InfoOf& infoOf)
+{
+	std::vector<FiredEvent> queue;
+	if (elapsedMs <= 0.0f)
+	{
+		return queue;
+	}
+	const auto enqueue = [&queue](const std::vector<FiredEvent>& fired) {
+		for (const auto& event : fired)
+		{
+			Enqueue(queue, event);
+		}
+	};
+	enqueue(LayerEvents(last.body, current.body, true, infoOf));
+	if (current.soundingSlot.has_value() && *current.soundingSlot < current.slots.size())
+	{
+		// The heaviest slot sounds from where it was last frame; one just brought in sounds from the next
+		const auto& slot = current.slots[*current.soundingSlot];
+		const auto previous = std::ranges::find(last.slots, slot.animation, &Played::animation);
+		enqueue(LayerEvents(previous != last.slots.end() ? std::optional(*previous) : std::nullopt, slot, false, infoOf));
+	}
+	enqueue(LayerEvents(last.gesture, current.gesture, true, infoOf));
+	// A face sounds as it is pulled, not again each time the expression loops round
+	bool faceLooped = last.faceLooped;
+	enqueue(FaceEvents(last.face, current.face, faceLooped, infoOf));
+
+	last = current;
+	last.faceLooped = faceLooped;
+	return queue;
+}
+
 std::optional<size_t> creature_audio::SoundingSlot(std::span<const float> weights)
 {
 	std::optional<size_t> heaviest;

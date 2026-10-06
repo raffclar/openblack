@@ -26,16 +26,8 @@ namespace openblack::ecs::components
 /// the sounds it made last
 struct CreatureAudio
 {
-	/// Where each layer of the body was at the last frame: its action, gesture and face, and the animations played
-	/// together by weight, by animation
-	std::optional<creature_audio::Played> body;
-	std::optional<creature_audio::Played> gesture;
-	std::optional<creature_audio::Played> face;
-	/// The face has looped round since it was pulled, and makes no more sounds
-	bool faceLooped {false};
-	std::vector<creature_audio::Played> slots;
-	/// The animation of the slot that sounded last frame
-	std::optional<size_t> soundingSlot;
+	/// Where each layer of the body was at the last frame in which time passed
+	creature_audio::Layers last;
 
 	/// A sound the creature made, or was to make
 	struct Heard

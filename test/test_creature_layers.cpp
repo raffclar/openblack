@@ -124,6 +124,25 @@ TEST(CreatureLayers, ASitStartsLoopsUntilToldThenEnds)
 	EXPECT_FALSE(IsPlaying(body));
 }
 
+TEST(CreatureLayers, ABodyTimedByWhatPlaysItStaysWherePut)
+{
+	// A fight sets its fighter's move at the move's own time each frame; the frame mustn't move it on as well, or the
+	// time shown would run ahead by however long each frame took, and go back when a frame takes less
+	const BodyAction move {
+	    .kind = BodyAction::Kind::Sequence,
+	    .phase = BodyAction::Phase::Loop,
+	    .animations = {120, 120, 120},
+	    .timeMs = 70.0f,
+	    .timedByPlayer = true,
+	};
+	for (const auto milliseconds : {0.0f, 1.0f, 16.0f, 700.0f})
+	{
+		const auto played = AdvanceBody(move, milliseconds, 500);
+		EXPECT_EQ(played.phase, BodyAction::Phase::Loop);
+		EXPECT_FLOAT_EQ(played.timeMs, 70.0f);
+	}
+}
+
 TEST(CreatureLayers, AFaceRunsBackBeforeTheNextStarts)
 {
 	FaceLayer face {.current = std::nullopt, .timeMs = 0.0f, .wanted = 16};

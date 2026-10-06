@@ -178,7 +178,9 @@ void TurnTowards(CreatureLocomotion& locomotion, float heading, float maxRadians
 	locomotion.toHeading = turned;
 }
 
-/// The body plays a fight animation at the fighter's time, looping until the fight moves it on
+/// The body plays a fight animation at the fighter's time, looping until the fight moves it on. The fight alone moves
+/// the time on, at the move's own speed, so that the body shows exactly where the move is: blows land and sound as drawn,
+/// whatever the frame rate.
 void Show(CreatureAnimation& animation, const fight::Fighter& fighter, bool poweringUp, float durationMs)
 {
 	const auto played = fighter.state == fight::State::Stance && poweringUp ? fight::animations::k_PowerUp : fighter.animation;
@@ -189,6 +191,7 @@ void Show(CreatureAnimation& animation, const fight::Fighter& fighter, bool powe
 	    .timeMs = std::clamp(fighter.timeMs, 0.0f, std::max(durationMs - 1.0f, 0.0f)),
 	    .mirrored = fighter.mirrored,
 	    .holdLoop = fighter.state == fight::State::Lying,
+	    .timedByPlayer = true,
 	};
 	animation.slots.clear();
 }

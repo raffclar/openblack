@@ -180,6 +180,10 @@ BodyAction creature_layers::AdvanceBody(BodyAction body, float milliseconds, std
 		body.timeMs = 0.0f;
 		return body;
 	}
+	if (body.timedByPlayer)
+	{
+		return body;
+	}
 	const auto length = static_cast<float>(duration.value_or(0));
 	const auto stand = [] { return BodyAction {}; };
 	if (body.kind == BodyAction::Kind::Once)
