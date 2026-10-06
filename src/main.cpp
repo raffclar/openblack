@@ -54,8 +54,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("H,height", "Window resolution in the y axis.", cxxopts::value<uint16_t>()->default_value("1024"))
 		("u,ui-scale", "Scaling of the GUI", cxxopts::value<float>()->default_value("1.0"))
 		("s,start-level", "Level that is loaded at start-up", cxxopts::value<std::string>()->default_value("Land1.txt"))
-		("testbed", "Start on the flat creature testbed instead of a level.")
-		("testbed-water", "Give the testbed a pool of sea in front of the camera, to check reflections.")
+		("testbed", "Start on the flat creature testbed, a plane with a lake, instead of a level.")
 		("V,vsync", "Enable Vertical Sync.")
 		("detail-level", "Graphics detail level of the original game, 0 to 6 (4 by default, 5 custom, 6 the highest).", cxxopts::value<uint16_t>()->default_value("4"))
 		("m,window-mode", "Which mode to run window.", cxxopts::value<std::string>()->default_value("windowed"))
@@ -195,7 +194,6 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.logLevels = logLevels;
 		args.startLevel = result["start-level"].as<std::string>();
 		args.startTestbed = result.count("testbed") != 0;
-		args.testbedWater = result.count("testbed-water") != 0;
 		args.frameStatsInterval = result["frame-stats"].as<uint32_t>();
 		args.frameStatsViews = result.count("frame-stats-views") != 0;
 	}

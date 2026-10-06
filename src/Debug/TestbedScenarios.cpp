@@ -179,11 +179,10 @@ void TestbedScenarios::DrawPicker() noexcept
 	ImGui::TextWrapped("%s", scenario.description.data());
 	ImGui::TextWrapped("Look for: %s", scenario.expected.data());
 	const auto& environment = scenario.environment;
-	ImGui::TextDisabled("%s testbed, %.1f o'clock%s, %s, body time x%.0f, %zu creature%s, %zu object%s, %zu command%s",
-	                    environment.land == Land::Pool ? "Pool" : "Plain", static_cast<double>(environment.hour),
-	                    environment.clockRuns ? "" : " (clock stopped)", Name(environment.weather).data(),
-	                    static_cast<double>(environment.bodyTimeScale), scenario.creatures.size(),
-	                    scenario.creatures.size() == 1 ? "" : "s", scenario.objects.size(),
+	ImGui::TextDisabled("%.1f o'clock%s, %s, body time x%.0f, %zu creature%s, %zu object%s, %zu command%s",
+	                    static_cast<double>(environment.hour), environment.clockRuns ? "" : " (clock stopped)",
+	                    Name(environment.weather).data(), static_cast<double>(environment.bodyTimeScale),
+	                    scenario.creatures.size(), scenario.creatures.size() == 1 ? "" : "s", scenario.objects.size(),
 	                    scenario.objects.size() == 1 ? "" : "s", scenario.commands.size(),
 	                    scenario.commands.size() == 1 ? "" : "s");
 }
@@ -225,7 +224,7 @@ void TestbedScenarios::DrawControls() noexcept
 	if (ImGui::Button("Empty testbed") && Game::Instance() != nullptr)
 	{
 		_runner.Stop();
-		Game::Instance()->LoadTestbed(picked.environment.land == Land::Pool);
+		Game::Instance()->LoadTestbed();
 	}
 	ImGui::SetItemTooltip("Loads the testbed afresh, with nothing on it");
 

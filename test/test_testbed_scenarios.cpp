@@ -14,9 +14,11 @@
 #include <string>
 #include <vector>
 
+#include <glm/common.hpp>
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/FlatLand.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureLayers.h"
@@ -123,9 +125,41 @@ TEST(TestbedScenarios, CoversTheCreatureFeatures)
 		species.insert(creature.species);
 	}
 	EXPECT_EQ(species.size(), static_cast<size_t>(CreatureType::_COUNT) - 1);
-	// Thirst needs water to find
-	EXPECT_EQ(Find("needs.thirst")->environment.land, Land::Pool);
-	EXPECT_EQ(Find("light.reflections")->environment.land, Land::Pool);
+	// Thirst needs water to find: the testbed's lake within the creature's search for it, 30 cells round it
+	const auto lake = flat_land::k_LakeCentre - flat_land::k_MapMiddle;
+	const auto* thirst = Find("needs.thirst");
+	ASSERT_NE(thirst, nullptr);
+	ASSERT_FALSE(thirst->creatures.empty());
+	EXPECT_LT(glm::distance(thirst->creatures.front().offset, lake) - flat_land::k_LakeHalfExtent.y, 300.0f);
+	EXPECT_NE(Find("light.reflections"), nullptr);
+	EXPECT_NE(Find("movement.lake"), nullptr);
+}
+
+TEST(TestbedScenarios, NothingStartsOnTheLakesOpenWater)
+{
+	const auto lake = flat_land::k_LakeCentre - flat_land::k_MapMiddle;
+	const auto onOpenWater = [lake](glm::vec2 offset) {
+		const auto from = glm::abs(offset - lake);
+		return from.x < flat_land::k_LakeHalfExtent.x && from.y < flat_land::k_LakeHalfExtent.y;
+	};
+	for (const auto& scenario : All())
+	{
+		for (const auto& creature : scenario.creatures)
+		{
+			EXPECT_FALSE(onOpenWater(creature.offset)) << scenario.id;
+		}
+		for (const auto& object : scenario.objects)
+		{
+			EXPECT_FALSE(onOpenWater(object.offset)) << scenario.id;
+		}
+		for (const auto& command : scenario.commands)
+		{
+			if (command.kind == Command::Kind::WalkTo || command.kind == Command::Kind::RunTo)
+			{
+				EXPECT_FALSE(onOpenWater(command.point)) << scenario.id;
+			}
+		}
+	}
 }
 
 TEST(TestbedScenarios, CoversObjectsTheHandAndLeashes)

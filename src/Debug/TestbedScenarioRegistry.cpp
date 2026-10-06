@@ -18,6 +18,7 @@
 #include <fmt/format.h>
 #include <glm/geometric.hpp>
 
+#include "3D/FlatLand.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureLayers.h"
@@ -32,8 +33,9 @@ using namespace openblack::testbed_scenarios;
 // description of what it sets up and what to look for, and then its data: the environment (land, hour, weather, body
 // time), the framing, the creatures with the bodies, needs and desires they start with, the objects on the land, and
 // the commands, which play in turn (commands on objects name them by their place in the scenario's objects). Offsets are from
-// the middle of the map, x east and y north; the testbed's camera looks north from 120 units south of the middle, and the pool
-// lies between them (x -160 to 160, y -120 to -20). A new facet goes into the Facet enum and its Name. test_testbed_scenarios
+// the middle of the map, x east and y north; the testbed's camera looks north from 120 units south of the middle, and the lake
+// lies beyond the middle (k_Lake, its open water 100 units a side, ringed by 20 units of shallows and a bank). Keep other
+// scenarios clear of it. A new facet goes into the Facet enum and its Name. test_testbed_scenarios
 // checks the data of every scenario; anything a scenario needs that the runner can't yet do goes into these types and
 // TestbedScenarioRunner together.
 
@@ -56,6 +58,20 @@ constexpr size_t k_LastPhase = 13;
 constexpr size_t k_Skills = 6;
 constexpr size_t k_Miracles = 42;
 constexpr size_t k_Deeds = 46;
+/// The testbed's lake, from the middle of the map: the middle of its open water, half its width, and the width of the
+/// shallows round it
+constexpr glm::vec2 k_Lake = flat_land::k_LakeCentre - flat_land::k_MapMiddle;
+constexpr glm::vec2 k_LakeHalf = flat_land::k_LakeHalfExtent;
+constexpr float k_ShallowsWidth = 20.0f;
+/// The near and far shallows of the lake, as the testbed's camera looks north across it
+constexpr float k_NearShallows = k_Lake.y - k_LakeHalf.y - (k_ShallowsWidth * 0.5f);
+constexpr float k_FarShallows = k_Lake.y + k_LakeHalf.y + (k_ShallowsWidth * 0.5f);
+
+/// The lake's open water, for the overview to keep in view
+std::vector<glm::vec2> LakeInView()
+{
+	return {k_Lake - k_LakeHalf, k_Lake + k_LakeHalf};
+}
 
 Command Go(Kind kind, size_t creature, glm::vec2 point, float delay = 0.0f, bool wait = true)
 {
@@ -305,15 +321,14 @@ void AddNeeds(std::vector<Scenario>& all)
 	    .id = "needs.thirst",
 	    .name = "Thirsty creature finds water",
 	    .facet = Facet::Needs,
-	    .description = "On the testbed with the pool, a parched tiger starts north of the middle with its desire for "
+	    .description = "A parched tiger starts north of the middle, short of the testbed's lake, with its desire for "
 	                   "water as strong as it gets.",
-	    .expected = "It walks to the nearest edge of the pool, bends down and drinks; its thirst clears and the desire "
-	                "for water is held back for a while.",
-	    .environment = {.land = Land::Pool},
-	    .framing = {.shot = Shot::Testbed},
+	    .expected = "It walks down the bank to the nearest edge of the lake, bends down and drinks; its thirst clears "
+	                "and the desire for water is held back for a while.",
+	    .framing = {.shot = Shot::Overview, .include = LakeInView()},
 	    .creatures = {CreatureSetup {
 	        .species = CreatureType::Tiger,
-	        .offset = {0.0f, 90.0f},
+	        .offset = {0.0f, 60.0f},
 	        .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.95f, .poo = 0.0f},
 	        .desires = {{.desire = Desire::Water, .fraction = 1.0f}},
 	    }},
@@ -664,15 +679,15 @@ void AddLight(std::vector<Scenario>& all)
 
 	all.push_back({
 	    .id = "light.reflections",
-	    .name = "Reflections in the pool",
+	    .name = "Reflections in the lake",
 	    .facet = Facet::Light,
-	    .description = "On the testbed with the pool, a tiger, a horse and a giant ape stand on its far edge, seen "
-	                   "across the water from the testbed's camera.",
+	    .description = "A tiger, a horse and a giant ape stand in the far shallows of the testbed's lake, seen across "
+	                   "the water from the south.",
 	    .expected = "Each shows upside down in the water in front of it, moving as it moves.",
-	    .environment = {.land = Land::Pool},
-	    .framing = {.shot = Shot::Testbed},
-	    .creatures = {Posed(CreatureType::Tiger, {40.0f, -5.0f}), Posed(CreatureType::Horse, {0.0f, -5.0f}),
-	                  Posed(CreatureType::GiantApe, {-45.0f, -5.0f})},
+	    .framing = {.shot = Shot::Overview, .include = LakeInView()},
+	    .creatures = {Posed(CreatureType::Tiger, {k_Lake.x + 30.0f, k_FarShallows}),
+	                  Posed(CreatureType::Horse, {k_Lake.x, k_FarShallows}),
+	                  Posed(CreatureType::GiantApe, {k_Lake.x - 30.0f, k_FarShallows})},
 	});
 }
 
@@ -692,6 +707,23 @@ void AddMovement(std::vector<Scenario>& all)
 	    .commands = {Go(Kind::WalkTo, 0, {60.0f, 60.0f}, 1.0f), Go(Kind::RunTo, 0, {-60.0f, 60.0f}, 0.5f),
 	                 Go(Kind::TurnToFace, 0, {0.0f, 0.0f}, 0.5f), Go(Kind::WalkTo, 0, {-60.0f, -60.0f}, 1.0f),
 	                 Go(Kind::RunTo, 0, {50.0f, -60.0f}, 0.5f), Go(Kind::WalkTo, 0, {60.0f, -60.0f}, 0.5f)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "movement.lake",
+	    .name = "Round the lake and through its shallows",
+	    .facet = Facet::Movement,
+	    .description = "A tiger on the west bank of the testbed's lake walks to the east bank, then down into the near "
+	                   "shallows and back up onto the plain.",
+	    .expected = "It never sets foot on the open water, which is too deep: its route bends round the lake on the bank "
+	                "or wades its shallows; it walks into the shallows and stands with its feet at the water, then "
+	                "climbs the bank.",
+	    .framing = {.shot = Shot::Overview, .include = LakeInView()},
+	    .creatures = {Posed(CreatureType::Tiger, {k_Lake.x - k_LakeHalf.x - 50.0f, k_Lake.y}, 90.0f)},
+	    .commands = {Go(Kind::WalkTo, 0, {k_Lake.x + k_LakeHalf.x + 50.0f, k_Lake.y}, 1.0f),
+	                 Go(Kind::WalkTo, 0, {k_Lake.x + 20.0f, k_NearShallows}, 1.0f),
+	                 Go(Kind::WalkTo, 0, {k_Lake.x - k_LakeHalf.x - 50.0f, k_Lake.y}, 1.0f)},
 	    .repeatFrom = 0,
 	});
 
@@ -833,14 +865,13 @@ void AddAudio(std::vector<Scenario>& all)
 	    .id = "audio.surfaces",
 	    .name = "Footsteps on grass and in the shallows",
 	    .facet = Facet::Audio,
-	    .description = "On the testbed with the pool, a tiger walks from the grass into the edge of the pool and back. "
+	    .description = "A tiger walks from the grass down the bank into the shallows of the testbed's lake and back. "
 	                   "Select it in the spawner to see its sound log.",
 	    .expected = "Its footsteps sound of grass on the land and of splashing in the water; the log's keys show the "
 	                "surface changing.",
-	    .environment = {.land = Land::Pool},
 	    .framing = {.shot = Shot::Follow, .distance = 1.4f},
-	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 40.0f})},
-	    .commands = {Go(Kind::WalkTo, 0, {0.0f, -25.0f}, 1.0f), Go(Kind::WalkTo, 0, {0.0f, 40.0f}, 1.0f)},
+	    .creatures = {Posed(CreatureType::Tiger, {k_Lake.x, 80.0f}, 180.0f)},
+	    .commands = {Go(Kind::WalkTo, 0, {k_Lake.x, k_NearShallows}, 1.0f), Go(Kind::WalkTo, 0, {k_Lake.x, 80.0f}, 1.0f)},
 	    .repeatFrom = 0,
 	});
 

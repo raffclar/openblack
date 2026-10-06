@@ -149,7 +149,6 @@ Game::Game(Arguments&& args) noexcept
     : _gamePath(args.gamePath)
     , _startMap(args.startLevel)
     , _startTestbed(args.startTestbed)
-    , _testbedWater(args.testbedWater)
     , _requestScreenshot(args.requestScreenshot)
 {
 	Locator::camera::emplace(glm::zero<glm::vec3>());
@@ -1623,7 +1622,7 @@ bool Game::Run() noexcept
 
 	if (_startTestbed)
 	{
-		LoadTestbed(_testbedWater);
+		LoadTestbed();
 	}
 	else if (!LoadMap(_startMap))
 	{
@@ -1816,7 +1815,7 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 	return true;
 }
 
-void Game::LoadTestbed(bool water) noexcept
+void Game::LoadTestbed() noexcept
 {
 	// No script runs on the testbed: the story's would set its time of day and stop its clock a few turns in
 	if (Locator::vm::has_value())
@@ -1824,7 +1823,7 @@ void Game::LoadTestbed(bool water) noexcept
 		Locator::vm::value().StopAllTasks();
 	}
 	PrepareNewLand();
-	InitializeLevel(flat_land::Build(water));
+	InitializeLevel(flat_land::Build());
 	SetUpLandscape();
 
 	// Looking down over the middle of the map, from the south

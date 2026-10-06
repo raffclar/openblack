@@ -512,9 +512,12 @@ const route::WalkableLand& CreatureLocomotionSystem::GetWalkableLand()
 			return *_land;
 		}
 		const auto& land = Locator::terrainSystem::value();
+		// The corners' own altitudes rather than the drawn heights, which put everything at sea level at the bottom: only
+		// corners right at the bottom make deep water, and shallows a little above it can be waded
 		_land = route::WalkableLand::Build(
 		    [&land](int32_t x, int32_t z) {
-			    return land.GetHeightAt(glm::vec2(static_cast<float>(x), static_cast<float>(z)) * route::k_CellSize);
+			    const auto* cell = land.FindCell(glm::u16vec2(static_cast<uint16_t>(x), static_cast<uint16_t>(z)));
+			    return cell != nullptr ? static_cast<float>(cell->altitude) * LandIslandInterface::k_HeightUnit : 0.0f;
 		    },
 		    [&land](int32_t x, int32_t z) -> std::optional<bool> {
 			    const auto* cell = land.FindCell(glm::u16vec2(static_cast<uint16_t>(x), static_cast<uint16_t>(z)));

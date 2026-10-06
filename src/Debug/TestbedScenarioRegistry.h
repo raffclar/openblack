@@ -78,13 +78,6 @@ enum class Facet : uint8_t
 constexpr size_t k_FacetCount = static_cast<size_t>(Facet::_Count);
 [[nodiscard]] std::string_view Name(Facet facet);
 
-/// The testbed's land: the plain, or the plain just above the sea with a pool of it in front of the camera
-enum class Land : uint8_t
-{
-	Plain,
-	Pool,
-};
-
 /// The weather laid over the whole island, the climates breeding no storms of their own; clear is a mild day
 enum class Weather : uint8_t
 {
@@ -98,7 +91,6 @@ enum class Weather : uint8_t
 
 struct Environment
 {
-	Land land {Land::Plain};
 	/// The hour of the day, as scripts give it, and whether the clock then runs on or stands still
 	float hour {12.0f};
 	bool clockRuns {true};
@@ -132,7 +124,7 @@ struct Framing
 	Shot shot {Shot::Overview};
 	/// The creature followed or looked at, by its place in the scenario's creatures
 	size_t creature {0};
-	/// Further points kept in view by the overview, from the middle of the map, such as the pool; it keeps the creatures,
+	/// Further points kept in view by the overview, from the middle of the map, such as the lake; it keeps the creatures,
 	/// the objects and wherever the commands send the creatures in view by itself
 	std::vector<glm::vec2> include;
 	/// Further away for more than 1, closer for less

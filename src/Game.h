@@ -84,8 +84,6 @@ struct Arguments
 	std::string startLevel;
 	/// Start on the flat creature testbed rather than startLevel
 	bool startTestbed {false};
-	/// With a pool of sea in front of the camera, for checking what the water reflects
-	bool testbedWater {false};
 	/// Log frame time statistics every so many frames, never when 0
 	uint32_t frameStatsInterval {0};
 	/// With the frame statistics, the GPU time of each render view
@@ -136,9 +134,9 @@ public:
 
 	bool LoadMap(const std::filesystem::path& path) noexcept;
 	void LoadLandscape(const std::filesystem::path& path);
-	/// Loads the testbed: a flat plane over the whole map, with nothing on it, for trying out creatures
-	/// With water, the plane is just above the sea and has a pool of it in front of the camera, to see reflections in
-	void LoadTestbed(bool water = false) noexcept;
+	/// Loads the testbed: a flat plane over the whole map, with a lake north of the middle and nothing on it, for trying
+	/// out creatures
+	void LoadTestbed() noexcept;
 
 	void SetTime(float time) noexcept;
 	/// How many times longer a turn takes: 2 is half speed
@@ -173,7 +171,6 @@ private:
 
 	std::filesystem::path _startMap;
 	bool _startTestbed {false};
-	bool _testbedWater {false};
 
 	std::chrono::steady_clock::time_point _lastGameLoopTime;
 	std::chrono::steady_clock::duration _turnDeltaTime;

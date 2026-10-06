@@ -166,7 +166,7 @@ void Runner::Start(const Scenario& scenario)
 	// A fresh testbed: the last one's creatures, objects, footprints, weather and scripts all go with it
 	if (auto* game = Game::Instance(); game != nullptr)
 	{
-		game->LoadTestbed(scenario.environment.land == Land::Pool);
+		game->LoadTestbed();
 	}
 	if (!Locator::terrainSystem::has_value())
 	{

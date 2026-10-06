@@ -8,15 +8,26 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <array>
+#include <optional>
 
 #include <gtest/gtest.h>
 
 #include "3D/FlatLand.h"
+#include "Creature/CreatureRoute.h"
 
 using namespace openblack;
 
 namespace
 {
+/// Within the lake or its shore, with a cell to spare
+bool NearLake(int x, int z)
+{
+	const auto reach = flat_land::k_ShoreCells + 1;
+	return x >= flat_land::k_LakeMinX - reach && x <= flat_land::k_LakeMaxX + reach && z >= flat_land::k_LakeMinZ - reach &&
+	       z <= flat_land::k_LakeMaxZ + reach;
+}
+
 bool SameColour(flat_land::Colour a, flat_land::Colour b)
 {
 	return a.r == b.r && a.g == b.g && a.b == b.b;
@@ -43,15 +54,149 @@ TEST(FlatLand, CoversEveryBlockOfTheMap)
 	}
 }
 
-TEST(FlatLand, EveryCellIsFlatDryLand)
+TEST(FlatLand, AwayFromTheLakeEveryCellIsFlatDryLand)
 {
 	const auto land = flat_land::Build();
 	for (const auto& block : land.blocks)
 	{
-		EXPECT_TRUE(std::ranges::all_of(block.cells, [](const lnd::LNDCell& cell) {
-			return cell.altitude == flat_land::k_Altitude && cell.properties.country == 0 && cell.properties.hasWater == 0 &&
-			       cell.properties.fullWater == 0 && cell.properties.split == 0 && cell.flags == flat_land::k_SoundFlags;
-		}));
+		for (int x = 0; x < 17; ++x)
+		{
+			for (int z = 0; z < 17; ++z)
+			{
+				const auto mapX = static_cast<int>(block.blockX) * 16 + x;
+				const auto mapZ = static_cast<int>(block.blockZ) * 16 + z;
+				if (NearLake(mapX, mapZ))
+				{
+					continue;
+				}
+				const auto& cell = block.cells.at(static_cast<size_t>(x * 17 + z));
+				ASSERT_TRUE(cell.altitude == flat_land::k_Altitude && cell.properties.country == 0 &&
+				            cell.properties.hasWater == 0 && cell.properties.fullWater == 0 && cell.properties.split == 0 &&
+				            cell.flags == flat_land::k_SoundFlags)
+				    << mapX << ", " << mapZ;
+			}
+		}
+	}
+}
+
+TEST(FlatLand, TheLakeIsAHundredUnitsOfOpenWaterNorthOfTheMiddle)
+{
+	EXPECT_EQ(flat_land::k_LakeMaxX - flat_land::k_LakeMinX, 10);
+	EXPECT_EQ(flat_land::k_LakeMaxZ - flat_land::k_LakeMinZ, 10);
+	EXPECT_FLOAT_EQ(flat_land::k_LakeHalfExtent.x * 2.0f, 100.0f);
+	EXPECT_FLOAT_EQ(flat_land::k_LakeHalfExtent.y * 2.0f, 100.0f);
+	EXPECT_FLOAT_EQ(flat_land::k_MapMiddle.x, 2560.0f);
+	EXPECT_FLOAT_EQ(flat_land::k_LakeCentre.x, 2560.0f);
+	// Beyond the middle, its bank clear of the scenarios and spawn area within 120 units of the middle
+	const auto bankStart = (static_cast<float>(flat_land::k_LakeMinZ - flat_land::k_ShoreCells) * flat_land::k_CellSize) -
+	                       flat_land::k_MapMiddle.y;
+	EXPECT_GE(bankStart, 120.0f);
+
+	int open = 0;
+	for (int x = 0; x < flat_land::k_CellsPerSide; ++x)
+	{
+		for (int z = 0; z < flat_land::k_CellsPerSide; ++z)
+		{
+			const bool inLake = x >= flat_land::k_LakeMinX && x < flat_land::k_LakeMaxX && z >= flat_land::k_LakeMinZ &&
+			                    z < flat_land::k_LakeMaxZ;
+			const bool isOpen = flat_land::KindOf(x, z) == flat_land::CellKind::OpenWater;
+			ASSERT_EQ(isOpen, inLake) << x << ", " << z;
+			open += isOpen ? 1 : 0;
+		}
+	}
+	EXPECT_EQ(open, 100);
+}
+
+TEST(FlatLand, OpenWaterIsAtTheBottomShowingTheSea)
+{
+	const auto cell = flat_land::CellAt(flat_land::k_LakeMinX + 4, flat_land::k_LakeMinZ + 4);
+	EXPECT_EQ(cell.altitude, 0);
+	EXPECT_EQ(cell.properties.hasWater, 1);
+	EXPECT_NE(cell.flags & flat_land::k_OpenWaterFlag, 0);
+	EXPECT_EQ(cell.flags >> 2, 2) << "still fresh water";
+	// The corners on the open water's edge are at the bottom too
+	EXPECT_EQ(flat_land::Altitude(flat_land::k_LakeMaxX, flat_land::k_LakeMaxZ), 0);
+}
+
+TEST(FlatLand, ShallowsRingTheOpenWaterAtSeaLevel)
+{
+	// Two cells out on every side, corners included, the cells are wadeable water at sea level, not open
+	for (int out = 1; out <= 2; ++out)
+	{
+		for (const auto [x, z] :
+		     std::array<std::array<int, 2>, 4> {{{flat_land::k_LakeMinX - out, flat_land::k_LakeMinZ + 5},
+		                                         {flat_land::k_LakeMaxX - 1 + out, flat_land::k_LakeMinZ + 5},
+		                                         {flat_land::k_LakeMinX + 5, flat_land::k_LakeMaxZ - 1 + out},
+		                                         {flat_land::k_LakeMinX - out, flat_land::k_LakeMinZ - out}}})
+		{
+			ASSERT_EQ(flat_land::KindOf(x, z), flat_land::CellKind::Shallows) << x << ", " << z;
+			const auto cell = flat_land::CellAt(x, z);
+			EXPECT_EQ(cell.properties.hasWater, 1);
+			EXPECT_EQ(cell.flags & flat_land::k_OpenWaterFlag, 0);
+			EXPECT_EQ(cell.flags >> 2, 2);
+			EXPECT_LE(cell.altitude, flat_land::k_SeaLevelAltitude);
+		}
+	}
+	// Then the bank: dry, coastal, then the plain
+	const auto shore = flat_land::CellAt(flat_land::k_LakeMinX - 3, flat_land::k_LakeMinZ + 5);
+	EXPECT_EQ(flat_land::KindOf(flat_land::k_LakeMinX - 3, flat_land::k_LakeMinZ + 5), flat_land::CellKind::Shore);
+	EXPECT_EQ(shore.properties.hasWater, 0);
+	EXPECT_EQ(shore.flags, flat_land::k_CoastalSoundFlags);
+	EXPECT_EQ(flat_land::KindOf(flat_land::k_LakeMinX - 4, flat_land::k_LakeMinZ + 5), flat_land::CellKind::Land);
+	EXPECT_EQ(flat_land::Altitude(flat_land::k_LakeMinX - flat_land::k_ShoreCells, flat_land::k_LakeMinZ),
+	          flat_land::k_Altitude);
+}
+
+TEST(FlatLand, TheBankIsNoSteeperThanACreatureCanWalk)
+{
+	// Rising no more than 10 units across a cell, at 0.67 units an altitude step
+	for (size_t i = 1; i < flat_land::k_ShoreAltitudes.size(); ++i)
+	{
+		const auto rise = flat_land::k_ShoreAltitudes.at(i) - flat_land::k_ShoreAltitudes.at(i - 1);
+		EXPECT_GE(rise, 0);
+		EXPECT_LE(static_cast<float>(rise) * 0.67f, 10.0f);
+	}
+	EXPECT_EQ(flat_land::k_ShoreAltitudes.back(), flat_land::k_Altitude);
+}
+
+TEST(FlatLand, RoutesWadeTheShallowsButNotTheOpenWater)
+{
+	const auto land = creature_route::WalkableLand::Build(
+	    [](int32_t x, int32_t z) { return static_cast<float>(flat_land::Altitude(x, z)) * 0.67f; },
+	    [](int32_t x, int32_t z) -> std::optional<bool> { return flat_land::CellAt(x, z).properties.hasWater != 0; });
+	using creature_route::Ground;
+	EXPECT_EQ(land.At(flat_land::k_LakeMinX + 5, flat_land::k_LakeMinZ + 5), Ground::Blocked);
+	EXPECT_EQ(land.At(flat_land::k_LakeMinX - 1, flat_land::k_LakeMinZ + 5), Ground::Water);
+	EXPECT_EQ(land.At(flat_land::k_LakeMinX - 2, flat_land::k_LakeMinZ + 5), Ground::Water);
+	EXPECT_EQ(land.At(flat_land::k_LakeMinX - 3, flat_land::k_LakeMinZ + 5), Ground::Open);
+	EXPECT_EQ(land.At(256, 256), Ground::Open);
+	// The middle of the near shallows is somewhere to stand
+	const glm::vec2 shallows {flat_land::k_LakeCentre.x, flat_land::k_LakeCentre.y - flat_land::k_LakeHalfExtent.y - 10.0f};
+	EXPECT_TRUE(land.IsValid(shallows, creature_route::k_DestinationClearance));
+}
+
+TEST(FlatLand, BlocksCarryTheLakeAcrossTheirEdges)
+{
+	const auto land = flat_land::Build();
+	for (const auto& block : land.blocks)
+	{
+		for (int x = 0; x < 17; ++x)
+		{
+			for (int z = 0; z < 17; ++z)
+			{
+				const auto mapX = static_cast<int>(block.blockX) * 16 + x;
+				const auto mapZ = static_cast<int>(block.blockZ) * 16 + z;
+				if (!NearLake(mapX, mapZ))
+				{
+					continue;
+				}
+				const auto& cell = block.cells.at(static_cast<size_t>(x * 17 + z));
+				const auto expected = flat_land::CellAt(mapX, mapZ);
+				ASSERT_EQ(cell.altitude, expected.altitude) << mapX << ", " << mapZ;
+				ASSERT_EQ(cell.flags, expected.flags) << mapX << ", " << mapZ;
+				ASSERT_EQ(cell.properties.hasWater, expected.properties.hasWater) << mapX << ", " << mapZ;
+			}
+		}
 	}
 }
 

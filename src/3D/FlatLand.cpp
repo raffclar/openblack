@@ -19,39 +19,15 @@ constexpr int k_CellsPerBlock = 16;
 constexpr float k_BlockSize = 160.0f;
 constexpr int k_TexelsPerCell = lnd::LNDMaterial::k_Width / k_CellsPerBlock;
 
-lnd::LNDCell FlatCell()
-{
-	lnd::LNDCell cell {};
-	cell.luminosity = flat_land::k_Luminosity;
-	cell.altitude = flat_land::k_Altitude;
-	cell.flags = flat_land::k_SoundFlags;
-	return cell;
-}
+/// A block holds the corners along both its edges, 17 a side
+constexpr int k_BlockCornersPerSide = k_CellsPerBlock + 1;
 
-/// The pool's cells in a block: down at the sea and, inside its edges, open sea, where no land is drawn
-void LetInPool(lnd::LNDBlock& block, int blockX, int blockZ)
+/// How many cells out from the lake's open water the map's corner (x, z) lies, 0 on or inside its edge
+int CellsFromOpenWater(int x, int z)
 {
-	constexpr uint8_t k_OpenSea = 0x02;
-	constexpr int k_CellsPerSide = k_CellsPerBlock + 1;
-	for (int x = 0; x < k_CellsPerSide; ++x)
-	{
-		for (int z = 0; z < k_CellsPerSide; ++z)
-		{
-			const auto mapX = (blockX * k_CellsPerBlock) + x;
-			const auto mapZ = (blockZ * k_CellsPerBlock) + z;
-			if (mapX < flat_land::k_PoolMinX || mapX > flat_land::k_PoolMaxX || mapZ < flat_land::k_PoolMinZ ||
-			    mapZ > flat_land::k_PoolMaxZ)
-			{
-				continue;
-			}
-			auto& cell = block.cells.at(static_cast<size_t>((x * k_CellsPerSide) + z));
-			cell.altitude = 0;
-			if (mapX < flat_land::k_PoolMaxX && mapZ < flat_land::k_PoolMaxZ)
-			{
-				cell.flags = static_cast<uint8_t>(cell.flags | k_OpenSea);
-			}
-		}
-	}
+	const auto outside = [](int v, int min, int max) { return std::max({min - v, v - max, 0}); };
+	return std::max(outside(x, flat_land::k_LakeMinX, flat_land::k_LakeMaxX),
+	                outside(z, flat_land::k_LakeMinZ, flat_land::k_LakeMaxZ));
 }
 } // namespace
 
@@ -65,32 +41,78 @@ flat_land::Colour flat_land::MaterialColour(int x, int z)
 	return odd ? k_DarkSquare : k_LightSquare;
 }
 
-LandData flat_land::Build(bool pool)
+uint8_t flat_land::Altitude(int x, int z)
+{
+	const auto out = CellsFromOpenWater(x, z);
+	return out < static_cast<int>(k_ShoreAltitudes.size()) ? k_ShoreAltitudes.at(static_cast<size_t>(out)) : k_Altitude;
+}
+
+flat_land::CellKind flat_land::KindOf(int x, int z)
+{
+	const std::array corners {Altitude(x, z), Altitude(x + 1, z), Altitude(x, z + 1), Altitude(x + 1, z + 1)};
+	const auto [low, high] = std::ranges::minmax(corners);
+	if (high == 0)
+	{
+		return CellKind::OpenWater;
+	}
+	if (high <= k_SeaLevelAltitude)
+	{
+		return CellKind::Shallows;
+	}
+	return low <= k_SeaLevelAltitude ? CellKind::Shore : CellKind::Land;
+}
+
+lnd::LNDCell flat_land::CellAt(int x, int z)
+{
+	lnd::LNDCell cell {};
+	cell.luminosity = k_Luminosity;
+	cell.altitude = Altitude(x, z);
+	switch (KindOf(x, z))
+	{
+	case CellKind::OpenWater:
+		cell.properties.hasWater = 1;
+		cell.flags = k_FreshWaterSoundFlags | k_OpenWaterFlag;
+		break;
+	case CellKind::Shallows:
+		cell.properties.hasWater = 1;
+		cell.flags = k_FreshWaterSoundFlags;
+		break;
+	case CellKind::Shore:
+		cell.flags = k_CoastalSoundFlags;
+		break;
+	case CellKind::Land:
+		cell.flags = k_SoundFlags;
+		break;
+	}
+	return cell;
+}
+
+LandData flat_land::Build()
 {
 	LandData data;
 
-	// Every block of the map, in order along z then x
-	auto cell = FlatCell();
-	if (pool)
-	{
-		cell.altitude = k_LowAltitude;
-	}
+	// Every block of the map, in order along z then x; a block's cells run [x * 17 + z], its last row and column the
+	// first of the next block's
 	data.blocks.reserve(data.blockIndexLookup.size());
 	for (int x = 0; x < LandData::k_BlocksPerSide; ++x)
 	{
 		for (int z = 0; z < LandData::k_BlocksPerSide; ++z)
 		{
 			auto& block = data.blocks.emplace_back();
-			std::ranges::fill(block.cells, cell);
+			for (int cx = 0; cx < k_BlockCornersPerSide; ++cx)
+			{
+				for (int cz = 0; cz < k_BlockCornersPerSide; ++cz)
+				{
+					const auto mapX = (x * k_CellsPerBlock) + cx;
+					const auto mapZ = (z * k_CellsPerBlock) + cz;
+					block.cells.at(static_cast<size_t>((cx * k_BlockCornersPerSide) + cz)) = CellAt(mapX, mapZ);
+				}
+			}
 			block.index = static_cast<uint32_t>(data.blocks.size());
 			block.mapX = static_cast<float>(x) * k_BlockSize;
 			block.mapZ = static_cast<float>(z) * k_BlockSize;
 			block.blockX = static_cast<uint32_t>(x);
 			block.blockZ = static_cast<uint32_t>(z);
-			if (pool)
-			{
-				LetInPool(block, x, z);
-			}
 			data.blockIndexLookup.at(static_cast<size_t>(x * LandData::k_BlocksPerSide + z)) =
 			    static_cast<uint16_t>(block.index);
 		}
