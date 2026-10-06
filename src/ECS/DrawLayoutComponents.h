@@ -23,6 +23,7 @@ struct MorphWithTerrain;
 struct StoragePit;
 struct TempleInteriorPart;
 struct Transform;
+struct Translucent;
 struct Tree;
 struct Unlit;
 } // namespace openblack::ecs::components
@@ -40,7 +41,8 @@ constexpr bool k_ChangesDrawLayout = [] {
 	return std::is_same_v<C, Mesh> || std::is_same_v<C, Transform> || std::is_same_v<C, MorphWithTerrain> ||
 	       std::is_same_v<C, Tree> || std::is_same_v<C, TempleInteriorPart> || std::is_same_v<C, AtHome> ||
 	       std::is_same_v<C, Abode> || std::is_same_v<C, Feature> || std::is_same_v<C, MobileStatic> ||
-	       std::is_same_v<C, StoragePit> || std::is_same_v<C, Unlit> || std::is_same_v<C, CreatureMorph>;
+	       std::is_same_v<C, StoragePit> || std::is_same_v<C, Unlit> || std::is_same_v<C, CreatureMorph> ||
+	       std::is_same_v<C, Translucent>;
 }();
 
 } // namespace openblack::ecs

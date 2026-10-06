@@ -957,7 +957,16 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 						state &= ~BGFX_STATE_WRITE_Z;
 					}
 				}
-				bgfx::setState(state, desc.rgba);
+				auto rgba = desc.rgba;
+				if (desc.additiveShare.has_value())
+				{
+					// Added by a constant share, as the game draws a one-shot miracle's bubble
+					state &= ~BGFX_STATE_BLEND_MASK;
+					state |= BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_FACTOR, BGFX_STATE_BLEND_ONE);
+					const auto byte = static_cast<uint32_t>(std::clamp(*desc.additiveShare, 0.0f, 1.0f) * 255.0f);
+					rgba = (byte << 24) | (byte << 16) | (byte << 8) | byte;
+				}
+				bgfx::setState(state, rgba);
 			}
 
 			program->Submit(static_cast<bgfx::ViewId>(viewId), desc.sortDepth,
@@ -4054,6 +4063,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				auto mesh = meshManager.Handle(meshId);
 
 				submitDesc.useMaterialBlending = useMaterialBlending;
+				submitDesc.additiveShare = placers.additiveShare;
 				// The game gives the rooms the temple's light; the hand keeps its own
 				const bool templeLit = Locator::temple::has_value() && Locator::temple::value().Active() &&
 				                       meshId != ecs::components::Hand::k_MeshId;

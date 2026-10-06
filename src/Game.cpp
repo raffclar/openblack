@@ -97,6 +97,7 @@
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MistSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
@@ -239,7 +240,25 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	// creature fights, clicks on the creatures and the arena's ground direct the fight instead.
 	auto& creatureHand = Locator::creatureHandSystem::value();
 	auto& fights = Locator::creatureFightSystem::value();
-	if (!inTemple && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT && !middleMouseButton)
+	auto& magic = Locator::magicSystem::value();
+	// A miracle in the hand, or a one-shot bubble under it, takes the press before the creatures and the land
+	bool magicTookPress = false;
+	if (!inTemple && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT && !middleMouseButton &&
+	    !Locator::debugGui::value().IsMouseOverWindow())
+	{
+		magicTookPress = magic.PressAction();
+	}
+	if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT)
+	{
+		magic.ReleaseAction();
+	}
+	// The other button lets go of the miracle in the hand
+	if (!inTemple && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT)
+	{
+		magic.DiscardHeldSeed();
+	}
+	if (!magicTookPress && !magic.IsHandBusy() && !inTemple && event.type == SDL_MOUSEBUTTONDOWN &&
+	    event.button.button == SDL_BUTTON_LEFT && !middleMouseButton)
 	{
 		const auto screenSize = Locator::windowing::value().GetSize();
 		glm::vec3 rayOrigin;
@@ -262,7 +281,8 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	}
 	const bool onCreature = creatureHand.GetCreature().has_value();
 
-	_handGripping = !inTemple && (middleMouseButton || (leftMouseButton && !onCreature && !fights.IsPressed()));
+	_handGripping =
+	    !inTemple && (middleMouseButton || (leftMouseButton && !onCreature && !fights.IsPressed() && !magic.IsHandBusy()));
 	_handRotating = !inTemple && middleMouseButton;
 
 	auto& window = Locator::windowing::value();
@@ -582,6 +602,11 @@ bool Game::GameLogicLoop() noexcept
 
 	// The objects' looping sounds start again where they have stopped
 	Locator::soundTagSystem::value().ProcessTurn(cameraPosition);
+	{
+		// The dispensers, then each miracle's upkeep, its own particle effect and what that effect tells it
+		auto magic = profiler.BeginScoped(Profiler::Stage::MagicUpdate);
+		Locator::magicSystem::value().ProcessTurn();
+	}
 	{
 		// The particle effects not owned by a miracle step, and the spot visuals count down
 		auto particles = profiler.BeginScoped(Profiler::Stage::ParticlesUpdate);
@@ -994,6 +1019,11 @@ bool Game::Update() noexcept
 					}
 				}
 				UpdateHandInterface();
+			}
+			{
+				auto magic = profiler.BeginScoped(Profiler::Stage::MagicUpdate);
+				UpdateMagicHand(handTransform.position,
+				                std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 			}
 			Locator::entitiesRegistry::value().SetDirty();
 		}
@@ -1850,6 +1880,9 @@ void Game::LoadTestbed() noexcept
 
 	StartNewLand();
 
+	// The testbed has no temple to give its player influence: its miracles may be cast anywhere
+	Locator::magicSystem::value().SetIgnoreInfluence(true);
+
 	// The testbed comes with its window of scenarios to try out on it
 	if (Locator::debugGui::has_value())
 	{
@@ -1870,7 +1903,9 @@ void Game::PrepareNewLand()
 	Locator::influenceSystem::value().Reset();
 	// Nor its creatures' footprints
 	Locator::footprintSystem::value().Reset();
-	// Nor its particle effects
+	// Nor its miracles, nor their particle effects
+	Locator::magicSystem::value().Reset();
+	Locator::magicSystem::value().SetIgnoreInfluence(false);
 	Locator::particleSystem::value().Reset();
 
 	// Reset everything. Deletes all entities and their components
@@ -2204,6 +2239,23 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 		_handDistance = glm::clamp(glm::min(_handHoverZoomer.GetValue(), nearest), k_HandMinDistance, k_HandMaxDistance);
 	}
 	handTransform.position = eye + _handRayDirection * _handDistance;
+}
+
+void Game::UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds)
+{
+	const auto screenSize = Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::zero<glm::ivec2>();
+	ecs::systems::MagicSystemInterface::HandFrame frame {.handPosition = handPosition, .point = _cursorWorldPosition};
+	if (screenSize.x > 0 && screenSize.y > 0)
+	{
+		Locator::camera::value().DeprojectScreenToWorld(
+		    static_cast<glm::vec2>(_mousePosition) / static_cast<glm::vec2>(screenSize), frame.rayOrigin, frame.rayDirection);
+	}
+	frame.cameraForward = Locator::camera::value().GetForward();
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	frame.overWorld = !inTemple && !Locator::debugGui::value().IsMouseOverWindow();
+	auto& magic = Locator::magicSystem::value();
+	magic.UpdateHand(frame, deltaSeconds);
+	magic.Update(deltaSeconds);
 }
 
 void Game::PlayHandGrabSound()

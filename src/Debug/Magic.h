@@ -45,6 +45,8 @@ private:
 	void DrawSandbox() noexcept;
 	void DrawParticles() noexcept;
 	void DrawRunningEffects() noexcept;
+	/// The running miracles and the dispensers, and tools to cast and put them down
+	void DrawMiracles() noexcept;
 	/// The spawned effects given a time close down when it is up
 	void UpdateTimedEffects(float seconds) noexcept;
 	/// Where a spawned effect goes: the hand, or what the camera looks at, on the land
@@ -59,6 +61,8 @@ private:
 	void StepSandbox() noexcept;
 
 	MagicType _selected {MagicType::Fireball};
+	/// The miracle the miracles' tab casts and puts down
+	MagicType _miracle {MagicType::Fireball};
 
 	// The sandbox
 	Tribe _tribe {Tribe::NORSE};

@@ -72,6 +72,8 @@ public:
 	struct L3DMeshSubmitDesc
 	{
 		graphics::RenderPass viewId;
+		/// Every primitive is added over what is behind it by this share, whatever its material says
+		std::optional<float> additiveShare;
 		const graphics::ShaderProgram* program;
 		/// Draws the submeshes that have a lightmap, with it bound to s_lightmap, when set
 		const graphics::ShaderProgram* lightmapProgram;

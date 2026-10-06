@@ -31,6 +31,7 @@
 #include "ECS/Components/Swayable.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Translucent.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Unlit.h"
 #include "ECS/Registry.h"
@@ -66,6 +67,8 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		bool castsShadow;
 		bool unlit;
 		bool perEntity;
+		bool translucent;
+		std::optional<float> additiveShare;
 	};
 	std::unordered_map<entt::id_type, MeshInstances> meshIds;
 
@@ -74,12 +77,19 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		                                                                   .morphWithTerrain = morphWithTerrain,
 		                                                                   .castsShadow = false,
 		                                                                   .unlit = false,
-		                                                                   .perEntity = false}));
+		                                                                   .perEntity = false,
+		                                                                   .translucent = false,
+		                                                                   .additiveShare = std::nullopt}));
 		count.first->second.count++;
 		// The things whose shadows Black & White bakes into the land (IsCastShadowAtNight), and its features
 		count.first->second.castsShadow |= registry.AnyOf<Abode, Feature, MobileStatic, StoragePit>(entity);
 		count.first->second.unlit |= registry.AnyOf<Unlit>(entity);
 		count.first->second.perEntity |= registry.AnyOf<CreatureMorph>(entity);
+		if (const auto* translucent = registry.TryGet<const Translucent>(entity))
+		{
+			count.first->second.translucent = true;
+			count.first->second.additiveShare = translucent->share;
+		}
 		instanceCount++;
 	};
 
@@ -127,6 +137,10 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		    std::forward_as_tuple(offset, desc.count, desc.morphWithTerrain, desc.castsShadow));
 		drawDesc->second.unlit = desc.unlit;
 		drawDesc->second.perEntity = desc.perEntity;
+		// Blended by its materials, over the opaque things
+		drawDesc->second.materialBlending = desc.translucent;
+		drawDesc->second.translucent = desc.translucent;
+		drawDesc->second.additiveShare = desc.additiveShare;
 		_instanceSlots.emplace(
 		    meshId,
 		    InstanceSlots {.offset = offset, .count = desc.count, .filled = 0, .perEntity = desc.perEntity, .height = 0.0f});

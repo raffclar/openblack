@@ -13,6 +13,9 @@
 
 #include <cinttypes>
 #include <cmath>
+#include <cstring>
+
+#include <algorithm>
 
 #include <bgfx/embedded_shader.h>
 // BGFX has support for WSL to use windows d3d. We disable it here from the BGFX_EMBEDDED_SHADER macro.
@@ -54,6 +57,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "Editor/EditorWindow.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -63,6 +67,7 @@
 #include "LandIsland.h"
 #include "Locator.h"
 #include "Magic.h"
+#include "Magic/MagicTables.h"
 #include "MeshViewer.h"
 #include "PathFinding.h"
 #include "Profiler.h"
@@ -329,6 +334,7 @@ bool Gui::Loop() noexcept
 		window->WindowDraw();
 	}
 	ShowVillagerNames();
+	ShowDispenserNames();
 	ShowCameraPositionOverlay();
 
 	ImGui::Render();
@@ -877,6 +883,49 @@ std::optional<glm::uvec4> Gui::RenderVillagerName(const std::vector<glm::vec4>& 
 	}
 
 	return std::make_optional<glm::uvec4>(boxExtent);
+}
+
+void Gui::ShowDispenserNames() noexcept
+{
+	const auto& config = Locator::config::value();
+	if (!config.showDispenserNames || !Locator::magicSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto& displaySize = ImGui::GetIO().DisplaySize;
+	const glm::vec4 viewport {0.0f, 0.0f, displaySize.x, displaySize.y};
+	const auto& camera = Locator::camera::value();
+	auto* drawList = ImGui::GetBackgroundDrawList();
+	// Only near enough to read
+	constexpr float k_MaxDistance = 250.0f;
+	constexpr float k_LabelHeight = 9.0f;
+	for (const auto& dispenser : Locator::magicSystem::value().GetDispensers())
+	{
+		if (glm::distance(camera.GetOrigin(), dispenser.position) > k_MaxDistance)
+		{
+			continue;
+		}
+		glm::vec3 screen;
+		if (!camera.ProjectWorldToScreen(dispenser.position + glm::vec3(0.0f, k_LabelHeight, 0.0f), viewport, screen))
+		{
+			continue;
+		}
+		const auto& raw = magic::GetMagicEffectInfo(Locator::infoConstants::value(), dispenser.magicType).debugString;
+		// Its miracle's name as the tables spell it, in lower case, the creature spells' shortened
+		std::string name(raw.data(), strnlen(raw.data(), raw.size()));
+		constexpr std::string_view k_CreaturePrefix = "CREATURE_SPELL_";
+		if (name.starts_with(k_CreaturePrefix))
+		{
+			name = "creature " + name.substr(k_CreaturePrefix.size());
+		}
+		std::ranges::replace(name, '_', ' ');
+		std::ranges::transform(name, name.begin(), [](char c) { return static_cast<char>(std::tolower(c)); });
+		const auto size = ImGui::CalcTextSize(name.c_str());
+		const ImVec2 at(screen.x - size.x * 0.5f, screen.y - size.y);
+		drawList->AddRectFilled(ImVec2(at.x - 3.0f, at.y - 1.0f), ImVec2(at.x + size.x + 3.0f, at.y + size.y + 1.0f),
+		                        IM_COL32(0, 0, 0, 150), 3.0f);
+		drawList->AddText(at, dispenser.hasOrb ? IM_COL32(255, 240, 160, 255) : IM_COL32(170, 170, 170, 255), name.c_str());
+	}
 }
 
 void Gui::ShowVillagerNames() noexcept

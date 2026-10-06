@@ -203,6 +203,8 @@ private:
 
 	/// Plays the sound of the hand grabbing the land or the sea at the grab point, as the game does
 	void PlayHandGrabSound();
+	/// The miracles hear where the hand and cursor are, and the held miracle follows the hand
+	void UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds);
 	/// Places the hand on the line of sight through the cursor the way the game does
 	void PlaceHand(ecs::components::Transform& handTransform, float deltaSeconds);
 	/// Loads the hand animations of Data/CTR/hh.hbn for the hand mesh

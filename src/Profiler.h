@@ -44,6 +44,7 @@ public:
 		CreatureCombatUpdate,
 		VegetationUpdate,
 		ParticlesUpdate,
+		MagicUpdate,
 		SdlInput,
 		UpdateUniforms,
 		UpdateEntities,
@@ -101,6 +102,7 @@ public:
 	    "Creature Combat",      //
 	    "Vegetation Update",    //
 	    "Particles",            //
+	    "Magic",                //
 	    "SDL Input",            //
 	    "Update Uniforms",      //
 	    "Entities",             //

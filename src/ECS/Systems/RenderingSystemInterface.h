@@ -59,6 +59,8 @@ struct RenderContext
 		bool materialBlending {false};
 		/// The instances are all blended by their materials, so they are drawn after the opaque ones
 		bool translucent {false};
+		/// The instances are added over what is behind them by this share, whatever their materials say
+		std::optional<float> additiveShare;
 		/// The instances are drawn one by one, each posed and shaped as its entity is: the creatures
 		bool perEntity {false};
 		/// How far the instances' textures have slid across them

@@ -133,6 +133,7 @@ class TimeSystemInterface;
 class VegetationInterface;
 class WeatherSystemInterface;
 class ParticleSystemInterface;
+class MagicSystemInterface;
 } // namespace ecs::systems
 
 void InitializeWindow(const std::string& title, int width, int height, windowing::DisplayMode displayMode, uint32_t extraFlags);
@@ -206,6 +207,7 @@ struct Locator
 	using influenceSystem = entt::locator<ecs::systems::InfluenceSystemInterface>;
 	using townDesireSystem = entt::locator<ecs::systems::TownDesireSystemInterface>;
 	using particleSystem = entt::locator<ecs::systems::ParticleSystemInterface>;
+	using magicSystem = entt::locator<ecs::systems::MagicSystemInterface>;
 	using vm = entt::locator<lhvm::LHVM>;
 	using chlapi = entt::locator<chlapi::CHLApi>;
 };

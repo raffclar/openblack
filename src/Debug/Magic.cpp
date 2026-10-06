@@ -110,6 +110,11 @@ void Magic::Draw() noexcept
 	}
 	if (ImGui::BeginTabBar("MagicTabs"))
 	{
+		if (ImGui::BeginTabItem("Running"))
+		{
+			DrawMiracles();
+			ImGui::EndTabItem();
+		}
 		if (ImGui::BeginTabItem("Miracle"))
 		{
 			DrawSelected();

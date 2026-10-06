@@ -38,6 +38,8 @@ struct EngineConfig
 	bool showVillagerNames {false};
 	bool debugVillagerNames {false};
 	bool debugVillagerStates {false};
+	/// Each miracle dispenser is labelled with its miracle
+	bool showDispenserNames {true};
 
 	bool viewDetailOverlay {false};
 	bool drawSky {true};
