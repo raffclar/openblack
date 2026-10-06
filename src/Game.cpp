@@ -59,6 +59,7 @@
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
+#include "Creature/CreatureHandRules.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/FrameStatsLog.h"
 #include "Debug/TestbedDispenserGrid.h"
@@ -218,6 +219,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 {
 	static bool leftMouseButton = false;
 	static bool middleMouseButton = false;
+	static bool rightMouseButton = false;
 
 	// Pressed and let go, or as the mouse moving finds them: a press or a let go the menu or the debug windows took would
 	// otherwise leave the hand gripping, as on leaving the temple
@@ -229,16 +231,24 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	{
 		middleMouseButton = event.type == SDL_MOUSEBUTTONDOWN;
 	}
+	const bool rightLetGo =
+	    rightMouseButton && ((event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT) ||
+	                         (event.type == SDL_MOUSEMOTION && (event.motion.state & SDL_BUTTON_RMASK) == 0));
+	if ((event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) && event.button.button == SDL_BUTTON_RIGHT)
+	{
+		rightMouseButton = event.type == SDL_MOUSEBUTTONDOWN;
+	}
 	if (event.type == SDL_MOUSEMOTION)
 	{
 		leftMouseButton = (event.motion.state & SDL_BUTTON_LMASK) != 0;
 		middleMouseButton = (event.motion.state & SDL_BUTTON_MMASK) != 0;
+		rightMouseButton = (event.motion.state & SDL_BUTTON_RMASK) != 0;
 	}
 
 	// The hand grips the land, which the temple has none of: its camera takes the clicks
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	// Clicking a creature holds the hand to it to stroke or slap it, rather than gripping the land. While the player's
-	// creature fights, clicks on the creatures and the arena's ground direct the fight instead.
+	// Holding the right button on a creature holds the hand to it to stroke or slap it; clicking it puts the leash on.
+	// While the player's creature fights, clicks on the creatures and the arena's ground direct the fight instead.
 	auto& creatureHand = Locator::creatureHandSystem::value();
 	auto& fights = Locator::creatureFightSystem::value();
 	auto& magic = Locator::magicSystem::value();
@@ -253,11 +263,34 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	{
 		magic.ReleaseAction();
 	}
-	// The other button lets go of the miracle in the hand
+	// The other button lets go of the miracle in the hand, or else takes hold of the creature under the hand. With the
+	// leash on, pressed on another creature it ties the leash to that one instead (see the leash's input).
 	if (!inTemple && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT)
 	{
-		_actionTakenByMagic = magic.GetHeldSeed().has_value();
+		_actionPressTaken = magic.GetHeldSeed().has_value();
 		magic.DiscardHeldSeed();
+		if (!_actionPressTaken)
+		{
+			const auto screenSize = Locator::windowing::value().GetSize();
+			glm::vec3 rayOrigin;
+			glm::vec3 rayDirection;
+			Locator::camera::value().DeprojectScreenToWorld(glm::vec2(event.button.x, event.button.y) /
+			                                                    static_cast<glm::vec2>(glm::max(screenSize, glm::ivec2(1))),
+			                                                rayOrigin, rayDirection);
+			const auto& leashes = Locator::leashSystem::value();
+			const auto own = leashes.PlayersCreature(PlayerNames::PLAYER_ONE);
+			const auto under = creatureHand.CreatureAlong(rayOrigin, rayDirection);
+			const bool tying = under.has_value() && own.has_value() && *under != *own && leashes.IsLeashed(*own);
+			if (under.has_value() && !tying)
+			{
+				_actionPressTaken = true;
+				if (!creatureHand.Grab(rayOrigin, rayDirection))
+				{
+					// A creature the hand may not hold: a click on it still asks the leash, which says why not
+					Locator::leashSystem::value().TapCreature(PlayerNames::PLAYER_ONE, *under);
+				}
+			}
+		}
 	}
 	if (!magicTookPress && !magic.IsHandBusy() && !inTemple && event.type == SDL_MOUSEBUTTONDOWN &&
 	    event.button.button == SDL_BUTTON_LEFT && !middleMouseButton)
@@ -268,7 +301,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		Locator::camera::value().DeprojectScreenToWorld(glm::vec2(event.button.x, event.button.y) /
 		                                                    static_cast<glm::vec2>(glm::max(screenSize, glm::ivec2(1))),
 		                                                rayOrigin, rayDirection);
-		if (!fights.Press(rayOrigin, rayDirection) && !creatureHand.Grab(rayOrigin, rayDirection))
+		if (!fights.Press(rayOrigin, rayDirection))
 		{
 			PlayHandGrabSound();
 		}
@@ -277,9 +310,17 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	{
 		fights.Release();
 	}
-	if (!leftMouseButton && creatureHand.GetCreature().has_value() && !creatureHand.IsHeldByCommand())
+	// Letting go of the right button lets go of the creature. Let go quickly, having neither stroked nor slapped it, the
+	// press was a click, which puts the leash on the player's creature.
+	if (rightLetGo && creatureHand.GetCreature().has_value() && !creatureHand.IsHeldByCommand())
 	{
+		const auto creature = *creatureHand.GetCreature();
+		const bool click = creatureHand.IsClick();
 		creatureHand.Release();
+		if (click)
+		{
+			Locator::leashSystem::value().TapCreature(PlayerNames::PLAYER_ONE, creature);
+		}
 	}
 	const bool onCreature = creatureHand.GetCreature().has_value();
 
@@ -470,12 +511,12 @@ void Game::ProcessHandToolTipTurn()
 		return;
 	}
 	auto& toolTips = _interface->GetToolTips();
-	// Over the player's own creature, the hand can take hold of it to stroke or slap it
+	// Over the player's own creature, or their guide's, the hand can take hold of it to stroke or slap it
 	const auto over = _creatureUnderHand.has_value() ? _creatureUnderHand : Locator::creatureHandSystem::value().GetCreature();
 	if (over.has_value() && !_interface->GetMenu().IsOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive())
 	{
 		const auto* creature = Locator::entitiesRegistry::value().TryGet<const ecs::components::Creature>(*over);
-		if (creature != nullptr && creature->owner == PlayerNames::PLAYER_ONE)
+		if (creature != nullptr && creature_hand::MayTouch(PlayerNames::PLAYER_ONE, creature->owner, creature->guidesCreature))
 		{
 			toolTips.Submit(creature_panel::k_InteractToolTip, gui::ToolTipAction::Select, gui::ToolTipArrows::k_None);
 		}
@@ -951,8 +992,16 @@ bool Game::Update() noexcept
 					// aren't updated then, so a key just pressed would read as pressed again every frame.
 					if (!Locator::debugGui::value().StealsFocus())
 					{
-						Locator::leashSystem::value().HandleInput(rayOrigin, rayDirection, _actionTakenByMagic);
-						_actionTakenByMagic = false;
+						auto& leashes = Locator::leashSystem::value();
+						leashes.HandleInput(rayOrigin, rayDirection, _actionPressTaken);
+						_actionPressTaken = false;
+						// Shaking the free hand takes off the leash held in it
+						const auto seconds = std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count();
+						const bool handFree = !_handGripping && !Locator::creatureHandSystem::value().GetCreature() &&
+						                      !Locator::magicSystem::value().GetHeldSeed().has_value();
+						leashes.TrackHand(PlayerNames::PLAYER_ONE,
+						                  static_cast<glm::vec2>(_mousePosition) / static_cast<float>(screenSize.y), seconds,
+						                  handFree);
 					}
 					if (auto hit = dynamicsSystem.RayCastClosestHit(rayOrigin, rayDirection, 1e10f))
 					{

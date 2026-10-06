@@ -481,6 +481,30 @@ bool LeashSystem::PressKey(PlayerNames player, leash::LeashKey key)
 	return Carry(player, *creature, leash::CommandFor(key, KeyStateOf(registry, *creature)));
 }
 
+bool LeashSystem::TrackHand(PlayerNames player, glm::vec2 cursor, float seconds, bool handFree)
+{
+	if (!handFree)
+	{
+		_shake = {};
+		return false;
+	}
+	return leash::TrackShake(_shake, cursor, seconds) && Shake(player);
+}
+
+bool LeashSystem::Shake(PlayerNames player)
+{
+	const auto creature = PlayersCreature(player);
+	if (!creature.has_value() || !IsLeashed(*creature) || TiedTo(*creature).has_value())
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Player {} shook the hand with no leash held in it", PlayerNumber(player));
+		return false;
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Player {} shook the leash off creature {}", PlayerNumber(player),
+	                   entt::to_integral(*creature));
+	TakeOff(*creature);
+	return true;
+}
+
 bool LeashSystem::TapCreature(PlayerNames player, entt::entity creature)
 {
 	if (IsLeashed(creature))
@@ -1103,14 +1127,10 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 		TapPost(*tapped);
 		return;
 	}
-	// Tapping a creature with no leash on in hand puts the picked leash on it, if it is the player's to lead
+	// A creature is clicked or held by the right button as it is let go (see TapCreature and the creature hand): only
+	// with the leash on does pressing it on another creature tie the leash to that one
 	const bool isCreature = registry.TryGet<const Creature>(*tapped) != nullptr;
-	if (isCreature && (!wearing || *tapped == *creature))
-	{
-		TapCreature(player, *tapped);
-		return;
-	}
-	if (!wearing)
+	if (!wearing || (isCreature && *tapped == *creature))
 	{
 		return;
 	}

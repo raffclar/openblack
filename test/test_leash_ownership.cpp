@@ -9,11 +9,13 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <algorithm>
 #include <array>
 
 #include <SDL_events.h>
 #include <gtest/gtest.h>
 
+#include "Creature/CreatureHandRules.h"
 #include "Creature/LeashKeys.h"
 #include "Creature/LeashOwnership.h"
 #include "Input/GameActionMap.h"
@@ -196,4 +198,101 @@ TEST(LeashKeys, PreviousAndNextGoRoundTheKnownLeashes)
 	EXPECT_EQ(StepKnown(LeashType::Rope, two, true), LeashType::Evil);
 	EXPECT_EQ(CommandFor(LeashKey::NextLeash, {.known = Knowing({LeashType::Rope}), .selected = LeashType::Rope}),
 	          KeyCommand {});
+}
+
+namespace
+{
+/// Sweeps the cursor from side to side across the screen's middle: so many swings of so wide, each taking so long,
+/// sampled sixty times a second. Returns whether the hand was shaken.
+bool Sweep(ShakeTracker& tracker, int swings, float width, float swingSeconds)
+{
+	constexpr float k_Frame = 1.0f / 60.0f;
+	const int frames = std::max(static_cast<int>(swingSeconds / k_Frame), 1);
+	bool shaken = TrackShake(tracker, {0.5f, 0.5f}, k_Frame);
+	for (int swing = 0; swing < swings; ++swing)
+	{
+		const float from = swing % 2 == 0 ? 0.5f - width * 0.5f : 0.5f + width * 0.5f;
+		const float to = swing % 2 == 0 ? 0.5f + width * 0.5f : 0.5f - width * 0.5f;
+		for (int frame = 1; frame <= frames; ++frame)
+		{
+			const float t = static_cast<float>(frame) / static_cast<float>(frames);
+			shaken = TrackShake(tracker, {from + (to - from) * t, 0.5f}, k_Frame) || shaken;
+		}
+	}
+	return shaken;
+}
+} // namespace
+
+TEST(LeashShake, AQuickBackAndForthIsAShake)
+{
+	ShakeTracker tracker;
+	EXPECT_TRUE(Sweep(tracker, 6, 0.15f, 0.1f));
+}
+
+TEST(LeashShake, UpAndDownCountsToo)
+{
+	ShakeTracker tracker;
+	constexpr float k_Frame = 1.0f / 60.0f;
+	bool shaken = false;
+	for (int i = 0; i < 24 && !shaken; ++i)
+	{
+		shaken = TrackShake(tracker, {0.5f, (i / 3) % 2 == 0 ? 0.4f : 0.6f}, k_Frame);
+	}
+	EXPECT_TRUE(shaken);
+}
+
+TEST(LeashShake, SlowSweepsAreNotAShake)
+{
+	ShakeTracker tracker;
+	EXPECT_FALSE(Sweep(tracker, 6, 0.15f, 0.4f));
+}
+
+TEST(LeashShake, TremblesAreNotAShake)
+{
+	ShakeTracker tracker;
+	EXPECT_FALSE(Sweep(tracker, 12, k_ShakeSwing * 0.5f, 0.05f));
+}
+
+TEST(LeashShake, OneSweepIsNotAShake)
+{
+	ShakeTracker tracker;
+	EXPECT_FALSE(Sweep(tracker, 2, 0.5f, 0.1f));
+}
+
+TEST(LeashShake, AShakeStartsAfresh)
+{
+	ShakeTracker tracker;
+	constexpr float k_Frame = 1.0f / 60.0f;
+	bool shaken = false;
+	for (int i = 0; i < 60 && !shaken; ++i)
+	{
+		shaken = TrackShake(tracker, {(i / 3) % 2 == 0 ? 0.4f : 0.6f, 0.5f}, k_Frame);
+	}
+	ASSERT_TRUE(shaken);
+	// The turns that made it are forgotten, so the next shake has to be a whole one
+	EXPECT_EQ(tracker.turnCount, 0u);
+	EXPECT_FALSE(TrackShake(tracker, {0.6f, 0.5f}, k_Frame));
+}
+
+TEST(CreatureHand, TheHandTouchesOnlyItsOwnAndTheGuidesCreature)
+{
+	using creature_hand::MayTouch;
+	EXPECT_TRUE(MayTouch(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, false));
+	// Khazar's creature belongs to another player but guides the player
+	EXPECT_TRUE(MayTouch(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_THREE, true));
+	// Another god's creature, and nobody's, are left alone
+	EXPECT_FALSE(MayTouch(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_FOUR, false));
+	EXPECT_FALSE(MayTouch(PlayerNames::PLAYER_ONE, PlayerNames::NEUTRAL, false));
+	EXPECT_FALSE(MayTouch(PlayerNames::PLAYER_ONE, PlayerNames::NEUTRAL, true));
+}
+
+TEST(CreatureHand, AQuickPressIsAClickAndALongOneAHold)
+{
+	using creature_hand::IsClick;
+	EXPECT_TRUE(IsClick(150.0f, false));
+	EXPECT_FALSE(IsClick(creature_hand::k_ClickMaxMs, false));
+	// Stroking or slapping makes it a hold however quick
+	EXPECT_FALSE(IsClick(150.0f, true));
+	// A click can never last long enough to stroke
+	EXPECT_LE(creature_hand::k_ClickMaxMs, creature_feedback::k_StrokeHoldMs);
 }

@@ -41,6 +41,10 @@ struct HandOnCreature
 	float slapShowMs {0.0f};
 	/// Held by a command, such as a testbed scenario's, rather than by the button, which lets go only when told to
 	bool byCommand {false};
+	/// How long the button has been held, and whether the hand has stroked or slapped since, which tell a click on the
+	/// creature from a hold
+	float heldMs {0.0f};
+	bool strokedOrSlapped {false};
 };
 
 /// On the player's hand once it has let go of a creature: the sum of strokes and slaps it let go with, which the

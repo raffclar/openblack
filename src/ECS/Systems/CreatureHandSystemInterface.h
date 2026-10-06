@@ -20,9 +20,11 @@
 namespace openblack::ecs::systems
 {
 
-/// The player's hand on a creature (see components::HandOnCreature). The hand can't pick a creature up: clicking one
-/// holds the hand to it. Resting on its body the hand strokes it, swept fast across it the hand slaps it, and the
-/// creature reacts to each. When the hand lets go the creature's mind is told how it was treated, from -1 to 1.
+/// The player's hand on a creature (see components::HandOnCreature). The hand can't pick a creature up: holding the
+/// right button on one holds the hand to it, if it is the player's own or their guiding god's (creature_hand::MayTouch).
+/// Let go quickly, the press was a click, which puts the leash on instead. Resting on its body the hand strokes it, swept fast
+/// across it the hand slaps it, and the creature reacts to each. When the hand lets go the creature's mind is told how it was
+/// treated, from -1 to 1.
 class CreatureHandSystemInterface
 {
 public:
@@ -39,8 +41,12 @@ public:
 	virtual ~CreatureHandSystemInterface() = default;
 
 	/// The hand's button was pressed with the cursor on a line of sight from a point: whether it is now held to a
-	/// creature
+	/// creature. A creature the player's hand may not touch is refused.
 	virtual bool Grab(const glm::vec3& rayOrigin, const glm::vec3& rayDirection) = 0;
+	/// Whether the player's hand may take hold of the creature to stroke and slap it
+	[[nodiscard]] virtual bool MayHold(entt::entity creature) const = 0;
+	/// Whether the hand held to a creature by the button would, let go now, have been clicked on it rather than held
+	[[nodiscard]] virtual bool IsClick() const = 0;
 	/// Once a frame while held to a creature, with the line of sight through the cursor, the cursor on the screen and the
 	/// frame's seconds: strokes and slaps, and where the hand is
 	virtual std::optional<HandPose> Update(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor,

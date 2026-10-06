@@ -13,6 +13,7 @@
 #include <optional>
 
 #include <entt/entity/fwd.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "Creature/LeashKeys.h"
@@ -102,9 +103,16 @@ public:
 
 	/// A player presses a leash shortcut, which acts on their creature. Returns whether it did anything.
 	virtual bool PressKey(PlayerNames player, creature_leash::LeashKey key) = 0;
-	/// A player taps a creature with the hand: their own creature gets the picked leash put on; any other is refused.
-	/// Returns whether the leash went on.
+	/// A player clicks a creature with the right button: their own creature gets the picked leash put on; any other
+	/// is refused. Returns whether the leash went on.
 	virtual bool TapCreature(PlayerNames player, entt::entity creature) = 0;
+	/// Once a frame, the player's cursor in screen heights from the top left and the frame's seconds, and whether the
+	/// hand is free to shake, holding nothing and gripping nothing. Shaken, it takes off a leash held in the hand.
+	/// Returns whether that happened.
+	virtual bool TrackHand(PlayerNames player, glm::vec2 cursor, float seconds, bool handFree) = 0;
+	/// The player shakes the hand: a leash held in it comes off; one tied to something stays. Returns whether it came
+	/// off.
+	virtual bool Shake(PlayerNames player) = 0;
 
 	/// Hangs a player's three leash posts at three points, the aggression, learning and compassion leashes in turn
 	virtual void PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& points) = 0;

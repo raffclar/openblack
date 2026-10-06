@@ -177,8 +177,9 @@ private:
 	uint32_t _frameCount {0};
 	glm::ivec2 _mousePosition;
 	bool _handGripping;
-	/// Whether the last press of the Action button let go of a miracle in the hand, so it taps nothing else
-	bool _actionTakenByMagic {false};
+	/// Whether the last press of the Action button went to letting go of a miracle in the hand or to a creature, so it
+	/// taps nothing else for the leash
+	bool _actionPressTaken {false};
 	bool _handRotating {false};
 	/// The hand sits on the line of sight through the cursor, this far from the camera
 	glm::vec3 _handRayDirection {0.0f, -1.0f, 0.0f};

@@ -19,10 +19,12 @@
 
 #include <glm/geometric.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
+#include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
 #include "Creature/CreatureFeedback.h"
+#include "Creature/CreatureHandRules.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -121,7 +123,7 @@ std::optional<glm::vec3> OnPlaneThrough(const glm::vec3& centre, const glm::vec3
 bool CreatureHandSystem::Grab(const glm::vec3& rayOrigin, const glm::vec3& rayDirection)
 {
 	const auto nearest = CreatureAlong(rayOrigin, rayDirection);
-	if (!nearest.has_value())
+	if (!nearest.has_value() || !MayHold(*nearest))
 	{
 		return false;
 	}
@@ -129,6 +131,27 @@ bool CreatureHandSystem::Grab(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 	registry.AssignOrReplace<HandOnCreature>(PlayerHand(), HandOnCreature {.creature = *nearest});
 	registry.Remove<HandLastFeedback>(PlayerHand());
 	return true;
+}
+
+bool CreatureHandSystem::MayHold(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	// The hand is the local player's
+	if (body == nullptr || !creature_hand::MayTouch(PlayerNames::PLAYER_ONE, body->owner, body->guidesCreature))
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The hand can't hold creature {}: it is neither the player's nor their guide's",
+		                   entt::to_integral(creature));
+		return false;
+	}
+	return true;
+}
+
+bool CreatureHandSystem::IsClick() const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* contact = Locator::handSystem::has_value() ? registry.TryGet<const HandOnCreature>(PlayerHand()) : nullptr;
+	return contact != nullptr && !contact->byCommand && creature_hand::IsClick(contact->heldMs, contact->strokedOrSlapped);
 }
 
 std::optional<entt::entity> CreatureHandSystem::CreatureAlong(const glm::vec3& rayOrigin, const glm::vec3& rayDirection) const
@@ -197,6 +220,7 @@ CreatureHandSystem::Update(const glm::vec3& rayOrigin, const glm::vec3& rayDirec
 	const auto touch = hit.has_value() ? std::optional(rayOrigin + (rayDirection * *hit)) : std::nullopt;
 	const auto point = onPlane.value_or(touch.value_or(centre));
 
+	contact->heldMs += ms;
 	contact->sinceStrokeMs += ms;
 	contact->sinceSlapMs += ms;
 	contact->slapShowMs = std::max(contact->slapShowMs - ms, 0.0f);
@@ -221,6 +245,7 @@ CreatureHandSystem::Update(const glm::vec3& rayOrigin, const glm::vec3& rayDirec
 			// The hand slaps either way, but it only counts when the creature can reel from it
 			contact->sinceSlapMs = 0.0f;
 			contact->slapShowMs = k_SlapShowMs;
+			contact->strokedOrSlapped = true;
 			if (minds.ForceAction(creatureEntity, slap->animation, slap->mirrored, std::nullopt,
 			                      feedback::k_SlapInterruptsAfter))
 			{
@@ -242,6 +267,7 @@ CreatureHandSystem::Update(const glm::vec3& rayOrigin, const glm::vec3& rayDirec
 				contact->sum = feedback::AfterStroke(contact->sum);
 				contact->lastPart = part;
 				contact->sinceStrokeMs = 0.0f;
+				contact->strokedOrSlapped = true;
 			}
 		}
 	}
@@ -290,7 +316,7 @@ HandOnCreature* CreatureHandSystem::HoldByCommand(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!Locator::handSystem::has_value() || !registry.Valid(creature) ||
-	    !registry.AllOf<Creature, CreatureAnimation, Transform>(creature))
+	    !registry.AllOf<Creature, CreatureAnimation, Transform>(creature) || !MayHold(creature))
 	{
 		return nullptr;
 	}
