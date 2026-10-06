@@ -39,6 +39,11 @@ namespace openblack::l3d
 class L3DFile;
 }
 
+namespace openblack::psys
+{
+struct ParticleFile;
+}
+
 namespace openblack::pack
 {
 struct AudioBankSampleHeader;
@@ -153,6 +158,12 @@ struct SoundLoader final: BaseLoader<audio::Sound>
 struct LightLoader final: BaseLoader<Lights>
 {
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
+};
+
+/// A particle effect file by its name in a folder: <name>.txt when there is one, else the compressed <name>_txt.zzz
+struct ParticleFileLoader final: BaseLoader<psys::ParticleFile>
+{
+	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& directory, const std::string& name) const;
 };
 
 struct CameraPathLoader final: BaseLoader<CameraPath>

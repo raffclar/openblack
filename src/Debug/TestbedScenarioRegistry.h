@@ -69,6 +69,8 @@ enum class Facet : uint8_t
 	Combat,
 	/// What it learns: from strokes and slaps, from mind files, as it grows up, and by copying the player
 	Mind,
+	/// The particle effects of the miracles and spot visuals
+	Particles,
 
 	_Count
 };
@@ -198,6 +200,20 @@ struct ObjectSetup
 	glm::vec2 offset {0.0f};
 	float scale {1.0f};
 	float yawDegrees {0.0f};
+};
+
+/// A particle effect played on the land
+struct ParticleSetup
+{
+	ParticleType type {ParticleType::Smoke};
+	glm::vec2 offset {0.0f};
+	/// Above the land
+	float height {0.0f};
+	float magnitude {1.0f};
+	/// The player whose colour it takes where it takes one
+	int player {0};
+	/// Seconds after which it closes down and starts again, for effects that end; none to run until the scenario stops
+	float restartSeconds {0.0f};
 };
 
 /// Something a creature is told to do, in turn with the scenario's other commands
@@ -331,6 +347,7 @@ struct Scenario
 	Framing framing;
 	std::vector<CreatureSetup> creatures;
 	std::vector<ObjectSetup> objects;
+	std::vector<ParticleSetup> particles;
 	std::vector<Command> commands;
 	/// After the last command, the commands go round again from this one
 	std::optional<size_t> repeatFrom;

@@ -21,6 +21,7 @@
 #include <L3DFile.h>
 #include <MorphFile.h>
 #include <PackFile.h>
+#include <ParticleFile.h>
 #include <RawImage.h>
 #include <bgfx/bgfx.h>
 #include <spdlog/spdlog.h>
@@ -674,4 +675,34 @@ CameraPathLoader::result_type CameraPathLoader::operator()(FromDiskTag, const st
 	}
 
 	return cameraPath;
+}
+
+ParticleFileLoader::result_type ParticleFileLoader::operator()(FromDiskTag, const std::filesystem::path& directory,
+                                                               const std::string& name) const
+{
+	auto& fileSystem = Locator::filesystem::value();
+	std::string text;
+	if (const auto loose = directory / (name + ".txt"); fileSystem.Exists(loose))
+	{
+		const auto bytes = fileSystem.ReadAll(loose);
+		text.assign(bytes.begin(), bytes.end());
+	}
+	else
+	{
+		const auto bytes = fileSystem.ReadAll(directory / (name + "_txt.zzz"));
+		const auto compressed = psys::SplitCompressed(bytes);
+		if (!compressed.has_value())
+		{
+			throw std::runtime_error("Particle file " + name + " is too short");
+		}
+		const auto inflated =
+		    zip::Inflate(std::vector<uint8_t>(compressed->deflated.begin(), compressed->deflated.end()), compressed->textSize);
+		text.assign(inflated.begin(), inflated.end());
+	}
+	auto file = psys::ParticleFile::Parse(text);
+	if (!file.has_value())
+	{
+		throw std::runtime_error("Particle file " + name + " cannot be read");
+	}
+	return std::make_shared<psys::ParticleFile>(std::move(*file));
 }

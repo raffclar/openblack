@@ -53,6 +53,7 @@
 #include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
 #include "ECS/Systems/Implementations/MistSystem.h"
+#include "ECS/Systems/Implementations/ParticleSystem.h"
 #include "ECS/Systems/Implementations/PathfindingSystem.h"
 #include "ECS/Systems/Implementations/PlayerSystem.h"
 #include "ECS/Systems/Implementations/RainSystem.h"
@@ -115,6 +116,7 @@ using openblack::ecs::systems::InfluenceSystem;
 using openblack::ecs::systems::LeashSystem;
 using openblack::ecs::systems::LivingActionSystem;
 using openblack::ecs::systems::MistSystem;
+using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PathfindingSystem;
 using openblack::ecs::systems::PlayerSystem;
 using openblack::ecs::systems::RainSystem;
@@ -220,6 +222,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::chimneySmokeSystem::emplace<ChimneySmokeSystem>();
 	Locator::influenceSystem::emplace<InfluenceSystem>();
 	Locator::townDesireSystem::emplace<TownDesireSystem>();
+	Locator::particleSystem::emplace<ParticleSystem>();
 	return true;
 }
 
@@ -311,6 +314,7 @@ void openblack::ShutDownServices()
 	Locator::fieldSystem::reset();
 	Locator::soundTagSystem::reset();
 	Locator::townDesireSystem::reset();
+	Locator::particleSystem::reset();
 	Locator::terrainSystem::reset();
 	Locator::filesystem::reset();
 	Locator::gameActionSystem::reset();

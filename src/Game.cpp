@@ -97,6 +97,7 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MistSystemInterface.h"
+#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
@@ -581,6 +582,11 @@ bool Game::GameLogicLoop() noexcept
 
 	// The objects' looping sounds start again where they have stopped
 	Locator::soundTagSystem::value().ProcessTurn(cameraPosition);
+	{
+		// The particle effects not owned by a miracle step, and the spot visuals count down
+		auto particles = profiler.BeginScoped(Profiler::Stage::ParticlesUpdate);
+		Locator::particleSystem::value().ProcessTurn();
+	}
 
 	// Each turn ends with the camera taking the alignment of the player of most influence where it is
 	Locator::alignmentSystem::value().UpdateTurn();
@@ -1851,6 +1857,8 @@ void Game::PrepareNewLand()
 	Locator::influenceSystem::value().Reset();
 	// Nor its creatures' footprints
 	Locator::footprintSystem::value().Reset();
+	// Nor its particle effects
+	Locator::particleSystem::value().Reset();
 
 	// Reset everything. Deletes all entities and their components
 	Locator::entitiesRegistry::value().Reset();

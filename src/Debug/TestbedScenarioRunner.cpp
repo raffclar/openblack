@@ -54,6 +54,7 @@
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
@@ -157,6 +158,7 @@ void Runner::Start(const Scenario& scenario)
 	_timeline = {};
 	_creatures.clear();
 	_objects.clear();
+	_particles.clear();
 	_started.clear();
 	_log.clear();
 	_shot.reset();
@@ -177,6 +179,10 @@ void Runner::Start(const Scenario& scenario)
 	SetUpEnvironment(scenario.environment);
 	PlaceObjects(scenario, _middle);
 	PlaceCreatures(scenario, _middle);
+	for (size_t i = 0; i < scenario.particles.size(); ++i)
+	{
+		_particles.push_back({StartParticle(i), 0.0f});
+	}
 	Frame(scenario.framing.shot, scenario.framing.creature, scenario.framing.distance);
 	Log(fmt::format("Started {}", scenario.name));
 }
@@ -188,6 +194,15 @@ void Runner::Stop()
 		return;
 	}
 	_running = false;
+	// Its particle effects die away
+	if (Locator::particleSystem::has_value())
+	{
+		for (const auto& particle : _particles)
+		{
+			Locator::particleSystem::value().CloseDown(particle.effect);
+		}
+	}
+	_particles.clear();
 	// The hand lets go of a creature a scenario held it to
 	if (Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsHeldByCommand())
 	{
@@ -835,6 +850,10 @@ void Runner::UpdateCamera()
 		{
 			points.push_back(MapPoint(_middle, object.offset));
 		}
+		for (const auto& particle : _scenario->particles)
+		{
+			points.push_back(MapPoint(_middle, particle.offset));
+		}
 		for (const auto& extra : _scenario->framing.include)
 		{
 			points.push_back(MapPoint(_middle, extra));
@@ -895,12 +914,49 @@ void Runner::Update(float seconds)
 		return;
 	}
 	_seconds += seconds;
+	UpdateParticles(seconds);
 	ApplyStates();
 	const auto due = Advance(_timeline, _scenario->commands, _scenario->repeatFrom, seconds,
 	                         [this](size_t creature) { return IsFree(creature); });
 	for (const auto index : due)
 	{
 		Give(_scenario->commands[index]);
+	}
+}
+
+uint32_t Runner::StartParticle(size_t index) const
+{
+	if (!Locator::particleSystem::has_value() || !Locator::terrainSystem::has_value())
+	{
+		return ecs::systems::ParticleSystemInterface::k_NoEffect;
+	}
+	const auto& particle = _scenario->particles.at(index);
+	const auto point = MapPoint(_middle, particle.offset);
+	const glm::vec3 position {point.x, Locator::terrainSystem::value().GetHeightAt(point) + particle.height, point.y};
+	auto& particles = Locator::particleSystem::value();
+	const auto effect = particles.Start(particle.type, position, particle.magnitude);
+	particles.SetPlayer(effect, particle.player);
+	return effect;
+}
+
+void Runner::UpdateParticles(float seconds)
+{
+	if (!Locator::particleSystem::has_value())
+	{
+		return;
+	}
+	auto& particles = Locator::particleSystem::value();
+	for (size_t i = 0; i < _particles.size(); ++i)
+	{
+		auto& running = _particles.at(i);
+		const auto restart = _scenario->particles.at(i).restartSeconds;
+		running.seconds += seconds;
+		// An effect that has ended, or whose time is up, starts again
+		if (!particles.IsRunning(running.effect) || (restart > 0.0f && running.seconds >= restart))
+		{
+			particles.CloseDown(running.effect);
+			running = {StartParticle(i), 0.0f};
+		}
 	}
 }
 

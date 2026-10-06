@@ -125,6 +125,11 @@ void Magic::Draw() noexcept
 			DrawSandbox();
 			ImGui::EndTabItem();
 		}
+		if (ImGui::BeginTabItem("Particles"))
+		{
+			DrawParticles();
+			ImGui::EndTabItem();
+		}
 		ImGui::EndTabBar();
 	}
 }
@@ -350,6 +355,11 @@ void Magic::StepSandbox() noexcept
 	UpdateWorshipStrain(_site, rules, dancers);
 	EndWorshipTurn(_site, rules, dancers);
 	++_turns;
+}
+
+void Magic::UpdateAlways() noexcept
+{
+	UpdateTimedEffects(ImGui::GetIO().DeltaTime);
 }
 
 void Magic::Update() noexcept

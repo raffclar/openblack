@@ -27,6 +27,7 @@ using CreatureSkinArtManager = ResourceManager<CreatureSkinArtLoader>;
 using SoundManager = ResourceManager<SoundLoader>;
 using GlowManager = ResourceManager<LightLoader>;
 using CameraPathManager = ResourceManager<CameraPathLoader>;
+using ParticleFileManager = ResourceManager<ParticleFileLoader>;
 
 class ResourcesInterface
 {
@@ -47,6 +48,8 @@ public:
 	virtual SoundManager& GetSounds() = 0;
 	virtual GlowManager& GetGlows() = 0;
 	virtual CameraPathManager& GetCameraPaths() = 0;
+	/// The particle effect files, by particles::ParticleFileId of their names
+	virtual ParticleFileManager& GetParticleFiles() = 0;
 };
 
 } // namespace openblack::resources

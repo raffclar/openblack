@@ -43,6 +43,7 @@ public:
 		CreatureLeashUpdate,
 		CreatureCombatUpdate,
 		VegetationUpdate,
+		ParticlesUpdate,
 		SdlInput,
 		UpdateUniforms,
 		UpdateEntities,
@@ -95,6 +96,7 @@ public:
 	    "Creature Leash",       //
 	    "Creature Combat",      //
 	    "Vegetation Update",    //
+	    "Particles",            //
 	    "SDL Input",            //
 	    "Update Uniforms",      //
 	    "Entities",             //

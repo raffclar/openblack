@@ -33,6 +33,7 @@ public:
 	SoundManager& GetSounds() override { return _sounds; }
 	GlowManager& GetGlows() override { return _glows; }
 	CameraPathManager& GetCameraPaths() override { return _cameraPaths; }
+	ParticleFileManager& GetParticleFiles() override { return _particleFiles; }
 
 private:
 	MeshManager _meshes;
@@ -48,5 +49,6 @@ private:
 	SoundManager _sounds;
 	GlowManager _glows;
 	CameraPathManager _cameraPaths;
+	ParticleFileManager _particleFiles;
 };
 } // namespace openblack::resources

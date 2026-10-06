@@ -112,6 +112,8 @@ private:
 	void DrawSnowfall(const DrawSceneDesc& desc) const;
 	/// The smoke from the homes' chimneys, each in its place among what blends, in the main view
 	void DrawChimneySmoke(const DrawSceneDesc& desc) const;
+	/// The particle effects' sprites, one instanced draw for each run of an effect's sprites on the same sheet
+	void DrawParticles(const DrawSceneDesc& desc) const;
 	/// The border of the players' influence, in the main view
 	void DrawInfluenceBorder(const DrawSceneDesc& desc) const;
 	/// The ripples the hand makes crossing a border, each in its place among what blends, in the main view

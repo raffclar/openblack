@@ -22,6 +22,7 @@
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
+#include "Particles/ParticleTypes.h"
 
 using namespace openblack;
 using namespace openblack::testbed_scenarios;
@@ -1473,6 +1474,48 @@ void AddMind(std::vector<Scenario>& all)
 	});
 }
 
+void AddParticles(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "particles.smoke_and_fire",
+	    .name = "Smoke, steam and a bonfire",
+	    .facet = Facet::Particles,
+	    .description = "The spot visuals' smoke, steam, evil smoke and a bonfire, side by side on the plain.",
+	    .expected = "Grey smoke and white steam puffs rise, spin and fade; the evil smoke is dark; the bonfire's flames "
+	                "flicker in its additive sprites with smoke rising above them.",
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 0.0f}, {40.0f, 0.0f}}, .distance = 0.3f},
+	    .particles = {{.type = ParticleType::Smoke, .offset = {-30.0f, 0.0f}, .magnitude = 8.0f},
+	                  {.type = ParticleType::Steam, .offset = {-10.0f, 0.0f}, .magnitude = 8.0f},
+	                  {.type = ParticleType::EvilSmoke, .offset = {10.0f, 0.0f}, .magnitude = 8.0f},
+	                  {.type = ParticleType::Bonfire, .offset = {30.0f, 0.0f}, .magnitude = 5.0f}},
+	});
+
+	all.push_back({
+	    .id = "particles.sparkles",
+	    .name = "Sparkles and magic",
+	    .facet = Facet::Particles,
+	    .description = "Short effects started again every few seconds: the failed cast, the hand gripping the land, a "
+	                   "magic object made, an object appearing in the second player's colour, and a forest made.",
+	    .expected = "Each plays out in sprites from the sprite sheets and starts again: the cross of the failed cast, "
+	                "a ring of sparks, a spinning cloud of sparks, sparks fountaining up in green, and falling leaves.",
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, 0.0f}, {30.0f, 0.0f}}, .distance = 0.45f},
+	    .particles =
+	        {{.type = ParticleType::SpellFail, .offset = {-30.0f, 0.0f}, .height = 5.0f, .restartSeconds = 4.0f},
+	         {.type = ParticleType::GripLandscape, .offset = {-15.0f, 0.0f}, .restartSeconds = 3.0f},
+	         {.type = ParticleType::MagicObjectCreated,
+	          .offset = {0.0f, 0.0f},
+	          .height = 3.0f,
+	          .magnitude = 3.0f,
+	          .restartSeconds = 5.0f},
+	         {.type = ParticleType::ObjectAppear,
+	          .offset = {15.0f, 0.0f},
+	          .magnitude = 3.0f,
+	          .player = 1,
+	          .restartSeconds = 4.0f},
+	         {.type = ParticleType::ForestCreated, .offset = {30.0f, 0.0f}, .magnitude = 1.0f, .restartSeconds = 6.0f}},
+	});
+}
+
 std::vector<Scenario> Build()
 {
 	std::vector<Scenario> all;
@@ -1491,6 +1534,7 @@ std::vector<Scenario> Build()
 	AddLeash(all);
 	AddCombat(all);
 	AddMind(all);
+	AddParticles(all);
 	return all;
 }
 
@@ -1582,7 +1626,7 @@ std::string_view testbed_scenarios::Name(Facet facet)
 {
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
 	    "Idle",       "Expressions", "Senses",  "Needs", "Growth", "Appearance", "Light", "Movement",
-	    "Footprints", "Audio",       "Objects", "Hand",  "Leash",  "Combat",     "Mind",
+	    "Footprints", "Audio",       "Objects", "Hand",  "Leash",  "Combat",     "Mind",  "Particles",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
@@ -1694,9 +1738,20 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 	{
 		problems.emplace_back("hour or body time out of range");
 	}
-	if (scenario.creatures.empty())
+	if (scenario.creatures.empty() && scenario.particles.empty())
 	{
-		problems.emplace_back("no creatures");
+		problems.emplace_back("no creatures or particles");
+	}
+	for (const auto& particle : scenario.particles)
+	{
+		if (particles::ParticleTypeFile(particle.type).empty())
+		{
+			problems.emplace_back("a particle type that has no file");
+		}
+		if (particle.magnitude < 0.0f || particle.restartSeconds < 0.0f)
+		{
+			problems.emplace_back("a particle effect's magnitude or restart out of range");
+		}
 	}
 	const auto creatures = scenario.creatures.size();
 	const auto& framing = scenario.framing;

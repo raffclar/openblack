@@ -59,6 +59,9 @@ private:
 	void SetUpEnvironment(const Environment& environment);
 	void PlaceObjects(const Scenario& scenario, glm::vec2 middle);
 	void PlaceCreatures(const Scenario& scenario, glm::vec2 middle);
+	/// Starts the scenario's particle effect of that index
+	[[nodiscard]] uint32_t StartParticle(size_t index) const;
+	void UpdateParticles(float seconds);
 	/// The needs and desires go on once the body and mind have started, and every frame for those that hold them
 	void ApplyStates();
 	void Give(const Command& command);
@@ -86,6 +89,13 @@ private:
 	glm::vec2 _middle {0.0f};
 	std::vector<entt::entity> _creatures;
 	std::vector<entt::entity> _objects;
+	/// The scenario's particle effects, and the seconds since each was last started
+	struct RunningParticle
+	{
+		uint32_t effect;
+		float seconds;
+	};
+	std::vector<RunningParticle> _particles;
 	/// Whether each creature's needs and desires have been set as it started
 	std::vector<bool> _started;
 

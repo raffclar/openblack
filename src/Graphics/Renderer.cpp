@@ -84,6 +84,7 @@
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
@@ -2561,6 +2562,54 @@ void Renderer::DrawChimneySmoke(const DrawSceneDesc& desc) const
 	});
 }
 
+void Renderer::DrawParticles(const DrawSceneDesc& desc) const
+{
+	if (desc.viewId != RenderPass::Main || !Locator::particleSystem::has_value() || !Locator::time::has_value() ||
+	    (Locator::temple::has_value() && Locator::temple::value().Active()))
+	{
+		return;
+	}
+	const auto origin = desc.camera->GetOrigin();
+	const auto frame = Locator::particleSystem::value().CollectSprites(Locator::time::value().GetTurnFraction(), origin);
+	if (frame.instances.empty())
+	{
+		return;
+	}
+	const auto& textures = Locator::resources::value().GetTextures();
+	const auto* program = _shaderManager->GetShader("ParticleInstanced");
+	const auto viewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
+	constexpr auto k_Stride = static_cast<uint16_t>(sizeof(particles::sprites::SpriteInstance));
+	for (const auto& batch : frame.batches)
+	{
+		if (!textures.Contains(batch.texture) || bgfx::getAvailInstanceDataBuffer(batch.count, k_Stride) < batch.count)
+		{
+			continue;
+		}
+		bgfx::InstanceDataBuffer instances;
+		bgfx::allocInstanceDataBuffer(&instances, batch.count, k_Stride);
+		std::memcpy(instances.data, &frame.instances.at(batch.first), static_cast<size_t>(batch.count) * k_Stride);
+		const auto texture = textures.Handle(batch.texture);
+		// A sheet without an alpha of its own takes its alpha from its red
+		const auto alphaTexture = textures.Contains(batch.alphaTexture) ? textures.Handle(batch.alphaTexture) : texture;
+		program->SetTextureSampler("s_diffuse", 0, *texture);
+		program->SetTextureSampler("s_alpha", 1, *alphaTexture);
+		_plane->GetVertexBuffer().Bind();
+		bgfx::setInstanceDataBuffer(&instances);
+		// Tested against depth, both sides, added to what is behind or blended over it as the creator asks
+		const auto& mode = render_modes::Desc(batch.mode);
+		uint64_t state = BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER;
+		state |= mode.blend == render_modes::Blend::Additive
+		             ? BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE)
+		             : BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA);
+		if (mode.zWrite)
+		{
+			state |= BGFX_STATE_WRITE_Z;
+		}
+		bgfx::setState(state);
+		program->Submit(viewId, zsort::Depth(batch.sortPoint, origin));
+	}
+}
+
 void Renderer::DrawWaterRings(const DrawSceneDesc& desc) const
 {
 	if (desc.viewId != RenderPass::Main || !Locator::waterRingSystem::has_value() ||
@@ -4211,6 +4260,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawRain(desc);
 			DrawSnowfall(desc);
 			DrawChimneySmoke(desc);
+			DrawParticles(desc);
 			DrawInfluenceBorder(desc);
 			DrawInfluenceRipples(desc);
 			// The mists blend over the rest, the farthest first
