@@ -38,6 +38,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
@@ -56,6 +57,7 @@ using openblack::ecs::components::CreatureAnimation;
 using openblack::ecs::components::CreatureLocomotion;
 using openblack::ecs::components::CreatureMindState;
 using openblack::ecs::components::CreatureMorph;
+using openblack::ecs::components::CreatureTattoos;
 using openblack::ecs::components::Transform;
 
 namespace
@@ -74,12 +76,6 @@ const ImVec4 k_PlacingColour {0.85f, 0.30f, 0.25f, 1.0f};
 /// A right click picks out the thing to pick up or knock down nearest it, this close at most
 constexpr float k_PickRadius = 12.0f;
 const ImVec4 k_StartColour {0.25f, 0.60f, 0.30f, 1.0f};
-
-std::string_view SpeciesName(CreatureType species)
-{
-	const auto index = static_cast<size_t>(species);
-	return index >= 1 && index <= k_SpeciesNames.size() ? k_SpeciesNames.at(index - 1) : "Unknown";
-}
 
 const GCreatureInfo* SpeciesInfo(CreatureType species)
 {
@@ -139,6 +135,12 @@ CreatureSpawner::CreatureSpawner() noexcept
 {
 }
 
+std::string_view CreatureSpawner::SpeciesName(CreatureType species) noexcept
+{
+	const auto index = static_cast<size_t>(species);
+	return index >= 1 && index <= k_SpeciesNames.size() ? k_SpeciesNames.at(index - 1) : "Unknown";
+}
+
 void CreatureSpawner::Close() noexcept
 {
 	_placing = false;
@@ -162,6 +164,7 @@ void CreatureSpawner::Draw() noexcept
 	}
 	if (ImGui::BeginTabItem("Spawn"))
 	{
+		DrawSpawnMind();
 		DrawSettings();
 		ImGui::Separator();
 		DrawPlacing();
@@ -182,6 +185,7 @@ void CreatureSpawner::Draw() noexcept
 		ImGui::EndTabItem();
 	}
 	ImGui::EndTabBar();
+	DrawFileBrowser();
 }
 
 void CreatureSpawner::UseSpeciesDefaults() noexcept
@@ -917,9 +921,26 @@ void CreatureSpawner::Spawn(glm::vec2 screenCoord) noexcept
 	{
 		return;
 	}
+	SpawnAt(hit->position);
+}
+
+entt::entity CreatureSpawner::SpawnAt(const glm::vec3& position) noexcept
+{
 	const auto degrees = _randomFacing ? std::uniform_real_distribution(0.0f, 360.0f)(_random) : _facingDegrees;
-	CreatureArchetype::Create(hit->position, _owner, _species, 0, glm::radians(degrees), _scale,
-	                          {.alignment = _alignment, .fatness = _fatness, .strength = _strength});
+	const auto entity = CreatureArchetype::Create(position, _owner, _species, 0, glm::radians(degrees), _scale,
+	                                              {.alignment = _alignment, .fatness = _fatness, .strength = _strength});
+	auto& registry = Locator::entitiesRegistry::value();
+	if (_spawnMind != nullptr && Locator::creatureMindSystem::has_value())
+	{
+		// The mind is taken up on the creature's first turn of thought
+		Locator::creatureMindSystem::value().LoadMind(entity, _spawnMind);
+	}
+	if (auto* tattoos = registry.TryGet<CreatureTattoos>(entity); tattoos != nullptr && _spawnTattoos.has_value())
+	{
+		tattoos->slots = *_spawnTattoos;
+		++tattoos->revision;
+	}
+	return entity;
 }
 
 bool CreatureSpawner::TakesEvent(const SDL_Event& event) const noexcept

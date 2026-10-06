@@ -133,6 +133,8 @@ target_include_directories(openblack_lib PRIVATE ${CXXOPTS_INCLUDE_DIRS})
 if (WIN32)
   # The crash handler's stack traces and minidumps
   target_link_libraries(openblack_lib PRIVATE dbghelp)
+  # The shell's file dialogs
+  target_link_libraries(openblack_lib PRIVATE ole32 shell32 uuid)
 endif ()
 
 if (OPENBLACK_CLANG_TIDY_CHECKS)

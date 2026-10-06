@@ -9,15 +9,26 @@
 
 #pragma once
 
+#include <filesystem>
+#include <memory>
 #include <optional>
 #include <random>
 #include <string>
+#include <string_view>
 
 #include <entt/entity/fwd.hpp>
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
+#include "Creature/CreatureTattoo.h"
 #include "Enums.h"
+#include "FileBrowser.h"
 #include "Window.h"
+
+namespace openblack::creaturemind
+{
+struct MindFileData;
+}
 
 namespace openblack::debug::gui
 {
@@ -44,6 +55,7 @@ protected:
 	[[nodiscard]] bool TakesEvent(const SDL_Event& event) const noexcept override;
 
 private:
+	[[nodiscard]] static std::string_view SpeciesName(CreatureType species) noexcept;
 	void DrawSettings() noexcept;
 	/// The creature picked in the list: its alignment, physique and size, changed as it stands
 	void DrawSelected() noexcept;
@@ -82,6 +94,27 @@ private:
 	void Command(glm::vec2 screenCoord) noexcept;
 	void DrawCreatures() noexcept;
 	void Spawn(glm::vec2 screenCoord) noexcept;
+	/// Places a creature with the settings, and the mind and tattoos of the mind file it is to be spawned from, if any
+	entt::entity SpawnAt(const glm::vec3& position) noexcept;
+
+	/// What a mind file chosen with a file dialog is for
+	enum class MindFileUse : uint8_t
+	{
+		/// Loaded into the selected creature
+		LoadIntoSelected,
+		/// New creatures are spawned from it: its species, name, body, tattoos and mind
+		Spawn,
+		/// The selected creature's mind is saved to it
+		SaveSelected,
+	};
+	/// Asks for a mind file with the platform's file dialog, or the debug file browser where there is none
+	void ChooseMindFile(MindFileUse use) noexcept;
+	/// Loads, spawns from or saves to the chosen mind file, and says what became of it
+	void UseMindFile(MindFileUse use, const std::filesystem::path& path) noexcept;
+	/// The mind file buttons of the Spawn tab, and the mind file new creatures are spawned from
+	void DrawSpawnMind() noexcept;
+	/// The debug file browser, while it stands in for a file dialog
+	void DrawFileBrowser() noexcept;
 	/// Starts the body as a new creature of the species is: its size, fatness and strength
 	void UseSpeciesDefaults() noexcept;
 
@@ -152,10 +185,15 @@ private:
 	float _fightChargeMs {0.0f};
 	bool _fightAuto {true};
 	std::string _lastFight;
-	/// The folder mind files are listed from, where the mind is saved to, and what became of the last load or save
-	std::string _mindFolder;
-	std::string _mindSavePath {"openblack_creature_mind"};
+	/// What became of the last mind file loaded, spawned from or saved
 	std::string _lastMindFile;
+	/// The mind file new creatures are spawned from, its name, and the tattoos it gives them
+	std::shared_ptr<const creaturemind::MindFileData> _spawnMind;
+	std::string _spawnMindName;
+	std::optional<creature_tattoo::Slots> _spawnTattoos;
+	/// Stands in for the file dialog where the platform has none, and what the file it gives is for
+	FileBrowser _fileBrowser;
+	MindFileUse _browserUse {MindFileUse::LoadIntoSelected};
 	/// The skill, miracle and player's deed picked to show the selected creature
 	int _skill {0};
 	int _miracle {0};

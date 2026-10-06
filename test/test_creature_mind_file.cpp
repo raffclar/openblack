@@ -96,13 +96,11 @@ std::vector<uint8_t> ReadBytes(const std::filesystem::path& path)
 	return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
 }
 
+/// A folder of real creature saves to check against, given by OPENBLACK_CREATURE_SAVES; none by default
 std::filesystem::path ReferenceFolder()
 {
-	if (const char* folder = std::getenv("OPENBLACK_CREATURE_SAVES"))
-	{
-		return folder;
-	}
-	return std::filesystem::path(OPENBLACK_SOURCE_DIR) / "references" / "creature_saves";
+	const char* folder = std::getenv("OPENBLACK_CREATURE_SAVES");
+	return folder != nullptr ? std::filesystem::path(folder) : std::filesystem::path {};
 }
 } // namespace
 
@@ -247,13 +245,14 @@ TEST(CreatureMindFile, FreshMindWritesACurrentFile)
 	EXPECT_EQ(read.developmentPhase, 2);
 }
 
-/// The community saves are the user's own files: this only runs where they are
+/// Real creature saves are players' own files, not part of the project: this only runs on a folder of them given by
+/// OPENBLACK_CREATURE_SAVES
 TEST(CreatureMindFile, ReferenceSavesParseAndRoundTrip)
 {
 	const auto folder = ReferenceFolder();
-	if (!std::filesystem::is_directory(folder))
+	if (folder.empty() || !std::filesystem::is_directory(folder))
 	{
-		GTEST_SKIP() << "No reference creature saves at " << folder;
+		GTEST_SKIP() << "Set OPENBLACK_CREATURE_SAVES to a folder of creature saves to check them";
 	}
 	size_t files = 0;
 	for (const auto& entry : std::filesystem::directory_iterator(folder))

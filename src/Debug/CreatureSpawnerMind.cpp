@@ -44,10 +44,6 @@ using openblack::ecs::components::Transform;
 
 namespace
 {
-/// Where the community creature saves are looked for, from the working directory up
-constexpr std::string_view k_ReferenceFolder = "references/creature_saves";
-constexpr int k_FolderSearchDepth = 6;
-
 std::string Narrow(const std::u16string& text)
 {
 	std::string narrow;
@@ -58,26 +54,7 @@ std::string Narrow(const std::u16string& text)
 	return narrow;
 }
 
-std::filesystem::path FindReferenceFolder()
-{
-	std::error_code error;
-	auto folder = std::filesystem::current_path(error);
-	for (int i = 0; i < k_FolderSearchDepth && !error; ++i)
-	{
-		const auto candidate = folder / k_ReferenceFolder;
-		if (std::filesystem::is_directory(candidate, error))
-		{
-			return candidate;
-		}
-		if (!folder.has_parent_path() || folder.parent_path() == folder)
-		{
-			break;
-		}
-		folder = folder.parent_path();
-	}
-	return std::filesystem::path(k_ReferenceFolder);
-}
-
+/// The mind files in a folder, leaving out the bodies the game saves beside the creatures' minds
 std::vector<std::filesystem::path> MindFilesIn(const std::filesystem::path& folder)
 {
 	std::vector<std::filesystem::path> files;
@@ -112,10 +89,6 @@ void CreatureSpawner::DrawLearning(entt::entity entity) noexcept
 	const auto* tables = minds.GetTables();
 
 	ImGui::SeparatorText("Learning mind");
-	if (_mindFolder.empty())
-	{
-		_mindFolder = FindReferenceFolder().generic_string();
-	}
 	if (!mind->learnt.has_value() || !mind->desires.has_value())
 	{
 		ImGui::TextUnformatted("The mind hasn't thought yet");
@@ -131,54 +104,20 @@ void CreatureSpawner::DrawLearning(entt::entity entity) noexcept
 		            learnt.file->SavedAsText().c_str(), Narrow(learnt.file->ProfileText()).c_str());
 	}
 
-	if (ImGui::TreeNode("Mind files"))
+	if (ImGui::TreeNodeEx("Mind files", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		std::array<char, 512> folder {};
-		std::copy_n(_mindFolder.begin(), std::min(_mindFolder.size(), folder.size() - 1), folder.begin());
-		if (ImGui::InputText("Folder", folder.data(), folder.size()))
+		if (ImGui::Button("Open mind file..."))
 		{
-			_mindFolder = folder.data();
+			ChooseMindFile(MindFileUse::LoadIntoSelected);
 		}
-		std::vector<std::filesystem::path> folders {std::filesystem::path(_mindFolder)};
-		if (Locator::filesystem::has_value())
+		if (ImGui::IsItemHovered())
 		{
-			folders.push_back(Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true));
+			ImGui::SetTooltip("Loads a saved creature's mind into this creature: what it has learnt and its name");
 		}
-		for (const auto& from : folders)
+		ImGui::SameLine();
+		if (ImGui::Button("Save mind as..."))
 		{
-			const auto files = MindFilesIn(from);
-			ImGui::Text("%s: %zu files", from.generic_string().c_str(), files.size());
-			for (const auto& path : files)
-			{
-				ImGui::PushID(path.generic_string().c_str());
-				if (ImGui::SmallButton("Load"))
-				{
-					auto data = std::make_shared<creaturemind::MindFileData>();
-					const auto result = creaturemind::ReadFile(path, *data);
-					if (result == creaturemind::MindResult::Success)
-					{
-						minds.LoadMind(entity, data);
-					}
-					_lastMindFile = fmt::format("{}: {}", path.filename().string(), creaturemind::ResultToStr(result));
-				}
-				ImGui::SameLine();
-				ImGui::TextUnformatted(path.filename().string().c_str());
-				ImGui::PopID();
-			}
-		}
-		std::array<char, 512> savePath {};
-		std::copy_n(_mindSavePath.begin(), std::min(_mindSavePath.size(), savePath.size() - 1), savePath.begin());
-		if (ImGui::InputText("Save as", savePath.data(), savePath.size()))
-		{
-			_mindSavePath = savePath.data();
-		}
-		if (ImGui::Button("Save mind"))
-		{
-			if (const auto file = minds.SaveMind(entity))
-			{
-				const auto result = creaturemind::WriteFile(_mindSavePath, *file);
-				_lastMindFile = fmt::format("Saved {}: {}", _mindSavePath, creaturemind::ResultToStr(result));
-			}
+			ChooseMindFile(MindFileUse::SaveSelected);
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Clear learning"))
@@ -188,7 +127,28 @@ void CreatureSpawner::DrawLearning(entt::entity entity) noexcept
 		}
 		if (!_lastMindFile.empty())
 		{
-			ImGui::TextUnformatted(_lastMindFile.c_str());
+			ImGui::TextWrapped("%s", _lastMindFile.c_str());
+		}
+		if (Locator::filesystem::has_value())
+		{
+			// The game's own minds, and the creatures it saved between lands
+			const auto folder = Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true);
+			const auto files = MindFilesIn(folder);
+			if (ImGui::TreeNode("game", "The game's mind files: %zu", files.size()))
+			{
+				for (const auto& path : files)
+				{
+					ImGui::PushID(path.generic_string().c_str());
+					if (ImGui::SmallButton("Load"))
+					{
+						UseMindFile(MindFileUse::LoadIntoSelected, path);
+					}
+					ImGui::SameLine();
+					ImGui::TextUnformatted(path.filename().string().c_str());
+					ImGui::PopID();
+				}
+				ImGui::TreePop();
+			}
 		}
 		ImGui::TreePop();
 	}

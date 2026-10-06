@@ -181,8 +181,8 @@ struct CreatureSetup
 	/// Wounds and burns, and drops of blood, on its skin
 	std::vector<creature_marks::Mark> wounds;
 	std::vector<creature_marks::Mark> blood;
-	/// A mind file it takes up as it starts: "reference:NAME" for one of the community saves (looked for in
-	/// references/creature_saves from the working directory up), "game:NAME" for one of the game's Scripts/CreatureMind
+	/// A mind file it takes up as it starts: "game:NAME" for one of the game's Scripts/CreatureMind files, or
+	/// "chosen:NAME" for the one last opened with the spawner's file dialog, falling back to the game's file NAME
 	std::string_view mindFile;
 };
 

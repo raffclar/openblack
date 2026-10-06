@@ -117,4 +117,9 @@ constexpr uint32_t k_PaletteRows = 128;
 /// The slot a design put on a site goes in: the slot with that design on that site already, then the first empty one,
 /// then the one with something else on that site; none when every slot holds another site's tattoo
 [[nodiscard]] std::optional<size_t> SlotFor(const Slots& slots, uint8_t site, uint8_t design);
+
+/// A tattoo as a saved creature keeps it, one 32-bit word a slot: the design in the lowest four bits, the site in the
+/// next four, then the colour's blue, green and red bytes
+[[nodiscard]] Slot FromWord(uint32_t word);
+[[nodiscard]] uint32_t ToWord(const Slot& slot);
 } // namespace openblack::creature_tattoo

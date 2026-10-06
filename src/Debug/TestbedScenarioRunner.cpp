@@ -28,6 +28,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/SkyInterface.h"
 #include "Camera/Camera.h"
+#include "Common/FileDialog.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureLayers.h"
@@ -778,33 +779,31 @@ std::string Runner::TeachMind(entt::entity entity, const Command& command)
 
 void Runner::LoadMindFile(entt::entity entity, std::string_view name)
 {
-	constexpr std::string_view k_Reference = "reference:";
+	constexpr std::string_view k_Chosen = "chosen:";
 	constexpr std::string_view k_Game = "game:";
-	constexpr std::string_view k_ReferenceFolder = "references/creature_saves";
-	constexpr int k_FolderSearchDepth = 6;
-	std::filesystem::path path;
-	if (name.starts_with(k_Reference))
+	std::filesystem::path gameFolder;
+	if (Locator::filesystem::has_value())
 	{
-		// The community saves are looked for from the working directory up
+		gameFolder = Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true);
+	}
+	std::filesystem::path path;
+	if (name.starts_with(k_Chosen))
+	{
+		// The mind file last opened with the spawner's file dialog, else the game's own mind of that name
 		std::error_code error;
-		auto folder = std::filesystem::current_path(error);
-		for (int i = 0; i < k_FolderSearchDepth && !error; ++i)
+		const auto chosen = file_dialog::RememberedPath("creature-mind-file");
+		if (chosen.has_value() && std::filesystem::is_regular_file(*chosen, error))
 		{
-			if (std::filesystem::is_directory(folder / k_ReferenceFolder, error))
-			{
-				path = folder / k_ReferenceFolder / name.substr(k_Reference.size());
-				break;
-			}
-			if (!folder.has_parent_path() || folder.parent_path() == folder)
-			{
-				break;
-			}
-			folder = folder.parent_path();
+			path = *chosen;
+		}
+		else if (!gameFolder.empty())
+		{
+			path = gameFolder / name.substr(k_Chosen.size());
 		}
 	}
-	else if (name.starts_with(k_Game) && Locator::filesystem::has_value())
+	else if (name.starts_with(k_Game) && !gameFolder.empty())
 	{
-		path = Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true) / name.substr(k_Game.size());
+		path = gameFolder / name.substr(k_Game.size());
 	}
 	auto data = std::make_shared<creaturemind::MindFileData>();
 	const auto result = path.empty() ? creaturemind::MindResult::ErrCantOpen : creaturemind::ReadFile(path, *data);
@@ -812,7 +811,8 @@ void Runner::LoadMindFile(entt::entity entity, std::string_view name)
 	{
 		Locator::creatureMindSystem::value().LoadMind(entity, data);
 	}
-	Log(fmt::format("mind file {}: {}", name, creaturemind::ResultToStr(result)));
+	Log(fmt::format("mind file {}: {}", path.empty() ? std::string(name) : path.filename().string(),
+	                creaturemind::ResultToStr(result)));
 }
 
 void Runner::Frame(Shot shot, size_t creature, float distance)

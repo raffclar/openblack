@@ -216,3 +216,18 @@ std::optional<size_t> creature_tattoo::SlotFor(const Slots& slots, uint8_t site,
 	}
 	return index([site](const Slot& slot) { return slot.site == site; });
 }
+
+Slot creature_tattoo::FromWord(uint32_t word)
+{
+	return {
+	    .design = static_cast<uint8_t>(word & 0xFu),
+	    .site = static_cast<uint8_t>((word >> 4u) & 0xFu),
+	    .colour = {static_cast<uint8_t>(word >> 24u), static_cast<uint8_t>(word >> 16u), static_cast<uint8_t>(word >> 8u)},
+	};
+}
+
+uint32_t creature_tattoo::ToWord(const Slot& slot)
+{
+	return (slot.design & 0xFu) | ((slot.site & 0xFu) << 4u) | (static_cast<uint32_t>(slot.colour.b) << 8u) |
+	       (static_cast<uint32_t>(slot.colour.g) << 16u) | (static_cast<uint32_t>(slot.colour.r) << 24u);
+}

@@ -1485,16 +1485,17 @@ void AddMind(std::vector<Scenario>& all)
 
 	all.push_back({
 	    .id = "mind.community",
-	    .name = "Load a community creature mind",
+	    .name = "Load a chosen creature mind",
 	    .facet = Facet::Mind,
-	    .description = "A wolf that takes up Tagana, a community-made creature (Yamac), from references/creature_saves, "
-	                   "with villagers, food, trees and a ball about it.",
+	    .description = "A wolf that takes up the mind file last opened with the spawner's Open mind file button (a "
+	                   "community-made creature, say), or else the game's own Khazar creature mind, with villagers, "
+	                   "food, trees and a ball about it.",
 	    .expected = "Its name, desires, opinions and the examples of its decision trees come from the file (the spawner's "
 	                "Mind panel lists them, and its thoughts). The planner weighs what it has learnt: it goes for the "
-	                "things its trees rate well. Without the reference folder the wolf keeps a fresh mind and the log "
+	                "things its trees rate well. If neither file can be read the wolf keeps a fresh mind and the log "
 	                "says why.",
 	    .framing = {.shot = Shot::Overview},
-	    .creatures = {CreatureSetup {.species = CreatureType::Wolf, .mindFile = "reference:Tagana"}},
+	    .creatures = {CreatureSetup {.species = CreatureType::Wolf, .mindFile = "chosen:KhazarCreature"}},
 	    .objects = {{.type = MobileObjectInfo::MagicFood, .offset = {-30.0f, -30.0f}},
 	                {.type = MobileObjectInfo::Ball, .offset = {30.0f, -20.0f}},
 	                {.type = TreeInfo::Beech, .offset = {-50.0f, 40.0f}},
@@ -1959,10 +1960,9 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		{
 			problems.push_back(fmt::format("{}: body out of range", who));
 		}
-		if (!creature.mindFile.empty() && !creature.mindFile.starts_with("reference:") &&
-		    !creature.mindFile.starts_with("game:"))
+		if (!creature.mindFile.empty() && !creature.mindFile.starts_with("chosen:") && !creature.mindFile.starts_with("game:"))
 		{
-			problems.push_back(fmt::format("{}: a mind file is reference: or game:", who));
+			problems.push_back(fmt::format("{}: a mind file is chosen: or game:", who));
 		}
 		if (creature.phase && *creature.phase > k_LastPhase)
 		{
