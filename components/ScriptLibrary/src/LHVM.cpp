@@ -159,6 +159,9 @@ int LHVM::LoadBinary(const LHVMFile& file)
 	}
 
 	_tasks.clear();
+	_heldTasks.clear();
+	_resumeFrom.clear();
+	_breakpoints.clear();
 	_ticks = 0;
 	_currentLineNumber = 0;
 	_highestTaskId = 0;
@@ -204,6 +207,9 @@ int LHVM::RestoreState(const std::filesystem::path& filepath)
 	_auto = file.GetAutostart();
 
 	_tasks.clear();
+	_heldTasks.clear();
+	_resumeFrom.clear();
+	_breakpoints.clear();
 	for (const auto& task : file.GetTasks())
 	{
 		_tasks.emplace(task.id, task);
@@ -293,6 +299,7 @@ void LHVM::Reboot()
 	_auto.clear();
 	_instructions.clear();
 	_data.clear();
+	_breakpoints.clear();
 
 	_ticks = 0;
 	_highestTaskId = 0;
@@ -334,7 +341,7 @@ void LHVM::LookIn(const ScriptType allowedScriptTypesMask)
 	// execute exception handlers first
 	for (auto& [id, task] : _tasks)
 	{
-		if (task.type & allowedScriptTypesMask)
+		if ((task.type & allowedScriptTypesMask) && !IsParked(id))
 		{
 			_currentStack = &task.stack;
 			if (task.inExceptionHandler)
@@ -358,7 +365,7 @@ void LHVM::LookIn(const ScriptType allowedScriptTypesMask)
 	// execute normal code
 	for (auto& [id, task] : _tasks)
 	{
-		if (task.type & allowedScriptTypesMask)
+		if ((task.type & allowedScriptTypesMask) && !IsParked(id))
 		{
 			_currentStack = &task.stack;
 			if (!task.inExceptionHandler)
@@ -381,7 +388,7 @@ void LHVM::LookIn(const ScriptType allowedScriptTypesMask)
 	// unlock waiting tasks
 	for (auto& [id, task] : _tasks)
 	{
-		if (task.type & allowedScriptTypesMask)
+		if ((task.type & allowedScriptTypesMask) && !IsParked(id))
 		{
 			task.ticks++;
 			if (task.waitingTaskId != 0 && !TaskExists(task.waitingTaskId))
@@ -507,6 +514,8 @@ void LHVM::StopTask(uint32_t taskNumber)
 		}
 
 		_tasks.erase(taskNumber);
+		_heldTasks.erase(taskNumber);
+		_resumeFrom.erase(taskNumber);
 	}
 	else
 	{
@@ -724,6 +733,10 @@ void LHVM::CpuLoop(VMTask& task)
 	task.iield = false;
 	while (task.waitingTaskId == 0)
 	{
+		if ((!_breakpoints.empty() || !_heldTasks.empty() || !_resumeFrom.empty()) && DebuggerStops(task))
+		{
+			break;
+		}
 		_currentTask = &task;
 		_executedInstructions++;
 		const auto& instruction = _instructions.at(task.instructionAddress);
@@ -739,6 +752,90 @@ void LHVM::CpuLoop(VMTask& task)
 		task.instructionAddress++;
 	}
 	_currentTask = nullptr;
+}
+
+bool LHVM::DebuggerStops(VMTask& task)
+{
+	const auto address = task.instructionAddress;
+	if (auto held = _heldTasks.find(task.id); held != _heldTasks.end())
+	{
+		if (held->second == 0)
+		{
+			return true;
+		}
+		--held->second;
+		return false;
+	}
+	bool resuming = false;
+	if (auto resume = _resumeFrom.find(task.id); resume != _resumeFrom.end())
+	{
+		resuming = resume->second == address;
+		_resumeFrom.erase(resume);
+	}
+	if (!resuming && _breakpoints.contains(address))
+	{
+		_heldTasks[task.id] = 0;
+		return true;
+	}
+	return false;
+}
+
+bool LHVM::IsParked(uint32_t taskNumber) const
+{
+	const auto held = _heldTasks.find(taskNumber);
+	return held != _heldTasks.end() && held->second == 0;
+}
+
+void LHVM::SetVariable(uint32_t id, VMValue value)
+{
+	if (id < _variables.size())
+	{
+		_variables.at(id).value = value;
+	}
+}
+
+void LHVM::SetTaskVariable(uint32_t taskNumber, size_t index, VMValue value)
+{
+	if (auto task = _tasks.find(taskNumber); task != _tasks.end() && index < task->second.localVars.size())
+	{
+		task->second.localVars.at(index).value = value;
+	}
+}
+
+void LHVM::SetBreakpoint(uint32_t address, bool enabled)
+{
+	if (enabled)
+	{
+		_breakpoints.insert(address);
+	}
+	else
+	{
+		_breakpoints.erase(address);
+	}
+}
+
+void LHVM::HoldTask(uint32_t taskNumber)
+{
+	if (TaskExists(taskNumber))
+	{
+		_heldTasks[taskNumber] = 0;
+	}
+}
+
+void LHVM::StepTask(uint32_t taskNumber)
+{
+	if (auto held = _heldTasks.find(taskNumber); held != _heldTasks.end())
+	{
+		++held->second;
+	}
+}
+
+void LHVM::ContinueTask(uint32_t taskNumber)
+{
+	if (auto task = _tasks.find(taskNumber); task != _tasks.end() && _heldTasks.erase(taskNumber) > 0)
+	{
+		_resumeFrom[taskNumber] = task->second.instructionAddress;
+	}
 }
 
 float LHVM::Fmod(float a, float b)

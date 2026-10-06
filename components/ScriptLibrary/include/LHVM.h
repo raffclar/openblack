@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -43,6 +44,12 @@ protected:
 	uint32_t _highestTaskId {0};
 	uint32_t _highestScriptId {0};
 	uint32_t _executedInstructions {0};
+
+	/// The debugger's breakpoints, by instruction address; the held tasks, each with the instructions it may still run
+	/// before it is held again; and the address each continued task starts from, which its breakpoint lets it past once
+	std::set<uint32_t> _breakpoints;
+	std::map<uint32_t, uint32_t> _heldTasks;
+	std::map<uint32_t, uint32_t> _resumeFrom;
 
 	const std::vector<NativeFunction>* _functions {nullptr};
 	std::function<void(const uint32_t func)> _nativeCallEnterCallback;
@@ -108,6 +115,10 @@ protected:
 
 	void PrintInstruction(const VMTask& task, const VMInstruction& instruction);
 	void CpuLoop(VMTask& task);
+	/// Whether the debugger stops the task before its next instruction: held, or reaching a breakpoint
+	bool DebuggerStops(VMTask& task);
+	/// Held with no instruction left to run, so its turns pass it by
+	[[nodiscard]] bool IsParked(uint32_t taskNumber) const;
 
 	static float Fmod(float a, float b);
 
@@ -173,6 +184,22 @@ public:
 	/// The number of the task running now, 0 between tasks
 	[[nodiscard]] uint32_t GetCurrentTaskNumber() const { return _currentTask != nullptr ? _currentTask->id : 0; }
 	[[nodiscard]] const std::vector<char>& GetData() const { return _data; }
+
+	/// Changes a global variable's value, keeping its type
+	void SetVariable(uint32_t id, VMValue value);
+	/// Changes one of a task's local variables, by its place among them, keeping its type
+	void SetTaskVariable(uint32_t taskNumber, size_t index, VMValue value);
+
+	/// The debugger. A breakpoint holds a task before the instruction at its address runs. A held task sits out the VM's
+	/// turns, as if time stood still for it, until it is stepped one instruction at a time or continued.
+	void SetBreakpoint(uint32_t address, bool enabled);
+	[[nodiscard]] const std::set<uint32_t>& GetBreakpoints() const { return _breakpoints; }
+	void HoldTask(uint32_t taskNumber);
+	/// Lets a held task run one more instruction at its next turn
+	void StepTask(uint32_t taskNumber);
+	/// Lets a held task run on, past the breakpoint it waits at
+	void ContinueTask(uint32_t taskNumber);
+	[[nodiscard]] bool IsTaskHeld(uint32_t taskNumber) const { return _heldTasks.contains(taskNumber); }
 };
 
 } // namespace openblack::lhvm
