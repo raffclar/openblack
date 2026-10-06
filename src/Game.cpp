@@ -90,6 +90,7 @@
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -747,6 +748,12 @@ bool Game::Update() noexcept
 		{
 			return false; // Quit event
 		}
+	}
+	// The in-game editor keeps its camera on what it has picked
+	if (Locator::editorSystem::has_value())
+	{
+		auto editor = profiler.BeginScoped(Profiler::Stage::EditorUpdate);
+		Locator::editorSystem::value().Update(deltaTime);
 	}
 
 	camera.Update(deltaTime);
@@ -1638,7 +1645,14 @@ bool Game::Run() noexcept
 	{
 		auto& chlapi = Locator::chlapi::value();
 		auto& lhvm = Locator::vm::value();
-		lhvm.Initialise(&chlapi.GetFunctionsTable(), nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+		// The virtual machine's errors go to the scripting log, where the editor's Scripts panel shows them
+		lhvm.Initialise(
+		    &chlapi.GetFunctionsTable(), nullptr, nullptr, nullptr,
+		    [](lhvm::ErrorCode code, const std::string& text, uint32_t number) {
+			    SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Script error: {} ({} {})",
+			                        lhvm::k_ErrorMsg.at(static_cast<size_t>(code)), text, number);
+		    },
+		    nullptr, nullptr);
 		try
 		{
 			lhvm.LoadBinary(fileSystem.ReadAll(challengePath));

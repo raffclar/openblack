@@ -52,6 +52,7 @@ public:
 		UpdateEntitiesTrees,
 		UpdateAudio,
 		GuiLoop,
+		EditorUpdate,
 		GameLogic,
 		SceneDraw,
 		FootprintPass,
@@ -108,6 +109,7 @@ public:
 	    "Tree Instances",       //
 	    "Audio",                //
 	    "GUI Loop",             //
+	    "Editor",               //
 	    "Game Logic",           //
 	    "Encode Draw Scene",    //
 	    "Footprint Pass",       //
