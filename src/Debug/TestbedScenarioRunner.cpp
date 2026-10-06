@@ -373,10 +373,6 @@ void Runner::PlaceCreatures(const Scenario& scenario, glm::vec2 middle)
 			{
 				leashes.SetKnown(entity, type, true);
 			}
-			if (auto* owned = registry.TryGet<Creature>(entity))
-			{
-				owned->guidesCreature = setup.guidesCreature;
-			}
 			if (setup.leashable.has_value())
 			{
 				leashes.SetLeashable(entity, *setup.leashable);

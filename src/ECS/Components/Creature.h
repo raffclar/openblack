@@ -26,9 +26,6 @@ struct Creature
 	/// Whether it is the one creature its owner can put a leash on. Each player has at most one; the leash system keeps
 	/// it so, making a player's first creature theirs to lead.
 	bool leashable {false};
-	/// Whether it belongs to the god who guides the player (Khazar), so the player's hand may stroke and slap it as it
-	/// does their own creature
-	bool guidesCreature {false};
 	CreatureType species;
 	entt::id_type mind;
 	/// What the creature has become, which its body shows: alignment from -1 (evil) to 1 (good), fatness and strength

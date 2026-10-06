@@ -143,15 +143,6 @@ void CreatureSpawner::DrawLeash(entt::entity entity) noexcept
 	{
 		ImGui::SetTooltip("The one creature its owner can lead; making it so stops their other creature being it");
 	}
-	ImGui::SameLine();
-	if (auto* owned = registry.TryGet<Creature>(entity))
-	{
-		ImGui::Checkbox("Guide's creature", &owned->guidesCreature);
-		if (ImGui::IsItemHovered())
-		{
-			ImGui::SetTooltip("Belongs to the god who guides the player (Khazar): the player's hand may stroke and slap it");
-		}
-	}
 	if (const auto refused = leashes.LastRefusal())
 	{
 		ImGui::TextDisabled("Last refused: player %d, creature %u: %s", static_cast<int>(refused->player) + 1,

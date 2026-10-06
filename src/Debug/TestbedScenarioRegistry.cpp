@@ -1446,20 +1446,19 @@ void AddLeash(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
-	    .id = "leash.guides_creature",
-	    .name = "Slapping Khazar's creature",
+	    .id = "leash.other_gods_creatures",
+	    .name = "Slapping other gods' creatures",
 	    .facet = Facet::Leash,
-	    .description = "Your tiger on the left, Khazar's tortoise, the creature of the god who guides you, in the middle, "
-	                   "and Lethys's wolf on the right. The hand slaps the tortoise, then tries to slap the wolf, then "
-	                   "tries to leash the tortoise.",
-	    .expected = "The tortoise is slapped and reels. The wolf can't be held, nor the tortoise leashed, and the log "
-	                "says why.",
+	    .description = "Your tiger on the left, a tortoise of player three (as Khazar's is) in the middle and a wolf of "
+	                   "player four (as Lethys's is) on the right. The hand slaps the tortoise and the wolf, as it may "
+	                   "any god's creature, then tries to leash the tortoise.",
+	    .expected = "The tortoise and the wolf are slapped and reel. Leashing the tortoise is refused, as it isn't "
+	                "yours, and the log says so.",
 	    .framing = {.shot = Shot::Testbed},
 	    .creatures = {Content(CreatureType::Tiger, {-40.0f, 60.0f}),
 	                  [] {
 		                  auto tortoise = Content(CreatureType::Tortoise, {0.0f, 60.0f});
 		                  tortoise.owner = PlayerNames::PLAYER_THREE;
-		                  tortoise.guidesCreature = true;
 		                  return tortoise;
 	                  }(),
 	                  [] {
@@ -1470,6 +1469,7 @@ void AddLeash(std::vector<Scenario>& all)
 	    .commands = {Slap(1, 0.85f, false, true, 1.0f),
 	                 Act(Kind::HandLetGo, 1, 2.0f, true),
 	                 Slap(2, 0.85f, false, true, 1.0f),
+	                 Act(Kind::HandLetGo, 2, 2.0f, true),
 	                 {.kind = Kind::HandTapLeash, .creature = 1, .delaySeconds = 1.0f}},
 	});
 

@@ -11,13 +11,17 @@
 
 using namespace openblack;
 
-bool creature_hand::MayTouch(PlayerNames player, PlayerNames owner, bool guidesCreature)
+bool creature_hand::MayHold(const Holdable& creature)
 {
-	if (player == PlayerNames::NEUTRAL || owner == PlayerNames::NEUTRAL)
-	{
-		return false;
-	}
-	return owner == player || guidesCreature;
+	// The game also keeps the hand off a creature part way into one particular action of its own; that action isn't
+	// known here
+	return creature.owner != PlayerNames::NEUTRAL && creature.species != CreatureType::Ogre && !creature.asleep &&
+	       !creature.frozen;
+}
+
+bool creature_hand::ShowsInteractTip(PlayerNames player, PlayerNames owner, bool asleep)
+{
+	return player != PlayerNames::NEUTRAL && owner == player && !asleep;
 }
 
 bool creature_hand::IsClick(float heldMs, bool strokedOrSlapped)

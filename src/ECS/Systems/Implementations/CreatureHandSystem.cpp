@@ -28,6 +28,8 @@
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/HandOnCreature.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -137,10 +139,22 @@ bool CreatureHandSystem::MayHold(entt::entity creature) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
-	// The hand is the local player's
-	if (body == nullptr || !creature_hand::MayTouch(PlayerNames::PLAYER_ONE, body->owner, body->guidesCreature))
+	if (body == nullptr)
 	{
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The hand can't hold creature {}: it is neither the player's nor their guide's",
+		return false;
+	}
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	const auto* spells = registry.TryGet<const CreatureSpells>(creature);
+	const creature_hand::Holdable holdable {
+	    .owner = body->owner,
+	    .species = body->species,
+	    .asleep = mind != nullptr && creature_mind::IsAsleep(mind->idle),
+	    .frozen = spells != nullptr && spells->spells.IsActive(creature_spells::Spell::Freeze),
+	};
+	if (!creature_hand::MayHold(holdable))
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"),
+		                   "The hand can't hold creature {}: it belongs to nobody, is an ogre, or is asleep or frozen",
 		                   entt::to_integral(creature));
 		return false;
 	}

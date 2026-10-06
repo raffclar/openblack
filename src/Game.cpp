@@ -68,6 +68,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureHair.h"
+#include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/Mist.h"
@@ -512,12 +513,15 @@ void Game::ProcessHandToolTipTurn()
 		return;
 	}
 	auto& toolTips = _interface->GetToolTips();
-	// Over the player's own creature, or their guide's, the hand can take hold of it to stroke or slap it
+	// Over the player's own creature, the hand shows that it can take hold of it to stroke or slap it. It can hold other
+	// players' creatures too, but the game only offers it for the player's own.
 	const auto over = _creatureUnderHand.has_value() ? _creatureUnderHand : Locator::creatureHandSystem::value().GetCreature();
 	if (over.has_value() && !_interface->GetMenu().IsOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive())
 	{
 		const auto* creature = Locator::entitiesRegistry::value().TryGet<const ecs::components::Creature>(*over);
-		if (creature != nullptr && creature_hand::MayTouch(PlayerNames::PLAYER_ONE, creature->owner, creature->guidesCreature))
+		const auto* mind = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureMindState>(*over);
+		const bool asleep = mind != nullptr && creature_mind::IsAsleep(mind->idle);
+		if (creature != nullptr && creature_hand::ShowsInteractTip(PlayerNames::PLAYER_ONE, creature->owner, asleep))
 		{
 			toolTips.Submit(creature_panel::k_InteractToolTip, gui::ToolTipAction::Select, gui::ToolTipArrows::k_None);
 		}

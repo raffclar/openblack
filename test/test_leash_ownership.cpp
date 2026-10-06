@@ -274,16 +274,27 @@ TEST(LeashShake, AShakeStartsAfresh)
 	EXPECT_FALSE(TrackShake(tracker, {0.6f, 0.5f}, k_Frame));
 }
 
-TEST(CreatureHand, TheHandTouchesOnlyItsOwnAndTheGuidesCreature)
+TEST(CreatureHand, TheHandHoldsAnyPlayersCreature)
 {
-	using creature_hand::MayTouch;
-	EXPECT_TRUE(MayTouch(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, false));
-	// Khazar's creature belongs to another player but guides the player
-	EXPECT_TRUE(MayTouch(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_THREE, true));
-	// Another god's creature, and nobody's, are left alone
-	EXPECT_FALSE(MayTouch(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_FOUR, false));
-	EXPECT_FALSE(MayTouch(PlayerNames::PLAYER_ONE, PlayerNames::NEUTRAL, false));
-	EXPECT_FALSE(MayTouch(PlayerNames::PLAYER_ONE, PlayerNames::NEUTRAL, true));
+	using creature_hand::Holdable;
+	using creature_hand::MayHold;
+	EXPECT_TRUE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger}));
+	// Khazar's, Lethys's or any other god's
+	EXPECT_TRUE(MayHold({.owner = PlayerNames::PLAYER_THREE, .species = CreatureType::Tortoise}));
+	EXPECT_TRUE(MayHold({.owner = PlayerNames::PLAYER_FOUR, .species = CreatureType::Wolf}));
+	// Not nobody's, nor an ogre, nor one asleep or frozen
+	EXPECT_FALSE(MayHold({.owner = PlayerNames::NEUTRAL, .species = CreatureType::Tiger}));
+	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Ogre}));
+	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .asleep = true}));
+	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .frozen = true}));
+}
+
+TEST(CreatureHand, TheInteractTipIsForTheOwnCreatureOnly)
+{
+	using creature_hand::ShowsInteractTip;
+	EXPECT_TRUE(ShowsInteractTip(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, false));
+	EXPECT_FALSE(ShowsInteractTip(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_THREE, false));
+	EXPECT_FALSE(ShowsInteractTip(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, true));
 }
 
 TEST(CreatureHand, AQuickPressIsAClickAndALongOneAHold)

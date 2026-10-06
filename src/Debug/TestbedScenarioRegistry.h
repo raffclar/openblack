@@ -172,8 +172,6 @@ struct CreatureSetup
 	/// Whether it is the one creature its owner can lead on the leash. When not given, a player's first creature is
 	/// and the others aren't.
 	std::optional<bool> leashable;
-	/// Whether it belongs to the god who guides the player (Khazar), so the player's hand may stroke and slap it
-	bool guidesCreature {false};
 	/// Its alignment, fatness and strength, the species' start when not given, and its size, 1 when not given: a
 	/// creature well grown, about 15 units tall, rather than as small as a new one starts
 	std::optional<float> alignment;
