@@ -3210,7 +3210,9 @@ void Renderer::UploadCreatureSkins(const DrawSceneDesc& drawDesc) const
 		}
 		entry.revision = skin.revision;
 	});
-	std::erase_if(_creatureSkins, [&seen](const auto& entry) { return std::ranges::find(seen, entry.first) == seen.end(); });
+	// The skins of creatures no longer about go, looked up sorted rather than one by one through every creature's
+	std::ranges::sort(seen);
+	std::erase_if(_creatureSkins, [&seen](const auto& entry) { return !std::ranges::binary_search(seen, entry.first); });
 }
 
 void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
