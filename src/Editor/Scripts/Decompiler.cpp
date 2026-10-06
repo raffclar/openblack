@@ -12,13 +12,13 @@
 #include <algorithm>
 #include <format>
 
+#include <ChlCompiler.h>
 #include <LHVMDecompiler.h>
 
 namespace openblack::editor::scripts
 {
 
-// Source comes from the Challenge Language decompiler. No compiler is linked in yet: filling in Compile is what's left,
-// and the panel's editor already hands its text to it.
+// Source comes from the Challenge Language decompiler and goes back through its compiler
 
 bool HasDecompiler()
 {
@@ -77,12 +77,36 @@ std::optional<DecompiledSource> Decompile(const Program& program, const lhvm::VM
 
 bool HasCompiler()
 {
-	return false;
+	return true;
 }
 
-CompileResult Compile([[maybe_unused]] const lhvm::VMScript& script, [[maybe_unused]] std::string_view source)
+CompileResult Compile(const Program& program, const lhvm::VMScript& script, std::string_view source)
 {
-	return {.compiled = false, .diagnostics = {"No script compiler is linked in yet"}};
+	// The machine's variable 0 is its null variable; programs number globals from 1
+	std::vector<std::string> globals;
+	globals.reserve(program.globals.size());
+	for (size_t i = 1; i < program.globals.size(); ++i)
+	{
+		globals.push_back(program.globals[i].name);
+	}
+	const lhvm::LHVMFile current(lhvm::LHVMVersion::BlackAndWhite, globals,
+	                             std::vector<lhvm::VMInstruction>(program.code.begin(), program.code.end()), {},
+	                             std::vector<lhvm::VMScript>(program.scripts.begin(), program.scripts.end()),
+	                             std::vector<char>(program.data.begin(), program.data.end()));
+	const auto compiled = lhvm::chl::CompileScript(current, {.name = script.filename, .text = std::string(source)});
+
+	CompileResult result;
+	for (const auto& diagnostic : compiled.diagnostics)
+	{
+		result.diagnostics.push_back(
+		    std::format("{}:{}: {}", diagnostic.location.line, diagnostic.location.column, diagnostic.message));
+	}
+	if (compiled.program)
+	{
+		result.compiled = true;
+		result.program = std::make_shared<const lhvm::LHVMFile>(*compiled.program);
+	}
+	return result;
 }
 
 } // namespace openblack::editor::scripts

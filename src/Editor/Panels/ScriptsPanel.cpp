@@ -10,6 +10,7 @@
 #include "ScriptsPanel.h"
 
 #include <charconv>
+#include <cstdlib>
 
 #include <algorithm>
 #include <filesystem>
@@ -670,7 +671,15 @@ void ScriptsPanel::DrawDecompiled(const Program& program, const VMScript& script
 		ImGui::BeginDisabled(!HasCompiler());
 		if (ImGui::Button("Compile"))
 		{
-			_compileMessages = Compile(script, _sourceText).diagnostics;
+			auto result = Compile(program, script, _sourceText);
+			_compileMessages = std::move(result.diagnostics);
+			if (result.program != nullptr && Locator::vm::value().UpdateProgram(*result.program) == EXIT_SUCCESS)
+			{
+				// The program's tables have moved: stop drawing from the old ones this frame
+				_compileMessages.emplace_back("Compiled: the script runs its new code from its next start");
+				ImGui::EndDisabled();
+				return;
+			}
 		}
 		ImGui::EndDisabled();
 		if (!HasCompiler())

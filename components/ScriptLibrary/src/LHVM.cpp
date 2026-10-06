@@ -185,6 +185,26 @@ int LHVM::LoadBinary(const LHVMFile& file)
 	return EXIT_SUCCESS;
 }
 
+int LHVM::UpdateProgram(const LHVMFile& file)
+{
+	if (!file.IsLoaded() || file.GetInstructions().size() < _instructions.size() ||
+	    file.GetVariablesNames().size() < _variablesNames.size() || file.GetScripts().size() < _scripts.size())
+	{
+		return EXIT_FAILURE;
+	}
+	_instructions = file.GetInstructions();
+	_scripts = file.GetScripts();
+	_data = file.GetData();
+	const auto& names = file.GetVariablesNames();
+	for (auto i = _variablesNames.size(); i < names.size(); ++i)
+	{
+		_variables.emplace_back(DataType::Float, VMValue(0.0f), names[i]);
+	}
+	_variablesNames = names;
+	_highestScriptId = static_cast<uint32_t>(_scripts.size());
+	return EXIT_SUCCESS;
+}
+
 int LHVM::RestoreState(const std::filesystem::path& filepath)
 {
 	auto file = LHVMFile();

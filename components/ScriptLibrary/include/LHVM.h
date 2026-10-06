@@ -144,6 +144,11 @@ public:
 	/// Read SAV file from the filesystem
 	int RestoreState(const std::filesystem::path& filepath);
 
+	/// Take a newer build of the loaded program that keeps the existing code where it is and adds to it, as recompiling
+	/// a script does: the instructions, scripts and data are replaced and new globals added, while running tasks and
+	/// variable values carry on. Tasks of a recompiled script finish its old code; new ones run the new code.
+	int UpdateProgram(const LHVMFile& file);
+
 	VMValue Pop(DataType& type);
 	VMValue Pop();
 	float Popf();

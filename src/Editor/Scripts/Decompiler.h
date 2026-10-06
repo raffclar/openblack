@@ -9,10 +9,13 @@
 
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <LHVMFile.h>
 
 #include "ScriptModel.h"
 
@@ -29,10 +32,13 @@ struct CompileResult
 {
 	bool compiled {false};
 	std::vector<std::string> diagnostics;
+	/// The program with the script replaced: its new code is added after the old, so the other scripts and running
+	/// tasks keep their addresses
+	std::shared_ptr<const lhvm::LHVMFile> program;
 };
 /// Whether a compiler is linked in to turn edited source back into a program
 [[nodiscard]] bool HasCompiler();
-/// Compiles a script's edited source; says why not without a compiler
-[[nodiscard]] CompileResult Compile(const lhvm::VMScript& script, std::string_view source);
+/// Compiles a script's edited source into the program; says why not when it doesn't compile
+[[nodiscard]] CompileResult Compile(const Program& program, const lhvm::VMScript& script, std::string_view source);
 
 } // namespace openblack::editor::scripts
