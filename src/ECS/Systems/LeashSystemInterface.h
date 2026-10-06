@@ -15,6 +15,8 @@
 #include <entt/entity/fwd.hpp>
 #include <glm/vec3.hpp>
 
+#include "Creature/LeashKeys.h"
+#include "Creature/LeashOwnership.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -26,9 +28,21 @@ namespace openblack::ecs::systems
 /// and the leash's feelings and lessons are passed to the creature's mind. The player picks a leash at the citadel's
 /// leash posts or with the hotkeys, puts it on and takes it off with the leash key, and taps things with the Action
 /// button to tie the leash to them and untie it again.
+///
+/// Who may lead which creature is decided here and nowhere else (see creature_leash::WhyNot): each player leads only
+/// their one leashable creature, so the hand, the shortcuts, the scripts, the debug windows and the scenarios all go
+/// through these calls. A refusal is logged and kept as the last refusal for the debug windows to show.
 class LeashSystemInterface
 {
 public:
+	/// A leash that was refused: who wanted it on which creature, and why not
+	struct Refused
+	{
+		PlayerNames player;
+		entt::entity creature;
+		creature_leash::Refusal why;
+	};
+
 	virtual ~LeashSystemInterface() = default;
 
 	/// Once a game turn
@@ -42,7 +56,23 @@ public:
 	[[nodiscard]] virtual bool Knows(entt::entity creature, LeashType type) const = 0;
 	virtual void SetKnown(entt::entity creature, LeashType type, bool known) = 0;
 
-	/// Puts a leash on the creature, held in its player's hand. Returns whether it could: it must know the leash.
+	/// Whether the creature is the one its owner can lead
+	[[nodiscard]] virtual bool IsLeashable(entt::entity creature) const = 0;
+	/// Makes the creature the one its owner can lead, which stops their other creature being it and takes that one's
+	/// leash off; or stops it being it, taking its leash off. A creature that belongs to nobody can't be made leashable.
+	virtual bool SetLeashable(entt::entity creature, bool leashable) = 0;
+	/// Gives the creature to another player, taking its leash off. It stays leashable only if the new owner has no
+	/// leashable creature of their own.
+	virtual void SetOwner(entt::entity creature, PlayerNames owner) = 0;
+	/// A new creature becomes its owner's leashable one when they have none yet
+	virtual void ClaimOnArrival(entt::entity creature) = 0;
+	/// Why the player may not put the leash on the creature, or creature_leash::Refusal::None when they may
+	[[nodiscard]] virtual creature_leash::Refusal WhyNot(PlayerNames player, entt::entity creature, LeashType type) const = 0;
+	/// The last leash refused, for the debug windows
+	[[nodiscard]] virtual std::optional<Refused> LastRefusal() const = 0;
+
+	/// Puts a leash on the creature, held in its owner's hand. Returns whether it could: it must be its owner's leashable
+	/// creature and know the leash.
 	virtual bool PutOn(entt::entity creature, LeashType type) = 0;
 	virtual void TakeOff(entt::entity creature) = 0;
 	/// Unties a tied leash back to the hand, or else puts the picked leash on or takes it off
@@ -66,8 +96,14 @@ public:
 	[[nodiscard]] virtual bool IsLeashed(entt::entity creature) const = 0;
 	[[nodiscard]] virtual std::optional<entt::entity> TiedTo(entt::entity creature) const = 0;
 	[[nodiscard]] virtual LeashType TypeOf(entt::entity creature) const = 0;
-	/// The player's creature: the one the player leads if any, else the first the player owns
+	/// The player's creature: the one creature they can lead, if they have one
 	[[nodiscard]] virtual std::optional<entt::entity> PlayersCreature(PlayerNames player) const = 0;
+
+	/// A player presses a leash shortcut, which acts on their creature. Returns whether it did anything.
+	virtual bool PressKey(PlayerNames player, creature_leash::LeashKey key) = 0;
+	/// A player taps a creature with the hand: their own creature gets the picked leash put on; any other is refused.
+	/// Returns whether the leash went on.
+	virtual bool TapCreature(PlayerNames player, entt::entity creature) = 0;
 
 	/// Hangs a player's three leash posts at three points, the aggression, learning and compassion leashes in turn
 	virtual void PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& points) = 0;

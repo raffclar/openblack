@@ -945,8 +945,13 @@ bool Game::Update() noexcept
 						enterTemple = Locator::templeExteriorSystem::value().EntranceAt(rayOrigin, rayDirection) ==
 						              PlayerNames::PLAYER_ONE;
 					}
-					// The leash keys, and the Action button tapping leash posts, creatures and things to tie the leash to
-					Locator::leashSystem::value().HandleInput(rayOrigin, rayDirection);
+					// The leash keys, and the Action button tapping leash posts, creatures and things to tie the leash to.
+					// Not while the debug windows have the keyboard or mouse, as when typing in a text field: the controls
+					// aren't updated then, so a key just pressed would read as pressed again every frame.
+					if (!Locator::debugGui::value().StealsFocus())
+					{
+						Locator::leashSystem::value().HandleInput(rayOrigin, rayDirection);
+					}
 					if (auto hit = dynamicsSystem.RayCastClosestHit(rayOrigin, rayDirection, 1e10f))
 					{
 						intersectionTransform = hit->first;

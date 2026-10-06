@@ -27,6 +27,8 @@
 #include "Audio/Sound.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureRig.h"
+#include "Creature/LeashKeys.h"
+#include "Creature/LeashOwnership.h"
 #include "Creature/LeashRules.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -194,6 +196,27 @@ CreatureMindState* MindOf(Registry& registry, entt::entity creature)
 {
 	return registry.TryGet<CreatureMindState>(creature);
 }
+
+/// What the leash shortcuts need to know about a creature
+leash::KeyState KeyStateOf(const Registry& registry, entt::entity creature)
+{
+	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
+	if (leashes == nullptr)
+	{
+		return {};
+	}
+	return {
+	    .worn = leashes->worn.has_value(),
+	    .tied = leashes->worn.has_value() && leashes->worn->tiedTo.has_value(),
+	    .known = leashes->known,
+	    .selected = leashes->worn.has_value() ? leashes->worn->type : leashes->selected,
+	};
+}
+
+int PlayerNumber(PlayerNames player)
+{
+	return static_cast<int>(player) + 1;
+}
 } // namespace
 
 bool LeashSystem::Knows(entt::entity creature, LeashType type) const
@@ -222,19 +245,156 @@ void LeashSystem::SetKnown(entt::entity creature, LeashType type, bool known)
 	}
 }
 
-bool LeashSystem::PutOn(entt::entity creature, LeashType type)
+std::vector<leash::Claim> LeashSystem::Claims() const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	std::vector<leash::Claim> claims;
+	registry.Each<const Creature>([&claims](entt::entity entity, const Creature& creature) {
+		claims.push_back({.creature = entt::to_integral(entity), .owner = creature.owner, .leashable = creature.leashable});
+	});
+	return claims;
+}
+
+bool LeashSystem::IsLeashable(entt::entity creature) const
+{
+	const auto* body = Locator::entitiesRegistry::value().TryGet<const Creature>(creature);
+	return body != nullptr && body->leashable;
+}
+
+bool LeashSystem::SetLeashable(entt::entity creature, bool leashable)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	auto* leashes = registry.TryGet<CreatureLeash>(creature);
-	if (leashes == nullptr || !Knows(creature, LeashType::Rope) || !Knows(creature, type))
+	auto* body = registry.TryGet<Creature>(creature);
+	if (body == nullptr)
 	{
 		return false;
 	}
-	const auto& body = registry.Get<const Creature>(creature);
+	const auto owner = body->owner;
+	if (!leashable)
+	{
+		if (body->leashable)
+		{
+			TakeOff(creature);
+			registry.Get<Creature>(creature).leashable = false;
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} is no longer the one player {} leads",
+			                   entt::to_integral(creature), PlayerNumber(owner));
+		}
+		return true;
+	}
+	if (!leash::CanLead(owner))
+	{
+		Refuse(owner, creature, leash::Refusal::NoPlayer);
+		return false;
+	}
+	// A player leads one creature: the one chosen last
+	for (const auto id : leash::Displaced(Claims(), entt::to_integral(creature), owner))
+	{
+		const auto other = static_cast<entt::entity>(id);
+		TakeOff(other);
+		registry.Get<Creature>(other).leashable = false;
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} is no longer the one player {} leads", id, PlayerNumber(owner));
+	}
+	if (!registry.Get<Creature>(creature).leashable)
+	{
+		registry.Get<Creature>(creature).leashable = true;
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} is now the one player {} leads", entt::to_integral(creature),
+		                   PlayerNumber(owner));
+	}
+	return true;
+}
+
+void LeashSystem::SetOwner(entt::entity creature, PlayerNames owner)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* body = registry.TryGet<Creature>(creature);
+	if (body == nullptr || body->owner == owner)
+	{
+		return;
+	}
+	TakeOff(creature);
+	auto& changed = registry.Get<Creature>(creature);
+	changed.owner = owner;
+	// It stays the one its new owner leads only if they have no other
+	if (changed.leashable &&
+	    (!leash::CanLead(owner) || !leash::Displaced(Claims(), entt::to_integral(creature), owner).empty()))
+	{
+		registry.Get<Creature>(creature).leashable = false;
+	}
+}
+
+void LeashSystem::ClaimOnArrival(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (body == nullptr || body->leashable)
+	{
+		return;
+	}
+	auto others = Claims();
+	std::erase_if(others, [creature](const leash::Claim& claim) { return claim.creature == entt::to_integral(creature); });
+	if (leash::ClaimsOnArrival(others, body->owner))
+	{
+		registry.Get<Creature>(creature).leashable = true;
+	}
+}
+
+leash::Refusal LeashSystem::WhyNot(PlayerNames player, entt::entity creature, LeashType type) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	if (body == nullptr)
+	{
+		return leash::Refusal::NotACreature;
+	}
+	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
+	return leash::WhyNot(
+	    player,
+	    {
+	        .owner = body->owner,
+	        .leashable = body->leashable,
+	        .knowsLearningLeash = Knows(creature, LeashType::Rope),
+	        .knowsType = Knows(creature, type),
+	        .heldBy = leashes != nullptr && leashes->worn.has_value() ? std::optional(leashes->worn->holder) : std::nullopt,
+	    });
+}
+
+std::optional<LeashSystemInterface::Refused> LeashSystem::LastRefusal() const
+{
+	return _lastRefusal;
+}
+
+void LeashSystem::Refuse(PlayerNames player, entt::entity creature, leash::Refusal why)
+{
+	_lastRefusal = Refused {.player = player, .creature = creature, .why = why};
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Player {} can't leash creature {}: {}", PlayerNumber(player),
+	                   entt::to_integral(creature), leash::Describe(why));
+}
+
+bool LeashSystem::PutOn(entt::entity creature, LeashType type)
+{
+	const auto* body = Locator::entitiesRegistry::value().TryGet<const Creature>(creature);
+	if (body == nullptr)
+	{
+		Refuse(PlayerNames::NEUTRAL, creature, leash::Refusal::NotACreature);
+		return false;
+	}
+	// Whoever puts it on, it is held by the creature's owner
+	return PutOnFor(body->owner, creature, type);
+}
+
+bool LeashSystem::PutOnFor(PlayerNames player, entt::entity creature, LeashType type)
+{
+	if (const auto why = WhyNot(player, creature, type); why != leash::Refusal::None)
+	{
+		Refuse(player, creature, why);
+		return false;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* leashes = &registry.Get<CreatureLeash>(creature);
 	if (!leashes->worn.has_value())
 	{
 		leashes->worn.emplace();
-		leashes->worn->holder = body.owner;
+		leashes->worn->holder = player;
 	}
 	leashes->worn->type = type;
 	leashes->selected = type;
@@ -269,23 +429,72 @@ void LeashSystem::TakeOff(entt::entity creature)
 
 bool LeashSystem::Toggle(entt::entity creature)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	auto* leashes = registry.TryGet<CreatureLeash>(creature);
-	if (leashes == nullptr || !Knows(creature, LeashType::Rope))
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (body == nullptr)
 	{
+		Refuse(PlayerNames::NEUTRAL, creature, leash::Refusal::NotACreature);
 		return false;
 	}
-	if (leashes->worn.has_value() && leashes->worn->tiedTo.has_value())
+	// As the leash key does, for the creature's owner
+	return Carry(body->owner, creature, leash::CommandFor(leash::LeashKey::Leash, KeyStateOf(registry, creature)));
+}
+
+bool LeashSystem::Carry(PlayerNames player, entt::entity creature, const leash::KeyCommand& command)
+{
+	using Kind = leash::KeyCommand::Kind;
+	const auto checked = command.kind == Kind::PutOn || command.kind == Kind::ChangeType ? command.type : LeashType::Rope;
+	if (const auto why = WhyNot(player, creature, checked); why != leash::Refusal::None)
 	{
-		UntieToHand(creature);
-		return true;
+		Refuse(player, creature, why);
+		return false;
 	}
-	if (leashes->worn.has_value())
+	switch (command.kind)
 	{
+	case Kind::None:
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} knows no other leash to pick", entt::to_integral(creature));
+		return false;
+	case Kind::PutOn:
+		return PutOnFor(player, creature, command.type);
+	case Kind::TakeOff:
 		TakeOff(creature);
 		return true;
+	case Kind::UntieToHand:
+		UntieToHand(creature);
+		return true;
+	case Kind::ChangeType:
+		return ChangeType(creature, command.type);
 	}
-	return PutOn(creature, Knows(creature, leashes->selected) ? leashes->selected : LeashType::Rope);
+	return false;
+}
+
+bool LeashSystem::PressKey(PlayerNames player, leash::LeashKey key)
+{
+	const auto creature = PlayersCreature(player);
+	if (!creature.has_value())
+	{
+		_lastRefusal = Refused {.player = player, .creature = entt::null, .why = leash::Refusal::NotACreature};
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Player {} has no creature they can lead", PlayerNumber(player));
+		return false;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	return Carry(player, *creature, leash::CommandFor(key, KeyStateOf(registry, *creature)));
+}
+
+bool LeashSystem::TapCreature(PlayerNames player, entt::entity creature)
+{
+	if (IsLeashed(creature))
+	{
+		// Already on: tapping its own creature again does nothing, and another's is refused
+		if (const auto why = WhyNot(player, creature, TypeOf(creature)); why != leash::Refusal::None)
+		{
+			Refuse(player, creature, why);
+		}
+		return false;
+	}
+	const auto* leashes = Locator::entitiesRegistry::value().TryGet<const CreatureLeash>(creature);
+	const auto picked = leashes != nullptr ? leashes->selected : LeashType::Rope;
+	return PutOnFor(player, creature, Knows(creature, picked) ? picked : LeashType::Rope);
 }
 
 bool LeashSystem::ChangeType(entt::entity creature, LeashType type)
@@ -310,16 +519,20 @@ bool LeashSystem::ChangeType(entt::entity creature, LeashType type)
 bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	auto* leashes = registry.TryGet<CreatureLeash>(creature);
-	if (leashes == nullptr || object == creature || !registry.Valid(object) ||
-	    registry.TryGet<const Transform>(object) == nullptr)
+	if (object == creature || !registry.Valid(object) || registry.TryGet<const Transform>(object) == nullptr)
 	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {}'s leash can't be tied to that", entt::to_integral(creature));
 		return false;
 	}
-	if (!leashes->worn.has_value() && !PutOn(creature, leashes->selected))
+	if (!IsLeashed(creature))
 	{
-		return false;
+		const auto* picked = registry.TryGet<const CreatureLeash>(creature);
+		if (!PutOn(creature, picked != nullptr ? picked->selected : LeashType::Rope))
+		{
+			return false;
+		}
 	}
+	auto* leashes = &registry.Get<CreatureLeash>(creature);
 	auto& worn = *leashes->worn;
 	worn.tiedTo = object;
 	worn.tiedTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
@@ -459,25 +672,11 @@ LeashType LeashSystem::TypeOf(entt::entity creature) const
 
 std::optional<entt::entity> LeashSystem::PlayersCreature(PlayerNames player) const
 {
-	const auto& registry = Locator::entitiesRegistry::value();
-	std::optional<entt::entity> first;
-	std::optional<entt::entity> leashed;
-	registry.Each<const Creature>([&](entt::entity entity, const Creature& creature) {
-		if (creature.owner != player)
-		{
-			return;
-		}
-		if (!first.has_value())
-		{
-			first = entity;
-		}
-		const auto* leashes = registry.TryGet<const CreatureLeash>(entity);
-		if (!leashed.has_value() && leashes != nullptr && leashes->worn.has_value() && leashes->worn->holder == player)
-		{
-			leashed = entity;
-		}
-	});
-	return leashed.has_value() ? leashed : first;
+	if (const auto id = leash::LeashableOf(Claims(), player))
+	{
+		return static_cast<entt::entity>(*id);
+	}
+	return std::nullopt;
 }
 
 void LeashSystem::PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& points)
@@ -697,6 +896,14 @@ void LeashSystem::ProcessTurn()
 			continue;
 		}
 
+		// Made someone else's or no longer the one its owner leads, the leash comes off
+		if (!body->leashable || leashes.worn->holder != body->owner)
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {}'s leash comes off: it isn't its holder's to lead",
+			                   entt::to_integral(entity));
+			TakeOff(entity);
+			continue;
+		}
 		auto& worn = *leashes.worn;
 		if (worn.tiedTo.has_value() &&
 		    (!registry.Valid(*worn.tiedTo) || registry.TryGet<const Transform>(*worn.tiedTo) == nullptr))
@@ -838,26 +1045,13 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto pressed = [&actions](BindableActionMap action) { return actions.GetChanged(action) && actions.Get(action); };
 
-	if (creature.has_value() && pressed(BindableActionMap::LEASH_UNLEASH_CREATURE))
+	// The leash shortcuts
+	for (const auto action :
+	     {BindableActionMap::LEASH_UNLEASH_CREATURE, BindableActionMap::PREVIOUS_LEASH, BindableActionMap::NEXT_LEASH})
 	{
-		Toggle(*creature);
-	}
-	// The next and previous leashes the creature knows
-	if (creature.has_value() && (pressed(BindableActionMap::NEXT_LEASH) || pressed(BindableActionMap::PREVIOUS_LEASH)))
-	{
-		if (const auto* leashes = registry.TryGet<const CreatureLeash>(*creature))
+		if (const auto key = leash::KeyFor(action); key.has_value() && pressed(action))
 		{
-			const auto step = pressed(BindableActionMap::NEXT_LEASH) ? 1 : static_cast<int>(leash::k_Types.size()) - 1;
-			auto index = leash::IndexOf(leashes->selected).value_or(1);
-			for (size_t tries = 0; tries < leash::k_Types.size(); ++tries)
-			{
-				index = (index + static_cast<size_t>(step)) % leash::k_Types.size();
-				if (leashes->known.test(index))
-				{
-					ChangeType(*creature, leash::k_Types.at(index));
-					break;
-				}
-			}
+			PressKey(player, *key);
 		}
 	}
 
@@ -909,18 +1103,11 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 		TapPost(*tapped);
 		return;
 	}
-	if (!creature.has_value())
+	// Tapping a creature with no leash on in hand puts the picked leash on it, if it is the player's to lead
+	const bool isCreature = registry.TryGet<const Creature>(*tapped) != nullptr;
+	if (isCreature && (!wearing || *tapped == *creature))
 	{
-		return;
-	}
-	if (*tapped == *creature)
-	{
-		// Tapping its creature puts the picked leash on
-		if (!wearing)
-		{
-			const auto* leashes = registry.TryGet<const CreatureLeash>(*creature);
-			PutOn(*creature, leashes != nullptr ? leashes->selected : LeashType::Rope);
-		}
+		TapCreature(player, *tapped);
 		return;
 	}
 	if (!wearing)
@@ -937,5 +1124,10 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 	if (mind == nullptr || mind->developmentPhase > k_TyingPhase)
 	{
 		TieTo(*creature, *tapped);
+	}
+	else
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} is too young to have its leash tied to things",
+		                   entt::to_integral(*creature));
 	}
 }

@@ -1982,6 +1982,7 @@ void DevFunction() // 205 DEV_FUNCTION
 	const auto creature = leashes.PlayersCreature(PlayerNames::PLAYER_ONE);
 	if (!creature.has_value())
 	{
+		SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "DEV_FUNCTION({}): the player has no creature they can lead", func);
 		return;
 	}
 	switch (func)
@@ -3302,11 +3303,8 @@ void ToggleLeash() // 354 TOGGLE_LEASH
 	{
 		return;
 	}
-	auto& leashes = Locator::leashSystem::value();
-	if (const auto creature = leashes.PlayersCreature(player))
-	{
-		leashes.Toggle(*creature);
-	}
+	// As the player's leash key does, refused and logged when they have no creature to lead
+	Locator::leashSystem::value().PressKey(player, creature_leash::LeashKey::Leash);
 }
 
 void GameSetMana() // 355 GAME_SET_MANA

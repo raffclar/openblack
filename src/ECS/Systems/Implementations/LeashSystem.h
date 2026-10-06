@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <optional>
+#include <vector>
+
 #include "ECS/Systems/LeashSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -27,6 +30,12 @@ public:
 
 	[[nodiscard]] bool Knows(entt::entity creature, LeashType type) const override;
 	void SetKnown(entt::entity creature, LeashType type, bool known) override;
+	[[nodiscard]] bool IsLeashable(entt::entity creature) const override;
+	bool SetLeashable(entt::entity creature, bool leashable) override;
+	void SetOwner(entt::entity creature, PlayerNames owner) override;
+	void ClaimOnArrival(entt::entity creature) override;
+	[[nodiscard]] creature_leash::Refusal WhyNot(PlayerNames player, entt::entity creature, LeashType type) const override;
+	[[nodiscard]] std::optional<Refused> LastRefusal() const override;
 	bool PutOn(entt::entity creature, LeashType type) override;
 	void TakeOff(entt::entity creature) override;
 	bool Toggle(entt::entity creature) override;
@@ -44,8 +53,17 @@ public:
 	[[nodiscard]] std::optional<entt::entity> PlayersCreature(PlayerNames player) const override;
 	void PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& points) override;
 	bool TapPost(entt::entity post) override;
+	bool PressKey(PlayerNames player, creature_leash::LeashKey key) override;
+	bool TapCreature(PlayerNames player, entt::entity creature) override;
 
 private:
+	/// Puts the leash on for the player, unless the rules refuse it, which is logged and remembered
+	bool PutOnFor(PlayerNames player, entt::entity creature, LeashType type);
+	/// Carries out what a shortcut does to the player's creature
+	bool Carry(PlayerNames player, entt::entity creature, const creature_leash::KeyCommand& command);
+	void Refuse(PlayerNames player, entt::entity creature, creature_leash::Refusal why);
+	/// The creatures as the one-each assignment sees them
+	[[nodiscard]] std::vector<creature_leash::Claim> Claims() const;
 	/// The posts of each temple whose heart mesh has the three points to hang them at, once the temples are there
 	void PlacePostsAtTemples();
 	/// A taut rope in the hand pulls the creature to the hand
@@ -54,6 +72,7 @@ private:
 	bool _postsPlaced {false};
 	/// The two leash-tying sounds play in turn
 	bool _secondAttachSound {false};
+	std::optional<Refused> _lastRefusal;
 };
 
 } // namespace openblack::ecs::systems
