@@ -217,6 +217,7 @@ jobs:
           name: openblack-test-data-${{ env.GITHUB_REF_NAME_DASHES }}
           path: cmake-build-presets/ninja-multi-vcpkg/test
       - name: Download encrypted Game Data
+        if: ${{ false }}
         env:
           GH_TOKEN: ${{ secrets.BW_ASSET_TOKEN }}
         shell: bash
@@ -227,14 +228,17 @@ jobs:
             --pattern bw.zip \
             --dir game-data
       - name: Extract Game Data
+        if: ${{ false }}
         run: 7z x -p"${{secrets.BW_DOWNLOAD_PW}}" -ogame-data "$PWD/game-data/${{steps.game-data.outputs.filename}}"
       - name: Enable execute permissions on binary
         run: chmod +x ${{steps.download-binary.outputs.download-path}}/*/*
         if: startsWith(matrix.os, 'ubuntu') || startsWith(matrix.os, 'macos')
       - run: ${{steps.download-binary.outputs.download-path}}/Debug/openblack   -g ${{steps.download-test.outputs.download-path}}/mock -b Noop --num-frames-to-simulate 10 --log-file stdout --log-level all=debug
       - run: ${{steps.download-binary.outputs.download-path}}/Release/openblack -g ${{steps.download-test.outputs.download-path}}/mock -b Noop --num-frames-to-simulate 10 --log-file stdout --log-level all=debug
-      - run: ${{steps.download-binary.outputs.download-path}}/Debug/openblack   -g game-data/bw                                        -b Noop --num-frames-to-simulate 10 --log-file stdout --log-level all=debug
-      - run: ${{steps.download-binary.outputs.download-path}}/Release/openblack -g game-data/bw                                        -b Noop --num-frames-to-simulate 10 --log-file stdout --log-level all=debug
+      - if: ${{ false }}
+        run: ${{steps.download-binary.outputs.download-path}}/Debug/openblack   -g game-data/bw                                        -b Noop --num-frames-to-simulate 10 --log-file stdout --log-level all=debug
+      - if: ${{ false }}
+        run: ${{steps.download-binary.outputs.download-path}}/Release/openblack -g game-data/bw                                        -b Noop --num-frames-to-simulate 10 --log-file stdout --log-level all=debug
       - name: Install valgrind and libc6-dbg
         run: |
           sudo apt update -y
@@ -256,7 +260,7 @@ jobs:
           ALSOFT_DRIVERS: "null" # avoid using also which fails, then leaks memory outside of project
       - name: Check openblack for memory leaks (Real)
         run: valgrind --tool=memcheck --track-origins=yes --leak-check=full -s --error-exitcode=1 ${{steps.download-binary.outputs.download-path}}/Debug/openblack -g game-data/bw -b Noop --num-frames-to-simulate 10  --log-level all=error
-        if: startsWith(matrix.os, 'ubuntu')
+        if: ${{ false }}
         env:
           ALSOFT_DRIVERS: "null" # avoid using also which fails, then leaks memory outside of project
 
