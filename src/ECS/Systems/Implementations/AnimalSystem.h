@@ -36,6 +36,8 @@ public:
 	[[nodiscard]] glm::vec3 MovementOf(entt::entity animal) const override;
 	void SetFlockCentre(entt::entity flock, glm::vec2 centre) override;
 	void KillByEffect(entt::entity animal, glm::vec3 position) override;
+	void SetDying(entt::entity animal) override;
+	void IntoHand(entt::entity animal) override;
 	[[nodiscard]] entt::entity LeaderOf(entt::entity flock) const override;
 	[[nodiscard]] std::vector<entt::entity> MembersOf(entt::entity flock) const override;
 	[[nodiscard]] glm::vec2 GoalOf(entt::entity animal) const override;
@@ -43,6 +45,11 @@ public:
 	void SendBird(entt::entity bird, glm::vec2 goal, float height, bool leader) override;
 	void SendWolf(entt::entity wolf, glm::vec2 start, glm::vec2 destination, float halfWidth) override;
 	void StartFading(entt::entity animal) override;
+
+	[[nodiscard]] bool IsAvailableForReaction(entt::entity animal) const override;
+	bool SetupFleeFromObject(entt::entity entity, entt::entity object) override;
+	bool SetupReactToFlyingObject(entt::entity animal, entt::entity object, float speed) override;
+	void StopReaction(entt::entity animal) override;
 
 	[[nodiscard]] bool IsFrighteningToCreature(entt::entity animal) const override;
 	[[nodiscard]] bool CanPlayerPickUp(entt::entity animal) const override;
@@ -66,6 +73,10 @@ private:
 	void StartWander(entt::entity entity, components::Animal& animal);
 	/// A follower near its leader, then in formation
 	void FollowFlock(entt::entity entity, components::Animal& animal);
+
+	// Fleeing what it reacts to, for any animal on the land
+	/// A turn of its flight or its watching; whether it was fleeing at all
+	bool Flee(entt::entity entity, components::Animal& animal);
 
 	// The wolves
 	void Wolf(entt::entity entity, components::Animal& animal);
@@ -96,6 +107,8 @@ private:
 	void Remove(entt::entity animal);
 	/// A turn of a killed animal: falling dead, then lying dead its time before it goes
 	void ProcessDeath(entt::entity entity, components::Animal& animal);
+	/// A dying bird falls out of the sky through the physics
+	void FallDying(entt::entity entity, const components::Animal& animal);
 	/// An animal leaves its flock, which goes once empty
 	void LeaveFlock(entt::entity entity, components::Animal& animal);
 

@@ -69,6 +69,31 @@ public:
 	virtual void StartFading(entt::entity animal) = 0;
 	/// An effect kills an animal where it has been put down: a miracle's animal fades out, any other is left with no life
 	virtual void KillByEffect(entt::entity animal, glm::vec3 position) = 0;
+	/// An animal with no life left starts dying where it is: it falls dead (a bird out of the sky), then lies dead its
+	/// time. One in the physics starts dying only once it has come down.
+	virtual void SetDying(entt::entity animal) = 0;
+	/// An animal is taken into a hand, the player's or a creature's: it plays its kind's clip for being held, if its
+	/// kind has one
+	virtual void IntoHand([[maybe_unused]] entt::entity animal) {}
+
+	/// Whether an animal may take up a reaction: not held, flying or carried, and not dying, dead, brought down or holding
+	/// still while a clip plays
+	[[nodiscard]] virtual bool IsAvailableForReaction([[maybe_unused]] entt::entity animal) const { return false; }
+	/// An animal flees from an object with no test, as it flees a fire: false only when it isn't an animal. With the
+	/// object gone it gives up on its next step.
+	virtual bool SetupFleeFromObject([[maybe_unused]] entt::entity animal, [[maybe_unused]] entt::entity object)
+	{
+		return false;
+	}
+	/// An animal takes up the reaction to a thing flying at a speed: it flees when the thing is nearer than it flies in
+	/// two seconds, remembering it; otherwise it takes no notice. Whether it took it up.
+	virtual bool SetupReactToFlyingObject([[maybe_unused]] entt::entity animal, [[maybe_unused]] entt::entity object,
+	                                      [[maybe_unused]] float speed)
+	{
+		return false;
+	}
+	/// An animal's reaction ends: it forgets what it fled and decides what to do again
+	virtual void StopReaction([[maybe_unused]] entt::entity animal) {}
 
 	/// Whether a creature is frightened of an animal: bats frighten creatures, doves don't
 	[[nodiscard]] virtual bool IsFrighteningToCreature(entt::entity animal) const = 0;
