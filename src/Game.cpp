@@ -769,6 +769,17 @@ void Game::ProcessHandToolTipTurn()
 		return;
 	}
 	auto& toolTips = _interface->GetToolTips();
+	// With the leash held, the hand says what a tap of the Action button does with it, before anything else
+	if (!_interface->GetMenu().IsOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive())
+	{
+		const auto hovered = Locator::pickingSystem::value().GetPick().object;
+		if (const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, hovered))
+		{
+			toolTips.Submit(*tip, gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
+			toolTips.ProcessTurn();
+			return;
+		}
+	}
 	// Over the player's own creature, the hand shows that it can take hold of it to stroke or slap it. It can hold other
 	// players' creatures too, but the game only offers it for the player's own.
 	const auto over = _creatureUnderHand.has_value() ? _creatureUnderHand : Locator::creatureHandSystem::value().GetCreature();
@@ -1401,13 +1412,15 @@ bool Game::Update() noexcept
 						enterTemple = Locator::templeExteriorSystem::value().EntranceAt(rayOrigin, rayDirection) ==
 						              PlayerNames::PLAYER_ONE;
 					}
-					// The leash keys, and the Action button tapping leash posts, creatures and things to tie the leash to.
+					// The leash keys, and the Action button tapping leash posts, and with the leash held giving orders and
+					// tying the leash to things.
 					// Not while the debug windows have the keyboard or mouse, as when typing in a text field: the controls
 					// aren't updated then, so a key just pressed would read as pressed again every frame.
 					if (!Locator::debugGui::value().StealsFocus())
 					{
 						auto& leashes = Locator::leashSystem::value();
-						leashes.HandleInput(rayOrigin, rayDirection, _actionPressTaken);
+						leashes.HandleInput(rayOrigin, rayDirection, static_cast<glm::vec2>(_mousePosition), SDL_GetTicks(),
+						                    _actionPressTaken);
 						_actionPressTaken = false;
 					}
 					// The gestures drawn with the hand: circles and power-ups for the miracles, the leash's gestures, and

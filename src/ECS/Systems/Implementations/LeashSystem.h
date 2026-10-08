@@ -12,6 +12,7 @@
 #include <optional>
 #include <vector>
 
+#include "Creature/LeashOrders.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -26,7 +27,8 @@ class LeashSystem final: public LeashSystemInterface
 public:
 	void ProcessTurn() override;
 	void Update(float seconds) override;
-	void HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, bool actionTaken) override;
+	void HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor, uint32_t milliseconds,
+	                 bool actionTaken) override;
 
 	[[nodiscard]] bool Knows(entt::entity creature, LeashType type) const override;
 	void SetKnown(entt::entity creature, LeashType type, bool known) override;
@@ -52,6 +54,10 @@ public:
 	[[nodiscard]] std::optional<glm::vec3> HolderPoint(entt::entity creature) const override;
 	[[nodiscard]] LeashType TypeOf(entt::entity creature) const override;
 	[[nodiscard]] std::optional<entt::entity> PlayersCreature(PlayerNames player) const override;
+	bool OrderAt(PlayerNames player, const glm::vec3& place) override;
+	bool OrderOn(PlayerNames player, entt::entity object) override;
+	[[nodiscard]] std::optional<glm::vec3> OrderTarget(entt::entity creature) const override;
+	[[nodiscard]] std::optional<uint32_t> ToolTip(PlayerNames player, std::optional<entt::entity> hovered) const override;
 	void PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& points) override;
 	bool TapPost(entt::entity post) override;
 	bool PressKey(PlayerNames player, creature_leash::LeashKey key) override;
@@ -70,11 +76,28 @@ private:
 	void PlacePostsAtTemples();
 	/// A taut rope in the hand pulls the creature to the hand
 	void Pull(entt::entity creature);
+	/// The creature takes an order on the land or on a thing, unless it refuses
+	bool TakeGroundOrder(entt::entity creature, const glm::vec3& place);
+	bool TakeThingOrder(entt::entity creature, entt::entity object);
+	/// The creature answers an order: its player hears it acknowledged, and it nods and makes its acknowledging sound
+	void Acknowledge(entt::entity creature);
+	/// The order taken is remembered and marked: the sparkles over its target, and the ring its player sees
+	void MarkOrder(entt::entity creature, std::optional<entt::entity> object, const glm::vec3& point, bool fight);
+	/// The order is over: its marker goes
+	void EndOrder(entt::entity creature);
+	/// Whether the order the creature took is still being carried out
+	[[nodiscard]] bool OrderInForce(entt::entity creature) const;
+	/// The ring of the player's own creature's order follows its target and throbs
+	void UpdateMarkers(float seconds);
 	/// Whether the posts have been looked for at the temples yet
 	bool _postsPlaced {false};
 	/// The two leash-tying sounds play in turn
 	bool _secondAttachSound {false};
 	std::optional<Refused> _lastRefusal;
+	/// Tells the Action button's double taps from single ones
+	creature_leash_orders::DoubleTaps _doubleTaps;
+	/// The clock every order's ring throbs by, in milliseconds of game time
+	float _markerClockMs {0.0f};
 };
 
 } // namespace openblack::ecs::systems

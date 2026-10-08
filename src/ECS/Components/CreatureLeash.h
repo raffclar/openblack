@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <bitset>
 #include <optional>
 
@@ -18,6 +19,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "Creature/CreatureDesires.h"
 #include "Creature/LeashRope.h"
 #include "Creature/LeashRules.h"
 #include "Enums.h"
@@ -81,6 +83,44 @@ struct CreatureLeash
 	std::optional<glm::vec3> home;
 	/// Walking back into the area it is kept within
 	bool returning {false};
+
+	/// The order given with the leash that the creature carries out, and where it is marked
+	struct Order
+	{
+		/// The mind's count of agendas as it took the order, which a later agenda moves on from
+		uint32_t serial {0};
+		/// It was told to fight, which lasts as long as the fight does
+		bool fight {false};
+		/// What it was sent to, or where on the land
+		std::optional<entt::entity> object;
+		glm::vec3 point {0.0f};
+		/// The sparkles over the target, by their effect's number, 0 for none
+		uint32_t sparkles {0};
+		/// The ring its player sees and the footprint inside it
+		entt::entity ring {entt::null};
+		entt::entity footprint {entt::null};
+	};
+	std::optional<Order> order;
+
+	/// What the creature last said about an order, for its help to tell the player
+	enum class Help : uint8_t
+	{
+		None,
+		/// The desire it acts on
+		CurrentDesire,
+		/// It couldn't get where it was sent
+		Inaccessible,
+		/// The leash pulled it away from what it was doing
+		PulledAway,
+	};
+	Help help {Help::None};
+	std::optional<creature_desires::Desire> helpDesire;
+};
+
+/// A sprite of the marker over where a creature was sent with the leash
+struct LeashMarker
+{
+	entt::entity creature {entt::null};
 };
 
 /// One of the three leashes hanging at a citadel, which its player taps to pick that leash
