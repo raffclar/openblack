@@ -308,6 +308,10 @@ private:
 	void UploadCreatureSkins(const DrawSceneDesc& drawDesc) const;
 	/// The hand's skins as blended for its player's alignment (see components::HandMorph), taken up when they change
 	void UploadHandSkins() const;
+	/// Every animal's bones as posed this frame, in one texture, so that all the animals of a model, a flock's birds, are
+	/// drawn at once, each instance finding its own bones by its place among them. A model some of whose animals fade is
+	/// drawn an animal at a time as before.
+	void UploadAnimalBones(const DrawSceneDesc& drawDesc) const;
 	/// What the hand's base mesh is pulled towards for its player's alignment, none while it shows the base
 	[[nodiscard]] std::optional<L3DMeshSubmitDesc::MorphTargets> HandMorphTargets() const;
 
@@ -386,6 +390,18 @@ private:
 		std::vector<std::pair<uint32_t, const Texture2D*>> drawn;
 	};
 	mutable std::unordered_map<entt::entity, CreatureSkins> _creatureSkins;
+	/// The animals of a model drawn at once this frame: where their bones start in the texture, how many each has, and
+	/// whether they take the brightest of the land's light or are white
+	struct AnimalBoneGroup
+	{
+		uint32_t firstMatrix {0};
+		uint32_t bones {0};
+		bool brightestLand {true};
+	};
+	mutable std::unordered_map<entt::id_type, AnimalBoneGroup> _animalBoneGroups;
+	/// The bones' matrices, four texels each, a row of the texture after another
+	mutable std::vector<glm::mat4> _animalBones;
+	mutable std::unique_ptr<Texture2D> _animalBoneTexture;
 	/// Whether running out of textures for the creatures' skins has been logged
 	mutable bool _warnedOutOfSkins {false};
 	/// The hand's skins as blended for its player's alignment, one texture each, and the blending they hold
