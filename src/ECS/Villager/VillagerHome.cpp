@@ -239,6 +239,12 @@ bool IsAtHome(entt::entity villager)
 
 bool IsReachable(entt::entity villager)
 {
+	// In the hand -> 0 (fire::traits::InHand, as VillagerReactions.cpp and Influence.cpp read it)
+	return IsReachableOutOfHand(villager) && !fire::traits::InHand(villager);
+}
+
+bool IsReachableOutOfHand(entt::entity villager)
+{
 	// IsAvailable (not being deleted, the final state not 14 DYING): a corpse playing its
 	// dying clip (TOP 23, FINAL 15) or lying in 15 is reachable (literal)
 	if (!IsAvailable(villager))
@@ -247,11 +253,6 @@ bool IsReachable(entt::entity villager)
 	}
 	// Inside its home -> 0
 	if (Inside(villager))
-	{
-		return false;
-	}
-	// In the hand -> 0 (fire::traits::InHand, as VillagerReactions.cpp and Influence.cpp read it)
-	if (fire::traits::InHand(villager))
 	{
 		return false;
 	}
