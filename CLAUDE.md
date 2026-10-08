@@ -3,7 +3,7 @@
 openblack reimplements Black & White (2001). Follow the conventions below for all C++ code and game design logic.
 
 The goal is to recreate the original game as closely as possible, ensuring vanilla visuals from the original game
-are preserved but with modern libraries such as BGFX, EnTT and with C++23 optimisations.
+are preserved but with modern libraries such as BGFX, EnTT and with C++20 optimisations.
 
 ## Token Optimisation
 
