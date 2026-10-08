@@ -273,7 +273,7 @@ public:
 	/// What a lightning bolt may strike round a point on the land, as the game finds it: everything standing in the first
 	/// cells of a spiral out from the point's cell, whatever its distance, in each cell what stays put and then what moves
 	/// in the map's order, a building only in the cell it stands in, but for the dead and the miracles' seeds
-	[[nodiscard]] virtual std::vector<StrikeCandidate> StrikeCandidates(glm::vec3 /*centre*/, float /*radius*/) const
+	[[nodiscard]] virtual std::vector<StrikeCandidate> StrikeCandidates(glm::vec3 /*centre*/, size_t /*cells*/) const
 	{
 		return {};
 	}
@@ -291,8 +291,8 @@ public:
 	[[nodiscard]] virtual std::optional<entt::entity> TakeArcs() { return std::nullopt; }
 	/// Points of an object's model where it stands now, picked by the random function from a part of it: count of them,
 	/// none once it has gone
-	[[nodiscard]] virtual std::vector<SurfacePoint> SurfacePoints(entt::entity /*object*/, size_t /*count*/,
-	                                                              const std::function<int32_t(int32_t)>& /*random*/) const
+	[[nodiscard]] virtual std::vector<particles::SurfacePoint>
+	SurfacePoints(entt::entity /*object*/, size_t /*count*/, const std::function<int32_t(int32_t)>& /*random*/) const
 	{
 		return {};
 	}
