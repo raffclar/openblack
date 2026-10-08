@@ -75,6 +75,7 @@
 #include "ECS/Registry.h"
 #include "ECS/ResourceStores.h"
 #include "ECS/Rocks.h"
+#include "ECS/ScriptHitObject.h"
 #include "ECS/SeaCells.h"
 #include "ECS/StoragePitStore.h"
 #include "ECS/Systems/PhysicsObjectsSystemInterface.h"
@@ -1112,9 +1113,16 @@ void EndTurn()
 	{
 		if (auto* po = PhysicsObjects::Find(entity); po != nullptr && registry.Valid(entity))
 		{
+			const auto hitter = po->hitBy != nullptr ? po->hitBy->entity : entt::entity {entt::null};
 			if (!ReactToPhysicsImpact(*po) && !registry.Valid(entity))
 			{
 				PhysicsObjects::RemoveObject(entity);
+			}
+			// after its reaction, a body another body struck becomes the scripts' hit object, and that body what hit it
+			// (each only while it is still available)
+			if (hitter != entt::null)
+			{
+				script_hit::SetHitObject(entity, hitter);
 			}
 		}
 	}
