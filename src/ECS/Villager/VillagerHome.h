@@ -42,6 +42,9 @@ void SetTown(entt::entity villager, entt::entity town);
 [[nodiscard]] bool IsAtHome(entt::entity villager);
 /// IsAvailable && !IsAtHome && not in the hand (fire::traits::InHand) && TOP != 236 GO_AND_HIDE_IN_NEARBY_BUILDING
 [[nodiscard]] bool IsReachable(entt::entity villager);
+/// IsReachable without the hand's part: the game lets go of what the hand holds before the object starts its physics,
+/// while this port's hand still holds it at that moment, so the physics asks this one
+[[nodiscard]] bool IsReachableOutOfHand(entt::entity villager);
 /// Not controlled by a script, available for a state change (not in the hand), and the available-state flags of
 /// GetFinalState's row & 1
 [[nodiscard]] bool IsVillagerAvailable(entt::entity villager);

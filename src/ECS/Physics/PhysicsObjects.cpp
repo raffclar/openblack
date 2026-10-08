@@ -36,9 +36,11 @@
 #include "CollisionSounds.h"
 #include "Debug/DebugEnv.h"
 #include "Dust.h"
+#include "ECS/Abodes.h"
 #include "ECS/AnimalAI.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
@@ -46,6 +48,7 @@
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/Fragment.h"
 #include "ECS/Components/Indestructible.h"
+#include "ECS/Components/LandscapeVortex.h"
 #include "ECS/Components/Life.h"
 #include "ECS/Components/MapShield.h"
 #include "ECS/Components/Mesh.h"
@@ -55,6 +58,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/StoragePit.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
@@ -72,8 +76,10 @@
 #include "ECS/ResourceStores.h"
 #include "ECS/Rocks.h"
 #include "ECS/SeaCells.h"
+#include "ECS/StoragePitStore.h"
 #include "ECS/Systems/PhysicsObjectsSystemInterface.h"
 #include "ECS/ToBeDeleted.h"
+#include "ECS/Villager/VillagerHome.h"
 #include "ECS/VillagerDrowning.h"
 #include "ECS/WaterRings.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -83,6 +89,7 @@
 #include "Locator.h"
 #include "Magic/Objects/MapShield.h"
 #include "ParticleCarriedObjects.h"
+#include "PhysicsClassRules.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -138,13 +145,28 @@ ImpactInfo ImpactOf(const PhysicsObject& po)
 
 const graphics::L3DMesh* MeshOf(entt::entity entity)
 {
-	const auto* mesh = Locator::entitiesRegistry::value().TryGet<const Mesh>(entity);
-	if (mesh == nullptr)
+	const auto& registry = Locator::entitiesRegistry::value();
+	entt::id_type id = 0;
+	if (const auto* animated = registry.TryGet<const AnimatedStatic>(entity))
+	{
+		// a gate, the piper's cave and the phone box are bodies of their own collision models, by their open state
+		// (openblack's gates keep no open or plinth state yet, so they are always shut and empty); the others have none
+		const auto collision = class_rules::AnimatedStaticCollisionMesh(animated->type, 0, 0, 0);
+		if (!collision.has_value())
+		{
+			return nullptr;
+		}
+		id = resources::HashIdentifier(*collision);
+	}
+	else if (const auto* mesh = registry.TryGet<const Mesh>(entity); mesh != nullptr)
+	{
+		// the Mesh component: a broken building's stays its intact model (its FragMesh is a components::DrawMesh)
+		id = mesh->id;
+	}
+	else
 	{
 		return nullptr;
 	}
-	// the Mesh component: a broken building's stays its intact model (its FragMesh is a components::DrawMesh)
-	const auto id = mesh->id;
 	auto& meshes = Locator::resources::value().GetMeshes();
 	if (!meshes.Contains(id))
 	{
@@ -199,6 +221,18 @@ const GObjectInfo* InfoOf(entt::entity entity)
 		return &info.mapShield.at(c->kind == MapShield::Kind::Physical ? 1 : 0);
 	}
 	return nullptr;
+}
+
+/// A static's row of the info tables, or null without them
+const GMobileStaticInfo* MobileStaticInfoOf(MobileStaticInfo type)
+{
+	if (!Locator::infoConstants::has_value() || type == MobileStaticInfo::None)
+	{
+		return nullptr;
+	}
+	const auto& rows = Locator::infoConstants::value().mobileStatic;
+	const auto index = static_cast<size_t>(type);
+	return index < rows.size() ? &rows.at(index) : nullptr;
 }
 
 /// The mesh data of a body: the submeshes flagged isPhysics, otherwise the LOD 0 ones; every vertex and triangle of
@@ -686,6 +720,10 @@ void AddProxy(entt::entity entity)
 	{
 		Buildings::ForgetHitter(entt::null, entity);     // a building's body setup clears the FragMesh's last hitter
 		po->flags |= PhysicsObject::k_NoObjectCollision; // buildings do not check their vertices against objects
+	}
+	else if (Locator::entitiesRegistry::value().AnyOf<CitadelHeart, AnimatedStatic>(entity))
+	{
+		po->flags |= PhysicsObject::k_NoObjectCollision; // nor do the temple's heart and the animated statics
 	}
 	PhysicsState().objects.push_back(std::move(po));
 }
@@ -1175,6 +1213,11 @@ int PhysicsObjects::ConstantsType(entt::entity entity)
 	}
 	if (const auto* statics = registry.TryGet<const MobileStatic>(entity))
 	{
+		// the lanterns, the singing stone's base and the bonfire are plain objects: the unmovable row
+		if (class_rules::IsPlainObjectStatic(statics->type))
+		{
+			return 0;
+		}
 		const auto index = static_cast<int>(statics->type);
 		if ((index >= 49 && index <= 52) || index == 14 || index == 15 || index == 5 || Rocks::IsRock(entity))
 		{
@@ -1206,32 +1249,55 @@ bool PhysicsObjects::InteractsWithPhysicsObjects(entt::entity entity)
 	{
 		return magic::map_shield::InteractsWithPhysicsObjects(entity); // physical shield: yes, magic shield: no
 	}
+	// standing trees: thrown objects go through them; fragments only hit the landscape; fields, forests, worship sites,
+	// fish farms, lanterns and totem statues are never hit
 	if (registry.AnyOf<Tree, Field, BigForest, Fragment>(entity))
-	{
-		return false; // standing trees: thrown objects go through them; fragments only hit the landscape
-	}
-	if (registry.AllOf<Creature>(entity))
-	{
-		return true;
-	}
-	if (const auto* pot = registry.TryGet<const Pot>(entity))
-	{
-		// piles do not interact
-		return pot->type == PotInfo::HandWood || pot->type == PotInfo::HandFood;
-	}
-	// fields are never hit; buildings only while standing (more than 10% built and life > 0.01)
-	if (const auto* abode = registry.TryGet<const Abode>(entity); abode != nullptr && abode->type == AbodeNumber::Field)
 	{
 		return false;
 	}
-	if (registry.AnyOf<Abode, StoragePit>(entity))
+	// always in the way: the creature, dead trees, scaffolds and a vortex that sucks things in
+	if (registry.AnyOf<Creature, DeadTree, Scaffold>(entity))
 	{
-		if (const auto* life = registry.TryGet<const Life>(entity); life != nullptr && life->value <= 0.01f)
-		{
-			return false;
-		}
+		return true;
 	}
-	return registry.AnyOf<MobileStatic, MobileObject, Villager, Animal, DeadTree, Abode, StoragePit>(entity);
+	if (const auto* vortex = registry.TryGet<const LandscapeVortex>(entity))
+	{
+		return vortex->type == VortexType::In;
+	}
+	if (registry.AllOf<CitadelHeart>(entity))
+	{
+		return class_rules::CitadelHeartIsObstacle(abodes::GetPercentBuilt(entity));
+	}
+	if (const auto* animated = registry.TryGet<const AnimatedStatic>(entity))
+	{
+		return class_rules::AnimatedStaticIsObstacle(animated->type);
+	}
+	if (registry.AllOf<Pot>(entity))
+	{
+		// every pot, unless it is one of a storage pit's piles
+		return StoragePitStore::OwnerOf(entity) == entt::null;
+	}
+	if (const auto* statics = registry.TryGet<const MobileStatic>(entity))
+	{
+		const auto* info = MobileStaticInfoOf(statics->type);
+		return class_rules::MobileStaticIsObstacle(statics->type, info != nullptr ? info->mobileType : MobileStaticInfo::None,
+		                                           info != nullptr ? info->meshId : MeshId::Dummy,
+		                                           abodes::GetPercentBuilt(entity), LifeOf(entity));
+	}
+	if (const auto* object = registry.TryGet<const MobileObject>(entity))
+	{
+		return class_rules::MobileObjectIsObstacle(object->type);
+	}
+	if (const auto* abode = registry.TryGet<const Abode>(entity))
+	{
+		return class_rules::AbodeIsObstacle(abode->type, abodes::GetPercentBuilt(entity), LifeOf(entity));
+	}
+	// storage pits and features stand as buildings do
+	if (registry.AnyOf<StoragePit, Feature>(entity))
+	{
+		return class_rules::StandingBuilding(abodes::GetPercentBuilt(entity), LifeOf(entity));
+	}
+	return registry.AnyOf<Villager, Animal, OneOffSpellSeed>(entity);
 }
 
 bool PhysicsObjects::SetUpBody(entt::entity entity, PhysicsBody& body, bool dynamic)
@@ -1248,7 +1314,8 @@ bool PhysicsObjects::CanWakeKnockedProxy(entt::entity entity)
 bool PhysicsObjects::CanBecomeAPhysicsObject(entt::entity entity)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	if (registry.AnyOf<Abode, StoragePit, Field, BigForest>(entity))
+	if (registry.AnyOf<Abode, StoragePit, Field, BigForest, Creature, MapShield, LandscapeVortex, AnimatedStatic, CitadelHeart>(
+	        entity))
 	{
 		return false;
 	}
@@ -1258,8 +1325,29 @@ bool PhysicsObjects::CanBecomeAPhysicsObject(entt::entity entity)
 		const auto& handlers = PhysicsObjects::Handlers(entity);
 		return handlers.canBecomePhysicsObject ? handlers.canBecomePhysicsObject(entity) : true;
 	}
-	// a one-shot orb is a MobileObject too
-	return registry.AnyOf<MobileStatic, MobileObject, Villager, Animal, Tree, DeadTree, Pot, Fragment, OneOffSpellSeed>(entity);
+	if (registry.AllOf<Villager>(entity))
+	{
+		return villager::IsReachableOutOfHand(entity);
+	}
+	if (const auto* pot = registry.TryGet<const Pot>(entity))
+	{
+		// only a kind of pot its table lets fly
+		if (pot->type == PotInfo::_COUNT || !Locator::infoConstants::has_value())
+		{
+			return false;
+		}
+		return Locator::infoConstants::value().pot.at(static_cast<size_t>(pot->type)).canBecomeAPhysicsObject != 0;
+	}
+	if (const auto* statics = registry.TryGet<const MobileStatic>(entity))
+	{
+		return class_rules::MobileStaticCanBecomePhysicsObject(statics->type);
+	}
+	if (const auto* object = registry.TryGet<const MobileObject>(entity))
+	{
+		return class_rules::MobileObjectCanBecomePhysicsObject(object->type);
+	}
+	// a one-shot orb is a mobile object too
+	return registry.AnyOf<Animal, Tree, DeadTree, Fragment, OneOffSpellSeed>(entity);
 }
 
 const GObjectInfo* PhysicsObjects::ObjectInfo(entt::entity entity)
@@ -1302,7 +1390,11 @@ float PhysicsObjects::Weight(entt::entity entity)
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (registry.AnyOf<Abode, StoragePit>(entity))
 	{
-		return 2000.0f; // a building's body
+		return class_rules::k_BuildingMass; // a building's body
+	}
+	if (registry.AnyOf<CitadelHeart, AnimatedStatic>(entity))
+	{
+		return class_rules::k_HeavyFixedMass; // the temple's heart, a gate or a chess piece
 	}
 	if (const auto* fragment = registry.TryGet<const Fragment>(entity))
 	{
