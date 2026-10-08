@@ -30,12 +30,16 @@ class RenderingSystemCommon: public RenderingSystemInterface
 public:
 	~RenderingSystemCommon();
 	void SetDirty() override;
+	void SetLayoutDirty() override;
 	void PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams) override;
 	const RenderContext& GetContext() override { return _renderContext; }
 
 private:
 	virtual void PrepareDrawDescs(bool drawBoundingBox) = 0;
 	virtual void PrepareDrawUploadUniforms(bool drawBoundingBox) = 0;
+	/// Uploads the instances into the draw lists as they are, when the draw lists can be kept while things only move.
+	/// Returns false when they must be made again first, as they always are by default.
+	virtual bool UploadUniformsKeepingDescs([[maybe_unused]] bool drawBoundingBox) { return false; }
 
 protected:
 	RenderContext _renderContext;

@@ -120,14 +120,19 @@ target_link_libraries(
   openblack_lib
   PRIVATE "$<$<CXX_COMPILER_ID:MSVC>:-SAFESEH:NO>"
           l3d
+          cam
           pack
           lnd
           anm
           glw
           morph
+          psys
+          rawimage
           imgui::imgui
           imgui_user
           ScriptLibrary
+          lhvmdecompiler
+          lhvmcompiler
           glm::glm
           EnTT::EnTT
           bgfx::bgfx
@@ -139,8 +144,17 @@ target_link_libraries(
           LinearMath
           minizip::minizip
   PUBLIC spdlog::spdlog
+         # The mind file's types are part of the creature mind component
+         creaturemind
 )
 target_include_directories(openblack_lib PRIVATE ${CXXOPTS_INCLUDE_DIRS})
+
+if (WIN32)
+  # The crash handler's stack traces and minidumps
+  target_link_libraries(openblack_lib PRIVATE dbghelp)
+  # The shell's file dialogs
+  target_link_libraries(openblack_lib PRIVATE ole32 shell32 uuid)
+endif ()
 
 if (OPENBLACK_CLANG_TIDY_CHECKS)
   if (CLANG_TIDY)

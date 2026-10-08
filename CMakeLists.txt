@@ -37,17 +37,28 @@ project(openblack VERSION 0.1.0)
 # Ninja runs a job per core and more, and every link of the many executables reads the whole static library, so many
 # links at once can run out of memory. Links, and compiles, go through pools of a few jobs each. Other generators
 # ignore job pools.
-set(OPENBLACK_LINK_JOBS 2 CACHE STRING "How many executables Ninja links at the same time")
+set(OPENBLACK_LINK_JOBS
+    2
+    CACHE STRING "How many executables Ninja links at the same time"
+)
 if (NOT OPENBLACK_LINK_JOBS GREATER 0)
   set(OPENBLACK_LINK_JOBS 1)
 endif ()
-set_property(GLOBAL APPEND PROPERTY JOB_POOLS openblack_link_pool=${OPENBLACK_LINK_JOBS})
+set_property(
+  GLOBAL APPEND PROPERTY JOB_POOLS openblack_link_pool=${OPENBLACK_LINK_JOBS}
+)
 set(CMAKE_JOB_POOL_LINK openblack_link_pool)
-set(OPENBLACK_COMPILE_JOBS 8 CACHE STRING "How many sources Ninja compiles at the same time")
+set(OPENBLACK_COMPILE_JOBS
+    8
+    CACHE STRING "How many sources Ninja compiles at the same time"
+)
 if (NOT OPENBLACK_COMPILE_JOBS GREATER 0)
   set(OPENBLACK_COMPILE_JOBS 1)
 endif ()
-set_property(GLOBAL APPEND PROPERTY JOB_POOLS openblack_compile_pool=${OPENBLACK_COMPILE_JOBS})
+set_property(
+  GLOBAL APPEND PROPERTY JOB_POOLS
+                         openblack_compile_pool=${OPENBLACK_COMPILE_JOBS}
+)
 set(CMAKE_JOB_POOL_COMPILE openblack_compile_pool)
 
 # Configure C++ standard
@@ -132,19 +143,28 @@ include(ClangFormat)
 # gets bundled dependencies (imgui, bgfx.cmake)
 add_subdirectory(externals)
 add_subdirectory(components/l3d)
+add_subdirectory(components/cam)
 add_subdirectory(components/pack)
 add_subdirectory(components/lnd)
 add_subdirectory(components/anm)
 add_subdirectory(components/glw)
 add_subdirectory(components/morph)
+add_subdirectory(components/creaturemind)
+add_subdirectory(components/psys)
+add_subdirectory(components/rawimage)
 add_subdirectory(components/ScriptLibrary)
+add_subdirectory(components/lhvmlang)
+add_subdirectory(components/lhvmdecompiler)
+add_subdirectory(components/lhvmcompiler)
 add_subdirectory(src)
+add_subdirectory(apps/camtool)
 add_subdirectory(apps/l3dtool)
 add_subdirectory(apps/packtool)
 add_subdirectory(apps/lndtool)
 add_subdirectory(apps/anmtool)
 add_subdirectory(apps/glwtool)
 add_subdirectory(apps/morphtool)
+add_subdirectory(apps/creaturemindtool)
 add_subdirectory(apps/lhvmtool)
 
 # Map CMAKE_HOST_SYSTEM_PROCESSOR value
@@ -193,8 +213,10 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # The game's logic must give the same floating point results on every build, as the game's own did with one rounding
 # for each operation. Fused or reassociated float math changes them, so these flags stop the configure.
-function(openblack_check_deterministic_fp)
-  set(flags "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE} ${CMAKE_CXX_FLAGS_RELWITHDEBINFO} ${CMAKE_CXX_FLAGS_DEBUG}")
+function (openblack_check_deterministic_fp)
+  set(flags
+      "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE} ${CMAKE_CXX_FLAGS_RELWITHDEBINFO} ${CMAKE_CXX_FLAGS_DEBUG}"
+  )
   foreach (target openblack_lib openblack)
     if (TARGET ${target})
       get_target_property(options ${target} COMPILE_OPTIONS)
@@ -203,10 +225,22 @@ function(openblack_check_deterministic_fp)
       endif ()
     endif ()
   endforeach ()
-  foreach (bad "/fp:fast" "/fp:contract" "/arch:AVX2" "/arch:AVX512" "-ffast-math" "-mfma" "-ffp-contract=fast")
+  foreach (
+    bad
+    "/fp:fast"
+    "/fp:contract"
+    "/arch:AVX2"
+    "/arch:AVX512"
+    "-ffast-math"
+    "-mfma"
+    "-ffp-contract=fast"
+  )
     string(FIND "${flags}" "${bad}" at)
     if (NOT at EQUAL -1)
-      message(FATAL_ERROR "${bad}: fused or reassociated float math changes the game's results. Remove it.")
+      message(
+        FATAL_ERROR
+          "${bad}: fused or reassociated float math changes the game's results. Remove it."
+      )
     endif ()
   endforeach ()
 endfunction ()
