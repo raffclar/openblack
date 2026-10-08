@@ -15,6 +15,7 @@
 #include <gtest/gtest.h>
 
 #include "Video/FallingSpellAudio.h"
+#include "Video/PreviewPlayback.h"
 #include "Video/VideoRules.h"
 
 using namespace openblack::video;
@@ -168,4 +169,29 @@ TEST(VideoRules, FallingSpellSounds)
 	          (FallingSpellSound {.action = Action::Stop, .bank = "InGame.sad", .sample = 172, .owner = 1}));
 	EXPECT_EQ(SoundOf(FallingSpellCue::MusicFadeOut), std::nullopt);
 	EXPECT_EQ(SoundOf(FallingSpellCue::WhiteFadeStart), std::nullopt);
+}
+
+TEST(PreviewPlayback, PlaysPausesStepsAndRestarts)
+{
+	PreviewPlayback playback(48, 24, 1);
+	EXPECT_EQ(playback.Advance(1s), 0u); // paused at first
+	playback.Play();
+	EXPECT_EQ(playback.Advance(41ms), 0u);
+	EXPECT_EQ(playback.Advance(1ms), 1u);
+	EXPECT_EQ(playback.Advance(958ms), 24u);
+	playback.Pause();
+	EXPECT_EQ(playback.Advance(10s), 24u);
+	playback.Step();
+	EXPECT_EQ(playback.Frame(), 25u);
+	EXPECT_FALSE(playback.IsPlaying());
+	// Playing on from a step keeps the video's pace from that frame
+	playback.Play();
+	EXPECT_EQ(playback.Advance(42ms), 26u);
+	// It stops on its last frame, and playing again starts over
+	EXPECT_EQ(playback.Advance(10s), 47u);
+	EXPECT_FALSE(playback.IsPlaying());
+	playback.Play();
+	EXPECT_EQ(playback.Frame(), 0u);
+	playback.Restart();
+	EXPECT_EQ(playback.Advance(0ms), 0u);
 }
