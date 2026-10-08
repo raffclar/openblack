@@ -5,6 +5,12 @@ openblack reimplements Black & White (2001). Follow the conventions below for al
 The goal is to recreate the original game as closely as possible, ensuring vanilla visuals from the original game
 are preserved but with modern libraries such as BGFX, EnTT and with C++20 optimisations.
 
+## Research Precedence
+
+- bw1-decomp source code. This is a byte-for-byte decompilation of the original game. Not all source files are complete.
+- ghidra decompilation via MCP.
+- Diego's github repository, https://github.com/diegoscood-ai/openblack.
+
 ## Token Optimisation
 
 - Always read with explicit offset and limit instead of slurping whole files.
