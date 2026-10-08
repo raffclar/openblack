@@ -101,6 +101,8 @@ constexpr std::string_view k_ExamineAction = "ExamineByPickingUp";
 constexpr std::string_view k_ThrowAboutAction = "PracticeThrow";
 constexpr std::string_view k_HurlAction = "Hurl";
 constexpr std::string_view k_FightAction = "Fight";
+/// The action a creature made to catch something carries out
+constexpr std::string_view k_CatchAction = "Catch";
 /// A creature looks for things to pick up this far away at most, and for homes and trees to hurl them at
 constexpr float k_ObjectSearchDistance = 80.0f;
 constexpr float k_HurlSearchDistance = 120.0f;
@@ -698,6 +700,12 @@ void Order(ecs::Registry& registry, entt::entity creature, const creature_mind::
 	case Kind::PointAt:
 		hands.PointAt(creature, point);
 		break;
+	case Kind::Catch:
+		if (!object.has_value() || !registry.Valid(*object) || !hands.Catch(creature, *object))
+		{
+			hands.Cancel(creature);
+		}
+		break;
 	}
 }
 
@@ -1006,6 +1014,29 @@ bool CreatureMindSystem::SitDown(entt::entity creature)
 	return true;
 }
 
+void CreatureMindSystem::UpdateAttitudeFromFeedback(entt::entity creature, float feedback)
+{
+	auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(creature);
+	if (mind == nullptr)
+	{
+		return;
+	}
+	// Good feedback shows it its player wants compassion, bad anger, and it warms or cools to the player
+	creature_perceived_desires::Increase(
+	    mind->perceivedDesires, static_cast<size_t>(feedback > 0.0f ? Desire::Compassion : Desire::Anger), std::abs(feedback));
+	mind->attitudeToPlayer = creature_feedback::AttitudeAfter(mind->attitudeToPlayer, feedback);
+	mind->averageFeedback = creature_feedback::AverageAfter(mind->averageFeedback, feedback);
+}
+
+void CreatureMindSystem::ChangeDesireSource(entt::entity creature, uint32_t type, float amount)
+{
+	auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(creature);
+	if (mind != nullptr && mind->desires.has_value())
+	{
+		creature_desires::ChangeSource(*mind->desires, type, amount);
+	}
+}
+
 void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 {
 	namespace sources = creature_desires::sources;
@@ -1027,11 +1058,7 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 		}
 		return;
 	}
-	// A stroke shows it its player wants compassion, a slap anger
-	creature_perceived_desires::Increase(
-	    mind->perceivedDesires, static_cast<size_t>(feedback > 0.0f ? Desire::Compassion : Desire::Anger), std::abs(feedback));
-	mind->attitudeToPlayer = creature_feedback::AttitudeAfter(mind->attitudeToPlayer, feedback);
-	mind->averageFeedback = creature_feedback::AverageAfter(mind->averageFeedback, feedback);
+	UpdateAttitudeFromFeedback(creature, feedback);
 	mind->feedbackSeconds = 0.0f;
 	mind->feedbackWasStroke = feedback > 0.0f;
 	// Slapped, it stops whatever it was doing
@@ -1216,6 +1243,40 @@ void CreatureMindSystem::FoughtFight(entt::entity creature, [[maybe_unused]] boo
 	if (mind != nullptr && mind->desires.has_value())
 	{
 		Satisfied(creature, *mind->desires, k_FightAction);
+	}
+}
+
+void CreatureMindSystem::ForceCatch(entt::entity creature, entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	const auto* tables = GetTables();
+	if (mind == nullptr || tables == nullptr)
+	{
+		return;
+	}
+	// What it was doing stops as a failure
+	Abandon(*mind);
+	ReleaseCast(creature);
+	creature_mind::Step step {.kind = creature_mind::Step::Kind::Object};
+	step.order = {.kind = creature_mind::ObjectOrder::Kind::Catch, .object = entt::to_integral(object)};
+	if (!Replan(creature, creature_mind::Activity::Planned, {step}))
+	{
+		return;
+	}
+	if (const auto action = creature_mind_tables::FindAction(*tables, k_CatchAction))
+	{
+		mind->planner.current =
+		    creature_planner::Plan {.desire = Desire::Play, .action = *action, .object = entt::to_integral(object)};
+		mind->planActive = true;
+		mind->planSerial = mind->idle.serial;
+		mind->agendaSeen = mind->idle.serial;
+		mind->satisfiedByEffect = false;
+	}
+	// Having decided to play, the desires that go against it are held back
+	if (mind->desires.has_value())
+	{
+		creature_learning::SuppressOpposed(*mind->desires, Desire::Play, tables->dependencies, k_TurnsPerSecond);
 	}
 }
 

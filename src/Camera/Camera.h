@@ -67,7 +67,7 @@ public:
 	Camera& SetOrigin(const glm::vec3& position);
 	Camera& SetFocus(const glm::vec3& position);
 	/// The eye and what it looks at jump up by these as the camera shakes, as it is drawn
-	Camera& SetShake(float eye, float focus);
+	Camera& SetShake(const glm::vec3& eye, const glm::vec3& focus);
 
 	Camera& SetOriginInterpolator(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& m0, const glm::vec3& m1);
 	Camera& SetFocusInterpolator(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& m0, const glm::vec3& m1);
@@ -104,6 +104,14 @@ public:
 
 	void DeprojectScreenToWorld(glm::vec2 screenCoord, glm::vec3& outWorldOrigin, glm::vec3& outWorldDirection,
 	                            Interpolation interpolation = Camera::Interpolation::Current) const;
+	/// The eye, and the point of the near plane a point of the screen (0 to 1 from the top left) shows
+	struct NearPlanePoint
+	{
+		glm::vec3 eye;
+		glm::vec3 point;
+	};
+	[[nodiscard]] NearPlanePoint OnNearPlane(glm::vec2 screenCoord,
+	                                         Interpolation interpolation = Camera::Interpolation::Current) const;
 	bool ProjectWorldToScreen(glm::vec3 worldPosition, glm::vec4 viewport, glm::vec3& outScreenPosition,
 	                          Interpolation interpolation = Camera::Interpolation::Current) const;
 
@@ -136,8 +144,8 @@ protected:
 	glm::mat4 _projectionMatrixReversedZ = glm::mat4 {1.0f};
 	std::unique_ptr<CameraModel> _model;
 	Projection _cameraProjection = Projection::ReversedZ;
-	float _shakeEye = 0.0f;
-	float _shakeFocus = 0.0f;
+	glm::vec3 _shakeEye {0.0f};
+	glm::vec3 _shakeFocus {0.0f};
 	float _keyboardMoveSpeed = k_KeyboardMoveSpeedDefault;
 };
 
