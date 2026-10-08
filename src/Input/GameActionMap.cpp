@@ -250,9 +250,23 @@ void GameActionMap::WarpCursor(glm::ivec2 position)
 	}
 }
 
+glm::ivec2 GameActionMap::GetCursorImagePosition() const
+{
+	return _cursorPinnedAt.value_or(glm::ivec2(_mousePosition));
+}
+
 std::optional<glm::ivec2> GameActionMap::GetCursorWarp() const
 {
 	return _cursorWarp;
+}
+
+void GameActionMap::PinCursor(bool pinned)
+{
+	_cursorPinned = pinned;
+	if (!pinned)
+	{
+		_cursorPinnedAt.reset();
+	}
 }
 
 void GameActionMap::AllowCursorFreeze(bool allowed)
@@ -363,6 +377,11 @@ void GameActionMap::Frame()
 			}
 		}
 		_mousePosition = glm::clamp(cursor.cursor, glm::zero<decltype(screenSize)>(), screenSize);
+		// A pinned cursor's image stays where it was pinned; the pointer itself is still followed
+		if (_cursorPinned && !_cursorPinnedAt.has_value())
+		{
+			_cursorPinnedAt = glm::ivec2(_mousePosition);
+		}
 	}
 	_mouseDelta = glm::ivec2(0, 0);
 	_mouseWheelDelta = 0.0f;

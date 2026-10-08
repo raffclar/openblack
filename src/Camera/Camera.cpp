@@ -16,7 +16,7 @@
 
 #include "3D/LandIslandInterface.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/PickingSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "ReflectionXZCamera.h"
@@ -53,7 +53,15 @@ glm::mat4 Camera::GetRotationMatrix() const
 glm::mat4 Camera::GetViewMatrix(Interpolation interpolation) const
 {
 	// Invert the camera's rotation (transposed) and position (negated) to get the view matrix.
-	return glm::lookAt(GetOrigin(interpolation), GetFocus(interpolation), glm::vec3(0.0f, 1.0f, 0.0f));
+	return glm::lookAt(GetOrigin(interpolation) + _shakeEye, GetFocus(interpolation) + _shakeFocus,
+	                   glm::vec3(0.0f, 1.0f, 0.0f));
+}
+
+Camera& Camera::SetShake(const glm::vec3& eye, const glm::vec3& focus)
+{
+	_shakeEye = eye;
+	_shakeFocus = focus;
+	return *this;
 }
 
 glm::mat4 Camera::GetViewProjectionMatrix(Interpolation interpolation) const
@@ -78,26 +86,34 @@ std::optional<ecs::components::Transform> Camera::RaycastMouseToLand(bool includ
 std::optional<ecs::components::Transform> Camera::RaycastScreenCoordToLand(glm::vec2 screenCoord, bool includeWater,
                                                                            Interpolation interpolation) const
 {
-	// get the hit by raycasting to the land down via the pixel coordinate
-	ecs::components::Transform intersectionTransform;
-	float intersectDistance = 0.0f;
+	// The land the line from the eye through the pixel meets, as the game finds the land under the cursor, and the sea's
+	// level when asked for
+	if (!Locator::pickingSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto [eye, nearPoint] = OnNearPlane(screenCoord, interpolation);
+	if (const auto point = Locator::pickingSystem::value().LandUnderPixel(eye, nearPoint, includeWater))
+	{
+		return ecs::components::Transform {.position = *point, .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)};
+	}
+	return std::nullopt;
+}
+
+Camera::NearPlanePoint Camera::OnNearPlane(glm::vec2 screenCoord, Interpolation interpolation) const
+{
+	// The point the pixel shows somewhere ahead, then brought along its line from the eye to the near plane's depth: the
+	// view's w is the depth along the view
 	glm::vec3 rayOrigin;
 	glm::vec3 rayDirection;
 	DeprojectScreenToWorld(screenCoord, rayOrigin, rayDirection, interpolation);
-	const auto& dynamicsSystem = Locator::dynamicsSystem::value();
-	if (auto hit = dynamicsSystem.RayCastClosestHit(rayOrigin, rayDirection, 1e10f))
+	const auto eye = glm::vec3(glm::inverse(GetViewMatrix(interpolation))[3]);
+	const float depth = (GetViewProjectionMatrix(Projection::Normal, interpolation) * glm::vec4(rayOrigin, 1.0f)).w;
+	if (!(depth > 0.0f))
 	{
-		intersectionTransform = hit->first;
-		return std::make_optional(intersectionTransform);
+		return {.eye = eye, .point = rayOrigin};
 	}
-	if (includeWater && glm::intersectRayPlane(rayOrigin, rayDirection, glm::vec3(0.0f, 0.0f, 0.0f),
-	                                           glm::vec3(0.0f, 1.0f, 0.0f), intersectDistance))
-	{
-		intersectionTransform.position = rayOrigin + rayDirection * intersectDistance;
-		intersectionTransform.rotation = glm::mat3(1.0f);
-		return std::make_optional(intersectionTransform);
-	}
-	return std::nullopt;
+	return {.eye = eye, .point = eye + (rayOrigin - eye) * (_nearClip / depth)};
 }
 
 Camera& Camera::SetProjectionMatrixPerspective(float xFov, float aspect, float nearClip, float farClip)
@@ -250,6 +266,11 @@ void Camera::Update(std::chrono::microseconds dt)
 void Camera::HandleActions(std::chrono::microseconds dt)
 {
 	_model->HandleActions(dt);
+}
+
+void Camera::SetKeyboardMoveSpeed(float speed)
+{
+	_keyboardMoveSpeed = ClampKeyboardMoveSpeed(speed);
 }
 
 std::unique_ptr<CameraModel> Camera::SetModel(std::unique_ptr<CameraModel> model)

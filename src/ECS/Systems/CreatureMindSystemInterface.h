@@ -18,6 +18,7 @@
 #include <glm/vec3.hpp>
 
 #include "Creature/CreatureFace.h"
+#include "Enums.h"
 
 namespace openblack::creaturemind
 {
@@ -56,8 +57,11 @@ public:
 	/// cast
 	virtual void SeeSkill(const glm::vec3& point, size_t skill) = 0;
 	virtual void SeeMiracle(const glm::vec3& point, size_t miracle) = 0;
-	/// The player did one of the deeds creatures copy (by its row in the game's table) at a point, maybe to something
-	virtual void PlayerDid(size_t deed, const glm::vec3& point, std::optional<entt::entity> object) = 0;
+	/// A player did one of the deeds creatures copy (by its row in the game's table) at a point, maybe to something.
+	/// Only that player's own creature, the one it leads on the leash, may copy it; with no player given, any creature
+	/// may (for the debug tools).
+	virtual void PlayerDid(size_t deed, const glm::vec3& point, std::optional<entt::entity> object,
+	                       std::optional<PlayerNames> player) = 0;
 	/// The game's tables the minds use, once the game's data is loaded
 	[[nodiscard]] virtual const creature_mind_tables::Tables* GetTables() = 0;
 
@@ -77,6 +81,11 @@ public:
 	/// stops what it was doing if slapped, warms or cools to the player, and shows its pleasure or sorrow next. Feedback
 	/// too slight to count only has it look at the player.
 	virtual void ReceiveFeedback(entt::entity creature, float feedback) = 0;
+	/// Feedback that only moves how the creature feels about its player (as being hit by what its player threw does):
+	/// it takes the player to want compassion or anger, and warms or cools to the player, from -1 to 1
+	virtual void UpdateAttitudeFromFeedback(entt::entity /*creature*/, float /*feedback*/) {}
+	/// Every source of a type in the creature's desires goes up or down by an amount
+	virtual void ChangeDesireSource(entt::entity /*creature*/, uint32_t /*type*/, float /*amount*/) {}
 	/// Plays an action at once, as stroking and slapping make it, unless the body is less than a share of the way through
 	/// what it plays; a face can be pulled with it. Returns whether it played.
 	virtual bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
@@ -95,6 +104,24 @@ public:
 
 	/// A fight the creature was in ended, won or lost: fighting satisfies the desire it is for, and its body pays for it
 	virtual void FoughtFight(entt::entity creature, bool won) = 0;
+	/// Something stops what the creature is doing, which it gives up as a failure, as a spell freezing it does
+	virtual void AbandonAction(entt::entity /*creature*/) {}
+	/// The creature is made to catch a thing flying at it: what it was doing fails, and it plays with the thing by catching
+	/// it, wanting to play less for a while
+	virtual void ForceCatch(entt::entity /*creature*/, entt::entity /*object*/) {}
+	/// A nasty miracle struck near the creature: it is frightened by it, and runs from where it struck, or goes to look
+	/// at it when it isn't afraid or is on the learning leash; it learns the miracle when it may
+	virtual void ReactToNastyMagic(entt::entity /*creature*/, const glm::vec3& /*point*/, std::optional<size_t> /*learn*/) {}
+	/// A nice miracle of its own player's was cast near the creature: it goes to look at it, and learns it
+	virtual void ReactToNiceMagic(entt::entity /*creature*/, const glm::vec3& /*point*/, std::optional<size_t> /*learn*/) {}
+	/// The creature tries a miracle at an object, as its casting pose's loop begins or in a fight: in a fight it pays
+	/// stamina first; a try short of the sightings it needs fizzles; a miracle it can't cast frustrates it. Whether it
+	/// was cast.
+	virtual bool TryMiracle(entt::entity /*creature*/, MagicType /*type*/, entt::entity /*target*/) { return false; }
+	/// For the debug tools: the creature knows a miracle (by its magic type) as if it had learnt it, and is told to cast
+	/// one at a thing, going about it as it would by itself
+	virtual void KnowMiracle(entt::entity /*creature*/, size_t /*miracle*/) {}
+	virtual bool TellCast(entt::entity /*creature*/, MagicType /*type*/, entt::entity /*target*/) { return false; }
 };
 
 } // namespace openblack::ecs::systems
