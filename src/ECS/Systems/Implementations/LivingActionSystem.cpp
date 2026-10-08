@@ -20,7 +20,9 @@
 
 #include "Common/RandomNumberManager.h"
 #include "ECS/Components/CarriedByTornado.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
@@ -30,14 +32,20 @@
 #include "VillagerEaten.h"
 #include "VillagerFire.h"
 #include "VillagerHome.h"
+#include "VillagerPhysics.h"
 #include "VillagerReactions.h"
+#include "VillagerShieldShelter.h"
+#include "VillagerTeleport.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 namespace villager_home = openblack::ecs::villager_home;
 namespace villager_eaten = openblack::ecs::villager_eaten;
+namespace villager_teleport = openblack::ecs::villager_teleport;
+namespace villager_shield = openblack::ecs::villager_shield;
 namespace villager_fire = openblack::ecs::villager_fire;
+namespace villager_physics = openblack::ecs::villager_physics;
 
 /// A villager with no state does nothing
 uint32_t VillagerInvalidState(LivingAction& /*action*/)
@@ -158,8 +166,15 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     },
     /* FOLLOWING_OBJECT_REACTION */ k_TodoEntry,
     /* INSPECT_OBJECT_REACTION */ k_TodoEntry,
-    /* FLYING */ k_TodoEntry,
-    /* LANDED */ k_TodoEntry,
+    /* FLYING */
+    VillagerStateTableEntry {
+        .state = &villager_physics::Flying,
+        .exitState = &villager_physics::ExitFlying,
+    },
+    /* LANDED */
+    VillagerStateTableEntry {
+        .state = &villager_physics::Landed,
+    },
     /* LOOK_AT_FLYING_OBJECT_REACTION */ k_TodoEntry,
     /* SET_DYING */ k_TodoEntry,
     /* DYING */
@@ -170,7 +185,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_fire::Dead,
     },
-    /* DROWNING */ k_TodoEntry,
+    /* DROWNING */
+    VillagerStateTableEntry {
+        .state = &villager_physics::Drowning,
+    },
     /* DOWNED */
     VillagerStateTableEntry {
         .state = &villager_eaten::LiesStill,
@@ -184,7 +202,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* GOTO_WOOD_REACTION */ k_TodoEntry,
     /* ARRIVES_AT_WOOD_REACTION */ k_TodoEntry,
     /* WAIT_FOR_ANIMATION */ k_TodoEntry,
-    /* IN_HAND */ k_TodoEntry,
+    /* IN_HAND */
+    VillagerStateTableEntry {
+        .exitState = &villager_physics::ExitInHand,
+    },
     /* GOTO_PICKUP_BALL_REACTION */ k_TodoEntry,
     /* ARRIVES_AT_PICKUP_BALL_REACTION */ k_TodoEntry,
     /* MOVE_IN_FLOCK */ k_TodoEntry,
@@ -232,7 +253,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* ARRIVES_AT_BIG_FOREST_FOR_BUILDING */ k_TodoEntry,
     /* FISHERMAN_ARRIVES_AT_FISHING */ k_TodoEntry,
     /* FISHING */ k_TodoEntry,
-    /* WAIT_FOR_COUNTER */ k_TodoEntry,
+    /* WAIT_FOR_COUNTER */
+    VillagerStateTableEntry {
+        .state = &villager_shield::WaitForCounter,
+    },
     /* GOTO_WORSHIP_SITE_FOR_WORSHIP */ k_TodoEntry,
     /* ARRIVES_AT_WORSHIP_SITE_FOR_WORSHIP */ k_TodoEntry,
     /* WORSHIPPING_AT_WORSHIP_SITE */ k_TodoEntry,
@@ -353,7 +377,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* FLEEING_FROM_CREATURE_REACTION */ k_TodoEntry,
     /* TURN_TO_FACE_CREATURE_REACTION */ k_TodoEntry,
     /* WATCH_FLYING_OBJECT_REACTION */ k_TodoEntry,
-    /* POINT_AT_FLYING_OBJECT_REACTION */ k_TodoEntry,
+    /* POINT_AT_FLYING_OBJECT_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_physics::PointAtFlyingObject,
+    },
     /* DECIDE_WHAT_TO_DO */
     VillagerStateTableEntry {
         .state = &villager_home::DecideWhatToDo,
@@ -362,7 +389,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* EAT_OUTSIDE */ k_TodoEntry,
     /* RUN_AWAY_FROM_OBJECT_REACTION */ k_TodoEntry,
     /* MOVE_TOWARDS_CREATURE_REACTION */ k_TodoEntry,
-    /* AMAZED_BY_MAGIC_SHIELD_REACTION */ k_TodoEntry,
+    /* AMAZED_BY_MAGIC_SHIELD_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_shield::AmazedByMagicShield,
+    },
     /* VILLAGER_GOSSIPS */ k_TodoEntry,
     /* CHECK_INTERACT_WITH_ANIMAL */ k_TodoEntry,
     /* CHECK_INTERACT_WITH_WORSHIP_SITE */ k_TodoEntry,
@@ -395,8 +425,14 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* WEAK_ON_GROUND */ k_TodoEntry,
     /* SCRIPT_WANDER_AROUND_POSITION */ k_TodoEntry,
     /* SCRIPT_PLAY_ANIM */ k_TodoEntry,
-    /* GO_TOWARDS_TELEPORT_REACTION */ k_TodoEntry,
-    /* TELEPORT_REACTION */ k_TodoEntry,
+    /* GO_TOWARDS_TELEPORT_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_teleport::GoTowardsTeleportReaction,
+    },
+    /* TELEPORT_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_teleport::TeleportReaction,
+    },
     /* DANCE_WHILE_REACTING */ k_TodoEntry,
     /* CONTROLLED_BY_CREATURE */ k_TodoEntry,
     /* POINT_AT_DEAD_PERSON */ k_TodoEntry,
@@ -479,7 +515,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* RESTART_MEETING */ k_TodoEntry,
     /* GOTO_ABODE_BURNING_REACTION */ k_TodoEntry,
     /* ARRIVES_AT_ABODE_BURNING_REACTION */ k_TodoEntry,
-    /* REPAIRS_ABODE */ k_TodoEntry,
+    /* GO_TOWARDS_TELEPORT_REACTION_QUICKLY: running to a teleport stone is walking to it, faster */
+    VillagerStateTableEntry {
+        .state = &villager_teleport::GoTowardsTeleportReaction,
+    },
     /* ARRIVES_AT_SCAFFOLD_FOR_PICKUP */ k_TodoEntry,
     /* ARRIVES_AT_BUILDING_SITE_WITH_SCAFFOLD */ k_TodoEntry,
     /* MOVE_SCAFFOLD_TO_BUILDING_SITE */ k_TodoEntry,
@@ -493,14 +532,19 @@ void LivingActionSystem::Update()
 
 	// TODO(#475): process food speedup
 
-	registry.Each<const Villager, LivingAction>([this]([[maybe_unused]] const Villager& villager, LivingAction& action) {
-		VillagerCallValidate(action, LivingAction::Index::Top);
-	});
+	// What a hand holds, or what flies in the physics, does nothing of its own
+	registry.Each<const Villager, LivingAction>(
+	    [this]([[maybe_unused]] const Villager& villager, LivingAction& action) {
+		    VillagerCallValidate(action, LivingAction::Index::Top);
+	    },
+	    entt::exclude<InHand, InPhysics>);
 	// TODO(#476): same call but for other types of living
 
-	registry.Each<const Villager, LivingAction>([this]([[maybe_unused]] const Villager& villager, LivingAction& action) {
-		VillagerCallValidate(action, LivingAction::Index::Final);
-	});
+	registry.Each<const Villager, LivingAction>(
+	    [this]([[maybe_unused]] const Villager& villager, LivingAction& action) {
+		    VillagerCallValidate(action, LivingAction::Index::Final);
+	    },
+	    entt::exclude<InHand, InPhysics>);
 	// TODO(#476): same call but for other types of living
 
 	// TODO(bwrsandman): Store result of this call in vector or with tag component
@@ -509,7 +553,7 @@ void LivingActionSystem::Update()
 	    [this]([[maybe_unused]] const Villager& villager, LivingAction& action) {
 		    VillagerCallState(action, LivingAction::Index::Top);
 	    },
-	    entt::exclude<CarriedByTornado>);
+	    entt::exclude<CarriedByTornado, InHand, InPhysics>);
 	// TODO(#476): same call but for other types of living
 }
 
