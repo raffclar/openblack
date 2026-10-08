@@ -31,6 +31,19 @@ struct EffectSource
 	PlayerNames player {PlayerNames::NEUTRAL};
 	/// The creature that cast it, if a creature did: its own alignment moves rather than its player's
 	entt::entity casterCreature {entt::null};
+	/// What applied it when no miracle did, such as the thing a blow came from: none at all for a fall onto the land.
+	/// Without it, the miracle's own rules hold. With it, the people round react to it rather than to what it struck,
+	/// and a town counts an attack only when something applied the harm
+	std::optional<entt::entity> appliedBy;
+	/// The effect comes from no player at all, as a fall nobody caused: no player's alignment moves and nobody is
+	/// remembered for the harm
+	bool playerless {false};
+	/// The effect is a thing striking a creature in the physics: a creature fighting takes it neither as a blow of the
+	/// fight nor out of its life
+	bool blow {false};
+	/// Where the effect came from, which only a blow gives: the centre of the striking thing's body. Without it the
+	/// effect is taken as coming from the corner of the map
+	std::optional<glm::vec3> point;
 };
 
 /// A drop of the water miracle's rain

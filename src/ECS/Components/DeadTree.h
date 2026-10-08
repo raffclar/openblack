@@ -18,6 +18,10 @@ namespace openblack::ecs::components
 struct DeadTree
 {
 	TreeInfo type;
+	/// What its wood is worth against an ordinary tree's, as the tree it was when it died
+	float woodMultiplier {1.0f};
+	/// A forester felled it: it falls as a tree whatever its model, and calls nobody to its wood when it comes down
+	bool felled {false};
 };
 
 } // namespace openblack::ecs::components
