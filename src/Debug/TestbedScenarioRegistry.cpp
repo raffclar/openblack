@@ -1299,6 +1299,52 @@ void AddLeash(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "leash.orders",
+	    .name = "Orders given with the leash",
+	    .facet = Facet::Leash,
+	    .description = "A tiger on the learning leash is told with the Action button to go to a point to the east, told "
+	                   "again before it gets there, then to act on a rock, a cow, and the lake.",
+	    .expected = "Each order is answered with the acknowledge sound, a nod and the tiger's voice, and marked: six pale "
+	                "yellow sparkles over the place, and a throbbing yellow ring with a paw print inside, which follows "
+	                "the cow. Told again it runs and then waits a few seconds; the rock it looks at, the cow it picks "
+	                "up and holds, at the lake it drinks or looks at its reflection. One marker at a time.",
+	    .framing = {.shot = Shot::Overview, .include = {{60.0f, 40.0f}, {0.0f, k_NearShallows}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 20.0f})},
+	    .objects = {{.type = FeatureInfo::FatPilarChalk, .offset = {-40.0f, 30.0f}},
+	                {.type = AnimalInfo::Cow, .offset = {30.0f, 10.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), Go(Kind::LeashOrderAt, 0, {60.0f, 40.0f}, 1.0f, false),
+	                 Go(Kind::LeashOrderAt, 0, {60.0f, 40.0f}, 2.0f, false), OnObject(Kind::LeashOrderOn, 0, 0, 10.0f, false),
+	                 OnObject(Kind::LeashOrderOn, 0, 1, 12.0f, false),
+	                 Go(Kind::LeashOrderAt, 0, {0.0f, k_NearShallows + 10.0f}, 15.0f, false),
+	                 Act(Kind::TakeOffLeash, 0, 15.0f)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "leash.temple_leashes",
+	    .name = "The leashes hanging on the temple",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger knows the learning leash. The temple's three leashes are hung in a row in front of "
+	                   "the camera; then it is taught the aggression and compassion leashes, the aggression leash is "
+	                   "tapped, and tapped again.",
+	    .expected = "At first only the learning leash hangs, a twisted rope collar in a white smoky glow, tumbling slowly "
+	                "with its texture running round it. Taught the others, the spiked blade (aggression) and the rainbow "
+	                "fur (compassion) hang beside it. Tapped with the click sound, the aggression leash is carried in the "
+	                "hand and its glow at the temple turns orange; tapped again it hangs back in place, silently. The "
+	                "hand over each names it: Leash Of Aggression, Leash Of Learning, Leash Of Compassion.",
+	    .framing = {.shot = Shot::Placed, .eye = {6.0f, 6.0f, 26.0f}, .look = {9.0f, 5.0f, 40.0f}},
+	    .creatures = {Posed(CreatureType::Tiger, {-20.0f, 70.0f})},
+	    .commands = {Leash(0, LeashType::Rope, 0.5f),
+	                 Act(Kind::TakeOffLeash, 0, 0.5f),
+	                 Go(Kind::HangLeashPosts, 0, {14.0f, 40.0f}, 0.5f, false),
+	                 Leash(0, LeashType::Evil, 4.0f),
+	                 Leash(0, LeashType::Good, 0.5f),
+	                 Act(Kind::TakeOffLeash, 0, 0.5f),
+	                 {.kind = Kind::TapLeashPost, .creature = 0, .delaySeconds = 4.0f, .value = 0},
+	                 {.kind = Kind::TapLeashPost, .creature = 0, .delaySeconds = 4.0f, .value = 0}},
+	});
+
+	all.push_back({
 	    .id = "leash.pull_to_hand",
 	    .name = "Pulled to the hand",
 	    .facet = Facet::Leash,
@@ -2164,7 +2210,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 80> k_Names {
+	constexpr std::array<std::string_view, 84> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -2209,6 +2255,10 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "hand taps to leash",
 	    "leash key",
 	    "shake the hand",
+	    "order to a point",
+	    "order on the object",
+	    "hang the temple's leashes",
+	    "tap a temple leash",
 	    "start fight",
 	    "fight blow",
 	    "fight block",

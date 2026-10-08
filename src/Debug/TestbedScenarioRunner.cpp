@@ -58,6 +58,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/LivingAction.h"
@@ -882,6 +883,44 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 			return leashes.TieTo(creature, *object) ? "tied" : "can't";
 		}
 		return "it is gone";
+	case Kind::LeashOrderAt:
+	{
+		const auto point = MapPoint(_middle, command.point);
+		const glm::vec3 onLand {point.x, Locator::terrainSystem::value().GetHeightAt(point), point.y};
+		return leashes.OrderAt(command.player, onLand) ? "taken" : "refused";
+	}
+	case Kind::LeashOrderOn:
+		if (const auto object = ObjectAt(command.object))
+		{
+			return leashes.OrderOn(command.player, *object) ? "taken" : "refused";
+		}
+		return "it is gone";
+	case Kind::HangLeashPosts:
+	{
+		constexpr float k_Apart = 6.0f;
+		constexpr float k_Up = 5.0f;
+		const auto middle = MapPoint(_middle, command.point);
+		std::array<glm::vec3, 3> points {};
+		for (size_t i = 0; i < points.size(); ++i)
+		{
+			const glm::vec2 at {middle.x + ((static_cast<float>(i) - 1.0f) * k_Apart), middle.y};
+			points.at(i) = {at.x, Locator::terrainSystem::value().GetHeightAt(at) + k_Up, at.y};
+		}
+		leashes.PlacePosts(command.player, points);
+		return "hung";
+	}
+	case Kind::TapLeashPost:
+	{
+		std::optional<entt::entity> post;
+		Locator::entitiesRegistry::value().Each<const ecs::components::LeashPost>(
+		    [&post, &command](entt::entity entity, const ecs::components::LeashPost& at) {
+			    if (at.owner == command.player && at.type == creature_leash::k_Types.at(command.value))
+			    {
+				    post = entity;
+			    }
+		    });
+		return post.has_value() && leashes.TapPost(*post) ? "tapped" : "no such leash";
+	}
 	case Kind::UntieLeash:
 		leashes.UntieToHand(creature);
 		return {};
@@ -1300,6 +1339,10 @@ void Runner::Give(const Command& command)
 	case Kind::HandTapLeash:
 	case Kind::LeashKey:
 	case Kind::LeashShake:
+	case Kind::LeashOrderAt:
+	case Kind::LeashOrderOn:
+	case Kind::HangLeashPosts:
+	case Kind::TapLeashPost:
 		result = GiveLeashCommand(*entity, command);
 		break;
 	case Kind::StartFight:
