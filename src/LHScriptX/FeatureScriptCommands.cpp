@@ -9,6 +9,7 @@
 
 #include "FeatureScriptCommands.h"
 
+#include <algorithm>
 #include <tuple>
 
 #include <glm/gtx/euler_angles.hpp>
@@ -43,7 +44,9 @@
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
@@ -426,10 +429,12 @@ void FeatureScriptCommands::CreateNewAnimal([[maybe_unused]] glm::vec3 position,
 	// __func__);
 }
 
-void FeatureScriptCommands::CreateForest([[maybe_unused]] int32_t forestId, [[maybe_unused]] glm::vec3 position)
+void FeatureScriptCommands::CreateForest(int32_t forestId, glm::vec3 position)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	if (Locator::forestSystem::has_value())
+	{
+		Locator::forestSystem::value().MakeLandForest(static_cast<uint32_t>(forestId), position, entt::null, false);
+	}
 }
 
 void FeatureScriptCommands::CreateTree(int32_t forestId, glm::vec3 position, TreeInfo treeType, int32_t rotation, int32_t scale)
@@ -447,7 +452,14 @@ void FeatureScriptCommands::CreateDeadTree(glm::vec3 position, [[maybe_unused]] 
 void FeatureScriptCommands::CreateNewTree(int32_t forestId, glm::vec3 position, TreeInfo treeType, int32_t isNonScenic,
                                           float rotation, float currentSize, float maxSize)
 {
-	TreeArchetype::Create(forestId, position, treeType, static_cast<bool>(isNonScenic), rotation, maxSize, currentSize);
+	// A tree joins the first of the land's forests with its forest's number, or none when there is none
+	uint32_t forest = 0;
+	if (forestId != 0 && Locator::forestSystem::has_value() &&
+	    Locator::forestSystem::value().LandForestOf(static_cast<uint32_t>(forestId)).has_value())
+	{
+		forest = static_cast<uint32_t>(forestId);
+	}
+	TreeArchetype::Create(forest, position, treeType, static_cast<bool>(isNonScenic), rotation, maxSize, currentSize);
 }
 
 void FeatureScriptCommands::CreateField(glm::vec3 position, FieldTypeInfo type)
@@ -854,10 +866,19 @@ void FeatureScriptCommands::SetComputerPlayerPersonality(const std::string&, glm
 	// __func__);
 }
 
-void FeatureScriptCommands::SetGlobalLandBalance(int32_t, float)
+void FeatureScriptCommands::SetGlobalLandBalance(int32_t index, float value)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	auto& balances = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landBalance;
+	if (index >= 0 && static_cast<size_t>(index) < balances.size())
+	{
+		balances.at(static_cast<size_t>(index)) = value;
+	}
+	// The land's balance of how impressive miracles are goes to the reactions
+	constexpr int32_t k_ImpressivenessBalance = 2;
+	if (index == k_ImpressivenessBalance && Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().SetLandBalance(value);
+	}
 }
 
 void FeatureScriptCommands::SetLandBalance(const std::string&, int32_t, float)
@@ -917,8 +938,8 @@ void FeatureScriptCommands::MakeLastObjectArtifact(int32_t, const std::string&, 
 	// __func__);
 }
 
-void FeatureScriptCommands::SetLostTownScale([[maybe_unused]] float scale)
+void FeatureScriptCommands::SetLostTownScale(float scale)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// TODO(raffclar): the game also scales the belief a town keeps in the player who lost it by this
+	Locator::entitiesRegistry::value().Context().mapScriptGlobals.lostTownScale = scale;
 }

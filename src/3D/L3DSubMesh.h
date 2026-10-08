@@ -13,11 +13,13 @@
 
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
 #include <L3DFile.h>
 #include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "AxisAlignedBoundingBox.h"
@@ -68,6 +70,26 @@ public:
 	~L3DSubMesh() noexcept;
 
 	bool Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept;
+
+	/// A corner of a submesh made while the game runs, such as a broken building's
+	struct MadeVertex
+	{
+		glm::vec3 position;
+		glm::vec2 uv;
+		glm::vec3 normal;
+	};
+	/// A primitive of a submesh made while the game runs, drawn with the material of a primitive of another model
+	struct MadePrimitive
+	{
+		const L3DSubMesh* source {nullptr};
+		size_t sourcePrimitive {0};
+		std::vector<MadeVertex> vertices;
+		/// Triangles over its own vertices
+		std::vector<uint16_t> indices;
+	};
+	/// Makes a submesh drawn at the nearest level of detail from primitives given whole; all of them together hold no more
+	/// vertices than a 16-bit index reaches
+	bool LoadMade(std::span<const MadePrimitive> primitives) noexcept;
 	/// A dynamic mesh's submesh takes its vertices afresh from a file of the same shape
 	void UpdateVertices(const l3d::L3DFile& l3d) noexcept;
 
@@ -112,6 +134,18 @@ public:
 		std::vector<uint16_t> indices;
 	};
 	[[nodiscard]] const Surface& GetSurface() const { return _surface; }
+	/// Every submesh's vertices as the file holds them (a boned one's in the space of the bone that moves each), its
+	/// triangles over them, and for a boned one the bone of each vertex: what the physics builds bodies from
+	static constexpr uint16_t k_NoBone = 0xFFFF;
+	struct BodyGeometry
+	{
+		std::vector<glm::vec3> positions;
+		/// Each vertex's texture coordinates
+		std::vector<glm::vec2> uvs;
+		std::vector<uint16_t> indices;
+		std::vector<uint16_t> bones;
+	};
+	[[nodiscard]] const BodyGeometry& GetBodyGeometry() const { return _bodyGeometry; }
 	/// Whether some of the vertices are blended towards others where the body's parts meet (see vertex_blend). Each
 	/// vertex then names its partner in its bone indices' second and its weight, in 32767ths, in their third.
 	[[nodiscard]] bool HasBlends() const { return _hasBlends; }
@@ -159,6 +193,7 @@ private:
 	std::vector<SurfacePoint> _surfacePoints;
 	std::vector<SurfacePrimitive> _surfacePrimitives;
 	Surface _surface;
+	BodyGeometry _bodyGeometry;
 
 	AxisAlignedBoundingBox _boundingBox;
 	bool _hasBlends {false};
