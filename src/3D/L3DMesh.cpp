@@ -15,7 +15,6 @@
 #include <filesystem>
 #include <stdexcept>
 
-#include <BulletCollision/CollisionShapes/btConvexHullShape.h>
 #include <L3DFile.h>
 #include <bgfx/bgfx.h>
 #include <glm/gtc/type_ptr.hpp>
@@ -41,6 +40,24 @@ L3DMesh::L3DMesh(std::string debugName, bool dynamic) noexcept
 
 L3DMesh::~L3DMesh() noexcept = default;
 
+bool L3DMesh::LoadMade(const L3DMesh& skinSource, std::span<const std::vector<L3DSubMesh::MadePrimitive>> subMeshes) noexcept
+{
+	_skinSource = &skinSource;
+	for (const auto& primitives : subMeshes)
+	{
+		auto subMesh = std::make_unique<L3DSubMesh>(*this);
+		if (!subMesh->LoadMade(primitives))
+		{
+			continue;
+		}
+		const auto& bb = subMesh->GetBoundingBox();
+		_boundingBox.minima = glm::min(_boundingBox.minima, bb.minima);
+		_boundingBox.maxima = glm::max(_boundingBox.maxima, bb.maxima);
+		_subMeshes.emplace_back(std::move(subMesh));
+	}
+	return !_subMeshes.empty();
+}
+
 bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 {
 	bool result = true;
@@ -50,6 +67,9 @@ bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 	for (const auto& skin : l3d.GetSkins())
 	{
 		_skinOrder.push_back(skin.id);
+		_skinMasks[skin.id] =
+		    screen_pick::MaskOf(std::span(reinterpret_cast<const uint16_t*>(skin.texels.data()), skin.texels.size()),
+		                        l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height);
 		_skins[skin.id] = std::make_unique<Texture2D>(_debugName.c_str());
 		const auto size = static_cast<uint32_t>(skin.texels.size() * sizeof(skin.texels[0]));
 		// bgfx only lets a texture created without texels have them changed
@@ -191,11 +211,6 @@ bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 		if (subMesh->GetFlags().isPhysics)
 		{
 			const auto& verticesSpan = l3d.GetVertexSpan(i);
-			auto* physicsMesh =
-			    new btConvexHullShape(reinterpret_cast<const btScalar*>(verticesSpan.data()),
-			                          static_cast<int>(verticesSpan.size()), static_cast<int>(sizeof(verticesSpan[0])));
-			physicsMesh->optimizeConvexHull();
-			_physicsMesh.reset(physicsMesh);
 			// Its triangles, each primitive's indices counting from its own first vertex
 			uint32_t vertexBase = 0;
 			uint32_t indexBase = 0;

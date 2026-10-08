@@ -31,18 +31,26 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
+#include "ECS/ClipSoundPlayer.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/CarriedByTornado.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/ReactionRules.h"
+#include "Physics/LivingRules.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerFire.h"
@@ -50,6 +58,7 @@
 using namespace openblack;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
+namespace living = openblack::physics::living;
 // Not "flock": on Linux that is also a function from <sys/file.h>
 namespace flock_rules = openblack::magic::flock;
 
@@ -58,6 +67,8 @@ namespace
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 constexpr auto k_TurnMilliseconds =
     static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(TimeSystemInterface::k_TurnDuration).count());
+/// Game turns a second
+constexpr float k_TurnsPerSecond = 1000.0f / static_cast<float>(k_TurnMilliseconds);
 constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
 /// The miracles' doves and bats tilt half a radian into a turn, easing into it over half a second
 constexpr float k_SpellBirdBankAngle = 0.5f;
@@ -447,8 +458,9 @@ void AnimalSystem::ProcessTurn()
 		{
 			continue;
 		}
-		// Carried off by a tornado, it is the tornado's until it lets go
-		if (registry.AllOf<CarriedByTornado>(entity))
+		// Carried off by a tornado, it is the tornado's until it lets go; held in a hand or flying, the hand's or the
+		// physics'
+		if (registry.AnyOf<CarriedByTornado, InHand, InPhysics>(entity))
 		{
 			continue;
 		}
@@ -470,6 +482,11 @@ void AnimalSystem::ProcessTurn()
 		if (info.hunger != 0 && animal.hunger < static_cast<int32_t>(info.hunger))
 		{
 			++animal.hunger;
+		}
+		// Fleeing what it reacts to comes before its own ways
+		if (Flee(entity, animal))
+		{
+			continue;
 		}
 		if (IsBird(animal.type))
 		{
@@ -921,6 +938,20 @@ void AnimalSystem::Pounce(entt::entity wolf, Animal& animal)
 	}
 }
 
+void AnimalSystem::IntoHand(entt::entity animal)
+{
+	auto* data = EntityRegistry().TryGet<Animal>(animal);
+	if (data == nullptr)
+	{
+		return;
+	}
+	if (const auto clip = physics::living::ClipsOf(data->type).inHand)
+	{
+		data->animation = *clip;
+		data->clipPlace = 0;
+	}
+}
+
 void AnimalSystem::BringDown(entt::entity wolf, entt::entity prey)
 {
 	auto& registry = EntityRegistry();
@@ -928,7 +959,9 @@ void AnimalSystem::BringDown(entt::entity wolf, entt::entity prey)
 	int fallTurns = 0;
 	if (auto* villager = registry.TryGet<Villager>(prey))
 	{
+		const float before = ecs::world_objects::LifeOf(prey);
 		villager->health = static_cast<uint32_t>(std::lround(flock_rules::k_DownedLife * 100.0f));
+		ecs::world_objects::CountInjury(prey, before, flock_rules::k_DownedLife);
 		if (auto* wallHug = registry.TryGet<WallHug>(prey))
 		{
 			wallHug->goal = Xz(registry.Get<const Transform>(prey).position);
@@ -1147,10 +1180,21 @@ void AnimalSystem::KillByEffect(entt::entity entity, glm::vec3 position)
 		StartFading(entity);
 		return;
 	}
+	SetDying(entity);
+}
+
+void AnimalSystem::SetDying(entt::entity entity)
+{
+	auto& registry = EntityRegistry();
+	auto* animal = registry.TryGet<Animal>(entity);
+	// One killed in the air starts dying only once it has come down
+	if (animal == nullptr || registry.AllOf<InPhysics>(entity))
+	{
+		return;
+	}
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Animals: #{} killed", static_cast<uint32_t>(entity));
-	// It has no life left and falls dying; its body lies its time once dead. (A bird falls out of the sky as a thing
-	// thrown; openblack has no physics for it yet, so a bird lies where it was put down.)
-	// Killed again, its body only lies its full time afresh
+	// It has no life left and falls dying; its body lies its time once dead. A bird falls out of the sky through the
+	// physics while it dies. Killed again, its body only lies its full time afresh
 	animal->deadTurns = animals::k_TurnsToDieOver;
 	if (animal->state == AnimalState::Dying || animal->state == AnimalState::Dead)
 	{
@@ -1166,12 +1210,32 @@ void AnimalSystem::KillByEffect(entt::entity entity, glm::vec3 position)
 	}
 }
 
+void AnimalSystem::FallDying(entt::entity entity, const Animal& animal)
+{
+	if (!Locator::dynamicsSystem::has_value())
+	{
+		return;
+	}
+	// Forward at its speed across the land, tumbling about its side axis
+	constexpr glm::vec3 k_DyingTumble {5.0f, 0.0f, 0.0f};
+	const auto step = Metres(animal.move.step);
+	const float speed = glm::length(step) * k_TurnsPerSecond;
+	const glm::vec3 forward(std::cos(animal.heading), 0.0f, std::sin(animal.heading));
+	Locator::dynamicsSystem::value().InitialisePhysics(entity, {.velocity = forward * speed, .spin = k_DyingTumble});
+}
+
 void AnimalSystem::ProcessDeath(entt::entity entity, Animal& animal)
 {
 	if (animal.state == AnimalState::Dying)
 	{
+		// A dying bird falls out of the sky with the speed it flew at, tumbling, until it comes down
+		if (IsBird(animal.type))
+		{
+			FallDying(entity, animal);
+			return;
+		}
 		// Its fall played out once, it lies dead, out of its flock
-		if (IsBird(animal.type) || animal.turnsInState * k_TurnMilliseconds < PlayTimeOf(animal.animation))
+		if (animal.turnsInState * k_TurnMilliseconds < PlayTimeOf(animal.animation))
 		{
 			return;
 		}
@@ -1216,6 +1280,156 @@ bool AnimalSystem::IsFrighteningToCreature(entt::entity animal) const
 	// Bats, the evil flock's bats, vultures and lions frighten creatures
 	return data != nullptr && (data->type == AnimalInfo::Bat || data->type == AnimalInfo::SpellBat ||
 	                           data->type == AnimalInfo::Vulture || data->type == AnimalInfo::Lion);
+}
+
+bool AnimalSystem::IsAvailableForReaction(entt::entity entity) const
+{
+	const auto& registry = EntityRegistry();
+	const auto* animal = registry.TryGet<const Animal>(entity);
+	if (animal == nullptr || registry.AnyOf<CarriedByTornado, InHand, InPhysics>(entity))
+	{
+		return false;
+	}
+	// Judged by the state it is to end up in
+	const auto state = animal->state == AnimalState::MoveToPos ? animal->finalState : animal->state;
+	switch (state)
+	{
+	case AnimalState::Dying:
+	case AnimalState::Dead:
+	case AnimalState::Downed:
+	case AnimalState::WaitForClip:
+		return false;
+	default:
+		return true;
+	}
+}
+
+bool AnimalSystem::SetupFleeFromObject(entt::entity entity, entt::entity object)
+{
+	auto& registry = EntityRegistry();
+	auto* animal = registry.TryGet<Animal>(entity);
+	if (animal == nullptr)
+	{
+		return false;
+	}
+	// It takes up the flee whatever the object; with the object gone its next step gives the flee up
+	animal->fleeing = object;
+	animal->fleeReaction = Reaction::ReactToFire;
+	SetState(*animal, AnimalState::FleeingFromObject);
+	return true;
+}
+
+bool AnimalSystem::SetupReactToFlyingObject(entt::entity entity, entt::entity object, float speed)
+{
+	auto& registry = EntityRegistry();
+	auto* animal = registry.TryGet<Animal>(entity);
+	const auto* at = registry.Valid(object) ? registry.TryGet<const Transform>(object) : nullptr;
+	if (animal == nullptr || at == nullptr)
+	{
+		return false;
+	}
+	// Measured across the map, against how far the thing flies in two seconds
+	const auto& here = registry.Get<const Transform>(entity).position;
+	if (!living::AnimalFleesFlyingObject(living::MapDistance(here, at->position), speed))
+	{
+		return false;
+	}
+	animal->fleeing = object;
+	animal->fleeReaction = Reaction::ReactToFlyingObject;
+	SetState(*animal, AnimalState::FleeingFromObject);
+	return true;
+}
+
+void AnimalSystem::StopReaction(entt::entity entity)
+{
+	auto* animal = EntityRegistry().TryGet<Animal>(entity);
+	if (animal == nullptr)
+	{
+		return;
+	}
+	animal->fleeing = entt::null;
+	if (animal->state == AnimalState::FleeingFromObject || animal->state == AnimalState::FleeingAndLookingAtObject ||
+	    (animal->state == AnimalState::MoveToPos && animal->finalState == AnimalState::FleeingAndLookingAtObject))
+	{
+		SetState(*animal, AnimalState::DecideWhatToDo);
+	}
+}
+
+bool AnimalSystem::Flee(entt::entity entity, Animal& animal)
+{
+	const bool running = animal.state == AnimalState::MoveToPos && animal.finalState == AnimalState::FleeingAndLookingAtObject;
+	if (animal.state != AnimalState::FleeingFromObject && animal.state != AnimalState::FleeingAndLookingAtObject && !running)
+	{
+		return false;
+	}
+	auto& registry = EntityRegistry();
+	const auto* at = registry.Valid(animal.fleeing) ? registry.TryGet<const Transform>(animal.fleeing) : nullptr;
+	const auto& info = Locator::infoConstants::value().reaction.at(static_cast<size_t>(animal.fleeReaction));
+	// With nothing left to flee it decides again
+	if (at == nullptr)
+	{
+		StopReaction(entity);
+		return true;
+	}
+	// Running to where it flees, it gets there first
+	if (running)
+	{
+		if (MoveTo3D(animal))
+		{
+			SetState(animal, animal.finalState);
+		}
+		return true;
+	}
+	auto& transform = registry.Get<Transform>(entity);
+	const auto& here = transform.position;
+	const float distance = living::MapDistance(here, at->position);
+	// Watching, it gives up once the thing is beyond the reaction's furthest
+	if (animal.state == AnimalState::FleeingAndLookingAtObject)
+	{
+		if (!(distance <= info.maxDistanceToRunAwayFromObject))
+		{
+			StopReaction(entity);
+		}
+		return true;
+	}
+	const auto* entry = Locator::dynamicsSystem::has_value() ? Locator::dynamicsSystem::value().Find(animal.fleeing) : nullptr;
+	const glm::vec3 velocity = entry != nullptr && entry->body != nullptr ? entry->body->velocity : glm::vec3(0.0f);
+	const bool coming = magic::ComingTowards(here, at->position, velocity);
+	switch (living::FleeFromObject(distance, info.minDistanceToRunAwayFromObject, info.maxDistanceToRunAwayFromObject, coming))
+	{
+	case living::FleeStep::GiveUp:
+		StopReaction(entity);
+		break;
+	case living::FleeStep::Watch:
+		SetState(animal, AnimalState::FleeingAndLookingAtObject);
+		break;
+	case living::FleeStep::Run:
+	{
+		// A step away across the land, across the thing's way when it moves, at its fleeing speed
+		auto to = magic::FleePointFromStill(here, at->position);
+		if (glm::length(velocity) > 0.0f)
+		{
+			const float x = Random(magic::k_FleeJitter);
+			const float z = Random(magic::k_FleeJitter);
+			to = magic::FleePointFromMoving(here, at->position, velocity, x, z);
+		}
+		if (OnMap(Xz(to)))
+		{
+			const auto clip = animal.animation;
+			const auto place = animal.clipPlace;
+			// The speed of its kind the state table gives fleeing
+			const auto& row = Locator::infoConstants::value().villagerStateTable.at(
+			    static_cast<size_t>(VillagerStates::FleeingFromObjectReaction));
+			animal.move.speed = SpeedStateOf(InfoOf(animal.type), std::min<size_t>(row.speedIndex, 5));
+			SetupMoveTo(animal, Xz(to), 0.0f, AnimalState::FleeingAndLookingAtObject);
+			// An animal has no clip of its own for moving: it keeps the one it had
+			animal.animation = clip;
+			animal.clipPlace = place;
+		}
+		break;
+	}
+	}
+	return true;
 }
 
 bool AnimalSystem::CanPlayerPickUp(entt::entity animal) const
@@ -1274,15 +1488,15 @@ void AnimalSystem::Update(uint32_t turn, float turnFraction)
 	auto& meshes = Locator::resources::value().GetMeshes();
 	registry.Each<Animal, Transform, const Mesh>([&](entt::entity entity, Animal& animal, Transform& transform,
 	                                                 const Mesh& mesh) {
-		// A tornado carrying it places it
-		if (registry.AllOf<CarriedByTornado>(entity))
+		// A tornado carrying it places it, as does a hand holding it or the physics moving it; it still plays its clip
+		if (!registry.AnyOf<CarriedByTornado, InHand, InPhysics>(entity))
 		{
-			return;
+			// Drawn between its last two turns, tilted as far as its bank has glided
+			transform.position = animal.previousPosition + ((animal.position - animal.previousPosition) * t);
+			const float heading =
+			    animal.previousHeading + (std::remainder(animal.heading - animal.previousHeading, k_TwoPi) * t);
+			transform.rotation = animals::Orientation(heading, animal.bank.Step(elapsedSeconds));
 		}
-		// Drawn between its last two turns, tilted as far as its bank has glided
-		transform.position = animal.previousPosition + ((animal.position - animal.previousPosition) * t);
-		const float heading = animal.previousHeading + (std::remainder(animal.heading - animal.previousHeading, k_TwoPi) * t);
-		transform.rotation = animals::Orientation(heading, animal.bank.Step(elapsedSeconds));
 		auto* pose = registry.TryGet<AnimalPose>(entity);
 		// The clips are kept by the hash of their number in the animation pack
 		const auto clipId = resources::HashIdentifier(static_cast<uint32_t>(animal.animation));
@@ -1303,6 +1517,12 @@ void AnimalSystem::Update(uint32_t turn, float turnFraction)
 		const auto played = moving && !timing.playedByTime
 		                        ? animals::MovingPlay(timing, animal.move.speed, elapsed, transform.scale.x)
 		                        : static_cast<int32_t>(elapsed);
+		// The sounds on the clip's frames it passes play from the animal
+		if (played > 0)
+		{
+			ecs::clip_sound_player::Play(entity, animal.animation, *clip, animal.clipPlace, static_cast<uint32_t>(played),
+			                             transform.position);
+		}
 		animal.clipPlace = animals::AdvanceClip(timing, animal.clipPlace, played);
 
 		// A wolf fades out of sight as it goes; the doves and bats stay whole until they go

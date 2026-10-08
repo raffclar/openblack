@@ -71,10 +71,6 @@ public:
 	void Reset();
 
 private:
-	/// Whether a point is in the water, as off the land is (MagicResources.cpp)
-	[[nodiscard]] bool IsWater(glm::vec3 point) const;
-	/// What a storage pit takes into its piles of food or wood that is poured by it
-	uint32_t AddToStore(entt::entity store, ResourceType type, uint32_t given);
 	/// The objects an effect may reach in a square of the map's cells, as the cells keep them
 	[[nodiscard]] std::vector<magic::EffectReceiver> ReceiversIn(const magic::CellRange& cells);
 	/// What an effect did to the objects it reached: their lives, the flames, the alignment of whoever it came from, and
@@ -129,6 +125,14 @@ public:
 	void ApplyEffectAt(glm::vec3 point, const magic::EffectValues& values, PlayerNames player) override
 	{
 		_world.ApplyEffectAt(point, values, {.player = player});
+	}
+	bool ApplyEffectToObject(entt::entity object, const magic::EffectValues& values, PlayerNames player) override
+	{
+		return _world.ApplyEffect(object, values, {.player = player});
+	}
+	bool ApplyEffectToObject(entt::entity object, const magic::EffectValues& values, const magic::EffectSource& source) override
+	{
+		return _world.ApplyEffect(object, values, source);
 	}
 	[[nodiscard]] bool CanCastAt(MagicType type, PlayerNames player, glm::vec3 point) override;
 	bool SpellEvent(entt::entity spell, const particles::SpellEventInfo& event) override;
