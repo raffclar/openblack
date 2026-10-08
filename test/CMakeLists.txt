@@ -73,6 +73,7 @@ openblack_setup_and_add_test(test_hand_animation hand/test_hand_animation.cpp)
 target_link_libraries(test_hand_animation PRIVATE pack l3d morph)
 openblack_setup_and_add_test(test_hand_shadow hand/test_hand_shadow.cpp)
 openblack_setup_and_add_test(test_hand_cross_fade hand/test_hand_cross_fade.cpp)
+openblack_setup_and_add_test(test_hand_visibility hand/test_hand_visibility.cpp)
 openblack_setup_and_add_test(
   test_hand_orientation hand/test_hand_orientation.cpp
 )

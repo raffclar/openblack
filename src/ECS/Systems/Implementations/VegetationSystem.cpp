@@ -139,7 +139,7 @@ void VegetationSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 }
 
 // The game marks the trees around the hand to bend away from it, within its bounding sphere
-void VegetationSystem::UpdateBendPoints()
+void VegetationSystem::UpdateBendPoints(bool handShown)
 {
 	_bendPoints.clear();
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -149,6 +149,11 @@ void VegetationSystem::UpdateBendPoints()
 		    _bendPoints.push_back({.position = transform.position, .radius = creature.radius * k_CreatureBendReach});
 	    });
 
+	// The hand put away bends nothing: it is still and touches nothing until it comes back
+	if (!handShown)
+	{
+		return;
+	}
 	auto& handSystem = Locator::handSystem::value();
 	const auto handEntity = handSystem.GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 	const auto position = handSystem.GetPlayerHandPositions()[static_cast<size_t>(HandSystemInterface::Side::Left)];

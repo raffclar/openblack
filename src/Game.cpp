@@ -167,6 +167,7 @@
 #include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
 #include "Hand/HandFeel.h"
+#include "Hand/HandVisibility.h"
 #include "Input/GameActionMapInterface.h"
 #include "LHScriptX/Script.h"
 #include "Locator.h"
@@ -1519,104 +1520,112 @@ bool Game::Update() noexcept
 
 		// Update Hand
 		{
-			const glm::mat4 modelRotationCorrection = glm::eulerAngleX(glm::radians(90.0f));
+			// Put away, it stays where it was and does nothing until it comes back
+			if (IsHandShown())
+			{
+				const glm::mat4 modelRotationCorrection = glm::eulerAngleX(glm::radians(90.0f));
 
-			const auto handEntity = Locator::handSystem::value()
-			                            .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
-			auto& handTransform = Locator::entitiesRegistry::value().Get<ecs::components::Transform>(handEntity);
-			UpdateHandNavigation(handTransform);
-			if (Locator::temple::has_value() && Locator::temple::value().Active())
-			{
-				if (!_handGripping)
+				const auto handEntity =
+				    Locator::handSystem::value()
+				        .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+				auto& handTransform = Locator::entitiesRegistry::value().Get<ecs::components::Transform>(handEntity);
+				UpdateHandNavigation(handTransform);
+				if (Locator::temple::has_value() && Locator::temple::value().Active())
 				{
-					handTransform.rotation = glm::eulerAngleY(camera.GetRotation().y) * modelRotationCorrection;
-					handTransform.rotation = intersectionTransform.rotation * handTransform.rotation;
-				}
-			}
-			else
-			{
-				OrientHand(handTransform, glm::mat3(glm::eulerAngleY(camera.GetRotation().y) * modelRotationCorrection),
-				           intersectionTransform.rotation * glm::vec3(0.0f, 1.0f, 0.0f),
-				           std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
-			}
-			PlaceHand(handTransform, std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
-			// Held to a creature, the hand rests on its body under the cursor, stroking and slapping it
-			{
-				auto creatureHand = profiler.BeginScoped(Profiler::Stage::CreatureHandUpdate);
-				const auto screenSize =
-				    Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::zero<glm::ivec2>();
-				_handOnCreature.reset();
-				_creatureUnderHand.reset();
-				if (screenSize.x > 0 && screenSize.y > 0)
-				{
-					auto& hands = Locator::creatureHandSystem::value();
-					glm::vec3 rayOrigin;
-					glm::vec3 rayDirection;
-					camera.DeprojectScreenToWorld(static_cast<glm::vec2>(_mousePosition) / static_cast<glm::vec2>(screenSize),
-					                              rayOrigin, rayDirection);
-					// The hand isn't over the world while it is over a debug window, or in the temple
-					const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-					if (!inTemple && !Locator::debugGui::value().IsMouseOverWindow())
+					if (!_handGripping)
 					{
-						_creatureUnderHand = hands.CreatureUnderCursor();
-					}
-					if (hands.GetCreature().has_value())
-					{
-						_handOnCreature =
-						    hands.Update(rayOrigin, rayDirection, static_cast<glm::vec2>(_mousePosition), HandStepSeconds());
-					}
-					if (_handOnCreature.has_value())
-					{
-						handTransform.position = _handOnCreature->position;
+						handTransform.rotation = glm::eulerAngleY(camera.GetRotation().y) * modelRotationCorrection;
+						handTransform.rotation = intersectionTransform.rotation * handTransform.rotation;
 					}
 				}
-				UpdateHandInterface();
-			}
-			{
-				auto magic = profiler.BeginScoped(Profiler::Stage::MagicUpdate);
-				// Food and wood pouring from the hand lift it and tip it forward, and what it pours comes from there
-				const auto pour = Locator::magicSystem::value().GetHandPour(Locator::time::value().GetTurnFraction());
-				// The hand is drawn where a scenario puts it, and stays where a pour that holds it began
-				const auto driven = Locator::magicSystem::value().GetDrivenHand();
-				if (driven.has_value())
+				else
 				{
-					handTransform.position = driven->handPosition;
+					OrientHand(handTransform, glm::mat3(glm::eulerAngleY(camera.GetRotation().y) * modelRotationCorrection),
+					           intersectionTransform.rotation * glm::vec3(0.0f, 1.0f, 0.0f),
+					           std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 				}
-				handTransform.position = pour.pinned.value_or(handTransform.position);
-				handTransform.position.y += pour.raise;
-				// A seed in the hand lifts it, by how it is held; the pour tips it as the hand is posed (magic::HandHoldPoser)
-				if (const auto held = magic::HandHoldPoser::Find())
+				PlaceHand(handTransform, std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
+				// Held to a creature, the hand rests on its body under the cursor, stroking and slapping it
 				{
-					// Measured to the land under the cursor, or under the hand a scenario puts
-					const auto land = driven.has_value() ? driven->point : _cursorWorldPosition;
-					handTransform.position.y += magic::HandHoldPoser::Lift(
-					    *held, glm::distance(camera.GetOrigin(), land.value_or(handTransform.position)));
+					auto creatureHand = profiler.BeginScoped(Profiler::Stage::CreatureHandUpdate);
+					const auto screenSize =
+					    Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::zero<glm::ivec2>();
+					_handOnCreature.reset();
+					_creatureUnderHand.reset();
+					if (screenSize.x > 0 && screenSize.y > 0)
+					{
+						auto& hands = Locator::creatureHandSystem::value();
+						glm::vec3 rayOrigin;
+						glm::vec3 rayDirection;
+						camera.DeprojectScreenToWorld(static_cast<glm::vec2>(_mousePosition) /
+						                                  static_cast<glm::vec2>(screenSize),
+						                              rayOrigin, rayDirection);
+						// The hand isn't over the world while it is over a debug window, or in the temple
+						const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+						if (!inTemple && !Locator::debugGui::value().IsMouseOverWindow())
+						{
+							_creatureUnderHand = hands.CreatureUnderCursor();
+						}
+						if (hands.GetCreature().has_value())
+						{
+							_handOnCreature = hands.Update(rayOrigin, rayDirection, static_cast<glm::vec2>(_mousePosition),
+							                               HandStepSeconds());
+						}
+						if (_handOnCreature.has_value())
+						{
+							handTransform.position = _handOnCreature->position;
+						}
+					}
+					UpdateHandInterface();
 				}
-				else if (const auto screenSize =
-				             Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::zero<glm::ivec2>();
-				         Locator::handGrabSystem::has_value() && screenSize.x > 0 && screenSize.y > 0)
 				{
-					// A thing the hand takes or holds lifts it, and makes ready to throw, its spring drags it
-					glm::vec3 rayOrigin;
-					glm::vec3 rayDirection;
-					camera.DeprojectScreenToWorld(static_cast<glm::vec2>(_mousePosition) / static_cast<glm::vec2>(screenSize),
-					                              rayOrigin, rayDirection);
-					const auto land = _cursorWorldPosition.value_or(handTransform.position);
-					handTransform.position = Locator::handGrabSystem::value().UpdateFrame({
-					    .target = handTransform.position,
-					    .rayOrigin = rayOrigin,
-					    .rayDirection = rayDirection,
-					    .camera = camera.GetOrigin(),
-					    .cursorGround = _cursorWorldPosition,
-					    .handSize = HandAnimation::SizeAtDistance(glm::distance(camera.GetOrigin(), land)),
-					    .seconds = std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count(),
-					    .gameMs = static_cast<uint32_t>(std::lround(gameTime.count())),
-					    .nowMs = SDL_GetTicks(),
-					    .turn = Locator::time::value().GetTurn(),
-					});
+					auto magic = profiler.BeginScoped(Profiler::Stage::MagicUpdate);
+					// Food and wood pouring from the hand lift it and tip it forward, and what it pours comes from there
+					const auto pour = Locator::magicSystem::value().GetHandPour(Locator::time::value().GetTurnFraction());
+					// The hand is drawn where a scenario puts it, and stays where a pour that holds it began
+					const auto driven = Locator::magicSystem::value().GetDrivenHand();
+					if (driven.has_value())
+					{
+						handTransform.position = driven->handPosition;
+					}
+					handTransform.position = pour.pinned.value_or(handTransform.position);
+					handTransform.position.y += pour.raise;
+					// A seed in the hand lifts it, by how it is held; the pour tips it as the hand is posed
+					// (magic::HandHoldPoser)
+					if (const auto held = magic::HandHoldPoser::Find())
+					{
+						// Measured to the land under the cursor, or under the hand a scenario puts
+						const auto land = driven.has_value() ? driven->point : _cursorWorldPosition;
+						handTransform.position.y += magic::HandHoldPoser::Lift(
+						    *held, glm::distance(camera.GetOrigin(), land.value_or(handTransform.position)));
+					}
+					else if (const auto screenSize = Locator::windowing::has_value() ? Locator::windowing::value().GetSize()
+					                                                                 : glm::zero<glm::ivec2>();
+					         Locator::handGrabSystem::has_value() && screenSize.x > 0 && screenSize.y > 0)
+					{
+						// A thing the hand takes or holds lifts it, and makes ready to throw, its spring drags it
+						glm::vec3 rayOrigin;
+						glm::vec3 rayDirection;
+						camera.DeprojectScreenToWorld(static_cast<glm::vec2>(_mousePosition) /
+						                                  static_cast<glm::vec2>(screenSize),
+						                              rayOrigin, rayDirection);
+						const auto land = _cursorWorldPosition.value_or(handTransform.position);
+						handTransform.position = Locator::handGrabSystem::value().UpdateFrame({
+						    .target = handTransform.position,
+						    .rayOrigin = rayOrigin,
+						    .rayDirection = rayDirection,
+						    .camera = camera.GetOrigin(),
+						    .cursorGround = _cursorWorldPosition,
+						    .handSize = HandAnimation::SizeAtDistance(glm::distance(camera.GetOrigin(), land)),
+						    .seconds = std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count(),
+						    .gameMs = static_cast<uint32_t>(std::lround(gameTime.count())),
+						    .nowMs = SDL_GetTicks(),
+						    .turn = Locator::time::value().GetTurn(),
+						});
+					}
+					UpdateMagicHand(handTransform.position,
+					                std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 				}
-				UpdateMagicHand(handTransform.position,
-				                std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 			}
 			{
 				// The globes and the hand show their miracles
@@ -1793,7 +1802,7 @@ bool Game::Update() noexcept
 		{
 			auto actions = profiler.BeginScoped(Profiler::Stage::VegetationUpdate);
 			auto& vegetation = Locator::vegetation::value();
-			vegetation.UpdateBendPoints();
+			vegetation.UpdateBendPoints(IsHandShown());
 			vegetation.Rustle(gameTime);
 		}
 
@@ -2557,8 +2566,7 @@ bool Game::Run() noexcept
 			    .drawBoundingBoxes = config.drawBoundingBoxes,
 			    .cullBack = false,
 			    .wireframe = config.wireframe,
-			    .drawHand = (!_interface || !_interface->GetMenu().IsOpen()) &&
-			                Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
+			    .drawHand = IsHandShown(),
 			};
 			Locator::rendererInterface::value().DrawScene(drawDesc);
 		}
@@ -3205,6 +3213,12 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 			handTransform.rotation = TipForwards(onLevelLand, _handHeading, *tip);
 		}
 	}
+}
+
+bool Game::IsHandShown() const
+{
+	return hand_visibility::IsShown(_interface && _interface->GetMenu().IsOpen(),
+	                                Locator::cinematicDirectorSystem::value().IsInterfaceActive());
 }
 
 float Game::HandStepSeconds() const
