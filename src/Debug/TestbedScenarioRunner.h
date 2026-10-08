@@ -24,6 +24,7 @@
 #include <entt/entity/entity.hpp>
 
 #include "BenchmarkRecorder.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "TestbedScenarioRegistry.h"
 
 namespace openblack::testbed_scenarios
@@ -115,7 +116,11 @@ private:
 	/// The scenario's dispensers and lone bubbles, after the testbed's grid stays or goes as it asks
 	void PlaceDispensers(const Scenario& scenario);
 	/// Casts the scenario's miracles as their times come, and lets go of held ones when theirs are up
-	void UpdateMiracles();
+	void UpdateMiracles(float seconds);
+	/// The scenario's villagers set walking, and dropped on teleport stones, as their times come
+	void UpdateVillagerWalks();
+	/// The scenario's objects thrown when their throws are due
+	void UpdateThrows();
 	/// Casts the scenario's miracle of that index; the running miracle, or none
 	entt::entity CastMiracle(size_t index);
 	void UpdateParticles(float seconds);
@@ -126,10 +131,26 @@ private:
 	std::string GiveObjectCommand(entt::entity creature, const Command& command);
 	std::string GiveHandCommand(entt::entity creature, const Command& command);
 	std::string GiveLeashCommand(entt::entity creature, const Command& command);
+	/// The commands of the player's hand alone: a seed put in it, a gesture drawn with it
+	std::string GivePlayerCommand(const Command& command);
+	/// The hand goes over a fireball in flight to take hold of it; what came of that
+	std::string HandTakeFireBall();
+	/// Once the hand is over the fireball, it taps it, or presses the action button with a seed in it
+	void FinishTakingFireBall();
+	/// Draws a gesture through the gesture recogniser, across the middle of the screen
+	std::string DrawGesture(GestureType gesture);
+	/// Once a drawn gesture is finished, logs what was recognised
+	void WatchGesture();
 	/// The commands of fights, and of being knocked out and brought round
 	std::string GiveFightCommand(entt::entity creature, const Command& command);
 	/// Creature Mode's and the Creature Cave's commands, as the player's keys and clicks give them
 	std::string GiveCreatureModeCommand(entt::entity creature, const Command& command);
+	/// The player's mouse: presses, moves and the wheel, made as the mouse's own events
+	std::string GivePointerCommand(const Command& command);
+	/// Moves the mouse on along a sweep, and lets go of it once the scenario's commands are done
+	void UpdatePointer(float seconds);
+	/// Where the cursor and the hand are on the screen, for the log
+	[[nodiscard]] std::string HandOnScreen() const;
 	/// Sets a desire or the stage of growing up, or rewards what the creature last did by the kind of thing it was to
 	std::string TeachMind(entt::entity entity, const Command& command);
 	/// Loads a mind file named as a scenario names it into a creature
@@ -140,14 +161,30 @@ private:
 	/// The scenario's objects by their place in it, while they are still about
 	[[nodiscard]] std::optional<entt::entity> ObjectAt(size_t index) const;
 	void Log(std::string line);
+	/// Every miracle's position and the land's height under it, for a scenario that logs them
+	void LogMiracles();
 
 	const Scenario* _scenario {nullptr};
 	bool _running {false};
 	float _seconds {0.0f};
+	/// Frames since the hand went over a fireball to take hold of it, none while it isn't
+	std::optional<int> _fireBallTakeFrames;
+	/// When the miracles' positions are next logged, for a scenario that logs them
+	float _nextMiracleLog {0.0f};
 	Timeline _timeline;
 	glm::vec2 _middle {0.0f};
 	std::vector<entt::entity> _creatures;
 	std::vector<entt::entity> _objects;
+	/// When each of the scenario's throws is next due, in seconds; none once done
+	std::vector<std::optional<float>> _throwsDue;
+	/// For each object, when it next walks, whether it next walks out or back, and whether it has been dropped yet
+	struct ObjectWalk
+	{
+		std::optional<float> nextAt;
+		bool outwards {true};
+		bool dropped {false};
+	};
+	std::vector<ObjectWalk> _walks;
 	/// The scenario's particle effects, and the seconds since each was last started
 	struct RunningParticle
 	{
@@ -161,12 +198,37 @@ private:
 		std::optional<float> nextAt;
 		std::optional<float> letGoAt;
 		entt::entity spell {entt::null};
+		/// Cast by hand: when its button is pressed and let go, and where the hand is
+		std::optional<float> pressAt;
+		std::optional<float> releaseAt;
+		/// After letting go, the hand sweeps on until then
+		std::optional<float> sweepUntil;
+		glm::vec3 hand {0.0f};
 	};
+	/// A miracle cast through the hand: its seed in the hand and the hand over its point, the button pressed later
+	void StartHandCast(size_t index);
+	/// The hand over a miracle's point or creature, as the scenario puts it
+	[[nodiscard]] std::optional<ecs::systems::MagicSystemInterface::HandFrame> HandFrameFor(size_t index, glm::vec3 hand) const;
 	std::vector<RunningMiracle> _miracles;
 	/// Whether each creature's needs and desires have been set as it started
 	std::vector<bool> _started;
 
 	std::deque<std::string> _log;
+	/// The gesture being drawn, and the count of gestures recognised before it
+	std::optional<GestureType> _drawing;
+	uint32_t _recognisedBefore {0};
+
+	/// The mouse moving along a sweep, in pixels a second, and for how much longer
+	struct PointerSweep
+	{
+		glm::vec2 pixelsPerSecond {0.0f};
+		float secondsLeft {0.0f};
+		/// The part of a pixel left over from the frames before
+		glm::vec2 remainder {0.0f};
+	};
+	std::optional<PointerSweep> _sweep;
+	/// The hand's place on the screen is logged every frame for a while after the mouse's buttons change
+	float _handWatchSeconds {0.0f};
 
 	/// The crowd laid out, the next of it to spawn, its homes and towns as they have spawned, and how long it took
 	std::vector<CrowdCreature> _crowdCreatures;

@@ -11,6 +11,8 @@
 
 #include "TownSystem.h"
 
+#include <algorithm>
+
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -19,8 +21,48 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 
+using namespace openblack::ecs;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
+
+TownSystem::TownSystem()
+{
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	_registry = &Locator::entitiesRegistry::value();
+	_connections.push_back(_registry->OnDestroy<Abode>().connect<&TownSystem::OnAbodeGone>(*this));
+	_connections.push_back(_registry->OnDestroy<Villager>().connect<&TownSystem::OnVillagerGone>(*this));
+}
+
+TownSystem::~TownSystem()
+{
+	// The registry may have gone first, taking its signals with it
+	if (Locator::entitiesRegistry::has_value() && &Locator::entitiesRegistry::value() == _registry)
+	{
+		for (auto& connection : _connections)
+		{
+			connection.release();
+		}
+	}
+}
+
+void TownSystem::OnAbodeGone(entt::registry& registry, entt::entity abode)
+{
+	for (auto [entity, town] : registry.view<Town>().each())
+	{
+		std::erase(town.abodes, abode);
+	}
+}
+
+void TownSystem::OnVillagerGone(entt::registry& registry, entt::entity villager)
+{
+	for (auto [entity, town] : registry.view<Town>().each())
+	{
+		std::erase(town.homelessVillagers, villager);
+	}
+}
 
 entt::entity TownSystem::FindAbodeWithSpace(entt::entity townEntity) const
 {
@@ -75,6 +117,10 @@ void TownSystem::AddHomelessVillagerToTown(entt::entity townEntity, entt::entity
 	// TODO(bwrsandman): if already assigned to abode or other villager homeless list, remove
 	assert(villager.abode == entt::null);
 	assert(villager.town == entt::null || villager.town == registryContext.towns[town.id]);
-	town.homelessVillagers.insert(villagerEntity);
+	// The newest homeless comes first
+	if (std::ranges::find(town.homelessVillagers, villagerEntity) == town.homelessVillagers.end())
+	{
+		town.homelessVillagers.insert(town.homelessVillagers.begin(), villagerEntity);
+	}
 	villager.town = townEntity;
 }

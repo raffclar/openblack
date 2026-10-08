@@ -19,10 +19,13 @@
 #include <glm/mat4x4.hpp>
 #include <spdlog/common.h>
 
+#include "3D/HandCrossFade.h"
+#include "3D/HandNavigationPose.h"
 #include "Common/Zoomer.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "EngineConfig.h"
 #include "Input/ShortcutKeys.h"
+#include "Magic/HandHoldPoser.h"
 #include "Windowing/WindowingInterface.h" // For DisplayMode
 
 union SDL_Event;
@@ -35,6 +38,7 @@ namespace audio
 class AtmosAudio;
 class GameMusic;
 } // namespace audio
+class Camera;
 class HandAnimation;
 namespace gui
 {
@@ -128,8 +132,8 @@ public:
 	/// Seconds the hand eases over to land further from and nearer to the camera
 	static constexpr float k_HandEaseOutTime = 0.28f;
 	static constexpr float k_HandEaseInTime = 0.1f;
-	/// Seconds the hand takes to settle onto the land it grips, the game's pose cross-fade
-	static constexpr float k_HandGripSettleTime = 0.13f;
+	/// Seconds the hand takes to hold its distance from the camera as it drags by the edge of the screen
+	static constexpr float k_HandHoldTime = 0.4f;
 
 	explicit Game(Arguments&& args) noexcept;
 	virtual ~Game() noexcept;
@@ -166,6 +170,8 @@ public:
 	[[nodiscard]] std::optional<ScenarioRequest> TakeScenarioRequest() { return std::exchange(_scenarioRequest, std::nullopt); }
 	[[nodiscard]] std::chrono::duration<float, std::milli> GetDeltaTime() const { return _turnDeltaTime; }
 	[[nodiscard]] const glm::ivec2& GetMousePosition() const { return _mousePosition; }
+	/// Puts the cursor the game works with somewhere in the window, until the mouse next moves
+	void SetMousePosition(glm::ivec2 position) { _mousePosition = position; }
 	[[nodiscard]] const audio::AtmosAudio* GetAtmosAudio() const { return _atmosAudio.get(); }
 	[[nodiscard]] audio::GameMusic* GetGameMusic() { return _gameMusic.get(); }
 	[[nodiscard]] const audio::GameMusic* GetGameMusic() const { return _gameMusic.get(); }
@@ -196,7 +202,7 @@ private:
 	std::chrono::steady_clock::time_point _lastGameLoopTime;
 	std::chrono::steady_clock::duration _turnDeltaTime;
 	uint32_t _frameCount {0};
-	glm::ivec2 _mousePosition;
+	glm::ivec2 _mousePosition {0, 0};
 	bool _handGripping;
 	/// Whether the last press of the Action button went to letting go of a miracle in the hand or to a creature, so it
 	/// taps nothing else for the leash
@@ -206,18 +212,34 @@ private:
 	glm::vec3 _handRayDirection {0.0f, -1.0f, 0.0f};
 	float _handDistance {k_HandMinDistance};
 	Zoomer _handHoverZoomer;
-	bool _handWasDragging {false};
+	bool _handWasGripping {false};
+	/// Where the hand is, before it is faded from where it was
+	glm::vec3 _handPosition {0.0f, 0.0f, 0.0f};
+	/// Dragging the land, and the pose the camera's hints give the hand
+	bool _handCameraState {false};
+	hand_navigation_pose::Pose _handPose {hand_navigation_pose::Pose::Idle};
+	/// How far from the camera the hand holds while it drags by the edge of the screen
+	Zoomer _handHoldZoomer;
 	/// The land the hand grips while it drags it, and where the hand was when it gripped
 	glm::vec3 _handGripPoint {0.0f, 0.0f, 0.0f};
-	glm::vec3 _handGripFrom {0.0f, 0.0f, 0.0f};
-	Zoomer _handGripBlend;
+	/// The fade from where the hand was to where it is now held, as it grips the land or lets go
+	HandCrossFade _handCrossFade;
 	/// The way the surface the cursor is on in the temple faces, which the hand turns to
 	Zoomer3 _handTempleNormal {glm::vec3(0.0f, 1.0f, 0.0f)};
 	/// The options screen's one-press actions: the temple and realm keys, the villagers' names and details
 	input::ShortcutKeys _shortcutKeys;
-	/// Where the hand holds on while the camera turns
-	glm::vec3 _handHoldPoint {0.0f, 0.0f, 0.0f};
-	bool _handWasRotating {false};
+	/// Which way the hand faces across the land, and its up, easing to the slope under it
+	glm::vec3 _handHeading {0.0f, 0.0f, 1.0f};
+	Zoomer3 _handUp {glm::vec3(0.0f, 1.0f, 0.0f)};
+	int _handLastCursorX {0};
+	/// Whether the hand held its up last frame, gripping the land
+	bool _handUpWasHeld {false};
+	/// Whether the cursor is on a thing rather than the land or the sea
+	bool _cursorOnObject {false};
+	/// The up of the face of a model the hand rests on, none over the land or what the hand doesn't feel
+	std::optional<glm::vec3> _handSurfaceUp;
+	/// The hand rests over a thing picked under the cursor
+	bool _handOverObject {false};
 	/// Where the cursor points at in the world, on the landscape or the sea
 	std::optional<glm::vec3> _cursorWorldPosition;
 	/// Where the hand is and how it is posed while it is held to a creature
@@ -229,8 +251,17 @@ private:
 
 	/// Plays the sound of the hand grabbing the land or the sea at the grab point, as the game does
 	void PlayHandGrabSound();
+	/// What the hand steps by this frame, in seconds
+	[[nodiscard]] float HandStepSeconds() const;
 	/// The miracles hear where the hand and cursor are, and the held miracle follows the hand
 	void UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds);
+	/// The gestures drawn with the cursor this frame, through the gesture system
+	void UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds);
+	/// Turns the hand to face along the line of sight through the cursor and stands it on the slope under it
+	void OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp,
+	                float deltaSeconds);
+	/// Decides how the hand moves this frame, gripping the land, held as it drags by the edge, or hovering, and its pose
+	void UpdateHandNavigation(const ecs::components::Transform& handTransform);
 	/// Places the hand on the line of sight through the cursor the way the game does
 	void PlaceHand(ecs::components::Transform& handTransform, float deltaSeconds);
 	/// Loads the hand animations of Data/CTR/hh.hbn for the hand mesh
@@ -242,6 +273,8 @@ private:
 	/// Once a frame outside the temple: where the hand's tooltip is drawn, and the status panel of the creature the hand
 	/// is held to, or over
 	void UpdateHandInterface();
+	/// The interface's pick of what is under the cursor, at the frame as it is about to be drawn
+	void PickUnderCursor(float seconds);
 	/// Once a game turn outside the temple: the hand's tooltip for what it is over, "Interact" over the player's own
 	/// creature
 	void ProcessHandToolTipTurn();
@@ -250,6 +283,8 @@ private:
 	std::unique_ptr<audio::AtmosAudio> _atmosAudio;
 	std::unique_ptr<audio::GameMusic> _gameMusic;
 	std::unique_ptr<HandAnimation> _handAnimation;
+	/// Poses the hand around the miracle seed it holds
+	magic::HandHoldPoser _handHold;
 	/// The game's own interface, null without the game's files for it
 	std::unique_ptr<gui::GameInterface> _interface;
 	/// Whether the game was paused when the menu opened, which pauses it
