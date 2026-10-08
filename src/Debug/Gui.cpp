@@ -58,6 +58,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/VillagerAge.h"
 #include "Editor/EditorWindow.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -988,8 +989,9 @@ void Gui::ShowVillagerNames() noexcept
 
 		    const std::string name = "Villager #" + std::to_string(i);
 		    const std::string stateHelpText = "TODO: STATE HELP TEXT";
-		    std::string details = config.showVillagerDetails ? fmt::format("{}\nA:{} L:{}%, H:{}%", stateHelpText, villager.age,
-		                                                                   villager.health, villager.hunger)
+		    std::string details = config.showVillagerDetails ? fmt::format("{}\nA:{} L:{}%, F:{:.0f}%", stateHelpText,
+		                                                                   ecs::villager_age::AgeNow(villager), villager.health,
+		                                                                   villager.food * 100.0f)
 		                                                     : std::string();
 		    const auto& actionSystem = Locator::livingActionSystem::value();
 		    if (config.debugVillagerStates)
@@ -1019,8 +1021,11 @@ void Gui::ShowVillagerNames() noexcept
 					    ImGui::Text("Homeless");
 				    }
 				    ImGui::InputInt("Health", reinterpret_cast<int*>(&villager.health));
-				    ImGui::InputInt("Age", reinterpret_cast<int*>(&villager.age));
-				    ImGui::InputInt("Hunger", reinterpret_cast<int*>(&villager.hunger));
+				    if (auto age = static_cast<int>(ecs::villager_age::AgeNow(villager)); ImGui::InputInt("Age", &age))
+				    {
+					    ecs::villager_age::SetBirthTurnForAge(villager, static_cast<uint32_t>(std::max(age, 0)));
+				    }
+				    ImGui::InputFloat("Food", &villager.food);
 				    ImGui::Combo("Life Stage", &villager.lifeStage, Villager::k_LifeStageStrs);
 				    ImGui::Combo("Sex", &villager.sex, Villager::k_SexStrs);
 				    ImGui::Combo("Tribe", &villager.tribe, k_TribeStrs);

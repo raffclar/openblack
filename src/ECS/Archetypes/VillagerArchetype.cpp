@@ -21,7 +21,9 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/VillagerAge.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
@@ -42,7 +44,7 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 	registry.Assign<Transform>(entity, position, glm::eulerAngleY(glm::radians(180.0f)), glm::vec3(1.0));
 	registry.Assign<Mobile>(entity);
 	const uint32_t health = 100;
-	const uint32_t hunger = 100;
+	const float food = 1.0f;
 
 	const auto lifeStage = age < 18 ? Villager::LifeStage::Child : Villager::LifeStage::Adult;
 	const auto sex = info.villagerNumber == VillagerNumber::Housewife ? Villager::Sex::FEMALE : Villager::Sex::MALE;
@@ -56,7 +58,8 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 		abode = Locator::townSystem::value().FindAbodeWithSpace(town);
 	}
 
-	registry.Assign<Villager>(entity, health, static_cast<uint32_t>(age), hunger, lifeStage, sex, info.tribeType,
+	const uint32_t turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	registry.Assign<Villager>(entity, health, villager_age::BirthTurnFor(turn, age), food, lifeStage, sex, info.tribeType,
 	                          info.villagerNumber, task, town, abode);
 	registry.Assign<WallHug>(entity, glm::vec2(), glm::vec2(), 0.0f, GetSpeedStateSpeed(info.speedGroup.speedDefault));
 	const auto resourceId = resources::HashIdentifier(info.highDetail);
