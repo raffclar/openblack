@@ -13,10 +13,13 @@
 
 #include "3D/LandIslandInterface.h"
 #include "ECS/Components/Footpath.h"
+#include "ECS/Footpaths.h"
 #include "ECS/Registry.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "FileSystem/MemoryStream.h"
 #include "GameThingSerializer.h"
 #include "Locator.h"
+#include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
 using namespace openblack::filesystem;
@@ -28,7 +31,11 @@ FotFile::FotFile(Game& game)
 
 void FotFile::Load(const std::filesystem::path& path)
 {
-	auto stream = Locator::filesystem::value().Open(path, Stream::Mode::Read);
+	// the footpath file's bytes from the byte cache, read afresh with every map load (as its map script), through a
+	// memory stream (a copy: the stream owns its data)
+	auto& blobs = Locator::resources::value().GetBlobs();
+	blobs.Erase(resources::BlobId(path));
+	auto stream = std::make_unique<filesystem::MemoryStream>(std::vector<uint8_t>(resources::LoadBlob(blobs, path)));
 	serializer::GameThingSerializer serializer(*stream);
 	auto footpathLinkSaves = serializer.DeserializeList<serializer::GameThingSerializer::FootpathLinkSave>();
 	auto footpaths = serializer.DeserializeList<serializer::GameThingSerializer::Footpath>();
@@ -40,8 +47,9 @@ void FotFile::Load(const std::filesystem::path& path)
 
 	for (const auto& footpath : footpaths)
 	{
-		const auto entity = registry.Create();
-		auto& footpathEntt = registry.Assign<ecs::components::Footpath>(entity);
+		// One new footpath per saved footpath (the original pushes each at the list's head)
+		const auto entity = ecs::footpaths::Create();
+		auto& footpathEntt = registry.Get<ecs::components::Footpath>(entity);
 		footpathEntt.nodes.reserve(footpath.nodes.size());
 		for (const auto& node : footpath.nodes)
 		{
@@ -55,8 +63,13 @@ void FotFile::Load(const std::filesystem::path& path)
 			// if that is the case, this bit should be moved to rendering code
 			position.y += island.GetHeightAt({position.x, position.z});
 
-			footpathEntt.nodes.push_back({position});
+			// A saved node: its MapCoords, then a byte of flags
+			const map_coords::MapCoords coords {static_cast<int32_t>(node.coords.x), static_cast<int32_t>(node.coords.z),
+			                                    node.coords.altitude};
+			footpathEntt.nodes.push_back({position, coords, node.unknown, footpathEntt.nextNodeId++});
 		}
+		// A saved footpath: the nodes, then its active flag
+		footpathEntt.active = footpath.unknown != 0;
 		footpathEntities.push_back(static_cast<ecs::components::Footpath::Id>(entity));
 	}
 
@@ -78,5 +91,10 @@ void FotFile::Load(const std::filesystem::path& path)
 		};
 		const auto entity = registry.Create();
 		registry.Assign<ecs::components::FootpathLink>(entity, position, std::move(linkFootpathEntities));
+		// Each link save is resolved as it is read: to the fixed building or the planned abode at its point, else
+		// deleted
+		const map_coords::MapCoords coords {static_cast<int32_t>(save.coords.x), static_cast<int32_t>(save.coords.z),
+		                                    save.coords.altitude};
+		ecs::footpaths::AttachLoadedLink(entity, coords);
 	}
 }

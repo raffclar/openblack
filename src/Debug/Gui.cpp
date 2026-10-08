@@ -14,6 +14,9 @@
 #include <cinttypes>
 #include <cmath>
 
+#include <algorithm>
+#include <array>
+
 #include <bgfx/embedded_shader.h>
 // BGFX has support for WSL to use windows d3d. We disable it here from the BGFX_EMBEDDED_SHADER macro.
 #if BX_PLATFORM_LINUX
@@ -41,30 +44,55 @@
 #include <SDL2/SDL_syswm.h>
 #endif
 
+#include "3D/DayNightClock.h"
 #include "3D/SkyInterface.h"
+#include "3D/SkyType.h"
 #include "Audio.h"
+#include "Audio/Audio.h"
+#include "AudioBanks.h"
+#include "Camera.h"
 #include "Camera/Camera.h"
+#include "Consciences.h"
 #include "Console.h"
+#include "CreatureSpawner.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/DayNightClockSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/ScreenshotRequestSystemInterface.h"
+#include "ECS/Villager/VillagerAge.h"
+#include "Editor/EditorWindow.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
+#include "Gestures.h"
 #include "Graphics/GraphicsHandleBgfx.h"
+#include "Graphics/RendererInterface.h"
+#include "Gui/CreatureCaveScreen.h"
 #include "ImGuiUtils.h"
+#include "KeyBindingsWindow.h"
 #include "LHVMViewer.h"
 #include "LandIsland.h"
 #include "Locator.h"
+#include "Magic.h"
 #include "MeshViewer.h"
+#include "Miracles.h"
+#include "ModLoaderStatus.h"
+#include "Music.h"
 #include "PathFinding.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
+#include "Scripts.h"
 #include "Temple.h"
 #include "TextureViewer.h"
+#ifdef OPENBLACK_USE_BINK
+#include "VideoViewer.h"
+#endif
+#include "Vortices.h"
+#include "Weather.h"
 #include "Windowing/WindowingInterface.h"
 
 // Turn off formatting because it adds spaces which break the stringifying
@@ -99,8 +127,23 @@ const std::array<bgfx::EmbeddedShader, 5> k_EmbeddedShaders = {{
 
     BGFX_EMBEDDED_SHADER_END(),
 }};
+
 } // namespace
 
+/// The click feedback of a setup dialog (the options, save, keyboard and multiplayer boxes): when a control tells the
+/// box's control callback that it was clicked (the mouse released over the control it was pressed on, or the keyboard),
+/// the original plays G_MenuButton (InGame 159) 2D with mode 3 and starts a mouse force feedback effect (not ported:
+/// openblack has no force feedback). openblack's own dialogs are these ImGui menus, so each of their controls plays it
+/// when it reports a click. The sample's user parameter is 0, so GAudio drops it inside the citadel.
+/// Returns what it was given, to wrap the `if (ImGui::MenuItem(...))` of the menus.
+bool openblack::debug::gui::MenuClick(bool activated) noexcept
+{
+	if (activated)
+	{
+		audio::PlaySoundEffect(audio::Owner::None(), 159, 3, 0, false, false, audio::SfxBank::InGame);
+	}
+	return activated;
+}
 std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPass viewId) noexcept
 {
 	IMGUI_CHECKVERSION();
@@ -108,18 +151,34 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 	ImGui::GetIO().BackendRendererName = "imgui_impl_bgfx";
 
 	std::vector<std::unique_ptr<Window>> debugWindows;
-	debugWindows.emplace_back(new Profiler);
-	debugWindows.emplace_back(new MeshViewer);
-	debugWindows.emplace_back(new TextureViewer);
-	debugWindows.emplace_back(new Console);
-	debugWindows.emplace_back(new LandIsland);
-	debugWindows.emplace_back(new LHVMViewer);
-	debugWindows.emplace_back(new PathFinding);
-	debugWindows.emplace_back(new Audio);
-	debugWindows.emplace_back(new TempleInterior);
+	debugWindows.emplace_back(std::make_unique<Profiler>());
+	debugWindows.emplace_back(std::make_unique<MeshViewer>());
+	debugWindows.emplace_back(std::make_unique<TextureViewer>());
+	debugWindows.emplace_back(std::make_unique<Console>());
+	debugWindows.emplace_back(std::make_unique<LandIsland>());
+	debugWindows.emplace_back(std::make_unique<LHVMViewer>());
+	debugWindows.emplace_back(std::make_unique<PathFinding>());
+	debugWindows.emplace_back(std::make_unique<Audio>());
+	debugWindows.emplace_back(std::make_unique<Music>());
+	debugWindows.emplace_back(std::make_unique<AudioBanks>());
+	debugWindows.emplace_back(std::make_unique<TempleInterior>());
+	debugWindows.emplace_back(std::make_unique<Miracles>());
+	debugWindows.emplace_back(std::make_unique<Vortices>());
+	debugWindows.emplace_back(std::make_unique<CreatureSpawner>());
+	debugWindows.emplace_back(std::make_unique<Consciences>());
+	debugWindows.emplace_back(std::make_unique<Scripts>());
+	debugWindows.emplace_back(std::make_unique<gui::Camera>());
+	debugWindows.emplace_back(std::make_unique<Weather>());
+	debugWindows.emplace_back(std::make_unique<Gestures>());
+	debugWindows.emplace_back(std::make_unique<KeyBindingsWindow>());
+	debugWindows.emplace_back(std::make_unique<Magic>());
+	debugWindows.emplace_back(std::make_unique<editor::EditorWindow>());
+#ifdef OPENBLACK_USE_BINK
+	debugWindows.emplace_back(std::make_unique<VideoViewer>());
+#endif
 
-	auto gui = std::unique_ptr<DebugGuiInterface>(
-	    new Gui(imgui, static_cast<bgfx::ViewId>(viewId), std::move(debugWindows), !Locator::windowing::has_value()));
+	std::unique_ptr<DebugGuiInterface> gui = std::make_unique<Gui>(imgui, static_cast<bgfx::ViewId>(viewId),
+	                                                               std::move(debugWindows), !Locator::windowing::has_value());
 
 	if (Locator::windowing::has_value())
 	{
@@ -195,15 +254,16 @@ bool Gui::ProcessEvents(const SDL_Event& event) noexcept
 {
 	ImGui::SetCurrentContext(_imgui);
 
+	auto takenByWindow = false;
 	for (auto& window : _debugWindows)
 	{
-		window->WindowProcessEvent(event);
+		takenByWindow = window->WindowProcessEvent(event) || takenByWindow;
 	}
 
 	ImGui_ImplSDL2_ProcessEvent(&event);
 
 	const auto& io = ImGui::GetIO();
-	_stealsFocus = io.WantCaptureMouse;
+	_stealsFocus = io.WantCaptureMouse || takenByWindow;
 	switch (event.type)
 	{
 	default:
@@ -216,7 +276,8 @@ bool Gui::ProcessEvents(const SDL_Event& event) noexcept
 		break;
 	case SDL_KEYDOWN:
 	case SDL_KEYUP:
-		_stealsFocus = io.WantCaptureKeyboard;
+		// A window's own keys, as the editor's tools, and typing in a field are kept from the game's keys
+		_stealsFocus = io.WantCaptureKeyboard || takenByWindow;
 		break;
 	case SDL_WINDOWEVENT:
 		if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
@@ -273,10 +334,30 @@ bool Gui::CreateDeviceObjectsBgfx() noexcept
 void Gui::NewFrame() noexcept
 {
 	ImGui::SetCurrentContext(_imgui);
-	ImGui_ImplSDL2_NewFrame();
 	ImGuiIO& io = ImGui::GetIO();
+	// headless (no window, Noop): the SDL backend was never set up (its data is null); a fixed size instead of ImGui's
+	// -1 so the layout's clamps keep a valid range
+	if (_headless)
+	{
+		io.DisplaySize = ImVec2(1024.0f, 768.0f);
+	}
+	else
+	{
+		ImGui_ImplSDL2_NewFrame();
+	}
 	io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
 	ImGui::NewFrame();
+}
+
+void Gui::OpenWindow(std::string_view name) noexcept
+{
+	for (auto& window : _debugWindows)
+	{
+		if (window->GetName() == name)
+		{
+			window->Open();
+		}
+	}
 }
 
 bool Gui::Loop() noexcept
@@ -297,6 +378,8 @@ bool Gui::Loop() noexcept
 	}
 	ShowVillagerNames();
 	ShowCameraPositionOverlay();
+	// The game's Creature Cave screen, drawn with the debug windows' ImGui, while the cave is open
+	openblack::gui::DrawCreatureCaveScreen();
 
 	ImGui::Render();
 
@@ -486,7 +569,7 @@ bool Gui::ShowMenu() noexcept
 
 			auto menuItem = [&game](const auto& label, const std::filesystem::path& path, const std::string description,
 			                        bool validLevel) {
-				if (ImGui::MenuItem(label.data(), nullptr, false, validLevel))
+				if (MenuClick(ImGui::MenuItem(label.data(), nullptr, false, validLevel)))
 				{
 					game.LoadMap(path);
 				}
@@ -519,24 +602,38 @@ bool Gui::ShowMenu() noexcept
 
 		if (ImGui::BeginMenu("World"))
 		{
+			config.timeOfDay = Locator::skySystem::value().GetTime();
 			if (ImGui::SliderFloat("Time of Day", &config.timeOfDay, 0.0f, 24.0f, "%.3f"))
 			{
-				Game::Instance()->SetTime(fmodf(config.timeOfDay, 24.0f));
+				Game::SetTime(fmodf(config.timeOfDay, 24.0f));
 			}
+			ImGui::Text("Visual time %.3f", Locator::dayNightClock::value().Clock().GetVisualTime());
 
-			ImGui::Text("Sky Type Index %f", Locator::skySystem::value().GetCurrentSkyType());
+			// The frame's sky type (2 night, 1 dusk, 0 day) and the sky type the dome is built with
+			ImGui::Text("Sky type %.3f (dome %.3f)", sky_type::Frame(), sky_type::Dome().Built());
 			ImGui::SliderFloat("Sky alignment", &config.skyAlignment, -1.0f, 1.0f, "%.3f");
+			{
+				int detail = config.detailLevel;
+				if (ImGui::SliderInt("Detail level (original)", &detail, 0, 6))
+				{
+					config.detailLevel = static_cast<uint8_t>(detail);
+				}
+			}
 
 			ImGui::EndMenu();
 		}
 
 		if (ImGui::BeginMenu("Debug"))
 		{
+			if (MenuClick(ImGui::MenuItem("Editor", "F2")))
+			{
+				OpenWindow("Editor");
+			}
 			if (ImGui::BeginMenu("Windows"))
 			{
 				for (auto& window : _debugWindows)
 				{
-					if (ImGui::MenuItem(window->GetName().c_str()))
+					if (MenuClick(ImGui::MenuItem(window->GetName().c_str())))
 					{
 						window->Open();
 					}
@@ -546,25 +643,25 @@ bool Gui::ShowMenu() noexcept
 
 			if (ImGui::BeginMenu("Villager Names"))
 			{
-				ImGui::Checkbox("Show", &config.showVillagerNames);
-				ImGui::Checkbox("Show States", &config.debugVillagerStates);
-				ImGui::Checkbox("Debug", &config.debugVillagerNames);
+				MenuClick(ImGui::Checkbox("Show", &config.showVillagerNames));
+				MenuClick(ImGui::Checkbox("Show States", &config.debugVillagerStates));
+				MenuClick(ImGui::Checkbox("Debug", &config.debugVillagerNames));
 
 				ImGui::EndMenu();
 			}
 
 			if (ImGui::BeginMenu("View"))
 			{
-				ImGui::Checkbox("Game Detail Overlay", &config.viewDetailOverlay);
-				ImGui::Checkbox("Sky", &config.drawSky);
-				ImGui::Checkbox("Water", &config.drawWater);
-				ImGui::Checkbox("Island", &config.drawIsland);
-				ImGui::Checkbox("Entities", &config.drawEntities);
-				ImGui::Checkbox("Sprites", &config.drawSprites);
-				ImGui::Checkbox("Wireframe", &config.wireframe);
-				ImGui::Checkbox("Bounding Boxes", &config.drawBoundingBoxes);
-				ImGui::Checkbox("Footpaths", &config.drawFootpaths);
-				ImGui::Checkbox("Streams", &config.drawStreams);
+				MenuClick(ImGui::Checkbox("Game Detail Overlay", &config.viewDetailOverlay));
+				MenuClick(ImGui::Checkbox("Sky", &config.drawSky));
+				MenuClick(ImGui::Checkbox("Water", &config.drawWater));
+				MenuClick(ImGui::Checkbox("Island", &config.drawIsland));
+				MenuClick(ImGui::Checkbox("Entities", &config.drawEntities));
+				MenuClick(ImGui::Checkbox("Sprites", &config.drawSprites));
+				MenuClick(ImGui::Checkbox("Wireframe", &config.wireframe));
+				MenuClick(ImGui::Checkbox("Bounding Boxes", &config.drawBoundingBoxes));
+				MenuClick(ImGui::Checkbox("Footpaths", &config.drawFootpaths));
+				MenuClick(ImGui::Checkbox("Streams", &config.drawStreams));
 
 				ImGui::EndMenu();
 			}
@@ -575,7 +672,7 @@ bool Gui::ShowMenu() noexcept
 				float fieldOfView = glm::degrees(camera.GetHorizontalFieldOfView());
 				auto aspect = Locator::windowing::has_value() ? Locator::windowing::value().GetAspectRatio() : 1.0f;
 				ImGui::Text("Aspect Ratio %.3f", aspect);
-				if (ImGui::MenuItem("Reset"))
+				if (MenuClick(ImGui::MenuItem("Reset")))
 				{
 					camera.SetProjectionMatrixPerspective(config.cameraXFov, aspect, config.cameraNearClip,
 					                                      config.cameraFarClip);
@@ -594,15 +691,15 @@ bool Gui::ShowMenu() noexcept
 				float multiplier = game.GetGameSpeed();
 				ImGui::Text("Scaled game duration: %.3fms (%.3f Hz)", multiplier * Game::k_TurnDuration.count(),
 				            1000.0f / (multiplier * Game::k_TurnDuration.count()));
-				if (ImGui::MenuItem("Slow"))
+				if (MenuClick(ImGui::MenuItem("Slow")))
 				{
 					game.SetGameSpeed(Game::k_TurnDurationMultiplierSlow);
 				}
-				if (ImGui::MenuItem("Normal"))
+				if (MenuClick(ImGui::MenuItem("Normal")))
 				{
 					game.SetGameSpeed(Game::k_TurnDurationMultiplierNormal);
 				}
-				if (ImGui::MenuItem("Fast"))
+				if (MenuClick(ImGui::MenuItem("Fast")))
 				{
 					game.SetGameSpeed(Game::k_TurnDurationMultiplierFast);
 				}
@@ -614,21 +711,30 @@ bool Gui::ShowMenu() noexcept
 				ImGui::EndMenu();
 			}
 
+			// only when the mod loader library was loaded: its version and what it said about the mods folder
+			if (Locator::modLoader::has_value() && ImGui::BeginMenu("Mods"))
+			{
+				const auto& status = Locator::modLoader::value();
+				ImGui::Text("Mod loader version %d", status.version);
+				ImGui::TextUnformatted(status.result.c_str());
+				ImGui::EndMenu();
+			}
+
 			ImGui::EndMenu();
 		}
 
 		if (ImGui::BeginMenu("Capture"))
 		{
-			if (ImGui::Button("Capture"))
+			if (MenuClick(ImGui::Button("Capture")))
 			{
-				game.RequestScreenshot(_screenshotFilename);
+				Locator::screenshotRequest::value().Request(_screenshotFilename);
 			}
 			ImGui::SameLine();
 			ImGui::InputText("Screenshot", &_screenshotFilename);
 			ImGui::EndMenu();
 		}
 
-		if (ImGui::MenuItem("Quit", "Esc"))
+		if (MenuClick(ImGui::MenuItem("Quit", "Esc")))
 		{
 			return true;
 		}
@@ -646,7 +752,7 @@ bool Gui::ShowMenu() noexcept
 void Gui::RenderArrow(const std::string& name, const ImVec2& pos, const ImVec2& size) const noexcept
 {
 	// clang-format off
-	static const auto boxOverlayFlags =
+	constexpr auto k_BoxOverlayFlags =
 		0u
 		| ImGuiWindowFlags_NoMove
 		| ImGuiWindowFlags_AlwaysAutoResize
@@ -662,7 +768,7 @@ void Gui::RenderArrow(const std::string& name, const ImVec2& pos, const ImVec2& 
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 	ImGui::SetNextWindowBgAlpha(0.0f);
 	ImGui::SetNextWindowSize(size);
-	if (ImGui::Begin((name + " Frame").c_str(), nullptr, boxOverlayFlags))
+	if (ImGui::Begin((name + " Frame").c_str(), nullptr, k_BoxOverlayFlags))
 	{
 		const auto strId = name + " Arrow";
 		ImGuiWindow* window = ImGui::GetCurrentWindow();
@@ -836,8 +942,9 @@ void Gui::ShowVillagerNames() noexcept
 	    glm::vec4(ImGui::GetStyle().WindowPadding.x, 0, displaySize.x - ImGui::GetStyle().WindowPadding.x, displaySize.y);
 	std::vector<glm::vec4> coveredAreas;
 	coveredAreas.reserve(Locator::entitiesRegistry::value().Size<Villager>());
+	const uint32_t turn = Locator::time::has_value() ? game_clock::Turn() : 0;
 	Locator::entitiesRegistry::value().Each<const Transform, Villager, LivingAction>(
-	    [this, &i, &coveredAreas, &camera, config, viewport] //
+	    [this, &i, &coveredAreas, &camera, config, viewport, turn] //
 	    (const Transform& transform, Villager& villager, LivingAction& action) {
 		    ++i;
 		    const float height = 2.0f * transform.scale.y; // TODO(bwrsandman): get from bounding box max y
@@ -867,7 +974,8 @@ void Gui::ShowVillagerNames() noexcept
 		    const std::string name = "Villager #" + std::to_string(i);
 		    const std::string stateHelpText = "TODO: STATE HELP TEXT";
 		    std::string details =
-		        fmt::format("{}\nA:{} L:{}%, H:{}%", stateHelpText, villager.age, villager.health, villager.hunger);
+		        fmt::format("{}\nA:{} L:{:.0f}%, F:{:.2f}", stateHelpText,
+		                    ecs::villager::AgeFromBirthTurn(villager.birthTurn, turn), villager.life * 100.0f, villager.food);
 		    const auto& actionSystem = Locator::livingActionSystem::value();
 		    if (config.debugVillagerStates)
 		    {
@@ -890,14 +998,16 @@ void Gui::ShowVillagerNames() noexcept
 		    std::function<void(void)> debugCallback;
 		    if (config.debugVillagerNames)
 		    {
-			    debugCallback = [&villager, &action, &actionSystem] {
+			    debugCallback = [&villager, &action, &actionSystem, turn] {
 				    if (villager.abode == entt::null)
 				    {
 					    ImGui::Text("Homeless");
 				    }
-				    ImGui::InputInt("Health", reinterpret_cast<int*>(&villager.health));
-				    ImGui::InputInt("Age", reinterpret_cast<int*>(&villager.age));
-				    ImGui::InputInt("Hunger", reinterpret_cast<int*>(&villager.hunger));
+				    ImGui::SliderFloat("Life", &villager.life, 0.0f, 1.0f);
+				    ImGui::Text("Age: %u (born on turn %d)", ecs::villager::AgeFromBirthTurn(villager.birthTurn, turn),
+				                villager.birthTurn);
+				    ImGui::InputFloat("Food", &villager.food);
+				    ImGui::Text("Flags: 0x%04X, last check turn %u", villager.flags, villager.lastCheckTurn);
 				    ImGui::Combo("Life Stage", &villager.lifeStage, Villager::k_LifeStageStrs);
 				    ImGui::Combo("Sex", &villager.sex, Villager::k_SexStrs);
 				    ImGui::Combo("Tribe", &villager.tribe, k_TribeStrs);
@@ -949,7 +1059,7 @@ void Gui::ShowVillagerNames() noexcept
 void Gui::ShowCameraPositionOverlay() noexcept
 {
 	// clang-format off
-	static const auto cameraPositionOverlayFlags =
+	constexpr auto k_CameraPositionOverlayFlags =
 		0u
 		| ImGuiWindowFlags_NoMove
 		| ImGuiWindowFlags_NoDecoration
@@ -966,7 +1076,7 @@ void Gui::ShowCameraPositionOverlay() noexcept
 
 	if (Locator::config::value().viewDetailOverlay)
 	{
-		if (ImGui::Begin("Game Details Overlay", nullptr, cameraPositionOverlayFlags))
+		if (ImGui::Begin("Game Details Overlay", nullptr, k_CameraPositionOverlayFlags))
 		{
 			const auto& camera = Locator::camera::value();
 			const auto camOrigin = camera.GetOrigin();

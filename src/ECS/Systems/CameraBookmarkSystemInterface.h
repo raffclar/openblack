@@ -22,6 +22,7 @@ namespace openblack::ecs::systems
 class CameraBookmarkSystemInterface
 {
 public:
+	virtual ~CameraBookmarkSystemInterface() = default;
 	virtual bool Initialize() = 0;
 	virtual void Update(const std::chrono::microseconds& dt) const = 0;
 	[[nodiscard]] virtual const std::array<entt::entity, 8>& GetBookmarks() const = 0;
@@ -29,6 +30,11 @@ public:
 	/// and the saved camera origin is restored. The original focus is lost.
 	virtual void SetBookmark(uint8_t index, const glm::vec3& position, const glm::vec3& savedCameraOrigin) const = 0;
 	virtual void ClearBookmark(uint8_t index) const = 0;
+	/// On at start-up (PLAY_JC_SPECIAL 14 / 15 turn it on / off; a script reboot turns it on; saved with the bookmarks,
+	/// pending with the saved games): the bookmark keys and the bookmarks' drawing (pending: openblack draws the
+	/// CameraBookmark entities with the other models) only while it is set
+	virtual void SetEnabled(bool enabled) = 0;
+	[[nodiscard]] virtual bool IsEnabled() const = 0;
 };
 
 } // namespace openblack::ecs::systems

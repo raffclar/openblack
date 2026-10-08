@@ -127,6 +127,7 @@
 #include <cstring>
 
 #include <fstream>
+#include <string_view>
 #include <utility>
 
 using namespace openblack::pack;
@@ -230,7 +231,7 @@ std::string_view openblack::pack::ResultToStr(PackResult result)
 	std::unreachable();
 }
 
-PackResult PackFile::ReadBlocks(std::istream& stream) noexcept
+PackResult PackFile::ReadBlocks(std::istream& stream, bool skipWaveData) noexcept
 {
 	assert(!_isLoaded);
 
@@ -270,6 +271,15 @@ PackResult PackFile::ReadBlocks(std::istream& stream) noexcept
 			return PackResult::ErrDuplicateBlockName;
 		}
 
+		if (skipWaveData && std::string_view(header.blockName.data()) == "LHAudioWaveData")
+		{
+			// a bank that is not loaded into memory keeps the file open and reads a wave at its first play
+			_audioWaveDataOffset = static_cast<uint64_t>(stream.tellg());
+			_audioWaveDataSize = header.blockSize;
+			stream.seekg(header.blockSize, std::ios_base::cur);
+			continue;
+		}
+
 		_blocks[std::string(header.blockName.data())] = std::vector<uint8_t>(header.blockSize);
 		stream.read(reinterpret_cast<char*>(_blocks[header.blockName.data()].data()), header.blockSize);
 	}
@@ -289,7 +299,7 @@ PackResult PackFile::ResolveInfoBlock() noexcept
 		return PackResult::ErrMissingInfoBlock;
 	}
 
-	auto data = GetBlock("INFO");
+	const auto& data = GetBlock("INFO");
 	imemstream stream(reinterpret_cast<const char*>(data.data()), data.size());
 
 	uint32_t totalTextures;
@@ -309,7 +319,7 @@ PackResult PackFile::ResolveBodyBlock() noexcept
 		return PackResult::ErrMissingBodyBlock;
 	}
 
-	auto data = GetBlock("Body");
+	const auto& data = GetBlock("Body");
 	imemstream stream(reinterpret_cast<const char*>(data.data()), data.size());
 
 	// Greetings Jean-Claude Cottier
@@ -337,7 +347,7 @@ PackResult PackFile::ResolveAudioBankSampleTableBlock() noexcept
 		return PackResult::ErrMissingAudioBankSampleTableBlock;
 	}
 
-	auto data = GetBlock("LHAudioBankSampleTable");
+	const auto& data = GetBlock("LHAudioBankSampleTable");
 	imemstream stream(reinterpret_cast<const char*>(data.data()), data.size());
 	std::size_t fsize = 0;
 	if (stream.seekg(0, std::ios_base::end))
@@ -448,7 +458,7 @@ PackResult PackFile::ExtractTexturesFromBlock() noexcept
 
 PackResult PackFile::ExtractAnimationsFromBlock() noexcept
 {
-	auto data = GetBlock("Body");
+	const auto& data = GetBlock("Body");
 	imemstream stream(reinterpret_cast<const char*>(data.data()), data.size());
 
 	// Read lookup
@@ -465,13 +475,37 @@ PackResult PackFile::ExtractAnimationsFromBlock() noexcept
 			return PackResult::ErrMissingTextureBlock;
 		}
 
-		auto animationData = GetBlock(blockName.data());
+		const auto& animationData = GetBlock(blockName.data());
 		_animations[i].resize(animationHeaderSize + animationData.size());
 
 		stream.seekg(_bodyBlockLookup[i].offset);
 		stream.read(reinterpret_cast<char*>(_animations[i].data()), animationHeaderSize);
 		memcpy(_animations[i].data() + animationHeaderSize, animationData.data(), animationData.size());
 	}
+
+	return PackResult::Success;
+}
+
+PackResult PackFile::ResolveFileSegmentBankInfoBlock() noexcept
+{
+	// The original fails to register a bank without this block; here it stays optional so that the packs that only
+	// have a sample table keep loading.
+	_audioBankInfo = {};
+	if (!HasBlock("LHFileSegmentBankInfo"))
+	{
+		return PackResult::Success;
+	}
+
+	const auto& data = GetBlock("LHFileSegmentBankInfo");
+	// (defensive, not in the original: it reads the 3 u32 without checking the block size; every .sad of
+	// the installation has 532 bytes)
+	if (data.size() < sizeof(_audioBankInfo))
+	{
+		return PackResult::ErrFileTooSmall;
+	}
+
+	// 3 u32 read one after the other
+	memcpy(&_audioBankInfo, data.data(), sizeof(_audioBankInfo));
 
 	return PackResult::Success;
 }
@@ -483,7 +517,7 @@ PackResult PackFile::ExtractSoundsFromBlock() noexcept
 		return PackResult::ErrMissingAudioWaveDataBlock;
 	}
 
-	auto data = GetBlock("LHAudioWaveData");
+	const auto& data = GetBlock("LHAudioWaveData");
 	imemstream stream(reinterpret_cast<const char*>(data.data()), data.size());
 	//	auto isSector = false;
 	//	auto isPrevSector = false;
@@ -517,7 +551,7 @@ PackResult PackFile::ResolveMeshBlock() noexcept
 	{
 		return PackResult::ErrMissingMeshBlock;
 	}
-	auto data = GetBlock("MESHES");
+	const auto& data = GetBlock("MESHES");
 
 	imemstream stream(reinterpret_cast<const char*>(data.data()), data.size());
 	// Greetings Jean-Claude Cottier
@@ -682,7 +716,7 @@ PackResult PackFile::ReadFile(std::istream& stream) noexcept
 {
 	PackResult result;
 
-	result = ReadBlocks(stream);
+	result = ReadBlocks(stream, false);
 	if (result != PackResult::Success)
 	{
 		return result;
@@ -735,11 +769,11 @@ PackResult PackFile::ReadFile(std::istream& stream) noexcept
 			return result;
 		}
 
-		// ResolveFileSegmentBankBlock();
-		// if (result != PackResult::Success)
-		// {
-		// 	return result;
-		// }
+		result = ResolveFileSegmentBankInfoBlock();
+		if (result != PackResult::Success)
+		{
+			return result;
+		}
 		result = ExtractSoundsFromBlock();
 		if (result != PackResult::Success)
 		{
@@ -749,6 +783,40 @@ PackResult PackFile::ReadFile(std::istream& stream) noexcept
 
 	_isLoaded = true;
 
+	return PackResult::Success;
+}
+
+PackResult PackFile::ReadAudioHeaders(std::istream& stream) noexcept
+{
+	auto result = ReadBlocks(stream, true);
+	if (result != PackResult::Success)
+	{
+		return result;
+	}
+	result = ResolveAudioBankSampleTableBlock();
+	if (result != PackResult::Success)
+	{
+		return result;
+	}
+	result = ResolveFileSegmentBankInfoBlock();
+	if (result != PackResult::Success)
+	{
+		return result;
+	}
+	if (_audioWaveDataSize == 0 && !_audioSampleHeaders.empty())
+	{
+		return PackResult::ErrMissingAudioWaveDataBlock;
+	}
+	// the checks of ExtractSoundsFromBlock, without reading the waves
+	for (const auto& sample : _audioSampleHeaders)
+	{
+		if (static_cast<uint64_t>(sample.offset) + sample.size > _audioWaveDataSize)
+		{
+			return PackResult::ErrFileTooSmall;
+		}
+	}
+	_audioSampleData.assign(_audioSampleHeaders.size(), {});
+	_isLoaded = true;
 	return PackResult::Success;
 }
 

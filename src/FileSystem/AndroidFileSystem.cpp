@@ -151,7 +151,7 @@ std::unique_ptr<Stream> AndroidFileSystem::Open(const std::filesystem::path& pat
 	jbyte* jbytesPtr = _jniEnv->GetByteArrayElements(jbytes, nullptr);
 
 	std::vector<uint8_t> bytes(jbytesPtr, jbytesPtr + length);
-	auto value = std::unique_ptr<Stream>(new MemoryStream(std::move(bytes)));
+	std::unique_ptr<Stream> value = std::make_unique<MemoryStream>(std::move(bytes));
 
 	_jniEnv->ReleaseByteArrayElements(jbytes, jbytesPtr, 0);
 	_jniEnv->DeleteLocalRef(jbytes);

@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Black &amp; White 1 notes for openblack — Black &amp; White notes</title>
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body>
+<nav id="side">
+  <h1><a href="index.html" style="color:inherit;text-decoration:none">Black &amp; White notes</a></h1>
+  <span class="tag">openblack — how the original behaves</span>
+  <input id="q" type="search" placeholder="Search (press /)" autocomplete="off">
+  <div id="hits"></div>
+  <div id="nav"><h2>Start here</h2>
+<a class="here" href="README.html">Black &amp; White 1 notes for openblack</a>
+<h2>Engine</h2>
+<a class="" href="openblack-internals.html">openblack internals</a>
+<a class="" href="engine-loop.html">The engine loop: game turns and frames (original and openblack)</a>
+<a class="" href="engine-math.html">Coordinates, terrain, object size, game clock, matrices and Zoomer</a>
+<a class="" href="tooling.html">Tools and formats</a>
+<a class="" href="parity.html">Graphics engine parity: original versus openblack</a>
+<a class="" href="original-frame.html">The original B&amp;W frame (runblack.exe W120, D3D7, LH3D)</a>
+<h2>World</h2>
+<a class="" href="map-loading.html">Map loading and script functions</a>
+<a class="" href="land-script-save.html">Writing land-script lines: SaveObject and WriteCommand</a>
+<a class="" href="water.html">Water in the game</a>
+<a class="" href="trees.html">Trees and forests</a>
+<a class="" href="buildings.html">Buildings, building sites and towns (the building side)</a>
+<a class="" href="objects-and-resources.html">Objects and resources</a>
+<a class="" href="physics.html">Physics: thrown objects, collisions, damage and rocks that split</a>
+<h2>Life</h2>
+<a class="" href="villagers.html">Villagers: data, state machine and speed</a>
+<a class="" href="animals.html">Animals: AI, states and clips</a>
+<h2>Magic and weather</h2>
+<a class="" href="magic.html">Magic: the core of the miracles</a>
+<a class="" href="miracles.html">Miracles one by one</a>
+<a class="" href="particles.html">Particles (PSys)</a>
+<a class="" href="day-night-weather.html">Day, night and weather in the original</a>
+<a class="" href="vortex.html">Vortexes and the tornado: objects swallowed, carried and flung</a>
+<h2>Hand and interface</h2>
+<a class="" href="hand-and-interface.html">The hand and the interface</a>
+<a class="" href="intro.html">The Land 1 intro and the tutorial&#x27;s script side</a>
+<a class="" href="script-camera.html">Script camera (GCamera and CameraModeScript)</a>
+<a class="" href="camera-tracks.html">Camera tracks (`Data\camera.edt`) and `WALK_PATH`</a>
+<h2>Presentation</h2>
+<a class="" href="rendering.html">World rendering: original versus openblack</a>
+<a class="" href="rendering-objects.html">Model rendering: original versus openblack</a>
+<a class="" href="animation.html">Skeletal animation (villagers and animals)</a>
+<a class="" href="audio.html">Audio: the engine, the banks, the music, the voices and the script</a>
+<a class="" href="video.html">Bink videos (.bik)</a>
+<h2>Data</h2>
+<a class="" href="mods.html">Modified data packs</a>
+<h2>Other</h2>
+<a class="" href="creature.html">The creature: groundwork, random streams and what is unknown</a></div>
+</nav>
+<main>
+<details id="toc"><summary>On this page</summary><div class="toc">
+<ul>
+<li><a href="#black--white-1-notes-for-openblack">Black &amp; White 1 notes for openblack</a><ul>
+<li><a href="#pages-by-area">Pages by area</a></li>
+<li><a href="#where-do-i-look-for">Where do I look for…?</a></li>
+<li><a href="#how-to-read-the-pages">How to read the pages</a></li>
+<li><a href="#how-the-code-is-written">How the code is written</a></li>
+<li><a href="#external-references">External references</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+<h1 id="black--white-1-notes-for-openblack">Black &amp; White 1 notes for openblack</h1>
+<p>Welcome. This wiki collects what was found out about how the original Black &amp; White (2001) works, read from
+<code>runblack.exe</code> (unofficial v1.42 on top of v1.20, W120 layout) and from the original data, and how openblack rebuilds
+it. Start with the area you are interested in below; every page opens with what it covers and a table of contents.</p>
+<ul>
+<li><a href="#pages-by-area">Pages by area</a></li>
+<li><a href="#where-do-i-look-for">Where do I look for…?</a></li>
+<li><a href="#how-to-read-the-pages">How to read the pages</a></li>
+<li><a href="#how-the-code-is-written">How the code is written</a></li>
+<li><a href="#external-references">External references</a></li>
+</ul>
+<h2 id="pages-by-area">Pages by area</h2>
+<p><strong>Engine</strong></p>
+<ul>
+<li><a href="openblack-internals.html">openblack-internals.md</a>: where things are in our code, building, tests, debug and test environment variables, known traps.</li>
+<li><a href="engine-loop.html">engine-loop.md</a>: game turns and frames, the original loop call by call, the interface's packets, random streams, state hash and fixed clock.</li>
+<li><a href="engine-math.html">engine-math.md</a>: coordinates and cells, distances and sigmoids, object size, the game clock, terrain height, LH matrices, Zoomer.</li>
+<li><a href="tooling.html">tooling.md</a>: disassembly, symbols, openblack tools, data formats, LND maps.</li>
+<li><a href="parity.html">parity.md</a>: each stage of the original graphics engine and its status in openblack.</li>
+<li><a href="original-frame.html">original-frame.md</a>: the original frame: draw order, render modes, states, levels of detail.</li>
+</ul>
+<p><strong>World</strong></p>
+<ul>
+<li><a href="map-loading.html">map-loading.md</a>: map loading and the map script: CHL CREATE, fog, herds, script objects, towns and citadel.</li>
+<li><a href="land-script-save.html">land-script-save.md</a>: writing land-script lines: the exe's line format and the per-class writers.</li>
+<li><a href="water.html">water.md</a>: water cells and queries, water in scripts, sinking and drowning, sharks, the fish puzzle, the missionaries' boat.</li>
+<li><a href="trees.html">trees.md</a>: trees and forests: uprooting, replanting, wood, growth, drawing, fire, sacrifice.</li>
+<li><a href="buildings.html">buildings.md</a>: buildings and towns: resources held by objects, town stores, life and damage, plans and building sites.</li>
+<li><a href="objects-and-resources.html">objects-and-resources.md</a>: piles and pots, the store, static objects and rocks, fields, pick-up sounds.</li>
+<li><a href="physics.html">physics.md</a>: thrown objects, collisions, damage, floating, dropping from the hand, buildings and rocks that break.</li>
+</ul>
+<p><strong>Life</strong></p>
+<ul>
+<li><a href="villagers.html">villagers.md</a>: villagers: original fields, flags, creation, states, jobs, towns' desires, death.</li>
+<li><a href="animals.html">animals.md</a>: animals: the original AI (herbivores, predators, birds, flocks), clips per species, remaining differences.</li>
+<li><a href="creature.html">creature.md</a>: the creature: the ported groundwork (body, mind, movement, fight, leash, audio, follow camera), its random streams, stand-ins and what is unknown.</li>
+</ul>
+<p><strong>Magic and weather</strong></p>
+<ul>
+<li><a href="magic.html">magic.md</a>: the magic core: info.dat tables, spell life cycle, casting from the hand and gestures, worship, influence, alignment, fire.</li>
+<li><a href="miracles.html">miracles.md</a>: each miracle: food and wood, water, heal, forest, flocks, fireball and lightning, shields, teleport, storm and tornado.</li>
+<li><a href="particles.html">particles.md</a>: the particle engine (PSys): types, classes, hierarchies, creators, particle sound.</li>
+<li><a href="day-night-weather.html">day-night-weather.md</a>: the day and night clock, night lights, climate, storms and rain.</li>
+<li><a href="vortex.html">vortex.md</a>: the vortex objects, what they swallow and fling, objects between lands, what a tornado carries.</li>
+</ul>
+<p><strong>Hand and interface</strong></p>
+<ul>
+<li><a href="hand-and-interface.html">hand-and-interface.md</a>: the hand: placement, states, grabbing, throwing, the object under the cursor.</li>
+<li><a href="intro.html">intro.md</a>: the Land 1 intro and the tutorial: dialogue texts, advisor spirits, help events, the family in high detail.</li>
+<li><a href="script-camera.html">script-camera.md</a>: the script camera: zoomers, camera opcodes, arrival rule, FOV, releasing control.</li>
+<li><a href="camera-tracks.html">camera-tracks.md</a>: <code>Data\camera.edt</code> cameras and tracks, and the walk paths of mobile objects.</li>
+</ul>
+<p><strong>Presentation</strong></p>
+<ul>
+<li><a href="rendering.html">rendering.md</a>: drawing the world: terrain, sea and coast, light, haze, sky and clouds, shadows on the terrain, text.</li>
+<li><a href="rendering-objects.html">rendering-objects.md</a>: drawing models: materials, lighting, sprites, reflections, shadows, LOD, smoke, and the shared drawing systems.</li>
+<li><a href="animation.html">animation.md</a>: villager and animal animation: clips per state, speed, size, clip sounds, drawing between turns.</li>
+<li><a href="audio.html">audio.md</a>: the audio engine, banks and formats, music, voices and texts, audio script functions.</li>
+<li><a href="video.html">video.md</a>: the Bink videos: when each one plays, pacing, pause, widescreen, fade, skipping, audio.</li>
+</ul>
+<p><strong>Data</strong></p>
+<ul>
+<li><a href="mods.html">mods.md</a>: modified data packs: how the installation's <code>AllMeshes.g3d</code> differs from the original, and ideas waiting for a mod SDK.</li>
+</ul>
+<h2 id="where-do-i-look-for">Where do I look for…?</h2>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Page</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>An address or symbol of <code>runblack.exe</code>, the disassembly scripts</td>
+<td><a href="tooling.html">tooling.md</a></td>
+</tr>
+<tr>
+<td>Terrain height, coordinates, matrices, object radius and height, the turn and the frame dt</td>
+<td><a href="engine-math.html">engine-math.md</a></td>
+</tr>
+<tr>
+<td>Picking up, dropping, throwing, the cursor</td>
+<td><a href="hand-and-interface.html">hand-and-interface.md</a></td>
+</tr>
+<tr>
+<td>Food and wood, store, fields</td>
+<td><a href="objects-and-resources.html">objects-and-resources.md</a></td>
+</tr>
+<tr>
+<td>Trees and forests (tug, replanting, growth, fire, sacrifice)</td>
+<td><a href="trees.html">trees.md</a></td>
+</tr>
+<tr>
+<td>What the map script (CHL) creates, fogs, herds, street lamps, towns</td>
+<td><a href="map-loading.html">map-loading.md</a></td>
+</tr>
+<tr>
+<td>Hits, damage, buildings that break, dropping from the hand</td>
+<td><a href="physics.html">physics.md</a></td>
+</tr>
+<tr>
+<td>Vortexes, objects carried by the tornado</td>
+<td><a href="vortex.html">vortex.md</a></td>
+</tr>
+<tr>
+<td>Animations and speed of villagers and animals</td>
+<td><a href="animation.html">animation.md</a></td>
+</tr>
+<tr>
+<td>Villager data and states</td>
+<td><a href="villagers.html">villagers.md</a></td>
+</tr>
+<tr>
+<td>Animal behaviour</td>
+<td><a href="animals.html">animals.md</a></td>
+</tr>
+<tr>
+<td>The creature: info.dat tables, mind files, its random draws, stand-in constants</td>
+<td><a href="creature.html">creature.md</a></td>
+</tr>
+<tr>
+<td>Time of day, lit windows, weather, storms, rain</td>
+<td><a href="day-night-weather.html">day-night-weather.md</a></td>
+</tr>
+<tr>
+<td>How the world is drawn (terrain, sea, sky); whether it already matches the original</td>
+<td><a href="rendering.html">rendering.md</a>, <a href="parity.html">parity.md</a></td>
+</tr>
+<tr>
+<td>How a model is drawn (materials, lighting, reflections, shadows, sprites, smoke)</td>
+<td><a href="rendering-objects.html">rendering-objects.md</a></td>
+</tr>
+<tr>
+<td>Which API to use for a billboard, an animated texture, something stuck to the ground, a blend mode or the transparent order (do not hand-write it)</td>
+<td><a href="rendering-objects.html">rendering-objects.md</a> (sections for each system), <a href="rendering.html#haze-and-land-light-the-common-api">rendering.md</a></td>
+</tr>
+<tr>
+<td>Order of the original frame</td>
+<td><a href="original-frame.html">original-frame.md</a></td>
+</tr>
+<tr>
+<td>Magic: spells and chants, casting from the hand, gestures, worship, influence, alignment, reactions, fire</td>
+<td><a href="magic.html">magic.md</a></td>
+</tr>
+<tr>
+<td>A specific miracle (food, water, heal, forest, flocks, fireball, lightning, shields, teleport, storm, lightning explosion)</td>
+<td><a href="miracles.html">miracles.md</a></td>
+</tr>
+<tr>
+<td>Particles: types, PSys classes, creators, particle sound, which rule is where</td>
+<td><a href="particles.html">particles.md</a></td>
+</tr>
+<tr>
+<td>Which cell is water; nearest coast, river or drinking water; the creature's <code>LandAvoid</code></td>
+<td><a href="water.html#water-cells-seacells">water.md</a></td>
+</tr>
+<tr>
+<td>Sinking and drowning, sharks, the fish puzzle, the missionaries' boat, waterfall, what sounds in the water</td>
+<td><a href="water.html">water.md</a></td>
+</tr>
+<tr>
+<td>Cameras and tracks of <code>camera.edt</code>, shark routes</td>
+<td><a href="camera-tracks.html">camera-tracks.md</a></td>
+</tr>
+<tr>
+<td>How the script moves the camera (MOVE_CAMERA_*, HAS_CAMERA_ARRIVED, lenses)</td>
+<td><a href="script-camera.html">script-camera.md</a></td>
+</tr>
+<tr>
+<td>The intro video or the spell-drop video, skipping it with ESC, the .bik files</td>
+<td><a href="video.html">video.md</a></td>
+</tr>
+<tr>
+<td>The Land 1 intro, the advisors, the dialogue texts, the tutorial's script functions</td>
+<td><a href="intro.html">intro.md</a></td>
+</tr>
+<tr>
+<td>The installation's modified meshes and textures</td>
+<td><a href="mods.html">mods.md</a></td>
+</tr>
+<tr>
+<td>Test hooks (<code>OPENBLACK_*</code>), building, debugging</td>
+<td><a href="openblack-internals.html">openblack-internals.md</a> and the «Test hooks» section of each page</td>
+</tr>
+</tbody>
+</table>
+<h2 id="how-to-read-the-pages">How to read the pages</h2>
+<ul>
+<li>Everything stated is verified in the executable or measured, unless it is marked:</li>
+<li><strong><span class="state approx">inferred</span></strong>: deduced from the code or the data, but not read directly;</li>
+<li><strong><span class="state approx">approximate</span></strong>: openblack comes close to the original but does not match it exactly.</li>
+<li>Every constant or rule carries the address it was read at, or its source data.</li>
+<li>Every page ends with a <strong>Pending</strong> section: what is not ported yet, what is still unverified, and open questions.</li>
+<li>A topic lives on a single page; the others link to it. Addresses and figures are never deleted when editing.</li>
+</ul>
+<h2 id="how-the-code-is-written">How the code is written</h2>
+<p>openblack is a replica: first everything original, verified in the executable, with no guesses. The code is modern
+C++20 on EnTT: state lives in ECS components and Locator services, assets load through the resource caches, and
+comments describe behaviour in plain English, with no decompiled names or addresses (those belong in this wiki). The
+conventions are in <a href="../refactor/README.md">the refactor guide</a>, and how a change is verified (tests, the fidelity run,
+pixel-identical screenshots) in <a href="../refactor/TESTING.md">TESTING.md</a>.</p>
+<h2 id="external-references">External references</h2>
+<ul>
+<li><a href="https://github.com/openblack/bw1-decomp">openblack/bw1-decomp</a>: matching decompilation of <code>runblack.exe</code>;
+  <code>config/BW1W120/symbols.txt</code> gives names to the addresses.</li>
+</ul>
+</main>
+<script src="search.js"></script>
+<script src="wiki.js"></script>
+</body>
+</html>

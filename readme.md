@@ -133,6 +133,13 @@ grammar.
 You can also join the [Discord for development discussion]((https://discord.gg/5QTexBU))
 if you are unsure of anything.
 
+This fork's code follows the conventions in [docs/refactor/README.md](docs/refactor/README.md): state lives in ECS
+components or Locator services, assets are loaded through the resource caches, and comments describe behaviour in plain
+English. [docs/refactor/TESTING.md](docs/refactor/TESTING.md) describes how a change is verified against the previous
+build, and [CHANGELOG.md](CHANGELOG.md) lists what changed. What is known about the original game is in the research
+wiki, [docs/bw1-notes](docs/bw1-notes/README.md); an HTML copy with an index and search is in `docs/wiki-html`
+(open `index.html`, or rebuild it with `python docs/make_wiki_html.py`).
+
 # Extracting asset files from original game
 
 As mentioned before, the original game assets are required in order to run

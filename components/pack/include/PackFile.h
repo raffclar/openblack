@@ -16,6 +16,7 @@
 #include <memory>
 #include <streambuf>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace openblack::pack
@@ -176,6 +177,18 @@ struct AudioBankSampleHeader
 	uint16_t atmos;           ///<
 };
 
+/// First 3 u32 of the LHFileSegmentBankInfo block of a .sad (532 bytes: 3 u32 + a 520 byte title).
+/// The original's audio library reads the 3 u32 when it registers the bank and keeps the 3rd, which it returns when
+/// asked whether the bank is a music bank. 1 in every .sad of Audio\Music and in Dialogue\MissionariesVerse1..3.sad, 0
+/// in the rest (data).
+struct AudioBankInfo
+{
+	uint32_t unknown0; ///< 0 except in SFX\Atmos\ocean.sad (7) (unknown)
+	uint32_t unknown1; ///< 0 except in SFX\Atmos\ocean.sad (6) (unknown)
+	uint32_t isMusic;  ///< non-zero = music bank
+};
+static_assert(sizeof(AudioBankInfo) == 3 * sizeof(uint32_t));
+
 /**
   This class is used to read LionHead Packs files
  */
@@ -200,9 +213,14 @@ protected:
 	std::vector<AudioBankSampleHeader> _audioSampleHeaders;
 	/// Bytes of snd audio samples
 	std::vector<std::vector<uint8_t>> _audioSampleData;
+	/// Start of the LHFileSegmentBankInfo block of a sound pack (all zero if the pack has none)
+	AudioBankInfo _audioBankInfo {};
+	/// ReadAudioHeaders: where the body of the LHAudioWaveData block starts in the stream, and its size (0 otherwise)
+	uint64_t _audioWaveDataOffset {0};
+	uint64_t _audioWaveDataSize {0};
 
-	/// Read blocks from pack
-	PackResult ReadBlocks(std::istream& stream) noexcept;
+	/// Read blocks from pack. `skipWaveData`: the body of LHAudioWaveData is not read, only its place is kept
+	PackResult ReadBlocks(std::istream& stream, bool skipWaveData) noexcept;
 
 	/// Write blocks to file
 	PackResult WriteBlocks(std::ostream& stream) const noexcept;
@@ -225,6 +243,9 @@ protected:
 	/// Extract Sounds from all Blocks named in LHAudioBankSampleTable Block
 	PackResult ExtractSoundsFromBlock() noexcept;
 
+	/// Parse the LHFileSegmentBankInfo block of a sound pack
+	PackResult ResolveFileSegmentBankInfoBlock() noexcept;
+
 	/// Parse Info Block
 	PackResult ResolveMeshBlock() noexcept;
 
@@ -234,6 +255,12 @@ public:
 
 	/// Read file from the input source
 	PackResult ReadFile(std::istream& stream) noexcept;
+
+	/// Read a sound pack's headers only, as the original registers a bank that is not loaded into memory: every block but the
+	/// body of LHAudioWaveData, which stays in the file (its place: GetAudioWaveDataOffset). The samples' data are
+	/// empty; a wave is read when it is first played, at
+	/// GetAudioWaveDataOffset() + header.offset, header.size bytes.
+	PackResult ReadAudioHeaders(std::istream& stream) noexcept;
 
 	/// Read g3d file from the filesystem
 	PackResult Open(const std::filesystem::path& filepath) noexcept;
@@ -282,7 +309,15 @@ public:
 	{
 		return _audioSampleHeaders[index];
 	}
+	[[nodiscard]] const AudioBankInfo& GetAudioBankInfo() const noexcept { return _audioBankInfo; }
+	/// The 3rd u32 of LHFileSegmentBankInfo, which the original tests for non-zero before it plays a bank as music
+	[[nodiscard]] bool IsAudioMusicBank() const noexcept { return _audioBankInfo.isMusic != 0; }
 	[[nodiscard]] const std::vector<std::vector<uint8_t>>& GetAudioSamplesData() const noexcept { return _audioSampleData; }
+	/// Moves the samples' bytes out of the pack (one vector per sample header); the pack has none afterwards
+	[[nodiscard]] std::vector<std::vector<uint8_t>> TakeAudioSamplesData() noexcept { return std::move(_audioSampleData); }
+	/// ReadAudioHeaders: the stream offset of the LHAudioWaveData block's body (a sample's wave is at this +
+	/// AudioBankSampleHeader::offset)
+	[[nodiscard]] uint64_t GetAudioWaveDataOffset() const noexcept { return _audioWaveDataOffset; }
 	[[nodiscard]] const std::vector<uint8_t>& GetAudioSampleData(uint32_t index) const noexcept
 	{
 		return _audioSampleData[index];

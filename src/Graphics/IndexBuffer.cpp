@@ -15,7 +15,9 @@
 #include <utility>
 
 #include <bgfx/bgfx.h>
+#include <spdlog/spdlog.h>
 
+#include "Engine/GpuCommands.h"
 #include "GraphicsHandleBgfx.h"
 
 using namespace openblack::graphics;
@@ -30,7 +32,15 @@ IndexBuffer::IndexBuffer(std::string name, const void* indices, uint32_t indexCo
 	assert(indexCount > 0);
 
 	const auto* mem = bgfx::makeRef(indices, indexCount * GetTypeSize(_type));
+	engine::gpu::NoteResourceCall("IndexBuffer::create", _name);
 	_handle = fromBgfx(bgfx::createIndexBuffer(mem, type == Type::Uint32 ? BGFX_BUFFER_INDEX32 : 0));
+	if (!bgfx::isValid(toBgfx(_handle)))
+	{
+		// (openblack guard) bgfx is out of handles (4096 of each kind): setName on kInvalidHandle writes out of bgfx's
+		// array in Release and corrupts the heap; the buffer stays empty and is not drawn
+		SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "{}: out of bgfx buffer handles, not created", _name);
+		return;
+	}
 	bgfx::setName(toBgfx(_handle), _name.c_str());
 }
 
@@ -42,7 +52,15 @@ IndexBuffer::IndexBuffer(std::string name, const void* mem, Type type)
 	const auto* memBgfx = static_cast<const bgfx::Memory*>(mem);
 	_count = memBgfx->size / sizeof(uint16_t);
 
+	engine::gpu::NoteResourceCall("IndexBuffer::create", _name);
 	_handle = fromBgfx(bgfx::createIndexBuffer(memBgfx, type == Type::Uint32 ? BGFX_BUFFER_INDEX32 : 0));
+	if (!bgfx::isValid(toBgfx(_handle)))
+	{
+		// (openblack guard) bgfx is out of handles (4096 of each kind): setName on kInvalidHandle writes out of bgfx's
+		// array in Release and corrupts the heap; the buffer stays empty and is not drawn
+		SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "{}: out of bgfx buffer handles, not created", _name);
+		return;
+	}
 	bgfx::setName(toBgfx(_handle), _name.c_str());
 }
 
@@ -50,6 +68,7 @@ IndexBuffer::~IndexBuffer()
 {
 	if (bgfx::isValid(toBgfx(_handle)))
 	{
+		engine::gpu::NoteResourceCall("IndexBuffer::destroy", _name);
 		bgfx::destroy(toBgfx(_handle));
 	}
 }
@@ -79,7 +98,16 @@ uint32_t IndexBuffer::GetTypeSize(Type type)
 	return static_cast<uint32_t>(type == Type::Uint16 ? sizeof(uint16_t) : sizeof(uint32_t));
 }
 
+bool IndexBuffer::IsValid() const noexcept
+{
+	return bgfx::isValid(toBgfx(_handle));
+}
+
 void IndexBuffer::Bind(uint32_t count, uint32_t startIndex) const
 {
+	if (!IsValid())
+	{
+		return; // (openblack guard) never hand bgfx an invalid handle
+	}
 	bgfx::setIndexBuffer(toBgfx(_handle), startIndex, count);
 }

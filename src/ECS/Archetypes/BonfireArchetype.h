@@ -19,7 +19,8 @@ namespace openblack::ecs::archetypes
 class BonfireArchetype
 {
 public:
-	static entt::entity Create(const glm::vec3& position);
+	/// A bonfire (pos, temperature, yAngle, scale) without the unused temperature
+	static entt::entity Create(const glm::vec3& position, float yAngleRadians, float scale);
 	BonfireArchetype() = delete;
 };
 } // namespace openblack::ecs::archetypes

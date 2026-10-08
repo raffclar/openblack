@@ -11,8 +11,11 @@
 
 #include <array>
 #include <optional>
+#include <span>
 #include <unordered_map>
+#include <vector>
 
+#include <SDL_events.h>
 #include <SDL_keyboard.h>
 #include <SDL_mouse.h>
 #include <glm/vec3.hpp>
@@ -43,16 +46,29 @@ public:
 	[[nodiscard]] glm::ivec2 GetMouseDelta() const final;
 	[[nodiscard]] std::array<std::optional<glm::vec3>, 2> GetHandPositions() const final;
 
+	[[nodiscard]] std::span<const KeyBinding> GetKeyBindings() const final;
+	void SetKeyBinding(BindableActionMap action, std::optional<KeyChord> key) final;
+	void ResetKeyBindings() final;
+	void QueuePress(BindableActionMap action) final;
+	[[nodiscard]] bool HasQueuedPresses() const final;
+
 	void Frame() final;
 	void ProcessEvent(const SDL_Event& event) final;
 
 private:
+	/// The mouse's bindings from the table
+	void ApplyMouseBindings();
+	/// The presses queued since the last frame, made through the same paths as the player's
+	void ApplyQueuedPresses();
+
+	KeyBindingTable _bindings {k_DefaultKeyBindings};
+	std::vector<BindableActionMap> _queuedPresses;
+	std::vector<SDL_Event> _queuedReleases;
+	BindableActionMap _queuedHeld = BindableActionMap::NONE;
 	BindableActionMap _bindableMap = BindableActionMap::NONE;
 	UnbindableActionMap _unbindableMap = UnbindableActionMap::NONE;
 	BindableActionMap _bindableMapPrevious = BindableActionMap::NONE;
 	UnbindableActionMap _unbindableMapPrevious = UnbindableActionMap::NONE;
-	std::unordered_map<SDL_Keycode, std::pair<SDL_Keymod, BindableActionMap>> _keyboardModBindings;
-	std::unordered_map<SDL_Keycode, BindableActionMap> _keyboardBindings;
 	std::unordered_map<int /*mousebutton*/, BindableActionMap> _mouseBindings;
 	std::unordered_map<int /*mousebutton*/, std::pair<SDL_Keymod, BindableActionMap>> _mouseModBindings;
 	uint8_t _currentMouseButtons = 0;

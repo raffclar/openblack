@@ -16,7 +16,15 @@
 #include <spdlog/spdlog.h>
 #include <stb_image_write.h>
 
+#include "Engine/GpuCommands.h"
 #include "GraphicsHandleBgfx.h"
+#include "Locator.h"
+
+namespace bgfx
+{
+// Defined and exported by bgfx but not declared in bgfx.h: frees a Memory that is not handed to bgfx.
+void release(const Memory* _mem);
+} // namespace bgfx
 
 namespace openblack::graphics
 {
@@ -31,6 +39,7 @@ Texture2D::~Texture2D()
 {
 	if (bgfx::isValid(toBgfx(_handle)))
 	{
+		engine::gpu::NoteResourceCall("Texture2D::destroy", _name);
 		bgfx::destroy(toBgfx(_handle));
 	}
 }
@@ -63,10 +72,12 @@ void Texture2D::Create(uint16_t width, uint16_t height, uint16_t layers, Texture
 	default:
 		assert(false);
 	}
-	_handle = fromBgfx(bgfx::createTexture2D(width, height, false, layers, toBgfx(format), flags,
-	                                         reinterpret_cast<const bgfx::Memory*>(memory)));
+
+	const auto* bgfxMemory = reinterpret_cast<const bgfx::Memory*>(memory);
+	_samplerFlags = static_cast<uint32_t>(flags & BGFX_SAMPLER_BITS_MASK);
+	engine::gpu::NoteResourceCall("Texture2D::Create", _name);
+	_handle = fromBgfx(bgfx::createTexture2D(width, height, false, layers, toBgfx(format), flags, bgfxMemory));
 	bgfx::setName(toBgfx(_handle), _name.c_str());
-	bgfx::frame();
 
 	bgfx::TextureInfo textureInfo;
 	bgfx::calcTextureSize(textureInfo, width, height, 1, false, false, layers, toBgfx(format));
@@ -75,8 +86,28 @@ void Texture2D::Create(uint16_t width, uint16_t height, uint16_t layers, Texture
 	_format = fromBgfx(textureInfo.format);
 	_stride = textureInfo.width * textureInfo.bitsPerPixel / 8;
 	_storageSize = textureInfo.storageSize;
+}
 
-	bgfx::frame();
+void Texture2D::Update(const void* data, uint32_t size) noexcept
+{
+	if (!bgfx::isValid(toBgfx(_handle)) || data == nullptr)
+	{
+		return;
+	}
+	const uint16_t width = _resolution.x;
+	const uint16_t height = _resolution.y;
+	engine::gpu::NoteResourceCall("Texture2D::Update", _name);
+	bgfx::updateTexture2D(toBgfx(_handle), 0, 0, 0, 0, width, height, bgfx::copy(data, size));
+}
+
+void Texture2D::UpdateRegion(glm::u16vec2 origin, glm::u16vec2 size, const void* data, uint32_t bytes) noexcept
+{
+	if (!bgfx::isValid(toBgfx(_handle)) || data == nullptr || size.x == 0 || size.y == 0)
+	{
+		return;
+	}
+	engine::gpu::NoteResourceCall("Texture2D::UpdateRegion", _name);
+	bgfx::updateTexture2D(toBgfx(_handle), 0, 0, origin.x, origin.y, size.x, size.y, bgfx::copy(data, bytes));
 }
 
 void Texture2D::DumpTexture() const

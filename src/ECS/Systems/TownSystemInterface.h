@@ -17,8 +17,8 @@ namespace openblack::ecs::systems
 class TownSystemInterface
 {
 public:
+	virtual ~TownSystemInterface() = default;
 	[[nodiscard]] virtual entt::entity FindAbodeWithSpace(entt::entity townEntity) const = 0;
-	[[nodiscard]] virtual entt::entity FindClosestTown(const glm::vec3& point) const = 0;
 	virtual void AddHomelessVillagerToTown(entt::entity townEntity, entt::entity villagerEntity) = 0;
 };
 } // namespace openblack::ecs::systems

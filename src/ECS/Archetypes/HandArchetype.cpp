@@ -28,6 +28,8 @@ entt::entity HandArchetype::Create(const glm::vec3& position, float xAngleRadian
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
 
+	// (inferred) not one of the original's constructors (the hand's matrix comes from the camera, HandState::Update);
+	// without effect: HandPlacement rewrites the rotation every frame
 	const auto rotation = glm::mat3(glm::eulerAngleXYZ(xAngleRadians, yAngleRadians, zAngleRadians));
 	registry.Assign<Hand>(entity, rightHanded);
 	registry.Assign<Transform>(entity, position, rotation, glm::vec3(scale));

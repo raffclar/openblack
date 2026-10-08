@@ -1,47 +1,29 @@
-$input v_position, v_texcoord0, v_normal
+$input v_position, v_texcoord0, v_normal, v_color0
 
 #include <bgfx_shader.sh>
 
+// The sky dome's three textures, one layer per alignment: the day / dusk / night blend is
+// already in them, built on the CPU by sky_type::DomeBlend
 SAMPLER2DARRAY(s_diffuse, 0);
-uniform vec4 u_typeAlignment;
+uniform vec4 u_typeAlignment; // x: unused (the sky type is in the textures), y: alignment 0 evil .. 2 good
 
 void main()
 {
 	// constants
-	const float nightIndex = 0.0f;
-	const float duskIndex = 1.0f;
-	const float dayIndex = 2.0f;
 	const float evilIndex = 0.0f;
-	const float neutralIndex = 1.0f;
 	const float goodIndex = 2.0f;
 
 	// unpack uniform
-	float textureType = clamp(u_typeAlignment.x, nightIndex, dayIndex);
 	float alignment = clamp(u_typeAlignment.y, evilIndex, goodIndex);
 
+	// How the original mixes the alignments is not read yet (inferred): openblack's linear mix of the two nearest
 	float alignT = mod(alignment, 1.0f);
 	float alignA = alignment - alignT;
 	float alignB = min(alignA + 1.0f, goodIndex);
 
-	float typeT = mod(textureType, 1.0f);
-	float typeA = textureType - typeT;
-	float typeB = min(typeA + 1.0f, dayIndex);
+	vec4 colorA = texture2DArray(s_diffuse, vec3(v_texcoord0.xy, alignA));
+	vec4 colorB = texture2DArray(s_diffuse, vec3(v_texcoord0.xy, alignB));
 
-	float indexAA = 3.0f * alignA + typeA;
-	float indexAB = 3.0f * alignA + typeB;
-	float indexBA = 3.0f * alignB + typeA;
-	float indexBB = 3.0f * alignB + typeB;
-
-	vec4 colorAA = texture2DArray(s_diffuse, vec3(v_texcoord0.xy, indexAA));
-	vec4 colorAB = texture2DArray(s_diffuse, vec3(v_texcoord0.xy, indexAB));
-	vec4 colorBA = texture2DArray(s_diffuse, vec3(v_texcoord0.xy, indexBA));
-	vec4 colorBB = texture2DArray(s_diffuse, vec3(v_texcoord0.xy, indexBB));
-
-	vec4 colorAlignA = mix(colorAA, colorBA, alignT);
-	vec4 colorAlignB = mix(colorAB, colorBB, alignT);
-	colorAlignA.a = 1.0f;
-	colorAlignB.a = 1.0f;
-
-	gl_FragColor = mix(colorAlignA, colorAlignB, typeT);
-
+	gl_FragColor = mix(colorA, colorB, alignT);
+	gl_FragColor.a = 1.0f;
 }

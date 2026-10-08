@@ -9,6 +9,7 @@
 
 #include "CameraBookmarkArchetype.h"
 
+#include "3D/FrameAnim.h"
 #include "ECS/Components/CameraBookmark.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Registry.h"
@@ -20,10 +21,15 @@ using namespace openblack;
 using namespace openblack::ecs::archetypes;
 using namespace openblack::ecs::components;
 
+namespace
+{
+constexpr int k_FirstCell = 24;
+} // namespace
+
 std::array<entt::entity, 8> CameraBookmarkArchetype::CreateAll()
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	auto texture = Locator::resources::value().GetTextures().Handle(entt::hashed_string("raw/misc0a"));
+	auto texture = Locator::resources::value().GetTextures().Handle(entt::hashed_string("raw/misc0a").value());
 	if (!texture)
 	{
 		throw std::runtime_error("Failed to get Camera Bookmark sprite: misc0a");
@@ -38,8 +44,9 @@ std::array<entt::entity, 8> CameraBookmarkArchetype::CreateAll()
 	// TODO (#749) use std::views::enumerate
 	for (uint8_t i = 0; auto entity : result)
 	{
-		const float u = static_cast<float>(i) / static_cast<float>(result.size());
-		registry.Assign<Sprite>(entity, texture->GetNativeHandle(), glm::vec2 {u, 3.0f / 8.0f}, extent, tint);
+		// (openblack) cells 24..31 of misc0a (row 3), openblack's own choice: no original address
+		registry.Assign<Sprite>(entity, texture->GetNativeHandle(), graphics::frame_anim::SpriteCellUv(k_FirstCell + i)[0],
+		                        extent, tint);
 		++i;
 		registry.Assign<CameraBookmark>(entity, i, 0.0f);
 	}

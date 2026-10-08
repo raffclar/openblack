@@ -1,0 +1,967 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Map loading and script functions — Black &amp; White notes</title>
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body>
+<nav id="side">
+  <h1><a href="index.html" style="color:inherit;text-decoration:none">Black &amp; White notes</a></h1>
+  <span class="tag">openblack — how the original behaves</span>
+  <input id="q" type="search" placeholder="Search (press /)" autocomplete="off">
+  <div id="hits"></div>
+  <div id="nav"><h2>Start here</h2>
+<a class="" href="README.html">Black &amp; White 1 notes for openblack</a>
+<h2>Engine</h2>
+<a class="" href="openblack-internals.html">openblack internals</a>
+<a class="" href="engine-loop.html">The engine loop: game turns and frames (original and openblack)</a>
+<a class="" href="engine-math.html">Coordinates, terrain, object size, game clock, matrices and Zoomer</a>
+<a class="" href="tooling.html">Tools and formats</a>
+<a class="" href="parity.html">Graphics engine parity: original versus openblack</a>
+<a class="" href="original-frame.html">The original B&amp;W frame (runblack.exe W120, D3D7, LH3D)</a>
+<h2>World</h2>
+<a class="here" href="map-loading.html">Map loading and script functions</a>
+<a class="" href="land-script-save.html">Writing land-script lines: SaveObject and WriteCommand</a>
+<a class="" href="water.html">Water in the game</a>
+<a class="" href="trees.html">Trees and forests</a>
+<a class="" href="buildings.html">Buildings, building sites and towns (the building side)</a>
+<a class="" href="objects-and-resources.html">Objects and resources</a>
+<a class="" href="physics.html">Physics: thrown objects, collisions, damage and rocks that split</a>
+<h2>Life</h2>
+<a class="" href="villagers.html">Villagers: data, state machine and speed</a>
+<a class="" href="animals.html">Animals: AI, states and clips</a>
+<h2>Magic and weather</h2>
+<a class="" href="magic.html">Magic: the core of the miracles</a>
+<a class="" href="miracles.html">Miracles one by one</a>
+<a class="" href="particles.html">Particles (PSys)</a>
+<a class="" href="day-night-weather.html">Day, night and weather in the original</a>
+<a class="" href="vortex.html">Vortexes and the tornado: objects swallowed, carried and flung</a>
+<h2>Hand and interface</h2>
+<a class="" href="hand-and-interface.html">The hand and the interface</a>
+<a class="" href="intro.html">The Land 1 intro and the tutorial&#x27;s script side</a>
+<a class="" href="script-camera.html">Script camera (GCamera and CameraModeScript)</a>
+<a class="" href="camera-tracks.html">Camera tracks (`Data\camera.edt`) and `WALK_PATH`</a>
+<h2>Presentation</h2>
+<a class="" href="rendering.html">World rendering: original versus openblack</a>
+<a class="" href="rendering-objects.html">Model rendering: original versus openblack</a>
+<a class="" href="animation.html">Skeletal animation (villagers and animals)</a>
+<a class="" href="audio.html">Audio: the engine, the banks, the music, the voices and the script</a>
+<a class="" href="video.html">Bink videos (.bik)</a>
+<h2>Data</h2>
+<a class="" href="mods.html">Modified data packs</a>
+<h2>Other</h2>
+<a class="" href="creature.html">The creature: groundwork, random streams and what is unknown</a></div>
+</nav>
+<main>
+<details id="toc"><summary>On this page</summary><div class="toc">
+<ul>
+<li><a href="#map-loading-and-script-functions">Map loading and script functions</a><ul>
+<li><a href="#creation-from-chl-create-27--create_with_angle_and_scale-252">Creation from CHL (CREATE 27 / CREATE_WITH_ANGLE_AND_SCALE 252)</a></li>
+<li><a href="#map-mist-create_mist">Map mist (CREATE_MIST)</a><ul>
+<li><a href="#drawing-lh3dmist-fn_007fa300">Drawing (LH3DMist, fn_007FA300)</a></li>
+</ul>
+</li>
+<li><a href="#animals-and-flocks-create_flock-create_new_animal">Animals and flocks (CREATE_FLOCK, CREATE_NEW_ANIMAL)</a></li>
+<li><a href="#map-simulation-data-data-only-nothing-is-drawn">Map simulation data (data only, nothing is drawn)</a></li>
+<li><a href="#the-map-script-reader-lhscriptx">The map script reader (LHScriptX)</a><ul>
+<li><a href="#towns-and-players">Towns and players</a></li>
+<li><a href="#villagers-from-the-map-script">Villagers from the map script</a></li>
+</ul>
+</li>
+<li><a href="#fish-farms-create_fish_farm--create_town_fish_farm">Fish farms (CREATE_FISH_FARM / CREATE_TOWN_FISH_FARM)</a></li>
+<li><a href="#build-percentage-of-a-feature-built_percentage-chl-property-22">Build percentage of a Feature (BUILT_PERCENTAGE, CHL property 22)</a></li>
+<li><a href="#map-script-objects-street-lanterns-bonfires-dead-trees-gates">Map script objects (street lanterns, bonfires, dead trees, gates)</a></li>
+<li><a href="#towns-and-citadel">Towns and citadel</a></li>
+<li><a href="#script-commands-that-move-things-move_game_thing-033-and-friends">Script commands that move things (MOVE_GAME_THING 033 and friends)</a><ul>
+<li><a href="#move_game_thing-gscriptmovegamething-0x6f8e80">MOVE_GAME_THING (GScript::MoveGameThing 0x6F8E80)</a></li>
+<li><a href="#what-the-script-queries-afterwards">What the script queries afterwards</a></li>
+<li><a href="#set_script_state-017-set_script_ulong-020-played-064-and-the-script-states">SET_SCRIPT_STATE 017, SET_SCRIPT_ULONG 020, PLAYED 064 and the script states</a></li>
+<li><a href="#delete-gscriptdeleteobject-0x6f92d0">DELETE (GScript::DeleteObject 0x6F92D0)</a></li>
+<li><a href="#the-scripts-things-scriptmanage-slots">The script's things (ScriptManage slots)</a></li>
+<li><a href="#virtual-machine-cast">Virtual machine CAST</a></li>
+<li><a href="#in-game-land-1">In game (Land 1)</a></li>
+<li><a href="#skipping-the-tutorial-skipbox-and-can_skip_tutorial">Skipping the tutorial (SkipBox and CAN_SKIP_TUTORIAL)</a></li>
+</ul>
+</li>
+<li><a href="#pending">Pending</a></li>
+<li><a href="#test-hooks">Test hooks</a></li>
+<li><a href="#sources">Sources</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+<h1 id="map-loading-and-script-functions">Map loading and script functions</h1>
+<p>What the map script (<code>Land*.txt</code>, LHScriptX) and the CHL CREATEs do when loading a land: object creation,
+mists, flocks and animals, simulation data (towns, climate, arenas), fish farms, script objects (street lanterns,
+bonfires, dead trees, gates, planned citadel), <code>IsOkToCreateAtPos</code> and <code>BUILT_PERCENTAGE</code>. All <strong>faithful</strong> (read
+in runblack.exe) except what is marked <strong><span class="state approx">inferred</span></strong>, <em>deviation</em> or <strong>pending</strong>.</p>
+<blockquote>
+<p><strong>Code rules.</strong> The created things are ECS entities made by archetypes, with their state in components and the
+systems reached through Locator services, never globals; map scripts, meshes and info rows load through the
+resource caches; script-reader logic is tested with fakes in <code>test/</code>; comments describe behaviour in plain
+English, with no decompiled names or addresses (those belong here). See <a href="openblack-internals.html">openblack-internals.md</a>.</p>
+</blockquote>
+<ul>
+<li><a href="#creation-from-chl-create-27--create_with_angle_and_scale-252">Creation from CHL</a></li>
+<li><a href="#map-mist-create_mist">Map mist (CREATE_MIST)</a></li>
+<li><a href="#drawing-lh3dmist-fn_007fa300">Drawing (LH3DMist)</a></li>
+<li><a href="#animals-and-flocks-create_flock-create_new_animal">Animals and flocks</a></li>
+<li><a href="#map-simulation-data-data-only-nothing-is-drawn">Map simulation data</a></li>
+<li><a href="#the-map-script-reader-lhscriptx">The map script reader (LHScriptX)</a></li>
+<li><a href="#towns-and-players">Towns and players</a></li>
+<li><a href="#villagers-from-the-map-script">Villagers from the map script</a></li>
+<li><a href="#fish-farms-create_fish_farm--create_town_fish_farm">Fish farms</a></li>
+<li><a href="#build-percentage-of-a-feature-built_percentage-chl-property-22">Build percentage of a Feature</a></li>
+<li><a href="#map-script-objects-street-lanterns-bonfires-dead-trees-gates">Map script objects</a></li>
+<li><a href="#towns-and-citadel">Towns and citadel</a></li>
+<li><a href="#script-commands-that-move-things-move_game_thing-033-and-friends">Script commands that move things</a></li>
+<li><a href="#delete-gscriptdeleteobject-0x6f92d0">DELETE</a></li>
+<li><a href="#the-scripts-things-scriptmanage-slots">The script's things</a></li>
+<li><a href="#pending">Pending</a> · <a href="#test-hooks">Test hooks</a> · <a href="#sources">Sources</a></li>
+</ul>
+<h2 id="creation-from-chl-create-27--create_with_angle_and_scale-252">Creation from CHL (CREATE 27 / CREATE_WITH_ANGLE_AND_SCALE 252)</h2>
+<ul>
+<li><code>GScript::CreateThing</code> 0x6F1B20 and <code>CreateWithAngleAndScale</code> 0x6F2E10 (angle in degrees, ×0.0174533) only accept
+  types 1..41 and call the switch <code>fn_006F11A0</code> (table 0x6F1A70). If nothing is created, the script receives <strong>0</strong>
+  ("Thing not created"). openblack returned entity 0 (a valid entity) for everything unsupported.</li>
+<li>Subtype 5000 is only valid for Timer, SpellDispenser, Whale, Ark, Marker, Ball, Poo and Scaffold.
+  The subtype-5000 test is at 0x6F11BD; MobileStatic's case at 0x6F141E; "Invalid create type" for Abode and the rest
+  at 0x6F191D.</li>
+<li><strong>Marker</strong> (<code>fn_0070D8D0</code>): a <code>ScriptMarker</code> with only the position. <code>MapCoords::Set</code> 0x603340 stores
+  <code>y − GetAltitude</code>, <code>GET_POSITION</code> 0x6F88A0 returns <code>GetAltitude + relY</code> and <code>ScriptMarker::PhysicsEditorCreate</code>
+  0x561030 does nothing, so the marker returns exactly the vector it was created with (y = 0 in CHL).</li>
+<li>The other objects stay on the ground: <code>PhysicsEditorCreate</code> (GameThingWithPos 0x401980, MobileStatic 0x55D720,
+  Bonfire 0x4397C0) sets relY = 0; after creating, 0x6F1591-0x6F1A42 rebuilds the matrix at <code>GetAltitude(pos) + relY</code> with
+  only the Y angle and the object's scale (no X/Z tilt).</li>
+<li>Cases: Feature <code>fn_00527350</code>(angle, scale); Villager <code>Villager::Create</code> 0x74FBE0 with age grownUpAge + 1,
+  VillagerChild with age 10 (no town or house); Animal and Bird <code>fn_00419C20</code>; MobileStatic and Rock: subtype 6 →
+  GBaseOnly <code>fn_00609340</code> (no angle or scale), 7 and 59 → <code>GStreetLantern::Create</code>, the rest <code>fn_00608770</code> (info 8 →
+  Bonfire, rocks with info +0x128 = 2); MobileObject <code>0x607000</code>, Poo = MobileObject 5, Ark = 23; Tree
+  <code>Tree::Create</code> 0x749EE0 (no forest); AnimatedStatic <code>0x421F50</code>. Abode, Town, Dance, Flock, InfluenceRing, Citadel,
+  WorshipSite, SpellSeed, Mist, Field, ComputerPlayer and TotemStatue give "Invalid create type" in the original too.
+  PuzzleGame (type 32, 0x6F184C): <code>fn_006D6680(pos, subtipo, ftol(ángulo·2048·0,159155), escala)</code> (see «Fish
+  puzzle» in <a href="water.html#fish-puzzle">water.md</a>). Pending in openblack: Reward, Creature, DeadTree, Store,
+  Timer, Ball, Totem, Highlight and Scaffold. Already ported: Vortex (<code>ecs::vortex::Create</code>), WeatherThing (<code>magic::script::CreateWeatherThing</code>),
+  OneShotSpell, OneShotSpellInHand and SpellDispenser (<code>Magic/Script/CHLWorship.cpp</code>) and Whale (the shark).</li>
+<li>Whale (0x6F1747): <code>Whale::Create</code> 0x774C50(pos, &amp;GMobileObjectInfo[24], 0, angle, scale): the shark.</li>
+<li>Scaffold (0x6F13BF..0x6F13D5): <code>Scaffold::Create(pos, GScaffoldInfo 0xD959D0, 0, 0, angle, scale)</code>.</li>
+<li>Timer (0x6F1253..0x6F1263): <code>fn_007115A0((float)(uint64)sub_type)</code>: the subtype is the length in seconds.</li>
+<li>After creating, both commands call <code>AddScriptGameThing(thing, 1)</code> (CREATE 0x6F1BCD, CREATE_WITH_ANGLE_AND_SCALE
+  0x6F2F01): a thing the script created (see <a href="#the-scripts-things-scriptmanage-slots">The script's things</a>).</li>
+<li>openblack: <code>CreateScriptObject</code> (CHLApi.cpp), <code>MarkerArchetype</code>. The Singing Stones circle is now assembled at
+  (2496,67, 2246.33) on the ground. Unimplemented CHL functions are logged only once per function.</li>
+</ul>
+<h2 id="map-mist-create_mist">Map mist (CREATE_MIST)</h2>
+<ul>
+<li><code>CREATE_MIST</code> "AFNFF" (0x7155C9) → <code>Mist::Create</code> 0x6063D0(pos with relY = F1, size F3, colour N2, k F4) →
+  <code>CallVirtualFunctionsForCreation</code> 0x606420: <code>LH3DObject::Create(7)</code> (LH3DMist) at <code>GetAltitude(x, z) + F1</code>,
+  +0x88 = F3, +0x90 = N2 &gt;&gt; 24 (alpha), flag +0x80 bit 1; only if F4 ≠ 1, +0x8C = F4 and bit 2. The constructor of
+  LH3DMist 0x7F9560 sets +0x88 = 1, +0x8C = 3, +0x90 = 0x80 and the counter +0x84 = Random(0, 16) &amp; 15.</li>
+<li><code>Mist::SetFade</code> 0x606800(initial size, final size, initial alpha, final alpha, seconds): sets the initial size and
+  alpha right away and <code>fn_00606880</code> adds one step per 0.1 s turn for seconds × 10 turns (alpha limited to
+  0..255); <code>Get2DRadius</code> 0x606660 = scale × the largest x/z half-extent of the mesh. It is used by <code>CREATE_MIST</code> 263 and
+  <code>SET_MIST_FADE</code> 264 of CHL (one call of each in challenge.chl; not done yet).</li>
+<li>Land1 has 17 (swamp, the piper's cave...). openblack: <code>MistArchetype</code>, <code>components::Mist</code>,
+  <code>Renderer::CollectMists</code> / <code>DrawMist</code> (drawing further below).</li>
+</ul>
+<h3 id="drawing-lh3dmist-fn_007fa300">Drawing (LH3DMist, <code>fn_007FA300</code>)</h3>
+<ul>
+<li>
+<p><strong>Other mists</strong> (API <code>mists::Submit(const MistDesc&amp;)</code>, <code>src/Graphics/Mists.h</code>): whoever has their own
+  LH3DMist objects (the storm puffs of <code>GWeather::DrawClouds</code> 0x83FC90) sends them every frame with position,
+  size, ARGB colour, effect/normal branch, k and its counter; <code>CollectMists</code> clips them with the same sphere and they go into the
+  same back-to-front list as the map ones and the blended models (<code>_frameMists</code>, <code>DrawMist(índice)</code>).</p>
+</li>
+<li>
+<p>Same mesh <code>mist.l3d</code> (dome of radius 20, base at the origin), smoke material 0xEA1ABC (<code>fn_0080BBD0</code>, mode 6:
+  SRCALPHA/INVSRCALPHA blending, colour and alpha = texture × diffuse, no Z write, two-sided) and 8×8 atlas as the
+  clouds. Creation (<code>CallVirtualFunctionsForCreation</code> 0x606420): +0x80 |= 1 always; if F4 ≠ 1, +0x8C = F4 and
+  +0x80 |= 2 ("effect" branch). Colour N2 at +0x4C (ARGB), +0x50 (specular) = 0.</p>
+</li>
+<li><strong>Rotation</strong> (key): 0x7FA38F copies into the object's matrix the one at 0xEA1C98, which <code>UpdateCamera</code> 0x819A62 builds in two
+  steps. First it permutes the columns of the world→camera A = 0xEA1D28: row i = (A[3i], −A[3i+2], A[3i+1]),
+  translation 0. And <strong>then</strong> (0x819AC5 <code>mov ecx, 0xEA1C98</code>, 0x819AF3 <code>call fn_007FB3F0</code>; the other copy of
+  <code>UpdateCamera</code>, 0x81A1AD, does the same at 0x81A265) it <strong>inverts it in place</strong>: <code>fn_007FB3F0</code> is the inverse of
+  the 4×3 matrix (cofactors / determinant, translation = −t·M⁻¹). Being orthonormal, the inverse is the transpose, so
+  the final rows are right, −forward and up. A uses row vectors and the object's matrix is applied the same way
+  (x' = m0 x + m3 y + m6 z, <code>fn_0084BA90</code>), so row k is the image of local axis k: in glm
+  <strong>mat3(right, −forward, up)</strong>, that is, a <strong>billboard</strong>. Local X = screen right, local Y (the axis of
+  the dome) towards the camera, local Z = up, so the dome is always seen face-on, like a smoke disc, and
+  never edge-on (checked by emulating 0x819690 + the permutation + 0x7FB3F0 with several cameras). Its centre is on the ground, so the Z test cuts off the lower half of the disc (also
+  in the original).</li>
+<li><strong>Effect branch</strong> (bit 2; in Land1 they all have k = 1, in Land4/Land5 k = 3.78 / 2.64): s = size/(1 + (k − 1)
+  (1 − |dy|/|d|)); 0x7FA4DC..0x7FA539 scale row 0 (local X) by the size and rows 1 and 2 (Y, Z) by s: <strong>non-uniform
+  scale</strong>. Light at (0, 500000, 0), ambient 0xD2, no land light, atlas V + 0.25 (0x7FA44D: rows 2-3).</li>
+<li><strong>Normal branch</strong> (0x7FA5B0): the 9 cells × size. <code>fn_00801C90</code> gives the light (table[lum] bilinear over the 4 cells)
+  and leaves at +0x50 the bilinear RGB of those cells (the first dword read as D3DCOLOR: red = blue byte). <code>fn_007FEB30</code>
+  applies the haze: light × (256 − trunc((256 − k) t)) &gt;&gt; 8 and specular += round(haze colour × t). Then each
+  channel = floor(N2 × light / 255), alpha = alpha of N2, and the model lighting (light at (−500000, 500000, −500000),
+  ambient 90). <strong>Without</strong> the + 0.25 of the atlas (0x7FA675: rows 0-1 of <code>smokea.raw</code>, peaks 171-197; rows 2-3 reach
+  228-248).</li>
+<li>Per-vertex light (<code>fn_0084BA90</code>): I = round(255 · n_local · L_local), L_local = normalize(M⁻¹ (Lpos − pos)); with
+  non-uniform scale it is not the light of the rotated normal.</li>
+<li>Counter +0x84 += ftol(g_game_time_inc · 0.255), modulo 900 only if it goes past 900; frame (counter/20) &amp; 15. It only
+  advances inside Draw, that is, with the mist on screen.</li>
+<li>Order: <code>LH3DMist::AddDrawing</code> 0x7FA7F0 discards with <code>CheckRegionOnScreen</code> (radius = mesh radius × size ×
+  0.55) and sends the mist to the <code>LH3DZSorter</code> (key |pos − camera|², callback 0x7FA980), together with the transparent
+  models and the sprites.</li>
+<li>openblack: <code>Renderer::CollectMists</code> / <code>DrawMist</code> (RendererMists.cpp) enter the back-to-front list of the
+  main pass (<code>DrawPass</code>, <code>ZObject::mist</code> of the <code>graphics::zsort</code> queue); without entities the mists go into the
+  same queue as the clouds (there is no <code>DrawMists</code> any more). <code>vs_cloud</code>
+  receives <code>u_cloudLight</code> (L_local) and <code>fs_cloud</code> adds <code>u_cloudSpecular</code> (0 in the clouds and in the effect branch).
+  Deviation: the counter keeps the fraction (like <code>Clouds.cpp</code>), because without vsync openblack goes over 250 fps and
+  the original's truncated step would be 0. The alpha texture <code>smokea.raw</code> is cut to 4 bits on load, as in the
+  original (ARGB4444, <code>a.raw</code> 0x8375C1: 228 → 238/255; see
+  <a href="rendering.html#argb4444-textures">rendering.md</a>).</li>
+</ul>
+<h2 id="animals-and-flocks-create_flock-create_new_animal">Animals and flocks (CREATE_FLOCK, CREATE_NEW_ANIMAL)</h2>
+<ul>
+<li><strong>CREATE_FLOCK</strong> "NAANNN" (0x71634A): <code>Flock::Flock</code> 0x52F780(A1, the current player, id N0) → id at +0x8C, +0x60/+0x6C
+  = A1, +0x50 = 0x50, +0x52 = 0x1E, in the list g_game+0x205C44 (inserted at the front); <code>SetDomainCentrePos</code>(A2) → +0x14.
+  Domain radius +0x50 = N3 (0 → 0x50). With <code>VERSION</code> ≥ 2.1 (0xD9957C; all lands have 2.3): flock
+  distance +0x52 = N4 and town N5; before that, town N4 and +0x52 stays at 0x1E. With a town: +0x34 and the town's list
+  +0xF08. Invisible (simulation only).</li>
+<li><strong>CREATE_NEW_ANIMAL</strong> (0x716543; CREATE_ANIMAL 0x71649F the same with age 0): looks for the flock by +0x8C in that list
+  (the newest with that id) and the town with <code>FindTownWithID</code> → <code>fn_00419D10</code>(pos, info, town, flock, age).</li>
+<li>With a flock: age 0 → GameRand(20) + 5; creates the animal (<code>fn_00419E00</code>) and joins it (<code>fn_0052FA50</code>: list +0x3C
+    sorted by the creature's byte +0xD4, +0x48 members, <code>Living::SetFlock</code>); if the animal cannot be herded and the
+    flock has a town, the flock leaves the town's list and +0x34 = 0; +0x88 = maximum number of members.</li>
+<li>Without a flock (<code>fn_00419C20</code>, also the CHL CREATE): age 0 → <strong>GameRand(40)</strong> + 5; the animal receives its own
+    flock (<code>Flock(Living*)</code> 0x52F950, at its position, without a script id, +0x50 = info.domainRadius (+0x25C),
+    +0x52 = (int)info.flockDistance (+0x21C), no town).</li>
+<li>Town of the animal (<code>fn_00417C50</code>, +0xE0 and the town's list +0x984): only those that can be herded keep it
+    (<code>IsOkToBeShepherd</code>, vtable +0xBA4 = 0x41D0E0 → 1); the others, none.</li>
+<li><strong>Classes</strong> (<code>fn_00419E00</code>, jump on info.animalInfo +0x1F4, 27 cases): ground animals (lion, tiger, wolf, leopard,
+  SpellWolf, PieceLion/Wolf/Villager; ctor 0x41FD30 or 0x416EB0), grazing animals (sheep, tortoise, cow, horse, pig,
+  PieceSheep; ctor 0x41D0B0, can be herded) and flying animals (crow, dove, swallow, pigeon, seagull, bat,
+  SpellDove and SpellBat; ctor <code>Dove</code> 0x41DCF0). Types 5 (goat), 7 (zebra), 17-19 and &gt; 26 (puzzle horse, cow, tortoise and
+  pig) <strong>create nothing</strong>.</li>
+<li><strong>Flying animals</strong>: the <code>Dove</code> ctor 0x41DCF0 calls the Animal one (0x416EB0, which calls <code>Living::SetState</code> 0x5F2A80),
+  resets fields (<code>fn_00417900</code>) and sets the altitude of its MapCoords (+0x1C) = info.altitudeNormal (+0x278: dove,
+  pigeon and bat 20, crow, swallow and seagull 40); <code>Game3DObject::SetPosition</code> 0x63B680 places them at
+  <code>GetAltitude + altitudeNormal</code>. <code>CallVirtualFunctionsForCreation</code> is 0x41F240 (the Animal one plus a call to the
+  3D object). <code>StandAnimation</code>: dove 8 (DOVE_FLAP), swallow 27 (SWALLOW_FLAP), seagull 22 (SEAGULL_TAKEOFF),
+  bat 2 (BAT_GLIDE). Their flight is already decoded and ported (commit e3a9d81f, «Birds fly like the original»;
+  <code>AnimalClass::Flying</code> in <code>AnimalArchetype.cpp</code>, details in
+  <a href="animals.html#birds-crow-dove-swallow-rock-dove-seagull-bat">animals.md</a>).
+  <em>Previously</em> openblack did not create them (81 of the 116 animals of Land1); they count as Object in the creation counter.</li>
+<li>openblack: <code>components::Flock</code>, <code>Animal::flock/town</code>, <code>Town::flocks</code>, <code>RegistryContext::flocks</code>, <code>AnimalArchetype</code>.</li>
+</ul>
+<h2 id="map-simulation-data-data-only-nothing-is-drawn">Map simulation data (data only, nothing is drawn)</h2>
+<ul>
+<li><strong>SET_TOWN_UNINHABITABLE</strong> (case 5, 0x715542): town +0x5F4 = 1 (<code>Town::uninhabitable</code>).</li>
+<li><strong>CREATE_TOWN_CENTRE</strong> (case 9, 0x71577C): town or the nearest one (<code>fn_00552FF0</code>); <code>IsOkToCreateAtPos</code> 0x404B10;
+  <code>Abode::Create</code>; if it is a TownCentre: town +0x9A4 = the centre if it was empty (<code>Town::centre</code>) and
+  <code>Town::SetWorshipPercentage</code>(N5·0.001) 0x73C060, which stores +0x5C0 <strong>only if the town has a worship site</strong> (otherwise,
+  0) and passes it to the totem statue. Without a town, <code>TotemStatue::SetWorshipPercentage</code> 0x738270. All lands pass 0.</li>
+<li><strong>CREATE_PLANNED_ABODE</strong> (case 8, shares code with CREATE_ABODE): town or the nearest one, otherwise nothing; abode
+  type 0x404 (TownCentre) → <code>PlannedTownCentre::Create</code> 0x7444D0, otherwise <code>PlannedAbode::Create</code> 0x405600 (pos, info,
+  town, angle N4·0,001, scale N5·0.001; food and wood are not used); invisible (<code>PlannedMultiMapFixed::Draw</code>
+  0x648930 = <code>ret</code>). openblack: <code>Town::plannedAbodes</code>.</li>
+<li><strong>CREATE_ARENA</strong> (case 69) → <code>fn_00424820</code> → GArena 0x4246F0 (pos, radius +0x30, list g_game+0x205C7C); its
+  GLightSheet is only drawn during a fight. openblack: <code>components::Arena</code>.</li>
+<li><strong>Climate</strong> (cases 60-63): <code>CREATE_WEATHER_CLIMATE</code>(id, info, pos, r1, r2) → <code>fn_00771300</code>: id 0 = <code>GClimate(0)</code>
+  0x771020 (ignores the rest); otherwise, GClimate 0x771170 (pos +0x14, sorted radii +0x20/+0x24, id +0x28, info +0x2C;
+  initial rain and temperature from the season's range, not ported), list g_game+0x205CF4 (GClimate in
+  <a href="day-night-weather.html#gclimate-the-climates-climatecpp">day-night-weather.md</a>). <code>_RAIN</code>(id, F1, N2, N3,
+  N4) → +0x34 {F1, N2, N3, (u8)N4}; <code>_TEMP</code>(id, F1, F2) → +0x44/+0x48; <code>_WIND</code>(id, F1, F2, F3) → +0x4C..; the climate is
+  looked up by id (<code>fn_007731B0</code>, the newest); id 0 uses the world climate g_game+0x250534, created on the fly; an unknown
+  id does nothing. Land1: zones 1 (2701, 2567; −35/−32 degrees, snow), 2 and 3. openblack:
+  <code>components::Climate</code>.</li>
+<li><strong>CREATE_DRINK_WAYPOINT</strong> (case 95) → 0x770BC0 (WayPoint.cpp, list g_game+0x205C74): point where the creature drinks.
+  Land1 has 47. openblack: <code>components::DrinkWaypoint</code>.</li>
+<li><strong>FIRE_FLY_SPELL_REWARD_PROB</strong> (case 88): <code>GMagicInfo::GetInfoFromText</code> 0x5FB3B0 compares case-insensitively with the name
+  of the 42 magic effects (the first that matches; "NONE" is always 0; if there is none, 42) → 0x52B630: out of
+  range it does nothing; otherwise, table 0xCCFBAC[i] = p and rebuilds the cumulative sums at 0xCCFB04. It is not reset between
+  lands.</li>
+<li><strong>Globals</strong>: <code>VERSION</code> → 0xD9957C; <code>SET_LAND_NUMBER</code> → g_game+0x205A08 (0 in the GGame ctor; openblack does not reset it when loading a map; it is read by
+  <code>DesignedWaterFall</code> 0x5E3770 for the Land 3/4 scenery, see rendering.md);
+  <code>SET_TOWN_INFLUENCE_MULTIPLIER</code> / <code>SET_PLAYER_INFLUENCE_MULTIPLIER</code> → g_game+0x250078 / +0x25007C, which
+  <code>GGame::Init</code> 0x54F66F sets to 1 before the script. openblack: <code>Game::GetMapScriptGlobals</code>.</li>
+<li><code>GLandBalance::Values</code> 0xD1A280: 8 multipliers that the island script sets with SET_GLOBAL_LAND_BALANCE. All are 1
+  when a map loads (<code>GLandBalance::Init</code> 0x5E2890, from <code>GSetup::LoadMapFeatures</code>). Known uses: 4 = villager speed
+  (<code>Villager::SetStateSpeed</code>), 5 = wood value of trees (<code>Tree::GetWoodValue</code>), 7 = the belief speed constant.</li>
+<li><code>StartPlaygroundGame</code> 0x552F40 (every island except the first of the campaign) calls <code>Town::AsssignTownFeature</code>
+  again (0x552F76), after <code>LoadMapFeatures</code> (0x552F6E).</li>
+<li>Climate cases: CREATE_WEATHER_CLIMATE case 60 (0x7171F5) → fn_00771300(pos, &amp;GClimateInfo[N1], F3, F4, 0, id N0);
+  _RAIN case 61 (0x717250) → 0x773200; _TEMP case 62 (0x7172A2) → 0x773290; _WIND case 63 (0x7172E0) → 0x7732D0.</li>
+<li>CREATE_ARENA is case 69 at 0x7175FA. CREATE_DRINK_WAYPOINT is case 95 at 0x716616. FIRE_FLY_SPELL_REWARD_PROB is
+  case 88 at 0x717998.</li>
+<li>SET_LAND_NUMBER is case 82 (0x7177A4). Besides <code>DesignedWaterFall</code>, the influence and the worship sites read
+  g_game+0x205A08.</li>
+<li>SET_TOWN_INFLUENCE_MULTIPLIER is case 96 (0x717B5C). SET_PLAYER_INFLUENCE_MULTIPLIER is case 97 (0x717B7B).</li>
+<li>CREATE_STREAM_POINT (0x717550) appends the point at the tail with <code>GStream::AddPoint</code> 0x733B90.</li>
+<li>CREATE_FOOTPATH (fn_00717171, 0x717639..0x71764D): <code>new GFootpath(0, 0)</code> (0x534EB0). The script's footpath number
+  is not stored.</li>
+<li>CREATE_FOOTPATH_NODE (0x71765F..0x7176AC): the node goes to each footpath in g_game +0x205C64 whose position from the
+  list head (fn_00534F90) equals the script's number (at most one; none → nothing). <code>GFootpath::AddPos</code> 0x534FC0
+  inserts <code>new GFootpathNode(MapCoords(pos), 1, 0)</code> at the list head (0x7176A7).</li>
+</ul>
+<h2 id="the-map-script-reader-lhscriptx">The map script reader (LHScriptX)</h2>
+<ul>
+<li>Each command's argument types come from the type strings at 0xC20F20.. (CREATE_TOWN "NALNL", CREATE_ABODE
+  "NALNNNN", CREATE_VILLAGER_POS "AALN").</li>
+<li><code>LHScriptX&lt;char&gt;::Pram</code> +0x6000 holds 12 integer slots, one set for all scripts (class static): <code>ScanLine</code>
+  0x7E7540 stops at 12 (0x7E7715..0x7E77F9).</li>
+<li><code>ScanLine</code> writes slot i only for an 'N' argument (atol, 0x7E77CC) or an int variable (0x7E77BE). Any other
+  argument leaves the earlier command's value in that slot.</li>
+<li><code>GetScriptPos</code> 0x718250 = <code>MapCoords(const char*)</code> 0x6031D0 → <code>MapCoords::Set</code> 0x603280: x = ftol(atof × 65536 / 10)
+  (0x6032AF), relative height 0 (0x6032B1), z from the second field (0x6032D5), and a third field, if present, goes
+  to the height unscaled (0x6032E4..0x6032EF).</li>
+<li>Then <code>GetScriptPos</code> adds the offset [0xD99724] when it is set (<code>MapCoords::operator+=</code> 0x605410 at 0x71826F, in
+  integers). Only the vortex reader sets it (fn_0076FA50 0x76FA69, from <code>LandscapeVortexOut::ProcessContentsOfVortex</code>
+  0x5FE249), so a land's own script never has an offset.</li>
+<li><code>GSetup::LoadMapFeatures</code> 0x7180F0 resets once per map, not per line (0x7180FE..0x71811A): no offset [0xD99724],
+  player override [0xC20D54] = −1, tribe override [0xC20D58] = −1, VERSION [0xD9957C] = 0 (0x718110, so a land
+  without VERSION does not keep the previous land's) and last created object [0xD99384] = none.</li>
+<li>[0xD99384] = the object the last creation command made, written right after creating, even when null (0x715A9C,
+  0x715B3F, 0x715D78). The vortex reader fn_0076FA50 returns it.</li>
+<li>[0xC20D58] tribe override (−1 = none, 0x7182A0..0x7182AE): CREATE_VILLAGER / _POS take that tribe's villager with
+  the same number when there is one (0x715D37..0x715D5D). Only the vortex reader writes it (fn_0076FA50 0x76FA91).</li>
+<li>VERSION is case 51 (0x716FF9). CREATE_FLOCK's version 2.1 test is at 0x7163D2.</li>
+<li>LOAD_FEATURE_SCRIPT: <code>MapCommandProcess</code> case 6 (jump table 0x715018 → 0x714DCB) = <code>GSetup::LoadMapFeatures(path)</code>
+  0x714DD0. It loads the file with <code>LHScriptX::Load</code> (0x718136), then assigns the town features (0x71813D),
+  <code>GGame::Birthday</code>, <code>GPlayer::PostLoadCleanup</code> and <code>GStream::CreateAll</code> (0x718148..0x718152), as for the map's own
+  script. Not ported.</li>
+</ul>
+<h3 id="towns-and-players">Towns and players</h3>
+<ul>
+<li><code>GGame::FindTownWithID</code> 0x552FA0 looks the town up by its script number (+0x5B4).</li>
+<li>Nearest town fn_00552FF0 (<code>ret 4</code>, one MapCoords, no id; called at 0x7156A6, 0x7157FF, 0x715AD6, 0x715B79, 0x7168FE
+  and 0x717E15): walks the town list g_game+0x205C84 newest first (0x73964D), takes the first, then a later one only
+  when <code>GUtils::GetDistanceInMetres</code> 0x74CD70 is strictly smaller (0x55301B). An exact tie goes to the newer town.
+  Only x and z count.</li>
+<li><code>GPlayer::GetPlayerFromText</code> 0x64B5E0: the player whose name matches without case (_stricmp 0x64B609), or else the
+  neutral player (0x64B627..0x64B643).</li>
+<li>SET_TOWN_BELIEF (fn_00715150, 0x71542B): <code>GetPlayerFromText</code> (0x715432), <code>FindTownWithID</code> (0x715449; no town →
+  nothing, 0x717E8A), then <code>Town::SetBeliefInPlayer</code> 0x73BA70(P, f) (0x715460): for the neutral player +0x5D8 = f,
+  otherwise <code>SetBelief</code> 0x4387D0, capped. It overwrites the slot.</li>
+<li>SET_TOWN_BELIEF_CAP (0x715472): <code>GetPlayerFromText</code> (0x715479), <code>FindTownWithID</code> (0x715492),
+  <code>GBelief::SetBeliefInPlayerCap</code> 0x438A00(P, f) (0x7154B5).</li>
+<li>SET_TOWN_BELIEF_CAP multiplayer case (0x7154BA..0x715528): if the land is <code>.\mpm_3p_1.txt</code> (strcmp with 0xD99648),
+  <code>IsMultiplayerGame</code> 0x552F80 is true (0x7154FB), town +0x5B4 == 3 and the player is not neutral, the cap is 2.0.
+  openblack plays no multiplayer land.</li>
+<li>SET_TOWN_BALANCE_BELIEF_SCALE (case 98): <code>FindTownWithID</code> (no town: 0x717BAE), then town +0x5DC = the scale
+  (0x717BBA). This scales the town's pending belief when it is folded in.</li>
+<li>SET_LOST_TOWN_SCALE (case 104): [0xBF33F0] = the scale (0x717E85). <code>GLandBalance::Init</code> sets it back to 1.0
+  (0x5E28A9). The town belief fold reads it (fn_004383D0 at 0x4384BA and 0x4386E4: the boredom and belief left in a
+  player's towns when one is lost).</li>
+<li>CREATE_TOWN_CENTRE_SPELL_ICON (command 12) uses the same handler as CREATE_TOWN_SPELL (0x715B4A).</li>
+<li>CREATE_SPELL_ICON (command 13) does nothing in the original either (0x715B7C).</li>
+<li>CREATE_INFLUENCE_RING (case 59, 0x7171A3): <code>InfluenceRing::Create(pos, GGame::GetPlayer(player), radius, anti)</code>.
+  <code>GetPlayer</code> does not check the index (openblack adds a range check).</li>
+<li>CREATE_WORSHIP_SITE (command 19, 0x7160C8): only the player and the tribe are used. The site's position comes from
+  its citadel slot.</li>
+<li>CREATE_PLANNED_CITADEL (0x715E91): the player string must resolve (0x715EBE, else nothing). The
+  <code>PlannedTownCitadelHeart</code> (ctor 0x467DD0) gets info 0xC5E270 + N3 × 0x158, angle N5 × 0.001 and scale N6 × 0.001.</li>
+</ul>
+<h3 id="villagers-from-the-map-script">Villagers from the map script</h3>
+<ul>
+<li>CREATE_TOWN_VILLAGER (command 16, "NAAN", 0x715A4C): info = <code>GVillagerInfo::GetInfoFromText</code>(argument 2)
+  (0x715A61), the 0x3A4-byte record at 0xDA6BE8 + 0x3A4 × info.</li>
+<li>CREATE_SPECIAL_TOWN_VILLAGER (command 17, "NANN", 0x715AF8): the info index is N2 itself, unchecked
+  (0x715AF8..0x715B13).</li>
+<li>Both then do <code>Villager::Create</code> 0x74FBE0(GetScriptPos(A1), info, N3, 0) and set [0xD99384] (0x715A9C / 0x715B3F).
+  No villager → stop. Then the town from <code>FindTownWithID</code>(N0), else the town nearest the position (fn_00552FF0), else
+  stop, and <code>Town::AddVillagerToTown</code> 0x73A090.</li>
+<li>CREATE_VILLAGER (command 15, "AAL", 0x715B9B with <code>cmp eax, 0xF</code>): A0 is also the abode position (0x715BC9). The
+  info is <code>GetInfoFromText</code> of the second argument, which is an 'A' position (0x715BAC), so it never names a villager
+  and gives 0x54. The age is integer slot 2 ([ebp+0x6008], 0x715BBC), which this command's 'L' does not write. No
+  shipped script uses it.</li>
+<li>CREATE_VILLAGER_POS (command 18, "AALN", also 0x715B9B, with <code>cmp eax, 0x12</code>): info = <code>GetInfoFromText</code>(argument 2)
+  (0x715BFF), age = N3 ([ebp+0x600C]), abode looked up at A0, villager made at A1 (0x715C1B / 0x715C43).</li>
+<li>Abode lookup for CREATE_VILLAGER / _POS (0x715C5F..0x715D1B): every player, then the neutral one
+  (<code>GetNextPlayerAndNeutral</code> 0x550980), their towns (GPlayer +0xA50, next +0x75C), their abodes (Town +0x754, next
+  +0x9C, newest first). It takes the first abode whose door (vt +0x864, <code>MultiMapFixed::GetDoorPos</code> 0x52E370) is in
+  the same map cell as the position (high words compared, 0x715CAF / 0x715CC7).</li>
+<li>The abode's town comes from vt +0x48 (<code>Abode::GetTown</code> 0x401730). The abode itself only counts while it has room:
+  info +0x174 MaxVillagers − the count +0xA4 == 0 → no abode (0x715D06..0x715D17).</li>
+<li>Then (0x715D1F..0x715E02): the info, or the override tribe's villager of the same number (+0x1FC) when
+  <code>GVillagerInfo::Find</code> 0x752650 has one. <code>Villager::Create</code> 0x74FBE0(position, info, age, 0) with the position's
+  height zeroed first (0x715D3F). [0xD99384] = the villager, even null; [0xD99380] gets it too (no reader known). No
+  villager → stop.</li>
+<li>Placement: the abode (<code>Abode::AddVillagerToAbode</code> 0x404060); else, in its town, <code>FindAbodeWithSpaceInTown</code>
+  0x73B370(villager, 0) → <code>AddVillagerToAbode</code>, else <code>Town::AddVillagerToTown</code> 0x73A090; else the game's vagrants
+  (g_game +0x205BFC, 0x715DC0).</li>
+<li><code>GVillagerInfo::GetInfoFromText</code> 0x7519E0: for each of the 9 tribes (records 0xDA57B8, 0x1C apart; name at
+  [0xC22FDC + 4 × tribe]) whose name starts the text without case (__strnicmp 0x751A1B) and is followed by '_'
+  (0x751A27), it compares that tribe's 7 villager names with the rest (__stricmp 0x751A40, <code>GetTribeTextArray</code>
+  0x751AA0). Result = tribe × 7 + villager (0x751A87..0x751A95).</li>
+<li>If no name matches, it returns 0x54 (0x751A7D), one past the 84 records at [0xDA6BE8].</li>
+<li><code>GVillagerInfo::Find</code> 0x752650: the FIRST of the 84 records (0xDA6BE8, 0x3A4 apart) whose tribe (+0x1F4) and number
+  (+0x1FC) match (0x752663..0x75266A), else null.</li>
+<li><span class="state approx">inferred</span> The vagrants list g_game +0x205BFC starts empty on each map: the <code>GGame</code> ctor 0x54B3A0 zeroes it and each
+  deleted villager leaves it (<code>DeleteDependancys</code> 0x74FE4B).</li>
+</ul>
+<h2 id="fish-farms-create_fish_farm--create_town_fish_farm">Fish farms (CREATE_FISH_FARM / CREATE_TOWN_FISH_FARM)</h2>
+<ul>
+<li>Case 31 (0x7166E1): 0x52C7B0(pos, GFishFarmInfo[N1] (0xCCFC78 + 0x128·i; info.dat only has entry 0), no town).
+  Case 32 (0x716722): without the town it creates nothing; otherwise, the same with it. The ctor 0x52C360 stores at +0x8C <strong>always
+  the nearest town</strong> (<code>Town::GetNearestTownToPos</code> 0x73B170, any tribe), whatever the script's one is.</li>
+<li>Fish shoal (<code>CallVirtualFunctionsForCreation</code> 0x52CC10, reviewed): with [0xC37BF4] = 0 (without flattening the sea,
+  <code>GetAltitude</code> 0x803090 uses the raw height), rings of radius 2, 4... &lt; 50 and 32 directions; the first direction with
+  height exactly 0 at two consecutive radii gives the centre. openblack already did it the same way (<code>GetUnflattenedHeightAt</code>), so
+  the 9 of Land1 without a shoal (those of the lake of town 2 and others) come out the same as in the original with the same
+  data; the search was not changed.</li>
+</ul>
+<h2 id="build-percentage-of-a-feature-built_percentage-chl-property-22">Build percentage of a Feature (<code>BUILT_PERCENTAGE</code>, CHL property 22)</h2>
+<p>Status: <strong>faithful</strong> and ported.</p>
+<ul>
+<li><strong>Script</strong> (Land 1): <code>TheMissionaries</code> creates <code>GArk = CREATE(3, 69 = ArkDryDock, (1881,083; 8,1316; 3154,109))</code> and sets
+  <code>BUILT_PERCENTAGE of GArk = 0,2</code> (the pattern <code>GET_PROPERTY; POPI 0; PUSHF v; SET_PROPERTY</code> is an assignment);
+  <code>TheMissionariesBuildingBoat</code> adds 0.03 per hit (with <code>PLAY_SOUND_EFFECT(RANDOM_ULONG(92, 97))</code>) up to
+  <code>ArkIncrement</code>. openblack's numbering is the right one: 22 = <code>BuiltPercentage</code>.</li>
+<li><code>GET_PROPERTY</code> 22 (0x70E1A9): <code>dynamic_cast&lt;MultiMapFixed&gt;</code> → <code>GetPercentBuilt</code> (vt+0x880 = 0x4014F0, +0x5C); if it is not
+  a MultiMapFixed, <strong>1</strong> (0x70E1ED). <code>SET_PROPERTY</code> 22 (0x70EC69): MultiMapFixed → <code>fn_0052EDD0</code>: +0x5C = value (0 if
+  negative, <strong>no cap</strong>) and, if ≥ 1, <code>MultiMapFixed::Built</code> 0x52EBB0 (+0x5C = 1, +0x58 loses 0x02 and gains 0x08, releases
+  the building site +0x74, reaction 0xF if it has a town, <code>RequestChangeTexture</code>); then the town's list of buildings
+  (0x70EC9B..0x70ECD4), which a Feature does not have. On anything but a MultiMapFixed it jumps to 0x70F294: "Cannot
+  Set Property %d" and nothing changes (also the common exit 0x70F2CC..0x70F2D4 of the other properties).</li>
+<li><strong>Initial value</strong>: <code>fn_00527350</code> → <code>MultiMapFixed</code> ctor 0x52E1E0(pos, info, angle, scale, percentage,
+  planned): planned → bit 0x02 and +0x5C = 0; otherwise, +0x5C = percentage and bit 0x08. The script's <code>CREATE</code> passes 1:
+  built.</li>
+<li><strong>Drawing</strong>: <code>Feature::Draw</code> 0x518690 = <code>MultiMapFixed::Draw</code> 0x518090: if <code>IsDrawBuilding</code> (vt+0x8A4), <code>DrawBuilding</code>
+  0x517F90. <code>Feature::IsDrawBuilding</code> 0x527790: <strong>only for GFeatureInfo 69</strong> (ArkDryDock) is it <code>!IsBuilt()</code> (0x422110:
+  bit 0x02 clear and +0x5C ≥ 1); the other Features use <code>MultiMapFixed::IsDrawBuilding</code> 0x52F0C0 = "has a building site"
+  (+0x74), which a Feature never has: they are always drawn whole. <code>DrawBuilding</code>: p = <code>GetPercentForDrawBuilding</code>
+  0x52EFD0 = min(GetPercentBuilt, GetPercentRepairedFromWhenDamaged 0x52F010 = 1 if it is not built); with p = 0
+  nothing is drawn; otherwise, vt+0x110 of the static object = <code>fn_00816AD0</code> (the half-built drawing of the houses: main
+  mesh cut at pos.y + 2·ext.y·scale·p with inner walls and cap, and the scaffolding that rises (p &lt; 0.2), whole or
+  cut from above (p &gt; 0.8)).</li>
+<li>openblack: <code>components::Feature::percentBuilt</code>, <code>src/ECS/FeatureBuild.{h,cpp}</code> (<code>physics::PartialBuild</code> applied to the
+  Feature's local mesh; no mesh with p = 0; the terrain footprint is kept), <code>GET/SET_PROPERTY</code> 22 in <code>CHLApi</code>.
+  The Land 1 script does not reach <code>TheMissionaries</code> yet (it comes after choosing a creature): it is tested with
+  <code>OPENBLACK_TEST_BUILT_PERCENTAGE</code>. At 0.2 the whole scaffolding is visible and the ark cut at one fifth; at 1, the ark on
+  its props.</li>
+</ul>
+<h2 id="map-script-objects-street-lanterns-bonfires-dead-trees-gates">Map script objects (street lanterns, bonfires, dead trees, gates)</h2>
+<ul>
+<li><strong>Parameters</strong>: in the script's argument block, the integer of parameter i is at +0x6000 + 4i and the float at
+  +0x6030 + 4i. <code>GMobileStaticInfo</code> takes 300 bytes in memory (0xD3A6D8 + 300·i: MS[6] = 0xD3ADE0, MS[7] = 0xD3AF0C,
+  MS[8] = 0xD3B038) and 284 in <code>info.dat</code>: in memory the info.dat record starts at +0x10 (the object type is at
+  info +0x10 and the clip of an AnimatedStatic at +0x128, which is +0x118 in openblack's <code>GAnimatedStaticInfo</code>). The 61
+  MobileStatic infos have object type 0x1C (MOBILE_STATIC).</li>
+<li><strong>CREATE_STREET_LANTERN</strong> (case 80, 0x717720) → <code>GStreetLantern::Create</code> 0x7346E0(pos, &amp;MS[N1]): creates nothing if in the
+  map cell of the position (<code>MapCoords::FindType</code> 0x6045C0 → <code>MapCell::FindTypeOnMap</code> 0x6015E0; cells of 10
+  units) there is an object of type 0x1C less than 0.5 m away in x/z (<code>GUtils::GetDistanceInMetres</code> 0x74CD70); any
+  thing made with a MobileStatic info: rocks, bonfires, street lanterns, dead trees. +0x58 = (info ≠ MS[7]).
+  <code>CallVirtualFunctionsForCreation</code> 0x734810: mesh 148 (MSH_B_CAMPFIRE) if +0x58, otherwise 398 (MSH_O_TOWNLIGHT);
+  <code>SetPosition((x, GetAltitude + y, z), ángulo 0, escala 1)</code> (no 180° turn), the light <code>fn_00823240</code>(that point,
+  +0x58) at +0x5C and, <strong>in both classes</strong> (it does not check +0x58, corrected: this note used to say "only in the village one"), the
+  sound 0x93 at +0x60 (<code>fn_0071E8C0</code> = <code>SoundTag::Create</code>), unless the object carries the UNAVAILABLE mark (+0xA &amp; 1);
+  details of the sound in <a href="day-night-weather.html">day-night-weather.md</a>. Land1: 8 of type 7 and 4 of type 59
+  (field lanterns with the bonfire mesh, <strong>not</strong> bonfires). The CHL CREATE with 7 or 59 goes through the same place.
+  openblack: <code>StreetLanternArchetype</code>, <code>components::StreetLantern</code> / <code>LanternLight</code>; <code>night_lights</code> sets the lights
+  according to <code>LanternLight</code> (previously by the mesh, and the real bonfires came out with lantern light).</li>
+<li><code>GStreetLantern::Create</code> 0x7346E0: <code>FindType(0x1C, prev)</code> at 0x7346EC / 0x734716 walks the cell's fixed list from
+    its head (type 28 counts as fixed); the distance at 0x7346FC is <code>GetDistanceInMetres</code> 0x74CD70 (the table
+    hypotenuse 0x74F680 on the two MapCoords), <code>fcomp 0.5; test ah, 1</code>. A multi-cell object is found in every cell of
+    its NewCollideDescriptor.</li>
+<li>CREATE_STREET_LIGHT (case 81, 0x717763) creates a <code>GStreetLight</code> (0x734E60), not decoded. No land uses it.</li>
+<li><strong>CREATE_BONFIRE</strong> "AFFF" (case 73, 0x7176AE) → <code>fn_00439850</code>(pos, F1 temperature, F2 Y angle, F3 scale) → ctor
+  0x4395C0: <code>Rock</code>(pos, MS[8], angle, scale) and <code>CreateSpotVisualWithSpecifiedDuration</code>(pos, 25 SF_Bonfire, 1,0, −1 =
+  forever, the bonfire); the temperature is not used on creation (Land1 has 24,7, which openblack took as the angle). No
+  lantern light. openblack: <code>BonfireArchetype</code>.</li>
+<li><strong>MobileStatic</strong>: <code>CREATE_MOBILESTATIC</code> "ANFF" (case 41) → <code>fn_00608770</code>(pos, info, 0, 0, F2 angle, F3 scale):
+  MS[8] → <code>Bonfire::Create</code> with temperature 100; info +0x128 = 2 → <code>Rock</code>; MS[6] → nothing; the rest <code>MobileStatic</code>.
+  <code>CREATE_MOBILE_STATIC</code> "ANFFFFF" (case 42) → <code>fn_00608840</code>(pos with relY = F2, info, 0, 0, F3, F4, F5, F6): MS[6] →
+  GBaseOnly <code>fn_00609340</code>; MS[7] → nothing; the rest <code>fn_00608770</code>(…, F4, F6); then <code>SetXYZAnglesAndScale</code>(F3, F4, F5,
+  F6) on what was created (also the base and the bonfire). openblack: <code>MobileStaticArchetype::CreateFromInfo</code> /
+  <code>CreateWithXYZAngles</code>.</li>
+<li>CREATE_MOBILESTATIC is case 41 at 0x716D46; CREATE_MOBILE_STATIC is case 42 at 0x716DC1. <code>fn_00608770</code> gives
+    nothing for MS[6] at 0x6087E1; <code>fn_00608840</code> gives nothing for MS[7] (street lantern) at 0x608869: lanterns only
+    come from CREATE_STREET_LANTERN.</li>
+<li><strong>CREATE_DEAD_TREE</strong> "ALNFFFF" (case 43, 0x716E64) → <code>fn_00510BB0</code>(pos, GTreeInfo[N2], player, F3, F4, F5, F6, 0):
+  ctor 0x510A30 = <code>Rock</code>(MS[3], angle 0, scale 1) + <code>SetLife</code>(F3); with 0xCC5F10 = 0, <code>GetDeadTreeMesh</code> 0x510C60 is the
+  normal mesh of the type; then <code>SetXYZAnglesAndScale</code>(F4, F5, F6, 1), the MobileStatic matrix (x = F4, y = F5,
+  z = F6). Land1: 3 (types 12, 4 and 4, life 1, small angles). openblack made a live burnt tree; now
+  <code>DeadTreeArchetype</code> (<code>components::DeadTree</code>, no Tree or forest, can be picked up).</li>
+<li><strong>CREATE_POT</strong> (case 38): <code>IsOkToCreateAtPos</code> and, if the quantity N3 ≤ 0 (0x716B19), nothing. Removes the 4 empty wood
+  piles of Land1. It calls <code>Pot::Create</code> with its int argument 1 (0x716B39): the pot sends its reaction when it is
+  created (for food, hungry grazers come to eat).</li>
+<li><strong>CREATE_NEW_FEATURE</strong> (case 75): with N5 ≠ 0 it creates a <code>PlannedFeature</code> 0x527440 (not drawn); no land uses it.</li>
+<li><strong>Names</strong>: features <code>fn_00527740</code> and animated statics <code>fn_00422600</code> compare with <code>_stricmp</code> (if there is none, they return the
+  number of infos, 0x4C / 0x10); <code>GAbodeInfo::GetInfoFromText</code> 0x405A70 walks the 9 tribes, compares the prefix with
+  <code>_strnicmp</code>, requires '_' and the description with <code>_stricmp</code> (16 per tribe); otherwise, −1. The original uses the result without
+  checking it; openblack logs the failure and skips the command (deliberate robustness deviation; it used to throw).</li>
+<li><strong>AnimatedStatic</strong> (<code>CallVirtualFunctionsForCreation</code> 0x422300): sets the clip from info +0x128 (Norse Gate 191, Gate
+  Stone Plinth 195, Piper Cave Entrance 189); <code>Draw</code> 0x422770 advances or rewinds it depending on whether it is open, limited to its
+  duration: closed is t = 0 (openblack: <code>SkeletalAnimation</code> stopped at 0). With mesh 212 (Norse Gate, <code>fn_004230D0</code>)
+  it creates 2 <code>Game3DObject</code> with mesh 398 at (∓15, 30, 0) of the gate's matrix (rows with scale + translation),
+  angle 0 and scale 1, each with the light <code>fn_00823240</code>(its position, 0).
+  <code>CallVirtualFunctionsForCreation</code> reads the clip at info +0x128 at 0x42241F..0x422446; the Norse Gate lamps are
+  built at 0x42246B..0x422571 and are not map objects.</li>
+<li><strong>CREATE_PLANNED_CITADEL</strong> (case 20): town and player mandatory; <code>fn_00467DD0</code> (PlannedTownCitadelHeart in the
+  town) and stores the position at 0xC5E258. The real temple comes from <code>PlannedTownCitadelHeart::CreatePlannedNoFixedCheck</code>
+  0x467EF0 (vtable +0x504: the player's <code>Citadel</code> if it has none, <code>fn_00462B10</code>, and <code>CitadelHeart::Create</code> 0x464E20), which
+  is called by <code>Town::AddBuildingSiteNoFixedCheck</code> 0x73B8A0 from <code>Town::RequestBestPlanned</code>, <code>Town::ForceBuildingOfPlannedAtPos</code>
+  0x73E560 (<code>GScript::BuildBuilding</code> 0x6FAB30 of CHL, and 0x641774 after <code>StartPlaygroundGame</code> with 0xC5E258) and
+  <code>Scaffold::TryToBuildPlannedBuilding</code>. <code>GGame::Birthday</code> → <code>GPlayer::Birthday</code> → <code>Town::Birthday</code> only rebuilds
+  statistics. When the map loads <strong>there is no temple</strong>, only the plan (GameThingWithPos 0x4C, no mesh, no cell, no
+  creation index, no flattening; <code>Draw</code> 0x648930 = <code>ret</code>). Info "Citadel Heart" (info.dat 0x115C0): wood 5,
+  timeToBuild 150, desireToBeBuilt 1,0, mesh 564 BuildingDummyCitadel; abode type of the plan 0x804 (civic).</li>
+<li>Conversion 0x467EF0 (arg <code>float life</code>): the player is the <strong>owner of the town</strong> (<code>Town+0x2C</code>, the one from CREATE_TOWN or the
+    neutral one), not the script's (that one is only validated). <code>CitadelHeart::Create</code>(pos, info, citadel, plan angle, plan
+    scale, life, 1): the 1 marks "under construction" (MultiMapFixed 0x52E1E0, +0x58 bit 1, +0x5C = 0).
+    <code>CallVirtualFunctionsForCreation</code> 0x4675A0 creates the LH3D type 8 at <strong>scale 1</strong> with y = altitude(origin) + alt and calls
+    0x882730 (mesh B_FIRST_TEMPLE, % built, <strong>flattens the land</strong>, then the outside's first blend:
+    <a href="magic.html#the-temples-outside-alignment-and-size">The temple's outside</a>): the flattening happens on conversion. Worship sites
+    (<code>fn_00464F50</code>) only if life ≥ 1. Then heart+0x94 = town, <code>PostCreatePlanned</code> 0x648C50 and the plan is deleted.</li>
+<li><code>AddBuildingSiteNoFixedCheck</code> always passes life 0.0 and creates a <code>CitadelBuildingSite</code> (0x468DC0 → 0x43D1E0); it is
+    finished by the villagers (<code>CitadelHeart::Built</code> 0x465000). <code>Draw</code> 0x882A40 uses <code>DrawPartialyBuilt</code> 0x816AD0 while
+    the <strong>percent built</strong> (+0x5C, passed as +0x9C) is below 1.0, not the life, and with the inner-wall offsets
+    [0xC392AC] / [0xC392B0] set to 1.0 (both cull modes) for that draw, then restored to 0.2 / 0.35 (0x882A7B..0x882AA7).</li>
+<li>Triggers: <strong>Land 1</strong> = CHL <code>FollowUs</code>: <code>BUILD_BUILDING((1915.05, 0, 2508.89), 1.0)</code> (the plan pos from
+    Land1.txt:95; <code>GetPlannedAtPos</code> 0x73E4C0 takes the nearest plan less than the radius of mesh 564 × scale + 1 m away),
+    then <code>CALL_NEAR(Citadel 18)</code> + <code>SET_PROPERTY(22, 0.375)</code>; <code>PreventCitadelCompletion</code> limits it to 0.9 and
+    <code>CheckCitadel</code> waits for 1. <code>BUILD_BUILDING</code> (<code>GScript::BuildBuilding</code> 0x6FAB30) pops the desire first, then z, y,
+    x (0x6FAB3F..0x6FAB81), and calls <code>Town::ForceBuildingOfPlannedAtPos(MapCoords(LHPoint(x, y, z)) 0x603160,
+    desire × 5.0 [0x8AB6E4])</code>. <strong>Lands 2-5</strong> = AI: <code>Villager::CheckSatisfyCivicBuildings</code> 0x758E90 (town desire
+    FOR_CIVIC_BUILDING 6, 0x748330) → <code>RequestBestPlanned</code> 0x73A650 → <code>GetBestPlanned</code> 0x73A140 (mask 4).</li>
+<li><strong>CREATE_CITADEL</strong> (<code>Citadel::CreateCitadel</code> 0x463240) passes (angle, 1,0, 1,0, 0) to <code>CitadelHeart::Create</code>: the
+    script's scale is <strong>ignored</strong> (Kapa's Land1 Playground passes 0, other maps 300 or 4121) and it comes out built.</li>
+<li>openblack: CREATE_CITADEL draws at scale 1 (it used to use the script's: in Kapa's Land1 Playground the temple was
+    invisible). CREATE_PLANNED_CITADEL requires a valid town and player (otherwise, nothing), the temple belongs to the town's owner
+    (<code>Town::owner</code>) and is drawn at scale 1. <strong>Pending deviation</strong>: since there are no town desires, building
+    sites, BUILD_BUILDING/SET_PROPERTY 22/CALL_NEAR or partial drawing, the temple is still created already built
+    (and flattening) on load, so that it does not disappear from Land 1-5. Making it faithful requires porting all of the above.</li>
+<li><strong>IsOkToCreateAtPos</strong> 0x638C40: fails if <code>MapCoords::CollideCollideWithFixe</code> 0x604FE0 → <code>MapCell::CollideWithFixe</code>
+  0x601D10 gives bit 8 and the cell is not water. Bit 8 comes from a <code>NewCollide::Obj</code> circle of radius 0.5 (0x82AD90)
+  against the <code>GetCollideData</code> (vtable +0x858) of each fixed object in the cell's list +4 (<code>Obj::Collide</code> 0x829140);
+  the other bits come from <code>MapCell::Collide</code> 0x601BD0 (bit 0x10 of the land block, outside the map). A Python
+  simulation of the test (<code>sim.py</code>) predicted the rejections.</li>
+<li><strong>Who calls it</strong>: only CREATE_TREE (27, 0x716235), CREATE_NEW_TREE (28, 0x7162EE), CREATE_POT (38, 0x716B0C, before
+    looking at the quantity) and CREATE_MOBILEOBJECT (40, 0x716C71). If it fails, it creates nothing, writes nothing and the script continues.
+    Angle and scale are not used. The CHL handlers do not call it. CREATE_TOWN_CENTRE uses another one (<code>GAbodeInfo::IsOkToCreateAtPos</code>
+    0x404B10, not ported: in Land1-5 it rejects none). Abodes, fields, features, mobile statics, bonfires and dead
+    trees are created without checking anything.</li>
+<li><strong>The test</strong>: circle of 0.5 at the script's (x, z) (the height does not count, <code>MapCoords(char*)</code> leaves y = 0) against the
+    objects of <strong>its cell</strong>; 2D test <code>dx² + dz² &lt;= (ra + rb)²</code> and then the children. With water in the cell (bit 0x10,
+    <code>hasWater</code>) it is always created; outside the map (or in an empty block) too. In openblack that test is
+    <code>ecs::sea_cells::IsWater</code> (<code>MapCoords::IsWater</code> 0x6035B0, <code>ECS/SeaCells.h</code>, the cell of the 16.16 MapCoords), the
+    same as for physics, the hand and the AI (2026-10-01; previously it read the cell by hand). Land1 still has 1351 trees and 51
+    mobile objects (<code>OPENBLACK_DUMP_ENTITY_COUNTS=600</code>).</li>
+<li><strong>Shapes</strong>: tree = circle of 0.3 at its position, only in its cell (0x74C5F0). MultiMapFixed (abode, centre,
+    field 594, feature, animated static, mobile static, rock, bonfire, dead tree, dispenser) = <code>NewCollide(LH3DObject)</code>
+    0x829390 from the mesh's bbox: bbox centre rotated with <code>x' = x·cos a − z·sin a</code>, <code>z' = x·sin a + z·cos a</code>;
+    half-axes <code>max(1, escala·mitad)</code> in x and z; if long/short &gt; 1,4, outer circle <code>sqrt(ex²+ez²)</code> with
+    <code>int(largo/corto)+1</code> children of the short radius in a row along the long axis (0x82ADD0 / 0x828F40); otherwise, one circle of
+    <code>max(ex, ez)</code>. It is put into every cell whose circle (cell centre, 7.1) it touches. The bbox (0x8081B0) passes the
+    boned meshes (flag 0x100) through <code>LH3DAnim::SetTransform</code>, like openblack's. Without collide data: BigForest,
+    pots, mobile objects, villagers, animals, street lanterns and planned buildings.</li>
+<li><strong>openblack</strong> (<code>ECS/MapCollide.h/.cpp</code>, <code>openblack::ecs::map_collide</code>): grid of cells that is emptied on
+    LOAD_LANDSCAPE and filled with the script's parameters (mesh from the created object's <code>Mesh</code>, Y angle and scale from the
+    script, not the Transform). Not registered yet: fish farms, CitadelHeart (0x468FB0) and WorshipSite (0x77E490), not
+    decoded. <code>OPENBLACK_LOG_ISOK=1</code> writes one line per rejection (command, position, what blocks it).</li>
+<li><strong>Result</strong> (checked with <code>OPENBLACK_DUMP_ENTITY_COUNTS</code>): Land1 1395 → 1351 trees (44 rejections: the 43 of
+    <code>sim.py</code> − 2 under the Piper Cave Entrance + 3 under the dead trees), mobile objects 51; Land2 921 → 915 (+1
+    pot); Land3 1397 → 1373 and 26 → 20 mobile objects; Land4 799 → 764 and 1 → 0 (+1 pot); Land5 804 → 782 and
+    19 → 13; LandT 341 → 316. Differences from <code>sim.py</code>: the Piper Cave Entrance is a boned mesh and <code>sim.py</code> used
+    the untransformed vertices; <code>sim.py</code> did not model the dead trees (they are Rocks with the type's normal mesh,
+    created with angle 0 and scale 1, and the script's angles are almost 0). Screenshot: Land1 next to the Boulder1 Lime
+    (2120, 2494), now without the trees on top.</li>
+</ul>
+<h2 id="towns-and-citadel">Towns and citadel</h2>
+<p>Summary of what the wiki already says about towns, temple and citadel, with links (no text has been moved):</p>
+<ul>
+<li><strong>Town data on load</strong>: <code>SET_TOWN_UNINHABITABLE</code>, <code>CREATE_TOWN_CENTRE</code> (centre and worship percentage) and
+  <code>CREATE_PLANNED_ABODE</code>, in <a href="#map-simulation-data-data-only-nothing-is-drawn">Map simulation data</a>.
+  The totem of the town centre (<code>components::TotemStatue</code>) and the sinking of the abodes down to their foundation, in
+  <a href="openblack-internals.html#render">openblack-internals.md</a>.</li>
+<li><strong><code>Town::owner</code></strong> (<code>Town+0x2C</code>, the player from <code>CREATE_TOWN</code> or the neutral one): it is the owner of the temple that comes from
+  <code>CREATE_PLANNED_CITADEL</code>, not the script's player
+  (<a href="#map-script-objects-street-lanterns-bonfires-dead-trees-gates">Map script objects</a>).</li>
+<li><strong>Temple</strong>: on load there is only the plan (<code>PlannedTownCitadelHeart</code>); <code>CitadelHeart::Create</code> converts it and flattens the
+  land (0x882730), and <code>CREATE_CITADEL</code> ignores the script's scale (same section). openblack creates it already built in
+  <code>CitadelArchetype</code> (pending <em>deviation</em>); the flattening (flat up to 35 units, blend up to 70) is in
+  <a href="openblack-internals.html#render">openblack-internals.md</a>.</li>
+<li><strong>Citadel and worship</strong>: the six worship site slots in the temple entity (<code>components::Temple</code>) in
+  <a href="magic.html#the-citadel-and-its-six-slots-worshipcitadelcpp">magic.md</a>; its influence and the difference inherited from the
+  already-built temple in <a href="magic.html#influence-srcecsinfluence">magic.md</a>.</li>
+<li><strong>Collision (<code>MapCollide</code>)</strong>: <code>IsOkToCreateAtPos</code> and the <code>ecs::map_collide</code> grid, in
+  <a href="#map-script-objects-street-lanterns-bonfires-dead-trees-gates">Map script objects</a>; CitadelHeart and
+  WorshipSite are not yet registered in it.</li>
+<li><strong>Inside the citadel</strong> (<code>g_game+0x205A28 == 1</code>): what plays in <a href="audio.html#original-gaudio-lhaudio-and-qmixer">audio.md</a>
+  and <a href="objects-and-resources.html">objects-and-resources.md</a> («Sounds»); the frame in
+  <a href="original-frame.html#other-cases-temple-video-and-2d">original-frame.md</a>; graphical parity in <a href="parity.html">parity.md</a>.</li>
+<li>Town trees (scenic forest, list of forests Town +0x608):
+  <a href="trees.html#searches-for-trees-and-forests-for-the-villagers">trees.md</a>.</li>
+</ul>
+<h2 id="script-commands-that-move-things-move_game_thing-033-and-friends">Script commands that move things (MOVE_GAME_THING 033 and friends)</h2>
+<p>The <strong>Land 1</strong> intro (CHL <code>FollowUs</code>, <code>Scripts\Quests\challenge.chl</code>; in the decompiled code listing of challenge.chl
+from line 49528) creates the family (mother = VILLAGER 49, father = 53, son = 52, CREATE 027), moves it with
+<code>MOVE_GAME_THING(cosa, punto, 0.0)</code> and waits with <code>GET_DISTANCE(GET_POSITION(cosa), punto) == 0</code> (<code>FollowUs_loop_4</code> and
+<code>_loop_6</code>) or <code>&lt; 1</code> (<code>_loop_5</code>, <code>_loop_77..79</code>). Then it makes them act with <code>SET_SCRIPT_ULONG(cosa, clip, veces)</code> +
+<code>SET_SCRIPT_STATE(cosa, 200)</code> and waits for <code>PLAYED(cosa)</code> (<code>_loop_8</code>, 11, 17, 45, 48, 49, 74, 80..82). All of this was a stub.</p>
+<h3 id="move_game_thing-gscriptmovegamething-0x6f8e80">MOVE_GAME_THING (GScript::MoveGameThing 0x6F8E80)</h3>
+<p>It pops radius, z, y, x and the thing (0x6F8E91..0x6F8EE9); <code>GetScriptGameThing</code> 0x70D220 (otherwise: "Thing no longer valid"
+0xC0C258). <code>MapCoords(pos)</code> 0x603160 (x / z; y stays relative to the land). By type, in this order:</p>
+<table>
+<thead>
+<tr>
+<th>test (vtable)</th>
+<th>what it does</th>
+<th>openblack</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IsCreature (+0x34)</td>
+<td><code>dynamic_cast&lt;Creature*&gt;</code> ("no creature for script" 0xC0D598), IsObjectInMap (+0x178) → fn_004F6B60(pos, radius): <code>PrepareCreatureForScriptedAction</code> 0x4F6A90 and subactions (<code>AddSubAction</code> 0x4FF240). Only here is the radius used</td>
+<td><strong>pending</strong> (there is no creature AI)</td>
+</tr>
+<tr>
+<td>IsLiving (+0x3C4)</td>
+<td>IsObjectInMap and !IsDrowning (+0x17C), otherwise nothing; <code>AreWeThere(coords, 0.0)</code> (+0x85C, 0x60AD60) == 0 → <code>Living::SetupMoveToPos(coords, 4 IN_SCRIPT)</code> 0x5F2830 (0x6F8FCA); if already there → <code>GScript::SetScriptState(cosa, 4)</code> 0x6F82E0 (0x6F8FD7)</td>
+<td>villagers exact; animals <strong><span class="state approx">approximate</span></strong>, below</td>
+</tr>
+<tr>
+<td>IsFlock (+0x3EC)</td>
+<td><code>Flock::SetDomainCentrePos</code> 0x52FC20: destination (+0x80) of the flock's <strong>tail</strong> member (0x52FC2C..0x52FC53: a villager's or an animal's), then centre (+0x14) of the flock</td>
+<td><code>AnimalBrain::goal</code> of the first one and <code>Flock::domainCentre</code></td>
+</tr>
+<tr>
+<td>IsWeather (+0x3FC)</td>
+<td>fn_00774550: +0x78 (its system) +0x5C = pos</td>
+<td>there are no weather things</td>
+</tr>
+<tr>
+<td>IsComputerPlayer (+0x4B8)</td>
+<td>fn_00658510(pos, 60.0)</td>
+<td>there are no CPU players</td>
+</tr>
+<tr>
+<td>rest</td>
+<td>"Jonty - Thing must be living to move it!" (0xC0D56C) and <code>SetPos(coords)</code> (+0xFC, 0x401940)</td>
+<td>only the <code>Transform</code> is moved <strong><span class="state approx">approximate</span></strong></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Addresses: no thing at 0x6F8EEF; IsCreature at 0x6F8F15, the cast at 0x6F8F2B, <code>fn_004F6B60(pos, radius)</code> at
+  0x6F8F60; IsLiving at 0x6F8F70 with IsObjectInMap 0x6F8F7E and IsDrowning 0x6F8F90 (else nothing, 0x6F907E);
+  <code>AreWeThere</code> at 0x6F8FB7; IsFlock at 0x6F8FEA; IsWeather at 0x6F9015; IsComputerPlayer at 0x6F9036; the "Jonty"
+  message and <code>SetPos</code> at 0x6F9058. <code>GameThingWithPos::SetPos</code> 0x401940: Pos = coords, so the thing's world point is
+  the vector itself.</li>
+<li><strong>Living::SetupMoveToPos</strong> 0x5F2830 (pos, final): movement state = byte of GLivingInfo +0x124 (1 MOVE_TO_POS
+  for all villagers), or 3 MOVE_ON_STRUCTURE if GameThingWithPos +0x24 &amp; 0x80 (only set by <code>Living::MoveOnStructure</code>;
+  openblack does not have it: never); <code>SetCurrentAndDestinationState(movimiento, final)</code> (+0x8DC) and, only if it gives 1,
+  <code>MobileWallHug::SetupMobileMoveToPos(pos)</code> 0x60AAD0: destination +0x80 = pos, <code>InitStepsXZ</code> 0x60BFA0, out of the
+  detour lists (fn_00611AC0 / 00611610 / 00612BB0 / 00610590, +0x76 = 0), and <code>AreWeThere(0)</code> → +0x5E = 1 ARRIVED; otherwise,
+  <code>CircleHugInfo::Reset</code>, +0x78 = 1, +0x5E = 0xB <strong>STEP_THROUGH</strong> (straight, without going around: it is not the LINEAR of
+  <code>SetupMoveToWithHug</code> 0x5F2890). openblack: <code>ecs::villager::SetupMoveToPos</code> (<code>src/ECS/Villager/VillagerScript.*</code>), with
+  the PathfindingSystem's <code>MoveStateStepThroughTag</code> or <code>MoveStateArrivedTag</code> mark.</li>
+<li><strong>MobileWallHug::AreWeThere(pos, r)</strong> 0x60AD60: <code>dx² + dz² &lt; (velocidad u16 +0x5A + r)²</code> (strict, in MapCoords);
+  <code>AreWeThere(r)</code> 0x60AD40 = <code>AreWeThere(GetDestPos() (+0x860), r)</code>. openblack in metres with <code>WallHug::speed</code>
+  <strong>(approximate: floats instead of 16.16 integers)</strong>.</li>
+<li>Animals <strong><span class="state approx">approximate</span></strong>: <code>animal_ai::MoveTo(…, IN_SCRIPT)</code> (Living::SetupMoveToPos), the destination's altitude above
+  the land (+0x88) is taken as 0 and, if already there, <code>animal_ai::SetState(IN_SCRIPT)</code> instead of SetScriptState.</li>
+</ul>
+<h3 id="what-the-script-queries-afterwards">What the script queries afterwards</h3>
+<ul>
+<li><strong>GET_POSITION</strong> (GScript::GetPosition 0x6F88A0): flock → Pos of the first member or <code>GetFlockPos</code> 0x530570 (the
+  centre +0x14); <strong>a MobileWallHug that is not a creature (+0x408, +0x34) returns its destination (+0x80) if
+  <code>AreWeThere(0)</code></strong> (0x6F8977..0x6F89AF), otherwise its Pos. Height = <code>GetAltitude</code> + the +8 of those MapCoords; openblack gives the
+  land height at the destination <strong>(approximate: WallHug only stores x / z; GET_DISTANCE does not look at y)</strong>.
+  On a flock: IsFlock at 0x6F8927, the first member's Pos at 0x6F8931..0x6F893F, else <code>GetFlockPos</code> 0x530570 = the
+  flock's +0x14 when there is no first member.</li>
+<li><strong>SET_POSITION</strong>: after moving, a Living (vt +0x3C4) controlled by the script (+0x25 &amp; 4) gets
+  <code>SetScriptState(this, 4 IN_SCRIPT)</code> (0x6F8C5A..0x6F8C6D).</li>
+<li><strong>GET_DISTANCE</strong> (GScript::GetDistance 0x6F8CA0): <code>GUtils::GetDistance(LHPoint, LHPoint)</code> 0x74CDE0 =
+  <code>hypotenuse(dx, dz)</code> 0x74F6C0: <strong>only x and z</strong>; 0 if |dx| and |dz| ≤ 0.0001 (0x8BF518), otherwise <code>1 / InvSqrt(dx²+dz²)</code> with the
+  root approximated by the table <code>_FUN_0074f620</code> (table 0xDA5A10, the same as <code>AnimalLairs.cpp</code>); <strong>below 0.5
+  (0x8AA3B4) it gives 0</strong>. Previously openblack measured in 3D and without the cut-off, so <code>== 0</code> was never met.
+  It pops the two vectors at 0x6F8CB1..0x6F8D07; <code>GUtils::GetDistance</code> ignores y at 0x74CDE8..0x74CDF3; the under-0.5
+  cut is at 0x6F8D4B.</li>
+</ul>
+<h3 id="set_script_state-017-set_script_ulong-020-played-064-and-the-script-states">SET_SCRIPT_STATE 017, SET_SCRIPT_ULONG 020, PLAYED 064 and the script states</h3>
+<ul>
+<li><strong>SET_SCRIPT_STATE</strong> 0x6F8370: state (first pop) and thing ("Object no longer valid" 0xC0D428). Script container
+  (+0x3F8: g_game +0x250090 +0x24 and the loop function from table 0xC0C73C) <strong>pending</strong>; <code>dynamic_cast&lt;Living*&gt;</code> and
+  !IsDrowning → <code>GScript::SetScriptState(living, estado)</code> 0x6F82E0; otherwise, "Object not living for set state" 0xC0D440.
+  No thing at 0x6F8396. A script container (0x6F83B9): g_game +0x250090 +0x24 = state and the type's loop function
+  (table 0xC0C73C by GetScriptObjectType vt +0x4E8) with 0x6F8280, which calls <code>GScript::SetScriptState</code> 0x6F82E0 on
+  every Living member <strong>with no IsDrowning test</strong>. The single Living test is at 0x6F841D.</li>
+<li><strong>GScript::SetScriptState</strong> 0x6F82E0, not a creature: IsAvailable (+0x2C; Villager 0x751D50: not being deleted and final ≠ 14
+  DYING) and IsObjectInMap (+0x178: +0x24 &amp; 1; openblack: not in the hand, <strong><span class="state approx">approximate</span></strong>) → <code>StorePreviousState</code>
+  (+0x8EC, 0x763470), <code>CallExitStateFunction(estado)</code> (+0x904) and <code>CallEntryStateFunction(estado)</code> (+0x90C) without looking at
+  the result, <code>Living::SetAnim(1)</code> (+0x8FC, 0x5ECB80 → SetAnim(GetAnimId(), 1) 0x5ECBA0: the state's clip from 0) and
+  +0x58 = 0. The creature branch (fn_0047B140 / 004F6E30 / 004F6F10) <strong>pending</strong>: a creature's path (0x6F82EA,
+  0x6F82F1..0x6F831B) is fn_0047B140 / fn_004F6E30 / fn_004F6F10 with its +0x128C clip.</li>
+<li><strong>SET_SCRIPT_ULONG</strong> 0x6F8770: times (first pop), clip, thing. Villager: +0x120 = times, +0x11C = clip
+  (<code>Villager::scriptAnimLoops</code> / <code>scriptAnim</code>); creature +0x1290 / +0x128C <strong>pending</strong>; otherwise, "setting the state of
+  something neither a creature nor a villager" (0xC0D484). No thing at 0x6F87A9. A script container (0x6F87CD):
+  g_game +0x250090 +0x24 = clip, +0x28 = times and the loop function with 0x6F8730: every Villager member +0x11C =
+  clip, +0x120 = times. Villager at 0x6F8841, creature at 0x6F886D, the "neither a creature nor a villager" message
+  at 0x6F8879.</li>
+<li><strong>PLAYED</strong> 0x6F9DC0 on a villager: <code>Villager::IsScriptAnimationComplete</code> 0x7689D0: TOP 23 WAIT_FOR_ANIMATION → 0; TOP
+  200 → times == 0; otherwise 1. Another Living: GetFinalState == 4 (0x6F9EC4) <strong>pending</strong>.
+  The whole of <code>PLAYED</code> 0x6F9DC0: no thing → "Thing no longer valid" and <strong>1</strong> (0x6F9DE1); IsLiving at 0x6F9E83, the
+  Villager cast at 0x6F9E9C, <code>IsScriptAnimationComplete</code> called at 0x6F9EAA; a creature's plan 0x6F9DF4..0x6F9E7E;
+  another Living 0x6F9EC4..0x6F9ED8; a weather thing → +0x78 == 0 (0x6F9EF0); a PuzzleGame → <code>fn_006D66E0</code>
+  (0x6F9F0B); anything else → "Thing not living" and 1 (0x6F9F31).</li>
+<li>Row <strong>4 IN_SCRIPT</strong>: state <code>StateInScript</code> 0x5ED9A0 (creates DataForScriptRemind if there is none; 1), entry
+  <code>EnterInScript</code> 0x5ED7E0 (vt +0x940: 1 if <code>IsStateEntryFunctionSameAs(final, next)</code> 0x7524D0 or there is no script
+  memory), exit <code>ExitInScript</code> 0x5ED9C0 (vt +0x914: <code>CircleHugInfo::Reset</code>; <code>IsScriptState(next)</code> (+0x960, file
+  0x18) → 1; otherwise it stores the memory and <code>ExitNoChangeState(next)</code> 0x768780 = 1 if next is interruptible by script
+  (file 0x1C), IN_HAND (<code>IsStateForInterface</code> 0x417070) or <code>IsStateExitFunctionSameAs</code>).</li>
+<li>Row <strong>200 SCRIPT_PLAY_ANIM</strong>: <code>ScriptPlayAnim</code> 0x768970: with times &gt; 0, one less and <code>PlayAnimThenSetState(veces ?
+  200 : 4)</code>; entry <code>EnterPlayAnim</code> 0x768840 (like EnterInScript), exit <code>ExitPlayAnim</code> 0x7689C0 = ExitInScript; clip
+  <code>ScriptAnimation</code> 0x768A00 = +0x11C (<code>AnimFn::Script</code> of <code>VillagerAnimations.cpp</code>).</li>
+<li><strong>Living::PlayAnimThenSetState</strong> 0x5ECAC0: <code>CallExitStateFunction(s)</code> and, if 1, <code>CallEntryStateFunction(23, s)</code>: TOP 23
+  and FINAL s, the clip does not change. Row <strong>23 WAIT_FOR_ANIMATION</strong>: <code>WaitForAnimation</code> 0x5EC990: <code>IsReadyForNewAnimation(1)</code>
+  → <code>SetTopStateToFinal</code> and 0, otherwise 1.</li>
+<li><strong>Not ported</strong>: <code>DataForScriptRemind</code> (Living +0xB0, <code>Create</code> 0x5EF190, <code>KeepThatInMind</code> 0x5EF1D0, fn_005EF2A0), with
+  which a villager taken out of a script state remembers its walk and resumes it on returning. Without it, the branches of
+  EnterInScript / EnterPlayAnim that resume it are never taken <strong><span class="state approx">inferred</span></strong>.</li>
+<li><strong><span class="state approx">approximate</span></strong> In the original the walk only advances from the MOVE_TO_POS function (<code>Living::MoveToPos</code> 0x5EC270 →
+  <code>MobileWallHug::MoveTo</code> 0x60AF20); openblack's PathfindingSystem moves every entity with a mark, whatever its
+  state. That is why <code>SetScriptState</code> removes the marks if the villager is no longer in MOVE_TO_POS: without that the father kept
+  walking (and overshot the destination) while acting in 200.</li>
+</ul>
+<h3 id="delete-gscriptdeleteobject-0x6f92d0">DELETE (GScript::DeleteObject 0x6F92D0)</h3>
+<ul>
+<li>Pops the mode, then the object (0x6F92E1); nothing for a thing no longer there (GetScriptGameThing 0x70D220). Every
+  path calls <code>RemoveScriptGameThing</code> 0x70D1A0; a container (town, flock) is disbanded there (<code>PUSH(id, 4)</code> +
+  <code>DisbandId</code> 0x6EFDC0).</li>
+<li>Mode jump table 0x6F9490: 0 (0x6F9344) <code>GameThing::ToBeDeleted(0)</code> (vt +0xC); 1 (0x6F935D, IsObject vt +0x460 only):
+  a creature gets <code>Creature::SetFizz(1.0, 2.0, true)</code> 0x47AB90 and is not deleted here, anything else <code>GoolooGooloo</code>
+  0x5E6540 then ToBeDeleted(0); 2 (0x6F93DA, IsObject only): <code>fn_00681230(obj, 0)</code>, the mesh broken up (15.0, 3.0),
+  then deleted; 3 (0x6F9410, CitadelHeart only): <code>fn_00681260(heart, pos, 80.0, 3.0, 0)</code> or <code>DestructionSequenceStart</code>
+  0x465AB0.</li>
+<li>A PuzzleGame's own delete is fn_006D6CC0 (openblack's DELETE does not call it yet).</li>
+</ul>
+<h3 id="the-scripts-things-scriptmanage-slots">The script's things (ScriptManage slots)</h3>
+<p>The ScriptManage code is at 0x70CEE0..0x70D8A0.</p>
+<ul>
+<li><code>GScript::GetScriptGameThing</code> 0x70D220 looks the id up in the slot table 0xD967F8: 511 slots of 0x14 bytes. Each
+  caller prints its own miss: "Thing no longer valid" 0xC0C258, "Thing not found!" 0xC0CFAC, "Object no longer valid"
+  0xC0D428.</li>
+<li>Slot +0xC = created by script (<code>GScript::IsCreatedByScript</code> 0x70D440); +0x10 = the number of script variables
+  holding it (<code>ScriptManage::IncreaseReferenceCount</code> 0x70D5F0 stops at 0xFF).</li>
+<li><code>AddScriptGameThing</code> 0x70D0F0(thing, created): 1 for the CREATE family, 0 for the finders (CALL, GET_...). A thing
+  already in a script keeps its slot (<code>FindScriptGameThing</code> 0x70CF50); otherwise a free slot, where fn_0070D870 sets
+  +0xC and clears the count. With created = 1 it also calls the Object's mesh (+0x40) vt +0x98(0) and sets +0xA |= 0x40.</li>
+<li><code>IncrementScriptReference</code> 0x70CF90 → <code>IncreaseReferenceCount</code> 0x70D5F0 (LHVM's reference callback, ADD_REFERENCE):
+  the first reference sets IsInScript and, for a thing the script created (or one already controlled),
+  ControlledByScript. <code>DecrementScriptReference</code> 0x70CFD0 → fn_0070D670: one reference less; the release waits for
+  Process.</li>
+<li><code>ADD_REFERENCE</code> = <code>GScript::AddReference</code> 0x6FA450 (pushes nothing); <code>REMOVE_REFERENCE</code> = 0x6FA470.</li>
+<li><code>Object::SetInScript</code> 0x639B20 sets the +0x24 &amp; 0x200 bit.</li>
+<li>fn_0070D480, called from <code>GScript::Process</code> (0x6EB6DB) right after the scripts' LookIn: every slot without a reference
+  is released (<code>ReleaseControlFromScript</code> 0x70D540, then SetInScript(0)) and freed (fn_0070D800: ClearThingOnly +
+  count 0). A thing still controlled there logs "Thing should be released! PANIC" (0x70D504).</li>
+<li><code>ReleaseControlFromScript</code> 0x70D540(thing, id, fromCommand), only when controlled (+0x25 &amp; 4): a container at a
+  task's end is DisbandId'd (0x70D57C..0x70D5AC) and, when the script created it, SetControlledByScript(0) +
+  ToBeDeleted(0) and nothing more; with fromCommand its controlled members are released first
+  (<code>ReleaseContainerContents</code>, 0x70D5B4); then <code>ReleaseScriptThingIntoTheGame</code> (0x70D5C6). Not controlled: a
+  container's members give back their references (<code>DecreaseContainerContentsScriptReference</code> 0x6EFD60, from a flock's
+  head, 0x6EFDAC).</li>
+<li><code>ReleaseContainerContents</code> 0x6EFCD0: a flock's members from the head (the next one read first); each controlled one
+  with a slot gets <code>ReleaseScriptThingIntoTheGame(member, id, 1)</code>; a controlled member without a slot ends the whole
+  loop (0x6EFD2E..0x6EFD30: <code>je 0x6EFD54</code>); another container logs "CANNOT RELEASE THIS! USE DISPAND!".</li>
+<li><code>ReleaseScriptThingIntoTheGame</code> 0x70F600(thing, id, fromCommand): SetControlledByScript(0) (0x70F60C). At a task's
+  end (fromCommand 0) a thing deleted when released (<code>IsDeletedWhenReleasedFromScript</code> 0x4021C0: only a ScriptTimer,
+  0x561300 = 1) or a highlight the script created goes with ToBeDeleted(0), logging "Deleting thing not created by
+  script" when +0xC is clear (0x70F647..0x70F670). Then <code>RemoveThingMusic</code> 0x429340 and, by GetScriptObjectType (byte
+  table 0x70F76C, jump table 0x70F754): 4 / 5 a villager, 6 / 21 an animal, 12 a creature, 28 a ball, 24 / 31 / 34
+  "Unknown thing-Tell Jonty", every other type nothing (37 → 0x70F750).</li>
+<li>Villager case (0x70F6DE..0x70F736): not in the map and not in the physics → "Releasing object not in map"; in the
+    physics (+0x24 &amp; 0x40) <code>LivingAction::SetState(2, 163)</code> 0x6F82C0 (the previous state, +0x8E), else
+    <code>SetScriptState(163 DECIDE_WHAT_TO_DO)</code>; then <code>Villager::ReleaseFromScript</code> 0x7531D0.</li>
+<li>Animal case (0x70F6B1..0x70F6DB): <code>SetScriptState(32 WANDER)</code> the same way, then fn_0041AA00.</li>
+<li>Creature case (0x70F739): fn_004F7060. Ball case (0x70F6A4): +0x2FC = 1.</li>
+<li><code>RELEASE_FROM_SCRIPT</code> 159 (<code>GScript::ReleaseFromScript</code> 0x6FB380): no thing → "Thing not valid" (0xC0CD88); a
+  controlled thing → <code>ReleaseControlFromScript(thing, id, 1)</code> (0x6FB3B9), so it is never deleted (the 1 skips
+  0x70F61A..0x70F670). The slot and its references stay.</li>
+</ul>
+<h3 id="virtual-machine-cast">Virtual machine CAST</h3>
+<p>In the original <code>ScriptLibraryR.dll</code> (<code>Plug Ins</code>), opcode 23 INTCAST (0x10008EE0, table 0x100090E4 by type − 1)
+<strong>converts</strong>: CASTI reads the bits as a float and does <code>__ftol</code> (0x1001568C, truncates; the low word of the 64-bit integer),
+CASTF reads the bits as an unsigned 32-bit integer (fild qword with the high part 0); CASTV, CASTO and CASTB only change
+the type and type 5 does nothing. openblack only changed the type, so <code>PUSHF 1.0 CASTI</code> reached SET_SCRIPT_ULONG
+as 0x3F800000 times. Fixed in <code>components/ScriptLibrary/src/LHVM.cpp</code> (<code>Opcode23Cast</code>).</p>
+<ul>
+<li><code>DLL_GETTIME</code>: the game's opcode table has a NULL handler for it (<code>{NULL, 0, 1}</code>, 0x70041E..0x70042A);
+  <code>ScriptLibraryR.dll</code>'s Initialise (0x10002308) installs its own 0x1000ABD0, <code>LHVM::PushElaspedTime</code>: the VM tick
+  count (one a game turn outside the citadel) × 0.1f.</li>
+<li>The VM as GScript asks it: <code>ScriptDLL::TaskNumber</code> 0x6F69F0, <code>GetCurrentTaskScriptType</code> 0x6F6A90, <code>GetScriptType</code>
+  0x6F6C50, <code>StopTasksOfType</code> 0x6F68F0, <code>PUSH</code> 0x6F6BA0, <code>POP</code> 0x6F6BC0, <code>StartScript</code> 0x6F6880.</li>
+<li>A help script is <code>GetCurrentTaskScriptType() == 2</code> (0x710433..0x71044B: sub 2, neg, sbb, inc).</li>
+<li><code>GScript::ScriptErrorMessage</code> 0x6F62B0 and <code>ScriptWarningMessage</code> 0x6F62C0 are a bare <code>ret</code> in W120: the original
+  prints none of its script messages.</li>
+</ul>
+<h3 id="in-game-land-1">In game (Land 1)</h3>
+<p>With <code>OPENBLACK_TEST_TEXT_CLICK=1</code> (the texts with interaction 1 wait for a click, as in the original) <code>FollowUs</code> passes
+<code>_loop_4</code> at ~15 s (the family reaches the kiss markers), walks to the beach, the son runs into the sea, the camera jumps
+with the script's SET_CAMERA_POSITION calls, the texts appear (<code>¡Has salvado a nuestro hijo!</code> … <code>Te enseñaré cómo seguirlos.</code>)
+and the family passes <code>_loop_77..79</code> (reaches <code>StartPath</code>).</p>
+<p><strong>State on 2026-10-03 (with <code>OPENBLACK_TEST_TEXT_CLICK=1</code>):</strong> the script camera (035 <code>HAS_CAMERA_ARRIVED</code>, 003 / 004, see
+<a href="script-camera.html">script-camera.md</a>) and <code>SET_AVI_SEQUENCE</code> (203, <code>INTRO.bik</code>, see <a href="video.html">video.md</a>) are ported, so
+<code>FollowUs</code> now runs through the film (~frame 20000), the rescue, the advisors' texts 4431..4437 and 5189..5192 and
+<code>RUN Drag</code> (52154). In <code>Drag</code> (12627..12722), after <code>PLAY_HAND_DEMO(279, 1, 0)</code> (12663, 266) the script waits
+<code>HAND_DEMO_TRIGGER</code> (336) three times (12672 / 12682 / 12692) and then <code>IS_PLAYING_HAND_DEMO</code> (267, 12699; it pushes
+<code>!IsPlayBack(0)</code> 0x6FDB9A, so it waits for the demo to end).</p>
+<p><strong>State on 2026-10-04:</strong> with the hand demo (<code>Input/HandDemo.h</code>) and the opcodes 266 / 267 / 336 wired, <code>drag.hnd</code> plays its 590 records, text 5219 follows and the hand-over at
+52172..52175 runs (<code>SET_WIDESCREEN 0</code>, <code>END_GAME_SPEED</code>, <code>END_CAMERA_CONTROL</code>, <code>END_DIALOGUE</code>): the bars go, the camera
+and the dialogue are released, about 4 min of game after the start. The dialogue texts are drawn (HelpText display,
+<code>Help/HelpTextDisplay.h</code>, Renderer::DrawHelpText; not verified yet against the original's look). Still missing: the
+advisors (pending: HelpDude), the welcome crowd and dance, the villagers' focus and override animations, the intro's JC specials and the high-detail family models. The whole intro: <a href="intro.html">intro.md</a>.</p>
+<h3 id="skipping-the-tutorial-skipbox-and-can_skip_tutorial">Skipping the tutorial (SkipBox and CAN_SKIP_TUTORIAL)</h3>
+<p><strong>Faithful</strong> (runblack.exe v1.42, read with <code>bwdis.py</code>):</p>
+<ul>
+<li><code>GGame::OnNewGame</code> 0x553900: if there is a script and it is Land 1 it starts <code>LandControlAll</code> and, always, calls
+  <code>DoYesNoSkipTutorialRequestersIfNecessary</code> 0x54CBD0 (0x55395B). This clears bits 23, 24 and 25 of <code>g_game+0x14</code>
+  (0x54CBD5 / 0x54CBE1 / 0x54CBED); the condition that used to come before showing the box is nulled out with 25 NOPs
+  (0x54CBF4..0x54CC0C), so it <strong>always</strong> does <code>PauseGame(1)</code> and <code>SkipBox::Show</code> (vt +0x0C, <code>DialogBoxBase::Show</code>
+  0x5135F0) on the SkipBox from <code>FrontEnd::Init</code> (0x53B844, pointer at 0xCD0634, callback 0x544480 at 0x53BB9D).</li>
+<li><code>SkipBox::Init</code> 0x5441C0: a title, a button (id 0xB, text 0xA24 from <code>HelpTextDatabase</code>) and four checkboxes (ids
+  0x3C..0x3F) with texts 5..8 of the text table at 0xD17CA0 (not read); the selected one is at <code>+0x20</code>, 0 by
+  default (0x544206; also set to 0 at 0x5442C2). <code>SkipBox::CanESCOut</code> 0x53BD60 returns 0: it does not close with ESC.</li>
+<li>Callback 0x544480: when button 0xB is pressed, depending on the checkbox (jump table 0x5445A0): 0 clears 23, 24 and 25;
+  1 sets 23 and clears 24 and 25; 2 sets 23 and 24 and clears 25; 3 sets all three. Then <code>PauseGame(0)</code> and
+  <code>DialogBoxBase::Hide</code>.</li>
+<li>The scripts read it with <code>CAN_SKIP_TUTORIAL</code> (460, <code>GScript::CanSkipTutorial</code> 0x6FFEF0, bit 23),
+  <code>CAN_SKIP_CREATURE_TRAINING</code> (461, 0x6FFF10, bit 24) and <code>IS_KEEPING_OLD_CREATURE</code> (462, 0x6FFF30, bit 25), which
+  push the bit as a boolean (VMType 6). Nobody else writes those bits (search for <code>or</code>/<code>and</code> with 0x800000,
+  0x1000000, 0x2000000 in the whole <code>.text</code>).</li>
+<li>challenge.chl: only <code>SetupLand1</code> calls them. <code>CAN_SKIP_TUTORIAL</code> → global <code>IsSkippingToCreatureSelect</code> = 1;
+  <code>CAN_SKIP_CREATURE_TRAINING</code> → <code>IsSkippingCreatureGuide</code> = 1; <code>IS_KEEPING_OLD_CREATURE</code> and
+  <code>CURRENT_PROFILE_HAS_CREATURE</code> → <code>IsKeepingOldCreature</code> = 1 and the other two as well.</li>
+<li><code>LandControl1</code>: with <code>IsSkippingToCreatureSelect</code> neither <code>FollowUs</code> (the intro) nor <code>CitadelGuide</code> run: it does
+  <code>BUILD_BUILDING((1915.05, 0, 2508.89), 1.0)</code>, takes with <code>CALL_NEAR(18, 5000, ese punto, 5)</code> the created object (the
+  citadel, <span class="state approx">inferred</span> from the type) and sets its <code>BUILT_PERCENTAGE</code> (property 22) = 1; <code>ChooseYourCreature</code> does not run either: it creates the three gate stones (<code>GateKey1</code>, <code>GateKey2</code>,
+  <code>QuarryRock</code>) and runs <code>CreaturesInGlade</code> (which takes the camera to choose a creature and, in that case, skips the
+  guardian and does a 2 s <code>SET_FADE_IN</code> after 2 s). With <code>IsKeepingOldCreature</code> it instead sets the time (<code>SET_GAME_TIME 15.4</code>,
+  <code>GAME_TIME_ON_OFF 1</code>), opens the creature gate (<code>SET_OPEN_CLOSE</code>), sets <code>ChooseYourCreatureFinished</code> and
+  loads the profile's creature (<code>LOAD_MY_CREATURE</code>). With <code>IsSkippingCreatureGuide</code> none of <code>MoveTheGuideAround</code>,
+  <code>CreatureDevLearnToEat</code>, <code>CreatureDevPunishment</code>, <code>CreatureDevLeashIntro</code>, <code>CreatureDevLeashAttachToHouse</code>,
+  <code>MeetTheGuide</code>, <code>GuideAsksToMeetYourCreature</code>, <code>GuideImpressTown*</code>, <code>CreatureDevGuideTeachesFight</code> or <code>TheStorm</code> run
+  (it waits for <code>LeaveLandNow</code>).</li>
+<li>There is no other original way to skip the intro: <code>FollowUs</code> does not call <code>KEY_DOWN</code> or check ESC; the click only advances the
+  texts.</li>
+</ul>
+<p><strong>What runs with each answer</strong> (read in the decompiled code listing of challenge.chl, which is pseudo-assembly: the natives
+appear as <code>CALL &lt;n&gt;</code>; extents: <code>SetupLand1</code> 25357-25622, <code>LandControl1</code> 74956-75239, <code>LandControlAll</code>
+171106-171139, <code>CreaturesInGlade</code> 43862-46096, <code>CreatureDevSeeHome</code> 6932-7814, <code>FollowUs</code> 49528-53196):</p>
+<ul>
+<li><code>SetupLand1</code> 25398-25455: the three globals are independent, but <code>IsKeepingOldCreature</code> =
+  <code>IS_KEEPING_OLD_CREATURE and CURRENT_PROFILE_HAS_CREATURE</code> (25432-25435) and, when it is set, it <strong>forces</strong> the other two
+  to 1 (25440-25447). Neither <code>SetupLand1</code> nor <code>LandControlAll</code> have music, camera, dialogue or fade before
+  <code>LandControl1</code> (the <code>SET_FADE_IN(3.0)</code> at 171120 is already the transition to Land 2).</li>
+<li><code>LandControl1</code>: with <code>IsSkippingToCreatureSelect</code> neither <code>FollowUs</code> (74982), <code>CitadelGuide</code> (74983) nor
+  <code>ChooseYourCreature</code> (75037) run, and instead it does <code>BUILD_BUILDING</code> + <code>CALL_NEAR(18, 5000, …)</code> +
+  <code>SET_PROPERTY(22, ciudadela, 1.0)</code> (74988-75017) and deletes <code>GateKey1</code>, <code>GateKey2</code> and <code>QuarryRock</code> (75042-75083).
+  <code>CreaturesInGlade</code> (75088) is only skipped with <code>IsKeepingOldCreature</code>: then the block 75093-75125 runs
+  (<code>SET_GAME_TIME(15.4)</code>, <code>GAME_TIME_ON_OFF(1)</code>, <code>SET_CAMERA_ZONE(3436)</code>, <code>SET_OPEN_CLOSE</code> of the creature
+  gates, <code>ChooseYourCreatureFinished = 1</code>, <code>LOAD_MY_CREATURE(1850, 1300)</code>).</li>
+<li><strong><code>CreatureDevSeeHome</code> (75141) always runs</strong>, with all three answers. With <code>IsSkippingCreatureGuide</code> it takes the branch
+  7056-7085: <code>loop { START_CAMERA_CONTROL }</code>, <code>loop { START_DIALOGUE }</code>, <code>START_GAME_SPEED</code>, <code>SET_WIDESCREEN(1)</code>,
+  <code>SET_CAMERA_POSITION(1891.039, 31.693, 2520.674)</code>, <code>SET_CAMERA_FOCUS(1899.053, 30.312, 2518.680)</code>,
+  <code>SET_WIDESCREEN(0)</code>, <code>END_GAME_SPEED</code>, <code>END_CAMERA_CONTROL</code>, <code>END_DIALOGUE</code>, <code>SET_FADE_IN(2.0)</code>; with no <code>SLEEP</code> in between,
+  so the lock lasts one turn and the camera <strong>snaps</strong> (does not glide) onto the village. Before that, unconditionally,
+  <code>SET_GAME_TIME(4.59)</code> + <code>GAME_TIME_ON_OFF(1)</code> (7000-7003): dawn breaks.</li>
+<li><strong>The player's creature on the skip path</strong> (challenge.chl instruction pointers, read in the bytecode): <code>LandControl1</code>
+  loads it at ip 68025 (<code>LOAD_MY_CREATURE(1850, 0, 1300)</code>, turn 7) and runs <code>CreatureDevSeeHome</code> at ip 68037. There,
+  after the dawn and an asynchronous did-you-know, <code>MyCreature = CALL_PLAYER_CREATURE(1)</code>; the skip jumps over
+  <code>SET_CREATURE_DEV_STAGE(0)</code> (ip 6043) to the camera block (6053-6080, above), then <code>SET_POSITION(MyCreature,
+  HomePos)</code>, <code>SET_CREATURE_HOME(MyCreature, HomePos)</code> and <code>SET_FOCUS(MyCreature, GET_CAMERA_POSITION)</code> (turn 8), then
+  <code>SET_FADE_IN(2)</code> and a looped <code>SLEEP 2</code> until the script ends. HomePos is the script's local marker made at ip 5951
+  at (1896.5, 29.48, 2520.06). At turn 30, <code>LandControl1</code> ip 68047-68063: <code>MyCreature = CALL_PLAYER_CREATURE(1)</code>,
+  <code>SET_CREATURE_DEV_STAGE(MyCreature, 13)</code>, <code>DEV_FUNCTION(2)</code> (the rope leash), <code>DEV_FUNCTION(3)</code> (the other leashes),
+  <code>CREATURE_IN_DEV_SCRIPT(false, MyCreature)</code>, <code>RELEASE_FROM_SCRIPT(MyCreature)</code>. What each native does:
+  <a href="creature.html#the-players-creature">creature.md</a>.</li>
+<li><code>CreaturesInGlade</code> (answers 2 and 3, not 4) does hijack the beginning: <code>START_CAMERA_CONTROL</code> 44028,
+  <code>START_DIALOGUE</code> 44031, <code>SET_WIDESCREEN(1)</code> 44035, <code>SET_FADE(0,0,0,2.0)</code> 44295 (skip branch), <code>SET_FADE_IN(2.0)</code>
+  44326, <code>SET_CAMERA_POSITION/FOCUS</code> 44303/44310 (1753.3, 49.5, 2811.1), <code>MOVE_CAMERA_*</code> 44339-44403,
+  <code>HAS_CAMERA_ARRIVED</code> 44404/44415/44422, <code>START_MUSIC(63)</code> 44419, <code>RUN_CAMERA_PATH(13)</code> 44421, and it does not let go until
+  44684-44691. In openblack <code>MOVE_CAMERA_*</code> and <code>HAS_CAMERA_ARRIVED</code> are stubs, so the script <strong>got stuck there
+  forever with the camera, the dialogue and the widescreen held</strong>.</li>
+<li><code>START_MUSIC(54)</code>, the intro music, appears <strong>only once in the whole challenge.chl</strong>: line 50114, inside
+  <code>FollowUs</code>. With any skip answer it never plays. Others in Land 1: 67 in <code>ChooseYourCreature</code> (42493) and in
+  <code>CreatureDevSeeHome</code> without skipping (7117), 63 and 65 in <code>CreaturesInGlade</code> (44419, 45644/45813/45985), 67 and 69 in
+  <code>TheStorm</code>. <code>SET_AVI_SEQUENCE</code> (51024), <code>CAMERA_PROPERTIES</code> (50444), <code>SET_FOCUS_AND_POSITION_FOLLOW</code> (50439) and
+  <code>SET_INTERFACE_INTERACTION</code> of Land 1 are all inside <code>FollowUs</code>: with the skip they are never executed.</li>
+<li>The 13 background scripts (<code>SingingStoneCircle</code>, <code>ThrowingStones</code>, <code>TheLostFlock</code>, <code>TheMissionaries</code>, <code>MagicMushroom</code>,
+  <code>HermitMain</code>, <code>CreatureSavingPeople</code>, <code>PiedPiper</code>, <code>CreatureGuardian</code>, <code>LeaveThroughVortexL1</code>…) wait on a
+  <code>ChallengeHighlightNotify</code> / <code>QuestHighlightNotify</code> / <code>SingingStonesNotify</code> before touching the camera, so none of them
+  gets in the way at the start. With <code>IsSkippingCreatureGuide</code>, <code>LeaveThroughVortexL1</code> opens the exit vortex from the beginning
+  (53845-53876).</li>
+</ul>
+<p><strong>openblack:</strong> <code>Game::Run</code>, after starting <code>LandControlAll</code>, clears the three bits (<code>TutorialSkipFlags</code> of the map
+script globals), pauses the game and shows the SkipBox (<code>Gui/SkipBox</code>, with the texts of the patch database and
+entry 0xA24 for the button). Its answer sets the bits (0 none, 1 bit 23, 2 bits 23 and 24, 3 the three) and unpauses
+the game. Since openblack has no profiles, <code>CURRENT_PROFILE_HAS_CREATURE</code> (CHL 463) answers true when the fourth answer
+was given, so that answer can take effect.</p>
+<h2 id="pending">Pending<span class="state pending">pending</span></h2>
+<ul>
+<li><strong>Changing land (<code>LOAD_MAP</code>, native 152) is not ported: the native is empty</strong>, so Land 1 never goes on to Land 2.</li>
+<li>The original: <code>GScript::LoadMap</code> 0x6FB320 changes land inside the call, through <code>StartPlaygroundGame</code> 0x552F40
+    (<code>ClearMap</code>, <code>GSetup::LoadMapFeatures</code>, <code>Town::AsssignTownFeature</code>). The calling script goes on in the same step,
+    on the new land.</li>
+<li>Land 1 reaches it from <code>LandControlAll</code> (ip 155486-155490) once <code>LeaveThroughVortexL1</code> has set <code>LeaveLandNow</code>
+    after its camera dive into the vortex.</li>
+<li>A port is designed but parked:<ul>
+<li>the native records the path and stops its task after the call;</li>
+<li>the VM's step ends there;</li>
+<li>the land is loaded at the frame's sync point.</li>
+</ul>
+</li>
+<li>Two findings for it:<ul>
+<li>the original's <code>ValidateScriptVariables</code> 0x6EB6F0 does not clear the scripts' variables: it clears two
+  GScript pointers (+0x70, +0x74) and releases the unreferenced script-thing slots, which in openblack are
+  <code>ScriptHeld</code> components that go with the registry. openblack has a risk the original does not: its script
+  variables hold raw entity ids, which a new land's entities can reuse;</li>
+<li><code>ClearMap</code> saves the creature's mind and physique (0x552CB5, 0x552D54) for the next land's <code>LOAD_MY_CREATURE</code>.
+  openblack has no writer from a creature's state to a mind file yet, so it needs designing first.</li>
+</ul>
+</li>
+<li><code>STOP_ALL_SCRIPTS_IN_FILES_EXCLUDING</code> (154, 0x6F0C00) splits its list with <code>strtok</code> on space, comma and tab and
+    compares with <code>_stricmp</code>; openblack splits on spaces only and compares with case.</li>
+<li>CHL CREATE not ported: Reward, Creature, DeadTree, Store, Timer, Ball, Totem, Highlight and Scaffold.</li>
+<li><code>CREATE_BASE_WITH_ANGLE</code> is not implemented: the script line is skipped.</li>
+<li><code>CREATE_MIST</code> 263 and <code>SET_MIST_FADE</code> 264 of CHL (<code>CHLApi.cpp</code>, not implemented).</li>
+<li>Initial rain and temperature of <code>GClimate</code> (season range): recorded here as not ported; check against
+  <a href="day-night-weather.html#gclimate-the-climates-climatecpp">day-night-weather.md</a>.</li>
+<li><code>GAbodeInfo::IsOkToCreateAtPos</code> 0x404B10 of <code>CREATE_TOWN_CENTRE</code>; register in <code>MapCollide</code> the fish farms,
+  CitadelHeart (0x468FB0) and WorshipSite (0x77E490).</li>
+<li>Faithful citadel: town desires, building sites, <code>BUILD_BUILDING</code>, <code>CALL_NEAR</code>, partial drawing
+  (<code>DrawPartialyBuilt</code> 0x816AD0); until then the temple comes out built on load.</li>
+<li><code>SET_LAND_NUMBER</code> is not reset when loading a map in openblack.</li>
+<li>(pending, from the notes) <code>ADD_RESOURCE</code> on a villager: <code>Villager::AddResource</code> 0x7564D0 (Land 1's builders, L52628..52703).</li>
+<li>(pending, from the notes) <code>GAME_THING_CLICKED</code> on a challenge scroll calls <code>SaveGameRoom::InstantSaveGame(14)</code> 0x792FB0: no save rooms.</li>
+<li>(pending, from the notes) <code>SetScriptNameOfCreate</code> 0x56FA70 (the debug name) after FLOCK_CREATE, CREATE_TIMER and CREATE_HIGHLIGHT (0x6F1CEA, name from fn_006F6A10).</li>
+<li>(not verified) whether the VM gives <code>type</code> as an int or as float bits (SET_SCAFFOLD_PROPERTIES).</li>
+<li>(unclear note) AnimatedStatic creation: "0x4223A4: 0x423140".</li>
+<li>(pending) which player <code>Flock::Flock</code> gets for FLOCK_CREATE / a FLOCK_ATTACH of two livings (g_game +0x18, 0xA60 apart).</li>
+<li><code>CreateVillagerAtAbode</code> note: "[0xD99384] = it, null too ((not ported) [0xD99380] the same, no reader known)". The role of [0xD99380] is unknown.</li>
+<li><code>k_NoVillagerInfo</code>: "0x54, one past the 84 records of [0xDA6BE8]. (pending) what the exe reads there".</li>
+<li>MOVE_GAME_THING on a flock: the original sets the destination of the flock's tail member and openblack the first
+  member's; whether openblack's first member is the original's tail is not checked.</li>
+</ul>
+<h2 id="test-hooks">Test hooks</h2>
+<ul>
+<li><code>OPENBLACK_TEST_BUILT_PERCENTAGE</code>: <code>BUILT_PERCENTAGE</code> of the Land 1 ark.</li>
+<li><code>OPENBLACK_LOG_ISOK=1</code>: one line per <code>IsOkToCreateAtPos</code> rejection.</li>
+<li><code>OPENBLACK_DUMP_ENTITY_COUNTS</code>: entity count by type after loading (result of <code>IsOkToCreateAtPos</code>).</li>
+<li><code>OPENBLACK_SCRIPT_THING_TRACE=1</code>: one line per MOVE_GAME_THING, SET_SCRIPT_STATE, SET_SCRIPT_ULONG and per true PLAYED
+  (to follow <code>FollowUs</code>).</li>
+<li><code>OPENBLACK_TEST_SKIP_ANSWER=&lt;answer&gt;,&lt;frame&gt;</code>: answers the SkipBox at that frame, as its OK would.</li>
+<li><code>OPENBLACK_TEST_TEXT_CLICK=1</code>: every turn, if a text is waiting for the click (RUN_TEXT with interaction 1), it does the left
+  click (<code>HelpSystem::ProcessInterface(true)</code>, which ignores it until 1 s of text).</li>
+</ul>
+<h2 id="sources">Sources</h2>
+<ul>
+<li>runblack.exe W120: the map script's command cases, <code>GScript::CreateThing</code> 0x6F1B20 and its switch <code>fn_006F11A0</code>.</li>
+<li>Script commands: GScript::MoveGameThing 0x6F8E80, SetScriptState 0x6F8370, SetScriptUlong 0x6F8770, Played 0x6F9DC0,
+  GetPosition 0x6F88A0, GetDistance 0x6F8CA0, HasCameraArrived 0x6ED170; <code>bwdis.py</code> on the cited Living / Villager /
+  MobileWallHug functions, and a disassembly of <code>Plug Ins\ScriptLibraryR.dll</code> (INTCAST).</li>
+</ul>
+</main>
+<script src="search.js"></script>
+<script src="wiki.js"></script>
+</body>
+</html>

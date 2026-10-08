@@ -19,7 +19,9 @@ namespace openblack::ecs::archetypes
 class StreetLanternArchetype
 {
 public:
-	static entt::entity Create(const glm::vec3& position);
+	/// A street lantern from its mobile static info (CREATE_STREET_LANTERN, CHL CREATE 7 and 59)
+	/// @return entt::null when another MobileStatic is within 0.5 m
+	static entt::entity Create(const glm::vec3& position, MobileStaticInfo info);
 	StreetLanternArchetype() = delete;
 };
 } // namespace openblack::ecs::archetypes

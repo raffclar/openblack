@@ -1,0 +1,52 @@
+name: Agent task
+description: One piece of work for the contributor's agent to pick up and deliver as a pull request.
+labels: ["agent-task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One deliverable that fits one pull request.
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What the game should do once this is merged, in a few sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: vanilla
+    attributes:
+      label: Vanilla behaviour and evidence
+      description: >-
+        The original game's behaviour exactly, with evidence: Ghidra addresses, docs/bw1-notes pages, game data files.
+        Say what is still unknown.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: What the reviewer will check, including the tests that must exist and any fidelity run.
+      placeholder: |
+        - [ ] ...
+        - [ ] Unit tests for ... with fakes
+    validations:
+      required: true
+  - type: textarea
+    id: pointers
+    attributes:
+      label: Where in the code
+      description: Area, services, components or files most likely involved.
+  - type: input
+    id: depends
+    attributes:
+      label: Depends on
+      description: Issues that must be merged first, e.g. "#12, #15". Leave empty if none.
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - normal
+        - high
+        - low

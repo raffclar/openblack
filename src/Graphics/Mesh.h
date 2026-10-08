@@ -15,6 +15,7 @@
 #include <optional>
 
 #include "GraphicsHandle.h"
+#include "IndexBuffer.h" // complete: the constructor's default index buffer is destroyed at the call site
 #include "RenderPass.h"
 
 namespace bgfx
@@ -41,7 +42,8 @@ public:
 		TriangleStrip,
 	};
 
-	explicit Mesh(VertexBuffer* vertexBuffer, IndexBuffer* indexBuffer = nullptr,
+	// Takes ownership of the buffers. Callers create the vertex buffer, then the index buffer, each in its own statement
+	explicit Mesh(std::unique_ptr<VertexBuffer> vertexBuffer, std::unique_ptr<IndexBuffer> indexBuffer = nullptr,
 	              Topology topology = Topology::TriangleList) noexcept;
 	~Mesh() noexcept;
 
@@ -51,14 +53,12 @@ public:
 
 	[[nodiscard]] Topology GetTopology() const noexcept;
 
-	enum SkipState : uint8_t
-	{
-		SkipNone = 0b00000000,
-		SkipRenderState = 0b00000001,
-		SkipVertexBuffer = 0b00000010,
-		SkipIndexBuffer = 0b00000100,
-		SkipInstanceBuffer = 0b00001000,
-	};
+	// The bits of DrawDesc::skip
+	static constexpr uint8_t k_SkipNone = 0b00000000;
+	static constexpr uint8_t k_SkipRenderState = 0b00000001;
+	static constexpr uint8_t k_SkipVertexBuffer = 0b00000010;
+	static constexpr uint8_t k_SkipIndexBuffer = 0b00000100;
+	static constexpr uint8_t k_SkipInstanceBuffer = 0b00001000;
 
 	struct DrawDesc
 	{
@@ -78,6 +78,7 @@ public:
 	void Draw(const DrawDesc& desc) const;
 
 protected:
+	// Declaration order is the destruction order: the index buffer is released before the vertex buffer
 	std::unique_ptr<graphics::VertexBuffer> _vertexBuffer;
 	std::unique_ptr<graphics::IndexBuffer> _indexBuffer;
 

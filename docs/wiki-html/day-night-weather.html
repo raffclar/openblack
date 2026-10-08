@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Day, night and weather in the original — Black &amp; White notes</title>
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body>
+<nav id="side">
+  <h1><a href="index.html" style="color:inherit;text-decoration:none">Black &amp; White notes</a></h1>
+  <span class="tag">openblack — how the original behaves</span>
+  <input id="q" type="search" placeholder="Search (press /)" autocomplete="off">
+  <div id="hits"></div>
+  <div id="nav"><h2>Start here</h2>
+<a class="" href="README.html">Black &amp; White 1 notes for openblack</a>
+<h2>Engine</h2>
+<a class="" href="openblack-internals.html">openblack internals</a>
+<a class="" href="engine-loop.html">The engine loop: game turns and frames (original and openblack)</a>
+<a class="" href="engine-math.html">Coordinates, terrain, object size, game clock, matrices and Zoomer</a>
+<a class="" href="tooling.html">Tools and formats</a>
+<a class="" href="parity.html">Graphics engine parity: original versus openblack</a>
+<a class="" href="original-frame.html">The original B&amp;W frame (runblack.exe W120, D3D7, LH3D)</a>
+<h2>World</h2>
+<a class="" href="map-loading.html">Map loading and script functions</a>
+<a class="" href="land-script-save.html">Writing land-script lines: SaveObject and WriteCommand</a>
+<a class="" href="water.html">Water in the game</a>
+<a class="" href="trees.html">Trees and forests</a>
+<a class="" href="buildings.html">Buildings, building sites and towns (the building side)</a>
+<a class="" href="objects-and-resources.html">Objects and resources</a>
+<a class="" href="physics.html">Physics: thrown objects, collisions, damage and rocks that split</a>
+<h2>Life</h2>
+<a class="" href="villagers.html">Villagers: data, state machine and speed</a>
+<a class="" href="animals.html">Animals: AI, states and clips</a>
+<h2>Magic and weather</h2>
+<a class="" href="magic.html">Magic: the core of the miracles</a>
+<a class="" href="miracles.html">Miracles one by one</a>
+<a class="" href="particles.html">Particles (PSys)</a>
+<a class="here" href="day-night-weather.html">Day, night and weather in the original</a>
+<a class="" href="vortex.html">Vortexes and the tornado: objects swallowed, carried and flung</a>
+<h2>Hand and interface</h2>
+<a class="" href="hand-and-interface.html">The hand and the interface</a>
+<a class="" href="intro.html">The Land 1 intro and the tutorial&#x27;s script side</a>
+<a class="" href="script-camera.html">Script camera (GCamera and CameraModeScript)</a>
+<a class="" href="camera-tracks.html">Camera tracks (`Data\camera.edt`) and `WALK_PATH`</a>
+<h2>Presentation</h2>
+<a class="" href="rendering.html">World rendering: original versus openblack</a>
+<a class="" href="rendering-objects.html">Model rendering: original versus openblack</a>
+<a class="" href="animation.html">Skeletal animation (villagers and animals)</a>
+<a class="" href="audio.html">Audio: the engine, the banks, the music, the voices and the script</a>
+<a class="" href="video.html">Bink videos (.bik)</a>
+<h2>Data</h2>
+<a class="" href="mods.html">Modified data packs</a>
+<h2>Other</h2>
+<a class="" href="creature.html">The creature: groundwork, random streams and what is unknown</a></div>
+</nav>
+<main>
+<details id="toc"><summary>On this page</summary><div class="toc">
+<ul>
+<li><a href="#day-night-and-weather-in-the-original">Day, night and weather in the original</a><ul>
+<li><a href="#clock-done-src3ddaynightclock">Clock (done: src/3D/DayNightClock.*)</a></li>
+<li><a href="#sky-type-src3dskytype">Sky type (src/3D/SkyType.*)</a></li>
+<li><a href="#night-lights-report-night_visualstxt">Night lights (report night_visuals.txt)</a></li>
+<li><a href="#climate">Climate</a></li>
+<li><a href="#weather-and-climate-srcecsweather">Weather and climate (src/ECS/Weather)</a><ul>
+<li><a href="#weatherinfo-8-bytes-lh3datmos">WeatherInfo (8 bytes, LH3DAtmos)</a></li>
+<li><a href="#lh3datmos-the-40-m-grid-atmoscpp">LH3DAtmos: the 40 m grid (Atmos.cpp)</a></li>
+<li><a href="#storms-lh3dstorm-and-gweather-stormscpp">Storms: LH3DStorm and GWeather (Storms.cpp)</a></li>
+<li><a href="#gclimate-the-climates-climatecpp">GClimate: the climates (Climate.cpp)</a></li>
+<li><a href="#queries-weatherh">Queries (Weather.h)</a></li>
+<li><a href="#chl-weather-objects-weatherthingcpp">CHL weather objects (WeatherThing.cpp)</a></li>
+<li><a href="#the-drawn-rain-raincpp-graphicsrendererraincpp">The drawn rain (Rain.cpp, Graphics/RendererRain.cpp)</a></li>
+<li><a href="#the-drawn-snow">The drawn snow</a></li>
+<li><a href="#order-in-the-turn-weatherloopcpp">Order in the turn (WeatherLoop.cpp)</a></li>
+<li><a href="#hooks">Hooks</a></li>
+</ul>
+</li>
+<li><a href="#pending">Pending</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+<h1 id="day-night-and-weather-in-the-original">Day, night and weather in the original</h1>
+<p>The game weather (climates, storms, rain) is at the end, in «Weather and climate».</p>
+<ul>
+<li><a href="#clock-done-src3ddaynightclock">Clock</a></li>
+<li><a href="#sky-type-src3dskytype">Sky type</a></li>
+<li><a href="#night-lights-report-night_visualstxt">Night lights</a></li>
+<li><a href="#climate">Climate</a></li>
+<li><a href="#weather-and-climate-srcecsweather">Weather and climate</a></li>
+<li><a href="#pending">Pending</a></li>
+</ul>
+<h2 id="clock-done-src3ddaynightclock">Clock (done: <code>src/3D/DayNightClock.*</code>)</h2>
+<p>There are <strong>two clocks</strong> in hours 0..24:</p>
+<ul>
+<li><strong>Visual time</strong> (<code>GLandAlignement::VisualTime</code> 0xBF3380). It advances linearly, one day every <code>duration</code> seconds of
+  game time (1700 s by default, about 28 min). It is moved by <code>GLandAlignement::UpdateTime</code> 0x5E1FE0 once per
+  turn, called from <code>GGame::ProcessTurn</code> 0x54E6AE with <code>(scale · 0.1, 0.1)</code> (<code>GGame::ProcessTurn</code> passes the turn length [0xD01A3C] × 0.1, 0x54E6AE..0x54E6C3). With the game paused it does not advance and with
+  the game sped up it goes faster (it goes by turns).</li>
+<li><strong>Script time</strong>: the visual time passed through a piecewise linear function (<code>fn_00869FD0</code>; <code>fn_0086A160</code> visual →
+  script, <code>fn_0086A110</code> script → visual). It maps the cycle thresholds to the fixed hours 3.5 / 7.5 / 8 / 8.5
+  (0xC395B0..BC), mirrored around 12. It is used by <code>GET_GAME_TIME</code> / <code>SET_GAME_TIME</code>, the sun (<code>fn_0086C020</code>), the moon
+  (<code>LH3DAtmos::UpdateGame</code>) and the street lantern lights (<code>fn_0086C220</code>). openblack passes this time to the sun and the moon
+  (<code>Sky::SetTime</code> / <code>GetTime</code>). It is <strong>not</strong> the time of the sky type: that one runs on the visual time (see
+  <a href="#sky-type-src3dskytype">Sky type</a>).</li>
+</ul>
+<p><strong>Cycle</strong> (<code>GGameInfo::SetVisualTimeCycle</code> 0x557620, <code>(duration, night, change)</code>; fractions of the whole day):</p>
+<ul>
+<li>Speed: <code>n = ftol(duration · 0.41666666f)</code> ([0x8DF8F0] = 0x3ED55555) and <code>10/n</code> hours per second, the same by day
+  and by night (0xBF338C and 0xBF3390 hold the same value; 0 for n = 0, 0x557645..0x557685). The product stays in the x87 register before <code>__ftol</code>: with the
+  FPU at 24 bits (<code>fn_007DEE00</code>, <code>and cw, 0xFCFF</code> at 0x7DEE0D) it is the float product that openblack computes; with 53 bits
+  durations that are multiples of 2.4 (1200, 2400) would give one <code>n</code> less.</li>
+<li>Thresholds (<code>LH3DSky::SetDayNightTimes</code> 0x869FA0 → 0xFA26A0..94): N = 12·night, E = 12·change + N (stored as
+  float), c = min((E − N)·0.25, N), and <code>SetDayNightTimes(N − c, c + N, E − c, E + c)</code> (0x55768F..0x5576E4; <strong>faithful</strong>,
+  openblack does it in this order from <code>DayNightClock::SetCycle</code>, which also calls <code>sky_type::SetThresholds</code>).
+  By default (1700; 0.083; 0.07) they are <strong>0.786 / 1.206 / 1.626 / 2.046 h</strong>
+  from midnight. That is, there is full night only between 23.2 and 0.8 visual hours and it is day between 2 and
+  22 h: the night lasts about 2 real minutes and each transition another 30 s.</li>
+<li><code>LH3DSky::Time2SkyType</code> 0x86A1B0 over the visual time: 2 at night, 1 at dusk, 0 by day. <code>IsVisualNight</code> is &gt; 1.2
+  (the double). All the detail, in <a href="#sky-type-src3dskytype">Sky type</a>.</li>
+<li><code>fn_0086A3B0</code> sets (4.5; 7; 7.5; 8.25) when opening the sky, but <code>GLandAlignement::Open</code> overwrites it immediately with the
+  default cycle.</li>
+<li><code>ResetGameTimeProperties</code> 0x711520: 1700 s, 8.3 % night, 7 % change. <code>SetVisualTimeScale</code> 0x557610
+  (GAME_TIME_ON_OFF). Target hour 0xBF3384 (12), step 0xBF3388 (2.5 h per second of game time), MOVE_GAME_TIME in
+  progress 0xD1A268.</li>
+<li>In the campaign the thresholds are <strong>always</strong> the default ones: <code>challenge.chl</code> never calls 407 or 408, Land1,
+  Land4, Land5 and LandT have no <code>SET_NIGHTTIME</code> and Land2/Land3 repeat (1700; 0.083; 0.07). The playgrounds do
+  change them: SandBox Creature Training and ThreeGods (1000; 0.23; 0.17) → 2.25 / 3.27 / 4.29 / 5.31; Demon God
+  (1143; 1; 0) → 12 / 12 / 12 / 12, type 2 always except at exactly 12 o'clock (0); Ultimate Sandbox (3400; 0.4; 0.01) →
+  4.77 / 4.83 / 4.89 / 4.95.</li>
+</ul>
+<p><strong>Advance per turn</strong> (<code>UpdateTime(a, b)</code>, a = scale · 0.1 and b = 0.1):</p>
+<ol>
+<li>If there is no <code>MOVE_GAME_TIME</code> in progress: step 2.5 h/s and target = visual + speed · a, where speed =
+   lerp(day, night, sky type / 2).</li>
+<li>The visual time approaches the target by the short way (±12 h), at most step · b per turn, and wraps around at 24.</li>
+<li><code>SetTime</code> 0x5E22E0 normalises the target and sets it to 0 outside ±1000. With seconds ≠ 0, step = |difference| /
+   seconds. <code>MOVE_GAME_TIME</code> finishes on the turn after arriving.</li>
+</ol>
+<p>Checked: 20 000 turns plus a <code>MOVE_GAME_TIME(3, 30)</code> give in the port the same values as the emulation of the
+original, down to the sixth decimal.</p>
+<p><strong>Startup and scripts</strong></p>
+<ul>
+<li><code>GLandAlignement::Open</code>: scale 1, default cycle and time 12. openblack calls <code>DayNightClock::Reset</code> at the start of
+  <code>Game::LoadMap</code>, before the island script.</li>
+<li>Island script: <code>SET_NIGHTTIME(1700, 0.083, 0.07)</code> in Land2/Land3 reaches <code>SetVisualTimeCycleFromMapEditor</code> 0x557BB0,
+  which limits night ≤ 1 and change ≤ 1 − night.</li>
+<li>CHL: <code>SET_GAME_TIME</code> 112, <code>GET_GAME_TIME</code> 113, <code>GAME_TIME_ON_OFF</code> 288 (scale 1/0), <code>MOVE_GAME_TIME</code> 289 (hour,
+  seconds), <code>SET_GAME_TIME_PROPERTIES</code> 407, <code>RESET_GAME_TIME_PROPERTIES</code> 408.</li>
+<li><code>SET_GAME_TIME</code> 0x710E20: ForceVisualTime (script → visual time); <code>GET_GAME_TIME</code> 0x710E60: the visual time mapped
+  back to script time. <code>GAME_TIME_ON_OFF</code> 0x710E90: <code>SetVisualTimeScale(on ? 1 : 0)</code>; <code>MOVE_GAME_TIME</code> 0x710EC0: the
+  visual time slides to the hour in <code>duration</code> seconds of game time. <code>SET_GAME_TIME_PROPERTIES</code> 0x7114B0:
+  <code>SetVisualTimeCycle(duration, percentage night, percentage change)</code>.</li>
+<li>Land1 starts with <code>FollowUs</code>: <code>SET_GAME_TIME(7.3)</code> and <code>GAME_TIME_ON_OFF(0)</code>, a dawn with the clock stopped; later
+  it does <code>MOVE_GAME_TIME(12, 460)</code>. <code>LandControl1</code> sets 15.4 h and turns the clock on. Other sequences set their
+  time, for example <code>VillageWavingSequence</code> 12/16 h and the Land4 meteorite one 16.5 h.</li>
+<li>In openblack the intro does not advance (CHL functions are missing), so Land1 stays for now at 7.3 h with the clock
+  stopped. To see the cycle you have to use the World menu or the hooks below.</li>
+<li><strong>VM fix</strong>: unimplemented CHL functions left their arguments on the stack, and those of the following ones were
+  shifted. For example, <code>SET_PROPERTY</code> left a 1.0 that <code>SET_GAME_TIME</code> then read. Now <code>LHVM::Opcode05Sys</code>
+  removes <code>stackIn</code> values when the function has not popped any, below whatever it has pushed.</li>
+</ul>
+<p><strong>Test hooks</strong></p>
+<ul>
+<li><code>OPENBLACK_TIME_OF_DAY=&lt;script hour&gt;</code> fixes the time on every turn (<code>SetScriptTime</code>, with the sky jump).</li>
+<li><code>OPENBLACK_TEST_MOVE_TIME="hour,seconds"</code> does a <code>MOVE_GAME_TIME</code> on load; the script may overwrite it.</li>
+<li><code>OPENBLACK_CLOCK_TRACE=1</code> writes the clock to the log every 50 turns: visual time, script time, sky type computed
+  now, the frame's one (<code>sky_type::Frame()</code>) and the dome's one (<code>Dome().Built()</code>).</li>
+<li>The World menu shows the script time (slider), the visual time, the frame's sky type and the dome's.</li>
+</ul>
+<h2 id="sky-type-src3dskytype">Sky type (<code>src/3D/SkyType.*</code>)</h2>
+<p>A single API, <code>openblack::sky_type::</code> (<code>src/3D/SkyType.h</code>), with the original's convention: <strong>2 night, 1 dusk, 0 day</strong>,
+continuous. All <strong>faithful</strong> except what is marked.</p>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Original</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>At(hour)</code></td>
+<td><code>Time2SkyType</code> 0x86A1B0</td>
+<td>Folds around 12 only if hour &gt; 12 (<code>test ah,0x41</code>); then strict <code>&lt;</code> against A..D: 2, 2 − (h − A)/(B − A), 1, 1 − (h − C)/(D − C), 0. There is no division by zero: with A = B the ramp is unreachable. <code>DayNightClock::SkyType(hour)</code> (was <code>Time2SkyType</code>) forwards here with its thresholds</td>
+</tr>
+<tr>
+<td><code>SetThresholds(A,B,C,D)</code></td>
+<td><code>SetDayNightTimes</code> 0x869FA0</td>
+<td>A → 0xFA26A0, B → 0xFA269C, C → 0xFA2698, D → 0xFA2694; called by <code>DayNightClock::SetCycle</code> (0x557620)</td>
+</tr>
+<tr>
+<td><code>SampleFrame(visual)</code>, <code>Frame()</code>, <code>FrameHour()</code></td>
+<td><code>fn_0086A2C0</code>, [0xFA26BC], [0xFA26C4]</td>
+<td>Normalises to [0, 24) with the loops at 0x86A2C4..0x86A308 and stores hour and type. <code>DrawSky</code> 0x5E2226 calls it once per frame with the visual time [0xBF3380]: in openblack, at the start of <code>Renderer::DrawScene</code> (once per frame, not on every pass)</td>
+</tr>
+<tr>
+<td><code>Jump(visual)</code></td>
+<td><code>fn_0086A270</code></td>
+<td><code>SampleFrame</code> and the whole dome at once. Called by <code>fn_005E22A0</code> 0x5E22CB (<code>ForceVisualTime</code> 0x5575D0): in openblack, <code>DayNightClock::SetScriptTime</code> (Reset/LoadMap, <code>SET_GAME_TIME</code>, the slider, <code>OPENBLACK_TIME_OF_DAY</code>, <code>config.timeOfDay</code>). <code>MOVE_GAME_TIME</code> does not jump</td>
+</tr>
+<tr>
+<td><code>IsVisualNight(T)</code></td>
+<td>0x5575E0</td>
+<td>T &gt; the double 1.2 ([0x8D8758] = 33 33 33 33 33 33 F3 3F): T = 1.2f is already night. Used by <code>DayNightClock::IsVisualNight</code>; <code>ChildAtCreche</code> 0x757CFF has the same comparison</td>
+</tr>
+<tr>
+<td><code>EveningRamp(visual, w, o)</code></td>
+<td><code>fn_00557AE0</code></td>
+<td>u = 24 − visual, s = D + o; u &lt; s → 1; !((D + w) + o &gt; u) → 0; otherwise, 1 − (u − s)/w. For the Relaxation 0x7488C0 / Sleep 0x748960 desires (no caller yet, <strong>pending</strong>)</td>
+</tr>
+<tr>
+<td><code>LightColumn(T)</code></td>
+<td>0x86985E..0x8698AD</td>
+<td>(2 − T)·6.0f·2.5f = (2 − T)·15, column of the light table</td>
+</tr>
+<tr>
+<td><code>HazeFactor(T)</code></td>
+<td>0x869D5F..0x869D7A</td>
+<td>v = T &gt; 1 ? 2 − T : T; v²</td>
+</tr>
+<tr>
+<td><code>DomeWeightOf</code>, <code>BlendTexel555</code>, <code>DomeBlend</code></td>
+<td><code>fn_0086B7F0</code>, <code>fn_0086B9A0</code>, <code>fn_0086A330</code></td>
+<td>The dome, below</td>
+</tr>
+</tbody>
+</table>
+<p>Who calls what:</p>
+<ul>
+<li>They compute the type on the spot with the visual time, like the original: the model lighting
+  (<code>model_light::UpdateFrameLight(…, sky_type::At(visual))</code>, like <code>fn_005E5830</code> 0x5E58D1..0x5E58DF; it gives the same as
+  <code>Frame()</code> because <code>DrawSky</code> samples the same time right afterwards), <code>DayNightClock::ProcessTurn</code> (0x5E202B), the
+  fireflies (<code>SkyType</code>, 0x52B7CA / 0x52B820) and <code>IsVisualNight</code> (night lights).</li>
+<li>They read the frame sample: the dome and <code>LandLightTable::Build(sky_type::Frame(), …)</code> (column
+  <code>LightColumn</code>, haze <code>HazeFactor</code>; see <a href="rendering.html">rendering.md</a>). Sound (<code>GSoundMap</code>, 0x71DDF1) must read
+  <code>Frame()</code>, the T of the previous frame (ProcessTurn 0x54D830 and EndTurn 0x54D837 run back to back, without <code>DrawSky</code>):
+  <code>audio::ProcessTurn</code> reads it this way (done).</li>
+<li>Constants: 12 [0x8CF1C0], 24 [0x8CA26C], 2.5 [0x8C581C], 255 [0x8AB270] (0x86B8A6 / 0x86B8C3); the ramp's fdivp is
+  (h − A)/(B − A) (0x86A206..0x86A21A). The set-up thresholds 4.5 / 7 / 7.5 / 8.25 are pushed as 0x40900000 /
+  0x40E00000 / 0x40F00000 / 0x41040000 (0x86A3B7..0x86A3E0).</li>
+<li>Removed: <code>Sky::GetCurrentSkyType</code> with script time and invented thresholds 3.5 / 7.5 / 8 / 8.5 with <code>&lt;=</code> (and later
+  its forwarder 2 − <code>Frame()</code>), <code>Sky::SetDayNightTimes</code>, <code>u_skyAlphaThreshold.x</code> (fs_object does not read it), <code>u_sky</code> and its
+  fallback ramp in <code>fs_water</code> (without <code>palette.raw</code> the sea now goes unlit, white, <strong><span class="state approx">inferred</span></strong>: the original always has
+  the table), and <code>u_skyAndBump.x</code> (it is 0; fs_terrain no longer reads it: the sky type reaches the land only through the
+  light table and the haze of vs_terrain).</li>
+<li>Precision: the FPU runs at 24 bits (<code>fn_007DEE00</code>, <code>and cw, 0xFCFF</code> at 0x7DEE0D), the same hypothesis as <code>SetCycle</code>. With
+  it the <code>Time2SkyType</code> ramps already come out rounded to float, the <code>SampleFrame</code> loops run in float (h = −1e-7
+  gives 24 → 0; with 53/64 bits it would stay at 23.9999999 and 24.0f would be stored) and the hysteresis subtraction is rounded to
+  float before comparing it with the double 0.03f.</li>
+<li>NaN: <code>Time2SkyType</code> compares with <code>fcomp</code> / <code>test ah,1</code> / <code>je</code> (0x86A1DC..0x86A246), so «unordered» counts
+  as «&lt;»: a NaN time gives 2 (night). openblack copies it with <code>!(t &gt;= x)</code> comparisons. In <code>SampleFrame</code> the original
+  gets stuck in an infinite loop with NaN; openblack carries on (openblack difference).</li>
+</ul>
+<p><strong>The dome</strong> (<code>DomeBlend</code>, <code>Sky::UpdateDome</code>, <code>fs_sky.sc</code>):</p>
+<ul>
+<li><code>fn_0086A3B0</code> creates 3 dynamic 256×256 textures (flags 0x104, format 4; [0xFA2738 + 4a]), one per alignment,
+  and builds them whole. Sources: <code>Data\WeatherSystem\sky_&lt;good|ntrl|evil&gt;_&lt;day|dusk|night&gt;.555</code>, index
+  3·time_of_day + alignment ([0xFA26E8]). It builds the whole dome at 0x86A595, and the dome's [0xFA26C0] is 0 again
+  at 0x86A5AB.</li>
+<li>Each frame, <code>fn_0086A330</code> (after <code>SampleFrame</code>, 0x5E222B): if the dome is complete and |<code>Frame()</code> − built|<blockquote>
+<p>0.03 (the double [0x99A168] = (double)0.03f, strict), it stores the new T ([0xFA26C0]) and goes back to row 0
+  ([0xFA26B8]); while rows are missing it blends 32 more with the stored T (the first block in the same frame). There are
+  [0xEDD470] ? 128 : 256 rows. [0xEDD470] depends on the detail level: <code>fn_00823AD0</code> copies it from the table
+  [0x9A38E0 + 4·level] = 1, 1, 0, 0, 0, 0, 0 (0x823C5B..0x823C69; <code>DetailLevel::skyNoBlend</code>), and <code>fn_0082A8E0</code>
+  writes it again on its two exits (0x82AB1B / 0x82AB30). At levels 2..6 there are 256 rows in 8 frames, with
+  blending. At levels 0 and 1 <code>fn_00869670</code> is false: no blending, 128 rows and tint by T (below, not ported).
+  openblack blends 256 rows at all levels.</p>
+</blockquote>
+</li>
+<li><code>fn_0086B7F0</code>: T ≤ 1 → w = ftol(T·255) between day (255 − w) and dusk (w); otherwise, w = ftol((T − 1)·255) between dusk
+  and night. <code>fn_0086B9A0</code> (555 path): per 5-bit channel <code>(c_inf·(255 − w)) &gt;&gt; 8 + (c_sup·w) &gt;&gt; 8</code>; the sum of
+  weights is 255/256 (a channel of 31 comes out as 30; the callee masks 255 − w with 0xFF, 0x86B9F6..0x86BA03) and bit
+  15 comes out as 0. Since each term is truncated separately, the dome
+  comes out somewhat darker and with more banding than the previous linear blend: about −4/−5 per channel (out of 255) at noon and
+  up to 40 % less in the dark channels at night (the night textures have values 1..4 out of 31). This is what
+  the original does (tables 0xFA2554 / 0xFA2514, p = 255 − ftol(T·255) at 0x86B8E3): <strong>do not «fix» it</strong>.</li>
+<li>The texture (format 4) only receives the +0x138 mark when the block reaches the last row (0x86B95B..0x86B977); the
+  unlock <code>fn_00838EB0</code> only uploads formats 1, 2 and 0x20 itself. The +0x138 mark means «dirty, upload on
+  the next bind»: the <code>SetTexture</code> path of the LH3D texture (0x837EC6..0x837F74) checks it, locks the D3D
+  surface (vtable +0x64, flags 0x821), converts the system copy with [+0x134] (0x837F19), unlocks, calls
+  <code>IDirect3DDevice7::SetTexture</code> (+0x8C) and clears the mark (0x837F74); that is, in the <code>DrawSky</code> of the same frame.
+  openblack uploads the 3 layers to the GPU only when the last row is finished, so the dome changes all at once after 8
+  frames, like the original.</li>
+<li>openblack does it on the CPU, in <code>Sky::BlendDome</code>, on a copy of the 9 textures; <code>fs_sky.sc</code> no longer blends times,
+  only alignments (layer 0 evil, 1 neutral, 2 good; <code>u_typeAlignment.x</code> is not used). How the original blends the
+  alignment is <strong>not read yet</strong> (openblack keeps its linear blend of the two closest, <strong><span class="state approx">inferred</span></strong>).</li>
+<li>The initial dome is built with the current T (the original uses the time from <code>fn_0086A3B0</code> with its thresholds
+  4.5 / 7 / 7.5 / 8.25); the last time jump of <code>Open</code> (0x5E1D9C; the first is <code>fn_005576F0</code> 0x557702) and the
+  <code>SetScriptTime(12)</code> of <code>Reset</code> in openblack rebuild it whole immediately (the last jump wins), <strong><span class="state approx">inferred</span></strong> with no
+  visible effect. <code>fn_005E22A0</code> also calls <code>fn_005E1DE0</code> (0x5E22D3, reads [0xBF3378]) after the jump: it is not sky
+  type and it is not in <code>SetScriptTime</code>.</li>
+<li>Not ported: the no-blend mode (<code>fn_00869670</code> false: copy of the day textures and tint of the sky colour by
+  T, 0x86B1C1..0x86B2A4), the 565 path ([0xEDD46C]) and the light table after <code>Jump</code> (openblack rebuilds it every
+  frame).</li>
+<li>Order in <code>GGame::Load</code>: the jump (0x554B6F) comes before <code>SetVisualTimeCycle</code> (0x554C9E), with the previous thresholds;
+  openblack does not load saved games.</li>
+</ul>
+<p>Tests: <code>test_sky_type</code> (default thresholds, <code>At</code> with Demon God and with NaN, normalisation (also
+−1e-7 → 0 at 24 bits), 1.2 double, evening ramp, column and haze, weights, 555 blend, hysteresis and rows (also the
+subtraction rounded to float), jump from <code>SetScriptTime</code>).</p>
+<h2 id="night-lights-report-night_visualstxt">Night lights (report <code>night_visuals.txt</code>)</h2>
+<ul>
+<li><strong>Windows</strong> (<code>Abode::Draw</code> 0x515F70): the submeshes with the L3D <code>isWindow</code> mark are shown unlit, with a flat
+  grey 224..252 that flickers slightly. It only happens if someone is at home (Abode +0xB6) and it is visual night. Each
+  house has its own time offset: the fractional part of |x + z|·0.1 + y. openblack: <code>night_lights::WindowColour</code>
+  (<code>src/3D/NightLights.*</code>), which gives the colour +0x54 0xFFgggggg or 0 with the windows off, and goes in the z of the fifth
+  column of the instance (<code>argb_colour::PackInstanceWindow</code>, <a href="rendering-objects.html#the-object-colour-fields-in-the-instance">rendering-objects.md</a>). Since openblack does not yet send villagers home, it counts "someone at home" as
+  the house having inhabitants <strong><span class="state approx">approximate</span></strong>.</li>
+<li><strong>Home of the script villagers</strong>: when creating a villager with CREATE_VILLAGER, openblack gives it the house
+  closest to the script's abode position (1 unit or less away) or, if there is none, any with room, and adds it
+  to its inhabitants. Own rule, not checked against the original <strong><span class="state approx">approximate</span></strong>.</li>
+<li><strong>Hand light and street lantern light</strong> (done; <code>night_lights::Update</code>, called from <code>Renderer::UpdateClouds</code>):</li>
+<li>Mechanism (<code>fn_008229B0</code>): an 8-bit image, remapped on load to min(47, v·48/255 + 0.5), is stamped onto
+    the luminosity of the cells with a bilinear filter that the original shifts by one texel. v = r·trunc(I·255)/255. If
+    v ≤ lum·((G255·48) &gt;&gt; 8) &gt;&gt; 8 the cell does not change (G255 is the green of table[255]). Otherwise, v replaces the
+    normal land (≥ 48) or the maximum with another light is kept. The range 0..47 is the warm ramp of the light table.
+    openblack writes it into the same R8 layer as the cloud shadows (the shader takes the minimum).</li>
+<li>Only when the mean of the table's base is below 120.</li>
+<li>Hand: <code>light_hand.raw</code> (12×12) from the position of the hand model − 55, with strength clamp((120 − mean)/15).
+    No light if the hand is hidden.</li>
+<li>Street lanterns: <code>CREATE_STREET_LANTERN</code> (type 7 = MSH_O_TOWNLIGHT, flames at +5) and bonfires (MSH_B_CAMPFIRE, +1).
+    Stamps <code>village_diffuse.raw</code> (14×14) from pos − 50, with ±0.5 of jitter every 30 ms. Strength I/255 from
+    <code>fn_0086C220</code> by script time: it turns on from 16.5 to 17.5 and turns off from 6 to 7 (on at 16.5 0xC395C4, off at
+    7 0xC395C8, ramp 1 0xC395CC).</li>
+<li>Lantern details: the jitter clock +0x10 starts at Random(0, 30) (0x8232FB); a flame's size Random(−0.1, 0.1) + 1,
+    at least 1e-4 (0x823355..0x823382); the flames start at cell 0 (0x823397); new lights go at the head of
+    [0xEB99B8] (0x8232D5..0x8232E7); every 30 ms (0x8234B6..0x8234FD, 1/30 [0x8CF3F8]) Random(−0.5, 0.5) for +0x14
+    (0x823502) and +0x18 (0x823514) and the glow's size Random(−0.1, 0.1) + 3 (0x823526..0x823546); fn_007349E0(dark)
+    plays the lanterns' loop only while dark (both branches of 0x5E5921); fn_00823690 stamps village_diffuse.raw.</li>
+<li>Creation (<code>fn_00823240</code>) is <strong>not gated by darkness</strong>: 6 CRT draws in this order: the clock <code>Random(0, 30)</code>
+    (0x8232FB), then for each of the 3 sprites (2 flames, 1 glow) the flame size <code>Random(−0.1, 0.1)</code> (0x823368, flames
+    only) and the start <code>ftol(Random(0, 31))</code> (0x8233EE). Callers: <code>GStreetLantern::CallVirtualFunctionsForCreation</code>
+    0x734905, <code>AnimatedStatic::CallVirtualFunctionsForCreation</code> 0x422565 (the Norse gate's lamps) and
+    <code>CitadelHeart::DrawLantern</code> 0x4666E2 (2 lights, lazily, on the first draw with +0x9C &gt; 0.07).</li>
+<li>The darkness gate: <code>fn_005E5830</code> runs once per drawn frame from <code>GLandscape::Draw</code> 0x5E488E. With the mean of
+    the R, G, B of [0xFA26A4] &lt; 120 (0x5E5921) it calls, in order, the jitter <code>fn_00823460</code>, <code>fn_0086D360</code>, the village
+    alpha [0xD20184] = clamp((120 − mean)/15), <code>fn_007349E0(1)</code>, the hand light <code>fn_008229B0</code> (if the hand is shown)
+    and <code>fn_00823690</code>; otherwise (0x5E5A20) [0xEB99BC] = 0, <code>fn_0086D360</code> and <code>fn_007349E0(0)</code>. 0x5E592A is the only
+    caller of the jitter, so its 3 CRT draws per light per tick (newest first) are <strong>not made while it is light</strong>. The
+    time of day only drives the brightness (<code>fn_0086C220</code>), not the gate.</li>
+<li>raffclar's tree: 6 creation draws in this order at creation, and the jitter only when dark. Not checked: whether
+    his <code>LandLightTable::GetLandColour</code> equals [0xFA26A4] bit for bit, and his registry order against "newest first".</li>
+<li>Additive sprites: two <code>S_Fire</code> flames (frames 0..31 backwards in 700 ms with an integer global clock, which only
+    runs with alpha ≠ 0; flame i starts at the global table 0xC383BC, which every new light rewrites with
+    ftol(Random(0, 31)) (fn_00823240 0x8233E4..0x8233F8), so they all run in phase with the last one created;
+    fn_00823570, <code>frame_anim::LanternCell</code>; half-size 1 ± 0.1) and a halo
+    <code>smoke</code> cell 56 ((flags &amp; ~7) | 0x38, 0x8233BC..0x8233EB; half-size 3 ± 0.1). Colour 0xF38421 with alpha trunc(I/2).</li>
+<li>Approximate: the sprite shader only uses the alpha mask, without the texture's RGB.</li>
+<li>The additive quad of the hand over the water (±60, <code>atmos.raw</code>) is done (<code>src/3D/HandWaterGlow.*</code>, see
+    <a href="rendering.html#sky-sun-moon-and-clouds-original">rendering.md</a>). The two lights of the Norse gate
+    (MSH_O_TOWNLIGHT at (±15, 30, 0) of the gate) are done (see <a href="map-loading.html">map-loading.md</a>).</li>
+<li><strong>Street lantern sound</strong> (done; <code>src/Audio/LanternSounds.*</code>, one <code>audio::tags</code> per lantern,
+  <a href="audio.html#soundtag">audio.md</a>):</li>
+<li><strong>Creation</strong>: <code>GStreetLantern::CallVirtualFunctionsForCreation</code> 0x734810 creates a <code>SoundTag</code> (<code>fn_0071E8C0</code>,
+    +0x60) with offset (0, <code>Object::GetHeight</code> 0x638120, 0), sample 0x93, 3D, mode 2, loops −1, bank 1
+    (<code>Audio\SFX\Game\InGame.sad</code>) and then <code>SetActive([0xDA0A10])</code>. <strong>Both lantern classes</strong> have it (it does not check
+    +0x58); the object with the UNAVAILABLE mark (+0xA &amp; 1) does not have it.</li>
+<li><strong>Sample</strong>: 0x93 = LH_SAMPLE_G_LANTERN_01 (147) = <code>G_Lantern_01.wav</code>, 22050 Hz, ~4.1 s, priority 200, override
+    marks 0x7C0: loops −1, minDist 3, maxDist 5, scale 4, mode 2. No volume or pitch mark, so
+    volume 127 (gain 1) and pitch 100 % with the usual ±15 % deviation. Mode 2 = one channel per lantern: if it is already
+    playing, it does nothing.</li>
+<li><strong>Day/night switch</strong>: <code>fn_007349E0(on)</code> stores [0xDA0A10] and does <code>SoundTag::SetActive</code> on every lantern. Only
+    caller <code>fn_005E5830</code> (<code>GLandscape::Draw</code>, every frame): 1 when the mean of the light table's base is
+    <strong>&lt; 120</strong> (the same test as the hand and the village lights, with no time test), 0 otherwise. <code>SetActive(0)</code> calls
+    <code>StopPlayingSoundEffect</code>: abrupt cut.</li>
+<li><strong>Per turn</strong>: <code>SoundTag::ProcessSoundTags</code> 0x71E5F0 from <code>GGame::EndTurn</code>; each active tag calls
+    <code>GAudio::PlaySoundEffect</code> 0x42A100 with (x, altitude + y, z) plus the offset. 0x429E30 <strong>does not start</strong> the sample
+    if the camera is more than maxDist (5 units) from that point; once started, the loop continues wherever the camera goes.
+    If the lantern stops being available, <code>CreateSoundTagForDeadObject</code> calls <code>LHSampleReleaseLoop</code>: the current pass
+    finishes and the tag is deleted.</li>
+<li>openblack: <code>audio::lantern_sounds::SetOn</code> from <code>night_lights::Update</code> (the same mean &lt; 120),
+    <code>ProcessTurn</code> in the turn block of <code>Game.cpp</code> and <code>Clear</code> together with <code>night_lights::Clear</code> on map load (before
+    <code>Registry::Reset</code>, which would delete the emitter entities without releasing the OpenAL source and the loop would keep
+    playing). The emitter is created with <code>PlayType::Repeat</code> and released by setting <code>PlayType::Once</code> on it (= <code>LHSampleReleaseLoop</code>:
+    <code>AudioManager::Update</code> removes its <code>AL_LOOPING</code> and destroys it when the pass finishes).</li>
+<li><strong>Not ported</strong> (unverified): QMixer's attenuation curve for {min 3, max 5, scale 4}
+    (<code>QSWaveMixSetDistanceMapping</code>, it is in the external DLL). openblack keeps OpenAL's default model as in
+    all 3D sounds; a general audio change could set <code>AL_REFERENCE_DISTANCE</code> / <code>AL_MAX_DISTANCE</code> per
+    source from the <code>.sad</code>, but only after deciphering QMixer.</li>
+<li>Because of the 5 units in the data, in normal play it can only be heard with the camera almost on top of the lantern.</li>
+<li>Checked in game (<code>OPENBLACK_LANTERN_SOUND_TRACE=1</code>): with <code>OPENBLACK_TIME_OF_DAY=22</code> and the camera at the
+    Land1 village lantern <code>2493,2534</code> it starts at 1.7 units and does not repeat (mode 2); at the field lantern <code>1365,2571</code>
+    it starts the same way (both classes); at noon it never starts; when changing map (<code>OPENBLACK_TEST_MAP_CYCLE</code>) the cut of
+    <code>Clear</code> does not leave the loop loose. The night → day transition <strong>could not be triggered in game</strong>: the Land1 CHL script sets the
+    script time to 7.3 every turn (above the darkness threshold, which is between 7.2 and 7.3), so
+    <code>OPENBLACK_TEST_MOVE_TIME</code> does not move it and <code>OPENBLACK_TIME_OF_DAY</code> pins it without a transition; the abrupt cut was verified
+    through the same code path (<code>Clear</code>).</li>
+<li><strong>Fireflies</strong> (done; <code>src/ECS/FireFlies.*</code>):</li>
+<li>When: with visual time &gt; 12 and sky type &gt; 1 up to 50 appear, half on trees and half on random
+    rocks. Each turn one flies to the closest house or lantern less than 300 m away, at +(height + 2). In the morning
+    each turn one goes back to a tree or a rock.</li>
+<li>Flight: it lasts distance / (3·speed) with smoothstep easing.</li>
+<li>Drawing: orbit of radius 8 plus a jitter of radius 1. Sprite 37 of <code>S_SpriteSheet3</code>, half-size 0.3, alpha 190,
+    which fades out between 100 and 300 m.</li>
+<li>Approximate: the spiral search with 50 % per cell is reduced to "the closest one that passes a coin toss".</li>
+<li><strong>Sound</strong>: <code>GSoundMap</code> blends the day and night ambience according to max(0, sky type − 1) (done, see
+  <a href="objects-and-resources.html#sounds">objects-and-resources.md</a>, "Ambience"); the
+  sounds of the houses are chosen by the sky type (pending).</li>
+<li>Gameplay only, left out for now: lions and wolves go to their den (22 / 23 h), children leave the
+  crèche, the food desire and the creature's desires.</li>
+</ul>
+<h2 id="climate">Climate</h2>
+<p>The game weather (climates, storms, rain and its drawing) is ported and described below, in
+<a href="#weather-and-climate-srcecsweather">Weather and climate</a>. What remains here are the sky notes from the first reading.</p>
+<ul>
+<li>Sky clouds (<code>CloudInSky</code>): done, see <a href="rendering.html#sky-sun-moon-and-clouds-original">rendering.md</a> (placement, colour by time and alignment,
+  sky alignment smoothed 0.001/ms). What depends on the weather goes through <code>Clouds::WeatherOvercastAtCamera()</code>
+  (byte 3 of <code>weather::atmos::GetWeatherSmooth</code> at the camera × 0.01; 0 with a clear sky).</li>
+</ul>
+<p>Water and weather: <strong>there is no wet ground</strong> in the original; the sea only changes with the weather through the overcast cap of the
+light table and the lightning flash (<code>LandLightTable::Build</code>). The overcast has a single source,
+<code>Clouds::WeatherOvercastAtCamera()</code> (reads <code>weather::atmos::GetWeatherSmooth</code> at the camera); <code>3D/SkyWeather</code> only gives the flash (<code>weather::LightningFlashAtCamera</code> from
+<code>ECS/Weather/LightningFlash</code> at the camera position).
+- <strong>Storm clouds</strong>: <code>GClimate::CreateStorm</code> 0x772E00 → <code>GWeather</code> 0x83F590 → <code>DrawClouds</code>
+  0x83FC90, a group of up to 16 balls (8 by default, <code>CHANGE_CLOUD_PROPERTIES</code> changes number, blackness and height) at
+  lx, lz ∈ −1..1, ly ∈ −10..10 + height; every 400 frames a new target (ly 0..20 + height), 1/400 of the way
+  per frame; world X = R·lx/2 + cx, Z = R·lz/2 + cz, Y = ground + ly with R = radius(t) + radius2; size R·2·Random(0.01,
+  0.015); colour [0xFA26A4]·(1 − 0.5·blackness), alpha·intensity·0.75, with haze; they are not drawn with alpha ≤ 5. They are the
+  only cloud groups in the original. Already ported: <a href="miracles.html#the-flash-and-the-clouds-of-the-registered-storms-ecsweatherlightningflash-stormclouds">The flash and the clouds of the registered storms</a>.
+  - A puff's colour scales each RGB byte by (1 − 0.5 × blackness) only when the blackness is above 0
+    (0x83FF56..0x840000).
+  - The puffs get the haze of fn_007FEB30 with a grey specular min(255, ftol(flash f3 [storm +0x8C] × 127 [0x8C4A00]))
+    in all four bytes (0x83FFEE..0x840027), put in +0x50 by SetColorSpecular and drawn by the mists' effect branch: the
+    storm's own flash lights its clouds.
+  - The storm's shadow s = (blackness + 0.7) × fade is stamped with 1 when s ≥ 1, and otherwise only when s &gt; 0.01
+    ([0x8C5840]); only with the "CloudShadows" option [0xC381F4]: fn_0086CFF0(+0xA0, 0xEE9D3C, 40, 1, s, 2, 0)
+    (0x840069..0x8400C6).</p>
+<p>The weather items first read here (<code>GClimate</code>, <code>LH3DAtmos::Render3D</code> with rain and snow by 80×80 tiles, lightning,
+overcast weather in the light table and the haze) are described in <a href="#weather-and-climate-srcecsweather">Weather and climate</a>;
+what is left is in <a href="#pending">Pending</a>.</p>
+<h2 id="weather-and-climate-srcecsweather">Weather and climate (<code>src/ECS/Weather</code>)</h2>
+<p>Two layers, as in the original: <strong>LH3DAtmos</strong> (the 3D engine) keeps a grid of the weather made by the registered
+<em>storms</em>, and <strong>GClimate</strong> (the game) adds the temperature and wind of the <em>climates</em> to it and creates natural storms.
+All queries from the rest of the game go through <code>GClimate::ComputeWeather</code>.</p>
+<blockquote>
+<p><strong>Code rules.</strong> The weather state (grid, storms, climates, weather objects) lives in ECS components or Locator
+services, not in globals; the info rows and textures load through the resource caches; the byte arithmetic and the
+formulas are pure functions tested with fakes in <code>test/</code>; comments describe behaviour in plain English, with
+no decompiled names or addresses (those belong here). See <a href="../refactor/README.md">the conventions</a>.</p>
+</blockquote>
+<ul>
+<li><code>Weather.h</code> / <code>WeatherQueries.cpp</code>: the queries (the small header that the rest of the game includes).</li>
+<li><code>WeatherInfo.h</code>: the 8-byte structure and its byte arithmetic.</li>
+<li><code>Atmos.{h,cpp}</code>: LH3DAtmos, the grid of 128 × 128 cells of 40 m.</li>
+<li><code>Storms.{h,cpp}</code>: LH3DStorm / GWeather, the registered volumes.</li>
+<li><code>Climate.{h,cpp}</code>: GClimate, <code>ComputeWeather</code>, <code>ProcessAll</code>, the natural storms.</li>
+<li><code>Calendar.{h,cpp}</code>: the date part of GGameInfo (day of the year, month, season).</li>
+<li><code>WeatherThing.{h,cpp}</code>: the CHL weather objects.</li>
+<li><code>Rain.{h,cpp}</code> + <code>Graphics/RendererRain.cpp</code>: the drawn rain.</li>
+<li><code>WeatherLoop.{h,cpp}</code>: the calls from the turn; <code>WeatherDebugHooks.cpp</code>: the test hooks.</li>
+<li>Scripts: <code>Magic/Script/MapScriptWeather.cpp</code> (map commands) and <code>Magic/Script/CHLWeather.cpp</code> (CHL natives).</li>
+</ul>
+<h3 id="weatherinfo-8-bytes-lh3datmos"><code>WeatherInfo</code> (8 bytes, <code>LH3DAtmos</code>)</h3>
+<p>It is returned in <code>edx:eax</code>, and the same layout is a grid cell, the tail of an LH3DStorm (+0x48) and the
+result of <code>ComputeWeather</code>: <code>temperature</code> (degrees), <code>rain</code> (0..100), <code>snow</code>, <code>overcast</code>, <code>windX</code>, <code>windZ</code>
+(× 1/8 = m/s), <code>snowCover</code> and <code>stamp</code> (the frame in which the cell was computed).</p>
+<p>The arithmetic is on signed bytes, and the original mixes two forms: the temperature <strong>wraps</strong> (<code>add cl, al</code>,
+<code>WrapAdd</code>) and the rest is <strong>clamped</strong> to -128..127 (<code>ClampAdd</code>). The interpolation is <code>a + ((b - a) × w &gt;&gt; 8)</code> with
+arithmetic shift (<code>LerpByte</code>).</p>
+<h3 id="lh3datmos-the-40-m-grid-atmoscpp">LH3DAtmos: the 40 m grid (<code>Atmos.cpp</code>)</h3>
+<ul>
+<li>128 × 128 cells of 40 m (0xEDC350) = 5120 m, exactly the map. Outside the grid the <em>ambient weather</em> is used
+  (0xEDC348), which in a game is all 0 (it is only written by <code>LHInetWeather</code> and the saved game).</li>
+<li>A cell is recomputed <strong>on demand</strong> (<code>fn_00834EE0</code> / <code>fn_00834E20</code>) when its <code>stamp</code> is not the current frame
+  (0xEDC340): it starts from the ambient weather and adds each registered storm at the <strong>corner</strong> of the cell
+  (<code>ix × 40, 0, iz × 40</code>), not at the requested point. That is why the rain comes out in 40 m steps.</li>
+<li>The grid 0xEDC350 (0x20000 bytes) is allocated by fn_00835AD0, which also loads <code>sstorm.raw</code> (40 × 40 grey, 0x640
+  bytes) into 0xEE9D3C at 0x835E15: the storms' land shadow.</li>
+<li>A cell recompute (<code>fn_00834E20</code>) starts from the ambient weather (<code>fn_00834E10</code>), applies each storm (vt+0xC, list
+  [0xEEA37C], next +0x3BC), stamps [0xEDC340] into byte 7 (0x834EAD..0x834EB8) and then <strong>overwrites</strong> byte 6
+  (snowCover, 0x834EC5; it is not added) with <code>fn_00834DD0(corner)</code> = clamp(ftol(<code>fn_0086CA80</code>(x, z) × 0.5), −128, 127)
+  (0x834DE4..0x834E04; <code>ftol</code> truncates towards zero), 0 without [0xEDC344]. <code>fn_0086CA80</code> (reached through
+  <code>fn_0086CB80(p)</code>) filters the 128 × 128 float grid bilinearly (cells of 40, × 0.025; 0 outside [0, 127) in x or z).
+  <code>SnowCover::Init</code> 0x86C960 zeroes it (0x10000 bytes) and loads <code>data\WeatherSystem\snowmap.raw</code>, with no draws.
+  raffclar's tree (<code>WeatherSystem.cpp</code>) has the filter, the bounds and the overwrite, but <strong>not the × 0.5</strong>: its
+  lying snow is twice as deep in the grid (tornado dust <code>&gt;= k_SnowDust</code> and the debug "Lying" bar; <code>IsSnowCoveredAt</code>
+  is unaffected).</li>
+<li>The cell lerp fn_00835620 (and the smooth sampling) lerps bytes 0..6 with a wrapping add and keeps the stamp of the
+  first cell.</li>
+<li>A new land (<code>InitStaticsValues</code> 0x54A8CC..0x54A907): every storm deleted (0x54A8D1), the grid and the ambient
+  weather zeroed, the frame back to 1.</li>
+<li><code>GClimate::ComputeWeather</code> 0x771640 is reached through <code>GClimate::GetWeather</code> 0x771490; only the camera asks for the
+  smooth sampling.</li>
+<li><code>LH3DAtmos::UpdateGame</code> 0x8356E0 (the first call of <code>GGame::ProcessTurn</code>, with the visual time and 0.1 s) updates
+  the storms and advances the frame; on overflowing 256 it clears all stamps and goes back to 1. The sun position that
+  it also computes (0xEDD378: 4000, cos(t·π/12) × 1100 − 150, sin × 800) is for lighting, it is not used here.</li>
+<li><code>LH3DAtmos::GetWeather</code> 0x834F80: the cell of (x, z) and then the height: <strong>above 50 m the temperature drops
+  0.075 per metre</strong>, and above 200 m it is a fixed −11 (<code>add al, 0xF5</code>).</li>
+<li><code>LH3DAtmos::GetWeatherSmooth</code> 0x835180: bilinear between the four cells in steps of 1/256; above 200 m
+  it tends towards the ambient weather with weight <code>(height − 200) / 4</code> (cap 256) and then applies the same drop with height. It is the
+  one used by the camera (clouds) and <code>GetWindAt(p, true)</code>; all the GClimate getters ask for the non-smoothed one.</li>
+<li><code>SnowCover</code> (0xEDC344, the snow accumulated on the ground, <code>fn_0086CB80 × 0.5</code>) <strong>is not ported</strong>: <code>snowCover</code> stays 0.
+  With no snowing storm the grid stays 0, so porting it with the × 0.5 and the truncation is identity.</li>
+</ul>
+<h3 id="storms-lh3dstorm-and-gweather-stormscpp">Storms: LH3DStorm and GWeather (<code>Storms.cpp</code>)</h3>
+<p>The LH3DStorm descriptor (0x50 bytes, constructor <code>fn_0083F3F0</code>) comes by default with inner radius 100, outer 300,
+fade 10 s, life 100 s, strength 1, 8 clouds, blackness 0.5, elevation 160, fall speed 1, no lightning, and as
+weather 10 degrees / rain 100 / overcast 100 / wind (10, 0). The GWeather object (0x3C0, list 0xEEA37C, the newest
+first) copies it and adds age, destination, speed, deletion counter, lightning timers, drawing
+position, radii and fade.</p>
+<ul>
+<li><code>GWeather::Update</code> 0x83F900 (from <code>fn_0083F840</code>, once per turn with 0.1 s):</li>
+<li>when <code>lifeTime</code> passes it is marked for deletion;</li>
+<li>the <strong>fade</strong> rises from 0 to <code>strength</code> in <code>fadeInTime</code> and goes down the same way at the end, and the <strong>inner radius</strong> follows it
+    (the outer one does not);</li>
+<li>it moves towards its destination at <code>speed</code> m/s in x,z;</li>
+<li>it only moves when the distance to its target is above 0.001 ([0x8AA3B0], 0x83FA11);</li>
+<li>the lightning, once faded in: <code>forkTimer</code> and <code>sheetTimer</code> count down and on reaching 0 they are reloaded with
+    <code>min + rand(max − min)</code>. The fork one creates a lightning PSys (0xEEA384) and the sheet one plays the thunder (0xEEA388);
+    here they are two <em>callbacks</em> (<code>SetForkCallback</code> / <code>SetSheetCallback</code>), still empty. The flash
+    (<code>fn_00837290</code>, <code>Storm::flash</code>) is in <a href="miracles.html#the-flash-and-the-clouds-of-the-registered-storms-ecsweatherlightningflash-stormclouds">The flash and the clouds of the registered storms</a> (<code>ECS/Weather/LightningFlash</code>).</li>
+<li>In the original the lightning callbacks are function pointers set by the engine: fork 0xEEA384 = 0x68E8F0 (from
+  <code>PSysGlobal::InitializeOneTimeOnly</code>, a PSys strike), sheet 0xEEA388 = 0x429CE0 (GAudio, the thunder). Both get the
+  storm, the point (storm x, z, land height + elevation) and the outer radius.</li>
+<li>The lightning flash bitmap 0xED92F0 is built once for all flashes with a refcount at 0xEDD3A8 (values capped at 255
+  inside d &lt; 32).</li>
+<li>A new storm: fn_0083F6F0 → fn_0083F590 puts a new GWeather at the head of the list with speed 1 and target = its own
+  position. The GWeather ctor fn_0083F4E0 leaves the speed (+0x68, metres per second towards the target) at 0.</li>
+<li>fn_0083F8D0 answers whether a storm is still in the list and not marked for deletion (the original keeps a GWeather
+  pointer and asks it); the deleting destructor is vt 0x10, after fn_0083F630 unlinks it (and deletes its cloud
+  mists).</li>
+<li><strong>Deletion over two turns</strong>: <code>fn_0083F7B0</code> only marks (+0x94 = 1); the counter rises on each <code>UpdateAll</code> and the storm
+  is destroyed when it goes past 2. While it is marked it no longer contributes anything to the grid. <code>GClimate::ToBeDeleted</code> 0x7713E0
+  does destroy them instantly.</li>
+<li><code>GWeather::CalcAtmos</code> 0x8400E0: if the point is in the box and the circle of the <strong>outer</strong> radius, the weight is 1 inside
+  the inner one and goes down linearly to 0 at the outer one; <code>w = weight × fade × 256</code>. With <code>w == 0</code> it does nothing. The
+  temperature <strong>tends</strong> towards the storm's (<code>LerpByte</code>) and rain, snow, overcast and wind are <strong>added</strong>
+  (<code>ClampAdd(x, (value × w) &gt;&gt; 8)</code>).</li>
+<li><code>fn_0083F750</code> (<code>KILL_STORMS_IN_AREA</code>) marks the storms whose 2D distance to the point is less than radius + their outer
+  radius.</li>
+</ul>
+<h3 id="gclimate-the-climates-climatecpp">GClimate: the climates (<code>Climate.cpp</code>)</h3>
+<p>List <code>g_game+0x205CF4</code>, the newest first; the <strong>world climate</strong> (id 0, <code>g_game+0x250534</code>) is at (2560, 2560)
+with radius 5120 and type <code>WORLD</code>. <code>ComputeWeather</code> creates it if it is missing, so in practice it always exists.</p>
+<ul>
+<li>They are created by the map script with <code>CREATE_WEATHER_CLIMATE(id, info, "x,z", r1, r2)</code> (<code>fn_00771300</code>, case 60): id 0 makes
+  the world one (replacing the previous one and ignoring the rest of the arguments), any other id a local one with the radii
+  sorted and <code>maxStorms = int(r2 × 0.001 + 1)</code>. <code>CREATE_WEATHER_CLIMATE_RAIN/TEMP/WIND</code> then set the rest.
+  <strong>Land1 has four</strong> (lines 2270..2285 of <code>Scripts\Land1.txt</code>): the world one with 10.8 degrees and wind (24, 0), two
+  warm ones of 37.8 degrees at (2157, 2425) and (1740, 3145), and one <strong>very cold one of −35.2</strong> at (2701, 2568) with wind (40, 0).</li>
+<li><code>GClimateInfo</code> (7 rows of info.dat) gives per season <code>rainMin/Max</code>, <code>tempMin/Max</code> and <code>windMin/Max</code>. The season comes from
+  <code>GGameInfo::GetSeason</code>: 0 spring (day 79), 1 summer (171), 2 autumn (263), 3 winter.</li>
+<li><strong>Temperature</strong> (<code>fn_00773ED0</code> / <code>fn_00773F40</code>, every turn): the target is
+  <code>hourFactor[hour] × monthFactor[month] × (max − min) + min</code>, with the tables 0xC249D8 (0.5 at 0 h, 1.5 at 16 h) and
+  0xC249A4 (1.0 in July, 0.1 in January; <strong>February is 0</strong>, as in the exe). The temperature approaches the target by
+  <code>|int(target)| × 0.1</code> degrees per turn, so it <strong>never converges: it oscillates</strong> around it (in Land1 the script stores 10.8
+  with target 12).</li>
+<li><strong>Rain</strong> (<code>fn_00773D60</code>, once per game day): if it is already raining it only counts the days; if not, the desire grows
+  with two rolls of <code>rainMax × 0.02</code> and is clamped to 1. The month, hour and nature terms of <code>GClimateRainInfo</code>
+  are 0 because that table <strong>is not in info.dat</strong> (0xDCB8D0 stays zeroed).</li>
+<li><strong>Wind</strong> (<code>fn_00774AA0</code>, per day): from the season's band in the <code>windAngle</code> direction. The weight is
+  <code>int(exp(−((desire − 0.5) × 5)²))</code>, which is only 1 with a desire of exactly 0.5, so in practice it is always
+  <code>min + max</code>.</li>
+<li><strong>One game day</strong> is 36000 turns per year / 365.25 = <strong>98.56 turns</strong> (9.9 s). The land starts on 5 May
+  1998 at 18:05:30 (<code>GGameInfo::GGameInfo</code> 0x557730), that is, on day 125.75 of the year.</li>
+<li><strong>Calendar</strong>:</li>
+<li><code>_SecondsInDay</code> 0x8DF8E0 = 86400 and <code>_NumDaysInYear</code> 0x8DF8DC = 365.25.</li>
+<li>The month lengths 0xBEC948 are made cumulative by the <code>GGameInfo</code> ctor 0x557730; <strong>October has 30 days</strong> in the
+    original, 364 days in all.</li>
+<li><code>GGameInfo::GetDaysFromStart</code> 0x557940 = (turn + start) × (+0x18) / 86400, without the whole years of the start
+    date (the day of the year is the same, they are multiples of 365.25 days).</li>
+<li>fn_00557960: the month 1..12 (the first whose cumulative day count is above the day of the year; 12 past the last);
+    fn_005579C0: the day of the month from 0.</li>
+<li>fn_00557810 builds the start from <code>SetStartDate(1998, 5, 5)</code> and <code>SetStartTime(18, 5, 30)</code>: the 120 days before May
+    from the table, the day of the month (5, added whole), then hours, minutes and seconds, in turns. The map commands
+    that change the date (GSetup 0x714D57 / 0x714D81) are not used by the original lands.</li>
+<li>Climate fields: +0x68 storm elevation 500 (ctor 0x77113E, fn_00771170 0x7712C6); +0x6C fall speed = windMax[season]
+  × 1/30 [0x980518] + 0.5 [0x8AB260] (0x77114B); +0x70 = 1.0, meaning unknown (0x771137, 0x7712B6); +0x74..+0x80 the
+  lightning ranges of its hot storms, 5 and 60 s (0x77111B..0x771134, 0x7712A6..0x7712C3).</li>
+<li>A local climate starts from its info: fn_00773D30(rainMin, rainMax) sets the desire to rainMax and the raining days
+  to int(rainMin × 100); fn_00774A90 does nothing, so there is no wind until the script sets it.</li>
+<li>Script setters: <code>CREATE_WEATHER_CLIMATE_RAIN</code> 0x717250 → 0x773200 (id 0 = the world climate, made if missing);
+  <code>_TEMP</code> 0x7172A2 → 0x773290 writes +0x44 / +0x48 and reads the world climate <strong>without making it</strong> (id 0 needs it to
+  exist already); <code>_WIND</code> 0x7172E0 → 0x7732D0 writes +0x4C..+0x54.</li>
+<li>Globals: last day 0xDCB8B8, last season 0xDCB8BC, the season the climates use 0xDCB8C0 (changed on the first day of
+  a new season), next id 0xC2475C. A new land (<code>InitStaticsValues</code> 0x54A829..0x54A849): no climate, the climate system
+  and storm creation on, day, season and id counters back to 0 / 0 / 1.</li>
+<li><code>GClimate::ComputeWeather</code> 0x771640:
+  1. the grid at the point (smoothed or not);
+  2. the temperature and wind <strong>of the world climate</strong> as the base;
+  3. <strong>plus each climate in the list, the world one included again</strong>, with the radius weight (1 inside the inner one, 0 at
+     the outer one). It is not a copying oversight: the original reads 0x250534 and then walks the complete list, so
+     <strong>the world climate counts twice</strong>. That is why Land1 gives 20 degrees on the plain (9 + 9) and not 10.
+  4. the result is added with clamping to the grid bytes.</li>
+<li><code>GClimate::ProcessAll</code> 0x771BE0 (turn, after the scripts) and <code>fn_00772330</code> per climate: updates the temperature;
+  its storms drift with the grid wind (× 0.01 m per turn); on a new day, a storm that left
+  its climate (or, for the world one, that entered any climate) jumps to the fade-out stretch and the desire goes back to 1; and if
+  it has already rained enough this season it also fades out, and the desire starts again (fn_00773D50). Then, on a new day, rain and wind, and with desire 1 a
+  new storm.</li>
+<li><code>GClimate::CreateStorm</code> 0x772E00: <code>FindWhereToCreateStorm</code> 0x772BE0 chooses the place (the world one, a random 10 m cell
+  out of the 512, retrying up to 20 times while it falls in another climate and off the island; a local one, at
+  <code>r² × innerRadius</code> in a random direction). The size is <code>rand(1000)</code> (world) or the distance to the centre, clamped
+  to 160..900; the outer one is <code>int(size × 1.1)</code>; the life <code>(rainMax × 100 − rainingDays) × 10</code> s with a minimum of 20;
+  the elevation 500. It is placed with fn_0083F4A0(pos, inner, outer) at its 10 m cell at a height of 300
+  (0x43960000, 0x772F5B) and fades in over 10 s (0x772FAF). The distances of <code>FindWhereToCreateStorm</code> (0x772D86 /
+  0x772D97), <code>CreateStorm</code> (0x772ED6, truncated) and fn_00772330 (0x7724E2 / 0x77254C) are
+  <code>GUtils::GetDistance(LHPoint, LHPoint)</code> 0x74CDE0. The blackness is <code>exp(−((t − 30) / 15)²)</code>, and above 30 degrees it is an electrical storm with the
+  climate's lightning. <strong>Below 0 degrees it is pure snow</strong>; above, the snow part is <code>exp(−(t × 0.2)²)</code>
+  (all rain beyond about 10 degrees) and the rest rain.</li>
+<li><code>PAUSE_UNPAUSE_CLIMATE_SYSTEM</code> and <code>PAUSE_UNPAUSE_STORM_CREATION_IN_CLIMATE_SYSTEM</code> (0xC24759 / 0xC24758) switch off the
+  update and the creation. The natives are 0x6FF4E0 (it gates the temperature, rain and wind updates) and 0x6FF500.</li>
+</ul>
+<h3 id="queries-weatherh">Queries (<code>Weather.h</code>)</h3>
+<p>All of them on <code>ComputeWeather</code> at an LHPoint (x, z in metres and the <strong>absolute height</strong> in y, which is what lowers the
+temperature):</p>
+<table>
+<thead>
+<tr>
+<th>Query</th>
+<th>Original</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GetMaxRainingOrSnowingAt</code></td>
+<td>0x771600</td>
+<td><code>max(rain, snow)</code>; fire cools with <code>1 + 0.01 ×</code> this</td>
+</tr>
+<tr>
+<td><code>GetRainAt</code> / <code>GetSnowAt</code></td>
+<td>0x771570 / 0x7715B0</td>
+<td>0 as long as there is no world climate</td>
+</tr>
+<tr>
+<td><code>IsRainingAt</code> / <code>IsSnowingAt</code> / <code>IsSnowCoveredAt</code></td>
+<td>0x7714B0 / 0x7714F0 / 0x771530</td>
+<td>the byte &gt; 0</td>
+</tr>
+<tr>
+<td><code>GetTemperatureAt</code></td>
+<td><code>GClimate::GetTemp</code> 0x771A80</td>
+<td>it is <strong>not</strong> the ambient temperature of fire, which is the constant 24.7 of <code>MapCoords::GetTemperature</code> 0x605CC0</td>
+</tr>
+<tr>
+<td><code>GetWindXAt</code> / <code>GetWindZAt</code></td>
+<td>fn_00771AB0 / fn_00771AE0</td>
+<td>the bytes</td>
+</tr>
+<tr>
+<td><code>GetWindAt</code></td>
+<td>fn_00771B10</td>
+<td><code>(windX/8, 0, windZ/8)</code>; read by fire, <code>UR_CloudMoverNew</code> and the bounce of the fireballs</td>
+</tr>
+</tbody>
+</table>
+<p>The first five check beforehand that the world climate exists (they return 0 / false if not); the others create it.</p>
+<h3 id="chl-weather-objects-weatherthingcpp">CHL weather objects (<code>WeatherThing.cpp</code>)</h3>
+<p><code>CREATE</code> of a <code>SCRIPT_OBJECT_TYPE_WEATHER_THING</code> (type 15) creates a WeatherThing with a storm made from
+<code>GWeatherInfo[subtype]</code> (inner radius 100, outer 300, life 100 s, clouds at 500, and the temperature, humidity, snow,
+overcast and wind of the row as bytes). It keeps a <strong>copy</strong> of the descriptor; the natives edit it and <code>UpdateStats</code>
+0x774370 dumps it into the storm (reloading the lightning timers): <code>CHANGE_WEATHER_PROPERTIES</code> (123),
+<code>CHANGE_LIGHTNING_PROPERTIES</code> (124), <code>CHANGE_TIME_FADE_PROPERTIES</code> (125), <code>CHANGE_CLOUD_PROPERTIES</code> (126).
+<code>WeatherThing::ProcessWeatherThings</code> 0x7741A0 runs every turn: if its storm is no longer there it forgets it, with
+<code>SetAffectedByWind</code> the storm drifts with the wind of <code>ComputeWeather</code> × 0.01, and the object moves with it.</p>
+<p><code>CREATE_WEATHER_STORM</code> from the map script (case 0x717328) creates a storm of a climate. Its third string
+(<code>"overcast,snow,temp,rain,windX,windZ"</code>) is read with <code>%d</code> <strong>over the bytes</strong> of the descriptor, 4 bytes per value,
+so each value overwrites the next three: only temperature, rain and wind survive (snow and overcast end up as
+0 or −1). No original land uses it.</p>
+<ul>
+<li><code>WeatherThing</code> is 0x88 bytes, in the list g_game +0x205C54 (next +0x80), newest first; its descriptor copy is at
+  +0x28; +0x7C is <code>SetAffectedByWind</code> 0x55DF20.</li>
+<li>CHL <code>CREATE</code>: GScript 0x6F151E → 0x7741F0 → ctor 0x774030(pos, 100, 300, 100, &amp;GWeatherInfo[subtype]); fn_00770EA0
+  writes the info's temperature, wetness, snowFall, overCast and wind as the storm's bytes at LHPoint(pos, land + y);
+  fn_00770F10 makes the storm at once as a 0x3C8 object (fn_00770E50 sets its +0x3C0 to 0).</li>
+<li><code>WeatherThing::Process</code> 0x774230 returns 1 while it has a storm; the drift is fn_00771A30 (<code>ComputeWeather</code>'s wind at
+  the storm × the factor); the thing copies the descriptor back. A thing whose storm is gone would be deleted if no
+  script held it (openblack keeps it). <code>ProcessWeatherThings</code> runs after <code>GLandAlignement::UpdateTime</code>.</li>
+<li><code>ProcessWeatherThings</code> sets 0xD016CD to 1 while some thing has a storm and to 2 when none (its reader is not ported).</li>
+<li>Natives: fn_00774400 <code>CHANGE_WEATHER_PROPERTIES</code> (temperature in whole degrees; rain, snow and overcast × 100; fall
+  speed), fn_00774460 <code>CHANGE_TIME_FADE_PROPERTIES</code> (lifeTime, fadeInTime), fn_00774500 <code>CHANGE_CLOUD_PROPERTIES</code>
+  (blackness, number of clouds as an int, elevation), fn_00774520 <code>CHANGE_LIGHTNING_PROPERTIES</code> (sheet and fork
+  ranges).</li>
+<li><code>WeatherThing::SetMovement</code> 0x774480 writes the wind bytes as clamp(v × 8, −127, 127); fn_00774550 / fn_00774580 set
+  the storm's target and speed.</li>
+</ul>
+<h3 id="the-drawn-rain-raincpp-graphicsrendererraincpp">The drawn rain (<code>Rain.cpp</code>, <code>Graphics/RendererRain.cpp</code>)</h3>
+<p><code>LH3DAtmos</code> has a rain object (<code>fn_00833DA0</code>) with <strong>128 streaks</strong> of 0x1C bytes. Each streak (<code>fn_00833D10</code>) is a
+line from <code>(x, −50, z)</code> to <code>(x + dx, elevation, z + dz)</code> around the centre of the tile, with <code>x, z</code> in ±80, the
+slant <code>dx, dz</code> in ±15, a texture offset 0..1 and a speed of 0.1..0.2 turns per second. The u goes
+from the offset to offset + 1 (the texture repeats across the width) and the v is fixed, 0x3F010000 = 0.50390625, the
+row 129 of <code>Data\Textures\atmos.raw</code>, which is a row of white strokes.</p>
+<ul>
+<li><code>LH3DAtmos::Update3D</code> 0x8357A0 (per frame): the storm <strong>closest to the camera</strong> sets the elevation and the
+  fall speed (160 and 1 with no storm); both approach by 0.3 of the way per frame and are clamped to
+  40..640 m and 0.3..5. Then, <em>if it was drawn in the previous frame</em> (0xEDC300), the streaks advance: the phase rises 2.4
+  per second and on overflowing the streak is placed again.</li>
+<li>The 128 streaks (0x1C bytes each) are at 0xEDC358; the elevation is 0xC38E10 (160 at start) and the fall speed
+  factor 0xC38E14 (1 at start).</li>
+<li>fn_00833D10 places a streak with 7 draws of <code>Random</code> 0x81D180 (the CRT <code>rand()</code>, not GRand) (0x833D1D..0x833D8F);
+  the step fn_00833EA0 makes 4 more draws per reborn streak (0x833F23..0x833F5F).</li>
+<li>The streaks are placed <strong>once per process, twice</strong>, not per land: the <code>LH3DAtmos</code> init <code>fn_00835AD0</code> (from
+  <code>start_system</code> 0x6433C2 with flags = −(Weather != 0), [0xC381FC] = 1 by default, read from the "Weather" key at
+  0x823A0C; also <code>DoCitadelMultiplayer</code> 0x5555A8 with flags −1) calls <code>fn_00833DA0</code> at 0x835DA8 (the constructor)
+  and again at 0x835DC4: 2 × 128 × 7 = 1792 CRT draws at start-up, after the snow's (below). Land load does not reach
+  it.</li>
+<li><code>LH3DAtmos::Render3D</code> 0x836250: for each land block, two grid samples (the centre of the block and the
+  centre + 40) and the largest of their rain and snow bytes; if it exceeds 5, it queues an object in the Z-sorter with the three
+  low bytes of its user data = <code>(x/80, z/80, value × 88 / 100)</code> (<code>fn_008341B0</code>). When flushing the Z-sorter
+  (<code>fn_0082F280</code>) the callback <code>fn_00833F80</code> unpacks them and calls <code>fn_00834370(x, z, 0, 128, alpha)</code>. That is why there
+  is a single tile per block, centred on its origin + 80.</li>
+<li>The tile alpha in <code>Render3D</code> is 88 × max / 100 (imul 0x51EB851F, 0x836431..0x83645D); fn_008341B0 clamps it to 0xFF
+  (0x8341B8) and drops only a negative one (0x8341CC).</li>
+<li><code>fn_00834370</code>: nothing beyond 400 m from the camera; between 100 and 400 the alpha and the number of streaks are multiplied by
+  <code>1 − (d − 100) / 300</code>. The bottom alpha is that, and the top one <code>alpha / ((2d/400 + 1) × 5)</code>, so the streak
+  fades towards the cloud. Each streak is also attenuated by its phase: below 0.05, <code>phase × 20</code>; above 0.95,
+  <code>(1 − phase) × 20</code>. The material is <code>AtmosMaterial</code> in mode 6 (alpha) with Z test and no Z write.</li>
+<li>With the value above 0x2C the original also calls <code>g_water_drop_cb</code> for the drops that splash on the ground:
+  <strong>it is not ported</strong>. Neither is the drawn snow (below) nor the lightning flash.</li>
+<li>In openblack the streaks are one-pixel lines with the <code>WorldQuad</code> program (<code>atmos.raw</code> + <code>atmosa.raw</code>) in the
+  <code>MainBlended</code> pass. <code>rain::Reset</code> places the 128 streaks (896 CRT draws) at every <code>OnLoadMap</code> instead of 2 × 896
+  once at start-up (see <a href="#pending">Pending</a>).</li>
+</ul>
+<h3 id="the-drawn-snow">The drawn snow</h3>
+<p>Not ported. 256 flakes of 0x34 bytes at [0xEDC354], only when the "Weather" setting is on (<code>fn_00835AD0</code>,
+<code>test [flags], 2</code> at 0x835D27).</p>
+<ul>
+<li>Placement: <code>fn_00834890</code> (0x834890..0x8348BA), per flake <code>fn_00834700</code> (<code>Random(−80, 80)·0.5</code> 0x834710,
+  <code>Random(0, [0xC38E10] = 160)</code> 0x834727, <code>Random(−80, 80)·0.5</code> 0x83473A, then <code>fn_008345F0</code> with 10 draws
+  0x834611..0x8346D0: fall <code>(0,1) + 7</code>, sway speed <code>(0,10) − 5</code>, heading <code>(0,2π)</code>, sway <code>(0,π)</code>, spin <code>(0,2π)</code> ×3, spin
+  speed <code>(0,π/2)</code> ×3), then y = <code>Random(−20, 160)</code> into +4 (0x8348AA): <strong>14 CRT draws per flake, 3584 per call</strong>.</li>
+<li>The init calls it <strong>twice</strong> in a row (0x835D51 as the constructor, then 0x835D6D on the same object, [0xEDC354] set
+  at 0x835D67): <strong>7168 CRT draws at start-up</strong>, before the rain's 1792. Land load does not reach it.</li>
+<li>Per frame (<code>Update3D</code> 0x835AA0..0x835AB9): only if a snow tile was drawn in the previous frame ([0xEDC2FC], set
+  at 0x836627), the step <code>fn_008348C0</code> clears the flag and moves the flakes: a flake at y ≤ −20 is placed again by
+  <code>fn_00834700</code> (13 draws), and <code>fn_00834770</code> adds <code>Random(0, π/4)</code> to the heading each time the sway passes 2π
+  (0x8347B9). With no snowing storm there are no per-frame draws.</li>
+<li>Drawing (<code>Render3D</code> 0x8365CD..0x83665C): for a block whose largest snow byte (offset 2) is &gt; 5, <code>fn_00834900</code>
+  (prepare the flakes) once per frame, then <code>fn_00834290</code> queues the tile with alpha snow·256/100 and the Z-sorter
+  callback <code>fn_00834120</code> (0x834354). <code>fn_00834120</code> is the snow tile's <strong>draw callback, not a scatter</strong>: it unpacks
+  [0xEE9D30] (x/80, z/80, amount), calls <code>fn_00834BF0</code> when the amount is &gt; 5, and makes no draws.</li>
+<li>raffclar's tree (<code>SnowfallSystem.cpp</code>, <code>3D/Snowfall.cpp</code>): the same 13 placement ranges plus <code>(−20, 160)</code> in
+  <code>Scatter</code> (14 per flake; the "13 × 256 = 3328" count is short by one per flake), and the step gated like
+  [0xEDC2FC]; but it scatters <strong>once</strong>, at Locator emplace, where the original does it twice.</li>
+</ul>
+<h3 id="order-in-the-turn-weatherloopcpp">Order in the turn (<code>WeatherLoop.cpp</code>)</h3>
+<p>In the steps of <code>GGame::ProcessTurn</code> 0x54E5C0 (<a href="engine-loop.html">engine-loop.md</a> §2): <code>ProcessTurnStart</code> from
+<code>Magic/MagicLoop.cpp</code> (<code>LH3DAtmos::UpdateGame</code>, 0x54E5D7); <code>ProcessWeatherThings</code> (0x54E6CB) and <code>ProcessClimate</code>
+(<code>GClimate::ProcessAll</code>, 0x54E6DA, with the bookmarks and highlights in between) from <code>Game::GameLogicLoop</code>; and
+<code>UpdateFrame</code> every frame from <code>magic::Update</code> (the rain streaks). <code>OnLoadMap</code> leaves everything empty, and places
+the rain streaks again (<code>rain::Reset</code>, 896 CRT draws; the original does not, see <a href="#pending">Pending</a>).</p>
+<h3 id="hooks">Hooks</h3>
+<p><code>OPENBLACK_TEST_WEATHER="x,z,radius[,rain[,fade[,temperature]]]"</code>, <code>OPENBLACK_TEST_WEATHER_AT="x,z[;x,z...]"</code> and
+<code>OPENBLACK_WEATHER_TRACE=1</code>; see
+<a href="openblack-internals.html#debug-environment-variables">openblack-internals.md</a>.</p>
+<h2 id="pending">Pending<span class="state pending">pending</span></h2>
+<ul>
+<li><code>SnowCover</code> (the accumulated snow, 0xEDC344) and the drawn snow. Not ported either: the SnowCover step
+  <code>fn_0086C7A0(seconds)</code> in <code>UpdateGame</code>, and the snow a storm lays, <code>ftol(snow × snowCoverRate × fade)</code> through
+  fn_0086C2D0 in the inner / outer radius at amount × seconds × 0.03.</li>
+<li><strong>Fidelity bug (ours), the rain placement</strong>: openblack places the rain streaks at every <code>OnLoadMap</code> (<code>rain::Reset</code>,
+  128 × 7 = 896 CRT draws), where the original places them 2 × 896 once, at start-up, and never on land load (see
+  <a href="#the-drawn-rain-raincpp-graphicsrendererraincpp">The drawn rain</a>). The fix is a measured behaviour change, together
+  with the snow scatter: it shifts the whole CRT stream (clouds, lanterns and everything after them).</li>
+<li>The snow scatter is missing: the original spends 2 × 3584 = 7168 CRT draws on it at start-up, before the rain's (see <a href="#the-drawn-snow">The drawn snow</a>); raffclar's tree does it once (13 + 1 draws per flake) at Locator emplace, which matches neither tree.</li>
+<li>The lanterns: openblack's 30 ms jitter (3 CRT draws per light per tick) runs every frame, also while it is light,
+  where the original runs it only with the mean &lt; 120 (see <a href="#night-lights-report-night_visualstxt">Night lights</a>); the
+  6 creation draws per light come at the first <code>Rescan</code> (the first <code>night_lights::Update</code>, the first island frame), not at lantern
+  creation; and every light is drawn again (6 each) whenever the set changes (checked every 1000 ms), where the
+  original only draws for the new light. A measured behaviour change: first measure whether the Land 1 run crosses
+  120, since the gate alone removes the jitter's draws while it is light.</li>
+<li>The lightning flash (<code>fn_00837290</code>) and [0xFA2768] are already there, its light stamp on the terrain included (see <a href="miracles.html#the-flash-and-the-clouds-of-the-registered-storms-ecsweatherlightningflash-stormclouds">The flash and the clouds of the registered storms</a>); the bolt and thunder <em>callbacks</em> are set but empty.</li>
+<li>The decay of the lightning flash values 0xEDD384 / 0xEDC374 that <code>Update3D</code> does in the rain step.</li>
+<li>The drops on the ground (<code>g_water_drop_cb</code>).</li>
+<li>The virtual influence of the weather, <code>LHInetWeather</code> and the ambient weather of the saved game.</li>
+<li><code>GClimate+0x84</code> ("lightning even if it is below 30 degrees"): <strong>who writes it has not been found</strong>, 0 is assumed.</li>
+<li>The per-block distance field (+0x9BC) that <code>Render3D</code> uses to discard blocks: here the 2D distance to the
+  camera is used with the same threshold (400 + 160), and the real cut-off is still the 400 m one of <code>fn_00834370</code>.</li>
+<li>The sounds of the houses chosen by the sky type; the alignment blend of the dome (not read yet); the no-blend dome
+  mode, the 565 path and the light table after <code>Jump</code>; the <code>EveningRamp</code> callers (the Relaxation and Sleep desires).</li>
+<li>Unverified: <code>ecs/Weather/Climate.cpp</code> <code>climate::CreateStorm</code>, at <code>if (d.lifeTime &lt; 8.0f)</code>: "// [0x8C2C70] (0x773155), then 20 (0x773162)". A second life clamp after the "&lt; 20 → 20" one; what branch it belongs to is not stated. Unverified.</li>
+<li>Unverified: <code>ECS/Weather/WeatherThing.cpp</code> <code>weather_thing::Create</code>: "fn_00770F10: the 0x3C8 GWeather (fn_00770E50: +0x3C0 = 0)", while day-night-weather.md gives GWeather as 0x3C0 bytes. Whether the weather thing's storm is a subclass with one more field is unverified.</li>
+</ul>
+</main>
+<script src="search.js"></script>
+<script src="wiki.js"></script>
+</body>
+</html>

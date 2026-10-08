@@ -10,6 +10,7 @@
 #include "CreatureBody.h"
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -53,26 +54,37 @@ entt::id_type creature::GetIdFromType(CreatureType species, CreatureBody::Appear
 	    fmt::format("creature/{}/{}", static_cast<uint8_t>(species), static_cast<uint32_t>(appearance)).c_str());
 }
 
-entt::id_type creature::GetIdFromMeshName(const std::string& name)
+namespace
+{
+struct MeshName
+{
+	CreatureType species;
+	CreatureBody::Appearance appearance;
+};
+
+std::optional<MeshName> ParseMeshName(const std::string& name)
 {
 	auto species = S::Unknown;
-	auto appearance = A::Base;
 	auto split = string_utils::Split(string_utils::LowerCase(name), "_");
 	auto suffix = split[split.size() - 1];
 
-	auto appearanceFound = k_MeshNameToAppearance.find(suffix);
+	const auto appearanceFound = k_MeshNameToAppearance.find(suffix);
 	if (appearanceFound == k_MeshNameToAppearance.end())
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Unknown creature appearance: {}", name);
+		// Not a body of a species: an artwork file left in the folder, whose name ends in something else
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Creature mesh \"{}\" names no appearance; it is skipped", name);
+		return std::nullopt;
 	}
-	else
-	{
-		appearance = appearanceFound->second;
-	}
+	const auto appearance = appearanceFound->second;
 
-	// Remove the suffix and find the creature species
+	// Remove the suffix and find the creature species. The Ogre's variants keep its base mesh's name before their own,
+	// as in A_Greek_Boned_Base_Evil.
 	split.erase(split.begin() + split.size() - 1);
-	auto speciesFound = k_MeshNameToSpecies.find(fmt::format("{}", fmt::join(split, "_")));
+	if (split.size() > 1 && split.back() == "base")
+	{
+		split.pop_back();
+	}
+	const auto speciesFound = k_MeshNameToSpecies.find(fmt::format("{}", fmt::join(split, "_")));
 	if (speciesFound == k_MeshNameToSpecies.end())
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Unknown creature species: {}", name);
@@ -81,7 +93,27 @@ entt::id_type creature::GetIdFromMeshName(const std::string& name)
 	{
 		species = speciesFound->second;
 	}
+	return MeshName {.species = species, .appearance = appearance};
+}
+} // namespace
 
-	return entt::hashed_string(
-	    fmt::format("creature/{}/{}", static_cast<uint8_t>(species), static_cast<uint32_t>(appearance)).c_str());
+std::optional<entt::id_type> creature::GetIdFromMeshName(const std::string& name)
+{
+	const auto parsed = ParseMeshName(name);
+	if (!parsed.has_value())
+	{
+		return std::nullopt;
+	}
+	return GetIdFromType(parsed->species, parsed->appearance);
+}
+
+CreatureType creature::GetSpeciesFromMeshName(const std::string& fileName)
+{
+	const auto parsed = ParseMeshName(fileName);
+	return parsed.has_value() ? parsed->species : S::Unknown;
+}
+
+entt::id_type creature::GetRigId(CreatureType species)
+{
+	return entt::hashed_string(fmt::format("creature/{}/rig", static_cast<uint8_t>(species)).c_str());
 }

@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Graphics engine parity: original versus openblack — Black &amp; White notes</title>
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body>
+<nav id="side">
+  <h1><a href="index.html" style="color:inherit;text-decoration:none">Black &amp; White notes</a></h1>
+  <span class="tag">openblack — how the original behaves</span>
+  <input id="q" type="search" placeholder="Search (press /)" autocomplete="off">
+  <div id="hits"></div>
+  <div id="nav"><h2>Start here</h2>
+<a class="" href="README.html">Black &amp; White 1 notes for openblack</a>
+<h2>Engine</h2>
+<a class="" href="openblack-internals.html">openblack internals</a>
+<a class="" href="engine-loop.html">The engine loop: game turns and frames (original and openblack)</a>
+<a class="" href="engine-math.html">Coordinates, terrain, object size, game clock, matrices and Zoomer</a>
+<a class="" href="tooling.html">Tools and formats</a>
+<a class="here" href="parity.html">Graphics engine parity: original versus openblack</a>
+<a class="" href="original-frame.html">The original B&amp;W frame (runblack.exe W120, D3D7, LH3D)</a>
+<h2>World</h2>
+<a class="" href="map-loading.html">Map loading and script functions</a>
+<a class="" href="land-script-save.html">Writing land-script lines: SaveObject and WriteCommand</a>
+<a class="" href="water.html">Water in the game</a>
+<a class="" href="trees.html">Trees and forests</a>
+<a class="" href="buildings.html">Buildings, building sites and towns (the building side)</a>
+<a class="" href="objects-and-resources.html">Objects and resources</a>
+<a class="" href="physics.html">Physics: thrown objects, collisions, damage and rocks that split</a>
+<h2>Life</h2>
+<a class="" href="villagers.html">Villagers: data, state machine and speed</a>
+<a class="" href="animals.html">Animals: AI, states and clips</a>
+<h2>Magic and weather</h2>
+<a class="" href="magic.html">Magic: the core of the miracles</a>
+<a class="" href="miracles.html">Miracles one by one</a>
+<a class="" href="particles.html">Particles (PSys)</a>
+<a class="" href="day-night-weather.html">Day, night and weather in the original</a>
+<a class="" href="vortex.html">Vortexes and the tornado: objects swallowed, carried and flung</a>
+<h2>Hand and interface</h2>
+<a class="" href="hand-and-interface.html">The hand and the interface</a>
+<a class="" href="intro.html">The Land 1 intro and the tutorial&#x27;s script side</a>
+<a class="" href="script-camera.html">Script camera (GCamera and CameraModeScript)</a>
+<a class="" href="camera-tracks.html">Camera tracks (`Data\camera.edt`) and `WALK_PATH`</a>
+<h2>Presentation</h2>
+<a class="" href="rendering.html">World rendering: original versus openblack</a>
+<a class="" href="rendering-objects.html">Model rendering: original versus openblack</a>
+<a class="" href="animation.html">Skeletal animation (villagers and animals)</a>
+<a class="" href="audio.html">Audio: the engine, the banks, the music, the voices and the script</a>
+<a class="" href="video.html">Bink videos (.bik)</a>
+<h2>Data</h2>
+<a class="" href="mods.html">Modified data packs</a>
+<h2>Other</h2>
+<a class="" href="creature.html">The creature: groundwork, random streams and what is unknown</a></div>
+</nav>
+<main>
+
+<h1 id="graphics-engine-parity-original-versus-openblack">Graphics engine parity: original versus openblack</h1>
+<p>Complete map of the original frame (with addresses): <a href="original-frame.html">original-frame.md</a>. Details of
+what is already done: <a href="rendering.html">rendering.md</a> (the world), <a href="rendering-objects.html">rendering-objects.md</a> (the models)
+and <a href="water.html">water.md</a> (the water); each stage links to its section.</p>
+<p>Status: <strong>same</strong> (verified), <strong>approx.</strong> (works but differs), <strong>missing</strong>.</p>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Original</th>
+<th>openblack</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Clear</td>
+<td>Colour is not cleared; the sky covers the screen</td>
+<td>Clears to 0x274659</td>
+<td>approx. (not visible)</td>
+</tr>
+<tr>
+<td><a href="rendering.html#camera">Camera</a></td>
+<td>Horizontal FOV 70°, no far plane, near 0.3–3.5 depending on height</td>
+<td>FOV 70°, near 0.3 + 0.16·height (0.3–3.5), far 65536</td>
+<td>same</td>
+</tr>
+<tr>
+<td><a href="rendering.html#sky-sun-moon-and-clouds-original">Sky</a></td>
+<td>9 images (alignment × time of day), 2 passes, darkens with storms, white with lightning; time thresholds 3.5/7.5/8/8.5</td>
+<td>Type and alignment, the original's thresholds</td>
+<td>approx. (no weather)</td>
+</tr>
+<tr>
+<td><a href="rendering.html#sky-sun-moon-and-clouds-original">Sun and moon</a></td>
+<td><code>sun.l3d</code> (6–18 h) and its glow; <code>moon.l3d</code> with phase from the real clock and an additive halo; no stars</td>
+<td>Same (glow occluded by the terrain with CPU rays); the moon reflected in the sea (halo + mirrored mesh)</td>
+<td>approx.</td>
+</tr>
+<tr>
+<td><a href="rendering.html#sky-sun-moon-and-clouds-original">Clouds and cloud shadows</a></td>
+<td>70 clouds (<code>mist.l3d</code> + <code>smoke.raw</code>) moving with the wind, colour by alignment; shadows from <code>sclouds.raw</code> in the cell brightness</td>
+<td>Same</td>
+<td>same</td>
+</tr>
+<tr>
+<td><a href="rendering.html#sea-skyraw--skyaraw">Reflected land</a></td>
+<td>Land only, no Z, half light, no small bump</td>
+<td>Same</td>
+<td>same</td>
+</tr>
+<tr>
+<td><a href="rendering-objects.html#object-reflections-and-hand-shadow-on-objects">Object reflections in the sea</a></td>
+<td>Hand (grey 0xA0A0A0 unlit) and what it holds, physics objects, the creature's body (y &lt; 6, 0x65A0A0D0) and boats, mirrored and clipped above the water, with the colour left on them by <code>fn_00801C90</code></td>
+<td>The hand, what it holds, physics objects and boats (<code>DrawBoatReflection</code>); the creature is missing (it does not exist yet)</td>
+<td>approx.</td>
+</tr>
+<tr>
+<td><a href="rendering-objects.html#cutting-by-the-water-plane-drawcutbyplane">Underwater</a></td>
+<td>Fish-farm fish (15 <code>misc0.raw</code> sprites per farm), before the sea; sharks and swimming SuperVillagers cut by y = 0 (<code>DrawCutByPlane</code>, 0xFF303070)</td>
+<td>The fish shoals, the puzzle net and the sharks (<code>DrawCutByPlane</code>), inside the reflection target; there are no SuperVillagers</td>
+<td>approx.</td>
+</tr>
+<tr>
+<td><a href="rendering.html#sea-skyraw--skyaraw">Sea</a></td>
+<td>Mode 5 (ARGB4444), period 560 (level 4), wind (0 in game), 2 px rows from the edge of the 30000 quad, rippling, alpha 255→80 and top row at 0x20, level 0 with a ±70000 quad; no fog; the hand's night glow underneath</td>
+<td>Same (rows redone per pixel in <code>fs_water</code>)</td>
+<td>same</td>
+</tr>
+<tr>
+<td><a href="rendering.html#terrain-light-table-0xedd90c">Light table</a></td>
+<td><code>palette.raw</code> by time of day and alignment, overcast cap and lightning flash</td>
+<td>Same (<code>LandLightTable::Build</code> with the overcast and the flash at the camera)</td>
+<td>same</td>
+</tr>
+<tr>
+<td><a href="rendering.html#terrain-detail-small-bump">Land</a></td>
+<td>Blocks front to back, mode 14, per-vertex light table, small bump</td>
+<td>Same</td>
+<td>same</td>
+</tr>
+<tr>
+<td><a href="rendering.html#distance-haze-original-fog-detail-levels-36">Distance fog</a></td>
+<td>In software: land per vertex, models once per object; not on sea, sky or PSys particles</td>
+<td>Same (with the storm and lightning haze)</td>
+<td>same</td>
+</tr>
+<tr>
+<td><a href="rendering.html#shadows-three-systems-in-the-original">Static shadows</a></td>
+<td>Baked into the block textures: Fixed/MobileObject/trees, shear x += h, z += h, ×0.5</td>
+<td><code>StaticShadow</code> pass of the whole island every frame (256 px/block), ×0.5 in <code>fs_terrain</code></td>
+<td>same (without the original's 4×2 AA)</td>
+</tr>
+<tr>
+<td><a href="rendering.html#projected-shadows-shadowinfo">Projected shadows</a></td>
+<td><code>ShadowInfo</code> list: 32×32 silhouettes rasterised on the CPU (alpha n/15, empty ring, fade at 50–80 radii with the 9-block test, baked to nibbles) of the hand, the creature, thrown objects, the boat (with the sun), the SuperVillagers and the PSys meshes; onto every land block they touch, and the hand, the creature and the boat also onto objects (mode 6, ZFUNC EQUAL, vertical projection), at the end of each receiver's Draw</td>
+<td>Same (<code>graphics::shadow_list</code>, <code>RendererShadows.cpp</code>: one block redraw per shadow; onto the objects behind each one, in Main or in their slot in the queue). The hand as in the original (compared against the user's captures of the original, 2026-10-02); the creature, the prediction, the SuperVillagers and the PSys meshes are missing</td>
+<td>approx.</td>
+</tr>
+<tr>
+<td><a href="rendering-objects.html#villager-blobs-object-reflections-and-lod">Villager and animal blobs</a></td>
+<td>Two quads from the feet (bones 21 and 18) towards +X+Z (2·scale, on the terrain plane), width 0.4, alpha 1 → 0; animals: 4 quads from the EBone points of their mesh</td>
+<td>Same (villagers and land animals)</td>
+<td>same</td>
+</tr>
+<tr>
+<td>Footprints</td>
+<td>Burned into the block textures</td>
+<td>Footprint pass</td>
+<td>approx.</td>
+</tr>
+<tr>
+<td><a href="rendering-objects.html#model-lighting">Model lighting</a></td>
+<td>Land under the object (bilinear), integer rule <code>fn_0084BA90</code> (<code>I = fistp(255·N·L)</code> with ties to even, <code>f = amb + ((255 − amb)·I &gt;&gt; 8)</code> with ambient 90, diffuse <code>(c·f) &gt;&gt; 8</code>), point light [0xEA9E90] brought into mesh space (fixed sun by day, next to the hand in full night), additive specular, hand ×1.5</td>
+<td>Same (<code>src/Graphics/ModelLight.h</code> and <code>assets/shaders/model_light.sh</code>)</td>
+<td>same</td>
+</tr>
+<tr>
+<td><a href="rendering-objects.html#l3d-material-blending">L3D materials</a></td>
+<td>Type = mode; chroma with alpha test (ref − 5) <strong>and</strong> blending</td>
+<td>Same, with per-material culling (bit 0 of byte +5; D3DCULL_CCW = CCW in bgfx) and wrap/clamp (bit 2)</td>
+<td>same</td>
+</tr>
+<tr>
+<td><a href="rendering-objects.html#the-single-transparent-queue-lh3dzsorter">Transparent ordering</a></td>
+<td>Back-to-front Z-sorter (max. 2048, stable)</td>
+<td>A single queue, <code>graphics::zsort</code> (stable insertion, cap 0x800, dist² key in <code>float</code>): models with their mesh's 0x200 flag, whole (<code>LH3DObject::AddDrawing</code> 0x815F0B; the rest immediately, 0x815F62), the single-use bubble, the hand, the elements of Sorted effects one by one and Queued ones whole, sprites, mists, clouds, smoke, rain per tile and the boat's sprites, in <code>MainBlended</code> (sequential); shadows on objects inside each receiver</td>
+<td>same</td>
+</tr>
+<tr>
+<td><a href="rendering-objects.html#villager-blobs-object-reflections-and-lod">Model LOD</a></td>
+<td>In this executable the loading of <code>LevelOfDetail</code> is disabled (NOP at 0x823810 / 0x823B43): always LOD 1, no fading or disappearing</td>
+<td>Always LOD 1</td>
+<td>same</td>
+</tr>
+<tr>
+<td><a href="day-night-weather.html">Windows</a></td>
+<td><code>Abode::Draw</code> 0x515F70: unlit <code>isWindow</code> submeshes, grey 224..252 that flickers, with someone at home and at night</td>
+<td><code>night_lights::WindowColour</code> (+0x54 0xFFgggggg or 0, <code>PackInstanceWindow</code>); "someone at home" = <code>PresentAtHome</code> (+0xB6), raised and lowered by the villagers, then <code>IsVisualNight</code> (<a href="day-night-weather.html">day-night-weather.md</a>)</td>
+<td>approx.</td>
+</tr>
+<tr>
+<td>Hand</td>
+<td>Always Z-sorter (<code>CHand::AddDrawing</code> 0x46D203), light ×1.5, wrist with alpha</td>
+<td>Same: whole in the queue</td>
+<td>same</td>
+</tr>
+<tr>
+<td><a href="rendering-objects.html#chimney-smoke-lh3dsmoke">Chimney smoke</a></td>
+<td><code>LH3DSmoke</code> (10 <code>smoke.raw</code> sprites, mode 6) at the chimney (extra point [1] of meshes with flag 0x400) while there are villagers inside or the workshop is producing; the hand pushes it</td>
+<td>Same (<code>RendererSmoke.cpp</code>); <code>PresentAtHome</code> is raised by the villagers; age not truncated; the workshops' scaffold count is missing</td>
+<td>approx.</td>
+</tr>
+<tr>
+<td><a href="water.html#water-rings">Water rings</a></td>
+<td><code>fn_005E5100</code>: horizontal <code>smoke.raw</code>, mode 13, 700 ms; from the hand's splash, objects falling into the water, swimmers, sharks and bait</td>
+<td>Same (hand, thrown objects, sharks, waterfall and the fish puzzle; there are no swimmers)</td>
+<td>same</td>
+</tr>
+<tr>
+<td><a href="water.html#the-missionaries-boat-petitnavire">Boats</a></td>
+<td><code>PetitNavire</code> (<code>PLAY_JC_SPECIAL(6)</code>): launch via <code>boat1.anm</code> with sailors, dust, splashes and 3 sounds; 60 s voyage via <code>boat2.anm</code> with deck and wake; reflection 0xFF303070</td>
+<td>Same (<code>ecs/MissionaryBoat</code>, <code>DisappearSmoke</code>; the sprites, one by one in the common queue); the hull shadow with the fixed sun, also onto objects</td>
+<td>approx.</td>
+</tr>
+<tr>
+<td><a href="particles.html#the-psys-in-the-world-format-step-drawing-and-water-rules">Particles, spells, fireflies, sparkles</a></td>
+<td>PSys, everything in the Z-sorter</td>
+<td>Generic PSys engine (<code>src/Particles</code>): the spell files with the ~25 most used classes, sprites sorted per effect; script effects (<code>SPECIAL_EFFECT_*</code>); fireflies; mesh atoms, mists, chains and light maps (<a href="rendering-objects.html">rendering-objects.md</a>). Missing: the rules of specific spells and moving the hand's effects to this engine</td>
+<td>approx.</td>
+</tr>
+<tr>
+<td><a href="day-night-weather.html#the-drawn-rain-raincpp-graphicsrendererraincpp">Rain, snow, lightning</a></td>
+<td>By storm, in 80×80 tiles</td>
+<td>The rain per tile in the common queue (<code>Rain.cpp</code>, <code>RendererRain.cpp</code>), the lightning flash and the storm clouds; no drawn snow, no drops on the ground</td>
+<td>approx.</td>
+</tr>
+<tr>
+<td>Leashes, gestures</td>
+<td>Modes 15 and 13</td>
+<td>—</td>
+<td>missing</td>
+</tr>
+<tr>
+<td><a href="magic.html#influence-srcecsinfluence">Influence border</a></td>
+<td><code>InfluenceCircle::Draw(1)</code> 0x826C90 every frame in the world view: a 40-high curtain per citadel and town, <code>burn.raw</code>, mode 6, scrolled, at once before the Z-sorter drain; rebuilt every 10 turns; same-player overlaps pruned; hand-crossing ripple (7 <code>smoke.raw</code> rings, Z-sorted)</td>
+<td>Same (<code>ECS/Influence/InfluenceCircles.cpp</code>, <code>RendererInfluence.cpp</code>); the border latch is set when the player has a temple (no temple fade); no per-land colour remap</td>
+<td>approx.</td>
+</tr>
+<tr>
+<td><a href="rendering.html#text-the-originals-fonts-and-the-hand-message">Names, counters, help</a></td>
+<td>Z-sorter and end-of-frame callbacks; fonts <code>j0</code>/<code>f1</code>/<code>f3</code>; texts from <code>InfoScript2.txt</code></td>
+<td>Original <code>j0</code> font and the message for the amount in the hand; the other messages, names and counters are missing</td>
+<td>approx.</td>
+</tr>
+<tr>
+<td><a href="rendering-objects.html#the-single-transparent-queue-lh3dzsorter">Sprites</a></td>
+<td><code>LH3DSprite</code> in the Z-sorter</td>
+<td>In the main pass, in the common queue (<code>components::Sprite</code>, smoke, boat sprites one by one)</td>
+<td>same</td>
+</tr>
+<tr>
+<td><a href="rendering.html#screen-fade-and-cinema-bars">Screen fade and bars</a></td>
+<td><code>SET_FADE</code>/<code>SET_FADE_IN</code> per turn; <code>SET_WIDESCREEN</code> bars over 2 s; quads in FinishFrame</td>
+<td>Same (<code>ScreenOverlay</code> view); without the initial black of <code>OnNewGame</code> because the intro does not yet reach its <code>SET_FADE_IN</code></td>
+<td>approx.</td>
+</tr>
+<tr>
+<td><a href="video.html#openblack">Bink video</a></td>
+<td><code>DrawToScreen</code> 0x54DC6D → <code>thedraw</code> 0x844E30 → fn_00845740: one quad per 256x256 tile in mode 6, ZFUNC ALWAYS, no Z; no world while it covers the screen (0x54DD7D)</td>
+<td><code>Renderer::DrawVideoOverlay</code> in <code>ScreenOverlay</code> (one texture, the same texels per tile), the world is not drawn with <code>CoversScreen()</code>; still without decoder (black) or opcode 203</td>
+<td>in progress</td>
+</tr>
+<tr>
+<td>Temple and citadel</td>
+<td>Their own lights, Citadel* keys</td>
+<td><code>TempleInterior</code></td>
+<td>approx.</td>
+</tr>
+<tr>
+<td>Gamma, post-processing, D3D fog</td>
+<td>None</td>
+<td>None</td>
+<td>same</td>
+</tr>
+</tbody>
+</table>
+<p>Level of detail: the original's, 4 by default (<code>--detail-level</code>, <code>Graphics/DetailLevel.h</code>).</p>
+<blockquote>
+<p><strong>Code rules.</strong> Each stage keeps its state in ECS components or Locator services, loads its assets through the
+resource caches and keeps its pure logic testable with fakes in <code>test/</code>; comments in the code describe behaviour
+in plain English, with no decompiled names or addresses (those belong in these pages).</p>
+</blockquote>
+<h2 id="pending">Pending<span class="state pending">pending</span></h2>
+<ul>
+<li>The stages still missing or in progress in the table: the drawn snow and the raindrops on the ground, leashes and
+  gestures, the Bink decoder (and opcode 203), the creature (reflections and shadows), the prediction, the
+  SuperVillagers and the PSys meshes in the projected shadows.</li>
+<li>CRT draws that differ from the original, each a measured behaviour change still to make: the rain is placed at
+  every <code>OnLoadMap</code> (896 draws) instead of 2 × 896 once at start-up; there is no snow scatter (7168 draws at
+  start-up); the clouds make 5 draws instead of 6; the lantern jitter runs while it is light, the lanterns' creation
+  draws come at the first <code>Rescan</code>, and every light is drawn again when the set changes. Details in
+  <a href="day-night-weather.html#pending">day-night-weather.md</a> and <a href="rendering.html#pending">rendering.md</a>.</li>
+</ul>
+</main>
+<script src="search.js"></script>
+<script src="wiki.js"></script>
+</body>
+</html>

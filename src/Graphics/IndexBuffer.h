@@ -30,7 +30,7 @@ public:
 
 	IndexBuffer() = delete;
 	IndexBuffer(const IndexBuffer& other) = delete;
-	IndexBuffer(IndexBuffer&&) = default;
+	IndexBuffer(IndexBuffer&&) = delete;
 
 	IndexBuffer(std::string name, const void* indices, uint32_t indexCount, Type type);
 	IndexBuffer(std::string name, const void* memory, Type type);
@@ -42,6 +42,7 @@ public:
 	[[nodiscard]] uint32_t GetStride() const;
 	[[nodiscard]] Type GetType() const;
 
+	[[nodiscard]] bool IsValid() const noexcept;
 	void Bind(uint32_t count, uint32_t startIndex = 0) const;
 
 private:

@@ -13,6 +13,7 @@
 
 #include <array>
 #include <filesystem>
+#include <ostream>
 #include <string>
 #include <vector>
 
@@ -82,7 +83,11 @@ public:
 	/// Read lhvm file from a buffer
 	void Open(const std::vector<uint8_t>& buffer);
 
-	void Write(const std::filesystem::path& filepath);
+	/// Write the program (globals, code, autostart scripts, scripts and data). Runtime status isn't written yet. False
+	/// when the file can't be written.
+	/// It is the save path of the script debugger and editor; nothing in the game calls it
+	bool Write(const std::filesystem::path& filepath) const;
+	void Write(std::ostream& stream) const;
 
 	[[nodiscard]] bool IsLoaded() const { return _isLoaded; }
 	[[nodiscard]] LHVMVersion GetVersion() const { return _version; }

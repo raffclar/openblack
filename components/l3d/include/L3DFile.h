@@ -64,8 +64,8 @@ enum class L3DMeshFlags : uint32_t
 	Unknown7 = 1U << 6U,                  // 0x40     (25)
 	Unknown8 = 1U << 7U,                  // 0x80     (24)
 	HasBones = 1U << 8U,                  // 0x100    (23)
-	Unknown10 = 1U << 9U,                 // 0x200    (22)
-	Unknown11 = 1U << 10U,                // 0x400    (21)
+	Unknown10 = 1U << 9U,                 // 0x200    (22) the object goes to the Z-sorter whole (L3DMesh::IsZSorted)
+	HasChimney = 1U << 10U,               // 0x400    (21) extra point [1] (the chimney's position)
 	HasDoorPosition = 1U << 11U,          // 0x800    (20)
 	Packed = 1U << 12U,                   // 0x1000   (19)
 	NoDraw = 1U << 13U,                   // 0x2000   (18)
@@ -264,6 +264,16 @@ struct L3DMaterial
 };
 static_assert(sizeof(L3DMaterial) == 4 * sizeof(uint32_t));
 
+/// A submesh's lightmap, from the UV2 block. The game multiplies its primitives by the skin, mapped by
+/// the vertices' second texture coordinates.
+struct L3DLightmap
+{
+	/// Textured, with the lightmap's skin
+	L3DMaterial material;
+	std::array<uint32_t, 4> reserved;
+};
+static_assert(sizeof(L3DLightmap) == 8 * sizeof(uint32_t));
+
 struct L3DPrimitiveHeader
 {
 	L3DMaterial material;
@@ -300,6 +310,69 @@ struct L3DBlend
 };
 static_assert(sizeof(L3DBlend) == 8);
 
+/// A submesh's record in the name block, one for each submesh in turn
+struct L3DSubmeshName
+{
+	enum Flags : uint32_t
+	{
+		/// The submesh, a window, sheds a volume of light: the game draws its edges drawn out away from
+		/// volumeLightSource, fading as they go
+		VolumeLight = 1u << 0,
+	};
+
+	std::array<char, 64> name;
+	uint32_t flags;
+	float unknown1;
+	L3DPoint volumeLightSource;
+	/// How far the edges are drawn out, before the game scales it
+	float volumeLightLength;
+	/// The point the submesh turns about, when it has a joint
+	L3DPoint jointPivot;
+	/// The matrix of the game's table of joints which the submesh is turned by, when it is from 0 to 255. The leaves of
+	/// the temple's doors have joints.
+	int32_t jointIndex;
+	/// The submesh's frame, which the temple's rooms place their controls' text and camera by: its x, y and z axes,
+	/// then its origin. A point in the frame is x * axes[0] + y * axes[1] + z * axes[2] + origin in the mesh.
+	std::array<L3DPoint, 3> frameAxes;
+	L3DPoint frameOrigin;
+	std::array<float, 12> unknown2;
+	/// The submesh's box, in its frame
+	L3DPoint frameMin;
+	L3DPoint frameMax;
+};
+static_assert(sizeof(L3DSubmeshName) == 0xE0);
+
+/// Decodes the records of a name block whose data, after its size, count and offset of the records, are at dataOffset
+/// in its file. False when the records don't lie in the data.
+bool DecodeSubmeshNames(std::span<const uint8_t> data, uint32_t dataOffset, uint32_t count, uint32_t recordsOffset,
+                        std::vector<L3DSubmeshName>& names) noexcept;
+
+/// Decodes the lightmaps of a UV2 block at blockOffset in its file, blockSize bytes long with its header: data are its
+/// bytes after the block's size, vertex count and submesh count. False when the block doesn't hold them.
+bool DecodeLightmaps(std::span<const uint8_t> data, uint32_t blockOffset, uint32_t blockSize, uint32_t vertexCount,
+                     uint32_t submeshCount, std::vector<L3DPoint2D>& coordinates, std::vector<L3DLightmap>& lightmaps) noexcept;
+
+/// EBone block (ContainsEBone), after the extra metrics: up to 16 points attached to bones. The original's animal ground
+/// blobs use the positions of the first 2 or 4, in the space of the bone they name (-1 = unused).
+struct L3DEBone
+{
+	uint32_t size;                                     ///< 836
+	std::array<std::array<float, 3 * 4>, 16> matrices; ///< 3x3 rotation then position
+	std::array<int32_t, 16> bones;
+};
+static_assert(sizeof(L3DEBone) == 836);
+
+/// NewEP block (ContainsNewEP), the last of the additional data: a building's entrance points. The
+/// block is its size (8 + count x 0x38), the count, then the entries
+struct L3DNewEP
+{
+	std::array<float, 9> rotation; ///< +0x00 3x3 (identity in every shipped mesh)
+	std::array<float, 3> position; ///< +0x24 in the mesh's space
+	uint32_t unknown;              ///< +0x30 (0 in every shipped mesh)
+	int32_t type;                  ///< +0x34 ABODE_EPP: 1 the did-you-know sign's point, 2 (another use), 0 a lantern's
+};
+static_assert(sizeof(L3DNewEP) == 0x38);
+
 /**
   This class is used to read L3Ds.
  */
@@ -329,8 +402,16 @@ protected:
 	std::vector<std::span<L3DBone>> _boneSpans;
 	std::optional<L3DFootprint> _footprint;
 	std::vector<uint8_t> _uv2Data;
+	/// The UV2 block's lightmap coordinates, one for each vertex of every submesh in turn
+	std::vector<L3DPoint2D> _lightmapCoordinates;
+	/// The UV2 block's lightmap of each submesh
+	std::vector<L3DLightmap> _lightmaps;
 	std::string _nameData;
+	/// The name block's records, one for each submesh, when it has them
+	std::vector<L3DSubmeshName> _submeshNames;
 	std::vector<std::array<float, 3 * 4>> _extraMetrics;
+	std::optional<L3DEBone> _eBone;
+	std::vector<L3DNewEP> _newEP;
 
 	/// Write file to the input source
 	L3DResult WriteFile(std::ostream& stream) const noexcept;
@@ -364,11 +445,16 @@ public:
 	[[nodiscard]] const std::optional<L3DFootprint>& GetFootprint() const noexcept { return _footprint; }
 	[[nodiscard]] const std::vector<std::array<float, 3 * 4>>& GetExtraMetrics() const noexcept { return _extraMetrics; }
 	[[nodiscard]] const std::vector<uint8_t>& GetUv2Data() const noexcept { return _uv2Data; }
+	[[nodiscard]] const std::vector<L3DPoint2D>& GetLightmapCoordinates() const noexcept { return _lightmapCoordinates; }
+	[[nodiscard]] const std::vector<L3DLightmap>& GetLightmaps() const noexcept { return _lightmaps; }
+	[[nodiscard]] const std::optional<L3DEBone>& GetEBone() const noexcept { return _eBone; }
+	[[nodiscard]] const std::vector<L3DNewEP>& GetNewEP() const noexcept { return _newEP; }
 	void SetFootprint(const L3DFootprint& footprint) noexcept { _footprint = footprint; }
 	void SetExtraMetrics(const std::vector<std::array<float, 3 * 4>>& metrics) noexcept { _extraMetrics = metrics; }
 	void SetUv2Data(std::vector<uint8_t>& uv2Data) noexcept { _uv2Data = uv2Data; }
 	void SetNameData(std::string& nameData) noexcept { _nameData = nameData; }
 	[[nodiscard]] const std::string& GetNameData() const noexcept { return _nameData; }
+	[[nodiscard]] const std::vector<L3DSubmeshName>& GetSubmeshNames() const noexcept { return _submeshNames; }
 	[[nodiscard]] const std::span<L3DPrimitiveHeader>& GetPrimitiveSpan(uint32_t submeshIndex) const noexcept
 	{
 		return _primitiveSpans[submeshIndex];

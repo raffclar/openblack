@@ -9,11 +9,17 @@
 
 #pragma once
 
+#include <entt/entity/fwd.hpp>
+
 namespace openblack::ecs::systems
 {
 class PathfindingSystemInterface
 {
 public:
-	virtual void Update() = 0;
+	virtual ~PathfindingSystemInterface() = default;
+
+	/// This turn's step of one villager's wall-hugging walk. The state functions that walk call it
+	/// (living_turn::MoveToStep, ECS/LivingTurn.h)
+	virtual void Step(entt::entity entity) = 0;
 };
 } // namespace openblack::ecs::systems

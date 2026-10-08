@@ -39,7 +39,9 @@ public:
 	~Ocean() noexcept;
 
 	[[nodiscard]] graphics::FrameBuffer& GetReflectionFramebuffer() const noexcept override { return *_reflectionFrameBuffer; }
+	void ResizeReflectionFramebuffer(uint16_t width, uint16_t height) override;
 	[[nodiscard]] graphics::Mesh& GetMesh() const noexcept override { return *_mesh; }
+	[[nodiscard]] graphics::Mesh& GetScreenMesh() const noexcept override { return *_screenMesh; }
 	[[nodiscard]] entt::id_type GetDiffuseTexture() const noexcept override { return k_DiffuseTextureId; }
 	[[nodiscard]] entt::id_type GetAlphaTexture() const noexcept override { return k_AlphaTextureId; }
 
@@ -47,6 +49,7 @@ private:
 	void CreateMesh();
 
 	std::unique_ptr<graphics::Mesh> _mesh;
+	std::unique_ptr<graphics::Mesh> _screenMesh;
 	std::unique_ptr<graphics::FrameBuffer> _reflectionFrameBuffer;
 };
 

@@ -95,6 +95,12 @@
  *         noise - noise texture
  *         bump - bump map
  *
+ * ------------------------ optional BWLandEditor chunks ----------------------
+ *
+ * - "EXT0", uint32 size of the whole chunk, uint8 version, uint8 altitude bits (8-16; the high bits of the altitude go
+ *   in the low bits of each cell's save colour)
+ * - "META", uint32 size of the data, editor data
+ *
  * ------------------------ start of unaccounted block -------------------------
  *
  * // TODO(bwrsandman)
@@ -107,8 +113,10 @@
 #include <cassert>
 #include <cstring>
 
+#include <algorithm>
 #include <fstream>
 #include <stdexcept>
+#include <string_view>
 #include <utility>
 
 using namespace openblack::lnd;
@@ -185,6 +193,8 @@ std::string_view openblack::lnd::ResultToStr(LNDResult result)
 		return "Extra Textures are beyond the end of the file.";
 	case LNDResult::ErrUnaccountedData:
 		return "Parsing ended without reaching end of file.";
+	case LNDResult::ErrBadAltitudeBits:
+		return "The EXT0 chunk has altitude bits outside 8-16.";
 	}
 	std::unreachable();
 }
@@ -209,7 +219,9 @@ LNDResult LNDFile::ReadFile(std::istream& stream) noexcept
 	// First 1052 bytes
 	stream.read(reinterpret_cast<char*>(&_header), sizeof(LNDHeader));
 
-	if (_header.blockSize != sizeof(LNDBlock))
+	// Some playground lands (the god lands, 0GOODXEVIL) store the size of all their blocks together here
+	if (_header.blockSize != sizeof(LNDBlock) &&
+	    (_header.blockCount == 0 || _header.blockSize != sizeof(LNDBlock) * (_header.blockCount - 1)))
 	{
 		return LNDResult::ErrNonStandardBlockSize;
 	}
@@ -263,6 +275,54 @@ LNDResult LNDFile::ReadFile(std::istream& stream) noexcept
 	}
 	stream.read(reinterpret_cast<char*>(&_extra), sizeof(_extra));
 
+	// Chunks added by BWLandEditor (Daniels118): "EXT0" (size of the whole chunk, version, altitude bits) and "META"
+	// (size of the data, editor data); it stops at an unknown one
+	while (static_cast<std::size_t>(stream.tellg()) + 8 <= fsize)
+	{
+		const auto chunkStart = stream.tellg();
+		std::array<char, 4> magic {};
+		uint32_t size = 0;
+		stream.read(magic.data(), magic.size());
+		stream.read(reinterpret_cast<char*>(&size), sizeof(size));
+		const auto remaining = fsize - static_cast<std::size_t>(stream.tellg());
+		if (std::string_view(magic.data(), magic.size()) == "EXT0")
+		{
+			const std::size_t body = size > 8 ? size - 8 : 0;
+			if (body > remaining)
+			{
+				return LNDResult::ErrUnaccountedData;
+			}
+			std::vector<uint8_t> data(body);
+			stream.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(data.size()));
+			if (!data.empty())
+			{
+				_extensionVersion = data[0];
+			}
+			if (data.size() > 1)
+			{
+				if (data[1] < 8 || data[1] > 16)
+				{
+					return LNDResult::ErrBadAltitudeBits;
+				}
+				_altitudeBits = data[1];
+			}
+		}
+		else if (std::string_view(magic.data(), magic.size()) == "META")
+		{
+			if (size > remaining)
+			{
+				return LNDResult::ErrUnaccountedData;
+			}
+			_metadata.resize(size);
+			stream.read(reinterpret_cast<char*>(_metadata.data()), static_cast<std::streamsize>(_metadata.size()));
+		}
+		else
+		{
+			stream.seekg(chunkStart);
+			break;
+		}
+	}
+
 	// Get all bytes that weren't read
 	if (stream.peek() != EOF)
 	{
@@ -302,8 +362,24 @@ LNDResult LNDFile::WriteFile(std::ostream& stream) const noexcept
 	// Write Extra textures (noise and bump map)
 	stream.write(reinterpret_cast<const char*>(&_extra), sizeof(_extra));
 
-	// TODO(bwrsandman): Figure out what the unaccounted bytes are for and write
-	//                   them to the file
+	// BWLandEditor chunks
+	if (_altitudeBits != 8)
+	{
+		const std::array<uint8_t, 2> body = {_extensionVersion != 0 ? _extensionVersion : static_cast<uint8_t>(1),
+		                                     _altitudeBits};
+		const auto size = static_cast<uint32_t>(8 + body.size());
+		stream.write("EXT0", 4);
+		stream.write(reinterpret_cast<const char*>(&size), sizeof(size));
+		stream.write(reinterpret_cast<const char*>(body.data()), body.size());
+	}
+	if (!_metadata.empty())
+	{
+		const auto size = static_cast<uint32_t>(_metadata.size());
+		stream.write("META", 4);
+		stream.write(reinterpret_cast<const char*>(&size), sizeof(size));
+		stream.write(reinterpret_cast<const char*>(_metadata.data()), _metadata.size());
+	}
+
 	stream.write(reinterpret_cast<const char*>(_unaccounted.data()), _unaccounted.size() * sizeof(_unaccounted[0]));
 
 	return LNDResult::Success;
@@ -354,8 +430,12 @@ LNDResult LNDFile::Write(const std::filesystem::path& filepath) noexcept
 	_header.lowResolutionCount = static_cast<uint32_t>(_lowResolutionTextures.size());
 	for (const auto& block : _blocks)
 	{
-		const auto lookupIndex = block.blockX << 5 | block.blockZ;
-		_header.lookUpTable.at(lookupIndex) = static_cast<uint8_t>(block.index);
+		// the table only covers 32 x 32 blocks and indices up to 255 (larger BWLandEditor maps go without it)
+		if (block.blockX < 32 && block.blockZ < 32 && block.index < 256)
+		{
+			const auto lookupIndex = block.blockX << 5 | block.blockZ;
+			_header.lookUpTable.at(lookupIndex) = static_cast<uint8_t>(block.index);
+		}
 	}
 
 	// TODO (#749) use std::views::enumerate
@@ -374,6 +454,16 @@ LNDResult LNDFile::Write(const std::filesystem::path& filepath) noexcept
 	}
 
 	return WriteFile(stream);
+}
+
+uint16_t LNDFile::GetBlocksPerSide() const noexcept
+{
+	uint32_t span = 31;
+	for (const auto& block : _blocks)
+	{
+		span = std::max({span, block.blockX, block.blockZ});
+	}
+	return static_cast<uint16_t>(span + 1);
 }
 
 void LNDFile::AddLowResolutionTexture(const LNDLowResolutionTexture& texture) noexcept

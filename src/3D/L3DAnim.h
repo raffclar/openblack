@@ -47,8 +47,22 @@ public:
 
 	[[nodiscard]] const std::string& GetName() const noexcept { return _name; }
 	[[nodiscard]] uint32_t GetDuration() const noexcept { return _duration; }
+	void SetLooping(bool loop) noexcept { _unknown_0x50 = loop ? (_unknown_0x50 | 0x100u) : (_unknown_0x50 & ~0x100u); }
 	[[nodiscard]] const std::vector<Frame>& GetFrames() const noexcept { return _frames; }
 	[[nodiscard]] std::vector<glm::mat4> GetBoneMatrices(uint32_t time) const noexcept;
+
+	// The header as the original reads it (docs/bw1-notes/animation.md):
+	/// the clip's length in milliseconds of game time (`_duration` is the clip's size in bytes)
+	[[nodiscard]] int32_t GetDurationMs() const noexcept { return static_cast<int32_t>(_unknown_0x20); }
+	/// ground covered by one cycle: walking clips advance with the distance moved
+	[[nodiscard]] float GetCycleDistance() const noexcept { return _unknown_0x28; }
+	/// the loop flag, 0x100 of the flags
+	[[nodiscard]] bool IsLooping() const noexcept { return (_unknown_0x50 & 0x100u) != 0; }
+	/// Each bone's transform relative to its parent at `milliseconds`. The keys are evenly
+	/// spaced (a looping clip wraps its last key back to the first, a one-shot one ends on it) and every element of the
+	/// 3x4 matrices is lerped, without re-orthonormalising. `blendSampler`: the original's blend sampler instead (the
+	/// SuperVillager's cross-fade), the same but the next key after the last is always the first, one-shot clips too.
+	void SampleLocal(int32_t milliseconds, std::vector<glm::mat4>& bones, bool blendSampler = false) const noexcept;
 
 private:
 	std::string _name;

@@ -9,7 +9,11 @@
 
 #pragma once
 
+#include <cstddef>
+
 #include <LHVM.h>
+#include <imgui.h>
+#include <imgui_memory_editor.h>
 
 #include "Window.h"
 
@@ -47,6 +51,10 @@ private:
 	uint32_t _selectedTaskID {0};
 	bool _resetStackScroll {false};
 	bool _resetExceptionHandlersScroll {false};
+
+	size_t _selectedVariable {0};    ///< the Variables tab's selection
+	MemoryEditor _dataEditor;        ///< the Data tab's editor
+	int _selectedScriptVariable {0}; ///< the Local Variables tab's selection
 
 	static std::string DataToString(lhvm::VMValue data, lhvm::DataType type) noexcept;
 };

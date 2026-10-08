@@ -9,56 +9,29 @@
 
 #pragma once
 
-#include <algorithm>
-#include <string>
 #include <vector>
 
-#include <glm/geometric.hpp>
 #include <glm/vec3.hpp>
-
-#include "Enums.h"
 
 namespace openblack::ecs::components
 {
 
+/// A river: its points in script order (CREATE_STREAM_POINT appends at the tail), each at the ground altitude (the
+/// script handler sets y). The river runs p[i] -> p[i + 1].
 struct Stream
 {
 	using Id = int;
 
-	// NOLINTNEXTLINE(misc-no-recursion): lint error, this isn't a function
-	class Node
-	{
-	public:
-		glm::vec3 position;
-		std::vector<Node> edges;
+	Id id;
+	std::vector<glm::vec3> points;
+};
 
-		Node(const glm::vec3& position, const std::vector<Node>& nodes)
-		    : position(position)
-		{
-			if (nodes.empty())
-			{
-				return;
-			}
-
-			auto element =
-			    std::min_element(std::cbegin(nodes), std::cend(nodes), [&position](const auto& first, const auto& second) {
-				    auto firstDistance = glm::distance(position, first.position);
-				    auto secondDistance = glm::distance(position, second.position);
-				    return firstDistance < secondDistance;
-			    });
-
-			if (glm::distance(position, element->position) < k_MaxNodeDistance)
-			{
-				edges.push_back(*element);
-			}
-		}
-
-	private:
-		const static auto k_MaxNodeDistance = 100;
-	};
-
-	Stream::Id id;
-	std::vector<Node> nodes;
+/// One landscape footprint of a river segment (two per segment): data\river2.l3d, the
+/// river bed, blended into the land colour like a building footprint; data\river.l3d (channel = true), whose alpha
+/// lowers the land's alpha (min) so the sea drawn before the land shows through as the water.
+struct StreamFootprint
+{
+	bool channel;
 };
 
 } // namespace openblack::ecs::components

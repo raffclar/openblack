@@ -14,6 +14,8 @@
 
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
+#include "Resources/BlobStream.h"
+#include "Resources/ResourcesInterface.h"
 
 namespace openblack
 {
@@ -25,7 +27,17 @@ std::unique_ptr<const InfoConstants> InfoFile::LoadFromFile(const std::filesyste
 	auto infos = std::make_unique<InfoConstants>();
 	std::vector<uint8_t> data;
 	pack::PackFile pack;
-	const auto result = pack.ReadFile(*Locator::filesystem::value().GetData(path));
+	// its bytes from the byte cache, parsed in place
+	auto result = pack::PackResult::ErrCantOpen;
+	try
+	{
+		result = pack.ReadFile(*resources::BlobStream(
+		    resources::LoadBlob(Locator::resources::value().GetBlobs(), Locator::filesystem::value().FindPath(path))));
+	}
+	catch (const std::exception& e)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to read {}: {}", path.generic_string(), e.what());
+	}
 	if (result != pack::PackResult::Success)
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to open {}: {}", path.generic_string(), pack::ResultToStr(result));

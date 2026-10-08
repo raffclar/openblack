@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <string>
 
+#include "GameClock.h"
 #include "ScriptingBindingUtils.h"
 
 using namespace openblack::lhscriptx;
@@ -76,14 +77,17 @@ void MapScriptCommands::SetTurnsPerYear([[maybe_unused]] int32_t turnsPerYear)
 	                       std::to_string(__LINE__));
 }
 
-void MapScriptCommands::SetGameTickTime([[maybe_unused]] int32_t gameTickTime)
+void MapScriptCommands::SetGameTickTime(int32_t gameTickTime)
 {
-	throw std::logic_error(std::string {} + "Function " + __func__ + " not implemented. " + __FILE__ + ":" +
-	                       std::to_string(__LINE__));
+	// the turn length is the argument; the scheduler keeps its own 100 (game_clock)
+	openblack::game_clock::SetMsPerTurn(static_cast<uint32_t>(gameTickTime));
 }
 
 void MapScriptCommands::LoadFeatureScript(glm::vec3)
 {
+	// TODO(not ported): loads the map features from the script's string: the file is loaded as a land script, then
+	// ecs::town_features::AssignTownFeatures() at its end, the game's birthday, the players' post-load cleanup and the
+	// streams created, as Game::LoadMap does for the map's own script
 	throw std::logic_error(std::string {} + "Function " + __func__ + " not implemented. " + __FILE__ + ":" +
 	                       std::to_string(__LINE__));
 }

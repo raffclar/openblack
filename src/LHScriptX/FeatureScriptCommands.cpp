@@ -9,23 +9,36 @@
 
 #include "FeatureScriptCommands.h"
 
+#include <cctype>
+
+#include <algorithm>
+#include <optional>
 #include <tuple>
 
+#include <glm/geometric.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/polar_coordinates.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/DayNightClock.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/ObjectMatrix.h"
 #include "Camera/Camera.h"
+#include "Common/GUtilsDistance.h"
+#include "ECS/AnimalAI.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
+#include "ECS/Archetypes/AnimalArchetype.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/BigForestArchetype.h"
 #include "ECS/Archetypes/BonfireArchetype.h"
 #include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
+#include "ECS/Archetypes/DeadTreeArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/FieldArchetype.h"
+#include "ECS/Archetypes/FishFarmArchetype.h"
+#include "ECS/Archetypes/MistArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
@@ -34,16 +47,41 @@
 #include "ECS/Archetypes/TownArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
+#include "ECS/Components/Abode.h"
+#include "ECS/Components/Flock.h"
 #include "ECS/Components/Footpath.h"
+#include "ECS/Components/MapSimData.h"
+#include "ECS/Components/Mesh.h"
 #include "ECS/Components/Stream.h"
+#include "ECS/Components/Town.h"
+#include "ECS/Components/Transform.h"
+#include "ECS/Footpaths.h"
+#include "ECS/Influence/Influence.h"
+#include "ECS/MapCells.h"
+#include "ECS/MapCollide.h"
+#include "ECS/ObjectCreationIndex.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/DayNightClockSystemInterface.h"
+#include "ECS/Systems/MapScriptSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Town/AbodeVillagers.h"
+#include "ECS/Town/TownBelief.h"
+#include "ECS/Town/TownDesire.h"
+#include "ECS/Town/TownQueries.h"
+#include "ECS/Town/TownVillagers.h"
+#include "ECS/Trees.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "InfoConstants.h"
+#include "LHScriptX/Script.h"
+#include "LHScriptX/VillagerCommands.h"
+#include "LandBalance.h"
 #include "Locator.h"
+#include "Magic/Script/MapScriptMagic.h"
+#include "Magic/Script/MapScriptWeather.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptingBindingUtils.h"
+#include "Worship/WorshipPercentage.h"
 
 using namespace openblack;
 using namespace openblack::lhscriptx;
@@ -67,26 +105,6 @@ constexpr std::unordered_map<std::string_view, C> makeLookup(std::array<std::str
 
 const auto k_PlayerLookup = makeLookup<PlayerNames>(k_PlayerNamesStrs);
 const auto k_TribeLookup = makeLookup<Tribe>(k_TribeStrs);
-const auto k_VillagerNumberLookup = makeLookup<VillagerNumber>(k_VillagerNumberStrs);
-
-std::tuple<Tribe, VillagerNumber> GetVillagerTribeAndNumber(const std::string& villagerTribeWithType)
-{
-	const auto pos = villagerTribeWithType.find_first_of('_');
-	const auto tribeStr = villagerTribeWithType.substr(0, pos);
-	const auto roleStr = villagerTribeWithType.substr(pos + 1);
-
-	try
-	{
-		const auto tribe = k_TribeLookup.at(tribeStr);
-		const auto role = k_VillagerNumberLookup.at(roleStr);
-		return std::make_tuple(tribe, role);
-	}
-	catch (...)
-	{
-		std::throw_with_nested(std::runtime_error("Could not recognize either villager tribe or role"));
-	}
-}
-
 PlayerNames GetPlayerName(const std::string& name)
 {
 	PlayerNames player;
@@ -99,6 +117,121 @@ PlayerNames GetPlayerName(const std::string& name)
 		std::throw_with_nested(std::runtime_error(fmt::format("Could not recognize player name: {}", name)));
 	}
 	return player;
+}
+
+/// The player whose name matches ignoring case (SET_TOWN_BELIEF, SET_TOWN_BELIEF_CAP), else the neutral player.
+/// Not GetPlayerName, which throws
+PlayerNames PlayerFromText(const std::string& name)
+{
+	for (size_t i = 0; i < k_PlayerNamesStrs.size(); ++i)
+	{
+		const auto& candidate = k_PlayerNamesStrs.at(i);
+		if (candidate.size() == name.size() && std::equal(candidate.begin(), candidate.end(), name.begin(), [](char a, char b) {
+			    return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+		    }))
+		{
+			return static_cast<PlayerNames>(i);
+		}
+	}
+	return PlayerNames::NEUTRAL;
+}
+
+/// The town with the script's id (ecs::town_queries::FindTownWithID)
+entt::entity FindTown(int32_t townId)
+{
+	return ecs::town_queries::FindTownWithID(static_cast<uint32_t>(townId));
+}
+
+/// The script's town number as the town's key (Town::id, which AbodeArchetype / FieldArchetype take); a number no town
+/// has -> Abode::k_NoTown (their own fallback: the nearest town)
+uint32_t TownKeyOf(int32_t townId)
+{
+	const auto town = FindTown(townId);
+	return town != entt::null ? Locator::entitiesRegistry::value().Get<const Town>(town).id : Abode::k_NoTown;
+}
+
+/// The nearest town: the town list newest first (town_queries::TownsNewestFirst), the first always taken, then a
+/// strictly smaller distance in metres, so an exact tie goes to the newer town; none without towns. MapCoords x, z
+/// only (FromMetres: the altitude is not read)
+entt::entity FindNearestTown(const glm::vec3& position)
+{
+	return ecs::map_cells::FindNearestTownInList(map_coords::FromMetres(glm::vec2(position.x, position.z)));
+}
+
+/// The info index a command passes to the villager's creation, or nullopt for one past openblack's table
+std::optional<VillagerInfo> ValidVillagerInfo(int32_t index, const char* command)
+{
+	if (index < 0 || static_cast<size_t>(index) >= Locator::infoConstants::value().villager.size())
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "LHScriptX: {}: villager info {} out of the table, skipped", command,
+		                   index);
+		return std::nullopt;
+	}
+	return static_cast<VillagerInfo>(index);
+}
+
+/// CREATE_TOWN_VILLAGER / CREATE_SPECIAL_TOWN_VILLAGER: the villager at A1 with the info and age N3; it becomes the
+/// last created object, null too; none -> end. Then the town with id N0, else the nearest town to A1, else end; the
+/// villager is added to that town
+void CreateVillagerInTown(int32_t townId, const glm::vec3& position, VillagerInfo info, int32_t age)
+{
+	const auto villager = VillagerArchetype::Create(position, position, info, static_cast<uint32_t>(age), false);
+	Script::SetLastCreated(villager);
+	if (villager == entt::null)
+	{
+		return;
+	}
+	auto town = FindTown(townId);
+	if (town == entt::null)
+	{
+		town = FindNearestTown(position);
+	}
+	if (town == entt::null)
+	{
+		return;
+	}
+	ecs::town_villagers::AddVillagerToTown(town, villager);
+}
+
+/// CREATE_VILLAGER / _POS, after villager_commands::FindAbodeAt(abodePosition): the info, or the overriding tribe's
+/// villager of the same number when that tribe has one; the villager is made at the position with the info and age
+/// (put on the land); it becomes the last created object, null too; none -> end. Then the abode found; else its
+/// town: an abode with space in the town, else the town itself; else the game's vagrants
+void CreateVillagerAtAbode(const glm::vec3& abodePosition, const glm::vec3& position, VillagerInfo info, int32_t age)
+{
+	const auto at = villager_commands::FindAbodeAt(abodePosition);
+	if (const auto tribe = Script::TribeOverride(); tribe.has_value())
+	{
+		const auto number = Locator::infoConstants::value().villager.at(static_cast<size_t>(info)).villagerNumber;
+		if (const auto other = villager_commands::FindVillagerInfo(*tribe, number); other.has_value())
+		{
+			info = *other;
+		}
+	}
+	const auto villager = VillagerArchetype::Create(abodePosition, position, info, static_cast<uint32_t>(age), false);
+	Script::SetLastCreated(villager);
+	if (villager == entt::null)
+	{
+		return;
+	}
+	if (at.abode != entt::null)
+	{
+		ecs::abode_villagers::AddVillagerToAbode(at.abode, villager);
+		return;
+	}
+	if (at.town != entt::null)
+	{
+		if (const auto abode = ecs::town_villagers::FindAbodeWithSpaceInTown(at.town, villager, 0.0f); abode != entt::null)
+		{
+			ecs::abode_villagers::AddVillagerToAbode(abode, villager);
+			return;
+		}
+		ecs::town_villagers::AddVillagerToTown(at.town, villager);
+		return;
+	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "LHScriptX: no abode at {}: the villager is a vagrant",
+	                    glm::to_string(abodePosition));
+	ecs::town_villagers::AddToVagrants(villager);
 }
 
 } // namespace
@@ -214,7 +347,7 @@ const std::array<const ScriptCommandSignature, 106> FeatureScriptCommands::k_Sig
 
 inline glm::mat4 GetRotation(int rotation)
 {
-	return glm::eulerAngleY(static_cast<float>(rotation) * -0.001f);
+	return glm::mat4(affine::AngleY(static_cast<float>(rotation) * 0.001f));
 }
 
 inline glm::vec3 GetSize(int size)
@@ -230,8 +363,8 @@ void FeatureScriptCommands::SetATownInfluenceMultiplier(int32_t townId, float mu
 
 void FeatureScriptCommands::CreateMist(glm::vec3 position, float param2, int32_t param3, float param4, float param5)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}, {}, {}, {}) not implemented.",
-	                    __FILE__, __LINE__, __func__, glm::to_string(position), param2, param3, param4, param5);
+	// command "AFNFF": a mist at the position raised by F1, ARGB colour N2, size F3, k F4
+	MistArchetype::Create(position, param2, static_cast<uint32_t>(param3), param4, param5);
 }
 
 void FeatureScriptCommands::CreatePath(int32_t param1, int32_t param2, int32_t param3, int32_t param4)
@@ -257,125 +390,237 @@ void FeatureScriptCommands::CreateTown(int32_t townId, glm::vec3 position, const
 	}
 
 	TownArchetype::Create(townId, position, GetPlayerName(playerOwner), tribe);
+	// the town is not an Object, but its 7 TownDesireFlags are
+	ecs::object_index::Skip(7);
 }
 
 void FeatureScriptCommands::SetTownBelief(int32_t townId, const std::string& playerOwner, float belief)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	auto& registryContext = registry.Context();
-
-	Town& town = registry.Get<Town>(registryContext.towns.at(townId));
-	town.beliefs.insert({playerOwner, belief});
+	// SET_TOWN_BELIEF: nothing without the town; otherwise the town's belief in the player (for the neutral player its
+	// own slot), capped. It overwrites the slot (the old string map inserted, so it kept the first value)
+	const auto player = PlayerFromText(playerOwner);
+	if (const auto town = FindTown(townId); town != entt::null)
+	{
+		ecs::town_belief::SetBeliefInPlayer(Locator::entitiesRegistry::value().Get<Town>(town), player, belief);
+	}
 }
 
 void FeatureScriptCommands::SetTownBeliefCap(int32_t townId, const std::string& playerOwner, float belief)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}, {}) not implemented.", __FILE__,
-	                    __LINE__, __func__, townId, playerOwner, belief);
+	// SET_TOWN_BELIEF_CAP: nothing without the town; otherwise the cap of the town's belief in the player. (pending) on
+	// the land .\mpm_3p_1.txt in a multiplayer game, town 3 and a non-neutral player get a cap of 2.0; openblack plays
+	// no multiplayer land
+	const auto player = PlayerFromText(playerOwner);
+	if (const auto town = FindTown(townId); town != entt::null)
+	{
+		ecs::town_belief::SetCap(Locator::entitiesRegistry::value().Get<Town>(town).belief, player, belief);
+	}
 }
 
 void FeatureScriptCommands::SetTownUninhabitable(int32_t townId)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}) not implemented.", __FILE__, __LINE__,
-	                    __func__, townId);
+	// case 5: the town becomes uninhabitable; nothing without the town
+	if (const auto town = FindTown(townId); town != entt::null)
+	{
+		Locator::entitiesRegistry::value().Get<Town>(town).uninhabitable = true;
+	}
 }
 
 void FeatureScriptCommands::SetTownCongregationPos(int32_t townId, glm::vec3 position)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}) not implemented.", __FILE__, __LINE__,
-	                    __func__, townId, glm::to_string(position));
+	// case 6: nothing without the town; otherwise the town's congregation position (the cache that
+	// ecs::town_queries reads) = the script position N1, all three fields.
+	// A script position is x, z in map coordinates with altitude 0, or with a third field the altitude unscaled. A
+	// script offset may be added, but it is only set by the vortex between lands, so a land's features script never
+	// has one.
+	// openblack's script parser (Script.cpp GetParameter) only makes a vector of a two-field string, and its y is the
+	// terrain height, not a third field: y = 0 is the literal value for that form. Every SET_TOWN_CONGREGATION_POS of
+	// the shipped scripts has two fields. (approximate) a three-field string does not reach here in openblack
+	if (const auto town = FindTown(townId); town != entt::null)
+	{
+		auto& component = Locator::entitiesRegistry::value().Get<Town>(town);
+		component.congregationPos = ecs::town_queries::ToMapCoords({position.x, position.z});
+		component.congregationPosY = 0.0f;
+	}
 }
 
 void FeatureScriptCommands::CreateAbode(int32_t townId, glm::vec3 position, const std::string& abodeInfo, int32_t rotation,
                                         int32_t size, int32_t foodAmount, int32_t woodAmount)
 {
 	// Does not use 3d angle to game angle
-	AbodeArchetype::Create(townId, position, GAbodeInfo::Find(abodeInfo), rotation * 0.001f, size * 0.001f,
+	const auto type = GAbodeInfo::Find(abodeInfo);
+	if (type == AbodeInfo::None)
+	{
+		return; // openblack: the original has no check (see GAbodeInfo::Find)
+	}
+	AbodeArchetype::Create(TownKeyOf(townId), position, type, rotation * 0.001f, size * 0.001f,
 	                       static_cast<uint32_t>(foodAmount), static_cast<uint32_t>(woodAmount));
 }
 
 void FeatureScriptCommands::CreatePlannedAbode(int32_t townId, glm::vec3 position, const std::string& abodeInfo,
-                                               int32_t rotation, int32_t size, int32_t foodAmount, int32_t woodAmount)
+                                               int32_t rotation, int32_t size, [[maybe_unused]] int32_t foodAmount,
+                                               [[maybe_unused]] int32_t woodAmount)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}, {}, {}, {}, {}, {}) not implemented.",
-	                    __FILE__, __LINE__, __func__, townId, glm::to_string(position), abodeInfo, rotation, size, foodAmount,
-	                    woodAmount);
+	// case 8 (shared with CREATE_ABODE): the town, else the nearest one, else nothing; the food and wood are not used.
+	// A town centre type makes a planned town centre, any other a planned abode; both go on the town's planned list
+	// and are never drawn.
+	auto town = FindTown(townId);
+	if (town == entt::null)
+	{
+		town = FindNearestTown(position);
+	}
+	const auto type = GAbodeInfo::Find(abodeInfo);
+	if (town == entt::null || type == AbodeInfo::None)
+	{
+		return;
+	}
+	const auto& info = Locator::infoConstants::value().abode.at(static_cast<size_t>(type));
+	Locator::entitiesRegistry::value().Get<Town>(town).plannedAbodes.push_back(
+	    PlannedAbode {type, position, rotation * 0.001f, size * 0.001f, info.abodeType == AbodeType::TownCentre});
 }
 
 void FeatureScriptCommands::CreateTownCentre(int32_t townId, glm::vec3 position, const std::string& abodeInfo, int32_t rotation,
-                                             int32_t size, [[maybe_unused]] int32_t worshipPercentage)
+                                             int32_t size, int32_t worshipPercentage)
 {
-	AbodeArchetype::Create(townId, position, GAbodeInfo::Find(abodeInfo), rotation * 0.001f, size * 0.001f,
-	                       static_cast<uint32_t>(0), static_cast<uint32_t>(0));
+	// case 9
+	const auto type = GAbodeInfo::Find(abodeInfo);
+	if (type == AbodeInfo::None)
+	{
+		return; // openblack: the original has no check (see GAbodeInfo::Find)
+	}
+	const auto centre = AbodeArchetype::Create(TownKeyOf(townId), position, type, rotation * 0.001f, size * 0.001f,
+	                                           static_cast<uint32_t>(0), static_cast<uint32_t>(0));
+	if (centre == entt::null || type == AbodeInfo::None ||
+	    Locator::infoConstants::value().abode.at(static_cast<size_t>(type)).abodeType != AbodeType::TownCentre)
+	{
+		return;
+	}
+	// the town's centre if it had none, and the worship percentage N5 * 0.001 on the centre's town (the branch for a
+	// centre without a town, which sets it on the totem statue, can't happen here: openblack always gives the abode a
+	// town)
+	auto& registry = Locator::entitiesRegistry::value();
+	// the centre's town key (the nearest town's after the fallback, maybe a founded one)
+	const auto town = ecs::town_queries::TownByKey(registry.Get<Abode>(centre).townId);
+	if (town == entt::null)
+	{
+		return;
+	}
+	auto& townData = registry.Get<Town>(town);
+	if (townData.centre == entt::null)
+	{
+		townData.centre = centre;
+	}
+	townData.worshipPercentage = static_cast<float>(worshipPercentage) * 0.001f;
+	// the full worship percentage setter (Worship/WorshipPercentage.cpp: kept only with a worship site, the totem
+	// statue, the villagers sent)
+	worship::percentage::SetWorshipPercentage(town, townData.worshipPercentage);
 }
 
 void FeatureScriptCommands::CreateTownSpell(int32_t townId, const std::string& spellName)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}) not implemented.", __FILE__, __LINE__,
-	                    __func__, townId, spellName);
+	magic::script::CreateTownSpell(townId, spellName); // Magic/Script/MapScriptMagic.cpp
 }
 
 void FeatureScriptCommands::CreateNewTownSpell(int32_t townId, const std::string& spellName)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}) not implemented.", __FILE__, __LINE__,
-	                    __func__, townId, spellName);
+	// the town centre's spell icon this makes is counted by the object index (TownCentreSpellIcon takes no index of its own)
+	ecs::object_index::AddTownSpell(static_cast<uint32_t>(townId), spellName);
+	magic::script::CreateNewTownSpell(townId, spellName); // Magic/Script/MapScriptMagic.cpp
 }
 
-void FeatureScriptCommands::CreateTownCentreSpellIcon(int32_t param1, const std::string& param2)
+void FeatureScriptCommands::CreateTownCentreSpellIcon(int32_t townId, const std::string& spellName)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}) not implemented.", __FILE__, __LINE__,
-	                    __func__, param1, param2);
+	// command 12, the same handler as CREATE_TOWN_SPELL
+	magic::script::CreateTownSpell(townId, spellName); // Magic/Script/MapScriptMagic.cpp
 }
 
 void FeatureScriptCommands::CreateSpellIcon(glm::vec3 position, const std::string& param2, int32_t param3, int32_t param4,
                                             int32_t param5)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}, {}, {}, {}) not implemented.",
-	                    __FILE__, __LINE__, __func__, glm::to_string(position), param2, param3, param4, param5);
+	// command 13 does nothing in the original either
+	SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "LHScriptX: CREATE_SPELL_ICON({}, {}, {}, {}, {}) does nothing.",
+	                    glm::to_string(position), param2, param3, param4, param5);
 }
 
-void FeatureScriptCommands::CreatePlannedSpellIcon(int32_t param1, glm::vec3 position, const std::string& param3,
+void FeatureScriptCommands::CreatePlannedSpellIcon(int32_t townId, glm::vec3 position, const std::string& spellName,
                                                    int32_t param4, int32_t param5, int32_t param6)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}, {}, {}, {}, {}) not implemented.",
-	                    __FILE__, __LINE__, __func__, param1, glm::to_string(position), param3, param4, param5, param6);
+	// command 14: only the town's magic type (the planned icon itself is not made)
+	SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "LHScriptX: CREATE_PLANNED_SPELL_ICON({}, {}, {}, {}, {}, {})", townId,
+	                    glm::to_string(position), spellName, param4, param5, param6);
+	magic::script::CreatePlannedSpellIcon(townId, spellName); // Magic/Script/MapScriptMagic.cpp
 }
 
-void FeatureScriptCommands::CreateVillager(glm::vec3 param1, glm::vec3 param2, const std::string& param3)
+void FeatureScriptCommands::CreateVillager(glm::vec3 position, [[maybe_unused]] glm::vec3 param2,
+                                           [[maybe_unused]] const std::string& param3)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}, {}) not implemented.", __FILE__,
-	                    __LINE__, __func__, glm::to_string(param1), glm::to_string(param2), param3);
+	// command 15 "AAL": the position A0 is also the abode's; the info is read from the text of the SECOND argument, an
+	// 'A', so a position: never a villager's name -> no villager info; the age is integer slot 2, which this command's
+	// 'L' does not write. No shipped script uses it.
+	// (openblack) k_NoVillagerInfo directly: GetParameter has already turned arg 1 into a vec3, its text is gone, and a
+	// "x,z" text never names a villager
+	const auto info = ValidVillagerInfo(villager_commands::k_NoVillagerInfo, "CREATE_VILLAGER");
+	if (!info.has_value())
+	{
+		return;
+	}
+	CreateVillagerAtAbode(position, position, *info, Script::IntSlot(2));
 }
 
 void FeatureScriptCommands::CreateTownVillager(int32_t townId, glm::vec3 position, const std::string& villagerType, int32_t age)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}, {}, {}) not implemented.", __FILE__,
-	                    __LINE__, __func__, townId, glm::to_string(position), villagerType, age);
+	// command 16 "NAAN": the villager info named by arg 2
+	if (const auto info = ValidVillagerInfo(villager_commands::VillagerInfoFromText(villagerType), "CREATE_TOWN_VILLAGER");
+	    info.has_value())
+	{
+		CreateVillagerInTown(townId, position, *info, age);
+	}
 }
 
-void FeatureScriptCommands::CreateSpecialTownVillager(int32_t param1, glm::vec3 position, int32_t param3, int32_t param4)
+void FeatureScriptCommands::CreateSpecialTownVillager(int32_t townId, glm::vec3 position, int32_t villagerInfo, int32_t age)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}, {}, {}) not implemented.", __FILE__,
-	                    __LINE__, __func__, param1, glm::to_string(position), param3, param4);
+	// command 17 "NANN": the info index N2 itself (no check in the original)
+	if (const auto info = ValidVillagerInfo(villagerInfo, "CREATE_SPECIAL_TOWN_VILLAGER"); info.has_value())
+	{
+		CreateVillagerInTown(townId, position, *info, age);
+	}
 }
 
 void FeatureScriptCommands::CreateVillagerPos(glm::vec3 abodePosition, glm::vec3 position, const std::string& tribeAndNumber,
                                               int32_t age)
 {
-	auto [tribe, number] = GetVillagerTribeAndNumber(tribeAndNumber);
-	VillagerArchetype::Create(abodePosition, position, GVillagerInfo::Find(tribe, number), age);
+	// command 18 "AALN" (shares CREATE_VILLAGER's handler, not command 16's): the villager info named by arg 2, the age
+	// N3, the abode looked up at A0 and the villager made at A1
+	if (const auto info = ValidVillagerInfo(villager_commands::VillagerInfoFromText(tribeAndNumber), "CREATE_VILLAGER_POS");
+	    info.has_value())
+	{
+		CreateVillagerAtAbode(abodePosition, position, *info, age);
+	}
 }
 
 void FeatureScriptCommands::CreateCitadel(glm::vec3 position, int32_t, const std::string& playerOwner, int32_t rotation,
-                                          int32_t size)
+                                          int32_t /*size*/)
 {
-	CitadelArchetype::Create(position, GetPlayerName(playerOwner), GetRotation(rotation), GetSize(size));
+	// the citadel heart is made with the angle, scale 1.0, life 1.0: the script's size is
+	// ignored (some lands pass 0, 300 or 4121) and the temple is made built
+	// (the creation indices of the heart, its CitadelEntrance and its TempleLeash: CitadelArchetype::CreateHeart)
+	CitadelArchetype::Create(position, GetPlayerName(playerOwner), GetRotation(rotation), glm::vec3(1.0f));
 }
 
-void FeatureScriptCommands::CreatePlannedCitadel(int32_t townId, glm::vec3 position, int32_t, const std::string& playerOwner,
-                                                 int32_t rotation, int32_t size)
+void FeatureScriptCommands::CreatePlannedCitadel(int32_t townId, glm::vec3 position, int32_t heartInfo,
+                                                 const std::string& playerOwner, int32_t rotation, int32_t size)
 {
-	CitadelArchetype::CreatePlan(townId, position, GetPlayerName(playerOwner), GetRotation(rotation), GetSize(size));
+	// needs the town and a player name that resolves, else nothing; then the planned citadel heart: heart info N3,
+	// angle = N5 x 0.001, scale = N6 x 0.001
+	const auto town = FindTown(townId);
+	if (town == entt::null || !k_PlayerLookup.contains(playerOwner))
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("scripting"), R"(LHScriptX: CREATE_PLANNED_CITADEL: no town {} or player "{}", skipped)",
+		                   townId, playerOwner);
+		return;
+	}
+	CitadelArchetype::CreatePlan(town, position, static_cast<uint32_t>(heartInfo), static_cast<float>(rotation) * 0.001f,
+	                             static_cast<float>(size) * 0.001f);
 }
 
 void FeatureScriptCommands::CreateCreaturePen([[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t, int32_t, int32_t)
@@ -384,11 +629,20 @@ void FeatureScriptCommands::CreateCreaturePen([[maybe_unused]] glm::vec3 positio
 	// __func__);
 }
 
-void FeatureScriptCommands::CreateWorshipSite([[maybe_unused]] glm::vec3 position, int32_t, const std::string&,
-                                              const std::string&, int32_t, int32_t)
+void FeatureScriptCommands::CreateWorshipSite([[maybe_unused]] glm::vec3 position, int32_t, const std::string& playerOwner,
+                                              const std::string& tribeType, int32_t, int32_t)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// command 19: only the player and the tribe are used; the site's place comes from its citadel slot
+	Tribe tribe;
+	try
+	{
+		tribe = k_TribeLookup.at(tribeType);
+	}
+	catch (...)
+	{
+		std::throw_with_nested(std::runtime_error("Could not recognize worship site tribe"));
+	}
+	magic::script::CreateWorshipSite(GetPlayerName(playerOwner), tribe); // Magic/Script/MapScriptMagic.cpp
 }
 
 void FeatureScriptCommands::CreatePlannedWorshipSite([[maybe_unused]] glm::vec3 position, int32_t, const std::string&,
@@ -398,22 +652,26 @@ void FeatureScriptCommands::CreatePlannedWorshipSite([[maybe_unused]] glm::vec3 
 	// __func__);
 }
 
-void FeatureScriptCommands::CreateAnimal([[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t)
+void FeatureScriptCommands::CreateAnimal(glm::vec3 position, int32_t type, int32_t flock, int32_t townId)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// command 24 "ANNN": type, flock id, town id; age 0 -> random
+	CreateNewAnimal(position, type, flock, townId, 0);
 }
 
-void FeatureScriptCommands::CreateNewAnimal([[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t, int32_t)
+void FeatureScriptCommands::CreateNewAnimal(glm::vec3 position, int32_t type, int32_t flock, int32_t townId, int32_t age)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// command 25 "ANNNN": type, flock id, town id, age. The flock is the one made by CREATE_FLOCK with that id; with
+	// none, the animal is made without a flock
+	const auto& flocks = Locator::entitiesRegistry::value().Context().flocks;
+	const auto found = flocks.find(flock);
+	AnimalArchetype::Create(position, static_cast<AnimalInfo>(type), FindTown(townId),
+	                        found != flocks.end() ? found->second : entt::null, static_cast<uint32_t>(std::max(age, 0)));
 }
 
-void FeatureScriptCommands::CreateForest([[maybe_unused]] int32_t forestId, [[maybe_unused]] glm::vec3 position)
+void FeatureScriptCommands::CreateForest(int32_t forestId, glm::vec3 position)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// a forest with the script's id (0 takes the next free one): the forest its trees are looked up in
+	ecs::CreateForest(static_cast<uint32_t>(forestId), position);
 }
 
 void FeatureScriptCommands::CreateTree(int32_t forestId, glm::vec3 position, TreeInfo treeType, int32_t rotation, int32_t scale)
@@ -421,17 +679,25 @@ void FeatureScriptCommands::CreateTree(int32_t forestId, glm::vec3 position, Tre
 	CreateNewTree(forestId, position, treeType, 1, rotation * 0.001f, scale * 0.001f, scale * 0.001f);
 }
 
-void FeatureScriptCommands::CreateDeadTree(glm::vec3 position, [[maybe_unused]] const std::string& player,
-                                           [[maybe_unused]] TreeInfo treeType, float scale, [[maybe_unused]] float roll,
-                                           float yaw, [[maybe_unused]] float pitch)
+void FeatureScriptCommands::CreateDeadTree(glm::vec3 position, [[maybe_unused]] const std::string& player, TreeInfo treeType,
+                                           float life, float xAngle, float yAngle, float zAngle)
 {
-	CreateNewTree(-1, position, TreeInfo::Burnt, 1, yaw, scale, scale);
+	// case 43: a dead tree with the type's normal mesh, life F3, X/Y/Z angles F4, F5, F6 and scale 1. The player is not
+	// drawn.
+	DeadTreeArchetype::Create(position, treeType, life, xAngle, yAngle, zAngle);
 }
 
 void FeatureScriptCommands::CreateNewTree(int32_t forestId, glm::vec3 position, TreeInfo treeType, int32_t isNonScenic,
                                           float rotation, float currentSize, float maxSize)
 {
-	TreeArchetype::Create(forestId, position, treeType, static_cast<bool>(isNonScenic), rotation, maxSize, currentSize);
+	// cases 27 and 28: nothing on top of another object (no log; the script goes on)
+	if (!ecs::map_collide::IsOkToCreateAtPos(position, "CREATE_NEW_TREE"))
+	{
+		return;
+	}
+	// the script's forest id is looked up in the forest list: a tree whose forest does not exist has none
+	TreeArchetype::Create(ecs::ResolveForestId(forestId), position, treeType, static_cast<bool>(isNonScenic), rotation, maxSize,
+	                      currentSize);
 }
 
 void FeatureScriptCommands::CreateField(glm::vec3 position, FieldTypeInfo type)
@@ -444,16 +710,21 @@ void FeatureScriptCommands::CreateTownField(int32_t townId, glm::vec3 position, 
 	CreateNewTownField(townId, position, type, 0.0f);
 }
 
-void FeatureScriptCommands::CreateFishFarm([[maybe_unused]] glm::vec3 position, int32_t)
+void FeatureScriptCommands::CreateFishFarm(glm::vec3 position, int32_t info)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// case 31: a fish farm of info N1, no town
+	FishFarmArchetype::Create(position, static_cast<uint32_t>(info));
 }
 
-void FeatureScriptCommands::CreateTownFishFarm([[maybe_unused]] int32_t townId, [[maybe_unused]] glm::vec3 position, int32_t)
+void FeatureScriptCommands::CreateTownFishFarm(int32_t townId, glm::vec3 position, int32_t info)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// case 32: nothing without the town; then the same as CREATE_FISH_FARM with it (the farm's ctor takes the
+	// nearest town anyway)
+	if (FindTown(townId) == entt::null)
+	{
+		return;
+	}
+	FishFarmArchetype::Create(position, static_cast<uint32_t>(info));
 }
 
 void FeatureScriptCommands::CreateFeature(glm::vec3 position, FeatureInfo type, int32_t rotation, int32_t scale, int32_t)
@@ -487,7 +758,14 @@ void FeatureScriptCommands::CreatePitch([[maybe_unused]] glm::vec3 position, int
 
 void FeatureScriptCommands::CreatePot(glm::vec3 position, PotInfo type, int32_t /*unused*/, int32_t amount)
 {
-	PotArchetype::Create(position, 0.0f, type, amount);
+	// case 38: nothing on top of another object, then nothing for an amount <= 0
+	if (!ecs::map_collide::IsOkToCreateAtPos(position, "CREATE_POT") || amount <= 0)
+	{
+		return;
+	}
+	// the pot is created with its reaction flag set: it spreads its reaction at creation (food: the hungry
+	// grazers come and eat)
+	ecs::animal_ai::SetupPotReaction(PotArchetype::Create(position, 0.0f, type, amount));
 }
 
 void FeatureScriptCommands::CreateTownTemporaryPots(int32_t, int32_t, int32_t)
@@ -498,18 +776,25 @@ void FeatureScriptCommands::CreateTownTemporaryPots(int32_t, int32_t, int32_t)
 
 void FeatureScriptCommands::CreateMobileObject(glm::vec3 position, MobileObjectInfo type, int32_t rotation, int32_t scale)
 {
+	// case 40: nothing on top of another object
+	if (!ecs::map_collide::IsOkToCreateAtPos(position, "CREATE_MOBILEOBJECT"))
+	{
+		return;
+	}
 	MobileObjectArchetype::Create(position, type, rotation * 0.001f, scale * 0.001f);
 }
 
 void FeatureScriptCommands::CreateMobileStatic(glm::vec3 position, MobileStaticInfo type, float yRotation, float scale)
 {
-	CreateMobileUStatic(position, type, 0.0f, 0.0f, yRotation, 0.0f, scale);
+	// CREATE_MOBILESTATIC "ANFF", case 41: no vertical offset, Y angle F2, scale F3
+	MobileStaticArchetype::CreateFromInfo(position, type, 0.0f, yRotation, scale);
 }
 
 void FeatureScriptCommands::CreateMobileUStatic(glm::vec3 position, MobileStaticInfo type, float verticalOffset,
                                                 float xRotation, float yRotation, float zRotation, float scale)
 {
-	MobileStaticArchetype::Create(position, type, verticalOffset, xRotation, yRotation, zRotation, scale);
+	// CREATE_MOBILE_STATIC "ANFFFFF", case 42: the position raised by F2, X/Y/Z angles F3, F4, F5, scale F6
+	MobileStaticArchetype::CreateWithXYZAngles(position, type, verticalOffset, xRotation, yRotation, zRotation, scale);
 }
 
 void FeatureScriptCommands::CreateScaffold(int32_t, [[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t)
@@ -542,29 +827,55 @@ void FeatureScriptCommands::CreateCreatureFromFile(const std::string& playerName
 	auto playerType =
 	    std::distance(k_PlayerNamesStrs.begin(), std::find(k_PlayerNamesStrs.begin(), k_PlayerNamesStrs.end(), playerName));
 	auto yAngleRadians = glm::radians(180.0f);
-	auto scale = .3f;
+	// the script's creature type 0 is the Giant Ape
+	if (creatureType == CreatureType::Unknown)
+	{
+		creatureType = CreatureType::GiantApe;
+	}
 	auto& resources = Locator::resources::value();
 	auto& creatureMindManager = resources.GetCreatureMinds();
 	auto creatureMindPath = Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true) / creatureMind;
 	auto loadResult = creatureMindManager.Load(creatureMind, resources::CreatureMindLoader::FromDiskTag {}, creatureMindPath);
 	auto creatureMindId = loadResult.first->first;
 	CreatureArchetype::Create(position, static_cast<PlayerNames>(playerType), creatureType, creatureMindId, yAngleRadians,
-	                          scale);
+	                          CreatureArchetype::StartScale(creatureType), CreatureArchetype::StartBody(creatureType));
 }
 
-void FeatureScriptCommands::CreateFlock(int32_t, glm::vec3, glm::vec3, int32_t, int32_t, int32_t)
+void FeatureScriptCommands::CreateFlock(int32_t flockId, glm::vec3 position, glm::vec3 domainCentre, int32_t domainRadius,
+                                        int32_t param5, int32_t param6)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// case 49 "NAANNN": a flock at A1 for the current player with id N0, domain centre A2, domain radius N3 (0 -> 80).
+	// From VERSION 2.1 on, the flock distance is N4 and the town N5; before, the town is N4 and the distance stays 30.
+	// The town gets it on its flock list.
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = registry.Create();
+	auto& flock = registry.Assign<Flock>(entity);
+	flock.id = flockId;
+	flock.savedDomainCentre = position;
+	flock.domainCentre = domainCentre;
+	flock.domainRadius = domainRadius != 0 ? static_cast<uint16_t>(domainRadius) : static_cast<uint16_t>(0x50);
+	const bool newVersion = !(Locator::mapScriptSystem::value().Globals().version < 2.1f);
+	if (newVersion)
+	{
+		flock.flockDistance = static_cast<uint16_t>(param5);
+	}
+	if (const auto town = FindTown(newVersion ? param6 : param5); town != entt::null)
+	{
+		flock.town = town;
+		registry.Get<Town>(town).flocks.push_back(entity);
+	}
+	registry.Context().flocks.insert_or_assign(flockId, entity);
 }
 
 void FeatureScriptCommands::LoadLandscape(const std::string& path)
 {
-	Game::Instance()->LoadLandscape(path);
+	Game::LoadLandscape(path);
 }
 
-void FeatureScriptCommands::Version([[maybe_unused]] float version)
+void FeatureScriptCommands::Version(float version)
 {
+	// case 51: the land's script version
+	Locator::mapScriptSystem::value().Globals().version = version;
 	SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "LHScriptX: Land version set to: {}", version);
 }
 
@@ -613,41 +924,47 @@ void FeatureScriptCommands::CreateNewBigForest(glm::vec3 position, BigForestInfo
 	BigForestArchetype::Create(position, type, unknown, rotation, scale);
 }
 
-void FeatureScriptCommands::CreateInfluenceRing([[maybe_unused]] glm::vec3 position, int32_t, float, int32_t)
+void FeatureScriptCommands::CreateInfluenceRing(glm::vec3 position, int32_t player, float radius, int32_t anti)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// case 59: an influence ring for the player, radius and anti flag. (inferred) the range check is openblack's: the
+	// original does not test the player index
+	if (player >= 0 && player < static_cast<int32_t>(PlayerNames::_COUNT))
+	{
+		influence::CreateRing(position, static_cast<PlayerNames>(player), radius, anti != 0);
+	}
 }
 
-void FeatureScriptCommands::CreateWeatherClimate(int32_t, int32_t, glm::vec3, float, float)
+void FeatureScriptCommands::CreateWeatherClimate(int32_t id, int32_t info, glm::vec3 position, float radius1, float radius2)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// case 60: a climate of info N1 at the position, radii F3, F4, id N0: Magic/Script/MapScriptWeather.cpp ->
+	// ECS/Weather/Climate (id 0 makes a default climate that ignores the rest; otherwise the radii in order)
+	magic::map_script::CreateWeatherClimate(id, info, position, radius1, radius2);
 }
 
-void FeatureScriptCommands::CreateWeatherClimateRain(int32_t, float, int32_t, int32_t, int32_t)
+void FeatureScriptCommands::CreateWeatherClimateRain(int32_t id, float desire, int32_t dryDays, int32_t rainingDays,
+                                                     int32_t flags)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// case 61: the climate's rain = {F1, N2, N3, (uint8_t)N4}; nothing for an unknown id
+	magic::map_script::CreateWeatherClimateRain(id, desire, dryDays, rainingDays, flags);
 }
 
-void FeatureScriptCommands::CreateWeatherClimateTemp(int32_t, float, float)
+void FeatureScriptCommands::CreateWeatherClimateTemp(int32_t id, float temperature, float target)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// case 62: the climate's temperature F1 and target F2
+	magic::map_script::CreateWeatherClimateTemp(id, temperature, target);
 }
 
-void FeatureScriptCommands::CreateWeatherClimateWind(int32_t, float, float, float)
+void FeatureScriptCommands::CreateWeatherClimateWind(int32_t id, float windX, float windZ, float angle)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// case 63: the climate's wind = {F1, F2, F3}
+	magic::map_script::CreateWeatherClimateWind(id, windX, windZ, angle);
 }
 
-void FeatureScriptCommands::CreateWeatherStorm(int32_t, glm::vec3, float, int32_t, const std::string&, const std::string&,
-                                               const std::string&, float, glm::vec3)
+void FeatureScriptCommands::CreateWeatherStorm(int32_t climate, glm::vec3 position, float age, int32_t numClouds,
+                                               const std::string& shape, const std::string& clouds, const std::string& weather,
+                                               float speed, glm::vec3 target)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	magic::map_script::CreateWeatherStorm(climate, position, age, numClouds, shape, clouds, weather, speed, target);
 }
 
 void FeatureScriptCommands::BrushSize(float, float)
@@ -671,8 +988,13 @@ void FeatureScriptCommands::CreateStreamPoint(int32_t streamId, glm::vec3 positi
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& registryContext = registry.Context();
 
-	Stream& stream = registry.Get<Stream>(registryContext.streams.at(streamId));
-	stream.nodes.emplace_back(position, stream.nodes);
+	// the point sits on the ground; appended at the tail
+	auto point = position;
+	if (Locator::terrainSystem::has_value())
+	{
+		point.y = Locator::terrainSystem::value().GetHeightAt({position.x, position.z});
+	}
+	registry.Get<Stream>(registryContext.streams.at(streamId)).points.push_back(point);
 }
 
 void FeatureScriptCommands::CreateWaterfall([[maybe_unused]] glm::vec3 position)
@@ -681,27 +1003,34 @@ void FeatureScriptCommands::CreateWaterfall([[maybe_unused]] glm::vec3 position)
 	// __func__);
 }
 
-void FeatureScriptCommands::CreateArena([[maybe_unused]] glm::vec3 position, float)
+void FeatureScriptCommands::CreateArena(glm::vec3 position, float radius)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// case 69: an arena, not drawn until a creature fight is on
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Assign<Arena>(registry.Create(), position, radius);
 }
 
-void FeatureScriptCommands::CreateFootpath(int32_t footpathId)
+void FeatureScriptCommands::CreateFootpath([[maybe_unused]] int32_t footpathId)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto entity = registry.Create();
-	registry.Assign<Footpath>(entity);
-	auto& registryContext = registry.Context();
-	registryContext.footpaths.insert({footpathId, entity});
+	// a new empty footpath; the script's number is not kept: the nodes find their footpath by its position in the
+	// list (CreateFootpathNode)
+	static_cast<void>(ecs::footpaths::Create());
 }
 
 void FeatureScriptCommands::CreateFootpathNode(int footpathId, glm::vec3 position)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	auto& registryContext = registry.Context();
-	auto& footpath = registry.Get<Footpath>(registryContext.footpaths.at(footpathId));
-	footpath.nodes.emplace_back(Footpath::Node {position});
+	// every footpath of the game's list whose position from the head is `footpathId` (at most one) gets the node;
+	// none -> nothing
+	const auto entity = ecs::footpaths::AtPositionFromHead(footpathId);
+	if (entity == entt::null)
+	{
+		return;
+	}
+	auto& footpath = registry.Get<Footpath>(entity);
+	// a new node at the position's map coordinates, inserted at the list's head
+	const auto coords = map_coords::FromWorld(position);
+	footpath.nodes.insert(footpath.nodes.begin(), Footpath::Node {position, coords, 1, footpath.nextNodeId++});
 }
 
 void FeatureScriptCommands::LinkFootpath(int32_t footpathId)
@@ -712,9 +1041,10 @@ void FeatureScriptCommands::LinkFootpath(int32_t footpathId)
 	                    __func__, footpathId);
 }
 
-void FeatureScriptCommands::CreateBonfire(glm::vec3 position, float rotation, [[maybe_unused]] float param3, float scale)
+void FeatureScriptCommands::CreateBonfire(glm::vec3 position, [[maybe_unused]] float temperature, float yAngle, float scale)
 {
-	CreateMobileStatic(position, MobileStaticInfo::Bonfire, rotation, scale);
+	// case 73: F1 temperature, F2 Y angle, F3 scale; the bonfire ignores F1
+	BonfireArchetype::Create(position, yAngle, scale);
 }
 
 void FeatureScriptCommands::CreateBase([[maybe_unused]] glm::vec3 position, int32_t)
@@ -724,9 +1054,20 @@ void FeatureScriptCommands::CreateBase([[maybe_unused]] glm::vec3 position, int3
 }
 
 void FeatureScriptCommands::CreateNewFeature(glm::vec3 position, const std::string& type, int32_t rotation, int32_t scale,
-                                             [[maybe_unused]] int32_t param5)
+                                             int32_t param5)
 {
-	FeatureArchetype::Create(position, GFeatureInfo::Find(type), rotation * 0.001f, scale * 0.001f);
+	// case 75: with N5 != 0 a planned feature, which is never drawn and only matters to the town's building plans (not
+	// simulated yet): nothing is made here. No land uses it.
+	if (param5 != 0)
+	{
+		return;
+	}
+	const auto info = GFeatureInfo::Find(type);
+	if (info == FeatureInfo::None)
+	{
+		return; // openblack: the original has no check (see GFeatureInfo::Find)
+	}
+	FeatureArchetype::Create(position, info, rotation * 0.001f, scale * 0.001f);
 }
 
 void FeatureScriptCommands::SetInteractDesire(float)
@@ -737,7 +1078,8 @@ void FeatureScriptCommands::SetInteractDesire(float)
 
 void FeatureScriptCommands::ToggleComputerPlayer(const std::string& affiliation, int32_t)
 {
-	PlayerArchetype::Create(GetPlayerName(affiliation));
+	// listed in the player system like the one LOAD_LANDSCAPE makes
+	Locator::playerSystem::value().AddPlayer(PlayerArchetype::Create(GetPlayerName(affiliation)));
 }
 
 void FeatureScriptCommands::SetComputerPlayerCreatureLike(const std::string&, const std::string&)
@@ -752,40 +1094,33 @@ void FeatureScriptCommands::MultiplayerDebug(int32_t, int32_t)
 	// __func__);
 }
 
-void FeatureScriptCommands::CreateStreetLantern([[maybe_unused]] glm::vec3 position, int32_t type)
+void FeatureScriptCommands::CreateStreetLantern(glm::vec3 position, int32_t type)
 {
-	// In the retail game, any value other than 7 creates a bonfire
-	if (type == 7)
-	{
-		StreetLanternArchetype::Create(position);
-	}
-	else
-	{
-		BonfireArchetype::Create(position);
-	}
+	// case 80: a street lantern of mobile static info N1; any info other than 7 (Land1: 59,
+	// Country Lantern) is a country lantern with the campfire mesh, not a Bonfire
+	StreetLanternArchetype::Create(position, static_cast<MobileStaticInfo>(type));
 }
 
-void FeatureScriptCommands::CreateStreetLight([[maybe_unused]] glm::vec3 position)
+void FeatureScriptCommands::CreateStreetLight(glm::vec3 position)
 {
-	StreetLanternArchetype::Create(position);
+	// TODO: case 81 makes a street light, not decoded yet; no land uses it. Drawn as a town lantern.
+	StreetLanternArchetype::Create(position, MobileStaticInfo::StreetLantern);
 }
 
 void FeatureScriptCommands::SetLandNumber(int32_t number)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}) not implemented.", __FILE__, __LINE__,
-	                    __func__, number);
+	// case 82: the land number, kept in the map globals
+	Locator::mapScriptSystem::value().Globals().landNumber = number; // read by ECS/Influence and the worship sites
 }
 
-void FeatureScriptCommands::CreateOneShotSpell([[maybe_unused]] glm::vec3 position, const std::string&)
+void FeatureScriptCommands::CreateOneShotSpell(glm::vec3 position, const std::string& seed)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	magic::script::CreateOneShotSpell(position, seed); // Magic/Script/MapScriptMagic.cpp
 }
 
-void FeatureScriptCommands::CreateOneShotSpellPu([[maybe_unused]] glm::vec3 position, const std::string&)
+void FeatureScriptCommands::CreateOneShotSpellPu(glm::vec3 position, const std::string& magicName)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	magic::script::CreateOneShotSpellPu(position, magicName); // Magic/Script/MapScriptMagic.cpp
 }
 
 void FeatureScriptCommands::CreateFireFly([[maybe_unused]] glm::vec3 position)
@@ -794,36 +1129,69 @@ void FeatureScriptCommands::CreateFireFly([[maybe_unused]] glm::vec3 position)
 	// __func__);
 }
 
-void FeatureScriptCommands::TownDesireBoost([[maybe_unused]] int32_t townId, const std::string&, float)
+void FeatureScriptCommands::TownDesireBoost(int32_t townId, const std::string& desire, float boost)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// command 86: the town with the id and the desire named (ignoring case); both found -> the town's desire boost =
+	// boost, without re-sorting nor a range check (Land2.txt: "Abodes" / "Civic_Buildings" -0.75)
+	ecs::town_desire::MapTownDesireBoost(FindTown(townId), desire, boost);
 }
 
 void FeatureScriptCommands::CreateAnimatedStatic(glm::vec3 position, const std::string& type, int32_t rotation, int32_t scale)
 {
 	auto animatedStaticType = GAnimatedStaticInfo::Find(type);
+	if (animatedStaticType == AnimatedStaticInfo::None)
+	{
+		return; // openblack: the original has no check (see GAnimatedStaticInfo::Find)
+	}
 	AnimatedStaticArchetype::Create(position, animatedStaticType, rotation * 0.001f, scale * 0.001f);
 }
 
-void FeatureScriptCommands::FireFlySpellRewardProb([[maybe_unused]] const std::string& spell,
-                                                   [[maybe_unused]] float probability)
+void FeatureScriptCommands::FireFlySpellRewardProb(const std::string& spell, float probability)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	magic::script::FireFlySpellRewardProb(spell, probability); // Magic/Script/MapScriptMagic.cpp
+	// the same table kept in the map globals: case 88: the first of the 42 magic effect names equal ignoring case,
+	// else 42; out of range does nothing; else the table entry and the running sums
+	auto& globals = Locator::mapScriptSystem::value().Globals();
+	const auto& effects = Locator::infoConstants::value().magicEffect;
+	size_t index = MapScriptGlobals::k_MagicCount;
+	for (size_t i = 0; i < effects.size() && i < MapScriptGlobals::k_MagicCount; ++i)
+	{
+		const std::string_view name(effects[i].debugString.data());
+		if (name.size() == spell.size() && std::equal(name.begin(), name.end(), spell.begin(), [](char a, char b) {
+			    return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+		    }))
+		{
+			index = i;
+			break;
+		}
+	}
+	if (index >= MapScriptGlobals::k_MagicCount)
+	{
+		return;
+	}
+	globals.fireFlySpellRewardProbability.at(index) = probability;
+	float sum = 0.0f;
+	for (size_t i = 0; i < MapScriptGlobals::k_MagicCount; ++i)
+	{
+		sum += globals.fireFlySpellRewardProbability.at(i);
+		globals.fireFlySpellRewardCumulative.at(i) = sum;
+	}
 }
 
 void FeatureScriptCommands::CreateNewTownField(int32_t townId, glm::vec3 position, FieldTypeInfo townFieldType, float rotation)
 {
 	// Rotation is in radians and not scaled
-	FieldArchetype::Create(townId, position, townFieldType, rotation);
+	// the town's ABODE_FIELD abode (mesh 594), angle F3, scale 1
+	FieldArchetype::Create(static_cast<int>(TownKeyOf(townId)), position, townFieldType, rotation);
 }
 
-void FeatureScriptCommands::CreateSpellDispenser(int32_t, [[maybe_unused]] glm::vec3 position, const std::string&,
-                                                 const std::string&, float, float, float)
+void FeatureScriptCommands::CreateSpellDispenser(int32_t townId, glm::vec3 position, const std::string& abodeInfo,
+                                                 const std::string& magicName, float yAngle, float scale, float period)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// the dispenser Abode and its one-shot orb take their own creation indices
+	magic::script::CreateSpellDispenser(townId, position, GAbodeInfo::Find(abodeInfo), magicName, yAngle, scale,
+	                                    period); // Magic/Script/MapScriptMagic.cpp
+	// it is a fixed map object (its Abode's InsertMapObject, AbodeArchetype::Create): it blocks the trees made after it
 }
 
 void FeatureScriptCommands::LoadComputerPlayerPersonality(int32_t, glm::vec3)
@@ -838,10 +1206,9 @@ void FeatureScriptCommands::SetComputerPlayerPersonality(const std::string&, glm
 	// __func__);
 }
 
-void FeatureScriptCommands::SetGlobalLandBalance(int32_t, float)
+void FeatureScriptCommands::SetGlobalLandBalance(int32_t index, float value)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	land_balance::Set(index, value);
 }
 
 void FeatureScriptCommands::SetLandBalance(const std::string&, int32_t, float)
@@ -850,28 +1217,32 @@ void FeatureScriptCommands::SetLandBalance(const std::string&, int32_t, float)
 	// __func__);
 }
 
-void FeatureScriptCommands::CreateDrinkWaypoint([[maybe_unused]] glm::vec3 position)
+void FeatureScriptCommands::CreateDrinkWaypoint(glm::vec3 position)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// case 95: an invisible waypoint
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Assign<DrinkWaypoint>(registry.Create(), position);
 }
 
-void FeatureScriptCommands::SetTownInfluenceMultiplier([[maybe_unused]] float multiplier)
+void FeatureScriptCommands::SetTownInfluenceMultiplier(float multiplier)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// case 96
+	Locator::mapScriptSystem::value().Globals().townInfluenceMultiplier = multiplier; // read by ECS/Influence
 }
 
-void FeatureScriptCommands::SetPlayerInfluenceMultiplier([[maybe_unused]] float multiplier)
+void FeatureScriptCommands::SetPlayerInfluenceMultiplier(float multiplier)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// case 97
+	Locator::mapScriptSystem::value().Globals().playerInfluenceMultiplier = multiplier; // read by ECS/Influence
 }
 
-void FeatureScriptCommands::SetTownBalanceBeliefScale([[maybe_unused]] int32_t townId, [[maybe_unused]] float scale)
+void FeatureScriptCommands::SetTownBalanceBeliefScale(int32_t townId, float scale)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// case 98: nothing without the town; otherwise the scale of its pending belief (ecs::town_belief::Fold)
+	if (const auto town = FindTown(townId); town != entt::null)
+	{
+		Locator::entitiesRegistry::value().Get<Town>(town).belief.beliefScale = scale;
+	}
 }
 
 void FeatureScriptCommands::StartGameMessage([[maybe_unused]] const std::string& message, [[maybe_unused]] int32_t landNumber)
@@ -892,10 +1263,10 @@ void FeatureScriptCommands::EditLevel()
 	// __func__);
 }
 
-void FeatureScriptCommands::SetNighttime(float, float, float)
+void FeatureScriptCommands::SetNighttime(float duration, float night, float change)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// the visual day/night cycle set from the map editor's values
+	Locator::dayNightClock::value().Clock().SetCycleFromLand(duration, night, change);
 }
 
 void FeatureScriptCommands::MakeLastObjectArtifact(int32_t, const std::string&, float)
@@ -904,8 +1275,9 @@ void FeatureScriptCommands::MakeLastObjectArtifact(int32_t, const std::string&, 
 	// __func__);
 }
 
-void FeatureScriptCommands::SetLostTownScale([[maybe_unused]] float scale)
+void FeatureScriptCommands::SetLostTownScale(float scale)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// case 104: the lost town scale, 1 again on a land balance reset (land_balance::Reset); read by the
+	// town belief's fold (the boredom and the belief left in a player's towns when one is lost)
+	land_balance::SetLostTownScale(scale);
 }

@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Writing land-script lines: SaveObject and WriteCommand — Black &amp; White notes</title>
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body>
+<nav id="side">
+  <h1><a href="index.html" style="color:inherit;text-decoration:none">Black &amp; White notes</a></h1>
+  <span class="tag">openblack — how the original behaves</span>
+  <input id="q" type="search" placeholder="Search (press /)" autocomplete="off">
+  <div id="hits"></div>
+  <div id="nav"><h2>Start here</h2>
+<a class="" href="README.html">Black &amp; White 1 notes for openblack</a>
+<h2>Engine</h2>
+<a class="" href="openblack-internals.html">openblack internals</a>
+<a class="" href="engine-loop.html">The engine loop: game turns and frames (original and openblack)</a>
+<a class="" href="engine-math.html">Coordinates, terrain, object size, game clock, matrices and Zoomer</a>
+<a class="" href="tooling.html">Tools and formats</a>
+<a class="" href="parity.html">Graphics engine parity: original versus openblack</a>
+<a class="" href="original-frame.html">The original B&amp;W frame (runblack.exe W120, D3D7, LH3D)</a>
+<h2>World</h2>
+<a class="" href="map-loading.html">Map loading and script functions</a>
+<a class="here" href="land-script-save.html">Writing land-script lines: SaveObject and WriteCommand</a>
+<a class="" href="water.html">Water in the game</a>
+<a class="" href="trees.html">Trees and forests</a>
+<a class="" href="buildings.html">Buildings, building sites and towns (the building side)</a>
+<a class="" href="objects-and-resources.html">Objects and resources</a>
+<a class="" href="physics.html">Physics: thrown objects, collisions, damage and rocks that split</a>
+<h2>Life</h2>
+<a class="" href="villagers.html">Villagers: data, state machine and speed</a>
+<a class="" href="animals.html">Animals: AI, states and clips</a>
+<h2>Magic and weather</h2>
+<a class="" href="magic.html">Magic: the core of the miracles</a>
+<a class="" href="miracles.html">Miracles one by one</a>
+<a class="" href="particles.html">Particles (PSys)</a>
+<a class="" href="day-night-weather.html">Day, night and weather in the original</a>
+<a class="" href="vortex.html">Vortexes and the tornado: objects swallowed, carried and flung</a>
+<h2>Hand and interface</h2>
+<a class="" href="hand-and-interface.html">The hand and the interface</a>
+<a class="" href="intro.html">The Land 1 intro and the tutorial&#x27;s script side</a>
+<a class="" href="script-camera.html">Script camera (GCamera and CameraModeScript)</a>
+<a class="" href="camera-tracks.html">Camera tracks (`Data\camera.edt`) and `WALK_PATH`</a>
+<h2>Presentation</h2>
+<a class="" href="rendering.html">World rendering: original versus openblack</a>
+<a class="" href="rendering-objects.html">Model rendering: original versus openblack</a>
+<a class="" href="animation.html">Skeletal animation (villagers and animals)</a>
+<a class="" href="audio.html">Audio: the engine, the banks, the music, the voices and the script</a>
+<a class="" href="video.html">Bink videos (.bik)</a>
+<h2>Data</h2>
+<a class="" href="mods.html">Modified data packs</a>
+<h2>Other</h2>
+<a class="" href="creature.html">The creature: groundwork, random streams and what is unknown</a></div>
+</nav>
+<main>
+<details id="toc"><summary>On this page</summary><div class="toc">
+<ul>
+<li><a href="#writing-land-script-lines-saveobject-and-writecommand">Writing land-script lines: SaveObject and WriteCommand</a><ul>
+<li><a href="#the-line-format">The line format</a></li>
+<li><a href="#the-writers">The writers</a></li>
+<li><a href="#in-openblack">In openblack</a></li>
+<li><a href="#pending">Pending</a></li>
+<li><a href="#sources">Sources</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+<h1 id="writing-land-script-lines-saveobject-and-writecommand">Writing land-script lines: SaveObject and WriteCommand</h1>
+<p>The original can write an object back as the land-script line that re-creates it. Each class has its own
+<code>SaveObject</code> (vt +0x82C). The vortex uses it to carry what an In swallows to the next land (<code>vortex.txt</code>, see
+<a href="vortex.html">vortex.md</a>); the land editor's save uses the same writers. openblack reads land scripts already
+(LHScriptX, <a href="map-loading.html">map-loading.md</a>); this page is the writing side.</p>
+<h2 id="the-line-format">The line format</h2>
+<ul>
+<li><code>GSetup::GetCommandAsText(cmd)</code> 0x715130 -&gt; <code>LHScriptCommandX::GetCommandAsText</code> 0x7E7FB0 builds a <strong>printf format</strong>
+  from the command table 0xC20F00. There are 105 entries of 16 bytes: the name pointer, then 12 inline type letters
+  (spaces are padding). The order: strcpy of the name and strcat "(" (0x7E7FBE..0x7E7FD5); the 12 letters, each
+  through (letter − 'A') in the byte table 0x7E8078 and the jump table 0x7E8064 (0x7E7FE1..0x7E802A); the last two
+  characters cut if anything was added (0x7E8035..0x7E8042); then ")\n" (0x7E8047, literal 0xC22098).</li>
+<li>The format is the name, <code>(</code>, then per letter:</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Letter</th>
+<th>Appended</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>A</code></td>
+<td><code>%s,</code></td>
+<td>a text without quotes: a position, or a name such as a villager's type (<code>CELTIC_FISHERMAN</code>)</td>
+</tr>
+<tr>
+<td><code>L</code></td>
+<td><code>"%s",</code></td>
+<td>a quoted string</td>
+</tr>
+<tr>
+<td><code>N</code></td>
+<td><code>%d,</code></td>
+<td>an int</td>
+</tr>
+<tr>
+<td><code>F</code></td>
+<td><code>%f,</code></td>
+<td>a float, printed with 6 decimals</td>
+</tr>
+<tr>
+<td>any other</td>
+<td>nothing</td>
+<td>padding</td>
+</tr>
+</tbody>
+</table>
+<p>The per-letter literals: A <code>%s,</code> 0xC34DDC, L <code>"%s",</code> 0xC34DE4, N <code>%d,</code> 0xBE83AC, F <code>%f,</code> 0xC34DD4.</p>
+<ul>
+<li>The last <code>,</code> is cut if anything was added, then <code>)\n</code> closes it. A command with no parameters is <code>NAME()\n</code>.</li>
+<li><strong>A position</strong> is <code>MapCoords::ConvertToText</code> 0x602880: <code>"%0.2f,%0.2f"</code> of x then z, with the quotes in the
+  literal (0xBF4198). Each value is <code>fixed × 10.0f × 2^-16</code> on the x87 at 24 bits (<code>fild</code>, <code>fmul [0x930050]</code> (10.0),
+  <code>fmul [0x8AC41C]</code> (2^-16)), so the first product is rounded to a float and the second is exact.</li>
+<li>The exe's CRT (<code>sprintf</code> 0x7C57D2) rounds the digits <strong>half up</strong>: 0.625 m is written <code>0.63</code>, and 2^-7 is written <code>0.007813</code>. Today's
+  C runtimes round half to even here.</li>
+<li>Example (Villager, CREATE_TOWN_VILLAGER <code>NAAN</code>): <code>CREATE_TOWN_VILLAGER(1, "3079.69,3117.83", CELTIC_FISHERMAN, 26)</code>.
+  The shipped Land2 / Land3 use this form, and openblack's reader takes the bare name as a string.</li>
+</ul>
+<h2 id="the-writers">The writers</h2>
+<ul>
+<li>Every writer first calls <code>CheckAndSetSaved</code> 0x56FEF0: an object whose GameThing +0xC already equals
+  GlobalSaveCount [0xD99710] has been saved in this pass and is skipped.</li>
+<li>The count goes up (<code>inc word</code>) in SaveAllMap 0x7183AE, fn_00718C10 (at 0x718C93, and near 0x719154) and the
+    VortexSave ctor 0x76F84E.</li>
+<li>The position written is <code>MapCoords − at</code> when an <code>at</code> is given (the vortex's In, MapCoords::operator- 0x6055C0).</li>
+<li>The physics classes' writers:</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Writer</th>
+<th>Used by</th>
+<th>Skips when</th>
+<th>Line</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MobileStatic 0x6088E0</td>
+<td>MobileStatic, Rock, Fragment</td>
+<td>+0x7C set</td>
+<td><code>CREATE_MOBILE_STATIC(pos, info, altitude, x, y, z, scale)</code></td>
+</tr>
+<tr>
+<td>MobileObject 0x607270</td>
+<td>MobileObject, Ball</td>
+<td>+0x58 set</td>
+<td><code>CREATE_MOBILEOBJECT(pos, info, ftol(y × 1000), ftol(scale × 1000))</code></td>
+</tr>
+<tr>
+<td>Pot 0x66D550</td>
+<td>Pot, the piles</td>
+<td>it is part of a structure (a storage pit's or a workshop's pile, 0x66DA00)</td>
+<td><code>CREATE_POT(pos, info, resource type, amount)</code></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>MobileStatic and MobileObject then mark every identical object (the same type, info and MapCoords) as saved, so a
+  stack is written once.</li>
+<li>The identical-object pass: MobileStatic 0x608A20..0x608A9E, MobileObject 0x607366..0x6073E6: every other object
+    of the same class at exactly the same MapCoords (x, z and the altitude) with the same info is marked saved
+    (<code>FindType(MapCoords, OBJECT_TYPE)</code> 0x6045C0 over the cell).</li>
+<li>MobileObject's pass goes through <code>FindTypeOnMap</code> (0x601668) filtered on the info's object type (+0x10):
+    MOBILE_OBJECT 20 only, so a Ball (type 15) never marks its twins.</li>
+<li><strong>MobileStatic</strong> <code>SaveObject</code> 0x6088E0: CheckAndSetSaved at 0x6088F1; the position 0x6088FE..0x608929; +0x7C (an
+  Object*: what it belongs to) checked at 0x60892D; <code>GetScale</code> (vt +0x120), <code>GetZAngle</code> (+0x50C), <code>GetYAngle</code>
+  (+0x508), <code>GetXAngle</code> (+0x504), each as a double (0x608947..0x608977): the stored angles as they are.</li>
+<li>The info's index = (+0x28 − 0xD3A6D8) / 0x12C and the altitude +8 as the vertical offset (0x60897D..0x6089A5).</li>
+<li>An <code>IsTownArtifact</code> (vt +0x800) object writes <code>TownArtifact::SaveObject</code> 0x4269C0's own line instead
+    (0x6089F2..0x608A1B).</li>
+<li><strong>MobileObject</strong> <code>SaveObject</code> 0x607270: CheckAndSetSaved at 0x60727B; the position 0x60728C..0x6072BB; +0x58 (what
+  holds it) checked at 0x6072BF; <code>ftol(GetYAngle × 1000.0f [0x8AB228])</code>, <code>ftol(GetScale × 1000.0f)</code>, the info's index
+  (+0x28 − 0xD38448) / 0x114 (0x6072CF..0x607301).</li>
+<li><strong>Pot</strong> <code>SaveObject</code> 0x66D550: CheckAndSetSaved at 0x66D55A; the position 0x66D569..0x66D59B; <code>IsPartOfStructure</code>
+  (vt +0x860) at 0x66D59F → nothing (0x66D632). A plain Pot's (0x55D4B0) is 0; a PotStructure's (0x66DA00) is its
+  +0x78 structure when that IsAvailable (vt +0x2C); 0x66DA00 also clears +0x78 when its owner is not available.</li>
+<li>The info's index (+0x28 − 0xD4C660) / 0x144, <code>GetResourceType</code> (vt +0x690), the amount +0x70
+    (0x66D5AD..0x66D5D7).</li>
+<li><strong>DeadTree</strong> <code>SaveObject</code> 0x511430: <code>CREATE_DEAD_TREE</code> (43, "ALNFFFF"). CheckAndSetSaved at 0x511439; the position
+  0x511446..0x511478; the player <code>GetPlayer</code> (vt +0x1C), else the local player (g_game +0x205A5B), its name from the
+  table 0xBFF094 (<code>GetPlayerNumber</code> 0x64A790) (0x51147C..0x5114BB).</li>
+<li><code>GetZAngle</code>, <code>GetYAngle</code>, <code>GetXAngle</code>, <code>GetLife</code> (vt +0x11C), each a double (0x5114C4..0x5114F4); the tree
+    info's index (+0x94 − 0xDA3AD8) / 0x140 (0x5114FA..0x511512).</li>
+<li><strong>OneOffSpellSeed</strong> <code>SaveObject</code> 0x72AB80: <code>CREATE_ONE_SHOT_SPELL_PU</code> (84, "AL"; not 83). CheckAndSetSaved at
+  0x72AB8A; the position 0x72AB99..0x72ABCA.</li>
+<li>The name (0x72ABCE..0x72ABDA) is <code>GetMagicInfo</code> 0x72A610 (the seed's info, <code>GetMagicInfoFromPULevel</code> 0x72AFE0 at
+    its power-up level +0x78: the base one when that level has no magic type) → <code>GetMagicInfoText</code> 0x5FB3F0 =
+    <code>GetMagicEffectInfo</code> 0x5FB680 of that GMagicInfo's magicType (+0x10, table 0xD37D10) + 0x34 (debugString), as
+    <code>GetInfoFromText</code> reads it.</li>
+<li><strong>A fragment is written as a rock</strong>: its ctor gives every fragment GMobileStaticInfo row 2 (0xD3A930), Rock (0x76E9E4). It comes
+  back on the next land as a plain rock.</li>
+<li>Scaffold (0x6EAF30), Bonfire (0x4398A0), Villager (0x751AF0), Abode, Tree, Feature, Creature and some forty other
+  classes have their own writers.</li>
+</ul>
+<h2 id="in-openblack">In openblack</h2>
+<blockquote>
+<p><strong>Code rules.</strong> The save pass reads ECS components and each class's writer is registered by its owner, never a
+global; the writer and its format are pure functions, unit tested with fakes in <code>test/</code>; comments describe
+behaviour in plain English, with no decompiled names or addresses (those belong here). See
+<a href="openblack-internals.html">openblack-internals.md</a>.</p>
+</blockquote>
+<ul>
+<li><code>lhscriptx::WriteCommand(name, {values})</code> (LHScriptX/ScriptWriter): the table copied from the exe, the format of
+  0x7E7FB0, ConvertToText's position text and the half-up rounding. A test checks that every command it can write has
+  a reader with the same parameters.</li>
+<li><code>ecs::land_script_save</code> (ECS/LandScriptSave): the save pass, a writer per class (registered by its owner), and the
+  physics writers above.</li>
+<li><span class="state approx">approximate</span>: openblack keeps no object angles, so the MobileStatic angles come from the rotation matrix.</li>
+</ul>
+<h2 id="pending">Pending<span class="state pending">pending</span></h2>
+<ul>
+<li>The writers of the other classes (each class's owner).</li>
+<li>The saved-game path, since openblack has no saved games.</li>
+<li>(pending) a building site's pile is linked through +0x74: whether its +0x78 is set too is not read.</li>
+</ul>
+<h2 id="sources">Sources</h2>
+<ul>
+<li>runblack.exe W120: GSetup 0x715130 / 0x7E7FB0, MapCoords::ConvertToText 0x602880, the SaveObject writers above.</li>
+</ul>
+</main>
+<script src="search.js"></script>
+<script src="wiki.js"></script>
+</body>
+</html>

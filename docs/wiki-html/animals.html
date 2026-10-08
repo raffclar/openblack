@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Animals: AI, states and clips — Black &amp; White notes</title>
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body>
+<nav id="side">
+  <h1><a href="index.html" style="color:inherit;text-decoration:none">Black &amp; White notes</a></h1>
+  <span class="tag">openblack — how the original behaves</span>
+  <input id="q" type="search" placeholder="Search (press /)" autocomplete="off">
+  <div id="hits"></div>
+  <div id="nav"><h2>Start here</h2>
+<a class="" href="README.html">Black &amp; White 1 notes for openblack</a>
+<h2>Engine</h2>
+<a class="" href="openblack-internals.html">openblack internals</a>
+<a class="" href="engine-loop.html">The engine loop: game turns and frames (original and openblack)</a>
+<a class="" href="engine-math.html">Coordinates, terrain, object size, game clock, matrices and Zoomer</a>
+<a class="" href="tooling.html">Tools and formats</a>
+<a class="" href="parity.html">Graphics engine parity: original versus openblack</a>
+<a class="" href="original-frame.html">The original B&amp;W frame (runblack.exe W120, D3D7, LH3D)</a>
+<h2>World</h2>
+<a class="" href="map-loading.html">Map loading and script functions</a>
+<a class="" href="land-script-save.html">Writing land-script lines: SaveObject and WriteCommand</a>
+<a class="" href="water.html">Water in the game</a>
+<a class="" href="trees.html">Trees and forests</a>
+<a class="" href="buildings.html">Buildings, building sites and towns (the building side)</a>
+<a class="" href="objects-and-resources.html">Objects and resources</a>
+<a class="" href="physics.html">Physics: thrown objects, collisions, damage and rocks that split</a>
+<h2>Life</h2>
+<a class="" href="villagers.html">Villagers: data, state machine and speed</a>
+<a class="here" href="animals.html">Animals: AI, states and clips</a>
+<h2>Magic and weather</h2>
+<a class="" href="magic.html">Magic: the core of the miracles</a>
+<a class="" href="miracles.html">Miracles one by one</a>
+<a class="" href="particles.html">Particles (PSys)</a>
+<a class="" href="day-night-weather.html">Day, night and weather in the original</a>
+<a class="" href="vortex.html">Vortexes and the tornado: objects swallowed, carried and flung</a>
+<h2>Hand and interface</h2>
+<a class="" href="hand-and-interface.html">The hand and the interface</a>
+<a class="" href="intro.html">The Land 1 intro and the tutorial&#x27;s script side</a>
+<a class="" href="script-camera.html">Script camera (GCamera and CameraModeScript)</a>
+<a class="" href="camera-tracks.html">Camera tracks (`Data\camera.edt`) and `WALK_PATH`</a>
+<h2>Presentation</h2>
+<a class="" href="rendering.html">World rendering: original versus openblack</a>
+<a class="" href="rendering-objects.html">Model rendering: original versus openblack</a>
+<a class="" href="animation.html">Skeletal animation (villagers and animals)</a>
+<a class="" href="audio.html">Audio: the engine, the banks, the music, the voices and the script</a>
+<a class="" href="video.html">Bink videos (.bik)</a>
+<h2>Data</h2>
+<a class="" href="mods.html">Modified data packs</a>
+<h2>Other</h2>
+<a class="" href="creature.html">The creature: groundwork, random streams and what is unknown</a></div>
+</nav>
+<main>
+<details id="toc"><summary>On this page</summary><div class="toc">
+<ul>
+<li><a href="#animals-ai-states-and-clips">Animals: AI, states and clips</a><ul>
+<li><a href="#turn-animalprocessstate-0x417ee0">Turn (Animal::ProcessState 0x417EE0)</a></li>
+<li><a href="#herbivores-sheep-tortoise-cow-horse-pig">Herbivores (sheep, tortoise, cow, horse, pig)</a></li>
+<li><a href="#predators-lion-tiger-leopard-wolf">Predators (lion, tiger, leopard, wolf)</a></li>
+<li><a href="#birds-crow-dove-swallow-rock-dove-seagull-bat">Birds (crow, dove, swallow, rock dove, seagull, bat)</a></li>
+<li><a href="#moving-mobilewallhug">Moving (MobileWallHug)</a></li>
+<li><a href="#reactions">Reactions</a></li>
+<li><a href="#hand-flight-and-death">Hand, flight and death</a></li>
+<li><a href="#clips-per-species-animalanimationcpp-0x41c0e0">Clips per species (AnimalAnimation.cpp 0x41C0E0..)</a></li>
+<li><a href="#flocks-age-and-smoke">Flocks, age and smoke</a></li>
+<li><a href="#hunted-villagers">Hunted villagers</a></li>
+<li><a href="#scripts-and-flags">Scripts and flags</a></li>
+<li><a href="#api-for-other-systems-ecsanimalaih">API for other systems (ECS/AnimalAI.h)</a></li>
+<li><a href="#blobs-and-mesh-of-the-animals">Blobs and mesh of the animals</a><ul>
+<li><a href="#blobs-done">Blobs (done)</a></li>
+<li><a href="#creation-mesh-and-scale">Creation: mesh and scale</a></li>
+</ul>
+</li>
+<li><a href="#test-hooks">Test hooks</a></li>
+<li><a href="#pending">Pending</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+<h1 id="animals-ai-states-and-clips">Animals: AI, states and clips</h1>
+<p>All the animal AI ported from runblack.exe: herbivores, predators and hunting, birds, fleeing and the other reactions,
+flocks, age, smoke, the hand, flight and death, the detour, the lairs and the script animals. bw1-decomp only has empty
+stubs of Animal*.cpp: everything comes from the executable.</p>
+<p>In openblack: <code>ECS/AnimalAI.*</code> (turn, herbivores, hand, death, movement states), <code>ECS/AnimalPredators.cpp</code>
+(predators and hunting), <code>ECS/AnimalLairs.cpp</code> (lairs), <code>ECS/AnimalBirds.cpp</code> (birds), <code>ECS/AnimalFlee.cpp</code> (the
+reactions), <code>ECS/AnimalAIDetail.h</code> (what
+they share), <code>ECS/AnimalAnimations.*</code> (clip per state and species), <code>ECS/AnimalApi.cpp</code> (functions for spells and
+scripts, in <code>AnimalAI.h</code>), <code>ECS/AnimalDebugHooks.cpp</code> (test hooks), <code>ECS/DisappearSmoke.*</code> (was <code>ECS/SmokyStuff.*</code>; smoke from the carcass),
+<code>components::AnimalBrain</code> (the Living / MobileWallHug / Animal fields that the AI uses), <code>components::Flock</code>,
+<code>ECS/ScriptHeld.*</code> + <code>components::ScriptHeld</code> / <code>CannotBeEaten</code> (what the scripts hold and their flags) and
+<code>ECS/AnimalScript.cpp</code> (the animal that a script releases).</p>
+<blockquote>
+<p><strong>Code rules.</strong> Animal state lives in ECS components (<code>components::AnimalBrain</code>, <code>components::Flock</code>) and the
+systems are reached through Locator services, never globals; the AI's formulas stay pure functions, unit tested with
+fakes in <code>test/</code>; comments describe behaviour in plain English, with no decompiled names or addresses (those
+belong here). See <a href="openblack-internals.html">openblack-internals.md</a>.</p>
+</blockquote>
+<p><strong>Land1 sheep:</strong> <code>Land1.txt</code> creates none. The 9 sheep are created by the challenge "The Lost Flock" (<code>challenge.chl</code>,
+script <code>TheLostFlock</code>), which <code>LandControl1</code> launches only after the <code>FollowUs</code> and <code>CitadelGuide</code> intro; in openblack the intro
+does not finish yet, so they do not appear. Land2 does create them in the map.</p>
+<h2 id="turn-animalprocessstate-0x417ee0">Turn (<code>Animal::ProcessState</code> 0x417EE0)</h2>
+<p>Every turn, after the villagers: TurnsSinceStateChange + 1; if the state has the needs flag
+(info.dat <code>animalStateTable.field0xa4</code>) <code>ProcessNeeds</code> (hunger, sleep, breeding +1 up to their info.dat maximum; the leader
+counts <code>leaderTurns</code>); then the state's function (<code>g_AnimalStateTable</code> 0xD12108). There are no entry / exit clips
+nor speed changes per state (<code>Animal::SetStateSpeed</code> empty). <code>SetTopState</code>: exit filter (in the hand only
+FLYING, LANDED or death; flying only IN_HAND, LANDED or death), state, counter to 0 and the state's clip.
+<code>PlayAnimThenSetState</code>: WAIT_FOR_ANIMATION with the clip unchanged until turns × 100 ms ≥ its duration.</p>
+<ul>
+<li><code>Animal::SetStateSpeed</code> is at 0x41A2B0 (empty). <code>Animal::GetFinalState</code> 0x41A240: the top state if the table marks it final, otherwise the destination.</li>
+<li>The exit filters of the hand and of flight are <code>Living::ExitInHand</code> 0x5ED500 (only FLYING, LANDED or dying) and <code>Living::ExitInFlying</code> 0x5ED540 (only IN_HAND, LANDED or dying).</li>
+<li><code>Animal::ProcessNeeds</code> 0x417DC0. <code>Animal::CheckNeeds</code> 0x418450 returns 3 ready to breed (otherwise the breed counter restarts when the flock is full), 1 hungry, 2 sleepy, 0 none.</li>
+<li>At the start of a turn a target that is no longer available is dropped (fn_00417E90); a young one grows four times a year, every 1500 / 4 turns (fn_004179F0).</li>
+<li><code>Animal::InteractDecideWhatToDo</code> 0x417D80 (vt +0xB88): with a flock (+0xB8) <code>LookForFlocksInSpiral(Pos, info, 2 × domainRadius (+0x25C), merge 1)</code> 0x41A690 (0x417D83..0x417DA2), then <code>StartWander</code> (vt +0xB48, 0x417DAB): the Dove class has its own, <code>Animal::StartWander</code> 0x417C90 serves the grazers, the hunters and the SpellWolf.</li>
+<li><code>Living::GetNumTurnsToDieOver</code> 0x5EC3E0 = 600 (the corpse time).</li>
+<li><code>Animal::Animal</code> 0x416EB0 with <code>Living::Living</code> 0x5EBEC0: counters 0, speedDefault, DECIDE_WHAT_TO_DO, the info.dat life; the sleep place is the flock's domain-centre cell at creation (fn_005E18E0).</li>
+<li>The initial heading comes from <code>MobileWallHug::SetToZero</code> 0x60F760: game angle 0, facing +x; nothing at creation sets another.</li>
+</ul>
+<h2 id="herbivores-sheep-tortoise-cow-horse-pig">Herbivores (sheep, tortoise, cow, horse, pig)</h2>
+<p>A single class (constructor 0x41D0B0, vtable "Cow"); only the clips change. Cycle:</p>
+<ul>
+<li><strong>DECIDE_WHAT_TO_DO</strong> (<code>Cow::DecideWhatToDo</code> 0x41D1B0): breed if it is time; the leader (first member of the flock) takes
+  the herd to a random point of the domain every <code>stayTime</code> turns (cow 200, the rest 1000) or if it left the domain; a
+  member more than <code>flockDistance</code> from the leader goes back to its side; otherwise, the needs; otherwise, START_WANDER.</li>
+<li><strong>WANDER</strong> (<code>Cow::Wander</code> 0x41D280): in a straight line at <code>step</code> per turn and it only changes heading on entering another
+  10 m cell (no wall-hug nor water). The new heading (<code>SetNewWander</code> 0x41A3F0) adds, with a speed budget
+  along the major axis (<code>fn_0041A5B0</code>), 0.9 × speed towards the leader if it is far (the distance in whole metres,
+<code>__ftol</code> 0x41A421, compared as int with the int radii), the flock (<code>fn_0041AD70</code>: 1/5 towards the
+  centre of the others, the nearest neighbour by axes, the cohesion vector <strong>again</strong>, 3/5 of the neighbour's step; the
+  distance is compared with raw MapCoords, so it almost always attracts) and a random turn of ±turnAngle/2.</li>
+<li><strong>Hunger</strong> (50 turns, horse 100): <code>LookForGrazePos</code> walks in a spiral (domain/10)² cells from its own, in front
+  (±viewAngle/2 = ±90°), neither its own nor that of another member (or its destination), without water nor a fixed object;
+  MOVE_TO_POS there → <strong>START_TO_EAT</strong> (head-lowering clip once) → <strong>EAT</strong> 20..34 times (GameRand(15) + 20), each time one of
+  the two eating clips at random → <strong>FINISH_EATING</strong> (raise the head) → DECIDE.</li>
+<li><strong>Sleep</strong>: a pure counter, without day / night. Full (1000) → SEEK_SLEEP to the sleeping spot (the cell at the centre
+  of the domain at birth) → SLEEPS standing (−2 per turn, +1 from ProcessNeeds: ~100 s).</li>
+<li><strong>Breeding</strong> (3000 turns): only if the flock has fewer members than it had (<code>maxMembers</code>): GIVES_BIRTH creates one
+  of age 1 in the same flock.</li>
+<li>Speed: always <code>speedDefault</code> (cow, sheep, pig 0.75 m/s; horse 1.5; tortoise 0.25), so always the walking
+  clip. Turning in MOVE_TO_POS: <code>Animal::SetTowardsAngle</code> 0x418560, at most turnAngle per turn (cow 34 = 6°);
+  with the destination inside its turning circle (R = 2 × speed / turnAngle in radians) it turns |diff| − turnAngle × d / R,
+  almost fully when close (0x4186B4..0x4186FC), so it does not keep circling the destination.</li>
+<li><code>Living::KeepLeaderWithinDomain</code> 0x41AAD0: the leader takes the herd to a new place every stayTime turns.</li>
+<li><code>Cow::ReactToAnimalNeeds</code> 0x41D310: breeding, then hunger, then sleep.</li>
+<li>The wander's straight move is fn_0060BD00. In <code>SetNewWander</code> the random turn is <code>GameRand(turn)</code> (0x41A509; 0 for 0, without a draw); the heading follows the step at once (fn_0060C000).</li>
+<li>The speed budget's scale is fn_0041A590 = v × num / den, truncated.</li>
+<li>The flock steering's neighbour distance is fn_0074D090 [inferred |dx| + |dz|].</li>
+<li><code>SetTowardsAngle</code>: the side and the size of the turn come from <code>GetAngleSign</code> 0x74D6F0 and <code>GetAngleDifference</code> 0x74D740 (0x4185E9).</li>
+<li><code>Cow::LookForFoodPos</code> 0x41D440 → <code>Animal::LookForGrazePos</code> 0x41A8B0 / <code>FindGrazingPosition</code> 0x41A980; fn_00419980 refuses a cell where another member of its flock stands or is going. The spiral is <code>GUtils::Spiral</code> over a copy of its own MapCoords (0x41A8C5..0x41A8D5): PosWithinDomain 0x41A906, InBounds 0x41A913, FindGrazingPosition 0x41A924, then += 0x41A945 (whole cells on the high words).</li>
+<li><code>Animal::MoveToPos</code> 0x41BAF0 → <code>Living::MoveToPos</code> 0x5EC270 (<code>MobileWallHug::MoveTo</code>; arrived (0xA) → SetTopStateToFinal 0x5ECA80).</li>
+<li>Eating: <code>Animal::StartToEat</code> 0x418280 gives 15..24 eat clips (GameRand(10) + 15, 0x41828F); the grazers' <code>Cow::StartToEat</code> 0x41D4A0 then makes it 20..34 (GameRand(15) + 20, 0x41D4B4). <code>Animal::Eat</code> 0x4182D0.</li>
+<li>Sleep: <code>Animal::SeekSleep</code> 0x4180D0 goes to a spot in a square around its sleep cell, 2 m per flock member (fn_0074F310); <code>Animal::Sleeps</code> 0x418330.</li>
+<li>Breeding: <code>Animal::GivesBirth</code> 0x418230.</li>
+<li>Landing: <code>Animal::Landed</code> 0x417D50 (CalculeLairPos, then the flock centres where it landed; the predators: their lair).</li>
+</ul>
+<h2 id="predators-lion-tiger-leopard-wolf">Predators (lion, tiger, leopard, wolf)</h2>
+<p>Tiger and leopard use the lion's code (the tiger puts its lair in a forest); the wolf has its own. They wander, sleep,
+breed and land with the herbivores' functions.</p>
+<ul>
+<li><strong>Felines</strong> (<code>Lion::DecideWhatToDo</code> 0x41FE70): breed; after 22:00 (visual time) to sleep with the counter
+  full; the leader moves the herd (stayTime lion 200); otherwise, hunger (lion 12000 turns, tiger 9000, leopard 1200),
+  then sleep; otherwise, wander at 1.5 m/s.</li>
+<li><strong>Lairs</strong> (<code>ECS/AnimalLairs.cpp</code>). The forest list (g_game +0x205BB4) goes from the
+  newest to the oldest; the first is taken without scoring and the others score with <code>fn_0053AD00</code> =
+  <code>SigmoidThreshold(-0.9, -(MapCoords distance / 1000))</code> (the sigmoid of the number of trees is computed and discarded),
+  changing only if they score strictly more. Every forest more than 1000 MapCoords (0.15 m) away scores 0.1144, so in
+  practice <strong>the lair is the second newest forest</strong> (with only one, that one), at its grown tree nearest to the centre.</li>
+<li>Tiger (<code>Tiger::CalculeLairPos</code> 0x421470): that rule; without forests or without a grown tree, where it is. Land5: the tiger at
+    (2841, 2918), next to forest 19, puts its lair in forest 18 (1358, 3577), 1600 m away.</li>
+<li>Wolf (<code>Wolf::CalculeLairPos</code> 0x421730): the nearest big forest; if there is none, the tiger's rule; if the chosen
+    forest has no grown tree or there are no forests, the nearest tree (all of them); otherwise, where it is.</li>
+<li>Lion and leopard (<code>Lion::CalculeLairPos</code> 0x420010): where it is. Land2 has no forests: the tiger stays where it is.</li>
+<li><strong>Wolves</strong> (0x4216B0): to the lair (a square the size of the pack around the centre of the domain, see Lairs)
+  and lying in it (HIDE_IN_LAIR, sleeping clip). When hungry (120 turns) they only
+  go out after 23:00: towards the nearest flock that is not stronger at 1.2 m (in practice their own: the leader hunts
+  where it is) or towards the nearest village.</li>
+<li><strong>Prey</strong> (<code>fn_004196D0</code>): the first in a spiral of 64 cells (±40 m): another species, on the ground, alive, with meat
+  (all except the tortoise), outside their turning circles; a cub only a downed prey. It is chased from the
+  next check, at 8 m/s. <strong>Villagers are also prey</strong> (see <a href="#hunted-villagers">Hunted villagers</a>). What cannot be eaten (+0x25 &amp; 0x40) is never prey, nor what is
+  controlled by a script (+0x24 &amp; 0x400) except for a hunter that is in a script (see Scripts and flags).</li>
+<li><strong>Chase</strong> (HUNTING_MOVE_TO_POS 41, 0x418DB0): stalks at 1.25 m/s (stalking clip) from 100 to 50 m, sprints at
+  10 m/s below 50 m; pounces when it is at pounce stride × scale × 0.5 (~2.3 m) and the prey is within ±22.5° of
+  its heading; gives up after 20 s (chaseTime) or beyond 100 m.</li>
+<li><strong>Pounce</strong> (TARGET_POUNCE 40, 0x419010; clip POUNCE_HI, the wolf POUNCE): at 1 m or less the prey falls (life 0.05,
+  DOWNED); when the pounce stride ends: if it fell, <code>FinishPouncing</code> (hunger 0, it places itself next to the prey to eat);
+  otherwise, it goes back to chasing it.</li>
+<li><strong>The prey</strong>: DOWNED (falling clip) → BEING_EATEN (lying down) 300 turns → DEAD, carcass 50 turns; the one that cannot be
+  eaten (+0x25 &amp; 0x40, 0x5EC4E0) goes to LANDED and stays alive.</li>
+<li><strong>Eating</strong>: START_TO_EAT → EAT 15..24 cycles; if the prey disappears it goes back to deciding (<code>Lion::Eat</code> 0x41FE40; also
+  at the end of the meal, so the getting-up clip is never seen).</li>
+<li><code>Lion::ReactToAnimalFoodNeeds</code> 0x41FF40, used by every predator: chase the target seen last turn, otherwise look for one.</li>
+<li><code>Animal::ReactToAnimalNeeds</code> 0x4183C0: hunger (no food: on to sleep), then sleep. The wolf's is <code>Wolf::ReactToAnimalNeeds</code> 0x421950.</li>
+<li><code>IsHuntingTargetValid</code> (vt +0xBB4) of the Animal class, 0x418DA0, only checks that the target is not null.</li>
+<li>Prey search (<code>FindPrey</code>): <code>GUtils::Spiral</code> at 0x41953E over a copy of its own MapCoords (0x41949A..0x4194B6), InBounds 0x4194D6; in each cell <code>GetFirstIterator</code> 0x6034D0 (at 0x4194E9) walks the fixed list, then the mobile one (0x41951B..0x419531), each from its head (GetMapChild 0x41950D); the first object that passes fn_004196D0 (0x4194F9) wins.</li>
+<li>fn_004196D0 refuses all but villagers and animals (info type 2 / 4, 0x41975A); the "cannot be eaten" test is at 0x4196F4.</li>
+<li><code>Living::IsSkeleton</code> (status bit 0x40) is never set for animals, so their corpses are prey too.</li>
+<li>fn_004196D0's "nearer than the stored candidate" compares 2 × Chebyshev(me, prey) in raw MapCoords against the Chebyshev of my cell indices and the stored raw MapCoords (fn_0074CF30): a unit mix-up, so in practice the new one is always nearer.</li>
+<li><code>Animal::SetupMoveToTarget</code> 0x418D20: a downed prey is eaten, any other is chased (the state only, the clip stays); the walk is <code>MobileWallHug::SetupMobileMoveToObject</code> 0x60ACD0 (STEP_THROUGH at it), then <code>Living::SetState</code> 0x5F2A80.</li>
+<li>fn_005EC240 is the current move plus SetTopStateToFinal on arrival (used by the pounce).</li>
+<li><code>Animal::HuntingMoveToPosAbandon</code> 0x418FD0. <code>Animal::FinishPouncing</code> 0x419120: fed, then it walks to the prey and stops one scale-metre short of it to eat.</li>
+<li><code>Living::Downed</code> 0x5EC4B0 plays the dying clip, then BEING_EATEN; <code>Living::StateBeingEaten</code> 0x5EC4D0 counts the 300 turns.</li>
+<li><code>Wolf::HideInLair</code> 0x4219E0 (the in-script leader's test is at 0x421A0E).</li>
+<li><code>SpellWolf::Wander</code> 0x420A10. The SpellWolf's vt +0xB48 is <code>Animal::StartWander</code> 0x417C90 too: after a hunt it wanders, and its Wander runs on.</li>
+<li>Lairs: the forest list (g_game +0x205BB4) is linked by +0x44; the tiger's loop is at 0x4214D2 and the wolf's at 0x42181A; the chosen forest gives its first grown tree (Forest +0x48: the one nearest its centre). The wolf's nearest big forest comes from the BigForest list g_game +0x205CE4.</li>
+</ul>
+<h2 id="birds-crow-dove-swallow-rock-dove-seagull-bat">Birds (crow, dove, swallow, rock dove, seagull, bat)</h2>
+<p>All of them are the Dove class (constructor 0x41DCF0); only the clips and the info.dat values change. They are born at
+<code>altitudeNormal</code> above the ground (20 or 40 m), at 8-10 m/s.</p>
+<ul>
+<li><strong>Leader</strong> (<code>Dove::DecideWhatToDo</code> 0x41DE40 → <code>StartWander</code> 0x41DF50 → SPECIAL_MOVE_TO_POS 44): a leg to a
+  random point 80 m away (domainRadius) <strong>from where it is</strong> (the flock drifts across the island), at its height ± altitudeVariance
+  within altitudeNormal + [altitudeMin, altitudeMax]; another leg on arrival or every stayTime (100 turns).</li>
+<li><strong>Followers</strong> (FOLLOW_FLOCK 45): a point 10 m from the leader, then a formation slot (<code>fn_0041E890</code>, read
+  literally) and MOVE_TO_POS in 2D at a constant height above the ground; start over.</li>
+<li><strong>Height</strong> (<code>Animal::MoveTo3D</code> 0x418AA0): in flight they keep their absolute height (they do not follow the hills) and rise or
+  descend at most altitudeMovementChange per turn (0.2-0.6 m), never less than 2 m from the ground.</li>
+<li><strong>Banking</strong>: when turning they tilt ±0.5 rad over 2 s (the Zoomer, <code>Animal::SetTowardsAngle</code>) and level out again over 2 s;
+  <code>Dove::Draw</code> 0x41F680 rotates the drawn matrix around its forward axis (in openblack, in <code>MobileDrawing</code>).</li>
+<li><strong>They never land</strong> in the original game: info.sleep is 0 in all of them, so LAND_AT_POS / SLEEPS are never reached. They
+  have no hunger, breeding nor day / night (the bats fly by day).</li>
+<li><strong>Clips</strong>: the moving one (and the deciding one) is a coin toss between flapping and gliding on each state change and on each
+  SetSpeed (the swallow among three, the bat always flaps); its SetAnim never restarts the clip. Table in
+  <code>ECS/AnimalAnimations.cpp</code> (<code>BirdClip</code>).</li>
+<li>They cannot be picked up nor hit (playerCanPickUp 0) and are not prey (more than 2 m up). When dead they fall with physics at
+  the flight speed (<code>Dove::Dying</code> 0x41F1B0) and stay on the ground as a carcass.</li>
+<li>The flock's altitude is fn_0041DF20: the flock's own, otherwise the info's altitudeNormal.</li>
+<li>A leg's height (<code>StartWander</code>, 0x41DFFD): (altitude + variance) − GameFloatRand(2 × variance).</li>
+<li><code>Dove::ReactToAnimalNeeds</code> 0x41E600: no hunger, no breeding.</li>
+<li><code>Dove::SpecialMoveToPos</code> 0x41E160: the leader re-steers every stayTime turns and starts a new leg on arrival; it ends through fn_005EC2A0 (SetTopStateToFinal, then SetState(0, flock +0x7C)).</li>
+<li><code>Dove::FollowFlock</code> 0x41E0B0; fn_0041E130: once the clip has played it tosses flap or glide again, every turn until the state changes (the counter is not restarted).</li>
+<li><code>Dove::Dying</code> 0x41F1B0 starts the physics with its flight velocity along its heading: s = ConvertGameAngleToScawenAngle(+0x5C) (0x41F1BB), velocity (sin(s)·v, 0, −cos(s)·v) (0x41F1D5..0x41F220, the trigonometry in extended precision, rounded once by the fmul).</li>
+<li>The formation slot (fn_0041E890, 0x41E98F..0x41EA05) does not use AddDistanceFromAngle: x = ftol(((cos(a) × row) × 10 + leader.x × 10 × 2^-16) × 65536 / 10), z the same with sin and column, with two roundings (fimul then fmul 10 [0x8AB470]).</li>
+</ul>
+<h2 id="moving-mobilewallhug">Moving (MobileWallHug)</h2>
+<p><code>Living::SetupMoveToPos</code> (0x5F2830) uses the one-argument version of <code>SetupMobileMoveToPos</code>: <strong>STEP_THROUGH</strong>, a straight
+walk without going around obstacles that in the animals re-aims every turn with their <code>SetTowardsAngle</code> (turn limited by
+turnAngle). At the step that is one stride away it goes to FINAL_STEP and arrives (0xA) the next turn. Going around obstacles
+(LINEAR → ORBIT → EXIT_CIRCLE) is only used by <code>SetupMoveToWithHug</code> (0x5F2890): going to the food (19) and fleeing again (6);
+ported in <code>ECS/AnimalWallHug.*</code>:</p>
+<ul>
+<li><strong>Circles</strong> (<code>ObjectCircleIterator</code>, always those of the 10 m cell of the point being swept): those of each fixed object
+  in the cell with collision data (not the fields, which the iterator skips; forests have none; a tree only its 0.3 m
+  trunk and only in its cell; a multi-cell object in each cell its 7.1 m circle touches). That of a building or
+  feature is the one of its box (centre, the largest half-axis × scale, minimum 1 m); if the box is more than 1.4 times longer than
+  wide, a row of int(length / width) + 1 circles of the short half-axis. Then, the water cells (or outside the map) of
+  the cell and its 8 neighbours, each a 7.2 m circle at its centre.</li>
+<li><strong>LINEAR</strong> (<code>MoveToCircleHugLinearSquareSweep</code> 0x60CA50): the nearest circle that the ray of the step enters
+  (the real entry, dot − √disc; behind −0.2 m it does not count); TurnsToObj = distance / step length (0xFF: none or more
+  than 255 turns away). It walks straight, and <strong>only re-aims</strong> (<code>InitStepsXZ</code>, with the species' limited turn) and sweeps again
+  when changing cell. When the count runs out it starts orbiting on the side the step passes (CW / CCW).</li>
+<li><strong>ORBIT</strong> (0x60B0E4 / 0x60B40E): turns speed / radius × 0.0497 + 1 every turn. <code>MoveToCircleHugCircleSquareSweep</code>
+  (0x6159F0 CW, 0x614C40 CCW) searches along the orbit for the first intersection with another circle of the cell (or the destination if
+  it is inside the circle, 0.1° earlier), TurnsToObj = the arc / (1.5 × speed), and sets the tangent heading (towards the
+  centre ± 90°, minus 64 per radius beyond 0.9 radii). Less than one turn away: the destination → direct STEP_THROUGH; another
+  circle → switches to it and sweeps again (3 levels). It exits (EXIT_CIRCLE, straight outwards from the centre) when it is
+  closer to the destination than when it started orbiting, with the destination on the inner side and ahead; outside the circle it goes back to
+  LINEAR_CW / CCW.</li>
+<li>Consequence of the original: since LINEAR only re-aims when changing cell and with turnAngle (6° the cow), an animal whose
+  heading no longer points at the destination (or that leaves an orbit outwards) moves away and does not arrive [the code; not seen in the
+  original game]; if the destination lies inside the circled circle, it arrives via the final STEP_THROUGH. In numbers: the sheep
+  turns at most 64 (11°) per re-aim (<code>Animal::SetTowardsAngle</code> 0x418560; the almost full turn only inside its
+  turning circle, R = 2 × 0.075 m / 0.196 = 0.77 m) and walks 0.075 m per turn, so it re-aims once every ~133 turns;
+  in Land2 with a pile next to them (<code>OPENBLACK_TEST_FOOD_PILE</code>) only 2 of 25 hungry sheep get to eat, and the
+  food reaction lasts 2000 turns. Checked against the code 2026-10-01 (MoveTo 0x60B095, MoveToCircleHug
+  0x60D800, InitStepsXZ 0x60BFA0, SetupMobileMoveToPos 0x60ABC0, AreWeThere 0x60AD60, Living::MoveToPos 0x5EC270,
+  ProcessReaction 0x5F1270: nothing else re-aims).</li>
+<li>The handlers of <code>MobileWallHug::MoveTo</code>: LINEAR 0x60B095, ORBIT_CW / CCW 0x60B0E4 / 0x60B40E, EXIT_CIRCLE 0x60B78F. Each returns 6 / 7 when it stepped (same / new map cell) and 1 when it only changed state.</li>
+<li>Constants: a water cell's circle 7.2 m (<code>ObjectCircleIterator::Init</code> 0x60D21C); a tree's trunk 0.3 m (<code>Tree::CreateCollideData</code> 0x74C622); a box more than 1.4 times longer than wide becomes a row of circles (<code>NewCollide::NewCollide</code> 0x829470); the "behind" bound −0.2 is the double at 0x930668; arc length (MapCoords) / radius (m) → game angle is 0.0497359186 = 2048 / (2π × 6553.6) (0x930660); the goal point is taken 0.1° before the goal (cos / sin at 0x930680 / 0x93067C); the orbit sweep's recursion budget is 3 (0xBF42C8 / 0xBF42CC).</li>
+<li><code>CircleHugInfo::GetObjectPtr</code> 0x60A660 / <code>SetObjectPtr</code> 0x60A770; the rest of SetObjectPtr is the bookkeeping of <code>g_CircleHugStateInfo</code>.</li>
+<li>A hug handler that reaches FINAL_STEP (4) (0x60B232, 0x60B801..0x60B81E) sets the step to Pos − goal; it is unused, since FINAL_STEP snaps to the goal the next turn (0x60AF6C).</li>
+<li>The water test of the iterator is <code>LH3DIsland::IsWater</code> 0x60D3A0 (the land cell under a cell index is water, or there is none); the neighbours' test in <code>ObjectCircleIterator::Init(int)</code> 0x60D0A0 is the same hasWater bit.</li>
+<li><code>ObjectCircleIterator</code> over a map cell: Init 0x60D280 / 0x60D0A0, GetMapChild 0x638560. It takes the cell's fixed list in its order (<code>GetFirstObjectFixed</code> 0x6034B0); Init skips an object without <code>GetCollideData</code> (vt +0x858, 0x60D29D) and a field by its RTTI (0x60D2B1..0x60D2C8). A multi-cell object is in the cells of its NewCollideDescriptor.</li>
+<li>The LINEAR sweep: the entry distance is fn_0060CEE0 (dot − √disc; behind −0.2 it is FLT_MAX), the sweep record fn_0060CF20, "nearer than the best" fn_0060CFF0; the step is normalised in metres (0x60CAB9) and turns = distance / |step| (0x60CE5E: above 255 none, not above 0 or unordered 0).</li>
+<li>The orbit sweep orders points along the orbit starting from the animal (g = its position − the centre, 0xD3EE70 / 0xD3EE68): <code>Point2DCompare::operator&lt;</code> 0x610180 / 0x6101F0, <code>Resolve__Point2DCompare</code> 0x6101C0 / 0x610230 (the half the orbit reaches first), the exact cut <code>IntersectIntervalCircle_1::Resolve</code> 0x6169F0 / fn_00616C70, the interval fn_00616D00 / fn_00616A80 (hi = d, lo = d + perp(d), × the radii's ratio when the other circle is not bigger; resolved at once when the bounds come out in the wrong order), <code>Point2D::Cross</code> 0x611240.</li>
+<li>The end of the sweep sets the heading along the orbit (0x6166E3 / 0x61593B).</li>
+<li>ORBIT uses the step as it is now, which the sweeps may have re-aimed, not the one it moved by (0x60B2C5).</li>
+</ul>
+<p><code>GUtils::Spiral</code> (dir 1, count 1: (−1, 0), (0, −1), (+1, 0) × 2, (0, +1) × 2...)
+in all the spirals; <code>Collide(1)</code> is only water (the <code>hasWater</code> bit of the terrain cell) or outside the map,
+<code>Collide(0)</code> nothing; <code>CalcRandomPos</code> (0x5ED080): two random points, each with a spiral of 25 cells, accepting if
+it is on the map, without collision, outside the turning circles and (birds) over a terrain block; otherwise, the centre if it is
+outside its turning circles, and otherwise, its own position. Angles with the trunc(65536 cos) tables and <code>LHArcTan</code>.
+Initial heading 0 (+x). The flock list is in reverse order of creation: the leader is the first one that entered; the
+birds' formation counts from the newest. The animals are processed from the newest to the oldest.</p>
+<h2 id="reactions">Reactions</h2>
+<p><code>Reaction::ProcessReactions</code>, which would distribute them every turn, depends on a debug switch that the game never
+enables, so <strong>each reaction is offered only once</strong>, when created (<code>Reaction::CreateReaction</code> → <code>SpreadReaction</code>
+0x6E3E10: (maxReactionDistance × 0.2)² cells of <code>GUtils::Spiral</code> within the radius; <code>ApplyReactionToLivingObjectsAtSquare</code>
+0x6E3F90 for each animal: available (<code>IsAvailableForReaction</code>), distance = half Manhattan distance, score
+min(255, priority × (1 + 0.5 × howImportantIsDistance × (max − d) / max)), and its <strong>records</strong> (3 at most, {type,
+turn}: it does not take a type again before NumGameTurnsBeforeReactingAgain; they expire after 1800 turns). An animal that is already
+reacting only changes if the new one scores more and the current one has already lasted 10 s (1 s if it was being picked up by the hand). Each type ends
+after its own number of turns (<code>Living::ProcessReaction</code> 0x5F1270), if the initiator disappears (and then it goes back to the
+saved state: DECIDE, or state 0 if it came from moving, and stays there like the original) or if the
+reaction disappears (it stays in its state). Leaving to a state that is not a reaction one (the hand, dying, a need) drops the
+reaction without changing the state (<code>Animal::ExitReaction</code> 0x41B170). The animals react to object (0), look (1),
+spell (3), creature (6), food (7), fire (10), falling tree (27, which nobody creates) and predator (28); the
+predators also to flying object (9). Tortoise and birds do not react. <strong>No animal reacts to the hand</strong>.
+In openblack the distribution, the records, the scoring and the change rule are common to all living beings
+(<code>ECS/Effects/Reactions</code>, <code>components::ReactionRecords</code>); what is specific to the animals (priorities 28/7/9, StartReacting,
+turns of 28, states 49/6/30/19/20) is their handler in <code>ECS/AnimalFlee.cpp</code>. The villagers receive the same
+reactions in the same distribution (fire and teleport ported).</p>
+<ul>
+<li><strong>Predator (28):</strong> each predator creates it at birth (fn_0041FD30). Those with <code>isFleeingFromPredator</code> flee within
+  25 m, if the predator is not stalking (at its speed2 or less it goes unnoticed); a predator only from a stronger one. Fleeing:
+  state 49 at its flee speed (cow, sheep, pig 4 m/s; horse 9) ~10 m to one side of its trajectory; then
+  6 (again if it is coming towards it or is closer than 30 m) or 30 (still, looking at it); ~80-88 turns or beyond 75 m.</li>
+<li><strong>Food (7, <code>Pot::SetupReaction</code> 0x66D660):</strong> the map's food piles (CREATE_POT) on load, and a pot that the
+  hand puts down; it is removed when it is picked up or emptied. <strong>Hungry</strong> herbivores within 35 m go to the edge of the pile (the sum of
+  both radii), take 50 from it (the pile shrinks; when empty it disappears) and their hunger is set to 0. The piles the hand makes
+  (MagicFood) have foodType 0: no animal goes to them, not in the original either.</li>
+<li><strong>Flying object (9, <code>Object::InitialisePhysicsFromHand</code> 0x637412):</strong> what the hand throws makes the
+  predators within 25 m flee if 2 × its speed exceeds its distance; the reaction is removed when the object lands.</li>
+<li>Not ported (they need systems that openblack does not have): spells (0, 3), village artefacts (1), creature (6),
+  fire (10).</li>
+<li><code>Living::IsAvailableForReaction</code> 0x5F11F0 (vt +0x984 of every Animal class) checks these conditions in order: IsFunctional (vt +0xD4, 0x5F1202; an animal always is); not controlled by a script (0x5F120C); not in the dance editor (0x5F121E); the final state (vt +0xB04) not one of the list 0x5F1227..0x5F1248; not dying (+0xB4 &amp; 1, 0x5F124A); not on a structure (+0x24 &amp; 0x80, 0x5F1258, set only by <code>Living::MoveOnStructure</code>).</li>
+<li>Priorities: <code>Living::FleeFromPredatorPriority</code> 0x5F15D0 (at its speed2 or slower a predator goes unnoticed); <code>Lion::FleeFromPredatorPriority</code> 0x4203C0 (a predator only flees from a stronger one).</li>
+<li>More priorities: <code>ReactToFoodPriority</code> 0x5F1710 with <code>Animal::IsInterestedInFoodObject</code> 0x419BC0 (some food in it, not in the physics, near enough, and a hungry animal whose needsFoodTypes takes that food); <code>ReactToFlyingObjectPriority</code> 0x5F1800 (not while it flies or lands itself).</li>
+<li>Turn functions: <code>NumGameTurnsToReactToPredatorFunction</code> 0x5F1980 (0 unless the initiator is an animal; 0 while it looks at a predator that runs at it faster than 5 m/s), <code>NumGameTurnsBeforeReactingAgainToPredatorFunction</code> 0x5F1A00.</li>
+<li>"Coming towards me" is fn_005F1E60: the object's movement within acos 0.8 of the line to it.</li>
+<li><code>Reaction::CreateReaction</code> 0x6E3D70 gets its player (+0x38) from the predator's GetPlayer (fn_0041FD30, 0x41FD5C), the pot's GetPlayer (<code>Pot::SetupReaction</code> 0x66D660), or the thrower's <code>GInterfaceStatus::GetPlayer</code> (0x637405).</li>
+<li><code>Animal::SetupFleeFromPredator</code> 0x420410; <code>SetupReactToFood</code> 0x5F14C0.</li>
+<li><code>StopReactingAndSetState</code> 0x5F11C0 → <code>Animal::ResetStateAfterReacting</code> 0x41A280: the stored state's return state (animalStateTable field0x1c).</li>
+<li><code>Animal::GetFleeingPositionFromMovingObject</code> 0x420550: about 10 m sideways out of its path, on the side it stands on, ±4 m ((GameFloatRand(8) + side × distance) − 4, x first at 0x420688, then z at 0x4206B0).</li>
+<li><code>Living::GetFleeingPositionFromStationaryObject</code> 0x5F2010: straight away from a still object; on it, it stays.</li>
+<li>The flee states: <code>Animal::FleeingFromPredatorReaction</code> 0x4201F0; <code>Living::FleeingFromObjectReaction</code> 0x5F1D10 with <code>FleeFromObjectIfComingTowardsMe(obj, 30, 30)</code> 0x5F1D90 (the 30s are states, FLEEING_AND_LOOKING; the distance is the reaction's minDistanceToRunAwayFromObject); <code>SetupMoveToWithHug</code> is called at 0x5F1E3F.</li>
+<li><code>Living::LookingAtObjectReaction</code> 0x5F23A0.</li>
+<li>Food: <code>Living::GotoFoodReaction</code> 0x5F2550 walks to the food's working point (SetupMoveToWithHug at 0x5F259A), then ARRIVES_AT_FOOD; <code>Animal::ArrivesAtFoodReaction</code> 0x41A0A0 sets hunger 0 and does RemoveResource(FOOD, min(50, amount)).</li>
+</ul>
+<h2 id="hand-flight-and-death">Hand, flight and death</h2>
+<ul>
+<li>Picking up: <code>GAnimalInfo.playerCanPickUp</code> (all the land ones except those of the puzzles). When picked up it leaves its flock for
+  one of its own (<code>SeperateLivingIntoNewFlock</code>) → IN_HAND. Dropping or throwing: physics → FLYING (clip THROWN).</li>
+<li>At rest (<code>Animal::EndPhysics</code> 0x5F0D80, <code>ECS/LivingPhysics.cpp</code>): landType by the turn-start matrix's right row
+  (po+0xD8: y &gt; 0.5 → 1, &lt; −0.5 or NaN → 2, otherwise 0; the villager's mapping reversed; a NaN gives 2 because
+  <code>test ah, 1</code> at 0x5F0DBB takes the unordered compare as "&lt;"), heading =
+  Wrap(float(GetYAngle(current fwd row po+0xBC) + pi)) into SetYAngle (+0x4C and GameAngle), drawn afterwards at the GetYXZ
+  yaw of the current matrix (RemoveObject 0x646B72). The rows are the original's (<code>living::BodyRows</code>: as they are from the
+  hand, OriginalRows for the world path; (inferred, not verified in game), trace
+  <code>OPENBLACK_ANIMAL_TRACE</code> <code>landing:</code> lines). No body (Living 0x5EFDF8 → EndPhysics(NULL), <code>living::EndPhysicsWithoutBody</code>;
+  <code>animal_ai::PutDown</code> calls it): heading unchanged, landType 3. A put-down goes IN_HAND → LANDED without FLYING; alive → LANDED (getting-up clip according to landType; the predators, the waking one) → the
+  flock centres itself where it fell → INTERACT_DECIDE → off wandering. <strong>There is no
+  drowning state</strong> in the animals (<code>Animal::EndPhysics</code> has no water branch): in the sea the animal
+  never stops, its density rises and after <strong>~75 turns (7.5 s)</strong> it exceeds 1 and <code>Living::HasSunk</code> 0x5ED370 kills it and
+  deletes it (<code>SetDying</code>, state 15, <code>ToBeDeleted(0)</code>) — alive or carcass. In a shallow cell with water of altitude ≥ 2
+  it lands <strong>alive</strong> (unlike the villager, who drowns); see
+  <a href="water.html#sinking-drowning-and-being-deleted">water.md</a>. Dropping gently
+  puts it into physics like the original, over the sea and on land (see <a href="#pending">Pending</a>).</li>
+<li>Death (<code>Living::SetDying</code> 0x5EC390, nothing while it is flying): DYING (falling clip) → DEAD (lying according to landType; the
+  predators with the sleeping clip) 600 turns (never if a script controls it) → its smoke (<code>CreateSmokyStuff</code>, below) and it disappears. A thrown carcass
+  goes back to DEAD with another 600.</li>
+<li><code>Animal::InterfaceSetInMagicHand</code> is 0x419B60; <code>Living::InitialisePhysicsFromHand</code> 0x5EFD80 (every drop and throw is physics, FLYING).</li>
+<li><code>Animal::EndPhysics</code> writes the landType into +0xB4 bits 4-5 (0x5F0E06..0x5F0E21) and altitude +0x1C = 0 (0x5F0E28).</li>
+<li><code>Living::IsDead</code> 0x417270 also counts an animal that is not functional: <code>Living::IsFunctional</code> 0x4172D0 = IsAvailable (vt +0x2C) == 1 and GetLife (vt +0x11C) != 0.</li>
+<li><code>Living::Dead</code> deletes the vanished animal in its own turn (vt +0xC ToBeDeleted(0), 0x5EC462), off the list for the livings after it (the loop has already read its next).</li>
+<li><code>Animal::DeleteDependancys</code> 0x417BA0 unlinks it from its town's list (+0xE0's list +0x984, 0x417BA4..0x417BF6, −−+0x988), sets +0xE0 = 0 (0x417BF7), then leaves its flock (0x417C02..0x417C18). No prey / hunter link is cleared: the readers ask IsAvailable.</li>
+<li>The death reason is <code>Animal::GetDeathReason</code> 0x417890 (+0x10C).</li>
+</ul>
+<h2 id="clips-per-species-animalanimationcpp-0x41c0e0">Clips per species (AnimalAnimation.cpp 0x41C0E0..)</h2>
+<table>
+<thead>
+<tr>
+<th>species</th>
+<th>walk</th>
+<th>idle</th>
+<th>eat</th>
+<th>lower / raise head</th>
+<th>hand</th>
+<th>thrown</th>
+<th>lands lt 0/1/2</th>
+<th>dead lt 1/other</th>
+<th>falls</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>cow</td>
+<td>45 (41 runs)</td>
+<td>42</td>
+<td>36/35</td>
+<td>37 / 44</td>
+<td>38</td>
+<td>43</td>
+<td>42/40/39</td>
+<td>30/29</td>
+<td>31</td>
+</tr>
+<tr>
+<td>sheep</td>
+<td>145 (141)</td>
+<td>142</td>
+<td>133/132</td>
+<td>136 / 140</td>
+<td>137</td>
+<td>143</td>
+<td>142/139/138</td>
+<td>131/130</td>
+<td>134</td>
+</tr>
+<tr>
+<td>pig</td>
+<td>128 (125)</td>
+<td>126</td>
+<td>117/116</td>
+<td>120 / 124</td>
+<td>121</td>
+<td>127</td>
+<td>126/123/122</td>
+<td>115/114</td>
+<td>118</td>
+</tr>
+<tr>
+<td>horse</td>
+<td>61 / trot 59 / 56</td>
+<td>57</td>
+<td>49/48</td>
+<td>52 / 60</td>
+<td>53</td>
+<td>58</td>
+<td>57/55/54</td>
+<td>47/46</td>
+<td>46</td>
+</tr>
+<tr>
+<td>tortoise</td>
+<td>172</td>
+<td>171 for everything</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>Thresholds: <code>speedThreshold</code> entry 2 (cow, sheep and pig) and 3 (horse). Predators (lion, tiger, leopard, wolf):
+stalking below speedDefault, walking, running above entry 6..9; in the table of <code>ECS/AnimalAnimations.cpp</code>. The clip
+advances with the terrain covered while it moves (<code>Object::IsMoving</code>) and with time otherwise.</p>
+<ul>
+<li><code>Animal::GetAnimId</code> 0x417FA0 always asks the species' function of the state (g_AnimalStateTable slot 0x60), with no info.dat fallback; −1 keeps the clip playing (<code>Animal::StandardAnimation</code> 0x4177D0). Animals have no into / out-of clips.</li>
+<li>The species' clip functions span 0x41C0E0..0x41CF10: <code>Cow::MoveAnimation</code> 0x41C720 (run above its walk speed; sheep and pig use the cow's threshold, entry 2), <code>Horse::MoveAnimation</code> 0x41CA70 (entry 3: walk, trot, run), <code>Cow::EatAnimation</code> 0x41C740 (GameRand(2) at 0x41C74C picks one of the two), <code>Cow::LandedAnimation</code> 0x41C760, <code>Cow::DeadAnimation</code> 0x41C790 ((status &amp; 0x30) == 0x10 ? DEAD_ON_RHS : DEAD_ON_LHS).</li>
+<li>The birds' slots span 0x41BD20..0x41C080. Decide is <code>Animal::DecideAnimation</code> 0x41BD20, the Move function. The coin is GameRand(2) == 0 ? first : second (Dove 0x41BD39, Crow 0x41BEC9, Pigeon / Seagull 0x41BF39 / 0x41BFA9); the swallow's three-way draw is GameRand(3) at 0x41C019.</li>
+<li>The birds' Stand, Dead, Eat, Sleep and Thrown slots are fixed ids: the odd ones (e.g. the crow's stand = TAKEOFF) are what the code returns. Every other slot is −1.</li>
+<li>The birds' SetAnim (the one that never restarts the clip) is fn_0041E7E0.</li>
+<li>The clip's advance is <code>Animal::Draw</code> 0x51C310 → fn_0051AF00 (by the ground covered while <code>Object::IsMoving</code>, otherwise by time).</li>
+</ul>
+<h2 id="flocks-age-and-smoke">Flocks, age and smoke</h2>
+<ul>
+<li><strong>Picking up an animal</strong> (<code>Flock::SeperateLivingIntoNewFlock</code> 0x52FE10): it always goes to a flock of its own where it was
+  picked up, with the radius and distance of the old one, without a village and maximum 0; the old one, if it is left empty, is deleted, except
+  a script flock (+0x25 &amp; 4: it releases the animal's reference and stays even if empty, 0x419B75).</li>
+<li><strong>Merging</strong> (<code>Animal::LookForFlocksInSpiral</code> 0x41A690): only after landing (±80 m), because <code>flocksCanMerge</code> is 0 in
+  all of them; the biggest one keeps all of them if they are of the same species and the sum does not exceed <code>maxFlockSize</code>; a flock
+  with a village does not merge; two script flocks do not merge and a foreign script one always keeps all of them
+  (0x41A837, fn_005302A0 0x5302B4). Oddity: the maximum of the one that stays adds the other's once per member, clamped.</li>
+<li><strong>Age</strong> (<code>Living::GetAge</code> 0x5ECAF0): 1500 turns per year since its birth turn. The young grow every 375
+  turns (<code>scale += random(0.75 × (ageToScale[age + 1] − scale))</code>) until <code>grownUpAge</code>; an adult is born at 0.9 and two
+  rolls leave it in (0.95, 1.05]. <strong>Animals do not die of old age</strong>: checked across the whole executable:
+  <code>oldAge</code> / <code>retirementAge</code> are only read by <code>Villager::CheckDeathFromOldAge</code>
+  (0x760CA0) and the death reason OLD_AGE (9) is only for villagers.</li>
+<li><strong>Being born</strong> (GIVES_BIRTH): the newborn decides immediately, before the mother goes back to wandering.</li>
+<li><strong>Animal thrown into a food store:</strong> it becomes food (its foodValue: cow and horse 1200, sheep 800,
+  lion and tiger 900, wolf 700, pig 290) and disappears (<code>Animal::ReactToPhysicsImpact</code> 0x41BC10): the hit
+  (<code>GetGameObjectWhoHitMe</code>) and the animal available, and the hit <code>IsResourceStore(FOOD)</code> (a storage pit, a worship
+  site) → the hit's <code>DeleteObjectAndTakeResource(this, po +0x24)</code>: the thrower's interface, so the pit's town gets the
+  desire, alignment, belief and the creature deed, the Supply help, reaction 22, the ghost; when it took, nothing
+  more, else <code>Living</code>'s damage. The food is <code>ftol(GetFoodValue(3))</code> 0x41BC80 = <code>(GetFoodType() &amp; 3) ? foodValue : 0</code>
+  (0x4026D0): an animal whose foodType has neither bit is still taken and deleted, worth nothing. Given from the
+  hand on the press: valid only on a <strong>StoragePit</strong> (RTDynamicCast, 0x41B320; else <code>Living</code>'s totem test, the
+  sacrifice, not ported); apply 0x41B360: <code>IsResourceStore(FOOD)</code> and not INDESTRUCTIBLE (+0x24 bit 0x4000) → taken,
+  3, else 0 (still held). openblack: <code>AnimalReactToPhysicsImpact</code> (<code>LivingPhysics.cpp</code>) and <code>ecs::held_apply</code> (the
+  Animal rows), through <code>ecs::resource_stores</code>; the deletion is <code>ToBeDeleted</code> (out of its town's list and its
+  flock, out of the physics and the cells). A worship site puts the food in its food pot (<code>WorshipSite::AddResource</code>
+  0x77C5F0, <a href="magic.html">magic.md</a>).</li>
+<li><strong>Smoke from the carcass</strong> (<code>Object::CreateSmokyStuff</code> 0x63A810 → <code>SmokyStuff::Create</code> 0x823C90 mode 0, size 1): 15
+  sprites of <code>Data\Textures\smoke.raw</code> with a random direction at 0.3..1 × size, grey 0x808080 with opacity life × 100,
+  3 s, from 0.5 to 1.5 × size. The engine is <code>ecs::disappear_smoke</code> (<code>ECS/DisappearSmoke.*</code>, the same as the dust
+  and the boat's splashes; it is drawn with the boat sprites); the animals only call <code>disappear_smoke::Create</code>.</li>
+<li><strong>In the hand</strong> the animals have the villagers' grip (2D radius, drop 0.65). The landType is read from the body's matrix
+  at the start of the turn.</li>
+<li><code>ageToScale</code> is at GAnimalInfo +0x27C, read at +0x280 + 4 × age by <code>SetScaleForAge</code> 0x417A5C; index −1 is the dword before the table (<code>InitialiseScale</code> 0x417B30 at age 0): +0x278, altitudeNormal.</li>
+<li><code>fn_00417C50(town)</code> (SetTown) inserts the animal at the head of the town's list (a new node, ++ +0x988, 0x417C66..0x417C85) but does not take it off the list of the town it had (only <code>Animal::DeleteDependancys</code> unlinks), so a second call can list it twice.</li>
+<li>Flock merging (<code>LookForFlocksAtPos</code> 0x41A790): FindTypeOnMap(4, 0) 0x41A7A7 .. FindTypeOnMap(4, obj) 0x41A876 walks the ANIMAL objects of the cell's mobile list from its head (type 4 does not count as fixed); the merge itself is fn_00530210.</li>
+<li><code>Living::SetFlock</code> 0x5EE5F0: an old flock → RemoveLivingFromFlock(living, 1) (0x5EE5F3..0x5EE600), then +0xB8 = flock (0x5EE609 / 0x5EE617).</li>
+<li>AddMember fn_0052FA50: the old flock's +0x30 is cleared when it is this living (0x52FA55..0x52FA6B); fn_005ECFE0 takes it out of its flock, even this one, with deleteWhenEmpty 1 (0x52FA74); already in the list → 0 (0x52FA79..0x52FA8F); Living::SetFlock at 0x52FB2E.</li>
+<li>AddLeader (0x52FC75..0x52FDF4): if it is already the tail, nothing (0x52FC97); otherwise it is unlinked and inserted again by +0xD4 (0x52FCDA..0x52FDEE, no SetFlock); a non-member goes through AddMember (0x52FDF4).</li>
+<li><code>Flock::RemoveLivingFromFlock</code> 0x52FB50(living, deleteWhenEmpty): a non-member still gets +0xB8 = 0 and returns false (0x52FB6D); otherwise it is unlinked (0x52FB93..0x52FBF7, −−count), +0xB8 = 0 (0x52FBFA) and, with deleteWhenEmpty and no member left, the flock's ToBeDeleted(0) (0x52FC00..0x52FC10).</li>
+<li><code>SeperateLivingIntoNewFlock</code> 0x52FE10 calls RemoveLiving at 0x52FE1E, creates its own flock at 0x52FE41, and copies the old flock's domainRadius and flockDistance at 0x52FE4A..0x52FE57.</li>
+<li><code>Flock::Flock(Living*)</code> 0x52F950 does not write +0x88 (maxMembers).</li>
+<li>Merge fn_00530210(keeper, other) walks the other's cursor (+0x44) from its head while it has a member (0x53021B..0x53022A); each step does keeper +0x88 += other +0x88 (0x53022C..0x530232), clamped to the maxFlockSize (info +0x260) of the animal at the keeper's cursor +0x44 (0x530238..0x530272); then AddMember(keeper, head) (0x530282 / 0x530291) empties and deletes the other.</li>
+<li>Merging a flock into itself (attaching a flock to itself) never empties <code>other</code> and hangs the game.</li>
+<li>fn_00530180(exclude) picks a random member: count 0 → null (0x53018A); r = GameRand(count − 1) when there is an exclude and more than one member, otherwise GameRand(count) (0x530190..0x5301B1, "Flock.cpp" 0x182 / 0x186); then, from the head, the first member at an index ≥ r that is not the excluded one (0x5301BE..0x5301EF).</li>
+<li><code>Flock::FindLiving</code> 0x530510: from the head (the cursor +0x44, 0x53051E..0x530557), the first member the callback accepts.</li>
+<li><code>Living::PosWithinDomain</code> 0x5ED010(pos, factor): GetDistanceInMetres from the domain centre (0x5ED025..0x5ED037, <code>Living::GetFlockPos</code> 0x5ECF60 = flock +0x14); outside when radius × factor &lt; distance (0x5ED04E..0x5ED05F).</li>
+<li>FLOCK_ATTACH also makes its flock with the script id 0xABA52 at +0x8C (0x6EF6EA; FLOCK_CREATE at 0x6F2271).</li>
+<li>The Flock class spans Flock.cpp 0x52F780..0x530590.</li>
+</ul>
+<h2 id="hunted-villagers">Hunted villagers</h2>
+<p>Villagers are prey like the animals (type 2, with meat) if they are outside their home. When downed, their health stays at 5 %
+and they go to DOWNED (clip <code>P_ATTACKED_BY_LION</code>), then BEING_EATEN 300 turns (<code>P_DYING</code>) and they die (<code>Villager::BeingEaten</code>
+0x76B380: l = GetLife(); SetLife(0); <code>VillagerDead(ANIMAL 3, its player (the owner of its town), l, 1)</code>, in
+openblack <code>ecs::villager::VillagerDead</code>, which kills it at the end of the turn). They are driven by the animal
+AI (<code>components::DownedVillager</code>). The one that cannot be eaten (+0x25 &amp; 0x40)
+gets up (LANDED) instead of dying; openblack puts it in LANDED when the 300 turns end, without waiting for the clip <span class="state approx">approximate</span>.</p>
+<h2 id="scripts-and-flags">Scripts and flags</h2>
+<ul>
+<li><strong>Held by a script</strong> (<code>ECS/ScriptHeld.*</code>, faithful): the original's script objects are slots of
+  <code>ScriptManage</code> (511, 0xD967F8) with their reference count; in openblack the slot is the entity's <code>components::ScriptHeld</code>.
+  Each LHVM variable that stores an object gives it a reference (callbacks of <code>LHVM::Initialise</code> in
+  <code>Game.cpp</code>, <code>ADD_REFERENCE</code> / <code>REMOVE_REFERENCE</code>; the original ScriptLibraryR.dll calls those two natives on each POP
+  of an object and when stopping a task); with the first one it becomes <code>IsInScript</code> (+0x24 &amp; 0x200) and, if a
+  script created it (<code>CREATE</code>, <code>CREATE_WITH_ANGLE_AND_SCALE</code>: <code>AddScriptGameThing(thing, 1)</code>), <strong>controlled by the script</strong> (+0x24
+  &amp; 0x400). After each <code>LookIn</code> (GScript::Process 0x6EB6DB → fn_0070D480) whatever no longer has references is released:
+  it loses both flags and an animal goes through fn_0041AA00 (own flock if it has none; dead → SetDying, which gives the carcass another
+  600 turns; alive → INTERACT_DECIDE_WHAT_TO_DO, in openblack one turn later: approximate).</li>
+<li><strong>Controlled by the script</strong>: it is not prey except for a hunter that is in a script (HuntingMoveToPos 0x418DD7,
+  fn_00419340, fn_004196D0), it does not take reactions (IsAvailableForReaction 0x5F120C), <strong>its carcass does not expire</strong> (Living::Dead
+  0x5EC41E) and its flock is a script one (hand and merging, above).</li>
+<li><strong>Wolf in a script</strong>: the leader puts the lair where it is (Wolf::CalculeLairPos 0x421774) and hunts from it at
+  any time without looking at hunger (Wolf::HideInLair 0x421A2E).</li>
+<li><strong>Cannot be eaten</strong> (+0x25 &amp; 0x40, <code>components::CannotBeEaten</code>): it is set by the land-to-land vortex on everything that
+  comes out of it (fn_005FE3B0 0x5FE5DD) and on the puzzle objects; it is not prey and, if it was already downed, it survives.</li>
+<li>Releasing (fn_0041AA00): it does nothing while +0x24 &amp; 0x44 (in the physics or in the hand) or g_game +0x14 &amp; 0x8000.
+  It creates its own flock at 0x41AA47 (<code>Flock::Flock(Living*)</code>: radius info +0x25C, distance (int) info +0x21C). A dead
+  animal released this way goes to SetDying at 0x41AA89; one that was already dying (status &amp; 1) goes straight to DEAD.
+  A living one calls vt +0xB88 <code>Animal::InteractDecideWhatToDo</code> 0x417D80 at once (0x41AAB7).</li>
+</ul>
+<h2 id="api-for-other-systems-ecsanimalaih">API for other systems (<code>ECS/AnimalAI.h</code>)</h2>
+<ul>
+<li><strong>Spells</strong>: <code>CreateAnimal</code>, <code>MoveTo</code> (Living::SetupMoveToPos), <code>SetState</code> / <code>SetStateRaw</code> (vt+0x938),
+  <code>Destination</code>, <code>SetFinalDestination</code> (SpellWolf +0x148), <code>Kill</code> / <code>DestroyedByEffect</code> (0x41B1B0), <code>Remove</code>, <code>SetAlpha</code>.</li>
+<li><strong>Death</strong>: <code>AddDeathListener(fn)</code> → id / <code>RemoveDeathListener(id)</code>: all of them are notified at the start of Living::SetDying
+  (vt+0x6A4), once per death and not while it is flying; <code>SetDeathCallback</code> is a single listener that replaces its own.
+  <code>SetSpeciesDying(type, fn)</code> is a species' own SetDying and replaces the whole of Living::SetDying. It is used by
+  SpellDove 0x41F5C0, SpellBat (shares SpellDove's slot) and SpellWolf 0x420CF0: a fade over
+  GetNumTurnsToDieOver = 20 turns, without a carcass; the spells register it.</li>
+<li><strong>Script</strong>: <code>ScriptMoveTo(e, xz)</code> = the Living branch of MOVE_GAME_THING (GScript 0x6F8F6C): nothing in the hand; already
+  there (AreWeThere vt+0x85C) → <code>SetScriptState(IN_SCRIPT 4)</code>, otherwise <code>SetupMoveToPos(pos, IN_SCRIPT 4)</code>.
+  <code>SetScriptState(e, s)</code> = GScript::SetScriptState 0x6F82E0: StorePreviousState (0x417040: its final state),
+  CallExitStateFunction (0x41A2C0, without looking at its answer), SetState(0, s) (no animal script state has
+  an entry function, 0x41A310), its clip (SetAnim vt+0x8FC) and the counter +0x58 to 0. "On the map" for an animal = not
+  in the hand [inferred].</li>
+<li><strong>Villagers</strong>: the eaten one dies via <code>ecs::villager::VillagerDead</code>; <code>villager::IsAtHome</code> is awaited (excluding
+  from the prey those who are at home) and the list of shepherds.</li>
+<li><strong>Hand and physics</strong>: <code>PlaceInHand</code>, <code>InitialisePhysics</code>, <code>EndPhysics</code>, <code>PutDown</code> (only for openblack's
+  bodiless case, <code>physics::from_hand::PlaceWithoutBody</code>; the original ends the physics immediately, 0x5EFDF8). The
+  physics and the hand reach them through <code>ECS/LivingPhysics</code> (the Animal class's physics handlers and
+  <code>living::InterfaceSetInMagicHand</code>).</li>
+</ul>
+<h2 id="blobs-and-mesh-of-the-animals">Blobs and mesh of the animals</h2>
+<p>(Moved from rendering.md.)</p>
+<h3 id="blobs-done">Blobs (done)</h3>
+<ul>
+<li>In <code>fn_00812170</code>: if it is not human, with <code>IsHumanShadowed</code> (flag 0x4000000, <code>SetHumanShadowed(1)</code> in each species'
+  Create; 0 while the creature holds it), and &gt; 0.2 and a mesh with <code>ContainsEBone</code> → <code>fn_0081FFF0(obj, normal, ebone)</code>.</li>
+<li>EBone block (836 bytes) after the footprint ones (size at +8), UV2, name and extra metrics: <code>u32 size; float m[16][12];
+  int32 bone[16]</code>. The positions of m[0..3] in their bone's space are used: P = object × bone × pos, y = ground + 0.2.
+  Pair (0, 1) always, pair (2, 3) if bone[2] ≠ −1 (all the quadrupeds: 4 quads). Birds and bats have no EBone.</li>
+<li><strong>Oddity of the original</strong>: the first quad of each pair receives V = D (it builds D + (P1 − P0)/2 but passes &amp;D); the second
+  D + (P0 − P1)/2.</li>
+<li>openblack: <code>L3DFile::GetEBone</code>, <code>L3DMesh::GetBlobPoints</code>, animal loop in <code>Renderer::DrawHumanShadows</code>.</li>
+</ul>
+<h3 id="creation-mesh-and-scale">Creation: mesh and scale</h3>
+<ul>
+<li><code>CREATE_ANIMAL</code> (24, "ANNN": type, herd, village) and <code>CREATE_NEW_ANIMAL</code> (25, "ANNNN": + age) → <code>fn_00419D10</code>
+  (herds and classes in <a href="map-loading.html#animals-and-flocks-create_flock-create_new_animal">map-loading.md</a>). Mesh: <code>Object::CallVirtualFunctionsForCreation</code> 0x636BE0 gives the
+  LH3DObject <code>GetDetailMesh(2, 1, 0)</code> (info +0x1FC + 4k: high, std, low) and the LOD is always 1: <strong>the std one</strong> (also
+  <code>GetMesh</code>); openblack used the high one. Scale (<code>InitialiseScale</code> 0x417B20, then <code>SetScaleForAge</code> 0x417A40):
+  young ones (age &lt; grownUpAge) ageToScale[age − 1] + FloatRand(0.75·(ageToScale[age + 1] − s)), at age 0 the
+  dword before the table (+0x278, altitudeNormal); adults 0.9, then t = (0.05 − FloatRand(0.1)) + 1 and, if 0.9 &lt; t, a
+  second roll. No initial angle. openblack: <code>animal_ai::InitialScaleForAge</code> / <code>ScaleForAge</code>, shared by the creation,
+  the growth tick and the script's <code>SET_PROPERTY</code> Age (<code>animal_ai::SetAge</code>, Animal::SetAge 0x4179C0).</li>
+<li>Script properties: Speed <code>SetSpeedInMetres</code> (MobileWallHug 0x60C080 → Animal::SetSpeed 0x417FE0, the clip for the
+  new speed), <code>GetSpeedInMetres</code> 0x60C070; Living::IsDead 0x417270 (<code>animal_ai::IsDead</code>); <code>SET_FOCUS</code> →
+  <code>living::SetFocus</code> → <code>animal_ai::SetYAngle</code> (see <a href="villagers.html">villagers.md</a>).</li>
+<li>Flocks (the script opcodes): the animal AI's flock code and <code>ECS/Flocks.h</code> (the scripts' flocks) share one
+  convention: <code>members</code> front() is the leader (the original's tail). <code>LeaderOf</code>, <code>SetDomainCentre</code> and
+  <code>PosWithinDomain</code> now call <code>ecs::flocks</code>, and <code>CalcRandomPos</code> calls <code>living::CalcRandomPos</code> with the animal's vt
+  tests. Living::PosWithinDomain 0x5ED010 is <strong>0 without a flock</strong> (0x5ED01E); openblack's copy answered 1.</li>
+<li>Land1 creates 116 (doves 40, seagulls 22, swallows 14, horses 12, cows 10, pigs 7, tortoises 6, bats 5);
+  openblack creates them all, with the AI and the clips of this page.</li>
+<li>openblack: <code>components::Animal</code>, <code>AnimalArchetype</code>.</li>
+</ul>
+<h2 id="test-hooks">Test hooks</h2>
+<p><code>OPENBLACK_ANIMAL_TRACE=1</code> (state changes, landType and every 50 turns how many there are in each state),
+<code>OPENBLACK_TEST_VIEW_ANIMAL="n[,distance[,angle[,every]]]"</code>, <code>OPENBLACK_TEST_THROW_ANIMAL="n,turn[,vx,vy,vz]"</code>,
+<code>OPENBLACK_TEST_KILL_ANIMAL="n,turn"</code>, <code>OPENBLACK_TEST_ANIMAL_SPECIES=&lt;AnimalInfo&gt;</code> (n only counts that species),
+<code>OPENBLACK_TEST_HUNGRY=&lt;AnimalInfo&gt;</code> (that species hungry on turn 1), <code>OPENBLACK_TEST_SPREAD_REACTIONS=&lt;turn&gt;</code>
+(the predators spread their flee reaction again), <code>OPENBLACK_TEST_HUNT_VILLAGER="&lt;species&gt;,&lt;turn&gt;"</code>,
+<code>OPENBLACK_TEST_FOOD_PILE="&lt;species&gt;,&lt;turn&gt;"</code>, <code>OPENBLACK_TEST_FOOD_BEHIND="&lt;species&gt;,&lt;turn&gt;[,&lt;type&gt;[,&lt;m&gt;]]"</code> (the
+first of that species, hungry, 8 m in front of the nearest building (0; not a field, which the circle iterator skips) or
+feature (2) of 2..8 m radius or tree (1)
+and a food pile m (6) behind it; its route every 2 turns; with the trace, each change of the detour),
+<code>OPENBLACK_TEST_SMOKE=&lt;n&gt;</code>, <code>OPENBLACK_TEST_CORPSE_TURNS=&lt;n&gt;</code>, <code>OPENBLACK_TEST_LAIRS=&lt;turn&gt;</code> (lists the forests and
+each predator leader recomputes its lair; with the trace, the chosen lair and the rule),
+<code>OPENBLACK_TEST_SCRIPT_HELD="n,turn[,release]"</code> (the n-th animal is held by a script as if it had been
+created by a CREATE; at <code>release</code> it loses the reference; every 25 turns its state, counter and flags),
+<code>OPENBLACK_TEST_CANNOT_BE_EATEN=&lt;turn&gt;</code> (on that turn all the animals and villagers receive the vortex flag; with
+<code>HUNT_VILLAGER</code> before the downing there is no hunt, after it the villager gets up),
+<code>OPENBLACK_TEST_VIEW_LOCK=1</code> (the camera is placed every turn
+next to the animal, for the birds). Land2 (<code>-s Land2.txt</code>) has lions, tigers and wolves.</p>
+<h2 id="pending">Pending<span class="state pending">pending</span></h2>
+<p>What openblack still does differently from the original, and what is left:</p>
+<ul>
+<li>The detour (<code>ECS/AnimalWallHug.*</code>): the order of the objects in a cell is that of openblack's registry, not the cell's
+  list (the orbit sweep decides by bounds, so a tie or a different order can choose another intersection); the
+  membership of the cell is computed (7.1 m circle; tree in its cell) instead of reading the map's list; a circle
+  whose object is deleted is released [inferred]; the shared bookkeeping <code>g_CircleHugStateInfo</code> / <code>DoWallHuggerLookahead</code>
+  (0x609A50, a ghost villager that simulates the path) is not ported; arcs and headings in metres, not in integer MapCoords.
+  Two openblack checks that the original does not do (it reads <code>GetObjectPtr()</code> without looking): no circle at the start of the
+  orbit or the sweep, only possible if its object was deleted [inferred]. <code>+0x76</code> is always set to 0 when preparing the walk
+  (the original only with an entry in <code>g_CircleHugStateInfo</code>; nobody reads it before rewriting it) and the field <code>+0x78</code>
+  (1 / 0x10) is not carried [inferred: unidentified, it is not read on the animals' path].
+  openblack's port for villagers (<code>PathfindingSystem</code>) has its own bugs.</li>
+<li>Lairs (<code>ECS/AnimalLairs.cpp</code>): <code>GUtils::GetDistance</code> is ported as is (<code>hypotenuse</code> 0x74F680 with the approximate
+  inverse root of the 1024-entry table 0xDA5A10, ~0.1 %), but over openblack's float positions
+  truncated to MapCoords. The tiger's water search is not ported (it does not change the result). <code>flock +0x5C</code>
+  (without a lair) is not ported because the original only sets it to 0. Distance ties between big forests
+  and trees choose the newest object by creation index, like the original's head-insertion lists.
+  The order of a forest's grown trees (<code>GrownTreesByDistance</code>) uses the 3D distance to the
+  centre; the original (<code>DistanceToForest</code> 0x53A890 = <code>GetDistanceInMetres</code>) measures it only in x / z: on slopes it can
+  change which tree is the lair.</li>
+<li>Eaten villager: dies via <code>VillagerDead</code> (3 ANIMAL, its owner) and lies as a normal corpse (600 turns, the
+  owner's alignment, the town's counters and help sprites, the neighbours' REACT_TO_DEATH: <a href="villagers.html">villagers.md</a>, Death); the
+  villagers do not flee from predators nor take other reactions. A corpse is reachable, so a predator may pounce on it:
+  fn_005EC480 gives it the downed mark and life 0.05 as to any Living, and its SetTopState(17) (Villager::SetTopState) is
+  refused by DEAD's exit (to check in the game). The corpse
+  counter of animals and villagers is the shared <code>living::DeadTick</code> (Living::Dead 0x5EC400).</li>
+<li>Scripts: the vortex does not exist in openblack, so nothing has the "cannot be eaten" flag yet
+  (it needs the vortex: <code>script_held::SetCannotBeEaten</code> on what comes out of it); there are no script flocks
+  (FLOCK_CREATE / FLOCK_ATTACH not implemented: neither DisbandId nor its references); when releasing a villager
+  <code>Villager::ReleaseFromScript</code> is not ported; <code>SetScriptState(0x20)</code> of the released animal is not ported (fn_0041AA00 overwrites it
+  immediately); the death reason SACRIFICE (7), which deletes a carcass even if it is controlled, is not carried. The finders
+  of openblack's CHL (CALL, GET_...) do not call <code>AddScriptGameThing</code>: the slot is created with the first reference
+  [approximated]. When releasing an animal, "in physics or in the hand" (+0x24 &amp; 0x44) is in openblack the physics
+  component or the IN_HAND / FLYING states [approximated], and the flag g_game +0x14 &amp; 0x8000 (scripts stopped: with it
+  <code>GScript::Process</code> does not do <code>LookIn</code>, 0x6EB6C7) does not exist in openblack. The LHVM references are faithful: the
+  original ScriptLibraryR.dll calls the natives ADD_REFERENCE / REMOVE_REFERENCE from POP (0x10008BC0: the new object
+  and the old one of the variable) and when stopping a task (0x10006604); a task's parameters receive them through
+  the POP of its prologue.</li>
+<li>Flock merging (0x41A690 / 0x41A790): the original does not merge a flock with a shepherd (Flock +0x30, the villager of
+  <code>VillagerBecomesShepherd</code> 0x768C1C: its own or the other) nor two of different players (<code>GetPlayer</code>); openblack has no
+  shepherds nor flock player, so it only looks at its own flock's village [approximated].</li>
+<li>Shepherds, the leader priority of FLOCK_ATTACH, the birds' landing (unreachable in the game: info.sleep 0), the exact
+  order of the lists of each map cell and the turn interleaved with the villagers.</li>
+<li>The random numbers go through <code>game_random</code> (GameRand over the synchronised seed); the sequence is still
+  not that of an original game while other systems drawing from the stream are not ported (<a href="engine-math.html">engine-math.md</a>,
+  "Random numbers") <span class="state approx">approximate</span>.</li>
+<li>Putting an animal down gently goes through physics like the original (<code>Object::InitialisePhysicsFromHand</code> 0x636F00,
+  <a href="physics.html">physics.md</a>): on land it leaves physics on the spot through <code>Animal::EndPhysics</code> 0x5F0D80. The three
+  landing poses of <code>Villager::EndPhysics</code> are (pending).</li>
+<li><code>Dove::IsPosValidForMapCellExistance (0x41F840) [the tie rules not read]: a land block under the point</code></li>
+<li><code>StepTowards</code>: <code>fn_0060ADC0: SetupMobileMoveToObject's STEP_THROUGH walk at the object, whose position is the goal each turn [inferred: the goal follows the object]</code></li>
+<li><code>Flock::info</code>: <code>+0x28 / +0x2C: the GFlockInfo and the player Flock::Flock 0x52F780 hands to its Container base (fn_0046B8A0, 0x46B8DC / 0x46B8F4); none for Flock::Flock(Living*). (pending) their readers</code></li>
+<li><code>Flock::calm</code>: <code>+0x5C: CHANGE_INNER_OUTER_PROPERTIES' calm, ftol (0x70F53C). (pending) its reader</code>. This disagrees
+  with the Lairs point above, which says the original only sets flock +0x5C to 0; one of the two readings needs checking.</li>
+<li><code>Living::MoveToPos</code> is 0x5EC270 on this page, while a test note gives "MobileWallHug::MoveTo 0x60AF20 for this
+  villager (its state function's call, Living::MoveToPos 0x5EC280)"; 0x5EC280 may be the call inside the function
+  (unverified).</li>
+</ul>
+</main>
+<script src="search.js"></script>
+<script src="wiki.js"></script>
+</body>
+</html>

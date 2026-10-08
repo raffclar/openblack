@@ -74,13 +74,19 @@ class VertexBuffer
 {
 public:
 	VertexBuffer(std::string name, const void* memory, VertexDecl decl) noexcept;
+	VertexBuffer(const VertexBuffer&) = delete;
+	VertexBuffer& operator=(const VertexBuffer&) = delete;
 	~VertexBuffer() noexcept;
 
 	[[nodiscard]] uint32_t GetCount() const noexcept;
 	[[nodiscard]] uint32_t GetStrideBytes() const noexcept;
 	[[nodiscard]] uint32_t GetSizeInBytes() const noexcept;
 
+	[[nodiscard]] bool IsValid() const noexcept;
 	void Bind() const;
+	/// Binds the buffer as another vertex stream, read with its own layout: the attributes a draw takes from it
+	/// (a creature's variant meshes for the morphing body)
+	void BindStream(uint8_t stream, VertexLayoutHandle layout) const;
 
 private:
 	std::string _name;

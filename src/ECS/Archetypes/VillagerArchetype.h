@@ -21,7 +21,10 @@ namespace openblack::ecs::archetypes
 class VillagerArchetype
 {
 public:
-	static entt::entity Create(const glm::vec3& abodePosition, const glm::vec3& position, VillagerInfo type, uint32_t age);
+	/// @param joinTown kept for the callers: making a villager gives it no town or home; the map
+	/// script's CREATE_VILLAGER_POS handler adds it to its town (town_villagers::AddVillagerToTown)
+	static entt::entity Create(const glm::vec3& abodePosition, const glm::vec3& position, VillagerInfo type, uint32_t age,
+	                           bool joinTown = true);
 	VillagerArchetype() = delete;
 };
 } // namespace openblack::ecs::archetypes

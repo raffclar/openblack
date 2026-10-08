@@ -25,7 +25,7 @@ std::unique_ptr<CameraModel> CameraModel::CreateModel(CameraModel::Model model)
 	switch (model)
 	{
 	case CameraModel::Model::DefaultWorld:
-		return std::unique_ptr<CameraModel>(new DefaultWorldCameraModel());
+		return std::make_unique<DefaultWorldCameraModel>();
 	default:
 		assert(false);
 		return nullptr;
