@@ -40,6 +40,10 @@ constexpr float k_AdultLargestScale = 1.05f;
 constexpr float k_ChildGrowthShare = 0.75f;
 /// The old are looked at for dying of old age once in this many turns, each at its own turn
 constexpr uint32_t k_OldAgeCheckTurns = 800;
+/// A new villager's food is drawn this far above the hungry mark
+constexpr float k_NewbornFoodRange = 0.6f;
+/// A new villager waits up to this many turns before it first decides what to do
+constexpr uint32_t k_FirstDecisionTurns = 500;
 
 /// Random numbers on the game's shared stream: a float from 0 up to a limit, and a whole number below a limit
 using FloatRandom = std::function<float(float)>;
@@ -101,6 +105,37 @@ struct Ages
 /// Whether an old villager dies of old age now. Past old age, a draw from 0 to 1 cubed gives how much of the years
 /// between old age and the oldest it may add to its own; it dies when that takes it past the oldest.
 [[nodiscard]] bool DiesOfOldAge(uint32_t age, const Ages& ages, const FloatRandom& floatRandom, const IntRandom& intRandom);
+
+/// What a villager is given as it is made
+struct Newborn
+{
+	/// Its age once adults are raised to the youngest adult's
+	uint32_t age {0};
+	bool child {false};
+	float scale {1.0f};
+	/// How full it starts: a little over half full to a little over full
+	float food {1.0f};
+	/// The turn its needs count as last looked at: up to a check's worth of turns ago, so villagers made together are
+	/// looked at on different turns
+	uint32_t lastCheckTurn {0};
+	/// The turns it stands before its first decision, 1 to 500
+	uint16_t turnsUntilFirstDecision {1};
+};
+
+/// What the making of a villager needs from its kind
+struct NewbornKind
+{
+	uint32_t grownUp {0};
+	float hungryForFood {0.5f};
+	uint32_t processChecksEvery {8};
+	std::span<const float, 20> ageToScale;
+};
+
+/// Makes a villager of an age on a turn, with the game's draws in the game's order: its size, its food (drawn twice
+/// unless the first comes out full), its last check (drawn twice unless the game is younger than the first draw) and
+/// its wait before its first decision
+[[nodiscard]] Newborn MakeNewborn(uint32_t age, uint32_t turn, const NewbornKind& kind, const FloatRandom& floatRandom,
+                                  const IntRandom& intRandom);
 
 /// A villager's age in whole years by the game's clock now
 [[nodiscard]] uint32_t AgeNow(const components::Villager& villager);

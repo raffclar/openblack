@@ -60,6 +60,26 @@ bool villager_age::DiesOfOldAge(uint32_t age, const Ages& ages, const FloatRando
 	return age + extra > ages.oldest;
 }
 
+villager_age::Newborn villager_age::MakeNewborn(uint32_t age, uint32_t turn, const NewbornKind& kind,
+                                                const FloatRandom& floatRandom, const IntRandom& intRandom)
+{
+	Newborn born;
+	born.age = GivenAge(age, kind.grownUp);
+	born.child = IsChildAge(born.age, kind.grownUp);
+	born.scale =
+	    GrownScale(born.age, kind.grownUp, kind.ageToScale, StartScale(born.age, kind.grownUp, kind.ageToScale), floatRandom);
+
+	const float firstFood = floatRandom(k_NewbornFoodRange) + kind.hungryForFood;
+	born.food = firstFood < 1.0f ? floatRandom(k_NewbornFoodRange) + kind.hungryForFood : 1.0f;
+
+	auto sinceChecked = intRandom(kind.processChecksEvery);
+	sinceChecked = sinceChecked < turn ? intRandom(kind.processChecksEvery) : turn;
+	born.lastCheckTurn = turn - sinceChecked;
+
+	born.turnsUntilFirstDecision = static_cast<uint16_t>(intRandom(k_FirstDecisionTurns) + 1);
+	return born;
+}
+
 namespace
 {
 uint32_t TurnNow()

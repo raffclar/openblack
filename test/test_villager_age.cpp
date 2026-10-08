@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <array>
+#include <string>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -122,4 +123,69 @@ TEST(VillagerAge, OnlyThePastOldAgeDieOfItAndTheOlderTheLikelier)
 	EXPECT_FALSE(DiesOfOldAge(90, ages, half, extra));
 	EXPECT_EQ(intLimits.back(), 5u);
 	EXPECT_TRUE(DiesOfOldAge(96, ages, half, extra));
+}
+
+namespace
+{
+/// Hands out float and whole draws, recording each draw's limit in order
+struct Stream
+{
+	std::vector<float> floats;
+	std::vector<uint32_t> ints;
+	std::vector<std::string> order;
+	size_t nextFloat {0};
+	size_t nextInt {0};
+	FloatRandom Float()
+	{
+		return [this](float limit) {
+			order.push_back("f" + std::to_string(limit));
+			return floats.at(nextFloat++);
+		};
+	}
+	IntRandom Int()
+	{
+		return [this](uint32_t limit) {
+			order.push_back("i" + std::to_string(limit));
+			return ints.at(nextInt++);
+		};
+	}
+};
+const NewbornKind k_Kind {.grownUp = k_GrownUp, .hungryForFood = 0.5f, .processChecksEvery = 8, .ageToScale = k_AgeToScale};
+} // namespace
+
+TEST(VillagerAge, ANewAdultDrawsItsSizeFoodCheckAndWaitInTheGamesOrder)
+{
+	Stream stream {.floats = {0.02f, 0.08f, 0.3f, 0.45f}, .ints = {5, 3, 41}};
+	const auto born = MakeNewborn(13, 1000, k_Kind, stream.Float(), stream.Int());
+	EXPECT_EQ(born.age, 18u);
+	EXPECT_FALSE(born.child);
+	// 1.05 - 0.02 is bigger than 0.9, so the size is a second draw
+	EXPECT_FLOAT_EQ(born.scale, 0.97f);
+	// 0.3 + 0.5 is under full, so the food is a second draw
+	EXPECT_FLOAT_EQ(born.food, 0.95f);
+	// 5 is under the turn, so the check is drawn again
+	EXPECT_EQ(born.lastCheckTurn, 997u);
+	EXPECT_EQ(born.turnsUntilFirstDecision, 42u);
+	const std::vector<std::string> expected = {"f" + std::to_string(0.1f),
+	                                           "f" + std::to_string(0.1f),
+	                                           "f" + std::to_string(0.6f),
+	                                           "f" + std::to_string(0.6f),
+	                                           "i8",
+	                                           "i8",
+	                                           "i500"};
+	EXPECT_EQ(stream.order, expected);
+}
+
+TEST(VillagerAge, ANewChildIsItsAgesSizeAndAFullOneDrawsOnce)
+{
+	Stream stream {.floats = {0.0f, 0.55f}, .ints = {5, 0}};
+	const auto born = MakeNewborn(5, 2, k_Kind, stream.Float(), stream.Int());
+	EXPECT_TRUE(born.child);
+	EXPECT_EQ(born.age, 5u);
+	EXPECT_FLOAT_EQ(born.scale, 0.63f);
+	// 0.55 + 0.5 is full: exactly full, no second draw
+	EXPECT_FLOAT_EQ(born.food, 1.0f);
+	// The game is younger than the draw: last checked when the game began
+	EXPECT_EQ(born.lastCheckTurn, 0u);
+	EXPECT_EQ(born.turnsUntilFirstDecision, 1u);
 }

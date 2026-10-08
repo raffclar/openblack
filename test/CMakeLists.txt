@@ -276,6 +276,7 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_town_belief test_town_belief.cpp)
 openblack_setup_and_add_test(test_villager_speed test_villager_speed.cpp)
 openblack_setup_and_add_test(test_villager_age test_villager_age.cpp)
+openblack_setup_and_add_test(test_villager_needs test_villager_needs.cpp)
 openblack_setup_and_add_test(test_creature_casting test_creature_casting.cpp)
 openblack_setup_and_add_test(test_particle_glints test_particle_glints.cpp)
 target_link_libraries(test_particle_glints PRIVATE psys)
