@@ -1023,13 +1023,13 @@ void DynamicsSystem::BeginTurn()
 	// Moving bodies are awake; resting ones only when something moving is near them, or they always stay
 	for (auto& entry : _entries)
 	{
-		if (entry->body->resting && !entry->Has(PhysicsEntry::k_AlwaysStays))
+		if (turn::AwakeAtTurnStart(entry->body->resting, entry->Has(PhysicsEntry::k_AlwaysStays)))
 		{
-			entry->flags &= static_cast<uint8_t>(~PhysicsEntry::k_Awake);
+			entry->flags |= PhysicsEntry::k_Awake;
 		}
 		else
 		{
-			entry->flags |= PhysicsEntry::k_Awake;
+			entry->flags &= static_cast<uint8_t>(~PhysicsEntry::k_Awake);
 		}
 	}
 	WakeNearMovingBodies();
@@ -1470,9 +1470,13 @@ void DynamicsSystem::UpdateFrame(float turnFraction, float gameSeconds)
 			continue;
 		}
 		const auto& body = *entry->body;
+		// A body at rest is drawn where its object is and costs nothing a frame: its drawn pose went as it stopped
 		if (body.resting)
 		{
-			registry.Remove<PhysicsDrawPose>(entry->entity);
+			if (registry.AllOf<PhysicsDrawPose>(entry->entity))
+			{
+				registry.Remove<PhysicsDrawPose>(entry->entity);
+			}
 			continue;
 		}
 		// Sunk deeper than its radius, it keeps the pose it was last drawn at

@@ -153,6 +153,14 @@ bool AdvanceDustPuff(DustPuff& puff, float seconds);
 /// The five whooshes are picked by the tick count
 inline constexpr int32_t k_Whooshes = 5;
 
+/// Whether a body is awake as a turn starts, before what moves wakes what is near it: a moving body is, a resting one only
+/// if its kind always stays in the physics. A body still asleep after the waking leaves the physics, so a body at rest
+/// with nothing moving near it costs nothing from the next turn on.
+[[nodiscard]] constexpr bool AwakeAtTurnStart(bool resting, bool alwaysStays)
+{
+	return !resting || alwaysStays;
+}
+
 /// Whether a moving body is low enough for the sea: its centre under half its radius above the sea's level. There it
 /// bobs, and it has sunk if it is denser than water and its kind says so.
 [[nodiscard]] bool NearSeaLevel(bool resting, float centreHeight, float radius);
