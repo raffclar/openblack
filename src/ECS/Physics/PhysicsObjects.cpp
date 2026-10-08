@@ -489,7 +489,10 @@ bool SetUpBody(entt::entity entity, PhysicsBody& body, bool dynamic, bool handPo
 	return true;
 }
 
-void SyncTransform(const PhysicsObject& po)
+/// The object takes the body's place and angles. Come to rest in the turn's update, a villager stands where the body's
+/// centre of mass is (its altitude the centre's height above the land), not at the body's origin; every other object,
+/// and a villager taken out of the physics from outside the update, at the origin
+void SyncTransform(const PhysicsObject& po, bool atRest = false)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(po.entity))
@@ -497,7 +500,7 @@ void SyncTransform(const PhysicsObject& po)
 		return;
 	}
 	auto& transform = registry.Get<Transform>(po.entity);
-	transform.position = po.body.ObjectOrigin();
+	transform.position = atRest && registry.AllOf<Villager>(po.entity) ? po.body.Centre() : po.body.ObjectOrigin();
 	// the object's angles from the body's matrix: a Living stays upright with its yaw, and so does a Tree (a tree
 	// replanted from the hand stands straight); the others: the rows, (approximate) RotationYXZ of their angles equals them
 	// only to rounding. A villager's or an animal's Transform is the drawn rotation: the yaw-only original rows (the body's
@@ -588,10 +591,10 @@ bool ReactToPhysicsImpact(PhysicsObject& po)
 
 /// The end of physics at rest, the class's part. Returns the entity that stays as a resting proxy (entt::null:
 /// none).
-entt::entity EndPhysicsOfClass(PhysicsObject& po)
+entt::entity EndPhysicsOfClass(PhysicsObject& po, bool atRest)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	SyncTransform(po);
+	SyncTransform(po, atRest);
 	auto entity = po.entity;
 	// its own flying-object reactions go (the predators fleeing from it stop)
 	ecs::animal_ai::EndReactionsOf(entity);
@@ -617,7 +620,7 @@ entt::entity EndPhysicsOfClass(PhysicsObject& po)
 /// With insert and the object available (ecs::IsAvailable): inside the 512 x 512 cells it goes back in the map
 /// cells, outside it is deleted (ToBeDeleted). Returns entt::null when the object that stays is the deleted one;
 /// GameTurnUpdate makes the returned object the resting proxy.
-entt::entity EndPhysics(PhysicsObject& po)
+entt::entity EndPhysics(PhysicsObject& po, bool atRest)
 {
 	const auto entity = po.entity;
 	auto& registry = Locator::entitiesRegistry::value();
@@ -626,7 +629,7 @@ entt::entity EndPhysics(PhysicsObject& po)
 	const bool classCallsBackInMap =
 	    handlers.endPhysics && (registry.AnyOf<Villager, Animal>(entity) || handlers.callsBackInMap);
 	const bool wasTree = registry.AllOf<Tree>(entity);
-	const auto kept = EndPhysicsOfClass(po);
+	const auto kept = EndPhysicsOfClass(po, atRest);
 	if (wasTree && registry.Valid(kept) && registry.AllOf<DeadTree>(kept))
 	{
 		// a tree's DeadTree goes in the cells with no bounds test and is returned; the object's own part is not called
@@ -641,13 +644,20 @@ entt::entity EndPhysics(PhysicsObject& po)
 	return kept;
 }
 
-/// On rest or removal the object stops being a hitter: buildings forget it (FragMesh lastHitter) and bodies that
-/// had it as their thrower (the pass-through pair) collide with it again.
+/// On rest or removal a thing that breaks buildings stops being their hitter: their entries pass it through no longer
+/// (their thrower) and they forget it struck them (FragMesh lastHitter). Anything else, and any other entry that had it
+/// as its thrower, is left as it is.
 void ForgetThrower(entt::entity entity)
 {
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(entity) || !Buildings::PhysicallyDestroysAbodes(entity))
+	{
+		return;
+	}
 	for (auto& other : PhysicsState().objects)
 	{
-		if (other->thrower == entity && other->entity != entity)
+		if (other->thrower == entity && other->entity != entity && registry.Valid(other->entity) &&
+		    registry.AnyOf<Abode, StoragePit>(other->entity))
 		{
 			other->thrower = entt::null;
 		}
@@ -913,6 +923,7 @@ void Substep()
 		auto& po = *PhysicsState().objects[i];
 		auto* self = &po;
 		const float vyBefore = po.body.velocity.y;
+		const auto centreBefore = po.body.Centre();
 		auto result = po.body.Integrate();
 		if (!po.body.resting && po.body.Centre().y < po.body.Radius() * 0.5f)
 		{
@@ -938,18 +949,21 @@ void Substep()
 		{
 			po.forceSum += po.body.force;
 		}
-		// the fly-by whoosh: a body entering the 10 m sphere round the camera at more than 20 m/s (G_ROCKPAST_01..05)
+		// the fly-by whoosh: a body whose centre enters the 10 m sphere round the camera in this substep's move, at more
+		// than 20 m/s (G_ROCKPAST_01..05). The centres before and after the move are compared, so a body made inside the
+		// sphere makes none
 		if (Locator::camera::has_value())
 		{
-			const auto d = po.body.Centre() - Locator::camera::value().GetOrigin();
+			const auto camera = Locator::camera::value().GetOrigin();
+			const auto before = centreBefore - camera;
+			const auto d = po.body.Centre() - camera;
 			const float d2 = glm::dot(d, d);
-			if (d2 < 100.0f && po.cameraDistance2 > 100.0f && glm::dot(po.body.velocity, po.body.velocity) > 400.0f)
+			if (d2 < 100.0f && glm::dot(before, before) > 100.0f && glm::dot(po.body.velocity, po.body.velocity) > 400.0f)
 			{
 				// a 2D in-game sound, one of G_RockPast_01..05 picked by the tick count
 				audio::PlaySoundEffect(audio::Owner::None(), 69 + static_cast<int>(audio::TickCount() % 5), 2, 0, false, false,
 				                       audio::SfxBank::InGame);
 			}
-			po.cameraDistance2 = d2;
 		}
 		switch (result)
 		{
@@ -958,7 +972,7 @@ void Substep()
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Physics: entity {} at rest at ({:.2f}, {:.2f}, {:.2f})",
 			                   static_cast<uint32_t>(po.entity), po.body.Centre().x, po.body.Centre().y, po.body.Centre().z);
 			ForgetThrower(po.entity);
-			const auto kept = EndPhysics(po);
+			const auto kept = EndPhysics(po, true);
 			if (!stillAt(i, self))
 			{
 				continue;
@@ -968,13 +982,15 @@ void Substep()
 				RemoveAt(i);
 				continue;
 			}
-			// GameTurnUpdate's stop only (RemoveObjectWithEndPhysics does not do it again): the object EndPhysics returned
-			// takes the body's angles. A DeadTree a tree's end of physics returned is a MobileStatic: it keeps the body's x, y,
-			// z. (pending) the same call on any other returned object (a Living's Transform has the drawn quarter turn; the
-			// others equal their rows to rounding)
-			if (registry.AllOf<DeadTree, Transform>(kept))
+			// GameTurnUpdate's stop only (RemoveObjectWithEndPhysics does not do it again): whatever object EndPhysics
+			// returned takes the body's angles again, after its class's end of physics. A DeadTree a tree's end of physics
+			// returned is a MobileStatic: it keeps the body's x, y, z; a villager or an animal keeps the yaw, drawn with its
+			// quarter turn
+			if (registry.AllOf<Transform>(kept))
 			{
-				registry.Get<Transform>(kept).rotation = PhysicsObjects::RotationFromRows(kept, po.body.Rotation());
+				const auto rotation = PhysicsObjects::RotationFromRows(kept, po.body.Rotation());
+				registry.Get<Transform>(kept).rotation =
+				    registry.AnyOf<Villager, Animal>(kept) ? DrawQuarterTurn(rotation) : rotation;
 			}
 			po.entity = kept;
 			po.body.resting = true;
@@ -1630,7 +1646,7 @@ void PhysicsObjects::RemoveObjectWithEndPhysics(entt::entity entity)
 		auto* self = PhysicsState().objects[i].get();
 		// the angles, position and altitude from the body, then EndPhysics(po, insert_back_into_map = true)
 		const bool landed = (self->flags & PhysicsObject::k_Landed) != 0;
-		const auto kept = EndPhysics(*self);
+		const auto kept = EndPhysics(*self, false);
 		// LANDED and the returned object on land -> its landing sound; the GameTurnUpdate stop never plays it
 		if (auto& registry = Locator::entitiesRegistry::value(); landed && registry.Valid(kept))
 		{
