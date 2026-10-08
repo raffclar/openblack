@@ -12,12 +12,16 @@
 #include <cmath>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
+#include <optional>
 
+#include <entt/core/hashed_string.hpp>
 #include <glm/geometric.hpp>
 
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Audio/AudioManagerInterface.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureCatch.h"
 #include "Creature/CreatureDesires.h"
@@ -63,6 +67,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -84,6 +89,12 @@ namespace living = openblack::physics::living;
 
 namespace
 {
+/// A temple heart's five beam sounds, played in turn
+constexpr std::array<entt::hashed_string, 5> k_HeartBeamSounds {
+    entt::hashed_string("InGame.sad/206"), entt::hashed_string("InGame.sad/207"), entt::hashed_string("InGame.sad/208"),
+    entt::hashed_string("InGame.sad/209"), entt::hashed_string("InGame.sad/210")};
+static_assert(k_HeartBeamSounds.size() == physics::temple_heart::k_BeamSounds);
+
 Registry& Entities()
 {
 	return Locator::entitiesRegistry::value();
@@ -265,6 +276,92 @@ std::vector<physics::temple_heart::Town> HeartTowns(PlayerNames owner)
 	return lists;
 }
 
+/// The spot visual a temple's heart fires its beams from, made the first time it beams
+std::optional<ParticleSystemInterface::EffectId> HeartBeamSource(entt::entity heart, Temple& temple)
+{
+	if (!Locator::particleSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	if (!temple.beamSource.has_value())
+	{
+		auto& particles = Locator::particleSystem::value();
+		const auto& position = Entities().Get<const Transform>(heart).position;
+		const auto id = particles.StartSpotVisual(SpotVisualType::MagicBeamOnCitadel, position, -1, entt::null, 1.0f);
+		particles.SetPlayer(id, static_cast<int>(temple.owner));
+		temple.beamSource = id;
+	}
+	return temple.beamSource;
+}
+
+/// A point's place with an object's height added
+glm::vec3 TopOf(entt::entity object)
+{
+	auto top = Entities().Get<const Transform>(object).position;
+	top.y += world_objects::SizeOf(object).height;
+	return top;
+}
+
+/// A temple's heart passing a blow that breaks buildings on to a target beams at it every two seconds, with one of its
+/// five beam sounds in turn
+void BeamAtTarget(entt::entity heart, Temple& temple, entt::entity target)
+{
+	namespace temple_heart = physics::temple_heart;
+	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	const auto interval = temple_heart::BeamInterval(static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count()));
+	temple_heart::Beam beam {.target = temple.beamTarget, .turn = temple.beamTurn};
+	const bool due = temple_heart::BeamAtTargetDue(beam, target, turn, interval);
+	temple.beamTarget = beam.target;
+	temple.beamTurn = beam.turn;
+	if (!due)
+	{
+		return;
+	}
+	const auto source = HeartBeamSource(heart, temple);
+	if (!source.has_value())
+	{
+		return;
+	}
+	const auto heartPosition = Entities().Get<const Transform>(heart).position;
+	if (Locator::audio::has_value())
+	{
+		auto& next = Entities().Context().nextHeartBeamSound;
+		const auto sound = k_HeartBeamSounds.at(next);
+		next = (next + 1) % temple_heart::k_BeamSounds;
+		Locator::audio::value().StartSoundEffect(sound.value(), {.position = heartPosition, .owner = heart});
+	}
+	Locator::particleSystem::value().AddPlasma(*source, {
+	                                                        .start = TopOf(heart),
+	                                                        .end = TopOf(target),
+	                                                        .startTangent = particles::k_HeartPlasmaStartTangent,
+	                                                        .endTangent = particles::k_HeartPlasmaEndTangent,
+	                                                        .life = particles::k_HeartPlasmaLife,
+	                                                        .speed = particles::k_HeartPlasmaSpeed,
+	                                                        .alpha = particles::k_HeartPlasmaAlpha,
+	                                                    });
+}
+
+/// A temple's heart taking a blow that breaks buildings itself forgets what it beamed at, and on the same wait beams
+/// at a point on itself
+void BeamAtItself(entt::entity heart, Temple& temple)
+{
+	namespace temple_heart = physics::temple_heart;
+	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	const auto interval = temple_heart::BeamInterval(static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count()));
+	temple_heart::Beam beam {.target = temple.beamTarget, .turn = temple.beamTurn};
+	const bool due = temple_heart::BeamAtItselfDue(beam, turn, interval);
+	temple.beamTarget = beam.target;
+	temple.beamTurn = beam.turn;
+	if (!due)
+	{
+		return;
+	}
+	[[maybe_unused]] const auto source = HeartBeamSource(heart, temple);
+	// TODO(physics): the beam ends at a random point of the heart's model facing no more than a little downwards, arriving
+	// against its normal; the model's triangles are picked through the detail level's choice of its parts, which
+	// openblack doesn't reproduce yet, so no beam is fired
+}
+
 /// Something thrown strikes a temple's heart: the heart passes the blow on to a building or a homeless villager of its
 /// player's towns, and only with none to take it is the heart itself harmed, by what breaks buildings
 void StrikeHeart(DynamicsSystemInterface& dynamics, PhysicsEntry& entry, const ImpactInfo& impact)
@@ -281,8 +378,18 @@ void StrikeHeart(DynamicsSystemInterface& dynamics, PhysicsEntry& entry, const I
 	auto& temple = registry.Get<Temple>(heart);
 	const auto towns = HeartTowns(temple.owner);
 	const auto target = physics::temple_heart::Choose(towns);
-	// TODO(physics): the heart beams its plasma at what takes the blow, or at a point on itself with none, while what
-	// struck it breaks buildings; openblack has no plasma beam yet
+	// While what struck it breaks buildings, the heart beams at what takes the blow, or at a point on itself with none
+	if (destroys)
+	{
+		if (target.kind == physics::temple_heart::TargetKind::Heart)
+		{
+			BeamAtItself(heart, temple);
+		}
+		else
+		{
+			BeamAtTarget(heart, temple, target.entity);
+		}
+	}
 	switch (target.kind)
 	{
 	case physics::temple_heart::TargetKind::Building:

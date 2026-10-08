@@ -9,7 +9,11 @@
 
 #pragma once
 
-#include <entt/entity/fwd.hpp>
+#include <cstdint>
+
+#include <optional>
+
+#include <entt/entity/entity.hpp>
 
 #include "3D/TempleInteriorInterface.h"
 #include "Enums.h"
@@ -41,6 +45,11 @@ struct Temple
 	PlayerNames owner;
 	/// The game turn its heart last took the harm of a thrown thing
 	uint32_t lastHitTurn {0};
+	/// What its heart last beamed at, and when
+	entt::entity beamTarget {entt::null};
+	uint32_t beamTurn {0};
+	/// The spot visual its heart's beams are fired from, made with the first beam and kept for ever
+	std::optional<uint32_t> beamSource;
 };
 
 /// The way into a temple, Entrance.l3d at the temple's place, which the temple makes and its player clicks the Action

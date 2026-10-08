@@ -109,6 +109,7 @@ ParticleClassRegistry ParticleClassRegistry::WithAllClasses(CreatorResourcesInte
 	RegisterFlockingRules(registry);
 	RegisterForestRules(registry);
 	RegisterBeamRules(registry);
+	RegisterPlasmaRules(registry);
 	RegisterBlastRules(registry);
 	return registry;
 }

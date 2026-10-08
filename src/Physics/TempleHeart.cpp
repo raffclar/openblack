@@ -66,4 +66,41 @@ float Harm(glm::vec3 velocity, float mass)
 	return k_MostHarm < harm ? k_MostHarm : harm;
 }
 
+uint32_t BeamInterval(uint32_t millisecondsPerTurn)
+{
+	// Turns a second as a whole number, times two, cut down to a whole number
+	constexpr double k_Seconds = 2.0;
+	return static_cast<uint32_t>(static_cast<double>(1000u / millisecondsPerTurn) * k_Seconds);
+}
+
+bool BeamAtTargetDue(Beam& beam, entt::entity target, uint32_t turn, uint32_t interval)
+{
+	if (target != beam.target)
+	{
+		beam.target = target;
+		beam.turn = 0;
+	}
+	if (beam.target == entt::null || !(interval + beam.turn < turn))
+	{
+		return false;
+	}
+	beam.turn = turn;
+	return true;
+}
+
+bool BeamAtItselfDue(Beam& beam, uint32_t turn, uint32_t interval)
+{
+	if (beam.target != entt::null)
+	{
+		beam.target = entt::null;
+		beam.turn = 0;
+	}
+	if (!(interval + beam.turn < turn))
+	{
+		return false;
+	}
+	beam.turn = turn;
+	return true;
+}
+
 } // namespace openblack::physics::temple_heart

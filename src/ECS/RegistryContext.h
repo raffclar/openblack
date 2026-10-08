@@ -39,6 +39,8 @@ struct RegistryContext
 	/// smash of a rock plays
 	uint8_t nextHandRockTap {0};
 	uint8_t nextCreatureRockSmash {0};
+	/// The temple hearts' beam sounds go round in turn: the next of the five a beam plays
+	uint32_t nextHeartBeamSound {0};
 	/// The order towns are gained by their players in, the next to be given
 	uint32_t nextTownGained {0};
 };

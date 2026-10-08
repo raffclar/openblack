@@ -118,6 +118,8 @@ void RegisterFlockRules(ParticleClassRegistry& registry);
 void RegisterTornadoRules(ParticleClassRegistry& registry);
 /// The simple beam's rule: wiggling ribbons of light from the effect's origin to the objects and points it is given
 void RegisterBeamRules(ParticleClassRegistry& registry);
+/// The temple heart's plasma beam
+void RegisterPlasmaRules(ParticleClassRegistry& registry);
 /// The beam explosion's rules: the explosion, the beam's fall and the cones' spread, closing the effect down, and the
 /// pieces objects break into
 void RegisterBlastRules(ParticleClassRegistry& registry);
