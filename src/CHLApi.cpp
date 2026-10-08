@@ -99,6 +99,7 @@
 #include "ECS/ScriptContainers.h"
 #include "ECS/ScriptHeld.h"
 #include "ECS/ScriptHighlight.h"
+#include "ECS/ScriptHitObject.h"
 #include "ECS/ScriptTimer.h"
 #include "ECS/ScriptTypes.h"
 #include "ECS/SeaCells.h"
@@ -3177,8 +3178,8 @@ void IsOfType() // 192 IS_OF_TYPE
 
 void ClearHitObject() // 193 CLEAR_HIT_OBJECT
 {
-	// TODO(Daniels118): implement this
-	NotImplemented(__func__);
+	// the scripts' hit object and what hit it are forgotten
+	ecs::script_hit::SetHitObject(entt::null, entt::null);
 }
 
 void GameThingHit() // 194 GAME_THING_HIT
@@ -3482,16 +3483,29 @@ void SetCreatureHome() // 223 SET_CREATURE_HOME
 
 void GetHitObject() // 224 GET_HIT_OBJECT
 {
-	// TODO(Daniels118): implement this
-	NotImplemented(__func__);
-	Pusho(0);
+	// the last thing a body in the physics found itself struck by another, handed to the script as a found thing; 0
+	// for none
+	const auto hit = ecs::script_hit::HitObject();
+	if (hit == entt::null)
+	{
+		Pusho(0);
+		return;
+	}
+	ecs::script_held::AddScriptThing(hit, false);
+	Pusho(static_cast<uint32_t>(hit));
 }
 
 void GetObjectWhichHit() // 225 GET_OBJECT_WHICH_HIT
 {
-	// TODO(Daniels118): implement this
-	NotImplemented(__func__);
-	Pusho(0);
+	// what struck it, handed to the script as a found thing; 0 for none
+	const auto hitter = ecs::script_hit::ObjectWhichHit();
+	if (hitter == entt::null)
+	{
+		Pusho(0);
+		return;
+	}
+	ecs::script_held::AddScriptThing(hitter, false);
+	Pusho(static_cast<uint32_t>(hitter));
 }
 
 void GetNearestTownOfPlayer() // 226 GET_NEAREST_TOWN_OF_PLAYER
@@ -3587,8 +3601,8 @@ void GetDesire() // 234 GET_DESIRE
 	// not a town)
 	const auto desire = Pop().intVal;
 	std::vector<std::string> errors;
-	const float value = ecs::town_desire::ScriptGetDesire(
-	    desire, [] { return static_cast<entt::entity>(Pop().uintVal); }, &errors);
+	const float value =
+	    ecs::town_desire::ScriptGetDesire(desire, [] { return static_cast<entt::entity>(Pop().uintVal); }, &errors);
 	for (const auto& error : errors)
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "GET_DESIRE: {}", error);
