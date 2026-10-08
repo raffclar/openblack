@@ -33,7 +33,8 @@ union SDL_Event;
 namespace openblack::graphics
 {
 class Texture2D;
-}
+class VideoOverlay;
+} // namespace openblack::graphics
 
 namespace openblack::gui
 {
@@ -101,6 +102,8 @@ private:
 	void DrawCreaturePanel(glm::u16vec2 resolution);
 	/// The fight's panel, at the top left of the screen
 	void DrawFightPanel(glm::u16vec2 resolution);
+	/// The full-screen video playing, between the interface and the scripts' fade
+	void DrawVideo(glm::u16vec2 resolution);
 	/// The tooltip's glow: a soft box of atmos.raw added round a rectangle
 	void DrawGlow(glm::vec2 min, glm::vec2 max, glm::vec4 colour);
 
@@ -119,6 +122,7 @@ private:
 	std::optional<Message> _message;
 	ToolTips _toolTips;
 	ScreenFade _screenFade;
+	std::unique_ptr<graphics::VideoOverlay> _video;
 	std::optional<glm::vec2> _handOnScreen;
 	std::optional<creature_panel::Values> _creaturePanel;
 	std::optional<creature_fight_hud::Values> _fightPanel;

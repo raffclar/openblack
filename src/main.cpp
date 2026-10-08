@@ -67,6 +67,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("screenshot-path", "Path of the request a screenshot of the backbuffer.", cxxopts::value<std::filesystem::path>()->default_value("screenshot.png"))
 		("frame-stats", "Log the average and 95th percentile frame time and the profiler stages every so many frames (0 for never).", cxxopts::value<uint32_t>()->default_value("0"))
 		("frame-stats-views", "With --frame-stats, also profile and log the GPU time of each render view.")
+		("play-video", "Play a full-screen video once the land is loaded: intro, fall (the falling spell, which needs the player's creature) or a path such as Data/logo.bik.", cxxopts::value<std::string>()->default_value(""))
 		("scenario", "Start on the testbed and run the testbed scenario of this id, such as benchmark.creatures_100.", cxxopts::value<std::string>())
 		("benchmark-warmup", "With --scenario, the frames a benchmark's crowd settles for once spawned, before it is measured.", cxxopts::value<uint32_t>()->default_value("120"))
 		("benchmark-frames", "With --scenario, the frames of a benchmark measured.", cxxopts::value<uint32_t>()->default_value("600"))
@@ -200,6 +201,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.startTestbed = result.count("testbed") != 0;
 		args.frameStatsInterval = result["frame-stats"].as<uint32_t>();
 		args.frameStatsViews = result.count("frame-stats-views") != 0;
+		args.playVideo = result["play-video"].as<std::string>();
 		if (result.count("scenario") != 0)
 		{
 			args.scenario = openblack::ScenarioRequest {

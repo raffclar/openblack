@@ -104,6 +104,8 @@ struct Arguments
 	uint32_t frameStatsInterval {0};
 	/// With the frame statistics, the GPU time of each render view
 	bool frameStatsViews {false};
+	/// A full-screen video to play once the land is loaded: "intro", "fall" or a path under the game's folder
+	std::string playVideo;
 	/// A testbed scenario to run as the game starts, by its id, and how to measure its crowd if it has one
 	std::optional<ScenarioRequest> scenario;
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> requestScreenshot;
@@ -197,6 +199,7 @@ private:
 	const std::filesystem::path _gamePath;
 
 	std::filesystem::path _startMap;
+	std::string _playVideo;
 	bool _startTestbed {false};
 	std::optional<ScenarioRequest> _scenarioRequest;
 	bool _quitRequested {false};

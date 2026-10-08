@@ -23,6 +23,7 @@
 #include <MorphFile.h>
 #include <PackFile.h>
 #include <SDL.h>
+#include <bgfx/bgfx.h>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -154,6 +155,7 @@
 #include "ECS/Systems/TornadoSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -273,6 +275,7 @@ Game* Game::sInstance = nullptr;
 Game::Game(Arguments&& args) noexcept
     : _gamePath(args.gamePath)
     , _startMap(args.startLevel)
+    , _playVideo(args.playVideo)
     , _startTestbed(args.startTestbed || args.scenario.has_value())
     , _scenarioRequest(args.scenario)
     , _requestScreenshot(args.requestScreenshot)
@@ -1005,7 +1008,7 @@ bool Game::GameLogicLoop() noexcept
 		    .paused = false,
 		    .turn = clock.GetTurn(),
 		    .inCitadel = false,
-		    .videoPlaying = false,
+		    .videoPlaying = Locator::videoSystem::value().IsPlaying(),
 		});
 	}
 
@@ -1086,7 +1089,8 @@ void Game::ProcessTempleAudioTurn()
 	ProcessMusicTurn(Locator::camera::value().GetOrigin(), true);
 	if (_atmosAudio)
 	{
-		_atmosAudio->ContinueTurn({.paused = false, .turn = GetTurn(), .inCitadel = true, .videoPlaying = false});
+		_atmosAudio->ContinueTurn(
+		    {.paused = false, .turn = GetTurn(), .inCitadel = true, .videoPlaying = Locator::videoSystem::value().IsPlaying()});
 	}
 }
 
@@ -1239,6 +1243,8 @@ bool Game::Update() noexcept
 	// The frame's game time: none while paused, quicker or slower with the game speed
 	auto& clock = Locator::time::value();
 	clock.UpdateFrame();
+	// A full-screen video decodes the frames due by the real clock, fades, and ends
+	Locator::videoSystem::value().Update(std::chrono::steady_clock::now());
 	const auto gameTime = std::chrono::duration<float, std::milli>(clock.GetFrameGameTime());
 	Locator::alignmentSystem::value().Update(gameTime);
 	{
@@ -1844,6 +1850,13 @@ bool Game::Initialize() noexcept
 		// If gui captures this input, do not propagate
 		if (!Locator::debugGui::value().ProcessEvents(event))
 		{
+			// A full-screen video takes Escape: it fades out, unless Shift or Ctrl is held
+			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE && event.key.repeat == 0 &&
+			    Locator::videoSystem::value().Escape((event.key.keysym.mod & KMOD_SHIFT) != 0,
+			                                         (event.key.keysym.mod & KMOD_CTRL) != 0))
+			{
+				return;
+			}
 			// Inside the temple, Escape goes back to its main room and out, as the temple's keys do
 			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE && event.key.repeat == 0 &&
 			    Locator::temple::has_value() && Locator::temple::value().Active())
@@ -2517,6 +2530,20 @@ bool Game::Run() noexcept
 	Game::SetTime(config.timeOfDay);
 	Locator::time::value().Start();
 
+	if (_playVideo == "intro")
+	{
+		Locator::videoSystem::value().Play("Data/INTRO.bik");
+		Locator::videoSystem::value().ScheduleIntro();
+	}
+	else if (_playVideo == "fall")
+	{
+		Locator::videoSystem::value().StartFallingSpell();
+	}
+	else if (!_playVideo.empty())
+	{
+		Locator::videoSystem::value().Play(_playVideo);
+	}
+
 	_frameCount = 0;
 	auto lastTime = std::chrono::high_resolution_clock::now();
 	auto& profiler = Locator::profiler::value();
@@ -2557,7 +2584,16 @@ bool Game::Run() noexcept
 			    .drawHand = (!_interface || !_interface->GetMenu().IsOpen()) &&
 			                Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
 			};
-			Locator::rendererInterface::value().DrawScene(drawDesc);
+			// Nothing of the world shows under a video that covers the screen, nor behind the falling spell's film
+			const auto& videos = Locator::videoSystem::value();
+			if (videos.CoversScreen() || videos.HidesWorld())
+			{
+				bgfx::touch(static_cast<bgfx::ViewId>(graphics::RenderPass::Main));
+			}
+			else
+			{
+				Locator::rendererInterface::value().DrawScene(drawDesc);
+			}
 		}
 
 		// The game's interface over the scene

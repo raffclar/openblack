@@ -25,8 +25,10 @@
 
 #include "Audio/AudioManagerInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/Texture2D.h"
+#include "Graphics/VideoOverlay.h"
 #include "Gui/CinemaBars.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -304,6 +306,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	{
 		_painter.DrawPointer(_pointerCanvas, mouse, milliseconds);
 	}
+	DrawVideo(resolution);
 	// The scripts' fade covers the picture between the cinema bars, which are black
 	const auto& director = Locator::cinematicDirectorSystem::value();
 	const auto bars = static_cast<float>(CinemaBars::BarHeight(resolution.x, resolution.y, director.GetWideScreenFraction()));
@@ -328,6 +331,39 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	}
 	_canvas.End();
 	_pointerCanvas.End();
+}
+
+void GameInterface::DrawVideo(glm::u16vec2 resolution)
+{
+	if (!Locator::videoSystem::has_value())
+	{
+		return;
+	}
+	const auto& videos = Locator::videoSystem::value();
+	const auto picture = videos.GetPicture();
+	if (!picture.has_value())
+	{
+		return;
+	}
+	// Over the interface, under the scripts' fade and the cinema bars: what has been drawn so far goes first
+	_canvas.End();
+	if (!_video)
+	{
+		_video = std::make_unique<graphics::VideoOverlay>();
+	}
+	_video->Draw(graphics::RenderPass::Interface, resolution,
+	             {
+	                 .y = picture->y,
+	                 .u = picture->u,
+	                 .v = picture->v,
+	                 .yStride = picture->yStride,
+	                 .chromaStride = picture->chromaStride,
+	                 .width = picture->width,
+	                 .height = picture->height,
+	                 .serial = picture->serial,
+	             },
+	             video::LetterboxRect(resolution.x, resolution.y), picture->alpha, videos.IsSixteenBitColour());
+	_canvas.Begin(resolution);
 }
 
 void GameInterface::DrawGlow(glm::vec2 min, glm::vec2 max, glm::vec4 colour)
