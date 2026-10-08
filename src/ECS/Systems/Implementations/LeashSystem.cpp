@@ -400,6 +400,11 @@ bool LeashSystem::PutOnFor(PlayerNames player, entt::entity creature, LeashType 
 	leashes->worn->type = type;
 	leashes->selected = type;
 	leashes->control = CreatureLeash::Control::Idle;
+	// The leash going on ends any drag the body still leans against
+	if (auto* animation = registry.TryGet<CreatureAnimation>(creature))
+	{
+		creature_sway::SetLeashDrag(animation->sway, 0.0f);
+	}
 	// The rope is laid afresh from the hand to the collar next frame
 	leashes->worn->ropeStarted = false;
 	return true;
@@ -480,16 +485,6 @@ bool LeashSystem::PressKey(PlayerNames player, leash::LeashKey key)
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
 	return Carry(player, *creature, leash::CommandFor(key, KeyStateOf(registry, *creature)));
-}
-
-bool LeashSystem::TrackHand(PlayerNames player, glm::vec2 cursor, float seconds, bool handFree)
-{
-	if (!handFree)
-	{
-		_shake = {};
-		return false;
-	}
-	return leash::TrackShake(_shake, cursor, seconds) && Shake(player);
 }
 
 bool LeashSystem::Shake(PlayerNames player)
@@ -691,6 +686,16 @@ std::optional<entt::entity> LeashSystem::TiedTo(entt::entity creature) const
 	return leashes != nullptr && leashes->worn.has_value() ? leashes->worn->tiedTo : std::nullopt;
 }
 
+std::optional<glm::vec3> LeashSystem::HolderPoint(entt::entity creature) const
+{
+	const auto* leashes = Locator::entitiesRegistry::value().TryGet<const CreatureLeash>(creature);
+	if (leashes == nullptr || !leashes->worn.has_value() || leashes->worn->tiedTo.has_value())
+	{
+		return std::nullopt;
+	}
+	return HandPoint();
+}
+
 LeashType LeashSystem::TypeOf(entt::entity creature) const
 {
 	const auto* leashes = Locator::entitiesRegistry::value().TryGet<const CreatureLeash>(creature);
@@ -849,6 +854,11 @@ void LeashSystem::Pull(entt::entity creature)
 		leashes.control = CreatureLeash::Control::WalkingToHand;
 		// Once on its way, it is pulled along as fast as it goes
 		leashes.pull = 1.0f;
+		// and its body leans against the drag
+		if (auto* animation = registry.TryGet<CreatureAnimation>(creature))
+		{
+			creature_sway::SetLeashDrag(animation->sway, 1.0f);
+		}
 		if (mind != nullptr)
 		{
 			mind->leash.obeying = true;

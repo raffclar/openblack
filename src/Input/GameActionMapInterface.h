@@ -179,10 +179,18 @@ public:
 	virtual void WarpCursor([[maybe_unused]] glm::ivec2 position) {}
 	/// Where the cursor was put this frame, if it was
 	[[nodiscard]] virtual std::optional<glm::ivec2> GetCursorWarp() const { return std::nullopt; }
+	/// Actions the land's scripts don't allow now, which read as not held
+	virtual void SetBlockedActions([[maybe_unused]] BindableActionMap actions) {}
 	/// Whether the camera the player has can be turned with the mouse, which holds the cursor still while it is
 	virtual void AllowCursorFreeze([[maybe_unused]] bool allowed) {}
 	/// The cursor is held still while the mouse turns the camera, and the pointer's position isn't followed
 	[[nodiscard]] virtual bool IsCursorFrozen() const { return false; }
+	/// The cursor's image is pinned where it is as the hand scoops, and is free again once let go. Only the drawn image
+	/// stays: the pointer the hand, the gestures and the camera follow keeps moving with the mouse
+	virtual void PinCursor([[maybe_unused]] bool pinned) {}
+	/// Where the cursor's image is drawn: where it was pinned, else at the pointer. openblack draws the hand as the cursor
+	/// and no separate image
+	[[nodiscard]] virtual glm::ivec2 GetCursorImagePosition() const { return glm::ivec2(GetMousePosition()); }
 
 	virtual void Frame() = 0;
 	virtual void ProcessEvent(const SDL_Event& event) = 0;

@@ -164,7 +164,7 @@ void GameActionMap::ApplyQueuedPresses()
 
 bool GameActionMap::GetBindable(BindableActionMap action) const
 {
-	return (static_cast<uint64_t>(_bindableMap) & static_cast<uint64_t>(action)) != 0;
+	return (static_cast<uint64_t>(_bindableMap) & static_cast<uint64_t>(action) & ~static_cast<uint64_t>(_blocked)) != 0;
 }
 
 bool GameActionMap::GetUnbindable(UnbindableActionMap action) const
@@ -175,7 +175,7 @@ bool GameActionMap::GetUnbindable(UnbindableActionMap action) const
 bool GameActionMap::GetBindableChanged(BindableActionMap action) const
 {
 	return ((static_cast<uint64_t>(_bindableMap) ^ static_cast<uint64_t>(_bindableMapPrevious)) &
-	        static_cast<uint64_t>(action)) != 0;
+	        static_cast<uint64_t>(action) & ~static_cast<uint64_t>(_blocked)) != 0;
 }
 
 bool GameActionMap::GetUnbindableChanged(UnbindableActionMap action) const
@@ -187,7 +187,7 @@ bool GameActionMap::GetUnbindableChanged(UnbindableActionMap action) const
 bool GameActionMap::GetBindableRepeat(BindableActionMap action) const
 {
 	return ((static_cast<uint64_t>(_bindableMap) & static_cast<uint64_t>(_bindableMapPrevious)) &
-	        static_cast<uint64_t>(action)) != 0;
+	        static_cast<uint64_t>(action) & ~static_cast<uint64_t>(_blocked)) != 0;
 }
 
 bool GameActionMap::GetUnbindableRepeat(UnbindableActionMap action) const
@@ -250,9 +250,23 @@ void GameActionMap::WarpCursor(glm::ivec2 position)
 	}
 }
 
+glm::ivec2 GameActionMap::GetCursorImagePosition() const
+{
+	return _cursorPinnedAt.value_or(glm::ivec2(_mousePosition));
+}
+
 std::optional<glm::ivec2> GameActionMap::GetCursorWarp() const
 {
 	return _cursorWarp;
+}
+
+void GameActionMap::PinCursor(bool pinned)
+{
+	_cursorPinned = pinned;
+	if (!pinned)
+	{
+		_cursorPinnedAt.reset();
+	}
 }
 
 void GameActionMap::AllowCursorFreeze(bool allowed)
@@ -363,6 +377,11 @@ void GameActionMap::Frame()
 			}
 		}
 		_mousePosition = glm::clamp(cursor.cursor, glm::zero<decltype(screenSize)>(), screenSize);
+		// A pinned cursor's image stays where it was pinned; the pointer itself is still followed
+		if (_cursorPinned && !_cursorPinnedAt.has_value())
+		{
+			_cursorPinnedAt = glm::ivec2(_mousePosition);
+		}
 	}
 	_mouseDelta = glm::ivec2(0, 0);
 	_mouseWheelDelta = 0.0f;

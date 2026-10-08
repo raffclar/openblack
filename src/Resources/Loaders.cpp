@@ -18,11 +18,14 @@
 #include <utility>
 
 #include <GLWFile.h>
+#include <GestureFile.h>
 #include <L3DFile.h>
 #include <MorphFile.h>
 #include <PackFile.h>
 #include <ParticleFile.h>
+#include <PhysicsConstantsFile.h>
 #include <RawImage.h>
+#include <SASFile.h>
 #include <StackedBitmap.h>
 #include <bgfx/bgfx.h>
 #include <spdlog/spdlog.h>
@@ -31,12 +34,14 @@
 #include "3D/LandLightTable.h"
 #include "3D/Light.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/ClipSounds.h"
 #include "Common/Bitmap16B.h"
 #include "Common/StringUtils.h"
 #include "Common/Zip.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/Texture2D.h"
 #include "Locator.h"
+#include "Physics/Materials.h"
 
 using namespace openblack;
 using namespace openblack::filesystem;
@@ -101,6 +106,17 @@ L3DLoader::result_type L3DLoader::operator()(FromDynamicFileTag, const std::stri
 	return mesh;
 }
 
+L3DLoader::result_type L3DLoader::operator()(FromMadeTag, const std::string& debugName, const graphics::L3DMesh& skinSource,
+                                             std::span<const std::vector<graphics::L3DSubMesh::MadePrimitive>> subMeshes) const
+{
+	auto mesh = std::make_shared<graphics::L3DMesh>(debugName);
+	if (!mesh->LoadMade(skinSource, subMeshes))
+	{
+		throw std::runtime_error("Unable to make mesh");
+	}
+	return mesh;
+}
+
 L3DFileLoader::result_type L3DFileLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
 {
 	auto file = std::make_shared<l3d::L3DFile>();
@@ -118,6 +134,30 @@ Bitmap16BLoader::result_type Bitmap16BLoader::operator()(FromDiskTag, const std:
 {
 	const auto data = Locator::filesystem::value().ReadAll(path);
 	return std::make_shared<Bitmap16B>(data.data());
+}
+
+ClipSoundsLoader::result_type ClipSoundsLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
+{
+	const auto data = Locator::filesystem::value().ReadAll(path);
+	const auto file = sas::Parse(data);
+	return file.has_value() ? std::make_shared<audio::clip_sounds::ClipSoundTable>(*file)
+	                        : std::make_shared<audio::clip_sounds::ClipSoundTable>();
+}
+
+ClipSoundsLoader::result_type ClipSoundsLoader::operator()(EmptyTag) const
+{
+	return std::make_shared<audio::clip_sounds::ClipSoundTable>();
+}
+
+PhysicsMaterialsLoader::result_type PhysicsMaterialsLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
+{
+	const auto data = Locator::filesystem::value().ReadAll(path);
+	return std::make_shared<physics::MaterialTable>(physconst::Parse(data, physics::k_MaterialRows));
+}
+
+PhysicsMaterialsLoader::result_type PhysicsMaterialsLoader::operator()(EmptyTag) const
+{
+	return std::make_shared<physics::MaterialTable>();
 }
 
 LandLightPaletteLoader::result_type LandLightPaletteLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
@@ -511,6 +551,12 @@ CreatureRigLoader::result_type CreatureRigLoader::operator()(FromBufferTag, cons
 	rig->soundObject = static_cast<int32_t>(file.GetHairHeader().soundObject);
 	rig->soundBankName = file.GetSoundBankName();
 	rig->leashBone = file.GetLeashBone();
+	if (const auto& points = file.GetCreatureActionPoints(); points.has_value() && points->rightEye >= 0)
+	{
+		rig->rightEye = static_cast<uint32_t>(points->rightEye);
+	}
+	rig->fileTail = file.GetCreatureTail();
+	rig->creatureVersion = file.GetCreatureVersion();
 
 	if (const auto& sites = file.GetTattooSites(); sites.has_value())
 	{
@@ -552,6 +598,7 @@ CreatureRigLoader::result_type CreatureRigLoader::operator()(FromBufferTag, cons
 			    .eatMs = ms(points->eatTime),
 			    .throwMs = ms(points->throwTime),
 			    .putDownMs = ms(points->putDownTime),
+			    .catchMs = ms(points->catchTimes[1]),
 			};
 		}
 	}
@@ -642,6 +689,9 @@ SoundLoader::result_type SoundLoader::operator()(BaseLoader<audio::Sound>::FromB
 	sound->maxDistance = header.maxDist;
 	sound->distanceScale = header.scale;
 	sound->loopType = header.loopType;
+	// The part the sample loops over while it loops, which it plays on past once let go
+	sound->loopStart = header.lStart;
+	sound->loopEnd = header.lEnd;
 	sound->group = static_cast<uint16_t>(header.group);
 	sound->buffer = buffer;
 	return sound;
@@ -676,6 +726,18 @@ CameraPathLoader::result_type CameraPathLoader::operator()(FromDiskTag, const st
 	}
 
 	return cameraPath;
+}
+
+GestureTemplatesLoader::result_type GestureTemplatesLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
+{
+	auto file = std::make_shared<gestures::GestureFile>();
+	if (const auto result = file->Open(Locator::filesystem::value().ReadAll(path));
+	    result != gestures::GestureFileResult::Success)
+	{
+		throw std::runtime_error("Unable to load gesture templates " + path.string() + ": " +
+		                         std::string(gestures::ResultToStr(result)));
+	}
+	return file;
 }
 
 ParticleFileLoader::result_type ParticleFileLoader::operator()(FromDiskTag, const std::filesystem::path& directory,

@@ -35,6 +35,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/PickingSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -50,9 +51,6 @@ namespace
 constexpr float k_SpeedEaseSeconds = 0.05f;
 /// The hand shows its slap this long
 constexpr float k_SlapShowMs = 300.0f;
-/// The furthest a line of sight is followed to a creature
-constexpr float k_RayLength = 1e5f;
-
 entt::entity PlayerHand()
 {
 	return Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
@@ -122,9 +120,9 @@ std::optional<glm::vec3> OnPlaneThrough(const glm::vec3& centre, const glm::vec3
 }
 } // namespace
 
-bool CreatureHandSystem::Grab(const glm::vec3& rayOrigin, const glm::vec3& rayDirection)
+bool CreatureHandSystem::Grab()
 {
-	const auto nearest = CreatureAlong(rayOrigin, rayDirection);
+	const auto nearest = CreatureUnderCursor();
 	if (!nearest.has_value() || !MayHold(*nearest))
 	{
 		return false;
@@ -168,24 +166,19 @@ bool CreatureHandSystem::IsClick() const
 	return contact != nullptr && !contact->byCommand && creature_hand::IsClick(contact->heldMs, contact->strokedOrSlapped);
 }
 
-std::optional<entt::entity> CreatureHandSystem::CreatureAlong(const glm::vec3& rayOrigin, const glm::vec3& rayDirection) const
+std::optional<entt::entity> CreatureHandSystem::CreatureUnderCursor() const
 {
-	if (!Locator::handSystem::has_value())
+	// The creature the interface picked under the cursor as the last frame was drawn
+	if (!Locator::handSystem::has_value() || !Locator::pickingSystem::has_value())
 	{
 		return std::nullopt;
 	}
-	std::optional<entt::entity> nearest;
-	float best = k_RayLength;
-	Locator::entitiesRegistry::value().Each<const Creature, const CreatureAnimation, const Transform>(
-	    [&](entt::entity entity, const Creature& creature, const CreatureAnimation& animation, const Transform& transform) {
-		    const auto body = BodyOf(creature, animation, transform);
-		    if (const auto hit = feedback::RayHit(rayOrigin, rayDirection, body); hit.has_value() && *hit < best)
-		    {
-			    best = *hit;
-			    nearest = entity;
-		    }
-	    });
-	return nearest;
+	const auto& picked = Locator::pickingSystem::value().GetPick().object;
+	if (!picked.has_value() || !Locator::entitiesRegistry::value().AllOf<Creature>(*picked))
+	{
+		return std::nullopt;
+	}
+	return picked;
 }
 
 std::optional<CreatureHandSystem::HandPose>

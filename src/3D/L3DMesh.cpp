@@ -11,10 +11,10 @@
 
 #include <cassert>
 
+#include <algorithm>
 #include <filesystem>
 #include <stdexcept>
 
-#include <BulletCollision/CollisionShapes/btConvexHullShape.h>
 #include <L3DFile.h>
 #include <bgfx/bgfx.h>
 #include <glm/gtc/type_ptr.hpp>
@@ -40,6 +40,24 @@ L3DMesh::L3DMesh(std::string debugName, bool dynamic) noexcept
 
 L3DMesh::~L3DMesh() noexcept = default;
 
+bool L3DMesh::LoadMade(const L3DMesh& skinSource, std::span<const std::vector<L3DSubMesh::MadePrimitive>> subMeshes) noexcept
+{
+	_skinSource = &skinSource;
+	for (const auto& primitives : subMeshes)
+	{
+		auto subMesh = std::make_unique<L3DSubMesh>(*this);
+		if (!subMesh->LoadMade(primitives))
+		{
+			continue;
+		}
+		const auto& bb = subMesh->GetBoundingBox();
+		_boundingBox.minima = glm::min(_boundingBox.minima, bb.minima);
+		_boundingBox.maxima = glm::max(_boundingBox.maxima, bb.maxima);
+		_subMeshes.emplace_back(std::move(subMesh));
+	}
+	return !_subMeshes.empty();
+}
+
 bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 {
 	bool result = true;
@@ -49,6 +67,9 @@ bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 	for (const auto& skin : l3d.GetSkins())
 	{
 		_skinOrder.push_back(skin.id);
+		_skinMasks[skin.id] =
+		    screen_pick::MaskOf(std::span(reinterpret_cast<const uint16_t*>(skin.texels.data()), skin.texels.size()),
+		                        l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height);
 		_skins[skin.id] = std::make_unique<Texture2D>(_debugName.c_str());
 		const auto size = static_cast<uint32_t>(skin.texels.size() * sizeof(skin.texels[0]));
 		// bgfx only lets a texture created without texels have them changed
@@ -166,14 +187,53 @@ bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 			result = false;
 			continue;
 		}
+		{
+			// Its surface, as the game picks points on it
+			auto& surface = _surfaces.emplace_back();
+			const auto vertices = l3d.GetVertexSpan(i);
+			surface.positions.reserve(vertices.size());
+			for (const auto& vertex : vertices)
+			{
+				surface.positions.emplace_back(vertex.position.x, vertex.position.y, vertex.position.z);
+			}
+			const auto indices = l3d.GetIndexSpan(i);
+			surface.indices.assign(indices.begin(), indices.end());
+			uint32_t vertexBase = 0;
+			uint32_t indexBase = 0;
+			for (const auto& primitive : l3d.GetPrimitiveSpan(i))
+			{
+				surface.primitives.push_back(
+				    {.vertexBase = vertexBase, .indexBase = indexBase, .numTriangles = primitive.numTriangles});
+				vertexBase += primitive.numVertices;
+				indexBase += primitive.numTriangles * 3;
+			}
+		}
 		if (subMesh->GetFlags().isPhysics)
 		{
 			const auto& verticesSpan = l3d.GetVertexSpan(i);
-			auto* physicsMesh =
-			    new btConvexHullShape(reinterpret_cast<const btScalar*>(verticesSpan.data()),
-			                          static_cast<int>(verticesSpan.size()), static_cast<int>(sizeof(verticesSpan[0])));
-			physicsMesh->optimizeConvexHull();
-			_physicsMesh.reset(physicsMesh);
+			// Its triangles, each primitive's indices counting from its own first vertex
+			uint32_t vertexBase = 0;
+			uint32_t indexBase = 0;
+			const auto indices = l3d.GetIndexSpan(i);
+			for (const auto& primitive : l3d.GetPrimitiveSpan(i))
+			{
+				for (uint32_t t = 0; t < primitive.numTriangles && indexBase + (t * 3) + 2 < indices.size(); ++t)
+				{
+					std::array<glm::vec3, 3> triangle {};
+					for (uint32_t c = 0; c < 3; ++c)
+					{
+						const auto index = vertexBase + indices[indexBase + (t * 3) + c];
+						if (index < verticesSpan.size())
+						{
+							const auto& p = verticesSpan[index].position;
+							triangle.at(c) = glm::vec3(p.x, p.y, p.z);
+						}
+					}
+					_physicsTriangles.push_back(triangle);
+				}
+				vertexBase += primitive.numVertices;
+				indexBase += primitive.numTriangles * 3;
+			}
 			// FIXME(bwrsandman): Some meshes have multiple physics meshes
 		}
 		const auto& bb = subMesh->GetBoundingBox();

@@ -14,6 +14,7 @@
 #include <array>
 #include <chrono>
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -30,6 +31,7 @@
 #include "3D/SkyDome.h"
 #include "Graphics/CreatureShadow.h"
 #include "Graphics/HandShadow.h"
+#include "Graphics/PartialBuildCap.h"
 #include "Graphics/RenderPass.h"
 #include "Graphics/RendererInterface.h"
 #include "Particles/ParticleDrawFrame.h"
@@ -37,6 +39,11 @@
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
 #endif
+
+namespace bgfx
+{
+struct OcclusionQueryHandle;
+}
 
 namespace openblack
 {
@@ -96,6 +103,10 @@ private:
 	void DrawSun(RenderPass viewId) const;
 	/// The sun's glare over the finished view, dimmed by what hides the sun from the camera
 	void DrawSunGlare(const Camera& camera) const;
+	/// Asks the drawing of a glare sample's pixel, between two corners of the screen (0 to 1 from the top left), whether
+	/// anything is drawn there nearer than a depth
+	void AskGlareSampleDrawn(const Camera& camera, bgfx::OcclusionQueryHandle query, glm::vec2 topLeft, glm::vec2 bottomRight,
+	                         float depth) const;
 	/// The puffs of mist, blended over the scene, the farthest first
 	void DrawMists(const DrawSceneDesc& desc) const;
 	/// The moon and its glow in the sky, after the sky's dome
@@ -118,10 +129,26 @@ private:
 	/// The particle effects in the order the camera of the pass draws them, among the other things that blend: runs of
 	/// sprites that share a sheet as one instanced draw, ribbons, models and mists
 	void DrawParticles(const DrawSceneDesc& desc) const;
+	/// The ghosts of the buildings effects destroyed, each laying its depth through a scrolling pattern and then added
+	/// over itself where it did, the farthest first
+	void DrawDestructionGhosts(const DrawSceneDesc& desc) const;
+	/// The physical shields' domes
+	void DrawShieldDomes(const DrawSceneDesc& desc) const;
 	/// A particle's mist, in the translucent pass at a place among what blends
 	void DrawParticleMist(const DrawSceneDesc& desc, const particles::draw::MistDraw& mist, uint32_t depth) const;
 	/// A particle's model, in the translucent pass at a place among what blends
 	void DrawParticleMesh(const DrawSceneDesc& desc, const particles::draw::MeshDraw& mesh, uint32_t depth) const;
+	/// The one-shot globes, the miracles in them and the rings round the extreme ones, in the main and reflected views
+	void DrawGlobes(const DrawSceneDesc& desc) const;
+	/// The hand holding a miracle glowing in its player's colour, just after the hand at its depth in the sort
+	void DrawHandGlow(const DrawSceneDesc& desc, uint32_t handDepth) const;
+	[[nodiscard]] const Texture2D* HandFlowTexture() const;
+	/// The bands flying onto and off the hand that holds a miracle and the bracelets it wears, in the main view
+	void DrawHandMiracleBands(const DrawSceneDesc& desc) const;
+	/// A tribe's power behind a miracle: its name's letters spinning round the hand or rising where it was cast
+	void DrawTribalPower(const DrawSceneDesc& desc) const;
+	/// A piece of a broken model: its triangles placed by its atom, a draw for each skin
+	void DrawParticleFragment(const DrawSceneDesc& desc, const particles::draw::FragmentDraw& fragment, uint32_t depth) const;
 	/// A frame of a particle light map as a texture of its colours, made when first stamped
 	[[nodiscard]] const Texture2D* ParticleLightMap(entt::id_type bitmap, int frame) const;
 	/// The border of the players' influence, in the main view
@@ -186,6 +213,9 @@ private:
 		CreatureShadowMatrix,
 		CreatureShadow,
 		SkyAlphaThreshold,
+		ObjectLook,
+		KeepBelow,
+		Inset,
 
 		_count
 	};
@@ -220,6 +250,9 @@ private:
 	    "u_creatureShadowMatrix", //
 	    "u_creatureShadow",       //
 	    "u_skyAlphaThreshold",    //
+	    "u_objectLook",           //
+	    "u_keepBelow",            //
+	    "u_inset",                //
 	};
 	using MeshUniforms = std::array<std::optional<UniformHandle>, static_cast<size_t>(MeshUniform::_count)>;
 	/// A program's handles of the mesh uniforms it has, looked up by name the first time it draws a mesh
@@ -227,6 +260,23 @@ private:
 	/// Draws a submesh, with a texture in place of its skins when given one
 	void DrawSubMesh(const L3DMesh& mesh, const L3DSubMesh& subMesh, const L3DMeshSubmitDesc& desc, bool preserveState,
 	                 const TextureHandle* texture = nullptr, glm::vec3 glow = glm::vec3(0.0f)) const;
+	/// What a primitive cut at a height in its model's own space shows: whether it has a whole triangle below the cut,
+	/// and the cap over its cut walls. Made once for each cut.
+	struct Cap
+	{
+		bool wholeBelow {false};
+		std::vector<partial_build_cap::CapVertex> vertices;
+	};
+	struct CapPrimitive
+	{
+		const void* key;
+		uint32_t indicesOffset;
+		uint32_t indicesCount;
+		bool twoSided;
+	};
+	[[nodiscard]] const Cap& CapOf(const L3DSubMesh& subMesh, const CapPrimitive& primitive, float height) const;
+	/// Binds a cap's corners as the vertices of the next draw; false when there is no room for them this frame
+	[[nodiscard]] static bool BindCap(const std::vector<partial_build_cap::CapVertex>& cap);
 	void DrawPass(const DrawSceneDesc& desc) const;
 	/// The beams of the temple's spot lights and the light its windows shed, which the game draws in its
 	/// rooms but not in the reflection of the main room
@@ -256,6 +306,10 @@ private:
 	/// Takes up the creatures' skins where they have been painted again, before their bodies are drawn with them; drops
 	/// those of creatures no longer on the land
 	void UploadCreatureSkins(const DrawSceneDesc& drawDesc) const;
+	/// The hand's skins as blended for its player's alignment (see components::HandMorph), taken up when they change
+	void UploadHandSkins() const;
+	/// What the hand's base mesh is pulled towards for its player's alignment, none while it shows the base
+	[[nodiscard]] std::optional<L3DMeshSubmitDesc::MorphTargets> HandMorphTargets() const;
 
 	std::unique_ptr<ShaderManager> _shaderManager;
 	std::unique_ptr<BgfxCallback> _bgfxCallback;
@@ -279,6 +333,8 @@ private:
 	/// x: how much a fully covered texel darkens, y: where along the light the shadow starts
 	mutable std::array<glm::vec4, CreatureShadow::k_MaxShadows> _creatureShadowParameters {};
 	mutable uint8_t _creatureShadowCount {0};
+	/// The caps over the broken buildings' cut walls, by primitive and cut height; made afresh when a cut moves
+	mutable std::map<std::pair<const void*, float>, Cap> _caps;
 	/// The land's light this frame, and the 256 by 1 texture the terrain reads it from
 	mutable std::unique_ptr<LandLightTable> _landLightTable;
 	/// The sea's ripple step, 0 to 15, moving on each frame the sea's rows are drawn while the game's time goes on
@@ -295,6 +351,10 @@ private:
 	mutable std::optional<TextureHandle> _lightningGlowTexture;
 	/// How strongly the sun glares, 0 to 255, easing towards how much of the sun shows
 	mutable float _sunGlare {0.0f};
+	/// The question asked of each glare sample's pixel as the scene is drawn: whether anything nearer than the depth that
+	/// hides it is there. Made the first time it is asked.
+	mutable std::array<bgfx::OcclusionQueryHandle, 5> _glareQueries {
+	    {BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE}};
 	mutable std::optional<TextureHandle> _landLightTexture;
 	/// The mesh uniforms of each program that has drawn a mesh; the programs live as long as the renderer
 	mutable std::unordered_map<const ShaderProgram*, MeshUniforms> _meshUniforms;
@@ -313,6 +373,9 @@ private:
 	/// icons.raw with iconsa.raw's alpha, which the creature's room's belts and medals are drawn with, once loaded
 	mutable std::optional<TextureHandle> _iconsTexture;
 	mutable bool _iconsLoaded {false};
+	/// S_Hand_Flow.raw with S_Hand_Flowa.raw's alpha, which the hand holding a miracle glows with, once loaded
+	mutable std::unique_ptr<Texture2D> _handFlowTexture;
+	mutable bool _handFlowLoaded {false};
 	/// A creature's skins as painted (see components::CreatureSkin), one texture each
 	struct CreatureSkins
 	{
@@ -325,6 +388,10 @@ private:
 	mutable std::unordered_map<entt::entity, CreatureSkins> _creatureSkins;
 	/// Whether running out of textures for the creatures' skins has been logged
 	mutable bool _warnedOutOfSkins {false};
+	/// The hand's skins as blended for its player's alignment, one texture each, and the blending they hold
+	mutable std::vector<std::unique_ptr<Texture2D>> _handSkinTextures;
+	mutable std::vector<std::pair<uint32_t, const Texture2D*>> _handSkins;
+	mutable std::optional<uint32_t> _handSkinRevision;
 	/// The creatures drawn this frame: all of them, or the nearest the camera when there are more than the backend can
 	/// upload the bones of
 	struct DrawnCreature
