@@ -31,8 +31,9 @@
  * - the mesh: its size then a plain L3D0 mesh
  * - the animations: a count, then for each slot with a name the record's size (0 for none) and the animation, in the
  *   same keyframe format as the creatures' and the hand's
- * - 0x1C bytes and four words, the starting emotion, the face records (one of 16 floats per emotion)
- * - the near depth, the model scale, an unused float, the sound events and loop window of each animation
+ * - the face's bones, a word nothing reads and the pupils' texture centre and scale, the starting emotion and the face
+ *   records (one of 16 floats per emotion)
+ * - the near depth, the model scale, the pitch offset, the sound events and loop window of each animation
  * - the fingertip offsets of the pointing arm, the far depth, a flag byte per animation, the halo's scale and offset
  */
 namespace openblack::helpdude
@@ -54,6 +55,16 @@ enum class HelpDudeResult : uint8_t
 constexpr size_t k_AnimationSlots = 80;
 constexpr size_t k_NameLength = 0x80;
 constexpr size_t k_FaceFloats = 16;
+constexpr size_t k_Emotions = 8;
+constexpr size_t k_FaceBones = 7;
+
+/// A face record: how an emotion sets the eyes, lids and pupils
+using FaceRecord = std::array<float, k_FaceFloats>;
+
+/// What a face record holds when the file doesn't give it: blinks every 5 to 10 seconds lasting half a second, eyes and
+/// pupils at their natural size, the lids open and the base pose at its own pace
+constexpr FaceRecord k_DefaultFaceRecord {5.0f, 10.0f, 0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+                                          0.0f, 0.0f,  0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f};
 
 /// A sound an animation plays when its phase passes a point
 struct SoundEvent
@@ -75,6 +86,8 @@ struct AnimationEvents
 
 struct HelpDudeFile
 {
+	HelpDudeFile() { faceRecords.fill(k_DefaultFaceRecord); }
+
 	/// The bones as the file states them; the mesh's own count is the one used
 	uint32_t boneCount = 0;
 	/// The height of the rest skeleton, which is measured again once the mesh loads
@@ -87,14 +100,23 @@ struct HelpDudeFile
 	/// A plain L3D0 mesh
 	std::vector<uint8_t> mesh;
 	std::array<std::optional<morph::Animation>, k_AnimationSlots> animations;
-	std::array<uint8_t, 0x1C> unknownBytes {};
-	std::array<uint32_t, 4> unknownWords {};
+	/// The first eye's bones (0 for none), the second eye's, then the head: the eyes are scaled and their pupils moved by
+	/// the face records, and the head turns to look between the two eyes
+	std::array<uint32_t, k_FaceBones> faceBones {};
+	/// A word nothing reads
+	uint32_t unusedWord = 0;
+	/// Where the pupils' texture is centred and how far it moves
+	float pupilCentreU = 0.0f;
+	float pupilCentreV = 0.0f;
+	float pupilScale = 0.0f;
 	uint32_t startEmotion = 0;
-	/// One record of k_FaceFloats floats per emotion, as stored
-	std::vector<uint8_t> faceRecords;
+	/// One record per emotion. Only a block of exactly 0x200 bytes replaces them; any other count of bytes is read one
+	/// byte at a time over the first byte of the first record, so only the last byte read stays there.
+	std::array<FaceRecord, k_Emotions> faceRecords {};
 	float nearDepth = 0.0f;
 	float modelScale = 0.0f;
-	float unknownFloat = 0.0f;
+	/// Added to the advisor's pitch
+	float pitchOffset = 0.0f;
 	std::vector<AnimationEvents> events;
 	/// How far the pointing finger's tip is along the model's first and third axes, in model sizes
 	float fingertipAcross = 0.0f;
@@ -109,8 +131,6 @@ struct HelpDudeFile
 	{
 		return slot < animations.size() && animations[slot].has_value() ? &*animations[slot] : nullptr;
 	}
-	/// The face record of an emotion, or nullopt past the records stored
-	[[nodiscard]] std::optional<std::array<float, k_FaceFloats>> FaceRecord(size_t emotion) const;
 };
 
 /// Reads a whole .hd file, its pack header included

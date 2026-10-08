@@ -102,18 +102,6 @@ std::string_view ResultToStr(HelpDudeResult result)
 	return "Unknown";
 }
 
-std::optional<std::array<float, k_FaceFloats>> HelpDudeFile::FaceRecord(size_t emotion) const
-{
-	constexpr size_t k_RecordBytes = k_FaceFloats * sizeof(float);
-	if ((emotion + 1) * k_RecordBytes > faceRecords.size())
-	{
-		return std::nullopt;
-	}
-	std::array<float, k_FaceFloats> record {};
-	std::memcpy(record.data(), faceRecords.data() + emotion * k_RecordBytes, k_RecordBytes);
-	return record;
-}
-
 bool ReadAnimation(std::span<const uint8_t> data, size_t& offset, morph::Animation& out)
 {
 	Reader in(data, offset);
@@ -229,16 +217,34 @@ HelpDudeResult ReadHelpDudeFile(const std::vector<uint8_t>& bytes, HelpDudeFile&
 		}
 	}
 
-	uint32_t faceBytes = 0;
-	if (!in.Bytes(out.unknownBytes.data(), out.unknownBytes.size()) ||
-	    !in.Bytes(out.unknownWords.data(), out.unknownWords.size() * sizeof(uint32_t)) || !in.Value(out.startEmotion) ||
-	    !in.Value(faceBytes) || !in.Values(out.faceRecords, faceBytes))
+	int32_t faceBytes = 0;
+	if (!in.Bytes(out.faceBones.data(), out.faceBones.size() * sizeof(uint32_t)) || !in.Value(out.unusedWord) ||
+	    !in.Value(out.pupilCentreU) || !in.Value(out.pupilCentreV) || !in.Value(out.pupilScale) ||
+	    !in.Value(out.startEmotion) || !in.Value(faceBytes))
 	{
 		return HelpDudeResult::ErrTruncated;
 	}
+	constexpr auto k_AllRecords = static_cast<int32_t>(sizeof(out.faceRecords));
+	if (faceBytes == k_AllRecords)
+	{
+		if (!in.Bytes(out.faceRecords.data(), sizeof(out.faceRecords)))
+		{
+			return HelpDudeResult::ErrTruncated;
+		}
+	}
+	else
+	{
+		for (int32_t i = 0; i < faceBytes; ++i)
+		{
+			if (!in.Bytes(&out.faceRecords[0][0], 1))
+			{
+				return HelpDudeResult::ErrTruncated;
+			}
+		}
+	}
 
 	uint32_t eventLists = 0;
-	if (!in.Value(out.nearDepth) || !in.Value(out.modelScale) || !in.Value(out.unknownFloat) || !in.Value(eventLists))
+	if (!in.Value(out.nearDepth) || !in.Value(out.modelScale) || !in.Value(out.pitchOffset) || !in.Value(eventLists))
 	{
 		return HelpDudeResult::ErrTruncated;
 	}

@@ -11,6 +11,7 @@
 #include <cstring>
 
 #include <array>
+#include <bit>
 #include <filesystem>
 #include <fstream>
 #include <optional>
@@ -105,7 +106,7 @@ void WriteAnimation(Writer& out, const FakeAnimation& animation)
 }
 
 /// Four slots: "Stand" and "Wave" with animations, an empty name, and "Spare" with a record size of 0
-std::vector<uint8_t> MakeFile(bool truncateHalo = false)
+std::vector<uint8_t> MakeFile(bool truncateHalo = false, bool oddFaceBytes = false)
 {
 	Writer s;
 	s.U32(k_Bones);
@@ -127,19 +128,29 @@ std::vector<uint8_t> MakeFile(bool truncateHalo = false)
 	WriteAnimation(s, k_Stand);
 	WriteAnimation(s, k_Wave);
 	s.U32(0);
-	for (int i = 0; i < 0x1C; ++i)
+	for (uint32_t bone = 0; bone < helpdude::k_FaceBones; ++bone)
 	{
-		s.Value(static_cast<uint8_t>(i));
+		s.U32(bone + 10);
 	}
 	s.U32(1);
 	s.F32(0.25f);
 	s.F32(0.5f);
 	s.F32(0.75f);
 	s.U32(2);
-	s.U32(0x200);
-	for (int i = 0; i < 0x80; ++i)
+	if (oddFaceBytes)
 	{
-		s.F32(static_cast<float>(i));
+		s.U32(3);
+		s.Value(static_cast<uint8_t>(0x11));
+		s.Value(static_cast<uint8_t>(0x22));
+		s.Value(static_cast<uint8_t>(0x33));
+	}
+	else
+	{
+		s.U32(0x200);
+		for (int i = 0; i < 0x80; ++i)
+		{
+			s.F32(static_cast<float>(i));
+		}
 	}
 	s.F32(8.5f);
 	s.F32(0.025f);
@@ -232,13 +243,12 @@ TEST(HelpDudeFile, ReadsEveryField)
 	EXPECT_FLOAT_EQ(wave->keyframes[2].translations[1][0], 21.0f);
 	EXPECT_EQ(file.AnimationAt(3), nullptr);
 
-	EXPECT_EQ(file.unknownBytes[0x1B], 0x1Bu);
-	EXPECT_EQ(file.unknownWords[0], 1u);
+	EXPECT_EQ(file.faceBones[6], 16u);
+	EXPECT_EQ(file.unusedWord, 1u);
+	EXPECT_FLOAT_EQ(file.pupilCentreU, 0.25f);
+	EXPECT_FLOAT_EQ(file.pupilScale, 0.75f);
 	EXPECT_EQ(file.startEmotion, 2u);
-	const auto face = file.FaceRecord(7);
-	ASSERT_TRUE(face.has_value());
-	EXPECT_FLOAT_EQ((*face)[15], 127.0f);
-	EXPECT_FALSE(file.FaceRecord(8).has_value());
+	EXPECT_FLOAT_EQ(file.faceRecords[7][15], 127.0f);
 	EXPECT_FLOAT_EQ(file.nearDepth, 8.5f);
 	EXPECT_FLOAT_EQ(file.modelScale, 0.025f);
 	ASSERT_EQ(file.events.size(), 2u);
@@ -252,6 +262,20 @@ TEST(HelpDudeFile, ReadsEveryField)
 	EXPECT_EQ(file.animationFlags[2], 0x20u);
 	EXPECT_FLOAT_EQ(file.haloScale, 0.5f);
 	EXPECT_FLOAT_EQ(file.haloOffset[1], -0.25f);
+}
+
+TEST(HelpDudeFile, OddFaceBlockOverwritesOneByte)
+{
+	helpdude::HelpDudeFile file;
+	ASSERT_EQ(helpdude::ReadHelpDudeFile(MakeFile(false, true), file), helpdude::HelpDudeResult::Success);
+	// Only the last byte stays, over the lowest byte of the first record's first float
+	auto expected = helpdude::k_DefaultFaceRecord[0];
+	auto bits = std::bit_cast<uint32_t>(expected);
+	bits = (bits & 0xFFFFFF00u) | 0x33u;
+	EXPECT_EQ(std::bit_cast<uint32_t>(file.faceRecords[0][0]), bits);
+	EXPECT_EQ(file.faceRecords[0][1], helpdude::k_DefaultFaceRecord[1]);
+	EXPECT_EQ(file.faceRecords[7], helpdude::k_DefaultFaceRecord);
+	EXPECT_FLOAT_EQ(file.nearDepth, 8.5f);
 }
 
 TEST(HelpDudeFile, AnimationSizeMatchesItsRecord)
@@ -303,7 +327,6 @@ TEST(HelpDudeFile, GameFiles)
 		EXPECT_NEAR(file.farDepth, e.farDepth, 1e-5f);
 		EXPECT_NEAR(file.modelScale, e.modelScale, 1e-6f);
 		EXPECT_NEAR(file.haloScale, e.haloScale, 1e-6f);
-		EXPECT_EQ(file.faceRecords.size(), 0x200u);
 		EXPECT_EQ(file.events.size(), 80u);
 		for (size_t i = 0; i < helpdude::k_AnimationSlots; ++i)
 		{
