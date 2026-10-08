@@ -331,3 +331,12 @@ openblack_setup_and_add_test(test_temple_heart test_temple_heart.cpp)
 openblack_setup_and_add_test(test_store_rules test_store_rules.cpp)
 openblack_setup_and_add_test(test_clip_sounds test_clip_sounds.cpp)
 target_link_libraries(test_clip_sounds PRIVATE sas)
+
+# The Bink video component's tests need nothing from the game; those that read the game's videos skip without
+# OPENBLACK_GAME_PATH
+foreach (BINK_TEST bitstream blocks)
+  add_executable(test_bink_${BINK_TEST} bink/test_bink_${BINK_TEST}.cpp)
+  target_link_libraries(test_bink_${BINK_TEST} PRIVATE GTest::gtest_main bink)
+  set_property(TARGET test_bink_${BINK_TEST} PROPERTY FOLDER "tests")
+  add_test(NAME test_bink_${BINK_TEST} COMMAND test_bink_${BINK_TEST})
+endforeach ()
