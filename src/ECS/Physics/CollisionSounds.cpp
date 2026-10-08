@@ -26,10 +26,14 @@
 #include "Buildings.h"
 #include "Debug/DebugEnv.h"
 #include "Dust.h"
+#include "ECS/Abodes.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/AnimatedStatic.h"
+#include "ECS/Components/Feature.h"
 #include "ECS/Components/Fragment.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/StoragePit.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/FishShoals.h"
@@ -56,7 +60,6 @@ constexpr int k_Fragment = 31; // SOUND_COLLISION_TYPE_FRAGMENT
 constexpr int k_Grain = 11;
 constexpr int k_Bush = 2;
 constexpr int k_HollowWood = 18;
-constexpr int k_BrickBuilding = 10;
 
 // the A (hitter) and B (hit) codes of each SOUND_COLLISION_TYPE
 constexpr std::array<int, 33> k_TabA = {21, 24, 20, 20, 20, 20, 20, 19, 19, 19, 19, 20, 25, 22, 22, 22, 22,
@@ -94,9 +97,21 @@ int CollisionSounds::TypeOf(entt::entity entity)
 			return k_HollowWood;
 		}
 	}
-	if (registry.AnyOf<Abode, StoragePit>(entity))
+	// a building's, the temple heart's, a gate's and a feature's are their own info's, as any other object's
+	if (registry.AnyOf<Abode, StoragePit, CitadelHeart>(entity))
 	{
-		return k_BrickBuilding;
+		const auto* info = abodes::MultiCellStaticInfoOf(entity);
+		return info != nullptr ? static_cast<int>(info->collideSound) : 0;
+	}
+	if (const auto* animated = registry.TryGet<const AnimatedStatic>(entity);
+	    animated != nullptr && animated->type != AnimatedStaticInfo::None && Locator::infoConstants::has_value())
+	{
+		return static_cast<int>(
+		    Locator::infoConstants::value().animatedStatic.at(static_cast<size_t>(animated->type)).collideSound);
+	}
+	if (const auto* feature = registry.TryGet<const Feature>(entity); feature != nullptr && Locator::infoConstants::has_value())
+	{
+		return static_cast<int>(Locator::infoConstants::value().feature.at(static_cast<size_t>(feature->type)).collideSound);
 	}
 	if (const auto* info = PhysicsObjects::ObjectInfo(entity))
 	{
@@ -128,14 +143,22 @@ void CollisionSounds::AttemptToAddSoundEvent(const PhysicsObject& po)
 	{
 		return;
 	}
+	// what made the noise and what it hit, nothing hit sounding as the ground; a fragment on either side makes nothing at
+	// all, neither sound nor dust nor ring
 	const int typeA = TypeOf(obj);
-	int typeB = k_Ground;
-	const auto at = po.body.Centre();
-	if (hitObj != entt::null)
+	if (typeA == k_Fragment)
 	{
-		typeB = TypeOf(hitObj);
+		return;
 	}
-	else if (Locator::terrainSystem::has_value())
+	int typeB = hitObj != entt::null ? TypeOf(hitObj) : k_Ground;
+	if (typeB == k_Fragment)
+	{
+		return;
+	}
+	const auto at = po.body.Centre();
+	// the ground's dust, ring and splash when what was hit sounds as the ground: nothing hit, or a thing of the ground's
+	// sound
+	if (typeB == k_Ground && Locator::terrainSystem::has_value())
 	{
 		// not IsDryLand (altitude < 4, the water bit is not read) -> ring; and no cell (off the map, no block) or an
 		// altitude under 3 at the cell rounded to the nearest -> WATER; altitude 3: ring + dust
@@ -167,10 +190,6 @@ void CollisionSounds::AttemptToAddSoundEvent(const PhysicsObject& po)
 		{
 			Dust::Emit(dustAt, Dust::RandomVelocity(), deep ? 0x28C8F0F4u : 0x50806040u, size);
 		}
-	}
-	if (typeA == k_Fragment || typeB == k_Fragment)
-	{
-		return;
 	}
 	PhysicsState().soundPairs.push_back({obj, hitObj, 2});
 	// level from the unscaled info weight: 3 soft (g < 1.25), 2, 1 hard (g > 3); GRAIN never at 1
