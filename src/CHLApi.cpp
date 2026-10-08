@@ -71,6 +71,7 @@
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/TownPlaythings.h"
 #include "Enums.h"
+#include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -1668,11 +1669,18 @@ void GetLandHeight() // 151 GET_LAND_HEIGHT
 
 void LoadMap() // 152 LOAD_MAP
 {
-	// const auto path = PopString();
-
-	// auto& fileSystem = Locator::filesystem::value();
-	// auto mapPath = fileSystem.GetGamePath() / path;
-	// TODO(Daniels118): LoadMap(mapPath);
+	// The story moves on to its next land: the land is laid out afresh at once, while the scripts go on running, the
+	// one that asked included
+	const auto path = PopString();
+	const auto& fileSystem = Locator::filesystem::value();
+	try
+	{
+		Game::Instance()->LoadMap(fileSystem.FindPath(filesystem::FileSystemInterface::FixPath(path)));
+	}
+	catch (const std::exception& e)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Could not load the map {}: {}", path, e.what());
+	}
 }
 
 void StopAllScriptsExcluding() // 153 STOP_ALL_SCRIPTS_EXCLUDING

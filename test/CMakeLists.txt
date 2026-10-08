@@ -248,6 +248,10 @@ openblack_setup_and_add_test(test_uniform_table graphics/test_uniform_table.cpp)
 openblack_setup_and_add_test(test_editor test_editor.cpp)
 openblack_setup_and_add_test(test_editor_scripts test_editor_scripts.cpp)
 target_link_libraries(test_editor_scripts PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_land_change_scripts lhvm/test_land_change_scripts.cpp
+)
+target_link_libraries(test_land_change_scripts PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_chl_language lhvm/test_chl_language.cpp)
 target_link_libraries(test_chl_language PRIVATE lhvmlang)
 openblack_setup_and_add_test(test_lhvm_decompiler lhvm/test_lhvm_decompiler.cpp)

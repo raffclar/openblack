@@ -2659,6 +2659,29 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 	return true;
 }
 
+bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept
+{
+	// Outside the story, a land is loaded with the challenge's scripts started again from scratch: every task of the
+	// last land stops, the scripts' variables are cleared and the challenge's scripts that start by themselves start
+	// again. None of the last land's scripts go on running on the new land.
+	if (Locator::vm::has_value())
+	{
+		auto& fileSystem = Locator::filesystem::value();
+		const auto challengePath = fileSystem.GetPath<filesystem::Path::Quests>() / "challenge.chl";
+		try
+		{
+			Locator::vm::value().LoadBinary(fileSystem.ReadAll(challengePath));
+		}
+		catch (const std::exception& err)
+		{
+			Locator::vm::value().StopAllTasks();
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to read challenge file at {}: {}", challengePath.generic_string(),
+			                    err.what());
+		}
+	}
+	return LoadMap(path);
+}
+
 void Game::LoadTestbed() noexcept
 {
 	// No script runs on the testbed: the story's would set its time of day and stop its clock a few turns in
