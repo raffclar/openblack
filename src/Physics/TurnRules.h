@@ -164,6 +164,9 @@ inline constexpr int32_t k_Whooshes = 5;
 /// Whether a moving body is low enough for the sea: its centre under half its radius above the sea's level. There it
 /// bobs, and it has sunk if it is denser than water and its kind says so.
 [[nodiscard]] bool NearSeaLevel(bool resting, float centreHeight, float radius);
+/// Whether a moving body has sunk out of sight: its centre at least its radius under the sea's level, so no point of
+/// it is above the surface. It is drawn no more from then on, though it sinks on until it is deleted deep under the sea.
+[[nodiscard]] bool SunkOutOfSight(float centreHeight, float radius);
 /// Whether a body bobbed this step: its upward speed changed sign
 [[nodiscard]] bool Bobbed(float upwardSpeedBefore, float upwardSpeedAfter);
 

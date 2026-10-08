@@ -12,9 +12,11 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <algorithm>
 #include <array>
 #include <map>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -79,13 +81,15 @@ private:
 constexpr physics::Material k_Stone {
     .density = 2.0f, .springK = 20.0f, .dampK = 1.0f, .friction = 1.0f, .spinKeptPerSecond = 0.7f, .drag = 0.0f};
 
-/// A world of a flat island, a map of cells kept by hand, and every model a cube a metre across
+/// A world of a flat island, or of open sea at the sea's level, a map of cells kept by hand, and every model a cube a
+/// metre across
 class FakeWorld final: public dynamics::World
 {
 public:
-	FakeWorld()
+	explicit FakeWorld(float landHeight)
 	    : _info(std::make_unique<InfoConstants>())
-	    , _land(k_LandHeight)
+	    , _land(landHeight)
+	    , _landHeight(landHeight)
 	{
 		auto& rock = _info->mobileStatic.at(static_cast<size_t>(MobileStaticInfo::RockChalk));
 		rock.mobileType = MobileStaticInfo::Rock;
@@ -103,6 +107,8 @@ public:
 	}
 
 	static constexpr float k_LandHeight = 20.0f;
+	static constexpr float k_SeaLevel = 0.0f;
+	[[nodiscard]] float LandHeight() const { return _landHeight; }
 
 	[[nodiscard]] Registry& Entities() override { return _registry; }
 	[[nodiscard]] const Registry& Entities() const override { return _registry; }
@@ -183,6 +189,7 @@ private:
 	Registry _registry;
 	std::unique_ptr<InfoConstants> _info;
 	FlatIsland _land;
+	float _landHeight;
 	std::vector<glm::vec3> _cube;
 	std::vector<uint32_t> _cubeFaces;
 };
@@ -199,9 +206,12 @@ public:
 class DynamicsSystemTest: public ::testing::Test
 {
 protected:
-	void SetUp() override
+	void SetUp() override { MakeWorld(FakeWorld::k_LandHeight); }
+
+	/// The world the system works in: dry land at that height, or the open sea at the sea's level
+	void MakeWorld(float landHeight)
 	{
-		auto world = std::make_unique<FakeWorld>();
+		auto world = std::make_unique<FakeWorld>(landHeight);
 		_world = world.get();
 		_dynamics = std::make_unique<DynamicsSystem>(std::move(world));
 		_dynamics->SetClassHooks(std::make_unique<PlainHooks>());
@@ -212,7 +222,7 @@ protected:
 	{
 		auto& registry = _world->Entities();
 		const auto rock = registry.Create();
-		registry.Assign<Transform>(rock, glm::vec3(xz.x, FakeWorld::k_LandHeight, xz.y), glm::mat3(1.0f), glm::vec3(1.0f));
+		registry.Assign<Transform>(rock, glm::vec3(xz.x, _world->LandHeight(), xz.y), glm::mat3(1.0f), glm::vec3(1.0f));
 		registry.Assign<MobileStatic>(rock, MobileStaticInfo::RockChalk);
 		registry.Assign<Mesh>(rock, resources::HashIdentifier(MeshId::Dummy), int8_t {0}, int8_t {0});
 		_world->filed[rock] = FakeWorld::CellOf(registry.Get<const Transform>(rock).position);
@@ -307,4 +317,56 @@ TEST_F(DynamicsSystemTest, ARockFarFromAnythingMovingIsNeverWoken)
 		_dynamics->ProcessTurn();
 		ASSERT_EQ(_dynamics->Find(far), nullptr);
 	}
+}
+
+TEST_F(DynamicsSystemTest, ARockSinkingInTheSeaIsDrawnUntilWhollyUnderAndDeletedDeepBelow)
+{
+	MakeWorld(FakeWorld::k_SeaLevel);
+	const auto rock = Rock({1000.0f, 1000.0f});
+	_world->Entities().Get<Transform>(rock).position.y += 3.0f;
+	ASSERT_TRUE(_dynamics->InitialisePhysics(rock, {.velocity = {0.0f, -1.0f, 0.0f}}).started);
+
+	bool sawUnderSea = false;
+	for (int turn = 0; turn < 600 && _world->Entities().Valid(rock); ++turn)
+	{
+		_dynamics->ProcessTurn();
+		_dynamics->UpdateFrame(0.5f, 0.0f);
+		std::optional<glm::vec3> centre;
+		float radius = 0.0f;
+		float highest = -1e9f;
+		_dynamics->ForEachEntry([&](const PhysicsEntry& entry) {
+			if (entry.entity == rock)
+			{
+				centre = entry.body->Centre();
+				radius = entry.body->Radius();
+				for (const auto& point : entry.body->Points())
+				{
+					highest = std::max(highest, point.world.y);
+				}
+			}
+		});
+		if (!_world->Entities().Valid(rock))
+		{
+			break;
+		}
+		ASSERT_TRUE(centre.has_value());
+		// Deleted only once its centre is four radii under; until then it is still about
+		EXPECT_GE(centre->y, -4.0f * radius - 1.0f);
+		const auto* drawn = _world->Entities().TryGet<const PhysicsDrawPose>(rock);
+		ASSERT_NE(drawn, nullptr);
+		if (centre->y > -radius)
+		{
+			// Some of it may still be above the surface: it is drawn
+			EXPECT_FALSE(drawn->underSea);
+		}
+		else
+		{
+			// Every point of it is under the surface: it isn't drawn
+			EXPECT_LE(highest, FakeWorld::k_SeaLevel);
+			EXPECT_TRUE(drawn->underSea);
+			sawUnderSea = true;
+		}
+	}
+	EXPECT_TRUE(sawUnderSea);
+	EXPECT_FALSE(_world->Entities().Valid(rock)) << "it never sank deep enough to be deleted";
 }

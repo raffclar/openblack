@@ -8,9 +8,9 @@
  *******************************************************************************/
 
 // The testbed's physics scenarios: things lying still, one thing thrown, a crowd of things thrown and dropped together,
-// buildings broken by thrown rocks, rocks split by hard landings and a creature struck. Each throw is the player's
-// hand's, so the same rules run as in a game; run with --frame-stats to see what a frame costs while they fly and once
-// they have come to rest.
+// buildings broken by thrown rocks, rocks split by hard landings, a creature struck and things dropped into the sea. Each throw
+// is the player's hand's, so the same rules run as in a game; run with --frame-stats to see what a frame costs while they fly
+// and once they have come to rest.
 
 #include <cmath>
 
@@ -18,6 +18,7 @@
 #include <numbers>
 #include <vector>
 
+#include "3D/FlatLand.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -220,6 +221,58 @@ void AddCreatureHit(std::vector<Scenario>& all)
 	});
 }
 
+void AddSinking(std::vector<Scenario>& all)
+{
+	// One of each kind the physics treats differently in the water, dropped side by side into the lake's open water
+	const glm::vec2 lake = flat_land::k_LakeCentre - flat_land::k_MapMiddle;
+	const std::array<ObjectSetup, 12> kinds {
+	    ObjectSetup {.type = MobileStaticInfo::RockChalk},
+	    ObjectSetup {.type = MobileStaticInfo::Boulder1Lime},
+	    ObjectSetup {.type = MobileStaticInfo::RockVolcanic, .scale = 2.0f},
+	    ObjectSetup {.type = MobileObjectInfo::EgyptPotA},
+	    ObjectSetup {.type = MobileObjectInfo::WaterJug},
+	    ObjectSetup {.type = MobileObjectInfo::Champi},
+	    ObjectSetup {.type = MobileObjectInfo::EgyptBarrel},
+	    ObjectSetup {.type = TreeInfo::Birch, .scale = 0.6f},
+	    ObjectSetup {.type = MobileObjectInfo::Ball},
+	    ObjectSetup {.type = MobileStaticInfo::SharprockSandstone},
+	    ObjectSetup {.type = VillagerInfo::CelticFarmerMale},
+	    ObjectSetup {.type = AnimalInfo::Sheep},
+	};
+	std::vector<ObjectSetup> objects;
+	std::vector<ThrowSetup> throws;
+	for (size_t i = 0; i < kinds.size(); ++i)
+	{
+		const glm::vec2 at = lake + glm::vec2 {(static_cast<float>(i % 6) - 2.5f) * 12.0f, i < 6 ? -10.0f : 10.0f};
+		auto object = kinds.at(i);
+		// They wait on the bank south of the lake until they are dropped
+		object.offset = lake + glm::vec2 {(static_cast<float>(i) - 5.5f) * 6.0f, -flat_land::k_LakeHalfExtent.y - 40.0f};
+		objects.push_back(object);
+		throws.push_back({
+		    .object = i,
+		    .from = at,
+		    .height = 8.0f,
+		    .velocity = {0.0f, -2.0f, 0.0f},
+		    .delaySeconds = 1.0f + static_cast<float>(i) * 0.2f,
+		});
+	}
+	all.push_back({
+	    .id = "physics.sinking",
+	    .name = "Things dropped into the sea",
+	    .facet = Facet::Physics,
+	    .description = "Rocks, boulders, a pot, a water jug, a mushroom, a barrel, a tree, a ball, a villager and a sheep are "
+	                   "dropped side by side into the lake's open water.",
+	    .expected = "Each splashes in; light things float and bob until they soak up enough water, heavy ones sink. A thing "
+	                "that sinks is hidden by the water as it goes under and is gone once it is deep below; the villager "
+	                "drowns and the sheep dies.",
+	    .environment = {.dispenserGrid = false},
+	    // Low over the lake's south shore, looking across the water at where they go in
+	    .framing = {.shot = Shot::Placed, .eye = {lake.x - 10.0f, 9.0f, lake.y - 45.0f}, .look = {lake.x + 4.0f, 0.0f, lake.y}},
+	    .objects = objects,
+	    .throws = throws,
+	});
+}
+
 } // namespace
 
 void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
@@ -230,4 +283,5 @@ void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
 	AddBuildingBreak(all);
 	AddRockSplit(all);
 	AddCreatureHit(all);
+	AddSinking(all);
 }

@@ -1409,9 +1409,16 @@ void DynamicsSystem::UpdateFrame(float turnFraction, float gameSeconds)
 			}
 			continue;
 		}
-		// Sunk deeper than its radius, it keeps the pose it was last drawn at
-		if (body.Centre().y <= -body.Radius())
+		// Sunk wholly under the sea it is drawn no more; it is told so once, so nothing is uploaded again each frame
+		if (turn::SunkOutOfSight(body.Centre().y, body.Radius()))
 		{
+			const auto* drawnPose = registry.TryGet<const PhysicsDrawPose>(entry->entity);
+			if (drawnPose == nullptr || !drawnPose->underSea)
+			{
+				auto hidden = drawnPose != nullptr ? *drawnPose : PhysicsDrawPose {};
+				hidden.underSea = true;
+				registry.AssignOrReplace<PhysicsDrawPose>(entry->entity, hidden);
+			}
 			continue;
 		}
 		const auto pose = body.DrawPose(turnFraction, entry->animated);
