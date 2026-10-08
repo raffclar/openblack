@@ -58,6 +58,7 @@
 #include "ECS/Registry.h"
 #include "ECS/SnowDust.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
@@ -1392,6 +1393,11 @@ void DynamicsSystem::AttemptCollisionSound(PhysicsEntry& entry)
 			{
 				hitType = SoundCollisionType::Water;
 				colour = turn::k_SeaFoam;
+				// The fish near the splash dart away
+				if (Locator::fishFarmSystem::has_value())
+				{
+					Locator::fishFarmSystem::value().Scare(centre);
+				}
 			}
 			if (Locator::waterRingSystem::has_value())
 			{

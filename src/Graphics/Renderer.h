@@ -114,6 +114,8 @@ private:
 	/// The creatures' footprints laid over the land, blended before the rest of what blends, in the main view and the
 	/// sea's reflection
 	void DrawCreatureFootprints(const DrawSceneDesc& desc) const;
+	/// The fish farms' shoals, drawn into what lies under the sea for the sea to be blended over them
+	void DrawFishShoals(const DrawSceneDesc& desc) const;
 	/// The villagers' ground blobs, in the main view
 	void DrawGroundBlobs(const DrawSceneDesc& desc) const;
 	/// The rain about the camera, each block's in its place among what blends, in the main view
