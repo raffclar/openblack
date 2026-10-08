@@ -70,15 +70,18 @@ class MockTerrain final: public openblack::LandIslandInterface
 	[[nodiscard]] float GetHeightAt(glm::vec2) const final { return 0.0f; }
 	[[nodiscard]] glm::vec3 GetNormalAt(glm::vec2) const final { return {0.0f, 1.0f, 0.0f}; }
 	[[nodiscard]] const openblack::lnd::LNDCell& GetCell(const glm::u16vec2&) const final { assert(false); }
+	[[nodiscard]] const openblack::lnd::LNDCell* FindCell(const glm::u16vec2&) const final { return nullptr; }
 	void DumpTextures() const final { assert(false); }
 	void DumpMaps() const final { assert(false); }
 	[[nodiscard]] std::vector<openblack::LandBlock>& GetBlocks() final { assert(false); }
 	[[nodiscard]] const std::vector<openblack::LandBlock>& GetBlocks() const final { assert(false); }
 	[[nodiscard]] const std::vector<openblack::lnd::LNDCountry>& GetCountries() const final { assert(false); }
-	[[nodiscard]] const openblack::graphics::Texture2D& GetAlbedoArray() const final { assert(false); }
-	[[nodiscard]] const openblack::graphics::Texture2D& GetBump() const final { assert(false); }
 	[[nodiscard]] const openblack::graphics::Texture2D& GetHeightMap() const final { assert(false); }
+	[[nodiscard]] const openblack::graphics::Texture2D& GetLuminosityMap() const final { assert(false); }
+	[[nodiscard]] const openblack::graphics::Texture2D& GetCellColourMap() const final { assert(false); }
+	[[nodiscard]] const openblack::graphics::Texture2D& GetBlockTextures() const final { assert(false); }
 	[[nodiscard]] const openblack::graphics::FrameBuffer& GetFootprintFramebuffer() const final { assert(false); }
+	[[nodiscard]] const openblack::graphics::FrameBuffer& GetLandAlphaFramebuffer() const final { assert(false); }
 	[[nodiscard]] openblack::U16Extent2 GetIndexExtent() const final { assert(false); }
 	[[nodiscard]] glm::mat4 GetOrthoView() const final { assert(false); }
 	[[nodiscard]] glm::mat4 GetOrthoProj() const final { assert(false); }
@@ -100,6 +103,7 @@ public:
 	[[nodiscard]] bool GetUnbindableRepeat(openblack::input::UnbindableActionMap) const final { return false; }
 	[[nodiscard]] glm::uvec2 GetMousePosition() const override { return k_MockMousePos; }
 	[[nodiscard]] glm::ivec2 GetMouseDelta() const override { return {}; }
+	[[nodiscard]] float GetMouseWheelDelta() const override { return 0.0f; }
 	[[nodiscard]] std::array<std::optional<glm::vec3>, 2> GetHandPositions() const override { return {}; }
 	void Frame() final {}
 	void ProcessEvent(const SDL_Event& event) final {}

@@ -7,9 +7,12 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <algorithm>
 #include <iostream>
 #include <map>
 #include <memory>
+#include <span>
+#include <typeinfo>
 
 #include <SDL_messagebox.h>
 #include <cxxopts.hpp>
@@ -22,6 +25,7 @@
 // clang-format on
 #endif
 
+#include "Common/CrashHandler.h"
 #include "EngineConfig.h"
 #include "Game.h"
 
@@ -50,7 +54,9 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("H,height", "Window resolution in the y axis.", cxxopts::value<uint16_t>()->default_value("1024"))
 		("u,ui-scale", "Scaling of the GUI", cxxopts::value<float>()->default_value("1.0"))
 		("s,start-level", "Level that is loaded at start-up", cxxopts::value<std::string>()->default_value("Land1.txt"))
+		("testbed", "Start on the flat creature testbed, a plane with a lake, instead of a level.")
 		("V,vsync", "Enable Vertical Sync.")
+		("detail-level", "Graphics detail level of the original game, 0 to 6 (4 by default, 5 custom, 6 the highest).", cxxopts::value<uint16_t>()->default_value("4"))
 		("m,window-mode", "Which mode to run window.", cxxopts::value<std::string>()->default_value("windowed"))
 		("b,backend-type", "Which backend to use for rendering.", cxxopts::value<std::string>())
 		("n,num-frames-to-simulate", "Number of frames to simulate before quitting.", cxxopts::value<uint32_t>()->default_value("0"))
@@ -59,6 +65,13 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		    cxxopts::value<std::vector<std::string>>()->default_value("all=debug"))
 		("screenshot-frame", "Request a screenshot of the backbuffer at a certain frame number.", cxxopts::value<uint32_t>())
 		("screenshot-path", "Path of the request a screenshot of the backbuffer.", cxxopts::value<std::filesystem::path>()->default_value("screenshot.png"))
+		("frame-stats", "Log the average and 95th percentile frame time and the profiler stages every so many frames (0 for never).", cxxopts::value<uint32_t>()->default_value("0"))
+		("frame-stats-views", "With --frame-stats, also profile and log the GPU time of each render view.")
+		("scenario", "Start on the testbed and run the testbed scenario of this id, such as benchmark.creatures_100.", cxxopts::value<std::string>())
+		("benchmark-warmup", "With --scenario, the frames a benchmark's crowd settles for once spawned, before it is measured.", cxxopts::value<uint32_t>()->default_value("120"))
+		("benchmark-frames", "With --scenario, the frames of a benchmark measured.", cxxopts::value<uint32_t>()->default_value("600"))
+		("benchmark-out", "With --scenario, where a benchmark writes its results (with .json and .csv after it); the game quits once they are written.", cxxopts::value<std::string>())
+		("crash-dialogs", "Show the system's and C runtime's crash dialogs (Abort/Retry/Ignore) instead of writing a crash report to crashes/ and exiting.")
 	;
 	// clang-format on
 
@@ -177,12 +190,28 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.windowHeight = result["height"].as<uint16_t>();
 		args.guiScale = result["ui-scale"].as<float>();
 		args.vsync = result["vsync"].as<bool>();
+		args.detailLevel = static_cast<uint8_t>(std::min<uint16_t>(result["detail-level"].as<uint16_t>(), 6));
 		args.displayMode = displayMode;
 		args.graphicsBackend = graphicsBackend;
 		args.numFramesToSimulate = result["num-frames-to-simulate"].as<uint32_t>();
 		args.logFile = result["log-file"].as<std::string>();
 		args.logLevels = logLevels;
 		args.startLevel = result["start-level"].as<std::string>();
+		args.startTestbed = result.count("testbed") != 0;
+		args.frameStatsInterval = result["frame-stats"].as<uint32_t>();
+		args.frameStatsViews = result.count("frame-stats-views") != 0;
+		if (result.count("scenario") != 0)
+		{
+			args.scenario = openblack::ScenarioRequest {
+			    .id = result["scenario"].as<std::string>(),
+			    .warmUpFrames = result["benchmark-warmup"].as<uint32_t>(),
+			    .frames = std::max<uint32_t>(result["benchmark-frames"].as<uint32_t>(), 1),
+			};
+			if (result.count("benchmark-out") != 0)
+			{
+				args.scenario->results = std::filesystem::path(result["benchmark-out"].as<std::string>());
+			}
+		}
 	}
 	catch (cxxopts::exceptions::parsing& err)
 	{
@@ -198,6 +227,12 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 
 int main(int argc, char* argv[]) noexcept
 {
+	const bool crashDialogs = openblack::crash_handler::WantsCrashDialogs(std::span(argv, static_cast<size_t>(argc)));
+	if (!crashDialogs)
+	{
+		openblack::crash_handler::Install();
+	}
+
 	// clang-format off
 	std::cout <<
 	    "==============================================================================\n"
@@ -214,6 +249,7 @@ int main(int argc, char* argv[]) noexcept
 		{
 			return returnCode;
 		}
+		openblack::crash_handler::SetLogFile(args.logFile);
 		auto game = std::make_unique<openblack::Game>(std::move(args));
 		if (!game->Initialize())
 		{
@@ -226,6 +262,11 @@ int main(int argc, char* argv[]) noexcept
 	}
 	catch (std::exception& e)
 	{
+		if (!crashDialogs)
+		{
+			openblack::crash_handler::ReportFatal(openblack::crash_report::CrashKind::UncaughtException, e.what(), {}, 0,
+			                                      typeid(e).name());
+		}
 		std::cerr << e.what() << std::endl;
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Fatal error", e.what(), nullptr);
 		return EXIT_FAILURE;

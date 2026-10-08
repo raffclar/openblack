@@ -84,6 +84,23 @@ target_sources(
 )
 set_target_properties(openblack_lib PROPERTIES LINKER_LANGUAGE CXX)
 
+# The script API's natives that are still stubs, which the editor's Scripts panel shows
+set(OPENBLACK_UNIMPLEMENTED_NATIVES
+    ${CMAKE_BINARY_DIR}/include/generated/scripting/UnimplementedNatives.h
+)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/include/generated/scripting)
+add_custom_command(
+  OUTPUT ${OPENBLACK_UNIMPLEMENTED_NATIVES}
+  COMMAND
+    ${CMAKE_COMMAND} -DSOURCE=${CMAKE_CURRENT_LIST_DIR}/CHLApi.cpp
+    -DOUTPUT=${OPENBLACK_UNIMPLEMENTED_NATIVES} -P
+    ${CMAKE_SOURCE_DIR}/CMakeModules/GenerateUnimplementedNatives.cmake
+  DEPENDS ${CMAKE_CURRENT_LIST_DIR}/CHLApi.cpp
+          ${CMAKE_SOURCE_DIR}/CMakeModules/GenerateUnimplementedNatives.cmake
+  COMMENT "Listing the script API's unwritten natives"
+)
+target_sources(openblack_lib PRIVATE ${OPENBLACK_UNIMPLEMENTED_NATIVES})
+
 target_include_directories(
   openblack_lib
   PUBLIC ${CMAKE_CURRENT_LIST_DIR}
@@ -103,14 +120,19 @@ target_link_libraries(
   openblack_lib
   PRIVATE "$<$<CXX_COMPILER_ID:MSVC>:-SAFESEH:NO>"
           l3d
+          cam
           pack
           lnd
           anm
           glw
           morph
+          psys
+          rawimage
           imgui::imgui
           imgui_user
           ScriptLibrary
+          lhvmdecompiler
+          lhvmcompiler
           glm::glm
           EnTT::EnTT
           bgfx::bgfx
@@ -122,8 +144,17 @@ target_link_libraries(
           LinearMath
           minizip::minizip
   PUBLIC spdlog::spdlog
+         # The mind file's types are part of the creature mind component
+         creaturemind
 )
 target_include_directories(openblack_lib PRIVATE ${CXXOPTS_INCLUDE_DIRS})
+
+if (WIN32)
+  # The crash handler's stack traces and minidumps
+  target_link_libraries(openblack_lib PRIVATE dbghelp)
+  # The shell's file dialogs
+  target_link_libraries(openblack_lib PRIVATE ole32 shell32 uuid)
+endif ()
 
 if (OPENBLACK_CLANG_TIDY_CHECKS)
   if (CLANG_TIDY)

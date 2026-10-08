@@ -14,6 +14,7 @@
 #include <glm/gtc/constants.hpp>
 
 #include "ECS/Archetypes/HandArchetype.h"
+#include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "Locator.h"

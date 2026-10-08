@@ -9,10 +9,15 @@
 
 #include "TreeArchetype.h"
 
+#include <cmath>
+
+#include <glm/gtc/constants.hpp>
 #include <glm/gtx/euler_angles.hpp>
 
+#include "Common/RandomNumberManager.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Swayable.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Registry.h"
@@ -39,6 +44,10 @@ entt::entity TreeArchetype::Create([[maybe_unused]] uint32_t forestId, const glm
 	registry.Assign<Tree>(entity, type, maxSize);
 	const auto resourceId = resources::HashIdentifier(info.normal);
 	registry.Assign<Mesh>(entity, resourceId, static_cast<int8_t>(0), static_cast<int8_t>(-1));
+	// As a tree is made, one of 16 sways by the tree's facing, so neighbours facing alike sway alike.
+	// The game truncates towards zero.
+	const auto swaySlot = static_cast<int32_t>(std::trunc((yAngleRadians * 8.0f / glm::pi<float>()) + 0.5f)) & 0xF;
+	registry.Assign<Swayable>(entity, static_cast<uint8_t>(swaySlot));
 
 	return entity;
 }

@@ -12,6 +12,7 @@
 #include <array>
 #include <filesystem>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -23,10 +24,17 @@
 
 namespace openblack
 {
+struct LandData;
+namespace graphics
+{
+class VertexBuffer;
+}
+
 class LandIsland final: public LandIslandInterface
 {
 public:
 	explicit LandIsland(const std::filesystem::path& path);
+	explicit LandIsland(const LandData& data);
 	~LandIsland() noexcept;
 
 	void LoadFromFile(const std::filesystem::path& path);
@@ -35,28 +43,37 @@ public:
 	[[nodiscard]] glm::vec3 GetNormalAt(glm::vec2) const override;
 	[[nodiscard]] const LandBlock* GetBlock(const glm::u8vec2& coordinates) const;
 	[[nodiscard]] const lnd::LNDCell& GetCell(const glm::u16vec2& coordinates) const override;
+	[[nodiscard]] const lnd::LNDCell* FindCell(const glm::u16vec2& coordinates) const override;
 
 	// Debug
 	void DumpTextures() const override;
 	void DumpMaps() const override;
 
 private:
+	void Build(const LandData& data);
 	[[nodiscard]] std::vector<uint8_t> CreateHeightMap() const;
+	[[nodiscard]] std::vector<uint8_t> CreateLuminosityMap() const;
+	[[nodiscard]] std::vector<uint8_t> CreateCellColourMap() const;
 	std::vector<LandBlock> _landBlocks;
 	std::vector<lnd::LNDCountry> _countries;
+	std::vector<uint16_t> _materialTypes;
 
-	std::array<uint8_t, 1024> _blockIndexLookup {0};
+	/// One more than the index of each block of the map, [x * 32 + z], or 0 where there is no land
+	std::array<uint16_t, 1024> _blockIndexLookup {0};
 
 	// Renderer, Dynamics
 public:
 	[[nodiscard]] std::vector<LandBlock>& GetBlocks() override { return _landBlocks; }
 	[[nodiscard]] const std::vector<LandBlock>& GetBlocks() const override { return _landBlocks; }
 	[[nodiscard]] const std::vector<lnd::LNDCountry>& GetCountries() const override { return _countries; }
+	[[nodiscard]] std::span<const uint16_t> GetMaterialTypes() const override { return _materialTypes; }
 
-	[[nodiscard]] const graphics::Texture2D& GetAlbedoArray() const override { return *_materialArray; }
-	[[nodiscard]] const graphics::Texture2D& GetBump() const override { return *_textureBumpMap; }
 	[[nodiscard]] const graphics::Texture2D& GetHeightMap() const override { return *_heightMap; }
+	[[nodiscard]] const graphics::Texture2D& GetLuminosityMap() const override { return *_luminosityMap; }
+	[[nodiscard]] const graphics::Texture2D& GetCellColourMap() const override { return *_cellColourMap; }
+	[[nodiscard]] const graphics::Texture2D& GetBlockTextures() const override { return *_blockTextures; }
 	[[nodiscard]] const graphics::FrameBuffer& GetFootprintFramebuffer() const override { return *_footprintFrameBuffer; }
+	[[nodiscard]] const graphics::FrameBuffer& GetLandAlphaFramebuffer() const override { return *_landAlphaFrameBuffer; }
 
 	[[nodiscard]] glm::mat4 GetOrthoView() const override { return _view; }
 	[[nodiscard]] glm::mat4 GetOrthoProj() const override { return _proj; }
@@ -66,14 +83,15 @@ public:
 	uint8_t GetNoise(glm::u8vec2 pos) override;
 
 private:
-	std::unique_ptr<graphics::Texture2D> _materialArray;
-	std::unique_ptr<graphics::Texture2D> _countryLookup;
-
 	std::unique_ptr<graphics::Texture2D> _heightMap;
-	std::unique_ptr<graphics::Texture2D> _textureNoiseMap;
-	std::unique_ptr<graphics::Texture2D> _textureBumpMap;
+	std::unique_ptr<graphics::Texture2D> _luminosityMap;
+	std::unique_ptr<graphics::Texture2D> _cellColourMap;
+	std::unique_ptr<graphics::Texture2D> _blockTextures;
+	/// Every block's vertices, a run of them each
+	std::unique_ptr<graphics::VertexBuffer> _blockVertices;
 
 	std::unique_ptr<graphics::FrameBuffer> _footprintFrameBuffer;
+	std::unique_ptr<graphics::FrameBuffer> _landAlphaFrameBuffer;
 	glm::mat4 _proj;
 	glm::mat4 _view;
 	glm::u16vec2 _extentIndexMin;

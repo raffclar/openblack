@@ -14,22 +14,28 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/polar_coordinates.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/DayNightClock.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/SkyInterface.h"
 #include "Camera/Camera.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/BigForestArchetype.h"
-#include "ECS/Archetypes/BonfireArchetype.h"
 #include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
+#include "ECS/Archetypes/DeadTreeArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/FieldArchetype.h"
+#include "ECS/Archetypes/FlowersArchetype.h"
+#include "ECS/Archetypes/MistArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Archetypes/PotArchetype.h"
+#include "ECS/Archetypes/StreamSegmentArchetype.h"
 #include "ECS/Archetypes/StreetLanternArchetype.h"
 #include "ECS/Archetypes/TownArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
@@ -38,6 +44,7 @@
 #include "ECS/Components/Stream.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/WeatherSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "InfoConstants.h"
@@ -228,10 +235,9 @@ void FeatureScriptCommands::SetATownInfluenceMultiplier(int32_t townId, float mu
 	                    townId, multiplier);
 }
 
-void FeatureScriptCommands::CreateMist(glm::vec3 position, float param2, int32_t param3, float param4, float param5)
+void FeatureScriptCommands::CreateMist(glm::vec3 position, float altitude, int32_t colour, float size, float edgeShrink)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}, {}, {}, {}) not implemented.",
-	                    __FILE__, __LINE__, __func__, glm::to_string(position), param2, param3, param4, param5);
+	MistArchetype::Create(position, altitude, static_cast<uint32_t>(colour), size, edgeShrink);
 }
 
 void FeatureScriptCommands::CreatePath(int32_t param1, int32_t param2, int32_t param3, int32_t param4)
@@ -290,8 +296,13 @@ void FeatureScriptCommands::CreateAbode(int32_t townId, glm::vec3 position, cons
                                         int32_t size, int32_t foodAmount, int32_t woodAmount)
 {
 	// Does not use 3d angle to game angle
-	AbodeArchetype::Create(townId, position, GAbodeInfo::Find(abodeInfo), rotation * 0.001f, size * 0.001f,
-	                       static_cast<uint32_t>(foodAmount), static_cast<uint32_t>(woodAmount));
+	const auto type = GAbodeInfo::Find(abodeInfo);
+	if (type == AbodeInfo::None)
+	{
+		return; // the game has no check (see GAbodeInfo::Find)
+	}
+	AbodeArchetype::Create(townId, position, type, rotation * 0.001f, size * 0.001f, static_cast<uint32_t>(foodAmount),
+	                       static_cast<uint32_t>(woodAmount));
 }
 
 void FeatureScriptCommands::CreatePlannedAbode(int32_t townId, glm::vec3 position, const std::string& abodeInfo,
@@ -305,8 +316,13 @@ void FeatureScriptCommands::CreatePlannedAbode(int32_t townId, glm::vec3 positio
 void FeatureScriptCommands::CreateTownCentre(int32_t townId, glm::vec3 position, const std::string& abodeInfo, int32_t rotation,
                                              int32_t size, [[maybe_unused]] int32_t worshipPercentage)
 {
-	AbodeArchetype::Create(townId, position, GAbodeInfo::Find(abodeInfo), rotation * 0.001f, size * 0.001f,
-	                       static_cast<uint32_t>(0), static_cast<uint32_t>(0));
+	const auto type = GAbodeInfo::Find(abodeInfo);
+	if (type == AbodeInfo::None)
+	{
+		return; // the game has no check (see GAbodeInfo::Find)
+	}
+	AbodeArchetype::Create(townId, position, type, rotation * 0.001f, size * 0.001f, static_cast<uint32_t>(0),
+	                       static_cast<uint32_t>(0));
 }
 
 void FeatureScriptCommands::CreateTownSpell(int32_t townId, const std::string& spellName)
@@ -421,11 +437,11 @@ void FeatureScriptCommands::CreateTree(int32_t forestId, glm::vec3 position, Tre
 	CreateNewTree(forestId, position, treeType, 1, rotation * 0.001f, scale * 0.001f, scale * 0.001f);
 }
 
-void FeatureScriptCommands::CreateDeadTree(glm::vec3 position, [[maybe_unused]] const std::string& player,
-                                           [[maybe_unused]] TreeInfo treeType, float scale, [[maybe_unused]] float roll,
-                                           float yaw, [[maybe_unused]] float pitch)
+void FeatureScriptCommands::CreateDeadTree(glm::vec3 position, [[maybe_unused]] const std::string& player, TreeInfo treeType,
+                                           float scale, [[maybe_unused]] float roll, float yaw, [[maybe_unused]] float pitch)
 {
-	CreateNewTree(-1, position, TreeInfo::Burnt, 1, yaw, scale, scale);
+	// TODO: tilt the tree by its roll and pitch
+	DeadTreeArchetype::Create(position, treeType, yaw, scale);
 }
 
 void FeatureScriptCommands::CreateNewTree(int32_t forestId, glm::vec3 position, TreeInfo treeType, int32_t isNonScenic,
@@ -461,10 +477,9 @@ void FeatureScriptCommands::CreateFeature(glm::vec3 position, FeatureInfo type, 
 	FeatureArchetype::Create(position, type, rotation * 0.001f, scale * 0.001f);
 }
 
-void FeatureScriptCommands::CreateFlowers([[maybe_unused]] glm::vec3 position, int32_t, float, float)
+void FeatureScriptCommands::CreateFlowers(glm::vec3 position, FlowersInfo type, float rotation, float scale)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	FlowersArchetype::Create(position, type, rotation, scale);
 }
 
 void FeatureScriptCommands::CreateWallSection([[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t, int32_t)
@@ -542,14 +557,13 @@ void FeatureScriptCommands::CreateCreatureFromFile(const std::string& playerName
 	auto playerType =
 	    std::distance(k_PlayerNamesStrs.begin(), std::find(k_PlayerNamesStrs.begin(), k_PlayerNamesStrs.end(), playerName));
 	auto yAngleRadians = glm::radians(180.0f);
-	auto scale = .3f;
 	auto& resources = Locator::resources::value();
 	auto& creatureMindManager = resources.GetCreatureMinds();
 	auto creatureMindPath = Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true) / creatureMind;
 	auto loadResult = creatureMindManager.Load(creatureMind, resources::CreatureMindLoader::FromDiskTag {}, creatureMindPath);
 	auto creatureMindId = loadResult.first->first;
 	CreatureArchetype::Create(position, static_cast<PlayerNames>(playerType), creatureType, creatureMindId, yAngleRadians,
-	                          scale);
+	                          CreatureArchetype::StartScale(creatureType), CreatureArchetype::StartBody(creatureType));
 }
 
 void FeatureScriptCommands::CreateFlock(int32_t, glm::vec3, glm::vec3, int32_t, int32_t, int32_t)
@@ -619,28 +633,25 @@ void FeatureScriptCommands::CreateInfluenceRing([[maybe_unused]] glm::vec3 posit
 	// __func__);
 }
 
-void FeatureScriptCommands::CreateWeatherClimate(int32_t, int32_t, glm::vec3, float, float)
+void FeatureScriptCommands::CreateWeatherClimate(int32_t index, int32_t type, glm::vec3 position, float radius1, float radius2)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	Locator::weatherSystem::value().CreateClimate(index, static_cast<uint32_t>(type), glm::xz(position), radius1, radius2);
 }
 
-void FeatureScriptCommands::CreateWeatherClimateRain(int32_t, float, int32_t, int32_t, int32_t)
+void FeatureScriptCommands::CreateWeatherClimateRain(int32_t index, float desire, int32_t dryDays, int32_t rainingDays,
+                                                     int32_t raining)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	Locator::weatherSystem::value().SetClimateRain(index, desire, dryDays, rainingDays, raining);
 }
 
-void FeatureScriptCommands::CreateWeatherClimateTemp(int32_t, float, float)
+void FeatureScriptCommands::CreateWeatherClimateTemp(int32_t index, float temperature, float targetTemperature)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	Locator::weatherSystem::value().SetClimateTemperature(index, temperature, targetTemperature);
 }
 
-void FeatureScriptCommands::CreateWeatherClimateWind(int32_t, float, float, float)
+void FeatureScriptCommands::CreateWeatherClimateWind(int32_t index, float windX, float windZ, float angle)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	Locator::weatherSystem::value().SetClimateWind(index, windX, windZ, angle);
 }
 
 void FeatureScriptCommands::CreateWeatherStorm(int32_t, glm::vec3, float, int32_t, const std::string&, const std::string&,
@@ -672,7 +683,11 @@ void FeatureScriptCommands::CreateStreamPoint(int32_t streamId, glm::vec3 positi
 	auto& registryContext = registry.Context();
 
 	Stream& stream = registry.Get<Stream>(registryContext.streams.at(streamId));
-	stream.nodes.emplace_back(position, stream.nodes);
+	stream.points.push_back(position);
+	if (stream.points.size() >= 2)
+	{
+		StreamSegmentArchetype::Create(stream.points[stream.points.size() - 2], stream.points.back());
+	}
 }
 
 void FeatureScriptCommands::CreateWaterfall([[maybe_unused]] glm::vec3 position)
@@ -726,7 +741,12 @@ void FeatureScriptCommands::CreateBase([[maybe_unused]] glm::vec3 position, int3
 void FeatureScriptCommands::CreateNewFeature(glm::vec3 position, const std::string& type, int32_t rotation, int32_t scale,
                                              [[maybe_unused]] int32_t param5)
 {
-	FeatureArchetype::Create(position, GFeatureInfo::Find(type), rotation * 0.001f, scale * 0.001f);
+	const auto info = GFeatureInfo::Find(type);
+	if (info == FeatureInfo::None)
+	{
+		return; // the game has no check (see GFeatureInfo::Find)
+	}
+	FeatureArchetype::Create(position, info, rotation * 0.001f, scale * 0.001f);
 }
 
 void FeatureScriptCommands::SetInteractDesire(float)
@@ -752,28 +772,20 @@ void FeatureScriptCommands::MultiplayerDebug(int32_t, int32_t)
 	// __func__);
 }
 
-void FeatureScriptCommands::CreateStreetLantern([[maybe_unused]] glm::vec3 position, int32_t type)
+void FeatureScriptCommands::CreateStreetLantern(glm::vec3 position, int32_t type)
 {
-	// In the retail game, any value other than 7 creates a bonfire
-	if (type == 7)
-	{
-		StreetLanternArchetype::Create(position);
-	}
-	else
-	{
-		BonfireArchetype::Create(position);
-	}
+	// Any kind other than the street lantern makes a country lantern on a campfire, not a bonfire
+	StreetLanternArchetype::Create(position, static_cast<MobileStaticInfo>(type));
 }
 
-void FeatureScriptCommands::CreateStreetLight([[maybe_unused]] glm::vec3 position)
+void FeatureScriptCommands::CreateStreetLight(glm::vec3 position)
 {
-	StreetLanternArchetype::Create(position);
+	StreetLanternArchetype::Create(position, MobileStaticInfo::StreetLantern);
 }
 
 void FeatureScriptCommands::SetLandNumber(int32_t number)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}) not implemented.", __FILE__, __LINE__,
-	                    __func__, number);
+	Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber = number;
 }
 
 void FeatureScriptCommands::CreateOneShotSpell([[maybe_unused]] glm::vec3 position, const std::string&)
@@ -802,7 +814,11 @@ void FeatureScriptCommands::TownDesireBoost([[maybe_unused]] int32_t townId, con
 
 void FeatureScriptCommands::CreateAnimatedStatic(glm::vec3 position, const std::string& type, int32_t rotation, int32_t scale)
 {
-	auto animatedStaticType = GAnimatedStaticInfo::Find(type);
+	const auto animatedStaticType = GAnimatedStaticInfo::Find(type);
+	if (animatedStaticType == AnimatedStaticInfo::None)
+	{
+		return; // the game has no check (see GAnimatedStaticInfo::Find)
+	}
 	AnimatedStaticArchetype::Create(position, animatedStaticType, rotation * 0.001f, scale * 0.001f);
 }
 
@@ -856,16 +872,14 @@ void FeatureScriptCommands::CreateDrinkWaypoint([[maybe_unused]] glm::vec3 posit
 	// __func__);
 }
 
-void FeatureScriptCommands::SetTownInfluenceMultiplier([[maybe_unused]] float multiplier)
+void FeatureScriptCommands::SetTownInfluenceMultiplier(float multiplier)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	Locator::entitiesRegistry::value().Context().mapScriptGlobals.townInfluenceMultiplier = multiplier;
 }
 
-void FeatureScriptCommands::SetPlayerInfluenceMultiplier([[maybe_unused]] float multiplier)
+void FeatureScriptCommands::SetPlayerInfluenceMultiplier(float multiplier)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	Locator::entitiesRegistry::value().Context().mapScriptGlobals.playerInfluenceMultiplier = multiplier;
 }
 
 void FeatureScriptCommands::SetTownBalanceBeliefScale([[maybe_unused]] int32_t townId, [[maybe_unused]] float scale)
@@ -892,10 +906,9 @@ void FeatureScriptCommands::EditLevel()
 	// __func__);
 }
 
-void FeatureScriptCommands::SetNighttime(float, float, float)
+void FeatureScriptCommands::SetNighttime(float duration, float night, float change)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	Locator::skySystem::value().GetClock().SetCycleFromLand(duration, night, change);
 }
 
 void FeatureScriptCommands::MakeLastObjectArtifact(int32_t, const std::string&, float)
