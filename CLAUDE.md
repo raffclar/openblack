@@ -15,7 +15,8 @@ are preserved but with modern libraries such as BGFX, EnTT and with C++20 optimi
 - Comments should stay plain English, describing behaviour without referencing Mac symbols, addresses, assembly, or
   vanilla's internal names.
 - Avoid decompiled function names. They may change between versions and developer setups.
-- Technical notes and research should go to `docs/openblack/*domain*/*feature*.md`
+- Technical notes and research go to the bw1-decomp repository's `docs/openblack/*domain*/*feature*.md`, not to this
+  repository.
 
 ## Modern C++
 
