@@ -21,17 +21,21 @@
 #include "3D/MapCoords.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Forest.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Reward.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Transform.h"
@@ -72,6 +76,7 @@ void ForEachMapComponent(Func&& func)
 	func.template operator()<Creature>();
 	func.template operator()<Animal>();
 	func.template operator()<MobileObject>();
+	func.template operator()<RewardOnLand>();
 }
 
 /// A building's outline on the ground, from its model's box as it is placed
@@ -117,7 +122,7 @@ MapProduction::MapProduction()
 	_connections.push_back(_registry->OnDestroy<MapCellResident>().connect<&MapProduction::OnResidentGone>(*this));
 	// Anything already made is filed too
 	ForEachMapComponent([this]<typename Component>() {
-		_registry->Each<const Component>([this](entt::entity entity, const Component& /*unused*/) {
+		_registry->Each<const Component>([this](entt::entity entity, const auto&... /*unused*/) {
 			if (std::ranges::find(_made, entity) == _made.end())
 			{
 				_made.push_back(entity);
@@ -156,7 +161,7 @@ std::optional<MapProduction::Kind> MapProduction::KindOf(const Registry& registr
 	{
 		return Kind {.placement = Placement::FixedBack, .coversOutline = false, .moves = true};
 	}
-	if (registry.AnyOf<Villager, Creature, Animal, MobileObject>(entity))
+	if (registry.AnyOf<Villager, Creature, Animal, MobileObject, Ball, RewardOnLand>(entity))
 	{
 		return Kind {.placement = Placement::MobileFront, .coversOutline = false, .moves = true};
 	}
@@ -192,7 +197,9 @@ void MapProduction::FileMade() const
 	_made.clear();
 	for (const auto entity : made)
 	{
-		if (!_registry->Valid(entity) || _registry->AllOf<MapCellResident>(entity))
+		// What is held by a hand or moving in the physics stays out of the map's cells until it is put back
+		if (!_registry->Valid(entity) || _registry->AllOf<MapCellResident>(entity) ||
+		    _registry->AnyOf<InHand, InPhysics>(entity))
 		{
 			continue;
 		}
