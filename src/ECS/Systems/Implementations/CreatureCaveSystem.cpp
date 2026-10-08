@@ -150,6 +150,14 @@ std::optional<creature_cave::Snapshot> CreatureCaveSystem::Snapshot() const
 		return snapshot;
 	}
 	snapshot.attitudeToPlayer = mind->attitudeToPlayer;
+	// Whether it thinks it knows what its god wants most
+	// TODO(raffclar): the game forgets what it found each time it writes the scroll's text; this is looked at every frame,
+	// so it only looks
+	auto perceived = mind->perceivedDesires;
+	snapshot.knowsGodsDesire = creature_perceived_desires::TakeDominant(perceived, [mind](size_t desire) {
+		                           return mind->desires.has_value() && desire < mind->desires->desires.size() &&
+		                                  mind->desires->desires.at(desire).activated;
+	                           }).has_value();
 	snapshot.secondsAlone = mind->secondsAlone;
 	const auto* tables = Locator::creatureMindSystem::has_value() ? Locator::creatureMindSystem::value().GetTables() : nullptr;
 	if (mind->learnt.has_value())
@@ -198,8 +206,9 @@ std::optional<creature_cave::Snapshot> CreatureCaveSystem::Snapshot() const
 				}
 				else if (i < knowledge.miraclesSeen.size())
 				{
-					const auto needed = std::max(creature_watching::TimesToLearn(rule.timesToSee, multiplier), 1u);
-					percent = static_cast<int32_t>(std::min(100u, knowledge.miraclesSeen[i].count * 100 / needed));
+					const auto needed = creature_watching::TimesNeeded(rule.timesToSee, multiplier);
+					percent = static_cast<int32_t>(
+					    std::min(100.0f, static_cast<float>(knowledge.miraclesSeen[i].count) * 100.0f / needed));
 				}
 				snapshot.miracles.push_back({.name = rule.name, .percent = percent});
 			}

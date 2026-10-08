@@ -98,6 +98,8 @@ public:
 
 	[[nodiscard]] virtual bool IsLeashed(entt::entity creature) const = 0;
 	[[nodiscard]] virtual std::optional<entt::entity> TiedTo(entt::entity creature) const = 0;
+	/// Where the hand holding a creature's leash is, while a hand holds it rather than a post or a thing
+	[[nodiscard]] virtual std::optional<glm::vec3> HolderPoint(entt::entity creature) const = 0;
 	[[nodiscard]] virtual LeashType TypeOf(entt::entity creature) const = 0;
 	/// The player's creature: the one creature they can lead, if they have one
 	[[nodiscard]] virtual std::optional<entt::entity> PlayersCreature(PlayerNames player) const = 0;
@@ -107,12 +109,8 @@ public:
 	/// A player clicks a creature with the right button: their own creature gets the picked leash put on; any other
 	/// is refused. Returns whether the leash went on.
 	virtual bool TapCreature(PlayerNames player, entt::entity creature) = 0;
-	/// Once a frame, the player's cursor in screen heights from the top left and the frame's seconds, and whether the
-	/// hand is free to shake, holding nothing and gripping nothing. Shaken, it takes off a leash held in the hand.
-	/// Returns whether that happened.
-	virtual bool TrackHand(PlayerNames player, glm::vec2 cursor, float seconds, bool handFree) = 0;
-	/// The player shakes the hand: a leash held in it comes off; one tied to something stays. Returns whether it came
-	/// off.
+	/// The player shakes the leash off, drawing a scribble with the empty hand (see GestureSystemInterface): a leash held
+	/// in the hand comes off; one tied to something stays. Returns whether it came off.
 	virtual bool Shake(PlayerNames player) = 0;
 
 	/// Hangs a player's three leash posts at three points, the aggression, learning and compassion leashes in turn
