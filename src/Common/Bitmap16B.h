@@ -9,34 +9,31 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
-#include <filesystem>
-#include <string>
+#include <span>
+#include <vector>
 
 namespace openblack
 {
+/// A 16-bit image file (the sky's .555 layers): a header of u32s (the width at 1, the height at 2) and the
+/// 16-bit texels from the 5th u32
 class Bitmap16B
 {
 public:
-	Bitmap16B() = delete;
-
-	explicit Bitmap16B(const void* data);
-	~Bitmap16B();
+	/// Parses the bytes of a whole file (read through the resource caches)
+	explicit Bitmap16B(std::span<const uint8_t> fileData);
 
 	[[nodiscard]] unsigned int Width() const { return _width; }
 	[[nodiscard]] unsigned int Height() const { return _height; }
-	uint16_t* Data() { return _data; }
-	[[nodiscard]] size_t Size() const { return _size; };
+	[[nodiscard]] const uint16_t* Data() const { return _data.data(); }
+	[[nodiscard]] size_t Size() const { return _data.size() * sizeof(uint16_t); }
 
 private:
 	unsigned int _width;
 	unsigned int _height;
-	uint16_t* _data;
-	size_t _size;
-
-public:
-	static Bitmap16B* LoadFromFile(const std::filesystem::path& path);
+	std::vector<uint16_t> _data;
 };
 
 } // namespace openblack

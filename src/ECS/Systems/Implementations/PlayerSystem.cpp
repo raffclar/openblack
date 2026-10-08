@@ -18,6 +18,16 @@
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
 
+namespace
+{
+/// A name out of range falls to the neutral player
+size_t IndexOf(openblack::PlayerNames name)
+{
+	const auto index = static_cast<size_t>(name);
+	return index < PlayerSystem::k_Players ? index : static_cast<size_t>(openblack::PlayerNames::NEUTRAL);
+}
+} // namespace
+
 void PlayerSystem::RegisterPlayers()
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -35,4 +45,24 @@ void PlayerSystem::AddPlayer(entt::entity playerEntity)
 entt::entity PlayerSystem::GetPlayer(PlayerNames playerName) const
 {
 	return _players.at(playerName);
+}
+
+void PlayerSystem::ClearPlayers()
+{
+	_players.clear();
+}
+
+Alignment& PlayerSystem::Alignment(PlayerNames name)
+{
+	return _alignment[IndexOf(name)];
+}
+
+PlayerMagic& PlayerSystem::MagicWithoutEntity(PlayerNames name)
+{
+	return _magicWithoutEntity[IndexOf(name)];
+}
+
+void PlayerSystem::ClearMagicWithoutEntity()
+{
+	_magicWithoutEntity.fill(PlayerMagic {});
 }

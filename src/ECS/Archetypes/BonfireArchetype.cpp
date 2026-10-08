@@ -9,25 +9,22 @@
 
 #include "BonfireArchetype.h"
 
-#include <glm/gtx/euler_angles.hpp>
+#include <glm/vec3.hpp>
 
-#include "3D/AllMeshes.h"
-#include "ECS/Components/Mesh.h"
-#include "ECS/Components/Transform.h"
-#include "ECS/Registry.h"
-#include "Locator.h"
-#include "Resources/ResourceManager.h"
+#include "MobileStaticArchetype.h"
+#include "Particles/PSysManager.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
-using namespace openblack::ecs::components;
 
-entt::entity BonfireArchetype::Create(const glm::vec3& position)
+entt::entity BonfireArchetype::Create(const glm::vec3& position, float yAngleRadians, float scale)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto entity = registry.Create();
-	registry.Assign<Transform>(entity, position, glm::eulerAngleY(glm::radians(180.0f)), glm::vec3(1.0f));
-	const auto resourceId = resources::HashIdentifier(MeshId::BuildingCampfire);
-	registry.Assign<Mesh>(entity, resourceId, static_cast<int8_t>(0), static_cast<int8_t>(1));
+	// A rock with mobile static info 8 (MSH_B_CAMPFIRE) with the angle and scale, and the spot visual
+	// SPOT_VISUAL_BONFIRE (25), 1.0, -1 (forever), on it. The temperature the callers pass (CREATE_BONFIRE's F1, 100
+	// from a mobile static creation) is not used. No lantern light.
+	const auto entity =
+	    MobileStaticArchetype::Create(position, MobileStaticInfo::Bonfire, 0.0f, 0.0f, yAngleRadians, 0.0f, scale);
+	constexpr int k_SpotVisualBonfire = 25;
+	psys::manager::CreateSpotVisual(k_SpotVisualBonfire, position, -1.0f, entity);
 	return entity;
 }

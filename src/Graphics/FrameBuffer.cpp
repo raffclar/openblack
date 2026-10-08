@@ -15,6 +15,7 @@
 
 #include <bgfx/bgfx.h>
 
+#include "Engine/GpuCommands.h"
 #include "GraphicsHandleBgfx.h"
 
 using namespace openblack::graphics;
@@ -40,16 +41,19 @@ FrameBuffer::FrameBuffer(std::string&& name, uint16_t width, uint16_t height, Te
 
 	if (depthStencilFormat)
 	{
+		engine::gpu::NoteResourceCall("FrameBuffer::create (its two textures)", _name);
 		std::array<bgfx::TextureHandle, 2> textures = {
 		    bgfx::createTexture2D(width, height, false, 1, toBgfx(colorFormat), BGFX_TEXTURE_RT),
 		    bgfx::createTexture2D(width, height, false, 1, toBgfx(depthStencilFormat.value()), BGFX_TEXTURE_RT),
 		};
+		engine::gpu::NoteResourceCall("FrameBuffer::create", _name);
 		_handle = fromBgfx(bgfx::createFrameBuffer(static_cast<uint8_t>(textures.size()), textures.data()));
 		_colorAttachment._handle = fromBgfx(bgfx::getTexture(toBgfx(_handle), 0));
 		_depthStencilAttachment._handle = fromBgfx(bgfx::getTexture(toBgfx(_handle), 1));
 	}
 	else
 	{
+		engine::gpu::NoteResourceCall("FrameBuffer::create", _name);
 		_handle = fromBgfx(bgfx::createFrameBuffer(_width, _height, toBgfx(colorFormat), BGFX_TEXTURE_RT));
 		_colorAttachment._handle = fromBgfx(bgfx::getTexture(toBgfx(_handle), 0));
 	}
@@ -61,6 +65,7 @@ FrameBuffer::~FrameBuffer()
 {
 	if (bgfx::isValid(toBgfx(_handle)))
 	{
+		engine::gpu::NoteResourceCall("FrameBuffer::destroy", _name);
 		bgfx::destroy(toBgfx(_handle));
 	}
 }

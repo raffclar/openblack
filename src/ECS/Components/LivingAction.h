@@ -49,9 +49,13 @@ struct LivingAction
 	{
 	}
 
-	// LivingState or VillagerState
+	// LivingState or VillagerState: TOP, FINAL (the destination), PREVIOUS (the stored)
 	std::array<uint8_t, static_cast<size_t>(Index::_Count)> states;
+	/// The original's generic u16 "state counter": each state uses it its own way (CREATED counts down, DROWNING,
+	/// SIT...). A new villager starts it at GameRand(500) + 1. Setting a villager state does not touch it. The name
+	/// is openblack's.
 	uint16_t turnsUntilStateChange;
+	/// Turns since TOP last changed (each villager state turn adds 1; setting TOP resets it to 0)
 	uint16_t turnsSinceStateChange;
 };
 } // namespace openblack::ecs::components

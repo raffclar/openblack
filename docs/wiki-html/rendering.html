@@ -1,0 +1,1296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>World rendering: original versus openblack — Black &amp; White notes</title>
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body>
+<nav id="side">
+  <h1><a href="index.html" style="color:inherit;text-decoration:none">Black &amp; White notes</a></h1>
+  <span class="tag">openblack — how the original behaves</span>
+  <input id="q" type="search" placeholder="Search (press /)" autocomplete="off">
+  <div id="hits"></div>
+  <div id="nav"><h2>Start here</h2>
+<a class="" href="README.html">Black &amp; White 1 notes for openblack</a>
+<h2>Engine</h2>
+<a class="" href="openblack-internals.html">openblack internals</a>
+<a class="" href="engine-loop.html">The engine loop: game turns and frames (original and openblack)</a>
+<a class="" href="engine-math.html">Coordinates, terrain, object size, game clock, matrices and Zoomer</a>
+<a class="" href="tooling.html">Tools and formats</a>
+<a class="" href="parity.html">Graphics engine parity: original versus openblack</a>
+<a class="" href="original-frame.html">The original B&amp;W frame (runblack.exe W120, D3D7, LH3D)</a>
+<h2>World</h2>
+<a class="" href="map-loading.html">Map loading and script functions</a>
+<a class="" href="land-script-save.html">Writing land-script lines: SaveObject and WriteCommand</a>
+<a class="" href="water.html">Water in the game</a>
+<a class="" href="trees.html">Trees and forests</a>
+<a class="" href="buildings.html">Buildings, building sites and towns (the building side)</a>
+<a class="" href="objects-and-resources.html">Objects and resources</a>
+<a class="" href="physics.html">Physics: thrown objects, collisions, damage and rocks that split</a>
+<h2>Life</h2>
+<a class="" href="villagers.html">Villagers: data, state machine and speed</a>
+<a class="" href="animals.html">Animals: AI, states and clips</a>
+<h2>Magic and weather</h2>
+<a class="" href="magic.html">Magic: the core of the miracles</a>
+<a class="" href="miracles.html">Miracles one by one</a>
+<a class="" href="particles.html">Particles (PSys)</a>
+<a class="" href="day-night-weather.html">Day, night and weather in the original</a>
+<a class="" href="vortex.html">Vortexes and the tornado: objects swallowed, carried and flung</a>
+<h2>Hand and interface</h2>
+<a class="" href="hand-and-interface.html">The hand and the interface</a>
+<a class="" href="intro.html">The Land 1 intro and the tutorial&#x27;s script side</a>
+<a class="" href="script-camera.html">Script camera (GCamera and CameraModeScript)</a>
+<a class="" href="camera-tracks.html">Camera tracks (`Data\camera.edt`) and `WALK_PATH`</a>
+<h2>Presentation</h2>
+<a class="here" href="rendering.html">World rendering: original versus openblack</a>
+<a class="" href="rendering-objects.html">Model rendering: original versus openblack</a>
+<a class="" href="animation.html">Skeletal animation (villagers and animals)</a>
+<a class="" href="audio.html">Audio: the engine, the banks, the music, the voices and the script</a>
+<a class="" href="video.html">Bink videos (.bik)</a>
+<h2>Data</h2>
+<a class="" href="mods.html">Modified data packs</a>
+<h2>Other</h2>
+<a class="" href="creature.html">The creature: groundwork, random streams and what is unknown</a></div>
+</nav>
+<main>
+<details id="toc"><summary>On this page</summary><div class="toc">
+<ul>
+<li><a href="#world-rendering-original-versus-openblack">World rendering: original versus openblack</a><ul>
+<li><a href="#the-originals-direct3d-7-states">The original's Direct3D 7 states</a></li>
+<li><a href="#argb4444-textures">ARGB4444 textures</a></li>
+<li><a href="#terrain-detail-small-bump">Terrain detail ("small bump")</a></li>
+<li><a href="#sea-skyraw--skyaraw">Sea (sky.raw + skya.raw)</a></li>
+<li><a href="#coast">Coast</a></li>
+<li><a href="#terrain-light-table-0xedd90c">Terrain light table (0xEDD90C)</a></li>
+<li><a href="#distance-haze-original-fog-detail-levels-36">Distance haze (original, "Fog" detail, levels 3–6)</a></li>
+<li><a href="#haze-and-land-light-the-common-api">Haze and land light: the common API</a></li>
+<li><a href="#camera">Camera</a></li>
+<li><a href="#shadows-three-systems-in-the-original">Shadows (three systems in the original)</a></li>
+<li><a href="#projected-shadows-shadowinfo">Projected shadows (ShadowInfo)</a></li>
+<li><a href="#sky-sun-moon-and-clouds-original">Sky: sun, moon and clouds (original)</a></li>
+<li><a href="#rivers">Rivers</a></li>
+<li><a href="#screen-fade-and-cinema-bars">Screen fade and cinema bars</a></li>
+<li><a href="#text-the-originals-fonts-and-the-hand-message">Text: the original's fonts and the hand message</a></li>
+<li><a href="#particles-psys">Particles (PSys)</a></li>
+<li><a href="#map-mist-lh3dmist-fn_007fa300">Map mist (LH3DMist, fn_007FA300)</a></li>
+<li><a href="#the-temple-interior">The temple interior</a></li>
+<li><a href="#test-hooks">Test hooks</a></li>
+<li><a href="#addresses-of-the-original-moved-out-of-the-code">Addresses of the original, moved out of the code</a></li>
+<li><a href="#pending">Pending</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+<h1 id="world-rendering-original-versus-openblack">World rendering: original versus openblack</h1>
+<p>How the world is drawn in the original and in openblack: Direct3D states, terrain and small bump, sea and coast, light
+table, haze, camera, shadows on the terrain, sky (sun, moon, clouds), rivers, screen fade, text and the map's mist. The
+models (materials, light, reflections, object shadows, sprites, smoke) are in
+<a href="rendering-objects.html">rendering-objects.md</a>; water as gameplay, in <a href="water.html">water.md</a>; the state of each stage,
+in <a href="parity.html">parity.md</a>.</p>
+<ul>
+<li><a href="#the-originals-direct3d-7-states">The original's Direct3D 7 states</a></li>
+<li><a href="#argb4444-textures">ARGB4444 textures</a></li>
+<li><a href="#terrain-detail-small-bump">Terrain detail ("small bump")</a></li>
+<li><a href="#sea-skyraw--skyaraw">Sea</a></li>
+<li><a href="#coast">Coast</a></li>
+<li><a href="#terrain-light-table-0xedd90c">Terrain light table</a></li>
+<li><a href="#distance-haze-original-fog-detail-levels-36">Distance haze</a></li>
+<li><a href="#haze-and-land-light-the-common-api">Haze and land light: the common API</a></li>
+<li><a href="#camera">Camera</a></li>
+<li><a href="#shadows-three-systems-in-the-original">Shadows (three systems in the original)</a></li>
+<li><a href="#projected-shadows-shadowinfo">Projected shadows (ShadowInfo)</a></li>
+<li><a href="#sky-sun-moon-and-clouds-original">Sky: sun, moon and clouds</a></li>
+<li><a href="#rivers">Rivers</a></li>
+<li><a href="#screen-fade-and-cinema-bars">Screen fade and cinema bars</a></li>
+<li><a href="#text-the-originals-fonts-and-the-hand-message">Text: the original's fonts and the hand message</a></li>
+<li><a href="#particles-psys">Particles (PSys)</a></li>
+<li><a href="#map-mist-lh3dmist-fn_007fa300">Map mist (LH3DMist)</a></li>
+<li><a href="#the-temple-interior">The temple interior</a></li>
+<li><a href="#test-hooks">Test hooks</a>, <a href="#pending">Pending</a></li>
+</ul>
+<p>Status: everything on this page is <strong>faithful</strong> (original, verified in the executable) except what is marked
+<strong><span class="state approx">approximate</span></strong> or <strong><span class="state approx">inferred</span></strong>, the deviations stated in each section and what is in
+<a href="#pending">Pending</a>.</p>
+<blockquote>
+<p><strong>Code rules.</strong> State lives in ECS components or Locator services, textures and meshes load through the resource
+caches (<code>Texture2DLoader</code> and the other loaders), pure logic (formulas, tables, rasterisers) stays free of global
+state and is tested with fakes in <code>test/</code>, and comments describe behaviour in plain English, with no decompiled
+names or addresses (those belong here).</p>
+</blockquote>
+<h2 id="the-originals-direct3d-7-states">The original's Direct3D 7 states</h2>
+<p><code>LH3DRender</code> sets the states with two wrappers, <code>LH3DRender::SetRenderState</code> (0x412940) and
+<code>LH3DRender::SetTextureStageState</code> (0x82B9C0), and also with direct calls into the <code>IDirect3DDevice7</code> vtable: <code>+0x50</code>
+is SetRenderState and <code>+0x94</code> is SetTextureStageState.</p>
+<ul>
+<li><strong>Filtering</strong>: in the default configuration (<code>0x82CA40</code>, inside <code>fn_0082C8F0</code>, next to <code>OpenD3D</code>),
+  MINFILTER and MAGFILTER = 2 (<strong>linear</strong>) in stages 0 and 1. <code>SetupThing</code> (0x4133A2… and <code>DrawBevBox</code> 0x413C20),
+  in the 2D frontend, switches to 1 (point) while it draws and restores it afterwards.</li>
+<li><strong>There are no mipmaps</strong>: <code>D3DTSS_MIPFILTER</code> is never set (D3D7's default value is NONE) and the DDS textures
+  in <code>AllMeshes.g3d</code> only have one level.</li>
+<li><strong>There is no antialiasing</strong>: neither <code>D3DRENDERSTATE_ANTIALIAS</code> nor <code>EDGEANTIALIAS</code> appear, nor
+  <code>MAXANISOTROPY</code> either.</li>
+<li>Dither enabled (<code>DITHERENABLE</code>), which was for the 16-bit modes.</li>
+<li><strong>No cubic filter</strong> (reviewed at the user's request): every MAGFILTER write (cache 0xEC8230/0xEC8630;
+  <code>fn_0082C8F0</code> 0x82CADB, <code>fn_00836E20</code> 0x836FA4, <code>HelpDude::Feel</code> 0x5B9CAF, <code>SetupThing::DrawTab</code>/<code>DrawBevBox</code>) uses
+  1 (point) or 2 (linear); never 3/4 (D3DTFG_FLATCUBIC / GAUSSIANCUBIC). There is no filtering option in the registry.
+  The installation's <code>d3dim.dll</code> / <code>d3dim700.dll</code> are UCyborg's "resolution limit remover" (2016), they do not touch
+  filtering. A softer look in the original would come from the driver or from the Windows compatibility layer.</li>
+<li>Cut-outs: the <code>TexturedChroma</code> materials (trees, fences) use threshold 0x96 (0.588); the pine has
+  <code>MSH_T_CONIFER</code> 577 and <code>MSH_T_PINE</code> 590. Its skin (BGRA4) has ~94.5 % of texels with alpha 0 or 15 and the rest
+  intermediate.</li>
+<li>The default configuration also turns on <code>D3DRENDERSTATE_SPECULARENABLE</code> (<code>fn_0082C8F0</code> 0x82CC54): the vertex
+  specular is added to texture × diffuse.</li>
+<li>The mode table 0xC38728 is installed by <code>LH3DRender::Open</code> (0x82B4EA).</li>
+</ul>
+<p>openblack already matches by default: bilinear, no mips and no MSAA.</p>
+<h2 id="argb4444-textures">ARGB4444 textures</h2>
+<p><strong>Faithful</strong>. Code: <code>src/Graphics/Argb4444.h</code> (<code>graphics::argb4444</code>, stateless
+and, on purpose, without a shader twin); tests <code>test_argb4444</code> (they emulate 0x8374F0..0x837533 and 0x83767E..0x837687).</p>
+<ul>
+<li><strong>The cut.</strong> <code>LH3DTexture</code> stores in ARGB4444 the textures created with the alpha flag 0x40 (<code>Create</code> 0x8379E0
+  with flags 0x41). Format 0 has the masks 0xF000/0xF00/0xF0/0xF (0x85DCA1..0x85DCC2). <code>fn_00837400</code> keeps the high
+  nibble of each byte, without rounding:</li>
+<li>B = byte[+2] &gt;&gt; 4 (0x8374F4), G = byte[+1] &amp; 0xF0 (0x837502), R = (byte[+0] &amp; 0xF0) &lt;&lt; 4 (0x837512);</li>
+<li>the alpha of <code>xa.raw</code> = byte &amp; 0xF0 (0x837681).</li>
+<li>D3D7 expands the nibble when sampling, n·17 (inferred: the driver does it). The original <strong>filters nibbles that are
+    already cut</strong>, so the cut goes at load time and not in a shader.</li>
+<li>API: <code>Quantize(v) = v &gt;&gt; 4</code>, <code>Expand(n) = n·17</code>, <code>Cut(v) = Expand(Quantize(v)) = (v &amp; 0xF0) | (v &gt;&gt; 4)</code>;
+    <code>Pack</code>/<code>Unpack</code> of the 16-bit texel; <code>PackRaw(rgb, alpha)</code> for the <code>x.raw</code> + <code>xa.raw</code> pair.</li>
+<li><strong>Without the flag</strong>, the 4444 branch does not run (<code>cmp [esp+0x834],0 / je</code>, 0x8374CB/0x8374D2). It goes to 565
+  (0x8376E3..0x83771E) or to 555 (0x837765..0x83779F) depending on [0xEDD46C] (0 on the hardware the game targets:
+  555, see <code>Graphics/Rgb16.h</code>), with 5 bits per channel: texel = ((R &amp; 0xF8) &lt;&lt; 7) | ((G &amp; 0xF8) &lt;&lt; 2) | (B &gt;&gt; 3),
+  without rounding. <strong>Done</strong>: <code>Texture2DLoader</code> cuts each byte with <code>rgb16::Cut5</code>
+  (= <code>Unpack555(Pack555(...))</code>, the bit-repetition expansion D3D does when sampling, inferred) in the
+  <code>k_Rgb555Stems</code> textures (<code>Loaders.cpp</code>) that are exactly 0x30000 bytes (the same guard as <code>fn_00837300</code>).</li>
+<li>[0xEDD46C] is set to 1 only by <code>fn_0085D7F0</code> (0x85D929..0x85D930), when the 16-bit format the engine picks has the
+    green mask 0x7E0 (565), i.e. the device has no X1R5G5B5; <code>fn_00837400</code> tests it at <code>cmp [0xEDD46C]</code> 0x8376B9.</li>
+<li>The 565 branch (0x8376E3..0x83771E) packs ((R &amp; 0xF8) &lt;&lt; 8) | ((G &amp; 0xF8) &lt;&lt; 3) | (B &gt;&gt; 3) (<code>shl edx, 5</code> 0x8376FA,
+    <code>lea edi, [edx + eax·8]</code> 0x83770C): green is G &amp; 0xF8, so the lowest bit of the 6-bit field is always 0. Only for
+    .raw textures, never for the video.</li>
+<li>Who goes that way: of the 69 calls to <code>Create</code> 0x8379E0, the ones that load a file without 0x40 are <code>Sun.raw</code>
+    (flags 1, 0x81E844..0x81E851) and the saved-game images, <code>screenshots_lores_%i_map_0.raw</code> and
+    <code>screenshots_hires_%i_map_0.raw</code> (flags 1, <code>fn_00784070</code> 0x78408F and <code>fn_00784640</code> 0x78466A, names from
+    <code>fn_00784430</code> / <code>fn_007843F0</code>), which openblack does not load. The others are 0x41 (the list below), 0x44 / 0xC4 /
+    0x104 (in memory, type 4), 0x48, 4 (mesh skins), 2 (<code>SetPackedTexture</code>) or the video; the one at 0x822874 is in
+    <code>fn_008227A0</code>, a command-line mode (the terrain .cmp converter), not in the game.</li>
+<li>openblack: only <code>sun</code>.</li>
+<li><strong>The 0x44 ones do carry the flag</strong> (0x44 &amp; 0x40; <code>Create</code> stores the whole flags in [tex+0x10], 0x837A76): they are
+  4444 surfaces, but of type 4 (flags &amp; 0x3F, tables 0x837CD4 / 0x838E84 → 0x838C2E), in-memory textures that do not
+  load their file through <code>fn_00837400</code>. Such as <code>ChallengeScroll.raw</code> (0x44, 0x781BDC and 0x79D59F; strings 0xC25048
+  and 0xC2A5D0) and <code>human_shadow</code> (below). <code>ChallengeScroll</code> is not in the list because the game fills it in itself,
+  not because it lacks the flag; how it fills it in has not been read (see <a href="#pending">Pending</a>).</li>
+<li><strong>Guards.</strong> The colour has to be exactly 0x30000 bytes (<code>fn_00837300</code>, <code>cmp ecx,0x30000 / sete</code>, 0x837318); if
+  not, it goes through DDS. That is why <code>S_IceEnvMapGrey.raw</code>, of 194823 bytes, is not cut, nor is its
+  <code>S_IceEnvMapGreya.raw</code> (0x10000 bytes): without a valid colour <code>fn_00837400</code> never gets to read the alpha. The alpha
+  is read with 0x10000 bytes (0x837600): <code>LHLoadData</code> reads min(length, 0x10000) (0x7BCEC0..0x7BCECD) and does not fail
+  if it is shorter; the rest of the buffer keeps the colour stream (the leftover rule below, from its length onwards),
+  and a longer one is truncated without error.</li>
+<li><strong>Without <code>a.raw</code>.</strong> The alpha's name is the colour's without its last 4 characters plus <code>"a.raw"</code> (0xC384AC,
+  0x8375B4..0x8375C1). If <code>LHLoadData</code> fails, it only calls <code>Report3D</code> (0x837616) and carries on at 0x83761E with the
+  buffer that still holds the colour. The alpha of pixel i then comes from byte i of the colour stream (R0, G0, B0,
+  R1…) &amp; 0xF0.</li>
+<li>In practice it does not happen: all the 0x41 textures come with their <code>a.raw</code> (perhaps the saved-game images,
+    inferred). <code>PackRaw</code> reproduces it.</li>
+<li><strong>Who carries it.</strong> There are only two calls to <code>fn_00837400</code>: 0x838087 in <code>fn_00837DF0</code> and 0x838D41 in
+  <code>fn_00838AF0</code>. Both pass <code>[tex+0x10] &amp; 0x40</code> (0x838079 / 0x838D37).</li>
+<li>Of the 69 calls to <code>Create</code>, 32 push an immediate 0x41 and 22 use 0x44.</li>
+<li>One more computes it: <code>fn_008227A0</code> (not <code>fn_00822560</code>) 0x822855..0x822874 sets 1, plus 0x40 if the <code>a.raw</code> exists (the terrain
+    .cmp converter).</li>
+<li><strong>The <code>k_AlphaFlagStems</code> list</strong>, each name with its address:</li>
+<li>fixed: <code>Front_end_buttons</code>, <code>mousehelp</code>, <code>forcefield</code>, <code>pin</code>, <code>rainbow</code>, <code>PlayersSymbols</code>, <code>ChooseSymbol</code>,
+    <code>OriginalChooseSymbol</code>, <code>sky</code> (0x5E5432), <code>gatheringtext</code>, <code>Data\C_Ape_Hair</code>, <code>icons</code>, <code>PictureTexture</code>,
+    <code>smallbump</code>, <code>Weather</code>, <code>atmos</code>, <code>snow</code>, <code>Data\blobs</code>, <code>leash</code>;</li>
+<li>particles from <code>fn_0080BBD0</code>: <code>p4t</code>, <code>p4</code>, <code>smoke</code>, <code>s_fire</code>, <code>cool_effect</code>, <code>misc0</code>, <code>burn</code>;</li>
+<li>environment maps (table 0xC37EAC): <code>envmap</code>, <code>envmap_glass_fx</code>, <code>envmap_glass_fx_inv</code>, <code>envmap_glass_fx2_inv</code>;</li>
+<li>through <code>fn_0057DBE0</code> → <code>fn_0057DB10</code> (0x57DB78/0x57DB7B, flags 0x41):<ul>
+<li>GlobalTextures: <code>S_SpriteSheet1/2/3</code>, <code>S_Static</code>, <code>S_Hand_Flow</code>, <code>S_Fire</code> and the tables 0xBEF478, 0xBEF484 and
+  0xBEF4A0;</li>
+<li>the <code>TextureFileName</code> entries of the spell files, through ParticleSpriteCreator (<code>fn_006AA030</code> 0x6AA047) and
+  ParticleChainCreator (<code>fn_006AA800</code> 0x6AA817): <code>S_Beam</code>, <code>S_lightning</code>, <code>S_Spangle_A</code> <span class="state approx">inferred</span>,
+  <code>S_Teleport_Vortex_Texture(01)</code>, <code>S_Volcano_Fire</code>, <code>S_Volcano_Rock</code>;</li>
+<li>ZR_SurfRevol (0x6863E4);</li>
+<li>LandscapeVortex <code>fn_005FEA70</code>, tables 0xBF3F5C / 0xBF3F68: <code>S_VortexBaseMultiRing</code>, <code>S_Volcano_Base</code>,
+  <code>S_VortexBaseAlphacopy</code>, <code>S_Volcano_Base_Alpha</code>.</li>
+</ul>
+</li>
+<li>Load site of each fixed stem: <code>Front_end_buttons</code> 0x4120CA, <code>mousehelp</code> 0x447584 (0x44757F, [0xC5A314]),
+    <code>forcefield</code> 0x4568B9, <code>pin</code> 0x53C658, <code>rainbow</code> 0x5C386B, <code>PlayersSymbols</code> 0x5DE410, <code>ChooseSymbol</code> 0x5DE425,
+    <code>OriginalChooseSymbol</code> 0x5DE43D, <code>sky</code> 0x5E5432 / 0x5E5461, <code>gatheringtext</code> 0x5F8A92 / 0x72E00D / 0x83109F
+    (<code>GatheringText::SetupGameFonts</code> 0x831096), <code>Data\C_Ape_Hair</code> 0x6186C7, <code>icons</code> 0x787358, <code>PictureTexture</code>
+    0x7900FD, <code>smallbump</code> <code>fn_00804830</code> 0x804844, <code>Weather</code> 0x81E831, <code>atmos</code> 0x835C29 ([0xEDC370]), <code>snow</code> 0x835C7C,
+    <code>Data\blobs</code> 0x845E08, <code>leash</code> 0x8485F2.</li>
+<li><code>fn_0080BBD0</code> loads, in order: <code>p4t</code> 0x80BC1B, <code>p4</code> 0x80BC44, <code>smoke</code> 0x80BC6D ([0xEA1A98]), <code>s_fire</code> 0x80BC99,
+    <code>cool_effect</code> 0x80BCD4, <code>misc0</code> 0x80BD0E ([0xEA1A90]), <code>burn</code> 0x80BD37 ([0xEA1A9C]; path string 0xC37F90,
+    <code>Create(path, 0x41, −1, 0)</code> 0x80BD2F..0x80BD3F).</li>
+<li><code>envmap</code>: <code>fn_0080B380</code> 0x80B393 (table 0xC37EAC).</li>
+<li>LandscapeVortex <code>fn_005FEA70</code> creates its textures at 0x5FEA92 / 0x5FEB1B; the table 0xBF3F5C is filled by
+    <code>fn_005FD4C0</code> and 0xBF3F68 by <code>fn_005FD4D0</code>.</li>
+<li><code>HasAlphaFlag(stem)</code> accepts the colour's name and the alpha's (the same plus <code>a</code>), case-insensitively.</li>
+<li><strong><code>human_shadow.raw</code></strong> is not in the list. <code>fn_0081FAA0</code> creates its own 0x44 texture (0x81FC58) and reads 0x400 bytes
+  (0x81FC86). It writes texel = (v &amp; 0xF0) &lt;&lt; 8 (<code>and cl,0xF0 / mov bh,cl</code>, 0x81FCDD..0x81FCEC): alpha <code>Quantize(v)</code>
+  and RGB 0. It is the same cut, with its own entry (<code>k_HumanShadowStem</code>).</li>
+<li>It reads the 0x400 bytes at 0x81FC86 / 0x81FC91 and locks the new texture through <code>fn_00838AF0</code> (0x81FCA4).</li>
+<li><strong>L3D skins</strong>: they are copied as they are (<code>rep movsd</code> 0x837B41), because they already come in 4444. With mesh flag
+  0x10000 (<code>test edi,edx</code> 0x80656D) they would be RGB555 (see <a href="#pending">Pending</a>).</li>
+</ul>
+<p><strong>openblack.</strong>
+- <code>Texture2DLoader</code> (FromDiskTag, <code>Resources/Loaders.cpp</code>) cuts with <code>Cut</code> at load time:
+  - every <code>.raw</code> whose name satisfies <code>HasAlphaFlag</code> and is 0x30000 (colour) or, if it is the alpha (the colour plus
+    <code>a</code>), is 0x10000 and its sibling colour exists and is 0x30000 (approximate: the original only looks at the colour;
+    an alpha of another size is not cut here);
+  - and <code>human_shadow</code>.
+- openblack stores <code>x.raw</code> and <code>xa.raw</code> as two textures. Each one is cut separately, and bgfx's linear filter
+  already works on the 16 levels, like D3D.
+- <code>PackRaw</code> is used by the small bump (<code>LandIsland.cpp</code>), which joins colour and alpha in one texture. A shorter alpha
+  takes the tail of the colour stream and a longer one is truncated, like <code>LHLoadData</code>; a colour that is not 0x30000
+  is rejected (approximate: the original would go through DDS).
+- The copies that only expand nibbles that are already done use <code>Expand</code> (<code>CoastAlpha.cpp</code>, <code>GameFont.cpp</code>) or
+  <code>Unpack</code> (<code>BlockTexture.cpp</code>).
+- Shaders:
+  - <code>fs_blob.sc</code> no longer quantises. Before, it did floor(v/17) after filtering: one level less in 120 of the 256
+    values and the gradient in steps. Now the blob comes out somewhat darker and without steps.
+  - <code>fs_land_alpha.sc</code> keeps the rounding to 16 levels (floor(a·15 + 0.5)/15) even though the footprint is already
+    BGRA4: the texture is created with a linear filter (<code>L3DMesh.cpp</code>) and the rounding absorbs the hardware's error
+    when sampling the texel centre; if the value is already exact, nothing changes.
+  - <code>fs_physics_shadow_resolve.sc</code> (<code>covered/15</code>, 0xFA95C4) was already exact.
+- Whoever uses these textures already receives the 16 levels: also the glow of the night lights (<code>NightLights.cpp</code>
+  loads <code>S_Firea</code> and <code>smokea</code>), the water rings and the boats' puffs.</p>
+<h2 id="terrain-detail-small-bump">Terrain detail ("small bump")</h2>
+<p>Full report from the disassembly; W120 addresses:
+- <code>fn_00804830</code> loads <code>.\data\Textures\smallbump.raw</code> with the alpha flag (0x41). On first use <code>fn_00837400</code> packs it
+  into ARGB4444 and puts <code>smallbumpa.raw</code> into the alpha nibble (<code>"a.raw"</code>, 0x8375C1). Material mode 0xE.
+- Mode 0xE = <code>fn_0082DD90</code> (mode table 0xC38728, 8-byte {fn, flag} entries): <code>ALPHABLENDENABLE</code>,
+  <code>SRCALPHA/INVSRCALPHA</code>, stage 0 <code>TEXTURE*DIFFUSE</code> in colour and alpha.
+- <code>fn_007A1800</code> (block drawing): second pass per block, unlit, UV × 12 per block (one repeat every
+  13.33 units). It is not done on blocks with an overlay material.
+- <strong>Vertex diffuse of that pass</strong> (x87 <code>fn_00874AA0</code> 0x8758E7–0x87598B, SSE <code>fn_007A1800</code> 0x7A2FD0–0x7A3136; both
+  paths the same), with d the signed distance to the fade line and e = 20:
+  - d ≥ e → <code>specular &amp; 0xFF000000 | 0xFFFFFF</code>: white with alpha 255, or <strong>alpha 0 if the vertex altitude is ≤ 1</strong>
+    (the specular alpha, see <a href="#coast">Coast</a>);
+  - −e &lt; d &lt; e → <code>fistp(255 − (e − d)·255/40) &lt;&lt; 24 | 0xFFFFFF</code> if the specular alpha is not 0, otherwise 0 (black,
+    alpha 0);
+  - d ≤ −e → 0.
+  Masks of the SSE path: 0xFC01B0 = 0xFF000000, 0xFC01C0 = 0x00FFFFFF, compared with 0 (<code>[esp+0x460]</code>, 0x7A1C3B).
+  That way the detail <strong>fades (Gouraud) towards each vertex with altitude ≤ 1</strong>: it does not end in a straight edge
+  where the shallow water touches the open-sea cells. Skipping the triangles with all 3 vertices at 0 (0x7A31A0)
+  changes nothing.
+- Fade (<code>fn_007FEE60</code>; constants from <code>fn_007FE7B0</code>: 50 = 0x42480000, ramp 40 = 0x42200000, e = 20 = 0x41A00000):
+  line 50 units in front of the camera on the plane y = min(cam.y, 0.67·165); full up to 20 units before, nothing 20
+  after. It depends on the camera's height and angle (not a fixed 200): <strong>when zooming the camera in or out the
+  area with detail grows or shrinks, also over the shore, just as in the original</strong>.
+- Result: <code>col = mix(col_lit, smallbump.rgb · c, smallbumpa · a)</code> with (c, a) the diffuse above → <strong>light</strong> specks, also
+  at night. openblack did <code>col *= 1 − smallbumpa</code> (dark blotches) with only the alpha and UV × 10.
+- Until the shore audit (2026-10-01) openblack gave alpha = fade on every triangle with any vertex of altitude &gt; 1, also
+  on its shore vertices: a semi-transparent greenish film over the shallow water near the camera, cut along the
+  triangle edges (straight and diagonal) and changing with the zoom. Now <code>vs_terrain</code> computes (c, a) per vertex like
+  the original (<code>v_smallBumpFade</code>, vec2).
+- <code>SetUseSmallBump</code> (0x87FD30) only changes <code>[0xC37210]</code> (registry "UseSmallBump", detail levels).
+- <code>S_TileLandscape.raw</code> is not for the terrain: it is entry 6 of the global textures table 0xBEF484, used by the
+  citadel heart (<code>fn_00465C70</code>) <strong><span class="state approx">inferred</span></strong>. <code>L_Smallbump_01.raw</code> is not used.
+- In this installation <code>smallbump.raw</code> (2017), <code>smallbumpa.raw</code>, <code>Sky.raw</code> and <code>S_TileLandscape*.raw</code> (2021) come from
+  a texture pack, they are not from 2001. The user remembers (2026-10-01) that the mottling over the shallow water may
+  come from that <code>smallbump.raw</code>: with the 2001 original it would look different; the drawing rule is the same.
+- openblack: <code>LandIsland::CreateSmallBumpTexture</code> (RGBA with 4-bit quantisation), per-vertex fade in <code>vs_terrain</code>
+  (<code>u_smallBumpLine</code>, <code>u_skyAndBump.w</code>), blend in <code>fs_terrain</code>.</p>
+<h2 id="sea-skyraw--skyaraw">Sea (<code>sky.raw</code> + <code>skya.raw</code>)</h2>
+<p>From the disassembly (W120):
+- <code>GLandscape::Open</code> 0x5E5432 loads <code>.\Data\Textures\sky.raw</code> (alpha flag; <code>skya.raw</code> is the alpha, 4 bits) with
+  material mode 5 (= <code>fn_0082DD90</code>, the same as 0xE: <code>SRCALPHA/INVSRCALPHA</code>, <code>TEXTURE*DIFFUSE</code>).
+- <code>GLandscape::Draw</code>: sky (with the reflected moon) → reflected land (<code>LandRef</code>, heights × −1, light table × 0.5,
+  <code>fn_007FF4F0</code>) → parts under the water (hand, objects, fish…) → hand glow (0x5E4D89) → sea
+  (<code>fn_00879930</code>) → land. The sea is skipped only if <code>[0xECA670]</code> (wireframe, debug) or <code>[0xECA664]</code> ≠ 0; the latter is
+  set by <code>PSysLightMaps</code> (0x6CA57E) to <code>clamp(level, 0, 1)·190</code> and the level only goes up/down when a cutscene ends
+  (<code>CameraModePath::Cleanup</code>): <strong>in normal play the sea is drawn</strong>.
+- Strips of 2 px rows on screen, <code>ZFUNC ALWAYS</code>, without writing Z. UV = (world + offset) / P,
+  P = 2000 − 1800·WaterTiling (560 at the default detail, 200 at the maximum). Offset with the ambient wind
+  (−1/330 per ms, applied twice per frame), which is 0 in a game.
+  Ripple: each row moves 0.9·sin(i·π/8) along the camera's horizontal front,
+  i = (frame + 2·(row+1)) &amp; 15, full beyond 70 depth, nothing below 30.
+- Vertex colour = entry 255 of the terrain light table (full light for the time of day); alpha = 255 up to
+  depth 7000, dropping linearly to 80 at 14000 (0xC39908). A single colour for the whole sea: <strong>the sea receives no
+  cloud shadows</strong> (only the reflected land seen through it).
+- WaterTiling is the global 0xC38228 (read by <code>fn_00879930</code>).
+- The ripple direction is the camera's forward x and z ([0xEA1DD4] / [0xEA1DDC]) scaled to 0.9, unless both are 0.
+- The sea material's mode 5 is set by <code>GLandscape::Open</code> at 0x5E546C.
+- The sea's CPU routines are <code>fn_008792E0</code>, <code>fn_00879500</code>, <code>fn_00879930</code> and <code>fn_0087A090</code> (the role of <code>fn_008792E0</code>
+  is in <a href="#pending">Pending</a>).
+- Texture offsets: [0xFA9370] / [0xFA9374] for detail levels 1..6, [0xFA9390] / [0xFA9394] for level 0.
+- Drift constants: −1/330 at 0x9A3C24 (used at 0x879963), −1/330000 at 0x9A3C2C (0x87A130).
+- The ambient wind is <code>g_ambient_wind_direction</code> (0xEA9E70 / 0xEA9E78) = FastNormalize(int8 <code>LH3DAtmos::ambient[4]</code> /
+  8, 0, ambient[5] / 8), set every turn by <code>GGame::ProcessTurn</code> 0x54E5DC. ambient[4..5] are only written by
+  <code>InitStaticsValues</code> / <code>fn_00835AD0</code> (0), <code>GGame::Load</code> and the Internet weather: that is why it is 0 in a game.</p>
+<p>In openblack (<code>fs_water</code>/<code>vs_water</code>, <code>Graphics/RendererSea.cpp</code>, <code>Graphics/SeaRows</code>): <strong>done like the original</strong>.
+- <strong>Sea area</strong> (<code>fn_00879500</code>, <code>sea::ComputeScreenRange</code>): 30000×30000 quad at y = 0 centred on (2560, 2560)
+  (corners −12440 / 17560), clipped with the near plane and the four sides (no far plane). <code>top</code> = minimum and
+  <code>bot</code> = maximum screen y, with their 1/z; <code>top</code> is raised to 0 and <code>bot</code> lowered to height − 1 without correcting
+  its 1/z. Oddity copied: the first vertex can only set <code>bot</code> (<code>if y &gt; bot … else if y &lt; top</code>). The clipping is the
+  original's: vertices 0..3 = (−12440, −12440), (17560, −12440), (17560, 17560), (−12440, 17560) and triangles
+  (0, 2, 1), (0, 3, 2) (0x879537); each one goes through the recursive clipper <code>fn_0081A760</code> (x87) / <code>fn_007A3A50</code>
+  (SSE, P4), one plane per bit from 0x20 (near) to 0x02, two new vertices per cut at the end of the table and, if two
+  triangles remain, the first one clipped by a recursive call; the new vertices carry only the codes of the following
+  planes and their screen y is clamped to 0..height−1 (<code>g_MaxScreen</code>, 0x81E130). <code>bot</code>/<code>top</code> are read in the order of
+  that list. Checked with a Unicorn emulation of <code>fn_00879500</code>: both paths
+  give the same list and the same y (±0.05 px of rounding) in 400 random cameras; <code>test_sea_rows</code> carries two cases
+  from the emulation. In 30000 cameras over the island the "only <code>bot</code>" oddity never moved <code>top</code> by more than 1 px.
+  <strong>Bug in the original, copied</strong>: to decide whether clipping is needed it adds up the codes of 0, 1, 2 and of entry
+  <strong>4</strong> of the table (<code>[0xE3B5F0]</code>, instead of 3 at 0xE3B5EC), which is a leftover from the last draw by LH3DP3. If
+  that entry and codes 0..2 are 0 with vertex 3 outside, it draws without clipping with the camera x', y', z' of
+  vertex 3 (a garbage <code>top</code>). It requires seeing corners 0, 1 and 2 at the same time: it does not happen in any of
+  200000 cameras over the island's disc (radius 5120, height 3..4000), so entry 4 = 0 is assumed. Near plane:
+  <code>[0xE839E0]</code>, which <code>GCamera::Update</code> 0x4424AF sets every frame with <code>LandFeature::GetNearClipping</code> 0x5E2F30 =
+  0.3 + 0.16·h (h = camera − <code>GetAltitude</code>; 0.3 if h ≤ 0, 3.5 if h &gt; 20; 0.1 with <code>SET_GRAPHICS_CLIPPING</code>
+  [0xD1A2F8]): it is the <code>cameraNearClip</code> that openblack already recalculates in <code>Game</code> and the one the sea uses.
+  - Clip codes of LH3DP3 (<code>fn_008797F0</code> 0x87985A..0x8798C3): 0x20 in front of the near plane, 0x10 / 0x08 right /
+    left, 0x04 / 0x02 top / bottom of the 90° frustum of the pre-scaled camera matrix (|x'| ≤ z, |y'| ≤ z); no far
+    plane.
+  - The sea is clipped with <code>g_NoBackfaceCull</code> = 1 (0x8795AC): no triangle is culled.
+  - New edge vertex (<code>fn_0081DD90</code> / SSE <code>fn_007A1480</code>): t = d(in) / (d(in) − d(out)), p = in·(1 − t) + out·t; the
+    distance to the plane comes from the jump table 0x81E17C; its clip code only tests the planes after the one being
+    cut (jump table 0x81E1B4, 0x81E063), never the near plane again; its screen position is clamped at 0x81E0F1 to
+    <code>g_MaxScreen</code> 0xC2AB00 (width − 1, height − 1).
+  - Triangles left after each cut in <code>fn_0081A760</code>: (c, c−a, c−b) 0x81A7C1; (b−a, b, b−c) 0x81A835; (b−a, b, c) then
+    (b−a, c, c−a) 0x81A856; (a, a−b, a−c) 0x81A8C8; (a, a−b, c) then (a−b, c−b, c) 0x81A8E9; (a−c, a, b) then (a−c, b,
+    b−c) 0x81A928; nothing to clip 0x81A971.
+  - <code>fn_00879500</code> returns no sea when the whole quad is outside one plane (0x8795CA, 0x879649) or when bottom &lt; 0 or
+    top &gt; height − 1 (0x879768..0x8797E2).
+  - top starts at the screen height and bottom at −1 (0x879651..0x879762); screen y = (1 − y'/z)·height/2
+    (<code>fn_008797F0</code> 0x8798E6). The two 1/z are stored as rhw = near/z at [0xFA9384] / [0xFA9388] and divided by near in
+    <code>fn_00879930</code>.
+- <strong>Rows</strong> (<code>fn_00879930</code>): rows of vertices r = 0..n at y = ftol(top) + 2r, n = (ftol(bot) − ftol(top) + 2)/2;
+  1/z of the row = 1/z(top) + r·(1/z(bot) − 1/z(top))/(n − 1). <code>vs_water</code> draws a full-screen quad and <code>fs_water</code>
+  redoes each row per pixel: point on the plane under the row, ripple on the even rows (full if 1/z &lt; 1/70,
+  (1/z − 30)·0.025 if &lt; 1/30), the odd rows repeat the UV of the previous one (2 identical px and 2 interpolated px,
+  without perspective correction), alpha per row rounded and <strong>row 0 with alpha 0x20</strong> if ftol(top) ≥ 1.
+  It is counted from <code>top</code> and with <code>u_viewRect</code>, so it does not depend on the API.
+  - The rows are set up at 0x879AD7..0x879B3E; the alpha 0x20 of row 0 is decided by "y of row 0 &gt; 0.5" (0x879D5A).
+- Outside the rows and below the horizon (between the far edge of the quad and the horizon, or with no sea on screen)
+  what is under the sea is seen unblended: the <strong>strip of mirrored sky</strong> above the edge of the sea (about 25 px at 864
+  high with the camera at a height of 300). Above the horizon, the sky of the main view.
+- <strong>Frame</strong> <code>[0xFA938C]</code>: goes up by 1 (&amp; 15) per drawn frame only if the sea is on screen and the game is running
+  (<code>g_game_time_inc</code> ≠ 0): <strong>while paused the sea lines do not move</strong> (identical captures while paused). At modern fps
+  it shimmers faster than at ~30 fps, as the original would at that speed.
+- <strong>Drift with the wind</strong> (<code>sea::Drift</code>): off += wind·ms·(−1/330), twice (0x879963 always, 0x879A69 if there is sea on
+  screen), wrapped to P; at level 0, off0 += wind·ms·(−1/330000) wrapped to (−1, 1). The ambient wind is 0
+  (<code>sea::k_AmbientWind</code>), so it does not move: the code is there for the day it is not 0.
+- <strong>Detail level 0</strong> (<code>fn_0087A090</code>, WaterTiling = 0): world quad of ±70000, UV (x + 70000)/2800 and
+  (70000 − z)/2800 (V grows towards −z) plus its drift, vertex alpha 255, without ripple or fade.
+- <strong>Texture in 4 bits</strong> (<code>fn_00837400</code>): at load time, <code>sky.raw</code> and <code>skya.raw</code> keep <code>v &gt;&gt; 4</code> (n/15, like ARGB4444 in
+  D3D). The colour of <code>sky.raw</code> has a deviation of 5-8 out of 255, so 4-6 levels per channel remain and close up flat
+  blotches are seen.
+- <strong>What is under the sea</strong> is the reflection target, now <strong>the size of the main view</strong> (it is recreated when the size
+  changes; before it was 1024²) and painted <strong>in order</strong> (sequential view, like <code>GLandscape::Draw</code> 0x5E48AE–0x5E4E6B):
+  mirrored sky, reflected moon, reflected land (<code>fn_007FF4F0</code>: half light, <strong>no small bump</strong> because
+  <code>[0xC37210]</code> = 0, no dynamic shadows; the cloud ones yes; <strong>without writing Z</strong>: <code>GLandscape::Draw</code> 0x5E48C5–0x5E4900
+  sets ZWRITEENABLE (14) to 0 before <code>fn_007FF4F0</code> and to 1 afterwards, so it does not cover anything that comes after
+  and, between blocks, the last one drawn wins: the farthest, see <a href="#coast">Coast</a>), hand and objects under the water,
+  schools of fish and the <strong>hand glow</strong>. openblack drew it writing Z (its flat cells at y = 0, even if they were
+  transparent, and the mirrored hills covered the reflections that came after); since 2026-10-01 it no longer does. No
+  models or sprites. <code>fs_water</code> blends <code>light·sky</code> over it with alpha <code>skya·row alpha</code>, the same as
+  SRCALPHA/INVSRCALPHA over the frame.
+- Sea with ZFUNC ALWAYS, without writing Z and without culling; the main view is sequential and the land that comes
+  afterwards covers it.
+- Hook <code>OPENBLACK_SEA_TRACE=1</code> (every 500 frames: first row, n, 1/z, step, smooth row, frame, drift).
+  Test: <code>test_sea_rows</code>.</p>
+<h2 id="coast">Coast</h2>
+<p><strong>Faithful</strong> (done). The normal and SSE paths do the same. The earlier attempt (flattening and skipping
+cells, nothing more) gave a "stepped sand floor" because it lacked the piece that gives the shore its shape: the
+<strong>alpha of the block texture</strong>.
+- <strong>Coastal alpha per texel</strong> (<code>fn_008732C0</code>, SSE <code>fn_007AB4B0</code>, 16×16 texels per cell, 256 per block): altitude
+  weighted with cones <code>h = Σ w_k·alt_k</code> (<code>fn_00871560</code>: <code>w_k = max(0, 14 − d_k)</code> to the 4 corners, truncated to Σ = 255
+  and +1 to the largest), <code>h &lt; 0x100</code> → 0, <code>h ≥ 0x400</code> → 15, in between <code>e = h + 4·(int8)noise</code> (LND noise,
+  <code>[x·256 + z]</code>, the same in all blocks) and <code>idx = 15 + trunc((15e − 14250)/438)</code> on the table 0xC39814 =
+  0xC2AAC0 (16 dwords already shifted 12 bits: nibbles 0,0,0,1,2,4,6,8,9,10,10,11,12,13,14,15). Transparent below an
+  altitude of ~1.2–2, opaque towards ~2.9–3.7; the noise draws the shoreline.
+- <strong>Open-sea cells</strong> (bit 0x02 of the <code>flags</code> byte, <code>word(cell+6) &amp; 0x200</code>): their triangles are not emitted
+  (0x875DDC, 0x876A8A <strong>and</strong> SSE 0x7A9B14, 0x7AAB14) and the builder zeroes their texels (0x8739F8). 3297 cells in
+  Land1. Bit 0x02 is <strong>not</strong> part of the sound code: bits 2..5 of the byte are the ATMOS type.
+- <strong>Mesh flattening</strong>: <code>y = alt ≤ 3 ? 0 : alt·0.67</code> at each vertex (0x874B95, SSE 0x7A1EE7, <code>cmpleps</code> against 3.0
+  at 0xFC01F0). The game (<code>GetAltitude</code> 0x803121) only flattens next to a base corner ≤ 4; in Land1 there is no cell
+  where the two rules give different heights (base &gt; 4 with a corner ≤ 3: 0 of 25600).
+- <strong>Specular</strong>: <code>cell dword | 0xFF000000</code>; its alpha is 0 if UseSmallBump and alt ≤ 1 (0x874BA9, SSE 0x7A1F16).
+  The small bump pass copies it to its diffuse (alpha 0 at those vertices, see
+  <a href="#terrain-detail-small-bump">Terrain detail</a>) and skips the triangles with all 3 vertices like that (SSE
+  0x7A31A0). The small bump is <strong>not</strong> modulated by the coastal alpha, but it fades to 0 towards the vertices with
+  altitude ≤ 1: over the shallow water its specks only appear next to higher vertices, without an edge.
+- <strong>No hard edge next to the open-sea cells</strong>: on the 6 lands, the 0x02 cells have all 4 corners at altitude 0 and
+  the coastal alpha of the neighbouring drawn cells is 0 in every texel of the shared edge
+  (Land1 871 edges, Land2 1722, Land3 900, Land4 1283, Land5 1808, LandT 556,
+  all with maximum nibble 0). A straight edge in openblack cannot come from the coastal alpha.
+- <strong>Dynamic shadows</strong> (<code>fn_00878350</code>): vertex colour 0 where the altitude byte ≤ 1 → they fade towards the water
+  (interpolated), without a hard cut.
+- The land is drawn in mode 14 (SRCALPHA/INVSRCALPHA) over the already painted sea and <strong>writes Z even if the alpha is
+  0</strong> (<code>fn_0082DD90</code> sets ALPHATESTENABLE = 0 at 0x82DE2A and does not touch ZWRITEENABLE). Consequence, in the original
+  and in openblack: whatever is <strong>below y = 0</strong> and is drawn afterwards with its normal Draw (a tree or other physical
+  object that sinks before being deleted at −4R, see <a href="water.html#sinking-drowning-and-being-deleted">water.md</a>) is covered in
+  all the drawn cells and seen whole, as if floating, over the 0x02 cells, which do not write Z: it comes out <strong>cut into
+  rectangles</strong> along the edge of the open-sea cells.
+- <strong>Block order</strong> (land and reflected land): the list from <code>LH3DIsland::PreDraw</code> (0x7FF45F–0x7FF4DD),
+  ascending by <code>block+0x9BC</code> = distance from the camera to the centre (x + 80, 0, z + 80) of the block with LandRef
+  (<code>fn_00877210</code> 0x87722C–0x877296, 0x877C8A–0x877CCD): <strong>the closest first</strong>; <code>fn_007FF610</code> and <code>fn_007FF4F0</code>
+  walk the same list (+0x9B8). openblack sorts them the same way in <code>Renderer::DrawPass</code>. Without Z on the reflected
+  land, that order decides which mirrored hill covers which.
+- openblack: <code>3D/CoastAlpha</code> (port of the reference script, identical texel by texel in Land1),
+  today the alpha channel of <code>LandIsland</code>'s RGBA8 <code>BlockTexture</code> (see below; linear filter, rows along +z; it is
+  rebuilt in <code>RebuildAltitudes</code>);
+  <code>LandBlock</code> flattens, collapses the 0x02 cells to a point (Bullet's physics shape keeps them) and passes the "shore
+  fade" (alt &gt; 1) per vertex; <code>fs_terrain</code>: <code>a = min(costa, LandAlpha)</code> (the rivers still use <code>min</code>), without
+  <code>discard</code>, the two passes as a premultiplied colour (blend ONE/INV_SRC_ALPHA: <code>(land+spec)·a·(1−b) +
+  (bump+spec)·b</code>) and the shadows also multiply what is seen behind. <code>GetDrawnHeightAt</code> = height of the drawn mesh.
+  Differences: a single texture for the island (the bilinear filter crosses the block edges; the original had one
+  texture per block).
+- <strong>Cone weights, tie-break</strong>: the +1 goes to the largest and, among equals, to the <strong>last</strong> (w3 before w0): the table
+  that <code>fn_00871560</code> builds at 0xE3A3E0, read from a Unicorn run, gives e.g. at texel (8, 8) 63, 63, 63, 66.
+  31 of the 256 texels (the lines i = 8 and j = 8) change with respect to the previous rule (the coastal alpha barely).
+- <strong>Colour of the block texture (done)</strong>: <code>fn_00873790</code> per cell and <code>fn_008732C0</code> per texel, with the block's
+  <code>(x·256 + z)</code> index for the material, the noise and the bump (<code>[0xFA7698]</code>, the LND's bump):
+  - <code>h &lt; 0x100</code> → texel 0. Otherwise, entry <code>mat = min((h &gt;&gt; 8) + noise, 255)</code> of the country's table (<code>[0xFA75C0 +
+    4·country]</code>, country = low nibble of byte 6 of the cell): {index 0, index 1, coef}. 5-bit colour of the material
+    textures (<code>[0xFA74F8 + 4·i]</code>, B5G5R5 after the type u16): <code>c0·coef + c1·(256 − coef)</code> (the <strong>first</strong> one carries
+    the coefficient; only c0 if they are equal), × bump and to 4 bits: R = (Σ(c &amp; 0x7C00)·bump) &gt;&gt; 18, G &gt;&gt; 17, B &gt;&gt; 16,
+    each one clamped to 15 (0x873438..0x8734EA); alpha the coastal nibble.
+  - If the cell's 4 corners are not of the same country, it is built once per corner country and <code>fn_00871850</code>
+    blends per 4-bit channel (alpha included) with the cone weights: <code>floor(Σ channel_k·w_k / 255)</code>.
+  - Checked: the Unicorn emulation of <code>fn_00873790</code> matches the
+    reference in the 163840 texels of 40 rows of Land1 cells along the x87 path; the SSE one (P4, <code>fn_007AB4B0</code> with
+    <code>pmulhuw</code>) lowers the blue nibble (sometimes the green) by 1 in ~1.8 % of the texels. The x87 one is followed. The
+    texture openblack generates (<code>OPENBLACK_DUMP_BLOCK_TEXTURE</code>) is identical to the reference in 524288 compared
+    texels.
+  - <code>h &lt; 0x100</code> gives texel 0, black and transparent (0x87339C). The country's table entry is 12 bytes: {index 0,
+    index 1, coefficient} at country + 4 + 12·mat (0x8733BF).
+  - One build when the 4 corners share the country, else one per corner country (0x8737EA..0x873821); <code>fn_00871850</code>
+    blends at 0x8718EC..0x871A36 with the 0x80808081 multiply per channel mask (the result is the same for equal
+    countries: the weights add up to 255).
+  - The LND noise map is [0xFA7694] (the bump map [0xFA7698]); both 256×256, index x·256 + z, the same for every
+    block.
+  - openblack: <code>3D/BlockTexture</code> (<code>CountryTexel</code>, <code>BlendCorners</code>, <code>BuildIslandBlockTexture</code>); <code>LandIsland</code> keeps the
+    material textures and the bump in CPU and uploads an RGBA8 <code>BlockTexture</code> (nibble × 17, colour and coastal alpha)
+    that replaces the R8 <code>CoastAlpha</code>; <code>fs_terrain</code> takes the colour (it already includes the bump) and the alpha from
+    it; on top go the footprints, the static shadows and the light as before.
+  - This settles the question in tooling.md: the material entry is <code>min((h &gt;&gt; 8) + noise, 255)</code>, neither the
+    editor's <code>min(alt + noise/4)</code> nor openblack's former <code>(alt + noise) % 256</code>.</p>
+<h2 id="terrain-light-table-0xedd90c">Terrain light table (0xEDD90C)</h2>
+<ul>
+<li><code>fn_00869850</code>, every frame from <code>GLandAlignement::DrawSky</code>: 256 colours indexed by the cell's brightness, from
+  <code>Data\WeatherSystem\palette.raw</code> (32×32 RGBA, one for all the islands). Rows 0..2: colour of the good/neutral/evil
+  land according to the time (column = (2 − Time2SkyType)·15: 0 midnight, 15 sunset, 30 noon); rows 3..7 by alignment
+  (column = X·15, X = 1 − alignment: 0 good, 2 evil).</li>
+<li>base = lerp of rows 0/1/2 by X (with t = −1 exactly at neutral, a bug in the original that is kept), limited to
+  255 − 96·cloudy weather. Entries 48..255 = <code>(c3·(255−i) + base·i) / 200</code> (<code>fn_00869790</code>; LightBoost from the
+  registry, 0 by default) capped at 255; 0..47 another ramp (Land1's land uses 48..255). Lightning: lerp to white.</li>
+<li>Use: land vertex diffuse = table[brightness]; reflected land × 0.5; sea = table[255].</li>
+<li>Values at neutral noon: [48] 686d66, [128] 9eab9f, [218] daf0e0, [255] f3fffb (almost white); midnight
+  [255] 3d5b6c; sunset d68e79; evil at noon dbc8ff.</li>
+<li><code>palette.raw</code> is read as R, G, B, A bytes and swapped into D3DCOLOR by the loader (0x835CEC).</li>
+<li>The moon colour (palette row 5 at the alignment column) is stored at [0xFA26DC].</li>
+<li>table[255] ([0xEDDD08] = [0xEDD90C + 0x3FC]) is what the sea reads at 0x87993F, and the light of the missing cells
+  (0x8020F8, 0x802525, 0x803365).</li>
+<li>Storm: the overcast amount is clamped to 1 and the clamp written back to [0xFA2754] (0x869DDB); near and far move
+  towards 15 / 350 at 0x869E71..0x869E96; the flash also whitens the haze (0x869E98).</li>
+<li>Overcast at the camera: <code>GCamera::Update</code> 0x4426BA..0x4426E5 stores (float)(int8)byte 3 (movsx of +0x83) × 0.01
+  (0x8C5840) in [0xD1A26C], not clamped; <code>GLandAlignement::DrawSky</code> copies it to [0xFA2754] (0x5E2215).</li>
+<li>The copy of the last table is read by the PSys mists (<code>RenderParticleMist::DrawAt</code> 0x67A6C7) and the storm puffs
+  (<code>GWeather::DrawClouds</code> 0x83FF56). The ring creators take table[255] for the hand's rings and table[200] for the
+  rain's.</li>
+<li>openblack: <code>3D/LandLightTable</code> (exact port, checked against a Python reference), 256×1 texture that
+  <code>vs_terrain</code> samples per vertex; <code>u_seaColour</code> for the sea. <code>Build(skyType, alignment, overcast, flash)</code>:
+  cap <code>min(c, ftol(255 − 96·overcast))</code> without clipping the cloudiness (0x869ADB), flash <code>c += ((0xFF − c)·f) &gt;&gt; 8</code> with
+  alpha 0xFF across the whole table (0x869C25) and the storm/lightning haze; <code>LandLightTable::Current().GetRaw(i)</code> (copy
+  of the last <code>Build</code>) is the global table 0xEDD90C read by the ring creators (<code>ECS/WaterRings</code>); the renderer uses
+  <code>GetRaw</code> of its own table; <code>Current()</code> also keeps the base [0xFA26A4] (<code>GetRawBase</code>) and the haze, which are read by
+  the PSys mists and the storm clouds. Cloudy = <code>[0xFA2754]</code> (<code>GCamera::Update</code> 0x4426BA: byte 3 of
+  <code>GetWeatherSmooth</code> at the camera × 0.01) and flash = <code>[0xFA2768]</code> (<code>Update3D</code> 0x83587C, the closest storm that
+  contains the camera). The cloudiness comes from a single source, <code>Clouds::WeatherOvercastAtCamera()</code>; <code>3D/SkyWeather</code>
+  only gives the flash (<code>weather::LightningFlashAtCamera(camera)</code> from <code>ECS/Weather/LightningFlash</code>). Test:
+  <code>test_land_light</code> against a Python generator (exact inputs in binary: with 1.3 or 0.6 the
+  float columns fall on the other side of an integer from Python's doubles). The alignment is the sky's smoothed one (<code>Renderer::_skyAlignment</code>, [0xBF3378]).
+  The sky type of the column is the frame's sample [0xFA26BC] (<code>sky_type::Frame()</code>; column
+  <code>sky_type::LightColumn</code> = (2 − T)·15, haze <code>sky_type::HazeFactor</code>, see
+  <a href="day-night-weather.html#sky-type-src3dskytype">day-night-weather.md</a>); <code>Build(T, …)</code> receives it as is. The
+  original computes the column with <code>Time2SkyType([0xFA26C4])</code> (0x869859) and the haze with [0xFA26BC] (0x869D5F): it is
+  the same value, because <code>fn_00869850</code> runs in <code>fn_0086A330</code> right after <code>fn_0086A2C0</code> (DrawSky 0x5E2226..0x5E222B).
+  With the old convention (2 − T by the forwarder) the table came out identical at every hour (same float column);
+  only the last bits of near/far change: v'² = v·v and then <code>v'²·c + base</code> (0x869D7A..0x869DAB) instead of
+  <code>base + c·v·v</code> with v = 1 − |S − 1|, and the exe's exact constants [0x9A3BE0] = 1/900, [0x9A3BD8] =
+  0.00013888883, [0x9A3B70] = 1/15, [0x9A3BD4] = 1/350 instead of 0.00111111 / 0.000138889 / 0.0666667 /
+  0.00285714 (<code>test_land_light</code>, <code>LandLightTable.MatchesTheOldConventionEveryHour</code>).</li>
+</ul>
+<h2 id="distance-haze-original-fog-detail-levels-36">Distance haze (original, "Fog" detail, levels 3–6)</h2>
+<ul>
+<li>Per-frame parameters in <code>fn_00869850</code> (0x869CB8..0x869F78 → <code>fn_007FEAA0</code> / <code>fn_007FEAD0</code>), from the base of the
+  light table (with the cloudy weather cap): <code>k = min(255, (R + 4G + 3B)/8 + 8)</code>, colour = (R/3, G/3, B/3); with v' = 0
+  by day and by night and 1 at sunset: <code>near = 1/(0.0025 + 0.0075·v'²)</code>, <code>far = 1/(0.00111111 +
+  0.000138889·v'²)</code> (400→900 / 100→800). Storm: colour → (c&gt;&gt;3)+32, k → 48, near/far → 15/350 by w;
+  lightning: colour and k → 255. The 15/400/64 of the static initialisers are not used.</li>
+<li><code>t = clamp((z − near)/(far − near))</code>, z = view depth along the camera axis. Diffuse ×
+  <code>(256 − trunc((256 − k)·t))/256</code>; specular += <code>round(color·t)</code> with saturation.</li>
+<li>Land: per vertex (<code>fn_00874AA0</code> 0x874C5B, SSE <code>fn_007A1800</code>), block classes 0/1/2 (block+0x940); the land's
+  specular = RGB of the cell (D3DCOLOR, R and B swapped) + haze, added after the small bump.
+  Models: once per object at its origin (<code>fn_007FEB30</code>), no haze closer than near. It is not applied to the sea, the
+  sky (only storm tint), the sun and the moon (alpha ÷ (1 + 8w)), nor to PSys particles, shadows or the hand.</li>
+<li>Values (neutral, clear): noon near 400 far 900 k 211 colour (63, 70, 65); sunset 100/800 k 120 (56, 37,
+  31); midnight 400/900 k 81 (16, 24, 28).</li>
+<li>The haze globals: the "Fog" key [0xC37204] (written by <code>fn_008237B0</code> 0x8239E2 and <code>fn_00823AD0</code> 0x823C1F); near
+  [0xC37220] (static 15), far [0xC37224] (static 400), range = far − near [0xE9B6DC] (<code>fn_007FEAA0</code>
+  0x7FEAB0..0x7FEABB); k [0xC37228] in 1/256 (static 256, an int argument of <code>fn_007FEAD0</code>, 0x7FEAE0..0x7FEAF5);
+  colour [0xC37214] / [0xC37218] / [0xC3721C] as floats (static 64).</li>
+<li>The packed colour [0xE9B6D8] is <code>__ftol</code> of each float: b in byte 0, g in byte 1, r in byte 2, alpha 0
+  (0x7FEAFA..0x7FEB26).</li>
+<li>The depth z is the z column of <code>g_world_to_clipping</code> 0xEA9E40 (+0x08, +0x14, +0x20, translation +0x2C)
+  (0x7FEB4A..0x7FEB75, also 0x874C14 and 0x8773BC).</li>
+<li>Objects (<code>fn_007FEB30</code>): with Fog off the specular comes back untouched (0x7FEB36..0x7FEB49); strictly closer than
+  near nothing changes (0x7FEB7D..0x7FEB94); t uses fdiv (0x7FEBAD..0x7FEBBE); the diffuse is scaled only when f &lt; 256
+  (unsigned, 0x7FEBEB); the haze colour gets alpha 0xFF (0x7FEC80..0x7FEC99); a zero specular becomes that colour as
+  it is (0x7FEC9B), any other gets it added with saturation, alpha 0xFF either way (0x7FECA2..0x7FED0D).</li>
+<li>Land vertices (<code>fn_00874AA0</code>): with no haze the loop at 0x874B5E jumps to 0x875024; class 1 is 0x874C5B..0x874D1E;
+  the specular keeps its <strong>own</strong> alpha (0x874D83), or becomes the haze colour with alpha 0 when it was 0 (0x874D9E);
+  then the diffuse (0x874DA1..0x874DF0), only when f &lt; 256 (0x874DA7).</li>
+<li>openblack: a single API, <code>graphics::haze</code> (<code>src/Graphics/Haze.{h,cpp}</code>) and <code>assets/shaders/haze.sh</code> (see the
+  next section). Faithful in the rounding: <code>f = 256 − ftol((256 − k)·t)</code> (0x7FEBC3), diffuse <code>(c·f) &gt;&gt; 8</code> per byte
+  with the alpha kept (0x7FEBED), colour with <code>fistp</code> (round-to-even, 0x7FEC4A), class 2 with the truncated colour
+  [0xE9B6D8] (0x874C48, packed at 0x7FEB26) and saturated add.</li>
+</ul>
+<h2 id="haze-and-land-light-the-common-api">Haze and land light: the common API</h2>
+<p><strong>Original.</strong> One haze formula with three implementations (objects <code>fn_007FEB30</code>, x87 land <code>fn_00874AA0</code>,
+SSE land <code>fn_007A1800</code>) and four ways of taking the land light under an object, which are not merged:</p>
+<table>
+<thead>
+<tr>
+<th>Routine</th>
+<th>What it does</th>
+<th>Users</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>fn_00801C90</code> (SSE <code>fn_007A3EC0</code>)</td>
+<td><strong>integer</strong> bilinear over 4 cells: weights <code>ftol(frac·256)</code> [0x8D45CC], first in z (+0x08) and then in x (+0x88), <code>a + ((b − a)·w &gt;&gt; 8)</code> per byte; outside the map table[255] and specular 0xFF000000 (0x8020F8)</td>
+<td>almost all the models (48 calls)</td>
+</tr>
+<tr>
+<td><code>fn_00802120</code> (SSE <code>fn_007A4170</code>)</td>
+<td>the same, with weights <code>CellX &gt;&gt; 8</code> and <code>CellZ &gt;&gt; 8</code> (0x802206, 0x802237): <strong>almost no interpolation</strong></td>
+<td><code>Tree::Draw</code> 0x74AB1B (and the haze at 0x74AB60), <code>Scaffold::Draw</code> 0x6EA6CA, <code>TownArtifact::Draw</code> 0x51CB14</td>
+</tr>
+<tr>
+<td><code>GetAltitudeAndSetColorSpecular</code> 0x803340</td>
+<td>the cell alone (0x8033FA..0x803413), no haze</td>
+<td><code>WorshipSite::Draw</code> 0x519460 (except if it is burning: with <code>Object +0x44</code>, the FireEffect, it goes through <code>fn_00518050</code> → <code>fn_0080BEC0</code>, bilinear and haze; 0x5193FF..0x51940A), <code>SpellIcon::Draw</code> 0x5196CC, <code>Totem::Draw</code> 0x51ACD1</td>
+</tr>
+<tr>
+<td><code>fn_00801C90</code> without <code>fn_007FEB30</code></td>
+<td>the bilinear, no haze</td>
+<td><code>MultiMapFixed::DrawBuilding</code> 0x517F90 (0x517FB2; with fire only the tint <code>fn_0080BF10</code> 0x517FD4): the half-built building. It is called by <code>MultiMapFixed::Draw</code> 0x5180A6 if <code>IsDrawBuilding</code> (vt +0x8A4: the building plot +0x74, 0x52F0C0; for a Feature, 0x527790: the unfinished ArkDryDock), <code>Abode::Draw</code> 0x516129 (with DestructionMesh +0x90: the repaired part) and, with <code>IsBuilt</code> (vt +0x890) = 0, <code>WorshipSite::Draw</code> 0x5193E9, <code>SpellIcon::Draw</code> 0x519668 and <code>Totem::Draw</code> 0x51ABC3. <code>PetitNavire::PreDraw</code> 0x5DFF20 (hull +0x28, 0x5E018D and 0x5E03DF) and <code>PostDraw</code> 0x5E03F0 (sailors 0x5E073B; the deck copies the hull's +0x4C, 0x5E099C..0x5E09A2) never call <code>fn_007FEB30</code>. <code>Scaffold::Draw</code> 0x6EA5C0: the scaffold through <code>MobileObject::Draw</code> (with haze) and the ghost building +0x74 with <code>fn_00802120</code> (0x6EA6CA), no haze</td>
+</tr>
+<tr>
+<td>[0xEDDD08] = table[255]</td>
+<td>fixed light</td>
+<td><code>Dove::Draw</code> 0x41F75B, <code>CitadelHeart</code> 0x466958, clouds <code>fn_005E1DE0</code>, sea <code>fn_00879930</code></td>
+</tr>
+</tbody>
+</table>
+<p>Haze class of each block (<code>fn_00877210</code> 0x87743D..0x87749B): the depth of the 8 corners of its box
+(0x877232..0x877370, one per case of the jump table 0x877D04: centre +0x90C / +0x910 + 80 [0x8D060C] ± 80; in y,
+from 0 to <code>fild(+0x924)</code> × 0.67 [0xC3720C], or ± that height with [0xE9CD8C]). <span class="state approx">inferred</span> +0x924 is
+<code>LNDBlock::highestAltitude</code> and [0xE9CD8C] the LandRef detail key.
+Bit 2 if a corner goes past far, bit 1 if it is in (near, far]. Class 0 with Fog off or without bits, 1 if there is any
+bit 1, otherwise 2.
+- Cell layout: every LandBlock holds 17×17 cells of 8 bytes, index (x &amp; 15)·17 + (z &amp; 15) (0x83AED6..0x83AEEC); the
+  first dword is the cell colour read as a D3DCOLOR (bytes 0..2 blue, green, red = the file's r, g, b), byte 3 the
+  luminosity. The 4 corners are at +4, +0xC, +0x8C, +0x94 (<code>fn_0083AE80</code> 0x83AEF7..0x83AF17).
+- Cells are global, 0..511 along x and z (world / 10); <code>g_index_block</code> 0xE9C964 is 32×32 blocks of 16 cells, index (cx</p>
+<blockquote>
+<blockquote>
+<p>4)·32 + (cz &gt;&gt; 4) (0x874650..0x87466F).
+- <code>fn_00801C90</code>: cell = <code>__ftol(x·0.1)</code>, <code>__ftol(z·0.1)</code> (0x801CB8..0x801CDC, clipped to 0..0x1FF), weight ftol((f −
+  ftol(f))·256) (0x801DCB..0x801E06); the byte lerp a + ((b − a)·w &gt;&gt; 8) with the masks is a + floor((b − a)·w/256),
+  alpha 0 (0x801E0B..0x8020F0); off the map 0x8020F8..0x802113.
+- <code>fn_00802120</code> reads CellX = word [mc + 2] and CellZ = word [mc + 6]; SSE weights 0x7A42AC / 0x7A42BC; off the map
+  0x802525.
+- <code>GetAltitudeAndSetColorSpecular</code> 0x803340: off the map or without a block it exits at 0x803365 / 0x8033DA.</p>
+</blockquote>
+</blockquote>
+<p><strong>Light and shadow stamps on the land.</strong> There is no separate texture: they are written into the LandBlock's cells.
+- <code>fn_0086CFF0(pos, texels, pitch, centre, alpha, mode, maximum)</code> → <code>fn_0086CF50</code>: up to 200 stamps (0x86CFF5) in the
+  list 0xFA2920 (0x34 bytes, count [0xFA51C0]). The alpha × 255 is clipped and goes through <code>ftol</code>. With <code>centre</code>, the
+  position moves back (pitch − 1)·5 [0x8AB6E4] in x and z.
+- <code>fn_005E5830</code> → <code>fn_0086D360</code> (0x5E592F) applies the list with <code>fn_0086D060</code>: cell <code>ftol(x·0.1)</code>, weight
+  <code>fistp(255 − frac·255)</code> &amp; 0xFF, clipping to 0x200 cells and only blocks with +0x920 &amp; 4. Modes 1..8 of the table
+  0x86D338 only set a bpp (3, 1, 1, 1, 1, 1, 1, 4); only 1 and 2 stamp.
+  - Mode 2, shadow (<code>fn_00878C70</code>): bilinear of the map (z with wz, then x with wx), <code>v = 255 − (255 − r)·alpha/255</code>
+    (0x80808081), <strong>floor 0x30</strong> (0x878DAD) and brightness = <strong>min</strong>(brightness, v) (0x878DBD..0x878DC6).
+  - Mode 1, light (<code>fn_00878780</code>): per channel, <code>v = r·alpha/255</code> added to the cell's colour capped at 0xFF (0x878B09),
+    or the maximum if the last argument is not 0 (0x87890D). The map's R goes to the D3DCOLOR's red.
+- <code>ClearLight</code> 0x5E57B0 → <code>fn_0086D460</code>: <code>fn_00878700</code> leaves colour 0 and brightness = byte +5 (which in the .lnd files
+  has the same value as +3: checked in Land1, Land2 and Norse) and empties the list (0x86D487).
+- Callers:
+  - PSysLightMaps <code>fn_006CA280</code>: + (10, 0, 10) [0x8AB414], centred, mode 1 with bpp 3 and 2 with bpp 1. It is fed by
+    <code>ParticleLightMap::DrawAt</code> 0x67B220, the shadow of the PSys clouds (0x67A7BE, <code>GetBitmap</code> 0x6AA540) and
+    <code>FireGraphic</code> (0x731633).
+  - The map's clouds, <code>fn_005E25C0</code> 0x5E2800: sclouds.raw of 40, not centred, mode 2. It covers pitch − 1 = 39
+    cells. The map's rows go along x (<code>fn_0086D060</code> 0x86D1EC advances <code>ix·pitch·bpp</code>) and the bytes along z
+    (<code>fn_00878C70</code> 0x878DD1): the shadow ends up <strong>transposed</strong> with respect to openblack's earlier one, which read
+    <code>image[z·40 + x]</code> and covered 41 cells.
+  - The storm's shadow, <code>GWeather::DrawClouds</code> 0x8400C6: sstorm.raw of 40, centred, mode 2, s = (blackness +
+    0.7)·fade.
+  - The flash, <code>fn_00837200</code> 0x837278: the radial map 0xED92F0 of 64, mode 1.
+  - <code>DanceLight</code> 0x50F919: not ported.
+- <code>fn_0086D060</code>'s weight below 0: fistp((i − f)·255) and the cell one less (0x86D110..0x86D135); above 0
+  0x86D0E7..0x86D106; &amp; 0xFF at 0x86D19A..0x86D1A7; clipping 0x86D1B5..0x86D241; only modes 1 and 2 stamp (0x86D2E8).
+- Light stamp (<code>fn_00878780</code>): texel byte c goes into colour byte 2 − c (texel R → D3DCOLOR red), capped at 0xFF
+  (0x878B09..0x878B19).
+- <code>ClearLight</code> goes <code>fn_0086D460</code> → <code>fn_0086D390</code> → <code>fn_00878700</code>.
+- The "drawn this frame" bit 4 of block +0x920 is set by <code>fn_00877210</code> (0x8774E8).
+- The map clouds' stamp: only clouds with an alpha (0x5E27CB), at the cloud's world x, z with y 0
+  (0x5E2769..0x5E27B5), <code>fn_0086CFF0(pos, [0xD1A25C], 40, 0, alpha·(1/255) [0x900058], 2, 0)</code> (0x5E27DE..0x5E2800,
+  <code>push 0x28</code> 0x5E27FE). [0xD1A25C] holds <code>sclouds.raw</code>; the detail key is "CloudShadows".</p>
+<p><strong>openblack.</strong>
+- <code>graphics::haze</code>: <code>Params</code> (the 7 globals), <code>Frame()</code> (the Fog key in a single place), <code>ApplyObject</code> =
+  <code>fn_007FEB30</code>, <code>BlockClass</code> = <code>fn_00877210</code>, <code>ApplyVertex</code> = <code>fn_00874AA0</code> and <code>Uniforms</code>. <code>haze.sh</code>: <code>HazeT</code>,
+  <code>HazeFactor</code>, <code>ApplyHazeDiffuse</code>, <code>HazeColour</code> (round-to-even), <code>HazeColourFull</code> and <code>HazeAddSaturated</code>.
+- <code>land_light</code> (<code>src/3D/LandLight.{h,cpp}</code>, <code>assets/shaders/land_light.sh</code>): the frame's cells (<code>BeginFrame</code>,
+  <code>ApplyStamps</code>), <code>At</code> / <code>AtCellShift</code> / <code>AtCell</code> / <code>FullLight</code>, <code>AddStamp</code> / <code>ApplyStamp</code> and <code>LoadBitmapFile</code> (it
+  reads the file and passes it to <code>graphics::frame_anim::LoadBitmapFromFile</code> = <code>GJBitmap::LoadBitmapFromFile</code> 0x57CA90,
+  with the frame layout of <code>fn_0057CB40</code>; <code>frame_anim::FrameTexels</code> gives one frame, 0x6CA2E3). <code>Renderer::UpdateClouds</code>
+  uploads the cells as an RGBA texture (colour and brightness) read by <code>vs_terrain</code> and <code>vs_object</code>.
+- The haze class of each block: <code>haze::BlockCorners</code> (the 8 corners) and <code>haze::BlockClassOf</code>.
+- <code>vs_object</code>: <code>u_objectLight.w</code> = no haze + 2 × <code>land_light::ObjectMode</code> per mesh
+  (<code>RenderContext::meshLandLight</code>). The trees go with <code>CellShift</code> and haze; the worship sites (if they are not burning)
+  and the icons, with <code>Cell</code> and no haze; the Dove class, with <code>Full</code> and no haze (<code>Dove::Draw</code> only writes +0x4C;
+  <span class="state approx">inferred</span> +0x50 stays at 0). The half-built ArkDryDock (<code>ecs/FeatureBuild.h</code>) and the boat's hull
+  (<code>missionary_boat::GetHull</code>, was <code>petit_navire</code>) go bilinear and without haze (<code>DrawBuilding</code> 0x517F90, <code>PetitNavire</code> 0x5E03DF).
+- <code>vs_terrain</code>: the light and colour of the frame's cell, and the haze according to the block's class (<code>u_hazeBlock</code>).
+- The shadow of the map's clouds is no longer a separate cap: they are mode 2 stamps (<code>Clouds::StampShadows</code>).
+- The night lights (<code>night_lights</code>, <code>fn_008229B0</code>) write into the frame's brightness, after the stamps. <code>fn_008229B0</code>
+  reads byte +3 of the cell and writes it directly (0x822D9D, 0x822DC3). Before, openblack clipped them with
+  <code>min(loaded brightness, cap)</code>, so a light did not raise a cell with brightness &lt; 48; now it does.
+- <code>Particles/Creators/LightMap</code> is no longer a flat sprite: it stamps on the land (<code>light_map_atoms::SubmitFrame</code>, once per
+  frame: one record per atom, like <code>DrawAt</code> 0x67B220). Each atom runs through the map's frames
+  (<code>LightMapCreator::InitAtom</code> = <code>CreateParticleLightMap</code> 0x6A9DEF..0x6A9E16: FrameRate at +0x110, NumFramesInUse at
+  +0x114, PlayAnim at +0x118), so the light fades out; stuck on frame 0, the lightning left the ground white. The <code>UseRandJitter</code> jitter comes from
+  <code>game_random::LocalFloatRand</code> (GRand's local seed, the same one <code>FireGraphic</code> uses): the 1st draw goes to z, the 2nd
+  to y and the 3rd to x (0x67B264..0x67B2A3).</p>
+<p><strong>Remaining differences.</strong>
+- <span class="state approx">approximate</span> All blocks are stamped, not only those drawn in the frame (+0x920 bit 4).
+- <span class="state approx">approximate</span> Outside the map, or with c00 in a missing block, the shader's bilinear treats each cell as having no
+  block (brightness 255, colour 0), instead of giving table[255] and 0xFF000000 to the whole sample (0x801D17..0x801D43 →
+  0x8020F8).
+- <span class="state approx">inferred</span> In <code>FireGraphic</code>, <code>Object +0x24 &amp; 2</code> = map object and +0x98 = the object's position.
+- <span class="state approx">approximate</span> In <code>FireGraphic</code>, the two-sine noise (<code>VLNoise</code> 0x590C30 not ported), without the turn fraction, and
+  the fire's id instead of <code>this &amp; 0xFFFF</code>.
+- <span class="state approx">approximate</span> One light mode per mesh, not per instance: if two classes share a mesh (a <code>DeadTree</code> or <code>FelledTree</code>,
+  which use <code>fn_00801C90</code>, with that of a living tree), the special mode wins and a warning is logged once.
+- <code>grand_local::LocalRand</code> / <code>LocalFloatRand</code> (3D/LH3DRandom) have been removed: <code>game_random::LocalRand</code> /
+  <code>LocalFloatRand</code> (LHRand over GData +0xC) are called directly instead, and <code>game_random::crt::Random</code> for the CRT's
+  <code>Random</code>. There is no longer a separate generator.
+- PLAUSIBLE, not done: the reflection under the water (<code>vs_object</code> x = 3) goes without haze, but the original stores in
+  +0x4C / +0x50 the light already with haze (<code>MobileObject::Draw</code> 0x51818E, <code>PhysicsObject::DrawAll</code> 0x646FB1), which
+  <code>DrawUnderWater</code> reuses.
+- Pending: the <code>vt+0x890 == 0</code> branches of <code>WorshipSite::Draw</code> and <code>SpellIcon::Draw</code> (0x5193D9, 0x519658 →
+  <code>DrawBuilding</code>) and the +0x10C branch of <code>SpellIcon::Draw</code> (0x519672, not read).
+- Pending: <code>RendererSea.cpp:164</code> reads table[255] with <code>GetColour(255)</code> and not with <code>land_light::FullLight</code>.
+- <span class="state approx">inferred</span> The "cell &gt;&gt; 8" and "one cell" modes are only given to <code>Tree</code>, <code>WorshipSite</code> and <code>SpellIcon</code>: the
+  scaffolds, the artifacts and the totems do not have their own component yet.
+- Pending: the "light without haze" of <code>DrawBuilding</code> for the building plots (MultiMapFixed +0x74; openblack does not
+  build on plots) and for unbuilt WorshipSite / SpellIcon / Totem; <span class="state approx">approximate</span> the repaired part of a damaged Abode
+  is merged with its FragMesh, whose pieces do carry haze (<code>fn_007F7ED0</code> 0x7F7F5F, 0x7F807D), and keeps the haze;
+  <span class="state approx">approximate</span> the sailors and the boat's deck share a mesh with villagers and cows (one mode per mesh) and keep the
+  haze; the scaffold's ghost building is not drawn; the UseLandscapeColor sprites (0x67AFD9) and
+  <code>RenderParticleGJMesh</code> (0x67C184).</p>
+<h2 id="camera">Camera</h2>
+<ul>
+<li>Horizontal FOV 70°, no far plane; the near one follows the height above the ground: <code>0.3 + 0.16·h</code> (0.3–3.5).
+  openblack recalculates it every frame in <code>Game</code> after <code>camera.Update</code>.</li>
+</ul>
+<h2 id="shadows-three-systems-in-the-original">Shadows (three systems in the original)</h2>
+<ul>
+<li><strong>Static</strong> (done): <code>fn_008721A0</code> (block texture thread, after snow and footprints). All Fixed and MobileObject
+  objects cast them (<code>SetShadowOnTexture</code> in <code>Create3DObject</code> 0x52DE30 / 0x607210), trees and forests with alpha test
+  (<code>DrawTextureShadow</code>); not AnimatedStatic, DeadTree, flowers, vessels, magic food, crops, shields, seeds, totems.
+  LOD 0, shear by the sun x' = x + h, z' = z + h (h above the object's base), coverage 4×2 per texel; the texel's RGB
+  × (255 − I/2)/256, that is ×0.5 with full coverage (×0.75 with 128 px textures).
+  openblack: <code>RenderPass::StaticShadow</code>, <code>vs_static_shadow_instanced</code>/<code>fs_static_shadow</code> (MAX), the island's R8 texture
+  (<code>LandIsland::GetStaticShadowFramebuffer</code>), its own instance range (<code>CastsStaticShadow</code> in
+  <code>RenderingSystem.cpp</code>), applied in <code>fs_terrain</code> after the footprints.</li>
+<li><strong>Projected</strong> (the <code>ShadowInfo</code> list): its own section, <a href="#projected-shadows-shadowinfo">Projected shadows</a>.</li>
+<li><strong>Blobs of villagers and animals</strong> (done): <code>human_shadow.raw</code> 32×32 between two bones (<code>fn_0081FFF0</code>), mode 6;
+  see <a href="rendering-objects.html#villager-blobs-object-reflections-and-lod">rendering-objects.md</a>.</li>
+</ul>
+<h2 id="projected-shadows-shadowinfo">Projected shadows (ShadowInfo)</h2>
+<p><strong>Faithful</strong> except where marked.</p>
+<p><strong>Original.</strong>
+- A linked list of <code>ShadowInfo</code> (0x4AC bytes, head [0xFAA7E0]); each new one goes at the front (<code>fn_0087FD50</code>
+  0x87FEC4..0x87FEF2). There are only two constructors: <code>CreateDynamicShadow</code> (0x80C02C, the hand and the creature) and
+  the holder <code>fn_008745A0</code> (0x8745BA: physical objects in flight <code>fn_007FCE80</code>, the boat <code>PetitNavire::PetitNavire</code>
+  0x5E11AE, the prediction, PSys and SuperVillagers). Each one has its own 32×32 ARGB4444 texture (si+0x45C) and its
+  material <code>CreateMaterial(6)</code> with +5 = 0 (single-sided, <strong>CLAMP</strong>, 0x87FE12).
+- <strong>Fade</strong> <code>fn_00874600</code>: 0 if the block under the emitter is at ≥ 100000 ([0xC37200]); 0 if none of the 9
+  blocks at (−60, 0, +60) ([0x8C36A8]) exists, is visible (+0x920 &amp; 1, the 5 outcodes of <code>fn_00877210</code> over the 8
+  corners of <code>haze::BlockCorners</code>) and is at &lt; 100000; otherwise, q = |(x, ground, z) − camera| / (scale · radius):
+  255 below 50 ([0xC398F4]), linear down to 0 at 80 ([0xC398F8]).
+- <strong>Alpha</strong>: generic <code>ftol(fundido · base / 255)</code> ([0x900058], 0x874872); complex (hand) the same below 255 and 255
+  otherwise (0x815007..0x815051).
+- <strong>Light</strong>: vertical pos + (0, 15000, 0) ([0x9A3C10]); the fixed sun [0xEA1C88] if holder+4 (the boat, 0x5E11B6); the
+  hand pos + (0, 200, 0) ([0x8C7B34]); the creature at 3 radii minimum and 45° (0x815058..0x815181, not ported).
+- <strong>Silhouette on the CPU</strong> (<code>fn_00806F60</code>): projection <code>fn_00850900</code> with the <strong>light's absolute y</strong> (t = −Ly / (h − Ly),
+  h = max(0, W.y − base)), box = min/max without margin, grid of 128 × 64 subsamples (4 × 2 per texel), triangles
+  with the back face discarded (<code>fn_00850CC0</code>), half-open 16.16 edges (<code>fn_0087FF70</code>), filling by nibbles
+  (<code>fn_00880050</code>; with si+0x3C the even subrows are not written, 0x880141). Resolve <code>fn_00880FC0</code>: texel = popcount
+  → alpha <strong>n/15</strong>, the <strong>outer ring</strong> stays at 0. If si+0x10 ≠ 255, <strong>baked fade</strong> n' = floor(n·a/255)
+  (0x80769A, <code>0x80808081</code>, <code>and 0xF000</code>).
+- <strong>Chroma path</strong> (the emitter has vt+0x94: trees, dead trees, forests, the hand's food): instead of the
+  rasterisation, <code>DrawTextureShadow32x32</code> (vt+0x168 = <code>fn_0080EE80</code> → <code>fn_0084B7D0</code> → <code>fn_00881DE0</code>) paints the
+  textured triangles with the 64×64 map of its texture's alpha (<code>fn_00838F00</code>: high nibble &amp; 0xF0), each texel
+  OR <code>(a &amp; 0xE0) &lt;&lt; 7</code> (at most 7/15), and then a 2×2 OR filter of the nibbles (0x807635..0x807688). If the
+  emitter is chroma the held object is dropped (si+0 = 0, 0x8073E8).
+- <strong>Land</strong> (<code>fn_007FF610</code> 0x7FF749): right after each block of the main land (not the mirrored one), for every active
+  shadow whose box touches the block (bx·160 ≤ x1, (bx + 1)·160 ≥ x0; [0x8D151C]), <strong>all of them</strong> (it does not look at
+  si+0xC). <code>fn_00878350</code>: H = GetAltitude(emitter) if si+0x464, otherwise si+0x18 (the hand: t' = 1), <strong>one H per
+  shadow</strong>; t' = (si+0x18 − Ly)/(H − Ly); u, v in the box; diffuse 0 if the altitude byte ≤ 1; codes 0x400 /
+  0x40..0x200 and the triangle with a common code is removed. Drawn <strong>immediately</strong> (<code>LH3DRender::DrawTriangle</code> 0x82F810
+  → IDirect3DDevice7 vt+0x68, 0x82F916).
+- <strong>Objects</strong> (<code>fn_0080B050</code> → <code>fn_0084E200</code>): see
+  <a href="rendering-objects.html#object-reflections-and-hand-shadow-on-objects">rendering-objects.md</a>.
+- <strong>Where it goes in the frame relative to the Z-sorter</strong>: no shadow is a Z object of its own (<code>fn_00878350</code>,
+  <code>fn_0080B050</code> and <code>fn_0084E200</code> are not among the 32 callers of <code>NewZObject</code> 0x83F310). The land ones go with the
+  land, before the flush (<code>FinishFrame</code> 0x82F480); the object ones, at the end of each object's Draw: immediately if it
+  is opaque, inside its Z object if it is in the queue.
+- List: a new entry is [0xFAA7E0] with +4 = the old head (0x87FED6); <code>fn_0087FD50</code> makes its texture with
+  <code>fn_008379E0(0, 0xC4, …)</code> and clears it (0x87FDBE..0x87FDFC); its material +5 = 0 gives no tiling (0x87864D).
+  <code>fn_0087FF10</code> takes it out and releases the texture (0x87FF40).
+- ShadowInfo fields: si+0x08 active (<code>fn_00814FD0</code> clears it when the object is hidden, 0x814FEE; <code>CHand::Hide</code>
+  0x46C2E0 → <code>fn_00814FD0</code> 0x814FE4..0x814FF9, so a hidden hand casts nothing); si+0x10 alpha (0 = not drawn,
+  <code>fn_00881030</code>); si+0x14 base alpha (0x87FED0); si+0x444 the light, si+0x448 its y; si+0x450 = caster − light
+  (<code>fn_00806F60</code> 0x80708B..0x8070D4); si+0x464 the caster, written by <code>fn_00874850</code> (0x874993), never by
+  <code>fn_00814FD0</code>.
+- Which physics objects get one (<code>fn_007FCE80</code> 0x7FCE9D..0x7FCEC7): IsShadowOnTextureChroma (vt+0x94 = <code>fn_007F98D0</code>,
+  LH3DObject +4 bit 13, tested first, 0x7FCEA1), IsShadowOnTexture (vt+0x84 = <code>fn_007F98A0</code>, bit 12) or animated
+  (vt+0x1AC). It is removed with the physics (<code>PhysOb::DeInitialise</code> 0x7FB772).
+- The chroma bit is set through vt+0x90(1) (<code>fn_007F98B0</code>) by Tree 0x749F96, BigForest 0x43908B, DeadTree 0x510AC6,
+  <code>FelledTree::Create</code>'s <code>fn_00510880</code> (0x5108DA) and the Pot of info 12 (0x66D173, after the <code>cmp 0xC</code> of 0x66D164);
+  FieldCrop clears it (0x607EAB).
+- Other casters: the SuperVillagers' TemporaryShadow (<code>fn_00825F20</code> → <code>fn_00825090</code>); the PSys mesh atoms with
+  CastHumanShadow (<code>CreateParticle</code> 0x6A8B5C..0x6A8B7F → <code>fn_006CA340</code> → <code>fn_008745A0</code>: si+0xC = 1 at 0x8745C8,
+  holder+4 = 0 at 0x8745C1; updated by <code>fn_006CA540</code> 0x6CA5A9 → <code>fn_006CA3D0</code> (0x6CA3D5..0x6CA3E1) → <code>fn_00874850</code>
+  with the particle's object; removed by <code>fn_006C7A80</code> 0x6C7AA6 → <code>fn_006CA370</code> → <code>fn_0087FF10</code>). Not ported: the
+  creature (LH3DCreature 0x47F543) and the prediction object (<code>fn_00646FE0</code> 0x647245).
+- A PSys atom's object is an LH3DStaticObject (<code>CreateLH3DObject</code> 0x6A8AA6, <code>LH3DObject::Create(0)</code> 0x80B4F8):
+  vt+0x1AC is 0, so <code>fn_00874850</code> skips the pose (0x8748A2..0x8748AA); and it never gets vt+0x90(1)
+  (0x6A8AA0..0x6A8AFD; the ctor's +4 = 0x10009 leaves bit 13 clear), so it is never chroma.
+- Generic update inputs: the position is obj+0x38..0x40 of the drawn (interpolated, 0x7FCED2) matrix; the scale
+  obj+0x44 (a PSys atom's: its PSR +0x30, <code>Particle3DObj::DrawAt</code> 0x67A009); the ground GetAltitude 0x874789; the fade
+  at 0x874872 (complex 0x815002); alpha 0 tests 0x874898 / 0x815041.
+- The light: the vertical one at 0x87490A, the fixed sun at 0x8748E7 (0x8748E0..0x874932); the hand's is obj+0xBC
+  (CHand 0x46CB28) + (0, 200, 0).
+- The caster's bones: the hand's [0xC37D9C] = CHand+0x47F0 (0x46CB1C), a posed model's (<code>fn_00839980</code>), else the
+  mesh's rest pose.
+- The held object: <code>SetHeldObject</code> (vt+0x234 = <code>fn_00816830</code>, 0x816855) is only called when IsG3DObjectDrawnInHand
+  (vt+0x618, 0x46DC86). The hand's render object CHand+0x4904 is set at the press by <code>fn_0046DC30</code> (0x46DCDC, with
+  SetCastDynamicShadow(0)) and restored by <code>CHand::ThrowObject</code> 0x46DDD0.
+- Creature light (not ported): the constant 0.1 is the double [0x8C9D40] (0x8150BF); radius = mesh radius × scale × 3
+  (0x815062..0x815081).
+- Fade loop (<code>fn_00874600</code>): the block under the caster at 0x874603..0x874684; the 3×3 neighbours with x outer and z
+  inner, −1..1 (0x87468A..0x874737); cells outside 0..0x1FF (0x87463D / 0x874649) skip the first test and count as no
+  block; q = sqrt((dz² + dy²) + dx²) / (scale·radius) with dx, dy, dz stored as floats (0x87478E..0x8747EE); the
+  radius is the mesh's +0x30 (half diagonal); the ramp 0x874822..0x874844.
+- The box before the first vertex is 0x60AD78EC / 0xE0AD78EC (<code>fn_00874850</code> 0x87499B / 0x8749AA, <code>fn_00806F60</code>
+  0x8070DA).
+- Sub-meshes rasterised: those with the LOD 0 bit 0x20000000 ([0xC37D94] = 1), through <code>fn_0087FA70</code> → <code>fn_00850900</code>;
+  caster 0x807109..0x807148, held object 0x8071D3..0x807249. A skinned vertex uses its bone (branch [0xFA93BC] &amp; 1,
+  0x850B04; one bone matrix per vertex group {count, bone}, 0x850B04..0x850B2B).
+- Projection (<code>fn_00850900</code>): the matrix's ty is lowered by the base y (0x85094F..0x85096E; the skinned branch does
+  the same to its copy of the bone matrix, 0x850B2D..0x850B35); h = max(0, W.y) (0x8509D4..0x8509E3); the box also
+  tracks k = W.z·d.z + W.x·d.x as kMin (0x850A05..0x850A2C, 0x850A1B); Ly is negated at 0x850914; the box grows at
+  0x850A70..0x850AB8.
+- Two-sided casters: material +5 &amp; 1 or a mist (vt+0x1F8 = IsMist, 1 only in Mist 0x55EB90; no mist gets a ShadowInfo)
+  (<code>fn_00850CC0</code> 0x850CC9..0x850CEE).
+- Winding (<code>fn_00850CC0</code>): a one-sided triangle is kept when (r0 − r2)(x1 − x2) ≥ (r1 − r2)(x0 − x2), rows r = ftol(z)
+  (0x850D03..0x850DA1), and walked 0→2, 2→1, 1→0; a two-sided one is walked 0→2→1 when (r0 − r1)(x2 − x1) &lt; (r2 −
+  r1)(x0 − x1), else 0→1→2 (0x850E29..0x850F6D).
+- Grid: [0xC39B08] = 128 and [0xC39B0C] = 64 (0x807077 / 0x807081); one coverage byte per texel at si+0x40, cleared at
+  0x80706B..0x807075; bits 0..3 the even subrow, 4..7 the odd one, bit x &amp; 3 for the subsample (masks 0x9A3C74 /
+  0x9A3CB4 / 0x9A3CF4 / 0x9A3D34, also 0x9A3D74 / 0x9A3D78).
+- Into the grid (0x807265..0x807305): px = (x − x0)·(128/(x1 − x0)), pz = (z − z0)·(64/(z1 − z0)), the factors stored
+  as floats first ([0x8C6CA8] = 128, [0x930678] = 64), each clamped to 0 below and to 127 ([0x8C4A00]) / 63
+  ([0x9A2BF8]) above.
+- Span tables: [0xFA9FC8] the left ends (edges going up), [0xFA97C4] the right ends (going down), the touched rows
+  [0xFAA7D0]..[0xFAA7CC]. They are static and never cleared: each triangle only resets the rows ([0xFAA7D0] =
+  [0xC39B0C], [0xFAA7CC] = 0, 0x850DB2 / 0x850DBD).
+- Edge (<code>fn_0087FF70</code>): horizontal edges are skipped (0x87FF7B); edges going up are swapped into the left table
+  (0x87FF81..0x87FF9D); off-grid edges are rejected (0x87FFAE / 0x87FFB8); slope = (x1 − x0)/(y1 − y0) with fidiv
+  (0x87FFBE..0x87FFD0); y1 is clamped to the rows; with y0 &lt; 0, x0 − y0·slope (0x87FFD8..0x87FFE8); the step is
+  ftol(slope·65536) ([0x8AC408]) and each row stores x &gt;&gt; 16 (0x880030).
+- Fill (<code>fn_00880050</code>): each row of [minRow, maxRow) fills [max(0, l), min(grid x, r)), nothing when empty
+  (0x8800A0..0x8800D0); the odd subrow test is <code>test bl, 1</code> (0x8800E0); two subrows per texel row
+  (0x88019E..0x8801A7).
+- Resolve: rows and columns 1..texels − 2 only; the table [0xFA95C4] = popcount(i) &lt;&lt; 12 is built by <code>fn_00880F20</code>.
+  The baked fade is skipped when the alpha is 255 (0x8075BD..0x8075D1).
+- The chroma map (<code>fn_00838F00</code>): 64×64, cached at texture+0x12C; byte (r, c) = the high byte of texel (ftol(r·h/64),
+  ftol(c·w/64)) &amp; 0xF0 (0x838F88..0x838FD0, [0x8D8BD0] = 1/64).
+- The chroma path (<code>fn_0080EE80</code> into the 16-bit target of <code>fn_008816F0</code>): every sub-mesh with the LOD 0 bit
+  (0x80EECA..0x80EED5) <strong>except boned ones</strong> (<code>fn_0084B7D0</code> 0x84B7F5: [0xFA93BC] &amp; 1), each primitive with its
+  texture's map (0x84B97E), through the object's matrix [0xEA1AE8] (no bones), into LH3DP3::Table1 0xE437E0; triangles
+  of 6 bytes (0x84B99C..0x84BA71).
+- Chroma vertex (0x84B804..0x84B96D): t = (si+0x18 − Ly)/(W.y − Ly) (no clamp of h); x = ((W.x − Lx)·t + Lx −
+  x0)·(32/(x1 − x0)), clamped to [1, 31] ([0x8AA390], [0x92B6F4]), z the same; u, v = uv × 63 ([0x9A2BF8]); W = (x·m00
+  + z·m20) + y·m10 + t (0x84B83F..0x84B88D).
+- Chroma triangle (<code>fn_00881DE0</code>): vertices ftol'd (0x84B9AA..0x84BA4C) and clamped to the target
+  (0x881DE9..0x881E83), sorted with a the upper vertex (ties: level and to the right; 0x881E86..0x881EEA); edges
+  <code>fn_00881A60</code> (12-byte x, u, v entries, rows inclusive, steps ftol(d·(1/(y1 − y0 + 1))·65536); a horizontal edge
+  stores its ends as they are, not in 16.16); spans <code>fn_00882080</code>, inclusive, u and v stepped by an integer division;
+  texel index ((v &gt;&gt; 10) &amp; ~0x3F) + (u &gt;&gt; 16) (0x882141..0x882150).
+- Order inside <code>fn_00806F60</code>: the grid, then a chroma caster (vt+0x94, 0x80732B) drawn into the cleared 0x800-byte
+  buffer (0x807339..0x8073E3, its raster 0x8073F5..0x807466 skipped), else the raster; the held object
+  (0x807466..0x8075B7); the resolve (0x807601); the chroma blur; the baked fade.
+- Visibility of a block (<code>fn_00877210</code> 0x8773E4..0x8774E2): the 8 corners through <code>g_world_to_clipping</code>; outcodes Z &lt;
+  near ([0xE839E0], also read by <code>CameraModePath::SetUpNearClipping</code> 0x460F10), X &gt; Z else −Z &gt; X, Y &gt; Z else −Z &gt; Y;
+  not visible when one outcode holds for all 8; stored at 0x8774E8 / 0x877CEB.
+- Over the land <code>fn_007FF610</code> is called from <code>GLandscape::Draw</code> 0x5E4E96; <code>fn_0084E200</code> draws at once through the
+  draw-triangle pointer [0xC386EC] (0x84E8F0).
+- Morphable receiver test: when width and depth are equal (or unordered) the depth is taken (0x80E7A7..0x80E7B4).</p>
+<p><strong>openblack.</strong>
+- <code>src/Graphics/ShadowMath.{h,cpp}</code> (<code>graphics::shadow_math</code>, without bgfx or ECS: fade, alphas, lights, projection,
+  rasterisation, resolve, chroma filter, baked fade, block and visibility test), with <code>test_shadow_math</code>.
+- <code>src/Graphics/ShadowList.{h,cpp}</code> (<code>graphics::shadow_list</code>): the list and its producers (the hand, the physical
+  objects in flight from <code>PhysicsObjects::ForEach</code> with <code>CastsPhysicsShadow</code>, and the <code>components::DynamicShadow</code>: the
+  boat with <code>useSun</code>), one 32×32 R8 texture (n·17, CLAMP) per entry, uploaded every frame. The pose comes from
+  <code>L3DSubMesh::GetSkinBones</code> / <code>GetSkinLocalPositions</code> and from <code>ecs::PosesByInstance</code>.
+- <code>src/Graphics/RendererShadows.cpp</code>: <code>UpdateShadows</code> (once per frame), <code>DrawLandShadows</code> (in the block loop of
+  <code>Renderer::DrawPass</code>, Main view, right after each block's <code>submit</code>; program <code>LandShadow</code> =
+  <code>vs_land_shadow</code> / <code>fs_land_shadow</code>, which shares <code>land_position.sh</code> with <code>vs_terrain</code> to give the same Z;
+  <code>render_modes::ZFunc::LessEqualInclusive</code> (the D3DCMP_LESSEQUAL of 0x82CCC5, which with inverted depth is
+  GEQUAL; also the one for the animated and morphable receivers), without writing Z, mode 6, the block's culling; texture in stage 11) and the shadows
+  on objects (<code>CollectShadowReceivers</code>, <code>DrawShadowsOnObject</code>, <code>DrawShadowsOnCutObjects</code>, <code>ClearShadowReceivers</code>). <code>shadow.sh</code>:
+  <code>LandShadowUv</code>, <code>ObjectShadowUv</code>, <code>ShadowKept</code> (the 0x400 code).
+- <code>fs_terrain</code> no longer has shadows (gone are <code>s7_dynamicShadow</code>, <code>u_dynamicShadow*</code> and the loop of 16
+  <code>u_physicsShadow*</code>); <code>PhysicsShadows.{h,cpp}</code>, <code>vs_dynamic_shadow_instanced</code>, <code>fs_physics_shadow_resolve</code>,
+  <code>DrawHandShadowPass</code> and the <code>DynamicShadow</code> / <code>PhysicsShadow</code> / <code>PhysicsShadowResolve</code> views were deleted. No cap of
+  16.
+- Order relative to <code>graphics::zsort</code>: the land ones, in Main with their block (before the queue); the object ones,
+  after the object's <code>DrawMesh</code> in Main or inside its queue entry (<code>MainBlended</code>); no new entry in the queue.</p>
+<p><strong>Differences.</strong>
+- <strong>The hand (done; source: the user's captures of the original, 2026-10-02)</strong>: <code>shadow_list::k_HandShadowAsOriginal
+  = true</code>, like the original: si+0x3C = 1 (<code>CreateDynamicShadow</code> 0x80C037), so <code>fn_00880050</code> does not write the
+  even subrows (0x880141..0x880146) and the hand reaches at most 4/15; 32×32 (<code>fn_0087FD50</code>); base at the hand's own y
+  (si+0x18 = obj+0x3C, 0x8152B1..0x8152B4), with t' = 1 on the land; the held object si+0x00
+  (= obj+0x8C, <code>SetHeldObject</code> <code>fn_00816830</code> 0x816855) rasterised into the same <code>ShadowInfo</code> with its own base
+  (0x807163) and at full density (si+0x3C saved, set to 0 and restored, 0x807532 / 0x80753D / 0x8075B7; in the loop
+  over its primitives 0x80714F..0x807259). A chroma held object uses the <code>ShadowInfo</code>'s base (si+0x18, <code>fn_0084B7D0</code>
+  0x84B7E0), not its own. With <code>false</code> openblack's look from before the list comes back (64×64, full density, on the
+  ground under the hand, without the held object), only for comparison.
+  - What the captures show: the hand's shadow is its silhouette, with the fingers, light grey and half transparent
+    (4/15); a held orb casts a darker, round shadow below it (full density); the orbs are drawn whole on top of the
+    shadows; the dispenser keeps its shadow.
+    - <a href="img/original_hand_shadow_over_dispenser.png">img/original_hand_shadow_over_dispenser.png</a>: the hand over the
+      dispenser's orb; behind, on the ground, the light silhouette of the hand.
+    - <a href="img/original_hand_shadow_orb_over_dispenser.png">img/original_hand_shadow_orb_over_dispenser.png</a>: the hand with
+      an orb over the dispenser; dark, round shadow at its foot.
+    - <a href="img/original_hand_shadow_red_orb_over_dispenser.png">img/original_hand_shadow_red_orb_over_dispenser.png</a>: the
+      same with another orb.
+    - <a href="img/original_hand_shadow_orb_over_ground.png">img/original_hand_shadow_orb_over_ground.png</a>: the hand with an
+      orb over the grass; dark, round shadow displaced down and to the left.
+  - Comparison (openblack, scene <code>OPENBLACK_TEST_DISPENSER=NORSE_ABODE_SPELL_DISPENSER,1826,2670,10,2</code>,
+    <code>OPENBLACK_CAMERA_LOCK=1816,52,2656,1826,37,2670</code>, 13 h; the hand picks up the orb with <code>OPENBLACK_TEST_TUG=1700,2500,10,3</code>
+    and <code>OPENBLACK_TEST_TUG_MOUSE2</code>): before, the hand's shadow was a dark silhouette (8/15) and the held orb had no
+    shadow; now the silhouette is light grey with the fingers, as in the first capture, and with the orb in the hand
+    the dark, round shadow of captures 2 and 4 appears below it, on the grass and at the foot of the dispenser; the orb
+    stays whole on top.
+  - <strong><span class="state approx">approximate</span></strong> the darkness of the orb's shadow: on the grass, openblack ends up at 0.46 of the ground's
+    luminance (65 / 142) and capture 4 of the original at 0.55 (63 / 114). openblack gives the code's maximum: with the
+    trace (<code>OPENBLACK_SHADOW_TRACE=1</code>) the shadow carries alpha 255 (fade 255, without
+    <code>BakeAlpha</code>) and n = 8 at most (4×2 subsamples per texel, <code>fn_00880FC0</code>), 8/15 → 1 − 0.533 = 0.467. The difference
+    fits a fade in the original below 255 (n' = floor(8·a/255) = 7 for a = 223..254, 0x80769A..0x8076EC; the capture's
+    camera is not known), half-covered edge texels or the capture's lighting; nothing has been read in the binary that
+    explains it, so the code stays as it is.
+  - The dispenser's <strong>own</strong> shadow is not a <code>ShadowInfo</code> (the trace only lists the hand's): the dispenser is an
+    <code>Abode</code>, so it casts a <strong>static</strong> shadow (<code>CastsStaticShadow</code>, <code>fn_008721A0</code>, shear x + h, z + h).
+    With the camera on the opposite side (<code>OPENBLACK_CAMERA_LOCK=1846,47,2690,1826,37,2670</code>) it is
+    seen as a soft blotch in front of the tripod, lightened by the dispenser's disc and sparks; with the captures'
+    camera it falls behind the table.
+- <strong><span class="state approx">approximate</span></strong> the 0x400 code, which in the original removes whole triangles: on the land, <code>fs_land_shadow</code>
+  removes the triangle when its three vertices carry the code, but does it per fragment with the interpolated value,
+  so along the edges a few stray fragments too many or too few remain; on the objects, <code>fs_object_shadow</code> applies it
+  per fragment. With vertical light k = 0 and nothing changes.
+- <strong><span class="state approx">approximate</span></strong> the redraw over the land (Z GEQUAL without writing Z) depends on <code>vs_terrain</code> and
+  <code>vs_land_shadow</code> giving bit-identical depth: they share <code>land_position.sh</code>, but they do not carry <code>precise</code> /
+  <code>invariant</code>. On the current backend (D3D11) there are no specks in the captures. If they appear on another backend or
+  with another shader compiler, plan B is a minimal bias towards the camera in <code>vs_land_shadow</code> (with inverted Z,
+  <code>gl_Position.z += ε·w</code>) or declaring the position invariant in both. The same applies to the shadow on static
+  objects (ZFUNC EQUAL against the object's instanced draw).
+- <strong><span class="state approx">inferred</span></strong> linear filtering of the texture (that of LH3D's default stage); the boat's visibility with the normal
+  camera and not the mirror's; an invisible block has its new distance here (the original keeps the old one).
+- Not ported: the creature, the prediction, the SuperVillagers and the PSys meshes (<code>fn_006CA340</code> from 0x6A8B76,
+  <code>MeshCreator::InitAtom</code>).</p>
+<h2 id="sky-sun-moon-and-clouds-original">Sky: sun, moon and clouds (original)</h2>
+<ul>
+<li>The time the sun and the moon use is the <strong>script time</strong> (fixed thresholds 3.5 / 7.5 / 8 / 8.5 h); the game's real
+  clock is the visual time with the cycle's thresholds. See <a href="day-night-weather.html">day-night-weather.md</a>.</li>
+<li>The <strong>dome</strong> (the <code>sky_*.555</code> textures) follows the sky type of the visual time, with a hysteresis of 0.03 and 32
+  rows per frame (<code>fn_0086A330</code> / <code>fn_0086B7F0</code>; <code>sky_type::DomeBlend</code>, <code>Sky::UpdateDome</code>). All the detail, in
+  <a href="day-night-weather.html#sky-type-src3dskytype">day-night-weather.md</a>.</li>
+<li><strong>Sun</strong> (<code>fn_0086C020</code> / <code>fn_0086C140</code>): <code>sun.l3d</code> (vertical quad 9928), <code>sun.raw</code>, mode 13 (additive SRCALPHA/ONE,
+  no Z), at (−30000, y, −30000) rotated 3π/4, y = 7500·(clamp(min(T, 24−T), 6, 12) − 6)/6, colour 0x957C63, alpha
+  0 → 255 between 3 and 6 h and 255 → 0 between 18 and 21 h (÷(1 + 8·clouds)). <strong>Glare</strong> (<code>fn_0086BB60</code>, at the end of
+  the frame): the same mesh ×1.8, colour 0xA06A35, without Z test, visibility from 5 samples occluded by the
+  terrain, smoothed 1 %/ms.</li>
+<li>The alpha A is [0xC395A8]. The glare [0xFA2778] moves by (target − glare)·(<code>g_game_time_inc</code> × 0.01 [0x8C4B10]),
+    clamped to 0..255 (0x86BBA1..0x86BBF9): the factor is not capped (<code>g_game_time_inc</code> ≤ 199) and the glare stays put
+    while paused.</li>
+<li><strong>Moon</strong> (<code>LH3DAtmos::UpdateGame</code> 0x8356E0): camera + (4000, 1100·cos θ − 150, 800·sin θ), θ = T·π/12; alpha
+  m = min(200, 0.5·y − 110); colour = row 5 of <code>palette.raw</code> by alignment. Halo (<code>fn_0086A930</code>): 4000 quad on the
+  basis of <code>fn_0086AC60</code> (+Z from the eye to the moon, X horizontal in the view), <code>atmos.raw</code> UV 0.25–0.49375 (v0 at the
+  bottom left = 0.25), additive, colour (R/6, G/5, B/4, m). Mesh: <code>moon.l3d</code> (loaded without skins, texture
+  <code>weather.raw</code> by code), that basis ×4, <code>fn_0086AFA0</code>(−0.1309) = Rz(+7.5°) in glm, RotateY(phase + π) =
+  Ry(−(phase + π)) in glm, ×0.65 (details in <a href="rendering-objects.html#objects-that-face-the-camera-billboards">rendering-objects.md</a>); the phase comes from the <strong>real clock</strong>
+  (2π(1 − frac((days − 10962)/29.5306))) and regenerates the UVs. Normal culling (bit 0 = 0).
+  <strong>Reflection</strong> (<code>fn_0086B010</code> 0x86B61D; done): the first call draws halo + mesh + the mesh's <code>DrawUnderWater</code>
+  (vt+0x118: the moon mirrored at y = 0, unlit); the second, with <code>pos.y = −pos.y</code> and <code>[0xFA2774]</code> = 1, only the
+  halo. Same m and same colour, in the sky stage (the reflected land covers it). In openblack, <code>DrawMoon(…,
+  mirrored)</code> in the reflection pass: the halo with the mirrored camera's view and the mesh with the main one's
+  (it comes out flipped, like <code>DrawUnderWater</code>, with the culling inverted). The tilt k = −1 of the second call is never
+  seen: that call does not draw the mesh (<code>fn_0086A930</code> 0x86AC0F). The sun is <strong>not</strong> reflected (<code>fn_0086C140</code> is
+  called only once).</li>
+<li>The tilt [0x9A3BF0] is applied with k = +1 at 0x86AEF3..0x86AF0B; <code>fn_0086AFA0</code> is 0x86AFAC..0x86B008 (r0' = c·r0
+    − s·r1, r1' = c·r1 + s·r0).</li>
+<li>The basis (0x86AC67..0x86AE4F) leaves an exactly null vector unnormalised (0x86AD26..0x86AD58,
+    0x86ADAF..0x86ADD7).</li>
+<li>Halo: corners at 0x86AA3C..0x86AB67 (half width 2000, the rows already × 4); UV constants 0.25 = 0x3E800000
+    (0x86A981) and 0.49375 = 0x3EFCCCCD (0x86A996); the triangles 0xEDC310 are set at 0x86A933..0x86A974.</li>
+<li><strong>Night-time hand glow on the water</strong> (done; <code>3D/HandWaterGlow</code>, <code>Renderer::DrawHandWaterGlow</code>):
+  <code>GLandscape::Draw</code> 0x5E4D89, if k = <code>[0xD20184]</code> &gt; 0.01 (k = clamp((120 − mean of the base colour)/15, 0, 1), the same
+  as the hand's light on land): colour = row 6 of <code>palette.raw</code> (<code>[0xFA26E0]</code>) moved a quarter of the way towards
+  (255, 128, 64) per channel (integer: floor((3c + target)/4)), alpha clamp(ftol(k·190), 0, 190). <code>fn_005E3F70</code>: only
+  if some cell of [(x − 70)/10, (x + 70)/10] × [(z − 70)/10, (z + 70)/10] (lower limits clipped to 0..511,
+  the upper ones not) has altitude &lt; 5 or has no cell; horizontal quad at y = 0 of (x ± 60, z ± 60), UV
+  (0.75; 0.375)–(0.796875; 0.421875) of <code>atmos.raw</code> (u with x, v with z), <code>LH3DAtmos::AdditiveMaterial</code> (mode 13,
+  SRCALPHA/ONE; with the texture <code>data\textures\atmos.raw</code> (<code>fn_00835AD0</code> 0x835C20..0x835C4E creates <code>AtmosMaterial</code> mode 6 and <code>AdditiveMaterial</code> mode 13 with it)), ZFUNC ALWAYS, right before the sea. In openblack it goes at the
+  end of the reflection pass (a quad at y = 0 is its own mirror) and is seen through the sea; with the hand over
+  high land nothing appears.</li>
+<li>k &gt; 0.01 is tested at 0x5E4D8F; the colour is made at 0x5E4DA0..0x5E4E57; the maximum alpha 190 is 0x8DAD54; a
+    cell altitude byte below 5 counts as low (0x5E410A); the cell is ftol then a signed division by 10 (0x66666667,
+    <code>sar 2</code>: both truncate towards 0).</li>
+<li>The quad's corners go (x − 60, z − 60), (x + 60, z − 60), (x + 60, z + 60), (x − 60, z + 60) with the UVs of
+    0x92B2F8 in that order (a 12×12 texel spot of the 256×256 atmos.raw) and the indices 0x92B2E0 = {0, 1, 2, 2, 3,
+    0}; ZFUNC ALWAYS at 0x5E4281, no culling.</li>
+<li><strong>Clouds</strong> (<code>CloudInSky::Open</code> 0x5E23F0, <code>fn_005E25C0</code>): 70 + 2 fixed ones, x ∈ ±8000 (wind at 70 u/s, angle 3π/4,
+  around (1280, 1280)), y 300–500, z ±5000, size 13–50, k 2.5–5; edge alpha beyond ±6000.
+  <code>mist.l3d</code> without skins: smoke material <code>smoke.raw</code> + <code>smokea.raw</code> (mode 6, two-sided, <code>fn_0080BBD0</code>). They are
+  LH3DMist objects (+0x80 |= 2, effect branch), so they use the same <code>fn_007FA300</code>: the <strong>billboard</strong>
+  mat3(right, −forward, up) from the "Map mist" section and the <strong>non-uniform scale</strong> s = size/(1 + (k − 1)
+  (1 − |dy|/|d|)) with the size in row 0 (width on screen) and s in rows 1 and 2 (depth and height). Near the
+  horizon |dy|/|d| ≈ 0.05–0.2, so each cloud is a <strong>horizontal ellipse ~k times wider than it is tall</strong> (2.5–5; the
+  two fixed ones, size 300 and k 20, almost flat bands); they only look round right underneath. Animated 8×8 atlas
+  (frame (counter/20) &amp; 15, UV ((f&amp;7)/8, (f&gt;&gt;3)/8 + 0.25)), zenith light with ambient 210/256; alignment colour ×
+  table[255] · 186/256 + 35;
+  alpha 0 on good land, 200 neutral, 255 evil.</li>
+<li>The cloud count 70 is [0xBF33A8]; the wind angle is the constant [0x92B2A0] = 2.35619455575943 (3π/4).</li>
+<li>The mist / cloud sphere radius for the screen test is the mesh's +0x30 (0x7FA7FE) × size (+0x88) × 0.55
+    ([0x8D3E80], 0x7FA814).</li>
+<li><strong>Placement</strong> (<code>CloudInSky::Open</code> 0x5E2439..0x5E24F4): five
+    <code>Random</code> calls per cloud in this order (x, y, z, size, k), also clouds 0 and 1, each one on its own and uniform in
+    the box: <strong>the sky clouds are not in groups</strong>. The groups that are seen come from chance (≈1500 u on average
+    between 68 clouds, with streaks and gaps) and from perspective; the original's real groups are the storm clouds
+    (<code>GWeather::DrawClouds</code> 0x83FC90: up to 16 balls per storm around its centre, darkened and with haze; ported,
+    see <a href="miracles.html#the-flash-and-the-clouds-of-the-registered-storms-ecsweatherlightningflash-stormclouds">miracles.md</a>).</li>
+<li><code>Random</code> 0x81D180 = min + (max − min)·(rand()·3.0518509e−05f) with the MSVC CRT's <code>rand()</code> (0x7C8837,
+    s = s·214013 + 2531011, (s &gt;&gt; 16) &amp; 0x7FFF), not the synchronised GRand. <strong>Correction (game_random)</strong>: the <code>srand(time(NULL))</code> at 0x577721 is in
+    fn_005776E0, which is only reached when saving <code>creature.lhp</code>: <code>rand()</code> starts at seed 1 (<code>__initptd</code>
+    0x7D2323) and is per thread; what changes the sky between sessions and lands is the <code>rand()</code> calls spent before
+    <strong><span class="state approx">inferred</span></strong>. <code>GLandscape::Open</code> → <code>GLandAlignement::Open</code> 0x5E1D10
+    → <code>CloudInSky::Open</code> rebuilds the 70 clouds on every land load. openblack: <code>Clouds</code> (the same generator; fixed seed
+    with <code>OPENBLACK_CLOUD_SEED=&lt;n&gt;</code>; <code>Clouds::OnLandscapeOpened</code> from <code>InitializeLevel</code>).</li>
+<li>Step (<code>fn_005E25C0</code>): x += inc·70·0.001; past 8000, t = x + 8000, x = t − ftol(t/16000)·16000 − 8000 (only x:
+    each cloud comes back along the same line at the same height); edge = fistp((x ± 8000)·0.1275) (rounding), fixed
+    ones 192; alpha = edge·A/255 in integers.</li>
+<li><strong>Colour</strong> (<code>fn_005E1DE0</code>, every frame from <code>GLandAlignement::DrawSky</code>): i = trunc(X), f = trunc((X − i)·256), each byte a + floor((b − a)·f/256)
+    between 00FFFFFF / C8FFFFFF / FFAAA066 (0xBF339C), RGB·table[255] (c·t &gt;&gt; 8), then c + floor((8960 − 70c)/256) (255 →
+    <strong>220</strong>: the original never paints them white). Per-vertex light (<code>fn_0084BA90</code>): I = fistp(255·N·L),
+    f = 210 + (45·I &gt;&gt; 8) (210..<strong>254</strong>), diffuse (c·f) &gt;&gt; 8. The time of day only comes in through the table (rows 0-2
+    of <code>palette.raw</code>) and the weather only through its cloudiness cap. Neutral noon ≈ (172..208, 179..217, 177..214),
+    light grey that with α ≈ 0.7 over the blue looks whitish; at sunset salmon; evil: opaque ochre; good: none.
+    <strong>Land1 starts at 7.3 h script time</strong> (almost full sunset) with the clock stopped: hence the brownish clouds; with
+    <code>OPENBLACK_TIME_OF_DAY=12</code> they come out light grey as in the original.<ul>
+<li>The result goes to [0xBF3398]. The light product is per channel (R <code>imul</code> 0x5E1EE9, G 0x5E1F02, B 0x5E1F1E, each
+  <code>sar 8</code>); the alpha byte (+0x1B, written at 0x5E1ECA) is the lerped one, untouched; the last step is c + (((35
+  &lt;&lt; 8) − 70c) &gt;&gt; 8) (0x5E1F28..0x5E1FB4).</li>
+</ul>
+</li>
+<li><strong>Sky alignment</strong> [0xBF3378] (0 good, 1 neutral, 2 evil; it starts at 1 and loading a land does not touch it):
+    target [0xBF337C] = (1 − clamp((v + 1)/2, 0, 1))·2 (<code>fn_005E2240</code>), with v = <code>GetAlignmentValue</code> of the player with
+    the most influence at the interface's position (<code>fn_0064AC30</code> from <code>GPlayer::ProcessPlayers</code> 0x64A697, every turn;
+    <code>DoCitadelMultiplayer</code> forces 0.5). <code>DrawSky</code> 0x5E2160 moves it 0.001 per ms (inc·0.01·0.1) and snaps it when it
+    overshoots; it is used by the clouds, the light table and the sky. openblack: <code>SkyAlignment</code> (Renderer), target
+    <code>Clouds::InfluentialPlayerAlignment()</code> (<code>ecs::effects::alignment::GetInterfaceAlignment()</code> × 2 − 1, or the
+    debug slider, or <code>OPENBLACK_TEST_SKY_ALIGNMENT</code> from −1 evil to 1 good; <code>atmos_banks::Alignment()</code> uses the
+    same value) and cloudiness
+    <code>Clouds::WeatherOvercastAtCamera()</code> = byte 3 of <code>weather::atmos::GetWeatherSmooth(camera, 1)</code> × 0.01 (0 without
+    storms).</li>
+<li><strong>Animation</strong>: each cloud is an LH3DMist with its own counter +0x84; <code>LH3DMist::AddDrawing</code> 0x7FA7F0 (vt+0x100)
+    only sends it to the Z-sorter if its sphere (half diagonal of the mesh × size × 0.55) touches the screen, and only
+    then does the counter advance in the Draw: the clouds drift out of phase with each other. <strong>There is no blending
+    between frames</strong>: <code>fn_007FA300</code> computes frame = (counter·45)/900 in integers (0x7FA3F4..0x7FA41B, no fraction),
+    sets a single UV offset (vt+0xE8 = 0x7F9B70: +0x68/+0x6C) and draws once (<code>fn_0080DB30</code>); mode 6 (<code>fn_0082DF10</code>)
+    only configures stage 0 (MODULATE texture × diffuse). The change is abrupt every 20 counts (≈78 ms, 16 frames in
+    ≈3.5 s); the same goes for the map's mist.</li>
+<li><strong>Cloud shadows</strong>: <code>sclouds.raw</code> 40×40, one texel per cell from the cloud's corner,
+  <code>lum = min(lum, max(48, 255 − (255 − s)·α/255))</code>; openblack: <code>Clouds::BuildShadowCap</code> → per-cell R8 texture used by
+  <code>vs_terrain</code> and <code>vs_object</code> before the light table.</li>
+<li><strong>Skin ids 0xFF…</strong> (<code>mist.l3d</code> 0xFFD0EBBE, <code>moon.l3d</code> 0xFF52BA30): they are never resolved; those meshes are
+  loaded without skins (<code>LH3DMesh::Create(data, 1)</code>) and their texture is set by the code. Moreover their skin table
+  starts at the end of the file (like <code>sun.l3d</code>): openblack's L3D parser now tolerates it.</li>
+<li><strong>General fix</strong>: <code>HashIdentifier(hashed_string)</code> hashed the number again; <code>Contains</code>/<code>Load</code> with
+  <code>entt::hashed_string</code> found nothing (it was the cause of the "missing raw/* textures").</li>
+</ul>
+<h2 id="rivers">Rivers</h2>
+<p><strong>Faithful</strong> (done).</p>
+<ul>
+<li><strong>There is no river renderer.</strong> <code>GStream</code> (GameThing 0x47, Stream.cpp) stores its points in script order
+  (<code>CREATE_STREAM_POINT</code> 0x717550 sets y = ground height and appends at the end); the segments are p[i] → p[i+1]
+  (openblack linked each point with the closest previous one: corrected, <code>Stream::points</code>).</li>
+<li><code>GStream::CreateAll</code> 0x733FF0 (after the script) → <code>CreateRiver</code> 0x7341E0: per segment, angle θ = atan2(dz, dx),
+  position p[i], scale only in local X = 3D length / 30, and two terrain footprints (fn_0081E9E0):
+  <code>data\river2.l3d</code> (brown riverbed, blended into the block's colour like a building's footprint, fn_008728A0) and
+  <code>data\river.l3d</code> (flag +0x38 = 1: only its alpha, which <strong>lowers</strong> the block's alpha nibble: min(dst, src),
+  fn_00872AB0; banks 15/15, channel 10-14/15). 32×64 ARGB4444 footprints, 10.6 × 30 units.</li>
+<li>The visible water is <strong>the sea</strong>: it is drawn before the land (ZFUNC ALWAYS) and the land (mode 14, SRCALPHA) lets
+  it show through in the channel. No texture, scrolling, particles or LOD of its own; the "flow" is the sea's movement.</li>
+<li>openblack: <code>ECS/Rivers</code> creates, when loading the map, two <code>StreamFootprint</code> + <code>Transform</code> entities per segment; the
+  riverbed goes in the footprints pass (<code>Renderer::DrawRiverFootprints</code>) and the channel in <code>RenderPass::LandAlpha</code>, an
+  R8 of the whole island cleared to 1 with MIN blending (<code>fs_land_alpha</code>, nearest texel, quantised to 1/15);
+  <code>fs_terrain</code> multiplies its output alpha by that value.</li>
+<li>Not analysed: the sound <code>ATMOS_TYPE_RUNNING_WATER</code> (<code>audio/sfx/atmos/stream.sad</code>). The waterfalls: see
+  <a href="water.html#fixed-scenery-per-land-land-3-waterfall-land-4-ark-and-dinosaur">water.md</a> (<code>GWaterfall</code> draws nothing; the one in <code>waterfall3.l3d</code> is <code>DesignedWaterFall</code>, only in Land 3).</li>
+</ul>
+<h2 id="screen-fade-and-cinema-bars">Screen fade and cinema bars</h2>
+<p><strong>Faithful</strong> (done; without the black of <code>OnNewGame</code>).
+- GScript state (g_game+0x250090): +0xB0 alpha step per turn, +0xB4 alpha, +0xB8 ARGB colour.
+  - <code>SET_FADE(r, g, b, t)</code> (0x6FCD70 → <code>SetupScreenFadeTo</code> 0x6EBA90; all truncated, t as a char): t ≤ 0 → A = 255
+    instantly; otherwise, alpha 0 and step 255/(10t) (the A byte does not change until the next turn).
+  - <code>SET_FADE_IN(t)</code> (0x6FCE00 → 0x6EBB00): t ≤ 0 → A = 0; otherwise, alpha 255 and step −255/(10t).
+  - <code>FADE_FINISHED</code> = step == 0. <code>ProcessFade</code> 0x6EB9D0 once per game turn (100 ms): it does not advance while paused.
+- Drawing <code>fn_0086FEE0</code> (FinishFrame, right before EndScene, after the help and the 2D rectangles): if A ≠ 0, colour
+  quad x 0..W−1, y h'..H−1−h' (h' = h − 1 with bars), mode 1, ZFUNC ALWAYS; then the bars again on top; the colour
+  is set to 0 every frame.
+- Bars <code>[0xEB9950]</code> = f: height <code>trunc((H − 0.5625·W)·f)/2</code> (16:9 with f = 1; nothing on wider screens),
+  black. <code>SET_WIDESCREEN</code> (32, <code>HelpSystem::SetWideScreen</code> 0x5C6AD0) slides f linearly over
+  <code>HelpSystemInfo.wideScreenTime</code> = 2 s of game time, continuing from wherever it is; <code>WIDESCREEN_TRANSISTION_FINISHED</code> (132).
+- Other sources: <code>OnNewGame</code> 0x553980 sets black instantly on Land 1 (the <code>FollowUs</code> intro removes it with
+  <code>SET_FADE_IN(12)</code>); <code>Temple::UpdateFade</code> 0x794280 in the citadel (real time, 1/s), not ported.
+- <code>FADE_FINISHED</code> is <code>fn_006EBB50</code>; <code>WIDESCREEN_TRANSISTION_FINISHED</code> is 0x6FAC20.
+- Each bar's height is computed by <code>fn_005C5780</code>.
+- Reversing <code>SET_WIDESCREEN</code> in the middle of a slide: <code>GetWideScreenPercentage</code> 0x5C6AE3 is read before +0x45E8
+  changes, then +0x45F0 = (on ? p : 1 − p)·wideScreenTime·1000 (0x5C6B1F..0x5C6B4E).
+- <code>Temple::UpdateFade</code> writes the colour every frame it runs through <code>fn_0053CE60</code> ([0xFA51D8], 0x794361), leaving
+  ProcessFade's step and alpha as they are.
+- <code>LH3DRender::FinishFrame</code> 0x82F460 order: the bars (0x82F652..0x82F6DD), then the callbacks with bit 0x80000000
+  (0x82F6E5..0x82F718, among them the video), and the fade <code>fn_0086FEE0</code> last (0x82F753), over the film.
+- openblack: <code>3D/ScreenFade</code>, view <code>RenderPass::ScreenOverlay</code>, <code>Renderer::DrawScreenOverlay</code>. The black of <code>OnNewGame</code>
+  is <strong>not</strong> applied: openblack's intro still stops before its <code>SET_FADE_IN</code> (<code>START_CAMERA_CONTROL</code> and others are
+  stubs) and the screen would stay black.</p>
+<h2 id="text-the-originals-fonts-and-the-hand-message">Text: the original's fonts and the hand message</h2>
+<p><strong>Faithful</strong> (done; the offset relative to the hand is <strong><span class="state approx">approximate</span></strong>).
+- Fonts <code>Data\j0</code> ("Ocean Sans MM", the one for the messages), <code>f1</code>, <code>f3</code>: <code>.met</code> = u32 cell height 80, wchar[128]
+  name, u32 count, 28-byte records {u16 code, u16 bitmap width, s16, u16, f32 left, f32 width,
+  f32 right, u32 offset and u32 size in the <code>.fnt</code>}. <code>.fnt</code> (<code>CachePage::RenderChar</code> 0x830C10): lengths of
+  1-bit runs alternating 0/1 starting from 0; one byte, or 0xFF + u16; bitmap of width × 80 by rows.
+- Glyph cache: white ARGB4444, alpha by 2×2 blocks with the table 0x9A3990 {0, 4, 8, 12, 15}/15, one transparent
+  texel on each side; rows 40..59 at a quarter (sizes &lt; 26). <code>DrawTextRaw</code> 0x832C60: s = size/80,
+  X0 = x + advance + left·s, X1 = X0 + (width + 2)·s, height = size; advance += (left + width + right)·s; no
+  kerning; mode 16 (SRCALPHA/INVSRCALPHA, alpha test ≥ 5, no Z).
+- Message with the amount in the hand: <code>ToolTips::ForceToolTips(0xEEA, amount)</code> every turn of a locked selection
+  (piles, fields, fish farms) and 12 turns afterwards; text 0xEEA from <code>Scripts\InfoScript2.txt</code> ("Cantidad:
+  %3.0f"; the id is the order of the ADD_TEXT lines). <code>CameraHelp::DrawKeyOrMouse</code> 0x447EA0: next to the hand on
+  screen, box of H/25 (text at 2/3), yellow text with two black copies at ±1 px; it moves to the other side of the hand
+  past 2/3 of the screen. The user checked in the original that <strong>there is no background</strong> (the code's additive box is
+  not seen) and that the amount <strong>is shown while the hand holds it</strong>, until it is released.
+- <code>GatheringText::GetStringWidth</code> 0x831130 = Σ (left + width + right)·size/80.
+- <code>DrawTextRaw</code> clips the height at 0x832DAB..0x832E20: above the top the glyph is cut (y = top, h −= cut), past the
+  bottom h = bottom − y, nothing when h ≤ 0; the v range is cut in the same ratio of the unclipped size
+  (0x832E07..0x832E20). HelpText passes its box's top and bottom (0x5CBE04..0x5CBE7F).
+- The glyph material's mode 16 is made by <code>CachePage::Init</code> 0x830244 (+4 = 5).
+- HelpText's fonts (ctor <code>fn_005CADC0</code>, table 0xECCD08): +0xC j0, +0x14 f1, +0x10 f3; f1 and f3 fall back to j0 when
+  they are missing. The original makes them when HelpText is made, so before the first text is drawn; openblack
+  preloads j0, f1 and f3 at the end of each land load (<code>Renderer::PreloadForLand</code>), so the first frame that draws
+  text no longer creates their atlases. A texture is made without a <code>bgfx::frame()</code> of its own: its bytes are copied
+  to bgfx (<code>bgfx::copy</code>), which needs no frames to stay alive (cine audit #9).
+- openblack: <code>Graphics/GameFont</code> (R8 atlas with the same rasterisation), <code>Common/HelpText</code>, <code>Renderer::DrawHandToolTip</code>
+  (view <code>ScreenOverlay</code>), <code>fs_text</code>. Hook <code>OPENBLACK_TEST_TOOLTIP=&lt;n&gt;</code>. The offset of the text relative to the hand
+  (half a box) is an estimate.
+  The other messages are missing (when hovering over piles and stores, "Pick up"...).</p>
+<h2 id="particles-psys">Particles (PSys)</h2>
+<p>The PSys engine (file format, per-turn step, drawing, script effects, the rules ported for water and the town's
+beliefs) is in <a href="particles.html#the-psys-in-the-world-format-step-drawing-and-water-rules">particles.md</a>.</p>
+<h2 id="map-mist-lh3dmist-fn_007fa300">Map mist (LH3DMist, <code>fn_007FA300</code>)</h2>
+<p>The drawing of the map's mist (<code>fn_007FA300</code>, billboards, order, fade and the other mists of <code>mists::Submit</code>)
+is in <a href="map-loading.html#drawing-lh3dmist-fn_007fa300">map-loading.md</a>, together with its creation (CREATE_MIST).</p>
+<h2 id="the-temple-interior">The temple interior</h2>
+<p>The original draws the citadel in case 1 of <code>GGame::Process3dEngine</code> (<code>DoCitadelDraw</code> 0x555410; the frame's order is in
+<a href="original-frame.html#other-cases-temple-video-and-2d">original-frame.md</a>). openblack: <code>Renderer::DrawTemplePass</code>
+(<code>Graphics/RendererTemple.cpp</code>), raffclar's drawing re-applied on our renderer.</p>
+<ul>
+<li><strong>No sun and no glare inside (faithful).</strong> <code>LH3DSky::g_b_we_are_inside_citadel</code>
+  [0xFA2760] is 1 only around <code>GLandAlignement::DrawSky</code> (0x555439..0x55544D; the same in <code>Process3dEngine</code>).
+  DrawSky → fn_0086A330 → fn_0086B010 still draws the dome and the moon, which do not read the flag, but the sun
+  (fn_0086C140, called at 0x86B618) returns at once while it is set (0x86C141..0x86C148). The "sun drawn" flag
+  [0xFA275C] is only set after the sun is drawn (0x86C20D), and the glare (fn_0086BB60, from <code>LH3DRender::FinishFrame</code>
+  0x82F4C9) runs only if it is set (0x86BB78..0x86BB7F) and clears it (0x86BB92). So inside the citadel there is no
+  glare at all, and its eased visibility [0xFA2778] keeps its value through the visit (the easing at 0x86BBA1 is
+  skipped). <code>GScript::SetSunDraw</code> also writes [0xFA2760] (0x708EC1); what the script passes has not been read.
+  openblack: the temple pass draws the dome and the moon, and neither the sun nor its glare, as the original.</li>
+<li><strong>The main room's reflection, under its floor and its pool (faithful, relative to the room).</strong> <code>WorldRoom::Draw</code>
+  0x79E280: with CitadelReflections [0xC381E0] (written at 0x8238E9) and CitadelLightmaps [0xC381E4] (0x82390B),
+  fn_00795310(1, …) (0x79E2B5) draws the room mirrored, then its vt+4(1) and fn_007954A0(1), then the floor
+  (fn_00795430(0xFF), 0x79E2D9). The mirror multiplies row 1 of the room object's matrix (+0x18: +0x20..+0x28, its
+  local y axis) by −1 [0x8AB678] (0x795338..0x795364) and undoes it after the draw (0x7953A7..0x7953CE); the position
+  is not touched. fn_007954A0 does the same around fn_0083D8D0 (0x7954C1..0x795525). The room is reflected in its own
+  plane y = 0, through its position. openblack's rooms stand at the temple's position (0, 0, 0), turned only about y,
+  so the world's y = 0 of <code>Camera::Reflect</code> (<code>DrawTempleReflection</code>) is that plane, and the pool's reflection
+  (<code>DrawTemplePool</code>) shows that same mirrored room. Where the original puts the interior in the world has not been
+  read (<a href="script-camera.html">script-camera.md</a>); the plane relative to the room does not depend on it.</li>
+<li><code>PictureRoomBase::Draw</code> 0x78F1F0 (the base of the save-game room) mirrors its room the same way when its +0x124 is
+  set (0x78F21F, behind the same two flags) and then draws the floor at alpha 0xD0 (0x78F23A) instead of 0xFF.
+  openblack mirrors only the main room (<a href="#pending">Pending</a>).</li>
+</ul>
+<h2 id="test-hooks">Test hooks</h2>
+<p>In <a href="openblack-internals.html#debug-environment-variables">openblack-internals.md</a>:</p>
+<ul>
+<li><code>OPENBLACK_SEA_TRACE=1</code> (sea rows every 500 frames) and the test <code>test_sea_rows</code>.</li>
+<li><code>OPENBLACK_DUMP_BLOCK_TEXTURE</code> (coast block texture) and the test <code>test_land_light</code> (light table).</li>
+<li><code>test_haze_land_light</code> (haze, land light and stamps); <code>OPENBLACK_TEST_STORM_CLOUDS</code>, <code>OPENBLACK_TEST_SPELL</code>
+  and <code>OPENBLACK_TEST_WEATHER</code> to see the stamps (storm shadow, lightning light and fireball).</li>
+<li><code>OPENBLACK_CLOUD_SEED=&lt;n&gt;</code>, <code>OPENBLACK_TIME_OF_DAY=&lt;h&gt;</code> and <code>OPENBLACK_TEST_SKY_ALIGNMENT=&lt;-1..1&gt;</code> (sky and clouds).</li>
+<li><code>OPENBLACK_TEST_FADE="r,g,b,seconds"</code> and <code>OPENBLACK_TEST_WIDESCREEN=1</code> (fade and bars).</li>
+<li><code>OPENBLACK_TEST_TOOLTIP=&lt;n&gt;</code> (hand message).</li>
+<li>Projected shadows: <code>OPENBLACK_SHADOW_TRACE=1</code> (once per second, each <code>ShadowInfo</code> with its light, alpha, fade,
+  box, t' and maximum n, and the objects that receive a shadow with the view in which it is drawn) and
+  <code>OPENBLACK_DUMP_SHADOWS=&lt;folder&gt;</code> (each texture ×8 as PNG every 300 frames); the test <code>test_shadow_math</code>.</li>
+</ul>
+<h2 id="addresses-of-the-original-moved-out-of-the-code">Addresses of the original, moved out of the code</h2>
+<p>The code's comments describe what it does in plain words; the original's addresses and function names they used to quote are kept here, next to the openblack symbol each one corresponds to.</p>
+<table>
+<thead>
+<tr>
+<th>Address or name</th>
+<th>What it is</th>
+<th>openblack</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>0x5E5510</code></td>
+<td>GLandscape::Open entry; it calls GLandAlignement::Open -&gt; CloudInSky::Open, a new sky of clouds per land</td>
+<td><code>Clouds::OnLandscapeOpened (Locator.cpp)</code></td>
+</tr>
+<tr>
+<td><code>si+0x1C..0x28</code></td>
+<td>projected shadow's box: x0, z0, x1, z1 (uploaded as x0, z0, 1 / (x1 - x0), 1 / (z1 - z0))</td>
+<td><code>u_shadowBox (vs_land_shadow.sc), u_dynamicShadowBox (fs_object_shadow.sc)</code></td>
+</tr>
+<tr>
+<td><code>si+0x440</code></td>
+<td>projected shadow's least k = x d.x + z d.z; a vertex below it gets the clip code 0x400</td>
+<td><code>u_shadowCull.z / u_dynamicShadowCull.z, ShadowKept (shadow.sh)</code></td>
+</tr>
+<tr>
+<td><code>0x7FEB98..0x7FEBBE</code></td>
+<td>fn_007FEB30 (object haze): t = (min(max(z, near), far) - near) / (far - near)</td>
+<td><code>haze.sh HazeT</code></td>
+</tr>
+<tr>
+<td><code>0x874C5B..0x874C9C</code></td>
+<td>fn_00874AA0 (land haze, class 1): the same t from the clamped view depth</td>
+<td><code>haze.sh HazeT, vs_terrain.sc</code></td>
+</tr>
+<tr>
+<td><code>0x874C90</code></td>
+<td>fn_00874AA0: f = 256 - __ftol((256 - k) t) (object side 0x7FEBC3)</td>
+<td><code>haze.sh HazeFactor</code></td>
+</tr>
+<tr>
+<td><code>0x7FEBED..0x7FEC30</code></td>
+<td>fn_007FEB30: diffuse (c f) &gt;&gt; 8 per byte, only when f &lt; 256 (land side 0x874DA1..0x874DF0)</td>
+<td><code>haze.sh ApplyHazeDiffuse</code></td>
+</tr>
+<tr>
+<td><code>0x7FEC32..0x7FEC7E, 0x874CD2..0x874D06</code></td>
+<td>object / land haze colour c t, each channel with fistp (round to nearest, halves to even)</td>
+<td><code>haze.sh HazeColour, RoundHalfEven</code></td>
+</tr>
+<tr>
+<td><code>0x874D21..0x874D9E (and 0x874D21..0x874DF0)</code></td>
+<td>fn_00874AA0: specular + haze colour saturated at 0xFF, then the diffuse (c f) &gt;&gt; 8</td>
+<td><code>haze.sh HazeAddSaturated, vs_terrain.sc haze block</code></td>
+</tr>
+<tr>
+<td><code>0x8784A7..0x8784EC (0x8784A7..0x8784B8 for t')</code></td>
+<td>fn_00878350: land shadow uv u = (Lx + (x - Lx) t' - x0) / (x1 - x0), v in z</td>
+<td><code>shadow.sh LandShadowUv, vs_land_shadow.sc u_shadowLight</code></td>
+</tr>
+<tr>
+<td><code>0x878502</code></td>
+<td>fn_00878350: per-vertex clip code 0x400 on the land (k below si+0x440)</td>
+<td><code>shadow.sh ShadowKept</code></td>
+</tr>
+<tr>
+<td><code>0x87846D..0x87848A</code></td>
+<td>fn_00878350: shadow vertex diffuse 0 at altitude 1 or less</td>
+<td><code>vs_land_shadow.sc a_color3 / v_shoreFade</code></td>
+</tr>
+<tr>
+<td><code>0x874B89 / 0x874B7A</code></td>
+<td>fn_00874AA0: land vertex diffuse = table[cell byte 3], specular = the cell colour</td>
+<td><code>vs_terrain.sc LandCell / LandTable</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="pending">Pending<span class="state pending">pending</span></h2>
+<ul>
+<li>Fade: the black of <code>OnNewGame</code> (openblack's intro does not reach its <code>SET_FADE_IN</code> yet) and <code>Temple::UpdateFade</code> in
+  the citadel.</li>
+<li><a href="#the-temple-interior">The temple interior</a>, what is missing:</li>
+<li>The hand's placement inside the temple is not ported: openblack's hand there is placed by raffclar's code. In the
+    original, <code>TempleRoom::Draw</code> 0x799FE0 casts the cursor into the room (<code>InnerCamera::RayCast</code> 0x795980, called at
+    0x79A199) and on a hit writes the point to [0xE360C8..0xE360D0] and InnerCamera+0x440 to [0xE360B8..0xE360C0],
+    then copies [0xE360C8] to [0xE360D8] (0x79A1EB..0x79A208) <strong>(inferred: the hand's point)</strong>; the hand's state
+    there is <code>HandStateCitadel</code> (<code>Enter</code> 0x5B0C10, <code>Update</code> 0x5B0D00). Neither has been read.</li>
+<li>The save-game room's reflection (<code>PictureRoomBase::Draw</code> 0x78F21F) and its floor at alpha 0xD0.</li>
+<li>CitadelReflections and CitadelLightmaps: the original draws the main room's reflection only with both on;
+    openblack always draws it.</li>
+<li>The Creature Cave's mist domes are drawn through openblack's land mist, lit by the land under them
+    <strong><span class="state approx">approximate</span></strong>: how the original lights the cave's mists inside the citadel has not been read.</li>
+<li>Text: the other messages (when hovering over piles and stores, "Pick up"...); the offset of the text relative to the
+  hand is an estimate.</li>
+<li>Rivers: the sound <code>ATMOS_TYPE_RUNNING_WATER</code> (not analysed, see <a href="water.html#water-audio">water.md</a>).</li>
+<li><a href="#argb4444-textures">ARGB4444 textures</a>, what is missing:</li>
+<li><code>ChallengeScroll.raw</code> (0x44, type 4 in-memory texture): how the game fills it in has not been read.</li>
+<li>The L3D skins with flag 0x10000 (<code>L3DMeshFlags::Unknown17</code>) should be uploaded as X1R5G5B5 and not as BGRA4
+    (<code>L3DMesh.cpp</code>). Only <code>Data\d_sky.l3d</code> carries it and openblack does not load it, so today it is not visible. The
+    meshes in <code>AllMeshes.g3d</code> have not been checked <span class="state approx">inferred</span>.</li>
+<li>The halving of <code>[0xEDD470]</code> with fmt ≠ 3 (step 6 and jump 0x300, 0x8374BB/0x8374C3): the top-left pixel of each
+    2×2, at 128. Not ported.</li>
+<li>The light maps of <code>Data\Spells\LightMaps</code> (<code>Particles/Creators/LightMap.cpp</code>) also go through <code>fn_0057DBE0</code>
+    <span class="state approx">inferred</span> and are not cut.</li>
+<li>The save-game pictures: "the save-game pictures (0x7926DA, 0x79286F) are made by the game: neither has a stem
+    here". This page says the save-game images are loaded from files with flags 1 (<code>fn_00784070</code> 0x78408F,
+    <code>fn_00784640</code> 0x78466A); whether 0x7926DA / 0x79286F are a different pair of <code>Create</code> calls (with a computed 0x41)
+    is not stated.</li>
+<li>Sea: the role of <code>fn_008792E0</code>, listed with <code>fn_00879500</code> / <code>fn_00879930</code> / <code>fn_0087A090</code> as "the CPU side of the
+  original's sea", is not given anywhere.</li>
+<li><a href="#projected-shadows-shadowinfo">Projected shadows</a>: the creature, the prediction, the SuperVillagers and the PSys meshes
+  (<code>fn_006CA340</code>).</li>
+<li>Creature light of the projected shadows (<code>LightCreature</code>, not ported): only instruction ranges are known
+  (0x815062..0x8151A5: horizontal distance, a test against the radius, against 0.1, a 45° test dy/horizontal &lt; 1); the
+  exact flow has not been written down.</li>
+<li>Original lighting: what is still missing is written elsewhere:</li>
+<li>the creature's shadow: the <a href="#projected-shadows-shadowinfo">Projected shadows</a> bullet just above;</li>
+<li>the creature's reflection: <a href="rendering-objects.html#pending">rendering-objects.md</a> ("Reflections and dynamic shadows
+    of the creature and the SuperVillagers");</li>
+<li>the particles: <code>UseDynamicLighting</code> of chains and meshes, in <a href="particles.html#pending">particles.md</a>.</li>
+</ul>
+</main>
+<script src="search.js"></script>
+<script src="wiki.js"></script>
+</body>
+</html>

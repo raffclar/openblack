@@ -1,7 +1,7 @@
 find_package(Python3 COMPONENTS Interpreter)
 
 add_executable(gen_info gen_info.cpp)
-target_include_directories(gen_info PRIVATE ../../src ${CXXOPTS_INCLUDE_DIRS})
+target_include_directories(gen_info PRIVATE ${PROJECT_SOURCE_DIR}/src ${CXXOPTS_INCLUDE_DIRS})
 set_property(TARGET gen_info PROPERTY FOLDER "tests")
 if (MSVC)
   target_compile_options(gen_info PRIVATE /utf-8)
@@ -158,7 +158,8 @@ add_custom_target(
     lndtool write -o ${TERRAIN_LAND_1_OUTPUT} --terrain-type ${TERRAIN_TYPE}
     --noise-map ${TERRAIN_NOISE_MAP} --bump-map ${TERRAIN_BUMP_MAP}
     --material-array=${TERRAIN_MATERIAL_LIST} --points
-    "1788.40 28.9173050 2710.00"
+    "1788.40 28.9173050 2710.00" --points "1798.40 28.9173050 2710.00" --points
+    "1788.40 28.9173050 2720.00" --points "1798.40 28.9173050 2720.00"
   COMMAND
     lndtool write -o ${TERRAIN_LAND_MPM_2P_1_OUTPUT} --terrain-type
     ${TERRAIN_TYPE} --noise-map ${TERRAIN_NOISE_MAP} --bump-map

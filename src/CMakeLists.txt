@@ -1,19 +1,26 @@
-file(GLOB_RECURSE OPENBLACK_SOURCES "${CMAKE_CURRENT_LIST_DIR}/*.cpp")
+# CONFIGURE_DEPENDS: an added, removed or renamed source, header or shader makes the build re-run CMake by itself
+file(GLOB_RECURSE OPENBLACK_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/*.cpp")
+# the mod loader is a library of its own (src/ModLoader), never linked into the game
+list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/src/ModLoader/")
 if (NOT ANDROID)
   list(REMOVE_ITEM OPENBLACK_SOURCES "${CMAKE_CURRENT_LIST_DIR}/main.cpp")
 endif ()
-file(GLOB_RECURSE OPENBLACK_HEADERS "${CMAKE_CURRENT_LIST_DIR}/*.h")
+if (NOT OPENBLACK_USE_BINK)
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/src/(Video/Bink[A-Za-z]+|Debug/VideoViewer)[.]cpp$")
+endif ()
+file(GLOB_RECURSE OPENBLACK_HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/*.h")
+list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX "/src/ModLoader/")
 if (APPLE)
-  file(GLOB_RECURSE OPENBLACK_OBJC_SOURCES "${CMAKE_CURRENT_LIST_DIR}/*.mm")
+  file(GLOB_RECURSE OPENBLACK_OBJC_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/*.mm")
   list(APPEND OPENBLACK_SOURCES "${OPENBLACK_OBJC_SOURCES}")
 endif ()
 
 set(OPENBLACK_RC ${CMAKE_SOURCE_DIR}/assets/resource/icon/openblack.rc)
 
-file(GLOB OPENBLACK_IMGUI_VS_SHADERS
+file(GLOB OPENBLACK_IMGUI_VS_SHADERS CONFIGURE_DEPENDS
      "${CMAKE_SOURCE_DIR}/assets/shaders/imgui/vs_*.sc"
 )
-file(GLOB OPENBLACK_IMGUI_FS_SHADERS
+file(GLOB OPENBLACK_IMGUI_FS_SHADERS CONFIGURE_DEPENDS
      "${CMAKE_SOURCE_DIR}/assets/shaders/imgui/fs_*.sc"
 )
 bgfx_compile_shaders(
@@ -31,11 +38,11 @@ bgfx_compile_shaders(
   OUTPUT_DIR ${CMAKE_BINARY_DIR}/include/generated/shaders/imgui
 )
 
-file(GLOB OPENBLACK_VERTEX_SHADERS "${CMAKE_SOURCE_DIR}/assets/shaders/vs_*.sc")
-file(GLOB OPENBLACK_FRAGMENT_SHADERS
+file(GLOB OPENBLACK_VERTEX_SHADERS CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/assets/shaders/vs_*.sc")
+file(GLOB OPENBLACK_FRAGMENT_SHADERS CONFIGURE_DEPENDS
      "${CMAKE_SOURCE_DIR}/assets/shaders/fs_*.sc"
 )
-file(GLOB OPENBLACK_VARYING_DEF_FILE
+file(GLOB OPENBLACK_VARYING_DEF_FILE CONFIGURE_DEPENDS
      "${CMAKE_SOURCE_DIR}/assets/shaders/varying.def.sc"
 )
 
@@ -52,6 +59,42 @@ bgfx_compile_shaders(
   SHADERS ${OPENBLACK_FRAGMENT_SHADERS}
   VARYING_DEF ${OPENBLACK_VARYING_DEF_FILE}
   OUTPUT_DIR ${CMAKE_BINARY_DIR}/include/generated/shaders
+)
+
+# bgfx_compile_shaders only knows each shader's .sc and varying.def. The files a shader includes with #include "..."
+# (the .sh helpers and the .sc another .sc builds on, followed through their own includes) become dependencies of that
+# shader, so an edit to one rebuilds exactly the shaders that reach it. The shaders and what they include are also
+# configure dependencies: an edit that adds an #include re-runs CMake, which finds the new file
+function(openblack_shader_include_depends OUTPUT_DIR)
+  foreach (SHADER ${ARGN})
+    set(PENDING ${SHADER})
+    set(INCLUDED "")
+    while (PENDING)
+      list(POP_FRONT PENDING CURRENT)
+      get_filename_component(CURRENT_DIR ${CURRENT} DIRECTORY)
+      file(STRINGS ${CURRENT} INCLUDE_LINES REGEX "^[ \t]*#[ \t]*include[ \t]*\"")
+      foreach (LINE ${INCLUDE_LINES})
+        string(REGEX REPLACE "^[ \t]*#[ \t]*include[ \t]*\"([^\"]+)\".*$" "\\1" NAME "${LINE}")
+        get_filename_component(INCLUDE_FILE ${NAME} ABSOLUTE BASE_DIR ${CURRENT_DIR})
+        if (EXISTS ${INCLUDE_FILE} AND NOT INCLUDE_FILE IN_LIST INCLUDED)
+          list(APPEND INCLUDED ${INCLUDE_FILE})
+          list(APPEND PENDING ${INCLUDE_FILE})
+        endif ()
+      endforeach ()
+    endwhile ()
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${SHADER} ${INCLUDED})
+    if (INCLUDED)
+      # the first output of the shader's command (bgfx_compile_shaders: <OUTPUT_DIR>/glsl/<name>.bin.h)
+      get_filename_component(SHADER_NAME ${SHADER} NAME)
+      add_custom_command(OUTPUT ${OUTPUT_DIR}/glsl/${SHADER_NAME}.bin.h APPEND DEPENDS ${INCLUDED})
+    endif ()
+  endforeach ()
+endfunction ()
+openblack_shader_include_depends(
+  ${CMAKE_BINARY_DIR}/include/generated/shaders/imgui ${OPENBLACK_IMGUI_VS_SHADERS} ${OPENBLACK_IMGUI_FS_SHADERS}
+)
+openblack_shader_include_depends(
+  ${CMAKE_BINARY_DIR}/include/generated/shaders ${OPENBLACK_VERTEX_SHADERS} ${OPENBLACK_FRAGMENT_SHADERS}
 )
 
 list(APPEND OPENBLACK_SHADERS ${OPENBLACK_IMGUI_VS_SHADERS})
@@ -84,11 +127,37 @@ target_sources(
 )
 set_target_properties(openblack_lib PROPERTIES LINKER_LANGUAGE CXX)
 
+# The script API's natives that are still stubs, which the debug Scripts panel shows
+set(OPENBLACK_UNIMPLEMENTED_NATIVES
+    ${CMAKE_BINARY_DIR}/include/generated/scripting/UnimplementedNatives.h
+)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/include/generated/scripting)
+add_custom_command(
+  OUTPUT ${OPENBLACK_UNIMPLEMENTED_NATIVES}
+  COMMAND
+    ${CMAKE_COMMAND} -DSOURCE=${CMAKE_CURRENT_LIST_DIR}/CHLApi.cpp
+    -DOUTPUT=${OPENBLACK_UNIMPLEMENTED_NATIVES} -P
+    ${CMAKE_SOURCE_DIR}/CMakeModules/GenerateUnimplementedNatives.cmake
+  DEPENDS ${CMAKE_CURRENT_LIST_DIR}/CHLApi.cpp
+          ${CMAKE_SOURCE_DIR}/CMakeModules/GenerateUnimplementedNatives.cmake
+  COMMENT "Listing the script API's unwritten natives"
+)
+target_sources(openblack_lib PRIVATE ${OPENBLACK_UNIMPLEMENTED_NATIVES})
+# openblack's own Bink video decoder (OPENBLACK_USE_BINK): the debug GUI's Video window
+if (OPENBLACK_USE_BINK)
+  target_compile_definitions(openblack_lib PUBLIC OPENBLACK_USE_BINK)
+endif ()
+# The audio decoders give the samples of the decoder they replaced only with single precision operations as written:
+# no fused multiply-adds (MSVC's /fp:precise does not contract them)
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  set_source_files_properties(${CMAKE_CURRENT_LIST_DIR}/Audio/Codec/MpegAudio.cpp PROPERTIES COMPILE_OPTIONS -ffp-contract=off)
+endif ()
+
 target_include_directories(
   openblack_lib
   PUBLIC ${CMAKE_CURRENT_LIST_DIR}
          ${CMAKE_BINARY_DIR}/include # For shaders and other bin2c
-         ${BULLET_INCLUDE_DIR} ${Stb_INCLUDE_DIR} ${DRLIBS_INCLUDE_DIRS}
+         ${BULLET_INCLUDE_DIR} ${Stb_INCLUDE_DIR}
 )
 if (NOT VCPKG_TARGET_ANDROID)
   target_include_directories(
@@ -108,6 +177,8 @@ target_link_libraries(
           anm
           glw
           morph
+          rawimage
+          cam
           imgui::imgui
           imgui_user
           ScriptLibrary
@@ -122,6 +193,8 @@ target_link_libraries(
           LinearMath
           minizip::minizip
   PUBLIC spdlog::spdlog
+         # The mind file's types are part of the creature code's interfaces
+         creaturemind
 )
 target_include_directories(openblack_lib PRIVATE ${CXXOPTS_INCLUDE_DIRS})
 
@@ -168,10 +241,13 @@ endif ()
 
 target_compile_definitions(
   openblack_lib
-  PRIVATE
+  # glm's conventions are part of the library's interface: everything that includes its headers (the tests, the tools)
+  # must expand glm's inline functions the same way, or two definitions of one function reach the linker
+  PUBLIC
     "GLM_FORCE_LEFT_HANDED"
     "GLM_FORCE_RADIANS"
     "GLM_ENABLE_EXPERIMENTAL"
+  PRIVATE
     # "IMGUI_DISABLE_OBSOLETE_FUNCTIONS"
     # Compile-time optimize out log messages (debug level if debug, else info)
     "SPDLOG_ACTIVE_LEVEL=$<IF:$<CONFIG:DEBUG>,SPDLOG_LEVEL_DEBUG,SPDLOG_LEVEL_INFO>"
@@ -198,8 +274,6 @@ if (MSVC)
             /W4
             # Disable nonstandard extension used: nameless struct/union from glm
             /wd4201
-            # Multi-threaded
-            /MP
             # Enables stricter C++ standards conformance checks
             /permissive-
             # Set correct version of c++
@@ -233,6 +307,16 @@ else ()
   endif ()
 endif ()
 
+# Precompiled header: third-party and standard headers that most sources reach through Locator.h, ECS/Registry.h and
+# the components. No project headers: they change often, and a change would rebuild every source. Off with clang-tidy,
+# which cannot read an MSVC precompiled header
+if (OPENBLACK_USE_PCH AND NOT OPENBLACK_CLANG_TIDY_CHECKS)
+  target_precompile_headers(openblack_lib PRIVATE ${OPENBLACK_PCH_HEADERS})
+  if (APPLE)
+    set_source_files_properties(${OPENBLACK_OBJC_SOURCES} PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+  endif ()
+endif ()
+
 set_property(
   DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT openblack
 )
@@ -250,7 +334,9 @@ if (ANDROID)
 else ()
   add_executable(openblack main.cpp)
   target_link_libraries(openblack PRIVATE openblack_lib)
-
+  # built with the game and loaded at start-up when it is there; not linked
+  add_subdirectory(ModLoader)
+  add_dependencies(openblack ModLoader)
   if (MSVC)
     # Debug builds create a debug console
     set_target_properties(

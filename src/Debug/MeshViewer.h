@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <array>
 #include <memory>
 #include <optional>
 
@@ -59,6 +60,8 @@ private:
 	float _spawnRotation {0.0f};
 	float _spawnScale {1.0f};
 	bool _viewBoundingBox {false};
+	/// The selected mesh's flag names; kept between frames (a mesh with no flags shows the last text)
+	std::array<char, 0x400> _bitfieldTitle {};
 	std::unique_ptr<graphics::Mesh> _boundingBox;
 	std::unique_ptr<graphics::FrameBuffer> _frameBuffer;
 };

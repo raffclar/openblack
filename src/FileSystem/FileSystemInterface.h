@@ -37,6 +37,7 @@ enum class Path
 	WeatherSystem,
 	CreatureMesh,
 	Citadel,
+	CitadelEngine,
 };
 
 class FileSystemInterface
@@ -102,6 +103,10 @@ public:
 		{
 			result = GetPath<Path::Data>() / "Citadel";
 		}
+		else if constexpr (pathType == Path::CitadelEngine)
+		{
+			result = GetPath<Path::Citadel>() / "engine";
+		}
 		else
 		{
 			assert(false);
@@ -110,14 +115,14 @@ public:
 	}
 
 	[[nodiscard]] virtual std::filesystem::path FindPath(const std::filesystem::path& path) const = 0;
-	virtual std::unique_ptr<std::istream> GetData(const std::filesystem::path& path) = 0;
+	[[nodiscard]] virtual std::unique_ptr<std::istream> GetData(const std::filesystem::path& path) = 0;
 	[[nodiscard]] virtual bool IsPathValid(const std::filesystem::path& path) = 0;
-	virtual std::unique_ptr<Stream> Open(const std::filesystem::path& path, Stream::Mode mode) = 0;
+	[[nodiscard]] virtual std::unique_ptr<Stream> Open(const std::filesystem::path& path, Stream::Mode mode) = 0;
 	[[nodiscard]] virtual bool Exists(const std::filesystem::path& path) const = 0;
 	virtual void SetGamePath(const std::filesystem::path& path) = 0;
 	[[nodiscard]] virtual const std::filesystem::path& GetGamePath() const = 0;
 	virtual void AddAdditionalPath(const std::filesystem::path& path) = 0;
-	virtual std::vector<uint8_t> ReadAll(const std::filesystem::path& path) = 0;
+	[[nodiscard]] virtual std::vector<uint8_t> ReadAll(const std::filesystem::path& path) = 0;
 	virtual void Iterate(const std::filesystem::path& path, bool recursive,
 	                     const std::function<void(const std::filesystem::path&)>& function) const = 0;
 };

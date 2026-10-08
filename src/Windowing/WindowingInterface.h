@@ -26,6 +26,8 @@ enum class DisplayMode : std::uint8_t
 class WindowingInterface
 {
 public:
+	virtual ~WindowingInterface() = default;
+
 	struct NativeHandles
 	{
 		void* nativeWindow;

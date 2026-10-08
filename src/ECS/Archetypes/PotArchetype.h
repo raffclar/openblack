@@ -19,7 +19,13 @@ namespace openblack::ecs::archetypes
 class PotArchetype
 {
 public:
-	static entt::entity Create(const glm::vec3& position, float yAngleRadians, PotInfo type, int32_t amount);
+	/// allowEmpty: store piles exist with no resource (buried, not drawn) until the store fills them.
+	static entt::entity Create(const glm::vec3& position, float yAngleRadians, PotInfo type, int32_t amount,
+	                           bool allowEmpty = false);
+	// Call after the amount changes: plain pots rescale, piles move to their new sink offset (over 1 s if animate).
+	static void SetSize(entt::entity entity, bool animate);
+	// Advances the pile sink animations (PileWood / PileFood::Draw).
+	static void UpdateSizes(float seconds);
 	PotArchetype() = delete;
 };
 } // namespace openblack::ecs::archetypes

@@ -13,6 +13,8 @@
 
 #include <LHVMTypes.h>
 
+#include "Help/ScriptControl.h"
+
 namespace openblack::chlapi
 {
 
@@ -35,5 +37,9 @@ private:
 
 	std::vector<lhvm::NativeFunction> _functionsTable;
 };
+
+/// The script VM as the game's script control asks it (task number, current task's script type, script type, stop
+/// tasks of a type, push, start script) on Locator::vm
+[[nodiscard]] help::script_control::Vm ScriptVm();
 
 } // namespace openblack::chlapi

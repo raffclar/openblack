@@ -45,9 +45,11 @@ namespace openblack::ecs::systems
 class DynamicsSystemInterface
 {
 public:
+	virtual ~DynamicsSystemInterface() = default;
 	virtual void Reset() = 0;
 	virtual void Update(std::chrono::microseconds& dt) = 0;
 	virtual void AddRigidBody(btRigidBody* object) = 0;
+	virtual void RemoveRigidBody([[maybe_unused]] btRigidBody* object) {}
 	virtual void RegisterRigidBodies() = 0;
 	virtual void RegisterIslandRigidBodies(LandIslandInterface& island) = 0;
 	virtual void UpdatePhysicsTransforms() = 0;

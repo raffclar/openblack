@@ -11,6 +11,7 @@
 
 #include <cassert>
 
+#include <array>
 #include <stdexcept>
 
 #include <spdlog/fmt/fmt.h>
@@ -110,18 +111,18 @@ Stream& FileStream::Write(const uint8_t* buffer, std::size_t length)
 std::string FileStream::GetLine()
 {
 	const int MAX_LINE_LENGTH = 1024;
-	char buffer[MAX_LINE_LENGTH];
-	if (fgets(buffer, MAX_LINE_LENGTH, _file) != nullptr)
+	std::array<char, MAX_LINE_LENGTH> buffer;
+	if (fgets(buffer.data(), MAX_LINE_LENGTH, _file) != nullptr)
 	{
 		// fgets() includes the newline character in the output,
 		// so we remove it if it's there
-		auto len = strlen(buffer);
+		auto len = strlen(buffer.data());
 		if (len > 0 && buffer[len - 1] == '\n')
 		{
 			buffer[len - 1] = '\0';
 		}
 
-		return std::string(buffer);
+		return std::string(buffer.data());
 	}
 	else
 	{

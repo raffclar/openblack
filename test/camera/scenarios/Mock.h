@@ -9,8 +9,11 @@
 
 #pragma once
 
+#include <algorithm>
 #include <array>
+#include <map>
 #include <optional>
+#include <vector>
 
 #include <3D/LandIslandInterface.h>
 #include <Camera/Camera.h>
@@ -68,6 +71,7 @@ class MockWindowingSystem final: public openblack::windowing::WindowingInterface
 class MockTerrain final: public openblack::LandIslandInterface
 {
 	[[nodiscard]] float GetHeightAt(glm::vec2) const final { return 0.0f; }
+	[[nodiscard]] float GetUnflattenedHeightAt(glm::vec2) const final { return 0.0f; }
 	[[nodiscard]] glm::vec3 GetNormalAt(glm::vec2) const final { return {0.0f, 1.0f, 0.0f}; }
 	[[nodiscard]] const openblack::lnd::LNDCell& GetCell(const glm::u16vec2&) const final { assert(false); }
 	void DumpTextures() const final { assert(false); }
@@ -77,7 +81,11 @@ class MockTerrain final: public openblack::LandIslandInterface
 	[[nodiscard]] const std::vector<openblack::lnd::LNDCountry>& GetCountries() const final { assert(false); }
 	[[nodiscard]] const openblack::graphics::Texture2D& GetAlbedoArray() const final { assert(false); }
 	[[nodiscard]] const openblack::graphics::Texture2D& GetBump() const final { assert(false); }
+	[[nodiscard]] const openblack::graphics::Texture2D& GetSmallBump() const final { assert(false); }
 	[[nodiscard]] const openblack::graphics::Texture2D& GetHeightMap() const final { assert(false); }
+	[[nodiscard]] const openblack::graphics::Texture2D& GetCellMap() const final { assert(false); }
+	[[nodiscard]] const openblack::graphics::FrameBuffer& GetStaticShadowFramebuffer() const final { assert(false); }
+	[[nodiscard]] const openblack::graphics::FrameBuffer& GetLandAlphaFramebuffer() const final { assert(false); }
 	[[nodiscard]] const openblack::graphics::FrameBuffer& GetFootprintFramebuffer() const final { assert(false); }
 	[[nodiscard]] openblack::U16Extent2 GetIndexExtent() const final { assert(false); }
 	[[nodiscard]] glm::mat4 GetOrthoView() const final { assert(false); }
@@ -153,6 +161,40 @@ public:
 
 	uint16_t frameNumber = 0;
 	const openblack::Camera* camera;
+};
+
+// The raycasts a scenario recorded, read from its raycasts/<name>.json: for a screen coordinate, the first branch that
+// lists it gives the hit (or no hit) of each frame. A coordinate or frame the recording does not have is a test error
+class RecordedMockDynamicsSystem final: public MockDynamicsSystem
+{
+public:
+	struct Branch
+	{
+		std::vector<glm::u16vec2> coords;
+		std::map<uint16_t, std::optional<glm::vec2>> frames;
+	};
+
+	[[nodiscard]] std::optional<glm::vec2> RayCastClosestHitScreenCoord(glm::u16vec2 screenCoord) const override
+	{
+		for (const auto& branch : branches)
+		{
+			if (std::ranges::find(branch.coords, screenCoord) == branch.coords.end())
+			{
+				continue;
+			}
+			const auto found = branch.frames.find(frameNumber);
+			if (found != branch.frames.end())
+			{
+				return found->second;
+			}
+			assert(false); // Shouldn't be any unaccounted raycasts
+			return std::nullopt;
+		}
+		assert(false); // Shouldn't be any unaccounted raycasts
+		return std::nullopt;
+	}
+
+	std::vector<Branch> branches;
 };
 
 #if defined(_MSC_VER)

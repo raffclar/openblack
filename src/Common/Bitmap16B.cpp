@@ -11,30 +11,13 @@
 
 #include <cstring> // memcpy
 
-#include "FileSystem/FileSystemInterface.h"
-#include "Locator.h"
-
 using namespace openblack;
 
-Bitmap16B::Bitmap16B(const void* fileData)
+Bitmap16B::Bitmap16B(std::span<const uint8_t> fileData)
 {
-	_width = reinterpret_cast<const uint32_t*>(fileData)[1];
-	_height = reinterpret_cast<const uint32_t*>(fileData)[2];
-	_size = _width * _height * 2;
-
-	_data = new uint16_t[_width * _height];
-	memcpy(_data, &reinterpret_cast<const uint32_t*>(fileData)[4], _size);
-}
-
-Bitmap16B::~Bitmap16B()
-{
-	delete[] _data;
-}
-
-Bitmap16B* Bitmap16B::LoadFromFile(const std::filesystem::path& path)
-{
-	auto const& data = Locator::filesystem::value().ReadAll(path);
-	auto* bitmap = new Bitmap16B(data.data());
-
-	return bitmap;
+	const auto* header = reinterpret_cast<const uint32_t*>(fileData.data());
+	_width = header[1];
+	_height = header[2];
+	_data.resize(static_cast<size_t>(_width) * _height);
+	memcpy(_data.data(), &header[4], Size());
 }

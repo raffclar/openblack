@@ -11,8 +11,9 @@
 
 #include "PathfindingSystem.h"
 
+#include <limits>
 #include <optional>
-#include <vector>
+#include <type_traits>
 
 #include <entt/entity/entity.hpp>
 #include <glm/gtx/euler_angles.hpp>
@@ -21,12 +22,16 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
+#include "3D/ObjectMatrix.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Unavailable.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Map.h"
+#include "ECS/MapCells.h"
 #include "ECS/Registry.h"
+#include "ECS/Villager/VillagerScript.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -37,18 +42,19 @@ using namespace openblack::ecs::systems;
 namespace
 {
 
+/// The heading and step of openblack's own orbit (InitializeStepAroundObstacle, IterateStepAroundObstacle, the exit of
+/// the circle). (approximate) not the original's circle hug and its sweeps: float radians and metres, left to the
+/// hug's port
 void InitializeStep(Transform& transform, WallHug& wallHug, float angle)
 {
-	transform.rotation = glm::eulerAngleY(-angle - glm::radians(90.0f));
+	openblack::ecs::villager::SetYAngle(transform, wallHug, angle);
 	wallHug.step = glm::vec2(glm::cos(angle), glm::sin(angle)) * wallHug.speed;
-	wallHug.yAngle = angle;
 }
 
+/// villager::InitStepsXZ: the game angle at the goal, the integer step
 void InitializeStepToGoal(Transform& transform, WallHug& wallHug)
 {
-	const auto diff = wallHug.goal - glm::xz(transform.position);
-	const auto angle = glm::atan(diff.y, diff.x);
-	InitializeStep(transform, wallHug, angle);
+	openblack::ecs::villager::InitStepsXZ(transform, wallHug);
 }
 
 void InitializeStepAroundObstacle(Transform& transform, WallHug& wallHug, const Fixed& obstacle, float numCirclesAway,
@@ -71,16 +77,28 @@ void IterateStepAroundObstacle(Transform& transform, WallHug& wallHug, const Fix
 	InitializeStep(transform, wallHug, angle + angleStep * clockwiseModifier);
 }
 
-/// The wall-hug/orbit movement port has unfinished branches. To keep villager wandering
-/// working, we degrade gracefully instead of crashing: stop the villager where it is
-/// and drop all of its movement state. The LivingActionSystem's MoveToPos handler then sees no
-/// active move tags, treats the villager as "arrived", and picks a new destination.
+/// The wall-hug/orbit movement port has unfinished branches (the goal inside the hugged circle, TODO #864, and the
+/// circle-to-circle handover, TODO #865: the circle hug's square sweeps in the original).
+/// The original never gives a walk up: its MoveTo returns 0 / 1 / 6 / 7 while it walks and 0xA only when it is there
+/// (ARRIVED with AreWeThere, FINAL_STEP), and the Living's move to a position changes state only on 0xA; there is no
+/// "abandoned" code. (approximate) So instead of dropping the walk (which the villagers took as an arrival where
+/// they stood), the unported branch goes on as STEP_THROUGH (0xB: the straight walk to the goal, InitStepsXZ, no
+/// obstacle handling): MoveTo keeps walking and the villager arrives only through AreWeThere (step 5 -> FINAL_STEP).
 void AbandonMove(ecs::Registry& registry, entt::entity entity)
 {
-	SPDLOG_LOGGER_WARN(spdlog::get("pathfinding"), "Villager #{}: unimplemented pathfinding case hit, abandoning move",
+	SPDLOG_LOGGER_WARN(spdlog::get("pathfinding"),
+	                   "Villager #{}: unimplemented pathfinding case hit, going on straight to the goal (STEP_THROUGH)",
 	                   static_cast<uint32_t>(entity));
 	registry.Remove<MoveStateLinearTag, MoveStateOrbitTag, MoveStateExitCircleTag, MoveStateStepThroughTag,
 	                MoveStateFinalStepTag, MoveStateArrivedTag, WallHugObjectReference>(entity);
+	auto* transform = registry.TryGet<Transform>(entity);
+	auto* wallHug = registry.TryGet<WallHug>(entity);
+	if (transform == nullptr || wallHug == nullptr)
+	{
+		return;
+	}
+	InitializeStepToGoal(*transform, *wallHug);
+	registry.Assign<MoveStateStepThroughTag>(entity, MoveStateClockwise::Undefined, glm::xz(transform->position));
 }
 bool AreWeThere(const glm::vec2& pos, const glm::vec2& goal, float threshold)
 {
@@ -332,15 +350,41 @@ bool OrbitScanForObstacle(entt::entity entity, bool clockwise, Transform& transf
 	return found;
 }
 
-template <MoveState S, typename... Exclude>
-void StepForward(ecs::Registry& registry, Exclude... exclude)
+template <typename... X>
+bool Excluded(const ecs::Registry& registry, entt::entity entity, entt::exclude_t<X...> /*exclude*/)
 {
-	registry.Each<MoveStateTagComponent<S>, const WallHug, Transform>(
-	    [](MoveStateTagComponent<S>& state, const WallHug& wallHug, const Transform& transform) {
+	if constexpr (sizeof...(X) == 0)
+	{
+		return false;
+	}
+	else
+	{
+		return registry.AnyOf<X...>(entity);
+	}
+}
+
+/// registry.Each<C...>(func, entt::exclude<X...>) for one entity: func(entity, its C...) when it has every C and none of
+/// the X. The walk of one villager goes through the same phases, in the same order, as the walk of everyone did
+template <typename... C, typename... Exclude, typename Func>
+void ForOne(ecs::Registry& registry, entt::entity entity, Func func, Exclude... exclude)
+{
+	if (!registry.AllOf<std::remove_const_t<C>...>(entity) || (Excluded(registry, entity, exclude) || ...))
+	{
+		return;
+	}
+	func(entity, registry.Get<std::remove_const_t<C>>(entity)...);
+}
+
+template <MoveState S>
+void StepForward(ecs::Registry& registry, entt::entity entity)
+{
+	ForOne<MoveStateTagComponent<S>, const WallHug, Transform>(
+	    registry, entity,
+	    [](entt::entity, MoveStateTagComponent<S>& state, const WallHug& wallHug, const Transform& transform) {
 		    const auto goal = glm::xz(transform.position) + wallHug.step;
 		    state.stepGoal = goal;
 	    },
-	    exclude...);
+	    entt::exclude<Unavailable>);
 }
 
 template <MoveState S>
@@ -363,83 +407,102 @@ bool CellTransition(entt::entity entity, const MoveStateTagComponent<MoveState::
 
 /// Transition from one grid cell to another requires another check for obstacle in the line
 template <MoveState S>
-void HandleCellTransition(ecs::Registry& registry)
+void HandleCellTransition(ecs::Registry& registry, entt::entity entity)
 {
-	registry.Each<const MoveStateTagComponent<S>, WallHug, Transform>(
-	    [](entt::entity entity, const MoveStateTagComponent<S>& state, WallHug& wallHug, Transform& transform) {
+	ForOne<const MoveStateTagComponent<S>, WallHug, Transform>(
+	    registry, entity,
+	    [](entt::entity e, const MoveStateTagComponent<S>& state, WallHug& wallHug, Transform& transform) {
 		    const auto position = glm::xz(transform.position);
 		    const auto positionId = MapInterface::GetGridCell(position);
 		    const auto goalId = MapInterface::GetGridCell(state.stepGoal);
 		    if (positionId != goalId)
 		    {
-			    CellTransition(entity, state, transform, wallHug);
+			    CellTransition(e, state, transform, wallHug);
 		    }
-	    });
+	    },
+	    entt::exclude<Unavailable>);
 }
 
 // TODO(bwrsandman): Vanilla is more complex than this. Update to the map might be needed when transitioning from one block to
 // the other.
-template <MoveState S, typename... Exclude>
-void ApplyStepGoal(ecs::Registry& registry, Exclude... exclude)
+template <MoveState S>
+void ApplyStepGoal(ecs::Registry& registry, entt::entity entity)
 {
-	registry.Each<const MoveStateTagComponent<S>, Transform>(
-	    [](const MoveStateTagComponent<S>& state, Transform& transform) {
+	ForOne<const MoveStateTagComponent<S>, Transform>(
+	    registry, entity,
+	    [](entt::entity e, const MoveStateTagComponent<S>& state, Transform& /*transform*/) {
 		    const float altitude = Locator::terrainSystem::value().GetHeightAt(state.stepGoal);
-		    transform.position = glm::xzy(glm::vec3(state.stepGoal, altitude));
+		    // map_cells::MoveMapObject: the new position, and the head of the new cell's list only when the cell changes
+		    // (map_cells writes the Transform)
+		    map_cells::MoveMapObject(e, glm::xzy(glm::vec3(state.stepGoal, altitude)));
 	    },
-	    exclude...);
+	    entt::exclude<Unavailable>);
 }
 
 } // namespace
 
-void PathfindingSystem::Update()
+void PathfindingSystem::Step(entt::entity entity)
 {
+	// MoveTo for one villager, called by the state functions that walk (living_turn::MoveToStep): the move to a
+	// position, the move on a footpath, ... The phases below are openblack's walk (not yet the original's jump table
+	// on the move state), each one for this villager only: an obstacle scan sees the positions the livings before it
+	// in the list took this turn, as in the original
 	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(entity))
+	{
+		return;
+	}
 
 	// 1.  ARRIVED:
-	//         If AreWeThere is false, set to STEP_THROUGH (and it will trigger following steps)
-	registry.Each<const MoveStateArrivedTag, const Transform, const WallHug>(
-	    [&registry](entt::entity entity, const MoveStateArrivedTag& state, const Transform& transform, const WallHug& wallHug) {
-		    if (AreWeThere(glm::xz(transform.position), wallHug.goal, wallHug.speed))
+	//         If AreWeThere is false, set to STEP_THROUGH (and it will trigger following steps). The original's
+	//         ARRIVED: AreWeThere(0) -> Pos = goal, 0xA; else STEP_THROUGH. (The test here was
+	//         inverted: it left ARRIVED precisely when there.)
+	ForOne<const MoveStateArrivedTag, const Transform, const WallHug>(
+	    registry, entity,
+	    [&registry](entt::entity e, const MoveStateArrivedTag& state, const Transform& transform, const WallHug& wallHug) {
+		    if (!AreWeThere(glm::xz(transform.position), wallHug.goal, wallHug.speed))
 		    {
-			    registry.SwapComponents<MoveStateStepThroughTag>(entity, state, state.clockwise);
+			    registry.SwapComponents<MoveStateStepThroughTag>(e, state, state.clockwise);
 		    }
-	    });
+	    },
+	    entt::exclude<Unavailable>);
 
 	// 2.  LINEAR, LINEAR_CW, LINEAR_CCW
 	//         If this is the first turn and there is step size defined
-	registry.Each<const MoveStateLinearTag, Transform, WallHug>(
-	    [](entt::entity entity, const MoveStateLinearTag&, Transform& transform, WallHug& wallHug) {
+	ForOne<const MoveStateLinearTag, Transform, WallHug>(
+	    registry, entity,
+	    [](entt::entity e, const MoveStateLinearTag&, Transform& transform, WallHug& wallHug) {
 		    if (wallHug.step == glm::vec2(0.0f, 0.0))
 		    {
 			    InitializeStepToGoal(transform, wallHug);
-			    LinearScanForObstacle(entity, glm::xz(transform.position), wallHug.step);
+			    LinearScanForObstacle(e, glm::xz(transform.position), wallHug.step);
 		    }
 	    },
-	    entt::exclude<WallHugObjectReference>);
+	    entt::exclude<WallHugObjectReference, Unavailable>);
 
 	// 3.  ORBIT_CW, ORBIT_CCW, EXIT_CIRCLE_CW, EXIT_CIRCLE_CCW:
 	//         Orbiting requires a recorded obstacle to hug. Handling a missing one is unimplemented
-	//         in the port; abandon those moves instead of crashing. Collect
-	//         first, then remove, so we never mutate the pool being iterated for a non-current entity.
+	//         in the port; abandon those moves instead of crashing. Both tags are looked at first, then the move is
+	//         abandoned once for each one without its obstacle, as the collecting pass over everyone did.
 	{
-		std::vector<entt::entity> missingObstacle;
-		const auto collectIfNoObstacle = [&registry, &missingObstacle](entt::entity entity) {
-			if (!registry.AllOf<WallHugObjectReference>(entity) ||
-			    registry.Get<WallHugObjectReference>(entity).entity == entt::null)
+		int missingObstacle = 0;
+		const auto countIfNoObstacle = [&registry, &missingObstacle](entt::entity e) {
+			if (!registry.AllOf<WallHugObjectReference>(e) || registry.Get<WallHugObjectReference>(e).entity == entt::null)
 			{
-				missingObstacle.push_back(entity);
+				++missingObstacle;
 			}
 		};
-		registry.Each<const MoveStateOrbitTag>(
-		    [&collectIfNoObstacle](entt::entity entity, [[maybe_unused]] const MoveStateOrbitTag& state) {
-			    collectIfNoObstacle(entity);
-		    });
-		registry.Each<const MoveStateExitCircleTag>(
-		    [&collectIfNoObstacle](entt::entity entity, [[maybe_unused]] const MoveStateExitCircleTag& state) {
-			    collectIfNoObstacle(entity);
-		    });
-		for (const auto entity : missingObstacle)
+		ForOne<const MoveStateOrbitTag>(
+		    registry, entity,
+		    [&countIfNoObstacle](entt::entity e, [[maybe_unused]] const MoveStateOrbitTag& state) { countIfNoObstacle(e); },
+		    entt::exclude<Unavailable>);
+		ForOne<const MoveStateExitCircleTag>(
+		    registry, entity,
+		    [&countIfNoObstacle](entt::entity e, [[maybe_unused]] const MoveStateExitCircleTag& state) {
+			    countIfNoObstacle(e);
+		    },
+		    entt::exclude<Unavailable>);
+		for (int i = 0; i < missingObstacle; ++i)
 		{
 			AbandonMove(registry, entity);
 		}
@@ -447,30 +510,33 @@ void PathfindingSystem::Update()
 
 	// 4a. STEP_THROUGH, EXIT_CIRCLE_CW, EXIT_CIRCLE_CCW, LINEAR without obstacles:
 	//         Do StepForward and ApplyStepGoal for the step distance -> no change to state
-	StepForward<MoveState::StepThrough>(registry);
-	StepForward<MoveState::ExitCircle>(registry);
-	ApplyStepGoal<MoveState::StepThrough>(registry);
-	ApplyStepGoal<MoveState::ExitCircle>(registry);
+	StepForward<MoveState::StepThrough>(registry, entity);
+	StepForward<MoveState::ExitCircle>(registry, entity);
+	ApplyStepGoal<MoveState::StepThrough>(registry, entity);
+	ApplyStepGoal<MoveState::ExitCircle>(registry, entity);
 
 	// 4b. FINAL_STEP, ARRIVED:
 	//         Do ApplyStepGoal for the remaining distance to the goal and return a message to change LIVING STATE
 	//         exclude from next parts -> no change to state
-	ApplyStepGoal<MoveState::FinalStep>(registry);
-	ApplyStepGoal<MoveState::Arrived>(registry);
+	ApplyStepGoal<MoveState::FinalStep>(registry, entity);
+	ApplyStepGoal<MoveState::Arrived>(registry, entity);
 
 	// 4c. ORBIT_CW, ORBIT_CCW:
-	registry.Each<const MoveStateOrbitTag, const WallHugObjectReference, WallHug, Transform>(
-	    [&registry](const MoveStateOrbitTag& state, const WallHugObjectReference& reference, WallHug& wallHug,
+	ForOne<const MoveStateOrbitTag, const WallHugObjectReference, WallHug, Transform>(
+	    registry, entity,
+	    [&registry](entt::entity, const MoveStateOrbitTag& state, const WallHugObjectReference& reference, WallHug& wallHug,
 	                Transform& transform) {
 		    IterateStepAroundObstacle(transform, wallHug, registry.Get<Fixed>(reference.entity),
 		                              state.clockwise == MoveStateClockwise::Clockwise);
-	    });
-	StepForward<MoveState::Orbit>(registry);
-	HandleCellTransition<MoveState::Orbit>(registry);
+	    },
+	    entt::exclude<Unavailable>);
+	StepForward<MoveState::Orbit>(registry, entity);
+	HandleCellTransition<MoveState::Orbit>(registry, entity);
 	// Decrement turns to object, remove reference once at 0, 0xFF means there is obstacle
 	// TODO(#500): split WallHugObjectReference into FutureObstacle and HuggedObstacle
-	registry.Each<const MoveStateOrbitTag, WallHugObjectReference>(
-	    [](const MoveStateOrbitTag&, WallHugObjectReference& reference) {
+	ForOne<const MoveStateOrbitTag, WallHugObjectReference>(
+	    registry, entity,
+	    [](entt::entity, const MoveStateOrbitTag&, WallHugObjectReference& reference) {
 		    if (reference.stepsAway == std::numeric_limits<decltype(reference.stepsAway)>::max())
 		    {
 			    return;
@@ -483,26 +549,30 @@ void PathfindingSystem::Update()
 		    {
 			    --reference.stepsAway;
 		    }
-	    });
+	    },
+	    entt::exclude<Unavailable>);
 	// Call OrbitScanForObstacle for those without reference, jumping from one circle to the next
-	// registry.Each<const MoveStateOrbitTag, entt::exclude_t<WallHugObjectReference>>( // FIXME: Exclusion list is not working
-	registry.Each<const MoveStateOrbitTag>([&registry](entt::entity entity, [[maybe_unused]] const MoveStateOrbitTag& state) {
-		if (!registry.AnyOf<WallHugObjectReference>(entity))
-		{
-			// TODO(#865): circle-to-circle transition is unimplemented. Degrade gracefully.
-			AbandonMove(registry, entity);
-		}
-	});
-	ApplyStepGoal<MoveState::Orbit>(registry);
+	ForOne<const MoveStateOrbitTag>(
+	    registry, entity,
+	    [&registry](entt::entity e, [[maybe_unused]] const MoveStateOrbitTag& state) {
+		    if (!registry.AnyOf<WallHugObjectReference>(e))
+		    {
+			    // TODO(#865): circle-to-circle transition is unimplemented. Degrade gracefully.
+			    AbandonMove(registry, e);
+		    }
+	    },
+	    entt::exclude<Unavailable>);
+	ApplyStepGoal<MoveState::Orbit>(registry, entity);
 	// Check if it's time to exit circle hug
-	registry.Each<const MoveStateOrbitTag, WallHug, Transform, WallHugObjectReference>(
-	    [&registry](entt::entity entity, const MoveStateOrbitTag& state, WallHug& wallHug, Transform& transform,
+	ForOne<const MoveStateOrbitTag, WallHug, Transform, WallHugObjectReference>(
+	    registry, entity,
+	    [&registry](entt::entity e, const MoveStateOrbitTag& state, WallHug& wallHug, Transform& transform,
 	                WallHugObjectReference& reference) {
 		    const auto pos = glm::xz(transform.position);
 		    if (AreWeThere(pos, wallHug.goal, 0.0f))
 		    {
-			    registry.SwapComponents<MoveStateFinalStepTag>(entity, state, MoveStateClockwise::Undefined, wallHug.goal);
-			    registry.Remove<WallHugObjectReference>(entity);
+			    registry.SwapComponents<MoveStateFinalStepTag>(e, state, MoveStateClockwise::Undefined, wallHug.goal);
+			    registry.Remove<WallHugObjectReference>(e);
 		    }
 
 		    const auto diff = pos - wallHug.goal;
@@ -525,16 +595,18 @@ void PathfindingSystem::Update()
 		    const auto normal = pos - obstacle.boundingCenter;
 		    InitializeStep(transform, wallHug, glm::atan(normal.y, normal.x));
 		    // Add exit tag, current tag stay to avoid 6. and is removed after
-		    registry.Assign<MoveStateExitCircleTag>(entity, state.clockwise, state.stepGoal);
-	    });
+		    registry.Assign<MoveStateExitCircleTag>(e, state.clockwise, state.stepGoal);
+	    },
+	    entt::exclude<Unavailable>);
 
 	// 4d. LINEAR, LINEAR_CW, LINEAR_CCW:
 	//         Do move_to_circle_hug (complex) -> can change state to ORBIT*
-	StepForward<MoveState::Linear>(registry);
-	HandleCellTransition<MoveState::Linear>(registry);
+	StepForward<MoveState::Linear>(registry, entity);
+	HandleCellTransition<MoveState::Linear>(registry, entity);
 	// Decrement turns to object, transition to orbit at 0
-	registry.Each<const MoveStateLinearTag, Transform, WallHug, WallHugObjectReference>(
-	    [&registry](entt::entity entity, const MoveStateLinearTag& state, Transform& transform, WallHug& wallHug,
+	ForOne<const MoveStateLinearTag, Transform, WallHug, WallHugObjectReference>(
+	    registry, entity,
+	    [&registry](entt::entity e, const MoveStateLinearTag& state, Transform& transform, WallHug& wallHug,
 	                WallHugObjectReference& reference) {
 		    assert(reference.stepsAway != 0xFF); // In this case, the component should have been removed
 		    if (reference.stepsAway == 0)
@@ -550,47 +622,52 @@ void PathfindingSystem::Update()
 				    clockwise = sin > 0.0f ? MoveStateClockwise::Clockwise : MoveStateClockwise::CounterClockwise;
 			    }
 			    // Add orbit, remove linear later
-			    auto& newState = registry.Assign<MoveStateOrbitTag>(entity, clockwise, state.stepGoal);
+			    auto& newState = registry.Assign<MoveStateOrbitTag>(e, clockwise, state.stepGoal);
 			    reference.stepsAway = std::numeric_limits<decltype(reference.stepsAway)>::max(); // FIXME: useless value
 			    // TODO(#500): reference.entity should probably be put in another component
 			    // registry.Remove<WallHugObjectReference>(entity);
 			    // registry.Remove<MoveStateLinearTag>(entity); // TODO(#500): Maybe do this later
 
 			    // TODO(bwrsandman): perhaps move this to another Each call
-			    OrbitScanForObstacle(entity, newState.clockwise == MoveStateClockwise::Clockwise, transform, wallHug);
+			    OrbitScanForObstacle(e, newState.clockwise == MoveStateClockwise::Clockwise, transform, wallHug);
 		    }
 		    else
 		    {
 			    --reference.stepsAway;
 		    }
-	    });
+	    },
+	    entt::exclude<Unavailable>);
 
-	ApplyStepGoal<MoveState::Linear>(registry);
+	ApplyStepGoal<MoveState::Linear>(registry, entity);
 	// Clean-up: Remove those which have been transitioned
-	registry.Each<const MoveStateLinearTag, const MoveStateOrbitTag>(
-	    [&registry](entt::entity entity, const MoveStateLinearTag, const MoveStateOrbitTag) {
-		    registry.Remove<MoveStateLinearTag>(entity);
-	    });
+	ForOne<const MoveStateLinearTag, const MoveStateOrbitTag>(
+	    registry, entity,
+	    [&registry](entt::entity e, const MoveStateLinearTag&, const MoveStateOrbitTag&) {
+		    registry.Remove<MoveStateLinearTag>(e);
+	    },
+	    entt::exclude<Unavailable>);
 
 	// 5.  NOT(FINAL_STEP, ARRIVED): ** PRIOR TO ANY CHANGE OF THE ABOVE STEPS (4c):
 	//         if AreWeThere(): sets to FINAL_STEP
-	registry.Each<WallHug, const Transform>(
-	    [&registry](entt::entity entity, WallHug& wallHug, const Transform& transform) {
+	ForOne<WallHug, const Transform>(
+	    registry, entity,
+	    [&registry](entt::entity e, WallHug& wallHug, const Transform& transform) {
 		    if (AreWeThere(glm::xz(transform.position), wallHug.goal, wallHug.speed))
 		    {
-			    registry.Assign<MoveStateFinalStepTag>(entity, MoveStateClockwise::Undefined, wallHug.goal);
-			    registry.Remove<MoveStateLinearTag, MoveStateOrbitTag, MoveStateExitCircleTag, MoveStateStepThroughTag>(entity);
+			    registry.Assign<MoveStateFinalStepTag>(e, MoveStateClockwise::Undefined, wallHug.goal);
+			    registry.Remove<MoveStateLinearTag, MoveStateOrbitTag, MoveStateExitCircleTag, MoveStateStepThroughTag>(e);
 		    }
 	    },
-	    entt::exclude<MoveStateFinalStepTag, MoveStateArrivedTag>);
+	    entt::exclude<MoveStateFinalStepTag, MoveStateArrivedTag, Unavailable>);
 
 	// 6.  EXIT_CIRCLE_CW, EXIT_CIRCLE_CCW ** PRIOR TO ANY CHANGE OF THE ABOVE STEPS (4c):
 	//         if the distance to obstacle is greater than the radius of the circle: set to LINEAR_(C)CW and do
 	//         linear_square_sweep
-	registry.Each<const MoveStateExitCircleTag, WallHug, const WallHugObjectReference, Transform>(
-	    [&registry](entt::entity entity, const MoveStateExitCircleTag& state, WallHug& wallHug,
-	                const WallHugObjectReference& object, Transform& transform) {
-		    if (object.entity != entt::null && !registry.AnyOf<MoveStateOrbitTag>(entity))
+	ForOne<const MoveStateExitCircleTag, WallHug, const WallHugObjectReference, Transform>(
+	    registry, entity,
+	    [&registry](entt::entity e, const MoveStateExitCircleTag& state, WallHug& wallHug, const WallHugObjectReference& object,
+	                Transform& transform) {
+		    if (object.entity != entt::null && !registry.AnyOf<MoveStateOrbitTag>(e))
 		    {
 			    const auto position = glm::xz(transform.position);
 			    const auto& fixed = registry.Get<const Fixed>(object.entity);
@@ -599,16 +676,19 @@ void PathfindingSystem::Update()
 				    if (!AreWeThere(position, fixed.boundingCenter, fixed.boundingRadius))
 				    {
 					    InitializeStepToGoal(transform, wallHug);
-					    registry.SwapComponents<MoveStateLinearTag>(entity, state, state.clockwise, state.stepGoal);
-					    LinearScanForObstacle(entity, position, wallHug.step);
+					    registry.SwapComponents<MoveStateLinearTag>(e, state, state.clockwise, state.stepGoal);
+					    LinearScanForObstacle(e, position, wallHug.step);
 				    }
 			    }
 		    }
-	    });
+	    },
+	    entt::exclude<Unavailable>);
 
 	// Remove leftover tag from orbit to exit circle transition
-	registry.Each<const MoveStateExitCircleTag, const MoveStateOrbitTag>(
-	    [&registry](entt::entity entity, const MoveStateExitCircleTag, const MoveStateOrbitTag) {
-		    registry.Remove<MoveStateOrbitTag>(entity);
-	    });
+	ForOne<const MoveStateExitCircleTag, const MoveStateOrbitTag>(
+	    registry, entity,
+	    [&registry](entt::entity e, const MoveStateExitCircleTag&, const MoveStateOrbitTag&) {
+		    registry.Remove<MoveStateOrbitTag>(e);
+	    },
+	    entt::exclude<Unavailable>);
 }

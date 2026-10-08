@@ -17,8 +17,11 @@ using namespace openblack;
 
 std::mt19937& RandomNumberManagerProduction::Generator()
 {
-	thread_local std::mt19937 tGenerator(static_cast<unsigned int>(time(nullptr)));
-	return tGenerator;
+	if (!_generator.has_value())
+	{
+		_generator.emplace(static_cast<unsigned int>(time(nullptr)));
+	}
+	return *_generator;
 }
 
 std::optional<std::reference_wrapper<std::mutex>> RandomNumberManagerProduction::LockAccess()

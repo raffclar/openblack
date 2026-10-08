@@ -32,7 +32,30 @@ if (OPENBLACK_USE_VCPKG AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
   )
 endif ()
 
+# openblack's own Bink video decoder (src/Video/Bink*): the game's films, and the debug GUI's Video window. Without it
+# the films are skipped
+option(OPENBLACK_USE_BINK "Build openblack's own Bink video decoder and play the game's films" ON)
+option(OPENBLACK_USE_PCH "Precompile the common third-party headers of openblack_lib" ON)
+
 project(openblack VERSION 0.1.0)
+
+# Build memory (openblack, 2026-10-03): Ninja runs cores+2 jobs, and every link of the ~93 executables reads the whole
+# static openblack_lib (~480 MB), so many links at once ran out of RAM. Links go through a pool of
+# OPENBLACK_LINK_JOBS (other generators ignore job pools; this sets the JOB_POOLS property, so -DCMAKE_JOB_POOLS is
+# not used).
+set(OPENBLACK_LINK_JOBS 1 CACHE STRING "How many executables Ninja links at the same time")
+if (NOT OPENBLACK_LINK_JOBS GREATER 0)
+  set(OPENBLACK_LINK_JOBS 1)
+endif ()
+set_property(GLOBAL APPEND PROPERTY JOB_POOLS openblack_link_pool=${OPENBLACK_LINK_JOBS})
+set(CMAKE_JOB_POOL_LINK openblack_link_pool)
+# Build memory: every MSVC compile holds its own RAM, so at most OPENBLACK_COMPILE_JOBS at once, whatever -j says
+set(OPENBLACK_COMPILE_JOBS 2 CACHE STRING "How many sources Ninja compiles at the same time")
+if (NOT OPENBLACK_COMPILE_JOBS GREATER 0)
+  set(OPENBLACK_COMPILE_JOBS 1)
+endif ()
+set_property(GLOBAL APPEND PROPERTY JOB_POOLS openblack_compile_pool=${OPENBLACK_COMPILE_JOBS})
+set(CMAKE_JOB_POOL_COMPILE openblack_compile_pool)
 
 # Configure C++ standard
 set(CMAKE_CXX_STANDARD 23)
@@ -98,12 +121,6 @@ if (TARGET bgfx::bgfx AND TARGET bgfx::bx)
   target_link_libraries(bgfx::bgfx INTERFACE bgfx::bx)
 endif ()
 
-find_path(
-  DRLIBS_INCLUDE_DIRS REQUIRED
-  NAMES dr_flac.h dr_mp3.h dr_wav.h
-  PATHS /usr/include/dr_libs
-)
-
 find_package(OpenAL REQUIRED)
 find_package(imgui REQUIRED)
 find_package(Bullet REQUIRED)
@@ -121,7 +138,64 @@ add_subdirectory(components/lnd)
 add_subdirectory(components/anm)
 add_subdirectory(components/glw)
 add_subdirectory(components/morph)
+add_subdirectory(components/creaturemind)
+add_subdirectory(components/rawimage)
+add_subdirectory(components/cam)
 add_subdirectory(components/ScriptLibrary)
+# The precompiled header (OPENBLACK_USE_PCH): third-party and standard headers that most sources reach through
+# Locator.h, ECS/Registry.h and the components; openblack_lib and every test group (with gtest) precompile it. No
+# project headers: they change often, and a change would rebuild every source
+set(OPENBLACK_PCH_HEADERS
+    # std
+    <cstddef>
+    <cstdint>
+    <cstdlib>
+    <cstring>
+    <cmath>
+    <cassert>
+    <algorithm>
+    <array>
+    <bit>
+    <chrono>
+    <filesystem>
+    <functional>
+    <limits>
+    <map>
+    <memory>
+    <optional>
+    <queue>
+    <set>
+    <source_location>
+    <span>
+    <string>
+    <string_view>
+    <tuple>
+    <unordered_map>
+    <unordered_set>
+    <utility>
+    <vector>
+    # glm (the GLM_FORCE_* defines are target-wide, above)
+    <glm/vec2.hpp>
+    <glm/vec3.hpp>
+    <glm/vec4.hpp>
+    <glm/mat3x3.hpp>
+    <glm/mat4x4.hpp>
+    <glm/geometric.hpp>
+    <glm/gtc/constants.hpp>
+    <glm/gtc/quaternion.hpp>
+    # EnTT
+    <entt/core/hashed_string.hpp>
+    <entt/core/type_info.hpp>
+    <entt/entity/entity.hpp>
+    <entt/entity/helper.hpp>
+    <entt/entity/registry.hpp>
+    <entt/locator/locator.hpp>
+    <entt/resource/cache.hpp>
+    # logging
+    <fmt/format.h>
+    <spdlog/spdlog.h>
+)
+
 add_subdirectory(src)
 add_subdirectory(apps/l3dtool)
 add_subdirectory(apps/packtool)
@@ -174,3 +248,26 @@ set_property(
   DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT openblack
 )
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
+# Determinism (openblack engine, docs/bw1-notes/engine-loop.md "Floating point"): the game logic must give the same
+# floats on every build and thread, as the original's (its x87 FPU at 24 bits: one rounding per operation). Fused or
+# reassociated float math changes them, so these flags stop the configure.
+function(openblack_check_deterministic_fp)
+  set(flags "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE} ${CMAKE_CXX_FLAGS_RELWITHDEBINFO} ${CMAKE_CXX_FLAGS_DEBUG}")
+  foreach (target openblack_lib openblack)
+    if (TARGET ${target})
+      get_target_property(options ${target} COMPILE_OPTIONS)
+      if (options)
+        string(APPEND flags " ${options}")
+      endif ()
+    endif ()
+  endforeach ()
+  foreach (bad "/fp:fast" "/fp:contract" "/arch:AVX2" "/arch:AVX512" "-ffast-math" "-mfma" "-ffp-contract=fast")
+    string(FIND "${flags}" "${bad}" at)
+    if (NOT at EQUAL -1)
+      message(FATAL_ERROR "${bad}: fused or reassociated float math changes the game's results (determinism, "
+                          "docs/bw1-notes/engine-loop.md 'Floating point'). Remove it.")
+    endif ()
+  endforeach ()
+endfunction ()
+openblack_check_deterministic_fp()

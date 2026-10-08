@@ -102,7 +102,7 @@ void MeshViewer::Draw() noexcept
 
 	auto mesh = meshes.Handle(_selectedMesh);
 
-	static std::array<char, 0x400> bitfieldTitle;
+	auto& bitfieldTitle = _bitfieldTitle;
 	{
 		int32_t offset = 0;
 		int32_t newLines = 1;
@@ -312,21 +312,21 @@ void MeshViewer::Update() noexcept
 	_frameBuffer->Bind(k_ViewId);
 	// TODO(bwrsandman): The setting of viewport and clearing should probably be
 	// done in framebuffer bind
-	static const uint32_t clearColor = 0x274659ff;
-	bgfx::setViewClear(static_cast<bgfx::ViewId>(k_ViewId), BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, clearColor, 1.0f, 0);
+	constexpr uint32_t k_ClearColor = 0x274659ff;
+	bgfx::setViewClear(static_cast<bgfx::ViewId>(k_ViewId), BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, k_ClearColor, 1.0f, 0);
 	uint16_t width;
 	uint16_t height;
 	_frameBuffer->GetSize(width, height);
 	bgfx::setViewRect(static_cast<bgfx::ViewId>(k_ViewId), 0, 0, width, height);
 
-	// clang-format off
-	const uint64_t state = 0u
-		| BGFX_STATE_WRITE_MASK
-		| BGFX_STATE_DEPTH_TEST_LESS
-		| BGFX_STATE_CULL_CCW // TODO(bwrsandman): Some meshes wind one way and
-		                      //                   some others (i.e. rocks, gate)
-		| BGFX_STATE_MSAA;
-	// clang-format on
+	// the model pass's states with the viewer's own (not inverted) depth test
+	const graphics::render_modes::StateOptions options {
+	    .zFunc = graphics::render_modes::ZFunc::Always,
+	    .cull = graphics::render_modes::Cull::Ccw, // TODO(bwrsandman): Some meshes wind one way and
+	                                               //                   some others (i.e. rocks, gate)
+	    .writeAlpha = true,
+	    .msaa = true,
+	    .extra = BGFX_STATE_DEPTH_TEST_LESS};
 
 	const auto& mesh = meshes.Handle(_selectedMesh);
 	if (_selectedSubMesh >= 0 && static_cast<uint32_t>(_selectedSubMesh) < mesh->GetSubMeshes().size())
@@ -335,7 +335,7 @@ void MeshViewer::Update() noexcept
 		graphics::RendererInterface::L3DMeshSubmitDesc desc = {};
 		desc.viewId = k_ViewId;
 		desc.program = objectShader;
-		desc.state = state;
+		desc.options = options;
 		desc.modelMatrices = &identity;
 		desc.matrixCount = 1;
 		desc.drawAll = true;

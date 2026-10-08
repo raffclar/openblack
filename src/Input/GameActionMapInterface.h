@@ -185,6 +185,8 @@ public:
 		    action);
 	}
 
+	virtual ~GameActionInterface() = default;
+
 	[[nodiscard]] virtual bool GetBindable(BindableActionMap action) const = 0;
 	[[nodiscard]] virtual bool GetUnbindable(UnbindableActionMap action) const = 0;
 	[[nodiscard]] virtual bool GetBindableChanged(BindableActionMap action) const = 0;

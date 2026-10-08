@@ -17,17 +17,24 @@ namespace openblack::ecs::systems
 class LivingActionSystemInterface
 {
 public:
+	virtual ~LivingActionSystemInterface() = default;
 	virtual void Update() = 0;
 
 	[[nodiscard]] virtual VillagerStates VillagerGetState(const components::LivingAction& action,
 	                                                      components::LivingAction::Index index) const = 0;
 	virtual void VillagerSetState(components::LivingAction& action, components::LivingAction::Index index, VillagerStates state,
 	                              bool skipTransition) const = 0;
-	virtual uint32_t VillagerCallState(components::LivingAction& action, components::LivingAction::Index index) const = 0;
-	virtual bool VillagerCallEntryState(components::LivingAction& action, components::LivingAction::Index index,
-	                                    VillagerStates src, VillagerStates dst) const = 0;
-	virtual bool VillagerCallExitState(components::LivingAction& action, components::LivingAction::Index index) const = 0;
-	virtual int VillagerCallOutOfAnimation(components::LivingAction& action, components::LivingAction::Index index) const = 0;
+	[[nodiscard]] virtual uint32_t VillagerCallState(components::LivingAction& action,
+	                                                 components::LivingAction::Index index) const = 0;
+	/// The entry function of the table row `row`, told the final state from before the change and the state
+	/// entered: 1 = accepted, 0x23 = accepted and the states set by it, else refused. An empty slot is 1 (no function)
+	virtual uint32_t VillagerCallEntry(components::LivingAction& action, VillagerStates row, VillagerStates final,
+	                                   VillagerStates next) const = 0;
+	/// The exit function of the table row `row`, told the state that follows: 1 = it may leave. Empty: 1
+	[[nodiscard]] virtual uint32_t VillagerCallExit(components::LivingAction& action, VillagerStates row,
+	                                                VillagerStates next) const = 0;
+	[[nodiscard]] virtual int VillagerCallOutOfAnimation(components::LivingAction& action,
+	                                                     components::LivingAction::Index index) const = 0;
 	virtual bool VillagerCallValidate(components::LivingAction& action, components::LivingAction::Index index) const = 0;
 };
 

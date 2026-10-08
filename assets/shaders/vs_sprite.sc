@@ -5,6 +5,13 @@ $output v_texcoord0
 
 uniform vec4 u_sampleRect;
 
+// The sprite draw's mode A (flag 0x40 clear), the billboard::Screen mode of src/3D/Billboard.h, on the GPU: the
+// plane -1..1 (Primitive::CreatePlane) is scaled and turned by u_model (billboard::ScreenSpriteModel: T(pos)
+// Rz(-angle) S(half width, half height, 1)), taken into the world by the camera's rotation (u_invView) and moved to
+// the translation. So a corner is pos + R (c x + s y) + U (-s x + c y), local x going to (cos, -sin) on the screen
+// as in the original, with v = 0 at the top. The sprite's origin offset is 0 for every
+// user of this shader (components::Sprite and the chimney smoke have none); the near test is made on the
+// CPU before the draw.
 void main()
 {
 	// Plane position to UV

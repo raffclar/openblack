@@ -22,7 +22,6 @@ class TownSystem final: public TownSystemInterface
 {
 public:
 	[[nodiscard]] entt::entity FindAbodeWithSpace(entt::entity townEntity) const override;
-	[[nodiscard]] entt::entity FindClosestTown(const glm::vec3& point) const override;
 	void AddHomelessVillagerToTown(entt::entity townEntity, entt::entity villagerEntity) override;
 };
 } // namespace openblack::ecs::systems

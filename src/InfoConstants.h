@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <array>
@@ -429,7 +430,7 @@ struct GWorshipSiteInfo: GCitadelPartInfo
 	uint32_t maxDancersVisible;
 	float chantsToFillBattery;
 	float eachVillagerAddToFillBattery;
-	uint32_t chantsToReserveForMaintaining;
+	float chantsToReserveForMaintaining; ///< a float in the code; the file holds an int, so it reads as ~7e-43 (kept)
 	float artifactPowerupMultiplier;
 };
 
@@ -857,8 +858,69 @@ struct GSpeedThreshold
 
 struct GCreatureInfo: GLivingInfo
 {
-	std::array<uint8_t, 416> field0x1e4;
+	/// The species' row in the creature tables, the Giant Ape's first
+	uint32_t row;
+	float field0x1e8;
+	/// How big a new creature of the species is, and how fat, 0 to 1
+	float startScale;
+	float startFatness;
+	/// How a new creature's body starts: full of energy, and neither warm nor cold
+	float startEnergy;
+	float startWarmth;
+	/// The temperature the species is comfortable at; it warms or cools only well away from it
+	float comfortTemperature;
+	/// The creature ages by one every this many seconds of game time
+	uint32_t secondsPerAgeTick;
+	/// It grows fast for most of this many minutes of age, then slowly
+	float growUpMinutes;
+	float field0x208;
+	/// Walking while its energy is below this tires it faster
+	float lowEnergyThreshold;
+	/// How much moving tires it each game turn, before its youth makes that faster
+	float exhaustionRate;
+	/// It goes from not thirsty to fully thirsty in this many seconds
+	float secondsToDehydrate;
+	/// Its strength is multiplied by this each game turn
+	float strengthDecay;
+	/// Carrying something as heavy as itself makes it stronger by half in this many minutes
+	float carryStrengthMinutes;
+	/// The energy it uses each game turn, less the bigger it is
+	float energyDrain;
+	/// While hungry, the fat it burns each game turn
+	float fatBurn;
+	/// How much of what it eats beyond full turns to fat
+	float overeatFatFactor;
+	/// Asleep, the life it regains and the exhaustion it sheds each game turn
+	float sleepHeal;
+	float sleepRecover;
+	std::array<uint8_t, 0xc> field0x234;
+	/// How fast the creature goes, each a fraction of its top speed: slowly (when exhausted), walking and running
+	float slowSpeed;
+	float walkSpeed;
+	float runSpeed;
+	std::array<uint8_t, 0x8c> field0x24c;
+	/// Running away, the creature goes at least this far from what it flees, and up to 40 further
+	float runAwayDistance;
+	std::array<uint8_t, 0x88> field0x2dc;
+	/// How long it sleeps for its size, once rested
+	float sleepLength;
+	/// A meal's food value over this, and over its size, is the energy it gains
+	float foodToEnergy;
+	float field0x36c;
+	/// The poo a meal builds up for each unit of energy it gains
+	float pooPerEnergy;
+	std::array<uint8_t, 0x10> field0x374;
 };
+static_assert(sizeof(GCreatureInfo) == 0x384);
+static_assert(offsetof(GCreatureInfo, startEnergy) == 0x1f4);
+static_assert(offsetof(GCreatureInfo, comfortTemperature) == 0x1fc);
+static_assert(offsetof(GCreatureInfo, growUpMinutes) == 0x204);
+static_assert(offsetof(GCreatureInfo, energyDrain) == 0x220);
+static_assert(offsetof(GCreatureInfo, sleepRecover) == 0x230);
+static_assert(offsetof(GCreatureInfo, slowSpeed) == 0x240);
+static_assert(offsetof(GCreatureInfo, runAwayDistance) == 0x2d8);
+static_assert(offsetof(GCreatureInfo, sleepLength) == 0x364);
+static_assert(offsetof(GCreatureInfo, pooPerEnergy) == 0x370);
 
 struct GMagicRadiusSpellInfo: GMagicInfo
 {
@@ -1424,10 +1486,11 @@ struct GEffectInfo
 struct GMagicEffectInfo: GEffectInfo
 {
 	std::array<char, 0x30> debugString;
-	uint32_t timerWhenOneShot;
-	uint32_t timerWhenPlayerCasting;
-	uint32_t timerWhenCreatureCasting;
-	uint32_t timerWhenComputerPlayerCasting;
+	// seconds (the code reads them as floats); -1 = no time limit. MAGIC_TYPE 0 holds the int 10.
+	float timerWhenOneShot;
+	float timerWhenPlayerCasting;
+	float timerWhenCreatureCasting;
+	float timerWhenComputerPlayerCasting;
 	float initialChants;
 	float costToCreate;
 	float costPerEvent;
@@ -1513,42 +1576,40 @@ struct GPFootballInfo: GMultiMapFixedInfo
 
 struct GSpellSeedInfo: GObjectInfo
 {
-	uint32_t field0xf0;
-	uint32_t field0xf4;
-	uint32_t field0xf8;
-	uint32_t field0xfc;
-	uint32_t field0x100;
-	uint32_t field0x104;
-	uint32_t field0x108;
-	uint32_t field0x10c;
-	uint32_t field0x110;
-	uint32_t field0x114;
-	uint32_t field0x118;
-	uint32_t field0x11c;
-	uint32_t field0x120;
-	uint32_t field0x124;
-	uint32_t field0x128;
-	uint32_t field0x12c;
-	uint32_t field0x130;
-	float field0x134;
-	float field0x138;
-	float field0x13c;
-	float field0x140;
-	float field0x144;
-	uint32_t field0x148;
-	uint32_t field0x14c;
-	float field0x150;
-	float field0x154;
-	uint32_t field0x158;
-	float field0x15c;
-	uint32_t field0x160;
-	uint32_t field0x164;
-	uint32_t field0x168;
-	uint32_t field0x16c;
-	uint32_t field0x170;
-	uint32_t field0x174;
-	uint32_t field0x178;
-	uint32_t field0x17c;
+	// Names from the original's code
+	GestureType selectionGesture; ///< stage 0 of the selection, 1 SPIRAL (player) / 2 INVERSE_SPIRAL (creature)
+	GestureType gesture;          ///< the miracle's gesture (stage 1)
+	GestureType gestureStage2;    ///< 0 in every entry
+	GestureType sizingGesture;    ///< 4 CIRCLE for STORM, SHIELD, PHYSICAL_SHIELD
+	SpellCastType castType;       ///< cast in the hand, or applied only after the recognition
+	uint32_t isKeptInHand;        ///< the spell is kept in the hand
+	uint32_t castOnObject;        ///< 1 = cast on an object
+	uint32_t unknown0x10C;        ///< 0 for NATURE and TELEPORT, else 1 (UNVERIFIED: no reader found)
+	uint32_t seedFollowsSpell;    ///< the seed is bound to the live spell
+	/// the magic of POWER_UP_TYPE_NONE (-1), then of PU 0, 1, 2
+	std::array<MagicType, 4> magicTypes;
+	/// the gesture that powers the seed up to PU 0, 1, 2 (0 = none)
+	std::array<GestureType, 3> powerUpGestures;
+	MeshId mesh;        ///< the seed's mesh
+	float scale;        ///< the seed's scale
+	float unknown0x138; ///< equals scale except for the flocks (UNVERIFIED: no reader found)
+	float holdLoweringMultiplier;
+	float holdRadius; ///< x the scale
+	float holdYRotate;
+	HoldType holdType;                 ///< MAGIC (2) is forced until the seed is ready
+	uint32_t attachInHandEffectToBone; ///< the hand's bone for the in-hand effect
+	float unknown0x150;                ///< -1.5 in most entries (UNVERIFIED: no reader found)
+	float unknown0x154;                ///< (UNVERIFIED: no reader found)
+	uint32_t deleteSeedOnceCast;       ///< the seed is deleted once cast
+	float unknown0x15C;                ///< 0.1 in every entry (UNVERIFIED: no reader found)
+	uint32_t unknown0x160;             ///< 1 in every entry (UNVERIFIED: no reader found)
+	ParticleType holderParticle;       ///< the effect on the worship icon's holder
+	uint32_t useMesh;                  ///< (inferred)
+	uint32_t exists;                   ///< 1 = a real spell, 0 = unused slot
+	uint32_t iconIndex;                ///< the icon slot (inferred)
+	HelpText tooltip;
+	uint32_t unknown0x178; ///< (UNVERIFIED: no reader found)
+	uint32_t unknown0x17C; ///< 1 for FIRE, LIGHTNING_BOLT, HEAL, WEAK, STRONG (UNVERIFIED: no reader found)
 };
 
 struct GCitadelHeartInfo: GCitadelPartInfo
@@ -1745,9 +1806,11 @@ namespace v100 // original release 1.0
 {
 struct CreatureActionInfo
 {
-	float field0x0;
-	float field0x4;
-	float field0x8;
+	/// What doing the action does to the creature's body once it is done: strength gained, energy used and
+	/// exhaustion added, the last two less the bigger it is
+	float strengthGain;
+	float energyCost;
+	float exhaustionCost;
 	uint32_t field0xc;
 	float field0x10;
 	std::array<char, 0x20> name;
@@ -1776,7 +1839,8 @@ struct CreatureActionInfo
 	uint32_t field0x8c;
 	uint32_t field0x90;
 	uint32_t field0x94;
-	uint32_t field0x98;
+	/// The desire the action satisfies
+	uint32_t desire;
 	uint32_t field0x9c;
 	uint32_t field0xa0;
 	uint32_t field0xa4;
@@ -1786,7 +1850,8 @@ struct CreatureActionInfo
 	uint32_t field0xb4;
 	uint32_t field0xb8;
 	uint32_t field0xbc;
-	float field0xc0;
+	/// The desire it satisfies is multiplied by this once it is done
+	float desireMultiplier;
 	float field0xc4;
 	uint32_t field0xc8;
 	float field0xcc;
@@ -1802,6 +1867,8 @@ struct CreatureActionInfo
 	uint32_t field0xf4;
 	uint32_t field0xf8;
 };
+static_assert(offsetof(CreatureActionInfo, desire) == 0x98);
+static_assert(offsetof(CreatureActionInfo, desireMultiplier) == 0xc0);
 
 struct InfoConstants
 {

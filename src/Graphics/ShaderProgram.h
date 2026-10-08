@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <functional>
 #include <map>
 #include <string>
 
@@ -32,18 +33,24 @@ public:
 
 	ShaderProgram() = delete;
 	ShaderProgram(const std::string& name, ShaderHandle vertexShader, ShaderHandle fragmentShader);
+	ShaderProgram(const ShaderProgram&) = delete;
+	ShaderProgram& operator=(const ShaderProgram&) = delete;
 	~ShaderProgram();
 
-	void SetTextureSampler(const char* samplerName, uint8_t bindPoint, const Texture2D& texture) const;
+	/// flags: bgfx sampler flags, UINT32_MAX = the texture's own
+	void SetTextureSampler(const char* samplerName, uint8_t bindPoint, const Texture2D& texture,
+	                       uint32_t flags = UINT32_MAX) const;
 	void SetTextureSampler(const char* samplerName, uint8_t bindPoint, const graphics::TextureHandle& texture) const;
-	void SetUniformValue(const char* uniformName, const void* value) const;
+	/// num: array elements (1 for plain uniforms)
+	void SetUniformValue(const char* uniformName, const void* value, uint16_t num = 1) const;
 
 	[[nodiscard]] ProgramHandle GetRawHandle() const { return _program; }
 
 private:
 	std::string _name;
 	ProgramHandle _program;
-	std::map<std::string, UniformHandle> _uniforms;
+	// std::less<> finds a uniform by its name without building a string each time
+	std::map<std::string, UniformHandle, std::less<>> _uniforms;
 };
 
 } // namespace openblack::graphics

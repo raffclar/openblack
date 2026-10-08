@@ -46,7 +46,7 @@ public:
 	static void CreatePlannedSpellIcon(int32_t, glm::vec3 position, const std::string&, int32_t, int32_t, int32_t);
 	static void CreateVillager(glm::vec3, glm::vec3, const std::string&);
 	static void CreateTownVillager(int32_t townId, glm::vec3 position, const std::string& villagerType, int32_t age);
-	static void CreateSpecialTownVillager(int32_t, glm::vec3, int32_t, int32_t);
+	static void CreateSpecialTownVillager(int32_t townId, glm::vec3 position, int32_t villagerInfo, int32_t age);
 	static void CreateVillagerPos(glm::vec3, glm::vec3, const std::string&, int32_t);
 	static void CreateCitadel(glm::vec3 position, int32_t, const std::string&, int32_t, int32_t);
 	static void CreatePlannedCitadel(int32_t, glm::vec3 position, int32_t, const std::string&, int32_t, int32_t);
@@ -57,8 +57,8 @@ public:
 	static void CreateNewAnimal(glm::vec3 position, int32_t, int32_t, int32_t, int32_t);
 	static void CreateForest(int32_t forestId, glm::vec3 position);
 	static void CreateTree(int32_t forestId, glm::vec3 position, TreeInfo treeType, int32_t rotation, int32_t scale);
-	static void CreateDeadTree(glm::vec3 position, const std::string& player, TreeInfo treeType, float scale, float roll,
-	                           float yaw, float pitch);
+	static void CreateDeadTree(glm::vec3 position, const std::string& player, TreeInfo treeType, float life, float xAngle,
+	                           float yAngle, float zAngle);
 	static void CreateNewTree(int32_t forestId, glm::vec3 position, TreeInfo treeType, int32_t isNonScenic, float rotation,
 	                          float currentSize, float maxSize);
 	static void CreateField(glm::vec3 position, FieldTypeInfo type);
@@ -107,7 +107,7 @@ public:
 	static void CreateFootpath(int32_t footpathId);
 	static void CreateFootpathNode(int footpathId, glm::vec3 position);
 	static void LinkFootpath(int32_t footpathId);
-	static void CreateBonfire(glm::vec3 position, float rotation, float param3, float scale);
+	static void CreateBonfire(glm::vec3 position, float temperature, float yAngle, float scale);
 	static void CreateBase(glm::vec3 position, int32_t);
 	static void CreateNewFeature(glm::vec3 position, const std::string& type, int32_t rotation, int32_t scale, int32_t param5);
 	static void SetInteractDesire(float);

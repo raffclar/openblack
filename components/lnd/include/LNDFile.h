@@ -31,6 +31,7 @@ enum class LNDResult : uint8_t
 	ErrBadCountrySize,
 	ErrExtraTextureData,
 	ErrUnaccountedData,
+	ErrBadAltitudeBits,
 };
 
 std::string_view ResultToStr(LNDResult result);
@@ -80,10 +81,23 @@ struct LNDCell
 	uint8_t b;
 	uint8_t luminosity;
 	uint8_t altitude;
+	/// With more than 8 altitude bits (BWLandEditor EXT0 chunk) its low bits are the high bits of the altitude
 	uint8_t saveColor;
 	Properties properties;
-	/// Sound properties: coastal sound, land sound, sea sound, freshwater sound
+	/// Bit 0: "transparent"; bit 1: an open-water cell that is not drawn (word[cell + 6] & 0x200); bits 2..5: the
+	/// ATMOS_TYPE of the cell ((flags >> 2) & 0xF: 0 none, 1 sea, 2 still fresh
+	/// water, 3 coastal, 4 jungle, 5 arctic, 6 desert, 7 countryside, 8 swamp, 9 running water). BWLandEditor's
+	/// LH3DLandCell.Sound codes (flags >> 1: 2 splash, 3 ocean, 4 slow waves, 5 lake, 6 coast, 7 fast waves...) are
+	/// ATMOS_TYPE = code >> 1 named by ear
 	uint8_t flags;
+
+	/// The altitude in height units (0.67): the altitude byte plus, with more than 8 altitude bits, the high bits kept
+	/// in the low bits of saveColor
+	[[nodiscard]] constexpr uint16_t Altitude(uint8_t altitudeBits) const noexcept
+	{
+		const auto highMask = static_cast<uint8_t>(0xFFu >> (16u - altitudeBits));
+		return static_cast<uint16_t>(((saveColor & highMask) << 8u) | altitude);
+	}
 };
 static_assert(sizeof(LNDCell::Properties) == 1);
 static_assert(sizeof(LNDCell) == 8);
@@ -188,10 +202,12 @@ protected:
 	std::vector<LNDCountry> _countries;
 	std::vector<LNDMaterial> _materials;
 	LNDExtraTextures _extra;
-	// TODO(bwrsandman): There should be no accounted bytes. Reverse those bytes
-	//                   and remove this array.
-	/// Bytes in file which could serve a purpose but are unaccounted for in
-	/// current model.
+	/// BWLandEditor "EXT0" chunk: altitude bits 8..16 (8 = the original format)
+	uint8_t _altitudeBits {8};
+	uint8_t _extensionVersion {0};
+	/// BWLandEditor "META" chunk (editor data, kept as it is)
+	std::vector<uint8_t> _metadata;
+	/// Bytes after the known chunks (kept to write them back).
 	std::vector<uint8_t> _unaccounted;
 
 	/// Write file to the input source
@@ -220,6 +236,11 @@ public:
 	[[nodiscard]] const auto& GetMaterials() const noexcept { return _materials; }
 	[[nodiscard]] const auto& GetExtra() const noexcept { return _extra; }
 	[[nodiscard]] const auto& GetUnaccounted() const noexcept { return _unaccounted; }
+	[[nodiscard]] uint8_t GetAltitudeBits() const noexcept { return _altitudeBits; }
+	[[nodiscard]] const auto& GetMetadata() const noexcept { return _metadata; }
+	/// Blocks per side of the grid: 32 in the original, more in BWLandEditor maps (up to 128)
+	[[nodiscard]] uint16_t GetBlocksPerSide() const noexcept;
+	void SetAltitudeBits(uint8_t bits) noexcept { _altitudeBits = bits; }
 
 	void AddLowResolutionTexture(const LNDLowResolutionTexture& texture) noexcept;
 	void AddMaterial(const LNDMaterial& material) noexcept;

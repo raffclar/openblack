@@ -19,11 +19,13 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
-#include "Audio/AudioManagerInterface.h"
+#include "Audio/Audio.h"
+#include "Audio/Services/Confirmation.h"
 #include "Camera.h"
-#include "Common/RandomNumberManager.h"
+#include "CameraHelp.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "Help/HelpProfile.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
@@ -59,6 +61,7 @@ constexpr auto k_FlyingThresholdFactor = 1.5f;
 constexpr auto k_GroundDistanceMinimum = 10.0f;
 constexpr auto k_FlightHeightFactor = 0.1f;
 constexpr auto k_FlyingScoreAngles = MakeFlyingScoreAngles<float, 0x20>();
+// For the original 32 x 32 block maps: centred on the map, radius = its side (5120); BWLandEditor maps scale it
 constexpr auto k_ConstrainDiscCentre = glm::vec3(2560.0f, 0.0f, 2560.0f);
 constexpr auto k_ConstrainDiscRadius = 5120.0f;
 constexpr auto k_MaxAltitude = 30'000.0f;
@@ -234,12 +237,15 @@ bool DefaultWorldCameraModel::ConstrainDisc()
 {
 	bool hasBeenAdjusted = false;
 
-	const auto delta = _targetOrigin - k_ConstrainDiscCentre;
+	const float scale = static_cast<float>(Locator::terrainSystem::value().GetCellsPerSide()) / 512.0f;
+	const auto centre = k_ConstrainDiscCentre * scale;
+	const auto radius = k_ConstrainDiscRadius * scale;
+	const auto delta = _targetOrigin - centre;
 	const auto distance2 = glm::length2(delta);
 
-	if (distance2 > k_ConstrainDiscRadius * k_ConstrainDiscRadius)
+	if (distance2 > radius * radius)
 	{
-		_targetOrigin = k_ConstrainDiscCentre + delta * (k_ConstrainDiscRadius / glm::sqrt(distance2));
+		_targetOrigin = centre + delta * (radius / glm::sqrt(distance2));
 		hasBeenAdjusted = true;
 	}
 
@@ -261,7 +267,10 @@ void DefaultWorldCameraModel::UpdateFocusPointInteractionParameters(glm::vec3 or
 	_originFocusDistanceAtInteractionStart = glm::distance(origin, focus);
 	// TODO(#713): calculate a y-basis based on the projection on land of camera origin and hand
 	_originToHandPlaneNormal = glm::vec3(0.0f, 1.0f, 0.0f);
-	// TODO(#713): Calculate the with _originToHandPlaneNormal and the mouse hit point to put in _alignmentAtInteractionStart
+	// Drag plane through the grabbed point (was always sea level): the grabbed land stays under the hand on hills too.
+	_alignmentAtInteractionStart = _screenSpaceMouseRaycastHitAtClick.has_value()
+	                                   ? glm::dot(*_screenSpaceMouseRaycastHitAtClick, _originToHandPlaneNormal)
+	                                   : 0.0f;
 	_averageIslandDistance = GetVerticalLineInverseDistanceWeighingRayCast(camera);
 	{
 		const auto diff = _targetOrigin - _targetFocus;
@@ -483,6 +492,7 @@ void DefaultWorldCameraModel::UpdateModeFlying(glm::vec3 eulerAngles)
 		}
 
 		const auto bestAngleIndex = std::distance(scores.begin(), std::max_element(scores.begin(), scores.end()));
+		// The land's normal at the point, then point + n
 		const auto normal = Locator::terrainSystem::value().GetNormalAt(glm::xz(point));
 		const auto offsetPoint = point + normal;
 
@@ -500,15 +510,20 @@ void DefaultWorldCameraModel::UpdateModeFlying(glm::vec3 eulerAngles)
 
 	if (wooshingDistance)
 	{
-		SetFlight(_targetOrigin, _targetFocus);
+		// The double click's flight whooshes without SetFlight's own test. It does so with the focus distance 100 when one
+		// distance is more than 100 * 1.5 and the other more than 10 (the test above), and also in a second case with the
+		// focus distance 1000 (pending, not ported)
+		_flightPath = CharterFlight(_targetOrigin, _targetFocus, _currentOrigin, k_FlightHeightFactor);
+		PlayWoosh();
 	}
 }
 
 void DefaultWorldCameraModel::UpdateCameraInterpolationValues(const Camera& camera)
 {
-	// Get current curve interpolated values from camera
-	_currentOrigin = camera.GetOrigin(Camera::Interpolation::Current);
-	_currentFocus = camera.GetFocus(Camera::Interpolation::Current);
+	// Get current curve interpolated values from camera: the model reads the camera's zoomers, not the shaken camera
+	// (the shake only moves the drawn camera), so the shake never feeds back into the model
+	_currentOrigin = camera.GetOriginZoomer().GetCurrentValue();
+	_currentFocus = camera.GetFocusZoomer().GetCurrentValue();
 	_targetOrigin = camera.GetOrigin(Camera::Interpolation::Target);
 	_targetFocus = camera.GetFocus(Camera::Interpolation::Target);
 }
@@ -554,14 +569,71 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 
 	ComputeDistanceFromBoundY();
 
+	// The features SET_INTERFACE_INTERACTION allows. Without Zoom the zoom input is 0, without Rotate the rotation is
+	// skipped, without Pitch the pitch
+	{
+		const int32_t features = camera_help::GetEnabledFeatures();
+		if ((features & camera_help::Bit(camera_help::Feature::Zoom)) == 0)
+		{
+			_rotateAroundDelta.z = 0.0f;
+		}
+		if ((features & camera_help::Bit(camera_help::Feature::Rotate)) == 0)
+		{
+			_rotateAroundDelta.y = 0.0f;
+		}
+		if ((features & camera_help::Bit(camera_help::Feature::Pitch)) == 0)
+		{
+			_rotateAroundDelta.x = 0.0f;
+		}
+	}
+
 	// Get step size
 	const auto scalingFactor = 60.0f;
-	const auto zoomDelta = _rotateAroundDelta.z * 0.0015f * scalingFactor;
+	// The zoom's scale from the height between the camera and its focus (their destinations): 3 x the difference, at
+	// least 60, at most 240 below the focus and 2000 above it
+	const auto zoomScale = [&camera]() {
+		constexpr float k_HeightFactor = 3.0f;
+		constexpr float k_Min = 60.0f;
+		constexpr float k_MaxBelow = 4.0f; // x 60
+		constexpr float k_MaxAbove = 2000.0f;
+		const float cam = camera.GetOrigin(Camera::Interpolation::Target).y;
+		const float focus = camera.GetFocus(Camera::Interpolation::Target).y;
+		if (cam < focus)
+		{
+			const float s = (focus - cam) * k_HeightFactor;
+			const float maxBelow = k_Min * k_MaxBelow;
+			return s <= k_Min ? k_Min : (s < maxBelow ? s : maxBelow);
+		}
+		const float s = (cam - focus) * k_HeightFactor;
+		return s <= k_Min ? k_Min : (s < k_MaxAbove ? s : k_MaxAbove);
+	}();
+	const auto zoomDelta = _rotateAroundDelta.z * 0.0015f * zoomScale;
 
 	if (_mode == Mode::Polar || _mode == Mode::ArcBall)
 	{
+		// The player's zoom, rotate and pitch of this frame go to the camera help (the help events 25..29 of
+		// GET_TOTAL_EVENTS, counted once a turn). (pending) the input mask (keyboard, mouse buttons, wheel)
+		help_profile::OnPlayerCameraMove(_rotateAroundDelta.y, _rotateAroundDelta.x, zoomDelta, 0);
+		// The confirmation sound's feeds: the turn and the tilt of this frame over the frame's seconds; 0 on the frames
+		// without them
+		{
+			const float seconds = std::chrono::duration_cast<std::chrono::duration<float>>(dt).count();
+			const auto width =
+			    static_cast<float>(Locator::windowing::has_value() ? Locator::windowing::value().GetSize().x : 800);
+			if (seconds > 0.0f)
+			{
+				audio::confirmation::FeedAngle(_rotateAroundDelta.y * glm::pi<float>() / width, seconds);
+				audio::confirmation::FeedPitch(_rotateAroundDelta.x * 0.002f, seconds);
+			}
+		}
 		// Adjust camera's orientation based on user input. Call will reset deltas.
 		TiltZoom(eulerAngles, scalingFactor, zoomDelta);
+	}
+	else if (const float seconds = std::chrono::duration_cast<std::chrono::duration<float>>(dt).count(); seconds > 0.0f)
+	{
+		// A frame without a turn or a tilt feeds 0 to both
+		audio::confirmation::FeedAngle(0.0f, seconds);
+		audio::confirmation::FeedPitch(0.0f, seconds);
 	}
 
 	const auto mouseCurrent = Locator::gameActionSystem::value().GetMousePosition();
@@ -584,17 +656,17 @@ DefaultWorldCameraModel::ComputeUpdateReturnInfo(bool originHasBeenAdjusted, std
 {
 	if (!_flightPath.has_value())
 	{
-		static constinit auto kTimeThreshold = 1'500'000us;
+		constexpr auto k_TimeThreshold = 1'500'000us;
 		auto duration = 300'000us;
 		if (originHasBeenAdjusted)
 		{
 			duration *= 2;
 		}
-		if (_elapsedTime <= kTimeThreshold)
+		if (_elapsedTime <= k_TimeThreshold)
 		{
 			duration =
 			    std::chrono::microseconds {glm::mix(k_MinimalCameraAnimationDuration.count(), duration.count(),
-			                                        (static_cast<float>(_elapsedTime.count()) / kTimeThreshold.count()))};
+			                                        (static_cast<float>(_elapsedTime.count()) / k_TimeThreshold.count()))};
 		}
 		return {{GetTargetOrigin(), GetTargetFocus(), duration}};
 	}
@@ -683,7 +755,8 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 		_rotateAroundDelta.z += distance;
 	}
 
-	if (actionSystem.Get(input::UnbindableActionMap::TWO_BUTTON_CLICK))
+	if (actionSystem.Get(input::UnbindableActionMap::TWO_BUTTON_CLICK) &&
+	    (camera_help::GetEnabledFeatures() & camera_help::Bit(camera_help::Feature::JustZoom)) != 0)
 	{
 		_rotateAroundDelta.z += actionSystem.GetMouseDelta().y * k_TwoButtonZoomFactor;
 		// TODO(#711): the mouse has to be reset
@@ -699,15 +772,22 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	_handPosition = handPositions[0].or_else([handPositions] { return handPositions[1]; });
 
 	_modePrev = _mode;
-	if (_handPosition.has_value() && actionSystem.Get(input::UnbindableActionMap::DOUBLE_CLICK))
+	// The double click's flight needs its feature bit, the land grab its own
+	const int32_t features = camera_help::GetEnabledFeatures();
+	const bool canFly = (features & camera_help::Bit(camera_help::Feature::DoubleClickFly)) != 0;
+	const bool canGrab = (features & camera_help::Bit(camera_help::Feature::GrabLand)) != 0;
+	if (canFly && _handPosition.has_value() && actionSystem.Get(input::UnbindableActionMap::DOUBLE_CLICK))
 	{
 		_mode = Mode::FlyingToPoint;
+		// The double click's flight (DoubleClickObject when it was on an object: (approximate) openblack's camera does not
+		// tell them apart, both count as the position's)
+		help_profile::CameraHelpCallback(help_profile::CameraReason::DoubleClickPos, 0);
 	}
 	else if (actionSystem.Get(input::BindableActionMap::ROTATE_AROUND_MOUSE_ON))
 	{
 		_mode = Mode::ArcBall;
 	}
-	else if (_handPosition.has_value() && actionSystem.Get(input::BindableActionMap::MOVE))
+	else if (canGrab && _handPosition.has_value() && actionSystem.Get(input::BindableActionMap::MOVE))
 	{
 		_mode = Mode::DraggingLandscape;
 	}
@@ -724,14 +804,19 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 void DefaultWorldCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus)
 {
 	_flightPath = CharterFlight(origin, focus, _currentOrigin, k_FlightHeightFactor);
-	static constexpr auto k_WooshingNoiseIds = std::array<audio::SoundId, 4> {
-	    audio::SoundId::G_Woosh_01,
-	    audio::SoundId::G_Woosh_02,
-	    audio::SoundId::G_Woosh_03,
-	    audio::SoundId::G_Woosh_04,
-	};
-	const auto wooshNoiseId = static_cast<entt::id_type>(Locator::rng::value().Choose(k_WooshingNoiseIds));
-	Locator::audio::value().PlaySound(wooshNoiseId, audio::PlayType::Once);
+	// The bookmarks', the scripts' flights: the woosh only when the camera is farther than 100 * 1.5 from the new
+	// position
+	if (glm::distance(origin, _currentOrigin) > k_FlyingDistanceThresholds[0] * 1.5f)
+	{
+		PlayWoosh();
+	}
+}
+
+void DefaultWorldCameraModel::PlayWoosh()
+{
+	// 46 G_Woosh_01 + (tick count & 3): no owner, mode 3, no loops, 2D, InGame
+	audio::PlaySoundEffect(audio::Owner::None(), 46 + static_cast<int>(audio::TickCount() & 3), 3, 0, false, false,
+	                       audio::SfxBank::InGame);
 }
 
 glm::vec3 DefaultWorldCameraModel::GetTargetOrigin() const

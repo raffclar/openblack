@@ -27,6 +27,7 @@
 
 namespace openblack::debug::gui
 {
+
 class Window;
 
 class Gui final: public DebugGuiInterface
@@ -39,6 +40,7 @@ public:
 	void SetScale(float scale) noexcept override;
 	bool ProcessEvents(const SDL_Event& event) noexcept override;
 	bool Loop() noexcept override;
+	void OpenWindow(std::string_view name) noexcept override;
 	void Draw() noexcept override;
 
 private:

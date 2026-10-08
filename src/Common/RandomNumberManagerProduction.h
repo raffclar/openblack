@@ -10,6 +10,7 @@
 #pragma once
 
 #include <mutex>
+#include <optional>
 #include <random>
 
 #include "RandomNumberManager.h"
@@ -30,5 +31,9 @@ public:
 private:
 	std::mt19937& Generator() override;
 	std::optional<std::reference_wrapper<std::mutex>> LockAccess() override;
+
+	/// Seeded with the time on first use. Only the main thread draws from this service, so the one generator a
+	/// thread_local gave each thread is this one
+	std::optional<std::mt19937> _generator;
 };
 } // namespace openblack

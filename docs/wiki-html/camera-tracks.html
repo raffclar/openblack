@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Camera tracks (`Data\camera.edt`) and `WALK_PATH` — Black &amp; White notes</title>
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body>
+<nav id="side">
+  <h1><a href="index.html" style="color:inherit;text-decoration:none">Black &amp; White notes</a></h1>
+  <span class="tag">openblack — how the original behaves</span>
+  <input id="q" type="search" placeholder="Search (press /)" autocomplete="off">
+  <div id="hits"></div>
+  <div id="nav"><h2>Start here</h2>
+<a class="" href="README.html">Black &amp; White 1 notes for openblack</a>
+<h2>Engine</h2>
+<a class="" href="openblack-internals.html">openblack internals</a>
+<a class="" href="engine-loop.html">The engine loop: game turns and frames (original and openblack)</a>
+<a class="" href="engine-math.html">Coordinates, terrain, object size, game clock, matrices and Zoomer</a>
+<a class="" href="tooling.html">Tools and formats</a>
+<a class="" href="parity.html">Graphics engine parity: original versus openblack</a>
+<a class="" href="original-frame.html">The original B&amp;W frame (runblack.exe W120, D3D7, LH3D)</a>
+<h2>World</h2>
+<a class="" href="map-loading.html">Map loading and script functions</a>
+<a class="" href="land-script-save.html">Writing land-script lines: SaveObject and WriteCommand</a>
+<a class="" href="water.html">Water in the game</a>
+<a class="" href="trees.html">Trees and forests</a>
+<a class="" href="buildings.html">Buildings, building sites and towns (the building side)</a>
+<a class="" href="objects-and-resources.html">Objects and resources</a>
+<a class="" href="physics.html">Physics: thrown objects, collisions, damage and rocks that split</a>
+<h2>Life</h2>
+<a class="" href="villagers.html">Villagers: data, state machine and speed</a>
+<a class="" href="animals.html">Animals: AI, states and clips</a>
+<h2>Magic and weather</h2>
+<a class="" href="magic.html">Magic: the core of the miracles</a>
+<a class="" href="miracles.html">Miracles one by one</a>
+<a class="" href="particles.html">Particles (PSys)</a>
+<a class="" href="day-night-weather.html">Day, night and weather in the original</a>
+<a class="" href="vortex.html">Vortexes and the tornado: objects swallowed, carried and flung</a>
+<h2>Hand and interface</h2>
+<a class="" href="hand-and-interface.html">The hand and the interface</a>
+<a class="" href="intro.html">The Land 1 intro and the tutorial&#x27;s script side</a>
+<a class="" href="script-camera.html">Script camera (GCamera and CameraModeScript)</a>
+<a class="here" href="camera-tracks.html">Camera tracks (`Data\camera.edt`) and `WALK_PATH`</a>
+<h2>Presentation</h2>
+<a class="" href="rendering.html">World rendering: original versus openblack</a>
+<a class="" href="rendering-objects.html">Model rendering: original versus openblack</a>
+<a class="" href="animation.html">Skeletal animation (villagers and animals)</a>
+<a class="" href="audio.html">Audio: the engine, the banks, the music, the voices and the script</a>
+<a class="" href="video.html">Bink videos (.bik)</a>
+<h2>Data</h2>
+<a class="" href="mods.html">Modified data packs</a>
+<h2>Other</h2>
+<a class="" href="creature.html">The creature: groundwork, random streams and what is unknown</a></div>
+</nav>
+<main>
+<details id="toc"><summary>On this page</summary><div class="toc">
+<ul>
+<li><a href="#camera-tracks-datacameraedt-and-walk_path">Camera tracks (Data\camera.edt) and WALK_PATH</a><ul>
+<li><a href="#the-file">The file</a><ul>
+<li><a href="#lh3dway-0x24--44n-bytes">LH3DWay (0x24 + 44·n bytes)</a></li>
+<li><a href="#lh3dwayrunning-0x20c-bytes">LH3DWay::Running (0x20C bytes)</a></li>
+</ul>
+</li>
+<li><a href="#walk_path-177-of-a-mobileobject">WALK_PATH (177) of a MobileObject</a><ul>
+<li><a href="#living-not-ported">Living (not ported)</a></li>
+</ul>
+</li>
+<li><a href="#the-sharks-of-land-1-followus-challengechl">The sharks of Land 1 (FollowUs, challenge.chl)</a></li>
+<li><a href="#pending">Pending</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+<h1 id="camera-tracks-datacameraedt-and-walk_path">Camera tracks (<code>Data\camera.edt</code>) and <code>WALK_PATH</code></h1>
+<p>Code: <code>src/3D/CameraTracks.{h,cpp}</code> (reader and evaluation), <code>src/ECS/MobileWalkPaths.{h,cpp}</code> +
+<code>ECS/Components/MobileWalkPath.h</code> (the <code>DataPath</code> of a MobileObject), <code>src/CHLApi.cpp</code> (<code>WALK_PATH</code>,
+<code>GET_WALK_PATH_PERCENTAGE</code>, <code>CONVERT_CAMERA_POSITION/FOCUS</code>).</p>
+<blockquote>
+<p><strong>Code rules.</strong> A walk path's state is a component on its entity; files such as <code>camera.edt</code> load through the
+resource caches; the track maths are pure functions tested with fakes in <code>test/</code>; comments describe behaviour in plain English,
+with no decompiled names or addresses (those belong here). See <a href="../refactor/README.md">the conventions</a>.</p>
+</blockquote>
+<ul>
+<li><a href="#the-file">The file</a></li>
+<li><a href="#walk_path-177-of-a-mobileobject"><code>WALK_PATH</code> (177) of a MobileObject</a></li>
+<li><a href="#the-sharks-of-land-1-followus-challengechl">The sharks of Land 1 (<code>FollowUs</code>, challenge.chl)</a></li>
+<li><a href="#pending">Pending</a></li>
+</ul>
+<h2 id="the-file">The file</h2>
+<p><code>GCameraEditor::CreateSegFile</code> 0x445530 opens <code>.\Data\camera.edt</code> once (the global <code>LHFile</code> 0xC59CF4) and
+<code>LHFile::GetSegment</code> 0x7BDDD0 reads segments by name; the data of a segment is read in order by
+<code>LHFile::GetSegmentData(ptr, size, -1)</code> 0x7BE040 (also used by the camera zone files, <a href="script-camera.html">script-camera.md</a>). Format: <code>"LiOnHeAd"</code> and then segments with a 32-byte name
+(zero-padded), a u32 size and the data. On the original disc (150536 bytes): <code>EDITOR</code> (58084 bytes, editor names;
+the game does not read it), <code>Cam0</code>..<code>Cam555</code> (32 bytes) and <code>Track0</code>..<code>Track52</code>. Creature Isle ships its own.</p>
+<ul>
+<li><strong><code>Cam%d</code></strong> (<code>GCameraEditor::LoadCameraFromHD</code> 0x446FE0 copies the 32 bytes as they are): position (3 floats), focus
+  (3 floats), and two floats that are 0 and −1 in all 556. <code>CONVERT_CAMERA_POSITION</code> 0x6ED200 pushes floats 0..2,
+  <code>CONVERT_CAMERA_FOCUS</code> 0x6ED270 floats 3..5. If the segment does not exist the original leaves the stack buffer
+  uninitialised; openblack returns (0, 0, 0).</li>
+<li><strong><code>Track%d</code></strong> (<code>ScriptedCamera::Create</code> 0x447060 → 12-byte <code>ScriptedCamera</code>): a u32 (0 in all of them; goes to +0) and
+  two <code>LH3DWay</code>, each preceded by its u16 size; they are copied to new memory, <code>LH3DWay::AdjustPtr</code> 0x844570
+  rebuilds the pointers and each one gets an <code>LH3DWay::Running</code> (0x843ED0): +4 the one for the camera <strong>position</strong>,
+  +8 the one for the <strong>focus</strong>. If it is missing: <code>"Cannot load track No %d"</code> (0x4470E1) and it returns 0.</li>
+</ul>
+<h3 id="lh3dway-0x24--44n-bytes"><code>LH3DWay</code> (0x24 + 44·n bytes)</h3>
+<table>
+<thead>
+<tr>
+<th>Offset</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>+0x00</td>
+<td>u16 size; +0x02 u16 = 0x63 in all of them</td>
+</tr>
+<tr>
+<td>+0x04</td>
+<td>n points</td>
+</tr>
+<tr>
+<td>+0x08</td>
+<td>float 0.26 in all of them (nothing below reads it)</td>
+</tr>
+<tr>
+<td>+0x0C</td>
+<td>recomputed by <code>AdjustPtr</code>: Σ, over the segments with distinct times, dt·(v0 − a·t0 + a/2) with t0 = time[i]·0.001, dt = time[i+1]·0.001 − t0, a = (v[i+1] − v0)/dt; 0.1 if it comes out 0. Used by the <code>WALK_PATH</code> of Living (below), not by that of MobileObjects</td>
+</tr>
+<tr>
+<td>+0x10</td>
+<td>duration in ms = ftol(last time) (12212 in Track20, 12884 in Track21)</td>
+</tr>
+<tr>
+<td>+0x14..+0x20</td>
+<td>pointers (from the editor; <code>AdjustPtr</code> rebuilds them from +0x24)</td>
+</tr>
+<tr>
+<td>+0x24</td>
+<td>n points (vec3), then n pairs of handles (vec3 ×2: the two inner handles of segment i→i+1), n times in ms, n speeds (units/s)</td>
+</tr>
+</tbody>
+</table>
+<p>Each segment i is a cubic Bezier (P[i], handle[i].a, handle[i].b, P[i+1]).</p>
+<h3 id="lh3dwayrunning-0x20c-bytes"><code>LH3DWay::Running</code> (0x20C bytes)</h3>
+<p>+0 current segment, +0x04..+0x200 table of 128 floats, +0x204 last parameter t, +0x208 the way.</p>
+<ul>
+<li><code>fn_00843F00</code> (table of segment s): total length of the Bezier in 127 steps (t = i·(1/127) [0x8D8690], i = 0..127, from P[s]);
+  then table[i] = 127·accumulated length(i)/total for i = 1..126, table[0] = 0, table[127] = <strong>1.0</strong> (+0x200).</li>
+<li><code>fn_00844280(sample, &amp;out)</code>: segment = the first i with time[i+1] ≥ sample (a new one rebuilds the table);
+  sample ≥ duration → last point (touches neither segment nor t); sample ≤ 0 → first point and t = 0. The segment
+  search (0x844298) reads past the array for a time after the last one. Otherwise (the chord fraction, 0x844335..0x844385):
+  L = |P[s+1] − P[s]| (the chord, <code>fn_008433E0</code>: sqrt((z·z + y·y) + x·x), as <code>fn_004A1BA0</code>), v0 = speed[s], dt = (time[s+1] − time[s])·0.001,
+  τ = (sample − time[s])·0.001, a = 2(L − dt·v0)/dt², <strong>u = τ(v0 + aτ/2)/L</strong> (constant acceleration that covers
+  the chord exactly at time[s+1]). Then (the table lookup 0x844387..0x844418; with k = 127, hi is the last t, +0x204)
+  k = ftol(127u), lo = table[k], hi = table[k+1]; if u == lo, t = lo; if
+  not, the loops that search for the entry move a pointer but do <strong>not</strong> change lo or hi, and t = w·lo + (1 − w)·hi with
+  w = (hi − u)/(hi − lo), which is u again (with the rounding of the table's scale, up to ~4·10⁻⁴ in t with the FPU
+  at 24 bits). So the table does not reparametrise anything. Outside the table (u &lt; 0 or u &gt; 1, which only happens if v0 &gt; 2L/dt;
+  in the shark tracks all speeds are 10) the original reads other fields of the object: openblack
+  uses t = u. out = the segment's Bezier at t; t is left at +0x204.</li>
+<li><code>fn_008439C0(segment, t, &amp;out)</code> is the bare Bezier (the one used by <code>WALK_PATH</code>); it sums x in a different order from y and z
+  (((B2·3ut² + B1·3u²t) + B3·t³) + B0·u³), openblack copies it.</li>
+</ul>
+<h2 id="walk_path-177-of-a-mobileobject"><code>WALK_PATH</code> (177) of a MobileObject</h2>
+<p><code>GScript::WalkPath</code> 0x6FBB50 pops (object, forward, track, from, to). If the object is Living it goes to 0x5EE100 (below);
+if it is a MobileObject (<code>__RTDynamicCast</code>) to <code>fn_006076C0(track, from, to, forward)</code>; otherwise, "Thing is invalid for move
+path". <code>fn_006076C0</code>: adds the object once to the list g_game+0x205CD4 (= <code>GlobalGameLists</code> +0x130) and gives it a
+new <code>DataPath</code> (0x30) at +0x64: +0x14 = <code>ScriptedCamera::Create(track)</code>, +0x1C = to, +0x20 = forward,
++0x28 = <strong>100</strong> (step), +0x2C = 1, <strong>+0x24 = from × duration</strong> (0x60776B: <code>fild</code> duration, × from).</p>
+<p>Every turn, in <code>GGame::ProcessTurn</code>: <code>Whale::ProcessAll</code> 0x54E5C7 (start of turn = Pos), then
+<code>GlobalGameLists::Process</code> 0x5913ED calls <code>MobileObject::MoveAlongPath</code> 0x607790 (vt+0x52C) of each object in the
+list, and afterwards <code>GScript::Process</code> 0x54E693 (the scripts: the <code>WALK_PATH</code> takes effect from the next turn):</p>
+<ol>
+<li>sample = ftol(+0x24) if forward, ftol(duration − +0x24) otherwise; clamped to 0..duration (0x6077A2 / 0x6077F4).</li>
+<li><code>fn_00844280</code> on the <strong>position</strong> Running (its point is discarded) and <code>fn_008439C0</code> on the <strong>focus</strong> way with the
+   segment and t it left: <strong>the object follows the focus curve, with the timing of the position curve</strong>.</li>
+<li><code>fn_00607990</code>: if +0x24 / duration &lt; to: +0x24 += 100 (capped at the duration) and
+   <code>SetPos(MapCoords(ftol(x·6553.6), ftol(z·6553.6)), relative y 0)</code> (0x6078A3; back to x · 1/6553.6 in
+   <code>Game3DObject::SetPosition</code> 0x63B6BD) + <code>Game3DObject::SetPosition(coords, 0, 0, 0, 1)</code>
+   (height = GetAltitude + 0; it also sets rotation 0 and scale 1 on the 3D object, which the shark's <code>Draw</code> sets again
+   every frame). Otherwise it leaves the list <strong>without moving</strong> that turn (0x607900; the DataPath stays).</li>
+</ol>
+<p>Units: the sample is the track time in ms and the step of 100 is one 100 ms turn, so the track is
+traversed in real time (Track20: 123 turns; Track21: 129). Backwards it goes through the samples from the end; <code>from</code> and
+<code>to</code> are always compared with +0x24 / duration, so <code>WALK_PATH(o, 0, 21, 0.25, 0.75)</code> starts at sample
+9663 and stops when +0x24 reaches 9721 (0.75 of the duration). There is no loop: when it finishes, the object stays where it is.
+A second <code>WALK_PATH</code> on the same object does not add it to the list again and replaces the DataPath (the old one is lost).
+<code>ToBeDeleted</code> 0x606F4A removes it from the list (in openblack the component dies with the entity).</p>
+<p><code>GET_WALK_PATH_PERCENTAGE</code> (179, 0x6FBC50): <strong>1.0</strong> for anything that is not Living; for a Living
+<code>Living::GetWalkPathPercentage</code> 0x5EE520 = +0xAC→+0x24 / duration. No original script calls it.</p>
+<h3 id="living-not-ported">Living (not ported)</h3>
+<p>0x5EE100 (misassigned symbol <code>Animal::DebugText</code>): deletes the old DataPath at +0xAC, creates one with the track, +0x18 =
+track, +0x1C = to, +0x20 = forward, <strong>+0x28 = duration / (focus length (+0x0C) / (speed(+0x5A)/655·0.1))</strong>,
++0x2C = speed, +0x24 = from × duration, and calls vt+0x8FC, Living::SetAnim (not AddFootpath). It is moved by
+<code>Living::MoveAlongPath</code> 0x5EE230. Used by <code>FollowUs</code> (Father, track 22) and <code>BlindWomanJourney</code> (track 7).</p>
+<h2 id="the-sharks-of-land-1-followus-challengechl">The sharks of Land 1 (<code>FollowUs</code>, challenge.chl)</h2>
+<p><code>Shark1Pos = CREATE(Marker, CONVERT_CAMERA_FOCUS(221))</code>, <code>Shark2Pos = ...(230)</code>; <code>Shark1 = CREATE(Whale, 5000,
+GET_POSITION(Shark1Pos))</code>, <code>Shark2</code> likewise; <code>WALK_PATH(Shark1, 1, 21, 0, 1)</code>, <code>WALK_PATH(Shark2, 1, 20, 0, 1)</code>.
+Cam221/Cam230 are the start cameras of those tracks: their focus is the first focus point of Track21/Track20
+((1312.57, 0.74, 2010.79) and (1318.92, 0.74, 2000.23)). The foci are at y ≈ 0.4..0.9 (ignored: relative y 0), at
+10 units/s, towards (1427, 2056) and (1430, 2042).</p>
+<p><strong>Verified</strong>: the openblack trace (<code>OPENBLACK_WALK_PATH_TRACE=1</code>) gives the same segments, t and points as the
+Unicorn emulation of 0x844570/0x843ED0/0x844280/0x8439C0 with the FPU at 24 bits over the
+71 compared samples of each track, and the backwards traversal 0.25→0.75 of Track21 ends at the same sample.
+With the FPU at 64 bits t changes by up to 4·10⁻⁴ (a few millimetres). The original runs at 24 bits, and sets it itself:
+<code>fn_007DEE00</code> does <code>fninit</code> and clears bits 8–9 (PC = 00, single precision) of the control word (<code>and 0xFCFF</code>,
+0x7DEE0D); it is called at startup (<code>pc_main</code> 0x641C6F via <code>fn_007DEDD0</code>), in every <code>GGame::EndTurn</code> (0x54E964, 0x54E974,
+0x54E984), in <code>Process3dEngine</code> (0x54E426, 0x54E4D1), when opening the landscape and when loading. The CRT's
+<code>__setdefaultprecision</code> (53 bits) only runs before all of that.</p>
+<p>Hook: <code>OPENBLACK_TEST_SHARK=1</code> creates the two <code>FollowUs</code> sharks and their <code>WALK_PATH</code>;
+<code>OPENBLACK_TEST_SHARK="track,camera[,forward[,from[,to]]]"</code> a single one at that camera's focus.</p>
+<p><code>RUN_CAMERA_PATH</code> (119, 0x6ED7F0) uses the same track from the script camera (<code>CameraModeScript</code>, <code>fn_00461A80</code>):
+the reader (<code>LoadCameraTrack</code>, <code>CameraWayRunner</code>) is what the script camera's <code>RunPath</code> uses
+(<a href="script-camera.html#the-script-mode">script-camera.md</a>).</p>
+<h2 id="pending">Pending<span class="state pending">pending</span></h2>
+<ul>
+<li>(unverified, disagrees with the <code>+0x0C</code> row of the <code>LH3DWay</code> table above) "AdjustPtr: +0x0C = the sum of the chord
+  lengths (0x8445AF..0x8445F1), 0.1 if 0".</li>
+<li>Past the table (u &lt; 0 or u &gt; 1) the original reads the object's other fields; what it gets there is not read.</li>
+</ul>
+</main>
+<script src="search.js"></script>
+<script src="wiki.js"></script>
+</body>
+</html>

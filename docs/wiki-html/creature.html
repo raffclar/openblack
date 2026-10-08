@@ -1,0 +1,2038 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The creature: groundwork, random streams and what is unknown — Black &amp; White notes</title>
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body>
+<nav id="side">
+  <h1><a href="index.html" style="color:inherit;text-decoration:none">Black &amp; White notes</a></h1>
+  <span class="tag">openblack — how the original behaves</span>
+  <input id="q" type="search" placeholder="Search (press /)" autocomplete="off">
+  <div id="hits"></div>
+  <div id="nav"><h2>Start here</h2>
+<a class="" href="README.html">Black &amp; White 1 notes for openblack</a>
+<h2>Engine</h2>
+<a class="" href="openblack-internals.html">openblack internals</a>
+<a class="" href="engine-loop.html">The engine loop: game turns and frames (original and openblack)</a>
+<a class="" href="engine-math.html">Coordinates, terrain, object size, game clock, matrices and Zoomer</a>
+<a class="" href="tooling.html">Tools and formats</a>
+<a class="" href="parity.html">Graphics engine parity: original versus openblack</a>
+<a class="" href="original-frame.html">The original B&amp;W frame (runblack.exe W120, D3D7, LH3D)</a>
+<h2>World</h2>
+<a class="" href="map-loading.html">Map loading and script functions</a>
+<a class="" href="land-script-save.html">Writing land-script lines: SaveObject and WriteCommand</a>
+<a class="" href="water.html">Water in the game</a>
+<a class="" href="trees.html">Trees and forests</a>
+<a class="" href="buildings.html">Buildings, building sites and towns (the building side)</a>
+<a class="" href="objects-and-resources.html">Objects and resources</a>
+<a class="" href="physics.html">Physics: thrown objects, collisions, damage and rocks that split</a>
+<h2>Life</h2>
+<a class="" href="villagers.html">Villagers: data, state machine and speed</a>
+<a class="" href="animals.html">Animals: AI, states and clips</a>
+<h2>Magic and weather</h2>
+<a class="" href="magic.html">Magic: the core of the miracles</a>
+<a class="" href="miracles.html">Miracles one by one</a>
+<a class="" href="particles.html">Particles (PSys)</a>
+<a class="" href="day-night-weather.html">Day, night and weather in the original</a>
+<a class="" href="vortex.html">Vortexes and the tornado: objects swallowed, carried and flung</a>
+<h2>Hand and interface</h2>
+<a class="" href="hand-and-interface.html">The hand and the interface</a>
+<a class="" href="intro.html">The Land 1 intro and the tutorial&#x27;s script side</a>
+<a class="" href="script-camera.html">Script camera (GCamera and CameraModeScript)</a>
+<a class="" href="camera-tracks.html">Camera tracks (`Data\camera.edt`) and `WALK_PATH`</a>
+<h2>Presentation</h2>
+<a class="" href="rendering.html">World rendering: original versus openblack</a>
+<a class="" href="rendering-objects.html">Model rendering: original versus openblack</a>
+<a class="" href="animation.html">Skeletal animation (villagers and animals)</a>
+<a class="" href="audio.html">Audio: the engine, the banks, the music, the voices and the script</a>
+<a class="" href="video.html">Bink videos (.bik)</a>
+<h2>Data</h2>
+<a class="" href="mods.html">Modified data packs</a>
+<h2>Other</h2>
+<a class="here" href="creature.html">The creature: groundwork, random streams and what is unknown</a></div>
+</nav>
+<main>
+<details id="toc"><summary>On this page</summary><div class="toc">
+<ul>
+<li><a href="#the-creature-groundwork-random-streams-and-what-is-unknown">The creature: groundwork, random streams and what is unknown</a><ul>
+<li><a href="#what-is-ported">What is ported</a><ul>
+<li><a href="#the-creature-tables-in-infodat">The creature tables in info.dat</a></li>
+<li><a href="#the-body">The body</a></li>
+<li><a href="#drawing-in-the-frame">Drawing in the frame</a></li>
+<li><a href="#drawing-between-turns">Drawing between turns</a></li>
+<li><a href="#the-mind-and-its-file">The mind and its file</a></li>
+<li><a href="#movement-body-over-time-spells-fights-throws">Movement, body over time, spells, fights, throws</a></li>
+<li><a href="#leash-and-the-hand">Leash and the hand</a></li>
+<li><a href="#audio-status-panel-and-the-follow-camera">Audio, status panel and the follow camera</a></li>
+</ul>
+</li>
+<li><a href="#the-spec-files-animation-numbers">The spec file's animation numbers</a></li>
+<li><a href="#random-streams">Random streams</a></li>
+<li><a href="#mimicry-and-the-town-hooks">Mimicry and the town hooks</a><ul>
+<li><a href="#what-openblack-does-with-a-deed">What openblack does with a deed</a></li>
+<li><a href="#corrections-to-earlier-notes">Corrections to earlier notes</a></li>
+<li><a href="#gate-in-considermakingcreaturemimicplayer-0x4ea900">Gate in ConsiderMakingCreatureMimicPlayer (0x4EA900)</a></li>
+<li><a href="#spell-hits-fn_004e9df0thing-magic-player">Spell hits: fn_004E9DF0(thing, magic, player)</a></li>
+<li><a href="#landing-considercreaturemimickingwhenobjectlands-0x4eaab0">Landing: ConsiderCreatureMimickingWhenObjectLands (0x4EAAB0)</a></li>
+<li><a href="#deed-table-complete-for-w120">Deed table (complete for W120)</a></li>
+<li><a href="#town-and-villager-hooks">Town and villager hooks</a><ul>
+<li><a href="#town-step-16-townupdateattitudetocreature-0x7437f0-size-0x210">Town step 16: Town::UpdateAttitudeToCreature 0x7437F0 (size 0x210)</a></li>
+<li><a href="#the-emergencys-creature-part">The emergency's creature part</a></li>
+<li><a href="#the-satisfy-activity-and-getvillageractivitydesire">The satisfy activity and GetVillagerActivityDesire</a></li>
+<li><a href="#gplayermakecreatureempathisewithplayertowndesire-0x4c80f0">GPlayer::MakeCreatureEmpathiseWithPlayerTownDesire 0x4C80F0</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#leash-natives">Leash natives</a><ul>
+<li><a href="#common-facts">Common facts</a></li>
+<li><a href="#script-enum-and-the-temples-selection">Script enum and the temple's selection</a></li>
+<li><a href="#per-native">Per native</a></li>
+<li><a href="#get_object_leash_type-0x6f5460-0x6f54f0">GET_OBJECT_LEASH_TYPE (0x6F5460-0x6F54F0)</a></li>
+<li><a href="#what-openblack-does-with-the-leash-natives">What openblack does with the leash natives</a></li>
+<li><a href="#the-leash-keys">The leash keys</a></li>
+</ul>
+</li>
+<li><a href="#the-players-creature">The player's creature</a><ul>
+<li><a href="#what-openblack-does-with-the-players-creature">What openblack does with the player's creature</a></li>
+</ul>
+</li>
+<li><a href="#stand-ins-and-unverified-constants">Stand-ins and unverified constants</a></li>
+<li><a href="#addresses-of-the-original-moved-out-of-the-code">Addresses of the original, moved out of the code</a></li>
+<li><a href="#openblack">openblack</a></li>
+<li><a href="#pending">Pending</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+<h1 id="the-creature-groundwork-random-streams-and-what-is-unknown">The creature: groundwork, random streams and what is unknown</h1>
+<p>What openblack has of the player's creature so far, and what is known of the original's. The creature code comes from
+raffclar's tree (<code>stack/81-creature-mode</code> at <code>ff1e79d1</code>), ported onto ours in four commits as <strong>pure, dormant
+groundwork</strong>: formulas, state machines and file formats, unit tested with fakes, that no game code calls yet. No
+component, system, Locator slot or call site exists for it; a running game behaves as before, with one exception noted
+under <a href="#the-body">The body</a>. Most of the creature classes of <code>runblack.exe</code> (<code>Creature</code>, <code>CreatureMental</code>,
+<code>CreatureAction</code>, <code>CreatureAgenda</code>, <code>CreatureLook</code>, <code>CreatureFace</code>, <code>CreatureMimic</code>, <code>CreatureRoom</code>, <code>LH3DCreature</code>)
+have headers in bw1-decomp but no bodies, so most of what follows is his model, not a reading of the original: the
+constants that have no source are listed in <a href="#stand-ins-and-unverified-constants">Stand-ins</a> and
+<a href="#pending">Pending</a>.</p>
+<ul>
+<li><a href="#what-is-ported">What is ported</a></li>
+<li><a href="#the-creature-tables-in-infodat">The creature tables in info.dat</a></li>
+<li><a href="#the-body">The body</a></li>
+<li><a href="#the-mind-and-its-file">The mind and its file</a></li>
+<li><a href="#movement-body-over-time-spells-fights-throws">Movement, body over time, spells, fights, throws</a></li>
+<li><a href="#leash-and-the-hand">Leash and the hand</a></li>
+<li><a href="#audio-status-panel-and-the-follow-camera">Audio, status panel and the follow camera</a></li>
+<li><a href="#the-spec-files-animation-numbers">The spec file's animation numbers</a></li>
+<li><a href="#random-streams">Random streams</a></li>
+<li><a href="#mimicry-and-the-town-hooks">Mimicry and the town hooks</a></li>
+<li><a href="#what-openblack-does-with-a-deed">What openblack does with a deed</a></li>
+<li><a href="#deed-table-complete-for-w120">Deed table (complete for W120)</a></li>
+<li><a href="#town-and-villager-hooks">Town and villager hooks</a></li>
+<li><a href="#leash-natives">Leash natives</a></li>
+<li><a href="#what-openblack-does-with-the-leash-natives">What openblack does with the leash natives</a></li>
+<li><a href="#the-leash-keys">The leash keys</a></li>
+<li><a href="#the-players-creature">The player's creature</a></li>
+<li><a href="#what-openblack-does-with-the-players-creature">What openblack does with the player's creature</a></li>
+<li><a href="#stand-ins-and-unverified-constants">Stand-ins and unverified constants</a></li>
+<li><a href="#addresses-of-the-original-moved-out-of-the-code">Addresses of the original, moved out of the code</a></li>
+<li><a href="#openblack">openblack</a></li>
+<li><a href="#pending">Pending</a></li>
+</ul>
+<blockquote>
+<p><strong>Code rules.</strong> The creature's pure logic stays free of global state and draws no random number itself: every draw
+is passed in by its caller, so the systems that come later choose the stream (see <a href="#random-streams">Random streams</a>).
+No <code>random_device</code>, clock or file I/O in it; mind files are bytes in and bytes out, and the loader goes through the
+resource caches. Comments describe behaviour in plain English, with no decompiled names or addresses (those belong
+here). See <a href="openblack-internals.html">openblack-internals.md</a>.</p>
+</blockquote>
+<h2 id="what-is-ported">What is ported</h2>
+<h3 id="the-creature-tables-in-infodat">The creature tables in info.dat</h3>
+<ul>
+<li><strong><code>GCreatureInfo</code></strong> (one row per species, 0x384 bytes): the 416 bytes that used to be one opaque array are named.
+  The species row is at +0x1E4, <code>startEnergy</code> +0x1F4, <code>comfortTemperature</code> +0x1FC, <code>growUpMinutes</code> +0x204,
+  <code>energyDrain</code> +0x220, <code>sleepRecover</code> +0x230, <code>slowSpeed</code> / <code>walkSpeed</code> / <code>runSpeed</code> from +0x240, <code>runAwayDistance</code>
+  +0x2D8, <code>sleepLength</code> +0x364, <code>pooPerEnergy</code> +0x370. Four blocks are still unread: +0x234 (0xC bytes), +0x24C
+  (0x8C), +0x2DC (0x88), +0x374 (0x10). In the code these offsets survive only as <code>static_assert</code>s on the layout.</li>
+<li><strong><code>CreatureActionInfo</code></strong>: <code>strengthGain</code> / <code>energyCost</code> / <code>exhaustionCost</code> at +0x0 / +0x4 / +0x8, <code>desire</code> +0x98,
+  <code>desireMultiplier</code> +0xC0. <code>field0xfc</code> exists only in patch 1.20 (openblack issue #684).</li>
+<li><strong><code>CreatureInitialDesireInfo</code></strong>: 0x1C0 bytes in memory, 0x1B0 in the file, which leaves out the 0x10-byte header;
+  our <code>field0xN</code> is therefore the original's +0x10+N. Read from <code>info.dat</code>:</li>
+<li>+0x10..+0x2C: the 8 sources of the desire;</li>
+<li>+0x38 (our <code>field0x28</code>): learnable;</li>
+<li>+0x4C (our <code>field0x3c</code>): holds 0.3 to 3 in the data (hunger and tiredness 2, healing 3); bw1-decomp calls it
+    <code>DesireDecay</code>; his code uses it as the desire's cap;</li>
+<li>+0x50 / +0x54 (our <code>field0x40</code> / <code>field0x44</code>): hold 0.999 / 1 in nearly every row (0.9 / 1 in two); bw1-decomp
+    calls them <code>InitialValueMin</code> / <code>InitialValueMax</code>; one number is drawn from this range per desire (see
+    <a href="#random-streams">Random streams</a>), and his code uses it as the desire's per-turn decay;</li>
+<li>+0x78 (our <code>field0x68</code>): the weight (bw1-decomp: <code>DesireGrowthRate</code>);</li>
+<li>+0x80 / +0xC0 / +0x100 / +0x140 / +0x180: the name and the desire, short, trying and doing texts.</li>
+</ul>
+<p>bw1-decomp marks the names of +0x4C..+0x54 as fabricated. In <code>CreatureDesires::Initialise</code> 0x4DC100 the drawn number
+  goes into an unnamed array (<code>field_0x288</code>), while the array that <code>FindWeakestDesire</code> 0x4DC7B0 compares as the
+  desire's value (<code>field_0xa8</code>) is set to 0. The data (a cap of 0.3..3, a drawn range of 0.9..1) also reads like a cap
+  and a per-turn decay. So his reading is kept (cap = +0x4C, decay drawn in [+0x50, +0x54], value 0) <strong><span class="state approx">inferred</span></strong>:
+  it makes the same 40 draws from the same fields in the same order; only the meaning of the stored values is open.
+  This reverses the earlier note that the fields had to be swapped.</p>
+<h3 id="the-body">The body</h3>
+<ul>
+<li><strong>Meshes</strong> (<code>src/3D/CreatureBody</code>): a creature mesh's file name gives the species, the appearance (base, evil, good,
+  thin, fat, weak, strong) and the Ogre variants. The mesh folder <code>Data/CreatureMesh</code> also holds files whose last name
+  part is not an appearance (<code>A_Tiger2_Base - Realistic Face.l3d</code>, <code>Eyeball.l3d</code>, <code>Eyelid.l3d</code>); those are now
+  skipped, while an unknown species still names a mesh and logs an error. <strong>This is the one change to running code:</strong>
+  before, <code>Eyeball</code> or <code>Eyelid</code> (whichever loaded first) took the id <code>creature/0/0</code>, the Unknown species' base mesh,
+  so a creature of type 0 (<code>CREATURE_TYPE</code> 0, only the Playgrounds use it) drew an eyeball and now has no mesh. Nothing
+  looks these meshes up by name and no creature exists on Land 1 or Land 2, so no verification check changes. Our
+  rule is a port decision, not a reading (see <a href="#pending">Pending</a>).</li>
+<li><strong>Morph</strong> (<code>CreatureMorph</code>): the body is the base mesh pulled towards one mesh on each of three axes (evil-good,
+  thin-fat, weak-strong); threshold and vertex blend as the hand's (0.03; base + |a|(m − base),
+  <a href="hand-and-interface.html">hand-and-interface.md</a>).</li>
+<li><strong>Layers, face, eyes, look</strong> (<code>CreatureLayers</code>, <code>CreatureFace</code>, <code>CreatureEyes</code>, <code>CreatureLook</code>): one body animation
+  at a time (stand, a one-shot action, or start / loop / end), with the head turn, the face and a gesture on top; the
+  faces a feeling pulls and how long they hold; the eyes (eyeball and eyelid set at points on the body's triangles,
+  blinking, the lids following the pupils); what an idle creature looks at.</li>
+<li><strong>Skeletal animation</strong> (<code>src/3D/SkeletalAnimation</code>, <code>CreatureAnimation</code>): a species' variant animations (evil, good,
+  thin, fat) are blended into the base's by the body's axes, element by element on the bone matrices. The rotation is
+  our <code>affine::RotationYXZ</code> read by rows (the same nine cells as his formula; ours models the original's FPU
+  rounding), and the rows are normalised with <code>std::hypot</code> as <code>HandAnimator</code> does. Angles are read back with his
+  <code>asin</code> / <code>atan2</code> decomposition, not <code>affine::DecomposeYXZ</code>: the blended matrices are not unit, and at the gimbal
+  (<code>m6 = m8 = 0</code>) <code>DecomposeYXZ</code> gives NaN as the original does, which would poison the keyframes. Two known
+  differences from the hand's animator: in the non-looping edge frame the hand clamps to the last frame and the
+  creature wraps to the first; and a bone the animation does not move takes the stand animation's first frame (the
+  hand: the bind pose).</li>
+<li><strong>Skin</strong> (<code>CreatureTattoo</code>, <code>CreatureMarks</code>, <code>CreatureSkin</code>): up to eight tattoos of sixteen designs
+  (<code>Data/Textures/PlayersSymbols.raw</code>, colours from <code>tattoocols.raw</code>); wounds, burns and blood trails that age into
+  scars; each base skin blended towards the evil or good skin, 4 bits a channel, weight trunc(|a|·256) ≤ 255 —
+  bit for bit the hand's <code>MorphTexture</code> blend (a test pins it against <code>HandMorph.cpp</code>'s blend over all 256 weights).</li>
+<li><strong>The default tattoo symbols</strong> come from <code>Data\Textures\OriginalChooseSymbol.raw</code>, 256×256 RGB (196 608 bytes),
+  the exe's own file: <code>runblack.exe</code> names <code>PlayersSymbols</code>, <code>ChooseSymbol</code> and <code>OriginalChooseSymbol</code> and loads them
+  at 0x5DE410 / 0x5DE425 / 0x5DE43D (<a href="rendering.html">rendering.md</a>, the <code>k_AlphaFlagStems</code> list), each with its <code>a.raw</code>
+  alpha. His <code>Game.cpp:1738</code> reads the defaults from <code>I_PLAYER_SYMBOLS_.raw</code> instead. That file and
+  <code>I_PLAYER_SYMBOLS_A.raw</code> are a repack's copies that the exe never loads: neither name occurs in <code>runblack.exe</code>;
+  <code>I_PLAYER_SYMBOLS_.raw</code> (65 536 bytes, one grey byte a texel) is byte for byte <code>ChooseSymbola.raw</code>, the alpha, and
+  <code>I_PLAYER_SYMBOLS_A.raw</code> (196 608 bytes, RGB) is byte for byte <code>OriginalChooseSymbol.raw</code> in the Complete
+  Collection's <code>Data\Textures</code>. openblack's skin-art loader (<code>CreatureSkinArtLoader</code>, loaded at start-up under
+  <code>creature_skin::k_ArtId</code>) reads the defaults from <code>OriginalChooseSymbol.raw</code> as his code reads its file: RGB, the
+  level of a texel is its blue &gt;&gt; 4, 64×64 cells, 4 to a row. The players' symbols (<code>PlayersSymbols.raw</code>) are optional;
+  a cell left blank there takes the default.</li>
+<li><strong>Hair and footprints</strong> (<code>CreatureHair</code>, <code>CreatureFootprints</code>): tufts of strands as spring chains whose look moves
+  from neutral towards evil or good; a print under the lower foot at each footstep, fading over about five seconds.</li>
+</ul>
+<h3 id="drawing-in-the-frame">Drawing in the frame</h3>
+<p>Read from <code>runblack.exe</code> (W120), 2026-10-08:</p>
+<ul>
+<li><strong>Where.</strong> A creature is drawn in the models stage (<a href="original-frame.html#2-draw-stages-in-order">original-frame.md</a>,
+  4m): <code>Creature::Draw</code> 0x517910 (vt+0x610) points the game object's 3D object (+0x40) at the body
+  ([+0x160]+0x58 → +0x482C, 0x517AD1..0x517AE5), then calls <code>LH3DCreature::AddForDrawing</code> 0x48E1C0 (vt+0x1C,
+  0x517AED). That one lights the body (<code>fn_00801C90</code>, haze <code>fn_007FEB30</code>), runs <code>CheckRegionOnScreen</code> and calls
+  <code>DrawNow</code> 0x48E260 at once. Other callers of <code>DrawNow</code>: <code>FallingSpell::Draw</code> 0x526A42, <code>fn_00640054</code> 0x640386 (the
+  creature snapshot) and <code>CreatureRoom::DrawAdditional</code> 0x7888B2 (the Cave).</li>
+<li><strong>The body</strong> is an animated 3D object: <code>Morphable::MorphInit</code> 0x61731A makes it with <code>LH3DObject::Create(3)</code>, which
+  is vtable 0x9A3068 (0x80B5DE; the hand's body is made the same way). <code>DrawNow</code> calls its <code>AddDrawing</code> (vt+0x100 =
+  <code>fn_00813340</code>, 0x48E2A6): off screen or with +0xB8 set nothing; queued whole (<code>NewZObject</code> 0x813413, callback
+  0x7FA980, key (dx² + dy²) + dz² from +0x38..+0x40) if its Z-sort bit (vt+0x44, from the mesh's 0x200) <strong>or</strong> its
+  global-alpha bit (vt+0x4C, +4 &amp; 0x80) is set; otherwise its Draw at once (vt+0x108 = <code>fn_00813BA0</code>, 0x8133C4). No
+  creature base mesh in <code>Data/CreatureMesh</code> has the 0x200 flag (only the Lion's six variants and the three hand meshes
+  have it; the body gets the base), and no write of the global-alpha bit to the body was found, so a creature is drawn
+  at once, in the draw list's order, never through the Z-sorter <strong>(inferred: the global-alpha part)</strong>.</li>
+<li><strong>Inside the body's Draw</strong> (<code>fn_00813BA0</code>): the mesh, then the shadows cast on objects (the list [0xFAA7E0],
+  <code>fn_0080B050</code>, 0x813F8E..0x813FE0; a shadow is not drawn on its own caster, +0x464), then the <strong>hair</strong>
+  (<code>LH3DObjectHair</code> at +0x88, <code>fn_00848390</code> 0x814029) only while +0x94 and +0xA0 (the body's cross-fade state) are
+  both below 0.2. The hair strands go through <code>Draw3DWorldTriangle</code> 0x81C090 with the hair group's material (+0x78), or
+  <code>fn_0081BC10</code> untextured (<code>fn_00847060</code> 0x847696 / 0x8476BC): drawn at once, no Z object.</li>
+<li><strong>The eyes</strong> come after the body's <code>AddDrawing</code> returns: the shared eyeball and eyelid objects ([0xC64224] /
+  [0xC64228], <code>LH3DObject::Create(0)</code>, <code>Data\eyeball.l3d</code> / <code>Data\eyelid.l3d</code>, 0x48E2DA..0x48E364), two eyes each,
+  drawn at once with vt+0x108 (<code>fn_0080DB30</code>), or the cross-fade draws vt+0x15C / vt+0x154 when the body's +0x94 /
+  +0xA0 is set (0x48E9A2..0x48E9DD, 0x48EFD3..0x48F00E). So the order is body, shadows over it, hair, eyes; a queued
+  body (not seen) would have its eyes drawn before it.</li>
+<li><strong>No shadow falls on the body.</strong> The receiver flag (+4 &amp; 0x40) is set only through vt+0x78 with 1; no creature code
+  calls it (none of the 33 vt+0x78 call sites is on the body), and a bare 3D object starts with +4 = 0x10009
+  (0x816537). The game object's own 3D object (<code>Object::Create3DObject</code> 0x6365F0) is the one that asks, and it is
+  replaced by the body before the draw. openblack: <code>ReceivesDynamicShadow</code> leaves out the creatures.</li>
+<li><strong>The creature's own shadow</strong> is a projected shadow (<code>CreateDynamicShadow</code>, <a href="rendering.html#projected-shadows-shadowinfo">rendering.md</a>),
+  drawn with the land blocks (4i) and over the objects that receive; not ported.</li>
+<li><strong>The hair's material</strong> (read 2026-10-08): one material for every creature, made the first time a creature loads
+  (<code>fn_006186B0</code>, called from <code>LH3DCreature::LoadBase</code> 0x4EB11C and <code>Morphable::ReadBinary</code> 0x617DA4):
+  <code>data\c_ape_hair.raw</code> (format 0x41), <code>CreateMaterial(9, texture)</code> 0x618701 into [0xD3F008], then +4 (ALPHAREF) = 0x32
+  (0x618713); +5 stays 0 (<code>CreateMaterial</code> 0x82FD56), so it is one-sided (CCW) and clamped. <code>PrepareForDrawing</code> passes
+  it to every hair group (0x4ED539 / 0x4ED5AC → <code>fn_00848350</code> → <code>fn_00847C90</code>, group +0x78). A group without its
+  texture (+0x60 ≠ 1) goes through <code>fn_0081BC10</code> with no material, so the triangle draw's default one
+  ([0xEA9EC4], <code>CreateMaterial(0, 0)</code> at 0x819011): mode 0, opaque. Both write depth, so the hair is never covered by
+  what is drawn after it and behind it, whatever the draw-list order.</li>
+<li>openblack (<code>Renderer::DrawPass</code>, <code>Renderer::DrawCreatureParts</code>): the body in the models' loop at once (the mesh's
+  0x200 decides, as for any model), then the shadows over it, the hair and the eyes. The hair in
+  <code>render_modes::materials::k_CreatureHair</code> (mode 9, ALPHAREF 50; the world quads' shader drops the texels under
+  ALPHAREF) and <code>k_CreatureHairPlain</code> (mode 0). <strong><span class="state approx">approximate</span></strong> both two-sided: the ribbons are built facing the
+  camera in openblack's own winding. <strong><span class="state approx">approximate</span></strong> the models are drawn per mesh, not in the original's draw-list
+  order (near blocks first); with the hair writing depth this only changes which background its blended edges show.
+  Before 2026-10-08 the hair was in mode 6 (no depth write), so a model drawn after it and behind it (the temple)
+  covered it.</li>
+</ul>
+<h3 id="drawing-between-turns">Drawing between turns</h3>
+<p>A creature's Transform moves once a turn (<code>creature_pose::CommitTurnPose</code>); every frame the locomotion writes
+<code>components::CreatureDrawPose</code>, the position lerped from the turn's start to its end by the turn fraction and the
+heading lerped the short way round (<code>CreatureLocomotionSystem::Update</code>). It is the villagers' "one turn behind" scheme
+(<a href="animation.html#drawing-between-turns">animation.md</a>) without their slope shear or their yaw rate.</p>
+<ul>
+<li><strong><span class="state approx">inferred</span></strong> the original does the same: its creature is a Living on the same list, so the start-of-turn copy
+  (+0x2C) and the per-frame lerp apply. <code>Creature::Draw</code> 0x517910 was read only for its stage and order, not for its
+  matrix source; bw1-decomp has no body for it.</li>
+<li>openblack (2026-10-08): <code>creature_pose::BetweenTurns</code> gives the pose while it belongs to the turn that put the
+  Transform where it is (the locomotion started, <code>toPosition</code> equal to the Transform's position, no hand or physics
+  pose); otherwise the Transform. <code>ecs::DrawnModel</code> takes it, decided per row, after the hand's and the physics' poses
+  and before <code>DrawPosition</code>, with the scale it already had (the pen's drawn scale, else the Transform's): one matrix
+  for the whole drawn creature. A standing creature (pose equal to its Transform) keeps the Transform's matrix bit for
+  bit. Every reader takes that matrix (<code>ecs::DrawnBodyModel</code>): the body's row (<code>RenderingSystem::WriteEntityRow</code>),
+  hence its shadow and the hair's light; the eyes (<code>CreatureAnimationSystem::PlaceEyes</code>), the hair roots, what it
+  holds (<code>UpdateHeldDraw</code>, its <code>PhysicsDrawPose</code> only), the footprints, the hand's touch and pick
+  (<code>CreatureHandSystem</code>: <code>CreatureAlong</code> and the strokes and slaps, the original's hand colliding the drawn, posed
+  body), and fire, spell seeds and tree bending (<code>DrawnModel</code> / <code>DrawnPosition</code>). <code>creature_pose::DrawnPlacementOf</code>
+  gives the same sources' rotation alone, for where the eyes look ahead and the turn of what it holds. On the
+  Transform, because the turn or the hash reads them: the head's look in <code>PoseBody</code> (its bones place the held object's
+  Transform in the turn), the held object's Transform, the leash's collar end (the rope's tension decides the pull),
+  the audio positions and the fight's hits.</li>
+<li><strong><span class="state approx">approximate</span></strong> the hand's touch on a creature changes the game (which creature is picked, strokes and slaps that
+  reach its mind): it now reads the drawn body, so it can differ from before by up to one turn's step while the
+  creature walks, and in its pen it finds the smaller body that is drawn there.</li>
+<li><strong>The pen's drawn size reaches every part.</strong> What is sized apart from the matrix shrinks by
+  <code>creature_pose::DrawnSizeShare</code> (the drawn scale over the Transform's, 1 outside a pen): the eyes' size and how deep
+  they sit, the hair's strand length, width and root depth, and the footprints' side; the reflection's bounding
+  radius takes <code>creature_pose::DrawnScale</code>. <strong><span class="state approx">approximate</span></strong> the original's eyes and hair under a drawn size are not
+  read: they are scaled as one with the body here, where the original may recompute them from the drawn size (their
+  size rules are not linear in it). The hair's stiffness follows its scale, as for a smaller creature.</li>
+</ul>
+<h3 id="the-mind-and-its-file">The mind and its file</h3>
+<ul>
+<li><strong>The mind file</strong> (<code>components/creaturemind</code>, <code>MindFile</code>): the <code>.erc</code> / mind-file format, read and written from
+  bytes. The names are enciphered with MSVC <code>rand</code>'s LCG (214013 / 2531011, <code>&gt;&gt; 16 &amp; 0x7FFF</code>) seeded with 0x913 for
+  each name. The two <code>.erc</code> files in <code>Scripts\CreatureMind</code>, <code>C4ba71b36.erc</code> (a Mandrill, row 14) and <code>Cacab45d4.erc</code>
+  (a Tiger, row 2), are version 33 and read and write back byte for byte. They are not templates: they are two
+  profiles' creatures, the files <code>LOAD_MY_CREATURE</code> reads (<a href="#the-players-creature">The player's creature</a>).
+  <code>Profiles\&lt;name&gt;\creature.lhp</code> is not a mind file (both profiles' files are refused as an unsupported version): it is
+  an export the game writes and never reads back.</li>
+<li><strong>Mind</strong> (<code>CreatureDesires</code>, <code>CreatureDecisionTree</code>, <code>CreatureLearning</code>, <code>CreatureWatching</code>, <code>CreaturePlanner</code>,
+  <code>CreatureMindModel</code>, <code>CreatureMindTables</code>, <code>CreatureMindFileBody</code>): 40 desires that grow from their sources past
+  their thresholds and otherwise fade; two decision trees per desire (what to act on, what to use); learning from
+  strokes and slaps credited to recent actions; learning skills and miracles by watching; the planner that picks a goal
+  and an action per desire. The sigmoids are ours: <code>Sigmoid</code> is <code>gutils::CreatureSigmoidThreshold</code>, <code>SigmoidStep</code> is
+  <code>gutils::SigmoidThreshold</code> (the game's 41 exact floats, <a href="engine-math.html">engine-math.md</a>); his decimal table differs
+  in 14 steps (16, 18, 19, 23, 24, 26, 27, 29-33, 35, 36) by 1-2 ULP and gave 1 instead of 0 at a threshold of exactly 1.</li>
+<li><strong>Idle mind and actions</strong> (<code>CreatureIdleMind</code>, <code>CreaturePlanActions</code>, <code>CreatureFeedback</code>, <code>CreatureReach</code>,
+  <code>CreatureObjectActions</code>): the agenda an idle creature works through once a turn; which of the table's actions it can
+  carry out; strokes and slaps; reaching by blending four animations; picking up, eating, tossing and throwing things.</li>
+</ul>
+<h3 id="movement-body-over-time-spells-fights-throws">Movement, body over time, spells, fights, throws</h3>
+<p><code>CreatureLocomotion</code> (speed towards a fraction of the top speed, slower uphill, walk and run blended by distance),
+<code>CreaturePhysiology</code> (age, growth, energy and fat, tiredness, thirst, warmth through <code>gutils::SigmoidThreshold</code>,
+strength, poo), <code>CreatureSpells</code> (freeze, small, big, weak, strong, fat, thin, invisible, nice, nasty, itchy and the
+unfinished ones; each eases in, holds and eases out; the creature's sound actions per spell are 0x76..0x7E),
+<code>CreatureFight</code> and <code>CreatureFightHud</code> (the duel in a circular arena and its panel) and <code>CreatureThrow</code> (the release
+velocities). His own flight (<code>Fly</code>, bounce and slide) is left out: what a creature throws will fly through our
+physics objects.</p>
+<h3 id="leash-and-the-hand">Leash and the hand</h3>
+<p><code>LeashRules</code>, <code>LeashRope</code> (40 masses on springs at 200 Hz), <code>LeashOwnership</code> (one leashable creature per player),
+<code>LeashKeys</code> (L, V, B, checked against our <code>input::GameActionMap</code>, read once a frame by
+<code>ecs::creature_loop::ProcessLeashKeys</code>; his shake tracker is left out) and
+<code>CreatureHandRules</code>. The hand holds only the player's own or an allied player's creature, in or out of the
+influence (<code>Creature::ValidForLockedSelectProcess</code> 0x476E10 and the action press 0x5D13FB..0x5D1481; raffclar's rule
+allowed any god's); openblack has no alliances, so only the player's own. Let go within 450 ms of camera time, the
+press was a click: packet 0x5F, the TOGGLE_LEASH path below (openblack: the leash key). Strokes and slaps act at frame
+time on the local machine (packet 0x27 only replays them elsewhere); how the creature was treated goes to its mind
+with packet 0x59, the mind's "player feedback" fn_004E06A0 (<code>FinishActionUnsuccessfully("player feedback")</code>, then a
+plan when |v| &gt; 0.01). The hand's side is in <a href="hand-and-interface.html#the-hand-on-a-creature">hand-and-interface.md</a>.</p>
+<h3 id="audio-status-panel-and-the-follow-camera">Audio, status panel and the follow camera</h3>
+<ul>
+<li><strong><code>CreatureAudio</code></strong> with <code>src/Audio/Engine/AnimEffectKeys.h</code>: a creature's sounds sit on moments of its animations
+  and are looked up by size, species, ground and action. <code>VoiceBankStem</code> gives the species bank's stem (our
+  <code>CreatureBank</code> builds <code>audio/sfx/creature/{}.sad</code>). <code>SET_CREATURE_SOUND</code> is 1 after a reset and 0 means only the
+  local creature's voice is heard (<a href="audio.html">audio.md</a>); event modes 1 and 2 map to our Stop and Release (ours: no
+  shipped animation uses them). The ground comes from <code>ecs::sea_cells::GetSurfaceType</code>, not from his surface rules.</li>
+<li><strong><code>CreatureStatusPanel</code></strong>: damage, hunger and tiredness bars and the hand's reward while the hand is over a creature.</li>
+<li><strong><code>CreatureMode</code></strong> and <strong><code>src/Camera/CreatureFollow</code></strong>: Creature Mode's rules (C locks onto the player's creature;
+  the double click is our <code>DOUBLE_CLICK</code>) and the follow camera, built on our script-camera follow functions
+  (<code>HeadingAndPitchFromPoints</code>, <code>PointFromDistanceHeadingAndPitch</code>, <code>FollowSeconds</code>, <code>ClampFollowDistance</code>,
+  <code>FollowPitch</code>, <code>ThingViewingDistance</code>): distance 2..1500, least pitch 0.241661, height × 8, pace 2 s easing to 1 s, as
+  in <a href="script-camera.html">script-camera.md</a>. Headings run from 0 to 2π.</li>
+</ul>
+<h2 id="the-spec-files-animation-numbers">The spec file's animation numbers</h2>
+<p><code>Data/ctrspec27.txt</code>, counted from the first animation after the version line, skipping <code>=</code> section lines:</p>
+<table>
+<thead>
+<tr>
+<th>Number</th>
+<th>Animation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>stand</td>
+</tr>
+<tr>
+<td>16-27</td>
+<td>faces (the first ten pulled when idle)</td>
+</tr>
+<tr>
+<td>28-30</td>
+<td>sleep: start, loop, end</td>
+</tr>
+<tr>
+<td>31-33</td>
+<td>poo: start, loop, end</td>
+</tr>
+<tr>
+<td>34-36</td>
+<td>puke: start, loop, end</td>
+</tr>
+<tr>
+<td>37-39</td>
+<td>sit: start, loop, end</td>
+</tr>
+<tr>
+<td>52-74</td>
+<td>actions</td>
+</tr>
+<tr>
+<td>75</td>
+<td>head turn right / left</td>
+</tr>
+<tr>
+<td>76</td>
+<td>head down / up</td>
+</tr>
+<tr>
+<td>77, 78</td>
+<td>the same while sitting</td>
+</tr>
+<tr>
+<td>96</td>
+<td>eat</td>
+</tr>
+<tr>
+<td>106, 107</td>
+<td>faint, get up</td>
+</tr>
+<tr>
+<td>200-206</td>
+<td>gestures (202 yawn)</td>
+</tr>
+</tbody>
+</table>
+<p>The morph animation header's fields, from his tree (still <code>unknown0x0..</code> in our <code>MorphFile.h</code>): duration +0x0,
+looping +0x4, stride rate +0x8, stride length +0xC, displacement +0x10..+0x18. <code>HairHeader</code>'s +0x0 is the species'
+sound-object key.</p>
+<h2 id="random-streams">Random streams</h2>
+<p>The game has one random state, described in <a href="engine-math.html#random-numbers-game_random">engine-math.md</a>: the
+synchronised GRand (<code>GameRand</code> 0x6DE510, <code>GameFloatRand</code> 0x6DE530), the local GRand (<code>LocalRand</code> 0x6DE570,
+<code>LocalFloatRand</code> 0x6DE590), the particle systems' choice between the two per effect (<code>PSysRand</code> 0x6729E0,
+<code>PSysFloatRand</code> 0x6729B0) and the C runtime's <code>rand()</code> 0x7C8837 with <code>Random(a, b)</code> 0x81D180. Our port reaches all of
+them through <code>openblack::game_random</code> (<code>src/Common/GameRandom.{h,cpp}</code>, <code>Locator::gameRandom</code>). The turn/draw split is
+in <a href="engine-loop.html#4-random-streams-between-turn-and-frame">engine-loop.md</a>: the synchronised stream is the game
+logic's; the local, CRT and particle streams are shared by the turn and the frame. <code>Locator::rng</code> is only for the
+tests' <code>TestRng</code>. The rule for the creature (decided 2026-10-07): each draw follows the original's stream; a private
+seeded engine only for a draw with no counterpart in the original (visual extras, debug tools); no <code>random_device</code>.</p>
+<p>Only one creature draw is decompiled:</p>
+<ul>
+<li><strong><code>CreatureDesires::Initialise</code> 0x4DC100 (M119 0x125EE30)</strong>, bw1-decomp <code>src/Black/CreatureMentalDesire.cpp:63</code>: for
+  each of the 40 desires, <code>min + GameFloatRand(max − min)</code> with min / max at +0x50 / +0x54: <strong>40 draws on the
+  synchronised stream</strong>, one per desire, in desire order. Where the drawn number is stored, and what it means, is in
+  <a href="#the-creature-tables-in-infodat">The creature tables in info.dat</a>.</li>
+<li><code>CreatureDesires::RandomiseIncreaseTime</code> 0x4DC310 jitters a desire's increase time when the "randomise" cheat flag is
+  set; not decompiled, and no normal run reaches it.</li>
+</ul>
+<p>Neighbouring facts the creature has to respect:</p>
+<ul>
+<li><strong>The decompiled eye blink is on the CRT stream.</strong> The high-detail villager's eyes blink every <code>Random(1000, 5000)</code> ms
+  with a hold of <code>Random(100, 200)</code> ms, a glance target of <code>Random(-0.25, 0.25)</code> and a squint of <code>Random(0, 0.3)</code>
+  (0x88358D..0x8836E2; <a href="intro.html">intro.md</a> "The family in high detail"). The creature's eyes are another object
+  (<code>LH3DCreature</code>) and their stream is unknown.</li>
+<li><strong>The mist's frame counter is on the CRT stream.</strong> <code>LH3DMist</code>'s constructor 0x7F9560 sets its counter (+0x84) to
+  <code>Random(0, 16) &amp; 15</code> (<a href="map-loading.html">map-loading.md</a>); his creature cave's mist uses exactly that formula.</li>
+<li><strong>The temple's leash draws from the CRT stream when it is created</strong> (<a href="engine-loop.html">engine-loop.md</a>, "Reward and
+  TempleLeash creation"). No leash code in his tree draws at all.</li>
+</ul>
+<p>In the ported code every one of these draws is passed in by the caller. "His draw" below is the call site in his
+systems at <code>ff1e79d1</code>, which are not ported yet; "our stream" is what the port must call.</p>
+<table>
+<thead>
+<tr>
+<th>His draw</th>
+<th>Original counterpart</th>
+<th>Original stream</th>
+<th>Our stream to use</th>
+<th>Confidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CreatureAnimationSystem.cpp:410</code> eye blink: next open = <code>random(5000) + 2500</code> ms (in our <code>CreatureEyes</code>: <code>random(interval) + interval / 2</code>, interval 5000), one draw per blink, on the frame clock</td>
+<td>the creature's eyes are not decompiled; the decompiled blink is the high-detail villager's, <code>Random(1000, 5000)</code> ms</td>
+<td>CRT for that blink; the creature's unknown</td>
+<td><code>game_random::crt::Random</code>, the blink moved onto the turn clock</td>
+<td>inferred <span class="state approx">approximate</span></td>
+</tr>
+<tr>
+<td><code>CreatureMindSystem.cpp:705</code> <code>uniform(low, high)</code> → <code>creature_desires::Create</code>, one float per desire (40)</td>
+<td><code>CreatureDesires::Initialise</code> 0x4DC100</td>
+<td>synchronised (<code>GameFloatRand</code>)</td>
+<td><code>game_random::GameFloatRange(min, max)</code></td>
+<td><strong>checked in bw1-decomp</strong></td>
+</tr>
+<tr>
+<td><code>CreatureMindLearning.cpp:1117</code> the same <code>uniform</code> in <code>ClearLearning</code></td>
+<td>the same function</td>
+<td>synchronised</td>
+<td><code>game_random::GameFloatRange</code></td>
+<td><strong>checked in bw1-decomp</strong></td>
+</tr>
+<tr>
+<td><code>CreatureMindSystem.cpp:702</code> <code>random(range)</code> → <code>creature_mind::Think</code>: the idle activity lot, the face, the hang-around direction and distance, the sleep, poo and throw-about places, the need and object-activity choice</td>
+<td>not decompiled; every decompiled Living decision draws <code>GameRand</code> (<code>Villager.cpp:1016, 1019</code>, <code>VillagerReaction.cpp:180, 259, 326, 805</code>, <code>VillagerStates.cpp:737</code>)</td>
+<td>synchronised (turn logic)</td>
+<td><code>game_random::GameRand(n)</code></td>
+<td>inferred (strong)</td>
+</tr>
+<tr>
+<td><code>CreatureMindSystem.cpp:914</code> <code>ShowFeeling</code> → <code>creature_mind::PullFace</code></td>
+<td>not decompiled</td>
+<td>synchronised (logic)</td>
+<td><code>GameRand(n)</code></td>
+<td>inferred</td>
+</tr>
+<tr>
+<td><code>CreatureMindSystem.cpp:942</code> <code>SitDown</code> → <code>creature_mind::SitDown</code></td>
+<td>not decompiled</td>
+<td>synchronised (logic)</td>
+<td><code>GameRand(n)</code></td>
+<td>inferred</td>
+</tr>
+<tr>
+<td><code>CreatureMindSystem.cpp:1080</code> <code>Sleep</code> → <code>creature_mind::Sleep</code></td>
+<td>not decompiled</td>
+<td>synchronised (logic)</td>
+<td><code>GameRand(n)</code></td>
+<td>inferred</td>
+</tr>
+<tr>
+<td><code>CreatureMindSystem.cpp:1117</code> <code>Poo</code> → <code>creature_mind::Poo</code> (where it goes)</td>
+<td>not decompiled</td>
+<td>synchronised (logic)</td>
+<td><code>GameRand(n)</code></td>
+<td>inferred</td>
+</tr>
+<tr>
+<td><code>CreatureMindSystem.cpp:872</code> <code>bernoulli(0.5)</code> in <code>PlayAction</code>: whether an action plays mirrored</td>
+<td>not decompiled</td>
+<td>unknown</td>
+<td><code>GameRand(2)</code></td>
+<td>inferred (no counterpart found)</td>
+</tr>
+<tr>
+<td><code>CreatureMindLearning.cpp:368</code> <code>Random(range)</code>, used by <code>creature_plan_actions::Agenda</code> and <code>creature_watching::StepMimicry</code></td>
+<td>not decompiled</td>
+<td>synchronised (logic)</td>
+<td><code>GameRand(n)</code></td>
+<td>inferred</td>
+</tr>
+<tr>
+<td><code>CreatureMindLearning.cpp:373</code> <code>Chance()</code> 0..1, used by <code>creature_watching::StartMimicry</code>: drawn at the mimic site, during the turn, only for the player's own creature (<a href="#mimicry-and-the-town-hooks">Mimicry</a>)</td>
+<td>not decompiled (the entry point 0x4EA900 is read, the draw inside <code>Creature::MimicPlayer</code> is not)</td>
+<td>synchronised (logic)</td>
+<td><code>GameFloatRand(1.0f)</code></td>
+<td>inferred</td>
+</tr>
+<tr>
+<td><code>CreatureLocomotionSystem.cpp:667</code> run-away distance <code>random(40) + species runAway</code></td>
+<td><code>Creature::RunAwayFromObjectReaction</code> named, not decompiled; the villagers' flee draws are <code>GameRand</code> (<code>VillagerReaction.cpp:900, 903</code>)</td>
+<td>synchronised (logic)</td>
+<td><code>GameRand(40)</code></td>
+<td>inferred</td>
+</tr>
+<tr>
+<td><code>CreatureLocomotionSystem.cpp:844</code> fidget choice <code>random(3)</code></td>
+<td>not decompiled</td>
+<td>synchronised (logic)</td>
+<td><code>GameRand(3)</code></td>
+<td>inferred</td>
+</tr>
+<tr>
+<td><code>CreatureLocomotionSystem.cpp:857</code> <code>bernoulli(0.5)</code>: whether the confused fidget (the third choice above) plays mirrored</td>
+<td>not decompiled</td>
+<td>unknown</td>
+<td><code>GameRand(2)</code></td>
+<td>inferred (no counterpart found)</td>
+</tr>
+<tr>
+<td><code>CreaturePhysiologySystem.cpp:324</code> the poo's yaw, <code>uniform_real(0, 2π)</code>, for the <code>LumpOfPoo</code> object</td>
+<td>not decompiled; objects created by the turn's logic belong to the synchronised stream</td>
+<td>synchronised (logic)</td>
+<td><code>GameFloatRand(2π)</code></td>
+<td>inferred</td>
+</tr>
+<tr>
+<td><code>CreaturePhysiologySystem.cpp:347-355</code> the 12 puke drops: two <code>unit(-1, 1)</code> and one <code>green(0.4, 0.9)</code> each (36 draws)</td>
+<td>not decompiled; in the original the puke is not an ECS sprite</td>
+<td>unknown</td>
+<td><code>game_random::psys::FloatRand</code> inside a <code>StepScope(Local)</code> if ported as a particle effect, else a private seeded engine</td>
+<td>no counterpart</td>
+</tr>
+<tr>
+<td><code>CreatureFightSystem.cpp:626</code> <code>bernoulli(0.5)</code>: whether the faint, lying and getting up sequence plays mirrored</td>
+<td>not decompiled</td>
+<td>unknown</td>
+<td><code>GameRand(2)</code></td>
+<td>inferred (no counterpart found)</td>
+</tr>
+<tr>
+<td><code>CreatureFightSystem.cpp:894</code> <code>bernoulli(0.5)</code>: a taunt, or (his reading of the game) an action past the end of the list that plays nothing, before a fight's Ready stage</td>
+<td>not decompiled</td>
+<td>synchronised (logic)</td>
+<td><code>GameRand(2)</code></td>
+<td>inferred</td>
+</tr>
+<tr>
+<td><code>CreatureFightSystem.cpp:1073</code> → <code>fight::ChooseMove</code>, <code>fight::ComputerEndsBlock</code></td>
+<td>not decompiled</td>
+<td>synchronised (logic)</td>
+<td><code>GameRand(n)</code></td>
+<td>inferred</td>
+</tr>
+<tr>
+<td><code>CreatureFightSystem.cpp:1421-1431</code> an unblocked blow's wound on the skin atlas, drawn in this order: u, then v (<code>:1426</code>, <code>:1427</code>, each <code>uniform_int(16, 239)</code> from the texel distribution of <code>:1424</code>), then the kind in <code>fight::WoundKind</code> (<code>random(2)</code>, and <code>random(3)</code> more only for a wound of blow type 1), then the column (<code>random(8)</code>): 4 or 5 draws per wound, in the order of the designated initialisers</td>
+<td>not decompiled</td>
+<td>synchronised (kept on the creature)</td>
+<td><code>GameRand(n)</code>, the same order and ranges</td>
+<td>inferred</td>
+</tr>
+<tr>
+<td><code>CreatureCaveEffects.cpp:202</code> a cave mist's frame counter, <code>int(Random(0, 16)) &amp; 0xF</code></td>
+<td><code>LH3DMist</code> constructor 0x7F9560</td>
+<td>CRT</td>
+<td><code>game_random::crt::Random(0, 16)</code></td>
+<td><strong>checked</strong></td>
+</tr>
+<tr>
+<td><code>CreatureCaveEffects.cpp:146..314</code> (about 21 draws) the cave's smoke, spray and mist dome</td>
+<td>the creature room is not decompiled (<code>CreatureRoom::DrawAdditional</code> 0x788630 is known only for its frame-anim cell, on the real clock)</td>
+<td>unknown</td>
+<td>a private seeded engine owned by the effect</td>
+<td>no counterpart</td>
+</tr>
+<tr>
+<td><code>CreatureSpawner.cpp:936</code> the debug spawner's facing</td>
+<td>debug tool</td>
+<td>—</td>
+<td>a private engine with a fixed seed</td>
+<td>no counterpart (debug)</td>
+</tr>
+<tr>
+<td><code>CreatureSpawnerAppearance.cpp:163, 171</code> the debug mark place and wound kind</td>
+<td>debug tool</td>
+<td>—</td>
+<td>a private engine with a fixed seed</td>
+<td>no counterpart (debug)</td>
+</tr>
+</tbody>
+</table>
+<p>In every row his engine is a private <code>std::mt19937</code> seeded from <code>std::random_device</code> (his <code>CreatureAnimationSystem.h:34</code>,
+<code>CreatureMindSystem.h:87</code>, <code>CreatureLocomotionSystem.h:55</code>, <code>CreaturePhysiologySystem.h:47</code>, <code>CreatureFightSystem.h:93</code>,
+<code>CreatureSpawner.h:182</code>), except the cave, which uses <code>Locator::rng</code>. None of them survives the port. The state hash
+covers the synchronised, local and CRT seeds, so only a private engine is off the references.</p>
+<h2 id="mimicry-and-the-town-hooks">Mimicry and the town hooks</h2>
+<p>The original reports a player's deed to the creature through <code>GPlayer::ConsiderMakingCreatureMimicPlayer(status,
+action, thing, magic)</code> at 0x4EA900 (bw1-decomp <code>src/Black/Player.h:163</code>; W120 <code>symbols.txt</code> line 4883). It is a method
+of the <strong>player</strong>: it only concerns that player's creature (player +0xA4C). There are <strong>25 direct call sites</strong> in W120
+and no indirect ones (the address never appears in the image as a pointer). Of the 46 deed values
+(<code>DETECTED_PLAYER_ACTION</code>, bw1-decomp <code>include/chlasm/CreatureEnum.h:745-805</code>, the 46 rows of <code>info.creatureMimic</code>), 40
+can be reported and 6 never are. Unless a row says otherwise, <code>magic</code> is 0.</p>
+<p><strong>Evidence.</strong> Every caller was disassembled from the game's <code>runblack.exe</code> with capstone (2026-10-08). Its layout matches
+the W120 <code>symbols.txt</code>, but its SHA-1 is not the one in <code>build.sha1</code>. The Mac build was not available for a cross-check.
+The four sites ported first (deeds 11, 16, 21, 33) were read again from the same exe before they were ported.</p>
+<h3 id="what-openblack-does-with-a-deed">What openblack does with a deed</h3>
+<ul>
+<li><code>creature_watching::Deed</code> (<code>src/Creature/CreatureDeeds.h</code>): the 46 deeds in the table's order, <code>k_DeedCount</code> = 46,
+  pinned to the size of <code>InfoConstants::creatureMimic</code>.</li>
+<li><code>ecs::creature_mimic</code> (<code>src/ECS/CreatureMimic.{h,cpp}</code>): <code>Consider(player, deed, object, magic)</code> publishes
+  <code>events::PlayerDeedForMimic</code> (<code>src/ECS/Events/CreatureMimicEvents.h</code>) with the object's position, read through the
+  const registry (the origin for something with no <code>Transform</code>). Its handler, registered in <code>Locator.cpp</code> with the
+  other game handlers, passes the deed to <code>CreatureMindSystemInterface::PlayerDid(player, deed, point, object)</code> when
+  the mind system is there.</li>
+<li><strong><code>PlayerDid</code> takes the player, and only creatures whose <code>Creature::owner</code> is that player watch</strong> (our change to
+  raffclar's, whose <code>PlayerDid</code> has no player and walks every creature). This is the original's per-player entry point;
+  what the original does with <code>magic</code> is not read (Pending).</li>
+<li>The mind's draw is <code>creature_watching::StartMimicry</code>'s chance (<code>GameFloatRand(1.0f)</code>), drawn synchronously at the
+  site, during the turn, as the original draws inside its entry point; it is drawn only for the player's own creature,
+  once it passes the conditions checked before the draw.</li>
+<li><strong>Dormant on Land 1 and Land 2</strong>: no creature exists there. The sites below that run on those lands (villagers
+  dropped in the sea, water on a player's fields, trees replanted from the hand, and the empathy sites further down)
+  publish an event that walks an empty const view, or has no subscriber; nothing is made, moved or drawn.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Deed</th>
+<th>Site (original)</th>
+<th>openblack</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>11 PLANT_TREE</td>
+<td><code>Tree::EndPhysics</code> 0x74BBB1</td>
+<td><code>HandSystem::Replant</code> (<code>HandTrees.cpp</code>)</td>
+<td>after the spot visual, before the tree goes back in its cell; player PLAYER_ONE, as the alignment line beside it (<a href="trees.html#dropping-and-replanting">trees.md</a>). openblack updates the alignment before the deed, the original after it (Pending in trees.md)</td>
+</tr>
+<tr>
+<td>16 DAMAGE_BY_THROWING_AT</td>
+<td><code>Abode::ReactToPhysicsImpact</code> 0x406286</td>
+<td><code>Buildings::ReactToPhysicsImpact</code> (abodes and storage pits; <code>StoragePit</code> 0x733730 and <code>TownCentre</code> 0x744380 only forward to the Abode's)</td>
+<td>before the test of what hit it; with a player and the <strong>building's own body</strong> marked FROM_HAND, which never happens in practice (<a href="physics.html">physics.md</a>); <code>creature_mimic::ShouldMimicBuildingHit</code></td>
+</tr>
+<tr>
+<td>21 THROW_IN_THE_SEA</td>
+<td><code>Villager::HasSunk</code> 0x750AED</td>
+<td><code>ecs::HasSunk</code>, villager branch, through <code>creature_mimic::ConsiderThrownInTheSea</code></td>
+<td>after <code>IsAvailable</code> (0x750AB5), before the dead test; the player is the last dropper's (<code>VillagerLastInteraction</code>, the hand's)</td>
+</tr>
+<tr>
+<td>33 CAST_WATER_ON_CROPS</td>
+<td><code>Field::ApplyWaterSpell</code> 0x528F64</td>
+<td><code>water::ApplyWaterSpell</code>, field branch</td>
+<td>after the any-object part (0x528F3A), before the fire test and the sowing; only when the spell has a player; magic always 0x16 (<code>MagicType::Water</code>), also for the power-up</td>
+</tr>
+</tbody>
+</table>
+<h3 id="corrections-to-earlier-notes">Corrections to earlier notes</h3>
+<ul>
+<li><strong>Wrong labels in W120 <code>symbols.txt</code>.</strong> 0x4EA670 is labelled <code>DecideOnNewPlan</code> (line 4882) but is the real
+  <code>Creature::MimicPlayer</code>: 3 arguments (<code>ret 0xC</code>), calls <code>GetMimickingAction</code>, called at the end of
+  <code>ConsiderMakingCreatureMimicPlayer</code>. The Mac symbols put <code>DecideOnNewPlan</code> in another TU. 0x4E0DE0 is labelled
+  <code>MimicPlayer</code> (line 4663) but takes 1 argument (<code>ret 4</code>); it is called by <code>ForceActOnObject</code> and <code>fn_005E6BD0</code> and is
+  not a deed site.</li>
+<li><strong><code>Town::UpdateAggressor</code> is not a deed site.</strong> The code at 0x73CAAA..0x73CB29 calls guidance functions
+  (<code>fn_0071C960</code>, <code>fn_0071C9F0</code>), not the mimic (see <a href="#the-emergencys-creature-part">The emergency's creature part</a>).
+  The claims in our <code>MapShield.cpp</code> comment and in <a href="miracles.html">miracles.md</a> were wrong; the wiki is corrected, the
+  code comment is Pending.</li>
+<li><strong><code>Spell::InitWithPos</code> is not a mimic site.</strong> It has no call to the mimic function. It does make the creature
+  empathise (<code>fn_00721730</code>, below), which is what our <code>Spell.cpp</code> comment says; a <code>SeeMiracle</code> call there would be a
+  guess.</li>
+<li><strong>The abode hit tests FROM_HAND on the abode's own body</strong>, not on the hitter's (0x406273 tests the argument's +0x1D8,
+  the abode's entry; the hitter is its +0x20). A first reading took it for the hitter's flags. <strong>The port follows the
+  exe, not the H1 spec</strong> (H1_SPEC §2.3 M1 had <code>hit-&gt;flags</code>, which would fire on every hand-thrown rock hitting a house;
+  the coordinator's decision of 2026-10-08: follow the exe). The test also comes before the <code>PhysicallyDestroysAbodes</code>
+  test, so the first guard is split: the valid test, then the mimic, then the destroy test (pure code between them).</li>
+<li><strong>Fidelity risk at <code>StoragePit</code> 0x733844.</strong> When food is put into another player's pit, the original draws
+  <code>GameRand(2)</code> (bw1-decomp <code>StoragePit.cpp</code> line 688) <strong>before any creature check</strong>, so the draw happens even when the
+  player has no creature. openblack already draws it (<code>StoragePitStore::DoCreatureMimicAfterAddingResource</code>).</li>
+<li><strong>Disciple off-by-one in <code>Villager::Landed</code>.</strong> The deed is disciple type + 21. <code>VILLAGER_DISCIPLE</code> has TRADER = 9,
+  which has no deed of its own, so the last values shift by one: TRADER gives 30 (CHANGE_HOUSE), CHANGE_HOUSE gives 31
+  (WORSHIP), WORSHIP gives 32 (TAKE_OBJECT_HOME), FROM_VORTEX gives 33, NONE gives 21 (THROW_IN_THE_SEA).
+  <a href="villagers.html">villagers.md</a> already states this correctly.</li>
+<li><strong>The animals' sinking tests availability first.</strong> <code>Living::HasSunk</code> 0x5ED370 (the animals') returns 0 when the
+  animal is not available (vt +0x2C, 0x5ED375), then reports deed 21 for a last dropper (0x5ED3A9, with no null test of
+  the player), then sets it dying and deletes it. openblack's animal branch of <code>HasSunk</code> has no availability test
+  (Pending).</li>
+</ul>
+<h3 id="gate-in-considermakingcreaturemimicplayer-0x4ea900">Gate in <code>ConsiderMakingCreatureMimicPlayer</code> (0x4EA900)</h3>
+<p>In order:</p>
+<ol>
+<li>The player has a creature (player +0xA4C) without flag +0x24 &amp; 0x10.</li>
+<li>The creature's player +0x8E0 is not 2, and creature +0x1268 is at least 3.</li>
+<li>Leash and table check: per-action table at 0xCAB220, 0xC0 bytes per action, flag at +4.</li>
+<li>The current reaction's +0x10 is below 0x96.</li>
+<li><code>CanSeePos(thing)</code>, and the distance is within <code>fn_004EFC70(+0x160)</code>.</li>
+<li>The action's priority (table +0) beats the mimic already running.</li>
+<li>Then it calls <code>Creature::MimicPlayer</code> 0x4EA670.</li>
+</ol>
+<p>openblack's <code>StartMimicry</code> checks the phase (at least 3), the learning leash, the reaction priority (below 150; the
+port passes 0), the sight (within 150) and the chance, in that order; steps 1, 2 and 6 are not all modelled.</p>
+<h3 id="spell-hits-fn_004e9df0thing-magic-player">Spell hits: <code>fn_004E9DF0(thing, magic, player)</code></h3>
+<p>Called from <code>Spell::ApplyDefaultSpellEffect</code> at 0x720E8A, only when something is hit, the spell has a player and it is
+not a creature cast; the report itself is at 0x720EB7. Returns 46 for "no deed".</p>
+<ul>
+<li>First: if the spell's desire is not ANGER and the nearest town within 100 m belongs to someone else, the deed is 20.
+  The desire is <code>GMagicEffectInfo[magic]</code> +0x98 (<code>perceivedPlayerDesire[0]</code>; table at 0xCC6630, 0x11C bytes per entry).</li>
+<li>Fireball 1-3: 17.</li>
+<li>Lightning and explosion 4-8: 18. 9 (EXPLOSION_ONE_PU_TWO), 12, 13 and 16-20: nothing.</li>
+<li>Heal 10-11: 42.</li>
+<li>Food 14-15: 1 on a worship site, 3 on a storage pit, otherwise nothing.</li>
+<li>Wood 21: 5 on a storage pit, 8 on a building being built.</li>
+<li>Water 22-23: 33 on a field, 34 on something on fire, and <strong>33 on anything else</strong>.</li>
+<li>Flock 24-25: always 20.</li>
+</ul>
+<h3 id="landing-considercreaturemimickingwhenobjectlands-0x4eaab0">Landing: <code>ConsiderCreatureMimickingWhenObjectLands</code> (0x4EAAB0)</h3>
+<p>Called from <code>Object::InitialisePhysicsFromHand</code> (0x637306) and <code>Object::EndPhysics</code> (0x63764A). Status = the thing's last
+dropper (<code>GetInterfaceStatusWhoLastDroppedMe</code>); player = that status's player.</p>
+<ul>
+<li>Within 80 m of the player's citadel (player +0xA48): 36 if the thing's town (<code>GetTown</code>) belongs to another player,
+  otherwise 32.</li>
+<li>Otherwise: 35 if the thing's town belongs to another player and the nearest town is the dropper's.</li>
+</ul>
+<h3 id="deed-table-complete-for-w120">Deed table (complete for W120)</h3>
+<p>The "openblack" column says what is <strong>ported</strong>; otherwise it gives the site where the report would go, which waits for
+the follow-up hooks commit (Pending).</p>
+<table>
+<thead>
+<tr>
+<th>Deed</th>
+<th>Name</th>
+<th>Reporting function, call address</th>
+<th>Trigger (status / player / thing)</th>
+<th>openblack</th>
+<th>Conf.</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>PUT_FOOD_IN_WORSHIP_SITE</td>
+<td><code>WorshipSite::DoCreatureMimicAfterAddingResource</code> 0x77DF19</td>
+<td>Food added to a worship site; the <code>MultiMapFixed</code> test runs first. Dropper's status and player; thing = the site</td>
+<td><code>ECS/ObjectDelivery.cpp</code>, <code>ECS/PotResource.cpp</code></td>
+<td>High</td>
+</tr>
+<tr>
+<td>1</td>
+<td>CAST_MAGIC_FOOD_IN_WORSHIP_SITE</td>
+<td><code>Spell::ApplyDefaultSpellEffect</code> 0x720EB7 via <code>fn_004E9DF0</code></td>
+<td>Food miracle hits a worship site. Spell's status and player; thing = what was hit; magic = the spell's</td>
+<td><code>Magic/Core/SpellEvent.cpp</code></td>
+<td>High</td>
+</tr>
+<tr>
+<td>2</td>
+<td>PUT_FOOD_IN_STORAGE_PIT</td>
+<td><code>StoragePit::DoCreatureMimicAfterAddingResource</code> 0x733870</td>
+<td>Food put in a pit, status +0x128 is the dropper's own player</td>
+<td>ObjectDelivery / PotResource (the deed is computed, not reported)</td>
+<td>High</td>
+</tr>
+<tr>
+<td>3</td>
+<td>CAST_MAGIC_FOOD_IN_STORAGE_PIT</td>
+<td>0x720EB7 via <code>fn_004E9DF0</code></td>
+<td>Food miracle hits a pit, or a workshop (<code>Workshop</code> overrides <code>IsStoragePit</code>)</td>
+<td>SpellEvent.cpp</td>
+<td>High</td>
+</tr>
+<tr>
+<td>4</td>
+<td>PUT_WOOD_IN_STORAGE_PIT</td>
+<td>StoragePit 0x7338B6</td>
+<td>Non-food resource in a pit, own player (after the building-site test)</td>
+<td>ObjectDelivery / PotResource (computed)</td>
+<td>High</td>
+</tr>
+<tr>
+<td>5</td>
+<td>CAST_MAGIC_WOOD_IN_STORAGE_PIT</td>
+<td>0x720EB7 via <code>fn_004E9DF0</code></td>
+<td>Wood miracle hits a pit or a workshop</td>
+<td>SpellEvent.cpp</td>
+<td>High</td>
+</tr>
+<tr>
+<td>6</td>
+<td>BUILD_HOUSE</td>
+<td><code>Scaffold::EndPhysics</code> 0x6E87A9</td>
+<td>A thrown scaffold stops. Status = physics object +0x24; player = the <strong>scaffold's</strong> owner; thing = the scaffold</td>
+<td><code>ECS/Scaffolds.cpp</code></td>
+<td>High</td>
+</tr>
+<tr>
+<td>7</td>
+<td>PUT_WOOD_IN_BUILDING_SITE</td>
+<td><code>MultiMapFixed::DoCreatureMimicAfterAddingResource</code> 0x52F239</td>
+<td>Wood added to a building being built; returns true and stops the subclass tests</td>
+<td>ObjectDelivery / PotResource (computed for a pit)</td>
+<td>High</td>
+</tr>
+<tr>
+<td>8</td>
+<td>CAST_MAGIC_WOOD_BY_BUILDING_SITE</td>
+<td>0x720EB7 via <code>fn_004E9DF0</code></td>
+<td>Wood miracle hits a building being built (not a pit)</td>
+<td>SpellEvent.cpp</td>
+<td>High</td>
+</tr>
+<tr>
+<td>9</td>
+<td>PUT_WOOD_IN_WORKSHOP</td>
+<td><code>Workshop::DoCreatureMimicAfterAddingResource</code> 0x77A6AB</td>
+<td>Wood added to a workshop (after the building-site test)</td>
+<td>ObjectDelivery / PotResource</td>
+<td>High</td>
+</tr>
+<tr>
+<td>10</td>
+<td>CAST_MAGIC_WOOD_BY_WORKSHOP</td>
+<td><strong>never reported</strong></td>
+<td>Wood cast on a workshop gives 5 instead</td>
+<td>none</td>
+<td>High</td>
+</tr>
+<tr>
+<td>11</td>
+<td>PLANT_TREE</td>
+<td><code>Tree::EndPhysics</code> 0x74BBB1</td>
+<td>Replanted tree, after <code>Forest::AddTree</code>. Player = <code>PhysicsObject::GetPlayer</code>; status = +0x24; thing = the tree</td>
+<td><strong>ported</strong>: <code>HandTrees.cpp</code> <code>Replant</code></td>
+<td>High</td>
+</tr>
+<tr>
+<td>12</td>
+<td>GIVE_TOWN_PROTECTION_WITH_SHIELD</td>
+<td><strong>never reported</strong></td>
+<td>Shield 19-20 gives nothing in <code>fn_004E9DF0</code></td>
+<td>none</td>
+<td>High</td>
+</tr>
+<tr>
+<td>13</td>
+<td>BRING_PEOPLE_TO_WORSHIP</td>
+<td><strong>never reported</strong></td>
+<td>—</td>
+<td>none</td>
+<td>High</td>
+</tr>
+<tr>
+<td>14</td>
+<td>MAKE_ARTEFACT</td>
+<td><code>Town::AddArtifact</code> (Mac name; W120 <code>fn_0073FDA0</code>) 0x73FE49; <code>WorshipSite::AddArtifact</code> 0x77DBA1</td>
+<td>A thrown object suitable as an artifact lands within 50 m and joins a town or worship site (<code>Fixed::EndPhysics</code> 0x52E047 / 0x52E0BE). Player = the thrower; status = last dropper; not for trees</td>
+<td>none: artifacts not ported (<code>ECS/Town/TownProcess.cpp</code>)</td>
+<td>High (Mac name: Med)</td>
+</tr>
+<tr>
+<td>15</td>
+<td>DAMAGE_BY_THROWING</td>
+<td><code>PhysicsObject::GameTurnUpdate</code> 0x6463BE</td>
+<td>After the impact sound and <code>ReactToPhysicsImpact</code>: a body from the hand (+0x1D8 &amp; 4) with a status, a living thing or rock, not a tree. Status = +0x24; thing = the body</td>
+<td><code>ECS/Physics/PhysicsObjects.cpp</code>, after <code>ReactToPhysicsImpact</code></td>
+<td>High</td>
+</tr>
+<tr>
+<td>16</td>
+<td>DAMAGE_BY_THROWING_AT</td>
+<td><code>Abode::ReactToPhysicsImpact</code> 0x406286; <code>GameTurnUpdate</code> 0x64643A</td>
+<td>Abode hit, with the abode's own body from the hand; thing = the abode. Physics: the same body test when it hit something (+0x20); thing = the thrown body</td>
+<td><strong>ported</strong> for the abode (<code>Buildings.cpp</code>); the physics one: PhysicsObjects.cpp</td>
+<td>High</td>
+</tr>
+<tr>
+<td>17</td>
+<td>DAMAGE_WITH_FIRE</td>
+<td>0x720EB7 via <code>fn_004E9DF0</code></td>
+<td>Fireball 1-3 hits something</td>
+<td>SpellEvent.cpp</td>
+<td>High</td>
+</tr>
+<tr>
+<td>18</td>
+<td>DAMAGE_WITH_MAGIC</td>
+<td>same</td>
+<td>Lightning or explosion 4-8 hits something</td>
+<td>SpellEvent.cpp</td>
+<td>High</td>
+</tr>
+<tr>
+<td>19</td>
+<td>IMPRESS_BY_THROWING</td>
+<td><strong>never reported</strong></td>
+<td>—</td>
+<td>none</td>
+<td>High</td>
+</tr>
+<tr>
+<td>20</td>
+<td>IMPRESS_WITH_MAGIC</td>
+<td>same</td>
+<td>The desire/town rule, or any flock 24-25</td>
+<td>SpellEvent.cpp</td>
+<td>High</td>
+</tr>
+<tr>
+<td>21</td>
+<td>THROW_IN_THE_SEA</td>
+<td><code>Villager::HasSunk</code> 0x750AED; <code>Living::HasSunk</code> 0x5ED3A9</td>
+<td>Sinks while available (<code>IsAvailable</code> first). Status = last dropper; thing = itself. <code>Living::HasSunk</code> does not null-check the player. Also NONE disciple + 21</td>
+<td><strong>ported</strong> for the villager (<code>VillagerDrowning.cpp</code>); the animal's: no last dropper is kept for animals</td>
+<td>High</td>
+</tr>
+<tr>
+<td>22-29</td>
+<td>MAKE_DISCIPLE_FARMER … CRAFTSMAN</td>
+<td><code>Villager::Landed</code> 0x760744</td>
+<td>First turn landed (+0x90 == 1, flags +0xE0 &amp; 0x20 and &amp; 0x200). Status = last dropper, needs a player. Deed = disciple (+0xF2) + 21 if below 46</td>
+<td><code>LivingActionSystem.cpp</code> (<code>VillagerLanded</code>); disciples not ported</td>
+<td>High (code)</td>
+</tr>
+<tr>
+<td>30</td>
+<td>MAKE_DISCIPLE_CHANGE_HOUSE</td>
+<td>same</td>
+<td>Reached by TRADER (9) + 21</td>
+<td>same</td>
+<td>Med</td>
+</tr>
+<tr>
+<td>31</td>
+<td>MAKE_DISCIPLE_WORSHIP</td>
+<td>same</td>
+<td>Reached by CHANGE_HOUSE (10) + 21</td>
+<td>same</td>
+<td>Med</td>
+</tr>
+<tr>
+<td>32</td>
+<td>TAKE_OBJECT_HOME</td>
+<td><code>ConsiderCreatureMimickingWhenObjectLands</code> 0x4EAB49 (+ disciple WORSHIP)</td>
+<td>Dropped within 80 m of own citadel; thing's town is not another player's</td>
+<td><code>ECS/Physics/FromHand.cpp</code>, <code>ECS/LivingPhysics.cpp</code></td>
+<td>High</td>
+</tr>
+<tr>
+<td>33</td>
+<td>CAST_WATER_ON_CROPS</td>
+<td><code>Field::ApplyWaterSpell</code> 0x528F64; also 0x720EB7 via <code>fn_004E9DF0</code></td>
+<td>Field: spell has a player; magic always 0x16; thing = the field. <code>fn_004E9DF0</code>: water hits a field <strong>or anything not on fire</strong></td>
+<td><strong>ported</strong> for the field (<code>SpellWater.cpp</code>); the spell hit: SpellEvent.cpp</td>
+<td>High</td>
+</tr>
+<tr>
+<td>34</td>
+<td>CAST_WATER_TO_PUT_OUT_FIRE</td>
+<td>0x720EB7 via <code>fn_004E9DF0</code></td>
+<td>Water hits something on fire (not a field)</td>
+<td>SpellEvent.cpp</td>
+<td>High</td>
+</tr>
+<tr>
+<td>35</td>
+<td>STEAL_OBJECT_AND_PUT_IN_TOWN</td>
+<td>ObjectLands 0x4EAB8E</td>
+<td>Not near own citadel; thing's town is another player's; nearest town is the dropper's</td>
+<td>FromHand.cpp / LivingPhysics.cpp</td>
+<td>High</td>
+</tr>
+<tr>
+<td>36</td>
+<td>STEAL_OBJECT_AND_PUT_BY_CITADEL</td>
+<td>ObjectLands 0x4EAB34</td>
+<td>Within 80 m of own citadel; thing's town is another player's</td>
+<td>same</td>
+<td>High</td>
+</tr>
+<tr>
+<td>37</td>
+<td>BREAK_ROCKS</td>
+<td><code>GInterface</code> tap handler 0x5DA650 (unnamed), call 0x5DA6C8</td>
+<td>Tapping a rock that is valid to tap. Status = interface +0x39C; thing = the rock</td>
+<td><code>ECS/Systems/Implementations/HandTurn.cpp</code></td>
+<td>High</td>
+</tr>
+<tr>
+<td>38</td>
+<td>THROW_FOOTBALL_IN_GOAL</td>
+<td><strong>never reported</strong></td>
+<td>—</td>
+<td>none</td>
+<td>High</td>
+</tr>
+<tr>
+<td>39</td>
+<td>CATCH_FOOTBALL</td>
+<td><strong>never reported</strong></td>
+<td>—</td>
+<td>none</td>
+<td>High</td>
+</tr>
+<tr>
+<td>40</td>
+<td>SACRIFICE</td>
+<td><code>Animal::ApplyThisToObject</code> 0x41B3DF; <code>Villager::ApplyThisToObject</code> 0x752D10</td>
+<td>Animal or villager applied to a <code>WorshipTotem</code>. Status = the applying hand's; thing = the victim; followed by the alignment update</td>
+<td><code>HandApplyToObject.cpp</code> (sacrifice not ported)</td>
+<td>High</td>
+</tr>
+<tr>
+<td>41</td>
+<td>PLAY_WITH_TOY</td>
+<td><code>Object::InitialisePhysicsFromHand</code> 0x637457</td>
+<td>Status, <code>IsToy</code>, and no thrower or the thrower is not a creature (bw1-decomp <code>Object.cpp:603-606</code>)</td>
+<td><code>ECS/Physics/FromHand.cpp</code> (no <code>IsToy</code> yet)</td>
+<td>High</td>
+</tr>
+<tr>
+<td>42</td>
+<td>HEAL</td>
+<td>0x720EB7 via <code>fn_004E9DF0</code></td>
+<td>Heal 10-11 hits something</td>
+<td>SpellEvent.cpp</td>
+<td>High</td>
+</tr>
+<tr>
+<td>43 / 44</td>
+<td>STEAL_FOOD_FROM_FARM / _FROM_STORAGE_PIT</td>
+<td>StoragePit 0x7338B6 (shared tail; deed pushed at 0x733861)</td>
+<td>Food put in a pit and status +0x128 is not the dropper. Deed = 43 + (<code>GameRand(2)</code> != 0)</td>
+<td>ObjectDelivery / PotResource (computed, the draw made)</td>
+<td>High</td>
+</tr>
+<tr>
+<td>45</td>
+<td>STEAL_WOOD_FROM_STORAGE_PIT</td>
+<td>StoragePit 0x73389A</td>
+<td>Non-food in a pit, status +0x128 is not the dropper</td>
+<td>same (computed)</td>
+<td>High</td>
+</tr>
+</tbody>
+</table>
+<h3 id="town-and-villager-hooks">Town and villager hooks</h3>
+<p>All of these are empty stubs in bw1-decomp (<code>TownAttitudeToCreature.cpp</code>, <code>Town.cpp</code>, <code>Player.cpp</code>,
+<code>CreatureDirectControl.cpp</code>, <code>TownDesire.cpp</code>, <code>Spell.cpp</code> are 0-35 lines; <code>TownCreatureInfo.h</code> lists only the
+destructor and <code>GetBaseInfo</code>). Everything below was read with capstone from the shipped <code>runblack.exe</code> using the W120
+symbols. The exe matches W120: 0x4C80F0 has the expected bytes, and the Creature vtable at 0x8CC810 resolves to the
+right symbols.</p>
+<h4 id="town-step-16-townupdateattitudetocreature-0x7437f0-size-0x210">Town step 16: <code>Town::UpdateAttitudeToCreature</code> 0x7437F0 (size 0x210)</h4>
+<p>Not ported (<code>TownProcess.cpp</code>, step 16); the numbers below make it portable (Pending).</p>
+<ul>
+<li><strong>Call site:</strong> <code>Town::Process</code> 0x747380 calls it at 0x74744B, right after <code>ProcessTownEmergency</code> at 0x747444
+  (<a href="villagers.html">villagers.md</a>). Declared at <code>Town.h:353</code>; TU <code>Black/TownAttitudeToCreature.cpp</code> 0x743690-0x743A30
+  (<code>splits.txt:2255</code>).</li>
+<li><strong>Data:</strong> Town +0x970 is a singly linked list of <code>{next, TownCreatureInfo*}</code> nodes; Town +0x974 is its count. Each
+  record: +0x10 the Creature, +0x14 the attitude, +0x18 the turn the attitude was set, +0x1C the turn it was reset.</li>
+<li><strong>Creation:</strong> <code>Town::CreateCreatureInfo</code> 0x743720 on first contact (attitude 0, both stamps = turn), called from
+  <code>Villager::SetupReactToCreature</code> at 0x767673.</li>
+<li><strong>Reader:</strong> <code>Town::GetTownAttitudeToCreature(Creature*)</code> 0x7436F0 returns +0x14, or 0 if there is no record. Read by
+  the villager reactions (0x76767B, 0x767779, 0x76849E), <code>WatchFightAnimation</code>, <code>Living::NumGameTurns…ToCreature</code>
+  (0x5F1BBA, 0x5F1CCE) and <code>Creature::GetImpressiveValue</code> (0x47B244).</li>
+<li><strong>Per record, each turn:</strong>
+  1. If the creature's GameThing flags byte +0xA has bit 0 set, every node for it is unlinked and freed and the info is
+     deleted (vtable +4, argument 1).
+  2. Gate: <code>GetNearestTown(Town+0x14, 10.0)</code> 0x6020E0 must return this town (literal, and looks always true since it is
+     the town's own position) and <code>CreaturePlan::IsValid</code> (mind +0xF48) 0x4F12E0 must be true.
+  3. The new attitude comes from a member function in the creature-action info table: index = Creature +0x1120,
+     entries 0x50 bytes, function at 0x9D16B8 + idx·0x50, called on <code>[[mind+0xF58]+0x30]</code>. The table is filled at run
+     time by <code>crt_xc_fn_CreatureAction_00491B90</code>. Entries seen: 0x768540 None → 1; 0x768550 Fear → 3 (15 actions, e.g.
+     idx 15, 18, 45-47, 95-105, 185, 186, 197); 0x768560 Respect → 4; <code>GameThingWithPos::…Eating</code> → 1;
+     <code>Living::AttitudeToCreatureEating</code> 0x768580 → <code>vt+0x2C8(0) ? 3 : 1</code>.
+  4. Fear (3) is forced when mind +0xF50 == 4, <code>[mind+0xF58]</code> vt+0x2C returns 6, and
+     <code>[Creature+0x160]+0x28 == [mind+0xF58]+0x30</code>.
+  5. A result of 1 does nothing. If the attitude changed, or it is 3, it is stored with +0x18 = turn. Only when it
+     changed is <code>fn_004C9FE0(creature, 0x21 = CREATURE_HELP_TYPE_SHOW_TOWN_ATTITUDE_TO_CREATURE, att, 0, 0, 0)</code> called.
+  6. <strong>Timeout:</strong> while attitude != 1, <code>secs = (turn − info+0x18) / (1000 / [0xD01A38])</code> (unsigned integer). Durations
+     {0: 15.0, 2: 10.0, 3: 30.0, 4: 10.0}, index ≥ 5 → 0. When <code>secs &gt; dur</code>, attitude becomes 1 and +0x1C = turn.</li>
+<li><strong>Attitude values:</strong> 1 = none, 3 = fear, 4 = respect; 0 and 2 unnamed. Five help texts
+  (<code>HELP_TEXT_TOWN_ATTITUDE_TO_CREATURE_01..05</code>, 1083-1087) fit values 0-4. No writer of 2 was found.</li>
+</ul>
+<h4 id="the-emergencys-creature-part">The emergency's creature part</h4>
+<ul>
+<li><code>Town::ProcessTownEmergency</code> 0x7477A0, <code>CallAllVillagersToTownEmergency</code> 0x747890 and <code>SetInStateOfEmergency</code>
+  0x7479A0 have <strong>no creature code</strong> (no +0xA4C read, no call that reaches a creature).</li>
+<li>The "creature part" our <code>TownEmergency.cpp</code> refers to is in <strong><code>Town::UpdateAggressor</code> 0x73C9B0, at
+  0x73CAA3-0x73CB2D</strong> (<a href="buildings.html">buildings.md</a>; <code>Town.h:247</code>), after the slot update <code>fn_0073E0F0</code>:</li>
+<li><code>obj = EffectValues+0x28</code>. If it exists and <code>IsCreature()</code> (vt+0x34): <code>c = CastCreature()</code> (vt+0xA4),
+    <code>p = c-&gt;GetPlayer()</code>. If <code>p</code> exists, <code>c</code> is not the town player's creature (+0xA4C) and
+    <code>p-&gt;IsMemberOfThisPlayer(MyInterfaceStatus)</code>, it calls <code>fn_0071C960(guidance, c, effect)</code>: if <code>[0xC221CC]</code> is set
+    and <code>HelpSpritesPlayNow(0xB)</code>, then <code>HelpSpiritSay(GetRandomSample(0xD99D08), 0xB)</code>.</li>
+<li>Otherwise it calls <code>fn_0071C9F0(guidance, town, effect)</code> (sample group 0xD) when the caused player is local.</li>
+<li><strong>Help-spirit audio only, no game state.</strong> It changes nothing in the verification checks.</li>
+</ul>
+<h4 id="the-satisfy-activity-and-getvillageractivitydesire">The satisfy activity and <code>GetVillagerActivityDesire</code></h4>
+<ul>
+<li><code>Town::SetVillagerActivity</code> 0x73FF10 (<code>Town.h:169</code>): best = the football's vt+0x4C (Town +0xEA4); then tries the
+  town player's creature (+0xA4C) and the artifacts (+0x994, next +0x20), each with a strict <code>&gt;</code>. If best == 0 it
+  returns 0, otherwise it calls the winner's vt+0x50 (matches <a href="villagers.html">villagers.md</a>).</li>
+<li>Creature vtable <code>??_7Creature@@6B@</code> 0x8CC810: +0x4C = <strong>0x401870 <code>GameThing::GetVillagerActivityDesire</code></strong>
+  (<code>fld 0.0; ret 4</code>), +0x50 = <code>GameThing::SetVillagerActivity</code> 0x401880, +0x54 = the GameThing default.</li>
+<li>None of the four 0xB44-sized vtables (Creature, Living, SpecialVillager, Villager) overrides +0x4C, and only
+  Creature overrides <code>CastCreature</code>, so there is no subclass. The only overrides are Football 0x532220, TownArtifact
+  0x4262D0 and Town 0x73FF00. <code>Creature.h</code> declares none.</li>
+<li><strong>The creature's part is always 0 and never wins.</strong> openblack's <code>CheckSatisfyRelaxation</code> already gives 0; only the
+  comment in <code>VillagerSatisfy.cpp</code> needs changing (Pending).</li>
+</ul>
+<h4 id="gplayermakecreatureempathisewithplayertowndesire-0x4c80f0"><code>GPlayer::MakeCreatureEmpathiseWithPlayerTownDesire</code> 0x4C80F0</h4>
+<p>0x3A bytes; <code>Player.h:183-187</code>; TU <code>CreatureDirectControl.cpp</code> 0x4C5F80-0x4C8440.</p>
+<ul>
+<li><code>c = player+0xA4C</code>. If <code>c</code> exists and <code>Creature::CanSeePos(pos)</code> 0x477440, it calls
+  <code>fn_004C8050(&amp;mind[c+0x164]+0x18C80, desire, weight)</code>, which checks <code>-1 &lt; d &lt; 17</code> and sets
+  <code>a[0xA0/4 + d] = clamp(a[...] + weight, 0, 1)</code>. The sister <code>MakeCreatureEmpathiseWithPlayer</code> 0x4C80B0 does the same
+  through <code>fn_004C8000</code> on <code>a[0..39]</code> (CREATURE_DESIRES).</li>
+<li><strong>The object</strong> at mind +0x18C80 is a <code>CreaturePerceivedPlayerDesires</code>, at +0x40 inside <code>CreatureAttitudeToPlayer</code>
+  (mind +0x18C40; ctor <code>fn_004C8130</code>, called from the <code>CreatureMental</code> ctor at 0x4D23BE;
+  <code>CreatureAttitudeToPlayer.h:21-28</code>). Layout: +0x00 float[40]; +0xA0 float[17]; +0xE4 57 histories of 0x80 bytes
+  (30-float ring, index at +0x78, count at +0x7C). The header's 0x20-byte history struct is a placeholder: the 0x80
+  stride totals 0x1D64 = 0x1DA4 − 0x40.</li>
+<li><strong>Each turn:</strong> <code>Creature::ProcessState</code> → <code>fn_00477A00</code> (0x477A88) → <code>fn_004C7EB0</code>: <code>fn_004C7F20</code> multiplies all 57
+  values by <strong>0.9995</strong> (float at 0x8CF3D4); <code>fn_004C7F60</code> pushes them into the rings only on even turns (skips when
+  <code>g_game+0x205A40 &amp; 1</code>).</li>
+<li><strong>Readers:</strong> the town-desire array (+0xA0) is only saved and loaded (<code>fn_004E79D0</code> at 0x4E7DA9 from <code>SaveMind</code>;
+  <code>fn_004E84A0</code> at 0x4E8914, version ≥ 0x10). No gameplay reader of it or its histories was found. The creature-desire
+  array is read by <code>CreaturePerceivedPlayerDesires::GetDominantDesire</code> 0x4C7ED0 (from
+  <code>CreatureRoom::MakePersonalityScrollText</code> 0x788F23 and <code>TempleRoom::AddText</code> 0x79B651), which returns the last
+  activated desire with value &gt; 0 and zeroes those values. Feedback also adds to it
+  (<code>UpdateAttitudeToPlayerFromFeedback</code> 0x4E10D5, index 1 or 2).</li>
+<li><strong>The callers of 0x4C80F0</strong>, and what openblack does at each:</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Caller</th>
+<th>Call</th>
+<th>Desire, weight</th>
+<th>openblack</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CheckInteractWithWorshipSite</code></td>
+<td>0x7572FD, 0x75738B</td>
+<td>9, 0.5; 7, 0.5</td>
+<td>state 171 not ported; not in bw1-decomp's source</td>
+</tr>
+<tr>
+<td><code>CheckInteractWithAbode</code></td>
+<td>0x7574DF</td>
+<td>5 FOR_ABODES, 0.5 (no player test)</td>
+<td>state 172 not ported (disciples)</td>
+</tr>
+<tr>
+<td><code>CheckInteractWithField</code></td>
+<td>0x7575F6</td>
+<td>0 FOR_FOOD, 0.5, with a player</td>
+<td><strong>published</strong> (<code>VillagerInteract.cpp</code>)</td>
+</tr>
+<tr>
+<td><code>CheckInteractWithFishFarm</code></td>
+<td>0x757674</td>
+<td>0 FOR_FOOD, 0.5, with a player</td>
+<td><strong>published</strong> (<code>VillagerInteract.cpp</code>)</td>
+</tr>
+<tr>
+<td><code>CheckInteractWithTree</code></td>
+<td>0x7576E8</td>
+<td>1 FOR_WOOD, 0.5, with a player</td>
+<td>state 175 not ported</td>
+</tr>
+<tr>
+<td><code>TakeWoodFromTree</code></td>
+<td>0x75FBF1</td>
+<td>1 FOR_WOOD, 0.5, with a player</td>
+<td><strong>published</strong> (<code>VillagerForester.cpp</code>)</td>
+</tr>
+<tr>
+<td><code>fn_00721730</code> from <code>Spell::InitWithPos</code></td>
+<td>0x71FE5D</td>
+<td><code>GMagicEffectInfo</code> +0xA0, 1.0, plus +0x98 / +0x9C into 0x4C80B0</td>
+<td>not ported (<code>Spell.cpp</code> comment)</td>
+</tr>
+</tbody>
+</table>
+<p>Indexes 0..16 are <code>TOWN_DESIRE_INFO_*</code> (<code>include/chlasm/Enum.h:1481-1500</code>, our <code>TownDesireInfo</code>). bw1-decomp's source
+  shows only five calls (<code>VillagerCheck.cpp:103,136,152,166</code>, <code>VillagerForester.cpp:164</code>); the two worship-site calls
+  and the spell call are from the exe.
+- <strong>openblack:</strong> each published site calls <code>creature_mimic::EmpathiseWithTownDesire(GetPlayerOf(villager), desire,
+  0.5, villager)</code> on its success path only. It publishes <code>events::CreatureEmpathyWithTownDesire</code> (player, desire,
+  weight, the villager's position) when there is a player. <strong>It has no subscriber yet</strong>: the mind's side (0x4C80F0 and
+  its per-turn decay) waits to be ported. A port can be exact (clamped add, ×0.9995 decay per creature turn, even-turn
+  history); with no gameplay reader found it would only affect the save file and debug state. These sites run on Land 1
+  (foresters taking wood, farmers and fishermen at work) and change nothing.</p>
+<h2 id="leash-natives">Leash natives</h2>
+<p><strong>Evidence.</strong> The game folder's exe is W120: the native table's "NONE" entry is at 0x00C0DB98, as
+<code>bw1-decomp/src/Black/ScriptFunctions.cpp:29-30</code> says. bw1-decomp has the table entries (<code>ScriptFunctions.cpp:232-401</code>)
+and the symbols (<code>config/BW1W120/symbols.txt:15400-15423, 15711</code>) but no bodies; the bodies below were disassembled
+from <code>runblack.exe</code> with capstone. Mac (BW1M110) names are given in brackets where they differ. All nine are ported
+(<code>Creature/LeashScript</code>, called from <code>CHLApi.cpp</code>); see <a href="#what-openblack-does-with-the-leash-natives">What openblack does with them</a>.</p>
+<h3 id="common-facts">Common facts</h3>
+<ul>
+<li><code>GScript::ScriptErrorMessage</code> (0x6F62B0) is a bare <code>ret</code>: every script error message is a no-op in the shipped game.</li>
+<li>VM push types: 1 = Int, 6 = Boolean (our <code>LHVMTypes.h</code> <code>DataType</code>). <code>POP</code> returns the raw 32-bit value; only
+  TOGGLE_LEASH converts it (<code>fld</code> + <code>__ftol</code>).</li>
+<li>"Is a creature" is vtable +0x34; "its player" is vtable +0x1C (<code>GetPlayer</code>).</li>
+<li>The leash state is a <code>GLeashStatus</code> at <code>GPlayer::GetLeaderInterfaceStatus()</code> +0x12C. Fields: +0x14 leash on;
+  +0x18 works; +0x1C type in use (a LEASH_TYPE); +0x24 object it is tied to; +0x34 turn it was tied; +0x38 interface
+  status.</li>
+<li>There are 9 leash entries, not 8 (TOGGLE_LEASH is the ninth). Ids, names and argument/return counts match our
+  <code>CHLApi.cpp</code> bindings.</li>
+</ul>
+<h3 id="script-enum-and-the-temples-selection">Script enum and the temple's selection</h3>
+<p><code>bw1-decomp/include/chlasm/Enum.h:556-565</code> (Lionhead header, "Jonty Barnes 2001-11-15", via Daniels118/chlasm):
+<code>LEASH_TYPE_NONE = -1</code>, <code>FIRST = 0</code>, <code>EVIL = 1</code>, <code>ROPE = 2</code>, <code>GOOD = 3</code>. The original <code>LAST = 4</code> is commented out; the
+decomp changed it to 3. The game data ships no CHL <code>Enum.h</code>.</p>
+<p>The temple stores the type as a 0-based index in <code>TempleLeash::field_0x0</code> (<code>CitadelHeart.h:77-80</code>), -1 for none:</p>
+<ul>
+<li>Setter <code>fn_004648E0</code> (= Mac <code>CitadelHeart::SetLeash(LEASH_TYPE)</code>): 1 → 0, 2 → 1, 3 → 2; anything else leaves it
+  unchanged.</li>
+<li>Getter <code>fn_00464920</code>: returns -1 when <code>heart-&gt;leashes</code> (+0xE4) is null or the index is -1; otherwise 0 → 1, 1 → 2,
+  anything else → 3.</li>
+<li><code>LeashObj::InterfaceTap</code> (0x464490) sets the index to -1 when the post already selected is tapped.</li>
+</ul>
+<h3 id="per-native">Per native</h3>
+<table>
+<thead>
+<tr>
+<th>Id</th>
+<th>Name</th>
+<th>W120 function</th>
+<th>Pops (first pop = last pushed)</th>
+<th>Pushes</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>185</td>
+<td>ATTACH_OBJECT_LEASH_TO_OBJECT</td>
+<td><code>AttachObjectLeashToObject</code> 0x6F4480 [Mac <code>AttachObjectLeachToObject</code>]</td>
+<td>A, then B</td>
+<td>—</td>
+<td>Swaps A and B if only one is a creature, so either order works. Needs a creature with a player, then <code>fn_005E6BD0(creature, object)</code> on the leader's <code>GLeashStatus</code>: plays the sound, +0x24 = object, +0x34 = game turn, <code>SetOn(creature, 1)</code>, <code>UpdateLeashLengthWhenAttachedToObject</code>, then 0x4E0DE0 (labelled <code>MimicPlayer</code>), and the TownDesireFlags / TownCentre desire.</td>
+</tr>
+<tr>
+<td>186</td>
+<td>ATTACH_OBJECT_LEASH_TO_HAND</td>
+<td><code>AttachObjectLeashToHand</code> 0x6F4580</td>
+<td>creature</td>
+<td>—</td>
+<td>Needs a creature with a player, then <code>fn_005E6EA0(creature)</code>: +0x24 = 0, <code>SetOn(creature, 1)</code>, a sound for the local player. <strong>No branches</strong>: always unties and turns the leash on (differs from raffclar's tied/Toggle logic).</td>
+</tr>
+<tr>
+<td>187</td>
+<td>DETACH_OBJECT_LEASH</td>
+<td><code>DetachObjectLeash</code> 0x6F4610</td>
+<td>creature</td>
+<td>—</td>
+<td>Needs a creature with a player, then <code>GLeashStatus::SetOn(creature, 0)</code> (0x5E6F70) on the leader status. Off path: clears +0x14 and +0x24, unsuppresses desires unless +0x1C == 2, clears some creature fields, <code>StopImmersion(7)</code>.</td>
+</tr>
+<tr>
+<td>222</td>
+<td>IS_LEASHED</td>
+<td><code>IsLeashed</code> 0x6F4980</td>
+<td>object</td>
+<td>Bool</td>
+<td>false if missing, not a creature, or no player; otherwise <code>Creature::GetInterfaceStatusLeashOn(c) != 0</code> (0x4CF060): some interface status of the player has +0x14 set.</td>
+</tr>
+<tr>
+<td>249</td>
+<td>SET_LEASH_WORKS</td>
+<td><code>SetLeashWorks</code> 0x6F4E50</td>
+<td>creature, then value</td>
+<td>—</td>
+<td><code>GLeashStatus+0x18 = raw popped bits</code> (float bits, unconverted) when it is a creature with a player.</td>
+</tr>
+<tr>
+<td>269</td>
+<td>IS_LEASHED_TO_OBJECT</td>
+<td><code>IsLeashedToObject</code> 0x6F4FC0 [Mac <code>ObjectLeashedToObject</code>]</td>
+<td>A, then B</td>
+<td>Bool</td>
+<td>Same swap as 185. Pushes <code>GLeashStatus+0x24 == other</code>; does not test +0x14. Any failure pushes false.</td>
+</tr>
+<tr>
+<td>275</td>
+<td>GET_OBJECT_LEASH_TYPE</td>
+<td><code>GetObjectLeashType</code> 0x6F5460</td>
+<td>object</td>
+<td><strong>Int</strong></td>
+<td>See below.</td>
+</tr>
+<tr>
+<td>305</td>
+<td>SET_DRAW_LEASH</td>
+<td><code>SetDrawLeash</code> 0x708C80</td>
+<td>value</td>
+<td>—</td>
+<td><code>GGame+0x250090</code> (GScript) <code>+0x78 = raw popped bits</code> (written at 0x708C9D); matches <a href="intro.html">intro.md</a>. Does not touch the leash state.</td>
+</tr>
+<tr>
+<td>354</td>
+<td>TOGGLE_LEASH</td>
+<td><code>ToggleLeash</code> 0x6F4430 [Mac <code>TogglePlayerLeash</code>]</td>
+<td>player (float, <code>ftol</code>)</td>
+<td>—</td>
+<td>See below.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>TOGGLE_LEASH.</strong> <code>ConvertScriptPlayerToGamePlayer</code> (0x6EB9A0) → <code>GetPlayer</code> → <code>GetLeaderInterfaceStatus</code> →
+<code>GetInterface</code> → <code>fn_005D06E0</code>, which takes <code>player-&gt;creature</code> (+0xA4C), needs creature vt+0x2C true and Creature
++0x1110 != 0, needs the leash off or on in this same interface status (+0x39C), then calls <code>fn_005E7140</code>: if tied
+(+0x24) it unties (+0x24 = 0, town desire reset, <code>StartImmersion(7, 0x80000000)</code>), otherwise
+<code>SetOn(creature, !+0x14)</code>.</p>
+<h3 id="get_object_leash_type-0x6f5460-0x6f54f0">GET_OBJECT_LEASH_TYPE (0x6F5460-0x6F54F0)</h3>
+<p>It does <strong>not</strong> report the creature's own leash. It does <code>dynamic_cast&lt;Creature&gt;</code> → <code>GetPlayer()</code> → <code>player-&gt;citadel</code>
+(+0xA48, <code>Player.h:95</code>) → <code>citadel-&gt;heart</code> (+0x30) → <code>fn_00464920(heart)</code>. It reports the <strong>type selected at that
+player's temple</strong>, pushed as Int:</p>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Pushes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Object not found, not a creature, no player, no citadel, or no heart</td>
+<td><code>0</code></td>
+</tr>
+<tr>
+<td>Heart exists but its TempleLeash is not created, or nothing is selected</td>
+<td><strong><code>-1</code> (<code>LEASH_TYPE_NONE</code>)</strong></td>
+</tr>
+<tr>
+<td>Selected index 0 / 1 / 2 or more</td>
+<td><code>1</code> EVIL / <code>2</code> ROPE / <code>3</code> GOOD</td>
+</tr>
+</tbody>
+</table>
+<p><strong>No leash selected pushes -1.</strong> 0 only means the lookup failed. raffclar's "None → 0" is right only for those failure
+cases. The port is to push what the original pushes.</p>
+<h3 id="what-openblack-does-with-the-leash-natives">What openblack does with the leash natives</h3>
+<p><code>creature_leash::script</code> takes the leash service and the things named, so it is tested with a fake
+(<code>test/creature/test_leash_script.cpp</code>); the natives in <code>CHLApi.cpp</code> pop as the table above and push the defaults when
+there is no leash service. Both are dormant on Land 1 and Land 2: no leash opcode runs there with the start-up answer 3
+(the <code>SET_DRAW_LEASH</code> calls are in <code>CreatureDevLeashIntro</code> and <code>AttachToHouse</code>, which are skipped), and there is no
+creature to lead.</p>
+<ul>
+<li><strong>A thing</strong>: an id of 0 or an entity no longer valid is none, silently (the original's messages are empty). "A
+  creature" is an entity with the <code>Creature</code> component, looked up through the const registry, so no storage is made.
+  The "with a player" part is not checked: the leash service refuses a creature its player can't lead.</li>
+<li><strong>185 / 269</strong>: the second pop is the creature and the first the thing; when only the first is a creature, they swap.
+  185 ties the leash (<code>TieTo</code>, which puts the picked leash on first if none is worn); 269 compares the tie.</li>
+<li><strong>186</strong>: a tied leash is untied back to the hand; a leash not worn is put on (<code>Toggle</code>); one already held stays. The
+  original always unties and turns the leash on. Both end in the same state only when the leash service lets the
+  leash on: <code>Toggle</code> (and <code>TieTo</code> for 185, through <code>PutOn</code>) goes through <code>WhyNot</code>, and refuses, logging it and keeping
+  it as the last refusal, a creature that is not the one its player leads or that does not know the leash. The script's
+  command then does nothing here (Pending).</li>
+<li><strong>187</strong>: <code>TakeOff</code>. <strong>222</strong>: <code>IsLeashed</code>. <strong>249</strong>: <code>SetWorks</code>, set when the popped bits are not zero.</li>
+<li><strong>275</strong>: the leash picked for the creature (<code>Picked</code>: the one it wears, or else the one to put on next, worn or not)
+  as the scripts number it, <code>LEASH_TYPE_NONE</code> (-1) for a creature with no leashes, and 0 when the thing is missing or
+  not a creature. The original reads the leash picked at the player's temple, worn or not; the port keeps the pick on
+  the creature (<code>CreatureLeash::selected</code>, set by the hotkeys and by putting a leash on) until the temple leash comes
+  (Pending).</li>
+<li><strong>305</strong>: <code>script_control::CameraControl::drawLeash</code> = the popped value as it is; the leash draw reads it.</li>
+<li><strong>354</strong>: the script player (a float, truncated) through <code>magic::ScriptPlayerToGamePlayer</code>, then the leash key for
+  that player (<code>PressKey</code>, which also refuses a player with no creature to lead). In the port a script player out of
+  0..8 does nothing: that range is <code>ScriptPlayerToGamePlayer</code>'s own, and the original's conversion's range checks are
+  not traced (Pending). The original reaches its own creature checks by another path: the leader's interface status,
+  then <code>fn_005D06E0</code>'s tests (creature vtable +0x2C, Creature +0x1110, the leash state of that same interface status);
+  the port's are <code>PressKey</code>'s (<code>PlayersCreature</code>, then <code>WhyNot</code> in <code>Carry</code>). Which creatures each lets through is not
+  compared (Pending).</li>
+</ul>
+<h3 id="the-leash-keys">The leash keys</h3>
+<p>L, V and B are read once a frame, after the temple's room keys: the first of the three that went down this frame
+(down and changed, as the room keys are read) goes to <code>PressKey</code> for the local player, only when the player has a
+creature they can lead. They are not read while the debug windows have the keyboard (the actions are not framed then)
+nor while the world is paused in the citadel. The original's key path is not read (Pending); since at most one turn
+runs a frame, a key read at frame time changes the leash before the next turn, as a packet sent for it would.</p>
+<h2 id="the-players-creature">The player's creature</h2>
+<p>The creature a profile brings to a land, read in <code>runblack.exe</code> W120 (bw1-decomp has the headers only).</p>
+<ul>
+<li><strong><code>LOAD_MY_CREATURE</code></strong> (native 250, <code>GScript::LoadMyCreature</code> 0x6FD260) pops z, y and x, drops y, and calls
+  <code>GGame::LoadMyCreatureIntoNewMap(cell x, cell z)</code> 0x552AC0 (the Mac's name; W120 <code>fn_00552AC0</code>) with the high words of
+  <code>ftol(metres × 6553.6)</code>. It is that function's only caller; the lands' scripts reach it with their own
+  <code>LOAD_MY_CREATURE</code> (Land 1 ip 68025, Land 2 ip 84316, Land 3 ip 113848, VortexEntry ip 128).
+  1. If the local player has a creature (<code>GPlayer</code> +0xA4C), nothing.
+  2. The file is the local <code>LHPlayer</code>'s +4 string (interface +0x1BC), or "Dummy": the profile's registry value
+     <code>HKCU\Software\Lionhead Studios Ltd\Black &amp; White\LHMultiplayer\Profiles\&lt;profile&gt;\file</code>, read with
+     <code>LHNetGetCurrentProfileString("file")</code> (0x66BF5B). It is a <code>C&lt;8 hex&gt;.erc</code> name the profile keeps; it is not a CRC32
+     of the profile's name.
+  3. <code>Creature::Load(name, MapCoords(cells), player, NULL)</code> 0x4E7FF0 → <code>LoadFullyQualified(".\scripts\CreatureMind\" +
+     name)</code> 0x4E8040: the version into 0xCAB174, then the species row (&lt; 17), <code>Creature::CreateCreature(coords,
+     &amp;CreatureInfo[row] (0xC60460 + row × 0x394), player)</code> 0x474B50, +0x1058 = (start data and not 1), the path to
+     +0x1228, <code>CheckValidation</code> from version 0x15, then the mind (<code>fn_004E84A0</code>, which builds the body through
+     <code>Update3DCreatureFromAttributes</code> at 0x4E8A05). A missing or empty file or a bad row: no creature, no message.
+  4. <code>SetFizz(1.0, 0, false)</code> then <code>SetFizz(0.0, 3.0, false)</code> (0x47AB90): sound tag sfx 0x27 at the creature and the
+     fizz at 1, then a fade to 0 at -1/3 per second (+0x12AC lock, +0x12B0 current, +0x12B4 target, +0x12B8 rate). No
+     <code>rand()</code>.
+  <code>MapCoords(cell, cell)</code> 0x602FC0 puts the point in the middle of the cell (low words 0x8000), altitude 0.</li>
+<li><strong><code>CURRENT_PROFILE_HAS_CREATURE</code></strong> (463, <code>GGame::CurrentProfileHasACreature</code> 0x555A30): whether
+  <code>.\Scripts\CreatureMind\&lt;that file&gt;</code> exists.</li>
+<li><strong><code>CreateCreature</code></strong> 0x474B50 returns NULL when the player already has a creature; otherwise <code>Creature::Create</code>
+  0x474A20 (memory zeroed by <code>Base::new</code> 0x4366F0, so the development phase +0x1268 starts at 0). The home +0x1200 is
+  the player's +0xA48+0x30 object's position (the citadel's), else the creation point; the creation point is also copied
+  to +0x1214. The size is the species' +0x1FC. Its draws are all on the synchronised stream: the Living constructor's
+  <code>GameRand</code> (0x5EBF89), strength and fat ± 0.1 (<code>GameFloatRand(0.2)</code> at 0x4EF3FA and 0x4EF426), each desire's
+  initial value and increase time (0x4DC14E, 0x4DC346), two per desire source (0x4DE1B2, 0x4DE21B), about 30 in
+  <code>fn_004E2E70</code> (0x4E2E93..0x4E33F6), one in <code>fn_004F1FF0</code> (0x4F201F) and, on condition, <code>SpreadReaction</code> (0x6E3F18);
+  a range of 0 draws nothing. Loading from a file adds the mind's sources (0x4E870D).</li>
+<li><strong><code>Physique&lt;file&gt;</code></strong> in the same folder is written by <code>Creature::Save3D</code> 0x4E70C0 (every 600 ticks for the local
+  creature when interface +0x1FC and +0x1058 are 0, on <code>ToBeDeleted</code> and on <code>ClearMap</code>) and read only by the front
+  end's tattoo editor (0x4E7310, from 0x54284A); never by <code>LOAD_MY_CREATURE</code>. Layout: int species; floats size
+  (LH3D +0x90), strength (physical +0xC), fat (physical +0x14) and alignment; then two counted dword lists (skin marks,
+  LH3D +0x5184). <code>PhysiqueC4ba71b36.erc</code>: Mandrill, size 2.0, strength 0.84212, fat 0.4, alignment 0.118912, 0 and 3
+  entries.</li>
+<li><strong><code>Profiles\&lt;name&gt;\creature.lhp</code></strong> is written by <code>fn_0047B440</code> with the same 600-tick save: the creature's values
+  into <code>.\scripts\creature_html.tmpl</code> (<code>%s\html\%s.html</code>), then <code>GenerateCreatureHTML</code> <code>fn_00578330</code> writes an
+  "LHNILD" archive with a "CREATURE" section and up to five <code>creatureshot_%d.jpg</code>. Nothing reads it back. Its header
+  (<code>fn_005776E0</code>) is the game's only <code>srand(time)</code> (0x577721), followed by a <code>LocalRand(0x8000)</code> (0x577731).</li>
+<li><code>GGame::GetNextPlayerWithNoCreature</code> 0x550A30 has no callers (it also ignores its argument).</li>
+<li><strong>The natives Land 1 reaches on it:</strong></li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Native</th>
+<th>Original</th>
+<th>Pops, in order</th>
+<th>Does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>197 <code>CALL_PLAYER_CREATURE</code></td>
+<td>0x6F3D40</td>
+<td>player</td>
+<td>the game player's creature (+0xA4C) through <code>AddScriptGameThing(c, 0)</code>; none: "No creature of player %d" and 0</td>
+</tr>
+<tr>
+<td>223 <code>SET_CREATURE_HOME</code></td>
+<td>0x6F4A20</td>
+<td>z, y, x, the object</td>
+<td>a creature: +0x1200 / +0x1204 = <code>ftol(x × 6553.6)</code> / <code>ftol(z × 6553.6)</code>, +0x1208 = 0 (y dropped)</td>
+</tr>
+<tr>
+<td>208 <code>SET_CREATURE_DEV_STAGE</code></td>
+<td>0x6F4820</td>
+<td>the stage (an int), the object</td>
+<td>a creature: <code>MoveToDevelopmentPhase(stage, 0)</code></td>
+</tr>
+<tr>
+<td>205 <code>DEV_FUNCTION</code></td>
+<td>0x6FC130</td>
+<td>the function (an int)</td>
+<td>the table below</td>
+</tr>
+<tr>
+<td>282 <code>CREATURE_IN_DEV_SCRIPT</code></td>
+<td>0x6F5680</td>
+<td>the object, the value</td>
+<td>a creature: +0x10C0 = the value as popped</td>
+</tr>
+</tbody>
+</table>
+<p>The object natives print "Thing not found!" / "Thing not creature!" and do nothing for anything else.
+- <strong><code>DEV_FUNCTION</code></strong> (<code>SCRIPT_DEV_FUNCTION</code>, bw1-decomp <code>include/chlasm/ScriptEnums.h</code>; jump table 0x6FC4E4), on the
+  local player's creature:</p>
+<table>
+<thead>
+<tr>
+<th>n</th>
+<th>Name</th>
+<th>Does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>START_DEVELOPMENT_SCRIPTS</td>
+<td><code>MoveToDevelopmentPhase(0, 0)</code>, the home copied to +0x11A8, +0x11B4 = 12.0 (no null check)</td>
+</tr>
+<tr>
+<td>2</td>
+<td>ROPE_LEASH_ENABLED</td>
+<td>+0x1110 = 1</td>
+</tr>
+<tr>
+<td>3</td>
+<td>OTHER_LEASHES_ENABLED</td>
+<td>+0x1114 = 1, +0x110C = 1</td>
+</tr>
+<tr>
+<td>4</td>
+<td>LOAD_MY_CREATURE</td>
+<td><code>SetPacket(0x4E)</code></td>
+</tr>
+<tr>
+<td>5</td>
+<td>RESET_ESCAPE_STATE</td>
+<td><code>TutorialState</code> = 1</td>
+</tr>
+<tr>
+<td>6</td>
+<td>MY_CREATURE_POINT_OUT_HIGHLIGHT</td>
+<td>a spiral search for a <code>ScriptHighlight</code> that is not a did-you-know, then a forced plan</td>
+</tr>
+<tr>
+<td>7</td>
+<td>CLEAR_INTERACTION_MAGNITUDE</td>
+<td>mind +0x18C5C = 0</td>
+</tr>
+<tr>
+<td>8, 9</td>
+<td>MY_CREATURE_CAN_DIE, CANNOT_DIE</td>
+<td>+0x1158 = 1, 0</td>
+</tr>
+<tr>
+<td>10, 11</td>
+<td>CREATURE_HELP_ON, OFF</td>
+<td>nothing; 42 calls of <code>fn_004CA580</code></td>
+</tr>
+<tr>
+<td>12</td>
+<td>ENTER_SAVEGAMEROOM</td>
+<td><code>GoInsideCitadel(5, 0)</code></td>
+</tr>
+</tbody>
+</table>
+<p>Packet 0x4E (handler 0x63D86B, jump table 0x63DDCC) makes or loads the sender's creature at its citadel's home
+  (<code>CLANCREATECREATURE&lt;nn&gt;</code> start data: <code>CreateCreature</code> and phases 0-12; otherwise <code>Creature::Load</code>), then sets +0x1108,
+  +0x110C, +0x1110 and +0x1114 to 1 and phase 13: multiplayer and skirmish only.
+- <strong><code>MoveToDevelopmentPhase</code></strong> 0x4C59C0: when confined, unleashed and at phase 5 or more, +0x11B4 = 0; the phase to
+  +0x1268, +0x126C = 0; every desire unsuppressed and deactivated; then for each phase from 0 to the one asked, its "add"
+  list (10 slots) activated and its "remove" list (4 slots) deactivated (42 = empty); +0x194 = 0 and the agenda cleared.
+  No draw. The table is <code>CreatureDevelopmentPhaseEntry[14]</code> at 0xC84878 (stride 0x84) from <code>info.dat</code>'s
+  DETAIL_CREATURE_DEVELOPMENT (records of 0x74 bytes from 0x10B6C; the add list at +0x4C in memory, the remove list at
+  +0x7C). Adds by phase: 0: 5, 8, 9, 17, 18, 21, 24, 28, 35, 23; 1: 4, 6, 29, 38, 3; 2: 15, 19, 20, 36; 3: 14; 4: 33, 7;
+  5 and 6: 16, 37; 7: 31; 8: none; 9: 0, 10, 27, 13; 10: 2; 11: 1; 12: 0, 10, 27; 13: 1, 32, 34, 39, and 29 removed. At
+  phase 13, 33 desires are active; off are 11, 12, 22, 25, 26, 29 and 30.
+- <strong><code>SET_FOCUS</code> on a creature</strong> (<code>GScript::SetFocus</code> 0x6F90B0): a creature is first put under script control (vtable
+  +0x440, bit 0x400 of +0x24), then <code>Creature::SetFocus(LHPoint)</code> 0x4F6760 (vtable +0x510; other objects take
+  <code>Object::SetFocus</code> 0x6393A0, the yaw snap). It stores the point in the mind (+0x1D3F4 = +0x1D3F8 = 1, the point at
+  +0x1D400), <code>PrepareCreatureForScriptedAction(1)</code> 0x4F6A90 (script control, <code>FinishActionUnsuccessfully</code>, a scripted
+  plan of desire 0x18 and action 0x16 into mind +0xF48, the sub-action agenda at mind +0xFA8 reset), then queues
+  sub-action 7 "TurnToFacePos" with <code>LookAtPosition</code> 0x4D1460. Each turn its phase 0 (0x501660) is done when the point
+  is less than 0.1 away or within π/8 of the creature's heading; otherwise <code>StopMoving</code> and <code>StartTurningAction</code>;
+  phase 1 (0x501730) waits for the body action to end. No draw on this path (the agenda's <code>GameRand(7)</code> at 0x4FF086 needs
+  a second function, which this sub-action has none of).
+- <strong>The tutorial's creatures</strong> (<code>CreaturesInGlade</code>, answers 0-2): made by <code>CREATE</code> type 12 (<code>GScript::CreateThing</code>
+  0x6F1B20, case at 0x6F149C) with no player, then <code>CREATURE_SET_PLAYER</code> 0x6F41C0 (+0xA4C, +0x1070, the name). Offered:
+  the Cow (row 1), the Ape (row 0) and the Tiger (row 2) by (2233, 3152) (ip 44076-44096).
+- <strong>The home follows the temple.</strong> <code>Creature::ProcessState</code> (0x472E1A..0x472EA5) rewrites the home +0x1200 / +0x1204 /
+  +0x1208 on every step, with no state test, whenever the player, <code>player+0xA44</code>, the citadel (<code>player+0xA48</code>) and its
+  heart (<code>Citadel+0x30</code>, a <code>CitadelHeart</code>) exist: the heart's <code>Game3dObject</code> (<code>Object+0x40</code>) special point #15 (vtable
+  +0x1CC with edx = 15, <code>Game3DObject::GetSpecialPos</code> 0x63B040) in world space, x and z × 6553.6 truncated, altitude 0.
+  So <code>SET_CREATURE_HOME</code> only lasts while there is no heart. On Land 1 point #15 of <code>b_first_temple.l3d</code> is the last of
+  its 16 extra metrics, local (-9.318, 0, -20.437); with the heart at (1915.05, 2508.89) turned 36.0 rad
+  (<code>CREATE_PLANNED_CITADEL</code> angle 36000 × 0.001) it is (1895.97, 2520.75), 0.87 m from the script's HomePos.
+- <strong>Drawn smaller in the pen.</strong> <code>Creature::ShrinkDownIfNearCitadel</code> (its Mac name; W120 <code>fn_004EFCE0</code>, called only
+  from <code>Creature::ProcessState</code> at 0x472F72) takes the real scale (<code>[+0x160]+0x6C</code>, what <code>GetScale</code> reads) and, when
+  the owner's citadel heart is built (<code>CitadelPart::IsBuilt</code> 0x464AD0, vtable +0x890), the distance <code>d</code> from the
+  creature to its home +0x1200 is at most 16 m (<code>GUtils::GetDistanceInMetres</code> 0x74CD70) and the creature is between
+  the pen's walls, draws it at <code>0.22 + (real − 0.22) × (clamp(d, 14, 16) − 14) / 2</code> (constants 0x8D14C4, 0x8D14C8,
+  0x8D1520) through <code>LH3DCreature::SetSize</code> 0x480530; elsewhere at its real size. The walls: θ0 = the heart's
+  <code>GetYAngle</code> (+0x4C, radians as stored) + 3.83, θ1 = θ0 + 0.897598 (2π/7); with dx, dz the drawn creature (+0x78,
+  +0x80) minus the heart's point in metres, inside is <code>cos θ0·dz − sin θ0·dx ≥ 0</code> and <code>sin θ1·dx − cos θ1·dz ≥ 0</code>
+  (the heart's arms 0 and 1). The real size is never written, so it comes back as the creature walks out; no draw; no
+  state. In the Creature Cave (<code>CreatureRoom::InitEngine</code> 0x787BD8) the creature's copy takes the real size. On Land 1
+  the home is inside the pen (9.78 and 9.01; 0.87 m), so from turn 8 the creature is drawn at 0.22.</p>
+<h3 id="what-openblack-does-with-the-players-creature">What openblack does with the player's creature</h3>
+<ul>
+<li><strong>The profile's file is a setting:</strong> <code>--creature-file &lt;name&gt;</code> (<code>EngineConfig::profileCreatureFile</code>), default
+  <code>C4ba71b36.erc</code>, the game folder's first profile's creature, so every run loads the same one; empty for a profile
+  without a creature. <code>CURRENT_PROFILE_HAS_CREATURE</code> answers whether that file exists.</li>
+<li><strong><code>LOAD_MY_CREATURE</code></strong> (<code>ECS/PlayerCreature</code>): nothing when the player leads a creature already (the leash
+  system's <code>PlayersCreature</code>); else the file through the mind cache, its species, size, alignment and strength
+  (<code>CreatureMindFileBody</code>), and <code>CreatureArchetype::Create</code> at the middle of the point's cell on the ground. The
+  fatness starts as the species does (which known field of the file holds it is not checked). The creature faces π, as
+  the script-made creatures do <span class="state approx">inferred</span>. The fizz is not ported. Our creation's draws are our mind's (the 40 initial
+  desires), not the original's list above.</li>
+<li><strong>The natives:</strong> <code>CALL_PLAYER_CREATURE</code> gives the creature the player leads; <code>SET_CREATURE_HOME</code> writes the leash's
+  home (<code>LeashSystemInterface::SetHome</code>), x and z through the 16.16 fixed point, on the ground; <code>SET_CREATURE_DEV_STAGE</code>
+  sets the mind's development phase, and the desires follow in the mind's next turn (the original at once);
+  <code>DEV_FUNCTION</code> 2 is <code>SetKnown(Rope)</code>, 3 is <code>SetKnown(Evil)</code>, <code>SetKnown(Good)</code> and <code>SetLeashable</code> (+0x110C read as the
+  creature its player leads); the other values are not ported; <code>CREATURE_IN_DEV_SCRIPT</code> sets <code>Creature::inDevScript</code>.</li>
+<li><strong>The home:</strong> each creature turn starts with <code>FollowTemplePens</code> (<code>ECS/PlayerCreature</code>, called from
+  <code>ECS/CreatureLoop</code>): while its player's temple is built, every creature's home is the temple mesh's pen point
+  (<code>TemplePenPoint</code>, special point 15), through the fixed point and on the ground. <code>TempleCreatureHome</code> (where a
+  knocked-out creature is carried) takes the same point; it took the mesh's first point before.</li>
+<li><strong>The pen:</strong> <code>ShrinkInPens</code>, right after <code>FollowTemplePens</code>, writes the drawn scale to
+  <code>components::CreatureDrawPose::scale</code> (<code>BetweenPenWalls</code>, <code>PenDrawnSize</code>), none outside a pen; <code>ecs::DrawnModel</code>
+  draws a creature at it, its eyes, hair and footprints following (<a href="#drawing-between-turns">Drawing between turns</a>).
+  <code>Transform::scale</code> and <code>Creature::size</code> keep the real size, so gameplay and the state hash do not see it (the hand
+  touches the drawn body, so it touches a smaller one there). The distance is taken from the creature's turn position, not its drawn one.</li>
+<li><strong>Debug window:</strong> Debug &gt; Windows &gt; Creature spawner (<code>Debug/CreatureSpawner*</code>, raffclar's window on our creature
+  systems, its pure parts in <code>CreatureSpawnerModel</code>): spawn, the creatures and the selected one's looks, audio,
+  movement, hands, mind, learning, body, leash and fight; and at the top the player's creature (real and drawn size,
+  phase, home, leash, desires and plan, needs, alignment, the hand), with "bring to the hand", "set stage" and the
+  leashes. His file dialogs, rope drawing, leash posts and editor hosting are not ported. Closed, it does nothing.</li>
+<li><strong>The "creature" part of the state hash:</strong> each creature's owner, species, leashable, inDevScript, body, size,
+  development phase and home.</li>
+</ul>
+<h2 id="stand-ins-and-unverified-constants">Stand-ins and unverified constants</h2>
+<p>Values openblack uses where the original's are not known. Each is a stand-in until it is read in the executable.</p>
+<ul>
+<li><strong>The idle mind</strong> (<code>CreatureIdleMind.h</code>), his constants that stand in for what the original's planner decides:
+  <code>k_MinDesireShown</code> 0.2 (a desire is shown only when it is over all others), <code>k_ActivityLots</code> 4 (the idle activities
+  weighed by what the creature has learnt), <code>k_ActOnNeed</code> 0.3 and <code>k_ActOnDesire</code> 0.3 (when a need or a desire beats
+  everything else), <code>k_FaintSeconds</code> 10 (how long a fainted creature lies out cold). His other idle timings
+  (<code>k_ShowDesireSeconds</code> 60, <code>k_FaceRepeatSeconds</code> 4.2, <code>k_SitSeconds</code> 10 + 5, <code>k_HangAroundDistance</code> 20, …) have no
+  wiki backing either.</li>
+<li><strong>The mind:</strong> his <code>MiracleMultiplier</code> table (17 species) and the planner's and learning's constants.</li>
+<li><strong>The eyes:</strong> first blink 1000 ms, blink 200 ms, wait <code>random(5000) + 2500</code> ms (his; see <a href="#random-streams">Random streams</a>).</li>
+<li><strong>Locomotion:</strong> acceleration 12, top-speed margin 1.1, corner π/6, slope 0.6 within [0.3, 1.1], walk 8 and run 20
+  per (0.875 × size + 0.25).</li>
+<li><strong>Physiology:</strong> growth slope 8 (at most 2), growth ×3 while asleep, fat burnt below energy 0.5, youth exhaustion
+  4 − 0.15 × age, warmth threshold 0.6 at 0.025 per degree, at least 50 turns of sleep.</li>
+<li><strong>Spells:</strong> big ×1.8, small ×0.5555556, frozen colour #8CC8FF.</li>
+<li><strong>Fight:</strong> arena 39 per size (at most 60), damage 0.05 / 0.03, AI chances 16 / 8 / 1, a block ends 1 in 8, a counter
+  1 in 5.</li>
+<li><strong>Throw:</strong> gravity 9.81 (to compare with our physics' gravity).</li>
+<li><strong>Leash:</strong> hand slack 0.7 s + 22 and at most 3 s + 32; tied 1.5× within 180..360; pull 0.8; rope 40 nodes at 200 Hz.</li>
+<li><strong>Follow camera:</strong> the clear-view search, 32 headings × 8 samples; his key, wheel and clear-view constants.</li>
+<li><strong>Start scale without the tables:</strong> <code>CreatureArchetype::StartScale</code> gives 0.22 when <code>info.dat</code> is not loaded (his
+  <code>k_UnknownStartScale</code>); with the tables it is the species row's <code>startScale</code>.</li>
+<li><strong>Height:</strong> 15 per unit of size, as <a href="engine-math.html">engine-math.md</a> gives it (<code>k_CreatureHeightPerScale</code>); his
+  copies are pinned to ours by tests.</li>
+</ul>
+<h2 id="addresses-of-the-original-moved-out-of-the-code">Addresses of the original, moved out of the code</h2>
+<p>The ported code's comments describe behaviour in plain words; the original's names and offsets behind them are kept here.</p>
+<table>
+<thead>
+<tr>
+<th>Address or name</th>
+<th>What it is</th>
+<th>openblack</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GCreatureInfo</code> +0x1E4..+0x370 (size 0x384)</td>
+<td>the creature species row; offsets in <a href="#the-creature-tables-in-infodat">The creature tables</a></td>
+<td><code>GCreatureInfo</code> named fields, <code>static_assert</code>s in <code>InfoConstants.h</code></td>
+</tr>
+<tr>
+<td><code>CreatureActionInfo</code> +0x0 / +0x4 / +0x8 / +0x98 / +0xC0</td>
+<td>strength gain, energy cost, exhaustion cost, desire, desire multiplier</td>
+<td><code>CreatureActionInfo</code> named fields</td>
+</tr>
+<tr>
+<td><code>CreatureInitialDesireInfo</code> +0x4C / +0x50 / +0x54</td>
+<td><code>DesireDecay</code>, <code>InitialValueMin</code> / <code>Max</code> in bw1-decomp</td>
+<td><code>creature_mind</code> tables (<code>initialMax</code>, decay range)</td>
+</tr>
+<tr>
+<td><code>CreatureDesires::Initialise</code> 0x4DC100</td>
+<td>the 40 initial draws</td>
+<td><code>creature_desires::Create</code> (draw injected)</td>
+</tr>
+<tr>
+<td><code>CreatureDesires::FindWeakestDesire</code> 0x4DC7B0</td>
+<td>reads the desire's value array (set to 0 at start)</td>
+<td><code>creature_desires</code></td>
+</tr>
+<tr>
+<td><code>CreatureDesires::RandomiseIncreaseTime</code> 0x4DC310</td>
+<td>cheat-flag jitter, not decompiled</td>
+<td>none</td>
+</tr>
+<tr>
+<td>MSVC <code>rand</code> LCG 214013 / 2531011, seed 0x913</td>
+<td>the mind file's name cipher</td>
+<td><code>creaturemind::MindFile</code></td>
+</tr>
+<tr>
+<td><code>LH3DMist</code> constructor 0x7F9560, +0x84</td>
+<td>the mist's frame counter, <code>Random(0, 16) &amp; 15</code></td>
+<td>(the cave, not ported)</td>
+</tr>
+<tr>
+<td><code>LH3DCreature</code></td>
+<td>the creature's drawn body and eyes</td>
+<td><code>CreatureBody</code>, <code>CreatureEyes</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="openblack">openblack</h2>
+<ul>
+<li><code>src/InfoConstants.h</code>: the named creature tables. <code>src/3D/CreatureBody.{h,cpp}</code>: mesh names (<code>ParseMeshName</code> and
+  <code>GetIdFromMeshName</code> return <code>std::optional</code>), loaded once by the creature-mesh loop in <code>Game.cpp</code>.</li>
+<li><code>src/3D/SkeletalAnimation.{h,cpp}</code> (<code>openblack::skeletal_animation</code>, beside the unrelated
+  <code>ecs::components::SkeletalAnimation</code>), with <code>FromMorph</code> for the morph parser's animations.</li>
+<li><code>components/morph</code>: his parser, with the header's named fields (<code>duration</code>, <code>looping</code>, stride, displacement, hair
+  groups, sound events) and the creature block that follows the animations in a <code>.cbn</code> (action points, leash bone,
+  eyes, tattoo sites, voice bank). The block is read only when the header's first field is not 0: in <code>Data/CTR/hh.HBN</code>
+  it is 0 (the hand's file), in the <code>.cbn</code> files 0x15, so the hand reads the same clips as before.
+  <code>components/rawimage</code>: headerless <code>.raw</code> images.</li>
+<li><strong>Loaders</strong> (<code>src/Resources/Loaders.cpp</code>): the mind loader reads through <code>Locator::filesystem</code> and never throws (a
+  file that cannot be read leaves <code>ErrCantOpen</code>). <code>LoadCreatureRigs</code> walks <code>Data/CTR</code> at start-up, reads each <code>.cbn</code>'s
+  <code>Creature</code> block into <code>CreatureRig</code> (<code>GetCreatureRigs()</code>, by <code>creature::GetRigId</code>) and preloads the skin meshes each
+  rig names into <code>GetL3DFiles()</code> under <code>creature/skins/&lt;name&gt;</code>; nothing is read later. <code>Game.cpp</code> also loads
+  <code>Data/Eyeball.l3d</code>, <code>Data/Eyelid.l3d</code>, <code>Data/C_Ape_Hair(a).raw</code> and the skin art. Nothing draws them yet.</li>
+<li><strong>Components and archetype</strong>: the creature's components in <code>src/ECS/Components/</code> (<code>CreatureLocomotion</code> holds a
+  <code>route_planner::RouteFollower</code> behind a pointer in place of his planner and route; <code>CreatureDrawPose</code> is ours, the
+  per-frame drawn pose). <code>CreatureArchetype::Create</code> keeps our rotation (<code>affine::AngleY</code>) and creation index, puts the
+  components on, draws the body at <code>DrawnScale</code> (size × 15 / rest height; the size alone without the mesh) and
+  publishes <code>Teleported</code>. <code>SnapTurnStart</code> sets a creature's <code>fromPosition</code> / <code>toPosition</code> and drawn pose, looked up
+  through the const registry. <code>ObjectMetrics</code> reads a creature's scale from <code>Creature::size</code>.</li>
+<li><code>src/Creature/</code>: 38 pure modules (body, mind, movement, fight, leash, audio, panel, mode), beside the existing
+  <code>CreatureMind.h</code> placeholder the loaders use.
+  <code>components/creaturemind/</code>: the mind file library, linked into <code>openblack_lib</code>. <code>src/Audio/Engine/AnimEffectKeys.h</code>.
+  <code>src/Camera/CreatureFollow.{h,cpp}</code>.</li>
+<li>Tests: <code>test/creature/</code>, one group <code>test_creature</code> (398 tests; one integration test reads saved minds from
+  <code>OPENBLACK_CREATURE_SAVES</code> and skips without them). None uses the Locator or the game's data.</li>
+<li><strong>Systems, emplaced and not called yet</strong> (<code>src/ECS/Systems/</code>, one <code>&lt;X&gt;SystemInterface.h</code> and one
+  <code>Implementations/&lt;X&gt;System</code> each, all reached through <code>Locator</code>): animation, skin, hair, footprints, physiology (made
+  with the game) and locomotion (made with each land). Nothing in the turn or the frame calls them; no registry signal
+  or event is connected. What changed from his:</li>
+<li>the turn length is <code>game_clock</code> (<code>k_TurnSeconds</code>, <code>MsPerTurn()</code>), not his time service;</li>
+<li>the eyes blink on the turn and the CRT stream; the locomotion's run-away distance, fidget and mirror coin and the
+    poo's yaw are <code>GameRand</code> / <code>GameFloatRand</code> (<a href="#random-streams">Random streams</a>); the puke's 12 drops are kept by the
+    physiology system as draw-only data (<code>GetPukeDrops</code>), no entity, scattered by a private seeded generator;</li>
+<li>the skins are painted only from the mesh files the loaders preloaded, never read at frame time;</li>
+<li>the footprints' April Fools' day reads an injected date, once per land (<code>Reset</code>); the only wall-clock read is in
+    <code>Locator.cpp</code>;</li>
+<li>locomotion walks on our <code>RouteFollower</code> (one per creature, made at its first move) and the <code>land_avoid</code> mask
+    (<code>IsPosValid</code> at 7.1 for a destination and 7.05 while walking, <code>land_avoid::NearestValid</code> to put a stray creature
+    back). The follower fills its obstacles through <code>route_plan_world::CheckSquareFunction</code>, which now tells a creature's
+    follower (its plan's context) from a footpath's holder (no plan, unchanged): a creature avoids another player's map
+    shield, and a dead tree only while it burns and no script controls it. His own planner, obstacle gathering and
+    corner cap are not ported. The <code>Transform</code> moves once a turn (<code>creature_pose::CommitTurnPose</code>, through the map
+    cells); between turns only <code>CreatureDrawPose</code> and the animation slots move. A creature put back on the land it can
+    stand on publishes <code>Teleported</code>.</li>
+<li><strong>The other systems, emplaced and not called yet</strong>: fight, leash, creature hand, mind (with its learning) and object
+  actions, made with the game. What changed from his:</li>
+<li><strong>the fight is stepped by the turn</strong>: the animation clock, the moves the animations carry the fighters by, the
+    blows' moments and the turns to face move on 100 ms at a time at the start of the fight's turn; the frame only
+    draws the body between the turn's start and end (<code>creature_fight::DrawnTime</code>) and charges a held blow. Its coins and
+    choices draw <code>GameRand</code>, a wound's texels u then v first; the camera does not fly to a fight while a script or the
+    interface has it; the player is <code>creature::LocalPlayer()</code>;</li>
+<li>the leash has no posts and no shake: those come with the citadel's leash object and the game's gestures; the keys
+    are read once a frame (<a href="#the-leash-keys">The leash keys</a>); <code>TakeOffHeldLeash</code> is the shake's effect, for the
+    scribble gesture, which nothing calls yet. Its scans are const and
+    in entity order; its tying sounds are the in-game bank's 148 and 149, in turn;</li>
+<li>the creature hand keeps the hand's pose and the creature under it (his <code>Game</code> members); there is no stroking by
+    command;</li>
+<li>the mind's draws are <code>GameRand</code> / <code>GameFloatRand</code>, the 40 first desire draws <code>GameFloatRange</code> in desire order; its
+    scans pass over things that are going and take the lower entity on a tie; night is the day / night clock's; water is
+    found on the <code>land_avoid</code> mask;</li>
+<li>the object actions play by the turn, and their moments (taking hold, knocking down, letting go, eating) come at
+    turn time, the palm sampled in the actions' animations at the moment. Something eaten dies as any death goes
+    (<code>life::Kill</code> for a villager or an animal, the dead list for the rest); a home struck takes a creature's blow
+    (<code>abodes::OnPhysicalDamage</code>), a tree is felled, a thing is deleted. What is let go of goes back on the map where it
+    is, drawn there at once; it does not fly yet. Animals are food and can be picked up (when a hand may hold them).</li>
+<li><strong>Creature spells</strong> (<code>src/Magic/Spells/SpellCreature.{h,cpp}</code>): the creature miracles (MAGIC_TYPE 26..41) are our
+  spell class tree's <code>SpellClass::Creature</code>, registered last. Its operations are the plain spell's but for two: cast on
+  an object it is the plain cast, then, on a creature, <code>spell_creature::Receive</code> (held for the spell's time times the
+  caster's tribal power, then the spell runs with no time limit until the creature lets it go; a spell of the same kind
+  it replaces is closed down); its close-down is the plain one, then no creature's spell points at it any more. A
+  creature miracle cast at a place does exactly what it did before as a plain spell; only the "class not ported" warning
+  is gone. <code>spell_creature::ProcessTurn</code> moves each creature's spells on by a turn (creatures in entity order, through
+  the const registry), applies each event through the pure <code>creature_spells::Apply</code> (the body value pulled, the freeze
+  and fizz, the mind paused, the desire made dominant then least) and plays the sound action from the creature bank. It
+  is not called yet. His <code>MagicSystem</code> creature methods are not taken.</li>
+<li><strong>The creature as a spell target</strong>: <code>fire::traits::IsCreature</code> is true for a creature that is still there (the
+  mourners pass on fire starters that may be gone); <code>PhysicsObjects::ObjectInfo</code> gives a creature its species' row, so
+  it has the row's burn multiplier, defence multipliers and weight like any object. A creature takes no harm from a
+  spell's damage or from burning yet: both reductions skip it (Pending). Explosions and tornadoes already leave
+  creatures alone (<code>CanBeDestroyedBySpell</code>).</li>
+<li><strong>Throws</strong>: what a creature lets go of goes into our physics objects, never his own flight. Thrown at a target, it is
+  <code>PhysicsObjects::AddObject</code> with the creature as the thrower; put down, dropped, tossed aside or let go of by a
+  creature that is gone, it starts as the hand's objects do (<code>from_hand::InitialisePhysicsFromHand</code>), but is thrown
+  above a speed across the ground of 1 rather than 2 (<code>from_hand::IsThrown</code>, <a href="physics.html">physics.md</a>). An object no
+  body can be made for is put down where it is. <code>ecs::creature_physics</code> gives the creature its body when the physics
+  wants one (a ball as tall as the creature, six points and eight faces, mass 1000, not moved by a hit) and its weight;
+  <code>RegisterPhysicsHandlers</code> is not called yet, and the creature catch hook stays unset.</li>
+<li><strong>Creature audio</strong> (<code>CreatureAudioSystem</code>, made with the game, not called yet): its animations' moments play
+  through <code>Locator::audio</code>'s <code>PlayAnimationEffect</code> with the creature as a tracked owner, from the creature bank
+  (<code>SfxBank::Creature</code>) or the species' own (<code>CreatureBank</code> of <code>VoiceBankStem</code>), at the distance from the listener; the
+  ground is <code>sea_cells::GetSurfaceType</code>. The bank's own filters stand for his temple and wide-screen gates. Whether other
+  players' creatures speak is the script's <code>creatureSound</code>. Each sound kept on the creature notes its bank and the
+  channel it started on (none when filtered out or not started). The footsteps still leave prints.</li>
+<li><strong>Mimicry and the town hooks</strong> (<code>src/Creature/CreatureDeeds.h</code>, <code>src/ECS/CreatureMimic.{h,cpp}</code>,
+  <code>src/ECS/Events/CreatureMimicEvents.h</code>): four deed sites publish the player's deed, which the mind system takes
+  through <code>PlayerDid</code>, for the player's own creatures only; three villager sites publish the town need a creature may
+  share, with no subscriber yet (<a href="#mimicry-and-the-town-hooks">Mimicry and the town hooks</a>).</li>
+<li>Still his and not ported: the renderer's creature and rope passes, the debug spawner, Creature Mode's wiring and the
+  Creature Cave.</li>
+</ul>
+<h2 id="pending">Pending<span class="state pending">pending</span></h2>
+<ul>
+<li><strong>The creature drawn between turns</strong> (<a href="#drawing-between-turns">Drawing between turns</a>):</li>
+<li>The leash rope's collar end stays at the Transform, up to one turn's step ahead of the drawn neck. A draw-only fix
+    would shift the rope's drawn points by (drawn collar - game collar) x i/n in the rope's drawing, never in the rope.</li>
+<li>Whether the original clamps the creature's turn fraction to 0.99, as for the livings; ours goes to 1.</li>
+<li>The drawn yaw: ours is lerped over the turn; whether the original turns it at a rate, as the villagers do.</li>
+<li>
+<p>The eyes may be placed twice: <code>PlaceEyes</code> builds world matrices and the eyes are drawn with the body's instance
+    row, which the instanced shader applies after <code>u_model</code>. To check on screen; a fix would be its own commit.</p>
+</li>
+<li>
+<p><strong>The hand on a creature</strong>: allies (<code>IsAllied</code> 0x64D5D0) once the game has alliances; the creature's Flags bit 0x400
+  (byte +0x25 &amp; 4) and mind +0xF60 / +0xFB4 in <code>ValidForLockedSelectProcess</code> (openblack's asleep and frozen stand for
+  them); <code>GoIntoStateOfFinishingAction</code> (0x477B20) at the lock's start, <code>LH3DCreature::ReconnectToGame</code> (0x480730) at
+  its end and <code>GetReadyForNetworkUnfriendlyEndLockedSelect</code> (0x476ED0): the 3D creature's fields are not ported.</p>
+</li>
+<li>
+<p><strong>The player's creature</strong> (<a href="#the-players-creature">The player's creature</a>):</p>
+</li>
+<li><code>SET_FOCUS</code> on a creature is not ported: the creature is not turned to the camera at Land 1's turn 8. It needs
+    script control in the mind (the scripted plan, the current action finished, the agenda cleared) and the π/8 test
+    against our <code>TurnToFace</code>.</li>
+<li>The fizz after <code>LOAD_MY_CREATURE</code> (sound 0x27 and the 3 s fade); its sound tag's own values are not read.</li>
+<li>Which field of the mind file holds the fatness (the physique's unnamed floats), and whether the mind load
+    (<code>fn_004E84A0</code>) sets the development phase.</li>
+<li><code>MoveToDevelopmentPhase</code>'s other steps (+0x11B4, +0x194, the agenda cleared) and its immediate effect.</li>
+<li><code>DEV_FUNCTION</code> 1 and 4-12; who reads +0x10C0 (<code>CREATURE_IN_DEV_SCRIPT</code>) and +0x1108; what +0x110C is beyond
+    "the creature its player leads".</li>
+<li>Whether <code>SET_POSITION</code> puts a creature in script state 4 as it does villagers and animals.</li>
+<li>A land change: the original's creature goes with the player, so the next land's <code>LOAD_MY_CREATURE</code> does nothing;
+    whether openblack keeps it across a land change, or makes it again from the file, is to be checked.</li>
+<li>The tutorial's own creatures (<code>CreaturesInGlade</code>), which our runs do not reach.</li>
+<li><strong>The initial desires</strong>: what the original stores in the drawn array and in +0x4C (decay and cap, as his code reads
+  them, or initial value and decay, as bw1-decomp's names say). His <code>CreatureMindLearning.cpp:425</code> also builds desires
+  at the midpoint of the range without a draw; whether the original has a draw-free set-up is unknown (it changes the
+  draw count).</li>
+<li><strong>The creature's own eye blink</strong>: stream, interval, and whether the high-detail villager's hold and squint are shared.
+  Until read, the blink goes on the CRT stream, marked approximate.</li>
+<li><strong>The mind, plans, mimicry, fidgets, fight and poo draws</strong>: no decompiled function, so "synchronised" is a rule, not a
+  reading; each must be confirmed as the classes are decompiled.</li>
+<li><strong>The puke and the cave's smoke, spray and mist dome</strong>: whether they are particle effects in the original, and with
+  which <code>NET_GAME_TYPE</code>.</li>
+<li><strong>The temple leash</strong>: the <code>TempleLeash</code> object with the heart, its posts and its CRT draws at creation, which no code
+  of ours makes yet.</li>
+<li><strong>The leash rope in the citadel and while paused</strong> (read 2026-10-08): the rope step (<code>Leash.cpp</code> <code>fn_00848970</code>,
+  sub-steps of 0.005 s, <code>n = 1 - ftol(dt * -200)</code>) runs from <code>GInterface::UpdateAllLeashes</code> 0x5D9130, called by
+  <code>PostDrawProcess</code> 0x5CEAB3 every frame with no inside test, so it keeps running in the citadel; only the drawing
+  (<code>DrawAllLeashes</code> 0x54DF18, on the land path of <code>Process3dEngine</code>) stops there. Paused (dt 0) it still takes one
+  0.005 s sub-step per frame with its ends pinned; the port's <code>UpdateLeash</code> runs ungated, but whether it takes that one
+  sub-step at dt 0 is not checked. <code>GoInsideCitadel</code> 0x553E10 also turns the player's own leash off first (packet
+  0x5B at 0x553F5C, handler 0x63D3CE → <code>GLeashStatus::SetOn(creature, 0)</code>), which the port does not do yet (with
+  C34). Not read: when that packet applies while paused, interface state 0x15 (the drag rope), the step's physics
+  (<code>fn_008487C0</code>, <code>fn_00848830</code>).</li>
+<li><strong>How the original picks a species' body meshes</strong>: it does not walk <code>Data/CreatureMesh</code> as we do; our skip of names
+  whose last part is not an appearance is a port decision.</li>
+<li><strong>Animation blending</strong>: which angle decomposition the original uses when it blends a creature's variant animations.</li>
+<li><strong>The creature in the turn</strong>: the original runs it inside <code>Living::ProcessLiving</code> (<a href="villagers.html">villagers.md</a>); the
+  port will first run it as one block after the living list <span class="state approx">approximate</span>, per creature later.</li>
+<li><strong>Route planning and walkable land</strong>: his A* lattice is replaced by our route follower and <code>land_avoid</code> mask; his
+  heading convention against the original's (3D angle + π/2, <a href="engine-math.html">engine-math.md</a>) is unchecked.</li>
+<li><strong>The creature's radius</strong>: read from the body in the original, not ported; his default is 5, and the locomotion's
+  measure from the mesh's box (half its width plus length, halved) is his, approximate.</li>
+<li><strong>The creature's route</strong> (<code>RouteFollower::SetDest</code>): the original's values for a creature are not known. The port
+  passes the arrival ring's outer radius and inner radius as the plan's first two values, the creature's radius, and
+  (distance + 1) × 5 as the longest route (the footpaths' factor), with 64 search turns a game turn and no obstacle hook.
+  When the route ends with a re-plan in flight, or the destination is inside an obstacle, the creature stands.</li>
+<li><strong>The fight by the turn</strong>: a blow's clock moves 100 ms at a time, and what goes past the end of an animation is lost as
+  the next one starts, as in his code. A blow of 1000 ms at the speed of a blow (0.66) takes 16 turns (1.6 s) where
+  his 30-frames-a-second play takes 46 frames (about 1.53 s), so a duel goes about 4 % slower; each blow still lands
+  once. The original's own fight step is not read.</li>
+<li><strong>What a creature does to things</strong> <span class="state approx">approximate</span>: the force of a creature's blow on a home (his 3.75 × size is
+  dropped for the thrown-object damage), whether an eaten villager dies with a reason the town counts, and where the
+  original takes a creature's palm. A dead tree it walks round only while it burns and no script controls it.</li>
+<li><strong>Water for a creature</strong>: the sea is taken as the cells of the walkable mask it can't reach whose middle is at the
+  sea's level, searched 8 cells round; the original's search is not read.</li>
+<li><strong>The desires' fields</strong>: the port keeps the reading above (cap = +0x4C, decay drawn in [+0x50, +0x54]); a mind file's
+  set-up draws nothing (it takes the range's middle, which the file's desires then replace).</li>
+<li><strong>Footprints on April Fools' day</strong>: when the original reads the date is not read; his code read it at every print,
+  the port once per land.</li>
+<li><strong>The hand on a creature</strong>: the click threshold (his 1000 ms against our 225 ms grab press); the 0xE85 interact
+  tooltip's owner rule (his: own awake creature only; check 0x5D7406).</li>
+<li><strong>Creature audio</strong>: whether <code>SET_CREATURE_SOUND</code> 0 mutes only other creatures' voices (his scope) or all their
+  events; his species fallback table; the creature music, heartbeat and Guidance (<a href="audio.html">audio.md</a>).</li>
+<li><strong>Surface rules</strong>: his snow at depth 27 and material type 0 extras, kept out of the shared <code>GetSurfaceType</code>.</li>
+<li><strong>Fights</strong>: the wound type per blow (his guess), the tier-1 AI gap he notes, and the fight camera's side, which he
+  says differs from the game's east view.</li>
+<li><strong>Leash gestures</strong>: the shake gesture's real thresholds; the <code>AttachLeash</code> / <code>DetachLeash</code> / <code>FocusLeash</code> help
+  events' trigger sites.</li>
+<li><strong>The SCRIBBLE with a leash in the hand</strong> (parked): <code>GInterface::ProcessPowerUpSystem</code> (W120 0x5CF300, Mac
+    <code>ProcessPowerUpSystem__10GInterfaceFv</code>) has no body in bw1-decomp, and its step 4 in <a href="magic.html">magic.md</a> lists
+    only the held object and the most charged icon. Whether a leash held in the hand is shaken off there, and before or
+    after the held object, needs that function read. Until then <code>TakeOffHeldLeash</code> is not called and the gestures are
+    as before.</li>
+<li><strong>The SQUARE_SPIRAL leash picker</strong> (parked): raffclar's tree has none, and the wiki has no numbers.</li>
+<li><strong>The leash keys</strong>: the original's key path (packets 0xF / 0x10, <a href="audio.html">audio.md</a>, not read): whether it acts at
+  the next turn or at once, and whether it needs the creature leashable as the port does.</li>
+<li><strong>Leash natives, openblack's differences</strong> (<a href="#what-openblack-does-with-the-leash-natives">What openblack does</a>):</li>
+<li><code>GET_OBJECT_LEASH_TYPE</code> gives the leash picked for the creature, worn or not, as the original gives the leash
+    picked at the player's temple (<code>TempleLeash</code>, -1 when nothing is picked). Still different: the port's pick lives
+    on the creature, not the player's temple. Until something is picked (a leash put on, or changed with the keys) the
+    port reports -1, as the temple's leash does with nothing picked (coordinator, 2026-10-08), though the keys would put
+    the learning leash on; the original's start (the <code>TempleLeash</code> constructor, and when the heart creates it) is still
+    not read, and comes with the temple leash (C34). The original gives 0
+    for a player with no temple or heart, which the port does not check; the leash posts that pick at the temple come
+    with the temple leash (C34).</li>
+<li><code>ATTACH_OBJECT_LEASH_TO_HAND</code> and <code>ATTACH_OBJECT_LEASH_TO_OBJECT</code> put the leash on through <code>WhyNot</code>, which refuses a
+    creature that is not the one its player leads or that does not know the leash; the original's natives test only
+    "a creature with a player" and then turn the leash on. Whether the original's <code>SetOn</code> (on path, 0x5E6F70) refuses
+    anything is not read, so the refusal stays.</li>
+<li><code>TOGGLE_LEASH</code>: the port does nothing for a script player out of 0..8 (<code>ScriptPlayerToGamePlayer</code>'s range); the
+    range checks in the original's conversion are not traced. Its creature checks (<code>fn_005D06E0</code>: vtable +0x2C,
+    Creature +0x1110, the interface status's leash state) are not compared with <code>PressKey</code>'s.</li>
+<li>The original keeps one leash state per player, not per creature: <code>IS_LEASHED_TO_OBJECT</code> and <code>SET_LEASH_WORKS</code> on a
+    creature of the player that is not the one they lead act on the player's leash there, and on that creature's own
+    (empty) leash here. <code>SET_LEASH_WORKS</code> while no leash is worn sets the original's flag but nothing here (the port's
+    flag lives on the worn leash). Who reads the flag is not known.</li>
+<li>The "has a player" test (vtable +0x1C) is not ported: which creatures have no player is not read.</li>
+<li>When both things of 185 / 269 are creatures, the roles are taken from the CHL syntax (the creature pushed first);
+    not checked in the x86.</li>
+<li><strong>Mimicry</strong> (<a href="#mimicry-and-the-town-hooks">Mimicry and the town hooks</a>): four deeds are reported (11, 16, 21, 33).</li>
+<li>The follow-up hooks commit, with every number now read: the resource deeds 0, 2, 4, 7, 9, 43-45 (the pit's deed is
+    already computed, its draw made, and dropped); the spell hits through <code>fn_004E9DF0</code> (1, 3, 5, 8, 17, 18, 20, 33, 34,
+    42; needs <code>GMagicEffectInfo</code> +0x98 from <code>info.dat</code>); the landing deeds 32, 35, 36; BUILD_HOUSE 6 (the scaffold's
+    owner); BREAK_ROCKS 37; DAMAGE_BY_THROWING 15 and the physics' own 16 (the thrown body as the thing).</li>
+<li>Waiting on other ports: PLAY_WITH_TOY 41 (<code>IsToy</code> of <code>Ball</code> and <code>MobileStatic</code>), the disciples 22-31, MAKE_ARTEFACT
+    14 (artifacts), SACRIFICE 40 (worship's sacrifice), the animal's THROW_IN_THE_SEA (who last dropped an animal).</li>
+<li>What the original does with <code>magic</code> (<code>Creature::MimicPlayer</code> 0x4EA670 is not read), the per-action table at 0xCAB220
+    (priority, flags, filled from <code>info.dat</code>) and the gate's steps 1, 2 and 6.</li>
+<li>The name of <code>GInterfaceStatus</code> +0x128 (the header's <code>LeashStatus</code>, compared with a <code>GPlayer*</code>); physics flag +0x1D8
+    &amp; 4 (FROM_HAND), creature +0x1268, player +0x8E0 == 2; whether the disciple off-by-one is the original's bug or the
+    <code>VILLAGER_DISCIPLE</code> enum is wrong; no cross-check against the Mac build.</li>
+<li>Code comments to correct: <code>MapShield.cpp</code> (a creature mimic after the aggression slot: it is help-spirit guidance)
+    and <code>VillagerSatisfy.cpp</code> (the creature's activity desire is always 0).</li>
+<li>The animals' <code>HasSunk</code> availability test (<code>Living::HasSunk</code> 0x5ED375), missing from openblack's animal branch.</li>
+<li>No test pins the PLANT_TREE site in <code>HandSystem::Replant</code>: it is reached only through a real hand system's end of
+    physics for a tree (the hand's set-up, the terrain, the smoke and the spot visual). <code>Consider</code>'s own tests pin the
+    deed's fields; the site's place is checked by reading.</li>
+<li><strong>The town hooks</strong>: the mind's side of the empathy (0x4C80F0: the clamped add, the ×0.9995 decay per turn and the
+  even-turn history), which the three published sites wait for; the worship-site calls (states 171, 9 and 7) and the
+  spell's (<code>fn_00721730</code>); <code>Town::UpdateAttitudeToCreature</code> 0x7437F0 (step 16; the names of attitudes 0 and 2,
+  <code>fn_004C9FE0</code>, mind +0xF50 / +0xF58, Creature +0x160, the actions at the Fear indexes; the help texts 1083-1087); the
+  help-sample groups 0xD99D08 and 0xD99DA0 of the aggressor guidance; possible readers of the town-desire empathy
+  array through registers or pointers (only the immediates 0x18C80, 0x18D20, 0x18DDC and 0x1A1DC were scanned).</li>
+<li><strong>Leash natives</strong> (<a href="#leash-natives">Leash natives</a>): no native body is in the decomp, everything is our reading of
+  the x86. Unnamed: <code>fn_005D06E0</code>, <code>fn_005E6BD0</code>, <code>fn_005E6EA0</code>, <code>fn_005E7140</code>, <code>fn_004648E0</code>, <code>fn_00464920</code>; the
+  meanings of <code>GLeashStatus</code> +0x18 / +0x1C / +0x24 and Creature +0x1110 are inferred from use; creature vtable slots
+  +0x2C and +0x34 not checked (read from the error strings only); who reads <code>GLeashStatus</code> +0x18; the range checks in
+  <code>ConvertScriptPlayerToGamePlayer</code> 0x6EB9A0 and <code>GGame::GetPlayer</code>; no shipped CHL <code>Enum.h</code>; PPC Mac bodies not
+  disassembled.</li>
+<li><strong>The mind-file cipher</strong>: whether saving a mind file reseeds anything (the <code>srand(time)</code> at 0x577721 is in
+  <code>creature.lhp</code>'s export, not in the mind file's save; <a href="engine-math.html">engine-math.md</a>).</li>
+<li><strong>Playground creatures</strong> (<code>CREATE_CREATURE_FROM_FILE</code>, playgrounds and <code>comp.txt</code> only): they now start at their
+  species' <code>startScale</code> and start body (not 0.3), their <code>Transform</code> scale is the drawn scale, and the script's type 0
+  is taken as the Giant Ape. Whether the original draws a creature at size × 15 / rest height is inferred.</li>
+<li><strong>The creature's row in the map cells' type</strong> (<code>map_cells::TypeOf</code>) is now the species' row, inferred.</li>
+<li><strong>Spells on a creature</strong>: where the turn calls the creature spells (the port will call them from the creature's turn,
+  approximate); a creature's own damage (<code>Creature::ReduceLife</code>, <a href="magic.html">magic.md</a>) and its defence override, so
+  that spells and fire hurt it (today both pass it by); the creature as a spell's creator (<code>MaintainSpell</code>,
+  <code>UpdateSpellInfo</code>); the lightning bolt's creature test, a tornado carrying a creature, the three flames on a burning
+  creature (their draw stream is not read) and the town's magic stolen by a creature. None has numbers yet.</li>
+<li><strong>A creature's body in the physics</strong>: the original's is its bounding sphere with one point for each bone and its
+  mass is read from the body; the port's is a ball as tall as the creature, mass 1000. Who catches what is thrown (the
+  catch hook) and whether a creature's put-down really goes through the hand's start of physics are not read.</li>
+<li><strong>What a creature throws</strong>: the thrower's player for the flying-object reaction (the hand's start gives the hand's).</li>
+<li><strong>Every constant in <a href="#stand-ins-and-unverified-constants">Stand-ins</a></strong>, and the four unread blocks of <code>GCreatureInfo</code>.</li>
+<li><strong>Double click on a creature (the lock-on) and the camera help.</strong> In <code>CameraModeNew3::Update</code> 0x45A960 the lock-on is
+  part of the double-click flight: the branch needs camera feature 0x10 (0x45DDA3) and clears the interface's
+  double-click flag (0x45DDE9). With a thing under the hand (<code>GInterface+0x3C8</code>) it first reports
+  <code>CameraHelpCallback(0x306 DoubleClickObject)</code> (0x45DE3A, help event 31), then asks <code>IsCreature</code> (vt+0x34, 0x45DE4B),
+  and after the flight's set-up builds <code>CameraModeFollow(camera, thing, 1.0, 0, 0)</code> (ctor 0x44B800, at 0x45E34B); a
+  fight arena in range starts <code>StartFight</code> 0x45A4D0 instead (0x45E07E clears the follow). openblack's Creature Mode
+  locks on only with feature 0x10, as the original, but the world camera still reports 0x305 DoubleClickPos (event 30)
+  for every double click, on a thing or not: reporting 0x306 needs the thing under the hand (C29), and the fight arena
+  is not ported.</li>
+<li><strong>The C key</strong> (<code>ZOOM_TO_CREATURE</code>) does not yet respect the script interaction modes: <code>IsActionBlocked</code>
+  (<code>src/Help/InterfaceInteraction.h</code>) would block it when camera moves or realm zooms are not allowed, but the action
+  map does not ask it yet, so Creature Mode still locks on.</li>
+<li><strong>Drawing the creature (C31), inferred until a creature is drawn:</strong> the hair's ribbon winding against the
+  original's one-sided material (see <a href="#drawing-in-the-frame">Drawing in the frame</a>); whether the
+  creature's shadow is also drawn over objects; the shadow projected from the posed base mesh rather than the morphed
+  one; whether its eyes and hair are drawn in the water's reflection; and, for a creature that morphs with the terrain,
+  that the morph program (which has no height-map version) stands in for the height-map one. A hair with bit 2 of +0x24 switches FILLMODE to wireframe for 10 of every 20 strand draws (counter [0xEF7530],
+  0x84757E..0x8475C2, put back at 0x8476C1..): which hair sets that bit is not known (a debug view, <strong><span class="state approx">inferred</span></strong>).</li>
+<li><strong>The Creature Cave without a creature.</strong> openblack's creature room shows its four scrolls blank and opens no cave
+  screen while the player has no creature (as raffclar's port); what the original's cave shows in that state has not
+  been checked.</li>
+</ul>
+</main>
+<script src="search.js"></script>
+<script src="wiki.js"></script>
+</body>
+</html>

@@ -1,0 +1,1134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>openblack internals — Black &amp; White notes</title>
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body>
+<nav id="side">
+  <h1><a href="index.html" style="color:inherit;text-decoration:none">Black &amp; White notes</a></h1>
+  <span class="tag">openblack — how the original behaves</span>
+  <input id="q" type="search" placeholder="Search (press /)" autocomplete="off">
+  <div id="hits"></div>
+  <div id="nav"><h2>Start here</h2>
+<a class="" href="README.html">Black &amp; White 1 notes for openblack</a>
+<h2>Engine</h2>
+<a class="here" href="openblack-internals.html">openblack internals</a>
+<a class="" href="engine-loop.html">The engine loop: game turns and frames (original and openblack)</a>
+<a class="" href="engine-math.html">Coordinates, terrain, object size, game clock, matrices and Zoomer</a>
+<a class="" href="tooling.html">Tools and formats</a>
+<a class="" href="parity.html">Graphics engine parity: original versus openblack</a>
+<a class="" href="original-frame.html">The original B&amp;W frame (runblack.exe W120, D3D7, LH3D)</a>
+<h2>World</h2>
+<a class="" href="map-loading.html">Map loading and script functions</a>
+<a class="" href="land-script-save.html">Writing land-script lines: SaveObject and WriteCommand</a>
+<a class="" href="water.html">Water in the game</a>
+<a class="" href="trees.html">Trees and forests</a>
+<a class="" href="buildings.html">Buildings, building sites and towns (the building side)</a>
+<a class="" href="objects-and-resources.html">Objects and resources</a>
+<a class="" href="physics.html">Physics: thrown objects, collisions, damage and rocks that split</a>
+<h2>Life</h2>
+<a class="" href="villagers.html">Villagers: data, state machine and speed</a>
+<a class="" href="animals.html">Animals: AI, states and clips</a>
+<h2>Magic and weather</h2>
+<a class="" href="magic.html">Magic: the core of the miracles</a>
+<a class="" href="miracles.html">Miracles one by one</a>
+<a class="" href="particles.html">Particles (PSys)</a>
+<a class="" href="day-night-weather.html">Day, night and weather in the original</a>
+<a class="" href="vortex.html">Vortexes and the tornado: objects swallowed, carried and flung</a>
+<h2>Hand and interface</h2>
+<a class="" href="hand-and-interface.html">The hand and the interface</a>
+<a class="" href="intro.html">The Land 1 intro and the tutorial&#x27;s script side</a>
+<a class="" href="script-camera.html">Script camera (GCamera and CameraModeScript)</a>
+<a class="" href="camera-tracks.html">Camera tracks (`Data\camera.edt`) and `WALK_PATH`</a>
+<h2>Presentation</h2>
+<a class="" href="rendering.html">World rendering: original versus openblack</a>
+<a class="" href="rendering-objects.html">Model rendering: original versus openblack</a>
+<a class="" href="animation.html">Skeletal animation (villagers and animals)</a>
+<a class="" href="audio.html">Audio: the engine, the banks, the music, the voices and the script</a>
+<a class="" href="video.html">Bink videos (.bik)</a>
+<h2>Data</h2>
+<a class="" href="mods.html">Modified data packs</a>
+<h2>Other</h2>
+<a class="" href="creature.html">The creature: groundwork, random streams and what is unknown</a></div>
+</nav>
+<main>
+<details id="toc"><summary>On this page</summary><div class="toc">
+<ul>
+<li><a href="#openblack-internals">openblack internals</a><ul>
+<li><a href="#build-test-run">Build, test, run</a></li>
+<li><a href="#map-of-the-hand-code">Map of the hand code</a></li>
+<li><a href="#render">Render</a></li>
+<li><a href="#debugging-a-crash">Debugging a crash</a></li>
+<li><a href="#debug-environment-variables">Debug environment variables</a></li>
+<li><a href="#tests-and-test-data">Tests and test data</a></li>
+<li><a href="#committing-part-of-a-file">Committing part of a file</a></li>
+<li><a href="#mouse-tests">Mouse tests</a></li>
+<li><a href="#known-traps">Known traps</a></li>
+<li><a href="#renamed-identifiers">Renamed identifiers</a><ul>
+<li><a href="#back-to-raffclars-names-2026-10-07">Back to raffclar's names (2026-10-07)</a></li>
+</ul>
+</li>
+<li><a href="#pending">Pending</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+<h1 id="openblack-internals">openblack internals</h1>
+<p>Where things are in our code, how to build and test it, the debug and test environment variables, and the traps
+found so far.</p>
+<blockquote>
+<p><strong>Code rules.</strong> State lives in ECS components or Locator services, never in globals; assets and files load through
+the resource caches; resources are owned with RAII and standard types (<code>std::unique_ptr</code>, <code>std::optional</code>,
+<code>std::span</code>, <code>std::array</code>); unit tests live in <code>test/</code> and inject fakes rather than checking systems through the
+locator; comments describe behaviour in plain English, with no decompiled names or addresses (those belong in this
+wiki). See <a href="../refactor/README.md">the conventions</a> and <a href="../refactor/TESTING.md">how a change is verified</a>.</p>
+</blockquote>
+<ul>
+<li><a href="#build-test-run">Build, test, run</a></li>
+<li><a href="#map-of-the-hand-code">Map of the hand code</a></li>
+<li><a href="#render">Render</a></li>
+<li><a href="#debugging-a-crash">Debugging a crash</a></li>
+<li><a href="#debug-environment-variables">Debug environment variables</a></li>
+<li><a href="#tests-and-test-data">Tests and test data</a></li>
+<li><a href="#committing-part-of-a-file">Committing part of a file</a></li>
+<li><a href="#mouse-tests">Mouse tests</a></li>
+<li><a href="#renamed-identifiers">Renamed identifiers</a></li>
+<li><a href="#pending">Pending</a></li>
+</ul>
+<h2 id="build-test-run">Build, test, run</h2>
+<ul>
+<li>Build with the CMake presets (<code>ninja-multi-vcpkg</code>). <strong>After adding .cpp files, configure again</strong> (the sources are
+  collected with GLOB).</li>
+<li>Tests in <code>cmake-build-presets\ninja-multi-vcpkg\bin\Release</code>: <code>test_camera</code> (11 recordings of the original),
+  <code>test_set_camera_pos</code>, <code>test_game_initialize</code>, <code>test_load_scene</code>, <code>test_mobile_wall_hug</code>, <code>test_fixed</code>,
+  <code>test_zoomer</code>, <code>test_game_matrix</code>, <code>test_land_normal</code>… (all the <code>test_*.exe</code>). They must all pass.</li>
+<li>Without <code>-W/-H</code>, the window takes 85 % of the usable desktop and is centred; larger sizes are reduced.</li>
+<li>By default the game runs from the first frame, like the original (turns and scripts from the first frame);
+  <code>OPENBLACK_START_PAUSED=1</code> starts paused like the old openblack.</li>
+</ul>
+<h2 id="map-of-the-hand-code">Map of the hand code</h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>HandSystem.cpp</code></td>
+<td>Press state machine, animation, public interface</td>
+</tr>
+<tr>
+<td><code>HandPlacement.cpp</code></td>
+<td>Hand geometry, <code>Place</code>, object under the cursor, <code>ResolveCursorPoint</code> (ORHP)</td>
+</tr>
+<tr>
+<td><code>HandHolding.cpp</code></td>
+<td>Picking up, poses, spring, releasing (the physics' part is in <code>src/ECS/Physics/FromHand.cpp</code>)</td>
+</tr>
+<tr>
+<td><code>HandResources.cpp</code></td>
+<td>Piles, pots, taking in batches, putting down, stores</td>
+</tr>
+<tr>
+<td><code>HandTrees.cpp</code></td>
+<td>Uprooting, roots, replanting, dead trees</td>
+</tr>
+<tr>
+<td><code>HandEffects.cpp</code></td>
+<td>Dust when grabbing, particles when picking up (grain, wood, fish sparkles)</td>
+</tr>
+<tr>
+<td><code>HandFish.cpp</code></td>
+<td>Splash when grabbing the water, fishing in the fish farms</td>
+</tr>
+<tr>
+<td><code>HandDebugHooks.cpp</code></td>
+<td>All the test environment variables</td>
+</tr>
+<tr>
+<td><code>Common/Zoomer</code></td>
+<td>Zoomer and Zoomer3 from LH3DLib (<a href="engine-math.html#zoomer-lh3dlib">engine-math.md</a>)</td>
+</tr>
+<tr>
+<td><code>3D/ObjectMatrix</code></td>
+<td><code>affine</code>: LHMatrix constructors (<a href="engine-math.html#lh-matrices">engine-math.md</a>)</td>
+</tr>
+<tr>
+<td><code>3D/LandNormal</code></td>
+<td><code>land_normal</code>: LH3DIsland::GetNormal (<a href="engine-math.html#terrain-normal">engine-math.md</a>)</td>
+</tr>
+<tr>
+<td><code>ECS/StoragePitStore</code></td>
+<td>Store logic</td>
+</tr>
+<tr>
+<td><code>Archetypes/PotArchetype</code></td>
+<td>Create pots/piles, <code>SetSize</code>, <code>UpdateSizes</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="render">Render</h2>
+<ul>
+<li>Instance matrix (mat4 per object): the <code>w</code> of the rotation columns are reused:</li>
+<li><code>[0][3]</code> = 1 − opacity (<code>components::Alpha</code>; with the table 0xC387C8, in the queue if its mesh has the flag 0x200 and
+    otherwise immediately in the main view);</li>
+<li><code>[1][3]</code> = V texture offset (<code>components::UvScroll</code>);</li>
+<li><code>[2][3]</code> = <code>components::MeshTint</code> (1e6 and above). The footprint shader only uses xyz of those columns.</li>
+<li><code>MorphWithTerrain</code> (the original: <code>LH3DObject::UpdateMelting</code> 0x8168F0; objects of 3D type 1 = morphable; the common API is <code>land_morph</code>, see
+  <a href="rendering-objects.html#meshes-stuck-to-the-ground-land_morph">rendering-objects.md</a>): each vertex rises <code>GetAltitude(vertex xz) − GetAltitude(origin xz)</code>,
+  so the object's own height (a pile or a field sinking) is preserved. vs_object computes the exact GetAltitude
+  (the 4 unfiltered corners of the cell, its <code>split</code> diagonal and the flattening next to the sea) with the RG32F height
+  map (altitude, split; the 17×17 cells of each block). Before, it was bilinear and misaligned by half a cell (errors of
+  8-50 units at the map edges: gaps under fields and buildings). The objects that fade out (<code>Alpha</code>) stay
+  stuck to the terrain (in the original they go through the same <code>Draw</code>).</li>
+<li>The buildings that do <strong>not</strong> follow the terrain (houses of all tribes, mill, dispenser, totem, wonders of
+  tribes 1, 2, 5 and 6) are sunk when created (<code>Abode::CallVirtualFunctionsForCreation</code> 0x403270, in
+  <code>AbodeArchetype::Create</code>): down to the lowest ground under the 4 xz corners of their mesh's box
+  (<code>GetAltitudeFondation</code> 0x63ABC0, never above the origin), at most <code>max(0.2·2D radius, 0.8)</code> (radius =
+  scale × the largest half-extent in x or z, 0x638180). It replaces the script's altitude. Only with an island loaded
+  (<code>UnloadedIsland</code> throws in <code>GetHeightAt</code>). The temple flattens the terrain around it
+  (0x882730: flat up to 35 units, blend up to 70; done in <code>CitadelArchetype::FlattenLandUnderTemple</code>).
+  <strong>Deviation:</strong> openblack does it on load (it creates the temple already built); the original, when turning the plan
+  into a temple (<code>CitadelHeart::Create</code> → 0x4675A0 → 0x882730).</li>
+<li><strong>Town centre totem</strong> (<code>components::TotemStatue</code>, <code>CreateTotemStatue</code> in AbodeArchetype.cpp): <code>TownCentre::CreateTotemIfNecessary</code> 0x743DA0 → <code>TotemStatue::Create</code>
+  0x737CC0. Two static meshes without sinking: the tribe's pedestal (<code>InfoConstants.totemStatue[tribe].plinth</code>,
+  BuildingPlayerIconPlinth*) at special point 6 of the centre (<code>GetTotemPos</code> 0x743F20, with the centre's matrix and
+  raised like its morph), with its Y angle and scale; on top (+2.729, 0x999A9C) the icon: the player's creature
+  (BuildingPlayerIcon<Species>) or, without a creature, the hand (BuildingSpellHand, the only one there is now). They rise
+  <code>8 × worship fraction</code> (Draw 0x738960; no worship yet: 0). The beliefs (GBelief::DrawBelief 0x438800) go at
+  <code>y of point 6 + height of the icon's mesh × scale</code> (Object::GetHeight 0x638120).</li>
+<li>The instance buffer grows with a margin and is uploaded with <code>bgfx::copy</code> (with <code>makeRef</code> and a <code>resize</code> freed memory
+  was read: artefacts when creating and destroying meshes every frame).</li>
+<li><code>L3DSubMesh</code> keeps positions and indices on the CPU (<code>GetCollisionPositions/Indices</code>) for picking and measurements;
+  <code>L3DMesh::RayIntersect</code> does the triangle test.</li>
+<li>Textures: if a material asks for a non-existent texture and the mesh carries an embedded skin, that one is used (the user's modified pack relies on it, see <a href="mods.html#embedded-textures">mods.md</a>).</li>
+<li>
+<p><strong>Trap</strong>: ninja does not recompile the variants that only <code>#include</code> their base when the base changes
+  (<code>vs_object.sc</code>, <code>vs_static_shadow.sc</code>…): <code>vs_object_instanced*.sc</code>, <code>vs_object_hm_instanced*.sc</code> and
+  <code>vs_static_shadow_instanced_static.sc</code> (7 files) have to be touched (<code>touch</code>). With old shaders objects
+  disappear (all of them, or the trees). The build script already touches them before building.</p>
+</li>
+<li>
+<p><code>RenderContext::entityInstances</code>: entity → (mesh, instance index, <code>morphWithTerrain</code>,
+  <code>receivesDynamicShadow</code>), to draw a specific entity (reflections, shadow on objects).</p>
+</li>
+<li>
+<p><code>LandIslandInterface::GetUnflattenedHeightAt</code>: <code>GetAltitude</code> without the sea flattening (search for the fish farms).</p>
+</li>
+<li>
+<p><strong>Trap: Vulkan uniform buffer.</strong> On every call bgfx copies the whole vertex shader uniform block
+  into a per-frame buffer of 128 B × 65535 = 8 MB, without checking it in Release. <code>vs_object</code> with <code>u_model[128]</code> is
+  ~8 KB per call: with ~1000 calls it overflowed and crashed in <code>ScratchBufferVK::write</code> (Kapa's Land1). Meshes without
+  bones use the <code>*_static</code> variants (<code>BGFX_CONFIG_MAX_BONES 1</code>, <code>Renderer::StaticVariant</code>); when adding object
+  shaders, create their variant too.
+  Meshes with up to 32 bones (villagers 22, almost all animals) use the <code>*B32</code> variants
+  (<code>Renderer::BonesVariant32</code>): each villager or animal with a pose is its own draw, and those outside the view
+  are not drawn (<code>SphereInView</code> in the instance loop). In addition bgfx is patched (vcpkg overlay
+  <code>vcpkg-overlay-ports/bgfx</code>, <code>raise-vulkan-limits.patch</code>, enabled in <code>CMakePresets.json</code> with
+  <code>VCPKG_OVERLAY_PORTS</code>): the descriptor set pool goes from 1024 to 8192 per frame in flight (with ~2000-2700 draws
+  it ran out and crashed in <code>getDescriptorSet</code> inside the driver: Greek, Tibetan, Demon, Kapa's Land1, Ultimate Sandbox)
+  and the uniform buffer from 128 to 512 B per draw (32 MB). Hooks: <code>OPENBLACK_DRAW_STATS=1</code> (draws per frame in the
+  log) and <code>OPENBLACK_TEST_MAP_CYCLE="&lt;frames&gt;:&lt;script&gt;,&lt;script&gt;..."</code> (loads the next script every N frames, like the
+  "Load Island" menu; paths relative to Scripts, e.g. <code>Playgrounds/TwoGods.txt</code>).</p>
+</li>
+<li><strong>Trap: <code>bgfx::makeRef</code> on local data.</strong> bgfx reads them later; use <code>bgfx::copy</code> unless the buffer lives
+  until after the next <code>bgfx::frame()</code> (three cases in <code>LandIsland::LoadFromFile</code>, already fixed).</li>
+</ul>
+<h2 id="debugging-a-crash">Debugging a crash</h2>
+<ul>
+<li><code>Common/CrashHandler</code>: an unhandled exception or <code>std::terminate</code> write the stack to stderr and to
+  <code>openblack_crash.txt</code> (working directory). With names and lines only if the <code>.pdb</code> is next to it: build
+  <code>RelWithDebInfo</code> (output in <code>bin\RelWithDebInfo</code>).</li>
+<li>Unexplained crash (30-09-2026): a RelWithDebInfo build crashed when loading Land1 with 0xC0000005 in
+  <code>btCollisionWorld::updateSingleAabb</code> (<code>stepSimulation</code>, from <code>Game::Update</code>). The cause is unknown and so is whether it
+  is already fixed; if it reappears, look for a <code>btCollisionObject</code> freed without <code>removeCollisionObject</code>.</li>
+<li><code>OPENBLACK_FLUSH_LOG=1</code>: the log is written line by line (the last lines before a crash are not lost).</li>
+<li>Scripts: <code>LHScriptX::Script</code> skips the line it does not understand (<code>ScriptError</code>, <code>LexerException</code>) and logs it
+  ("line skipped"); the skirmish maps contain typos (double quote, empty argument, stray words) that the
+  original tolerates. An integer is valid where a decimal is expected and vice versa; integers are saturated.
+  <code>CREATE_BASE_WITH_ANGLE</code> does not exist yet (it is skipped). The gods' <code>.lnd</code> files store in <code>blockSize</code> the size of all
+  the blocks together.</li>
+</ul>
+<h2 id="debug-environment-variables">Debug environment variables</h2>
+<p><code>OPENBLACK_PROFILE=&lt;s&gt;</code> (profiler summary in the log), <code>OPENBLACK_CAMERA_FLY="ox,oy,oz,fx,fy,fz"</code> (the flight
+takes a few thousand frames: use <code>-n 8000 --screenshot-frame 7900</code>; when the Land 1 intro plays it
+fades to black at around 90 s of play (<code>SetAviSequence</code> / <code>ObjectDelete</code> in the log) and at 7900 the shots come out
+black or half faded, so there use <code>-n 6000 --screenshot-frame 5900</code>, with the flight already still, and check that
+the shot is not black; the clouds with <code>OPENBLACK_CLOUD_SEED</code> are born the same but advance with the real milliseconds,
+so two shots cannot be compared pixel by pixel in the sky), <code>OPENBLACK_DUMP_COAST_ALPHA=1</code> (or <code>=&lt;file&gt;.png</code>: dumps the coastal alpha texture, x to the right and z
+downwards from the island's first block, which is printed in the log), <code>OPENBLACK_DUMP_BLOCK_TEXTURE=1</code> (or <code>=&lt;file&gt;.png</code>: the RGBA block texture of the whole
+island, colour and coastal alpha, same orientation),
+<code>OPENBLACK_PRINT_ALTITUDE="x,z"</code> (game height, of the drawn mesh and unflattened,
+physical terrain and nearby objects), <code>OPENBLACK_MARK_LOWEST=1</code> (marks the lowest vertex of the nearby rocks),
+<code>OPENBLACK_SEA_TRACE=1</code> (every 500 frames, the sea rows: first row, n, 1/z and its step, smooth top row,
+sea frame and drift; see <a href="rendering.html#sea-skyraw--skyaraw">rendering.md</a>),
+<code>OPENBLACK_DUMP_STATIC_GAPS=1</code>,
+<code>OPENBLACK_DUMP_LAND_AVOID=1</code> (or <code>=&lt;file&gt;.png</code>: the creature's <code>LandAvoid</code> mask when loading the landscape, one
+pixel per cell, green 0, blue 6, red 1, grey 2; see <a href="water.html#the-creatures-landavoid-mask">water.md</a>), <code>OPENBLACK_HAND_TRACE=1</code>, <code>OPENBLACK_HAND_TEST_ROCK="x,z"</code>
+(+ <code>_FOOD</code>, <code>_NO_BOULDER</code>), <code>OPENBLACK_HAND_TEST_TREE="x,z[,dead][,roots][,store]"</code>,
+<code>OPENBLACK_TEST_TREE_GROWTH="x,z"</code> (two saplings there, one in a forest and another without a forest: only the first grows),
+<code>OPENBLACK_TREE_TRACE=1</code> (each growth step, the trees a forest plants, the bending of crowns and the glow),
+<code>OPENBLACK_TEST_REPLANT="x,z,degrees"</code> (drops there a tree tilted by those degrees and says whether it is replanted, falls with physics
+or stays dead),
+<code>OPENBLACK_HAND_TEST_STORE_TAKE="wood,food"</code>, <code>OPENBLACK_HAND_ANIM=&lt;node&gt;</code>, <code>OPENBLACK_NO_PICKUP_PSYS=1</code>,
+<code>OPENBLACK_HAND_TEST_HOLD=&lt;scale&gt;</code> (the hand starts holding a rock),
+<code>OPENBLACK_HAND_TEST_DROP="x,z,seconds[,type]"</code> (the hand holds a rock 0, a pot of 300 food 1 or of wood 2,
+the first villager 3, the first tree 4 or the first animal 5, and drops it gently there after those seconds of game time: over the sea it must fall with physics, see
+<a href="physics.html#water-in-impacts-and-when-dropping">physics.md</a>), <code>OPENBLACK_TEST_SEA="x,z,type[,height]"</code> (<code>villager|animal|tree|pot|rock</code>: creates that object at that height, 2 by default, above the point and puts it into physics with no velocity; the log gives the cell, the density, the radius and <code>GET_LAND_HEIGHT</code> there and on the reference land, and the drowning villager's counter every 100 turns; with <code>OPENBLACK_PHYSICS_TRACE=1</code> it can be seen sinking, see <a href="water.html#sinking-drowning-and-being-deleted">water.md</a>; with <code>OPENBLACK_TEST_CUT=1</code> the object also carries <code>components::CutByPlane</code> and its part under the water is drawn cut in 0xFF303070, see <a href="rendering-objects.html#cutting-by-the-water-plane-drawcutbyplane">rendering-objects.md</a>), <code>OPENBLACK_TEST_SHARK=1</code> (<a href="water.html#sharks-class-whale">water.md</a>; the sharks part of <code>FollowUs</code> in Land 1: two <code>SharkArchetype</code> in <code>CONVERT_CAMERA_FOCUS(221)</code> and <code>(230)</code> with <code>WALK_PATH</code> along tracks 21 and 20 of <code>camera.edt</code>; <code>="track,camera[,forward[,from[,to]]]"</code> a single one; see <a href="camera-tracks.html">camera-tracks.md</a>), <code>OPENBLACK_WALK_PATH_TRACE=1</code> (every turn of every <code>WALK_PATH</code>: sample, segment, t, focus point and position set), <code>OPENBLACK_TEST_JC_SPECIAL="6[,mode[,frames[,ms]]]"</code> (the missionaries' boat, <a href="water.html#the-missionaries-boat-petitnavire">water.md</a>, <code>PLAY_JC_SPECIAL(6)</code>, those frames after having a landscape; mode 1 starts on the crossing; <code>ms</code> advances the boat in one go in 33 ms steps for shots at a given moment, e.g. <code>6,0,7880,7200</code> with <code>-n 8000 --screenshot-frame 7900</code> and <code>OPENBLACK_CAMERA_FLY="1892,14,3176,1866,6,3161"</code> gives the splash; <code>OPENBLACK_BOAT_TRACE=1</code> writes mode, time, hull and sprites every 500 ms), <code>OPENBLACK_TEST_BUILT_PERCENTAGE="p"</code> (the Land 1 ArkDryDock where <code>TheMissionaries</code> creates it, with <code>BUILT_PERCENTAGE</code> = p; camera <code>1905,22,3180,1881,8,3154</code>), <code>OPENBLACK_TEST_FISH_PUZZLE="x,z[,inside]"</code> (the script's <code>PuzzleGame</code> 14 at (x, 0, z), processed once: bait, net of 7 floats and the 2 shoals; when the net closes the next turn writes <code>PuzzleGame 14 played</code>; the shoals only count with the camera closer than 300; in Land 4 <code>2497.9,3628.35</code>; with <code>inside</code> = 1 all the fish start at the bait and the net closes after 500 ms; with <code>OPENBLACK_HAND_TRACE=1</code> it writes <code>Fish puzzle: inside N/30</code> and <code>net closed</code>, see <a href="water.html#fish-puzzle">water.md</a>), <code>OPENBLACK_TEST_SPLASH="x,z"</code> (one hand
+splash per second), <code>OPENBLACK_AUDIO_TRACE=1</code> (each start of <code>Audio/SamplePlay</code> with mode, owner, channel and gain, each channel stopped and why, each sample that ends and each 3D cut by distance; the <code>AudioManager</code> emitters no longer exist),
+<code>OPENBLACK_HAND_TEST_FISH=1</code> (splash and
+fishing in the first shoal with the action held for 3 s; with <code>OPENBLACK_HAND_TRACE=1</code> it writes <code>Fish trace</code>), <code>OPENBLACK_START_PAUSED=1</code> (starts paused like the old openblack; by default the game runs from the first frame, like the original: turns and
+scripts from the first frame), <code>OPENBLACK_TEST_FADE="r,g,b,seconds"</code> (<code>SET_FADE</code>), <code>OPENBLACK_TEST_VIEW_VILLAGER="n[,distance[,angle]]"</code> (the camera looks at villager n from that distance and side; the villagers walk, so from far away they can leave the frame; beware: it sets the view only once, when there is a landscape, and the ~5 s intro of Land 1 then moves the camera, so in a late capture the view is no longer on the villager: it is not useful for BEFORE/AFTER captures, use <code>OPENBLACK_CAMERA_FLY</code>, which holds it every turn), <code>OPENBLACK_TEST_WIDESCREEN=1</code>, <code>OPENBLACK_TEST_CHIMNEY=all</code> (all the chimneys give off smoke even if nobody is at home; <a href="rendering-objects.html#chimney-smoke-lh3dsmoke">rendering-objects.md</a>), <code>OPENBLACK_CLOUD_SEED=&lt;n&gt;</code> (calls <code>game_random::crt::Srand(n)</code> once before the first sky: it seeds the CRT <code>rand()</code> stream that the whole game shares, not one of the clouds' own; <span class="state approx">inferred</span> the sky only comes out the same if the previous CRT draws are the same; there is no longer a time seed: the original's only <code>srand(time)</code>, 0x577721 in fn_005776E0, only runs when saving creature.lhp), <code>OPENBLACK_TEST_SKY_ALIGNMENT=&lt;-1..1&gt;</code> (target of the sky alignment: −1 evil, 0 neutral, 1 good; instead of the debug slider), <code>OPENBLACK_LOG_ISOK=1</code> (one <code>isok:</code> line in the log for each script tree, pot or mobile object that <code>IsOkToCreateAtPos</code> does not allow to be created, with what blocks it; see <a href="map-loading.html#map-script-objects-street-lanterns-bonfires-dead-trees-gates">map-loading.md</a>), <code>OPENBLACK_SCENERY_TRACE=1</code> (the fixed scenery of Land 3/4, <code>ECS/DesignedScenery</code>: creation, land change and each ring of the waterfall with its V; see <a href="water.html#fixed-scenery-per-land-land-3-waterfall-land-4-ark-and-dinosaur">water.md</a>), <code>OPENBLACK_SOUND_TAG_TRACE=1</code> (<code>Audio/SoundTags</code>: each tag created, deleted, released or delayed, and every 50 turns the channel of each one), <code>OPENBLACK_AUDIO_TEST_VIEW</code> / <code>_ANIM</code> / <code>_LANTERN</code> / <code>_NO_WIDESCREEN</code> (camera on a villager or on a lantern, forced clip, without the widescreen filter: <a href="audio.html#test-hooks">audio.md</a>), <code>OPENBLACK_ATMOS_TRACE=&lt;n&gt;</code> (every n turns the lines of the original <code>GSoundMap::Dump</code> — <code>Sound Map Calc Update X=%d Z=%d %s Count=%d</code>, <code>Sound Map At Hand ...</code>, <code>Sound Radius=%3.3f Distance=%3.3f DistanceAboveLand=%3.3f</code> — and of <code>ProcessAtmosBanks</code> — <code>%s Vol=%3.3f Sent=%d Step=%d</code> per bank —, plus an "(openblack)" line with the 14 volumes and their cells; and each loop start and release of the ambience), <code>OPENBLACK_LANTERN_SOUND_TRACE=1</code> (writes <code>Lantern sound:</code> in the log: start, cut and release of each lantern's loop with its distance, and every 50 turns the number of lanterns, whether it is night and the distance of the nearest one; test it with <code>OPENBLACK_TIME_OF_DAY=22</code> and the camera within 5 units of the tip of a lantern). <code>OPENBLACK_PSYS_SOUND_TRACE=1</code>: trace of the PSys sounds (start with action, size, surface, distance and sample from spells.sad; "too far" if the camera is farther than the sample's maxDist; loop release or cut when the atom dies; deletion), see <a href="particles.html#sound-of-the-particles-srcaudiospellsounds-srcparticlesrulessoundcpp">particles.md</a>. Influence (<a href="magic.html#influence-srcecsinfluence">magic.md</a>): <code>OPENBLACK_TEST_INFLUENCE="x,z[;x,z...]"</code> writes in the log, on turns 2 and 100, what <code>GET_INFLUENCE(0, 0, pos)</code> would give at each point (with the raw value, whether there is an anti ring, and the radii of citadels and towns); <code>OPENBLACK_TEST_INFLUENCE_RING="x,z,radius[,anti[,player]]"</code> creates on turn 1 a ring like <code>INFLUENCE_POSITION</code>; <code>OPENBLACK_INFLUENCE_EVERYWHERE=1</code> is the original's "GatheringFlag" flag (influence 1 everywhere). Time and weather (<a href="day-night-weather.html#weather-and-climate-srcecsweather">day-night-weather.md</a>): <code>OPENBLACK_TEST_WEATHER="x,z,radius[,rain[,fade[,temperature[,sheetMin,sheetMax[,forkMin,forkMax]]]]]"</code> (the sheet lightning and forked lightning intervals of the descriptor +0x30..+0x3C; with them <code>GWeather::Update</code> starts the flash fn_00837290, which the miracle storm never requests: fn_006D5730 leaves them at 0) registers on turn 1 a static storm made like that of the storm miracle (inner <code>max(radius, 60)</code>, outer <code>max(2.5·radius, inner + 20, 80)</code>, corrected by the storm miracle lane: the three <code>fcomp; test ah, 0x41; je</code> of fn_006D5730 keep the value only if it is larger, rain 100, cloudiness 80, 20 degrees, almost infinite lifetime, fade 1 s) and writes on turns 2 and 30 what <code>GClimate::ComputeWeather</code> returns at the centre, inside, at the two radii and outside (temperature, rain, snow, cloudiness, wind in bytes and in m/s, <code>GetMaxRainingOrSnowing</code> and <code>GetTemp</code>); the grid is 40 m, so points in the same cell give the same value. <code>OPENBLACK_TEST_WEATHER_AT="x,z[;x,z...]"</code> writes the same at those points. <code>OPENBLACK_WEATHER_TRACE=1</code> writes each game day the climates (temperature and target, wind, rain desire, dry and raining days, storms), every 50 turns the storms, and once per second what the rain draws (<code>Rain: N tiles</code>). Worship and one-shot miracles (<a href="magic.html#worship-where-miracles-come-from-srcworship-ecssystemsimplementationsvillagerworship">magic.md</a>), all on turn 1 except where stated: <code>OPENBLACK_TEST_WORSHIP_SITE="&lt;TRIBE&gt;[,&lt;SEED&gt;...]"</code> creates that tribe's worship site at the player's citadel, like <code>CREATE_WORSHIP_SITE</code>, with an icon for each seed (the scripts do not give the human player any built town centre, so its citadel would never have its own site); <code>OPENBLACK_TEST_WORSHIP_PLAYER="&lt;n&gt;"</code> makes these hooks act as player n instead of the human; <code>OPENBLACK_TEST_TOWN_SPELL="&lt;town&gt;,&lt;MAGIC&gt;[;...]"</code> is <code>SET_MAGIC_IN_OBJECT(town, magic, 1)</code> (the town stores the magic and its owner enables it); <code>OPENBLACK_TEST_MANA="&lt;chants&gt;"</code> is <code>GAME_SET_MANA</code> at that player's first worship site; <code>OPENBLACK_TEST_WORSHIP="&lt;town&gt;,&lt;fraction&gt;"</code> is <code>Town::SetWorshipPercentage</code> (what dragging the totem does); <code>OPENBLACK_TEST_TAP_ICON="&lt;SEED&gt;[,turn...]"</code> taps the player's icon for that seed on those turns (by default turn 5) and writes the magic, what is needed, the result, the store and whether it stays charging; <code>OPENBLACK_TEST_TAP="x,z,turn"</code> taps the nearest tappable object to that point (an icon, a town centre icon or a one-shot ball); <code>OPENBLACK_TEST_DISPENSER="&lt;ABODE&gt;,x,z,&lt;MAGIC&gt;[,seconds]"</code> creates a dispenser like the Land1 challenge script (<code>GiveSpellDispenserReward</code>); <code>OPENBLACK_TEST_FIREFLY_REWARD="x,z[,n]"</code> rolls the fireflies reward n times there. <code>OPENBLACK_CAMERA_LOCK="ox,oy,oz,fx,fy,fz"</code> puts the camera there every turn (in Land 1 the script takes the camera with START_CAMERA_CONTROL and its intro waits for MOVE_GAME_THING; without <code>OPENBLACK_CAMERA_LOCK</code>, <code>OPENBLACK_CAMERA_FLY</code> also holds the camera at its end point every turn). <code>OPENBLACK_WORSHIP_TRACE=1</code> writes each worship site when it is created (player, tribe, slot, position and angle), its icons, and every turn its chant count (<code>icons</code>, <code>N</code> dancers, <code>C</code> capacity, <code>k</code> intensity, tension, battery and maximum, available and damage per dancer), as well as the charging of the icons, the dispensers' orbs and the villagers who go to worship. Physics: see <a href="physics.html#test-hooks">physics.md</a>.</p>
+<p>Miracles (<a href="magic.html#spell-core-srcmagiccore-srcmagicspells-srcecseffects">magic.md</a>), once on the
+first turn with the map loaded: <code>OPENBLACK_TEST_SPELL="&lt;magic&gt;,x,z[,radius[,duration[,player[,curl]]]]"</code> casts like
+<code>SPELL_AT_POS</code> (the creator is the neutral player, which replenishes the chants; with <code>player</code> 0..7 that player casts,
+which does not replenish, and -1 is the neutral one; radius 10 and the duration of <code>timerWhenPlayerCasting</code> if not given
+(-2 also requests it); "from" 30 m above the point; <code>curl</code> is the script's, PSysProcessInfo +0x34, from which the shields'
+spins come) and writes what the class check (vt 0x30) would answer there; <code>OPENBLACK_TEST_SEED="&lt;seed&gt;[,pu]"</code> puts a
+charged seed in the hand, like <code>OneOffSpellSeed::CreateSpellIntoHand</code>; <code>OPENBLACK_TEST_ONESHOT="&lt;seed&gt;,x,z[,pu[,tap]]"</code> creates
+a one-shot ball on the ground (with <code>tap</code>, it taps it and it goes to the hand). <code>&lt;magic&gt;</code> is a MAGIC_TYPE number or the name
+from info.dat (<code>FIRE</code>, <code>HEAL</code>, <code>STORM_PU2</code>...); <code>&lt;seed&gt;</code> a SPELL_SEED_TYPE number or its name (<code>FIRE</code>, <code>HEAL</code>,
+<code>STORM</code>...). <code>OPENBLACK_SPELL_TRACE=1</code> writes every turn <code>Spell trace</code> per spell (chants, safety level,
+strength, cost of the turn, age, closed, PSys and atoms), each applied event and the heal target searches.
+With it (or with <code>OPENBLACK_HAND_TRACE=1</code>) <code>Pot::AddResourceToPos</code> writes <code>Pot trace</code> (which pile or store each
+amount goes into, at what distance and with what radius, and the new piles with their 2D radius) and each grain of food or wood
+<code>SpellResource event</code> (units, chants paid, dry land, strength), and <code>Grain trace</code> gives every turn the elevation of the
+stream's hand (t, height, tilt and whether it is fixed); see
+<a href="miracles.html#food-and-wood-magicspellsspellresource-magicobjectsmagicfoodwood-ecspotresource">miracles.md</a>.</p>
+<p>Heal (<a href="miracles.html#heal-magicspellsspellhealcpp-particlesruleshealcpp">miracles.md</a>):
+<code>OPENBLACK_TEST_HURT_VILLAGERS="x,z,radius,life[,poisoned[,turn[,heal[,repeat]]]]"</code> sets to <code>life</code> (0..1) all the
+villagers within <code>radius</code> of (x, z), poisons them with a 1, and with <code>heal</code> 1 (HEAL) or 2 (HEAL_PU_ONE) casts the
+miracle right there like <code>SPELL_AT_POS</code>. It happens on turn <code>turn</code> (1 by default) and repeats every <code>repeat</code> turns (0 = only
+once; useful so that there is a lit chakra in the capture). Then it writes each change: <code>Heal test: turn +N villager
+E life a -&gt; b, poisoned p, glow (specular) r,g,b</code> (the chakra's glow; <code>none</code> when there is no chakra).</p>
+<p>Casting from the hand and gestures (<a href="magic.html#casting-from-the-hand-gestures-and-hand-effects-srcmagicgestures-srcmagichand-handspellseedcpp">magic.md</a>):
+- <code>OPENBLACK_TEST_CAST="press@t0,release@t1[,press@t2,release@t3...][,shot@t]"</code> presses and releases the action (the right
+  button) at those seconds from when the map exists, added to the real mouse. With a seed in the hand
+  (<code>OPENBLACK_TEST_SEED</code>) it goes through the real path: arms and casts on release (HAND_GESTURE), casts on press
+  (HAND_POSITION) or casts every turn while held (IN_HAND). The hand is wherever <code>OPENBLACK_MOUSE_AT</code> says.
+  <code>shot@t</code> (at the end) requests a capture at that moment to <code>OPENBLACK_TEST_SHOT_PATH</code>, for captures at a game time and
+  not at a frame (the frame rate varies).
+- <code>OPENBLACK_TEST_CAST_PATH="x0,z0,x1,z1"</code>: during the first press the hand travels along that line over the terrain (the
+  food, wood and water sprinkle only releases when it is moved).
+- <code>OPENBLACK_TEST_THROW_VEL="vx,vy,vz"</code>: the hand velocity (ThrowVelocity of the interface state) that the
+  spell receives when cast (the fireball leaves with it).
+- <code>OPENBLACK_TEST_GESTURE="&lt;GESTURE&gt;[,sizePx[,cx,cy[,t]]][;&lt;GESTURE&gt;...]"</code> or <code>=&lt;file.txt&gt;</code> ("x y" pixels per line):
+  draws the gesture's first template (GESTURE_TYPE name or number; a leading <code>-</code> mirrors it) <code>sizePx</code>
+  wide (200) centred on the window fraction (cx, cy) (the centre), t seconds of game time after the map exists
+  (0.5), as mouse messages every 28 ms. When it finishes it writes which gestures the buffer matches. The camera must not move
+  (an <code>OPENBLACK_CAMERA_FLY</code> flight clears the buffer).
+- <code>OPENBLACK_GESTURE_TRACE=1</code>: recognised gestures (template, mirror, segment), circles (position and size), help
+  events and casts from the hand (also with <code>OPENBLACK_SPELL_TRACE=1</code>).</p>
+<p>Fire and lightning bolt (<a href="magic.html#fire-srcecsfire">magic.md</a> and <a href="miracles.html#fireball-and-lightning-magicobjectsmagicfireball-particlesrulesfireballlightning">miracles.md</a>):
+<code>OPENBLACK_TEST_FIRE="x,z,T[,class[,turn]]"</code> sets the object with fire data nearest to (x, z) to temperature T
+(<code>SetTemperature</code>) or, if T ≤ 1, sets it on fire with that speed (<code>SetOnFire</code>); the class can be <code>any</code>, <code>tree</code>, <code>abode</code>,
+<code>villager</code> or <code>field</code>, and the turn (counted from the first one with the map loaded) allows waiting for the camera to arrive.
+<code>OPENBLACK_FIRE_TRACE=1</code> writes the new fires, the objects that are consumed, the deleted fires, the reactions and
+the villagers who flee or put out fires, and every 20 turns what each burning object draws (<code>Fire: graphic of fire ...</code>:
+flames, scale and alpha of the first one, steam and smoke), which serves to check the flames without a capture. The
+lightning bolt and the fireball are cast with <code>OPENBLACK_TEST_SPELL="LIGHTNING_BOLT,x,z,radius,duration"</code> and <code>"FIREBALL,x,z"</code>; with a long
+duration (for example 300 s) the lightning keeps striking until the camera arrives. <code>OPENBLACK_SPELL_TRACE=1</code> writes each
+type 3 event of the tips with their numbers and, per turn, <code>Lightning: N targets ... M of K forks struck</code> with the origin, the
+heading of the cone and the scale of the forks. <code>OPENBLACK_PSYS_CHAIN_TRACE=1</code> writes per frame the PSys ribbons
+(how many, with how many joints, their texture and where they go from and to), which is the way to tell "the ribbon is not
+drawn" apart from "in that frame there were none" (the lightning flickers: a fork is only visible on the turn it strikes).</p>
+<p><code>OPENBLACK_ZSORTER_TRACE=1</code> writes once per second (every 60 drawn frames) a <code>ZSorter trace:</code> line with
+what the frame's single transparent queue holds (<code>graphics::zsort</code>, <code>Renderer::DrawPass</code>): the total, the
+entries lost to the 0x800 cap (<code>NewZObject</code> 0x83F31C), how many there are of each class (models, faded, clouds,
+rain tiles, boat sprites, sprites, meshes and chains of the <code>Sorted</code> effects, <code>Queued</code> effects, mists,
+smoke, sprites, hand) and the key (squared
+distance) of the first and the last; see
+<a href="rendering-objects.html#the-single-transparent-queue-lh3dzsorter">rendering-objects.md</a>.</p>
+<p><code>OPENBLACK_SHADOW_TRACE=1</code> writes once per second the projected shadows (<code>graphics::shadow_list</code>): for each
+<code>ShadowInfo</code> (<code>shadow &lt;n&gt; caster &lt;entity&gt; light &lt;tipo&gt; alpha &lt;a&gt; fade &lt;f&gt; box (...) kMin &lt;k&gt; t' &lt;t&gt; max n &lt;n&gt;
+points &lt;p&gt;</code>, or why it is not drawn), the objects that receive one (<code>shadow receiver: instance &lt;i&gt; mesh &lt;m&gt; shadows &lt;n&gt;</code>)
+and in which view it is drawn on them (<code>shadow on object: ... view &lt;v&gt;</code>: 4 = Main, immediately; 5 = MainBlended, inside their
+queue entry). <code>OPENBLACK_DUMP_SHADOWS=&lt;folder&gt;</code> saves every 300 frames each texture ×8 as PNG
+(<code>shadow_&lt;frame&gt;_&lt;n&gt;_&lt;entity&gt;.png</code>). See <a href="rendering.html#projected-shadows-shadowinfo">rendering.md</a>.</p>
+<p><code>OPENBLACK_ORB_TRACE=1</code> writes, <strong>every drawn frame</strong> and from <code>Renderer::DrawScene</code> (right after sorting the
+list from back to front), two kinds of line in the log with the <code>graphics</code> logger:</p>
+<ul>
+<li><code>Orb trace: surface (&lt;texture&gt;) path &lt;p&gt; sorted &lt;k&gt;/&lt;n&gt; origin (x, y, z)</code> for each <code>ZR_SurfRevol</code> surface (the
+  dispenser disc, the teleport pool): the path of its effect (0 <code>Sorted</code>: drawn immediately, before
+  the whole queue, <code>k</code> = −1; 1 <code>Queued</code>: <code>k</code> is the position of its effect's entry) and the effect's origin.</li>
+<li><code>Orb trace: orb &lt;entity&gt; phase &lt;p&gt; frame &lt;f&gt; packed[1][3] &lt;v&gt; uv (u, v) alpha &lt;a&gt; sorted &lt;k&gt;/&lt;n&gt; key &lt;d&gt; sortPoint (x, y, z) inView &lt;b&gt;</code>
+  for each <code>components::OneOffSpellSeed</code> (the bubble of a one-shot ball): the phase and the frame of its 4×4 sheet
+  (<code>OneOffSpellSeed::UpdateFrame</code> 0x72A570), the packed value it carries to the shader in <code>[1][3]</code>
+  (<code>frame_anim::PackUvOffset</code>) with the UV it represents, the alpha (1 − <code>[0][3]</code>), whether it entered the sorted list and at what
+  position with what key (−1 = it did not enter: the list leaves out instances with alpha 0), the sort point of
+  <code>OneOffSpellSeed::Draw</code> 0x518E90 and the result of the view volume test. If the entity has no instance
+  this frame it writes <code>Orb trace: orb &lt;entity&gt; has no instance this frame</code>.</li>
+</ul>
+<p>It serves two purposes: checking that the dispenser disc is drawn <strong>before</strong> the bubble and
+following the bubble through the 15 → 0 wrap-around of its sheet. The scene is
+<code>OPENBLACK_TEST_DISPENSER="NORSE_ABODE_SPELL_DISPENSER,1826,2670,10,2"</code> with
+<code>OPENBLACK_CAMERA_LOCK="1816,52,2656,1826,37,2670"</code> (run it from a private copy of the exe). It is about 2
+lines per frame, so it is advisable to limit the frames with <code>-n</code>.</p>
+<p>Teleport (<a href="miracles.html#teleport-srcmagicobjectsmagicteleport-srcecssystemsimplementationsvillagerteleport">miracles.md</a>): <code>OPENBLACK_TEST_TELEPORT="x0,z0,x1,z1[,player[,mode]]"</code> plants two teleport stones like <code>SPELL_AT_POS</code> (B at x1,z1 and A at x0,z0; player 7 = neutral and free, 0 = PLAYER_ONE spends chants). <code>mode</code>: <code>walk</code> (default, the villager nearest to A walks towards B two turns earlier and A's reaction diverts it through the stones), <code>drop</code> (a second later the villager is dropped onto A, forced jump like <code>fn_005FC4F0</code>), <code>none</code> (only the stones). <code>OPENBLACK_TEST_TELEPORT_TURN=&lt;n&gt;</code> delays the start (the flight of a capture takes ~160 turns). <code>OPENBLACK_TELEPORT_TRACE=1</code> (or <code>OPENBLACK_SPELL_TRACE=1</code>) writes the stones, the distribution of the reaction, the jumps (from which stone to which, the saving in metres) and the spell's <code>PayFor</code> (a useful jump adds chants, a forced backwards one costs, R13). The discs use <code>ZR_SurfRevol</code> (<code>RendererRevolvedSurface.cpp</code>).</p>
+<p>Forest (<a href="miracles.html#forest-magicspellsspellforest-magicobjectsmagictree-ecstrees">miracles.md</a>):
+<code>OPENBLACK_TEST_MAGIC_TURN=&lt;n&gt;</code> makes <code>OPENBLACK_TEST_SPELL</code>, <code>_SEED</code> and <code>_ONESHOT</code> wait for game turn n (so
+that the <code>OPENBLACK_CAMERA_FLY</code> camera is already there); <code>OPENBLACK_TEST_FOREST_SHOT="&lt;turns&gt;,&lt;path.png&gt;[;&lt;turns&gt;,&lt;path&gt;...]"</code>
+requests a capture those turns after the forest seed touches the ground (the frame number of
+<code>--screenshot-frame</code> varies with the drawing speed; this request replaces the command-line one if they coincide).
+Example: <code>OPENBLACK_TEST_MAGIC_TURN=330 OPENBLACK_TEST_SPELL=NATURE,1790,2625
+OPENBLACK_CAMERA_FLY=1772,52,2604,1790,36,2625 OPENBLACK_TEST_FOREST_SHOT="3,a.png;120,b.png"</code> with <code>-n 11000</code>.</p>
+<p>Water (<a href="miracles.html#water-magicspellsspellwater-particlescreatorsmist">miracles.md</a>): <code>OPENBLACK_TEST_SPELL=WATER,x,z,10,6</code> (or
+<code>WATER_PU1</code>; the cloud appears 30 m above the point, the drops fall around the point) and
+<code>OPENBLACK_TEST_WATER_SHOT="&lt;turns&gt;,&lt;path.png&gt;[;...]"</code>: captures those game turns after the spell's first <code>Process</code>
+(also while it is closing). With <code>OPENBLACK_SPELL_TRACE=1</code> each drop writes its point, its distance, the watered
+objects and the last ring; each field, its crops, growth and food; a tree, the sapling it plants; a burning object,
+reaction 34. With the hand: <code>OPENBLACK_TEST_SEED=WATER OPENBLACK_TEST_CAST="press@20,release@32"
+OPENBLACK_TEST_CAST_PATH="x0,z0,x1,z1"</code>. Putting out a fire: <code>OPENBLACK_TEST_FIRE="1818.6,2628.4,500,tree,110"</code> and the water
+on turn 200 (<code>OPENBLACK_TEST_MAGIC_TURN=200</code>), camera <code>1810,36,2620,1818.6,31,2628.4</code>.</p>
+<p>Flocks (<a href="miracles.html#flocks-magicspellsspellflock-particlesrulesflockcpp">miracles.md</a>): <code>OPENBLACK_TEST_SPELL=FLYING_FLOCK,x,z</code> or <code>GROUND_FLOCK,x,z</code> (24 / 25; from 30 m above the point, the neutral player, so they head towards +x alternating sides) and <code>OPENBLACK_TEST_FLOCK_SHOT="&lt;turns&gt;,&lt;path.png&gt;[;...]"</code> (captures those game turns after the cast). With <code>OPENBLACK_SPELL_TRACE=1</code> each animal writes its departure and destination and, every 10 turns, each member its position, state and alpha. To make the camera follow them: <code>OPENBLACK_TEST_VIEW_ANIMAL="0,35,-90" OPENBLACK_TEST_ANIMAL_SPECIES=20 OPENBLACK_TEST_VIEW_LOCK=1</code> (22 the wolves).</p>
+<p>Shields (<a href="miracles.html#shields-magicspellsspellshield-magicobjectsmapshield-particlesrulesshield">miracles.md</a>):
+<code>OPENBLACK_TEST_SHIELD_SHOT="&lt;turns&gt;,&lt;path.png&gt;[;...]"</code> requests a capture those game turns after the first
+MapShield is created (like the forest one). <code>OPENBLACK_TEST_SHIELD_FRAMES="&lt;turns&gt;,&lt;n&gt;,&lt;prefix&gt;[@&lt;slow&gt;]"</code> takes n captures
+in consecutive frames (<code>&lt;prefix&gt;_&lt;i&gt;.png</code>, turn and fraction in the log; <code>@&lt;slow&gt;</code> lengthens the turn but <strong>not</strong> the
+PSys interpolation, see <a href="miracles.html#hooks-and-screenshots">miracles.md</a>). With <code>OPENBLACK_SPELL_TRACE=1</code> it writes
+<code>SpellShield::InitWithPos</code> (radius,
+anti rings, reaction, town, cost per turn), every turn the physical shield (<code>t</code>, growth curve, drawn scale and
+that of the object, angle, height, dying and whether it has a body in the physics) and each physical hit (momentum and chants
+paid). Example of the physical shield growing: <code>OPENBLACK_TEST_MAGIC_TURN=300
+OPENBLACK_TEST_SPELL="PHYSICAL_SHIELD,1826.8,2641.4,40,-2,-1,2" OPENBLACK_CAMERA_FLY=1720,90,2560,1826.8,40,2641.4
+OPENBLACK_TEST_SHIELD_SHOT="7,a.png;10,b.png;13,c.png;25,d.png"</code> with <code>-n 16000</code>. A rock against it:
+<code>OPENBLACK_TEST_PHYSICS="1745,2641.4,25,12,6,0,1.0,1"</code> (12 m/s: it bounces).</p>
+<p>Lightning explosion (<a href="miracles.html#lightning-explosion-and-missing-psys-classes-particlesrulesexplosionkeypointsorientforestcpp">miracles.md</a>):
+<code>OPENBLACK_TEST_SPELL="BEAM_EXPLOSION,x,z"</code> (also <code>BEAM_EXPLOSION_PU1</code> and <code>_PU2</code>, which spread several explosions) and
+<code>OPENBLACK_TEST_EXPLOSION_SHOT="&lt;turns&gt;,&lt;path.png&gt;[;...]"</code>, which requests captures those game turns after the first
+step of the first explosion (like the shield one). With <code>OPENBLACK_SPELL_TRACE=1</code> it writes <code>Explosion: started ...</code>
+(centre, shield margin, search radius and spiral cells) with each target (distance, radius and class), each
+destroyed object (ring, exploded and deleted) and what is not ported (the meshes in pieces), and the ground mark it leaves (<code>Explosion: ground mark</code>).
+Example: <code>OPENBLACK_TEST_MAGIC_TURN=300 OPENBLACK_TEST_SPELL="BEAM_EXPLOSION_PU2,1790,2600"
+OPENBLACK_CAMERA_FLY=1700,140,2480,1790,40,2600 OPENBLACK_TEST_EXPLOSION_SHOT="12,a.png;40,b.png;80,c.png"</code> with
+<code>-n 16000</code>.</p>
+<p>Storm (<a href="miracles.html#storm-electric-storm-and-tornado-magicspellsspellstormandtornado-particlesrulesstorm-ecsweatherlightningflashstormclouds">miracles.md</a>):
+<code>OPENBLACK_TEST_SPELL="STORM,x,z,60"</code> (or <code>STORM_PU1</code> with lightning, <code>STORM_PU2</code> with a tornado; the radius is the spell's,
+clamped to 20..1000) casts like <code>SPELL_AT_POS</code> (from 30 m above: without a heading, so the storm has no wind
+of its own). <code>OPENBLACK_TEST_STORM_SHOT="&lt;turns&gt;,&lt;path.png&gt;[;...]"</code> requests a capture those game turns after the
+first turn of the first storm; <code>OPENBLACK_TEST_STORM_STRIKE_SHOT="&lt;n&gt;,&lt;path.png&gt;[;...]"</code> requests it on the turn of
+lightning strike no. n from the clouds (the strikes last 1 or 2 turns). <code>OPENBLACK_TEST_STORM_PILE="x,z,amount[,wood]"</code> puts a
+pile of food (or of wood) there when the first storm is cast, for the tornado to pick up.
+<code>OPENBLACK_TEST_STORM_CLOUDS="x,z,radius[,clouds[,blackness[,elevation]]]"</code> registers on the first frame with land a
+storm with clouds (<code>GWeather::DrawClouds</code>: inner = radius, outer = 3 × radius, 8 clouds, blackness 0.5, elevation 160
+by default; rain 100, fade 1 s). <code>OPENBLACK_STORM_TRACE=1</code> writes the registration of the miracle's storm (radii,
+rain, cloudiness, wind, fade), each lightning strike (from which cloud, the next one, its lifetime), each thing the tornado picks up (what
+it is, how high it rises) and, every 10 turns of each storm spell, its age, chants, the weather at its centre
+(<code>ComputeWeather</code>), its atoms, the objects it carries and the flash at that point. Tornado example:
+<code>OPENBLACK_TEST_MAGIC_TURN=200 OPENBLACK_TEST_SPELL="STORM_PU2,1826.8,2641.4,60"
+OPENBLACK_TEST_STORM_PILE="1830,2650,400" OPENBLACK_CAMERA_FLY=1775,60,2595,1830,45,2650
+OPENBLACK_TEST_STORM_SHOT="95,a.png;120,b.png"</code> with <code>-n 12000</code>.</p>
+<p>Useful points in Land1: <code>1464,2016</code> is <strong>open sea</strong> (altitude 0, water cell that is not drawn), not the beach;
+shore at altitude 1 at <code>1485,2015</code>; dry land at altitude 44 at <code>1788.4,2710</code>; dry sand <code>1478,2129</code>; village store
+<code>1826.8,2641.4</code> (camera <code>1818,75,2612,1824,44,2636</code>); tree next to the store <code>1818.6,2628.4</code> (the ground is at 29.4 m:
+camera <code>1810,36,2620,1818.6,31,2628.4</code>). The <code>OPENBLACK_CAMERA_FLY</code> flight takes about 4000 frames, which with the map
+loaded are about 150-180 game turns: to see something short-lived, it is advisable to cast it with the turn parameter.</p>
+<h2 id="tests-and-test-data">Tests and test data</h2>
+<ul>
+<li><code>test_food_wood</code>: the HandStateGrain spline and its loop, the cost of each grain, the pile sounds,
+  <code>GetProportionRaised</code>, the emission of SF_Food (18 grains/s with the hand still, 1 per 2.5 m when moving it) and the reading of
+  ARRAY with floats; with <code>OPENBLACK_GAME_PATH</code> the real food and wood rows.</li>
+<li><code>test_spell_forest</code>: the forest spiral, the target scale, how many trees it wants, the cost and
+  GetMaxObjectsToCreate; with <code>OPENBLACK_GAME_PATH</code> the real NATURE row and the <code>magicTreeTypes</code>.</li>
+<li><code>test_shield</code> (<a href="miracles.html#shields-magicspellsspellshield-magicobjectsmapshield-particlesrulesshield">miracles.md</a>):
+  the clamping and the cost of the radius, the ProcessShield curves, the sphere helpers (inside, crossing, intersection,
+  bounce), the DefensiveSphere registration with a real effect and <code>DoAnyShieldDeflections</code>, and the frame of the PSys
+  hierarchies (the marked ancestors, with their scale); with <code>OPENBLACK_GAME_PATH</code>, the real rows of both shields.</li>
+<li><code>test_influence</code>: the ring curve, the town and citadel radius, the anti rings and those that follow an object.</li>
+<li><code>test_lightning</code> (<a href="miracles.html#lightning-magic_type-4-6-seed-6-lightning_bolt-particlesruleslightningcpp">miracles.md</a>): that
+  <code>UR_Lightning</code>, <code>UR_LightningStrike</code>, <code>ParticleChainCreator</code> and <code>ParticleLightMapCreator</code> are registered, the
+  properties they read and the per-segment UV of the ribbon; with <code>OPENBLACK_GAME_PATH</code>, the real <code>SF_LightningBolt*</code> and
+  <code>SF_LightningStrike</code> and the size of the light map <code>.raw</code>.</li>
+<li><code>test_spell_chants</code> (the chant economy of <a href="magic.html">magic.md</a>, without a world): a player's lightning bolt and the
+  neutral player's, the sustained shield and the tribal power, the edge cases of the strength and the alignment distribution;
+  with <code>OPENBLACK_GAME_PATH</code> also the real rows of the lightning bolt and the shield.</li>
+<li><code>test_worship</code> (the worship economy of <a href="magic.html">magic.md</a>, without a world except a registry): the capacity and
+  battery of the site by dancers, its end-of-turn count (dance intensity, battery and damage per
+  dancer), the tension, the failure of the maintenance reserve, <code>UseChants</code>, the excess of <code>AddToChantStore</code>,
+  how many villagers a town requests, <code>SigmoidThreshold</code> and the fireflies' probabilities.</li>
+<li><code>test_magic_tables</code> (miracle tables, <a href="magic.html">magic.md</a>): with <code>OPENBLACK_GAME_PATH=&lt;installation&gt;</code> it also
+  checks the real <code>Scripts\info.dat</code>; without it that test is skipped.</li>
+<li><code>test_spell_sounds</code> (PSys sound, <a href="particles.html#sound-of-the-particles-srcaudiospellsounds-srcparticlesrulessoundcpp">particles.md</a>): likewise, with <code>OPENBLACK_GAME_PATH</code> it also reads
+  <code>Data\SoundAction.h</code>, <code>spells.sad</code> and <code>SF_TeleportVortex</code>.</li>
+<li><code>test_weather</code> (time and weather, <a href="day-night-weather.html#weather-and-climate-srcecsweather">day-night-weather.md</a>), without a world: the
+  byte arithmetic, the date and the seasons, the fade and the <code>CalcAtmos</code> of a storm, the 40 m grid and the falloff with
+  height, the deletion over two turns, <code>KILL_STORMS_IN_AREA</code>, the sum of the climates, the temperature oscillation, the
+  storm that creates a climate with desire 1 and the bytes of <code>CREATE_WEATHER_STORM</code>.</li>
+<li><code>test_water_queries</code> (water queries and <code>LandAvoid</code>) needs the original data: it is <strong>skipped</strong> if
+  <code>OPENBLACK_TEST_GAME_PATH=&lt;game folder&gt;</code> is not defined. It loads <code>Scripts\Land1.txt</code> once for the whole suite
+  (beware: the magic tests use <code>OPENBLACK_GAME_PATH</code>, this one <code>OPENBLACK_TEST_GAME_PATH</code>).</li>
+<li>A third variable: the tests that read installed audio, help, video and HelpSprite files (<code>test_audio_tables</code>,
+  <code>test_music_bank</code>, <code>test_game_music</code>, <code>test_sample_play</code>, <code>test_help_system</code>, <code>test_help_dude_file</code>, <code>test_voices</code>,
+  <code>test_ui_sfx</code>, <code>test_bik_file</code>, <code>test_villager_draw_golden</code>…) use <code>OPENBLACK_TEST_BW_ROOT=&lt;game root&gt;</code> and skip
+  without it. Full list in <a href="audio.html#test-hooks">audio.md</a>.</li>
+<li>The test terrain is generated by <code>lndtool</code> in <code>test/mock/CMakeLists.txt</code>. A bug that erased the previous points
+  of the same block was fixed; the cell under the <code>test_set_camera_pos</code> camera is now flat.</li>
+</ul>
+<h2 id="committing-part-of-a-file">Committing part of a file</h2>
+<p>To commit only some hunks of a file, do <strong>not</strong> use <code>git apply --unidiff-zero</code>: it places the insertions according to
+the working tree's lines and not HEAD's, and it broke HEAD twice (f9c0b08c, fixed in 6fde22cf; 09fc3b05, fixed in
+6a0b1a4b). Assemble the commit in a temporary index on top of HEAD instead.</p>
+<h2 id="mouse-tests">Mouse tests</h2>
+<p>Scripts that move the real mouse (SetCursorPos, mouse_event): <strong>do not launch them if the user is using the PC</strong>. To
+verify without the mouse: captures with <code>OPENBLACK_CAMERA_FLY</code> and the test hooks.</p>
+<h2 id="known-traps">Known traps</h2>
+<ul>
+<li><strong>Two registry-context types with the same name share one slot.</strong> The services that keep one struct per module in an
+  entity registry's context (<code>Locator::scriptState</code>, <code>worldEffects</code>, <code>debugHooks</code>, <code>audioState</code>, and the particle
+  system's modules) look the struct up by type. EnTT identifies a type by hashing its name as the compiler spells it
+  (<code>ENTT_PRETTY_FUNCTION</code>), so two different structs that spell the same name get the same id: the second module to ask
+  for its state is handed the first one's, reinterpreted as its own type, and nothing warns. What makes a name the same:</li>
+<li>two structs called e.g. <code>State</code> in <strong>anonymous namespaces at file scope</strong>, with no enclosing named namespace, in two
+    source files: <strong>the same id</strong>, so they collide;</li>
+<li>the same two inside <strong>different named namespaces</strong> (<code>openblack::help::input_prompt</code> and <code>openblack::help::tooltips</code>):
+    different ids, which is safe, because the enclosing namespace is part of the name.
+  So a module's state struct is safe as long as no other one shares both its name and its enclosing named namespace.
+  Checked with MSVC 14.44 and the EnTT the project builds against, with a three-file test program.</li>
+</ul>
+<h2 id="renamed-identifiers">Renamed identifiers</h2>
+<p>Many of our names were copied from the original game, or kept a decompiler's placeholder. They were renamed to say
+what they do. The wiki now uses the new names for our code and keeps the original game's names for the original. This
+table lists only the old names that appear in this wiki or in older notes, so that older material can still be followed.
+Paths are under <code>src/</code>.</p>
+<table>
+<thead>
+<tr>
+<th>our old name</th>
+<th>new name</th>
+<th>file</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>game_random::LHRand</code>, <code>guidance::LHRand</code></td>
+<td><code>SeededRandom</code></td>
+<td><code>Common/GameRandom.h</code>, <code>Audio/Services/Guidance.h</code></td>
+</tr>
+<tr>
+<td><code>render_modes::Mode::AlphaTexturedAlphaNz</code>, <code>SmoothAlphaNz</code>, <code>TexturedAlphaNz</code>, <code>AlphaTexturedAlphaAdditiveNz</code>, <code>TexturedChromaAlphaNz</code></td>
+<td>the same with <code>NoZWrite</code> for <code>Nz</code></td>
+<td><code>Graphics/RenderModes.h</code></td>
+</tr>
+<tr>
+<td><code>render_modes::Mode::ChromaJustZ</code></td>
+<td><code>ChromaDepthOnly</code></td>
+<td><code>Graphics/RenderModes.h</code></td>
+</tr>
+<tr>
+<td><code>sample_play::ClearInfoList</code>, <code>AudioSystemRand</code></td>
+<td><code>ClearChannelOwners</code>, <code>AlternatingRandom</code></td>
+<td><code>Audio/Engine/SamplePlay.h</code></td>
+</tr>
+<tr>
+<td><code>DllRand</code> (the struct; the test suite keeps the name)</td>
+<td><code>LibraryRandomState</code></td>
+<td><code>Audio/Engine/SamplePlay.cpp</code></td>
+</tr>
+<tr>
+<td><code>MusicEngine::GetInfo</code>, <code>GetMasterInfo</code></td>
+<td><code>FindChannelOfBank</code>, <code>GetMainChannel</code></td>
+<td><code>Audio/Engine/MusicEngine.h</code></td>
+</tr>
+<tr>
+<td><code>MusicEngine::SetMasterVolume</code>, <code>sample_play::SetMasterVolume</code>, <code>sample_play::MasterVolume</code></td>
+<td><code>SetMainVolume</code>, <code>SetMainVolume</code>, <code>MainVolume</code></td>
+<td><code>Audio/Engine/MusicEngine.h</code>, <code>Audio/Engine/SamplePlay.h</code></td>
+</tr>
+<tr>
+<td><code>audio::SetSampleMasterVolume</code>, <code>SampleMasterVolume</code></td>
+<td><code>SetSampleMainVolume</code>, <code>SampleMainVolume</code></td>
+<td><code>Audio/Audio.h</code></td>
+</tr>
+<tr>
+<td><code>EngineConfig::audioMusicMasterVolume</code>, <code>audioSampleMasterVolume</code> (the original's registry values keep their names)</td>
+<td><code>audioMusicMainVolume</code>, <code>audioSampleMainVolume</code></td>
+<td><code>EngineConfig.h</code></td>
+</tr>
+<tr>
+<td>tests <code>MusicEngineTest.MasterVolume</code>, <code>SamplePlayTest.MasterVolume</code></td>
+<td><code>MusicEngineTest.MainVolume</code>, <code>SamplePlayTest.MainVolume</code></td>
+<td><code>test/audio/test_music_engine.cpp</code>, <code>test/audio/test_sample_play.cpp</code></td>
+</tr>
+<tr>
+<td><code>PhysOb</code> (<code>ECS/Physics/PhysOb.h</code>, <code>.cpp</code>), test files <code>test_physob_pose.cpp</code>, <code>test_physob_water.cpp</code>, suites <code>PhysObPose</code>, <code>PhysObWaterTest</code></td>
+<td><code>PhysicsBody</code> (<code>PhysicsBody.h</code>, <code>.cpp</code>), <code>test_physics_body_pose.cpp</code>, <code>test_physics_body_water.cpp</code>, <code>PhysicsBodyPose</code>, <code>PhysicsBodyWaterTest</code></td>
+<td><code>ECS/Physics/</code>, <code>test/</code></td>
+</tr>
+<tr>
+<td><code>physics::psys_objects</code> (<code>ECS/Physics/PSysObjects.h</code>, <code>.cpp</code>), the component <code>PSysCarried</code> (<code>ECS/Components/PSysCarried.h</code>), <code>test_psys_objects.cpp</code> and its suites <code>PSysObjects</code>, <code>PSysObjectsTest</code></td>
+<td><code>particle_carried_objects</code> (<code>ParticleCarriedObjects.h</code>, <code>.cpp</code>), <code>CarriedByParticleSystem</code> (<code>CarriedByParticleSystem.h</code>), <code>test_particle_carried_objects.cpp</code>, <code>ParticleCarriedObjects</code>, <code>ParticleCarriedObjectsTest</code></td>
+<td><code>ECS/Physics/</code>, <code>ECS/Components/</code>, <code>test/</code></td>
+</tr>
+<tr>
+<td>directories <code>Audio/GAudio/</code>, <code>Audio/LH/</code></td>
+<td><code>Audio/Game/</code>, <code>Audio/Engine/</code></td>
+<td><code>Audio/</code></td>
+</tr>
+<tr>
+<td>directory <code>PSys/</code> (the <code>psys</code> namespace keeps its name)</td>
+<td><code>Particles/</code></td>
+<td><code>Particles/</code></td>
+</tr>
+<tr>
+<td><code>advisor::Four1</code>, <code>CalcKey</code>, the <code>dude</code> parameters</td>
+<td><code>FastFourierTransform</code>, <code>ComputeLipSyncKey</code>, <code>advisor</code></td>
+<td><code>Audio/Services/Advisor.h</code></td>
+</tr>
+<tr>
+<td><code>spooky::SoundExCode</code>, <code>PerformSoundexComparison</code>, <code>TrySoundex</code>, <code>PlaySpooky</code></td>
+<td><code>SoundexDigit</code>, <code>SoundsAlike</code>, <code>FindSoundAlikeName</code>, <code>PlaySpookyVoice</code></td>
+<td><code>Audio/Services/SpookyVoices.h</code></td>
+</tr>
+<tr>
+<td><code>GameMusic::ProcessAudioGameTurn</code>, <code>RestartMusicThing</code>, <code>IsMusicThingFinished</code></td>
+<td><code>UpdateTurn</code>, <code>RestartThingMusic</code>, <code>IsThingMusicFinished</code></td>
+<td><code>Audio/Services/GameMusic.h</code></td>
+</tr>
+<tr>
+<td><code>CalculateRadiusPointAndDistance</code></td>
+<td><code>UpdateReceiver</code></td>
+<td><code>Audio/Services/SoundMap.cpp</code></td>
+</tr>
+<tr>
+<td><code>HelpSpritesPlayNow</code>, <code>HelpSpiritSay</code>, <code>HelpSpritesCheckMoonPhase</code>, <code>HelpSpritesAlignmentProcess</code></td>
+<td><code>CanPlaySpiritRemark</code>, <code>SpiritSay</code>, <code>RemarkOnMoonPhase</code>, <code>UpdateAlignmentRemarks</code></td>
+<td><code>Audio/Services/Guidance.h</code></td>
+</tr>
+<tr>
+<td><code>HelpSpritesTownBeingAttacked</code>, <code>HelpSpritesLowOnFood</code>, <code>HelpSpritesLowOnPeople</code>, <code>HelpSpritesVillagerUnhappy</code>, <code>HelpSpritesGeneralBad</code>, <code>HelpSpritesDestroyBuilding</code> (and the other <code>HelpSprites*</code>)</td>
+<td><code>WarnTownUnderAttack</code>, <code>WarnLowOnFood</code>, <code>WarnLowOnPeople</code>, <code>WarnVillagersUnhappy</code>, <code>RemarkGeneralBad</code>, <code>RemarkBuildingDestroyed</code> (the others are <code>Warn*</code> or <code>Remark*</code>)</td>
+<td><code>Audio/Services/Guidance.h</code></td>
+</tr>
+<tr>
+<td><code>ProcessTownDesireSFX</code>, <code>ProcessHeartBeatSFX</code>, <code>ResourceDropSFX</code>, <code>TownAttackSFX</code></td>
+<td><code>UpdateTownDesireRemarks</code>, <code>UpdateHeartBeat</code>, <code>PlayResourceDropRemark</code>, <code>PlayTownAttackRemark</code></td>
+<td><code>Audio/Services/Guidance.h</code></td>
+</tr>
+<tr>
+<td><code>StartRaiseTotemSFX</code>, <code>EndRaiseTotemSFX</code>, <code>MakeDiscipleSFX</code>, <code>BeliefSFX</code>, <code>BeliefSample</code>, <code>DeathInVillageSFX</code>, <code>GetRandomSampleBasedOnValue</code></td>
+<td><code>StartTotemRaiseSound</code>, <code>EndTotemRaiseSound</code>, <code>PlayDiscipleRemark</code>, <code>PlayBeliefRemark</code>, <code>PlayBeliefSample</code>, <code>PlayVillageDeathRemark</code>, <code>RandomSampleForValue</code></td>
+<td><code>Audio/Services/Guidance.h</code></td>
+</tr>
+<tr>
+<td><code>audio::SamplePlayAnimEffect</code></td>
+<td><code>PlayAnimationEffect</code></td>
+<td><code>Audio/Audio.h</code></td>
+</tr>
+<tr>
+<td><code>flag10</code> (play options, sound tags and the <code>PlaySoundEffect*</code> parameters)</td>
+<td><code>extra3DFlag</code></td>
+<td><code>Audio/Engine/SamplePlay.h</code>, <code>Audio/Services/SoundTags.cpp</code></td>
+</tr>
+<tr>
+<td><code>audio::Get3DSoundPos</code>, <code>tags::Get3DSoundPos</code></td>
+<td><code>OwnerSoundPoint</code>, <code>TagSoundPoint</code></td>
+<td><code>Audio/Game/AudioSystem.h</code>, <code>Audio/Services/SoundTags.h</code></td>
+</tr>
+<tr>
+<td><code>ecs::audio_queries::GAudioAlignment</code>, test <code>AudioLaws.GAudioAlignment</code></td>
+<td><code>AudioAlignmentValue</code>, <code>AudioLaws.AlignmentCurve</code></td>
+<td><code>ECS/AudioQueries.h</code></td>
+</tr>
+<tr>
+<td><code>PSysSound</code>, <code>PSysSoundPosition</code></td>
+<td><code>ParticleSound</code>, <code>ParticleSoundPosition</code></td>
+<td><code>Audio/Services/SpellSounds.h</code></td>
+</tr>
+<tr>
+<td><code>SetSetSent</code></td>
+<td><code>MarkMessageSetSent</code></td>
+<td><code>Help/HelpMessageSets.h</code></td>
+</tr>
+<tr>
+<td><code>HelpDude</code>, <code>HelpDudeControl</code>, <code>HelpDude::Update1</code></td>
+<td><code>AdvisorSpirit</code>, <code>AdvisorSpiritController</code>, <code>AdvisorSpirit::UpdateMotion</code></td>
+<td><code>Help/Spirits.h</code></td>
+</tr>
+<tr>
+<td><code>ConvertScriptSpiritToHelpSpirit</code></td>
+<td><code>ResolveScriptAdvisor</code></td>
+<td><code>Help/HelpSystem.h</code></td>
+</tr>
+<tr>
+<td><code>ActualEndGameSpeed</code></td>
+<td><code>RestoreGameSpeed</code></td>
+<td><code>Help/ScriptControl.cpp</code></td>
+</tr>
+<tr>
+<td><code>CAnim</code>, <code>CFrame</code>, <code>Help/CAnim.{h,cpp}</code></td>
+<td><code>SpiritAnimClip</code>, <code>SpiritAnimKey</code>, <code>Help/SpiritAnimClip.{h,cpp}</code></td>
+<td><code>Help/SpiritAnimClip.h</code></td>
+</tr>
+<tr>
+<td><code>help::kmicon</code>, <code>KMIcon</code>, <code>Help/KMIcon.{h,cpp}</code></td>
+<td><code>help::input_prompt</code>, <code>InputPromptIcon</code>, <code>Help/InputPromptIcon.{h,cpp}</code></td>
+<td><code>Help/InputPromptIcon.h</code></td>
+</tr>
+<tr>
+<td><code>hand_fx::RemoveAllPermBands</code>, <code>DoRemoveFromHandVisual</code>, <code>SetPULevel</code></td>
+<td><code>RemoveAllPermanentBands</code>, <code>RemoveHandSpellVisuals</code>, <code>SetPowerUpLevel</code></td>
+<td><code>Magic/Hand/HandMagicFX.h</code></td>
+</tr>
+<tr>
+<td><code>DoPreCastThings</code>, <code>DoPostCastThings</code></td>
+<td><code>PrepareCast</code>, <code>FinishCast</code></td>
+<td><code>Magic/Core/SpellSeed.cpp</code></td>
+</tr>
+<tr>
+<td><code>DrawBurst</code> parameters <code>a5</code>, <code>a6</code></td>
+<td><code>phase</code>, <code>shape</code></td>
+<td><code>Magic/Objects/FallingSpell.h</code></td>
+</tr>
+<tr>
+<td><code>magic::GetMagicTypeFromPULevel</code>, <code>GetMagicInfoFromPULevel</code></td>
+<td><code>MagicTypeForPowerUpLevel</code>, <code>MagicInfoForPowerUpLevel</code></td>
+<td><code>Magic/MagicTables.h</code></td>
+</tr>
+<tr>
+<td><code>players::ProportionOfWorldPopulationWhoBelieveInMe</code></td>
+<td><code>BelieverFraction</code></td>
+<td><code>Magic/Core/Players.h</code></td>
+</tr>
+<tr>
+<td><code>magic::ProcessPSysGameLoopEnd</code></td>
+<td><code>ProcessSpellParticlesEndOfLoop</code></td>
+<td><code>Magic/MagicLoop.h</code></td>
+</tr>
+<tr>
+<td><code>teleport::AnyMultiMapFixedNear</code></td>
+<td><code>AnyMultiCellStaticNear</code></td>
+<td><code>Magic/Objects/MagicTeleport.h</code></td>
+</tr>
+<tr>
+<td><code>worship::player::IsAtLeastOneSpellBeginToBeCharged</code>, <code>IsSpellBeginToBeCharged</code></td>
+<td><code>AnySpellCharging</code>, <code>IsThatSpellCharging</code></td>
+<td><code>Worship/PlayerSpellIcons.h</code></td>
+</tr>
+<tr>
+<td><code>icon::ActualInterfaceTap</code>, <code>UpdateGraphicsWithPULevels</code></td>
+<td><code>HandleValidatedTap</code>, <code>UpdatePowerUpGraphics</code></td>
+<td><code>Worship/WorshipSpellIcon.h</code></td>
+</tr>
+<tr>
+<td><code>SetPULevel</code>, <code>UpdateGraphicWithPULevels</code> (town centre)</td>
+<td><code>SetTownCentrePowerUpLevel</code>, <code>UpdateTownCentrePowerUpGraphics</code></td>
+<td><code>Worship/TownCentreSpellIcon.cpp</code></td>
+</tr>
+<tr>
+<td><code>Timer::MSeconds</code>, <code>SetSpeedUpFactor</code>, <code>TimerSaysDoATurn</code></td>
+<td><code>ElapsedMs</code>, <code>SetSpeed</code>, <code>IsTurnScheduled</code></td>
+<td><code>GameClock.h</code></td>
+</tr>
+<tr>
+<td><code>game_packets::ProcessOneSuperpacket</code></td>
+<td><code>DispatchQueuedPackets</code></td>
+<td><code>Input/GamePackets.h</code></td>
+</tr>
+<tr>
+<td><code>FloodAnalyse</code></td>
+<td><code>FloodFillReachable</code></td>
+<td><code>3D/LandAvoid.cpp</code></td>
+</tr>
+<tr>
+<td><code>Time2SkyType</code></td>
+<td><code>SkyType</code></td>
+<td><code>3D/DayNightClock.h</code></td>
+</tr>
+<tr>
+<td><code>billboard::VolBlend</code></td>
+<td><code>VolumeBlendBasis</code></td>
+<td><code>3D/Billboard.h</code></td>
+</tr>
+<tr>
+<td><code>PSysFrameAdvance</code>, <code>PSysFrameLerp</code>, <code>PSysFrameIndex</code></td>
+<td><code>ParticleFrameAdvance</code>, <code>ParticleFrameLerp</code>, <code>ParticleFrameIndex</code></td>
+<td><code>3D/FrameAnim.h</code></td>
+</tr>
+<tr>
+<td><code>DrawPSysSprites</code></td>
+<td><code>DrawParticleSprites</code></td>
+<td><code>Graphics/Renderer.h</code></td>
+</tr>
+<tr>
+<td><code>Graphics/RendererPSys.cpp</code>, <code>Graphics/RendererSurfRevol.cpp</code></td>
+<td><code>Graphics/RendererParticles.cpp</code>, <code>Graphics/RendererRevolvedSurface.cpp</code></td>
+<td>(files)</td>
+</tr>
+<tr>
+<td><code>AsssignTownFeature</code></td>
+<td><code>AssignTownFeatures</code></td>
+<td><code>ECS/Town/TownFeatures.h</code></td>
+</tr>
+<tr>
+<td><code>CalculeLairPos</code></td>
+<td><code>CalculateLairPosition</code></td>
+<td><code>ECS/AnimalAIDetail.h</code></td>
+</tr>
+<tr>
+<td><code>SendFootpathsAroundObsticle</code>, <code>StopGoingRoundObsticle</code></td>
+<td><code>RerouteFootpathsAroundObstacle</code>, <code>StopReroutingAroundObstacle</code></td>
+<td><code>ECS/Footpaths.h</code></td>
+</tr>
+<tr>
+<td><code>CheckSatisfySuppyWorship</code></td>
+<td><code>CheckSatisfySupplyWorship</code></td>
+<td><code>ECS/Villager/VillagerSatisfy.h</code></td>
+</tr>
+<tr>
+<td><code>DeleteDependancys</code> (fields, fish farms, scaffolds, graveyard, wonders, workshops, villager, town centre) and its tests</td>
+<td><code>DeleteDependants</code></td>
+<td><code>ECS/Fields.h</code> and the other seven headers</td>
+</tr>
+<tr>
+<td><code>WomanSpecial</code></td>
+<td><code>UpdatePregnancy</code></td>
+<td><code>ECS/Villager/VillagerAge.h</code></td>
+</tr>
+<tr>
+<td><code>alignment::CrudeSet</code>, <code>CrudeUpdate</code></td>
+<td><code>SetClamped</code>, <code>AddClamped</code></td>
+<td><code>ECS/Effects/Alignment.h</code></td>
+</tr>
+<tr>
+<td><code>pot_resource::JustAddResource</code></td>
+<td><code>AddToPotDirect</code></td>
+<td><code>ECS/PotResource.h</code></td>
+</tr>
+<tr>
+<td><code>object_resources::JustGetResource</code></td>
+<td><code>PotAmount</code></td>
+<td><code>ECS/ObjectResources.h</code></td>
+</tr>
+<tr>
+<td><code>object::ObjectGet2DRadius</code>, <code>ObjectGetHeight</code></td>
+<td><code>FootprintRadius</code>, <code>ObjectHeight</code></td>
+<td><code>ECS/ObjectMetrics.h</code></td>
+</tr>
+<tr>
+<td><code>abodes::GetNewEp</code></td>
+<td><code>GetEntrancePoint</code></td>
+<td><code>ECS/Abodes.h</code></td>
+</tr>
+<tr>
+<td><code>workshops::IsCloseToEP</code></td>
+<td><code>IsNearSpecialPoint</code></td>
+<td><code>ECS/Town/Workshops.h</code></td>
+</tr>
+<tr>
+<td><code>FireEffect::Tc</code>, <code>Tmax</code></td>
+<td><code>CombustionThreshold</code>, <code>MaxBurnTemperature</code></td>
+<td><code>ECS/Fire/FireEffect.h</code></td>
+</tr>
+<tr>
+<td><code>living::GetYXZYaw</code></td>
+<td><code>YawFromRotation</code></td>
+<td><code>ECS/LivingPhysics.h</code></td>
+</tr>
+<tr>
+<td><code>map_cells::IsMultiMapFixedClass</code>, <code>fire::traits::IsMultiMapFixed</code></td>
+<td><code>IsMultiCellStaticClass</code>, <code>IsMultiCellStatic</code></td>
+<td><code>ECS/MapCells.h</code>, <code>ECS/Fire/FireObjectTraits.h</code></td>
+</tr>
+<tr>
+<td><code>SmokyStuff</code>, <code>smoky_stuff</code>, <code>SmokyStuffCell</code>, <code>ECS/SmokyStuff.{h,cpp}</code></td>
+<td><code>DisappearSmoke</code>, <code>disappear_smoke</code>, <code>DisappearSmokeCell</code>, <code>ECS/DisappearSmoke.{h,cpp}</code></td>
+<td><code>ECS/DisappearSmoke.h</code>, <code>3D/FrameAnim.h</code></td>
+</tr>
+<tr>
+<td><code>petit_navire</code>, <code>PetitNavire</code>, <code>ECS/PetitNavire.{h,cpp}</code></td>
+<td><code>missionary_boat</code>, <code>MissionaryBoat</code>, <code>ECS/MissionaryBoat.{h,cpp}</code></td>
+<td><code>ECS/MissionaryBoat.h</code></td>
+</tr>
+<tr>
+<td><code>script_highlight::dyk_read</code></td>
+<td><code>did_you_know_read</code></td>
+<td><code>ECS/ScriptHighlight.h</code></td>
+</tr>
+<tr>
+<td><code>thing_flags</code>, <code>ECS/ThingFlags.h</code></td>
+<td><code>object_flags</code>, <code>ECS/ObjectFlags.h</code></td>
+<td><code>ECS/ObjectFlags.h</code></td>
+</tr>
+<tr>
+<td><code>PSysRand</code> (the lightning helper)</td>
+<td><code>RandomBelow</code></td>
+<td><code>Particles/Rules/Lightning.cpp</code></td>
+</tr>
+<tr>
+<td><code>DrawOffsetLT</code>, <code>SetRefPos</code></td>
+<td><code>HandDrawOffset</code>, <code>SetReference</code></td>
+<td><code>Particles/PSys.h</code></td>
+</tr>
+<tr>
+<td><code>VSNoise1To1</code></td>
+<td><code>SignedValueNoise</code></td>
+<td><code>Particles/Noise.h</code></td>
+</tr>
+<tr>
+<td><code>Creator::Kind::GJMesh</code>, <code>gj_mesh</code></td>
+<td><code>MeshPiece</code>, <code>mesh_pieces</code></td>
+<td><code>Particles/PSys.h</code>, <code>Particles/Rules/ExplodeObject.h</code></td>
+</tr>
+<tr>
+<td>directory <code>RPlan/</code>, <code>RPlan.{h,cpp}</code>, <code>RPHolder.{h,cpp}</code>, <code>RPFollow.{h,cpp}</code></td>
+<td><code>RoutePlanner/</code>, <code>RoutePlan.{h,cpp}</code>, <code>ObstacleGrid.{h,cpp}</code>, <code>RouteFollower.{h,cpp}</code> (<code>Point2D.h</code> keeps its name)</td>
+<td><code>RoutePlanner/</code></td>
+</tr>
+<tr>
+<td>namespace <code>rplan</code></td>
+<td><code>route_planner</code></td>
+<td><code>RoutePlanner/*.h</code></td>
+</tr>
+<tr>
+<td><code>RPAvoid</code>, <code>RPHolder</code></td>
+<td><code>RouteObstacle</code>, <code>ObstacleGrid</code></td>
+<td><code>RoutePlanner/ObstacleGrid.h</code></td>
+</tr>
+<tr>
+<td><code>RPlan</code>, <code>RPFollow</code></td>
+<td><code>RoutePlan</code>, <code>RouteFollower</code></td>
+<td><code>RoutePlanner/RoutePlan.h</code>, <code>RoutePlanner/RouteFollower.h</code></td>
+</tr>
+<tr>
+<td>test suites <code>RPlanTest</code>, <code>RPFollowTest</code></td>
+<td><code>RoutePlanTest</code>, <code>RouteFollowerTest</code></td>
+<td><code>test/test_rplan.cpp</code>, <code>test/test_rplan_follow.cpp</code></td>
+</tr>
+<tr>
+<td><code>Point2D::GetNormSq</code>, <code>GetRange</code></td>
+<td><code>LengthSquared</code>, <code>DistanceTo</code></td>
+<td><code>RoutePlanner/Point2D.h</code></td>
+</tr>
+<tr>
+<td><code>RPAvoid::PointIsTotallyInside</code></td>
+<td><code>RouteObstacle::ContainsCircle</code></td>
+<td><code>RoutePlanner/ObstacleGrid.h</code></td>
+</tr>
+<tr>
+<td><code>RPHolder::InitialiseSystem</code>, <code>SquareDoesNotContain</code>, <code>GetSidePointOfStartObject</code></td>
+<td><code>ObstacleGrid::InstallCallbacks</code>, <code>IsNotInSquare</code>, <code>StartObstacleSidePoint</code></td>
+<td><code>RoutePlanner/ObstacleGrid.h</code></td>
+</tr>
+<tr>
+<td><code>RPlan::GameTurnUpdate</code></td>
+<td><code>RoutePlan::StepSearch</code></td>
+<td><code>RoutePlanner/RoutePlan.h</code></td>
+</tr>
+<tr>
+<td><code>Lh3dColour.h</code>, <code>test_lh3d_colour.cpp</code></td>
+<td><code>ArgbColour.h</code>, <code>test_argb_colour.cpp</code></td>
+<td><code>Graphics/ArgbColour.h</code>, <code>test/test_argb_colour.cpp</code></td>
+</tr>
+<tr>
+<td>namespace <code>lh3d_colour</code></td>
+<td><code>argb_colour</code></td>
+<td><code>Graphics/ArgbColour.h</code></td>
+</tr>
+<tr>
+<td>test suite <code>Lh3dColour</code></td>
+<td><code>ArgbColour</code></td>
+<td><code>test/test_argb_colour.cpp</code></td>
+</tr>
+<tr>
+<td>shader include <code>lh3d_colour.sh</code> (<code>LH3D_COLOUR_SH</code>)</td>
+<td><code>argb_colour.sh</code> (<code>ARGB_COLOUR_SH</code>)</td>
+<td><code>assets/shaders/argb_colour.sh</code></td>
+</tr>
+<tr>
+<td>GLSL <code>Lh3dMulShr8</code>, <code>Lh3dAddSat</code>, <code>Lh3dMul255</code>, <code>Lh3dUnpackRgb24</code></td>
+<td><code>MultiplyShift8</code>, <code>AddSaturated</code>, <code>MultiplyDiv255</code>, <code>UnpackRgb24</code></td>
+<td><code>assets/shaders/argb_colour.sh</code>, <code>vs_object.sc</code></td>
+</tr>
+<tr>
+<td>tests <code>MulShr8_4…</code>, <code>AddSat</code>, <code>MulShr8KeepA</code>, <code>ScaleShr8…</code>, <code>Mul255…</code></td>
+<td>the names of the functions they test</td>
+<td><code>test/test_argb_colour.cpp</code></td>
+</tr>
+<tr>
+<td><code>MulShr8_4</code>, <code>AddSat_4</code></td>
+<td><code>MultiplyArgbShift8</code>, <code>AddArgbSaturated</code></td>
+<td><code>Graphics/ArgbColour.h</code></td>
+</tr>
+<tr>
+<td><code>MulShr8_3KeepA</code>, <code>ScaleShr8_3KeepA</code>, <code>AddSat_3KeepA</code></td>
+<td><code>MultiplyRgbShift8KeepAlpha</code>, <code>ScaleRgbShift8KeepAlpha</code>, <code>AddRgbSaturatedKeepAlpha</code></td>
+<td><code>Graphics/ArgbColour.h</code></td>
+</tr>
+<tr>
+<td><code>Mul255</code>, <code>Mul255_4</code>, <code>Mul255_3KeepA</code>, <code>Mul255_3OpaqueA</code></td>
+<td><code>MultiplyBytes</code>, <code>MultiplyArgb</code>, <code>MultiplyRgbKeepAlpha</code>, <code>MultiplyRgbOpaque</code></td>
+<td><code>Graphics/ArgbColour.h</code></td>
+</tr>
+<tr>
+<td>namespace <code>gutils</code></td>
+<td><code>game_math</code></td>
+<td><code>ECS/GameAngle.h</code>, <code>ECS/GameDistance.h</code>, <code>ECS/FastExp.h</code></td>
+</tr>
+<tr>
+<td>files <code>ECS/GUtilsAngle.{h,cpp}</code>, <code>ECS/GUtilsDistance.{h,cpp}</code>, <code>ECS/GUtilsExp.h</code></td>
+<td><code>ECS/GameAngle.{h,cpp}</code>, <code>ECS/GameDistance.{h,cpp}</code>, <code>ECS/FastExp.h</code></td>
+<td><code>ECS/</code></td>
+</tr>
+<tr>
+<td><code>LHArcTan</code>, <code>GetLHPointFromAngle</code></td>
+<td><code>AngleFromDelta</code>, <code>OffsetFromAngle</code></td>
+<td><code>ECS/GameAngle.h</code></td>
+</tr>
+<tr>
+<td><code>ConvertGameAngleToScawenAngle</code>, <code>ConvertScawenAngleToGameAngle</code>, <code>k_ScawenOffset</code></td>
+<td><code>GameAngleToPhysicsRadians</code>, <code>PhysicsRadiansToGameAngle</code>, <code>k_PhysicsAngleOffset</code></td>
+<td><code>ECS/GameAngle.h</code></td>
+</tr>
+<tr>
+<td><code>StepFromAngle8</code></td>
+<td><code>StepFromAngleCoarse</code></td>
+<td><code>ECS/GameAngle.h</code></td>
+</tr>
+<tr>
+<td><code>Exp24</code></td>
+<td><code>ExpSinglePrecision</code></td>
+<td><code>ECS/FastExp.h</code></td>
+</tr>
+<tr>
+<td><code>ToFixedGUtils</code>, <code>ToFixedTenthTimes65536</code>, <code>JustMapXZ</code></td>
+<td><code>MetresToFixedExact</code>, <code>MetresToFixedForHandLookup</code>, <code>CellStep</code></td>
+<td><code>ECS/MapCoords.h</code></td>
+</tr>
+<tr>
+<td>test files <code>test_gutils_angle.cpp</code>, <code>test_gutils_distance.cpp</code>, <code>test_lh_angles.cpp</code></td>
+<td><code>test_game_angle.cpp</code>, <code>test_game_distance.cpp</code>, <code>test_game_angles.cpp</code></td>
+<td><code>test/</code></td>
+</tr>
+<tr>
+<td>test suites <code>GUtilsAngle</code>, <code>GUtilsDistance</code>, <code>LhAngles</code></td>
+<td><code>GameAngle</code>, <code>GameDistance</code>, <code>GameAngles</code></td>
+<td><code>test/test_game_angle.cpp</code>, <code>test/test_game_distance.cpp</code>, <code>test/test_game_angles.cpp</code></td>
+</tr>
+<tr>
+<td>tests <code>GUtilsAngle.LHArcTan</code>, <code>MapCoords.ToFixedGUtilsIsAnotherRounding</code></td>
+<td><code>GameAngle.ArcTanTableMatches</code>, <code>MapCoords.ToFixedRoundsDifferently</code></td>
+<td><code>test/test_game_angle.cpp</code>, <code>test/test_map_coords.cpp</code></td>
+</tr>
+<tr>
+<td>namespace <code>lh_matrix</code></td>
+<td><code>affine</code></td>
+<td><code>3D/ObjectMatrix.h</code>, <code>3D/AffineMatrix.h</code></td>
+</tr>
+<tr>
+<td><code>Mat43</code>, files <code>3D/LhMatrix43.{h,cpp}</code></td>
+<td><code>AffineMatrix</code>, <code>3D/AffineMatrix.{h,cpp}</code></td>
+<td><code>3D/AffineMatrix.h</code></td>
+</tr>
+<tr>
+<td><code>YXZ</code>, <code>AngleXYZ</code>, <code>GetYXZ</code>, <code>lh_matrix::SetPosition</code></td>
+<td><code>RotationYXZ</code>, <code>RotationXYZ</code>, <code>DecomposeYXZ</code>, <code>PlacementMatrix</code></td>
+<td><code>3D/ObjectMatrix.h</code></td>
+</tr>
+<tr>
+<td><code>MulPre</code>, <code>SetInverse</code>, <code>ChangeFovScales</code></td>
+<td><code>MultiplyReversed</code>, <code>Inverse</code>, <code>LensScalesFromFov</code></td>
+<td><code>3D/AffineMatrix.h</code></td>
+</tr>
+<tr>
+<td><code>PointThroughWForScreenTest</code>, <code>PointThroughWForBoxTest</code>, <code>PointThroughWForShadowBlocks</code>, <code>BoneRootThroughW</code></td>
+<td><code>ToClipForScreenTest</code>, <code>ToClipForBoxTest</code>, <code>ToClipForShadowBlocks</code>, <code>BoneRootToClip</code></td>
+<td><code>3D/AffineMatrix.h</code></td>
+</tr>
+<tr>
+<td><code>CameraFrame::lh</code></td>
+<td><code>clipMatrices</code></td>
+<td><code>3D/Billboard.h</code></td>
+</tr>
+<tr>
+<td>test files <code>test_lh_matrix.cpp</code>, <code>test_lh_matrix43.cpp</code></td>
+<td><code>test_game_matrix.cpp</code>, <code>test_affine_matrix.cpp</code></td>
+<td><code>test/</code></td>
+</tr>
+<tr>
+<td>test suites <code>TestLhMatrix</code>, <code>LhMatrix43</code> (and the tests <code>TestLhMatrix.YXZ</code>, <code>TestLhMatrix.AngleXYZ</code>, <code>LhMatrix43.ChangeFovScales</code>)</td>
+<td><code>GameMatrix</code>, <code>AffineMatrix</code> (<code>GameMatrix.RotationYXZ</code>, <code>GameMatrix.RotationXYZ</code>, <code>AffineMatrix.LensScalesFromFov</code>)</td>
+<td><code>test/test_game_matrix.cpp</code>, <code>test/test_affine_matrix.cpp</code></td>
+</tr>
+<tr>
+<td>the file-local <code>Ftol</code> copies in <code>3D/LandMorph.cpp</code>, <code>Graphics/ShadowMath.cpp</code>, <code>Graphics/Renderer.cpp</code>, <code>Help/HelpTextDisplay.cpp</code>, <code>Help/SpiritsRuntime.cpp</code>, <code>ECS/Town/TownQueries.cpp</code>, <code>Magic/Objects/FallingSpell.cpp</code>, <code>RoutePlanner/ObstacleGrid.cpp</code></td>
+<td>one shared <code>TruncateToInt</code> (<code>map_coords::FtoL</code> and the <code>Ftol</code> in <code>ECS/Town/TownDesire.cpp</code> are kept: they behave differently)</td>
+<td><code>Common/TruncateToInt.h</code></td>
+</tr>
+</tbody>
+</table>
+<p>Several old names are also the original game's names (<code>HelpDude</code>, <code>CAnim</code>, <code>DeleteDependancys</code>, <code>PSysRand</code>,
+<code>DrawOffsetLT</code>, <code>Time2SkyType</code>, <code>LHArcTan</code>, <code>ConvertGameAngleToScawenAngle</code>, <code>JustMapXZ</code>, <code>MulPre</code>, <code>SetInverse</code>,
+<code>GetYXZ</code>, <code>SetPosition</code>...). Where a page talks about the original, it still uses them.</p>
+<h3 id="back-to-raffclars-names-2026-10-07">Back to raffclar's names (2026-10-07)</h3>
+<p>raffclar's tree is now the architecture base (<code>docs/refactor/README.md</code>, "Following raffclar's tree"). Step 2 of the
+merge plan took these names from his tree. The rows above that they undo are kept as history.</p>
+<table>
+<thead>
+<tr>
+<th>our name before</th>
+<th>his name now</th>
+<th>file</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>namespace <code>ecs::map_coords</code>, files <code>ECS/MapCoords.{h,cpp}</code></td>
+<td><code>map_coords</code>, <code>3D/MapCoords.{h,cpp}</code></td>
+<td><code>3D/MapCoords.h</code></td>
+</tr>
+<tr>
+<td><code>CellStep</code>, <code>MetresToFixedExact</code></td>
+<td><code>JustMapXZ</code>, <code>ToFixedGUtils</code></td>
+<td><code>3D/MapCoords.h</code></td>
+</tr>
+<tr>
+<td>namespace <code>game_math</code>, files <code>ECS/GameAngle.{h,cpp}</code>, <code>ECS/GameDistance.{h,cpp}</code></td>
+<td><code>gutils</code>, <code>Common/GUtilsAngle.{h,cpp}</code>, <code>Common/GUtilsDistance.{h,cpp}</code></td>
+<td><code>Common/</code></td>
+</tr>
+<tr>
+<td><code>GameAngleToPhysicsRadians</code>, <code>PhysicsRadiansToGameAngle</code>, <code>k_PhysicsAngleOffset</code></td>
+<td><code>ConvertGameAngleToScawenAngle</code>, <code>ConvertScawenAngleToGameAngle</code>, <code>k_ScawenOffset</code></td>
+<td><code>Common/GUtilsAngle.h</code></td>
+</tr>
+<tr>
+<td><code>AngleFromDelta</code>, <code>OffsetFromAngle</code>, <code>GetAngleDirection</code>, <code>GetXFromAngle</code>, <code>GetZFromAngle</code></td>
+<td><code>LHArcTan</code>, <code>GetPointFromAngle</code>, <code>GetAngleSign</code>, <code>GetXByAngle</code>, <code>GetZByAngle</code></td>
+<td><code>Common/GUtilsAngle.h</code></td>
+</tr>
+<tr>
+<td>namespace <code>graphics::zsorter</code>, files <code>Graphics/ZSorter.{h,cpp}</code></td>
+<td><code>graphics::zsort</code>, <code>Graphics/ZSort.{h,cpp}</code></td>
+<td><code>Graphics/ZSort.h</code></td>
+</tr>
+<tr>
+<td><code>components::PlayerAlignment</code>, file <code>ECS/Components/PlayerAlignment.h</code></td>
+<td><code>components::Alignment</code>, <code>ECS/Components/Alignment.h</code></td>
+<td><code>ECS/Components/Alignment.h</code></td>
+</tr>
+<tr>
+<td>file <code>ECS/Components/TownInfluence.h</code>, <code>CitadelInfluence::value</code></td>
+<td><code>ECS/Components/Influence.h</code>, <code>CitadelInfluence::reach</code></td>
+<td><code>ECS/Components/Influence.h</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="pending">Pending<span class="state pending">pending</span></h2>
+<ul>
+<li>The temple entrance (<code>Entrance.l3d</code>) follows the terrain.</li>
+<li>Town centre totem: facing the worship site (AddToPlayer 0x738130) and the creature icon.</li>
+<li>Unexplained crash (30-09-2026): a RelWithDebInfo build crashed when loading Land1 with 0xC0000005 in
+  <code>btCollisionWorld::updateSingleAabb</code>; it is unknown whether it is already fixed (see
+  <a href="#debugging-a-crash">Debugging a crash</a>).</li>
+</ul>
+</main>
+<script src="search.js"></script>
+<script src="wiki.js"></script>
+</body>
+</html>

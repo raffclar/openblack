@@ -10,6 +10,7 @@
 #pragma once
 
 #include <map>
+#include <optional>
 #include <string>
 
 #include <entt/fwd.hpp>
@@ -38,9 +39,21 @@ public:
  * Returns an ECS ID representing the mesh resource for the given creature mesh file name.
  * For example, "A_Tiger2_Evil" returns the "evil" variant mesh resource ID and
  * "A_Tiger2_Base" returns the "base" variant.
+ * Nothing when the last part of the name is not an appearance: a file left over from the artwork is not a species'
+ * body and must not take its id.
  * @param fileName The creature mesh file name
  * @return A unique ID pointing to the mesh
  */
-entt::id_type GetIdFromMeshName(const std::string& fileName);
-entt::id_type GetIdFromType(CreatureType species, CreatureBody::Appearance appearance);
+[[nodiscard]] std::optional<entt::id_type> GetIdFromMeshName(const std::string& fileName);
+[[nodiscard]] entt::id_type GetIdFromType(CreatureType species, CreatureBody::Appearance appearance);
+/// The species a creature mesh file name is of, as GetIdFromMeshName reads it, or Unknown
+[[nodiscard]] CreatureType GetSpeciesFromMeshName(const std::string& fileName);
+/// The id of what moves the species' body (creature::CreatureRig)
+[[nodiscard]] entt::id_type GetRigId(CreatureType species);
+
+/// The species' row in the game's creature tables, which start with the Giant Ape and then follow the species in order
+[[nodiscard]] constexpr size_t InfoRow(CreatureType species)
+{
+	return species == CreatureType::GiantApe ? 0 : static_cast<size_t>(species);
+}
 } // namespace openblack::creature

@@ -18,17 +18,20 @@
 
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "ECS/Components/Footpath.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Map.h"
+#include "ECS/MapCells.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack::debug::gui;
+namespace map_coords = openblack::map_coords;
 
 PathFinding::PathFinding() noexcept
     : Window("Path Finding", ImVec2(400, 400))
@@ -216,8 +219,8 @@ void PathFinding::Update() noexcept
 
 		if (!found)
 		{
-			auto& map = Locator::entitiesMap::value();
-			for (const auto& entity : map.GetMobileInGridCell(_handPosition))
+			// the mobile list of the hand's map cell, from its head (ecs::map_cells)
+			for (const auto entity : ecs::map_cells::MobileInCell(map_coords::CellOf(_handPosition)))
 			{
 				if (registry.AllOf<Villager>(entity))
 				{

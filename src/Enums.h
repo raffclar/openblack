@@ -1555,13 +1555,15 @@ static constexpr std::array<std::string_view, static_cast<size_t>(VillagerStates
     "GO_AND_CHILLOUT_OUTSIDE_HOME",
     "SIT_AND_CHILLOUT",
     "SCRIPT_GO_AND_MOVE_ALONG_PATH",
-    "RESTART_MEETING",
-    "ARRIVES_AT_SCAFFOLD_FOR_PICKUP",
-    "ARRIVES_AT_BUILDING_SITE_WITH_SCAFFOLD",
-    "MOVE_SCAFFOLD_TO_BUILDING_SITE",
-    "GOTO_ABODE_BURNING_REACTION",
-    "ARRIVES_AT_ABODE_BURNING_REACTION",
-    "REPAIRS_ABODE",
+    // 248..254: the original's VILLAGER_STATES names (GStates.h, VILLAGER_STATE_* = 248..254); runblack.exe has no
+    // state-name string table
+    "GO_HOME_FROM_WORSHIP",
+    "ARRIVES_HOME_FROM_WORSHIP",
+    "SLEEP_IN_TENT_FROM_WORSHIP",
+    "GO_TOWARDS_TELEPORT_REACTION_QUICKLY",
+    "GO_AND_CHILLOUT_IN_TOWN",
+    "WAIT_FOR_ARTIFACT_DANCE",
+    "BREEDER_JUST_LANDED",
 };
 static_assert(k_VillagerStateStrings.size() == static_cast<size_t>(VillagerStates::_COUNT),
               "The number of state type strings should be the same as the number of state types");

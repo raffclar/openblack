@@ -7,7 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <filesystem>
 #include <fstream>
+#include <iostream>
 
 #include <Camera/Camera.h>
 #include <ECS/Registry.h>
@@ -29,7 +31,6 @@
 
 // Enable this define because we use a custom locator
 #define LOCATOR_IMPLEMENTATIONS
-#include <Audio/AudioManagerNoOp.h>
 #include <Camera/DefaultWorldCameraModel.h>
 #include <Common/RandomNumberManagerTesting.h>
 
@@ -39,10 +40,12 @@ using nlohmann::json;
 using openblack::ecs::Registry;
 using namespace openblack;
 
+void LoadRaycasts(RecordedMockDynamicsSystem& dynamics, const std::filesystem::path& path);
+
 struct TestValues
 {
 	std::string_view name;
-	MockDynamicsSystem* dynamicsSystem;
+	RecordedMockDynamicsSystem* dynamicsSystem;
 	MockAction* actionInterface;
 };
 // Padding causes valgrind errors https://github.com/google/googletest/issues/3805
@@ -57,6 +60,9 @@ protected:
 		const auto testResultsPath = std::filesystem::path(k_ScenarioPath) / (testName.data() + std::string(".json"));
 		ASSERT_TRUE(std::filesystem::exists(testResultsPath));
 		std::ifstream(testResultsPath) >> _scenario;
+		const auto raycastsPath = std::filesystem::path(k_ScenarioPath) / "raycasts" / (testName.data() + std::string(".json"));
+		ASSERT_TRUE(std::filesystem::exists(raycastsPath));
+		LoadRaycasts(*GetParam().dynamicsSystem, raycastsPath);
 
 		Locator::entitiesRegistry::emplace<Registry>();
 
@@ -64,7 +70,6 @@ protected:
 		GetParam().dynamicsSystem->camera = _camera.get();
 
 		Locator::rng::emplace<openblack::RandomNumberManagerTesting>();
-		Locator::audio::emplace<openblack::audio::AudioManagerNoOp>();
 		Locator::terrainSystem::emplace<MockTerrain>();
 		Locator::windowing::emplace<MockWindowingSystem>();
 		Locator::dynamicsSystem::reset<MockDynamicsSystem>(GetParam().dynamicsSystem);
@@ -87,6 +92,8 @@ protected:
 		Locator::windowing::reset();
 		Locator::dynamicsSystem::reset();
 		Locator::gameActionSystem::reset();
+		Locator::rng::reset();
+		Locator::entitiesRegistry::reset();
 	}
 
 	static void SetModel(DefaultWorldCameraModel& m, const json& json);
@@ -97,6 +104,55 @@ protected:
 	std::unique_ptr<Camera> _camera;
 	std::unique_ptr<CameraModel> _model;
 };
+
+/// The scenario's recorded raycasts (raycasts/<name>.json): branches in the order they are tried, each with the
+/// screen coordinates it answers and, per frame, the hit point or null for no hit
+void LoadRaycasts(RecordedMockDynamicsSystem& dynamics, const std::filesystem::path& path)
+{
+	json data;
+	std::ifstream(path) >> data;
+	dynamics.branches.clear();
+	for (const auto& b : data["branches"])
+	{
+		auto& branch = dynamics.branches.emplace_back();
+		for (const auto& coord : b["coords"])
+		{
+			branch.coords.emplace_back(coord[0].get<uint16_t>(), coord[1].get<uint16_t>());
+		}
+		for (const auto& frame : b["frames"])
+		{
+			std::optional<glm::vec2> hit;
+			if (!frame[1].is_null())
+			{
+				hit = glm::vec2(frame[1][0].get<float>(), frame[1][1].get<float>());
+			}
+			branch.frames.emplace(frame[0].get<uint16_t>(), hit);
+		}
+	}
+}
+
+/// A Zoomer as the recording dumps it (current_value first ... non_linear_acceleration = c2, c3, c4 last)
+void LoadZoomer(Zoomer& zoomer, const json& j)
+{
+	zoomer.value = j["current_value"].get<float>();
+	zoomer.destination = j["destination"].get<float>();
+	zoomer.destinationSpeed = j["destination_speed"].get<float>();
+	zoomer.speed = j["current_speed"].get<float>();
+	zoomer.time = j["current_time"].get<float>();
+	zoomer.duration = j["duration"].get<float>();
+	zoomer.startValue = j["start_value"].get<float>();
+	zoomer.startSpeed = j["start_speed"].get<float>();
+	zoomer.c2 = j["non_linear_acceleration"]["x"].get<float>();
+	zoomer.c3 = j["non_linear_acceleration"]["y"].get<float>();
+	zoomer.c4 = j["non_linear_acceleration"]["z"].get<float>();
+}
+
+void LoadZoomer3d(Zoomer3& zoomer, const json& j)
+{
+	LoadZoomer(zoomer.axis[0], j["x"]);
+	LoadZoomer(zoomer.axis[1], j["y"]);
+	LoadZoomer(zoomer.axis[2], j["z"]);
+}
 
 void ValidateCamera(const Camera& c, const json& expected, int frameNumber)
 {
@@ -325,58 +381,9 @@ TEST_P(TestDefaultCameraModel, ValidateRecordedData)
 
 		SetModel(reinterpret_cast<DefaultWorldCameraModel&>(*_model), framePrev);
 
-		{
-			const auto p0 = glm::vec3 {
-			    framePrev["camera"]["camera_origin_zoomer"]["x"]["start_value"].get<float>(),
-			    framePrev["camera"]["camera_origin_zoomer"]["y"]["start_value"].get<float>(),
-			    framePrev["camera"]["camera_origin_zoomer"]["z"]["start_value"].get<float>(),
-			};
-			const auto p1 = glm::vec3 {
-			    framePrev["camera"]["camera_origin_zoomer"]["x"]["destination"].get<float>(),
-			    framePrev["camera"]["camera_origin_zoomer"]["y"]["destination"].get<float>(),
-			    framePrev["camera"]["camera_origin_zoomer"]["z"]["destination"].get<float>(),
-			};
-			const auto v0 = glm::vec3 {
-			    framePrev["camera"]["camera_origin_zoomer"]["x"]["start_speed"].get<float>(),
-			    framePrev["camera"]["camera_origin_zoomer"]["y"]["start_speed"].get<float>(),
-			    framePrev["camera"]["camera_origin_zoomer"]["z"]["start_speed"].get<float>(),
-			};
-			const auto v1 = glm::vec3 {
-			    framePrev["camera"]["camera_origin_zoomer"]["x"]["destination_speed"].get<float>(),
-			    framePrev["camera"]["camera_origin_zoomer"]["y"]["destination_speed"].get<float>(),
-			    framePrev["camera"]["camera_origin_zoomer"]["z"]["destination_speed"].get<float>(),
-			};
-			const auto duration = framePrev["camera"]["camera_origin_zoomer"]["x"]["duration"].get<float>();
-			const auto currentTime = framePrev["camera"]["camera_origin_zoomer"]["x"]["current_time"].get<float>();
-			const auto t = duration != 0.0f ? currentTime / duration : 0.0f;
-			(*_camera).SetOriginInterpolator(p0, p1, v0 * duration, v1 * duration).SetInterpolatorT(t);
-		}
-		{
-			const auto p0 = glm::vec3 {
-			    framePrev["camera"]["camera_heading_zoomer"]["x"]["start_value"].get<float>(),
-			    framePrev["camera"]["camera_heading_zoomer"]["y"]["start_value"].get<float>(),
-			    framePrev["camera"]["camera_heading_zoomer"]["z"]["start_value"].get<float>(),
-			};
-			const auto p1 = glm::vec3 {
-			    framePrev["camera"]["camera_heading_zoomer"]["x"]["destination"].get<float>(),
-			    framePrev["camera"]["camera_heading_zoomer"]["y"]["destination"].get<float>(),
-			    framePrev["camera"]["camera_heading_zoomer"]["z"]["destination"].get<float>(),
-			};
-			const auto v0 = glm::vec3 {
-			    framePrev["camera"]["camera_heading_zoomer"]["x"]["start_speed"].get<float>(),
-			    framePrev["camera"]["camera_heading_zoomer"]["y"]["start_speed"].get<float>(),
-			    framePrev["camera"]["camera_heading_zoomer"]["z"]["start_speed"].get<float>(),
-			};
-			const auto v1 = glm::vec3 {
-			    framePrev["camera"]["camera_heading_zoomer"]["x"]["destination_speed"].get<float>(),
-			    framePrev["camera"]["camera_heading_zoomer"]["y"]["destination_speed"].get<float>(),
-			    framePrev["camera"]["camera_heading_zoomer"]["z"]["destination_speed"].get<float>(),
-			};
-			const auto duration = framePrev["camera"]["camera_heading_zoomer"]["x"]["duration"].get<float>();
-			const auto currentTime = framePrev["camera"]["camera_heading_zoomer"]["x"]["current_time"].get<float>();
-			const auto t = duration != 0.0f ? currentTime / duration : 0.0f;
-			(*_camera).SetFocusInterpolator(p0, p1, v0 * duration, v1 * duration).SetInterpolatorT(t);
-		}
+		// the original's zoomers as they were at the start of the frame (the camera's origin and focus zoomers)
+		LoadZoomer3d(_camera->GetOriginZoomer(), framePrev["camera"]["camera_origin_zoomer"]);
+		LoadZoomer3d(_camera->GetFocusZoomer(), framePrev["camera"]["camera_heading_zoomer"]);
 
 		GetParam().dynamicsSystem->frameNumber = i;
 		GetParam().actionInterface->frameNumber = i;
@@ -384,40 +391,73 @@ TEST_P(TestDefaultCameraModel, ValidateRecordedData)
 		const auto deltaTimePrev = std::chrono::milliseconds(framePrev["g_delta_time"].get<int>());
 		const auto updateInfo = _model->Update(deltaTimePrev, *_camera);
 		_model->HandleActions(deltaTimePrev);
-
-		if (updateInfo)
-		{
-			const auto m1 = glm::zero<glm::vec3>();
-			// You have to normalize the velocity with the NEW duration
-			const auto durationSeconds = std::chrono::duration_cast<std::chrono::duration<float>>(updateInfo->duration);
-			(*_camera)
-			    .SetOriginInterpolator(_camera->GetOrigin(), updateInfo->origin,
-			                           _camera->GetOriginVelocity() * durationSeconds.count(), m1)
-			    .SetFocusInterpolator(_camera->GetFocus(), updateInfo->focus,
-			                          _camera->GetFocusVelocity() * durationSeconds.count(), m1)
-			    .SetInterpolatorDuration(updateInfo->duration)
-			    .SetInterpolatorTime(0us);
-		}
-
-		const auto duration = _camera->GetInterpolatorDuration().count();
-		if (duration == 0.0f)
-		{
-			(*_camera).SetInterpolatorT(1.0f);
-		}
-		else
-		{
-			(*_camera).AddInterpolatorTime(std::min(100ms, deltaTimePrev));
-		}
+		// the camera's update: the frame's ms times 0.001
+		_camera->UpdateZoomers(updateInfo, static_cast<float>(deltaTimePrev.count()) * 0.001f);
 
 		ValidateModel(reinterpret_cast<DefaultWorldCameraModel&>(*_model), framePost, i + 1);
 		ValidateCamera(*_camera, framePost["camera"], i + 1);
 	}
 }
 
-#define SCENARIO_VALUES(name)                                     \
-	TestValues                                                    \
-	{                                                             \
-		#name, new name##MockDynamicsSystem, new name##MockAction \
+TEST(TestCameraZoomers, ZoomerMatchesRecording)
+{
+	// Every zoomer state recorded from the original, bit for bit: its coefficients are those of
+	// SetDestinationWithSpeedAndTime (solved with Inverse) from its start value and speed to its
+	// destination, and its value and speed those of Update at its time. (Not a TEST_P: the fixture owns its
+	// mocks once per scenario)
+	size_t curves = 0;
+	size_t values = 0;
+	size_t scenarios = 0;
+	for (const auto& entry : std::filesystem::directory_iterator(TEST_BINARY_DIR "/camera/scenarios"))
+	{
+		if (entry.path().extension() != ".json")
+		{
+			continue;
+		}
+		++scenarios;
+		json scenario;
+		std::ifstream(entry.path()) >> scenario;
+		for (const auto& frame : scenario["frames"])
+		{
+			for (const char* name : {"camera_origin_zoomer", "camera_heading_zoomer"})
+			{
+				for (const char* axis : {"x", "y", "z"})
+				{
+					Zoomer recorded;
+					LoadZoomer(recorded, frame["camera"][name][axis]);
+					if (!(recorded.duration >= 0.001f))
+					{
+						continue;
+					}
+					Zoomer zoomer;
+					zoomer.value = recorded.startValue;
+					zoomer.speed = recorded.startSpeed;
+					zoomer.SetDestinationWithSpeedAndTime(recorded.destination, recorded.destinationSpeed, recorded.duration);
+					ASSERT_EQ(zoomer.c2, recorded.c2) << "frame " << frame["frame"] << " " << name << "." << axis;
+					ASSERT_EQ(zoomer.c3, recorded.c3) << "frame " << frame["frame"] << " " << name << "." << axis;
+					ASSERT_EQ(zoomer.c4, recorded.c4) << "frame " << frame["frame"] << " " << name << "." << axis;
+					++curves;
+					if (recorded.time > 0.0f && recorded.time < recorded.duration)
+					{
+						zoomer.Update(recorded.time);
+						ASSERT_EQ(zoomer.value, recorded.value) << "frame " << frame["frame"] << " " << name << "." << axis;
+						ASSERT_EQ(zoomer.speed, recorded.speed) << "frame " << frame["frame"] << " " << name << "." << axis;
+						++values;
+					}
+				}
+			}
+		}
+	}
+	std::cout << curves << " curves, " << values << " values" << std::endl;
+	EXPECT_EQ(scenarios, 11u);
+	EXPECT_GT(curves, 0u);
+	EXPECT_GT(values, 0u);
+}
+
+#define SCENARIO_VALUES(name)                                       \
+	TestValues                                                      \
+	{                                                               \
+		#name, new RecordedMockDynamicsSystem, new name##MockAction \
 	}
 
 const auto k_TestingScenarioValues = testing::Values( //

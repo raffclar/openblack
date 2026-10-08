@@ -26,17 +26,16 @@ class MapInterface
 public:
 	using CellId = glm::u16vec2;
 
-	static constexpr float k_PositionToGridFactor = static_cast<float>(0x10000) * 0.1f;
-	static constexpr glm::u16vec2 k_GridSize = {0x200, 0x200};
+	static constexpr float k_PositionToGridFactor = static_cast<float>(0x10000) * 0.1f; // = map_coords::k_FixedPerMetre
+	static constexpr glm::u16vec2 k_GridSize = {0x200, 0x200};                          // map_coords::k_MapCells
 
+	/// map_coords::CellOf: the MapCoords' high words, unsigned (off the map: >= k_GridSize, 0xFFFF when negative)
 	static CellId GetGridCell(const glm::vec2& pos);
 	static CellId GetGridCell(const glm::vec3& pos);
 	static glm::vec2 GetCellCenter(const CellId& cellId);
 
 	[[nodiscard]] virtual const std::unordered_set<entt::entity>& GetFixedInGridCell(const CellId& cellId) const = 0;
 	[[nodiscard]] virtual const std::unordered_set<entt::entity>& GetFixedInGridCell(const glm::vec3& pos) const = 0;
-	[[nodiscard]] virtual const std::unordered_set<entt::entity>& GetMobileInGridCell(const CellId& cellId) const = 0;
-	[[nodiscard]] virtual const std::unordered_set<entt::entity>& GetMobileInGridCell(const glm::vec3& pos) const = 0;
 
 	virtual void Rebuild() = 0;
 

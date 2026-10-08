@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The original B&amp;W frame (runblack.exe W120, D3D7, LH3D) — Black &amp; White notes</title>
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body>
+<nav id="side">
+  <h1><a href="index.html" style="color:inherit;text-decoration:none">Black &amp; White notes</a></h1>
+  <span class="tag">openblack — how the original behaves</span>
+  <input id="q" type="search" placeholder="Search (press /)" autocomplete="off">
+  <div id="hits"></div>
+  <div id="nav"><h2>Start here</h2>
+<a class="" href="README.html">Black &amp; White 1 notes for openblack</a>
+<h2>Engine</h2>
+<a class="" href="openblack-internals.html">openblack internals</a>
+<a class="" href="engine-loop.html">The engine loop: game turns and frames (original and openblack)</a>
+<a class="" href="engine-math.html">Coordinates, terrain, object size, game clock, matrices and Zoomer</a>
+<a class="" href="tooling.html">Tools and formats</a>
+<a class="" href="parity.html">Graphics engine parity: original versus openblack</a>
+<a class="here" href="original-frame.html">The original B&amp;W frame (runblack.exe W120, D3D7, LH3D)</a>
+<h2>World</h2>
+<a class="" href="map-loading.html">Map loading and script functions</a>
+<a class="" href="land-script-save.html">Writing land-script lines: SaveObject and WriteCommand</a>
+<a class="" href="water.html">Water in the game</a>
+<a class="" href="trees.html">Trees and forests</a>
+<a class="" href="buildings.html">Buildings, building sites and towns (the building side)</a>
+<a class="" href="objects-and-resources.html">Objects and resources</a>
+<a class="" href="physics.html">Physics: thrown objects, collisions, damage and rocks that split</a>
+<h2>Life</h2>
+<a class="" href="villagers.html">Villagers: data, state machine and speed</a>
+<a class="" href="animals.html">Animals: AI, states and clips</a>
+<h2>Magic and weather</h2>
+<a class="" href="magic.html">Magic: the core of the miracles</a>
+<a class="" href="miracles.html">Miracles one by one</a>
+<a class="" href="particles.html">Particles (PSys)</a>
+<a class="" href="day-night-weather.html">Day, night and weather in the original</a>
+<a class="" href="vortex.html">Vortexes and the tornado: objects swallowed, carried and flung</a>
+<h2>Hand and interface</h2>
+<a class="" href="hand-and-interface.html">The hand and the interface</a>
+<a class="" href="intro.html">The Land 1 intro and the tutorial&#x27;s script side</a>
+<a class="" href="script-camera.html">Script camera (GCamera and CameraModeScript)</a>
+<a class="" href="camera-tracks.html">Camera tracks (`Data\camera.edt`) and `WALK_PATH`</a>
+<h2>Presentation</h2>
+<a class="" href="rendering.html">World rendering: original versus openblack</a>
+<a class="" href="rendering-objects.html">Model rendering: original versus openblack</a>
+<a class="" href="animation.html">Skeletal animation (villagers and animals)</a>
+<a class="" href="audio.html">Audio: the engine, the banks, the music, the voices and the script</a>
+<a class="" href="video.html">Bink videos (.bik)</a>
+<h2>Data</h2>
+<a class="" href="mods.html">Modified data packs</a>
+<h2>Other</h2>
+<a class="" href="creature.html">The creature: groundwork, random streams and what is unknown</a></div>
+</nav>
+<main>
+<details id="toc"><summary>On this page</summary><div class="toc">
+<ul>
+<li><a href="#the-original-bw-frame-runblackexe-w120-d3d7-lh3d">The original B&amp;W frame (runblack.exe W120, D3D7, LH3D)</a><ul>
+<li><a href="#1-frame-loop">1. Frame loop</a></li>
+<li><a href="#2-draw-stages-in-order">2. Draw stages in order</a><ul>
+<li><a href="#other-cases-temple-video-and-2d">Other cases: temple, video and 2D</a></li>
+</ul>
+</li>
+<li><a href="#3-render-modes">3. Render modes</a></li>
+<li><a href="#4-global-state">4. Global state</a></li>
+<li><a href="#5-comparison-with-openblack">5. Comparison with openblack</a></li>
+<li><a href="#pending">Pending</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+<h1 id="the-original-bw-frame-runblackexe-w120-d3d7-lh3d">The original B&amp;W frame (runblack.exe W120, D3D7, LH3D)</h1>
+<p>Map of a game frame of the original, with addresses: how the frame is launched, the draw order of each
+stage, the 19 render modes (D3D states per L3D material type) and the global state (projection, haze,
+clearing, levels of detail). The status of each stage in openblack is in <a href="parity.html">parity.md</a> and the details of what has been
+done in <a href="rendering.html">rendering.md</a> (the world) and <a href="rendering-objects.html">rendering-objects.md</a> (the models).</p>
+<p>Everything is <strong>faithful</strong> (read in the executable) except what is marked <strong><span class="state approx">inferred</span></strong>.</p>
+<ul>
+<li><a href="#1-frame-loop">1. Frame loop</a></li>
+<li><a href="#2-draw-stages-in-order">2. Draw stages in order</a></li>
+<li><a href="#other-cases-temple-video-and-2d">Other cases: temple, video and 2D</a></li>
+<li><a href="#3-render-modes">3. Render modes</a></li>
+<li><a href="#4-global-state">4. Global state</a></li>
+<li><a href="#5-comparison-with-openblack">5. Comparison with openblack</a></li>
+<li><a href="#pending">Pending</a></li>
+</ul>
+<h2 id="1-frame-loop">1. Frame loop</h2>
+<p><code>GGame::Loop</code> 0x54CF20 (decomp <code>src/Black/Game.cpp</code>), on each iteration:</p>
+<ul>
+<li>ProcessGraphicsEngine 0x54D850 → [mouse, camera-&gt;Update (sets the FOV and the dynamic near plane),
+  GInterface::PreDrawProcess 0x5CE9E0 (hand collision, disciple icon), <strong>Process3dEngine 0x54DA80</strong>,
+  BMan/debug camera editor, GInterface::PostDrawProcess (only updates leash and collision, does not draw),
+  HelpSystem::PostDrawProcess (flag)] → ScriptedScreenShot → <strong>GGame::FlipScreen 0x54D800 → LHScreen::Flip
+  0x7DE090</strong> (timing text, software LHMouse::Draw, LHFlip 0x7DE580 and then the frame <em>clear</em>
+  fn_0082EE70, see <a href="#4-global-state">4. Global state</a>).</li>
+<li>Process3dEngine: LH3DRender::StartFrame 0x82F0E0 → video (Bink) → switch field_0x205a28 (0 = world,
+  1 = citadel/temple, 2 = falling-spell video) → fade / help / influence → <strong>LH3DRender::FinishFrame
+  0x82F460</strong> (Z-sort flush + callbacks + EndScene) → debug 2D (CreatureMentalEditor, leash info,
+  DisplayHowImpressed, CPU players, countdown text) → LH3DAtmos::Render2D (debug weather map
+  with Lock, <strong><span class="state approx">inferred</span></strong>).</li>
+<li>StartFrame: fninit/FPU control, delta time (g_delta_time 0xC38134, smoothed fps 0xEC7FC0),
+  <strong>BeginScene</strong> (vt+0x14), g_frame++, g_started_frame=1, <strong>zsorter reset fn_0083F3B0</strong>, fn_00813770,
+  fn_0085BF00, SetLight/SetProjMatrix only with hardware T&amp;L (never: start_system forces [0xC386E4]=1),
+  fn_00821270.</li>
+</ul>
+<h2 id="2-draw-stages-in-order">2. Draw stages in order</h2>
+<p>Case 0 = world.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Stage</th>
+<th>Function</th>
+<th>What it does / states</th>
+<th>Order / culling</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>landscape.PreDraw</td>
+<td>GLandscape::PreDraw 0x5E3F60 → LH3DIsland::PreDraw 0x7FF2D0 → fn_00877210</td>
+<td>list of visible blocks (32×32 blocks of 160), fog class per block +0x940</td>
+<td>frustum and near-plane culling with each block's box; list 0xFAA?/0xFA92D8 sorted by distance +0x9BC <strong>front to back</strong></td>
+</tr>
+<tr>
+<td>2</td>
+<td>shadow textures</td>
+<td>TemporaryShadow::UpdateAll 0x825190 (and fn_00874850 per SuperVillager)</td>
+<td>silhouettes rasterised by the CPU into per-object shadow textures (fn_008801D0, <strong><span class="state approx">inferred</span></strong>), list 0xFAA7E0</td>
+<td>—</td>
+</tr>
+<tr>
+<td>3</td>
+<td>preparation</td>
+<td>LH3DCreature::PrepareForDrawing 0x4ED320 per creature, CHand::PrepareForDrawing 0x46C550, PSysLightMaps::AddDrawing 0x6CA6E0, LH3DLandscape::TextureUpdateThread 0x871F00 (block textures: footprints and decals fn_008721A0/fn_00872FA0), LH3DAtmos::Update3D</td>
+<td>does not draw</td>
+<td>—</td>
+</tr>
+<tr>
+<td>4</td>
+<td>GLandscape::Draw 0x5E42E0</td>
+<td>(detail in 4a–4o)</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>4a</td>
+<td>preparation</td>
+<td>3D cursor (Get3DPointFromScreen), fn_00802550, Windmill::PreDraw, Tree::PreDraw (swaying in the wind), fn_008296D0 (8 s fade timer, mode 0xF), fn_005E5830 (hand position; hand night light fn_00823460/fn_0086D360; clouds fn_005E25C0 with the Clouds key)</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>4b</td>
+<td><strong>sky</strong></td>
+<td>GLandAlignement::DrawSky 0x5E2160 (not in wireframe) → fn_0086A330 → light table fn_00869850 + fog parameters, fn_0086B7F0 (sky_{good,ntrl,evil}_{day,dusk,night}.555 → 3 textures, mode 2) → fn_0086B010</td>
+<td><strong>moon</strong> moon.l3d + additive glow quad 500 (AdditiveMaterial mode 13), and a copy mirrored in Y (reflection, <strong><span class="state approx">inferred</span></strong>); <strong>dome</strong> sky.l3d with ZFUNC ALWAYS, 2 passes (texture of the base alignment with α255, then the 2nd alignment with global alpha (alignment−1)·255), darkened by the storm, towards white with lightning; <strong>sun</strong> sun.l3d fn_0086C140, colour 0x957C63, visible from 6 to 18 h, ÷(1+8·clouds). <strong>No stars.</strong></td>
+<td>the sky covers the whole screen (the colour buffer is not cleared)</td>
+</tr>
+<tr>
+<td>4c</td>
+<td><strong>reflected land</strong> (LandRef key)</td>
+<td>fn_007FF4F0, ZWRITEENABLE off around it (0x5E48B3–0x5E4900)</td>
+<td>heights ×−1, light table ×0.5, small bump forced off; land only, no models</td>
+<td>mirrored block list</td>
+</tr>
+<tr>
+<td>4d</td>
+<td>reflections in the sea</td>
+<td>PetitNavire::PreDraw 0x5DFF20 (ships); hand DrawUnderWater vt+0x118 with specular 0x65A0A0A0 through the <strong>alternative mode table 0xC387C8</strong>; object in the creature's hand; fn_00646FE0 (physics objects), fn_00775120 (sharks, cut by the water plane, 0x5E4B26), fn_00824B90 (FishFarm fish and the fish puzzle nets), fn_005DFCE0 (footprint UV2, <strong><span class="state approx">inferred</span></strong>)</td>
+<td>before the sea. The hand, what it holds, the physics objects and the ships are <strong>reflections</strong>: <code>DrawUnderWater</code> draws them mirrored in y = 0 and clipped to what is above the water (see <a href="rendering-objects.html#object-reflections-and-hand-shadow-on-objects">rendering-objects.md</a>; it had previously been assumed they were their parts under the water); the FishFarm fish are sprites under the water</td>
+<td></td>
+</tr>
+<tr>
+<td>4e</td>
+<td>SuperVillagers</td>
+<td>list 0xEB9A08: Draw vt+0x610 + shadow fn_00874850; swimming villagers generate water rings</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>4f</td>
+<td>hand night glow</td>
+<td>fn_005E3F70: additive quad on the ground of ±60, ZFUNC ALWAYS</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>4g</td>
+<td><strong>sea</strong></td>
+<td>fn_00879930 (skipped if [0xECA664] or in wireframe): sky.raw/skya.raw mode 5, rows of 2 px, ZFUNC ALWAYS, no Z write, colour = light table[255], alpha 255→80 between 7000 and 14000, period P = 2000−1800·WaterTiling</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>4h</td>
+<td>vortex</td>
+<td>fn_005FF310 → fn_005FFBB0 (LandscapeVortex, <strong><span class="state approx">inferred</span></strong>)</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>4i</td>
+<td><strong>land</strong></td>
+<td>fn_007FF610: per visible block front to back, transition blocks fn_00877D20, block fn_00874AA0 / SSE fn_007A1800 (blocks in mode 14, per-vertex light table, software haze, 2nd small bump pass in mode 14), then <strong>projected dynamic shadows</strong> per block fn_00878350 (shadow material mode 6)</td>
+<td>front to back</td>
+<td></td>
+</tr>
+<tr>
+<td>4j</td>
+<td>debug</td>
+<td>fn_0081F820: field-of-view triangles of the scripts</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>4k</td>
+<td>citadel heart</td>
+<td>fn_00467360 → CitadelHeart::DrawNow 0x4670D0</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>4l</td>
+<td>water rings</td>
+<td>fn_005E5100 over 1024×0x38 at 0xEAB7C8 (GWater circle sprite, direct LH3DSprite::Draw)</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>4m</td>
+<td><strong>models</strong></td>
+<td>fn_005E5CD0: object draw list (≤3000, GLandscape::DrawObjects 0xD1D28C) of the visible blocks (dist &lt; VanishObjectDist 100000) + global list; it is rebuilt according to DrawListRebuildCount / 10 turns / land change; with the camera still only the last objects on screen are redrawn. Draw of an object (e.g. MobileObject::Draw 0x518150): light fn_00801C90 (<a href="rendering-objects.html#model-lighting">rendering-objects.md</a>), fog fn_007FEB30, Game3DObject::AddForDrawing 0x63B5D0 → LH3DObject::AddDrawing fn_00815A70: frustum CheckRegionOnScreen 0x868C80, <strong>LOD</strong> by distance (23.3f/66.7f/86.7f → LOD 1/2/4, fade 86.7f–173.3f, culled beyond that if IsDisappear; distant humans → impostor sprite; <strong>inactive in this executable</strong>: the LevelOfDetail loads are disabled, always LOD 1, see <a href="rendering-objects.html#villager-blobs-object-reflections-and-lod">rendering-objects.md</a>), IsGlowing → glow sprite, <strong>NeedSorting (mesh with alpha, flag 0x200) → Z-sorter; otherwise immediate Draw</strong></td>
+<td>opaque: block order, unsorted; with alpha: Z-sorter</td>
+<td></td>
+</tr>
+<tr>
+<td>4m′</td>
+<td>the creature, in the list</td>
+<td>Creature::Draw 0x517910 → LH3DCreature::AddForDrawing 0x48E1C0 → DrawNow 0x48E260</td>
+<td>body (fn_00813340: at once; the Z-sorter only with the mesh flag 0x200 or global alpha, which no creature has), the shadows over it, its hair, then its eyes at once (<a href="creature.html#drawing-in-the-frame">creature.md</a>)</td>
+<td>at once, in the list's order</td>
+</tr>
+<tr>
+<td>4n</td>
+<td>rest of 5E5CD0</td>
+<td>SuperVillagers list 0xEB9A10 (OverrideMaterial with forced alpha-ref 0xA), game list vt+0x610, markers, Reward sprites, PetitNavire::PostDraw, hand_intro, sprite emitters fn_008274A0/fn_00823570/fn_00827B90/fn_00828E50</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>4o</td>
+<td>end</td>
+<td>storage pit / LandFeature::DrawWorm</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>5</td>
+<td>creature fight sparkles</td>
+<td>LH3DCreature::DrawFightSparkles 0x48DD70</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>6</td>
+<td>leashes</td>
+<td>GInterface::DrawAllLeashes 0x5D9310 (fn_008491B0; leash material mode 15)</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>7</td>
+<td>physics objects</td>
+<td>PhysicsObject::DrawAll 0x646DE0 (AddForDrawing, DrawOutOfMap)</td>
+<td>like the models</td>
+<td></td>
+</tr>
+<tr>
+<td>8</td>
+<td>hand</td>
+<td>CHand::UpdateHeldObject; <strong>CHand::AddDrawing 0x46D100 → Z-sorter</strong> (light ×1.5); objects in other players' hands with DrawInHand</td>
+<td>Z-sorter</td>
+<td></td>
+</tr>
+<tr>
+<td>9</td>
+<td>interface</td>
+<td>GInterface::Draw 0x518640 → fn_005FAF80 (magic hand), state vt+0x500 (gesture trail, etc.; gestures in mode 13)</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>10</td>
+<td>liquid particles</td>
+<td>DrawLiquidParticles 0x845C50 → Z-sorter</td>
+<td>Z-sorter</td>
+<td></td>
+</tr>
+<tr>
+<td>11</td>
+<td>debug overlay</td>
+<td>GGame::Draw 0x5533B0 (only if g_game-&gt;field_0x14 &amp; 0x4000: alignment and belief bars)</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>12</td>
+<td>miscellaneous</td>
+<td>CreatureLessonChooser::UpdateDraw, EditorIconBase::DrawMouseOver</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>13</td>
+<td>particles</td>
+<td>PSysGlobal::DrawLoop 0x68F5E0 (PSys managers → PSysManager::AddDrawing 0x6797D0 → Z-sorter), FireFly::DrawAll, Spell::DrawSpells 0x7203F0, GParticleContainer::DrawParticleContainers, GPlayer::DrawPlayers (player sparkles, blobs.raw mode 13), TownCentre::DrawAll (DrawPSys)</td>
+<td>Z-sorter</td>
+<td></td>
+</tr>
+<tr>
+<td>14</td>
+<td>counters</td>
+<td>ValueSpinner::Update/AddDrawing (not during the help cinematic)</td>
+<td>Z-sorter (<strong><span class="state approx">inferred</span></strong>)</td>
+<td></td>
+</tr>
+<tr>
+<td>15</td>
+<td>debug</td>
+<td>LH3DStorm::DebugDrawAll, LH3DAtmos::DrawWindField</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>16</td>
+<td><strong>weather</strong></td>
+<td>LH3DAtmos::Render3D 0x836250: per storm (list 0xFA92D8…, storms at dist &lt; 560) and per 80×80 tile, intensity from GetWeather at the 4 corners; if &gt;5: rain fn_008341B0 → Z-sorter callback 0x833F80 (streaks, AtmosMaterial mode 6 atmos.raw, splashes g_water_drop_cb, amount according to the RainSplash key); snow fn_00834290 → callback 0x834120 (snow.raw mode 9). Lightning: LightSheet::DoTheDrawing 0x83E8C0 (mode 13) via GLightSheet::Draw → Z-sorter. Rain colour = (light table base/2 &amp; 0x7f7f7f)+0x7f7f7f.</td>
+<td>Z-sorter by the tile's distance²</td>
+<td></td>
+</tr>
+<tr>
+<td>17</td>
+<td>camera force field</td>
+<td>ForceField of CameraModeNew3 (only with the flag)</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>18</td>
+<td>villager names</td>
+<td>VillagerName::AddDrawing → Z-sorter</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>19</td>
+<td>fade</td>
+<td>GScript::ProcessFade 0x6EB9D0 or Temple::UpdateFade 0x794280 → sets the screen fade colour [0xFA51D8] (drawn in FinishFrame)</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>20</td>
+<td>3D help</td>
+<td>HelpSystem::Draw3D 0x5C59A0 (help character, arrows)</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>21</td>
+<td>ClearLight 0x5E57B0</td>
+<td>removes the hand light (fn_00822F90/fn_00823780/fn_0086D460)</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>22</td>
+<td>power spins</td>
+<td>PowerSpinRunner → Z-sorter (PowerSpin::Draw)</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>23</td>
+<td>influence ring</td>
+<td>InfluenceCircle::Draw 0x826C90 (in the world only if the camera is more than 100 high: alpha 0→120 between 100 and 200; mode 6, no culling, wrap, UV offset 0.0001/−0.0002 per ms), Draw3DWorldTriangle <strong>immediate</strong></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>24</td>
+<td><strong>FinishFrame 0x82F460</strong></td>
+<td>(a) <strong>Z-sorter flush fn_0082F280</strong> back to front (key = dist² to the camera, max. 2048 entries); (b) "before" callbacks (ascending priority, 0xEC8130): FallingSpell (0x526480), HelpDude 0x5C2E30 (100), CameraModeNew3 0x4562E0 (1000); (c) fn_0086BB60 sky post-process (sun and lens flare, <strong><span class="state approx">inferred</span></strong>); (d) <strong>Z-reset quad</strong>: full-screen quad FVF 0x1C4, z=1, rhw=0, colour 0, material [0xEDD494] mode 1, ZFUNC ALWAYS → Z=1 over the whole screen; (e) cinema bars if [0xEB9950] (2D rectangles queued fn_0081E590, height fn_0081E8B0); (f) "after" callbacks: HelpDude 0x5C2E10 (100), <strong>flush of the 2D rectangle queue 0x81E7D0→fn_0081E3C0 (10000; mode 1, ZFUNC ALWAYS, no Z write)</strong>, HelpText 0x5CD020 (20000: help text boxes), LHVideoPlayer::thedraw 0x844E30 (0x8000), start_system 0x6424E0 (0xA0000); (g) fn_00836200 debug weather; (h) <strong>screen fade fn_0086FEE0</strong>: full-screen quad of colour [0xFA51D8], mode 1, ZFUNC ALWAYS, if alpha≠0; then the bar rectangles and the fade reset; (i) EndScene (vt+0x18)</td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h3 id="other-cases-temple-video-and-2d">Other cases: temple, video and 2D</h3>
+<ul>
+<li>Case 1 (citadel/temple): Update3D, LH3DSky::g_b_we_are_inside_citadel=1, TemporaryShadow::UpdateAll, DrawSky
+  (no sun, hence no glare at the end of the frame), Temple::Draw 0x794370 (its own lights with fn_0081E1F0 SetLight,
+  rooms; Citadel* detail keys), Temple::Update, liquid particles. Details in
+  <a href="rendering.html#the-temple-interior">rendering.md</a>.</li>
+<li>Case 2: FallingSpell video + liquid particles.</li>
+<li>Video: LHVideoPlayer::DrawToScreen (16:9 bars, alpha fade; FallingSpell 80).</li>
+<li>HUD and 2D: B&amp;W has no classic HUD; the 2D consists of the help text boxes (callback), tooltips and text with
+  GatheringText (fonts in mode 6), queued rectangles, fade, bars and the software cursor in Flip
+  (<strong><span class="state approx">inferred</span></strong>: the cursor is usually the 3D hand).</li>
+</ul>
+<h2 id="3-render-modes">3. Render modes</h2>
+<p>Table 0xC38728, 19 entries {fn, flag}; the L3D material type is the mode index.</p>
+<p>Common to all: colour = TEXTURE×DIFFUSE; ALPHAFUNC GREATEREQUAL set only once (0x82CBA6); ALPHAREF = mat+4 (or the
+forced one [0xECA65C] if [0xECA658]); bit 0 of byte +5 of the material → cull NONE, otherwise CCW; bit 2 or g_b_need_tilling →
+WRAP, otherwise CLAMP; mode cache [0xC38718] (reset to 0x14 every frame). No mode touches fog, specular,
+lighting or stage 1.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>fn</th>
+<th>States</th>
+<th>L3D type / uses</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>82D470</td>
+<td>untextured, opaque, writes Z</td>
+<td>Smooth</td>
+</tr>
+<tr>
+<td>1</td>
+<td>82D5C0</td>
+<td>untextured, SA/ISA, writes Z, stage 0 untouched</td>
+<td>SmoothAlpha; 2D rectangles, fade, Z-reset quad</td>
+</tr>
+<tr>
+<td>2</td>
+<td>82D820</td>
+<td>textured, opaque, α=tex</td>
+<td>Textured; sky domes</td>
+</tr>
+<tr>
+<td>3</td>
+<td>82D920</td>
+<td>SA/ISA, α=tex×diff, writes Z</td>
+<td>TexturedAlpha</td>
+</tr>
+<tr>
+<td>4</td>
+<td>82DC20</td>
+<td>SA/ISA, α=tex, writes Z</td>
+<td>AlphaTextured (buildings, hand; the wrist fades out with the alpha)</td>
+</tr>
+<tr>
+<td>5</td>
+<td>82DD90</td>
+<td>SA/ISA, α=tex×diff, writes Z</td>
+<td>AlphaTexturedAlpha; sea</td>
+</tr>
+<tr>
+<td>6</td>
+<td>82DF10</td>
+<td>like 5, no Z write</td>
+<td>…AlphaNz; fonts, influence, human_shadow, dynamic shadows, atmos rain, video</td>
+</tr>
+<tr>
+<td>7</td>
+<td>82D6F0</td>
+<td>untextured, SA/ISA, no Z write</td>
+<td>SmoothAlphaNz</td>
+</tr>
+<tr>
+<td>8</td>
+<td>82DAA0</td>
+<td>like 6</td>
+<td>TexturedAlphaNz</td>
+</tr>
+<tr>
+<td>9</td>
+<td>82E080</td>
+<td>SA/ISA <strong>+ alpha test</strong>, α=tex, writes Z</td>
+<td>TexturedChroma (trees 0x96), snow</td>
+</tr>
+<tr>
+<td>10</td>
+<td>82E830</td>
+<td>additive SA/ONE + alpha test, α=tex×diff, writes Z</td>
+<td>…AdditiveChroma</td>
+</tr>
+<tr>
+<td>11</td>
+<td>82E9C0</td>
+<td>like 10, no Z write</td>
+<td>…AdditiveChromaNz</td>
+</tr>
+<tr>
+<td>12</td>
+<td>82EB50</td>
+<td>additive SA/ONE, writes Z</td>
+<td>…Additive</td>
+</tr>
+<tr>
+<td>13</td>
+<td>82ECD0</td>
+<td>additive SA/ONE, no Z write</td>
+<td>…AdditiveNz: gestures, lightning, moon glow, sparkles, fire, smoke</td>
+</tr>
+<tr>
+<td>14</td>
+<td>82DD90</td>
+<td>= 5 (flag 0)</td>
+<td>land blocks, small bump</td>
+</tr>
+<tr>
+<td>15</td>
+<td>82E470</td>
+<td>SA/ISA + alpha test, α=tex×diff, writes Z</td>
+<td>TexturedChromaAlpha; leash</td>
+</tr>
+<tr>
+<td>16</td>
+<td>82E6A0</td>
+<td>like 15, no Z write</td>
+<td>text cache</td>
+</tr>
+<tr>
+<td>17</td>
+<td>82D820</td>
+<td>= 2</td>
+<td>—</td>
+</tr>
+<tr>
+<td>18</td>
+<td>82E2A0</td>
+<td>Z only (ZERO/ONE) + alpha test</td>
+<td>ChromaJustZ; vortex, fizz</td>
+</tr>
+</tbody>
+</table>
+<p>Alternative table 0xC387C8 (object fade / DrawWithGlobalAlpha, hand reflection with DrawUnderWater):
+0, 1 → D5C0; 2, 3, 17 → D920; 4, 5 → DD90; 9 → E470 (ref scaled by the object's alpha); the rest the same. Flags word:
+nobody reads it (<a href="rendering-objects.html#render-modes-and-materials-render_modes">rendering-objects.md</a>).</p>
+<h2 id="4-global-state">4. Global state</h2>
+<ul>
+<li><strong>Projection.</strong> No hardware T&amp;L: CPU transformation to XYZRHW. Horizontal FOV [0xEA1DD0], default 70°
+  (1.22173), aspect width/height [0xE839EC]; sz = 1−near/z, rhw = near/z, <strong>no far plane</strong>. Near plane
+  [0xE839E0] dynamic according to the camera's height above the ground: 0.3 + 0.16·h clamped to [0.3, 3.5] (0.1 on the
+  path cameras, 0.2 in the citadel with fov 90°).</li>
+<li><strong>Fog.</strong> No D3D fog. Software haze (Fog key [0xC37204]): start and end according to the sky type
+  (noon/midnight 400→900, dusk 100→800; storm →15/350), colour = light table base/3; per vertex
+  it darkens the diffuse towards "dark" and adds the fog RGB to the specular (<strong><span class="state approx">inferred</span></strong>); land per block +0x940,
+  objects fn_007FEB30.</li>
+<li><strong>Clearing.</strong> In Flip, after presenting, only every ~2000 ms (2 frames) in game: black 0xFF000000, z=1. The Z
+  is reset every frame with the FinishFrame quad; the colour buffer depends on the sky.</li>
+<li><strong>Gamma and filtering.</strong> No gamma. LightBoost (only in custom detail) changes the light table divisor.
+  Bilinear filtering, no mips, no AA, dithering enabled (<a href="rendering.html">rendering.md</a>).</li>
+<li><strong>Level of detail.</strong> fn_00823AD0 from start_system 0x643026; level = detailidx from the registry (&lt;5), otherwise <strong>4</strong>;
+  5 = custom (fn_008237B0 reads each key). Table 0x9A3704 (L0..L6):</li>
+<li>Live: LevelOfDetail (dead), UseSmallBump 1 in all, Clouds/CloudShadows 0001111, WaterTiling
+    0/.2/.4/.6/<strong>.8</strong>/.5/1 (level 4 → sea period <strong>560</strong>; 200 only in L6), LandRef 0001111, CitadelReflections
+    0000111, CitadelLightmaps 0111111, CitadelGlows/People 0011111, CitadelVolumeLight 0001111, RainSplash
+    0,0,3,5,8,8,8, LightBoost 0, Fog 0001111.</li>
+<li>Only at startup: Weather 0001111, Light 0011111 (object dynamic light flag 0x20), ShadowsOnObjects 0001111
+    (flag 0x40), UseHighTexture 0000111 (land textures of 256 versus 128 px), UseMultiLayerOnLandscape
+    inverted (1 only in L0), FixeLand.</li>
+<li>HardwareTnL/MaxObjectDistance are read but ignored. The land detail distances 0xE9C508 depend
+    on the number of textures in VRAM. VanishObjectDist 100000 (script).</li>
+</ul>
+<h2 id="5-comparison-with-openblack">5. Comparison with openblack</h2>
+<p>The up-to-date parity table is <a href="parity.html">parity.md</a>. The list that was here (2026-09-29) has been removed because a good
+part of it was no longer true: it listed as absent in openblack the sun and the moon, the clouds, the object reflections in the sea,
+the haze, the dynamic shadows, the particles, the fade and the bars and the water rings, and as different the
+FOV, the order of transparents and sprites, the LOD and the TexturedChroma alpha test; today all of that is done (identical
+or approximate to the original) according to parity.md.</p>
+<p>The only harmless difference remains the same: openblack clears the colour to 0x274659 (the original does not clear it; it is not visible).
+What is missing according to parity.md: the drawn snow and the raindrops on the ground; leashes and gestures; the Bink
+decoder; the creature (reflections and shadows).</p>
+<p>Original data that was only in that list:</p>
+<ul>
+<li>TexturedChroma = alpha test ≥0x96 <strong>and</strong> SA/ISA blending.</li>
+<li>The dynamic shadows fall on the land and, with ShadowsOnObjects, on the objects.</li>
+<li>Footprints and decals baked into the block textures.</li>
+<li>Clouds and cloud shadows from detail level 3.</li>
+</ul>
+<h2 id="pending">Pending<span class="state pending">pending</span></h2>
+<ul>
+<li>Stage 1: the address of the visible-block list is only known as "0xFAA?/0xFA92D8".</li>
+<li>Stage 4d: <code>fn_005DFCE0</code> (footprint UV2) and stage 4h (<code>fn_005FF310</code> → <code>fn_005FFBB0</code>, LandscapeVortex) are
+  <strong><span class="state approx">inferred</span></strong>.</li>
+<li>Stage 24 (c): <code>fn_0086BB60</code> as the sky post-process (sun and lens flare) is <strong><span class="state approx">inferred</span></strong>.</li>
+</ul>
+</main>
+<script src="search.js"></script>
+<script src="wiki.js"></script>
+</body>
+</html>

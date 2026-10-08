@@ -15,6 +15,11 @@ namespace openblack::ecs::components
 struct BigForest
 {
 	int type;
+	/// The wood left; the forest is scaled to wood / its info's woodValue
+	float wood {0.0f};
+	float woodValue {1.0f}; ///< the info's woodValue
+	/// Its Forest (made at creation; that forest points back at the BigForest)
+	uint32_t forestId {0};
 };
 
 struct Forest

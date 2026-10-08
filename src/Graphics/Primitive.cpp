@@ -16,6 +16,7 @@
 #include <bgfx/bgfx.h>
 #include <glm/vec2.hpp>
 
+#include "IndexBuffer.h"
 #include "Mesh.h"
 #include "VertexBuffer.h"
 
@@ -40,9 +41,9 @@ std::unique_ptr<Mesh> Primitive::CreatePlane()
 	decl.emplace_back(VertexAttrib::Attribute::Position, static_cast<uint8_t>(2), VertexAttrib::Type::Float);
 
 	const auto* mem = bgfx::makeRef(vertices.data(), static_cast<uint32_t>(vertices.size() * sizeof(vertices[0])));
-	auto* vertexBuffer = new VertexBuffer("Plane", mem, decl);
+	auto vertexBuffer = std::make_unique<VertexBuffer>("Plane", mem, decl);
 	bgfx::frame();
-	auto mesh = std::make_unique<Mesh>(vertexBuffer, nullptr, Mesh::Topology::TriangleList);
+	auto mesh = std::make_unique<Mesh>(std::move(vertexBuffer), nullptr, Mesh::Topology::TriangleList);
 	bgfx::frame();
 
 	return mesh;

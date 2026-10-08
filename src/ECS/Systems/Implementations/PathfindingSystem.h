@@ -20,6 +20,6 @@ namespace openblack::ecs::systems
 class PathfindingSystem final: public PathfindingSystemInterface
 {
 public:
-	void Update() override;
+	void Step(entt::entity entity) override;
 };
 } // namespace openblack::ecs::systems

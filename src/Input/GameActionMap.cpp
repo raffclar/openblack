@@ -19,7 +19,11 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "FixedMouse.h"
+#include "Game.h"
+#include "GameCursor.h"
 #include "Locator.h"
+#include "RealInput.h"
 #include "Windowing/WindowingInterface.h"
 
 using namespace openblack::input;
@@ -110,7 +114,8 @@ glm::ivec2 GameActionMap::GetMouseDelta() const
 
 void GameActionMap::Frame()
 {
-	if ((SDL_GetMouseState(nullptr, nullptr) & (SDL_BUTTON_LMASK | SDL_BUTTON_RMASK)) == (SDL_BUTTON_LMASK | SDL_BUTTON_RMASK))
+	if (!FixedMouse().has_value() && !IgnoreRealInput() &&
+	    (SDL_GetMouseState(nullptr, nullptr) & (SDL_BUTTON_LMASK | SDL_BUTTON_RMASK)) == (SDL_BUTTON_LMASK | SDL_BUTTON_RMASK))
 	{
 		_unbindableMap = static_cast<UnbindableActionMap>(static_cast<uint8_t>(_unbindableMap) |
 		                                                  static_cast<uint8_t>(UnbindableActionMap::TWO_BUTTON_CLICK));
@@ -119,7 +124,7 @@ void GameActionMap::Frame()
 		                                                static_cast<uint64_t>(_mouseModBindings[SDL_BUTTON_RMASK].second)));
 		_bindableMap = static_cast<BindableActionMap>(static_cast<uint64_t>(_bindableMap) &
 		                                              ~(static_cast<uint64_t>(_mouseBindings[SDL_BUTTON_LMASK]) |
-		                                                static_cast<uint64_t>(_mouseBindings[SDL_BUTTON_LMASK])));
+		                                                static_cast<uint64_t>(_mouseBindings[SDL_BUTTON_RMASK])));
 	}
 	else
 	{
@@ -193,6 +198,15 @@ void GameActionMap::Frame()
 	{
 		glm::ivec2 absoluteMousePosition;
 		SDL_GetMouseState(&absoluteMousePosition.x, &absoluteMousePosition.y);
+		if (FixedMouse().has_value())
+		{
+			absoluteMousePosition = *FixedMouse();
+		}
+		else if (IgnoreRealInput())
+		{
+			// the game's cursor of the last frame (OPENBLACK_MOUSE_AT or a hand demo), not the real one
+			absoluteMousePosition = GameCursor();
+		}
 		const auto screenSize =
 		    Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::ivec2(1.0f, 1.0f);
 		_mousePosition = glm::clamp(absoluteMousePosition, glm::zero<decltype(screenSize)>(), screenSize);
@@ -225,8 +239,7 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 		}
 	}
 	// Double click will not count as a single click
-	else if (event.type == SDL_MOUSEBUTTONDOWN && (event.button.button & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0 &&
-	         event.button.clicks == 2)
+	else if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT && event.button.clicks == 2)
 	{
 		_unbindableMap = static_cast<UnbindableActionMap>(static_cast<uint8_t>(_unbindableMap) |
 		                                                  static_cast<uint8_t>(UnbindableActionMap::DOUBLE_CLICK));
@@ -314,7 +327,7 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 			                                              ~static_cast<uint64_t>(_keyboardBindings[event.key.keysym.scancode]));
 		}
 	}
-	else if (event.type == SDL_MOUSEBUTTONUP && (event.button.button & SDL_BUTTON_LMASK) != 0 && event.button.clicks == 2)
+	else if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT && event.button.clicks == 2)
 	{
 		_unbindableMap = static_cast<UnbindableActionMap>(static_cast<uint8_t>(_unbindableMap) &
 		                                                  ~static_cast<uint8_t>(UnbindableActionMap::DOUBLE_CLICK));
@@ -346,7 +359,8 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 	}
 	else if (event.type == SDL_MOUSEMOTION)
 	{
-		_mouseDelta = {event.motion.xrel, event.motion.yrel};
+		// Accumulate: several motion events can arrive in one frame (Frame() resets the delta).
+		_mouseDelta += glm::ivec2(event.motion.xrel, event.motion.yrel);
 	}
 }
 

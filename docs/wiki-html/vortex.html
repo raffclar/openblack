@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vortexes and the tornado: objects swallowed, carried and flung — Black &amp; White notes</title>
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body>
+<nav id="side">
+  <h1><a href="index.html" style="color:inherit;text-decoration:none">Black &amp; White notes</a></h1>
+  <span class="tag">openblack — how the original behaves</span>
+  <input id="q" type="search" placeholder="Search (press /)" autocomplete="off">
+  <div id="hits"></div>
+  <div id="nav"><h2>Start here</h2>
+<a class="" href="README.html">Black &amp; White 1 notes for openblack</a>
+<h2>Engine</h2>
+<a class="" href="openblack-internals.html">openblack internals</a>
+<a class="" href="engine-loop.html">The engine loop: game turns and frames (original and openblack)</a>
+<a class="" href="engine-math.html">Coordinates, terrain, object size, game clock, matrices and Zoomer</a>
+<a class="" href="tooling.html">Tools and formats</a>
+<a class="" href="parity.html">Graphics engine parity: original versus openblack</a>
+<a class="" href="original-frame.html">The original B&amp;W frame (runblack.exe W120, D3D7, LH3D)</a>
+<h2>World</h2>
+<a class="" href="map-loading.html">Map loading and script functions</a>
+<a class="" href="land-script-save.html">Writing land-script lines: SaveObject and WriteCommand</a>
+<a class="" href="water.html">Water in the game</a>
+<a class="" href="trees.html">Trees and forests</a>
+<a class="" href="buildings.html">Buildings, building sites and towns (the building side)</a>
+<a class="" href="objects-and-resources.html">Objects and resources</a>
+<a class="" href="physics.html">Physics: thrown objects, collisions, damage and rocks that split</a>
+<h2>Life</h2>
+<a class="" href="villagers.html">Villagers: data, state machine and speed</a>
+<a class="" href="animals.html">Animals: AI, states and clips</a>
+<h2>Magic and weather</h2>
+<a class="" href="magic.html">Magic: the core of the miracles</a>
+<a class="" href="miracles.html">Miracles one by one</a>
+<a class="" href="particles.html">Particles (PSys)</a>
+<a class="" href="day-night-weather.html">Day, night and weather in the original</a>
+<a class="here" href="vortex.html">Vortexes and the tornado: objects swallowed, carried and flung</a>
+<h2>Hand and interface</h2>
+<a class="" href="hand-and-interface.html">The hand and the interface</a>
+<a class="" href="intro.html">The Land 1 intro and the tutorial&#x27;s script side</a>
+<a class="" href="script-camera.html">Script camera (GCamera and CameraModeScript)</a>
+<a class="" href="camera-tracks.html">Camera tracks (`Data\camera.edt`) and `WALK_PATH`</a>
+<h2>Presentation</h2>
+<a class="" href="rendering.html">World rendering: original versus openblack</a>
+<a class="" href="rendering-objects.html">Model rendering: original versus openblack</a>
+<a class="" href="animation.html">Skeletal animation (villagers and animals)</a>
+<a class="" href="audio.html">Audio: the engine, the banks, the music, the voices and the script</a>
+<a class="" href="video.html">Bink videos (.bik)</a>
+<h2>Data</h2>
+<a class="" href="mods.html">Modified data packs</a>
+<h2>Other</h2>
+<a class="" href="creature.html">The creature: groundwork, random streams and what is unknown</a></div>
+</nav>
+<main>
+<details id="toc"><summary>On this page</summary><div class="toc">
+<ul>
+<li><a href="#vortexes-and-the-tornado-objects-swallowed-carried-and-flung">Vortexes and the tornado: objects swallowed, carried and flung</a><ul>
+<li><a href="#the-vortex-objects-landscapevortex-magicvortexcpp-0x5fd2d00x600460">The vortex objects (LandscapeVortex, MagicVortex.cpp 0x5FD2D0..0x600460)</a></li>
+<li><a href="#states-and-fades">States and fades</a></li>
+<li><a href="#taking-objects-in-the-in-vortex">Taking objects in (the In vortex)</a></li>
+<li><a href="#bringing-them-out-the-out-vortex">Bringing them out (the Out vortex)</a></li>
+<li><a href="#the-land-under-a-vortex">The land under a vortex</a></li>
+<li><a href="#the-objects-a-particle-system-carries-tornado-and-vortex">The objects a particle system carries (tornado and vortex)</a></li>
+<li><a href="#drawing">Drawing</a></li>
+<li><a href="#what-is-ported-and-what-is-pending">What is ported and what is pending</a></li>
+<li><a href="#sources">Sources</a></li>
+<li><a href="#pending">Pending</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+<h1 id="vortexes-and-the-tornado-objects-swallowed-carried-and-flung">Vortexes and the tornado: objects swallowed, carried and flung</h1>
+<p>Code: <code>src/ECS/Vortex.{h,cpp}</code> and <code>src/ECS/Components/LandscapeVortex.h</code> (the vortex
+objects), <code>src/ECS/Physics/ParticleCarriedObjects.{h,cpp}</code> (was <code>PSysObjects</code>; what a particle system carries) and <code>src/Particles/Rules/Storm.cpp</code>
+(the tornado's rule). The tornado as a miracle (the storm spell, its funnel, dust and pick-up) is in
+<a href="miracles.html#the-tornado-ur_tornado-0x6d18b0-ctor-0x6d1680">miracles.md</a>; this page covers the objects.</p>
+<ul>
+<li><a href="#the-vortex-objects-landscapevortex-magicvortexcpp-0x5fd2d00x600460">The vortex objects</a></li>
+<li><a href="#states-and-fades">States and fades</a></li>
+<li><a href="#taking-objects-in-the-in-vortex">Taking objects in</a></li>
+<li><a href="#bringing-them-out-the-out-vortex">Bringing them out</a></li>
+<li><a href="#the-land-under-a-vortex">The land under a vortex</a></li>
+<li><a href="#the-objects-a-particle-system-carries-tornado-and-vortex">The objects a particle system carries</a></li>
+<li><a href="#drawing">Drawing</a></li>
+<li><a href="#what-is-ported-and-what-is-pending">What is ported and what is pending</a>, <a href="#sources">Sources</a></li>
+<li><a href="#pending">Pending</a></li>
+</ul>
+<h2 id="the-vortex-objects-landscapevortex-magicvortexcpp-0x5fd2d00x600460">The vortex objects (LandscapeVortex, MagicVortex.cpp 0x5FD2D0..0x600460)</h2>
+<ul>
+<li>Three classes, made by <code>LandscapeVortex::Create(pos, type, 50.0)</code> 0x5FE6E0 from the CHL <code>CREATE Vortex</code> (GScript
+  0x6F171B): <strong>In</strong> (0x104 bytes, ctor 0x5FD7F0), <strong>Out</strong> (0x134, 0x5FDE20) and <strong>Volcano</strong> (0xEC, 0x5FD740). Any
+  other type makes nothing.</li>
+<li><code>CallVirtualFunctionsForCreation</code> 0x5FEE30 reads the type's <strong>GVortexInfo</strong> row (info.dat, table 0xD38248, stride
+  0x40; openblack <code>InfoConstants::vortex</code>):</li>
+<li>the initial state (info +0x20 -&gt; +0xE4);</li>
+<li>the mesh 0x230 scaled by <code>baseScale</code> (+0x28);</li>
+<li>up to four particle systems: ObjectMover +0x18 (the one that pulls objects), PreLandscape +0x10 (on the ground),
+    PostLandscape +0x14 and LightMap +0x1C;</li>
+<li>for the Volcano only, a looping sound (0xAC).
+  The <code>maxToCreate*</code> fields are not read: the Out's villager count is a literal 30 (fn_005FD480).</li>
+<li>CHL: <code>VORTEX_FADE_OUT</code> 257 (GScript 0x6FD8C0 -&gt; StartFadeOut 0x5FFFD0) and <code>VORTEX_PARAMETERS</code> 328 (0x6FE090:
+  SetTown 0x5FDFE0 and SetFlockParams 0x5FDFF0 of an Out: the town the arrivals join, where the arriving animals settle
+  and the flock's two word fields).</li>
+<li>The global list [0xD38220] (linked through +0x88) is walked once a frame (fn_005FF310 from GLandscape::Draw
+  0x5E4E91) and once a turn (fn_005FF330 from PSysGlobal::GameLoopEnd 0x68F5B9).</li>
+<li>A vortex cannot be picked up (ValidForPlaceInHand 0x5FF300 = 0) and is not an effect receiver. In the physics it is
+  never a flying body. Only the In is hit by thrown objects: InteractsWithPhysicsObjects 0x5FD8C0 = 1, no raise, row
+  13 of PhysicsConstants.</li>
+</ul>
+<h2 id="states-and-fades">States and fades</h2>
+<ul>
+<li>+0xE4 is <code>VortexStateType</code>: 0 Inactive, 1 Active, 2 FadeIn, 3 FadeOut. StartFadeIn fn_005FFFB0 and StartFadeOut
+  set the state and +0xB4 = the turn.</li>
+<li>The seconds in the state, <code>e</code> (fn_005FF920): <code>(turns since +0xB4 + the turn fraction) × ms per turn × 0.001</code>.</li>
+<li>The presence <code>f</code> (fn_005FFAD0):</li>
+<li>Inactive 0, Active 1;</li>
+<li>FadeIn: 0 for 2 s, then <code>smooth((e − 2) / 5)</code>;</li>
+<li>FadeOut: <code>smooth(1 − e / 5)</code> for 5 s, then 0;</li>
+<li>with <code>smooth(x) = (3 − 2x)·x·x</code>.</li>
+<li>The fade and land curves are fn_005FFAD0, fn_005FFAA0 and fn_005FF350; with the retail spline (every y 0) their
+  values are exact in float.</li>
+<li>Once a turn (fn_005FF4F0), after 7 s: a FadeIn becomes Active, and a FadeOut becomes Inactive and is deleted
+  (<code>ToBeDeleted</code>).</li>
+</ul>
+<h2 id="taking-objects-in-the-in-vortex">Taking objects in (the In vortex)</h2>
+<ul>
+<li><strong>Once a turn</strong>, only when Active (ProcessContentsOfVortex 0x5FDB60):</li>
+<li>a spiral walk of up to 9999 cells from the vortex, within Create's 50 m (+0xE8) on every 3rd turn and 25 m on
+    the others; the walk stops at the first cell farther than that;</li>
+<li>every object of each cell that <code>CanBeSuckedIntoVortex</code> (vt +0x640) is taken in at rest;</li>
+<li>a pile gives up to 1000 into a new pile, scaled <code>(rand(0.3)·0.4 + 0.3) × scale</code>, and that one is taken.</li>
+<li><strong>A thrown object that hits it</strong> (ReactToPhysicsImpact 0x5FD8E0) is taken in with its velocity and its body matrix.
+  This needs Active, <code>CanBeSuckedIntoVortex</code> and IN_PHYSICS.</li>
+<li>The take (fn_005FD9B0):</li>
+<li>a creature only fizzes, <code>SetFizz(1, 3, true)</code>, and only when closer than <code>Get2DRadius × 0.7</code>;</li>
+<li>anything else that <code>CanBecomeAPhysicsObject</code>, when the vortex has its ObjectMover particle system (+0x98,
+    0x5FDA33), becomes a <strong>VortexObjectInfo</strong>: the object, "from the physics",
+    velocity, matrix, the script-held flag, the vortex;</li>
+<li>the record is queued for the particle rule <code>UR_VortexAttract</code> 0x6D39C0. That rule turns each record into a
+    particle carrying the object on a spiral into the vortex.</li>
+<li>What arrives and is not script-held is <strong>written to <code>vortex.txt</code></strong> in the save folder (VortexSave, the In's +0xEC,
+  <code>obj-&gt;SaveObject</code> vt +0x82C, fn_0076FA00): see the next section.</li>
+</ul>
+<h2 id="bringing-them-out-the-out-vortex">Bringing them out (the Out vortex)</h2>
+<ul>
+<li>An In and an Out are <strong>not linked in memory</strong>. The In writes what it swallows to <code>vortex.txt</code> (VortexSave mode 0),
+  and the Out of the next land reads it back (mode 1, the land-script parser <code>LHScriptX::InitIfLevel</code> 0x7E7530).
+  That is how the villagers and objects taken on one island come out on the next.</li>
+<li>Once a turn (ProcessContentsOfVortex 0x5FE030), on even turns:</li>
+<li>it emits at a cell 16 m away at a random angle: the next object of the file, and when the file is empty
+    <strong>30 new villagers</strong>;</li>
+<li>the new villagers are of the town's tribe (type 7, Norse, without a town), half of them housewives and the rest a forester,
+    fisherman, farmer, shepherd or leader; every 5th one is a child of <code>rand(9) + 1</code> years, the others <code>rand(6) + 16</code>.
+  The statistics +0x118 / +0x120 / +0x124 count objects, food + wood and villagers.</li>
+<li>The hand-over (fn_005FE3B0):</li>
+<li>a villager:<ul>
+<li>joins the Out's town, and becomes a disciple 12 (FROM_VORTEX) when there is also a script flock;</li>
+<li>joins that flock (AddMember); when the flock is in a script, the villager becomes the script's too;</li>
+<li>is kept alive while thrown (SetLife(1.0));</li>
+</ul>
+</li>
+<li>an animal is pointed at the Out's animal Flock (Living::SetFlock), made at SetFlockParams' position:<ul>
+<li>the flock is made at the first arrival, with SetFlockParams' two numbers as its flock distance and domain radius;</li>
+<li>a new flock replaces it when its tail holds an animal of another kind;</li>
+<li>SetFlock does not add a member, so the flock stays empty and every animal joins it, whatever its kind;</li>
+<li>the animal also gets the Out's town (fn_00417C50);</li>
+</ul>
+</li>
+<li>anything but a Dove is then <strong>flung</strong> (fn_005FE5F0):<ul>
+<li><code>v = (sin a·B, C, −cos a·B)</code>, with <code>B = (rand(5) + 8)·s</code> and <code>C = (rand(5) + 10)·s</code>;</li>
+<li>spin <code>w = (−v.z, 0, v.x) / (height / 2)</code> in the body's axes (0x5FE691 reads v.z, 0x5FE6A3 v.x);</li>
+<li><code>InitialisePhysics</code> with the vortex as thrower: a real physics flight.</li>
+</ul>
+</li>
+</ul>
+<h2 id="the-land-under-a-vortex">The land under a vortex</h2>
+<ul>
+<li>An In or an Out (not the Volcano) <strong>flattens the 11 × 11 cells under it to their mean altitude</strong> as it fades in
+  (fn_005FF4F0, fn_005FF350):</li>
+<li>the cells' original altitudes are saved the first time;</li>
+<li>each turn the factor <code>q = 1 − (1 − f)²</code> grows;</li>
+<li>every cell becomes <code>round(alt0 + q·b)</code>, with <code>b = mean − alt0</code> within 50 m, blending to 0 at 56 m.</li>
+<li>The vortex's spline (5 keys at 0, 10, 30, 50, 58 m) has every height 0 in the retail data, so it adds nothing.</li>
+<li><code>q</code> only grows, because FadeOut takes it as 1: the land is <strong>not restored</strong> when the vortex goes.</li>
+</ul>
+<h2 id="the-objects-a-particle-system-carries-tornado-and-vortex">The objects a particle system carries (tornado and vortex)</h2>
+<p><code>RenderParticleGameObject</code> (0x58 bytes, ctor 0x6C9E60) is what a particle holds. The physics part
+(<code>physics::particle_carried_objects</code>, was <code>psys_objects</code>):</p>
+<ul>
+<li><strong>Attach</strong> fn_006CA0E0: a flying object is not carried (the atom stays empty); otherwise <strong>Take</strong> fn_006CA060.</li>
+<li><strong>Take</strong>: the class's <code>InitialisePhysics</code> with <strong>add 0</strong>. The object leaves the map cells and is flagged
+  IN_PHYSICS without a body, and GameThing +0xA &amp; 0x10 ("carried") is set. A villager or an animal enters FLYING; a
+  villager first drops what it carries.</li>
+<li>While carried, the object is drawn at the particle's matrix (DrawAt 0x67B170).</li>
+<li><strong>Release</strong> fn_006C9EF0: angles from the particle's matrix, position on the ground under it, <code>EndPhysics(NULL)</code>
+  (back in the map), the carried bit cleared. No flight and no impact.</li>
+<li><strong>The tornado</strong> (UR_Tornado, miracles.md): when the particle dies, a living thing is released and dies
+  (<code>DestroyedByEffect</code>), and anything else is deleted (the tornado destroys what it carries).</li>
+<li><strong>The vortex</strong> (UR_VortexAttract): at the end of the spiral the object is released and, when the record says so,
+  flung out (above). Otherwise the In's file takes it.</li>
+<li>IN_PHYSICS (+0x24 &amp; 0x40) is set only by <code>Object::InitialisePhysics</code> 0x6374A5 and cleared by <code>RemoveObject</code> 0x646B56
+  and <code>EndPhysics</code> 0x6375B9. A resting proxy body never has it.</li>
+</ul>
+<h2 id="drawing">Drawing</h2>
+<p>Once a frame (fn_005FFBB0), drawing only (in openblack, from the render snapshot):
+- the ground decal, made while <code>f &gt; 0</code> (fn_005FEA70) and released at 0 (fn_005FE8B0), with alpha
+  <code>min(f·255, 235)</code>;
+- the ground particle system, placed at the ground minus <code>2.5 − 2.2·q</code>;
+- the vortex mesh.</p>
+<h2 id="what-is-ported-and-what-is-pending">What is ported and what is pending</h2>
+<blockquote>
+<p><strong>Code rules.</strong> The vortex state lives in ECS components (<code>LandscapeVortex</code>) and its systems are reached through
+Locator services; the info rows come through the resource caches; pure logic such as the fades is tested with
+fakes in <code>test/</code>; comments describe behaviour in plain English, with no decompiled names or addresses (those
+belong here). See <a href="../refactor/README.md">the conventions</a>.</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>Part</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GVortexInfo, the three classes, Create (radius 50, scale 1), the state and fades, FadeIn -&gt; Active / FadeOut -&gt; delete at 7 s, the turn from GameLoopEnd</td>
+<td>ported (Vortex.cpp, MagicLoop.cpp)</td>
+</tr>
+<tr>
+<td>The land flattening (fn_005FF4F0 / fn_005FF350, the retail zero spline)</td>
+<td>ported (<code>SetCellAltitude</code> + <code>RebuildAltitudes</code>, as the citadel)</td>
+</tr>
+<tr>
+<td>VORTEX_FADE_OUT / VORTEX_PARAMETERS / CREATE Vortex</td>
+<td>ported (CHLApi.cpp)</td>
+</tr>
+<tr>
+<td>The In's take (spiral, ReactToPhysicsImpact, CanBeSuckedIntoVortex 0x639B60, the same-cell test, VortexObjectInfo)</td>
+<td>ported; (pending) the pile split (Storm.cpp's SplitPile to be shared)</td>
+</tr>
+<tr>
+<td>UR_VortexAttract (the spiral of the carried objects)</td>
+<td>pending (the PSys rules)</td>
+</tr>
+<tr>
+<td>particle_carried_objects Take / Release / Fling, the carried bit</td>
+<td>ported (ParticleCarriedObjects.cpp); the tornado's side is in Storm.cpp</td>
+</tr>
+<tr>
+<td>The Out's emission (the cell 16 m away, the file's objects, 30 new villagers), the hand-over to its town, the thrown list kept alive, the fade held while it emits, the fling</td>
+<td>ported</td>
+</tr>
+<tr>
+<td>The hand-over's flocks (the script flock, the animals' Flock)</td>
+<td>ported; (pending) the disciple FROM_VORTEX, the flock's info and player, the animal's town (they need the villager and animal APIs)</td>
+</tr>
+<tr>
+<td>VortexSave (<code>vortex.txt</code> between lands)</td>
+<td>the writers: <code>lhscriptx::WriteCommand</code> and the physics classes' SaveObject (<a href="land-script-save.html">land-script-save.md</a>); the reader: one line at a time through the land-script interpreter with the position offset and the last created object (Script's map state); (pending) the other classes' writers and the save folder</td>
+</tr>
+<tr>
+<td>Drawing (decal, ground particles, mesh)</td>
+<td>pending (the render snapshot)</td>
+</tr>
+<tr>
+<td>Save / Load of the vortex</td>
+<td>not ported (openblack has no saved games)</td>
+</tr>
+<tr>
+<td>The vortex that leaves a land</td>
+<td>the scripts open it with CHL <code>CREATE</code> of an In at a marker (<code>challenge.chl</code>: Land 1 <code>LeaveThroughVortexL1</code> at (1700.23, 11.40, 2520.18), once <code>OpenVortexL1</code> is set or at once when the creature guide is skipped; Land 2 at (1061.11, 147.79, 3597.97); Land 4 at (2060.18, 11.39, 2591.70); Land 3's script is given its place when it starts). Opening it is ported; going through it to the next land is not (<code>LeaveLandNow</code>, then <code>LandControlAll</code>'s <code>LOAD_MAP</code>, an empty native)</td>
+</tr>
+<tr>
+<td>Debug window</td>
+<td>Debug &gt; Windows &gt; Vortices (<code>Debug/Vortices</code>, <code>VorticesModel</code>): the vortices on the land with fade out and delete, a new In / Out / Volcano at the hand or at a click, and each land's leaving vortex opened at the script's place</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sources">Sources</h2>
+<ul>
+<li>runblack.exe W120: MagicVortex.cpp 0x5FD2D0..0x600460, VortexSave.cpp 0x76F840..0x7700B0, PSysTornado.cpp
+  (UR_VortexAttract 0x6D39C0, UR_Tornado 0x6D18B0), RenderParticleGameObject 0x6C9E60..0x6CA162.</li>
+</ul>
+<h2 id="pending">Pending<span class="state pending">pending</span></h2>
+<ul>
+<li>The In's pile split (a pile gives up to 1000 into a new pile, which is taken), to be shared with the tornado's.</li>
+<li><code>UR_VortexAttract</code>: the spiral that carries the taken objects into the vortex.</li>
+<li>The hand-over: the disciple FROM_VORTEX, the flock's info and player, and the animal's town.</li>
+<li>VortexSave: the writers of the other classes, and the save folder.</li>
+<li>Drawing: the ground decal, the ground particle system and the vortex mesh.</li>
+<li>Save / Load of the vortex (openblack has no saved games).</li>
+</ul>
+</main>
+<script src="search.js"></script>
+<script src="wiki.js"></script>
+</body>
+</html>

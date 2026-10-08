@@ -92,7 +92,7 @@ bool DefaultFileSystem::IsPathValid(const std::filesystem::path& path)
 
 std::unique_ptr<Stream> DefaultFileSystem::Open(const std::filesystem::path& path, Stream::Mode mode)
 {
-	return std::unique_ptr<Stream>(new FileStream(FindPath(path), mode));
+	return std::make_unique<FileStream>(FindPath(path), mode);
 }
 
 bool DefaultFileSystem::Exists(const std::filesystem::path& path) const

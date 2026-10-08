@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -43,6 +44,12 @@ protected:
 	uint32_t _highestTaskId {0};
 	uint32_t _highestScriptId {0};
 	uint32_t _executedInstructions {0};
+
+	/// The debugger's breakpoints, by instruction address; the held tasks, each with the instructions it may still run
+	/// before it is held again; and the address each continued task starts from, which its breakpoint lets it past once
+	std::set<uint32_t> _breakpoints;
+	std::map<uint32_t, uint32_t> _heldTasks;
+	std::map<uint32_t, uint32_t> _resumeFrom;
 
 	const std::vector<NativeFunction>* _functions {nullptr};
 	std::function<void(const uint32_t func)> _nativeCallEnterCallback;
@@ -101,18 +108,24 @@ protected:
 	const VMScript* GetScript(const std::string& name);
 	bool TaskExists(uint32_t taskId);
 	uint32_t GetTicksCount();
-	void PushElaspedTime();
 	VMVar& GetVar(VMTask& task, uint32_t id);
 	uint32_t GetExceptionHandlersCount();
 	uint32_t GetCurrentExceptionHandlerIp(uint32_t index);
 
 	void PrintInstruction(const VMTask& task, const VMInstruction& instruction);
 	void CpuLoop(VMTask& task);
+	/// Whether the debugger stops the task before its next instruction: held, or reaching a breakpoint
+	bool DebuggerStops(VMTask& task);
+	/// Held with no instruction left to run, so its turns pass it by
+	[[nodiscard]] bool IsParked(uint32_t taskNumber) const;
 
 	static float Fmod(float a, float b);
 
 public:
 	LHVM();
+
+	/// The original script library's elapsed time (CHL 029): the tick count times 0.1f, type 2
+	void PushElaspedTime();
 
 	~LHVM();
 
@@ -132,6 +145,11 @@ public:
 
 	/// Read SAV file from the filesystem
 	int RestoreState(const std::filesystem::path& filepath);
+
+	/// Take a newer build of the loaded program that keeps the existing code where it is and adds to it, as recompiling
+	/// a script does: the instructions, scripts and data are replaced and new globals added, while running tasks and
+	/// variable values carry on. Tasks of a recompiled script finish its old code; new ones run the new code.
+	int UpdateProgram(const LHVMFile& file);
 
 	VMValue Pop(DataType& type);
 	VMValue Pop();
@@ -163,6 +181,20 @@ public:
 
 	void StopTasksOfType(ScriptType typesMask);
 
+	/// The id of the task running now, 0 outside a task, as the original's script library answers it
+	[[nodiscard]] uint32_t GetCurrentTaskNumber() const { return _currentTask != nullptr ? _currentTask->id : 0; }
+	/// The type of the task running now, Script (1) outside a task
+	[[nodiscard]] ScriptType GetCurrentTaskScriptType() const
+	{
+		return _currentTask != nullptr ? _currentTask->type : ScriptType::Script;
+	}
+	/// The type of a task, Script (1) when there is no such task
+	[[nodiscard]] ScriptType GetTaskScriptType(uint32_t taskNumber) const
+	{
+		const auto task = _tasks.find(taskNumber);
+		return task != _tasks.end() ? task->second.type : ScriptType::Script;
+	}
+
 	[[nodiscard]] std::string GetString(uint32_t offset);
 	[[nodiscard]] const std::vector<NativeFunction>* GetFunctions() const { return _functions; };
 
@@ -171,6 +203,22 @@ public:
 	[[nodiscard]] const std::vector<VMScript>& GetScripts() const { return _scripts; }
 	[[nodiscard]] const std::map<uint32_t, VMTask>& GetTasks() const { return _tasks; }
 	[[nodiscard]] const std::vector<char>& GetData() const { return _data; }
+
+	/// Changes a global variable's value, keeping its type
+	void SetVariable(uint32_t id, VMValue value);
+	/// Changes one of a task's local variables, by its place among them, keeping its type
+	void SetTaskVariable(uint32_t taskNumber, size_t index, VMValue value);
+
+	/// The debugger. A breakpoint holds a task before the instruction at its address runs. A held task sits out the VM's
+	/// turns, as if time stood still for it, until it is stepped one instruction at a time or continued.
+	void SetBreakpoint(uint32_t address, bool enabled);
+	[[nodiscard]] const std::set<uint32_t>& GetBreakpoints() const { return _breakpoints; }
+	void HoldTask(uint32_t taskNumber);
+	/// Lets a held task run one more instruction at its next turn
+	void StepTask(uint32_t taskNumber);
+	/// Lets a held task run on, past the breakpoint it waits at
+	void ContinueTask(uint32_t taskNumber);
+	[[nodiscard]] bool IsTaskHeld(uint32_t taskNumber) const { return _heldTasks.contains(taskNumber); }
 };
 
 } // namespace openblack::lhvm

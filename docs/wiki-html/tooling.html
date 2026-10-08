@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tools and formats — Black &amp; White notes</title>
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body>
+<nav id="side">
+  <h1><a href="index.html" style="color:inherit;text-decoration:none">Black &amp; White notes</a></h1>
+  <span class="tag">openblack — how the original behaves</span>
+  <input id="q" type="search" placeholder="Search (press /)" autocomplete="off">
+  <div id="hits"></div>
+  <div id="nav"><h2>Start here</h2>
+<a class="" href="README.html">Black &amp; White 1 notes for openblack</a>
+<h2>Engine</h2>
+<a class="" href="openblack-internals.html">openblack internals</a>
+<a class="" href="engine-loop.html">The engine loop: game turns and frames (original and openblack)</a>
+<a class="" href="engine-math.html">Coordinates, terrain, object size, game clock, matrices and Zoomer</a>
+<a class="here" href="tooling.html">Tools and formats</a>
+<a class="" href="parity.html">Graphics engine parity: original versus openblack</a>
+<a class="" href="original-frame.html">The original B&amp;W frame (runblack.exe W120, D3D7, LH3D)</a>
+<h2>World</h2>
+<a class="" href="map-loading.html">Map loading and script functions</a>
+<a class="" href="land-script-save.html">Writing land-script lines: SaveObject and WriteCommand</a>
+<a class="" href="water.html">Water in the game</a>
+<a class="" href="trees.html">Trees and forests</a>
+<a class="" href="buildings.html">Buildings, building sites and towns (the building side)</a>
+<a class="" href="objects-and-resources.html">Objects and resources</a>
+<a class="" href="physics.html">Physics: thrown objects, collisions, damage and rocks that split</a>
+<h2>Life</h2>
+<a class="" href="villagers.html">Villagers: data, state machine and speed</a>
+<a class="" href="animals.html">Animals: AI, states and clips</a>
+<h2>Magic and weather</h2>
+<a class="" href="magic.html">Magic: the core of the miracles</a>
+<a class="" href="miracles.html">Miracles one by one</a>
+<a class="" href="particles.html">Particles (PSys)</a>
+<a class="" href="day-night-weather.html">Day, night and weather in the original</a>
+<a class="" href="vortex.html">Vortexes and the tornado: objects swallowed, carried and flung</a>
+<h2>Hand and interface</h2>
+<a class="" href="hand-and-interface.html">The hand and the interface</a>
+<a class="" href="intro.html">The Land 1 intro and the tutorial&#x27;s script side</a>
+<a class="" href="script-camera.html">Script camera (GCamera and CameraModeScript)</a>
+<a class="" href="camera-tracks.html">Camera tracks (`Data\camera.edt`) and `WALK_PATH`</a>
+<h2>Presentation</h2>
+<a class="" href="rendering.html">World rendering: original versus openblack</a>
+<a class="" href="rendering-objects.html">Model rendering: original versus openblack</a>
+<a class="" href="animation.html">Skeletal animation (villagers and animals)</a>
+<a class="" href="audio.html">Audio: the engine, the banks, the music, the voices and the script</a>
+<a class="" href="video.html">Bink videos (.bik)</a>
+<h2>Data</h2>
+<a class="" href="mods.html">Modified data packs</a>
+<h2>Other</h2>
+<a class="" href="creature.html">The creature: groundwork, random streams and what is unknown</a></div>
+</nav>
+<main>
+<details id="toc"><summary>On this page</summary><div class="toc">
+<ul>
+<li><a href="#tools-and-formats">Tools and formats</a><ul>
+<li><a href="#disassembly-of-runblackexe">Disassembly of runblack.exe</a></li>
+<li><a href="#openblack-tools">openblack tools</a></li>
+<li><a href="#data-formats">Data formats</a></li>
+<li><a href="#lnd-and-bwlandeditor-maps">LND and BWLandEditor maps</a><ul>
+<li><a href="#how-it-reads-the-lnd">How it reads the LND</a></li>
+<li><a href="#cell-bytes">Cell bytes</a></li>
+<li><a href="#low-resolution-textures">Low-resolution textures</a></li>
+<li><a href="#what-is-adapted-in-openblack">What is adapted in openblack</a></li>
+<li><a href="#test-maps-and-analysis-scripts">Test maps and analysis scripts</a></li>
+<li><a href="#differences-not-checked-in-the-original">Differences not checked in the original</a></li>
+</ul>
+</li>
+<li><a href="#pending">Pending</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+<h1 id="tools-and-formats">Tools and formats</h1>
+<p>How the original is investigated (disassembly scripts over <code>runblack.exe</code>), openblack's command-line
+tools and the game's data formats: G3D/L3D packs, effects, textures, scripts, <code>info.dat</code> and the LND with
+the extensions of the BWLandEditor map editor.</p>
+<ul>
+<li><a href="#disassembly-of-runblackexe">Disassembly of runblack.exe</a></li>
+<li><a href="#openblack-tools">openblack tools</a></li>
+<li><a href="#data-formats">Data formats</a></li>
+<li><a href="#lnd-and-bwlandeditor-maps">LND and BWLandEditor maps</a></li>
+<li><a href="#how-it-reads-the-lnd">How it reads the LND</a></li>
+<li><a href="#cell-bytes">Cell bytes</a></li>
+<li><a href="#low-resolution-textures">Low-resolution textures</a></li>
+<li><a href="#what-is-adapted-in-openblack">What is adapted in openblack</a></li>
+<li><a href="#test-maps-and-analysis-scripts">Test maps and analysis scripts</a></li>
+<li><a href="#differences-not-checked-in-the-original">Differences not checked in the original</a></li>
+<li><a href="#pending">Pending</a></li>
+</ul>
+<h2 id="disassembly-of-runblackexe">Disassembly of runblack.exe</h2>
+<p>Python scripts, kept outside the repository (<code>bwdis.py</code>, <code>callers.py</code>, <code>refs.py</code>, <code>scan.py</code>, <code>vtq.py</code>, <code>anim_vt.py</code>,
+<code>vt.py</code> and <code>potinfo.py</code>):</p>
+<ul>
+<li><code>python bwdis.py ADDR:SIZE [ADDR:SIZE...]</code> disassembles <code>runblack.exe</code> with capstone. It annotates symbols, floats from the
+  data section (<code>; =0.67</code>) and strings.</li>
+<li>Virtual calls <code>call [reg + off]</code> are annotated with the vtable of class <code>VTC</code> (environment variable, by
+    default <code>Tree</code>). <strong>The annotated name is only valid if <code>VTC</code> is the object's real class</strong>; otherwise, ignore it.</li>
+<li><code>python callers.py ADDR</code> lists who calls a function (searches for <code>call rel32</code>).</li>
+<li><code>python refs.py ADDR...</code> lists instructions that reference an address (data or functions).</li>
+<li><code>vt.py Clase [regex]</code> prints a class's vtable; <code>potinfo.py</code> reads the pot table from <code>info.dat</code>.</li>
+</ul>
+<p>Symbols and tricks:</p>
+<ul>
+<li>The symbols come from <code>bw1-decomp\config\BW1W120\symbols.txt</code>. Some names are wrong, for example:
+  <code>0x5B3C70</code> is <code>HandStateHolding::Update</code> and <code>0x5B5E70</code> is <code>ObtainRequiredHandPosition</code>.</li>
+<li>To read tables that are filled in at startup (in <code>.data</code> they are zero), look for the <code>crt_xc_fn_*</code> initialiser that
+  writes to them (e.g. the interface action state table, 0x5D7960).</li>
+</ul>
+<p>Reference values (goldens) for the tests that check the original bit for bit:</p>
+<ul>
+<li>Float routines: an independent float32 model of the x87 at 24-bit precision (PC24), written operand by operand from
+  the disassembly. Each fadd / fsub / fsubr / fmul / fdiv / fsqrt is rounded to 24 bits. fpatan (like fsin / fcos) is
+  not affected by the precision control, so it runs at 64 bits and is rounded only by the caller's <code>fstp dword</code>. The
+  test then compares the bits. Modelled this way: the LH3D angles (0x7FA990, 0x7FAA50, 0x7FAAF0), PhysOb::SetUpPos
+  0x7FC760 and AdjustToGroundLevel 0x7FCB80, HandAngularMomentum 0x5D4EB3.., DrawOrigin 0x6473B4.. and
+  CapReleaseVelocity 0x5D4F5F..; with numpy float32, one rounding per operation: 0x7FAFF0, 0x7FAE60,
+  LHMatrix::SetInverse 0x7FB290 and UpdateWorldToCamera 0x819690; the walking rows and InitStepsXZ 0x60BFA0 (tables
+  0xC31614 / 0xC31E14 / 0xC2307C). game_random's values come from a float32 emulation of the same kind.</li>
+<li>Integer pixel routines: the test copies the original's instructions one by one, keeping register-sized variables,
+  and compares the output on every input: 4444 texel 0x8374F0..0x837533 / 0x83767E..0x837687, 555 0x83776A..0x83778D,
+  raw 565 0x8376E9..0x83770C, diffuse 0x80BFA3..0x80C00B, the 0x80808081 divides 0x7FA6DF / 0x5E272C, FragMesh face
+  light 0x7F82A8..0x7F8363.</li>
+<li>Exe code run under Unicorn: the scripts are kept with each subject's documents (for example the QMixer emulation,
+  see <a href="audio.html">audio.md</a>, and the one that runs the exe's <code>_qsort</code> 0x7C7E64, see <a href="villagers.html">villagers.md</a>).</li>
+</ul>
+<h2 id="openblack-tools">openblack tools</h2>
+<p>Built in <code>cmake-build-presets\ninja-multi-vcpkg\bin\Release</code>:</p>
+<blockquote>
+<p><strong>Code rules.</strong> Tools and tests read the game's files through the same loaders and resource caches as the game;
+unit tests live in <code>test/</code>, use fakes and never need the original data (a test that does skips itself when the
+data is absent); comments describe behaviour in plain English, with no decompiled names or addresses (those belong
+here). See <a href="openblack-internals.html">openblack-internals.md</a>.</p>
+</blockquote>
+<ul>
+<li><code>packtool -M pack.g3d</code> lists meshes; <code>packtool -m N -e out.l3d pack.g3d</code> extracts mesh N;
+  <code>packtool -T pack.g3d</code> lists textures (<strong>ids in hexadecimal</strong>); <code>packtool -t IDX -e out.dds</code> extracts the texture by
+  index (the id is a different field).</li>
+<li><code>l3dtool read -H|-m|-P|-V|-I|-s file.l3d</code>: header, submeshes, primitives (material, skinID), vertices (positions
+  with <strong>one decimal place</strong>), indices, embedded skins.</li>
+<li><code>lndtool write ... --points "x y z"</code>: generates the test terrain (see tests in openblack-internals.md).</li>
+<li><strong>Shaders with #include</strong>: <code>bgfx_compile_shaders</code> only follows the top-level file. The <code>vs_object_*.sc</code> variants
+  (and <code>vs_static_shadow_instanced_static.sc</code>) include <code>vs_object.sc</code>/another variant: after changing the included file you have to
+  <code>touch</code> the variants, or the executable keeps the old version for static and instanced meshes.</li>
+<li>Replay and profile switches (openblack dev tools, not original; <a href="engine-loop.html">engine-loop.md</a> §7):
+  <code>OPENBLACK_STATE_HASH=&lt;file&gt;</code> writes a hash of the game state at the end of each turn;
+  <code>OPENBLACK_FIXED_FRAME_MS=&lt;ms&gt;</code> makes every frame that many ms (game timer, engine timer, audio ticks, the frame's
+  delta; not Lightning's 10 s wall-clock timeout, Particles/Rules/Lightning.cpp); <code>OPENBLACK_PROFILE=&lt;s&gt;</code> now ends
+  each summary with the memory (RAM working set, peak and private bytes; bgfx textures, render targets, GPU,
+  transient buffers).</li>
+</ul>
+<h2 id="data-formats">Data formats</h2>
+<ul>
+<li><strong>Mesh pack</strong> <code>Data\AllMeshes.g3d</code>: Lionhead pack with ~626 L3D meshes and their DDS textures. The mesh
+  number is the index in the pack, which matches the enum in <code>Data\AllMeshes.h</code> <strong>only for that pack</strong> (Creature
+  Isle and other packs have other indices).</li>
+<li><strong>L3D</strong>: header of 19 u32 (magic, flags, size, submeshCount, submeshOffsets, bbox[8], another, skinCount,
+  skinOffsets, extraCount, extraOffset, footprintOffset). Embedded skins start with a u32 id followed by
+  256×256 16-bit pixels.</li>
+<li><strong>Effects</strong>: <code>Data\Spells\ZSpellFiles\*.zzz</code> = zlib from byte 4 onwards; inside, a text properties file
+  (<code>BEGINCLASS</code> / <code>PROPERTY</code>). Examples: <code>SF_GripLandscape</code>, <code>SF_MultiPickUpWood/Food/FoodFish</code>, <code>SF_MultiPutDown*</code>.</li>
+<li><strong>Loose textures</strong> <code>Data\Textures\X.raw</code> (256×256 RGB) + <code>Xa.raw</code> (R8 alpha). Sprite sheets of 8×8 cells.</li>
+<li><strong>Map scripts</strong> <code>Scripts\LandN.txt</code>; the executable's command table (0xC21190…) gives the name and parameter
+  types (<code>A</code> position, <code>N</code> integer, <code>F</code> float). E.g.: <code>CREATE_MOBILE_STATIC</code> = <code>ANFFFFF</code> =
+  (pos, type, altitude, X angle, Y angle, Z angle, scale).</li>
+<li><strong><code>Scripts\info.dat</code></strong>: object tables (pots, trees, mobile statics...). openblack loads it into <code>InfoConstants</code>.</li>
+</ul>
+<h2 id="lnd-and-bwlandeditor-maps">LND and BWLandEditor maps</h2>
+<p>BWLandEditor is Daniels118's map editor (Java, GPL-3). Part of its code is ported from
+openblack: InfoConstants, L3D/G3D and an old version of <code>fs_terrain</code>. What follows comes from the editor's code
+(not from the original executable) except where stated otherwise.</p>
+<h3 id="how-it-reads-the-lnd">How it reads the LND</h3>
+<p>The same as openblack, plus three extensions that openblack already supports (<code>LNDFile</code>, <code>LandIsland</code>):</p>
+<ul>
+<li>At the end of the file there may be the blocks <code>EXT0</code> (u32 size of the whole block = 10, u8 version, u8 altitude
+  bits 8-16) and <code>META</code> (u32 data size, editor data). With more than 8 bits, the high bits of the altitude
+  go in the low bits of <code>saveColor</code> (<code>LNDCell::Altitude</code>, <code>LandIslandInterface::GetCellAltitude</code>).</li>
+<li>The grid can have up to 128×128 blocks and more than 255 blocks. The header table only covers 32×32 and
+  indices &lt; 256, so <code>LandIsland</code> builds its table from each block's <code>blockX</code>/<code>blockZ</code>. In the 21 original <code>.lnd</code>
+  files the table matches those fields (<code>lnd_check.py</code>).</li>
+<li>The editor corrects a <code>mapX</code>/<code>mapZ</code> that does not agree with <code>blockX</code>/<code>blockZ</code>, and <code>LandIsland</code> does the same.</li>
+</ul>
+<h3 id="cell-bytes">Cell bytes</h3>
+<ul>
+<li><strong><code>flags</code>, according to the editor.</strong> Bit 0 = "transparent"; bits 1-7 = ambient sound: 0 nothing, 2 splashing, 3 ocean,
+  4 slow waves, 5 lake, 6 coast, 7 fast waves, 8 jungle, 10 wind, 12 desert, 14 birds, 16 forest, 18 river.
+  The odd ones above 8 are variants of the preceding even one.
+  The original reads the zone as <code>(flags &gt;&gt; 2) &amp; 0xF</code> (<code>Terrain::GetAtmosType</code> 0x7352B0): the editor's codes are
+  <code>tipo &lt;&lt; 1</code>; table and usage in <a href="objects-and-resources.html">objects-and-resources.md</a> («Ambience (atmos)»).</li>
+<li><strong><code>properties</code> (+6).</strong> Bits 0-3 = country, bit 4 (0x10) = hasWater, bit 5 (0x20) = coastLine, bit 6 (0x40) =
+  fullWater, bit 7 (0x80) = split (diagonal, see <a href="engine-math.html#terrain-height">engine-math.md</a>). To separate
+  the open sea from inland water, <code>lnd_water.py</code> groups the connected cells with water or without a block: those touching
+  the map edge or the void are sea; the rest, lakes or ponds.</li>
+</ul>
+<h3 id="low-resolution-textures">Low-resolution textures</h3>
+<p>Atlas of 4×4 subtextures of 64×64, one per block, 4 texels per cell, with X and Y swapped. The "unknown" in its
+header is the number of blocks in the atlas. <code>iu_lrs</code>/<code>iv_lrs</code> are integers (0/64/128/192). openblack does not use them (it only
+reads them in <code>LNDFile</code>).</p>
+<h3 id="what-is-adapted-in-openblack">What is adapted in openblack</h3>
+<p><strong>Our own</strong> (the original maps do not change):</p>
+<ul>
+<li>With more than 8 bits the heightmap goes from R8 to R32F on the same scale (1 = altitude 255). Above 255 the
+  country's last material is used, as the editor does.</li>
+<li>The per-island textures (footprints, static shadows, alpha) drop below 256 texels per block as soon as they would exceed 8192.</li>
+<li>The disc that limits the camera (centre 2560, radius 5120) grows with the size of the map.</li>
+</ul>
+<h3 id="test-maps-and-analysis-scripts">Test maps and analysis scripts</h3>
+<p><code>lnd_make_tests.py</code> generates three maps and their scripts (start with <code>-s</code> and the absolute path of the <code>.txt</code>):</p>
+<ul>
+<li><code>Land1_ext</code>: Land1 with the editor blocks at the end; identical to Land1, height at (1788.4, 2710) = 28.9173050.</li>
+<li><code>Land1_hi</code>: 10 bits and doubled altitudes; height 57.8346100.</li>
+<li><code>Land5_x2</code>: Land5 twice, grid of 60, 374 blocks.</li>
+</ul>
+<p><code>.lnd</code> analysis scripts: <code>lnd_check</code> (block table versus blockX/blockZ),
+<code>lnd_make_tests</code> (test maps), <code>lnd_beaches</code> (sand next to water, materials 6 and 11), <code>lnd_zones</code> /
+<code>lnd_countries</code> / <code>lnd_find_country &lt;lnd&gt; &lt;n&gt;</code> (sound zones, countries and median position of a country),
+<code>lnd_materials</code> / <code>lnd_colours</code> / <code>lnd_tile_check</code> / <code>lnd_decal_metric</code> (256×256 RGB555 materials),
+<code>lnd_water</code> (bodies of water), <code>lnd_hash</code> (FNV-1a of the materials).</p>
+<h3 id="differences-not-checked-in-the-original">Differences not checked in the original</h3>
+<ul>
+<li>The editor chooses the material with <code>min(altitud + ruido/4, 255)</code>; the original does it <strong>per texel</strong> with
+  <code>min((h &gt;&gt; 8) + ruido, 255)</code> and the altitude weighted with cones (resolved, <a href="rendering.html#coast">rendering.md</a>), and openblack
+  already follows it (<code>3D/BlockTexture</code>).</li>
+<li>openblack's L3D reader takes the footprint width and height from the header; the editor reads them per entry.</li>
+<li>The editor reads Creature Isle's info.dat (627250 bytes; longer tables in InfoConstants.java L23-33); openblack
+  does not yet.</li>
+</ul>
+<h2 id="pending">Pending<span class="state pending">pending</span></h2>
+<ul>
+<li><strong>Converting the original assets to open formats.</strong> Which assets and which target formats is not written down
+  yet; to be decided.</li>
+<li><strong>Real-ESRGAN on the NPU</strong> (possible, with doubts: many PCs have no NPU). Use the NPU (Intel AI Boost, through
+  OpenVINO) to upscale textures ×4 with Real-ESRGAN faster and without loading the CPU. A tool only, it does not
+  change the game; for when openblack is complete.</li>
+<li><code>test_help_dude_file.cpp</code> (file scope), unverified: "the clip samplers (src/Help/SpiritAnimClip.h, was CAnim.h) against values of
+  fn_00860E00 / fn_00861EE0 / 0x839F10 run from runblack.exe under an x86 emulator." The note does not name the
+  script. A grip evaluation script (<code>grip_eval.py</code>) mentions those addresses, but it was not checked that this is
+  the script.</li>
+</ul>
+</main>
+<script src="search.js"></script>
+<script src="wiki.js"></script>
+</body>
+</html>

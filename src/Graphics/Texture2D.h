@@ -163,14 +163,23 @@ public:
 	Texture2D(const Texture2D&) = delete;
 	Texture2D& operator=(const Texture2D&) = delete;
 
+	/// `memory` (a bgfx::Memory, or null for an empty texture) is consumed by a later bgfx::frame(): it must own its
+	/// bytes (bgfx::copy or bgfx::alloc), or reference bytes that outlive the texture. No bgfx::frame() is called here
 	void Create(uint16_t width, uint16_t height, uint16_t layers, TextureFormat format, Wrapping wrapping, Filter filter,
 	            const void* memory) noexcept;
 
 	[[nodiscard]] const std::string& GetName() const { return _name; }
+	/// New texels for the whole texture, in the format Create was given (converted the same way when it built mips).
+	/// bgfx::updateTexture2D with bgfx::copy; no bgfx::frame()
+	void Update(const void* data, uint32_t size) noexcept;
+	/// New texels for the rectangle of `size` texels at `origin` (layer 0, no mips), rows one after another with no gap
+	void UpdateRegion(glm::u16vec2 origin, glm::u16vec2 size, const void* data, uint32_t bytes) noexcept;
 	[[nodiscard]] const TextureHandle& GetNativeHandle() const { return _handle; }
 	[[nodiscard]] glm::u16vec2 GetResolution() const { return _resolution; }
 	[[nodiscard]] uint16_t GetLayerCount() const { return _numLayers; }
 	[[nodiscard]] TextureFormat GetFormat() const { return _format; }
+	/// The sampler flags given at creation (wrapping and filter)
+	[[nodiscard]] uint32_t GetSamplerFlags() const { return _samplerFlags; }
 
 	void DumpTexture() const;
 
@@ -182,6 +191,7 @@ protected:
 	uint16_t _numLayers;
 	TextureFormat _format;
 	uint32_t _storageSize;
+	uint32_t _samplerFlags = 0;
 
 	friend FrameBuffer;
 };

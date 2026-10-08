@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Modified data packs — Black &amp; White notes</title>
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body>
+<nav id="side">
+  <h1><a href="index.html" style="color:inherit;text-decoration:none">Black &amp; White notes</a></h1>
+  <span class="tag">openblack — how the original behaves</span>
+  <input id="q" type="search" placeholder="Search (press /)" autocomplete="off">
+  <div id="hits"></div>
+  <div id="nav"><h2>Start here</h2>
+<a class="" href="README.html">Black &amp; White 1 notes for openblack</a>
+<h2>Engine</h2>
+<a class="" href="openblack-internals.html">openblack internals</a>
+<a class="" href="engine-loop.html">The engine loop: game turns and frames (original and openblack)</a>
+<a class="" href="engine-math.html">Coordinates, terrain, object size, game clock, matrices and Zoomer</a>
+<a class="" href="tooling.html">Tools and formats</a>
+<a class="" href="parity.html">Graphics engine parity: original versus openblack</a>
+<a class="" href="original-frame.html">The original B&amp;W frame (runblack.exe W120, D3D7, LH3D)</a>
+<h2>World</h2>
+<a class="" href="map-loading.html">Map loading and script functions</a>
+<a class="" href="land-script-save.html">Writing land-script lines: SaveObject and WriteCommand</a>
+<a class="" href="water.html">Water in the game</a>
+<a class="" href="trees.html">Trees and forests</a>
+<a class="" href="buildings.html">Buildings, building sites and towns (the building side)</a>
+<a class="" href="objects-and-resources.html">Objects and resources</a>
+<a class="" href="physics.html">Physics: thrown objects, collisions, damage and rocks that split</a>
+<h2>Life</h2>
+<a class="" href="villagers.html">Villagers: data, state machine and speed</a>
+<a class="" href="animals.html">Animals: AI, states and clips</a>
+<h2>Magic and weather</h2>
+<a class="" href="magic.html">Magic: the core of the miracles</a>
+<a class="" href="miracles.html">Miracles one by one</a>
+<a class="" href="particles.html">Particles (PSys)</a>
+<a class="" href="day-night-weather.html">Day, night and weather in the original</a>
+<a class="" href="vortex.html">Vortexes and the tornado: objects swallowed, carried and flung</a>
+<h2>Hand and interface</h2>
+<a class="" href="hand-and-interface.html">The hand and the interface</a>
+<a class="" href="intro.html">The Land 1 intro and the tutorial&#x27;s script side</a>
+<a class="" href="script-camera.html">Script camera (GCamera and CameraModeScript)</a>
+<a class="" href="camera-tracks.html">Camera tracks (`Data\camera.edt`) and `WALK_PATH`</a>
+<h2>Presentation</h2>
+<a class="" href="rendering.html">World rendering: original versus openblack</a>
+<a class="" href="rendering-objects.html">Model rendering: original versus openblack</a>
+<a class="" href="animation.html">Skeletal animation (villagers and animals)</a>
+<a class="" href="audio.html">Audio: the engine, the banks, the music, the voices and the script</a>
+<a class="" href="video.html">Bink videos (.bik)</a>
+<h2>Data</h2>
+<a class="here" href="mods.html">Modified data packs</a>
+<h2>Other</h2>
+<a class="" href="creature.html">The creature: groundwork, random streams and what is unknown</a></div>
+</nav>
+<main>
+<details id="toc"><summary>On this page</summary><div class="toc">
+<ul>
+<li><a href="#modified-data-packs">Modified data packs</a><ul>
+<li><a href="#the-installations-pack">The installation's pack</a></li>
+<li><a href="#embedded-textures">Embedded textures</a></li>
+<li><a href="#mesh-origin-floating-rocks">Mesh origin (floating rocks)</a></li>
+<li><a href="#villagers-meshes-and-textures">Villagers: meshes and textures</a></li>
+<li><a href="#future-ideas-need-the-sdk">Future ideas (need the SDK)</a></li>
+<li><a href="#pending">Pending</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+<h1 id="modified-data-packs">Modified data packs</h1>
+<p>The <code>AllMeshes.g3d</code> of the installation is a mod by the user, not the original pack: here are its differences from the
+original (embedded textures, rock origins, villager textures) and what was found out about the villager meshes.</p>
+<ul>
+<li><a href="#the-installations-pack">The installation's pack</a></li>
+<li><a href="#embedded-textures">Embedded textures</a></li>
+<li><a href="#mesh-origin-floating-rocks">Mesh origin (floating rocks)</a></li>
+<li><a href="#villagers-meshes-and-textures">Villagers: meshes and textures</a></li>
+<li><a href="#future-ideas-need-the-sdk">Future ideas (need the SDK)</a></li>
+<li><a href="#pending">Pending</a></li>
+</ul>
+<h2 id="the-installations-pack">The installation's pack</h2>
+<ul>
+<li>The current <code>Data\AllMeshes.g3d</code> is a mod by the user (626 meshes, textures 0x01–0x70). There is no copy of the base
+  pack.</li>
+<li>References for original meshes: the Creature Isle pack (<code>...\CreatureIsle\Data\AllMeshes.g3d</code>, <strong>different
+  indices</strong>: check its <code>AllMeshes.h</code>).</li>
+<li>The <code>Ultimate\Data\AllMeshes.g3d</code> pack is another mod (704 meshes).</li>
+</ul>
+<h2 id="embedded-textures">Embedded textures</h2>
+<ul>
+<li>The palm trees (meshes 586–589) carry their texture embedded with id <strong>0x1001</strong>, but their material asks for 0x85–0x88, which do not
+  exist in the pack. Ultimate repeats the pattern. In the original game they look fine; openblack uses the mesh's embedded
+  skin when the material does not find its texture.</li>
+<li>In <code>LH3DMesh::Create</code> (0x806460) the embedded skins are registered with <code>fn_008379E0</code>, and the value 0x1001 could be
+  format + id (<strong>inferred</strong>).</li>
+</ul>
+<h2 id="mesh-origin-floating-rocks">Mesh origin (floating rocks)</h2>
+<ul>
+<li>The mod's rock meshes have their origin shifted relative to the original ones:
+  <code>MSH_Z_SPELLROCK01</code> lowest vertex +0.8 (original −0.6), <code>MSH_BOULDER3_LIME</code> +0.2 (original −0.2).</li>
+<li>The script altitudes are designed for the original meshes, so with the mod they end up in the air (in
+  Land1, 74 of 243 static objects float more than 5 cm). The original does not correct it.</li>
+<li>In addition, many of the mod's rocks end up resting on a tip because of their rotation: even though the lowest vertex touches the ground,
+  they seem to float.</li>
+</ul>
+<h2 id="villagers-meshes-and-textures">Villagers: meshes and textures</h2>
+<p><strong>Meshes</strong></p>
+<ul>
+<li><code>MSH_P_*</code> meshes 413–524 of the base pack (geometry identical to Creature Isle's, so the user's mod does not touch
+  them). Each tribe and sex has <strong>its own mesh</strong>, in 3 levels: <code>_1</code> ~260–300 vertices, <code>_2</code> ~110–150, <code>_3</code>
+  26–40. There is one texture per tribe, shared by man and woman (0x4E–0x5C). Some meshes repeat geometry with
+  another texture (TIBETAN=TIBT, JAPANESE=JAPN, SHAOLIN_MONK=JAPN_M_A_1, TAN/WHITE girls, INTRO_M=CULT_PRIEST).</li>
+<li><code>MSH_P_INTRO_M</code>/<code>_F</code> (483/484) <strong>do not have more polygons</strong>: 258 v / 348 t, like a normal villager. INTRO_M is the
+  CULT_PRIEST geometry with texture 0x59; INTRO_F uses the female villagers' skeleton. Their textures are 256².
+  <code>INTRO.bik</code> is a pre-rendered video: its models are not in the files.</li>
+<li>Skeleton: 110 of the 112 meshes have the same 22-bone hierarchy (EGPT_M_B_2 has 21), and all the
+  <code>M_P_*</code> animations of AllAnims.anm (232) are 22-bone. The rest poses vary a little (groups: 85 meshes,
+  12 female, 10, CULT_PRIEST+INTRO_M).</li>
+<li>Which mesh is drawn: the original, always LOD 1 (the LevelOfDetail loads are disabled): <code>stdDetail</code> /
+  <code>childMeshMedium</code> for villagers (about 5.7 KB of mesh versus 12 KB for the high one) and <code>std</code> for animals. openblack
+  does the same since 2026-09-30 (<strong>faithful</strong>). History: previously openblack used only <code>highDetail</code> (no LOD) and drew the
+  villagers in the rest pose (Renderer.cpp, "Get animation frame instead of default"; L3DAnim loaded AllAnims but
+  there was no playback, today see <a href="animation.html">animation.md</a>).</li>
+</ul>
+<p><strong>Textures</strong></p>
+<ul>
+<li>All are <strong>native</strong> 256² atlases. The ones the user's pack has at 512 or 1024 are upscales with
+  duplicated pixels (the error versus doubling their half is &lt; 1.5 levels), except 0x5A and 0x47 (native 512).</li>
+<li>INTRO_M/F look finer because their 256² texture is of <strong>a single</strong> character (the villagers: 4 per atlas).
+  No pack (base, Creature Isle, Ultimate) comes with better ones.</li>
+<li><strong>The Norse atlas of the user's pack (0x5A, 1024 px) is not the original</strong>: it has the intro characters
+  painted on it (the face of the blonde woman of INTRO_F, the bearded man, one with a red shirt and jeans).
+  The Creature Isle Norse atlas (skin 0x74 of its pack, <code>MSH_P_NORS_F_A_1</code> = 580 there) has the original clothing
+  (dark dress, men in black with a belt). That is why the female villagers of Land1 (Norse village) look like "the ones from the
+  intro": the mesh (<code>NORS_F_A_1</code>, 498) and the clip (<code>M_P_Walk_Woman</code>) are the correct ones.</li>
+</ul>
+<h2 id="future-ideas-need-the-sdk">Future ideas (need the SDK)</h2>
+<p>These ideas from the user's task list wait for a real mod SDK, built once the game is reconstructed. They are <strong>not</strong>
+pending engine work: the engine stays faithful to the original, and each idea would be disabled by default.</p>
+<ul>
+<li><strong>Better physics</strong> (see <a href="physics.html#pending">physics.md</a>): building pieces with a collision mesh, so that they hit
+  other objects; building pieces that can be grabbed with the hand; more improvements as they come up.</li>
+<li><strong>Animals always flee</strong> (see <a href="animals.html">animals.md</a>): the predators repeat their flee reaction every turn (what
+  <code>Reaction::ProcessReactions</code> would do, switched off in the original by a debug switch), so the herbivores flee every
+  time a predator comes near and not only when it is created. Today only the test hook
+  <code>OPENBLACK_TEST_SPREAD_REACTIONS=&lt;turn&gt;</code> exists (see <a href="animals.html#test-hooks">Test hooks</a>).</li>
+</ul>
+<h2 id="pending">Pending<span class="state pending">pending</span></h2>
+<ul>
+<li>Floating rocks resting on a tip: planned solution: physics (<strong>not checked</strong> whether it has already been done).</li>
+</ul>
+</main>
+<script src="search.js"></script>
+<script src="wiki.js"></script>
+</body>
+</html>

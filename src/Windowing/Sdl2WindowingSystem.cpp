@@ -21,6 +21,8 @@
 void* cbSetupMetalLayer(void* wnd);
 #endif
 
+#include <algorithm>
+
 #include <SDL.h>
 
 using namespace openblack::windowing;
@@ -78,9 +80,39 @@ Sdl2WindowingSystem::Sdl2WindowingSystem(const std::string& title, int width, in
 		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 	}
 
-	// Get SDL Window requirements from Renderer
-	const int x = SDL_WINDOWPOS_UNDEFINED;
-	const int y = SDL_WINDOWPOS_UNDEFINED;
+	// Windowed: fit the window in the usable desktop area (without the task bar, leaving room for the title bar). No
+	// size given: 85% of that area; a size larger than the desktop is scaled down keeping its aspect ratio.
+	int x = SDL_WINDOWPOS_UNDEFINED;
+	int y = SDL_WINDOWPOS_UNDEFINED;
+	if (displayMode == DisplayMode::Windowed)
+	{
+		SDL_Rect usable;
+		if (SDL_GetDisplayUsableBounds(0, &usable) == 0 && usable.w > 0 && usable.h > 0)
+		{
+			constexpr int k_TitleBar = 40;
+			const int maxWidth = usable.w;
+			const int maxHeight = std::max(1, usable.h - k_TitleBar);
+			if (width <= 0 || height <= 0)
+			{
+				width = static_cast<int>(static_cast<float>(maxWidth) * 0.85f);
+				height = static_cast<int>(static_cast<float>(maxHeight) * 0.85f);
+			}
+			else if (width > maxWidth || height > maxHeight)
+			{
+				const float fit = std::min(static_cast<float>(maxWidth) / static_cast<float>(width),
+				                           static_cast<float>(maxHeight) / static_cast<float>(height));
+				width = static_cast<int>(static_cast<float>(width) * fit);
+				height = static_cast<int>(static_cast<float>(height) * fit);
+			}
+			x = SDL_WINDOWPOS_CENTERED;
+			y = SDL_WINDOWPOS_CENTERED;
+		}
+	}
+	if (width <= 0 || height <= 0)
+	{
+		width = 1280;
+		height = 720;
+	}
 
 	auto window = std::unique_ptr<SDL_Window, SDLDestroyer>(SDL_CreateWindow(title.c_str(), x, y, width, height, flags));
 

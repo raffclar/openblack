@@ -11,6 +11,9 @@
 
 #include "DynamicsSystem.h"
 
+#include <cstring>
+
+#include <bit>
 #include <vector>
 
 #include <BulletCollision/BroadphaseCollision/btDbvtBroadphase.h>
@@ -60,6 +63,7 @@ void DynamicsSystem::Reset()
 	{
 		_world->removeRigidBody(obj);
 	}
+	WorldChanged();
 }
 
 DynamicsSystem::~DynamicsSystem() = default;
@@ -68,11 +72,19 @@ void DynamicsSystem::Update(std::chrono::microseconds& dt)
 {
 	std::chrono::duration<float> seconds = dt;
 	_world->stepSimulation(seconds.count());
+	WorldChanged();
 }
 
 void DynamicsSystem::AddRigidBody(btRigidBody* object)
 {
 	_world->addRigidBody(object);
+	WorldChanged();
+}
+
+void DynamicsSystem::RemoveRigidBody(btRigidBody* object)
+{
+	_world->removeRigidBody(object);
+	WorldChanged();
 }
 
 void DynamicsSystem::RegisterRigidBodies()
@@ -119,8 +131,40 @@ void DynamicsSystem::UpdatePhysicsTransforms()
 	});
 }
 
+namespace
+{
+/// The same float bits (a ray asked again exactly)
+bool SameBits(const glm::vec3& a, const glm::vec3& b)
+{
+	return std::memcmp(&a, &b, sizeof(glm::vec3)) == 0;
+}
+
+bool SameBits(float a, float b)
+{
+	return std::bit_cast<uint32_t>(a) == std::bit_cast<uint32_t>(b);
+}
+} // namespace
+
 std::optional<std::pair<Transform, RigidBodyDetails>>
 DynamicsSystem::RayCastClosestHit(const glm::vec3& origin, const glm::vec3& direction, float tMax) const
+{
+	for (const auto& cached : _cachedRays)
+	{
+		if (cached && cached->generation == _generation && SameBits(cached->origin, origin) &&
+		    SameBits(cached->direction, direction) && SameBits(cached->tMax, tMax))
+		{
+			return cached->result;
+		}
+	}
+	auto result = CastRay(origin, direction, tMax);
+	_cachedRays.at(_nextCachedRay) =
+	    CachedRay {.origin = origin, .direction = direction, .tMax = tMax, .generation = _generation, .result = result};
+	_nextCachedRay = (_nextCachedRay + 1) % k_CachedRays;
+	return result;
+}
+
+std::optional<std::pair<Transform, RigidBodyDetails>> DynamicsSystem::CastRay(const glm::vec3& origin,
+                                                                              const glm::vec3& direction, float tMax) const
 {
 	auto from = btVector3(origin.x, origin.y, origin.z);
 	auto to = from + tMax * btVector3(direction.x, direction.y, direction.z);

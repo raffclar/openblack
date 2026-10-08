@@ -9,8 +9,11 @@
 
 #pragma once
 
+#include <functional>
 #include <map>
+#include <memory>
 #include <string>
+#include <string_view>
 
 #include "RenderPass.h"
 #include "ShaderProgram.h"
@@ -30,12 +33,12 @@ public:
 	~ShaderManager();
 
 	void LoadShaders();
-	[[nodiscard]] const ShaderProgram* GetShader(const std::string& name) const;
+	[[nodiscard]] const ShaderProgram* GetShader(std::string_view name) const;
 
 	void SetCamera(RenderPass viewId, const Camera& camera);
 
 private:
-	using ShaderMap = std::map<std::string, const ShaderProgram*>;
+	using ShaderMap = std::map<std::string, std::unique_ptr<const ShaderProgram>, std::less<>>;
 
 	ShaderMap _shaderPrograms;
 };

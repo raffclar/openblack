@@ -9,6 +9,8 @@
 
 #include "Mesh.h"
 
+#include <utility>
+
 #include "GraphicsHandleBgfx.h"
 #include "IndexBuffer.h"
 #include "ShaderProgram.h"
@@ -16,9 +18,9 @@
 
 using namespace openblack::graphics;
 
-Mesh::Mesh(VertexBuffer* vertexBuffer, IndexBuffer* indexBuffer, Topology topology) noexcept
-    : _vertexBuffer(vertexBuffer)
-    , _indexBuffer(indexBuffer)
+Mesh::Mesh(std::unique_ptr<VertexBuffer> vertexBuffer, std::unique_ptr<IndexBuffer> indexBuffer, Topology topology) noexcept
+    : _vertexBuffer(std::move(vertexBuffer))
+    , _indexBuffer(std::move(indexBuffer))
     , _topology(topology)
 {
 }
@@ -47,19 +49,19 @@ Mesh::Topology Mesh::GetTopology() const noexcept
 
 void Mesh::Draw(const DrawDesc& desc) const
 {
-	if (desc.instanceBuffer && (desc.skip & SkipState::SkipInstanceBuffer) == 0)
+	if (desc.instanceBuffer && (desc.skip & k_SkipInstanceBuffer) == 0)
 	{
 		bgfx::setInstanceDataBuffer(toBgfx(*desc.instanceBuffer), desc.instanceStart, desc.instanceCount);
 	}
-	if (_indexBuffer != nullptr && _indexBuffer->GetCount() > 0 && (desc.skip & SkipState::SkipIndexBuffer) == 0)
+	if (_indexBuffer != nullptr && _indexBuffer->GetCount() > 0 && (desc.skip & k_SkipIndexBuffer) == 0)
 	{
 		_indexBuffer->Bind(desc.count, desc.offset);
 	}
-	if ((desc.skip & SkipState::SkipVertexBuffer) == 0)
+	if ((desc.skip & k_SkipVertexBuffer) == 0)
 	{
 		_vertexBuffer->Bind();
 	}
-	if ((desc.skip & SkipState::SkipRenderState) == 0)
+	if ((desc.skip & k_SkipRenderState) == 0)
 	{
 		bgfx::setState(desc.state, desc.rgba);
 	}

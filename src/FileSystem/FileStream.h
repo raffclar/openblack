@@ -20,6 +20,8 @@ class FileStream final: public Stream
 {
 public:
 	FileStream(const std::filesystem::path& path, Stream::Mode mode);
+	FileStream(const FileStream&) = delete;
+	FileStream& operator=(const FileStream&) = delete;
 	~FileStream() override;
 
 	[[nodiscard]] std::size_t Position() const override;
