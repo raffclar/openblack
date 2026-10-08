@@ -40,12 +40,12 @@ public:
 };
 
 // NOLINTBEGIN(bugprone-branch-clone, google-readability-function-size, readability-function-size)
-class TiltDownZoomOutMockDynamicsSystem: public MockDynamicsSystem
+class TiltDownZoomOutMockPickingSystem: public MockPickingSystem
 {
 public:
-	TiltDownZoomOutMockDynamicsSystem() = default;
+	TiltDownZoomOutMockPickingSystem() = default;
 
-	[[nodiscard]] std::optional<glm::vec2> RayCastClosestHitScreenCoord(glm::u16vec2 screenCoord) const override
+	[[nodiscard]] std::optional<glm::vec2> LandAtPixel(glm::u16vec2 screenCoord) const override
 	{
 		if (screenCoord == k_ScreenCentreLine[0])
 		{
