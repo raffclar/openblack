@@ -57,9 +57,50 @@ Target Choose(std::span<const Town> towns)
 
 float Harm(glm::vec3 velocity, float mass)
 {
-	const float harm =
-	    std::sqrt((velocity.x * velocity.x) + (velocity.y * velocity.y) + (velocity.z * velocity.z)) * mass * k_HarmPerMomentum;
+	// Worked in wider precision, z and y first, and rounded once
+	const double x = velocity.x;
+	const double y = velocity.y;
+	const double z = velocity.z;
+	const auto harm = static_cast<float>(std::sqrt(((z * z) + (y * y)) + (x * x)) * static_cast<double>(mass) *
+	                                     static_cast<double>(k_HarmPerMomentum));
 	return k_MostHarm < harm ? k_MostHarm : harm;
+}
+
+uint32_t BeamInterval(uint32_t millisecondsPerTurn)
+{
+	// Turns a second as a whole number, times two, cut down to a whole number
+	constexpr double k_Seconds = 2.0;
+	return static_cast<uint32_t>(static_cast<double>(1000u / millisecondsPerTurn) * k_Seconds);
+}
+
+bool BeamAtTargetDue(Beam& beam, entt::entity target, uint32_t turn, uint32_t interval)
+{
+	if (target != beam.target)
+	{
+		beam.target = target;
+		beam.turn = 0;
+	}
+	if (beam.target == entt::null || !(interval + beam.turn < turn))
+	{
+		return false;
+	}
+	beam.turn = turn;
+	return true;
+}
+
+bool BeamAtItselfDue(Beam& beam, uint32_t turn, uint32_t interval)
+{
+	if (beam.target != entt::null)
+	{
+		beam.target = entt::null;
+		beam.turn = 0;
+	}
+	if (!(interval + beam.turn < turn))
+	{
+		return false;
+	}
+	beam.turn = turn;
+	return true;
 }
 
 } // namespace openblack::physics::temple_heart

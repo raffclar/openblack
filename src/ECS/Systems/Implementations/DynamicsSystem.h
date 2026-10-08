@@ -15,6 +15,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "ECS/DynamicsWorld.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "Particles/ParticleEffect.h"
@@ -44,7 +45,10 @@ namespace openblack::ecs::systems
 class DynamicsSystem final: public DynamicsSystemInterface
 {
 public:
+	/// The physics in the game's own world
 	DynamicsSystem();
+	/// The physics in a world of its own, as tests give it
+	explicit DynamicsSystem(std::unique_ptr<dynamics::World> world);
 	~DynamicsSystem() override;
 
 	void ResetSimulation() override;
@@ -76,8 +80,16 @@ public:
 	void ForEachEntry(const std::function<void(const PhysicsEntry&)>& visit) const override;
 
 private:
+	[[nodiscard]] Registry& Entities();
+	[[nodiscard]] const Registry& Entities() const;
+	/// An object the physics may still work on: one that exists
+	[[nodiscard]] bool IsAvailable(entt::entity object) const;
+	/// The info weight of an object's kind
+	[[nodiscard]] float InfoWeight(entt::entity object) const;
+	/// The model of a static, from its row of the tables; none for anything else
+	[[nodiscard]] std::optional<MeshId> StaticModel(entt::entity object) const;
 	/// Any creature's leash tied to an object lets go, as the object starts to move
-	static void LetGoOfLeashesTiedTo(entt::entity object);
+	void LetGoOfLeashesTiedTo(entt::entity object);
 	/// A toy a player's hand let go may set the player's creature thinking of playing with it, whether it landed or flew
 	void ConsiderToyPlay(entt::entity object, const FromHand& release);
 	/// The kind of an object as the physics sees it now
@@ -128,6 +140,7 @@ public:
 private:
 	[[nodiscard]] PhysicsClassHooks& Hooks();
 
+	std::unique_ptr<dynamics::World> _world;
 	std::unique_ptr<PhysicsClassHooks> _hooks;
 	std::unique_ptr<PhysicsGround> _ground;
 	const LandIslandInterface* _groundLand {nullptr};

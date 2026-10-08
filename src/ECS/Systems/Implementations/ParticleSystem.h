@@ -204,6 +204,7 @@ public:
 	[[nodiscard]] size_t GetSoundCount() const override { return _world.SoundCount(); }
 	void AddTarget(EffectId id, entt::entity target) override;
 	void AddTargetPosition(EffectId id, glm::vec3 position) override;
+	void AddPlasma(EffectId id, const particles::PlasmaCommand& command) override;
 	void AddBeliefSprite(const particles::BeliefSprite& sprite) override;
 	void AddGestureTrail(std::shared_ptr<particles::GestureTrail> trail) override;
 	void UpdateFrame(float gameSeconds, const HandFrame& hand) override;

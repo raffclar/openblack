@@ -84,6 +84,12 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 	const auto state = villager_clips::IsOnWater(position) ? VillagerStates::Drowning : VillagerStates::Created;
 	registry.Assign<LivingAction>(entity, state, born.turnsUntilFirstDecision);
 	registry.Assign<VillagerPose>(entity);
+	// One joining a town with no home in it to go to is one of its homeless
+	if (town != entt::null && abode == entt::null)
+	{
+		registry.Get<Villager>(entity).town = entt::null;
+		Locator::townSystem::value().AddHomelessVillagerToTown(town, entity);
+	}
 
 	return entity;
 }

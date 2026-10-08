@@ -74,3 +74,26 @@ TEST(TempleHeart, TheHeartIsHarmedByTheBlowsMomentumUpToAFifth)
 	EXPECT_FLOAT_EQ(Harm({0.0f, 3.0f, 4.0f}, 1000.0f), 0.025f);
 	EXPECT_FLOAT_EQ(Harm({0.0f, 30.0f, 40.0f}, 1000.0f), 0.2f);
 }
+
+TEST(TempleHeartBeam, EveryTwoSecondsAtTheSameTargetAndAtOnceAtANewOne)
+{
+	EXPECT_EQ(BeamInterval(100), 20u);
+	Beam beam;
+	const auto first = static_cast<entt::entity>(1);
+	const auto second = static_cast<entt::entity>(2);
+	EXPECT_TRUE(BeamAtTargetDue(beam, first, 21, 20));
+	EXPECT_EQ(beam.turn, 21u);
+	// Strictly more than the interval later
+	EXPECT_FALSE(BeamAtTargetDue(beam, first, 41, 20));
+	EXPECT_TRUE(BeamAtTargetDue(beam, first, 42, 20));
+	// A new target starts the wait afresh, from nothing
+	EXPECT_TRUE(BeamAtTargetDue(beam, second, 43, 20));
+	// Taking the blow itself forgets the target, and beams at itself afresh too
+	EXPECT_TRUE(BeamAtItselfDue(beam, 44, 20));
+	EXPECT_TRUE(beam.target == entt::null);
+	EXPECT_FALSE(BeamAtItselfDue(beam, 50, 20));
+	// Too early in the game for any beam
+	Beam early;
+	EXPECT_FALSE(BeamAtTargetDue(early, first, 20, 20));
+	EXPECT_EQ(early.target, first);
+}
