@@ -27,7 +27,8 @@
 /// The Bink 1 video decoder for the game's videos (revision 'i', no alpha plane): each frame's video packet decoded to
 /// YUV 4:2:0 planes. It gives the same planes as the game's own Bink library on every frame of the five videos.
 ///
-/// What makes it exact: the planes are coded Y, then V, then U, each starting on a 32-bit boundary; pixel stores wrap
+/// What makes it exact: the planes are coded Y, then V, then U, each starting on a 32-bit boundary, and the chroma planes
+/// start at the byte offset the packet's first 32 bits give, as the game's library reads them; pixel stores wrap
 /// modulo 256 and are never clamped; the inverse DCT's multiplies wrap at 32 bits and its rows round with
 /// (x + 127) >> 8; a motion vector is only checked against the plane's block area, so a negative x in the first column
 /// reads the end of the row above; before the first picture the picture being decoded is its own reference.

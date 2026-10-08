@@ -18,11 +18,13 @@ using namespace openblack::bink;
 
 namespace
 {
-/// Revision 'i' starts each packet with a 32-bit field the picture doesn't use
-constexpr size_t k_PacketHeaderBits = 32;
+/// Revision 'i' starts each packet with the byte offset, from the packet's start, of its chroma planes
+constexpr uint32_t k_ChromaOffsetBits = 32;
 /// The planes in the order a packet holds them: Y, then V, then U
 constexpr std::array<size_t, 3> k_PlaneOrder = {0, 2, 1};
 constexpr char k_Revision = 'i';
+/// Far larger than any video the game plays; anything bigger is treated as a damaged header rather than allocated
+constexpr uint32_t k_MaxDimension = 4096;
 
 /// The run block: the 64 pixels in one of 16 orders, as runs of one colour or of colours one by one; `put` stores a
 /// pixel (0 to 63, row * 8 + x)
@@ -108,6 +110,10 @@ std::optional<Decoder> Decoder::Create(const Header& header, std::string* error)
 	{
 		return fail("no picture");
 	}
+	if (header.width > k_MaxDimension || header.height > k_MaxDimension)
+	{
+		return fail("the picture is too big");
+	}
 	if (header.revision != k_Revision)
 	{
 		return fail("only Bink revision 'i' is decoded");
@@ -160,13 +166,23 @@ bool Decoder::Decode(std::span<const uint8_t> packet)
 		return false;
 	}
 	BitReader reader(packet);
-	reader.Skip(k_PacketHeaderBits);
+	const size_t chromaOffset = reader.Read(k_ChromaOffsetBits);
 	for (size_t i = 0; i < k_PlaneOrder.size(); ++i)
 	{
 		const size_t plane = k_PlaneOrder[i];
 		if (!DecodePlane(reader, plane))
 		{
 			return false;
+		}
+		if (plane == 0)
+		{
+			// The chroma planes start where the packet says, as the game's library reads them, not necessarily where
+			// the luma ended; the game's own videos always place them right after it
+			if (chromaOffset < k_ChromaOffsetBits / 8 || chromaOffset > packet.size())
+			{
+				return false;
+			}
+			reader.Seek(chromaOffset * 8);
 		}
 		if (reader.Position() >= reader.Size())
 		{

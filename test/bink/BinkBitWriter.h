@@ -51,6 +51,16 @@ public:
 		return *this;
 	}
 
+	/// Overwrites 32 bits already written, at a byte offset
+	BinkBitWriter& Patch32(size_t byte, uint32_t value)
+	{
+		for (size_t i = 0; i < 4; ++i)
+		{
+			_bytes.at(byte + i) = static_cast<uint8_t>(value >> (8 * i));
+		}
+		return *this;
+	}
+
 	[[nodiscard]] size_t Bits() const { return _bits; }
 	[[nodiscard]] const std::vector<uint8_t>& Bytes() const { return _bytes; }
 

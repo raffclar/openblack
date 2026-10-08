@@ -82,6 +82,13 @@ public:
 		}
 	}
 
+	/// Moves to a bit position, at most a little past the end
+	void Seek(size_t position) noexcept
+	{
+		_position = 0;
+		Skip(position);
+	}
+
 	/// Moves to the next multiple of 32 bits (nothing if it is on one)
 	void Align32() noexcept { Skip(((_position + 31) & ~size_t {31}) - _position); }
 

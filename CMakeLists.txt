@@ -167,6 +167,7 @@ add_subdirectory(apps/lndtool)
 add_subdirectory(apps/anmtool)
 add_subdirectory(apps/glwtool)
 add_subdirectory(apps/morphtool)
+add_subdirectory(apps/binktool)
 add_subdirectory(apps/creaturemindtool)
 add_subdirectory(apps/lhvmtool)
 

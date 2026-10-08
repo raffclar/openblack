@@ -334,7 +334,7 @@ target_link_libraries(test_clip_sounds PRIVATE sas)
 
 # The Bink video component's tests need nothing from the game; those that read the game's videos skip without
 # OPENBLACK_GAME_PATH
-foreach (BINK_TEST bitstream blocks)
+foreach (BINK_TEST file bitstream blocks decoder yuv robustness)
   add_executable(test_bink_${BINK_TEST} bink/test_bink_${BINK_TEST}.cpp)
   target_link_libraries(test_bink_${BINK_TEST} PRIVATE GTest::gtest_main bink)
   set_property(TARGET test_bink_${BINK_TEST} PROPERTY FOLDER "tests")
