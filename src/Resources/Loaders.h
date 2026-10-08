@@ -15,6 +15,7 @@
 
 #include "3D/CameraPath.h"
 #include "3D/L3DAnim.h"
+#include "3D/L3DSubMesh.h"
 #include "3D/Light.h"
 #include "Audio/Sound.h"
 #include "Creature/CreatureMind.h"
@@ -56,6 +57,16 @@ struct AudioBankSampleHeader;
 struct G3DTexture;
 } // namespace openblack::pack
 
+namespace openblack::physics
+{
+class MaterialTable;
+}
+
+namespace openblack::audio::clip_sounds
+{
+class ClipSoundTable;
+}
+
 namespace openblack::resources
 {
 
@@ -82,6 +93,12 @@ struct L3DLoader final: BaseLoader<graphics::L3DMesh>
 	[[nodiscard]] result_type operator()(FromBufferTag, const std::string& debugName, const std::vector<uint8_t>& data) const;
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
 	[[nodiscard]] result_type operator()(FromDynamicFileTag, const std::string& debugName, const l3d::L3DFile& file) const;
+	/// Made while the game runs from triangles of another model, drawn with its skins (a broken building's)
+	struct FromMadeTag
+	{
+	};
+	[[nodiscard]] result_type operator()(FromMadeTag, const std::string& debugName, const graphics::L3DMesh& skinSource,
+	                                     std::span<const std::vector<graphics::L3DSubMesh::MadePrimitive>> subMeshes) const;
 };
 
 /// The data of an L3D file, .l3d or zipped .zzz, for what changes meshes on the CPU
@@ -94,6 +111,27 @@ struct L3DFileLoader final: BaseLoader<l3d::L3DFile>
 struct Bitmap16BLoader final: BaseLoader<Bitmap16B>
 {
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
+};
+
+/// The sounds placed on the people's, animals' and birds' clips, from Data/SmallSounds.SAS; none when there is no file
+struct ClipSoundsLoader final: BaseLoader<audio::clip_sounds::ClipSoundTable>
+{
+	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
+	struct EmptyTag
+	{
+	};
+	[[nodiscard]] result_type operator()(EmptyTag) const;
+};
+
+/// The physics materials of Data/PhysicsConstants.txt; every row zero when there is no file
+struct PhysicsMaterialsLoader final: BaseLoader<physics::MaterialTable>
+{
+	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
+	/// No file to read: every material is zero, as the game's are without one
+	struct EmptyTag
+	{
+	};
+	[[nodiscard]] result_type operator()(EmptyTag) const;
 };
 
 struct LandLightPaletteLoader final: BaseLoader<LandLightPalette>
@@ -183,6 +221,12 @@ struct ParticleBitmapLoader final: BaseLoader<psys::StackedBitmap>
 		int framesInUse;
 	};
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path, const Layout& layout) const;
+};
+
+/// The templates the hand's drawn gestures are matched against
+struct GestureTemplatesLoader final: BaseLoader<gestures::GestureFile>
+{
+	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
 };
 
 struct CameraPathLoader final: BaseLoader<CameraPath>
