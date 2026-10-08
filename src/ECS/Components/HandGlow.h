@@ -9,24 +9,17 @@
 
 #pragma once
 
-#include <BulletDynamics/Dynamics/btRigidBody.h>
-#include <LinearMath/btDefaultMotionState.h>
+#include <cstdint>
 
 namespace openblack::ecs::components
 {
 
-struct RigidBody
+/// A colour added to the light the hand is drawn in, after its texture: a recognised gesture's flash makes the hand glow
+/// in its player's colour
+struct HandGlow
 {
-	btRigidBody handle;
-	// TODO(bwrsandman): it would be more cache friendly to not use a pointer here
-	std::unique_ptr<btDefaultMotionState> motionState;
-
-	RigidBody(const btRigidBody::btRigidBodyConstructionInfo& info, const btTransform& startTransform)
-	    : handle {info}
-	    , motionState(std::make_unique<btDefaultMotionState>(startTransform))
-	{
-		handle.setMotionState(motionState.get());
-	}
+	/// 0xRRGGBB, black for none
+	uint32_t rgb {0};
 };
 
 } // namespace openblack::ecs::components

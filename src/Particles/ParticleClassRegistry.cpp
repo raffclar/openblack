@@ -96,6 +96,9 @@ ParticleClassRegistry ParticleClassRegistry::WithAllClasses(CreatorResourcesInte
 	RegisterSoundRules(registry);
 	RegisterFireballRules(registry);
 	RegisterLightningRules(registry);
+	RegisterArcRules(registry);
+	RegisterBeliefRules(registry);
+	RegisterCreatureSpellRules(registry);
 	RegisterGlintRules(registry);
 	RegisterShieldRules(registry);
 	RegisterStormRules(registry);
@@ -105,6 +108,7 @@ ParticleClassRegistry ParticleClassRegistry::WithAllClasses(CreatorResourcesInte
 	RegisterTornadoRules(registry);
 	RegisterFlockingRules(registry);
 	RegisterForestRules(registry);
+	RegisterBeamRules(registry);
 	RegisterBlastRules(registry);
 	return registry;
 }
