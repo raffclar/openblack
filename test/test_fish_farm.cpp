@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include <numbers>
+#include <optional>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -71,6 +72,57 @@ TEST(FishFarm, AScoopWantsItsRampWithinTheHandfulsRoom)
 	EXPECT_EQ(fish_farm::ScoopWanted(400, k_Type, 0, 0), 100u);
 	EXPECT_EQ(fish_farm::ScoopWanted(40, k_Type, 90, 100), 10u);
 	EXPECT_EQ(fish_farm::ScoopWanted(40, k_Type, 120, 100), 0u);
+}
+
+TEST(FishFarm, ATownWantsAFarmFishedOnlyWhileItHasNoFisherman)
+{
+	EXPECT_EQ(fish_farm::DesireToBeFished(0, 4), 1u);
+	EXPECT_EQ(fish_farm::DesireToBeFished(1, 4), 0u);
+	EXPECT_EQ(fish_farm::DesireToBeFished(4, 4), 0u);
+	EXPECT_EQ(fish_farm::DesireToBeFished(9, 4), 0u);
+}
+
+TEST(FishFarm, ATownSendsAFishermanToTheNearestFarmWithoutOne)
+{
+	const std::vector<fish_farm::Candidate> farms {
+	    {.distance = 50.0f, .fishermen = 1},
+	    {.distance = 200.0f, .fishermen = 0},
+	    {.distance = 100.0f, .fishermen = 0},
+	    {.distance = 100.0f, .fishermen = 0},
+	};
+	EXPECT_EQ(fish_farm::BestFarm(farms, 4), std::optional<size_t>(2));
+	// None that has its fisherman, however near
+	const std::vector<fish_farm::Candidate> none {{.distance = 5.0f, .fishermen = 1}, {.distance = 50.0f, .fishermen = 2}};
+	EXPECT_FALSE(fish_farm::BestFarm(none, 4).has_value());
+}
+
+TEST(FishFarm, AFishermansSpotIsTheFarmMovedByMetres)
+{
+	// 2.5 m along x and -1 m along z from the middle of cell (10, 20)
+	const glm::ivec2 farm {(10 << 16) | 0x8000, (20 << 16) | 0x8000};
+	const auto spot = fish_farm::FishingSpot(farm, {2.5f, -1.0f});
+	EXPECT_EQ(spot.x, farm.x + 16384);
+	// Truncated towards 0 after the move: 6553.6 units back is 6554 whole ones
+	EXPECT_EQ(spot.y, farm.y - 6554);
+}
+
+TEST(FishFarm, AFishermanCatchesAQuarterOfWhatHeCarriesLessOutOfSeason)
+{
+	// Spring: a quarter of 40
+	EXPECT_EQ(fish_farm::Catch(40, 0, 0, 1.0f), 10);
+	// Winter: 0.6 of it, truncated
+	EXPECT_EQ(fish_farm::Catch(40, 0, 3, 1.0f), 6);
+	// No more than his room, then by his tribe's skill
+	EXPECT_EQ(fish_farm::Catch(40, 36, 0, 1.0f), 4);
+	EXPECT_EQ(fish_farm::Catch(40, 0, 0, 1.5f), 15);
+}
+
+TEST(FishFarm, AFishermanTakesHisFoodToTheStoreOnceHisRoomIsLessThanHisCatch)
+{
+	EXPECT_FALSE(fish_farm::TakesCatchToStore(40, 20, 10));
+	EXPECT_TRUE(fish_farm::TakesCatchToStore(40, 31, 10));
+	EXPECT_TRUE(fish_farm::TakesCatchToStore(40, 40, 0));
+	EXPECT_FALSE(fish_farm::TakesCatchToStore(40, 30, 10));
 }
 
 TEST(FishShoal, TheShoalLiesWhereTheSeaIsOpenOnTwoRingsRunning)

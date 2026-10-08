@@ -74,6 +74,7 @@ entt::entity FishFarmArchetype::Create(const glm::vec3& position)
 	registry.Assign<Transform>(entity, centre, glm::mat3(1.0f), glm::vec3(1.0f));
 
 	FishFarm farm;
+	farm.place = {coords.x, coords.z};
 	// Whatever town a script names, it is the nearest town's
 	farm.town = NearestTown(glm::xz(centre));
 	farm.fish = fish_farm::Full(Locator::fishFarmSystem::value().GetType());

@@ -27,6 +27,13 @@ public:
 	[[nodiscard]] std::optional<entt::entity> FarmWithFishAt(glm::vec2 point) const override;
 	[[nodiscard]] fish_farm::Type GetType() const override;
 	uint32_t TakeFish(entt::entity farm, uint32_t wanted) override;
+	[[nodiscard]] float FishLeft(entt::entity farm) const override;
+	[[nodiscard]] std::optional<entt::entity> ClosestFarm(glm::vec3 point, float maxDistance) const override;
+	[[nodiscard]] std::optional<entt::entity> BestFarmFor(entt::entity town, glm::vec3 fisherman) const override;
+	void AddFisherman(entt::entity farm, entt::entity villager) override;
+	void RemoveFisherman(entt::entity farm, entt::entity villager) override;
+	[[nodiscard]] glm::vec3 FishingSpot(entt::entity farm) override;
+	[[nodiscard]] std::optional<int32_t> Fish(entt::entity farm, uint32_t capacity, uint32_t held, float tribalPower) override;
 	void Reset() override;
 
 private:

@@ -11,6 +11,9 @@
 
 #include <algorithm>
 
+#include "3D/MapCoords.h"
+#include "Common/GUtilsDistance.h"
+
 namespace openblack::fish_farm
 {
 namespace
@@ -66,6 +69,71 @@ uint32_t ScoopWanted(uint32_t ramp, const Type& type, uint32_t held, uint32_t ma
 		wanted = std::min(wanted, room);
 	}
 	return wanted;
+}
+
+uint32_t DesireToBeFished(size_t fishermen, uint32_t maxFishermen)
+{
+	// The farm is always taken as full, so only its fishermen count
+	constexpr float k_PercentFull = 1.0f;
+	float lacking = static_cast<float>(fishermen) / static_cast<float>(maxFishermen);
+	if (!(lacking < 1.0f))
+	{
+		lacking = 1.0f;
+	}
+	return static_cast<uint32_t>(map_coords::FtoL(k_PercentFull * (1.0f - lacking)));
+}
+
+std::optional<size_t> BestFarm(std::span<const Candidate> farms, uint32_t maxFishermen)
+{
+	std::optional<size_t> best;
+	float bestScore = 0.0f;
+	for (size_t i = 0; i < farms.size(); ++i)
+	{
+		const auto& farm = farms[i];
+		const float score = static_cast<float>(DesireToBeFished(farm.fishermen, maxFishermen)) *
+		                    gutils::GetDistanceModifier(farm.distance, k_FishermanReach);
+		if (score > bestScore)
+		{
+			bestScore = score;
+			best = i;
+		}
+	}
+	return best;
+}
+
+glm::ivec2 FishingSpot(glm::ivec2 farm, glm::vec2 offset)
+{
+	// Each axis goes out to metres, moves, and comes back, truncated
+	const auto axis = [](int32_t fixed, float metres) {
+		const double moved =
+		    (static_cast<double>(fixed) * 10.0 * (1.0 / 65536.0) + static_cast<double>(metres)) * 65536.0 / 10.0;
+		return static_cast<int32_t>(moved);
+	};
+	return {axis(farm.x, offset.x), axis(farm.y, offset.y)};
+}
+
+namespace
+{
+/// The room a villager has left for food, as the game keeps it: a 16-bit count
+[[nodiscard]] float Room(uint32_t capacity, uint32_t held)
+{
+	return static_cast<float>(static_cast<int16_t>(static_cast<uint16_t>(capacity - held)));
+}
+} // namespace
+
+int32_t Catch(uint32_t capacity, uint32_t held, uint32_t season, float tribalPower)
+{
+	const float share = static_cast<float>(capacity) * k_CatchShare;
+	const float wanted = share * k_SeasonCatch.at(std::min<size_t>(season, k_SeasonCatch.size() - 1));
+	const float room = Room(capacity, held);
+	const float caught = (wanted <= room ? wanted : room) * tribalPower;
+	return map_coords::FtoL(caught);
+}
+
+bool TakesCatchToStore(uint32_t capacity, uint32_t held, uint32_t caught)
+{
+	const float room = Room(capacity, held);
+	return room < static_cast<float>(caught) || room == 0.0f;
 }
 
 } // namespace openblack::fish_farm
