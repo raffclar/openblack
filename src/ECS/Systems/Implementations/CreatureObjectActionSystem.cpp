@@ -1306,10 +1306,9 @@ void CreatureObjectActionSystem::Update(std::chrono::duration<float, std::milli>
 	StartPendingCatches();
 }
 
-void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::milli> gameTime)
+void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::milli> /*gameTime*/)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto seconds = std::chrono::duration<float>(gameTime).count();
 
 	// The moments things are taken hold of and let go of, with the hand where the body was posed this frame
 	struct Moment
