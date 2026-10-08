@@ -423,11 +423,18 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			Locator::camera::value().DeprojectScreenToWorld(glm::vec2(event.button.x, event.button.y) /
 			                                                    static_cast<glm::vec2>(glm::max(screenSize, glm::ivec2(1))),
 			                                                rayOrigin, rayDirection);
+			// While the player's creature duels, the Action button adds a move to its queue
+			if (fights.Press(rayOrigin, rayDirection, creature_fight::Button::Action, SDL_GetTicks(),
+			                 Locator::time::value().GetTurn()))
+			{
+				_actionPressTaken = true;
+				_fightButton = creature_fight::Button::Action;
+			}
 			const auto& leashes = Locator::leashSystem::value();
 			const auto own = leashes.PlayersCreature(PlayerNames::PLAYER_ONE);
 			const auto under = creatureHand.CreatureUnderCursor();
 			const bool tying = under.has_value() && own.has_value() && *under != *own && leashes.IsLeashed(*own);
-			if (under.has_value() && !tying)
+			if (!_actionPressTaken && under.has_value() && !tying)
 			{
 				_actionPressTaken = true;
 				if (!creatureHand.Grab())
@@ -458,14 +465,24 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		    Locator::creatureModeSystem::value().Press({.milliseconds = event.button.timestamp,
 		                                                .screen = glm::vec2(event.button.x, event.button.y),
 		                                                .creature = creatureHand.CreatureUnderCursor()});
-		if (!doubleClicked && !fights.Press(rayOrigin, rayDirection))
+		// While the player's creature duels, the Move button makes a move at once in place of those queued
+		if (!doubleClicked && fights.Press(rayOrigin, rayDirection, creature_fight::Button::Move, SDL_GetTicks(),
+		                                   Locator::time::value().GetTurn()))
+		{
+			_fightButton = creature_fight::Button::Move;
+		}
+		else if (!doubleClicked)
 		{
 			PlayHandGrabSound();
 		}
 	}
-	if (!leftMouseButton && fights.IsPressed())
+	// Letting go of the button that pressed charges the blow it queued
+	if (_fightButton.has_value() && fights.IsPressed() &&
+	    ((*_fightButton == creature_fight::Button::Move && !leftMouseButton) ||
+	     (*_fightButton == creature_fight::Button::Action && !rightMouseButton)))
 	{
-		fights.Release();
+		fights.Release(SDL_GetTicks(), Locator::time::value().GetTurn());
+		_fightButton.reset();
 	}
 	// Letting go of the right button lets go of the creature. Let go quickly, having neither stroked nor slapped it, the
 	// press was a click, which puts the leash on the player's creature.
@@ -772,7 +789,17 @@ void Game::ProcessHandToolTipTurn()
 	// Over the player's own creature, the hand shows that it can take hold of it to stroke or slap it. It can hold other
 	// players' creatures too, but the game only offers it for the player's own.
 	const auto over = _creatureUnderHand.has_value() ? _creatureUnderHand : Locator::creatureHandSystem::value().GetCreature();
-	if (over.has_value() && !_interface->GetMenu().IsOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive())
+	const bool shown = !_interface->GetMenu().IsOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+	// While the player's creature duels, the hand offers to block over it, to attack over its opponent, and to manoeuvre
+	// anywhere else, each by the Action button
+	if (const auto tip = Locator::creatureFightSystem::value().HandTip(_creatureUnderHand))
+	{
+		if (shown)
+		{
+			toolTips.Submit(creature_fight::ToolTipIndex(*tip), gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
+		}
+	}
+	else if (over.has_value() && shown)
 	{
 		const auto* creature = Locator::entitiesRegistry::value().TryGet<const ecs::components::Creature>(*over);
 		const auto* mind = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureMindState>(*over);

@@ -150,6 +150,31 @@ enum class Step : uint8_t
 /// Whether a creature at a point may take a step: forward always, back or sideways only within range
 [[nodiscard]] bool CanStep(const Arena& arena, glm::vec2 position, Step step);
 
+// The player's controls
+
+/// The two buttons of the hand. The Move button makes its move at once, throwing away the moves queued; the Action
+/// button adds its move to the end of the queue. Both charge a blow for as long as they are held.
+enum class Button : uint8_t
+{
+	Move,
+	Action,
+};
+/// Whether a press makes its move in place of the queue
+[[nodiscard]] bool ReplacesQueue(Button button);
+/// A press on the ground only directs the fight within the arena
+[[nodiscard]] bool GroundPressCounts(const Arena& arena, glm::vec2 point);
+/// What the hand offers over a fight: blocking over the player's own creature, attacking over its opponent, and
+/// manoeuvring anywhere else
+enum class Tip : uint8_t
+{
+	Block,
+	Attack,
+	Manoeuvre,
+};
+[[nodiscard]] Tip TipOver(bool overOwnCreature, bool overOpponent);
+/// The tooltip shown for each, by its place among the game's tooltips
+[[nodiscard]] uint32_t ToolTipIndex(Tip tip);
+
 struct Move
 {
 	enum class Kind : uint8_t
@@ -183,6 +208,11 @@ constexpr float k_MaxChargeMs = 1200.0f;
 [[nodiscard]] float ReleasedCharge(float heldMs);
 /// How fast a blow plays by its charge, 0.5 to 1.5
 [[nodiscard]] float BlowSpeed(float chargeMs);
+/// How long a press counts as held for its charge: the time it was held, but no more than a tenth of a second for each
+/// game turn since it was pressed, and one more
+constexpr float k_HeldMsPerTurn = 100.0f;
+[[nodiscard]] float HeldMs(float realMs, uint32_t turnsSincePress);
+
 /// The fight's computer opponent hits at this speed
 constexpr float k_AiBlowSpeed = 0.5f;
 
@@ -203,7 +233,8 @@ public:
 	[[nodiscard]] std::optional<QueuedMove> Front() const;
 	void Pop();
 	void Clear();
-	/// The first blow still waiting for its charge gets it. False when none waits.
+	/// The move added last gets its charge, if it is a blow still waiting for it. False otherwise. A blow left waiting
+	/// behind a later move never gets one, and waits until a hit takes it away.
 	bool Release(float heldMs);
 	/// Getting hit takes away a charged blow still waiting
 	void CancelWaiting();
@@ -215,12 +246,15 @@ public:
 private:
 	std::array<QueuedMove, k_Capacity> _moves {};
 	size_t _count {0};
+	/// The move added last is a blow waiting for the button to be let go
+	bool _awaitingRelease {false};
 };
 
 // Learning to fight
 
-/// How the creature leans in fights, from -1 (defensive) to 1 (aggressive). Each move the player makes for it nudges
-/// it: a block towards defence, anything else towards attack.
+/// How the creature leans in fights, from -1 (defensive) to 1 (aggressive). Each move a human player's creature makes
+/// nudges it as the move is made, whoever asked for it: a block or a step towards defence, a blow or the special move
+/// towards attack; a miracle leaves it be.
 [[nodiscard]] float LearnTendency(float tendency, Move::Kind kind);
 /// A creature's first fight starts it leaning against its alignment: evil creatures attack, good ones defend
 [[nodiscard]] float FirstTendency(float alignment);
@@ -393,7 +427,7 @@ struct Fighter
 };
 /// Plays a state, with an action's animation and speed
 void Enter(Fighter& fighter, State state, std::optional<size_t> animation = std::nullopt, float speed = 1.0f);
-/// The player adds a move: the computer gives the creature back and waits 15 seconds, and the creature learns from it
+/// The player adds a move: the computer gives the creature back and waits 15 seconds
 bool PlayerMove(Fighter& fighter, const Move& move, bool replace);
 
 /// What to do with the move at the front of the queue

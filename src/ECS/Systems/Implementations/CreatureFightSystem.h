@@ -36,9 +36,14 @@ public:
 	void SetAutoFighting(entt::entity creature, bool autoFight) override;
 	[[nodiscard]] bool IsAutoFighting(entt::entity creature) const override;
 
-	bool Press(const glm::vec3& rayOrigin, const glm::vec3& rayDirection) override;
-	void Release() override;
+	[[nodiscard]] std::optional<entt::entity> PlayersFighter() const override;
+	bool Press(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, creature_fight::Button button, uint32_t milliseconds,
+	           uint32_t turn) override;
+	void Release(uint32_t milliseconds, uint32_t turn) override;
 	[[nodiscard]] bool IsPressed() const override { return _pressed.has_value(); }
+	[[nodiscard]] std::optional<creature_fight::Tip> HandTip(std::optional<entt::entity> under) const override;
+	bool GestureSpecialMove() override;
+	bool GestureSpell(MagicType type) override;
 
 	[[nodiscard]] bool IsBlocking(entt::entity creature) const override;
 	void Recoil(entt::entity creature) override;
@@ -84,14 +89,17 @@ private:
 	void FollowDuel();
 	/// Leaves the fight for good, its mind taking over again
 	void Leave(entt::entity creature);
+	/// Whether the line from the player's fighter to its opponent meets the opponent's body, as gestures need
+	[[nodiscard]] bool SeesOpponent(entt::entity creature) const;
 
 	bool _angerStartsFights {true};
 	bool _cameraWatches {true};
-	/// The player's creature a press is charging a blow for, and how long it has been held
+	/// The player's creature a press is charging a blow for, and when it was pressed
 	struct Pressed
 	{
 		entt::entity creature;
-		float heldMs;
+		uint32_t milliseconds;
+		uint32_t turn;
 	};
 	std::optional<Pressed> _pressed;
 	/// Where the camera was last sent to look at a fight

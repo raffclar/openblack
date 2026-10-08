@@ -22,6 +22,7 @@
 #include "3D/HandCrossFade.h"
 #include "3D/HandNavigationPose.h"
 #include "Common/Zoomer.h"
+#include "Creature/CreatureFight.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "EngineConfig.h"
 #include "Input/ShortcutKeys.h"
@@ -207,6 +208,8 @@ private:
 	/// Whether the last press of the Action button went to letting go of a miracle in the hand or to a creature, so it
 	/// taps nothing else for the leash
 	bool _actionPressTaken {false};
+	/// The button whose press directs the player's creature's fight, until it is let go
+	std::optional<creature_fight::Button> _fightButton;
 	bool _handRotating {false};
 	/// The hand sits on the line of sight through the cursor, this far from the camera
 	glm::vec3 _handRayDirection {0.0f, -1.0f, 0.0f};

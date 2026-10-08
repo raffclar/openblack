@@ -130,16 +130,62 @@ TEST(CreatureFight, QueueHoldsTwelveAndAClickReplacesIt)
 	EXPECT_TRUE(queue.Push(AttackMove(Band::High), true));
 	EXPECT_EQ(queue.Size(), 1u);
 	EXPECT_TRUE(queue.HasWaiting());
-	queue.Push(StepMove(Step::Back), false);
 	EXPECT_TRUE(queue.Release(700.0f));
 	EXPECT_EQ(queue.Front()->chargeMs, 700.0f);
 	EXPECT_FALSE(queue.Release(100.0f));
+	queue.Push(StepMove(Step::Back), false);
 	queue.Pop();
 	EXPECT_EQ(queue.Front()->move, StepMove(Step::Back));
 	queue.Pop();
 	EXPECT_TRUE(queue.Empty());
 	queue.Pop();
 	EXPECT_TRUE(queue.Empty());
+}
+
+TEST(CreatureFight, LettingGoChargesOnlyTheMoveAddedLast)
+{
+	MoveQueue queue;
+	queue.Push(AttackMove(Band::High), false);
+	// A step added after the blow: letting go charges nothing, and the blow keeps waiting
+	queue.Push(StepMove(Step::Left), false);
+	EXPECT_FALSE(queue.Release(500.0f));
+	EXPECT_FALSE(queue.Moves()[0].chargeMs.has_value());
+	queue.Push(AttackMove(Band::Low), false);
+	EXPECT_TRUE(queue.Release(5000.0f));
+	EXPECT_FALSE(queue.Moves()[0].chargeMs.has_value());
+	EXPECT_FLOAT_EQ(*queue.Moves()[2].chargeMs, k_MaxChargeMs);
+	// A full queue refuses a blow, and letting go then charges nothing
+	MoveQueue full;
+	for (size_t i = 0; i < MoveQueue::k_Capacity; ++i)
+	{
+		full.Push(AttackMove(Band::Mid), false);
+	}
+	EXPECT_FALSE(full.Push(AttackMove(Band::Mid), false));
+	EXPECT_FALSE(full.Release(300.0f));
+}
+
+TEST(CreatureFight, HeldTimeIsKeptToTheGameTurns)
+{
+	EXPECT_FLOAT_EQ(HeldMs(250.0f, 5), 250.0f);
+	EXPECT_FLOAT_EQ(HeldMs(900.0f, 2), 300.0f);
+	EXPECT_FLOAT_EQ(HeldMs(40.0f, 0), 40.0f);
+	EXPECT_FLOAT_EQ(HeldMs(400.0f, 0), 100.0f);
+}
+
+TEST(CreatureFight, ButtonsAndTips)
+{
+	EXPECT_TRUE(ReplacesQueue(Button::Move));
+	EXPECT_FALSE(ReplacesQueue(Button::Action));
+	const Arena arena {.centre = {10.0f, 0.0f}, .radius = 20.0f};
+	EXPECT_TRUE(GroundPressCounts(arena, {29.0f, 0.0f}));
+	EXPECT_FALSE(GroundPressCounts(arena, {30.5f, 0.0f}));
+	EXPECT_EQ(TipOver(true, false), Tip::Block);
+	EXPECT_EQ(TipOver(true, true), Tip::Block);
+	EXPECT_EQ(TipOver(false, true), Tip::Attack);
+	EXPECT_EQ(TipOver(false, false), Tip::Manoeuvre);
+	EXPECT_EQ(ToolTipIndex(Tip::Block), 22u);
+	EXPECT_EQ(ToolTipIndex(Tip::Attack), 23u);
+	EXPECT_EQ(ToolTipIndex(Tip::Manoeuvre), 46u);
 }
 
 TEST(CreatureFight, GettingHitTakesAWaitingBlowAway)
@@ -186,13 +232,33 @@ TEST(CreatureFight, PlayerMovesTakeBackControlAndTeach)
 	EXPECT_TRUE(PlayerMove(fighter, AttackMove(Band::High), true));
 	EXPECT_EQ(fighter.control, Control::Player);
 	EXPECT_FLOAT_EQ(fighter.computerWaitMs, k_ComputerWaitsMs);
-	EXPECT_FLOAT_EQ(fighter.tendency, 0.02f);
-	PlayerMove(fighter, BlockMove(), false);
+	// Queueing teaches nothing: the move teaches as it is made
+	EXPECT_FLOAT_EQ(fighter.tendency, 0.0f);
+	EXPECT_FLOAT_EQ(LearnTendency(0.0f, Move::Kind::High), 0.02f);
 	// A difference of nearly equal numbers: a fused multiply-add, as arm64 compilers make, moves its last bits
-	EXPECT_NEAR(fighter.tendency, (0.98f * 0.02f) - 0.02f, 1e-7f);
+	EXPECT_NEAR(LearnTendency(0.02f, Move::Kind::Block), (0.98f * 0.02f) - 0.02f, 1e-7f);
+	EXPECT_NEAR(LearnTendency(0.02f, Move::Kind::Animation), (0.98f * 0.02f) - 0.02f, 1e-7f);
+	EXPECT_FLOAT_EQ(LearnTendency(0.5f, Move::Kind::Spell), 0.5f);
+	EXPECT_FLOAT_EQ(LearnTendency(0.0f, Move::Kind::Special), 0.02f);
 	EXPECT_FLOAT_EQ(LearnTendency(1.0f, Move::Kind::Mid), 1.0f);
 	EXPECT_FLOAT_EQ(LearnTendency(-1.0f, Move::Kind::Block), -1.0f);
 	EXPECT_FLOAT_EQ(FirstTendency(-0.7f), 0.7f);
+}
+
+TEST(CreatureFight, ABlockQueuedWhileBlockingEndsTheBlock)
+{
+	Fighter fighter;
+	Enter(fighter, State::Block);
+	fighter.queue.Push(BlockMove(), false);
+	fighter.queue.Push(StepMove(Step::Back), false);
+	const auto order = TakeOrder(fighter, true);
+	ASSERT_TRUE(order.has_value());
+	EXPECT_EQ(order->kind, Order::Kind::EndBlock);
+	ASSERT_EQ(fighter.queue.Size(), 1u);
+	EXPECT_EQ(fighter.queue.Front()->move, StepMove(Step::Back));
+	// Anything else ends it and is kept for the stance after
+	EXPECT_EQ(TakeOrder(fighter, true)->kind, Order::Kind::EndBlock);
+	EXPECT_EQ(fighter.queue.Size(), 1u);
 }
 
 TEST(CreatureFight, HealthStaminaAndLife)

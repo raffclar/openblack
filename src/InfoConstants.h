@@ -1656,7 +1656,7 @@ struct GSpellSeedInfo: GObjectInfo
 	uint32_t iconIndex;          ///< 0x170: icon slot (inferred)
 	HelpText tooltip;            ///< 0x174
 	uint32_t unknown0x178;       ///< (unused by the game)
-	uint32_t unknown0x17C;       ///< 1 for FIRE, LIGHTNING_BOLT, HEAL, WEAK, STRONG (unused by the game)
+	uint32_t unknown0x17C;       ///< 1 for FIRE, LIGHTNING_BOLT, HEAL, WEAK, STRONG: the miracles cast in fights by gesture
 };
 static_assert(offsetof(GSpellSeedInfo, selectionGesture) == 0xf0);
 static_assert(offsetof(GSpellSeedInfo, magicTypes) == 0x114);
