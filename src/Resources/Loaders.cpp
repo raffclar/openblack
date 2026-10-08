@@ -17,6 +17,7 @@
 #include <span>
 #include <utility>
 
+#include <BinkFile.h>
 #include <GLWFile.h>
 #include <GestureFile.h>
 #include <L3DFile.h>
@@ -726,6 +727,18 @@ CameraPathLoader::result_type CameraPathLoader::operator()(FromDiskTag, const st
 	}
 
 	return cameraPath;
+}
+
+VideoLoader::result_type VideoLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
+{
+	std::string error;
+	auto file = bink::BinkFile::Parse(Locator::filesystem::value().ReadAll(path), &error);
+	if (!file)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Can't play the video {}: {}", path.generic_string(), error);
+		return nullptr;
+	}
+	return std::make_shared<bink::BinkFile>(std::move(*file));
 }
 
 GestureTemplatesLoader::result_type GestureTemplatesLoader::operator()(FromDiskTag, const std::filesystem::path& path) const

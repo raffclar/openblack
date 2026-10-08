@@ -340,3 +340,8 @@ foreach (BINK_TEST file bitstream blocks decoder yuv robustness)
   set_property(TARGET test_bink_${BINK_TEST} PROPERTY FOLDER "tests")
   add_test(NAME test_bink_${BINK_TEST} COMMAND test_bink_${BINK_TEST})
 endforeach ()
+
+# The full-screen videos' rules and system, over synthetic Bink files
+openblack_setup_and_add_test(test_video_rules video/test_video_rules.cpp)
+openblack_setup_and_add_test(test_video_system video/test_video_system.cpp)
+target_include_directories(test_video_system PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/bink)

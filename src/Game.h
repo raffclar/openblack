@@ -174,6 +174,8 @@ public:
 	void SetMousePosition(glm::ivec2 position) { _mousePosition = position; }
 	[[nodiscard]] const audio::AtmosAudio* GetAtmosAudio() const { return _atmosAudio.get(); }
 	[[nodiscard]] audio::GameMusic* GetGameMusic() { return _gameMusic.get(); }
+	/// The game's interface over the scene, none before it is made
+	[[nodiscard]] gui::GameInterface* GetInterface() { return _interface.get(); }
 	[[nodiscard]] const audio::GameMusic* GetGameMusic() const { return _gameMusic.get(); }
 	[[nodiscard]] const HandAnimation* GetHandAnimation() const { return _handAnimation.get(); }
 
