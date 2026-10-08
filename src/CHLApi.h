@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <vector>
 
 #include <LHVMTypes.h>
@@ -25,6 +27,8 @@ public:
 	CHLApi();
 
 	[[nodiscard]] const std::vector<lhvm::NativeFunction>& GetFunctionsTable();
+	/// A script task has stopped: whatever it had control of goes back
+	static void TaskStopped(uint32_t task);
 
 private:
 	void InitFunctionsTable0();

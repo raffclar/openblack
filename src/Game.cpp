@@ -117,6 +117,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
@@ -144,6 +145,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
+#include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
@@ -2468,7 +2470,7 @@ bool Game::Run() noexcept
 		Locator::scriptObjects::value().Reset();
 		lhvm.Initialise(
 		    &chlapi.GetFunctionsTable(), [](uint32_t func) { Locator::scriptObjects::value().EnterNative(func); }, nullptr,
-		    nullptr,
+		    [](uint32_t task) { chlapi::CHLApi::TaskStopped(task); },
 		    [](lhvm::ErrorCode code, const std::string& text, uint32_t number) {
 			    SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Script error: {} ({} {})",
 			                        lhvm::k_ErrorMsg.at(static_cast<size_t>(code)), text, number);
@@ -2479,9 +2481,11 @@ bool Game::Run() noexcept
 		{
 			lhvm.LoadBinary(fileSystem.ReadAll(challengePath));
 			// The story's scripts run the first land; on the testbed they would set its time of day and stop its clock
-			if (!_startTestbed)
+			// The story opens on a black screen: its first land comes up at noon, and its scripts set the dawn of the
+			// opening scene and fade the picture in from black some turns later
+			if (!_startTestbed && lhvm.StartScript("LandControlAll", lhvm::ScriptType::All) != 0)
 			{
-				lhvm.StartScript("LandControlAll", lhvm::ScriptType::All);
+				Locator::cinematicDirectorSystem::value().StartStory();
 			}
 		}
 		catch (const std::runtime_error& err)
@@ -2536,7 +2540,6 @@ bool Game::Run() noexcept
 		auto milliseconds = std::chrono::duration_cast<std::chrono::duration<uint32_t, std::milli>>(duration);
 		{
 			auto section = profiler.BeginScoped(Profiler::Stage::SceneDraw);
-
 			const graphics::RendererInterface::DrawSceneDesc drawDesc {
 			    .camera = &Locator::camera::value(),
 			    .frameBuffer = nullptr,
@@ -2719,6 +2722,17 @@ void Game::PrepareNewLand()
 		Locator::waterRingSystem::value().Reset();
 	}
 	Locator::cinematicDirectorSystem::value().Reset();
+	// Nor does any script keep the camera, the game's speed or the dialogue
+	if (Locator::camera::has_value())
+	{
+		auto& scriptControl = Locator::scriptControlSystem::value();
+		if (const auto owner = scriptControl.GetCameraOwner(); owner != 0)
+		{
+			scriptControl.EndCameraControl(Locator::camera::value(), owner);
+		}
+		scriptControl.Reset();
+	}
+	Locator::dialogueControlSystem::value().Reset();
 	Locator::cameraHelpSystem::value().Get().ResetForNewLand();
 	Locator::influenceSystem::value().Reset();
 	// Nor its creatures' footprints

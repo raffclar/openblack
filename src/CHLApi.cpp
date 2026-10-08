@@ -16,12 +16,14 @@
 #include <limits>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 
 #include <LHVM.h>
 #include <LHVMTypes.h>
 #include <entt/entity/entity.hpp>
 #include <entt/entity/fwd.hpp>
+#include <glm/geometric.hpp>
 #include <glm/vec3.hpp>
 #include <spdlog/spdlog.h>
 
@@ -31,6 +33,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/GameMusic.h"
 #include "Camera/Camera.h"
+#include "Camera/ScriptCameraModel.h"
 #include "Creature/LeashRules.h"
 #include "ECS/Archetypes/BallArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
@@ -55,6 +58,8 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CreatureModeSystemInterface.h"
+#include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -66,6 +71,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
+#include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -112,6 +118,76 @@ std::unordered_set<std::string> GetUniqueWords(const std::string& strings)
 		result.insert(word);
 	}
 	return result;
+}
+
+/// The task running the native now, 0 between tasks
+uint32_t CurrentTask()
+{
+	return Locator::vm::value().GetCurrentTaskNumber();
+}
+
+/// The kind of script a task runs, none for a task that has gone
+lhvm::ScriptType TaskType(uint32_t task)
+{
+	const auto& tasks = Locator::vm::value().GetTasks();
+	const auto found = tasks.find(task);
+	return found != tasks.end() ? found->second.type : lhvm::ScriptType::None;
+}
+
+/// A script's mistake the game tells of, and carries on
+void ScriptMessage(std::string_view message)
+{
+	SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "{}", message);
+}
+
+bool PlayerInsideTemple()
+{
+	return Locator::temple::has_value() && Locator::temple::value().Active();
+}
+
+/// The task whose cinema bars are in, 0 for none
+uint32_t WideScreenOwner()
+{
+	return Locator::cinematicDirectorSystem::value().GetWideScreenOwner();
+}
+
+/// The script's camera the camera commands move: with a warning when the script has none
+ScriptCameraModel* ScriptCamera()
+{
+	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	if (camera == nullptr)
+	{
+		ScriptMessage("We are in the wrong camera mode! - exception happened?");
+	}
+	return camera;
+}
+
+/// The camera commands that move it warn of a script doing so in the temple
+ScriptCameraModel* ScriptCameraToMove()
+{
+	if (PlayerInsideTemple())
+	{
+		ScriptMessage("Script moving camera in citadel");
+	}
+	return ScriptCamera();
+}
+
+/// Leashes are drawn again once a script gives the camera back, and not while it has it
+void DrawLeashes(bool drawn)
+{
+	if (Locator::leashSystem::has_value())
+	{
+		Locator::leashSystem::value().SetDrawn(drawn);
+	}
+}
+
+/// The task with the dialogue gives it back: the cinema bars go, and the advisors are sent home
+void ReleaseDialogue(uint32_t task)
+{
+	if (Locator::dialogueControlSystem::value().Release(task, TaskType(task) == lhvm::ScriptType::Help))
+	{
+		Locator::cinematicDirectorSystem::value().SetWideScreen(false, 0);
+	}
 }
 
 glm::vec3 PopVec()
@@ -300,6 +376,26 @@ void Pushb(bool value)
 	lhvm.Pushb(value);
 }
 
+void CHLApi::TaskStopped(uint32_t task)
+{
+	// What the task held goes back: the dialogue, its cinema bars, the camera and the game's speed
+	ReleaseDialogue(task);
+	auto& director = Locator::cinematicDirectorSystem::value();
+	if (director.IsWideScreenOn() && director.GetWideScreenOwner() == task)
+	{
+		director.SetWideScreen(false, 0);
+	}
+	const auto released = Locator::scriptControlSystem::value().TaskStopped(Locator::camera::value(), task);
+	if (released.camera)
+	{
+		DrawLeashes(true);
+	}
+	if (released.gameSpeed)
+	{
+		Locator::time::value().SetSpeed(1.0f);
+	}
+}
+
 CHLApi::CHLApi()
 {
 	_functionsTable.reserve(464);
@@ -315,33 +411,40 @@ void None() {} // 000 NONE
 void SetCameraPosition() // 001 SET_CAMERA_POSITION
 {
 	const auto position = PopVec();
-	// TODO(Daniels118): check if cinema mode is enabled
-	auto& camera = Locator::camera::value();
-	camera.SetOrigin(position);
+	// Without the script's camera the position is quietly dropped
+	if (auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value()); camera != nullptr)
+	{
+		camera->SetOrigin(position);
+	}
 }
 
 void SetCameraFocus() // 002 SET_CAMERA_FOCUS
 {
 	const auto position = PopVec();
-	// TODO(Daniels118): check if cinema mode is enabled
-	auto& camera = Locator::camera::value();
-	camera.SetFocus(position);
+	if (auto* camera = ScriptCameraToMove(); camera != nullptr)
+	{
+		camera->SetFocus(position);
+	}
 }
 
 void MoveCameraPosition() // 003 MOVE_CAMERA_POSITION
 {
-	// const auto time = Popf();
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
+	const auto time = Popf();
+	const auto position = PopVec();
+	if (auto* camera = ScriptCameraToMove(); camera != nullptr)
+	{
+		camera->MoveOrigin(position, time);
+	}
 }
 
 void MoveCameraFocus() // 004 MOVE_CAMERA_FOCUS
 {
-	// const auto time = Popf();
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
+	const auto time = Popf();
+	const auto position = PopVec();
+	if (auto* camera = ScriptCameraToMove(); camera != nullptr)
+	{
+		camera->MoveFocus(position, time);
+	}
 }
 
 void GetCameraPosition() // 005 GET_CAMERA_POSITION
@@ -613,15 +716,31 @@ void DllGettime() // 029 DLL_GETTIME
 
 void StartCameraControl() // 030 START_CAMERA_CONTROL
 {
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
-	Pushb(false);
+	const auto task = CurrentTask();
+	const bool templeScript = TaskType(task) & (lhvm::ScriptType::TempleHelp | lhvm::ScriptType::TempleSpecial);
+	const bool insideTemple = PlayerInsideTemple();
+	// Following a creature is left for the script's camera, which takes over from where the camera is
+	if (!insideTemple && Locator::creatureModeSystem::has_value() && Locator::creatureModeSystem::value().IsActive())
+	{
+		Locator::creatureModeSystem::value().Leave();
+	}
+	const bool taken = Locator::scriptControlSystem::value().StartCameraControl(
+	    Locator::camera::value(), {.task = task, .templeScript = templeScript, .insideTemple = insideTemple},
+	    [](float x, float z) { return Locator::terrainSystem::value().GetHeightAt(glm::vec2(x, z)); });
+	// Out in the world the leashes aren't drawn during the script's shots
+	if (taken && !insideTemple)
+	{
+		DrawLeashes(false);
+	}
+	Pushb(taken);
 }
 
 void EndCameraControl() // 031 END_CAMERA_CONTROL
 {
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
+	if (Locator::scriptControlSystem::value().EndCameraControl(Locator::camera::value(), CurrentTask()))
+	{
+		DrawLeashes(true);
+	}
 }
 
 void SetWidescreen() // 032 SET_WIDESCREEN
@@ -660,9 +779,22 @@ void SetFocus() // 034 SET_FOCUS
 
 void HasCameraArrived() // 035 HAS_CAMERA_ARRIVED
 {
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
-	Pushb(false);
+	if (PlayerInsideTemple())
+	{
+		ScriptMessage("Script camera in citadel");
+	}
+	auto& camera = Locator::camera::value();
+	if (const auto* script = Locator::scriptControlSystem::value().GetScriptCamera(camera); script != nullptr)
+	{
+		Pushb(script->Arrived());
+		return;
+	}
+	// The player's camera has arrived once where it is and what it looks at are where it is going
+	const auto distanceSquared = [](const glm::vec3& a, const glm::vec3& b) { return glm::dot(a - b, a - b); };
+	Pushb(distanceSquared(camera.GetOrigin(Camera::Interpolation::Target), camera.GetOrigin()) <
+	          script_camera::k_ArrivedDistanceSquared &&
+	      distanceSquared(camera.GetFocus(Camera::Interpolation::Target), camera.GetFocus()) <
+	          script_camera::k_ArrivedDistanceSquared);
 }
 
 void FlockCreate() // 036 FLOCK_CREATE
@@ -959,9 +1091,11 @@ void RandomUlong() // 065 RANDOM_ULONG
 
 void SetGamespeed() // 066 SET_GAMESPEED
 {
-	// const auto speed = Popf();
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
+	const auto speed = Popf();
+	if (Locator::scriptControlSystem::value().MaySetGameSpeed(CurrentTask()))
+	{
+		Locator::time::value().SetSpeed(speed);
+	}
 }
 
 void CallInNear() // 067 CALL_IN_NEAR
@@ -1398,22 +1532,54 @@ void RunCameraPath() // 119 RUN_CAMERA_PATH
 
 void StartDialogue() // 120 START_DIALOGUE
 {
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
-	Pushb(false);
+	auto& dialogue = Locator::dialogueControlSystem::value();
+	const auto task = CurrentTask();
+	auto owner = dialogue.GetOwner();
+	if (owner == 0)
+	{
+		dialogue.SendSpiritsHome(false);
+	}
+	else
+	{
+		if (owner == task)
+		{
+			ScriptMessage("Script Asking For Dialogue Control It already has! - Dangerous");
+			Pushb(true);
+			return;
+		}
+		// A story script takes the dialogue from a help script, whose tasks are stopped and so give it back
+		if (TaskType(owner) == lhvm::ScriptType::Help && TaskType(task) == lhvm::ScriptType::Script)
+		{
+			Locator::vm::value().StopTasksOfType(lhvm::ScriptType::Help | lhvm::ScriptType::TempleHelp |
+			                                     lhvm::ScriptType::MultiplayerHelp);
+			owner = dialogue.GetOwner();
+		}
+		if (owner != 0)
+		{
+			Pushb(false);
+			return;
+		}
+	}
+	// The script carries on even when another task's cinema bars keep the dialogue from it
+	dialogue.Request(task, WideScreenOwner());
+	Pushb(true);
 }
 
 void EndDialogue() // 121 END_DIALOGUE
 {
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
+	auto& dialogue = Locator::dialogueControlSystem::value();
+	const auto task = CurrentTask();
+	if (dialogue.GetOwner() != task)
+	{
+		return;
+	}
+	dialogue.SendSpiritsHome(TaskType(task) == lhvm::ScriptType::Help);
+	ReleaseDialogue(task);
 }
 
 void IsDialogueReady() // 122 IS_DIALOGUE_READY
 {
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
-	Pushb(false);
+	Pushb(!Locator::dialogueControlSystem::value().IsControlled(WideScreenOwner()));
 }
 
 void ChangeWeatherProperties() // 123 CHANGE_WEATHER_PROPERTIES
@@ -1469,14 +1635,15 @@ void SetHeadingAndSpeed() // 127 SET_HEADING_AND_SPEED
 
 void StartGameSpeed() // 128 START_GAME_SPEED
 {
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
+	Locator::scriptControlSystem::value().StartGameSpeed(CurrentTask());
 }
 
 void EndGameSpeed() // 129 END_GAME_SPEED
 {
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
+	if (Locator::scriptControlSystem::value().EndGameSpeed(CurrentTask()))
+	{
+		Locator::time::value().SetSpeed(1.0f);
+	}
 }
 
 void BuildBuilding() // 130 BUILD_BUILDING

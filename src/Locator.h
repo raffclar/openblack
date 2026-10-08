@@ -123,6 +123,8 @@ class CreatureFightSystemInterface;
 class CreatureModeSystemInterface;
 class CreatureCaveSystemInterface;
 class CinematicDirectorSystemInterface;
+class ScriptControlSystemInterface;
+class DialogueControlSystemInterface;
 class SoundTagSystemInterface;
 class RainSystemInterface;
 class ChimneySmokeSystemInterface;
@@ -228,6 +230,8 @@ struct Locator
 	using creatureModeSystem = entt::locator<ecs::systems::CreatureModeSystemInterface>;
 	using creatureCaveSystem = entt::locator<ecs::systems::CreatureCaveSystemInterface>;
 	using cinematicDirectorSystem = entt::locator<ecs::systems::CinematicDirectorSystemInterface>;
+	using scriptControlSystem = entt::locator<ecs::systems::ScriptControlSystemInterface>;
+	using dialogueControlSystem = entt::locator<ecs::systems::DialogueControlSystemInterface>;
 	using soundTagSystem = entt::locator<ecs::systems::SoundTagSystemInterface>;
 	using rainSystem = entt::locator<ecs::systems::RainSystemInterface>;
 	using chimneySmokeSystem = entt::locator<ecs::systems::ChimneySmokeSystemInterface>;

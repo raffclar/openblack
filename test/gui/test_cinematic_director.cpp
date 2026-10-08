@@ -55,3 +55,21 @@ TEST(CinematicDirector, SettingTheSameAgainChangesNothing)
 	EXPECT_EQ(director.GetWideScreenOwner(), 0u);
 	EXPECT_TRUE(director.IsInterfaceActive());
 }
+
+TEST(CinematicDirector, TheStoryOpensOnABlackScreen)
+{
+	CinematicDirectorSystem director;
+	director.Reset();
+	EXPECT_EQ(director.GetFadeColour() >> 24u, 0u);
+
+	// Black at once, before any turn, so nothing of the land shows before its scripts set the scene
+	director.StartStory();
+	EXPECT_EQ(director.GetFadeColour(), 0xFF000000u);
+	EXPECT_TRUE(director.IsFadeFinished());
+	director.ProcessTurn();
+	EXPECT_EQ(director.GetFadeColour(), 0xFF000000u);
+
+	// Until the scripts fade the picture back in
+	director.FadeBackToNormal(0);
+	EXPECT_EQ(director.GetFadeColour() >> 24u, 0u);
+}

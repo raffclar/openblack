@@ -65,6 +65,9 @@ openblack_setup_and_add_test(test_cinematics gui/test_cinematics.cpp)
 openblack_setup_and_add_test(
   test_cinematic_director gui/test_cinematic_director.cpp
 )
+openblack_setup_and_add_test(
+  test_dialogue_control gui/test_dialogue_control.cpp
+)
 target_link_libraries(test_sound_decoding PRIVATE pack)
 openblack_setup_and_add_test(test_hand_animation hand/test_hand_animation.cpp)
 target_link_libraries(test_hand_animation PRIVATE pack l3d morph)
@@ -220,6 +223,7 @@ target_link_libraries(test_l3d_submesh_names PRIVATE l3d)
 openblack_setup_and_add_test(test_light_beams graphics/test_light_beams.cpp)
 target_link_libraries(test_light_beams PRIVATE l3d glw)
 openblack_setup_and_add_test(test_temple_camera camera/test_temple_camera.cpp)
+openblack_setup_and_add_test(test_script_camera camera/test_script_camera.cpp)
 openblack_setup_and_add_test(test_temple_doors temple/test_temple_doors.cpp)
 openblack_setup_and_add_test(
   test_creature_cave_effects temple/test_creature_cave_effects.cpp
