@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <optional>
+
 #include <entt/entity/entity.hpp>
 
 #include "Enums.h"
@@ -43,8 +45,24 @@ void SetupOnFire(entt::entity villager, entt::entity fire);
 void StopFireFighting(entt::entity villager);
 /// The fire a villager fights or runs from, none for anybody else
 [[nodiscard]] entt::entity FireOf(entt::entity villager);
-/// A villager killed by an effect such as fire dies: it falls, lies dead as a skeleton for a while and goes
-void DieByEffect(entt::entity villager);
+/// What a death is put down to: what killed the villager, the player who did it (none for nobody, counted as the neutral
+/// player), and how much the death weighs with its town against that player
+struct DeathCause
+{
+	DeathReason reason {DeathReason::None};
+	std::optional<PlayerNames> killer;
+	float weight {0.0f};
+};
+/// How a death by an effect is remembered: killed by a spell, whatever the effect, put down to the effect's player and
+/// weighing with the town the life the effect took
+[[nodiscard]] constexpr DeathCause SpellDeath(std::optional<PlayerNames> killer, float weight)
+{
+	return {.reason = DeathReason::Spell, .killer = killer, .weight = weight};
+}
+/// A villager killed by an effect such as fire dies: it falls, lies dead as a skeleton for a while and goes. A death
+/// with its cause is remembered: on the body, in its town's deaths by killer and cause, and in the players' counts of
+/// people lost and killed (and sacrificed).
+void DieByEffect(entt::entity villager, std::optional<DeathCause> cause = std::nullopt);
 
 uint32_t ReactToFire(components::LivingAction& action);
 uint32_t PutOutFireByBeating(components::LivingAction& action);
