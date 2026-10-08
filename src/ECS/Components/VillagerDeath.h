@@ -11,6 +11,10 @@
 
 #include <cstdint>
 
+#include <optional>
+
+#include "Enums.h"
+
 namespace openblack::ecs::components
 {
 
@@ -20,6 +24,9 @@ struct VillagerDeath
 {
 	uint32_t turnsLeft {0};
 	bool skeleton {false};
+	/// What killed it, and the player put down for it, when its death says
+	std::optional<DeathReason> reason;
+	std::optional<PlayerNames> killer;
 };
 
 } // namespace openblack::ecs::components

@@ -9,24 +9,22 @@
 
 #pragma once
 
-#include <BulletDynamics/Dynamics/btRigidBody.h>
-#include <LinearMath/btDefaultMotionState.h>
-
 namespace openblack::ecs::components
 {
 
-struct RigidBody
+/// A tree that fell dead: the first time it is drawn, its roots drop from it
+struct DropsRoots
 {
-	btRigidBody handle;
-	// TODO(bwrsandman): it would be more cache friendly to not use a pointer here
-	std::unique_ptr<btDefaultMotionState> motionState;
+};
 
-	RigidBody(const btRigidBody::btRigidBodyConstructionInfo& info, const btTransform& startTransform)
-	    : handle {info}
-	    , motionState(std::make_unique<btDefaultMotionState>(startTransform))
-	{
-		handle.setMotionState(motionState.get());
-	}
+/// The roots of a tree that fell dead, dropping to the land under it and fading away
+struct FallingRoots
+{
+	/// The game's seconds since they began to fall
+	float seconds {0.0f};
+	/// The height they fell from, and the height they come to rest at
+	float startHeight {0.0f};
+	float restHeight {0.0f};
 };
 
 } // namespace openblack::ecs::components

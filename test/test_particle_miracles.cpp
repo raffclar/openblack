@@ -555,7 +555,7 @@ TEST_F(ParticleMiracleTest, ArcsCrawlOverWhatABoltStrikesAgainAfterEachSearch)
 	}
 	EXPECT_GE(world.arcsQueued.size(), 2u);
 	EXPECT_LE(world.arcsQueued.size(), 3u);
-	EXPECT_TRUE(std::ranges::all_of(world.arcsQueued, [tree](entt::entity object) { return object == tree; }));
+	EXPECT_TRUE(std::ranges::all_of(world.arcsQueued, [&](entt::entity object) { return object == tree; }));
 }
 
 TEST_F(ParticleMiracleTest, ABoltThatIsNoLongerCastStrikesNothing)
@@ -600,6 +600,30 @@ TEST_F(ParticleMiracleTest, TheSprinklingSourceFollowsTheHandNoHigherThanALimit)
 	effect->Walk(1.0f, walk);
 	// A point is not drawn, but its place is where the grains fall from: the land plus 58
 	EXPECT_TRUE(walk.atoms.empty());
+}
+
+TEST_F(ParticleMiracleTest, AScoopsGrainsRiseFromTheLandUnderTheHandToTheHand)
+{
+	auto effect = Make(Header() + Object("ParticleSpriteCreator", "Grain", k_Point) +
+	                   Object("ER_MultiPickup", "Stream",
+	                          "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Grain\nPROPERTY EmitRate FLOAT 8\n"
+	                          "PROPERTY RaiseTime FLOAT 1\n"));
+	effect->SetProcessInfo({.handPosition = {4.0f, 10.0f, 6.0f}});
+	// Eight a second are let out
+	for (int step = 0; step < 5; ++step)
+	{
+		effect->Step(k_Step);
+	}
+	const auto made = effect->AtomCount();
+	EXPECT_GE(made, 3u);
+	EXPECT_LE(made, 5u);
+	// None outlives the rise time; closing down lets no more out
+	effect->CloseDown();
+	for (int step = 0; step < 20; ++step)
+	{
+		effect->Step(k_Step);
+	}
+	EXPECT_EQ(effect->AtomCount(), 0u);
 }
 
 TEST_F(ParticleMiracleTest, AnAtomsSoundIsLetGoWhenTheAtomGoes)

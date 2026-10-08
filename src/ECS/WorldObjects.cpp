@@ -20,6 +20,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
+#include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/DeadTree.h"
@@ -29,14 +30,15 @@
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Forest.h"
+#include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/MagicForest.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
-#include "ECS/Components/RigidBody.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
@@ -46,6 +48,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -56,6 +59,8 @@
 #include "ECS/TownAggression.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Physics/DamageMesh.h"
+#include "Physics/LivingRules.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
@@ -64,6 +69,23 @@ using namespace openblack::ecs::components;
 
 namespace
 {
+/// A building that is built and whose town stands: one whose repair the town would see to
+bool IsBuiltBuildingOfATown(const Registry& registry, entt::entity object)
+{
+	const auto* abode = registry.TryGet<const Abode>(object);
+	if (abode == nullptr)
+	{
+		return false;
+	}
+	if (const auto* progress = registry.TryGet<const BuildProgress>(object); progress != nullptr && progress->built < 1.0f)
+	{
+		return false;
+	}
+	const auto& towns = registry.Context().towns;
+	const auto town = towns.find(abode->townId);
+	return town != towns.end() && registry.Valid(town->second) && registry.AllOf<Town>(town->second);
+}
+
 /// A villager's health out of this is its life
 constexpr float k_VillagerHealthScale = 100.0f;
 /// An object with no model stands this big
@@ -189,6 +211,11 @@ const GObjectInfo* world_objects::InfoOf(entt::entity object)
 	{
 		return Row(info.mobileObject, mobile->type);
 	}
+	// The football has a row of its own
+	if (registry.AllOf<Ball>(object))
+	{
+		return &info.ball;
+	}
 	return nullptr;
 }
 
@@ -263,6 +290,17 @@ float world_objects::ReduceLife(entt::entity object, float damage)
 		}
 		return needs->needs.life;
 	}
+	// A building not yet built loses what is built of it rather than life, and all its life once nothing is
+	if (auto* progress = registry.TryGet<BuildProgress>(object);
+	    progress != nullptr && progress->built < 1.0f && registry.AnyOf<Abode, SpellDispenser>(object))
+	{
+		progress->built = progress->built - damage <= 0.0f ? 0.0f : progress->built - damage;
+		if (progress->built != 0.0f)
+		{
+			return LifeOf(object);
+		}
+		damage = LifeOf(object);
+	}
 	// Villagers keep their life to a fraction of their health, so that small hurts add up
 	const float before = LifeOf(object);
 	auto& life = registry.AllOf<ObjectLife>(object) ? registry.Get<ObjectLife>(object)
@@ -271,11 +309,18 @@ float world_objects::ReduceLife(entt::entity object, float damage)
 	if (auto* villager = registry.TryGet<Villager>(object))
 	{
 		villager->health = static_cast<uint32_t>(std::ceil(life.life * k_VillagerHealthScale));
+		CountInjury(object, before, life.life);
 	}
-	if (registry.AllOf<Abode>(object) && damage > 0.0f)
+	if (registry.AllOf<Abode>(object) && life.life < 1.0f)
 	{
-		// Its people come out of a building that is being hurt
+		// Its people come out of a building left under its full life, however little it lost
 		EmptyBuilding(object);
+	}
+	// A built building of a town left under its full life gets a site for its repair, which starts from a little less
+	// than the life it is left with, whatever took it there
+	if (life.life < 1.0f && IsBuiltBuildingOfATown(registry, object))
+	{
+		registry.AssignOrReplace<RepairSite>(object, RepairSite {.startLife = physics::damage::RepairStartLife(life.life)});
 	}
 	return life.life;
 }
@@ -289,7 +334,9 @@ bool world_objects::CanBeDestroyedBySpell(entt::entity object)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto can = [&registry, object] {
-		if (!registry.Valid(object) || registry.AnyOf<Creature, Field, Temple, TeleportStone, OneOffSpellSeed>(object))
+		// Nor anything a script made indestructible
+		if (!registry.Valid(object) ||
+		    registry.AnyOf<Creature, Field, Temple, TeleportStone, OneOffSpellSeed, Indestructible>(object))
 		{
 			return false;
 		}
@@ -336,7 +383,22 @@ void world_objects::Destroy(entt::entity object)
 	Remove(object);
 }
 
-void world_objects::DestroyedByEffect(entt::entity object)
+void world_objects::LeaveGhost(entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* mesh = registry.TryGet<const Mesh>(object);
+	const auto* transform = registry.TryGet<const Transform>(object);
+	if (mesh == nullptr || transform == nullptr)
+	{
+		return;
+	}
+	auto model = glm::translate(glm::mat4(1.0f), transform->position) * glm::mat4(transform->rotation);
+	model = glm::scale(model, transform->scale);
+	const auto ghost = registry.Create();
+	registry.Assign<DestructionGhost>(ghost, DestructionGhost {.mesh = mesh->id, .model = model});
+}
+
+void world_objects::DestroyedByEffect(entt::entity object, const EffectDeath& death)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object) || IsCreature(object))
@@ -346,22 +408,27 @@ void world_objects::DestroyedByEffect(entt::entity object)
 	if (registry.AnyOf<Abode, SpellDispenser>(object))
 	{
 		// A ghost of it flickers out where it stood, and it goes
-		if (const auto* mesh = registry.TryGet<const Mesh>(object))
-		{
-			if (const auto* transform = registry.TryGet<const Transform>(object))
-			{
-				auto model = glm::translate(glm::mat4(1.0f), transform->position) * glm::mat4(transform->rotation);
-				model = glm::scale(model, transform->scale);
-				const auto ghost = registry.Create();
-				registry.Assign<DestructionGhost>(ghost, DestructionGhost {.mesh = mesh->id, .model = model});
-			}
-		}
+		LeaveGhost(object);
 		Remove(object);
 		return;
 	}
 	if (registry.AllOf<Villager>(object))
 	{
-		villager_fire::DieByEffect(object);
+		// Any effect's death counts as killed by a spell, put down to the effect's player
+		villager_fire::DieByEffect(object, villager_fire::SpellDeath(death.killer, death.weight));
+		return;
+	}
+	// An animal falls dead rather than vanishing; a miracle's fades out
+	if (registry.AllOf<Animal>(object) && Locator::animalSystem::has_value())
+	{
+		if (registry.AllOf<SpellAnimal>(object))
+		{
+			Locator::animalSystem::value().StartFading(object);
+		}
+		else
+		{
+			Locator::animalSystem::value().SetDying(object);
+		}
 		return;
 	}
 	if (auto* field = registry.TryGet<Field>(object))
@@ -385,10 +452,6 @@ void world_objects::Remove(entt::entity object)
 	if (!registry.Valid(object))
 	{
 		return;
-	}
-	if (auto* body = registry.TryGet<RigidBody>(object); body != nullptr && Locator::dynamicsSystem::has_value())
-	{
-		Locator::dynamicsSystem::value().RemoveRigidBody(&body->handle);
 	}
 	if (Locator::fireSystem::has_value())
 	{
@@ -458,6 +521,30 @@ void world_objects::AttackTown(entt::entity object, float damage, PlayerNames ag
 	const bool owner = registry.Get<const Town>(town).owner == aggressor;
 	const uint32_t turn = Locator::time::has_value() ? static_cast<uint32_t>(Locator::time::value().GetTurn()) : 0;
 	ecs::town_aggression::Attacked(aggression->record, aggressor, owner, amount, info.town.firstTimeDamageDoneAddition, turn);
+}
+
+void world_objects::CountInjury(entt::entity villager, float before, float after)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* person = registry.TryGet<const Villager>(villager);
+	if (person == nullptr || !registry.Valid(person->town))
+	{
+		return;
+	}
+	auto* town = registry.TryGet<Town>(person->town);
+	if (town == nullptr)
+	{
+		return;
+	}
+	const int change = physics::living::InjuredChange(before, after);
+	if (change > 0)
+	{
+		++town->injured;
+	}
+	else if (change < 0 && town->injured > 0)
+	{
+		--town->injured;
+	}
 }
 
 float world_objects::IncreaseLife(entt::entity object, float amount)
