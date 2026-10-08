@@ -256,6 +256,47 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 		startIndex += static_cast<uint16_t>(primitive.numTriangles * 3);
 	}
 
+	// Every model keeps its vertices as the file holds them for the physics, boned or not, with each vertex's bone
+	{
+		const auto count = std::min<size_t>(nVertices, verticesSpan.size());
+		_bodyGeometry.positions.clear();
+		_bodyGeometry.positions.reserve(count);
+		_bodyGeometry.uvs.clear();
+		_bodyGeometry.uvs.reserve(count);
+		for (size_t i = 0; i < count; ++i)
+		{
+			_bodyGeometry.positions.emplace_back(verticesSpan[i].position.x, verticesSpan[i].position.y,
+			                                     verticesSpan[i].position.z);
+			_bodyGeometry.uvs.emplace_back(verticesSpan[i].texCoord.x, verticesSpan[i].texCoord.y);
+		}
+		_bodyGeometry.indices.assign(indices, indices + nIndices);
+		_bodyGeometry.bones.clear();
+		if (_flags.hasBones)
+		{
+			// Each primitive's vertices are moved by its groups' bones in turn, a run of vertices each
+			const auto& groups = l3d.GetVertexGroupSpan(meshIndex);
+			size_t group = 0;
+			for (const auto& primitive : primitiveSpan)
+			{
+				size_t inPrimitive = 0;
+				for (uint32_t g = 0; g < primitive.numGroups && group < groups.size(); ++g, ++group)
+				{
+					for (uint32_t v = 0; v < groups[group].vertexCount && inPrimitive < primitive.numVertices; ++v)
+					{
+						_bodyGeometry.bones.push_back(groups[group].boneIndex);
+						++inPrimitive;
+					}
+				}
+				// Vertices no group names belong to no bone
+				for (; inPrimitive < primitive.numVertices; ++inPrimitive)
+				{
+					_bodyGeometry.bones.push_back(k_NoBone);
+				}
+			}
+			_bodyGeometry.bones.resize(count, k_NoBone);
+		}
+	}
+
 	// A model that doesn't move by bones keeps its triangles for the flames set on it and the pieces it breaks into
 	if (!_flags.hasBones)
 	{
@@ -296,6 +337,68 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 	return true;
 }
 
+bool L3DSubMesh::LoadMade(std::span<const MadePrimitive> primitives) noexcept
+{
+	_flags = {};
+	_flags.lodMask = 1;
+	_primitives.clear();
+	_surface = {};
+	size_t vertexCount = 0;
+	size_t indexCount = 0;
+	for (const auto& primitive : primitives)
+	{
+		vertexCount += primitive.vertices.size();
+		indexCount += primitive.indices.size();
+	}
+	if (vertexCount == 0 || indexCount == 0 || vertexCount > std::numeric_limits<uint16_t>::max())
+	{
+		return false;
+	}
+	const bgfx::Memory* verticesMem = bgfx::alloc(static_cast<uint32_t>(sizeof(EnhancedL3DVertex) * vertexCount));
+	const bgfx::Memory* indicesMem = bgfx::alloc(static_cast<uint32_t>(sizeof(uint16_t) * indexCount));
+	auto* vertices = reinterpret_cast<EnhancedL3DVertex*>(verticesMem->data);
+	auto* indices = reinterpret_cast<uint16_t*>(indicesMem->data);
+	_boundingBox.maxima = glm::vec3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+	_boundingBox.minima = glm::vec3(FLT_MAX, FLT_MAX, FLT_MAX);
+	uint32_t firstVertex = 0;
+	uint32_t firstIndex = 0;
+	for (const auto& primitive : primitives)
+	{
+		for (const auto& vertex : primitive.vertices)
+		{
+			vertices[firstVertex + (&vertex - primitive.vertices.data())] = {
+			    .pos = vertex.position, .uv = vertex.uv, .norm = vertex.normal, .index = glm::i16vec4(-1, -1, 0, 0)};
+			_boundingBox.maxima = glm::max(_boundingBox.maxima, vertex.position);
+			_boundingBox.minima = glm::min(_boundingBox.minima, vertex.position);
+		}
+		for (size_t i = 0; i < primitive.indices.size(); ++i)
+		{
+			indices[firstIndex + i] = static_cast<uint16_t>(primitive.indices[i] + firstVertex);
+		}
+		// Drawn with the material of the primitive it came from
+		auto drawn = primitive.source->GetPrimitives().at(primitive.sourcePrimitive);
+		drawn.indicesOffset = firstIndex;
+		drawn.indicesCount = static_cast<uint32_t>(primitive.indices.size());
+		// Seen from both sides
+		drawn.twoSided = true;
+		_primitives.push_back(drawn);
+		firstVertex += static_cast<uint32_t>(primitive.vertices.size());
+		firstIndex += static_cast<uint32_t>(primitive.indices.size());
+	}
+
+	VertexDecl decl;
+	decl.reserve(4);
+	decl.emplace_back(VertexAttrib::Attribute::Position, static_cast<uint8_t>(3), VertexAttrib::Type::Float);
+	decl.emplace_back(VertexAttrib::Attribute::TexCoord0, static_cast<uint8_t>(2), VertexAttrib::Type::Float);
+	decl.emplace_back(VertexAttrib::Attribute::Normal, static_cast<uint8_t>(3), VertexAttrib::Type::Float);
+	decl.emplace_back(VertexAttrib::Attribute::Indices, static_cast<uint8_t>(4), VertexAttrib::Type::Int16,
+	                  /*normalized=*/false, /*asInt=*/true);
+	auto* vertexBuffer = new VertexBuffer(_l3dMesh.GetDebugName(), verticesMem, decl);
+	auto* indexBuffer = new IndexBuffer(_l3dMesh.GetDebugName(), indicesMem, IndexBuffer::Type::Uint16);
+	_mesh = std::make_unique<graphics::Mesh>(vertexBuffer, indexBuffer);
+	return true;
+}
+
 void L3DSubMesh::BoundVertices(const l3d::L3DFile& l3d, uint32_t meshIndex)
 {
 	const auto primitiveSpan = l3d.GetPrimitiveSpan(meshIndex);
@@ -311,31 +414,29 @@ void L3DSubMesh::BoundVertices(const l3d::L3DFile& l3d, uint32_t meshIndex)
 	_boundingBox.minima = glm::vec3(FLT_MAX, FLT_MAX, FLT_MAX);
 	if (_flags.hasBones)
 	{
-		for (auto& primitive : primitiveSpan)
+		// Each group of vertices is placed by its bone in the pose the model rests in. The groups run on over the
+		// vertices of every primitive in turn, as the game bounds each primitive by its own groups.
+		uint32_t vertexOffset = 0;
+		for (const auto& group : vertexGroupSpans)
 		{
-			uint32_t vertexOffset = 0;
-			for (uint32_t i = 0; i < primitive.numGroups; ++i)
+			auto matrix = glm::identity<glm::mat4>();
+			for (uint32_t parent = group.boneIndex; parent != std::numeric_limits<uint32_t>::max();
+			     parent = boneSpans[parent].parent)
 			{
-				auto matrix = glm::identity<glm::mat4>();
-				for (uint32_t parent = vertexGroupSpans[i].boneIndex; parent != std::numeric_limits<uint32_t>::max();
-				     parent = boneSpans[parent].parent)
-				{
-					const auto& bone = boneSpans[parent];
-					const auto orientation = glm::make_mat3(bone.orientation.data());
-					const auto translation = glm::make_vec3(&bone.position.x) * orientation;
-					const auto local = glm::translate(glm::mat4(orientation), translation);
-					matrix = local * matrix;
-				}
-
-				for (uint32_t j = 0; j < vertexGroupSpans[i].vertexCount; ++j)
-				{
-					const auto& vertex = verticesSpan[vertexOffset + j];
-					const auto position = glm::xyz(matrix * glm::vec4(glm::make_vec3(&vertex.position.x), 1.0f));
-					_boundingBox.maxima = glm::max(_boundingBox.maxima, position);
-					_boundingBox.minima = glm::min(_boundingBox.minima, position);
-				}
-				vertexOffset += vertexGroupSpans[i].vertexCount;
+				const auto& bone = boneSpans[parent];
+				const auto orientation = glm::make_mat3(bone.orientation.data());
+				const auto translation = glm::make_vec3(&bone.position.x) * orientation;
+				const auto local = glm::translate(glm::mat4(orientation), translation);
+				matrix = local * matrix;
 			}
+			for (uint32_t j = 0; j < group.vertexCount && vertexOffset + j < verticesSpan.size(); ++j)
+			{
+				const auto& vertex = verticesSpan[vertexOffset + j];
+				const auto position = glm::xyz(matrix * glm::vec4(glm::make_vec3(&vertex.position.x), 1.0f));
+				_boundingBox.maxima = glm::max(_boundingBox.maxima, position);
+				_boundingBox.minima = glm::min(_boundingBox.minima, position);
+			}
+			vertexOffset += group.vertexCount;
 		}
 	}
 	else

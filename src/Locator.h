@@ -94,7 +94,9 @@ namespace ecs::systems
 {
 class CameraBookmarkSystemInterface;
 class DynamicsSystemInterface;
+class PickingSystemInterface;
 class HandSystemInterface;
+class HandGrabSystemInterface;
 class CameraPathSystemInterface;
 class LivingActionSystemInterface;
 class MistSystemInterface;
@@ -133,6 +135,7 @@ class TempleExteriorSystemInterface;
 class PlayerSystemInterface;
 class RenderingSystemInterface;
 class TownSystemInterface;
+class ResourceStoreSystemInterface;
 class TimeSystemInterface;
 class VegetationInterface;
 class WeatherSystemInterface;
@@ -148,6 +151,9 @@ class GestureSystemInterface;
 class MiracleFxSystemInterface;
 class FireSystemInterface;
 class ExplosionSystemInterface;
+class RewardSystemInterface;
+class ScriptObjectsSystemInterface;
+class BuildingDamageSystemInterface;
 } // namespace ecs::systems
 
 void InitializeWindow(const std::string& title, int width, int height, windowing::DisplayMode displayMode, uint32_t extraFlags);
@@ -179,10 +185,12 @@ struct Locator
 	using rendereringSystem = entt::locator<ecs::systems::RenderingSystemInterface>;
 	using rendererInterface = entt::locator<graphics::RendererInterface>;
 	using dynamicsSystem = entt::locator<ecs::systems::DynamicsSystemInterface>;
+	using pickingSystem = entt::locator<ecs::systems::PickingSystemInterface>;
 	using cameraBookmarkSystem = entt::locator<ecs::systems::CameraBookmarkSystemInterface>;
 	using cameraPathSystem = entt::locator<ecs::systems::CameraPathSystemInterface>;
 	using livingActionSystem = entt::locator<ecs::systems::LivingActionSystemInterface>;
 	using townSystem = entt::locator<ecs::systems::TownSystemInterface>;
+	using resourceStoreSystem = entt::locator<ecs::systems::ResourceStoreSystemInterface>;
 	using weatherSystem = entt::locator<ecs::systems::WeatherSystemInterface>;
 	using pathfindingSystem = entt::locator<ecs::systems::PathfindingSystemInterface>;
 	using entitiesRegistry = entt::locator<ecs::Registry>;
@@ -192,6 +200,7 @@ struct Locator
 	using cameraHelpSystem = entt::locator<ecs::systems::CameraHelpSystemInterface>;
 	using templeExteriorSystem = entt::locator<ecs::systems::TempleExteriorSystemInterface>;
 	using handSystem = entt::locator<ecs::systems::HandSystemInterface>;
+	using handGrabSystem = entt::locator<ecs::systems::HandGrabSystemInterface>;
 	using temple = entt::locator<TempleInteriorInterface>;
 	using time = entt::locator<ecs::systems::TimeSystemInterface>;
 	using vegetation = entt::locator<ecs::systems::VegetationInterface>;
@@ -236,6 +245,9 @@ struct Locator
 	using miracleFxSystem = entt::locator<ecs::systems::MiracleFxSystemInterface>;
 	using fireSystem = entt::locator<ecs::systems::FireSystemInterface>;
 	using explosionSystem = entt::locator<ecs::systems::ExplosionSystemInterface>;
+	using rewardSystem = entt::locator<ecs::systems::RewardSystemInterface>;
+	using scriptObjects = entt::locator<ecs::systems::ScriptObjectsSystemInterface>;
+	using buildingDamageSystem = entt::locator<ecs::systems::BuildingDamageSystemInterface>;
 	using vm = entt::locator<lhvm::LHVM>;
 	using chlapi = entt::locator<chlapi::CHLApi>;
 };

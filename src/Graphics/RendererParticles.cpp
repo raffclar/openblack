@@ -35,10 +35,12 @@
 #include "Camera/Camera.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/Mist.h"
+#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
+#include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/IndexBuffer.h"
@@ -155,6 +157,16 @@ void Renderer::CollectParticles() const
 	if (Locator::explosionSystem::has_value())
 	{
 		Locator::explosionSystem::value().CollectDrawFrame(_particleFrame);
+	}
+	// The dust of a reward chest that fell
+	if (Locator::rewardSystem::has_value())
+	{
+		Locator::rewardSystem::value().CollectDrawFrame(_particleFrame);
+	}
+	// The dust that thrown things throw up as they land
+	if (Locator::dynamicsSystem::has_value())
+	{
+		Locator::dynamicsSystem::value().CollectDrawFrame(_particleFrame);
 	}
 }
 
