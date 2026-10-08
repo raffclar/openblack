@@ -60,6 +60,15 @@ glm::vec3 ByRows(const glm::vec3& v, const glm::mat3& rows)
 	return v.x * rows[0] + v.y * rows[1] + v.z * rows[2];
 }
 
+/// An anim's root move turned by the rows, summed in the order the game sums it
+glm::vec3 RootMoveByRows(const glm::vec3& v, const glm::mat3& rows)
+{
+	const glm::vec3 x = v.x * rows[0];
+	const glm::vec3 y = v.y * rows[1];
+	const glm::vec3 z = v.z * rows[2];
+	return (z + y) + x;
+}
+
 bool IsSpace(char c)
 {
 	return std::isspace(static_cast<unsigned char>(c)) != 0;
@@ -419,55 +428,97 @@ float Smooth(float t)
 std::vector<AudioTag> ParseAudioTags(std::string_view label, float time, std::string& lastWord, int* errors)
 {
 	int count = 0;
-	std::string s(label);
-	// ';' and '/' end the label
-	if (const auto cut = s.find_first_of(";/"); cut != std::string::npos)
+	std::vector<AudioTag> tags;
+	// Only text from a '[' is read, each group up to its ']', ';' or '/', and the search goes on after it
+	size_t start = label.find('[');
+	while (start != std::string_view::npos)
 	{
-		s.resize(cut);
-	}
-	auto trim = [](std::string& t) {
-		size_t b = 0;
-		while (b < t.size() && IsSpace(t[b]))
-		{
-			++b;
-		}
-		t.erase(0, b);
-		while (!t.empty() && IsSpace(t.back()))
-		{
-			t.pop_back();
-		}
-	};
-	trim(s);
-	if (!s.empty() && s[0] == '[')
-	{
-		s.erase(0, 1);
-		if (const auto close = s.find(']'); close != std::string::npos)
-		{
-			s.resize(close);
-		}
-		else
+		std::string group(label.substr(start + 1));
+		const size_t end = group.find_first_of("];/");
+		if (end == std::string::npos || group[end] != ']')
 		{
 			++count; // an unclosed '[' is an error
 		}
-		trim(s);
-	}
-	std::vector<AudioTag> tags;
-	size_t pos = 0;
-	while (pos < s.size())
-	{
-		AudioTag tag;
-		tag.time = time;
-		const size_t next = ParseOneTag(s, pos, tag, count, lastWord);
-		tags.push_back(tag);
-		if (next <= pos)
+		if (end != std::string::npos)
+		{
+			group.resize(end);
+		}
+		const auto first = std::ranges::find_if(group, [](char c) { return !IsSpace(c); });
+		group.erase(group.begin(), first);
+		while (!group.empty() && IsSpace(group.back()))
+		{
+			group.pop_back();
+		}
+		size_t pos = 0;
+		while (pos < group.size())
+		{
+			AudioTag tag;
+			tag.time = time;
+			const size_t next = ParseOneTag(group, pos, tag, count, lastWord);
+			tags.push_back(tag);
+			if (next <= pos)
+			{
+				break;
+			}
+			pos = next;
+		}
+		if (end == std::string::npos)
 		{
 			break;
 		}
-		pos = next;
+		start = label.find('[', start + 1 + end + 1);
 	}
 	if (errors != nullptr)
 	{
 		*errors += count;
+	}
+	return tags;
+}
+
+std::vector<helpdude::SoundEvent> CrossedSounds(std::span<const helpdude::SoundEvent> events, float& last, float phase)
+{
+	// The sounds between the phase the anim was last heard at and now, both ends included. A jump of more than half the
+	// anim plays nothing.
+	const float previous = last < 0.0f ? phase : last;
+	float now = phase - static_cast<float>(static_cast<int32_t>(phase));
+	const float from = previous - static_cast<float>(static_cast<int32_t>(previous));
+	last = now;
+	if (now < from)
+	{
+		now += 1.0f;
+	}
+	std::vector<helpdude::SoundEvent> crossed;
+	if (from + 0.5f < now)
+	{
+		return crossed;
+	}
+	for (const auto& event : events)
+	{
+		if (event.phase > now)
+		{
+			break;
+		}
+		if (event.phase >= from || (now >= 1.0f && event.phase < now - 1.0f))
+		{
+			crossed.push_back(event);
+		}
+	}
+	return crossed;
+}
+
+std::vector<AudioTag> BuildSentenceTags(std::span<const TagLabel> labels, std::string& lastWord)
+{
+	// Any error in any of a sentence's labels leaves it with no tags at all
+	int errors = 0;
+	std::vector<AudioTag> tags;
+	for (const auto& label : labels)
+	{
+		auto more = ParseAudioTags(label.text, label.time, lastWord, &errors);
+		tags.insert(tags.end(), more.begin(), more.end());
+	}
+	if (errors != 0)
+	{
+		tags.clear();
 	}
 	return tags;
 }
@@ -485,6 +536,7 @@ DudeData DudeData::FromFile(const helpdude::HelpDudeFile& file)
 		{
 			data.loopStart[i] = file.events[i].loopStart;
 			data.loopEnd[i] = file.events[i].loopEnd;
+			data.sounds[i] = file.events[i].sounds;
 		}
 	}
 	data.flags = file.animationFlags;
@@ -497,7 +549,38 @@ DudeData DudeData::FromFile(const helpdude::HelpDudeFile& file)
 	data.pitchOffset = file.pitchOffset;
 	data.fingertipOffsetRow0 = file.fingertipAcross;
 	data.fingertipOffsetRow2 = file.fingertipAhead;
+	data.faceBones = file.faceBones;
+	data.pupilCentre = {file.pupilCentreU, file.pupilCentreV};
+	data.pupilScale = file.pupilScale;
 	return data;
+}
+
+glm::vec2 TrailUv(size_t point, bool second, bool good)
+{
+	const float along = static_cast<float>(point) * 0.03125f;
+	if (second)
+	{
+		return {along, 0.5f};
+	}
+	return {along, good ? 1.0f : 0.0f};
+}
+
+std::array<uint16_t, 6 * (Trail::k_Points - 1)> TrailIndices()
+{
+	std::array<uint16_t, 6 * (Trail::k_Points - 1)> indices {};
+	size_t n = 0;
+	for (size_t j = Trail::k_Points - 1; j-- > 0;)
+	{
+		const auto a0 = static_cast<uint16_t>(2 * j);
+		const auto b0 = static_cast<uint16_t>(2 * j + 1);
+		const auto a1 = static_cast<uint16_t>(2 * j + 2);
+		const auto b1 = static_cast<uint16_t>(2 * j + 3);
+		for (const uint16_t k : {a0, b0, b1, b1, a1, a0})
+		{
+			indices.at(n++) = k;
+		}
+	}
+	return indices;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -540,7 +623,8 @@ AdvisorSpirit::AdvisorSpirit(int index, const DudeData& data, AdvisorSpiritContr
 	_slotLast.fill(-1.0f);
 	_lastMouse = control.Frame().mouse;
 	_emotion = data.startEmotion;
-	_face = data.faces[0]; // (pending) the record the original builds before the first UpdateFace
+	// The game's default record until the first face update
+	_face = helpdude::k_DefaultFaceRecord;
 	_hoverX.Reset(0.0f);
 	_hoverY.Reset(0.0f);
 	_depth.Reset(0.0f);
@@ -630,7 +714,7 @@ void AdvisorSpirit::SnapClingEdge()
 	{
 		return;
 	}
-	if (std::abs(_clingY * 1.28205f) < std::abs(_clingX))
+	if (std::abs(_clingY * 1.2820513f) < std::abs(_clingX))
 	{
 		if (_clingX > 0.0f)
 		{
@@ -1032,7 +1116,7 @@ void AdvisorSpirit::ApplyAnim(uint32_t anim, float phase, float referencePhase, 
 			_flicker = _flicker || (p > 0.16f && p < 0.25f);
 		}
 	}
-	_position += ByRows(args.rootMove, _rows);
+	_position += RootMoveByRows(args.rootMove, _rows);
 	_layers.push_back({AnimLayer::Kind::Add, anim, args.milliseconds, args.referenceKey});
 }
 
@@ -1057,9 +1141,13 @@ void AdvisorSpirit::AddAt(uint32_t anim, float weight, uint32_t referenceKey)
 
 void AdvisorSpirit::Sound(uint32_t anim, float phase, bool sfx)
 {
-	if (sfx)
+	if (!sfx || anim >= k_AnimSlots)
 	{
-		_sounds.push_back({anim, phase});
+		return;
+	}
+	for (const auto& event : CrossedSounds(_data.sounds[anim], _slotLast[anim], phase))
+	{
+		_sounds.push_back({.anim = anim, .sample = event.sample, .filtered = event.flag != 0});
 	}
 }
 
@@ -1200,9 +1288,10 @@ void AdvisorSpirit::UpdateDepthSpacing(float zMin)
 		partner->_partnerDistance = d;
 		if (d2 < 0.81f)
 		{
-			const float k = d * 1.11111116f;
-			partner->_depth.SetDestination((1.0f - k * k) * -0.5f, 1.0f, 0.0f);
-			const float own = dy < zMin ? zMin : dy;
+			const float k = d * 1.1111110f;
+			const float v = 1.0f - k * k;
+			partner->_depth.SetDestination(v * -0.5f, 1.0f, 0.0f);
+			const float own = v < zMin ? zMin : v;
 			_depth.SetDestination(own, 1.0f, 0.0f);
 			return;
 		}
@@ -1417,7 +1506,7 @@ void AdvisorSpirit::UpdateBasePose(bool stable, float rate, bool sfx)
 		if (!(_stableBlend < 1.0f))
 		{
 			const int32_t ms = clock % static_cast<int32_t>(hoverStable->duration);
-			_layers.push_back({AnimLayer::Kind::Set, anim::k_HoverStable, ms});
+			_layers.push_back({AnimLayer::Kind::Set, anim::k_HoverStable, ms, 0, false});
 			Sound(anim::k_HoverStable, static_cast<float>(ms) / static_cast<float>(static_cast<int32_t>(hoverStable->duration)),
 			      sfx);
 		}
@@ -1437,7 +1526,7 @@ void AdvisorSpirit::UpdateBasePose(bool stable, float rate, bool sfx)
 	else if (hover != nullptr)
 	{
 		const int32_t ms = clock % static_cast<int32_t>(hover->duration);
-		_layers.push_back({AnimLayer::Kind::Set, anim::k_Hover, ms});
+		_layers.push_back({AnimLayer::Kind::Set, anim::k_Hover, ms, 0, false});
 		Sound(anim::k_Hover, static_cast<float>(ms) / static_cast<float>(static_cast<int32_t>(hover->duration)), sfx);
 	}
 	if (const skeletal_animation::Animation* wing = Clip(anim::k_Wingflap); wing != nullptr) // empty in both files
@@ -1446,7 +1535,7 @@ void AdvisorSpirit::UpdateBasePose(bool stable, float rate, bool sfx)
 		_layers.push_back({AnimLayer::Kind::Add, anim::k_Wingflap, ms, 0});
 		Sound(anim::k_Wingflap, static_cast<float>(ms) / static_cast<float>(static_cast<int32_t>(wing->duration)), sfx);
 	}
-	const float step = (_index == k_EvilDude ? 1.01f : 0.999811f) * rate;
+	const float step = (_index == k_EvilDude ? 1.01f : 0.99981135f) * rate;
 	_hoverClock += step;
 	_hoverClock2 += step;
 }
@@ -1498,12 +1587,22 @@ void AdvisorSpirit::UpdateFace(float dt)
 	const float lidR = (1.0f - _face[10]) * b + _face[10];
 	if ((_activeFlags & 8) == 0)
 	{
-		// the eye bones scaled by rec[3] / rec[4] (renderer), then the two lids
-		// ms clamped to [0, dur - 1], reference key 0
+		// the eye bones scaled by rec[3] / rec[4], then the two lids: ms clamped to [0, dur - 1], reference key 0
+		AnimLayer scale {AnimLayer::Kind::ScaleEyes};
+		scale.blend = _face[3];
+		scale.blendB = _face[4];
+		_layers.push_back(scale);
 		AddAt(anim::k_LeftEyeShut, lidL, 0);
 		AddAt(anim::k_RightEyeShut, lidR, 0);
 	}
-	// the pupils are the renderer's (rec[5..8])
+	// The pupils: each eye's texture scales across and down, rec[5..8], each kept within 0 and 2
+	for (size_t eye = 0; eye < 2; ++eye)
+	{
+		const float across = std::clamp(_face[7 + eye] + _face[5 + eye], 0.0f, 2.0f);
+		const float down = std::clamp(_face[5 + eye] - _face[7 + eye], 0.0f, 2.0f);
+		_pupils.at(eye) = glm::vec2(across * _data.pupilScale, down * _data.pupilScale);
+	}
+	_pupilsSet = true;
 	// clips[emotion + 10], no mask (Clip's bound is the 80 slots)
 	if (Clip(anim::k_FirstEmotion + _emotion) != nullptr && w > 0.0f)
 	{
@@ -1781,9 +1880,9 @@ void AdvisorSpirit::UpdateMotion(float dt, bool focus, float zMin, bool sfx)
 	}
 
 	// 5. the hover channels (Zoomer::Update, inline in the original) and the world target
-	_hoverX.Update(dt);
-	_hoverY.Update(dt);
-	_depth.Update(dt);
+	_hoverX.UpdateInline(dt);
+	_hoverY.UpdateInline(dt);
+	_depth.UpdateInline(dt);
 	_worldTarget.Update(dt);
 
 	// 6. the zones; the original also fills four more records here (pending: nothing reads them)
@@ -1829,11 +1928,14 @@ void AdvisorSpirit::UpdateMotion(float dt, bool focus, float zMin, bool sfx)
 
 	// 8. / 9. the model matrix and the in-world pose
 	UpdateMatrix(dt);
+	// The land lights the advisor in the world where it is now, before its anims move it
+	_lightPosition = _position;
 
 	// 10. the base pose
 	if (_data.clips[anim::k_Stand].has_value())
 	{
-		_layers.push_back({AnimLayer::Kind::Set, anim::k_Stand, 0});
+		// The stand pose fills every bone the other clips leave alone
+		_layers.push_back({AnimLayer::Kind::Set, anim::k_Stand, 0, 0, true});
 	}
 	if (_state != dude_state::k_Cling)
 	{
@@ -1852,7 +1954,7 @@ void AdvisorSpirit::UpdateMotion(float dt, bool focus, float zMin, bool sfx)
 	const float shown = 1.0f - _pointBlend;
 	uint32_t next = _state;
 	const bool noArm = (_activeFlags & 0x10) != 0;
-	// 1.0, or `shown` in a point hold with the arm; the point arm's angle is scaled by it
+	// The point arm's angle is scaled by the arm clip's phase, or 1 without the arm
 	float pointWeight = 1.0f;
 	switch (_state)
 	{
@@ -1860,8 +1962,8 @@ void AdvisorSpirit::UpdateMotion(float dt, bool focus, float zMin, bool sfx)
 	case dude_state::k_PointIntroR:
 		if (!noArm)
 		{
-			ApplyAnim(_state == dude_state::k_PointIntroL ? anim::k_PointLIn : anim::k_PointRIn, shown * _stateTime * 4.0f,
-			          0.0f, false);
+			pointWeight = shown * _stateTime * 4.0f;
+			ApplyAnim(_state == dude_state::k_PointIntroL ? anim::k_PointLIn : anim::k_PointRIn, pointWeight, 0.0f, false);
 		}
 		if (_stateTime > 0.25f)
 		{
@@ -1880,8 +1982,8 @@ void AdvisorSpirit::UpdateMotion(float dt, bool focus, float zMin, bool sfx)
 	case dude_state::k_PointOutroR:
 		if (!noArm)
 		{
-			ApplyAnim(_state == dude_state::k_PointOutroL ? anim::k_PointLIn : anim::k_PointRIn,
-			          (1.0f - _stateTime * 4.0f) * shown, 0.0f, false); // 4 t (as the intro)
+			pointWeight = (1.0f - _stateTime * 4.0f) * shown;
+			ApplyAnim(_state == dude_state::k_PointOutroL ? anim::k_PointLIn : anim::k_PointRIn, pointWeight, 0.0f, false);
 		}
 		if (_stateTime > 0.25f) // 0.25 (as the intro)
 		{
@@ -2230,7 +2332,8 @@ void AdvisorSpirit::UpdateHead(float dt)
 	const Queries& q = _control.GetQueries();
 	if (_lookTarget && (_activeFlags & 1) == 0)
 	{
-		// the head angles only, nothing when the target is behind
+		// The head's angles to the target; a target behind the head leaves them at 0
+		_headTarget = glm::vec3(0.0f);
 		const std::optional<glm::vec2> angles =
 		    q.headAngles ? q.headAngles(_index, _rows, _position, *_lookTarget) : std::optional<glm::vec2>(glm::vec2(0.0f));
 		if (angles)
@@ -2288,6 +2391,89 @@ void AdvisorSpirit::UpdateHead(float dt)
 	{
 		AddAt(clipX, x, static_cast<uint32_t>(clip->frames.size()) / 2);
 	}
+}
+
+void AdvisorSpirit::ResetTrail()
+{
+	_trail.points.fill({_hoverX.GetValue(), _hoverY.GetValue(), _depth.GetValue()});
+}
+
+void AdvisorSpirit::UpdateTrail(float dt)
+{
+	const glm::vec3 point(_hoverX.GetValue(), _hoverY.GetValue(), _depth.GetValue());
+	_trail.accumulator += dt;
+	if (_trail.accumulator > 0.2f)
+	{
+		_trail.accumulator -= 0.2f;
+		_trail.points.at(_trail.head) = point;
+		_trail.head = (_trail.head + 1) & (Trail::k_Points - 1);
+	}
+	for (auto& spark : _trail.sparks)
+	{
+		spark.age += dt;
+		if (spark.age >= 16.0f)
+		{
+			const float rz = _control.Random(-0.5f, 0.0f);
+			const float ry = _control.Random(-0.1f, 0.1f);
+			const float rx = _control.Random(-0.1f, 0.1f);
+			spark.position = {point.x + rx, point.y + ry, point.z + rz};
+			spark.velocity.y = _control.Random(-0.3f, 0.3f);
+			spark.velocity.x = _control.Random(-0.1f, 0.1f);
+			spark.velocity.z = 0.0f;
+			spark.age -= 16.0f;
+		}
+		spark.position.x += dt * spark.velocity.x * 0.1f;
+		spark.position.y += dt * spark.velocity.y * 0.1f;
+		spark.position.z += dt * spark.velocity.z * 0.1f;
+		spark.velocity.y += dt * 0.021f;
+	}
+}
+
+std::array<TrailVertex, 2 * Trail::k_Points> AdvisorSpirit::TrailStrip() const
+{
+	std::array<glm::vec3, Trail::k_Points> points {};
+	for (size_t i = 0; i < points.size(); ++i)
+	{
+		points.at(i) = _trail.points.at((_trail.head + i) & (Trail::k_Points - 1));
+	}
+	std::array<TrailVertex, 2 * Trail::k_Points> strip {};
+	const bool good = _index == k_GoodDude;
+	for (size_t i = 0; i < points.size(); ++i)
+	{
+		const glm::vec3 tangent = points.at(std::min(i + 1, points.size() - 1)) - points.at(i == 0 ? 0 : i - 1);
+		const float length = glm::length(tangent);
+		// The direction along the strip, made unit length unless the points coincide
+		glm::vec2 across(tangent);
+		if (tangent != glm::vec3(0.0f))
+		{
+			const float inverse = 1.0f / length;
+			across = glm::vec2(inverse * tangent.x, inverse * tangent.y);
+		}
+		// Only a strip moving more than a hair is widened
+		float width = length;
+		if (length > 0.0001f)
+		{
+			width = length + 0.2f;
+		}
+		width = std::min(width, 0.6f);
+		const float half = width * _data.scale / _data.nearDepth * 150.0f;
+		const auto alpha = std::min(20u + static_cast<uint32_t>(static_cast<int32_t>(100.0f * width)), 64u);
+		const uint32_t argb = alpha << 24u | 0xFFFFFFu;
+		const glm::vec3& p = points.at(i);
+		strip.at(2 * i) = {{p.x + across.y * half, p.y - across.x * half, p.z}, TrailUv(i, false, good), argb};
+		strip.at(2 * i + 1) = {{p.x - across.y * half, p.y + across.x * half, p.z}, TrailUv(i, true, good), argb};
+	}
+	return strip;
+}
+
+void AdvisorSpirit::FlushTags()
+{
+	for (; _nextTag < _tags.size(); ++_nextTag)
+	{
+		FireTag(_tags[_nextTag], false, true);
+	}
+	_tags.clear();
+	_nextTag = 0;
 }
 
 void AdvisorSpirit::UpdateDraw(int32_t frameMs, uint32_t tickMs)
@@ -2807,6 +2993,11 @@ void AdvisorSpiritController::ProcessTurn()
 	}
 }
 
+void AdvisorSpiritController::StopSentence(int dude)
+{
+	_dudes[dude]->FlushTags();
+}
+
 void AdvisorSpiritController::SetSentenceTags(int dude, std::vector<AudioTag> tags)
 {
 	_dudes[dude]->_tags = std::move(tags);
@@ -2916,10 +3107,22 @@ void AdvisorSpiritController::Update(const FrameInput& input)
 {
 	_frame = input;
 	Process(input.dt, 0.4f);
-	// the draws: the overlay (blend < 0.5) and the 3D draw (>= 0.5) for dudes out of home
+	// The draws in the frame's order: the dudes in the world (blend at least 0.5) with the scene, then both trails,
+	// then the dudes near the screen over everything
 	for (int i = 0; i < k_Dudes; ++i)
 	{
-		if (_state[i] != ControlState::Home)
+		if (_state[i] != ControlState::Home && _dudes[i]->InWorld() >= 0.5f)
+		{
+			_dudes[i]->UpdateDraw(input.frameMs, input.tickMs);
+		}
+	}
+	for (auto& dude : _dudes)
+	{
+		dude->UpdateTrail(input.trailDt);
+	}
+	for (int i = 0; i < k_Dudes; ++i)
+	{
+		if (_state[i] != ControlState::Home && _dudes[i]->InWorld() < 0.5f)
 		{
 			_dudes[i]->UpdateDraw(input.frameMs, input.tickMs);
 		}

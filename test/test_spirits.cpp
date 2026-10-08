@@ -17,10 +17,12 @@
 #include <algorithm>
 #include <array>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include <gtest/gtest.h>
 
+#include "Common/Zoomer.h"
 #include "Help/Spirits.h"
 
 using namespace openblack;
@@ -400,4 +402,125 @@ TEST(Spirits, AudioTags)
 	d.FireTag(ParseAudioTags("[GA shrug]", 0.0f, word)[0], true, true);
 	EXPECT_EQ(f.control.Dude(0).SlotMode(64), 1);
 	EXPECT_EQ(d.SlotMode(64), 0);
+}
+
+TEST(Spirits, AudioTagsFromEveryBracket)
+{
+	int errors = 0;
+	std::string word;
+	// Text outside the brackets is skipped, and every bracket is read
+	const auto tags = ParseAudioTags("well [TE sad] then [TA pray]", 0.0f, word, &errors);
+	ASSERT_EQ(tags.size(), 2u);
+	EXPECT_EQ(errors, 0);
+	EXPECT_EQ(tags[0].action, 4);
+	EXPECT_EQ(tags[1].index, 51);
+	EXPECT_TRUE(ParseAudioTags("no tags here", 0.0f, word, &errors).empty());
+	// An unclosed bracket is an error
+	errors = 0;
+	std::ignore = ParseAudioTags("[TE sad", 0.0f, word, &errors);
+	EXPECT_EQ(errors, 1);
+}
+
+TEST(Spirits, OneBadLabelDropsTheSentencesTags)
+{
+	std::string word;
+	const std::array good {TagLabel {"[TE sad]", 0.5f}, TagLabel {"[TA pray]", 1.0f}};
+	const auto tags = BuildSentenceTags(good, word);
+	ASSERT_EQ(tags.size(), 2u);
+	EXPECT_EQ(tags[0].time, 0.5f);
+	EXPECT_EQ(tags[1].time, 1.0f);
+	const std::array bad {TagLabel {"[TE sad]", 0.5f}, TagLabel {"[TA pray", 1.0f}};
+	EXPECT_TRUE(BuildSentenceTags(bad, word).empty());
+}
+
+TEST(Spirits, AnimSoundsPlayAsTheirPointsArePassed)
+{
+	const std::array events {helpdude::SoundEvent {1, 1, 0.1f}, helpdude::SoundEvent {2, 1, 0.5f},
+	                         helpdude::SoundEvent {3, 1, 0.9f}};
+	float last = -1.0f;
+	// Not heard before: from where it is now
+	EXPECT_TRUE(CrossedSounds(events, last, 0.0f).empty());
+	auto crossed = CrossedSounds(events, last, 0.2f);
+	ASSERT_EQ(crossed.size(), 1u);
+	EXPECT_EQ(crossed[0].sample, 1u);
+	// A jump of more than half the anim plays nothing, but is remembered
+	EXPECT_TRUE(CrossedSounds(events, last, 0.95f).empty());
+	EXPECT_FLOAT_EQ(last, 0.95f);
+	// Round the end of the loop: both the end's and the start's points
+	last = 0.85f;
+	crossed = CrossedSounds(events, last, 1.15f);
+	ASSERT_EQ(crossed.size(), 2u);
+	EXPECT_EQ(crossed[0].sample, 1u);
+	EXPECT_EQ(crossed[1].sample, 3u);
+	EXPECT_FLOAT_EQ(last, 0.15f);
+	// Both ends are included: held on a point, it plays every time
+	last = 0.5f;
+	EXPECT_EQ(CrossedSounds(events, last, 0.5f).size(), 1u);
+	EXPECT_EQ(CrossedSounds(events, last, 0.5f).size(), 1u);
+}
+
+TEST(Spirits, TrailTakesAPointEveryFifthAndSparksDrawRandoms)
+{
+	Fixture f;
+	AdvisorSpirit& d = f.control.Dude(0);
+	d.ResetTrail();
+	const glm::vec3 start = d.GetTrail().points[0];
+	EXPECT_TRUE(std::ranges::all_of(d.GetTrail().points, [&](const glm::vec3& p) { return p == start; }));
+	f.randomCalls.clear();
+	d.UpdateTrail(0.1f);
+	d.UpdateTrail(0.1f);
+	EXPECT_EQ(d.GetTrail().head, 0u); // 0.2 is not past 0.2
+	d.UpdateTrail(0.1f);
+	EXPECT_EQ(d.GetTrail().head, 1u);
+	EXPECT_TRUE(f.randomCalls.empty());
+	// The sparks respawn every 16, each with five draws in this order
+	d.UpdateTrail(16.0f);
+	ASSERT_EQ(f.randomCalls.size(), 5u * Trail::k_Sparks);
+	EXPECT_EQ(f.randomCalls[0], glm::vec2(-0.5f, 0.0f));
+	EXPECT_EQ(f.randomCalls[1], glm::vec2(-0.1f, 0.1f));
+	EXPECT_EQ(f.randomCalls[2], glm::vec2(-0.1f, 0.1f));
+	EXPECT_EQ(f.randomCalls[3], glm::vec2(-0.3f, 0.3f));
+	EXPECT_EQ(f.randomCalls[4], glm::vec2(-0.1f, 0.1f));
+	// A reset leaves where the next point goes
+	d.ResetTrail();
+	EXPECT_EQ(d.GetTrail().head, 2u);
+}
+
+TEST(Spirits, TrailStripNarrowAndFaintWhenStill)
+{
+	Fixture f;
+	AdvisorSpirit& d = f.control.Dude(1);
+	d.ResetTrail();
+	const auto strip = d.TrailStrip();
+	// Still points: no width, the faintest alpha, both sides on the point
+	EXPECT_EQ(strip[0].argb, (20u << 24u) | 0xFFFFFFu);
+	EXPECT_EQ(strip[0].hover, strip[1].hover);
+	// The evil band's edge is at the bottom of the texture, the middle at a half
+	EXPECT_EQ(strip[2].uv, glm::vec2(0.03125f, 0.0f));
+	EXPECT_EQ(strip[3].uv, glm::vec2(0.03125f, 0.5f));
+	const auto indices = TrailIndices();
+	EXPECT_EQ(indices[0], 60);
+	EXPECT_EQ(indices[1], 61);
+	EXPECT_EQ(indices[2], 63);
+}
+
+TEST(Spirits, ZoomerSolvesAsTheGameDoes)
+{
+	Zoomer z;
+	z.Reset(0.0f);
+	z.SetDestination(1.0f, 1.0f);
+	z.Update(0.5f);
+	EXPECT_GT(z.GetValue(), 0.0f);
+	EXPECT_LT(z.GetValue(), 1.0f);
+	z.Update(0.5f);
+	EXPECT_EQ(z.GetValue(), 1.0f);
+	// No time, or not a number, puts it there
+	z.SetDestination(2.0f, std::nanf(""));
+	EXPECT_EQ(z.GetValue(), 2.0f);
+	// A move shorter than about 0.05 s barely moves, then jumps at its end
+	z.SetDestination(3.0f, 0.02f);
+	z.Update(0.01f);
+	EXPECT_LT(z.GetValue() - 2.0f, 0.01f);
+	z.Update(0.01f);
+	EXPECT_EQ(z.GetValue(), 3.0f);
 }

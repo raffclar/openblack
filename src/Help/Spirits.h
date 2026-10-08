@@ -15,10 +15,12 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include <HelpDudeFile.h>
 #include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -36,11 +38,6 @@
 // W / H are the screen size (unsigned 16 bits; W/2 and H/2 by a shift). Dude 0 is the good spirit (MarkGood.Hd), dude 1
 // the evil one (help spirit type 1 -> 0, any other -> 1). Marks: (inferred) deduced from use, (approximate) not checked
 // exactly, (pending) not read.
-
-namespace openblack::helpdude
-{
-struct HelpDudeFile;
-}
 
 namespace openblack::help::spirits
 {
@@ -163,6 +160,26 @@ struct AudioTag
 [[nodiscard]] std::vector<AudioTag> ParseAudioTags(std::string_view label, float time, std::string& lastWord,
                                                    int* errors = nullptr);
 
+/// One cue label of a voice recording and its time in seconds from the start
+struct TagLabel
+{
+	std::string text;
+	float time;
+};
+/// A sentence's tags from all its labels in order; any error in any label leaves it with none
+[[nodiscard]] std::vector<AudioTag> BuildSentenceTags(std::span<const TagLabel> labels, std::string& lastWord);
+/// The sounds of an anim whose points its phase passed since it was last heard at `last`, which becomes the phase's
+/// fraction; `last` below 0 means not heard yet
+[[nodiscard]] std::vector<helpdude::SoundEvent> CrossedSounds(std::span<const helpdude::SoundEvent> events, float& last,
+                                                              float phase);
+
+[[nodiscard]] inline std::array<helpdude::FaceRecord, helpdude::k_Emotions> DefaultFaces()
+{
+	std::array<helpdude::FaceRecord, helpdude::k_Emotions> faces {};
+	faces.fill(helpdude::k_DefaultFaceRecord);
+	return faces;
+}
+
 /// The per-dude data AdvisorSpirit takes from its .hd
 struct DudeData
 {
@@ -170,7 +187,11 @@ struct DudeData
 	std::array<float, k_AnimSlots> loopStart {};
 	std::array<float, k_AnimSlots> loopEnd {};
 	std::array<uint8_t, k_AnimSlots> flags {};
-	std::array<std::array<float, 16>, 8> faces {}; ///< 8 emotion records of 16 floats
+	std::array<helpdude::FaceRecord, helpdude::k_Emotions> faces = DefaultFaces(); ///< one record per emotion
+	std::array<std::vector<helpdude::SoundEvent>, k_AnimSlots> sounds {};
+	std::array<uint32_t, helpdude::k_FaceBones> faceBones {};
+	glm::vec2 pupilCentre {0.0f};
+	float pupilScale {0.0f};
 	uint32_t startEmotion {0};
 	float modelSize {0.0f};  ///< 63.423 / 79.154 in the files
 	float nearDepth {15.0f}; ///< 8.7333 in the file
@@ -189,18 +210,57 @@ struct AnimLayer
 {
 	enum class Kind : uint8_t
 	{
-		Set,      ///< SetPose(clip, ms) with the stand clip's key 0 as fill
-		SetBlend, ///< Set(clip, ms) and Set(clipB, msB) lerped per float by `blend` in absolute bone space
-		Add,      ///< ApplyAdditive(clip, ms, frames[referenceKey]) (ApplyAnim and the direct calls)
+		/// The clip at ms sets the bones it moves; with `fill`, the stand clip's first key sets the rest
+		Set,
+		/// The clip at ms and clipB at msB, each set without fill, lerped per float by `blend` in the bones' model space
+		SetBlend,
+		/// The clip's change from its keyframe `referenceKey` to its pose at ms, added on top
+		Add,
+		/// The first eye's bones' rotations scaled by `blend`, the second eye's by `blendB`
+		ScaleEyes,
 	};
 	Kind kind {Kind::Add};
 	uint32_t clip {0};
 	int32_t milliseconds {0};
 	uint32_t referenceKey {0};
+	bool fill {false};
 	uint32_t clipB {0};
 	int32_t millisecondsB {0};
 	float blend {0.0f};
+	float blendB {0.0f};
 };
+
+/// The rainbow trail an advisor leaves while near the screen: points of where it has been in hover space (x, y and its
+/// depth channel), and sparks that move about it but are never drawn
+struct Trail
+{
+	static constexpr size_t k_Points = 32;
+	static constexpr size_t k_Sparks = 16;
+	struct Spark
+	{
+		glm::vec3 position {0.0f};
+		glm::vec3 velocity {0.0f};
+		float age {0.0f};
+	};
+	std::array<glm::vec3, k_Points> points {};
+	/// Where the next point goes; the oldest point is here too
+	size_t head {0};
+	float accumulator {0.0f};
+	std::array<Spark, k_Sparks> sparks {};
+};
+
+/// One vertex of a trail's strip, in hover space with its depth channel
+struct TrailVertex
+{
+	glm::vec3 hover {0.0f};
+	glm::vec2 uv {0.0f};
+	uint32_t argb {0};
+};
+
+/// The trail texture's coordinates: along the strip by point, across from the good or evil band's edge to the middle
+[[nodiscard]] glm::vec2 TrailUv(size_t point, bool second, bool good);
+/// The strip's triangles over its 2 x 32 vertices, from the newest pair back
+[[nodiscard]] std::array<uint16_t, 6 * (Trail::k_Points - 1)> TrailIndices();
 
 /// One particle of the puff (16 of them, made by the first draw of a puff)
 struct PuffParticle
@@ -223,14 +283,18 @@ constexpr size_t k_PuffParticles = 16;
 struct AnimSound
 {
 	uint32_t anim {0};
-	float phase {0.0f};
+	/// The in-game bank's sample
+	uint32_t sample {0};
+	/// Played through the animation sound path rather than as a plain sample
+	bool filtered {true};
 };
 
 /// The inputs of one frame
 struct FrameInput
 {
-	float dt {0.0f};     ///< The frame time x 0.001
-	int32_t frameMs {0}; ///< For the alpha fade and the puff: the frame time (<= 500) / the game time step
+	float dt {0.0f};      ///< The frame time x 0.001
+	float trailDt {0.0f}; ///< The whole frame time in ms x 0.01, which the trails move on by
+	int32_t frameMs {0};  ///< For the alpha fade and the puff: the frame time (<= 500) / the game time step
 	Screen screen {};
 	glm::ivec2 mouse {0};    ///< The mouse position in pixels
 	uint32_t tickMs {0};     ///< GetTickCount (the GoInvisible flicker)
@@ -326,7 +390,13 @@ public:
 	/// The target emotion, peak = max(peak, 0), the emotion time reset
 	void SetEmotion(uint32_t emotion, float peak);
 	/// The 32 trail points reset to the hover (the trail is drawn by the renderer: a counter here)
-	void ResetTrail() { ++_trailResets; }
+	void ResetTrail();
+	/// Moves the trail on by `dt` (the frame's ms x 0.01): a new point every 0.2, and the sparks
+	void UpdateTrail(float dt);
+	/// The strip's vertices, oldest point first, two per point
+	[[nodiscard]] std::array<TrailVertex, 2 * Trail::k_Points> TrailStrip() const;
+	/// Fires every tag the sentence has left on this advisor itself, whoever it names, as a sentence stops
+	void FlushTags();
 	/// Every anim slot's mode = 0
 	void ClearAnims();
 	/// The cling target and the fly target = (hx, hy), SnapClingEdge, from home a snap to the edge's off-screen point
@@ -388,6 +458,8 @@ public:
 	[[nodiscard]] float WorldHeight() const { return _worldHeight; }
 	[[nodiscard]] const glm::mat3& Rows() const { return _rows; }
 	[[nodiscard]] const glm::vec3& Position() const { return _position; }
+	/// Where the land's light is sampled for the advisor in the world
+	[[nodiscard]] const glm::vec3& LightPosition() const { return _lightPosition; }
 	[[nodiscard]] float Roll() const { return _roll; }
 	[[nodiscard]] Edge ClingEdge() const { return _edge; }
 	[[nodiscard]] glm::vec2 ClingTarget() const { return {_clingX, _clingY}; }
@@ -403,7 +475,7 @@ public:
 	{
 		return _puffParticles;
 	}
-	[[nodiscard]] uint32_t TrailResets() const { return _trailResets; }
+	[[nodiscard]] const Trail& GetTrail() const { return _trail; }
 	[[nodiscard]] uint32_t Emotion() const { return _emotion; }
 	[[nodiscard]] uint32_t EmotionTarget() const { return _emotionTarget; }
 	[[nodiscard]] float EmotionWeight() const { return _emotionWeight; }
@@ -423,6 +495,12 @@ public:
 	}
 	[[nodiscard]] const std::vector<AnimLayer>& Layers() const { return _layers; }
 	[[nodiscard]] const std::vector<AnimSound>& Sounds() const { return _sounds; }
+	/// Each eye's pupil texture scale across and down, once the face has been updated; until then the mesh keeps its
+	/// own texture coordinates
+	[[nodiscard]] std::optional<std::array<glm::vec2, 2>> Pupils() const
+	{
+		return _pupilsSet ? std::optional(_pupils) : std::nullopt;
+	}
 	/// During this frame's GoInvisible windows
 	[[nodiscard]] bool Flicker() const { return _flicker; }
 	[[nodiscard]] float PartnerDistance() const { return _partnerDistance; }
@@ -547,9 +625,12 @@ private:
 	size_t _nextTag {0};
 	glm::mat3 _rows {1.0f}; ///< Rows r0, r1, r2
 	glm::vec3 _position {0.0f};
-	uint32_t _trailResets {0};
+	glm::vec3 _lightPosition {0.0f};
+	Trail _trail;
 	std::vector<AnimLayer> _layers;
 	std::vector<AnimSound> _sounds;
+	std::array<glm::vec2, 2> _pupils {};
+	bool _pupilsSet {false};
 };
 
 /// AdvisorSpiritController and the two help spirits around it. The CHL-facing calls take the help spirit type
@@ -631,6 +712,8 @@ public:
 	void Update(const FrameInput& input);
 	/// The sentence's tags when it starts (from the WAV's cue labels, ParseAudioTags)
 	void SetSentenceTags(int dude, std::vector<AudioTag> tags);
+	/// The dude's sentence stops: its remaining tags all fire on it
+	void StopSentence(int dude);
 
 	[[nodiscard]] AdvisorSpirit& Dude(int dude) { return *_dudes[dude]; }
 	[[nodiscard]] const AdvisorSpirit& Dude(int dude) const { return *_dudes[dude]; }
