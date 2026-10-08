@@ -1867,6 +1867,21 @@ void AddParticles(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "particles.vortex_and_flies_sounds",
+	    .name = "The landscape vortex's and the flies' sounds",
+	    .facet = Facet::Particles,
+	    .description = "The landscape vortex as it opens and as it closes, and a swarm of flies, side by side and close up, "
+	                   "every eight seconds. Their sounds are named in the effect files by sound actions the game's header "
+	                   "numbers by counting on from the one before.",
+	    .expected = "The vortices play the vortex's hum and the flies their buzz as they start; the debug log names an "
+	                "emitter for each.",
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 30.0f}, {15.0f, 50.0f}}, .distance = 0.4f},
+	    .particles = {{.file = "SF_LandscapeVortexInBefore", .offset = {-8.0f, 40.0f}, .restartSeconds = 8.0f},
+	                  {.file = "SF_LandscapeVortexOutAfter", .offset = {8.0f, 40.0f}, .restartSeconds = 8.0f},
+	                  {.file = "SF_Flies", .offset = {0.0f, 36.0f}, .height = 2.0f, .restartSeconds = 8.0f}},
+	});
+
+	all.push_back({
 	    .id = "particles.mist",
 	    .name = "Mist over the holders",
 	    .facet = Facet::Particles,
@@ -2016,8 +2031,16 @@ std::vector<Scenario> Build()
 	AddParticles(all);
 	AddEditor(all);
 	AddMiracleScenarios(all);
+	AddGlobeScenarios(all);
+	AddLifeLightScenarios(all);
+	AddCreatureCastingScenarios(all);
 	AddBenchmark(all);
 	AddCreatureModeScenarios(all);
+	AddGestureScenarios(all);
+	AddStormScenarios(all);
+	AddFlockScenarios(all);
+	AddTeleportScenarios(all);
+	AddTornadoScenarios(all);
 	AddHandNavigationScenarios(all);
 	AddHandLookScenarios(all);
 	return all;
@@ -2110,6 +2133,12 @@ std::string_view CommandProblem(const Command& command, std::span<const ObjectSe
 	}
 }
 } // namespace
+
+bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
+{
+	return kind == Kind::SetHour || kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed ||
+	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || IsPointerCommand(kind);
+}
 
 std::string_view testbed_scenarios::Name(Facet facet)
 {
@@ -2261,7 +2290,8 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		problems.emplace_back("hour or body time out of range");
 	}
 	if (scenario.creatures.empty() && scenario.particles.empty() && scenario.miracles.empty() && scenario.dispensers.empty() &&
-	    !environment.dispenserGrid && !scenario.crowd.has_value() && !environment.playerAlignment.has_value())
+	    !environment.dispenserGrid && !scenario.crowd.has_value() && !environment.playerAlignment.has_value() &&
+	    std::ranges::none_of(scenario.commands, [](const Command& command) { return NeedsNoCreature(command.kind); }))
 	{
 		problems.emplace_back(
 		    "no creatures, particles, miracles, dispensers, crowd, player's commands or alignment for the hand");
@@ -2401,8 +2431,7 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 	{
 		const auto& command = scenario.commands.at(i);
 		const auto what = fmt::format("command {} ({})", i, Name(command.kind));
-		if (command.kind != Kind::SetHour && command.kind != Kind::SetAlignment && !IsPointerCommand(command.kind) &&
-		    command.creature >= creatures)
+		if (!NeedsNoCreature(command.kind) && command.creature >= creatures)
 		{
 			problems.push_back(fmt::format("{}: no such creature", what));
 		}
@@ -2446,7 +2475,9 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		    (command.kind == Kind::PointerSweep && command.amount <= 0.0f) ||
 		    (command.kind == Kind::OpenCreatureCave && command.value >= creature_cave::k_PageCount) ||
 		    ((command.kind == Kind::ApplyTattoo || command.kind == Kind::RemoveTattoo) &&
-		     (command.value >= creature_tattoo::k_DesignCount || command.bodyPart >= creature_tattoo::k_SlotCount)))
+		     (command.value >= creature_tattoo::k_DesignCount || command.bodyPart >= creature_tattoo::k_SlotCount)) ||
+		    ((command.kind == Kind::HoldSeed || command.kind == Kind::SummonSeed) && command.value >= k_SeedCount) ||
+		    (command.kind == Kind::DrawGesture && (command.value == 0 || command.value > k_LastGesture)))
 		{
 			problems.push_back(fmt::format("{}: value {} out of range", what, command.value));
 		}
