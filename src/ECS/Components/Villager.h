@@ -78,5 +78,13 @@ struct Villager
 	entt::entity abode;
 	/// The turn its needs were last looked at
 	uint32_t lastCheckTurn {0};
+	/// What it shows in its hands
+	CarriedObject carried {CarriedObject::None};
+	/// A clip taking it into or out of a state is playing, and its state waits for it to end
+	bool transitionPlaying {false};
+	/// A clip took it out of its last state, and the one taking it into its new state is still to come
+	bool intoClipDue {false};
+	/// A knock on its home woke it: its own needs leave it be, and it won't go back to bed, for its next decision
+	bool woken {false};
 };
 } // namespace openblack::ecs::components
