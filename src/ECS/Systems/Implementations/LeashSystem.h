@@ -89,6 +89,8 @@ private:
 	[[nodiscard]] bool OrderInForce(entt::entity creature) const;
 	/// The ring of the player's own creature's order follows its target and throbs
 	void UpdateMarkers(float seconds);
+	/// The temple's leashes hang if the creature knows them, tumble and glow, the picked one carried in the hand
+	void UpdatePosts(float seconds);
 	/// Whether the posts have been looked for at the temples yet
 	bool _postsPlaced {false};
 	/// The two leash-tying sounds play in turn

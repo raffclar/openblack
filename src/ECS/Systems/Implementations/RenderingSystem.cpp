@@ -33,6 +33,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
+#include "ECS/Components/SkinOverride.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Swayable.h"
@@ -283,6 +284,24 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    {
 			    fits = false;
 			    return;
+		    }
+		    // A mesh drawn with another texture, slid across it: the temple's leashes
+		    if (const auto* skin = registry.TryGet<const SkinOverride>(entity))
+		    {
+			    if (const auto desc = _renderContext.instancedDrawDescs.find(slots->first);
+			        desc != _renderContext.instancedDrawDescs.end())
+			    {
+				    desc->second.uvOffset = skin->uvOffset;
+				    if (desc->second.subMeshTextures.empty())
+				    {
+					    const auto drawn =
+					        entt::locator<resources::ResourcesInterface>::value().GetMeshes().Handle(slots->first);
+					    for (uint32_t i = 0; i < static_cast<uint32_t>(drawn->GetSubMeshes().size()); ++i)
+					    {
+						    desc->second.subMeshTextures.emplace_back(i, skin->texture);
+					    }
+				    }
+			    }
 		    }
 
 		    auto modelMatrix = glm::mat4(transform.rotation);

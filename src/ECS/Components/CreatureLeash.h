@@ -22,6 +22,7 @@
 #include "Creature/CreatureDesires.h"
 #include "Creature/LeashRope.h"
 #include "Creature/LeashRules.h"
+#include "Creature/TempleLeashes.h"
 #include "Enums.h"
 
 namespace openblack::ecs::components
@@ -126,12 +127,28 @@ struct LeashMarker
 /// One of the three leashes hanging at a citadel, which its player taps to pick that leash
 struct LeashPost
 {
-	/// The collar mesh the posts are drawn with, Data/Misc/leash.l3d
+	/// The collar mesh the posts are drawn with, Data/Misc/leash.l3d, once for each leash so that each is drawn with its
+	/// own band of the leash texture
 	static constexpr entt::id_type k_MeshId = entt::hashed_string("misc/leash");
+	static constexpr std::array<entt::id_type, 3> k_TypeMeshIds = {
+	    entt::hashed_string("misc/leash/aggression"),
+	    entt::hashed_string("misc/leash/learning"),
+	    entt::hashed_string("misc/leash/compassion"),
+	};
+	/// The leash texture with its alpha, which the collars are drawn with in place of their own skin
+	static constexpr entt::id_type k_TextureId = entt::hashed_string("raw/leash+alpha");
 
 	LeashType type {LeashType::Rope};
 	PlayerNames owner {PlayerNames::PLAYER_ONE};
 	bool selected {false};
+	/// Where it hangs on the temple
+	glm::vec3 point {0.0f};
+	/// How it tumbles and glows
+	temple_leashes::Look look {};
+	/// It hangs there now: its player has a creature that knows it
+	bool hung {false};
+	/// The glow of smoke about it
+	entt::entity glow {entt::null};
 };
 
 } // namespace openblack::ecs::components

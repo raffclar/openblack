@@ -78,6 +78,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureHair.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/DeadTree.h"
@@ -2188,6 +2189,11 @@ bool Game::Initialize() noexcept
 		if (const auto path = fileSystem.GetPath<Path::Misc>() / "leash.l3d"; fileSystem.Exists(path))
 		{
 			meshManager.Load("misc/leash", LFromDiskTag {}, path);
+			// The temple hangs one of each leash, the game loading the collar once for each
+			for (const auto id : ecs::components::LeashPost::k_TypeMeshIds)
+			{
+				meshManager.Load(id, LFromDiskTag {}, path);
+			}
 		}
 		// The eyes every creature is drawn with
 		for (const auto& [id, file] : {std::pair {ecs::components::CreatureEyes::k_EyeballMeshId, "Eyeball.l3d"},
@@ -2386,6 +2392,22 @@ bool Game::Initialize() noexcept
 		Locator::infoConstants::reset(result.release());
 	}
 
+	// The temple's leashes are drawn with the leash texture and its alpha
+	if (const auto leash = fileSystem.GetPath<Path::Textures>() / "leash.raw",
+	    alpha = fileSystem.GetPath<Path::Textures>() / "leasha.raw";
+	    fileSystem.Exists(leash) && fileSystem.Exists(alpha))
+	{
+		constexpr uint16_t k_LeashTextureSide = 256;
+		try
+		{
+			textureManager.Load(ecs::components::LeashPost::k_TextureId, resources::Texture2DLoader::FromDiskWithAlphaTag {},
+			                    leash, alpha, k_LeashTextureSide);
+		}
+		catch (std::runtime_error& err)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+		}
+	}
 	fileSystem.Iterate(fileSystem.GetPath<Path::Textures>(), false, [&textureManager](const std::filesystem::path& f) {
 		if (string_utils::LowerCase(f.extension().string()) == ".raw")
 		{
