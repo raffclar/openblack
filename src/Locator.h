@@ -109,7 +109,7 @@ class PhysicsObjectsSystemInterface;
 class WeatherSystemInterface;
 class CreatureModeSystemInterface;
 class CreatureCaveSystemInterface;
-class DynamicsSystemInterface;
+class LandPickSystemInterface;
 class EditorSystemInterface;
 class FallingSpellSystemInterface;
 class FireEffectSystemInterface;
@@ -217,7 +217,7 @@ struct Locator
 	using gameActionSystem = entt::locator<input::GameActionInterface>;
 	using rendereringSystem = entt::locator<ecs::systems::RenderingSystemInterface>;
 	using rendererInterface = entt::locator<graphics::RendererInterface>;
-	using dynamicsSystem = entt::locator<ecs::systems::DynamicsSystemInterface>;
+	using landPickSystem = entt::locator<ecs::systems::LandPickSystemInterface>;
 	using editorSystem = entt::locator<ecs::systems::EditorSystemInterface>;
 	using creatureModeSystem = entt::locator<ecs::systems::CreatureModeSystemInterface>;
 	using creatureCaveSystem = entt::locator<ecs::systems::CreatureCaveSystemInterface>;

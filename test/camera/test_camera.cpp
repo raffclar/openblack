@@ -40,12 +40,12 @@ using nlohmann::json;
 using openblack::ecs::Registry;
 using namespace openblack;
 
-void LoadRaycasts(RecordedMockDynamicsSystem& dynamics, const std::filesystem::path& path);
+void LoadRaycasts(RecordedMockLandPickSystem& dynamics, const std::filesystem::path& path);
 
 struct TestValues
 {
 	std::string_view name;
-	RecordedMockDynamicsSystem* dynamicsSystem;
+	RecordedMockLandPickSystem* landPickSystem;
 	MockAction* actionInterface;
 };
 // Padding causes valgrind errors https://github.com/google/googletest/issues/3805
@@ -62,17 +62,17 @@ protected:
 		std::ifstream(testResultsPath) >> _scenario;
 		const auto raycastsPath = std::filesystem::path(k_ScenarioPath) / "raycasts" / (testName.data() + std::string(".json"));
 		ASSERT_TRUE(std::filesystem::exists(raycastsPath));
-		LoadRaycasts(*GetParam().dynamicsSystem, raycastsPath);
+		LoadRaycasts(*GetParam().landPickSystem, raycastsPath);
 
 		Locator::entitiesRegistry::emplace<Registry>();
 
 		_camera = std::make_unique<Camera>();
-		GetParam().dynamicsSystem->camera = _camera.get();
+		GetParam().landPickSystem->camera = _camera.get();
 
 		Locator::rng::emplace<openblack::RandomNumberManagerTesting>();
 		Locator::terrainSystem::emplace<MockTerrain>();
 		Locator::windowing::emplace<MockWindowingSystem>();
-		Locator::dynamicsSystem::reset<MockDynamicsSystem>(GetParam().dynamicsSystem);
+		Locator::landPickSystem::reset<MockLandPickSystem>(GetParam().landPickSystem);
 		Locator::gameActionSystem::reset<MockAction>(GetParam().actionInterface);
 
 		const auto aspect = Locator::windowing::value().GetAspectRatio();
@@ -90,7 +90,7 @@ protected:
 		_camera.reset();
 		Locator::terrainSystem::reset();
 		Locator::windowing::reset();
-		Locator::dynamicsSystem::reset();
+		Locator::landPickSystem::reset();
 		Locator::gameActionSystem::reset();
 		Locator::rng::reset();
 		Locator::entitiesRegistry::reset();
@@ -107,7 +107,7 @@ protected:
 
 /// The scenario's recorded raycasts (raycasts/<name>.json): branches in the order they are tried, each with the
 /// screen coordinates it answers and, per frame, the hit point or null for no hit
-void LoadRaycasts(RecordedMockDynamicsSystem& dynamics, const std::filesystem::path& path)
+void LoadRaycasts(RecordedMockLandPickSystem& dynamics, const std::filesystem::path& path)
 {
 	json data;
 	std::ifstream(path) >> data;
@@ -385,7 +385,7 @@ TEST_P(TestDefaultCameraModel, ValidateRecordedData)
 		LoadZoomer3d(_camera->GetOriginZoomer(), framePrev["camera"]["camera_origin_zoomer"]);
 		LoadZoomer3d(_camera->GetFocusZoomer(), framePrev["camera"]["camera_heading_zoomer"]);
 
-		GetParam().dynamicsSystem->frameNumber = i;
+		GetParam().landPickSystem->frameNumber = i;
 		GetParam().actionInterface->frameNumber = i;
 
 		const auto deltaTimePrev = std::chrono::milliseconds(framePrev["g_delta_time"].get<int>());
@@ -457,7 +457,7 @@ TEST(TestCameraZoomers, ZoomerMatchesRecording)
 #define SCENARIO_VALUES(name)                                       \
 	TestValues                                                      \
 	{                                                               \
-		#name, new RecordedMockDynamicsSystem, new name##MockAction \
+		#name, new RecordedMockLandPickSystem, new name##MockAction \
 	}
 
 const auto k_TestingScenarioValues = testing::Values( //

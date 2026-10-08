@@ -19,7 +19,6 @@
 #include <array>
 #include <stdexcept>
 
-#include <BulletDynamics/Dynamics/btRigidBody.h>
 #include <LNDFile.h>
 #include <bgfx/bgfx.h>
 #include <glm/common.hpp>
@@ -34,8 +33,6 @@
 #include "3D/LandBlock.h"
 #include "3D/LandNormal.h"
 #include "3D/MapCoords.h"
-#include "Dynamics/LandBlockBulletMeshInterface.h"
-#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/Argb4444.h"
@@ -524,30 +521,10 @@ void LandIsland::RebuildAltitudes()
 		{
 			continue;
 		}
-		// Every block around a changed one leaves the physics world and comes back, in this order, so the world's
-		// bodies keep the order they always had here. Only a block whose mesh reads a changed corner is built again
-		// (a new mesh and a new rigid body with the same identity, DynamicsSystem::RegisterIslandRigidBodies); the
-		// others would build the same mesh and shape, so their own body goes back unchanged.
-		auto& body = _landBlocks[i].GetRigidBody();
-		const bool inWorld = body != nullptr && body->getBroadphaseHandle() != nullptr && Locator::dynamicsSystem::has_value();
-		const int userIndex = inWorld ? body->getUserIndex() : -1;
-		const int userIndex2 = inWorld ? body->getUserIndex2() : -1;
-		void* userPointer = inWorld ? body->getUserPointer() : nullptr;
-		if (inWorld)
-		{
-			Locator::dynamicsSystem::value().RemoveRigidBody(body.get());
-		}
+		// Only a block whose mesh reads a changed corner is built again; the others would build the same mesh
 		if (!_changedCorners.has_value() || LandBlock::ReadsCorners(position, *_changedCorners))
 		{
 			_landBlocks[i].BuildMesh(*this);
-		}
-		if (inWorld)
-		{
-			auto& rebuilt = _landBlocks[i].GetRigidBody();
-			rebuilt->setUserIndex(userIndex);
-			rebuilt->setUserIndex2(userIndex2);
-			rebuilt->setUserPointer(userPointer);
-			Locator::dynamicsSystem::value().AddRigidBody(rebuilt.get());
 		}
 	}
 	const auto indexSize = _extentIndexMax - _extentIndexMin + glm::u16vec2(1, 1);
@@ -1176,7 +1153,7 @@ bool LandIslandInterface::RayCastCells(float x0, float z0, float y0, float x1, f
 	return false;
 }
 
-bool LandIslandInterface::RayCast(const glm::vec3& from, const glm::vec3& to, glm::vec2& hit, const glm::vec3& camera) const
+bool LandIslandInterface::RayCastLand(const glm::vec3& from, const glm::vec3& to, glm::vec2& hit) const
 {
 	// The ray in cell units: x and z x 0.1, y / 0.67 (k_HeightUnit)
 	glm::vec2 cellsHit(0.0f);
@@ -1184,6 +1161,15 @@ bool LandIslandInterface::RayCast(const glm::vec3& from, const glm::vec3& to, gl
 	                 to.z * k_RayCellsPerMetre, to.y / k_HeightUnit, cellsHit))
 	{
 		hit = cellsHit * k_RayMetresPerCell;
+		return true;
+	}
+	return false;
+}
+
+bool LandIslandInterface::RayCast(const glm::vec3& from, const glm::vec3& to, glm::vec2& hit, const glm::vec3& camera) const
+{
+	if (RayCastLand(from, to, hit))
+	{
 		return true;
 	}
 	// a ray going down (to.y <= from.y) and not flat meets y = 0 at t = -(from.y / dy); the point is written either way,

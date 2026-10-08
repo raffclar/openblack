@@ -1105,7 +1105,7 @@ void CreatureSpawner::Command() noexcept
 
 void CreatureSpawner::Spawn() noexcept
 {
-	if (!Locator::terrainSystem::has_value() || !Locator::dynamicsSystem::has_value() || !Locator::camera::has_value())
+	if (!Locator::terrainSystem::has_value() || !Locator::landPickSystem::has_value() || !Locator::camera::has_value())
 	{
 		return;
 	}

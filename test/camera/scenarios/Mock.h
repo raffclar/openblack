@@ -17,7 +17,7 @@
 
 #include <3D/LandIslandInterface.h>
 #include <Camera/Camera.h>
-#include <ECS/Systems/DynamicsSystemInterface.h>
+#include <ECS/Systems/LandPickSystemInterface.h>
 #include <Input/GameActionMapInterface.h>
 #include <Locator.h>
 #include <Windowing/WindowingInterface.h>
@@ -115,35 +115,34 @@ public:
 	uint32_t frameNumber = 0;
 };
 
-// The mock land should work perfectly well and if not, there is something wrong with the physics
-class MockDynamicsSystem: public openblack::ecs::systems::DynamicsSystemInterface
+// The land under the cursor, as recorded from the game for each scenario: the mock land itself has no cells
+class MockLandPickSystem: public openblack::ecs::systems::LandPickSystemInterface
 {
 public:
-	virtual ~MockDynamicsSystem() = default;
+	~MockLandPickSystem() override = default;
 
-	void Reset() override {}
-	void Update(std::chrono::microseconds& dt) override {}
-	void AddRigidBody(btRigidBody* object) override {}
-	void RegisterRigidBodies() override {}
-	void RegisterIslandRigidBodies(openblack::LandIslandInterface& island) override {}
-	void UpdatePhysicsTransforms() override {}
 	[[nodiscard]] virtual std::optional<glm::vec2> RayCastClosestHitScreenCoord(glm::u16vec2 screenCoord) const = 0;
-	[[nodiscard]] std::optional<std::pair<openblack::ecs::components::Transform, openblack::RigidBodyDetails>>
-	RayCastClosestHit(const glm::vec3& origin, [[maybe_unused]] const glm::vec3& direction,
-	                  [[maybe_unused]] float tMax) const override
+	[[nodiscard]] std::optional<glm::vec3> LandUnderPixel(glm::vec3 camera, glm::vec3 nearPoint,
+	                                                      [[maybe_unused]] bool withSea) const override
 	{
 		const auto& terrain = openblack::Locator::terrainSystem::value();
-		const auto screenCoord = GetWindowCoordinates(origin);
+		// the pixel the line through the near plane's point shows, taken well inside the view
+		const auto screenCoord = GetWindowCoordinates(camera + (nearPoint - camera) * 100.0f);
 		if (!screenCoord.has_value())
 		{
 			return std::nullopt;
 		}
-		auto hit = RayCastClosestHitScreenCoord(*screenCoord);
+		const auto hit = RayCastClosestHitScreenCoord(*screenCoord);
 		if (!hit.has_value())
 		{
 			return std::nullopt;
 		}
-		return {{{{hit->x, terrain.GetHeightAt(*hit), hit->y}}, {}}};
+		return glm::vec3(hit->x, terrain.GetHeightAt(*hit), hit->y);
+	}
+	[[nodiscard]] std::optional<glm::vec2> LandAlong([[maybe_unused]] glm::vec3 from,
+	                                                 [[maybe_unused]] glm::vec3 to) const override
+	{
+		return std::nullopt;
 	}
 
 	[[nodiscard]] std::optional<glm::u16vec2> GetWindowCoordinates(const glm::vec3& position) const
@@ -165,7 +164,7 @@ public:
 
 // The raycasts a scenario recorded, read from its raycasts/<name>.json: for a screen coordinate, the first branch that
 // lists it gives the hit (or no hit) of each frame. A coordinate or frame the recording does not have is a test error
-class RecordedMockDynamicsSystem final: public MockDynamicsSystem
+class RecordedMockLandPickSystem final: public MockLandPickSystem
 {
 public:
 	struct Branch

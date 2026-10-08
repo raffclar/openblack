@@ -20,7 +20,7 @@
 
 #include "3D/LandIslandInterface.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/LandPickSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "ReflectionXZCamera.h"
@@ -92,32 +92,44 @@ std::optional<ecs::components::Transform> Camera::RaycastMouseToLand(bool includ
 std::optional<ecs::components::Transform> Camera::RaycastScreenCoordToLand(glm::vec2 screenCoord, bool includeWater,
                                                                            Interpolation interpolation) const
 {
-	// get the hit by raycasting to the land down via the pixel coordinate
-	ecs::components::Transform intersectionTransform;
-	float intersectDistance = 0.0f;
+	// The land the line from the eye through the pixel's point on the near plane meets, as the game finds the land under
+	// the cursor, and the sea's level when asked for
+	if (!Locator::landPickSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto [eye, nearPoint] = OnNearPlane(screenCoord, interpolation);
+	if (const auto point = Locator::landPickSystem::value().LandUnderPixel(eye, nearPoint, includeWater))
+	{
+		ecs::components::Transform intersectionTransform;
+		intersectionTransform.position = *point;
+		intersectionTransform.rotation = glm::mat3(1.0f);
+		return intersectionTransform;
+	}
+	return std::nullopt;
+}
+
+Camera::NearPlanePoint Camera::OnNearPlane(glm::vec2 screenCoord, Interpolation interpolation) const
+{
+	// The point the pixel shows somewhere ahead, then brought along its line from the eye to the near plane's depth: the
+	// view's w is the depth along the view
 	glm::vec3 rayOrigin;
 	glm::vec3 rayDirection;
 	DeprojectScreenToWorld(screenCoord, rayOrigin, rayDirection, interpolation);
-	const auto& dynamicsSystem = Locator::dynamicsSystem::value();
-	if (auto hit = dynamicsSystem.RayCastClosestHit(rayOrigin, rayDirection, 1e10f))
+	const auto eye = glm::vec3(glm::inverse(GetViewMatrix(interpolation))[3]);
+	const float depth = (GetViewProjectionMatrix(Projection::Normal, interpolation) * glm::vec4(rayOrigin, 1.0f)).w;
+	if (!(depth > 0.0f))
 	{
-		intersectionTransform = hit->first;
-		return std::make_optional(intersectionTransform);
+		return {.eye = eye, .point = rayOrigin};
 	}
-	if (includeWater && glm::intersectRayPlane(rayOrigin, rayDirection, glm::vec3(0.0f, 0.0f, 0.0f),
-	                                           glm::vec3(0.0f, 1.0f, 0.0f), intersectDistance))
-	{
-		intersectionTransform.position = rayOrigin + rayDirection * intersectDistance;
-		intersectionTransform.rotation = glm::mat3(1.0f);
-		return std::make_optional(intersectionTransform);
-	}
-	return std::nullopt;
+	return {.eye = eye, .point = eye + (rayOrigin - eye) * (_nearClip / depth)};
 }
 
 Camera& Camera::SetProjectionMatrixPerspective(float xFov, float aspect, float nearClip, float farClip)
 {
 	_xFov = glm::radians(xFov);
 	_aspect = aspect;
+	_nearClip = nearClip;
 	const float yFov = (glm::atan(glm::tan(_xFov / 2.0f) / aspect)) * 2.0f;
 	// The reversed Z one (k_ReverseZMatrix) is what the draws use; the normal one stays for picking and projecting
 	_projectionMatrix = glm::perspective(yFov, aspect, nearClip, farClip);

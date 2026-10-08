@@ -100,6 +100,14 @@ public:
 
 	void DeprojectScreenToWorld(glm::vec2 screenCoord, glm::vec3& outWorldOrigin, glm::vec3& outWorldDirection,
 	                            Interpolation interpolation = Camera::Interpolation::Current) const;
+	/// The eye and the point a screen coordinate (0 to 1) shows on the near plane: the line the land test follows
+	struct NearPlanePoint
+	{
+		glm::vec3 eye;
+		glm::vec3 point;
+	};
+	[[nodiscard]] NearPlanePoint OnNearPlane(glm::vec2 screenCoord,
+	                                         Interpolation interpolation = Camera::Interpolation::Current) const;
 	bool ProjectWorldToScreen(glm::vec3 worldPosition, glm::vec4 viewport, glm::vec3& outScreenPosition,
 	                          Interpolation interpolation = Camera::Interpolation::Current) const;
 
@@ -127,8 +135,10 @@ protected:
 	glm::vec3 _originDrawOffset {0.0f};  ///< the shake added to the drawn position
 	glm::vec3 _focusDrawOffset {0.0f};   ///< the shake added to the drawn focus
 	std::optional<glm::mat4> _drawnView; ///< the falling spell's view, while it (mode 2) draws
-	float _xFov = 0.0f;                  // TODO(#707): This should be a zoomer for animations
-	float _aspect = 1.0f;                ///< SetProjectionMatrixPerspective's aspect (W / H)
+	/// The near plane's distance, where the land test's line through a pixel starts
+	float _nearClip = 0.0f;
+	float _xFov = 0.0f;   // TODO(#707): This should be a zoomer for animations
+	float _aspect = 1.0f; ///< SetProjectionMatrixPerspective's aspect (W / H)
 	glm::mat4 _projectionMatrix = glm::mat4 {1.0f};
 	glm::mat4 _projectionMatrixReversedZ = glm::mat4 {1.0f};
 	std::unique_ptr<CameraModel> _model;

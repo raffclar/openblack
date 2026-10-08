@@ -14,11 +14,9 @@
 #include <algorithm>
 #include <ranges>
 
-#include <BulletDynamics/Dynamics/btRigidBody.h>
 #include <LNDFile.h>
 #include <bgfx/bgfx.h>
 
-#include "Dynamics/LandBlockBulletMeshInterface.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/VertexBuffer.h"
@@ -71,9 +69,6 @@ void LandBlock::BuildMesh(LandIslandInterface& island)
 
 	BuildVertexList(vertices, island);
 
-	// the physics shape keeps every cell (it copies the positions)
-	_dynamicsMeshInterface = std::make_unique<dynamics::LandBlockBulletMeshInterface>(vertices);
-
 	// Open sea cells (bit 0x02 of the flags byte) are not drawn: the original emits no triangles for them, so there
 	// only the sea shows and no Z is written.
 	// Here their six vertices collapse to a point (zero area, nothing rasterised).
@@ -95,15 +90,6 @@ void LandBlock::BuildMesh(LandIslandInterface& island)
 
 	auto vertexBuffer = std::make_unique<VertexBuffer>("LandBlock", verticesMem, decl);
 	_mesh = std::make_unique<Mesh>(std::move(vertexBuffer));
-
-	_physicsMesh = std::make_unique<btBvhTriangleMeshShape>(_dynamicsMeshInterface.get(), true);
-	_rigidBody = std::make_unique<btRigidBody>(0.0f, nullptr, _physicsMesh.get());
-	btTransform transform;
-	transform.setIdentity();
-	transform.setOrigin(btVector3(_block->mapX, 0, _block->mapZ));
-	_rigidBody->setWorldTransform(transform);
-	_rigidBody->setContactStiffnessAndDamping(300, 10);
-	_rigidBody->setUserIndex(-1);
 }
 
 void LandBlock::BuildVertexList(std::span<LandVertex> vertices, LandIslandInterface& island)

@@ -18,6 +18,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/LandIslandInterface.h"
+#include "3D/LandUnderPixel.h"
 
 using namespace openblack;
 
@@ -183,4 +184,60 @@ TEST(LandRayCast, OffTheMap)
 	// 2.5 units up per cell does not: cell 9's slope at u = 0.769 (75 + 2.5 u = 100 u)
 	ASSERT_TRUE(island.RayCastCells(-5.0f, 3.0f, 40.0f, -3.0f, 3.0f, 45.0f, hit));
 	EXPECT_NEAR(hit.x, 9.0f + 75.0f / 97.5f, 0.001f);
+}
+
+TEST(LandRayCast, LandOnlyHasNoSea)
+{
+	const auto island = RidgeIsland();
+	glm::vec2 hit(0.0f);
+	// down onto flat land at altitude 0 (land, not sea, in the line test's eyes: the cells are there)
+	EXPECT_TRUE(island.RayCastLand(glm::vec3(55.0f, 30.0f, 55.0f), glm::vec3(55.0f, -30.0f, 55.0f), hit));
+	// off the map's cells, downwards: no land, and no sea either
+	EXPECT_FALSE(island.RayCastLand(glm::vec3(-100.0f, 30.0f, -100.0f), glm::vec3(-120.0f, 10.0f, -100.0f), hit));
+	glm::vec2 sea(0.0f);
+	EXPECT_TRUE(island.RayCast(glm::vec3(-100.0f, 30.0f, -100.0f), glm::vec3(-120.0f, 10.0f, -100.0f), sea,
+	                           glm::vec3(-100.0f, 30.0f, -100.0f)));
+	EXPECT_NEAR(sea.x, -130.0f, 0.001f);
+}
+
+TEST(LandUnderPixel, LandSeaAndNothing)
+{
+	const auto island = RidgeIsland();
+	// the line meets the ridge's side
+	const auto ridge = land_pick::UnderPixel(island, glm::vec3(25.0f, 30.0f, 55.0f), glm::vec3(26.0f, 30.0f, 55.0f), false);
+	ASSERT_TRUE(ridge.has_value());
+	EXPECT_NEAR(ridge->x, 90.0f + 10.0f * (30.0f / 0.67f) / 100.0f, 0.01f);
+	EXPECT_EQ(ridge->y, 0.0f); // the island's height everywhere
+	// off the map going down: the sea near the camera with the sea, nothing without it
+	const glm::vec3 camera(-100.0f, 30.0f, -100.0f);
+	const glm::vec3 nearPoint(-101.0f, 29.0f, -100.0f);
+	const auto sea = land_pick::UnderPixel(island, camera, nearPoint, true);
+	ASSERT_TRUE(sea.has_value());
+	EXPECT_NEAR(sea->x, -130.0f, 0.001f);
+	EXPECT_NEAR(sea->z, -100.0f, 0.001f);
+	EXPECT_FALSE(land_pick::UnderPixel(island, camera, nearPoint, false).has_value());
+	// looking up: nothing at all
+	EXPECT_FALSE(land_pick::UnderPixel(island, camera, glm::vec3(-101.0f, 31.0f, -100.0f), true).has_value());
+}
+
+TEST(LandUnderPixel, FarSeaIsTakenWithoutTheReachButKeptInReach)
+{
+	const auto island = RidgeIsland();
+	// a line that only meets the sea 10 km off, beyond the near sea's 7500 m: still the sea's level, then pulled back
+	// onto the sphere of 7680 m about the map's middle
+	const glm::vec3 camera(-100.0f, 100.0f, -100.0f);
+	const glm::vec3 nearPoint(-200.0f, 99.0f, -100.0f);
+	const auto sea = land_pick::UnderPixel(island, camera, nearPoint, true);
+	ASSERT_TRUE(sea.has_value());
+	const glm::vec3 fromMiddle(sea->x - land_pick::k_MapMiddle, sea->y, sea->z - land_pick::k_MapMiddle);
+	EXPECT_NEAR(glm::length(fromMiddle), land_pick::k_PickReach, 0.05f);
+}
+
+TEST(LandUnderPixel, KeptInReach)
+{
+	const glm::vec3 near(100.0f, 5.0f, 200.0f);
+	EXPECT_EQ(land_pick::KeptInReach(near), near);
+	const auto far = land_pick::KeptInReach(glm::vec3(land_pick::k_MapMiddle + 20000.0f, 0.0f, land_pick::k_MapMiddle));
+	EXPECT_NEAR(far.x, land_pick::k_MapMiddle + land_pick::k_PickReach, 0.01f);
+	EXPECT_NEAR(far.z, land_pick::k_MapMiddle, 0.01f);
 }

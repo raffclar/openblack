@@ -18,7 +18,6 @@
 
 #include "Camera/Camera.h"
 #include "ECS/Components/Transform.h"
-#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/HandMagicStateInterface.h"
 #include "Game.h"
 #include "Input/GameCursor.h"
@@ -80,29 +79,13 @@ float sampling::ScreenRatio()
 
 std::optional<glm::vec3> sampling::ScreenToLand(glm::vec2 pixel)
 {
-	if (!Locator::camera::has_value() || !Locator::dynamicsSystem::has_value())
+	if (!Locator::camera::has_value())
 	{
 		return std::nullopt;
 	}
-	glm::vec3 origin;
-	glm::vec3 direction;
-	Ray(pixel, origin, direction);
-	if (glm::any(glm::isnan(origin)) || glm::any(glm::isnan(direction)))
-	{
-		return std::nullopt;
-	}
-	// as Game::Update finds the point under the cursor: the island, else the sea plane (inferred: openblack's picking,
-	// the 1e10 range and the y = 0 sea plane are not the original's; its land ray is not ported)
-	if (const auto hit = Locator::dynamicsSystem::value().RayCastClosestHit(origin, direction, 1e10f); hit)
-	{
-		return hit->first.position;
-	}
-	float distance = 0.0f;
-	if (glm::intersectRayPlane(origin, direction, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f), distance))
-	{
-		return origin + direction * distance;
-	}
-	return std::nullopt;
+	// as Game::Update finds the point under the cursor: the land or sea under the pixel, as the game finds it
+	const auto land = Locator::camera::value().RaycastScreenCoordToLand(pixel / ScreenSize(), true);
+	return land.has_value() ? std::optional(land->position) : std::nullopt;
 }
 
 Projection sampling::CurrentProjection()

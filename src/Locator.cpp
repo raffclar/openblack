@@ -56,7 +56,6 @@
 #include "ECS/Systems/Implementations/CreatureSkinSystem.h"
 #include "ECS/Systems/Implementations/DayNightClockSystem.h"
 #include "ECS/Systems/Implementations/DebugHooks.h"
-#include "ECS/Systems/Implementations/DynamicsSystem.h"
 #include "ECS/Systems/Implementations/EditorSystem.h"
 #include "ECS/Systems/Implementations/FallingSpellSystem.h"
 #include "ECS/Systems/Implementations/FireEffectSystem.h"
@@ -71,6 +70,7 @@
 #include "ECS/Systems/Implementations/InputState.h"
 #include "ECS/Systems/Implementations/LandAvoidSystem.h"
 #include "ECS/Systems/Implementations/LandBalanceSystem.h"
+#include "ECS/Systems/Implementations/LandPickSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
 #include "ECS/Systems/Implementations/MagicObjectsSystem.h"
@@ -164,7 +164,6 @@ using openblack::ecs::systems::CreatureObjectActionSystem;
 using openblack::ecs::systems::CreaturePhysiologySystem;
 using openblack::ecs::systems::CreatureSkinSystem;
 using openblack::ecs::systems::DayNightClockSystem;
-using openblack::ecs::systems::DynamicsSystem;
 using openblack::ecs::systems::EditorSystem;
 using openblack::ecs::systems::FallingSpellSystem;
 using openblack::ecs::systems::FireEffectSystem;
@@ -177,6 +176,7 @@ using openblack::ecs::systems::HandMagicState;
 using openblack::ecs::systems::HandSystem;
 using openblack::ecs::systems::InputState;
 using openblack::ecs::systems::LandBalanceSystem;
+using openblack::ecs::systems::LandPickSystem;
 using openblack::ecs::systems::LeashSystem;
 using openblack::ecs::systems::LivingActionSystem;
 using openblack::ecs::systems::MagicObjectsSystem;
@@ -559,7 +559,7 @@ bool openblack::InitializeGame() noexcept
 void openblack::InitializeLevel(const std::filesystem::path& path)
 {
 	Locator::entitiesMap::emplace<MapProduction>();
-	Locator::dynamicsSystem::emplace<DynamicsSystem>();
+	Locator::landPickSystem::emplace<LandPickSystem>();
 	Locator::livingActionSystem::emplace<LivingActionSystem>();
 	Locator::townSystem::emplace<TownSystem>();
 	Locator::pathfindingSystem::emplace<PathfindingSystem>();
@@ -601,7 +601,7 @@ void openblack::ShutDownServices()
 	audio::device::Close();
 
 	Locator::rendereringSystem::reset();
-	Locator::dynamicsSystem::reset();
+	Locator::landPickSystem::reset();
 	// the cave asks Creature Mode for the player's creature
 	Locator::creatureCaveSystem::reset();
 	// before the camera, whose model it may hold

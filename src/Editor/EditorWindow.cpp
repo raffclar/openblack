@@ -141,7 +141,7 @@ glm::vec2 EditorWindow::MouseOnScreen() noexcept
 
 std::optional<glm::vec3> EditorWindow::LandAt(glm::vec2 screen) noexcept
 {
-	if (!Locator::camera::has_value() || !Locator::dynamicsSystem::has_value())
+	if (!Locator::camera::has_value() || !Locator::landPickSystem::has_value())
 	{
 		return std::nullopt;
 	}

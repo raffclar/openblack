@@ -20,9 +20,6 @@
 
 #include "LandIslandInterface.h"
 
-class btBvhTriangleMeshShape;
-class btRigidBody;
-
 namespace openblack
 {
 
@@ -54,11 +51,6 @@ struct LandVertex
 
 class LandIslandInterface;
 
-namespace dynamics
-{
-class LandBlockBulletMeshInterface;
-}
-
 /// A box of the island's cell corners (map cell coordinates), from min to max inclusive on each axis
 struct CornerBox
 {
@@ -75,7 +67,7 @@ public:
 
 	LandBlock() = default;
 	void BuildMesh(LandIslandInterface& island);
-	/// The block's vertices from the island's cells (BuildMesh's, without the GPU mesh and the physics shape)
+	/// The block's vertices from the island's cells (BuildMesh's, without the GPU mesh)
 	void BuildVertexList(std::span<LandVertex> vertices, LandIslandInterface& island);
 	/// Whether the mesh of the block at this block position reads one of these corners: its own 17 x 17 corners and,
 	/// for the smooth normals, one more on each side. A block that reads none of them builds the same mesh again.
@@ -85,15 +77,11 @@ public:
 	[[nodiscard]] const lnd::LNDCell* GetCells() const;
 	[[nodiscard]] glm::ivec2 GetBlockPosition() const;
 	[[nodiscard]] glm::vec2 GetMapPosition() const;
-	[[nodiscard]] std::unique_ptr<btRigidBody>& GetRigidBody() { return _rigidBody; };
 	[[nodiscard]] const std::unique_ptr<lnd::LNDBlock>& GetLndBlock() const { return _block; };
 	void SetLndBlock(const lnd::LNDBlock& block);
 
 private:
 	std::unique_ptr<lnd::LNDBlock> _block;
 	std::unique_ptr<graphics::Mesh> _mesh;
-	std::unique_ptr<dynamics::LandBlockBulletMeshInterface> _dynamicsMeshInterface;
-	std::unique_ptr<btBvhTriangleMeshShape> _physicsMesh;
-	std::unique_ptr<btRigidBody> _rigidBody;
 };
 } // namespace openblack

@@ -81,6 +81,8 @@ public:
 	/// Users: the lightning's fork (Particles/Rules/Lightning.cpp) and, not ported yet, the camera update, the camera modes,
 	/// the landscape draw and a few more
 	[[nodiscard]] bool RayCast(const glm::vec3& from, const glm::vec3& to, glm::vec2& hit, const glm::vec3& camera) const;
+	/// RayCast's land part alone, with no sea: true and the hit's x, z in metres when the ray meets the land
+	[[nodiscard]] bool RayCastLand(const glm::vec3& from, const glm::vec3& to, glm::vec2& hit) const;
 	/// The ray cast in cell units (x, z, y / 0.67): the hit's x, z in cells
 	[[nodiscard]] bool RayCastCells(float x0, float z0, float y0, float x1, float z1, float y1, glm::vec2& hit) const;
 

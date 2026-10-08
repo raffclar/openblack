@@ -20,15 +20,12 @@
 #include <stdexcept>
 #include <vector>
 
-#include <BulletCollision/CollisionShapes/btBvhTriangleMeshShape.h>
-#include <BulletDynamics/Dynamics/btRigidBody.h>
 #include <LNDFile.h>
 #include <gtest/gtest.h>
 
 #include "3D/BlockTexture.h"
 #include "3D/LandBlock.h"
 #include "3D/LandIslandInterface.h"
-#include "Dynamics/LandBlockBulletMeshInterface.h"
 #include "Graphics/Mesh.h"
 
 using namespace openblack;

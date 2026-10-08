@@ -27,8 +27,6 @@
 #include "Graphics/ShadowMath.h"
 #include "L3DSubMesh.h"
 
-class btConvexShape;
-
 namespace openblack
 {
 namespace l3d
@@ -195,9 +193,6 @@ public:
 	/// The NewEP block (flag ContainsNewEP): each entrance point's ABODE_EPP type and position in the mesh space, in
 	/// the block's order (an abode takes the first of a type)
 	[[nodiscard]] const std::vector<std::pair<int32_t, glm::vec3>>& GetNewEntrancePoints() const { return _newEntrancePoints; }
-	[[nodiscard]] bool HasPhysicsMesh() const { return _physicsMesh != nullptr; }
-	[[nodiscard]] btConvexShape& GetPhysicsMesh() { return *_physicsMesh; }
-	[[nodiscard]] const btConvexShape& GetPhysicsMesh() const { return *_physicsMesh; }
 	[[nodiscard]] float GetMass() const { return _physicsMass; }
 	[[nodiscard]] AxisAlignedBoundingBox GetBoundingBox() const { return _boundingBox; }
 	/// Nearest hit of the ray origin + t * direction (mesh space, direction need not be unit) with the triangles of the
@@ -240,7 +235,6 @@ private:
 	std::optional<std::pair<uint32_t, glm::vec3>> _eBonePoint0;
 	std::vector<std::pair<int32_t, glm::vec3>> _newEntrancePoints;
 	/// Bounding box if no physics mesh was found
-	std::unique_ptr<btConvexShape> _physicsMesh;
 	float _physicsMass {1.0f}; // TODO(bwrsandman): Find somewhere in file a value
 	AxisAlignedBoundingBox _boundingBox {
 	    {std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()},

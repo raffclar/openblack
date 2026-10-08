@@ -117,7 +117,6 @@
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/DayNightClockSystemInterface.h"
 #include "ECS/Systems/DrawUpdate.h"
-#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -1149,10 +1148,6 @@ bool Game::Update() noexcept
 
 	Locator::debugGui::value().SetScale(config.guiScale);
 
-	// (openblack) Bullet is not stepped: the original has no rigid-body world (its physics is the physics objects'
-	// update, once a turn); the dynamics system only answers ray casts (the hand, the
-	// camera, the console). Stepping it with the wall clock moved the Features and dropped their yaw every frame.
-
 	// Input events
 	{
 		auto sdlInput = profiler.BeginScoped(Profiler::Stage::SdlInput);
@@ -1480,24 +1475,15 @@ bool Game::Update() noexcept
 				glm::vec3 rayDirection;
 				camera.DeprojectScreenToWorld(static_cast<glm::vec2>(cursor) / static_cast<glm::vec2>(screenSize), rayOrigin,
 				                              rayDirection);
-				auto& dynamicsSystem = Locator::dynamicsSystem::value();
 
 				if (!glm::any(glm::isnan(rayOrigin) || glm::isnan(rayDirection)))
 				{
-					if (auto hit = dynamicsSystem.RayCastClosestHit(rayOrigin, rayDirection, 1e10f))
+					// the land or sea under the cursor, as the game finds it (Camera::RaycastScreenCoordToLand)
+					if (const auto land = camera.RaycastScreenCoordToLand(
+					        static_cast<glm::vec2>(cursor) / static_cast<glm::vec2>(screenSize), true))
 					{
-						intersectionTransform = hit->first;
-					}
-					else // For the water
-					{
-						float intersectDistance = 0.0f;
-						const auto planeOrigin = glm::vec3(0.0f, 0.0f, 0.0f);
-						const auto planeNormal = glm::vec3(0.0f, 1.0f, 0.0f);
-						if (glm::intersectRayPlane(rayOrigin, rayDirection, planeOrigin, planeNormal, intersectDistance))
-						{
-							intersectionTransform.position = rayOrigin + rayDirection * intersectDistance;
-							intersectionTransform.rotation = glm::mat3(1.0f);
-						}
+						intersectionTransform.position = land->position;
+						intersectionTransform.rotation = glm::mat3(1.0f);
 					}
 					// ObtainRequiredHandPosition: the hand goes along the mouse ray to the surface under the cursor
 					// (an object's mesh or the land), smoothed by the hand distance zoomer.
@@ -2188,8 +2174,6 @@ bool Game::Run() noexcept
 		return false;
 	}
 
-	Locator::dynamicsSystem::value().RegisterRigidBodies();
-
 	auto& fileSystem = Locator::filesystem::value();
 
 	auto challengePath = fileSystem.GetPath<filesystem::Path::Quests>() / "challenge.chl";
@@ -2847,7 +2831,6 @@ void Game::LoadLandscape(const std::filesystem::path& path)
 	Locator::playerSystem::value().AddPlayer(ecs::archetypes::PlayerArchetype::Create(PlayerNames::PLAYER_ONE));
 
 	Locator::cameraBookmarkSystem::value().Initialize();
-	Locator::dynamicsSystem::value().RegisterIslandRigidBodies(Locator::terrainSystem::value());
 	Locator::playerSystem::value().RegisterPlayers();
 }
 

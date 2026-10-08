@@ -15,7 +15,6 @@
 #include <filesystem>
 #include <stdexcept>
 
-#include <BulletCollision/CollisionShapes/btConvexHullShape.h>
 #include <L3DFile.h>
 #include <bgfx/bgfx.h>
 #include <glm/gtc/type_ptr.hpp>
@@ -196,16 +195,6 @@ bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to open L3DSubMesh");
 			result = false;
 			continue;
-		}
-		if (subMesh->GetFlags().isPhysics)
-		{
-			const auto& verticesSpan = l3d.GetVertexSpan(i);
-			auto physicsMesh = std::make_unique<btConvexHullShape>(reinterpret_cast<const btScalar*>(verticesSpan.data()),
-			                                                       static_cast<int>(verticesSpan.size()),
-			                                                       static_cast<int>(sizeof(verticesSpan[0])));
-			physicsMesh->optimizeConvexHull();
-			_physicsMesh = std::move(physicsMesh);
-			// FIXME(bwrsandman): Some meshes have multiple physics meshes
 		}
 		const auto& bb = subMesh->GetBoundingBox();
 		_boundingBox.minima = glm::min(_boundingBox.minima, bb.minima);

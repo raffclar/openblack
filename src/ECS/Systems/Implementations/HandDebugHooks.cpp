@@ -88,7 +88,6 @@
 #include "ECS/StoragePitStore.h"
 #include "ECS/Systems/DayNightClockSystemInterface.h"
 #include "ECS/Systems/DebugHooksInterface.h"
-#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/ToBeDeleted.h"
 #include "ECS/Town/TownFeatures.h"
 #include "ECS/Trees.h"
@@ -738,18 +737,6 @@ void HandSystem::RunDebugHooks() noexcept
 					                   Locator::terrainSystem::value().GetHeightAt(glm::vec2(m.x, m.z)));
 				}
 				registry.SetDirty();
-			}
-			// Compare with the drawn landscape mesh (the Bullet land blocks are built from it) on a small grid.
-			for (int i = 0; i < 5; ++i)
-			{
-				for (int j = 0; j < 5; ++j)
-				{
-					const glm::vec2 p(x + static_cast<float>(i) * 2.5f, z + static_cast<float>(j) * 2.5f);
-					const auto hit = Locator::dynamicsSystem::value().RayCastClosestHit(glm::vec3(p.x, 500.0f, p.y),
-					                                                                    glm::vec3(0.0f, -1.0f, 0.0f), 1000.0f);
-					SPDLOG_LOGGER_INFO(spdlog::get("game"), "  ({:.1f},{:.1f}) GetHeightAt {:.3f} mesh {:.3f}", p.x, p.y,
-					                   Locator::terrainSystem::value().GetHeightAt(p), hit ? hit->first.position.y : -1.0f);
-				}
 			}
 		}
 	}

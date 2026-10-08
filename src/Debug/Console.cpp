@@ -18,7 +18,6 @@
 #include "Camera/Camera.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "LHScriptX/FeatureScriptCommands.h"
 #include "LHScriptX/Script.h"
@@ -226,33 +225,10 @@ void Console::Draw() noexcept
 	SDL_GetMouseState(&mousePosition.x, &mousePosition.y);
 	if (!io.WantCaptureMouse && screenSize.x > 0 && screenSize.y > 0)
 	{
-		glm::vec3 rayOrigin;
-		glm::vec3 rayDirection;
-		Locator::camera::value().DeprojectScreenToWorld(
-		    static_cast<glm::vec2>(mousePosition) / static_cast<glm::vec2>(screenSize), rayOrigin, rayDirection);
-		const auto& dynamicsSystem = Locator::dynamicsSystem::value();
-		if (auto hit = dynamicsSystem.RayCastClosestHit(rayOrigin, rayDirection, 1e10f))
+		if (const auto land = Locator::camera::value().RaycastScreenCoordToLand(
+		        static_cast<glm::vec2>(mousePosition) / static_cast<glm::vec2>(screenSize), true))
 		{
-			if (hit->second.userData != nullptr)
-			{
-				switch (hit->second.type)
-				{
-				case RigidBodyType::Terrain:
-				{
-					// auto landIsland = reinterpret_cast<const LandIsland*>(hit->second.userData);
-					auto blockIndex = hit->second.id;
-					ImGui::SetTooltip("Block Index: %d", blockIndex);
-				}
-				break;
-				case RigidBodyType::Entity:
-				{
-					// auto registry = reinterpret_cast<const openblack::ecs::Registry*>(hit->second.userData);
-					auto entity = hit->second.id;
-					ImGui::SetTooltip("Entity %d", entity);
-				}
-				break;
-				}
-			}
+			ImGui::SetTooltip("Land (%.1f, %.1f, %.1f)", land->position.x, land->position.y, land->position.z);
 		}
 	}
 
