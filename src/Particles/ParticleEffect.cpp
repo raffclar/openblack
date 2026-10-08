@@ -769,6 +769,17 @@ std::optional<entt::entity> Effect::TakeTarget()
 	return target;
 }
 
+std::optional<PlasmaCommand> Effect::TakePlasma()
+{
+	if (_plasma.empty())
+	{
+		return std::nullopt;
+	}
+	const auto command = _plasma.back();
+	_plasma.pop_back();
+	return command;
+}
+
 std::optional<glm::vec3> Effect::TakeTargetPosition()
 {
 	if (_targetPositions.empty())
