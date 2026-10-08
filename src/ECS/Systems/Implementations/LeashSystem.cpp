@@ -876,8 +876,8 @@ void LeashSystem::PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& 
 			                                           .alpha = textures.Handle(k_SmokeAlphaId)->GetNativeHandle()});
 		}
 		registry.Assign<LeashPost>(entity, post);
-		const auto meshId =
-		    meshes.Contains(LeashPost::k_TypeMeshIds.at(i)) ? LeashPost::k_TypeMeshIds.at(i) : LeashPost::k_MeshId;
+		const auto collar = entt::hashed_string::value(temple_leashes::CollarMeshName(owner, post.type).c_str());
+		const auto meshId = meshes.Contains(collar) ? collar : LeashPost::k_MeshId;
 		if (meshes.Contains(meshId))
 		{
 			registry.Assign<Mesh>(entity, meshId, static_cast<int8_t>(0), static_cast<int8_t>(0));

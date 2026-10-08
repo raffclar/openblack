@@ -2189,10 +2189,14 @@ bool Game::Initialize() noexcept
 		if (const auto path = fileSystem.GetPath<Path::Misc>() / "leash.l3d"; fileSystem.Exists(path))
 		{
 			meshManager.Load("misc/leash", LFromDiskTag {}, path);
-			// The temple hangs one of each leash, the game loading the collar once for each
-			for (const auto id : ecs::components::LeashPost::k_TypeMeshIds)
+			// Each player's temple hangs one of each leash, each drawn with its own copy of the collar
+			for (uint8_t player = 0; player < static_cast<uint8_t>(PlayerNames::_COUNT); ++player)
 			{
-				meshManager.Load(id, LFromDiskTag {}, path);
+				for (const auto type : creature_leash::k_Types)
+				{
+					meshManager.Load(temple_leashes::CollarMeshName(static_cast<PlayerNames>(player), type), LFromDiskTag {},
+					                 path);
+				}
 			}
 		}
 		// The eyes every creature is drawn with

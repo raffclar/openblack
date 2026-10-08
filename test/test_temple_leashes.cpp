@@ -99,3 +99,18 @@ TEST(TempleLeashes, TheirToolTips)
 	EXPECT_EQ(ToolTipOf(LeashType::Rope), k_LearningTip);
 	EXPECT_EQ(ToolTipOf(LeashType::Good), k_CompassionTip);
 }
+
+TEST(TempleLeashes, EachPlayersLeashSlidesItsTextureByItself)
+{
+	// Each player's leash of each kind is drawn with a collar of its own, so two temples' leashes of a kind slide their
+	// textures each from its own random start
+	EXPECT_NE(CollarMeshName(PlayerNames::PLAYER_ONE, LeashType::Evil),
+	          CollarMeshName(PlayerNames::PLAYER_TWO, LeashType::Evil));
+	EXPECT_NE(CollarMeshName(PlayerNames::PLAYER_ONE, LeashType::Evil),
+	          CollarMeshName(PlayerNames::PLAYER_ONE, LeashType::Good));
+	const auto first = Advance(Start({1000, 0, 0, 0}), 1.0f);
+	const auto second = Advance(Start({20000, 0, 0, 0}), 1.0f);
+	EXPECT_NE(first.scroll, second.scroll);
+	// Each draw is scaled to its range as the game scales the C library's numbers
+	EXPECT_NEAR(Start({16384, 0, 0, 0}).scroll, 16384.0f / 32767.0f, k_Tolerance);
+}

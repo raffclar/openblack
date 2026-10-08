@@ -104,6 +104,11 @@ Glow temple_leashes::GlowOf(bool picked, uint8_t alpha)
 	return {.tint = glm::vec4(1.0f, 1.0f, 1.0f, a), .additive = false};
 }
 
+std::string temple_leashes::CollarMeshName(PlayerNames owner, LeashType type)
+{
+	return "misc/leash/" + std::to_string(static_cast<int>(owner)) + "/" + std::to_string(static_cast<int>(type));
+}
+
 uint32_t temple_leashes::ToolTipOf(LeashType type)
 {
 	switch (type)
