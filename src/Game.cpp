@@ -972,6 +972,7 @@ bool Game::GameLogicLoop() noexcept
 	// collides and comes to rest
 	if (Locator::dynamicsSystem::has_value())
 	{
+		auto physics = profiler.BeginScoped(Profiler::Stage::PhysicsUpdate);
 		Locator::dynamicsSystem::value().ProcessTurn();
 	}
 	// The pieces broken off buildings count down their time, and go when it runs out
