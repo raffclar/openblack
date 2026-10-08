@@ -22,9 +22,10 @@
 namespace openblack::ecs::systems
 {
 
-/// The animals: the flocks of doves and bats and the packs of wolves the miracles make. A bird flock's leader flies where
-/// it is sent and its followers keep a formation behind it; a wolf runs where it is sent, hunting what crosses its way.
-/// The miracle's animals fade out rather than die.
+/// The animals: the land's birds, the doves or bats about each temple, and the flocks of doves and bats and the packs of
+/// wolves the miracles make. A bird flock's leader flies legs about its home or where it is sent and its followers keep
+/// a formation behind it; a wolf runs where it is sent, hunting what crosses its way. The miracle's animals fade out
+/// rather than die.
 class AnimalSystemInterface
 {
 public:
@@ -44,6 +45,15 @@ public:
 	/// height above the land
 	virtual entt::entity CreateSpellAnimal(AnimalInfo type, glm::vec2 position, float heightAboveLand, uint16_t angle,
 	                                       PlayerNames owner, entt::entity flock, entt::entity spell) = 0;
+	/// A flock a land script makes with its number, where it says, wandering about its home as far as it says (its
+	/// kind's way when it says none), its followers within so far of their leader
+	virtual entt::entity CreateScriptFlock(int32_t id, glm::vec2 position, glm::vec2 home, float reach,
+	                                       float flockDistance) = 0;
+	/// The latest flock a land script made with a number, none for none
+	[[nodiscard]] virtual entt::entity FindScriptFlock(int32_t id) const = 0;
+	/// One of the land's birds, as a land script or a temple makes it: flying at its kind's height over a point, at an
+	/// age (a random one for none), joining a flock, or one of its own for none
+	virtual entt::entity CreateBird(AnimalInfo type, glm::vec2 position, uint32_t age, entt::entity flock) = 0;
 	/// A new size for an animal
 	virtual void SetScale(entt::entity animal, float scale) = 0;
 	/// An animal's radius across the ground: the larger half of its model's width and depth, scaled

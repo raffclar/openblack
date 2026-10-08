@@ -2039,6 +2039,7 @@ std::vector<Scenario> Build()
 	AddGestureScenarios(all);
 	AddStormScenarios(all);
 	AddFlockScenarios(all);
+	AddBirdScenarios(all);
 	AddTeleportScenarios(all);
 	AddTornadoScenarios(all);
 	AddHandNavigationScenarios(all);
@@ -2145,7 +2146,7 @@ std::string_view testbed_scenarios::Name(Facet facet)
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
 	    "Idle",     "Expressions", "Senses", "Needs",    "Growth",    "Appearance",    "Light",
 	    "Movement", "Footprints",  "Audio",  "Objects",  "Hand",      "Leash",         "Combat",
-	    "Mind",     "Particles",   "Editor", "Miracles", "Benchmark", "Creature Mode",
+	    "Mind",     "Particles",   "Editor", "Miracles", "Benchmark", "Creature Mode", "Animals",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
@@ -2290,11 +2291,12 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		problems.emplace_back("hour or body time out of range");
 	}
 	if (scenario.creatures.empty() && scenario.particles.empty() && scenario.miracles.empty() && scenario.dispensers.empty() &&
-	    !environment.dispenserGrid && !scenario.crowd.has_value() && !environment.playerAlignment.has_value() &&
+	    scenario.birdFlocks.empty() && scenario.temples.empty() && !environment.dispenserGrid && !scenario.crowd.has_value() &&
+	    !environment.playerAlignment.has_value() &&
 	    std::ranges::none_of(scenario.commands, [](const Command& command) { return NeedsNoCreature(command.kind); }))
 	{
-		problems.emplace_back(
-		    "no creatures, particles, miracles, dispensers, crowd, player's commands or alignment for the hand");
+		problems.emplace_back("no creatures, particles, miracles, dispensers, birds, temples, crowd, player's commands or "
+		                      "alignment for the hand");
 	}
 	if ((environment.playerAlignment && !InRange(*environment.playerAlignment, -1.0f, 1.0f)) ||
 	    (environment.cursor && (!InRange(environment.cursor->x, 0.0f, 1.0f) || !InRange(environment.cursor->y, 0.0f, 1.0f))))

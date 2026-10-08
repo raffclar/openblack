@@ -19,6 +19,7 @@
 #include <fstream>
 #include <limits>
 #include <memory>
+#include <numbers>
 #include <ranges>
 #include <system_error>
 #include <type_traits>
@@ -46,6 +47,7 @@
 #include "Creature/CreatureObjectActions.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
+#include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/FieldArchetype.h"
@@ -74,6 +76,7 @@
 #include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -417,6 +420,7 @@ void Runner::Start(const Scenario& scenario)
 
 	SetUpEnvironment(scenario.environment);
 	PlaceObjects(scenario, _middle);
+	PlaceBirds(scenario, _middle);
 	PlaceCreatures(scenario, _middle);
 	PlaceDispensers(scenario);
 	if (scenario.tribalPower.has_value() && Locator::magicSystem::has_value())
@@ -645,6 +649,36 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 		    },
 		    object.type));
 		SetLifeAndPoison(_objects.back(), object);
+	}
+}
+
+void Runner::PlaceBirds(const Scenario& scenario, glm::vec2 middle)
+{
+	const auto& land = Locator::terrainSystem::value();
+	for (const auto& setup : scenario.temples)
+	{
+		const auto point = MapPoint(middle, setup.offset);
+		ecs::archetypes::CitadelArchetype::Create({point.x, land.GetHeightAt(point), point.y}, setup.owner, glm::mat4(1.0f),
+		                                          glm::vec3(1.0f));
+	}
+	if (!Locator::animalSystem::has_value())
+	{
+		return;
+	}
+	// As a land script makes them: the flock numbered, then its birds spread about its home
+	auto& animals = Locator::animalSystem::value();
+	constexpr float k_Spread = 8.0f;
+	for (size_t i = 0; i < scenario.birdFlocks.size(); ++i)
+	{
+		const auto& setup = scenario.birdFlocks[i];
+		const auto home = MapPoint(middle, setup.offset);
+		const auto flock = animals.CreateScriptFlock(static_cast<int32_t>(i + 1), home, home, setup.reach, setup.flockDistance);
+		for (uint32_t bird = 0; bird < setup.count; ++bird)
+		{
+			const float angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>(bird) / static_cast<float>(setup.count);
+			const glm::vec2 at = home + glm::vec2(std::cos(angle), std::sin(angle)) * k_Spread;
+			animals.CreateBird(setup.kind, at, 0, flock);
+		}
 	}
 }
 
