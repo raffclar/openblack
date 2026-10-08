@@ -83,14 +83,15 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageLight.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
-#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
@@ -503,6 +504,14 @@ Renderer::~Renderer() noexcept
 	{
 		bgfx::destroy(toBgfx(*_lightningGlowTexture));
 	}
+	for (auto& query : _glareQueries)
+	{
+		if (bgfx::isValid(query))
+		{
+			bgfx::destroy(query);
+			query = BGFX_INVALID_HANDLE;
+		}
+	}
 	_shaderManager.reset();
 	bgfx::frame();
 	bgfx::shutdown();
@@ -696,6 +705,80 @@ const Renderer::MeshUniforms& Renderer::MeshUniformsOf(const ShaderProgram& prog
 	return found->second;
 }
 
+namespace
+{
+/// How far a building's inner walls stand in from its outer ones, in the model's own units: less for a two-sided
+/// material
+constexpr float k_InnerWallTwoSided = 0.2f;
+constexpr float k_InnerWall = 0.35f;
+
+[[nodiscard]] float InsetOf(bool twoSided)
+{
+	return twoSided ? k_InnerWallTwoSided : k_InnerWall;
+}
+
+/// The most caps kept at once: past it they are all made afresh as they are needed
+constexpr size_t k_MostCaps = 512;
+} // namespace
+
+const Renderer::Cap& Renderer::CapOf(const L3DSubMesh& subMesh, const CapPrimitive& primitive, float height) const
+{
+	const auto key = std::make_pair(primitive.key, height);
+	if (const auto found = _caps.find(key); found != _caps.end())
+	{
+		return found->second;
+	}
+	if (_caps.size() >= k_MostCaps)
+	{
+		_caps.clear();
+	}
+	const auto& surface = subMesh.GetSurface();
+	std::span<const uint16_t> indices(surface.indices);
+	const auto first = std::min<size_t>(primitive.indicesOffset, indices.size());
+	indices = indices.subspan(first, std::min<size_t>(primitive.indicesCount, indices.size() - first));
+	Cap cap {
+	    .wholeBelow = partial_build_cap::HasWholeTriangleBelow(surface.positions, indices, height),
+	    .vertices = partial_build_cap::Build(surface.positions, surface.uvs, surface.normals, indices, height,
+	                                         InsetOf(primitive.twoSided)),
+	};
+	return _caps.emplace(key, std::move(cap)).first->second;
+}
+
+bool Renderer::BindCap(const std::vector<partial_build_cap::CapVertex>& cap)
+{
+	// Laid out as a model's own vertices, each moved by the model's matrix alone
+	struct Vertex
+	{
+		glm::vec3 position;
+		glm::vec2 uv;
+		glm::vec3 normal;
+		std::array<int16_t, 4> indices;
+	};
+	static_assert(sizeof(Vertex) == 8 * sizeof(float) + 4 * sizeof(int16_t));
+	bgfx::VertexLayout layout;
+	layout.begin()
+	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::Normal, 3, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::Indices, 4, bgfx::AttribType::Int16, false, true)
+	    .end();
+	const auto count = static_cast<uint32_t>(cap.size());
+	if (bgfx::getAvailTransientVertexBuffer(count, layout) < count)
+	{
+		return false;
+	}
+	bgfx::TransientVertexBuffer buffer;
+	bgfx::allocTransientVertexBuffer(&buffer, count, layout);
+	auto* vertices = reinterpret_cast<Vertex*>(buffer.data);
+	for (size_t i = 0; i < cap.size(); ++i)
+	{
+		// The first matrix, no partner to blend with
+		vertices[i] = {.position = cap[i].position, .uv = cap[i].uv, .normal = cap[i].normal, .indices = {0, -1, 0, 0}};
+	}
+	bgfx::setVertexBuffer(0, &buffer);
+	return true;
+}
+
 void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSubMesh& subMesh, const L3DMeshSubmitDesc& desc,
                            bool preserveState, const TextureHandle* subMeshTexture, glm::vec3 glow) const
 {
@@ -706,8 +789,8 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 	// A lit window is a faint glow, blended by its texture's alpha as its material says, over the wall behind it
 	const bool materialBlending = desc.useMaterialBlending || window;
 	const auto viewId = window ? TranslucentView(desc.viewId) : desc.viewId;
-	if (!desc.drawAll &&
-	    (subMesh.IsPhysics() || subMesh.GetFlags().status != 0 || (!window && (subMesh.GetFlags().lodMask & 1) != 1)))
+	if (!desc.drawAll && (subMesh.IsPhysics() || subMesh.GetFlags().status != desc.onlyStatus.value_or(0) ||
+	                      (!window && (subMesh.GetFlags().lodMask & 1) != 1)))
 	{
 		return;
 	}
@@ -722,7 +805,9 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 	// The game draws the submeshes with a lightmap through it and the others as they are
 	const auto lightmapSkinID = subMesh.GetLightmapSkinID();
 	const Texture2D* lightmap = lightmapSkinID.has_value() ? GetTexture(*lightmapSkinID, skins) : nullptr;
-	const auto* program = desc.lightmapProgram != nullptr && lightmap != nullptr ? desc.lightmapProgram : desc.program;
+	// A cap has no lightmap coordinates of its own
+	const auto* program =
+	    desc.lightmapProgram != nullptr && lightmap != nullptr && !desc.cap ? desc.lightmapProgram : desc.program;
 	if (desc.onlyJoints && !subMesh.GetJoint().has_value())
 	{
 		return;
@@ -797,8 +882,29 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 
 		// Primitives drawn with their own material's blending can't share render state, nor can a submesh with a texture
 		// of its own
+		// nor inner walls, whose inset each primitive's material decides
 		const bool primitivePreserveState = !materialBlending && subMeshTexture == nullptr && desc.subMeshGlows.empty() &&
-		                                    texture != nullptr && texture == nextTexture && (preserveState || hasNext);
+		                                    !desc.innerWalls && !desc.cap && texture != nullptr && texture == nextTexture &&
+		                                    (preserveState || hasNext);
+
+		// A cut building's inner walls and cap belong only to a primitive with a whole triangle below the cut, and a cap
+		// is drawn from geometry of its own, which a primitive not cut has none of
+		const std::vector<partial_build_cap::CapVertex>* cap = nullptr;
+		if ((desc.innerWalls || desc.cap) && desc.modelCutHeight.has_value())
+		{
+			const auto& made = CapOf(subMesh,
+			                         {.key = &prim,
+			                          .indicesOffset = prim.indicesOffset,
+			                          .indicesCount = prim.indicesCount,
+			                          .twoSided = prim.twoSided},
+			                         *desc.modelCutHeight);
+			if (!made.wholeBelow || (desc.cap && made.vertices.empty()))
+			{
+				lastPreserveState = false;
+				continue;
+			}
+			cap = desc.cap ? &made.vertices : nullptr;
+		}
 
 		uint32_t skip = Mesh::SkipState::SkipNone;
 		if (!lastPreserveState)
@@ -841,6 +947,20 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			{
 				const glm::vec4 u_uvOffset {desc.uvOffset, desc.uvScale, 0.0f};
 				setUniform(MeshUniform::UvOffset, &u_uvOffset);
+			}
+			if (has(MeshUniform::KeepBelow))
+			{
+				// The cap lies on the cut itself, so it isn't cut
+				const bool keepBelow = desc.cutAbove.has_value() && cap == nullptr;
+				const glm::vec4 u_keepBelow {keepBelow ? 1.0f : 0.0f, desc.cutAbove.value_or(0.0f), 0.0f, 0.0f};
+				setUniform(MeshUniform::KeepBelow, &u_keepBelow);
+			}
+			if (has(MeshUniform::Inset))
+			{
+				// y: 1 for the cap, which is set in already and drawn unlit
+				const glm::vec4 u_inset {desc.innerWalls ? InsetOf(prim.twoSided) : 0.0f, cap != nullptr ? 1.0f : 0.0f, 0.0f,
+				                         0.0f};
+				setUniform(MeshUniform::Inset, &u_inset);
 			}
 			if (has(MeshUniform::SeaClip))
 			{
@@ -985,11 +1105,19 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				bgfx::setInstanceDataBuffer(toBgfx(desc.instanceDesc->GetRawHandle()), desc.instanceDesc->GetStart(),
 				                            desc.instanceDesc->GetCount());
 			}
-			if (subMesh.GetMesh().IsIndexed() && (skip & Mesh::SkipState::SkipIndexBuffer) == 0)
+			if (cap != nullptr)
+			{
+				if (!BindCap(*cap))
+				{
+					lastPreserveState = false;
+					continue;
+				}
+			}
+			else if (subMesh.GetMesh().IsIndexed() && (skip & Mesh::SkipState::SkipIndexBuffer) == 0)
 			{
 				subMesh.GetMesh().GetIndexBuffer().Bind(prim.indicesCount, prim.indicesOffset);
 			}
-			if ((skip & Mesh::SkipState::SkipVertexBuffer) == 0)
+			if (cap == nullptr && (skip & Mesh::SkipState::SkipVertexBuffer) == 0)
 			{
 				subMesh.GetMesh().GetVertexBuffer().Bind();
 				if (desc.morphTargets != nullptr && _morphStreamLayouts)
@@ -1000,7 +1128,11 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			if ((skip & Mesh::SkipState::SkipRenderState) == 0)
 			{
 				auto state = desc.state;
-				if (desc.useMaterialCulling)
+				if (desc.twoSided)
+				{
+					state &= ~BGFX_STATE_CULL_MASK;
+				}
+				else if (desc.useMaterialCulling)
 				{
 					// L3D meshes face clockwise
 					state &= ~BGFX_STATE_CULL_MASK;
@@ -2992,22 +3124,52 @@ void Renderer::DrawSunGlare(const Camera& camera) const
 	}
 	const auto model = SunModel(placement->position);
 
-	// Each sample of the sun the land or a thing hides from the camera dims the glare by a fifth
+	// Each sample of the sun hidden from the camera dims the glare by a fifth. The land hides it where the line from the
+	// camera to it meets the land; otherwise what is drawn at its pixel does, when it is nearer than the depth the game's
+	// depth buffer counts as hidden. That is asked of the drawing as it happens, and answered a frame or two later.
 	int hidden = 0;
 	const auto origin = camera.GetOrigin();
-	const auto right = glm::vec3(model * glm::vec4(1.0f, 0.0f, 0.0f, 0.0f));
-	if (Locator::dynamicsSystem::has_value())
+	const float near = camera.GetNearClip();
+	const auto samples = sun::GlareSamples(placement->position, origin, near);
+	const bool asksDrawing = (bgfx::getCaps()->supported & BGFX_CAPS_OCCLUSION_QUERY) != 0;
+	const auto resolution =
+	    Locator::windowing::has_value() ? static_cast<glm::vec2>(Locator::windowing::value().GetSize()) : glm::vec2(0.0f);
+	const auto toClip = camera.GetViewProjectionMatrix();
+	for (size_t i = 0; i < samples.size(); ++i)
 	{
-		for (const auto& offset : sun::k_GlareSamples)
+		bool isHidden = Locator::pickingSystem::has_value() &&
+		                Locator::pickingSystem::value().LandOrSeaAlong(origin, samples[i], origin).has_value();
+		// The sample's pixel, when it is in front of the near plane and on the screen
+		const auto clip = toClip * glm::vec4(samples[i], 1.0f);
+		std::optional<glm::vec2> pixel;
+		if (!(clip.w < near) && resolution.x > 0.0f)
 		{
-			auto sample = placement->position + (right * offset.x) + glm::vec3(0.0f, offset.y, 0.0f);
-			sample.y = std::max(sample.y, sun::k_GlareLowestSample);
-			const auto towards = sample - origin;
-			if (Locator::dynamicsSystem::value().RayCastClosestHit(origin, glm::normalize(towards), glm::length(towards)))
+			const auto x = static_cast<int32_t>((clip.x / clip.w + 1.0f) * resolution.x * 0.5f);
+			const auto y = static_cast<int32_t>((1.0f - clip.y / clip.w) * resolution.y * 0.5f);
+			if (x >= 0 && y >= 0 && x < static_cast<int32_t>(resolution.x) && y < static_cast<int32_t>(resolution.y))
 			{
-				++hidden;
+				pixel = glm::vec2(static_cast<float>(x), static_cast<float>(y));
 			}
 		}
+		if (asksDrawing)
+		{
+			auto& query = _glareQueries.at(i);
+			if (!isHidden && pixel.has_value() && bgfx::isValid(query) &&
+			    bgfx::getResult(query) == bgfx::OcclusionQueryResult::Invisible)
+			{
+				isHidden = true;
+			}
+			if (pixel.has_value())
+			{
+				if (!bgfx::isValid(query))
+				{
+					query = bgfx::createOcclusionQuery();
+				}
+				AskGlareSampleDrawn(camera, query, *pixel / resolution, (*pixel + 1.0f) / resolution,
+				                    sun::GlareHidingDepth(near));
+			}
+		}
+		hidden += isHidden ? 1 : 0;
 	}
 	const auto frameMilliseconds = static_cast<uint32_t>(Locator::time::value().GetFrameGameTime().count());
 	_sunGlare = sun::EaseGlare(_sunGlare, hidden, frameMilliseconds);
@@ -3028,6 +3190,53 @@ void Renderer::DrawSunGlare(const Camera& camera) const
 	                                        .celestial = glm::vec4(0.0f),
 	                                        .state = k_AdditiveState | (inTemple ? BGFX_STATE_DEPTH_TEST_GREATER : 0),
 	                                    });
+}
+
+void Renderer::AskGlareSampleDrawn(const Camera& camera, bgfx::OcclusionQueryHandle query, glm::vec2 topLeft,
+                                   glm::vec2 bottomRight, float depth) const
+{
+	// A square over the sample's pixel at the depth that counts as hidden, drawn after the scene against its depth and
+	// writing nothing: none of it shows when the scene there is nearer
+	struct Corner
+	{
+		glm::vec4 position;
+		glm::vec4 colour;
+	};
+	// The corners' layout never changes, so it is made once
+	static const auto layout = [] {
+		bgfx::VertexLayout made;
+		made.begin()
+		    .add(bgfx::Attrib::Position, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Float)
+		    .end();
+		return made;
+	}();
+	if (bgfx::getAvailTransientVertexBuffer(6, layout) < 6)
+	{
+		return;
+	}
+	const auto at = [&camera, depth](glm::vec2 screen) {
+		const auto [eye, nearPoint] = camera.OnNearPlane(screen);
+		return glm::vec4(eye + (nearPoint - eye) * (depth / camera.GetNearClip()), 1.0f);
+	};
+	const auto a = at(topLeft);
+	const auto b = at({bottomRight.x, topLeft.y});
+	const auto c = at(bottomRight);
+	const auto d = at({topLeft.x, bottomRight.y});
+	bgfx::TransientVertexBuffer buffer;
+	bgfx::allocTransientVertexBuffer(&buffer, 6, layout);
+	auto* corners = reinterpret_cast<Corner*>(buffer.data);
+	const glm::vec4 colour(1.0f);
+	corners[0] = {a, colour};
+	corners[1] = {b, colour};
+	corners[2] = {c, colour};
+	corners[3] = {a, colour};
+	corners[4] = {c, colour};
+	corners[5] = {d, colour};
+	bgfx::setVertexBuffer(0, &buffer);
+	bgfx::setState(BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA);
+	const auto* program = _shaderManager->GetShader("DebugLine");
+	bgfx::submit(static_cast<bgfx::ViewId>(TranslucentView(RenderPass::Main)), toBgfx(program->GetRawHandle()), query);
 }
 
 namespace
@@ -3956,7 +4165,7 @@ void Renderer::SelectDrawnCreatures(const DrawSceneDesc& drawDesc) const
 	for (const auto& [entity, instance] : draws)
 	{
 		// The animals are drawn one by one by themselves
-		if (!drawDesc.entities.AnyOf<ecs::components::AnimalPose>(entity))
+		if (!drawDesc.entities.AnyOf<ecs::components::AnimalPose, ecs::components::VillagerPose>(entity))
 		{
 			_drawnCreatures.push_back({.entity = entity, .instance = instance});
 		}
@@ -4365,7 +4574,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			const auto drawInstances = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers,
 			                               bool useMaterialBlending, uint32_t first, uint32_t count,
 			                               const EntityPose* pose = nullptr,
-			                               const L3DMeshSubmitDesc::MorphTargets* handMorph = nullptr) {
+			                               const L3DMeshSubmitDesc::MorphTargets* handMorph = nullptr,
+			                               std::optional<graphics::DynamicVertexBufferHandle> instances = std::nullopt) {
 				auto mesh = meshManager.Handle(meshId);
 
 				submitDesc.useMaterialBlending = useMaterialBlending;
@@ -4385,7 +4595,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				submitDesc.creatureShadows = meshId != ecs::components::Hand::k_MeshId;
 				submitDesc.unlit = placers.unlit;
 				submitDesc.instanceDesc =
-				    std::make_unique<graphics::InstanceDesc>(renderCtx.instanceUniformBuffer, first, count);
+				    std::make_unique<graphics::InstanceDesc>(instances.value_or(renderCtx.instanceUniformBuffer), first, count);
 				if (mesh->IsBoned())
 				{
 					const auto animated = renderCtx.animatedBoneMatrices.find(meshId);
@@ -4463,6 +4673,49 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				    !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
 				{
 					drawInstances(meshId, placers, placers.materialBlending, placers.offset, placers.count);
+				}
+			}
+			// A broken or unfinished building's whole model, as far up as it stands, from both sides and with its inner
+			// walls, and its scaffold sunk into the land or cut down from the top
+			for (const auto& build : renderCtx.partialBuilds)
+			{
+				if (!meshManager.Contains(build.meshId))
+				{
+					continue;
+				}
+				const RenderContext::InstancedDrawDesc placers {0, 1, build.morphWithTerrain, false};
+				const auto drawPart = [&](uint32_t instance, std::optional<float> cut, std::optional<uint32_t> status,
+				                          bool innerWalls) {
+					submitDesc.cutAbove = cut;
+					submitDesc.modelCutHeight = status.has_value() || build.morphWithTerrain ? std::nullopt : build.capHeight;
+					submitDesc.twoSided = true;
+					submitDesc.innerWalls = innerWalls;
+					submitDesc.onlyStatus = status;
+					drawInstances(build.meshId, placers, false, instance, 1, nullptr, nullptr,
+					              renderCtx.partialBuildInstanceBuffer);
+					submitDesc.cutAbove.reset();
+					submitDesc.modelCutHeight.reset();
+					submitDesc.twoSided = false;
+					submitDesc.innerWalls = false;
+					submitDesc.onlyStatus.reset();
+				};
+				if (build.modelCut.has_value())
+				{
+					drawPart(build.instance, build.modelCut, std::nullopt, false);
+					drawPart(build.instance, build.modelCut, std::nullopt, true);
+					// Then the cap over the cut walls, joining the outer to the inner
+					// TODO(physics): the game caps a model that follows the land too, the land under each of its corners
+					// moving its cut; openblack caps only the rest
+					if (!build.morphWithTerrain)
+					{
+						submitDesc.cap = true;
+						drawPart(build.instance, build.modelCut, std::nullopt, false);
+						submitDesc.cap = false;
+					}
+				}
+				if (build.scaffoldStatus.has_value())
+				{
+					drawPart(build.scaffoldInstance, build.scaffoldCut, build.scaffoldStatus, false);
 				}
 			}
 			// The creatures, each posed and shaped as it is, then its eyes
@@ -4543,9 +4796,31 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				              &entityPose);
 				submitDesc.objectLook.reset();
 			};
+			// The villagers, each posed by its state's clip, or in its model's own pose while its state plays none
+			const auto drawVillager = [&](entt::entity entity, uint32_t instance) {
+				const auto* pose = desc.entities.TryGet<const ecs::components::VillagerPose>(entity);
+				const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
+				if (pose == nullptr || mesh == nullptr || !meshManager.Contains(mesh->id))
+				{
+					return;
+				}
+				const auto placers = renderCtx.instancedDrawDescs.find(mesh->id);
+				if (placers == renderCtx.instancedDrawDescs.end() ||
+				    (desc.viewId == RenderPass::Reflection && placers->second.hiddenFromReflection))
+				{
+					return;
+				}
+				const auto model = meshManager.Handle(mesh->id);
+				const bool posed = pose->bones.size() == model->GetBoneMatrices().size();
+				const EntityPose entityPose {.bones = posed ? std::span<const glm::mat4>(pose->bones)
+				                                            : std::span<const glm::mat4>(model->GetBoneMatrices()),
+				                             .morphTargets = nullptr};
+				drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &entityPose);
+			};
 			for (const auto& [entity, instance] : renderCtx.entityDraws)
 			{
 				drawAnimal(entity, instance, false);
+				drawVillager(entity, instance);
 			}
 			DrawTempleUnderside(desc);
 			// In the temple, whose draws keep their order, the sun's glare comes after its solid parts, which hide it, and

@@ -52,6 +52,7 @@
 #include "Resources/ResourcesInterface.h"
 #include "VillagerFire.h"
 #include "VillagerHome.h"
+#include "VillagerPhysics.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -340,6 +341,16 @@ void villager_reactions::Start(entt::entity villager, Reaction type, LivingReact
 			}
 		}
 		break;
+	case Reaction::ReactToFlyingObject:
+		// It points at what flies by, or runs from it coming too near
+		if (Locator::reactionSystem::has_value())
+		{
+			if (const auto reaction = Locator::reactionSystem::value().Find(state.reaction))
+			{
+				villager_physics::SetupReactToFlyingObject(villager, reaction->source.initiator);
+			}
+		}
+		break;
 	case Reaction::ReactToFire:
 		// The fire's own states take over, from the object burning
 		if (Locator::reactionSystem::has_value())
@@ -422,6 +433,11 @@ uint32_t villager_reactions::Fleeing(LivingAction& action)
 	villager_home::SetupMoveTo(action, glm::xz(to), VillagerStates::FleeingAndLookingAtObjectReaction);
 	SetStateSpeed(villager, FinalStateOf(action));
 	return 0;
+}
+
+void villager_reactions::LookAt(entt::entity villager, const glm::vec3& point)
+{
+	TurnTowards(villager, point);
 }
 
 uint32_t villager_reactions::Watching(LivingAction& action)

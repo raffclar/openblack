@@ -62,11 +62,32 @@ struct CreatureObjectAction
 	uint32_t attempts {0};
 	/// Throwing: how long the throw is to take to get there
 	float flightSeconds {0.0f};
+	/// Catching: where the hand closes in each catching animation, in the model's units, and how the catch goes: ready
+	/// and waiting for the thing, stepping across to where it will pass, reaching for it, missed and drawing back, or
+	/// caught and finishing
+	enum class Catching : uint8_t
+	{
+		Ready,
+		Stepping,
+		Reaching,
+		Missed,
+		Caught,
+	};
+	std::array<glm::vec3, 4> catchHands {};
+	Catching catching {Catching::Ready};
+	/// How high the thing was against the hand at the last frame it was still in the physics
+	float catchHeight {0.5f};
 	/// Why it gave up, when it did
 	std::string failure;
 };
 
 /// What a creature holds in its hand, and which hand
+/// The last thing a creature let go of into the physics, which the scripts can ask for and forget
+struct CreatureDroppedObject
+{
+	entt::entity object {entt::null};
+};
+
 struct CreatureHeldObject
 {
 	entt::entity object {entt::null};
@@ -79,18 +100,23 @@ struct CreatureHeldObject
 	glm::vec3 middle {0.0f};
 };
 
+/// A catch the creature is to make once what its body is doing is over
+struct PendingCatch
+{
+	entt::entity object {entt::null};
+};
+
+/// Where the creature's hand closes in each catching animation, in the model's units: measured at its first catch and
+/// never again, whatever its shape becomes
+struct CatchHands
+{
+	std::array<glm::vec3, 4> hands {};
+};
+
 /// On something a creature holds: which creature
 struct HeldByCreature
 {
 	entt::entity creature {entt::null};
-};
-
-/// Something flying through the air after a creature let go of it, until it comes to rest
-struct Thrown
-{
-	glm::vec3 velocity {0.0f};
-	/// Who threw it
-	entt::entity thrower {entt::null};
 };
 
 /// How the creature's town sees what it is doing, which its villagers react to, and for how long more it will once
@@ -99,12 +125,6 @@ struct CreatureTownAttitude
 {
 	creature_object_actions::TownAttitude attitude {creature_object_actions::TownAttitude::None};
 	float secondsLeft {0.0f};
-};
-
-/// On an abode or anything else a creature has struck: how hard it has been hit in all
-struct PhysicalDamage
-{
-	float total {0.0f};
 };
 
 } // namespace openblack::ecs::components
