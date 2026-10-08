@@ -18,6 +18,7 @@
 #include "3D/SkyInterface.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownAggression.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
@@ -148,6 +149,12 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 	{
 		in.turn = Locator::time::value().GetTurn();
 	}
+	// What it wants of protection and mercy is what it summed of the attacks on it last turn
+	if (const auto* aggression = registry.TryGet<const TownAggression>(townEntity))
+	{
+		in.protection = aggression->record.protection;
+		in.mercy = aggression->record.mercy;
+	}
 	return in;
 }
 } // namespace
@@ -171,6 +178,11 @@ void TownDesireSystem::ProcessTurn()
 		        .farmerMaxWood = farmer.maxWoodCarried,
 		    };
 		    town_desire::Process(desire, context);
+		    // Then the attacks on it fade and are summed for its next turn's desires
+		    if (auto* aggression = registry.TryGet<TownAggression>(entity))
+		    {
+			    town_aggression::ProcessTurn(aggression->record, town.owner);
+		    }
 	    });
 }
 
@@ -199,6 +211,30 @@ float TownDesireSystem::GetRawDesire(entt::entity town, TownDesireInfo desire) c
 {
 	const auto* townDesire = Locator::entitiesRegistry::value().TryGet<const TownDesire>(town);
 	return townDesire != nullptr && Valid(desire) ? town_desire::GetRawDesire(*townDesire, Index(desire)) : 0.0f;
+}
+
+float TownDesireSystem::RecomputeDesire(entt::entity town, TownDesireInfo desire)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* townDesire = registry.TryGet<TownDesire>(town);
+	const auto* data = registry.TryGet<const Town>(town);
+	const auto* tribe = registry.TryGet<const Tribe>(town);
+	if (townDesire == nullptr || data == nullptr || tribe == nullptr || !Valid(desire))
+	{
+		return 0.0f;
+	}
+	const auto& info = Locator::infoConstants::value();
+	const auto& farmer = info.villager.at(10);
+	const auto inputs = GatherInputs(town, *data, *tribe);
+	const town_desire::DesireContext context {
+	    .desire = *townDesire,
+	    .in = inputs,
+	    .town = info.town,
+	    .info = info.townDesire,
+	    .farmerMaxFood = farmer.maxFoodCarried,
+	    .farmerMaxWood = farmer.maxWoodCarried,
+	};
+	return town_desire::CallDesireFunction(*townDesire, context, Index(desire));
 }
 
 TownDesireInfo TownDesireSystem::GetMostWanted(entt::entity town) const
