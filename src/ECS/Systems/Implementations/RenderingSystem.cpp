@@ -19,14 +19,20 @@
 
 #include "3D/L3DMesh.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/GroundMark.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/MorphWithTerrain.h"
+#include "ECS/Components/ObjectGlow.h"
+#include "ECS/Components/Physics.h"
+#include "ECS/Components/Pot.h"
+#include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Swayable.h"
@@ -35,8 +41,11 @@
 #include "ECS/Components/Translucent.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Unlit.h"
+#include "ECS/Components/VillagerPose.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
+#include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
@@ -45,11 +54,23 @@
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/ShaderManager.h"
 #include "Locator.h"
+#include "Physics/DamageMesh.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
+
+namespace
+{
+/// The model an object is drawn with: a broken building's broken model in place of its own
+entt::id_type DrawnMeshOf(entt::entity entity, const Mesh& mesh)
+{
+	return openblack::Locator::buildingDamageSystem::has_value()
+	           ? openblack::Locator::buildingDamageSystem::value().DrawnMesh(entity, mesh.id)
+	           : mesh.id;
+}
+} // namespace
 
 RenderingSystem::~RenderingSystem() = default;
 
@@ -70,26 +91,35 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		bool perEntity;
 		bool translucent;
 		std::optional<float> additiveShare;
+		bool instanceAlpha;
 	};
 	std::unordered_map<entt::id_type, MeshInstances> meshIds;
 
 	auto prep = [&registry, &meshIds, &instanceCount](entt::entity entity, const Mesh& mesh, bool morphWithTerrain) {
-		auto count = meshIds.insert(std::make_pair(mesh.id, MeshInstances {.count = static_cast<uint32_t>(mesh.submeshId),
-		                                                                   .morphWithTerrain = morphWithTerrain,
-		                                                                   .castsShadow = false,
-		                                                                   .unlit = false,
-		                                                                   .perEntity = false,
-		                                                                   .translucent = false,
-		                                                                   .additiveShare = std::nullopt}));
+		auto count = meshIds.insert(
+		    std::make_pair(DrawnMeshOf(entity, mesh), MeshInstances {.count = static_cast<uint32_t>(mesh.submeshId),
+		                                                             .morphWithTerrain = morphWithTerrain,
+		                                                             .castsShadow = false,
+		                                                             .unlit = false,
+		                                                             .perEntity = false,
+		                                                             .translucent = false,
+		                                                             .additiveShare = std::nullopt,
+		                                                             .instanceAlpha = false}));
 		count.first->second.count++;
 		// The things whose shadows Black & White bakes into the land (IsCastShadowAtNight), and its features
 		count.first->second.castsShadow |= registry.AnyOf<Abode, Feature, MobileStatic, StoragePit>(entity);
 		count.first->second.unlit |= registry.AnyOf<Unlit>(entity);
-		count.first->second.perEntity |= registry.AnyOf<CreatureMorph>(entity);
+		// The creatures and the animals are each posed as they are
+		count.first->second.perEntity |= registry.AnyOf<CreatureMorph, AnimalPose, VillagerPose>(entity);
 		if (const auto* translucent = registry.TryGet<const Translucent>(entity))
 		{
 			count.first->second.translucent = true;
 			count.first->second.additiveShare = translucent->share;
+		}
+		if (const auto* mark = registry.TryGet<const GroundMark>(entity); mark != nullptr && mark->alpha.has_value())
+		{
+			count.first->second.translucent = true;
+			count.first->second.instanceAlpha = true;
 		}
 		instanceCount++;
 	};
@@ -142,6 +172,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		drawDesc->second.materialBlending = desc.translucent;
 		drawDesc->second.translucent = desc.translucent;
 		drawDesc->second.additiveShare = desc.additiveShare;
+		drawDesc->second.instanceAlpha = desc.instanceAlpha;
 		_instanceSlots.emplace(
 		    meshId,
 		    InstanceSlots {.offset = offset, .count = desc.count, .filled = 0, .perEntity = desc.perEntity, .height = 0.0f});
@@ -192,6 +223,7 @@ void RenderingSystem::PrepareTreeDrawDescs(bool drawBoundingBox)
 		    .add(bgfx::Attrib::TexCoord6, 4, bgfx::AttribType::Float) // i_data1 (matrix row 1)
 		    .add(bgfx::Attrib::TexCoord5, 4, bgfx::AttribType::Float) // i_data2 (matrix row 2)
 		    .add(bgfx::Attrib::TexCoord4, 4, bgfx::AttribType::Float) // i_data3 (matrix row 3)
+		    .add(bgfx::Attrib::TexCoord3, 4, bgfx::AttribType::Float) // i_data4 (how it burns)
 		    .end();
 		_renderContext.treeInstanceUniformBuffer =
 		    graphics::fromBgfx(bgfx::createDynamicVertexBuffer(treeInstanceCount, layout));
@@ -240,12 +272,13 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 
 	// Set transforms for instanced draw at offsets
 	_renderContext.entityDraws.clear();
+	_renderContext.drawnObjects.clear();
 	bool fits = true;
 	registry.Each<const Mesh, const Transform>(
 	    [this, &registry, &vegetation, &fits, drawBoundingBox](entt::entity entity, const Mesh& mesh,
 	                                                           const Transform& transform) {
 		    // A mesh the draw lists don't have room for, which has changed since they were made
-		    const auto slots = _instanceSlots.find(mesh.id);
+		    const auto slots = _instanceSlots.find(DrawnMeshOf(entity, mesh));
 		    if (!fits || slots == _instanceSlots.end() || slots->second.filled >= slots->second.count)
 		    {
 			    fits = false;
@@ -255,6 +288,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    auto modelMatrix = glm::mat4(transform.rotation);
 		    modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
 		    modelMatrix = glm::scale(modelMatrix, transform.scale);
+		    // A body moving in the physics is drawn between its last two turns
+		    if (const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity))
+		    {
+			    modelMatrix = glm::translate(glm::mat4(1.0f), drawn->origin) * glm::mat4(drawn->axes);
+		    }
 		    // A home with someone in lights its windows at night
 		    const auto* abode = registry.TryGet<const Abode>(entity);
 		    glm::vec4 look {abode != nullptr && abode->presentAtHome > 0 ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
@@ -281,29 +319,100 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 
-		    // A frozen creature takes an icy look, the land's light on it tinted blue as it freezes
-		    // and an invisible one fizzes out of sight
+		    // A pile of food or wood is drawn as far under the ground as it has sunk, not at all once wholly under, and the
+		    // grain of a pile of food flows down it as it rises
+		    if (const auto* pile = registry.TryGet<const ResourcePile>(entity); pile != nullptr && pile->height > 0.0f)
+		    {
+			    if (!magic::piles::Shown(pile->rise, pile->height))
+			    {
+				    look.z = 1.0f;
+			    }
+			    else
+			    {
+				    modelMatrix[3].y += pile->rise.offset;
+				    const auto* pot = registry.TryGet<const Pot>(entity);
+				    if (pot != nullptr && magic::piles::GrainFlows(pot->type))
+				    {
+					    look.x = -magic::piles::GrainFlow(pile->rise.offset, pile->height);
+				    }
+			    }
+		    }
+
+		    // A frozen creature takes an icy look, tinted dark blue and sheened with ice as it freezes, and an invisible one
+		    // dissolves through static
 		    if (const auto* spells = registry.TryGet<const CreatureSpells>(entity))
 		    {
 			    if (spells->freeze > 0.0f)
 			    {
 				    look.y = static_cast<float>(creature_spells::FrozenTint(spells->freeze));
+				    look.w = -spells->freeze;
 			    }
 			    if (spells->fizz > 0.0f)
 			    {
-				    look.z = -spells->fizz;
+				    look.w = -(2.0f + spells->fizz);
+			    }
+		    }
+
+		    // A glow added over it, as the heal lights the people it heals, as a negative x: a house's positive x is its
+		    // windows' light
+		    if (const auto* glow = registry.TryGet<const ObjectGlow>(entity); glow != nullptr && abode == nullptr)
+		    {
+			    look.x = -static_cast<float>(glow->Packed());
+		    }
+		    // A blast's rubble fades by its alpha in its last second
+		    if (const auto* mark = registry.TryGet<const GroundMark>(entity); mark != nullptr && mark->alpha.has_value())
+		    {
+			    look.z = -(1.0f - static_cast<float>(*mark->alpha) / 255.0f);
+		    }
+		    // Something charred by fire is drawn grey
+		    if (look.y == 0.0f && Locator::fireSystem::has_value())
+		    {
+			    if (const auto charred = Locator::fireSystem::value().GetCharredColour(entity))
+			    {
+				    look.y = static_cast<float>(*charred);
+			    }
+		    }
+		    // Something hot glows red-orange, added as the heal's glow is (a pile or pot doesn't). A house's glow goes
+		    // above its windows' light: 1 plus the glow while someone is home
+		    if (Locator::fireSystem::has_value() && !registry.AllOf<Pot>(entity))
+		    {
+			    if (const auto heat = Locator::fireSystem::value().GetGlowColour(entity); heat.has_value() && *heat != 0)
+			    {
+				    if (abode != nullptr)
+				    {
+					    look.x = look.x > 0.5f ? 1.0f + static_cast<float>(*heat) : -static_cast<float>(*heat);
+				    }
+				    else if (look.x <= 0.0f && look.x >= -0.5f)
+				    {
+					    look.x = -static_cast<float>(*heat);
+				    }
+				    else if (look.x < -0.5f)
+				    {
+					    const auto glow = static_cast<uint32_t>(-look.x);
+					    uint32_t sum = 0;
+					    for (const uint32_t shift : {16u, 8u, 0u})
+					    {
+						    sum |= std::min(((glow >> shift) & 0xFFu) + ((*heat >> shift) & 0xFFu), 0xFFu) << shift;
+					    }
+					    look.x = -static_cast<float>(sum);
+				    }
 			    }
 		    }
 
 		    const uint32_t idx = slots->second.offset + slots->second.filled;
 		    _renderContext.instanceUniforms[idx] = {.model = modelMatrix, .look = look};
+		    if (look.z != 1.0f)
+		    {
+			    _renderContext.drawnObjects.push_back({.entity = entity, .model = modelMatrix});
+		    }
 		    if (slots->second.perEntity)
 		    {
 			    _renderContext.entityDraws.push_back({.entity = entity, .instance = idx});
 		    }
 		    if (drawBoundingBox)
 		    {
-			    auto l3dMesh = entt::locator<resources::ResourcesInterface>::value().GetMeshes().Handle(mesh.id);
+			    auto l3dMesh =
+			        entt::locator<resources::ResourcesInterface>::value().GetMeshes().Handle(DrawnMeshOf(entity, mesh));
 			    auto box = l3dMesh->GetBoundingBox();
 			    auto boxMatrix = modelMatrix * glm::translate(box.Center()) * glm::scale(box.Size());
 			    _renderContext.instanceUniforms[idx + (_renderContext.instanceUniforms.size() / 2)] = {.model = boxMatrix};
@@ -318,7 +427,86 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		bgfx::update(toBgfx(_renderContext.instanceUniformBuffer), 0,
 		             bgfx::makeRef(_renderContext.instanceUniforms.data(), size));
 	}
+	UploadPartialBuilds();
 	return fits;
+}
+
+void RenderingSystem::UploadPartialBuilds()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	_renderContext.partialBuilds.clear();
+	_renderContext.partialBuildInstances.clear();
+	if (!Locator::buildingDamageSystem::has_value())
+	{
+		return;
+	}
+	const auto& buildings = Locator::buildingDamageSystem::value();
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	registry.Each<const Mesh, const Transform>([&](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+		const auto share = buildings.PartialShare(entity);
+		if (!share.has_value() || !meshes.Contains(mesh.id))
+		{
+			return;
+		}
+		const auto model = meshes.Handle(mesh.id);
+		const float halfHeight = 0.5f * model->GetBoundingBox().Size().y;
+		const auto build = physics::damage::PartialBuildOf(*share, transform.position.y, halfHeight, transform.scale.y);
+		// The scaffold is the submeshes of the highest status there is
+		std::optional<uint32_t> scaffold;
+		for (const auto& subMesh : model->GetSubMeshes())
+		{
+			const auto status = subMesh->GetFlags().status;
+			if (status >= 1 && (!scaffold.has_value() || status > *scaffold))
+			{
+				scaffold = status;
+			}
+		}
+		auto matrix = glm::translate(glm::mat4(1.0f), transform.position) * glm::mat4(transform.rotation) *
+		              glm::scale(glm::mat4(1.0f), transform.scale);
+		RenderContext::PartialBuildDraw draw {
+		    .meshId = mesh.id,
+		    .morphWithTerrain = registry.AllOf<MorphWithTerrain>(entity),
+		    .instance = static_cast<uint32_t>(_renderContext.partialBuildInstances.size()),
+		    .modelCut = build.modelCut,
+		    .capHeight = build.modelCut.has_value() && transform.scale.y != 0.0f
+		                     ? std::optional((*build.modelCut - transform.position.y) / transform.scale.y)
+		                     : std::nullopt,
+		    .scaffoldStatus = build.scaffoldShown ? scaffold : std::nullopt,
+		    .scaffoldCut = build.scaffoldCut,
+		};
+		_renderContext.partialBuildInstances.push_back({.model = matrix});
+		// The scaffold sinks along its up axis while the building rises out of the land
+		const glm::vec3 up = transform.rotation[1];
+		draw.scaffoldInstance = static_cast<uint32_t>(_renderContext.partialBuildInstances.size());
+		_renderContext.partialBuildInstances.push_back(
+		    {.model = glm::translate(glm::mat4(1.0f), -up * build.scaffoldSink) * matrix});
+		_renderContext.partialBuilds.push_back(draw);
+	});
+	const auto count = static_cast<uint32_t>(_renderContext.partialBuildInstances.size());
+	if (count == 0)
+	{
+		return;
+	}
+	if (_renderContext.partialBuildCapacity < count)
+	{
+		if (bgfx::isValid(toBgfx(_renderContext.partialBuildInstanceBuffer)))
+		{
+			bgfx::destroy(toBgfx(_renderContext.partialBuildInstanceBuffer));
+		}
+		bgfx::VertexLayout layout;
+		layout.begin()
+		    .add(bgfx::Attrib::TexCoord7, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord6, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord5, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord4, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord3, 4, bgfx::AttribType::Float)
+		    .end();
+		_renderContext.partialBuildInstanceBuffer = graphics::fromBgfx(bgfx::createDynamicVertexBuffer(count, layout));
+		_renderContext.partialBuildCapacity = count;
+	}
+	bgfx::update(toBgfx(_renderContext.partialBuildInstanceBuffer), 0,
+	             bgfx::copy(_renderContext.partialBuildInstances.data(),
+	                        static_cast<uint32_t>(count * sizeof(RenderContext::ObjectInstance))));
 }
 
 bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
@@ -334,34 +522,54 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 
 	// Set the transforms of the trees, swaying or bent away from the hand
 	bool fits = true;
-	registry.Each<const Mesh, const Transform, const Tree, const Swayable>(
-	    [this, &fits, drawBoundingBox, &vegetation](const Mesh& mesh, const Transform& transform, const Tree& /*unused*/,
-	                                                const Swayable& swayable) {
-		    const auto slots = _treeSlots.find(mesh.id);
-		    if (!fits || slots == _treeSlots.end() || slots->second.filled >= slots->second.count)
-		    {
-			    fits = false;
-			    return;
-		    }
+	registry.Each<const Mesh, const Transform, const Tree, const Swayable>([this, &registry, &fits, drawBoundingBox,
+	                                                                        &vegetation](entt::entity entity, const Mesh& mesh,
+	                                                                                     const Transform& transform,
+	                                                                                     const Tree& /*unused*/,
+	                                                                                     const Swayable& swayable) {
+		const auto slots = _treeSlots.find(mesh.id);
+		if (!fits || slots == _treeSlots.end() || slots->second.filled >= slots->second.count)
+		{
+			fits = false;
+			return;
+		}
 
-		    const uint32_t idx = slots->second.offset + slots->second.filled;
-		    auto modelMatrix = glm::mat4(transform.rotation);
-		    modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
-		    modelMatrix = glm::scale(modelMatrix, transform.scale);
-		    _renderContext.treeInstanceData[idx].modelMatrix = vegetation.GetTreeMatrix(
-		        modelMatrix, transform.position, transform.scale.y, slots->second.height, swayable.swaySlot);
+		const uint32_t idx = slots->second.offset + slots->second.filled;
+		auto modelMatrix = glm::mat4(transform.rotation);
+		modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
+		modelMatrix = glm::scale(modelMatrix, transform.scale);
+		// A body moving in the physics is drawn between its last two turns
+		if (const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity))
+		{
+			modelMatrix = glm::translate(glm::mat4(1.0f), drawn->origin) * glm::mat4(drawn->axes);
+		}
+		// A tree with a fire on it is drawn darker, its foliage thinning as it burns, and narrows away at the last,
+		// keeping its height
+		glm::vec4 burning(0.0f);
+		if (Locator::fireSystem::has_value())
+		{
+			if (const auto look = Locator::fireSystem::value().GetBurningTreeLook(entity))
+			{
+				burning = {static_cast<float>(look->grey) / 256.0f, look->alphaReference / 255.0f, 0.0f, 0.0f};
+				modelMatrix = glm::scale(modelMatrix, glm::vec3(look->scale, 1.0f, look->scale));
+			}
+		}
+		_renderContext.treeInstanceData[idx].burning = burning;
+		_renderContext.treeInstanceData[idx].modelMatrix = vegetation.GetTreeMatrix(
+		    modelMatrix, transform.position, transform.scale.y, slots->second.height, swayable.swaySlot);
+		_renderContext.drawnObjects.push_back({.entity = entity, .model = _renderContext.treeInstanceData[idx].modelMatrix});
 
-		    if (drawBoundingBox && idx + _renderContext.treeInstanceData.size() / 2 < _renderContext.treeInstanceData.size())
-		    {
-			    auto l3dMesh = entt::locator<resources::ResourcesInterface>::value().GetMeshes().Handle(mesh.id);
-			    auto box = l3dMesh->GetBoundingBox();
-			    auto boxMatrix = modelMatrix * glm::translate(box.Center()) * glm::scale(box.Size());
+		if (drawBoundingBox && idx + _renderContext.treeInstanceData.size() / 2 < _renderContext.treeInstanceData.size())
+		{
+			auto l3dMesh = entt::locator<resources::ResourcesInterface>::value().GetMeshes().Handle(mesh.id);
+			auto box = l3dMesh->GetBoundingBox();
+			auto boxMatrix = modelMatrix * glm::translate(box.Center()) * glm::scale(box.Size());
 
-			    // Store bounding box matrix in the second half of the instance data array
-			    _renderContext.treeInstanceData[idx + (_renderContext.treeInstanceData.size() / 2)].modelMatrix = boxMatrix;
-		    }
-		    ++slots->second.filled;
-	    });
+			// Store bounding box matrix in the second half of the instance data array
+			_renderContext.treeInstanceData[idx + (_renderContext.treeInstanceData.size() / 2)].modelMatrix = boxMatrix;
+		}
+		++slots->second.filled;
+	});
 
 	if (fits && !_renderContext.treeInstanceData.empty())
 	{
