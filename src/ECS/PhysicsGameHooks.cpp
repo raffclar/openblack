@@ -427,7 +427,6 @@ void StrikeHeart(DynamicsSystemInterface& dynamics, PhysicsEntry& entry, const I
 	                                                      .player = hitterEntry->player.value_or(PlayerNames::NEUTRAL),
 	                                                      .appliedBy = hitter,
 	                                                  });
-	// TODO(physics): a heart left with no life starts the temple's destruction; openblack has no destruction sequence yet
 }
 
 /// A physical shield struck by a thing that breaks buildings pays for the blow by its momentum

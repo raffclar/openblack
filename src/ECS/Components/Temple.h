@@ -50,6 +50,12 @@ struct Temple
 	uint32_t beamTurn {0};
 	/// The spot visual its heart's beams are fired from, made with the first beam and kept for ever
 	std::optional<uint32_t> beamSource;
+	/// Its heart has lost all its life and the temple is being destroyed, this many seconds on
+	bool destroying {false};
+	float destructionClock {0.0f};
+	/// The glow over the heart, and the sound that loops until the explosion
+	std::optional<uint32_t> destructionGlow;
+	entt::entity destructionLoop {entt::null};
 };
 
 /// The way into a temple, Entrance.l3d at the temple's place, which the temple makes and its player clicks the Action

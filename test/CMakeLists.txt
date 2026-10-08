@@ -323,6 +323,9 @@ target_link_libraries(test_physics_engine PRIVATE physconst)
 openblack_setup_and_add_test(test_physics_rest test_physics_rest.cpp)
 openblack_setup_and_add_test(test_dynamics_system test_dynamics_system.cpp)
 target_link_libraries(test_dynamics_system PRIVATE psys physconst lnd)
+openblack_setup_and_add_test(
+  test_temple_destruction test_temple_destruction.cpp
+)
 openblack_setup_and_add_test(test_physics_manager test_physics_manager.cpp)
 openblack_setup_and_add_test(test_physics_living test_physics_living.cpp)
 openblack_setup_and_add_test(test_physics_objects test_physics_objects.cpp)
