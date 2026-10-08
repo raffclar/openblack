@@ -39,6 +39,7 @@ public:
 	bool Throw(entt::entity creature, const glm::vec3& target) override;
 	bool Destroy(entt::entity creature, entt::entity target) override;
 	bool PointAt(entt::entity creature, const glm::vec3& point) override;
+	bool Catch(entt::entity creature, entt::entity object) override;
 	void Cancel(entt::entity creature) override;
 	void Drop(entt::entity creature) override;
 
@@ -50,10 +51,14 @@ public:
 	[[nodiscard]] bool CanDestroy(entt::entity target) const override;
 
 private:
+	/// Catches made to wait while a creature's body acted out something else start once it is free
+	void StartPendingCatches();
 	/// Starts an action on the creature in place of any it was doing, or records why it can't
 	bool Start(entt::entity creature, components::CreatureObjectAction action);
 	/// Lets go of the held object, which flies off with a velocity
 	void Release(entt::entity creature, const glm::vec3& position, const glm::vec3& velocity);
+	/// A held thing goes into the physics as the creature lets it go
+	void LetGo(entt::entity creature, entt::entity object, const glm::vec3& velocity);
 };
 
 } // namespace openblack::ecs::systems

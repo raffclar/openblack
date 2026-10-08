@@ -33,6 +33,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
+#include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
@@ -40,11 +41,13 @@
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Forest.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/MagicForest.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/MorphWithTerrain.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StoragePit.h"
@@ -55,10 +58,15 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
+#include "ECS/CreatureScars.h"
 #include "ECS/Map.h"
+#include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
+#include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -188,17 +196,35 @@ const lnd::LNDCell* CellAt(const glm::vec3& point)
 	return Locator::terrainSystem::value().FindCell(glm::u16vec2(glm::floor(glm::vec2(point.x, point.z) / k_CellSize)));
 }
 
-bool IsHeld(entt::entity /*object*/)
+/// Whether something is in a hand: it never joins a blaze it heats
+bool IsHeld(entt::entity object)
 {
-	// The hand doesn't pick up objects yet; only the creatures it holds, which don't burn while held
-	return false;
+	return Entities().AllOf<InHand>(object);
 }
 
-/// Whether an object is on the map: a fireball never is, nor is something held. (Something flung through the air also
-/// leaves the map, but nothing flies freely here yet.)
+/// Whether a burning thing spreads its fire about the land: anything on the map does, and a thing in the hand only where
+/// the player holding it has influence
+bool SpreadsFrom(entt::entity object, const glm::vec3& position)
+{
+	if (!IsHeld(object))
+	{
+		return true;
+	}
+	if (!Locator::influenceSystem::has_value() || !Locator::playerSystem::has_value())
+	{
+		return false;
+	}
+	// The hands on the screen are the local player's
+	const auto holder = Locator::playerSystem::value().GetLocalPlayer();
+	return Locator::influenceSystem::value().PlayerInfluence(holder, position) > 0.0f;
+}
+
+/// Whether an object is on the map: a fireball never is, nor is something held, flung through the air or carried by a
+/// tornado, all of which are out of the map's cells
 bool IsInMap(entt::entity object)
 {
-	return !Entities().AllOf<MagicFireBall>(object) && !IsHeld(object);
+	const auto& registry = Entities();
+	return !registry.AnyOf<MagicFireBall, InHand, InPhysics, CarriedByTornado>(object);
 }
 
 /// Whether an object takes a burn at all: a pot only with something in it, a field only with food to burn
@@ -257,8 +283,8 @@ const graphics::L3DMesh* MeshOf(entt::entity object)
 	return meshes.Contains(mesh->id) ? &*meshes.Handle(mesh->id) : nullptr;
 }
 
-/// A random point of a random triangle of the model's first detail, in its own frame; a random bone's place for a model
-/// moved by bones. A tree's flames keep to its middle half.
+/// A random point of a random triangle of the model's first detail, in its own frame; a random bone's place, as the
+/// bones are posed now, for a model moved by bones. A tree's flames keep to its middle half.
 std::optional<glm::vec3> RandomPointOn(entt::entity object)
 {
 	const auto* mesh = MeshOf(object);
@@ -269,9 +295,9 @@ std::optional<glm::vec3> RandomPointOn(entt::entity object)
 	auto& random = Locator::gameRandom::value();
 	if (mesh->IsBoned() && !mesh->GetBoneMatrices().empty())
 	{
-		const auto& bones = mesh->GetBoneMatrices();
+		const auto bones = ecs::posed_model::BonesOf(Entities(), object, *mesh);
 		const auto bone = random.LocalRand(static_cast<int32_t>(bones.size()));
-		return glm::vec3(bones.at(std::min<size_t>(bone, bones.size() - 1))[3]);
+		return glm::vec3(bones[std::min<size_t>(static_cast<size_t>(bone), bones.size() - 1)][3]);
 	}
 	size_t triangles = 0;
 	const auto firstDetail = [](const graphics::L3DSubMesh& subMesh) { return (subMesh.GetFlags().lodMask & 1u) != 0; };
@@ -804,6 +830,99 @@ void FireSystem::MergeBlazes(entt::entity object, entt::entity other)
 	}
 }
 
+void FireSystem::MoveFire(entt::entity from, entt::entity to)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(from) || !registry.Valid(to) || registry.AllOf<Fire>(to))
+	{
+		return;
+	}
+	const auto* old = registry.TryGet<const Fire>(from);
+	if (old == nullptr)
+	{
+		return;
+	}
+	auto moved = *old;
+	// Its place in its blaze: first of it, the blaze goes with it; else it stands in the same place among the others
+	if (moved.root == from)
+	{
+		moved.root = to;
+		if (auto* group = registry.TryGet<FireGroup>(from))
+		{
+			auto blaze = std::move(*group);
+			std::ranges::replace(blaze.members, from, to);
+			for (const auto member : blaze.members)
+			{
+				if (auto* memberFire = member != to ? registry.TryGet<Fire>(member) : nullptr)
+				{
+					memberFire->root = to;
+				}
+			}
+			registry.Assign<FireGroup>(to, std::move(blaze));
+		}
+	}
+	else if (auto* blaze = registry.Valid(moved.root) ? registry.TryGet<FireGroup>(moved.root) : nullptr)
+	{
+		std::ranges::replace(blaze->members, from, to);
+	}
+	registry.Assign<Fire>(to, moved);
+	if (auto* look = registry.TryGet<FireLook>(from))
+	{
+		registry.Assign<FireLook>(to, std::move(*look));
+	}
+	std::ranges::replace(_fires, from, to);
+	// The alarm it raises now comes from what it became
+	if (moved.reaction != 0 && Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().SetInitiator(moved.reaction, to);
+	}
+	// Its crackle carries on from what it became
+	for (auto& slot : _soundSlots)
+	{
+		if (slot.fire == from)
+		{
+			slot.fire = to;
+		}
+	}
+	registry.Remove<FireGroup>(from);
+	registry.Remove<FireLook>(from);
+	registry.Remove<Fire>(from);
+	registry.SetDirty();
+}
+
+void FireSystem::CopyFire(entt::entity from, entt::entity to)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(from) || !registry.Valid(to))
+	{
+		return;
+	}
+	const auto* source = registry.TryGet<const Fire>(from);
+	if (source == nullptr)
+	{
+		return;
+	}
+	const auto player = source->hasPlayer ? std::optional(source->player) : std::nullopt;
+	const auto temperature = source->state.temperature;
+	auto* fire = FindOrCreate(to, player, source->source);
+	if (fire == nullptr)
+	{
+		return;
+	}
+	JoinBlaze(from, to);
+	// It is made as hot as the first, if it was cooler
+	fire = &registry.Get<Fire>(to);
+	if (fire->state.temperature < temperature)
+	{
+		fire->state.previous = temperature;
+		fire->state.temperature = temperature;
+	}
+	else
+	{
+		fire->state.previous = fire->state.temperature;
+	}
+}
+
 void FireSystem::AddFireman(entt::entity object, entt::entity villager)
 {
 	if (auto* group = GroupOf(object))
@@ -928,9 +1047,11 @@ void FireSystem::Process(entt::entity object)
 	{
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Fire: object {} went out", entt::to_integral(object));
 	}
-	// TODO(blastfire): a creature that catches is burnt on its skin in three tries, each a ray from a random point
-	// round its centre bone at the body posed by its bones: type 0 two times in three, else 6, size GameRand(8). The
-	// creatures' skins take wounds (CreatureSkinSystem), but nothing finds where a ray meets a posed creature's skin yet.
+	// A creature is burnt on its skin the turn it catches
+	if ((fire.state.flags & fire::k_JustIgnited) != 0 && world_objects::IsCreature(object))
+	{
+		ecs::creature_scars::BurnOnCatching(object);
+	}
 	if (outcome.rainedOn && Locator::magicSystem::has_value())
 	{
 		// The people come to watch a storm miracle's rain put the fire out
@@ -955,7 +1076,11 @@ void FireSystem::Process(entt::entity object)
 			{
 				// Burnt down: a building stands with no life, a villager dies, anything else goes
 				SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Fire: object {} burnt down", entt::to_integral(object));
-				world_objects::DestroyedByEffect(object);
+				// A villager burnt to death is put down to whoever lit the fire, weighing nothing with its town
+				world_objects::DestroyedByEffect(object, world_objects::EffectDeath {
+				                                             .killer = lit.hasPlayer ? std::optional(lit.player) : std::nullopt,
+				                                             .weight = 0.0f,
+				                                         });
 				if (!registry.Valid(object) || !registry.AllOf<Fire>(object))
 				{
 					std::erase(_fires, object);
@@ -968,7 +1093,7 @@ void FireSystem::Process(entt::entity object)
 	auto& burning = registry.Get<Fire>(object);
 	const float life = world_objects::LifeOf(object);
 	const float fraction = fire::FireFraction(burning.state.temperature, *material, life);
-	if (map_coords::InBounds(position) && !IsHeld(object))
+	if (map_coords::InBounds(position) && SpreadsFrom(object, position))
 	{
 		Spread(object, fire::FireRadius(*material, fraction));
 		if (!registry.Valid(object) || !registry.AllOf<Fire>(object))
@@ -997,8 +1122,9 @@ void FireSystem::Process(entt::entity object)
 			}
 		}
 	}
-	// The living react to something hot; not to a burning villager, which runs about itself
-	if (Locator::reactionSystem::has_value() && !IsHeld(object))
+	// The living react to something hot; not to a burning villager, which runs about itself, nor to a burning thing in the
+	// hand or flying through the air
+	if (Locator::reactionSystem::has_value() && !registry.AnyOf<InHand, InPhysics>(object))
 	{
 		// One reaction for as long as it stays hot, never made again should it end sooner; once it cools, every fire
 		// reaction it started goes, and any to it burning in the hand
@@ -1332,6 +1458,23 @@ void FireSystem::Delete(entt::entity object)
 			                                         .type = Reaction::ReactToWood,
 			                                         .player = world_objects::PlayerOf(object).value_or(PlayerNames::NEUTRAL),
 			                                         .position = transform->position});
+		}
+	}
+	// A pot that stops burning calls its people again, when it holds something and is not one of a store's piles
+	if (const auto* pot = registry.TryGet<const Pot>(object);
+	    pot != nullptr && pot->amount > 0 && Locator::reactionSystem::has_value() && Locator::infoConstants::has_value())
+	{
+		const bool inStore =
+		    Locator::resourceStoreSystem::has_value() && Locator::resourceStoreSystem::value().StoreOf(object).has_value();
+		const auto reaction = Locator::infoConstants::value().pot.at(static_cast<size_t>(pot->type)).associatedReaction;
+		const auto* transform = registry.TryGet<const Transform>(object);
+		auto& reactions = Locator::reactionSystem::value();
+		if (!inStore && reaction != Reaction::None && transform != nullptr && !reactions.HasReaction(object))
+		{
+			reactions.Create({.initiator = object,
+			                  .type = reaction,
+			                  .player = world_objects::PlayerOf(object).value_or(PlayerNames::NEUTRAL),
+			                  .position = transform->position});
 		}
 	}
 	// A magic tree that stops burning draws its caster's people again

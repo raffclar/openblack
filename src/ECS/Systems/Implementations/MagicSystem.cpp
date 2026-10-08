@@ -71,6 +71,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/CreatureSight.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -115,8 +116,6 @@ namespace
 {
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 constexpr float k_TurnsPerSecond = 1.0f / k_TurnSeconds;
-/// A creature with nothing to look at looks ahead, along its heading
-constexpr float k_LookAheadMetres = 10.0f;
 constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
 
 /// The hand's speed is smoothed over about this many seconds
@@ -260,7 +259,7 @@ void AddDamageFrom(PlayerNames owner, PlayerNames from, float damage)
 
 /// What a miracle does to an object it takes the last of the life from: a creature that can die faints and one that
 /// can't has all its life back, anything else is destroyed as its kind is
-void DestroyedByEffect(entt::entity entity)
+void DestroyedByEffect(entt::entity entity, const ecs::world_objects::EffectDeath& death)
 {
 	auto& registry = EntityRegistry();
 	if (const auto* creature = registry.TryGet<const Creature>(entity))
@@ -275,7 +274,7 @@ void DestroyedByEffect(entt::entity entity)
 		}
 		return;
 	}
-	ecs::world_objects::DestroyedByEffect(entity);
+	ecs::world_objects::DestroyedByEffect(entity, death);
 }
 
 /// The alignment of whoever an effect comes from, which damps how far it moves
@@ -473,14 +472,18 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 		}
 		magic_living::AfterEffect(outcome.entity, values, source);
 		alignment += outcome.alignmentChange;
-		// Harm done to a town's people or buildings counts as an attack on the town by whoever did it
-		if (outcome.aggression)
+		// What applied the effect, when no miracle did: none for a fall onto the land
+		const bool appliedByNothing =
+		    source.appliedBy.has_value() && (*source.appliedBy == entt::null || !PositionOf(*source.appliedBy).has_value());
+		// Harm done to a town's people or buildings counts as an attack on the town by whoever did it, when something
+		// applied it
+		if (outcome.aggression && !appliedByNothing)
 		{
 			ecs::world_objects::AttackTown(outcome.entity, outcome.damaged + outcome.burnt, source.player);
 		}
 		// A player's miracle, not a creature's, is remembered against them by the player whose object it harmed
 		const auto owner = ecs::world_objects::PlayerOf(outcome.entity);
-		if (!byCreature && owner.has_value())
+		if (!byCreature && !source.playerless && owner.has_value())
 		{
 			AddDamageFrom(*owner, source.player, outcome.damaged + outcome.burnt);
 		}
@@ -489,7 +492,10 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 		if (outcome.crushed && Locator::reactionSystem::has_value() &&
 		    !Locator::reactionSystem::value().HasReaction(outcome.entity))
 		{
-			const auto initiator = byCreature ? source.casterCreature : outcome.entity;
+			// What applied a blow is what the people react to, when it stands somewhere; else the thing crushed
+			const auto initiator = byCreature                                          ? source.casterCreature
+			                       : source.appliedBy.has_value() && !appliedByNothing ? *source.appliedBy
+			                                                                           : outcome.entity;
 			if (const auto position = PositionOf(initiator))
 			{
 				Locator::reactionSystem::value().Create({.initiator = initiator,
@@ -510,7 +516,8 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 		{
 			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Magic: a miracle took the last of {}'s life",
 			                    entt::to_integral(outcome.entity));
-			DestroyedByEffect(outcome.entity);
+			DestroyedByEffect(outcome.entity, {.killer = source.playerless ? std::nullopt : std::optional(source.player),
+			                                   .weight = outcome.lifeBefore.value_or(0.0f)});
 		}
 	}
 	if (alignment == 0.0f)
@@ -522,7 +529,7 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 	{
 		registry.Get<Creature>(source.casterCreature).pendingAlignment += alignment;
 	}
-	else if (source.player != PlayerNames::NEUTRAL && Locator::alignmentSystem::has_value())
+	else if (!source.playerless && source.player != PlayerNames::NEUTRAL && Locator::alignmentSystem::has_value())
 	{
 		Locator::alignmentSystem::value().AddPendingAlignment(source.player, alignment);
 	}
@@ -1902,7 +1909,7 @@ std::optional<entt::entity> MagicSystem::HeldSeedTarget() const
 	{
 		return std::nullopt;
 	}
-	const auto target = Locator::creatureHandSystem::value().CreatureAlong(_hand.rayOrigin, _hand.rayDirection);
+	const auto target = Locator::creatureHandSystem::value().CreatureUnderCursor();
 	if (!target.has_value() || !CanCastOn(HeldMagicType(), *target))
 	{
 		return std::nullopt;
@@ -2445,32 +2452,8 @@ MagicSystemInterface::HandCastState MagicSystem::GetHandCastState() const
 
 void MagicSystem::Empathise(MagicType type, PlayerNames player, glm::vec3 point)
 {
-	auto& registry = EntityRegistry();
-	const auto creature =
-	    Locator::leashSystem::has_value() ? Locator::leashSystem::value().PlayersCreature(player) : std::nullopt;
-	auto* mind = creature.has_value() && registry.Valid(*creature) ? registry.TryGet<CreatureMindState>(*creature) : nullptr;
-	const auto* at = mind != nullptr ? registry.TryGet<const Transform>(*creature) : nullptr;
-	if (at == nullptr)
-	{
-		return;
-	}
-	// It sees what lies within two thirds of a half turn of where it looks, its head's look if it looks at something
-	const auto* animation = registry.TryGet<const CreatureAnimation>(*creature);
-	const auto* moving = registry.TryGet<const CreatureLocomotion>(*creature);
-	const glm::vec2 here(at->position.x, at->position.z);
-	uint16_t look = 0;
-	if (animation != nullptr && animation->lookAt.has_value())
-	{
-		look = gutils::GetAngleFromXZ(here, glm::vec2(animation->lookAt->x, animation->lookAt->z));
-	}
-	else if (moving != nullptr)
-	{
-		const auto ahead = creature_locomotion::DirectionOf(moving->heading);
-		look = gutils::GetAngleFromXZ(here, here + ahead * k_LookAheadMetres);
-	}
-	const bool sameCell =
-	    map_coords::Cell(map_coords::FromMetres(here)) == map_coords::Cell(map_coords::FromMetres(glm::vec2(point.x, point.z)));
-	if (!creature_perceived_desires::CanSeePos(look, gutils::GetAngleFromXZ(here, glm::vec2(point.x, point.z)), sameCell))
+	auto* mind = ecs::creature_sight::MindSeeing(player, point);
+	if (mind == nullptr)
 	{
 		return;
 	}
