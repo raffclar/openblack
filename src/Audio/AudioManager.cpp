@@ -84,7 +84,8 @@ std::string EmitterSoundName(const AudioEmitter& emitter)
 }
 
 /// How an emitter is described in the log: its entity, its sound, 2D or where it is
-std::string DescribeEmitter(entt::entity entity, const AudioEmitter& emitter)
+// Only the debug and trace logging uses it, which release builds leave out
+[[maybe_unused]] std::string DescribeEmitter(entt::entity entity, const AudioEmitter& emitter)
 {
 	return fmt::format("{} {} {}{}", static_cast<uint32_t>(entity), emitter.spatial ? "3D" : "2D", EmitterSoundName(emitter),
 	                   emitter.spatial
@@ -92,13 +93,15 @@ std::string DescribeEmitter(entt::entity entity, const AudioEmitter& emitter)
 	                       : std::string());
 }
 
-void LogEmitterStart(entt::entity entity, const AudioEmitter& emitter)
+// The log lines below are left out of release builds, which would otherwise find these parameters unused
+void LogEmitterStart([[maybe_unused]] entt::entity entity, [[maybe_unused]] const AudioEmitter& emitter)
 {
 	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} starts: volume {} pitch {}%{}", DescribeEmitter(entity, emitter),
 	                    emitter.volume, emitter.pitchPercent, emitter.loop == PlayType::Repeat ? ", looping" : "");
 }
 
-void LogNotStarted(const Sound& sound, const glm::vec3& position, std::string_view why)
+void LogNotStarted([[maybe_unused]] const Sound& sound, [[maybe_unused]] const glm::vec3& position,
+                   [[maybe_unused]] std::string_view why)
 {
 	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Sound {} at ({}, {}, {}) not started: {}", sound.name, position.x, position.y,
 	                    position.z, why);
