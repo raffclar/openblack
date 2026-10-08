@@ -49,6 +49,7 @@
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/FieldArchetype.h"
+#include "ECS/Archetypes/FishFarmArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Archetypes/TownArchetype.h"
@@ -637,6 +638,10 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    else if constexpr (std::is_same_v<T, AnimalInfo>)
 			    {
 				    return ecs::archetypes::AnimalArchetype::Create(type, position, yaw, 1.0f, PlayerNames::NEUTRAL);
+			    }
+			    else if constexpr (std::is_same_v<T, FishFarmInfo>)
+			    {
+				    return ecs::archetypes::FishFarmArchetype::Create(position);
 			    }
 			    else
 			    {

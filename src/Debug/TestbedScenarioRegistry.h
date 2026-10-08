@@ -215,10 +215,12 @@ struct CreatureSetup
 
 /// Something put on the land for the creatures: an object, a tree, a feature such as a pillar of rock, a villager, a pot
 /// or pile of food or wood, a building or field of the scenario's town, which is made with the first of them, or an
-/// animal
+/// animal, or a fish farm (which joins the nearest town)
 struct ObjectSetup
 {
-	std::variant<MobileObjectInfo, TreeInfo, FeatureInfo, VillagerInfo, PotInfo, AbodeInfo, FieldTypeInfo, AnimalInfo> type;
+	std::variant<MobileObjectInfo, TreeInfo, FeatureInfo, VillagerInfo, PotInfo, AbodeInfo, FieldTypeInfo, AnimalInfo,
+	             FishFarmInfo>
+	    type;
 	glm::vec2 offset {0.0f};
 	float scale {1.0f};
 	float yawDegrees {0.0f};
@@ -557,6 +559,8 @@ void AddBlastFireScenarios(std::vector<Scenario>& all);
 /// What the blast spares and does on a coast, the water over fields and forests and before the people watching a fire
 /// put out, and the hand catching a fireball or taking one into a fire seed
 void AddFirewaterScenarios(std::vector<Scenario>& all);
+/// A fish farm by a town: its shoal, the hand grabbing, scooping and scaring its fish
+void AddFishScenarios(std::vector<Scenario>& all);
 /// Creatures casting miracles
 void AddCreatureCastingScenarios(std::vector<Scenario>& all);
 /// Creature Mode's and the Creature Cave's scenarios

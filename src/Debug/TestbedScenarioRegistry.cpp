@@ -2043,6 +2043,7 @@ std::vector<Scenario> Build()
 	AddTornadoScenarios(all);
 	AddHandNavigationScenarios(all);
 	AddHandLookScenarios(all);
+	AddFishScenarios(all);
 	return all;
 }
 
