@@ -57,8 +57,12 @@ Target Choose(std::span<const Town> towns)
 
 float Harm(glm::vec3 velocity, float mass)
 {
-	const float harm =
-	    std::sqrt((velocity.x * velocity.x) + (velocity.y * velocity.y) + (velocity.z * velocity.z)) * mass * k_HarmPerMomentum;
+	// Worked in wider precision, z and y first, and rounded once
+	const double x = velocity.x;
+	const double y = velocity.y;
+	const double z = velocity.z;
+	const auto harm = static_cast<float>(std::sqrt(((z * z) + (y * y)) + (x * x)) * static_cast<double>(mass) *
+	                                     static_cast<double>(k_HarmPerMomentum));
 	return k_MostHarm < harm ? k_MostHarm : harm;
 }
 

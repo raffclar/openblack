@@ -219,9 +219,10 @@ void HurtCreature(DynamicsSystemInterface& dynamics, const PhysicsEntry& entry, 
 	minds.ChangeDesireSource(creature, creature_desires::sources::k_AngerFromDamage, *crush);
 }
 
-/// A physical shield struck by a thing that breaks buildings pays for the blow by its momentum
 /// The temple heart's player's towns as the heart passes a blow on over them: in the order the player gained them, each
 /// with its buildings and homeless people, the newest first
+// TODO(physics): a town's spell dispenser is one of its buildings the heart may pass a blow on to; openblack's dispensers
+// belong to no town yet
 std::vector<physics::temple_heart::Town> HeartTowns(PlayerNames owner)
 {
 	auto& registry = Entities();
@@ -303,20 +304,26 @@ void StrikeHeart(DynamicsSystemInterface& dynamics, PhysicsEntry& entry, const I
 		break;
 	}
 	const auto* hitterEntry = hitterAbout ? dynamics.Find(hitter) : nullptr;
-	if (!destroys || hitterEntry == nullptr || hitterEntry->body == nullptr || !Locator::infoConstants::has_value())
+	if (!destroys || hitterEntry == nullptr || hitterEntry->body == nullptr || !Locator::magicSystem::has_value())
 	{
 		return;
 	}
 	const auto& body = *hitterEntry->body;
 	temple.lastHitTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
-	// A hit of that harm through the heart's defence, put down to no player
+	// A hit of that harm, applied as the hitter's player's, through the heart's defence as any effect on an object is:
+	// the heart loses life and the player's alignment and the harm done against the heart's player are counted. With
+	// no player behind the blow, it is the neutral player's.
 	magic::EffectValues values {};
 	values[magic::EffectKind::Hit] = physics::temple_heart::Harm(body.velocity, body.Mass());
-	const auto defence = magic::EffectDefence::From(Locator::infoConstants::value().citadelHeart);
-	world_objects::ReduceLife(heart, magic::DamageFrom(values, defence));
+	Locator::magicSystem::value().ApplyEffectToObject(heart, values,
+	                                                  magic::EffectSource {
+	                                                      .player = hitterEntry->player.value_or(PlayerNames::NEUTRAL),
+	                                                      .appliedBy = hitter,
+	                                                  });
 	// TODO(physics): a heart left with no life starts the temple's destruction; openblack has no destruction sequence yet
 }
 
+/// A physical shield struck by a thing that breaks buildings pays for the blow by its momentum
 void StrikeShield(DynamicsSystemInterface& dynamics, entt::entity shield, const ImpactInfo& impact)
 {
 	if (impact.hitBy == entt::null || !Locator::magicShieldSystem::has_value() ||

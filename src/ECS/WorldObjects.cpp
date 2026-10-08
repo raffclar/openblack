@@ -611,6 +611,11 @@ std::optional<PlayerNames> world_objects::PlayerOf(entt::entity object)
 		return townOwner([abode](entt::entity, const Town& town) { return town.id == abode->townId; })
 		    .value_or(PlayerNames::NEUTRAL);
 	}
+	// A temple is its player's
+	if (const auto* temple = registry.TryGet<const Temple>(object))
+	{
+		return temple->owner;
+	}
 	if (const auto* magic = registry.TryGet<const MagicTree>(object))
 	{
 		const auto* forest = registry.Valid(magic->forest) ? registry.TryGet<const MagicForest>(magic->forest) : nullptr;
