@@ -18,6 +18,8 @@ using MeshManager = ResourceManager<L3DLoader>;
 using L3DFileManager = ResourceManager<L3DFileLoader>;
 using Bitmap16BManager = ResourceManager<Bitmap16BLoader>;
 using LandLightPaletteManager = ResourceManager<LandLightPaletteLoader>;
+using PhysicsMaterialsManager = ResourceManager<PhysicsMaterialsLoader>;
+using ClipSoundsManager = ResourceManager<ClipSoundsLoader>;
 using TextureManager = ResourceManager<Texture2DLoader>;
 using AnimationManager = ResourceManager<L3DAnimLoader>;
 using LevelManager = ResourceManager<LevelLoader>;
@@ -28,6 +30,7 @@ using SoundManager = ResourceManager<SoundLoader>;
 using GlowManager = ResourceManager<LightLoader>;
 using CameraPathManager = ResourceManager<CameraPathLoader>;
 using ParticleFileManager = ResourceManager<ParticleFileLoader>;
+using GestureTemplatesManager = ResourceManager<GestureTemplatesLoader>;
 using ParticleBitmapManager = ResourceManager<ParticleBitmapLoader>;
 
 class ResourcesInterface
@@ -38,6 +41,10 @@ public:
 	virtual L3DFileManager& GetL3DFiles() = 0;
 	virtual Bitmap16BManager& GetBitmaps() = 0;
 	virtual LandLightPaletteManager& GetLandLightPalettes() = 0;
+	/// The physics materials, by physics::k_MaterialsId
+	virtual PhysicsMaterialsManager& GetPhysicsMaterials() = 0;
+	/// The sounds on the people's, animals' and birds' clips, by audio::clip_sounds::k_TableId
+	virtual ClipSoundsManager& GetClipSounds() = 0;
 	virtual TextureManager& GetTextures() = 0;
 	virtual AnimationManager& GetAnimations() = 0;
 	virtual LevelManager& GetLevels() = 0;
@@ -53,6 +60,8 @@ public:
 	virtual ParticleFileManager& GetParticleFiles() = 0;
 	/// The light maps the particle effects stamp on the land, by their paths
 	virtual ParticleBitmapManager& GetParticleBitmaps() = 0;
+	/// The templates the hand's drawn gestures are matched against, by gesture::k_TemplatesId
+	virtual GestureTemplatesManager& GetGestureTemplates() = 0;
 };
 
 } // namespace openblack::resources

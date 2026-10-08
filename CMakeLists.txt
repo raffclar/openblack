@@ -133,7 +133,6 @@ find_path(
 
 find_package(OpenAL REQUIRED)
 find_package(imgui REQUIRED)
-find_package(Bullet REQUIRED)
 find_package(spdlog 1.3.0 REQUIRED)
 find_package(EnTT 3.7.0 CONFIG REQUIRED) # only available as a config
 find_path(CXXOPTS_INCLUDE_DIRS "cxxopts.hpp")
@@ -151,6 +150,9 @@ add_subdirectory(components/glw)
 add_subdirectory(components/morph)
 add_subdirectory(components/creaturemind)
 add_subdirectory(components/psys)
+add_subdirectory(components/physconst)
+add_subdirectory(components/sas)
+add_subdirectory(components/gestures)
 add_subdirectory(components/rawimage)
 add_subdirectory(components/ScriptLibrary)
 add_subdirectory(components/lhvmlang)

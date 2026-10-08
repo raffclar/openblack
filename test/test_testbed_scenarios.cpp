@@ -9,6 +9,7 @@
 
 #include <cmath>
 
+#include <algorithm>
 #include <array>
 #include <set>
 #include <string>
@@ -37,7 +38,7 @@ Command Wait(size_t creature, float delay, bool untilFree)
 	return {.kind = Command::Kind::Stop, .creature = creature, .delaySeconds = delay, .waitUntilFree = untilFree};
 }
 
-const auto k_AlwaysFree = [](size_t) { return true; };
+const auto k_AlwaysFree = [](const Command& /*command*/) { return true; };
 } // namespace
 
 TEST(TestbedScenarios, IdsAreUniqueAndFindable)
@@ -361,6 +362,47 @@ TEST(TestbedScenarios, CommandsOnThingsAreChecked)
 	EXPECT_TRUE(Problems(broken).empty());
 }
 
+TEST(TestbedScenarios, PointerCommandsAreChecked)
+{
+	using Kind = Command::Kind;
+	// The mouse needs no creature, but its points are on the screen and its buttons are the mouse's three
+	Scenario mouse {
+	    .id = "broken.mouse",
+	    .name = "Broken",
+	    .description = "Broken on purpose",
+	    .expected = "Every problem found",
+	    .commands = {{.kind = Kind::PointerTo, .point = {1.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .value = 0},
+	                 {.kind = Kind::PointerRelease, .value = 4},
+	                 {.kind = Kind::PointerSweep, .point = {0.1f, 0.0f}, .amount = 0.0f}},
+	};
+	EXPECT_EQ(Problems(mouse).size(), 4u);
+
+	mouse.commands = {{.kind = Kind::PointerTo, .point = {0.75f, 0.5f}},
+	                  {.kind = Kind::PointerPress, .value = 2},
+	                  {.kind = Kind::PointerSweep, .point = {-0.3f, 0.0f}, .amount = 1.5f},
+	                  {.kind = Kind::PointerRelease, .value = 2},
+	                  {.kind = Kind::WheelTurn, .value = 3}};
+	EXPECT_TRUE(Problems(mouse).empty());
+	EXPECT_TRUE(IsPointerCommand(Kind::WheelTurn));
+	EXPECT_FALSE(IsPointerCommand(Kind::WalkTo));
+}
+
+TEST(TestbedScenarios, CoversTheHandFindingItsWay)
+{
+	for (const auto* id : {"hand.rotate_release", "hand.two_buttons", "hand.drag", "hand.zoom", "hand.click", "hand.edge_hover",
+	                       "hand.edge_rotate", "hand.edge_pan", "hand.top_pitch", "hand.fast_pan"})
+	{
+		const auto* scenario = Find(id);
+		ASSERT_NE(scenario, nullptr) << id;
+		EXPECT_EQ(scenario->facet, Facet::Hand) << id;
+		EXPECT_TRUE(scenario->creatures.empty()) << id;
+		EXPECT_TRUE(std::ranges::all_of(scenario->commands, [](const Command& command) {
+			return IsPointerCommand(command.kind);
+		})) << id;
+	}
+}
+
 TEST(TestbedScenarios, ProblemsAreFound)
 {
 	Scenario broken {
@@ -491,8 +533,8 @@ TEST(TestbedScenarios, TimelineWaitsForTheCreatureToBeFree)
 	const std::vector<Command> commands {Wait(0, 0.0f, false), Wait(1, 1.0f, true)};
 	Timeline timeline;
 	bool free = false;
-	const auto isFree = [&free](size_t creature) {
-		EXPECT_EQ(creature, 1u);
+	const auto isFree = [&free](const Command& command) {
+		EXPECT_EQ(command.creature, 1u);
 		return free;
 	};
 	EXPECT_EQ(Advance(timeline, commands, std::nullopt, 0.1f, isFree), (std::vector<size_t> {0}));
@@ -700,4 +742,39 @@ TEST(TestbedScenarios, CrowdsAreChecked)
 	EXPECT_FALSE(Problems(scenario).empty());
 	scenario.crowd = Crowd {.count = 0, .perFrame = 5};
 	EXPECT_FALSE(Problems(scenario).empty());
+}
+
+TEST(TestbedScenarios, CoversCastingThroughTheHand)
+{
+	// Every way the hand casts is tried through the action button: thrown, at a circle, held, placed, on a creature,
+	// and from a seed summoned from worship
+	bool thrown = false;
+	bool circle = false;
+	bool held = false;
+	bool onCreature = false;
+	bool worship = false;
+	std::set<MagicType> withoutEffects;
+	for (const auto& scenario : All())
+	{
+		for (const auto& miracle : scenario.miracles)
+		{
+			thrown =
+			    thrown || (miracle.byHand && miracle.type == MagicType::Fireball && glm::length(miracle.throwVelocity) > 0.0f);
+			circle = circle || (miracle.byHand && miracle.circleRadius.has_value());
+			held = held || (miracle.byHand && miracle.holdSeconds.has_value());
+			onCreature = onCreature || (miracle.byHand && miracle.target == MiracleCast::Target::Creature);
+			worship = worship || (miracle.byHand && miracle.fromWorship);
+			withoutEffects.insert(miracle.type);
+		}
+	}
+	EXPECT_TRUE(thrown);
+	EXPECT_TRUE(circle);
+	EXPECT_TRUE(held);
+	EXPECT_TRUE(onCreature);
+	EXPECT_TRUE(worship);
+	// The miracles with no particle effect of their own, which used to go on their first turn
+	for (const auto type : {MagicType::Teleport, MagicType::FlockFlying, MagicType::FlockGround, MagicType::PhysicalShield})
+	{
+		EXPECT_TRUE(withoutEffects.contains(type)) << static_cast<int>(type);
+	}
 }

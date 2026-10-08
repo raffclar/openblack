@@ -62,6 +62,9 @@ constexpr size_t k_LastPhase = 13;
 constexpr size_t k_Skills = 6;
 constexpr size_t k_Miracles = 42;
 constexpr size_t k_Deeds = 46;
+/// The game's spell seeds, and its last gesture (the square wave)
+constexpr size_t k_SeedCount = 30;
+constexpr size_t k_LastGesture = 23;
 /// The seed of every benchmark's crowd, so that runs lay it out the same
 constexpr uint32_t k_BenchmarkSeed = 2026;
 /// The testbed's lake, from the middle of the map: the middle of its open water, half its width, and the width of the
@@ -1429,9 +1432,10 @@ void AddLeash(std::vector<Scenario>& all)
 	    .id = "leash.shake",
 	    .name = "Shake the leash off",
 	    .facet = Facet::Leash,
-	    .description = "Your tiger is clicked to put the leash on, and the hand is then shaken back and forth. Shake the "
-	                   "hand yourself (move the mouse quickly side to side with no button held) to try it.",
-	    .expected = "The rope goes on, and comes off once the hand is shaken; the readout says \"off\".",
+	    .description = "Your tiger is clicked to put the leash on, and a scribble is then drawn with the empty hand, as "
+	                   "the game shakes a leash off. Draw it yourself (move the mouse quickly side to side a few times, "
+	                   "no button held) to try it.",
+	    .expected = "The rope goes on, and comes off once the scribble is recognised; the log says so.",
 	    .framing = {.shot = Shot::Testbed},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 50.0f})},
 	    .commands = {{.kind = Kind::HandTapLeash, .creature = 0, .delaySeconds = 1.0f},
@@ -1863,6 +1867,21 @@ void AddParticles(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "particles.vortex_and_flies_sounds",
+	    .name = "The landscape vortex's and the flies' sounds",
+	    .facet = Facet::Particles,
+	    .description = "The landscape vortex as it opens and as it closes, and a swarm of flies, side by side and close up, "
+	                   "every eight seconds. Their sounds are named in the effect files by sound actions the game's header "
+	                   "numbers by counting on from the one before.",
+	    .expected = "The vortices play the vortex's hum and the flies their buzz as they start; the debug log names an "
+	                "emitter for each.",
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 30.0f}, {15.0f, 50.0f}}, .distance = 0.4f},
+	    .particles = {{.file = "SF_LandscapeVortexInBefore", .offset = {-8.0f, 40.0f}, .restartSeconds = 8.0f},
+	                  {.file = "SF_LandscapeVortexOutAfter", .offset = {8.0f, 40.0f}, .restartSeconds = 8.0f},
+	                  {.file = "SF_Flies", .offset = {0.0f, 36.0f}, .height = 2.0f, .restartSeconds = 8.0f}},
+	});
+
+	all.push_back({
 	    .id = "particles.mist",
 	    .name = "Mist over the holders",
 	    .facet = Facet::Particles,
@@ -2012,8 +2031,18 @@ std::vector<Scenario> Build()
 	AddParticles(all);
 	AddEditor(all);
 	AddMiracleScenarios(all);
+	AddGlobeScenarios(all);
+	AddLifeLightScenarios(all);
+	AddCreatureCastingScenarios(all);
 	AddBenchmark(all);
 	AddCreatureModeScenarios(all);
+	AddGestureScenarios(all);
+	AddStormScenarios(all);
+	AddFlockScenarios(all);
+	AddTeleportScenarios(all);
+	AddTornadoScenarios(all);
+	AddHandNavigationScenarios(all);
+	AddHandLookScenarios(all);
 	return all;
 }
 
@@ -2105,6 +2134,12 @@ std::string_view CommandProblem(const Command& command, std::span<const ObjectSe
 }
 } // namespace
 
+bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
+{
+	return kind == Kind::SetHour || kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed ||
+	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || IsPointerCommand(kind);
+}
+
 std::string_view testbed_scenarios::Name(Facet facet)
 {
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
@@ -2123,13 +2158,13 @@ std::string_view testbed_scenarios::Name(Weather weather)
 
 std::string_view testbed_scenarios::Name(Shot shot)
 {
-	constexpr std::array<std::string_view, 4> k_Names {"testbed", "overview", "follow", "head"};
+	constexpr std::array<std::string_view, 5> k_Names {"testbed", "overview", "follow", "head", "placed"};
 	return k_Names.at(static_cast<size_t>(shot));
 }
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 67> k_Names {
+	constexpr std::array<std::string_view, 80> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -2197,8 +2232,27 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "press F5",
 	    "tattoo",
 	    "take tattoo off",
+	    "hold seed",
+	    "draw gesture",
+	    "summon seed",
+	    "know miracle",
+	    "cast miracle",
+	    "press key",
+	    "hand takes fireball",
+	    "pointer to",
+	    "press button",
+	    "let go of button",
+	    "move mouse",
+	    "turn wheel",
+	    "set alignment",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
+}
+
+bool testbed_scenarios::IsPointerCommand(Command::Kind kind)
+{
+	return kind == Kind::PointerTo || kind == Kind::PointerPress || kind == Kind::PointerRelease ||
+	       kind == Kind::PointerSweep || kind == Kind::WheelTurn;
 }
 
 bool NeedOverrides::Empty() const
@@ -2236,9 +2290,16 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		problems.emplace_back("hour or body time out of range");
 	}
 	if (scenario.creatures.empty() && scenario.particles.empty() && scenario.miracles.empty() && scenario.dispensers.empty() &&
-	    !environment.dispenserGrid && !scenario.crowd.has_value())
+	    !environment.dispenserGrid && !scenario.crowd.has_value() && !environment.playerAlignment.has_value() &&
+	    std::ranges::none_of(scenario.commands, [](const Command& command) { return NeedsNoCreature(command.kind); }))
 	{
-		problems.emplace_back("no creatures, particles, miracles, dispensers or crowd");
+		problems.emplace_back(
+		    "no creatures, particles, miracles, dispensers, crowd, player's commands or alignment for the hand");
+	}
+	if ((environment.playerAlignment && !InRange(*environment.playerAlignment, -1.0f, 1.0f)) ||
+	    (environment.cursor && (!InRange(environment.cursor->x, 0.0f, 1.0f) || !InRange(environment.cursor->y, 0.0f, 1.0f))))
+	{
+		problems.emplace_back("alignment or cursor out of range");
 	}
 	if (scenario.crowd.has_value() && (scenario.crowd->count == 0 || scenario.crowd->perFrame == 0))
 	{
@@ -2370,9 +2431,13 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 	{
 		const auto& command = scenario.commands.at(i);
 		const auto what = fmt::format("command {} ({})", i, Name(command.kind));
-		if (command.kind != Kind::SetHour && command.creature >= creatures)
+		if (!NeedsNoCreature(command.kind) && command.creature >= creatures)
 		{
 			problems.push_back(fmt::format("{}: no such creature", what));
+		}
+		if (command.kind == Kind::SetAlignment && !InRange(command.alignment, -1.0f, 1.0f))
+		{
+			problems.push_back(fmt::format("{}: alignment out of range", what));
 		}
 		if ((command.kind == Kind::Follow || command.kind == Kind::StartFight || command.kind == Kind::TieLeashToCreature) &&
 		    (command.value >= creatures || command.value == command.creature))
@@ -2396,12 +2461,23 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		    (command.kind == Kind::SetPhase && command.value > k_LastPhase) ||
 		    (command.kind == Kind::ShowFeeling && command.value >= creature_face::k_CueCount) ||
 		    (command.kind == Kind::SeeSkill && command.value >= k_Skills) ||
-		    (command.kind == Kind::SeeMiracle && command.value >= k_Miracles) ||
+		    ((command.kind == Kind::SeeMiracle || command.kind == Kind::KnowMiracle || command.kind == Kind::CastMiracle) &&
+		     command.value >= k_Miracles) ||
+		    (command.kind == Kind::CastMiracle &&
+		     (command.atCreature.has_value() ? *command.atCreature >= scenario.creatures.size()
+		                                     : command.object >= scenario.objects.size())) ||
 		    (command.kind == Kind::PlayerDid && command.value >= k_Deeds) ||
 		    (command.kind == Kind::CameraKeys && (command.value >= 4 || command.amount <= 0.0f)) ||
+		    (command.kind == Kind::PointerTo &&
+		     (!InRange(command.point.x, 0.0f, 1.0f) || !InRange(command.point.y, 0.0f, 1.0f))) ||
+		    ((command.kind == Kind::PointerPress || command.kind == Kind::PointerRelease) &&
+		     (command.value < 1 || command.value > 3)) ||
+		    (command.kind == Kind::PointerSweep && command.amount <= 0.0f) ||
 		    (command.kind == Kind::OpenCreatureCave && command.value >= creature_cave::k_PageCount) ||
 		    ((command.kind == Kind::ApplyTattoo || command.kind == Kind::RemoveTattoo) &&
-		     (command.value >= creature_tattoo::k_DesignCount || command.bodyPart >= creature_tattoo::k_SlotCount)))
+		     (command.value >= creature_tattoo::k_DesignCount || command.bodyPart >= creature_tattoo::k_SlotCount)) ||
+		    ((command.kind == Kind::HoldSeed || command.kind == Kind::SummonSeed) && command.value >= k_SeedCount) ||
+		    (command.kind == Kind::DrawGesture && (command.value == 0 || command.value > k_LastGesture)))
 		{
 			problems.push_back(fmt::format("{}: value {} out of range", what, command.value));
 		}
@@ -2510,7 +2586,7 @@ void testbed_scenarios::Apply(std::span<const DesireOverride> overrides, creatur
 
 std::vector<size_t> testbed_scenarios::Advance(Timeline& timeline, std::span<const Command> commands,
                                                std::optional<size_t> repeatFrom, float seconds,
-                                               const std::function<bool(size_t creature)>& isFree)
+                                               const std::function<bool(const Command& command)>& isFree)
 {
 	std::vector<size_t> due;
 	if (commands.empty() || timeline.next >= commands.size())
@@ -2529,7 +2605,7 @@ std::vector<size_t> testbed_scenarios::Advance(Timeline& timeline, std::span<con
 		const auto& command = commands[timeline.next];
 		if (command.waitUntilFree && !timeline.freed)
 		{
-			if (timeline.sinceGiven < k_SettleSeconds || !isFree(command.creature))
+			if (timeline.sinceGiven < k_SettleSeconds || !isFree(command))
 			{
 				// Its delay counts from when the creature is free
 				timeline.seconds = 0.0f;

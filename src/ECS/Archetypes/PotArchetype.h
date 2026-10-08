@@ -20,6 +20,8 @@ class PotArchetype
 {
 public:
 	static entt::entity Create(const glm::vec3& position, float yAngleRadians, PotInfo type, int32_t amount);
+	/// A pot or pile holding nothing yet, as a storage pit makes one for what it is given
+	static entt::entity CreateEmpty(const glm::vec3& position, float yAngleRadians, PotInfo type);
 	PotArchetype() = delete;
 };
 } // namespace openblack::ecs::archetypes
