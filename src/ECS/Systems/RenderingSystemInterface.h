@@ -61,6 +61,9 @@ struct RenderContext
 		bool translucent {false};
 		/// The instances are added over what is behind them by this share, whatever their materials say
 		std::optional<float> additiveShare;
+		/// The instances are blended over what is behind them by their own alpha, as one minus the share in their look's
+		/// z, whatever their materials say: a blast's rubble in its last second
+		bool instanceAlpha {false};
 		/// The instances are drawn one by one, each posed and shaped as its entity is: the creatures
 		bool perEntity {false};
 		/// How far the instances' textures have slid across them
@@ -93,6 +96,9 @@ struct RenderContext
 	struct TreeInstanceData
 	{
 		glm::mat4 modelMatrix;
+		/// While it has a fire on it: x the grey of 256 its light is scaled by, no brighter than the trees' brightness,
+		/// and y the alpha below which its foliage is cut away, of 1; 0 for none
+		glm::vec4 burning {0.0f};
 	};
 
 	/// CPU-side buffer of tree instance data
@@ -111,6 +117,13 @@ struct RenderContext
 		uint32_t instance;
 	};
 	std::vector<EntityDraw> entityDraws;
+	/// Every object drawn this frame, in the order it is drawn, with the matrix it is drawn by: what the cursor can pick
+	struct DrawnObject
+	{
+		entt::entity entity;
+		glm::mat4 model;
+	};
+	std::vector<DrawnObject> drawnObjects;
 	/// The rivers' stretches, whose beds and channels are laid into the land (see components::StreamSegment)
 	std::vector<glm::mat4> streamSegments;
 	/// The hand is scaled by a negative factor to mirror it, which turns its faces round
@@ -127,6 +140,27 @@ struct RenderContext
 
 	/// Dynamic buffer for tree instance data (contains both matrix and sway params)
 	graphics::DynamicVertexBufferHandle treeInstanceUniformBuffer;
+
+	/// A broken or unfinished building's whole model drawn as far up as it stands, over what is left of it: the model
+	/// kept below its cut, with its inner walls, and its scaffold sunk or cut down; their instances are in
+	/// partialBuildInstanceBuffer
+	struct PartialBuildDraw
+	{
+		entt::id_type meshId {0};
+		bool morphWithTerrain {false};
+		uint32_t instance {0};
+		std::optional<float> modelCut;
+		/// The model's cut in its own space, where the cap over its walls is laid
+		std::optional<float> capHeight;
+		/// The scaffold: its submeshes' status, its instance (sunk as it rises), and its cut
+		std::optional<uint32_t> scaffoldStatus;
+		uint32_t scaffoldInstance {0};
+		std::optional<float> scaffoldCut;
+	};
+	std::vector<PartialBuildDraw> partialBuilds;
+	std::vector<ObjectInstance> partialBuildInstances;
+	graphics::DynamicVertexBufferHandle partialBuildInstanceBuffer;
+	uint32_t partialBuildCapacity {0};
 
 	/// Kept for backward compatibility, will be removed once shader is updated
 	std::vector<glm::mat4> treeInstanceUniforms;

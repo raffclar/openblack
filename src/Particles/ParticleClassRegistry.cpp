@@ -14,7 +14,9 @@
 #include <glm/geometric.hpp>
 
 #include "ParticleCreators.h"
+#include "ParticleFlocking.h"
 #include "ParticleObjectRules.h"
+#include "ParticleSurfaces.h"
 
 using namespace openblack::particles;
 
@@ -90,12 +92,24 @@ ParticleClassRegistry ParticleClassRegistry::WithAllClasses(CreatorResourcesInte
 	RegisterCurveRules(registry);
 	RegisterHealRules(registry);
 	RegisterHandRules(registry);
+	RegisterGestureRules(registry);
 	RegisterSoundRules(registry);
 	RegisterFireballRules(registry);
 	RegisterLightningRules(registry);
+	RegisterArcRules(registry);
+	RegisterBeliefRules(registry);
+	RegisterCreatureSpellRules(registry);
 	RegisterGlintRules(registry);
 	RegisterShieldRules(registry);
+	RegisterStormRules(registry);
+	RegisterFlockRules(registry);
+	RegisterSurfaceRules(registry);
 	RegisterObjectRules(registry);
+	RegisterTornadoRules(registry);
+	RegisterFlockingRules(registry);
+	RegisterForestRules(registry);
+	RegisterBeamRules(registry);
+	RegisterBlastRules(registry);
 	return registry;
 }
 

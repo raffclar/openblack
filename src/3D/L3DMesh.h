@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <array>
 #include <filesystem>
 #include <limits>
 #include <optional>
@@ -23,8 +24,8 @@
 #include "Graphics/LightBeams.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/ShaderProgram.h"
-
-class btConvexShape;
+#include "L3DSubMesh.h"
+#include "ScreenPick.h"
 
 namespace openblack
 {
@@ -104,6 +105,9 @@ public:
 	bool LoadFromFilesystem(const std::filesystem::path& path) noexcept;
 	bool LoadFromFile(const std::filesystem::path& path) noexcept;
 	bool LoadFromBuffer(const std::vector<uint8_t>& data) noexcept;
+	/// A model made while the game runs from the triangles of another, whose skins it is drawn with (which must outlive
+	/// it): one submesh for each group of primitives
+	bool LoadMade(const L3DMesh& skinSource, std::span<const std::vector<L3DSubMesh::MadePrimitive>> subMeshes) noexcept;
 	/// A dynamic mesh takes its vertices afresh from a file of the same shape
 	void UpdateVertices(const l3d::L3DFile& l3d) noexcept;
 	/// A dynamic mesh's skin takes its texels afresh
@@ -112,9 +116,26 @@ public:
 
 	[[nodiscard]] uint8_t GetNumSubMeshes() const { return static_cast<uint8_t>(_subMeshes.size()); }
 	[[nodiscard]] const std::vector<std::unique_ptr<L3DSubMesh>>& GetSubMeshes() const { return _subMeshes; }
-	[[nodiscard]] const std::unordered_map<SkinId, std::unique_ptr<graphics::Texture2D>>& GetSkins() const { return _skins; }
+	[[nodiscard]] const std::unordered_map<SkinId, std::unique_ptr<graphics::Texture2D>>& GetSkins() const
+	{
+		return _skinSource != nullptr ? _skinSource->GetSkins() : _skins;
+	}
 	/// The skins' ids in the order the file lists them
-	[[nodiscard]] const std::vector<SkinId>& GetSkinOrder() const { return _skinOrder; }
+	[[nodiscard]] const std::vector<SkinId>& GetSkinOrder() const
+	{
+		return _skinSource != nullptr ? _skinSource->GetSkinOrder() : _skinOrder;
+	}
+	/// Where each skin is solid, at 64 by 64 places over it, which the cursor is tested against on a model picked through
+	/// its texture's holes
+	[[nodiscard]] const screen_pick::AlphaMask* GetSkinMask(SkinId skin) const
+	{
+		if (_skinSource != nullptr)
+		{
+			return _skinSource->GetSkinMask(skin);
+		}
+		const auto found = _skinMasks.find(skin);
+		return found != _skinMasks.end() ? &found->second : nullptr;
+	}
 	[[nodiscard]] const std::vector<Footprint>& GetFootprints() const { return _footprints; }
 	[[nodiscard]] const std::vector<VolumeLight>& GetVolumeLights() const { return _volumeLights; }
 	[[nodiscard]] const std::vector<uint32_t>& GetBoneParents() const { return _bonesParents; }
@@ -123,10 +144,23 @@ public:
 	/// The top of the chimney the smoke rises from, in the mesh
 	[[nodiscard]] const std::optional<glm::vec3>& GetChimneyPos() const { return _chimneyPos; }
 	[[nodiscard]] const std::vector<glm::mat4>& GetExtraMetrics() const { return _extraMetrics; }
-	[[nodiscard]] bool HasPhysicsMesh() const { return _physicsMesh != nullptr; }
-	[[nodiscard]] btConvexShape& GetPhysicsMesh() { return *_physicsMesh; }
-	[[nodiscard]] const btConvexShape& GetPhysicsMesh() const { return *_physicsMesh; }
-	[[nodiscard]] float GetMass() const { return _physicsMass; }
+	/// The triangles of its physics submeshes in the model's space, as the game's physics collides with them
+	[[nodiscard]] const std::vector<std::array<glm::vec3, 3>>& GetPhysicsTriangles() const { return _physicsTriangles; }
+	/// Every submesh's vertex positions in the model's space and its primitives' triangles, each primitive's indices
+	/// counting from its own first vertex, as the game picks a point on a model's surface
+	struct SurfacePrimitive
+	{
+		uint32_t vertexBase;
+		uint32_t indexBase;
+		uint32_t numTriangles;
+	};
+	struct Surface
+	{
+		std::vector<glm::vec3> positions;
+		std::vector<uint16_t> indices;
+		std::vector<SurfacePrimitive> primitives;
+	};
+	[[nodiscard]] const std::vector<Surface>& GetSurfaces() const { return _surfaces; }
 	[[nodiscard]] AxisAlignedBoundingBox GetBoundingBox() const { return _boundingBox; }
 	/// How far along a ray, in the mesh's space, it first meets a submesh drawn of the mesh (as the game picks the
 	/// triangle under the mouse while it draws), other than the submeshes left undrawn. Only the temple's rooms keep
@@ -146,6 +180,10 @@ private:
 
 	std::unordered_map<SkinId, std::unique_ptr<graphics::Texture2D>> _skins;
 	std::vector<SkinId> _skinOrder;
+	/// A model made at run time draws with the skins of the model it was made from, which the resource cache keeps for the
+	/// level's life, as long as the made model's
+	const L3DMesh* _skinSource {nullptr};
+	std::unordered_map<SkinId, screen_pick::AlphaMask> _skinMasks;
 	std::vector<Footprint> _footprints; ///< If ContainsLandscapeFeature() is true
 	std::vector<VolumeLight> _volumeLights;
 	std::vector<std::unique_ptr<L3DSubMesh>> _subMeshes;
@@ -155,8 +193,8 @@ private:
 	std::optional<glm::vec3> _chimneyPos;
 	std::vector<glm::mat4> _extraMetrics;
 	/// Bounding box if no physics mesh was found
-	std::unique_ptr<btConvexShape> _physicsMesh;
-	float _physicsMass {1.0f}; // TODO(bwrsandman): Find somewhere in file a value
+	std::vector<std::array<glm::vec3, 3>> _physicsTriangles;
+	std::vector<Surface> _surfaces;
 	AxisAlignedBoundingBox _boundingBox {
 	    {std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()},
 	    {std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest()},

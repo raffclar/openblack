@@ -13,11 +13,13 @@
 
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
 #include <L3DFile.h>
 #include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "AxisAlignedBoundingBox.h"
@@ -59,6 +61,8 @@ class L3DSubMesh
 		float alphaCutoutThreshold;
 		/// Drawn from both sides: the game culls the back faces of the rest, as the material's cull mode says
 		bool twoSided;
+		/// The material's render mode, as the file numbers it
+		uint32_t materialType {0};
 	};
 
 public:
@@ -66,6 +70,26 @@ public:
 	~L3DSubMesh() noexcept;
 
 	bool Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept;
+
+	/// A corner of a submesh made while the game runs, such as a broken building's
+	struct MadeVertex
+	{
+		glm::vec3 position;
+		glm::vec2 uv;
+		glm::vec3 normal;
+	};
+	/// A primitive of a submesh made while the game runs, drawn with the material of a primitive of another model
+	struct MadePrimitive
+	{
+		const L3DSubMesh* source {nullptr};
+		size_t sourcePrimitive {0};
+		std::vector<MadeVertex> vertices;
+		/// Triangles over its own vertices
+		std::vector<uint16_t> indices;
+	};
+	/// Makes a submesh drawn at the nearest level of detail from primitives given whole; all of them together hold no more
+	/// vertices than a 16-bit index reaches
+	bool LoadMade(std::span<const MadePrimitive> primitives) noexcept;
 	/// A dynamic mesh's submesh takes its vertices afresh from a file of the same shape
 	void UpdateVertices(const l3d::L3DFile& l3d) noexcept;
 
@@ -100,12 +124,48 @@ public:
 	/// How far along a ray, in the mesh's space, it first meets the submesh, which the temple's rooms keep the triangles
 	/// of to find
 	[[nodiscard]] std::optional<float> Pick(glm::vec3 origin, glm::vec3 direction) const;
+	/// The submesh's corners and triangles, kept for the world to set flames on a model and to break it apart: each
+	/// primitive's indices (GetPrimitives) count into the corners. Empty for a model moved by bones.
+	struct Surface
+	{
+		std::vector<glm::vec3> positions;
+		std::vector<glm::vec2> uvs;
+		std::vector<glm::vec3> normals;
+		std::vector<uint16_t> indices;
+	};
+	[[nodiscard]] const Surface& GetSurface() const { return _surface; }
+	/// Every submesh's vertices as the file holds them (a boned one's in the space of the bone that moves each), its
+	/// triangles over them, and for a boned one the bone of each vertex: what the physics builds bodies from
+	static constexpr uint16_t k_NoBone = 0xFFFF;
+	struct BodyGeometry
+	{
+		std::vector<glm::vec3> positions;
+		/// Each vertex's texture coordinates
+		std::vector<glm::vec2> uvs;
+		std::vector<uint16_t> indices;
+		std::vector<uint16_t> bones;
+	};
+	[[nodiscard]] const BodyGeometry& GetBodyGeometry() const { return _bodyGeometry; }
 	/// Whether some of the vertices are blended towards others where the body's parts meet (see vertex_blend). Each
 	/// vertex then names its partner in its bone indices' second and its weight, in 32767ths, in their third.
 	[[nodiscard]] bool HasBlends() const { return _hasBlends; }
 	/// For a boned submesh, every vertex's position and bone index, a texel each in a row, for the vertex shader to place
 	/// a blended vertex's partner by. The texels of a creature's variant mesh follow the same order.
 	[[nodiscard]] const Texture2D* GetBlendSource() const { return _blendSource.get(); }
+	/// The vertices of a submesh without bones, with their normals, for effects that crawl over its surface such as the
+	/// arcs a lightning strike leaves, and the run of them each of its primitives has, in order; none for a boned one
+	struct SurfacePoint
+	{
+		glm::vec3 position;
+		glm::vec3 normal;
+	};
+	struct SurfacePrimitive
+	{
+		uint32_t first;
+		uint32_t count;
+	};
+	[[nodiscard]] const std::vector<SurfacePoint>& GetSurfacePoints() const { return _surfacePoints; }
+	[[nodiscard]] const std::vector<SurfacePrimitive>& GetSurfacePrimitives() const { return _surfacePrimitives; }
 
 private:
 	/// The submesh's vertices as they are drawn, in bgfx memory
@@ -130,6 +190,10 @@ private:
 	Frame _frame {glm::mat4(1.0f), glm::vec3(0.0f), glm::vec3(0.0f)};
 	/// The corners of each triangle in turn, of the temple's rooms
 	std::vector<glm::vec3> _pickTriangles;
+	std::vector<SurfacePoint> _surfacePoints;
+	std::vector<SurfacePrimitive> _surfacePrimitives;
+	Surface _surface;
+	BodyGeometry _bodyGeometry;
 
 	AxisAlignedBoundingBox _boundingBox;
 	bool _hasBlends {false};
