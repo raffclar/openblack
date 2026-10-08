@@ -32,6 +32,10 @@ public:
 	[[nodiscard]] float GetValue() const { return _value; }
 	[[nodiscard]] float GetSpeed() const { return _speed; }
 	[[nodiscard]] float GetDestination() const { return _destination; }
+	/// How long its move to the destination takes
+	[[nodiscard]] float GetDuration() const { return _duration; }
+	/// Its time is up: it is at its destination, or was put somewhere and not sent on
+	[[nodiscard]] bool HasArrived() const { return _elapsed == _duration; }
 
 private:
 	float _value {0.0f};
