@@ -102,6 +102,11 @@ void MusicPlayer::Start(size_t index, uint32_t startChunk)
 		}
 	}
 
+	if (const auto logger = spdlog::get("audio"); logger != nullptr)
+	{
+		SPDLOG_LOGGER_DEBUG(logger, "Music {} (group {}) starts at chunk {} of {}, {} frames in", channel.bank->path,
+		                    channel.groupId, chunk, chunkCount, skipFrames);
+	}
 	channel.stream = _backend.CreateStream(channel.pitchPercent);
 	channel.nextChunk = chunk - 1;
 	channel.playingChunk = chunk;

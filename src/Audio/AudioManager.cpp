@@ -11,6 +11,8 @@
 
 #include "AudioManager.h"
 
+#include <cmath>
+
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -97,8 +99,19 @@ std::string EmitterSoundName(const AudioEmitter& emitter)
 // The log lines below are left out of release builds, which would otherwise find these parameters unused
 void LogEmitterStart([[maybe_unused]] entt::entity entity, [[maybe_unused]] const AudioEmitter& emitter)
 {
-	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} starts: volume {} pitch {}%{}", DescribeEmitter(entity, emitter),
-	                    emitter.volume, emitter.pitchPercent, emitter.loop == PlayType::Repeat ? ", looping" : "");
+	// Where a placed sound is heard from: to the listener's right (or left), ahead and above
+	[[maybe_unused]] const auto heard = [&emitter]() {
+		if (!emitter.spatial)
+		{
+			return std::string();
+		}
+		const auto& camera = Locator::camera::value();
+		const auto at = audio::ToListenerFrame(emitter.position, camera.GetOrigin(), camera.GetForward(), camera.GetUp());
+		return fmt::format(", heard {:.1f} m {}, {:.1f} m ahead, {:.1f} m up", std::abs(at.x), at.x < 0.0f ? "left" : "right",
+		                   at.y, at.z);
+	};
+	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} starts: volume {} pitch {}%{}{}", DescribeEmitter(entity, emitter),
+	                    emitter.volume, emitter.pitchPercent, emitter.loop == PlayType::Repeat ? ", looping" : "", heard());
 }
 
 void LogNotStarted([[maybe_unused]] const Sound& sound, [[maybe_unused]] const glm::vec3& position,

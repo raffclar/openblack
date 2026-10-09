@@ -16,6 +16,8 @@
 #include <algorithm>
 #include <unordered_map>
 
+#include <spdlog/spdlog.h>
+
 #include "3D/LandIslandInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/Sound.h"
@@ -325,6 +327,8 @@ void InfluenceSystem::ProcessVirtualInfluence(uint32_t turn)
 	                                                                  : registry.Assign<VirtualInfluence>(entity);
 	const auto& citadel = Locator::infoConstants::value().citadel;
 	const bool shielded = Shielded(player, *hand);
+	const bool inInfluence = !shielded && PlayerInfluence(player, *hand) > 0.0f;
+	const auto before = virtualInfluence.state;
 	// TODO(raffclar): the chants waiting at the player's worship sites, which slow the waning, once worship sites are
 	// simulated; until then there are none
 	virtual_influence::ProcessTurn(virtualInfluence.state,
@@ -332,7 +336,7 @@ void InfluenceSystem::ProcessVirtualInfluence(uint32_t turn)
 	                                   .hand = *hand,
 	                                   .turn = turn,
 	                                   .handShielded = shielded,
-	                                   .handInInfluence = !shielded && PlayerInfluence(player, *hand) > 0.0f,
+	                                   .handInInfluence = inInfluence,
 	                                   .influencePower = InfluencePower(player),
 	                                   .chants = 0.0f,
 	                               },
@@ -341,6 +345,15 @@ void InfluenceSystem::ProcessVirtualInfluence(uint32_t turn)
 	                                   .maxTurns = citadel.virtualInfluenceMaxGameTicks,
 	                                   .chantsToDouble = citadel.virtualInfluenceChantsToDouble,
 	                               });
+	// The log follows the strength the hand keeps past the border, a tenth at a time
+	const auto& after = virtualInfluence.state;
+	if (static_cast<int>(before.fraction * 10.0f) != static_cast<int>(after.fraction * 10.0f) ||
+	    before.anchor.has_value() != after.anchor.has_value())
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "The hand {} its player's influence at ({:.1f}, {:.1f}), strength {:.2f}",
+		                    inInfluence ? "is in" : (shielded ? "is shielded from" : "is out of"), hand->x, hand->z,
+		                    after.fraction);
+	}
 }
 
 void InfluenceSystem::HumVirtualInfluence()

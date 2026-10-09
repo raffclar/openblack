@@ -2759,6 +2759,8 @@ void SetVirtualInfluence() // 254 SET_VIRTUAL_INFLUENCE
 {
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	const auto enable = Pop().intVal != 0;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "The hand's virtual influence for player {} is turned {}",
+	                    static_cast<int>(player), enable ? "on" : "off");
 	// Turned off, the player's hand keeps nothing of their influence past the border, and loses what it had
 	if (!Locator::playerSystem::has_value())
 	{
@@ -4473,6 +4475,7 @@ void GameAddForBuilding() // 444 GAME_ADD_FOR_BUILDING
 void EnableDisableAlignmentMusic() // 445 ENABLE_DISABLE_ALIGNMENT_MUSIC
 {
 	const auto enable = Pop().intVal != 0;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "The land's music is turned {}", enable ? "on" : "off");
 	if (auto* gameMusic = Game::Instance()->GetGameMusic())
 	{
 		gameMusic->SetAlignmentMusicEnabled(enable);

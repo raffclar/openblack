@@ -190,6 +190,7 @@ void GameMusic::Reset()
 	_scriptType = MusicType::None;
 	_scriptStarted = false;
 	_alignmentMusicEnabled = true;
+	_landMusicWasAllowed.reset();
 	_rememberedTown.reset();
 	_resumeChunks.clear();
 }
@@ -202,6 +203,12 @@ void GameMusic::StartScriptMusic(MusicType type)
 void GameMusic::ProcessTurn(const TurnInputs& inputs)
 {
 	const auto before = _playing;
+	if (const auto allowed = LandMusicAllowed(inputs); allowed != _landMusicWasAllowed)
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Land music {} (turn {}, cinema {}, turned on {})",
+		                    allowed ? "may play" : "waits", inputs.turn, inputs.cinema, _alignmentMusicEnabled);
+		_landMusicWasAllowed = allowed;
+	}
 	ProcessMusic(inputs);
 	if (_playing != before)
 	{

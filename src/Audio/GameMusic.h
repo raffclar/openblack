@@ -208,6 +208,8 @@ private:
 	MusicType _scriptType {MusicType::None};
 	bool _scriptStarted {false};
 	bool _alignmentMusicEnabled {true};
+	/// Whether the land's music could play last turn, for logging when that changes
+	std::optional<bool> _landMusicWasAllowed;
 	std::optional<uint32_t> _rememberedTown;
 	/// 1-based chunk each music group carries on from
 	std::map<int32_t, uint32_t> _resumeChunks;
