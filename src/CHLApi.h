@@ -41,6 +41,12 @@ public:
 	/// Logs how often each unwritten native was called, the most called first
 	void LogStubCalls() const;
 
+	/// Whether the scripts let the game's sound effects play: off, only the advisors' and villagers' speech plays
+	[[nodiscard]] bool IsGameSoundOn() const { return _gameSoundOn; }
+	void SetGameSoundOn(bool on) { _gameSoundOn = on; }
+	/// The scripts start again: their switches go back to how a new game has them
+	void ResetSwitches() { _gameSoundOn = true; }
+
 private:
 	void InitFunctionsTable0();
 	void InitFunctionsTable1();
@@ -51,6 +57,7 @@ private:
 	std::vector<lhvm::NativeFunction> _functionsTable;
 	uint32_t _currentNative {0};
 	script::NativeStubCalls _stubCalls;
+	bool _gameSoundOn {true};
 };
 
 } // namespace openblack::chlapi
