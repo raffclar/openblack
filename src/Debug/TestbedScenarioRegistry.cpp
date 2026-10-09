@@ -1350,6 +1350,46 @@ void AddHand(std::vector<Scenario>& all)
 	                 Slap(0, 0.85f, true, false, 2.0f), Slap(0, 0.55f, false, true, 2.0f), Act(Kind::HandLetGo, 0, 3.0f, true)},
 	    .repeatFrom = 0,
 	});
+	// The camera looks down on the north edge of the player's influence, 400 m from the middle: the bottom of the
+	// screen is inside it, the rest beyond
+	all.push_back({
+	    .id = "hand.virtual_influence",
+	    .name = "The hand acting past the influence border",
+	    .facet = Facet::Hand,
+	    .description = "The hand picks up a ball inside the player's influence, carries it past the border and lets it "
+	                   "go, picks up a second ball just outside and drops it, then waits further out and tries a third "
+	                   "ball once the share it keeps has run out, and comes back in.",
+	    .expected = "Just past the border the hand still takes and lets go of the balls, keeping its inside look, with "
+	                "the hum playing; the game log gives the share it keeps falling a tenth at a time. Once the log says "
+	                "it has none, the third ball can't be taken and the hand changes to its outside look.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, 375.0f}, .look = {0.0f, 0.0f, 415.0f}},
+	    .objects = {{.type = MobileObjectInfo::Ball, .offset = {0.0f, 393.0f}},
+	                {.type = MobileObjectInfo::Ball, .offset = {5.0f, 408.0f}},
+	                {.type = MobileObjectInfo::Ball, .offset = {-5.0f, 430.0f}}},
+	    .commands =
+	        {// Inside, the hand takes the first ball
+	         {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.5f, 0.96f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3},
+	         // Carries it past the border and lets it go there
+	         {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.0f, -0.25f}, .amount = 1.0f},
+	         {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.3f, .value = 3},
+	         // Takes the second ball, just outside, and lets it go
+	         {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.582f, 0.6f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3},
+	         {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.3f, .value = 3},
+	         // Waits further out until nothing is left, then tries the third
+	         {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.44f, 0.02f}},
+	         {.kind = Kind::PointerTo, .delaySeconds = 10.0f, .point = {0.441f, 0.296f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3},
+	         // And comes back in
+	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.3f, 0.97f}}},
+	});
 }
 
 void AddLeash(std::vector<Scenario>& all)
