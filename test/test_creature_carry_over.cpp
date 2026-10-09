@@ -7,9 +7,12 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
 #include <array>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <system_error>
@@ -70,7 +73,10 @@ class FakeLeash final: public ecs::systems::LeashSystemInterface
 public:
 	void ProcessTurn() override {}
 	void Update(float /*seconds*/) override {}
-	void HandleInput(const glm::vec3& /*rayOrigin*/, const glm::vec3& /*rayDirection*/, bool /*actionTaken*/) override {}
+	void HandleInput(const glm::vec3& /*rayOrigin*/, const glm::vec3& /*rayDirection*/, glm::vec2 /*cursor*/,
+	                 uint32_t /*milliseconds*/, bool /*actionTaken*/) override
+	{
+	}
 	[[nodiscard]] bool Knows(entt::entity /*creature*/, LeashType /*type*/) const override { return false; }
 	void SetKnown(entt::entity /*creature*/, LeashType /*type*/, bool /*known*/) override {}
 	[[nodiscard]] bool IsLeashable(entt::entity /*creature*/) const override { return false; }
@@ -106,6 +112,14 @@ public:
 	bool TapCreature(PlayerNames /*player*/, entt::entity /*creature*/) override { return false; }
 	bool Shake(PlayerNames /*player*/) override { return false; }
 	void PlacePosts(PlayerNames /*owner*/, const std::array<glm::vec3, 3>& /*points*/) override {}
+	bool OrderAt(PlayerNames /*player*/, const glm::vec3& /*place*/) override { return false; }
+	bool OrderOn(PlayerNames /*player*/, entt::entity /*object*/) override { return false; }
+	[[nodiscard]] std::optional<glm::vec3> OrderTarget(entt::entity /*creature*/) const override { return std::nullopt; }
+	[[nodiscard]] std::optional<uint32_t> ToolTip(PlayerNames /*player*/,
+	                                              std::optional<entt::entity> /*hovered*/) const override
+	{
+		return std::nullopt;
+	}
 	bool TapPost(entt::entity /*post*/) override { return false; }
 
 	std::optional<entt::entity> playersCreature;
