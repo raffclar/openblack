@@ -2789,6 +2789,12 @@ bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept
 	// again. None of the last land's scripts go on running on the new land.
 	if (Locator::vm::has_value())
 	{
+		// The program starting again frees every place of the scripts' objects, while the last land's objects are still
+		// there to be let go back into the game
+		if (Locator::scriptObjects::has_value())
+		{
+			Locator::scriptObjects::value().Reset();
+		}
 		auto& fileSystem = Locator::filesystem::value();
 		const auto challengePath = fileSystem.GetPath<filesystem::Path::Quests>() / "challenge.chl";
 		try
