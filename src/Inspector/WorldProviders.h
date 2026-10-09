@@ -63,6 +63,9 @@ using ParticleEffectInfo = ecs::systems::ParticleSystemInterface::EffectInfo;
 /// The running particle effects as list items, of those whose file names hold the text when it is given
 [[nodiscard]] Json EffectItems(std::span<const ParticleEffectInfo> effects, std::optional<std::string_view> file);
 
+/// The running particle effects that follow an object as list items
+[[nodiscard]] Json EmitterItems(std::span<const ParticleEffectInfo> effects, entt::entity owner);
+
 struct ParticleSources
 {
 	std::function<std::span<const water_rings::Ring>()> rings;
@@ -71,6 +74,7 @@ struct ParticleSources
 
 ///   particles.splash   near, radius          the splashes within the radius, nearest first, with their state
 ///   particles.effects  {file?} [near, radius] the running particle effects
+///   particles.emitters {owner}               the effects that follow an object
 class ParticlesProvider final: public ProviderInterface
 {
 public:

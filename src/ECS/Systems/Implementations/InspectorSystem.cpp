@@ -11,27 +11,18 @@
 
 #include "InspectorSystem.h"
 
-#include <chrono>
 #include <string>
 #include <utility>
 
 #include <spdlog/spdlog.h>
 
-#include "3D/DayNightClock.h"
-#include "3D/SkyInterface.h"
-#include "Camera/Camera.h"
 #include "Debug/TestbedScenarioRegistry.h"
-#include "ECS/Registry.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
-#include "ECS/Systems/WaterRingSystemInterface.h"
 #include "Game.h"
 #include "Inspector/ComponentReflection.h"
-#include "Inspector/EditProviders.h"
+#include "Inspector/GameProviders.h"
 #include "Inspector/GameWorldEdit.h"
-#include "Inspector/RegistryProviders.h"
 #include "Inspector/RunControl.h"
-#include "Inspector/WorldProviders.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -93,18 +84,6 @@ public:
 	}
 };
 
-inspector::RegistrySources RegistrySourcesFromLocator()
-{
-	return {
-	    .registry = []() -> const ecs::Registry* {
-		    return Locator::entitiesRegistry::has_value() ? &Locator::entitiesRegistry::value() : nullptr;
-	    },
-	    .info = []() -> const InfoConstants* {
-		    return Locator::infoConstants::has_value() ? &Locator::infoConstants::value() : nullptr;
-	    },
-	};
-}
-
 } // namespace
 
 InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
@@ -126,58 +105,7 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
 		}
 	});
 
-	_inspector.Add(std::make_unique<inspector::RegistryProvider>(RegistrySourcesFromLocator(), *_reflection));
-	_inspector.Add(std::make_unique<inspector::ObjectsProvider>(RegistrySourcesFromLocator()));
-	_inspector.Add(std::make_unique<inspector::EditProvider>(
-	    inspector::EditSources {
-	        .registry = []() -> ecs::Registry* {
-		        return Locator::entitiesRegistry::has_value() ? &Locator::entitiesRegistry::value() : nullptr;
-	        },
-	        .info = []() -> const InfoConstants* {
-		        return Locator::infoConstants::has_value() ? &Locator::infoConstants::value() : nullptr;
-	        },
-	    },
-	    *_reflection, *_worldEdit));
-	_inspector.Add(std::make_unique<inspector::SkyProvider>(inspector::SkySources {
-	    .scriptHour = []() -> std::optional<float> {
-		    if (!Locator::skySystem::has_value())
-		    {
-			    return std::nullopt;
-		    }
-		    return Locator::skySystem::value().GetClock().GetScriptTime();
-	    },
-	    .cameraOrigin = []() -> std::optional<glm::vec3> {
-		    if (!Locator::camera::has_value())
-		    {
-			    return std::nullopt;
-		    }
-		    return Locator::camera::value().GetOrigin();
-	    },
-	    .unixTime =
-	        []() {
-		        return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch())
-		            .count();
-	        },
-	}));
-	_inspector.Add(std::make_unique<inspector::ParticlesProvider>(inspector::ParticleSources {
-	    .rings = []() -> std::span<const water_rings::Ring> {
-		    if (!Locator::waterRingSystem::has_value())
-		    {
-			    return {};
-		    }
-		    return Locator::waterRingSystem::value().GetRings();
-	    },
-	    .effects = []() -> std::vector<inspector::ParticleEffectInfo> {
-		    if (!Locator::particleSystem::has_value())
-		    {
-			    return {};
-		    }
-		    return Locator::particleSystem::value().GetEffects();
-	    },
-	}));
-	auto game = std::make_unique<inspector::GameProvider>(*_runTarget);
-	_game = game.get();
-	_inspector.Add(std::move(game));
+	_game = inspector::AddGameProviders(_inspector, *_reflection, *_runTarget, *_worldEdit);
 
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Inspector listening on 127.0.0.1:{}", _server->Port());
 }

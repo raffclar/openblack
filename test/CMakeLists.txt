@@ -437,4 +437,12 @@ if (OPENBLACK_INSPECTOR)
     test_inspector_edit inspector/test_inspector_edit.cpp
   )
   target_link_libraries(test_inspector_edit PRIVATE inspector)
+  openblack_setup_and_add_test(
+    test_inspector_systems inspector/test_inspector_systems.cpp
+  )
+  target_link_libraries(test_inspector_systems PRIVATE inspector psys)
+  # The coverage test reads the locator's header for its services
+  target_compile_definitions(
+    test_inspector_systems PRIVATE OPENBLACK_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+  )
 endif ()

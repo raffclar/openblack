@@ -17,6 +17,7 @@
 #include <string>
 #include <utility>
 
+#include "EntityDescription.h"
 #include "Graphics/Moon.h"
 
 using namespace openblack;
@@ -58,6 +59,7 @@ Json EffectItem(const inspector::ParticleEffectInfo& effect)
 	    {"closing", effect.closing},
 	    {"owned_by_spell", effect.ownedBySpell},
 	    {"seconds_left", effect.secondsLeft.has_value() ? Json(*effect.secondsLeft) : Json(nullptr)},
+	    {"owner", effect.owner == entt::null ? Json(nullptr) : Json(entt::to_integral(effect.owner))},
 	};
 }
 
@@ -150,6 +152,19 @@ Json openblack::inspector::EffectItems(std::span<const ParticleEffectInfo> effec
 	return items;
 }
 
+Json openblack::inspector::EmitterItems(std::span<const ParticleEffectInfo> effects, entt::entity owner)
+{
+	Json items = Json::array();
+	for (const auto& effect : effects)
+	{
+		if (effect.owner == owner)
+		{
+			items.push_back(EffectItem(effect));
+		}
+	}
+	return items;
+}
+
 ParticlesProvider::ParticlesProvider(ParticleSources sources)
     : _sources(std::move(sources))
 {
@@ -172,6 +187,11 @@ std::vector<QueryDescription> ParticlesProvider::Describe() const
 	                     .required = false}},
 	     .kind = ResultKind::List,
 	     .needsNear = false},
+	    {.name = "emitters",
+	     .description = "The running particle effects that follow an object and end with it",
+	     .parameters = {{.name = "owner", .type = "integer", .description = "The object's entity id", .required = true}},
+	     .kind = ResultKind::List,
+	     .needsNear = false},
 	};
 }
 
@@ -188,6 +208,16 @@ QueryResult ParticlesProvider::Run(std::string_view query, const QueryContext& c
 		const auto file = StringMember(context.params, "file");
 		return QueryResult::Value(
 		    EffectItems(effects, file.has_value() ? std::optional<std::string_view>(*file) : std::nullopt));
+	}
+	if (query == "emitters")
+	{
+		const auto owner = context.params.find("owner");
+		const auto entity = owner == context.params.end() ? std::nullopt : FromId(*owner);
+		if (!entity.has_value())
+		{
+			return QueryResult::Error("owner must be an entity's id");
+		}
+		return QueryResult::Value(EmitterItems(effects, *entity));
 	}
 	return QueryResult::Error("no query particles." + std::string(query));
 }

@@ -1305,6 +1305,7 @@ std::vector<ParticleSystemInterface::EffectInfo> ParticleSystem::GetEffects() co
 		    .targets = effect.TargetCount(),
 		    .secondsLeft = secondsLeft,
 		    .unportedClasses = effect.UnportedClasses(),
+		    .owner = running.owner,
 		});
 	}
 	return result;

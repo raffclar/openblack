@@ -77,8 +77,10 @@ TOOLS = [
     },
     {
         "name": "inspector_query",
-        "description": "Runs any inspector query by name (e.g. ecs.entities, sky.moon) with its params and the "
-                       "shaping options. Results are small by default: lists are paged at 20 items.",
+        "description": "Runs any inspector query by name (e.g. ecs.entities, sky.moon, land.weather_at, "
+                       "magic.fires, script.tasks) with its params and the shaping options. Every system the game "
+                       "has is covered by some provider: ask inspector_describe. Results are small by default: "
+                       "lists are paged at 20 items.",
         "inputSchema": schema({"query": {"type": "string"}, "params": {"type": "object"}, **NEAR, **SHAPING},
                               ["query"]),
     },
@@ -165,6 +167,163 @@ TOOLS = [
         "inputSchema": schema({"id": {"type": "string"}}, ["id"]),
         "query": "game.scenario",
         "params": ["id"],
+    },
+    # Writes: each answers the small state that results, and is logged by the game and listed by inspector_writes
+    {
+        "name": "edit_kinds",
+        "description": "The kinds of thing edit_create makes; with kind, that kind's types by number and name.",
+        "inputSchema": schema({"kind": {"type": "string"}, **SHAPING}),
+        "query": "edit.kinds",
+        "params": ["kind"],
+    },
+    {
+        "name": "edit_create",
+        "description": "Makes a thing through the archetype the game makes it with (kinds: creature, villager, "
+                       "building, tree, feature, mobile_object, mobile_static, dispenser, miracle_bubble). Answers "
+                       "its id, label, components and whether it is in its map cell and the physics.",
+        "inputSchema": schema({"kind": {"type": "string"},
+                               "type": {"description": "The type's number or name (edit_kinds)"},
+                               "position": {"type": "array", "items": {"type": "number"},
+                                            "description": "[x, z] on the land, or [x, y, z]"},
+                               "yaw": {"type": "number", "description": "Degrees about the up axis"}},
+                              ["kind", "type", "position"]),
+        "query": "edit.create",
+        "params": ["kind", "type", "position", "yaw"],
+    },
+    {
+        "name": "edit_move",
+        "description": "Moves a thing as the game's tools do and refiles it in the map; answers its place and cell.",
+        "inputSchema": schema({"id": {"type": "integer"},
+                               "position": {"type": "array", "items": {"type": "number"},
+                                            "description": "[x, z] on the land, or [x, y, z]"}},
+                              ["id", "position"]),
+        "query": "edit.move",
+        "params": ["id", "position"],
+    },
+    {
+        "name": "edit_turn",
+        "description": "Turns a thing about the up axis by an angle in degrees.",
+        "inputSchema": schema({"id": {"type": "integer"}, "yaw": {"type": "number"}}, ["id", "yaw"]),
+        "query": "edit.turn",
+        "params": ["id", "yaw"],
+    },
+    {
+        "name": "edit_set",
+        "description": "Sets one field of a component (a dotted path into nested values), its type checked; "
+                       "answers the field as it now is.",
+        "inputSchema": schema({"id": {"type": "integer"}, "component": {"type": "string"},
+                               "field": {"type": "string"}, "value": {"description": "Of the field's type"}},
+                              ["id", "component", "field", "value"]),
+        "query": "edit.set",
+        "params": ["id", "component", "field", "value"],
+    },
+    {
+        "name": "edit_add_component",
+        "description": "Adds a component as it starts, then sets the given fields; answers the component.",
+        "inputSchema": schema({"id": {"type": "integer"}, "component": {"type": "string"},
+                               "fields": {"type": "object"}}, ["id", "component"]),
+        "query": "edit.add",
+        "params": ["id", "component", "fields"],
+    },
+    {
+        "name": "edit_remove_component",
+        "description": "Takes a component off an entity; answers the components left.",
+        "inputSchema": schema({"id": {"type": "integer"}, "component": {"type": "string"}}, ["id", "component"]),
+        "query": "edit.remove_component",
+        "params": ["id", "component"],
+    },
+    {
+        "name": "edit_destroy",
+        "description": "Takes a thing out through the game's own removal (its physics, sounds, map cells, home and "
+                       "town); how=effect destroys it as an effect would (a villager dies, a building burns "
+                       "down). Answers whether it still exists, is in its map cell or the physics.",
+        "inputSchema": schema({"id": {"type": "integer"}, "how": {"type": "string", "enum": ["remove", "effect"]}},
+                              ["id"]),
+        "query": "edit.destroy",
+        "params": ["id", "how"],
+    },
+    {
+        "name": "inspector_writes",
+        "description": "The last changes made through the inspector, newest first, and whether each was made.",
+        "inputSchema": schema(SHAPING),
+        "query": "writes",
+    },
+    # The main systems' named queries; every other system is reached through inspector_query (see describe)
+    {
+        "name": "physics_body",
+        "description": "One object's body in the physics: place, velocity, mass, resting, who threw it.",
+        "inputSchema": schema({"id": {"type": "integer"}, **SHAPING}, ["id"]),
+        "query": "physics.body",
+        "params": ["id"],
+    },
+    {
+        "name": "physics_bodies",
+        "description": "The physics' bodies within a radius of a point, nearest first.",
+        "inputSchema": schema({**NEAR, **SHAPING}, ["near", "radius"]),
+        "query": "physics.bodies",
+    },
+    {
+        "name": "creature_desires",
+        "description": "A creature's strongest desires (top 5 by default); id may be left out with one creature.",
+        "inputSchema": schema({"id": {"type": "integer"}, "top": {"type": "integer"}}),
+        "query": "creature.desires",
+        "params": ["id", "top"],
+    },
+    {
+        "name": "creature_plan",
+        "description": "A creature's plan (desire, action, object, priority), activity and next agenda steps.",
+        "inputSchema": schema({"id": {"type": "integer"}, **SHAPING}),
+        "query": "creature.plan",
+        "params": ["id"],
+    },
+    {
+        "name": "map_cell",
+        "description": "What stands in a map cell (10 by 10), as a search meets it: by a point in it or its cell.",
+        "inputSchema": schema({"position": {"type": "array", "items": {"type": "number"}},
+                               "cell": {"type": "array", "items": {"type": "integer"}}, **SHAPING}),
+        "query": "map.cell",
+        "params": ["position", "cell"],
+    },
+    {
+        "name": "town_homes",
+        "description": "A town's buildings with who lives in each (town ids from town.list).",
+        "inputSchema": schema({"id": {"type": "integer"}, **SHAPING}, ["id"]),
+        "query": "town.homes",
+        "params": ["id"],
+    },
+    {
+        "name": "town_homeless",
+        "description": "A town's people without a home.",
+        "inputSchema": schema({"id": {"type": "integer"}, **SHAPING}, ["id"]),
+        "query": "town.homeless",
+        "params": ["id"],
+    },
+    {
+        "name": "influence_hand",
+        "description": "The hand's share of its player's influence: the influence where the hand is, at its own "
+                       "place and the player's own, and whether the hand is inside.",
+        "inputSchema": schema({"player": {"type": "integer"}}),
+        "query": "influence.hand",
+        "params": ["player"],
+    },
+    {
+        "name": "particles_emitters",
+        "description": "The running particle effects that follow an object (its entity id).",
+        "inputSchema": schema({"owner": {"type": "integer"}, **SHAPING}, ["owner"]),
+        "query": "particles.emitters",
+        "params": ["owner"],
+    },
+    {
+        "name": "camera_state",
+        "description": "Where the camera is, what it looks at, its angles and field of view (read only).",
+        "inputSchema": schema(SHAPING),
+        "query": "camera.state",
+    },
+    {
+        "name": "audio_sounds",
+        "description": "The sounds playing within a radius of a point, nearest first.",
+        "inputSchema": schema({**NEAR, **SHAPING}, ["near", "radius"]),
+        "query": "audio.sounds",
     },
 ]
 TOOLS_BY_NAME = {tool["name"]: tool for tool in TOOLS}
