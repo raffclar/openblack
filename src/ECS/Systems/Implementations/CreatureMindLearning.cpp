@@ -607,9 +607,10 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	}
 	auto& [executor, agenda] = *built;
 	auto& registry = Locator::entitiesRegistry::value();
-	// Whatever its hands were doing is given up for the plan
+	// Whatever its hands were doing is given up for the plan, but for a catch, which its body carries on with by itself
 	if (Locator::creatureObjectActionSystem::has_value() &&
-	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
+	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy &&
+	    !Locator::creatureObjectActionSystem::value().IsCatching(creature))
 	{
 		Locator::creatureObjectActionSystem::value().Cancel(creature);
 	}

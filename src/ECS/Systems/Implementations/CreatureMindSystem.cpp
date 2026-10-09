@@ -1191,7 +1191,12 @@ bool CreatureMindSystem::Replan(entt::entity creature, creature_mind::Activity a
 	{
 		return false;
 	}
-	if (Locator::creatureLocomotionSystem::has_value())
+	// It stops walking, unless a catch it has started is turning it to face what it catches: changing what it does
+	// leaves a catch to its body
+	// TODO(physics): whether the game's stopping cuts short the turn a catch starts with wasn't traced
+	const bool catching =
+	    Locator::creatureObjectActionSystem::has_value() && Locator::creatureObjectActionSystem::value().IsCatching(creature);
+	if (Locator::creatureLocomotionSystem::has_value() && !catching)
 	{
 		Locator::creatureLocomotionSystem::value().Stop(creature);
 	}
