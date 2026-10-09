@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <optional>
+
 #include <entt/entity/fwd.hpp>
 #include <glm/vec2.hpp>
 
@@ -40,8 +42,17 @@ void SetScriptAnimation(entt::entity villager, AnimId clip, uint32_t plays);
 [[nodiscard]] bool HasPlayedScriptAnimation(entt::entity villager);
 /// The clip a script asked the villager to play, none when it asked for none
 [[nodiscard]] int32_t ScriptClip(entt::entity villager);
+/// A script gives the villager an age: it becomes a child or an adult, its model and size follow, and it is that old by
+/// the game's clock
+void SetAge(entt::entity villager, uint32_t age);
 /// The villager turns at once to face a point
 void Face(entt::entity villager, glm::vec2 point);
+/// A script makes the villager play a clip in place of its state's own, until its state next chooses one
+void OverrideAnimation(entt::entity villager, int32_t clip);
+/// The way the villager faces, as an angle about the upright
+[[nodiscard]] std::optional<float> YAngle(entt::entity villager);
+/// The villager turns at once to face the way of an angle about the upright
+void SetYAngle(entt::entity villager, float angle);
 
 /// Waiting in a script's hands: nothing to do
 uint32_t InScript(components::LivingAction& action);

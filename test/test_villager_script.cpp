@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <ECS/HighDetailRules.h>
 #include <ECS/VillagerScriptRules.h>
 #include <gtest/gtest.h>
 
@@ -77,4 +78,48 @@ TEST(VillagerScriptRules, ScriptLetsGoOnlyForItsOwnStates)
 	EXPECT_TRUE(rules::ScriptLetsGo(VillagerStates::InScript, VillagerStates::MoveAlongPath, k_Plain));
 	EXPECT_TRUE(rules::ScriptLetsGo(VillagerStates::ScriptPlayAnim, VillagerStates::ScriptPlayAnim, k_Plain));
 	EXPECT_FALSE(rules::ScriptLetsGo(VillagerStates::ScriptPlayAnim, VillagerStates::InScript, k_Plain));
+}
+
+TEST(HighDetail, OnlyTheOpeningsFamilyAndTheTrainerHaveDetailedModels)
+{
+	namespace hd = openblack::ecs::high_detail_rules;
+	const auto man = hd::DetailedModelFor(openblack::MeshId::PersonNorseMaleA1);
+	ASSERT_TRUE(man.has_value());
+	EXPECT_EQ(man->file, "Intro/nors_man.l3d");
+	EXPECT_EQ(man->face, hd::Face::Man);
+	EXPECT_EQ(hd::DetailedModelFor(openblack::MeshId::PersonNorseFemaleA1)->face, hd::Face::Woman);
+	EXPECT_EQ(hd::DetailedModelFor(openblack::MeshId::PersonBoyWhite1)->file, "Intro/nors_boy.l3d");
+	// The trainer wears the woman's face
+	EXPECT_EQ(hd::DetailedModelFor(openblack::MeshId::PersonAnimalTrainer)->face, hd::Face::Woman);
+	EXPECT_FALSE(hd::DetailedModelFor(openblack::MeshId::PersonNorseMaleA2).has_value());
+}
+
+TEST(HighDetail, TheOpeningsOrdersTurnTheBoyAndEaseHisTurning)
+{
+	namespace hd = openblack::ecs::high_detail_rules;
+	const hd::DrawOrders none;
+	// Easing switched off, then on again
+	auto result = hd::ApplyThingSpecial(hd::ThingSpecial::EaseTurning, false, none, 1.0f);
+	EXPECT_TRUE(result.orders.turnAtOnce);
+	EXPECT_FALSE(result.yAngle.has_value());
+	result = hd::ApplyThingSpecial(hd::ThingSpecial::EaseTurning, true, result.orders, 1.0f);
+	EXPECT_FALSE(result.orders.turnAtOnce);
+	// Mirrored, he faces the other way round and turns at once
+	result = hd::ApplyThingSpecial(hd::ThingSpecial::FaceMirrored, true, none, 1.0f);
+	ASSERT_TRUE(result.yAngle.has_value());
+	EXPECT_FLOAT_EQ(*result.yAngle, -1.0f);
+	EXPECT_TRUE(result.orders.turnAtOnce);
+	// Following the hand doesn't look at on
+	result = hd::ApplyThingSpecial(hd::ThingSpecial::FollowIntroHand, false, none, 1.0f);
+	EXPECT_TRUE(result.orders.followIntroHand);
+	result = hd::ApplyThingSpecial(hd::ThingSpecial::TakeQuarterTurn, true, none, 1.0f);
+	EXPECT_FLOAT_EQ(*result.yAngle, 1.0f - hd::k_QuarterTurn);
+}
+
+TEST(HighDetail, KeptOnlyWhileAScriptHoldsTheBars)
+{
+	namespace hd = openblack::ecs::high_detail_rules;
+	EXPECT_TRUE(hd::KeepsHighDetail(true, 12));
+	EXPECT_FALSE(hd::KeepsHighDetail(true, 0));
+	EXPECT_FALSE(hd::KeepsHighDetail(false, 12));
 }

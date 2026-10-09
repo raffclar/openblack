@@ -881,6 +881,26 @@ void LivingActionSystem::VillagerFace(entt::entity villager, glm::vec2 point) co
 	villager_script::Face(villager, point);
 }
 
+std::optional<float> LivingActionSystem::VillagerYAngle(entt::entity villager) const
+{
+	return villager_script::YAngle(villager);
+}
+
+void LivingActionSystem::VillagerSetYAngle(entt::entity villager, float angle) const
+{
+	villager_script::SetYAngle(villager, angle);
+}
+
+void LivingActionSystem::VillagerOverrideAnimation(entt::entity villager, int32_t clip) const
+{
+	villager_script::OverrideAnimation(villager, clip);
+}
+
+void LivingActionSystem::VillagerSetAge(entt::entity villager, uint32_t age) const
+{
+	villager_script::SetAge(villager, age);
+}
+
 uint32_t LivingActionSystem::VillagerCallState(LivingAction& action, LivingAction::Index index) const
 {
 	const auto state = action.states.at(static_cast<size_t>(index));

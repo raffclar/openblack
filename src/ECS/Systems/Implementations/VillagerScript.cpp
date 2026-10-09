@@ -16,9 +16,12 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 
+#include "Common/GUtilsAngle.h"
+#include "Common/GameRandom.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptAnimation.h"
 #include "ECS/Components/Transform.h"
@@ -26,10 +29,12 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/VillagerAge.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/VillagerScriptRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Resources/ResourceManager.h"
 #include "VillagerAnimate.h"
 #include "VillagerHome.h"
 
@@ -155,12 +160,43 @@ int32_t villager_script::ScriptClip(entt::entity villager)
 	return animation != nullptr ? static_cast<int32_t>(animation->clip) : static_cast<int32_t>(AnimId::Invalid);
 }
 
-void villager_script::Face(entt::entity villager, glm::vec2 point)
+void villager_script::SetAge(entt::entity villager, uint32_t age)
 {
 	auto& registry = Entities();
-	auto* transform = registry.TryGet<Transform>(villager);
-	auto* wallHug = registry.TryGet<WallHug>(villager);
-	if (transform == nullptr || wallHug == nullptr)
+	auto* person = registry.TryGet<Villager>(villager);
+	if (person == nullptr || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto& info =
+	    Locator::infoConstants::value().villager.at(static_cast<size_t>(GVillagerInfo::Find(person->tribe, person->number)));
+	const auto setting = villager_age::SetAge(age, villager_age::AgeNow(*person), info.grownUpAge);
+	person->lifeStage = setting.child ? Villager::LifeStage::Child : Villager::LifeStage::Adult;
+	if (auto* mesh = registry.TryGet<Mesh>(villager); mesh != nullptr && setting.childModel.has_value())
+	{
+		// A grown villager made young wears the child's model the game draws at its usual detail; a child made grown
+		// wears its kind's adult model
+		// TODO(opening): a skeleton keeps its skeleton's model either way
+		mesh->id = resources::HashIdentifier(*setting.childModel ? info.childMeshMedium : info.highDetail);
+	}
+	// Its size starts at its age's and then grows, as a newly made villager's does
+	if (auto* transform = registry.TryGet<Transform>(villager); transform != nullptr)
+	{
+		const auto start = villager_age::StartScale(setting.age, info.grownUpAge, info.ageToScale.values);
+		const auto grown =
+		    villager_age::GrownScale(setting.age, info.grownUpAge, info.ageToScale.values, start, [](float limit) {
+			    return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameFloatRand(limit) : 0.0f;
+		    });
+		transform->scale = glm::vec3(grown);
+	}
+	villager_age::SetBirthTurnForAge(*person, setting.age);
+	registry.SetDirty();
+}
+
+void villager_script::Face(entt::entity villager, glm::vec2 point)
+{
+	const auto* transform = Entities().TryGet<const Transform>(villager);
+	if (transform == nullptr)
 	{
 		return;
 	}
@@ -169,8 +205,39 @@ void villager_script::Face(entt::entity villager, glm::vec2 point)
 	{
 		return;
 	}
-	const float angle = std::atan2(offset.y, offset.x);
+	SetYAngle(villager, std::atan2(offset.y, offset.x));
+}
+
+void villager_script::OverrideAnimation(entt::entity villager, int32_t clip)
+{
+	// A clip the game doesn't have plays its first
+	const auto played = clip >= 0 && clip < static_cast<int32_t>(AnimId::_count) ? clip : 0;
+	// The same clip plays on; another starts from its beginning, and plays until its state next chooses a clip
+	if (villager_animate::CurrentClip(villager) != static_cast<AnimId>(played))
+	{
+		villager_animate::SetAnim(villager, played, true);
+	}
+	// TODO(opening): remembered for the villager to play again when it comes back to the script after being taken
+	// away from it
+}
+
+std::optional<float> villager_script::YAngle(entt::entity villager)
+{
+	const auto* wallHug = Entities().TryGet<const WallHug>(villager);
+	return wallHug != nullptr ? std::optional(wallHug->yAngle) : std::nullopt;
+}
+
+void villager_script::SetYAngle(entt::entity villager, float angle)
+{
+	auto& registry = Entities();
+	auto* transform = registry.TryGet<Transform>(villager);
+	auto* wallHug = registry.TryGet<WallHug>(villager);
+	if (transform == nullptr || wallHug == nullptr)
+	{
+		return;
+	}
 	wallHug->yAngle = angle;
+	wallHug->gameAngle = static_cast<uint16_t>(gutils::ConvertAngle3DToGame(angle));
 	transform->rotation = glm::eulerAngleY(-angle - glm::radians(90.0f));
 	registry.SetDirty();
 }

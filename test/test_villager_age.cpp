@@ -189,3 +189,34 @@ TEST(VillagerAge, ANewChildIsItsAgesSizeAndAFullOneDrawsOnce)
 	EXPECT_EQ(born.lastCheckTurn, 0u);
 	EXPECT_EQ(born.turnsUntilFirstDecision, 1u);
 }
+
+TEST(VillagerAge, AScriptMakingAGrownVillagerYoungGivesItTheChildsModel)
+{
+	// The opening's son is made grown (14) and then given the age 8
+	const auto setting = openblack::ecs::villager_age::SetAge(8, 18, 13);
+	EXPECT_EQ(setting.age, 8u);
+	EXPECT_TRUE(setting.child);
+	ASSERT_TRUE(setting.childModel.has_value());
+	EXPECT_TRUE(*setting.childModel);
+}
+
+TEST(VillagerAge, AnAgeOnTheSameSideOfGrowingUpKeepsTheModel)
+{
+	const auto child = openblack::ecs::villager_age::SetAge(3, 8, 13);
+	EXPECT_TRUE(child.child);
+	EXPECT_FALSE(child.childModel.has_value());
+	// An adult is never younger than the youngest adult's age
+	const auto adult = openblack::ecs::villager_age::SetAge(14, 40, 13);
+	EXPECT_EQ(adult.age, 18u);
+	EXPECT_FALSE(adult.child);
+	EXPECT_FALSE(adult.childModel.has_value());
+}
+
+TEST(VillagerAge, AChildGivenAGrownAgeWearsItsAdultModel)
+{
+	const auto setting = openblack::ecs::villager_age::SetAge(13, 5, 13);
+	EXPECT_EQ(setting.age, 18u);
+	EXPECT_FALSE(setting.child);
+	ASSERT_TRUE(setting.childModel.has_value());
+	EXPECT_FALSE(*setting.childModel);
+}

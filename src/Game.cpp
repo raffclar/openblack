@@ -135,6 +135,7 @@
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
+#include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -587,7 +588,8 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		case SDLK_7:
 		case SDLK_8:
 			// The camera's bookmarks aren't for the player while a script has the cinema bars in
-			if (!Locator::cinematicDirectorSystem::value().IsInterfaceActive())
+			if (!Locator::cinematicDirectorSystem::value().IsInterfaceActive() ||
+			    !Locator::cameraBookmarkSystem::value().IsEnabled())
 			{
 				break;
 			}
@@ -1307,6 +1309,8 @@ bool Game::Update() noexcept
 		Locator::temple::value().Update(deltaTime);
 	}
 	Locator::cameraBookmarkSystem::value().Update(deltaTime);
+	// The villagers a script draws in high detail are drawn as usual once its cinema bars are gone
+	Locator::highDetailSystem::value().Update();
 	if (_interface)
 	{
 		_interface->Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
@@ -2950,6 +2954,11 @@ void Game::PrepareNewLand()
 		scriptControl.Reset();
 	}
 	Locator::dialogueControlSystem::value().Reset();
+	// The camera's bookmarks a script put away come back (a land's first load makes them anew)
+	if (Locator::cameraBookmarkSystem::has_value())
+	{
+		Locator::cameraBookmarkSystem::value().SetEnabled(true);
+	}
 	Locator::cameraHelpSystem::value().Get().ResetForNewLand();
 	Locator::influenceSystem::value().Reset();
 	// Nor its creatures' footprints

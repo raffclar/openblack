@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <optional>
+
 #include <entt/entity/fwd.hpp>
 #include <glm/vec2.hpp>
 
@@ -63,6 +65,14 @@ public:
 	[[nodiscard]] virtual bool VillagerHasPlayedScriptAnimation(entt::entity villager) const = 0;
 	/// The villager turns at once to face a point
 	virtual void VillagerFace(entt::entity villager, glm::vec2 point) const = 0;
+	/// The way the villager faces, as an angle about the upright; none for a thing that isn't one
+	[[nodiscard]] virtual std::optional<float> VillagerYAngle(entt::entity villager) const = 0;
+	/// The villager turns at once to face the way of an angle about the upright
+	virtual void VillagerSetYAngle(entt::entity villager, float angle) const = 0;
+	/// A script makes the villager play a clip in place of its state's own, until its state next chooses one
+	virtual void VillagerOverrideAnimation(entt::entity villager, int32_t clip) const = 0;
+	/// A script gives the villager an age, making it a child or an adult
+	virtual void VillagerSetAge(entt::entity villager, uint32_t age) const = 0;
 };
 
 } // namespace openblack::ecs::systems

@@ -76,6 +76,7 @@
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
+#include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
@@ -86,6 +87,7 @@
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
+#include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -98,6 +100,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/TownPlaythings.h"
+#include "ECS/VillagerAge.h"
 #include "ECS/VillagerScriptRules.h"
 #include "ECS/WorldObjects.h"
 #include "Enums.h"
@@ -373,7 +376,13 @@ void RegisterCreated(entt::entity object)
 /// An object given to a native: a native that takes control of what it is given takes control of it
 entt::entity PopObject()
 {
-	return Locator::scriptObjects::value().Fetch(static_cast<entt::entity>(Pop().uintVal));
+	// A script's object 0 is none: the native was given nothing, or a creation that failed
+	const auto id = Pop().uintVal;
+	if (id == 0)
+	{
+		return entt::null;
+	}
+	return Locator::scriptObjects::value().Fetch(static_cast<entt::entity>(id));
 }
 
 /// The villager a native is given, if it is one the living actions direct
@@ -964,6 +973,17 @@ void GetProperty() // 021 GET_PROPERTY
 		}
 		Pushf(0.0f);
 		return;
+	case script::ObjectPropertyType::Age:
+		// Its age in years; only living things have one
+		if (const auto* person = registry.TryGet<const ecs::components::Villager>(object); person != nullptr)
+		{
+			Pushf(static_cast<float>(ecs::villager_age::AgeNow(*person)));
+			return;
+		}
+		// TODO(opening): the ages of creatures and animals; other things have none ("not used on non living objects")
+		NotImplemented(static_cast<int32_t>(prop));
+		Pushf(0.0f);
+		return;
 	case script::ObjectPropertyType::InHand:
 		// Held in a hand, as a number
 		Pushf(registry.AllOf<ecs::components::InHand>(object) ? 1.0f : 0.0f);
@@ -1058,6 +1078,16 @@ void SetProperty() // 022 SET_PROPERTY
 			transform->scale = glm::vec3(value);
 			registry.SetDirty();
 		}
+		return;
+	case script::ObjectPropertyType::Age:
+		// Only living things take an age, in whole years
+		if (registry.AllOf<ecs::components::Villager>(object))
+		{
+			Locator::livingActionSystem::value().VillagerSetAge(object, static_cast<uint32_t>(static_cast<int32_t>(value)));
+			return;
+		}
+		// TODO(opening): the ages of creatures and animals; other things take none
+		NotImplemented(static_cast<int32_t>(prop));
 		return;
 	case script::ObjectPropertyType::Speed:
 		// Metres a turn
@@ -1726,9 +1756,25 @@ void CallInNear() // 067 CALL_IN_NEAR
 
 void OverrideStateAnimation() // 068 OVERRIDE_STATE_ANIMATION
 {
-	// const auto animType = Pop().intVal;
-	// const auto obj = Pop().uintVal;
-	// TODO(Daniels118): implement this
+	const auto clip = Pop().intVal;
+	const auto object = PopObject();
+	// The game has clips 1 to 440; it complains of any other but plays it all the same
+	constexpr int32_t k_LastClip = 440;
+	if (clip < 1 || clip > k_LastClip)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid animation forced");
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		return;
+	}
+	if (registry.AllOf<ecs::components::Villager>(object))
+	{
+		Locator::livingActionSystem::value().VillagerOverrideAnimation(object, clip);
+		return;
+	}
+	// TODO(opening): the clips of creatures and animals; anything else isn't living ("thing must be living")
 	NotImplemented();
 }
 
@@ -3865,10 +3911,25 @@ void MoveGameTime() // 289 MOVE_GAME_TIME
 
 void SetHighGraphicsDetail() // 290 SET_HIGH_GRAPHICS_DETAIL
 {
-	// const auto object = Pop().uintVal;
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopObject();
+	const auto enable = Pop().intVal != 0;
+	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Thing not found");
+		return;
+	}
+	// The thing is drawn in high detail for the script's cinema, or as usual again
+	// TODO(opening): the high-detail drawing itself: the eyes and their blinking, the eased turning and the blending
+	// between clips
+	auto& highDetail = Locator::highDetailSystem::value();
+	if (enable)
+	{
+		highDetail.Make(object);
+	}
+	else
+	{
+		highDetail.Release(object);
+	}
 }
 
 void SetSkeleton() // 291 SET_SKELETON
@@ -4194,9 +4255,29 @@ void SetPlayerBelief() // 325 SET_PLAYER_BELIEF
 
 void PlayJcSpecial() // 326 PLAY_JC_SPECIAL
 {
-	// const auto feature = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto special = Pop().intVal;
+	switch (special)
+	{
+	case 14:
+	case 15:
+		// The camera's bookmarks are shown and taken again, or put away
+		Locator::cameraBookmarkSystem::value().SetEnabled(special == 14);
+		return;
+	case 0:
+	case 1:
+	case 2:
+	case 3:
+	case 4:
+	case 5:
+	case 6:
+		// TODO(opening): the opening's light from the sky, its camera, the hand that lifts the boy from the sea and the
+		// missionaries' boat
+		NotImplemented(special);
+		return;
+	default:
+		// The others do nothing
+		return;
+	}
 }
 
 void IsPlayingJcSpecial() // 327 IS_PLAYING_JC_SPECIAL
@@ -4409,11 +4490,22 @@ void StartAngleSound348() // 348 START_ANGLE_SOUND
 
 void ThingJcSpecial() // 349 THING_JC_SPECIAL
 {
-	// const auto target = Pop().uintVal;
-	// const auto feature = Pop().intVal;
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto target = PopObject();
+	const auto special = static_cast<ecs::high_detail_rules::ThingSpecial>(Pop().intVal);
+	const auto on = Pop().intVal != 0;
+	if (target == entt::null || !Locator::entitiesRegistry::value().Valid(target))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		return;
+	}
+	// The orders are for a thing drawn in high detail and are ignored by anything else; releasing the opening's own
+	// specials releases nothing while openblack doesn't make them
+	Locator::highDetailSystem::value().Order(target, special, on);
+	if (special == ecs::high_detail_rules::ThingSpecial::DrawnObjectSpecial)
+	{
+		// TODO(opening): the drawn object's own special
+		NotImplemented(static_cast<int32_t>(special));
+	}
 }
 
 void MusicPlayed350() // 350 MUSIC_PLAYED
