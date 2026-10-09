@@ -43,6 +43,9 @@ struct RegistryContext
 	uint8_t nextCreatureRockSmash {0};
 	/// The game is over: the local player's temple is being destroyed
 	bool gameOver {false};
+	/// A skirmish: a playground land played rather than the story's. Losing a temple doesn't end it. openblack plays no
+	/// online games, which would be the same.
+	bool skirmish {false};
 	/// The temple hearts' beam sounds go round in turn: the next of the five a beam plays
 	uint32_t nextHeartBeamSound {0};
 	/// The order towns are gained by their players in, the next to be given

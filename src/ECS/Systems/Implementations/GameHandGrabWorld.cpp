@@ -50,6 +50,7 @@
 #include "ECS/PhysicsClasses.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -58,6 +59,7 @@
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
@@ -380,15 +382,35 @@ void GameHandGrabWorld::TreeUprooted(PlayerNames player, entt::entity /*tree*/)
 	    player, magic::DampAlignmentChange(-Info()->player.treePullPutAlignmentChange, alignment.GetPlayerAlignment(player)));
 }
 
-bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player)
+bool GameHandGrabWorld::HoldsLeash(PlayerNames player)
 {
-	// A rock tall enough breaks when tapped; other things' taps are the clicking and activating of the interface
-	if (!object_physics::CanTapRock(object) || !Locator::dynamicsSystem::has_value())
+	if (!Locator::leashSystem::has_value())
 	{
 		return false;
 	}
-	object_physics::TapRock(Locator::dynamicsSystem::value(), object, handPoint, player);
-	return true;
+	const auto& leashes = Locator::leashSystem::value();
+	const auto creature = leashes.PlayersCreature(player);
+	return creature.has_value() && leashes.IsLeashed(*creature) && !leashes.TiedTo(*creature).has_value() &&
+	       leashes.HolderPoint(*creature).has_value();
+}
+
+bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player)
+{
+	// A rock tall enough breaks when tapped
+	if (object_physics::CanTapRock(object) && Locator::dynamicsSystem::has_value())
+	{
+		object_physics::TapRock(Locator::dynamicsSystem::value(), object, handPoint, player);
+		return true;
+	}
+	// A town's building is knocked on, whoever's town it is, unless the hand holds its creature's leash, which takes the
+	// tap to send the creature there
+	if (Entities().AllOf<Abode>(object) && Locator::abodeKnockSystem::has_value() && !HoldsLeash(player))
+	{
+		const bool ownHand = !Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() == player;
+		return Locator::abodeKnockSystem::value().Tap(object, handPoint, ownHand);
+	}
+	// Other things' taps are the clicking and activating of the interface
+	return false;
 }
 
 void GameHandGrabWorld::LeaveRootsHole(entt::entity tree)

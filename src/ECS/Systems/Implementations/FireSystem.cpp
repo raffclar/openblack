@@ -1064,6 +1064,7 @@ void FireSystem::Process(entt::entity object)
 		const bool field = registry.AllOf<Field>(object);
 		if (field || proofing == nullptr || !proofing->notHurtByFire)
 		{
+			const float lifeUnburnt = world_objects::LifeOf(object);
 			const float life = world_objects::ReduceLife(object, outcome.damage);
 			// Burning a town's people or buildings is an attack on the town by whoever lit the fire, by nobody's when
 			// no one did
@@ -1072,7 +1073,9 @@ void FireSystem::Process(entt::entity object)
 			{
 				world_objects::AttackTown(object, outcome.damage, lit.hasPlayer ? lit.player : PlayerNames::NEUTRAL);
 			}
-			if (life <= 0.0f && !world_objects::IsCreature(object))
+			// Only the burn that takes the last of its life burns it down: one burning on with none left is not burnt down
+			// again
+			if (life <= 0.0f && lifeUnburnt > 0.0f && !world_objects::IsCreature(object))
 			{
 				// Burnt down: a building stands with no life, a villager dies, anything else goes
 				SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Fire: object {} burnt down", entt::to_integral(object));

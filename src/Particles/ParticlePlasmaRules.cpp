@@ -74,13 +74,13 @@ public:
 		{
 			Begin(effect, collection, *pointCreator, *command);
 		}
-		for (size_t i = 0; i < collection.atoms.size();)
+		// The beams are laid newest first, which decides which beam each of the random nudges goes to
+		for (size_t i = collection.atoms.size(); i-- > 0;)
 		{
 			auto& atom = *collection.atoms[i];
 			const auto found = atom.data.find(this);
 			if (found == atom.data.end() || found->second.held == nullptr)
 			{
-				++i;
 				continue;
 			}
 			const auto& command = *std::static_pointer_cast<const PlasmaCommand>(found->second.held);
@@ -90,7 +90,6 @@ public:
 				continue;
 			}
 			Lay(effect, atom, command);
-			++i;
 		}
 		return true;
 	}

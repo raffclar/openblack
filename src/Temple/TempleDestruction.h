@@ -63,4 +63,21 @@ struct Events
 /// The smoke's turns, from a random share drawn up to its spread
 [[nodiscard]] int32_t SmokeTurns(uint32_t millisecondsPerTurn, float share);
 
+/// What decides whether a temple being destroyed ends the game this turn
+struct GameOverInputs
+{
+	/// The game has already ended
+	bool over {false};
+	/// A skirmish, played on a playground land, or a game played online: losing a temple doesn't end either this way
+	bool skirmish {false};
+	bool multiplayer {false};
+	/// The local player's temple is being destroyed
+	bool localTempleDestroying {false};
+};
+/// Whether the game ends: once, for the local player losing their temple, outside skirmishes and online games
+[[nodiscard]] constexpr bool GameOverStarts(const GameOverInputs& inputs)
+{
+	return !inputs.over && !inputs.skirmish && !inputs.multiplayer && inputs.localTempleDestroying;
+}
+
 } // namespace openblack::temple_destruction
