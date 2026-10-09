@@ -15,6 +15,7 @@
 
 #include <entt/fwd.hpp>
 #include <glm/mat4x4.hpp>
+#include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
 #include "Graphics/GraphicsHandle.h"
@@ -124,6 +125,20 @@ struct RenderContext
 	/// Stores information for rendering which is prepared at \ref PrepareDraw.
 	std::map<entt::id_type, InstancedDrawDesc> instancedDrawDescs;
 	std::map<entt::id_type, InstancedDrawDesc> treeInstancedDrawDescs;
+	/// The villagers fading out of sight in the distance, by the low mesh they are drawn as: blended by each one's alpha,
+	/// after the opaque things
+	std::map<entt::id_type, InstancedDrawDesc> fadingDrawDescs;
+	/// A villager too far away to be drawn as a mesh, which shows only as a dark smudge standing on a wide blob
+	struct FarVillager
+	{
+		entt::entity entity;
+		glm::vec3 position;
+		float scale;
+	};
+	/// By entity
+	std::vector<FarVillager> farVillagers;
+	/// The scale of the first villager ever seen that far away, which every far villager's smudge is sized by
+	float farSmudgeScale {1.0f};
 	/// Bone matrices of animated meshes, refilled at every \ref PrepareDraw. Boned meshes without an entry are drawn
 	/// in their rest pose.
 	std::map<entt::id_type, std::vector<glm::mat4>> animatedBoneMatrices;

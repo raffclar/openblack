@@ -11,6 +11,7 @@
 
 #include <chrono>
 #include <map>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -58,5 +59,9 @@ private:
 	};
 	std::unordered_map<entt::id_type, InstanceSlots> _instanceSlots;
 	std::unordered_map<entt::id_type, InstanceSlots> _treeSlots;
+	/// The villagers fading out in the distance, by their low mesh
+	std::unordered_map<entt::id_type, InstanceSlots> _fadingSlots;
+	/// The first villager ever seen too far away to be drawn sets the size of every far villager's smudge
+	std::optional<float> _farSmudgeScale;
 };
 } // namespace openblack::ecs::systems

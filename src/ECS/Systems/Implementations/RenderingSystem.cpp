@@ -14,17 +14,20 @@
 #include <algorithm>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <span>
 #include <unordered_map>
 
 #include <glm/gtx/transform.hpp>
 
 #include "3D/L3DMesh.h"
+#include "Camera/Camera.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/GroundMark.h"
@@ -56,7 +59,10 @@
 #include "Game.h"
 #include "Graphics/BonePalette.h"
 #include "Graphics/DebugLines.h"
+#include "Graphics/DetailLevel.h"
 #include "Graphics/GraphicsHandleBgfx.h"
+#include "Graphics/GroundBlobs.h"
+#include "Graphics/MeshDetail.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Texture2D.h"
 #include "Locator.h"
@@ -75,6 +81,25 @@ entt::id_type DrawnMeshOf(entt::entity entity, const Mesh& mesh)
 	return openblack::Locator::buildingDamageSystem::has_value()
 	           ? openblack::Locator::buildingDamageSystem::value().DrawnMesh(entity, mesh.id)
 	           : mesh.id;
+}
+
+/// Which of a villager's meshes it is drawn as this frame, by how deep into the view the middle of its standard mesh's
+/// bounding sphere is, drawn by `model`
+openblack::graphics::mesh_detail::Choice ChooseDetail(const DetailMeshes& detail, const glm::mat4& model, float scale,
+                                                      bool disappears, const openblack::Camera& camera, float modelDetail)
+{
+	namespace mesh_detail = openblack::graphics::mesh_detail;
+	const auto& meshes = entt::locator<openblack::resources::ResourcesInterface>::value().GetMeshes();
+	const auto bounding = detail.meshes.at(static_cast<size_t>(mesh_detail::Mesh::Standard));
+	if (!meshes.Contains(bounding))
+	{
+		return {.mesh = mesh_detail::Mesh::High, .alpha = std::nullopt};
+	}
+	const auto box = meshes.Handle(bounding)->GetBoundingBox();
+	const auto centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
+	const float depth = glm::dot(centre - camera.GetOrigin(), camera.GetForward());
+	const float reach = mesh_detail::Reach(detail.importance, glm::length(box.Size()) * 0.5f * scale, modelDetail);
+	return mesh_detail::Choose(depth, reach, disappears);
 }
 } // namespace
 
@@ -102,18 +127,19 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		bool villagers;
 	};
 	std::unordered_map<entt::id_type, MeshInstances> meshIds;
+	std::unordered_map<entt::id_type, uint32_t> fadingCounts;
 
-	auto prep = [&registry, &meshIds, &instanceCount](entt::entity entity, const Mesh& mesh, bool morphWithTerrain) {
-		auto count = meshIds.insert(
-		    std::make_pair(DrawnMeshOf(entity, mesh), MeshInstances {.count = static_cast<uint32_t>(mesh.submeshId),
-		                                                             .morphWithTerrain = morphWithTerrain,
-		                                                             .castsShadow = false,
-		                                                             .unlit = false,
-		                                                             .perEntity = false,
-		                                                             .translucent = false,
-		                                                             .additiveShare = std::nullopt,
-		                                                             .instanceAlpha = false,
-		                                                             .villagers = true}));
+	auto prepMesh = [&registry, &meshIds, &instanceCount](entt::entity entity, entt::id_type drawnMesh, const Mesh& mesh,
+	                                                      bool morphWithTerrain) {
+		auto count = meshIds.insert(std::make_pair(drawnMesh, MeshInstances {.count = static_cast<uint32_t>(mesh.submeshId),
+		                                                                     .morphWithTerrain = morphWithTerrain,
+		                                                                     .castsShadow = false,
+		                                                                     .unlit = false,
+		                                                                     .perEntity = false,
+		                                                                     .translucent = false,
+		                                                                     .additiveShare = std::nullopt,
+		                                                                     .instanceAlpha = false,
+		                                                                     .villagers = true}));
 		count.first->second.count++;
 		// The things whose shadows Black & White bakes into the land (IsCastShadowAtNight), and its features
 		count.first->second.castsShadow |= registry.AnyOf<Abode, Feature, MobileStatic, StoragePit>(entity);
@@ -132,6 +158,25 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 			count.first->second.instanceAlpha = true;
 		}
 		instanceCount++;
+	};
+	auto prep = [&registry, &prepMesh, &fadingCounts, &instanceCount](entt::entity entity, const Mesh& mesh,
+	                                                                  bool morphWithTerrain) {
+		const auto* detail = registry.TryGet<const DetailMeshes>(entity);
+		if (detail == nullptr || morphWithTerrain)
+		{
+			prepMesh(entity, DrawnMeshOf(entity, mesh), mesh, morphWithTerrain);
+			return;
+		}
+		// One drawn in less detail further off has room in each of its meshes, and among those fading out
+		for (auto it = detail->meshes.begin(); it != detail->meshes.end(); ++it)
+		{
+			if (std::find(detail->meshes.begin(), it, *it) == it)
+			{
+				prepMesh(entity, *it, mesh, morphWithTerrain);
+			}
+		}
+		++fadingCounts[detail->meshes.back()];
+		++instanceCount;
 	};
 
 	registry.Each<const Mesh, const Transform>(
@@ -192,6 +237,21 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		                                              .height = 0.0f,
 		                                              .bonePalette = desc.villagers});
 		offset += desc.count;
+	}
+	// The villagers fading out in the distance, blended by their own alpha
+	_renderContext.fadingDrawDescs.clear();
+	_fadingSlots.clear();
+	for (const auto& [meshId, count] : fadingCounts)
+	{
+		const auto [drawDesc, inserted] = _renderContext.fadingDrawDescs.emplace(
+		    std::piecewise_construct, std::forward_as_tuple(meshId), std::forward_as_tuple(offset, count, false, false));
+		drawDesc->second.perEntity = true;
+		drawDesc->second.bonePalette = true;
+		drawDesc->second.instanceAlpha = true;
+		_fadingSlots.emplace(
+		    meshId, InstanceSlots {
+		                .offset = offset, .count = count, .filled = 0, .perEntity = true, .height = 0.0f, .bonePalette = true});
+		offset += count;
 	}
 
 	// Prepare tree instances separately
@@ -282,6 +342,13 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	{
 		slots.filled = 0;
 	}
+	for (auto& [meshId, slots] : _fadingSlots)
+	{
+		slots.filled = 0;
+	}
+	_renderContext.farVillagers.clear();
+	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
+	const float modelDetail = graphics::detail_level::ModelDetail(Locator::config::value().detailLevel);
 
 	const auto& vegetation = Locator::vegetation::value();
 
@@ -292,11 +359,50 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
 	bool fits = true;
 	registry.Each<const Mesh, const Transform>(
-	    [this, &registry, &vegetation, &meshes, &fits, drawBoundingBox](entt::entity entity, const Mesh& mesh,
-	                                                                    const Transform& transform) {
+	    [this, &registry, &vegetation, &meshes, &fits, drawBoundingBox, camera,
+	     modelDetail](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+		    auto modelMatrix = glm::mat4(transform.rotation);
+		    modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
+		    modelMatrix = glm::scale(modelMatrix, transform.scale);
+		    // A body moving in the physics is drawn between its last two turns
+		    const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity);
+		    if (drawn != nullptr)
+		    {
+			    modelMatrix = glm::translate(glm::mat4(1.0f), drawn->origin) * glm::mat4(drawn->axes);
+		    }
+
+		    // A villager is drawn in less detail the further off it is, fades out, then shows only as a smudge on a blob
+		    // while it stands above the sea. One flying in the physics never fades.
+		    auto drawnMesh = DrawnMeshOf(entity, mesh);
+		    auto* slotMap = &_instanceSlots;
+		    std::optional<uint8_t> fade;
+		    if (const auto* detail = registry.TryGet<const DetailMeshes>(entity);
+		        detail != nullptr && camera != nullptr && !registry.AllOf<MorphWithTerrain>(entity))
+		    {
+			    const auto choice = ChooseDetail(*detail, modelMatrix, transform.scale.x, !registry.AllOf<InPhysics>(entity),
+			                                     *camera, modelDetail);
+			    if (!choice.mesh.has_value())
+			    {
+				    const auto position = glm::vec3(modelMatrix[3]);
+				    if (position.y > graphics::ground_blobs::k_LowestHeight)
+				    {
+					    _renderContext.farVillagers.push_back(
+					        {.entity = entity, .position = position, .scale = transform.scale.x});
+					    _farSmudgeScale = _farSmudgeScale.value_or(transform.scale.x);
+				    }
+				    return;
+			    }
+			    drawnMesh = detail->meshes.at(static_cast<size_t>(*choice.mesh));
+			    if (choice.alpha.has_value())
+			    {
+				    slotMap = &_fadingSlots;
+				    fade = choice.alpha;
+			    }
+		    }
+
 		    // A mesh the draw lists don't have room for, which has changed since they were made
-		    const auto slots = _instanceSlots.find(DrawnMeshOf(entity, mesh));
-		    if (!fits || slots == _instanceSlots.end() || slots->second.filled >= slots->second.count)
+		    const auto slots = slotMap->find(drawnMesh);
+		    if (!fits || slots == slotMap->end() || slots->second.filled >= slots->second.count)
 		    {
 			    fits = false;
 			    return;
@@ -310,9 +416,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    desc->second.uvOffset = skin->uvOffset;
 				    if (desc->second.subMeshTextures.empty())
 				    {
-					    const auto drawn =
+					    const auto skinned =
 					        entt::locator<resources::ResourcesInterface>::value().GetMeshes().Handle(slots->first);
-					    for (uint32_t i = 0; i < static_cast<uint32_t>(drawn->GetSubMeshes().size()); ++i)
+					    for (uint32_t i = 0; i < static_cast<uint32_t>(skinned->GetSubMeshes().size()); ++i)
 					    {
 						    desc->second.subMeshTextures.emplace_back(i, skin->texture);
 					    }
@@ -320,15 +426,6 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 
-		    auto modelMatrix = glm::mat4(transform.rotation);
-		    modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
-		    modelMatrix = glm::scale(modelMatrix, transform.scale);
-		    // A body moving in the physics is drawn between its last two turns
-		    const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity);
-		    if (drawn != nullptr)
-		    {
-			    modelMatrix = glm::translate(glm::mat4(1.0f), drawn->origin) * glm::mat4(drawn->axes);
-		    }
 		    // A home with someone in lights its windows at night
 		    const auto* abode = registry.TryGet<const Abode>(entity);
 		    glm::vec4 look {abode != nullptr && abode->presentAtHome > 0 ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
@@ -441,6 +538,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    look.z = 1.0f;
 		    }
 
+		    // Fading out in the distance
+		    if (fade.has_value() && look.z != 1.0f)
+		    {
+			    look.z = -(1.0f - (static_cast<float>(*fade) / 255.0f));
+		    }
+
 		    const uint32_t idx = slots->second.offset + slots->second.filled;
 		    _renderContext.instanceUniforms[idx] = {.model = modelMatrix, .look = look};
 		    // A villager's bones go into the palette, as its clip poses it or as its model rests, and its instance says
@@ -486,6 +589,13 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		const auto slots = _instanceSlots.find(meshId);
 		desc.filled = slots != _instanceSlots.end() ? slots->second.filled : 0;
 	}
+	for (auto& [meshId, desc] : _renderContext.fadingDrawDescs)
+	{
+		const auto slots = _fadingSlots.find(meshId);
+		desc.filled = slots != _fadingSlots.end() ? slots->second.filled : 0;
+	}
+	std::ranges::sort(_renderContext.farVillagers, {}, &RenderContext::FarVillager::entity);
+	_renderContext.farSmudgeScale = _farSmudgeScale.value_or(1.0f);
 	UploadBonePalette();
 	UploadPartialBuilds();
 	return fits;
