@@ -18,6 +18,8 @@ permissions:
 
 jobs:
   build:
+    # Pull requests labelled "ai-driven" skip CI
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'ai-driven') }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
