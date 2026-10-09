@@ -59,6 +59,8 @@ openblack_setup_and_add_test(test_sound_decoding audio/test_sound_decoding.cpp)
 openblack_setup_and_add_test(test_music audio/test_music.cpp)
 openblack_setup_and_add_test(test_music_decoding audio/test_music_decoding.cpp)
 openblack_setup_and_add_test(test_anim_effects audio/test_anim_effects.cpp)
+openblack_setup_and_add_test(test_listener_frame audio/test_listener_frame.cpp)
+openblack_setup_and_add_test(test_hearing_range audio/test_hearing_range.cpp)
 openblack_setup_and_add_test(test_interface gui/test_interface.cpp)
 openblack_setup_and_add_test(test_tool_tips gui/test_tool_tips.cpp)
 openblack_setup_and_add_test(test_screen_fade gui/test_screen_fade.cpp)
@@ -283,6 +285,7 @@ openblack_setup_and_add_test(
   test_magic_shield_forest test_magic_shield_forest.cpp
 )
 openblack_setup_and_add_test(test_reactions test_reactions.cpp)
+openblack_setup_and_add_test(test_map_production test_map_production.cpp)
 openblack_setup_and_add_test(test_magic_heal test_magic_heal.cpp)
 openblack_setup_and_add_test(test_lightning_maths test_lightning_maths.cpp)
 openblack_setup_and_add_test(test_tornado_creature test_tornado_creature.cpp)
@@ -297,10 +300,13 @@ openblack_setup_and_add_test(test_villager_speed test_villager_speed.cpp)
 openblack_setup_and_add_test(test_wall_hug_rules test_wall_hug_rules.cpp)
 openblack_setup_and_add_test(test_villager_age test_villager_age.cpp)
 openblack_setup_and_add_test(test_villager_needs test_villager_needs.cpp)
+openblack_setup_and_add_test(test_villager_routine test_villager_routine.cpp)
+openblack_setup_and_add_test(test_abode_knock test_abode_knock.cpp)
 openblack_setup_and_add_test(
   test_villager_animation test_villager_animation.cpp
 )
 openblack_setup_and_add_test(test_creature_casting test_creature_casting.cpp)
+openblack_setup_and_add_test(test_creature_fire test_creature_fire.cpp)
 openblack_setup_and_add_test(test_particle_glints test_particle_glints.cpp)
 target_link_libraries(test_particle_glints PRIVATE psys)
 openblack_setup_and_add_test(test_gesture_trail test_gesture_trail.cpp)
@@ -348,6 +354,9 @@ openblack_setup_and_add_test(test_dynamics_system test_dynamics_system.cpp)
 target_link_libraries(test_dynamics_system PRIVATE psys physconst lnd)
 openblack_setup_and_add_test(
   test_temple_destruction test_temple_destruction.cpp
+)
+openblack_setup_and_add_test(
+  test_temple_destruction_system test_temple_destruction_system.cpp
 )
 openblack_setup_and_add_test(test_physics_manager test_physics_manager.cpp)
 openblack_setup_and_add_test(test_physics_living test_physics_living.cpp)

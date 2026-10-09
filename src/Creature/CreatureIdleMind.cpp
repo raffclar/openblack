@@ -620,7 +620,13 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 				commands.object->point = senses.position + step.order.point;
 			}
 			break;
+		case Step::Kind::Douse:
+			// The water lands at once, and the step is done
+			commands.douse = step.object;
+			FinishStep(mind);
+			break;
 		case Step::Kind::Wait:
+		case Step::Kind::WaitInMap:
 			break;
 		}
 		return commands;
@@ -726,6 +732,23 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			{
 				FinishStep(mind);
 			}
+		}
+		break;
+	case Step::Kind::Douse:
+		// Done as it starts
+		FinishStep(mind);
+		break;
+	case Step::Kind::WaitInMap:
+		if (!senses.objectInMap.has_value())
+		{
+			// What it waited for is gone: the rest of the agenda is no use without it
+			mind.step = mind.agenda.size();
+			mind.stepStarted = false;
+			mind.gaveUp = true;
+		}
+		else if (*senses.objectInMap)
+		{
+			FinishStep(mind);
 		}
 		break;
 	case Step::Kind::Gesture:

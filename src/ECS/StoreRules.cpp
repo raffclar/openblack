@@ -26,9 +26,24 @@ uint32_t Truncated(float value)
 }
 } // namespace
 
+float store_rules::TreeWoodValue(float life, float multiplier, uint32_t woodValue, float scale, float landBalance)
+{
+	return life * multiplier * static_cast<float>(woodValue) * scale * landBalance;
+}
+
 uint32_t store_rules::TreeWood(float life, float multiplier, uint32_t woodValue, float scale, float landBalance)
 {
-	return Truncated(life * multiplier * static_cast<float>(woodValue) * scale * landBalance);
+	return Truncated(TreeWoodValue(life, multiplier, woodValue, scale, landBalance));
+}
+
+uint32_t store_rules::BigForestWorth(float scale, uint32_t woodValue)
+{
+	return Truncated(scale * static_cast<float>(woodValue));
+}
+
+float store_rules::BigForestWood(float life, uint32_t worth)
+{
+	return life * static_cast<float>(worth);
 }
 
 uint32_t store_rules::DeadTreeWood(float scale, uint32_t woodValue, float multiplier)

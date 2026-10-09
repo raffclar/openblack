@@ -61,8 +61,6 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
-/// A villager's health out of this is its life
-constexpr float k_VillagerHealthScale = 100.0f;
 /// A watching villager turns this much a turn towards what it watches: an eighth of a half turn
 constexpr float k_WatchTurn = std::numbers::pi_v<float> / 8.0f;
 
@@ -309,8 +307,7 @@ bool villager_reactions::Available(entt::entity villager, Reaction type)
 	// Too weak to react to anything but food
 	// TODO(raffclar): the game also keeps a villager scripts control, one on a structure and two flags whose meaning is
 	// unknown from reacting; none of them is modelled
-	return type == Reaction::ReactToFood ||
-	       static_cast<float>(component->health) / k_VillagerHealthScale > InfoOf(*component).lifeWhenCrawlsWounded;
+	return type == Reaction::ReactToFood || component->life > InfoOf(*component).lifeWhenCrawlsWounded;
 }
 
 void villager_reactions::Start(entt::entity villager, Reaction type, LivingReaction& state, bool wasReacting)

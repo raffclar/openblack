@@ -1032,7 +1032,7 @@ void villager_fire::DieByEffect(entt::entity villager, std::optional<DeathCause>
 	if (auto* person = registry.TryGet<Villager>(villager))
 	{
 		world_objects::CountInjury(villager, world_objects::LifeOf(villager), 0.0f);
-		person->health = 0;
+		person->life = 0.0f;
 	}
 	if (auto* life = registry.TryGet<ObjectLife>(villager))
 	{
