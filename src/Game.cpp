@@ -341,6 +341,11 @@ Game::~Game() noexcept
 		Locator::miracleFxSystem::value().SetInterface(nullptr);
 	}
 	_interface.reset();
+	// What the scripts asked of openblack that it can't do yet, for the natives to write next
+	if (Locator::chlapi::has_value())
+	{
+		Locator::chlapi::value().LogStubCalls();
+	}
 	ShutDownServices();
 	SDL_Quit(); // todo: move to GameWindow
 	spdlog::shutdown();
@@ -2475,8 +2480,12 @@ bool Game::Run() noexcept
 		// whether it takes control of what it is given, and the scripts' variables keep their objects' references
 		Locator::scriptObjects::value().Reset();
 		lhvm.Initialise(
-		    &chlapi.GetFunctionsTable(), [](uint32_t func) { Locator::scriptObjects::value().EnterNative(func); }, nullptr,
-		    nullptr,
+		    &chlapi.GetFunctionsTable(),
+		    [](uint32_t func) {
+			    Locator::scriptObjects::value().EnterNative(func);
+			    Locator::chlapi::value().EnterNative(func);
+		    },
+		    nullptr, nullptr,
 		    [](lhvm::ErrorCode code, const std::string& text, uint32_t number) {
 			    SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Script error: {} ({} {})",
 			                        lhvm::k_ErrorMsg.at(static_cast<size_t>(code)), text, number);
