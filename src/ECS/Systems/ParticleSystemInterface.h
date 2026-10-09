@@ -30,6 +30,7 @@ namespace openblack::particles
 {
 class Effect;
 struct GestureTrail;
+class LightSheet;
 struct ShieldSphere;
 } // namespace openblack::particles
 
@@ -132,6 +133,9 @@ public:
 	};
 	/// A recognised gesture's trail to show on the land, in the effect every trail shows in, which runs all the time
 	virtual void AddGestureTrail(std::shared_ptr<particles::GestureTrail> trail) = 0;
+	/// A sheet of light standing on the land, drawn and moved on by time for as long as its owner keeps it and doesn't
+	/// hide it
+	virtual void AddLightSheet(const std::shared_ptr<particles::LightSheet>& /*sheet*/) {}
 	/// Once a frame, by the frame's game time (none while the game is paused): the trails' sheets of light move on, and
 	/// the chain behind the hand steps
 	virtual void UpdateFrame(float gameSeconds, const HandFrame& hand) = 0;

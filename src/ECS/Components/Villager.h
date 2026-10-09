@@ -65,8 +65,10 @@ struct Villager
 	using Type = std::tuple<Tribe, Villager::LifeStage, Villager::Sex, VillagerNumber>;
 
 	uint32_t health;
-	uint32_t age;
-	uint32_t hunger;
+	/// The turn it was born on; its age in years counts from it
+	uint32_t birthTurn;
+	/// How full it is, from empty at 0 to full at 1. A newly made villager can start a little over full.
+	float food;
 	LifeStage lifeStage;
 	Sex sex;
 	Tribe tribe;
@@ -74,5 +76,15 @@ struct Villager
 	Task task;
 	entt::entity town;
 	entt::entity abode;
+	/// The turn its needs were last looked at
+	uint32_t lastCheckTurn {0};
+	/// What it shows in its hands
+	CarriedObject carried {CarriedObject::None};
+	/// A clip taking it into or out of a state is playing, and its state waits for it to end
+	bool transitionPlaying {false};
+	/// A clip took it out of its last state, and the one taking it into its new state is still to come
+	bool intoClipDue {false};
+	/// A knock on its home woke it: its own needs leave it be, and it won't go back to bed, for its next decision
+	bool woken {false};
 };
 } // namespace openblack::ecs::components

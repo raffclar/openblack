@@ -208,6 +208,7 @@ public:
 	void AddPlasma(EffectId id, const particles::PlasmaCommand& command) override;
 	void AddBeliefSprite(const particles::BeliefSprite& sprite) override;
 	void AddGestureTrail(std::shared_ptr<particles::GestureTrail> trail) override;
+	void AddLightSheet(const std::shared_ptr<particles::LightSheet>& sheet) override { _world.AddLightSheet(sheet); }
 	void UpdateFrame(float gameSeconds, const HandFrame& hand) override;
 	void CloseDown(EffectId id) override;
 	void Delete(EffectId id) override;

@@ -55,6 +55,7 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -64,6 +65,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
+#include "ECS/VillagerAge.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/WorldObjects.h"
 #include "Hand/HandGrabRules.h"
@@ -242,7 +244,8 @@ bool GameHandGrabWorld::IsSexuallyActive(entt::entity villager) const
 		return false;
 	}
 	const auto& kind = info->villager.at(static_cast<size_t>(GVillagerInfo::Find(data->tribe, data->number)));
-	return kind.startHavingSexAge <= data->age && data->age < kind.stopHavingSexAge;
+	const auto age = villager_age::AgeNow(*data);
+	return kind.startHavingSexAge <= age && age < kind.stopHavingSexAge;
 }
 
 std::optional<PlayerNames> GameHandGrabWorld::PlayerOf(entt::entity object) const
@@ -282,6 +285,16 @@ void GameHandGrabWorld::FireStartedMoving(entt::entity object, bool inHand)
 	{
 		Locator::fireSystem::value().StartedMoving(object, inHand);
 	}
+}
+
+void GameHandGrabWorld::CatchFirefly(entt::entity object)
+{
+	const auto* transform = Locator::entitiesRegistry::value().TryGet<const Transform>(object);
+	if (transform == nullptr || !Locator::fireflySystem::has_value() || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	Locator::fireflySystem::value().Catch(map_coords::FromWorld(Locator::terrainSystem::value(), transform->position));
 }
 
 void GameHandGrabWorld::HeatHeld(entt::entity object)
