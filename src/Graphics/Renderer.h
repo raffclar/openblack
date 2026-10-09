@@ -265,11 +265,11 @@ private:
 	/// Draws a submesh, with a texture in place of its skins when given one
 	void DrawSubMesh(const L3DMesh& mesh, const L3DSubMesh& subMesh, const L3DMeshSubmitDesc& desc, bool preserveState,
 	                 const TextureHandle* texture = nullptr, glm::vec3 glow = glm::vec3(0.0f)) const;
-	/// What a primitive cut at a height in its model's own space shows: whether it has a whole triangle below the cut,
+	/// What a primitive cut at a height in its model's own space shows: whether anything of it is drawn below the cut,
 	/// and the cap over its cut walls. Made once for each cut.
 	struct Cap
 	{
-		bool wholeBelow {false};
+		bool drawsBelow {false};
 		std::vector<partial_build_cap::CapVertex> vertices;
 	};
 	struct CapPrimitive

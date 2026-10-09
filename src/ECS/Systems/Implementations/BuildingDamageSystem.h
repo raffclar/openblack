@@ -30,6 +30,7 @@ public:
 	void ProcessTurn() override;
 	[[nodiscard]] entt::id_type DrawnMesh(entt::entity object, entt::id_type own) const override;
 	[[nodiscard]] std::optional<float> PartialShare(entt::entity building) const override;
+	[[nodiscard]] bool DrawsWhole(entt::entity object) const override;
 	void Reset() override;
 
 private:
