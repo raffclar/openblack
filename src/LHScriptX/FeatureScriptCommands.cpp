@@ -47,6 +47,7 @@
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -421,16 +422,24 @@ void FeatureScriptCommands::CreatePlannedWorshipSite([[maybe_unused]] glm::vec3 
 	// __func__);
 }
 
-void FeatureScriptCommands::CreateAnimal([[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t)
+void FeatureScriptCommands::CreateAnimal(glm::vec3 position, int32_t type, int32_t flockId, int32_t townId)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// As a new animal at no age, which takes a random one
+	CreateNewAnimal(position, type, flockId, townId, 0);
 }
 
-void FeatureScriptCommands::CreateNewAnimal([[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t, int32_t)
+void FeatureScriptCommands::CreateNewAnimal(glm::vec3 position, int32_t type, int32_t flockId, int32_t /*townId*/, int32_t age)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	if (!Locator::animalSystem::has_value() || type < 0 || type >= static_cast<int32_t>(AnimalInfo::_COUNT))
+	{
+		return;
+	}
+	// The type is the row of the animals' table; the animal joins the latest flock made with the number, or is a flock
+	// of its own when there is none. A bird never belongs to a town.
+	// TODO: the land's other animals, which openblack doesn't make yet
+	auto& animals = Locator::animalSystem::value();
+	animals.CreateBird(static_cast<AnimalInfo>(type), glm::vec2(position.x, position.z),
+	                   static_cast<uint32_t>(std::max(age, 0)), animals.FindScriptFlock(flockId));
 }
 
 void FeatureScriptCommands::CreateForest(int32_t forestId, glm::vec3 position)
@@ -587,10 +596,17 @@ void FeatureScriptCommands::CreateCreatureFromFile(const std::string& playerName
 	                          CreatureArchetype::StartScale(creatureType), CreatureArchetype::StartBody(creatureType));
 }
 
-void FeatureScriptCommands::CreateFlock(int32_t, glm::vec3, glm::vec3, int32_t, int32_t, int32_t)
+void FeatureScriptCommands::CreateFlock(int32_t id, glm::vec3 position, glm::vec3 home, int32_t reach, int32_t flockDistance,
+                                        int32_t /*townId*/)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// A flock of the land's, numbered for its animals to join, made where the script says with its home where it says.
+	// Every land of the game's is of a version that gives the flock distance and then the town. A flock with a bird in it
+	// keeps no town, and birds are the only animals openblack makes so far.
+	if (Locator::animalSystem::has_value())
+	{
+		Locator::animalSystem::value().CreateScriptFlock(id, glm::vec2(position.x, position.z), glm::vec2(home.x, home.z),
+		                                                 static_cast<float>(reach), static_cast<float>(flockDistance));
+	}
 }
 
 void FeatureScriptCommands::LoadLandscape(const std::string& path)
