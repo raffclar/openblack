@@ -21,12 +21,14 @@
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/DeadTree.h"
+#include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Reward.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Transform.h"
@@ -34,7 +36,9 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "GameHandGrabWorld.h"
+#include "Hand/HandClickRules.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -238,6 +242,53 @@ void HandGrabSystem::Tap(entt::entity object)
 	_world->TapThing(object, _world->PoseOf(_world->Hand()).origin, _world->HandPlayer());
 }
 
+HandClicked* HandGrabSystem::Clicked()
+{
+	const auto hand = _world->Hand();
+	if (!Exists(hand))
+	{
+		return nullptr;
+	}
+	auto& registry = _world->Entities();
+	if (auto* clicked = registry.TryGet<HandClicked>(hand))
+	{
+		return clicked;
+	}
+	return &registry.Assign<HandClicked>(hand);
+}
+
+bool HandGrabSystem::MarksThing(entt::entity object) const
+{
+	return hand_click::MarksThing(_world->HoldsLooseLeash(), _world->Entities().AllOf<Reward>(object));
+}
+
+void HandGrabSystem::ClickThing(entt::entity object, uint32_t turn)
+{
+	auto* clicked = Clicked();
+	if (clicked != nullptr && MarksThing(object))
+	{
+		hand_click::ClickThing(*clicked, object, turn);
+	}
+}
+
+void HandGrabSystem::ClickReleased(uint32_t turn)
+{
+	auto* clicked = Clicked();
+	if (clicked == nullptr)
+	{
+		return;
+	}
+	const auto under = _world->ObjectUnderCursor();
+	const auto* grab = Grab();
+	std::optional<map_coords::MapCoords> place;
+	if (grab != nullptr && grab->handPoint.has_value())
+	{
+		place =
+		    map_coords::MapCoords {.x = map_coords::ToFixed(grab->handPoint->x), .z = map_coords::ToFixed(grab->handPoint->z)};
+	}
+	hand_click::ClickReleased(*clicked, under, under.has_value() && MarksThing(*under), place, turn);
+}
+
 bool HandGrabSystem::Press(uint32_t nowMs, uint32_t turn)
 {
 	auto* grab = Grab();
@@ -272,9 +323,10 @@ bool HandGrabSystem::Press(uint32_t nowMs, uint32_t turn)
 	}
 	if (!object.has_value() || !MayTake(*object))
 	{
-		// A press the hand can't take is a tap on the thing (clicking and activating)
+		// A press the hand can't take clicks the thing, and is a tap on it (clicking and activating)
 		if (object.has_value())
 		{
+			ClickThing(*object, turn);
 			Tap(*object);
 		}
 		return false;
@@ -310,6 +362,14 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 		Empty(*grab);
 		// It still becomes the thing last let go, which a flying thing's twist then finds
 		grab->released = object;
+		// A tap clicks whatever is under the hand as it is let go
+		if (tap)
+		{
+			if (const auto under = _world->ObjectUnderCursor(); under.has_value())
+			{
+				ClickThing(*under, turn);
+			}
+		}
 		if (tap && Exists(object))
 		{
 			Tap(object);
@@ -800,6 +860,12 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 	}
 	grab->handSize = frame.handSize;
 	grab->handPoint = frame.cursorGround;
+	// Clicks are forgotten as the game's turns go by
+	if (auto* clicked = Clicked(); clicked != nullptr)
+	{
+		constexpr auto k_MillisecondsPerTurn = static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count());
+		hand_click::Forget(*clicked, frame.turn, k_MillisecondsPerTurn);
+	}
 	// A pour lasts three quarters of a second of the game's time
 	if (grab->pourEffect.has_value())
 	{

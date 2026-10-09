@@ -105,7 +105,7 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 
 	const auto& transform =
 	    registry.Assign<Transform>(entity, position, glm::mat3(glm::eulerAngleY(-yAngleRadians)), glm::vec3(scale));
-	registry.Assign<Abode>(entity, info.abodeNumber, townId, foodAmount, woodAmount);
+	registry.Assign<Abode>(entity, info.abodeNumber, townId, foodAmount, woodAmount).info = type;
 	// It joins its town's buildings, the newest first
 	if (const auto town = registry.Context().towns.find(townId); town != registry.Context().towns.end())
 	{
