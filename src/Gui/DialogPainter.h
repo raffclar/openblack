@@ -109,7 +109,7 @@ public:
 	/// With 8 cells to a row instead the box shows the whole 32 pixel cell of the atlas that starts at style's cell,
 	/// edged only for the square buttons (white, orange when hovered).
 	void DrawBevelBox(const DialogRect& rect, int style, uint8_t edges, glm::vec4 tint, int cellsToARow = 16) const;
-	/// Square buttons: a black square, ticked when checked, edged orange when hovered and
+	/// Square buttons: a black square over a soft shadow, ticked when checked, edged orange when hovered and
 	/// pushed in when pressed
 	void DrawSquare(glm::ivec2 position, int size, bool checked, bool hovered, bool pressed) const;
 	/// A four sided shape in the dialog space, its corners in order round it, each with its own

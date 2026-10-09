@@ -64,10 +64,12 @@
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TutorialSkipSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/TownPlaythings.h"
 #include "Enums.h"
@@ -4585,30 +4587,22 @@ void SetHandDemoKeys() // 459 SET_HAND_DEMO_KEYS
 
 void CanSkipTutorial() // 460 CAN_SKIP_TUTORIAL
 {
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
-	Pushb(false);
+	Pushb(Locator::tutorialSkipSystem::value().Get().skipTutorial);
 }
 
 void CanSkipCreatureTraining() // 461 CAN_SKIP_CREATURE_TRAINING
 {
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
-	Pushb(false);
+	Pushb(Locator::tutorialSkipSystem::value().Get().skipCreatureTraining);
 }
 
 void IsKeepingOldCreature() // 462 IS_KEEPING_OLD_CREATURE
 {
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
-	Pushb(false);
+	Pushb(Locator::tutorialSkipSystem::value().Get().keepOldCreature);
 }
 
 void CurrentProfileHasCreature() // 463 CURRENT_PROFILE_HAS_CREATURE
 {
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
-	Pushb(false);
+	Pushb(Locator::playerProfileSystem::value().CurrentProfileHasCreature());
 }
 
 void CHLApi::InitFunctionsTable0()

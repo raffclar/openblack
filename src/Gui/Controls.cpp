@@ -61,21 +61,22 @@ void StaticText::Draw(const DialogPainter& painter, bool /*hovered*/, bool /*foc
 	{
 		return;
 	}
-	// Static text shrinks the text until it fits: wrapped text in the height and on one line in the width
+	// Static text shrinks the text until it fits: wrapped text in the height and text on one line in the width
+	const bool wrapped = layout == Layout::Wrapped || layout == Layout::WrappedLeft;
 	auto fitted = size;
-	while (fitted > 10 && (painter.GetTextWidth(text, fitted) > static_cast<float>(rect.Width()) ||
-	                       (layout == Layout::Wrapped &&
-	                        painter.GetTextHeight(rect.Width(), text, fitted) > static_cast<float>(rect.Height()))))
+	while (fitted > 10 && (wrapped ? painter.GetTextHeight(rect.Width(), text, fitted) > static_cast<float>(rect.Height())
+	                               : painter.GetTextWidth(text, fitted) > static_cast<float>(rect.Width())))
 	{
 		--fitted;
 	}
 
 	const auto shadow = DialogPainter::k_ShadowColour;
 	const auto white = DialogPainter::k_FocusColour;
-	if (layout == Layout::Wrapped)
+	if (wrapped)
 	{
-		painter.DrawTextWrapped({.min = rect.min + 2, .max = rect.max + 2}, true, text, fitted, shadow);
-		painter.DrawTextWrapped(rect, true, text, fitted, white);
+		const bool centred = layout == Layout::Wrapped;
+		painter.DrawTextWrapped({.min = rect.min + 2, .max = rect.max + 2}, centred, text, fitted, shadow);
+		painter.DrawTextWrapped(rect, centred, text, fitted, white);
 		return;
 	}
 	const auto y = rect.Centre().y - (fitted / 2);
@@ -130,18 +131,21 @@ BigButton::BigButton(const GameFont& font, glm::ivec2 position, int size, std::u
 
 DialogRect BigButton::GetLabelRect() const
 {
-	const auto width = static_cast<int>(std::ceil(_font.GetWidth(label, static_cast<float>(_labelSize))));
+	// The label's text as it is drawn, its width cut to whole pixels
+	const auto width = static_cast<int>(_font.GetWidth(label, static_cast<float>(_labelSize)));
 	const auto top = rect.Centre().y - (_labelSize / 2);
 	switch (_side)
 	{
 	case LabelSide::Right:
-		return {.min = {rect.max.x, top}, .max = {rect.max.x + width + 2, top + _labelSize + 2}};
+		return {.min = {rect.max.x + _labelGap, top}, .max = {rect.max.x + _labelGap + width, top + _labelSize}};
 	case LabelSide::Left:
-		return {.min = {rect.min.x - width, top}, .max = {rect.min.x + 2, top + _labelSize + 2}};
+		return {.min = {rect.min.x - _labelGap - width, top}, .max = {rect.min.x - _labelGap, top + _labelSize}};
 	case LabelSide::Below:
 	default:
-		return {.min = {rect.Centre().x - (width / 2), rect.max.y + 2},
-		        .max = {rect.Centre().x + (width / 2) + 2, rect.max.y + 4 + _labelSize}};
+	{
+		const auto left = rect.Centre().x - (width / 2);
+		return {.min = {left, rect.max.y + 2}, .max = {left + width, rect.max.y + 2 + _labelSize}};
+	}
 	}
 }
 
@@ -184,12 +188,12 @@ void BigButton::DrawLabel(const DialogPainter& painter, bool hovered) const
 	switch (_side)
 	{
 	case LabelSide::Right:
-		painter.DrawText({rect.max.x + 2, top + 2}, 1000, Justify::Left, label, _labelSize, shadow);
-		painter.DrawText({rect.max.x, top}, 1000, Justify::Left, label, _labelSize, colour);
+		painter.DrawText({rect.max.x + _labelGap + 2, top + 2}, 1000, Justify::Left, label, _labelSize, shadow);
+		painter.DrawText({rect.max.x + _labelGap, top}, 1000, Justify::Left, label, _labelSize, colour);
 		break;
 	case LabelSide::Left:
-		painter.DrawText({rect.min.x + 2, top + 2}, 1000, Justify::Right, label, _labelSize, shadow);
-		painter.DrawText({rect.min.x, top}, 1000, Justify::Right, label, _labelSize, colour);
+		painter.DrawText({rect.min.x - _labelGap + 2, top + 2}, 1000, Justify::Right, label, _labelSize, shadow);
+		painter.DrawText({rect.min.x - _labelGap, top}, 1000, Justify::Right, label, _labelSize, colour);
 		break;
 	case LabelSide::Below:
 		painter.DrawText({rect.Centre().x + 2, rect.max.y + 4}, 1000, Justify::Centre, label, _labelSize, shadow);
@@ -199,15 +203,35 @@ void BigButton::DrawLabel(const DialogPainter& painter, bool hovered) const
 }
 
 CheckBox::CheckBox(const GameFont& font, glm::ivec2 position, std::u16string label, bool checked)
-    // Check boxes are 25 pixel squares, labelled below
-    : BigButton(font, position, 25, std::move(label), LabelSide::Below, Look::Square)
+    : CheckBox(font, position, k_DefaultSize, std::move(label), LabelSide::Below, checked, false)
+{
+}
+
+CheckBox::CheckBox(const GameFont& font, glm::ivec2 position, int size, std::u16string label, LabelSide side, bool checked,
+                   bool radio)
+    : BigButton(font, position, size, std::move(label), side, Look::Square)
+    , _radio(radio)
 {
 	_checked = checked;
+	// A check box's label beside it stands four pixels further off than a big button's
+	_labelGap = 4;
+}
+
+bool CheckBox::HitTest(glm::ivec2 point) const
+{
+	if (!visible)
+	{
+		return false;
+	}
+	const auto offset = point - rect.Centre();
+	const auto radius = rect.Width() / 2;
+	return (offset.x * offset.x) + (offset.y * offset.y) < radius * radius ||
+	       (!label.empty() && GetLabelRect().Contains(point));
 }
 
 void CheckBox::Activate(glm::ivec2 point)
 {
-	_checked = !_checked;
+	_checked = _radio || !_checked;
 	if (onChange)
 	{
 		onChange(_checked);

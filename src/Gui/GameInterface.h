@@ -15,6 +15,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include <glm/vec2.hpp>
 
@@ -25,6 +26,7 @@
 #include "GameFont.h"
 #include "GameMenu.h"
 #include "ScreenFade.h"
+#include "SkipBox.h"
 #include "TextDatabase.h"
 #include "ToolTips.h"
 
@@ -38,7 +40,7 @@ class Texture2D;
 namespace openblack::gui
 {
 
-/// The game's own interface, drawn over the scene: for now the menu that Escape brings up.
+/// The game's own interface, drawn over the scene: the menu that Escape brings up and the start-of-game question.
 ///
 /// It loads what Black & White's dialogs are made of: the texts of the info scripts, the font j0 and the front end
 /// atlas, and takes the mouse and keyboard from the game while a dialog is open.
@@ -62,6 +64,14 @@ public:
 	void Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds, bool overDebugWindow);
 
 	[[nodiscard]] GameMenu& GetMenu() noexcept { return *_menu; }
+
+	/// Asks the returning player how to start the new game. The box takes the mouse and every key until answered.
+	void ShowSkipBox();
+	/// The answer to the start-of-game question, once
+	std::optional<new_game_choice::Choice> TakeSkipBoxAnswer() { return std::exchange(_skipBoxAnswer, std::nullopt); }
+	/// Whether a dialog is up taking the mouse: the menu, or the start-of-game question
+	[[nodiscard]] bool IsDialogOpen() const noexcept { return _menu->IsOpen() || _skipBox->IsActive(); }
+
 	[[nodiscard]] const TextDatabase& GetTexts() const noexcept { return _texts; }
 	/// The dialogs' font, which the temple's scrolls are written in too
 	[[nodiscard]] const GameFont& GetFont() const noexcept { return _font; }
@@ -95,6 +105,8 @@ private:
 	              std::unique_ptr<graphics::Texture2D> mice, std::unique_ptr<graphics::Texture2D> atmos,
 	              std::u16string_view playerName, MenuSettings settings);
 
+	/// Every mouse event and key press goes to the start-of-game question while it is up
+	bool ProcessSkipBoxEvent(const SDL_Event& event);
 	/// The tooltip by the hand, its words and then its mouse
 	void DrawToolTip(glm::u16vec2 resolution);
 	/// The creature's status panel, at the left of the screen
@@ -116,6 +128,9 @@ private:
 	Canvas _pointerCanvas {graphics::RenderPass::Cursor};
 	DialogPainter _painter;
 	std::unique_ptr<GameMenu> _menu;
+	/// Made once and kept, so that the answer picked stays picked
+	std::unique_ptr<SkipBox> _skipBox;
+	std::optional<new_game_choice::Choice> _skipBoxAnswer;
 	std::optional<Message> _message;
 	ToolTips _toolTips;
 	ScreenFade _screenFade;

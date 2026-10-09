@@ -282,6 +282,9 @@ void DialogPainter::DrawSquare(glm::ivec2 position, int size, bool checked, bool
 	// The big buttons' first two styles: the black squares of the atlas, or below them those ticked
 	const auto style = (checked ? 0x20 : 0) + (hovered ? 2 : 0) + 0xB;
 	const auto push = pressed ? 2 : 0;
+	// A soft shadow under the square first, four pixels down and right, two when pressed in
+	const auto drop = pressed ? 2 : 4;
+	DrawBox({.min = position + drop, .max = position + size + drop}, {k_FrameLeft, k_FrameTop}, {k_FrameRight, k_FrameBottom});
 	DrawBevelBox({.min = position + push - 1, .max = position + size + push - 3}, style, All, glm::vec4(1.0f), 8);
 }
 

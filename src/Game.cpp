@@ -139,6 +139,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -154,6 +155,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TornadoSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
+#include "ECS/Systems/TutorialSkipSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
@@ -773,7 +775,7 @@ void Game::ProcessHandToolTipTurn()
 	// Over the player's own creature, the hand shows that it can take hold of it to stroke or slap it. It can hold other
 	// players' creatures too, but the game only offers it for the player's own.
 	const auto over = _creatureUnderHand.has_value() ? _creatureUnderHand : Locator::creatureHandSystem::value().GetCreature();
-	if (over.has_value() && !_interface->GetMenu().IsOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive())
+	if (over.has_value() && !_interface->IsDialogOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive())
 	{
 		const auto* creature = Locator::entitiesRegistry::value().TryGet<const ecs::components::Creature>(*over);
 		const auto* mind = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureMindState>(*over);
@@ -2504,6 +2506,10 @@ bool Game::Run() noexcept
 		                    (fileSystem.GetGamePath() / challengePath).generic_string());
 		return false;
 	}
+	if (!_startTestbed)
+	{
+		AskNewGameChoice();
+	}
 
 	// Everything the map made goes into the map's cells, in the order it was made
 	Locator::entitiesMap::value().Sync();
@@ -2562,7 +2568,7 @@ bool Game::Run() noexcept
 			    .drawBoundingBoxes = config.drawBoundingBoxes,
 			    .cullBack = false,
 			    .wireframe = config.wireframe,
-			    .drawHand = (!_interface || !_interface->GetMenu().IsOpen()) &&
+			    .drawHand = (!_interface || !_interface->IsDialogOpen()) &&
 			                Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
 			};
 			Locator::rendererInterface::value().DrawScene(drawDesc);
@@ -2793,10 +2799,31 @@ void Game::StartNewLand()
 	_gameMusic->Reset();
 }
 
+void Game::AskNewGameChoice()
+{
+	// Every new game starts with nothing skipped, and only a returning player is asked
+	Locator::tutorialSkipSystem::value().Set({});
+	const auto& profiles = Locator::playerProfileSystem::value();
+	if (!new_game_choice::AsksAtNewGame(profiles.GetProfileCount(), profiles.CurrentProfileHasCreature()) || !_interface)
+	{
+		return;
+	}
+	// The game waits, paused, for the answer
+	Locator::time::value().SetPaused(true);
+	_interface->ShowSkipBox();
+}
+
 void Game::HandleInterfaceAction()
 {
 	using Action = gui::GameMenu::Action;
 	const auto action = _interface->TakeAction();
+
+	// The answer to the start-of-game question tells the story what to skip, and the game goes on
+	if (const auto answer = _interface->TakeSkipBoxAnswer(); answer.has_value())
+	{
+		Locator::tutorialSkipSystem::value().Set(new_game_choice::SkipFor(*answer));
+		Locator::time::value().SetPaused(false);
+	}
 
 	// The settings the player changes take effect at once
 	if (_interface->TakeSettingsChanged())

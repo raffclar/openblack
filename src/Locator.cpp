@@ -71,6 +71,7 @@
 #include "ECS/Systems/Implementations/ParticleSystem.h"
 #include "ECS/Systems/Implementations/PathfindingSystem.h"
 #include "ECS/Systems/Implementations/PickingSystem.h"
+#include "ECS/Systems/Implementations/PlayerProfileSystem.h"
 #include "ECS/Systems/Implementations/PlayerSystem.h"
 #include "ECS/Systems/Implementations/RainSystem.h"
 #include "ECS/Systems/Implementations/ReactionSystem.h"
@@ -88,6 +89,7 @@
 #include "ECS/Systems/Implementations/TornadoSystem.h"
 #include "ECS/Systems/Implementations/TownDesireSystem.h"
 #include "ECS/Systems/Implementations/TownSystem.h"
+#include "ECS/Systems/Implementations/TutorialSkipSystem.h"
 #include "ECS/Systems/Implementations/VegetationSystem.h"
 #include "ECS/Systems/Implementations/VillageLightSystem.h"
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
@@ -154,6 +156,7 @@ using openblack::ecs::systems::MistSystem;
 using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PathfindingSystem;
 using openblack::ecs::systems::PickingSystem;
+using openblack::ecs::systems::PlayerProfileSystem;
 using openblack::ecs::systems::PlayerSystem;
 using openblack::ecs::systems::RainSystem;
 using openblack::ecs::systems::ReactionSystem;
@@ -169,6 +172,7 @@ using openblack::ecs::systems::TimeSystem;
 using openblack::ecs::systems::TornadoSystem;
 using openblack::ecs::systems::TownDesireSystem;
 using openblack::ecs::systems::TownSystem;
+using openblack::ecs::systems::TutorialSkipSystem;
 using openblack::ecs::systems::VegetationSystem;
 using openblack::ecs::systems::VillageLightSystem;
 using openblack::ecs::systems::WaterRingSystem;
@@ -238,6 +242,8 @@ bool openblack::InitializeGame() noexcept
 	Locator::skySystem::emplace<Sky>();
 	Locator::alignmentSystem::emplace<AlignmentSystem>();
 	Locator::cameraHelpSystem::emplace<CameraHelpSystem>();
+	Locator::tutorialSkipSystem::emplace<TutorialSkipSystem>();
+	Locator::playerProfileSystem::emplace<PlayerProfileSystem>();
 	Locator::templeExteriorSystem::emplace<TempleExteriorSystem>();
 	Locator::templeDestructionSystem::emplace<TempleDestructionSystem>();
 	Locator::time::emplace<TimeSystem>();

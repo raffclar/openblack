@@ -186,6 +186,7 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _atmos(std::move(atmos))
     , _painter(_canvas, _font, *_atlas, *_fontTexture)
     , _menu(std::make_unique<GameMenu>(_texts, _font, playerName, std::move(settings)))
+    , _skipBox(std::make_unique<SkipBox>(_texts, _font, DialogPainter::k_MidTextSize))
     , _toolTips(ReadToolTipsInfo())
 {
 	_painter.SetPictures(_symbols.get(), _mice.get());
@@ -193,9 +194,61 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
 
 GameInterface::~GameInterface() = default;
 
+void GameInterface::ShowSkipBox()
+{
+	_skipBoxAnswer.reset();
+	_skipBox->Show();
+	// The control under the pointer lights up at once
+	glm::ivec2 mouse;
+	SDL_GetMouseState(&mouse.x, &mouse.y);
+	_skipBox->MouseMove(_painter.ToDialog(mouse));
+}
+
+bool GameInterface::ProcessSkipBoxEvent(const SDL_Event& event)
+{
+	switch (event.type)
+	{
+	case SDL_MOUSEMOTION:
+		_skipBox->MouseMove(_painter.ToDialog({event.motion.x, event.motion.y}));
+		return true;
+	case SDL_MOUSEBUTTONDOWN:
+		if (event.button.button == SDL_BUTTON_LEFT)
+		{
+			_skipBox->MouseDown(_painter.ToDialog({event.button.x, event.button.y}));
+		}
+		return true;
+	case SDL_MOUSEBUTTONUP:
+		if (event.button.button == SDL_BUTTON_LEFT)
+		{
+			const auto result = _skipBox->MouseUp(_painter.ToDialog({event.button.x, event.button.y}));
+			// Every control clicks as it is let go over, the texts too
+			if (result.clicked)
+			{
+				Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+			}
+			if (result.answer.has_value())
+			{
+				_skipBoxAnswer = result.answer;
+			}
+		}
+		return true;
+	// No key answers the box or gets past it, Escape neither; keys let go of still reach the game
+	case SDL_MOUSEWHEEL:
+	case SDL_TEXTINPUT:
+	case SDL_KEYDOWN:
+		return true;
+	default:
+		return false;
+	}
+}
+
 bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution)
 {
 	_painter.Begin(resolution);
+	if (_skipBox->IsActive())
+	{
+		return ProcessSkipBoxEvent(event);
+	}
 	if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE)
 	{
 		if (_menu->IsOpen())
@@ -274,6 +327,7 @@ GameMenu::Action GameInterface::TakeAction()
 void GameInterface::Update(float deltaSeconds)
 {
 	_menu->Update(deltaSeconds);
+	_skipBox->Update(deltaSeconds);
 	_toolTips.Update(deltaSeconds);
 	_screenFade.Update(deltaSeconds);
 }
@@ -283,7 +337,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	_canvas.Begin(resolution);
 	_pointerCanvas.Begin(resolution);
 	_painter.Begin(resolution);
-	const bool menuOpen = _menu->IsVisible() && _menu->IsOpen();
+	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive();
 	if (_message.has_value())
 	{
 		_painter.DrawTextWrapped(DialogRect {{0, 0}, DialogPainter::k_Size}, true, _message->text, 60,
@@ -300,6 +354,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	{
 		_menu->Draw(_painter);
 	}
+	_skipBox->Draw(_painter);
 	if (menuOpen || overDebugWindow)
 	{
 		_painter.DrawPointer(_pointerCanvas, mouse, milliseconds);

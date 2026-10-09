@@ -87,15 +87,19 @@ public:
 		Right,
 		/// Broken into lines, centred
 		Wrapped,
+		/// Broken into lines from the left
+		WrappedLeft,
 	};
 
 	StaticText(DialogRect rect, std::u16string text, Layout layout, int size = DialogPainter::k_BigTextSize);
 	void Draw(const DialogPainter& painter, bool hovered, bool focused, bool pressed) const override;
-	[[nodiscard]] bool IsInteractive() const override { return false; }
+	/// Static text takes the mouse only when asked to: a click on it then clicks, but does nothing
+	[[nodiscard]] bool IsInteractive() const override { return takesClicks; }
 
 	std::u16string text;
 	Layout layout;
 	int size;
+	bool takesClicks {false};
 };
 
 /// A button: a dark box with a label, orange under the pointer
@@ -135,6 +139,7 @@ public:
 	std::u16string label;
 
 protected:
+	/// Where the label is drawn, without its shadow
 	[[nodiscard]] DialogRect GetLabelRect() const;
 	void DrawLabel(const DialogPainter& painter, bool hovered) const;
 
@@ -142,19 +147,31 @@ protected:
 	LabelSide _side;
 	Look _look;
 	int _labelSize {DialogPainter::k_MidTextSize};
+	/// How much further from the button a label beside it is
+	int _labelGap {0};
 	bool _checked {false};
 };
 
-/// A check box: a square ticked when checked, labelled below
+/// A check box: a square ticked when checked, labelled below unless asked otherwise. A radio button only ever ticks.
 class CheckBox final: public BigButton
 {
 public:
+	/// Check boxes are 25 pixel squares unless a size is given
+	static constexpr int k_DefaultSize = 25;
+
 	CheckBox(const GameFont& font, glm::ivec2 position, std::u16string label, bool checked);
+	CheckBox(const GameFont& font, glm::ivec2 position, int size, std::u16string label, LabelSide side, bool checked,
+	         bool radio);
 	void Activate(glm::ivec2 point) override;
+	/// The circle inside the square, or the label
+	[[nodiscard]] bool HitTest(glm::ivec2 point) const override;
 
 	[[nodiscard]] bool IsChecked() const noexcept { return _checked; }
 	void SetChecked(bool checked) noexcept { _checked = checked; }
 	std::function<void(bool)> onChange;
+
+private:
+	bool _radio {false};
 };
 
 /// A slider: a dark bar with a square knob and a label along it. Holding the mouse button down beside the knob
