@@ -154,6 +154,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TornadoSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
@@ -832,6 +833,8 @@ bool Game::GameLogicLoop() noexcept
 	}
 	// The towns work out what they want, then their villagers act on it
 	Locator::townDesireSystem::value().ProcessTurn();
+	// A town's storage pit or village centre on fire calls its people together
+	Locator::townSystem::value().ProcessTurn();
 	Locator::chimneySmokeSystem::value().ProcessTurn();
 	// How far the players' influence reaches, and its border
 	Locator::influenceSystem::value().ProcessTurn(Locator::time::value().GetTurn());

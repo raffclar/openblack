@@ -335,10 +335,9 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	}
 	if (object.life.has_value())
 	{
-		constexpr float k_VillagerHealthScale = 100.0f;
 		if (auto* villager = registry.TryGet<ecs::components::Villager>(entity))
 		{
-			villager->health = static_cast<uint32_t>(std::lround(std::clamp(*object.life, 0.0f, 1.0f) * k_VillagerHealthScale));
+			villager->life = std::clamp(*object.life, 0.0f, 1.0f);
 		}
 		if (auto* animal = registry.TryGet<ecs::components::Animal>(entity))
 		{
