@@ -11,6 +11,10 @@
 
 #include <cstdint>
 
+#include <entt/entity/fwd.hpp>
+#include <glm/vec2.hpp>
+
+#include "3D/AllMeshes.h"
 #include "ECS/Components/LivingAction.h"
 
 namespace openblack::ecs::systems
@@ -44,6 +48,19 @@ public:
 	virtual void VillagerSetTopStateToFinal(components::LivingAction& action) const = 0;
 	/// Whether the villager's clip has played through so many times since its state changed
 	[[nodiscard]] virtual bool VillagerIsReadyForNewAnimation(const components::LivingAction& action, uint32_t times) const = 0;
+
+	/// Whether a script can direct the villager: it is alive, on the land and not drowning
+	[[nodiscard]] virtual bool VillagerCanBeDirected(entt::entity villager) const = 0;
+	/// A script puts the villager straight into a state
+	virtual void VillagerSetScriptState(entt::entity villager, VillagerStates state) const = 0;
+	/// A script sends the villager to a point, where it waits for the script
+	virtual void VillagerScriptMoveTo(entt::entity villager, glm::vec2 goal) const = 0;
+	/// The clip a script asks the villager to play in the playing state, and how many times
+	virtual void VillagerSetScriptAnimation(entt::entity villager, AnimId clip, uint32_t plays) const = 0;
+	/// Whether the villager has played the clip a script asked for
+	[[nodiscard]] virtual bool VillagerHasPlayedScriptAnimation(entt::entity villager) const = 0;
+	/// The villager turns at once to face a point
+	virtual void VillagerFace(entt::entity villager, glm::vec2 point) const = 0;
 };
 
 } // namespace openblack::ecs::systems

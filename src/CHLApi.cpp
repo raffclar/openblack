@@ -37,6 +37,8 @@
 #include "Creature/LeashRules.h"
 #include "ECS/Archetypes/BallArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
+#include "ECS/Archetypes/ScriptMarkerArchetype.h"
+#include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureMind.h"
@@ -54,6 +56,7 @@
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WallHug.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
@@ -76,8 +79,10 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/TownPlaythings.h"
+#include "ECS/VillagerScriptRules.h"
 #include "Enums.h"
 #include "Game.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Magic/ScriptCast.h"
@@ -257,6 +262,27 @@ entt::entity CreateScriptBall(const glm::vec3& position)
 	return ball;
 }
 
+/// A villager a script makes: a grown-up just past growing up, or a child of ten, standing waiting for the script
+entt::entity CreateScriptVillager(bool child, uint32_t subtype, const glm::vec3& position)
+{
+	const auto& infos = Locator::infoConstants::value().villager;
+	if (subtype >= infos.size())
+	{
+		ScriptMessage("Thing not created");
+		return entt::null;
+	}
+	constexpr uint32_t k_ChildAge = 10;
+	const auto& info = infos.at(subtype);
+	const uint32_t age = child ? k_ChildAge : info.grownUpAge + 1;
+	// TODO(opening): the game makes one of its special villagers instead, now and then, when one fits
+	const auto villager = VillagerArchetype::Create(position, position, static_cast<VillagerInfo>(subtype), age);
+	if (Locator::livingActionSystem::has_value())
+	{
+		Locator::livingActionSystem::value().VillagerSetScriptState(villager, VillagerStates::InScript);
+	}
+	return villager;
+}
+
 entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const glm::vec3& position, float altitude,
                                 float xAngleRadians, float yAngleRadians, const float zAngleRadians, const float scale)
 {
@@ -269,6 +295,11 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		                                     yAngleRadians, zAngleRadians, scale);
 	case ObjectType::Ball:
 		return CreateScriptBall(position);
+	case ObjectType::Marker:
+		return ScriptMarkerArchetype::Create(position);
+	case ObjectType::Villager:
+	case ObjectType::VillagerChild:
+		return CreateScriptVillager(type == ObjectType::VillagerChild, subtype, position);
 	default:
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "CreateScriptObject not implemented for type {}", static_cast<int>(type));
 	}
@@ -307,6 +338,14 @@ void RegisterCreated(entt::entity object)
 entt::entity PopObject()
 {
 	return Locator::scriptObjects::value().Fetch(static_cast<entt::entity>(Pop().uintVal));
+}
+
+/// The villager a native is given, if it is one the living actions direct
+bool IsDirectableVillager(entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	return registry.Valid(object) && registry.AllOf<ecs::components::Villager, ecs::components::LivingAction>(object) &&
+	       Locator::livingActionSystem::has_value();
 }
 
 /// A script effect's seconds as game turns: a whole number of turns a second, as the game's turn length gives it
@@ -544,10 +583,26 @@ void GameThingClicked() // 016 GAME_THING_CLICKED
 
 void SetScriptState() // 017 SET_SCRIPT_STATE
 {
-	[[maybe_unused]] const auto state = Pop().intVal;
-	[[maybe_unused]] const auto object = PopObject();
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
+	const auto state = Pop().intVal;
+	const auto object = PopObject();
+	if (!Locator::entitiesRegistry::value().Valid(object))
+	{
+		ScriptMessage("Object no longer valid");
+		return;
+	}
+	if (IsDirectableVillager(object))
+	{
+		auto& living = Locator::livingActionSystem::value();
+		if (state < 0 || state >= static_cast<int32_t>(VillagerStates::_COUNT) || !living.VillagerCanBeDirected(object))
+		{
+			ScriptMessage("Object not living for set state");
+			return;
+		}
+		living.VillagerSetScriptState(object, static_cast<VillagerStates>(state));
+		return;
+	}
+	// TODO(opening): creatures, animals and groups of things
+	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented for this thing.", __func__);
 }
 
 void SetScriptStatePos() // 018 SET_SCRIPT_STATE_POS
@@ -568,11 +623,22 @@ void SetScriptFloat() // 019 SET_SCRIPT_FLOAT
 
 void SetScriptUlong() // 020 SET_SCRIPT_ULONG
 {
-	[[maybe_unused]] const auto loop = Pop().intVal;
-	[[maybe_unused]] const auto animation = Pop().intVal;
-	[[maybe_unused]] const auto object = PopObject();
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
+	// A count of -1 plays the clip without end
+	const auto plays = Pop().uintVal;
+	const auto animation = Pop().intVal;
+	const auto object = PopObject();
+	if (!Locator::entitiesRegistry::value().Valid(object))
+	{
+		ScriptMessage("Object no longer valid");
+		return;
+	}
+	if (IsDirectableVillager(object))
+	{
+		Locator::livingActionSystem::value().VillagerSetScriptAnimation(object, static_cast<AnimId>(animation), plays);
+		return;
+	}
+	// TODO(opening): creatures and groups of things
+	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented for this thing.", __func__);
 }
 
 /// Whether something is drowning, as the scripts ask: a villager while it is in its drowning state, anything else
@@ -615,6 +681,23 @@ void GetProperty() // 021 GET_PROPERTY
 	case script::ObjectPropertyType::Drowning:
 		Pushb(IsDrowning(object));
 		return;
+	case script::ObjectPropertyType::Scale:
+		if (const auto* transform = Locator::entitiesRegistry::value().TryGet<const Transform>(object); transform != nullptr)
+		{
+			Pushf(transform->scale.x);
+			return;
+		}
+		Pushf(0.0f);
+		return;
+	case script::ObjectPropertyType::Speed:
+		if (const auto* wallHug = Locator::entitiesRegistry::value().TryGet<const ecs::components::WallHug>(object);
+		    wallHug != nullptr)
+		{
+			Pushf(ecs::villager_script_rules::WalkSpeedToScriptSpeed(wallHug->speed));
+			return;
+		}
+		Pushf(0.0f);
+		return;
 	default:
 		// TODO(Daniels118): the other properties
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() property {} not implemented.", __func__,
@@ -626,11 +709,38 @@ void GetProperty() // 021 GET_PROPERTY
 
 void SetProperty() // 022 SET_PROPERTY
 {
-	// const auto val = Popf();
-	// const auto object = Pop().uintVal;
-	// const auto prop = Pop().intVal;
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
+	const auto value = Popf();
+	const auto object = PopObject();
+	const auto prop = static_cast<script::ObjectPropertyType>(Pop().intVal);
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		ScriptMessage("Object no longer valid");
+		return;
+	}
+	switch (prop)
+	{
+	case script::ObjectPropertyType::Scale:
+		// The thing is drawn at this size, the same along every axis
+		if (auto* transform = registry.TryGet<Transform>(object); transform != nullptr)
+		{
+			transform->scale = glm::vec3(value);
+			registry.SetDirty();
+		}
+		return;
+	case script::ObjectPropertyType::Speed:
+		// Metres a turn
+		if (auto* wallHug = registry.TryGet<ecs::components::WallHug>(object); wallHug != nullptr)
+		{
+			wallHug->speed = ecs::villager_script_rules::ScriptSpeedToWalkSpeed(value);
+		}
+		return;
+	default:
+		// TODO(Daniels118): the other properties
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() property {} not implemented.", __func__,
+		                    static_cast<int>(prop));
+		return;
+	}
 }
 
 void GetPosition() // 023 GET_POSITION
@@ -673,8 +783,7 @@ void GetDistance() // 025 GET_DISTANCE
 {
 	const auto p1 = PopVec();
 	const auto p0 = PopVec();
-	const auto distance = glm::length(p1 - p0);
-	Pushf(distance);
+	Pushf(ecs::villager_script_rules::ScriptDistance(p0, p1));
 }
 
 void Call() // 026 CALL
@@ -697,7 +806,7 @@ void Create() // 027 CREATE
 	const auto object = CreateScriptObject(type, subtype, position, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
 	RegisterCreated(object);
 
-	Pusho(static_cast<uint32_t>(object));
+	Pusho(object == entt::null ? 0 : static_cast<uint32_t>(object));
 }
 
 void Random() // 028 RANDOM
@@ -762,19 +871,46 @@ void SetWidescreen() // 032 SET_WIDESCREEN
 
 void MoveGameThing() // 033 MOVE_GAME_THING
 {
+	// How near a creature has to come; others go to the point itself
 	[[maybe_unused]] const auto radius = Popf();
-	[[maybe_unused]] const auto position = PopVec();
-	[[maybe_unused]] const auto object = PopObject();
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
+	const auto position = PopVec();
+	const auto object = PopObject();
+	if (!Locator::entitiesRegistry::value().Valid(object))
+	{
+		ScriptMessage("Object no longer valid");
+		return;
+	}
+	if (IsDirectableVillager(object))
+	{
+		// One in a hand, in the air or drowning stays where it is
+		auto& living = Locator::livingActionSystem::value();
+		if (living.VillagerCanBeDirected(object))
+		{
+			living.VillagerScriptMoveTo(object, glm::vec2(position.x, position.z));
+		}
+		return;
+	}
+	// TODO(opening): creatures, flocks, the weather, computer players and other things
+	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented for this thing.", __func__);
 }
 
 void SetFocus() // 034 SET_FOCUS
 {
-	// const auto position = PopVec();
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
+	const auto position = PopVec();
+	const auto object = PopObject();
+	if (!Locator::entitiesRegistry::value().Valid(object))
+	{
+		ScriptMessage("Object no longer valid");
+		return;
+	}
+	if (IsDirectableVillager(object))
+	{
+		// It turns at once to face the point
+		Locator::livingActionSystem::value().VillagerFace(object, glm::vec2(position.x, position.z));
+		return;
+	}
+	// TODO(opening): other objects, creatures and groups of things
+	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented for this thing.", __func__);
 }
 
 void HasCameraArrived() // 035 HAS_CAMERA_ARRIVED
@@ -1074,10 +1210,22 @@ void SetInterfaceInteraction() // 063 SET_INTERFACE_INTERACTION
 
 void Played() // 064 PLAYED
 {
-	// const auto obj = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
-	Pushb(false);
+	const auto object = PopObject();
+	if (!Locator::entitiesRegistry::value().Valid(object))
+	{
+		// Something gone has played whatever it was asked to
+		ScriptMessage("Object no longer valid");
+		Pushb(true);
+		return;
+	}
+	if (IsDirectableVillager(object))
+	{
+		Pushb(Locator::livingActionSystem::value().VillagerHasPlayedScriptAnimation(object));
+		return;
+	}
+	// TODO(opening): creatures' plans, other living things, the weather and dances
+	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented for this thing.", __func__);
+	Pushb(true);
 }
 
 void RandomUlong() // 065 RANDOM_ULONG

@@ -9,24 +9,18 @@
 
 #pragma once
 
+#include <cstdint>
+
+#include "3D/AllMeshes.h"
+
 namespace openblack::ecs::components
 {
 
-/// A script holds a reference to the object
-struct InScript
+/// The clip a script asked a villager to play when it puts it in the playing state, and how many more times to play it
+struct ScriptAnimation
 {
-};
-
-/// A script controls the object: it was made by a script, or a script moved, attached or set the state of it. Its own
-/// player's blows don't hurt a creature under a script's control, and a villager under one returns to what the script
-/// had it doing after it lands
-struct ScriptControlled
-{
-};
-
-/// A point a script marked: a place and nothing else
-struct ScriptMarker
-{
+	AnimId clip {AnimId::Invalid};
+	uint32_t playsLeft {0};
 };
 
 } // namespace openblack::ecs::components
