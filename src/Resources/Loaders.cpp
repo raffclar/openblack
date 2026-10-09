@@ -117,6 +117,17 @@ L3DLoader::result_type L3DLoader::operator()(FromMadeTag, const std::string& deb
 	return mesh;
 }
 
+L3DLoader::result_type L3DLoader::operator()(FromFileWithSkinsOfTag, const std::string& debugName, const l3d::L3DFile& file,
+                                             const graphics::L3DMesh& skinSource) const
+{
+	auto mesh = std::make_shared<graphics::L3DMesh>(debugName);
+	if (!mesh->LoadWithSkinsOf(file, skinSource))
+	{
+		throw std::runtime_error("Unable to load mesh");
+	}
+	return mesh;
+}
+
 L3DFileLoader::result_type L3DFileLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
 {
 	auto file = std::make_shared<l3d::L3DFile>();

@@ -25,7 +25,7 @@ public:
 	[[nodiscard]] Registry& Entities() override;
 	[[nodiscard]] int32_t LandNumber() const override;
 	[[nodiscard]] std::optional<glm::vec3> SitePoint(uint32_t index) const override;
-	[[nodiscard]] entt::id_type SiteMesh() const override;
+	[[nodiscard]] entt::id_type SiteMesh(entt::entity temple) override;
 	[[nodiscard]] entt::id_type AltarMesh(Tribe tribe) const override;
 	[[nodiscard]] float LandHeightAt(glm::vec2 point) const override;
 	[[nodiscard]] uint32_t PopulationOf(entt::entity town) const override;

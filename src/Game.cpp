@@ -1048,6 +1048,11 @@ bool Game::GameLogicLoop() noexcept
 	Locator::alignmentSystem::value().UpdateTurn();
 	// The temples' outsides follow their players' alignments
 	Locator::templeExteriorSystem::value().UpdateTurn();
+	// And their worship sites wear their looks
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().UpdateTurn();
+	}
 
 	if (_atmosAudio)
 	{
@@ -2018,9 +2023,9 @@ bool Game::Initialize() noexcept
 				                   SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading temple mesh: {}", f.stem().string());
 				                   meshManager.Load(name, resources::L3DLoader::FromDiskTag {}, f);
 				                   // The temple's outside is blended from the temple meshes, into the first temple's,
-				                   // and its entrance is picked under the cursor
+				                   // its entrance is picked under the cursor, and its worship sites wear its skin
 				                   if (name.starts_with("temple/b_temple") || name.starts_with("temple/b_first_temple") ||
-				                       name == "temple/entrance_l3d")
+				                       name == "temple/entrance_l3d" || name == "temple/b_worship_l3d")
 				                   {
 					                   resources.GetL3DFiles().Load(name, resources::L3DFileLoader::FromDiskTag {}, f);
 				                   }

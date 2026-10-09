@@ -209,6 +209,12 @@ void WorshipSiteSystem::SetCanHaveSites(entt::entity townOrTemple, bool can)
 	Log(spdlog::level::err, "scripting", "Worship sites can only be allowed or stopped for a town or temple");
 }
 
+void WorshipSiteSystem::UpdateTurn()
+{
+	_world->Entities().Each<const WorshipSite, Mesh>(
+	    [this](const WorshipSite& site, Mesh& mesh) { mesh.id = _world->SiteMesh(site.temple); });
+}
+
 void WorshipSiteSystem::BuildBy(entt::entity site, float share)
 {
 	auto& registry = _world->Entities();
@@ -216,15 +222,9 @@ void WorshipSiteSystem::BuildBy(entt::entity site, float share)
 	{
 		return;
 	}
+	// Its altar goes up with it, but isn't seen until it stands whole
 	auto& progress = registry.Get<BuildProgress>(site);
 	progress.built = std::max(progress.built + share, 0.0f);
-	// Its altar goes up with it
-	const auto altar = registry.Get<const WorshipSite>(site).altar;
-	if (auto* altarProgress = registry.Valid(altar) ? registry.TryGet<BuildProgress>(altar) : nullptr;
-	    altarProgress != nullptr && altarProgress->built < 1.0f)
-	{
-		altarProgress->built = std::max(altarProgress->built + share, 0.0f);
-	}
 	if (progress.built >= 1.0f)
 	{
 		Built(site);
@@ -234,8 +234,9 @@ void WorshipSiteSystem::BuildBy(entt::entity site, float share)
 bool WorshipSiteSystem::IsBuilt(entt::entity site) const
 {
 	const auto& registry = _world->Entities();
+	// A site keeps how far it is built only while it goes up
 	const auto* progress = registry.TryGet<const BuildProgress>(site);
-	return progress != nullptr && progress->built >= 1.0f;
+	return registry.AllOf<WorshipSite>(site) && (progress == nullptr || progress->built >= 1.0f);
 }
 
 entt::entity WorshipSiteSystem::TempleOf(PlayerNames player) const
@@ -369,7 +370,7 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 	const auto site = registry.Create();
 	const auto ground = glm::vec3(templePosition.x, _world->LandHeightAt(Across(templePosition)), templePosition.z);
 	registry.Assign<Transform>(site, ground, glm::mat3(glm::eulerAngleY(-facing)), glm::vec3(1.0f));
-	registry.Assign<Mesh>(site, _world->SiteMesh(), static_cast<int8_t>(0), static_cast<int8_t>(0));
+	registry.Assign<Mesh>(site, _world->SiteMesh(temple), static_cast<int8_t>(0), static_cast<int8_t>(0));
 	registry.Assign<BuildProgress>(site, 0.0f);
 	registry.Assign<WorshipSite>(site, WorshipSite {
 	                                       .temple = temple,
@@ -395,8 +396,6 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 	const auto altar = registry.Create();
 	registry.Assign<Transform>(altar, glm::vec3(altarAt.x, _world->LandHeightAt(altarAt), altarAt.y),
 	                           glm::mat3(glm::eulerAngleY(-facing)), glm::vec3(1.0f));
-	registry.Assign<Mesh>(altar, _world->AltarMesh(tribe), static_cast<int8_t>(0), static_cast<int8_t>(0));
-	registry.Assign<BuildProgress>(altar, 0.0f);
 	registry.Assign<WorshipAltar>(altar, site);
 	registry.Get<WorshipSite>(site).altar = altar;
 	if (const auto logger = spdlog::get("game"))
@@ -426,7 +425,16 @@ void WorshipSiteSystem::AddTownIfMissing(entt::entity site, entt::entity town)
 
 void WorshipSiteSystem::Built(entt::entity site)
 {
-	_world->Entities().Get<WorshipSite>(site).buildRequests.clear();
+	auto& registry = _world->Entities();
+	auto& component = registry.Get<WorshipSite>(site);
+	component.buildRequests.clear();
+	// It stands whole, drawn as itself, and its altar is seen from now on
+	registry.Remove<BuildProgress>(site);
+	if (registry.Valid(component.altar) && !registry.AllOf<Mesh>(component.altar))
+	{
+		registry.Assign<Mesh>(component.altar, _world->AltarMesh(component.tribe), static_cast<int8_t>(0),
+		                      static_cast<int8_t>(0));
+	}
 }
 
 std::vector<entt::entity> WorshipSiteSystem::TownsOf(PlayerNames player) const

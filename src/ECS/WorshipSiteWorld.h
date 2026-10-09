@@ -40,8 +40,9 @@ public:
 	[[nodiscard]] virtual int32_t LandNumber() const = 0;
 	/// One of the points laid out in the worship site's model, about the temple it stands at; none without the model
 	[[nodiscard]] virtual std::optional<glm::vec3> SitePoint(uint32_t index) const = 0;
-	/// The worship site's model
-	[[nodiscard]] virtual entt::id_type SiteMesh() const = 0;
+	/// The worship site's model as it stands at a temple: wearing the temple's own skin once the temple has one, which
+	/// changes with its player's alignment
+	[[nodiscard]] virtual entt::id_type SiteMesh(entt::entity temple) = 0;
 	/// The model of a tribe's altar
 	[[nodiscard]] virtual entt::id_type AltarMesh(Tribe tribe) const = 0;
 	[[nodiscard]] virtual float LandHeightAt(glm::vec2 point) const = 0;

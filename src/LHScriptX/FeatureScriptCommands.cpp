@@ -430,11 +430,11 @@ void FeatureScriptCommands::CreateWorshipSite(glm::vec3 /*position*/, int32_t /*
 	}
 }
 
-void FeatureScriptCommands::CreatePlannedWorshipSite([[maybe_unused]] glm::vec3 position, int32_t, const std::string&,
-                                                     const std::string&, int32_t, int32_t)
+void FeatureScriptCommands::CreatePlannedWorshipSite(glm::vec3 /*position*/, int32_t, const std::string&, const std::string&,
+                                                     int32_t, int32_t)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The game reads the line and does nothing with it: a worship site to come is only ever asked for by a town of its
+	// tribe once the temple stands
 }
 
 void FeatureScriptCommands::CreateAnimal([[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t)

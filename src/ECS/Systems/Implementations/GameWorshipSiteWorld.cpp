@@ -11,10 +11,14 @@
 
 #include "GameWorshipSiteWorld.h"
 
+#include <L3DFile.h>
 #include <entt/core/hashed_string.hpp>
+#include <fmt/format.h>
+#include <spdlog/spdlog.h>
 
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "ECS/Components/Mesh.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
@@ -63,9 +67,43 @@ std::optional<glm::vec3> GameWorshipSiteWorld::SitePoint(uint32_t index) const
 	return glm::vec3(points.at(index)[3]);
 }
 
-entt::id_type GameWorshipSiteWorld::SiteMesh() const
+entt::id_type GameWorshipSiteWorld::SiteMesh(entt::entity temple)
 {
-	return k_SiteMesh.value();
+	// Every part of the site's model is drawn with the first skin of the temple's model, so the site takes on the
+	// temple's look for its player's alignment as it changes
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* templeMesh = registry.Valid(temple) ? registry.TryGet<const Mesh>(temple) : nullptr;
+	if (templeMesh == nullptr || !Locator::resources::has_value())
+	{
+		return k_SiteMesh.value();
+	}
+	auto& resources = Locator::resources::value();
+	auto& meshes = resources.GetMeshes();
+	auto& files = resources.GetL3DFiles();
+	if (!meshes.Contains(templeMesh->id) || !files.Contains(k_SiteMesh.value()))
+	{
+		return k_SiteMesh.value();
+	}
+	const auto& templeModel = *meshes.Handle(templeMesh->id);
+	// Only a temple with its own model, made as its look changes, outlives the site's model made with its skin
+	if (!templeModel.IsDynamic() || templeModel.GetSkinOrder().empty())
+	{
+		return k_SiteMesh.value();
+	}
+	const auto name = fmt::format("temple/worship/{}", templeMesh->id);
+	const auto id = entt::hashed_string(name.c_str()).value();
+	if (!meshes.Contains(id))
+	{
+		auto site = *files.Handle(k_SiteMesh.value());
+		const auto skin = templeModel.GetSkinOrder().front();
+		for (auto& primitive : site.EditPrimitiveHeaders())
+		{
+			primitive.material.skinID = skin;
+		}
+		meshes.Load(id, resources::L3DLoader::FromFileWithSkinsOfTag {}, name, site, templeModel);
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Worship sites at temple model {} wear its skin", templeMesh->id);
+	}
+	return id;
 }
 
 entt::id_type GameWorshipSiteWorld::AltarMesh(Tribe tribe) const

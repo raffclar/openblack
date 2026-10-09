@@ -426,9 +426,18 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    look.z = 1.0f;
 		    }
 
+		    // A building going up is drawn only as far up as it stands, with the broken and the unfinished ones, though
+		    // what of it stands can still be pointed at
+		    const auto* progress = registry.TryGet<const BuildProgress>(entity);
+		    const bool goingUp = progress != nullptr && DrawnMeshOf(entity, mesh) == mesh.id;
+		    if (goingUp)
+		    {
+			    look.z = 1.0f;
+		    }
+
 		    const uint32_t idx = slots->second.offset + slots->second.filled;
 		    _renderContext.instanceUniforms[idx] = {.model = modelMatrix, .look = look};
-		    if (look.z != 1.0f)
+		    if (look.z != 1.0f || (goingUp && progress->built > 0.0f))
 		    {
 			    _renderContext.drawnObjects.push_back({.entity = entity, .model = modelMatrix});
 		    }

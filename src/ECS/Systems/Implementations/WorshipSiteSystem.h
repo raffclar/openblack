@@ -36,6 +36,7 @@ public:
 	void LandLaidOut() override;
 	entt::entity MakeBuiltSite(PlayerNames player, Tribe tribe) override;
 	void SetCanHaveSites(entt::entity townOrTemple, bool can) override;
+	void UpdateTurn() override;
 	void BuildBy(entt::entity site, float share) override;
 	[[nodiscard]] bool IsBuilt(entt::entity site) const override;
 	[[nodiscard]] entt::entity TempleOf(PlayerNames player) const override;

@@ -63,7 +63,11 @@ public:
 		}
 		return std::nullopt;
 	}
-	[[nodiscard]] entt::id_type SiteMesh() const override { return 1; }
+	[[nodiscard]] entt::id_type SiteMesh(entt::entity temple) override
+	{
+		const auto skinned = templeSkins.find(temple);
+		return skinned != templeSkins.end() ? skinned->second : 1;
+	}
 	[[nodiscard]] entt::id_type AltarMesh(Tribe tribe) const override { return 100 + static_cast<entt::id_type>(tribe); }
 	[[nodiscard]] float LandHeightAt(glm::vec2 /*point*/) const override { return 0.0f; }
 	[[nodiscard]] uint32_t PopulationOf(entt::entity town) const override
@@ -73,6 +77,8 @@ public:
 	}
 
 	int32_t landNumber {2};
+	/// The site's model wearing a temple's skin, once the temple has one
+	std::unordered_map<entt::entity, entt::id_type> templeSkins;
 	std::unordered_map<entt::entity, uint32_t> population;
 
 private:
@@ -188,7 +194,9 @@ TEST(WorshipSiteSystem, AStandingTempleGivesItsPlayersTownsTheirTribesSitesToBui
 	const auto& altar = f.registry.Get<const Transform>(site.altar).position;
 	EXPECT_NEAR(altar.x, altarAt.x, 1e-4f);
 	EXPECT_NEAR(altar.z, altarAt.y, 1e-4f);
-	EXPECT_EQ(f.registry.Get<const Mesh>(site.altar).id, 100u + static_cast<uint32_t>(Tribe::NORSE));
+	// Its altar isn't seen until the site is built
+	EXPECT_FALSE(f.registry.AllOf<Mesh>(site.altar));
+	EXPECT_EQ(f.registry.Get<const Mesh>(norseSite).id, 1u);
 }
 
 TEST(WorshipSiteSystem, ASiteTakesThePlaceNearestItsTribesNearestTown)
@@ -247,7 +255,10 @@ TEST(WorshipSiteSystem, TheLandScriptsBuiltSiteIsBuiltOnlyWhenItsTownWasAskedToB
 	EXPECT_EQ(site, f.registry.Get<const components::Town>(town).worshipSite);
 	EXPECT_TRUE(f.system->IsBuilt(site));
 	EXPECT_TRUE(f.registry.Get<const WorshipSite>(site).buildRequests.empty());
-	EXPECT_GE(f.registry.Get<const BuildProgress>(f.registry.Get<const WorshipSite>(site).altar).built, 1.0f);
+	// Built, it no longer goes up, and its tribe's altar is seen
+	EXPECT_FALSE(f.registry.AllOf<BuildProgress>(site));
+	EXPECT_EQ(f.registry.Get<const Mesh>(f.registry.Get<const WorshipSite>(site).altar).id,
+	          100u + static_cast<uint32_t>(Tribe::NORSE));
 
 	// A tribe the player has no town of: built, but not handed back
 	EXPECT_TRUE(f.system->MakeBuiltSite(PlayerNames::PLAYER_TWO, Tribe::GREEK) == entt::null);
@@ -303,4 +314,19 @@ TEST(WorshipSiteSystem, BuildingUpASiteFinishesItAtTheWhole)
 	f.system->BuildBy(site, 0.6f);
 	EXPECT_TRUE(f.system->IsBuilt(site));
 	EXPECT_TRUE(f.registry.Get<const WorshipSite>(site).buildRequests.empty());
+}
+
+TEST(WorshipSiteSystem, ASiteWearsItsTemplesSkinOnceTheTempleHasOne)
+{
+	Fixture f;
+	f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+	const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+	f.system->AddTemple(temple, 0.0f, true);
+	const auto site = *std::ranges::find_if(f.registry.Get<const CitadelWorship>(temple).sites,
+	                                        [](auto entity) { return entity != entt::null; });
+	f.system->UpdateTurn();
+	EXPECT_EQ(f.registry.Get<const Mesh>(site).id, 1u);
+	f.world->templeSkins[temple] = 7;
+	f.system->UpdateTurn();
+	EXPECT_EQ(f.registry.Get<const Mesh>(site).id, 7u);
 }

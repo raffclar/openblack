@@ -40,6 +40,9 @@ public:
 	/// A script lets a town or a temple have worship sites made, or stops it
 	virtual void SetCanHaveSites(entt::entity townOrTemple, bool can) = 0;
 
+	/// Every game turn: each site wears its temple's look as it is now
+	virtual void UpdateTurn() = 0;
+
 	/// A site is built up by a share of the whole, its altar with it. Reaching the whole, no town is asked to build it
 	/// any more.
 	virtual void BuildBy(entt::entity site, float share) = 0;
