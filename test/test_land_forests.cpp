@@ -48,3 +48,13 @@ TEST(LandForests, ATownTakesForestsStrictlyWithinReachThatHoldWood)
 	EXPECT_FALSE(NearTown(50.0f, 50.0f, 10.0f));
 	EXPECT_FALSE(NearTown(10.0f, 50.0f, 0.0f));
 }
+
+TEST(LandForests, ANumberGivenMovesTheCountOnlyWhenBeyondIt)
+{
+	// Beyond the count: past the number
+	EXPECT_EQ(CountAfter(3u, 7u), 8u);
+	// Equal to the count: the count stays, so the next forest without a number shares it
+	EXPECT_EQ(CountAfter(3u, 3u), 3u);
+	// Below the count: the count stays
+	EXPECT_EQ(CountAfter(3u, 1u), 3u);
+}

@@ -225,11 +225,11 @@ void Sightings(Stream& stream, std::vector<MindSighting>& sightings, uint32_t ve
 
 void Physique(Stream& stream, MindPhysique& body, uint32_t version)
 {
-	stream.Value(body.unknown0);
+	stream.Value(body.turns);
 	stream.Value(body.age);
 	stream.Value(body.strength);
-	stream.Value(body.unknown1);
-	stream.Value(body.unknown2);
+	stream.Value(body.fatness);
+	stream.Value(body.shownFatness);
 	stream.Optional(version < 14, body.before14);
 	stream.Value(body.energy);
 	stream.Optional(version > 5, body.scratch);
@@ -240,8 +240,8 @@ void Physique(Stream& stream, MindPhysique& body, uint32_t version)
 	}
 	stream.Optional(version > 21, body.unknown3);
 	stream.Optional(version > 21, body.size);
-	stream.Counted<uint32_t>(body.listA, [&stream](uint32_t& value) { stream.Value(value); });
-	stream.Counted<uint32_t>(body.listB, [&stream](uint32_t& value) { stream.Value(value); });
+	stream.Counted<uint32_t>(body.blood, [&stream](uint32_t& value) { stream.Value(value); });
+	stream.Counted<uint32_t>(body.wounds, [&stream](uint32_t& value) { stream.Value(value); });
 }
 
 /// The database is a list ended by an id of 0, each entry's pairs a list ended by a number of 0

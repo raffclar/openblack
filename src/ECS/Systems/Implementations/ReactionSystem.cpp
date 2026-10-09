@@ -22,6 +22,7 @@
 #include "3D/CreatureBody.h"
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
+#include "Creature/CreatureFireReaction.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
@@ -54,6 +55,7 @@
 #include "Magic/Impressiveness.h"
 #include "Magic/ReactionRules.h"
 #include "Magic/VillagerReactionRules.h"
+#include "ObjectMeasures.h"
 #include "Physics/LivingRules.h"
 #include "VillagerFire.h"
 #include "VillagerPhysics.h"
@@ -403,6 +405,21 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 	{
 		return villager_fire::ReactToFirePriority(living, reaction.source.initiator);
 	}
+	// A creature heeds a fire only when it is near enough the burning thing and big enough beside it
+	if (reaction.source.type == Reaction::ReactToFire && registry.AllOf<Creature>(living))
+	{
+		const auto burning = reaction.source.initiator;
+		const auto burningAt = registry.Valid(burning) ? object_measures::PositionOf(registry, burning) : std::nullopt;
+		if (!burningAt.has_value())
+		{
+			return 0;
+		}
+		const auto kind =
+		    creature_fire::Priority(gutils::GetDistanceInMetres(*burningAt, at), object_measures::TwoDRadius(registry, burning),
+		                            object_measures::TwoDRadius(registry, living), object_measures::Height(registry, living),
+		                            object_measures::Height(registry, burning), static_cast<uint8_t>(info->priority));
+		return villager_reaction::Priority(kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
+	}
 	const auto kind =
 	    magic::KindPriority(reaction.source.type, info->priority, magic::FastMapDistance(at, reaction.source.position),
 	                        living == reaction.source.casterCreature);
@@ -452,8 +469,10 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 		// The shields' villagers react to the shields' own reactions through the shields, and while they do, to nothing
 		// else but what flies inside the shield, which their priority weighs
 		// TODO(raffclar): the game weighs another reaction against a villager's shield reaction as against any other
-		if (!registry.Valid(entity) || !registry.AllOf<Transform>(entity) || entity == reaction.source.initiator ||
-		    !Reaches(registry, entity, reaction.source.type) ||
+		// A burning creature takes up its own fire's reaction, as any other within reach does
+		const bool ownFire = reaction.source.type == Reaction::ReactToFire && registry.AllOf<Creature>(entity);
+		if (!registry.Valid(entity) || !registry.AllOf<Transform>(entity) ||
+		    (entity == reaction.source.initiator && !ownFire) || !Reaches(registry, entity, reaction.source.type) ||
 		    (registry.AllOf<Villager>(entity) &&
 		     (ShieldKind(reaction.source.type) ||
 		      (registry.AllOf<VillagerShieldReaction>(entity) && reaction.source.type != Reaction::ReactToFlyingObject))) ||
@@ -572,6 +591,12 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 	if (registry.AllOf<Villager>(living))
 	{
 		villager_reactions::Start(living, reaction.source.type, state, wasReacting);
+		return;
+	}
+	// A creature goes to put out a fire or runs from it
+	if (source.type == Reaction::ReactToFire && registry.AllOf<Creature>(living) && Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().ReactToFire(living, source.initiator);
 		return;
 	}
 	// A creature turns aside into a teleport stone

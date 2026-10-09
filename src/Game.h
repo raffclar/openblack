@@ -10,6 +10,7 @@
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -23,6 +24,7 @@
 #include "3D/HandCrossFade.h"
 #include "3D/HandNavigationPose.h"
 #include "Common/Zoomer.h"
+#include "Creature/CreatureFight.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "EngineConfig.h"
 #include "Gui/LoadingScreenRules.h"
@@ -83,6 +85,8 @@ struct ScenarioRequest
 	uint32_t warmUpFrames {120};
 	uint32_t frames {600};
 	std::optional<std::filesystem::path> results;
+	/// Without the testbed's window of scenarios over the view, as for screenshots of what a scenario shows
+	bool hideWindow {false};
 };
 
 struct Arguments
@@ -159,10 +163,13 @@ public:
 	bool Initialize() noexcept;
 	bool Run() noexcept;
 
-	/// Loads a land from its map script. The tips screen shows while it loads, as for a new game; a script's own map
-	/// command shows the "please wait" banner instead, after five seconds
+	/// Loads a land's map script, keeping the challenge's scripts running, as the story's own change of land does. The
+	/// tips screen shows while it loads, as for a new game; a script's own map command shows the "please wait" banner
+	/// instead, after five seconds
 	bool LoadMap(const std::filesystem::path& path,
 	             loading::LoadingClock::Mode look = loading::LoadingClock::Mode::Tips) noexcept;
+	/// Loads a land as the land menu does: the challenge's scripts start again from scratch before the land loads
+	bool LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept;
 	void LoadLandscape(const std::filesystem::path& path);
 	/// Loads the testbed: a flat plane over the whole map, with a lake north of the middle and nothing on it, for trying
 	/// out creatures
@@ -240,6 +247,8 @@ private:
 	bool _tipFadedIn {false};
 	bool _startTestbed {false};
 	std::optional<ScenarioRequest> _scenarioRequest;
+	/// Whether the testbed opens its window of scenarios
+	bool _testbedWindow {true};
 	bool _quitRequested {false};
 
 	std::chrono::steady_clock::time_point _lastGameLoopTime;
@@ -250,6 +259,8 @@ private:
 	/// Whether the last press of the Action button went to letting go of a miracle in the hand or to a creature, so it
 	/// taps nothing else for the leash
 	bool _actionPressTaken {false};
+	/// The button whose press directs the player's creature's fight, until it is let go
+	std::optional<creature_fight::Button> _fightButton;
 	bool _handRotating {false};
 	/// The hand sits on the line of sight through the cursor, this far from the camera
 	glm::vec3 _handRayDirection {0.0f, -1.0f, 0.0f};
@@ -267,6 +278,16 @@ private:
 	glm::vec3 _handGripPoint {0.0f, 0.0f, 0.0f};
 	/// The fade from where the hand was to where it is now held, as it grips the land or lets go
 	HandCrossFade _handCrossFade;
+	/// The hand's tap after it knocked on a house: it stays upright where it knocked while the tap plays through once.
+	/// Holding something puts it off, and it starts over once the hand lets go.
+	struct HandKnock
+	{
+		glm::vec3 point;
+		std::chrono::microseconds time {0};
+	};
+	std::optional<HandKnock> _handKnock;
+	/// The hand plays its tap this frame
+	bool _handKnocking {false};
 	/// The way the surface the cursor is on in the temple faces, which the hand turns to
 	Zoomer3 _handTempleNormal {glm::vec3(0.0f, 1.0f, 0.0f)};
 	/// The options screen's one-press actions: the temple and realm keys, the villagers' names and details
@@ -307,6 +328,8 @@ private:
 	void UpdateHandNavigation(const ecs::components::Transform& handTransform);
 	/// Places the hand on the line of sight through the cursor the way the game does
 	void PlaceHand(ecs::components::Transform& handTransform, float deltaSeconds);
+	/// A knock on a house: the hand's tap starts, waits while the hand holds something, and the houses' read-out runs
+	void UpdateHandKnock(const ecs::components::Transform& handTransform);
 	/// Loads the hand animations of Data/CTR/hh.hbn for the hand mesh
 	void LoadHandAnimation();
 	/// What moves each species' body, from Data/CTR's .cbn files, by the species their base mesh names

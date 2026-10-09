@@ -37,6 +37,7 @@ public:
 	void ReleaseFromScript(entt::entity object) override;
 	void Replace(entt::entity from, entt::entity to) override;
 	void Reset() override;
+	void ClearForNewLand() override;
 
 private:
 	/// A controlled object goes back into the game: control is cleared, and a living thing takes up what it does when
