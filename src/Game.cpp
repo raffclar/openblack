@@ -2717,6 +2717,14 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 
 	PrepareNewLand();
 
+	// A playground land is played as a skirmish, in which losing a temple doesn't end the game
+	bool skirmish = false;
+	Locator::resources::value().GetLevels().Each([&path, &skirmish](entt::id_type /*id*/, const Level& level) {
+		skirmish = skirmish || (level.GetType() == Level::LandType::Skirmish &&
+		                        level.GetScriptPath().lexically_normal() == path.lexically_normal());
+	});
+	Locator::entitiesRegistry::value().Context().skirmish = skirmish;
+
 	Script script;
 	try
 	{
