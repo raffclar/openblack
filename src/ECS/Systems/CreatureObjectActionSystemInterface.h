@@ -54,6 +54,8 @@ public:
 	virtual bool PickUp(entt::entity creature, entt::entity object) = 0;
 	virtual bool PutDown(entt::entity creature) = 0;
 	virtual bool Discard(entt::entity creature) = 0;
+	/// Tosses away what it holds with another animation, letting go at the same moment
+	virtual bool DiscardWith(entt::entity creature, size_t animation) = 0;
 	virtual bool Lob(entt::entity creature) = 0;
 	virtual bool EatHeld(entt::entity creature) = 0;
 	/// Strokes, shakes, smells or examines what it holds, by the animation of that

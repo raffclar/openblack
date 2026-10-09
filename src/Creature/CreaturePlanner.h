@@ -88,6 +88,10 @@ struct Plan
 	float goalUsefulness {k_DefaultUsefulness};
 	float actionPriority {0.0f};
 	float priority {0.0f};
+	/// For a plan forced on the creature: the thing the desire is served through (a burning house's town, say), and the
+	/// thing used to do it, if any
+	std::optional<uint32_t> activityObject;
+	std::optional<uint32_t> instrument;
 };
 
 /// The best plan for a desire of a strength: the goal by distance and usefulness, then the action most wanted

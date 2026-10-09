@@ -47,6 +47,9 @@ enum class Target : uint8_t
 	Frightening,
 	/// Anything at all it can see
 	Anything,
+	/// Anything on fire, or anything not on fire
+	Burning,
+	Unburnt,
 };
 
 /// How the agenda is made
@@ -78,6 +81,12 @@ enum class Build : uint8_t
 	CastLightning,
 	CastHelpful,
 	CastPlayful,
+	/// Casting the water miracle at a burning thing
+	CastWater,
+	/// Setting a thing alight by tossing a burning thing at it
+	SetFire,
+	/// An action whose agenda can never be made
+	Never,
 };
 
 struct Executor
@@ -104,6 +113,10 @@ struct Situation
 	std::optional<creature_mind::Wants::WaterSpot> water;
 	std::optional<glm::vec2> hurlTarget;
 	std::optional<size_t> showDesireAnimation;
+	/// The thing the action uses, by its entity's number, as a burning thing to set something alight with; and whether
+	/// its hand holds something already
+	std::optional<uint32_t> instrument;
+	bool handFull {false};
 };
 /// What a casting action casts, from its row of the game's table and the creature
 struct CastInfo

@@ -167,7 +167,8 @@ void creature_learning::SuppressOpposed(creature_desires::Desires& desires, Desi
 	for (size_t other = 0; other < k_DesireCount; ++other)
 	{
 		const auto dependency = dependencies.at(index).at(other);
-		if (other != index && dependency < 0.0f)
+		// The desire decided on is held back too when it opposes itself
+		if (dependency < 0.0f)
 		{
 			creature_desires::Suppress(desires, static_cast<Desire>(other), -dependency * k_OpposedSuppressSeconds,
 			                           turnsPerSecond);
@@ -237,6 +238,27 @@ void creature_learning::ResetDrives(creature_desires::DesireState& desire)
 	{
 		source.drive = 0.0f;
 	}
+}
+
+bool creature_learning::RemembersForcedPlan(const creature_desires::DesireState& desire)
+{
+	// The source that has driven the desire most, of those that have driven it at all, the first of the most; else none
+	uint32_t type = k_NoTellingSource;
+	float most = 0.0f;
+	for (const auto& source : desire.sources)
+	{
+		if (source.drive > most)
+		{
+			type = source.type;
+			most = source.drive;
+		}
+	}
+	// When that says nothing of why, the desire's first source has its say
+	if (type > k_LastTellingSource && !desire.sources.empty())
+	{
+		type = desire.sources.front().type;
+	}
+	return type <= k_LastTellingSource;
 }
 
 CreatureAttitude& creature_learning::AttitudeTo(std::vector<CreatureAttitude>& attitudes, uint32_t creature)

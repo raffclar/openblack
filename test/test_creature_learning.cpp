@@ -125,10 +125,13 @@ TEST(CreatureDecisionTree, EmptyTreeKnowsNothing)
 
 TEST(CreatureDecisionTree, UsefulnessFromUtility)
 {
-	EXPECT_FLOAT_EQ(creature_tree::Usefulness(1.0f), 1.0f);
 	EXPECT_FLOAT_EQ(creature_tree::Usefulness(-1.0f), 0.0f);
 	EXPECT_FLOAT_EQ(creature_tree::Usefulness(-0.5f), 0.05f);
-	EXPECT_FLOAT_EQ(creature_tree::Usefulness(0.5f), 0.55f);
+	EXPECT_FLOAT_EQ(creature_tree::Usefulness(0.02f), 0.118f);
+	// Capped at an eighth: anything a little better than unknown is as useful as the best
+	EXPECT_FLOAT_EQ(creature_tree::Usefulness(0.5f), 0.125f);
+	EXPECT_FLOAT_EQ(creature_tree::Usefulness(1.0f), 0.125f);
+	EXPECT_FLOAT_EQ(creature_tree::Usefulness(-2.0f), 0.0f);
 }
 
 TEST(CreatureDecisionTree, KeepsTheNewestSixteenExamples)
@@ -332,6 +335,10 @@ TEST(CreatureLearning, DecidingSuppressesOpposedDesires)
 	creature_learning::SuppressOpposed(desires, Desire::Hunger, dependencies, 10.0f);
 	EXPECT_EQ(desires[Desire::Anger].suppressedTurns, 1200u);
 	EXPECT_EQ(desires[Desire::Hunger].suppressedTurns, 0u);
+	// A desire that opposes itself is held back by deciding on it as well
+	dependencies.at(static_cast<size_t>(Desire::Hunger)).at(static_cast<size_t>(Desire::Hunger)) = -0.25f;
+	creature_learning::SuppressOpposed(desires, Desire::Hunger, dependencies, 10.0f);
+	EXPECT_EQ(desires[Desire::Hunger].suppressedTurns, 600u);
 }
 
 TEST(CreatureLearning, DominanceAndActions)

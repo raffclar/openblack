@@ -33,6 +33,7 @@ public:
 	bool PickUp(entt::entity creature, entt::entity object) override;
 	bool PutDown(entt::entity creature) override;
 	bool Discard(entt::entity creature) override;
+	bool DiscardWith(entt::entity creature, size_t animation) override;
 	bool Lob(entt::entity creature) override;
 	bool EatHeld(entt::entity creature) override;
 	bool Keep(entt::entity creature, size_t animation) override;

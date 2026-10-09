@@ -283,6 +283,7 @@ openblack_setup_and_add_test(
   test_villager_animation test_villager_animation.cpp
 )
 openblack_setup_and_add_test(test_creature_casting test_creature_casting.cpp)
+openblack_setup_and_add_test(test_creature_fire test_creature_fire.cpp)
 openblack_setup_and_add_test(test_particle_glints test_particle_glints.cpp)
 target_link_libraries(test_particle_glints PRIVATE psys)
 openblack_setup_and_add_test(test_gesture_trail test_gesture_trail.cpp)

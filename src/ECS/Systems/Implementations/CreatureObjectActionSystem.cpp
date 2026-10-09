@@ -838,7 +838,8 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 			single(creature_throw::k_PutDown, points->putDownMs);
 			break;
 		case Kind::Discard:
-			single(creature_throw::k_Discard, points->discardMs);
+			// Tossing away with an animation asked for, it lets go when it would with its own
+			single(action.animations.front() != 0 ? action.animations.front() : creature_throw::k_Discard, points->discardMs);
 			break;
 		case Kind::Lob:
 		{
@@ -922,6 +923,13 @@ bool CreatureObjectActionSystem::PutDown(entt::entity creature)
 bool CreatureObjectActionSystem::Discard(entt::entity creature)
 {
 	return Start(creature, {.kind = Kind::Discard});
+}
+
+bool CreatureObjectActionSystem::DiscardWith(entt::entity creature, size_t animation)
+{
+	CreatureObjectAction action {.kind = Kind::Discard};
+	action.animations.front() = animation;
+	return Start(creature, std::move(action));
 }
 
 bool CreatureObjectActionSystem::Lob(entt::entity creature)

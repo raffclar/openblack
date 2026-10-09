@@ -15,7 +15,9 @@
 #include <chrono>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <LHVM.h>
@@ -24,6 +26,7 @@
 
 #include "3D/CreatureBody.h"
 #include "Camera/Camera.h"
+#include "Common/GUtilsDistance.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureLayers.h"
@@ -34,6 +37,7 @@
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureWatching.h"
+#include "Creature/LeashRules.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
 #include "ECS/Components/Abode.h"
@@ -41,6 +45,7 @@
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreatureSpells.h"
@@ -217,6 +222,12 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		        Locator::animalSystem::value().IsFrighteningToCreature(entity));
 	case Target::Anything:
 		return true;
+	case Target::Burning:
+	case Target::Unburnt:
+	{
+		const bool burning = Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(entity);
+		return burning == (target == Target::Burning);
+	}
 	}
 	return false;
 }
@@ -265,12 +276,13 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 		registry.Each<const Pot, const Transform>(
 		    [&](entt::entity entity, const Pot&, const Transform& at) { consider(entity, at); });
 	}
-	if (target == Target::Destroyable || target == Target::Tree || target == Target::Anything)
+	const bool fire = target == Target::Burning || target == Target::Unburnt;
+	if (target == Target::Destroyable || target == Target::Tree || target == Target::Anything || fire)
 	{
 		registry.Each<const Tree, const Transform>(
 		    [&](entt::entity entity, const Tree&, const Transform& at) { consider(entity, at); });
 	}
-	if (target == Target::Destroyable || target == Target::Anything)
+	if (target == Target::Destroyable || target == Target::Anything || fire)
 	{
 		registry.Each<const Abode, const Transform>(
 		    [&](entt::entity entity, const Abode&, const Transform& at) { consider(entity, at); });
@@ -588,36 +600,20 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 		return false;
 	}
 	const auto& info = tables->actions[plan.action];
-	const auto* executor = creature_plan_actions::For(info.name);
-	if (executor == nullptr)
+	auto built = PlanAgenda(creature, plan.action, plan.object, situation);
+	if (!built.has_value())
 	{
 		return false;
 	}
+	auto& [executor, agenda] = *built;
 	auto& registry = Locator::entitiesRegistry::value();
-	glm::vec2 point {0.0f};
-	if (plan.object.has_value())
-	{
-		const auto at = PointOf(registry, static_cast<entt::entity>(*plan.object));
-		if (!at.has_value())
-		{
-			return false;
-		}
-		point = *at;
-	}
-	const auto cast = creature_plan_actions::IsCast(*executor) ? CastInfoFor(creature, plan.action) : std::nullopt;
-	auto agenda = creature_plan_actions::Agenda(
-	    *executor, plan.object, point, situation, [this](uint32_t range) { return Random(range); }, cast);
-	if (!agenda.has_value())
-	{
-		return false;
-	}
 	// Whatever its hands were doing is given up for the plan
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
 	{
 		Locator::creatureObjectActionSystem::value().Cancel(creature);
 	}
-	if (!Replan(creature, executor->activity, std::move(*agenda)))
+	if (!Replan(creature, executor->activity, std::move(agenda)))
 	{
 		return false;
 	}
@@ -646,6 +642,75 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 		mind.idle.showDesireSeconds = creature_mind::k_ShowDesireSeconds;
 	}
 	return true;
+}
+
+std::optional<std::pair<const creature_plan_actions::Executor*, std::vector<creature_mind::Step>>>
+CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::optional<uint32_t> object,
+                               const creature_plan_actions::Situation& situation)
+{
+	const auto* tables = GetTables();
+	if (tables == nullptr || action >= tables->actions.size())
+	{
+		return std::nullopt;
+	}
+	const auto* executor = creature_plan_actions::For(tables->actions[action].name);
+	if (executor == nullptr)
+	{
+		return std::nullopt;
+	}
+	glm::vec2 point {0.0f};
+	if (object.has_value())
+	{
+		const auto at = PointOf(Locator::entitiesRegistry::value(), static_cast<entt::entity>(*object));
+		if (!at.has_value())
+		{
+			return std::nullopt;
+		}
+		point = *at;
+	}
+	const auto cast = creature_plan_actions::IsCast(*executor) ? CastInfoFor(creature, action) : std::nullopt;
+	auto agenda = creature_plan_actions::Agenda(
+	    *executor, object, point, situation, [this](uint32_t range) { return Random(range); }, cast);
+	if (!agenda.has_value())
+	{
+		return std::nullopt;
+	}
+	return std::pair {executor, std::move(*agenda)};
+}
+
+float CreatureMindSystem::ActivityUsefulness(entt::entity creature, const CreatureMindState& mind, Desire desire,
+                                             entt::entity object) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!mind.learnt.has_value() || !registry.Valid(object))
+	{
+		return 0.0f;
+	}
+	// The game also counts a thing useless for a few desires when nothing it knows of belongs to it. Nothing reaches
+	// here that way: what a fire belongs to always has the burning thing belonging to it, or is the creature itself.
+	if (const auto* leashes = registry.TryGet<const CreatureLeash>(creature))
+	{
+		// Leashed and tied to a thing, it only acts on what that thing belongs to
+		if (leashes->worn.has_value() && leashes->worn->tiedTo.has_value())
+		{
+			const auto tiedOwner = BelongsTo(*leashes->worn->tiedTo);
+			if (tiedOwner.has_value() && *tiedOwner != object)
+			{
+				return 0.0f;
+			}
+		}
+		// Kept within an area, it doesn't act on what lies farther from it than the area's radius
+		const bool leashed = leashes->worn.has_value();
+		const bool works = !leashed || leashes->worn->works;
+		const auto* at = registry.TryGet<const Transform>(creature);
+		const auto* objectAt = registry.TryGet<const Transform>(object);
+		if (creature_leash::IsConfined(leashes->confinementRadius, leashed, works) && at != nullptr && objectAt != nullptr &&
+		    gutils::GetDistanceInMetres(at->position, objectAt->position) > leashes->confinementRadius)
+		{
+			return 0.0f;
+		}
+	}
+	return Usefulness(*mind.learnt, desire, BeliefOf(registry, object, creature));
 }
 
 void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& mind, bool everyDesire)
