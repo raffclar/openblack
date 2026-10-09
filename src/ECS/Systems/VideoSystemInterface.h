@@ -50,7 +50,8 @@ public:
 	/// Plays a video, replacing any playing. A video that can't be opened (or while films are turned off) still exists
 	/// for a frame and then ends, with nothing shown. True when the file opened
 	virtual bool Play(const std::filesystem::path& path) = 0;
-	/// The intro's schedule: a fade from 58 s, the end at 60 s
+	/// The intro's schedule: a fade from 58 s, the end at 60 s. An intro whose file didn't open counts no frames, so it
+	/// stays black and paused until Escape ends it, as the game does; with films turned off it ends at once instead
 	virtual void ScheduleIntro() = 0;
 	/// The falling spell's film: drawn faintly over the scene with no fade of its own, the world hidden behind it, its
 	/// timeline of sounds and white fade running; nothing unless the player has a creature

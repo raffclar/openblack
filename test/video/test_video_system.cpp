@@ -207,6 +207,40 @@ TEST(VideoSystem, TheIntroEndsAtSixtySeconds)
 	EXPECT_FALSE(videos.IsPlaying());
 }
 
+TEST(VideoSystem, AMissingIntroWaitsForEscape)
+{
+	FakeGame game;
+	VideoSystem videos(game.Hooks());
+	EXPECT_FALSE(videos.Play("intro.bik"));
+	videos.ScheduleIntro();
+	// Timed at one frame a second, but with no file no frame is counted: it stays, paused, however long
+	EXPECT_EQ(videos.GetStatus()->schedule, (video::Schedule {.fadeStart = 58, .end = 60}));
+	videos.Update(k_Start);
+	videos.Update(k_Start + 120s);
+	EXPECT_TRUE(videos.IsPlaying());
+	EXPECT_TRUE(videos.CoversScreen());
+	EXPECT_EQ(videos.GetStatus()->frame, 0);
+	EXPECT_TRUE(game.paused);
+	// Escape: the fade would end at the file's last frame, which is none, so it ends at once
+	EXPECT_TRUE(videos.Escape(false, false));
+	videos.Update(k_Start + 121s);
+	EXPECT_FALSE(videos.IsPlaying());
+	videos.Update(k_Start + 122s);
+	EXPECT_FALSE(game.paused);
+}
+
+TEST(VideoSystem, WithFilmsOffTheIntroEndsAtOnce)
+{
+	FakeGame game;
+	game.files["intro.bik"] = MakeVideo(1601, 24);
+	VideoSystem videos(game.Hooks());
+	videos.SetFilmsEnabled(false);
+	videos.Play("intro.bik");
+	videos.ScheduleIntro();
+	videos.Update(k_Start);
+	EXPECT_FALSE(videos.IsPlaying());
+}
+
 TEST(VideoSystem, EscapeFadesOutOverFortyEightFrames)
 {
 	FakeGame game;

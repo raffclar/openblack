@@ -155,7 +155,8 @@ bool VideoSystem::Play(const std::filesystem::path& path)
 
 void VideoSystem::ScheduleIntro()
 {
-	if (!_video)
+	// With films turned off the intro ends at once, as any other film does
+	if (!_video || !_filmsEnabled)
 	{
 		return;
 	}
@@ -252,6 +253,12 @@ void VideoSystem::UpdateFallingSpell()
 void VideoSystem::DecodeDue(std::chrono::steady_clock::time_point now)
 {
 	auto& video = *_video;
+	// A file that didn't open has no frames to count: its counter stays where it is. The intro's schedule then holds
+	// it, black and paused, until Escape ends it
+	if (!video.file)
+	{
+		return;
+	}
 	if (!video.start)
 	{
 		video.start = now;
