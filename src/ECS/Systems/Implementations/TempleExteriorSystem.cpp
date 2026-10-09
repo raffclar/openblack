@@ -170,6 +170,15 @@ void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleEx
 	}
 	auto& temple = *meshes.Handle(id);
 	temple.UpdateVertices(blended);
+	// Its shape is kept too, for what is done at points on its surface
+	if (files.Contains(id))
+	{
+		*files.Handle(id) = blended;
+	}
+	else
+	{
+		files.Load(id, resources::L3DFileLoader::FromFileTag {}, blended);
+	}
 
 	// Its texture, of its player's set, between the two looks about its alignment
 	const auto texture = TextureOf(exterior.alignment);

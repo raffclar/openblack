@@ -174,3 +174,37 @@ TEST(GameClock, TheHandAndCameraStepByRealTimeExceptInAScriptsCutScene)
 	EXPECT_EQ(openblack::ecs::systems::CameraStep(17ms, 0ms, false), 17ms);
 	EXPECT_EQ(openblack::ecs::systems::CameraStep(17ms, 20ms, true), 20ms);
 }
+
+// Stepped deterministically, each frame takes the fixed time whatever the wall clock does, and the clock carries on from
+// there once it goes back to the wall clock
+TEST(GameClock, FixedFrameTimeIgnoresTheWallClock)
+{
+	Clock clock;
+	clock.time.StartGameClock(false);
+	clock.time.Update();
+	clock.Frame();
+	EXPECT_EQ(clock.time.GetTurn(), 1);
+
+	clock.time.SetFixedFrameTime(std::chrono::milliseconds(50));
+	// The wall clock runs wild, but two frames of 50 ms make a turn
+	for (int frame = 0; frame < 10; ++frame)
+	{
+		clock.now += (frame % 2 == 0) ? 1000 : 3;
+		clock.time.Update();
+		EXPECT_EQ(clock.time.GetFrameRealTime(), std::chrono::milliseconds(50));
+		clock.Frame();
+	}
+	EXPECT_EQ(clock.time.GetTurn(), 6);
+
+	// Back on the wall clock, time goes on from where the fixed frames left it, with no jump
+	clock.time.SetFixedFrameTime(std::nullopt);
+	clock.now += 10;
+	clock.time.Update();
+	EXPECT_EQ(clock.time.GetFrameRealTime(), std::chrono::milliseconds(10));
+	EXPECT_FALSE(clock.Frame());
+	EXPECT_EQ(clock.time.GetTurn(), 6);
+	clock.now += 90;
+	clock.time.Update();
+	EXPECT_TRUE(clock.Frame());
+	EXPECT_EQ(clock.time.GetTurn(), 7);
+}

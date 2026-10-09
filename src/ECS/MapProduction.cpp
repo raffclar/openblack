@@ -58,7 +58,6 @@ template <typename Func>
 void ForEachMapComponent(Func&& func)
 {
 	// Buildings and features, which cover their outline
-	func.template operator()<Temple>();
 	func.template operator()<Abode>();
 	func.template operator()<Feature>();
 	func.template operator()<Flowers>();
@@ -66,6 +65,8 @@ void ForEachMapComponent(Func&& func)
 	func.template operator()<MobileStatic>();
 	func.template operator()<SpellDispenser>();
 	func.template operator()<TeleportStone>();
+	// A temple's heart, which stands in the land as a building does
+	func.template operator()<Temple>();
 	// Trees and shields, each in one cell
 	func.template operator()<Tree>();
 	func.template operator()<DeadTree>();
@@ -148,7 +149,7 @@ MapProduction::~MapProduction()
 
 std::optional<MapProduction::Kind> MapProduction::KindOf(const Registry& registry, entt::entity entity)
 {
-	if (registry.AnyOf<Temple, Abode, Feature, Flowers, BigForest, SpellDispenser, TeleportStone>(entity))
+	if (registry.AnyOf<Abode, Feature, Flowers, BigForest, SpellDispenser, TeleportStone, Temple>(entity))
 	{
 		return Kind {.placement = Placement::FixedFront, .coversOutline = true, .moves = false};
 	}
