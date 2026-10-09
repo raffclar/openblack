@@ -78,6 +78,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureHair.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/DeadTree.h"
@@ -107,6 +108,7 @@
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
+#include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
@@ -122,6 +124,7 @@
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
@@ -277,6 +280,7 @@ Game::Game(Arguments&& args) noexcept
     , _startMap(args.startLevel)
     , _startTestbed(args.startTestbed || args.scenario.has_value())
     , _scenarioRequest(args.scenario)
+    , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
     , _requestScreenshot(args.requestScreenshot)
 {
 	Locator::camera::emplace(glm::zero<glm::vec3>());
@@ -425,11 +429,18 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			Locator::camera::value().DeprojectScreenToWorld(glm::vec2(event.button.x, event.button.y) /
 			                                                    static_cast<glm::vec2>(glm::max(screenSize, glm::ivec2(1))),
 			                                                rayOrigin, rayDirection);
+			// While the player's creature duels, the Action button adds a move to its queue
+			if (fights.Press(rayOrigin, rayDirection, creature_fight::Button::Action, SDL_GetTicks(),
+			                 Locator::time::value().GetTurn()))
+			{
+				_actionPressTaken = true;
+				_fightButton = creature_fight::Button::Action;
+			}
 			const auto& leashes = Locator::leashSystem::value();
 			const auto own = leashes.PlayersCreature(PlayerNames::PLAYER_ONE);
 			const auto under = creatureHand.CreatureUnderCursor();
 			const bool tying = under.has_value() && own.has_value() && *under != *own && leashes.IsLeashed(*own);
-			if (under.has_value() && !tying)
+			if (!_actionPressTaken && under.has_value() && !tying)
 			{
 				_actionPressTaken = true;
 				if (!creatureHand.Grab())
@@ -460,14 +471,24 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		    Locator::creatureModeSystem::value().Press({.milliseconds = event.button.timestamp,
 		                                                .screen = glm::vec2(event.button.x, event.button.y),
 		                                                .creature = creatureHand.CreatureUnderCursor()});
-		if (!doubleClicked && !fights.Press(rayOrigin, rayDirection))
+		// While the player's creature duels, the Move button makes a move at once in place of those queued
+		if (!doubleClicked && fights.Press(rayOrigin, rayDirection, creature_fight::Button::Move, SDL_GetTicks(),
+		                                   Locator::time::value().GetTurn()))
+		{
+			_fightButton = creature_fight::Button::Move;
+		}
+		else if (!doubleClicked)
 		{
 			PlayHandGrabSound();
 		}
 	}
-	if (!leftMouseButton && fights.IsPressed())
+	// Letting go of the button that pressed charges the blow it queued
+	if (_fightButton.has_value() && fights.IsPressed() &&
+	    ((*_fightButton == creature_fight::Button::Move && !leftMouseButton) ||
+	     (*_fightButton == creature_fight::Button::Action && !rightMouseButton)))
 	{
-		fights.Release();
+		fights.Release(SDL_GetTicks(), Locator::time::value().GetTurn());
+		_fightButton.reset();
 	}
 	// Letting go of the right button lets go of the creature. Let go quickly, having neither stroked nor slapped it, the
 	// press was a click, which puts the leash on the player's creature.
@@ -771,10 +792,31 @@ void Game::ProcessHandToolTipTurn()
 		return;
 	}
 	auto& toolTips = _interface->GetToolTips();
+	// With the leash held, the hand says what a tap of the Action button does with it, before anything else
+	if (!_interface->GetMenu().IsOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive())
+	{
+		const auto hovered = Locator::pickingSystem::value().GetPick().object;
+		if (const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, hovered))
+		{
+			toolTips.Submit(*tip, gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
+			toolTips.ProcessTurn();
+			return;
+		}
+	}
 	// Over the player's own creature, the hand shows that it can take hold of it to stroke or slap it. It can hold other
 	// players' creatures too, but the game only offers it for the player's own.
 	const auto over = _creatureUnderHand.has_value() ? _creatureUnderHand : Locator::creatureHandSystem::value().GetCreature();
-	if (over.has_value() && !_interface->GetMenu().IsOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive())
+	const bool shown = !_interface->GetMenu().IsOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+	// While the player's creature duels, the hand offers to block over it, to attack over its opponent, and to manoeuvre
+	// anywhere else, each by the Action button
+	if (const auto tip = Locator::creatureFightSystem::value().HandTip(_creatureUnderHand))
+	{
+		if (shown)
+		{
+			toolTips.Submit(creature_fight::ToolTipIndex(*tip), gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
+		}
+	}
+	else if (over.has_value() && shown)
 	{
 		const auto* creature = Locator::entitiesRegistry::value().TryGet<const ecs::components::Creature>(*over);
 		const auto* mind = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureMindState>(*over);
@@ -901,6 +943,12 @@ bool Game::GameLogicLoop() noexcept
 	// The scripts' fade moves on with their turn
 	Locator::cinematicDirectorSystem::value().ProcessTurn();
 
+	// The fireflies come out at nightfall and go home at dawn, by the time of day the turn began at
+	if (Locator::fireflySystem::has_value())
+	{
+		Locator::fireflySystem::value().ProcessTurn();
+	}
+
 	// The time of day moves on
 	Locator::skySystem::value().GetClock().ProcessTurn();
 
@@ -954,6 +1002,8 @@ bool Game::GameLogicLoop() noexcept
 		auto teleport = profiler.BeginScoped(Profiler::Stage::TeleportUpdate);
 		Locator::teleportSystem::value().ProcessTurn();
 	}
+	// A creature loaded from what a last land kept sparkles into sight
+	Locator::creatureCarryOverSystem::value().ProcessTurn();
 	{
 		// The particle effects not owned by a miracle step, and the spot visuals count down
 		auto particles = profiler.BeginScoped(Profiler::Stage::ParticlesUpdate);
@@ -1280,6 +1330,12 @@ bool Game::Update() noexcept
 		auto explosions = profiler.BeginScoped(Profiler::Stage::ExplosionUpdate);
 		Locator::explosionSystem::value().Update(std::chrono::duration<float, std::milli>(gameTime).count());
 	}
+	// The fireflies out drift about where they are between their last two turns
+	if (Locator::fireflySystem::has_value())
+	{
+		Locator::fireflySystem::value().Update(std::chrono::duration<float, std::milli>(gameTime).count(),
+		                                       clock.GetTurnFraction());
+	}
 	// The moving bodies are drawn between their last two turns, and the dust their landings threw up flies and fades
 	if (Locator::dynamicsSystem::has_value())
 	{
@@ -1415,13 +1471,15 @@ bool Game::Update() noexcept
 						enterTemple = Locator::templeExteriorSystem::value().EntranceAt(rayOrigin, rayDirection) ==
 						              PlayerNames::PLAYER_ONE;
 					}
-					// The leash keys, and the Action button tapping leash posts, creatures and things to tie the leash to.
+					// The leash keys, and the Action button tapping leash posts, and with the leash held giving orders and
+					// tying the leash to things.
 					// Not while the debug windows have the keyboard or mouse, as when typing in a text field: the controls
 					// aren't updated then, so a key just pressed would read as pressed again every frame.
 					if (!Locator::debugGui::value().StealsFocus())
 					{
 						auto& leashes = Locator::leashSystem::value();
-						leashes.HandleInput(rayOrigin, rayDirection, _actionPressTaken);
+						leashes.HandleInput(rayOrigin, rayDirection, static_cast<glm::vec2>(_mousePosition), SDL_GetTicks(),
+						                    _actionPressTaken);
 						_actionPressTaken = false;
 					}
 					// The gestures drawn with the hand: circles and power-ups for the miracles, the leash's gestures, and
@@ -2189,6 +2247,15 @@ bool Game::Initialize() noexcept
 		if (const auto path = fileSystem.GetPath<Path::Misc>() / "leash.l3d"; fileSystem.Exists(path))
 		{
 			meshManager.Load("misc/leash", LFromDiskTag {}, path);
+			// Each player's temple hangs one of each leash, each drawn with its own copy of the collar
+			for (uint8_t player = 0; player < static_cast<uint8_t>(PlayerNames::_COUNT); ++player)
+			{
+				for (const auto type : creature_leash::k_Types)
+				{
+					meshManager.Load(temple_leashes::CollarMeshName(static_cast<PlayerNames>(player), type), LFromDiskTag {},
+					                 path);
+				}
+			}
 		}
 		// The eyes every creature is drawn with
 		for (const auto& [id, file] : {std::pair {ecs::components::CreatureEyes::k_EyeballMeshId, "Eyeball.l3d"},
@@ -2387,6 +2454,22 @@ bool Game::Initialize() noexcept
 		Locator::infoConstants::reset(result.release());
 	}
 
+	// The temple's leashes are drawn with the leash texture and its alpha
+	if (const auto leash = fileSystem.GetPath<Path::Textures>() / "leash.raw",
+	    alpha = fileSystem.GetPath<Path::Textures>() / "leasha.raw";
+	    fileSystem.Exists(leash) && fileSystem.Exists(alpha))
+	{
+		constexpr uint16_t k_LeashTextureSide = 256;
+		try
+		{
+			textureManager.Load(ecs::components::LeashPost::k_TextureId, resources::Texture2DLoader::FromDiskWithAlphaTag {},
+			                    leash, alpha, k_LeashTextureSide);
+		}
+		catch (std::runtime_error& err)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+		}
+	}
 	fileSystem.Iterate(fileSystem.GetPath<Path::Textures>(), false, [&textureManager](const std::filesystem::path& f) {
 		if (string_utils::LowerCase(f.extension().string()) == ".raw")
 		{
@@ -2673,6 +2756,29 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 	return true;
 }
 
+bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept
+{
+	// Outside the story, a land is loaded with the challenge's scripts started again from scratch: every task of the
+	// last land stops, the scripts' variables are cleared and the challenge's scripts that start by themselves start
+	// again. None of the last land's scripts go on running on the new land.
+	if (Locator::vm::has_value())
+	{
+		auto& fileSystem = Locator::filesystem::value();
+		const auto challengePath = fileSystem.GetPath<filesystem::Path::Quests>() / "challenge.chl";
+		try
+		{
+			Locator::vm::value().LoadBinary(fileSystem.ReadAll(challengePath));
+		}
+		catch (const std::exception& err)
+		{
+			Locator::vm::value().StopAllTasks();
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to read challenge file at {}: {}", challengePath.generic_string(),
+			                    err.what());
+		}
+	}
+	return LoadMap(path);
+}
+
 void Game::LoadTestbed() noexcept
 {
 	// No script runs on the testbed: the story's would set its time of day and stop its clock a few turns in
@@ -2712,7 +2818,7 @@ void Game::LoadTestbed() noexcept
 	testbed_dispensers::PlaceGrid(middle);
 
 	// The testbed comes with its window of scenarios to try out on it
-	if (Locator::debugGui::has_value())
+	if (Locator::debugGui::has_value() && _testbedWindow)
 	{
 		Locator::debugGui::value().OpenWindow(debug::gui::k_TestbedScenariosWindow);
 	}
@@ -2720,6 +2826,17 @@ void Game::LoadTestbed() noexcept
 
 void Game::PrepareNewLand()
 {
+	// The player's creature is kept with its mind and body before anything of the land goes, for a later land's script
+	// to load it again; and the players keep what is theirs rather than the land's, such as their alignment
+	if (Locator::creatureCarryOverSystem::has_value())
+	{
+		Locator::creatureCarryOverSystem::value().KeepPlayersCreature();
+		Locator::creatureCarryOverSystem::value().Reset();
+	}
+	if (Locator::playerSystem::has_value())
+	{
+		Locator::playerSystem::value().KeepForNextLand();
+	}
 	// The last land's scripts let go of what they held: what they made goes, everything else goes back to the game
 	if (Locator::scriptObjects::has_value())
 	{
@@ -2741,11 +2858,14 @@ void Game::PrepareNewLand()
 	Locator::magicSystem::value().Reset();
 	Locator::miracleFxSystem::value().Reset();
 	Locator::fireSystem::value().Reset();
+	Locator::creatureFightSystem::value().Reset();
 	Locator::explosionSystem::value().Reset();
 	Locator::magicSystem::value().SetIgnoreInfluence(false);
 	Locator::animalSystem::value().Reset();
 	Locator::magicShieldSystem::value().Reset();
 	Locator::forestSystem::value().Reset();
+	// Nor its fireflies, nor what they give
+	Locator::fireflySystem::value().Reset();
 	Locator::reactionSystem::value().Reset();
 	Locator::teleportSystem::value().Reset();
 	Locator::gestureEvents::value().Reset();
@@ -2872,9 +2992,6 @@ void Game::SetUpLandscape()
 
 	// There is always a player active
 	Locator::playerSystem::value().AddPlayer(ecs::archetypes::PlayerArchetype::Create(PlayerNames::PLAYER_ONE));
-
-	// There is always at least one player active.
-	ecs::archetypes::PlayerArchetype::Create(PlayerNames::PLAYER_ONE);
 
 	Locator::cameraBookmarkSystem::value().Initialize();
 	Locator::playerSystem::value().RegisterPlayers();

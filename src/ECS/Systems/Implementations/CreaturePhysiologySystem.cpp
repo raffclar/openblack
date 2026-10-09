@@ -174,7 +174,8 @@ void StartNeeds(CreatureNeeds& needs, const physiology::Species& species)
 {
 	if (!needs.started)
 	{
-		needs.needs = physiology::Start(species);
+		needs.needs = needs.kept.has_value() ? physiology::Start(species, *needs.kept) : physiology::Start(species);
+		needs.kept.reset();
 		needs.started = true;
 	}
 }

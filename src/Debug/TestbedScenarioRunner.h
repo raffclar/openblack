@@ -226,6 +226,8 @@ private:
 	/// The gesture being drawn, and the count of gestures recognised before it
 	std::optional<GestureType> _drawing;
 	uint32_t _recognisedBefore {0};
+	/// Whether the Action button went down on the miracles for the gesture being drawn, to come up once it is done
+	bool _drawingPressedAction {false};
 
 	/// The mouse moving along a sweep, in pixels a second, and for how much longer
 	struct PointerSweep
