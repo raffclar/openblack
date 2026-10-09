@@ -49,6 +49,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/Sky.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/TempleExterior.h"
@@ -1399,12 +1400,14 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	    },
 	    reflection, worldEdit));
 	inspector.Add(SkyStateProvider(std::make_unique<SkyProvider>(SkySources {
-	    .scriptHour = []() -> std::optional<float> {
-		    if (!Locator::skySystem::has_value())
+	    .moon = []() -> std::optional<ecs::components::Moon> {
+		    if (!Locator::skySystem::has_value() || !Locator::entitiesRegistry::has_value())
 		    {
 			    return std::nullopt;
 		    }
-		    return Locator::skySystem::value().GetClock().GetScriptTime();
+		    const auto* moon =
+		        Locator::entitiesRegistry::value().TryGet<ecs::components::Moon>(Locator::skySystem::value().GetMoon());
+		    return moon != nullptr ? std::optional(*moon) : std::nullopt;
 	    },
 	    .cameraOrigin = []() -> std::optional<glm::vec3> {
 		    if (!Locator::camera::has_value())
@@ -1413,11 +1416,6 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		    }
 		    return Locator::camera::value().GetOrigin();
 	    },
-	    .unixTime =
-	        []() {
-		        return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch())
-		            .count();
-	        },
 	})));
 	inspector.Add(std::make_unique<ParticlesProvider>(ParticleSources {
 	    .rings = []() -> std::span<const water_rings::Ring> {

@@ -15,6 +15,7 @@
 #include <variant>
 #include <vector>
 
+#include <3D/SkyFrame.h>
 #include <ECS/Components/CreatureObjectAction.h>
 #include <ECS/Components/Transform.h>
 #include <ECS/Components/Tree.h>
@@ -59,10 +60,9 @@ std::set<std::string> Keys(const Json& object)
 SkySources FakeSky(float hour)
 {
 	return {
-	    .scriptHour = [hour]() -> std::optional<float> { return hour; },
-	    .cameraOrigin = []() -> std::optional<glm::vec3> { return glm::vec3(100.0f, 50.0f, 200.0f); },
 	    // 2026-01-01
-	    .unixTime = []() -> int64_t { return 1767225600; },
+	    .moon = [hour]() -> std::optional<ecs::components::Moon> { return sky_frame::MoonAt(hour, 1767225600); },
+	    .cameraOrigin = []() -> std::optional<glm::vec3> { return glm::vec3(100.0f, 50.0f, 200.0f); },
 	};
 }
 

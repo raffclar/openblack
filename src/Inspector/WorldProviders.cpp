@@ -17,6 +17,7 @@
 #include <string>
 #include <utility>
 
+#include "3D/SkyFrame.h"
 #include "EntityDescription.h"
 #include "Graphics/Moon.h"
 
@@ -67,8 +68,13 @@ Json EffectItem(const inspector::ParticleEffectInfo& effect)
 
 Json openblack::inspector::MoonState(float scriptHour, int64_t unixTime, glm::vec3 cameraOrigin)
 {
-	const auto placement = graphics::moon::Place(scriptHour);
-	const float phase = graphics::moon::Phase(unixTime);
+	return MoonState(sky_frame::MoonAt(scriptHour, unixTime), cameraOrigin);
+}
+
+Json openblack::inspector::MoonState(const ecs::components::Moon& moon, glm::vec3 cameraOrigin)
+{
+	const auto& placement = moon.placement;
+	const float phase = moon.phase;
 	// The phase runs down from a full turn at the new moon
 	const double fraction = 1.0 - (static_cast<double>(phase) / (2.0 * std::numbers::pi));
 	const auto day = static_cast<int>(std::floor(std::clamp(fraction, 0.0, 1.0) * k_MoonMonthDays));
@@ -103,14 +109,13 @@ QueryResult SkyProvider::Run(std::string_view query, const QueryContext& /*conte
 	{
 		return QueryResult::Error("no query sky." + std::string(query));
 	}
-	const auto hour = _sources.scriptHour ? _sources.scriptHour() : std::nullopt;
-	if (!hour.has_value())
+	const auto moon = _sources.moon ? _sources.moon() : std::nullopt;
+	if (!moon.has_value())
 	{
 		return QueryResult::Error("there is no sky: no land is loaded");
 	}
 	const auto camera = _sources.cameraOrigin ? _sources.cameraOrigin() : std::nullopt;
-	const auto now = _sources.unixTime ? _sources.unixTime() : 0;
-	return QueryResult::Value(MoonState(*hour, now, camera.value_or(glm::vec3(0.0f))));
+	return QueryResult::Value(MoonState(*moon, camera.value_or(glm::vec3(0.0f))));
 }
 
 Json openblack::inspector::SplashItems(std::span<const water_rings::Ring> rings, std::span<const ParticleEffectInfo> effects)

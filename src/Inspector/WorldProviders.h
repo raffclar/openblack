@@ -21,25 +21,25 @@
 #include <glm/vec3.hpp>
 
 #include "3D/WaterRings.h"
+#include "ECS/Components/Sky.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 
 /// Providers of the world's passing things: the sky's moon, and the splashes and particle effects
 namespace openblack::inspector
 {
 
-/// The moon as it is at an hour of script time, by the real date, for a camera: exactly its position in the world
-/// (null while it is down), its phase (0 to 2 pi), the whole days since the new moon, and whether it is up (an
-/// overcast may still hide it)
+/// The moon entity's state for a camera: exactly its position in the world (null while it is down), its phase (0 to 2
+/// pi), the whole days since the new moon, and whether it is up (an overcast may still hide it)
+[[nodiscard]] Json MoonState(const ecs::components::Moon& moon, glm::vec3 cameraOrigin);
+/// The moon as it is at an hour of script time, by the real date, for a camera
 [[nodiscard]] Json MoonState(float scriptHour, int64_t unixTime, glm::vec3 cameraOrigin);
 
 struct SkySources
 {
-	/// The hour of the script clock, none without a sky
-	std::function<std::optional<float>()> scriptHour;
+	/// The moon entity's state, none without a sky
+	std::function<std::optional<ecs::components::Moon>()> moon;
 	/// Where the player's camera is, none without one
 	std::function<std::optional<glm::vec3>()> cameraOrigin;
-	/// Seconds since 1970, by which the real moon's phase is shown
-	std::function<int64_t()> unixTime;
 };
 
 ///   sky.moon   the moon and its state, and nothing else
