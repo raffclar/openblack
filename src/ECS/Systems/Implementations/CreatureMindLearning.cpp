@@ -325,7 +325,7 @@ std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& 
 		common(types::k_Villager, k_Neutral, 0, 1, k_NoPlayer);
 		belief.Set(Attribute::Sex, static_cast<uint32_t>(villager->sex));
 		belief.Set(Attribute::VillagerJob, static_cast<uint32_t>(villager->number));
-		belief.Set(Attribute::Life, villager->health > 0 ? 1 : 0);
+		belief.Set(Attribute::Life, villager->life > 0.0f ? 1 : 0);
 		belief.Set(Attribute::OnFire,
 		           Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(entity) ? 1 : 0);
 		belief.Set(Attribute::Tribe, static_cast<uint32_t>(villager->tribe));

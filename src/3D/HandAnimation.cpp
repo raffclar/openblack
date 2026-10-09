@@ -242,6 +242,12 @@ void HandAnimation::StepCursorSpring(float seconds, glm::vec2 mouse)
 	    glm::clamp(glm::vec2(_smoothedCursor.x - mouse.x, mouse.y - _smoothedCursor.y), -k_MaxCursorLag, k_MaxCursorLag);
 }
 
+void HandAnimation::SettleCursor(glm::ivec2 cursor)
+{
+	_smoothedCursor = glm::vec2(cursor);
+	_cursorLag = glm::vec2(0.0f);
+}
+
 void HandAnimation::StartFade()
 {
 	_fadeFrom = _lastPoses;
