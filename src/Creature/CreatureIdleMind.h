@@ -143,6 +143,9 @@ struct ObjectOrder
 		PointAt,
 		/// Catching a thing flying at it
 		Catch,
+		/// Bringing food out of the sea: a handful of it appears at its feet, sized to the creature, and it picks it up.
+		/// Nothing is taken from the fish farm it stands by.
+		FishFromSea,
 	};
 	Kind kind {Kind::PickUp};
 	/// What it acts on, by its entity's number
@@ -422,6 +425,9 @@ using Random = std::function<uint32_t(uint32_t)>;
 [[nodiscard]] std::vector<Step> PutDownHeld();
 /// Walking to the water's edge, turning to the water and drinking
 [[nodiscard]] std::vector<Step> Drink(glm::vec2 shore, glm::vec2 water);
+/// Walking to a fish farm's shoal until within a distance of it, putting down what it holds first when it holds
+/// anything, bringing food out of the sea, and eating it
+[[nodiscard]] std::vector<Step> FishAndEat(glm::vec2 shoal, float arriveWithin, bool putDownFirst);
 /// A poo on the spot, a third of the time showing it needs one first
 [[nodiscard]] std::vector<Step> Poo(const Random& random);
 /// Being sick on the spot

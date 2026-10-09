@@ -502,6 +502,32 @@ TEST(CreaturePlanActions, BuildsAgendas)
 	EXPECT_EQ(creature_plan_actions::For("CastFireball"), nullptr);
 }
 
+TEST(CreaturePlanActions, FishingWalksToTheShoalBringsFoodOutOfTheSeaAndEatsIt)
+{
+	const auto random = [](uint32_t) { return 0u; };
+	const auto* fish = creature_plan_actions::For("FishAndEat");
+	ASSERT_NE(fish, nullptr);
+	// Only with a fish farm near
+	EXPECT_FALSE(creature_plan_actions::Possible(*fish, {}));
+	creature_plan_actions::Situation situation;
+	situation.fishing = creature_plan_actions::Situation::Fishing {.shoal = {10.0f, 20.0f}, .arriveWithin = 15.0f};
+	const auto agenda = creature_plan_actions::Agenda(*fish, std::nullopt, {}, situation, random);
+	ASSERT_TRUE(agenda.has_value());
+	ASSERT_EQ(agenda->size(), 3u);
+	EXPECT_EQ(agenda->at(0).kind, creature_mind::Step::Kind::Move);
+	EXPECT_EQ(agenda->at(0).movement.point, glm::vec2(10.0f, 20.0f));
+	EXPECT_FLOAT_EQ(agenda->at(0).movement.maxDistance, 15.0f);
+	EXPECT_EQ(agenda->at(1).order.kind, creature_mind::ObjectOrder::Kind::FishFromSea);
+	EXPECT_EQ(agenda->at(2).order.kind, creature_mind::ObjectOrder::Kind::Eat);
+	EXPECT_EQ(agenda->at(2).effect, creature_mind::Effect::Eat);
+	// Its hand emptied first when it holds something it can't eat
+	situation.fishing->putDownFirst = true;
+	const auto emptied = creature_plan_actions::Agenda(*fish, std::nullopt, {}, situation, random);
+	ASSERT_TRUE(emptied.has_value());
+	ASSERT_EQ(emptied->size(), 4u);
+	EXPECT_EQ(emptied->at(1).order.kind, creature_mind::ObjectOrder::Kind::PutDown);
+}
+
 // The model of what is learnt
 
 TEST(CreatureMindModel, LearningRebuildsTrees)

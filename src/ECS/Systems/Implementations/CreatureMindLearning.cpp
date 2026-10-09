@@ -20,6 +20,7 @@
 
 #include <LHVM.h>
 #include <fmt/format.h>
+#include <glm/geometric.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
@@ -31,8 +32,10 @@
 #include "Creature/CreatureMind.h"
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureMindTables.h"
+#include "Creature/CreatureMode.h"
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreaturePlanner.h"
+#include "Creature/CreatureRoute.h"
 #include "Creature/CreatureWatching.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
@@ -45,6 +48,7 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Feature.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Spell.h"
@@ -58,6 +62,7 @@
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -292,6 +297,64 @@ float Usefulness(const creature_mind_model::Learnt& learnt, Desire desire, const
 std::string ObjectName(const std::optional<creature_tree::Belief>& belief)
 {
 	return belief.has_value() ? fmt::format("{}s", creature_tree::BeliefName(belief->type)) : "that";
+}
+/// A creature looks this far, in metres, for a fish farm to fish at
+constexpr float k_FishingReach = 600.0f;
+/// It goes this near the shoal, or as near as it is tall when taller
+constexpr float k_FishingArrival = 15.0f;
+/// Where it can't stand at the shoal, it looks this far round for somewhere it can, which must be nearer than the second
+constexpr float k_FishingSearch = 1000.0f;
+constexpr float k_FishingStandReach = 30.0f;
+
+/// Where a creature at a point would fish: the shoal of the nearest fish farm (the farm itself without one), going as
+/// near as it is tall but at least 15 m; none without a farm near, or when it already holds food
+std::optional<creature_plan_actions::Situation::Fishing> FishingFor(const ecs::Registry& registry, entt::entity creature,
+                                                                    glm::vec2 position)
+{
+	if (!Locator::fishFarmSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	bool putDownFirst = false;
+	if (Locator::creatureObjectActionSystem::has_value())
+	{
+		const auto& hands = Locator::creatureObjectActionSystem::value();
+		if (const auto held = hands.GetHeld(creature))
+		{
+			if (hands.FoodValueOf(*held).has_value())
+			{
+				return std::nullopt;
+			}
+			putDownFirst = true;
+		}
+	}
+	const auto farm = Locator::fishFarmSystem::value().ClosestFarm({position.x, 0.0f, position.y}, k_FishingReach);
+	if (!farm.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& data = registry.Get<const FishFarm>(*farm);
+	const auto& at = registry.Get<const Transform>(*farm).position;
+	glm::vec3 shoal = data.shoal.has_value() ? data.shoal->centre : at;
+	// Where it can't stand there, the nearest place it can, if near enough
+	if (Locator::creatureLocomotionSystem::has_value())
+	{
+		const auto& land = Locator::creatureLocomotionSystem::value().GetWalkableLand();
+		const glm::vec2 point {shoal.x, shoal.z};
+		if (!land.IsValid(point, creature_route::k_DestinationClearance))
+		{
+			const auto valid = land.NearestValid(point, creature_route::k_DestinationClearance, k_FishingSearch);
+			if (!valid.has_value() || glm::distance(shoal, glm::vec3(valid->x, 0.0f, valid->y)) >= k_FishingStandReach)
+			{
+				return std::nullopt;
+			}
+			shoal = {valid->x, 0.0f, valid->y};
+		}
+	}
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const float height = creature_mode::CreatureHeight(body != nullptr ? body->size : 1.0f);
+	return creature_plan_actions::Situation::Fishing {
+	    .shoal = {shoal.x, shoal.z}, .arriveWithin = std::max(height, k_FishingArrival), .putDownFirst = putDownFirst};
 }
 } // namespace
 
@@ -682,7 +745,13 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	}
 	bool waterLooked = false;
 	bool hurlLooked = false;
+	bool fishingLooked = false;
 	const auto prepare = [&](const creature_plan_actions::Executor& executor) {
+		if (executor.build == creature_plan_actions::Build::FishAndEat && !fishingLooked)
+		{
+			fishingLooked = true;
+			situation.fishing = FishingFor(registry, creature, position);
+		}
 		if (executor.build == creature_plan_actions::Build::Drink && !waterLooked)
 		{
 			waterLooked = true;

@@ -40,6 +40,7 @@
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureRoute.h"
 #include "CreatureMindSystemDetail.h"
+#include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
@@ -646,6 +647,32 @@ void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, 
 	}
 }
 
+/// The food a creature fishing brings out of the sea: a handful at its feet of a thousand for each unit of its size,
+/// drawn half as big again as the creature. Nothing comes out of a fish farm.
+std::optional<entt::entity> FoodFromTheSea(ecs::Registry& registry, entt::entity creature)
+{
+	constexpr float k_FoodPerSize = 1000.0f;
+	constexpr float k_ScalePerSize = 1.5f;
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	if (transform == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const float size = body != nullptr ? body->size : 1.0f;
+	const auto amount = static_cast<int32_t>(size * k_FoodPerSize);
+	const auto food = ecs::archetypes::PotArchetype::Create(transform->position, 0.0f, PotInfo::WheatInHand, amount);
+	if (food == entt::null)
+	{
+		return std::nullopt;
+	}
+	if (auto* foodTransform = registry.TryGet<Transform>(food))
+	{
+		foodTransform->scale = glm::vec3(size * k_ScalePerSize);
+	}
+	return food;
+}
+
 /// Tells the creature's hands what to do with a thing
 void Order(ecs::Registry& registry, entt::entity creature, const creature_mind::Commands& commands)
 {
@@ -702,6 +729,16 @@ void Order(ecs::Registry& registry, entt::entity creature, const creature_mind::
 		break;
 	case Kind::Catch:
 		if (!object.has_value() || !registry.Valid(*object) || !hands.Catch(creature, *object))
+		{
+			hands.Cancel(creature);
+		}
+		break;
+	case Kind::FishFromSea:
+		if (const auto food = FoodFromTheSea(registry, creature); food.has_value())
+		{
+			hands.PickUp(creature, *food);
+		}
+		else
 		{
 			hands.Cancel(creature);
 		}

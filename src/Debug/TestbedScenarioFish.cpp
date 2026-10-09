@@ -12,6 +12,7 @@
 
 #include <vector>
 
+#include "Creature/CreatureDesires.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -109,5 +110,24 @@ void testbed_scenarios::AddFishScenarios(std::vector<Scenario>& all)
 	    .objects = FarmAndTown(),
 	    .commands = {Press(k_Grip, 3.0f), Release(k_Grip, 0.1f)},
 	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "needs.fish_and_eat",
+	    .name = "Hungry creature fishes",
+	    .facet = Facet::Needs,
+	    .description = "A hungry tiger on the bank above the lake, a fish farm on the shore below it and no other food "
+	                   "anywhere.",
+	    .expected = "It walks down to within 15 m of the farm's shoal, a bundle of food half as big again as it appears at "
+	                "its feet out of the water, and it picks it up and eats it; the farm's fish stay as they were.",
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .offset = {0.0f, 120.0f},
+	        .facingDegrees = 180.0f,
+	        .needs = {.energy = 0.2f, .dehydration = 0.0f, .poo = 0.0f},
+	        .desires = {{.desire = creature_desires::Desire::Hunger, .fraction = 1.0f}},
+	    }},
+	    .objects = FarmAndTown(),
 	});
 }

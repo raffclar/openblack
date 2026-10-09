@@ -218,6 +218,22 @@ std::vector<Step> creature_mind::PutDownHeld()
 	return {Object({.kind = ObjectOrder::Kind::PutDown})};
 }
 
+std::vector<Step> creature_mind::FishAndEat(glm::vec2 shoal, float arriveWithin, bool putDownFirst)
+{
+	std::vector<Step> agenda;
+	Step walk {.kind = Step::Kind::Move};
+	walk.movement = {.kind = Movement::Kind::ToPoint, .point = shoal, .maxDistance = arriveWithin};
+	agenda.push_back(walk);
+	// Its hand must be free to take the food
+	if (putDownFirst)
+	{
+		agenda.push_back(Object({.kind = ObjectOrder::Kind::PutDown}));
+	}
+	agenda.push_back(Object({.kind = ObjectOrder::Kind::FishFromSea}));
+	agenda.push_back(Object({.kind = ObjectOrder::Kind::Eat}, Effect::Eat));
+	return WithFace(std::move(agenda), creature_face::Cue::Curiosity);
+}
+
 std::vector<Step> creature_mind::Drink(glm::vec2 shore, glm::vec2 water)
 {
 	auto drink = Action(animations::k_Drink, false);

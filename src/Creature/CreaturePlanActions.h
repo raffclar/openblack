@@ -78,6 +78,8 @@ enum class Build : uint8_t
 	CastLightning,
 	CastHelpful,
 	CastPlayful,
+	/// Going to a fish farm's shoal, bringing food out of the sea there and eating it
+	FishAndEat,
 };
 
 struct Executor
@@ -104,6 +106,15 @@ struct Situation
 	std::optional<creature_mind::Wants::WaterSpot> water;
 	std::optional<glm::vec2> hurlTarget;
 	std::optional<size_t> showDesireAnimation;
+	/// Where it would fish: the shoal of the nearest fish farm, how near it goes, and whether its hand must be emptied
+	/// first; none with no farm near, or with food already in its hand
+	struct Fishing
+	{
+		glm::vec2 shoal {0.0f};
+		float arriveWithin {0.0f};
+		bool putDownFirst {false};
+	};
+	std::optional<Fishing> fishing;
 };
 /// What a casting action casts, from its row of the game's table and the creature
 struct CastInfo

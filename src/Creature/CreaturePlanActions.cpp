@@ -39,6 +39,7 @@ constexpr std::array k_Executors {
     Executor {.action = "Poo", .build = Build::Poo, .activity = Activity::Poo},
     Executor {.action = "Puke", .build = Build::Puke, .activity = Activity::Puke},
     Executor {.action = "DrinkFromTheSea", .build = Build::Drink, .activity = Activity::Drink},
+    Executor {.action = "FishAndEat", .build = Build::FishAndEat, .activity = Activity::Eat},
     Executor {.action = "ExamineByPickingUp",
               .target = Target::Pickable,
               .build = Build::ExamineByPickingUp,
@@ -146,6 +147,8 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 	{
 	case Build::Drink:
 		return situation.water.has_value();
+	case Build::FishAndEat:
+		return situation.fishing.has_value();
 	case Build::Hurl:
 		return situation.hurlTarget.has_value();
 	case Build::FaceCameraEmote:
@@ -181,6 +184,9 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::Puke();
 	case Build::Drink:
 		return creature_mind::Drink(situation.water->shore, situation.water->water);
+	case Build::FishAndEat:
+		return creature_mind::FishAndEat(situation.fishing->shoal, situation.fishing->arriveWithin,
+		                                 situation.fishing->putDownFirst);
 	case Build::ExamineByPickingUp:
 		return creature_mind::ExamineByPickingUp(*object, random);
 	case Build::ExamineByLooking:
