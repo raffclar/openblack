@@ -97,6 +97,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
@@ -158,6 +159,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TornadoSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
@@ -346,6 +348,11 @@ Game::~Game() noexcept
 		Locator::miracleFxSystem::value().SetInterface(nullptr);
 	}
 	_interface.reset();
+	// What the scripts asked of openblack that it can't do yet, for the natives to write next
+	if (Locator::chlapi::has_value())
+	{
+		Locator::chlapi::value().LogStubCalls();
+	}
 	ShutDownServices();
 	SDL_Quit(); // todo: move to GameWindow
 	spdlog::shutdown();
@@ -403,6 +410,12 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	{
 		// TODO(hand): a press too short to take the thing taps it
 		[[maybe_unused]] const auto tapped = handGrab->Release(SDL_GetTicks(), Locator::time::value().GetTurn());
+		// Let go with an empty hand that did nothing with the press, it clicks the thing or the place under it, for the
+		// scripts; not while the game is paused
+		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy() && !inTemple && !IsPaused())
+		{
+			handGrab->ClickReleased(Locator::time::value().GetTurn());
+		}
 	}
 	// The action button (the right) casts the miracle in the hand, which comes before the creatures: pressed, it arms,
 	// locks on or casts it, and let go it throws an armed one or lets a locked one go. Without a miracle it takes hold
@@ -443,6 +456,10 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			if (!_actionPressTaken && under.has_value() && !tying)
 			{
 				_actionPressTaken = true;
+				if (handGrab != nullptr)
+				{
+					handGrab->ClickThing(*under, Locator::time::value().GetTurn());
+				}
 				if (!creatureHand.Grab())
 				{
 					// A creature the hand may not hold: a click on it still asks the leash, which says why not
@@ -867,6 +884,12 @@ bool Game::GameLogicLoop() noexcept
 	// What moved since the last turn goes into its new map cell
 	Locator::entitiesMap::value().Sync();
 
+	// The players' temples take their turn first: one whose heart lost all its life moves on through its destruction
+	if (Locator::templeDestructionSystem::has_value())
+	{
+		Locator::templeDestructionSystem::value().ProcessTurn();
+	}
+
 	auto& profiler = Locator::profiler::value();
 
 	{
@@ -875,6 +898,8 @@ bool Game::GameLogicLoop() noexcept
 	}
 	// The towns work out what they want, then their villagers act on it
 	Locator::townDesireSystem::value().ProcessTurn();
+	// A town's storage pit or village centre on fire calls its people together
+	Locator::townSystem::value().ProcessTurn();
 	Locator::chimneySmokeSystem::value().ProcessTurn();
 	// How far the players' influence reaches, and its border
 	Locator::influenceSystem::value().ProcessTurn(Locator::time::value().GetTurn());
@@ -1021,12 +1046,6 @@ bool Game::GameLogicLoop() noexcept
 	{
 		Locator::rewardSystem::value().ProcessTurn();
 	}
-	// A temple whose heart lost all its life moves on through its destruction, as the game's objects take their turns
-	// before the physics
-	if (Locator::templeDestructionSystem::has_value())
-	{
-		Locator::templeDestructionSystem::value().ProcessTurn();
-	}
 	// Then the physics, after the living, the fires, the reactions, the miracles and the particles have had their turn,
 	// so a body any of them sets moving this turn flies this turn: what was thrown, dropped, knocked or pushed flies,
 	// collides and comes to rest
@@ -1044,6 +1063,11 @@ bool Game::GameLogicLoop() noexcept
 	if (Locator::handGrabSystem::has_value())
 	{
 		Locator::handGrabSystem::value().ProcessTurn();
+	}
+	// Once the whole turn is over, the local player whose temple is being destroyed has lost
+	if (Locator::templeDestructionSystem::has_value())
+	{
+		Locator::templeDestructionSystem::value().EndTurn();
 	}
 
 	// Each turn ends with the camera taking the alignment of the player of most influence where it is
@@ -1592,6 +1616,7 @@ bool Game::Update() noexcept
 			                            .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 			auto& handTransform = Locator::entitiesRegistry::value().Get<ecs::components::Transform>(handEntity);
 			UpdateHandNavigation(handTransform);
+			UpdateHandKnock(handTransform);
 			if (Locator::temple::has_value() && Locator::temple::value().Active())
 			{
 				if (!_handGripping)
@@ -1787,6 +1812,20 @@ bool Game::Update() noexcept
 				_handAnimation->UpdateHeld(deltaTime, *pullCycle,
 				                           magic::hand_hold::TugTimeMs(pull->hold, pullClip->duration, pull->reach, handSize),
 				                           _mousePosition);
+			}
+			else if (_handKnocking)
+			{
+				// Knocking on a house, the hand plays its tap once through, without leaning
+				const auto* tap = _handAnimation->GetAnimation(static_cast<size_t>(HandCycle::TapHouse));
+				const auto timeMs =
+				    static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(_handKnock->time).count());
+				_handAnimation->UpdateHeld(deltaTime, HandCycle::TapHouse, timeMs, _mousePosition);
+				_handAnimation->SettleCursor(_mousePosition);
+				_handKnock->time += deltaTime;
+				if (tap == nullptr || _handKnock->time >= std::chrono::milliseconds(tap->duration))
+				{
+					_handKnock.reset();
+				}
 			}
 			else if (!holdingSeed)
 			{
@@ -2561,8 +2600,12 @@ bool Game::Run() noexcept
 		// whether it takes control of what it is given, and the scripts' variables keep their objects' references
 		Locator::scriptObjects::value().Reset();
 		lhvm.Initialise(
-		    &chlapi.GetFunctionsTable(), [](uint32_t func) { Locator::scriptObjects::value().EnterNative(func); }, nullptr,
-		    nullptr,
+		    &chlapi.GetFunctionsTable(),
+		    [](uint32_t func) {
+			    Locator::scriptObjects::value().EnterNative(func);
+			    Locator::chlapi::value().EnterNative(func);
+		    },
+		    nullptr, nullptr,
 		    [](lhvm::ErrorCode code, const std::string& text, uint32_t number) {
 			    SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Script error: {} ({} {})",
 			                        lhvm::k_ErrorMsg.at(static_cast<size_t>(code)), text, number);
@@ -2715,6 +2758,14 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 
 	PrepareNewLand();
 
+	// A playground land is played as a skirmish, in which losing a temple doesn't end the game
+	bool skirmish = false;
+	Locator::resources::value().GetLevels().Each([&path, &skirmish](entt::id_type /*id*/, const Level& level) {
+		skirmish = skirmish || (level.GetType() == Level::LandType::Skirmish &&
+		                        level.GetScriptPath().lexically_normal() == path.lexically_normal());
+	});
+	Locator::entitiesRegistry::value().Context().skirmish = skirmish;
+
 	Script script;
 	try
 	{
@@ -2760,6 +2811,12 @@ bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept
 	// again. None of the last land's scripts go on running on the new land.
 	if (Locator::vm::has_value())
 	{
+		// The program starting again frees every place of the scripts' objects, while the last land's objects are still
+		// there to be let go back into the game
+		if (Locator::scriptObjects::has_value())
+		{
+			Locator::scriptObjects::value().Reset();
+		}
 		auto& fileSystem = Locator::filesystem::value();
 		const auto challengePath = fileSystem.GetPath<filesystem::Path::Quests>() / "challenge.chl";
 		try
@@ -2834,10 +2891,11 @@ void Game::PrepareNewLand()
 	{
 		Locator::playerSystem::value().KeepForNextLand();
 	}
-	// The last land's scripts let go of what they held: what they made goes, everything else goes back to the game
+	// The last land's scripts forget what they held: the land's objects go with it before anything could be let go back
+	// into the game
 	if (Locator::scriptObjects::has_value())
 	{
-		Locator::scriptObjects::value().Reset();
+		Locator::scriptObjects::value().ClearForNewLand();
 	}
 	// A new land has no weather of the last one, and none of its script's fades, cinema bars or clipping
 	if (Locator::weatherSystem::has_value())
@@ -3131,6 +3189,15 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 		return;
 	}
 
+	// Tapping a house it knocked on, the hand stays where it knocked
+	if (_handKnocking)
+	{
+		_handPosition = _handKnock->point;
+		_handCrossFade.Update(deltaSeconds);
+		handTransform.position = _handCrossFade.Apply(_handPosition);
+		return;
+	}
+
 	// Gripping the land, the camera keeps the land the hand gripped under the cursor, and the hand stays on the land it
 	// gripped, so it moves with it. Its hover carries on from how far the gripped land was from the camera.
 	const bool gripsLand = _handCameraState && _handPose == hand_navigation_pose::Pose::Grip;
@@ -3215,6 +3282,46 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 	_handPosition = eye + _handRayDirection * _handDistance;
 	_handCrossFade.Update(deltaSeconds);
 	handTransform.position = _handCrossFade.Apply(_handPosition);
+}
+
+void Game::UpdateHandKnock(const ecs::components::Transform& handTransform)
+{
+	if (!Locator::abodeKnockSystem::has_value())
+	{
+		return;
+	}
+	auto& knocks = Locator::abodeKnockSystem::value();
+	// The houses' read-out of their people runs by the frame
+	knocks.Update(Locator::time::value().GetFrameRealTime());
+	// A knock while the tap plays doesn't start it over, the hand already being where it knocked
+	if (knocks.TakeHandKnock())
+	{
+		if (_handKnock.has_value())
+		{
+			_handKnock->point = _handPosition;
+		}
+		else
+		{
+			_handKnock = HandKnock {.point = _handPosition};
+		}
+	}
+	// Holding something comes first; the tap starts over once the hand lets go
+	bool holds = magic::HandHoldPoser::Find().has_value();
+	if (!holds && Locator::handGrabSystem::has_value())
+	{
+		holds = Locator::handGrabSystem::value().GetHeldPose().has_value();
+	}
+	if (holds && _handKnock.has_value())
+	{
+		_handKnock->time = std::chrono::microseconds::zero();
+	}
+	const bool knocking = _handKnock.has_value() && !holds;
+	// Starting and ending the tap, the hand fades from where it was drawn
+	if (knocking != _handKnocking)
+	{
+		_handCrossFade.Start(handTransform.position);
+	}
+	_handKnocking = knocking;
 }
 
 void Game::UpdateHandNavigation(const ecs::components::Transform& handTransform)
@@ -3308,6 +3415,11 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 	}
 	_handUpWasHeld = _handCameraState;
 
+	// Tapping a house, the hand stands straight up
+	if (_handKnocking)
+	{
+		_handUp.Reset(glm::vec3(0.0f, 1.0f, 0.0f));
+	}
 	const auto up = _handUp.GetValue();
 	const auto onLevelLand = TurnToHeading(facingCamera, cameraHeading, _handHeading);
 	handTransform.rotation = glm::length(up) > 0.0f ? StandOnSlope(onLevelLand, _handHeading, up) : onLevelLand;

@@ -9,6 +9,8 @@
 
 #include "CreatureScars.h"
 
+#include <optional>
+
 #include <glm/geometric.hpp>
 
 #include "3D/CreatureBody.h"
@@ -93,28 +95,36 @@ void creature_scars::BurnOnCatching(entt::entity creature)
 	{
 		return;
 	}
-	const auto* body = Locator::entitiesRegistry::value().TryGet<const Creature>(creature);
-	const auto groin = GroinOf(creature);
-	if (body == nullptr || !groin.has_value())
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (body == nullptr)
 	{
 		return;
 	}
+	// The synced draws are made whether or not the posed body can be marked: without it they are drawn about where the
+	// creature stands, and nothing is marked
+	const auto posedGroin = GroinOf(creature);
+	const auto* standing = registry.TryGet<const Transform>(creature);
+	const glm::vec3 groin = posedGroin.value_or(standing != nullptr ? standing->position : glm::vec3(0.0f));
 	auto& random = Locator::gameRandom::value();
 	const float reach = ShownSize(*body) * creature_marks::scar::k_BurnReachPerSize;
 	for (int32_t i = 0; i < creature_marks::scar::k_CatchingBurnTries; ++i)
 	{
 		// Each try's point is drawn across, then up, then along
-		glm::vec3 from = *groin;
+		glm::vec3 from = groin;
 		from.x += random.GameFloatRand(reach * 0.25f) - reach * 0.125f;
 		from.y += random.GameFloatRand(reach) - reach * 0.5f;
 		from.z += random.GameFloatRand(reach * 0.25f) - reach * 0.125f;
-		const auto direction = *groin - from;
+		const auto direction = groin - from;
 		if (!(glm::dot(direction, direction) > creature_marks::scar::k_LeastReachSquared))
 		{
 			continue;
 		}
 		const auto kind = creature_marks::scar::BurnKind(random.GameRand(3));
 		const auto column = creature_marks::scar::CatchingBurnColumn(random.GameRand(8));
-		MarkAlong(creature, from, *groin, kind, column);
+		if (posedGroin.has_value())
+		{
+			MarkAlong(creature, from, groin, kind, column);
+		}
 	}
 }

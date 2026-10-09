@@ -127,7 +127,7 @@ std::vector<particles::StrikeCandidate> GameParticleWorld::StrikeCandidates(glm:
 				continue;
 			}
 			// The dead are no longer there to strike
-			if (const auto* villager = registry.TryGet<const Villager>(entity); villager != nullptr && villager->health <= 0)
+			if (const auto* villager = registry.TryGet<const Villager>(entity); villager != nullptr && villager->life <= 0.0f)
 			{
 				continue;
 			}

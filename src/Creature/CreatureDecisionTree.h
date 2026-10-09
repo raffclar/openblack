@@ -149,8 +149,11 @@ struct Tree
 [[nodiscard]] Tree Build(std::span<const Episode> episodes, std::span<const Attribute> allowed);
 /// How good a thing is by the tree, from -1 to 1; 0 when the tree has nothing to say about it
 [[nodiscard]] float Evaluate(const Tree& tree, const Belief& belief);
-/// How useful a thing is for the planner, from how good it is: 0.1 for things nothing is known about, rising to 1 for
-/// the best and falling to 0 for the worst
+/// The most useful anything can be for the planner, an eighth
+constexpr float k_MostUsefulness = 0.125f;
+/// How useful a thing is for the planner, from how good it is: 0.1 for things nothing is known about, rising with how
+/// good it is and falling to 0 for the worst, but never above k_MostUsefulness, so that anything a little better than
+/// unknown is as useful as the best
 [[nodiscard]] float Usefulness(float utility);
 /// The tree as lines of text, for the debug readouts
 [[nodiscard]] std::vector<std::string> Describe(const Tree& tree);

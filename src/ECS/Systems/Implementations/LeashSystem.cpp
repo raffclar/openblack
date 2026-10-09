@@ -1341,7 +1341,7 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 	// The player's leash posts along the ray come first
 	std::optional<entt::entity> post;
 	float nearest = k_TapReach;
-	registry.Each<const LeashPost, const Transform>([&](entt::entity entity, const LeashPost& at, const Transform& where) {
+	registry.Each<const LeashPost, const Transform>([&](entt::entity entity, const LeashPost& at, const Transform&) {
 		// Only the leashes hanging there can be tapped, where they hang even when the picked one is carried
 		if (at.owner != player || !at.hung)
 		{
