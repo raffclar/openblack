@@ -270,6 +270,27 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskWithAlphaTag, c
 	return texture;
 }
 
+Texture2DLoader::result_type Texture2DLoader::operator()(FromBitmapLayersTag, const std::string& name,
+                                                         std::span<const std::filesystem::path> layerPaths, uint16_t side) const
+{
+	auto& fileSystem = Locator::filesystem::value();
+	const size_t layerTexels = static_cast<size_t>(side) * side;
+	std::vector<uint16_t> texels(layerTexels * layerPaths.size(), 0);
+	for (size_t layer = 0; layer < layerPaths.size(); ++layer)
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading texture layer: {}", layerPaths[layer].generic_string());
+		const auto data = fileSystem.ReadAll(layerPaths[layer]);
+		Bitmap16B bitmap(data.data());
+		const auto count = std::min(layerTexels, static_cast<size_t>(bitmap.Width()) * bitmap.Height());
+		std::copy_n(bitmap.Data(), count, texels.begin() + static_cast<std::ptrdiff_t>(layer * layerTexels));
+	}
+	auto texture = std::make_shared<graphics::Texture2D>(name);
+	texture->Create(side, side, static_cast<uint16_t>(layerPaths.size()), graphics::TextureFormat::BGR5A1,
+	                graphics::Wrapping::ClampEdge, graphics::Filter::Linear,
+	                bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(texels[0]))));
+	return texture;
+}
+
 L3DAnimLoader::result_type L3DAnimLoader::operator()(FromBufferTag, const std::vector<uint8_t>& data) const
 {
 	auto animation = std::make_shared<L3DAnim>();

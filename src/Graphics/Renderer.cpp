@@ -60,6 +60,7 @@
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureSkin.h"
 #include "ECS/AbodeKnock.h"
+#include "ECS/Archetypes/SkyArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AtHome.h"
@@ -3210,9 +3211,9 @@ void Renderer::DrawMoon(RenderPass viewId) const
 	const auto phase = moon::Phase(now.count());
 	DrawCelestialMesh(
 	    viewId, {
-	                .meshId = SkyInterface::k_MoonMeshId.value(),
-	                .textureId = SkyInterface::k_MoonTextureId.value(),
-	                .alphaTextureId = SkyInterface::k_MoonAlphaTextureId.value(),
+	                .meshId = ecs::archetypes::SkyArchetype::k_MoonMeshId.value(),
+	                .textureId = ecs::archetypes::SkyArchetype::k_MoonTextureId.value(),
+	                .alphaTextureId = ecs::archetypes::SkyArchetype::k_MoonAlphaTextureId.value(),
 	                .model = moon::Model(basis, centre, phase),
 	                .colour = glm::vec4(colour, alpha),
 	                .celestial = {std::cos(phase), std::sin(phase), 1.0f, 1.0f},
@@ -3232,9 +3233,9 @@ void Renderer::DrawSun(RenderPass viewId) const
 	    sky_dome::ThroughOvercast(placement->alpha, _overcast, detail_level::Fog(Locator::config::value().detailLevel));
 	// In a warm colour, added to the sky drawn before it, leaving no depth; the land drawn after it covers it
 	DrawCelestialMesh(viewId, {
-	                              .meshId = SkyInterface::k_SunMeshId.value(),
-	                              .textureId = SkyInterface::k_SunTextureId.value(),
-	                              .alphaTextureId = SkyInterface::k_SunTextureId.value(),
+	                              .meshId = ecs::archetypes::SkyArchetype::k_SunMeshId.value(),
+	                              .textureId = ecs::archetypes::SkyArchetype::k_SunTextureId.value(),
+	                              .alphaTextureId = ecs::archetypes::SkyArchetype::k_SunTextureId.value(),
 	                              .model = SunModel(placement->position),
 	                              .colour = {0x95 / 255.0f, 0x7C / 255.0f, 0x63 / 255.0f, alpha / 255.0f},
 	                              .celestial = glm::vec4(0.0f),
@@ -3308,9 +3309,9 @@ void Renderer::DrawSunGlare(const Camera& camera) const
 	// it the glare is tested against the depth of what is drawn: its solid parts hide it, and it shows through its glass
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	DrawCelestialMesh(RenderPass::Main, {
-	                                        .meshId = SkyInterface::k_SunMeshId.value(),
-	                                        .textureId = SkyInterface::k_SunTextureId.value(),
-	                                        .alphaTextureId = SkyInterface::k_SunTextureId.value(),
+	                                        .meshId = ecs::archetypes::SkyArchetype::k_SunMeshId.value(),
+	                                        .textureId = ecs::archetypes::SkyArchetype::k_SunTextureId.value(),
+	                                        .alphaTextureId = ecs::archetypes::SkyArchetype::k_SunTextureId.value(),
 	                                        .model = model * glm::scale(glm::vec3(sun::k_GlareScale)),
 	                                        .colour = {0xA0 / 255.0f, 0x6A / 255.0f, 0x35 / 255.0f,
 	                                                   _sunGlare * placement->alpha / (255.0f * 255.0f)},
@@ -3795,7 +3796,9 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 	}
 	auto& sky = Locator::skySystem::value();
 	const auto frame = sky.AdvanceDome();
-	if (frame.Get().empty())
+	const auto& textures = Locator::resources::value().GetTextures();
+	const auto pictures = textures.Find(ecs::archetypes::SkyArchetype::k_DomeTextureId.value());
+	if (frame.Get().empty() || !pictures)
 	{
 		return;
 	}
@@ -3818,7 +3821,7 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 		{
 			// The pictures are laid out a layer for each time of day within each alignment
 			const glm::vec4 u_skyDome {alignment * 3, times.lower, times.upper, times.weight};
-			program.SetTextureSampler("s_diffuse", 0, sky.GetTexture());
+			program.SetTextureSampler("s_diffuse", 0, *pictures);
 			program.SetUniformValue("u_skyDome", &u_skyDome);
 			const auto top = static_cast<float>(alignment) * k_Rows;
 			SubmitLandQuad(viewId, program, {0.0f, top + first}, {k_Rows, top + last}, {0.0f, first / k_Rows},
@@ -4606,7 +4609,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			submitDesc.matrixCount = 1;
 			submitDesc.isSky = true;
 
-			DrawMesh(Locator::skySystem::value().GetMesh(), submitDesc, 0);
+			if (const auto dome =
+			        Locator::resources::value().GetMeshes().Find(ecs::archetypes::SkyArchetype::k_DomeMeshId.value()))
+			{
+				DrawMesh(*dome, submitDesc, 0);
+			}
 			DrawSun(skyViewId);
 			DrawMoon(skyViewId);
 		}

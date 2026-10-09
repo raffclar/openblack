@@ -51,6 +51,7 @@
 #include "3D/LandLightTable.h"
 #include "3D/MapCoords.h"
 #include "3D/OceanInterface.h"
+#include "3D/SkyDome.h"
 #include "3D/SkyInterface.h"
 #include "3D/SnowCover.h"
 #include "3D/TempleInteriorInterface.h"
@@ -72,6 +73,7 @@
 #include "Debug/FrameStatsLog.h"
 #include "Debug/TestbedDispenserGrid.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
+#include "ECS/Archetypes/SkyArchetype.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/CameraBookmark.h"
@@ -2360,9 +2362,22 @@ bool Game::Initialize() noexcept
 		meshManager.Load("river", LFromDiskTag {}, fileSystem.GetPath<Path::Data>() / "river.l3d");
 		meshManager.Load("river2", LFromDiskTag {}, fileSystem.GetPath<Path::Data>() / "river2.l3d");
 		meshManager.Load("metre_sphere", LFromDiskTag {}, fileSystem.GetPath<Path::Data>() / "metre_sphere.l3d");
-		meshManager.Load(SkyInterface::k_SunMeshId.value(), LFromDiskTag {},
+		// The sky: its dome, with the dome's pictures, the sun and the moon
+		using SkyArchetype = ecs::archetypes::SkyArchetype;
+		meshManager.Load(SkyArchetype::k_DomeMeshId.value(), LFromDiskTag {},
+		                 fileSystem.GetPath<Path::WeatherSystem>() / "sky.l3d");
+		{
+			std::vector<std::filesystem::path> pictures;
+			for (const auto& file : sky_dome::PictureFiles())
+			{
+				pictures.push_back(fileSystem.GetPath<Path::WeatherSystem>() / file);
+			}
+			textureManager.Load(SkyArchetype::k_DomeTextureId.value(), resources::Texture2DLoader::FromBitmapLayersTag {},
+			                    "Sky", pictures, sky_dome::k_Rows);
+		}
+		meshManager.Load(SkyArchetype::k_SunMeshId.value(), LFromDiskTag {},
 		                 fileSystem.GetPath<Path::WeatherSystem>() / "sun.l3d");
-		meshManager.Load(SkyInterface::k_MoonMeshId.value(), LFromDiskTag {},
+		meshManager.Load(SkyArchetype::k_MoonMeshId.value(), LFromDiskTag {},
 		                 fileSystem.GetPath<Path::WeatherSystem>() / "moon.l3d");
 		meshManager.Load(ecs::components::Mist::k_MeshId, LFromDiskTag {}, fileSystem.GetPath<Path::Landscape>() / "mist.l3d");
 
