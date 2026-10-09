@@ -112,7 +112,10 @@ void ParticleSystem::UpdateFrame(float gameSeconds, const HandFrame& hand)
 	}
 	for (const auto& sheet : _world.LightSheets())
 	{
-		sheet->Update(gameSeconds);
+		if (!sheet->Hidden())
+		{
+			sheet->Update(gameSeconds);
+		}
 	}
 
 	if (!IsRunning(_gestureChain))
@@ -150,6 +153,10 @@ void ParticleSystem::AddLightSheets(particles::draw::Frame& frame) const
 	std::vector<uint32_t> triangles;
 	for (const auto& sheet : _world.LightSheets())
 	{
+		if (sheet->Hidden())
+		{
+			continue;
+		}
 		// It takes its place by where its middle was when it was last drawn
 		const auto sortPoint = sheet->Middle();
 		sheet->Build(vertices, triangles);

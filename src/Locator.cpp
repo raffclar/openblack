@@ -30,6 +30,7 @@
 #include "ECS/MapProduction.h"
 #include "ECS/PhysicsGameHooks.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/Implementations/AbodeKnockSystem.h"
 #include "ECS/Systems/Implementations/AlignmentSystem.h"
 #include "ECS/Systems/Implementations/AnimalSystem.h"
 #include "ECS/Systems/Implementations/AnimatedStaticSystem.h"
@@ -42,6 +43,7 @@
 #include "ECS/Systems/Implementations/CloudSystem.h"
 #include "ECS/Systems/Implementations/CreatureAnimationSystem.h"
 #include "ECS/Systems/Implementations/CreatureAudioSystem.h"
+#include "ECS/Systems/Implementations/CreatureCarryOverSystem.h"
 #include "ECS/Systems/Implementations/CreatureCaveSystem.h"
 #include "ECS/Systems/Implementations/CreatureFightSystem.h"
 #include "ECS/Systems/Implementations/CreatureHairSystem.h"
@@ -57,6 +59,7 @@
 #include "ECS/Systems/Implementations/ExplosionSystem.h"
 #include "ECS/Systems/Implementations/FieldSystem.h"
 #include "ECS/Systems/Implementations/FireSystem.h"
+#include "ECS/Systems/Implementations/FireflySystem.h"
 #include "ECS/Systems/Implementations/FootprintSystem.h"
 #include "ECS/Systems/Implementations/ForestSystem.h"
 #include "ECS/Systems/Implementations/GestureSystem.h"
@@ -116,6 +119,7 @@ using openblack::chlapi::CHLApi;
 using openblack::debug::gui::DebugGuiInterface;
 using openblack::ecs::MapProduction;
 using openblack::ecs::Registry;
+using openblack::ecs::systems::AbodeKnockSystem;
 using openblack::ecs::systems::AlignmentSystem;
 using openblack::ecs::systems::AnimalSystem;
 using openblack::ecs::systems::AnimatedStaticSystem;
@@ -127,6 +131,7 @@ using openblack::ecs::systems::CinematicDirectorSystem;
 using openblack::ecs::systems::CloudSystem;
 using openblack::ecs::systems::CreatureAnimationSystem;
 using openblack::ecs::systems::CreatureAudioSystem;
+using openblack::ecs::systems::CreatureCarryOverSystem;
 using openblack::ecs::systems::CreatureCaveSystem;
 using openblack::ecs::systems::CreatureFightSystem;
 using openblack::ecs::systems::CreatureHairSystem;
@@ -140,6 +145,7 @@ using openblack::ecs::systems::CreatureSkinSystem;
 using openblack::ecs::systems::DynamicsSystem;
 using openblack::ecs::systems::EditorSystem;
 using openblack::ecs::systems::FieldSystem;
+using openblack::ecs::systems::FireflySystem;
 using openblack::ecs::systems::FootprintSystem;
 using openblack::ecs::systems::ForestSystem;
 using openblack::ecs::systems::GestureEventsInterface;
@@ -270,14 +276,17 @@ bool openblack::InitializeGame() noexcept
 	Locator::soundTagSystem::emplace<SoundTagSystem>();
 	Locator::rainSystem::emplace<RainSystem>();
 	Locator::chimneySmokeSystem::emplace<ChimneySmokeSystem>();
+	Locator::abodeKnockSystem::emplace<AbodeKnockSystem>();
 	Locator::influenceSystem::emplace<InfluenceSystem>();
 	Locator::townDesireSystem::emplace<TownDesireSystem>();
 	Locator::particleSystem::emplace<ParticleSystem>();
 	Locator::reactionSystem::emplace<ReactionSystem>();
 	Locator::teleportSystem::emplace<TeleportSystem>();
+	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>();
 	Locator::tornadoSystem::emplace<TornadoSystem>();
 	Locator::magicShieldSystem::emplace<MagicShieldSystem>();
 	Locator::forestSystem::emplace<ForestSystem>();
+	Locator::fireflySystem::emplace<FireflySystem>();
 	Locator::gestureSystem::emplace<GestureSystem>();
 	// The miracles take the gestures the gesture system recognises; the system stays the owner
 	Locator::gestureEvents::reset(static_cast<GestureEventsInterface*>(&Locator::gestureSystem::value()),
@@ -374,6 +383,7 @@ void openblack::ShutDownServices()
 	Locator::cinematicDirectorSystem::reset();
 	Locator::influenceSystem::reset();
 	Locator::chimneySmokeSystem::reset();
+	Locator::abodeKnockSystem::reset();
 	Locator::rainSystem::reset();
 	Locator::snowfallSystem::reset();
 	Locator::waterRingSystem::reset();
@@ -405,9 +415,11 @@ void openblack::ShutDownServices()
 	Locator::gestureEvents::reset();
 	Locator::reactionSystem::reset();
 	Locator::teleportSystem::reset();
+	Locator::creatureCarryOverSystem::reset();
 	Locator::tornadoSystem::reset();
 	Locator::magicShieldSystem::reset();
 	Locator::forestSystem::reset();
+	Locator::fireflySystem::reset();
 	Locator::gestureSystem::reset();
 	Locator::particleSystem::reset();
 	Locator::terrainSystem::reset();

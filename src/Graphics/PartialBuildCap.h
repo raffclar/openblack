@@ -41,7 +41,9 @@ inline constexpr size_t k_MostSegments = 500;
                                            std::span<const glm::vec3> normals, std::span<const uint16_t> indices, float height,
                                            float inset);
 
-/// Whether any triangle of a primitive lies wholly below the height: only such a primitive has inner walls and a cap
-[[nodiscard]] bool HasWholeTriangleBelow(std::span<const glm::vec3> positions, std::span<const uint16_t> indices, float height);
+/// Whether the cut draws anything of a primitive: any triangle with a corner below the height, which is drawn cut down to
+/// the part below it. Only such a primitive has inner walls and a cap. (The game also leaves them out when all it would
+/// draw below the cut is off screen; that changes nothing that can be seen.)
+[[nodiscard]] bool DrawsAnythingBelow(std::span<const glm::vec3> positions, std::span<const uint16_t> indices, float height);
 
 } // namespace openblack::graphics::partial_build_cap

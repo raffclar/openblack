@@ -1,6 +1,8 @@
 $input a_position
 $output v_texcoord0
 
+// Only the model matrix is used: a draw uploads every bone the shader declares
+#define BGFX_CONFIG_MAX_BONES 1
 #include <bgfx_shader.sh>
 
 uniform vec4 u_sampleRect;

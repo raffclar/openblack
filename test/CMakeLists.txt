@@ -43,6 +43,7 @@ openblack_setup_and_add_test(test_game_initialize test_game_initialize.cpp)
 openblack_setup_and_add_test(test_load_scene test_load_scene.cpp)
 openblack_setup_and_add_test(test_fixed test_fixed.cpp)
 openblack_setup_and_add_test(test_alignment test_alignment.cpp)
+openblack_setup_and_add_test(test_player_system test_player_system.cpp)
 openblack_setup_and_add_test(test_interpolator test_interpolator.cpp)
 openblack_setup_and_add_test(test_set_camera_pos camera/test_set_camera_pos.cpp)
 openblack_setup_and_add_test(
@@ -58,6 +59,8 @@ openblack_setup_and_add_test(test_sound_decoding audio/test_sound_decoding.cpp)
 openblack_setup_and_add_test(test_music audio/test_music.cpp)
 openblack_setup_and_add_test(test_music_decoding audio/test_music_decoding.cpp)
 openblack_setup_and_add_test(test_anim_effects audio/test_anim_effects.cpp)
+openblack_setup_and_add_test(test_listener_frame audio/test_listener_frame.cpp)
+openblack_setup_and_add_test(test_hearing_range audio/test_hearing_range.cpp)
 openblack_setup_and_add_test(test_interface gui/test_interface.cpp)
 openblack_setup_and_add_test(test_tool_tips gui/test_tool_tips.cpp)
 openblack_setup_and_add_test(test_screen_fade gui/test_screen_fade.cpp)
@@ -82,6 +85,10 @@ openblack_setup_and_add_test(
   test_hand_grab_system hand/test_hand_grab_system.cpp
 )
 openblack_setup_and_add_test(test_hand_feel hand/test_hand_feel.cpp)
+openblack_setup_and_add_test(test_hand_click hand/test_hand_click.cpp)
+target_link_libraries(test_hand_click PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(test_script_properties test_script_properties.cpp)
+target_link_libraries(test_script_properties PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_hand_hold_pose test_hand_hold_pose.cpp)
 openblack_setup_and_add_test(test_tribal_power_spin test_tribal_power_spin.cpp)
 openblack_setup_and_add_test(
@@ -94,6 +101,7 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_model_light graphics/test_model_light.cpp)
 openblack_setup_and_add_test(test_sun graphics/test_sun.cpp)
 openblack_setup_and_add_test(test_moon graphics/test_moon.cpp)
+openblack_setup_and_add_test(test_bone_budget graphics/test_bone_budget.cpp)
 openblack_setup_and_add_test(
   test_shader_samplers graphics/test_shader_samplers.cpp
 )
@@ -144,6 +152,7 @@ openblack_setup_and_add_test(test_ground_blobs test_ground_blobs.cpp)
 openblack_setup_and_add_test(test_zsort test_zsort.cpp)
 openblack_setup_and_add_test(test_rain test_rain.cpp)
 openblack_setup_and_add_test(test_chimney_smoke test_chimney_smoke.cpp)
+openblack_setup_and_add_test(test_native_stub_calls test_native_stub_calls.cpp)
 openblack_setup_and_add_test(test_influence_circle test_influence_circle.cpp)
 openblack_setup_and_add_test(test_field_crop test_field_crop.cpp)
 openblack_setup_and_add_test(test_snow_cover test_snow_cover.cpp)
@@ -176,6 +185,9 @@ openblack_setup_and_add_test(test_creature_sway test_creature_sway.cpp)
 openblack_setup_and_add_test(test_creature_catch test_creature_catch.cpp)
 openblack_setup_and_add_test(test_creature_tattoo test_creature_tattoo.cpp)
 openblack_setup_and_add_test(test_creature_marks test_creature_marks.cpp)
+openblack_setup_and_add_test(
+  test_creature_carry_over test_creature_carry_over.cpp
+)
 openblack_setup_and_add_test(test_vertex_blend test_vertex_blend.cpp)
 openblack_setup_and_add_test(
   test_creature_shadow graphics/test_creature_shadow.cpp
@@ -198,9 +210,17 @@ openblack_setup_and_add_test(
   test_creature_footprints test_creature_footprints.cpp
 )
 openblack_setup_and_add_test(test_creature_fight test_creature_fight.cpp)
+openblack_setup_and_add_test(test_creature_arena test_creature_arena.cpp)
+openblack_setup_and_add_test(test_land_avoid test_land_avoid.cpp)
+openblack_setup_and_add_test(
+  test_creature_fight_system test_creature_fight_system.cpp
+)
+openblack_setup_and_add_test(test_fight_view test_fight_view.cpp)
 openblack_setup_and_add_test(test_leash_rope test_leash_rope.cpp)
 openblack_setup_and_add_test(test_leash_rules test_leash_rules.cpp)
 openblack_setup_and_add_test(test_leash_ownership test_leash_ownership.cpp)
+openblack_setup_and_add_test(test_leash_orders test_leash_orders.cpp)
+openblack_setup_and_add_test(test_temple_leashes test_temple_leashes.cpp)
 openblack_setup_and_add_test(test_testbed_scenarios test_testbed_scenarios.cpp)
 openblack_setup_and_add_test(
   test_creature_status_panel test_creature_status_panel.cpp
@@ -249,6 +269,10 @@ openblack_setup_and_add_test(test_uniform_table graphics/test_uniform_table.cpp)
 openblack_setup_and_add_test(test_editor test_editor.cpp)
 openblack_setup_and_add_test(test_editor_scripts test_editor_scripts.cpp)
 target_link_libraries(test_editor_scripts PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_land_change_scripts lhvm/test_land_change_scripts.cpp
+)
+target_link_libraries(test_land_change_scripts PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_chl_language lhvm/test_chl_language.cpp)
 target_link_libraries(test_chl_language PRIVATE lhvmlang)
 openblack_setup_and_add_test(test_lhvm_decompiler lhvm/test_lhvm_decompiler.cpp)
@@ -267,6 +291,7 @@ openblack_setup_and_add_test(
   test_magic_shield_forest test_magic_shield_forest.cpp
 )
 openblack_setup_and_add_test(test_reactions test_reactions.cpp)
+openblack_setup_and_add_test(test_map_production test_map_production.cpp)
 openblack_setup_and_add_test(test_magic_heal test_magic_heal.cpp)
 openblack_setup_and_add_test(test_lightning_maths test_lightning_maths.cpp)
 openblack_setup_and_add_test(test_tornado_creature test_tornado_creature.cpp)
@@ -278,12 +303,16 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_town_belief test_town_belief.cpp)
 openblack_setup_and_add_test(test_villager_speed test_villager_speed.cpp)
+openblack_setup_and_add_test(test_wall_hug_rules test_wall_hug_rules.cpp)
 openblack_setup_and_add_test(test_villager_age test_villager_age.cpp)
 openblack_setup_and_add_test(test_villager_needs test_villager_needs.cpp)
+openblack_setup_and_add_test(test_villager_routine test_villager_routine.cpp)
+openblack_setup_and_add_test(test_abode_knock test_abode_knock.cpp)
 openblack_setup_and_add_test(
   test_villager_animation test_villager_animation.cpp
 )
 openblack_setup_and_add_test(test_creature_casting test_creature_casting.cpp)
+openblack_setup_and_add_test(test_creature_fire test_creature_fire.cpp)
 openblack_setup_and_add_test(test_particle_glints test_particle_glints.cpp)
 target_link_libraries(test_particle_glints PRIVATE psys)
 openblack_setup_and_add_test(test_gesture_trail test_gesture_trail.cpp)
@@ -332,6 +361,9 @@ target_link_libraries(test_dynamics_system PRIVATE psys physconst lnd)
 openblack_setup_and_add_test(
   test_temple_destruction test_temple_destruction.cpp
 )
+openblack_setup_and_add_test(
+  test_temple_destruction_system test_temple_destruction_system.cpp
+)
 openblack_setup_and_add_test(test_physics_manager test_physics_manager.cpp)
 openblack_setup_and_add_test(test_physics_living test_physics_living.cpp)
 openblack_setup_and_add_test(test_physics_objects test_physics_objects.cpp)
@@ -341,9 +373,13 @@ openblack_setup_and_add_test(test_scenic_forest test_scenic_forest.cpp)
 openblack_setup_and_add_test(test_nearest_search test_nearest_search.cpp)
 openblack_setup_and_add_test(test_land_forests test_land_forests.cpp)
 openblack_setup_and_add_test(test_script_objects test_script_objects.cpp)
+openblack_setup_and_add_test(test_script_find test_script_find.cpp)
 openblack_setup_and_add_test(test_partial_build_cap test_partial_build_cap.cpp)
 openblack_setup_and_add_test(test_town_playthings test_town_playthings.cpp)
 openblack_setup_and_add_test(test_temple_heart test_temple_heart.cpp)
+openblack_setup_and_add_test(test_fireflies test_fireflies.cpp)
 openblack_setup_and_add_test(test_store_rules test_store_rules.cpp)
 openblack_setup_and_add_test(test_clip_sounds test_clip_sounds.cpp)
 target_link_libraries(test_clip_sounds PRIVATE sas)
+openblack_setup_and_add_test(test_story_land_change test_story_land_change.cpp)
+target_link_libraries(test_story_land_change PRIVATE ScriptLibrary)

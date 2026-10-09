@@ -28,7 +28,7 @@ namespace openblack::particles
 class LightSheet
 {
 public:
-	/// The top of the sheet is spread out from the middle of its points by this
+	/// The top of the sheet is spread out from the middle of its points by this, unless it is given another spread
 	static constexpr float k_Spread = 1.1f;
 	/// How far up the sheet its brightest line is
 	static constexpr float k_BrightLine = 0.25f;
@@ -60,6 +60,11 @@ public:
 	/// along
 	void Start(std::vector<glm::vec3> points, uint32_t rgb, float height, float shiftSeconds);
 	[[nodiscard]] bool Started() const { return !_points.empty(); }
+	/// How far its top is spread out from the middle of its points
+	void SetSpread(float spread) { _spread = spread; }
+	/// A hidden sheet is neither drawn nor moved on by time: it waits as it is until it is shown again
+	void SetHidden(bool hidden) { _hidden = hidden; }
+	[[nodiscard]] bool Hidden() const { return _hidden; }
 	/// The strength fed in at its first point from now on, 0 to 1
 	void SetStrength(float strength) { _strength = strength; }
 	/// Time passes: the wave rolls on, the stars slide and the strengths move along
@@ -81,6 +86,8 @@ private:
 	/// Each point's height as the wave has it
 	std::vector<float> _heights;
 	uint32_t _rgb {0};
+	float _spread {k_Spread};
+	bool _hidden {false};
 	float _height {0.0f};
 	float _shiftSeconds {0.0f};
 	float _strength {0.0f};

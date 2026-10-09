@@ -1,6 +1,6 @@
 # Lists the script API's natives that openblack hasn't written yet, for the editor's Scripts panel.
 #
-# A native is unwritten while its function's body still logs that it is not implemented. The natives are numbered by
+# A native is unwritten while its function's body still reports itself as not implemented. The natives are numbered by
 # the order the API binds them in, so the list follows the source as natives get written.
 #
 # Usage: cmake -DSOURCE=<CHLApi.cpp> -DOUTPUT=<header> -P GenerateUnimplementedNatives.cmake
@@ -18,7 +18,7 @@ foreach (line IN LISTS lines)
     set(current "${CMAKE_MATCH_1}")
   elseif (line MATCHES "^}")
     set(current "")
-  elseif (NOT current STREQUAL "" AND line MATCHES "not implemented\\.")
+  elseif (NOT current STREQUAL "" AND line MATCHES "NotImplemented\\(")
     list(APPEND stubs "${current}")
     set(current "")
   endif ()

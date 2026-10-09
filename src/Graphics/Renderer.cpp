@@ -59,6 +59,8 @@
 #include "Creature/CreatureHair.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureSkin.h"
+#include "ECS/AbodeKnock.h"
+#include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
@@ -81,6 +83,7 @@
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Temple.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageLight.h"
@@ -88,6 +91,7 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
@@ -104,6 +108,7 @@
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
+#include "Graphics/BoneBudget.h"
 #include "Graphics/DebugLines.h"
 #include "Graphics/DetailLevel.h"
 #include "Graphics/FrameBuffer.h"
@@ -123,6 +128,7 @@
 #include "Graphics/TreeBrightness.h"
 #include "Graphics/VertexBuffer.h"
 #include "Graphics/ZSort.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 #include "Profiler.h"
 #include "Renderer.h"
@@ -739,7 +745,7 @@ const Renderer::Cap& Renderer::CapOf(const L3DSubMesh& subMesh, const CapPrimiti
 	const auto first = std::min<size_t>(primitive.indicesOffset, indices.size());
 	indices = indices.subspan(first, std::min<size_t>(primitive.indicesCount, indices.size() - first));
 	Cap cap {
-	    .wholeBelow = partial_build_cap::HasWholeTriangleBelow(surface.positions, indices, height),
+	    .drawsBelow = partial_build_cap::DrawsAnythingBelow(surface.positions, indices, height),
 	    .vertices = partial_build_cap::Build(surface.positions, surface.uvs, surface.normals, indices, height,
 	                                         InsetOf(primitive.twoSided)),
 	};
@@ -900,7 +906,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			                          .indicesCount = prim.indicesCount,
 			                          .twoSided = prim.twoSided},
 			                         *desc.modelCutHeight);
-			if (!made.wholeBelow || (desc.cap && made.vertices.empty()))
+			if (!made.drawsBelow || (desc.cap && made.vertices.empty()))
 			{
 				lastPreserveState = false;
 				continue;
@@ -2939,6 +2945,108 @@ void Renderer::DrawSnowfall(const DrawSceneDesc& desc) const
 	}
 }
 
+void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
+{
+	if (desc.viewId != RenderPass::Main || !Locator::abodeKnockSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto& knocks = Locator::abodeKnockSystem::value();
+	const auto town = knocks.GetReadoutTown();
+	static constexpr auto k_TextureId = entt::hashed_string("raw/misc0");
+	static constexpr auto k_AlphaTextureId = entt::hashed_string("raw/misc0a");
+	const auto& textures = Locator::resources::value().GetTextures();
+	const auto* townData = town.has_value() ? desc.entities.TryGet<const ecs::components::Town>(*town) : nullptr;
+	if (townData == nullptr || !textures.Contains(k_TextureId.value()) || !textures.Contains(k_AlphaTextureId.value()))
+	{
+		return;
+	}
+	struct Vertex
+	{
+		glm::vec3 position;
+		glm::vec2 uv;
+		uint32_t colour;
+	};
+	std::vector<Vertex> vertices;
+	// The little person is the second picture of the bottom row of the sheet's eight by eight
+	constexpr float k_Cell = 1.0f / 8.0f;
+	constexpr glm::vec2 k_Person {1.0f * k_Cell, 7.0f * k_Cell};
+	constexpr std::array<glm::vec2, 4> k_Corners {glm::vec2 {-1.0f, 1.0f}, glm::vec2 {1.0f, 1.0f}, glm::vec2 {1.0f, -1.0f},
+	                                              glm::vec2 {-1.0f, -1.0f}};
+	constexpr std::array<glm::vec2, 4> k_Uvs {glm::vec2 {0.0f, 0.0f}, glm::vec2 {k_Cell, 0.0f}, glm::vec2 {k_Cell, k_Cell},
+	                                          glm::vec2 {0.0f, k_Cell}};
+	const auto right = desc.camera->GetRight();
+	const auto up = desc.camera->GetUp();
+	const auto& infos = Locator::infoConstants::value().abode;
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const float scale = knocks.GetReadoutScale();
+	for (const auto abode : townData->abodes)
+	{
+		const auto* data = desc.entities.TryGet<const ecs::components::Abode>(abode);
+		const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(abode);
+		const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(abode);
+		if (data == nullptr || transform == nullptr || mesh == nullptr || !meshes.Contains(mesh->id))
+		{
+			continue;
+		}
+		const auto adults = static_cast<uint32_t>(std::ranges::count_if(data->inhabitants, [&desc](entt::entity villager) {
+			const auto* person = desc.entities.TryGet<const ecs::components::Villager>(villager);
+			return person != nullptr && person->lifeStage == ecs::components::Villager::LifeStage::Adult;
+		}));
+		// Above the house by its model's height and a little more
+		auto point = transform->position;
+		point.y += meshes.Handle(mesh->id)->GetBoundingBox().Size().y + ecs::abode_knock::k_RaisedAbove;
+		const auto places = infos.at(static_cast<size_t>(data->type)).maxVillagersInAbode;
+		for (const auto& marker : ecs::abode_knock::Readout(places, adults, scale))
+		{
+			const auto centre = point + right * marker.offset;
+			// The colour as the vertices take it, a byte each of red, green, blue and alpha from the lowest
+			const auto abgr =
+			    (marker.colour & 0xFF00FF00u) | ((marker.colour & 0xFFu) << 16u) | ((marker.colour >> 16u) & 0xFFu);
+			for (size_t c = 0; c < k_Corners.size(); ++c)
+			{
+				vertices.push_back({centre + (right * k_Corners.at(c).x + up * k_Corners.at(c).y) * marker.size,
+				                    k_Person + k_Uvs.at(c), abgr});
+			}
+		}
+	}
+	const auto count = static_cast<uint32_t>(vertices.size());
+	const auto quads = count / 4;
+	bgfx::VertexLayout layout;
+	layout.begin()
+	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+	    .end();
+	if (count == 0 || bgfx::getAvailTransientVertexBuffer(count, layout) < count ||
+	    bgfx::getAvailTransientIndexBuffer(quads * 6) < quads * 6)
+	{
+		return;
+	}
+	bgfx::TransientVertexBuffer vertexBuffer;
+	bgfx::TransientIndexBuffer indexBuffer;
+	bgfx::allocTransientVertexBuffer(&vertexBuffer, count, layout);
+	bgfx::allocTransientIndexBuffer(&indexBuffer, quads * 6);
+	std::memcpy(vertexBuffer.data, vertices.data(), count * sizeof(Vertex));
+	const auto indices = std::span(reinterpret_cast<uint16_t*>(indexBuffer.data), quads * 6);
+	constexpr std::array<uint16_t, 6> k_Triangles = {0, 1, 2, 2, 3, 0};
+	for (uint32_t q = 0; q < quads; ++q)
+	{
+		for (size_t t = 0; t < k_Triangles.size(); ++t)
+		{
+			indices[(q * 6) + t] = static_cast<uint16_t>((q * 4) + k_Triangles.at(t));
+		}
+	}
+	const auto* program = _shaderManager->GetShader("WorldTextured");
+	program->SetTextureSampler("s_diffuse", 0, *textures.Handle(k_TextureId));
+	program->SetTextureSampler("s_alpha", 1, *textures.Handle(k_AlphaTextureId));
+	bgfx::setVertexBuffer(0, &vertexBuffer);
+	bgfx::setIndexBuffer(&indexBuffer);
+	// Blended over what is behind, both sides, tested against depth but leaving none
+	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA);
+	program->Submit(static_cast<bgfx::ViewId>(TranslucentView(desc.viewId)));
+}
+
 void Renderer::DrawRain(const DrawSceneDesc& desc) const
 {
 	if (desc.viewId != RenderPass::Main || !Locator::rainSystem::has_value() ||
@@ -3774,15 +3882,17 @@ void Renderer::DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const
 	const auto proj = island.GetOrthoProj();
 	bgfx::setViewTransform(viewId, &view, &proj);
 
+	// Meshes without bones cast with the shader that declares only their model matrix
 	const auto* shader = _shaderManager->GetShader("ObjectShadowInstanced");
+	const auto* staticShader = _shaderManager->GetShader("ObjectShadowStaticInstanced");
 	const auto sun = glm::vec4(ObjectShadows::k_Sun, 0.0f);
 	shader->SetUniformValue("u_shadowSun", &sun);
+	staticShader->SetUniformValue("u_shadowSun", &sun);
 
 	const auto& meshManager = Locator::resources::value().GetMeshes();
 	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
 	L3DMeshSubmitDesc submitDesc = {};
 	submitDesc.viewId = RenderPass::ObjectShadow;
-	submitDesc.program = shader;
 	// Overlapping shadows cover the same texels, both sides of every triangle cast
 	submitDesc.state = BGFX_STATE_WRITE_R;
 
@@ -3804,6 +3914,8 @@ void Renderer::DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const
 				submitDesc.modelMatrices = mesh->GetBoneMatrices().data();
 				submitDesc.matrixCount = static_cast<uint8_t>(mesh->GetBoneMatrices().size());
 			}
+			submitDesc.program =
+			    bone_budget::For(submitDesc.matrixCount) == bone_budget::Budget::Single ? staticShader : shader;
 			DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 		}
 	};
@@ -4338,9 +4450,30 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	const auto* spriteShader = _shaderManager->GetShader("Sprite");
 	const auto* debugShaderInstanced = _shaderManager->GetShader("DebugLineInstanced");
 	const auto* objectShaderInstanced = _shaderManager->GetShader("ObjectInstanced");
+	const auto* objectShaderFewBonesInstanced = _shaderManager->GetShader("ObjectFewBonesInstanced");
 	const auto* objectShaderMorphInstanced = _shaderManager->GetShader("ObjectMorphInstanced");
 	const auto* objectShaderStaticInstanced = _shaderManager->GetShader("ObjectStaticInstanced");
 	const auto* objectShaderHeightMapInstanced = _shaderManager->GetShader("ObjectHeightMapInstanced");
+	const auto* objectShaderHeightMapStaticInstanced = _shaderManager->GetShader("ObjectHeightMapStaticInstanced");
+	// Each mesh is drawn with the shader declaring the fewest bones that hold its skeleton
+	const auto objectProgramFor = [&](uint8_t boneCount, bool morphWithTerrain) {
+		const auto budget = bone_budget::For(boneCount);
+		if (morphWithTerrain)
+		{
+			return budget == bone_budget::Budget::Single ? objectShaderHeightMapStaticInstanced
+			                                             : objectShaderHeightMapInstanced;
+		}
+		switch (budget)
+		{
+		case bone_budget::Budget::Single:
+			return objectShaderStaticInstanced;
+		case bone_budget::Budget::Few:
+			return objectShaderFewBonesInstanced;
+		case bone_budget::Budget::All:
+			break;
+		}
+		return objectShaderInstanced;
+	};
 	const auto* objectShaderLightmapInstanced = _shaderManager->GetShader("ObjectLightmapInstanced");
 	const auto* objectShaderReflectiveLightmapInstanced = _shaderManager->GetShader("ObjectReflectiveLightmapInstanced");
 
@@ -4634,9 +4767,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.joints = Locator::temple::value().GetDoors().GetJoints();
 				}
 				submitDesc.morphWithTerrain = placers.morphWithTerrain;
-				submitDesc.program = submitDesc.morphWithTerrain ? objectShaderHeightMapInstanced
-				                     : mesh->IsBoned()           ? objectShaderInstanced
-				                                                 : objectShaderStaticInstanced;
+				submitDesc.program = objectProgramFor(submitDesc.matrixCount, submitDesc.morphWithTerrain);
 				// Only the temple's meshes have lightmaps, and they don't stand on the land
 				submitDesc.lightmapProgram = submitDesc.morphWithTerrain ? nullptr
 				                             : placers.showsReflection   ? objectShaderReflectiveLightmapInstanced
@@ -4653,6 +4784,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.landLightScale = CreatureLandLightScale(desc.viewId);
 					submitDesc.modelMatrices = pose->bones.data();
 					submitDesc.matrixCount = static_cast<uint8_t>(pose->bones.size());
+					submitDesc.program = objectProgramFor(submitDesc.matrixCount, submitDesc.morphWithTerrain);
 					if (pose->morphTargets != nullptr)
 					{
 						submitDesc.program = objectShaderMorphInstanced;
@@ -4687,11 +4819,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					continue;
 				}
 				const RenderContext::InstancedDrawDesc placers {0, 1, build.morphWithTerrain, false};
+				// A part cut at a height is drawn from both sides; a scaffold standing whole, only sunk into the land, is
+				// drawn as the building's own model is
 				const auto drawPart = [&](uint32_t instance, std::optional<float> cut, std::optional<uint32_t> status,
 				                          bool innerWalls) {
 					submitDesc.cutAbove = cut;
 					submitDesc.modelCutHeight = status.has_value() || build.morphWithTerrain ? std::nullopt : build.capHeight;
-					submitDesc.twoSided = true;
+					submitDesc.twoSided = cut.has_value();
 					submitDesc.innerWalls = innerWalls;
 					submitDesc.onlyStatus = status;
 					drawInstances(build.meshId, placers, false, instance, 1, nullptr, nullptr,
@@ -4880,6 +5014,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawWaterRings(desc);
 			DrawRain(desc);
 			DrawSnowfall(desc);
+			DrawKnockReadout(desc);
 			DrawChimneySmoke(desc);
 			DrawShieldDomes(desc);
 			DrawDestructionGhosts(desc);
