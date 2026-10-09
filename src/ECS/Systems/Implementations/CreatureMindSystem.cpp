@@ -846,8 +846,8 @@ void CreatureMindSystem::ProcessTurn()
 		    creature_desires::UpdateDesires(*mind.desires, k_TurnsPerSecond);
 
 		    auto* eyes = registry.TryGet<CreatureEyes>(entity);
-		    // Paused, following the leash to the hand, fighting or knocked out, the mind leaves the body alone
-		    if (mind.paused || mind.leash.obeying || registry.AnyOf<CreatureFighting, CreatureKnockedOut>(entity))
+		    // Paused, fighting or knocked out, the mind leaves the body alone
+		    if (mind.paused || registry.AnyOf<CreatureFighting, CreatureKnockedOut>(entity))
 		    {
 			    return;
 		    }
@@ -861,6 +861,11 @@ void CreatureMindSystem::ProcessTurn()
 				    needs->faint.reset();
 				    passingOut.push_back(entity);
 			    }
+			    return;
+		    }
+		    // Following the leash to the hand, it is the leash's; passing out (above) lets go of it
+		    if (mind.leash.obeying)
+		    {
 			    return;
 		    }
 		    // Without the fights' knock-outs, it drops where it stands and comes round there
