@@ -41,6 +41,8 @@ public:
 		Busy,
 		/// The creature starting it isn't healthy enough
 		TooWeak,
+		/// There is no arena near enough, nor room for one
+		NoArena,
 	};
 
 	virtual ~CreatureFightSystemInterface() = default;

@@ -87,8 +87,9 @@ using Random = std::function<uint32_t(uint32_t)>;
 
 // The arena
 
-/// The arena's radius is 39 units for each of the bigger creature's size, at most 60
-constexpr float k_ArenaRadiusPerSize = 15.0f * 2.6f;
+/// The arena's radius is 2.6 times the bigger creature's height, 15 units for each of its size, at most 60
+constexpr float k_ArenaHeightPerSize = 15.0f;
+constexpr float k_ArenaRadiusPerHeight = 2.6f;
 constexpr float k_MaxArenaRadius = 60.0f;
 /// The two creatures take their places this many units of their size either side of its middle
 constexpr float k_SpotPerSize = 15.0f;
@@ -103,8 +104,6 @@ struct Arena
 	float radius {0.0f};
 };
 [[nodiscard]] float ArenaRadius(float sizeA, float sizeB);
-/// The arena between two creatures: centred between them
-[[nodiscard]] Arena MakeArena(glm::vec2 a, glm::vec2 b, float sizeA, float sizeB);
 /// Where a creature takes its place: the one that made the arena to the east of the middle, the other to the west
 [[nodiscard]] glm::vec2 ArenaSpot(const Arena& arena, float size, bool madeIt);
 [[nodiscard]] float ArrivalDistance(float size);

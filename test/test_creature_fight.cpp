@@ -49,8 +49,7 @@ TEST(CreatureFight, ArenaIsSizedByTheBiggerCreatureAndCapped)
 	EXPECT_FLOAT_EQ(ArenaRadius(1.0f, 0.5f), 39.0f);
 	EXPECT_FLOAT_EQ(ArenaRadius(0.5f, 1.2f), 39.0f * 1.2f);
 	EXPECT_FLOAT_EQ(ArenaRadius(3.0f, 1.0f), 60.0f);
-	const auto arena = MakeArena({0.0f, 0.0f}, {40.0f, 20.0f}, 1.0f, 1.0f);
-	EXPECT_EQ(arena.centre, glm::vec2(20.0f, 10.0f));
+	const Arena arena {.centre = {20.0f, 10.0f}, .radius = ArenaRadius(1.0f, 1.0f)};
 	EXPECT_EQ(ArenaSpot(arena, 1.0f, true), glm::vec2(35.0f, 10.0f));
 	EXPECT_EQ(ArenaSpot(arena, 2.0f, false), glm::vec2(-10.0f, 10.0f));
 	EXPECT_FLOAT_EQ(ArrivalDistance(1.0f), 22.5f);

@@ -20,10 +20,12 @@
 
 #include "3D/DayNightClock.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 #include "3D/SkyInterface.h"
 #include "Camera/Camera.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
+#include "ECS/Archetypes/ArenaArchetype.h"
 #include "ECS/Archetypes/BigForestArchetype.h"
 #include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
@@ -708,10 +710,10 @@ void FeatureScriptCommands::CreateWaterfall([[maybe_unused]] glm::vec3 position)
 	// __func__);
 }
 
-void FeatureScriptCommands::CreateArena([[maybe_unused]] glm::vec3 position, float)
+void FeatureScriptCommands::CreateArena(glm::vec3 position, float radius)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The land's own arenas stay for good
+	ArenaArchetype::Create({map_coords::ToFixed(position.x), map_coords::ToFixed(position.z)}, radius, false);
 }
 
 void FeatureScriptCommands::CreateFootpath(int32_t footpathId)

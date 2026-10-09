@@ -64,12 +64,10 @@ bool creature_fight::IsStep(size_t animation)
 
 float creature_fight::ArenaRadius(float sizeA, float sizeB)
 {
-	return std::clamp(k_ArenaRadiusPerSize * std::max(sizeA, sizeB), 0.0f, k_MaxArenaRadius);
-}
-
-Arena creature_fight::MakeArena(glm::vec2 a, glm::vec2 b, float sizeA, float sizeB)
-{
-	return {.centre = (a + b) * 0.5f, .radius = ArenaRadius(sizeA, sizeB)};
+	// The bigger creature's height, then the share of it, as the game rounds them
+	const float height = std::max(sizeA * k_ArenaHeightPerSize, sizeB * k_ArenaHeightPerSize);
+	const auto radius = static_cast<double>(height) * static_cast<double>(k_ArenaRadiusPerHeight);
+	return static_cast<float>(std::clamp(radius, 0.0, static_cast<double>(k_MaxArenaRadius)));
 }
 
 glm::vec2 creature_fight::ArenaSpot(const Arena& arena, float size, bool madeIt)

@@ -17,6 +17,7 @@
 #include <limits>
 #include <vector>
 
+#include <LNDFile.h>
 #include <glm/geometric.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
@@ -24,10 +25,14 @@
 
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
+#include "3D/LandAvoid.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
+#include "Audio/AudioManagerInterface.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
 #include "Camera/FightCameraModel.h"
+#include "Creature/CreatureArena.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
@@ -35,7 +40,9 @@
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreatureMode.h"
 #include "Creature/CreatureRig.h"
+#include "ECS/Archetypes/ArenaArchetype.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -48,6 +55,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/RegistryContext.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -56,8 +64,10 @@
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
+#include "Particles/LightSheet.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
@@ -320,6 +330,153 @@ bool InDuel(const ecs::Registry& registry, entt::entity creature)
 	const auto* fighting = registry.TryGet<const CreatureFighting>(creature);
 	return fighting != nullptr && fighting->stage == CreatureFighting::Stage::Duel;
 }
+
+namespace arena = openblack::creature_arena;
+
+/// The sound of a fight taking its arena
+constexpr auto k_ArenaDrawnSound = entt::hashed_string("InGame.sad/176");
+
+/// The species' running share of its top speed, as the game's tables have it
+float RunShareOf(CreatureType species)
+{
+	if (Locator::infoConstants::has_value())
+	{
+		const auto& creatures = Locator::infoConstants::value().creature;
+		const auto row = creature::InfoRow(species);
+		if (row < creatures.size())
+		{
+			return creatures.at(row).runSpeed;
+		}
+	}
+	return 0.0f;
+}
+
+/// Where creatures may go on the land, worked out the first time it is asked for on a land
+const land_avoid::Map& LandAvoidOf(ecs::Registry& registry)
+{
+	auto& context = registry.Context();
+	if (!context.landAvoid.has_value())
+	{
+		if (!Locator::terrainSystem::has_value())
+		{
+			context.landAvoid.emplace();
+			return *context.landAvoid;
+		}
+		const auto& island = Locator::terrainSystem::value();
+		const auto find = [&island](glm::ivec2 cell) {
+			return island.FindCell({static_cast<uint16_t>(cell.x), static_cast<uint16_t>(cell.y)});
+		};
+		context.landAvoid = land_avoid::Build(
+		    LandIslandInterface::k_MapCellsPerSide,
+		    [&find](glm::ivec2 corner) {
+			    const auto* cell = find(corner);
+			    return cell != nullptr ? cell->altitude : uint8_t {0};
+		    },
+		    [&find](glm::ivec2 cell) {
+			    const auto* found = find(cell);
+			    return found == nullptr || found->properties.hasWater != 0;
+		    });
+	}
+	return *context.landAvoid;
+}
+
+/// Whether an arena may lie over a land cell: one on the map, of land without water, that creatures can walk to
+bool UsableForArena(glm::ivec2 cell, const land_avoid::Map& avoid)
+{
+	constexpr auto k_Side = LandIslandInterface::k_MapCellsPerSide;
+	if (cell.x < 0 || cell.y < 0 || cell.x >= k_Side || cell.y >= k_Side || !Locator::terrainSystem::has_value())
+	{
+		return false;
+	}
+	const auto* land = Locator::terrainSystem::value().FindCell({static_cast<uint16_t>(cell.x), static_cast<uint16_t>(cell.y)});
+	if (land == nullptr || land->properties.hasWater != 0)
+	{
+		return false;
+	}
+	// TODO(creature-fights): the things standing in the cell, as the game checks them against the creature
+	return avoid.At(cell) == land_avoid::k_Land;
+}
+
+/// The arena two creatures about to fight take: the nearest one near enough to the middle between them, shrunk to the
+/// size wanted, or a new one for this fight where there is room
+std::optional<entt::entity> TakeArena(ecs::Registry& registry, entt::entity creature, entt::entity opponent)
+{
+	const auto& body = registry.Get<const Creature>(creature);
+	const auto& from = registry.Get<const Transform>(creature).position;
+	const auto& to = registry.Get<const Transform>(opponent).position;
+	// The middle in map units, as the game works it out without rounding on the way
+	const auto middle = [](float a, float b) {
+		return static_cast<int32_t>((static_cast<double>(a) + static_cast<double>(b)) * 0.5 *
+		                            static_cast<double>(map_coords::k_FixedPerMetre));
+	};
+	const glm::ivec2 start {middle(from.x, to.x), middle(from.z, to.z)};
+	const float wanted = fight::ArenaRadius(body.size, registry.Get<const Creature>(opponent).size);
+
+	std::vector<entt::entity> entities;
+	std::vector<glm::ivec2> places;
+	registry.Each<const CreatureArena>([&](entt::entity entity, const CreatureArena& found) {
+		entities.push_back(entity);
+		places.push_back(found.place);
+	});
+	if (const auto nearest = arena::Nearest(places, start, arena::ReuseDistance(RunShareOf(body.species), body.size)))
+	{
+		const auto entity = entities.at(*nearest);
+		auto& taken = registry.Get<CreatureArena>(entity);
+		taken.radius = std::min(taken.radius, wanted);
+		taken.temporary = false;
+		return entity;
+	}
+	const auto& avoid = LandAvoidOf(registry);
+	const auto placed = arena::Place(start, wanted, [&avoid](glm::ivec2 cell) { return UsableForArena(cell, avoid); });
+	if (!placed.has_value())
+	{
+		return std::nullopt;
+	}
+	return ecs::archetypes::ArenaArchetype::Create(placed->centre, placed->radius, true);
+}
+
+/// A fight is on in the arena: its ring of light stands and its sound plays
+void StartArenaFight(ecs::Registry& registry, entt::entity entity, entt::entity first, entt::entity second)
+{
+	auto& taken = registry.Get<CreatureArena>(entity);
+	taken.fightOn = true;
+	taken.first = first;
+	taken.second = second;
+	if (taken.ring != nullptr)
+	{
+		taken.ring->SetHidden(false);
+	}
+	if (Locator::audio::has_value())
+	{
+		Locator::audio::value().PlaySoundEffect(k_ArenaDrawnSound.value(), registry.Get<const Transform>(entity).position);
+	}
+}
+
+/// The creature that took an arena leaves its fight: an arena made for the fight goes, any other is free again
+void ReleaseArena(ecs::Registry& registry, entt::entity entity)
+{
+	if (!registry.Valid(entity))
+	{
+		return;
+	}
+	auto* taken = registry.TryGet<CreatureArena>(entity);
+	if (taken == nullptr)
+	{
+		return;
+	}
+	if (taken->temporary)
+	{
+		registry.Destroy(entity);
+		return;
+	}
+	taken->fightOn = false;
+	taken->first = entt::null;
+	taken->second = entt::null;
+	if (taken->ring != nullptr)
+	{
+		taken->ring->SetHidden(true);
+	}
+}
 } // namespace
 
 CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::entity creature, entt::entity opponent)
@@ -341,10 +498,14 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 	{
 		return StartResult::TooWeak;
 	}
-	const auto& from = registry.Get<const Transform>(creature).position;
-	const auto& to = registry.Get<const Transform>(opponent).position;
-	const auto arena = fight::MakeArena(Flat(from), Flat(to), registry.Get<const Creature>(creature).size,
-	                                    registry.Get<const Creature>(opponent).size);
+	const auto arenaEntity = TakeArena(registry, creature, opponent);
+	if (!arenaEntity.has_value())
+	{
+		return StartResult::NoArena;
+	}
+	const auto& taken = registry.Get<const CreatureArena>(*arenaEntity);
+	const fight::Arena arena {.centre = {map_coords::ToMetres(taken.place.x), map_coords::ToMetres(taken.place.y)},
+	                          .radius = taken.radius};
 
 	for (const auto& [self, other] : {std::pair(creature, opponent), std::pair(opponent, creature)})
 	{
@@ -371,6 +532,7 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 		    .opponent = other,
 		    .arena = arena,
 		    .madeArena = self == creature,
+		    .arenaEntity = *arenaEntity,
 		    .startPosition = registry.Get<const Transform>(self).position,
 		};
 		auto& fighter = fighting.fighter;
@@ -382,6 +544,7 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 		fighter.tendency = record.foughtBefore ? record.tendency : fight::FirstTendency(body.alignment);
 		registry.AssignOrReplace<CreatureFighting>(self, std::move(fighting));
 	}
+	StartArenaFight(registry, *arenaEntity, creature, opponent);
 
 	return StartResult::Started;
 }
@@ -1812,6 +1975,10 @@ void CreatureFightSystem::Leave(entt::entity creature)
 	if (_pressed.has_value() && _pressed->creature == creature)
 	{
 		_pressed.reset();
+	}
+	if (fighting->madeArena)
+	{
+		ReleaseArena(registry, fighting->arenaEntity);
 	}
 	registry.Remove<CreatureFighting>(creature);
 }
