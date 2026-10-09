@@ -189,6 +189,58 @@ void AddFire(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.creature_puts_out_fire",
+	    .name = "Creature putting out a fire",
+	    .facet = Facet::Miracles,
+	    .description = "A fireball sets alight a hut beside a caring tiger that knows the water miracle.",
+	    .expected = "The fire spreads from the hut to the tiger. A creature heeds only a fire it touches, so a few "
+	                "seconds on it takes up its own: it leaves what it was doing, turns, holds still a moment and raises "
+	                "its arms into the casting pose; the water miracle falls on it and its fire goes out, and three "
+	                "seconds later it lowers its arms and douses itself. Nothing it would choose for itself takes over "
+	                "while it does so.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 25.0f}, {25.0f, 60.0f}}},
+	    .creatures = {{.label = "carer",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {13.0f, 49.0f},
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f},
+	                   .desires = {{.desire = creature_desires::Desire::Compassion}}}},
+	    .objects = Village({0.0f, 40.0f}),
+	    .miracles = {{.type = MagicType::Fireball,
+	                  .point = {6.0f, 44.0f},
+	                  .handOffset = {6.0f, 34.0f},
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 8.0f},
+	                  .delaySeconds = 2.0f}},
+	    .commands =
+	        {
+	            {.kind = Command::Kind::KnowMiracle, .delaySeconds = 0.5f, .value = static_cast<size_t>(MagicType::Water)},
+	        },
+	});
+
+	all.push_back({
+	    .id = "miracles.creature_runs_from_fire",
+	    .name = "Creature running from a fire",
+	    .facet = Facet::Miracles,
+	    .description = "A fireball sets alight a hut beside a tiger that has never seen the water miracle.",
+	    .expected = "The fire spreads from the hut to the tiger, which can't put it out: a few seconds on it runs away "
+	                "from the fire.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 25.0f}, {45.0f, 85.0f}}},
+	    .creatures = {{.label = "runner",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {13.0f, 49.0f},
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	    .objects = Village({0.0f, 40.0f}),
+	    .miracles = {{.type = MagicType::Fireball,
+	                  .point = {6.0f, 44.0f},
+	                  .handOffset = {6.0f, 34.0f},
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 8.0f},
+	                  .delaySeconds = 2.0f}},
+	});
+
+	all.push_back({
 	    .id = "miracles.fireball_water",
 	    .name = "Fireballs onto the lake",
 	    .facet = Facet::Miracles,

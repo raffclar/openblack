@@ -65,6 +65,13 @@ using namespace openblack::ecs::components;
 
 namespace
 {
+/// Whether an object is drawn whole with the others: a building drawn as far up as it stands is drawn by itself
+bool DrawnWhole(entt::entity entity)
+{
+	return !openblack::Locator::buildingDamageSystem::has_value() ||
+	       openblack::Locator::buildingDamageSystem::value().DrawsWhole(entity);
+}
+
 /// The model an object is drawn with: a broken building's broken model in place of its own
 entt::id_type DrawnMeshOf(entt::entity entity, const Mesh& mesh)
 {
@@ -286,6 +293,20 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    fits = false;
 			    return;
 		    }
+		    // A building drawn only as far up as it stands keeps its place in the lists, not drawn there, so the lists
+		    // needn't be made again as it comes to stand whole
+		    if (!DrawnWhole(entity))
+		    {
+			    const uint32_t idx = slots->second.offset + slots->second.filled;
+			    _renderContext.instanceUniforms[idx] = {.model = glm::mat4(0.0f), .look = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)};
+			    if (drawBoundingBox)
+			    {
+				    _renderContext.instanceUniforms[idx + (_renderContext.instanceUniforms.size() / 2)] = {.model =
+				                                                                                               glm::mat4(0.0f)};
+			    }
+			    ++slots->second.filled;
+			    return;
+		    }
 		    // A mesh drawn with another texture, slid across it: the temple's leashes
 		    if (const auto* skin = registry.TryGet<const SkinOverride>(entity))
 		    {
@@ -420,10 +441,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 
-		    // A body sunk wholly under the sea isn't drawn
+		    // A body sunk wholly under the sea isn't drawn in any pass, its shadow included
 		    if (drawn != nullptr && drawn->underSea)
 		    {
 			    look.z = 1.0f;
+			    modelMatrix = glm::mat4(0.0f);
 		    }
 
 		    const uint32_t idx = slots->second.offset + slots->second.filled;
