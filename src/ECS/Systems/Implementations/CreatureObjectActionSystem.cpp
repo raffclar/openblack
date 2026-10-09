@@ -459,7 +459,8 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		}
 		if (action.kind == Kind::Throw)
 		{
-			action.flightSeconds = creature_throw::FlightTime(glm::distance(transform.position, action.point));
+			action.flightSeconds =
+			    action.givenFlightSeconds.value_or(creature_throw::FlightTime(glm::distance(transform.position, action.point)));
 			const auto weights = ThrowWeights(creature, transform, *points, action.point);
 			const std::array<size_t, 2> animations {creature_throw::k_HurlFlat, creature_throw::k_HurlHigh};
 			SetSlots(action, animations, weights);
@@ -952,6 +953,13 @@ bool CreatureObjectActionSystem::Keep(entt::entity creature, size_t animation)
 bool CreatureObjectActionSystem::Throw(entt::entity creature, const glm::vec3& target)
 {
 	return Start(creature, {.kind = Kind::Throw, .point = target});
+}
+
+bool CreatureObjectActionSystem::ThrowTaking(entt::entity creature, const glm::vec3& target, float flightSeconds)
+{
+	CreatureObjectAction action {.kind = Kind::Throw, .point = target};
+	action.givenFlightSeconds = flightSeconds;
+	return Start(creature, std::move(action));
 }
 
 bool CreatureObjectActionSystem::Destroy(entt::entity creature, entt::entity target)

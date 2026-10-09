@@ -52,11 +52,13 @@
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Spell.h"
+#include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/CreatureHome.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
@@ -222,6 +224,8 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		        Locator::animalSystem::value().IsFrighteningToCreature(entity));
 	case Target::Anything:
 		return true;
+	case Target::StoragePit:
+		return registry.AllOf<StoragePit>(entity);
 	}
 	return false;
 }
@@ -280,6 +284,11 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 		registry.Each<const Abode, const Transform>(
 		    [&](entt::entity entity, const Abode&, const Transform& at) { consider(entity, at); });
 	}
+	if (target == Target::StoragePit)
+	{
+		registry.Each<const StoragePit, const Transform>(
+		    [&](entt::entity entity, const StoragePit&, const Transform& at) { consider(entity, at); });
+	}
 	std::ranges::sort(found, {}, &Found::distance);
 	return found;
 }
@@ -302,12 +311,9 @@ std::string ObjectName(const std::optional<creature_tree::Belief>& belief)
 constexpr float k_FishingReach = 600.0f;
 /// It goes this near the shoal, or as near as it is tall when taller
 constexpr float k_FishingArrival = 15.0f;
-/// Where it can't stand at the shoal, it looks this far round for somewhere it can, which must be nearer than the second
-constexpr float k_FishingSearch = 1000.0f;
-constexpr float k_FishingStandReach = 30.0f;
 
 /// Where a creature at a point would fish: the shoal of the nearest fish farm (the farm itself without one), going as
-/// near as it is tall but at least 15 m; none without a farm near, or when it already holds food
+/// near as it is tall but at least 15 m, and where it would stand to fish for itself; none without a farm near
 std::optional<creature_plan_actions::Situation::Fishing> FishingFor(const ecs::Registry& registry, entt::entity creature,
                                                                     glm::vec2 position)
 {
@@ -315,46 +321,49 @@ std::optional<creature_plan_actions::Situation::Fishing> FishingFor(const ecs::R
 	{
 		return std::nullopt;
 	}
-	bool putDownFirst = false;
-	if (Locator::creatureObjectActionSystem::has_value())
-	{
-		const auto& hands = Locator::creatureObjectActionSystem::value();
-		if (const auto held = hands.GetHeld(creature))
-		{
-			if (hands.FoodValueOf(*held).has_value())
-			{
-				return std::nullopt;
-			}
-			putDownFirst = true;
-		}
-	}
 	const auto farm = Locator::fishFarmSystem::value().ClosestFarm({position.x, 0.0f, position.y}, k_FishingReach);
 	if (!farm.has_value())
 	{
 		return std::nullopt;
 	}
+	bool putDownFirst = false;
+	bool holdingFood = false;
+	if (Locator::creatureObjectActionSystem::has_value())
+	{
+		const auto& hands = Locator::creatureObjectActionSystem::value();
+		if (const auto held = hands.GetHeld(creature))
+		{
+			holdingFood = hands.FoodValueOf(*held).has_value();
+			putDownFirst = !holdingFood;
+		}
+	}
 	const auto& data = registry.Get<const FishFarm>(*farm);
 	const auto& at = registry.Get<const Transform>(*farm).position;
-	glm::vec3 shoal = data.shoal.has_value() ? data.shoal->centre : at;
-	// Where it can't stand there, the nearest place it can, if near enough
+	const glm::vec3 shoal = data.shoal.has_value() ? data.shoal->centre : at;
+	const glm::vec2 point {shoal.x, shoal.z};
+	// Fishing for itself, where it can't stand at the shoal it goes to the nearest place it can, if near enough
+	std::optional<glm::vec2> standAt = point;
 	if (Locator::creatureLocomotionSystem::has_value())
 	{
 		const auto& land = Locator::creatureLocomotionSystem::value().GetWalkableLand();
-		const glm::vec2 point {shoal.x, shoal.z};
 		if (!land.IsValid(point, creature_route::k_DestinationClearance))
 		{
-			const auto valid = land.NearestValid(point, creature_route::k_DestinationClearance, k_FishingSearch);
-			if (!valid.has_value() || glm::distance(shoal, glm::vec3(valid->x, 0.0f, valid->y)) >= k_FishingStandReach)
-			{
-				return std::nullopt;
-			}
-			shoal = {valid->x, 0.0f, valid->y};
+			const auto valid =
+			    land.NearestValid(point, creature_route::k_DestinationClearance, creature_route::k_ValidPointSearch);
+			standAt = valid.has_value() &&
+			                  glm::distance(shoal, glm::vec3(valid->x, 0.0f, valid->y)) < creature_route::k_ValidPointReach
+			              ? valid
+			              : std::nullopt;
 		}
 	}
 	const auto* body = registry.TryGet<const Creature>(creature);
 	const float height = creature_mode::CreatureHeight(body != nullptr ? body->size : 1.0f);
-	return creature_plan_actions::Situation::Fishing {
-	    .shoal = {shoal.x, shoal.z}, .arriveWithin = std::max(height, k_FishingArrival), .putDownFirst = putDownFirst};
+	return creature_plan_actions::Situation::Fishing {.shoal = point,
+	                                                  .standAt = standAt,
+	                                                  .arriveWithin = std::max(height, k_FishingArrival),
+	                                                  .putDownFirst = putDownFirst,
+	                                                  .holdingFood = holdingFood,
+	                                                  .height = height};
 }
 } // namespace
 
@@ -684,6 +693,8 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	{
 		return false;
 	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} sets about {} ({} steps)", entt::to_integral(creature), info.name,
+	                    mind.idle.agenda.size());
 	auto& learnt = *mind.learnt;
 	mind.planner.current = plan;
 	mind.planActive = true;
@@ -747,10 +758,17 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	bool hurlLooked = false;
 	bool fishingLooked = false;
 	const auto prepare = [&](const creature_plan_actions::Executor& executor) {
-		if (executor.build == creature_plan_actions::Build::FishAndEat && !fishingLooked)
+		const bool fishing = executor.build == creature_plan_actions::Build::FishAndEat ||
+		                     executor.build == creature_plan_actions::Build::GiveFishToStore ||
+		                     executor.build == creature_plan_actions::Build::TakeFishHome;
+		if (fishing && !fishingLooked)
 		{
 			fishingLooked = true;
 			situation.fishing = FishingFor(registry, creature, position);
+			if (const auto home = ecs::creature_home::HomeOf(registry, creature))
+			{
+				situation.home = glm::vec2(home->x, home->z);
+			}
 		}
 		if (executor.build == creature_plan_actions::Build::Drink && !waterLooked)
 		{
@@ -809,7 +827,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		const auto d = static_cast<size_t>(desire);
 		std::optional<creature_planner::Plan> best;
 		// Actions are weighed in groups by the kind of thing they are done to, so each has a goal it can be done to
-		std::array<std::vector<creature_planner::ActionCandidate>, static_cast<size_t>(Target::Anything) + 1> groups {};
+		std::array<std::vector<creature_planner::ActionCandidate>, static_cast<size_t>(Target::StoragePit) + 1> groups {};
 		for (const auto action : tables->desireActions.at(d))
 		{
 			const auto* executor = creature_plan_actions::For(tables->actions.at(action).name);

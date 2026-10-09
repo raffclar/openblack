@@ -29,8 +29,10 @@
 #include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureMindTables.h"
+#include "Creature/CreatureRoute.h"
 #include "Creature/CreatureSpellCasting.h"
 #include "Creature/CreatureSpellMind.h"
+#include "Creature/CreatureThrow.h"
 #include "Creature/CreatureWatching.h"
 #include "CreatureMindSystem.h"
 #include "ECS/Components/Abode.h"
@@ -424,6 +426,9 @@ void CreatureMindSystem::StartSubMove(entt::entity creature, const creature_mind
 	case Kind::TurnToFaceObject:
 		casting.move = CreatureCasting::Move::TurnToFace;
 		break;
+	case Kind::ToThrowPosition:
+		casting.move = CreatureCasting::Move::ToThrowPosition;
+		break;
 	default:
 		casting.move = CreatureCasting::Move::None;
 		return;
@@ -583,6 +588,66 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 		if (!bodyBusy)
 		{
 			done();
+		}
+		break;
+	}
+	case CreatureCasting::Move::ToThrowPosition:
+	{
+		if (casting->phase == 1)
+		{
+			if (!locomotion.IsMoving(creature))
+			{
+				done();
+			}
+			break;
+		}
+		if (!at.has_value())
+		{
+			fail();
+			break;
+		}
+		const auto stand =
+		    creature_throw::WhereToThrowFrom(here, Flat(*at), object_measures::Height(registry, creature),
+		                                     object_measures::TwoDRadius(registry, casting->target), casting->keep);
+		if (!stand.has_value())
+		{
+			fail();
+			break;
+		}
+		if (stand->kind == creature_throw::ThrowStand::Kind::There)
+		{
+			done();
+			break;
+		}
+		auto point = stand->point;
+		// Backing away, where it can't stand it goes to the nearest place it can, if near enough
+		if (stand->kind == creature_throw::ThrowStand::Kind::BackOff)
+		{
+			const auto& land = locomotion.GetWalkableLand();
+			if (!land.IsValid(point, creature_route::k_DestinationClearance))
+			{
+				const auto valid =
+				    land.NearestValid(point, creature_route::k_DestinationClearance, creature_route::k_ValidPointSearch);
+				if (!valid.has_value() || glm::distance(*valid, point) >= creature_route::k_ValidPointReach)
+				{
+					fail();
+					break;
+				}
+				point = *valid;
+			}
+		}
+		switch (locomotion.MoveTo(creature, point, CreatureLocomotionSystemInterface::Pace::Walk, stand->minDistance,
+		                          stand->maxDistance))
+		{
+		case CreatureLocomotionSystemInterface::MoveResult::Started:
+			casting->phase = 1;
+			break;
+		case CreatureLocomotionSystemInterface::MoveResult::Busy:
+			// It tries again next turn
+			break;
+		case CreatureLocomotionSystemInterface::MoveResult::InvalidDestination:
+			fail();
+			break;
 		}
 		break;
 	}

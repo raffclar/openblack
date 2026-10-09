@@ -11,6 +11,7 @@
 
 #include <array>
 #include <numeric>
+#include <optional>
 #include <vector>
 
 #include <glm/gtx/euler_angles.hpp>
@@ -136,6 +137,36 @@ TEST(CreatureThrow, FlightTimeIsTheTimeToFallTheDistance)
 	EXPECT_NEAR(creature_throw::FlightTime(9.81f), 1.0f, k_Tolerance);
 	EXPECT_NEAR(creature_throw::FlightTime(4.0f * 9.81f), 2.0f, k_Tolerance);
 	EXPECT_EQ(creature_throw::FlightTime(-1.0f), 0.0f);
+}
+
+TEST(CreatureThrow, ToThrowIntoSomethingItBacksAwayWalksUpOrStaysPut)
+{
+	using Kind = creature_throw::ThrowStand::Kind;
+	// Height 10, keeping 10, a radius of 5: no nearer than 35 and no further than 35, then 35.01
+	const glm::vec2 target {100.0f, 0.0f};
+	const auto near = creature_throw::WhereToThrowFrom({90.0f, 0.0f}, target, 10.0f, 5.0f, 10.0f);
+	ASSERT_TRUE(near.has_value());
+	EXPECT_EQ(near->kind, Kind::BackOff);
+	EXPECT_NEAR(near->point.x, 65.0f, k_Tolerance);
+	EXPECT_NEAR(near->point.y, 0.0f, k_Tolerance);
+	EXPECT_FLOAT_EQ(near->minDistance, 0.0f);
+	EXPECT_FLOAT_EQ(near->maxDistance, 20.0f);
+	const auto far = creature_throw::WhereToThrowFrom({0.0f, 0.0f}, target, 10.0f, 5.0f, 10.0f);
+	ASSERT_TRUE(far.has_value());
+	EXPECT_EQ(far->kind, Kind::WalkUp);
+	EXPECT_EQ(far->point, target);
+	EXPECT_FLOAT_EQ(far->minDistance, 35.0f);
+	EXPECT_NEAR(far->maxDistance, 35.01f, k_Tolerance);
+	// A small thing leaves a ring to stand in: 30 to 35 away
+	const auto ring = creature_throw::WhereToThrowFrom({0.0f, 0.0f}, target, 10.0f, 0.0f, 10.0f);
+	ASSERT_TRUE(ring.has_value());
+	EXPECT_FLOAT_EQ(ring->minDistance, 30.0f);
+	EXPECT_FLOAT_EQ(ring->maxDistance, 35.0f);
+	const auto there = creature_throw::WhereToThrowFrom({68.0f, 0.0f}, target, 10.0f, 0.0f, 10.0f);
+	ASSERT_TRUE(there.has_value());
+	EXPECT_EQ(there->kind, Kind::There);
+	// Right on top of it there is no way to back away
+	EXPECT_FALSE(creature_throw::WhereToThrowFrom(target, target, 10.0f, 0.0f, 10.0f).has_value());
 }
 
 TEST(CreatureThrow, TheReleaseVelocityLandsOnTheTarget)

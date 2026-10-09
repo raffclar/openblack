@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include <array>
+#include <optional>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -510,7 +511,10 @@ TEST(CreaturePlanActions, FishingWalksToTheShoalBringsFoodOutOfTheSeaAndEatsIt)
 	// Only with a fish farm near
 	EXPECT_FALSE(creature_plan_actions::Possible(*fish, {}));
 	creature_plan_actions::Situation situation;
-	situation.fishing = creature_plan_actions::Situation::Fishing {.shoal = {10.0f, 20.0f}, .arriveWithin = 15.0f};
+	situation.fishing = creature_plan_actions::Situation::Fishing {.shoal = {12.0f, 22.0f}, .arriveWithin = 15.0f};
+	// Not with nowhere to stand near the shoal
+	EXPECT_FALSE(creature_plan_actions::Possible(*fish, situation));
+	situation.fishing->standAt = glm::vec2(10.0f, 20.0f);
 	const auto agenda = creature_plan_actions::Agenda(*fish, std::nullopt, {}, situation, random);
 	ASSERT_TRUE(agenda.has_value());
 	ASSERT_EQ(agenda->size(), 3u);
@@ -526,6 +530,72 @@ TEST(CreaturePlanActions, FishingWalksToTheShoalBringsFoodOutOfTheSeaAndEatsIt)
 	ASSERT_TRUE(emptied.has_value());
 	ASSERT_EQ(emptied->size(), 4u);
 	EXPECT_EQ(emptied->at(1).order.kind, creature_mind::ObjectOrder::Kind::PutDown);
+}
+
+TEST(CreaturePlanActions, FishingForSomethingOtherThanEatingIsAllowedWithFoodInHand)
+{
+	const auto* fish = creature_plan_actions::For("FishAndEat");
+	ASSERT_NE(fish, nullptr);
+	creature_plan_actions::Situation situation;
+	situation.fishing = creature_plan_actions::Situation::Fishing {.standAt = glm::vec2(0.0f), .holdingFood = true};
+	// It doesn't fish to eat with food already in its hand
+	EXPECT_FALSE(creature_plan_actions::Possible(*fish, situation));
+}
+
+TEST(CreaturePlanActions, GivingFishToAStorePitFishesTurnsToThePitAndThrowsItIn)
+{
+	const auto random = [](uint32_t) { return 0u; };
+	const auto* give = creature_plan_actions::For("GiveFishToStoragePit");
+	ASSERT_NE(give, nullptr);
+	EXPECT_EQ(give->target, creature_plan_actions::Target::StoragePit);
+	creature_plan_actions::Situation situation;
+	EXPECT_FALSE(creature_plan_actions::Possible(*give, situation));
+	// It walks straight to the shoal, even where it couldn't stand to fish for itself
+	situation.fishing = creature_plan_actions::Situation::Fishing {
+	    .shoal = {10.0f, 20.0f}, .arriveWithin = 15.0f, .putDownFirst = true, .height = 12.0f};
+	constexpr uint32_t k_Pit = 7;
+	const auto agenda = creature_plan_actions::Agenda(*give, k_Pit, {}, situation, random);
+	ASSERT_TRUE(agenda.has_value());
+	ASSERT_EQ(agenda->size(), 6u);
+	EXPECT_EQ(agenda->at(0).movement.point, glm::vec2(10.0f, 20.0f));
+	EXPECT_EQ(agenda->at(1).order.kind, creature_mind::ObjectOrder::Kind::PutDown);
+	EXPECT_EQ(agenda->at(2).order.kind, creature_mind::ObjectOrder::Kind::FishFromSea);
+	EXPECT_EQ(agenda->at(3).movement.kind, creature_mind::Movement::Kind::ToThrowPosition);
+	EXPECT_EQ(agenda->at(3).movement.object, std::optional<uint32_t>(k_Pit));
+	EXPECT_FLOAT_EQ(agenda->at(3).movement.maxDistance, 12.0f);
+	EXPECT_EQ(agenda->at(3).face, creature_face::Cue::Compassion);
+	EXPECT_EQ(agenda->at(4).movement.kind, creature_mind::Movement::Kind::TurnToFaceObject);
+	EXPECT_FLOAT_EQ(agenda->at(4).seconds, 0.1f);
+	// Counted as done as it turns, before it throws
+	EXPECT_EQ(agenda->at(4).effect, creature_mind::Effect::Completed);
+	EXPECT_EQ(agenda->at(5).order.kind, creature_mind::ObjectOrder::Kind::ThrowInStore);
+	EXPECT_EQ(agenda->at(5).order.object, std::optional<uint32_t>(k_Pit));
+	// With food already in its hand it goes straight to the pit
+	situation.fishing->holdingFood = true;
+	const auto holding = creature_plan_actions::Agenda(*give, k_Pit, {}, situation, random);
+	ASSERT_TRUE(holding.has_value());
+	ASSERT_EQ(holding->size(), 3u);
+	EXPECT_EQ(holding->at(0).movement.kind, creature_mind::Movement::Kind::ToThrowPosition);
+}
+
+TEST(CreaturePlanActions, TakingFishHomePutsItDownWithinItsHeightOfHome)
+{
+	const auto random = [](uint32_t) { return 0u; };
+	const auto* take = creature_plan_actions::For("TakeFishHome");
+	ASSERT_NE(take, nullptr);
+	creature_plan_actions::Situation situation;
+	situation.fishing =
+	    creature_plan_actions::Situation::Fishing {.shoal = {10.0f, 20.0f}, .arriveWithin = 15.0f, .height = 12.0f};
+	// Not without a home
+	EXPECT_FALSE(creature_plan_actions::Possible(*take, situation));
+	situation.home = glm::vec2(100.0f, 200.0f);
+	const auto agenda = creature_plan_actions::Agenda(*take, std::nullopt, {}, situation, random);
+	ASSERT_TRUE(agenda.has_value());
+	ASSERT_EQ(agenda->size(), 4u);
+	EXPECT_EQ(agenda->at(1).order.kind, creature_mind::ObjectOrder::Kind::FishFromSea);
+	EXPECT_EQ(agenda->at(2).movement.point, glm::vec2(100.0f, 200.0f));
+	EXPECT_FLOAT_EQ(agenda->at(2).movement.maxDistance, 12.0f);
+	EXPECT_EQ(agenda->at(3).order.kind, creature_mind::ObjectOrder::Kind::PutDown);
 }
 
 // The model of what is learnt
