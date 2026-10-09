@@ -65,6 +65,8 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME vs_object_morph_instanced
 #include "ShaderIncluder.h"
+#define SHADER_NAME vs_object_posed_instanced
+#include "ShaderIncluder.h"
 #define SHADER_NAME vs_object_morph
 #include "ShaderIncluder.h"
 #define SHADER_NAME vs_object_hm_instanced
@@ -195,7 +197,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 63> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 64> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
@@ -203,6 +205,7 @@ const std::array<bgfx::EmbeddedShader, 63> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_object_instanced),
     BGFX_EMBEDDED_SHADER(vs_object_few_bones_instanced),
     BGFX_EMBEDDED_SHADER(vs_object_morph_instanced),
+    BGFX_EMBEDDED_SHADER(vs_object_posed_instanced),
     BGFX_EMBEDDED_SHADER(vs_object_morph),
     BGFX_EMBEDDED_SHADER(vs_object_hm_instanced),
     BGFX_EMBEDDED_SHADER(vs_object_hm_static_instanced), //
@@ -270,6 +273,7 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"ObjectInstanced", "vs_object_instanced", "fs_object"},
     ShaderDefinition {"ObjectFewBonesInstanced", "vs_object_few_bones_instanced", "fs_object"},
     ShaderDefinition {"ObjectMorphInstanced", "vs_object_morph_instanced", "fs_object"},
+    ShaderDefinition {"ObjectPosedInstanced", "vs_object_posed_instanced", "fs_object"},
     ShaderDefinition {"ObjectHeightMapInstanced", "vs_object_hm_instanced", "fs_object"},
     ShaderDefinition {"ObjectHeightMapStaticInstanced", "vs_object_hm_static_instanced", "fs_object"},
     ShaderDefinition {"ObjectStaticInstanced", "vs_object_static_instanced", "fs_object"},
