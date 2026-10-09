@@ -31,8 +31,10 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
+#include "ECS/CollideShape.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fixed.h"
+#include "ECS/Components/MapFootprint.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Map.h"
@@ -93,29 +95,43 @@ const std::unordered_set<entt::entity>& ObstaclesIn(const ecs::Registry& registr
 	return found != obstacles.end() ? found->second : k_None;
 }
 
-/// Files every fixed thing in the cells whose middles its bounding circle (a unit wider) takes in
+/// The shape a building takes up on the ground where it stands now
+collide::Shape ShapeOf(const MapFootprint& footprint, const Transform& transform)
+{
+	// It is placed at its position on the map, to the map's whole units
+	const glm::vec3 placed {map_coords::Quantise(transform.position.x), 0.0f, map_coords::Quantise(transform.position.z)};
+	const float scale = transform.scale.x;
+	const glm::vec3 centre = placed + transform.rotation * (scale * footprint.meshCentre);
+	return collide::ShapeOfBox(glm::xz(centre), glm::xz(footprint.meshHalfSize) * scale,
+	                           glm::xz(transform.rotation * glm::vec3(1.0f, 0.0f, 0.0f)),
+	                           glm::xz(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f)));
+}
+
+/// Files every fixed thing in the map cells it is in: a building in every cell its shape covers, anything else in the
+/// cell it stands in
 void FileObstacles(ecs::Registry& registry)
 {
 	auto& obstacles = registry.Context().wallHugObstacles;
 	obstacles.clear();
-	registry.Each<const Fixed, const Transform>(
-	    [&obstacles](entt::entity entity, const Fixed& fixed, const Transform& transform) {
-		    // TODO(bwrsandman): This is only in the case of a square bb underling the bounding circle (x/z) <= 1.4
-		    const float radius = fixed.boundingRadius * glm::compMax(transform.scale) + 1.0f;
-		    const auto min = MapInterface::GetGridCell(fixed.boundingCenter - radius);
-		    const auto max = MapInterface::GetGridCell(fixed.boundingCenter + radius);
-		    for (uint16_t x = min.x; x < max.x + 1; ++x)
-		    {
-			    for (uint16_t y = min.y; y < max.y + 1; ++y)
-			    {
-				    const auto cellId = MapInterface::CellId(x, y);
-				    if (glm::distance2(MapInterface::GetCellCenter(cellId), fixed.boundingCenter) < radius * radius)
-				    {
-					    obstacles[static_cast<uint32_t>(cellId.x + cellId.y * MapInterface::k_GridSize.x)].insert(entity);
-				    }
-			    }
-		    }
-	    });
+	const auto file = [&obstacles](glm::ivec2 cell, entt::entity entity) {
+		obstacles[static_cast<uint32_t>(cell.x + cell.y * MapInterface::k_GridSize.x)].insert(entity);
+	};
+	const glm::ivec2 cells {MapInterface::k_GridSize};
+	registry.Each<const Fixed, const Transform>([&](entt::entity entity, const Fixed&, const Transform& transform) {
+		if (const auto* footprint = registry.TryGet<const MapFootprint>(entity))
+		{
+			const float reach = transform.scale.x * glm::length(footprint->meshHalfSize) + 1.0f;
+			for (const auto cell : collide::FootprintCells(ShapeOf(*footprint, transform), reach, cells))
+			{
+				file(cell, entity);
+			}
+			return;
+		}
+		if (const auto cell = map_coords::CellOf(transform.position); map_coords::InBounds(cell))
+		{
+			file(cell, entity);
+		}
+	});
 }
 
 /// Whether a walker may go into a map cell: on the map, on land and not in water

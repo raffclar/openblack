@@ -13,6 +13,7 @@
 #include <glm/gtx/vec_swizzle.hpp>
 
 #include "3D/L3DMesh.h"
+#include "ECS/Components/MapFootprint.h"
 #include "ECS/Components/Transform.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -36,4 +37,12 @@ std::pair<glm::vec2, float> openblack::ecs::archetypes::GetFixedObstacleBounding
 	const auto radius = (glm::compMax(bbSize) / glm::compMin(bbSize) > 1.4) ? glm::length(bbSize) : glm::compMax(bbSize);
 
 	return std::make_pair(point, radius);
+}
+
+MapFootprint openblack::ecs::archetypes::GetMapFootprint(MeshId meshId)
+{
+	const auto l3dMesh = Locator::resources::value().GetMeshes().Handle(resources::HashIdentifier(meshId));
+	assert(l3dMesh);
+	const auto& bb = l3dMesh->GetBoundingBox();
+	return {.meshCentre = bb.Center(), .meshHalfSize = bb.Size() * 0.5f};
 }

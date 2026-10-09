@@ -13,6 +13,7 @@
 
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/Flowers.h"
+#include "ECS/Components/MapFootprint.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
 #include "ECS/Components/Transform.h"
@@ -37,6 +38,7 @@ entt::entity FlowersArchetype::Create(const glm::vec3& position, FlowersInfo typ
 	const auto& transform = registry.Assign<Transform>(entity, position, glm::eulerAngleY(-yAngleRadians), glm::vec3(scale));
 	const auto [point, radius] = GetFixedObstacleBoundingCircle(info.meshId, transform);
 	registry.Assign<Fixed>(entity, point, radius);
+	registry.Assign<MapFootprint>(entity, GetMapFootprint(info.meshId));
 	registry.Assign<Flowers>(entity, type);
 	registry.Assign<MorphWithTerrain>(entity);
 	registry.Assign<Unlit>(entity);

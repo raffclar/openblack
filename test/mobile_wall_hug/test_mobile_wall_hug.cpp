@@ -425,8 +425,10 @@ protected:
 // The walks were first recorded in 2021 with continuous angles, so they were never the game's own state: the game walks
 // in whole map units at whole game angles. They match the 2021 recordings only up to the walker's first re-aim at its
 // goal; from there they are recorded from this walk (run the test with OPENBLACK_RECORD_WALKS set to a folder to record
-// them again). Things are still filed in map cells by their bounding circles rather than their footprints, so the
-// turns to the houses ahead may change once that is done.
+// them again). Buildings are filed in every map cell their footprint covers, and with that walk 2's first orbit sees the
+// next house as many turns ahead as the 2021 recording does. Its straight walk after that does not see the house it
+// walked round next in the 2021 recording, as the straight-line check still takes the first thing near its next step
+// rather than the nearest circle.
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(MobileWallHugWalks, mobilewallhug1)

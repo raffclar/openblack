@@ -387,7 +387,7 @@
         0.76202392578125
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x08",
         "field_0x5": "0x00",
         "field_0x6": "0x1133",
         "obj_index": 84
@@ -421,7 +421,7 @@
         0.811920166015625
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x07",
         "field_0x5": "0x00",
         "field_0x6": "0x1133",
         "obj_index": 84
@@ -455,7 +455,7 @@
         0.848388671875
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x06",
         "field_0x5": "0x00",
         "field_0x6": "0x1133",
         "obj_index": 84
@@ -489,7 +489,7 @@
         0.870819091796875
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x05",
         "field_0x5": "0x00",
         "field_0x6": "0x1133",
         "obj_index": 84
@@ -523,7 +523,7 @@
         0.878753662109375
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x04",
         "field_0x5": "0x00",
         "field_0x6": "0x1133",
         "obj_index": 84
@@ -557,7 +557,7 @@
         0.8721923828125
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x03",
         "field_0x5": "0x00",
         "field_0x6": "0x1133",
         "obj_index": 84
@@ -591,7 +591,7 @@
         0.85113525390625
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x02",
         "field_0x5": "0x00",
         "field_0x6": "0x1133",
         "obj_index": 84
@@ -625,7 +625,7 @@
         0.8160400390625
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x01",
         "field_0x5": "0x00",
         "field_0x6": "0x1133",
         "obj_index": 84
@@ -659,7 +659,7 @@
         0.767364501953125
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x00",
         "field_0x5": "0x00",
         "field_0x6": "0x1133",
         "obj_index": 84
@@ -693,7 +693,7 @@
         0.576019287109375
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x00",
         "field_0x5": "0x00",
         "field_0x6": "0x1133",
         "obj_index": 84
@@ -727,10 +727,9 @@
         0.738067626953125
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0x01",
+        "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x1133",
-        "obj_index": 83
+        "field_0x6": "0x1133"
       },
       "status": "0x00000000",
       "goal": [
@@ -761,10 +760,9 @@
         0.738067626953125
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0x00",
+        "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x1133",
-        "obj_index": 83
+        "field_0x6": "0x1133"
       },
       "status": "0x00000000",
       "goal": [
@@ -788,17 +786,16 @@
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 2.957515001296997,
-      "move_state": "ORBIT_CW",
+      "y_angle": 0.9970875382423401,
+      "move_state": "LINEAR_CW",
       "step": [
-        -0.864105224609375,
-        0.16082763671875
+        0.47698974609375,
+        0.738067626953125
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
@@ -815,31 +812,30 @@
       "turn": 93,
       "id": 0,
       "pos": [
-        2201.58154296875,
-        2351.4462890625
+        2202.89501953125,
+        2351.913818359375
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 2.828660726547241,
-      "move_state": "ORBIT_CW",
+      "y_angle": 0.9970875382423401,
+      "move_state": "LINEAR_CW",
       "step": [
-        -0.836334228515625,
-        0.270538330078125
+        0.47698974609375,
+        0.738067626953125
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 24.91781234741211,
+      "distance": 23.794919967651367,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -849,31 +845,30 @@
       "turn": 94,
       "id": 0,
       "pos": [
-        2200.787109375,
-        2351.822021484375
+        2203.371826171875,
+        2352.65185546875
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 2.6998062133789063,
-      "move_state": "ORBIT_CW",
+      "y_angle": 0.9970875382423401,
+      "move_state": "LINEAR_CW",
       "step": [
-        -0.794525146484375,
-        0.37567138671875
+        0.47698974609375,
+        0.738067626953125
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 25.080921173095703,
+      "distance": 22.91626739501953,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -883,31 +878,30 @@
       "turn": 95,
       "id": 0,
       "pos": [
-        2200.04736328125,
-        2352.296875
+        2203.848876953125,
+        2353.39013671875
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 2.5709519386291504,
-      "move_state": "ORBIT_CW",
+      "y_angle": 0.9970875382423401,
+      "move_state": "LINEAR_CW",
       "step": [
-        -0.73974609375,
-        0.474700927734375
+        0.47698974609375,
+        0.738067626953125
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 25.162092208862305,
+      "distance": 22.037275314331055,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -917,31 +911,30 @@
       "turn": 96,
       "id": 0,
       "pos": [
-        2199.374755859375,
-        2352.862548828125
+        2204.325927734375,
+        2354.128173828125
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 2.6384470462799072,
-      "move_state": "ORBIT_CW",
+      "y_angle": 0.9970875382423401,
+      "move_state": "LINEAR_CW",
       "step": [
-        -0.770111083984375,
-        0.423736572265625
+        0.47698974609375,
+        0.738067626953125
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 25.16100311279297,
+      "distance": 21.158489227294922,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -951,31 +944,30 @@
       "turn": 97,
       "id": 0,
       "pos": [
-        2198.66552734375,
-        2353.381591796875
+        2204.802734375,
+        2354.8662109375
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 2.5095925331115723,
-      "move_state": "ORBIT_CW",
+      "y_angle": 0.9970875382423401,
+      "move_state": "LINEAR_CW",
       "step": [
-        -0.709228515625,
-        0.51910400390625
+        0.47698974609375,
+        0.738067626953125
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 25.24967384338379,
+      "distance": 20.279834747314453,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -985,31 +977,30 @@
       "turn": 98,
       "id": 0,
       "pos": [
-        2198.02880859375,
-        2353.987548828125
+        2205.27978515625,
+        2355.604248046875
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 2.3807382583618164,
-      "move_state": "ORBIT_CW",
+      "y_angle": 0.9970875382423401,
+      "move_state": "LINEAR_CW",
       "step": [
-        -0.6365966796875,
-        0.605926513671875
+        0.47698974609375,
+        0.738067626953125
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 25.25576400756836,
+      "distance": 19.401050567626953,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1019,31 +1010,30 @@
       "turn": 99,
       "id": 0,
       "pos": [
-        2197.475341796875,
-        2354.670166015625
+        2205.7568359375,
+        2356.34228515625
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 2.2518837451934814,
-      "move_state": "ORBIT_CW",
+      "y_angle": 0.9970875382423401,
+      "move_state": "LINEAR_CW",
       "step": [
-        -0.553436279296875,
-        0.68267822265625
+        0.47698974609375,
+        0.738067626953125
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 25.179250717163086,
+      "distance": 18.522266387939453,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1053,31 +1043,30 @@
       "turn": 100,
       "id": 0,
       "pos": [
-        2197.014404296875,
-        2355.41845703125
+        2206.23388671875,
+        2357.080322265625
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 2.1230294704437256,
-      "move_state": "ORBIT_CW",
+      "y_angle": 0.9970875382423401,
+      "move_state": "LINEAR_CW",
       "step": [
-        -0.46112060546875,
-        0.748138427734375
+        0.47698974609375,
+        0.738067626953125
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 25.020339965820313,
+      "distance": 17.643482208251953,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1087,31 +1076,30 @@
       "turn": 101,
       "id": 0,
       "pos": [
-        2196.653076171875,
-        2356.2197265625
+        2206.7109375,
+        2357.818359375
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 1.9941750764846802,
-      "move_state": "ORBIT_CW",
+      "y_angle": 0.9970875382423401,
+      "move_state": "LINEAR_CW",
       "step": [
-        -0.361175537109375,
-        0.801239013671875
+        0.47698974609375,
+        0.738067626953125
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 24.78074836730957,
+      "distance": 16.764699935913086,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1121,31 +1109,30 @@
       "turn": 102,
       "id": 0,
       "pos": [
-        2196.39794921875,
-        2357.060546875
+        2207.187744140625,
+        2358.556640625
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 1.8653206825256348,
-      "move_state": "ORBIT_CW",
+      "y_angle": 0.9970875382423401,
+      "move_state": "LINEAR_CW",
       "step": [
-        -0.255279541015625,
-        0.840911865234375
+        0.47698974609375,
+        0.738067626953125
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 24.461759567260742,
+      "distance": 15.885848045349121,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1155,31 +1142,30 @@
       "turn": 103,
       "id": 0,
       "pos": [
-        2196.2529296875,
-        2357.927490234375
+        2207.664794921875,
+        2359.294677734375
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 1.7364662885665894,
-      "move_state": "ORBIT_CW",
+      "y_angle": 0.9970875382423401,
+      "move_state": "LINEAR_CW",
       "step": [
-        -0.14495849609375,
-        0.866851806640625
+        0.47698974609375,
+        0.738067626953125
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 24.065567016601563,
+      "distance": 15.007067680358887,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1189,31 +1175,30 @@
       "turn": 104,
       "id": 0,
       "pos": [
-        2196.220458984375,
-        2358.8056640625
+        2208.141845703125,
+        2360.03271484375
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 1.607611894607544,
-      "move_state": "ORBIT_CW",
+      "y_angle": 0.9940195679664612,
+      "move_state": "LINEAR_CW",
       "step": [
-        -0.0323486328125,
-        0.8782958984375
+        0.479278564453125,
+        0.7366943359375
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 23.595325469970703,
+      "distance": 14.128289222717285,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1223,31 +1208,30 @@
       "turn": 105,
       "id": 0,
       "pos": [
-        2196.30126953125,
-        2359.6806640625
+        2208.62109375,
+        2360.769287109375
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 1.4787575006484985,
-      "move_state": "ORBIT_CW",
+      "y_angle": 0.9940195679664612,
+      "move_state": "LINEAR_CW",
       "step": [
-        0.080718994140625,
-        0.875091552734375
+        0.479278564453125,
+        0.7366943359375
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 23.054292678833008,
+      "distance": 13.249533653259277,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1257,31 +1241,30 @@
       "turn": 106,
       "id": 0,
       "pos": [
-        2196.493896484375,
-        2360.5380859375
+        2209.100341796875,
+        2361.506103515625
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 1.2793400287628174,
-      "move_state": "ORBIT_CW",
+      "y_angle": 0.9940195679664612,
+      "move_state": "LINEAR_CW",
       "step": [
-        0.252532958984375,
-        0.841827392578125
+        0.479278564453125,
+        0.7366943359375
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 22.44672393798828,
+      "distance": 12.370573997497559,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1291,31 +1274,30 @@
       "turn": 107,
       "id": 0,
       "pos": [
-        2196.8525390625,
-        2361.340576171875
+        2209.57958984375,
+        2362.24267578125
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 1.150485634803772,
-      "move_state": "ORBIT_CW",
+      "y_angle": 0.9940195679664612,
+      "move_state": "LINEAR_CW",
       "step": [
-        0.35858154296875,
-        0.80230712890625
+        0.479278564453125,
+        0.7366943359375
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 21.73848533630371,
+      "distance": 11.491820335388184,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1325,31 +1307,30 @@
       "turn": 108,
       "id": 0,
       "pos": [
-        2197.31103515625,
-        2362.090087890625
+        2210.058837890625,
+        2362.9794921875
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 1.0216312408447266,
-      "move_state": "ORBIT_CW",
+      "y_angle": 0.9940195679664612,
+      "move_state": "LINEAR_CW",
       "step": [
-        0.45867919921875,
-        0.74951171875
+        0.479278564453125,
+        0.7366943359375
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 20.97919464111328,
+      "distance": 10.612862586975098,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1359,31 +1340,30 @@
       "turn": 109,
       "id": 0,
       "pos": [
-        2197.8623046875,
-        2362.7744140625
+        2210.5380859375,
+        2363.716064453125
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.8927768468856812,
-      "move_state": "ORBIT_CW",
+      "y_angle": 0.9940195679664612,
+      "move_state": "LINEAR_CW",
       "step": [
-        0.5511474609375,
-        0.684356689453125
+        0.479278564453125,
+        0.7366943359375
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 20.17580795288086,
+      "distance": 9.734109878540039,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1393,31 +1373,30 @@
       "turn": 110,
       "id": 0,
       "pos": [
-        2198.496826171875,
-        2363.38232421875
+        2211.017578125,
+        2364.452880859375
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.7639224529266357,
-      "move_state": "ORBIT_CW",
+      "y_angle": 0.9940195679664612,
+      "move_state": "LINEAR_CW",
       "step": [
-        0.634613037109375,
-        0.60791015625
+        0.479278564453125,
+        0.7366943359375
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 19.33731460571289,
+      "distance": 8.855021476745605,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1427,31 +1406,30 @@
       "turn": 111,
       "id": 0,
       "pos": [
-        2199.204345703125,
-        2363.903564453125
+        2211.496826171875,
+        2365.189453125
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.6350680589675903,
-      "move_state": "ORBIT_CW",
+      "y_angle": 0.9940195679664612,
+      "move_state": "LINEAR_CW",
       "step": [
-        0.7073974609375,
-        0.521392822265625
+        0.479278564453125,
+        0.7366943359375
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 18.473636627197266,
+      "distance": 7.976272106170654,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1461,31 +1439,30 @@
       "turn": 112,
       "id": 0,
       "pos": [
-        2199.972900390625,
-        2364.32958984375
+        2211.97607421875,
+        2365.92626953125
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.5062136650085449,
-      "move_state": "ORBIT_CW",
+      "y_angle": 0.9940195679664612,
+      "move_state": "LINEAR_CW",
       "step": [
-        0.768585205078125,
-        0.426025390625
+        0.479278564453125,
+        0.7366943359375
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 17.596633911132813,
+      "distance": 7.097321510314941,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1495,31 +1472,30 @@
       "turn": 113,
       "id": 0,
       "pos": [
-        2200.789794921875,
-        2364.653564453125
+        2212.455322265625,
+        2366.662841796875
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 1.8898643255233765,
-      "move_state": "EXIT_CIRCLE_CW",
+      "y_angle": 0.9940195679664612,
+      "move_state": "LINEAR_CW",
       "step": [
-        -0.275726318359375,
-        0.834503173828125
+        0.479278564453125,
+        0.7366943359375
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 83
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 16.719749450683594,
+      "distance": 6.218577861785889,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1529,18 +1505,18 @@
       "turn": 114,
       "id": 0,
       "pos": [
-        2200.51416015625,
-        2365.488037109375
+        2212.9345703125,
+        2367.399658203125
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.38963112235069275,
+      "y_angle": 0.9940195679664612,
       "move_state": "LINEAR_CW",
       "step": [
-        0.81298828125,
-        0.333709716796875
+        0.479278564453125,
+        0.7366943359375
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
@@ -1552,7 +1528,7 @@
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 16.63204002380371,
+      "distance": 5.339635848999023,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1562,18 +1538,18 @@
       "turn": 115,
       "id": 0,
       "pos": [
-        2201.3271484375,
-        2365.82177734375
+        2213.413818359375,
+        2368.13623046875
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.38963112235069275,
+      "y_angle": 0.9940195679664612,
       "move_state": "LINEAR_CW",
       "step": [
-        0.81298828125,
-        0.333709716796875
+        0.479278564453125,
+        0.7366943359375
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
@@ -1585,7 +1561,7 @@
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 15.753219604492188,
+      "distance": 4.460906028747559,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1595,18 +1571,18 @@
       "turn": 116,
       "id": 0,
       "pos": [
-        2202.14013671875,
-        2366.1552734375
+        2213.89306640625,
+        2368.873046875
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.38963112235069275,
+      "y_angle": 0.9940195679664612,
       "move_state": "LINEAR_CW",
       "step": [
-        0.81298828125,
-        0.333709716796875
+        0.479278564453125,
+        0.7366943359375
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
@@ -1618,7 +1594,7 @@
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 14.874494552612305,
+      "distance": 3.5819873809814453,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1628,18 +1604,18 @@
       "turn": 117,
       "id": 0,
       "pos": [
-        2202.953125,
-        2366.489013671875
+        2214.372314453125,
+        2369.609619140625
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.38963112235069275,
+      "y_angle": 0.9940195679664612,
       "move_state": "LINEAR_CW",
       "step": [
-        0.81298828125,
-        0.333709716796875
+        0.479278564453125,
+        0.7366943359375
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
@@ -1651,7 +1627,7 @@
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 13.995676040649414,
+      "distance": 2.7033004760742188,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1661,18 +1637,18 @@
       "turn": 118,
       "id": 0,
       "pos": [
-        2203.76611328125,
-        2366.82275390625
+        2214.8515625,
+        2370.346435546875
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.38963112235069275,
+      "y_angle": 0.9817477464675903,
       "move_state": "LINEAR_CW",
       "step": [
-        0.81298828125,
-        0.333709716796875
+        0.48828125,
+        0.730743408203125
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
@@ -1684,7 +1660,7 @@
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 13.11685848236084,
+      "distance": 1.8244816064834595,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1694,18 +1670,18 @@
       "turn": 119,
       "id": 0,
       "pos": [
-        2204.5791015625,
-        2367.156494140625
+        2215.33984375,
+        2371.0771484375
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.38963112235069275,
+      "y_angle": 0.9817477464675903,
       "move_state": "LINEAR_CW",
       "step": [
-        0.81298828125,
-        0.333709716796875
+        0.48828125,
+        0.730743408203125
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
@@ -1717,7 +1693,7 @@
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 12.238041877746582,
+      "distance": 0.9457209706306458,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1727,18 +1703,18 @@
       "turn": 120,
       "id": 0,
       "pos": [
-        2205.39208984375,
-        2367.490234375
+        2215.828125,
+        2371.807861328125
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.38963112235069275,
-      "move_state": "LINEAR_CW",
+      "y_angle": 0.9817477464675903,
+      "move_state": "FINAL_STEP",
       "step": [
-        0.81298828125,
-        0.333709716796875
+        -0.051727294921875,
+        -0.045623779296875
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
@@ -1750,7 +1726,7 @@
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 11.35922622680664,
+      "distance": 0.06901583820581436,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1760,18 +1736,18 @@
       "turn": 121,
       "id": 0,
       "pos": [
-        2206.205078125,
-        2367.823974609375
+        2215.8798828125,
+        2371.853515625
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.38963112235069275,
-      "move_state": "LINEAR_CW",
+      "y_angle": 0.9817477464675903,
+      "move_state": "FINAL_STEP",
       "step": [
-        0.81298828125,
-        0.333709716796875
+        -0.051727294921875,
+        -0.045623779296875
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
@@ -1783,7 +1759,7 @@
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 10.480412483215332,
+      "distance": 0.0,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1793,18 +1769,18 @@
       "turn": 122,
       "id": 0,
       "pos": [
-        2207.01806640625,
-        2368.15771484375
+        2215.8798828125,
+        2371.853515625
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.38963112235069275,
-      "move_state": "LINEAR_CW",
+      "y_angle": 0.9817477464675903,
+      "move_state": "FINAL_STEP",
       "step": [
-        0.81298828125,
-        0.333709716796875
+        -0.051727294921875,
+        -0.045623779296875
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
@@ -1816,7 +1792,7 @@
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 9.601600646972656,
+      "distance": 0.0,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1826,18 +1802,18 @@
       "turn": 123,
       "id": 0,
       "pos": [
-        2207.8310546875,
-        2368.491455078125
+        2215.8798828125,
+        2371.853515625
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.38963112235069275,
-      "move_state": "LINEAR_CW",
+      "y_angle": 0.9817477464675903,
+      "move_state": "FINAL_STEP",
       "step": [
-        0.81298828125,
-        0.333709716796875
+        -0.051727294921875,
+        -0.045623779296875
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
@@ -1849,7 +1825,7 @@
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 8.722790718078613,
+      "distance": 0.0,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1859,18 +1835,18 @@
       "turn": 124,
       "id": 0,
       "pos": [
-        2208.64404296875,
-        2368.8251953125
+        2215.8798828125,
+        2371.853515625
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.38963112235069275,
-      "move_state": "LINEAR_CW",
+      "y_angle": 0.9817477464675903,
+      "move_state": "FINAL_STEP",
       "step": [
-        0.81298828125,
-        0.333709716796875
+        -0.051727294921875,
+        -0.045623779296875
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
@@ -1882,7 +1858,7 @@
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 7.843985080718994,
+      "distance": 0.0,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1892,18 +1868,18 @@
       "turn": 125,
       "id": 0,
       "pos": [
-        2209.45703125,
-        2369.15869140625
+        2215.8798828125,
+        2371.853515625
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.38963112235069275,
-      "move_state": "LINEAR_CW",
+      "y_angle": 0.9817477464675903,
+      "move_state": "FINAL_STEP",
       "step": [
-        0.81298828125,
-        0.333709716796875
+        -0.051727294921875,
+        -0.045623779296875
       ],
       "circle_hug_info": {
         "turns_to_obj": "0xff",
@@ -1915,7 +1891,7 @@
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 6.965278148651123,
+      "distance": 0.0,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1925,31 +1901,30 @@
       "turn": 126,
       "id": 0,
       "pos": [
-        2210.27001953125,
-        2369.492431640625
+        2215.8798828125,
+        2371.853515625
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.39576706290245056,
-      "move_state": "LINEAR_CW",
+      "y_angle": 0.9817477464675903,
+      "move_state": "FINAL_STEP",
       "step": [
-        0.81085205078125,
-        0.3387451171875
+        -0.051727294921875,
+        -0.045623779296875
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0x09",
+        "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 82
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 6.086483955383301,
+      "distance": 0.0,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1959,31 +1934,30 @@
       "turn": 127,
       "id": 0,
       "pos": [
-        2211.080810546875,
-        2369.831298828125
+        2215.8798828125,
+        2371.853515625
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.39576706290245056,
-      "move_state": "LINEAR_CW",
+      "y_angle": 0.9817477464675903,
+      "move_state": "FINAL_STEP",
       "step": [
-        0.81085205078125,
-        0.3387451171875
+        -0.051727294921875,
+        -0.045623779296875
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0x08",
+        "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 82
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 5.207730293273926,
+      "distance": 0.0,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -1993,31 +1967,30 @@
       "turn": 128,
       "id": 0,
       "pos": [
-        2211.8916015625,
-        2370.169921875
+        2215.8798828125,
+        2371.853515625
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.39576706290245056,
-      "move_state": "LINEAR_CW",
+      "y_angle": 0.9817477464675903,
+      "move_state": "FINAL_STEP",
       "step": [
-        0.81085205078125,
-        0.3387451171875
+        -0.051727294921875,
+        -0.045623779296875
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0x07",
+        "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 82
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 4.329073429107666,
+      "distance": 0.0,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -2027,31 +2000,30 @@
       "turn": 129,
       "id": 0,
       "pos": [
-        2212.702392578125,
-        2370.5087890625
+        2215.8798828125,
+        2371.853515625
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.39576706290245056,
-      "move_state": "LINEAR_CW",
+      "y_angle": 0.9817477464675903,
+      "move_state": "FINAL_STEP",
       "step": [
-        0.81085205078125,
-        0.3387451171875
+        -0.051727294921875,
+        -0.045623779296875
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0x06",
+        "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 82
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 3.4503238201141357,
+      "distance": 0.0,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -2061,31 +2033,30 @@
       "turn": 130,
       "id": 0,
       "pos": [
-        2213.513427734375,
-        2370.847412109375
+        2215.8798828125,
+        2371.853515625
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.39576706290245056,
-      "move_state": "LINEAR_CW",
+      "y_angle": 0.9817477464675903,
+      "move_state": "FINAL_STEP",
       "step": [
-        0.81085205078125,
-        0.3387451171875
+        -0.051727294921875,
+        -0.045623779296875
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0x05",
+        "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 82
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 2.5714497566223145,
+      "distance": 0.0,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -2095,31 +2066,30 @@
       "turn": 131,
       "id": 0,
       "pos": [
-        2214.32421875,
-        2371.186279296875
+        2215.8798828125,
+        2371.853515625
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.39576706290245056,
-      "move_state": "LINEAR_CW",
+      "y_angle": 0.9817477464675903,
+      "move_state": "FINAL_STEP",
       "step": [
-        0.81085205078125,
-        0.3387451171875
+        -0.051727294921875,
+        -0.045623779296875
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0x04",
+        "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 82
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 1.692718267440796,
+      "distance": 0.0,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -2129,31 +2099,30 @@
       "turn": 132,
       "id": 0,
       "pos": [
-        2215.135009765625,
-        2371.52490234375
+        2215.8798828125,
+        2371.853515625
       ],
       "field_0x24": "0x0101",
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.39576706290245056,
+      "y_angle": 0.9817477464675903,
       "move_state": "FINAL_STEP",
       "step": [
-        -0.74493408203125,
-        -0.328521728515625
+        -0.051727294921875,
+        -0.045623779296875
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0x03",
+        "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 82
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
         2215.8798828125,
         2371.853515625
       ],
-      "distance": 0.8141391277313232,
+      "distance": 0.0,
       "state_map": [
         "MOVE_TO_POS",
         "GO_AND_CHILLOUT_OUTSIDE_HOME"
@@ -2170,17 +2139,16 @@
       "field_0x26": "0x00",
       "turns_until_next_state_change": 0,
       "speed": 0.880126953125,
-      "y_angle": 0.39576706290245056,
+      "y_angle": 0.9817477464675903,
       "move_state": "FINAL_STEP",
       "step": [
-        -0.74493408203125,
-        -0.328521728515625
+        -0.051727294921875,
+        -0.045623779296875
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0x03",
+        "turns_to_obj": "0xff",
         "field_0x5": "0x00",
-        "field_0x6": "0x0cc7",
-        "obj_index": 82
+        "field_0x6": "0x0cc7"
       },
       "status": "0x00000000",
       "goal": [
