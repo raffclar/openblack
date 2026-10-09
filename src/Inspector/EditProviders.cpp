@@ -12,6 +12,7 @@
 #include <cctype>
 
 #include <algorithm>
+#include <iterator>
 #include <string>
 #include <utility>
 
