@@ -480,6 +480,8 @@ struct Command
 		WheelTurn,
 		/// The player's alignment jumps, which the hand shows
 		SetAlignment,
+		/// The creature walks to its home: its temple's pen while its player has a temple
+		WalkHome,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -549,6 +551,13 @@ struct ThrowSetup
 	std::optional<float> repeatSeconds;
 };
 
+/// A temple of the player's put on the land
+struct TempleSetup
+{
+	glm::vec2 offset {0.0f};
+	float angle {0.0f};
+};
+
 struct Scenario
 {
 	/// Unique and never changed, for picking it from the command line or a test
@@ -583,6 +592,9 @@ struct Scenario
 	/// The weights a caught firefly's miracle is drawn by, by the miracles' names, as a land's script sets them; the
 	/// testbed's land sets none
 	std::vector<std::pair<std::string_view, float>> fireflyRewards;
+	/// A temple of the player's, at this place from the middle of the map, turned by the angle as a land's script turns
+	/// one (radians about the vertical)
+	std::optional<TempleSetup> temple;
 };
 
 /// The miracles' scenarios, added to every scenario by the registry

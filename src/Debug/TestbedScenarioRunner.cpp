@@ -47,6 +47,7 @@
 #include "Creature/CreatureObjectActions.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
+#include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/FieldArchetype.h"
@@ -673,6 +674,13 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			Locator::fireflySystem::value().Create(map_coords::FromWorld(land, placed.position));
 		}
 	}
+	// The player's temple, at full size as a land's script makes one
+	if (scenario.temple.has_value())
+	{
+		const auto point = MapPoint(middle, scenario.temple->offset);
+		ecs::archetypes::CitadelArchetype::Create({point.x, land.GetHeightAt(point), point.y}, PlayerNames::PLAYER_ONE,
+		                                          scenario.temple->angle, glm::vec3(1.0f));
+	}
 }
 
 void Runner::PlaceCreatures(const Scenario& scenario, glm::vec2 middle)
@@ -1291,10 +1299,22 @@ void Runner::Give(const Command& command)
 		result =
 		    MoveResultName(locomotion.MoveTo(*entity, point, command.kind == Kind::RunTo ? Pace::Run : Pace::Walk, 0.0f, 1.0f));
 		break;
+	case Kind::WalkHome:
+		if (const auto* leash = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeash>(*entity);
+		    leash != nullptr && leash->home.has_value())
+		{
+			result =
+			    MoveResultName(locomotion.MoveTo(*entity, glm::vec2(leash->home->x, leash->home->z), Pace::Walk, 0.0f, 1.0f));
+		}
+		else
+		{
+			result = "it has no home";
+		}
+		break;
 	case Kind::Follow:
 		if (const auto leader = CreatureAt(command.value))
 		{
-			const auto size = Locator::entitiesRegistry::value().Get<Creature>(*entity).size;
+			const auto size = ShownSize(Locator::entitiesRegistry::value().Get<Creature>(*entity));
 			result = MoveResultName(locomotion.Follow(*entity, *leader, k_FollowDistance * std::max(size, 0.5f), Pace::Walk));
 		}
 		break;
@@ -1669,7 +1689,7 @@ void Runner::UpdateCamera()
 		if (const auto entity = CreatureAt(_shotCreature))
 		{
 			const auto& transform = registry.Get<Transform>(*entity);
-			const auto height = CreatureHeight(registry.Get<Creature>(*entity).size);
+			const auto height = CreatureHeight(ShownSize(registry.Get<Creature>(*entity)));
 			placement = *_shot == Shot::Follow ? Follow(transform.position, height, _shotDistance)
 			                                   : Head(transform.position, AheadOf(transform), height, _shotDistance);
 		}
