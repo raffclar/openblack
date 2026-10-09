@@ -18,17 +18,25 @@
 #include <glm/vec2.hpp>
 #include <spdlog/spdlog.h>
 
+#include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/Poisoned.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
+#include "ECS/VillagerNeeds.h"
+#include "ECS/WorldObjects.h"
 #include "Enums.h"
+#include "InfoConstants.h"
 #include "Locator.h"
+#include "VillagerAnimate.h"
 #include "VillagerEaten.h"
 #include "VillagerFire.h"
 #include "VillagerHome.h"
@@ -46,11 +54,35 @@ namespace villager_teleport = openblack::ecs::villager_teleport;
 namespace villager_shield = openblack::ecs::villager_shield;
 namespace villager_fire = openblack::ecs::villager_fire;
 namespace villager_physics = openblack::ecs::villager_physics;
+namespace villager_animate = openblack::ecs::villager_animate;
 
 /// A villager with no state does nothing
 uint32_t VillagerInvalidState(LivingAction& /*action*/)
 {
 	return 0;
+}
+
+/// Plays the clip it has to its end, then goes on into the state it works towards
+uint32_t VillagerWaitForAnimation(LivingAction& action)
+{
+	const auto& living = Locator::livingActionSystem::value();
+	if (living.VillagerIsReadyForNewAnimation(action, 1))
+	{
+		living.VillagerSetTopStateToFinal(action);
+		return 0;
+	}
+	return 1;
+}
+
+/// Stops for a second, worn out or showing its poison, then goes on
+uint32_t VillagerPauseForASecond(LivingAction& action)
+{
+	const auto& living = Locator::livingActionSystem::value();
+	if (living.VillagerIsReadyForNewAnimation(action, 1))
+	{
+		living.VillagerSetTopStateToFinal(action);
+	}
+	return 1;
 }
 
 uint32_t VillagerCreated(LivingAction& action)
@@ -201,7 +233,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* ARRIVES_AT_FOOD_REACTION */ k_TodoEntry,
     /* GOTO_WOOD_REACTION */ k_TodoEntry,
     /* ARRIVES_AT_WOOD_REACTION */ k_TodoEntry,
-    /* WAIT_FOR_ANIMATION */ k_TodoEntry,
+    /* WAIT_FOR_ANIMATION */
+    VillagerStateTableEntry {
+        .state = &VillagerWaitForAnimation,
+    },
     /* IN_HAND */
     VillagerStateTableEntry {
         .exitState = &villager_physics::ExitInHand,
@@ -503,7 +538,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* GO_AND_HIDE_IN_NEARBY_BUILDING */ k_TodoEntry,
     /* LOOK_TO_SEE_IF_IT_IS_SAFE */ k_TodoEntry,
     /* SLEEP_IN_TENT */ k_TodoEntry,
-    /* PAUSE_FOR_A_SECOND */ k_TodoEntry,
+    /* PAUSE_FOR_A_SECOND */
+    VillagerStateTableEntry {
+        .state = &VillagerPauseForASecond,
+    },
     /* PANIC_REACTION */ k_TodoEntry,
     /* GET_FOOD_AT_WORSHIP_SITE */ k_TodoEntry,
     /* GOTO_CONGREGATE_IN_TOWN_AFTER_EMERGENCY */ k_TodoEntry,
@@ -530,31 +568,30 @@ void LivingActionSystem::Update()
 
 	registry.Each<LivingAction>([](LivingAction& action) { ++action.turnsSinceStateChange; });
 
-	// TODO(#475): process food speedup
-
-	// What a hand holds, or what flies in the physics, does nothing of its own
-	registry.Each<const Villager, LivingAction>(
-	    [this]([[maybe_unused]] const Villager& villager, LivingAction& action) {
+	// What a hand holds, or what flies in the physics, does nothing of its own. Each villager in turn looks at whether
+	// its states still hold, then, unless a clip into or out of a state holds it, looks at its needs and acts.
+	registry.Each<Villager, LivingAction>(
+	    [this, &registry](entt::entity entity, Villager& villager, LivingAction& action) {
+		    // TODO(#475): process food speedup
 		    VillagerCallValidate(action, LivingAction::Index::Top);
-	    },
-	    entt::exclude<InHand, InPhysics>);
-	// TODO(#476): same call but for other types of living
-
-	registry.Each<const Villager, LivingAction>(
-	    [this]([[maybe_unused]] const Villager& villager, LivingAction& action) {
 		    VillagerCallValidate(action, LivingAction::Index::Final);
-	    },
-	    entt::exclude<InHand, InPhysics>);
-	// TODO(#476): same call but for other types of living
-
-	// TODO(bwrsandman): Store result of this call in vector or with tag component
-	// A villager carried off by a tornado does nothing of its own
-	registry.Each<const Villager, LivingAction>(
-	    [this]([[maybe_unused]] const Villager& villager, LivingAction& action) {
+		    // A villager carried off by a tornado does nothing of its own
+		    if (registry.AnyOf<CarriedByTornado>(entity))
+		    {
+			    return;
+		    }
+		    if (villager.transitionPlaying)
+		    {
+			    if (villager_animate::IsReadyForNewAnimation(action))
+			    {
+				    villager_animate::FinishedIntoOutOfAnimation(action);
+			    }
+			    return;
+		    }
 		    VillagerCallState(action, LivingAction::Index::Top);
 	    },
-	    entt::exclude<CarriedByTornado, InHand, InPhysics>);
-	// TODO(#476): same call but for other types of living
+	    entt::exclude<InHand, InPhysics>);
+	// TODO(#476): same calls but for other types of living
 }
 
 VillagerStates LivingActionSystem::VillagerGetState(const LivingAction& action, LivingAction::Index index) const
@@ -562,39 +599,207 @@ VillagerStates LivingActionSystem::VillagerGetState(const LivingAction& action, 
 	return static_cast<VillagerStates>(action.states.at(static_cast<size_t>(index)));
 }
 
-void LivingActionSystem::VillagerSetState(LivingAction& action, LivingAction::Index index, VillagerStates state,
-                                          bool skipTransition) const
+namespace
 {
-	const auto previousState = static_cast<VillagerStates>(action.states.at(static_cast<size_t>(index)));
-	if (previousState == state)
+/// Keeps a villager out of sight while its top state hides it
+void UpdateHiddenByState(entt::entity villager, VillagerStates state)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!Locator::infoConstants::has_value() || !registry.AllOf<Villager>(villager))
 	{
 		return;
 	}
-
-	[[maybe_unused]] auto& registry = Locator::entitiesRegistry::value();
-	SPDLOG_LOGGER_TRACE(spdlog::get("ai"), "Villager #{}: Setting state {} -> {}", static_cast<int>(registry.ToEntity(action)),
-	                    k_VillagerStateStrings.at(static_cast<size_t>(previousState)),
-	                    k_VillagerStateStrings.at(static_cast<size_t>(state)));
-
-	const bool runTransition = index == LivingAction::Index::Top && !skipTransition;
-
-	// Exit the previous state before switching. A truthy return means it isn't ready to be
-	// left yet, so abort the transition without changing state.
-	if (runTransition && VillagerCallExitState(action, index, state))
+	const bool hidden = villager_animate::IsHiddenByState(state);
+	if (hidden != registry.AllOf<HiddenByState>(villager))
 	{
-		return;
+		if (hidden)
+		{
+			registry.Assign<HiddenByState>(villager);
+		}
+		else
+		{
+			registry.Remove<HiddenByState>(villager);
+		}
+		registry.SetDirty();
 	}
+}
 
+/// The state a villager's top state works towards: the top state itself when that is a final one
+VillagerStates FinalStateOf(const LivingAction& action)
+{
+	const auto top = static_cast<VillagerStates>(action.states.at(static_cast<size_t>(LivingAction::Index::Top)));
+	const auto& table = Locator::infoConstants::value().villagerStateTable;
+	if (table.at(static_cast<size_t>(top)).isFinalState != 0)
+	{
+		return top;
+	}
+	return static_cast<VillagerStates>(action.states.at(static_cast<size_t>(LivingAction::Index::Final)));
+}
+} // namespace
+
+void LivingActionSystem::SetStateDirectly(LivingAction& action, LivingAction::Index index, VillagerStates state) const
+{
 	if (index == LivingAction::Index::Top)
 	{
 		action.turnsSinceStateChange = 0;
 	}
 	action.states.at(static_cast<size_t>(index)) = static_cast<uint8_t>(state);
-
-	if (runTransition)
+	if (index == LivingAction::Index::Top)
 	{
-		VillagerCallEntryState(action, index, previousState, state);
+		UpdateHiddenByState(Locator::entitiesRegistry::value().ToEntity(action), state);
 	}
+}
+
+void LivingActionSystem::VillagerSetState(LivingAction& action, LivingAction::Index index, VillagerStates state,
+                                          bool skipTransition) const
+{
+	const auto previousState = static_cast<VillagerStates>(action.states.at(static_cast<size_t>(index)));
+	[[maybe_unused]] auto& registry = Locator::entitiesRegistry::value();
+	SPDLOG_LOGGER_TRACE(spdlog::get("ai"), "Villager #{}: Setting state {} -> {}", static_cast<int>(registry.ToEntity(action)),
+	                    k_VillagerStateStrings.at(static_cast<size_t>(previousState)),
+	                    k_VillagerStateStrings.at(static_cast<size_t>(state)));
+
+	// Set as it is, with none of the state's rules: the final or remembered states, and a top state put straight in
+	if (index != LivingAction::Index::Top || skipTransition || !Locator::infoConstants::has_value())
+	{
+		if (previousState != state)
+		{
+			SetStateDirectly(action, index, state);
+		}
+		return;
+	}
+	SetTopState(action, state);
+}
+
+bool LivingActionSystem::ExitAllowed(LivingAction& action, VillagerStates next) const
+{
+	// Both the top state and the state it works towards must let the villager go
+	const auto top = VillagerGetState(action, LivingAction::Index::Top);
+	const auto final = FinalStateOf(action);
+	bool allowed = !VillagerCallExitState(action, LivingAction::Index::Top, next);
+	if (final != top)
+	{
+		const auto& entry = k_VillagerStateTable.at(static_cast<size_t>(final));
+		if (entry.exitState && entry.exitState(action, next))
+		{
+			allowed = false;
+		}
+	}
+	return allowed;
+}
+
+bool LivingActionSystem::EnterState(LivingAction& action, VillagerStates state) const
+{
+	const auto previous = VillagerGetState(action, LivingAction::Index::Top);
+	const auto& entry = k_VillagerStateTable.at(static_cast<size_t>(state));
+	if (entry.entryState && !entry.entryState(action, previous, state))
+	{
+		return false;
+	}
+	SetStateDirectly(action, LivingAction::Index::Top, state);
+	return true;
+}
+
+LivingActionSystem::SetResult LivingActionSystem::ChangeTopState(LivingAction& action, VillagerStates current,
+                                                                 std::optional<VillagerStates> destination) const
+{
+	const auto next = destination.value_or(current);
+	if (!ExitAllowed(action, next))
+	{
+		return SetResult::Refused;
+	}
+	const auto outOf = villager_animate::OutOfClip(action, next);
+	if (!EnterState(action, current))
+	{
+		return SetResult::EntryFailed;
+	}
+	if (destination.has_value())
+	{
+		const auto& entry = k_VillagerStateTable.at(static_cast<size_t>(*destination));
+		if (entry.entryState && !entry.entryState(action, current, *destination))
+		{
+			return SetResult::EntryFailed;
+		}
+		SetStateDirectly(action, LivingAction::Index::Final, *destination);
+	}
+	const auto villager = Locator::entitiesRegistry::value().ToEntity(action);
+	villager_reactions::SetStateSpeed(villager, current);
+	if (outOf.has_value())
+	{
+		villager_animate::SetAnim(villager, static_cast<int32_t>(*outOf), true);
+		return SetResult::Done;
+	}
+	villager_animate::SetStateAnim(villager);
+	if (const auto into = villager_animate::IntoClip(action, next); into.has_value())
+	{
+		villager_animate::SetAnim(villager, static_cast<int32_t>(*into), true);
+	}
+	return SetResult::Done;
+}
+
+bool LivingActionSystem::PausesBefore(LivingAction& action, VillagerStates state) const
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = registry.ToEntity(action);
+	const auto& table = Locator::infoConstants::value().villagerStateTable;
+	if (VillagerGetState(action, LivingAction::Index::Top) == VillagerStates::PauseForASecond ||
+	    table.at(static_cast<size_t>(state)).canPauseForASecond == 0 || registry.AllOf<ScriptControlled>(villager) ||
+	    !registry.AllOf<Villager>(villager) || !Locator::gameRandom::has_value())
+	{
+		return false;
+	}
+	const auto& person = registry.Get<const Villager>(villager);
+	const auto& info =
+	    Locator::infoConstants::value().villager.at(static_cast<size_t>(GVillagerInfo::Find(person.tribe, person.number)));
+	const float life = ecs::world_objects::LifeOf(villager);
+	const bool poisoned = registry.AllOf<Poisoned>(villager);
+	const float draw = Locator::gameRandom::value().GameFloatRand(1.0f);
+	return ecs::villager_needs::PausesForASecond(draw, life, poisoned, info.pauseForASecondChance) &&
+	       ChangeTopState(action, VillagerStates::PauseForASecond, state) == SetResult::Done;
+}
+
+void LivingActionSystem::SetTopState(LivingAction& action, VillagerStates state) const
+{
+	if (PausesBefore(action, state))
+	{
+		return;
+	}
+	if (ChangeTopState(action, state, std::nullopt) == SetResult::EntryFailed)
+	{
+		// A state that won't be gone into leaves the villager deciding what to do
+		EnterState(action, VillagerStates::DecideWhatToDo);
+	}
+}
+
+bool LivingActionSystem::VillagerSetCurrentAndDestinationState(LivingAction& action, VillagerStates current,
+                                                               VillagerStates destination) const
+{
+	return ChangeTopState(action, current, destination) == SetResult::Done;
+}
+
+void LivingActionSystem::VillagerPlayAnimThenSetState(LivingAction& action, VillagerStates next) const
+{
+	// The clip it plays now plays on to its end, then it goes on into the next state
+	if (!ExitAllowed(action, next) || !EnterState(action, VillagerStates::WaitForAnimation))
+	{
+		return;
+	}
+	const auto& entry = k_VillagerStateTable.at(static_cast<size_t>(next));
+	if (entry.entryState && !entry.entryState(action, VillagerStates::WaitForAnimation, next))
+	{
+		return;
+	}
+	SetStateDirectly(action, LivingAction::Index::Final, next);
+}
+
+void LivingActionSystem::VillagerSetTopStateToFinal(LivingAction& action) const
+{
+	SetTopState(action, VillagerGetState(action, LivingAction::Index::Final));
+}
+
+bool LivingActionSystem::VillagerIsReadyForNewAnimation(const LivingAction& action, uint32_t times) const
+{
+	return villager_animate::IsReadyForNewAnimation(action, times);
 }
 
 uint32_t LivingActionSystem::VillagerCallState(LivingAction& action, LivingAction::Index index) const
