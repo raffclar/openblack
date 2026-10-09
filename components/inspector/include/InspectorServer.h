@@ -55,6 +55,9 @@ public:
 	static constexpr size_t k_LongestLine = 1024 * 1024;
 
 	using Handler = std::function<std::string(std::string_view line)>;
+	/// Whether a line takes control of the game: a client that has only sent lines that don't (a ping, say) is
+	/// looking, not driving
+	using ControlFilter = std::function<bool(std::string_view line)>;
 
 	/// Listens on the loopback address at a port, any free one for 0; none, with why in the error, if it can't
 	[[nodiscard]] static std::unique_ptr<Server> Listen(uint16_t port, std::string& error);
@@ -67,6 +70,9 @@ public:
 	/// The port it listens on, the one chosen when asked for any
 	[[nodiscard]] uint16_t Port() const { return _port; }
 	[[nodiscard]] size_t ClientCount() const { return _clients.size(); }
+	/// The clients that have sent a line taking control; every line does unless a filter says otherwise
+	[[nodiscard]] size_t ControllingClientCount() const;
+	void SetControlFilter(ControlFilter filter) { _takesControl = std::move(filter); }
 
 	/// Takes new clients, reads what they sent, and answers each whole line through the handler. Never waits. The
 	/// number of lines answered.
@@ -78,6 +84,7 @@ private:
 		Socket socket;
 		std::string received;
 		std::string sending;
+		bool controlling {false};
 	};
 
 	void Accept();
@@ -88,6 +95,7 @@ private:
 	Socket _listener;
 	uint16_t _port;
 	std::vector<Client> _clients;
+	ControlFilter _takesControl;
 };
 
 /// A blocking client of the server, as the tests and tools use it

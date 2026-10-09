@@ -139,7 +139,9 @@ QueryResult Inspector::Answer(const Request& request) const
 	const auto error = [](std::string text) { return QueryResult::Error(std::move(text)); };
 	if (request.query == "ping")
 	{
-		return QueryResult::Value({{"pong", true}});
+		Json answer = _identity.is_object() ? _identity : Json::object();
+		answer["pong"] = true;
+		return QueryResult::Value(std::move(answer));
 	}
 	if (request.query == "writes")
 	{
@@ -245,4 +247,11 @@ std::string Inspector::Handle(std::string_view line) const
 		return EncodeError(request.id, answer.error);
 	}
 	return EncodeResult(request.id, answer.value);
+}
+
+bool Inspector::TakesControl(std::string_view line)
+{
+	const auto decoded = DecodeRequest(line);
+	const auto* request = std::get_if<Request>(&decoded);
+	return request == nullptr || request->query != "ping";
 }

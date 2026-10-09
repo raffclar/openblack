@@ -20,10 +20,18 @@ Register it with Claude Code (once per machine or project):
 then start the game with --inspect-port 47800. The port can also come from OPENBLACK_INSPECT_PORT. The game may be
 started and restarted at any time: the adapter connects on each call.
 
+Several games can run at once, each started with --inspect-port 0 (any free port). Each keeps a file
+<pid>.json in openblack-inspector under the temporary directory while its inspector runs. inspector_games lists
+them; inspector_connect chooses the one this session talks to by worktree, pid or port (by worktree, a game
+restarted on another port is found again); any tool takes a port for a single call to another game. Only the
+connected game keeps its player's input out.
+
 Run it with --call QUERY [JSON] to send a single request from a shell, without MCP:
 
     python openblack_inspector_mcp.py --port 47800 --call sky.moon
     python openblack_inspector_mcp.py --call objects.find '{"params": {"component": "Tree"}, "near": [0, 0], "radius": 50}'
+    python openblack_inspector_mcp.py --games
+    python openblack_inspector_mcp.py --worktree ob-wt-inspect --call sky.moon
 """
 
 import argparse
@@ -31,6 +39,7 @@ import json
 import os
 import socket
 import sys
+import tempfile
 import time
 
 PROTOCOL_VERSION = "2024-11-05"
@@ -588,16 +597,173 @@ TOOLS = [
         "query": "audio.sounds",
     },
 ]
+# The tools choosing which running game this session talks to; they are answered by the adapter itself
+GAME_TOOLS = [
+    {
+        "name": "inspector_games",
+        "description": "The openblack games running on this machine with their inspector on: pid, port, worktree, "
+                       "build_type, land, started, whether each answers, and which one this session is connected to. "
+                       "Games are found by the files they keep in the temporary directory; files of games that "
+                       "have gone are removed. Looking doesn't lock any game's input.",
+        "inputSchema": schema(),
+    },
+    {
+        "name": "inspector_connect",
+        "description": "Chooses the game this session talks to from now on: by worktree (its path, a path inside it, "
+                       "or its folder name such as ob-wt-inspect), by pid or by port. Connected by worktree, a "
+                       "restarted game on another port is found again. With nothing, goes back to the default port. "
+                       "The input lock follows: only the connected game keeps its player's input out.",
+        "inputSchema": schema({"worktree": {"type": "string"}, "pid": {"type": "integer"},
+                               "port": {"type": "integer"}}),
+    },
+]
+# Every game tool can also be sent once to another game without changing the connected one
+PORT_ARGUMENT = {"type": "integer",
+                 "description": "Send this one call to the game on this port instead of the connected game"}
+for _tool in TOOLS:
+    # A copy: several tools share their properties' dictionaries
+    _tool["inputSchema"]["properties"] = {**_tool["inputSchema"]["properties"], "port": PORT_ARGUMENT}
 TOOLS_BY_NAME = {tool["name"]: tool for tool in TOOLS}
 SHAPING_KEYS = set(SHAPING) | set(NEAR)
 
 
-class InspectorConnection:
-    """One line in, one line out, over a socket that is reopened whenever the game has gone"""
+def discovery_folder():
+    """Where running games keep their files: openblack-inspector in the temporary directory, as the game has it"""
+    return os.path.join(tempfile.gettempdir(), "openblack-inspector")
 
-    def __init__(self, port, timeout):
+
+def pid_alive(pid):
+    """Whether a process of that id runs now"""
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        process_query_limited_information = 0x1000
+        still_active = 259
+        handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
+        if not handle:
+            # A process of another user can't be opened but is there
+            return ctypes.get_last_error() == 5
+        try:
+            code = wintypes.DWORD()
+            return bool(kernel32.GetExitCodeProcess(handle, ctypes.byref(code))) and code.value == still_active
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def read_games(folder, alive=pid_alive):
+    """The games whose files are in the folder and whose processes run, by pid. Files of games that have gone are
+    removed; files that aren't a game's, or can't be read, are left."""
+    games = []
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return games
+    for name in names:
+        stem, extension = os.path.splitext(name)
+        if extension != ".json" or not stem.isdigit() or int(stem) == 0:
+            continue
+        pid = int(stem)
+        path = os.path.join(folder, name)
+        if not alive(pid):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+            continue
+        try:
+            with open(path, encoding="utf-8") as file:
+                record = json.load(file)
+        except (OSError, ValueError):
+            continue
+        if not isinstance(record, dict) or record.get("pid") != pid or not isinstance(record.get("port"), int):
+            continue
+        games.append(record)
+    games.sort(key=lambda game: game["pid"])
+    return games
+
+
+def ping(port, timeout):
+    """What the game on a port says of itself, None if nothing answers. A ping doesn't lock the game's input."""
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=timeout) as connection:
+            connection.sendall(b'{"id": 0, "query": "ping"}\n')
+            buffer = b""
+            deadline = time.monotonic() + timeout
+            while b"\n" not in buffer:
+                if time.monotonic() > deadline:
+                    return None
+                chunk = connection.recv(65536)
+                if not chunk:
+                    return None
+                buffer += chunk
+        answer = json.loads(buffer.split(b"\n", 1)[0].decode("utf-8", errors="replace"))
+    except (OSError, ValueError):
+        return None
+    return answer.get("result") if answer.get("ok") else None
+
+
+def normalise_path(path):
+    return os.path.normcase(os.path.normpath(path.replace("\\", "/")))
+
+
+def worktree_matches(game_worktree, wanted):
+    """A game's worktree is wanted by its path, a path inside it, or its folder's name"""
+    if not game_worktree or not wanted:
+        return False
+    game_path = normalise_path(game_worktree)
+    wanted_path = normalise_path(wanted)
+    if wanted_path == game_path or wanted_path.startswith(game_path.rstrip(os.sep) + os.sep):
+        return True
+    return os.path.normcase(os.path.basename(game_path)) == os.path.normcase(wanted.strip("/\\"))
+
+
+def describe_game(game):
+    return f"pid {game['pid']} port {game['port']} worktree {game.get('worktree') or '?'} land {game.get('land') or '-'}"
+
+
+def select_game(games, port=None, pid=None, worktree=None):
+    """The one game a selection names among those running, or why there is none"""
+    candidates = games
+    if port is not None:
+        candidates = [game for game in candidates if game["port"] == port]
+    if pid is not None:
+        candidates = [game for game in candidates if game["pid"] == pid]
+    if worktree is not None:
+        candidates = [game for game in candidates if worktree_matches(game.get("worktree", ""), worktree)]
+    wanted = ", ".join(f"{key} {value}" for key, value in (("port", port), ("pid", pid), ("worktree", worktree))
+                       if value is not None)
+    if not candidates:
+        running = "; ".join(describe_game(game) for game in games) or "none"
+        return None, f"no running game with {wanted}; running: {running}"
+    if len(candidates) > 1:
+        listed = "; ".join(describe_game(game) for game in candidates)
+        return None, f"{len(candidates)} games match {wanted}, choose one by pid: {listed}"
+    return candidates[0], None
+
+
+class InspectorConnection:
+    """One line in, one line out, over a socket that is reopened whenever the game has gone. The port is the one
+    given, or found again by a resolver each time the socket is reopened (a game restarted on another port)."""
+
+    def __init__(self, port, timeout, resolve=None, describe=None):
         self.port = port
         self.timeout = timeout
+        self.resolve = resolve
+        self.describe = describe
         self.socket = None
         self.buffer = b""
         self.next_id = 1
@@ -608,6 +774,11 @@ class InspectorConnection:
         self.socket = None
         self.buffer = b""
 
+    def _open(self):
+        if self.resolve is not None:
+            self.port = self.resolve()
+        self.socket = socket.create_connection(("127.0.0.1", self.port), timeout=self.timeout)
+
     def request(self, request):
         request = dict(request)
         request["id"] = self.next_id
@@ -616,15 +787,17 @@ class InspectorConnection:
         for attempt in range(2):
             try:
                 if self.socket is None:
-                    self.socket = socket.create_connection(("127.0.0.1", self.port), timeout=self.timeout)
+                    self._open()
                 self.socket.sendall(line)
                 return self._read_answer(request["id"])
             except OSError as error:
                 self.close()
                 if attempt == 1:
+                    hint = self.describe() if self.describe is not None else ""
                     raise ConnectionError(
                         f"no inspector on 127.0.0.1:{self.port} ({error}); start the game with --inspect-port "
-                        f"{self.port} in a build with OPENBLACK_INSPECTOR") from error
+                        f"{self.port} (or 0 and inspector_connect to it) in a build with OPENBLACK_INSPECTOR"
+                        f"{hint}") from error
 
     def _read_answer(self, wanted):
         # The game answers at its next frame, which may be slow while it loads
@@ -643,6 +816,85 @@ class InspectorConnection:
             if not chunk:
                 raise OSError("the game closed the connection")
             self.buffer += chunk
+
+
+class Session:
+    """Which game this adapter talks to: the default port until inspector_connect chooses another"""
+
+    def __init__(self, default_port, timeout, folder=None, alive=pid_alive, ping_timeout=2.0):
+        self.default_port = default_port
+        self.timeout = timeout
+        self.folder = folder or discovery_folder()
+        self.alive = alive
+        self.ping_timeout = ping_timeout
+        # What was chosen: {"port"|"pid"|"worktree": value}, or None for the default port
+        self.selection = None
+        self.connection = InspectorConnection(default_port, timeout, describe=self._running_hint)
+
+    def games(self):
+        """The running games, each with whether it answers and whether it is the connected one"""
+        games = read_games(self.folder, self.alive)
+        for game in games:
+            answer = ping(game["port"], self.ping_timeout)
+            # A port answering for another process is a reused port, not this game
+            game["responding"] = answer is not None and answer.get("pid", game["pid"]) == game["pid"]
+            game["connected"] = game["port"] == self.connection.port
+        return games
+
+    def _running_hint(self):
+        games = read_games(self.folder, self.alive)
+        if not games:
+            return ""
+        return "; running games: " + "; ".join(describe_game(game) for game in games) + \
+               " (inspector_connect to one)"
+
+    def _resolver(self, selection):
+        def resolve():
+            game, error = select_game(read_games(self.folder, self.alive), **selection)
+            if game is None:
+                raise OSError(error)
+            return game["port"]
+        return resolve
+
+    def connect(self, port=None, pid=None, worktree=None):
+        """Chooses the game; answers what was chosen, or an error. The old game's connection is closed, so its input
+        lock lets go."""
+        selection = {key: value for key, value in (("port", port), ("pid", pid), ("worktree", worktree))
+                     if value is not None}
+        if not selection:
+            self.connection.close()
+            self.selection = None
+            self.connection = InspectorConnection(self.default_port, self.timeout, describe=self._running_hint)
+            return {"ok": True, "result": {"connected": {"port": self.default_port}, "default": True}}
+        game, error = select_game(read_games(self.folder, self.alive), **selection)
+        if game is None and set(selection) == {"port"}:
+            # A game on a fixed port that keeps no file, as an older build
+            if ping(port, self.ping_timeout) is None:
+                return {"ok": False, "error": error}
+            game = {"port": port}
+        elif game is None:
+            return {"ok": False, "error": error}
+        self.connection.close()
+        self.selection = selection
+        # By worktree a restarted game is found again on its new port; by pid or port the game must be that one
+        resolve = self._resolver(selection) if "worktree" in selection else None
+        self.connection = InspectorConnection(game["port"], self.timeout, resolve=resolve,
+                                              describe=self._running_hint)
+        return {"ok": True, "result": {"connected": game}}
+
+    def call(self, name, arguments):
+        if name == "inspector_games":
+            return {"ok": True, "result": {"games": self.games(), "connected_port": self.connection.port}}
+        if name == "inspector_connect":
+            return self.connect(arguments.get("port"), arguments.get("pid"), arguments.get("worktree"))
+        if "port" in arguments:
+            # One call to another game; the connected one stays chosen
+            once = InspectorConnection(arguments["port"], self.timeout, describe=self._running_hint)
+            try:
+                return call_tool(once, name, arguments)
+            finally:
+                once.close()
+        return call_tool(self.connection, name, arguments)
 
 
 def build_request(tool, arguments):
@@ -681,7 +933,7 @@ def tool_result(answer):
     return {"content": [{"type": "text", "text": answer.get("error", "failed")}], "isError": True}
 
 
-def serve(connection):
+def serve(session):
     """The MCP side: JSON-RPC 2.0 messages, one per line on stdin and stdout"""
     for line in sys.stdin:
         line = line.strip()
@@ -702,15 +954,15 @@ def serve(connection):
                 result = {
                     "protocolVersion": version,
                     "capabilities": {"tools": {}},
-                    "serverInfo": {"name": "openblack-inspector", "version": "1.0.0"},
+                    "serverInfo": {"name": "openblack-inspector", "version": "1.1.0"},
                 }
             elif method == "tools/list":
                 result = {"tools": [{key: tool[key] for key in ("name", "description", "inputSchema")}
-                                    for tool in TOOLS]}
+                                    for tool in GAME_TOOLS + TOOLS]}
             elif method == "tools/call":
                 params = message.get("params", {})
                 try:
-                    answer = call_tool(connection, params.get("name", ""), params.get("arguments") or {})
+                    answer = session.call(params.get("name", ""), params.get("arguments") or {})
                 except ConnectionError as error:
                     answer = {"ok": False, "error": str(error)}
                 result = tool_result(answer)
@@ -729,23 +981,35 @@ def serve(connection):
 
 def main():
     parser = argparse.ArgumentParser(description="MCP server for openblack's debug inspector")
-    parser.add_argument("--port", type=int, default=int(os.environ.get("OPENBLACK_INSPECT_PORT", DEFAULT_PORT)))
+    parser.add_argument("--port", type=int, default=int(os.environ.get("OPENBLACK_INSPECT_PORT", DEFAULT_PORT)),
+                        help="The game talked to until inspector_connect chooses another (47800 by default)")
+    parser.add_argument("--worktree", help="Talk to the game running from this worktree (path or folder name)")
+    parser.add_argument("--pid", type=int, help="Talk to the game of this process")
     parser.add_argument("--timeout", type=float, default=10.0, help="Seconds to wait for the game to answer")
+    parser.add_argument("--games", action="store_true", help="List the running games and exit")
     parser.add_argument("--call", metavar="QUERY", help="Send one query and print the answer, without MCP")
     parser.add_argument("request", nargs="?", default="{}", help="With --call: the rest of the request as JSON")
     args = parser.parse_args()
 
-    connection = InspectorConnection(args.port, args.timeout)
+    session = Session(args.port, args.timeout)
+    if args.worktree is not None or args.pid is not None:
+        chosen = session.connect(pid=args.pid, worktree=args.worktree)
+        if not chosen.get("ok"):
+            print(chosen.get("error"), file=sys.stderr)
+            return 1
+    if args.games:
+        print(json.dumps(session.games(), indent=1))
+        return 0
     if args.call:
         request = json.loads(args.request)
         request["query"] = args.call
         try:
-            print(json.dumps(connection.request(request), indent=1))
+            print(json.dumps(session.connection.request(request), indent=1))
         except ConnectionError as error:
             print(error, file=sys.stderr)
             return 1
         return 0
-    serve(connection)
+    serve(session)
     return 0
 
 

@@ -102,3 +102,40 @@ TEST(InspectorServer, ATakenPortIsReported)
 	EXPECT_EQ(second, nullptr);
 	EXPECT_FALSE(error.empty());
 }
+
+// A client that only pings is looking for games, not driving one: only a client that asks something else counts as
+// controlling, and only once the filter says its line takes control
+TEST(InspectorServer, OnlyClientsTakingControlCountAsControlling)
+{
+	std::string error;
+	auto server = Server::Listen(0, error);
+	ASSERT_NE(server, nullptr) << error;
+	server->SetControlFilter(&Inspector::TakesControl);
+
+	auto looking = Client::Connect(server->Port());
+	auto driving = Client::Connect(server->Port());
+	ASSERT_TRUE(looking.has_value());
+	ASSERT_TRUE(driving.has_value());
+
+	ASSERT_TRUE(Exchange(*server, *looking, R"({"id": 1, "query": "ping"})").has_value());
+	EXPECT_EQ(server->ClientCount(), 2);
+	EXPECT_EQ(server->ControllingClientCount(), 0);
+
+	ASSERT_TRUE(Exchange(*server, *driving, R"({"id": 2, "query": "describe"})").has_value());
+	EXPECT_EQ(server->ControllingClientCount(), 1);
+	// It stays controlling while connected, whatever it asks next
+	ASSERT_TRUE(Exchange(*server, *driving, R"({"id": 3, "query": "ping"})").has_value());
+	EXPECT_EQ(server->ControllingClientCount(), 1);
+}
+
+// Without a filter every line takes control, as before
+TEST(InspectorServer, EveryLineTakesControlWithoutAFilter)
+{
+	std::string error;
+	auto server = Server::Listen(0, error);
+	ASSERT_NE(server, nullptr) << error;
+	auto client = Client::Connect(server->Port());
+	ASSERT_TRUE(client.has_value());
+	ASSERT_TRUE(Exchange(*server, *client, R"({"id": 1, "query": "ping"})").has_value());
+	EXPECT_EQ(server->ControllingClientCount(), 1);
+}

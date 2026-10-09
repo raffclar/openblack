@@ -198,6 +198,10 @@ endif ()
 if (OPENBLACK_INSPECTOR)
   target_link_libraries(openblack_lib PRIVATE inspector)
   target_compile_definitions(openblack_lib PUBLIC OPENBLACK_INSPECTOR)
+  # The running game tells tools how it was built
+  target_compile_definitions(
+    openblack_lib PRIVATE OPENBLACK_BUILD_TYPE="$<CONFIG>"
+  )
   # Every component's reflection in one file outgrows an object file's sections
   if (MSVC)
     set_source_files_properties(

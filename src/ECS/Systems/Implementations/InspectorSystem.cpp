@@ -29,6 +29,11 @@
 #include "Inspector/RunControl.h"
 #include "Locator.h"
 
+// The build's configuration, given by the build files
+#if !defined(OPENBLACK_BUILD_TYPE)
+#define OPENBLACK_BUILD_TYPE ""
+#endif
+
 using namespace openblack;
 using namespace openblack::ecs::systems;
 
@@ -138,6 +143,30 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
 	_inspector.Add(std::move(input));
 
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Inspector listening on 127.0.0.1:{}", _server->Port());
+
+	// Tools find this game, among others running, by its file in the shared folder; looking for it with a ping doesn't
+	// keep the player out
+	_server->SetControlFilter(&inspector::Inspector::TakesControl);
+	namespace discovery = inspector::discovery;
+	const auto executable = discovery::ExecutablePath();
+	const auto worktree = discovery::FindWorktree(executable.parent_path());
+	discovery::GameRecord record {
+	    .port = _server->Port(),
+	    .pid = discovery::CurrentProcessId(),
+	    .worktree = worktree.has_value() ? worktree->generic_string() : std::string(),
+	    .executable = executable.generic_string(),
+	    .buildType = OPENBLACK_BUILD_TYPE,
+	    .land = _controls->levels.Current(),
+	    .startTime =
+	        std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count(),
+	};
+	_inspector.SetIdentity(discovery::ToJson(record));
+	_discovery = std::make_unique<discovery::DiscoveryFile>(discovery::DefaultFolder(), std::move(record));
+	if (!_discovery->Written())
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The inspector couldn't write its discovery file {}",
+		                   _discovery->Path().generic_string());
+	}
 }
 
 InspectorSystem::~InspectorSystem() = default;
@@ -155,7 +184,16 @@ void InspectorSystem::Service()
 	});
 	if (Locator::gameActionSystem::has_value())
 	{
-		Locator::gameActionSystem::value().UpdateInputLock(_server->ClientCount() > 0, seconds);
+		// Only a client driving this game keeps the player out: tools pinging it to find it don't
+		Locator::gameActionSystem::value().UpdateInputLock(_server->ControllingClientCount() > 0, seconds);
+	}
+	// Tools listing the running games see the land each is on
+	const auto land = _controls->levels.Current();
+	if (land != _discovery->Record().land)
+	{
+		_discovery->SetLand(land);
+		auto identity = inspector::discovery::ToJson(_discovery->Record());
+		_inspector.SetIdentity(std::move(identity));
 	}
 	_game->Frame();
 	// The input due this frame is made before the game reads its input
