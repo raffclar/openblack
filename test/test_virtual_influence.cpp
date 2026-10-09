@@ -139,3 +139,47 @@ TEST(VirtualInfluence, TheHumsPitchIsTheStrengthLeft)
 	state.soundFraction = 0.6f;
 	EXPECT_EQ(HumPitchPercent(state), 60u);
 }
+
+TEST(VirtualInfluence, NearTheHandThePlaceIsInInfluenceAsMuchAsTheStrength)
+{
+	const auto hand = map_coords::FromMetres({500.0f, 500.0f});
+	State state;
+	state.fraction = 0.5f;
+	// Half strength reaches five metres, the edge itself not counted
+	const auto near = Grant(state, hand, map_coords::FromMetres({503.0f, 500.0f}));
+	ASSERT_TRUE(near.has_value());
+	EXPECT_FLOAT_EQ(*near, 0.5f);
+	const float edge = gutils::GetDistanceInMetres(hand, map_coords::FromMetres({505.0f, 500.0f}));
+	EXPECT_EQ(Grant(state, hand, map_coords::FromMetres({505.0f, 500.0f})).has_value(), edge < 5.0f);
+	EXPECT_FALSE(Grant(state, hand, map_coords::FromMetres({506.0f, 500.0f})).has_value());
+}
+
+TEST(VirtualInfluence, AtTheHandAnyStrengthCountsAndNoneDoesNot)
+{
+	const auto hand = map_coords::FromMetres({120.0f, 80.0f});
+	State state;
+	state.fraction = 0.1f;
+	EXPECT_TRUE(Grant(state, hand, hand).has_value());
+	state.fraction = 0.0f;
+	EXPECT_FALSE(Grant(state, hand, hand).has_value());
+}
+
+TEST(VirtualInfluence, TheGrantNeverExceedsFull)
+{
+	const auto hand = map_coords::FromMetres({120.0f, 80.0f});
+	State state;
+	state.fraction = 1.5f;
+	EXPECT_FLOAT_EQ(Grant(state, hand, hand).value_or(0.0f), 1.0f);
+	// And reaches no further than full strength does
+	EXPECT_FALSE(Grant(state, hand, map_coords::FromMetres({131.0f, 80.0f})).has_value());
+}
+
+TEST(VirtualInfluence, EveryTurnNotesWhereTheHandIsEvenWhenSwitchedOff)
+{
+	State state;
+	state.disabled = true;
+	ProcessTurn(state, Outside({30.0f, 0.0f, 40.0f}, 5), k_Settings);
+	ASSERT_TRUE(state.turnHand.has_value());
+	EXPECT_EQ(state.turnHand->x, 30.0f);
+	EXPECT_FALSE(state.anchor.has_value());
+}

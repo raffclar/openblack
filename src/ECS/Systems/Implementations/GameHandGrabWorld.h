@@ -28,6 +28,7 @@ public:
 
 	[[nodiscard]] std::optional<entt::entity> ObjectUnderCursor() const override;
 	[[nodiscard]] bool InInfluence(PlayerNames player, glm::vec3 point) const override;
+	[[nodiscard]] bool HandInInfluence(PlayerNames player, glm::vec3 hand) const override;
 	[[nodiscard]] bool InBounds(glm::vec3 point) const override;
 	[[nodiscard]] glm::vec3 LandNormalAt(glm::vec3 point) const override;
 

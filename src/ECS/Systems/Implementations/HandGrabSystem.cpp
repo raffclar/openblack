@@ -203,7 +203,7 @@ hand_grab::Holdable HandGrabSystem::HoldableOf(entt::entity object) const
 bool HandGrabSystem::HandInInfluence() const
 {
 	const auto* grab = _world->Entities().TryGet<const HandGrab>(_world->Hand());
-	return grab != nullptr && grab->handPoint.has_value() && _world->InInfluence(_world->HandPlayer(), *grab->handPoint);
+	return grab != nullptr && grab->handPoint.has_value() && _world->HandInInfluence(_world->HandPlayer(), *grab->handPoint);
 }
 
 bool HandGrabSystem::MayTake(entt::entity object) const

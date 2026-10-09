@@ -52,6 +52,8 @@ public:
 	[[nodiscard]] virtual std::optional<entt::entity> ObjectUnderCursor() const = 0;
 	/// Whether a point is in a player's influence
 	[[nodiscard]] virtual bool InInfluence(PlayerNames player, glm::vec3 point) const = 0;
+	/// Whether the hand, at its point, is in its player's influence: while it keeps any of it past the border it is
+	[[nodiscard]] virtual bool HandInInfluence(PlayerNames player, glm::vec3 hand) const { return InInfluence(player, hand); }
 	/// Whether a point is on the map
 	[[nodiscard]] virtual bool InBounds(glm::vec3 point) const = 0;
 	/// The flat normal of the land at a point

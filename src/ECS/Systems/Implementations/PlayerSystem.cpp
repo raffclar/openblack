@@ -12,6 +12,7 @@
 #include "PlayerSystem.h"
 
 #include "ECS/Components/Alignment.h"
+#include "ECS/Components/Influence.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
@@ -47,9 +48,13 @@ void PlayerSystem::KeepForNextLand()
 	const auto& registry = Locator::entitiesRegistry::value();
 	registry.Each<const Player>([this, &registry](entt::entity entity, const Player& player) {
 		const auto* alignment = registry.TryGet<const Alignment>(entity);
-		_kept.insert_or_assign(player.name, Kept {.alignment = alignment != nullptr ? std::optional(*alignment) : std::nullopt,
-		                                          .damageFrom = player.damageFrom,
-		                                          .windResistance = player.windResistance});
+		const auto* virtualInfluence = registry.TryGet<const VirtualInfluence>(entity);
+		_kept.insert_or_assign(
+		    player.name,
+		    Kept {.alignment = alignment != nullptr ? std::optional(*alignment) : std::nullopt,
+		          .damageFrom = player.damageFrom,
+		          .windResistance = player.windResistance,
+		          .virtualInfluence = virtualInfluence != nullptr ? std::optional(virtualInfluence->state) : std::nullopt});
 	});
 }
 
@@ -72,5 +77,11 @@ void PlayerSystem::TakeUpKept(entt::entity playerEntity)
 	if (kept.alignment.has_value())
 	{
 		registry.AssignOrReplace<Alignment>(playerEntity, *kept.alignment);
+	}
+	// The hand goes on keeping what it kept, measured from where it last was in influence even on the land before; its
+	// hum went with that land
+	if (kept.virtualInfluence.has_value())
+	{
+		registry.AssignOrReplace<VirtualInfluence>(playerEntity, *kept.virtualInfluence);
 	}
 }

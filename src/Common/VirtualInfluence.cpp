@@ -25,8 +25,22 @@ constexpr float k_PowerShare = 0.2f;
 constexpr float k_PercentPerFraction = 100.0f;
 } // namespace
 
+std::optional<float> virtual_influence::Grant(const State& state, const map_coords::MapCoords& hand,
+                                              const map_coords::MapCoords& place)
+{
+	// Switching it off takes the strength with it, so only the strength is asked
+	const float strength = std::min(state.fraction, 1.0f);
+	if (gutils::GetDistanceInMetres(hand, place) < strength * k_RadiusPerFraction)
+	{
+		return strength;
+	}
+	return std::nullopt;
+}
+
 void virtual_influence::ProcessTurn(State& state, const TurnInputs& inputs, const Settings& settings)
 {
+	// Where the hand is is noted every turn, whatever else happens
+	state.turnHand = inputs.hand;
 	if (state.disabled)
 	{
 		return;

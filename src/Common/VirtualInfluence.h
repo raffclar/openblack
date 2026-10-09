@@ -15,8 +15,13 @@
 
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
+
 namespace openblack::virtual_influence
 {
+
+/// How far round the hand, in metres, the player keeps their influence at full strength; less as it wanes
+constexpr float k_RadiusPerFraction = 10.0f;
 
 /// What the hand keeps of its player's influence once it reaches past the border: a strength from 0 to 1 that wanes
 /// the further the hand goes from the last place it was in influence and the longer it stays out, and comes back a
@@ -25,6 +30,8 @@ struct State
 {
 	/// The last place the hand was in its player's influence, none until it has been
 	std::optional<glm::vec3> anchor;
+	/// Where the hand was at the last game turn: what the questions asked during a turn measure from
+	std::optional<glm::vec3> turnHand;
 	/// The game turn the hand was last in influence
 	uint32_t lastInsideTurn {0};
 	/// The strength left, 0 to 1
@@ -62,6 +69,12 @@ struct TurnInputs
 	/// The chants waiting at the player's worship sites
 	float chants;
 };
+
+/// Whether a place counts as in the player's influence through what the hand keeps: within the strength's share of ten
+/// metres of the hand, measured between map positions, and then as much as the strength. None past that, with no
+/// strength left, or when switched off.
+[[nodiscard]] std::optional<float> Grant(const State& state, const map_coords::MapCoords& hand,
+                                         const map_coords::MapCoords& place);
 
 /// Each turn: in influence the hand marks the place and gets a tenth of its strength back; out of it the strength drops
 /// by how far it is from that place and how long it has been out, a strength under a tenth going at once; and under a

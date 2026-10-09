@@ -40,6 +40,16 @@ public:
 	{
 		return influence.at(static_cast<size_t>(player));
 	}
+	[[nodiscard]] float HandPointInfluence(PlayerNames player, const map_coords::MapCoords&) const override
+	{
+		return influence.at(static_cast<size_t>(player));
+	}
+	[[nodiscard]] float PlayerRawInfluence(PlayerNames player, const map_coords::MapCoords&) const override
+	{
+		return influence.at(static_cast<size_t>(player));
+	}
+	void HeldThingUsedOnLand(PlayerNames) override {}
+	void SetInGameTurn(bool) override {}
 	[[nodiscard]] std::span<const influence::Circle> GetCircles() const override { return {}; }
 	[[nodiscard]] bool IsBorderShown(PlayerNames) const override { return false; }
 	[[nodiscard]] glm::vec2 GetScrollOffset() const override { return {}; }
