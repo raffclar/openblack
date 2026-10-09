@@ -56,6 +56,7 @@
 #include "3D/WaterRings.h"
 #include "Camera/Camera.h"
 #include "Common/CrashHandler.h"
+#include "Creature/CreatureFizzLook.h"
 #include "Creature/CreatureHair.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureSkin.h"
@@ -648,8 +649,8 @@ void BindBlendSources(const L3DMesh& mesh, const L3DSubMesh& subMesh,
 	}
 }
 
-/// The looks the creature spells give a creature: the ice sheen of a frozen one, and the static an invisible one dissolves
-/// through, scrolling across its skin
+/// The textures of the looks the creature spells give a creature: the ice sheen of a frozen one, and the static one
+/// fizzing out of sight is drawn through
 void BindCreatureSpellLooks(const ShaderProgram& program)
 {
 	const auto& textures = Locator::resources::value().GetTextures();
@@ -665,12 +666,22 @@ void BindCreatureSpellLooks(const ShaderProgram& program)
 			program.SetTextureSampler(sampler, binding.first, *textures.Handle(binding.second));
 		}
 	}
-	// The static scrolls a tenth of its width and a fifth of its height a second
-	using Clock = std::chrono::steady_clock;
-	static const auto k_Start = Clock::now();
-	const float seconds = std::chrono::duration<float>(Clock::now() - k_Start).count();
-	const glm::vec4 u_creatureSpellLook {std::fmod(seconds * 0.1f, 1.0f), std::fmod(seconds * 0.2f, 1.0f), 0.0f, 0.0f};
-	program.SetUniformValue("u_creatureSpellLook", &u_creatureSpellLook);
+}
+
+/// How a creature fizzing out of sight is drawn in the pass at hand: xy how far the static has slid across its skin, z
+/// 0 for none, 1 for its depth through the static, with w the least alpha the static must have, or 2 for its body over
+/// that depth, blended at w
+glm::vec4 CreatureSpellLookOf(const std::optional<RendererInterface::L3DMeshSubmitDesc::Fizz>& fizz)
+{
+	using Pass = RendererInterface::L3DMeshSubmitDesc::Fizz::Pass;
+	if (!fizz.has_value())
+	{
+		return glm::vec4(0.0f);
+	}
+	const bool depth = fizz->pass == Pass::Depth;
+	const float w = depth ? static_cast<float>(creature_fizz_look::StaticThreshold(fizz->level)) / 255.0f
+	                      : creature_fizz_look::BodyAlpha(fizz->level);
+	return {fizz->scroll, depth ? 1.0f : 2.0f, w};
 }
 
 /// The colour a recognised gesture's flash adds to the hand's light, 0 to 1 a channel
@@ -945,6 +956,16 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				BindBlendSources(mesh, subMesh, *desc.morphTargets, *program);
 				BindCreatureSpellLooks(*program);
 			}
+			else if (desc.fizz.has_value())
+			{
+				BindCreatureSpellLooks(*program);
+			}
+			// Set for every mesh, so that none is drawn with another's fizz
+			if (has(MeshUniform::CreatureSpellLook))
+			{
+				const auto u_creatureSpellLook = CreatureSpellLookOf(desc.fizz);
+				setUniform(MeshUniform::CreatureSpellLook, &u_creatureSpellLook);
+			}
 			if (has(MeshUniform::UvOffset))
 			{
 				const glm::vec4 u_uvOffset {desc.uvOffset, desc.uvScale, 0.0f};
@@ -1130,7 +1151,14 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			if ((skip & Mesh::SkipState::SkipRenderState) == 0)
 			{
 				auto state = desc.state;
-				if (desc.twoSided)
+				using FizzPass = L3DMeshSubmitDesc::Fizz::Pass;
+				if (desc.fizz.has_value() && desc.fizz->pass == FizzPass::Depth)
+				{
+					// A fizzing creature's depth through the static culls its back faces, whatever its materials say
+					state &= ~BGFX_STATE_CULL_MASK;
+					state |= desc.mirrored ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW;
+				}
+				else if (desc.twoSided)
 				{
 					state &= ~BGFX_STATE_CULL_MASK;
 				}
@@ -1143,7 +1171,8 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 						state |= desc.mirrored ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW;
 					}
 				}
-				if (materialBlending)
+				// A fizzing creature's passes keep the blending they are given
+				if (materialBlending && !desc.fizz.has_value())
 				{
 					using BlendMode = decltype(prim.blend);
 					constexpr uint32_t k_AlphaTextured = 4;
@@ -1175,12 +1204,12 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 					}
 				}
 				auto rgba = desc.rgba;
-				if (desc.instanceAlpha)
+				if (desc.instanceAlpha && !desc.fizz.has_value())
 				{
 					state &= ~BGFX_STATE_BLEND_MASK;
 					state |= BGFX_STATE_BLEND_ALPHA;
 				}
-				if (desc.additiveShare.has_value())
+				if (desc.additiveShare.has_value() && !desc.fizz.has_value())
 				{
 					// Added by a constant share, as the game draws a one-shot miracle's bubble
 					state &= ~BGFX_STATE_BLEND_MASK;
@@ -4789,7 +4818,37 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					continue;
 				}
-				drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
+				const auto* spells = desc.entities.TryGet<const ecs::components::CreatureSpells>(entity);
+				const float fizz = spells != nullptr ? spells->fizz : 0.0f;
+				if (creature_fizz_look::Fizzing(fizz) && instance < renderCtx.instanceUniforms.size())
+				{
+					// Fizzing, it blends with what is behind it, so it is drawn with the rest that blends, where its
+					// distance puts it: first its depth alone, where the static scrolling over its skin is strong enough,
+					// then its body blended over just that depth
+					const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
+					const auto depth = zsort::Depth(position, cameraOrigin);
+					const auto level = creature_fizz_look::Level(fizz);
+					const auto mainState = submitDesc.state;
+					submitDesc.viewId = translucentViewId;
+					submitDesc.fizz = L3DMeshSubmitDesc::Fizz {
+					    .pass = L3DMeshSubmitDesc::Fizz::Pass::Depth, .level = level, .scroll = spells->staticScroll};
+					submitDesc.state = BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA;
+					submitDesc.sortDepth = depth;
+					drawInstances(mesh->id, placers->second, false, instance, 1, &pose);
+					submitDesc.fizz->pass = L3DMeshSubmitDesc::Fizz::Pass::Body;
+					submitDesc.state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_DEPTH_TEST_EQUAL |
+					                   BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA;
+					submitDesc.sortDepth = depth > 0 ? depth - 1 : 0;
+					drawInstances(mesh->id, placers->second, false, instance, 1, &pose);
+					submitDesc.fizz.reset();
+					submitDesc.state = mainState;
+					submitDesc.sortDepth = 0;
+					submitDesc.viewId = desc.viewId;
+				}
+				else if (creature_fizz_look::Drawn(fizz))
+				{
+					drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
+				}
 				DrawCreatureEyes(desc, entity, submitDesc);
 				DrawCreatureHair(desc, entity);
 			}

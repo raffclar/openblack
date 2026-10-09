@@ -25,6 +25,8 @@ public:
 	virtual void SetFizz(entt::entity creature, float target, float seconds, bool goesForGood) = 0;
 	/// Once a game turn, after the creatures have acted: every fizz moves on
 	virtual void ProcessTurn() = 0;
+	/// Each frame, by the frame's game time: the static every creature is drawn fizzing through slides across its skin
+	virtual void UpdateFrame(float seconds) = 0;
 	/// How far a creature has fizzed out of sight, 0 to 1
 	[[nodiscard]] virtual float FizzOf(entt::entity creature) const = 0;
 };

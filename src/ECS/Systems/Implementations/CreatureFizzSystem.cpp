@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "Audio/Sound.h"
+#include "Creature/CreatureFizzLook.h"
 #include "ECS/Components/CreatureFizz.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Transform.h"
@@ -102,6 +103,16 @@ void CreatureFizzSystem::ProcessTurn()
 	{
 		registry.SetDirty();
 	}
+}
+
+void CreatureFizzSystem::UpdateFrame(float seconds)
+{
+	Locator::entitiesRegistry::value().Each<CreatureSpells>([seconds](CreatureSpells& spells) {
+		if (creature_fizz_look::Fizzing(spells.fizz))
+		{
+			spells.staticScroll = creature_fizz_look::Scroll(spells.staticScroll, seconds);
+		}
+	});
 }
 
 float CreatureFizzSystem::FizzOf(entt::entity creature) const

@@ -216,6 +216,7 @@ private:
 		ObjectLook,
 		KeepBelow,
 		Inset,
+		CreatureSpellLook,
 
 		_count
 	};
@@ -253,6 +254,7 @@ private:
 	    "u_objectLook",           //
 	    "u_keepBelow",            //
 	    "u_inset",                //
+	    "u_creatureSpellLook",    //
 	};
 	using MeshUniforms = std::array<std::optional<UniformHandle>, static_cast<size_t>(MeshUniform::_count)>;
 	/// A program's handles of the mesh uniforms it has, looked up by name the first time it draws a mesh

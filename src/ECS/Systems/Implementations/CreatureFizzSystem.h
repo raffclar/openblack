@@ -23,6 +23,7 @@ class CreatureFizzSystem final: public CreatureFizzSystemInterface
 public:
 	void SetFizz(entt::entity creature, float target, float seconds, bool goesForGood) override;
 	void ProcessTurn() override;
+	void UpdateFrame(float seconds) override;
 	[[nodiscard]] float FizzOf(entt::entity creature) const override;
 };
 
