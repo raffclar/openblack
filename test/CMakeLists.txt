@@ -375,6 +375,7 @@ target_link_libraries(test_clip_sound_player PRIVATE sas)
 openblack_setup_and_add_test(
   test_physics_game_hooks test_physics_game_hooks.cpp
 )
+openblack_setup_and_add_test(test_town_homes test_town_homes.cpp)
 openblack_setup_and_add_test(test_reward test_reward.cpp)
 openblack_setup_and_add_test(test_scenic_forest test_scenic_forest.cpp)
 openblack_setup_and_add_test(test_nearest_search test_nearest_search.cpp)

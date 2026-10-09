@@ -480,8 +480,17 @@ void world_objects::Remove(entt::entity object)
 		{
 			if (auto* abode = registry.TryGet<Abode>(villager->abode))
 			{
-				abode->inhabitants.erase(object);
+				std::erase(abode->inhabitants, object);
 			}
+		}
+	}
+	// A building's people are made homeless as it goes, the newest first
+	if (const auto* abode = registry.TryGet<const Abode>(object); abode != nullptr && Locator::townSystem::has_value())
+	{
+		const auto inhabitants = abode->inhabitants;
+		for (const auto villager : inhabitants)
+		{
+			villager_home::HomeDeleted(villager);
 		}
 	}
 	registry.Destroy(object);
