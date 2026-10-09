@@ -403,6 +403,12 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	{
 		// TODO(hand): a press too short to take the thing taps it
 		[[maybe_unused]] const auto tapped = handGrab->Release(SDL_GetTicks(), Locator::time::value().GetTurn());
+		// Let go with an empty hand that did nothing with the press, it clicks the thing or the place under it, for the
+		// scripts; not while the game is paused
+		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy() && !inTemple && !IsPaused())
+		{
+			handGrab->ClickReleased(Locator::time::value().GetTurn());
+		}
 	}
 	// The action button (the right) casts the miracle in the hand, which comes before the creatures: pressed, it arms,
 	// locks on or casts it, and let go it throws an armed one or lets a locked one go. Without a miracle it takes hold
@@ -436,6 +442,10 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			if (under.has_value() && !tying)
 			{
 				_actionPressTaken = true;
+				if (handGrab != nullptr)
+				{
+					handGrab->ClickThing(*under, Locator::time::value().GetTurn());
+				}
 				if (!creatureHand.Grab())
 				{
 					// A creature the hand may not hold: a click on it still asks the leash, which says why not

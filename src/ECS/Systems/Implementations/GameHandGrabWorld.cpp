@@ -57,6 +57,7 @@
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
@@ -373,6 +374,17 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 	}
 	object_physics::TapRock(Locator::dynamicsSystem::value(), object, handPoint, player);
 	return true;
+}
+
+bool GameHandGrabWorld::HoldsLooseLeash() const
+{
+	if (!Locator::leashSystem::has_value())
+	{
+		return false;
+	}
+	const auto& leashes = Locator::leashSystem::value();
+	const auto creature = leashes.PlayersCreature(HandPlayer());
+	return creature.has_value() && leashes.HolderPoint(*creature).has_value();
 }
 
 void GameHandGrabWorld::LeaveRootsHole(entt::entity tree)

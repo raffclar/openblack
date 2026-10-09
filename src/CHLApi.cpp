@@ -27,6 +27,7 @@
 
 #include "3D/DayNightClock.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 #include "3D/SkyInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/GameMusic.h"
@@ -41,6 +42,7 @@
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Hand.h"
+#include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
@@ -72,6 +74,7 @@
 #include "ECS/TownPlaythings.h"
 #include "Enums.h"
 #include "Game.h"
+#include "Hand/HandClickRules.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Magic/ScriptCast.h"
@@ -364,6 +367,26 @@ void NotImplemented(std::optional<int32_t> detail = std::nullopt)
 
 } // namespace
 
+/// What the player at this computer last clicked, kept on their hand; none without a hand
+ecs::components::HandClicked* LocalHandClicked()
+{
+	if (!Locator::handSystem::has_value())
+	{
+		return nullptr;
+	}
+	const auto hand = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	auto& registry = Locator::entitiesRegistry::value();
+	if (hand == entt::null || !registry.Valid(hand))
+	{
+		return nullptr;
+	}
+	if (auto* clicked = registry.TryGet<ecs::components::HandClicked>(hand))
+	{
+		return clicked;
+	}
+	return &registry.Assign<ecs::components::HandClicked>(hand);
+}
+
 void None() {} // 000 NONE
 
 void SetCameraPosition() // 001 SET_CAMERA_POSITION
@@ -487,10 +510,17 @@ void TextRead() // 015 TEXT_READ
 
 void GameThingClicked() // 016 GAME_THING_CLICKED
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto object = PopObject();
+	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		Pushb(false);
+		return;
+	}
+	const auto* clicked = LocalHandClicked();
+	// TODO(script-natives): a clicked challenge highlight is saved to the instant save slot first, once highlights and
+	// saves exist
+	Pushb(clicked != nullptr && hand_click::IsThingClicked(*clicked, object));
 }
 
 void SetScriptState() // 017 SET_SCRIPT_STATE
@@ -1761,25 +1791,28 @@ void StopScript() // 155 STOP_SCRIPT
 
 void ClearClickedObject() // 156 CLEAR_CLICKED_OBJECT
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	if (auto* clicked = LocalHandClicked())
+	{
+		hand_click::ClearThing(*clicked);
+	}
 }
 
 void ClearClickedPosition() // 157 CLEAR_CLICKED_POSITION
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	if (auto* clicked = LocalHandClicked())
+	{
+		hand_click::ClearPlace(*clicked);
+	}
 }
 
 void PositionClicked() // 158 POSITION_CLICKED
 {
-	// const auto unk3 = Pop().intVal;
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto radius = Popf();
+	const auto position = PopVec();
+	const auto* clicked = LocalHandClicked();
+	// Along the ground: the position's height doesn't count
+	const map_coords::MapCoords at {.x = map_coords::ToFixed(position.x), .z = map_coords::ToFixed(position.z)};
+	Pushb(clicked != nullptr && hand_click::IsPlaceClicked(*clicked, at, radius));
 }
 
 void ReleaseFromScript() // 159 RELEASE_FROM_SCRIPT
@@ -4292,9 +4325,16 @@ void SetFightExit() // 420 SET_FIGHT_EXIT
 
 void GetObjectClicked() // 421 GET_OBJECT_CLICKED
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	const auto* clicked = LocalHandClicked();
+	const auto object = clicked != nullptr ? clicked->thing : entt::entity {entt::null};
+	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
+	{
+		Pusho(0);
+		return;
+	}
+	// The thing found takes a place in the scripts' table, the game's own
+	Locator::scriptObjects::value().Register(object, false);
+	Pusho(static_cast<uint32_t>(object));
 }
 
 void GetMana() // 422 GET_MANA

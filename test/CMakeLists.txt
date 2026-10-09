@@ -82,6 +82,8 @@ openblack_setup_and_add_test(
   test_hand_grab_system hand/test_hand_grab_system.cpp
 )
 openblack_setup_and_add_test(test_hand_feel hand/test_hand_feel.cpp)
+openblack_setup_and_add_test(test_hand_click hand/test_hand_click.cpp)
+target_link_libraries(test_hand_click PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_hand_hold_pose test_hand_hold_pose.cpp)
 openblack_setup_and_add_test(test_tribal_power_spin test_tribal_power_spin.cpp)
 openblack_setup_and_add_test(

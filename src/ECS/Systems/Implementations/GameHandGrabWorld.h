@@ -50,6 +50,7 @@ public:
 	void HeatHeld(entt::entity object) override;
 	void PlaySample(uint32_t sample, glm::vec3 position) override;
 	bool TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player) override;
+	[[nodiscard]] bool HoldsLooseLeash() const override;
 	[[nodiscard]] uint32_t LocalRandom(uint32_t count) override;
 	void VillagerIntoHand(entt::entity villager) override;
 	void AnimalIntoOwnFlock(entt::entity animal) override;
