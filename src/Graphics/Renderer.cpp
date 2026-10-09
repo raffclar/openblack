@@ -738,7 +738,7 @@ const Renderer::Cap& Renderer::CapOf(const L3DSubMesh& subMesh, const CapPrimiti
 	const auto first = std::min<size_t>(primitive.indicesOffset, indices.size());
 	indices = indices.subspan(first, std::min<size_t>(primitive.indicesCount, indices.size() - first));
 	Cap cap {
-	    .wholeBelow = partial_build_cap::HasWholeTriangleBelow(surface.positions, indices, height),
+	    .drawsBelow = partial_build_cap::DrawsAnythingBelow(surface.positions, indices, height),
 	    .vertices = partial_build_cap::Build(surface.positions, surface.uvs, surface.normals, indices, height,
 	                                         InsetOf(primitive.twoSided)),
 	};
@@ -899,7 +899,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			                          .indicesCount = prim.indicesCount,
 			                          .twoSided = prim.twoSided},
 			                         *desc.modelCutHeight);
-			if (!made.wholeBelow || (desc.cap && made.vertices.empty()))
+			if (!made.drawsBelow || (desc.cap && made.vertices.empty()))
 			{
 				lastPreserveState = false;
 				continue;
@@ -4685,11 +4685,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					continue;
 				}
 				const RenderContext::InstancedDrawDesc placers {0, 1, build.morphWithTerrain, false};
+				// A part cut at a height is drawn from both sides; a scaffold standing whole, only sunk into the land, is
+				// drawn as the building's own model is
 				const auto drawPart = [&](uint32_t instance, std::optional<float> cut, std::optional<uint32_t> status,
 				                          bool innerWalls) {
 					submitDesc.cutAbove = cut;
 					submitDesc.modelCutHeight = status.has_value() || build.morphWithTerrain ? std::nullopt : build.capHeight;
-					submitDesc.twoSided = true;
+					submitDesc.twoSided = cut.has_value();
 					submitDesc.innerWalls = innerWalls;
 					submitDesc.onlyStatus = status;
 					drawInstances(build.meshId, placers, false, instance, 1, nullptr, nullptr,
