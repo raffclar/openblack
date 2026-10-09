@@ -11,9 +11,12 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <vector>
 
 #include <LHVMTypes.h>
+
+#include "ScriptHeaders/NativeStubCalls.h"
 
 namespace openblack::chlapi
 {
@@ -30,6 +33,14 @@ public:
 	/// A script task has stopped: whatever it had control of goes back
 	static void TaskStopped(uint32_t task);
 
+	/// The scripts call a native: the one an unwritten native reports itself as
+	void EnterNative(uint32_t native) { _currentNative = native; }
+	/// The native being run isn't written (or this case of it isn't): logged the first time only, every call counted
+	void NotImplemented(std::optional<int32_t> detail = std::nullopt);
+	[[nodiscard]] const script::NativeStubCalls& GetStubCalls() const { return _stubCalls; }
+	/// Logs how often each unwritten native was called, the most called first
+	void LogStubCalls() const;
+
 private:
 	void InitFunctionsTable0();
 	void InitFunctionsTable1();
@@ -38,6 +49,8 @@ private:
 	void InitFunctionsTable4();
 
 	std::vector<lhvm::NativeFunction> _functionsTable;
+	uint32_t _currentNative {0};
+	script::NativeStubCalls _stubCalls;
 };
 
 } // namespace openblack::chlapi

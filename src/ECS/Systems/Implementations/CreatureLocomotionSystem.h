@@ -40,6 +40,7 @@ public:
 	MoveResult FleeFrom(entt::entity creature, glm::vec2 threat) override;
 	bool TurnToFace(entt::entity creature, glm::vec2 point) override;
 	void Stop(entt::entity creature) override;
+	void Place(entt::entity creature, glm::vec3 position) override;
 	[[nodiscard]] bool IsMoving(entt::entity creature) const override;
 	[[nodiscard]] const creature_route::WalkableLand& GetWalkableLand() override;
 

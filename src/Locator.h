@@ -129,6 +129,7 @@ class HelpSpeechSystemInterface;
 class SoundTagSystemInterface;
 class RainSystemInterface;
 class ChimneySmokeSystemInterface;
+class AbodeKnockSystemInterface;
 class InfluenceSystemInterface;
 class TownDesireSystemInterface;
 class PathfindingSystemInterface;
@@ -241,6 +242,7 @@ struct Locator
 	using soundTagSystem = entt::locator<ecs::systems::SoundTagSystemInterface>;
 	using rainSystem = entt::locator<ecs::systems::RainSystemInterface>;
 	using chimneySmokeSystem = entt::locator<ecs::systems::ChimneySmokeSystemInterface>;
+	using abodeKnockSystem = entt::locator<ecs::systems::AbodeKnockSystemInterface>;
 	using influenceSystem = entt::locator<ecs::systems::InfluenceSystemInterface>;
 	using townDesireSystem = entt::locator<ecs::systems::TownDesireSystemInterface>;
 	using particleSystem = entt::locator<ecs::systems::ParticleSystemInterface>;

@@ -92,8 +92,14 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 	const auto morph =
 	    creature_morph::FromAttributes(body.alignment, body.fatness, body.strength, SpeciesStrength(creatureType));
 	const auto size = creature_morph::ClampScale(scale);
-	registry.Assign<Creature>(entity, playerName, false, creatureType, creatureMindId, body.alignment, body.fatness,
-	                          body.strength, size);
+	registry.Assign<Creature>(entity, Creature {.owner = playerName,
+	                                            .leashable = false,
+	                                            .species = creatureType,
+	                                            .mind = creatureMindId,
+	                                            .alignment = body.alignment,
+	                                            .fatness = body.fatness,
+	                                            .strength = body.strength,
+	                                            .size = size});
 	// The body is drawn with the base mesh's skins, its shape blended towards the other meshes
 	registry.Assign<Mesh>(entity, creature::GetIdFromType(creatureType, CreatureBody::Appearance::Base));
 	registry.Assign<CreatureMorph>(entity, CreatureMorph {.shownFatness = body.fatness, .drawn = morph, .revision = 0});

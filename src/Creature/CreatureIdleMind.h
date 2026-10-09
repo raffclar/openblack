@@ -230,6 +230,11 @@ struct Step
 		/// Drawing a gesture in the air with its hand, by the gesture's number in the step's animation, until the
 		/// creature's movement says it is done or has failed
 		Gesture,
+		/// Waiting for the step's object to be back on the map (out of any hand, flight or tornado); if the object is
+		/// gone, the rest of the agenda is given up
+		WaitInMap,
+		/// Dousing the step's object with water at once, as a creature does after casting the water miracle at a fire
+		Douse,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -247,7 +252,7 @@ struct Step
 	bool closedEyes {false};
 	/// What the step does to the body: when an action is done (eating, as it starts), or a static step's loop ends
 	Effect effect {Effect::None};
-	/// The object eaten, by its entity's number
+	/// The object eaten, waited for or doused, by its entity's number
 	std::optional<uint32_t> object;
 	/// What an object step does
 	ObjectOrder order {};
@@ -353,6 +358,8 @@ struct Senses
 	Wants wants {};
 	bool rested {false};
 	HandsState hands {HandsState::Idle};
+	/// Whether the object a step waits for is on the map, none when the object is gone
+	std::optional<bool> objectInMap;
 	/// What picks the faces it pulls
 	creature_face::Feelings feelings {};
 };
@@ -395,6 +402,8 @@ struct Commands
 	/// A miracle to cast, and whether to let go of the one it holds
 	std::optional<CastOrder> cast;
 	bool releaseCast {false};
+	/// An object to douse with water, by its entity's number
+	std::optional<uint32_t> douse;
 };
 
 /// random(n) is a whole number from 0 to n - 1

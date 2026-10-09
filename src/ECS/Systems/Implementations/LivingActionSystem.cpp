@@ -385,8 +385,14 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* HAVING_SEX_AT_HOME */ k_TodoEntry,
     /* STOP_HAVING_SEX_AT_HOME */ k_TodoEntry,
     /* WAIT_FOR_DINNER */ k_TodoEntry,
-    /* HOMELESS_START */ k_TodoEntry,
-    /* VAGRANT_START */ k_TodoEntry,
+    /* HOMELESS_START */
+    VillagerStateTableEntry {
+        .state = &villager_home::HomelessStart,
+    },
+    /* VAGRANT_START */
+    VillagerStateTableEntry {
+        .state = &villager_home::VagrantStart,
+    },
     /* MORN_DEATH */ k_TodoEntry,
     /* PERFORM_INSPECTION_REACTION */ k_TodoEntry,
     /* APPROACH_OBJECT_REACTION */ k_TodoEntry,
@@ -462,7 +468,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* FAINTING_REACTION */ k_TodoEntry,
     /* START_CONFUSED_REACTION */ k_TodoEntry,
     /* CONFUSED_REACTION */ k_TodoEntry,
-    /* AFTER_TAP_ON_ABODE */ k_TodoEntry,
+    /* AFTER_TAP_ON_ABODE */
+    VillagerStateTableEntry {
+        .state = &villager_home::AfterTapOnAbode,
+    },
     /* WEAK_ON_GROUND */ k_TodoEntry,
     /* SCRIPT_WANDER_AROUND_POSITION */ k_TodoEntry,
     /* SCRIPT_PLAY_ANIM */
@@ -484,7 +493,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* GO_TOWARDS_DEAD_PERSON */ k_TodoEntry,
     /* LOOK_AT_DEAD_PERSON */ k_TodoEntry,
     /* MOURN_DEAD_PERSON */ k_TodoEntry,
-    /* NOTHING_TO_DO */ k_TodoEntry,
+    /* NOTHING_TO_DO */
+    VillagerStateTableEntry {
+        .state = &villager_home::NothingToDo,
+    },
     /* ARRIVES_AT_WORKSHOP_FOR_DROP_OFF */ k_TodoEntry,
     /* ARRIVES_AT_STORAGE_PIT_FOR_WORKSHOP_MATERIALS */ k_TodoEntry,
     /* SHOW_POISONED */ k_TodoEntry,
@@ -547,29 +559,51 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* WAIT_FOR_MATE */ k_TodoEntry,
     /* GO_AND_HIDE_IN_NEARBY_BUILDING */ k_TodoEntry,
     /* LOOK_TO_SEE_IF_IT_IS_SAFE */ k_TodoEntry,
-    /* SLEEP_IN_TENT */ k_TodoEntry,
+    /* SLEEP_IN_TENT */
+    VillagerStateTableEntry {
+        .state = &villager_home::SleepInTent,
+    },
     /* PAUSE_FOR_A_SECOND */
     VillagerStateTableEntry {
         .state = &VillagerPauseForASecond,
     },
     /* PANIC_REACTION */ k_TodoEntry,
     /* GET_FOOD_AT_WORSHIP_SITE */ k_TodoEntry,
-    /* GOTO_CONGREGATE_IN_TOWN_AFTER_EMERGENCY */ k_TodoEntry,
-    /* CONGREGATE_IN_TOWN_AFTER_EMERGENCY */ k_TodoEntry,
+    /* GOTO_CONGREGATE_IN_TOWN_AFTER_EMERGENCY */
+    VillagerStateTableEntry {
+        .state = &villager_home::GotoCongregateInTownAfterEmergency,
+    },
+    /* CONGREGATE_IN_TOWN_AFTER_EMERGENCY */
+    VillagerStateTableEntry {
+        .state = &villager_home::CongregateInTownAfterEmergency,
+    },
     /* SCRIPT_IN_CROWD */ k_TodoEntry,
-    /* GO_AND_CHILLOUT_OUTSIDE_HOME */ k_TodoEntry,
-    /* SIT_AND_CHILLOUT */ k_TodoEntry,
+    /* GO_AND_CHILLOUT_OUTSIDE_HOME */
+    VillagerStateTableEntry {
+        .state = &villager_home::GoAndChilloutOutsideHome,
+    },
+    /* SIT_AND_CHILLOUT */
+    VillagerStateTableEntry {
+        .state = &villager_home::SitAndChillout,
+        .entryState = &villager_home::EnterSitAndChillOut,
+    },
     /* SCRIPT_GO_AND_MOVE_ALONG_PATH */ k_TodoEntry,
-    /* RESTART_MEETING */ k_TodoEntry,
-    /* GOTO_ABODE_BURNING_REACTION */ k_TodoEntry,
-    /* ARRIVES_AT_ABODE_BURNING_REACTION */ k_TodoEntry,
+    /* GO_HOME_FROM_WORSHIP */ k_TodoEntry,
+    /* ARRIVES_HOME_FROM_WORSHIP */ k_TodoEntry,
+    /* SLEEP_IN_TENT_FROM_WORSHIP */
+    VillagerStateTableEntry {
+        .state = &villager_home::SleepInTent,
+    },
     /* GO_TOWARDS_TELEPORT_REACTION_QUICKLY: running to a teleport stone is walking to it, faster */
     VillagerStateTableEntry {
         .state = &villager_teleport::GoTowardsTeleportReaction,
     },
-    /* ARRIVES_AT_SCAFFOLD_FOR_PICKUP */ k_TodoEntry,
-    /* ARRIVES_AT_BUILDING_SITE_WITH_SCAFFOLD */ k_TodoEntry,
-    /* MOVE_SCAFFOLD_TO_BUILDING_SITE */ k_TodoEntry,
+    /* GO_AND_CHILLOUT_IN_TOWN */
+    VillagerStateTableEntry {
+        .state = &villager_home::GoAndChilloutInTown,
+    },
+    /* WAIT_FOR_ARTIFACT_DANCE */ k_TodoEntry,
+    /* BREEDER_JUST_LANDED */ k_TodoEntry,
 };
 
 void LivingActionSystem::Update()
@@ -646,6 +680,11 @@ VillagerStates FinalStateOf(const LivingAction& action)
 	return static_cast<VillagerStates>(action.states.at(static_cast<size_t>(LivingAction::Index::Final)));
 }
 } // namespace
+
+VillagerStates LivingActionSystem::VillagerGetFinalState(const LivingAction& action) const
+{
+	return FinalStateOf(action);
+}
 
 void LivingActionSystem::SetStateDirectly(LivingAction& action, LivingAction::Index index, VillagerStates state) const
 {
