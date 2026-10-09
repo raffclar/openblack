@@ -75,6 +75,7 @@ public:
 	void SetEmitterVolume(entt::entity emitter, uint32_t volume) override;
 	[[nodiscard]] uint32_t GetEmitterVolume(entt::entity emitter) override;
 	void StopOwnedSounds(entt::entity owner) override;
+	void StopAllSoundEffects() override;
 	void AddAnimEffects(const std::string& bankName, AnimEffectTable table) override;
 	AnimEffectPlay PlayAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
 	                              const glm::vec3& position) override;

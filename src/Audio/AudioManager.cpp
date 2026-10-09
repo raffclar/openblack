@@ -520,6 +520,21 @@ void AudioManager::StopOwnedSounds(entt::entity owner)
 	}
 }
 
+void AudioManager::StopAllSoundEffects()
+{
+	std::vector<entt::entity> effects;
+	Locator::entitiesRegistry::value().Each<const AudioEmitter>([&effects](entt::entity entity, const AudioEmitter& emitter) {
+		if (!emitter.music)
+		{
+			effects.push_back(entity);
+		}
+	});
+	for (const auto entity : effects)
+	{
+		DestroyEmitter(entity);
+	}
+}
+
 void AudioManager::AddAnimEffects(const std::string& bankName, AnimEffectTable table)
 {
 	_animEffects.insert_or_assign(bankName, std::move(table));
