@@ -49,6 +49,8 @@ struct PhysicsDrawPose
 	/// The model's axes, scaled by the object's scale
 	glm::mat3 axes {1.0f};
 	glm::vec3 origin {0.0f};
+	/// Sunk until its centre is a radius or more under the sea, every point of it under the surface: it isn't drawn
+	bool underSea {false};
 };
 
 } // namespace openblack::ecs::components

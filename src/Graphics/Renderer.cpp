@@ -72,6 +72,7 @@
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGlow.h"
 #include "ECS/Components/HandMorph.h"
+#include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/LightBeam.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
@@ -2557,7 +2558,7 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 			    addQuad(quad);
 		    }
 	    },
-	    entt::exclude<ecs::components::AtHome>);
+	    entt::exclude<ecs::components::AtHome, ecs::components::HiddenByState>);
 	if (vertices.empty())
 	{
 		return;

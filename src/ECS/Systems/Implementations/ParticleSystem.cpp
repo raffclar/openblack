@@ -1041,6 +1041,14 @@ void ParticleSystem::AddTargetPosition(EffectId id, glm::vec3 position)
 	}
 }
 
+void ParticleSystem::AddPlasma(EffectId id, const particles::PlasmaCommand& command)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->effect->AddPlasma(command);
+	}
+}
+
 void ParticleSystem::CloseDown(EffectId id)
 {
 	if (const auto it = FindRunning(id); it != _effects.end())

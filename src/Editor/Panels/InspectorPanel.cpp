@@ -38,6 +38,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/VillagerAge.h"
 #include "Editor/EditorContext.h"
 #include "Editor/EditorEntities.h"
 #include "Editor/EditorMath.h"
@@ -119,7 +120,8 @@ const std::vector<ComponentView>& ComponentViews()
 	                            }),
 	    View<Villager>("Villager",
 	                   [](const Villager& villager) {
-		                   return fmt::format("age {}, health {}, hunger {}", villager.age, villager.health, villager.hunger);
+		                   return fmt::format("age {}, health {}, food {:.2f}", ecs::villager_age::AgeNow(villager),
+		                                      villager.health, villager.food);
 	                   }),
 	    View<LivingAction>(
 	        "Living action",
@@ -281,8 +283,11 @@ void InspectorPanel::DrawVillager(EditorContext& context, entt::entity entity) n
 		ImGui::TextColored(style::k_Warning, "Homeless");
 	}
 	ImGui::InputScalar("Health", ImGuiDataType_U32, &villager.health);
-	ImGui::InputScalar("Age", ImGuiDataType_U32, &villager.age);
-	ImGui::InputScalar("Hunger", ImGuiDataType_U32, &villager.hunger);
+	if (auto age = ecs::villager_age::AgeNow(villager); ImGui::InputScalar("Age", ImGuiDataType_U32, &age))
+	{
+		ecs::villager_age::SetBirthTurnForAge(villager, age);
+	}
+	ImGui::InputFloat("Food", &villager.food);
 	EnumCombo("Life stage", villager.lifeStage, Villager::k_LifeStageStrs);
 	EnumCombo("Sex", villager.sex, Villager::k_SexStrs);
 	EnumCombo("Tribe", villager.tribe, k_TribeStrs);
