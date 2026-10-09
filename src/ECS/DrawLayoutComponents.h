@@ -15,6 +15,7 @@ namespace openblack::ecs::components
 {
 struct Abode;
 struct AnimalPose;
+struct AnimatedStaticPose;
 struct AtHome;
 struct CreatureMorph;
 struct Feature;
@@ -43,7 +44,7 @@ constexpr bool k_ChangesDrawLayout = [] {
 	       std::is_same_v<C, Tree> || std::is_same_v<C, TempleInteriorPart> || std::is_same_v<C, AtHome> ||
 	       std::is_same_v<C, Abode> || std::is_same_v<C, Feature> || std::is_same_v<C, MobileStatic> ||
 	       std::is_same_v<C, StoragePit> || std::is_same_v<C, Unlit> || std::is_same_v<C, CreatureMorph> ||
-	       std::is_same_v<C, Translucent> || std::is_same_v<C, AnimalPose>;
+	       std::is_same_v<C, Translucent> || std::is_same_v<C, AnimalPose> || std::is_same_v<C, AnimatedStaticPose>;
 }();
 
 } // namespace openblack::ecs

@@ -60,6 +60,7 @@
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureSkin.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/ChimneySmoke.h"
 #include "ECS/Components/Cloud.h"
@@ -4166,7 +4167,8 @@ void Renderer::SelectDrawnCreatures(const DrawSceneDesc& drawDesc) const
 	for (const auto& [entity, instance] : draws)
 	{
 		// The animals are drawn one by one by themselves
-		if (!drawDesc.entities.AnyOf<ecs::components::AnimalPose, ecs::components::VillagerPose>(entity))
+		if (!drawDesc.entities.AnyOf<ecs::components::AnimalPose, ecs::components::VillagerPose,
+		                             ecs::components::AnimatedStaticPose>(entity))
 		{
 			_drawnCreatures.push_back({.entity = entity, .instance = instance});
 		}
@@ -4797,11 +4799,20 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				              &entityPose);
 				submitDesc.objectLook.reset();
 			};
-			// The villagers, each posed by its state's clip, or in its model's own pose while its state plays none
+			// The villagers, each posed by its state's clip, or in its model's own pose while its state plays none; and the
+			// gates and other scenery the scripts open and close, each posed by its own clip
 			const auto drawVillager = [&](entt::entity entity, uint32_t instance) {
-				const auto* pose = desc.entities.TryGet<const ecs::components::VillagerPose>(entity);
+				const std::vector<glm::mat4>* bones = nullptr;
+				if (const auto* pose = desc.entities.TryGet<const ecs::components::VillagerPose>(entity))
+				{
+					bones = &pose->bones;
+				}
+				else if (const auto* still = desc.entities.TryGet<const ecs::components::AnimatedStaticPose>(entity))
+				{
+					bones = &still->bones;
+				}
 				const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
-				if (pose == nullptr || mesh == nullptr || !meshManager.Contains(mesh->id))
+				if (bones == nullptr || mesh == nullptr || !meshManager.Contains(mesh->id))
 				{
 					return;
 				}
@@ -4812,8 +4823,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					return;
 				}
 				const auto model = meshManager.Handle(mesh->id);
-				const bool posed = pose->bones.size() == model->GetBoneMatrices().size();
-				const EntityPose entityPose {.bones = posed ? std::span<const glm::mat4>(pose->bones)
+				const bool posed = bones->size() == model->GetBoneMatrices().size();
+				const EntityPose entityPose {.bones = posed ? std::span<const glm::mat4>(*bones)
 				                                            : std::span<const glm::mat4>(model->GetBoneMatrices()),
 				                             .morphTargets = nullptr};
 				drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &entityPose);

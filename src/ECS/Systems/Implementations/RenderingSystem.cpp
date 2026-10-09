@@ -20,6 +20,7 @@
 #include "3D/L3DMesh.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureSpells.h"
@@ -111,7 +112,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		count.first->second.castsShadow |= registry.AnyOf<Abode, Feature, MobileStatic, StoragePit>(entity);
 		count.first->second.unlit |= registry.AnyOf<Unlit>(entity);
 		// The creatures and the animals are each posed as they are
-		count.first->second.perEntity |= registry.AnyOf<CreatureMorph, AnimalPose, VillagerPose>(entity);
+		count.first->second.perEntity |= registry.AnyOf<CreatureMorph, AnimalPose, VillagerPose, AnimatedStaticPose>(entity);
 		if (const auto* translucent = registry.TryGet<const Translucent>(entity))
 		{
 			count.first->second.translucent = true;

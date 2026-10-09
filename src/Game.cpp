@@ -98,6 +98,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
@@ -1290,6 +1291,8 @@ bool Game::Update() noexcept
 		Locator::animalSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
 		// The villagers are posed by the clips their states play
 		Locator::livingActionSystem::value().UpdatePoses(clock.GetTurn(), clock.GetTurnFraction());
+		// The gates and the other scenery the scripts open and close play on, and the plinths' stones sit or sink
+		Locator::animatedStaticSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
 	}
 	{
 		// The creatures are drawn moving between the last two turns
@@ -2738,6 +2741,10 @@ void Game::PrepareNewLand()
 	Locator::explosionSystem::value().Reset();
 	Locator::magicSystem::value().SetIgnoreInfluence(false);
 	Locator::animalSystem::value().Reset();
+	if (Locator::animatedStaticSystem::has_value())
+	{
+		Locator::animatedStaticSystem::value().Reset();
+	}
 	Locator::magicShieldSystem::value().Reset();
 	Locator::forestSystem::value().Reset();
 	Locator::reactionSystem::value().Reset();

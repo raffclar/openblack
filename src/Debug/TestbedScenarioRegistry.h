@@ -222,7 +222,7 @@ struct CreatureSetup
 struct ObjectSetup
 {
 	std::variant<MobileObjectInfo, TreeInfo, FeatureInfo, VillagerInfo, PotInfo, AbodeInfo, FieldTypeInfo, AnimalInfo,
-	             MobileStaticInfo>
+	             MobileStaticInfo, AnimatedStaticInfo>
 	    type;
 	glm::vec2 offset {0.0f};
 	float scale {1.0f};
@@ -467,6 +467,11 @@ struct Command
 		WheelTurn,
 		/// The player's alignment jumps, which the hand shows
 		SetAlignment,
+		/// A script's open (value 1) or close (value 0) of the scenario's object (a gate, the gate stone plinth); the
+		/// player's hand laying the scenario's object, a gate stone, in the plinth that is the scenario's object of this
+		/// place (value). Neither needs a creature.
+		SetOpenClose,
+		LayGateStone,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -606,6 +611,8 @@ void AddPhysicsScenarios(std::vector<Scenario>& all);
 void AddHandNavigationScenarios(std::vector<Scenario>& all);
 /// The scenarios of how the hand looks for its player's alignment
 void AddHandLookScenarios(std::vector<Scenario>& all);
+/// The Norse gate of the creatures' glade and the gate stone plinth: opening, closing and laying the stones
+void AddGateScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them
 [[nodiscard]] std::span<const Scenario> All();

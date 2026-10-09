@@ -137,6 +137,7 @@ class PlayerSystemInterface;
 class RenderingSystemInterface;
 class TownSystemInterface;
 class ResourceStoreSystemInterface;
+class AnimatedStaticSystemInterface;
 class TimeSystemInterface;
 class VegetationInterface;
 class WeatherSystemInterface;
@@ -192,6 +193,7 @@ struct Locator
 	using livingActionSystem = entt::locator<ecs::systems::LivingActionSystemInterface>;
 	using townSystem = entt::locator<ecs::systems::TownSystemInterface>;
 	using resourceStoreSystem = entt::locator<ecs::systems::ResourceStoreSystemInterface>;
+	using animatedStaticSystem = entt::locator<ecs::systems::AnimatedStaticSystemInterface>;
 	using weatherSystem = entt::locator<ecs::systems::WeatherSystemInterface>;
 	using pathfindingSystem = entt::locator<ecs::systems::PathfindingSystemInterface>;
 	using entitiesRegistry = entt::locator<ecs::Registry>;

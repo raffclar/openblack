@@ -52,6 +52,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -689,6 +690,11 @@ bool GameHandGrabWorld::TakeIntoStore(entt::entity store, entt::entity object)
 	}
 	return Locator::resourceStoreSystem::has_value() &&
 	       Locator::resourceStoreSystem::value().TakeObject(store, object, HandPlayer());
+}
+
+bool GameHandGrabWorld::LayGateStone(entt::entity plinth, entt::entity stone)
+{
+	return Locator::animatedStaticSystem::has_value() && Locator::animatedStaticSystem::value().LayGateStone(plinth, stone);
 }
 
 void GameHandGrabWorld::PourAt(ResourceType resource, glm::vec3 point, uint32_t amount, PlayerNames player, bool poisoned)

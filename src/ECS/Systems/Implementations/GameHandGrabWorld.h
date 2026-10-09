@@ -80,6 +80,7 @@ public:
 	[[nodiscard]] bool StoresResource(entt::entity store, ResourceType resource) const override;
 	uint32_t AddToStore(entt::entity store, ResourceType resource, uint32_t amount, bool poisoned) override;
 	bool TakeIntoStore(entt::entity store, entt::entity object) override;
+	bool LayGateStone(entt::entity plinth, entt::entity stone) override;
 	void PourAt(ResourceType resource, glm::vec3 point, uint32_t amount, PlayerNames player, bool poisoned) override;
 	void UseUp(entt::entity object) override;
 	FromHandResult LetGoFromHand(entt::entity object, const FromHand& release) override;

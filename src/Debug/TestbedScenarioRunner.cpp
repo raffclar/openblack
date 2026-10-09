@@ -46,6 +46,7 @@
 #include "Creature/CreatureObjectActions.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
+#include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/FieldArchetype.h"
@@ -76,6 +77,7 @@
 #include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -96,6 +98,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Gestures/GesturePaths.h"
@@ -650,6 +653,10 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    {
 				    return ecs::archetypes::MobileStaticArchetype::Create(position, type, 0.0f, 0.0f, yaw, 0.0f, object.scale);
 			    }
+			    else if constexpr (std::is_same_v<T, AnimatedStaticInfo>)
+			    {
+				    return ecs::archetypes::AnimatedStaticArchetype::Create(position, type, yaw, object.scale);
+			    }
 			    else
 			    {
 				    return ecs::archetypes::FeatureArchetype::Create(position, type, yaw, object.scale);
@@ -1187,6 +1194,11 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the hour is {:.1f}", _seconds, command.hour));
 		return;
 	}
+	if (command.kind == Kind::SetOpenClose || command.kind == Kind::LayGateStone)
+	{
+		GiveSceneryCommand(command);
+		return;
+	}
 	if (command.kind == Kind::SetAlignment)
 	{
 		if (Locator::alignmentSystem::has_value())
@@ -1342,6 +1354,8 @@ void Runner::Give(const Command& command)
 	case Kind::PressKey:
 	case Kind::HandTakeFireBall:
 	case Kind::SetAlignment:
+	case Kind::SetOpenClose:
+	case Kind::LayGateStone:
 	// The mouse commands are given before a creature is looked for
 	case Kind::PointerTo:
 	case Kind::PointerPress:
@@ -1379,6 +1393,35 @@ void Runner::Give(const Command& command)
 	}
 	}
 	Log(fmt::format("{:.1f}s: {} {}{}{}", _seconds, who, Name(command.kind), result.empty() ? "" : ": ", result));
+}
+
+void Runner::GiveSceneryCommand(const Command& command)
+{
+	const auto object = ObjectAt(command.object);
+	if (!object.has_value() || !Locator::animatedStaticSystem::has_value())
+	{
+		Log(fmt::format("{:.1f}s: no such object", _seconds));
+		return;
+	}
+	auto& scenery = Locator::animatedStaticSystem::value();
+	if (command.kind == Kind::SetOpenClose)
+	{
+		const bool done = scenery.SetOpenState(*object, static_cast<int32_t>(command.value));
+		Log(fmt::format("{:.1f}s: {} object {}{}", _seconds, command.value == 1 ? "opened" : "closed", command.object,
+		                done ? "" : ", which isn't animated scenery"));
+		return;
+	}
+	// As the hand gives it: laid in the plinth, the stone is used up, leaving its ghost
+	const auto plinth = ObjectAt(command.value);
+	if (plinth.has_value() && scenery.LayGateStone(*plinth, *object))
+	{
+		ecs::world_objects::LeaveGhost(*object);
+		ecs::world_objects::Remove(*object);
+		Log(fmt::format("{:.1f}s: object {} laid in the plinth, now worth {}", _seconds, command.object,
+		                scenery.GateStoneValue(*plinth).value_or(0)));
+		return;
+	}
+	Log(fmt::format("{:.1f}s: object {} isn't taken by object {}", _seconds, command.object, command.value));
 }
 
 std::string Runner::GiveCreatureModeCommand(entt::entity creature, const Command& command)

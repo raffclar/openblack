@@ -53,6 +53,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -3222,10 +3223,19 @@ void SetDrawHighlight() // 306 SET_DRAW_HIGHLIGHT
 
 void SetOpenClose() // 307 SET_OPEN_CLOSE
 {
-	// const auto object = Pop().uintVal;
-	// const auto open = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
+	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	// The script's word is kept as it is: 1 opens, 0 closes
+	const auto open = static_cast<int32_t>(Pop().uintVal);
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_OPEN_CLOSE: thing not found");
+		return;
+	}
+	if (!Locator::animatedStaticSystem::has_value() || !Locator::animatedStaticSystem::value().SetOpenState(object, open))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_OPEN_CLOSE: thing must be an animated static");
+	}
 }
 
 void SetIntroBuilding() // 308 SET_INTRO_BUILDING
@@ -3337,10 +3347,25 @@ void SetSunDraw() // 319 SET_SUN_DRAW
 
 void ObjectInfoBits() // 320 OBJECT_INFO_BITS
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
-	Pushf(0.0f);
+	// What the gate stones laid in a plinth are worth: ape 1, tiger 2, cow 4
+	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "OBJECT_INFO_BITS: thing not valid");
+		Pushf(0.0f);
+		return;
+	}
+	const auto value = Locator::animatedStaticSystem::has_value()
+	                       ? Locator::animatedStaticSystem::value().GateStoneValue(object)
+	                       : std::nullopt;
+	if (!value.has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "OBJECT_INFO_BITS: thing must be an animated static");
+		Pushf(0.0f);
+		return;
+	}
+	Pushf(static_cast<float>(*value));
 }
 
 void SetHurtByFire() // 321 SET_HURT_BY_FIRE
