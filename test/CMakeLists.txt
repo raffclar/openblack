@@ -43,6 +43,7 @@ openblack_setup_and_add_test(test_game_initialize test_game_initialize.cpp)
 openblack_setup_and_add_test(test_load_scene test_load_scene.cpp)
 openblack_setup_and_add_test(test_fixed test_fixed.cpp)
 openblack_setup_and_add_test(test_alignment test_alignment.cpp)
+openblack_setup_and_add_test(test_player_system test_player_system.cpp)
 openblack_setup_and_add_test(test_interpolator test_interpolator.cpp)
 openblack_setup_and_add_test(test_set_camera_pos camera/test_set_camera_pos.cpp)
 openblack_setup_and_add_test(
@@ -94,6 +95,7 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_model_light graphics/test_model_light.cpp)
 openblack_setup_and_add_test(test_sun graphics/test_sun.cpp)
 openblack_setup_and_add_test(test_moon graphics/test_moon.cpp)
+openblack_setup_and_add_test(test_bone_budget graphics/test_bone_budget.cpp)
 openblack_setup_and_add_test(
   test_shader_samplers graphics/test_shader_samplers.cpp
 )
@@ -176,6 +178,9 @@ openblack_setup_and_add_test(test_creature_sway test_creature_sway.cpp)
 openblack_setup_and_add_test(test_creature_catch test_creature_catch.cpp)
 openblack_setup_and_add_test(test_creature_tattoo test_creature_tattoo.cpp)
 openblack_setup_and_add_test(test_creature_marks test_creature_marks.cpp)
+openblack_setup_and_add_test(
+  test_creature_carry_over test_creature_carry_over.cpp
+)
 openblack_setup_and_add_test(test_vertex_blend test_vertex_blend.cpp)
 openblack_setup_and_add_test(
   test_creature_shadow graphics/test_creature_shadow.cpp
@@ -249,6 +254,10 @@ openblack_setup_and_add_test(test_uniform_table graphics/test_uniform_table.cpp)
 openblack_setup_and_add_test(test_editor test_editor.cpp)
 openblack_setup_and_add_test(test_editor_scripts test_editor_scripts.cpp)
 target_link_libraries(test_editor_scripts PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_land_change_scripts lhvm/test_land_change_scripts.cpp
+)
+target_link_libraries(test_land_change_scripts PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_chl_language lhvm/test_chl_language.cpp)
 target_link_libraries(test_chl_language PRIVATE lhvmlang)
 openblack_setup_and_add_test(test_lhvm_decompiler lhvm/test_lhvm_decompiler.cpp)
@@ -352,3 +361,5 @@ openblack_setup_and_add_test(test_spirits test_spirits.cpp)
 target_link_libraries(test_spirits PRIVATE helpdude)
 openblack_setup_and_add_test(test_spirit_pose test_spirit_pose.cpp)
 target_link_libraries(test_spirit_pose PRIVATE helpdude)
+openblack_setup_and_add_test(test_story_land_change test_story_land_change.cpp)
+target_link_libraries(test_story_land_change PRIVATE ScriptLibrary)

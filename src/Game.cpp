@@ -108,6 +108,7 @@
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
+#include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
@@ -956,6 +957,8 @@ bool Game::GameLogicLoop() noexcept
 		auto teleport = profiler.BeginScoped(Profiler::Stage::TeleportUpdate);
 		Locator::teleportSystem::value().ProcessTurn();
 	}
+	// A creature loaded from what a last land kept sparkles into sight
+	Locator::creatureCarryOverSystem::value().ProcessTurn();
 	{
 		// The particle effects not owned by a miracle step, and the spot visuals count down
 		auto particles = profiler.BeginScoped(Profiler::Stage::ParticlesUpdate);
@@ -2687,6 +2690,29 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 	return true;
 }
 
+bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept
+{
+	// Outside the story, a land is loaded with the challenge's scripts started again from scratch: every task of the
+	// last land stops, the scripts' variables are cleared and the challenge's scripts that start by themselves start
+	// again. None of the last land's scripts go on running on the new land.
+	if (Locator::vm::has_value())
+	{
+		auto& fileSystem = Locator::filesystem::value();
+		const auto challengePath = fileSystem.GetPath<filesystem::Path::Quests>() / "challenge.chl";
+		try
+		{
+			Locator::vm::value().LoadBinary(fileSystem.ReadAll(challengePath));
+		}
+		catch (const std::exception& err)
+		{
+			Locator::vm::value().StopAllTasks();
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to read challenge file at {}: {}", challengePath.generic_string(),
+			                    err.what());
+		}
+	}
+	return LoadMap(path);
+}
+
 void Game::LoadTestbed() noexcept
 {
 	// No script runs on the testbed: the story's would set its time of day and stop its clock a few turns in
@@ -2734,6 +2760,17 @@ void Game::LoadTestbed() noexcept
 
 void Game::PrepareNewLand()
 {
+	// The player's creature is kept with its mind and body before anything of the land goes, for a later land's script
+	// to load it again; and the players keep what is theirs rather than the land's, such as their alignment
+	if (Locator::creatureCarryOverSystem::has_value())
+	{
+		Locator::creatureCarryOverSystem::value().KeepPlayersCreature();
+		Locator::creatureCarryOverSystem::value().Reset();
+	}
+	if (Locator::playerSystem::has_value())
+	{
+		Locator::playerSystem::value().KeepForNextLand();
+	}
 	// The last land's scripts let go of what they held: what they made goes, everything else goes back to the game
 	if (Locator::scriptObjects::has_value())
 	{
@@ -2886,9 +2923,6 @@ void Game::SetUpLandscape()
 
 	// There is always a player active
 	Locator::playerSystem::value().AddPlayer(ecs::archetypes::PlayerArchetype::Create(PlayerNames::PLAYER_ONE));
-
-	// There is always at least one player active.
-	ecs::archetypes::PlayerArchetype::Create(PlayerNames::PLAYER_ONE);
 
 	Locator::cameraBookmarkSystem::value().Initialize();
 	Locator::playerSystem::value().RegisterPlayers();

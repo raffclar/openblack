@@ -53,6 +53,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/CreatureBodyFile.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
@@ -1166,9 +1167,12 @@ std::optional<creaturemind::MindFileData> CreatureMindSystem::SaveMind(entt::ent
 			saved.alignment = global("OriginalAlignmentOfMyCreature");
 		}
 	}
-	file.physique.size = saved.size;
-	file.physique.strength = saved.strength;
-	file.alignment = saved.alignment;
+	// Its body is saved with its mind as it is now, but for what the spells changed
+	auto kept = creature_body_file::Capture(registry, creature);
+	kept.size = saved.size;
+	kept.strength = saved.strength;
+	kept.alignment = saved.alignment;
+	creature_mind_body::ToMindFile(kept, file);
 	return file;
 }
 
