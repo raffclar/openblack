@@ -75,8 +75,8 @@ MindFileData SampleMind()
 	                 .needs = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f},
 	                 .unknown3 = 4,
 	                 .size = 1.5f,
-	                 .listA = {1, 2},
-	                 .listB = {3}};
+	                 .blood = {1, 2},
+	                 .wounds = {3}};
 	mind.database = std::vector<MindDatabaseEntry> {
 	    {.id = 5, .unknown = 6, .size = 3, .pairs = {{.number = 1, .a = 0.5f, .b = 0.25f}, {.number = 3, .a = 1.0f}}}};
 	mind.unknown2 = 8;

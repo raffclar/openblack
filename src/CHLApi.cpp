@@ -55,6 +55,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -2725,9 +2726,9 @@ void SetLeashWorks() // 249 SET_LEASH_WORKS
 
 void LoadMyCreature() // 250 LOAD_MY_CREATURE
 {
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
+	// The player's creature, as kept when a land was last cleared, comes out at the place, unless they have one already
+	const auto position = PopVec();
+	Locator::creatureCarryOverSystem::value().LoadPlayersCreature({position.x, position.z});
 }
 
 void ObjectRelativeBelief() // 251 OBJECT_RELATIVE_BELIEF

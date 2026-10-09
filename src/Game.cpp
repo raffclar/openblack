@@ -107,6 +107,7 @@
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
+#include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
@@ -953,6 +954,8 @@ bool Game::GameLogicLoop() noexcept
 		auto teleport = profiler.BeginScoped(Profiler::Stage::TeleportUpdate);
 		Locator::teleportSystem::value().ProcessTurn();
 	}
+	// A creature loaded from what a last land kept sparkles into sight
+	Locator::creatureCarryOverSystem::value().ProcessTurn();
 	{
 		// The particle effects not owned by a miracle step, and the spot visuals count down
 		auto particles = profiler.BeginScoped(Profiler::Stage::ParticlesUpdate);
@@ -2737,6 +2740,17 @@ void Game::LoadTestbed() noexcept
 
 void Game::PrepareNewLand()
 {
+	// The player's creature is kept with its mind and body before anything of the land goes, for a later land's script
+	// to load it again; and the players keep what is theirs rather than the land's, such as their alignment
+	if (Locator::creatureCarryOverSystem::has_value())
+	{
+		Locator::creatureCarryOverSystem::value().KeepPlayersCreature();
+		Locator::creatureCarryOverSystem::value().Reset();
+	}
+	if (Locator::playerSystem::has_value())
+	{
+		Locator::playerSystem::value().KeepForNextLand();
+	}
 	// The last land's scripts let go of what they held: what they made goes, everything else goes back to the game
 	if (Locator::scriptObjects::has_value())
 	{
@@ -2889,9 +2903,6 @@ void Game::SetUpLandscape()
 
 	// There is always a player active
 	Locator::playerSystem::value().AddPlayer(ecs::archetypes::PlayerArchetype::Create(PlayerNames::PLAYER_ONE));
-
-	// There is always at least one player active.
-	ecs::archetypes::PlayerArchetype::Create(PlayerNames::PLAYER_ONE);
 
 	Locator::cameraBookmarkSystem::value().Initialize();
 	Locator::playerSystem::value().RegisterPlayers();

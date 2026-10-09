@@ -41,6 +41,7 @@
 #include "ECS/Systems/Implementations/CloudSystem.h"
 #include "ECS/Systems/Implementations/CreatureAnimationSystem.h"
 #include "ECS/Systems/Implementations/CreatureAudioSystem.h"
+#include "ECS/Systems/Implementations/CreatureCarryOverSystem.h"
 #include "ECS/Systems/Implementations/CreatureCaveSystem.h"
 #include "ECS/Systems/Implementations/CreatureFightSystem.h"
 #include "ECS/Systems/Implementations/CreatureHairSystem.h"
@@ -125,6 +126,7 @@ using openblack::ecs::systems::CinematicDirectorSystem;
 using openblack::ecs::systems::CloudSystem;
 using openblack::ecs::systems::CreatureAnimationSystem;
 using openblack::ecs::systems::CreatureAudioSystem;
+using openblack::ecs::systems::CreatureCarryOverSystem;
 using openblack::ecs::systems::CreatureCaveSystem;
 using openblack::ecs::systems::CreatureFightSystem;
 using openblack::ecs::systems::CreatureHairSystem;
@@ -273,6 +275,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::particleSystem::emplace<ParticleSystem>();
 	Locator::reactionSystem::emplace<ReactionSystem>();
 	Locator::teleportSystem::emplace<TeleportSystem>();
+	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>();
 	Locator::tornadoSystem::emplace<TornadoSystem>();
 	Locator::magicShieldSystem::emplace<MagicShieldSystem>();
 	Locator::forestSystem::emplace<ForestSystem>();
@@ -401,6 +404,7 @@ void openblack::ShutDownServices()
 	Locator::gestureEvents::reset();
 	Locator::reactionSystem::reset();
 	Locator::teleportSystem::reset();
+	Locator::creatureCarryOverSystem::reset();
 	Locator::tornadoSystem::reset();
 	Locator::magicShieldSystem::reset();
 	Locator::forestSystem::reset();

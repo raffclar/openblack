@@ -11,6 +11,7 @@
 
 #include <gtest/gtest.h>
 
+#include "ECS/Components/Alignment.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
@@ -90,4 +91,51 @@ TEST_F(PlayerSystemLands, APlayerNotOnTheNewLandIsForgotten)
 	_players.RegisterPlayers();
 
 	EXPECT_THROW(static_cast<void>(_players.GetPlayer(PlayerNames::PLAYER_THREE)), std::out_of_range);
+}
+
+TEST_F(PlayerSystemLands, APlayerKeepsTheirAlignmentAndWhatIsTheirsOnTheNextLand)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto one = MakePlayer(PlayerNames::PLAYER_ONE);
+	registry.Assign<components::Alignment>(one, -0.6f, 0.05f);
+	auto& player = registry.Get<components::Player>(one);
+	player.windResistance = 1;
+	player.damageFrom.at(1) = 3.5f;
+	_players.AddPlayer(one);
+
+	_players.KeepForNextLand();
+	ClearLand();
+	const auto again = MakePlayer(PlayerNames::PLAYER_ONE);
+	_players.TakeUpKept(again);
+
+	const auto* alignment = registry.TryGet<components::Alignment>(again);
+	ASSERT_NE(alignment, nullptr);
+	EXPECT_EQ(alignment->value, -0.6f);
+	EXPECT_EQ(alignment->pending, 0.05f);
+	EXPECT_EQ(registry.Get<components::Player>(again).windResistance, 1u);
+	EXPECT_EQ(registry.Get<components::Player>(again).damageFrom.at(1), 3.5f);
+}
+
+TEST_F(PlayerSystemLands, APlayerAwayFromALandKeepsWhatTheyHadOnTheLastTheyWereOn)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto two = MakePlayer(PlayerNames::PLAYER_TWO);
+	registry.Assign<components::Alignment>(two, 0.9f, 0.0f);
+	_players.KeepForNextLand();
+
+	// A land without them, then one with them again
+	ClearLand();
+	MakePlayer(PlayerNames::PLAYER_ONE);
+	_players.KeepForNextLand();
+	ClearLand();
+	const auto again = MakePlayer(PlayerNames::PLAYER_TWO);
+	_players.TakeUpKept(again);
+	EXPECT_EQ(registry.Get<components::Alignment>(again).value, 0.9f);
+}
+
+TEST_F(PlayerSystemLands, ANewPlayerHasNothingToTakeUp)
+{
+	const auto one = MakePlayer(PlayerNames::PLAYER_ONE);
+	_players.TakeUpKept(one);
+	EXPECT_EQ(Locator::entitiesRegistry::value().TryGet<components::Alignment>(one), nullptr);
 }

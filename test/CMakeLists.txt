@@ -178,6 +178,9 @@ openblack_setup_and_add_test(test_creature_sway test_creature_sway.cpp)
 openblack_setup_and_add_test(test_creature_catch test_creature_catch.cpp)
 openblack_setup_and_add_test(test_creature_tattoo test_creature_tattoo.cpp)
 openblack_setup_and_add_test(test_creature_marks test_creature_marks.cpp)
+openblack_setup_and_add_test(
+  test_creature_carry_over test_creature_carry_over.cpp
+)
 openblack_setup_and_add_test(test_vertex_blend test_vertex_blend.cpp)
 openblack_setup_and_add_test(
   test_creature_shadow graphics/test_creature_shadow.cpp
@@ -347,3 +350,5 @@ openblack_setup_and_add_test(test_temple_heart test_temple_heart.cpp)
 openblack_setup_and_add_test(test_store_rules test_store_rules.cpp)
 openblack_setup_and_add_test(test_clip_sounds test_clip_sounds.cpp)
 target_link_libraries(test_clip_sounds PRIVATE sas)
+openblack_setup_and_add_test(test_story_land_change test_story_land_change.cpp)
+target_link_libraries(test_story_land_change PRIVATE ScriptLibrary)
