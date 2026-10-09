@@ -48,6 +48,14 @@ private:
 	void NoteReach(float reach, float drawn);
 	/// Whether the hand crossed a border shown since the last frame, sending out a ripple where it did
 	bool CrossBorders(const glm::vec3& hand);
+	/// Whether another player's shield keeps a player out of a place
+	[[nodiscard]] static bool Shielded(PlayerNames player, const glm::vec3& point);
+	/// The sum of the reach of a player's citadel, towns and other sources of influence
+	[[nodiscard]] static float InfluencePower(PlayerNames player);
+	/// What the local player's hand keeps of their influence past the border, once a turn
+	void ProcessVirtualInfluence(uint32_t turn);
+	/// The hum of the hand past the border, each frame
+	void HumVirtualInfluence();
 
 	std::vector<influence::Circle> _circles;
 	std::array<bool, k_Players> _borderShown {};

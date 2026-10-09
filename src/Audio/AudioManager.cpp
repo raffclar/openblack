@@ -491,6 +491,23 @@ void AudioManager::SetEmitterVolume(entt::entity emitter, uint32_t volume)
 	_audioPlayer->SetVolume(component.sourceId, component.gain * _globalVolume * (component.music ? _musicVolume : _sfxVolume));
 }
 
+void AudioManager::SetEmitterPitch(entt::entity emitter, uint32_t pitchPercent)
+{
+	if (!EmitterExists(emitter))
+	{
+		return;
+	}
+	auto& component = Locator::entitiesRegistry::value().Get<AudioEmitter>(emitter);
+	if (component.pitchPercent == pitchPercent)
+	{
+		return;
+	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} pitch {}% -> {}%", DescribeEmitter(emitter, component),
+	                    component.pitchPercent, pitchPercent);
+	component.pitchPercent = pitchPercent;
+	_audioPlayer->SetPitch(component.sourceId, static_cast<float>(pitchPercent) / 100.0f);
+}
+
 uint32_t AudioManager::GetEmitterVolume(entt::entity emitter)
 {
 	return EmitterExists(emitter) ? Locator::entitiesRegistry::value().Get<AudioEmitter>(emitter).volume : 0;

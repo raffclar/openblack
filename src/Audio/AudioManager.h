@@ -73,6 +73,7 @@ public:
 	void ReleaseEmitterLoop(entt::entity emitter) override;
 	[[nodiscard]] bool IsEmitterLooping(entt::entity emitter) override;
 	void SetEmitterVolume(entt::entity emitter, uint32_t volume) override;
+	void SetEmitterPitch(entt::entity emitter, uint32_t pitchPercent) override;
 	[[nodiscard]] uint32_t GetEmitterVolume(entt::entity emitter) override;
 	void StopOwnedSounds(entt::entity owner) override;
 	void AddAnimEffects(const std::string& bankName, AnimEffectTable table) override;

@@ -43,6 +43,7 @@
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
+#include "ECS/Components/Influence.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
@@ -82,6 +83,8 @@ namespace openblack::chlapi
 {
 
 using namespace openblack::ecs::archetypes;
+
+PlayerNames ScriptPlayerName(int32_t scriptPlayer);
 
 using openblack::Locator;
 using openblack::MobileStaticInfo;
@@ -2754,10 +2757,28 @@ void SetHelpSystem() // 253 SET_HELP_SYSTEM
 
 void SetVirtualInfluence() // 254 SET_VIRTUAL_INFLUENCE
 {
-	// const auto player = Popf();
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto enable = Pop().intVal != 0;
+	// Turned off, the player's hand keeps nothing of their influence past the border, and loses what it had
+	if (!Locator::playerSystem::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = Locator::playerSystem::value().GetPlayer(player);
+	if (!registry.Valid(entity))
+	{
+		return;
+	}
+	auto& state =
+	    (registry.AnyOf<ecs::components::VirtualInfluence>(entity) ? registry.Get<ecs::components::VirtualInfluence>(entity)
+	                                                               : registry.Assign<ecs::components::VirtualInfluence>(entity))
+	        .state;
+	state.disabled = !enable;
+	if (state.disabled)
+	{
+		state.fraction = 0.0f;
+	}
 }
 
 void SetActive() // 255 SET_ACTIVE
