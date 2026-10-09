@@ -169,6 +169,27 @@ void AddCave(std::vector<Scenario>& all)
 	                 tattoo(Kind::ApplyTattoo, 9, 2, 2.0f),
 	                 tattoo(Kind::RemoveTattoo, 0, 1, 4.0f)},
 	});
+	all.push_back({
+	    .id = "creature_mode.tattoo_editor",
+	    .name = "The tattoo editor",
+	    .facet = Facet::CreatureMode,
+	    .description = "The tattoo editor is opened on the player's tiger, as clicking it in the Creature Cave does; a "
+	                   "colour is picked from the palette and darkened on the brightness bar (the pointer's points are "
+	                   "for a screen of 1600 by 900).",
+	    .expected = "Over the scene: the line of help at the top, the sixteen symbols in two columns down the sides, the "
+	                "palette at the far left and the brightness bar at the far right, OK at the bottom left, Cancel at "
+	                "the bottom right and the round rotation button between them. Picking from the palette colours "
+	                "the bar's middle, and the symbols take the bar's colour at its arrow.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f}, "yours")},
+	    .commands = {{.kind = Kind::OpenTattooEditor, .creature = 0, .delaySeconds = 1.0f},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {431.0f / 1600.0f, 270.0f / 900.0f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.2f, .value = 1},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 1},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.3f, .point = {1130.0f / 1600.0f, 530.0f / 900.0f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.2f, .value = 1},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 1}},
+	});
 }
 } // namespace
 

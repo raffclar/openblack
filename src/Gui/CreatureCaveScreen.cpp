@@ -20,8 +20,10 @@
 #include "3D/TempleScrolls.h"
 #include "Creature/CreatureCave.h"
 #include "ECS/Components/CreatureSkin.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
+#include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "GameInterface.h"
 #include "Locator.h"
 #include "TextDatabase.h"
@@ -168,6 +170,14 @@ void DrawTattoos(ecs::systems::CreatureCaveSystemInterface& cave, const GameInte
 	if (ImGui::Button("Remove"))
 	{
 		cave.RemoveTattoo(screen.site);
+	}
+	ImGui::SameLine();
+	// The tattoo editor, as clicking the creature in the cave opens it
+	if (ImGui::Button("Tattoo editor") && Locator::tattooEditorSystem::has_value())
+	{
+		const auto& transform = Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(*creature);
+		Locator::tattooEditorSystem::value().Open(*creature,
+		                                          creature_tattoo_editor::CaveView(transform.position, transform.scale.x));
 	}
 	ImGui::EndDisabled();
 	if (tattoos == nullptr)

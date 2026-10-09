@@ -55,6 +55,12 @@ public:
 	void MouseDown(glm::ivec2 point);
 	/// True when a control acted, which SetupBox answers with the menu button sound
 	bool MouseUp(glm::ivec2 point);
+	/// The mouse button, already down, now holds a control, as though it had gone down on it
+	void Hold(Control& control);
+	/// Whether the mouse button is down on a control
+	[[nodiscard]] bool IsHolding() const noexcept { return _pressed != nullptr; }
+	/// Whether the pointer is over a control that takes the mouse
+	[[nodiscard]] bool IsPointerOverControl() const;
 	void Wheel(glm::ivec2 point, int steps);
 	bool TextInput(std::u16string_view text);
 	bool KeyDown(int key);

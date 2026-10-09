@@ -132,6 +132,10 @@ bool Dialog::MouseUp(glm::ivec2 point)
 	auto* released = HitTest(point);
 	auto* pressed = std::exchange(_pressed, nullptr);
 	_hovered = released;
+	if (pressed != nullptr)
+	{
+		pressed->Release(point);
+	}
 	if (auto* picture = dynamic_cast<SymbolPicture*>(pressed); picture != nullptr && released != pressed)
 	{
 		picture->Release();
@@ -142,6 +146,18 @@ bool Dialog::MouseUp(glm::ivec2 point)
 	}
 	pressed->Activate(point);
 	return true;
+}
+
+void Dialog::Hold(Control& control)
+{
+	_pressed = &control;
+	_focused = &control;
+	_hovered = &control;
+}
+
+bool Dialog::IsPointerOverControl() const
+{
+	return HitTest(_pointer) != nullptr;
 }
 
 void Dialog::Wheel(glm::ivec2 point, int steps)

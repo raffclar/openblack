@@ -148,6 +148,7 @@
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
+#include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
@@ -1202,6 +1203,10 @@ bool Game::Update() noexcept
 		auto creatureCave = profiler.BeginScoped(Profiler::Stage::CreatureCaveUpdate);
 		Locator::creatureCaveSystem::value().Update();
 	}
+	if (Locator::tattooEditorSystem::has_value())
+	{
+		Locator::tattooEditorSystem::value().Update(std::chrono::duration<float, std::milli>(deltaTime).count());
+	}
 
 	// While a miracle's camera path has the camera, the player's camera doesn't move it
 	const bool pathHoldsCamera = Locator::cameraPathSystem::value().HoldsCamera();
@@ -1852,6 +1857,12 @@ bool Game::Initialize() noexcept
 		// If gui captures this input, do not propagate
 		if (!Locator::debugGui::value().ProcessEvents(event))
 		{
+			// The tattoo editor's dialog takes the keyboard and mouse while it is open, Escape and Enter included
+			if (_interface && _interface->GetTattooEditor().IsOpen() && Locator::windowing::has_value() &&
+			    _interface->ProcessEvent(event, static_cast<glm::u16vec2>(Locator::windowing::value().GetSize())))
+			{
+				return;
+			}
 			// Inside the temple, Escape goes back to its main room and out, as the temple's keys do
 			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE && event.key.repeat == 0 &&
 			    Locator::temple::has_value() && Locator::temple::value().Active())
@@ -2422,8 +2433,7 @@ bool Game::Initialize() noexcept
 		Locator::resources::value().GetCreatureSkinArt().Load(
 		    creature_skin::k_ArtId, resources::CreatureSkinArtLoader::FromDiskTag {},
 		    resources::CreatureSkinArtLoader::Paths {
-		        .symbols = fileSystem.GetPath<Path::Textures>() / "PlayersSymbols.raw",
-		        .defaultSymbols = fileSystem.GetPath<Path::Textures>() / "I_PLAYER_SYMBOLS_.raw",
+		        .symbols = fileSystem.GetPath<Path::Textures>() / "OriginalChooseSymbol.raw",
 		        .freshDamage = data / "damage_new256.raw",
 		        .freshDamageAlpha = data / "damage_new256A.raw",
 		        .oldDamage = data / "damage_old256.raw",

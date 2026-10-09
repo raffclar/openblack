@@ -21,8 +21,8 @@
 
 /// A creature can wear up to eight tattoos. Each is one of sixteen designs, in a colour, painted at one of the places its
 /// species has for tattoos: a point on one of its skins, at a size, turned and perhaps flipped. A design is a mask of
-/// sixteen levels, from Data/Textures/PlayersSymbols.raw, painted over the skin a 4-bit channel at a time. The tattoos are
-/// painted after the skin has been blended towards evil or good.
+/// sixteen levels, from Data/Textures/OriginalChooseSymbol.raw, painted over the skin a 4-bit channel at a time. The tattoos
+/// are painted after the skin has been blended towards evil or good.
 namespace openblack::creature_tattoo
 {
 /// The places on a body a tattoo can go
@@ -108,6 +108,10 @@ void Paint(std::span<uint16_t> skin, const Design& design, const glm::u8vec3& co
 /// The tattoo palette, Data/tattoocols.raw, is 32 columns by 128 rows of colours
 constexpr uint32_t k_PaletteColumns = 32;
 constexpr uint32_t k_PaletteRows = 128;
+
+/// A colour at a brightness, 0 to 1: a half leaves it as it is, more draws it towards white, less towards black, a
+/// channel at a time in 256ths
+[[nodiscard]] glm::u8vec3 Brightened(const glm::u8vec3& colour, float brightness);
 
 /// A colour of the palette at a brightness, 0 to 1: a half leaves it as it is, more draws it towards white, less towards
 /// black

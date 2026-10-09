@@ -19,6 +19,9 @@
 #include <utility>
 #include <vector>
 
+#include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
+
 #include "Common/Zoomer.h"
 #include "DialogPainter.h"
 
@@ -58,6 +61,8 @@ public:
 	virtual void Drag(glm::ivec2 /*point*/) {}
 	/// Every frame
 	virtual void Update(float /*deltaSeconds*/) {}
+	/// The mouse button was let go, wherever the pointer is, after going down on the control
+	virtual void Release(glm::ivec2 /*point*/) {}
 	/// The mouse button was let go over the control it went down on
 	virtual void Activate(glm::ivec2 /*point*/)
 	{
@@ -119,6 +124,8 @@ public:
 		Square,
 		LeftArrow,
 		RightArrow,
+		/// The disc of turning arrows, never pushed in
+		Rotation,
 	};
 	enum class LabelSide
 	{
@@ -133,6 +140,8 @@ public:
 	[[nodiscard]] bool HitTest(glm::ivec2 point) const override;
 
 	std::u16string label;
+	/// Labels beside the button are the dialog's text size, below it the middle size
+	void SetLabelSize(int size) noexcept { _labelSize = size; }
 
 protected:
 	[[nodiscard]] DialogRect GetLabelRect() const;
@@ -254,6 +263,71 @@ private:
 	std::u16string _text;
 	size_t _maxLength;
 	size_t _caret;
+};
+
+/// A colour picker: a strip of the palette's colours, or a brightness bar from black at the top through a colour at the
+/// middle to white at the bottom, in a bevelled box, with an arrow beside it at the height picked. Holding the mouse
+/// button down on it moves the arrow with the pointer.
+class ColourPicker final: public Control
+{
+public:
+	enum class Kind
+	{
+		Palette,
+		Brightness,
+	};
+
+	ColourPicker(DialogRect rect, Kind kind);
+	void Draw(const DialogPainter& painter, bool hovered, bool focused, bool pressed) const override;
+	void MouseMove(glm::ivec2 point) override { _pointer = point; }
+	void Drag(glm::ivec2 point) override;
+
+	/// How far down the arrow is, 0 to 1
+	[[nodiscard]] float GetPosition() const noexcept { return _position; }
+	/// The brightness bar's colour at its middle, see-through grey until a colour is picked
+	glm::u8vec4 colour {128, 128, 128, 0};
+	/// While the mouse button is held, every frame, at the pointer
+	std::function<void(glm::ivec2)> onDrag;
+
+private:
+	Kind _kind;
+	float _position {0.5f};
+	glm::ivec2 _pointer {-1, -1};
+};
+
+/// One of the player symbols as a picture the player drags: drawn in its tint, orange under the pointer, and while it
+/// is dragged drawn again under the pointer as well, over everything, flashing between its tint and the tint's
+/// opposite while it is over somewhere it can be dropped
+class DraggedSymbol final: public Control
+{
+public:
+	static constexpr int k_Size = 64;
+
+	DraggedSymbol(glm::ivec2 position, int symbol);
+	void Draw(const DialogPainter& painter, bool hovered, bool focused, bool pressed) const override;
+	[[nodiscard]] bool IsOnTop() const override { return _dragging; }
+	void MouseMove(glm::ivec2 point) override { _pointer = point; }
+	void MouseDown(glm::ivec2 point) override;
+	void Release(glm::ivec2 point) override;
+
+	/// Starts dragging it without the mouse button going down on it, as when a tattoo is lifted off the creature
+	void StartDragging() noexcept { _dragging = true; }
+	[[nodiscard]] bool IsDragging() const noexcept { return _dragging; }
+	[[nodiscard]] int GetSymbol() const noexcept { return _symbol; }
+
+	/// Its colour. With none at all, not even opacity, it is drawn as text is, with a shadow.
+	glm::u8vec4 tint {255, 255, 255, 255};
+	/// Whether it is over somewhere it can be dropped, which makes it flash
+	bool overTarget {false};
+	/// The milliseconds the flashing goes by
+	uint32_t milliseconds {0};
+	/// Let go of after being dragged, wherever it is
+	std::function<void()> onDrop;
+
+private:
+	int _symbol;
+	bool _dragging {false};
+	glm::ivec2 _pointer {-1, -1};
 };
 
 /// The player's symbol. Holding the mouse button down on it brings the symbols up around it on a dark
