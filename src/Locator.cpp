@@ -30,6 +30,7 @@
 #include "ECS/MapProduction.h"
 #include "ECS/PhysicsGameHooks.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/Implementations/AbodeKnockSystem.h"
 #include "ECS/Systems/Implementations/AlignmentSystem.h"
 #include "ECS/Systems/Implementations/AnimalSystem.h"
 #include "ECS/Systems/Implementations/BuildingDamageSystem.h"
@@ -117,6 +118,7 @@ using openblack::chlapi::CHLApi;
 using openblack::debug::gui::DebugGuiInterface;
 using openblack::ecs::MapProduction;
 using openblack::ecs::Registry;
+using openblack::ecs::systems::AbodeKnockSystem;
 using openblack::ecs::systems::AlignmentSystem;
 using openblack::ecs::systems::AnimalSystem;
 using openblack::ecs::systems::CameraBookmarkSystem;
@@ -272,6 +274,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::soundTagSystem::emplace<SoundTagSystem>();
 	Locator::rainSystem::emplace<RainSystem>();
 	Locator::chimneySmokeSystem::emplace<ChimneySmokeSystem>();
+	Locator::abodeKnockSystem::emplace<AbodeKnockSystem>();
 	Locator::influenceSystem::emplace<InfluenceSystem>();
 	Locator::townDesireSystem::emplace<TownDesireSystem>();
 	Locator::particleSystem::emplace<ParticleSystem>();
@@ -376,6 +379,7 @@ void openblack::ShutDownServices()
 	Locator::cinematicDirectorSystem::reset();
 	Locator::influenceSystem::reset();
 	Locator::chimneySmokeSystem::reset();
+	Locator::abodeKnockSystem::reset();
 	Locator::rainSystem::reset();
 	Locator::snowfallSystem::reset();
 	Locator::waterRingSystem::reset();
