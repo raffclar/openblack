@@ -171,3 +171,101 @@ TEST(WallHugRules, AWalkerLeavesTheCircleOnlyNearerItsGoalAndWithTheGoalAhead)
 	// No nearer than on starting round
 	EXPECT_FALSE(LeavesCircle(at(-11.0f), goal, {3277, 3277}, entry, false));
 }
+
+namespace
+{
+/// A walker at 1000 m, 1000 m stepping 5 m a turn along x
+const glm::ivec2 k_Walker = ToWhole({1000.0f, 1000.0f});
+constexpr glm::ivec2 k_FiveMetresAlongX {32768, 0};
+
+BlockingCircle Thing(glm::vec2 offset, float radius)
+{
+	return {.centre = glm::vec2(1000.0f, 1000.0f) + offset, .radius = radius, .landscape = false, .landscapeOrFence = false};
+}
+} // namespace
+
+TEST(WallHugRules, HeadingStraightOnTheWalkerHeadsForTheNearestCircleOnItsLine)
+{
+	// The far one comes first in the cell, the near one is reached first: its edge 38 m on, after 7 whole turns
+	const std::array<BlockingCircle, 3> circles {Thing({60.0f, 0.0f}, 2.0f), Thing({0.0f, 30.0f}, 2.0f),
+	                                             Thing({40.0f, 1.0f}, 2.0f)};
+	const auto scan = ScanLine(k_Walker, k_FiveMetresAlongX, circles);
+	ASSERT_TRUE(scan.circle.has_value());
+	EXPECT_EQ(*scan.circle, 2U);
+	EXPECT_EQ(scan.turnsToObstacle, 7);
+}
+
+TEST(WallHugRules, HeadingStraightOnNothingOnTheLineIsNothingInReach)
+{
+	const std::array<BlockingCircle, 2> circles {Thing({0.0f, 30.0f}, 2.0f), Thing({-20.0f, 0.0f}, 2.0f)};
+	const auto scan = ScanLine(k_Walker, k_FiveMetresAlongX, circles);
+	EXPECT_FALSE(scan.circle.has_value());
+	EXPECT_EQ(scan.turnsToObstacle, k_NoObstacleInReach);
+	// Nor is a circle more than 255 turns away
+	const std::array<BlockingCircle, 1> far {Thing({1300.0f, 0.0f}, 2.0f)};
+	EXPECT_FALSE(ScanLine(k_Walker, k_FiveMetresAlongX, far).circle.has_value());
+}
+
+TEST(WallHugRules, HeadingStraightOnACircleTheWalkerIsWellInsideDoesNotCount)
+{
+	// Five metres inside the first: it is passed over for the one ahead
+	const std::array<BlockingCircle, 2> circles {Thing({0.0f, 0.0f}, 5.0f), Thing({20.0f, 0.0f}, 2.0f)};
+	const auto scan = ScanLine(k_Walker, k_FiveMetresAlongX, circles);
+	ASSERT_TRUE(scan.circle.has_value());
+	EXPECT_EQ(*scan.circle, 1U);
+	EXPECT_EQ(scan.turnsToObstacle, 3);
+	// Just inside the edge of one, a tenth of a metre, it meets it at once
+	const std::array<BlockingCircle, 1> edge {Thing({2.1f, 0.0f}, 2.2f)};
+	const auto atOnce = ScanLine(k_Walker, k_FiveMetresAlongX, edge);
+	ASSERT_TRUE(atOnce.circle.has_value());
+	EXPECT_EQ(atOnce.turnsToObstacle, 0);
+}
+
+namespace
+{
+ThingOnMap Placed(ThingShape shape, glm::vec3 boxHalfSize, bool fence = false)
+{
+	return {.shape = shape,
+	        .position = {1000.0f, 0.0f, 1000.0f},
+	        .rotation = glm::mat3(1.0f),
+	        .scale = 1.0f,
+	        .boxCentre = glm::vec3(0.0f),
+	        .boxHalfSize = boxHalfSize,
+	        .fence = fence};
+}
+} // namespace
+
+TEST(WallHugRules, ATreeIsASmallCircleRoundItsTrunkWhateverItsSize)
+{
+	const auto circles = CirclesOf(Placed(ThingShape::Trunk, {6.0f, 10.0f, 6.0f}));
+	ASSERT_EQ(circles.size(), 1U);
+	EXPECT_FLOAT_EQ(circles[0].radius, k_TreeTrunkRadius);
+	EXPECT_NEAR(circles[0].centre.x, 1000.0f, 0.001f);
+	EXPECT_NEAR(circles[0].centre.y, 1000.0f, 0.001f);
+	EXPECT_TRUE(CirclesOf(Placed(ThingShape::None, {6.0f, 10.0f, 6.0f})).empty());
+}
+
+TEST(WallHugRules, ALongModelBlocksWithEachCircleOfItsRowAndASquareOneWithOne)
+{
+	const auto square = CirclesOf(Placed(ThingShape::ModelBox, {4.0f, 3.0f, 5.0f}));
+	ASSERT_EQ(square.size(), 1U);
+	EXPECT_FLOAT_EQ(square[0].radius, 5.0f);
+	// Five times as long as wide: a row of six circles as wide as the box, not its bounding circle
+	const auto fence = CirclesOf(Placed(ThingShape::ModelBox, {10.0f, 1.0f, 2.0f}, true));
+	ASSERT_EQ(fence.size(), 6U);
+	for (const auto& circle : fence)
+	{
+		EXPECT_FLOAT_EQ(circle.radius, 2.0f);
+		EXPECT_TRUE(circle.landscapeOrFence);
+		EXPECT_FALSE(circle.landscape);
+	}
+	EXPECT_NEAR(fence.front().centre.x, 1000.0f - 10.0f + 20.0f / 12.0f, 0.01f);
+}
+
+TEST(WallHugRules, OnlyTheFencesModelsAreFences)
+{
+	EXPECT_TRUE(IsFenceModel(openblack::MeshId::BuildingAmericanFence));
+	EXPECT_TRUE(IsFenceModel(openblack::MeshId::BuildingCelticFenceShort));
+	EXPECT_TRUE(IsFenceModel(openblack::MeshId::BuildingCelticFenceTall));
+	EXPECT_FALSE(IsFenceModel(openblack::MeshId::BuildingCeltic4));
+}

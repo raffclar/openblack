@@ -16,31 +16,38 @@
 
 #include <algorithm>
 #include <array>
-#include <limits>
 #include <optional>
-#include <unordered_set>
 #include <vector>
 
 #include <LNDFile.h>
 #include <entt/entity/entity.hpp>
-#include <glm/gtx/component_wise.hpp>
 #include <glm/gtx/euler_angles.hpp>
-#include <glm/gtx/norm.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 
+#include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
-#include "ECS/CollideShape.h"
+#include "ECS/Components/Abode.h"
+#include "ECS/Components/AnimatedStatic.h"
+#include "ECS/Components/DeadTree.h"
+#include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
-#include "ECS/Components/Fixed.h"
-#include "ECS/Components/MapFootprint.h"
+#include "ECS/Components/Flowers.h"
+#include "ECS/Components/MapCellResident.h"
+#include "ECS/Components/Mesh.h"
+#include "ECS/Components/Mobile.h"
+#include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Tree.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/WallHugRules.h"
+#include "InfoConstants.h"
 #include "Locator.h"
+#include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -55,82 +62,81 @@ namespace
 constexpr int8_t k_TurnsToReaimAfterHugging = 16;
 constexpr int8_t k_TurnsToReaimStepping = 127;
 
-/// Whether the circle a walker heads for or hugs is still there: water and the land's edge always are
+/// How a thing on the map stands in the walkers' way, from what it is
+wall_hug::ThingShape ShapeOf(const ecs::Registry& registry, entt::entity thing)
+{
+	if (registry.AnyOf<Field>(thing))
+	{
+		return wall_hug::ThingShape::None;
+	}
+	if (registry.AnyOf<Tree>(thing))
+	{
+		return wall_hug::ThingShape::Trunk;
+	}
+	if (registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, MobileStatic, DeadTree, SpellDispenser, TeleportStone>(thing))
+	{
+		return wall_hug::ThingShape::ModelBox;
+	}
+	return wall_hug::ThingShape::None;
+}
+
+/// The circles a thing on the map stands in the walkers' way with (see WallHugRules.h)
+std::vector<wall_hug::BlockingCircle> CirclesOf(const ecs::Registry& registry, entt::entity thing)
+{
+	const auto* transform = registry.TryGet<const Transform>(thing);
+	const auto shape = ShapeOf(registry, thing);
+	if (transform == nullptr || shape == wall_hug::ThingShape::None)
+	{
+		return {};
+	}
+	wall_hug::ThingOnMap onMap {.shape = shape,
+	                            .position = transform->position,
+	                            .rotation = transform->rotation,
+	                            .scale = transform->scale.x,
+	                            .boxCentre = glm::vec3(0.0f),
+	                            .boxHalfSize = glm::vec3(0.0f),
+	                            .fence = false};
+	if (shape == wall_hug::ThingShape::ModelBox)
+	{
+		const auto* mesh = registry.TryGet<const Mesh>(thing);
+		if (mesh == nullptr || !Locator::resources::has_value() || !Locator::resources::value().GetMeshes().Contains(mesh->id))
+		{
+			return {};
+		}
+		const auto box = Locator::resources::value().GetMeshes().Handle(mesh->id)->GetBoundingBox();
+		onMap.boxCentre = box.Center();
+		onMap.boxHalfSize = box.Size() * 0.5f;
+		if (const auto* mobileStatic = registry.TryGet<const MobileStatic>(thing);
+		    mobileStatic != nullptr && Locator::infoConstants::has_value())
+		{
+			const auto& info = Locator::infoConstants::value().mobileStatic.at(static_cast<size_t>(mobileStatic->type));
+			onMap.fence = wall_hug::IsFenceModel(info.meshId);
+		}
+	}
+	return wall_hug::CirclesOf(onMap);
+}
+
+/// Whether the circle a walker heads for or hugs is still there: water and the land's edge always are; a thing's is
+/// while the thing stands on the map where it stood, with that circle (a thing that is picked up or moved has a new
+/// shape when it is put down)
 bool CircleStillThere(const ecs::Registry& registry, const WallHugObjectReference& reference)
 {
-	return reference.entity == entt::null || (registry.Valid(reference.entity) && registry.AllOf<Fixed>(reference.entity));
-}
-
-/// Get neighbouring cells in this order for traversal
-/// +-----+-----+-----+
-/// | [5] | [4] | [7] |
-/// +-----+-----+-----+
-/// | [2] | [0] | [1] |
-/// +-----+-----+-----+
-/// | [6] | [3] | [8] |
-/// +-----+-----+-----+
-std::array<ecs::MapInterface::CellId, 9> GetNeighboringCells(const glm::vec2& pos)
-{
-	const auto cellIndex = MapInterface::GetGridCell(pos);
-	assert(glm::compMin(cellIndex) > 0 && glm::all(glm::lessThan(cellIndex, MapInterface::k_GridSize - glm::u16vec2(1))));
-	return {
-	    cellIndex,                          // Current
-	    {cellIndex.x + 1, cellIndex.y},     // Right
-	    {cellIndex.x - 1, cellIndex.y},     // Left
-	    {cellIndex.x, cellIndex.y + 1},     // Under
-	    {cellIndex.x, cellIndex.y - 1},     // Over
-	    {cellIndex.x - 1, cellIndex.y - 1}, // Over and left
-	    {cellIndex.x - 1, cellIndex.y + 1}, // Under and left
-	    {cellIndex.x + 1, cellIndex.y - 1}, // Over and right
-	    {cellIndex.x + 1, cellIndex.y + 1}, // Under and right
-	};
-}
-
-/// The walkers' obstacles in a cell, by their bounding circles
-const std::unordered_set<entt::entity>& ObstaclesIn(const ecs::Registry& registry, const MapInterface::CellId& cell)
-{
-	static const std::unordered_set<entt::entity> k_None;
-	const auto& obstacles = registry.Context().wallHugObstacles;
-	const auto found = obstacles.find(static_cast<uint32_t>(cell.x + cell.y * MapInterface::k_GridSize.x));
-	return found != obstacles.end() ? found->second : k_None;
-}
-
-/// The shape a building takes up on the ground where it stands now
-collide::Shape ShapeOf(const MapFootprint& footprint, const Transform& transform)
-{
-	// It is placed at its position on the map, to the map's whole units
-	const glm::vec3 placed {map_coords::Quantise(transform.position.x), 0.0f, map_coords::Quantise(transform.position.z)};
-	const float scale = transform.scale.x;
-	const glm::vec3 centre = placed + transform.rotation * (scale * footprint.meshCentre);
-	return collide::ShapeOfBox(glm::xz(centre), glm::xz(footprint.meshHalfSize) * scale,
-	                           glm::xz(transform.rotation * glm::vec3(1.0f, 0.0f, 0.0f)),
-	                           glm::xz(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f)));
-}
-
-/// Files every fixed thing in the map cells it is in: a building in every cell its shape covers, anything else in the
-/// cell it stands in
-void FileObstacles(ecs::Registry& registry)
-{
-	auto& obstacles = registry.Context().wallHugObstacles;
-	obstacles.clear();
-	const auto file = [&obstacles](glm::ivec2 cell, entt::entity entity) {
-		obstacles[static_cast<uint32_t>(cell.x + cell.y * MapInterface::k_GridSize.x)].insert(entity);
-	};
-	const glm::ivec2 cells {MapInterface::k_GridSize};
-	registry.Each<const Fixed, const Transform>([&](entt::entity entity, const Fixed&, const Transform& transform) {
-		if (const auto* footprint = registry.TryGet<const MapFootprint>(entity))
-		{
-			const float reach = transform.scale.x * glm::length(footprint->meshHalfSize) + 1.0f;
-			for (const auto cell : collide::FootprintCells(ShapeOf(*footprint, transform), reach, cells))
-			{
-				file(cell, entity);
-			}
-			return;
-		}
-		if (const auto cell = map_coords::CellOf(transform.position); map_coords::InBounds(cell))
-		{
-			file(cell, entity);
-		}
+	if (reference.entity == entt::null)
+	{
+		return true;
+	}
+	if (!registry.Valid(reference.entity))
+	{
+		return false;
+	}
+	const auto* resident = registry.TryGet<const MapCellResident>(reference.entity);
+	if (resident == nullptr || resident->cells.empty())
+	{
+		return false;
+	}
+	const auto circles = CirclesOf(registry, reference.entity);
+	return std::ranges::any_of(circles, [&reference](const wall_hug::BlockingCircle& circle) {
+		return circle.centre == reference.centre && circle.radius == reference.radius;
 	});
 }
 
@@ -150,8 +156,9 @@ bool ValidForTravel(int32_t x, int32_t z)
 	return cell != nullptr && cell->properties.hasWater == 0;
 }
 
-/// The circles that may block a walker going round a circle, looked for in the cell of a point: the things in it, then
-/// a circle in the middle of each of that cell and the eight round it that is water or off the land
+/// The circles that may block a walker, looked for in the cell of a map position as the game comes across them: the
+/// circles of the things in it, newest first, then a circle in the middle of each of that cell and the eight round it
+/// that is water or off the land
 struct Blockers
 {
 	std::vector<wall_hug::BlockingCircle> circles;
@@ -161,28 +168,24 @@ struct Blockers
 Blockers BlockersAround(const ecs::Registry& registry, glm::ivec2 coords)
 {
 	Blockers blockers;
-	const MapInterface::CellId cell {map_coords::CellOf(coords.x), map_coords::CellOf(coords.y)};
-	const auto& filed = ObstaclesIn(registry, cell);
-	// In a fixed order, so every machine looks at them alike
-	std::vector<entt::entity> things(filed.begin(), filed.end());
-	std::ranges::sort(things);
-	for (const auto thing : things)
+	const glm::ivec2 cell {map_coords::CellOf(coords.x), map_coords::CellOf(coords.y)};
+	if (Locator::entitiesMap::has_value())
 	{
-		if (registry.AnyOf<Field>(thing))
+		for (const auto thing : Locator::entitiesMap::value().GetFixedInGridCell(MapInterface::CellId(cell)))
 		{
-			continue;
+			for (const auto& circle : CirclesOf(registry, thing))
+			{
+				blockers.circles.push_back(circle);
+				blockers.entities.push_back(thing);
+			}
 		}
-		const auto& fixed = registry.Get<const Fixed>(thing);
-		blockers.circles.push_back(
-		    {.centre = fixed.boundingCenter, .radius = fixed.boundingRadius, .landscape = false, .landscapeOrFence = false});
-		blockers.entities.push_back(thing);
 	}
 	constexpr std::array<glm::ivec2, 9> k_Around {
 	    {{0, 0}, {1, 0}, {-1, 0}, {0, 1}, {0, -1}, {-1, -1}, {-1, 1}, {1, -1}, {1, 1}}};
 	constexpr float k_CellMetres = 10.0f;
 	for (const auto& offset : k_Around)
 	{
-		const glm::ivec2 around = glm::ivec2(cell) + offset;
+		const glm::ivec2 around = cell + offset;
 		if (!ValidForTravel(around.x, around.y))
 		{
 			blockers.circles.push_back({.centre = (glm::vec2(around) + 0.5f) * k_CellMetres,
@@ -195,82 +198,24 @@ Blockers BlockersAround(const ecs::Registry& registry, glm::ivec2 coords)
 	return blockers;
 }
 
-/// Iterate between all adjacent grids and find closest object that the ray (step) intersects with (circle)
-/// If that object is in front (and we are not in it) and less than 256 steps away, set as target and store steps
-bool LinearScanForObstacle(ecs::Registry& registry, entt::entity entity, const glm::vec2& pos, const glm::vec2& step)
+/// A walker heading straight on looks along its step for the nearest circle in the cell of a map position (see
+/// WallHugRules.h), and heads for it, or for nothing in reach
+void ScanLine(ecs::Registry& registry, entt::entity entity, glm::ivec2 position, glm::ivec2 step, glm::ivec2 coords)
 {
-	// Reference will be updated or removed
 	registry.Remove<WallHugObjectReference>(entity);
-
-	// FIXME(bwrsandman): This gets first, not closest
-	std::optional<entt::entity> fixedEntity = std::nullopt;
-	for (const auto& c : GetNeighboringCells(pos + step))
+	const auto blockers = BlockersAround(registry, coords);
+	const auto scan = wall_hug::ScanLine(position, step, blockers.circles);
+	if (!scan.circle.has_value())
 	{
-		// TODO(bwrsandman): Skip if out of bounds or in water
-		const auto& fixed = ObstaclesIn(registry, c);
-		if (!fixed.empty())
-		{
-			auto iter = std::find_if(fixed.cbegin(), fixed.cend(), [&registry](const auto& f) {
-				return !registry.AnyOf<Field>(f); // TODO(bwrsandman): && registry.AllOf<CollideData>();
-			});
-			if (iter != fixed.cend())
-			{
-				fixedEntity = std::make_optional(*iter);
-				break;
-			}
-		}
+		return;
 	}
-	if (!fixedEntity.has_value())
-	{
-		return false;
-	}
-
-	// Do ray-circle intersection with all objects found
-	const auto& fixed = registry.Get<Fixed>(*fixedEntity);
-	const auto stepSize = glm::length(step);
-	if (stepSize == 0.0f)
-	{
-		return false;
-	}
-	const auto direction = step / stepSize;
-	// Do a ray-circle intersection in 2d with ray = {pos, normal}, circle = {fixed.c, fixed.r} (same as ray-sphere)
-	const auto oc = pos - fixed.boundingCenter;
-	const auto halfB = glm::dot(oc, direction);
-	const auto c = glm::length2(oc) - fixed.boundingRadius * fixed.boundingRadius;
-	const float discriminant = halfB * halfB - c;
-	const bool hit = discriminant > 0;
-
-	// TODO(bwrsandman): if no hit, go through neighbouring cells, if still none, remove WallHugReference and return 1
-	if (!hit)
-	{
-		return false;
-	}
-
-	const float t = hit ? -halfB - glm::sqrt(discriminant) : -1.0f;
-	const bool inFront = t > 0.0f;
-
-	if (!inFront)
-	{
-		return false;
-	}
-
-	const auto numSteps = t / stepSize;
-	assert(numSteps >= 0); // t wouldn't be positive here and size should always be positive
-
-	// Too far
-	if (numSteps >= std::numeric_limits<decltype(WallHugObjectReference::stepsAway)>::max())
-	{
-		return false;
-	}
-
-	// Store object and number of steps away
+	const auto& circle = blockers.circles[*scan.circle];
 	registry.Assign<WallHugObjectReference>(entity, WallHugObjectReference {
-	                                                    .stepsAway = static_cast<uint8_t>(numSteps),
-	                                                    .entity = *fixedEntity,
-	                                                    .centre = fixed.boundingCenter,
-	                                                    .radius = fixed.boundingRadius,
+	                                                    .stepsAway = scan.turnsToObstacle,
+	                                                    .entity = blockers.entities[*scan.circle],
+	                                                    .centre = circle.centre,
+	                                                    .radius = circle.radius,
 	                                                });
-	return true;
 }
 
 /// The walker's walk this turn: where the walk holds it, its speed and goal in whole map units
@@ -337,11 +282,11 @@ void StartFinalStep(Walker& walker)
 	walker.wallHug.step = walker.wallHug.position - walker.goal;
 }
 
-/// Looks along the walker's straight way for the circle it will meet
-void ScanAhead(ecs::Registry& registry, Walker& walker)
+/// Looks along the walker's straight way for the circle it will meet, among those in the cell of a map position: where
+/// it stands, unless it is about to step into another cell
+void ScanAhead(ecs::Registry& registry, Walker& walker, std::optional<glm::ivec2> coords = std::nullopt)
 {
-	LinearScanForObstacle(registry, walker.entity, wall_hug::ToPoint(walker.wallHug.position),
-	                      wall_hug::ToPoint(walker.wallHug.step));
+	ScanLine(registry, walker.entity, walker.wallHug.position, walker.wallHug.step, coords.value_or(walker.wallHug.position));
 }
 
 /// A walker going round its circle looks along it for what blocks it, from the cell of a map position (see
@@ -438,7 +383,7 @@ void WalkStraight(ecs::Registry& registry, Walker& walker)
 	    map_coords::CellOf(next.y) != map_coords::CellOf(position.y))
 	{
 		FaceGoal(walker);
-		ScanAhead(registry, walker);
+		ScanAhead(registry, walker, next);
 	}
 
 	if (auto* reference = registry.TryGet<WallHugObjectReference>(walker.entity);
@@ -641,7 +586,6 @@ void Retag(ecs::Registry& registry, const Walker& walker)
 void PathfindingSystem::Update()
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	FileObstacles(registry);
 
 	// Every walker takes its turn's walk on its own, in the state it is in
 	std::vector<Walker> walkers;

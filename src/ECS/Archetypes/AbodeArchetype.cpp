@@ -15,7 +15,6 @@
 #include "3D/L3DMesh.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Fixed.h"
-#include "ECS/Components/MapFootprint.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
 #include "ECS/Components/StoragePit.h"
@@ -130,7 +129,6 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 	// Create Fixed component with a 2d bounding circle
 	const auto [point, radius] = GetFixedObstacleBoundingCircle(info.meshId, transform);
 	registry.Assign<Fixed>(entity, point, radius);
-	registry.Assign<MapFootprint>(entity, GetMapFootprint(info.meshId));
 
 	switch (info.abodeType)
 	{

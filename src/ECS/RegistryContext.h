@@ -13,7 +13,6 @@
 
 #include <optional>
 #include <unordered_map>
-#include <unordered_set>
 
 #include <entt/entity/fwd.hpp>
 
@@ -34,9 +33,6 @@ struct RegistryContext
 	std::unordered_map<uint32_t, entt::entity> towns;
 	components::VillageLightFlames villageLightFlames {.clock = 0, .starts = village_lights::k_FlameStarts};
 	components::MapScriptGlobals mapScriptGlobals;
-	/// The walkers' obstacles by the cells their bounding circles reach, made afresh each turn: the walkers don't yet
-	/// sweep the map's cells for obstacles as the game does, and keep to this coarser look until they do
-	std::unordered_map<uint32_t, std::unordered_set<entt::entity>> wallHugObstacles;
 	/// The rock-tapping sounds go round in turn: the next of the four a tap of the hand plays, and the next a creature's
 	/// smash of a rock plays
 	uint8_t nextHandRockTap {0};

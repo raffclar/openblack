@@ -12,7 +12,6 @@
 #include <glm/gtx/euler_angles.hpp>
 
 #include "ECS/Components/Fixed.h"
-#include "ECS/Components/MapFootprint.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -82,7 +81,6 @@ entt::entity SpellDispenserArchetype::Create(const glm::vec3& position, MagicTyp
 	registry.Assign<Mesh>(entity, resources::HashIdentifier(info.meshId), static_cast<int8_t>(0), static_cast<int8_t>(0));
 	const auto [point, radius] = GetFixedObstacleBoundingCircle(info.meshId, transform);
 	registry.Assign<Fixed>(entity, point, radius);
-	registry.Assign<MapFootprint>(entity, GetMapFootprint(info.meshId));
 	const auto period = static_cast<uint32_t>(info.timeEachMobileObjectTakesToProduce);
 	registry.Assign<SpellDispenser>(entity, SpellDispenser {.magicType = magicType,
 	                                                        .timer = {.tick = 0, .period = period, .active = period != 0},

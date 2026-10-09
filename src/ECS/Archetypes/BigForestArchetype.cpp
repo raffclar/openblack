@@ -13,7 +13,6 @@
 
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/Forest.h"
-#include "ECS/Components/MapFootprint.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
 #include "ECS/Components/Transform.h"
@@ -41,7 +40,6 @@ entt::entity BigForestArchetype::Create(const glm::vec3& position, BigForestInfo
 	const auto& transform = registry.Assign<Transform>(entity, position, glm::eulerAngleY(-yAngleRadians), glm::vec3(scale));
 	const auto [point, radius] = GetFixedObstacleBoundingCircle(info.meshId, transform);
 	registry.Assign<Fixed>(entity, point, radius);
-	registry.Assign<MapFootprint>(entity, GetMapFootprint(info.meshId));
 	registry.Assign<Forest>(entity);
 	registry.Assign<BigForest>(
 	    entity, BigForest {.type = static_cast<int>(type), .worth = ecs::store_rules::BigForestWorth(scale, info.woodValue)});
