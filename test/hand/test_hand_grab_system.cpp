@@ -16,9 +16,11 @@
 
 #include <gtest/gtest.h>
 
+#include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Reward.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
@@ -107,6 +109,7 @@ public:
 		tapped.push_back(object);
 		return true;
 	}
+	[[nodiscard]] bool HoldsLooseLeash() const override { return looseLeash; }
 	[[nodiscard]] uint32_t LocalRandom(uint32_t) override { return 0; }
 	void VillagerIntoHand(entt::entity villager) override { villagersInHand.push_back(villager); }
 	void AnimalIntoOwnFlock(entt::entity) override {}
@@ -250,6 +253,7 @@ public:
 	entt::entity hand {entt::null};
 	std::optional<entt::entity> underCursor;
 	bool influence {true};
+	bool looseLeash {false};
 	std::vector<PlayerNames> usedOnLand;
 	std::map<entt::entity, Size> sizes;
 	std::map<entt::entity, float> weights;
@@ -373,6 +377,90 @@ TEST_F(HandGrabSystemWithWorld, ThingsOutOfTheInfluenceOrHeldByAScriptAreLeft)
 	// Out of the influence or held by a script nothing is tapped; a boulder the hand can't lift is tapped at once
 	ASSERT_EQ(world->tapped.size(), 1u);
 	EXPECT_EQ(world->tapped.front(), boulder);
+}
+
+TEST_F(HandGrabSystemWithWorld, APressTheHandCantTakeClicksTheThing)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	// Even out of the influence, where it isn't tapped
+	world->influence = false;
+	EXPECT_FALSE(Press());
+	const auto* clicked = world->registry.TryGet<const HandClicked>(world->hand);
+	ASSERT_NE(clicked, nullptr);
+	EXPECT_EQ(clicked->thing, rock);
+	EXPECT_EQ(clicked->thingTurn, now / 100);
+	EXPECT_TRUE(world->tapped.empty());
+}
+
+TEST_F(HandGrabSystemWithWorld, ATapClicksWhatIsUnderTheHandAsItIsLetGo)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	EXPECT_TRUE(Press());
+	// Taking hold isn't a click
+	EXPECT_FALSE(world->registry.AllOf<HandClicked>(world->hand) &&
+	             world->registry.Get<HandClicked>(world->hand).thing != entt::null);
+	Frame(50);
+	const auto other = world->AddRock({5.0f, 0.0f, 0.0f});
+	world->underCursor = other;
+	Release();
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, other);
+}
+
+TEST_F(HandGrabSystemWithWorld, AHeldPressIsNoClick)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	EXPECT_TRUE(Press());
+	Frame(300);
+	Release();
+	const auto* clicked = world->registry.TryGet<const HandClicked>(world->hand);
+	EXPECT_TRUE(clicked == nullptr || clicked->thing == entt::null);
+}
+
+TEST_F(HandGrabSystemWithWorld, LettingGoOverTheLandClicksThePlace)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	system->ClickReleased(7);
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, rock);
+	world->underCursor.reset();
+	Frame(10, {}, {20.0f, 0.0f, 30.0f});
+	system->ClickReleased(8);
+	const auto& clicked = world->registry.Get<HandClicked>(world->hand);
+	EXPECT_TRUE(clicked.thing == entt::null);
+	EXPECT_EQ(clicked.place.x, map_coords::ToFixed(20.0f));
+	EXPECT_EQ(clicked.place.z, map_coords::ToFixed(30.0f));
+	EXPECT_EQ(clicked.placeTurn, 8u);
+}
+
+TEST_F(HandGrabSystemWithWorld, ARewardWithTheLeashLooseInTheHandIsTheLand)
+{
+	const auto chest = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->registry.Assign<Reward>(chest);
+	world->underCursor = chest;
+	world->looseLeash = true;
+	Frame(10, {}, {20.0f, 0.0f, 30.0f});
+	system->ClickReleased(8);
+	const auto& clicked = world->registry.Get<HandClicked>(world->hand);
+	EXPECT_TRUE(clicked.thing == entt::null);
+	EXPECT_EQ(clicked.placeTurn, 8u);
+	world->looseLeash = false;
+	system->ClickReleased(9);
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, chest);
+}
+
+TEST_F(HandGrabSystemWithWorld, ClicksAreForgottenAfterFifteenSeconds)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	system->ClickReleased(now / 100);
+	// 149 turns of 100 ms is under 15 seconds; 150 is just over, as a thousandth in single precision is a little more
+	Frame(14900);
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, rock);
+	Frame(100);
+	EXPECT_TRUE(world->registry.Get<HandClicked>(world->hand).thing == entt::null);
 }
 
 TEST_F(HandGrabSystemWithWorld, AThingInFlightIsCaughtOnlyAfterTheWait)

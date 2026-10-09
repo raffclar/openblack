@@ -1093,6 +1093,21 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "audio.cinema_music",
+	    .name = "The land's music waiting for the cinema bars",
+	    .facet = Facet::Audio,
+	    .description = "The camera stays in the player's influence while the land's music plays. After fifteen seconds a "
+	                   "script's cinema bars slide in, and twelve seconds later out again. The audio log gives when the "
+	                   "land's music waits and when it may play.",
+	    .expected = "The land's music fades out as the bars start to slide in and stays silent while they are up and "
+	                "while they slide out; once they are gone it comes back, carrying on from where it stopped.",
+	    .environment = {.playerAlignment = 1.0f},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 15.0f, .value = 1},
+	                 {.kind = Kind::WideScreen, .delaySeconds = 12.0f, .value = 0}},
+	});
+
+	all.push_back({
 	    .id = "audio.temple_music",
 	    .name = "The temple's music following the player's alignment",
 	    .facet = Facet::Audio,
@@ -1117,8 +1132,9 @@ void AddAudio(std::vector<Scenario>& all)
 	    .facet = Facet::Audio,
 	    .description = "The hand rests inside the player's influence near its border, goes out past the border for twenty "
 	                   "seconds, and comes back in. The audio log gives the hum's pitch as it changes.",
-	    .expected = "Crossing the border plays its sound each way. Outside, a hum is heard, not from any place, at full "
-	                "pitch at first, falling as the hand stays out and goes further; it stops when the hand comes back.",
+	    .expected = "Outside, a hum is heard, not from any place, at full pitch at first, falling as the hand stays out and "
+	                "goes further; it stops when the hand comes back. With no temple standing the border isn't shown, so "
+	                "crossing it makes no sound.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 330.0f}, .look = {0.0f, 0.0f, 420.0f}},
 	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.95f}},
@@ -1126,6 +1142,23 @@ void AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerSweep, .delaySeconds = 10.0f, .point = {0.0f, -0.1f}, .amount = 2.0f},
 	                 {.kind = Kind::PointerSweep, .delaySeconds = 10.0f, .point = {0.0f, 0.6f}, .amount = 2.0f}},
 	    .repeatFrom = 0,
+	});
+
+	// As above, but with the player's temple standing in the middle of their influence, so their border shows
+	all.push_back({
+	    .id = "audio.border_crossing",
+	    .name = "The hand crossing the influence border",
+	    .facet = Facet::Audio,
+	    .description = "The player's temple stands in the middle of their influence. The hand goes out over the north edge "
+	                   "of the influence and back in, every five seconds. The audio log gives where each sound is heard.",
+	    .expected = "Each time the hand goes over the border, out or in, the crossing sound plays once, from the hand, "
+	                "and smoke ripples along the border in the player's colour.",
+	    .environment = {.dispenserGrid = false, .temple = glm::vec2(0.0f)},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 330.0f}, .look = {0.0f, 0.0f, 420.0f}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.95f}},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 3.0f, .point = {0.0f, -0.5f}, .amount = 2.0f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 5.0f, .point = {0.0f, 0.5f}, .amount = 2.0f}},
+	    .repeatFrom = 1,
 	});
 }
 
@@ -2212,6 +2245,7 @@ std::vector<Scenario> Build()
 	AddGestureScenarios(all);
 	AddStormScenarios(all);
 	AddFlockScenarios(all);
+	AddBirdScenarios(all);
 	AddTeleportScenarios(all);
 	AddTornadoScenarios(all);
 	AddPhysicsScenarios(all);
@@ -2313,16 +2347,16 @@ std::string_view CommandProblem(const Command& command, std::span<const ObjectSe
 bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 {
 	return kind == Kind::SetHour || kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed ||
-	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment ||
+	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
 	       kind == Kind::HandTapObject || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
 {
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
-	    "Idle",       "Expressions", "Senses",    "Needs",         "Growth",  "Appearance", "Light", "Movement",
-	    "Footprints", "Audio",       "Objects",   "Hand",          "Leash",   "Combat",     "Mind",  "Particles",
-	    "Editor",     "Miracles",    "Benchmark", "Creature Mode", "Physics", "Nature",
+	    "Idle",       "Expressions", "Senses",    "Needs",         "Growth",  "Appearance", "Light",   "Movement",
+	    "Footprints", "Audio",       "Objects",   "Hand",          "Leash",   "Combat",     "Mind",    "Particles",
+	    "Editor",     "Miracles",    "Benchmark", "Creature Mode", "Physics", "Nature",     "Animals",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
@@ -2341,7 +2375,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 85> k_Names {
+	constexpr std::array<std::string_view, 88> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -2426,6 +2460,9 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "move mouse",
 	    "turn wheel",
 	    "set alignment",
+	    "cinema bars",
+	    "set fight lean",
+	    "set miracle sightings",
 	    "hand tap",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
@@ -2472,12 +2509,13 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		problems.emplace_back("hour or body time out of range");
 	}
 	if (scenario.creatures.empty() && scenario.particles.empty() && scenario.miracles.empty() && scenario.dispensers.empty() &&
-	    !environment.dispenserGrid && !scenario.crowd.has_value() && !environment.playerAlignment.has_value() &&
-	    scenario.throws.empty() && scenario.objects.empty() && scenario.fireflyRewards.empty() &&
+	    scenario.birdFlocks.empty() && scenario.temples.empty() && !environment.dispenserGrid && !scenario.crowd.has_value() &&
+	    !environment.playerAlignment.has_value() && scenario.throws.empty() && scenario.objects.empty() &&
+	    scenario.fireflyRewards.empty() &&
 	    std::ranges::none_of(scenario.commands, [](const Command& command) { return NeedsNoCreature(command.kind); }))
 	{
-		problems.emplace_back("no creatures, things, particles, miracles, dispensers, crowd, fireflies' rewards, player's "
-		                      "commands or alignment for the hand");
+		problems.emplace_back("no creatures, things, particles, miracles, dispensers, birds, temples, crowd, fireflies' "
+		                      "rewards, player's commands or alignment for the hand");
 	}
 	if ((environment.playerAlignment && !InRange(*environment.playerAlignment, -1.0f, 1.0f)) ||
 	    (environment.cursor && (!InRange(environment.cursor->x, 0.0f, 1.0f) || !InRange(environment.cursor->y, 0.0f, 1.0f))))
@@ -2650,6 +2688,8 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		if ((command.kind == Kind::SetDesire &&
 		     (command.value >= creature_desires::k_DesireCount || !InRange(command.amount, 0.0f, 1.0f))) ||
 		    (command.kind == Kind::SetPhase && command.value > k_LastPhase) ||
+		    (command.kind == Kind::SetFightLean && !InRange(command.amount, -1.0f, 1.0f)) ||
+		    (command.kind == Kind::SetMiracleSightings && (command.value >= k_Miracles || command.amount < 0.0f)) ||
 		    (command.kind == Kind::ShowFeeling && command.value >= creature_face::k_CueCount) ||
 		    (command.kind == Kind::SeeSkill && command.value >= k_Skills) ||
 		    ((command.kind == Kind::SeeMiracle || command.kind == Kind::KnowMiracle || command.kind == Kind::CastMiracle) &&

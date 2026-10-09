@@ -31,6 +31,8 @@ struct SpellDispenser
 	glm::vec3 orbPosition {0.0f};
 	/// Its swirl on the land under it, 0 for none
 	uint32_t effect {0};
+	/// Its row in the buildings' table
+	AbodeInfo building {AbodeInfo::None};
 };
 
 /// One of the dispensers the testbed lays out in a grid, cleared away when a scenario asks for none

@@ -105,6 +105,8 @@ public:
 	/// Everything the effect draws is moved by this from where its last step left it, as the miracle in the hand follows
 	/// the hand between turns
 	virtual void SetDrawOffset(EffectId id, glm::vec3 offset) = 0;
+	/// An effect of the temple's rooms, drawn while the player is in the temple rather than with the world's
+	virtual void SetInTemple(EffectId id) = 0;
 	/// The live shield holding a point, its sphere grown by a margin, if any
 	[[nodiscard]] virtual std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const = 0;
 	/// How many particle sounds are playing or dying away, for the debug window
@@ -153,8 +155,9 @@ public:
 	virtual void Reset() = 0;
 
 	/// Everything the effects draw this frame, t of the way through the game turn, into a frame that is cleared first.
-	/// The frame doesn't depend on the camera: each pass orders it for its own (particles::draw::Order).
-	virtual void CollectDrawFrame(float turnFraction, particles::draw::Frame& frame) const = 0;
+	/// The frame doesn't depend on the camera: each pass orders it for its own (particles::draw::Order). In the temple
+	/// only the temple's effects are drawn, and outside it only the world's.
+	virtual void CollectDrawFrame(float turnFraction, particles::draw::Frame& frame, bool inTemple) const = 0;
 	[[nodiscard]] virtual DrawStats GetDrawStats() const = 0;
 	[[nodiscard]] virtual std::vector<EffectInfo> GetEffects() const = 0;
 	/// The particle files' names, for the debug window

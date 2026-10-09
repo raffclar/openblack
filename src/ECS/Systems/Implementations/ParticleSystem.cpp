@@ -1012,6 +1012,14 @@ void ParticleSystem::SetDrawPath(EffectId id, particles::draw::DrawPath path)
 	}
 }
 
+void ParticleSystem::SetInTemple(EffectId id)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->inTemple = true;
+	}
+}
+
 void ParticleSystem::SetDrawOffset(EffectId id, glm::vec3 offset)
 {
 	if (const auto it = FindRunning(id); it != _effects.end())
@@ -1216,7 +1224,7 @@ void ParticleSystem::ResolveTextures(const particles::Effect& effect)
 	}
 }
 
-void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame& frame) const
+void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame& frame, bool inTemple) const
 {
 	frame.Clear();
 	const particles::draw::Sources sources {
@@ -1237,6 +1245,10 @@ void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame
 	};
 	for (const auto& running : _effects)
 	{
+		if (running.inTemple != inTemple)
+		{
+			continue;
+		}
 		_walk.Clear();
 		running.effect->Walk(turnFraction, _walk);
 		if (running.drawOffset != glm::vec3(0.0f))
@@ -1253,7 +1265,11 @@ void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame
 		particles::draw::AddEffect(frame, _walk, running.path, running.effect->GetOrigin(), running.effect->GetPlayer(),
 		                           sources);
 	}
-	AddLightSheets(frame);
+	// The land's light sheets are the world's
+	if (!inTemple)
+	{
+		AddLightSheets(frame);
+	}
 	_drawStats = {
 	    .sprites = frame.sprites.size(),
 	    .chains = frame.chains.size(),

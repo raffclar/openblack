@@ -96,15 +96,20 @@ TempleScrolls::CreatureFacts FactsOf(const Snapshot& snapshot)
 	facts.attention = std::clamp(1.0f - (snapshot.secondsAlone / k_AttentionFadeSeconds), 0.0f, 1.0f);
 	facts.knowsGodsDesire = snapshot.knowsGodsDesire;
 	facts.known = {static_cast<int32_t>(snapshot.creaturesKnown), 0, 0, 0};
-	// The miracles it knows or has started to learn, by the game's texts for them
+	// The miracles it knows about that the game has a text for having learnt, by the game's texts for them, with how far
+	// it has learnt each cut short
 	for (size_t i = k_FirstScrollMiracle; i < snapshot.miracles.size(); ++i)
 	{
-		const auto percent = std::clamp(snapshot.miracles.at(i).percent, 0, 100);
-		if (percent > 0)
+		const auto& miracle = snapshot.miracles.at(i);
+		if (miracle.knownAbout && miracle.hasLearntText)
 		{
-			facts.miracles.push_back({.text = MagicActionText(i), .percent = percent});
+			facts.miracles.push_back({.text = MagicActionText(i),
+			                          .percent = static_cast<int32_t>(miracle.learnt),
+			                          .miracle = static_cast<uint32_t>(i),
+			                          .learnt = miracle.learnt});
 		}
 	}
+	facts.fightBalance = snapshot.fightBalance;
 	return facts;
 }
 

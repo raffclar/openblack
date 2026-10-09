@@ -421,6 +421,17 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 	return false;
 }
 
+bool GameHandGrabWorld::HoldsLooseLeash() const
+{
+	if (!Locator::leashSystem::has_value())
+	{
+		return false;
+	}
+	const auto& leashes = Locator::leashSystem::value();
+	const auto creature = leashes.PlayersCreature(HandPlayer());
+	return creature.has_value() && leashes.HolderPoint(*creature).has_value();
+}
+
 void GameHandGrabWorld::LeaveRootsHole(entt::entity tree)
 {
 	auto& registry = Locator::entitiesRegistry::value();
