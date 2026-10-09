@@ -122,6 +122,9 @@ private:
 	void DrawWaterRings(const DrawSceneDesc& desc) const;
 	/// The snow falling about the camera where it snows, each quarter of a land block in its place among what blends
 	void DrawSnowfall(const DrawSceneDesc& desc) const;
+	/// After a knock, a row of little people over each house of the knocked town: one for each adult living there and
+	/// one for each free place
+	void DrawKnockReadout(const DrawSceneDesc& desc) const;
 	/// The smoke from the homes' chimneys, each in its place among what blends, in the main view
 	void DrawChimneySmoke(const DrawSceneDesc& desc) const;
 	/// Gathers what the particle effects draw this frame, once for every pass

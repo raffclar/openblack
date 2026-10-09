@@ -56,7 +56,7 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 
 	registry.Assign<Transform>(entity, position, glm::eulerAngleY(glm::radians(180.0f)), glm::vec3(born.scale));
 	registry.Assign<Mobile>(entity);
-	const uint32_t health = 100;
+	const float life = info.life;
 
 	const auto lifeStage = born.child ? Villager::LifeStage::Child : Villager::LifeStage::Adult;
 	const auto sex = info.sex == SexType::Female ? Villager::Sex::FEMALE : Villager::Sex::MALE;
@@ -74,7 +74,7 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 		registry.Get<Abode>(abode).inhabitants.insert(entity);
 	}
 
-	registry.Assign<Villager>(entity, health, villager_age::BirthTurnFor(turn, born.age), born.food, lifeStage, sex,
+	registry.Assign<Villager>(entity, life, villager_age::BirthTurnFor(turn, born.age), born.food, lifeStage, sex,
 	                          info.tribeType, info.villagerNumber, task, town, abode, born.lastCheckTurn);
 	registry.Assign<WallHug>(entity, glm::vec2(), glm::vec2(), 0.0f, GetSpeedStateSpeed(info.speedGroup.speedDefault));
 	// A child made as a child wears its kind's child model; the rest their job's

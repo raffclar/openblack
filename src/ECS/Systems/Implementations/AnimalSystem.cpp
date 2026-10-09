@@ -1090,7 +1090,7 @@ bool AnimalSystem::IsHuntingTargetValid(entt::entity wolf, const Animal& animal,
 	{
 		return false;
 	}
-	if (const auto* villager = registry.TryGet<const Villager>(prey); villager != nullptr && villager->health == 0)
+	if (const auto* villager = registry.TryGet<const Villager>(prey); villager != nullptr && villager->life <= 0.0f)
 	{
 		return false;
 	}
@@ -1211,7 +1211,7 @@ void AnimalSystem::BringDown(entt::entity wolf, entt::entity prey)
 	if (auto* villager = registry.TryGet<Villager>(prey))
 	{
 		const float before = ecs::world_objects::LifeOf(prey);
-		villager->health = static_cast<uint32_t>(std::lround(flock_rules::k_DownedLife * 100.0f));
+		villager->life = flock_rules::k_DownedLife;
 		ecs::world_objects::CountInjury(prey, before, flock_rules::k_DownedLife);
 		if (auto* wallHug = registry.TryGet<WallHug>(prey))
 		{
@@ -1282,7 +1282,7 @@ entt::entity AnimalSystem::FindPrey(entt::entity wolf, const Animal& animal)
 		cells[{cell.x, cell.y}].emplace_back(entity, facts);
 	};
 	registry.Each<const Villager, const Transform>([&](entt::entity entity, const Villager& villager, const Transform& t) {
-		add(entity, t, {.isVillager = true, .helpless = villager.health == 0 || registry.AllOf<BeingEaten>(entity)});
+		add(entity, t, {.isVillager = true, .helpless = villager.life <= 0.0f || registry.AllOf<BeingEaten>(entity)});
 	});
 	registry.Each<const Animal, const Transform>([&](entt::entity entity, const Animal& other, const Transform& t) {
 		if (entity != wolf)

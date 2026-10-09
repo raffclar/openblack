@@ -482,6 +482,9 @@ struct Command
 		WheelTurn,
 		/// The player's alignment jumps, which the hand shows
 		SetAlignment,
+		/// The player's hand knocks on the scenario's object, a building, as the Action button pressed on it does, from
+		/// where the hand is
+		HandTapObject,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -651,6 +654,7 @@ void AddPhysicsScenarios(std::vector<Scenario>& all);
 void AddHandNavigationScenarios(std::vector<Scenario>& all);
 /// The scenarios of how the hand looks for its player's alignment
 void AddHandLookScenarios(std::vector<Scenario>& all);
+void AddKnockScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them
 [[nodiscard]] std::span<const Scenario> All();
