@@ -487,6 +487,10 @@ TEST(PhysicsTurn, SinkingAndBobbing)
 	EXPECT_TRUE(turn::NearSeaLevel(false, 0.4f, 1.0f));
 	EXPECT_FALSE(turn::NearSeaLevel(false, 0.6f, 1.0f));
 	EXPECT_FALSE(turn::NearSeaLevel(true, -5.0f, 1.0f));
+	// Out of sight only once every point is under: the centre a whole radius or more down
+	EXPECT_FALSE(turn::SunkOutOfSight(-0.99f, 1.0f));
+	EXPECT_TRUE(turn::SunkOutOfSight(-1.0f, 1.0f));
+	EXPECT_FALSE(turn::SunkOutOfSight(0.5f, 1.0f));
 	EXPECT_TRUE(turn::Bobbed(-1.0f, 0.5f));
 	EXPECT_TRUE(turn::Bobbed(1.0f, -0.5f));
 	EXPECT_FALSE(turn::Bobbed(0.0f, 0.5f));

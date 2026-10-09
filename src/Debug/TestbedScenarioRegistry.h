@@ -82,6 +82,9 @@ enum class Facet : uint8_t
 	Benchmark,
 	/// Creature Mode, the camera locked onto a creature, and the Creature Cave
 	CreatureMode,
+	/// Things thrown, dropped and knocked: how they fly, what they break and how they come to rest, and what a frame
+	/// costs meanwhile
+	Physics,
 
 	_Count
 };
@@ -219,7 +222,7 @@ struct CreatureSetup
 struct ObjectSetup
 {
 	std::variant<MobileObjectInfo, TreeInfo, FeatureInfo, VillagerInfo, PotInfo, AbodeInfo, FieldTypeInfo, AnimalInfo,
-	             FishFarmInfo>
+	             MobileStaticInfo, FishFarmInfo>
 	    type;
 	glm::vec2 offset {0.0f};
 	float scale {1.0f};
@@ -517,6 +520,22 @@ struct HandHold
 	float height {6.0f};
 };
 
+/// One of the scenario's objects thrown into the physics as the player's hand throws it, again and again if asked
+struct ThrowSetup
+{
+	/// The object, by its place in the scenario's objects
+	size_t object {0};
+	/// It is lifted to this point, from the middle of the map, before it is thrown; none to throw it from where it lies
+	std::optional<glm::vec2> from;
+	/// How high above the land it is let go
+	float height {6.0f};
+	glm::vec3 velocity {0.0f};
+	/// Seconds after the scenario starts that it is thrown
+	float delaySeconds {1.0f};
+	/// Seconds after which it is thrown again, none for once. A throw due while it still flies waits for it to land.
+	std::optional<float> repeatSeconds;
+};
+
 struct Scenario
 {
 	/// Unique and never changed, for picking it from the command line or a test
@@ -546,6 +565,8 @@ struct Scenario
 	std::optional<Crowd> crowd;
 	/// Every miracle's position and the land's height under it are logged this often, in seconds
 	std::optional<float> logMiraclesEvery;
+	/// Objects thrown by the player's hand
+	std::vector<ThrowSetup> throws;
 };
 
 /// The miracles' scenarios, added to every scenario by the registry
@@ -578,6 +599,9 @@ void AddTornadoScenarios(std::vector<Scenario>& all);
 /// The shield and forest miracles: what each shield stops and what it costs, the forest on each ground, growing and
 /// withering
 void AddShieldForestScenarios(std::vector<Scenario>& all);
+/// The physics' scenarios: things thrown and dropped, buildings broken, rocks split, bodies coming to rest, and how
+/// much a frame costs while they do
+void AddPhysicsScenarios(std::vector<Scenario>& all);
 /// Whether a command is the player's alone, given whether or not the scenario has creatures
 [[nodiscard]] bool NeedsNoCreature(Command::Kind kind);
 /// The player's hand moving over the land, dragging it and turning and zooming the camera
