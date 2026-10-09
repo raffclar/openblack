@@ -274,3 +274,24 @@ TEST(Inspector, Ping)
 	const Inspector inspector;
 	EXPECT_EQ(Ask(inspector, R"({"query": "ping"})")["result"]["pong"], true);
 }
+
+// A ping answers what the game said of itself, for tools telling running games apart
+TEST(Inspector, PingAnswersTheIdentity)
+{
+	Inspector inspector;
+	inspector.SetIdentity({{"pid", 1234}, {"port", 47801}});
+	const auto answer = Ask(inspector, R"({"query": "ping"})")["result"];
+	EXPECT_EQ(answer["pong"], true);
+	EXPECT_EQ(answer["pid"], 1234);
+	EXPECT_EQ(answer["port"], 47801);
+}
+
+// Pinging looks for a game without taking control of it; every other line, even one that isn't a request, does
+TEST(Inspector, OnlyAPingLeavesControl)
+{
+	EXPECT_FALSE(Inspector::TakesControl(R"({"query": "ping"})"));
+	EXPECT_FALSE(Inspector::TakesControl(R"({"id": 3, "query": "ping"})"));
+	EXPECT_TRUE(Inspector::TakesControl(R"({"query": "describe"})"));
+	EXPECT_TRUE(Inspector::TakesControl(R"({"query": "sky.moon"})"));
+	EXPECT_TRUE(Inspector::TakesControl("not json"));
+}

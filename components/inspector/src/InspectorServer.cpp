@@ -325,6 +325,7 @@ size_t Server::Poll(const Handler& handler)
 			}
 			if (!line.empty())
 			{
+				client.controlling = client.controlling || !_takesControl || _takesControl(line);
 				client.sending += handler(line);
 				client.sending += '\n';
 				++answered;
@@ -338,6 +339,11 @@ size_t Server::Poll(const Handler& handler)
 	}
 	std::erase_if(_clients, [](const Client& client) { return !client.socket.Valid(); });
 	return answered;
+}
+
+size_t Server::ControllingClientCount() const
+{
+	return static_cast<size_t>(std::ranges::count_if(_clients, [](const Client& client) { return client.controlling; }));
 }
 
 std::optional<Client> Client::Connect(uint16_t port)

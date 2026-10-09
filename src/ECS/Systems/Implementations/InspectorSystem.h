@@ -15,6 +15,7 @@
 #include <memory>
 
 #include <Inspector.h>
+#include <InspectorDiscovery.h>
 #include <InspectorServer.h>
 #include <entt/meta/context.hpp>
 
@@ -67,6 +68,8 @@ private:
 	inspector::InputProvider* _input {nullptr};
 	/// Owned by the inspector, takes the pictures due each frame
 	inspector::ScreenshotProvider* _screenshots {nullptr};
+	/// The file telling tools this game runs and where it listens, removed as the inspector goes
+	std::unique_ptr<inspector::discovery::DiscoveryFile> _discovery;
 	/// When it last served requests, for how long the input lock lingers after a client goes
 	std::chrono::steady_clock::time_point _lastService {std::chrono::steady_clock::now()};
 };

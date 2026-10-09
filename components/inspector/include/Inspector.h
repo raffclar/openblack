@@ -27,8 +27,8 @@ namespace openblack::inspector
 /// its required parameters checked, run, and its result shaped by the query language.
 ///
 /// Three queries are always there: "describe", the providers and their queries (all of one provider's in full with
-/// {"provider": name}, or a single query's with {"query": "provider.name"}); "ping"; and "writes", the last queries that
-/// changed the game, newest first, with what they answered.
+/// {"provider": name}, or a single query's with {"query": "provider.name"}); "ping", answered with what the game says
+/// of itself; and "writes", the last queries that changed the game, newest first, with what they answered.
 ///
 /// Queries that write are told to the write log as they are answered, whether they could be or not.
 class Inspector
@@ -40,6 +40,12 @@ public:
 	static constexpr size_t k_RememberedWrites = 50;
 
 	void SetWriteLog(WriteLog log) { _writeLog = std::move(log); }
+	/// What "ping" answers beside pong: the game's port, process and the like, for tools telling games apart
+	void SetIdentity(Json identity) { _identity = std::move(identity); }
+
+	/// Whether a request's line takes control of the game: everything but a ping does, so that tools can look for
+	/// running games without keeping their players out
+	[[nodiscard]] static bool TakesControl(std::string_view line);
 
 	/// Adds a provider, replacing one of the same name
 	void Add(std::unique_ptr<ProviderInterface> provider);
@@ -58,6 +64,7 @@ private:
 
 	std::vector<std::unique_ptr<ProviderInterface>> _providers;
 	WriteLog _writeLog;
+	Json _identity = Json::object();
 	/// Kept as requests are answered, which reading the game's state doesn't change
 	mutable std::deque<Json> _writes;
 };
