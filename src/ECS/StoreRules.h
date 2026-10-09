@@ -20,6 +20,12 @@ namespace openblack::ecs::store_rules
 /// A tree's wood: its life, its wood value and its scale (once), times what a forest miracle's tree is worth over an
 /// ordinary one and the land's balance for wood, truncated
 [[nodiscard]] uint32_t TreeWood(float life, float multiplier, uint32_t woodValue, float scale, float landBalance);
+/// The same, as a forest counts it: not truncated
+[[nodiscard]] float TreeWoodValue(float life, float multiplier, uint32_t woodValue, float scale, float landBalance);
+/// What a big forest is made worth: its kind's wood value by its scale, truncated, as it is planted
+[[nodiscard]] uint32_t BigForestWorth(float scale, uint32_t woodValue);
+/// A big forest's wood: its life times what it was made worth
+[[nodiscard]] float BigForestWood(float life, uint32_t worth);
 /// A dead tree's wood: its scale and its tree's wood value, times what the tree was worth when it died; its life
 /// doesn't count
 [[nodiscard]] uint32_t DeadTreeWood(float scale, uint32_t woodValue, float multiplier);

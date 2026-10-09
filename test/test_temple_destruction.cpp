@@ -84,3 +84,12 @@ TEST(TempleDestruction, SpotVisualsLastTheirSecondsInTurns)
 	EXPECT_EQ(SmokeTurns(100, 0.0f), 60);
 	EXPECT_EQ(SmokeTurns(100, 0.4f), 90);
 }
+
+TEST(TempleDestruction, OnlyTheLocalPlayersLossOutsideSkirmishesAndOnlineGamesEndsTheGameOnce)
+{
+	EXPECT_TRUE(GameOverStarts({.localTempleDestroying = true}));
+	EXPECT_FALSE(GameOverStarts({}));
+	EXPECT_FALSE(GameOverStarts({.over = true, .localTempleDestroying = true}));
+	EXPECT_FALSE(GameOverStarts({.skirmish = true, .localTempleDestroying = true}));
+	EXPECT_FALSE(GameOverStarts({.multiplayer = true, .localTempleDestroying = true}));
+}
