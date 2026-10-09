@@ -56,6 +56,8 @@ struct Temple
 	/// The glow over the heart, and the sound that loops until the explosion
 	std::optional<uint32_t> destructionGlow;
 	entt::entity destructionLoop {entt::null};
+	/// The town that built it, for a temple a town planned
+	std::optional<int32_t> town;
 };
 
 /// The way into a temple, Entrance.l3d at the temple's place, which the temple makes and its player clicks the Action

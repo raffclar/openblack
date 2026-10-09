@@ -960,8 +960,8 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			if (has(MeshUniform::Inset))
 			{
 				// y: 1 for the cap, which is set in already and drawn unlit
-				const glm::vec4 u_inset {desc.innerWalls ? InsetOf(prim.twoSided) : 0.0f, cap != nullptr ? 1.0f : 0.0f, 0.0f,
-				                         0.0f};
+				const glm::vec4 u_inset {desc.innerWalls ? desc.innerWallInset.value_or(InsetOf(prim.twoSided)) : 0.0f,
+				                         cap != nullptr ? 1.0f : 0.0f, 0.0f, 0.0f};
 				setUniform(MeshUniform::Inset, &u_inset);
 			}
 			if (has(MeshUniform::SeaClip))
@@ -4716,6 +4716,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.modelCutHeight = status.has_value() || build.morphWithTerrain ? std::nullopt : build.capHeight;
 					submitDesc.twoSided = true;
 					submitDesc.innerWalls = innerWalls;
+					submitDesc.innerWallInset = build.innerWallInset;
 					submitDesc.onlyStatus = status;
 					drawInstances(build.meshId, placers, false, instance, 1, nullptr, nullptr,
 					              renderCtx.partialBuildInstanceBuffer);
@@ -4723,6 +4724,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.modelCutHeight.reset();
 					submitDesc.twoSided = false;
 					submitDesc.innerWalls = false;
+					submitDesc.innerWallInset.reset();
 					submitDesc.onlyStatus.reset();
 				};
 				if (build.modelCut.has_value())

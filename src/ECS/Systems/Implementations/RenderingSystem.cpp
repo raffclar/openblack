@@ -18,6 +18,7 @@
 #include <glm/gtx/transform.hpp>
 
 #include "3D/L3DMesh.h"
+#include "ECS/BuildingConstruction.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AtHome.h"
@@ -426,9 +427,18 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    look.z = 1.0f;
 		    }
 
+		    // A building going up is drawn only as far up as it stands, with the broken and the unfinished ones, though
+		    // what of it stands can still be pointed at
+		    const auto* progress = registry.TryGet<const BuildProgress>(entity);
+		    const bool goingUp = progress != nullptr && DrawnMeshOf(entity, mesh) == mesh.id;
+		    if (goingUp)
+		    {
+			    look.z = 1.0f;
+		    }
+
 		    const uint32_t idx = slots->second.offset + slots->second.filled;
 		    _renderContext.instanceUniforms[idx] = {.model = modelMatrix, .look = look};
-		    if (look.z != 1.0f)
+		    if (look.z != 1.0f || (goingUp && progress->built > 0.0f))
 		    {
 			    _renderContext.drawnObjects.push_back({.entity = entity, .model = modelMatrix});
 		    }
@@ -500,6 +510,9 @@ void RenderingSystem::UploadPartialBuilds()
 		                     : std::nullopt,
 		    .scaffoldStatus = build.scaffoldShown ? scaffold : std::nullopt,
 		    .scaffoldCut = build.scaffoldCut,
+		    // A temple's inner walls stand in further than other buildings', whatever their material
+		    .innerWallInset =
+		        registry.AllOf<Temple>(entity) ? std::optional(building_construction::k_TempleInnerWallInset) : std::nullopt,
 		};
 		_renderContext.partialBuildInstances.push_back({.model = matrix});
 		// The scaffold sinks along its up axis while the building rises out of the land

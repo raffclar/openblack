@@ -14,14 +14,18 @@
 
 #include <chrono>
 #include <limits>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <unordered_set>
+#include <utility>
 
 #include <LHVM.h>
 #include <LHVMTypes.h>
 #include <entt/entity/entity.hpp>
 #include <entt/entity/fwd.hpp>
+#include <glm/geometric.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <spdlog/spdlog.h>
 
@@ -47,6 +51,8 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/Transform.h"
@@ -70,6 +76,7 @@
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/TempleConstruction.h"
 #include "ECS/TownPlaythings.h"
 #include "Enums.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -514,6 +521,10 @@ void GetProperty() // 021 GET_PROPERTY
 	case script::ObjectPropertyType::Drowning:
 		Pushb(IsDrowning(object));
 		return;
+	case script::ObjectPropertyType::BuiltPercentage:
+		// All of anything not under construction
+		Pushf(ecs::construction::BuiltOf(object));
+		return;
 	default:
 		// TODO(Daniels118): the other properties
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() property {} not implemented.", __func__,
@@ -525,11 +536,26 @@ void GetProperty() // 021 GET_PROPERTY
 
 void SetProperty() // 022 SET_PROPERTY
 {
-	// const auto val = Popf();
-	// const auto object = Pop().uintVal;
-	// const auto prop = Pop().intVal;
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
+	const auto value = Popf();
+	const auto object = PopObject();
+	const auto prop = static_cast<script::ObjectPropertyType>(Pop().intVal);
+	if (!Locator::entitiesRegistry::value().Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_PROPERTY: object no longer valid");
+		return;
+	}
+	switch (prop)
+	{
+	case script::ObjectPropertyType::BuiltPercentage:
+		// A building is built that far, finished at all of it
+		ecs::construction::SetBuilt(object, value);
+		return;
+	default:
+		// TODO(Daniels118): the other properties
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() property {} not implemented.", __func__,
+		                    static_cast<int>(prop));
+		return;
+	}
 }
 
 void GetPosition() // 023 GET_POSITION
@@ -797,14 +823,46 @@ void PositionFollow() // 050 POSITION_FOLLOW
 
 void CallNear() // 051 CALL_NEAR
 {
-	// const auto excludingScripted = static_cast<bool>(Pop().intVal);
-	// const auto radius = Popf();
-	// const auto position = PopVec();
-	// const auto subtype = Pop().intVal;
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
-	Pusho(0);
+	const auto excludingScripted = static_cast<bool>(Pop().intVal);
+	const auto radius = Popf();
+	const auto position = PopVec();
+	const auto subtype = Pop().intVal;
+	const auto type = static_cast<script::ObjectType>(Pop().intVal);
+	if (type != script::ObjectType::Citadel)
+	{
+		// TODO(Daniels118): the other kinds of thing
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() type {} not implemented.", __func__,
+		                    static_cast<int>(type));
+		Pusho(0);
+		return;
+	}
+	// The nearest temple within the radius across the land; a temple has no subtype, so only "any" finds one
+	auto& registry = Locator::entitiesRegistry::value();
+	std::optional<std::pair<float, entt::entity>> nearest;
+	if (subtype == static_cast<int32_t>(script::FindType::Any))
+	{
+		registry.Each<const ecs::components::Temple, const Transform>(
+		    [&](entt::entity entity, const ecs::components::Temple&, const Transform& transform) {
+			    if (excludingScripted && registry.AllOf<ecs::components::InScript>(entity))
+			    {
+				    return;
+			    }
+			    const float distance =
+			        glm::distance(glm::vec2(position.x, position.z), glm::vec2(transform.position.x, transform.position.z));
+			    if (distance <= radius && (!nearest.has_value() || distance < nearest->first))
+			    {
+				    nearest = std::make_pair(distance, entity);
+			    }
+		    });
+	}
+	if (!nearest.has_value())
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "CALL_NEAR: thing not found");
+		Pusho(0);
+		return;
+	}
+	Locator::scriptObjects::value().Register(nearest->second, false);
+	Pusho(static_cast<uint32_t>(nearest->second));
 }
 
 void SpecialEffectPosition() // 052 SPECIAL_EFFECT_POSITION
@@ -1483,10 +1541,14 @@ void EndGameSpeed() // 129 END_GAME_SPEED
 
 void BuildBuilding() // 130 BUILD_BUILDING
 {
-	// const auto desire = Popf();
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
+	const auto desire = Popf();
+	const auto position = PopVec();
+	// The towns start what they planned there: a planned temple goes up
+	// TODO(villager-life): the towns' other planned buildings
+	if (!ecs::construction::StartPlannedAt(position, desire).has_value())
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "BUILD_BUILDING: no planned temple at ({}, {})", position.x, position.z);
+	}
 }
 
 void SetAffectedByWind() // 131 SET_AFFECTED_BY_WIND

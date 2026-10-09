@@ -24,6 +24,7 @@
 #include "3D/TempleExteriorMorph.h"
 #include "Common/Bitmap16B.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/TempleExterior.h"
 #include "ECS/Components/Transform.h"
@@ -82,7 +83,8 @@ std::optional<PlayerNames> TempleExteriorSystem::EntranceAt(glm::vec3 origin, gl
 	registry.Each<const TempleEntrance, const Transform>(
 	    [&](const entt::entity, const TempleEntrance& entrance, const Transform& transform) {
 		    const auto* temple = registry.TryGet<const Temple>(entrance.temple);
-		    if (temple == nullptr)
+		    // A temple's entrance can be clicked only once the temple is built
+		    if (temple == nullptr || registry.AllOf<BuildProgress>(entrance.temple))
 		    {
 			    return;
 		    }

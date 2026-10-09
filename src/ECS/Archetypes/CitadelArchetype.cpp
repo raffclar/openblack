@@ -11,8 +11,10 @@
 
 #include <entt/fwd.hpp>
 
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/TempleExterior.h"
 #include "ECS/Components/Transform.h"
@@ -26,6 +28,12 @@ using namespace openblack::ecs::components;
 entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames playerOwner, const glm::mat4& rotation,
                                       const glm::vec3& size)
 {
+	return Create(position, playerOwner, rotation, size, 1.0f);
+}
+
+entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames playerOwner, const glm::mat4& rotation,
+                                      const glm::vec3& size, float built)
+{
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
 	registry.Assign<Transform>(entity, position, rotation, size);
@@ -35,6 +43,11 @@ entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames pla
 	// Its outside is blended for its player's alignment, each vertex then set on the land
 	registry.Assign<TempleExterior>(entity);
 	registry.Assign<MorphWithTerrain>(entity);
+	// Under construction until all of it is built
+	if (built < 1.0f)
+	{
+		registry.Assign<BuildProgress>(entity, built < 0.0f ? 0.0f : built);
+	}
 	// The temple's heart, as it is made, puts its entrance where it is, turned as it is
 	const auto entrance = registry.Create();
 	registry.Assign<Transform>(entrance, position, rotation, size);
@@ -42,8 +55,12 @@ entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames pla
 	return entity;
 }
 
-entt::entity CitadelArchetype::CreatePlan(int32_t /*townId*/, const glm::vec3& position, PlayerNames playerOwner,
+entt::entity CitadelArchetype::CreatePlan(int32_t townId, const glm::vec3& position, PlayerNames playerOwner,
                                           const glm::mat4& rotation, const glm::vec3& size)
 {
-	return Create(position, playerOwner, rotation, size);
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = registry.Create();
+	registry.Assign<Transform>(entity, position, rotation, size);
+	registry.Assign<PlannedTemple>(entity, townId, playerOwner);
+	return entity;
 }
