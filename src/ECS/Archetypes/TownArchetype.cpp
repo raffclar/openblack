@@ -28,6 +28,7 @@ entt::entity TownArchetype::Create(int id, const glm::vec3& position, PlayerName
 
 	auto& town = registry.Assign<Town>(entity, static_cast<uint32_t>(id), playerOwner);
 	// Its player gains it as it is made, after the towns it already has
+	// TODO(physics): a town that changes hands goes after the new player's other towns; nothing changes a town's player yet
 	town.gained = registry.Context().nextTownGained++;
 	registry.Assign<Tribe>(entity, tribe);
 	// What it wants, worked out each turn from its people and buildings

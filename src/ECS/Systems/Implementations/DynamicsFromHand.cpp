@@ -24,43 +24,27 @@
 #include "ECS/PhysicsClasses.h"
 #include "ECS/PhysicsGround.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/FireSystemInterface.h"
-#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "Hand/HandGrabRules.h"
 #include "InfoConstants.h"
-#include "Locator.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 
-namespace
-{
-Registry& Entities()
-{
-	return Locator::entitiesRegistry::value();
-}
-
-bool IsAvailable(entt::entity object)
-{
-	return object != entt::null && Entities().Valid(object);
-}
-
-/// The model of a static, from its row of the tables; none for anything else
-std::optional<MeshId> StaticModel(entt::entity object)
+std::optional<MeshId> DynamicsSystem::StaticModel(entt::entity object) const
 {
 	const auto* still = Entities().TryGet<const MobileStatic>(object);
-	if (still == nullptr || !Locator::infoConstants::has_value())
+	const auto* info = _world->Info();
+	if (still == nullptr || info == nullptr)
 	{
 		return std::nullopt;
 	}
-	const auto& rows = Locator::infoConstants::value().mobileStatic;
+	const auto& rows = info->mobileStatic;
 	const auto index = static_cast<size_t>(still->type);
 	return index < rows.size() ? std::optional(rows[index].meshId) : std::nullopt;
 }
-} // namespace
 
 void DynamicsSystem::ConsiderToyPlay(entt::entity object, const FromHand& release)
 {
@@ -69,7 +53,7 @@ void DynamicsSystem::ConsiderToyPlay(entt::entity object, const FromHand& releas
 		return;
 	}
 	// A toy: the football, or a static of a toy's model
-	if (Locator::infoConstants::has_value() && physics_classes::IsToy(Entities(), object, Locator::infoConstants::value()))
+	if (const auto* info = _world->Info(); info != nullptr && physics_classes::IsToy(Entities(), object, *info))
 	{
 		Hooks().ConsiderMimickingToyPlay(object, *release.player);
 	}
@@ -140,8 +124,7 @@ FromHandResult DynamicsSystem::LetGoFromHand(entt::entity object, const FromHand
 	                           .thrown = thrown,
 	                           .raised = settled != body.Centre().y,
 	                           .computerVillager = registry.AllOf<Villager>(object) && release.player.has_value() &&
-	                                               Locator::playerSystem::has_value() &&
-	                                               Locator::playerSystem::value().IsComputerPlayer(*release.player),
+	                                               _world->IsComputerPlayer(*release.player),
 	                           .dryLand = land->IsDryLand(xz),
 	                           .nearestAltitude = land->CellAltitudeNearest(xz),
 	                           .needsGentleSlope = living || fence,
@@ -157,7 +140,7 @@ FromHandResult DynamicsSystem::LetGoFromHand(entt::entity object, const FromHand
 		float tiltY = 0.0f;
 		float tiltZ = 0.0f;
 		glm::extractEulerAngleYXZ(glm::mat4(registry.Get<const Transform>(object).rotation), tiltY, tiltX, tiltZ);
-		const bool burning = Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(object);
+		const bool burning = _world->IsOnFire(object);
 		switch (hand_grab::OutcomeOfLanding({.living = living,
 		                                     .fence = fence,
 		                                     .tree = registry.AllOf<Tree>(object),
@@ -188,14 +171,11 @@ FromHandResult DynamicsSystem::LetGoFromHand(entt::entity object, const FromHand
 	{
 		Hooks().DropCarriedResource(*this, object, release.velocity);
 	}
-	if (Locator::reactionSystem::has_value())
-	{
-		Locator::reactionSystem::value().Create({.initiator = object,
-		                                         .type = Reaction::ReactToFlyingObject,
-		                                         .player = release.player.value_or(PlayerNames::NEUTRAL),
-		                                         .position = centre,
-		                                         .playerless = !release.player.has_value()});
-	}
+	_world->CreateReaction({.initiator = object,
+	                        .type = Reaction::ReactToFlyingObject,
+	                        .player = release.player.value_or(PlayerNames::NEUTRAL),
+	                        .position = centre,
+	                        .playerless = !release.player.has_value()});
 	Hooks().OfferToCatchingCreatures(object, *entry);
 	Hooks().StartFlyingFromHand(*this, *entry);
 	ConsiderToyPlay(object, release);

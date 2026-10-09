@@ -9,11 +9,20 @@
 
 #pragma once
 
+#include <vector>
+
+#include <entt/signal/sigh.hpp>
+
 #include "ECS/Systems/TownSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
 #endif
+
+namespace openblack::ecs
+{
+class Registry;
+}
 
 namespace openblack::ecs::systems
 {
@@ -21,8 +30,22 @@ namespace openblack::ecs::systems
 class TownSystem final: public TownSystemInterface
 {
 public:
+	/// Keeps the towns' lists of buildings and homeless people as they go from the world
+	TownSystem();
+	virtual ~TownSystem();
+	TownSystem(const TownSystem&) = delete;
+	TownSystem& operator=(const TownSystem&) = delete;
+
 	[[nodiscard]] entt::entity FindAbodeWithSpace(entt::entity townEntity) const override;
 	[[nodiscard]] entt::entity FindClosestTown(const glm::vec3& point) const override;
 	void AddHomelessVillagerToTown(entt::entity townEntity, entt::entity villagerEntity) override;
+
+private:
+	/// A building or a person gone from the world leaves its town's lists
+	void OnAbodeGone(entt::registry& registry, entt::entity abode);
+	void OnVillagerGone(entt::registry& registry, entt::entity villager);
+
+	Registry* _registry {nullptr};
+	std::vector<entt::connection> _connections;
 };
 } // namespace openblack::ecs::systems

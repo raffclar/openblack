@@ -487,27 +487,29 @@ damage::PartialBuild damage::PartialBuildOf(float share, float footHeight, float
 
 std::optional<glm::vec3> damage::RandomSurfacePoint(const Mesh& mesh, const std::function<float(float)>& random)
 {
-	const auto primitives = static_cast<int32_t>(mesh.primitives.size());
-	const auto drawnPrimitive = static_cast<int32_t>(random(static_cast<float>(primitives)));
-	const int32_t primitive = std::max(drawnPrimitive, primitives - 1);
-	const auto* triangles =
-	    primitive >= 0 && primitive < primitives ? &mesh.primitives.at(static_cast<size_t>(primitive)).triangles : nullptr;
-	const auto count = triangles != nullptr ? static_cast<int32_t>(triangles->size()) : 0;
-	const int32_t triangle = std::min(static_cast<int32_t>(random(static_cast<float>(count))), count - 1);
-	float a = random(1.0f);
-	float b = random(1.0f);
-	// The game reads past the mesh when it has no primitive, or past the primitive when it has no triangle; nothing is
-	// struck here instead
-	if (triangle < 0)
+	// With no primitive, or a primitive with no triangle, nothing is drawn for it and the blow lands where the rock is
+	if (mesh.primitives.empty())
 	{
 		return std::nullopt;
 	}
+	const auto primitives = static_cast<int32_t>(mesh.primitives.size());
+	const auto drawnPrimitive = static_cast<int32_t>(random(static_cast<float>(primitives)));
+	const int32_t primitive = std::max(drawnPrimitive, primitives - 1);
+	const auto& triangles = mesh.primitives.at(static_cast<size_t>(primitive)).triangles;
+	if (triangles.empty())
+	{
+		return std::nullopt;
+	}
+	const auto count = static_cast<int32_t>(triangles.size());
+	const int32_t triangle = std::min(static_cast<int32_t>(random(static_cast<float>(count))), count - 1);
+	float a = random(1.0f);
+	float b = random(1.0f);
 	if (a + b > 1.0f)
 	{
 		a = 1.0f - a;
 		b = 1.0f - b;
 	}
-	const auto& corners = triangles->at(static_cast<size_t>(triangle)).corners;
+	const auto& corners = triangles.at(static_cast<size_t>(std::max(triangle, 0))).corners;
 	return corners[0].position + ((corners[1].position - corners[0].position) * a) +
 	       ((corners[2].position - corners[0].position) * b);
 }
