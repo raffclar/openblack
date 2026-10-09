@@ -46,8 +46,9 @@ struct CreatureFighting
 	Stage stage {Stage::Approach};
 	entt::entity opponent {entt::null};
 	creature_fight::Arena arena {};
-	/// Whether this creature made the arena, taking its place to the east of the middle
+	/// Whether this creature took the arena, taking its place to the east of the middle; the arena it took
 	bool madeArena {false};
+	entt::entity arenaEntity {entt::null};
 	creature_fight::Fighter fighter {};
 	/// How far each of its blows reaches and where it lands, measured as the fight starts, and when in each blow it
 	/// lands, by the blow's place from the first

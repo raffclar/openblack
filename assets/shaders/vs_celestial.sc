@@ -1,6 +1,8 @@
 $input a_position, a_texcoord0
 $output v_texcoord0
 
+// Only the model matrix is used: a draw uploads every bone the shader declares
+#define BGFX_CONFIG_MAX_BONES 1
 #include <bgfx_shader.sh>
 
 // x, y: the cosine and sine of the moon's phase, z: 1 to take the moon's texture coordinates from the phase,
