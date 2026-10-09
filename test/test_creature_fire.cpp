@@ -202,3 +202,12 @@ TEST(CreatureFireLearning, ForcedPlanIsRememberedUnlessNothingSaysWhy)
 	desire.sources[0].type = k_LastTellingSource + 1;
 	EXPECT_FALSE(creature_learning::RemembersForcedPlan(desire));
 }
+
+TEST(CreatureFire, EveryExecutorsTargetIsCountedAmongTheKinds)
+{
+	// The planner weighs actions in a group for each kind of target, the fire's kinds included
+	for (const auto& executor : creature_plan_actions::All())
+	{
+		EXPECT_LT(static_cast<size_t>(executor.target), creature_plan_actions::k_TargetCount) << executor.action;
+	}
+}

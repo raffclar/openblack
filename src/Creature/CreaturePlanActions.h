@@ -51,6 +51,8 @@ enum class Target : uint8_t
 	Burning,
 	Unburnt,
 };
+/// How many kinds of target there are
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::Unburnt) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t

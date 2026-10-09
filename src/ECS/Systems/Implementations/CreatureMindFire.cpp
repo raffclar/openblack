@@ -16,6 +16,7 @@
 #include <string_view>
 
 #include <glm/gtx/vec_swizzle.hpp>
+#include <spdlog/spdlog.h>
 
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
@@ -150,6 +151,10 @@ void CreatureMindSystem::ReactToFire(entt::entity creature, entt::entity burning
 	const auto response = sightings.has_value() ? creature_fire::Choose(usefulness, (*mind->desires)[Desire::Compassion].value,
 	                                                                    sightings->first, sightings->second)
 	                                            : creature_fire::Response::RunAway;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} reacts to the fire on {}: {} (usefulness {}, compassion {:.3f})",
+	                    entt::to_integral(creature), entt::to_integral(burning),
+	                    response == creature_fire::Response::PutOut ? "puts it out" : "runs away", usefulness.value_or(-1.0f),
+	                    (*mind->desires)[Desire::Compassion].value);
 	if (response == creature_fire::Response::PutOut)
 	{
 		ForceActivity(
@@ -173,6 +178,7 @@ void CreatureMindSystem::Douse(entt::entity creature, entt::entity object)
 	{
 		return;
 	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} douses {}", entt::to_integral(creature), entt::to_integral(object));
 	// A bucket of water's effect, five times over, applied by the creature and no player
 	auto values = magic::EffectValues::From(effects.at(row));
 	values.Scale(k_DouseBuckets);

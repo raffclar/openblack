@@ -617,6 +617,8 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	{
 		return false;
 	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} plans to {} on {}", entt::to_integral(creature),
+	                    tables->actions[plan.action].name, plan.object.value_or(0));
 	auto& learnt = *mind.learnt;
 	mind.planner.current = plan;
 	mind.planActive = true;
@@ -805,7 +807,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		const auto d = static_cast<size_t>(desire);
 		std::optional<creature_planner::Plan> best;
 		// Actions are weighed in groups by the kind of thing they are done to, so each has a goal it can be done to
-		std::array<std::vector<creature_planner::ActionCandidate>, static_cast<size_t>(Target::Anything) + 1> groups {};
+		std::array<std::vector<creature_planner::ActionCandidate>, creature_plan_actions::k_TargetCount> groups {};
 		for (const auto action : tables->desireActions.at(d))
 		{
 			const auto* executor = creature_plan_actions::For(tables->actions.at(action).name);

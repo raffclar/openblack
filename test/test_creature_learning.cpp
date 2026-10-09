@@ -234,6 +234,18 @@ TEST(CreaturePlanner, GoesRoundTheEligibleDesires)
 	EXPECT_EQ(second[1], Desire::Hunger);
 }
 
+TEST(CreaturePlanner, NothingReplacesAForcedPlan)
+{
+	creature_planner::PlannerState state;
+	state.best.at(0) = creature_planner::Plan {.desire = Desire::Impress, .action = 1, .priority = 1.0e30f};
+	state.current = creature_planner::Plan {.desire = Desire::Compassion,
+	                                        .action = 2,
+	                                        .goalUsefulness = creature_planner::k_ForcedScore,
+	                                        .actionPriority = creature_planner::k_ForcedScore,
+	                                        .priority = creature_planner::k_ForcedScore};
+	EXPECT_FALSE(creature_planner::Choose(state, 15.0f).has_value());
+}
+
 TEST(CreaturePlanner, ChoosesOnlyWhatIsPressingEnough)
 {
 	creature_planner::PlannerState state;

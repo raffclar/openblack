@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <array>
+#include <limits>
 #include <optional>
 #include <span>
 #include <vector>
@@ -98,6 +99,10 @@ struct Plan
 [[nodiscard]] std::optional<Plan> PlanDesire(creature_desires::Desire desire, float strength,
                                              std::span<const ObjectCandidate> objects, float distanceWeight,
                                              std::span<const ActionCandidate> actions);
+
+/// A plan forced on the creature, by a reaction or a catch, scores the most a score can be, so that no plan of its own is
+/// ever pressing enough to replace it
+constexpr float k_ForcedScore = std::numeric_limits<float>::max();
 
 /// What the planner holds between turns
 struct PlannerState

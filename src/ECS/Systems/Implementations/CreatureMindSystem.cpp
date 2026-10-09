@@ -25,6 +25,8 @@
 #include <span>
 #include <vector>
 
+#include <spdlog/spdlog.h>
+
 #include "3D/CreatureBody.h"
 #include "3D/DayNightClock.h"
 #include "3D/LandIslandInterface.h"
@@ -1300,8 +1302,12 @@ void CreatureMindSystem::ForceCatch(entt::entity creature, entt::entity object)
 	}
 	if (const auto action = creature_mind_tables::FindAction(*tables, k_CatchAction))
 	{
-		mind->planner.current =
-		    creature_planner::Plan {.desire = Desire::Play, .action = *action, .object = entt::to_integral(object)};
+		mind->planner.current = creature_planner::Plan {.desire = Desire::Play,
+		                                                .action = *action,
+		                                                .object = entt::to_integral(object),
+		                                                .goalUsefulness = creature_planner::k_ForcedScore,
+		                                                .actionPriority = creature_planner::k_ForcedScore,
+		                                                .priority = creature_planner::k_ForcedScore};
 		mind->planActive = true;
 		mind->planSerial = mind->idle.serial;
 		mind->agendaSeen = mind->idle.serial;
@@ -1347,6 +1353,8 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedPlan& 
 	    .handFull = registry.AllOf<CreatureHeldObject>(creature),
 	};
 	auto built = PlanAgenda(creature, *action, actionObject, situation);
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} is made to {} on {}: {}", entt::to_integral(creature), forced.action,
+	                    actionObject.value_or(0), built.has_value() ? "planned" : "can't be planned");
 	if (!built.has_value())
 	{
 		// The plan couldn't be made: it is left doing nothing, to decide afresh
@@ -1367,6 +1375,9 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedPlan& 
 	    .desire = forced.desire,
 	    .action = *action,
 	    .object = actionObject,
+	    .goalUsefulness = creature_planner::k_ForcedScore,
+	    .actionPriority = creature_planner::k_ForcedScore,
+	    .priority = creature_planner::k_ForcedScore,
 	    .activityObject = toNumber(forced.activityObject),
 	    .instrument = situation.instrument,
 	};
