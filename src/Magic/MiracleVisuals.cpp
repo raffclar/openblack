@@ -159,6 +159,12 @@ glm::mat4 visuals::RingModel(int ring, float spin, const glm::vec3& point, float
 	return model;
 }
 
+bool visuals::IsPhialSeed(SpellSeedType seed)
+{
+	return static_cast<int>(seed) >= static_cast<int>(SpellSeedType::CreatureSpellFreeze) &&
+	       static_cast<int>(seed) <= static_cast<int>(SpellSeedType::CreatureSpellItchy);
+}
+
 float visuals::StepPhialFrame(float frame, float seconds)
 {
 	return Wrap(frame + seconds * k_PhialFrameRate, static_cast<float>(k_PhialCells));
