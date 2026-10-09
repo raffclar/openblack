@@ -60,8 +60,6 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
-/// A villager's health out of this is its life
-constexpr float k_VillagerHealthScale = 100.0f;
 /// A creature changes its mind about another creature for its miracles no more often than this many turns
 constexpr uint32_t k_OpinionTurns = 600;
 /// Blocking in a fight, a creature takes this share of a miracle
@@ -116,11 +114,7 @@ std::optional<float> magic_living::LifeOf(entt::entity entity)
 	}
 	if (const auto* villager = registry.TryGet<const Villager>(entity))
 	{
-		// Its life is kept finer than its health, so that small hurts add up, unless its health was set since
-		const auto* life = registry.TryGet<const ObjectLife>(entity);
-		const bool current =
-		    life != nullptr && static_cast<uint32_t>(std::ceil(life->life * k_VillagerHealthScale)) == villager->health;
-		return current ? life->life : static_cast<float>(villager->health) / k_VillagerHealthScale;
+		return villager->life;
 	}
 	if (const auto* animal = registry.TryGet<const Animal>(entity))
 	{
@@ -140,9 +134,7 @@ void magic_living::SetLife(entt::entity entity, float life)
 	else if (auto* villager = registry.TryGet<Villager>(entity))
 	{
 		const float before = ecs::world_objects::LifeOf(entity);
-		auto* kept = registry.TryGet<ObjectLife>(entity);
-		(kept != nullptr ? *kept : registry.Assign<ObjectLife>(entity)).life = life;
-		villager->health = static_cast<uint32_t>(std::ceil(life * k_VillagerHealthScale));
+		villager->life = life;
 		ecs::world_objects::CountInjury(entity, before, life);
 	}
 	else if (auto* animal = registry.TryGet<Animal>(entity))

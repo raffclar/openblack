@@ -50,6 +50,10 @@ struct Town
 	float worshipShare {0.0f};
 	/// The worship site its people worship at, none until one is made for it
 	entt::entity worshipSite {entt::null};
+	/// Where its people gather, worked out the first time it is wanted and again once a new building stands on it
+	std::optional<glm::vec2> congregationPos;
+	/// The turn its latest emergency was called, 0 when it is in none
+	uint32_t emergencyTurn {0};
 };
 
 } // namespace openblack::ecs::components
