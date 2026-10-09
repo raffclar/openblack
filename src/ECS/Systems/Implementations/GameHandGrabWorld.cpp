@@ -65,6 +65,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
+#include "ECS/VillagerAge.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/WorldObjects.h"
 #include "Hand/HandGrabRules.h"
@@ -243,7 +244,8 @@ bool GameHandGrabWorld::IsSexuallyActive(entt::entity villager) const
 		return false;
 	}
 	const auto& kind = info->villager.at(static_cast<size_t>(GVillagerInfo::Find(data->tribe, data->number)));
-	return kind.startHavingSexAge <= data->age && data->age < kind.stopHavingSexAge;
+	const auto age = villager_age::AgeNow(*data);
+	return kind.startHavingSexAge <= age && age < kind.stopHavingSexAge;
 }
 
 std::optional<PlayerNames> GameHandGrabWorld::PlayerOf(entt::entity object) const
