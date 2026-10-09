@@ -870,9 +870,15 @@ void CreatureMindSystem::ProcessTurn()
 			    ++mind.stepTurns;
 		    }
 		    StepSubMove(entity, creature_layers::IsPlaying(animation.body));
+		    // A catch takes up the body until it is over, but the plan to catch is carried out as soon as the catch starts
+		    const bool catching = Locator::creatureObjectActionSystem::has_value() &&
+		                          Locator::creatureObjectActionSystem::value().IsCatching(entity);
+		    const bool catchStep = mind.idle.stepStarted && mind.idle.step < mind.idle.agenda.size() &&
+		                           mind.idle.agenda[mind.idle.step].kind == creature_mind::Step::Kind::Object &&
+		                           mind.idle.agenda[mind.idle.step].order.kind == creature_mind::ObjectOrder::Kind::Catch;
 		    const creature_mind::Senses senses {
 		        .seconds = k_TurnSeconds,
-		        .bodyBusy = creature_layers::IsPlaying(animation.body) || moving,
+		        .bodyBusy = creature_layers::IsPlaying(animation.body) || moving || catching,
 		        .bodyLooping = creature_layers::IsLooping(animation.body),
 		        .moving = moving,
 		        .subMove = SubMoveOf(entity),
@@ -888,7 +894,7 @@ void CreatureMindSystem::ProcessTurn()
 		                               })
 		                     : creature_mind::Wants {},
 		        .rested = needs != nullptr && needs->rested,
-		        .hands = HandsOf(entity),
+		        .hands = catchStep && catching ? creature_mind::HandsState::Done : HandsOf(entity),
 		        .objectInMap = WaitedForInMap(registry, mind.idle),
 		        .feelings = FeelingsOf(mind),
 		    };

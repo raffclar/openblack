@@ -45,6 +45,7 @@ public:
 	void Drop(entt::entity creature) override;
 
 	[[nodiscard]] State GetState(entt::entity creature) const override;
+	[[nodiscard]] bool IsCatching(entt::entity creature) const override;
 	[[nodiscard]] std::optional<float> GetProgress(entt::entity creature) const override;
 	[[nodiscard]] std::optional<entt::entity> GetHeld(entt::entity creature) const override;
 	[[nodiscard]] std::optional<float> FoodValueOf(entt::entity object) const override;

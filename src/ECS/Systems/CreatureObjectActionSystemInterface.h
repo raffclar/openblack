@@ -71,6 +71,8 @@ public:
 	virtual void Drop(entt::entity creature) = 0;
 
 	[[nodiscard]] virtual State GetState(entt::entity creature) const = 0;
+	/// Whether its body is taken up by a catch it has started: readying, stepping, reaching or bringing the hand back
+	[[nodiscard]] virtual bool IsCatching(entt::entity creature) const = 0;
 	/// How far through its animations the action is, 0 to 1, while it plays them
 	[[nodiscard]] virtual std::optional<float> GetProgress(entt::entity creature) const = 0;
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeld(entt::entity creature) const = 0;
