@@ -19,10 +19,12 @@
 
 #include "3D/DayNightClock.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 #include "3D/SkyInterface.h"
 #include "Camera/Camera.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
+#include "ECS/Archetypes/ArenaArchetype.h"
 #include "ECS/Archetypes/BigForestArchetype.h"
 #include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
@@ -43,6 +45,7 @@
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -708,10 +711,10 @@ void FeatureScriptCommands::CreateWaterfall([[maybe_unused]] glm::vec3 position)
 	// __func__);
 }
 
-void FeatureScriptCommands::CreateArena([[maybe_unused]] glm::vec3 position, float)
+void FeatureScriptCommands::CreateArena(glm::vec3 position, float radius)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The land's own arenas stay for good
+	ArenaArchetype::Create({map_coords::ToFixed(position.x), map_coords::ToFixed(position.z)}, radius, false);
 }
 
 void FeatureScriptCommands::CreateFootpath(int32_t footpathId)
@@ -812,10 +815,13 @@ void FeatureScriptCommands::CreateOneShotSpellPu([[maybe_unused]] glm::vec3 posi
 	// __func__);
 }
 
-void FeatureScriptCommands::CreateFireFly([[maybe_unused]] glm::vec3 position)
+void FeatureScriptCommands::CreateFireFly(glm::vec3 position)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// A firefly hiding at the spot, as the land's tree or rock there stands
+	if (Locator::fireflySystem::has_value() && Locator::terrainSystem::has_value())
+	{
+		Locator::fireflySystem::value().Create(map_coords::FromWorld(Locator::terrainSystem::value(), position));
+	}
 }
 
 void FeatureScriptCommands::TownDesireBoost([[maybe_unused]] int32_t townId, const std::string&, float)
@@ -834,11 +840,13 @@ void FeatureScriptCommands::CreateAnimatedStatic(glm::vec3 position, const std::
 	AnimatedStaticArchetype::Create(position, animatedStaticType, rotation * 0.001f, scale * 0.001f);
 }
 
-void FeatureScriptCommands::FireFlySpellRewardProb([[maybe_unused]] const std::string& spell,
-                                                   [[maybe_unused]] float probability)
+void FeatureScriptCommands::FireFlySpellRewardProb(const std::string& spell, float probability)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The weight of a miracle, by its name, in what a caught firefly gives on this land
+	if (Locator::fireflySystem::has_value())
+	{
+		Locator::fireflySystem::value().SetRewardWeight(spell, probability);
+	}
 }
 
 void FeatureScriptCommands::CreateNewTownField(int32_t townId, glm::vec3 position, FieldTypeInfo townFieldType, float rotation)
