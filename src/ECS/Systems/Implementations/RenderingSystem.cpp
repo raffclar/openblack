@@ -449,7 +449,14 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 
 		    const uint32_t idx = slots->second.offset + slots->second.filled;
-		    _renderContext.instanceUniforms[idx] = {.model = modelMatrix, .look = look};
+		    // An animal finds its own bones by its place among its model's instances, kept in its first column's w, which
+		    // the model's affine matrix leaves at 0
+		    auto instanceModel = modelMatrix;
+		    if (registry.AllOf<AnimalPose>(entity))
+		    {
+			    instanceModel[0].w = static_cast<float>(slots->second.filled);
+		    }
+		    _renderContext.instanceUniforms[idx] = {.model = instanceModel, .look = look};
 		    if (look.z != 1.0f)
 		    {
 			    _renderContext.drawnObjects.push_back({.entity = entity, .model = modelMatrix});
