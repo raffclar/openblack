@@ -2044,6 +2044,7 @@ std::vector<Scenario> Build()
 	AddPhysicsScenarios(all);
 	AddHandNavigationScenarios(all);
 	AddHandLookScenarios(all);
+	AddSkyScenarios(all);
 	return all;
 }
 
@@ -2144,9 +2145,9 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 std::string_view testbed_scenarios::Name(Facet facet)
 {
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
-	    "Idle",     "Expressions", "Senses", "Needs",    "Growth",    "Appearance",    "Light",
-	    "Movement", "Footprints",  "Audio",  "Objects",  "Hand",      "Leash",         "Combat",
-	    "Mind",     "Particles",   "Editor", "Miracles", "Benchmark", "Creature Mode", "Physics",
+	    "Idle",       "Expressions", "Senses",    "Needs",         "Growth",  "Appearance", "Light", "Movement",
+	    "Footprints", "Audio",       "Objects",   "Hand",          "Leash",   "Combat",     "Mind",  "Particles",
+	    "Editor",     "Miracles",    "Benchmark", "Creature Mode", "Physics", "Sky",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }

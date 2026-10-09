@@ -85,6 +85,8 @@ enum class Facet : uint8_t
 	/// Things thrown, dropped and knocked: how they fly, what they break and how they come to rest, and what a frame
 	/// costs meanwhile
 	Physics,
+	/// The sky: the moon and its phases
+	Sky,
 
 	_Count
 };
@@ -606,6 +608,8 @@ void AddPhysicsScenarios(std::vector<Scenario>& all);
 void AddHandNavigationScenarios(std::vector<Scenario>& all);
 /// The scenarios of how the hand looks for its player's alignment
 void AddHandLookScenarios(std::vector<Scenario>& all);
+/// The moon at night, seen to the east, for trying its phases and its path with the moon debug window
+void AddSkyScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them
 [[nodiscard]] std::span<const Scenario> All();

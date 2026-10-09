@@ -41,6 +41,7 @@ public:
 	void SetCycleFromLand(float duration, float night, float change);
 	/// Whether the clock runs
 	void SetRunning(bool running) { _scale = running ? 1.0f : 0.0f; }
+	[[nodiscard]] bool IsRunning() const { return _scale != 0.0f; }
 	/// Jumps to an hour of script time
 	void SetScriptTime(float hour);
 	/// Moves to an hour of script time over `seconds` of game time, the short way round

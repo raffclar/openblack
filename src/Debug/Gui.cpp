@@ -73,6 +73,7 @@
 #include "Magic.h"
 #include "Magic/MagicTables.h"
 #include "MeshViewer.h"
+#include "Moon.h"
 #include "PathFinding.h"
 #include "Physics.h"
 #include "Profiler.h"
@@ -134,6 +135,7 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 	debugWindows.emplace_back(new TempleInterior);
 	debugWindows.emplace_back(new gui::Camera);
 	debugWindows.emplace_back(new Weather);
+	debugWindows.emplace_back(new Moon);
 	debugWindows.emplace_back(new Magic);
 	debugWindows.emplace_back(new Gestures);
 	debugWindows.emplace_back(new Physics);

@@ -136,6 +136,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/MistSystemInterface.h"
+#include "ECS/Systems/MoonSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
@@ -162,6 +163,7 @@
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gestures/GestureTrailBuilder.h"
+#include "Graphics/DetailLevel.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
@@ -1248,6 +1250,15 @@ bool Game::Update() noexcept
 	auto& clock = Locator::time::value();
 	clock.UpdateFrame();
 	const auto gameTime = std::chrono::duration<float, std::milli>(clock.GetFrameGameTime());
+	// The moon takes its place for the hour and its phase from the computer's date
+	Locator::moonSystem::value().Update({
+	    .scriptHour = Locator::skySystem::value().GetClock().GetScriptTime(),
+	    .overcast = FrameLandLightInputs().overcast,
+	    .fog = graphics::detail_level::Fog(Locator::config::value().detailLevel),
+	    .realTime = clock.GetElapsedTime(),
+	    .wallClock =
+	        std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count(),
+	});
 	Locator::alignmentSystem::value().Update(gameTime);
 	{
 		auto actions = profiler.BeginScoped(Profiler::Stage::VegetationUpdate);

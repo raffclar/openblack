@@ -68,6 +68,7 @@
 #include "ECS/Systems/Implementations/MagicSystem.h"
 #include "ECS/Systems/Implementations/MiracleFxSystem.h"
 #include "ECS/Systems/Implementations/MistSystem.h"
+#include "ECS/Systems/Implementations/MoonSystem.h"
 #include "ECS/Systems/Implementations/ParticleSystem.h"
 #include "ECS/Systems/Implementations/PathfindingSystem.h"
 #include "ECS/Systems/Implementations/PickingSystem.h"
@@ -151,6 +152,7 @@ using openblack::ecs::systems::MagicShieldSystem;
 using openblack::ecs::systems::MagicSystem;
 using openblack::ecs::systems::MiracleFxSystem;
 using openblack::ecs::systems::MistSystem;
+using openblack::ecs::systems::MoonSystem;
 using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PathfindingSystem;
 using openblack::ecs::systems::PickingSystem;
@@ -265,6 +267,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::creatureModeSystem::emplace<CreatureModeSystem>();
 	Locator::creatureCaveSystem::emplace<CreatureCaveSystem>();
 	Locator::cinematicDirectorSystem::emplace<CinematicDirectorSystem>();
+	Locator::moonSystem::emplace<MoonSystem>();
 	Locator::soundTagSystem::emplace<SoundTagSystem>();
 	Locator::rainSystem::emplace<RainSystem>();
 	Locator::chimneySmokeSystem::emplace<ChimneySmokeSystem>();
@@ -368,6 +371,7 @@ void openblack::ShutDownServices()
 	Locator::pathfindingSystem::reset();
 	Locator::creatureLocomotionSystem::reset();
 	Locator::cinematicDirectorSystem::reset();
+	Locator::moonSystem::reset();
 	Locator::influenceSystem::reset();
 	Locator::chimneySmokeSystem::reset();
 	Locator::rainSystem::reset();

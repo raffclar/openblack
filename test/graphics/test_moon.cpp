@@ -7,6 +7,11 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+#include <cstdlib>
+
+#include <algorithm>
+
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
@@ -68,4 +73,52 @@ TEST(Moon, GlowIsASquareAboutTheMoon)
 	EXPECT_EQ(glow.corners[0], glm::vec3(-2000.0f, -2000.0f, 0.0f));
 	EXPECT_EQ(glow.corners[3], glm::vec3(2000.0f, 2000.0f, 0.0f));
 	EXPECT_EQ(moon::GlowColour(glm::vec3(0.6f, 0.5f, 0.4f)), glm::vec3(0.1f, 0.1f, 0.1f));
+}
+
+TEST(Moon, ScriptsAreToldHowNewTheMoonIs)
+{
+	// 1 at either end of the moon month, 0 half way through it
+	EXPECT_FLOAT_EQ(moon::ScriptPercentage(0.0f), 1.0f);
+	EXPECT_NEAR(moon::ScriptPercentage(3.14159274f), 0.0f, 1e-6f);
+	EXPECT_NEAR(moon::ScriptPercentage(6.2831855f), 1.0f, 1e-6f);
+	EXPECT_NEAR(moon::ScriptPercentage(1.5707964f), 0.5f, 1e-6f);
+	EXPECT_NEAR(moon::ScriptPercentage(4.712389f), 0.5f, 1e-6f);
+}
+
+TEST(Moon, MonthFractionCountsWholeDays)
+{
+	EXPECT_DOUBLE_EQ(moon::MonthFraction(k_NewMoonDay * 86400), 0.0);
+	// Any time of the same day gives the same fraction
+	EXPECT_DOUBLE_EQ(moon::MonthFraction((k_NewMoonDay + 10) * 86400),
+	                 moon::MonthFraction((k_NewMoonDay + 10) * 86400 + 86399));
+	EXPECT_NEAR(moon::MonthFraction((k_NewMoonDay + 10) * 86400), 10.0 * 0.03386318012808897, 1e-12);
+	// The phase is made from the fraction at full precision: many months on, it is still a whole day's step
+	const int64_t later = (k_NewMoonDay + 9773) * 86400;
+	const double fraction = moon::MonthFraction(later);
+	EXPECT_NEAR(moon::Phase(later), static_cast<float>((1.0 - fraction) * 6.2831854820251465), 1e-6f);
+}
+
+TEST(Moon, DateAtFractionFindsTheNearestDay)
+{
+	const int64_t start = (k_NewMoonDay + 100) * 86400;
+	for (const double fraction : {0.0, 0.25, 0.5, 0.75})
+	{
+		const auto date = moon::DateAtFraction(start, fraction);
+		// Within half a moon month, at noon, and within half a day's step of the point asked for
+		EXPECT_LE(std::llabs(date - start), 16 * 86400);
+		EXPECT_EQ(date % 86400, 43200);
+		const double apart = std::abs(moon::MonthFraction(date) - fraction);
+		EXPECT_LE(std::min(apart, 1.0 - apart), 0.5 * 0.0338632);
+	}
+}
+
+TEST(Moon, SkyAnglesFromTheCamera)
+{
+	// At midnight it is due east, about 13 degrees up
+	const auto midnight = moon::Angles(moon::Offset(0.0f));
+	EXPECT_NEAR(midnight.azimuth, 90.0f, 1e-3f);
+	EXPECT_NEAR(midnight.elevation, 13.36f, 0.01f);
+	// In the evening it is south of east, and in the morning north of east
+	EXPECT_GT(moon::Angles(moon::Offset(20.0f)).azimuth, 90.0f);
+	EXPECT_LT(moon::Angles(moon::Offset(4.0f)).azimuth, 90.0f);
 }

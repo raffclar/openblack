@@ -92,6 +92,7 @@
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/MoonSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
@@ -3009,12 +3010,15 @@ void Renderer::DrawRain(const DrawSceneDesc& desc) const
 
 void Renderer::DrawMoon(RenderPass viewId) const
 {
-	if (!Locator::camera::has_value())
+	if (!Locator::camera::has_value() || !Locator::moonSystem::has_value())
 	{
 		return;
 	}
-	const auto placement = moon::Place(Locator::skySystem::value().GetClock().GetScriptTime());
-	if (!placement)
+	// The moon shows only while its strength through the overcast is above nothing
+	const auto& moonSystem = Locator::moonSystem::value();
+	const auto placement = moonSystem.GetPlacement();
+	const float alpha = moonSystem.GetStrength() / 255.0f;
+	if (!placement || alpha <= 0.0f)
 	{
 		return;
 	}
@@ -3028,14 +3032,6 @@ void Renderer::DrawMoon(RenderPass viewId) const
 	const glm::vec3 colour = glm::vec3(static_cast<float>((moonColour >> 16) & 0xFFu),
 	                                   static_cast<float>((moonColour >> 8) & 0xFFu), static_cast<float>(moonColour & 0xFFu)) /
 	                         255.0f;
-	// It shows less through an overcast
-	const float alpha =
-	    sky_dome::ThroughOvercast(placement->alpha, _overcast, detail_level::Fog(Locator::config::value().detailLevel)) /
-	    255.0f;
-	if (alpha <= 0.0f)
-	{
-		return;
-	}
 
 	// First its glow, added to the sky
 	const auto& textures = Locator::resources::value().GetTextures();
@@ -3080,8 +3076,7 @@ void Renderer::DrawMoon(RenderPass viewId) const
 
 	// Then the moon, blended over the sky, its face turned to the real moon's phase. It leaves its depth, so the land
 	// nearer than it is drawn over it and the land beyond it stays hidden.
-	const auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch());
-	const auto phase = moon::Phase(now.count());
+	const auto phase = moonSystem.GetPhase();
 	DrawCelestialMesh(
 	    viewId, {
 	                .meshId = SkyInterface::k_MoonMeshId.value(),
