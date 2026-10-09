@@ -26,6 +26,7 @@
 #include "Creature/CreatureFight.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "EngineConfig.h"
+#include "Input/InputLock.h"
 #include "Input/ShortcutKeys.h"
 #include "Magic/HandHoldPoser.h"
 #include "Windowing/WindowingInterface.h" // For DisplayMode
@@ -84,6 +85,9 @@ struct ScenarioRequest
 	std::optional<std::filesystem::path> results;
 	/// Without the testbed's window of scenarios over the view, as for screenshots of what a scenario shows
 	bool hideWindow {false};
+	/// A benchmark's crowd is measured, its results written and the game quit, as the command line asks; a scenario
+	/// asked for while the game runs (from the debug inspector) only runs
+	bool benchmark {true};
 };
 
 struct Arguments
@@ -111,6 +115,11 @@ struct Arguments
 	/// A testbed scenario to run as the game starts, by its id, and how to measure its crowd if it has one
 	std::optional<ScenarioRequest> scenario;
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> requestScreenshot;
+	/// The port of 127.0.0.1 the debug inspector's server listens on, in builds with it; none to not start it
+	std::optional<uint16_t> inspectPort;
+	/// How the player's mouse and keyboard are kept out while the inspector drives the game: while a client is
+	/// connected, from the start, or never
+	input::LockMode inspectInputLock {input::LockMode::Auto};
 };
 
 class Game
@@ -178,6 +187,8 @@ public:
 	/// it back
 	void RequestQuit() { _quitRequested = true; }
 	[[nodiscard]] std::optional<ScenarioRequest> TakeScenarioRequest() { return std::exchange(_scenarioRequest, std::nullopt); }
+	/// Asks for a scenario while the game runs: the scenarios' window runs it on a fresh testbed next frame
+	void RequestScenario(ScenarioRequest request) { _scenarioRequest = std::move(request); }
 	[[nodiscard]] std::chrono::duration<float, std::milli> GetDeltaTime() const { return _turnDeltaTime; }
 	[[nodiscard]] const glm::ivec2& GetMousePosition() const { return _mousePosition; }
 	/// Puts the cursor the game works with somewhere in the window, until the mouse next moves
@@ -188,6 +199,10 @@ public:
 	[[nodiscard]] const HandAnimation* GetHandAnimation() const { return _handAnimation.get(); }
 
 	void RequestScreenshot(const std::filesystem::path& path) noexcept;
+	/// The game's own interface (its menu), once it is made
+	[[nodiscard]] gui::GameInterface* GetInterface() noexcept { return _interface.get(); }
+	/// The map script of the land loaded last, or "testbed"; empty before one is
+	[[nodiscard]] const std::filesystem::path& GetLandPath() const noexcept { return _landPath; }
 
 	static Game* Instance() { return sInstance; }
 
@@ -207,6 +222,9 @@ private:
 	std::filesystem::path _startMap;
 	bool _startTestbed {false};
 	std::optional<ScenarioRequest> _scenarioRequest;
+	/// The port the debug inspector is to listen on, if it is to start
+	std::optional<uint16_t> _inspectPort;
+	input::LockMode _inspectInputLock {input::LockMode::Auto};
 	/// Whether the testbed opens its window of scenarios
 	bool _testbedWindow {true};
 	bool _quitRequested {false};
@@ -313,6 +331,7 @@ private:
 	magic::HandHoldPoser _handHold;
 	/// The game's own interface, null without the game's files for it
 	std::unique_ptr<gui::GameInterface> _interface;
+	std::filesystem::path _landPath;
 	/// Whether the game was paused when the menu opened, which pauses it
 	bool _pausedBeforeMenu {true};
 	bool _menuWasOpen {false};

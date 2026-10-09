@@ -135,6 +135,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -282,6 +283,8 @@ Game::Game(Arguments&& args) noexcept
     , _startMap(args.startLevel)
     , _startTestbed(args.startTestbed || args.scenario.has_value())
     , _scenarioRequest(args.scenario)
+    , _inspectPort(args.inspectPort)
+    , _inspectInputLock(args.inspectInputLock)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
     , _requestScreenshot(args.requestScreenshot)
 {
@@ -783,7 +786,7 @@ void Game::UpdateHandInterface()
 	// The creature the hand is held to, or else the one it is over, any player's
 	const auto& creatureHand = Locator::creatureHandSystem::value();
 	auto creature = creatureHand.GetCreature();
-	const bool rightButtonHeld = (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_RMASK) != 0;
+	const bool rightButtonHeld = (Locator::gameActionSystem::value().GetPointerButtons() & SDL_BUTTON_RMASK) != 0;
 	if (!creature.has_value() && creature_panel::Triggered(rightButtonHeld))
 	{
 		creature = _creatureUnderHand;
@@ -1211,6 +1214,17 @@ bool Game::Update() noexcept
 
 	Locator::debugGui::value().SetScale(config.guiScale);
 	Locator::time::value().Update();
+	// The debug inspector answers what was asked since the last frame, and holds or releases the game for stepping,
+	// before the frame's input and turn
+	if (Locator::inspector::has_value())
+	{
+		Locator::inspector::value().Service();
+	}
+	// Stepped deterministically, a frame takes the fixed time the clock gives it, whatever the wall clock says
+	if (const auto fixed = Locator::time::value().GetFixedFrameTime(); fixed.has_value())
+	{
+		deltaTime = std::chrono::duration_cast<std::chrono::microseconds>(*fixed);
+	}
 
 	// The physics world isn't stepped: the game's objects don't move as rigid bodies, and the world only answers the
 	// rays cast for the hand, the camera and the like. Stepping it let the features fall and lose their turn.
@@ -1234,6 +1248,11 @@ bool Game::Update() noexcept
 		SDL_Event e;
 		while (SDL_PollEvent(&e) != 0)
 		{
+			// While an agent drives the game, the player's mouse and keyboard are kept out of it
+			if (!actions.AdmitEvent(e))
+			{
+				continue;
+			}
 			Locator::events::value().Create<SDL_Event>(e);
 		}
 		if (actions.IsCursorFrozen())
@@ -1270,6 +1289,9 @@ bool Game::Update() noexcept
 	// ImGui events + prepare
 	{
 		auto guiLoop = profiler.BeginScoped(Profiler::Stage::GuiLoop);
+		// The debug windows keep off the mouse while the player's input is locked out, and show a notice
+		Locator::debugGui::value().SetInputLock(Locator::gameActionSystem::value().IsPlayerInputBlocked(),
+		                                        Locator::gameActionSystem::value().GetScriptedPointer().has_value());
 		// The debug menu bar comes up with the game's menu, or always without it
 		Locator::debugGui::value().SetMenuBarVisible(!_interface || _interface->GetMenu().IsOpen());
 		if (Locator::debugGui::value().Loop())
@@ -2039,6 +2061,16 @@ bool Game::Initialize() noexcept
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize game services.");
 		return false;
 	}
+	// The debug inspector answers from the first frame; the game carries on without it if it can't listen
+	if (_inspectPort.has_value())
+	{
+		// An agent drives it: the player's mouse and keyboard are kept out while a client is connected, so that a knock
+		// of the mouse doesn't spoil its tests; from the start for a headless run, or never when asked
+		if (StartInspector(*_inspectPort))
+		{
+			Locator::gameActionSystem::value().SetInputLockMode(_inspectInputLock);
+		}
+	}
 
 	auto& resources = Locator::resources::value();
 	auto& meshManager = resources.GetMeshes();
@@ -2723,8 +2755,7 @@ bool Game::Run() noexcept
 		// The game's interface over the scene
 		if (_interface && Locator::windowing::has_value())
 		{
-			glm::ivec2 mouse;
-			SDL_GetMouseState(&mouse.x, &mouse.y);
+			const auto mouse = Locator::gameActionSystem::value().GetPointerPosition();
 			_interface->Draw(static_cast<glm::u16vec2>(Locator::windowing::value().GetSize()), mouse, SDL_GetTicks(),
 			                 Locator::debugGui::value().IsMouseOverWindow());
 		}
@@ -2788,6 +2819,7 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 		                        level.GetScriptPath().lexically_normal() == path.lexically_normal());
 	});
 	Locator::entitiesRegistry::value().Context().skirmish = skirmish;
+	_landPath = path;
 
 	Script script;
 	try
@@ -2858,6 +2890,7 @@ bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept
 
 void Game::LoadTestbed() noexcept
 {
+	_landPath = "testbed";
 	// No script runs on the testbed: the story's would set its time of day and stop its clock a few turns in
 	if (Locator::vm::has_value())
 	{

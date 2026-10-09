@@ -19,6 +19,7 @@
 #include <vector>
 
 #include <entt/core/fwd.hpp>
+#include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
 #include "Enums.h"
@@ -75,6 +76,8 @@ public:
 		/// Seconds left of a spot visual's life, none for one that lasts until it is closed
 		std::optional<float> secondsLeft;
 		std::vector<std::string> unportedClasses;
+		/// The object it follows and ends with, if any
+		entt::entity owner {entt::null};
 	};
 
 	virtual ~ParticleSystemInterface() = default;

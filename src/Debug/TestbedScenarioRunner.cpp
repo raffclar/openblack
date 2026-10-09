@@ -113,6 +113,7 @@
 #include "Gestures/GesturePaths.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
+#include "Input/InjectedInput.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Magic/SpellRules.h"
@@ -495,11 +496,12 @@ void Runner::Stop()
 	_sweep.reset();
 	if (Locator::gameActionSystem::has_value())
 	{
-		if (Locator::gameActionSystem::value().GetScriptedPointer().has_value())
+		if (_ownsPointer && Locator::gameActionSystem::value().GetScriptedPointer().has_value())
 		{
 			Locator::gameActionSystem::value().SetScriptedPointer(std::nullopt);
 			KeepDebugWindowsOffTheMouse(false);
 		}
+		_ownsPointer = false;
 	}
 	// Its particle effects die away
 	if (Locator::particleSystem::has_value())
@@ -2278,6 +2280,7 @@ void PushMotion(const input::GameActionInterface::ScriptedPointer& pointer, glm:
 	event.motion.y = pointer.position.y;
 	event.motion.xrel = moved.x;
 	event.motion.yrel = moved.y;
+	input::MarkInjected(event);
 	SDL_PushEvent(&event);
 }
 /// What the player's hand holds, for the log
@@ -2304,6 +2307,7 @@ std::string Runner::GivePointerCommand(const Command& command)
 	    .position = glm::ivec2(actions.GetMousePosition()),
 	});
 	KeepDebugWindowsOffTheMouse(true);
+	_ownsPointer = true;
 	switch (command.kind)
 	{
 	case Kind::PointerTo:
@@ -2330,6 +2334,7 @@ std::string Runner::GivePointerCommand(const Command& command)
 		event.button.clicks = 1;
 		event.button.x = pointer.position.x;
 		event.button.y = pointer.position.y;
+		input::MarkInjected(event);
 		SDL_PushEvent(&event);
 		_handWatchSeconds = 0.5f;
 		break;
@@ -2346,6 +2351,7 @@ std::string Runner::GivePointerCommand(const Command& command)
 		event.wheel.windowID = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0;
 		event.wheel.y = static_cast<int32_t>(command.value) * (command.ctrl ? -1 : 1);
 		event.wheel.preciseY = static_cast<float>(event.wheel.y);
+		input::MarkInjected(event);
 		SDL_PushEvent(&event);
 		break;
 	}
@@ -2363,11 +2369,12 @@ void Runner::UpdatePointer(float seconds)
 	}
 	auto& actions = Locator::gameActionSystem::value();
 	// Once the commands are done and the buttons let go, the mouse is the player's again
-	if (const auto pointer = actions.GetScriptedPointer();
-	    pointer.has_value() && pointer->buttons == 0 && !_sweep.has_value() && _timeline.done && _handWatchSeconds <= 0.0f)
+	if (const auto pointer = actions.GetScriptedPointer(); _ownsPointer && pointer.has_value() && pointer->buttons == 0 &&
+	                                                       !_sweep.has_value() && _timeline.done && _handWatchSeconds <= 0.0f)
 	{
 		actions.SetScriptedPointer(std::nullopt);
 		KeepDebugWindowsOffTheMouse(false);
+		_ownsPointer = false;
 	}
 	if (_handWatchSeconds > 0.0f || _sweep.has_value())
 	{
