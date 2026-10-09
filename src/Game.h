@@ -84,6 +84,9 @@ struct ScenarioRequest
 	std::optional<std::filesystem::path> results;
 	/// Without the testbed's window of scenarios over the view, as for screenshots of what a scenario shows
 	bool hideWindow {false};
+	/// A benchmark's crowd is measured, its results written and the game quit, as the command line asks; a scenario
+	/// asked for while the game runs (from the debug inspector) only runs
+	bool benchmark {true};
 };
 
 struct Arguments
@@ -111,6 +114,8 @@ struct Arguments
 	/// A testbed scenario to run as the game starts, by its id, and how to measure its crowd if it has one
 	std::optional<ScenarioRequest> scenario;
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> requestScreenshot;
+	/// The port of 127.0.0.1 the debug inspector's server listens on, in builds with it; none to not start it
+	std::optional<uint16_t> inspectPort;
 };
 
 class Game
@@ -178,6 +183,8 @@ public:
 	/// it back
 	void RequestQuit() { _quitRequested = true; }
 	[[nodiscard]] std::optional<ScenarioRequest> TakeScenarioRequest() { return std::exchange(_scenarioRequest, std::nullopt); }
+	/// Asks for a scenario while the game runs: the scenarios' window runs it on a fresh testbed next frame
+	void RequestScenario(ScenarioRequest request) { _scenarioRequest = std::move(request); }
 	[[nodiscard]] std::chrono::duration<float, std::milli> GetDeltaTime() const { return _turnDeltaTime; }
 	[[nodiscard]] const glm::ivec2& GetMousePosition() const { return _mousePosition; }
 	/// Puts the cursor the game works with somewhere in the window, until the mouse next moves
@@ -207,6 +214,8 @@ private:
 	std::filesystem::path _startMap;
 	bool _startTestbed {false};
 	std::optional<ScenarioRequest> _scenarioRequest;
+	/// The port the debug inspector is to listen on, if it is to start
+	std::optional<uint16_t> _inspectPort;
 	/// Whether the testbed opens its window of scenarios
 	bool _testbedWindow {true};
 	bool _quitRequested {false};

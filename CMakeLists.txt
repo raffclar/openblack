@@ -94,6 +94,20 @@ option(OPENBLACK_WARNINGS_AS_ERRORS
 option(OPENBLACK_TRACE_TIME
        "Compilation Time analysis (only available with clang)" OFF
 )
+# The debug inspector: a server on 127.0.0.1 that agents and tools query the game's state and control its run through,
+# started with --inspect-port. For debug and development builds; zero cost when off.
+if (EMSCRIPTEN
+    OR ANDROID
+    OR CMAKE_BUILD_TYPE STREQUAL "Release"
+)
+  set(OPENBLACK_INSPECTOR_DEFAULT OFF)
+else ()
+  set(OPENBLACK_INSPECTOR_DEFAULT ON)
+endif ()
+option(OPENBLACK_INSPECTOR
+       "Build the debug inspector into the game (debug and development builds)"
+       ${OPENBLACK_INSPECTOR_DEFAULT}
+)
 
 find_program(
   CLANG_TIDY NAMES clang-tidy-7 clang-tidy-6.0 clang-tidy-5.0 clang-tidy-4.0
@@ -166,6 +180,7 @@ add_subdirectory(components/ScriptLibrary)
 add_subdirectory(components/lhvmlang)
 add_subdirectory(components/lhvmdecompiler)
 add_subdirectory(components/lhvmcompiler)
+add_subdirectory(components/inspector)
 add_subdirectory(src)
 add_subdirectory(apps/camtool)
 add_subdirectory(apps/l3dtool)

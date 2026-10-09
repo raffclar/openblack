@@ -410,3 +410,27 @@ openblack_setup_and_add_test(test_clip_sounds test_clip_sounds.cpp)
 target_link_libraries(test_clip_sounds PRIVATE sas)
 openblack_setup_and_add_test(test_story_land_change test_story_land_change.cpp)
 target_link_libraries(test_story_land_change PRIVATE ScriptLibrary)
+
+# The inspector component's tests build without the game, as the component does
+macro (OPENBLACK_SETUP_AND_ADD_INSPECTOR_TEST TEST_NAME TEST_SOURCE)
+  add_executable(${TEST_NAME} ${TEST_SOURCE})
+  target_link_libraries(${TEST_NAME} PRIVATE GTest::gtest_main inspector)
+  set_property(TARGET ${TEST_NAME} PROPERTY FOLDER "tests")
+  add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
+endmacro ()
+openblack_setup_and_add_inspector_test(
+  test_inspector_protocol inspector/test_inspector_protocol.cpp
+)
+openblack_setup_and_add_inspector_test(
+  test_inspector_query inspector/test_inspector_query.cpp
+)
+openblack_setup_and_add_inspector_test(
+  test_inspector_server inspector/test_inspector_server.cpp
+)
+# The game's side of the inspector, built only with it
+if (OPENBLACK_INSPECTOR)
+  openblack_setup_and_add_test(
+    test_inspector_game inspector/test_inspector_game.cpp
+  )
+  target_link_libraries(test_inspector_game PRIVATE inspector psys)
+endif ()

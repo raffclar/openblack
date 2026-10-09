@@ -158,6 +158,7 @@ class ExplosionSystemInterface;
 class RewardSystemInterface;
 class ScriptObjectsSystemInterface;
 class BuildingDamageSystemInterface;
+class InspectorSystemInterface;
 } // namespace ecs::systems
 
 void InitializeWindow(const std::string& title, int width, int height, windowing::DisplayMode displayMode, uint32_t extraFlags);
@@ -167,6 +168,9 @@ void InitializeLevel(const std::filesystem::path& path);
 /// Starts a level on land that is generated rather than read from a file, as the flat testbed is
 void InitializeLevel(const LandData& land);
 void ShutDownServices();
+/// Starts the debug inspector's server on a port of 127.0.0.1 (any free one for 0): false, with why in the log, if it
+/// can't listen. Only in builds with the inspector.
+bool StartInspector(uint16_t port);
 
 struct Locator
 {
@@ -256,6 +260,8 @@ struct Locator
 	using rewardSystem = entt::locator<ecs::systems::RewardSystemInterface>;
 	using scriptObjects = entt::locator<ecs::systems::ScriptObjectsSystemInterface>;
 	using buildingDamageSystem = entt::locator<ecs::systems::BuildingDamageSystemInterface>;
+	/// Only in builds with the inspector, and only once --inspect-port started it
+	using inspector = entt::locator<ecs::systems::InspectorSystemInterface>;
 	using vm = entt::locator<lhvm::LHVM>;
 	using chlapi = entt::locator<chlapi::CHLApi>;
 };

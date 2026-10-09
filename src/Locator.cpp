@@ -65,6 +65,9 @@
 #include "ECS/Systems/Implementations/HandGrabSystem.h"
 #include "ECS/Systems/Implementations/HandSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
+#if defined(OPENBLACK_INSPECTOR)
+#include "ECS/Systems/Implementations/InspectorSystem.h"
+#endif
 #include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
 #include "ECS/Systems/Implementations/MagicShieldSystem.h"
@@ -95,6 +98,7 @@
 #include "ECS/Systems/Implementations/VillageLightSystem.h"
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
 #include "ECS/Systems/Implementations/WeatherSystem.h"
+#include "ECS/Systems/InspectorSystemInterface.h"
 #include "Graphics/RendererInterface.h"
 #include "Input/GameActionMap.h"
 #include "LHVM.h"
@@ -362,6 +366,8 @@ void openblack::ShutDownServices()
 		Locator::audio::reset();
 	}
 
+	// The inspector goes first: its providers read the services below
+	Locator::inspector::reset();
 	Locator::rendereringSystem::reset();
 	Locator::dynamicsSystem::reset();
 	Locator::templeDestructionSystem::reset();
@@ -438,4 +444,22 @@ void openblack::ShutDownServices()
 	Locator::profiler::reset();
 
 	Locator::vm::reset();
+}
+
+bool openblack::StartInspector([[maybe_unused]] uint16_t port)
+{
+#if defined(OPENBLACK_INSPECTOR)
+	std::string error;
+	auto server = inspector::Server::Listen(port, error);
+	if (server == nullptr)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The inspector couldn't start: {}", error);
+		return false;
+	}
+	Locator::inspector::emplace<ecs::systems::InspectorSystem>(std::move(server));
+	return true;
+#else
+	SPDLOG_LOGGER_ERROR(spdlog::get("game"), "This build has no inspector: configure with OPENBLACK_INSPECTOR on");
+	return false;
+#endif
 }

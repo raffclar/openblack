@@ -135,6 +135,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -282,6 +283,7 @@ Game::Game(Arguments&& args) noexcept
     , _startMap(args.startLevel)
     , _startTestbed(args.startTestbed || args.scenario.has_value())
     , _scenarioRequest(args.scenario)
+    , _inspectPort(args.inspectPort)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
     , _requestScreenshot(args.requestScreenshot)
 {
@@ -1211,6 +1213,12 @@ bool Game::Update() noexcept
 
 	Locator::debugGui::value().SetScale(config.guiScale);
 	Locator::time::value().Update();
+	// The debug inspector answers what was asked since the last frame, and holds or releases the game for stepping,
+	// before the frame's input and turn
+	if (Locator::inspector::has_value())
+	{
+		Locator::inspector::value().Service();
+	}
 
 	// The physics world isn't stepped: the game's objects don't move as rigid bodies, and the world only answers the
 	// rays cast for the hand, the camera and the like. Stepping it let the features fall and lose their turn.
@@ -2038,6 +2046,11 @@ bool Game::Initialize() noexcept
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize game services.");
 		return false;
+	}
+	// The debug inspector answers from the first frame; the game carries on without it if it can't listen
+	if (_inspectPort.has_value())
+	{
+		StartInspector(*_inspectPort);
 	}
 
 	auto& resources = Locator::resources::value();
