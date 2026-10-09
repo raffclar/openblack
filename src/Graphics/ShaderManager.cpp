@@ -201,7 +201,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 63> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 66> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
