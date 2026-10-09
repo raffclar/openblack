@@ -78,6 +78,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureHair.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/DeadTree.h"
@@ -771,6 +772,17 @@ void Game::ProcessHandToolTipTurn()
 		return;
 	}
 	auto& toolTips = _interface->GetToolTips();
+	// With the leash held, the hand says what a tap of the Action button does with it, before anything else
+	if (!_interface->GetMenu().IsOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive())
+	{
+		const auto hovered = Locator::pickingSystem::value().GetPick().object;
+		if (const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, hovered))
+		{
+			toolTips.Submit(*tip, gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
+			toolTips.ProcessTurn();
+			return;
+		}
+	}
 	// Over the player's own creature, the hand shows that it can take hold of it to stroke or slap it. It can hold other
 	// players' creatures too, but the game only offers it for the player's own.
 	const auto over = _creatureUnderHand.has_value() ? _creatureUnderHand : Locator::creatureHandSystem::value().GetCreature();
@@ -1412,13 +1424,15 @@ bool Game::Update() noexcept
 						enterTemple = Locator::templeExteriorSystem::value().EntranceAt(rayOrigin, rayDirection) ==
 						              PlayerNames::PLAYER_ONE;
 					}
-					// The leash keys, and the Action button tapping leash posts, creatures and things to tie the leash to.
+					// The leash keys, and the Action button tapping leash posts, and with the leash held giving orders and
+					// tying the leash to things.
 					// Not while the debug windows have the keyboard or mouse, as when typing in a text field: the controls
 					// aren't updated then, so a key just pressed would read as pressed again every frame.
 					if (!Locator::debugGui::value().StealsFocus())
 					{
 						auto& leashes = Locator::leashSystem::value();
-						leashes.HandleInput(rayOrigin, rayDirection, _actionPressTaken);
+						leashes.HandleInput(rayOrigin, rayDirection, static_cast<glm::vec2>(_mousePosition), SDL_GetTicks(),
+						                    _actionPressTaken);
 						_actionPressTaken = false;
 					}
 					// The gestures drawn with the hand: circles and power-ups for the miracles, the leash's gestures, and
@@ -2186,6 +2200,15 @@ bool Game::Initialize() noexcept
 		if (const auto path = fileSystem.GetPath<Path::Misc>() / "leash.l3d"; fileSystem.Exists(path))
 		{
 			meshManager.Load("misc/leash", LFromDiskTag {}, path);
+			// Each player's temple hangs one of each leash, each drawn with its own copy of the collar
+			for (uint8_t player = 0; player < static_cast<uint8_t>(PlayerNames::_COUNT); ++player)
+			{
+				for (const auto type : creature_leash::k_Types)
+				{
+					meshManager.Load(temple_leashes::CollarMeshName(static_cast<PlayerNames>(player), type), LFromDiskTag {},
+					                 path);
+				}
+			}
 		}
 		// The eyes every creature is drawn with
 		for (const auto& [id, file] : {std::pair {ecs::components::CreatureEyes::k_EyeballMeshId, "Eyeball.l3d"},
@@ -2384,6 +2407,22 @@ bool Game::Initialize() noexcept
 		Locator::infoConstants::reset(result.release());
 	}
 
+	// The temple's leashes are drawn with the leash texture and its alpha
+	if (const auto leash = fileSystem.GetPath<Path::Textures>() / "leash.raw",
+	    alpha = fileSystem.GetPath<Path::Textures>() / "leasha.raw";
+	    fileSystem.Exists(leash) && fileSystem.Exists(alpha))
+	{
+		constexpr uint16_t k_LeashTextureSide = 256;
+		try
+		{
+			textureManager.Load(ecs::components::LeashPost::k_TextureId, resources::Texture2DLoader::FromDiskWithAlphaTag {},
+			                    leash, alpha, k_LeashTextureSide);
+		}
+		catch (std::runtime_error& err)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+		}
+	}
 	fileSystem.Iterate(fileSystem.GetPath<Path::Textures>(), false, [&textureManager](const std::filesystem::path& f) {
 		if (string_utils::LowerCase(f.extension().string()) == ".raw")
 		{

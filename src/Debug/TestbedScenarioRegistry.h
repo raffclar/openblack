@@ -400,6 +400,14 @@ struct Command
 		/// The player shaking the leash off: a scribble drawn with the empty hand through the same gesture recogniser
 		/// the cursor goes through, which takes off a leash held in the hand
 		LeashShake,
+		/// With the leash held, the player's Action button giving an order: to go to the point, or to act on the
+		/// scenario's object
+		LeashOrderAt,
+		LeashOrderOn,
+		/// Hanging the player's three temple leashes in a row about the point, five metres up, as a temple hangs them;
+		/// the player tapping one of them (value: 0 aggression, 1 learning, 2 compassion)
+		HangLeashPosts,
+		TapLeashPost,
 		/// Fighting the other creature; then, in the fight, a blow high, in the middle or low charged for a while, a
 		/// block, a step forward, back, right or left, the special move, and fighting by itself or not, as the player's
 		/// clicks and the debug tools give them
