@@ -144,8 +144,13 @@ public:
 		float groundHeight;
 		/// Inside the citadel
 		bool inCitadel;
-		/// Alignment of the player, -1 (evil) to 1 (good)
+		/// Alignment of the place the camera is in, -1 (evil) to 1 (good): that of the player of most influence there,
+		/// neutral where none has any. The land's music follows it.
 		float alignment;
+		/// The local player's own alignment, -1 (evil) to 1 (good), which the temple's music follows
+		float playerAlignment;
+		/// A script holds the cinema bars, or they are sliding in or out: the land's music waits
+		bool cinema;
 		std::vector<Town> towns;
 	};
 
@@ -178,6 +183,11 @@ public:
 	[[nodiscard]] static int32_t GetAlignmentIndex(float alignment);
 	/// The land's music at the camera
 	[[nodiscard]] MusicType SelectLandType(const TurnInputs& inputs);
+	/// The temple's music, in the version of the local player's own alignment
+	[[nodiscard]] static MusicType SelectCitadelType(const TurnInputs& inputs);
+	/// Whether the land's music may play this turn: it is turned on, the game is past its first turns, and no script
+	/// holds the cinema bars nor are they sliding
+	[[nodiscard]] bool LandMusicAllowed(const TurnInputs& inputs) const;
 
 private:
 	void ProcessMusic(const TurnInputs& inputs);
@@ -198,6 +208,8 @@ private:
 	MusicType _scriptType {MusicType::None};
 	bool _scriptStarted {false};
 	bool _alignmentMusicEnabled {true};
+	/// Whether the land's music could play last turn, for logging when that changes
+	std::optional<bool> _landMusicWasAllowed;
 	std::optional<uint32_t> _rememberedTown;
 	/// 1-based chunk each music group carries on from
 	std::map<int32_t, uint32_t> _resumeChunks;

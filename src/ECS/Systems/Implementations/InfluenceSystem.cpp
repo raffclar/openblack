@@ -16,7 +16,10 @@
 #include <algorithm>
 #include <unordered_map>
 
+#include <spdlog/spdlog.h>
+
 #include "3D/LandIslandInterface.h"
+#include "Audio/AudioManagerInterface.h"
 #include "Audio/Sound.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -30,6 +33,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
@@ -265,6 +269,138 @@ void InfluenceSystem::ProcessTurn(uint32_t turn)
 	{
 		DrawBorders();
 	}
+	ProcessVirtualInfluence(turn);
+}
+
+bool InfluenceSystem::Shielded(PlayerNames player, const glm::vec3& point)
+{
+	const auto position = map_coords::FromMetres({point.x, point.z});
+	bool shielded = false;
+	Locator::entitiesRegistry::value().Each<const AntiInfluence, const Transform>(
+	    [&](const AntiInfluence& ring, const Transform& transform) {
+		    shielded =
+		        shielded || (ring.owner != player &&
+		                     gutils::GetDistanceInMetres(map_coords::FromMetres({transform.position.x, transform.position.z}),
+		                                                 position) < ring.radius);
+	    });
+	return shielded;
+}
+
+float InfluenceSystem::InfluencePower(PlayerNames player)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	float power = 0.0f;
+	if (const auto citadel = Citadels().at(static_cast<size_t>(player)); citadel != entt::null)
+	{
+		power = CitadelReach(citadel);
+	}
+	registry.Each<const Town, const TownInfluence>([&](const Town& town, const TownInfluence& influence) {
+		if (town.owner == player)
+		{
+			power += influence.radius;
+		}
+	});
+	registry.Each<const InfluenceSource>([&](const InfluenceSource& source) {
+		if (source.player == player)
+		{
+			power += source.radius;
+		}
+	});
+	return power;
+}
+
+void InfluenceSystem::ProcessVirtualInfluence(uint32_t turn)
+{
+	const auto hand = HandPosition();
+	if (!hand.has_value() || !Locator::playerSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto player = Locator::playerSystem::value().GetLocalPlayer();
+	const auto entity = Locator::playerSystem::value().GetPlayer(player);
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(entity))
+	{
+		return;
+	}
+	auto& virtualInfluence = registry.AnyOf<VirtualInfluence>(entity) ? registry.Get<VirtualInfluence>(entity)
+	                                                                  : registry.Assign<VirtualInfluence>(entity);
+	const auto& citadel = Locator::infoConstants::value().citadel;
+	const bool shielded = Shielded(player, *hand);
+	const bool inInfluence = !shielded && PlayerInfluence(player, *hand) > 0.0f;
+	const auto before = virtualInfluence.state;
+	// TODO(raffclar): the chants waiting at the player's worship sites, which slow the waning, once worship sites are
+	// simulated; until then there are none
+	virtual_influence::ProcessTurn(virtualInfluence.state,
+	                               {
+	                                   .hand = *hand,
+	                                   .turn = turn,
+	                                   .handShielded = shielded,
+	                                   .handInInfluence = inInfluence,
+	                                   .influencePower = InfluencePower(player),
+	                                   .chants = 0.0f,
+	                               },
+	                               {
+	                                   .maxDistance = citadel.virtualInfluenceMaxDistance,
+	                                   .maxTurns = citadel.virtualInfluenceMaxGameTicks,
+	                                   .chantsToDouble = citadel.virtualInfluenceChantsToDouble,
+	                               });
+	// The log follows the strength the hand keeps past the border, a tenth at a time
+	const auto& after = virtualInfluence.state;
+	if (static_cast<int>(before.fraction * 10.0f) != static_cast<int>(after.fraction * 10.0f) ||
+	    before.anchor.has_value() != after.anchor.has_value())
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "The hand {} its player's influence at ({:.1f}, {:.1f}), strength {:.2f}",
+		                    inInfluence ? "is in" : (shielded ? "is shielded from" : "is out of"), hand->x, hand->z,
+		                    after.fraction);
+	}
+}
+
+void InfluenceSystem::HumVirtualInfluence()
+{
+	if (!Locator::playerSystem::has_value() || !Locator::audio::has_value())
+	{
+		return;
+	}
+	const auto player = Locator::playerSystem::value().GetLocalPlayer();
+	const auto entity = Locator::playerSystem::value().GetPlayer(player);
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(entity) || !registry.AnyOf<VirtualInfluence>(entity))
+	{
+		return;
+	}
+	auto& virtualInfluence = registry.Get<VirtualInfluence>(entity);
+	auto& state = virtualInfluence.state;
+	auto& audio = Locator::audio::value();
+	const auto hand = HandPosition();
+	const auto inInfluence = [this, player](const glm::vec3& point) { return PlayerInfluence(player, point) > 0.0f; };
+	const bool plays = hand.has_value() && state.anchor.has_value() &&
+	                   virtual_influence::HumPlays(state, Shielded(player, *hand), inInfluence(*hand),
+	                                               Shielded(player, *state.anchor), inInfluence(*state.anchor));
+	if (!plays)
+	{
+		if (state.soundStarted)
+		{
+			audio.DestroyEmitter(virtualInfluence.hum);
+			virtualInfluence.hum = entt::null;
+			state.soundStarted = false;
+		}
+		return;
+	}
+	// Past the border the hand hums, heard alike from both sides, lower the less of its strength is left; it is started
+	// again whenever it has played out
+	if (!state.soundStarted)
+	{
+		state.soundFraction = state.fraction;
+		state.soundStarted = true;
+	}
+	const auto pitch = virtual_influence::HumPitchPercent(state);
+	if (!audio.EmitterExists(virtualInfluence.hum))
+	{
+		virtualInfluence.hum =
+		    audio.StartSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_VirtualInfluence_04), {.pitchPercent = pitch});
+	}
+	audio.SetEmitterPitch(virtualInfluence.hum, pitch);
 }
 
 void InfluenceSystem::Update(std::chrono::duration<float, std::milli> gameTime)
@@ -276,6 +412,8 @@ void InfluenceSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 
 	std::erase_if(_ripples,
 	              [&gameTime](influence::Ripple& ripple) { return !influence::AdvanceRipple(ripple, gameTime.count()); });
+
+	HumVirtualInfluence();
 
 	// While the game runs, the hand crossing a border sounds once, at the hand
 	if (Locator::time::value().IsPaused())

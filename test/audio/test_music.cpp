@@ -191,6 +191,108 @@ TEST(GameMusic, AlignmentPicksEvilNeutralOrGood)
 	EXPECT_EQ(GameMusic::GetAlignmentIndex(-1.0f), 0);
 	EXPECT_EQ(GameMusic::GetAlignmentIndex(0.0f), 1);
 	EXPECT_EQ(GameMusic::GetAlignmentIndex(1.0f), 2);
+	// Seven steps of the alignment: the lowest two are evil, the middle three neutral and the top two good
+	EXPECT_EQ(GameMusic::GetAlignmentIndex(-0.43f), 0);
+	EXPECT_EQ(GameMusic::GetAlignmentIndex(-0.42f), 1);
+	EXPECT_EQ(GameMusic::GetAlignmentIndex(0.42f), 1);
+	EXPECT_EQ(GameMusic::GetAlignmentIndex(0.43f), 2);
+}
+
+TEST(GameMusic, TheLandsMusicFollowsTheAlignmentOfThePlace)
+{
+	GameMusic music;
+	GameMusic::TurnInputs inputs {
+	    .turn = 100,
+	    .camera = {1000.0f, 100.0f, 1000.0f},
+	    .groundHeight = 0.0f,
+	    .inCitadel = false,
+	    .alignment = -0.8f,
+	    // The player's own alignment is not what the land's music follows
+	    .playerAlignment = 1.0f,
+	    .cinema = false,
+	    .towns = {{.position = {1100.0f, 0.0f, 1000.0f}, .tribe = 6, .id = 1}},
+	};
+	EXPECT_EQ(music.SelectLandType(inputs), MusicType::GreekTownEvil);
+	inputs.alignment = 0.9f;
+	EXPECT_EQ(music.SelectLandType(inputs), MusicType::GreekTownGood);
+	inputs.camera.x = 3000.0f;
+	EXPECT_EQ(music.SelectLandType(inputs), MusicType::GenericGood);
+	inputs.alignment = -1.0f;
+	EXPECT_EQ(music.SelectLandType(inputs), MusicType::GenericEvil);
+}
+
+TEST(GameMusic, TheTemplesMusicFollowsThePlayersOwnAlignment)
+{
+	GameMusic::TurnInputs inputs {
+	    .turn = 100,
+	    .camera = {},
+	    .groundHeight = 0.0f,
+	    .inCitadel = true,
+	    // Where the camera is does not matter inside the temple
+	    .alignment = 1.0f,
+	    .playerAlignment = -0.9f,
+	    .cinema = false,
+	    .towns = {},
+	};
+	EXPECT_EQ(GameMusic::SelectCitadelType(inputs), MusicType::CitadelEvil);
+	inputs.playerAlignment = 0.0f;
+	EXPECT_EQ(GameMusic::SelectCitadelType(inputs), MusicType::CitadelNeutral);
+	inputs.playerAlignment = 0.9f;
+	EXPECT_EQ(GameMusic::SelectCitadelType(inputs), MusicType::CitadelGood);
+}
+
+TEST(GameMusic, TheLandsMusicWaitsForTheFirstTurnsAndTheCinemaBars)
+{
+	const GameMusic music;
+	GameMusic::TurnInputs inputs {
+	    .turn = 21,
+	    .camera = {},
+	    .groundHeight = 0.0f,
+	    .inCitadel = false,
+	    .alignment = 0.0f,
+	    .playerAlignment = 0.0f,
+	    .cinema = false,
+	    .towns = {},
+	};
+	EXPECT_TRUE(music.LandMusicAllowed(inputs));
+	inputs.cinema = true;
+	EXPECT_FALSE(music.LandMusicAllowed(inputs));
+	inputs.cinema = false;
+	inputs.turn = 20;
+	EXPECT_FALSE(music.LandMusicAllowed(inputs));
+}
+
+TEST(MusicPlayer, AnotherVersionCrossfadesInTime)
+{
+	FakeMusicBackend backend;
+	MusicPlayer music(backend);
+	auto evil = MakeBank(8, 3);
+	auto good = MakeBank(8, 3);
+	// The land's music plays at 80: the version coming in rises by 4 a tick, the one going falls by 3
+	music.Play({.bank = evil, .volume = 80, .loops = -1, .sync = true, .fadeIn = true});
+	for (int i = 0; i < 40; ++i)
+	{
+		music.Update(MusicPlayer::k_Tick);
+	}
+	ASSERT_EQ(music.GetChannels()[0].volume, 80);
+	music.Play({.bank = good, .volume = 80, .loops = -1, .sync = true, .fadeIn = true});
+	music.Update(MusicPlayer::k_Tick);
+	EXPECT_EQ(music.GetChannels()[0].volume, 77);
+	EXPECT_EQ(music.GetChannels()[1].volume, 4);
+	// In time with the version it replaces
+	EXPECT_EQ(music.GetChannels()[1].playingChunk, music.GetChannels()[0].playingChunk);
+	// 20 ticks, 2.4 seconds, to be in, and 27, 3.24 seconds, for the other to be gone
+	for (int i = 1; i < 20; ++i)
+	{
+		music.Update(MusicPlayer::k_Tick);
+	}
+	EXPECT_EQ(music.GetChannels()[1].volume, 80);
+	EXPECT_EQ(music.GetChannels()[0].volume, 20);
+	for (int i = 20; i < 27; ++i)
+	{
+		music.Update(MusicPlayer::k_Tick);
+	}
+	EXPECT_FALSE(music.GetChannels()[0].active);
 }
 
 TEST(GameMusic, TownsNearTheCameraPlayTheirTribesMusic)
@@ -202,6 +304,8 @@ TEST(GameMusic, TownsNearTheCameraPlayTheirTribesMusic)
 	    .groundHeight = 0.0f,
 	    .inCitadel = false,
 	    .alignment = 0.0f,
+	    .playerAlignment = 0.0f,
+	    .cinema = false,
 	    .towns = {{.position = {1200.0f, 0.0f, 1000.0f}, .tribe = 5, .id = 1},
 	              {.position = {560.0f, 0.0f, 1000.0f}, .tribe = 2, .id = 2}},
 	};

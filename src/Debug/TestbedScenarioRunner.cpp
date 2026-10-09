@@ -83,6 +83,7 @@
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -431,6 +432,12 @@ void Runner::Start(const Scenario& scenario)
 	_middle = (land.GetExtent().minimum + land.GetExtent().maximum) * 0.5f;
 
 	SetUpEnvironment(scenario.environment);
+	if (const auto& temple = scenario.environment.temple; temple.has_value())
+	{
+		const auto at = MapPoint(_middle, *temple);
+		ecs::archetypes::CitadelArchetype::Create({at.x, land.GetHeightAt(at), at.y}, PlayerNames::PLAYER_ONE, glm::mat4(1.0f),
+		                                          glm::vec3(1.0f));
+	}
 	PlaceObjects(scenario, _middle);
 	PlaceBirds(scenario, _middle);
 	PlaceCreatures(scenario, _middle);
@@ -1320,6 +1327,17 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the alignment is {:.2f}", _seconds, command.alignment));
 		return;
 	}
+	if (command.kind == Kind::WideScreen)
+	{
+		// Held by a script, as the land's scripts hold them
+		constexpr uint32_t k_ScriptOwner = 1;
+		if (Locator::cinematicDirectorSystem::has_value())
+		{
+			Locator::cinematicDirectorSystem::value().SetWideScreen(command.value != 0, k_ScriptOwner);
+		}
+		Log(fmt::format("{:.1f}s: the cinema bars slide {}", _seconds, command.value != 0 ? "in" : "out"));
+		return;
+	}
 	const auto entity = CreatureAt(command.creature);
 	if (!entity.has_value() || !Locator::creatureLocomotionSystem::has_value() || !Locator::creatureMindSystem::has_value())
 	{
@@ -1471,6 +1489,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandTakeFireBall:
 	case Kind::HandTapObject:
 	case Kind::SetAlignment:
+	case Kind::WideScreen:
 	// The mouse commands are given before a creature is looked for
 	case Kind::PointerTo:
 	case Kind::PointerPress:

@@ -11,6 +11,8 @@
 
 #include "AudioManager.h"
 
+#include <cmath>
+
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -98,8 +100,19 @@ std::string EmitterSoundName(const AudioEmitter& emitter)
 // The log lines below are left out of release builds, which would otherwise find these parameters unused
 void LogEmitterStart([[maybe_unused]] entt::entity entity, [[maybe_unused]] const AudioEmitter& emitter)
 {
-	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} starts: volume {} pitch {}%{}", DescribeEmitter(entity, emitter),
-	                    emitter.volume, emitter.pitchPercent, emitter.loop == PlayType::Repeat ? ", looping" : "");
+	// Where a placed sound is heard from: to the listener's right (or left), ahead and above
+	[[maybe_unused]] const auto heard = [&emitter]() {
+		if (!emitter.spatial)
+		{
+			return std::string();
+		}
+		const auto& camera = Locator::camera::value();
+		const auto at = audio::ToListenerFrame(emitter.position, camera.GetOrigin(), camera.GetForward(), camera.GetUp());
+		return fmt::format(", heard {:.1f} m {}, {:.1f} m ahead, {:.1f} m up", std::abs(at.x), at.x < 0.0f ? "left" : "right",
+		                   at.y, at.z);
+	};
+	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} starts: volume {} pitch {}%{}{}", DescribeEmitter(entity, emitter),
+	                    emitter.volume, emitter.pitchPercent, emitter.loop == PlayType::Repeat ? ", looping" : "", heard());
 }
 
 void LogNotStarted([[maybe_unused]] const Sound& sound, [[maybe_unused]] const glm::vec3& position,
@@ -494,6 +507,23 @@ void AudioManager::SetEmitterVolume(entt::entity emitter, uint32_t volume)
 	component.volume = std::min<uint32_t>(volume, k_MaxVolume);
 	component.gain = _atmos->VolumeToGain(component.volume);
 	_audioPlayer->SetVolume(component.sourceId, component.gain * _globalVolume * (component.music ? _musicVolume : _sfxVolume));
+}
+
+void AudioManager::SetEmitterPitch(entt::entity emitter, uint32_t pitchPercent)
+{
+	if (!EmitterExists(emitter))
+	{
+		return;
+	}
+	auto& component = Locator::entitiesRegistry::value().Get<AudioEmitter>(emitter);
+	if (component.pitchPercent == pitchPercent)
+	{
+		return;
+	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} pitch {}% -> {}%", DescribeEmitter(emitter, component),
+	                    component.pitchPercent, pitchPercent);
+	component.pitchPercent = pitchPercent;
+	_audioPlayer->SetPitch(component.sourceId, static_cast<float>(pitchPercent) / 100.0f);
 }
 
 uint32_t AudioManager::GetEmitterVolume(entt::entity emitter)
