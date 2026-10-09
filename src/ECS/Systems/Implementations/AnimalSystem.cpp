@@ -99,10 +99,15 @@ constexpr uint32_t k_BirthAgeRange = 20;
 constexpr uint32_t k_BirthAgeMin = 5;
 /// How a flock's followers follow: in formation
 constexpr int k_FollowInFormation = 3;
+/// A challenge script's animal on its own keeps within 2 m of where it was made, its flock's followers within 1 m
+constexpr float k_ScriptAnimalFlockReach = 2.0f;
+constexpr float k_ScriptAnimalFlockDistance = 1.0f;
 /// The prey brought down plays its fall the turn after, and waits for it from the turn after that
 constexpr int k_FallStartsAfter = 2;
 /// The game's numbers for the animals' states whose table says whether an animal sees to its needs in them first
 constexpr size_t k_TableMoveToPos = 1;
+constexpr size_t k_TableInScript = 4;
+constexpr size_t k_TableMoveInFlock = 27;
 constexpr size_t k_TableStartWander = 31;
 constexpr size_t k_TableDecideWhatToDo = 43;
 constexpr size_t k_TableSpecialMoveToPos = 44;
@@ -290,6 +295,12 @@ bool SeesToNeedsIn(AnimalState state)
 	case AnimalState::MoveToPos:
 		row = k_TableMoveToPos;
 		break;
+	case AnimalState::InScript:
+		row = k_TableInScript;
+		break;
+	case AnimalState::MoveInFlock:
+		row = k_TableMoveInFlock;
+		break;
 	default:
 		return false;
 	}
@@ -371,6 +382,72 @@ entt::entity AnimalSystem::CreateBird(AnimalInfo type, glm::vec2 position, uint3
 	animal.flock = flockEntity;
 	registry.Get<Flock>(flockEntity).members.push_back(entity);
 	return entity;
+}
+
+entt::entity AnimalSystem::CreateScriptAnimal(AnimalInfo type, glm::vec2 position)
+{
+	// Made as a land script makes an animal with no flock, at a random age
+	const auto entity = CreateBird(type, position, 0, entt::null);
+	if (entity == entt::null)
+	{
+		return entt::null;
+	}
+	// Its own flock keeps it close about where it was made
+	auto& registry = EntityRegistry();
+	auto& flockData = registry.Get<Flock>(registry.Get<const Animal>(entity).flock);
+	flockData.domainRadius = k_ScriptAnimalFlockReach;
+	flockData.flockDistance = k_ScriptAnimalFlockDistance;
+	// The script holds it still until it says otherwise
+	SetScriptState(entity, LivingStates::LivingInScript);
+	return entity;
+}
+
+void AnimalSystem::JoinFlock(entt::entity entity, entt::entity flockEntity)
+{
+	auto& registry = EntityRegistry();
+	auto* animal = registry.TryGet<Animal>(entity);
+	auto* flockData = registry.Valid(flockEntity) ? registry.TryGet<Flock>(flockEntity) : nullptr;
+	if (animal == nullptr || flockData == nullptr)
+	{
+		return;
+	}
+	// Out of its flock first, even when it is the same one, then in after the others: the first to join leads
+	LeaveFlock(entity, *animal);
+	if (!registry.Valid(flockEntity))
+	{
+		return;
+	}
+	animal->flock = flockEntity;
+	registry.Get<Flock>(flockEntity).members.push_back(entity);
+}
+
+bool AnimalSystem::SetScriptState(entt::entity entity, LivingStates state)
+{
+	auto* animal = EntityRegistry().TryGet<Animal>(entity);
+	if (animal == nullptr)
+	{
+		return false;
+	}
+	AnimalState next {};
+	switch (state)
+	{
+	case LivingStates::LivingInScript:
+		next = AnimalState::InScript;
+		break;
+	case LivingStates::LivingMoveInFlock:
+		next = AnimalState::MoveInFlock;
+		break;
+	default:
+		return false;
+	}
+	// Only an animal out in the world takes it: not one held in a hand, carried off or flying through the air
+	if (EntityRegistry().AnyOf<CarriedByTornado, InHand, InPhysics>(entity))
+	{
+		return true;
+	}
+	// The state starts afresh, a land bird choosing its flying clip again
+	SetTopState(*animal, next);
+	return true;
 }
 
 entt::entity AnimalSystem::CreateSpellAnimal(AnimalInfo type, glm::vec2 position, float heightAboveLand, uint16_t angle,
@@ -633,6 +710,8 @@ void AnimalSystem::Bird(entt::entity entity, Animal& animal)
 		DecideWhatToDo(entity, animal);
 		break;
 	case AnimalState::StartWander:
+	case AnimalState::MoveInFlock:
+		// Moving with its flock as a script set it, a bird starts on a leg of its own
 		StartWander(entity, animal);
 		break;
 	case AnimalState::FollowFlock:
