@@ -31,6 +31,9 @@ public:
 	entt::entity CreateFlock(glm::vec2 centre, float domainRadius, float flockDistance) override;
 	entt::entity CreateSpellAnimal(AnimalInfo type, glm::vec2 position, float heightAboveLand, uint16_t angle,
 	                               PlayerNames owner, entt::entity flock, entt::entity spell) override;
+	entt::entity CreateScriptFlock(int32_t id, glm::vec2 position, glm::vec2 home, float reach, float flockDistance) override;
+	[[nodiscard]] entt::entity FindScriptFlock(int32_t id) const override;
+	entt::entity CreateBird(AnimalInfo type, glm::vec2 position, uint32_t age, entt::entity flock) override;
 	void SetScale(entt::entity animal, float scale) override;
 	[[nodiscard]] float RadiusOf(entt::entity animal) const override;
 	[[nodiscard]] glm::vec3 MovementOf(entt::entity animal) const override;
@@ -66,6 +69,12 @@ private:
 	[[nodiscard]] glm::vec2 RandomPos(const components::Animal& animal, glm::vec2 centre, float inner, float outer) const;
 
 	// The birds of a flock
+	/// A land bird's leader gives its leg up once it has kept to it its kind's stay time: whether it did
+	bool LeaderGivesUpLeg(entt::entity entity, components::Animal& animal);
+	/// A bird's speed, which a land bird chooses its flying clip afresh for
+	static void SetSpeed(components::Animal& animal, size_t speed);
+	/// The temples' doves and bats, seen to every hundred turns
+	void ProcessTempleBirds();
 	void Bird(entt::entity entity, components::Animal& animal);
 	void SpecialMoveToPos(entt::entity entity, components::Animal& animal);
 	void DecideWhatToDo(entt::entity entity, components::Animal& animal);
@@ -114,6 +123,8 @@ private:
 
 	/// The game's turn, and its clock at the last frame in milliseconds
 	uint32_t _turn {0};
+	/// How many flocks have been made, which orders them
+	uint32_t _flocksMade {0};
 	uint32_t _drawTime {0};
 };
 

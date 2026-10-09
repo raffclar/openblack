@@ -112,7 +112,11 @@ void DrawMiracles(const creature_cave::Snapshot& snapshot)
 	ImGui::SeparatorText("How far it has learnt each miracle");
 	for (const auto& miracle : snapshot.miracles)
 	{
-		ImGui::ProgressBar(static_cast<float>(miracle.percent) / 100.0f, ImVec2(ImGui::GetFontSize() * 6.0f, 0.0f));
+		if (!miracle.knownAbout)
+		{
+			continue;
+		}
+		ImGui::ProgressBar(miracle.learnt / 100.0f, ImVec2(ImGui::GetFontSize() * 6.0f, 0.0f));
 		ImGui::SameLine();
 		ImGui::TextUnformatted(miracle.name.c_str());
 	}
