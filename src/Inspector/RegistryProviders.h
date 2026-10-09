@@ -33,6 +33,7 @@ struct RegistrySources
 ///   ecs.entities  {component?, kind?, name?}  ids, kinds, labels and places
 ///   ecs.entity    {id, components?}            one entity, its components' names, their fields on request
 ///   ecs.components                             the component types there are, how many of each, which are reflected
+///   ecs.references {id}                        the component fields that hold an entity, gone or not
 class RegistryProvider final: public ProviderInterface
 {
 public:
@@ -45,6 +46,7 @@ public:
 private:
 	[[nodiscard]] QueryResult Entity(const ecs::Registry& registry, const Json& params) const;
 	[[nodiscard]] QueryResult Components(const ecs::Registry& registry) const;
+	[[nodiscard]] QueryResult References(const ecs::Registry& registry, const Json& params) const;
 
 	RegistrySources _sources;
 	const entt::meta_ctx& _context;

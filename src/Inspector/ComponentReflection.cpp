@@ -13,6 +13,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <entt/entity/entity.hpp>
 #include <entt/meta/container.hpp>
@@ -209,6 +210,69 @@ std::string reflection::ShortTypeName(const entt::type_info& info)
 		name.remove_prefix(colons + 2);
 	}
 	return std::string(name);
+}
+
+namespace
+{
+
+/// The most elements of a list looked through for references
+constexpr size_t k_MostElementsSearched = 4096;
+
+void FindReferences(const entt::meta_any& any, entt::entity target, const std::string& path, int depth,
+                    std::vector<std::string>& found)
+{
+	if (!any || depth > reflection::k_DeepestNesting)
+	{
+		return;
+	}
+	const auto type = any.type();
+	if (type.data().begin() != type.data().end())
+	{
+		for (const auto& [id, data] : type.data())
+		{
+			const reflection::FieldInfo* info = data.custom();
+			const auto name = info != nullptr ? info->name : std::to_string(id);
+			const auto fieldPath = path.empty() ? name : path + "." + name;
+			const auto value = data.get(any);
+			if (info != nullptr && info->refersTo != nullptr)
+			{
+				if (info->refersTo(value, target))
+				{
+					found.push_back(fieldPath);
+				}
+				continue;
+			}
+			FindReferences(value, target, fieldPath, depth + 1, found);
+		}
+		return;
+	}
+	if (auto sequence = any.as_sequence_container(); sequence)
+	{
+		size_t index = 0;
+		for (auto element : sequence)
+		{
+			if (index == k_MostElementsSearched)
+			{
+				break;
+			}
+			FindReferences(element, target, path + "." + std::to_string(index++), depth + 1, found);
+		}
+	}
+}
+
+} // namespace
+
+std::vector<std::string> reflection::References(const entt::meta_ctx& context, const entt::type_info& info,
+                                                const void* component, entt::entity target)
+{
+	std::vector<std::string> found;
+	const auto type = entt::resolve(context, info);
+	if (!type || component == nullptr)
+	{
+		return found;
+	}
+	FindReferences(type.from_void(component), target, {}, 0, found);
+	return found;
 }
 
 bool reflection::IsReflected(const entt::meta_ctx& context, const entt::type_info& info)

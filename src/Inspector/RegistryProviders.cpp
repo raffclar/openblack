@@ -201,6 +201,12 @@ std::vector<QueryDescription> RegistryProvider::Describe() const
 	     .parameters = {},
 	     .kind = ResultKind::List,
 	     .needsNear = false},
+	    {.name = "references",
+	     .description = "Every component field that holds an entity (an entity, an optional one or a list of them), "
+	                    "gone or not: the holder, its label, the component and the field's path",
+	     .parameters = {{.name = "id", .type = "integer", .description = "The entity's id", .required = true}},
+	     .kind = ResultKind::List,
+	     .needsNear = false},
 	};
 }
 
@@ -222,6 +228,10 @@ QueryResult RegistryProvider::Run(std::string_view query, const QueryContext& co
 	if (query == "components")
 	{
 		return Components(*registry);
+	}
+	if (query == "references")
+	{
+		return References(*registry, context.params);
 	}
 	return QueryResult::Error("no query ecs." + std::string(query));
 }
@@ -247,6 +257,39 @@ QueryResult RegistryProvider::Entity(const ecs::Registry& registry, const Json& 
 		}
 	}
 	return QueryResult::Value(std::move(result));
+}
+
+QueryResult RegistryProvider::References(const ecs::Registry& registry, const Json& params) const
+{
+	const auto id = params.find("id");
+	const auto target = id == params.end() ? std::nullopt : FromId(*id);
+	if (!target.has_value())
+	{
+		return QueryResult::Error("ecs.references needs the id of an entity, gone or not");
+	}
+	const auto* info = _sources.info ? _sources.info() : nullptr;
+	Json items = Json::array();
+	for (const auto& [storageId, storage] : registry.Underlying().storage())
+	{
+		if (storage.type() == entt::type_id<entt::entity>() || !reflection::IsReflected(_context, storage.type()))
+		{
+			continue;
+		}
+		const auto component = reflection::ShortTypeName(storage.type());
+		for (const auto holder : storage)
+		{
+			for (auto& field : reflection::References(_context, storage.type(), storage.value(holder), *target))
+			{
+				items.push_back({
+				    {"id", entt::to_integral(holder)},
+				    {"label", inspector::Describe(registry, holder, info).label},
+				    {"component", component},
+				    {"field", std::move(field)},
+				});
+			}
+		}
+	}
+	return QueryResult::Value(std::move(items));
 }
 
 QueryResult RegistryProvider::Components(const ecs::Registry& registry) const

@@ -172,6 +172,7 @@ openblack_setup_and_add_test(test_snowfall test_snowfall.cpp)
 openblack_setup_and_add_test(test_water_rings test_water_rings.cpp)
 openblack_setup_and_add_test(test_flat_land test_flat_land.cpp)
 openblack_setup_and_add_test(test_creature_body test_creature_body.cpp)
+openblack_setup_and_add_test(test_creature_removal test_creature_removal.cpp)
 openblack_setup_and_add_test(test_creature_morph test_creature_morph.cpp)
 openblack_setup_and_add_test(
   test_creature_animation test_creature_animation.cpp

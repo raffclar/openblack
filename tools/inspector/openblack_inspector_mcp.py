@@ -235,12 +235,29 @@ TOOLS = [
     {
         "name": "edit_destroy",
         "description": "Takes a thing out through the game's own removal (its physics, sounds, map cells, home and "
-                       "town); how=effect destroys it as an effect would (a villager dies, a building burns "
-                       "down). Answers whether it still exists, is in its map cell or the physics.",
+                       "town); a creature goes through the creature removal, which lets go of its leash, fight, the "
+                       "hand, its player's list (the next creature becomes the primary one), effects and what it "
+                       "carries. how=effect destroys it as an effect would (a villager dies, a building burns "
+                       "down; never a creature). Answers whether it still exists, is in its map cell or the physics.",
         "inputSchema": schema({"id": {"type": "integer"}, "how": {"type": "string", "enum": ["remove", "effect"]}},
                               ["id"]),
         "query": "edit.destroy",
         "params": ["id", "how"],
+    },
+    {
+        "name": "ecs_references",
+        "description": "Every component field that holds an entity id (gone or not): who holds it, the component and "
+                       "the field. Use after a destroy to check that nothing still points at it.",
+        "inputSchema": schema({"id": {"type": "integer"}, **SHAPING}, ["id"]),
+        "query": "ecs.references",
+        "params": ["id"],
+    },
+    {
+        "name": "creatures_fight",
+        "description": "Starts a fight between two creatures as the scripts and the leash do; answers how it went.",
+        "inputSchema": schema({"id": {"type": "integer"}, "opponent": {"type": "integer"}}, ["id", "opponent"]),
+        "query": "creatures.fight",
+        "params": ["id", "opponent"],
     },
     {
         "name": "inspector_writes",

@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <string>
@@ -255,10 +256,64 @@ template <typename Type>
 	return std::nullopt;
 }
 
+/// Whether a value of a type that holds entities (an entity, an optional one, or a list of them) holds this one
+template <typename Type>
+[[nodiscard]] constexpr bool HoldsEntities()
+{
+	if constexpr (std::is_same_v<Type, entt::entity>)
+	{
+		return true;
+	}
+	else if constexpr (detail::k_IsOptional<Type> || detail::k_IsList<Type>)
+	{
+		return std::is_same_v<typename Type::value_type, entt::entity>;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+template <typename Type>
+[[nodiscard]] bool RefersTo(const Type& value, entt::entity target)
+{
+	if constexpr (std::is_same_v<Type, entt::entity>)
+	{
+		return value == target;
+	}
+	else if constexpr (detail::k_IsOptional<Type>)
+	{
+		return value == target;
+	}
+	else
+	{
+		return std::find(value.begin(), value.end(), target) != value.end();
+	}
+}
+
+/// The test of whether a field's value holds an entity, for the types that hold entities; none for the rest
+template <typename Type>
+[[nodiscard]] constexpr auto RefersToFunction() -> bool (*)(const entt::meta_any&, entt::entity)
+{
+	if constexpr (HoldsEntities<Type>())
+	{
+		return [](const entt::meta_any& any, entt::entity target) {
+			const auto* value = any.try_cast<const Type>();
+			return value != nullptr && RefersTo(*value, target);
+		};
+	}
+	else
+	{
+		return nullptr;
+	}
+}
+
 /// What is kept with each registered field: its name, and how its value is written out and read in
 struct FieldInfo
 {
 	std::string name;
+	/// For a field holding entities, whether it holds this one; none for any other field
+	bool (*refersTo)(const entt::meta_any& value, entt::entity target) {nullptr};
 	/// The value as JSON, none when the generic writing through fields must do
 	std::optional<Json> (*encode)(const entt::meta_any& value) {nullptr};
 	/// A JSON value as a value of the field's type, none (with why not) when it doesn't fit
@@ -293,6 +348,7 @@ public:
 		_factory.template data<Member, entt::as_ref_t>(entt::hashed_string::value(name.data(), name.size()));
 		_factory.template custom<FieldInfo>(FieldInfo {
 		    .name = std::string(name),
+		    .refersTo = RefersToFunction<Value>(),
 		    .encode = [](const entt::meta_any& any) -> std::optional<Json> {
 			    if (const auto* value = any.try_cast<const Value>(); value != nullptr)
 			    {
@@ -333,6 +389,11 @@ void RegisterComponentFields(entt::meta_ctx& context);
 
 /// A component of an entity as JSON: its registered fields, or null when it has none registered
 [[nodiscard]] Json ComponentToJson(const entt::meta_ctx& context, const entt::type_info& info, const void* component);
+
+/// The dotted paths of a component's registered fields that hold an entity, through nested registered values and lists
+/// of them: ["opponent"], ["moves.2.target"]
+[[nodiscard]] std::vector<std::string> References(const entt::meta_ctx& context, const entt::type_info& info,
+                                                  const void* component, entt::entity target);
 
 /// Whether a type has fields registered
 [[nodiscard]] bool IsReflected(const entt::meta_ctx& context, const entt::type_info& info);

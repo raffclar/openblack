@@ -25,6 +25,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/CreatureRemoval.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -78,9 +79,9 @@ std::string RefusalToRemove(const ecs::Registry& registry, entt::entity entity, 
 	{
 		return "a player or a hand is never taken out";
 	}
-	if (registry.AllOf<Creature>(entity))
+	if (how == RemoveHow::Effect && registry.AllOf<Creature>(entity))
 	{
-		return "a creature is never taken out of the world by the game's removal: its leash, mind and fights hold it";
+		return "an effect never destroys a creature: take it out with how = \"remove\"";
 	}
 	if (registry.AllOf<Town>(entity))
 	{
@@ -90,7 +91,8 @@ std::string RefusalToRemove(const ecs::Registry& registry, entt::entity entity, 
 	{
 		return "the temple goes through its destruction: destroy it with how = \"effect\"";
 	}
-	if (const auto* held = registry.TryGet<const InHand>(entity); held != nullptr)
+	// A creature's own removal makes the hand let go of it
+	if (const auto* held = registry.TryGet<const InHand>(entity); held != nullptr && !registry.AllOf<Creature>(entity))
 	{
 		return "a hand holds it: let it go first";
 	}
@@ -193,6 +195,12 @@ std::string GameWorldEdit::Remove(entt::entity entity, RemoveHow how)
 	if (how == RemoveHow::Effect)
 	{
 		ecs::world_objects::DestroyedByEffect(entity, {.killer = std::nullopt, .weight = 0.0f});
+		return {};
+	}
+	// A creature goes through its own removal, which lets go of everything that holds it
+	if (registry.AllOf<Creature>(entity))
+	{
+		ecs::creature_removal::RemoveFromGame(entity);
 		return {};
 	}
 	// Out of the physics and silent first, then out of the world as the game takes things out

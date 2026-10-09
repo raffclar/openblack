@@ -14,6 +14,7 @@
 #include <variant>
 #include <vector>
 
+#include <ECS/Components/CreatureObjectAction.h>
 #include <ECS/Components/Transform.h>
 #include <ECS/Components/Tree.h>
 #include <ECS/Components/Villager.h>
@@ -278,6 +279,28 @@ TEST_F(InspectorRegistry, ComponentsAndFieldsOnRequest)
 	ASSERT_EQ(components["total"], 1);
 	EXPECT_EQ(components["items"][0]["count"], 5);
 	EXPECT_EQ(components["items"][0]["reflected"], true);
+}
+
+// What still points at an entity, through any component field that holds entities, even after the entity has gone
+TEST_F(InspectorRegistry, ReferencesToAnEntityAreFoundByField)
+{
+	const auto holder = _trees[1];
+	const auto held = _trees[2];
+	_registry.Assign<ecs::components::HeldByCreature>(_villager, ecs::components::HeldByCreature {.creature = holder});
+	const auto id = std::to_string(ToId(holder));
+
+	const auto found = Ask(_inspector, R"({"query": "ecs.references", "params": {"id": )" + id + "}}");
+	ASSERT_EQ(found["total"], 1);
+	EXPECT_EQ(found["items"][0]["id"], ToId(_villager));
+	EXPECT_EQ(found["items"][0]["component"], "HeldByCreature");
+	EXPECT_EQ(found["items"][0]["field"], "creature");
+
+	_registry.Destroy(holder);
+	EXPECT_EQ(Ask(_inspector, R"({"query": "ecs.references", "params": {"id": )" + id + "}}")["total"], 1);
+	_registry.Remove<ecs::components::HeldByCreature>(_villager);
+	EXPECT_EQ(Ask(_inspector, R"({"query": "ecs.references", "params": {"id": )" + id + "}}")["total"], 0);
+	EXPECT_EQ(Ask(_inspector, R"({"query": "ecs.references", "params": {"id": )" + std::to_string(ToId(held)) + "}}")["total"],
+	          0);
 }
 
 TEST_F(InspectorRegistry, UnknownComponentsAndEntitiesAreExplained)

@@ -1251,6 +1251,41 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		              }
 		              return QueryResult::Value(std::move(result));
 	              }));
+	auto fight = Query("fight",
+	                   "Starts a fight between two creatures as the scripts and the leash start one, the first making the "
+	                   "arena; how it went and both creatures' fight state",
+	                   {IdParameter("The creature that starts the fight"),
+	                    {.name = "opponent", .type = "integer", .description = "The other creature", .required = true}});
+	fight.writes = true;
+	provider->Add(std::move(fight), [](const QueryContext& context) {
+		const auto* registry = Registry();
+		if (registry == nullptr || !Locator::creatureFightSystem::has_value())
+		{
+			return QueryResult::Error("there are no fights without a land");
+		}
+		const auto creature = EntityParam(context.params);
+		const auto opponentId = context.params.find("opponent");
+		const auto opponent = opponentId == context.params.end() ? std::nullopt : FromId(*opponentId);
+		if (!creature.has_value() || !opponent.has_value() || !registry->Valid(*opponent) ||
+		    !registry->AllOf<Creature>(*creature) || !registry->AllOf<Creature>(*opponent))
+		{
+			return QueryResult::Error("creatures.fight needs two creatures: id and opponent");
+		}
+		auto& fights = Locator::creatureFightSystem::value();
+		using Start = ecs::systems::CreatureFightSystemInterface::StartResult;
+		constexpr std::array<std::string_view, 5> k_Results {"started", "no_opponent", "busy", "too_weak", "no_arena"};
+		const auto started = fights.StartFight(*creature, *opponent);
+		const auto index = std::min(static_cast<size_t>(started), k_Results.size() - 1);
+		if (started != Start::Started)
+		{
+			return QueryResult::Error("the fight didn't start: " + std::string(k_Results.at(index)));
+		}
+		return QueryResult::Value({
+		    {"result", k_Results.at(index)},
+		    {"fighting", {fights.IsFighting(*creature), fights.IsFighting(*opponent)}},
+		    {"opponent_of_id", Id(fights.OpponentOf(*creature))},
+		});
+	});
 	return provider;
 }
 
