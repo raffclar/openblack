@@ -9,8 +9,11 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <array>
 #include <functional>
+#include <numbers>
 #include <optional>
 
 #include <glm/vec3.hpp>
@@ -37,6 +40,22 @@ inline constexpr float k_WorldReturnSeconds = 3.0f;
 /// The camera is drawn at least a metre above the land
 inline constexpr float k_GroundClearance = 1.0f;
 
+/// A camera following a thing looks down on it at least this steeply, a thirteenth of a half turn
+inline constexpr float k_FollowLowestPitch = std::numbers::pi_v<float> / 13.0f;
+/// It stays between 2 and 1500 from it
+inline constexpr float k_FollowNearest = 2.0f;
+inline constexpr float k_FollowFarthest = 1500.0f;
+/// Its glides take two seconds while the following begins, easing to one second after two seconds
+inline constexpr float k_FollowStartSeconds = 2.0f;
+inline constexpr float k_FollowEndSeconds = 1.0f;
+inline constexpr float k_FollowBlendSeconds = 2.0f;
+/// A thing is first followed from eight times its height
+inline constexpr float k_FollowHeights = 8.0f;
+/// Looking straight down from directly above, the pitch is this
+inline constexpr float k_StraightDownPitch = 1.5393804f;
+/// A script's camera follows from this far behind until a script says otherwise
+inline constexpr float k_ScriptFollowSeconds = 0.2f;
+
 /// Where the camera is drawn from and looks at
 struct View
 {
@@ -50,6 +69,46 @@ struct View
 /// The camera as it is drawn: a metre aside and up when it is where it looks, then lifted, with what it looks at, to stay
 /// a metre above the land under it
 [[nodiscard]] View Drawn(const View& camera, const std::function<float(float x, float z)>& groundAt);
+
+/// The way a camera at one point looks at another: its heading about the upright and how steeply it looks down. Over a
+/// point that is all but straight below, the heading is 0 and the pitch the straight-down one.
+struct HeadingAndPitch
+{
+	float heading;
+	float pitch;
+};
+[[nodiscard]] HeadingAndPitch HeadingAndPitchFromPoints(const glm::vec3& origin, const glm::vec3& focus);
+/// The point at a distance from another, the way a heading and pitch look back at it
+[[nodiscard]] glm::vec3 PointFromDistanceHeadingAndPitch(const glm::vec3& point, float distance, float heading, float pitch);
+
+/// What a camera following a thing needs to know of it
+struct FollowedThing
+{
+	/// Where it is drawn, raised by half its height
+	glm::vec3 point;
+	/// The way it faces in game angles, for a thing that walks
+	std::optional<uint16_t> gameAngle;
+	/// Its height, from which the camera first follows it
+	float height {0.0f};
+};
+
+/// How a camera follows a thing
+struct FollowSettings
+{
+	float heading {0.0f};
+	float pitch {0.0f};
+	float viewingDistance {0.0f};
+	/// How long its glides take, as a share of the following's own glide time; nothing for no glide
+	float zoomTimeScale {k_ScriptFollowSeconds};
+	/// The heading turns with the way the thing faces
+	bool relativeHeading {true};
+};
+
+/// The seconds a following camera's glides take, some seconds after it began
+[[nodiscard]] float FollowSeconds(float secondsSinceBegun, float zoomTimeScale);
+/// Where a camera following a thing is sent: its heading and pitch from the thing, the pitch at least the lowest; the
+/// heading turned with the thing when it is relative
+[[nodiscard]] glm::vec3 FollowOrigin(const FollowedThing& thing, FollowSettings& settings);
 
 } // namespace script_camera
 
@@ -73,6 +132,19 @@ public:
 	/// Whether both where it is and what it looks at have arrived where they were sent
 	[[nodiscard]] bool Arrived() const;
 
+	/// Finds a followed thing now; nothing once it is gone
+	using ThingLookup = std::function<std::optional<script_camera::FollowedThing>()>;
+	/// The camera is placed behind a thing at a distance, the heading and pitch it looks at it now, and follows it and
+	/// looks at it
+	void FollowAndLookAt(ThingLookup thing, float distance);
+	/// The camera is placed behind a thing, from eight times its height, and follows it
+	void Follow(ThingLookup thing);
+	/// The camera looks at a thing and keeps looking at it
+	void LookAt(ThingLookup thing);
+	/// A script's settings for the following: its distance, glide time, heading and whether the heading turns with the
+	/// thing
+	void SetFollowSettings(float distance, float zoomTimeScale, float heading, bool relativeHeading);
+
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) override;
 	void HandleActions(std::chrono::microseconds dt) override;
 	void SetFlight(glm::vec3 origin, glm::vec3 focus) override;
@@ -83,9 +155,21 @@ public:
 private:
 	using Zoomers = std::array<camera::Zoomer, 3>;
 
+	/// The camera is moved at once to where following and looking at the things puts it
+	void SnapToFollowed();
+	/// Sends the camera after the things it follows and looks at
+	void UpdateFollowing();
+	void StopFollowing();
+	void StopLookingAt();
+
 	Zoomers _origin;
 	Zoomers _focus;
 	GroundHeight _groundAt;
+	ThingLookup _followed;
+	ThingLookup _lookedAt;
+	script_camera::FollowSettings _follow;
+	/// Seconds since the script took the camera, or since it last began following
+	float _seconds {0.0f};
 };
 
 } // namespace openblack

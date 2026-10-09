@@ -21,6 +21,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <LHVM.h>
@@ -194,6 +195,41 @@ ScriptCameraModel* ScriptCamera()
 		ScriptMessage("We are in the wrong camera mode! - exception happened?");
 	}
 	return camera;
+}
+
+/// A thing a script's camera follows or looks at, as the camera sees it while the thing is there: where it is drawn,
+/// raised by half its height, and the way it faces when it walks
+ScriptCameraModel::ThingLookup FollowedThing(entt::entity thing)
+{
+	return [thing]() -> std::optional<script_camera::FollowedThing> {
+		const auto& registry = Locator::entitiesRegistry::value();
+		if (!registry.Valid(thing))
+		{
+			return std::nullopt;
+		}
+		const auto* transform = registry.TryGet<const Transform>(thing);
+		if (transform == nullptr)
+		{
+			return std::nullopt;
+		}
+		// TODO(opening): a creature's height is its body's, and a flock is followed at its middle and its leader's
+		// height
+		float height = 0.0f;
+		if (const auto* mesh = registry.TryGet<const ecs::components::Mesh>(thing); mesh != nullptr)
+		{
+			const auto& meshes = Locator::resources::value().GetMeshes();
+			if (meshes.Contains(mesh->id))
+			{
+				height = meshes.Handle(mesh->id)->GetBoundingBox().Size().y * std::abs(transform->scale.y);
+			}
+		}
+		const auto* wallHug = registry.TryGet<const ecs::components::WallHug>(thing);
+		return script_camera::FollowedThing {
+		    .point = transform->position + glm::vec3(0.0f, height * 0.5f, 0.0f),
+		    .gameAngle = wallHug != nullptr ? std::optional(wallHug->gameAngle) : std::nullopt,
+		    .height = height,
+		};
+	};
 }
 
 /// The camera commands that move it warn of a script doing so in the temple
@@ -2797,12 +2833,21 @@ void GetWalkPathPercentage() // 179 GET_WALK_PATH_PERCENTAGE
 
 void CameraProperties() // 180 CAMERA_PROPERTIES
 {
-	// const auto enableBehind = static_cast<bool>(Pop().intVal);
-	// const auto angle = Popf();
-	// const auto speed = Popf();
-	// const auto distance = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto relative = Pop().intVal != 0;
+	// Degrees to radians by the game's own float
+	constexpr float k_DegreesToRadians = 0.017453292f;
+	const auto angle = Popf() * k_DegreesToRadians;
+	const auto glideScale = Popf();
+	const auto distance = Popf();
+	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	if (camera == nullptr)
+	{
+		ScriptMessage("Script camera has been removed! - Exception happened?");
+		return;
+	}
+	// How the script's camera follows a thing: from how far, how quickly, at what heading, and whether the heading turns
+	// with the thing
+	camera->SetFollowSettings(distance, glideScale, angle, relative);
 }
 
 void EnableDisableMusic() // 181 ENABLE_DISABLE_MUSIC
@@ -3797,26 +3842,51 @@ void GetObjectLeashType() // 275 GET_OBJECT_LEASH_TYPE
 	Pushi(type == LeashType::None ? 0 : static_cast<int32_t>(type));
 }
 
+/// The thing a following command is given, and the script's camera, each complained of when missing
+std::pair<entt::entity, ScriptCameraModel*> FollowCommand(entt::entity thing)
+{
+	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	if (camera == nullptr)
+	{
+		ScriptMessage("Script camera has been removed! - Exception happened?");
+	}
+	const bool valid = thing != entt::null && Locator::entitiesRegistry::value().Valid(thing);
+	if (!valid)
+	{
+		ScriptMessage("Object no longer valid");
+	}
+	return {valid ? thing : entt::null, camera};
+}
+
 void SetFocusFollow() // 276 SET_FOCUS_FOLLOW
 {
-	// const auto target = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto [thing, camera] = FollowCommand(PopObject());
+	if (thing != entt::null && camera != nullptr)
+	{
+		// The script's camera keeps looking at the thing
+		camera->LookAt(FollowedThing(thing));
+	}
 }
 
 void SetPositionFollow() // 277 SET_POSITION_FOLLOW
 {
-	// const auto target = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto [thing, camera] = FollowCommand(PopObject());
+	if (thing != entt::null && camera != nullptr)
+	{
+		// The script's camera is put behind the thing, as far as eight times its height, and follows it
+		camera->Follow(FollowedThing(thing));
+	}
 }
 
 void SetFocusAndPositionFollow() // 278 SET_FOCUS_AND_POSITION_FOLLOW
 {
-	// const auto distance = Popf();
-	// const auto target = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto distance = Popf();
+	const auto [thing, camera] = FollowCommand(PopObject());
+	if (thing != entt::null && camera != nullptr)
+	{
+		// The script's camera is put at a distance from the thing, follows it and looks at it
+		camera->FollowAndLookAt(FollowedThing(thing), distance);
+	}
 }
 
 void SetCameraLens() // 279 SET_CAMERA_LENS
