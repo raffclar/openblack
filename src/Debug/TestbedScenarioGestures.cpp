@@ -111,6 +111,33 @@ void testbed_scenarios::AddGestureScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.gesture_sounds",
+	    .name = "The sounds of drawing gestures",
+	    .facet = Facet::Miracles,
+	    .description = "A shield seed is put in the hand and a circle is drawn round the middle of the screen with the "
+	                   "Action button held; then a storm seed is summoned from the player's worship, its two power-up "
+	                   "gestures are drawn (the inverse spiral, then the spiral) and a scribble shakes it off. The "
+	                   "failure on letting go of a storm with no circle is in miracles.hand_circle_casts, the leash "
+	                   "gesture's in leash.gesture_picker.",
+	    .expected = "While the circle is drawn with the Action button held, the hand hums (the gesture loop, heard from "
+	                "the hand) until it lets go and the shield is cast. Each recognised gesture but the scribble "
+	                "plays the recognition chime, heard without position, as its trail appears. Each power-up adds "
+	                "the band's sound and the announcer's power-up voice (first, then second). The scribble has no "
+	                "chime: the hand shakes the storm off with the shake sound. Drawing without the Action button "
+	                "makes no sound of its own.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {AfterDrawing(HoldSeed(SpellSeedType::Shield, 1.0f)), Draw(GestureType::Circle, 1.0f),
+	                 AfterDrawing({.kind = Kind::SummonSeed,
+	                               .delaySeconds = k_DrawSeconds,
+	                               .value = static_cast<size_t>(SpellSeedType::Storm)}),
+	                 Draw(GestureType::InverseSpiral, 1.0f), Draw(GestureType::Spiral), Draw(GestureType::Scribble)},
+	    .repeatFrom = 0,
+	    // The hand held over the middle of the land, inside the player's influence, where the circle is drawn
+	    .hand = HandHold {.offset = {0.0f, 0.0f}, .height = 6.0f},
+	});
+
+	all.push_back({
 	    .id = "leash.gesture_picker",
 	    .name = "The leash gesture and the leash picker",
 	    .facet = Facet::Leash,
