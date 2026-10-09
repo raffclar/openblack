@@ -115,6 +115,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
+#include "ECS/Systems/CreaturePenSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -844,6 +845,8 @@ bool Game::GameLogicLoop() noexcept
 		auto creaturePhysiology = profiler.BeginScoped(Profiler::Stage::CreaturePhysiologyUpdate);
 		Locator::creaturePhysiologySystem::value().ProcessTurn();
 	}
+	// A creature's home is its temple's pen, and in the pen it is shown smaller so that it fits
+	Locator::creaturePenSystem::value().ProcessTurn();
 	// The creatures' bodies follow their fatness, and their marks heal
 	Locator::creatureAnimationSystem::value().ProcessTurn();
 	Locator::creatureSkinSystem::value().ProcessTurn();

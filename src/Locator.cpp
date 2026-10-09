@@ -49,6 +49,7 @@
 #include "ECS/Systems/Implementations/CreatureMindSystem.h"
 #include "ECS/Systems/Implementations/CreatureModeSystem.h"
 #include "ECS/Systems/Implementations/CreatureObjectActionSystem.h"
+#include "ECS/Systems/Implementations/CreaturePenSystem.h"
 #include "ECS/Systems/Implementations/CreaturePhysiologySystem.h"
 #include "ECS/Systems/Implementations/CreatureSkinSystem.h"
 #include "ECS/Systems/Implementations/DynamicsSystem.h"
@@ -133,6 +134,7 @@ using openblack::ecs::systems::CreatureLocomotionSystem;
 using openblack::ecs::systems::CreatureMindSystem;
 using openblack::ecs::systems::CreatureModeSystem;
 using openblack::ecs::systems::CreatureObjectActionSystem;
+using openblack::ecs::systems::CreaturePenSystem;
 using openblack::ecs::systems::CreaturePhysiologySystem;
 using openblack::ecs::systems::CreatureSkinSystem;
 using openblack::ecs::systems::DynamicsSystem;
@@ -260,6 +262,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::footprintSystem::emplace<FootprintSystem>();
 	Locator::editorSystem::emplace<EditorSystem>();
 	Locator::creatureSkinSystem::emplace<CreatureSkinSystem>();
+	Locator::creaturePenSystem::emplace<CreaturePenSystem>();
 	Locator::leashSystem::emplace<LeashSystem>();
 	Locator::creatureFightSystem::emplace<CreatureFightSystem>();
 	Locator::creatureModeSystem::emplace<CreatureModeSystem>();
@@ -379,6 +382,7 @@ void openblack::ShutDownServices()
 	Locator::leashSystem::reset();
 	Locator::creatureMindSystem::reset();
 	Locator::creaturePhysiologySystem::reset();
+	Locator::creaturePenSystem::reset();
 	Locator::creatureSkinSystem::reset();
 	Locator::creatureHairSystem::reset();
 	Locator::footprintSystem::reset();

@@ -10,6 +10,8 @@
 #include "CitadelArchetype.h"
 
 #include <entt/fwd.hpp>
+#include <glm/gtx/euler_angles.hpp>
+#include <glm/mat3x3.hpp>
 
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
@@ -23,13 +25,14 @@ using namespace openblack;
 using namespace openblack::ecs::archetypes;
 using namespace openblack::ecs::components;
 
-entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames playerOwner, const glm::mat4& rotation,
-                                      const glm::vec3& size)
+entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames playerOwner, float yAngle, const glm::vec3& size)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
+	// The game's turn goes the other way round from the drawn one
+	const glm::mat3 rotation(glm::eulerAngleY(-yAngle));
 	registry.Assign<Transform>(entity, position, rotation, size);
-	registry.Assign<Temple>(entity, playerOwner);
+	registry.Assign<Temple>(entity, Temple {.owner = playerOwner, .yAngle = yAngle});
 	const auto meshId = entt::hashed_string("temple/b_first_temple_l3d");
 	registry.Assign<Mesh>(entity, meshId, static_cast<int8_t>(0), static_cast<int8_t>(0));
 	// Its outside is blended for its player's alignment, each vertex then set on the land
@@ -42,8 +45,8 @@ entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames pla
 	return entity;
 }
 
-entt::entity CitadelArchetype::CreatePlan(int32_t /*townId*/, const glm::vec3& position, PlayerNames playerOwner,
-                                          const glm::mat4& rotation, const glm::vec3& size)
+entt::entity CitadelArchetype::CreatePlan(int32_t /*townId*/, const glm::vec3& position, PlayerNames playerOwner, float yAngle,
+                                          const glm::vec3& size)
 {
-	return Create(position, playerOwner, rotation, size);
+	return Create(position, playerOwner, yAngle, size);
 }

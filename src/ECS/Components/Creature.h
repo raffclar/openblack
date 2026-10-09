@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <optional>
 #include <string>
 
 #include <entt/fwd.hpp>
@@ -38,6 +39,8 @@ struct Creature
 	float strength {0.5f};
 	/// How big the creature is: 1 is about 15 units tall, whatever its species' mesh
 	float size {1.0f};
+	/// The smaller size its body is shown at while it is in its temple's pen, its own size kept; none elsewhere
+	std::optional<float> penSize;
 	/// How many objects its miracles have destroyed
 	float objectsDestroyed {0.0f};
 	/// Whether a miracle that takes the last of its life knocks it out; a script can make it unable to die, when such a

@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <tuple>
 
-#include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/polar_coordinates.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
@@ -222,9 +221,10 @@ const std::array<const ScriptCommandSignature, 106> FeatureScriptCommands::k_Sig
     CREATE_COMMAND_BINDING("SET_LOST_TOWN_SCALE", SetLostTownScale),
 }};
 
-inline glm::mat4 GetRotation(int rotation)
+/// A script's turn in thousandths of a radian, as the game reads it
+inline float GetYAngle(int rotation)
 {
-	return glm::eulerAngleY(static_cast<float>(rotation) * -0.001f);
+	return static_cast<float>(rotation) * 0.001f;
 }
 
 inline glm::vec3 GetSize(int size)
@@ -388,13 +388,13 @@ void FeatureScriptCommands::CreateVillagerPos(glm::vec3 abodePosition, glm::vec3
 void FeatureScriptCommands::CreateCitadel(glm::vec3 position, int32_t, const std::string& playerOwner, int32_t rotation,
                                           int32_t size)
 {
-	CitadelArchetype::Create(position, GetPlayerName(playerOwner), GetRotation(rotation), GetSize(size));
+	CitadelArchetype::Create(position, GetPlayerName(playerOwner), GetYAngle(rotation), GetSize(size));
 }
 
 void FeatureScriptCommands::CreatePlannedCitadel(int32_t townId, glm::vec3 position, int32_t, const std::string& playerOwner,
                                                  int32_t rotation, int32_t size)
 {
-	CitadelArchetype::CreatePlan(townId, position, GetPlayerName(playerOwner), GetRotation(rotation), GetSize(size));
+	CitadelArchetype::CreatePlan(townId, position, GetPlayerName(playerOwner), GetYAngle(rotation), GetSize(size));
 }
 
 void FeatureScriptCommands::CreateCreaturePen([[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t, int32_t, int32_t)

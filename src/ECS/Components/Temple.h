@@ -43,6 +43,8 @@ struct TempleInteriorPart
 struct Temple
 {
 	PlayerNames owner;
+	/// How far round it is turned, in radians, as its heart keeps it: the pen's walls are measured from it
+	float yAngle {0.0f};
 	/// The game turn its heart last took the harm of a thrown thing
 	uint32_t lastHitTurn {0};
 	/// What its heart last beamed at, and when
