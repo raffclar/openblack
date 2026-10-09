@@ -17,6 +17,8 @@ permissions:
 
 jobs:
   clang-format-check:
+    # Pull requests labelled "ai-driven" skip CI
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'ai-driven') }}
     name: clang-format
     runs-on: ubuntu-latest
     steps:
@@ -58,6 +60,8 @@ jobs:
           tool_name: clang-format
 
   linelint:
+    # Pull requests labelled "ai-driven" skip CI
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'ai-driven') }}
     name: linelint
     runs-on: ubuntu-latest
     steps:
@@ -92,6 +96,8 @@ jobs:
           tool_name: linelint
 
   cmake-format-check:
+    # Pull requests labelled "ai-driven" skip CI
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'ai-driven') }}
     name: cmake-format
     runs-on: ubuntu-latest
     steps:
@@ -133,6 +139,8 @@ jobs:
           tool_name: cmake-format
 
   copyright-check:
+    # Pull requests labelled "ai-driven" skip CI
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'ai-driven') }}
     name: license_checker
     runs-on: ubuntu-latest
     steps:
@@ -172,6 +180,8 @@ jobs:
           tool_name: license_checker
 
   gradle-lint:
+    # Pull requests labelled "ai-driven" skip CI
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'ai-driven') }}
     name: gradle lint
     runs-on: ubuntu-latest
     steps:
