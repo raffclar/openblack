@@ -23,6 +23,9 @@
 // number of map units (a 65536th of ten metres) walked each turn, ten turns a second, so a walker goes a tenth of its
 // speed in metres each turn.
 //
+// The walk itself is in whole map units at whole game angles, as the game's: a walker faces one of 2048 directions, and
+// its step is worked out from the game's sine table, so it is a little shorter than its speed.
+//
 // Going round a circle: each time the walker's next step crosses into another map cell, and when it has walked as many
 // turns as the last look ahead found it could go, it looks along the arc of the circle it hugs, in the way it goes
 // round, for the first point where another circle in that cell (or a stretch of water or the land's edge nearby) cuts
@@ -55,16 +58,32 @@ constexpr float k_LandscapeBlockerRadius = 7.2f;
 [[nodiscard]] int32_t WholeSpeed(float metresPerSecond);
 /// How far a walker at this speed (metres a second) goes in a turn, in metres
 [[nodiscard]] float StepMetres(float metresPerSecond);
-/// How far a walker at this speed (metres a second) turns each turn going round a circle of this radius, in radians:
-/// its step over the radius
-[[nodiscard]] float OrbitTurn(float metresPerSecond, float radius);
+
+/// A map position (whole map units, a 65536th of ten metres) in metres, as the walk's geometry takes it
+[[nodiscard]] glm::vec2 ToPoint(glm::ivec2 whole);
+/// A point in metres as a map position, truncated
+[[nodiscard]] glm::ivec2 ToWhole(glm::vec2 metres);
+/// The square of the distance between two map positions, in metres
+[[nodiscard]] float MetresDistanceSq(glm::ivec2 a, glm::ivec2 b);
+
+/// The step a walker makes in a turn along a game angle (2048 to the circle, 0 along x, 512 along z), in whole map
+/// units: a sixteenth of its speed (whole units a turn) times the sine table's 65536ths, over 4096
+[[nodiscard]] glm::ivec2 StepAlong(uint16_t angle, int32_t wholeSpeed);
+/// Whether a walker is within its step (its speed in whole units) of a point
+[[nodiscard]] bool WithinStep(glm::ivec2 position, glm::ivec2 point, int32_t wholeSpeed);
+/// How many game angles a walker turns each turn going round a circle of this radius (metres): its step over the
+/// radius in game angles, truncated, and one more
+[[nodiscard]] uint16_t OrbitTurn(int32_t wholeSpeed, float radius);
+/// Which way a walker heading for a circle goes round it on reaching it: clockwise (x to the right, z up) when the
+/// circle's middle lies to the right of its step
+[[nodiscard]] bool GoesRoundClockwise(glm::ivec2 position, glm::ivec2 centre, glm::ivec2 step);
 
 /// When a walker starts to go round a circle it notes how far from its goal it is, in 128ths of a metre less one; it
 /// may only leave the circle once nearer the goal than that.
-[[nodiscard]] uint32_t EntryDistance(float metresFromGoal);
+[[nodiscard]] uint32_t EntryDistance(glm::ivec2 position, glm::ivec2 goal);
 /// Whether a walker going round a circle leaves it now: it is nearer its goal than when it started round, and the goal
 /// lies ahead of it, off to the side away from the way it turns.
-[[nodiscard]] bool LeavesCircle(glm::vec2 position, glm::vec2 goal, glm::vec2 step, uint32_t entryDistance, bool clockwise);
+[[nodiscard]] bool LeavesCircle(glm::ivec2 position, glm::ivec2 goal, glm::ivec2 step, uint32_t entryDistance, bool clockwise);
 
 /// A circle that can block a walker
 struct BlockingCircle
@@ -92,8 +111,8 @@ struct CircleSweep
 	std::optional<size_t> hugged;
 	/// The turns it goes round before it looks again; k_NoObstacleInReach for no end in reach
 	uint8_t turnsToObstacle;
-	/// The heading it now walks at, in radians, when it was turned
-	std::optional<float> heading;
+	/// The game angle it now walks at, when it was turned
+	std::optional<uint16_t> heading;
 	/// Whether the last circle it was handed over to was water, the land's edge or a fence
 	bool needsLookahead;
 };
@@ -101,14 +120,15 @@ struct CircleSweep
 /// What a walker going round a circle looks at
 struct CircleSweepInput
 {
-	glm::vec2 position;
-	glm::vec2 goal;
-	/// The circle the walker hugs
+	/// The walker's map position and its goal's, in whole map units
+	glm::ivec2 position;
+	glm::ivec2 goal;
+	/// The circle the walker hugs, in metres
 	glm::vec2 centre;
 	float radius;
 	bool clockwise;
-	/// The walker's speed in metres a second
-	float speed;
+	/// The walker's speed in whole map units a turn
+	int32_t wholeSpeed;
 	/// The circles that may block it, in the order the game comes across them
 	std::span<const BlockingCircle> blockers;
 };

@@ -14,13 +14,15 @@
 #include <algorithm>
 #include <array>
 
+#include "3D/MapCoords.h"
+#include "Common/GUtilsAngle.h"
+
 namespace openblack::ecs::wall_hug
 {
 
 namespace
 {
 
-constexpr float k_Pi = 3.1415927f;
 constexpr float k_FullTurn = 6.2831855f;
 /// A tenth of a degree, by which the walk round to a goal inside the circle ends short of facing it
 constexpr float k_TenthDegreeCos = 0.99999845f;
@@ -32,9 +34,9 @@ constexpr double k_SoonTurns = 4.0;
 /// How many circles a walker can be looked along in a turn
 constexpr int k_MostSweeps = 3;
 /// The walker faces a quarter turn round from the circle's middle, less an eighth of that for each radius it is
-/// away from the circle
-constexpr float k_QuarterTurn = k_Pi / 2.0f;
-constexpr float k_OutwardsPerRadius = k_QuarterTurn / 8.0f;
+/// away from the circle, in game angles
+constexpr int32_t k_QuarterTurn = 0x200;
+constexpr float k_OutwardsPerRadius = 64.0f;
 
 /// The game's two dimensional cross product: positive when b is clockwise of a with x right and y down
 [[nodiscard]] float Cross(glm::vec2 a, glm::vec2 b)
@@ -174,12 +176,13 @@ SingleSweep SweepOnce(const CircleSweepInput& input, glm::vec2 centre, float rad
 {
 	const bool clockwise = input.clockwise;
 	const auto blockers = input.blockers;
-	glm::vec2 dir = input.position - centre;
+	glm::vec2 dir = ToPoint(input.position) - centre;
 	const glm::vec2 origin = dir;
 	const float length = Normalise(dir);
 	overlap = static_cast<float>(static_cast<double>(length / radius) - 0.9);
-	const glm::vec2 toGoal = input.goal - centre;
-	const bool goalInside = toGoal.x * toGoal.x + toGoal.y * toGoal.y < radius * radius;
+	const glm::vec2 toGoal = ToPoint(input.goal) - centre;
+	// Whether the goal is inside is measured between map positions: the circle's middle made one first
+	const bool goalInside = MetresDistanceSq(input.goal, ToWhole(centre)) < radius * radius;
 
 	if (blockers.empty() && !goalInside)
 	{
@@ -291,7 +294,7 @@ SingleSweep SweepOnce(const CircleSweepInput& input, glm::vec2 centre, float rad
 	{
 		angle = k_FullTurn - angle;
 	}
-	const auto speed = static_cast<float>(WholeSpeed(input.speed));
+	const auto speed = static_cast<float>(input.wholeSpeed);
 	const double turns = static_cast<double>(angle * radius * 65536.0f) / (static_cast<double>(speed * 10.0f) * 1.5);
 	if (turns > k_MostTurns)
 	{
@@ -326,27 +329,71 @@ float StepMetres(float metresPerSecond)
 	return static_cast<float>(WholeSpeed(metresPerSecond)) / k_WholePerMetre;
 }
 
-float OrbitTurn(float metresPerSecond, float radius)
+glm::vec2 ToPoint(glm::ivec2 whole)
 {
-	return StepMetres(metresPerSecond) / radius;
+	// The whole number times a tenth of 65536, rounded once to a float, as the game's integer multiply does
+	return {map_coords::ToMetres(whole.x), map_coords::ToMetres(whole.y)};
 }
 
-uint32_t EntryDistance(float metresFromGoal)
+glm::ivec2 ToWhole(glm::vec2 metres)
 {
-	return static_cast<uint32_t>(std::max(static_cast<double>(metresFromGoal) * 128.0 - 1.0, 0.0));
+	return {map_coords::ToFixed(metres.x), map_coords::ToFixed(metres.y)};
 }
 
-bool LeavesCircle(glm::vec2 position, glm::vec2 goal, glm::vec2 step, uint32_t entryDistance, bool clockwise)
+float MetresDistanceSq(glm::ivec2 a, glm::ivec2 b)
+{
+	const glm::vec2 d = ToPoint(b - a);
+	return d.x * d.x + d.y * d.y;
+}
+
+glm::ivec2 StepAlong(uint16_t angle, int32_t wholeSpeed)
+{
+	const int32_t sixteenth = wholeSpeed >> 4;
+	return {(sixteenth * gutils::Cos(angle)) >> 12, (sixteenth * gutils::Sin(angle)) >> 12};
+}
+
+bool WithinStep(glm::ivec2 position, glm::ivec2 point, int32_t wholeSpeed)
+{
+	const auto dx = static_cast<float>(position.x - point.x);
+	const auto dz = static_cast<float>(position.y - point.y);
+	const auto r = static_cast<float>(wholeSpeed);
+	return dx * dx + dz * dz < r * r;
+}
+
+uint16_t OrbitTurn(int32_t wholeSpeed, float radius)
+{
+	// The step over the radius is the turn in radians; each operation rounds to a float
+	const float radians = static_cast<float>(wholeSpeed) / radius;
+	const float angle = radians * 2048.0f / k_FullTurn / k_WholePerMetre;
+	return static_cast<uint16_t>(static_cast<uint16_t>(map_coords::FtoL(angle)) + 1);
+}
+
+bool GoesRoundClockwise(glm::ivec2 position, glm::ivec2 centre, glm::ivec2 step)
+{
+	return Cross(ToPoint(position) - ToPoint(centre), ToPoint(step)) > 0.0f;
+}
+
+uint32_t EntryDistance(glm::ivec2 position, glm::ivec2 goal)
+{
+	const double metres = std::sqrt(static_cast<double>(MetresDistanceSq(position, goal)));
+	return static_cast<uint32_t>(std::max(metres * 128.0 - 1.0, 0.0));
+}
+
+bool LeavesCircle(glm::ivec2 position, glm::ivec2 goal, glm::ivec2 step, uint32_t entryDistance, bool clockwise)
 {
 	const auto turns = static_cast<float>(entryDistance);
 	const float limit = turns * (1.0f / 0x4000) * turns;
-	const glm::vec2 d = position - goal;
-	if (!(d.x * d.x + d.y * d.y < limit))
+	if (!(MetresDistanceSq(position, goal) < limit))
 	{
 		return false;
 	}
-	const float side = step.x * d.y - step.y * d.x;
-	const bool goalAhead = d.x * step.x + d.y * step.y < 0.0f;
+	// In whole units, each coordinate made a float on its own first
+	const float dx = static_cast<float>(static_cast<uint32_t>(position.x)) - static_cast<float>(static_cast<uint32_t>(goal.x));
+	const float dz = static_cast<float>(static_cast<uint32_t>(position.y)) - static_cast<float>(static_cast<uint32_t>(goal.y));
+	const auto sx = static_cast<float>(step.x);
+	const auto sz = static_cast<float>(step.y);
+	const float side = sx * dz - sz * dx;
+	const bool goalAhead = dx * sx + dz * sz < 0.0f;
 	return (clockwise ? side < 0.0f : side > 0.0f) && goalAhead;
 }
 
@@ -382,12 +429,11 @@ CircleSweep SweepCircle(const CircleSweepInput& input)
 		case SingleSweep::Kind::Turns:
 		{
 			result.turnsToObstacle = once.turns;
-			const glm::vec2 toCentre = centre - input.position;
-			const float offset = k_QuarterTurn - k_OutwardsPerRadius * overlap;
-			// In double precision, so every platform's arctangent agrees
-			const auto towards =
-			    static_cast<float>(std::atan2(static_cast<double>(toCentre.y), static_cast<double>(toCentre.x)));
-			result.heading = towards + (input.clockwise ? offset : -offset);
+			// A quarter turn round from facing the circle's middle, less a little outwards for each radius away
+			const int32_t towards = gutils::GetAngleFromXZ(input.position, ToWhole(centre));
+			const int32_t outwards = map_coords::FtoL(overlap * (input.clockwise ? k_OutwardsPerRadius : -k_OutwardsPerRadius));
+			const int32_t angle = towards + (input.clockwise ? k_QuarterTurn : -k_QuarterTurn) - outwards;
+			result.heading = static_cast<uint16_t>(angle & gutils::k_GameAngleMask);
 			return result;
 		}
 		}

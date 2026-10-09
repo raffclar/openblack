@@ -65,10 +65,19 @@ struct WallHugObjectReference
 struct WallHug
 {
 	glm::vec2 goal;
-	glm::vec2 step;
+	/// The step the walker makes each turn, in whole map units (a 65536th of ten metres); none until the walk is set up
+	glm::ivec2 step {0, 0};
 	float yAngle; // FIXME(bwrsandman): member is a little redundant with transform or atan on step could keep or not
 	/// In metres a second; the walk goes a tenth of it each turn
 	float speed;
+	/// The way the walker faces, in game angles (2048 to the circle)
+	uint16_t gameAngle {0};
+	/// Turns until a walker stepping straight to its goal aims at it again
+	int8_t turnsUntilStepRebuild {0};
+	/// Where the walk holds the walker, in whole map units, and where it last put it in metres: when something else
+	/// moves the walker the walk takes up its new place
+	glm::ivec2 position {0, 0};
+	glm::vec2 placedAt {-1.0f, -1.0f};
 };
 
 } // namespace openblack::ecs::components

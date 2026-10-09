@@ -26,6 +26,7 @@
 #include "3D/InfluenceCircle.h"
 #include "3D/L3DMesh.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Common/GUtilsAngle.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
@@ -174,6 +175,8 @@ void TurnTowards(entt::entity villager, const glm::vec3& point)
 		turn = std::copysign(k_WatchTurn, turn);
 	}
 	wallHug.yAngle += turn;
+	// Turning the walker turns the way its walk faces as well
+	wallHug.gameAngle = static_cast<uint16_t>(gutils::ConvertAngle3DToGame(wallHug.yAngle));
 	transform.rotation = glm::eulerAngleY(-wallHug.yAngle - std::numbers::pi_v<float> * 0.5f);
 }
 /// The awe of a villager's people at a miracle, heard now and then near the hand
