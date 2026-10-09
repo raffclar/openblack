@@ -1595,6 +1595,22 @@ void AddCombat(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "combat.fight_view",
+	    .name = "Watching a fight",
+	    .facet = Facet::Combat,
+	    .description = "The player's red tiger and a blue tiger are told to fight, both by themselves, while the camera "
+	                   "looks at the arena from within it. Play it with the hand: the Move button (left) on the blue "
+	                   "tiger strikes at once, the Action button (right) queues the move, on the red tiger it blocks and "
+	                   "on the ground it steps; hold either to charge a blow, and draw a star for the special move.",
+	    .expected = "After a second of looking, the camera flies to the side of the arena and then follows the duel "
+	                "side on, easing round as the tigers move, and the fight panel shows at the top left. Zooming far "
+	                "out leaves the fight; once it is over the view stays three seconds and gives the camera back.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 80.0f, 10.0f}, .look = {0.0f, 0.0f, 40.0f}},
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+	});
+
+	all.push_back({
 	    .id = "combat.player",
 	    .name = "Directing the player's creature",
 	    .facet = Facet::Combat,

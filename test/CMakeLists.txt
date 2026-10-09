@@ -203,6 +203,12 @@ openblack_setup_and_add_test(
   test_creature_footprints test_creature_footprints.cpp
 )
 openblack_setup_and_add_test(test_creature_fight test_creature_fight.cpp)
+openblack_setup_and_add_test(test_creature_arena test_creature_arena.cpp)
+openblack_setup_and_add_test(test_land_avoid test_land_avoid.cpp)
+openblack_setup_and_add_test(
+  test_creature_fight_system test_creature_fight_system.cpp
+)
+openblack_setup_and_add_test(test_fight_view test_fight_view.cpp)
 openblack_setup_and_add_test(test_leash_rope test_leash_rope.cpp)
 openblack_setup_and_add_test(test_leash_rules test_leash_rules.cpp)
 openblack_setup_and_add_test(test_leash_ownership test_leash_ownership.cpp)
