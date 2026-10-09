@@ -166,6 +166,7 @@
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
+#include "Gui/LoadingScreen.h"
 #include "Hand/HandFeel.h"
 #include "Input/GameActionMapInterface.h"
 #include "LHScriptX/Script.h"
@@ -276,6 +277,8 @@ Game::Game(Arguments&& args) noexcept
     : _gamePath(args.gamePath)
     , _startMap(args.startLevel)
     , _playVideo(args.playVideo)
+    , _preIntro(args.preIntro)
+    , _skipLogos(args.skipLogos)
     , _startTestbed(args.startTestbed || args.scenario.has_value())
     , _scenarioRequest(args.scenario)
     , _requestScreenshot(args.requestScreenshot)
@@ -343,6 +346,7 @@ Game::~Game() noexcept
 		Locator::miracleFxSystem::value().SetInterface(nullptr);
 	}
 	_interface.reset();
+	_loadingScreen.reset();
 	ShutDownServices();
 	SDL_Quit(); // todo: move to GameWindow
 	spdlog::shutdown();
@@ -1924,6 +1928,10 @@ bool Game::Initialize() noexcept
 		return false;
 	}
 
+	// The logos, the first run's pre-intro and the tips screen, which stays up while the rest loads. Closing the window
+	// meanwhile ends the game at its first frame
+	PlayStartupScreens();
+
 	auto& resources = Locator::resources::value();
 	auto& meshManager = resources.GetMeshes();
 	auto& textureManager = resources.GetTextures();
@@ -2642,7 +2650,7 @@ bool Game::Run() noexcept
 	return true;
 }
 
-bool Game::LoadMap(const std::filesystem::path& path) noexcept
+bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mode look) noexcept
 {
 	auto& fileSystem = Locator::filesystem::value();
 
@@ -2652,15 +2660,18 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 		return false;
 	}
 
+	BeginLoadingScreen(look);
 	const auto data = fileSystem.ReadAll(path);
 	const auto source = std::string(reinterpret_cast<const char*>(data.data()), data.size());
 
 	PrepareNewLand();
+	RenderLoadingFrame();
 
 	Script script;
 	try
 	{
-		script.Load(source);
+		// The tips screen is drawn again as the map's commands are carried out, when it is due
+		script.Load(source, [this]() { RenderLoadingFrame(); });
 	}
 	catch (const std::exception& e)
 	{
@@ -2691,7 +2702,9 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 		Locator::forestSystem::value().AssignForestsToTowns();
 	}
 
+	RenderLoadingFrame();
 	StartNewLand();
+	EndLoadingScreen();
 	return true;
 }
 
@@ -2702,9 +2715,13 @@ void Game::LoadTestbed() noexcept
 	{
 		Locator::vm::value().StopAllTasks();
 	}
+	BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
 	PrepareNewLand();
+	RenderLoadingFrame();
 	InitializeLevel(flat_land::Build());
 	SetUpLandscape();
+	RenderLoadingFrame();
+	EndLoadingScreen();
 
 	// Looking down over the middle of the map, from the south
 	const auto& land = Locator::terrainSystem::value();

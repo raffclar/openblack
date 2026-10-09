@@ -78,7 +78,9 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_hand_morph hand/test_hand_morph.cpp)
 openblack_setup_and_add_test(test_hand_grab hand/test_hand_grab.cpp)
-openblack_setup_and_add_test(test_hand_grab_system hand/test_hand_grab_system.cpp)
+openblack_setup_and_add_test(
+  test_hand_grab_system hand/test_hand_grab_system.cpp
+)
 openblack_setup_and_add_test(test_hand_feel hand/test_hand_feel.cpp)
 openblack_setup_and_add_test(test_hand_hold_pose test_hand_hold_pose.cpp)
 openblack_setup_and_add_test(test_tribal_power_spin test_tribal_power_spin.cpp)
@@ -344,4 +346,10 @@ endforeach ()
 # The full-screen videos' rules and system, over synthetic Bink files
 openblack_setup_and_add_test(test_video_rules video/test_video_rules.cpp)
 openblack_setup_and_add_test(test_video_system video/test_video_system.cpp)
-target_include_directories(test_video_system PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/bink)
+target_include_directories(
+  test_video_system PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/bink
+)
+# The loading screen's and the start-up screens' rules
+openblack_setup_and_add_test(
+  test_loading_screen_rules gui/test_loading_screen_rules.cpp
+)
