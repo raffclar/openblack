@@ -11,6 +11,7 @@
 
 #include <cstddef>
 
+#include "Graphics/UploadPacer.h"
 #include "Loaders.h"
 #include "ResourceManager.h"
 
@@ -67,8 +68,8 @@ public:
 
 	/// Once a frame: moves what the loading threads have finished into the caches, then hands them more of the
 	/// prefetched resources, until about `budget` bytes of them are loading. What they make reaches the graphics card
-	/// about `uploadBudget` bytes a frame, so no frame waits long for it.
-	virtual void UpdateLoading(size_t budget, size_t uploadBudget) = 0;
+	/// within `uploads` a frame, so no frame waits long for it.
+	virtual void UpdateLoading(size_t budget, graphics::UploadPacer::Allowance uploads) = 0;
 	/// Asks for every resource registered and not loaded yet to be loaded on the loading threads
 	virtual void PrefetchAll() = 0;
 	/// How many registered resources are not loaded yet

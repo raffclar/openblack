@@ -41,9 +41,9 @@ public:
 	ParticleBitmapManager& GetParticleBitmaps() override { return _particleBitmaps; }
 	GestureTemplatesManager& GetGestureTemplates() override { return _gestureTemplates; }
 
-	void UpdateLoading(size_t budget, size_t uploadBudget) override
+	void UpdateLoading(size_t budget, graphics::UploadPacer::Allowance uploads) override
 	{
-		_loadQueue.GetUploadPacer().BeginFrame(uploadBudget);
+		_loadQueue.GetUploadPacer().BeginFrame(uploads);
 		ForEachManager([](auto& manager) { manager.Collect(); });
 		// What is still loading counts against the budget, so no more is made in a frame than it allows
 		size_t loading = 0;

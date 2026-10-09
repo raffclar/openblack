@@ -200,7 +200,7 @@ TEST(ResourceCache, AskingForAResourceWaitingToUploadLetsItThrough)
 	FakeCache cache;
 	LoadQueue queue(1);
 	// A frame with room for one upload, and a load that makes two: it waits for the next frame, which won't come
-	queue.GetUploadPacer().BeginFrame(1);
+	queue.GetUploadPacer().BeginFrame({.bytes = 1});
 	std::atomic<bool> firstMade = false;
 	cache.Register(k_First, [&firstMade] {
 		UploadPacer::Pace(1);

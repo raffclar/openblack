@@ -53,12 +53,13 @@ void UploadPacer::Pace(size_t bytes)
 	}
 }
 
-void UploadPacer::BeginFrame(size_t bytes)
+void UploadPacer::BeginFrame(Allowance allowance)
 {
 	{
 		const std::scoped_lock lock(_mutex);
-		_allowance = bytes;
+		_allowance = allowance;
 		_uploaded = 0;
+		_uploadCount = 0;
 	}
 	_wake.notify_all();
 }
@@ -78,11 +79,20 @@ size_t UploadPacer::GetUploaded() const
 	return _uploaded;
 }
 
+size_t UploadPacer::GetUploadCount() const
+{
+	const std::scoped_lock lock(_mutex);
+	return _uploadCount;
+}
+
 void UploadPacer::Take(size_t bytes)
 {
 	std::unique_lock lock(_mutex);
 	_wake.wait(lock, [this, bytes] {
-		return _released || _hurries > 0 || _uploaded == 0 || bytes <= _allowance - std::min(_uploaded, _allowance);
+		const bool fits =
+		    _uploadCount < _allowance.uploads && bytes <= _allowance.bytes - std::min(_uploaded, _allowance.bytes);
+		return _released || _hurries > 0 || _uploadCount == 0 || fits;
 	});
 	_uploaded += bytes;
+	++_uploadCount;
 }

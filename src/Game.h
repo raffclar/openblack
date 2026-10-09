@@ -28,6 +28,7 @@
 #include "Common/Zoomer.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "EngineConfig.h"
+#include "Graphics/UploadPacer.h"
 #include "Input/ShortcutKeys.h"
 #include "Magic/HandHoldPoser.h"
 #include "Windowing/WindowingInterface.h" // For DisplayMode
@@ -117,10 +118,11 @@ class Game
 {
 public:
 	static constexpr auto k_TurnDuration = std::chrono::milliseconds(100);
-	/// About how many bytes of files the loading threads read at a time, and how many bytes of what they make may reach
-	/// the graphics card each frame, so no frame waits long for it
+	/// About how many bytes of files the loading threads read at a time, and how much of what they make may reach the
+	/// graphics card each frame, so no frame waits long for it: sixteen buffers or textures keep the renderer's share of a
+	/// loading frame to about 6 ms on Vulkan, where some models' hundreds of small parts made it 17 ms
 	static constexpr size_t k_FrameLoadBudget = 256 << 10;
-	static constexpr size_t k_FrameUploadBudget = 128 << 10;
+	static constexpr graphics::UploadPacer::Allowance k_FrameUploads {.bytes = 128 << 10, .uploads = 16};
 	static constexpr float k_TurnDurationMultiplierSlow = 2.0f;
 	static constexpr float k_TurnDurationMultiplierNormal = 1.0f;
 	static constexpr float k_TurnDurationMultiplierFast = 0.5f;

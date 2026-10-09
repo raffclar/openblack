@@ -2645,7 +2645,7 @@ bool Game::Run() noexcept
 	{
 		// What the loading threads finished goes into the caches, and they're given a little more
 		auto& resources = Locator::resources::value();
-		resources.UpdateLoading(k_FrameLoadBudget, k_FrameUploadBudget);
+		resources.UpdateLoading(k_FrameLoadBudget, k_FrameUploads);
 		if (_prefetchTimer.has_value() && resources.PendingCount() == 0)
 		{
 			_prefetchTimer.reset();

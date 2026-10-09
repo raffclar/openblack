@@ -52,7 +52,7 @@ private:
 TEST(UploadPacer, TheMainThreadIsNeverHeld)
 {
 	UploadPacer pacer;
-	pacer.BeginFrame(10);
+	pacer.BeginFrame({.bytes = 10});
 	UploadPacer::Pace(1000);
 	UploadPacer::Pace(1000);
 	EXPECT_EQ(pacer.GetUploaded(), 0);
@@ -70,25 +70,51 @@ TEST(UploadPacer, BeforeTheFirstFrameEverythingGoes)
 TEST(UploadPacer, WhatDoesNotFitInAFrameWaitsForTheNext)
 {
 	UploadPacer pacer;
-	pacer.BeginFrame(150);
+	pacer.BeginFrame({.bytes = 150});
 	PacedUploads uploads(pacer);
 	// The first goes, as the first of a frame always does; the second would go over
 	std::this_thread::sleep_for(k_Settle);
 	EXPECT_EQ(uploads.Done(), 1);
-	pacer.BeginFrame(150);
+	pacer.BeginFrame({.bytes = 150});
 	uploads.Join();
 	EXPECT_EQ(uploads.Done(), 2);
 	EXPECT_EQ(pacer.GetUploaded(), 100);
 }
 
-TEST(UploadPacer, TheFirstUploadOfAFrameGoesHoweverLarge)
+TEST(UploadPacer, MoreUploadsThanAFrameHasRoomForWaitForTheNext)
 {
 	UploadPacer pacer;
-	pacer.BeginFrame(10);
+	// Room for every byte, but for only one buffer or texture
+	pacer.BeginFrame({.bytes = 1000, .uploads = 1});
 	PacedUploads uploads(pacer);
 	std::this_thread::sleep_for(k_Settle);
 	EXPECT_EQ(uploads.Done(), 1);
-	pacer.BeginFrame(10);
+	EXPECT_EQ(pacer.GetUploadCount(), 1);
+	pacer.BeginFrame({.bytes = 1000, .uploads = 1});
+	uploads.Join();
+	EXPECT_EQ(uploads.Done(), 2);
+	EXPECT_EQ(pacer.GetUploadCount(), 1);
+}
+
+TEST(UploadPacer, UploadsWithinBothAllowancesGoInOneFrame)
+{
+	UploadPacer pacer;
+	pacer.BeginFrame({.bytes = 200, .uploads = 2});
+	PacedUploads uploads(pacer);
+	uploads.Join();
+	EXPECT_EQ(uploads.Done(), 2);
+	EXPECT_EQ(pacer.GetUploaded(), 200);
+	EXPECT_EQ(pacer.GetUploadCount(), 2);
+}
+
+TEST(UploadPacer, TheFirstUploadOfAFrameGoesHoweverLarge)
+{
+	UploadPacer pacer;
+	pacer.BeginFrame({.bytes = 10});
+	PacedUploads uploads(pacer);
+	std::this_thread::sleep_for(k_Settle);
+	EXPECT_EQ(uploads.Done(), 1);
+	pacer.BeginFrame({.bytes = 10});
 	uploads.Join();
 	EXPECT_EQ(uploads.Done(), 2);
 }
@@ -96,7 +122,7 @@ TEST(UploadPacer, TheFirstUploadOfAFrameGoesHoweverLarge)
 TEST(UploadPacer, HurryingLetsEverythingThrough)
 {
 	UploadPacer pacer;
-	pacer.BeginFrame(150);
+	pacer.BeginFrame({.bytes = 150});
 	PacedUploads uploads(pacer);
 	std::this_thread::sleep_for(k_Settle);
 	{
@@ -109,7 +135,7 @@ TEST(UploadPacer, HurryingLetsEverythingThrough)
 TEST(UploadPacer, ReleasingLetsEverythingThrough)
 {
 	UploadPacer pacer;
-	pacer.BeginFrame(150);
+	pacer.BeginFrame({.bytes = 150});
 	PacedUploads uploads(pacer);
 	std::this_thread::sleep_for(k_Settle);
 	pacer.Release();
