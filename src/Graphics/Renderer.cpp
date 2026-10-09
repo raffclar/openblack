@@ -103,6 +103,7 @@
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
+#include "Graphics/BoneBudget.h"
 #include "Graphics/DebugLines.h"
 #include "Graphics/DetailLevel.h"
 #include "Graphics/FrameBuffer.h"
@@ -3779,15 +3780,17 @@ void Renderer::DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const
 	const auto proj = island.GetOrthoProj();
 	bgfx::setViewTransform(viewId, &view, &proj);
 
+	// Meshes without bones cast with the shader that declares only their model matrix
 	const auto* shader = _shaderManager->GetShader("ObjectShadowInstanced");
+	const auto* staticShader = _shaderManager->GetShader("ObjectShadowStaticInstanced");
 	const auto sun = glm::vec4(ObjectShadows::k_Sun, 0.0f);
 	shader->SetUniformValue("u_shadowSun", &sun);
+	staticShader->SetUniformValue("u_shadowSun", &sun);
 
 	const auto& meshManager = Locator::resources::value().GetMeshes();
 	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
 	L3DMeshSubmitDesc submitDesc = {};
 	submitDesc.viewId = RenderPass::ObjectShadow;
-	submitDesc.program = shader;
 	// Overlapping shadows cover the same texels, both sides of every triangle cast
 	submitDesc.state = BGFX_STATE_WRITE_R;
 
@@ -3809,6 +3812,8 @@ void Renderer::DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const
 				submitDesc.modelMatrices = mesh->GetBoneMatrices().data();
 				submitDesc.matrixCount = static_cast<uint8_t>(mesh->GetBoneMatrices().size());
 			}
+			submitDesc.program =
+			    bone_budget::For(submitDesc.matrixCount) == bone_budget::Budget::Single ? staticShader : shader;
 			DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 		}
 	};
@@ -4342,9 +4347,30 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	const auto* spriteShader = _shaderManager->GetShader("Sprite");
 	const auto* debugShaderInstanced = _shaderManager->GetShader("DebugLineInstanced");
 	const auto* objectShaderInstanced = _shaderManager->GetShader("ObjectInstanced");
+	const auto* objectShaderFewBonesInstanced = _shaderManager->GetShader("ObjectFewBonesInstanced");
 	const auto* objectShaderMorphInstanced = _shaderManager->GetShader("ObjectMorphInstanced");
 	const auto* objectShaderStaticInstanced = _shaderManager->GetShader("ObjectStaticInstanced");
 	const auto* objectShaderHeightMapInstanced = _shaderManager->GetShader("ObjectHeightMapInstanced");
+	const auto* objectShaderHeightMapStaticInstanced = _shaderManager->GetShader("ObjectHeightMapStaticInstanced");
+	// Each mesh is drawn with the shader declaring the fewest bones that hold its skeleton
+	const auto objectProgramFor = [&](uint8_t boneCount, bool morphWithTerrain) {
+		const auto budget = bone_budget::For(boneCount);
+		if (morphWithTerrain)
+		{
+			return budget == bone_budget::Budget::Single ? objectShaderHeightMapStaticInstanced
+			                                             : objectShaderHeightMapInstanced;
+		}
+		switch (budget)
+		{
+		case bone_budget::Budget::Single:
+			return objectShaderStaticInstanced;
+		case bone_budget::Budget::Few:
+			return objectShaderFewBonesInstanced;
+		case bone_budget::Budget::All:
+			break;
+		}
+		return objectShaderInstanced;
+	};
 	const auto* objectShaderLightmapInstanced = _shaderManager->GetShader("ObjectLightmapInstanced");
 	const auto* objectShaderReflectiveLightmapInstanced = _shaderManager->GetShader("ObjectReflectiveLightmapInstanced");
 
@@ -4638,9 +4664,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.joints = Locator::temple::value().GetDoors().GetJoints();
 				}
 				submitDesc.morphWithTerrain = placers.morphWithTerrain;
-				submitDesc.program = submitDesc.morphWithTerrain ? objectShaderHeightMapInstanced
-				                     : mesh->IsBoned()           ? objectShaderInstanced
-				                                                 : objectShaderStaticInstanced;
+				submitDesc.program = objectProgramFor(submitDesc.matrixCount, submitDesc.morphWithTerrain);
 				// Only the temple's meshes have lightmaps, and they don't stand on the land
 				submitDesc.lightmapProgram = submitDesc.morphWithTerrain ? nullptr
 				                             : placers.showsReflection   ? objectShaderReflectiveLightmapInstanced
@@ -4657,6 +4681,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.landLightScale = CreatureLandLightScale(desc.viewId);
 					submitDesc.modelMatrices = pose->bones.data();
 					submitDesc.matrixCount = static_cast<uint8_t>(pose->bones.size());
+					submitDesc.program = objectProgramFor(submitDesc.matrixCount, submitDesc.morphWithTerrain);
 					if (pose->morphTargets != nullptr)
 					{
 						submitDesc.program = objectShaderMorphInstanced;

@@ -1,11 +1,13 @@
 $input a_position, a_texcoord0, a_indices, i_data0, i_data1, i_data2, i_data3
 $output v_texcoord0
 
+#ifndef BGFX_CONFIG_MAX_BONES
 #if BGFX_SHADER_LANGUAGE_HLSL == 3
 #define BGFX_CONFIG_MAX_BONES 48
 #else
 #define BGFX_CONFIG_MAX_BONES 128
 #endif
+#endif // BGFX_CONFIG_MAX_BONES
 
 #include <bgfx_shader.sh>
 

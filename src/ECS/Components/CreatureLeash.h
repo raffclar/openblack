@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <bitset>
 #include <optional>
 
@@ -18,8 +19,10 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "Creature/CreatureDesires.h"
 #include "Creature/LeashRope.h"
 #include "Creature/LeashRules.h"
+#include "Creature/TempleLeashes.h"
 #include "Enums.h"
 
 namespace openblack::ecs::components
@@ -81,17 +84,67 @@ struct CreatureLeash
 	std::optional<glm::vec3> home;
 	/// Walking back into the area it is kept within
 	bool returning {false};
+
+	/// The order given with the leash that the creature carries out, and where it is marked
+	struct Order
+	{
+		/// The mind's count of agendas as it took the order, which a later agenda moves on from
+		uint32_t serial {0};
+		/// It was told to fight, which lasts as long as the fight does
+		bool fight {false};
+		/// What it was sent to, or where on the land
+		std::optional<entt::entity> object;
+		glm::vec3 point {0.0f};
+		/// The sparkles over the target, by their effect's number, 0 for none
+		uint32_t sparkles {0};
+		/// The ring its player sees and the footprint inside it
+		entt::entity ring {entt::null};
+		entt::entity footprint {entt::null};
+	};
+	std::optional<Order> order;
+
+	/// What the creature last said about an order, for its help to tell the player
+	enum class Help : uint8_t
+	{
+		None,
+		/// The desire it acts on
+		CurrentDesire,
+		/// It couldn't get where it was sent
+		Inaccessible,
+		/// The leash pulled it away from what it was doing
+		PulledAway,
+	};
+	Help help {Help::None};
+	std::optional<creature_desires::Desire> helpDesire;
+};
+
+/// A sprite of the marker over where a creature was sent with the leash
+struct LeashMarker
+{
+	entt::entity creature {entt::null};
 };
 
 /// One of the three leashes hanging at a citadel, which its player taps to pick that leash
 struct LeashPost
 {
-	/// The collar mesh the posts are drawn with, Data/Misc/leash.l3d
+	/// The collar mesh the posts are drawn with, Data/Misc/leash.l3d. Each player's leash of each kind has a copy of its
+	/// own (see temple_leashes::CollarMeshName), so that each is drawn with its own band of the leash texture and its own
+	/// slide of it.
 	static constexpr entt::id_type k_MeshId = entt::hashed_string("misc/leash");
+	/// The leash texture with its alpha, which the collars are drawn with in place of their own skin
+	static constexpr entt::id_type k_TextureId = entt::hashed_string("raw/leash+alpha");
 
 	LeashType type {LeashType::Rope};
 	PlayerNames owner {PlayerNames::PLAYER_ONE};
 	bool selected {false};
+	/// Where it hangs on the temple
+	glm::vec3 point {0.0f};
+	/// How it tumbles and glows
+	temple_leashes::Look look {};
+	/// It hangs there now: its player has a creature that knows it
+	bool hung {false};
+	/// The glow of smoke about it
+	entt::entity glow {entt::null};
 };
 
 } // namespace openblack::ecs::components

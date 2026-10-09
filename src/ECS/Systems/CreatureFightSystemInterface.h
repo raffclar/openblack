@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <chrono>
 #include <optional>
 
@@ -17,6 +19,7 @@
 
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureFightHud.h"
+#include "Enums.h"
 
 namespace openblack::ecs::systems
 {
@@ -38,6 +41,8 @@ public:
 		Busy,
 		/// The creature starting it isn't healthy enough
 		TooWeak,
+		/// There is no arena near enough, nor room for one
+		NoArena,
 	};
 
 	virtual ~CreatureFightSystemInterface() = default;
@@ -45,6 +50,9 @@ public:
 	/// Once a game turn, after the creatures have moved: fights start and end, moves are chosen and made, stamina comes
 	/// back, and creatures knocked out come round
 	virtual void ProcessTurn() = 0;
+	/// A new land: it forgets the press it held, the fight the camera watched and how long it looked at an arena, and
+	/// lets the player leave fights again; the creatures and their fights went with the old land
+	virtual void Reset() = 0;
 	/// Once a frame, by the game time, before the creatures are placed: the fight animations play, blows land and the
 	/// fighters move as their animations carry them
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
@@ -65,13 +73,26 @@ public:
 	virtual void SetAutoFighting(entt::entity creature, bool autoFight) = 0;
 	[[nodiscard]] virtual bool IsAutoFighting(entt::entity creature) const = 0;
 
-	/// The hand's button was pressed along a line of sight while the player's creature fights: whether the fight took
-	/// the press, which then charges a blow until it is let go
-	virtual bool Press(const glm::vec3& rayOrigin, const glm::vec3& rayDirection) = 0;
+	/// The player's creature, the first they got, while it duels
+	[[nodiscard]] virtual std::optional<entt::entity> PlayersFighter() const = 0;
+	/// One of the hand's buttons was pressed along a line of sight while the player's creature duels, at a time in
+	/// milliseconds and a game turn: whether the fight took the press. On the opponent it strikes high, in the middle or
+	/// low by where it lands, on the player's creature it blocks, and on the arena's ground it steps; the Move button
+	/// makes the move at once in place of those queued, the Action button adds it to the queue. A blow charges until the
+	/// button is let go.
+	virtual bool Press(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, creature_fight::Button button,
+	                   uint32_t milliseconds, uint32_t turn) = 0;
 	/// The button was let go after a press the fight took
-	virtual void Release() = 0;
+	virtual void Release(uint32_t milliseconds, uint32_t turn) = 0;
 	/// Whether a press the fight took is held
 	[[nodiscard]] virtual bool IsPressed() const = 0;
+	/// What the hand offers over a thing, or nothing, while the player's creature duels
+	[[nodiscard]] virtual std::optional<creature_fight::Tip> HandTip(std::optional<entt::entity> under) const = 0;
+	/// A gesture drawn while the player's creature duels: its special move, or a miracle it knows, cast in the fight.
+	/// Only taken while fewer than twelve moves are queued and the line from the creature to its opponent meets the
+	/// opponent's body. Whether it was taken.
+	virtual bool GestureSpecialMove() = 0;
+	virtual bool GestureSpell(MagicType type) = 0;
 
 	/// Whether a creature in a fight is blocking now
 	[[nodiscard]] virtual bool IsBlocking(entt::entity /*creature*/) const { return false; }
@@ -92,14 +113,17 @@ public:
 	/// The panel of the fight the player's creature is in, or else of any fight, if there is one
 	[[nodiscard]] virtual std::optional<creature_fight_hud::Values> GetPanel() const = 0;
 
-	/// Whether angry creatures pick fights by themselves, and whether the camera goes to watch the player's creature's
-	/// fights
+	/// Whether angry creatures pick fights by themselves, and whether the camera may watch fights
 	virtual void SetAngerStartsFights(bool enabled) = 0;
 	[[nodiscard]] virtual bool GetAngerStartsFights() const = 0;
 	virtual void SetCameraWatches(bool enabled) = 0;
 	[[nodiscard]] virtual bool GetCameraWatches() const = 0;
-	/// Whether the camera is watching the player's creature fight now
+	/// Whether the camera's fight view is watching a fight now
 	[[nodiscard]] virtual bool IsCameraOnFight() const = 0;
+	/// Whether the player may zoom out of the fight view, and the view ends by itself after the fight (scripts may forbid
+	/// it)
+	virtual void SetFightExit(bool /*allowed*/) {}
+	[[nodiscard]] virtual bool GetFightExit() const { return true; }
 };
 
 } // namespace openblack::ecs::systems
