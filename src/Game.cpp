@@ -2714,10 +2714,11 @@ void Game::LoadTestbed() noexcept
 
 void Game::PrepareNewLand()
 {
-	// The last land's scripts let go of what they held: what they made goes, everything else goes back to the game
+	// The last land's scripts forget what they held: the land's objects go with it before anything could be let go back
+	// into the game
 	if (Locator::scriptObjects::has_value())
 	{
-		Locator::scriptObjects::value().Reset();
+		Locator::scriptObjects::value().ClearForNewLand();
 	}
 	// A new land has no weather of the last one, and none of its script's fades, cinema bars or clipping
 	if (Locator::weatherSystem::has_value())
