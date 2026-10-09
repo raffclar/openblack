@@ -149,6 +149,7 @@ class CreatureCarryOverSystemInterface;
 class TornadoSystemInterface;
 class MagicShieldSystemInterface;
 class ForestSystemInterface;
+class FireflySystemInterface;
 class GestureSystemInterface;
 class MiracleFxSystemInterface;
 class FireSystemInterface;
@@ -245,6 +246,7 @@ struct Locator
 	using tornadoSystem = entt::locator<ecs::systems::TornadoSystemInterface>;
 	using magicShieldSystem = entt::locator<ecs::systems::MagicShieldSystemInterface>;
 	using forestSystem = entt::locator<ecs::systems::ForestSystemInterface>;
+	using fireflySystem = entt::locator<ecs::systems::FireflySystemInterface>;
 	using gestureSystem = entt::locator<ecs::systems::GestureSystemInterface>;
 	using miracleFxSystem = entt::locator<ecs::systems::MiracleFxSystemInterface>;
 	using fireSystem = entt::locator<ecs::systems::FireSystemInterface>;

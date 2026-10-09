@@ -17,6 +17,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -85,6 +86,8 @@ enum class Facet : uint8_t
 	/// Things thrown, dropped and knocked: how they fly, what they break and how they come to rest, and what a frame
 	/// costs meanwhile
 	Physics,
+	/// The land's nature: trees and their roots, fireflies
+	Nature,
 
 	_Count
 };
@@ -252,6 +255,8 @@ struct ObjectSetup
 	std::optional<float> fullSize;
 	/// A villager or animal that has eaten poison
 	bool poisoned {false};
+	/// A firefly hides exactly where the thing stands, as a land's script places one
+	bool firefly {false};
 };
 
 /// A particle effect played on the land
@@ -575,6 +580,9 @@ struct Scenario
 	std::optional<float> logMiraclesEvery;
 	/// Objects thrown by the player's hand
 	std::vector<ThrowSetup> throws;
+	/// The weights a caught firefly's miracle is drawn by, by the miracles' names, as a land's script sets them; the
+	/// testbed's land sets none
+	std::vector<std::pair<std::string_view, float>> fireflyRewards;
 };
 
 /// The miracles' scenarios, added to every scenario by the registry
@@ -602,6 +610,8 @@ void AddFlockScenarios(std::vector<Scenario>& all);
 void AddTeleportScenarios(std::vector<Scenario>& all);
 /// The tornado's scenarios: through a village and a wood, and meeting a creature
 void AddTornadoScenarios(std::vector<Scenario>& all);
+/// The land's nature: a tree pulled up leaving its roots, and the fireflies at nightfall
+void AddNatureScenarios(std::vector<Scenario>& all);
 /// The shield and forest miracles: what each shield stops and what it costs, the forest on each ground, growing and
 /// withering
 void AddShieldForestScenarios(std::vector<Scenario>& all);
