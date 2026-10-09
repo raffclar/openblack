@@ -109,6 +109,7 @@
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
+#include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
@@ -881,6 +882,8 @@ bool Game::GameLogicLoop() noexcept
 		// Fights start and end, the fighters choose their moves, and creatures knocked out come round
 		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
 		Locator::creatureFightSystem::value().ProcessTurn();
+		// Creatures fizz on out of sight or back in, after they have acted
+		Locator::creatureFizzSystem::value().ProcessTurn();
 	}
 	{
 		auto actions = profiler.BeginScoped(Profiler::Stage::LivingActionUpdate);

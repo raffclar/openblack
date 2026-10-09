@@ -104,6 +104,8 @@ struct CreatureKnockedOut
 	bool permanent {false};
 	/// Where it is taken, if it is taken home
 	std::optional<glm::vec3> home;
+	/// Game turns left of fizzing out of sight, or back in at home
+	uint16_t fizzTurns {0};
 };
 
 } // namespace openblack::ecs::components

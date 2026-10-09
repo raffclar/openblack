@@ -240,8 +240,7 @@ constexpr float k_MinLifeToFight = 0.1f;
 [[nodiscard]] bool HealthyEnoughToFight(float life);
 /// Knocked out, a creature lies 8 seconds and 4 more for each of its size
 [[nodiscard]] float FaintSeconds(float size);
-/// Taken home, it fades out and in this long, then waits this long before resting
-constexpr float k_FizzSeconds = 2.0f;
+/// Taken home (fizzing out and back in, see creature_fizz), it waits this long before resting
 constexpr float k_WaitAfterHomeSeconds = 3.0f;
 /// It rests until at least this healthy and no more exhausted than this, then gets up
 constexpr float k_GetUpLife = 0.4f;

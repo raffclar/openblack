@@ -130,9 +130,10 @@ void AddCreatureMode(std::vector<Scenario>& all)
 	    .description = "The player's tiger, its tiredness at 100%, away from the middle of the testbed with the camera "
 	                   "locked onto it.",
 	    .expected = "With the panel's tiredness at 100% the tiger passes out where it stands: it lies out cold for "
-	                "four times its size and eight seconds, fizzes out of sight over two seconds and back in over two at "
-	                "its pen, which on the testbed, with no temple, is the middle of the land; the camera follows it "
-	                "there. It lies a few seconds, rests until its life is 40% and its tiredness 30%, and gets up.",
+	                "four times its size and eight seconds, fizzes out of sight through static over two seconds with the "
+	                "teleport's energise sound and back in over two at its pen, which on the testbed, with no temple, is the "
+	                "middle of the land; the camera follows it there. It lies a few seconds, rests until its life is 40% "
+	                "and its tiredness 30%, and gets up.",
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {CreatureSetup {.label = "yours",
 	                                 .species = CreatureType::Tiger,

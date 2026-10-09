@@ -12,8 +12,10 @@
 #include "CreatureFightSystem.h"
 
 #include <cmath>
+#include <cstdint>
 
 #include <algorithm>
+#include <chrono>
 #include <limits>
 #include <vector>
 
@@ -28,6 +30,7 @@
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
 #include "Creature/CreatureFeedback.h"
+#include "Creature/CreatureFizz.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLocomotion.h"
@@ -47,6 +50,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
+#include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
@@ -70,6 +74,8 @@ namespace
 {
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 constexpr float k_TurnMs = k_TurnSeconds * 1000.0f;
+constexpr auto k_TurnMilliseconds =
+    static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(TimeSystemInterface::k_TurnDuration).count());
 /// Fighters turn to face their opponents this fast, in radians a second
 constexpr float k_FaceTurnRate = 3.0f;
 /// A blow lands on anything within this many units of its size of where it reaches, twice that for the special move
@@ -279,6 +285,24 @@ std::optional<glm::vec3> NoPen()
 	const auto& land = Locator::terrainSystem::value();
 	const auto middle = (land.GetExtent().minimum + land.GetExtent().maximum) * 0.5f;
 	return glm::vec3(middle.x, land.GetHeightAt(middle), middle.y);
+}
+
+/// Sets a creature fizzing out of sight or back in
+void SetFizz(entt::entity creature, float target, float seconds)
+{
+	if (Locator::creatureFizzSystem::has_value())
+	{
+		Locator::creatureFizzSystem::value().SetFizz(creature, target, seconds, false);
+	}
+}
+
+/// Carried home and stopped part way, a creature is back in full sight at once
+void StopCarryingHome(entt::entity creature, const CreatureKnockedOut& knockedOut)
+{
+	if (knockedOut.stage == CreatureKnockedOut::Stage::FadingOut || knockedOut.stage == CreatureKnockedOut::Stage::FadingIn)
+	{
+		SetFizz(creature, 0.0f, 0.0f);
+	}
 }
 
 /// Whether a fighter faces its opponent closely enough to make a move
@@ -718,6 +742,7 @@ void CreatureFightSystem::KillPermanently(entt::entity creature)
 	KnockOut(creature);
 	if (auto* knockedOut = registry.TryGet<CreatureKnockedOut>(creature))
 	{
+		StopCarryingHome(creature, *knockedOut);
 		knockedOut->permanent = true;
 		knockedOut->stage = CreatureKnockedOut::Stage::Lying;
 	}
@@ -739,6 +764,7 @@ void CreatureFightSystem::Resurrect(entt::entity creature)
 	{
 		needs->needs.life = fight::k_GetUpLife;
 	}
+	StopCarryingHome(creature, *knockedOut);
 	knockedOut->permanent = false;
 	knockedOut->stage = CreatureKnockedOut::Stage::GettingUp;
 	knockedOut->seconds = 0.0f;
@@ -1682,7 +1708,10 @@ void CreatureFightSystem::ProcessKnockedOut()
 				// A player's creature is taken home; any other comes round where it lies
 				if (body.owner != PlayerNames::NEUTRAL)
 				{
+					// It fizzes out of sight where it lies, with the teleport's sound
 					next(CreatureKnockedOut::Stage::FadingOut);
+					knockedOut.fizzTurns = creature_fizz::TurnsOf(creature_fizz::k_CarryHomeSeconds, k_TurnMilliseconds);
+					SetFizz(entity, 1.0f, creature_fizz::k_CarryHomeSeconds);
 				}
 				else
 				{
@@ -1691,25 +1720,30 @@ void CreatureFightSystem::ProcessKnockedOut()
 			}
 			break;
 		case CreatureKnockedOut::Stage::FadingOut:
-			if (knockedOut.seconds >= fight::k_FizzSeconds)
+			knockedOut.fizzTurns = knockedOut.fizzTurns > 0 ? knockedOut.fizzTurns - 1 : 0;
+			if (knockedOut.fizzTurns == 0)
 			{
+				// Out of sight, it is moved home and fizzes back into sight there
 				auto* locomotion = registry.TryGet<CreatureLocomotion>(entity);
 				if (knockedOut.home.has_value() && locomotion != nullptr)
 				{
 					PlaceAt(*locomotion, registry.Get<Transform>(entity), *knockedOut.home);
 					registry.SetDirty();
 				}
-				next(CreatureKnockedOut::Stage::FadingIn);
-			}
-			break;
-		case CreatureKnockedOut::Stage::FadingIn:
-			if (knockedOut.seconds >= fight::k_FizzSeconds)
-			{
+				SetFizz(entity, 0.0f, creature_fizz::k_CarryHomeSeconds);
 				// Home, it is no more exhausted or thirsty than it can bear, with a little energy
 				if (Locator::creaturePhysiologySystem::has_value())
 				{
 					Locator::creaturePhysiologySystem::value().WakeFromFaint(entity);
 				}
+				next(CreatureKnockedOut::Stage::FadingIn);
+				knockedOut.fizzTurns = creature_fizz::TurnsOf(creature_fizz::k_CarryHomeSeconds, k_TurnMilliseconds);
+			}
+			break;
+		case CreatureKnockedOut::Stage::FadingIn:
+			knockedOut.fizzTurns = knockedOut.fizzTurns > 0 ? knockedOut.fizzTurns - 1 : 0;
+			if (knockedOut.fizzTurns == 0)
+			{
 				next(CreatureKnockedOut::Stage::Waiting);
 			}
 			break;
