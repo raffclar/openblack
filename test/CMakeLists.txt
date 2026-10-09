@@ -433,4 +433,8 @@ if (OPENBLACK_INSPECTOR)
     test_inspector_game inspector/test_inspector_game.cpp
   )
   target_link_libraries(test_inspector_game PRIVATE inspector psys)
+  openblack_setup_and_add_test(
+    test_inspector_edit inspector/test_inspector_edit.cpp
+  )
+  target_link_libraries(test_inspector_edit PRIVATE inspector)
 endif ()

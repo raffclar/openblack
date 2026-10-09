@@ -55,6 +55,10 @@ Json openblack::inspector::ToJson(const QueryDescription& description, std::stri
 	{
 		result["needs_near"] = true;
 	}
+	if (description.writes)
+	{
+		result["writes"] = true;
+	}
 	return result;
 }
 
@@ -119,13 +123,14 @@ QueryResult Inspector::Describe(const Json& params) const
 		Json queries = Json::object();
 		for (const auto& description : provider->Describe())
 		{
-			queries[description.name] = description.description;
+			queries[description.name] = description.writes ? "(writes) " + description.description : description.description;
 		}
 		providers[std::string(provider->Name())] = std::move(queries);
 	}
 	return QueryResult::Value({
 	    {"providers", std::move(providers)},
-	    {"hint", "describe {\"provider\": name} or {\"query\": \"provider.query\"} for parameters"},
+	    {"hint", "describe {\"provider\": name} or {\"query\": \"provider.query\"} for parameters; \"writes\" lists the "
+	             "last changes made"},
 	});
 }
 
@@ -135,6 +140,10 @@ QueryResult Inspector::Answer(const Request& request) const
 	if (request.query == "ping")
 	{
 		return QueryResult::Value({{"pong", true}});
+	}
+	if (request.query == "writes")
+	{
+		return Writes(request);
 	}
 	if (request.query == "describe")
 	{
@@ -173,6 +182,10 @@ QueryResult Inspector::Answer(const Request& request) const
 	}
 
 	auto answered = provider->Run(queryName, QueryContext {.params = request.params, .options = request.options});
+	if (description->writes)
+	{
+		Remember(request, answered);
+	}
 	if (!answered.Ok())
 	{
 		return error(std::move(answered.error));
@@ -182,6 +195,34 @@ QueryResult Inspector::Answer(const Request& request) const
 		return QueryResult::Value(ShapeList(std::move(answered.value), request.options));
 	}
 	return QueryResult::Value(ShapeObject(answered.value, request.options));
+}
+
+QueryResult Inspector::Writes(const Request& request) const
+{
+	Json items = Json::array();
+	for (const auto& write : _writes)
+	{
+		items.push_back(write);
+	}
+	return QueryResult::Value(ShapeList(std::move(items), request.options));
+}
+
+void Inspector::Remember(const Request& request, const QueryResult& answer) const
+{
+	if (_writeLog)
+	{
+		_writeLog(request, answer);
+	}
+	Json write = {{"query", request.query}, {"params", request.params}, {"ok", answer.Ok()}};
+	if (!answer.Ok())
+	{
+		write["error"] = answer.error;
+	}
+	_writes.push_front(std::move(write));
+	if (_writes.size() > k_RememberedWrites)
+	{
+		_writes.pop_back();
+	}
 }
 
 std::string Inspector::Handle(std::string_view line) const

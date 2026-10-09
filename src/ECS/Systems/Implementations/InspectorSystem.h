@@ -27,6 +27,7 @@ namespace openblack::inspector
 {
 class GameProvider;
 class RunTargetInterface;
+class WorldEditInterface;
 } // namespace openblack::inspector
 
 namespace openblack::ecs::systems
@@ -50,6 +51,7 @@ private:
 	/// The components' reflection, the inspector's own rather than the library's shared one
 	std::unique_ptr<entt::meta_ctx> _reflection;
 	std::unique_ptr<inspector::RunTargetInterface> _runTarget;
+	std::unique_ptr<inspector::WorldEditInterface> _worldEdit;
 	inspector::Inspector _inspector;
 	/// Owned by the inspector, told of each frame
 	inspector::GameProvider* _game {nullptr};

@@ -198,6 +198,12 @@ endif ()
 if (OPENBLACK_INSPECTOR)
   target_link_libraries(openblack_lib PRIVATE inspector)
   target_compile_definitions(openblack_lib PUBLIC OPENBLACK_INSPECTOR)
+  # Every component's reflection in one file outgrows an object file's sections
+  if (MSVC)
+    set_source_files_properties(
+      Inspector/ComponentFields.cpp PROPERTIES COMPILE_OPTIONS /bigobj
+    )
+  endif ()
 endif ()
 
 target_compile_definitions(

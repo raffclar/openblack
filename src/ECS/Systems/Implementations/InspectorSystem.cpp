@@ -27,6 +27,8 @@
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "Game.h"
 #include "Inspector/ComponentReflection.h"
+#include "Inspector/EditProviders.h"
+#include "Inspector/GameWorldEdit.h"
 #include "Inspector/RegistryProviders.h"
 #include "Inspector/RunControl.h"
 #include "Inspector/WorldProviders.h"
@@ -109,11 +111,33 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
     : _server(std::move(server))
     , _reflection(std::make_unique<entt::meta_ctx>())
     , _runTarget(std::make_unique<GameRunTarget>())
+    , _worldEdit(std::make_unique<inspector::GameWorldEdit>())
 {
 	inspector::reflection::RegisterComponents(*_reflection);
+	_inspector.SetWriteLog([](const inspector::Request& request, const inspector::QueryResult& answer) {
+		if (answer.Ok())
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Inspector wrote: {} {}", request.query, inspector::Dump(request.params));
+		}
+		else
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Inspector refused: {} {}: {}", request.query,
+			                   inspector::Dump(request.params), answer.error);
+		}
+	});
 
 	_inspector.Add(std::make_unique<inspector::RegistryProvider>(RegistrySourcesFromLocator(), *_reflection));
 	_inspector.Add(std::make_unique<inspector::ObjectsProvider>(RegistrySourcesFromLocator()));
+	_inspector.Add(std::make_unique<inspector::EditProvider>(
+	    inspector::EditSources {
+	        .registry = []() -> ecs::Registry* {
+		        return Locator::entitiesRegistry::has_value() ? &Locator::entitiesRegistry::value() : nullptr;
+	        },
+	        .info = []() -> const InfoConstants* {
+		        return Locator::infoConstants::has_value() ? &Locator::infoConstants::value() : nullptr;
+	        },
+	    },
+	    *_reflection, *_worldEdit));
 	_inspector.Add(std::make_unique<inspector::SkyProvider>(inspector::SkySources {
 	    .scriptHour = []() -> std::optional<float> {
 		    if (!Locator::skySystem::has_value())

@@ -18,131 +18,55 @@
 #include <entt/meta/container.hpp>
 #include <entt/meta/meta.hpp>
 #include <entt/meta/resolve.hpp>
-#include <glm/mat3x3.hpp>
-#include <glm/vec2.hpp>
-#include <glm/vec3.hpp>
-#include <glm/vec4.hpp>
-
-#include "ECS/Components/Abode.h"
-#include "ECS/Components/Animal.h"
-#include "ECS/Components/Creature.h"
-#include "ECS/Components/Feature.h"
-#include "ECS/Components/Field.h"
-#include "ECS/Components/Fire.h"
-#include "ECS/Components/Fixed.h"
-#include "ECS/Components/Mobile.h"
-#include "ECS/Components/Player.h"
-#include "ECS/Components/Temple.h"
-#include "ECS/Components/Town.h"
-#include "ECS/Components/Transform.h"
-#include "ECS/Components/Tree.h"
-#include "ECS/Components/Villager.h"
 
 using namespace openblack::inspector;
-using namespace openblack::ecs::components;
 
 namespace
 {
 
-/// Nested structures are written this deep, and containers only this many of their first elements
-constexpr int k_DeepestNesting = 3;
-constexpr size_t k_MostElements = 16;
+Json AnyToJson(const entt::meta_any& any, int depth);
 
-template <typename Vector>
-Json VectorToJson(const Vector& vector)
+/// A registered field of a type by its name, and what is kept with it
+struct FoundField
 {
-	Json array = Json::array();
-	for (typename Vector::length_type i = 0; i < Vector::length(); ++i)
-	{
-		array.push_back(vector[i]);
-	}
-	return array;
-}
+	entt::meta_data data;
+	const reflection::FieldInfo* info;
+};
 
-/// A value of a type that JSON holds directly, none for any other
-std::optional<Json> LeafToJson(const entt::meta_any& any)
+std::optional<FoundField> FindField(const entt::meta_type& type, std::string_view name)
 {
-	if (const auto* value = any.try_cast<const bool>(); value != nullptr)
+	for (const auto& [id, data] : type.data())
 	{
-		return Json(*value);
-	}
-	if (const auto* value = any.try_cast<const float>(); value != nullptr)
-	{
-		return Json(*value);
-	}
-	if (const auto* value = any.try_cast<const double>(); value != nullptr)
-	{
-		return Json(*value);
-	}
-	if (const auto* value = any.try_cast<const int>(); value != nullptr)
-	{
-		return Json(*value);
-	}
-	if (const auto* value = any.try_cast<const uint32_t>(); value != nullptr)
-	{
-		return Json(*value);
-	}
-	if (const auto* value = any.try_cast<const int8_t>(); value != nullptr)
-	{
-		return Json(*value);
-	}
-	if (const auto* value = any.try_cast<const uint8_t>(); value != nullptr)
-	{
-		return Json(*value);
-	}
-	if (const auto* value = any.try_cast<const int16_t>(); value != nullptr)
-	{
-		return Json(*value);
-	}
-	if (const auto* value = any.try_cast<const uint16_t>(); value != nullptr)
-	{
-		return Json(*value);
-	}
-	if (const auto* value = any.try_cast<const int64_t>(); value != nullptr)
-	{
-		return Json(*value);
-	}
-	if (const auto* value = any.try_cast<const uint64_t>(); value != nullptr)
-	{
-		return Json(*value);
-	}
-	if (const auto* value = any.try_cast<const std::string>(); value != nullptr)
-	{
-		return Json(*value);
-	}
-	if (const auto* value = any.try_cast<const entt::entity>(); value != nullptr)
-	{
-		return *value == entt::null ? Json(nullptr) : Json(entt::to_integral(*value));
-	}
-	if (const auto* value = any.try_cast<const glm::vec2>(); value != nullptr)
-	{
-		return VectorToJson(*value);
-	}
-	if (const auto* value = any.try_cast<const glm::vec3>(); value != nullptr)
-	{
-		return VectorToJson(*value);
-	}
-	if (const auto* value = any.try_cast<const glm::vec4>(); value != nullptr)
-	{
-		return VectorToJson(*value);
-	}
-	if (const auto* value = any.try_cast<const glm::mat3>(); value != nullptr)
-	{
-		return Json {VectorToJson((*value)[0]), VectorToJson((*value)[1]), VectorToJson((*value)[2])};
+		const reflection::FieldInfo* info = data.custom();
+		if (info != nullptr && info->name == name)
+		{
+			return FoundField {.data = data, .info = info};
+		}
 	}
 	return std::nullopt;
 }
 
-Json AnyToJson(const entt::meta_any& any, int depth);
+Json FieldValueToJson(const entt::meta_data& data, const reflection::FieldInfo* info, const entt::meta_any& instance, int depth)
+{
+	const auto value = data.get(instance);
+	if (info != nullptr && info->encode != nullptr)
+	{
+		if (auto encoded = info->encode(value); encoded.has_value())
+		{
+			return *std::move(encoded);
+		}
+	}
+	return AnyToJson(value, depth + 1);
+}
 
 Json FieldsToJson(const entt::meta_any& any, int depth)
 {
 	Json object = Json::object();
 	for (const auto& [id, data] : any.type().data())
 	{
-		const reflection::FieldName* name = data.custom();
-		const auto key = name != nullptr ? name->name : std::to_string(id);
-		object[key] = AnyToJson(data.get(any), depth + 1);
+		const reflection::FieldInfo* info = data.custom();
+		const auto key = info != nullptr ? info->name : std::to_string(id);
+		object[key] = FieldValueToJson(data, info, any, depth);
 	}
 	return object;
 }
@@ -153,20 +77,15 @@ Json AnyToJson(const entt::meta_any& any, int depth)
 	{
 		return nullptr;
 	}
-	if (auto leaf = LeafToJson(any); leaf.has_value())
-	{
-		return *std::move(leaf);
-	}
 	const auto type = any.type();
 	if (type.is_enum())
 	{
-		// An enumeration is written as its number
 		if (const auto number = any.allow_cast<int64_t>(); number)
 		{
 			return number.cast<int64_t>();
 		}
 	}
-	if (depth >= k_DeepestNesting)
+	if (depth >= reflection::k_DeepestNesting)
 	{
 		return "...";
 	}
@@ -180,13 +99,13 @@ Json AnyToJson(const entt::meta_any& any, int depth)
 		size_t count = 0;
 		for (auto element : sequence)
 		{
-			if (count++ == k_MostElements)
+			if (count++ == reflection::k_MostElements)
 			{
 				break;
 			}
 			array.push_back(AnyToJson(element, depth + 1));
 		}
-		if (sequence.size() <= k_MostElements)
+		if (sequence.size() <= reflection::k_MostElements)
 		{
 			return array;
 		}
@@ -200,7 +119,76 @@ Json AnyToJson(const entt::meta_any& any, int depth)
 	return "<" + reflection::ShortTypeName(type.info()) + ">";
 }
 
+/// Sets a field of a value by a dotted path; the value is a reference to where it is kept
+std::string SetPath(const entt::meta_ctx& context, entt::meta_any& instance, std::string_view path, const Json& json)
+{
+	const auto dot = path.find('.');
+	const auto name = path.substr(0, dot);
+	const auto field = FindField(instance.type(), name);
+	if (!field.has_value())
+	{
+		return "no field " + std::string(name) + " in " + reflection::ShortTypeName(instance.type().info());
+	}
+	if (dot != std::string_view::npos)
+	{
+		// Further into a nested value, reached by reference
+		auto nested = field->data.get(instance);
+		if (!nested || nested.type().data().begin() == nested.type().data().end())
+		{
+			return std::string(name) + " has no fields to set by name";
+		}
+		return SetPath(context, nested, path.substr(dot + 1), json);
+	}
+	std::string error;
+	if (field->info->decode != nullptr)
+	{
+		if (auto value = field->info->decode(context, json, error); value.has_value())
+		{
+			return field->data.set(instance, *std::move(value)) ? std::string {}
+			                                                    : std::string(name) + " can't be set: it is read only";
+		}
+	}
+	// A nested value set from an object of its fields, each in turn
+	auto nested = field->data.get(instance);
+	if (json.is_object() && nested && nested.type().data().begin() != nested.type().data().end())
+	{
+		for (const auto& [key, member] : json.items())
+		{
+			if (auto problem = SetPath(context, nested, key, member); !problem.empty())
+			{
+				return problem;
+			}
+		}
+		return {};
+	}
+	return std::string(name) + " " + error;
+}
+
 } // namespace
+
+std::string reflection::detail::Describe(const Json& value)
+{
+	switch (value.type())
+	{
+	case Json::value_t::null:
+		return "null";
+	case Json::value_t::boolean:
+		return "a boolean";
+	case Json::value_t::string:
+		return "a string";
+	case Json::value_t::array:
+		return "an array of " + std::to_string(value.size());
+	case Json::value_t::object:
+		return "an object";
+	case Json::value_t::number_float:
+		return "a number with a fraction";
+	case Json::value_t::number_integer:
+	case Json::value_t::number_unsigned:
+		return "a whole number";
+	default:
+		return "something else";
+	}
+}
 
 std::string reflection::ShortTypeName(const entt::type_info& info)
 {
@@ -239,82 +227,81 @@ Json reflection::ComponentToJson(const entt::meta_ctx& context, const entt::type
 	return FieldsToJson(type.from_void(component), 0);
 }
 
+std::optional<Json> reflection::ReadField(const entt::meta_ctx& context, const entt::type_info& info, const void* component,
+                                          std::string_view path)
+{
+	const auto type = entt::resolve(context, info);
+	if (!type || component == nullptr)
+	{
+		return std::nullopt;
+	}
+	auto instance = type.from_void(component);
+	while (true)
+	{
+		const auto dot = path.find('.');
+		const auto field = FindField(instance.type(), path.substr(0, dot));
+		if (!field.has_value())
+		{
+			return std::nullopt;
+		}
+		if (dot == std::string_view::npos)
+		{
+			return FieldValueToJson(field->data, field->info, instance, 0);
+		}
+		instance = field->data.get(instance);
+		path.remove_prefix(dot + 1);
+	}
+}
+
+std::string reflection::SetField(const entt::meta_ctx& context, const entt::type_info& info, void* component,
+                                 std::string_view path, const Json& value)
+{
+	const auto type = entt::resolve(context, info);
+	if (!type || type.data().begin() == type.data().end())
+	{
+		return ShortTypeName(info) + " has no fields registered";
+	}
+	if (component == nullptr)
+	{
+		return ShortTypeName(info) + " holds no data";
+	}
+	auto instance = type.from_void(component);
+	return SetPath(context, instance, path, value);
+}
+
+entt::sparse_set* reflection::FindStorage(entt::registry& registry, const entt::meta_ctx& context, std::string_view name)
+{
+	for (auto&& [id, storage] : registry.storage())
+	{
+		if (ShortTypeName(storage.type()) == name)
+		{
+			return &storage;
+		}
+	}
+	for (auto&& [id, type] : entt::resolve(context))
+	{
+		const ComponentInfo* info = type.custom();
+		if (info != nullptr && info->storage != nullptr && ShortTypeName(type.info()) == name)
+		{
+			return &info->storage(registry);
+		}
+	}
+	return nullptr;
+}
+
+const entt::sparse_set* reflection::FindStorage(const entt::registry& registry, std::string_view name)
+{
+	for (const auto& [id, storage] : registry.storage())
+	{
+		if (ShortTypeName(storage.type()) == name)
+		{
+			return &storage;
+		}
+	}
+	return nullptr;
+}
+
 void reflection::RegisterComponents(entt::meta_ctx& context)
 {
-	Reflect<Transform>(context)
-	    .Field<&Transform::position>("position")
-	    .Field<&Transform::rotation>("rotation")
-	    .Field<&Transform::scale>("scale");
-	Reflect<Fixed>(context).Field<&Fixed::boundingCenter>("boundingCenter").Field<&Fixed::boundingRadius>("boundingRadius");
-	Reflect<Villager>(context)
-	    .Field<&Villager::life>("life")
-	    .Field<&Villager::birthTurn>("birthTurn")
-	    .Field<&Villager::food>("food")
-	    .Field<&Villager::lifeStage>("lifeStage")
-	    .Field<&Villager::sex>("sex")
-	    .Field<&Villager::tribe>("tribe")
-	    .Field<&Villager::number>("number")
-	    .Field<&Villager::task>("task")
-	    .Field<&Villager::town>("town")
-	    .Field<&Villager::abode>("abode")
-	    .Field<&Villager::carried>("carried");
-	Reflect<Abode>(context)
-	    .Field<&Abode::type>("type")
-	    .Field<&Abode::townId>("townId")
-	    .Field<&Abode::foodAmount>("foodAmount")
-	    .Field<&Abode::woodAmount>("woodAmount")
-	    .Field<&Abode::inhabitants>("inhabitants")
-	    .Field<&Abode::presentAtHome>("presentAtHome")
-	    .Field<&Abode::info>("info");
-	Reflect<Tree>(context).Field<&Tree::type>("type").Field<&Tree::maxSize>("maxSize").Field<&Tree::turnsToGrowth>(
-	    "turnsToGrowth");
-	Reflect<Feature>(context).Field<&Feature::type>("type");
-	Reflect<Field>(context).Field<&Field::town>("town").Field<&Field::type>("type").Field<&Field::growthTurn>("growthTurn");
-	Reflect<Animal>(context)
-	    .Field<&Animal::type>("type")
-	    .Field<&Animal::owner>("owner")
-	    .Field<&Animal::flock>("flock")
-	    .Field<&Animal::state>("state")
-	    .Field<&Animal::turnsInState>("turnsInState")
-	    .Field<&Animal::hunger>("hunger")
-	    .Field<&Animal::position>("position")
-	    .Field<&Animal::heading>("heading")
-	    .Field<&Animal::life>("life");
-	Reflect<Creature>(context)
-	    .Field<&Creature::owner>("owner")
-	    .Field<&Creature::leashable>("leashable")
-	    .Field<&Creature::species>("species")
-	    .Field<&Creature::alignment>("alignment")
-	    .Field<&Creature::fatness>("fatness")
-	    .Field<&Creature::strength>("strength")
-	    .Field<&Creature::size>("size")
-	    .Field<&Creature::objectsDestroyed>("objectsDestroyed")
-	    .Field<&Creature::canDie>("canDie");
-	Reflect<Town>(context)
-	    .Field<&Town::id>("id")
-	    .Field<&Town::owner>("owner")
-	    .Field<&Town::uninhabitable>("uninhabitable")
-	    .Field<&Town::homelessVillagers>("homelessVillagers")
-	    .Field<&Town::abodes>("abodes")
-	    .Field<&Town::playthings>("playthings")
-	    .Field<&Town::emergencyTurn>("emergencyTurn");
-	Reflect<Player>(context)
-	    .Field<&Player::name>("name")
-	    .Field<&Player::windResistance>("windResistance")
-	    .Field<&Player::villagersLost>("villagersLost")
-	    .Field<&Player::villagersKilled>("villagersKilled")
-	    .Field<&Player::sacrifices>("sacrifices");
-	Reflect<Temple>(context)
-	    .Field<&Temple::owner>("owner")
-	    .Field<&Temple::lastHitTurn>("lastHitTurn")
-	    .Field<&Temple::beamTarget>("beamTarget")
-	    .Field<&Temple::destroying>("destroying");
-	Reflect<Fire>(context)
-	    .Field<&Fire::source>("source")
-	    .Field<&Fire::player>("player")
-	    .Field<&Fire::root>("root")
-	    .Field<&Fire::createdTurn>("createdTurn")
-	    .Field<&Fire::reaction>("reaction");
-	Reflect<MobileStatic>(context).Field<&MobileStatic::type>("type");
-	Reflect<MobileObject>(context).Field<&MobileObject::type>("type");
+	RegisterComponentFields(context);
 }

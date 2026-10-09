@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <functional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -48,6 +49,8 @@ struct QueryDescription
 	ResultKind kind {ResultKind::Object};
 	/// The query searches around a point and needs "near" and "radius"
 	bool needsNear {false};
+	/// The query changes the game rather than only reading it: it is logged, and describe marks it
+	bool writes {false};
 };
 
 /// What a query answers: a value, or why it couldn't
@@ -83,6 +86,58 @@ public:
 	/// Answers a query by its name within the provider: an object, or for a list query an array of items. List items
 	/// that have a place give it as "position": [x, y, z], for the searches around a point.
 	[[nodiscard]] virtual QueryResult Run(std::string_view query, const QueryContext& context) = 0;
+};
+
+/// A provider made of functions, one for each of its queries, for a provider whose queries need no state of their own
+class FunctionProvider final: public ProviderInterface
+{
+public:
+	using Function = std::function<QueryResult(const QueryContext& context)>;
+
+	explicit FunctionProvider(std::string name)
+	    : _name(std::move(name))
+	{
+	}
+
+	/// Adds a query answered by a function
+	FunctionProvider& Add(QueryDescription description, Function function)
+	{
+		_queries.push_back({.description = std::move(description), .function = std::move(function)});
+		return *this;
+	}
+
+	[[nodiscard]] std::string_view Name() const override { return _name; }
+	[[nodiscard]] std::vector<QueryDescription> Describe() const override
+	{
+		std::vector<QueryDescription> descriptions;
+		descriptions.reserve(_queries.size());
+		for (const auto& query : _queries)
+		{
+			descriptions.push_back(query.description);
+		}
+		return descriptions;
+	}
+	[[nodiscard]] QueryResult Run(std::string_view query, const QueryContext& context) override
+	{
+		for (const auto& each : _queries)
+		{
+			if (each.description.name == query)
+			{
+				return each.function(context);
+			}
+		}
+		return QueryResult::Error("no query " + _name + "." + std::string(query));
+	}
+
+private:
+	struct Query
+	{
+		QueryDescription description;
+		Function function;
+	};
+
+	std::string _name;
+	std::vector<Query> _queries;
 };
 
 } // namespace openblack::inspector

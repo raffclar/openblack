@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <deque>
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -24,11 +26,21 @@ namespace openblack::inspector
 /// The inspector's providers, and the answering of requests: each request's query is found by its provider and name,
 /// its required parameters checked, run, and its result shaped by the query language.
 ///
-/// Two queries are always there: "describe", the providers and their queries (all of one provider's in full with
-/// {"provider": name}, or a single query's with {"query": "provider.name"}), and "ping".
+/// Three queries are always there: "describe", the providers and their queries (all of one provider's in full with
+/// {"provider": name}, or a single query's with {"query": "provider.name"}); "ping"; and "writes", the last queries that
+/// changed the game, newest first, with what they answered.
+///
+/// Queries that write are told to the write log as they are answered, whether they could be or not.
 class Inspector
 {
 public:
+	/// Told of each query that writes, with its answer
+	using WriteLog = std::function<void(const Request& request, const QueryResult& answer)>;
+	/// How many of the last writes "writes" remembers
+	static constexpr size_t k_RememberedWrites = 50;
+
+	void SetWriteLog(WriteLog log) { _writeLog = std::move(log); }
+
 	/// Adds a provider, replacing one of the same name
 	void Add(std::unique_ptr<ProviderInterface> provider);
 	[[nodiscard]] ProviderInterface* Find(std::string_view name) const;
@@ -41,8 +53,13 @@ public:
 
 private:
 	[[nodiscard]] QueryResult Describe(const Json& params) const;
+	[[nodiscard]] QueryResult Writes(const Request& request) const;
+	void Remember(const Request& request, const QueryResult& answer) const;
 
 	std::vector<std::unique_ptr<ProviderInterface>> _providers;
+	WriteLog _writeLog;
+	/// Kept as requests are answered, which reading the game's state doesn't change
+	mutable std::deque<Json> _writes;
 };
 
 /// A query's description as JSON
