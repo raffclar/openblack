@@ -32,6 +32,8 @@ public:
 	void RegisterPlayers() override;
 	void AddPlayer(entt::entity playerEntity) override;
 	[[nodiscard]] entt::entity GetPlayer(PlayerNames playerName) const override;
+	void AddCreature(entt::entity creature) override;
+	[[nodiscard]] std::optional<entt::entity> GetPrimaryCreature(PlayerNames name) const override;
 	void KeepForNextLand() override;
 	void TakeUpKept(entt::entity playerEntity) override;
 
