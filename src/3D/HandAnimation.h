@@ -80,6 +80,8 @@ public:
 	/// A frame of the hand holding a miracle's seed: a still frame of a cycle, without leaning. Taking hold, and letting
 	/// go (the next Update), cross-fade from the last pose; changing how it holds doesn't.
 	void UpdateHeld(std::chrono::microseconds dt, Cycle cycle, uint32_t timeMs, glm::ivec2 cursor);
+	/// The spring-smoothed copy of the cursor catches it up at once, so no lean is left to build up from
+	void SettleCursor(glm::ivec2 cursor);
 	/// How far the cursor runs ahead of the spring-smoothed copy of it, in pixels: positive when the smoothed copy is to the
 	/// right of the cursor, and when the cursor is below it
 	[[nodiscard]] glm::vec2 GetCursorLag() const { return _cursorLag; }
