@@ -20,6 +20,7 @@
 #include <limits>
 #include <memory>
 #include <ranges>
+#include <string>
 #include <system_error>
 #include <type_traits>
 #include <variant>

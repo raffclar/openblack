@@ -10,6 +10,7 @@
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <vector>
 
 #include <entt/entity/fwd.hpp>

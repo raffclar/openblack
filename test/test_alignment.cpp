@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <array>
+#include <chrono>
 #include <memory>
 #include <span>
 
