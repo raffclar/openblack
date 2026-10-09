@@ -422,10 +422,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 
-		    // A body sunk wholly under the sea isn't drawn
+		    // A body sunk wholly under the sea isn't drawn in any pass, its shadow included
 		    if (drawn != nullptr && drawn->underSea)
 		    {
 			    look.z = 1.0f;
+			    modelMatrix = glm::mat4(0.0f);
 		    }
 
 		    const uint32_t idx = slots->second.offset + slots->second.filled;

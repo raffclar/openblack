@@ -278,7 +278,8 @@ std::vector<physics::temple_heart::Town> HeartTowns(PlayerNames owner)
 	return lists;
 }
 
-/// The spot visual a temple's heart fires its beams from, made the first time it beams
+/// The spot visual a temple's heart fires its beams from, made the first time it beams; tried again on a later beam when
+/// it couldn't be made
 std::optional<ParticleSystemInterface::EffectId> HeartBeamSource(entt::entity heart, Temple& temple)
 {
 	if (!Locator::particleSystem::has_value())
@@ -290,6 +291,10 @@ std::optional<ParticleSystemInterface::EffectId> HeartBeamSource(entt::entity he
 		auto& particles = Locator::particleSystem::value();
 		const auto& position = Entities().Get<const Transform>(heart).position;
 		const auto id = particles.StartSpotVisual(SpotVisualType::MagicBeamOnCitadel, position, -1, entt::null, 1.0f);
+		if (id == ParticleSystemInterface::k_NoEffect)
+		{
+			return std::nullopt;
+		}
 		particles.SetPlayer(id, static_cast<int>(temple.owner));
 		temple.beamSource = id;
 	}
@@ -325,11 +330,12 @@ void BeamAtTarget(entt::entity heart, Temple& temple, entt::entity target)
 		return;
 	}
 	const auto heartPosition = Entities().Get<const Transform>(heart).position;
+	// The beam sounds take their turns whether or not they can be heard
+	auto& next = Entities().Context().nextHeartBeamSound;
+	const auto sound = k_HeartBeamSounds.at(next);
+	next = (next + 1) % temple_heart::k_BeamSounds;
 	if (Locator::audio::has_value())
 	{
-		auto& next = Entities().Context().nextHeartBeamSound;
-		const auto sound = k_HeartBeamSounds.at(next);
-		next = (next + 1) % temple_heart::k_BeamSounds;
 		Locator::audio::value().StartSoundEffect(sound.value(), {.position = heartPosition, .owner = heart});
 	}
 	Locator::particleSystem::value().AddPlasma(*source, {
