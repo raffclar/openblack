@@ -38,6 +38,8 @@ private:
 	void PrepareTreeDrawDescs(bool drawBoundingBox);
 	/// Each returns false when an instance had no room left in its mesh's draw list, which must then be made again
 	bool UploadInstances(bool drawBoundingBox);
+	/// The bones of the villagers placed with the instances, for the vertex shader to read
+	void UploadBonePalette();
 	/// The broken and unfinished buildings drawn as far up as they stand
 	void UploadPartialBuilds();
 	bool UploadTreeInstances(bool drawBoundingBox);
@@ -51,6 +53,8 @@ private:
 		bool perEntity;
 		/// The height of the mesh's bounding box, for the trees
 		float height;
+		/// The instances are villagers whose bones go into the bone palette
+		bool bonePalette {false};
 	};
 	std::unordered_map<entt::id_type, InstanceSlots> _instanceSlots;
 	std::unordered_map<entt::id_type, InstanceSlots> _treeSlots;

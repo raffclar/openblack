@@ -10,13 +10,20 @@
 #pragma once
 
 #include <map>
+#include <memory>
 #include <vector>
 
 #include <entt/fwd.hpp>
 #include <glm/mat4x4.hpp>
+#include <glm/vec4.hpp>
 
 #include "Graphics/GraphicsHandle.h"
 #include "Graphics/Mesh.h"
+
+namespace openblack::graphics
+{
+class Texture2D;
+}
 
 namespace openblack::ecs::systems
 {
@@ -66,6 +73,10 @@ struct RenderContext
 		bool instanceAlpha {false};
 		/// The instances are drawn one by one, each posed and shaped as its entity is: the creatures
 		bool perEntity {false};
+		/// The instances are all villagers, drawn together in one draw with each one's bones read from the bone palette
+		bool bonePalette {false};
+		/// How many of the instances are placed this frame, from the first
+		uint32_t filled {0};
 		/// How far the instances' textures have slid across them
 		glm::vec2 uvOffset {0.0f};
 		/// Textures some of the submeshes are drawn with in place of their skins, by submesh: the temple's scrolls
@@ -88,9 +99,15 @@ struct RenderContext
 		/// x: 1 while someone is home, which lights its windows at night. y: a colour, 0xRRGGBB, the land's light on it
 		/// is multiplied by, or 0 for none. z: 1 while it isn't drawn at all, or minus the share of it fizzed out of sight. w:
 		/// how much of the snow lying under it shows on it, of 256, and the most it shows, or 0 for all of it.
+		/// A villager drawn from the bone palette carries where its bones start in it in the w of the model matrix's first
+		/// column (see graphics::bone_palette).
 		glm::vec4 look {0.0f};
 	};
 	std::vector<ObjectInstance> instanceUniforms;
+	/// The bones of the villagers drawn this frame, refilled with the instances, and the texture the vertex shader reads
+	/// them from (see graphics::bone_palette)
+	std::vector<glm::vec4> bonePalette;
+	std::unique_ptr<graphics::Texture2D> bonePaletteTexture;
 
 	/// Tree instance data: the tree's matrix, swaying or bent
 	struct TreeInstanceData

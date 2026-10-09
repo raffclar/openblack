@@ -1042,6 +1042,10 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			{
 				setSampler(MeshUniform::Environment, 5, *desc.environment);
 			}
+			if (desc.bonePalette != nullptr && has(MeshUniform::BonePalette))
+			{
+				setSampler(MeshUniform::BonePalette, 2, *desc.bonePalette); // vs
+			}
 			if (desc.morphWithTerrain)
 			{
 				setSampler(MeshUniform::Heightmap, 1, heightMap);     // vs
@@ -4472,6 +4476,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 		}
 		return objectShaderInstanced;
 	};
+	const auto* objectShaderPaletteInstanced = _shaderManager->GetShader("ObjectPaletteInstanced");
 	const auto* objectShaderLightmapInstanced = _shaderManager->GetShader("ObjectLightmapInstanced");
 	const auto* objectShaderReflectiveLightmapInstanced = _shaderManager->GetShader("ObjectReflectiveLightmapInstanced");
 
@@ -4704,6 +4709,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			{
 				std::span<const glm::mat4> bones;
 				const L3DMeshSubmitDesc::MorphTargets* morphTargets;
+				/// Each instance's bones are read from the bone palette, where its instance says they start
+				bool bonePalette {false};
 			};
 			const auto drawInstances = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers,
 			                               bool useMaterialBlending, uint32_t first, uint32_t count,
@@ -4777,12 +4784,22 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 
 				submitDesc.morphTargets = nullptr;
+				submitDesc.bonePalette = nullptr;
 				if (pose != nullptr)
 				{
 					submitDesc.landLightScale = CreatureLandLightScale(desc.viewId);
 					submitDesc.modelMatrices = pose->bones.data();
 					submitDesc.matrixCount = static_cast<uint8_t>(pose->bones.size());
 					submitDesc.program = objectProgramFor(submitDesc.matrixCount, submitDesc.morphWithTerrain);
+					if (pose->bonePalette)
+					{
+						const static auto identity = glm::mat4(1.0f);
+						submitDesc.modelMatrices = &identity;
+						submitDesc.matrixCount = 1;
+						submitDesc.program = objectShaderPaletteInstanced;
+						submitDesc.lightmapProgram = nullptr;
+						submitDesc.bonePalette = renderCtx.bonePaletteTexture.get();
+					}
 					if (pose->morphTargets != nullptr)
 					{
 						submitDesc.program = objectShaderMorphInstanced;
@@ -4943,6 +4960,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					return;
 				}
+				// The villagers of a mesh drawn together from the bone palette
+				if (placers->second.bonePalette && renderCtx.bonePaletteTexture)
+				{
+					return;
+				}
 				const auto model = meshManager.Handle(mesh->id);
 				const bool posed = pose->bones.size() == model->GetBoneMatrices().size();
 				const EntityPose entityPose {.bones = posed ? std::span<const glm::mat4>(pose->bones)
@@ -4954,6 +4976,19 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			{
 				drawAnimal(entity, instance, false);
 				drawVillager(entity, instance);
+			}
+			// The villagers, a draw for each of their meshes, each instance posed by its own bones in the bone palette
+			if (renderCtx.bonePaletteTexture)
+			{
+				const EntityPose palettePose {.bones = {}, .morphTargets = nullptr, .bonePalette = true};
+				for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
+				{
+					if (placers.bonePalette && placers.filled > 0 &&
+					    !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
+					{
+						drawInstances(meshId, placers, placers.materialBlending, placers.offset, placers.filled, &palettePose);
+					}
+				}
 			}
 			DrawTempleUnderside(desc);
 			// In the temple, whose draws keep their order, the sun's glare comes after its solid parts, which hide it, and

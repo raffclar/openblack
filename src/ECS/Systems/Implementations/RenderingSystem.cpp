@@ -13,6 +13,8 @@
 
 #include <algorithm>
 #include <iostream>
+#include <memory>
+#include <span>
 #include <unordered_map>
 
 #include <glm/gtx/transform.hpp>
@@ -52,9 +54,11 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "Game.h"
+#include "Graphics/BonePalette.h"
 #include "Graphics/DebugLines.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/ShaderManager.h"
+#include "Graphics/Texture2D.h"
 #include "Locator.h"
 #include "Physics/DamageMesh.h"
 #include "Profiler.h"
@@ -94,6 +98,8 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		bool translucent;
 		std::optional<float> additiveShare;
 		bool instanceAlpha;
+		/// Every instance is a posed villager
+		bool villagers;
 	};
 	std::unordered_map<entt::id_type, MeshInstances> meshIds;
 
@@ -106,13 +112,15 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		                                                             .perEntity = false,
 		                                                             .translucent = false,
 		                                                             .additiveShare = std::nullopt,
-		                                                             .instanceAlpha = false}));
+		                                                             .instanceAlpha = false,
+		                                                             .villagers = true}));
 		count.first->second.count++;
 		// The things whose shadows Black & White bakes into the land (IsCastShadowAtNight), and its features
 		count.first->second.castsShadow |= registry.AnyOf<Abode, Feature, MobileStatic, StoragePit>(entity);
 		count.first->second.unlit |= registry.AnyOf<Unlit>(entity);
 		// The creatures and the animals are each posed as they are
 		count.first->second.perEntity |= registry.AnyOf<CreatureMorph, AnimalPose, VillagerPose>(entity);
+		count.first->second.villagers &= registry.AllOf<VillagerPose>(entity) && !morphWithTerrain;
 		if (const auto* translucent = registry.TryGet<const Translucent>(entity))
 		{
 			count.first->second.translucent = true;
@@ -170,14 +178,19 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		    std::forward_as_tuple(offset, desc.count, desc.morphWithTerrain, desc.castsShadow));
 		drawDesc->second.unlit = desc.unlit;
 		drawDesc->second.perEntity = desc.perEntity;
+		// The villagers of a mesh are drawn together, their bones read from the bone palette
+		drawDesc->second.bonePalette = desc.villagers;
 		// Blended by its materials, over the opaque things
 		drawDesc->second.materialBlending = desc.translucent;
 		drawDesc->second.translucent = desc.translucent;
 		drawDesc->second.additiveShare = desc.additiveShare;
 		drawDesc->second.instanceAlpha = desc.instanceAlpha;
-		_instanceSlots.emplace(
-		    meshId,
-		    InstanceSlots {.offset = offset, .count = desc.count, .filled = 0, .perEntity = desc.perEntity, .height = 0.0f});
+		_instanceSlots.emplace(meshId, InstanceSlots {.offset = offset,
+		                                              .count = desc.count,
+		                                              .filled = 0,
+		                                              .perEntity = desc.perEntity,
+		                                              .height = 0.0f,
+		                                              .bonePalette = desc.villagers});
 		offset += desc.count;
 	}
 
@@ -275,10 +288,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	// Set transforms for instanced draw at offsets
 	_renderContext.entityDraws.clear();
 	_renderContext.drawnObjects.clear();
+	_renderContext.bonePalette.clear();
+	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
 	bool fits = true;
 	registry.Each<const Mesh, const Transform>(
-	    [this, &registry, &vegetation, &fits, drawBoundingBox](entt::entity entity, const Mesh& mesh,
-	                                                           const Transform& transform) {
+	    [this, &registry, &vegetation, &meshes, &fits, drawBoundingBox](entt::entity entity, const Mesh& mesh,
+	                                                                    const Transform& transform) {
 		    // A mesh the draw lists don't have room for, which has changed since they were made
 		    const auto slots = _instanceSlots.find(DrawnMeshOf(entity, mesh));
 		    if (!fits || slots == _instanceSlots.end() || slots->second.filled >= slots->second.count)
@@ -428,6 +443,18 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 
 		    const uint32_t idx = slots->second.offset + slots->second.filled;
 		    _renderContext.instanceUniforms[idx] = {.model = modelMatrix, .look = look};
+		    // A villager's bones go into the palette, as its clip poses it or as its model rests, and its instance says
+		    // where they start
+		    if (slots->second.bonePalette)
+		    {
+			    const auto* pose = registry.TryGet<const VillagerPose>(entity);
+			    const auto& rest = meshes.Handle(slots->first)->GetBoneMatrices();
+			    const auto bones = pose != nullptr && pose->bones.size() == rest.size()
+			                           ? std::span<const glm::mat4>(pose->bones)
+			                           : std::span<const glm::mat4>(rest);
+			    graphics::bone_palette::SetFirstBone(_renderContext.instanceUniforms[idx].model,
+			                                         graphics::bone_palette::Append(_renderContext.bonePalette, bones));
+		    }
 		    if (look.z != 1.0f)
 		    {
 			    _renderContext.drawnObjects.push_back({.entity = entity, .model = modelMatrix});
@@ -454,8 +481,38 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		bgfx::update(toBgfx(_renderContext.instanceUniformBuffer), 0,
 		             bgfx::makeRef(_renderContext.instanceUniforms.data(), size));
 	}
+	for (auto& [meshId, desc] : _renderContext.instancedDrawDescs)
+	{
+		const auto slots = _instanceSlots.find(meshId);
+		desc.filled = slots != _instanceSlots.end() ? slots->second.filled : 0;
+	}
+	UploadBonePalette();
 	UploadPartialBuilds();
 	return fits;
+}
+
+void RenderingSystem::UploadBonePalette()
+{
+	auto& texels = _renderContext.bonePalette;
+	if (texels.empty())
+	{
+		return;
+	}
+	// Whole rows are sent, the last one filled out
+	const auto rows = graphics::bone_palette::RowsFor(texels.size());
+	texels.resize(static_cast<size_t>(rows) * graphics::bone_palette::k_Width, glm::vec4(0.0f));
+	auto& texture = _renderContext.bonePaletteTexture;
+	// The texture grows to twice the rows it needs, so that a growing crowd doesn't make it again every frame
+	if (!texture || texture->GetResolution().y < rows)
+	{
+		texture = std::make_unique<graphics::Texture2D>("BonePalette");
+		texture->CreateWithinFrame(graphics::bone_palette::k_Width, static_cast<uint16_t>(rows * 2), 1,
+		                           graphics::TextureFormat::RGBA32F, graphics::Wrapping::ClampEdge, graphics::Filter::Nearest,
+		                           nullptr);
+	}
+	const auto bytes = static_cast<uint32_t>(texels.size() * sizeof(glm::vec4));
+	bgfx::updateTexture2D(toBgfx(texture->GetNativeHandle()), 0, 0, 0, 0, graphics::bone_palette::k_Width, rows,
+	                      bgfx::copy(texels.data(), bytes));
 }
 
 void RenderingSystem::UploadPartialBuilds()
