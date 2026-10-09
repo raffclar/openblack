@@ -10,6 +10,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 #include <optional>
 #include <span>
@@ -65,5 +66,33 @@ struct PlannedCandidate
 /// How far a temple's inner walls stand in from its outer ones while it goes up, in its model's own units, whatever its
 /// materials (other buildings set them in less)
 inline constexpr float k_TempleInnerWallInset = 1.0f;
+
+/// How much of a temple its model shows built follows how much of its heart is built, never below none nor beyond all of
+/// it. As the model comes to show all of it from less, the temple is taken out of the map's cells and put back in them.
+struct DrawnBuild
+{
+	float drawn;
+	bool refile;
+};
+[[nodiscard]] DrawnBuild FollowBuilt(float drawn, float built);
+
+/// The land of the story on which a temple finished plays no music
+inline constexpr int32_t k_SilentFinishLand = 1;
+
+/// What decides whether a temple just finished plays its music
+struct FinishedTemple
+{
+	/// The temple is the player's at this machine
+	bool localPlayers;
+	/// A script task has the cinema bars in
+	bool scriptCutScene;
+	/// A script has music set to play, playing or about to
+	bool scriptMusic;
+	int32_t landNumber;
+};
+
+/// A temple finished plays its music for the player at this machine, unless a script has the cinema bars in or music of
+/// its own, and not on the first land
+[[nodiscard]] bool PlaysFinishedMusic(const FinishedTemple& temple);
 
 } // namespace openblack::building_construction

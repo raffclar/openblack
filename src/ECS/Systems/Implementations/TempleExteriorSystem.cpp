@@ -23,11 +23,13 @@
 #include "3D/L3DRayCast.h"
 #include "3D/TempleExteriorMorph.h"
 #include "Common/Bitmap16B.h"
+#include "ECS/BuildingConstruction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/TempleExterior.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "Locator.h"
@@ -53,7 +55,17 @@ void TempleExteriorSystem::UpdateTurn()
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& alignment = Locator::alignmentSystem::value();
 	registry.Each<const Temple, TempleExterior, Mesh>(
-	    [&alignment](const entt::entity entity, const Temple& temple, TempleExterior& exterior, Mesh& mesh) {
+	    [&registry, &alignment](const entt::entity entity, const Temple& temple, TempleExterior& exterior, Mesh& mesh) {
+		    // Its model shows as much of it built as its heart is. Once it shows all of it, the temple is taken out of the
+		    // map's cells and put back in them.
+		    const auto* progress = registry.TryGet<const BuildProgress>(entity);
+		    const auto follow =
+		        building_construction::FollowBuilt(exterior.drawnBuilt, progress != nullptr ? progress->built : 1.0f);
+		    exterior.drawnBuilt = follow.drawn;
+		    if (follow.refile && Locator::entitiesMap::has_value())
+		    {
+			    Locator::entitiesMap::value().Refile(entity);
+		    }
 		    // Each turn the temple grows toward its player's goodness, and twice their share of the influence
 		    // TODO(raffclar): the player's share of the influence, once influence is simulated
 		    exterior.alignmentTarget = (alignment.GetPlayerAlignment(temple.owner) + 1.0f) * 0.5f;

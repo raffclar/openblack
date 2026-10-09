@@ -38,6 +38,7 @@
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/TeleportStone.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
@@ -57,6 +58,7 @@ template <typename Func>
 void ForEachMapComponent(Func&& func)
 {
 	// Buildings and features, which cover their outline
+	func.template operator()<Temple>();
 	func.template operator()<Abode>();
 	func.template operator()<Feature>();
 	func.template operator()<Flowers>();
@@ -145,7 +147,7 @@ MapProduction::~MapProduction()
 
 std::optional<MapProduction::Kind> MapProduction::KindOf(const Registry& registry, entt::entity entity)
 {
-	if (registry.AnyOf<Abode, Feature, Flowers, BigForest, SpellDispenser, TeleportStone>(entity))
+	if (registry.AnyOf<Temple, Abode, Feature, Flowers, BigForest, SpellDispenser, TeleportStone>(entity))
 	{
 		return Kind {.placement = Placement::FixedFront, .coversOutline = true, .moves = false};
 	}

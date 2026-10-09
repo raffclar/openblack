@@ -93,3 +93,42 @@ TEST(BuildingConstruction, ModelReachIsTheLargerHalfWidthScaled)
 	EXPECT_FLOAT_EQ(ModelReach({3.0f, 5.0f}, 2.0f), 10.0f);
 	EXPECT_FLOAT_EQ(ModelReach({7.0f, 5.0f}, 1.0f), 7.0f);
 }
+
+TEST(BuildingConstruction, DrawnFollowsBuiltBetweenNoneAndAll)
+{
+	EXPECT_FLOAT_EQ(FollowBuilt(0.2f, 0.5f).drawn, 0.5f);
+	EXPECT_FLOAT_EQ(FollowBuilt(0.2f, -0.5f).drawn, 0.0f);
+	EXPECT_FLOAT_EQ(FollowBuilt(0.2f, 1.5f).drawn, 1.0f);
+	EXPECT_FALSE(FollowBuilt(0.2f, 0.5f).refile);
+}
+
+TEST(BuildingConstruction, ShowingAllFromLessRefilesOnce)
+{
+	EXPECT_TRUE(FollowBuilt(0.9f, 1.0f).refile);
+	EXPECT_TRUE(FollowBuilt(0.0f, 1.2f).refile);
+	EXPECT_FALSE(FollowBuilt(1.0f, 1.0f).refile);
+	EXPECT_FALSE(FollowBuilt(1.0f, 0.5f).refile);
+}
+
+TEST(BuildingConstruction, FinishedMusicPlaysForTheLocalPlayerAfterTheFirstLand)
+{
+	const auto temple = FinishedTemple {.localPlayers = true, .scriptCutScene = false, .scriptMusic = false, .landNumber = 2};
+	EXPECT_TRUE(PlaysFinishedMusic(temple));
+	auto other = temple;
+	other.localPlayers = false;
+	EXPECT_FALSE(PlaysFinishedMusic(other));
+	auto first = temple;
+	first.landNumber = 1;
+	EXPECT_FALSE(PlaysFinishedMusic(first));
+}
+
+TEST(BuildingConstruction, FinishedMusicWaitsOnNoScript)
+{
+	const auto temple = FinishedTemple {.localPlayers = true, .scriptCutScene = false, .scriptMusic = false, .landNumber = 3};
+	auto cutScene = temple;
+	cutScene.scriptCutScene = true;
+	EXPECT_FALSE(PlaysFinishedMusic(cutScene));
+	auto music = temple;
+	music.scriptMusic = true;
+	EXPECT_FALSE(PlaysFinishedMusic(music));
+}

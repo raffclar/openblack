@@ -18,6 +18,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/L3DMesh.h"
+#include "Audio/GameMusic.h"
 #include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/BuildingConstruction.h"
 #include "ECS/Components/Abode.h"
@@ -28,7 +29,10 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/WorldObjects.h"
+#include "Game.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -40,6 +44,9 @@ namespace
 {
 
 constexpr auto k_TempleMesh = entt::hashed_string("temple/b_first_temple_l3d");
+/// The music a temple plays as it is finished
+constexpr auto k_FinishedTempleMusic = audio::MusicType::ScriptEpic01;
+static_assert(static_cast<int32_t>(k_FinishedTempleMusic) == 61);
 
 ecs::Registry& Entities()
 {
@@ -86,6 +93,33 @@ std::optional<int32_t> TownOf(entt::entity building)
 	return std::nullopt;
 }
 
+/// A temple finished plays its music for the player at this machine
+void PlayFinishedMusic(PlayerNames owner)
+{
+	auto* music = Game::Instance() != nullptr ? Game::Instance()->GetGameMusic() : nullptr;
+	if (music == nullptr)
+	{
+		return;
+	}
+	const bool local = Locator::playerSystem::has_value() && Locator::playerSystem::value().GetLocalPlayer() == owner;
+	bool cutScene = false;
+	if (Locator::cinematicDirectorSystem::has_value())
+	{
+		const auto& director = Locator::cinematicDirectorSystem::value();
+		cutScene = director.IsWideScreenOn() && director.GetWideScreenOwner() != 0;
+	}
+	const auto temple = building_construction::FinishedTemple {
+	    .localPlayers = local,
+	    .scriptCutScene = cutScene,
+	    .scriptMusic = music->GetScriptType() != audio::MusicType::None,
+	    .landNumber = Entities().Context().mapScriptGlobals.landNumber,
+	};
+	if (building_construction::PlaysFinishedMusic(temple))
+	{
+		music->StartScriptMusic(k_FinishedTempleMusic);
+	}
+}
+
 /// A building is finished: no longer under construction, its site gone. A temple's heart is whole again.
 void Finish(entt::entity building)
 {
@@ -98,8 +132,8 @@ void Finish(entt::entity building)
 		{
 			life->life = 1.0f;
 		}
-		// TODO(temple-construction): its player's worship sites are planned for each of its towns (worship-sites), and
-		// on any land but the first its finishing music plays unless a script's music is playing
+		// TODO(worship-sites): its player's worship sites are planned for each of its towns
+		PlayFinishedMusic(registry.Get<const Temple>(building).owner);
 	}
 	else
 	{

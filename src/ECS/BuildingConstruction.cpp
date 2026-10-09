@@ -52,4 +52,15 @@ float ModelReach(glm::vec2 halfWidths, float scale)
 	return std::max(halfWidths.x, halfWidths.y) * scale;
 }
 
+DrawnBuild FollowBuilt(float drawn, float built)
+{
+	const float shown = std::clamp(built, 0.0f, 1.0f);
+	return {.drawn = shown, .refile = drawn < 1.0f && shown >= 1.0f};
+}
+
+bool PlaysFinishedMusic(const FinishedTemple& temple)
+{
+	return temple.localPlayers && !temple.scriptCutScene && !temple.scriptMusic && temple.landNumber != k_SilentFinishLand;
+}
+
 } // namespace openblack::building_construction

@@ -197,6 +197,11 @@ void GameMusic::Reset()
 void GameMusic::StartScriptMusic(MusicType type)
 {
 	_scriptType = type;
+	// Music a script starts plays from its beginning, even over the script's music already playing
+	if (type != MusicType::None)
+	{
+		_scriptStarted = false;
+	}
 }
 
 void GameMusic::ProcessTurn(const TurnInputs& inputs)
@@ -253,7 +258,7 @@ bool GameMusic::ProcessCitadel(const TurnInputs& inputs)
 	return true;
 }
 
-// Music a script has started plays from its start until the script stops it
+// Music a script has started plays from its start once through, until it ends or the script stops it
 bool GameMusic::ProcessScript()
 {
 	auto& audio = Locator::audio::value();
@@ -277,7 +282,15 @@ bool GameMusic::ProcessScript()
 		return false;
 	}
 	SaveResumeChunks();
-	audio.MusicPlay(path, MusicPlayOptions {.volume = k_FullVolume, .startChunk = 1});
+	const auto type = _scriptType;
+	audio.MusicPlay(path, MusicPlayOptions {.volume = k_FullVolume, .startChunk = 1, .onFinished = [this, type]() {
+		                                        // Played to its end, the script's music is over unless the script
+		                                        // has since asked for other music
+		                                        if (_scriptType == type)
+		                                        {
+			                                        _scriptType = MusicType::None;
+		                                        }
+	                                        }});
 	_scriptStarted = true;
 	_playing = _scriptType;
 	return true;

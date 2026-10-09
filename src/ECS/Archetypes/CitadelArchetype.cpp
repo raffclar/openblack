@@ -9,6 +9,8 @@
 
 #include "CitadelArchetype.h"
 
+#include <algorithm>
+
 #include <entt/fwd.hpp>
 
 #include "ECS/Components/Construction.h"
@@ -41,7 +43,8 @@ entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames pla
 	const auto meshId = entt::hashed_string("temple/b_first_temple_l3d");
 	registry.Assign<Mesh>(entity, meshId, static_cast<int8_t>(0), static_cast<int8_t>(0));
 	// Its outside is blended for its player's alignment, each vertex then set on the land
-	registry.Assign<TempleExterior>(entity);
+	// Its model shows as much of it built as its heart is from the start
+	registry.Assign<TempleExterior>(entity).drawnBuilt = std::clamp(built, 0.0f, 1.0f);
 	registry.Assign<MorphWithTerrain>(entity);
 	// Under construction until all of it is built
 	if (built < 1.0f)
