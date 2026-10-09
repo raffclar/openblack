@@ -133,7 +133,7 @@ TEST(ScriptObjects, TheFirstReferenceIsTold)
 	EXPECT_EQ(table.AddReference(0), Referenced::Nothing);
 }
 
-TEST(ScriptObjects, TheTableFillsAndIsClearedWithTheLand)
+TEST(ScriptObjects, TheTableFillsAndIsClearedWithTheProgram)
 {
 	Table table;
 	for (uint32_t object = 1; object < k_Places; ++object)
@@ -142,7 +142,24 @@ TEST(ScriptObjects, TheTableFillsAndIsClearedWithTheLand)
 	}
 	EXPECT_FALSE(table.Register(9999, false, false).has_value());
 	table.Clear();
-	EXPECT_TRUE(table.Register(9999, false, false).has_value());
+	// Every place is free, and the search starts at the first again
+	EXPECT_EQ(table.Register(9999, false, false), 1);
+}
+
+TEST(ScriptObjects, ANewLandKeepsThePlacesStillCounted)
+{
+	Table table;
+	const auto counted = *table.Register(5, false, false);
+	table.AddReference(counted);
+	const auto free = *table.Register(6, false, false);
+	table.ClearObjects();
+	EXPECT_FALSE(table.Find(5).has_value());
+	EXPECT_EQ(table.At(counted).count, 1);
+	// The search goes on from where it stopped: past the counted place, the other is free again once it comes round
+	const auto next = table.Register(7, false, false);
+	ASSERT_TRUE(next.has_value());
+	EXPECT_NE(*next, counted);
+	EXPECT_EQ(*next, free);
 }
 
 TEST(ScriptObjects, ADeadTreeTakesItsTreesPlace)
@@ -247,6 +264,22 @@ TEST(ScriptObjectsSystem, ClearingTheScriptsDeletesWhatTheyMadeAndLetsGoOfTheRes
 	system->AddReference(villager);
 	EXPECT_TRUE(world->objects.at(villager).inScript);
 	EXPECT_FALSE(world->objects.at(villager).controlled);
+}
+
+TEST(ScriptObjectsSystem, ANewLandLetsNothingGoBackIntoTheGame)
+{
+	auto [world, system] = MakeSystem();
+	const auto made = world->Add(10);
+	const auto villager = world->Add(11, {.kind = Kind::Villager});
+	ASSERT_TRUE(system->Register(made, true));
+	system->AddReference(made);
+	system->AddReference(villager);
+	system->EnterNative(k_MoveNative);
+	system->Fetch(villager);
+	system->ClearForNewLand();
+	// The land's objects went with it: nothing is deleted or released by the scripts
+	EXPECT_TRUE(world->deleted.empty());
+	EXPECT_TRUE(world->decided.empty());
 }
 
 TEST(ScriptObjectsSystem, ADeadTreeTakesOnlyItsTreesPlace)

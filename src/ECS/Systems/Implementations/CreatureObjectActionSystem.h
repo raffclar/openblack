@@ -33,6 +33,7 @@ public:
 	bool PickUp(entt::entity creature, entt::entity object) override;
 	bool PutDown(entt::entity creature) override;
 	bool Discard(entt::entity creature) override;
+	bool DiscardWith(entt::entity creature, size_t animation) override;
 	bool Lob(entt::entity creature) override;
 	bool EatHeld(entt::entity creature) override;
 	bool Keep(entt::entity creature, size_t animation) override;
@@ -44,6 +45,7 @@ public:
 	void Drop(entt::entity creature) override;
 
 	[[nodiscard]] State GetState(entt::entity creature) const override;
+	[[nodiscard]] bool IsCatching(entt::entity creature) const override;
 	[[nodiscard]] std::optional<float> GetProgress(entt::entity creature) const override;
 	[[nodiscard]] std::optional<entt::entity> GetHeld(entt::entity creature) const override;
 	[[nodiscard]] std::optional<float> FoodValueOf(entt::entity object) const override;

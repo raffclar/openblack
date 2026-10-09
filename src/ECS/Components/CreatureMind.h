@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <map>
 #include <memory>
 #include <optional>
 
@@ -72,6 +73,9 @@ struct CreatureMindState
 	/// The agenda carries out the planner's plan; the step that ends it took down the desire already
 	bool planActive {false};
 	bool satisfiedByEffect {false};
+	/// A step of the plan saw to what its desire wanted, as putting out a fire does once it is out: the desire is less
+	/// when the plan ends, even for an action that doesn't lessen it by itself
+	bool desireSeenTo {false};
 	/// The agenda carrying out the plan, and the last agenda remembered for feedback, by the idle mind's count of them
 	uint32_t planSerial {0};
 	uint32_t agendaSeen {0};
@@ -92,6 +96,9 @@ struct CreatureMindState
 	/// What the leash tells the mind: the desire it forces, whether the creature is following it to the hand, and what
 	/// the player has shown it on the leash
 	creature_leash::MindHooks leash {};
+	/// How often it has been told to hold things of each kind (by the game's belief types): it plays with what it holds
+	/// only the first times
+	std::map<uint32_t, uint32_t> heldKinds;
 };
 
 } // namespace openblack::ecs::components
