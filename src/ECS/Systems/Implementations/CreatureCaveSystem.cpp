@@ -14,12 +14,14 @@
 #include <algorithm>
 
 #include "3D/CreatureBody.h"
+#include "3D/CreatureCaveTrophies.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Creature/CreatureFightHud.h"
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureWatching.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSkin.h"
@@ -27,13 +29,31 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
+#include "Magic/MagicTables.h"
 
 namespace openblack::ecs::systems
 {
 
 using namespace components;
+
+namespace
+{
+/// Whether the game has a text for a creature having learnt a miracle, by the miracle's place in its table; the creature
+/// room's scroll and plinths leave out those it has none for
+bool HasLearntText(size_t miracle)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return true;
+	}
+	const auto& info = Locator::infoConstants::value();
+	return miracle < info.magicEffect.size() &&
+	       static_cast<int>(magic::GetMagicEffectInfo(info, static_cast<MagicType>(miracle)).creatureLearntEnum) != 0;
+}
+} // namespace
 
 bool CreatureCaveSystem::InTemple() const
 {
@@ -144,6 +164,10 @@ std::optional<creature_cave::Snapshot> CreatureCaveSystem::Snapshot() const
 	{
 		snapshot.needs = needs->needs;
 	}
+	if (const auto* record = registry.TryGet<const CreatureFightRecord>(*creature))
+	{
+		snapshot.fightBalance = record->tendency;
+	}
 	const auto* mind = registry.TryGet<const CreatureMindState>(*creature);
 	if (mind == nullptr)
 	{
@@ -199,18 +223,16 @@ std::optional<creature_cave::Snapshot> CreatureCaveSystem::Snapshot() const
 			for (size_t i = 0; i < tables->miracles.size(); ++i)
 			{
 				const auto& rule = tables->miracles[i];
-				int32_t percent = 0;
-				if (i < knowledge.miraclesKnown.size() && knowledge.miraclesKnown[i])
-				{
-					percent = 100;
-				}
-				else if (i < knowledge.miraclesSeen.size())
-				{
-					const auto needed = creature_watching::TimesNeeded(rule.timesToSee, multiplier);
-					percent = static_cast<int32_t>(
-					    std::min(100.0f, static_cast<float>(knowledge.miraclesSeen[i].count) * 100.0f / needed));
-				}
-				snapshot.miracles.push_back({.name = rule.name, .percent = percent});
+				// How far it has learnt a miracle is the times it has seen it over the times it must, whether it
+				// has learnt it or not
+				const auto needed = creature_watching::TimesNeeded(rule.timesToSee, multiplier);
+				const auto seen = i < knowledge.miraclesSeen.size() ? knowledge.miraclesSeen[i].count : 0u;
+				snapshot.miracles.push_back({
+				    .name = rule.name,
+				    .knownAbout = i < knowledge.miraclesKnown.size() && knowledge.miraclesKnown[i],
+				    .hasLearntText = HasLearntText(i),
+				    .learnt = CreatureCaveTrophies::PercentLearnt(seen, needed),
+				});
 			}
 		}
 	}
