@@ -17,6 +17,8 @@
 #include <istream>
 #include <map>
 #include <memory>
+#include <optional>
+#include <set>
 #include <streambuf>
 #include <string>
 #include <vector>
@@ -213,6 +215,14 @@ struct AudioBankInfo
 };
 static_assert(sizeof(AudioBankInfo) == 3 * sizeof(uint32_t));
 
+/// Where in its file a block left unread lies
+struct UnreadBlock
+{
+	/// From the start of the file to the block's first byte, after its header
+	uint64_t offset;
+	uint32_t size;
+};
+
 /**
   This class is used to read LionHead Packs files
  */
@@ -225,6 +235,8 @@ protected:
 	bool _isLoaded {false};
 
 	std::map<std::string, std::vector<uint8_t>> _blocks;
+	/// The blocks asked to be left unread, by where they lie in the file
+	std::map<std::string, UnreadBlock> _unreadBlocks;
 	std::vector<InfoBlockLookup> _infoBlockLookup;
 	std::vector<BodyBlockLookup> _bodyBlockLookup;
 	/// Metadata and DDS formatted texture data
@@ -242,8 +254,8 @@ protected:
 	/// Start of the LHFileSegmentBankInfo block of a sound pack (all zero if the pack has none)
 	AudioBankInfo _audioBankInfo {};
 
-	/// Read blocks from pack
-	PackResult ReadBlocks(std::istream& stream) noexcept;
+	/// Read blocks from pack, only noting where those named in `unread` lie
+	PackResult ReadBlocks(std::istream& stream, const std::set<std::string>& unread) noexcept;
 
 	/// Write blocks to file
 	PackResult WriteBlocks(std::ostream& stream) const noexcept;
@@ -279,6 +291,11 @@ public:
 	/// Read file from the input source
 	PackResult ReadFile(std::istream& stream) noexcept;
 
+	/// Read file from the input source, leaving the named blocks unread: only where they lie is kept, to read later
+	/// from the file. A sound pack whose LHAudioWaveData block is left unread has its samples' headers but not their
+	/// data.
+	PackResult ReadFile(std::istream& stream, const std::set<std::string>& unreadBlocks) noexcept;
+
 	/// Read g3d file from the filesystem
 	PackResult Open(const std::filesystem::path& filepath) noexcept;
 
@@ -308,6 +325,12 @@ public:
 
 	[[nodiscard]] const std::map<std::string, std::vector<uint8_t>>& GetBlocks() const noexcept { return _blocks; }
 	[[nodiscard]] bool HasBlock(const std::string& name) const noexcept { return _blocks.contains(name); }
+	/// Where a block asked to be left unread lies in the file, if the file has it
+	[[nodiscard]] std::optional<UnreadBlock> GetUnreadBlock(const std::string& name) const noexcept
+	{
+		const auto it = _unreadBlocks.find(name);
+		return it != _unreadBlocks.end() ? std::optional(it->second) : std::nullopt;
+	}
 	[[nodiscard]] const std::vector<uint8_t>& GetBlock(const std::string& name) const noexcept { return _blocks.at(name); }
 	[[nodiscard]] std::unique_ptr<std::istream> GetBlockAsStream(const std::string& name) const noexcept;
 	[[nodiscard]] const std::vector<InfoBlockLookup>& GetInfoBlockLookup() const noexcept { return _infoBlockLookup; }
