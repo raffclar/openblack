@@ -16,11 +16,14 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include <entt/core/hashed_string.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/ModelSurface.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureDesires.h"
 #include "ECS/Components/Abode.h"
@@ -122,7 +125,7 @@ public:
 	[[nodiscard]] Registry& Entities() override { return registry; }
 	[[nodiscard]] std::optional<float> LandHeight(glm::vec2 /*point*/) const override { return 0.0f; }
 	[[nodiscard]] uint32_t Turn() const override { return turn; }
-	[[nodiscard]] GameRandomInterface* Random() override { return nullptr; }
+	[[nodiscard]] GameRandomInterface* Random() override { return random; }
 	[[nodiscard]] std::optional<PlayerNames> LocalPlayer() const override { return PlayerNames::PLAYER_ONE; }
 	[[nodiscard]] float LifeOf(entt::entity /*object*/) const override { return 1.0f; }
 	[[nodiscard]] float HeightOf(entt::entity /*object*/) const override { return 10.0f; }
@@ -157,6 +160,11 @@ public:
 		return 7U;
 	}
 	void AddPlasma(uint32_t source, const particles::PlasmaCommand& command) override { plasma.emplace_back(source, command); }
+	[[nodiscard]] std::vector<model_surface::Triangle> DrawnTrianglesOf(entt::entity /*object*/) const override
+	{
+		return triangles;
+	}
+	[[nodiscard]] glm::mat4 PlacementOf(entt::entity /*object*/) const override { return placement; }
 	void PlaySound(entt::id_type sound, glm::vec3 /*position*/, entt::entity /*owner*/) override { sounds.push_back(sound); }
 	void PassOnBlowToBuilding(DynamicsSystemInterface& /*dynamics*/, entt::entity building, PhysicsEntry& /*struck*/,
 	                          const ImpactInfo& /*impact*/) override
@@ -227,6 +235,9 @@ public:
 
 	Registry registry;
 	uint32_t turn {0};
+	GameRandomInterface* random {nullptr};
+	std::vector<model_surface::Triangle> triangles;
+	glm::mat4 placement {1.0f};
 	std::vector<entt::entity> toys;
 	std::vector<entt::entity> stores;
 	std::map<entt::entity, ResourceStoreSystemInterface::ObjectResource> resources;
@@ -371,6 +382,75 @@ TEST(PhysicsGameHooks, ATemplesHeartPassesABlowOnToItsTownsBuildingAndBeamsAtItI
 	// The heart itself took nothing
 	EXPECT_TRUE(f.world->effects.empty());
 	EXPECT_EQ(f.world->beamSourcePlayers.size(), 1U);
+}
+
+/// Whole-number draws give the next of a list, fractions the next of another
+class ListedRandom final: public GameRandomInterface
+{
+public:
+	ListedRandom(std::vector<uint32_t> wholes, std::vector<float> fractions)
+	    : _wholes(std::move(wholes))
+	    , _fractions(std::move(fractions))
+	{
+	}
+	uint32_t GameRand(uint32_t /*n*/) override { return 0; }
+	float GameFloatRand(float /*x*/) override { return 0.0f; }
+	uint32_t LocalRand(int32_t /*n*/) override { return _wholes.at(_whole++); }
+	float LocalFloatRand(float /*x*/) override { return _fractions.at(_fraction++); }
+	int32_t CrtRand() override { return 0; }
+	void CrtSrand(uint32_t /*seed*/) override {}
+	[[nodiscard]] GameRandomSeeds GetSeeds() const override { return {}; }
+	void SetSeeds(GameRandomSeeds /*seeds*/) override {}
+	[[nodiscard]] ParticleRandomStream GetParticleStream() const override { return ParticleRandomStream::None; }
+	void SetParticleStream(ParticleRandomStream /*stream*/) override {}
+
+private:
+	std::vector<uint32_t> _wholes;
+	std::vector<float> _fractions;
+	size_t _whole {0};
+	size_t _fraction {0};
+};
+
+TEST(PhysicsGameHooks, ATemplesHeartWithNothingToPassABlowToBeamsAtAPointOnItselfFacingUp)
+{
+	Fixture f;
+	auto& registry = f.world->registry;
+	const auto heart = registry.Create();
+	registry.Assign<Transform>(heart, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Temple>(heart, PlayerNames::PLAYER_TWO);
+	// A floor facing down, then a roof facing up; the first point drawn is under the floor, the second on the roof
+	const glm::vec3 down {0.0f, -1.0f, 0.0f};
+	const glm::vec3 up {0.0f, 1.0f, 0.0f};
+	f.world->triangles = {
+	    {{{{0.0f, 0.0f, 0.0f}, down}, {{1.0f, 0.0f, 0.0f}, down}, {{0.0f, 0.0f, 1.0f}, down}}},
+	    {{{{0.0f, 4.0f, 0.0f}, up}, {{4.0f, 4.0f, 0.0f}, up}, {{0.0f, 4.0f, 4.0f}, up}}},
+	};
+	f.world->placement = glm::translate(glm::mat4(1.0f), glm::vec3(100.0f, 0.0f, 0.0f));
+	ListedRandom random({0, 1}, {0.25f, 0.5f, 0.75f, 0.5f});
+	f.world->random = &random;
+
+	const auto interval = temple_heart::BeamInterval(100);
+	f.world->turn = interval + 1;
+	f.StrikeWithRock(heart, 2500.0f, PlayerNames::PLAYER_ONE);
+	// The second point's fractions add up past one and are folded back to a quarter and a half
+	ASSERT_EQ(f.world->plasma.size(), 1U);
+	const auto& beam = f.world->plasma[0].second;
+	EXPECT_EQ(f.world->plasma[0].first, 7U);
+	EXPECT_EQ(beam.start, glm::vec3(0.0f, 10.0f, 0.0f));
+	EXPECT_EQ(beam.end, glm::vec3(101.0f, 4.0f, 2.0f));
+	EXPECT_EQ(beam.startTangent, up);
+	EXPECT_EQ(beam.endTangent, down);
+	EXPECT_EQ(beam.life, particles::k_HeartPlasmaLife);
+	EXPECT_EQ(beam.speed, particles::k_HeartPlasmaSpeed);
+	EXPECT_EQ(beam.alpha, particles::k_HeartPlasmaAlpha);
+	// No sound with a beam at itself, and it still takes the blow
+	EXPECT_TRUE(f.world->sounds.empty());
+	EXPECT_EQ(f.world->effects.size(), 1U);
+
+	// Not again until the interval has gone by
+	f.world->turn += interval;
+	f.StrikeWithRock(heart, 2500.0f, PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(f.world->plasma.size(), 1U);
 }
 
 TEST(PhysicsGameHooks, ATemplesHeartWithNothingToPassABlowToTakesItsHarm)

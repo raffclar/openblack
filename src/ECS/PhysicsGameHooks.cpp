@@ -23,6 +23,7 @@
 #include <glm/geometric.hpp>
 
 #include "3D/MapCoords.h"
+#include "3D/ModelSurface.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureCatch.h"
 #include "Creature/CreatureDesires.h"
@@ -300,9 +301,28 @@ void BeamAtItself(World& world, entt::entity heart, Temple& temple)
 		return;
 	}
 	static_cast<void>(HeartBeamSource(world, heart, temple));
-	// TODO(physics): the beam ends at a random point of the heart's model facing no more than a little downwards, arriving
-	// against its normal; the model's triangles are picked through the detail level's choice of its parts, which
-	// openblack doesn't reproduce yet, so no beam is fired
+	// The beam ends at a random point of the heart's model facing no more than a little downwards, arriving against the
+	// surface; the point is drawn even when there is nothing to fire the beam from
+	auto* random = world.Random();
+	if (random == nullptr)
+	{
+		return;
+	}
+	const auto triangles = world.DrawnTrianglesOf(heart);
+	const auto point = model_surface::RandomUpwardPoint(triangles, world.PlacementOf(heart), *random);
+	if (!temple.beamSource.has_value() || !point.has_value())
+	{
+		return;
+	}
+	world.AddPlasma(*temple.beamSource, {
+	                                        .start = TopOf(world, heart),
+	                                        .end = point->position,
+	                                        .startTangent = particles::k_HeartPlasmaStartTangent,
+	                                        .endTangent = -point->normal,
+	                                        .life = particles::k_HeartPlasmaLife,
+	                                        .speed = particles::k_HeartPlasmaSpeed,
+	                                        .alpha = particles::k_HeartPlasmaAlpha,
+	                                    });
 }
 
 /// Something thrown strikes a temple's heart: the heart passes the blow on to a building or a homeless villager of its

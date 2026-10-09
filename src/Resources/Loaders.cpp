@@ -117,6 +117,11 @@ L3DLoader::result_type L3DLoader::operator()(FromMadeTag, const std::string& deb
 	return mesh;
 }
 
+L3DFileLoader::result_type L3DFileLoader::operator()(FromFileTag, const l3d::L3DFile& file) const
+{
+	return std::make_shared<l3d::L3DFile>(file);
+}
+
 L3DFileLoader::result_type L3DFileLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
 {
 	auto file = std::make_shared<l3d::L3DFile>();

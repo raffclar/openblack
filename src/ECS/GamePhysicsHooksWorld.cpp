@@ -190,6 +190,16 @@ void GamePhysicsHooksWorld::AddPlasma(uint32_t source, const particles::PlasmaCo
 	}
 }
 
+std::vector<model_surface::Triangle> GamePhysicsHooksWorld::DrawnTrianglesOf(entt::entity object) const
+{
+	return world_objects::DrawnTrianglesOf(object);
+}
+
+glm::mat4 GamePhysicsHooksWorld::PlacementOf(entt::entity object) const
+{
+	return world_objects::PlacementOf(object);
+}
+
 void GamePhysicsHooksWorld::PlaySound(entt::id_type sound, glm::vec3 position, entt::entity owner)
 {
 	if (Locator::audio::has_value())

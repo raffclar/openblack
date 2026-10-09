@@ -105,6 +105,11 @@ struct L3DLoader final: BaseLoader<graphics::L3DMesh>
 struct L3DFileLoader final: BaseLoader<l3d::L3DFile>
 {
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
+	/// A copy of a file made in the game, such as a blended mesh
+	struct FromFileTag
+	{
+	};
+	[[nodiscard]] result_type operator()(FromFileTag, const l3d::L3DFile& file) const;
 };
 
 /// A 16 bit image, .16B

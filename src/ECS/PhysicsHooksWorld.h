@@ -12,12 +12,15 @@
 #include <cstdint>
 
 #include <optional>
+#include <vector>
 
 #include <entt/core/fwd.hpp>
 #include <entt/entity/entity.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/ModelSurface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "Enums.h"
 #include "Magic/MagicWorldInterface.h"
@@ -96,6 +99,10 @@ public:
 	/// The spot visual a temple's heart beams from, at a place and given a player; none when it couldn't be made
 	[[nodiscard]] virtual std::optional<uint32_t> StartHeartBeamSource(glm::vec3 position, PlayerNames player) = 0;
 	virtual void AddPlasma(uint32_t source, const particles::PlasmaCommand& command) = 0;
+	/// The triangles of the parts of an object's model that are drawn, in its model's space; none without a model
+	[[nodiscard]] virtual std::vector<model_surface::Triangle> DrawnTrianglesOf(entt::entity object) const = 0;
+	/// Where an object's model is placed in the world: moved, turned and scaled as it is drawn
+	[[nodiscard]] virtual glm::mat4 PlacementOf(entt::entity object) const = 0;
 	/// A sound effect played once at a place, belonging to an owner
 	virtual void PlaySound(entt::id_type sound, glm::vec3 position, entt::entity owner) = 0;
 

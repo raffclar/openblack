@@ -38,6 +38,8 @@ public:
 	[[nodiscard]] std::optional<VillagerStates> VillagerStateOf(entt::entity villager, bool final) const override;
 	[[nodiscard]] std::optional<uint32_t> StartHeartBeamSource(glm::vec3 position, PlayerNames player) override;
 	void AddPlasma(uint32_t source, const particles::PlasmaCommand& command) override;
+	[[nodiscard]] std::vector<model_surface::Triangle> DrawnTrianglesOf(entt::entity object) const override;
+	[[nodiscard]] glm::mat4 PlacementOf(entt::entity object) const override;
 	void PlaySound(entt::id_type sound, glm::vec3 position, entt::entity owner) override;
 	void PassOnBlowToBuilding(systems::DynamicsSystemInterface& dynamics, entt::entity building, PhysicsEntry& struck,
 	                          const ImpactInfo& impact) override;
