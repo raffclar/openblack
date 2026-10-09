@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -34,6 +35,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -56,9 +58,6 @@ namespace visuals = openblack::magic::visuals;
 namespace
 {
 constexpr float k_ByteMax = 255.0f;
-/// The seeds whose models take the game's first environment map in a globe: food and the creature spells' phials
-constexpr auto k_FirstPhial = SpellSeedType::CreatureSpellFreeze;
-constexpr auto k_LastPhial = SpellSeedType::CreatureSpellItchy;
 /// The freeze phial's creature takes its spell in this way
 constexpr int k_FreezeReceiveType = 0;
 /// The beam explosion's seed is added over what is behind it without writing depth
@@ -66,11 +65,6 @@ constexpr auto k_AddedSeed = SpellSeedType::BeamExplosion;
 /// The flying flock's seed is a bat for a god evil enough, otherwise a dove
 constexpr auto k_DoveMesh = MeshId::AnimalSpellDove;
 constexpr auto k_BatMesh = MeshId::AnimalBat1;
-
-bool IsPhial(SpellSeedType seed)
-{
-	return static_cast<int>(seed) >= static_cast<int>(k_FirstPhial) && static_cast<int>(seed) <= static_cast<int>(k_LastPhial);
-}
 
 glm::vec3 ColourOf(uint32_t rgb)
 {
@@ -85,6 +79,147 @@ constexpr uint64_t k_BlendedState = BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST
 constexpr uint64_t k_AddedState = k_BlendedState | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE);
 } // namespace
 
+void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& shown) const
+{
+	const bool reflection = desc.viewId == RenderPass::Reflection;
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto& textures = Locator::resources::value().GetTextures();
+	const auto& info = Locator::infoConstants::value();
+	const auto eye = desc.camera->GetOrigin();
+	const auto envmap = entt::hashed_string("raw/envmap").value();
+	const auto* environment = textures.Contains(envmap) ? &*textures.Handle(envmap) : nullptr;
+	const auto ice = entt::hashed_string("raw/S_IceEnvMap").value();
+	const auto* iceMap = textures.Contains(ice) ? &*textures.Handle(ice) : nullptr;
+	const auto* objectProgram = _shaderManager->GetShader("Object");
+	const auto* environmentProgram = _shaderManager->GetShader("ObjectEnvironment");
+	const auto translucent = TranslucentView(desc.viewId);
+	const auto& seed = magic::GetSpellSeedInfo(info, shown.seed);
+
+	// The seed's model, for the seeds that show one, spinning at its mesh height above the middle: food and the phials
+	// shining with the environment map, the beam added over what is behind it, a phial running through its texture and
+	// drawn as its creature takes its spell
+	auto meshId = seed.mesh;
+	if (shown.seed == SpellSeedType::FlockFlying)
+	{
+		const auto* flock = magic::GetMagicInfoAs<GMagicFlockFlyingInfo>(info, seed.magicTypes[0]);
+		// A bat for an owner evil enough, otherwise a dove
+		meshId = flock != nullptr && shown.ownerAlignment < flock->alignmentSwitch ? k_BatMesh : k_DoveMesh;
+	}
+	const auto seedMesh = resources::HashIdentifier(meshId);
+	if (seed.useMesh != 0 && meshes.Contains(seedMesh))
+	{
+		const bool phial = visuals::IsPhialSeed(shown.seed);
+		int receiveType = -1;
+		if (phial)
+		{
+			if (const auto* spell = magic::GetMagicInfoAs<GMagicCreatureSpellInfo>(info, seed.magicTypes[0]))
+			{
+				receiveType = static_cast<int>(spell->creatureReceiveSpellType);
+			}
+		}
+		const float pulse = visuals::PhialPulse(shown.phialPhase);
+		const auto draws = phial ? visuals::PhialDraws(receiveType, shown.phialPhase, pulse, shown.phialAlpha)
+		                         : std::vector<visuals::PhialDraw> {{.size = 1.0f, .alpha = 255, .lit = true}};
+		const auto shape = phial ? visuals::PhialScale(receiveType, shown.phialPhase) : glm::vec3(1.0f);
+		const bool environmentMapped = environment != nullptr && (phial || shown.seed == SpellSeedType::Food);
+		const bool added = shown.seed == k_AddedSeed;
+		const auto mesh = meshes.Handle(seedMesh);
+		const auto at = shown.middle + glm::vec3(0.0f, seed.meshHeight * shown.scale, 0.0f);
+		for (const auto& draw : draws)
+		{
+			const auto model = glm::translate(glm::mat4(1.0f), at) * glm::eulerAngleY(shown.spin) *
+			                   glm::scale(glm::mat4(1.0f), seed.scale * shown.scale * draw.size * shape);
+			// A model of several bones (the flocks' birds and wolves) has each placed by its rest matrix
+			std::vector<glm::mat4> bones;
+			if (mesh->IsBoned() && !mesh->GetBoneMatrices().empty())
+			{
+				bones.reserve(mesh->GetBoneMatrices().size());
+				std::ranges::transform(mesh->GetBoneMatrices(), std::back_inserter(bones),
+				                       [&model](const glm::mat4& bone) { return model * bone; });
+			}
+			L3DMeshSubmitDesc submitDesc = {};
+			submitDesc.program = environmentMapped ? environmentProgram : objectProgram;
+			submitDesc.environment = environmentMapped ? environment : nullptr;
+			submitDesc.modelMatrices = bones.empty() ? &model : bones.data();
+			submitDesc.matrixCount = bones.empty() ? 1 : static_cast<uint8_t>(std::min<size_t>(bones.size(), UINT8_MAX));
+			submitDesc.mirrored = reflection;
+			submitDesc.useMaterialCulling = true;
+			submitDesc.uvOffset = phial ? visuals::PhialUvOffset(shown.phialFrame) : glm::vec2(0.0f);
+			submitDesc.sortDepth = zsort::Depth(at, eye);
+			const float alpha = static_cast<float>(draw.alpha) / k_ByteMax;
+			if (added)
+			{
+				// Added by its own alpha without writing depth, lit as the rest
+				submitDesc.viewId = translucent;
+				submitDesc.state = k_AddedState | BGFX_STATE_WRITE_A;
+			}
+			else if (!draw.lit)
+			{
+				// Plain white at its alpha, blended over what is behind
+				submitDesc.viewId = translucent;
+				submitDesc.state = k_BlendedState | BGFX_STATE_BLEND_ALPHA;
+				submitDesc.tint = glm::vec4(1.0f, 1.0f, 1.0f, alpha);
+			}
+			else if (draw.alpha < 255)
+			{
+				// Lit, faded by its alpha
+				submitDesc.viewId = translucent;
+				submitDesc.state = k_BlendedState | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_FACTOR, BGFX_STATE_BLEND_INV_FACTOR);
+				submitDesc.rgba = static_cast<uint32_t>(draw.alpha) * 0x01010101u;
+			}
+			else
+			{
+				submitDesc.viewId = desc.viewId;
+				submitDesc.state = k_BlendedState | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z;
+				submitDesc.useMaterialBlending = true;
+			}
+			// A frozen phial is tinted icy by its pulse, and its ice shines over it
+			const bool frozen = phial && receiveType == k_FreezeReceiveType;
+			if (frozen)
+			{
+				submitDesc.tint = glm::vec4(ColourOf(visuals::FreezeTint(pulse)), 0.0f);
+			}
+			DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
+			if (frozen && iceMap != nullptr)
+			{
+				submitDesc.viewId = translucent;
+				submitDesc.program = environmentProgram;
+				submitDesc.environment = iceMap;
+				submitDesc.environmentOnlyAlpha = std::max(std::nearbyint(pulse * k_ByteMax), 1.0f) / k_ByteMax;
+				submitDesc.useMaterialBlending = false;
+				submitDesc.state = k_AddedState;
+				submitDesc.tint = glm::vec4(1.0f, 1.0f, 1.0f, 0.0f);
+				DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
+			}
+		}
+	}
+}
+
+void Renderer::DrawCaveSeeds(const DrawSceneDesc& desc) const
+{
+	if (desc.viewId != RenderPass::Main || !Locator::temple::has_value() || !Locator::temple::value().Active() ||
+	    !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	// The seeds are the player's at this computer: theirs is the alignment that makes the flock's seed a bat. Each is
+	// drawn at its full size and colour, the land's light not on it.
+	const float alignment = Locator::alignmentSystem::has_value()
+	                            ? Locator::alignmentSystem::value().GetPlayerAlignment(PlayerNames::PLAYER_ONE)
+	                            : 0.0f;
+	for (const auto& seed : Locator::temple::value().GetCaveSeeds())
+	{
+		DrawSeedModel(desc, {.seed = seed.seed,
+		                     .middle = seed.point,
+		                     .scale = 1.0f,
+		                     .spin = seed.spin,
+		                     .phialPhase = seed.phialPhase,
+		                     .phialFrame = seed.phialFrame,
+		                     .phialAlpha = std::numeric_limits<uint8_t>::max(),
+		                     .ownerAlignment = alignment});
+	}
+}
+
 void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 {
 	const bool reflection = desc.viewId == RenderPass::Reflection;
@@ -96,16 +231,8 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 	using ecs::components::OneOffSpellSeed;
 	using ecs::components::Transform;
 	const auto& meshes = Locator::resources::value().GetMeshes();
-	const auto& textures = Locator::resources::value().GetTextures();
-	const auto& info = Locator::infoConstants::value();
-	const auto& camera = *desc.camera;
-	const auto eye = camera.GetOrigin();
-	const auto envmap = entt::hashed_string("raw/envmap").value();
-	const auto* environment = textures.Contains(envmap) ? &*textures.Handle(envmap) : nullptr;
-	const auto ice = entt::hashed_string("raw/S_IceEnvMap").value();
-	const auto* iceMap = textures.Contains(ice) ? &*textures.Handle(ice) : nullptr;
+	const auto eye = desc.camera->GetOrigin();
 	const auto* objectProgram = _shaderManager->GetShader("Object");
-	const auto* environmentProgram = _shaderManager->GetShader("ObjectEnvironment");
 	const auto translucent = TranslucentPassOf(desc.viewId);
 	const bool haveBubble = meshes.Contains(OneOffSpellSeed::k_MeshId.value());
 	const bool haveRing = meshes.Contains(OneOffSpellSeed::k_RingMeshId.value());
@@ -114,107 +241,17 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 
 	desc.entities.Each<const OneOffSpellSeed, const Transform>([&](const OneOffSpellSeed& globe, const Transform& transform) {
 		const float scale = transform.scale.x * visuals::k_GlobeSeedScale;
-		const auto& seed = magic::GetSpellSeedInfo(info, globe.seedType);
 
-		// The miracle's seed spinning inside, below the middle, for the seeds that show one: lit by the land where it is,
-		// food and the phials shining with the environment map, the beam added over what is behind it, a phial running
-		// through its texture and drawn as its creature takes its spell
-		auto meshId = seed.mesh;
-		if (globe.seedType == SpellSeedType::FlockFlying)
-		{
-			const auto* flock = magic::GetMagicInfoAs<GMagicFlockFlyingInfo>(info, seed.magicTypes[0]);
-			// Nobody owns a globe, and nobody's alignment of 0 is evil enough for the bat
-			meshId = flock == nullptr || flock->alignmentSwitch <= 0.0f ? k_DoveMesh : k_BatMesh;
-		}
-		const auto seedMesh = resources::HashIdentifier(meshId);
-		if (seed.useMesh != 0 && meshes.Contains(seedMesh))
-		{
-			const bool phial = IsPhial(globe.seedType);
-			int receiveType = -1;
-			if (phial)
-			{
-				if (const auto* spell = magic::GetMagicInfoAs<GMagicCreatureSpellInfo>(info, seed.magicTypes[0]))
-				{
-					receiveType = static_cast<int>(spell->creatureReceiveSpellType);
-				}
-			}
-			const float pulse = visuals::PhialPulse(globe.phialPhase);
-			const auto draws = phial ? visuals::PhialDraws(receiveType, globe.phialPhase, pulse, visuals::k_GlobeAlpha)
-			                         : std::vector<visuals::PhialDraw> {{.size = 1.0f, .alpha = 255, .lit = true}};
-			const auto shape = phial ? visuals::PhialScale(receiveType, globe.phialPhase) : glm::vec3(1.0f);
-			const bool environmentMapped = environment != nullptr && (phial || globe.seedType == SpellSeedType::Food);
-			const bool added = globe.seedType == k_AddedSeed;
-			const auto mesh = meshes.Handle(seedMesh);
-			const auto at = globe.middle + glm::vec3(0.0f, seed.meshHeight * scale, 0.0f);
-			for (const auto& draw : draws)
-			{
-				const auto model = glm::translate(glm::mat4(1.0f), at) * glm::eulerAngleY(globe.spin) *
-				                   glm::scale(glm::mat4(1.0f), seed.scale * scale * draw.size * shape);
-				// A model of several bones (the flocks' birds and wolves) has each placed by its rest matrix
-				std::vector<glm::mat4> bones;
-				if (mesh->IsBoned() && !mesh->GetBoneMatrices().empty())
-				{
-					bones.reserve(mesh->GetBoneMatrices().size());
-					std::ranges::transform(mesh->GetBoneMatrices(), std::back_inserter(bones),
-					                       [&model](const glm::mat4& bone) { return model * bone; });
-				}
-				L3DMeshSubmitDesc submitDesc = {};
-				submitDesc.program = environmentMapped ? environmentProgram : objectProgram;
-				submitDesc.environment = environmentMapped ? environment : nullptr;
-				submitDesc.modelMatrices = bones.empty() ? &model : bones.data();
-				submitDesc.matrixCount = bones.empty() ? 1 : static_cast<uint8_t>(std::min<size_t>(bones.size(), UINT8_MAX));
-				submitDesc.mirrored = reflection;
-				submitDesc.useMaterialCulling = true;
-				submitDesc.uvOffset = phial ? visuals::PhialUvOffset(globe.phialFrame) : glm::vec2(0.0f);
-				submitDesc.sortDepth = zsort::Depth(at, eye);
-				const float alpha = static_cast<float>(draw.alpha) / k_ByteMax;
-				if (added)
-				{
-					// Added by its own alpha without writing depth, lit as the rest
-					submitDesc.viewId = translucent;
-					submitDesc.state = k_AddedState | BGFX_STATE_WRITE_A;
-				}
-				else if (!draw.lit)
-				{
-					// Plain white at its alpha, blended over what is behind
-					submitDesc.viewId = translucent;
-					submitDesc.state = k_BlendedState | BGFX_STATE_BLEND_ALPHA;
-					submitDesc.tint = glm::vec4(1.0f, 1.0f, 1.0f, alpha);
-				}
-				else if (draw.alpha < 255)
-				{
-					// Lit, faded by its alpha
-					submitDesc.viewId = translucent;
-					submitDesc.state =
-					    k_BlendedState | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_FACTOR, BGFX_STATE_BLEND_INV_FACTOR);
-					submitDesc.rgba = static_cast<uint32_t>(draw.alpha) * 0x01010101u;
-				}
-				else
-				{
-					submitDesc.viewId = desc.viewId;
-					submitDesc.state = k_BlendedState | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z;
-					submitDesc.useMaterialBlending = true;
-				}
-				// A frozen phial is tinted icy by its pulse, and its ice shines over it
-				const bool frozen = phial && receiveType == k_FreezeReceiveType;
-				if (frozen)
-				{
-					submitDesc.tint = glm::vec4(ColourOf(visuals::FreezeTint(pulse)), 0.0f);
-				}
-				DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
-				if (frozen && iceMap != nullptr)
-				{
-					submitDesc.viewId = translucent;
-					submitDesc.program = environmentProgram;
-					submitDesc.environment = iceMap;
-					submitDesc.environmentOnlyAlpha = std::max(std::nearbyint(pulse * k_ByteMax), 1.0f) / k_ByteMax;
-					submitDesc.useMaterialBlending = false;
-					submitDesc.state = k_AddedState;
-					submitDesc.tint = glm::vec4(1.0f, 1.0f, 1.0f, 0.0f);
-					DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
-				}
-			}
-		}
+		// The miracle's seed spinning inside, below the middle, for the seeds that show one. Nobody owns a globe, and
+		// nobody's alignment of 0 is evil enough for the flock's bat.
+		DrawSeedModel(desc, {.seed = globe.seedType,
+		                     .middle = globe.middle,
+		                     .scale = scale,
+		                     .spin = globe.spin,
+		                     .phialPhase = globe.phialPhase,
+		                     .phialFrame = globe.phialFrame,
+		                     .phialAlpha = visuals::k_GlobeAlpha,
+		                     .ownerAlignment = 0.0f});
 
 		// The globe, added at 150 of 255 by its texture's alpha and writing its depth, turned to face the camera about its
 		// middle, and with its origin pushed towards the camera from its middle by its radius so that it comes after what
