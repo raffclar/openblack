@@ -8,9 +8,14 @@
  *******************************************************************************/
 
 #include <array>
+#include <filesystem>
 #include <memory>
+#include <span>
+#include <string_view>
+#include <system_error>
 
 #include <MindFile.h>
+#include <PhysiqueFile.h>
 #include <gtest/gtest.h>
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
@@ -26,6 +31,7 @@
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "Locator.h"
 
 // Enable this define because we use a custom locator
@@ -58,6 +64,79 @@ creature_mind_body::Body GrownBody()
 	body.blood = {{.u = 1, .v = 2, .skin = 1, .age = 10}};
 	return body;
 }
+/// A leash system that knows only whose creature is whose
+class FakeLeash final: public ecs::systems::LeashSystemInterface
+{
+public:
+	void ProcessTurn() override {}
+	void Update(float /*seconds*/) override {}
+	void HandleInput(const glm::vec3& /*rayOrigin*/, const glm::vec3& /*rayDirection*/, bool /*actionTaken*/) override {}
+	[[nodiscard]] bool Knows(entt::entity /*creature*/, LeashType /*type*/) const override { return false; }
+	void SetKnown(entt::entity /*creature*/, LeashType /*type*/, bool /*known*/) override {}
+	[[nodiscard]] bool IsLeashable(entt::entity /*creature*/) const override { return false; }
+	bool SetLeashable(entt::entity /*creature*/, bool /*leashable*/) override { return false; }
+	void SetOwner(entt::entity /*creature*/, PlayerNames /*owner*/) override {}
+	void ClaimOnArrival(entt::entity /*creature*/) override {}
+	[[nodiscard]] creature_leash::Refusal WhyNot(PlayerNames /*player*/, entt::entity /*creature*/,
+	                                             LeashType /*type*/) const override
+	{
+		return {};
+	}
+	[[nodiscard]] std::optional<Refused> LastRefusal() const override { return std::nullopt; }
+	bool PutOn(entt::entity /*creature*/, LeashType /*type*/) override { return false; }
+	void TakeOff(entt::entity /*creature*/) override {}
+	bool Toggle(entt::entity /*creature*/) override { return false; }
+	bool ChangeType(entt::entity /*creature*/, LeashType /*type*/) override { return false; }
+	bool TieTo(entt::entity /*creature*/, entt::entity /*object*/) override { return false; }
+	void UntieToHand(entt::entity /*creature*/) override {}
+	void SetWorks(entt::entity /*creature*/, bool /*works*/) override {}
+	void SetDrawn(bool /*drawn*/) override {}
+	void ConfineToHome(entt::entity /*creature*/, float /*radius*/) override {}
+	void ClearConfinement(entt::entity /*creature*/) override {}
+	[[nodiscard]] bool FreeOfHome(entt::entity /*creature*/) const override { return true; }
+	[[nodiscard]] bool IsLeashed(entt::entity /*creature*/) const override { return false; }
+	[[nodiscard]] std::optional<entt::entity> TiedTo(entt::entity /*creature*/) const override { return std::nullopt; }
+	[[nodiscard]] std::optional<glm::vec3> HolderPoint(entt::entity /*creature*/) const override { return std::nullopt; }
+	[[nodiscard]] LeashType TypeOf(entt::entity /*creature*/) const override { return {}; }
+	[[nodiscard]] std::optional<entt::entity> PlayersCreature(PlayerNames player) const override
+	{
+		return player == PlayerNames::PLAYER_ONE ? playersCreature : std::nullopt;
+	}
+	bool PressKey(PlayerNames /*player*/, creature_leash::LeashKey /*key*/) override { return false; }
+	bool TapCreature(PlayerNames /*player*/, entt::entity /*creature*/) override { return false; }
+	bool Shake(PlayerNames /*player*/) override { return false; }
+	void PlacePosts(PlayerNames /*owner*/, const std::array<glm::vec3, 3>& /*points*/) override {}
+	bool TapPost(entt::entity /*post*/) override { return false; }
+
+	std::optional<entt::entity> playersCreature;
+};
+
+/// A folder of its own for a test's files, gone with the test
+class TestFolder
+{
+public:
+	explicit TestFolder(std::string_view name)
+	    : _path(std::filesystem::temp_directory_path() / "openblack_tests" / name)
+	{
+		std::error_code error;
+		std::filesystem::remove_all(_path, error);
+		std::filesystem::create_directories(_path, error);
+	}
+	~TestFolder()
+	{
+		std::error_code error;
+		std::filesystem::remove_all(_path, error);
+	}
+	TestFolder(const TestFolder&) = delete;
+	TestFolder& operator=(const TestFolder&) = delete;
+	TestFolder(TestFolder&&) = delete;
+	TestFolder& operator=(TestFolder&&) = delete;
+
+	[[nodiscard]] const std::filesystem::path& Path() const { return _path; }
+
+private:
+	std::filesystem::path _path;
+};
 } // namespace
 
 TEST(CreatureCarryOver, AWoundIsKeptAsAWordOfItsTexelSkinAgeColumnAndKind)
@@ -251,4 +330,104 @@ TEST_F(CreatureCarryOverSystem, WithNoCreatureWhatWasKeptBeforeStays)
 TEST_F(CreatureCarryOverSystem, NothingIsLoadedWhenNoCreatureWasKept)
 {
 	EXPECT_FALSE(_carryOver.LoadPlayersCreature({100.0f, 100.0f}).has_value());
+}
+
+TEST_F(CreatureCarryOverSystem, NothingIsLoadedWhenThePlayerAlreadyHasACreature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& leash = static_cast<FakeLeash&>(Locator::leashSystem::emplace<FakeLeash>());
+	const auto theirs = registry.Create();
+	registry.Assign<ecs::components::Creature>(theirs);
+	leash.playersCreature = theirs;
+	auto file = std::make_shared<creaturemind::MindFileData>();
+	file->name = u"Spot";
+	_carryOver.Keep(file);
+
+	const auto loaded = _carryOver.LoadPlayersCreature({100.0f, 100.0f});
+	Locator::leashSystem::reset();
+
+	EXPECT_FALSE(loaded.has_value());
+	// No other creature was made, and what was kept stays for another time
+	size_t creatures = 0;
+	registry.Each<const ecs::components::Creature>([&creatures](entt::entity, const auto&) { ++creatures; });
+	EXPECT_EQ(creatures, 1u);
+	ASSERT_NE(_carryOver.Kept(), nullptr);
+	EXPECT_EQ(_carryOver.Kept()->name, u"Spot");
+}
+
+TEST(CreatureCarryOver, TheCreatureIsKeptUnderTheProfilesNameAndItsPhysiqueBesideIt)
+{
+	const auto files = KeptFilesIn("minds", "C4a4f6e63.erc");
+	EXPECT_EQ(files.mind, std::filesystem::path("minds") / "C4a4f6e63.erc");
+	EXPECT_EQ(files.physique, std::filesystem::path("minds") / "PhysiqueC4a4f6e63.erc");
+}
+
+TEST(CreatureCarryOver, ThePhysiqueIsTheBodyAsItIsWithTheAlignmentItIsSavedWith)
+{
+	const auto body = GrownBody();
+	const auto physique = creature_mind_body::ToPhysiqueFile(body, 7, 0.25f);
+	EXPECT_EQ(physique.speciesRow, 7u);
+	EXPECT_EQ(physique.drawnSize, 1.8f);
+	EXPECT_EQ(physique.strength, 0.7f);
+	EXPECT_EQ(physique.fatness, 0.8f);
+	EXPECT_EQ(physique.alignment, 0.25f);
+	ASSERT_EQ(physique.blood.size(), 1u);
+	EXPECT_EQ(physique.blood.front(), creature_marks::BloodToWord(body.blood.front()));
+	ASSERT_EQ(physique.wounds.size(), 1u);
+	EXPECT_EQ(physique.wounds.front(), creature_marks::WoundToWord(Wound()));
+}
+
+TEST(CreatureCarryOver, APhysiqueFileIsTheBodysNumbersThenTheBloodThenTheWounds)
+{
+	const creaturemind::PhysiqueFileData physique {.speciesRow = 3,
+	                                               .drawnSize = 1.5f,
+	                                               .strength = 0.5f,
+	                                               .fatness = 0.25f,
+	                                               .alignment = -1.0f,
+	                                               .blood = {0x11},
+	                                               .wounds = {0x22, 0x33}};
+	const auto bytes = creaturemind::WritePhysique(physique);
+	// Five numbers, a count and a word of blood, a count and two words of wounds
+	ASSERT_EQ(bytes.size(), 4u * (5 + 2 + 3));
+	EXPECT_EQ(bytes.at(0), 3);
+	EXPECT_EQ(bytes.at(20), 1);
+	EXPECT_EQ(bytes.at(24), 0x11);
+	EXPECT_EQ(bytes.at(28), 2);
+	EXPECT_EQ(bytes.at(32), 0x22);
+	EXPECT_EQ(bytes.at(36), 0x33);
+	EXPECT_EQ(creaturemind::ReadPhysique(bytes), physique);
+	// A file cut short is no physique
+	EXPECT_FALSE(creaturemind::ReadPhysique(std::span(bytes).first(bytes.size() - 1)).has_value());
+}
+
+TEST_F(CreatureCarryOverSystem, ACreatureKeptByAnEarlierGameIsReadFromItsFile)
+{
+	const TestFolder folder("carry_over_read");
+	creaturemind::MindFileData file;
+	file.name = u"Rex";
+	const auto path = KeptFilesIn(folder.Path(), ecs::systems::CreatureCarryOverSystem::k_ProfileFile).mind;
+	ASSERT_EQ(creaturemind::WriteFile(path, file), creaturemind::MindResult::Success);
+
+	ecs::systems::CreatureCarryOverSystem carryOver(folder.Path());
+	EXPECT_EQ(carryOver.Kept(), nullptr);
+	// With no land to make it on, it is still read
+	EXPECT_FALSE(carryOver.LoadPlayersCreature({100.0f, 100.0f}).has_value());
+	ASSERT_NE(carryOver.Kept(), nullptr);
+	EXPECT_EQ(carryOver.Kept()->name, u"Rex");
+}
+
+TEST_F(CreatureCarryOverSystem, ACreatureKeptSinceTheGameStartedIsNotReplacedByItsFile)
+{
+	const TestFolder folder("carry_over_kept");
+	creaturemind::MindFileData old;
+	old.name = u"Rex";
+	const auto path = KeptFilesIn(folder.Path(), ecs::systems::CreatureCarryOverSystem::k_ProfileFile).mind;
+	ASSERT_EQ(creaturemind::WriteFile(path, old), creaturemind::MindResult::Success);
+
+	ecs::systems::CreatureCarryOverSystem carryOver(folder.Path());
+	auto kept = std::make_shared<creaturemind::MindFileData>();
+	kept->name = u"Spot";
+	carryOver.Keep(kept);
+	EXPECT_FALSE(carryOver.LoadPlayersCreature({100.0f, 100.0f}).has_value());
+	EXPECT_EQ(carryOver.Kept()->name, u"Spot");
 }
