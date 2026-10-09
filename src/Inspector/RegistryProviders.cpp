@@ -10,12 +10,15 @@
 #include "RegistryProviders.h"
 
 #include <cctype>
+#include <cstdint>
 
 #include <algorithm>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <InspectorQuery.h>
+#include <fmt/format.h>
 #include <glm/geometric.hpp>
 
 #include "ComponentReflection.h"
@@ -201,6 +204,15 @@ std::vector<QueryDescription> RegistryProvider::Describe() const
 	     .parameters = {},
 	     .kind = ResultKind::List,
 	     .needsNear = false},
+	    {.name = "hash",
+	     .description = "A hash of where every entity is (its id and transform), and of a component's fields when one is "
+	                    "named, to tell whether two runs ended the same",
+	     .parameters = {{.name = "component",
+	                     .type = "string",
+	                     .description = "Also hash this component's fields on each entity that has it",
+	                     .required = false}},
+	     .kind = ResultKind::Object,
+	     .needsNear = false},
 	    {.name = "references",
 	     .description = "Every component field that holds an entity (an entity, an optional one or a list of them), "
 	                    "gone or not: the holder, its label, the component and the field's path",
@@ -228,6 +240,10 @@ QueryResult RegistryProvider::Run(std::string_view query, const QueryContext& co
 	if (query == "components")
 	{
 		return Components(*registry);
+	}
+	if (query == "hash")
+	{
+		return Hash(*registry, context.params);
 	}
 	if (query == "references")
 	{
@@ -257,6 +273,49 @@ QueryResult RegistryProvider::Entity(const ecs::Registry& registry, const Json& 
 		}
 	}
 	return QueryResult::Value(std::move(result));
+}
+
+QueryResult RegistryProvider::Hash(const ecs::Registry& registry, const Json& params) const
+{
+	// FNV-1a over the entities in the order of their ids, each with its transform's floats as they are held
+	constexpr uint64_t k_Offset = 14695981039346656037ull;
+	constexpr uint64_t k_Prime = 1099511628211ull;
+	uint64_t hash = k_Offset;
+	const auto mix = [&hash](const void* data, size_t size) {
+		const auto* bytes = static_cast<const unsigned char*>(data);
+		for (size_t i = 0; i < size; ++i)
+		{
+			hash = (hash ^ bytes[i]) * k_Prime;
+		}
+	};
+	const entt::sparse_set* extra = nullptr;
+	if (const auto name = StringMember(params, "component"); name.has_value())
+	{
+		extra = reflection::FindStorage(registry.Underlying(), *name);
+		if (extra == nullptr)
+		{
+			return QueryResult::Error("no component " + *name + "; ask ecs.components for their names");
+		}
+	}
+	std::vector<entt::entity> entities;
+	registry.Each<const ecs::components::Transform>(
+	    [&entities](entt::entity entity, const ecs::components::Transform&) { entities.push_back(entity); });
+	std::ranges::sort(entities);
+	for (const auto entity : entities)
+	{
+		const auto id = entt::to_integral(entity);
+		mix(&id, sizeof(id));
+		const auto& transform = registry.Get<const ecs::components::Transform>(entity);
+		mix(&transform.position, sizeof(transform.position));
+		mix(&transform.rotation, sizeof(transform.rotation));
+		mix(&transform.scale, sizeof(transform.scale));
+		if (extra != nullptr && extra->contains(entity))
+		{
+			const auto fields = Dump(reflection::ComponentToJson(_context, extra->type(), extra->value(entity)));
+			mix(fields.data(), fields.size());
+		}
+	}
+	return QueryResult::Value({{"hash", fmt::format("{:016x}", hash)}, {"entities", entities.size()}});
 }
 
 QueryResult RegistryProvider::References(const ecs::Registry& registry, const Json& params) const

@@ -29,6 +29,8 @@
 #include <ECS/Registry.h>
 #include <Inspector.h>
 #include <Inspector/ComponentReflection.h>
+#include <Inspector/GameControls.h>
+#include <Inspector/GameInput.h>
 #include <Inspector/GameProviders.h>
 #include <Inspector/GameWorldEdit.h>
 #include <Inspector/RunControl.h>
@@ -101,6 +103,8 @@ public:
 	[[nodiscard]] uint32_t GetTurn() const override { return 0; }
 	[[nodiscard]] float GetSpeed() const override { return 1.0f; }
 	void SetSpeed(float /*speed*/) override {}
+	void SetFixedFrameTime(std::optional<uint32_t> /*milliseconds*/) override {}
+	[[nodiscard]] std::optional<uint32_t> GetFixedFrameTime() const override { return std::nullopt; }
 	bool LoadScenario(std::string_view /*id*/) override { return false; }
 	[[nodiscard]] std::vector<ScenarioSummary> Scenarios() const override { return {}; }
 };
@@ -262,20 +266,6 @@ TEST(InspectorInfluence, TheHandsShare)
 	EXPECT_EQ(Ask(inspector, R"({"query": "influence.state"})")["circles"], 3);
 }
 
-TEST(InspectorCamera, ReadOnlyState)
-{
-	Inspector inspector;
-	inspector.Add(MakeCameraProvider([]() -> std::optional<CameraState> {
-		return CameraState {.origin = glm::vec3(1.0f), .focus = glm::vec3(2.0f), .horizontalFieldOfView = 60.0f};
-	}));
-	const auto camera = Ask(inspector, R"({"query": "camera.state", "fields": ["origin", "focus"]})");
-	EXPECT_EQ(camera, Json({{"origin", {1.0, 1.0, 1.0}}, {"focus", {2.0, 2.0, 2.0}}}));
-	for (const auto& description : inspector.Find("camera")->Describe())
-	{
-		EXPECT_FALSE(description.writes);
-	}
-}
-
 TEST(InspectorAudio, SoundsNearAPoint)
 {
 	ecs::Registry registry;
@@ -338,8 +328,10 @@ TEST(InspectorCoverage, EveryLocatorServiceHasAQuery)
 	reflection::RegisterComponents(reflection);
 	StillRunTarget run;
 	GameWorldEdit world;
+	GameInput input;
+	GameControlSet controls(input);
 	Inspector inspector;
-	AddGameProviders(inspector, reflection, run, world);
+	AddGameProviders(inspector, reflection, run, world, controls.View());
 
 	std::set<std::string> covered;
 	for (const auto& [service, query] : CoveredServices())
@@ -362,8 +354,10 @@ TEST(InspectorCoverage, EveryQueryAnswersWithNoGame)
 	reflection::RegisterComponents(reflection);
 	StillRunTarget run;
 	GameWorldEdit world;
+	GameInput input;
+	GameControlSet controls(input);
 	Inspector inspector;
-	AddGameProviders(inspector, reflection, run, world);
+	AddGameProviders(inspector, reflection, run, world, controls.View());
 
 	const auto described = AskAny(inspector, R"({"query": "describe"})");
 	ASSERT_TRUE(described.Ok());

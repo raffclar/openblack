@@ -150,22 +150,6 @@ struct InfluenceSources
 ///   influence.at   {position, player?}   the player's influence at a point
 [[nodiscard]] std::unique_ptr<ProviderInterface> MakeInfluenceProvider(InfluenceSources sources);
 
-// The camera, read only
-
-struct CameraState
-{
-	glm::vec3 origin {0.0f};
-	glm::vec3 focus {0.0f};
-	/// Its angles in degrees
-	glm::vec3 rotation {0.0f};
-	glm::vec3 forward {0.0f};
-	float horizontalFieldOfView {0.0f};
-	float nearClip {0.0f};
-};
-
-///   camera.state                         where the camera is, what it looks at and its angles
-[[nodiscard]] std::unique_ptr<ProviderInterface> MakeCameraProvider(std::function<std::optional<CameraState>()> camera);
-
 // The sounds
 
 struct AudioState

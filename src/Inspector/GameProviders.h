@@ -18,6 +18,7 @@ namespace openblack::inspector
 {
 class GameProvider;
 class Inspector;
+struct GameControls;
 class RunTargetInterface;
 class WorldEditInterface;
 
@@ -37,6 +38,6 @@ struct LocatorCoverage
 /// Adds every provider of the game's state, reading the locator's services as each query is asked (none need be there
 /// when they are added). Answers the run control's provider, which is told of each frame.
 GameProvider* AddGameProviders(Inspector& inspector, const entt::meta_ctx& reflection, RunTargetInterface& runTarget,
-                               WorldEditInterface& worldEdit);
+                               WorldEditInterface& worldEdit, const GameControls& controls);
 
 } // namespace openblack::inspector

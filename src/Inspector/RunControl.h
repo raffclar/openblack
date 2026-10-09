@@ -66,6 +66,11 @@ public:
 	/// The game's speed: 1 is normal, 2 twice as fast
 	[[nodiscard]] virtual float GetSpeed() const = 0;
 	virtual void SetSpeed(float speed) = 0;
+	/// Each frame taking a fixed time in milliseconds, for deterministic stepping, or the wall clock's time again
+	virtual void SetFixedFrameTime(std::optional<uint32_t> milliseconds) = 0;
+	[[nodiscard]] virtual std::optional<uint32_t> GetFixedFrameTime() const = 0;
+	/// The lock on the player's mouse and keyboard, as input.state gives it
+	[[nodiscard]] virtual Json InputLock() const { return nullptr; }
 	/// Starts a testbed scenario on a fresh testbed by its id: false if there is no such scenario
 	virtual bool LoadScenario(std::string_view id) = 0;
 	[[nodiscard]] virtual std::vector<ScenarioSummary> Scenarios() const = 0;
@@ -75,6 +80,7 @@ public:
 ///   game.pause / game.resume         and the state after
 ///   game.step     {frames | turns}   runs that many frames or turns, then pauses
 ///   game.speed    {speed}            1 is normal, 2 twice as fast
+///   game.frame_time {ms}             each frame takes this long (0 for the wall clock's time), for deterministic runs
 ///   game.scenario {id}               loads a testbed scenario on a fresh testbed
 ///   game.scenarios                   the testbed scenarios there are
 class GameProvider final: public ProviderInterface
@@ -93,10 +99,14 @@ public:
 	void Frame();
 
 	[[nodiscard]] Json State() const;
+	/// The frames served so far
+	[[nodiscard]] uint64_t FrameNumber() const { return _frame; }
 
 private:
 	RunTargetInterface& _target;
 	RunControl _control;
+	/// The frame time to go back to once a step with a fixed frame time ends
+	std::optional<std::optional<uint32_t>> _frameTimeAfterStep;
 	uint64_t _frame {0};
 };
 

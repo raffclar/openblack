@@ -11,6 +11,7 @@
 
 #include "InspectorSystem.h"
 
+#include <chrono>
 #include <string>
 #include <utility>
 
@@ -19,7 +20,10 @@
 #include "Debug/TestbedScenarioRegistry.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Game.h"
+#include "Input/GameActionMapInterface.h"
 #include "Inspector/ComponentReflection.h"
+#include "Inspector/GameControls.h"
+#include "Inspector/GameInput.h"
 #include "Inspector/GameProviders.h"
 #include "Inspector/GameWorldEdit.h"
 #include "Inspector/RunControl.h"
@@ -58,6 +62,24 @@ public:
 			Locator::time::value().SetSpeed(speed);
 		}
 	}
+	void SetFixedFrameTime(std::optional<uint32_t> milliseconds) override
+	{
+		if (Locator::time::has_value())
+		{
+			Locator::time::value().SetFixedFrameTime(
+			    milliseconds.has_value() ? std::optional(std::chrono::milliseconds(*milliseconds)) : std::nullopt);
+		}
+	}
+	[[nodiscard]] std::optional<uint32_t> GetFixedFrameTime() const override
+	{
+		if (!Locator::time::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto fixed = Locator::time::value().GetFixedFrameTime();
+		return fixed.has_value() ? std::optional(static_cast<uint32_t>(fixed->count())) : std::nullopt;
+	}
+	[[nodiscard]] inspector::Json InputLock() const override { return inspector::InputLockState(); }
 	bool LoadScenario(std::string_view id) override
 	{
 		auto* game = Game::Instance();
@@ -91,6 +113,8 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
     , _reflection(std::make_unique<entt::meta_ctx>())
     , _runTarget(std::make_unique<GameRunTarget>())
     , _worldEdit(std::make_unique<inspector::GameWorldEdit>())
+    , _inputTarget(std::make_unique<inspector::GameInput>())
+    , _controls(std::make_unique<inspector::GameControlSet>(*_inputTarget))
 {
 	inspector::reflection::RegisterComponents(*_reflection);
 	_inspector.SetWriteLog([](const inspector::Request& request, const inspector::QueryResult& answer) {
@@ -105,7 +129,13 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
 		}
 	});
 
-	_game = inspector::AddGameProviders(_inspector, *_reflection, *_runTarget, *_worldEdit);
+	_game = inspector::AddGameProviders(_inspector, *_reflection, *_runTarget, *_worldEdit, _controls->View());
+	auto screenshots = std::make_unique<inspector::ScreenshotProvider>(_controls->screenshots, _controls->camera);
+	_screenshots = screenshots.get();
+	_inspector.Add(std::move(screenshots));
+	auto input = std::make_unique<inspector::InputProvider>(*_inputTarget);
+	_input = input.get();
+	_inspector.Add(std::move(input));
 
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Inspector listening on 127.0.0.1:{}", _server->Port());
 }
@@ -114,12 +144,24 @@ InspectorSystem::~InspectorSystem() = default;
 
 void InspectorSystem::Service()
 {
+	// The player's input is kept out while a client is connected (and a moment after), as the lock's mode says
+	const auto now = std::chrono::steady_clock::now();
+	const auto seconds = std::chrono::duration<float>(now - _lastService).count();
+	_lastService = now;
 	_server->Poll([this](std::string_view line) {
 		auto answer = _inspector.Handle(line);
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Inspector: {} -> {} bytes", line, answer.size());
 		return answer;
 	});
+	if (Locator::gameActionSystem::has_value())
+	{
+		Locator::gameActionSystem::value().UpdateInputLock(_server->ClientCount() > 0, seconds);
+	}
 	_game->Frame();
+	// The input due this frame is made before the game reads its input
+	_input->Frame(_game->FrameNumber());
+	// The pictures due this frame are asked for before it is drawn
+	_screenshots->Frame(_game->FrameNumber());
 }
 
 uint16_t InspectorSystem::GetPort() const

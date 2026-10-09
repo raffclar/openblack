@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <variant>
@@ -125,6 +126,8 @@ public:
 	[[nodiscard]] uint32_t GetTurn() const override { return turn; }
 	[[nodiscard]] float GetSpeed() const override { return speed; }
 	void SetSpeed(float value) override { speed = value; }
+	void SetFixedFrameTime(std::optional<uint32_t> milliseconds) override { fixedMs = milliseconds; }
+	[[nodiscard]] std::optional<uint32_t> GetFixedFrameTime() const override { return fixedMs; }
 	bool LoadScenario(std::string_view id) override
 	{
 		if (id != "idle.one")
@@ -142,6 +145,7 @@ public:
 	bool paused {true};
 	uint32_t turn {10};
 	float speed {1.0f};
+	std::optional<uint32_t> fixedMs;
 	std::string loaded;
 };
 
@@ -303,6 +307,24 @@ TEST_F(InspectorRegistry, ReferencesToAnEntityAreFoundByField)
 	          0);
 }
 
+// Two runs that end with everything in the same place hash the same; anything moved changes the hash
+TEST_F(InspectorRegistry, HashOfWhereEverythingIs)
+{
+	const auto first = Ask(_inspector, R"({"query": "ecs.hash"})");
+	EXPECT_EQ(first["entities"], 6);
+	EXPECT_EQ(Ask(_inspector, R"({"query": "ecs.hash"})")["hash"], first["hash"]);
+
+	_registry.Get<Transform>(_trees[1]).position.x += 0.001f;
+	const auto moved = Ask(_inspector, R"({"query": "ecs.hash"})");
+	EXPECT_NE(moved["hash"], first["hash"]);
+	_registry.Get<Transform>(_trees[1]).position.x -= 0.001f;
+
+	// A component's fields count when named
+	const auto plain = Ask(_inspector, R"({"query": "ecs.hash", "params": {"component": "Tree"}})");
+	_registry.Get<Tree>(_trees[1]).maxSize = 3.0f;
+	EXPECT_NE(Ask(_inspector, R"({"query": "ecs.hash", "params": {"component": "Tree"}})")["hash"], plain["hash"]);
+}
+
 TEST_F(InspectorRegistry, UnknownComponentsAndEntitiesAreExplained)
 {
 	auto decoded = DecodeRequest(R"({"query": "ecs.entities", "params": {"component": "Nope"}})");
@@ -367,5 +389,35 @@ TEST(InspectorRunControl, GameQueriesDriveTheClock)
 	auto decoded = DecodeRequest(R"({"query": "game.step", "params": {"frames": 1, "turns": 1}})");
 	EXPECT_FALSE(inspector.Answer(std::get<Request>(decoded)).Ok());
 	decoded = DecodeRequest(R"({"query": "game.scenario", "params": {"id": "nope"}})");
+	EXPECT_FALSE(inspector.Answer(std::get<Request>(decoded)).Ok());
+}
+
+// A step with a fixed frame time holds the frames to it while stepping, then gives the wall clock back
+TEST(InspectorRunControl, StepWithAFixedFrameTimeGivesItBackAfter)
+{
+	FakeRunTarget target;
+	Inspector inspector;
+	auto provider = std::make_unique<GameProvider>(target);
+	auto* game = provider.get();
+	inspector.Add(std::move(provider));
+
+	const auto stepping = Ask(inspector, R"({"query": "game.step", "params": {"frames": 2, "fixed_ms": 16}})");
+	EXPECT_EQ(stepping["fixed_ms"], 16);
+	game->Frame();
+	game->Frame();
+	EXPECT_EQ(target.fixedMs, 16u);
+	game->Frame();
+	EXPECT_TRUE(target.paused);
+	EXPECT_FALSE(target.fixedMs.has_value());
+
+	// Set for good, it stays after steps
+	EXPECT_EQ(Ask(inspector, R"({"query": "game.frame_time", "params": {"ms": 10}})")["fixed_ms"], 10);
+	Ask(inspector, R"({"query": "game.step", "params": {"frames": 1, "fixed_ms": 20}})");
+	game->Frame();
+	game->Frame();
+	EXPECT_EQ(target.fixedMs, 10u);
+	EXPECT_TRUE(Ask(inspector, R"({"query": "game.frame_time", "params": {"ms": 0}})")["fixed_ms"].is_null());
+
+	const auto decoded = DecodeRequest(R"({"query": "game.step", "params": {"frames": 1, "fixed_ms": 0}})");
 	EXPECT_FALSE(inspector.Answer(std::get<Request>(decoded)).Ok());
 }

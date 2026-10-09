@@ -173,6 +173,7 @@ openblack_setup_and_add_test(test_water_rings test_water_rings.cpp)
 openblack_setup_and_add_test(test_flat_land test_flat_land.cpp)
 openblack_setup_and_add_test(test_creature_body test_creature_body.cpp)
 openblack_setup_and_add_test(test_creature_removal test_creature_removal.cpp)
+openblack_setup_and_add_test(test_injected_input test_injected_input.cpp)
 openblack_setup_and_add_test(test_creature_morph test_creature_morph.cpp)
 openblack_setup_and_add_test(
   test_creature_animation test_creature_animation.cpp
@@ -442,6 +443,14 @@ if (OPENBLACK_INSPECTOR)
     test_inspector_systems inspector/test_inspector_systems.cpp
   )
   target_link_libraries(test_inspector_systems PRIVATE inspector psys)
+  openblack_setup_and_add_test(
+    test_inspector_input inspector/test_inspector_input.cpp
+  )
+  target_link_libraries(test_inspector_input PRIVATE inspector)
+  openblack_setup_and_add_test(
+    test_inspector_control inspector/test_inspector_control.cpp
+  )
+  target_link_libraries(test_inspector_control PRIVATE inspector)
   # The coverage test reads the locator's header for its services
   target_compile_definitions(
     test_inspector_systems PRIVATE OPENBLACK_SOURCE_DIR="${CMAKE_SOURCE_DIR}"

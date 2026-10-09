@@ -602,28 +602,6 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeInfluenceProvider(I
 	return provider;
 }
 
-std::unique_ptr<ProviderInterface> openblack::inspector::MakeCameraProvider(std::function<std::optional<CameraState>()> camera)
-{
-	auto provider = std::make_unique<FunctionProvider>("camera");
-	provider->Add(Query("state", "Where the camera is, what it looks at, its angles (degrees) and field of view; read only"),
-	              [camera](const QueryContext& /*context*/) {
-		              const auto state = camera ? camera() : std::nullopt;
-		              if (!state.has_value())
-		              {
-			              return QueryResult::Error("there is no camera");
-		              }
-		              return QueryResult::Value({
-		                  {"origin", Point(state->origin)},
-		                  {"focus", Point(state->focus)},
-		                  {"rotation", Point(state->rotation)},
-		                  {"forward", Point(state->forward)},
-		                  {"horizontal_fov", state->horizontalFieldOfView},
-		                  {"near_clip", state->nearClip},
-		              });
-	              });
-	return provider;
-}
-
 std::unique_ptr<ProviderInterface> openblack::inspector::MakeAudioProvider(AudioSources sources)
 {
 	auto provider = std::make_unique<FunctionProvider>("audio");

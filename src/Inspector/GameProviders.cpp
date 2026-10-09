@@ -130,6 +130,7 @@
 #include "Editor/EditorSelection.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "GameControls.h"
 #include "Graphics/RendererInterface.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
@@ -1291,7 +1292,7 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 
 // The scripts
 
-std::unique_ptr<ProviderInterface> ScriptProvider()
+std::unique_ptr<ProviderInterface> ScriptProvider(ScriptTargetInterface& scripts)
 {
 	auto provider = std::make_unique<FunctionProvider>("script");
 	provider->Add(Query("vm", "The script machine: its scripts, tasks, globals and the task running"),
@@ -1338,6 +1339,7 @@ std::unique_ptr<ProviderInterface> ScriptProvider()
 		                           {"script_controlled", CountOf<ScriptControlled>(registry)},
 		                           {"system", Locator::scriptObjects::has_value()}};
 	              }));
+	AddScriptControls(*provider, scripts);
 	return provider;
 }
 
@@ -1381,7 +1383,8 @@ std::span<const LocatorCoverage> openblack::inspector::CoveredServices()
 }
 
 GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const entt::meta_ctx& reflection,
-                                                     RunTargetInterface& runTarget, WorldEditInterface& worldEdit)
+                                                     RunTargetInterface& runTarget, WorldEditInterface& worldEdit,
+                                                     const GameControls& controls)
 {
 	const RegistrySources registrySources {.registry = &Registry, .info = &Info};
 	inspector.Add(std::make_unique<RegistryProvider>(registrySources, reflection));
@@ -1486,21 +1489,9 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		    return Locator::influenceSystem::has_value() ? Locator::influenceSystem::value().GetCircles().size() : 0;
 	    },
 	}));
-	inspector.Add(MakeCameraProvider([]() -> std::optional<CameraState> {
-		if (!Locator::camera::has_value())
-		{
-			return std::nullopt;
-		}
-		const auto& camera = Locator::camera::value();
-		return CameraState {
-		    .origin = camera.GetOrigin(),
-		    .focus = camera.GetFocus(),
-		    .rotation = glm::degrees(camera.GetRotation()),
-		    .forward = camera.GetForward(),
-		    .horizontalFieldOfView = camera.GetHorizontalFieldOfView(),
-		    .nearClip = camera.GetNearClip(),
-		};
-	}));
+	inspector.Add(MakeCameraProvider(controls.camera));
+	inspector.Add(MakeGuiProvider(controls.gui));
+	inspector.Add(MakeLevelProvider(controls.levels));
 	inspector.Add(MakeAudioProvider({
 	    .world = World(),
 	    .state = []() -> std::optional<AudioState> {
@@ -1524,7 +1515,7 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	inspector.Add(TempleProvider());
 	inspector.Add(ViewProvider());
 	inspector.Add(CreaturesProvider());
-	inspector.Add(ScriptProvider());
+	inspector.Add(ScriptProvider(controls.scripts));
 
 	auto game = std::make_unique<GameProvider>(runTarget);
 	auto* gameProvider = game.get();

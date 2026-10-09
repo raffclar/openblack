@@ -21,6 +21,8 @@ namespace
 
 /// The most frames or turns one step may run, so that a mistyped count doesn't run away
 constexpr double k_LongestStep = 100000.0;
+/// The longest a fixed frame may take
+constexpr double k_LongestFrameMs = 1000.0;
 
 std::optional<uint32_t> Count(const Json& params, std::string_view key)
 {
@@ -96,9 +98,21 @@ std::vector<QueryDescription> GameProvider::Describe() const
 	    state("resume", "Lets the game run, stopping any stepping; the state after"),
 	    state("step",
 	          "Runs the game for some frames or turns from the next frame, then pauses it; poll game.state until "
-	          "stepping is null",
+	          "stepping is null. With fixed_ms each frame takes that long whatever the wall clock says, so that the "
+	          "same input gives the same frames",
 	          {{.name = "frames", .type = "integer", .description = "Frames to run", .required = false},
-	           {.name = "turns", .type = "integer", .description = "Game turns to run (ten a second)", .required = false}}),
+	           {.name = "turns", .type = "integer", .description = "Game turns to run (ten a second)", .required = false},
+	           {.name = "fixed_ms",
+	            .type = "integer",
+	            .description = "Milliseconds each frame takes while stepping (1 to 1000)",
+	            .required = false}}),
+	    state("frame_time",
+	          "Each frame takes a fixed time from now on, whatever the wall clock says, or the wall clock's time again "
+	          "with 0; the state after",
+	          {{.name = "ms",
+	            .type = "integer",
+	            .description = "Milliseconds a frame (1 to 1000), 0 for none",
+	            .required = true}}),
 	    state("speed", "Sets the game's speed; the state after",
 	          {{.name = "speed", .type = "number", .description = "1 is normal, 2 twice as fast", .required = true}}),
 	    state("scenario", "Loads a testbed scenario on a fresh testbed",
@@ -122,9 +136,15 @@ Json GameProvider::State() const
 	{
 		stepping = {{"until_turn", *turn}};
 	}
+	const auto fixed = _target.GetFixedFrameTime();
 	return {
-	    {"paused", _target.IsPaused()}, {"turn", _target.GetTurn()},       {"frame", _frame},
-	    {"speed", _target.GetSpeed()},  {"stepping", std::move(stepping)},
+	    {"paused", _target.IsPaused()},
+	    {"turn", _target.GetTurn()},
+	    {"frame", _frame},
+	    {"speed", _target.GetSpeed()},
+	    {"stepping", std::move(stepping)},
+	    {"fixed_ms", fixed.has_value() ? Json(*fixed) : Json(nullptr)},
+	    {"input_lock", _target.InputLock()},
 	};
 }
 
@@ -134,6 +154,11 @@ void GameProvider::Frame()
 	if (const auto paused = _control.Frame(_target.IsPaused(), _target.GetTurn()); paused.has_value())
 	{
 		_target.SetPaused(*paused);
+	}
+	// A step with a fixed frame time gives the frame time back once it has run
+	if (!_control.Stepping() && _frameTimeAfterStep.has_value())
+	{
+		_target.SetFixedFrameTime(*std::exchange(_frameTimeAfterStep, std::nullopt));
 	}
 }
 
@@ -158,6 +183,19 @@ QueryResult GameProvider::Run(std::string_view query, const QueryContext& contex
 		{
 			return QueryResult::Error("game.step needs either frames or turns, a whole number from 1");
 		}
+		const auto fixed = NumberMember(params, "fixed_ms");
+		if (fixed.has_value() && (*fixed < 1.0 || *fixed > k_LongestFrameMs || std::floor(*fixed) != *fixed))
+		{
+			return QueryResult::Error("fixed_ms is a whole number of milliseconds from 1 to 1000");
+		}
+		if (fixed.has_value())
+		{
+			if (!_frameTimeAfterStep.has_value())
+			{
+				_frameTimeAfterStep = _target.GetFixedFrameTime();
+			}
+			_target.SetFixedFrameTime(static_cast<uint32_t>(*fixed));
+		}
 		if (frames.has_value())
 		{
 			_control.StepFrames(*frames);
@@ -176,6 +214,17 @@ QueryResult GameProvider::Run(std::string_view query, const QueryContext& contex
 			return QueryResult::Error("game.speed needs a speed from 0.1 to 16");
 		}
 		_target.SetSpeed(static_cast<float>(*speed));
+		return QueryResult::Value(State());
+	}
+	if (query == "frame_time")
+	{
+		const auto ms = NumberMember(params, "ms");
+		if (!ms.has_value() || *ms < 0.0 || *ms > k_LongestFrameMs || std::floor(*ms) != *ms)
+		{
+			return QueryResult::Error("game.frame_time needs ms, a whole number from 0 (the wall clock) to 1000");
+		}
+		_frameTimeAfterStep.reset();
+		_target.SetFixedFrameTime(*ms == 0.0 ? std::nullopt : std::optional(static_cast<uint32_t>(*ms)));
 		return QueryResult::Value(State());
 	}
 	if (query == "scenario")

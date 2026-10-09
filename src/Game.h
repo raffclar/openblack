@@ -26,6 +26,7 @@
 #include "Creature/CreatureFight.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "EngineConfig.h"
+#include "Input/InputLock.h"
 #include "Input/ShortcutKeys.h"
 #include "Magic/HandHoldPoser.h"
 #include "Windowing/WindowingInterface.h" // For DisplayMode
@@ -116,6 +117,9 @@ struct Arguments
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> requestScreenshot;
 	/// The port of 127.0.0.1 the debug inspector's server listens on, in builds with it; none to not start it
 	std::optional<uint16_t> inspectPort;
+	/// How the player's mouse and keyboard are kept out while the inspector drives the game: while a client is
+	/// connected, from the start, or never
+	input::LockMode inspectInputLock {input::LockMode::Auto};
 };
 
 class Game
@@ -195,6 +199,10 @@ public:
 	[[nodiscard]] const HandAnimation* GetHandAnimation() const { return _handAnimation.get(); }
 
 	void RequestScreenshot(const std::filesystem::path& path) noexcept;
+	/// The game's own interface (its menu), once it is made
+	[[nodiscard]] gui::GameInterface* GetInterface() noexcept { return _interface.get(); }
+	/// The map script of the land loaded last, or "testbed"; empty before one is
+	[[nodiscard]] const std::filesystem::path& GetLandPath() const noexcept { return _landPath; }
 
 	static Game* Instance() { return sInstance; }
 
@@ -216,6 +224,7 @@ private:
 	std::optional<ScenarioRequest> _scenarioRequest;
 	/// The port the debug inspector is to listen on, if it is to start
 	std::optional<uint16_t> _inspectPort;
+	input::LockMode _inspectInputLock {input::LockMode::Auto};
 	/// Whether the testbed opens its window of scenarios
 	bool _testbedWindow {true};
 	bool _quitRequested {false};
@@ -322,6 +331,7 @@ private:
 	magic::HandHoldPoser _handHold;
 	/// The game's own interface, null without the game's files for it
 	std::unique_ptr<gui::GameInterface> _interface;
+	std::filesystem::path _landPath;
 	/// Whether the game was paused when the menu opened, which pauses it
 	bool _pausedBeforeMenu {true};
 	bool _menuWasOpen {false};

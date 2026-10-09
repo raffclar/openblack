@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <chrono>
 #include <memory>
 
 #include <Inspector.h>
@@ -26,6 +27,10 @@
 namespace openblack::inspector
 {
 class GameProvider;
+struct GameControlSet;
+class InputProvider;
+class ScreenshotProvider;
+class InputTargetInterface;
 class RunTargetInterface;
 class WorldEditInterface;
 } // namespace openblack::inspector
@@ -52,9 +57,18 @@ private:
 	std::unique_ptr<entt::meta_ctx> _reflection;
 	std::unique_ptr<inspector::RunTargetInterface> _runTarget;
 	std::unique_ptr<inspector::WorldEditInterface> _worldEdit;
+	std::unique_ptr<inspector::InputTargetInterface> _inputTarget;
+	/// The camera, the windows, the scripts, the lands and the pictures of the screen, through the game
+	std::unique_ptr<inspector::GameControlSet> _controls;
 	inspector::Inspector _inspector;
 	/// Owned by the inspector, told of each frame
 	inspector::GameProvider* _game {nullptr};
+	/// Owned by the inspector, makes the input due each frame
+	inspector::InputProvider* _input {nullptr};
+	/// Owned by the inspector, takes the pictures due each frame
+	inspector::ScreenshotProvider* _screenshots {nullptr};
+	/// When it last served requests, for how long the input lock lingers after a client goes
+	std::chrono::steady_clock::time_point _lastService {std::chrono::steady_clock::now()};
 };
 
 } // namespace openblack::ecs::systems
