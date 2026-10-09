@@ -207,7 +207,7 @@ hand_grab::Holdable HandGrabSystem::HoldableOf(entt::entity object) const
 bool HandGrabSystem::HandInInfluence() const
 {
 	const auto* grab = _world->Entities().TryGet<const HandGrab>(_world->Hand());
-	return grab != nullptr && grab->handPoint.has_value() && _world->InInfluence(_world->HandPlayer(), *grab->handPoint);
+	return grab != nullptr && grab->handPoint.has_value() && _world->HandInInfluence(_world->HandPlayer(), *grab->handPoint);
 }
 
 bool HandGrabSystem::MayTake(entt::entity object) const
@@ -305,6 +305,12 @@ bool HandGrabSystem::Press(uint32_t nowMs, uint32_t turn)
 		{
 			return true;
 		}
+		// Out of the player's influence the press does nothing: the hand keeps hold, and letting go of the button later,
+		// even back inside, doesn't throw
+		if (!HandInInfluence())
+		{
+			return true;
+		}
 		grab->state = HandGrab::State::ReadyToThrow;
 		grab->springPending = true;
 		return true;
@@ -388,6 +394,9 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 			grab->springPending = false;
 			return std::nullopt;
 		}
+		// Letting go onto the land counts as one more turn for what the hand keeps of the player's influence past the
+		// border, before the throw
+		_world->HeldThingUsedOnLand(_world->HandPlayer());
 		LetGo(*grab, grab->springOn ? grab->spring.Velocity() : glm::vec3(0.0f), false);
 		return std::nullopt;
 	}

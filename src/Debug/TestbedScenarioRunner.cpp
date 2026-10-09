@@ -21,6 +21,7 @@
 #include <memory>
 #include <numbers>
 #include <ranges>
+#include <string>
 #include <system_error>
 #include <type_traits>
 #include <variant>
@@ -83,6 +84,7 @@
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -97,6 +99,7 @@
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -432,6 +435,12 @@ void Runner::Start(const Scenario& scenario)
 	_middle = (land.GetExtent().minimum + land.GetExtent().maximum) * 0.5f;
 
 	SetUpEnvironment(scenario.environment);
+	if (const auto& temple = scenario.environment.temple; temple.has_value())
+	{
+		const auto at = MapPoint(_middle, *temple);
+		ecs::archetypes::CitadelArchetype::Create({at.x, land.GetHeightAt(at), at.y}, PlayerNames::PLAYER_ONE, glm::mat4(1.0f),
+		                                          glm::vec3(1.0f));
+	}
 	PlaceObjects(scenario, _middle);
 	PlaceBirds(scenario, _middle);
 	PlaceCreatures(scenario, _middle);
@@ -1321,6 +1330,17 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the alignment is {:.2f}", _seconds, command.alignment));
 		return;
 	}
+	if (command.kind == Kind::WideScreen)
+	{
+		// Held by a script, as the land's scripts hold them
+		constexpr uint32_t k_ScriptOwner = 1;
+		if (Locator::cinematicDirectorSystem::has_value())
+		{
+			Locator::cinematicDirectorSystem::value().SetWideScreen(command.value != 0, k_ScriptOwner);
+		}
+		Log(fmt::format("{:.1f}s: the cinema bars slide {}", _seconds, command.value != 0 ? "in" : "out"));
+		return;
+	}
 	const auto entity = CreatureAt(command.creature);
 	if (!entity.has_value() || !Locator::creatureLocomotionSystem::has_value() || !Locator::creatureMindSystem::has_value())
 	{
@@ -1472,6 +1492,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandTakeFireBall:
 	case Kind::HandTapObject:
 	case Kind::SetAlignment:
+	case Kind::WideScreen:
 	// The mouse commands are given before a creature is looked for
 	case Kind::PointerTo:
 	case Kind::PointerPress:
@@ -2259,6 +2280,16 @@ void PushMotion(const input::GameActionInterface::ScriptedPointer& pointer, glm:
 	event.motion.yrel = moved.y;
 	SDL_PushEvent(&event);
 }
+/// What the player's hand holds, for the log
+std::string HeldByHand()
+{
+	if (!Locator::handGrabSystem::has_value())
+	{
+		return {};
+	}
+	const auto held = Locator::handGrabSystem::value().GetHeld();
+	return held.has_value() ? fmt::format(", holding {}", static_cast<uint32_t>(*held)) : std::string {};
+}
 } // namespace
 
 std::string Runner::GivePointerCommand(const Command& command)
@@ -2388,11 +2419,11 @@ std::string Runner::HandOnScreen() const
 	                  : cues.dragMode.has_value() ? k_DragModes.at(static_cast<size_t>(*cues.dragMode))
 	                                              : std::string_view("undecided");
 	return fmt::format("cursor ({}, {}), hand ({:.0f}, {:.0f}) at ({:.1f}, {:.1f}, {:.1f}), {:.1f} from the camera, scale "
-	                   "{:.3f}, hints {:#x}, drag {}, camera heading {:.3f} pitch {:.3f}{}",
+	                   "{:.3f}, hints {:#x}, drag {}, camera heading {:.3f} pitch {:.3f}{}{}",
 	                   cursor.x, cursor.y, screen.x, screen.y, position.x, position.y, position.z,
 	                   glm::distance(position, camera.GetOrigin()), transform.scale.y, cues.tricons, drag,
 	                   camera.GetRotation().y, camera.GetRotation().x,
-	                   Locator::gameActionSystem::value().IsCursorFrozen() ? ", held" : "");
+	                   Locator::gameActionSystem::value().IsCursorFrozen() ? ", held" : "", HeldByHand());
 }
 
 void Runner::Log(std::string line)

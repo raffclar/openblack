@@ -170,6 +170,9 @@ public:
 
 	[[nodiscard]] uint32_t GetTurn() const;
 	[[nodiscard]] bool IsPaused() const;
+	/// This computer's hand is drawn this frame: no menu is open over the game and the interface is not given over to a
+	/// cinematic
+	[[nodiscard]] bool IsHandDrawn() const;
 	/// The scenario asked for on the command line, once: the scenarios' window runs it as the game starts
 	/// The game ends after this frame. Unlike the window's events, which say each time whether to go on, nothing takes
 	/// it back

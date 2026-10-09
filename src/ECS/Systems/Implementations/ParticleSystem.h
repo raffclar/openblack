@@ -207,6 +207,7 @@ public:
 	void AddTargetPosition(EffectId id, glm::vec3 position) override;
 	void AddPlasma(EffectId id, const particles::PlasmaCommand& command) override;
 	void AddBeliefSprite(const particles::BeliefSprite& sprite) override;
+	void AddHandManaPathSpark(const particles::mana_path::Spark& spark) override;
 	void AddGestureTrail(std::shared_ptr<particles::GestureTrail> trail) override;
 	void AddLightSheet(const std::shared_ptr<particles::LightSheet>& sheet) override { _world.AddLightSheet(sheet); }
 	void UpdateFrame(float gameSeconds, const HandFrame& hand) override;
@@ -273,6 +274,8 @@ private:
 	bool _paused {false};
 	/// A symbol of belief waits for its effect
 	bool _beliefWanted {false};
+	/// The effect the hand's mana path sparks run in, once started
+	EffectId _handManaPath {k_NoEffect};
 	/// The textures by the name a creator spells them with: the sheet and its alpha
 	std::map<std::string, std::pair<entt::id_type, entt::id_type>, std::less<>> _textures;
 	/// Every texture's name in lower case, to its spelling on disk

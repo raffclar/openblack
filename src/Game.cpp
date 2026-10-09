@@ -651,6 +651,11 @@ bool Game::IsPaused() const
 	return Locator::time::value().IsPaused();
 }
 
+bool Game::IsHandDrawn() const
+{
+	return (!_interface || !_interface->GetMenu().IsOpen()) && Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+}
+
 void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds)
 {
 	if (!Locator::gestureSystem::has_value() || screenSize.x <= 0 || screenSize.y <= 0)
@@ -879,6 +884,8 @@ bool Game::GameLogicLoop() noexcept
 		return false;
 	}
 	clock.StartTurn();
+	// The influence asked during the turn is measured from where the hands were at it
+	Locator::influenceSystem::value().SetInGameTurn(true);
 	ProcessHandToolTipTurn();
 
 	// What moved since the last turn goes into its new map cell
@@ -1068,8 +1075,8 @@ bool Game::GameLogicLoop() noexcept
 		Locator::templeDestructionSystem::value().EndTurn();
 	}
 
-	// Each turn ends with the camera taking the alignment of the player of most influence where it is
-	Locator::alignmentSystem::value().UpdateTurn();
+	// Each turn ends with the camera taking the alignment of the player of most influence at its eye
+	Locator::alignmentSystem::value().UpdateTurn(cameraPosition);
 	// The temples' outsides follow their players' alignments
 	Locator::templeExteriorSystem::value().UpdateTurn();
 
@@ -1093,6 +1100,7 @@ bool Game::GameLogicLoop() noexcept
 	}
 
 	ProcessMusicTurn(cameraPosition, false);
+	Locator::influenceSystem::value().SetInGameTurn(false);
 
 	_lastGameLoopTime = currentTime;
 	_turnDeltaTime = delta;
@@ -1107,13 +1115,23 @@ void Game::ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel)
 	{
 		return;
 	}
+	const auto& alignment = Locator::alignmentSystem::value();
+	// The land's music waits while a script holds the cinema bars, and while they slide in or out
+	bool cinema = false;
+	if (Locator::cinematicDirectorSystem::has_value())
+	{
+		const auto& director = Locator::cinematicDirectorSystem::value();
+		cinema =
+		    (director.IsWideScreenOn() && director.GetWideScreenOwner() != 0) || !director.IsWideScreenTransitionFinished();
+	}
 	audio::GameMusic::TurnInputs music {
 	    .turn = GetTurn(),
 	    .camera = cameraPosition,
 	    .groundHeight = Locator::terrainSystem::value().GetHeightAt(glm::xz(cameraPosition)),
 	    .inCitadel = inCitadel,
-	    // TODO(raffclar): the player's alignment once it is simulated
-	    .alignment = 0.0f,
+	    .alignment = alignment.GetCameraAlignment(),
+	    .playerAlignment = alignment.GetPlayerAlignment(Locator::playerSystem::value().GetLocalPlayer()),
+	    .cinema = cinema,
 	    .towns = {},
 	};
 	Locator::entitiesRegistry::value().Each<const ecs::components::Town, const Tribe, const ecs::components::Transform>(
@@ -1428,6 +1446,11 @@ bool Game::Update() noexcept
 	// The homes' smoke rises while someone is in
 	Locator::chimneySmokeSystem::value().Update(gameTime);
 	Locator::influenceSystem::value().Update(gameTime);
+	// What the hand shows past the border is shown with the hand
+	if (IsHandDrawn())
+	{
+		Locator::influenceSystem::value().ShowHandInfluence(gameTime);
+	}
 	Locator::mistSystem::value().Update(gameTime);
 	Locator::villageLightSystem::value().Update(gameTime);
 	Locator::fieldSystem::value().Update(gameTime);
@@ -2692,8 +2715,7 @@ bool Game::Run() noexcept
 			    .drawBoundingBoxes = config.drawBoundingBoxes,
 			    .cullBack = false,
 			    .wireframe = config.wireframe,
-			    .drawHand = (!_interface || !_interface->GetMenu().IsOpen()) &&
-			                Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
+			    .drawHand = IsHandDrawn(),
 			};
 			Locator::rendererInterface::value().DrawScene(drawDesc);
 		}
