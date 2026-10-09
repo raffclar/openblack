@@ -23,6 +23,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
@@ -46,12 +47,12 @@ CreatureModeSystem::~CreatureModeSystem() = default;
 
 std::optional<entt::entity> CreatureModeSystem::PlayersCreature() const
 {
-	// The player's creature as the leash knows it: the one held on its leash, or its first
-	if (!Locator::leashSystem::has_value())
+	// The player's primary creature, the earliest they got that is still theirs
+	if (!Locator::playerSystem::has_value())
 	{
 		return std::nullopt;
 	}
-	return Locator::leashSystem::value().PlayersCreature(k_LocalPlayer);
+	return Locator::playerSystem::value().GetPrimaryCreature(k_LocalPlayer);
 }
 
 std::optional<creature_follow::View> CreatureModeSystem::GetView() const
