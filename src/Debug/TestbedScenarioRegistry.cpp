@@ -1056,6 +1056,77 @@ void AddAudio(std::vector<Scenario>& all)
 	    .commands = voices,
 	    .repeatFrom = 0,
 	});
+
+	// A tiger to the east roars, then a cow to the west moos, the camera looking north between them
+	auto east = Content(CreatureType::Tiger, {40.0f, 0.0f}, 180.0f, "tiger, east");
+	east.pauseMind = true;
+	auto west = Content(CreatureType::Cow, {-40.0f, 0.0f}, 180.0f, "cow, west");
+	west.pauseMind = true;
+	all.push_back({
+	    .id = "audio.stereo",
+	    .name = "Voices from either side of the screen",
+	    .facet = Facet::Audio,
+	    .description = "The camera looks north between a tiger on the right of the screen and a cow on the left, who take "
+	                   "turns to be angry. The audio log gives the side each sound is heard from.",
+	    .expected = "The tiger is heard from the right and the cow from the left; turning the camera round swaps them.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 25.0f, -70.0f}, .look = {0.0f, 5.0f, 0.0f}},
+	    .creatures = {east, west},
+	    .commands = {Play(Kind::PlayAction, 0, animations::k_Angry, 1.0f, true),
+	                 Play(Kind::PlayAction, 1, animations::k_Angry, 1.0f, true)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "audio.alignment_music",
+	    .name = "The land's music following the alignment",
+	    .facet = Facet::Audio,
+	    .description = "The camera stays in the player's influence while their alignment goes from good to evil, to "
+	                   "neutral and back to good, twelve seconds apart. The audio log gives the music mix as it fades.",
+	    .expected = "The land's music crossfades to the version of each alignment, carrying on in time: the new version "
+	                "fades in over about two and a half seconds while the old one fades out over about three.",
+	    .environment = {.playerAlignment = 1.0f},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::SetAlignment, .delaySeconds = 12.0f, .alignment = -1.0f},
+	                 {.kind = Kind::SetAlignment, .delaySeconds = 12.0f, .alignment = 0.0f},
+	                 {.kind = Kind::SetAlignment, .delaySeconds = 12.0f, .alignment = 1.0f}},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "audio.temple_music",
+	    .name = "The temple's music following the player's alignment",
+	    .facet = Facet::Audio,
+	    .description = "The temple opens on the creature's room, and the player's alignment goes from good to evil, to "
+	                   "neutral and back to good, twelve seconds apart. The audio log gives the music mix as it fades.",
+	    .expected = "The temple's music plays in the version of the player's own alignment, crossfading as it changes "
+	                "and carrying on in time.",
+	    .environment = {.playerAlignment = 1.0f},
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 40.0f}, 180.0f, "yours")},
+	    .commands = {{.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 1.0f},
+	                 {.kind = Kind::SetAlignment, .delaySeconds = 12.0f, .alignment = -1.0f},
+	                 {.kind = Kind::SetAlignment, .delaySeconds = 12.0f, .alignment = 0.0f},
+	                 {.kind = Kind::SetAlignment, .delaySeconds = 12.0f, .alignment = 1.0f}},
+	});
+
+	// The camera looks out across the north edge of the player's influence: the bottom of the screen is inside it,
+	// the middle and the top beyond it
+	all.push_back({
+	    .id = "audio.virtual_influence",
+	    .name = "The hand's hum past the influence border",
+	    .facet = Facet::Audio,
+	    .description = "The hand rests inside the player's influence near its border, goes out past the border for twenty "
+	                   "seconds, and comes back in. The audio log gives the hum's pitch as it changes.",
+	    .expected = "Crossing the border plays its sound each way. Outside, a hum is heard, not from any place, at full "
+	                "pitch at first, falling as the hand stays out and goes further; it stops when the hand comes back.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 330.0f}, .look = {0.0f, 0.0f, 420.0f}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.95f}},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 3.0f, .point = {0.0f, -0.5f}, .amount = 2.0f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 10.0f, .point = {0.0f, -0.1f}, .amount = 2.0f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 10.0f, .point = {0.0f, 0.6f}, .amount = 2.0f}},
+	    .repeatFrom = 0,
+	});
 }
 
 void AddObjects(std::vector<Scenario>& all)
