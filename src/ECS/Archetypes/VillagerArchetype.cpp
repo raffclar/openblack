@@ -76,7 +76,8 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 
 	registry.Assign<Villager>(entity, life, villager_age::BirthTurnFor(turn, born.age), born.food, lifeStage, sex,
 	                          info.tribeType, info.villagerNumber, task, town, abode, born.lastCheckTurn);
-	registry.Assign<WallHug>(entity, glm::vec2(), glm::vec2(), 0.0f, GetSpeedStateSpeed(info.speedGroup.speedDefault));
+	registry.Assign<WallHug>(
+	    entity, WallHug {.goal = glm::vec2(), .yAngle = 0.0f, .speed = GetSpeedStateSpeed(info.speedGroup.speedDefault)});
 	// A child made as a child wears its kind's child model; the rest their job's
 	const auto resourceId = resources::HashIdentifier(born.child ? info.childMeshHigh : info.highDetail);
 	registry.Assign<Mesh>(entity, resourceId, static_cast<int8_t>(0), static_cast<int8_t>(0));

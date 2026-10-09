@@ -120,7 +120,7 @@ protected:
 			auto& component = registry.Assign<Villager>(villager);
 			component.town = _town;
 			component.life = 1.0f;
-			registry.Assign<WallHug>(villager, glm::vec2(0.0f), glm::vec2(0.0f), 0.0f, 1.0f);
+			registry.Assign<WallHug>(villager, WallHug {.goal = glm::vec2(0.0f), .yAngle = 0.0f, .speed = 1.0f});
 			registry.Assign<LivingAction>(villager, VillagerStates::DecideWhatToDo, static_cast<uint16_t>(0));
 			_villagers.push_back(villager);
 		}
