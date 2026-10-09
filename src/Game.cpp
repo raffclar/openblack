@@ -51,7 +51,7 @@
 #include "3D/LandLightTable.h"
 #include "3D/MapCoords.h"
 #include "3D/OceanInterface.h"
-#include "3D/SkyInterface.h"
+#include "3D/SkyDome.h"
 #include "3D/SnowCover.h"
 #include "3D/TempleInteriorInterface.h"
 #include "3D/WaterRings.h"
@@ -72,6 +72,7 @@
 #include "Debug/FrameStatsLog.h"
 #include "Debug/TestbedDispenserGrid.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
+#include "ECS/Archetypes/SkyArchetype.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/CameraBookmark.h"
@@ -151,6 +152,7 @@
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -985,7 +987,7 @@ bool Game::GameLogicLoop() noexcept
 	}
 
 	// The time of day moves on
-	Locator::skySystem::value().GetClock().ProcessTurn();
+	Locator::skySystem::value().ProcessTurn();
 
 	// The weather moves on, then the ambience follows the weather at the camera
 	const auto cameraPosition = Locator::camera::value().GetOrigin();
@@ -2360,9 +2362,22 @@ bool Game::Initialize() noexcept
 		meshManager.Load("river", LFromDiskTag {}, fileSystem.GetPath<Path::Data>() / "river.l3d");
 		meshManager.Load("river2", LFromDiskTag {}, fileSystem.GetPath<Path::Data>() / "river2.l3d");
 		meshManager.Load("metre_sphere", LFromDiskTag {}, fileSystem.GetPath<Path::Data>() / "metre_sphere.l3d");
-		meshManager.Load(SkyInterface::k_SunMeshId.value(), LFromDiskTag {},
+		// The sky: its dome, with the dome's pictures, the sun and the moon
+		using SkyArchetype = ecs::archetypes::SkyArchetype;
+		meshManager.Load(SkyArchetype::k_DomeMeshId.value(), LFromDiskTag {},
+		                 fileSystem.GetPath<Path::WeatherSystem>() / "sky.l3d");
+		{
+			std::vector<std::filesystem::path> pictures;
+			for (const auto& file : sky_dome::PictureFiles())
+			{
+				pictures.push_back(fileSystem.GetPath<Path::WeatherSystem>() / file);
+			}
+			textureManager.Load(SkyArchetype::k_DomeTextureId.value(), resources::Texture2DLoader::FromBitmapLayersTag {},
+			                    "Sky", pictures, sky_dome::k_Rows);
+		}
+		meshManager.Load(SkyArchetype::k_SunMeshId.value(), LFromDiskTag {},
 		                 fileSystem.GetPath<Path::WeatherSystem>() / "sun.l3d");
-		meshManager.Load(SkyInterface::k_MoonMeshId.value(), LFromDiskTag {},
+		meshManager.Load(SkyArchetype::k_MoonMeshId.value(), LFromDiskTag {},
 		                 fileSystem.GetPath<Path::WeatherSystem>() / "moon.l3d");
 		meshManager.Load(ecs::components::Mist::k_MeshId, LFromDiskTag {}, fileSystem.GetPath<Path::Landscape>() / "mist.l3d");
 
@@ -2749,6 +2764,8 @@ bool Game::Run() noexcept
 			    .wireframe = config.wireframe,
 			    .drawHand = IsHandDrawn(),
 			};
+			// The sun, the moon and the dome's blend of this frame, for drawing it
+			Locator::skySystem::value().UpdateFrame(config.drawSky);
 			Locator::rendererInterface::value().DrawScene(drawDesc);
 		}
 
@@ -2997,8 +3014,11 @@ void Game::PrepareNewLand()
 		Locator::handGrabSystem::value().Reset();
 	}
 
+	// The sky goes on as it was: it is kept while every entity goes, and made again after
+	Locator::skySystem::value().KeepForNextLand();
 	// Reset everything. Deletes all entities and their components
 	Locator::entitiesRegistry::value().Reset();
+	Locator::skySystem::value().Initialize();
 	// TODO(#661): split entities that are permanent from map entities and move hand and camera to init
 	// We need a hand for the player
 	Locator::handSystem::value().Initialize();

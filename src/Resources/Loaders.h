@@ -9,7 +9,10 @@
 
 #pragma once
 
+#include <filesystem>
 #include <queue>
+#include <span>
+#include <string>
 
 #include <PackFile.h>
 
@@ -155,7 +158,14 @@ struct Texture2DLoader final: BaseLoader<graphics::Texture2D>
 	{
 	};
 
+	/// A texture of layers, each a square 16-bit bitmap file of 5 bits a colour
+	struct FromBitmapLayersTag
+	{
+	};
+
 	[[nodiscard]] result_type operator()(FromPackTag, const std::string& name, const pack::G3DTexture& g3dTexture) const;
+	[[nodiscard]] result_type operator()(FromBitmapLayersTag, const std::string& name,
+	                                     std::span<const std::filesystem::path> layerPaths, uint16_t side) const;
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& rawTexturePath) const;
 	[[nodiscard]] result_type operator()(FromDiskWithAlphaTag, const std::filesystem::path& rawTexturePath,
 	                                     const std::filesystem::path& alphaPath, uint16_t side) const;

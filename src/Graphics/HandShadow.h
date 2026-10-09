@@ -15,7 +15,7 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
-#include "3D/SkyInterface.h"
+#include "3D/DayNightClock.h"
 
 namespace openblack::graphics
 {
@@ -55,18 +55,17 @@ struct HandShadow
 
 	/// Direction sunlight travels in at a time of day in hours. The sun rises and sets with the sky's dusk and climbs
 	/// highest at midday, coming from the same side of the island as Black & White's fixed light.
-	[[nodiscard]] static glm::vec3 SunlightDirection(float hours, const SkyInterface::DayNightTimes& times);
+	[[nodiscard]] static glm::vec3 SunlightDirection(float hours, const DayNightTimes& times);
 	/// 1 in full day, 0 at night, ramping through dawn and dusk
-	[[nodiscard]] static float Daylight(float hours, const SkyInterface::DayNightTimes& times);
+	[[nodiscard]] static float Daylight(float hours, const DayNightTimes& times);
 	/// 1 near the ground, fading to 0 by k_FadeEnd hand radii away
 	[[nodiscard]] static float DistanceFade(float cameraDistance, float handRadius);
 
 	/// handBones are the model matrices of the hand's bones in world space. originBottomLeft and homogeneousDepth
 	/// are those of bgfx::Caps.
 	[[nodiscard]] static std::optional<HandShadow> Compute(const std::vector<glm::mat4>& handBones, glm::vec3 cameraPosition,
-	                                                       float groundHeight, float hours,
-	                                                       const SkyInterface::DayNightTimes& times, bool originBottomLeft,
-	                                                       bool homogeneousDepth);
+	                                                       float groundHeight, float hours, const DayNightTimes& times,
+	                                                       bool originBottomLeft, bool homogeneousDepth);
 };
 
 } // namespace openblack::graphics

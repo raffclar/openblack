@@ -27,7 +27,6 @@
 #include "3D/LandBlock.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/OceanInterface.h"
-#include "3D/SkyInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
@@ -50,6 +49,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/Sky.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/TempleExterior.h"
@@ -112,6 +112,7 @@
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -640,18 +641,19 @@ std::unique_ptr<ProviderInterface> SkyStateProvider(std::unique_ptr<ProviderInte
 		provider->Add(description,
 		              [shared, name = description.name](const QueryContext& context) { return shared->Run(name, context); });
 	}
-	provider->Add(Query("state", "The sky: its type, its time, the script clock's hour and the day and night's times"),
-	              Serve<Locator::skySystem>("the sky", [](const SkyInterface& sky, const QueryContext& /*c*/) {
-		              const auto times = sky.GetDayNightTimes();
-		              return Json {{"sky_type", sky.GetCurrentSkyType()},
-		                           {"time", sky.GetTime()},
-		                           {"script_hour", sky.GetClock().GetScriptTime()},
-		                           {"visual_hour", sky.GetClock().GetVisualTime()},
-		                           {"night_full", times.nightFull},
-		                           {"dusk_start", times.duskStart},
-		                           {"dusk_end", times.duskEnd},
-		                           {"day_full", times.dayFull}};
-	              }));
+	provider->Add(
+	    Query("state", "The sky: its type, its time, the script clock's hour and the day and night's times"),
+	    Serve<Locator::skySystem>("the sky", [](const ecs::systems::SkySystemInterface& sky, const QueryContext& /*c*/) {
+		    const auto times = sky.GetDayNightTimes();
+		    return Json {{"sky_type", sky.GetCurrentSkyType()},
+		                 {"time", sky.GetTime()},
+		                 {"script_hour", sky.GetClock().GetScriptTime()},
+		                 {"visual_hour", sky.GetClock().GetVisualTime()},
+		                 {"night_full", times.nightFull},
+		                 {"dusk_start", times.duskStart},
+		                 {"dusk_end", times.duskEnd},
+		                 {"day_full", times.dayFull}};
+	    }));
 	return provider;
 }
 
@@ -1398,12 +1400,14 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	    },
 	    reflection, worldEdit));
 	inspector.Add(SkyStateProvider(std::make_unique<SkyProvider>(SkySources {
-	    .scriptHour = []() -> std::optional<float> {
-		    if (!Locator::skySystem::has_value())
+	    .moon = []() -> std::optional<ecs::components::Moon> {
+		    if (!Locator::skySystem::has_value() || !Locator::entitiesRegistry::has_value())
 		    {
 			    return std::nullopt;
 		    }
-		    return Locator::skySystem::value().GetClock().GetScriptTime();
+		    const auto* moon =
+		        Locator::entitiesRegistry::value().TryGet<ecs::components::Moon>(Locator::skySystem::value().GetMoon());
+		    return moon != nullptr ? std::optional(*moon) : std::nullopt;
 	    },
 	    .cameraOrigin = []() -> std::optional<glm::vec3> {
 		    if (!Locator::camera::has_value())
@@ -1412,11 +1416,6 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		    }
 		    return Locator::camera::value().GetOrigin();
 	    },
-	    .unixTime =
-	        []() {
-		        return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch())
-		            .count();
-	        },
 	})));
 	inspector.Add(std::make_unique<ParticlesProvider>(ParticleSources {
 	    .rings = []() -> std::span<const water_rings::Ring> {
