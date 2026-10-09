@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <vector>
 
 #include <entt/entity/entity.hpp>
 
@@ -53,9 +54,10 @@ struct Temple
 	/// Its heart has lost all its life and the temple is being destroyed, this many seconds on
 	bool destroying {false};
 	float destructionClock {0.0f};
-	/// The glow over the heart, and the sound that loops until the explosion
+	/// The glow over the heart, and the sounds that loop until the explosion: one for each time the destruction started
+	/// while they play, each sounding over the others
 	std::optional<uint32_t> destructionGlow;
-	entt::entity destructionLoop {entt::null};
+	std::vector<entt::entity> destructionLoops;
 };
 
 /// The way into a temple, Entrance.l3d at the temple's place, which the temple makes and its player clicks the Action

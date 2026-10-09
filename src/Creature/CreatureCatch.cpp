@@ -12,9 +12,9 @@
 #include <cmath>
 
 #include <algorithm>
-#include <limits>
 
 #include <glm/geometric.hpp>
+#include <glm/mat3x3.hpp>
 
 #include "CreatureLayers.h"
 
@@ -87,9 +87,9 @@ Blend WeighWithout(float lastHeight)
 Ready ReadyToCatch(glm::vec3 thing, glm::vec3 velocity, const std::array<glm::vec3, 4>& hands, float modelScale,
                    float leadSeconds)
 {
-	// It must be in front of the creature
+	// It must be in front of the creature; a place that can't be measured gives up too
 	const float ahead = -thing.z;
-	if (ahead < 0.0f)
+	if (!(ahead >= 0.0f))
 	{
 		return {.readiness = Readiness::GiveUp, .mirrored = false};
 	}
@@ -97,13 +97,16 @@ Ready ReadyToCatch(glm::vec3 thing, glm::vec3 velocity, const std::array<glm::ve
 	const auto& highSide = hands[2];
 	const auto& highOther = hands[3];
 	const float reach = modelScale * (highSide.x + k_ReachBeyondHand * (highOther.x - highSide.x));
-	if (std::abs(side) > std::abs(reach))
+	// The reach is measured to the far side: a reach that comes out on the near side always takes the step
+	if (std::abs(side) > -reach)
 	{
 		return {.readiness = Readiness::Step, .mirrored = side <= 0.0f};
 	}
 	// When it arrives, coming at the creature along its front
 	const float closing = velocity.z;
-	const float arrives = closing != 0.0f ? ahead / closing : std::numeric_limits<float>::infinity();
+	// With no closing speed the thing never arrives and the creature waits, unless it is already there, when it can't
+	// tell and gives up
+	const float arrives = ahead / closing;
 	if (arrives >= leadSeconds + k_LateArrival)
 	{
 		return {.readiness = Readiness::Wait, .mirrored = false};
@@ -113,5 +116,12 @@ Ready ReadyToCatch(glm::vec3 thing, glm::vec3 velocity, const std::array<glm::ve
 		return {.readiness = Readiness::Catch, .mirrored = side < 0.0f};
 	}
 	return {.readiness = Readiness::GiveUp, .mirrored = false};
+}
+
+glm::vec3 StepMove(glm::vec3 travel, const glm::mat3& rotation, float modelScale, float stepMs, float durationMs, bool mirrored)
+{
+	const float share = stepMs * modelScale / durationMs;
+	const auto move = rotation * (travel * share);
+	return mirrored ? -move : move;
 }
 } // namespace openblack::creature_catch

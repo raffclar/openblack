@@ -17,6 +17,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -85,6 +86,8 @@ enum class Facet : uint8_t
 	/// Things thrown, dropped and knocked: how they fly, what they break and how they come to rest, and what a frame
 	/// costs meanwhile
 	Physics,
+	/// The land's nature: trees and their roots, fireflies
+	Nature,
 
 	_Count
 };
@@ -255,6 +258,8 @@ struct ObjectSetup
 	std::optional<float> fullSize;
 	/// A villager or animal that has eaten poison
 	bool poisoned {false};
+	/// A firefly hides exactly where the thing stands, as a land's script places one
+	bool firefly {false};
 };
 
 /// A particle effect played on the land
@@ -403,6 +408,14 @@ struct Command
 		/// The player shaking the leash off: a scribble drawn with the empty hand through the same gesture recogniser
 		/// the cursor goes through, which takes off a leash held in the hand
 		LeashShake,
+		/// With the leash held, the player's Action button giving an order: to go to the point, or to act on the
+		/// scenario's object
+		LeashOrderAt,
+		LeashOrderOn,
+		/// Hanging the player's three temple leashes in a row about the point, five metres up, as a temple hangs them;
+		/// the player tapping one of them (value: 0 aggression, 1 learning, 2 compassion)
+		HangLeashPosts,
+		TapLeashPost,
 		/// Fighting the other creature; then, in the fight, a blow high, in the middle or low charged for a while, a
 		/// block, a step forward, back, right or left, the special move, and fighting by itself or not, as the player's
 		/// clicks and the debug tools give them
@@ -472,6 +485,9 @@ struct Command
 		SetAlignment,
 		/// A script's cinema bars slide in (value 1) or out (value 0)
 		WideScreen,
+		/// The player's hand knocks on the scenario's object, a building, as the Action button pressed on it does, from
+		/// where the hand is
+		HandTapObject,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -572,6 +588,9 @@ struct Scenario
 	std::optional<float> logMiraclesEvery;
 	/// Objects thrown by the player's hand
 	std::vector<ThrowSetup> throws;
+	/// The weights a caught firefly's miracle is drawn by, by the miracles' names, as a land's script sets them; the
+	/// testbed's land sets none
+	std::vector<std::pair<std::string_view, float>> fireflyRewards;
 };
 
 /// The miracles' scenarios, added to every scenario by the registry
@@ -599,6 +618,8 @@ void AddFlockScenarios(std::vector<Scenario>& all);
 void AddTeleportScenarios(std::vector<Scenario>& all);
 /// The tornado's scenarios: through a village and a wood, and meeting a creature
 void AddTornadoScenarios(std::vector<Scenario>& all);
+/// The land's nature: a tree pulled up leaving its roots, and the fireflies at nightfall
+void AddNatureScenarios(std::vector<Scenario>& all);
 /// The shield and forest miracles: what each shield stops and what it costs, the forest on each ground, growing and
 /// withering
 void AddShieldForestScenarios(std::vector<Scenario>& all);
@@ -611,6 +632,7 @@ void AddPhysicsScenarios(std::vector<Scenario>& all);
 void AddHandNavigationScenarios(std::vector<Scenario>& all);
 /// The scenarios of how the hand looks for its player's alignment
 void AddHandLookScenarios(std::vector<Scenario>& all);
+void AddKnockScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them
 [[nodiscard]] std::span<const Scenario> All();

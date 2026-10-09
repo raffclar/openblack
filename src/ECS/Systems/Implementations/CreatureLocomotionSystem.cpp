@@ -735,6 +735,21 @@ bool CreatureLocomotionSystem::TurnToFace(entt::entity creature, glm::vec2 point
 	return true;
 }
 
+void CreatureLocomotionSystem::Place(entt::entity creature, glm::vec3 position)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* self = registry.TryGet<CreatureLocomotion>(creature))
+	{
+		self->fromPosition = position;
+		self->toPosition = position;
+	}
+	if (auto* transform = registry.TryGet<Transform>(creature))
+	{
+		transform->position = position;
+		registry.SetDirty();
+	}
+}
+
 void CreatureLocomotionSystem::Stop(entt::entity creature)
 {
 	if (auto* self = Locator::entitiesRegistry::value().TryGet<CreatureLocomotion>(creature))

@@ -1403,6 +1403,52 @@ void AddLeash(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "leash.orders",
+	    .name = "Orders given with the leash",
+	    .facet = Facet::Leash,
+	    .description = "A tiger on the learning leash is told with the Action button to go to a point to the east, told "
+	                   "again before it gets there, then to act on a rock, a cow, and the lake.",
+	    .expected = "Each order is answered with the acknowledge sound, a nod and the tiger's voice, and marked: six pale "
+	                "yellow sparkles over the place, and a throbbing yellow ring with a paw print inside, which follows "
+	                "the cow. Told again it runs and then waits a few seconds; the rock it looks at, the cow it picks "
+	                "up and holds, at the lake it drinks or looks at its reflection. One marker at a time.",
+	    .framing = {.shot = Shot::Overview, .include = {{60.0f, 40.0f}, {0.0f, k_NearShallows}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 20.0f})},
+	    .objects = {{.type = FeatureInfo::FatPilarChalk, .offset = {-40.0f, 30.0f}},
+	                {.type = AnimalInfo::Cow, .offset = {30.0f, 10.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), Go(Kind::LeashOrderAt, 0, {60.0f, 40.0f}, 1.0f, false),
+	                 Go(Kind::LeashOrderAt, 0, {60.0f, 40.0f}, 2.0f, false), OnObject(Kind::LeashOrderOn, 0, 0, 10.0f, false),
+	                 OnObject(Kind::LeashOrderOn, 0, 1, 12.0f, false),
+	                 Go(Kind::LeashOrderAt, 0, {0.0f, k_NearShallows + 10.0f}, 15.0f, false),
+	                 Act(Kind::TakeOffLeash, 0, 15.0f)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "leash.temple_leashes",
+	    .name = "The leashes hanging on the temple",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger knows the learning leash. The temple's three leashes are hung in a row in front of "
+	                   "the camera; then it is taught the aggression and compassion leashes, the aggression leash is "
+	                   "tapped, and tapped again.",
+	    .expected = "At first only the learning leash hangs, a twisted rope collar in a white smoky glow, tumbling slowly "
+	                "with its texture running round it. Taught the others, the spiked blade (aggression) and the rainbow "
+	                "fur (compassion) hang beside it. Tapped with the click sound, the aggression leash is carried in the "
+	                "hand and its glow at the temple turns orange; tapped again it hangs back in place, silently. The "
+	                "hand over each names it: Leash Of Aggression, Leash Of Learning, Leash Of Compassion.",
+	    .framing = {.shot = Shot::Placed, .eye = {6.0f, 6.0f, 26.0f}, .look = {9.0f, 5.0f, 40.0f}},
+	    .creatures = {Posed(CreatureType::Tiger, {-20.0f, 70.0f})},
+	    .commands = {Leash(0, LeashType::Rope, 0.5f),
+	                 Act(Kind::TakeOffLeash, 0, 0.5f),
+	                 Go(Kind::HangLeashPosts, 0, {14.0f, 40.0f}, 0.5f, false),
+	                 Leash(0, LeashType::Evil, 4.0f),
+	                 Leash(0, LeashType::Good, 0.5f),
+	                 Act(Kind::TakeOffLeash, 0, 0.5f),
+	                 {.kind = Kind::TapLeashPost, .creature = 0, .delaySeconds = 4.0f, .value = 0},
+	                 {.kind = Kind::TapLeashPost, .creature = 0, .delaySeconds = 4.0f, .value = 0}},
+	});
+
+	all.push_back({
 	    .id = "leash.pull_to_hand",
 	    .name = "Pulled to the hand",
 	    .facet = Facet::Leash,
@@ -1649,6 +1695,22 @@ void AddCombat(std::vector<Scenario>& all)
 	                "off.",
 	    .framing = ringside,
 	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+	});
+
+	all.push_back({
+	    .id = "combat.fight_view",
+	    .name = "Watching a fight",
+	    .facet = Facet::Combat,
+	    .description = "The player's red tiger and a blue tiger are told to fight, both by themselves, while the camera "
+	                   "looks at the arena from within it. Play it with the hand: the Move button (left) on the blue "
+	                   "tiger strikes at once, the Action button (right) queues the move, on the red tiger it blocks and "
+	                   "on the ground it steps; hold either to charge a blow, and draw a star for the special move.",
+	    .expected = "After a second of looking, the camera flies to the side of the arena and then follows the duel "
+	                "side on, easing round as the tigers move, and the fight panel shows at the top left. Zooming far "
+	                "out leaves the fight; once it is over the view stays three seconds and gives the camera back.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 80.0f, 10.0f}, .look = {0.0f, 0.0f, 40.0f}},
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
 
@@ -2146,8 +2208,10 @@ std::vector<Scenario> Build()
 	AddTeleportScenarios(all);
 	AddTornadoScenarios(all);
 	AddPhysicsScenarios(all);
+	AddNatureScenarios(all);
 	AddHandNavigationScenarios(all);
 	AddHandLookScenarios(all);
+	AddKnockScenarios(all);
 	return all;
 }
 
@@ -2243,15 +2307,15 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 {
 	return kind == Kind::SetHour || kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed ||
 	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
-	       IsPointerCommand(kind);
+	       kind == Kind::HandTapObject || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
 {
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
-	    "Idle",     "Expressions", "Senses", "Needs",    "Growth",    "Appearance",    "Light",
-	    "Movement", "Footprints",  "Audio",  "Objects",  "Hand",      "Leash",         "Combat",
-	    "Mind",     "Particles",   "Editor", "Miracles", "Benchmark", "Creature Mode", "Physics",
+	    "Idle",       "Expressions", "Senses",    "Needs",         "Growth",  "Appearance", "Light", "Movement",
+	    "Footprints", "Audio",       "Objects",   "Hand",          "Leash",   "Combat",     "Mind",  "Particles",
+	    "Editor",     "Miracles",    "Benchmark", "Creature Mode", "Physics", "Nature",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
@@ -2270,7 +2334,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 81> k_Names {
+	constexpr std::array<std::string_view, 86> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -2315,6 +2379,10 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "hand taps to leash",
 	    "leash key",
 	    "shake the hand",
+	    "order to a point",
+	    "order on the object",
+	    "hang the temple's leashes",
+	    "tap a temple leash",
 	    "start fight",
 	    "fight blow",
 	    "fight block",
@@ -2352,6 +2420,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "turn wheel",
 	    "set alignment",
 	    "cinema bars",
+	    "hand tap",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
@@ -2398,11 +2467,11 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 	}
 	if (scenario.creatures.empty() && scenario.particles.empty() && scenario.miracles.empty() && scenario.dispensers.empty() &&
 	    !environment.dispenserGrid && !scenario.crowd.has_value() && !environment.playerAlignment.has_value() &&
-	    scenario.throws.empty() && scenario.objects.empty() &&
+	    scenario.throws.empty() && scenario.objects.empty() && scenario.fireflyRewards.empty() &&
 	    std::ranges::none_of(scenario.commands, [](const Command& command) { return NeedsNoCreature(command.kind); }))
 	{
-		problems.emplace_back(
-		    "no creatures, things, particles, miracles, dispensers, crowd, player's commands or alignment for the hand");
+		problems.emplace_back("no creatures, things, particles, miracles, dispensers, crowd, fireflies' rewards, player's "
+		                      "commands or alignment for the hand");
 	}
 	if ((environment.playerAlignment && !InRange(*environment.playerAlignment, -1.0f, 1.0f)) ||
 	    (environment.cursor && (!InRange(environment.cursor->x, 0.0f, 1.0f) || !InRange(environment.cursor->y, 0.0f, 1.0f))))

@@ -131,26 +131,28 @@ struct MindKnownAction
 /// The creature's body as the mind file keeps it. Names follow what each value is known to be, where it is.
 struct MindPhysique
 {
-	uint32_t unknown0 {0};
+	/// The game turns it has lived, which its age follows
+	uint32_t turns {0};
 	/// Its age in game hours
 	uint32_t age {0};
 	float strength {0.0f};
-	float unknown1 {0.0f};
-	float unknown2 {0.0f};
+	/// Its fatness, and the fatness its body shows, which follows it a little each turn
+	float fatness {0.0f};
+	float shownFatness {0.0f};
 	/// Before version 14
 	std::optional<float> before14;
 	float energy {0.0f};
 	/// From version 6 on
 	std::optional<float> scratch;
 	uint16_t flags {0};
-	/// Poo, exhaustion, dehydration and three more
+	/// Six more values of the body, the second its exhaustion
 	std::array<float, 6> needs {};
 	/// From version 22 on: a number and the creature's size
 	std::optional<int32_t> unknown3;
 	std::optional<float> size;
-	/// Two lists the body keeps
-	std::vector<uint32_t> listA;
-	std::vector<uint32_t> listB;
+	/// The drops of blood and the wounds on its skin, a word each
+	std::vector<uint32_t> blood;
+	std::vector<uint32_t> wounds;
 };
 
 /// From version 18 on, entries of a small database kept with the mind: each a pair of numbers and pairs of values, the

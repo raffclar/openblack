@@ -23,5 +23,10 @@ entt::entity PlayerArchetype::Create(PlayerNames name)
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
 	registry.Assign<Player>(entity, name);
+	// A player made again on a later land is as they were on the last
+	if (Locator::playerSystem::has_value())
+	{
+		Locator::playerSystem::value().TakeUpKept(entity);
+	}
 	return entity;
 }
