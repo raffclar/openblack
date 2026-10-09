@@ -150,6 +150,7 @@
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
+#include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TornadoSystemInterface.h"
@@ -970,11 +971,18 @@ bool Game::GameLogicLoop() noexcept
 	{
 		Locator::rewardSystem::value().ProcessTurn();
 	}
+	// A temple whose heart lost all its life moves on through its destruction, as the game's objects take their turns
+	// before the physics
+	if (Locator::templeDestructionSystem::has_value())
+	{
+		Locator::templeDestructionSystem::value().ProcessTurn();
+	}
 	// Then the physics, after the living, the fires, the reactions, the miracles and the particles have had their turn,
 	// so a body any of them sets moving this turn flies this turn: what was thrown, dropped, knocked or pushed flies,
 	// collides and comes to rest
 	if (Locator::dynamicsSystem::has_value())
 	{
+		auto physics = profiler.BeginScoped(Profiler::Stage::PhysicsUpdate);
 		Locator::dynamicsSystem::value().ProcessTurn();
 	}
 	// The pieces broken off buildings count down their time, and go when it runs out

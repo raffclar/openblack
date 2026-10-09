@@ -45,12 +45,13 @@ struct FakeWorld final: World
 	std::vector<entt::entity> abandoned;
 	std::vector<entt::entity> deleted;
 
-	entt::entity Add(uint32_t id, Object object = {})
+	entt::entity Add(uint32_t id, Object object)
 	{
 		const auto entity = static_cast<entt::entity>(id);
 		objects[entity] = object;
 		return entity;
 	}
+	entt::entity Add(uint32_t id) { return Add(id, Object {}); }
 
 	[[nodiscard]] bool Exists(entt::entity object) const override { return objects.contains(object); }
 	[[nodiscard]] bool IsAvailable(entt::entity object) const override

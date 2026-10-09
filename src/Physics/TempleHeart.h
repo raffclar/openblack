@@ -76,4 +76,24 @@ inline constexpr float k_MostHarm = 0.2f;
 inline constexpr glm::vec3 k_VillagerLaunch {0.0f, 30.0f, 0.0f};
 inline constexpr glm::vec3 k_VillagerLaunchSpin {1.0f, 0.0f, 1.0f};
 
+/// The heart's beam at what it passes blows on to: the thing it last beamed at and the turn it last beamed
+struct Beam
+{
+	entt::entity target {entt::null};
+	uint32_t turn {0};
+};
+
+/// The turns between the heart's beams: two seconds' worth
+[[nodiscard]] uint32_t BeamInterval(uint32_t millisecondsPerTurn);
+
+/// A blow that breaks buildings passed on to a target: a new target starts the wait afresh, and a beam is due once more
+/// than the interval has gone by since the last; due, it is the beam's turn now
+[[nodiscard]] bool BeamAtTargetDue(Beam& beam, entt::entity target, uint32_t turn, uint32_t interval);
+/// A blow that breaks buildings the heart takes itself: it forgets what it last beamed at, starting the wait afresh, and
+/// beams at a point on itself on the same wait
+[[nodiscard]] bool BeamAtItselfDue(Beam& beam, uint32_t turn, uint32_t interval);
+
+/// The heart's beam sound is one of five in turn
+inline constexpr uint32_t k_BeamSounds = 5;
+
 } // namespace openblack::physics::temple_heart

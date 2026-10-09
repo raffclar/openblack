@@ -20,17 +20,13 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
-#include "3D/L3DMesh.h"
-#include "3D/L3DSubMesh.h"
 #include "3D/LandBlock.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/Sound.h"
-#include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureRig.h"
-#include "ECS/Archetypes/DeadTreeArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AtHome.h"
@@ -53,24 +49,18 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
-#include "ECS/Map.h"
 #include "ECS/PhysicsGround.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowDust.h"
-#include "ECS/Systems/FireSystemInterface.h"
-#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
-#include "ECS/Systems/WaterRingSystemInterface.h"
-#include "ECS/WorldObjects.h"
+#include "GameDynamicsWorld.h"
 #include "InfoConstants.h"
-#include "Locator.h"
 #include "Particles/ParticleDrawFrame.h"
 #include "Particles/ParticleEffect.h"
 #include "Physics/BodyShapes.h"
 #include "Physics/ObjectRules.h"
 #include "Physics/PairRules.h"
 #include "Resources/ResourceManager.h"
-#include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -84,8 +74,6 @@ namespace
 /// The puffs of dust are drawn from this sheet, eight frames a row
 constexpr entt::hashed_string k_DustSheet = entt::hashed_string("raw/blobs");
 constexpr entt::hashed_string k_DustSheetAlpha = entt::hashed_string("raw/blobsa");
-/// The bank the collision sounds are picked from
-constexpr std::string_view k_CollisionBank = "editor.sad";
 /// The list grows by this many slots at a time
 constexpr size_t k_SlotsPerGrowth = 16;
 /// A raise smaller than this is not one
@@ -93,17 +81,6 @@ constexpr float k_LeastRaise = 0.001f;
 /// A dropped body is raised out of what is under it, looking down through it and up through what is under it
 constexpr glm::vec3 k_Down(0.0f, -1.0f, 0.0f);
 constexpr glm::vec3 k_Up(0.0f, 1.0f, 0.0f);
-
-Registry& Entities()
-{
-	return Locator::entitiesRegistry::value();
-}
-
-/// An object the physics may still work on: one that exists
-bool IsAvailable(entt::entity object)
-{
-	return object != entt::null && Entities().Valid(object);
-}
 
 uint32_t Id(entt::entity object)
 {
@@ -129,14 +106,16 @@ glm::mat3 UprightAxes(const glm::mat3& axes)
 	return physics::objects::HeadingOnly(axes);
 }
 
-/// The info weight of an object's kind
-float InfoWeight(entt::entity object)
+} // namespace
+
+float DynamicsSystem::InfoWeight(entt::entity object) const
 {
-	if (!Locator::infoConstants::has_value())
+	const auto* tables = _world->Info();
+	if (tables == nullptr)
 	{
 		return 0.0f;
 	}
-	const auto& info = Locator::infoConstants::value();
+	const auto& info = *tables;
 	const auto& registry = Entities();
 	const auto row = [](const auto& rows, auto index) -> float {
 		const auto i = static_cast<size_t>(index);
@@ -160,40 +139,39 @@ float InfoWeight(entt::entity object)
 		// The physical shield's row
 		return info.mapShield[1].weight;
 	}
-	const auto* found = world_objects::InfoOf(object);
+	const auto* found = _world->InfoOf(object);
 	return found != nullptr ? found->weight : 0.0f;
 }
 
-/// The parts of a model the physics may build a body from: its triangles and whether they are its collision shape or of
-/// its nearest detail
-struct ModelParts
+namespace
 {
-	std::vector<std::vector<uint32_t>> indices;
-	std::vector<physics::shapes::ModelPart> parts;
-};
-ModelParts PartsOf(const graphics::L3DMesh& mesh)
-{
-	ModelParts model;
-	const auto& subMeshes = mesh.GetSubMeshes();
-	model.indices.reserve(subMeshes.size());
-	for (const auto& subMesh : subMeshes)
-	{
-		// A boned model's vertices count as the file holds them, unposed, as the game takes them
-		const auto& geometry = subMesh->GetBodyGeometry();
-		model.indices.emplace_back(geometry.indices.begin(), geometry.indices.end());
-		model.parts.push_back({.positions = geometry.positions,
-		                       .indices = model.indices.back(),
-		                       .isPhysics = subMesh->IsPhysics(),
-		                       .nearestDetail = (subMesh->GetFlags().lodMask & 1u) != 0});
-	}
-	return model;
-}
 } // namespace
 
 DynamicsSystem::DynamicsSystem()
-    : _hooks(std::make_unique<PhysicsClassHooks>())
+    : DynamicsSystem(std::make_unique<GameDynamicsWorld>())
+{
+}
+
+DynamicsSystem::DynamicsSystem(std::unique_ptr<dynamics::World> world)
+    : _world(std::move(world))
+    , _hooks(std::make_unique<PhysicsClassHooks>())
     , _dustCreator(MakeDustCreator())
 {
+}
+
+Registry& DynamicsSystem::Entities()
+{
+	return _world->Entities();
+}
+
+const Registry& DynamicsSystem::Entities() const
+{
+	return _world->Entities();
+}
+
+bool DynamicsSystem::IsAvailable(entt::entity object) const
+{
+	return object != entt::null && Entities().Valid(object);
 }
 
 DynamicsSystem::~DynamicsSystem() = default;
@@ -227,11 +205,12 @@ PhysicsClassHooks& DynamicsSystem::Hooks()
 
 const PhysicsGround* DynamicsSystem::Land()
 {
-	if (!Locator::terrainSystem::has_value())
+	const auto* found = _world->Land();
+	if (found == nullptr)
 	{
 		return nullptr;
 	}
-	const auto& land = Locator::terrainSystem::value();
+	const auto& land = *found;
 	if (_groundLand != &land || _ground == nullptr)
 	{
 		_ground = std::make_unique<PhysicsGround>(land);
@@ -247,13 +226,14 @@ const physics::Ground* DynamicsSystem::GetGround() const
 
 physics_classes::ClassFacts DynamicsSystem::FactsOf(entt::entity object) const
 {
-	if (!Locator::infoConstants::has_value() || !IsAvailable(object))
+	const auto* info = _world->Info();
+	if (info == nullptr || !IsAvailable(object))
 	{
 		return {};
 	}
 	const auto& registry = Entities();
 	const auto* progress = registry.TryGet<const BuildProgress>(object);
-	physics_classes::ClassInputs inputs {.life = world_objects::LifeOf(object),
+	physics_classes::ClassInputs inputs {.life = _world->LifeOf(object),
 	                                     .percentBuilt = progress != nullptr ? progress->built : 1.0f,
 	                                     .immovable = registry.AllOf<Immovable>(object)};
 	if (registry.AllOf<Villager>(object))
@@ -273,12 +253,11 @@ physics_classes::ClassFacts DynamicsSystem::FactsOf(entt::entity object) const
 			}
 		});
 	}
-	auto facts = physics_classes::Classify(registry, object, Locator::infoConstants::value(), inputs);
+	auto facts = physics_classes::Classify(registry, object, *info, inputs);
 	// Every model moved by bones is drawn from its body turned a quarter about its up axis
-	if (const auto* mesh = registry.TryGet<const Mesh>(object); mesh != nullptr && Locator::resources::has_value())
+	if (const auto* mesh = registry.TryGet<const Mesh>(object); mesh != nullptr)
 	{
-		const auto& meshes = Locator::resources::value().GetMeshes();
-		if (meshes.Contains(mesh->id) && meshes.Handle(mesh->id)->IsBoned())
+		if (const auto model = _world->SizeOfModel(mesh->id); model.has_value() && model->boned)
 		{
 			facts.animated = true;
 		}
@@ -309,14 +288,13 @@ std::unique_ptr<physics::Body> DynamicsSystem::MakePieceBody(entt::entity piece,
 	// It waits to come to rest as long as the model of the static row the game makes its pieces from would, whatever its
 	// own size
 	float halfHeight = 0.0f;
-	if (Locator::infoConstants::has_value() && Locator::resources::has_value())
+	if (const auto* info = _world->Info())
 	{
 		constexpr size_t k_PieceInfoRow = 2;
-		const auto id = resources::HashIdentifier(Locator::infoConstants::value().mobileStatic.at(k_PieceInfoRow).meshId);
-		auto& meshes = Locator::resources::value().GetMeshes();
-		if (meshes.Contains(id))
+		const auto id = resources::HashIdentifier(info->mobileStatic.at(k_PieceInfoRow).meshId);
+		if (const auto model = _world->SizeOfModel(id))
 		{
-			halfHeight = 0.5f * meshes.Handle(id)->GetBoundingBox().Size().y;
+			halfHeight = 0.5f * model->size.y;
 		}
 	}
 	const physics::BodySetup setup {
@@ -329,14 +307,11 @@ std::unique_ptr<physics::Body> DynamicsSystem::MakePieceBody(entt::entity piece,
 std::unique_ptr<physics::Body> DynamicsSystem::MakeBody(entt::entity object, const physics_classes::ClassFacts& facts)
 {
 	auto& registry = Entities();
-	if (facts.body == BodyKind::None || !Locator::resources::has_value())
+	if (facts.body == BodyKind::None)
 	{
 		return nullptr;
 	}
-	const auto& materials = Locator::resources::value().GetPhysicsMaterials();
-	const auto material = materials.Contains(physics::k_MaterialsId.value())
-	                          ? (*materials.Handle(physics::k_MaterialsId.value()))[facts.row]
-	                          : physics::Material {};
+	const auto material = _world->MaterialOf(facts.row);
 	if (facts.body == BodyKind::Creature)
 	{
 		return MakeCreatureBody(object, material);
@@ -377,13 +352,12 @@ std::unique_ptr<physics::Body> DynamicsSystem::MakeBody(entt::entity object, con
 	{
 		meshId = meshComponent->id;
 	}
-	auto& meshes = Locator::resources::value().GetMeshes();
-	if (meshId == 0 || !meshes.Contains(meshId))
+	const auto model = _world->SizeOfModel(meshId);
+	if (!model.has_value())
 	{
 		return nullptr;
 	}
-	const auto& mesh = *meshes.Handle(meshId);
-	const auto size = mesh.GetBoundingBox().Size();
+	const auto size = model->size;
 	const float halfHeight = 0.5f * size.y;
 	const float height = size.y * scale;
 	const float radius = 0.5f * std::max(size.x, size.z) * scale;
@@ -405,11 +379,11 @@ std::unique_ptr<physics::Body> DynamicsSystem::MakeBody(entt::entity object, con
 		                                    height, radius, scale);
 		break;
 	default:
-	{
-		const auto model = PartsOf(mesh);
-		shape = physics::shapes::FromModel(model.parts, scale);
+		if (const auto parts = _world->ModelOf(meshId))
+		{
+			shape = physics::shapes::FromModel(parts->parts, scale);
+		}
 		break;
-	}
 	}
 	if (shape.points.empty())
 	{
@@ -448,8 +422,7 @@ std::vector<physics::Ellipsoid> DynamicsSystem::CreatureSkeleton(entt::entity cr
 	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
 	const auto* transform = registry.TryGet<const Transform>(creature);
 	const auto* kind = registry.TryGet<const Creature>(creature);
-	if (animation == nullptr || transform == nullptr || kind == nullptr || animation->boneMatrices.empty() ||
-	    !Locator::resources::has_value())
+	if (animation == nullptr || transform == nullptr || kind == nullptr || animation->boneMatrices.empty())
 	{
 		return {};
 	}
@@ -460,20 +433,19 @@ std::vector<physics::Ellipsoid> DynamicsSystem::CreatureSkeleton(entt::entity cr
 	{
 		std::vector<glm::vec3> positions;
 		std::vector<uint16_t> bones;
-		const auto& meshes = Locator::resources::value().GetMeshes();
-		if (meshes.Contains(meshId))
+		if (const auto model = _world->ModelOf(meshId))
 		{
-			for (const auto& subMesh : meshes.Handle(meshId)->GetSubMeshes())
+			for (size_t i = 0; i < model->parts.size(); ++i)
 			{
-				const auto& geometry = subMesh->GetBodyGeometry();
-				positions.insert(positions.end(), geometry.positions.begin(), geometry.positions.end());
-				if (geometry.bones.empty())
+				const auto& part = model->parts[i];
+				positions.insert(positions.end(), part.positions.begin(), part.positions.end());
+				if (model->bones[i].empty())
 				{
-					bones.insert(bones.end(), geometry.positions.size(), uint16_t {0});
+					bones.insert(bones.end(), part.positions.size(), uint16_t {0});
 				}
 				else
 				{
-					bones.insert(bones.end(), geometry.bones.begin(), geometry.bones.end());
+					bones.insert(bones.end(), model->bones[i].begin(), model->bones[i].end());
 				}
 			}
 		}
@@ -661,17 +633,7 @@ PhysicsEntry* DynamicsSystem::AddProxy(entt::entity object)
 
 void DynamicsSystem::LetGoOfLeashesTiedTo(entt::entity object)
 {
-	if (!Locator::leashSystem::has_value())
-	{
-		return;
-	}
-	auto& leashes = Locator::leashSystem::value();
-	Entities().Each<const Creature>([&leashes, object](entt::entity creature, const Creature&) {
-		if (leashes.TiedTo(creature) == object)
-		{
-			leashes.UntieToHand(creature);
-		}
-	});
+	_world->UntieLeashesTiedTo(object);
 }
 
 PhysicsStarted DynamicsSystem::InitialisePhysics(entt::entity object, const PhysicsStart& start)
@@ -702,10 +664,7 @@ PhysicsStarted DynamicsSystem::StartPhysicsAsObject(entt::entity object, const P
 		Hooks().OfferToCatchingCreatures(object, *entry);
 	}
 	// A burning thing that starts to move leaves its fire's group
-	if (Locator::fireSystem::has_value())
-	{
-		Locator::fireSystem::value().StartedMoving(object, false);
-	}
+	_world->StartedMoving(object);
 	registry.SetDirty();
 	return {.entry = entry, .started = true};
 }
@@ -723,23 +682,17 @@ entt::entity DynamicsSystem::EndPhysicsAsObject(entt::entity object, bool insert
 		const auto* transform = registry.TryGet<const Transform>(object);
 		if (transform != nullptr && map_coords::InBounds(transform->position))
 		{
-			if (Locator::entitiesMap::has_value())
-			{
-				Locator::entitiesMap::value().Refile(object);
-			}
+			_world->Refile(object);
 		}
 		else if (transform != nullptr)
 		{
 			// It came to rest off the map: it goes, and its entry leaves the physics at the next turn's start
-			world_objects::Remove(object);
+			_world->Remove(object);
 			return entt::null;
 		}
 	}
 	// What it set the people and animals near it reacting to, flying by, is over, and the creature may copy what landed
-	if (Locator::reactionSystem::has_value())
-	{
-		Locator::reactionSystem::value().RemoveFrom(object, Reaction::ReactToFlyingObject);
-	}
+	_world->RemoveReactions(object, Reaction::ReactToFlyingObject);
 	Hooks().ConsiderMimickingLanding(object, std::nullopt);
 	return object;
 }
@@ -808,11 +761,11 @@ void DynamicsSystem::RaiseClearOfWhatIsUnder(PhysicsEntry& entry)
 	{
 		for (int32_t z = cells.low.y; z <= cells.high.y; ++z)
 		{
-			if (!Locator::entitiesMap::has_value())
+			if (!_world->HasMap())
 			{
 				continue;
 			}
-			for (const auto other : Locator::entitiesMap::value().GetAllInCell({x, z}))
+			for (const auto other : _world->AllInCell({x, z}))
 			{
 				if (other == entry.entity || other == entry.thrower || !registry.AllOf<Mesh>(other) ||
 				    !Hooks().RaisesObjects(other) || IndexOf(other).has_value() || !FactsOf(other).interacts)
@@ -977,7 +930,7 @@ void DynamicsSystem::ForEachEntry(const std::function<void(const PhysicsEntry&)>
 void DynamicsSystem::ProcessTurn()
 {
 	const auto* land = Land();
-	if (land == nullptr || !Locator::entitiesRegistry::has_value())
+	if (land == nullptr)
 	{
 		return;
 	}
@@ -1003,7 +956,7 @@ void DynamicsSystem::BeginTurn()
 			continue;
 		}
 		// The dead grow heavier, so that corpses sink
-		if (world_objects::LifeOf(entry.entity) < turn::k_DeadLife)
+		if (_world->LifeOf(entry.entity) < turn::k_DeadLife)
 		{
 			entry.body->density += turn::k_CorpseSoaking;
 		}
@@ -1023,13 +976,13 @@ void DynamicsSystem::BeginTurn()
 	// Moving bodies are awake; resting ones only when something moving is near them, or they always stay
 	for (auto& entry : _entries)
 	{
-		if (entry->body->resting && !entry->Has(PhysicsEntry::k_AlwaysStays))
+		if (turn::AwakeAtTurnStart(entry->body->resting, entry->Has(PhysicsEntry::k_AlwaysStays)))
 		{
-			entry->flags &= static_cast<uint8_t>(~PhysicsEntry::k_Awake);
+			entry->flags |= PhysicsEntry::k_Awake;
 		}
 		else
 		{
-			entry->flags |= PhysicsEntry::k_Awake;
+			entry->flags &= static_cast<uint8_t>(~PhysicsEntry::k_Awake);
 		}
 	}
 	WakeNearMovingBodies();
@@ -1046,11 +999,10 @@ void DynamicsSystem::BeginTurn()
 
 void DynamicsSystem::WakeNearMovingBodies()
 {
-	if (!Locator::entitiesMap::has_value())
+	if (!_world->HasMap())
 	{
 		return;
 	}
-	const auto& map = Locator::entitiesMap::value();
 	auto& registry = Entities();
 	// Each cell is walked once for all the bodies, though only so many are remembered
 	constexpr size_t k_MostWalkedCells = 0x200;
@@ -1094,20 +1046,7 @@ void DynamicsSystem::WakeNearMovingBodies()
 					walked.push_back(cell);
 				}
 				// The things that stay put first, then those that move
-				const MapInterface::CellId id(static_cast<uint16_t>(x), static_cast<uint16_t>(z));
-				const auto fixed =
-				    std::vector<entt::entity>(map.GetFixedInGridCell(id).begin(), map.GetFixedInGridCell(id).end());
-				for (const auto object : fixed)
-				{
-					if (full())
-					{
-						break;
-					}
-					wake(object);
-				}
-				const auto mobile =
-				    std::vector<entt::entity>(map.GetMobileInGridCell(id).begin(), map.GetMobileInGridCell(id).end());
-				for (const auto object : mobile)
+				for (const auto object : _world->FixedThenMobileInCell(cell))
 				{
 					if (full())
 					{
@@ -1158,7 +1097,7 @@ void DynamicsSystem::Step(const physics::Ground& ground)
 	{
 		entry->body->ApplyContacts();
 	}
-	const auto camera = Locator::camera::has_value() ? std::optional(Locator::camera::value().GetOrigin()) : std::nullopt;
+	const auto camera = _world->CameraOrigin();
 	for (size_t i = 0; i < _entries.size();)
 	{
 		auto& entry = *_entries[i];
@@ -1174,20 +1113,18 @@ void DynamicsSystem::Step(const physics::Ground& ground)
 				body.angularMomentum = glm::vec3(0.0f);
 				result = physics::StepResult::Stopped;
 			}
-			if (turn::Bobbed(upwardBefore, body.velocity.y) && Locator::waterRingSystem::has_value())
+			if (turn::Bobbed(upwardBefore, body.velocity.y))
 			{
-				Locator::waterRingSystem::value().Add(turn::BobRing(body.Centre(), body.Radius()));
+				_world->AddWaterRing(turn::BobRing(body.Centre(), body.Radius()));
 			}
 		}
-		if (camera.has_value() && turn::PassesCamera(centreBefore, body.Centre(), *camera, body.velocity) &&
-		    Locator::audio::has_value())
+		if (camera.has_value() && turn::PassesCamera(centreBefore, body.Centre(), *camera, body.velocity))
 		{
 			// One of the five whooshes, picked by the system clock's milliseconds
 			constexpr std::array<audio::SoundId, turn::k_Whooshes> k_RockPasts = {
 			    audio::SoundId::G_RockPast_01, audio::SoundId::G_RockPast_02, audio::SoundId::G_RockPast_03,
 			    audio::SoundId::G_RockPast_04, audio::SoundId::G_RockPast_05};
-			Locator::audio::value().PlaySoundEffect(
-			    static_cast<entt::id_type>(k_RockPasts.at(static_cast<size_t>(_ticks() % turn::k_Whooshes))), std::nullopt);
+			_world->PlaySound(k_RockPasts.at(static_cast<size_t>(_ticks() % turn::k_Whooshes)));
 		}
 		switch (result)
 		{
@@ -1219,7 +1156,7 @@ void DynamicsSystem::Step(const physics::Ground& ground)
 					// A dead tree covers the ground as it lies
 					if (registry.AllOf<DeadTree>(kept))
 					{
-						archetypes::DeadTreeArchetype::FitObstacle(kept);
+						_world->FitDeadTreeObstacle(kept);
 					}
 				}
 				else
@@ -1252,7 +1189,7 @@ void DynamicsSystem::Step(const physics::Ground& ground)
 				const auto object = entry.entity;
 				entry.entity = entt::null;
 				Entities().Remove<PhysicsDrawPose>(object);
-				world_objects::Remove(object);
+				_world->Remove(object);
 			}
 			break;
 		}
@@ -1283,7 +1220,7 @@ void DynamicsSystem::EndTurn()
 		// A felled tree makes one sound as it topples, if it is tall
 		if (available && entry.kind == PhysicsEntry::Kind::FelledTree && body.Axes()[1].y < turn::k_FelledUpright)
 		{
-			if (world_objects::SizeOf(entry.entity).height > turn::k_FelledSoundHeight)
+			if (_world->HeightOf(entry.entity) > turn::k_FelledSoundHeight)
 			{
 				Hooks().FelledTreeToppled(entry.entity);
 			}
@@ -1393,26 +1330,23 @@ void DynamicsSystem::AttemptCollisionSound(PhysicsEntry& entry)
 				hitType = SoundCollisionType::Water;
 				colour = turn::k_SeaFoam;
 			}
-			if (Locator::waterRingSystem::has_value())
-			{
-				Locator::waterRingSystem::value().Add(turn::ImpactRing(centre, entry.body->Radius()));
-			}
+			_world->AddWaterRing(turn::ImpactRing(centre, entry.body->Radius()));
 		}
 		// Where snow lies, the dust takes on the land's colour by how deep the snow is
 		const glm::vec3 at(centre.x, land != nullptr ? land->HeightAt(xz) : centre.y, centre.z);
-		AddLandingDust(at, entry.body->Radius(), snow_dust::Tint(colour, snow_dust::SnowAt(at)));
+		AddLandingDust(at, entry.body->Radius(), snow_dust::Tint(colour, _world->SnowAt(at)));
 	}
 	// How loud it is goes by its kind's weight, unscaled; a thing of no kind makes no sound
 	const auto infoWeight = InfoWeight(hitter);
-	if (infoWeight > 0.0f && Locator::audio::has_value())
+	if (infoWeight > 0.0f)
 	{
 		const auto level = turn::CollisionLevel(entry.impact, infoWeight, hitterType == SoundCollisionType::Grain);
 		const auto keys = turn::CollisionKeys(level, static_cast<int32_t>(hitterType), static_cast<int32_t>(hitType));
-		const auto played = Locator::audio::value().PlayAnimEffect(std::string(k_CollisionBank), keys, hitter, centre);
+		const auto played = _world->PlayCollisionSound(keys, hitter, centre);
 		// The sound follows the thing that made it, unless its code says it stays where it was made
-		if (played.emitter != entt::null && turn::CollisionSoundFollows(keys))
+		if (played.has_value() && played->emitter != entt::null && turn::CollisionSoundFollows(keys))
 		{
-			_followingSounds.push_back({.emitter = played.emitter, .owner = hitter});
+			_followingSounds.push_back({.emitter = played->emitter, .owner = hitter});
 		}
 	}
 	_soundPairs.Add(Id(hitter), Id(hit));
@@ -1425,14 +1359,14 @@ void DynamicsSystem::AddPuff(glm::vec3 position, glm::vec3 velocity, float size,
 	{
 		return;
 	}
-	auto* random = Locator::gameRandom::has_value() ? &Locator::gameRandom::value() : nullptr;
+	auto* random = _world->Random();
 	const auto variant = random != nullptr ? random->CrtRand() & 15 : 0;
 	_dust.push_back({.position = position, .velocity = velocity, .size = size, .variant = variant, .argb = argb});
 }
 
 void DynamicsSystem::AddLandingDust(glm::vec3 centre, float radius, uint32_t argb)
 {
-	auto* random = Locator::gameRandom::has_value() ? &Locator::gameRandom::value() : nullptr;
+	auto* random = _world->Random();
 	const auto speed = [random]() {
 		const auto r = random != nullptr ? static_cast<float>(random->LocalRand(201)) : 100.0f;
 		return (r - 100.0f) * turn::k_PuffSpeed;
@@ -1457,10 +1391,6 @@ void DynamicsSystem::AddLandingDust(glm::vec3 centre, float radius, uint32_t arg
 
 void DynamicsSystem::UpdateFrame(float turnFraction, float gameSeconds)
 {
-	if (!Locator::entitiesRegistry::has_value())
-	{
-		return;
-	}
 	auto& registry = Entities();
 	bool drawn = false;
 	for (const auto& entry : _entries)
@@ -1470,14 +1400,25 @@ void DynamicsSystem::UpdateFrame(float turnFraction, float gameSeconds)
 			continue;
 		}
 		const auto& body = *entry->body;
+		// A body at rest is drawn where its object is and costs nothing a frame: its drawn pose went as it stopped
 		if (body.resting)
 		{
-			registry.Remove<PhysicsDrawPose>(entry->entity);
+			if (registry.AllOf<PhysicsDrawPose>(entry->entity))
+			{
+				registry.Remove<PhysicsDrawPose>(entry->entity);
+			}
 			continue;
 		}
-		// Sunk deeper than its radius, it keeps the pose it was last drawn at
-		if (body.Centre().y <= -body.Radius())
+		// Sunk wholly under the sea it is drawn no more; it is told so once, so nothing is uploaded again each frame
+		if (turn::SunkOutOfSight(body.Centre().y, body.Radius()))
 		{
+			const auto* drawnPose = registry.TryGet<const PhysicsDrawPose>(entry->entity);
+			if (drawnPose == nullptr || !drawnPose->underSea)
+			{
+				auto hidden = drawnPose != nullptr ? *drawnPose : PhysicsDrawPose {};
+				hidden.underSea = true;
+				registry.AssignOrReplace<PhysicsDrawPose>(entry->entity, hidden);
+			}
 			continue;
 		}
 		const auto pose = body.DrawPose(turnFraction, entry->animated);
@@ -1486,10 +1427,8 @@ void DynamicsSystem::UpdateFrame(float turnFraction, float gameSeconds)
 	}
 	std::erase_if(_dust, [gameSeconds](turn::DustPuff& puff) { return !turn::AdvanceDustPuff(puff, gameSeconds); });
 	// The collision sounds follow what made them while they play
-	if (Locator::audio::has_value())
 	{
-		auto& audio = Locator::audio::value();
-		std::erase_if(_followingSounds, [&registry, &audio](const FollowingSound& sound) {
+		std::erase_if(_followingSounds, [this, &registry](const FollowingSound& sound) {
 			const auto* emitter = registry.Valid(sound.emitter) ? registry.TryGet<const AudioEmitter>(sound.emitter) : nullptr;
 			if (emitter == nullptr || emitter->state == audio::AudioStatus::Stopped || !IsAvailable(sound.owner))
 			{
@@ -1499,7 +1438,7 @@ void DynamicsSystem::UpdateFrame(float turnFraction, float gameSeconds)
 			const auto* transform = registry.TryGet<const Transform>(sound.owner);
 			if (drawn != nullptr || transform != nullptr)
 			{
-				audio.SetEmitterPosition(sound.emitter, drawn != nullptr ? drawn->origin : transform->position);
+				_world->MoveSound(sound.emitter, drawn != nullptr ? drawn->origin : transform->position);
 			}
 			return false;
 		});

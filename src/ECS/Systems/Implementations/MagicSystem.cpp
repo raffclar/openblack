@@ -226,6 +226,15 @@ std::optional<magic::EffectReceiver> ReceiverOf(entt::entity entity)
 		receiver.alignmentType = info->alignmentType;
 		receiver.crushable = true;
 	}
+	else if (registry.AllOf<Temple>(entity))
+	{
+		// A temple takes an effect as its heart: by the heart's own defences
+		const auto& heart = Locator::infoConstants::value().citadelHeart;
+		receiver.life = ecs::world_objects::LifeOf(entity);
+		receiver.defence = magic::EffectDefence::From(heart);
+		receiver.alignmentType = heart.alignmentType;
+		receiver.crushable = ecs::world_objects::CanBeCrushed(entity);
+	}
 	else if (const auto* objectInfo = ecs::world_objects::InfoOf(entity))
 	{
 		// Every object loses life to a crush or a hit by its own defence, but a field: crushing or hitting it takes nothing

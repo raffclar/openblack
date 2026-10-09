@@ -35,6 +35,15 @@ public:
 	                                   VillagerStates next) const = 0;
 	virtual int VillagerCallOutOfAnimation(components::LivingAction& action, components::LivingAction::Index index) const = 0;
 	virtual bool VillagerCallValidate(components::LivingAction& action, components::LivingAction::Index index) const = 0;
+	/// Goes into a state on the way to another, as the game sets both at once. Whether it went.
+	virtual bool VillagerSetCurrentAndDestinationState(components::LivingAction& action, VillagerStates current,
+	                                                   VillagerStates destination) const = 0;
+	/// Lets the clip the villager plays now play to its end, then goes into the next state
+	virtual void VillagerPlayAnimThenSetState(components::LivingAction& action, VillagerStates next) const = 0;
+	/// Goes on into the state the villager works towards
+	virtual void VillagerSetTopStateToFinal(components::LivingAction& action) const = 0;
+	/// Whether the villager's clip has played through so many times since its state changed
+	[[nodiscard]] virtual bool VillagerIsReadyForNewAnimation(const components::LivingAction& action, uint32_t times) const = 0;
 };
 
 } // namespace openblack::ecs::systems
