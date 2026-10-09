@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <entt/fwd.hpp>
 #include <glm/vec2.hpp>
 
@@ -47,10 +49,17 @@ using MoveStateStepThroughTag = MoveStateTagComponent<MoveState::StepThrough>;
 using MoveStateFinalStepTag = MoveStateTagComponent<MoveState::FinalStep>;
 using MoveStateArrivedTag = MoveStateTagComponent<MoveState::Arrived>;
 
+/// The circle a walker hugs or is heading for, and how many turns it goes before it looks again (0xff for no end in
+/// reach)
 struct WallHugObjectReference
 {
 	uint8_t stepsAway;
+	/// The thing whose circle it is; none for a stretch of water or the land's edge
 	entt::entity entity;
+	glm::vec2 centre;
+	float radius;
+	/// How far from its goal the walker was when it started round the circle, in 128ths of a metre less one
+	uint32_t entryDistance {0};
 };
 
 struct WallHug
@@ -58,6 +67,7 @@ struct WallHug
 	glm::vec2 goal;
 	glm::vec2 step;
 	float yAngle; // FIXME(bwrsandman): member is a little redundant with transform or atan on step could keep or not
+	/// In metres a second; the walk goes a tenth of it each turn
 	float speed;
 };
 
