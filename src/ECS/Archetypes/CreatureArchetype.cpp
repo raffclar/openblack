@@ -25,6 +25,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "Enums.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -113,6 +114,11 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 	registry.Assign<CreatureSkin>(entity);
 	registry.Assign<CreatureLocomotion>(entity);
 	registry.Assign<Transform>(entity, position, glm::eulerAngleY(yAngleRadians), glm::vec3(DrawnScale(creatureType, size)));
+	// Its owner keeps their creatures in the order they got them, the first being their primary creature
+	if (Locator::playerSystem::has_value())
+	{
+		Locator::playerSystem::value().AddCreature(entity);
+	}
 	// A player's first creature is the one they can lead on the leash
 	if (Locator::leashSystem::has_value())
 	{

@@ -19,6 +19,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Enums.h"
+
 /// How the miracles look outside their effects: the one-shot globes and the miracle floating in each, the rings round
 /// an extreme miracle, the bands and bracelets on the hand that holds a miracle and its glow. Pure rules, which the
 /// systems step and the renderer draws.
@@ -72,6 +74,9 @@ enum class Facing : uint8_t
 [[nodiscard]] glm::mat3 FacingCamera(const glm::vec3& point, const glm::vec3& camera, Facing facing);
 
 // The creature spell phials in a globe
+
+/// The creature spells' seeds, shown as phials that pulse
+[[nodiscard]] bool IsPhialSeed(SpellSeedType seed);
 
 /// Their texture runs through the 32 cells of a sheet of 8 by 4, an eighth each way, backwards, 15 a second
 inline constexpr float k_PhialFrameRate = -15.0f;

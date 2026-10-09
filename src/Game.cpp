@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <chrono>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -2504,7 +2505,10 @@ bool Game::Initialize() noexcept
 		}
 	}
 	fileSystem.Iterate(fileSystem.GetPath<Path::Textures>(), false, [&textureManager](const std::filesystem::path& f) {
-		if (string_utils::LowerCase(f.extension().string()) == ".raw")
+		// The game ships a grey ice map it never loads, cut short of a whole texture
+		constexpr std::string_view k_UnusedTexture = "s_iceenvmapgrey.raw";
+		if (string_utils::LowerCase(f.extension().string()) == ".raw" &&
+		    string_utils::LowerCase(f.filename().string()) != k_UnusedTexture)
 		{
 			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading raw texture: {}", f.stem().string());
 			try

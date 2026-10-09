@@ -232,13 +232,13 @@ const Texture2D* SnowDepth(std::unique_ptr<Texture2D>& texture, std::optional<ui
 	return texture.get();
 }
 
-/// The pass what blends in a scene goes to: its own pass after the scene's, but in the temple the scene's own, which
-/// draws everything in the order it comes
-RenderPass TranslucentView(RenderPass scene)
+} // namespace
+
+RenderPass Renderer::TranslucentView(RenderPass scene)
 {
+	// In the temple the scene's own pass draws everything in the order it comes
 	return Locator::temple::has_value() && Locator::temple::value().Active() ? scene : TranslucentPassOf(scene);
 }
-} // namespace
 
 /// How far back, as a fraction of their depth, the temple's rooms the player isn't in are drawn: a few millimetres at the
 /// doorways, past the rounding of the copies of their arches
@@ -480,6 +480,7 @@ Renderer::Renderer(uint32_t bgfxReset, std::unique_ptr<BgfxCallback>&& bgfxCallb
 Renderer::~Renderer() noexcept
 {
 	_creatureSkins.clear();
+	_animalBoneTexture.reset();
 	_handSkins.clear();
 	_handSkinTextures.clear();
 	_particleLightMaps.clear();
@@ -571,7 +572,7 @@ const Texture2D* GetTexture(uint32_t skinID, const std::unordered_map<SkinId, st
 		}
 		else
 		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Could not find the texture");
+			SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Could not find the texture {:#x}", skinID);
 		}
 	}
 
@@ -660,7 +661,7 @@ void BindCreatureSpellLooks(const ShaderProgram& program)
 	const auto& textures = Locator::resources::value().GetTextures();
 	constexpr std::array<std::pair<const char*, std::pair<uint8_t, entt::hashed_string>>, 3> k_Looks {{
 	    {"s_iceEnvironment", {10, entt::hashed_string("raw/S_IceEnvMap")}},
-	    {"s_iceEnvironmentAlpha", {1, entt::hashed_string("raw/S_IceEnvMapa")}},
+	    {"s_iceEnvironmentAlpha", {5, entt::hashed_string("raw/S_IceEnvMapa")}},
 	    {"s_staticAlpha", {15, entt::hashed_string("raw/S_Statica")}},
 	}};
 	for (const auto& [sampler, binding] : k_Looks)
@@ -836,8 +837,15 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 		             glm::translate(glm::mat4(1.0f), -joint->pivot);
 		modelMatrices = &jointModel;
 	}
-	// A creature's body takes its blended skins in place of its base mesh's
-	const auto skinOf = [&desc, &skins](uint32_t skinID) -> const Texture2D* {
+	// A creature's body takes its blended skins in place of its base mesh's. A draw given a skin of its own (the
+	// temple's icons) binds that for every skinned primitive, and a submesh drawn with a texture of its own (the
+	// citadel's leash collars) never samples its primitives' skins, which its mesh may not even have, so neither looks
+	// them up.
+	const auto skinOf = [&desc, &skins, subMeshTexture](uint32_t skinID) -> const Texture2D* {
+		if (subMeshTexture != nullptr || (desc.skinTexture != nullptr && skinID != 0xFFFFFFFF))
+		{
+			return nullptr;
+		}
 		if (desc.morphTargets != nullptr)
 		{
 			const auto& blended = desc.morphTargets->skins;
@@ -919,6 +927,11 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			if (modelMatrices != nullptr && desc.matrixCount > 0)
 			{
 				bgfx::setTransform(modelMatrices, desc.matrixCount);
+			}
+			if (desc.boneTexture != nullptr)
+			{
+				program->SetUniformValue("u_bones", &desc.bones);
+				program->SetTextureSampler("s_bones", 2, *desc.boneTexture);
 			}
 			if (has(MeshUniform::DepthBias))
 			{
@@ -1977,9 +1990,9 @@ void Renderer::DrawLightBeams(const DrawSceneDesc& desc) const
 
 void Renderer::DrawMesh(const graphics::L3DMesh& mesh, const L3DMeshSubmitDesc& desc, uint8_t subMeshIndex) const noexcept
 {
+	// Some of the game's meshes hold no geometry at all, like the singing stones' centre: there is nothing to draw
 	if (mesh.GetNumSubMeshes() == 0)
 	{
-		SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "Mesh {} has no submeshes to draw", mesh.GetDebugName());
 		return;
 	}
 
@@ -3620,6 +3633,85 @@ void Renderer::UploadCreatureSkins(const DrawSceneDesc& drawDesc) const
 	std::erase_if(_creatureSkins, [&seen](const auto& entry) { return !std::ranges::binary_search(seen, entry.first); });
 }
 
+void Renderer::UploadAnimalBones(const DrawSceneDesc& drawDesc) const
+{
+	// The bones' texture is this many texels wide: 256 matrices a row
+	constexpr uint32_t k_BoneTextureWidth = 1024;
+	_animalBoneGroups.clear();
+	_animalBones.clear();
+	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	struct Drawn
+	{
+		uint32_t instance;
+		const ecs::components::AnimalPose* pose;
+	};
+	std::unordered_map<entt::id_type, std::vector<Drawn>> byModel;
+	for (const auto& [entity, instance] : renderCtx.entityDraws)
+	{
+		const auto* pose = drawDesc.entities.TryGet<const ecs::components::AnimalPose>(entity);
+		const auto* mesh = drawDesc.entities.TryGet<const ecs::components::Mesh>(entity);
+		if (pose != nullptr && mesh != nullptr)
+		{
+			byModel[mesh->id].push_back({.instance = instance, .pose = pose});
+		}
+	}
+	for (const auto& [meshId, animals] : byModel)
+	{
+		// Only a model all of whose instances are animals, none fading and all in the same light
+		const auto placers = renderCtx.instancedDrawDescs.find(meshId);
+		if (placers == renderCtx.instancedDrawDescs.end() || placers->second.count != animals.size() ||
+		    !meshes.Contains(meshId))
+		{
+			continue;
+		}
+		const auto model = meshes.Handle(meshId);
+		const auto& rest = model->GetBoneMatrices();
+		const auto light = animals.front().pose->light;
+		if (!model->IsBoned() || rest.empty() || std::ranges::any_of(animals, [light](const Drawn& drawn) {
+			    return drawn.pose->alpha < 255 || drawn.pose->light != light;
+		    }))
+		{
+			continue;
+		}
+		const auto first = static_cast<uint32_t>(_animalBones.size());
+		const auto bones = static_cast<uint32_t>(rest.size());
+		_animalBones.resize(_animalBones.size() + (static_cast<size_t>(bones) * animals.size()));
+		for (const auto& drawn : animals)
+		{
+			// Each in its place among the model's instances, in the pose its clip gives it, or its model's own
+			const auto& posed = drawn.pose->bones.size() == rest.size() ? drawn.pose->bones : rest;
+			const auto place = first + ((drawn.instance - placers->second.offset) * bones);
+			std::ranges::copy(posed, _animalBones.begin() + place);
+		}
+		_animalBoneGroups.emplace(meshId,
+		                          AnimalBoneGroup {.firstMatrix = first,
+		                                           .bones = bones,
+		                                           .brightestLand = light == ecs::components::AnimalLight::BrightestLand});
+	}
+	if (_animalBones.empty())
+	{
+		return;
+	}
+	// A texture tall enough for every matrix, grown by doubling as the animals grow in number
+	const auto texels = static_cast<uint32_t>(_animalBones.size()) * 4;
+	const auto rows = (texels + k_BoneTextureWidth - 1) / k_BoneTextureWidth;
+	if (!_animalBoneTexture || _animalBoneTexture->GetResolution().y < rows)
+	{
+		uint32_t height = 1;
+		while (height < rows)
+		{
+			height *= 2;
+		}
+		_animalBoneTexture = std::make_unique<Texture2D>("Animal Bones");
+		_animalBoneTexture->CreateWithinFrame(static_cast<uint16_t>(k_BoneTextureWidth), static_cast<uint16_t>(height), 1,
+		                                      TextureFormat::RGBA32F, Wrapping::ClampEdge, Filter::Nearest, nullptr);
+	}
+	const auto resolution = _animalBoneTexture->GetResolution();
+	_animalBones.resize(static_cast<size_t>(resolution.x) * resolution.y / 4);
+	_animalBoneTexture->Update(_animalBones.data(), static_cast<uint32_t>(_animalBones.size() * sizeof(glm::mat4)));
+}
+
 namespace
 {
 /// The hand the player moves, which the others follow in how they look
@@ -4327,6 +4419,7 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	SelectDrawnCreatures(drawDesc);
 	UploadCreatureSkins(drawDesc);
 	UploadHandSkins();
+	UploadAnimalBones(drawDesc);
 	{
 		const auto& textures = Locator::resources::value().GetTextures();
 		_snowTexture = textures.Find(snow_cover::k_TextureId.value());
@@ -4450,6 +4543,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	const auto* objectShaderInstanced = _shaderManager->GetShader("ObjectInstanced");
 	const auto* objectShaderFewBonesInstanced = _shaderManager->GetShader("ObjectFewBonesInstanced");
 	const auto* objectShaderMorphInstanced = _shaderManager->GetShader("ObjectMorphInstanced");
+	const auto* objectShaderPosedInstanced = _shaderManager->GetShader("ObjectPosedInstanced");
 	const auto* objectShaderStaticInstanced = _shaderManager->GetShader("ObjectStaticInstanced");
 	const auto* objectShaderHeightMapInstanced = _shaderManager->GetShader("ObjectHeightMapInstanced");
 	const auto* objectShaderHeightMapStaticInstanced = _shaderManager->GetShader("ObjectHeightMapStaticInstanced");
@@ -4709,7 +4803,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			                               bool useMaterialBlending, uint32_t first, uint32_t count,
 			                               const EntityPose* pose = nullptr,
 			                               const L3DMeshSubmitDesc::MorphTargets* handMorph = nullptr,
-			                               std::optional<graphics::DynamicVertexBufferHandle> instances = std::nullopt) {
+			                               std::optional<graphics::DynamicVertexBufferHandle> instances = std::nullopt,
+			                               const AnimalBoneGroup* posedGroup = nullptr) {
 				auto mesh = meshManager.Handle(meshId);
 
 				submitDesc.useMaterialBlending = useMaterialBlending;
@@ -4794,6 +4889,20 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					submitDesc.program = objectShaderMorphInstanced;
 					submitDesc.morphTargets = handMorph;
+				}
+				// The animals of a model all at once, each posed by its own bones from the texture
+				submitDesc.boneTexture = nullptr;
+				if (posedGroup != nullptr && _animalBoneTexture)
+				{
+					submitDesc.landLightScale = CreatureLandLightScale(desc.viewId);
+					submitDesc.program = objectShaderPosedInstanced;
+					const static auto identity = glm::mat4(1.0f);
+					submitDesc.modelMatrices = &identity;
+					submitDesc.matrixCount = 1;
+					const auto size = _animalBoneTexture->GetResolution();
+					submitDesc.boneTexture = _animalBoneTexture.get();
+					submitDesc.bones = {static_cast<float>(posedGroup->firstMatrix), static_cast<float>(posedGroup->bones),
+					                    static_cast<float>(size.x), static_cast<float>(size.y)};
 				}
 
 				// TODO(bwrsandman): choose the correct LOD
@@ -4907,7 +5016,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				const auto* pose = desc.entities.TryGet<const ecs::components::AnimalPose>(entity);
 				const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
 				if (pose == nullptr || mesh == nullptr || pose->bones.empty() || (pose->alpha < 255) != translucent ||
-				    !meshManager.Contains(mesh->id))
+				    !meshManager.Contains(mesh->id) || _animalBoneGroups.contains(mesh->id))
 				{
 					return;
 				}
@@ -4952,6 +5061,28 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				                             .morphTargets = nullptr};
 				drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &entityPose);
 			};
+			// The animals of a model drawn at once, in their light: the brightest of the land's, or white
+			for (const auto& [meshId, group] : _animalBoneGroups)
+			{
+				const auto placers = renderCtx.instancedDrawDescs.find(meshId);
+				if (placers == renderCtx.instancedDrawDescs.end() ||
+				    (desc.viewId == RenderPass::Reflection && placers->second.hiddenFromReflection))
+				{
+					continue;
+				}
+				glm::vec3 colour(255.0f);
+				if (group.brightestLand && _landLightTable)
+				{
+					const auto texel = _landLightTable->GetTexels().back();
+					colour = glm::vec3(static_cast<float>(texel & 0xFFu), static_cast<float>((texel >> 8) & 0xFFu),
+					                   static_cast<float>((texel >> 16) & 0xFFu));
+				}
+				submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = colour, .alpha = 1.0f};
+				drawInstances(meshId, placers->second, placers->second.materialBlending, placers->second.offset,
+				              placers->second.count, nullptr, nullptr, std::nullopt, &group);
+				submitDesc.objectLook.reset();
+				submitDesc.boneTexture = nullptr;
+			}
 			for (const auto& [entity, instance] : renderCtx.entityDraws)
 			{
 				drawAnimal(entity, instance, false);
@@ -4995,6 +5126,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawTempleMap(desc);
 			DrawTempleMapMarkers(desc);
 			DrawCaveTrophies(desc);
+			DrawCaveSeeds(desc);
 			DrawGroundBlobs(desc);
 			DrawGlobes(desc);
 			DrawHandMiracleBands(desc);

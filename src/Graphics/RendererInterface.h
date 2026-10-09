@@ -19,6 +19,7 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 
 #include "InstanceDesc.h"
 #include "RenderPass.h"
@@ -41,6 +42,7 @@ class Registry;
 namespace openblack::graphics
 {
 class L3DMesh;
+class Texture2D;
 class FrameBuffer;
 class ShaderManager;
 class ShaderProgram;
@@ -88,6 +90,10 @@ public:
 		uint32_t rgba;
 		const glm::mat4* modelMatrices;
 		uint8_t matrixCount;
+		/// Each instance's own bones, for a program that takes them from a texture (s_bones), with where the draw's
+		/// first are, how many each instance has and the texture's size (u_bones)
+		const graphics::Texture2D* boneTexture {nullptr};
+		glm::vec4 bones {0.0f};
 		std::unique_ptr<const graphics::InstanceDesc> instanceDesc;
 		uint32_t instanceStart;
 		uint32_t instanceCount;
