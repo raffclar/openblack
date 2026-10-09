@@ -77,9 +77,14 @@ public:
 		}
 		++_position;
 		std::u16string result;
-		while (_position < _text.size() && _text[_position] != u'"' && _text[_position] != u'\n')
+		// A string may go on over a line break: two of the game's texts have their closing quote on the next line
+		while (_position < _text.size() && _text[_position] != u'"')
 		{
 			auto c = _text[_position++];
+			if (c == u'\r')
+			{
+				continue;
+			}
 			if (c == u'\\' && _position < _text.size())
 			{
 				c = _text[_position++];
@@ -131,6 +136,17 @@ private:
 
 size_t TextDatabase::AddScript(std::span<const uint8_t> script)
 {
+	return Add(script, nullptr);
+}
+
+size_t TextDatabase::AddHelpScript(std::span<const uint8_t> script)
+{
+	_helpNames.clear();
+	return Add(script, &_helpNames);
+}
+
+size_t TextDatabase::Add(std::span<const uint8_t> script, std::vector<std::string>* names)
+{
 	std::u16string text(script.size() / 2, u'\0');
 	for (size_t i = 0; i < text.size(); ++i)
 	{
@@ -153,7 +169,12 @@ size_t TextDatabase::AddScript(std::span<const uint8_t> script)
 		{
 			continue;
 		}
-		_texts.insert_or_assign(ToUtf8(*name), std::move(*value));
+		auto key = ToUtf8(*name);
+		if (names != nullptr)
+		{
+			names->push_back(key);
+		}
+		_texts.insert_or_assign(std::move(key), std::move(*value));
 		++count;
 	}
 	return count;

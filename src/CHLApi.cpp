@@ -19,6 +19,7 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
@@ -41,10 +42,13 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/GameMusic.h"
 #include "Camera/Camera.h"
+#include "Camera/ScriptCameraModel.h"
 #include "Common/GUtilsDistance.h"
 #include "Creature/LeashRules.h"
 #include "ECS/Archetypes/BallArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
+#include "ECS/Archetypes/ScriptMarkerArchetype.h"
+#include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureMind.h"
@@ -67,6 +71,7 @@
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WallHug.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
@@ -74,10 +79,13 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
+#include "ECS/Systems/CreatureModeSystemInterface.h"
+#include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -85,15 +93,18 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
+#include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/TownPlaythings.h"
+#include "ECS/VillagerScriptRules.h"
 #include "ECS/WorldObjects.h"
 #include "Enums.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Hand/HandClickRules.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Magic/ScriptCast.h"
@@ -137,6 +148,77 @@ std::unordered_set<std::string> GetUniqueWords(const std::string& strings)
 		result.insert(word);
 	}
 	return result;
+}
+
+/// The task running the native now, 0 between tasks
+uint32_t CurrentTask()
+{
+	return Locator::vm::value().GetCurrentTaskNumber();
+}
+
+/// The kind of script a task runs, none for a task that has gone
+lhvm::ScriptType TaskType(uint32_t task)
+{
+	const auto& tasks = Locator::vm::value().GetTasks();
+	const auto found = tasks.find(task);
+	return found != tasks.end() ? found->second.type : lhvm::ScriptType::None;
+}
+
+/// A script's mistake the game tells of, and carries on
+void ScriptMessage(std::string_view message)
+{
+	SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "{}", message);
+}
+
+/// Nothing outside is in view while the player is inside the temple
+bool PlayerInsideTemple()
+{
+	return Locator::temple::has_value() && Locator::temple::value().Active();
+}
+
+/// The task whose cinema bars are in, 0 for none
+uint32_t WideScreenOwner()
+{
+	return Locator::cinematicDirectorSystem::value().GetWideScreenOwner();
+}
+
+/// The script's camera the camera commands move: with a warning when the script has none
+ScriptCameraModel* ScriptCamera()
+{
+	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	if (camera == nullptr)
+	{
+		ScriptMessage("We are in the wrong camera mode! - exception happened?");
+	}
+	return camera;
+}
+
+/// The camera commands that move it warn of a script doing so in the temple
+ScriptCameraModel* ScriptCameraToMove()
+{
+	if (PlayerInsideTemple())
+	{
+		ScriptMessage("Script moving camera in citadel");
+	}
+	return ScriptCamera();
+}
+
+/// Leashes are drawn again once a script gives the camera back, and not while it has it
+void DrawLeashes(bool drawn)
+{
+	if (Locator::leashSystem::has_value())
+	{
+		Locator::leashSystem::value().SetDrawn(drawn);
+	}
+}
+
+/// The task with the dialogue gives it back: the cinema bars go, and the advisors are sent home
+void ReleaseDialogue(uint32_t task)
+{
+	if (Locator::dialogueControlSystem::value().Release(task, TaskType(task) == lhvm::ScriptType::Help))
+	{
+		Locator::cinematicDirectorSystem::value().SetWideScreen(false, 0);
+	}
 }
 
 glm::vec3 PopVec()
@@ -206,6 +288,27 @@ entt::entity CreateScriptBall(const glm::vec3& position)
 	return ball;
 }
 
+/// A villager a script makes: a grown-up just past growing up, or a child of ten, standing waiting for the script
+entt::entity CreateScriptVillager(bool child, uint32_t subtype, const glm::vec3& position)
+{
+	const auto& infos = Locator::infoConstants::value().villager;
+	if (subtype >= infos.size())
+	{
+		ScriptMessage("Thing not created");
+		return entt::null;
+	}
+	constexpr uint32_t k_ChildAge = 10;
+	const auto& info = infos.at(subtype);
+	const uint32_t age = child ? k_ChildAge : info.grownUpAge + 1;
+	// TODO(opening): the game makes one of its special villagers instead, now and then, when one fits
+	const auto villager = VillagerArchetype::Create(position, position, static_cast<VillagerInfo>(subtype), age);
+	if (Locator::livingActionSystem::has_value())
+	{
+		Locator::livingActionSystem::value().VillagerSetScriptState(villager, VillagerStates::InScript);
+	}
+	return villager;
+}
+
 entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const glm::vec3& position, float altitude,
                                 float xAngleRadians, float yAngleRadians, const float zAngleRadians, const float scale)
 {
@@ -228,6 +331,11 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 	}
 	case ObjectType::Ball:
 		return CreateScriptBall(position);
+	case ObjectType::Marker:
+		return ScriptMarkerArchetype::Create(position);
+	case ObjectType::Villager:
+	case ObjectType::VillagerChild:
+		return CreateScriptVillager(type == ObjectType::VillagerChild, subtype, position);
 	default:
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "CreateScriptObject not implemented for type {}", static_cast<int>(type));
 	}
@@ -266,6 +374,14 @@ void RegisterCreated(entt::entity object)
 entt::entity PopObject()
 {
 	return Locator::scriptObjects::value().Fetch(static_cast<entt::entity>(Pop().uintVal));
+}
+
+/// The villager a native is given, if it is one the living actions direct
+bool IsDirectableVillager(entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	return registry.Valid(object) && registry.AllOf<ecs::components::Villager, ecs::components::LivingAction>(object) &&
+	       Locator::livingActionSystem::has_value();
 }
 
 /// A script effect's seconds as game turns: a whole number of turns a second, as the game's turn length gives it
@@ -333,6 +449,26 @@ void Pushb(bool value)
 {
 	auto& lhvm = Locator::vm::value();
 	lhvm.Pushb(value);
+}
+
+void CHLApi::TaskStopped(uint32_t task)
+{
+	// What the task held goes back: the dialogue, its cinema bars, the camera and the game's speed
+	ReleaseDialogue(task);
+	auto& director = Locator::cinematicDirectorSystem::value();
+	if (director.IsWideScreenOn() && director.GetWideScreenOwner() == task)
+	{
+		director.SetWideScreen(false, 0);
+	}
+	const auto released = Locator::scriptControlSystem::value().TaskStopped(Locator::camera::value(), task);
+	if (released.camera)
+	{
+		DrawLeashes(true);
+	}
+	if (released.gameSpeed)
+	{
+		Locator::time::value().SetSpeed(1.0f);
+	}
 }
 
 CHLApi::CHLApi()
@@ -424,33 +560,40 @@ void None() {} // 000 NONE
 void SetCameraPosition() // 001 SET_CAMERA_POSITION
 {
 	const auto position = PopVec();
-	// TODO(Daniels118): check if cinema mode is enabled
-	auto& camera = Locator::camera::value();
-	camera.SetOrigin(position);
+	// Without the script's camera the position is quietly dropped
+	if (auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value()); camera != nullptr)
+	{
+		camera->SetOrigin(position);
+	}
 }
 
 void SetCameraFocus() // 002 SET_CAMERA_FOCUS
 {
 	const auto position = PopVec();
-	// TODO(Daniels118): check if cinema mode is enabled
-	auto& camera = Locator::camera::value();
-	camera.SetFocus(position);
+	if (auto* camera = ScriptCameraToMove(); camera != nullptr)
+	{
+		camera->SetFocus(position);
+	}
 }
 
 void MoveCameraPosition() // 003 MOVE_CAMERA_POSITION
 {
-	// const auto time = Popf();
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto time = Popf();
+	const auto position = PopVec();
+	if (auto* camera = ScriptCameraToMove(); camera != nullptr)
+	{
+		camera->MoveOrigin(position, time);
+	}
 }
 
 void MoveCameraFocus() // 004 MOVE_CAMERA_FOCUS
 {
-	// const auto time = Popf();
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto time = Popf();
+	const auto position = PopVec();
+	if (auto* camera = ScriptCameraToMove(); camera != nullptr)
+	{
+		camera->MoveFocus(position, time);
+	}
 }
 
 void GetCameraPosition() // 005 GET_CAMERA_POSITION
@@ -519,12 +662,6 @@ static std::optional<screen_pick::View> ScriptScreenView()
 	    .xScale = camera.GetProjectionMatrix()[0][0],
 	    .camera = glm::vec3(glm::inverse(camera.GetViewMatrix(Camera::Interpolation::Current))[3]),
 	};
-}
-
-/// Nothing outside is in view while the player is inside the temple
-static bool PlayerInsideTemple()
-{
-	return Locator::temple::has_value() && Locator::temple::value().Active();
 }
 
 /// Whether a thing shows on the screen: a thing with a model by its model's bounding sphere, anything else by the point
@@ -617,9 +754,25 @@ void GameThingClicked() // 016 GAME_THING_CLICKED
 
 void SetScriptState() // 017 SET_SCRIPT_STATE
 {
-	[[maybe_unused]] const auto state = Pop().intVal;
-	[[maybe_unused]] const auto object = PopObject();
-	// TODO(Daniels118): implement this
+	const auto state = Pop().intVal;
+	const auto object = PopObject();
+	if (!Locator::entitiesRegistry::value().Valid(object))
+	{
+		ScriptMessage("Object no longer valid");
+		return;
+	}
+	if (IsDirectableVillager(object))
+	{
+		auto& living = Locator::livingActionSystem::value();
+		if (state < 0 || state >= static_cast<int32_t>(VillagerStates::_COUNT) || !living.VillagerCanBeDirected(object))
+		{
+			ScriptMessage("Object not living for set state");
+			return;
+		}
+		living.VillagerSetScriptState(object, static_cast<VillagerStates>(state));
+		return;
+	}
+	// TODO(opening): creatures, animals and groups of things
 	NotImplemented();
 }
 
@@ -641,10 +794,21 @@ void SetScriptFloat() // 019 SET_SCRIPT_FLOAT
 
 void SetScriptUlong() // 020 SET_SCRIPT_ULONG
 {
-	[[maybe_unused]] const auto loop = Pop().intVal;
-	[[maybe_unused]] const auto animation = Pop().intVal;
-	[[maybe_unused]] const auto object = PopObject();
-	// TODO(Daniels118): implement this
+	// A count of -1 plays the clip without end
+	const auto plays = Pop().uintVal;
+	const auto animation = Pop().intVal;
+	const auto object = PopObject();
+	if (!Locator::entitiesRegistry::value().Valid(object))
+	{
+		ScriptMessage("Object no longer valid");
+		return;
+	}
+	if (IsDirectableVillager(object))
+	{
+		Locator::livingActionSystem::value().VillagerSetScriptAnimation(object, static_cast<AnimId>(animation), plays);
+		return;
+	}
+	// TODO(opening): creatures and groups of things
 	NotImplemented();
 }
 
@@ -783,6 +947,23 @@ void GetProperty() // 021 GET_PROPERTY
 	case script::ObjectPropertyType::Drowning:
 		Pushb(IsDrowning(object));
 		return;
+	case script::ObjectPropertyType::Scale:
+		if (const auto* transform = Locator::entitiesRegistry::value().TryGet<const Transform>(object); transform != nullptr)
+		{
+			Pushf(transform->scale.x);
+			return;
+		}
+		Pushf(0.0f);
+		return;
+	case script::ObjectPropertyType::Speed:
+		if (const auto* wallHug = Locator::entitiesRegistry::value().TryGet<const ecs::components::WallHug>(object);
+		    wallHug != nullptr)
+		{
+			Pushf(ecs::villager_script_rules::WalkSpeedToScriptSpeed(wallHug->speed));
+			return;
+		}
+		Pushf(0.0f);
+		return;
 	case script::ObjectPropertyType::InHand:
 		// Held in a hand, as a number
 		Pushf(registry.AllOf<ecs::components::InHand>(object) ? 1.0f : 0.0f);
@@ -868,8 +1049,28 @@ void SetProperty() // 022 SET_PROPERTY
 		}
 		return;
 	}
-	// TODO(Daniels118): the other properties
-	NotImplemented(static_cast<int32_t>(prop));
+	switch (prop)
+	{
+	case script::ObjectPropertyType::Scale:
+		// The thing is drawn at this size, the same along every axis
+		if (auto* transform = registry.TryGet<Transform>(object); transform != nullptr)
+		{
+			transform->scale = glm::vec3(value);
+			registry.SetDirty();
+		}
+		return;
+	case script::ObjectPropertyType::Speed:
+		// Metres a turn
+		if (auto* wallHug = registry.TryGet<ecs::components::WallHug>(object); wallHug != nullptr)
+		{
+			wallHug->speed = ecs::villager_script_rules::ScriptSpeedToWalkSpeed(value);
+		}
+		return;
+	default:
+		// TODO(Daniels118): the other properties
+		NotImplemented(static_cast<int32_t>(prop));
+		return;
+	}
 }
 
 void GetPosition() // 023 GET_POSITION
@@ -912,8 +1113,7 @@ void GetDistance() // 025 GET_DISTANCE
 {
 	const auto p1 = PopVec();
 	const auto p0 = PopVec();
-	const auto distance = glm::length(p1 - p0);
-	Pushf(distance);
+	Pushf(ecs::villager_script_rules::ScriptDistance(p0, p1));
 }
 
 /// What a "get ... at" (no reach) or "get ... at ... radius" (a reach) asks for
@@ -1071,7 +1271,7 @@ void Create() // 027 CREATE
 	const auto object = CreateScriptObject(type, subtype, position, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
 	RegisterCreated(object);
 
-	Pusho(static_cast<uint32_t>(object));
+	Pusho(object == entt::null ? 0 : static_cast<uint32_t>(object));
 }
 
 void Random() // 028 RANDOM
@@ -1090,15 +1290,31 @@ void DllGettime() // 029 DLL_GETTIME
 
 void StartCameraControl() // 030 START_CAMERA_CONTROL
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto task = CurrentTask();
+	const bool templeScript = TaskType(task) & (lhvm::ScriptType::TempleHelp | lhvm::ScriptType::TempleSpecial);
+	const bool insideTemple = PlayerInsideTemple();
+	// Following a creature is left for the script's camera, which takes over from where the camera is
+	if (!insideTemple && Locator::creatureModeSystem::has_value() && Locator::creatureModeSystem::value().IsActive())
+	{
+		Locator::creatureModeSystem::value().Leave();
+	}
+	const bool taken = Locator::scriptControlSystem::value().StartCameraControl(
+	    Locator::camera::value(), {.task = task, .templeScript = templeScript, .insideTemple = insideTemple},
+	    [](float x, float z) { return Locator::terrainSystem::value().GetHeightAt(glm::vec2(x, z)); });
+	// Out in the world the leashes aren't drawn during the script's shots
+	if (taken && !insideTemple)
+	{
+		DrawLeashes(false);
+	}
+	Pushb(taken);
 }
 
 void EndCameraControl() // 031 END_CAMERA_CONTROL
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	if (Locator::scriptControlSystem::value().EndCameraControl(Locator::camera::value(), CurrentTask()))
+	{
+		DrawLeashes(true);
+	}
 }
 
 void SetWidescreen() // 032 SET_WIDESCREEN
@@ -1120,26 +1336,66 @@ void SetWidescreen() // 032 SET_WIDESCREEN
 
 void MoveGameThing() // 033 MOVE_GAME_THING
 {
+	// How near a creature has to come; others go to the point itself
 	[[maybe_unused]] const auto radius = Popf();
-	[[maybe_unused]] const auto position = PopVec();
-	[[maybe_unused]] const auto object = PopObject();
-	// TODO(Daniels118): implement this
+	const auto position = PopVec();
+	const auto object = PopObject();
+	if (!Locator::entitiesRegistry::value().Valid(object))
+	{
+		ScriptMessage("Object no longer valid");
+		return;
+	}
+	if (IsDirectableVillager(object))
+	{
+		// One in a hand, in the air or drowning stays where it is
+		auto& living = Locator::livingActionSystem::value();
+		if (living.VillagerCanBeDirected(object))
+		{
+			living.VillagerScriptMoveTo(object, glm::vec2(position.x, position.z));
+		}
+		return;
+	}
+	// TODO(opening): creatures, flocks, the weather, computer players and other things
 	NotImplemented();
 }
 
 void SetFocus() // 034 SET_FOCUS
 {
-	// const auto position = PopVec();
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
+	const auto position = PopVec();
+	const auto object = PopObject();
+	if (!Locator::entitiesRegistry::value().Valid(object))
+	{
+		ScriptMessage("Object no longer valid");
+		return;
+	}
+	if (IsDirectableVillager(object))
+	{
+		// It turns at once to face the point
+		Locator::livingActionSystem::value().VillagerFace(object, glm::vec2(position.x, position.z));
+		return;
+	}
+	// TODO(opening): other objects, creatures and groups of things
 	NotImplemented();
 }
 
 void HasCameraArrived() // 035 HAS_CAMERA_ARRIVED
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	if (PlayerInsideTemple())
+	{
+		ScriptMessage("Script camera in citadel");
+	}
+	auto& camera = Locator::camera::value();
+	if (const auto* script = Locator::scriptControlSystem::value().GetScriptCamera(camera); script != nullptr)
+	{
+		Pushb(script->Arrived());
+		return;
+	}
+	// The player's camera has arrived once where it is and what it looks at are where it is going
+	const auto distanceSquared = [](const glm::vec3& a, const glm::vec3& b) { return glm::dot(a - b, a - b); };
+	Pushb(distanceSquared(camera.GetOrigin(Camera::Interpolation::Target), camera.GetOrigin()) <
+	          script_camera::k_ArrivedDistanceSquared &&
+	      distanceSquared(camera.GetFocus(Camera::Interpolation::Target), camera.GetFocus()) <
+	          script_camera::k_ArrivedDistanceSquared);
 }
 
 void FlockCreate() // 036 FLOCK_CREATE
@@ -1419,10 +1675,22 @@ void SetInterfaceInteraction() // 063 SET_INTERFACE_INTERACTION
 
 void Played() // 064 PLAYED
 {
-	// const auto obj = Pop().uintVal;
-	// TODO(Daniels118): implement this
+	const auto object = PopObject();
+	if (!Locator::entitiesRegistry::value().Valid(object))
+	{
+		// Something gone has played whatever it was asked to
+		ScriptMessage("Object no longer valid");
+		Pushb(true);
+		return;
+	}
+	if (IsDirectableVillager(object))
+	{
+		Pushb(Locator::livingActionSystem::value().VillagerHasPlayedScriptAnimation(object));
+		return;
+	}
+	// TODO(opening): creatures' plans, other living things, the weather and dances
 	NotImplemented();
-	Pushb(false);
+	Pushb(true);
 }
 
 void RandomUlong() // 065 RANDOM_ULONG
@@ -1436,9 +1704,11 @@ void RandomUlong() // 065 RANDOM_ULONG
 
 void SetGamespeed() // 066 SET_GAMESPEED
 {
-	// const auto speed = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto speed = Popf();
+	if (Locator::scriptControlSystem::value().MaySetGameSpeed(CurrentTask()))
+	{
+		Locator::time::value().SetSpeed(speed);
+	}
 }
 
 void CallInNear() // 067 CALL_IN_NEAR
@@ -1889,22 +2159,54 @@ void RunCameraPath() // 119 RUN_CAMERA_PATH
 
 void StartDialogue() // 120 START_DIALOGUE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	auto& dialogue = Locator::dialogueControlSystem::value();
+	const auto task = CurrentTask();
+	auto owner = dialogue.GetOwner();
+	if (owner == 0)
+	{
+		dialogue.SendSpiritsHome(false);
+	}
+	else
+	{
+		if (owner == task)
+		{
+			ScriptMessage("Script Asking For Dialogue Control It already has! - Dangerous");
+			Pushb(true);
+			return;
+		}
+		// A story script takes the dialogue from a help script, whose tasks are stopped and so give it back
+		if (TaskType(owner) == lhvm::ScriptType::Help && TaskType(task) == lhvm::ScriptType::Script)
+		{
+			Locator::vm::value().StopTasksOfType(lhvm::ScriptType::Help | lhvm::ScriptType::TempleHelp |
+			                                     lhvm::ScriptType::MultiplayerHelp);
+			owner = dialogue.GetOwner();
+		}
+		if (owner != 0)
+		{
+			Pushb(false);
+			return;
+		}
+	}
+	// The script carries on even when another task's cinema bars keep the dialogue from it
+	dialogue.Request(task, WideScreenOwner());
+	Pushb(true);
 }
 
 void EndDialogue() // 121 END_DIALOGUE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	auto& dialogue = Locator::dialogueControlSystem::value();
+	const auto task = CurrentTask();
+	if (dialogue.GetOwner() != task)
+	{
+		return;
+	}
+	dialogue.SendSpiritsHome(TaskType(task) == lhvm::ScriptType::Help);
+	ReleaseDialogue(task);
 }
 
 void IsDialogueReady() // 122 IS_DIALOGUE_READY
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(!Locator::dialogueControlSystem::value().IsControlled(WideScreenOwner()));
 }
 
 void ChangeWeatherProperties() // 123 CHANGE_WEATHER_PROPERTIES
@@ -1960,14 +2262,15 @@ void SetHeadingAndSpeed() // 127 SET_HEADING_AND_SPEED
 
 void StartGameSpeed() // 128 START_GAME_SPEED
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	Locator::scriptControlSystem::value().StartGameSpeed(CurrentTask());
 }
 
 void EndGameSpeed() // 129 END_GAME_SPEED
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	if (Locator::scriptControlSystem::value().EndGameSpeed(CurrentTask()))
+	{
+		Locator::time::value().SetSpeed(1.0f);
+	}
 }
 
 void BuildBuilding() // 130 BUILD_BUILDING
@@ -4015,12 +4318,13 @@ void GameThingCanViewCamera() // 339 GAME_THING_CAN_VIEW_CAMERA
 
 void GamePlaySaySoundEffect() // 340 GAME_PLAY_SAY_SOUND_EFFECT
 {
-	// const auto withPosition = static_cast<bool>(Pop().intVal);
-	// const auto position = PopVec();
-	// const auto sound = Pop().intVal;
-	// const auto extra = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Says a help text's line, on the second voice for "extra", heard from the position when it has one
+	const auto withPosition = Pop().intVal != 0;
+	const auto position = PopVec();
+	const auto text = static_cast<uint32_t>(Pop().intVal);
+	const auto extra = Pop().intVal != 0;
+	Locator::helpSpeechSystem::value().Say(text, extra ? audio::SpeechVoice::Second : audio::SpeechVoice::First,
+	                                       withPosition ? std::optional(position) : std::nullopt);
 }
 
 void SetTownDesireBoost() // 341 SET_TOWN_DESIRE_BOOST
@@ -5077,11 +5381,9 @@ void GetTempleEntrancePosition() // 457 GET_TEMPLE_ENTRANCE_POSITION
 
 void SaySoundEffectPlaying() // 458 SAY_SOUND_EFFECT_PLAYING
 {
-	// const auto sound = Pop().intVal;
-	// const auto alwaysFalse = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto text = static_cast<uint32_t>(Pop().intVal);
+	const auto extra = Pop().intVal != 0;
+	Pushb(Locator::helpSpeechSystem::value().IsSaying(text, extra ? audio::SpeechVoice::Second : audio::SpeechVoice::First));
 }
 
 void SetHandDemoKeys() // 459 SET_HAND_DEMO_KEYS

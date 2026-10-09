@@ -53,6 +53,7 @@
 #include "ECS/Systems/Implementations/CreatureObjectActionSystem.h"
 #include "ECS/Systems/Implementations/CreaturePhysiologySystem.h"
 #include "ECS/Systems/Implementations/CreatureSkinSystem.h"
+#include "ECS/Systems/Implementations/DialogueControlSystem.h"
 #include "ECS/Systems/Implementations/DynamicsSystem.h"
 #include "ECS/Systems/Implementations/EditorSystem.h"
 #include "ECS/Systems/Implementations/ExplosionSystem.h"
@@ -64,6 +65,7 @@
 #include "ECS/Systems/Implementations/GestureSystem.h"
 #include "ECS/Systems/Implementations/HandGrabSystem.h"
 #include "ECS/Systems/Implementations/HandSystem.h"
+#include "ECS/Systems/Implementations/HelpSpeechSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
@@ -80,6 +82,7 @@
 #include "ECS/Systems/Implementations/RenderingSystem.h"
 #include "ECS/Systems/Implementations/ResourceStoreSystem.h"
 #include "ECS/Systems/Implementations/RewardSystem.h"
+#include "ECS/Systems/Implementations/ScriptControlSystem.h"
 #include "ECS/Systems/Implementations/ScriptObjectsSystem.h"
 #include "ECS/Systems/Implementations/SnowSystem.h"
 #include "ECS/Systems/Implementations/SnowfallSystem.h"
@@ -140,6 +143,7 @@ using openblack::ecs::systems::CreatureModeSystem;
 using openblack::ecs::systems::CreatureObjectActionSystem;
 using openblack::ecs::systems::CreaturePhysiologySystem;
 using openblack::ecs::systems::CreatureSkinSystem;
+using openblack::ecs::systems::DialogueControlSystem;
 using openblack::ecs::systems::DynamicsSystem;
 using openblack::ecs::systems::EditorSystem;
 using openblack::ecs::systems::FieldSystem;
@@ -150,6 +154,7 @@ using openblack::ecs::systems::GestureEventsInterface;
 using openblack::ecs::systems::GestureSystem;
 using openblack::ecs::systems::HandGrabSystem;
 using openblack::ecs::systems::HandSystem;
+using openblack::ecs::systems::HelpSpeechSystem;
 using openblack::ecs::systems::InfluenceSystem;
 using openblack::ecs::systems::LeashSystem;
 using openblack::ecs::systems::LivingActionSystem;
@@ -165,6 +170,7 @@ using openblack::ecs::systems::RainSystem;
 using openblack::ecs::systems::ReactionSystem;
 using openblack::ecs::systems::RenderingSystem;
 using openblack::ecs::systems::ResourceStoreSystem;
+using openblack::ecs::systems::ScriptControlSystem;
 using openblack::ecs::systems::SnowfallSystem;
 using openblack::ecs::systems::SnowSystem;
 using openblack::ecs::systems::SoundTagSystem;
@@ -271,6 +277,9 @@ bool openblack::InitializeGame() noexcept
 	Locator::creatureModeSystem::emplace<CreatureModeSystem>();
 	Locator::creatureCaveSystem::emplace<CreatureCaveSystem>();
 	Locator::cinematicDirectorSystem::emplace<CinematicDirectorSystem>();
+	Locator::scriptControlSystem::emplace<ScriptControlSystem>();
+	Locator::dialogueControlSystem::emplace<DialogueControlSystem>();
+	Locator::helpSpeechSystem::emplace<HelpSpeechSystem>();
 	Locator::soundTagSystem::emplace<SoundTagSystem>();
 	Locator::rainSystem::emplace<RainSystem>();
 	Locator::chimneySmokeSystem::emplace<ChimneySmokeSystem>();
@@ -377,6 +386,9 @@ void openblack::ShutDownServices()
 	Locator::pathfindingSystem::reset();
 	Locator::creatureLocomotionSystem::reset();
 	Locator::cinematicDirectorSystem::reset();
+	Locator::scriptControlSystem::reset();
+	Locator::dialogueControlSystem::reset();
+	Locator::helpSpeechSystem::reset();
 	Locator::influenceSystem::reset();
 	Locator::chimneySmokeSystem::reset();
 	Locator::abodeKnockSystem::reset();

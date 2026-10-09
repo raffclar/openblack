@@ -42,6 +42,7 @@
 #include "VillagerHome.h"
 #include "VillagerPhysics.h"
 #include "VillagerReactions.h"
+#include "VillagerScript.h"
 #include "VillagerShieldShelter.h"
 #include "VillagerTeleport.h"
 
@@ -55,6 +56,7 @@ namespace villager_shield = openblack::ecs::villager_shield;
 namespace villager_fire = openblack::ecs::villager_fire;
 namespace villager_physics = openblack::ecs::villager_physics;
 namespace villager_animate = openblack::ecs::villager_animate;
+namespace villager_script = openblack::ecs::villager_script;
 
 /// A villager with no state does nothing
 uint32_t VillagerInvalidState(LivingAction& /*action*/)
@@ -186,7 +188,11 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     },
     /* MOVE_TO_OBJECT */ k_TodoEntry,
     /* MOVE_ON_STRUCTURE */ k_TodoEntry,
-    /* IN_SCRIPT */ k_TodoEntry,
+    /* IN_SCRIPT */
+    VillagerStateTableEntry {
+        .state = &villager_script::InScript,
+        .exitState = &villager_script::ExitInScript,
+    },
     /* IN_DANCE */ k_TodoEntry,
     /* FLEEING_FROM_OBJECT_REACTION */
     VillagerStateTableEntry {
@@ -468,7 +474,11 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     },
     /* WEAK_ON_GROUND */ k_TodoEntry,
     /* SCRIPT_WANDER_AROUND_POSITION */ k_TodoEntry,
-    /* SCRIPT_PLAY_ANIM */ k_TodoEntry,
+    /* SCRIPT_PLAY_ANIM */
+    VillagerStateTableEntry {
+        .state = &villager_script::ScriptPlayAnim,
+        .exitState = &villager_script::ExitInScript,
+    },
     /* GO_TOWARDS_TELEPORT_REACTION */
     VillagerStateTableEntry {
         .state = &villager_teleport::GoTowardsTeleportReaction,
@@ -839,6 +849,36 @@ void LivingActionSystem::VillagerSetTopStateToFinal(LivingAction& action) const
 bool LivingActionSystem::VillagerIsReadyForNewAnimation(const LivingAction& action, uint32_t times) const
 {
 	return villager_animate::IsReadyForNewAnimation(action, times);
+}
+
+bool LivingActionSystem::VillagerCanBeDirected(entt::entity villager) const
+{
+	return villager_script::CanBeDirected(villager);
+}
+
+void LivingActionSystem::VillagerSetScriptState(entt::entity villager, VillagerStates state) const
+{
+	villager_script::SetScriptState(villager, state);
+}
+
+void LivingActionSystem::VillagerScriptMoveTo(entt::entity villager, glm::vec2 goal) const
+{
+	villager_script::MoveTo(villager, goal);
+}
+
+void LivingActionSystem::VillagerSetScriptAnimation(entt::entity villager, AnimId clip, uint32_t plays) const
+{
+	villager_script::SetScriptAnimation(villager, clip, plays);
+}
+
+bool LivingActionSystem::VillagerHasPlayedScriptAnimation(entt::entity villager) const
+{
+	return villager_script::HasPlayedScriptAnimation(villager);
+}
+
+void LivingActionSystem::VillagerFace(entt::entity villager, glm::vec2 point) const
+{
+	villager_script::Face(villager, point);
 }
 
 uint32_t LivingActionSystem::VillagerCallState(LivingAction& action, LivingAction::Index index) const

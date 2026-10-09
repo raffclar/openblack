@@ -15,6 +15,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 
 namespace openblack::gui
 {
@@ -31,13 +32,20 @@ public:
 	/// Adds the ADD_TEXT lines of a script, little endian UTF-16 with or without a byte order mark. A text replaces any
 	/// earlier one of the same name. Returns how many texts the script has.
 	size_t AddScript(std::span<const uint8_t> script);
+	/// Adds the help texts' script, whose texts the scripts also refer to by number: the order they come in
+	size_t AddHelpScript(std::span<const uint8_t> script);
 
 	/// The text of a name, empty when there is none. "\n" in the script is a line break.
 	[[nodiscard]] std::u16string_view Get(std::string_view name) const;
 	[[nodiscard]] size_t GetCount() const noexcept { return _texts.size(); }
+	/// The names of the help texts by their numbers
+	[[nodiscard]] std::span<const std::string> GetHelpNames() const noexcept { return _helpNames; }
 
 private:
+	size_t Add(std::span<const uint8_t> script, std::vector<std::string>* names);
+
 	std::unordered_map<std::string, std::u16string> _texts;
+	std::vector<std::string> _helpNames;
 };
 
 /// Converts text for logs and the like

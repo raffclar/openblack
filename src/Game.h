@@ -274,6 +274,8 @@ private:
 	void PlayHandGrabSound();
 	/// What the hand steps by this frame, in seconds
 	[[nodiscard]] float HandStepSeconds() const;
+	/// Whether the player's hand is out, not put away for a dialog or a script's cinema bars
+	[[nodiscard]] bool IsHandShown() const;
 	/// The miracles hear where the hand and cursor are, and the held miracle follows the hand
 	void UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds);
 	/// The gestures drawn with the cursor this frame, through the gesture system

@@ -30,6 +30,8 @@ public:
 
 	[[nodiscard]] float Value() const { return _value; }
 	[[nodiscard]] float Speed() const { return _speed; }
+	/// Where it is going, or where it is when still
+	[[nodiscard]] float Destination() const { return _destination; }
 
 private:
 	float _value {0.0f};

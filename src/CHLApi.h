@@ -30,6 +30,8 @@ public:
 	CHLApi();
 
 	[[nodiscard]] const std::vector<lhvm::NativeFunction>& GetFunctionsTable();
+	/// A script task has stopped: whatever it had control of goes back
+	static void TaskStopped(uint32_t task);
 
 	/// The scripts call a native: the one an unwritten native reports itself as
 	void EnterNative(uint32_t native) { _currentNative = native; }

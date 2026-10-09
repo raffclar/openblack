@@ -59,6 +59,7 @@ openblack_setup_and_add_test(test_sound_decoding audio/test_sound_decoding.cpp)
 openblack_setup_and_add_test(test_music audio/test_music.cpp)
 openblack_setup_and_add_test(test_music_decoding audio/test_music_decoding.cpp)
 openblack_setup_and_add_test(test_anim_effects audio/test_anim_effects.cpp)
+openblack_setup_and_add_test(test_help_speech audio/test_help_speech.cpp)
 openblack_setup_and_add_test(test_listener_frame audio/test_listener_frame.cpp)
 openblack_setup_and_add_test(test_hearing_range audio/test_hearing_range.cpp)
 openblack_setup_and_add_test(test_interface gui/test_interface.cpp)
@@ -68,11 +69,15 @@ openblack_setup_and_add_test(test_cinematics gui/test_cinematics.cpp)
 openblack_setup_and_add_test(
   test_cinematic_director gui/test_cinematic_director.cpp
 )
+openblack_setup_and_add_test(
+  test_dialogue_control gui/test_dialogue_control.cpp
+)
 target_link_libraries(test_sound_decoding PRIVATE pack)
 openblack_setup_and_add_test(test_hand_animation hand/test_hand_animation.cpp)
 target_link_libraries(test_hand_animation PRIVATE pack l3d morph)
 openblack_setup_and_add_test(test_hand_shadow hand/test_hand_shadow.cpp)
 openblack_setup_and_add_test(test_hand_cross_fade hand/test_hand_cross_fade.cpp)
+openblack_setup_and_add_test(test_hand_visibility hand/test_hand_visibility.cpp)
 openblack_setup_and_add_test(
   test_hand_orientation hand/test_hand_orientation.cpp
 )
@@ -244,6 +249,7 @@ target_link_libraries(test_l3d_submesh_names PRIVATE l3d)
 openblack_setup_and_add_test(test_light_beams graphics/test_light_beams.cpp)
 target_link_libraries(test_light_beams PRIVATE l3d glw)
 openblack_setup_and_add_test(test_temple_camera camera/test_temple_camera.cpp)
+openblack_setup_and_add_test(test_script_camera camera/test_script_camera.cpp)
 openblack_setup_and_add_test(test_temple_doors temple/test_temple_doors.cpp)
 openblack_setup_and_add_test(
   test_creature_cave_effects temple/test_creature_cave_effects.cpp
@@ -311,6 +317,7 @@ openblack_setup_and_add_test(
   test_villager_animation test_villager_animation.cpp
 )
 openblack_setup_and_add_test(test_creature_casting test_creature_casting.cpp)
+openblack_setup_and_add_test(test_villager_script test_villager_script.cpp)
 openblack_setup_and_add_test(test_creature_fire test_creature_fire.cpp)
 openblack_setup_and_add_test(test_particle_glints test_particle_glints.cpp)
 target_link_libraries(test_particle_glints PRIVATE psys)
