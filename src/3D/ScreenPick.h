@@ -52,6 +52,15 @@ struct View
 /// cursor strictly inside it.
 [[nodiscard]] bool CursorOverSphere(const View& view, glm::vec3 centre, float radius, glm::vec3 origin);
 
+/// Whether any of an object's bounding sphere shows on the screen, as the scripts ask whether a thing is in view: one
+/// whose sphere is behind the near plane does not; one the camera is inside does; otherwise its circle on the screen
+/// must reach the screen. The cursor plays no part.
+[[nodiscard]] bool SphereOnScreen(const View& view, glm::vec3 centre, float radius, glm::vec3 origin);
+
+/// Whether a point shows on the screen: at or beyond the near plane, and on one of the screen's pixels (its pixel taken
+/// by cutting the fraction off towards nothing)
+[[nodiscard]] bool PointOnScreen(const View& view, glm::vec3 point);
+
 /// A corner of a triangle in clip space with its texture coordinates
 struct ClipCorner
 {

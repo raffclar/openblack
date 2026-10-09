@@ -321,3 +321,9 @@ void ScriptObjectsSystem::Reset()
 	_table.Clear();
 	_takesControl = false;
 }
+
+void ScriptObjectsSystem::ClearForNewLand()
+{
+	_table.ClearObjects();
+	_takesControl = false;
+}

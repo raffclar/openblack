@@ -24,9 +24,11 @@ public:
 	/// The temple's heart has lost the last of its life: its destruction starts, or starts again from
 	/// nothing
 	virtual void Start(entt::entity temple) = 0;
-	/// Once a game turn: the game ends for the local player whose temple is being destroyed, then each temple being
-	/// destroyed moves on a turn
+	/// At the start of each game turn, before anything else takes its turn: each temple being destroyed moves on a turn
 	virtual void ProcessTurn() = 0;
+	/// At the end of each game turn, after the physics: the game ends for the local player whose temple is being
+	/// destroyed, in the turn its heart lost the last of its life
+	virtual void EndTurn() = 0;
 };
 
 } // namespace openblack::ecs::systems

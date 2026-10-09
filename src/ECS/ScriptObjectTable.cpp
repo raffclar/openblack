@@ -103,8 +103,16 @@ void Table::Replace(uint32_t from, uint32_t to)
 	}
 }
 
+void Table::ClearObjects()
+{
+	for (auto& place : _places)
+	{
+		place = {.object = 0, .createdByScript = false, .count = place.count, .used = false};
+	}
+}
+
 void Table::Clear()
 {
-	// Where the next search starts is kept, as the game keeps it
 	_places = {};
+	_next = 1;
 }

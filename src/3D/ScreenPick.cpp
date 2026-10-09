@@ -189,31 +189,86 @@ float Depth(const View& view, glm::vec3 point)
 	return (view.worldToClip * glm::vec4(point, 1.0f)).w;
 }
 
-bool CursorOverSphere(const View& view, glm::vec3 centre, float radius, glm::vec3 origin)
+namespace
+{
+/// Where a sphere's circle falls on the screen, none when the sphere is wholly behind the near plane, and whether the
+/// camera is inside it
+struct SphereCircle
+{
+	bool cameraInside {false};
+	glm::vec2 centre {0.0f};
+	float radius {0.0f};
+};
+
+std::optional<SphereCircle> CircleOf(const View& view, glm::vec3 centre, float radius, glm::vec3 origin)
 {
 	const auto clip = view.worldToClip * glm::vec4(centre, 1.0f);
 	if (view.near > clip.w + radius)
 	{
-		return false;
+		return std::nullopt;
 	}
-	// A camera inside the sphere is over it wherever the cursor is
+	// The camera within the sphere's reach of the object's origin is inside it
 	const auto fromCamera = origin - view.camera;
 	if (glm::dot(fromCamera, fromCamera) < radius * radius)
 	{
+		return SphereCircle {.cameraInside = true};
+	}
+	const float overDepth = 1.0f / clip.w;
+	const glm::vec2 half = view.resolution * 0.5f;
+	return SphereCircle {
+	    .centre = {(clip.x * overDepth + 1.0f) * half.x, (1.0f - clip.y * overDepth) * half.y},
+	    .radius = radius * overDepth * half.x * view.xScale,
+	};
+}
+
+bool CircleReachesScreen(const View& view, const SphereCircle& circle)
+{
+	const float x = circle.centre.x;
+	const float y = circle.centre.y;
+	const float r = circle.radius;
+	return !(r + x < 0.0f || x - r > view.resolution.x || r + y < 0.0f || y - r > view.resolution.y);
+}
+} // namespace
+
+bool CursorOverSphere(const View& view, glm::vec3 centre, float radius, glm::vec3 origin)
+{
+	const auto circle = CircleOf(view, centre, radius, origin);
+	if (!circle.has_value())
+	{
+		return false;
+	}
+	// A camera inside the sphere is over it wherever the cursor is
+	if (circle->cameraInside)
+	{
 		return true;
+	}
+	if (!CircleReachesScreen(view, *circle))
+	{
+		return false;
+	}
+	const auto offset = view.cursor - circle->centre;
+	return glm::dot(offset, offset) < circle->radius * circle->radius;
+}
+
+bool SphereOnScreen(const View& view, glm::vec3 centre, float radius, glm::vec3 origin)
+{
+	const auto circle = CircleOf(view, centre, radius, origin);
+	return circle.has_value() && (circle->cameraInside || CircleReachesScreen(view, *circle));
+}
+
+bool PointOnScreen(const View& view, glm::vec3 point)
+{
+	const auto clip = view.worldToClip * glm::vec4(point, 1.0f);
+	if (clip.w < view.near)
+	{
+		return false;
 	}
 	const float overDepth = 1.0f / clip.w;
 	const glm::vec2 half = view.resolution * 0.5f;
 	const float x = (clip.x * overDepth + 1.0f) * half.x;
 	const float y = (1.0f - clip.y * overDepth) * half.y;
-	const float onScreen = radius * overDepth * half.x * view.xScale;
-	if (onScreen + x < 0.0f || x - onScreen > view.resolution.x || onScreen + y < 0.0f || y - onScreen > view.resolution.y)
-	{
-		return false;
-	}
-	const float dx = view.cursor.x - x;
-	const float dy = view.cursor.y - y;
-	return dx * dx + dy * dy < onScreen * onScreen;
+	// A pixel cut towards nothing is on the screen from just above -1 up to just under the screen's size
+	return x > -1.0f && x < view.resolution.x && y > -1.0f && y < view.resolution.y;
 }
 
 ClipCorner ToClip(const View& view, glm::vec3 world, glm::vec2 uv)
