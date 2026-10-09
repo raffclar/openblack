@@ -124,6 +124,9 @@ struct Environment
 	std::optional<float> playerAlignment;
 	/// Where the cursor, and so the hand, is put, as a share of the window from its top left, until the mouse moves
 	std::optional<glm::vec2> cursor;
+	/// Where the player's temple stands, from the middle of the map, x east and y north in units of the land; with it
+	/// standing their influence border shows, as on a land. The testbed has none when not given.
+	std::optional<glm::vec2> temple;
 };
 
 /// Where the camera looks as the scenario starts
@@ -467,6 +470,8 @@ struct Command
 		WheelTurn,
 		/// The player's alignment jumps, which the hand shows
 		SetAlignment,
+		/// A script's cinema bars slide in (value 1) or out (value 0)
+		WideScreen,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
