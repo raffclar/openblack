@@ -14,20 +14,27 @@
 
 #include <chrono>
 #include <limits>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <unordered_set>
+#include <vector>
 
 #include <LHVM.h>
 #include <LHVMTypes.h>
 #include <entt/entity/entity.hpp>
 #include <entt/entity/fwd.hpp>
+#include <glm/geometric.hpp>
+#include <glm/matrix.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/DayNightClock.h"
+#include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "3D/ScreenPick.h"
 #include "3D/SkyInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/GameMusic.h"
@@ -38,6 +45,7 @@
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Field.h"
@@ -72,6 +80,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/TownPlaythings.h"
+#include "ECS/WorldObjects.h"
 #include "Enums.h"
 #include "Game.h"
 #include "Hand/HandClickRules.h"
@@ -79,7 +88,10 @@
 #include "Magic/MagicTables.h"
 #include "Magic/ScriptCast.h"
 #include "Physics/Body.h"
+#include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptEnums.h"
+#include "ScriptHeaders/ScriptPropertyRules.h"
+#include "Windowing/WindowingInterface.h"
 
 namespace openblack::chlapi
 {
@@ -467,20 +479,80 @@ void SpiritPointGameThing() // 010 SPIRIT_POINT_GAME_THING
 	NotImplemented();
 }
 
+/// The view the scripts ask what is in: the camera as it is now and the window's size; none without a window
+static std::optional<screen_pick::View> ScriptScreenView()
+{
+	if (!Locator::camera::has_value() || !Locator::windowing::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto size = Locator::windowing::value().GetSize();
+	if (size.x <= 0 || size.y <= 0)
+	{
+		return std::nullopt;
+	}
+	const auto& camera = Locator::camera::value();
+	return screen_pick::View {
+	    .worldToClip = camera.GetViewProjectionMatrix(),
+	    .resolution = glm::vec2(size),
+	    .near = camera.GetNearClip(),
+	    .xScale = camera.GetProjectionMatrix()[0][0],
+	    .camera = glm::vec3(glm::inverse(camera.GetViewMatrix(Camera::Interpolation::Current))[3]),
+	};
+}
+
+/// Nothing outside is in view while the player is inside the temple
+static bool PlayerInsideTemple()
+{
+	return Locator::temple::has_value() && Locator::temple::value().Active();
+}
+
+/// Whether a thing shows on the screen: a thing with a model by its model's bounding sphere, anything else by the point
+/// it stands at
+static bool ThingOnScreen(const screen_pick::View& view, entt::entity thing)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* transform = registry.TryGet<const Transform>(thing);
+	if (transform == nullptr)
+	{
+		return false;
+	}
+	if (const auto* mesh = registry.TryGet<const ecs::components::Mesh>(thing); mesh != nullptr)
+	{
+		if (!Locator::resources::has_value() || !Locator::resources::value().GetMeshes().Contains(mesh->id))
+		{
+			return false;
+		}
+		const auto box = Locator::resources::value().GetMeshes().Handle(mesh->id)->GetBoundingBox();
+		// The sphere about the model's box: its centre placed as the thing is, its radius the half diagonal times the
+		// thing's size
+		const auto centre = transform->position + transform->rotation * (transform->scale * box.Center());
+		const float radius = glm::length(box.Size() * 0.5f) * transform->scale.x;
+		return screen_pick::SphereOnScreen(view, centre, radius, transform->position);
+	}
+	// Where it stands, across the land as a map position holds it
+	const auto at = glm::vec3(map_coords::Quantise(transform->position.x), transform->position.y,
+	                          map_coords::Quantise(transform->position.z));
+	return screen_pick::PointOnScreen(view, at);
+}
+
 void GameThingFieldOfView() // 011 GAME_THING_FIELD_OF_VIEW
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto object = PopObject();
+	const bool valid = object != entt::null && Locator::entitiesRegistry::value().Valid(object);
+	if (!valid)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+	}
+	const auto view = ScriptScreenView();
+	Pushb(valid && !PlayerInsideTemple() && view.has_value() && ThingOnScreen(*view, object));
 }
 
 void PosFieldOfView() // 012 POS_FIELD_OF_VIEW
 {
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto position = PopVec();
+	const auto view = ScriptScreenView();
+	Pushb(!PlayerInsideTemple() && view.has_value() && screen_pick::PointOnScreen(*view, position));
 }
 
 void RunText() // 013 RUN_TEXT
@@ -580,37 +652,192 @@ static bool IsDrowning(entt::entity object)
 	return entry != nullptr && entry->body != nullptr && entry->body->Centre().y < 0.0f;
 }
 
+/// Whether a town is wholly destroyed: none of its buildings stands
+static bool TownCompletelyDestroyed(const ecs::components::Town& town)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	std::vector<script::property_rules::TownBuilding> buildings;
+	buildings.reserve(town.abodes.size());
+	for (const auto abode : town.abodes)
+	{
+		if (!registry.Valid(abode))
+		{
+			continue;
+		}
+		const auto* progress = registry.TryGet<const ecs::components::BuildProgress>(abode);
+		buildings.push_back({
+		    .life = ecs::world_objects::LifeOf(abode),
+		    .field = registry.AllOf<ecs::components::Field>(abode),
+		    .built = progress != nullptr ? progress->built : 1.0f,
+		});
+	}
+	return script::property_rules::TownCompletelyDestroyed(buildings);
+}
+
+/// A creature's body as the scripts read and set it, none for anything else
+static creature_physiology::Needs* CreatureNeedsOf(entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.AllOf<ecs::components::Creature>(object))
+	{
+		return nullptr;
+	}
+	auto* needs = registry.TryGet<ecs::components::CreatureNeeds>(object);
+	return needs != nullptr ? &needs->needs : nullptr;
+}
+
+/// The need of a creature a property is, none for the properties that aren't
+static std::optional<script::property_rules::CreatureNeed> NeedOf(script::ObjectPropertyType prop)
+{
+	using script::ObjectPropertyType;
+	using script::property_rules::CreatureNeed;
+	switch (prop)
+	{
+	case ObjectPropertyType::CreatureWarmth:
+		return CreatureNeed::Warmth;
+	case ObjectPropertyType::CreatureEnergy:
+		return CreatureNeed::Energy;
+	case ObjectPropertyType::CreatureItchiness:
+		return CreatureNeed::Itchiness;
+	case ObjectPropertyType::CreatureAmountOfPoo:
+		return CreatureNeed::Poo;
+	case ObjectPropertyType::CreatureExhaustion:
+		return CreatureNeed::Exhaustion;
+	case ObjectPropertyType::CreatureDehydration:
+		return CreatureNeed::Dehydration;
+	default:
+		return std::nullopt;
+	}
+}
+
+static float& NeedValue(creature_physiology::Needs& needs, script::property_rules::CreatureNeed need)
+{
+	using script::property_rules::CreatureNeed;
+	switch (need)
+	{
+	case CreatureNeed::Warmth:
+		return needs.warmth;
+	case CreatureNeed::Energy:
+		return needs.energy;
+	case CreatureNeed::Itchiness:
+		return needs.itchiness;
+	case CreatureNeed::Poo:
+		return needs.poo;
+	case CreatureNeed::Exhaustion:
+		return needs.exhaustion;
+	case CreatureNeed::Dehydration:
+	default:
+		return needs.dehydration;
+	}
+}
+
 void GetProperty() // 021 GET_PROPERTY
 {
 	const auto object = PopObject();
 	const auto prop = static_cast<script::ObjectPropertyType>(Pop().intVal);
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		Pushf(0.0f);
+		return;
+	}
+	if (const auto need = NeedOf(prop); need.has_value())
+	{
+		auto* needs = CreatureNeedsOf(object);
+		if (needs == nullptr)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object not a creature");
+			Pushf(0.0f);
+			return;
+		}
+		Pushf(NeedValue(*needs, *need));
+		return;
+	}
 	switch (prop)
 	{
 	case script::ObjectPropertyType::Flying:
 		// In the physics, thrown, dropped or knocked and not yet at rest
-		{
-			auto& registry = Locator::entitiesRegistry::value();
-			Pushb(registry.Valid(object) && registry.AllOf<ecs::components::InPhysics>(object));
-			return;
-		}
+		Pushb(registry.AllOf<ecs::components::InPhysics>(object));
+		return;
 	case script::ObjectPropertyType::Drowning:
 		Pushb(IsDrowning(object));
 		return;
+	case script::ObjectPropertyType::InHand:
+		// Held in a hand, as a number
+		Pushf(registry.AllOf<ecs::components::InHand>(object) ? 1.0f : 0.0f);
+		return;
+	case script::ObjectPropertyType::Player:
+	{
+		const auto* town = registry.TryGet<const ecs::components::Town>(object);
+		Pushf(script::property_rules::PlayerProperty(ecs::world_objects::PlayerOf(object),
+		                                             town != nullptr && TownCompletelyDestroyed(*town)));
+		return;
+	}
+	case script::ObjectPropertyType::BuiltPercentage:
+		// How much of it is built, 0 to 1; anything that isn't built is whole
+		if (const auto* progress = registry.TryGet<const ecs::components::BuildProgress>(object); progress != nullptr)
+		{
+			Pushf(progress->built);
+			return;
+		}
+		Pushf(1.0f);
+		return;
+	case script::ObjectPropertyType::XPos:
+	case script::ObjectPropertyType::YPos:
+	case script::ObjectPropertyType::ZPos:
+	{
+		const auto* transform = registry.TryGet<const Transform>(object);
+		if (transform == nullptr)
+		{
+			Pushf(0.0f);
+			return;
+		}
+		const auto& at = transform->position;
+		if (prop == script::ObjectPropertyType::YPos)
+		{
+			// How high above the land it is
+			const float land =
+			    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(glm::vec2(at.x, at.z)) : 0.0f;
+			Pushf(at.y - land);
+			return;
+		}
+		// Across the land, as a map position holds it
+		Pushf(map_coords::Quantise(prop == script::ObjectPropertyType::XPos ? at.x : at.z));
+		return;
+	}
 	default:
 		// TODO(Daniels118): the other properties
 		NotImplemented(static_cast<int32_t>(prop));
-		Pushi(0);
+		Pushf(0.0f);
 		return;
 	}
 }
 
 void SetProperty() // 022 SET_PROPERTY
 {
-	// const auto val = Popf();
-	// const auto object = Pop().uintVal;
-	// const auto prop = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto value = Popf();
+	const auto object = PopObject();
+	const auto prop = static_cast<script::ObjectPropertyType>(Pop().intVal);
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		return;
+	}
+	if (const auto need = NeedOf(prop); need.has_value())
+	{
+		auto* needs = CreatureNeedsOf(object);
+		if (needs == nullptr)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object not a creature");
+			return;
+		}
+		NeedValue(*needs, *need) = script::property_rules::SetNeed(*need, value);
+		return;
+	}
+	// TODO(Daniels118): the other properties
+	NotImplemented(static_cast<int32_t>(prop));
 }
 
 void GetPosition() // 023 GET_POSITION
@@ -659,13 +886,13 @@ void GetDistance() // 025 GET_DISTANCE
 
 void Call() // 026 CALL
 {
-	// const auto excludingScripted = static_cast<bool>(Pop().intVal);
-	// const auto position = PopVec();
-	// const auto subtype = Pop().intVal;
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
+	[[maybe_unused]] const auto excludingScripted = static_cast<bool>(Pop().intVal);
+	[[maybe_unused]] const auto position = PopVec();
+	[[maybe_unused]] const auto subtype = Pop().intVal;
+	[[maybe_unused]] const auto type = Pop().intVal;
+	// TODO(script-natives): the nearest thing of the type and subtype within a metre (see docs scripts/calls.md)
 	NotImplemented();
-	Pushf(0.0f);
+	Pusho(0);
 }
 
 void Create() // 027 CREATE
@@ -878,12 +1105,12 @@ void PositionFollow() // 050 POSITION_FOLLOW
 
 void CallNear() // 051 CALL_NEAR
 {
-	// const auto excludingScripted = static_cast<bool>(Pop().intVal);
-	// const auto radius = Popf();
-	// const auto position = PopVec();
-	// const auto subtype = Pop().intVal;
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
+	[[maybe_unused]] const auto excludingScripted = static_cast<bool>(Pop().intVal);
+	[[maybe_unused]] const auto radius = Popf();
+	[[maybe_unused]] const auto position = PopVec();
+	[[maybe_unused]] const auto subtype = Pop().intVal;
+	[[maybe_unused]] const auto type = Pop().intVal;
+	// TODO(script-natives): the nearest thing of the type and subtype within the radius (see docs scripts/calls.md)
 	NotImplemented();
 	Pusho(0);
 }
@@ -1133,11 +1360,25 @@ void CreatureDoAction() // 075 CREATURE_DO_ACTION
 
 void InCreatureHand() // 076 IN_CREATURE_HAND
 {
-	// const auto creature = Pop().uintVal;
-	// const auto obj = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto creature = PopObject();
+	const auto thing = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (creature == entt::null || thing == entt::null || !registry.Valid(creature) || !registry.Valid(thing))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid creature or thing");
+		Pushb(false);
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(creature))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Not a creature");
+		Pushb(false);
+		return;
+	}
+	const auto* held = registry.TryGet<const ecs::components::CreatureHeldObject>(creature);
+	const auto* action = registry.TryGet<const ecs::components::CreatureObjectAction>(creature);
+	const auto eating = action != nullptr && action->kind == creature_object_actions::Kind::Eat ? action->target : std::nullopt;
+	Pushb(script::property_rules::InCreatureHand(thing, held != nullptr ? held->object : entt::null, eating));
 }
 
 void CreatureSetDesireValue() // 077 CREATURE_SET_DESIRE_VALUE
