@@ -120,8 +120,8 @@ const std::vector<ComponentView>& ComponentViews()
 	                            }),
 	    View<Villager>("Villager",
 	                   [](const Villager& villager) {
-		                   return fmt::format("age {}, health {}, food {:.2f}", ecs::villager_age::AgeNow(villager),
-		                                      villager.health, villager.food);
+		                   return fmt::format("age {}, life {:.2f}, food {:.2f}", ecs::villager_age::AgeNow(villager),
+		                                      villager.life, villager.food);
 	                   }),
 	    View<LivingAction>(
 	        "Living action",
@@ -282,7 +282,7 @@ void InspectorPanel::DrawVillager(EditorContext& context, entt::entity entity) n
 	{
 		ImGui::TextColored(style::k_Warning, "Homeless");
 	}
-	ImGui::InputScalar("Health", ImGuiDataType_U32, &villager.health);
+	ImGui::SliderFloat("Life", &villager.life, 0.0f, 1.0f);
 	if (auto age = ecs::villager_age::AgeNow(villager); ImGui::InputScalar("Age", ImGuiDataType_U32, &age))
 	{
 		ecs::villager_age::SetBirthTurnForAge(villager, age);
