@@ -21,6 +21,7 @@
 
 #include "3D/HandCrossFade.h"
 #include "3D/HandNavigationPose.h"
+#include "Common/LoadTimer.h"
 #include "Common/Zoomer.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "EngineConfig.h"
@@ -190,6 +191,11 @@ private:
 	void SetUpLandscape();
 	/// Starts the game clock, the atmosphere's sounds and the music on the new land
 	void StartNewLand();
+
+	/// When the game was launched
+	const LoadTimer::Clock::time_point _launchTime {LoadTimer::Clock::now()};
+	/// Times the start of the game, from its launch to the first frame drawn on the first land
+	std::optional<LoadTimer> _startupTimer;
 
 	/// path to Lionhead Studios Ltd/Black & White folder
 	const std::filesystem::path _gamePath;

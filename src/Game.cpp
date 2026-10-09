@@ -1828,6 +1828,8 @@ bool Game::Update() noexcept
 bool Game::Initialize() noexcept
 {
 	auto& config = Locator::config::value();
+	_startupTimer.emplace("startup", _launchTime);
+	_startupTimer->Step("launch");
 
 	if (config.graphicsBackend != GraphicsBackend::Noop)
 	{
@@ -1845,6 +1847,7 @@ bool Game::Initialize() noexcept
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize engine services.");
 		return false;
 	}
+	_startupTimer->Step("window, renderer and audio device");
 	auto& fileSystem = Locator::filesystem::value();
 	auto& events = Locator::events::value();
 
@@ -1918,6 +1921,7 @@ bool Game::Initialize() noexcept
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize game services.");
 		return false;
 	}
+	_startupTimer->Step("game services and shaders");
 
 	auto& resources = Locator::resources::value();
 	auto& meshManager = resources.GetMeshes();
@@ -1978,6 +1982,8 @@ bool Game::Initialize() noexcept
 		                   }
 	                   });
 
+	_startupTimer->Step("temple outside meshes");
+
 	// What things are made of, for the physics; without the file every material is zero, as in the game
 	if (const auto constants = fileSystem.GetPath<filesystem::Path::Data>() / "PhysicsConstants.txt";
 	    fileSystem.Exists(constants))
@@ -2006,6 +2012,7 @@ bool Game::Initialize() noexcept
 		                                      palette);
 	}
 
+	_startupTimer->Step("physics materials, dust sheets and land palette");
 	fileSystem.Iterate( //
 	    fileSystem.GetPath<filesystem::Path::Citadel>() / "engine", false,
 	    [&meshManager, &glowManager](const std::filesystem::path& f) {
@@ -2045,6 +2052,7 @@ bool Game::Initialize() noexcept
 	    });
 
 	pack::PackFile pack;
+	_startupTimer->Step("temple interior meshes and glows");
 
 	auto packResult = pack.ReadFile(*fileSystem.GetData(fileSystem.GetPath<Path::Data>() / "AllMeshes.g3d"));
 	if (packResult != pack::PackResult::Success)
@@ -2053,6 +2061,7 @@ bool Game::Initialize() noexcept
 		return false;
 	}
 
+	_startupTimer->Step("mesh pack read");
 	const auto& meshes = pack.GetMeshes();
 	// TODO (#749) use std::views::enumerate
 	for (size_t i = 0; const auto& mesh : meshes)
@@ -2062,12 +2071,14 @@ bool Game::Initialize() noexcept
 		++i;
 	}
 
+	_startupTimer->Step("mesh pack meshes");
 	const auto& textures = pack.GetTextures();
 	for (auto const& [name, g3dTexture] : textures)
 	{
 		textureManager.Load(g3dTexture.header.id, resources::Texture2DLoader::FromPackTag {}, name, g3dTexture);
 	}
 
+	_startupTimer->Step("mesh pack textures");
 	pack::PackFile animationPack;
 	packResult = animationPack.ReadFile(*fileSystem.GetData(fileSystem.GetPath<Path::Data>() / "AllAnims.anm"));
 	if (packResult != pack::PackResult::Success)
@@ -2082,6 +2093,7 @@ bool Game::Initialize() noexcept
 	{
 		animationManager.Load(i, resources::L3DAnimLoader::FromBufferTag {}, animations[i]);
 	}
+	_startupTimer->Step("animation pack");
 	// The game stops one of the packed clips playing round and round as it loads them
 	if (constexpr uint32_t k_HeldOnceClip = 323; animationManager.Contains(resources::HashIdentifier(k_HeldOnceClip)))
 	{
@@ -2109,6 +2121,7 @@ bool Game::Initialize() noexcept
 		resources.GetClipSounds().Handle(audio::clip_sounds::k_TableId.value())->Attach(packNames);
 	}
 
+	_startupTimer->Step("clip sounds");
 	fileSystem.Iterate(fileSystem.GetPath<Path::CreatureMesh>(), false, [&meshManager](const std::filesystem::path& f) {
 		const auto& fileName = f.stem().string();
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading creature mesh: {}", fileName);
@@ -2128,6 +2141,7 @@ bool Game::Initialize() noexcept
 		}
 	});
 
+	_startupTimer->Step("creature meshes");
 	fileSystem.Iterate(fileSystem.GetPath<Path::Symbols>(), false, [&camPathManager](const std::filesystem::path& f) {
 		if (f.extension() != ".cam")
 		{
@@ -2164,6 +2178,7 @@ bool Game::Initialize() noexcept
 		}
 	});
 
+	_startupTimer->Step("camera paths");
 	// Load loose one-off assets
 	{
 		using AFromDiskTag = resources::L3DAnimLoader::FromDiskTag;
@@ -2171,9 +2186,12 @@ bool Game::Initialize() noexcept
 
 		using LFromDiskTag = resources::L3DLoader::FromDiskTag;
 		meshManager.Load("hand", LFromDiskTag {}, fileSystem.GetPath<Path::CreatureMesh>() / "Hand_Boned_Base2.l3d");
+		_startupTimer->Step("hand mesh");
 		LoadHandAnimation();
+		_startupTimer->Step("hand animations");
 		LoadCreatureRigs();
 		meshManager.Load("coffre", LFromDiskTag {}, fileSystem.GetPath<Path::Misc>() / "coffre.l3d");
+		_startupTimer->Step("creature rigs");
 		// The closed reward chest
 		if (const auto path = fileSystem.GetPath<Path::Misc>() / "chest0.l3d"; fileSystem.Exists(path))
 		{
@@ -2209,6 +2227,7 @@ bool Game::Initialize() noexcept
 		camPathManager.Load("flying", CFromDiskTag {}, fileSystem.GetPath<Path::Data>() / "flying.cam");
 	}
 
+	_startupTimer->Step("one-off meshes");
 	// The game's menu, which greets the player by their profile's name: openblack has no profiles, so by the name
 	// they log in with
 	{
@@ -2242,6 +2261,7 @@ bool Game::Initialize() noexcept
 		}
 	}
 
+	_startupTimer->Step("game interface");
 	// TODO(raffclar): #400: Parse level files within the resource loader
 	// TODO(raffclar): #405: Determine campaign levels from the challenge script file
 	// Load the campaign levels
@@ -2294,6 +2314,7 @@ bool Game::Initialize() noexcept
 		}
 	});
 
+	_startupTimer->Step("level list");
 	// Load all sound packs in the Audio directory
 	auto& audioManager = Locator::audio::value();
 	fileSystem.Iterate(
@@ -2370,6 +2391,7 @@ bool Game::Initialize() noexcept
 		    }
 	    });
 
+	_startupTimer->Step("sound and music banks");
 	{
 		InfoFile infoFile;
 		auto result = infoFile.LoadFromFile(Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / "info.dat");
@@ -2381,6 +2403,7 @@ bool Game::Initialize() noexcept
 		Locator::infoConstants::reset(result.release());
 	}
 
+	_startupTimer->Step("info tables");
 	fileSystem.Iterate(fileSystem.GetPath<Path::Textures>(), false, [&textureManager](const std::filesystem::path& f) {
 		if (string_utils::LowerCase(f.extension().string()) == ".raw")
 		{
@@ -2396,6 +2419,7 @@ bool Game::Initialize() noexcept
 		}
 	});
 
+	_startupTimer->Step("raw textures");
 	// The texture every creature's hair is drawn with, and its alpha beside it
 	for (const auto& [id, name] : {std::pair {ecs::components::CreatureHair::k_TextureId, "C_Ape_Hair.raw"},
 	                               std::pair {ecs::components::CreatureHair::k_AlphaTextureId, "C_Ape_Haira.raw"}})
@@ -2446,6 +2470,7 @@ bool Game::Initialize() noexcept
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
 	}
+	_startupTimer->Step("hair, skin art and snow textures");
 
 	return true;
 }
@@ -2461,6 +2486,10 @@ bool Game::Run() noexcept
 	else if (!LoadMap(_startMap))
 	{
 		return false;
+	}
+	if (_startupTimer.has_value())
+	{
+		_startupTimer->Step("first land");
 	}
 
 	auto& fileSystem = Locator::filesystem::value();
@@ -2505,6 +2534,10 @@ bool Game::Run() noexcept
 		return false;
 	}
 
+	if (_startupTimer.has_value())
+	{
+		_startupTimer->Step("story scripts");
+	}
 	// Everything the map made goes into the map's cells, in the order it was made
 	Locator::entitiesMap::value().Sync();
 
@@ -2602,6 +2635,12 @@ bool Game::Run() noexcept
 		}
 
 		_frameCount++;
+		// The game is playable from its first frame drawn
+		if (_startupTimer.has_value())
+		{
+			_startupTimer->Step("first frame");
+			_startupTimer.reset();
+		}
 
 		const auto frameEnd = std::chrono::steady_clock::now();
 		if (frameStats.has_value())
@@ -2624,10 +2663,12 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 		return false;
 	}
 
+	LoadTimer timer(fmt::format("land {}", path.stem().string()));
 	const auto data = fileSystem.ReadAll(path);
 	const auto source = std::string(reinterpret_cast<const char*>(data.data()), data.size());
 
 	PrepareNewLand();
+	timer.Step("reset");
 
 	Script script;
 	try
@@ -2640,6 +2681,7 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Error in the map script {}: {}", path.generic_string(), e.what());
 	}
 
+	timer.Step("map script");
 	// Each released map comes with an optional .fot file which contains the footpath information for the map
 	const auto stem = string_utils::LowerCase(path.stem().generic_string());
 	const auto fotPath = fileSystem.GetPath<filesystem::Path::Landscape>() / fmt::format("{}.fot", stem);
@@ -2655,6 +2697,7 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 		                   path.generic_string(), fotPath.generic_string());
 	}
 
+	timer.Step("footpaths");
 	// With the land laid out, each town gathers the lone trees about it into its scenic forest
 	if (Locator::forestSystem::has_value())
 	{
@@ -2663,7 +2706,9 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 		Locator::forestSystem::value().AssignForestsToTowns();
 	}
 
+	timer.Step("forests");
 	StartNewLand();
+	timer.Step("start");
 	return true;
 }
 
@@ -2852,6 +2897,7 @@ void Game::LoadLandscape(const std::filesystem::path& path)
 	{
 		throw std::runtime_error("Could not find landscape " + path.generic_string());
 	}
+	LoadTimer timer(fmt::format("landscape {}", path.stem().string()));
 	InitializeLevel(fixedName);
 	SetUpLandscape();
 }
