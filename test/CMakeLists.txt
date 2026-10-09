@@ -44,6 +44,8 @@ openblack_setup_and_add_test(test_load_scene test_load_scene.cpp)
 openblack_setup_and_add_test(test_fixed test_fixed.cpp)
 openblack_setup_and_add_test(test_alignment test_alignment.cpp)
 openblack_setup_and_add_test(test_virtual_influence test_virtual_influence.cpp)
+openblack_setup_and_add_test(test_mana_path test_mana_path.cpp)
+target_link_libraries(test_mana_path PRIVATE psys)
 openblack_setup_and_add_test(
   test_influence_virtual_grant test_influence_virtual_grant.cpp
 )

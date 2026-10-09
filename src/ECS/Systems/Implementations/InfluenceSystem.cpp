@@ -34,6 +34,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -423,7 +424,7 @@ const virtual_influence::State* InfluenceSystem::VirtualStateOf(PlayerNames play
 	return virtualInfluence != nullptr ? &virtualInfluence->state : nullptr;
 }
 
-void InfluenceSystem::HumVirtualInfluence()
+void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli> gameTime)
 {
 	if (!Locator::playerSystem::has_value() || !Locator::audio::has_value())
 	{
@@ -465,6 +466,25 @@ void InfluenceSystem::HumVirtualInfluence()
 		state.soundFraction = state.fraction;
 		state.soundStarted = true;
 	}
+	// The mana path runs from the hand back to halfway to where it last was in influence, worked out once for each trip
+	// out, its sparks in the player's colour dimmed by the strength left
+	const auto handCoords = map_coords::FromMetres({hand->x, hand->z});
+	if (!state.manaPathStart.has_value())
+	{
+		state.manaPathStart =
+		    virtual_influence::ManaPathStart(handCoords, map_coords::FromMetres({state.anchor->x, state.anchor->z}));
+	}
+	if (const auto scale = virtual_influence::EmitManaPath(state, gameTime.count());
+	    scale.has_value() && Locator::particleSystem::has_value() && Locator::terrainSystem::has_value())
+	{
+		const auto& land = Locator::terrainSystem::value();
+		const auto colour = Player::k_Colours.at(static_cast<size_t>(player) & (Player::k_Colours.size() - 1));
+		Locator::particleSystem::value().AddHandManaPathSpark({
+		    .from = map_coords::ToWorld(land, handCoords),
+		    .to = map_coords::ToWorld(land, *state.manaPathStart),
+		    .rgb = virtual_influence::ScaleColour(colour, *scale) & 0xFFFFFFu,
+		});
+	}
 	const auto pitch = virtual_influence::HumPitchPercent(state);
 	if (!audio.EmitterExists(virtualInfluence.hum))
 	{
@@ -483,8 +503,6 @@ void InfluenceSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 
 	std::erase_if(_ripples,
 	              [&gameTime](influence::Ripple& ripple) { return !influence::AdvanceRipple(ripple, gameTime.count()); });
-
-	HumVirtualInfluence();
 
 	// While the game runs, the hand crossing a border sounds once, at the hand
 	if (Locator::time::value().IsPaused())

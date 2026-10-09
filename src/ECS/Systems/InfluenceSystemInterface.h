@@ -35,6 +35,10 @@ public:
 	/// Once a frame: the border's texture scrolls with the game time, and while the game runs the hand crossing a border
 	/// sends out a ripple and a sound, and the ripples grow and fade
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
+	/// Each frame this computer's hand is drawn: past the border, while it keeps some of its player's influence, it hums
+	/// and lets out a mana path back towards the border; otherwise the hum is stopped. Neither changes while the hand is
+	/// not drawn.
+	virtual void ShowHandInfluence(std::chrono::duration<float, std::milli> gameTime) = 0;
 
 	/// How much a place is in a player's influence, from -1 to 1. Near their hand it is what the hand keeps of their
 	/// influence past the border, while it keeps any (see virtual_influence::Grant): the questions of a game turn measure

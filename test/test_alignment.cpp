@@ -36,6 +36,7 @@ public:
 	void Reset() override {}
 	void ProcessTurn(uint32_t) override {}
 	void Update(std::chrono::duration<float, std::milli>) override {}
+	void ShowHandInfluence(std::chrono::duration<float, std::milli>) override {}
 	[[nodiscard]] float PlayerInfluence(PlayerNames player, const map_coords::MapCoords&) const override
 	{
 		return influence.at(static_cast<size_t>(player));

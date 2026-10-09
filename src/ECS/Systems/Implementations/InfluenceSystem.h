@@ -30,6 +30,7 @@ public:
 	void Reset() override;
 	void ProcessTurn(uint32_t turn) override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
+	void ShowHandInfluence(std::chrono::duration<float, std::milli> gameTime) override;
 
 	using InfluenceSystemInterface::PlayerInfluence;
 	[[nodiscard]] float PlayerInfluence(PlayerNames player, const map_coords::MapCoords& position) const override;
@@ -67,8 +68,6 @@ private:
 	[[nodiscard]] static const virtual_influence::State* VirtualStateOf(PlayerNames player);
 	/// The game turn last played
 	uint32_t _turn {0};
-	/// The hum of the hand past the border, each frame
-	void HumVirtualInfluence();
 
 	std::vector<influence::Circle> _circles;
 	std::array<bool, k_Players> _borderShown {};

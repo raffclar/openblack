@@ -42,6 +42,11 @@ struct State
 	bool soundStarted {false};
 	/// Turned off by a script: it neither changes nor sounds
 	bool disabled {false};
+	/// Where the mana path the hand lets out leads back to, worked out on the first frame it shows after the hand was
+	/// last in influence
+	std::optional<map_coords::MapCoords> manaPathStart;
+	/// Milliseconds of the frames shown, weighed by the strength, towards the next spark
+	float manaPathEmission {0.0f};
 };
 
 /// The citadel's settings of the game's information tables
@@ -85,6 +90,17 @@ void ProcessTurn(State& state, const TurnInputs& inputs, const Settings& setting
 /// the last place it was in is still in influence and unshielded
 [[nodiscard]] bool HumPlays(const State& state, bool handShielded, bool handInInfluence, bool anchorShielded,
                             bool anchorInInfluence);
+
+/// Where the mana path leads back to: halfway from the hand to the last place it was in influence, as map positions,
+/// rounded to the nearest step
+[[nodiscard]] map_coords::MapCoords ManaPathStart(const map_coords::MapCoords& hand, const map_coords::MapCoords& anchor);
+
+/// A frame shown: its milliseconds weighed by the strength count towards a spark, one once they pass ten. When one is
+/// due, the share of 256 its colour is scaled by: the strength out of 255.
+[[nodiscard]] std::optional<uint8_t> EmitManaPath(State& state, float frameMilliseconds);
+
+/// A colour 0xAARRGGBB with each of its four channels scaled by a share of 256
+[[nodiscard]] uint32_t ScaleColour(uint32_t argb, uint8_t scale);
 
 /// The hum's pitch in percent: its strength's share of its normal pitch, held to what it began at
 [[nodiscard]] uint32_t HumPitchPercent(const State& state);
