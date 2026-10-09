@@ -1037,7 +1037,16 @@ std::string Runner::DrawGesture(GestureType gesture)
 		}
 	}
 	// A circle sizes a storm or a shield readied by holding the Action button
-	gestures.DrawPath(std::move(*path), gesture == GestureType::Circle);
+	const bool holdingAction = gesture == GestureType::Circle;
+	gestures.DrawPath(std::move(*path), holdingAction);
+	// With a miracle in the hand the button goes down on it too, as the player's does, readying it to be cast
+	_drawingPressedAction = holdingAction && Locator::magicSystem::has_value() && Locator::magicSystem::value().IsHandBusy() &&
+	                        Locator::magicSystem::value().PressAction();
+	if (_drawingPressedAction)
+	{
+		Log(fmt::format("{:.1f}s: pressed for the circle: {}", _seconds,
+		                HandResultName(Locator::magicSystem::value().GetLastHandResult())));
+	}
 	_drawing = gesture;
 	const auto last = gestures.GetLastRecognised();
 	_recognisedBefore = last.has_value() ? last->number : 0;
@@ -1054,9 +1063,17 @@ void Runner::WatchGesture()
 	const auto recognised = gestures.GetLastRecognised();
 	// Recognised, or drawn to the end without being recognised
 	const bool done = recognised.has_value() && recognised->number != _recognisedBefore;
-	if (!done && gestures.IsDrawingPath())
+	// A button held for the gesture stays down until the path is drawn to its end
+	if ((!done || _drawingPressedAction) && gestures.IsDrawingPath())
 	{
 		return;
+	}
+	if (_drawingPressedAction && Locator::magicSystem::has_value())
+	{
+		auto& magic = Locator::magicSystem::value();
+		magic.ReleaseAction();
+		Log(fmt::format("{:.1f}s: let go after the circle: {}", _seconds, HandResultName(magic.GetLastHandResult())));
+		_drawingPressedAction = false;
 	}
 	if (!done)
 	{
