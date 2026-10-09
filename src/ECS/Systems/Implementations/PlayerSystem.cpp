@@ -11,6 +11,7 @@
 
 #include "PlayerSystem.h"
 
+#include "ECS/Components/Alignment.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
@@ -38,4 +39,38 @@ void PlayerSystem::AddPlayer(entt::entity playerEntity)
 entt::entity PlayerSystem::GetPlayer(PlayerNames playerName) const
 {
 	return _players.at(playerName);
+}
+
+void PlayerSystem::KeepForNextLand()
+{
+	// A player not on this land keeps what they kept from the last one they were on
+	const auto& registry = Locator::entitiesRegistry::value();
+	registry.Each<const Player>([this, &registry](entt::entity entity, const Player& player) {
+		const auto* alignment = registry.TryGet<const Alignment>(entity);
+		_kept.insert_or_assign(player.name, Kept {.alignment = alignment != nullptr ? std::optional(*alignment) : std::nullopt,
+		                                          .damageFrom = player.damageFrom,
+		                                          .windResistance = player.windResistance});
+	});
+}
+
+void PlayerSystem::TakeUpKept(entt::entity playerEntity)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* player = registry.TryGet<Player>(playerEntity);
+	if (player == nullptr)
+	{
+		return;
+	}
+	const auto found = _kept.find(player->name);
+	if (found == _kept.end())
+	{
+		return;
+	}
+	const auto& kept = found->second;
+	player->damageFrom = kept.damageFrom;
+	player->windResistance = kept.windResistance;
+	if (kept.alignment.has_value())
+	{
+		registry.AssignOrReplace<Alignment>(playerEntity, *kept.alignment);
+	}
 }

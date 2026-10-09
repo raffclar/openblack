@@ -83,6 +83,16 @@ public:
 	/// What the camera does with the mouse, which the hand shows: the hints the cursor's place offers, and what a
 	/// drag of the land has turned into
 	[[nodiscard]] virtual HandCues GetHandCues() const { return {}; }
+
+	/// What the player asked of the camera this frame, once HandleActions has read it: turning across, tilting, and
+	/// zooming, in the world camera's units of input
+	struct Asked
+	{
+		float turn {0.0f};
+		float tilt {0.0f};
+		float zoom {0.0f};
+	};
+	[[nodiscard]] virtual Asked GetAsked() const { return {}; }
 };
 
 } // namespace openblack

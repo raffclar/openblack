@@ -13,6 +13,7 @@
 #include <cstdlib>
 
 #include <algorithm>
+#include <array>
 
 #include <glm/geometric.hpp>
 
@@ -63,12 +64,10 @@ bool creature_fight::IsStep(size_t animation)
 
 float creature_fight::ArenaRadius(float sizeA, float sizeB)
 {
-	return std::clamp(k_ArenaRadiusPerSize * std::max(sizeA, sizeB), 0.0f, k_MaxArenaRadius);
-}
-
-Arena creature_fight::MakeArena(glm::vec2 a, glm::vec2 b, float sizeA, float sizeB)
-{
-	return {.centre = (a + b) * 0.5f, .radius = ArenaRadius(sizeA, sizeB)};
+	// The bigger creature's height, then the share of it, as the game rounds them
+	const float height = std::max(sizeA * k_ArenaHeightPerSize, sizeB * k_ArenaHeightPerSize);
+	const auto radius = static_cast<double>(height) * static_cast<double>(k_ArenaRadiusPerHeight);
+	return static_cast<float>(std::clamp(radius, 0.0, static_cast<double>(k_MaxArenaRadius)));
 }
 
 glm::vec2 creature_fight::ArenaSpot(const Arena& arena, float size, bool madeIt)
@@ -154,6 +153,32 @@ bool creature_fight::CanStep(const Arena& arena, glm::vec2 position, Step step)
 	return step == Step::Forward || WithinRange(arena, position);
 }
 
+bool creature_fight::ReplacesQueue(Button button)
+{
+	return button == Button::Move;
+}
+
+bool creature_fight::GroundPressCounts(const Arena& arena, glm::vec2 point)
+{
+	return glm::distance(point, arena.centre) < arena.radius;
+}
+
+Tip creature_fight::TipOver(bool overOwnCreature, bool overOpponent)
+{
+	if (overOwnCreature)
+	{
+		return Tip::Block;
+	}
+	return overOpponent ? Tip::Attack : Tip::Manoeuvre;
+}
+
+uint32_t creature_fight::ToolTipIndex(Tip tip)
+{
+	// "Block", "Attack" and "Manoeuvre"
+	constexpr std::array<uint32_t, 3> k_Indices {22, 23, 46};
+	return k_Indices.at(static_cast<size_t>(tip));
+}
+
 Move creature_fight::AttackMove(Band band)
 {
 	switch (band)
@@ -206,6 +231,11 @@ float creature_fight::ReleasedCharge(float heldMs)
 	return std::clamp(heldMs, 0.0f, k_MaxChargeMs);
 }
 
+float creature_fight::HeldMs(float realMs, uint32_t turnsSincePress)
+{
+	return std::min(realMs, static_cast<float>(turnsSincePress + 1) * k_HeldMsPerTurn);
+}
+
 float creature_fight::BlowSpeed(float chargeMs)
 {
 	return 0.5f + (ReleasedCharge(chargeMs) / k_MaxChargeMs);
@@ -219,10 +249,12 @@ bool MoveQueue::Push(const Move& move, bool replace)
 	}
 	if (_count >= k_Capacity)
 	{
+		_awaitingRelease = false;
 		return false;
 	}
 	_moves.at(_count) = {.move = move, .chargeMs = InitialCharge(move.kind)};
 	++_count;
+	_awaitingRelease = !_moves.at(_count - 1).chargeMs.has_value();
 	return true;
 }
 
@@ -239,22 +271,23 @@ void MoveQueue::Pop()
 	}
 	std::shift_left(_moves.begin(), _moves.begin() + static_cast<std::ptrdiff_t>(_count), 1);
 	--_count;
+	_awaitingRelease = _awaitingRelease && _count > 0;
 }
 
 void MoveQueue::Clear()
 {
 	_count = 0;
+	_awaitingRelease = false;
 }
 
 bool MoveQueue::Release(float heldMs)
 {
-	const auto moves = std::span(_moves.data(), _count);
-	const auto waiting = std::ranges::find_if(moves, [](const QueuedMove& move) { return !move.chargeMs.has_value(); });
-	if (waiting == moves.end())
+	if (!_awaitingRelease || _count == 0)
 	{
 		return false;
 	}
-	waiting->chargeMs = ReleasedCharge(heldMs);
+	_awaitingRelease = false;
+	_moves.at(_count - 1).chargeMs = ReleasedCharge(heldMs);
 	return true;
 }
 
@@ -263,6 +296,7 @@ void MoveQueue::CancelWaiting()
 	const auto moves = std::span(_moves.data(), _count);
 	const auto kept = std::ranges::remove_if(moves, [](const QueuedMove& move) { return !move.chargeMs.has_value(); });
 	_count -= kept.size();
+	_awaitingRelease = false;
 }
 
 bool MoveQueue::HasWaiting() const
@@ -272,7 +306,12 @@ bool MoveQueue::HasWaiting() const
 
 float creature_fight::LearnTendency(float tendency, Move::Kind kind)
 {
-	const auto nudge = kind == Move::Kind::Block ? -k_TendencyNudge : k_TendencyNudge;
+	if (kind == Move::Kind::Spell)
+	{
+		return tendency;
+	}
+	// Blocking and stepping lean it towards defence, blows towards attack
+	const auto nudge = kind == Move::Kind::Block || kind == Move::Kind::Animation ? -k_TendencyNudge : k_TendencyNudge;
 	return std::clamp((k_TendencyKeep * tendency) + nudge, -1.0f, 1.0f);
 }
 
@@ -583,7 +622,6 @@ bool creature_fight::PlayerMove(Fighter& fighter, const Move& move, bool replace
 	fighter.control = Control::Player;
 	fighter.autoFight = false;
 	fighter.computerWaitMs = k_ComputerWaitsMs;
-	fighter.tendency = LearnTendency(fighter.tendency, move.kind);
 	return fighter.queue.Push(move, replace);
 }
 
@@ -594,9 +632,13 @@ std::optional<Order> creature_fight::TakeOrder(Fighter& fighter, bool inRange)
 	{
 		return std::nullopt;
 	}
-	// Anything at all ends a block, and is made from the stance after it
+	// Anything at all ends a block, and is made from the stance after it; another block is used up ending it
 	if (fighter.state == State::Block)
 	{
+		if (front->move.kind == Move::Kind::Block)
+		{
+			fighter.queue.Pop();
+		}
 		return Order {.kind = Order::Kind::EndBlock};
 	}
 	if (fighter.state != State::Stance)
@@ -800,16 +842,4 @@ bool creature_fight::WantsToFight(float anger, float life, float distance, float
 {
 	return anger >= k_AngerToFight && HealthyEnoughToFight(life) && distance <= k_PickFightPerSize * size &&
 	       secondsSinceFight >= k_SecondsBetweenFights;
-}
-
-glm::vec3 creature_fight::CameraOrigin(const Arena& arena, float ground, glm::vec2 side)
-{
-	const auto away = glm::length(side) > 0.0f ? glm::normalize(side) * arena.radius : glm::vec2(arena.radius, 0.0f);
-	return {arena.centre.x + away.x, ground + (arena.radius * 0.5f), arena.centre.y + away.y};
-}
-
-glm::vec2 creature_fight::CameraSide(glm::vec2 a, glm::vec2 b)
-{
-	const auto along = b - a;
-	return glm::length(along) > 0.0f ? glm::normalize(glm::vec2(-along.y, along.x)) : glm::vec2(1.0f, 0.0f);
 }
