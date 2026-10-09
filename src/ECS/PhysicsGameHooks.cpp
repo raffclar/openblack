@@ -25,6 +25,7 @@
 #include "Common/GameRandom.h"
 #include "Creature/CreatureCatch.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -33,6 +34,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Field.h"
@@ -276,7 +278,8 @@ std::vector<physics::temple_heart::Town> HeartTowns(PlayerNames owner)
 	return lists;
 }
 
-/// The spot visual a temple's heart fires its beams from, made the first time it beams
+/// The spot visual a temple's heart fires its beams from, made the first time it beams; tried again on a later beam when
+/// it couldn't be made
 std::optional<ParticleSystemInterface::EffectId> HeartBeamSource(entt::entity heart, Temple& temple)
 {
 	if (!Locator::particleSystem::has_value())
@@ -288,6 +291,10 @@ std::optional<ParticleSystemInterface::EffectId> HeartBeamSource(entt::entity he
 		auto& particles = Locator::particleSystem::value();
 		const auto& position = Entities().Get<const Transform>(heart).position;
 		const auto id = particles.StartSpotVisual(SpotVisualType::MagicBeamOnCitadel, position, -1, entt::null, 1.0f);
+		if (id == ParticleSystemInterface::k_NoEffect)
+		{
+			return std::nullopt;
+		}
 		particles.SetPlayer(id, static_cast<int>(temple.owner));
 		temple.beamSource = id;
 	}
@@ -323,11 +330,12 @@ void BeamAtTarget(entt::entity heart, Temple& temple, entt::entity target)
 		return;
 	}
 	const auto heartPosition = Entities().Get<const Transform>(heart).position;
+	// The beam sounds take their turns whether or not they can be heard
+	auto& next = Entities().Context().nextHeartBeamSound;
+	const auto sound = k_HeartBeamSounds.at(next);
+	next = (next + 1) % temple_heart::k_BeamSounds;
 	if (Locator::audio::has_value())
 	{
-		auto& next = Entities().Context().nextHeartBeamSound;
-		const auto sound = k_HeartBeamSounds.at(next);
-		next = (next + 1) % temple_heart::k_BeamSounds;
 		Locator::audio::value().StartSoundEffect(sound.value(), {.position = heartPosition, .owner = heart});
 	}
 	Locator::particleSystem::value().AddPlasma(*source, {
@@ -660,6 +668,27 @@ void PhysicsGameHooks::DropSound(entt::entity object)
 	object_physics::TreeDropSound(object, static_cast<uint64_t>(ticks));
 }
 
+namespace
+{
+/// Whether the creature's plan is to fight or to catch: the plan stays so from when it is made until another replaces it
+bool PlansToFightOrCatch(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	if (mind == nullptr || !mind->planActive || !mind->planner.current.has_value() || !Locator::creatureMindSystem::has_value())
+	{
+		return false;
+	}
+	const auto* tables = Locator::creatureMindSystem::value().GetTables();
+	const auto action = mind->planner.current->action;
+	if (tables == nullptr || action >= tables->actions.size())
+	{
+		return false;
+	}
+	const auto& name = tables->actions[action].name;
+	return name == "Fight" || name == "Catch";
+}
+} // namespace
+
 void PhysicsGameHooks::OfferToCatchingCreatures(entt::entity object, PhysicsEntry& entry)
 {
 	auto& registry = Entities();
@@ -678,13 +707,11 @@ void PhysicsGameHooks::OfferToCatchingCreatures(entt::entity object, PhysicsEntr
 	const float objectWeight = Locator::dynamicsSystem::has_value() ? Locator::dynamicsSystem::value().WeightOf(object) : 0.0f;
 	for (const auto creature : creatures)
 	{
-		// Not one the hand is holding, one fighting, one a script controls, nor one already catching. (A creature under a
-		// script's only desire must also be free to react; openblack's scripts set no only desire.)
-		const auto* acting = registry.TryGet<const CreatureObjectAction>(creature);
-		if (handHeld == creature || registry.AllOf<CreatureFighting>(creature) || registry.AllOf<ScriptControlled>(creature) ||
-		    (acting != nullptr && acting->kind == creature_object_actions::Kind::Catch &&
-		     acting->status != creature_object_actions::Status::Done &&
-		     acting->status != creature_object_actions::Status::Failed))
+		// Not one the hand is holding, one that plans to fight or is fighting, one a script controls, nor one whose plan
+		// is a catch, a catch still waiting for its body included. (A creature under a script's only desire must also be
+		// free to react; openblack's scripts set no only desire.)
+		if (handHeld == creature || PlansToFightOrCatch(registry, creature) || registry.AllOf<CreatureFighting>(creature) ||
+		    registry.AllOf<ScriptControlled>(creature) || registry.AllOf<PendingCatch>(creature))
 		{
 			continue;
 		}

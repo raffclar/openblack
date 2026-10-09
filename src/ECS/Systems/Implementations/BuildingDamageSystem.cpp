@@ -792,7 +792,9 @@ void BuildingDamageSystem::ProcessTurn()
 std::optional<float> BuildingDamageSystem::PartialShare(entt::entity building) const
 {
 	const auto& registry = Entities();
-	if (!registry.Valid(building) || (!registry.AllOf<BuildingDamage>(building) && IsBuilt(building)))
+	// A broken building, one being repaired, or one still being built
+	if (!registry.Valid(building) ||
+	    (!registry.AllOf<BuildingDamage>(building) && !registry.AllOf<RepairSite>(building) && IsBuilt(building)))
 	{
 		return std::nullopt;
 	}
@@ -803,6 +805,19 @@ std::optional<float> BuildingDamageSystem::PartialShare(entt::entity building) c
 		return std::nullopt;
 	}
 	return share;
+}
+
+bool BuildingDamageSystem::DrawsWhole(entt::entity object) const
+{
+	const auto& registry = Entities();
+	// A building with a site for its building or repair is drawn only as far up as it stands, nothing at none, the
+	// whole of it once all of it stands; a broken one keeps its broken model drawn under that
+	if (!registry.Valid(object) || registry.AllOf<BuildingDamage>(object) ||
+	    (!registry.AllOf<RepairSite>(object) && IsBuilt(object)))
+	{
+		return true;
+	}
+	return DrawShare(object) >= 1.0f;
 }
 
 entt::id_type BuildingDamageSystem::DrawnMesh(entt::entity object, entt::id_type own) const

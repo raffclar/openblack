@@ -32,5 +32,8 @@ namespace openblack::ecs::land_forests
 
 /// The forests within a town's reach: their nearest point strictly nearer than the reach, and their wood not nothing
 [[nodiscard]] bool NearTown(float distance, float reach, float wood);
+/// The land's forest count once a forest is made with a number of its own: moved past the number only when the number is
+/// beyond the count
+[[nodiscard]] uint32_t CountAfter(uint32_t count, uint32_t number);
 
 } // namespace openblack::ecs::land_forests

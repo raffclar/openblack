@@ -41,7 +41,7 @@ struct Size
 };
 [[nodiscard]] Size SizeOf(entt::entity object);
 
-/// Its life, 0 to 1: a villager's health, a creature's life, any other object's own (1 until it is hurt)
+/// Its life, 0 to 1: a villager's or a creature's life, any other object's own (1 until it is hurt)
 [[nodiscard]] float LifeOf(entt::entity object);
 /// Life taken from an object, as each kind takes it: a building's people come out, and it stops working once low; a
 /// field loses food rather than life; a creature that runs out is knocked out. Its life after.
