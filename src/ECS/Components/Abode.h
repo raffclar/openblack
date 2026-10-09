@@ -11,6 +11,8 @@
 
 #include <set>
 
+#include <entt/entity/entity.hpp>
+
 #include "Enums.h"
 
 namespace openblack::ecs::components
