@@ -43,9 +43,21 @@ public:
 	void ReleaseCharge(entt::entity /*creature*/, float /*heldMs*/) override {}
 	void SetAutoFighting(entt::entity /*creature*/, bool /*autoFight*/) override {}
 	[[nodiscard]] bool IsAutoFighting(entt::entity /*creature*/) const override { return false; }
-	bool Press(const glm::vec3& /*rayOrigin*/, const glm::vec3& /*rayDirection*/) override { return false; }
-	void Release() override {}
+	void Reset() override {}
+	[[nodiscard]] std::optional<entt::entity> PlayersFighter() const override { return std::nullopt; }
+	bool Press(const glm::vec3& /*rayOrigin*/, const glm::vec3& /*rayDirection*/, creature_fight::Button /*button*/,
+	           uint32_t /*milliseconds*/, uint32_t /*turn*/) override
+	{
+		return false;
+	}
+	void Release(uint32_t /*milliseconds*/, uint32_t /*turn*/) override {}
 	[[nodiscard]] bool IsPressed() const override { return false; }
+	[[nodiscard]] std::optional<creature_fight::Tip> HandTip(std::optional<entt::entity> /*under*/) const override
+	{
+		return std::nullopt;
+	}
+	bool GestureSpecialMove() override { return false; }
+	bool GestureSpell(MagicType /*type*/) override { return false; }
 	void KnockOut(entt::entity creature) override { knockedOut.push_back(creature); }
 	void ForceFaint(entt::entity creature) override
 	{
