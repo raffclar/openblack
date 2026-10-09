@@ -31,7 +31,8 @@ SAMPLER2D(s_iceEnvironment, 10);
 SAMPLER2D(s_iceEnvironmentAlpha, 1);
 SAMPLER2D(s_staticAlpha, 15);
 // A creature fizzing out of sight is drawn twice. z 1: its depth alone, wherever the static's alpha is at least w; z 2:
-// its body, blended at w, over just that depth. z 0 for anything else.
+// its body, blended at w, over just that depth. z 0 for anything else, with w how frozen a piece of a creature drawn on its
+// own is.
 uniform vec4 u_creatureSpellLook;
 
 void main()
@@ -101,7 +102,9 @@ void main()
 #endif // USE_ENVIRONMENT
 	// Frozen, a sheen of ice is added over it by how frozen it is, looked up by the way each face points across the view,
 	// so it shows facet by facet
-	if (v_haze.w > 0.0f)
+	// A piece of it drawn on its own, not fizzing, gives how frozen it is in place of the instance
+	float frozen = v_haze.w > 0.0f ? v_haze.w : (u_creatureSpellLook.z < 0.5f ? u_creatureSpellLook.w : 0.0f);
+	if (frozen > 0.0f)
 	{
 		vec3 face = normalize(cross(dFdx(v_position.xyz), dFdy(v_position.xyz)));
 		vec3 eye = u_invView[3].xyz;
@@ -110,7 +113,7 @@ void main()
 		vec2 iceUv = (viewFace.xy + 1.0f) * 0.498046875f;
 		// Added weighed by its alpha and the freeze, over the object's colour
 		vec3 ice = texture2D(s_iceEnvironment, iceUv).rgb * texture2D(s_iceEnvironmentAlpha, iceUv).r;
-		diffuseTex.rgb = min(diffuseTex.rgb + ice * v_haze.w, vec3_splat(1.0f));
+		diffuseTex.rgb = min(diffuseTex.rgb + ice * frozen, vec3_splat(1.0f));
 	}
 	// A glow of its own, 0xRRGGBB, is added as the vertices' specular is, as the heal lights the people it heals
 	vec3 glow = u_glow.rgb;

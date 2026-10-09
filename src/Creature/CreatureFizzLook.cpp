@@ -62,9 +62,19 @@ glm::vec2 Scroll(glm::vec2 scroll, float seconds)
 	return {Slide(scroll.x, k_ScrollAcrossPerSecond, seconds), Slide(scroll.y, k_ScrollDownPerSecond, seconds)};
 }
 
-bool HairShown(float fizz)
+bool HairShown(float fizz, float freeze)
 {
-	return fizz < k_ExtrasGoneFizz;
+	return fizz < k_ExtrasGoneFizz && freeze < k_ExtrasGoneFizz;
+}
+
+bool EyesFizz(float fizz, float freeze)
+{
+	return freeze == 0.0f && Fizzing(fizz);
+}
+
+bool EyelidsWhite(float freeze)
+{
+	return freeze == 1.0f;
 }
 
 bool ReflectionShown(float fizz)
