@@ -29,4 +29,9 @@ struct MobileObject
 	MobileObjectInfo type; ///< This is 32 bits but could be 8 bits if stored in uint8_t
 };
 
+/// A mobile static that is a rock: a thing of its own to the scripts
+struct Rock
+{
+};
+
 } // namespace openblack::ecs::components

@@ -12,7 +12,9 @@
 #include <cmath>
 #include <cstdint>
 
+#include <algorithm>
 #include <chrono>
+#include <iterator>
 #include <limits>
 #include <optional>
 #include <sstream>
@@ -39,6 +41,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/GameMusic.h"
 #include "Camera/Camera.h"
+#include "Common/GUtilsDistance.h"
 #include "Creature/LeashRules.h"
 #include "ECS/Archetypes/BallArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
@@ -55,14 +58,19 @@
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptFind.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
@@ -205,9 +213,19 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 	switch (type)
 	{
 	case ObjectType::MobileStatic:
-	case ObjectType::Rock: // TODO(Daniels118): add a Rock archetype
 		return MobileStaticArchetype::Create(position, static_cast<MobileStaticInfo>(subtype), altitude, xAngleRadians,
 		                                     yAngleRadians, zAngleRadians, scale);
+	case ObjectType::Rock:
+	{
+		// A rock is a mobile static the scripts know as a rock
+		const auto rock = MobileStaticArchetype::Create(position, static_cast<MobileStaticInfo>(subtype), altitude,
+		                                                xAngleRadians, yAngleRadians, zAngleRadians, scale);
+		if (rock != entt::null)
+		{
+			Locator::entitiesRegistry::value().Assign<ecs::components::Rock>(rock);
+		}
+		return rock;
+	}
 	case ObjectType::Ball:
 		return CreateScriptBall(position);
 	default:
@@ -838,6 +856,18 @@ void SetProperty() // 022 SET_PROPERTY
 		NeedValue(*needs, *need) = script::property_rules::SetNeed(*need, value);
 		return;
 	}
+	if (prop == script::ObjectPropertyType::YPos)
+	{
+		// How high above the land it is: it is drawn there at once
+		if (auto* transform = registry.TryGet<Transform>(object); transform != nullptr)
+		{
+			const auto& at = transform->position;
+			const float land =
+			    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(glm::vec2(at.x, at.z)) : 0.0f;
+			transform->position.y = land + value;
+		}
+		return;
+	}
 	// TODO(Daniels118): the other properties
 	NotImplemented(static_cast<int32_t>(prop));
 }
@@ -886,15 +916,150 @@ void GetDistance() // 025 GET_DISTANCE
 	Pushf(distance);
 }
 
+/// What a "get ... at" (no reach) or "get ... at ... radius" (a reach) asks for
+struct ScriptFindRequest
+{
+	ObjectType type;
+	uint32_t subtype;
+	map_coords::MapCoords at;
+	std::optional<float> radius;
+	bool excludingScripted;
+};
+
+/// Where a thing is measured from by the scripts' searches
+static map_coords::MapCoords ScriptFindPosition(const ecs::Registry& registry, entt::entity entity)
+{
+	const auto& position = registry.Get<const Transform>(entity).position;
+	return map_coords::FromMetres({position.x, position.z});
+}
+
+/// The things in a cell of the map that a search asks for. The temple isn't kept in the map's cells: it is looked at in
+/// the cell of its middle, after what the cell holds
+static std::vector<ecs::script_find::Candidate> ScriptFindCandidates(const ScriptFindRequest& request, glm::ivec2 cell)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> things = Locator::entitiesMap::value().GetAllInCell(cell);
+	if (request.type == ObjectType::Citadel)
+	{
+		registry.Each<const ecs::components::Temple, const Transform>(
+		    [&things, cell](entt::entity temple, const ecs::components::Temple&, const Transform& transform) {
+			    if (map_coords::CellOf(transform.position) == cell)
+			    {
+				    things.push_back(temple);
+			    }
+		    });
+	}
+	std::vector<ecs::script_find::Candidate> found;
+	for (const auto thing : things)
+	{
+		if (!registry.Valid(thing) || !registry.AllOf<Transform>(thing))
+		{
+			continue;
+		}
+		// The excluding variants pass over what a script holds already
+		if (request.excludingScripted && registry.AllOf<ecs::components::InScript>(thing))
+		{
+			continue;
+		}
+		const auto kind = ecs::script_find::KindOf(registry, thing);
+		if (!kind.has_value() || !ecs::script_find::Matches(*kind, request.type, request.subtype))
+		{
+			continue;
+		}
+		const auto at = ScriptFindPosition(registry, thing);
+		if (request.radius.has_value() && gutils::GetDistanceInMetres(request.at, at) > *request.radius)
+		{
+			continue;
+		}
+		found.push_back({.entity = thing, .at = at});
+	}
+	return found;
+}
+
+/// The town nearest a place strictly within the reach, each player's towns in turn and the neutral ones last
+static entt::entity FindScriptTown(const map_coords::MapCoords& at, float reach)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	struct Entry
+	{
+		PlayerNames owner;
+		uint32_t id;
+		ecs::script_find::Candidate candidate;
+	};
+	std::vector<Entry> towns;
+	registry.Each<const ecs::components::Town, const Transform>(
+	    [&towns, &registry](entt::entity entity, const ecs::components::Town& town, const Transform&) {
+		    towns.push_back({.owner = town.owner,
+		                     .id = town.id,
+		                     .candidate = {.entity = entity, .at = ScriptFindPosition(registry, entity)}});
+	    });
+	std::ranges::sort(towns,
+	                  [](const Entry& a, const Entry& b) { return a.owner != b.owner ? a.owner < b.owner : a.id < b.id; });
+	std::vector<ecs::script_find::Candidate> ordered;
+	ordered.reserve(towns.size());
+	std::ranges::transform(towns, std::back_inserter(ordered), &Entry::candidate);
+	return ecs::script_find::FindNearestTown(at, reach, ordered);
+}
+
+/// The thing a script's search finds, taken into the scripts' table, or none. Types with no search (markers, dances,
+/// flocks and two unused ones) and types out of range are an error; a creature's search isn't written yet
+static entt::entity FindForScript(int32_t type, uint32_t subtype, const glm::vec3& position, std::optional<float> radius,
+                                  bool excludingScripted)
+{
+	constexpr int32_t k_LastFindType = 41;
+	if (type < 1 || type > k_LastFindType)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Script object type {} out of range", type);
+		return entt::null;
+	}
+	const auto objectType = static_cast<ObjectType>(type);
+	switch (objectType)
+	{
+	case ObjectType::Marker:
+	case ObjectType::Dance:
+	case ObjectType::Flock:
+	case ObjectType::InfluenceRing:
+	case ObjectType::WeatherThing:
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "No search for script object type {}", type);
+		return entt::null;
+	case ObjectType::Creature:
+		// TODO(script-natives): the creatures' own searches (see docs scripts/calls.md)
+		NotImplemented(type);
+		return entt::null;
+	default:
+		break;
+	}
+	const auto at = map_coords::FromMetres({position.x, position.z});
+	entt::entity found = entt::null;
+	if (objectType == ObjectType::Town)
+	{
+		found = FindScriptTown(at, radius.value_or(ecs::script_find::k_TownAtReach));
+	}
+	else
+	{
+		const ScriptFindRequest request {
+		    .type = objectType, .subtype = subtype, .at = at, .radius = radius, .excludingScripted = excludingScripted};
+		found = ecs::script_find::FindNearest(at, radius.value_or(ecs::script_find::k_AtReach),
+		                                      [&request](glm::ivec2 cell) { return ScriptFindCandidates(request, cell); });
+	}
+	if (found == entt::null)
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "Thing not found");
+		return entt::null;
+	}
+	Locator::scriptObjects::value().Register(found, false);
+	return found;
+}
+
 void Call() // 026 CALL
 {
-	[[maybe_unused]] const auto excludingScripted = static_cast<bool>(Pop().intVal);
-	[[maybe_unused]] const auto position = PopVec();
-	[[maybe_unused]] const auto subtype = Pop().intVal;
-	[[maybe_unused]] const auto type = Pop().intVal;
-	// TODO(script-natives): the nearest thing of the type and subtype within a metre (see docs scripts/calls.md)
-	NotImplemented();
-	Pusho(0);
+	// The nearest thing of the type and subtype in the cells within a metre of the place
+	const auto excludingScripted = Pop().intVal != 0;
+	const auto position = PopVec();
+	const auto subtype = Pop().uintVal;
+	const auto type = Pop().intVal;
+	const auto found = FindForScript(type, subtype, position, std::nullopt, excludingScripted);
+	Pusho(found == entt::null ? 0u : static_cast<uint32_t>(found));
 }
 
 void Create() // 027 CREATE
@@ -1107,14 +1272,14 @@ void PositionFollow() // 050 POSITION_FOLLOW
 
 void CallNear() // 051 CALL_NEAR
 {
-	[[maybe_unused]] const auto excludingScripted = static_cast<bool>(Pop().intVal);
-	[[maybe_unused]] const auto radius = Popf();
-	[[maybe_unused]] const auto position = PopVec();
-	[[maybe_unused]] const auto subtype = Pop().intVal;
-	[[maybe_unused]] const auto type = Pop().intVal;
-	// TODO(script-natives): the nearest thing of the type and subtype within the radius (see docs scripts/calls.md)
-	NotImplemented();
-	Pusho(0);
+	// The nearest thing of the type and subtype within the radius of the place
+	const auto excludingScripted = Pop().intVal != 0;
+	const auto radius = Popf();
+	const auto position = PopVec();
+	const auto subtype = Pop().uintVal;
+	const auto type = Pop().intVal;
+	const auto found = FindForScript(type, subtype, position, radius, excludingScripted);
+	Pusho(found == entt::null ? 0u : static_cast<uint32_t>(found));
 }
 
 void SpecialEffectPosition() // 052 SPECIAL_EFFECT_POSITION
