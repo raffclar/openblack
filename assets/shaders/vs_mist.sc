@@ -1,6 +1,8 @@
 $input a_position, a_texcoord0, a_normal
 $output v_texcoord0, v_color0, v_haze
 
+// Only the model matrix is used: a draw uploads every bone the shader declares
+#define BGFX_CONFIG_MAX_BONES 1
 #include <bgfx_shader.sh>
 
 #include "haze.sh"

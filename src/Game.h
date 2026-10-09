@@ -150,7 +150,10 @@ public:
 	bool Initialize() noexcept;
 	bool Run() noexcept;
 
+	/// Loads a land's map script, keeping the challenge's scripts running, as the story's own change of land does
 	bool LoadMap(const std::filesystem::path& path) noexcept;
+	/// Loads a land as the land menu does: the challenge's scripts start again from scratch before the land loads
+	bool LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept;
 	void LoadLandscape(const std::filesystem::path& path);
 	/// Loads the testbed: a flat plane over the whole map, with a lake north of the middle and nothing on it, for trying
 	/// out creatures
