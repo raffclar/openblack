@@ -2883,9 +2883,9 @@ void SetOnlyForScripts() // 217 SET_ONLY_FOR_SCRIPTS
 
 void StartMatchWithReferee() // 218 START_MATCH_WITH_REFEREE
 {
-	// The football pitch and the villager refereeing; the native takes control of both
-	[[maybe_unused]] const auto pitch = PopObject();
+	// The villager refereeing and the football pitch; the native takes control of both
 	[[maybe_unused]] const auto referee = PopObject();
+	[[maybe_unused]] const auto pitch = PopObject();
 	// TODO(Daniels118): implement this
 	NotImplemented();
 }

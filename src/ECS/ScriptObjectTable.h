@@ -65,7 +65,10 @@ public:
 	[[nodiscard]] const Place& At(uint16_t place) const { return _places.at(place); }
 	/// The place of one object now holds another, as a tree a script held becomes a dead tree
 	void Replace(uint32_t from, uint32_t to);
-	/// Every place is free again
+	/// The land's scripts end: each place lets go of its object, but keeps its count of references, so a place still
+	/// counted stays taken, and the next search starts where the last stopped
+	void ClearObjects();
+	/// The scripts' program starts again: every place is free and the next search starts at the first
 	void Clear();
 
 private:
