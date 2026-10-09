@@ -26,6 +26,7 @@
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/GroundMark.h"
+#include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/MorphWithTerrain.h"
@@ -126,7 +127,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 
 	registry.Each<const Mesh, const Transform>(
 	    [&prep](entt::entity entity, const Mesh& mesh, const Transform& /*unused*/) { prep(entity, mesh, false); },
-	    entt::exclude<MorphWithTerrain, Tree, TempleInteriorPart, AtHome>);
+	    entt::exclude<MorphWithTerrain, Tree, TempleInteriorPart, AtHome, HiddenByState>);
 	registry.Each<const Mesh, const Transform, const MorphWithTerrain>(
 	    [&prep](entt::entity entity, const Mesh& mesh, const Transform& /*unused*/, const MorphWithTerrain& /*unused*/) {
 		    prep(entity, mesh, true);
@@ -433,7 +434,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 		    ++slots->second.filled;
 	    },
-	    entt::exclude<TempleInteriorPart, Tree, AtHome>);
+	    entt::exclude<TempleInteriorPart, Tree, AtHome, HiddenByState>);
 
 	if (fits && !_renderContext.instanceUniforms.empty())
 	{
