@@ -11,6 +11,7 @@
 
 #include "PlayerSystem.h"
 
+#include "ECS/Components/Alignment.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
@@ -20,7 +21,9 @@ using namespace openblack::ecs::components;
 
 void PlayerSystem::RegisterPlayers()
 {
+	// The players of a land that has gone are forgotten; those already known on this land stay as they were
 	const auto& registry = Locator::entitiesRegistry::value();
+	std::erase_if(_players, [&registry](const auto& entry) { return !registry.Valid(entry.second); });
 	registry.Each<const Player>(
 	    [this](const entt::entity entity, const Player& player) { _players.emplace(player.name, entity); });
 }
@@ -29,10 +32,45 @@ void PlayerSystem::AddPlayer(entt::entity playerEntity)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto& player = registry.Get<components::Player>(playerEntity);
-	_players.emplace(player.name, playerEntity);
+	// A player made for a new land takes the place of the one of that name on the last land
+	_players.insert_or_assign(player.name, playerEntity);
 }
 
 entt::entity PlayerSystem::GetPlayer(PlayerNames playerName) const
 {
 	return _players.at(playerName);
+}
+
+void PlayerSystem::KeepForNextLand()
+{
+	// A player not on this land keeps what they kept from the last one they were on
+	const auto& registry = Locator::entitiesRegistry::value();
+	registry.Each<const Player>([this, &registry](entt::entity entity, const Player& player) {
+		const auto* alignment = registry.TryGet<const Alignment>(entity);
+		_kept.insert_or_assign(player.name, Kept {.alignment = alignment != nullptr ? std::optional(*alignment) : std::nullopt,
+		                                          .damageFrom = player.damageFrom,
+		                                          .windResistance = player.windResistance});
+	});
+}
+
+void PlayerSystem::TakeUpKept(entt::entity playerEntity)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* player = registry.TryGet<Player>(playerEntity);
+	if (player == nullptr)
+	{
+		return;
+	}
+	const auto found = _kept.find(player->name);
+	if (found == _kept.end())
+	{
+		return;
+	}
+	const auto& kept = found->second;
+	player->damageFrom = kept.damageFrom;
+	player->windResistance = kept.windResistance;
+	if (kept.alignment.has_value())
+	{
+		registry.AssignOrReplace<Alignment>(playerEntity, *kept.alignment);
+	}
 }

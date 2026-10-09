@@ -26,6 +26,7 @@
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/GroundMark.h"
+#include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/MorphWithTerrain.h"
@@ -33,6 +34,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
+#include "ECS/Components/SkinOverride.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Swayable.h"
@@ -126,7 +128,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 
 	registry.Each<const Mesh, const Transform>(
 	    [&prep](entt::entity entity, const Mesh& mesh, const Transform& /*unused*/) { prep(entity, mesh, false); },
-	    entt::exclude<MorphWithTerrain, Tree, TempleInteriorPart, AtHome>);
+	    entt::exclude<MorphWithTerrain, Tree, TempleInteriorPart, AtHome, HiddenByState>);
 	registry.Each<const Mesh, const Transform, const MorphWithTerrain>(
 	    [&prep](entt::entity entity, const Mesh& mesh, const Transform& /*unused*/, const MorphWithTerrain& /*unused*/) {
 		    prep(entity, mesh, true);
@@ -284,6 +286,24 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    fits = false;
 			    return;
 		    }
+		    // A mesh drawn with another texture, slid across it: the temple's leashes
+		    if (const auto* skin = registry.TryGet<const SkinOverride>(entity))
+		    {
+			    if (const auto desc = _renderContext.instancedDrawDescs.find(slots->first);
+			        desc != _renderContext.instancedDrawDescs.end())
+			    {
+				    desc->second.uvOffset = skin->uvOffset;
+				    if (desc->second.subMeshTextures.empty())
+				    {
+					    const auto drawn =
+					        entt::locator<resources::ResourcesInterface>::value().GetMeshes().Handle(slots->first);
+					    for (uint32_t i = 0; i < static_cast<uint32_t>(drawn->GetSubMeshes().size()); ++i)
+					    {
+						    desc->second.subMeshTextures.emplace_back(i, skin->texture);
+					    }
+				    }
+			    }
+		    }
 
 		    auto modelMatrix = glm::mat4(transform.rotation);
 		    modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
@@ -433,7 +453,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 		    ++slots->second.filled;
 	    },
-	    entt::exclude<TempleInteriorPart, Tree, AtHome>);
+	    entt::exclude<TempleInteriorPart, Tree, AtHome, HiddenByState>);
 
 	if (fits && !_renderContext.instanceUniforms.empty())
 	{

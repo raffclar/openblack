@@ -42,6 +42,7 @@
 #include "Physics/Body.h"
 #include "Physics/LivingRules.h"
 #include "Resources/ResourcesInterface.h"
+#include "VillagerAnimate.h"
 #include "VillagerFire.h"
 #include "VillagerReactions.h"
 
@@ -172,9 +173,10 @@ bool villager_physics::StartFlying(entt::entity villager)
 	}
 	// It flies dead or thrown. Only a vortex bringing people from another land flings them out with the vortex clip;
 	// openblack has no such vortex yet, and a tornado's passengers are simply thrown.
-	registry.AssignOrReplace<VillagerClip>(
+	const auto& thrown = registry.AssignOrReplace<VillagerClip>(
 	    villager, VillagerClip {.state = VillagerStates::Flying,
 	                            .clip = living::VillagerThrownClip(world_objects::LifeOf(villager) > 0.0f, false)});
+	villager_animate::SetAnim(villager, static_cast<int32_t>(thrown.clip), true);
 	return true;
 }
 
@@ -262,8 +264,9 @@ void villager_physics::Land(PhysicsEntry* entry, entt::entity villager)
 	}
 	const auto previous = Living().VillagerGetState(*action, LivingAction::Index::Previous);
 	SetTopState(*action, VillagerStates::Landed);
-	registry.AssignOrReplace<VillagerClip>(
+	const auto& landed = registry.AssignOrReplace<VillagerClip>(
 	    villager, VillagerClip {.state = VillagerStates::Landed, .clip = living::VillagerLandedClip(pose, false)});
+	villager_animate::SetAnim(villager, static_cast<int32_t>(landed.clip), true);
 	// A villager a script controls goes straight back to what it was doing, and so does one in some states
 	if (const auto* row = StateRowOf(previous);
 	    registry.AllOf<ScriptControlled>(villager) || (row != nullptr && row->field0xf4 != 0))
@@ -362,9 +365,10 @@ void villager_physics::SetupReactToFlyingObject(entt::entity villager, entt::ent
 		    person != nullptr && (person->sex == Villager::Sex::FEMALE || person->lifeStage == Villager::LifeStage::Child);
 		const auto first = womanOrChild ? random.GameRand(3) : 1;
 		const auto second = first != 0 ? random.GameRand(3) : 0;
-		registry.AssignOrReplace<VillagerClip>(villager,
-		                                       VillagerClip {.state = VillagerStates::PointAtFlyingObjectReaction,
-		                                                     .clip = living::PointingClip(womanOrChild, first, second)});
+		const auto& pointing = registry.AssignOrReplace<VillagerClip>(
+		    villager, VillagerClip {.state = VillagerStates::PointAtFlyingObjectReaction,
+		                            .clip = living::PointingClip(womanOrChild, first, second)});
+		villager_animate::SetAnim(villager, static_cast<int32_t>(pointing.clip), true);
 	}
 }
 

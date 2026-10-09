@@ -9,6 +9,8 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <cmath>
+
 #include <algorithm>
 #include <limits>
 #include <optional>
@@ -23,6 +25,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
+#include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
 #include "InfoConstants.h"
 #include "LivingActionSystem.h"
@@ -34,6 +37,14 @@
 using namespace openblack;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
+
+namespace
+{
+/// A clip whose stride is shorter than this stays where it is, and plays by the clock
+constexpr float k_StationaryStride = 0.05f;
+/// The game's speed units in one metre a second
+constexpr float k_SpeedUnitsPerMetrePerSecond = 655.36f;
+} // namespace
 
 void LivingActionSystem::UpdatePoses(uint32_t turn, float turnFraction)
 {
@@ -53,38 +64,33 @@ void LivingActionSystem::UpdatePoses(uint32_t turn, float turnFraction)
 	registry.Each<const Villager, const LivingAction, const Mesh, const Transform, VillagerPose>(
 	    [&](entt::entity entity, const Villager& /*unused*/, const LivingAction& action, const Mesh& mesh,
 	        const Transform& transform, VillagerPose& pose) {
-		    const auto state = action.states[static_cast<size_t>(LivingAction::Index::Top)];
-		    std::optional<AnimId> chosen;
-		    // A clip chosen by an earlier state is no choice of this one
-		    if (const auto* own = registry.TryGet<const VillagerClip>(entity); own != nullptr)
-		    {
-			    chosen = physics::living::ChoiceOfState(state, static_cast<uint8_t>(own->state), own->clip);
-		    }
-		    const int32_t tableClip = state < states.size() ? static_cast<int32_t>(states[state].animation) : -1;
-		    // A state starts its clip from the beginning; a negative clip keeps the one playing
-		    if (const auto clip = physics::living::VillagerStateClip(state, chosen, tableClip);
-		        clip.has_value() && *clip != pose.clip)
-		    {
-			    pose.clip = *clip;
-			    pose.place = 0;
-		    }
-
+		    // The clip is chosen by the villager's states as they change; here it only plays
 		    const auto clipId = resources::HashIdentifier(static_cast<uint32_t>(pose.clip));
 		    if (static_cast<int>(pose.clip) < 0 || !animations.Contains(clipId) || !meshes.Contains(mesh.id))
 		    {
 			    pose.bones.clear();
 			    return;
 		    }
-		    // Villagers play their clips by the clock
 		    const auto clip = animations.Handle(clipId);
 		    const animals::ClipTiming timing {.playTime = clip->GetPlayTime(),
 		                                      .frameCount = clip->GetFrames().size(),
 		                                      .looping = clip->IsLooping(),
 		                                      .playedByTime = true,
 		                                      .stride = clip->GetStride()};
+		    // Villagers play their clips by the clock, except that in the moving states a clip that carries them along
+		    // plays by the ground they cover
+		    auto played = static_cast<int32_t>(elapsed);
+		    const auto state = action.states.at(static_cast<size_t>(LivingAction::Index::Top));
+		    if (const auto* wallHug = registry.TryGet<const WallHug>(entity);
+		        wallHug != nullptr && states.at(state).movesWithGround != 0 && std::abs(timing.stride) >= k_StationaryStride)
+		    {
+			    const auto speed = static_cast<uint16_t>(std::lround(wallHug->speed * k_SpeedUnitsPerMetrePerSecond + 0.5f));
+			    played = animals::MovingPlay(timing, speed, elapsed, transform.scale.x);
+		    }
 		    // The sounds on the clip's frames it passes play from the villager
-		    ecs::clip_sound_player::Play(entity, pose.clip, *clip, pose.place, elapsed, transform.position);
-		    pose.place = animals::AdvanceClip(timing, pose.place, static_cast<int32_t>(elapsed));
+		    ecs::clip_sound_player::Play(entity, pose.clip, *clip, pose.place, static_cast<uint32_t>(played),
+		                                 transform.position);
+		    pose.place = animals::AdvanceClip(timing, pose.place, played);
 
 		    // The pose between the two keyframes around its place, each bone then placed by its parent
 		    const auto model = meshes.Handle(mesh.id);
