@@ -161,6 +161,7 @@
 #include "ECS/Systems/VillageLightSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -2736,6 +2737,12 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The map at {} does not come with a footpath file. Expected {}",
 		                   path.generic_string(), fotPath.generic_string());
+	}
+
+	// With the land laid out, each town of a player with a temple is given its worship site if it has none
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().LandLaidOut();
 	}
 
 	// With the land laid out, each town gathers the lone trees about it into its scenic forest

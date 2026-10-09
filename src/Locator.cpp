@@ -94,6 +94,7 @@
 #include "ECS/Systems/Implementations/VillageLightSystem.h"
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
 #include "ECS/Systems/Implementations/WeatherSystem.h"
+#include "ECS/Systems/Implementations/WorshipSiteSystem.h"
 #include "Graphics/RendererInterface.h"
 #include "Input/GameActionMap.h"
 #include "LHVM.h"
@@ -177,6 +178,7 @@ using openblack::ecs::systems::VegetationSystem;
 using openblack::ecs::systems::VillageLightSystem;
 using openblack::ecs::systems::WaterRingSystem;
 using openblack::ecs::systems::WeatherSystem;
+using openblack::ecs::systems::WorshipSiteSystem;
 using openblack::graphics::RendererInterface;
 using openblack::input::GameActionMap;
 using openblack::lhvm::LHVM;
@@ -313,6 +315,7 @@ void InitializeLevelWith(const LandSource& land)
 	Locator::dynamicsSystem::value().SetClassHooks(std::make_unique<openblack::ecs::PhysicsGameHooks>());
 	Locator::livingActionSystem::emplace<LivingActionSystem>();
 	Locator::townSystem::emplace<TownSystem>();
+	Locator::worshipSiteSystem::emplace<WorshipSiteSystem>();
 	Locator::resourceStoreSystem::emplace<ResourceStoreSystem>();
 	Locator::weatherSystem::emplace<WeatherSystem>();
 	Locator::pathfindingSystem::emplace<PathfindingSystem>();
@@ -367,6 +370,7 @@ void openblack::ShutDownServices()
 	Locator::cameraBookmarkSystem::reset();
 	Locator::livingActionSystem::reset();
 	Locator::townSystem::reset();
+	Locator::worshipSiteSystem::reset();
 	Locator::resourceStoreSystem::reset();
 	Locator::weatherSystem::reset();
 	Locator::handGrabSystem::reset();

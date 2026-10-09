@@ -17,14 +17,27 @@
 #include "ECS/Components/TempleExterior.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "Locator.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
 using namespace openblack::ecs::components;
 
-entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames playerOwner, const glm::mat4& rotation,
-                                      const glm::vec3& size)
+entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames playerOwner, float facing,
+                                      const glm::mat4& rotation, const glm::vec3& size)
+{
+	const auto entity = Make(position, playerOwner, rotation, size);
+	// Made standing whole, its player's towns are given their worship sites at once
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().AddTemple(entity, facing, true);
+	}
+	return entity;
+}
+
+entt::entity CitadelArchetype::Make(const glm::vec3& position, PlayerNames playerOwner, const glm::mat4& rotation,
+                                    const glm::vec3& size)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
@@ -42,8 +55,15 @@ entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames pla
 	return entity;
 }
 
-entt::entity CitadelArchetype::CreatePlan(int32_t /*townId*/, const glm::vec3& position, PlayerNames playerOwner,
+entt::entity CitadelArchetype::CreatePlan(int32_t /*townId*/, const glm::vec3& position, PlayerNames playerOwner, float facing,
                                           const glm::mat4& rotation, const glm::vec3& size)
 {
-	return Create(position, playerOwner, rotation, size);
+	// Its worship sites open once it is built
+	// TODO(worship-sites): the temple is drawn whole though it is still to be built, and nothing builds it yet
+	const auto entity = Make(position, playerOwner, rotation, size);
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().AddTemple(entity, facing, false);
+	}
+	return entity;
 }

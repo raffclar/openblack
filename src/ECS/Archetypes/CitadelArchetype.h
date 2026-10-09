@@ -19,10 +19,16 @@ namespace openblack::ecs::archetypes
 class CitadelArchetype
 {
 public:
-	static entt::entity Create(const glm::vec3& position, PlayerNames playerOwner, const glm::mat4& rotation,
+	/// A temple standing whole, facing some way (in radians, as the land's script gives it)
+	static entt::entity Create(const glm::vec3& position, PlayerNames playerOwner, float facing, const glm::mat4& rotation,
 	                           const glm::vec3& size);
-	static entt::entity CreatePlan(int32_t townId, const glm::vec3& position, PlayerNames playerOwner,
+	/// A temple still to be built
+	static entt::entity CreatePlan(int32_t townId, const glm::vec3& position, PlayerNames playerOwner, float facing,
 	                               const glm::mat4& rotation, const glm::vec3& size);
 	CitadelArchetype() = delete;
+
+private:
+	static entt::entity Make(const glm::vec3& position, PlayerNames playerOwner, const glm::mat4& rotation,
+	                         const glm::vec3& size);
 };
 } // namespace openblack::ecs::archetypes
