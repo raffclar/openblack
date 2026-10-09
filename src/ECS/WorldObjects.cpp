@@ -55,6 +55,7 @@
 #include "ECS/Systems/Implementations/VillagerFire.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TownAggression.h"
 #include "InfoConstants.h"
@@ -405,6 +406,15 @@ void world_objects::DestroyedByEffect(entt::entity object, const EffectDeath& de
 	{
 		return;
 	}
+	if (registry.AllOf<Temple>(object))
+	{
+		// A temple whose heart loses the last of its life is not removed: its destruction starts, and it goes at its end
+		if (Locator::templeDestructionSystem::has_value())
+		{
+			Locator::templeDestructionSystem::value().Start(object);
+		}
+		return;
+	}
 	if (registry.AnyOf<Abode, SpellDispenser>(object))
 	{
 		// A ghost of it flickers out where it stood, and it goes
@@ -610,6 +620,11 @@ std::optional<PlayerNames> world_objects::PlayerOf(entt::entity object)
 	{
 		return townOwner([abode](entt::entity, const Town& town) { return town.id == abode->townId; })
 		    .value_or(PlayerNames::NEUTRAL);
+	}
+	// A temple is its player's
+	if (const auto* temple = registry.TryGet<const Temple>(object))
+	{
+		return temple->owner;
 	}
 	if (const auto* magic = registry.TryGet<const MagicTree>(object))
 	{

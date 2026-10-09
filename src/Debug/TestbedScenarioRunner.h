@@ -121,6 +121,8 @@ private:
 	void UpdateMiracles(float seconds);
 	/// The scenario's villagers set walking, and dropped on teleport stones, as their times come
 	void UpdateVillagerWalks();
+	/// The scenario's objects thrown when their throws are due
+	void UpdateThrows();
 	/// Casts the scenario's miracle of that index; the running miracle, or none
 	entt::entity CastMiracle(size_t index);
 	void UpdateParticles(float seconds);
@@ -175,6 +177,8 @@ private:
 	glm::vec2 _middle {0.0f};
 	std::vector<entt::entity> _creatures;
 	std::vector<entt::entity> _objects;
+	/// When each of the scenario's throws is next due, in seconds; none once done
+	std::vector<std::optional<float>> _throwsDue;
 	/// For each object, when it next walks, whether it next walks out or back, and whether it has been dropped yet
 	struct ObjectWalk
 	{
