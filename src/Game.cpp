@@ -993,8 +993,8 @@ bool Game::GameLogicLoop() noexcept
 		Locator::handGrabSystem::value().ProcessTurn();
 	}
 
-	// Each turn ends with the camera taking the alignment of the player of most influence where it is
-	Locator::alignmentSystem::value().UpdateTurn();
+	// Each turn ends with the camera taking the alignment of the player of most influence at its eye
+	Locator::alignmentSystem::value().UpdateTurn(cameraPosition);
 	// The temples' outsides follow their players' alignments
 	Locator::templeExteriorSystem::value().UpdateTurn();
 
@@ -1032,13 +1032,23 @@ void Game::ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel)
 	{
 		return;
 	}
+	const auto& alignment = Locator::alignmentSystem::value();
+	// The land's music waits while a script holds the cinema bars, and while they slide in or out
+	bool cinema = false;
+	if (Locator::cinematicDirectorSystem::has_value())
+	{
+		const auto& director = Locator::cinematicDirectorSystem::value();
+		cinema =
+		    (director.IsWideScreenOn() && director.GetWideScreenOwner() != 0) || !director.IsWideScreenTransitionFinished();
+	}
 	audio::GameMusic::TurnInputs music {
 	    .turn = GetTurn(),
 	    .camera = cameraPosition,
 	    .groundHeight = Locator::terrainSystem::value().GetHeightAt(glm::xz(cameraPosition)),
 	    .inCitadel = inCitadel,
-	    // TODO(raffclar): the player's alignment once it is simulated
-	    .alignment = 0.0f,
+	    .alignment = alignment.GetCameraAlignment(),
+	    .playerAlignment = alignment.GetPlayerAlignment(Locator::playerSystem::value().GetLocalPlayer()),
+	    .cinema = cinema,
 	    .towns = {},
 	};
 	Locator::entitiesRegistry::value().Each<const ecs::components::Town, const Tribe, const ecs::components::Transform>(

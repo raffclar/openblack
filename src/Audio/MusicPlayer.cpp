@@ -10,7 +10,10 @@
 #include "MusicPlayer.h"
 
 #include <algorithm>
+#include <string>
 #include <utility>
+
+#include <spdlog/spdlog.h>
 
 using namespace openblack::audio;
 
@@ -223,6 +226,7 @@ void MusicPlayer::Update(std::chrono::microseconds dt)
 // above its target, falls by 3 a tick, and is released when it reaches silence.
 void MusicPlayer::VolumeTick()
 {
+	bool changed = false;
 	for (size_t i = 0; i < _channels.size(); ++i)
 	{
 		auto& channel = _channels.at(i);
@@ -243,16 +247,31 @@ void MusicPlayer::VolumeTick()
 				channel.volume = std::min(channel.volume + k_FadeInStep, channel.targetVolume);
 			}
 			ApplyVolume(channel);
+			changed = true;
 		}
 		else if (channel.volume > channel.targetVolume || !current)
 		{
 			channel.volume = std::max(channel.volume - k_FadeOutStep, 0);
 			ApplyVolume(channel);
+			changed = true;
 			if (channel.volume == 0)
 			{
 				Release(i);
 			}
 		}
+	}
+	// The mix as it fades, each bank playing with its volume out of 127
+	if (const auto logger = spdlog::get("audio"); changed && logger != nullptr && logger->should_log(spdlog::level::debug))
+	{
+		std::string mix;
+		for (const auto& channel : _channels)
+		{
+			if (channel.active)
+			{
+				mix += fmt::format("{}{} {}", mix.empty() ? "" : ", ", channel.bank->path, channel.volume);
+			}
+		}
+		SPDLOG_LOGGER_DEBUG(logger, "Music mix: {}", mix.empty() ? "silent" : mix);
 	}
 }
 
