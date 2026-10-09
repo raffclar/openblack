@@ -30,6 +30,8 @@ struct Abode
 	std::set<entt::entity> inhabitants;
 	/// How many of them are inside now
 	uint32_t presentAtHome {0};
+	/// Its row in the buildings' table
+	AbodeInfo info {AbodeInfo::None};
 };
 
 } // namespace openblack::ecs::components

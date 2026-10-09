@@ -107,6 +107,7 @@ private:
 	std::string _nativesFilter;
 	bool _onlyUsedNatives {true};
 	bool _onlyUnwrittenNatives {false};
+	bool _onlyRanStubs {false};
 	/// The side tab to bring to the front, once
 	std::optional<int> _showSideTab;
 	std::unique_ptr<MemoryEditor> _dataView;
