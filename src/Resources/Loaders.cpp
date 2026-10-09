@@ -19,6 +19,7 @@
 
 #include <GLWFile.h>
 #include <GestureFile.h>
+#include <HelpDudeFile.h>
 #include <L3DFile.h>
 #include <MorphFile.h>
 #include <PackFile.h>
@@ -40,6 +41,7 @@
 #include "Common/Zip.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/Texture2D.h"
+#include "Help/AdvisorModel.h"
 #include "Locator.h"
 #include "Physics/Materials.h"
 
@@ -780,4 +782,22 @@ ParticleBitmapLoader::result_type ParticleBitmapLoader::operator()(FromDiskTag, 
 		throw std::runtime_error("Light map " + path.string() + " is not the size its effect says");
 	}
 	return std::make_shared<psys::StackedBitmap>(std::move(*bitmap));
+}
+
+AdvisorModelLoader::result_type AdvisorModelLoader::operator()(FromBufferTag, const std::string& debugName,
+                                                               const std::vector<uint8_t>& data) const
+{
+	auto model = std::make_shared<help::spirits::AdvisorModel>();
+	if (const auto result = helpdude::ReadHelpDudeFile(data, model->file); result != helpdude::HelpDudeResult::Success)
+	{
+		throw std::runtime_error("Unable to read the advisor " + debugName + ": " + std::string(helpdude::ResultToStr(result)));
+	}
+	model->data = help::spirits::DudeData::FromFile(model->file);
+	if (model->file.hasData && !model->file.mesh.empty())
+	{
+		auto mesh = L3DLoader {}(L3DLoader::FromBufferTag {}, debugName, model->file.mesh);
+		model->rig = help::spirits::MakeSpiritRig(mesh->GetBoneParents(), mesh->GetBoneMatrices());
+		model->mesh = std::move(mesh);
+	}
+	return model;
 }

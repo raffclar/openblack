@@ -38,6 +38,7 @@ public:
 	ParticleFileManager& GetParticleFiles() override { return _particleFiles; }
 	ParticleBitmapManager& GetParticleBitmaps() override { return _particleBitmaps; }
 	GestureTemplatesManager& GetGestureTemplates() override { return _gestureTemplates; }
+	AdvisorModelManager& GetAdvisorModels() override { return _advisorModels; }
 
 private:
 	MeshManager _meshes;
@@ -58,5 +59,6 @@ private:
 	ParticleFileManager _particleFiles;
 	ParticleBitmapManager _particleBitmaps;
 	GestureTemplatesManager _gestureTemplates;
+	AdvisorModelManager _advisorModels;
 };
 } // namespace openblack::resources

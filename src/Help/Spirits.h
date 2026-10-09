@@ -119,6 +119,10 @@ enum class Edge : int32_t
 
 /// (1 - cos(pi t)) / 2, 0 below 0 and 1 above 1
 [[nodiscard]] float Smooth(float t);
+/// An anim slot's name, as the voice cue tags name it
+[[nodiscard]] std::string_view AnimName(uint32_t anim);
+/// An emotion's name
+[[nodiscard]] std::string_view EmotionName(uint32_t emotion);
 
 /// The screen size in pixels
 struct Screen

@@ -412,6 +412,16 @@ ApplyAnimArgs ApplyAnimArguments(const skeletal_animation::Animation& clip, floa
 
 } // namespace
 
+std::string_view AnimName(uint32_t anim)
+{
+	return anim < k_AnimNames.size() ? k_AnimNames.at(anim) : "";
+}
+
+std::string_view EmotionName(uint32_t emotion)
+{
+	return emotion < k_EmotionNames.size() ? k_EmotionNames.at(emotion) : "";
+}
+
 float Smooth(float t)
 {
 	if (t < 0.0f)
