@@ -17,6 +17,7 @@
 #include <ECS/Map.h>
 #include <ECS/Registry.h>
 #include <ECS/Systems/PathfindingSystemInterface.h>
+#include <ECS/WallHugRules.h>
 #include <Game.h>
 #include <LHScriptX/Script.h>
 #include <Locator.h>
@@ -203,7 +204,8 @@ protected:
 
 	void TearDown() override { _game.reset(); }
 
-	void MobileWallHugScenarioAssert()
+	/// checkTurns: whether the turns to the next obstacle are checked as well
+	void MobileWallHugScenarioAssert(bool checkTurns = true)
 	{
 		auto& map = Locator::entitiesMap::value();
 		auto& registry = Locator::entitiesRegistry::value();
@@ -211,7 +213,8 @@ protected:
 		registry.Each<ecs::components::WallHug>([&registry, this](entt::entity entity, ecs::components::WallHug& wallHug) {
 			using namespace openblack::ecs::components;
 			registry.Assign<MoveStateLinearTag>(entity);
-			wallHug.speed = _expectedStates[0].speed;
+			// The recordings hold the speed in metres a turn; the walk holds it in metres a second
+			wallHug.speed = _expectedStates[0].speed * openblack::ecs::wall_hug::k_TurnsPerSecond;
 			wallHug.step = _expectedStates[0].step;
 			wallHug.goal = _expectedStates[0].goal;
 		});
@@ -306,7 +309,10 @@ protected:
 			{
 				ASSERT_TRUE(villagerHasObstacle) << msg;
 				const auto& ref = registry.Get<ecs::components::WallHugObjectReference>(_villagerEntt);
-				// ASSERT_EQ(ref.stepsAway, state.circle_hug_info.turns_to_obstacle) << msg;
+				if (checkTurns)
+				{
+					ASSERT_EQ(ref.stepsAway, state.circle_hug_info.turns_to_obstacle) << msg;
+				}
 			}
 
 			ASSERT_NO_THROW(Locator::pathfindingSystem::value().Update()) << msg;
@@ -331,7 +337,9 @@ TEST_F(MobileWallHugWalks, mobilewallhug1)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(MobileWallHugWalks, mobilewallhug2)
 {
-	MobileWallHugScenarioAssert();
+	// The game files a building in every map cell of its footprint; openblack files things by their bounding circles,
+	// so the walk misses a neighbouring house that the game sees a few turns ahead (and so its turns to it)
+	MobileWallHugScenarioAssert(false);
 }
 
 // TODO(bwrsandman): Remove DISABLED_ prefix once walking on footpath is implemented
