@@ -35,6 +35,7 @@
 #include "Creature/CreatureThrow.h"
 #include "Creature/CreatureWatching.h"
 #include "CreatureMindSystem.h"
+#include "CreatureMindSystemDetail.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Creature.h"
@@ -266,6 +267,18 @@ std::optional<uint32_t> CreatureMindSystem::CastMagicOf(uint32_t action)
 		return std::nullopt;
 	}
 	return magic;
+}
+
+std::optional<std::pair<float, float>> mind_detail::MiracleSightings(const CreatureMindState& mind,
+                                                                     const creature_mind_tables::Tables& tables,
+                                                                     CreatureType species, MagicType magic)
+{
+	const auto sightings = SightingsOf(mind, tables, species, static_cast<uint32_t>(magic));
+	if (!sightings.has_value())
+	{
+		return std::nullopt;
+	}
+	return std::pair {sightings->seen, sightings->needed};
 }
 
 bool CreatureMindSystem::MayCast(entt::entity creature, const CreatureMindState& mind, uint32_t action, bool powerUp)
