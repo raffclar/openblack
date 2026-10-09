@@ -32,6 +32,14 @@ if (OPENBLACK_USE_VCPKG AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
   )
 endif ()
 
+# The repository patches some vcpkg ports, such as bgfx's Vulkan limits, wherever vcpkg is used, presets or not
+if (OPENBLACK_USE_VCPKG AND NOT DEFINED VCPKG_OVERLAY_PORTS)
+  set(VCPKG_OVERLAY_PORTS
+      ${CMAKE_CURRENT_SOURCE_DIR}/vcpkg-overlay-ports
+      CACHE STRING "The repository's patched vcpkg ports"
+  )
+endif ()
+
 project(openblack VERSION 0.1.0)
 
 # Ninja runs a job per core and more, and every link of the many executables reads the whole static library, so many
