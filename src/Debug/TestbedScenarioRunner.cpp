@@ -75,6 +75,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -946,9 +947,28 @@ std::string Runner::GivePlayerCommand(const Command& command)
 	}
 	case Kind::HandTakeFireBall:
 		return HandTakeFireBall();
+	case Kind::HandTapObject:
+		return HandTapObject(command.object);
 	default:
 		return {};
 	}
+}
+
+std::string Runner::HandTapObject(size_t index)
+{
+	const auto object = ObjectAt(index);
+	if (!object.has_value() || !Locator::handSystem::has_value() || !Locator::abodeKnockSystem::has_value())
+	{
+		return "nothing to tap";
+	}
+	// A knock on a building by this computer's hand, from where the hand is, as the Action button pressed on it makes
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hand =
+	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	const auto* transform = registry.TryGet<const Transform>(hand);
+	const bool took =
+	    Locator::abodeKnockSystem::value().Tap(*object, transform != nullptr ? transform->position : glm::vec3(0.0f), true);
+	return took ? "knocked" : "it takes no knock";
 }
 
 std::string Runner::HandTakeFireBall()
@@ -1163,7 +1183,7 @@ bool Runner::IsFree(size_t creature) const
 void Runner::Give(const Command& command)
 {
 	if (command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed ||
-	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall)
+	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -1340,6 +1360,7 @@ void Runner::Give(const Command& command)
 	case Kind::SummonSeed:
 	case Kind::PressKey:
 	case Kind::HandTakeFireBall:
+	case Kind::HandTapObject:
 	case Kind::SetAlignment:
 	// The mouse commands are given before a creature is looked for
 	case Kind::PointerTo:
