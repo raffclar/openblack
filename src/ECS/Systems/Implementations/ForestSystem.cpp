@@ -55,6 +55,7 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/ScenicForest.h"
+#include "ECS/StoreRules.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
@@ -276,10 +277,11 @@ uint32_t ForestSystem::Plant(entt::entity spell, Spell& miracle, float tribalPow
 		const float yaw = random.GameFloatRand(k_TwoPi);
 		point.y = Locator::terrainSystem::value().GetHeightAt({point.x, point.z});
 		const float target = forest::TargetScale(glm::distance(glm::xz(point), glm::xz(centre)));
-		// The miracle's trees make a forest of their own, with its own number, made with its first tree
+		// The miracle's trees make a forest of their own, one of the land's forests with the land's next number, made
+		// where its first tree stands
 		if (forestEntity == entt::null)
 		{
-			forestId = _nextMiracleForestId++;
+			forestId = MakeLandForest(std::nullopt, point, entt::null, false);
 		}
 		const auto tree = ecs::archetypes::TreeArchetype::Create(forestId, point, type, true, yaw, target, 0.0f);
 		if (forestEntity == entt::null)
@@ -483,12 +485,13 @@ void ForestSystem::ProcessForests()
 
 uint32_t ForestSystem::MakeLandForest(std::optional<uint32_t> id, glm::vec3 position, entt::entity bigForest, bool scenic)
 {
-	// A number given is kept and moves the count past it; none takes the next
+	// A number given is kept, and moves the count past it when it is beyond the count (one equal to the count leaves it,
+	// so the next forest without a number shares it); none takes the next
 	uint32_t number = _nextLandForestId;
 	if (id.has_value() && *id != 0)
 	{
 		number = *id;
-		_nextLandForestId = std::max(_nextLandForestId, number + 1);
+		_nextLandForestId = land_forests::CountAfter(_nextLandForestId, number);
 	}
 	else
 	{
@@ -555,21 +558,30 @@ float ForestSystem::WoodOf(entt::entity forest) const
 {
 	const auto& registry = EntityRegistry();
 	const auto* record = registry.Valid(forest) ? registry.TryGet<const LandForest>(forest) : nullptr;
-	if (record == nullptr || !Locator::resourceStoreSystem::has_value())
+	if (record == nullptr || !Locator::infoConstants::has_value())
 	{
 		return 0.0f;
 	}
-	const auto& stores = Locator::resourceStoreSystem::value();
+	const auto& info = Locator::infoConstants::value();
+	// The big forest's wood, then its growing trees', then its grown trees', none of it truncated
 	float wood = 0.0f;
 	if (record->bigForest != entt::null && registry.Valid(record->bigForest))
 	{
-		wood += static_cast<float>(stores.ResourceOf(record->bigForest).amount);
+		if (const auto* big = registry.TryGet<const BigForest>(record->bigForest))
+		{
+			wood += ecs::store_rules::BigForestWood(ecs::world_objects::LifeOf(record->bigForest), big->worth);
+		}
 	}
-	for (const bool growing : {false, true})
+	const float balance = registry.Context().mapScriptGlobals.landBalance.at(5);
+	for (const bool growing : {true, false})
 	{
 		for (const auto tree : TreesOf(forest, growing))
 		{
-			wood += static_cast<float>(stores.ResourceOf(tree).amount);
+			const auto& kind = registry.Get<const Tree>(tree);
+			const auto* magic = registry.TryGet<const MagicTree>(tree);
+			wood += ecs::store_rules::TreeWoodValue(
+			    ecs::world_objects::LifeOf(tree), magic != nullptr ? magic->woodMultiplier : 1.0f,
+			    info.tree.at(static_cast<size_t>(kind.type)).woodValue, registry.Get<const Transform>(tree).scale.x, balance);
 		}
 	}
 	return wood;
@@ -764,7 +776,6 @@ void ForestSystem::MakeScenicForests()
 void ForestSystem::Reset()
 {
 	_lastTreeAddedTurn = 0;
-	_nextMiracleForestId = k_FirstMiracleForestId;
 	_nextLandForestId = 1;
 	_landForestsMade = 0;
 }

@@ -86,7 +86,8 @@ enum class ObjectPropertyType : uint8_t
 	Scale,
 	InHand,
 	// InHandAny,	<-- CI
-	InHandGrabypeSpeed,
+	InHandGrabType,
+	Speed,
 	RunningSpeed,
 	DefaultSpeed,
 	Death,

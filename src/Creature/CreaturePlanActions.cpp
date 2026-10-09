@@ -13,6 +13,7 @@
 #include <array>
 
 #include "Creature/CreatureCastAgenda.h"
+#include "Creature/CreatureFireAgenda.h"
 #include "Creature/CreatureLayers.h"
 
 using namespace openblack;
@@ -123,6 +124,11 @@ constexpr std::array k_Executors {
     Executor {.action = "CastMakeCreatureIll", .target = Target::Creature, .build = Build::CastPlayful},
     Executor {.action = "CastMakeCreatureThirsty", .target = Target::Creature, .build = Build::CastPlayful},
     Executor {.action = "CastMakeCreatureItchy", .target = Target::Creature, .build = Build::CastPlayful},
+    // Fire: putting it out with the water miracle, setting a thing alight with a burning thing, and the action of
+    // starting a fire, which the game never carries out
+    Executor {.action = "PutOutFireWithMagicWater", .target = Target::Burning, .build = Build::CastWater},
+    Executor {.action = "SetFireToObject", .target = Target::Unburnt, .build = Build::SetFire},
+    Executor {.action = "StartFire", .build = Build::Never},
 };
 
 /// The trip to the shoal to bring food out of the sea, none when it already has food in its hand; it walks straight to the
@@ -152,7 +158,7 @@ const Executor* creature_plan_actions::For(std::string_view action)
 bool creature_plan_actions::IsCast(const Executor& executor)
 {
 	return executor.build == Build::CastLightning || executor.build == Build::CastHelpful ||
-	       executor.build == Build::CastPlayful;
+	       executor.build == Build::CastPlayful || executor.build == Build::CastWater;
 }
 
 bool creature_plan_actions::Possible(const Executor& executor, const Situation& situation)
@@ -250,6 +256,12 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::CastPlayful:
 		return creature_mind::CastAt(creature_mind::CastStyle::Playful, cast->magicType, cast->gesture, *object, cast->height,
 		                             random);
+	case Build::CastWater:
+		return creature_mind::PutOutFireWithWater(*object, cast->height);
+	case Build::SetFire:
+		return creature_mind::SetFireTo(*object, situation.instrument, situation.handFull);
+	case Build::Never:
+		return std::nullopt;
 	}
 	return std::nullopt;
 }

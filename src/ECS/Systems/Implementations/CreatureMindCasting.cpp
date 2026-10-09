@@ -268,6 +268,24 @@ std::optional<uint32_t> CreatureMindSystem::CastMagicOf(uint32_t action)
 	return magic;
 }
 
+std::optional<std::pair<float, float>> CreatureMindSystem::MiracleSightings(entt::entity creature, MagicType type)
+{
+	const auto* tables = GetTables();
+	const auto& registry = Entities();
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (tables == nullptr || mind == nullptr || body == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto sightings = SightingsOf(*mind, *tables, body->species, static_cast<uint32_t>(type));
+	if (!sightings.has_value())
+	{
+		return std::nullopt;
+	}
+	return std::pair {sightings->seen, sightings->needed};
+}
+
 bool CreatureMindSystem::MayCast(entt::entity creature, const CreatureMindState& mind, uint32_t action, bool powerUp)
 {
 	const auto* tables = GetTables();
