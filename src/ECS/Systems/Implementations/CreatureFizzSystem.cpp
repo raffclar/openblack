@@ -107,12 +107,18 @@ void CreatureFizzSystem::ProcessTurn()
 
 void CreatureFizzSystem::UpdateFrame(float seconds)
 {
+	_eyeStaticScroll = creature_fizz_look::Scroll(_eyeStaticScroll, seconds);
 	Locator::entitiesRegistry::value().Each<CreatureSpells>([seconds](CreatureSpells& spells) {
 		if (creature_fizz_look::Fizzing(spells.fizz))
 		{
 			spells.staticScroll = creature_fizz_look::Scroll(spells.staticScroll, seconds);
 		}
 	});
+}
+
+glm::vec2 CreatureFizzSystem::EyeStaticScroll() const
+{
+	return _eyeStaticScroll;
 }
 
 float CreatureFizzSystem::FizzOf(entt::entity creature) const

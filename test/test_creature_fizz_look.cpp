@@ -61,3 +61,14 @@ TEST(CreatureFizzLook, TheStaticScrollsAndWraps)
 	// No time, no slide
 	EXPECT_EQ(Scroll({0.3f, 0.4f}, 0.0f), glm::vec2(0.3f, 0.4f));
 }
+
+TEST(CreatureFizzLook, HairAndReflectionGoAFifthOfTheWayOut)
+{
+	EXPECT_TRUE(HairShown(0.0f));
+	EXPECT_TRUE(HairShown(0.19f));
+	EXPECT_FALSE(HairShown(0.2f));
+	EXPECT_FALSE(HairShown(1.0f));
+	EXPECT_TRUE(ReflectionShown(0.0f));
+	EXPECT_TRUE(ReflectionShown(0.19f));
+	EXPECT_FALSE(ReflectionShown(0.2f));
+}

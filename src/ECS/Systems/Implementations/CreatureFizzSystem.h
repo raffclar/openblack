@@ -25,6 +25,10 @@ public:
 	void ProcessTurn() override;
 	void UpdateFrame(float seconds) override;
 	[[nodiscard]] float FizzOf(entt::entity creature) const override;
+	[[nodiscard]] glm::vec2 EyeStaticScroll() const override;
+
+private:
+	glm::vec2 _eyeStaticScroll {0.0f};
 };
 
 } // namespace openblack::ecs::systems

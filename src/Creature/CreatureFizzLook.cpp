@@ -22,6 +22,8 @@ constexpr uint8_t k_Gone = 255;
 constexpr uint8_t k_ThresholdBelowLevel = 5;
 constexpr float k_ScrollAcrossPerSecond = 0.1f;
 constexpr float k_ScrollDownPerSecond = 0.2f;
+/// How far a creature fizzes out before its hair and its reflection are gone
+constexpr float k_ExtrasGoneFizz = 0.2f;
 
 float Slide(float at, float perSecond, float seconds)
 {
@@ -58,6 +60,16 @@ float BodyAlpha(uint8_t level)
 glm::vec2 Scroll(glm::vec2 scroll, float seconds)
 {
 	return {Slide(scroll.x, k_ScrollAcrossPerSecond, seconds), Slide(scroll.y, k_ScrollDownPerSecond, seconds)};
+}
+
+bool HairShown(float fizz)
+{
+	return fizz < k_ExtrasGoneFizz;
+}
+
+bool ReflectionShown(float fizz)
+{
+	return fizz < k_ExtrasGoneFizz;
 }
 
 } // namespace openblack::creature_fizz_look
