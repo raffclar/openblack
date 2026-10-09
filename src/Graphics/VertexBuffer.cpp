@@ -188,3 +188,13 @@ void VertexBuffer::Update(const void* memory) const
 	}
 	bgfx::update(toBgfx(_dynamicHandle), 0, reinterpret_cast<const bgfx::Memory*>(memory));
 }
+
+void VertexBuffer::Update(uint32_t firstVertex, const void* memory) const
+{
+	assert(_dynamic);
+	if (!IsValid())
+	{
+		return;
+	}
+	bgfx::update(toBgfx(_dynamicHandle), firstVertex, reinterpret_cast<const bgfx::Memory*>(memory));
+}

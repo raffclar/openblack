@@ -273,6 +273,16 @@ struct ParticleSetup
 	float restartSeconds {0.0f};
 };
 
+/// A vortex between the lands opened as a script opens one, and later told to fade out
+struct VortexSetup
+{
+	VortexType type {VortexType::In};
+	glm::vec2 offset {0.0f};
+	/// Seconds into the scenario it is made, and after that it is told to fade out; none to stay
+	float delaySeconds {0.0f};
+	std::optional<float> fadeOutAfterSeconds;
+};
+
 /// A miracle dispenser, or a one-shot bubble on its own, put down for the scenario
 struct DispenserSetup
 {
@@ -550,6 +560,7 @@ struct Scenario
 	std::vector<CreatureSetup> creatures;
 	std::vector<ObjectSetup> objects;
 	std::vector<ParticleSetup> particles;
+	std::vector<VortexSetup> vortices;
 	std::vector<DispenserSetup> dispensers;
 	std::vector<MiracleCast> miracles;
 	std::vector<Command> commands;
@@ -592,6 +603,8 @@ void AddStormScenarios(std::vector<Scenario>& all);
 void AddFlockScenarios(std::vector<Scenario>& all);
 /// The teleport miracle: stones, villagers jumping between them
 void AddTeleportScenarios(std::vector<Scenario>& all);
+/// The vortices between the lands: opening, levelling the ground and closing
+void AddVortexScenarios(std::vector<Scenario>& all);
 /// The tornado's scenarios: through a village and a wood, and meeting a creature
 void AddTornadoScenarios(std::vector<Scenario>& all);
 /// The shield and forest miracles: what each shield stops and what it costs, the forest on each ground, growing and

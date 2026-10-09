@@ -95,6 +95,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
+#include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
@@ -455,6 +456,7 @@ void Runner::Start(const Scenario& scenario)
 	{
 		_particles.push_back({StartParticle(i), 0.0f});
 	}
+	_vortices.assign(scenario.vortices.size(), {});
 	Frame(scenario.framing.shot, scenario.framing.creature, scenario.framing.distance);
 	Log(fmt::format("Started {}", scenario.name));
 }
@@ -485,6 +487,15 @@ void Runner::Stop()
 		}
 	}
 	_particles.clear();
+	// Its vortices go, though the ground they levelled stays levelled as the game leaves it
+	for (const auto& running : _vortices)
+	{
+		if (running.vortex != entt::null && Locator::entitiesRegistry::value().Valid(running.vortex))
+		{
+			Locator::entitiesRegistry::value().Destroy(running.vortex);
+		}
+	}
+	_vortices.clear();
 	// Its held miracles stop, and the hand is the mouse's again
 	if (Locator::magicSystem::has_value())
 	{
@@ -1639,6 +1650,7 @@ void Runner::Update(float seconds)
 	Measure();
 	SpawnCrowd();
 	UpdateParticles(seconds);
+	UpdateVortices();
 	UpdateMiracles(seconds);
 	UpdateVillagerWalks();
 	UpdateThrows();
@@ -2044,6 +2056,32 @@ uint32_t Runner::StartParticle(size_t index) const
 		}
 	}
 	return effect;
+}
+
+void Runner::UpdateVortices()
+{
+	if (!Locator::vortexSystem::has_value() || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	auto& vortices = Locator::vortexSystem::value();
+	for (size_t i = 0; i < _vortices.size(); ++i)
+	{
+		const auto& setup = _scenario->vortices.at(i);
+		auto& running = _vortices.at(i);
+		if (running.vortex == entt::null && _seconds >= setup.delaySeconds)
+		{
+			const auto point = MapPoint(_middle, setup.offset);
+			running.vortex = vortices.Create({point.x, 0.0f, point.y}, setup.type, 0.0f);
+			Log(fmt::format("Vortex {} opened at {:.0f}, {:.0f}", i, point.x, point.y));
+		}
+		if (running.vortex != entt::null && !running.fading && setup.fadeOutAfterSeconds.has_value() &&
+		    _seconds >= setup.delaySeconds + *setup.fadeOutAfterSeconds)
+		{
+			running.fading = vortices.StartFadeOut(running.vortex);
+			Log(fmt::format("Vortex {} fading out", i));
+		}
+	}
 }
 
 void Runner::UpdateParticles(float seconds)

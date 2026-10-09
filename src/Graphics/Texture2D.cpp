@@ -93,6 +93,17 @@ void Texture2D::Update(const void* data, uint32_t size) const
 	bgfx::updateTexture2D(toBgfx(_handle), 0, 0, 0, 0, _resolution.x, _resolution.y, bgfx::copy(data, size));
 }
 
+void Texture2D::UpdateLayerRegion(uint16_t layer, glm::u16vec2 origin, glm::u16vec2 size, const void* data,
+                                  uint32_t bytes) const
+{
+	bgfx::updateTexture2D(toBgfx(_handle), layer, 0, origin.x, origin.y, size.x, size.y, bgfx::copy(data, bytes));
+}
+
+void Texture2D::UpdateLayer(uint16_t layer, const void* data, uint32_t size) const
+{
+	bgfx::updateTexture2D(toBgfx(_handle), layer, 0, 0, 0, _resolution.x, _resolution.y, bgfx::copy(data, size));
+}
+
 void Texture2D::DumpTexture() const
 {
 	assert(!_name.empty());

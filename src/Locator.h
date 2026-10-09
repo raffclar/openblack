@@ -145,6 +145,7 @@ class MagicSystemInterface;
 class GestureEventsInterface;
 class ReactionSystemInterface;
 class TeleportSystemInterface;
+class VortexSystemInterface;
 class TornadoSystemInterface;
 class MagicShieldSystemInterface;
 class ForestSystemInterface;
@@ -240,6 +241,7 @@ struct Locator
 	using gestureEvents = entt::locator<ecs::systems::GestureEventsInterface>;
 	using reactionSystem = entt::locator<ecs::systems::ReactionSystemInterface>;
 	using teleportSystem = entt::locator<ecs::systems::TeleportSystemInterface>;
+	using vortexSystem = entt::locator<ecs::systems::VortexSystemInterface>;
 	using tornadoSystem = entt::locator<ecs::systems::TornadoSystemInterface>;
 	using magicShieldSystem = entt::locator<ecs::systems::MagicShieldSystemInterface>;
 	using forestSystem = entt::locator<ecs::systems::ForestSystemInterface>;

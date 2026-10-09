@@ -156,6 +156,7 @@
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
+#include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -991,6 +992,11 @@ bool Game::GameLogicLoop() noexcept
 	if (Locator::handGrabSystem::has_value())
 	{
 		Locator::handGrabSystem::value().ProcessTurn();
+	}
+	// At the end of the turn the vortices between the lands open, close and level the ground under them
+	if (Locator::vortexSystem::has_value())
+	{
+		Locator::vortexSystem::value().ProcessTurn();
 	}
 
 	// Each turn ends with the camera taking the alignment of the player of most influence where it is
