@@ -180,6 +180,18 @@ GameMusic::~GameMusic()
 	}
 }
 
+void GameMusic::RegisterBanks()
+{
+	auto& audio = Locator::audio::value();
+	for (const auto& type : k_MusicTypes)
+	{
+		if (!type.bank.empty())
+		{
+			[[maybe_unused]] const auto info = audio.GetMusicBankInfo(std::string(type.bank));
+		}
+	}
+}
+
 void GameMusic::Reset()
 {
 	Locator::audio::value().MusicStop(false);

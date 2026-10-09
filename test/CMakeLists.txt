@@ -115,6 +115,10 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_pack_bank_info pack/test_pack_bank_info.cpp)
 target_link_libraries(test_pack_bank_info PRIVATE pack)
+openblack_setup_and_add_test(
+  test_pack_audio_index pack/test_pack_audio_index.cpp
+)
+target_link_libraries(test_pack_audio_index PRIVATE pack)
 openblack_setup_and_add_test(test_game_random test_game_random.cpp)
 openblack_setup_and_add_test(test_crash_report test_crash_report.cpp)
 openblack_setup_and_add_test(test_game_clock test_game_clock.cpp)

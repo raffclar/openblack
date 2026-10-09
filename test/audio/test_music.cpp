@@ -93,7 +93,8 @@ std::shared_ptr<MusicBank> MakeBank(uint32_t chunks, int32_t group)
 {
 	auto bank = std::make_shared<MusicBank>();
 	bank->groupId = group;
-	bank->chunks.resize(chunks, std::vector<uint8_t>(1));
+	bank->chunkCount = chunks;
+	bank->readChunk = [](uint32_t) { return std::vector<uint8_t>(1); };
 	return bank;
 }
 
