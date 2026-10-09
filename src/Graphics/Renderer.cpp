@@ -225,13 +225,13 @@ const Texture2D* SnowDepth(std::unique_ptr<Texture2D>& texture, std::optional<ui
 	return texture.get();
 }
 
-/// The pass what blends in a scene goes to: its own pass after the scene's, but in the temple the scene's own, which
-/// draws everything in the order it comes
-RenderPass TranslucentView(RenderPass scene)
+} // namespace
+
+RenderPass Renderer::TranslucentView(RenderPass scene)
 {
+	// In the temple the scene's own pass draws everything in the order it comes
 	return Locator::temple::has_value() && Locator::temple::value().Active() ? scene : TranslucentPassOf(scene);
 }
-} // namespace
 
 /// How far back, as a fraction of their depth, the temple's rooms the player isn't in are drawn: a few millimetres at the
 /// doorways, past the rounding of the copies of their arches
@@ -829,8 +829,13 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 		             glm::translate(glm::mat4(1.0f), -joint->pivot);
 		modelMatrices = &jointModel;
 	}
-	// A creature's body takes its blended skins in place of its base mesh's
+	// A creature's body takes its blended skins in place of its base mesh's. A draw given a skin of its own (the
+	// temple's icons) binds that for every skinned primitive, so their own skins aren't looked up.
 	const auto skinOf = [&desc, &skins](uint32_t skinID) -> const Texture2D* {
+		if (desc.skinTexture != nullptr && skinID != 0xFFFFFFFF)
+		{
+			return nullptr;
+		}
 		if (desc.morphTargets != nullptr)
 		{
 			const auto& blended = desc.morphTargets->skins;
@@ -4860,6 +4865,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawTempleMap(desc);
 			DrawTempleMapMarkers(desc);
 			DrawCaveTrophies(desc);
+			DrawCaveSeeds(desc);
 			DrawGroundBlobs(desc);
 			DrawGlobes(desc);
 			DrawHandMiracleBands(desc);

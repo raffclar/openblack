@@ -59,6 +59,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/LivingAction.h"
@@ -1352,8 +1353,19 @@ void Runner::Give(const Command& command)
 	case Kind::SetDesire:
 	case Kind::SetPhase:
 	case Kind::RewardIf:
+	case Kind::SetMiracleSightings:
 		result = TeachMind(*entity, command);
 		break;
+	case Kind::SetFightLean:
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		auto* found = registry.TryGet<ecs::components::CreatureFightRecord>(*entity);
+		auto& record = found != nullptr ? *found : registry.Assign<ecs::components::CreatureFightRecord>(*entity);
+		record.tendency = command.amount;
+		record.foughtBefore = true;
+		result = fmt::format("leans {:+.2f}", record.tendency);
+		break;
+	}
 	case Kind::SeeSkill:
 		minds.SeeSkill(Locator::entitiesRegistry::value().Get<Transform>(*entity).position, command.value);
 		break;
@@ -1464,6 +1476,21 @@ std::string Runner::TeachMind(entt::entity entity, const Command& command)
 	case Kind::SetPhase:
 		mind->developmentPhase = static_cast<uint32_t>(command.value);
 		return fmt::format("stage {}", command.value);
+	case Kind::SetMiracleSightings:
+	{
+		if (!mind->learnt.has_value())
+		{
+			return "nothing learnt yet";
+		}
+		auto& knowledge = mind->learnt->knowledge;
+		if (command.value >= knowledge.miraclesSeen.size() || command.value >= knowledge.miraclesKnown.size())
+		{
+			return "no such miracle";
+		}
+		knowledge.miraclesSeen.at(command.value).count = static_cast<uint32_t>(command.amount);
+		knowledge.miraclesKnown.at(command.value) = true;
+		return fmt::format("miracle {} seen {} times", command.value, knowledge.miraclesSeen.at(command.value).count);
+	}
 	case Kind::RewardIf:
 		// From now on each thing it does to something is judged as soon as it is done
 		mind->trainer = static_cast<uint32_t>(command.value);

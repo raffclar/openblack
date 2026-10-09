@@ -467,6 +467,11 @@ struct Command
 		WheelTurn,
 		/// The player's alignment jumps, which the hand shows
 		SetAlignment,
+		/// Its history, as the Creature Cave's trophies show it: how it leans in fights (amount, -1 defensive to 1
+		/// aggressive) as if it had fought; how many times it has seen a miracle (value, by its magic type; amount, the
+		/// times), which it then knows about
+		SetFightLean,
+		SetMiracleSightings,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

@@ -200,6 +200,7 @@ public:
 	void SetPlayer(EffectId id, int player) override;
 	void SetDrawPath(EffectId id, particles::draw::DrawPath path) override;
 	void SetDrawOffset(EffectId id, glm::vec3 offset) override;
+	void SetInTemple(EffectId id) override;
 	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const override;
 	[[nodiscard]] size_t GetSoundCount() const override { return _world.SoundCount(); }
 	void AddTarget(EffectId id, entt::entity target) override;
@@ -216,7 +217,7 @@ public:
 	void ProcessTurn() override;
 	void Reset() override;
 
-	void CollectDrawFrame(float turnFraction, particles::draw::Frame& frame) const override;
+	void CollectDrawFrame(float turnFraction, particles::draw::Frame& frame, bool inTemple) const override;
 	[[nodiscard]] DrawStats GetDrawStats() const override { return _drawStats; }
 	[[nodiscard]] std::vector<EffectInfo> GetEffects() const override;
 	[[nodiscard]] std::vector<std::string> GetFileNames() const override;
@@ -239,6 +240,8 @@ private:
 		bool ownedBySpell {false};
 		/// Stepped every frame, not by ProcessTurn
 		bool everyFrame {false};
+		/// One of the temple's rooms' effects, drawn only while the player is in the temple
+		bool inTemple {false};
 		/// A spot visual's turns left, negative for ever
 		std::optional<int> turnsLeft;
 		/// An object it follows and ends with
