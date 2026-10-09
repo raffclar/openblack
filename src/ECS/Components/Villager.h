@@ -64,7 +64,8 @@ struct Villager
 
 	using Type = std::tuple<Tribe, Villager::LifeStage, Villager::Sex, VillagerNumber>;
 
-	uint32_t health;
+	/// Its life, from dead at 0 to full at 1
+	float life {1.0f};
 	/// The turn it was born on; its age in years counts from it
 	uint32_t birthTurn;
 	/// How full it is, from empty at 0 to full at 1. A newly made villager can start a little over full.
