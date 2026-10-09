@@ -15,6 +15,8 @@ concurrency:
 
 jobs:
   aur:
+    # Pull requests labelled "ai-driven" skip CI
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'ai-driven') }}
     name: Arch Linux AUR Packaging
     runs-on: ubuntu-latest
     container:
@@ -125,6 +127,8 @@ jobs:
           if-no-files-found: error
 
   flatpak:
+    # Pull requests labelled "ai-driven" skip CI
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'ai-driven') }}
     name: Package for flatpak
     runs-on: ubuntu-latest
     container:
@@ -154,6 +158,8 @@ jobs:
           if-no-files-found: error
 
   appimage:
+    # Pull requests labelled "ai-driven" skip CI
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'ai-driven') }}
     name: Package for appimage
     runs-on: ubuntu-24.04
     steps:
@@ -188,6 +194,8 @@ jobs:
           if-no-files-found: error
 
   snapcraft:
+    # Pull requests labelled "ai-driven" skip CI
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'ai-driven') }}
     name: Package for snap
     runs-on: ubuntu-latest
     steps:
