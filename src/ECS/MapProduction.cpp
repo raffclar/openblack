@@ -76,6 +76,7 @@ void ForEachMapComponent(Func&& func)
 	func.template operator()<Creature>();
 	func.template operator()<Animal>();
 	func.template operator()<MobileObject>();
+	func.template operator()<Ball>();
 	func.template operator()<RewardOnLand>();
 }
 

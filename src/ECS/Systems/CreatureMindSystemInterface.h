@@ -16,6 +16,7 @@
 #include <string_view>
 #include <vector>
 
+#include <entt/entity/entity.hpp>
 #include <entt/entity/fwd.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -114,6 +115,24 @@ public:
 	/// The creature is made to catch a thing flying at it: what it was doing fails, and it plays with the thing by catching
 	/// it, wanting to play less for a while
 	virtual void ForceCatch(entt::entity /*creature*/, entt::entity /*object*/) {}
+	/// A plan forced on a creature, as a reaction forces one: the desire it serves, the thing the desire is served
+	/// through (none for the desire itself), the action by its name in the game's table, the thing acted on, and the
+	/// thing used, if any
+	struct ForcedActivity
+	{
+		creature_desires::Desire desire {creature_desires::Desire::Fear};
+		std::optional<entt::entity> activityObject;
+		std::string_view action;
+		entt::entity actionObject {entt::null};
+		std::optional<entt::entity> instrument;
+	};
+	/// What the creature was doing stops as a failure and it carries out the plan instead: whether it could. A plan
+	/// carried out is remembered for the player's feedback (unless nothing says why it wants it), and the desires the
+	/// plan's desire opposes are held back.
+	virtual bool ForceActivity(entt::entity /*creature*/, const ForcedActivity& /*plan*/) { return false; }
+	/// A fire reaches the creature: it goes to put out a fire on something it cares for enough, once it has seen the
+	/// water miracle often enough to cast it, and runs from the burning thing otherwise
+	virtual void ReactToFire(entt::entity /*creature*/, entt::entity /*burning*/) {}
 	/// A nasty miracle struck near the creature: it is frightened by it, and runs from where it struck, or goes to look
 	/// at it when it isn't afraid or is on the learning leash; it learns the miracle when it may
 	virtual void ReactToNastyMagic(entt::entity /*creature*/, const glm::vec3& /*point*/, std::optional<size_t> /*learn*/) {}
