@@ -67,6 +67,7 @@ public:
 	[[nodiscard]] PlayerNames HandPlayer() const override { return PlayerNames::PLAYER_ONE; }
 	[[nodiscard]] std::optional<entt::entity> ObjectUnderCursor() const override { return underCursor; }
 	[[nodiscard]] bool InInfluence(PlayerNames, glm::vec3) const override { return influence; }
+	void HeldThingUsedOnLand(PlayerNames player) override { usedOnLand.push_back(player); }
 	[[nodiscard]] bool InBounds(glm::vec3) const override { return true; }
 	[[nodiscard]] glm::vec3 LandNormalAt(glm::vec3) const override { return {0.0f, 1.0f, 0.0f}; }
 	[[nodiscard]] Size SizeOf(entt::entity object) const override
@@ -249,6 +250,7 @@ public:
 	entt::entity hand {entt::null};
 	std::optional<entt::entity> underCursor;
 	bool influence {true};
+	std::vector<PlayerNames> usedOnLand;
 	std::map<entt::entity, Size> sizes;
 	std::map<entt::entity, float> weights;
 	std::set<entt::entity> flying;
@@ -462,6 +464,64 @@ TEST_F(HandGrabSystemWithWorld, TheSpringTakesHoldTheFrameAfterThePressAndThrows
 	EXPECT_EQ(world->released.front().first, rock);
 	EXPECT_GT(world->released.front().second.x, 0.0f);
 	EXPECT_FALSE(system->GetHeld().has_value());
+}
+
+TEST_F(HandGrabSystemWithWorld, LettingGoOntoTheLandCountsAsATurnForTheInfluenceKeptPastTheBorder)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_TRUE(system->GetHeld().has_value());
+	// Taking it up isn't using it on the land
+	EXPECT_TRUE(world->usedOnLand.empty());
+	world->underCursor.reset();
+	Frame(10);
+	// Let go out of the influence the hand keeps hold, and nothing counts
+	Press();
+	Frame(10);
+	world->influence = false;
+	Frame(10);
+	Release();
+	EXPECT_TRUE(system->GetHeld().has_value());
+	EXPECT_TRUE(world->usedOnLand.empty());
+	// Let go inside it counts once, as it is thrown
+	world->influence = true;
+	Frame(10);
+	Press();
+	Frame(10);
+	Release();
+	EXPECT_EQ(world->usedOnLand, std::vector<PlayerNames> {PlayerNames::PLAYER_ONE});
+	ASSERT_EQ(world->released.size(), 1u);
+}
+
+TEST_F(HandGrabSystemWithWorld, APressOutsideTheInfluenceDoesNotMakeReadyToThrow)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_TRUE(system->GetHeld().has_value());
+	world->underCursor.reset();
+	world->influence = false;
+	Frame(10);
+	Press();
+	Frame(10);
+	// Back inside before the button is let go: still held, not thrown
+	world->influence = true;
+	Frame(10);
+	Release();
+	EXPECT_TRUE(system->GetHeld().has_value());
+	EXPECT_TRUE(world->released.empty());
+	EXPECT_TRUE(world->usedOnLand.empty());
 }
 
 TEST_F(HandGrabSystemWithWorld, WhatIsLetGoGetsItsTwistAFifthOfASecondLater)

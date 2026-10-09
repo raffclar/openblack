@@ -168,6 +168,14 @@ bool GameHandGrabWorld::HandInInfluence(PlayerNames player, glm::vec3 hand) cons
 	return Locator::influenceSystem::has_value() && Locator::influenceSystem::value().IsHandInInfluence(player, hand);
 }
 
+void GameHandGrabWorld::HeldThingUsedOnLand(PlayerNames player)
+{
+	if (Locator::influenceSystem::has_value())
+	{
+		Locator::influenceSystem::value().HeldThingUsedOnLand(player);
+	}
+}
+
 bool GameHandGrabWorld::InBounds(glm::vec3 point) const
 {
 	return map_coords::InBounds(point);
