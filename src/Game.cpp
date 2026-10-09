@@ -275,6 +275,7 @@ Game::Game(Arguments&& args) noexcept
     , _startMap(args.startLevel)
     , _startTestbed(args.startTestbed || args.scenario.has_value())
     , _scenarioRequest(args.scenario)
+    , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
     , _requestScreenshot(args.requestScreenshot)
 {
 	Locator::camera::emplace(glm::zero<glm::vec3>());
@@ -2725,7 +2726,7 @@ void Game::LoadTestbed() noexcept
 	testbed_dispensers::PlaceGrid(middle);
 
 	// The testbed comes with its window of scenarios to try out on it
-	if (Locator::debugGui::has_value())
+	if (Locator::debugGui::has_value() && _testbedWindow)
 	{
 		Locator::debugGui::value().OpenWindow(debug::gui::k_TestbedScenariosWindow);
 	}
@@ -2754,6 +2755,7 @@ void Game::PrepareNewLand()
 	Locator::magicSystem::value().Reset();
 	Locator::miracleFxSystem::value().Reset();
 	Locator::fireSystem::value().Reset();
+	Locator::creatureFightSystem::value().Reset();
 	Locator::explosionSystem::value().Reset();
 	Locator::magicSystem::value().SetIgnoreInfluence(false);
 	Locator::animalSystem::value().Reset();

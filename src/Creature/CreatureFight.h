@@ -532,14 +532,4 @@ constexpr float k_PickFightPerSize = 60.0f;
 /// It waits this long after a fight before picking another
 constexpr float k_SecondsBetweenFights = 120.0f;
 [[nodiscard]] bool WantsToFight(float anger, float life, float distance, float size, float secondsSinceFight);
-
-/// The camera watches a fight from the arena's radius away to a side and half of it up, looking at the middle. The game
-/// always looks from the east, along the line the fighters start on; here it looks from across the line between them,
-/// so both are seen side on.
-[[nodiscard]] glm::vec3 CameraOrigin(const Arena& arena, float ground, glm::vec2 side);
-/// The side to watch two fighters from: across the line between them
-[[nodiscard]] glm::vec2 CameraSide(glm::vec2 a, glm::vec2 b);
-/// The game's camera stays on the arena; here it follows the fighters once they move this share of the radius away
-/// from where it looks
-constexpr float k_CameraFollowShare = 0.3f;
 } // namespace openblack::creature_fight

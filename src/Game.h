@@ -81,6 +81,8 @@ struct ScenarioRequest
 	uint32_t warmUpFrames {120};
 	uint32_t frames {600};
 	std::optional<std::filesystem::path> results;
+	/// Without the testbed's window of scenarios over the view, as for screenshots of what a scenario shows
+	bool hideWindow {false};
 };
 
 struct Arguments
@@ -198,6 +200,8 @@ private:
 	std::filesystem::path _startMap;
 	bool _startTestbed {false};
 	std::optional<ScenarioRequest> _scenarioRequest;
+	/// Whether the testbed opens its window of scenarios
+	bool _testbedWindow {true};
 	bool _quitRequested {false};
 
 	std::chrono::steady_clock::time_point _lastGameLoopTime;

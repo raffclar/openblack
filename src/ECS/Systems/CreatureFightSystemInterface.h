@@ -48,6 +48,9 @@ public:
 	/// Once a game turn, after the creatures have moved: fights start and end, moves are chosen and made, stamina comes
 	/// back, and creatures knocked out come round
 	virtual void ProcessTurn() = 0;
+	/// A new land: it forgets the press it held, the fight the camera watched and how long it looked at an arena, and
+	/// lets the player leave fights again; the creatures and their fights went with the old land
+	virtual void Reset() = 0;
 	/// Once a frame, by the game time, before the creatures are placed: the fight animations play, blows land and the
 	/// fighters move as their animations carry them
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
@@ -108,14 +111,17 @@ public:
 	/// The panel of the fight the player's creature is in, or else of any fight, if there is one
 	[[nodiscard]] virtual std::optional<creature_fight_hud::Values> GetPanel() const = 0;
 
-	/// Whether angry creatures pick fights by themselves, and whether the camera goes to watch the player's creature's
-	/// fights
+	/// Whether angry creatures pick fights by themselves, and whether the camera may watch fights
 	virtual void SetAngerStartsFights(bool enabled) = 0;
 	[[nodiscard]] virtual bool GetAngerStartsFights() const = 0;
 	virtual void SetCameraWatches(bool enabled) = 0;
 	[[nodiscard]] virtual bool GetCameraWatches() const = 0;
-	/// Whether the camera is watching the player's creature fight now
+	/// Whether the camera's fight view is watching a fight now
 	[[nodiscard]] virtual bool IsCameraOnFight() const = 0;
+	/// Whether the player may zoom out of the fight view, and the view ends by itself after the fight (scripts may forbid
+	/// it)
+	virtual void SetFightExit(bool /*allowed*/) {}
+	[[nodiscard]] virtual bool GetFightExit() const { return true; }
 };
 
 } // namespace openblack::ecs::systems

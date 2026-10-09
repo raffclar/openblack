@@ -27,6 +27,7 @@
 #include "3D/LandIslandInterface.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
+#include "Camera/FightCameraModel.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
@@ -43,6 +44,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -344,11 +346,9 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 	const auto arena = fight::MakeArena(Flat(from), Flat(to), registry.Get<const Creature>(creature).size,
 	                                    registry.Get<const Creature>(opponent).size);
 
-	bool watched = false;
 	for (const auto& [self, other] : {std::pair(creature, opponent), std::pair(opponent, creature)})
 	{
 		const auto& body = registry.Get<const Creature>(self);
-		watched = watched || PrimaryCreatureOf(registry, k_LocalPlayer) == self;
 		if (Locator::creatureLocomotionSystem::has_value())
 		{
 			Locator::creatureLocomotionSystem::value().Stop(self);
@@ -383,52 +383,149 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 		registry.AssignOrReplace<CreatureFighting>(self, std::move(fighting));
 	}
 
-	// The camera goes to watch the player's creature fight, from the side of the arena
-	if (watched && _cameraWatches)
-	{
-		Watch(arena, fight::CameraSide(Flat(from), Flat(to)));
-	}
 	return StartResult::Started;
 }
 
-void CreatureFightSystem::Watch(const fight::Arena& arena, glm::vec2 side)
+namespace
+{
+/// A fight's arena is on from when the fight starts until the duel is over
+bool ArenaOn(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* fighting = registry.Valid(creature) ? registry.TryGet<const CreatureFighting>(creature) : nullptr;
+	return fighting != nullptr && fighting->stage <= CreatureFighting::Stage::Duel;
+}
+
+fight_view::Fighter ViewedFighter(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* locomotion = registry.TryGet<const CreatureLocomotion>(creature);
+	return {.position = registry.Get<const Transform>(creature).position,
+	        .radius = locomotion != nullptr ? locomotion->radius : 5.0f,
+	        .height = HeightOf(registry.Get<const Creature>(creature).size)};
+}
+} // namespace
+
+void CreatureFightSystem::Reset()
+{
+	_pressed.reset();
+	EndView();
+	_lookSeconds = 0.0f;
+	_fightExit = true;
+}
+
+void CreatureFightSystem::UpdateView(float seconds)
 {
 	if (!Locator::camera::has_value())
 	{
 		return;
 	}
-	const auto ground = GroundAt(arena.centre);
-	Locator::camera::value().GetModel().SetFlight(fight::CameraOrigin(arena, ground, side),
-	                                              glm::vec3(arena.centre.x, ground, arena.centre.y));
-	_watched = arena.centre;
-}
-
-void CreatureFightSystem::FollowDuel()
-{
-	// The camera keeps the player's creature's duel framed, following the fighters as they move about the arena
-	auto& registry = Locator::entitiesRegistry::value();
-	std::optional<fight::Arena> framed;
-	glm::vec2 side {1.0f, 0.0f};
-	registry.Each<const CreatureFighting, const Creature, const Transform>(
-	    [&](const CreatureFighting& fighting, const Creature& creature, const Transform& transform) {
-		    if (framed.has_value() || creature.owner != PlayerNames::PLAYER_ONE ||
-		        fighting.stage != CreatureFighting::Stage::Duel || !registry.Valid(fighting.opponent))
-		    {
-			    return;
-		    }
-		    const auto other = Flat(registry.Get<const Transform>(fighting.opponent).position);
-		    framed = fight::Arena {.centre = (Flat(transform.position) + other) * 0.5f, .radius = fighting.arena.radius};
-		    side = fight::CameraSide(Flat(transform.position), other);
-	    });
-	if (!framed.has_value())
+	auto& camera = Locator::camera::value();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (_view.has_value())
 	{
-		_watched.reset();
+		auto* model = dynamic_cast<FightCameraModel*>(&camera.GetModel());
+		if (model == nullptr)
+		{
+			_view.reset();
+			return;
+		}
+		_lookSeconds = 0.0f;
+		if (_view->lingerSeconds.has_value())
+		{
+			*_view->lingerSeconds -= seconds;
+			if (*_view->lingerSeconds < 0.0f)
+			{
+				EndView();
+			}
+			return;
+		}
+		if (ArenaOn(registry, _view->first) && ArenaOn(registry, _view->second))
+		{
+			model->SetFighters(ViewedFighter(registry, _view->first), ViewedFighter(registry, _view->second));
+			// Zoomed far enough out, the player leaves the fight, if they may
+			if (model->ZoomedOut() && _fightExit)
+			{
+				EndView();
+			}
+			return;
+		}
+		// Once the fight is over the view lingers a little, if it may end by itself
+		if (_fightExit)
+		{
+			_view->lingerSeconds = fight_view::k_EndSoonSeconds;
+		}
 		return;
 	}
-	if (_cameraWatches &&
-	    (!_watched.has_value() || glm::distance(*_watched, framed->centre) > framed->radius * fight::k_CameraFollowShare))
+	if (!_cameraWatches)
 	{
-		Watch(*framed, side);
+		return;
+	}
+	// Looking at an arena with a fight on from within it for a while starts the fight view
+	const auto eye = camera.GetOrigin(Camera::Interpolation::Target);
+	const auto looking = camera.GetFocus(Camera::Interpolation::Target);
+	std::optional<std::pair<entt::entity, entt::entity>> found;
+	fight::Arena foundArena;
+	registry.Each<const CreatureFighting>([&](entt::entity entity, const CreatureFighting& fighting) {
+		if (found.has_value() || !fighting.madeArena || !ArenaOn(registry, entity) || !ArenaOn(registry, fighting.opponent))
+		{
+			return;
+		}
+		if (fight_view::WithinArena({eye.x, eye.z}, {looking.x, looking.z}, fighting.arena.centre, fighting.arena.radius))
+		{
+			found = std::pair(entity, fighting.opponent);
+			foundArena = fighting.arena;
+		}
+	});
+	if (!found.has_value())
+	{
+		return;
+	}
+	_lookSeconds += seconds;
+	if (_lookSeconds > fight_view::k_LookSeconds)
+	{
+		TryStartView(found->first, found->second, foundArena);
+	}
+}
+
+void CreatureFightSystem::TryStartView(entt::entity first, entt::entity second, const fight::Arena& arena)
+{
+	auto& camera = Locator::camera::value();
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto own = PrimaryCreatureOf(registry, k_LocalPlayer);
+	const bool involved = own == first || own == second;
+	const bool scripted = registry.AnyOf<ScriptControlled>(first) || registry.AnyOf<ScriptControlled>(second);
+	const auto eye = camera.GetOrigin(Camera::Interpolation::Target);
+	const auto looking = camera.GetFocus(Camera::Interpolation::Target);
+	// The player's creature's fight under a script's control is always watched; any other only from near enough
+	if (!(involved && scripted) && fight_view::TooFar({eye.x, eye.z}, {looking.x, looking.z}, arena.centre, arena.radius, 1.0f))
+	{
+		// TODO(advisors): for the player's creature, the advisors say one of their lines about its fight instead
+		return;
+	}
+	const auto ground = GroundAt(arena.centre);
+	const auto normal = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetNormalAt(arena.centre)
+	                                                        : glm::vec3(0.0f, 1.0f, 0.0f);
+	const auto start = fight_view::Start(arena.centre, arena.radius, ground, GroundAt, normal);
+	auto model = std::make_unique<FightCameraModel>(nullptr, start);
+	auto* view = model.get();
+	view->SetPlayerModel(camera.SetModel(std::move(model)));
+	_view = Watched {.first = first, .second = second, .lingerSeconds = std::nullopt};
+	_lookSeconds = 0.0f;
+}
+
+void CreatureFightSystem::EndView()
+{
+	_view.reset();
+	if (!Locator::camera::has_value())
+	{
+		return;
+	}
+	auto& camera = Locator::camera::value();
+	if (auto* model = dynamic_cast<FightCameraModel*>(&camera.GetModel()))
+	{
+		if (auto player = model->TakePlayerModel())
+		{
+			camera.SetModel(std::move(player));
+		}
 	}
 }
 
@@ -832,28 +929,16 @@ bool CreatureFightSystem::IsKnockedOut(entt::entity creature) const
 
 std::optional<creature_fight_hud::Values> CreatureFightSystem::GetPanel() const
 {
+	// Shown while the camera watches a fight, the creature that made the arena first
 	const auto& registry = Locator::entitiesRegistry::value();
-	std::optional<entt::entity> shown;
-	bool playersOwn = false;
-	registry.Each<const CreatureFighting, const Creature>(
-	    [&](entt::entity entity, const CreatureFighting& fighting, const Creature& creature) {
-		    if (fighting.stage != CreatureFighting::Stage::Duel || !registry.Valid(fighting.opponent))
-		    {
-			    return;
-		    }
-		    const bool own = creature.owner == PlayerNames::PLAYER_ONE;
-		    if (!shown.has_value() || (own && !playersOwn))
-		    {
-			    shown = entity;
-			    playersOwn = own;
-		    }
-	    });
-	if (!shown.has_value())
+	if (!_view.has_value() || _view->lingerSeconds.has_value() || !registry.Valid(_view->first) ||
+	    !registry.Valid(_view->second))
 	{
 		return std::nullopt;
 	}
+	const auto shown = std::optional(_view->first);
+	const auto opponent = _view->second;
 	creature_fight_hud::Values values;
-	const auto opponent = registry.Get<const CreatureFighting>(*shown).opponent;
 	for (size_t i = 0; i < values.sides.size(); ++i)
 	{
 		const auto entity = i == 0 ? *shown : opponent;
@@ -881,7 +966,6 @@ void CreatureFightSystem::ProcessTurn()
 	ProcessStages();
 	ProcessDuels();
 	ProcessKnockedOut();
-	FollowDuel();
 }
 
 void CreatureFightSystem::StartFightsFromMinds()
@@ -1392,6 +1476,7 @@ void CreatureFightSystem::Update(std::chrono::duration<float, std::milli> gameTi
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto milliseconds = gameTime.count();
+	UpdateView(milliseconds / 1000.0f);
 	std::vector<entt::entity> fighters;
 	registry.Each<CreatureFighting>([&fighters](entt::entity entity, CreatureFighting& fighting) {
 		if (fighting.fighter.state != fight::State::Idle)

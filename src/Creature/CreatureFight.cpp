@@ -845,15 +845,3 @@ bool creature_fight::WantsToFight(float anger, float life, float distance, float
 	return anger >= k_AngerToFight && HealthyEnoughToFight(life) && distance <= k_PickFightPerSize * size &&
 	       secondsSinceFight >= k_SecondsBetweenFights;
 }
-
-glm::vec3 creature_fight::CameraOrigin(const Arena& arena, float ground, glm::vec2 side)
-{
-	const auto away = glm::length(side) > 0.0f ? glm::normalize(side) * arena.radius : glm::vec2(arena.radius, 0.0f);
-	return {arena.centre.x + away.x, ground + (arena.radius * 0.5f), arena.centre.y + away.y};
-}
-
-glm::vec2 creature_fight::CameraSide(glm::vec2 a, glm::vec2 b)
-{
-	const auto along = b - a;
-	return glm::length(along) > 0.0f ? glm::normalize(glm::vec2(-along.y, along.x)) : glm::vec2(1.0f, 0.0f);
-}

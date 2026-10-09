@@ -24,6 +24,7 @@ class CreatureFightSystem final: public CreatureFightSystemInterface
 {
 public:
 	void ProcessTurn() override;
+	void Reset() override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 
 	StartResult StartFight(entt::entity creature, entt::entity opponent) override;
@@ -59,7 +60,9 @@ public:
 	[[nodiscard]] bool GetAngerStartsFights() const override { return _angerStartsFights; }
 	void SetCameraWatches(bool enabled) override { _cameraWatches = enabled; }
 	[[nodiscard]] bool GetCameraWatches() const override { return _cameraWatches; }
-	[[nodiscard]] bool IsCameraOnFight() const final { return _watched.has_value(); }
+	[[nodiscard]] bool IsCameraOnFight() const final { return _view.has_value(); }
+	void SetFightExit(bool allowed) override { _fightExit = allowed; }
+	[[nodiscard]] bool GetFightExit() const override { return _fightExit; }
 
 private:
 	/// The turn's parts: fights picked by angry creatures and started by the leash, the stages before and after the
@@ -84,9 +87,11 @@ private:
 	void MeasureBlows(entt::entity creature);
 	/// Faints and lies out cold, to be taken home later, or back to where it started fighting
 	void Faint(entt::entity creature, std::optional<glm::vec3> start);
-	/// The camera watches a fight, from the side of its arena
-	void Watch(const creature_fight::Arena& arena, glm::vec2 side);
-	void FollowDuel();
+	/// The camera's fight view: started by looking at an arena with a fight on, it follows the fight and lingers a little
+	/// after it, unless the player zooms out of it
+	void UpdateView(float seconds);
+	void TryStartView(entt::entity first, entt::entity second, const creature_fight::Arena& arena);
+	void EndView();
 	/// Leaves the fight for good, its mind taking over again
 	void Leave(entt::entity creature);
 	/// Whether the line from the player's fighter to its opponent meets the opponent's body, as gestures need
@@ -102,8 +107,19 @@ private:
 		uint32_t turn;
 	};
 	std::optional<Pressed> _pressed;
-	/// Where the camera was last sent to look at a fight
-	std::optional<glm::vec2> _watched;
+	/// The fight the camera watches: the creature that made the arena and the other, and once the fight is over how
+	/// long the view lingers
+	struct Watched
+	{
+		entt::entity first;
+		entt::entity second;
+		std::optional<float> lingerSeconds;
+	};
+	std::optional<Watched> _view;
+	/// How long the camera has looked at an arena from within it
+	float _lookSeconds {0.0f};
+	/// Whether the player may leave the fight view, and it ends by itself (scripts may forbid it)
+	bool _fightExit {true};
 	std::mt19937 _random {std::random_device {}()};
 };
 

@@ -461,12 +461,6 @@ TEST(CreatureFight, OutcomesAndStarting)
 	EXPECT_FALSE(WantsToFight(0.7f, 0.05f, 50.0f, 1.0f, 200.0f));
 	EXPECT_FALSE(WantsToFight(0.7f, 1.0f, 70.0f, 1.0f, 200.0f));
 	EXPECT_FALSE(WantsToFight(0.7f, 1.0f, 50.0f, 1.0f, 30.0f));
-	const auto camera = CameraOrigin({.centre = {10.0f, 20.0f}, .radius = 40.0f}, 5.0f, {2.0f, 0.0f});
-	EXPECT_EQ(camera, glm::vec3(50.0f, 25.0f, 20.0f));
-	// Across the line between the fighters
-	const auto side = CameraSide({0.0f, 0.0f}, {10.0f, 0.0f});
-	EXPECT_NEAR(side.x, 0.0f, 1e-6f);
-	EXPECT_NEAR(std::abs(side.y), 1.0f, 1e-6f);
 }
 
 TEST(CreatureFightHud, LayoutAndColours)

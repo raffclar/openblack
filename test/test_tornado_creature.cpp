@@ -43,6 +43,7 @@ public:
 	void ReleaseCharge(entt::entity /*creature*/, float /*heldMs*/) override {}
 	void SetAutoFighting(entt::entity /*creature*/, bool /*autoFight*/) override {}
 	[[nodiscard]] bool IsAutoFighting(entt::entity /*creature*/) const override { return false; }
+	void Reset() override {}
 	[[nodiscard]] std::optional<entt::entity> PlayersFighter() const override { return std::nullopt; }
 	bool Press(const glm::vec3& /*rayOrigin*/, const glm::vec3& /*rayDirection*/, creature_fight::Button /*button*/,
 	           uint32_t /*milliseconds*/, uint32_t /*turn*/) override
