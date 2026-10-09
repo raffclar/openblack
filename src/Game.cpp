@@ -869,6 +869,12 @@ bool Game::GameLogicLoop() noexcept
 	// What moved since the last turn goes into its new map cell
 	Locator::entitiesMap::value().Sync();
 
+	// The players' temples take their turn first: one whose heart lost all its life moves on through its destruction
+	if (Locator::templeDestructionSystem::has_value())
+	{
+		Locator::templeDestructionSystem::value().ProcessTurn();
+	}
+
 	auto& profiler = Locator::profiler::value();
 
 	{
@@ -1023,12 +1029,6 @@ bool Game::GameLogicLoop() noexcept
 	{
 		Locator::rewardSystem::value().ProcessTurn();
 	}
-	// A temple whose heart lost all its life moves on through its destruction, as the game's objects take their turns
-	// before the physics
-	if (Locator::templeDestructionSystem::has_value())
-	{
-		Locator::templeDestructionSystem::value().ProcessTurn();
-	}
 	// Then the physics, after the living, the fires, the reactions, the miracles and the particles have had their turn,
 	// so a body any of them sets moving this turn flies this turn: what was thrown, dropped, knocked or pushed flies,
 	// collides and comes to rest
@@ -1046,6 +1046,11 @@ bool Game::GameLogicLoop() noexcept
 	if (Locator::handGrabSystem::has_value())
 	{
 		Locator::handGrabSystem::value().ProcessTurn();
+	}
+	// Once the whole turn is over, the local player whose temple is being destroyed has lost
+	if (Locator::templeDestructionSystem::has_value())
+	{
+		Locator::templeDestructionSystem::value().EndTurn();
 	}
 
 	// Each turn ends with the camera taking the alignment of the player of most influence where it is
@@ -2741,6 +2746,14 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 
 	PrepareNewLand();
 
+	// A playground land is played as a skirmish, in which losing a temple doesn't end the game
+	bool skirmish = false;
+	Locator::resources::value().GetLevels().Each([&path, &skirmish](entt::id_type /*id*/, const Level& level) {
+		skirmish = skirmish || (level.GetType() == Level::LandType::Skirmish &&
+		                        level.GetScriptPath().lexically_normal() == path.lexically_normal());
+	});
+	Locator::entitiesRegistry::value().Context().skirmish = skirmish;
+
 	Script script;
 	try
 	{
@@ -2786,6 +2799,12 @@ bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept
 	// again. None of the last land's scripts go on running on the new land.
 	if (Locator::vm::has_value())
 	{
+		// The program starting again frees every place of the scripts' objects, while the last land's objects are still
+		// there to be let go back into the game
+		if (Locator::scriptObjects::has_value())
+		{
+			Locator::scriptObjects::value().Reset();
+		}
 		auto& fileSystem = Locator::filesystem::value();
 		const auto challengePath = fileSystem.GetPath<filesystem::Path::Quests>() / "challenge.chl";
 		try
@@ -2860,10 +2879,11 @@ void Game::PrepareNewLand()
 	{
 		Locator::playerSystem::value().KeepForNextLand();
 	}
-	// The last land's scripts let go of what they held: what they made goes, everything else goes back to the game
+	// The last land's scripts forget what they held: the land's objects go with it before anything could be let go back
+	// into the game
 	if (Locator::scriptObjects::has_value())
 	{
-		Locator::scriptObjects::value().Reset();
+		Locator::scriptObjects::value().ClearForNewLand();
 	}
 	// A new land has no weather of the last one, and none of its script's fades, cinema bars or clipping
 	if (Locator::weatherSystem::has_value())
