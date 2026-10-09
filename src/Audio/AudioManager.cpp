@@ -31,6 +31,7 @@
 #include "Common/StringUtils.h"
 #include "ECS/Registry.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "ListenerFrame.h"
 #include "Locator.h"
 #include "Resources/Resources.h"
 #include "SoundDecoder.h"
@@ -849,11 +850,7 @@ void AudioManager::PositionSource(SourceId source, std::optional<glm::vec3> list
 glm::vec3 AudioManager::ToListenerFrame(glm::vec3 worldPosition)
 {
 	const auto& camera = Locator::camera::value();
-	const auto forward = glm::normalize(camera.GetForward());
-	const auto up = glm::normalize(camera.GetUp());
-	const auto right = glm::normalize(glm::cross(forward, up));
-	const auto offset = worldPosition - camera.GetOrigin();
-	return {glm::dot(offset, right), glm::dot(offset, forward), glm::dot(offset, up)};
+	return audio::ToListenerFrame(worldPosition, camera.GetOrigin(), camera.GetForward(), camera.GetUp());
 }
 
 bool AudioManager::IsPlaying(Handle handle) const
