@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -269,7 +271,7 @@ TEST(DamageMesh, ABlowPassedOnLandsOnTheLastPrimitive)
 	EXPECT_FLOAT_EQ(point->x, 1.0f);
 	EXPECT_FLOAT_EQ(point->y, 0.0f);
 	EXPECT_FLOAT_EQ(point->z, 2.0f);
-	// An empty last primitive gives no point, the four draws still made
+	// An empty last primitive gives no point, after only the draw of the primitive
 	mesh.primitives.push_back({.material = 2});
 	next = 0;
 	limits.clear();
@@ -277,5 +279,12 @@ TEST(DamageMesh, ABlowPassedOnLandsOnTheLastPrimitive)
 		             limits.push_back(limit);
 		             return draws.at(next++);
 	             }).has_value());
-	EXPECT_EQ(limits.size(), 4U);
+	EXPECT_EQ(limits, (std::vector {3.0f}));
+	// A mesh with no primitive gives no point and draws nothing
+	limits.clear();
+	EXPECT_FALSE(RandomSurfacePoint(Mesh {}, [&](float limit) {
+		             limits.push_back(limit);
+		             return 0.0f;
+	             }).has_value());
+	EXPECT_TRUE(limits.empty());
 }

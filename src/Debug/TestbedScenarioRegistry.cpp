@@ -2041,6 +2041,7 @@ std::vector<Scenario> Build()
 	AddFlockScenarios(all);
 	AddTeleportScenarios(all);
 	AddTornadoScenarios(all);
+	AddPhysicsScenarios(all);
 	AddNatureScenarios(all);
 	AddHandNavigationScenarios(all);
 	AddHandLookScenarios(all);
@@ -2144,9 +2145,9 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 std::string_view testbed_scenarios::Name(Facet facet)
 {
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
-	    "Idle",     "Expressions", "Senses", "Needs",    "Growth",    "Appearance",    "Light",
-	    "Movement", "Footprints",  "Audio",  "Objects",  "Hand",      "Leash",         "Combat",
-	    "Mind",     "Particles",   "Editor", "Miracles", "Benchmark", "Creature Mode", "Nature",
+	    "Idle",       "Expressions", "Senses",    "Needs",         "Growth",  "Appearance", "Light", "Movement",
+	    "Footprints", "Audio",       "Objects",   "Hand",          "Leash",   "Combat",     "Mind",  "Particles",
+	    "Editor",     "Miracles",    "Benchmark", "Creature Mode", "Physics", "Nature",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
@@ -2292,12 +2293,11 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 	}
 	if (scenario.creatures.empty() && scenario.particles.empty() && scenario.miracles.empty() && scenario.dispensers.empty() &&
 	    !environment.dispenserGrid && !scenario.crowd.has_value() && !environment.playerAlignment.has_value() &&
-	    scenario.fireflyRewards.empty() &&
+	    scenario.throws.empty() && scenario.objects.empty() && scenario.fireflyRewards.empty() &&
 	    std::ranges::none_of(scenario.commands, [](const Command& command) { return NeedsNoCreature(command.kind); }))
 	{
-		problems.emplace_back(
-		    "no creatures, particles, miracles, dispensers, crowd, fireflies' rewards, player's commands or alignment for "
-		    "the hand");
+		problems.emplace_back("no creatures, things, particles, miracles, dispensers, crowd, fireflies' rewards, player's "
+		                      "commands or alignment for the hand");
 	}
 	if ((environment.playerAlignment && !InRange(*environment.playerAlignment, -1.0f, 1.0f)) ||
 	    (environment.cursor && (!InRange(environment.cursor->x, 0.0f, 1.0f) || !InRange(environment.cursor->y, 0.0f, 1.0f))))
@@ -2428,6 +2428,14 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		if (!valid || object.scale <= 0.0f || !ValidOffset(object.offset))
 		{
 			problems.emplace_back("an object of no such kind, size or place");
+		}
+	}
+	for (const auto& throwing : scenario.throws)
+	{
+		if (throwing.object >= scenario.objects.size() || (throwing.from.has_value() && !ValidOffset(*throwing.from)) ||
+		    throwing.height < 0.0f)
+		{
+			problems.emplace_back("a throw of no such object, or from no such place");
 		}
 	}
 	for (size_t i = 0; i < scenario.commands.size(); ++i)

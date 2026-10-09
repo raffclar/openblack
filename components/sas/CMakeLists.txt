@@ -5,7 +5,7 @@ add_library(sas STATIC ${SOURCES} ${HEADERS})
 
 target_include_directories(
   sas PUBLIC $<INSTALL_INTERFACE:include>
-                   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
 
 if (OPENBLACK_CLANG_TIDY_CHECKS)

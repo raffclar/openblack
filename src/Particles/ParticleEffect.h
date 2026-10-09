@@ -33,6 +33,7 @@
 
 #include "ParticleMaths.h"
 #include "ParticleSpellLink.h"
+#include "PlasmaCommand.h"
 #include "StormMaths.h"
 
 namespace openblack
@@ -712,6 +713,9 @@ public:
 	void AddTargetPosition(glm::vec3 position) { _targetPositions.push_back(position); }
 	[[nodiscard]] std::optional<glm::vec3> TakeTargetPosition();
 	[[nodiscard]] size_t TargetPositionCount() const { return _targetPositions.size(); }
+	/// Plasma beams the effect is to fire; the rules take them, the last given first
+	void AddPlasma(const PlasmaCommand& command) { _plasma.push_back(command); }
+	[[nodiscard]] std::optional<PlasmaCommand> TakePlasma();
 	/// An effect without a miracle counts as this computer's
 	[[nodiscard]] bool IsMyInterfaceCasting() const { return _sink == nullptr || _sink->IsMyInterfaceCasting(); }
 	[[nodiscard]] bool IsHumanPlayerCasting() const { return _sink != nullptr && _sink->IsHumanPlayerCasting(); }
@@ -875,6 +879,7 @@ private:
 	glm::vec3 _direction {0.0f};
 	std::vector<entt::entity> _targets;
 	std::vector<glm::vec3> _targetPositions;
+	std::vector<PlasmaCommand> _plasma;
 };
 
 } // namespace openblack::particles

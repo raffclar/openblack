@@ -51,6 +51,7 @@
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/FieldArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
+#include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Archetypes/TownArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
@@ -63,6 +64,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicFireBall.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/PrayerPower.h"
@@ -84,6 +86,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
@@ -371,6 +374,11 @@ void Runner::Start(const Scenario& scenario)
 	_timeline = {};
 	_creatures.clear();
 	_objects.clear();
+	_throwsDue.clear();
+	for (const auto& setup : scenario.throws)
+	{
+		_throwsDue.emplace_back(setup.delaySeconds);
+	}
 	_walks.clear();
 	_particles.clear();
 	_miracles.clear();
@@ -646,6 +654,10 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    else if constexpr (std::is_same_v<T, AnimalInfo>)
 			    {
 				    return ecs::archetypes::AnimalArchetype::Create(type, position, yaw, 1.0f, PlayerNames::NEUTRAL);
+			    }
+			    else if constexpr (std::is_same_v<T, MobileStaticInfo>)
+			    {
+				    return ecs::archetypes::MobileStaticArchetype::Create(position, type, 0.0f, 0.0f, yaw, 0.0f, object.scale);
 			    }
 			    else
 			    {
@@ -1643,6 +1655,7 @@ void Runner::Update(float seconds)
 	UpdateParticles(seconds);
 	UpdateMiracles(seconds);
 	UpdateVillagerWalks();
+	UpdateThrows();
 	WatchGesture();
 	FinishTakingFireBall();
 	ApplyStates();
@@ -1659,6 +1672,49 @@ void Runner::Update(float seconds)
 	for (const auto index : due)
 	{
 		Give(_scenario->commands[index]);
+	}
+}
+
+void Runner::UpdateThrows()
+{
+	if (!Locator::dynamicsSystem::has_value() || !Locator::entitiesRegistry::has_value() ||
+	    !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& dynamics = Locator::dynamicsSystem::value();
+	for (size_t i = 0; i < _throwsDue.size() && i < _scenario->throws.size(); ++i)
+	{
+		auto& due = _throwsDue.at(i);
+		if (!due.has_value() || _seconds < *due)
+		{
+			continue;
+		}
+		const auto& setup = _scenario->throws.at(i);
+		const auto object = setup.object < _objects.size() ? _objects.at(setup.object) : entt::null;
+		// What broke or went is thrown no more
+		if (!registry.Valid(object) || !registry.AllOf<ecs::components::Transform>(object))
+		{
+			due.reset();
+			continue;
+		}
+		// Still flying from the last throw: it is thrown once it lands
+		if (registry.AllOf<ecs::components::InPhysics>(object))
+		{
+			continue;
+		}
+		auto& transform = registry.Get<ecs::components::Transform>(object);
+		const auto point =
+		    setup.from.has_value() ? MapPoint(_middle, *setup.from) : glm::vec2(transform.position.x, transform.position.z);
+		transform.position = {point.x, Locator::terrainSystem::value().GetHeightAt(point) + setup.height, point.y};
+		registry.SetDirty();
+		const auto result = dynamics.LetGoFromHand(object, {.velocity = setup.velocity, .player = PlayerNames::PLAYER_ONE});
+		if (!result.accepted)
+		{
+			Log(fmt::format("{:.1f}s: object {} wasn't thrown", _seconds, setup.object));
+		}
+		due = setup.repeatSeconds.has_value() ? std::optional(*due + *setup.repeatSeconds) : std::nullopt;
 	}
 }
 
