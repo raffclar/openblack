@@ -159,6 +159,7 @@ openblack_setup_and_add_test(
   test_land_colour_stamps test_land_colour_stamps.cpp
 )
 openblack_setup_and_add_test(test_sky_dome test_sky_dome.cpp)
+openblack_setup_and_add_test(test_sky_frame test_sky_frame.cpp)
 openblack_setup_and_add_test(test_near_clipping test_near_clipping.cpp)
 openblack_setup_and_add_test(test_ground_blobs test_ground_blobs.cpp)
 openblack_setup_and_add_test(test_zsort test_zsort.cpp)

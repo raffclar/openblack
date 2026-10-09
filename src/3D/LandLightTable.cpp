@@ -130,6 +130,11 @@ uint32_t LandLightTable::GetLandColour(const LandLightPalette& palette, float sk
 	return Overcast(LandColour(PaletteColours(palette, skyType, alignment), alignment), overcast) & 0xFFFFFFu;
 }
 
+uint32_t LandLightTable::GetMoonColour(const LandLightPalette& palette, float skyType, float alignment) noexcept
+{
+	return PaletteColours(palette, skyType, alignment)[k_Moon] & 0xFFFFFFu;
+}
+
 void LandLightTable::Build(const LandLightPalette& palette, float skyType, float alignment, float overcast,
                            uint8_t flash) noexcept
 {
