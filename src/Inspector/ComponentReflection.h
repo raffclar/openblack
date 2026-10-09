@@ -219,22 +219,29 @@ template <typename Type>
 	}
 	else if constexpr (detail::k_IsGlmVector<Type> || detail::k_IsGlmMatrix<Type>)
 	{
-		if (!json.is_array() || json.size() != static_cast<size_t>(Type::length()))
+		// Every failure falls through to the last return, which would otherwise be unreachable code for these types
+		if (json.is_array() && json.size() == static_cast<size_t>(Type::length()))
+		{
+			Type value {};
+			bool decoded = true;
+			for (glm::length_t i = 0; decoded && i < Type::length(); ++i)
+			{
+				auto element = Decode<std::remove_cvref_t<decltype(value[i])>>(json[static_cast<size_t>(i)], error);
+				decoded = element.has_value();
+				if (decoded)
+				{
+					value[i] = *element;
+				}
+			}
+			if (decoded)
+			{
+				return value;
+			}
+		}
+		else
 		{
 			error = "needs an array of " + std::to_string(Type::length()) + ", not " + detail::Describe(json);
-			return std::nullopt;
 		}
-		Type value {};
-		for (glm::length_t i = 0; i < Type::length(); ++i)
-		{
-			auto element = Decode<std::remove_cvref_t<decltype(value[i])>>(json[static_cast<size_t>(i)], error);
-			if (!element.has_value())
-			{
-				return std::nullopt;
-			}
-			value[i] = *element;
-		}
-		return value;
 	}
 	else if constexpr (detail::k_IsOptional<Type>)
 	{
@@ -242,12 +249,10 @@ template <typename Type>
 		{
 			return Type {};
 		}
-		auto inner = Decode<typename Type::value_type>(json, error);
-		if (!inner.has_value())
+		if (auto inner = Decode<typename Type::value_type>(json, error); inner.has_value())
 		{
-			return std::nullopt;
+			return Type {*std::move(inner)};
 		}
-		return Type {*std::move(inner)};
 	}
 	else
 	{
