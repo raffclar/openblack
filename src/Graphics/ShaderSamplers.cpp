@@ -73,6 +73,16 @@ public:
 		return value;
 	}
 
+	void Skip(size_t size)
+	{
+		if (!_ok || _data.size() - _position < size)
+		{
+			_ok = false;
+			return;
+		}
+		_position += size;
+	}
+
 private:
 	std::span<const uint8_t> _data;
 	size_t _position = 0;
@@ -164,6 +174,50 @@ std::optional<std::vector<Sampler>> ReadSpirvSamplers(std::span<const uint8_t> b
 		return std::nullopt;
 	}
 	return samplers;
+}
+
+std::optional<uint16_t> ReadSpirvUniformBufferSize(std::span<const uint8_t> binary)
+{
+	Reader reader(binary);
+	const auto kind = static_cast<char>(reader.Read<uint8_t>());
+	const auto s = static_cast<char>(reader.Read<uint8_t>());
+	const auto h = static_cast<char>(reader.Read<uint8_t>());
+	const auto version = reader.Read<uint8_t>();
+	if (!reader.Ok() || (kind != 'V' && kind != 'F' && kind != 'C') || s != 'S' || h != 'H')
+	{
+		return std::nullopt;
+	}
+	reader.Read<uint32_t>(); // the hash of its inputs
+	if (version >= k_FirstVersionWithOutputHash)
+	{
+		reader.Read<uint32_t>(); // and of its outputs
+	}
+
+	// Past its uniforms
+	const auto count = reader.Read<uint16_t>();
+	for (uint16_t i = 0; i < count && reader.Ok(); ++i)
+	{
+		reader.Skip(reader.Read<uint8_t>());                                                  // its name
+		reader.Skip(sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint16_t) + sizeof(uint16_t)); // type, size, binding, count
+		if (version >= k_FirstVersionWithTextureInfo)
+		{
+			reader.Skip(sizeof(uint8_t) + sizeof(uint8_t)); // its texture's component type and dimension
+		}
+		if (version >= k_FirstVersionWithTextureFormat)
+		{
+			reader.Skip(sizeof(uint16_t)); // the format of a storage image
+		}
+	}
+
+	// Past its code, which ends with a terminating zero, and its vertex attributes
+	reader.Skip(reader.Read<uint32_t>() + 1);
+	reader.Skip(sizeof(uint16_t) * reader.Read<uint8_t>());
+	const auto size = reader.Read<uint16_t>();
+	if (!reader.Ok())
+	{
+		return std::nullopt;
+	}
+	return size;
 }
 
 DefaultTexture DefaultTextureFor(Dimension dimension) noexcept

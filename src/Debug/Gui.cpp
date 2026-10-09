@@ -538,7 +538,7 @@ bool Gui::ShowMenu() noexcept
 			                        bool validLevel) {
 				if (ImGui::MenuItem(label.data(), nullptr, false, validLevel))
 				{
-					game.LoadMap(path);
+					game.LoadMapWithFreshScripts(path);
 				}
 				if (!description.empty() && ImGui::IsItemHovered())
 				{
@@ -989,9 +989,9 @@ void Gui::ShowVillagerNames() noexcept
 
 		    const std::string name = "Villager #" + std::to_string(i);
 		    const std::string stateHelpText = "TODO: STATE HELP TEXT";
-		    std::string details = config.showVillagerDetails ? fmt::format("{}\nA:{} L:{}%, F:{:.0f}%", stateHelpText,
-		                                                                   ecs::villager_age::AgeNow(villager), villager.health,
-		                                                                   villager.food * 100.0f)
+		    std::string details = config.showVillagerDetails ? fmt::format("{}\nA:{} L:{:.0f}%, F:{:.0f}%", stateHelpText,
+		                                                                   ecs::villager_age::AgeNow(villager),
+		                                                                   villager.life * 100.0f, villager.food * 100.0f)
 		                                                     : std::string();
 		    const auto& actionSystem = Locator::livingActionSystem::value();
 		    if (config.debugVillagerStates)
@@ -1020,7 +1020,7 @@ void Gui::ShowVillagerNames() noexcept
 				    {
 					    ImGui::Text("Homeless");
 				    }
-				    ImGui::InputInt("Health", reinterpret_cast<int*>(&villager.health));
+				    ImGui::SliderFloat("Life", &villager.life, 0.0f, 1.0f);
 				    if (auto age = static_cast<int>(ecs::villager_age::AgeNow(villager)); ImGui::InputInt("Age", &age))
 				    {
 					    ecs::villager_age::SetBirthTurnForAge(villager, static_cast<uint32_t>(std::max(age, 0)));

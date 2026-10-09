@@ -60,6 +60,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/LivingAction.h"
@@ -76,6 +77,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -337,10 +339,9 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	}
 	if (object.life.has_value())
 	{
-		constexpr float k_VillagerHealthScale = 100.0f;
 		if (auto* villager = registry.TryGet<ecs::components::Villager>(entity))
 		{
-			villager->health = static_cast<uint32_t>(std::lround(std::clamp(*object.life, 0.0f, 1.0f) * k_VillagerHealthScale));
+			villager->life = std::clamp(*object.life, 0.0f, 1.0f);
 		}
 		if (auto* animal = registry.TryGet<ecs::components::Animal>(entity))
 		{
@@ -908,6 +909,44 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 			return leashes.TieTo(creature, *object) ? "tied" : "can't";
 		}
 		return "it is gone";
+	case Kind::LeashOrderAt:
+	{
+		const auto point = MapPoint(_middle, command.point);
+		const glm::vec3 onLand {point.x, Locator::terrainSystem::value().GetHeightAt(point), point.y};
+		return leashes.OrderAt(command.player, onLand) ? "taken" : "refused";
+	}
+	case Kind::LeashOrderOn:
+		if (const auto object = ObjectAt(command.object))
+		{
+			return leashes.OrderOn(command.player, *object) ? "taken" : "refused";
+		}
+		return "it is gone";
+	case Kind::HangLeashPosts:
+	{
+		constexpr float k_Apart = 6.0f;
+		constexpr float k_Up = 5.0f;
+		const auto middle = MapPoint(_middle, command.point);
+		std::array<glm::vec3, 3> points {};
+		for (size_t i = 0; i < points.size(); ++i)
+		{
+			const glm::vec2 at {middle.x + ((static_cast<float>(i) - 1.0f) * k_Apart), middle.y};
+			points.at(i) = {at.x, Locator::terrainSystem::value().GetHeightAt(at) + k_Up, at.y};
+		}
+		leashes.PlacePosts(command.player, points);
+		return "hung";
+	}
+	case Kind::TapLeashPost:
+	{
+		std::optional<entt::entity> post;
+		Locator::entitiesRegistry::value().Each<const ecs::components::LeashPost>(
+		    [&post, &command](entt::entity entity, const ecs::components::LeashPost& at) {
+			    if (at.owner == command.player && at.type == creature_leash::k_Types.at(command.value))
+			    {
+				    post = entity;
+			    }
+		    });
+		return post.has_value() && leashes.TapPost(*post) ? "tapped" : "no such leash";
+	}
 	case Kind::UntieLeash:
 		leashes.UntieToHand(creature);
 		return {};
@@ -961,9 +1000,28 @@ std::string Runner::GivePlayerCommand(const Command& command)
 	}
 	case Kind::HandTakeFireBall:
 		return HandTakeFireBall();
+	case Kind::HandTapObject:
+		return HandTapObject(command.object);
 	default:
 		return {};
 	}
+}
+
+std::string Runner::HandTapObject(size_t index)
+{
+	const auto object = ObjectAt(index);
+	if (!object.has_value() || !Locator::handSystem::has_value() || !Locator::abodeKnockSystem::has_value())
+	{
+		return "nothing to tap";
+	}
+	// A knock on a building by this computer's hand, from where the hand is, as the Action button pressed on it makes
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hand =
+	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	const auto* transform = registry.TryGet<const Transform>(hand);
+	const bool took =
+	    Locator::abodeKnockSystem::value().Tap(*object, transform != nullptr ? transform->position : glm::vec3(0.0f), true);
+	return took ? "knocked" : "it takes no knock";
 }
 
 std::string Runner::HandTakeFireBall()
@@ -1051,7 +1109,16 @@ std::string Runner::DrawGesture(GestureType gesture)
 		}
 	}
 	// A circle sizes a storm or a shield readied by holding the Action button
-	gestures.DrawPath(std::move(*path), gesture == GestureType::Circle);
+	const bool holdingAction = gesture == GestureType::Circle;
+	gestures.DrawPath(std::move(*path), holdingAction);
+	// With a miracle in the hand the button goes down on it too, as the player's does, readying it to be cast
+	_drawingPressedAction = holdingAction && Locator::magicSystem::has_value() && Locator::magicSystem::value().IsHandBusy() &&
+	                        Locator::magicSystem::value().PressAction();
+	if (_drawingPressedAction)
+	{
+		Log(fmt::format("{:.1f}s: pressed for the circle: {}", _seconds,
+		                HandResultName(Locator::magicSystem::value().GetLastHandResult())));
+	}
 	_drawing = gesture;
 	const auto last = gestures.GetLastRecognised();
 	_recognisedBefore = last.has_value() ? last->number : 0;
@@ -1068,9 +1135,17 @@ void Runner::WatchGesture()
 	const auto recognised = gestures.GetLastRecognised();
 	// Recognised, or drawn to the end without being recognised
 	const bool done = recognised.has_value() && recognised->number != _recognisedBefore;
-	if (!done && gestures.IsDrawingPath())
+	// A button held for the gesture stays down until the path is drawn to its end
+	if ((!done || _drawingPressedAction) && gestures.IsDrawingPath())
 	{
 		return;
+	}
+	if (_drawingPressedAction && Locator::magicSystem::has_value())
+	{
+		auto& magic = Locator::magicSystem::value();
+		magic.ReleaseAction();
+		Log(fmt::format("{:.1f}s: let go after the circle: {}", _seconds, HandResultName(magic.GetLastHandResult())));
+		_drawingPressedAction = false;
 	}
 	if (!done)
 	{
@@ -1178,7 +1253,7 @@ bool Runner::IsFree(size_t creature) const
 void Runner::Give(const Command& command)
 {
 	if (command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed ||
-	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall)
+	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -1326,6 +1401,10 @@ void Runner::Give(const Command& command)
 	case Kind::HandTapLeash:
 	case Kind::LeashKey:
 	case Kind::LeashShake:
+	case Kind::LeashOrderAt:
+	case Kind::LeashOrderOn:
+	case Kind::HangLeashPosts:
+	case Kind::TapLeashPost:
 		result = GiveLeashCommand(*entity, command);
 		break;
 	case Kind::StartFight:
@@ -1355,6 +1434,7 @@ void Runner::Give(const Command& command)
 	case Kind::SummonSeed:
 	case Kind::PressKey:
 	case Kind::HandTakeFireBall:
+	case Kind::HandTapObject:
 	case Kind::SetAlignment:
 	// The mouse commands are given before a creature is looked for
 	case Kind::PointerTo:

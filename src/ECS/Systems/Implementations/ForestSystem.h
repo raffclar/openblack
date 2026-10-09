@@ -48,16 +48,12 @@ private:
 
 	/// The turn a forest last gained a tree planted near another, 0 on a new land
 	uint32_t _lastTreeAddedTurn {0};
-	/// The number the next forest miracle's forest takes
-	uint32_t _nextMiracleForestId {k_FirstMiracleForestId};
 	/// The number the next forest of the land takes when none is given
 	uint32_t _nextLandForestId {1};
 	/// How many forests have been made, the forest miracles' included: the newest is met first
 	uint32_t _forestsMade {0};
 	/// How many times a tree has joined a forest's growing or grown trees
 	uint32_t _treesListed {0};
-	/// The forest miracles' forests are numbered from here, beyond any a land's script gives its forests
-	static constexpr uint32_t k_FirstMiracleForestId = 0x80000000u;
 };
 
 } // namespace openblack::ecs::systems

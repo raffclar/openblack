@@ -15,6 +15,8 @@ namespace openblack::ecs::components
 struct BigForest
 {
 	int type;
+	/// What its wood is worth at full life, fixed as it is planted
+	uint32_t worth {0};
 };
 
 struct Forest

@@ -127,6 +127,14 @@ struct MapCoords
 {
 	return static_cast<uint16_t>(static_cast<uint32_t>(fixed) >> 16u);
 }
+/// A position made from whole cells: the middle of the cell, on the ground
+[[nodiscard]] constexpr MapCoords CellCentre(uint16_t cellX, uint16_t cellZ)
+{
+	constexpr uint32_t k_HalfCell = 0x8000u;
+	return {.x = static_cast<int32_t>((static_cast<uint32_t>(cellX) << 16u) | k_HalfCell),
+	        .z = static_cast<int32_t>((static_cast<uint32_t>(cellZ) << 16u) | k_HalfCell),
+	        .altitude = 0.0f};
+}
 /// The high word read signed, as a cell step holds it
 [[nodiscard]] constexpr int16_t SignedCellOf(int32_t fixed)
 {

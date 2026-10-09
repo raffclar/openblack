@@ -134,8 +134,6 @@ constexpr float k_OrbTapLeeway = 1.3f;
 constexpr float k_DefaultOrbRadius = 2.5f;
 
 // The game's world
-/// A villager's health out of this is its life
-constexpr float k_VillagerHealthScale = 100.0f;
 /// The colours of the rings the water's drops leave on the land, picked at random
 constexpr std::array<uint32_t, 5> k_RippleColours = {0xFF80CBC5u, 0xFF8599C5u, 0xFFBA97B2u, 0xFFB9CA86u, 0xFFBD9C8Au};
 /// A tree rustles as the water grows it, one of these at random
