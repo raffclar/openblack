@@ -213,6 +213,11 @@ bool turn::NearSeaLevel(bool resting, float centreHeight, float radius)
 	return !resting && centreHeight < radius * k_SinkShare;
 }
 
+bool turn::SunkOutOfSight(float centreHeight, float radius)
+{
+	return centreHeight <= -radius;
+}
+
 bool turn::Bobbed(float upwardSpeedBefore, float upwardSpeedAfter)
 {
 	return upwardSpeedBefore * upwardSpeedAfter < 0.0f;
