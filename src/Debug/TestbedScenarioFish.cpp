@@ -12,6 +12,7 @@
 
 #include <vector>
 
+#include "3D/FlatLand.h"
 #include "Creature/CreatureDesires.h"
 #include "TestbedScenarioRegistry.h"
 
@@ -59,6 +60,23 @@ Command Press(size_t button, float delay)
 Command Release(size_t button, float delay)
 {
 	return {.kind = Kind::PointerRelease, .delaySeconds = delay, .value = button};
+}
+
+/// The pond north-west of the middle, a fish farm on its south-eastern bank whose shoal lies in the pond's shallows,
+/// where a creature can stand; the town's storage pit and three of its people on the plain beyond
+constexpr glm::vec2 k_PondFarm = glm::vec2(2295.0f, 2945.0f) - flat_land::k_MapMiddle;
+constexpr glm::vec2 k_PondPit = k_PondFarm + glm::vec2(25.0f, -45.0f);
+constexpr glm::vec2 k_PondCreature = k_PondFarm + glm::vec2(45.0f, -5.0f);
+
+std::vector<ObjectSetup> PondFarmAndPit()
+{
+	return {
+	    {.type = FishFarmInfo::Normal, .offset = k_PondFarm},
+	    {.type = AbodeInfo::CelticStoragePit, .offset = k_PondPit, .amount = 0},
+	    {.type = VillagerInfo::CelticFarmerMale, .offset = k_PondPit + glm::vec2(12.0f, -6.0f), .joinTown = true},
+	    {.type = VillagerInfo::CelticHousewifeFemale, .offset = k_PondPit + glm::vec2(-10.0f, -8.0f), .joinTown = true},
+	    {.type = VillagerInfo::CelticForesterMale, .offset = k_PondPit + glm::vec2(6.0f, -14.0f), .joinTown = true},
+	};
 }
 } // namespace
 
@@ -129,5 +147,26 @@ void testbed_scenarios::AddFishScenarios(std::vector<Scenario>& all)
 	        .desires = {{.desire = creature_desires::Desire::Hunger, .fraction = 1.0f}},
 	    }},
 	    .objects = FarmAndTown(),
+	});
+
+	all.push_back({
+	    .id = "needs.fish_for_town",
+	    .name = "Compassionate creature fishes for its town",
+	    .facet = Facet::Needs,
+	    .description = "A tiger that wants above all to be kind stands on the plain by the pond north-west of the "
+	                   "middle; a fish farm is on the pond's bank, the town's storage pit and three of its people beyond.",
+	    .expected = "Its compassion is for the town, and while the town wants food it sets about giving fish to the "
+	                "storage pit: it walks into the pond's shallows to within 15 m of the shoal, a bundle of food appears at "
+	                "its feet out of the water and it picks it up, walks back to throwing distance of the pit, turns to "
+	                "face it and throws the food in. It stands until the food has come down, then plans again.",
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .offset = k_PondCreature,
+	        .facingDegrees = 0.0f,
+	        .needs = {.energy = 1.0f, .dehydration = 0.0f, .poo = 0.0f},
+	        .desires = {{.desire = creature_desires::Desire::Compassion, .fraction = 1.0f}},
+	    }},
+	    .objects = PondFarmAndPit(),
 	});
 }

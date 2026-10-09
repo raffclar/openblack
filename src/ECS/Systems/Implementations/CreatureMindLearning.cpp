@@ -462,6 +462,7 @@ std::vector<uint32_t> TownCompassionActions(const ecs::Registry& registry, entt:
 	const auto feelings = TownFeelingsOf(registry, town);
 	const auto desires = town_compassion::DesiresToHelp(feelings.order, feelings.felt, tables.townActions);
 	auto& state = mind.townCompassion;
+	const auto before = state.desire;
 	const bool beingCompassionate =
 	    mind.planActive && mind.planner.current.has_value() && mind.planner.current->desire == Desire::Compassion;
 	if (mind.desires.has_value() &&
@@ -484,6 +485,12 @@ std::vector<uint32_t> TownCompassionActions(const ecs::Registry& registry, entt:
 		}
 	}
 	town_compassion::Settle(state, desires, feelings.felt);
+	if (state.desire != before)
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} helps town {} with its desire {} ({} it wants)",
+		                    entt::to_integral(creature), entt::to_integral(town),
+		                    state.desire.has_value() ? static_cast<int>(*state.desire) : -1, desires.size());
+	}
 	return town_compassion::Actions(state, tables.townActions, heal);
 }
 
