@@ -379,7 +379,7 @@ void SetPointing(CreatureObjectAction& action, const Transform& transform, const
 	const auto local = ToLocal(transform, action.point);
 	// The left side is mirrored in the meshes' space: the right is +x
 	const bool right = held != nullptr ? held->mirrored : local.x >= 0.0f;
-	const auto height = creature_throw::k_HeightAtSizeOne * body.size * k_PointFromHeightShare;
+	const auto height = creature_throw::k_HeightAtSizeOne * ShownSize(body) * k_PointFromHeightShare;
 	const auto elevation = std::atan2(local.y - height, std::max(glm::length(glm::vec2(local.x, local.z)), k_Tiny));
 	const auto high = std::clamp(elevation / k_PointHighRadians, 0.0f, 1.0f);
 	const std::array<size_t, 2> animations {
@@ -655,7 +655,7 @@ void UpdateReady(ecs::Registry& registry, entt::entity creature, const Creature&
 	{
 		return;
 	}
-	const auto lead = points->catchMs / (1000.0f * creature_layers::PlaybackRate(body.size));
+	const auto lead = points->catchMs / (1000.0f * creature_layers::PlaybackRate(ShownSize(body)));
 	const auto velocity = glm::transpose(transform.rotation) * flight->second;
 	const auto ready =
 	    creature_catch::ReadyToCatch(ToLocal(transform, flight->first), velocity, action.catchHands, transform.scale.x, lead);
@@ -815,7 +815,7 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 	{
 		const auto& transform = registry.Get<const Transform>(creature);
 		const auto ground = glm::distance(glm::xz(transform.position), glm::xz(action.point));
-		if (!creature_throw::FarEnoughToThrow(ground, body.size))
+		if (!creature_throw::FarEnoughToThrow(ground, ShownSize(body)))
 		{
 			Fail(action, "too close to throw at");
 		}
@@ -1230,7 +1230,7 @@ void CreatureObjectActionSystem::Update(std::chrono::duration<float, std::milli>
 		    {
 			    return;
 		    }
-		    const float step = gameTime.count() * creature_layers::PlaybackRate(body.size);
+		    const float step = gameTime.count() * creature_layers::PlaybackRate(ShownSize(body));
 		    if (action.kind == Kind::Catch)
 		    {
 			    using Catching = CreatureObjectAction::Catching;
@@ -1390,7 +1390,7 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			{
 				if (Locator::buildingDamageSystem::has_value())
 				{
-					Locator::buildingDamageSystem::value().Smash(target, creature, body.size);
+					Locator::buildingDamageSystem::value().Smash(target, creature, ShownSize(body));
 				}
 			}
 			else if (object_physics::IsRock(target) && Locator::dynamicsSystem::has_value())

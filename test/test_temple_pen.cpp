@@ -172,6 +172,8 @@ TEST_F(CreaturePenSystemTest, ShownAsANewbornInThePen)
 	ASSERT_TRUE(body.penSize.has_value());
 	EXPECT_EQ(*body.penSize, k_PenSize);
 	EXPECT_EQ(body.size, 2.0f);
+	// Whatever goes by how big it looks takes the pen's size; its own size is kept
+	EXPECT_EQ(ShownSize(body), k_PenSize);
 	EXPECT_FLOAT_EQ(_registry.Get<const Transform>(creature).scale.x, k_PenSize * 10.0f);
 }
 
@@ -188,6 +190,7 @@ TEST_F(CreaturePenSystemTest, GrowsBackWalkingOut)
 	transform.position += glm::vec3(-5.0f, 0.0f, -10.0f);
 	_system.ProcessTurn(_registry);
 	EXPECT_FALSE(_registry.Get<const Creature>(creature).penSize.has_value());
+	EXPECT_EQ(ShownSize(_registry.Get<const Creature>(creature)), 2.0f);
 	EXPECT_FLOAT_EQ(transform.scale.x, 20.0f);
 }
 

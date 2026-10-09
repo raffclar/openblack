@@ -47,4 +47,12 @@ struct Creature
 	/// miracle gives it back all its life instead
 	bool canDie {true};
 };
+
+/// The size its body is shown at: its own size, or the smaller one while it is in its temple's pen. Whatever goes by
+/// how big the creature looks and moves (its height, weight, reach, pace, animation speed, how much magic it can hold)
+/// takes this one; only its growth, eating, effort and what is saved of it keep to its own size.
+[[nodiscard]] inline float ShownSize(const Creature& creature)
+{
+	return creature.penSize.value_or(creature.size);
+}
 } // namespace openblack::ecs::components

@@ -87,7 +87,7 @@ void FootprintSystem::Step(entt::entity creature)
 	const auto print = creature_footprints::PrintOf(component.species, IsAprilFools());
 	const auto& land = Locator::terrainSystem::value();
 	const auto laid = creature_footprints::MakeFootprint(
-	    foot.position, foot.yaw + std::numbers::pi_v<float>, creature_footprints::Side(component.size, print), print.cell,
+	    foot.position, foot.yaw + std::numbers::pi_v<float>, creature_footprints::Side(ShownSize(component), print), print.cell,
 	    onLeft, [&land](float x, float z) { return land.GetHeightAt(glm::vec2(x, z)); });
 	if (!creature_footprints::Add(_trail, laid))
 	{

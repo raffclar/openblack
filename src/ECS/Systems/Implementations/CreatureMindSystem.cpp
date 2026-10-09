@@ -243,7 +243,7 @@ std::vector<creature_look::Candidate> GatherCandidates(ecs::Registry& registry)
 	};
 	registry.Each<const Creature, const Transform>([&](entt::entity entity, const Creature& creature, const Transform& at) {
 		add(entity, creature_look::Interest::Creature,
-		    at.position + glm::vec3(0.0f, creature_look::k_HeadHeight * creature.size, 0.0f));
+		    at.position + glm::vec3(0.0f, creature_look::k_HeadHeight * ShownSize(creature), 0.0f));
 	});
 	registry.Each<const Villager, const Transform>([&](entt::entity entity, const Villager&, const Transform& at) {
 		add(entity, creature_look::Interest::Villager, at.position + glm::vec3(0.0f, k_VillagerHeadHeight, 0.0f));
@@ -910,7 +910,7 @@ void CreatureMindSystem::ProcessTurn()
 			    const creature_look::Viewer viewer {
 			        .position = transform.position,
 			        .ahead = -(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f)),
-			        .size = creature.size,
+			        .size = ShownSize(creature),
 			    };
 			    mind.look = creature_look::LookAbout(mind.look, others, viewer, k_TurnsPerSecond);
 			    animation.lookAt = mind.look.id.has_value() ? mind.look.point : creature_look::PointAhead(viewer);

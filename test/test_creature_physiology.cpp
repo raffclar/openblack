@@ -287,6 +287,38 @@ TEST(CreaturePhysiology, EatingFillsItUpFattensAndBuildsPoo)
 	EXPECT_FLOAT_EQ(needs.poo, 0.0f);
 }
 
+TEST(CreaturePhysiology, ShrunkInItsPenItUsesUpEnergyAsTheSizeItIsShownAt)
+{
+	const auto species = Fake();
+	auto needs = Start(species);
+	Shape shape {.fatness = 0.5f, .strength = 0.5f, .size = 2.0f, .penSize = 0.22f};
+	EXPECT_FLOAT_EQ(ShownSize(shape), 0.22f);
+	TickTurn(needs, shape, species, Standing());
+	EXPECT_NEAR(needs.energy, 1.0f - (0.01f / 1.11f), k_Tolerance);
+	// Its own size is untouched
+	EXPECT_FLOAT_EQ(shape.size, 2.0f);
+}
+
+TEST(CreaturePhysiology, ShrunkInItsPenAMealGoesByItsOwnSizeButFillsItOnlyToItsShownSize)
+{
+	const auto species = Fake();
+	auto needs = Start(species);
+	Shape shape {.fatness = 0.5f, .strength = 0.5f, .size = 1.5f, .penSize = 0.22f};
+	// The meal is 1500 / 800 for its own size, and fills it only up to 1, not to its own size
+	EXPECT_FLOAT_EQ(Eat(needs, shape, species, 1500.0f), 1.875f);
+	EXPECT_FLOAT_EQ(needs.energy, 1.0f);
+	EXPECT_NEAR(shape.fatness, 0.6875f, k_Tolerance);
+}
+
+TEST(CreaturePhysiology, ShrunkInItsPenActionsStillCostByItsOwnSize)
+{
+	auto needs = Start(Fake());
+	Shape shape {.fatness = 0.5f, .strength = 0.5f, .size = 1.0f, .penSize = 0.22f};
+	ApplyActionCost(needs, shape, {.strengthGain = 0.0f, .energyCost = 0.03f, .exhaustionCost = 0.16f}, 13);
+	EXPECT_NEAR(needs.energy, 1.0f - 0.015f, k_Tolerance);
+	EXPECT_NEAR(needs.exhaustion, 0.08f, k_Tolerance);
+}
+
 TEST(CreaturePhysiology, SleepHealsAndRestsThenWakes)
 {
 	const auto species = Fake();

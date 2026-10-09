@@ -100,7 +100,7 @@ void creature_scars::BurnOnCatching(entt::entity creature)
 		return;
 	}
 	auto& random = Locator::gameRandom::value();
-	const float reach = body->size * creature_marks::scar::k_BurnReachPerSize;
+	const float reach = ShownSize(*body) * creature_marks::scar::k_BurnReachPerSize;
 	for (int32_t i = 0; i < creature_marks::scar::k_CatchingBurnTries; ++i)
 	{
 		// Each try's point is drawn across, then up, then along

@@ -117,7 +117,7 @@ bool CreatureModeSystem::Enter(entt::entity creature)
 	const auto& body = registry.Get<const components::Creature>(creature);
 	const auto& transform = registry.Get<const components::Transform>(creature);
 	auto model = std::make_unique<CreatureCameraModel>(camera.GetOrigin(), camera.GetFocus(), transform.position,
-	                                                   creature_mode::CreatureHeight(body.size));
+	                                                   creature_mode::CreatureHeight(ShownSize(body)));
 	_model = model.get();
 	_playerModel = camera.SetModel(std::move(model));
 	_creature = creature;
@@ -230,7 +230,7 @@ void CreatureModeSystem::Update(std::chrono::microseconds dt, const Frame& frame
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto& body = registry.Get<const components::Creature>(*_creature);
 	const auto& transform = registry.Get<const components::Transform>(*_creature);
-	_model->SetTarget(transform.position, creature_mode::CreatureHeight(body.size));
+	_model->SetTarget(transform.position, creature_mode::CreatureHeight(ShownSize(body)));
 
 	if (_held.seconds > 0.0f)
 	{

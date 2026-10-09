@@ -242,12 +242,14 @@ bool CanPayFor(entt::entity creature, MagicType type)
 		return false;
 	}
 	const auto& species = info.creature.at(creature::InfoRow(body->species));
-	return creature_spell_casting::CanCast(
-	    {.size = body->size, .strength = body->strength, .energy = needs->needs.energy, .exhaustion = needs->needs.exhaustion},
-	    {.chantsPerEnergy = species.chantsPerEnergy,
-	     .energyFloor = species.spellEnergyFloor,
-	     .sizeFactor = species.spellSizeFactor},
-	    magic::GetMagicEffectInfo(info, type).costToCreate);
+	return creature_spell_casting::CanCast({.size = ShownSize(*body),
+	                                        .strength = body->strength,
+	                                        .energy = needs->needs.energy,
+	                                        .exhaustion = needs->needs.exhaustion},
+	                                       {.chantsPerEnergy = species.chantsPerEnergy,
+	                                        .energyFloor = species.spellEnergyFloor,
+	                                        .sizeFactor = species.spellSizeFactor},
+	                                       magic::GetMagicEffectInfo(info, type).costToCreate);
 }
 } // namespace
 
@@ -296,8 +298,9 @@ std::optional<creature_plan_actions::CastInfo> CreatureMindSystem::CastInfoFor(e
 	const auto type = static_cast<MagicType>(*magic);
 	// The miracle's own gesture, power-ups too: none in the game's tables
 	const auto gesture = magic::GetMagicInfo(info, type).gestureType;
-	return creature_plan_actions::CastInfo {
-	    .magicType = *magic, .gesture = static_cast<uint32_t>(gesture), .height = cast_moves::k_HeightOfSizeOne * body->size};
+	return creature_plan_actions::CastInfo {.magicType = *magic,
+	                                        .gesture = static_cast<uint32_t>(gesture),
+	                                        .height = cast_moves::k_HeightOfSizeOne * ShownSize(*body)};
 }
 
 bool CreatureMindSystem::TryMiracle(entt::entity creature, MagicType type, entt::entity target)
