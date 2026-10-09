@@ -207,6 +207,8 @@ namespace
 {
 /// A creature frozen or fizzed this far casts no shadow
 constexpr float k_NoShadowSpellLook = 0.2f;
+/// How many buffers the frames are drawn into in turn
+constexpr uint8_t k_BackBuffers = 3;
 /// How deep the snow lies over the island, as a texture the shaders read point by point, refreshed when the snow
 /// changes; none without snow
 const Texture2D* SnowDepth(std::unique_ptr<Texture2D>& texture, std::optional<uint32_t>& revision)
@@ -427,6 +429,9 @@ std::unique_ptr<RendererInterface> RendererInterface::Create(GraphicsBackend bac
 		bgfxReset |= BGFX_RESET_VSYNC;
 	}
 	init.resolution.reset = bgfxReset;
+	// Three buffers to draw into: with two, a frame waits for the one on screen to be let go of, a whole refresh or two
+	// whenever the window is composited, as Direct3D 12 windows often are
+	init.resolution.numBackBuffers = k_BackBuffers;
 	init.callback = dynamic_cast<bgfx::CallbackI*>(bgfxCallback.get());
 
 	if (!bgfx::init(init))

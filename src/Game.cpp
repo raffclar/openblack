@@ -2993,6 +2993,7 @@ void Game::StartNewLand()
 	if (!_gameMusic)
 	{
 		_gameMusic = std::make_unique<audio::GameMusic>();
+		audio::GameMusic::RegisterBanks();
 	}
 	_gameMusic->Reset();
 }

@@ -164,6 +164,9 @@ public:
 	void ProcessTurn(const TurnInputs& inputs);
 	/// Forgets what was playing, when a land is loaded
 	void Reset();
+	/// Registers every music bank with the audio once, as the game does when its audio starts, so that starting a
+	/// piece later reads none of them
+	static void RegisterBanks();
 
 	/// Music a script starts: MusicType::None stops it
 	void StartScriptMusic(MusicType type);

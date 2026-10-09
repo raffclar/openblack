@@ -16,11 +16,13 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <PackFile.h>
 #include <glm/geometric.hpp>
@@ -713,18 +715,20 @@ std::optional<std::filesystem::path> FindIgnoringCase(const std::filesystem::pat
 
 std::shared_ptr<const MusicBank> AudioManager::LoadMusicBank(const std::string& bankPath)
 {
-	if (auto loaded = _musicBanks[bankPath].lock())
+	if (const auto found = _musicBanks.find(bankPath); found != _musicBanks.end())
 	{
-		return loaded;
+		return found->second;
 	}
+	auto& registered = _musicBanks[bankPath];
 	const auto path = FindIgnoringCase(bankPath);
 	if (!path)
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("audio"), "Music bank {} not found", bankPath);
 		return nullptr;
 	}
+	// Only the bank's headers are read: its music stays in the file
 	pack::PackFile pack;
-	if (pack.Open(*path) != pack::PackResult::Success || pack.GetAudioSampleHeaders().empty())
+	if (pack.OpenAudioIndex(*path) != pack::PackResult::Success || pack.GetAudioSampleHeaders().empty())
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("audio"), "Music bank {} could not be read", path->string());
 		return nullptr;
@@ -745,16 +749,35 @@ std::shared_ptr<const MusicBank> AudioManager::LoadMusicBank(const std::string& 
 	{
 		bank->loopOverride = first.loop;
 	}
-	bank->chunks = pack.GetAudioSamplesData();
+	bank->chunkCount = static_cast<uint32_t>(headers.size());
 	bank->chunkSampleRates.reserve(headers.size());
-	for (const auto& header : headers)
+	std::vector<std::pair<uint64_t, uint32_t>> spans;
+	spans.reserve(headers.size());
+	for (uint32_t i = 0; i < headers.size(); ++i)
 	{
-		bank->chunkSampleRates.push_back(header.sampleRate);
+		bank->chunkSampleRates.push_back(headers[i].sampleRate);
+		spans.push_back(pack.GetAudioSampleFileSpan(i).value_or(std::pair<uint64_t, uint32_t> {0, 0}));
 	}
-	_musicBankInfo[bankPath] = MusicBankInfo {.groupId = bank->groupId, .chunkCount = bank->GetChunkCount()};
-	_musicBanks[bankPath] = bank;
-	// Kept until another bank is read, so asking about a bank and then playing it reads it once
-	_recentMusicBank = bank;
+	bank->readChunk = [file = *path, spans = std::move(spans)](uint32_t chunk) {
+		std::vector<uint8_t> data;
+		if (chunk >= spans.size())
+		{
+			return data;
+		}
+		const auto [offset, size] = spans[chunk];
+		std::ifstream stream(file, std::ios::binary);
+		if (!stream.seekg(static_cast<std::streamoff>(offset)))
+		{
+			return data;
+		}
+		data.resize(size);
+		if (!stream.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(size)))
+		{
+			data.clear();
+		}
+		return data;
+	};
+	registered = bank;
 	return bank;
 }
 
@@ -777,16 +800,12 @@ bool AudioManager::MusicIsActive() const
 
 std::optional<MusicBankInfo> AudioManager::GetMusicBankInfo(const std::string& bankPath)
 {
-	if (const auto found = _musicBankInfo.find(bankPath); found != _musicBankInfo.end())
+	const auto bank = LoadMusicBank(bankPath);
+	if (!bank)
 	{
-		return found->second;
+		return std::nullopt;
 	}
-	// Reading the bank tells its group and length
-	if (!LoadMusicBank(bankPath))
-	{
-		_musicBankInfo[bankPath] = std::nullopt;
-	}
-	return _musicBankInfo[bankPath];
+	return MusicBankInfo {.groupId = bank->groupId, .chunkCount = bank->GetChunkCount()};
 }
 
 uint32_t AudioManager::AtmosRegisterBank(const std::string& bankName, const std::vector<pack::AudioBankSampleHeader>& headers,

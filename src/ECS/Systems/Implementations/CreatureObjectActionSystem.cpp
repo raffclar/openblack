@@ -246,7 +246,7 @@ void Consume(ecs::Registry& registry, entt::entity food)
 	{
 		if (auto* abode = registry.TryGet<Abode>(villager->abode))
 		{
-			abode->inhabitants.erase(food);
+			std::erase(abode->inhabitants, food);
 		}
 		if (auto* town = registry.TryGet<Town>(villager->town))
 		{

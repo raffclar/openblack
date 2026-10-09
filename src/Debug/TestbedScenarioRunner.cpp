@@ -106,6 +106,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
@@ -2526,10 +2527,8 @@ void Runner::SpawnCrowdMember(size_t index)
 	const auto town = townIds.find(static_cast<uint32_t>(home.town));
 	if (abode != entt::null && registry.Valid(abode) && town != townIds.end())
 	{
-		auto& villager = registry.Get<ecs::components::Villager>(entity);
-		villager.abode = abode;
-		villager.town = town->second;
-		registry.Get<ecs::components::Abode>(abode).inhabitants.insert(entity);
+		Locator::townSystem::value().AddVillagerToAbode(abode, entity);
+		registry.Get<ecs::components::Villager>(entity).town = town->second;
 	}
 }
 

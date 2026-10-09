@@ -115,6 +115,10 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_pack_bank_info pack/test_pack_bank_info.cpp)
 target_link_libraries(test_pack_bank_info PRIVATE pack)
+openblack_setup_and_add_test(
+  test_pack_audio_index pack/test_pack_audio_index.cpp
+)
+target_link_libraries(test_pack_audio_index PRIVATE pack)
 openblack_setup_and_add_test(test_game_random test_game_random.cpp)
 openblack_setup_and_add_test(test_crash_report test_crash_report.cpp)
 openblack_setup_and_add_test(test_game_clock test_game_clock.cpp)
@@ -368,6 +372,9 @@ openblack_setup_and_add_test(test_physics_rest test_physics_rest.cpp)
 openblack_setup_and_add_test(test_dynamics_system test_dynamics_system.cpp)
 target_link_libraries(test_dynamics_system PRIVATE psys physconst lnd)
 openblack_setup_and_add_test(
+  test_physics_draw_matrix test_physics_draw_matrix.cpp
+)
+openblack_setup_and_add_test(
   test_temple_destruction test_temple_destruction.cpp
 )
 openblack_setup_and_add_test(
@@ -377,6 +384,15 @@ openblack_setup_and_add_test(test_physics_manager test_physics_manager.cpp)
 openblack_setup_and_add_test(test_physics_living test_physics_living.cpp)
 openblack_setup_and_add_test(test_physics_objects test_physics_objects.cpp)
 openblack_setup_and_add_test(test_damage_mesh test_damage_mesh.cpp)
+openblack_setup_and_add_test(
+  test_building_damage_system test_building_damage_system.cpp
+)
+openblack_setup_and_add_test(test_clip_sound_player test_clip_sound_player.cpp)
+target_link_libraries(test_clip_sound_player PRIVATE sas)
+openblack_setup_and_add_test(
+  test_physics_game_hooks test_physics_game_hooks.cpp
+)
+openblack_setup_and_add_test(test_town_homes test_town_homes.cpp)
 openblack_setup_and_add_test(test_reward test_reward.cpp)
 openblack_setup_and_add_test(test_scenic_forest test_scenic_forest.cpp)
 openblack_setup_and_add_test(test_nearest_search test_nearest_search.cpp)
@@ -386,6 +402,8 @@ openblack_setup_and_add_test(test_script_find test_script_find.cpp)
 openblack_setup_and_add_test(test_partial_build_cap test_partial_build_cap.cpp)
 openblack_setup_and_add_test(test_town_playthings test_town_playthings.cpp)
 openblack_setup_and_add_test(test_temple_heart test_temple_heart.cpp)
+openblack_setup_and_add_test(test_model_surface test_model_surface.cpp)
+target_link_libraries(test_model_surface PRIVATE l3d)
 openblack_setup_and_add_test(test_fireflies test_fireflies.cpp)
 openblack_setup_and_add_test(test_store_rules test_store_rules.cpp)
 openblack_setup_and_add_test(test_clip_sounds test_clip_sounds.cpp)
