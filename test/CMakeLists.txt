@@ -431,6 +431,18 @@ openblack_setup_and_add_inspector_test(
 openblack_setup_and_add_inspector_test(
   test_inspector_server inspector/test_inspector_server.cpp
 )
+openblack_setup_and_add_inspector_test(
+  test_inspector_discovery inspector/test_inspector_discovery.cpp
+)
+# The inspector's MCP adapter: its choice among several running games, against fake games
+find_package(Python3 COMPONENTS Interpreter)
+if (Python3_Interpreter_FOUND)
+  add_test(
+    NAME test_inspector_mcp
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/tools/inspector/test_openblack_inspector_mcp.py
+  )
+endif ()
 # The game's side of the inspector, built only with it
 if (OPENBLACK_INSPECTOR)
   openblack_setup_and_add_test(

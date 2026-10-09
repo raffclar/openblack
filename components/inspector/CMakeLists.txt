@@ -23,8 +23,10 @@ if (OPENBLACK_CLANG_TIDY_CHECKS)
 endif ()
 
 if (MSVC)
-  target_compile_definitions(inspector PRIVATE _HAS_EXCEPTIONS=0)
-  target_compile_options(inspector PRIVATE /W4 /WX /EHs-c-)
+  # The standard library keeps its exception support as the game and tests have it: with it off here, the standard
+  # exceptions the JSON library makes (and never throws) when text doesn't parse are laid out differently from the
+  # same classes in the programs linking it, and freeing them corrupts the heap
+  target_compile_options(inspector PRIVATE /W4 /WX)
 else ()
   target_compile_options(
     inspector PRIVATE -Wall -Wextra -pedantic -Werror -fno-exceptions
