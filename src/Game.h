@@ -23,6 +23,7 @@
 #include "3D/HandCrossFade.h"
 #include "3D/HandNavigationPose.h"
 #include "Common/Zoomer.h"
+#include "Creature/CreatureFight.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "EngineConfig.h"
 #include "Input/ShortcutKeys.h"
@@ -81,6 +82,8 @@ struct ScenarioRequest
 	uint32_t warmUpFrames {120};
 	uint32_t frames {600};
 	std::optional<std::filesystem::path> results;
+	/// Without the testbed's window of scenarios over the view, as for screenshots of what a scenario shows
+	bool hideWindow {false};
 };
 
 struct Arguments
@@ -151,7 +154,10 @@ public:
 	bool Initialize() noexcept;
 	bool Run() noexcept;
 
+	/// Loads a land's map script, keeping the challenge's scripts running, as the story's own change of land does
 	bool LoadMap(const std::filesystem::path& path) noexcept;
+	/// Loads a land as the land menu does: the challenge's scripts start again from scratch before the land loads
+	bool LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept;
 	void LoadLandscape(const std::filesystem::path& path);
 	/// Loads the testbed: a flat plane over the whole map, with a lake north of the middle and nothing on it, for trying
 	/// out creatures
@@ -198,6 +204,8 @@ private:
 	std::filesystem::path _startMap;
 	bool _startTestbed {false};
 	std::optional<ScenarioRequest> _scenarioRequest;
+	/// Whether the testbed opens its window of scenarios
+	bool _testbedWindow {true};
 	bool _quitRequested {false};
 
 	std::chrono::steady_clock::time_point _lastGameLoopTime;
@@ -208,6 +216,8 @@ private:
 	/// Whether the last press of the Action button went to letting go of a miracle in the hand or to a creature, so it
 	/// taps nothing else for the leash
 	bool _actionPressTaken {false};
+	/// The button whose press directs the player's creature's fight, until it is let go
+	std::optional<creature_fight::Button> _fightButton;
 	bool _handRotating {false};
 	/// The hand sits on the line of sight through the cursor, this far from the camera
 	glm::vec3 _handRayDirection {0.0f, -1.0f, 0.0f};

@@ -538,7 +538,7 @@ bool Gui::ShowMenu() noexcept
 			                        bool validLevel) {
 				if (ImGui::MenuItem(label.data(), nullptr, false, validLevel))
 				{
-					game.LoadMap(path);
+					game.LoadMapWithFreshScripts(path);
 				}
 				if (!description.empty() && ImGui::IsItemHovered())
 				{
