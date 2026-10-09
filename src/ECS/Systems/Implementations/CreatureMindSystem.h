@@ -106,8 +106,8 @@ private:
 	[[nodiscard]] float ActivityUsefulness(entt::entity creature, const components::CreatureMindState& mind,
 	                                       creature_desires::Desire desire, entt::entity object) const;
 	/// A creature douses a thing with water, five times a bucket's worth, as it does after casting the water miracle at
-	/// a fire (CreatureMindFire.cpp)
-	void Douse(entt::entity creature, entt::entity object);
+	/// a fire (CreatureMindFire.cpp); whether the thing is no longer on fire
+	bool Douse(entt::entity creature, entt::entity object);
 	/// What a thing belongs to, as a creature sees it: a building's, villager's or field's town, a tree's forest (or else
 	/// the nearest forest with trees), an animal's flock, a creature itself; nothing for anything else
 	[[nodiscard]] static std::optional<entt::entity> BelongsTo(entt::entity thing);

@@ -183,24 +183,37 @@ TEST(CreatureFireLearning, ForcedPlanIsRememberedUnlessNothingSaysWhy)
 	using creature_learning::k_LastTellingSource;
 	creature_desires::DesireState desire;
 	// No sources at all: nothing says why
-	EXPECT_FALSE(creature_learning::RemembersForcedPlan(desire));
+	EXPECT_FALSE(creature_learning::RemembersPlan(desire));
 	desire.sources.push_back({.type = k_LastTellingSource + 5, .drive = 0.0f});
 	desire.sources.push_back({.type = 3, .drive = 2.0f});
 	// The source that drove it most says why
-	EXPECT_TRUE(creature_learning::RemembersForcedPlan(desire));
+	EXPECT_TRUE(creature_learning::RemembersPlan(desire));
 	desire.sources[1].type = k_LastTellingSource + 2;
 	// Neither the most driving nor the first says why
-	EXPECT_FALSE(creature_learning::RemembersForcedPlan(desire));
+	EXPECT_FALSE(creature_learning::RemembersPlan(desire));
 	// The first source says why
 	desire.sources[0].type = k_LastTellingSource;
-	EXPECT_TRUE(creature_learning::RemembersForcedPlan(desire));
+	EXPECT_TRUE(creature_learning::RemembersPlan(desire));
 	// Nothing has driven it: the first source has its say
 	desire.sources[1].drive = 0.0f;
 	desire.sources[0].type = 4;
 	desire.sources[1].type = 2;
-	EXPECT_TRUE(creature_learning::RemembersForcedPlan(desire));
+	EXPECT_TRUE(creature_learning::RemembersPlan(desire));
 	desire.sources[0].type = k_LastTellingSource + 1;
-	EXPECT_FALSE(creature_learning::RemembersForcedPlan(desire));
+	EXPECT_FALSE(creature_learning::RemembersPlan(desire));
+}
+
+TEST(CreatureFireLearning, AChosenPlanIsRememberedByTheDrivesBeforeTheyAreCountedAfresh)
+{
+	using creature_learning::k_LastTellingSource;
+	creature_desires::DesireState desire;
+	desire.sources.push_back({.type = k_LastTellingSource + 5, .drive = 0.0f});
+	desire.sources.push_back({.type = 3, .drive = 2.0f});
+	// The source that drove it most says why, and is asked before its drive goes
+	EXPECT_TRUE(creature_learning::TakeUpChosenPlan(desire));
+	EXPECT_EQ(desire.sources[1].drive, 0.0f);
+	// With every drive gone, only the first source has its say, which says nothing
+	EXPECT_FALSE(creature_learning::TakeUpChosenPlan(desire));
 }
 
 TEST(CreatureFire, EveryExecutorsTargetIsCountedAmongTheKinds)

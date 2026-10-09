@@ -33,6 +33,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "InfoConstants.h"
@@ -165,18 +166,18 @@ void CreatureMindSystem::ReactToFire(entt::entity creature, entt::entity burning
 	ForceActivity(creature, {.desire = Desire::Fear, .action = k_RunAwayAction, .actionObject = burning});
 }
 
-void CreatureMindSystem::Douse(entt::entity creature, entt::entity object)
+bool CreatureMindSystem::Douse(entt::entity creature, entt::entity object)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object) || !Locator::magicSystem::has_value() || !Locator::infoConstants::has_value())
 	{
-		return;
+		return false;
 	}
 	const auto& effects = Locator::infoConstants::value().effect;
 	const auto row = static_cast<size_t>(EffectInfo::WaterPail);
 	if (row >= effects.size())
 	{
-		return;
+		return false;
 	}
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} douses {}", entt::to_integral(creature), entt::to_integral(object));
 	// A bucket of water's effect, five times over, applied by the creature and no player
@@ -184,4 +185,6 @@ void CreatureMindSystem::Douse(entt::entity creature, entt::entity object)
 	values.Scale(k_DouseBuckets);
 	Locator::magicSystem::value().ApplyEffectToObject(object, values,
 	                                                  magic::EffectSource {.appliedBy = creature, .playerless = true});
+	// Its fire out, the creature has seen to what it wanted
+	return !registry.Valid(object) || !Locator::fireSystem::has_value() || !Locator::fireSystem::value().IsOnFire(object);
 }

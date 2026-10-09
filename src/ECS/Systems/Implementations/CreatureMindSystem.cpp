@@ -921,7 +921,10 @@ void CreatureMindSystem::ProcessTurn()
 		    Order(registry, entity, commands);
 		    if (commands.douse.has_value())
 		    {
-			    Douse(entity, static_cast<entt::entity>(*commands.douse));
+			    if (Douse(entity, static_cast<entt::entity>(*commands.douse)))
+			    {
+				    mind.desireSeenTo = true;
+			    }
 		    }
 		    TakeEffect(entity, commands, *mind.desires);
 		    if (commands.effect != creature_mind::Effect::None)
@@ -1323,6 +1326,7 @@ void CreatureMindSystem::ForceCatch(entt::entity creature, entt::entity object)
 		mind->planSerial = mind->idle.serial;
 		mind->agendaSeen = mind->idle.serial;
 		mind->satisfiedByEffect = false;
+		mind->desireSeenTo = false;
 	}
 	// Having decided to play, the desires that go against it are held back
 	if (mind->desires.has_value())
@@ -1396,9 +1400,10 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	mind->planSerial = mind->idle.serial;
 	mind->agendaSeen = mind->idle.serial;
 	mind->satisfiedByEffect = false;
+	mind->desireSeenTo = false;
 	// It is remembered for the player's feedback, unless nothing says why it wants what the plan serves
 	auto& desire = (*mind->desires)[forced.desire];
-	if (creature_learning::RemembersForcedPlan(desire))
+	if (creature_learning::RemembersPlan(desire))
 	{
 		const auto& info = tables->actions[*action];
 		creature_learning::Remember(mind->learnt->contexts,

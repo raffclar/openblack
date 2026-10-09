@@ -522,12 +522,15 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 	{
 		// The plan is over. Carried out to its end, the desire it served is less, unless one of its steps saw to that
 		// already; cut short by something else (fainting, a fight, a more pressing plan) or given up, it is still wanted.
+		// Only an action the game's table says lessens its desire does so, or one whose step saw to the desire.
 		const auto plan = *mind.planner.current;
 		const bool carriedOut = idle.serial == mind.planSerial && !idle.gaveUp;
-		if (carriedOut && !mind.satisfiedByEffect && tables != nullptr && plan.action < tables->actions.size())
+		if (carriedOut && !mind.satisfiedByEffect && tables != nullptr && plan.action < tables->actions.size() &&
+		    (tables->actions[plan.action].alwaysApplies || mind.desireSeenTo))
 		{
 			Satisfied(creature, *mind.desires, tables->actions[plan.action].name);
 		}
+		mind.desireSeenTo = false;
 		Abandon(mind);
 		mind.planner.best.at(static_cast<size_t>(plan.desire)).reset();
 	}
@@ -555,6 +558,7 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 	}
 	mind.agendaSeen = idle.serial;
 	mind.satisfiedByEffect = false;
+	mind.desireSeenTo = false;
 	if (mind.planActive || tables == nullptr)
 	{
 		return;
@@ -629,20 +633,25 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	mind.planSerial = mind.idle.serial;
 	mind.agendaSeen = mind.idle.serial;
 	mind.satisfiedByEffect = false;
-	creature_learning::ResetDrives((*mind.desires)[plan.desire]);
-	creature_learning::SuppressOpposed(*mind.desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
+	mind.desireSeenTo = false;
 	learnt.turnsSinceDone.at(plan.action) = 0;
-	creature_learning::Remember(learnt.contexts,
-	                            {
-	                                .action = plan.action,
-	                                .desire = plan.desire,
-	                                .object = plan.object,
-	                                .belief = plan.object.has_value()
-	                                              ? BeliefOf(registry, static_cast<entt::entity>(*plan.object), creature)
-	                                              : std::nullopt,
-	                                .learnable = info.learnable,
-	                                .windowSeconds = info.learningWindowSeconds,
-	                            });
+	// It is remembered for the player's feedback unless nothing says why it wants what the plan serves, as a forced plan
+	// is, and the desires the plan's desire opposes are held back
+	if (creature_learning::TakeUpChosenPlan((*mind.desires)[plan.desire]))
+	{
+		creature_learning::Remember(learnt.contexts,
+		                            {
+		                                .action = plan.action,
+		                                .desire = plan.desire,
+		                                .object = plan.object,
+		                                .belief = plan.object.has_value()
+		                                              ? BeliefOf(registry, static_cast<entt::entity>(*plan.object), creature)
+		                                              : std::nullopt,
+		                                .learnable = info.learnable,
+		                                .windowSeconds = info.learningWindowSeconds,
+		                            });
+	}
+	creature_learning::SuppressOpposed(*mind.desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
 	if (executor->build == creature_plan_actions::Build::ShowDesire)
 	{
 		mind.idle.showDesireSeconds = creature_mind::k_ShowDesireSeconds;
@@ -976,6 +985,7 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	mind->planSerial = mind->idle.serial;
 	mind->agendaSeen = mind->idle.serial;
 	mind->satisfiedByEffect = false;
+	mind->desireSeenTo = false;
 	auto& learnt = *mind->learnt;
 	learnt.turnsSinceDone.at(*action) = 0;
 	const auto& info = tables->actions[*action];

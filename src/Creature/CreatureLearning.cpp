@@ -240,7 +240,7 @@ void creature_learning::ResetDrives(creature_desires::DesireState& desire)
 	}
 }
 
-bool creature_learning::RemembersForcedPlan(const creature_desires::DesireState& desire)
+bool creature_learning::RemembersPlan(const creature_desires::DesireState& desire)
 {
 	// The source that has driven the desire most, of those that have driven it at all, the first of the most; else none
 	uint32_t type = k_NoTellingSource;
@@ -259,6 +259,13 @@ bool creature_learning::RemembersForcedPlan(const creature_desires::DesireState&
 		type = desire.sources.front().type;
 	}
 	return type <= k_LastTellingSource;
+}
+
+bool creature_learning::TakeUpChosenPlan(creature_desires::DesireState& desire)
+{
+	const bool remembered = RemembersPlan(desire);
+	ResetDrives(desire);
+	return remembered;
 }
 
 CreatureAttitude& creature_learning::AttitudeTo(std::vector<CreatureAttitude>& attitudes, uint32_t creature)

@@ -133,12 +133,15 @@ void MakeFullyDominant(creature_desires::Desires& desires, Desire desire);
 /// Source types past this say nothing of why the creature wants something; the first of them stands for no source
 constexpr uint32_t k_LastTellingSource = 60;
 constexpr uint32_t k_NoTellingSource = k_LastTellingSource + 1;
-/// Whether a plan forced on the creature (by a reaction) is remembered for the player's feedback: unless the source that
-/// has driven its desire most (none when no source has driven it) and the desire's first source both say nothing of why
-/// it wants it
-[[nodiscard]] bool RemembersForcedPlan(const creature_desires::DesireState& desire);
-/// Starts counting the sources' drive afresh
+/// Whether a plan the creature takes up, of its own or forced on it, is remembered for the player's feedback: unless the
+/// source that has driven its desire most (none when no source has driven it) and the desire's first source both say
+/// nothing of why it wants it. Asked before the drives are counted afresh.
+[[nodiscard]] bool RemembersPlan(const creature_desires::DesireState& desire);
+/// Starts counting the sources' drive afresh, as the creature switches to a plan its planner chose
 void ResetDrives(creature_desires::DesireState& desire);
+/// The creature takes up a plan its planner chose for the desire: whether the plan is remembered, which the drives
+/// decide before they are counted afresh
+[[nodiscard]] bool TakeUpChosenPlan(creature_desires::DesireState& desire);
 
 /// How the creature feels about another creature
 struct CreatureAttitude
