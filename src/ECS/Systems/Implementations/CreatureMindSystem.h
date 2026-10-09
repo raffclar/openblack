@@ -66,13 +66,15 @@ public:
 	void FoughtFight(entt::entity creature, bool won) override;
 	void AbandonAction(entt::entity creature) override;
 	void ForceCatch(entt::entity creature, entt::entity object) override;
-	bool ForceActivity(entt::entity creature, const ForcedPlan& plan) override;
+	bool ForceActivity(entt::entity creature, const ForcedActivity& plan) override;
 	void ReactToFire(entt::entity creature, entt::entity burning) override;
 	void ReactToNastyMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn) override;
 	void ReactToNiceMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn) override;
 	bool TryMiracle(entt::entity creature, MagicType type, entt::entity target) override;
 	void KnowMiracle(entt::entity creature, size_t miracle) override;
 	bool TellCast(entt::entity creature, MagicType type, entt::entity target) override;
+	bool ForcePlan(entt::entity creature, const ForcedPlan& plan) override;
+	std::optional<creature_desires::Desire> ForcePlanOn(entt::entity creature, entt::entity object) override;
 
 private:
 	/// Sets up what a creature has learnt the first time its mind thinks, from its mind file when it has one

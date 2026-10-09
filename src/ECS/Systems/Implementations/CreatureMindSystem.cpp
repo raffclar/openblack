@@ -1331,7 +1331,7 @@ void CreatureMindSystem::ForceCatch(entt::entity creature, entt::entity object)
 	}
 }
 
-bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedPlan& forced)
+bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivity& forced)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;

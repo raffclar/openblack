@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <map>
 #include <memory>
 #include <optional>
 
@@ -92,6 +93,9 @@ struct CreatureMindState
 	/// What the leash tells the mind: the desire it forces, whether the creature is following it to the hand, and what
 	/// the player has shown it on the leash
 	creature_leash::MindHooks leash {};
+	/// How often it has been told to hold things of each kind (by the game's belief types): it plays with what it holds
+	/// only the first times
+	std::map<uint32_t, uint32_t> heldKinds;
 };
 
 } // namespace openblack::ecs::components

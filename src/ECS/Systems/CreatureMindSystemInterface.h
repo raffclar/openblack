@@ -14,13 +14,16 @@
 #include <memory>
 #include <optional>
 #include <string_view>
+#include <vector>
 
 #include <entt/entity/entity.hpp>
 #include <entt/entity/fwd.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFace.h"
+#include "Creature/CreatureIdleMind.h"
 #include "Enums.h"
 
 namespace openblack::creaturemind
@@ -115,7 +118,7 @@ public:
 	/// A plan forced on a creature, as a reaction forces one: the desire it serves, the thing the desire is served
 	/// through (none for the desire itself), the action by its name in the game's table, the thing acted on, and the
 	/// thing used, if any
-	struct ForcedPlan
+	struct ForcedActivity
 	{
 		creature_desires::Desire desire {creature_desires::Desire::Fear};
 		std::optional<entt::entity> activityObject;
@@ -126,7 +129,7 @@ public:
 	/// What the creature was doing stops as a failure and it carries out the plan instead: whether it could. A plan
 	/// carried out is remembered for the player's feedback (unless nothing says why it wants it), and the desires the
 	/// plan's desire opposes are held back.
-	virtual bool ForceActivity(entt::entity /*creature*/, const ForcedPlan& /*plan*/) { return false; }
+	virtual bool ForceActivity(entt::entity /*creature*/, const ForcedActivity& /*plan*/) { return false; }
 	/// A fire reaches the creature: it goes to put out a fire on something it cares for enough, once it has seen the
 	/// water miracle often enough to cast it, and runs from the burning thing otherwise
 	virtual void ReactToFire(entt::entity /*creature*/, entt::entity /*burning*/) {}
@@ -143,6 +146,26 @@ public:
 	/// one at a thing, going about it as it would by itself
 	virtual void KnowMiracle(entt::entity /*creature*/, size_t /*miracle*/) {}
 	virtual bool TellCast(entt::entity /*creature*/, MagicType /*type*/, entt::entity /*target*/) { return false; }
+
+	/// A plan the creature is made to carry out, as an order given with the leash makes it: an action of the game's table
+	/// for a desire, on a thing or at a point, with its own agenda unless one is given
+	struct ForcedPlan
+	{
+		creature_desires::Desire desire {creature_desires::Desire::ObeyPlayer};
+		std::string_view action;
+		std::optional<entt::entity> object;
+		std::optional<glm::vec2> point;
+		std::optional<std::vector<creature_mind::Step>> agenda;
+	};
+	/// The creature gives up what it was doing for the plan, which nothing it wants replaces until it is done. Returns
+	/// whether it could be carried out.
+	virtual bool ForcePlan(entt::entity /*creature*/, const ForcedPlan& /*plan*/) { return false; }
+	/// The creature's desires choose something to do to a thing, as its planner would with that thing the only one
+	/// about, and it is made to do it. The desire it acts on, if its desires found anything.
+	virtual std::optional<creature_desires::Desire> ForcePlanOn(entt::entity /*creature*/, entt::entity /*object*/)
+	{
+		return std::nullopt;
+	}
 };
 
 } // namespace openblack::ecs::systems
