@@ -171,10 +171,70 @@ void AddCave(std::vector<Scenario>& all)
 	                 tattoo(Kind::RemoveTattoo, 0, 1, 4.0f)},
 	});
 }
+/// The Creature Cave's trophies for creatures of different histories: the belts on the attack dummies for how each leans
+/// in its fights, the medals on the magic plinths and the seeds hovering by them for the miracles it has learnt
+void AddCaveTrophies(std::vector<Scenario>& all)
+{
+	const auto lean = [](float amount, float delay) {
+		return Command {.kind = Kind::SetFightLean, .creature = 0, .delaySeconds = delay, .amount = amount};
+	};
+	const auto seen = [](MagicType miracle, float times) {
+		return Command {
+		    .kind = Kind::SetMiracleSightings, .creature = 0, .value = static_cast<size_t>(miracle), .amount = times};
+	};
+	const auto cave = [](float delay) {
+		return Command {.kind = Kind::OpenCreatureCave,
+		                .creature = 0,
+		                .delaySeconds = delay,
+		                .value = static_cast<size_t>(creature_cave::Page::Attributes)};
+	};
+	all.push_back({
+	    .id = "creature_mode.cave_trophies_novice",
+	    .name = "Cave trophies: a creature that never fought or learnt",
+	    .facet = Facet::CreatureMode,
+	    .description = "The player's tiger has never fought and has seen no miracle; F5 is pressed.",
+	    .expected = "The creature's room shows on each attack dummy the belts of an even balance: white, yellow and blue "
+	                "at their fourth and green at its second, on both rows. No medal stands on the plinths and no seed "
+	                "hovers by them.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f}, "yours")},
+	    .commands = {cave(1.0f)},
+	});
+	all.push_back({
+	    .id = "creature_mode.cave_trophies_aggressive",
+	    .name = "Cave trophies: an aggressive fighter that knows its miracles",
+	    .facet = Facet::CreatureMode,
+	    .description = "The player's tiger leans all the way to attack in its fights, has learnt the fireball, the "
+	                   "heal and the water miracles in full and has seen food and the forest a few times; F5 is pressed.",
+	    .expected = "One row of belts is full, white to black at its fourth, and the other row is empty. The plinths "
+	                "show a medal for all the miracles together and one each for the four best learnt, gems for the "
+	                "three learnt in full, shining; the seeds of the fireball, the heal, the water and the fourth best "
+	                "hover by the plinths, spinning, with their holders' effects.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f}, "yours")},
+	    .commands = {lean(1.0f, 1.0f), seen(MagicType::Fireball, 1000.0f), seen(MagicType::Heal, 1000.0f),
+	                 seen(MagicType::Water, 1000.0f), seen(MagicType::Food, 3.0f), seen(MagicType::Forest, 1.0f), cave(0.5f)},
+	});
+	all.push_back({
+	    .id = "creature_mode.cave_trophies_defensive",
+	    .name = "Cave trophies: a defensive fighter with flocks and a phial",
+	    .facet = Facet::CreatureMode,
+	    .description = "The player's tiger leans well to defence (-0.6), and has learnt the flying flock and the "
+	                   "freeze spell in full and the lightning half way; F5 is pressed.",
+	    .expected = "The defence row has 27 levels: white to red at their fourth and purple at its second; the attack "
+	                "row has six: white at its fourth and yellow at its first. The flock's seed hovers as a dove (or a "
+	                "bat for an evil god), the freeze spell's phial pulses icy, and the lightning's seed hovers third.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f}, "yours")},
+	    .commands = {lean(-0.6f, 1.0f), seen(MagicType::FlockFlying, 1000.0f), seen(MagicType::CreatureSpellFreeze, 1000.0f),
+	                 seen(MagicType::LightningBolt, 5.0f), cave(0.5f)},
+	});
+}
 } // namespace
 
 void testbed_scenarios::AddCreatureModeScenarios(std::vector<Scenario>& all)
 {
 	AddCreatureMode(all);
 	AddCave(all);
+	AddCaveTrophies(all);
 }
