@@ -18,6 +18,7 @@
 
 #include <entt/core/hashed_string.hpp>
 
+#include "3D/ModelSurface.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -67,6 +68,55 @@ void TempleDestructionSystem::RemoveTemple(entt::entity temple)
 	_world->Remove(temple);
 }
 
+void TempleDestructionSystem::Beam(entt::entity entity, Temple& temple, glm::vec3 position)
+{
+	namespace td = temple_destruction;
+	if (!td::Beaming(temple.destructionClock))
+	{
+		return;
+	}
+	// As many beams as the beam clock falls behind the clock, each between two random points of the heart's model facing
+	// no more than a little down, leaving along the first's normal and arriving against the second's
+	std::vector<model_surface::Triangle> triangles;
+	while (temple.destructionBeamClock < temple.destructionClock)
+	{
+		const float share = td::BeamShare(temple.destructionClock);
+		temple.destructionBeamClock = td::NextBeam(temple.destructionBeamClock, share);
+		if (!temple.destructionBeamSource.has_value())
+		{
+			temple.destructionBeamSource =
+			    _world->StartSpotVisual(SpotVisualType::MagicBeamOnCitadel, position,
+			                            td::TurnsFor(_world->MillisecondsPerTurn(), td::k_BeamsOver), temple.owner);
+		}
+		auto* random = _world->Random();
+		if (random == nullptr)
+		{
+			continue;
+		}
+		if (triangles.empty())
+		{
+			triangles = _world->DrawnTrianglesOf(entity);
+		}
+		const auto placement = _world->PlacementOf(entity);
+		const auto from = model_surface::RandomUpwardPoint(triangles, placement, *random);
+		const auto to = model_surface::RandomUpwardPoint(triangles, placement, *random);
+		if (!temple.destructionBeamSource.has_value() || !from.has_value() || !to.has_value())
+		{
+			continue;
+		}
+		const auto look = td::BeamLookAt(share);
+		_world->AddPlasma(*temple.destructionBeamSource, {
+		                                                     .start = from->position,
+		                                                     .end = to->position,
+		                                                     .startTangent = from->normal,
+		                                                     .endTangent = -to->normal,
+		                                                     .life = look.life,
+		                                                     .speed = look.speed,
+		                                                     .alpha = look.alpha,
+		                                                 });
+	}
+}
+
 void TempleDestructionSystem::Step(entt::entity entity, Temple& temple)
 {
 	namespace td = temple_destruction;
@@ -76,10 +126,13 @@ void TempleDestructionSystem::Step(entt::entity entity, Temple& temple)
 	temple.destructionClock += static_cast<float>(millisecondsPerTurn) * k_SecondsPerMillisecond;
 	const auto events = td::Between(before, temple.destructionClock);
 	const auto position = _world->Entities()->Get<const Transform>(entity).position;
+	// The beams' spot visual is let go once it has ended
+	if (temple.destructionBeamSource.has_value() && !_world->SpotVisualRunning(*temple.destructionBeamSource))
+	{
+		temple.destructionBeamSource.reset();
+	}
 	// TODO(physics): the local player's heartbeat quickens with the clock, and the heart fades out from fourteen seconds
 	// under a shell drawn over it; openblack has no heartbeat, and draws no heart fade or shell yet
-	// TODO(physics): the beams across the heart, between random points of its own model, wait on picking points of the
-	// heart's model as the targetless beam does
 	// A clock started again while the loop still plays starts another loop, sounding over the first, as the game makes a
 	// new sound each time
 	if (events.loopStarts)
@@ -91,6 +144,11 @@ void TempleDestructionSystem::Step(entt::entity entity, Temple& temple)
 			_loops.emplace_back(entity, loop);
 		}
 	}
+	if (events.loopStarts)
+	{
+		temple.destructionBeamClock = temple.destructionClock;
+	}
+	Beam(entity, temple, position);
 	if (events.glow)
 	{
 		temple.destructionGlow = _world->StartSpotVisual(SpotVisualType::MagicFxOnCitadel, position,
@@ -117,8 +175,13 @@ void TempleDestructionSystem::Step(entt::entity entity, Temple& temple)
 	if (events.smoke)
 	{
 		const float share = _world->RandomShare(td::k_SmokeShareSpread);
-		// TODO(physics): the smoke is shown ten times its size; openblack's spot visuals have no scale of their own yet
-		_world->StartSpotVisual(SpotVisualType::EvilSmoke, position, td::SmokeTurns(millisecondsPerTurn, share), temple.owner);
+		// The smoke is made at the usual magnitude, then made ten times as big
+		const auto smoke = _world->StartSpotVisual(SpotVisualType::EvilSmoke, position,
+		                                           td::SmokeTurns(millisecondsPerTurn, share), temple.owner);
+		if (smoke.has_value())
+		{
+			_world->SetSpotVisualMagnitude(*smoke, td::k_SmokeMagnitude);
+		}
 	}
 	if (events.end)
 	{

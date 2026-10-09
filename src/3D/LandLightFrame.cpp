@@ -10,9 +10,9 @@
 #include "LandLightFrame.h"
 
 #include "3D/LandLightTable.h"
-#include "3D/SkyInterface.h"
 #include "Camera/Camera.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"

@@ -230,7 +230,7 @@ std::string_view openblack::pack::ResultToStr(PackResult result)
 	std::unreachable();
 }
 
-PackResult PackFile::ReadBlocks(std::istream& stream) noexcept
+PackResult PackFile::ReadBlocks(std::istream& stream, std::string_view leftInFile) noexcept
 {
 	assert(!_isLoaded);
 
@@ -268,6 +268,18 @@ PackResult PackFile::ReadBlocks(std::istream& stream) noexcept
 		if (_blocks.contains(header.blockName.data()))
 		{
 			return PackResult::ErrDuplicateBlockName;
+		}
+
+		if (!leftInFile.empty() && std::string_view(header.blockName.data()) == leftInFile)
+		{
+			const auto offset = static_cast<uint64_t>(stream.tellg());
+			if (offset + header.blockSize > fsize)
+			{
+				return PackResult::ErrFileTooSmall;
+			}
+			_audioWaveDataSpan = BlockSpan {.offset = offset, .size = header.blockSize};
+			stream.seekg(static_cast<std::streamoff>(header.blockSize), std::ios_base::cur);
+			continue;
 		}
 
 		_blocks[std::string(header.blockName.data())] = std::vector<uint8_t>(header.blockSize);
@@ -703,7 +715,7 @@ PackResult PackFile::ReadFile(std::istream& stream) noexcept
 {
 	PackResult result;
 
-	result = ReadBlocks(stream);
+	result = ReadBlocks(stream, {});
 	if (result != PackResult::Success)
 	{
 		return result;
@@ -792,6 +804,58 @@ PackResult PackFile::Open(const std::vector<uint8_t>& buffer) noexcept
 	imemstream stream(reinterpret_cast<const char*>(buffer.data()), buffer.size() * sizeof(buffer[0]));
 
 	return ReadFile(stream);
+}
+
+PackResult PackFile::OpenAudioIndex(const std::filesystem::path& filepath) noexcept
+{
+	assert(!_isLoaded);
+
+	std::ifstream stream(filepath, std::ios::binary);
+	if (!stream.is_open())
+	{
+		return PackResult::ErrCantOpen;
+	}
+
+	auto result = ReadBlocks(stream, "LHAudioWaveData");
+	if (result != PackResult::Success)
+	{
+		return result;
+	}
+	if (!_audioWaveDataSpan)
+	{
+		return PackResult::ErrMissingAudioWaveDataBlock;
+	}
+	result = ResolveAudioBankSampleTableBlock();
+	if (result != PackResult::Success)
+	{
+		return result;
+	}
+	result = ResolveFileSegmentBankInfoBlock();
+	if (result != PackResult::Success)
+	{
+		return result;
+	}
+	// Every sample lies within the sample data
+	for (const auto& sample : _audioSampleHeaders)
+	{
+		if (static_cast<uint64_t>(sample.offset) + sample.size > _audioWaveDataSpan->size)
+		{
+			return PackResult::ErrFileTooSmall;
+		}
+	}
+
+	_isLoaded = true;
+	return PackResult::Success;
+}
+
+std::optional<std::pair<uint64_t, uint32_t>> PackFile::GetAudioSampleFileSpan(uint32_t index) const noexcept
+{
+	if (!_audioWaveDataSpan || index >= _audioSampleHeaders.size())
+	{
+		return std::nullopt;
+	}
+	const auto& sample = _audioSampleHeaders[index];
+	return std::pair {_audioWaveDataSpan->offset + sample.offset, sample.size};
 }
 
 PackResult PackFile::Write(const std::filesystem::path& filepath) noexcept

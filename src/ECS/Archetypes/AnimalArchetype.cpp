@@ -12,6 +12,7 @@
 #include <glm/vec3.hpp>
 
 #include "Animals/AnimalRules.h"
+#include "Animals/BirdRules.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
@@ -30,7 +31,9 @@ entt::entity AnimalArchetype::Create(AnimalInfo type, const glm::vec3& position,
 	const auto& info = Locator::infoConstants::value().animal.at(static_cast<size_t>(type));
 	const auto entity = registry.Create();
 	registry.Assign<Transform>(entity, position, animals::Orientation(heading, 0.0f), glm::vec3(scale));
-	registry.Assign<Mesh>(entity, resources::HashIdentifier(info.high), static_cast<int8_t>(0), static_cast<int8_t>(0));
+	// A bird is drawn with its kind's middle model, as the game draws its birds
+	const auto mesh = animals::birds::IsBird(type) ? info.std : info.high;
+	registry.Assign<Mesh>(entity, resources::HashIdentifier(mesh), static_cast<int8_t>(0), static_cast<int8_t>(0));
 	auto& animal = registry.Assign<Animal>(entity);
 	animal.type = type;
 	animal.owner = owner;

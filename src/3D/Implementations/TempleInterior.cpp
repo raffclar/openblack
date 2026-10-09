@@ -11,12 +11,14 @@
 
 #include "TempleInterior.h"
 
+#include <cmath>
 #include <cstdio>
 
 #include <array>
 #include <unordered_map>
 
 #include <fmt/format.h>
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <spdlog/spdlog.h>
@@ -47,11 +49,16 @@
 #include "ECS/Systems/Implementations/CameraPathSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystemTemple.h"
+#include "ECS/Systems/ParticleSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gui/GameInterface.h"
 #include "Gui/GameMenu.h"
+#include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/DispenserRules.h"
+#include "Magic/MagicTables.h"
+#include "Magic/MiracleVisuals.h"
 #include "Resources/ResourcesInterface.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -485,10 +492,11 @@ void TempleInterior::FadeIntoRoom()
 	}
 }
 
-void TempleInterior::UpdateCaveTrophies()
+void TempleInterior::UpdateCaveTrophies(float seconds)
 {
 	using namespace CreatureCaveTrophies;
 	_caveTrophies.clear();
+	_caveSeeds.clear();
 	const auto facts = GatherScrollFacts();
 	const entt::id_type creatureRoom = entt::hashed_string("temple/interior/creature_l3d").value();
 	auto& meshes = Locator::resources::value().GetMeshes();
@@ -496,14 +504,24 @@ void TempleInterior::UpdateCaveTrophies()
 	{
 		return;
 	}
-	std::vector<int32_t> percents;
-	for (const auto& miracle : facts.creature->miracles)
+	// The medals and seeds show the miracles as the magic scroll last worked them out: as the room is first drawn on a
+	// visit, every frame the scroll's text is in front of it, and once more as the camera leaves it
+	const bool written = _scrolls != nullptr && _scrolls->IsWrittenInFront(TempleScrolls::Content::CreatureMiracles);
+	if (!_caveLearning.has_value() || written || _magicScrollWritten)
 	{
-		percents.push_back(miracle.percent);
+		std::vector<MiracleLearnt> miracles;
+		for (const auto& miracle : facts.creature->miracles)
+		{
+			miracles.push_back({.miracle = miracle.miracle, .percent = miracle.learnt});
+		}
+		_caveLearning = LearningOf(miracles);
 	}
+	_magicScrollWritten = written;
+
 	const auto& points = meshes.Handle(creatureRoom)->GetExtraMetrics();
 	const auto temple = glm::translate(glm::mat4(1.0f), _templePosition) * glm::eulerAngleY(_templeRotation.y);
-	for (const auto& trophy : Choose(facts.creature->fightBalance, LearningOf(percents)))
+	// The belts follow how the creature fights as it is now
+	for (const auto& trophy : Choose(facts.creature->fightBalance, *_caveLearning))
 	{
 		const entt::id_type mesh = entt::hashed_string(fmt::format("temple/icons/{}", IconName(trophy.icon)).c_str()).value();
 		if (trophy.point >= points.size() || !meshes.Contains(mesh))
@@ -526,6 +544,91 @@ void TempleInterior::UpdateCaveTrophies()
 		    .environmentMapped = trophy.environmentMapped,
 		});
 	}
+
+	if (!Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto& info = Locator::infoConstants::value();
+	// The seed of each of the best-learnt miracles hovers at its point by the plinths, from when its place is first
+	// empty with that miracle there until the player leaves the temple
+	std::array<bool, k_BestMiracles> shown {};
+	std::array<SpellSeedType, k_BestMiracles> seeds {};
+	for (size_t i = 0; i < k_BestMiracles; ++i)
+	{
+		shown.at(i) = _caveSeedPlaces.at(i).has_value();
+		const auto& miracle = _caveLearning->bestMiracles.at(i);
+		// A miracle's seed is the first seed of the game's table that casts it, which the game writes into the
+		// miracle's record as it loads its tables
+		const auto seed =
+		    miracle.has_value() ? magic::FindFirstSpellSeedForMagicType(info, static_cast<MagicType>(*miracle)) : std::nullopt;
+		seeds.at(i) = seed.value_or(SpellSeedType::None);
+	}
+	auto* particles = Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
+	const auto made = SeedsToMake(shown, seeds);
+	for (size_t i = 0; i < k_BestMiracles; ++i)
+	{
+		const auto point = SeedPoint(i);
+		if (!made.at(i).has_value() || point >= points.size())
+		{
+			continue;
+		}
+		const auto at = glm::vec3(temple * points[point][3]);
+		CaveSeedPlace place {.seed = {.seed = *made.at(i), .point = at, .spin = 0.0f, .phialPhase = 0.0f, .phialFrame = 0.0f},
+		                     .holderEffect = ecs::systems::ParticleSystemInterface::k_NoEffect};
+		// Its holder's effect plays above it at its full size, in the colours of the player at this computer
+		const auto& seedInfo = magic::GetSpellSeedInfo(info, place.seed.seed);
+		if (particles != nullptr && seedInfo.holderParticle != ParticleType::None)
+		{
+			place.holderEffect =
+			    particles->Start(seedInfo.holderParticle, at + glm::vec3(0.0f, seedInfo.holderHeight, 0.0f), 1.0f);
+			if (place.holderEffect != ecs::systems::ParticleSystemInterface::k_NoEffect)
+			{
+				particles->SetInTemple(place.holderEffect);
+				particles->SetPlayer(place.holderEffect, static_cast<int>(PlayerNames::PLAYER_ONE));
+			}
+		}
+		_caveSeedPlaces.at(i) = place;
+	}
+	// The seeds spin and their phials pulse, and their effects play, as the room is drawn
+	for (auto& place : _caveSeedPlaces)
+	{
+		if (!place.has_value())
+		{
+			continue;
+		}
+		auto& seed = place->seed;
+		seed.spin = std::fmod(seed.spin + (magic::k_OrbSeedSpin * seconds), glm::two_pi<float>());
+		if (magic::visuals::IsPhialSeed(seed.seed))
+		{
+			const auto* spell =
+			    magic::GetMagicInfoAs<GMagicCreatureSpellInfo>(info, magic::GetSpellSeedInfo(info, seed.seed).magicTypes[0]);
+			const int receiveType = spell != nullptr ? static_cast<int>(spell->creatureReceiveSpellType) : 0;
+			seed.phialFrame = magic::visuals::StepPhialFrame(seed.phialFrame, seconds);
+			seed.phialPhase = std::fmod(seed.phialPhase + (magic::visuals::PhialPulseSpeed(receiveType) * seconds), 1.0f);
+		}
+		if (particles != nullptr && place->holderEffect != ecs::systems::ParticleSystemInterface::k_NoEffect)
+		{
+			particles->ProcessByFrame(place->holderEffect, seconds);
+		}
+		_caveSeeds.push_back(seed);
+	}
+}
+
+void TempleInterior::ClearCaveSeeds()
+{
+	for (auto& place : _caveSeedPlaces)
+	{
+		if (place.has_value() && place->holderEffect != ecs::systems::ParticleSystemInterface::k_NoEffect &&
+		    Locator::particleSystem::has_value())
+		{
+			Locator::particleSystem::value().Delete(place->holderEffect);
+		}
+		place.reset();
+	}
+	_caveSeeds.clear();
+	_caveLearning.reset();
+	_magicScrollWritten = false;
 }
 
 void TempleInterior::UpdateMapMarkers(float seconds)
@@ -804,11 +907,12 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 		// The creature's room chooses the belts and medals every frame
 		if (IsRoomDrawn(TempleRoom::CreatureCave))
 		{
-			UpdateCaveTrophies();
+			UpdateCaveTrophies(milliseconds / 1000.0f);
 		}
 		else
 		{
 			_caveTrophies.clear();
+			_caveSeeds.clear();
 		}
 		// The main room moves the pool's shimmer on while the main room is drawn
 		if (IsRoomDrawn(TempleRoom::Main))
@@ -954,6 +1058,8 @@ void TempleInterior::Deactivate()
 	_transitionRoom.reset();
 	_leavingForMapPoint = false;
 	_caveTrophies.clear();
+	// The seeds by the plinths go as the player leaves, and the room works out the miracles afresh on the next visit
+	ClearCaveSeeds();
 	// Leaving the temple goes out to the island all white, which fades over a second
 	if (_interface != nullptr)
 	{

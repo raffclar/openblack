@@ -74,6 +74,12 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("benchmark-out", "With --scenario, where a benchmark writes its results (with .json and .csv after it); the game quits once they are written.", cxxopts::value<std::string>())
 		("crash-dialogs", "Show the system's and C runtime's crash dialogs (Abort/Retry/Ignore) instead of writing a crash report to crashes/ and exiting.")
 	;
+#if defined(OPENBLACK_INSPECTOR)
+	options.add_options()
+		("inspect-port", "Start the debug inspector on this port of 127.0.0.1 (0 for any free port), for agents and tools to query and control the game. The player's mouse and keyboard are kept out while a client is connected; Ctrl+Alt+Shift+F12 takes the game back.", cxxopts::value<uint16_t>())
+		("inspect-lock-input", "With --inspect-port, keep the player's mouse and keyboard out from the start, as for a headless scenario run.")
+		("inspect-allow-player-input", "With --inspect-port, never keep the player's mouse and keyboard out.");
+#endif
 	// clang-format on
 
 	try
@@ -201,6 +207,20 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.startTestbed = result.count("testbed") != 0;
 		args.frameStatsInterval = result["frame-stats"].as<uint32_t>();
 		args.frameStatsViews = result.count("frame-stats-views") != 0;
+#if defined(OPENBLACK_INSPECTOR)
+		if (result.count("inspect-port") != 0)
+		{
+			args.inspectPort = result["inspect-port"].as<uint16_t>();
+		}
+		if (result.count("inspect-lock-input") != 0)
+		{
+			args.inspectInputLock = openblack::input::LockMode::Locked;
+		}
+		else if (result.count("inspect-allow-player-input") != 0)
+		{
+			args.inspectInputLock = openblack::input::LockMode::Unlocked;
+		}
+#endif
 		if (result.count("scenario") != 0)
 		{
 			args.scenario = openblack::ScenarioRequest {

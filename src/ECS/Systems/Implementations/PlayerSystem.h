@@ -16,6 +16,7 @@
 #include <string>
 #include <unordered_map>
 
+#include "Common/VirtualInfluence.h"
 #include "ECS/Components/Alignment.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 
@@ -31,6 +32,8 @@ public:
 	void RegisterPlayers() override;
 	void AddPlayer(entt::entity playerEntity) override;
 	[[nodiscard]] entt::entity GetPlayer(PlayerNames playerName) const override;
+	void AddCreature(entt::entity creature) override;
+	[[nodiscard]] std::optional<entt::entity> GetPrimaryCreature(PlayerNames name) const override;
 	void KeepForNextLand() override;
 	void TakeUpKept(entt::entity playerEntity) override;
 
@@ -41,6 +44,8 @@ private:
 		std::optional<components::Alignment> alignment;
 		std::array<float, 8> damageFrom {};
 		uint32_t windResistance {0};
+		/// What their hand keeps of their influence past the border, and whether a script switched it off
+		std::optional<virtual_influence::State> virtualInfluence;
 	};
 
 	std::unordered_map<PlayerNames, entt::entity> _players;

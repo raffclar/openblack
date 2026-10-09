@@ -31,6 +31,7 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include "ManaPathMaths.h"
 #include "ParticleMaths.h"
 #include "ParticleSpellLink.h"
 #include "PlasmaCommand.h"
@@ -716,6 +717,9 @@ public:
 	/// Plasma beams the effect is to fire; the rules take them, the last given first
 	void AddPlasma(const PlasmaCommand& command) { _plasma.push_back(command); }
 	[[nodiscard]] std::optional<PlasmaCommand> TakePlasma();
+	/// Sparks of a mana path the effect is to let out; the rules take them, the last given first
+	void AddManaPathSpark(const mana_path::Spark& spark) { _manaPathSparks.push_back(spark); }
+	[[nodiscard]] std::optional<mana_path::Spark> TakeManaPathSpark();
 	/// An effect without a miracle counts as this computer's
 	[[nodiscard]] bool IsMyInterfaceCasting() const { return _sink == nullptr || _sink->IsMyInterfaceCasting(); }
 	[[nodiscard]] bool IsHumanPlayerCasting() const { return _sink != nullptr && _sink->IsHumanPlayerCasting(); }
@@ -880,6 +884,7 @@ private:
 	std::vector<entt::entity> _targets;
 	std::vector<glm::vec3> _targetPositions;
 	std::vector<PlasmaCommand> _plasma;
+	std::vector<mana_path::Spark> _manaPathSparks;
 };
 
 } // namespace openblack::particles

@@ -28,6 +28,7 @@ public:
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 
 	StartResult StartFight(entt::entity creature, entt::entity opponent) override;
+	void Withdraw(entt::entity creature) override;
 	void AbortFight(entt::entity creature) override;
 	[[nodiscard]] bool IsFighting(entt::entity creature) const override;
 	[[nodiscard]] std::optional<entt::entity> OpponentOf(entt::entity creature) const override;
