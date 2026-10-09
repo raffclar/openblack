@@ -15,7 +15,6 @@
 
 #include "3D/Implementations/LandIsland.h"
 #include "3D/Implementations/Ocean.h"
-#include "3D/Implementations/Sky.h"
 #include "3D/Implementations/TempleInterior.h"
 #include "3D/Implementations/UnloadedIsland.h"
 #include "3D/LandData.h"
@@ -84,6 +83,7 @@
 #include "ECS/Systems/Implementations/ResourceStoreSystem.h"
 #include "ECS/Systems/Implementations/RewardSystem.h"
 #include "ECS/Systems/Implementations/ScriptObjectsSystem.h"
+#include "ECS/Systems/Implementations/SkySystem.h"
 #include "ECS/Systems/Implementations/SnowSystem.h"
 #include "ECS/Systems/Implementations/SnowfallSystem.h"
 #include "ECS/Systems/Implementations/SoundTagSystem.h"
@@ -245,7 +245,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::handGrabSystem::emplace<HandGrabSystem>();
 	Locator::temple::emplace<TempleInterior>();
 	Locator::oceanSystem::emplace<Ocean>();
-	Locator::skySystem::emplace<Sky>();
+	Locator::skySystem::emplace<ecs::systems::SkySystem>();
 	Locator::alignmentSystem::emplace<AlignmentSystem>();
 	Locator::cameraHelpSystem::emplace<CameraHelpSystem>();
 	Locator::templeExteriorSystem::emplace<TempleExteriorSystem>();

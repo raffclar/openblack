@@ -29,7 +29,6 @@ class OceanInterface;
 class Profiler;
 class GameRandomInterface;
 class RandomNumberManagerInterface;
-class SkyInterface;
 class TempleInteriorInterface;
 
 namespace v120
@@ -140,6 +139,7 @@ class TownSystemInterface;
 class ResourceStoreSystemInterface;
 class TimeSystemInterface;
 class VegetationInterface;
+class SkySystemInterface;
 class WeatherSystemInterface;
 class ParticleSystemInterface;
 class MagicSystemInterface;
@@ -186,7 +186,7 @@ struct Locator
 	using gameRandom = entt::locator<GameRandomInterface>;
 	using terrainSystem = entt::locator<LandIslandInterface>;
 	using oceanSystem = entt::locator<OceanInterface>;
-	using skySystem = entt::locator<SkyInterface>;
+	using skySystem = entt::locator<ecs::systems::SkySystemInterface>;
 	using audio = entt::locator<audio::AudioManagerInterface>;
 	using camera = entt::locator<Camera>;
 	using gameActionSystem = entt::locator<input::GameActionInterface>;

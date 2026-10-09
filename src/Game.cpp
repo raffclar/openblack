@@ -52,7 +52,6 @@
 #include "3D/MapCoords.h"
 #include "3D/OceanInterface.h"
 #include "3D/SkyDome.h"
-#include "3D/SkyInterface.h"
 #include "3D/SnowCover.h"
 #include "3D/TempleInteriorInterface.h"
 #include "3D/WaterRings.h"
@@ -153,6 +152,7 @@
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -987,7 +987,7 @@ bool Game::GameLogicLoop() noexcept
 	}
 
 	// The time of day moves on
-	Locator::skySystem::value().GetClock().ProcessTurn();
+	Locator::skySystem::value().ProcessTurn();
 
 	// The weather moves on, then the ambience follows the weather at the camera
 	const auto cameraPosition = Locator::camera::value().GetOrigin();
@@ -2764,6 +2764,8 @@ bool Game::Run() noexcept
 			    .wireframe = config.wireframe,
 			    .drawHand = IsHandDrawn(),
 			};
+			// The sun, the moon and the dome's blend of this frame, for drawing it
+			Locator::skySystem::value().UpdateFrame(config.drawSky);
 			Locator::rendererInterface::value().DrawScene(drawDesc);
 		}
 
@@ -3012,8 +3014,11 @@ void Game::PrepareNewLand()
 		Locator::handGrabSystem::value().Reset();
 	}
 
+	// The sky goes on as it was: it is kept while every entity goes, and made again after
+	Locator::skySystem::value().KeepForNextLand();
 	// Reset everything. Deletes all entities and their components
 	Locator::entitiesRegistry::value().Reset();
+	Locator::skySystem::value().Initialize();
 	// TODO(#661): split entities that are permanent from map entities and move hand and camera to init
 	// We need a hand for the player
 	Locator::handSystem::value().Initialize();

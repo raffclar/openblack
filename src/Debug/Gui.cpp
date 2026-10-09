@@ -44,7 +44,6 @@
 #include <SDL2/SDL_syswm.h>
 #endif
 
-#include "3D/SkyInterface.h"
 #include "Audio.h"
 #include "Camera.h"
 #include "Camera/Camera.h"
@@ -58,6 +57,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/VillagerAge.h"
 #include "Editor/EditorWindow.h"
 #include "EngineConfig.h"

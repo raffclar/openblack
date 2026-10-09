@@ -27,7 +27,6 @@
 #include "3D/LandBlock.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/OceanInterface.h"
-#include "3D/SkyInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
@@ -112,6 +111,7 @@
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -640,18 +640,19 @@ std::unique_ptr<ProviderInterface> SkyStateProvider(std::unique_ptr<ProviderInte
 		provider->Add(description,
 		              [shared, name = description.name](const QueryContext& context) { return shared->Run(name, context); });
 	}
-	provider->Add(Query("state", "The sky: its type, its time, the script clock's hour and the day and night's times"),
-	              Serve<Locator::skySystem>("the sky", [](const SkyInterface& sky, const QueryContext& /*c*/) {
-		              const auto times = sky.GetDayNightTimes();
-		              return Json {{"sky_type", sky.GetCurrentSkyType()},
-		                           {"time", sky.GetTime()},
-		                           {"script_hour", sky.GetClock().GetScriptTime()},
-		                           {"visual_hour", sky.GetClock().GetVisualTime()},
-		                           {"night_full", times.nightFull},
-		                           {"dusk_start", times.duskStart},
-		                           {"dusk_end", times.duskEnd},
-		                           {"day_full", times.dayFull}};
-	              }));
+	provider->Add(
+	    Query("state", "The sky: its type, its time, the script clock's hour and the day and night's times"),
+	    Serve<Locator::skySystem>("the sky", [](const ecs::systems::SkySystemInterface& sky, const QueryContext& /*c*/) {
+		    const auto times = sky.GetDayNightTimes();
+		    return Json {{"sky_type", sky.GetCurrentSkyType()},
+		                 {"time", sky.GetTime()},
+		                 {"script_hour", sky.GetClock().GetScriptTime()},
+		                 {"visual_hour", sky.GetClock().GetVisualTime()},
+		                 {"night_full", times.nightFull},
+		                 {"dusk_start", times.duskStart},
+		                 {"dusk_end", times.duskEnd},
+		                 {"day_full", times.dayFull}};
+	    }));
 	return provider;
 }
 

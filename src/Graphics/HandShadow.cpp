@@ -32,7 +32,7 @@ const glm::vec3 k_MiddaySunSide = glm::normalize(glm::vec3(-1.0f, 0.0f, -1.0f));
 constexpr float k_BoneSpreadToRadius = 1.4f;
 } // namespace
 
-glm::vec3 HandShadow::SunlightDirection(float hours, const SkyInterface::DayNightTimes& times)
+glm::vec3 HandShadow::SunlightDirection(float hours, const DayNightTimes& times)
 {
 	const auto sunrise = times.duskStart;
 	const auto sunset = 24.0f - times.duskStart;
@@ -47,7 +47,7 @@ glm::vec3 HandShadow::SunlightDirection(float hours, const SkyInterface::DayNigh
 	return -glm::normalize(towardsSun);
 }
 
-float HandShadow::Daylight(float hours, const SkyInterface::DayNightTimes& times)
+float HandShadow::Daylight(float hours, const DayNightTimes& times)
 {
 	// The sky's times are those of the morning, the evening mirrors them around midday
 	const auto morning = hours <= 12.0f ? hours : 24.0f - hours;
@@ -73,7 +73,7 @@ float HandShadow::DistanceFade(float cameraDistance, float handRadius)
 }
 
 std::optional<HandShadow> HandShadow::Compute(const std::vector<glm::mat4>& handBones, glm::vec3 cameraPosition,
-                                              float groundHeight, float hours, const SkyInterface::DayNightTimes& times,
+                                              float groundHeight, float hours, const DayNightTimes& times,
                                               bool originBottomLeft, bool homogeneousDepth)
 {
 	if (handBones.empty())

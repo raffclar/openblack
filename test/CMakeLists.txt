@@ -160,6 +160,7 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_sky_dome test_sky_dome.cpp)
 openblack_setup_and_add_test(test_sky_frame test_sky_frame.cpp)
+openblack_setup_and_add_test(test_sky_system test_sky_system.cpp)
 openblack_setup_and_add_test(test_near_clipping test_near_clipping.cpp)
 openblack_setup_and_add_test(test_ground_blobs test_ground_blobs.cpp)
 openblack_setup_and_add_test(test_zsort test_zsort.cpp)
