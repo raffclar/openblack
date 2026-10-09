@@ -26,6 +26,7 @@
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/GroundMark.h"
+#include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/MorphWithTerrain.h"
@@ -126,7 +127,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 
 	registry.Each<const Mesh, const Transform>(
 	    [&prep](entt::entity entity, const Mesh& mesh, const Transform& /*unused*/) { prep(entity, mesh, false); },
-	    entt::exclude<MorphWithTerrain, Tree, TempleInteriorPart, AtHome>);
+	    entt::exclude<MorphWithTerrain, Tree, TempleInteriorPart, AtHome, HiddenByState>);
 	registry.Each<const Mesh, const Transform, const MorphWithTerrain>(
 	    [&prep](entt::entity entity, const Mesh& mesh, const Transform& /*unused*/, const MorphWithTerrain& /*unused*/) {
 		    prep(entity, mesh, true);
@@ -289,7 +290,8 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
 		    modelMatrix = glm::scale(modelMatrix, transform.scale);
 		    // A body moving in the physics is drawn between its last two turns
-		    if (const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity))
+		    const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity);
+		    if (drawn != nullptr)
 		    {
 			    modelMatrix = glm::translate(glm::mat4(1.0f), drawn->origin) * glm::mat4(drawn->axes);
 		    }
@@ -399,13 +401,19 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 
+		    // A body sunk wholly under the sea isn't drawn
+		    if (drawn != nullptr && drawn->underSea)
+		    {
+			    look.z = 1.0f;
+		    }
+
 		    const uint32_t idx = slots->second.offset + slots->second.filled;
 		    _renderContext.instanceUniforms[idx] = {.model = modelMatrix, .look = look};
 		    if (look.z != 1.0f)
 		    {
 			    _renderContext.drawnObjects.push_back({.entity = entity, .model = modelMatrix});
 		    }
-		    if (slots->second.perEntity)
+		    if (slots->second.perEntity && (drawn == nullptr || !drawn->underSea))
 		    {
 			    _renderContext.entityDraws.push_back({.entity = entity, .instance = idx});
 		    }
@@ -419,7 +427,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 		    ++slots->second.filled;
 	    },
-	    entt::exclude<TempleInteriorPart, Tree, AtHome>);
+	    entt::exclude<TempleInteriorPart, Tree, AtHome, HiddenByState>);
 
 	if (fits && !_renderContext.instanceUniforms.empty())
 	{
@@ -541,7 +549,9 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		// A body moving in the physics is drawn between its last two turns
 		if (const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity))
 		{
-			modelMatrix = glm::translate(glm::mat4(1.0f), drawn->origin) * glm::mat4(drawn->axes);
+			// Sunk wholly under the sea it isn't drawn: every vertex lands on one point, which draws nothing
+			modelMatrix =
+			    drawn->underSea ? glm::mat4(0.0f) : glm::translate(glm::mat4(1.0f), drawn->origin) * glm::mat4(drawn->axes);
 		}
 		// A tree with a fire on it is drawn darker, its foliage thinning as it burns, and narrows away at the last,
 		// keeping its height

@@ -65,7 +65,10 @@ Blend Weigh(glm::vec3 thing, const std::array<glm::vec3, 4>& hands, float modelS
 		weight = kept;
 		return clamped;
 	};
-	const bool clamped = keep(height) | keep(side);
+	// Both weights are always clamped, so neither test is skipped.
+	const bool heightClamped = keep(height);
+	const bool sideClamped = keep(side);
+	const bool clamped = heightClamped || sideClamped;
 	return {.weights = {(1.0f - height) * (1.0f - side), (1.0f - height) * side, height * (1.0f - side), height * side},
 	        .clamped = clamped,
 	        .height = height};

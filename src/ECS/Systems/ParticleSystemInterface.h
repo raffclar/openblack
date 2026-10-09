@@ -24,6 +24,7 @@
 #include "Enums.h"
 #include "Particles/ParticleDrawFrame.h"
 #include "Particles/ParticleSpellLink.h"
+#include "Particles/PlasmaCommand.h"
 
 namespace openblack::particles
 {
@@ -110,6 +111,8 @@ public:
 	virtual void AddTarget(EffectId id, entt::entity target) = 0;
 	/// A point of the world for the effect's rules to act on, such as where a spot visual's beam ends
 	virtual void AddTargetPosition(EffectId /*id*/, glm::vec3 /*position*/) {}
+	/// A plasma beam for the effect to fire, as a temple heart's spot visual fires one at what takes a blow for it
+	virtual void AddPlasma(EffectId /*id*/, const particles::PlasmaCommand& /*command*/) {}
 	/// A symbol of belief rises from something that gained it, in the effect every symbol rises in, kept running once
 	/// wanted; no more than a few hundred wait
 	virtual void AddBeliefSprite(const particles::BeliefSprite& /*sprite*/) {}
