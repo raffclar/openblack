@@ -95,7 +95,7 @@ void LightSheet::Build(std::vector<Vertex>& vertices, std::vector<uint32_t>& tri
 	for (size_t i = 0; i < count; ++i)
 	{
 		const auto& point = _points[i];
-		auto top = ((point - _middle) * k_Spread) + _middle;
+		auto top = ((point - _middle) * _spread) + _middle;
 		const double rise = static_cast<double>(_heights[i]) * _strengths[i];
 		top.y = static_cast<float>(rise + top.y);
 		const auto bright = ((top - point) * k_BrightLine) + point;

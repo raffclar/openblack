@@ -11,11 +11,13 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 
 #include <entt/entity/fwd.hpp>
 
+#include "3D/LandAvoid.h"
 #include "3D/VillageLights.h"
 #include "Components/Footpath.h"
 #include "Components/MapScriptGlobals.h"
@@ -45,5 +47,7 @@ struct RegistryContext
 	uint32_t nextHeartBeamSound {0};
 	/// The order towns are gained by their players in, the next to be given
 	uint32_t nextTownGained {0};
+	/// Where creatures may go on the land, worked out once the land is there and first asked for
+	std::optional<land_avoid::Map> landAvoid;
 };
 } // namespace openblack::ecs

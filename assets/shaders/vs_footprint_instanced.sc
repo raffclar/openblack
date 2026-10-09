@@ -1,6 +1,8 @@
 $input a_position, a_texcoord0, i_data0, i_data1, i_data2, i_data3, i_data4
 $output v_texcoord0
 
+// Only the model matrix is used: a draw uploads every bone the shader declares
+#define BGFX_CONFIG_MAX_BONES 1
 #include <bgfx_shader.sh>
 
 void main()
