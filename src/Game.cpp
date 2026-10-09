@@ -838,8 +838,8 @@ bool Game::GameLogicLoop() noexcept
 	Locator::influenceSystem::value().ProcessTurn(Locator::time::value().GetTurn());
 	// The crops in the fields grow
 	Locator::fieldSystem::value().ProcessTurn(Locator::time::value().GetTurn());
-	// The trees that are still growing grow, faster in the rain
-	Locator::vegetation::value().ProcessTurn();
+	// The forests' growing trees grow, faster in the rain, and the forests spread
+	Locator::forestSystem::value().GrowForests();
 	{
 		// The creatures age, grow, get hungry, tired and thirsty, and heal while they sleep
 		auto creaturePhysiology = profiler.BeginScoped(Profiler::Stage::CreaturePhysiologyUpdate);
