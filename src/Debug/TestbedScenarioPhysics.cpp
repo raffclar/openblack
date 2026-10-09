@@ -28,6 +28,8 @@ namespace
 {
 /// Where the physics happens: south of the middle, in front of the camera and clear of the lake
 constexpr glm::vec2 k_Field {0.0f, -40.0f};
+/// How much closer than its overview a scenario is framed for the sounds of its field to be heard
+constexpr float k_WithinEarshot = 0.75f;
 /// A throw towards the field's middle from this far away lands near it
 constexpr float k_ThrowFrom = 30.0f;
 /// The hand's speed for a throw across the field, up and along
@@ -157,9 +159,13 @@ void AddBuildingBreak(std::vector<Scenario>& all)
 	    .name = "Huts broken by thrown boulders",
 	    .facet = Facet::Physics,
 	    .description = "Three huts in a row, and two boulders thrown at each from the south, again and again.",
-	    .expected = "A boulder knocks holes in a hut, pieces of it fly off and come to rest, and they fade away in time.",
+	    .expected = "A boulder knocks holes in a hut with a knock or a crash, pieces of it fly off and come to rest, and they "
+	                "fade away in time.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview, .include = {k_Field - glm::vec2 {40.0f}, k_Field + glm::vec2 {40.0f}}},
+	    // Closer than the overview of the field: the knocks and crashes don't start further than 150 m from the camera
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Field - glm::vec2 {40.0f}, k_Field + glm::vec2 {40.0f}},
+	                .distance = k_WithinEarshot},
 	    .objects = objects,
 	    .throws = throws,
 	});
