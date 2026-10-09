@@ -27,8 +27,10 @@
 #include <entt/entity/fwd.hpp>
 #include <glm/fwd.hpp>
 #include <glm/mat4x4.hpp>
+#include <glm/vec3.hpp>
 
 #include "3D/SkyDome.h"
+#include "Enums.h"
 #include "Graphics/CreatureShadow.h"
 #include "Graphics/HandShadow.h"
 #include "Graphics/PartialBuildCap.h"
@@ -143,6 +145,28 @@ private:
 	void DrawParticleMesh(const DrawSceneDesc& desc, const particles::draw::MeshDraw& mesh, uint32_t depth) const;
 	/// The one-shot globes, the miracles in them and the rings round the extreme ones, in the main and reflected views
 	void DrawGlobes(const DrawSceneDesc& desc) const;
+	/// A miracle's seed shown as a model, as a globe holds it or the creature's room shows it
+	struct SeedModelDraw
+	{
+		SpellSeedType seed;
+		/// The point its model stands its mesh height above, at its scale
+		glm::vec3 middle;
+		float scale;
+		/// Its turn about the up axis, in radians
+		float spin;
+		/// A phial's pulse and its texture's frame
+		float phialPhase;
+		float phialFrame;
+		/// How faint a phial is drawn, of 255
+		uint8_t phialAlpha;
+		/// The alignment of the player it is shown for, which makes the flying flock's seed a bat or a dove
+		float ownerAlignment;
+	};
+	void DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& shown) const;
+	/// The pass what blends in a scene goes to: its own pass after the scene's, but in the temple the scene's own
+	[[nodiscard]] static RenderPass TranslucentView(RenderPass scene);
+	/// The seeds of the creature's best-learnt miracles hovering by the plinths in the creature's room
+	void DrawCaveSeeds(const DrawSceneDesc& desc) const;
 	/// The hand holding a miracle glowing in its player's colour, just after the hand at its depth in the sort
 	void DrawHandGlow(const DrawSceneDesc& desc, uint32_t handDepth) const;
 	[[nodiscard]] const Texture2D* HandFlowTexture() const;

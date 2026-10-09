@@ -2231,7 +2231,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 85> k_Names {
+	constexpr std::array<std::string_view, 87> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -2316,6 +2316,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "move mouse",
 	    "turn wheel",
 	    "set alignment",
+	    "set fight lean",
+	    "set miracle sightings",
 	    "hand tap",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
@@ -2541,6 +2543,8 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		if ((command.kind == Kind::SetDesire &&
 		     (command.value >= creature_desires::k_DesireCount || !InRange(command.amount, 0.0f, 1.0f))) ||
 		    (command.kind == Kind::SetPhase && command.value > k_LastPhase) ||
+		    (command.kind == Kind::SetFightLean && !InRange(command.amount, -1.0f, 1.0f)) ||
+		    (command.kind == Kind::SetMiracleSightings && (command.value >= k_Miracles || command.amount < 0.0f)) ||
 		    (command.kind == Kind::ShowFeeling && command.value >= creature_face::k_CueCount) ||
 		    (command.kind == Kind::SeeSkill && command.value >= k_Skills) ||
 		    ((command.kind == Kind::SeeMiracle || command.kind == Kind::KnowMiracle || command.kind == Kind::CastMiracle) &&
