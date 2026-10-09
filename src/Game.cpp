@@ -58,6 +58,7 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/ClipSounds.h"
 #include "Audio/GameMusic.h"
+#include "Audio/HelpSpeech.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
@@ -132,6 +133,7 @@
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -2447,6 +2449,30 @@ bool Game::Initialize() noexcept
 			    }
 		    }
 	    });
+
+	// Which sample of the speech banks says each help text, for the lines the scripts have spoken
+	if (_interface)
+	{
+		auto& sounds = Locator::resources::value().GetSounds();
+		std::array<std::vector<audio::SpeechBankSample>, audio::k_SpeechBankFiles.size()> banks;
+		for (const auto& [groupName, group] : audioManager.GetSoundGroups())
+		{
+			const auto bank = std::ranges::find_if(audio::k_SpeechBankFiles, [&groupName](std::string_view file) {
+				return string_utils::LowerCase(std::string(file)) == string_utils::LowerCase(groupName);
+			});
+			if (bank == audio::k_SpeechBankFiles.end())
+			{
+				continue;
+			}
+			auto& samples = banks.at(static_cast<size_t>(std::distance(audio::k_SpeechBankFiles.begin(), bank)));
+			for (const auto id : group.sounds)
+			{
+				const auto& sound = *sounds.Handle(id);
+				samples.push_back({.sample = static_cast<uint32_t>(sound.id), .file = sound.name, .sound = id});
+			}
+		}
+		Locator::helpSpeechSystem::value().SetTable(audio::HelpSpeechTable(_interface->GetTexts().GetHelpNames(), banks));
+	}
 
 	{
 		InfoFile infoFile;

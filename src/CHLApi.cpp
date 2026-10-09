@@ -68,6 +68,7 @@
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -3838,12 +3839,13 @@ void GameThingCanViewCamera() // 339 GAME_THING_CAN_VIEW_CAMERA
 
 void GamePlaySaySoundEffect() // 340 GAME_PLAY_SAY_SOUND_EFFECT
 {
-	// const auto withPosition = static_cast<bool>(Pop().intVal);
-	// const auto position = PopVec();
-	// const auto sound = Pop().intVal;
-	// const auto extra = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
+	// Says a help text's line, on the second voice for "extra", heard from the position when it has one
+	const auto withPosition = Pop().intVal != 0;
+	const auto position = PopVec();
+	const auto text = static_cast<uint32_t>(Pop().intVal);
+	const auto extra = Pop().intVal != 0;
+	Locator::helpSpeechSystem::value().Say(text, extra ? audio::SpeechVoice::Second : audio::SpeechVoice::First,
+	                                       withPosition ? std::optional(position) : std::nullopt);
 }
 
 void SetTownDesireBoost() // 341 SET_TOWN_DESIRE_BOOST
@@ -4893,11 +4895,9 @@ void GetTempleEntrancePosition() // 457 GET_TEMPLE_ENTRANCE_POSITION
 
 void SaySoundEffectPlaying() // 458 SAY_SOUND_EFFECT_PLAYING
 {
-	// const auto sound = Pop().intVal;
-	// const auto alwaysFalse = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
-	Pushb(false);
+	const auto text = static_cast<uint32_t>(Pop().intVal);
+	const auto extra = Pop().intVal != 0;
+	Pushb(Locator::helpSpeechSystem::value().IsSaying(text, extra ? audio::SpeechVoice::Second : audio::SpeechVoice::First));
 }
 
 void SetHandDemoKeys() // 459 SET_HAND_DEMO_KEYS

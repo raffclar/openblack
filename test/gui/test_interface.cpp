@@ -185,6 +185,22 @@ TEST(TextDatabase, ReadsTheAddTextLines)
 	EXPECT_EQ(texts.GetCount(), 2);
 }
 
+TEST(TextDatabase, NumbersTheHelpTextsInTheirOrder)
+{
+	TextDatabase texts;
+	texts.AddHelpScript(Utf16Script(u"ADD_TEXT( 0, HELP_TEXT_NARRATOR_NONE, \"NONE\", \"Invalid\")\r\n"
+	                                u"ADD_TEXT( 1, HELP_TEXT_NARRATOR_MAN, \"FIRST\", \"Hello\")\r\n"
+	                                u"ADD_TEXT( 1, HELP_TEXT_NARRATOR_MAN, \"SECOND\", \"Over a line\r\nbreak\")\r\n"));
+	texts.AddScript(Utf16Script(u"ADD_TEXT(1, NONE, \"PATCH\", \"Not numbered\")", false));
+	const auto names = texts.GetHelpNames();
+	ASSERT_EQ(names.size(), 3);
+	EXPECT_EQ(names[0], "NONE");
+	EXPECT_EQ(names[1], "FIRST");
+	EXPECT_EQ(names[2], "SECOND");
+	EXPECT_EQ(texts.Get("SECOND"), u"Over a line\nbreak");
+	EXPECT_EQ(texts.Get("PATCH"), u"Not numbered");
+}
+
 TEST(TextDatabase, ConvertsBetweenUtf8AndUtf16)
 {
 	const std::u16string text = u"Bläck & Wh€te \U0001F600";

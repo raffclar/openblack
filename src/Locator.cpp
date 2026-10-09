@@ -64,6 +64,7 @@
 #include "ECS/Systems/Implementations/GestureSystem.h"
 #include "ECS/Systems/Implementations/HandGrabSystem.h"
 #include "ECS/Systems/Implementations/HandSystem.h"
+#include "ECS/Systems/Implementations/HelpSpeechSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
@@ -151,6 +152,7 @@ using openblack::ecs::systems::GestureEventsInterface;
 using openblack::ecs::systems::GestureSystem;
 using openblack::ecs::systems::HandGrabSystem;
 using openblack::ecs::systems::HandSystem;
+using openblack::ecs::systems::HelpSpeechSystem;
 using openblack::ecs::systems::InfluenceSystem;
 using openblack::ecs::systems::LeashSystem;
 using openblack::ecs::systems::LivingActionSystem;
@@ -275,6 +277,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::cinematicDirectorSystem::emplace<CinematicDirectorSystem>();
 	Locator::scriptControlSystem::emplace<ScriptControlSystem>();
 	Locator::dialogueControlSystem::emplace<DialogueControlSystem>();
+	Locator::helpSpeechSystem::emplace<HelpSpeechSystem>();
 	Locator::soundTagSystem::emplace<SoundTagSystem>();
 	Locator::rainSystem::emplace<RainSystem>();
 	Locator::chimneySmokeSystem::emplace<ChimneySmokeSystem>();
@@ -382,6 +385,7 @@ void openblack::ShutDownServices()
 	Locator::cinematicDirectorSystem::reset();
 	Locator::scriptControlSystem::reset();
 	Locator::dialogueControlSystem::reset();
+	Locator::helpSpeechSystem::reset();
 	Locator::influenceSystem::reset();
 	Locator::chimneySmokeSystem::reset();
 	Locator::rainSystem::reset();

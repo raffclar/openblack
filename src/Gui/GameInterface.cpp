@@ -129,7 +129,15 @@ std::unique_ptr<GameInterface> GameInterface::Create(std::u16string_view playerN
 	for (const auto* script : k_TextScripts)
 	{
 		const auto data = ReadIfExists(fileSystem.GetPath<Path::Scripts>() / script);
-		texts.AddScript(data);
+		// The first is the help texts' script, whose texts the game's scripts refer to by number
+		if (script == k_TextScripts.front())
+		{
+			texts.AddHelpScript(data);
+		}
+		else
+		{
+			texts.AddScript(data);
+		}
 	}
 
 	const auto met = ReadIfExists(fileSystem.GetPath<Path::Data>() / (std::string(k_Font) + ".met"));
