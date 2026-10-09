@@ -17,6 +17,7 @@
 #include <unordered_map>
 
 #include "ECS/Components/Alignment.h"
+#include "ECS/Components/Player.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -41,6 +42,7 @@ private:
 		std::optional<components::Alignment> alignment;
 		std::array<float, 8> damageFrom {};
 		uint32_t windResistance {0};
+		components::Player::Miracles miracles;
 	};
 
 	std::unordered_map<PlayerNames, entt::entity> _players;

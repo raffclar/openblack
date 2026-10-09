@@ -898,10 +898,6 @@ MagicSystem::MagicSystem()
 		_players.at(p) = std::make_unique<magic::PlayerSpellCaster>(static_cast<PlayerNames>(p),
 		                                                            [this](PlayerNames player) { return PrayerOf(player); });
 	}
-	for (auto& powers : _tribalPowers)
-	{
-		powers.fill(1.0f);
-	}
 }
 
 MagicSystem::~MagicSystem() = default;
@@ -939,18 +935,40 @@ magic::SpellCasterInterface* MagicSystem::CasterOf(const Spell& spell)
 	return nullptr;
 }
 
+namespace
+{
+/// The player's record on the land, if they are on it
+Player* PlayerRecord(PlayerNames player)
+{
+	Player* found = nullptr;
+	EntityRegistry().Each<Player>([player, &found](entt::entity, Player& record) {
+		if (record.name == player)
+		{
+			found = &record;
+		}
+	});
+	return found;
+}
+} // namespace
+
 std::array<float, magic::k_TribeCount> MagicSystem::PlayerTribalMultipliers(PlayerNames player) const
 {
-	// The players' tribal power multipliers come with worship; until then every tribe's is 1 unless the testbed sets it
-	return _tribalPowers.at(static_cast<size_t>(player));
+	// The power each tribe gives the player's miracles is the player's; a player not on the land has the usual
+	const auto* record = PlayerRecord(player);
+	return record != nullptr ? record->miracles.tribalPower : Player::k_UsualTribalPower;
 }
 
 void MagicSystem::SetTribalPower(PlayerNames player, Tribe tribe, float power)
 {
-	if (tribe != Tribe::NONE && static_cast<size_t>(tribe) < magic::k_TribeCount)
+	auto* record = PlayerRecord(player);
+	if (record == nullptr || tribe == Tribe::NONE || static_cast<size_t>(tribe) >= magic::k_TribeCount)
 	{
-		_tribalPowers.at(static_cast<size_t>(player)).at(static_cast<size_t>(tribe)) = power;
+		return;
 	}
+	// The most it has been goes with it, so that the power holds
+	const auto index = static_cast<size_t>(tribe);
+	record->miracles.tribalPower.at(index) = power;
+	record->miracles.maxTribalPower.at(index) = power;
 }
 
 float MagicSystem::PlayerTribalPower(PlayerNames player, MagicType type) const
@@ -1507,10 +1525,6 @@ void MagicSystem::Reset()
 	_handVelocity = glm::vec3(0.0f);
 	_handEffectPoint.reset();
 	_handScale = 1.0f;
-	for (auto& powers : _tribalPowers)
-	{
-		powers.fill(1.0f);
-	}
 	_lastHandResult = HandResult::None;
 	_world.Reset();
 	_grid.Clear();

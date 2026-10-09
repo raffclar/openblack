@@ -13,6 +13,7 @@
 
 #include "ECS/Components/Alignment.h"
 #include "ECS/Components/Player.h"
+#include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
 
@@ -49,7 +50,8 @@ void PlayerSystem::KeepForNextLand()
 		const auto* alignment = registry.TryGet<const Alignment>(entity);
 		_kept.insert_or_assign(player.name, Kept {.alignment = alignment != nullptr ? std::optional(*alignment) : std::nullopt,
 		                                          .damageFrom = player.damageFrom,
-		                                          .windResistance = player.windResistance});
+		                                          .windResistance = player.windResistance,
+		                                          .miracles = player.miracles});
 	});
 }
 
@@ -69,6 +71,8 @@ void PlayerSystem::TakeUpKept(entt::entity playerEntity)
 	const auto& kept = found->second;
 	player->damageFrom = kept.damageFrom;
 	player->windResistance = kept.windResistance;
+	// Their enabled miracles and their power with each tribe don't outlast the land
+	player->miracles = player_miracles::AfterLandCleared(kept.miracles);
 	if (kept.alignment.has_value())
 	{
 		registry.AssignOrReplace<Alignment>(playerEntity, *kept.alignment);

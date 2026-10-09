@@ -13,6 +13,7 @@
 
 #include "ECS/Components/Alignment.h"
 #include "ECS/Components/Player.h"
+#include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
 
@@ -138,4 +139,63 @@ TEST_F(PlayerSystemLands, ANewPlayerHasNothingToTakeUp)
 	const auto one = MakePlayer(PlayerNames::PLAYER_ONE);
 	_players.TakeUpKept(one);
 	EXPECT_EQ(Locator::entitiesRegistry::value().TryGet<components::Alignment>(one), nullptr);
+}
+
+TEST_F(PlayerSystemLands, APlayersEnabledMiraclesAndTribalPowerGoWithTheLand)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto one = MakePlayer(PlayerNames::PLAYER_ONE);
+	auto& miracles = registry.Get<components::Player>(one).miracles;
+	player_miracles::SetMagicTypeEnabled(miracles, MagicType::Heal, true);
+	miracles.allEnabled = true;
+	miracles.tribalPower.at(static_cast<size_t>(Tribe::NORSE)) = 2.0f;
+	miracles.maxTribalPower.at(static_cast<size_t>(Tribe::NORSE)) = 2.0f;
+	_players.AddPlayer(one);
+
+	_players.KeepForNextLand();
+	ClearLand();
+	const auto again = MakePlayer(PlayerNames::PLAYER_ONE);
+	_players.TakeUpKept(again);
+
+	const auto& after = registry.Get<components::Player>(again).miracles;
+	EXPECT_EQ(after.enabled.at(static_cast<size_t>(MagicType::Heal)), 0u);
+	EXPECT_EQ(after.tribalPower, components::Player::k_UsualTribalPower);
+	EXPECT_EQ(after.maxTribalPower, components::Player::k_UsualTribalPower);
+	// What was ever enabled, and every type being enabled, stay
+	EXPECT_TRUE(after.everEnabled.at(static_cast<size_t>(MagicType::Heal)));
+	EXPECT_TRUE(after.allEnabled);
+}
+
+TEST(PlayerMiracles, AMagicTypeStaysEnabledWhileAnythingEnablesIt)
+{
+	components::Player::Miracles miracles;
+	EXPECT_FALSE(player_miracles::IsMagicTypeEnabled(miracles, MagicType::Fireball));
+	player_miracles::SetMagicTypeEnabled(miracles, MagicType::Fireball, true);
+	player_miracles::SetMagicTypeEnabled(miracles, MagicType::Fireball, true);
+	player_miracles::SetMagicTypeEnabled(miracles, MagicType::Fireball, false);
+	EXPECT_TRUE(player_miracles::IsMagicTypeEnabled(miracles, MagicType::Fireball));
+	player_miracles::SetMagicTypeEnabled(miracles, MagicType::Fireball, false);
+	EXPECT_FALSE(player_miracles::IsMagicTypeEnabled(miracles, MagicType::Fireball));
+	// Never fewer than none
+	player_miracles::SetMagicTypeEnabled(miracles, MagicType::Fireball, false);
+	EXPECT_EQ(miracles.enabled.at(static_cast<size_t>(MagicType::Fireball)), 0u);
+	player_miracles::SetMagicTypeEnabled(miracles, MagicType::Fireball, true);
+	EXPECT_TRUE(player_miracles::IsMagicTypeEnabled(miracles, MagicType::Fireball));
+	EXPECT_TRUE(miracles.everEnabled.at(static_cast<size_t>(MagicType::Fireball)));
+}
+
+TEST(PlayerMiracles, EveryTypeIsEnabledWhenAllAre)
+{
+	components::Player::Miracles miracles;
+	miracles.allEnabled = true;
+	EXPECT_TRUE(player_miracles::IsMagicTypeEnabled(miracles, MagicType::Tornado));
+	EXPECT_FALSE(miracles.everEnabled.at(static_cast<size_t>(MagicType::Tornado)));
+}
+
+TEST(PlayerMiracles, APlayerStartsWithNothingEnabledAndUsualTribalPower)
+{
+	const components::Player player {PlayerNames::PLAYER_ONE};
+	EXPECT_FALSE(player_miracles::IsMagicTypeEnabled(player.miracles, MagicType::Heal));
+	EXPECT_EQ(player.miracles.tribalPower, components::Player::k_UsualTribalPower);
+	EXPECT_EQ(player.miracles.maxTribalPower.at(static_cast<size_t>(Tribe::TIBETAN)), 1.0f);
 }
