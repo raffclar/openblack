@@ -22,6 +22,7 @@
 #include <imgui_stdlib.h>
 #include <imgui_user.h>
 
+#include "CHLApi.h"
 #include "Common/FileDialog.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "Editor/EditorOutline.h"
@@ -1186,6 +1187,17 @@ void ScriptsPanel::DrawNatives(const Program& program) noexcept
 	ImGui::SameLine();
 	ImGui::Checkbox("Unwritten", &_onlyUnwrittenNatives);
 	ImGui::SetItemTooltip("Only the natives openblack hasn't written yet");
+	ImGui::SameLine();
+	ImGui::Checkbox("Ran", &_onlyRanStubs);
+	ImGui::SetItemTooltip("Only the unwritten natives the scripts have called while the game ran");
+
+	// The calls the scripts made to the unwritten natives while the game ran, each logged on its first call only
+	const auto* stubCalls = Locator::chlapi::has_value() ? &Locator::chlapi::value().GetStubCalls() : nullptr;
+	const auto ran = [stubCalls](uint32_t native) -> uint32_t { return stubCalls != nullptr ? stubCalls->Calls(native) : 0; };
+	if (stubCalls != nullptr)
+	{
+		ImGui::TextColored(style::k_Muted, "The scripts have called unwritten natives %u times.", stubCalls->Total());
+	}
 
 	std::map<uint32_t, uint32_t> calls;
 	for (const auto& use : _caches.natives)
@@ -1197,7 +1209,7 @@ void ScriptsPanel::DrawNatives(const Program& program) noexcept
 	{
 		const auto used = calls.contains(native);
 		const auto isWritten = IsImplemented(native, k_UnimplementedNatives);
-		if ((_onlyUsedNatives && !used) || (_onlyUnwrittenNatives && isWritten) ||
+		if ((_onlyUsedNatives && !used) || (_onlyUnwrittenNatives && isWritten) || (_onlyRanStubs && ran(native) == 0) ||
 		    !MatchesSearch(program.natives[native].name, _nativesFilter))
 		{
 			continue;
@@ -1206,7 +1218,7 @@ void ScriptsPanel::DrawNatives(const Program& program) noexcept
 	}
 
 	const auto height = _native.has_value() ? ImGui::GetContentRegionAvail().y * 0.6f : 0.0f;
-	if (ImGui::BeginTable("Natives", 5, k_ListFlags | ImGuiTableFlags_Sortable, ImVec2(0.0f, height)))
+	if (ImGui::BeginTable("Natives", 6, k_ListFlags | ImGuiTableFlags_Sortable, ImVec2(0.0f, height)))
 	{
 		ImGui::TableSetupScrollFreeze(0, 1);
 		ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_DefaultSort);
@@ -1214,6 +1226,7 @@ void ScriptsPanel::DrawNatives(const Program& program) noexcept
 		ImGui::TableSetupColumn("In/out", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoSort);
 		ImGui::TableSetupColumn("Calls", ImGuiTableColumnFlags_WidthFixed);
 		ImGui::TableSetupColumn("Written", ImGuiTableColumnFlags_WidthFixed);
+		ImGui::TableSetupColumn("Ran", ImGuiTableColumnFlags_WidthFixed);
 		ImGui::TableHeadersRow();
 		if (const auto* specs = ImGui::TableGetSortSpecs(); specs != nullptr && specs->SpecsCount > 0)
 		{
@@ -1226,6 +1239,8 @@ void ScriptsPanel::DrawNatives(const Program& program) noexcept
 					return calls.contains(native) ? calls.at(native) : 0;
 				case 4:
 					return IsImplemented(native, k_UnimplementedNatives) ? 1 : 0;
+				case 5:
+					return ran(native);
 				default:
 					return native;
 				}
@@ -1271,6 +1286,11 @@ void ScriptsPanel::DrawNatives(const Program& program) noexcept
 				}
 				ImGui::TableNextColumn();
 				ImGui::TextColored(isWritten ? style::k_Good : style::k_Error, isWritten ? "yes" : "no");
+				ImGui::TableNextColumn();
+				if (const auto times = ran(native); times > 0)
+				{
+					ImGui::TextColored(style::k_Error, "%u", times);
+				}
 				ImGui::PopID();
 			}
 		}

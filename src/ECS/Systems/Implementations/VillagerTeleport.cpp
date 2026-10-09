@@ -22,6 +22,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
+#include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/TeleportRules.h"
@@ -96,7 +97,7 @@ uint32_t ecs::villager_teleport::GoTowardsTeleportReaction(LivingAction& action)
 	const auto stone = registry.Get<const Transform>(traveller->stone).position;
 	const auto here = registry.Get<const Transform>(villager).position;
 	const auto* wallHug = registry.TryGet<const WallHug>(villager);
-	const float step = wallHug != nullptr ? wallHug->speed : 0.0f;
+	const float step = wallHug != nullptr ? ecs::wall_hug::StepMetres(wallHug->speed) : 0.0f;
 	auto& living = Locator::livingActionSystem::value();
 	// Within a step of the stone it is there, tested afresh each turn
 	if (magic::teleport::WithinAStep(here, stone, step))
