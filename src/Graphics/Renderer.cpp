@@ -61,6 +61,7 @@
 #include "Creature/CreatureHair.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureSkin.h"
+#include "Creature/CreatureSpells.h"
 #include "ECS/AbodeKnock.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -677,13 +678,13 @@ void BindCreatureSpellLooks(const ShaderProgram& program)
 
 /// How a creature fizzing out of sight is drawn in the pass at hand: xy how far the static has slid across its skin, z
 /// 0 for none, 1 for its depth through the static, with w the least alpha the static must have, or 2 for its body over
-/// that depth, blended at w
-glm::vec4 CreatureSpellLookOf(const std::optional<RendererInterface::L3DMeshSubmitDesc::Fizz>& fizz)
+/// that depth, blended at w. With z 0, w is how frozen it is.
+glm::vec4 CreatureSpellLookOf(const std::optional<RendererInterface::L3DMeshSubmitDesc::Fizz>& fizz, float freeze)
 {
 	using Pass = RendererInterface::L3DMeshSubmitDesc::Fizz::Pass;
 	if (!fizz.has_value())
 	{
-		return glm::vec4(0.0f);
+		return {0.0f, 0.0f, 0.0f, freeze};
 	}
 	const bool depth = fizz->pass == Pass::Depth;
 	const float w = depth ? static_cast<float>(creature_fizz_look::StaticThreshold(fizz->level)) / 255.0f
@@ -963,14 +964,14 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				BindBlendSources(mesh, subMesh, *desc.morphTargets, *program);
 				BindCreatureSpellLooks(*program);
 			}
-			else if (desc.fizz.has_value())
+			else if (desc.fizz.has_value() || desc.freeze > 0.0f)
 			{
 				BindCreatureSpellLooks(*program);
 			}
 			// Set for every mesh, so that none is drawn with another's fizz
 			if (has(MeshUniform::CreatureSpellLook))
 			{
-				const auto u_creatureSpellLook = CreatureSpellLookOf(desc.fizz);
+				const auto u_creatureSpellLook = CreatureSpellLookOf(desc.fizz, desc.freeze);
 				setUniform(MeshUniform::CreatureSpellLook, &u_creatureSpellLook);
 			}
 			if (has(MeshUniform::UvOffset))
@@ -1677,7 +1678,7 @@ void Renderer::DrawCaveTrophies(const DrawSceneDesc& desc) const
 }
 
 void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, entt::entity entity, const L3DMeshSubmitDesc& bodyDesc, float fizz,
-                                uint32_t fizzSortDepth) const
+                                float freeze, uint32_t fizzSortDepth) const
 {
 	using ecs::components::CreatureEyes;
 	const auto* eyes = desc.entities.TryGet<const CreatureEyes>(entity);
@@ -1702,11 +1703,18 @@ void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, entt::entity entity, 
 	submitDesc.mirrored = bodyDesc.mirrored;
 	submitDesc.creatureShadows = false;
 	submitDesc.sortDepth = bodyDesc.sortDepth;
-	const auto tint = glm::vec4(bodyDesc.tint.r, bodyDesc.tint.g, bodyDesc.tint.b, 0.0f);
+	auto tint = glm::vec4(bodyDesc.tint.r, bodyDesc.tint.g, bodyDesc.tint.b, 0.0f);
+	// Frozen, each piece takes the body's freeze: its light tinted towards the icy colour and a sheen of ice over it
+	if (freeze > 0.0f)
+	{
+		const auto icy = creature_spells::FrozenTint(freeze);
+		tint *= glm::vec4(glm::vec3((icy >> 16) & 0xFFu, (icy >> 8) & 0xFFu, icy & 0xFFu) / 256.0f, 1.0f);
+		submitDesc.freeze = freeze;
+	}
 
 	// While the creature fizzes, its eyes fizz with it, each piece drawn twice as its body is, just after it: but through
-	// the one static all the creatures' eyes share
-	const bool fizzing = creature_fizz_look::Fizzing(fizz) && Locator::creatureFizzSystem::has_value();
+	// the one static all the creatures' eyes share. A frozen eye is drawn frozen instead.
+	const bool fizzing = creature_fizz_look::EyesFizz(fizz, freeze) && Locator::creatureFizzSystem::has_value();
 	const auto scroll = fizzing ? Locator::creatureFizzSystem::value().EyeStaticScroll() : glm::vec2(0.0f);
 	auto sortDepth = fizzSortDepth;
 	const auto draw = [&](const L3DMesh& piece) {
@@ -1740,7 +1748,8 @@ void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, entt::entity entity, 
 		if (eye.eyelid.has_value())
 		{
 			submitDesc.modelMatrices = &*eye.eyelid;
-			submitDesc.tint = tint * glm::vec4(eyes->lidColour, 1.0f);
+			// Wholly frozen, the eyelids are white rather than the colour of the skin under them
+			submitDesc.tint = creature_fizz_look::EyelidsWhite(freeze) ? tint : tint * glm::vec4(eyes->lidColour, 1.0f);
 			draw(*eyelid);
 		}
 	}
@@ -4970,11 +4979,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				uint32_t eyesSortDepth = 0;
 				if (creature_fizz_look::Fizzing(fizz) && instance < renderCtx.instanceUniforms.size())
 				{
-					// Fizzing, it blends with what is behind it, so it is drawn with the rest that blends, where its
-					// distance puts it: first its depth alone, where the static scrolling over its skin is strong enough,
-					// then its body blended over just that depth
+					// Fizzing, it blends with what is behind it, but in its place among the solid models: after them in
+					// this view, before all that blends, the nearest fizzing creature first. First its depth alone, where
+					// the static scrolling over its skin is strong enough, then its body blended over just that depth.
 					const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
-					const auto depth = zsort::Depth(position, cameraOrigin);
+					const auto depth = zsort::BeforeSorted(position, cameraOrigin);
 					const auto level = creature_fizz_look::Level(fizz);
 					const auto mainState = submitDesc.state;
 					submitDesc.viewId = translucentViewId;
@@ -4998,9 +5007,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
 				}
-				DrawCreatureEyes(desc, entity, submitDesc, fizz, eyesSortDepth);
-				// The hair is drawn as it is until the creature has fizzed a fifth of the way out, then not at all
-				if (creature_fizz_look::HairShown(fizz))
+				const float freeze = spells != nullptr ? spells->freeze : 0.0f;
+				DrawCreatureEyes(desc, entity, submitDesc, fizz, freeze, eyesSortDepth);
+				// The hair is drawn as it is until the creature has fizzed or frozen a fifth of the way, then not at all
+				if (creature_fizz_look::HairShown(fizz, freeze))
 				{
 					DrawCreatureHair(desc, entity);
 				}

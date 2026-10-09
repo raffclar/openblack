@@ -64,11 +64,36 @@ TEST(CreatureFizzLook, TheStaticScrollsAndWraps)
 
 TEST(CreatureFizzLook, HairAndReflectionGoAFifthOfTheWayOut)
 {
-	EXPECT_TRUE(HairShown(0.0f));
-	EXPECT_TRUE(HairShown(0.19f));
-	EXPECT_FALSE(HairShown(0.2f));
-	EXPECT_FALSE(HairShown(1.0f));
+	EXPECT_TRUE(HairShown(0.0f, 0.0f));
+	EXPECT_TRUE(HairShown(0.19f, 0.0f));
+	EXPECT_FALSE(HairShown(0.2f, 0.0f));
+	EXPECT_FALSE(HairShown(1.0f, 0.0f));
 	EXPECT_TRUE(ReflectionShown(0.0f));
 	EXPECT_TRUE(ReflectionShown(0.19f));
 	EXPECT_FALSE(ReflectionShown(0.2f));
+}
+
+TEST(CreatureFizzLook, FreezeHidesTheHairAFifthOfTheWay)
+{
+	EXPECT_TRUE(HairShown(0.0f, 0.19f));
+	EXPECT_FALSE(HairShown(0.0f, 0.2f));
+	EXPECT_FALSE(HairShown(0.1f, 1.0f));
+	// The reflection goes with the fizz alone
+	EXPECT_TRUE(ReflectionShown(0.0f));
+}
+
+TEST(CreatureFizzLook, FrozenEyesAreNotFizzed)
+{
+	EXPECT_TRUE(EyesFizz(0.5f, 0.0f));
+	EXPECT_FALSE(EyesFizz(0.5f, 0.01f));
+	EXPECT_FALSE(EyesFizz(0.0f, 0.0f));
+	// Wholly out of sight, nothing is drawn through the static
+	EXPECT_FALSE(EyesFizz(1.0f, 0.0f));
+}
+
+TEST(CreatureFizzLook, EyelidsGoWhiteOnlyWhenWhollyFrozen)
+{
+	EXPECT_FALSE(EyelidsWhite(0.0f));
+	EXPECT_FALSE(EyelidsWhite(0.999f));
+	EXPECT_TRUE(EyelidsWhite(1.0f));
 }

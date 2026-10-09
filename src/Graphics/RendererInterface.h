@@ -203,6 +203,9 @@ public:
 			glm::vec2 scroll;
 		};
 		std::optional<Fizz> fizz;
+		/// How frozen the mesh is drawn, 0 to 1, as a piece of a frozen creature that isn't instanced: sheened with ice by
+		/// it, where it isn't fizzing
+		float freeze {0.0f};
 	};
 
 	static std::unique_ptr<RendererInterface> Create(GraphicsBackend backend, bool vsync) noexcept;

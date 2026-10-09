@@ -40,8 +40,16 @@ namespace openblack::creature_fizz_look
 /// drawn, wrapping round. Each creature's own static starts unmoved.
 [[nodiscard]] glm::vec2 Scroll(glm::vec2 scroll, float seconds);
 
-/// Whether the creature's hair is drawn: only until it has fizzed a fifth of the way out, and never through the static
-[[nodiscard]] bool HairShown(float fizz);
+/// Whether the creature's hair is drawn: only until it has fizzed or frozen a fifth of the way, and never through the
+/// static
+[[nodiscard]] bool HairShown(float fizz, float freeze);
+
+/// Whether the creature's eyes are drawn through the static: a frozen eye takes the freeze's look instead
+[[nodiscard]] bool EyesFizz(float fizz, float freeze);
+
+/// Whether the creature's eyelids are drawn white rather than in the colour of the skin under them: when it is wholly
+/// frozen
+[[nodiscard]] bool EyelidsWhite(float freeze);
 
 /// Whether the creature is drawn reflected in the sea: only until it has fizzed a fifth of the way out, and then whole,
 /// without the static
