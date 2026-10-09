@@ -824,6 +824,12 @@ bool Game::GameLogicLoop() noexcept
 	// What moved since the last turn goes into its new map cell
 	Locator::entitiesMap::value().Sync();
 
+	// The players' temples take their turn first: one whose heart lost all its life moves on through its destruction
+	if (Locator::templeDestructionSystem::has_value())
+	{
+		Locator::templeDestructionSystem::value().ProcessTurn();
+	}
+
 	auto& profiler = Locator::profiler::value();
 
 	{
@@ -968,12 +974,6 @@ bool Game::GameLogicLoop() noexcept
 	{
 		Locator::rewardSystem::value().ProcessTurn();
 	}
-	// A temple whose heart lost all its life moves on through its destruction, as the game's objects take their turns
-	// before the physics
-	if (Locator::templeDestructionSystem::has_value())
-	{
-		Locator::templeDestructionSystem::value().ProcessTurn();
-	}
 	// Then the physics, after the living, the fires, the reactions, the miracles and the particles have had their turn,
 	// so a body any of them sets moving this turn flies this turn: what was thrown, dropped, knocked or pushed flies,
 	// collides and comes to rest
@@ -991,6 +991,11 @@ bool Game::GameLogicLoop() noexcept
 	if (Locator::handGrabSystem::has_value())
 	{
 		Locator::handGrabSystem::value().ProcessTurn();
+	}
+	// Once the whole turn is over, the local player whose temple is being destroyed has lost
+	if (Locator::templeDestructionSystem::has_value())
+	{
+		Locator::templeDestructionSystem::value().EndTurn();
 	}
 
 	// Each turn ends with the camera taking the alignment of the player of most influence where it is

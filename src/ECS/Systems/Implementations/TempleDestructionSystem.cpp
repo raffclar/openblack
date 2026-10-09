@@ -11,6 +11,7 @@
 
 #include "TempleDestructionSystem.h"
 
+#include <utility>
 #include <vector>
 
 #include <LHVM.h>
@@ -81,7 +82,7 @@ void RemoveTemple(entt::entity temple)
 }
 
 /// One turn of a temple being destroyed, in the order the game takes its steps
-void Step(entt::entity entity, Temple& temple)
+void Step(entt::entity entity, Temple& temple, std::vector<std::pair<entt::entity, entt::entity>>& loops)
 {
 	namespace td = temple_destruction;
 	const float before = temple.destructionClock;
@@ -98,6 +99,10 @@ void Step(entt::entity entity, Temple& temple)
 		const auto& position = Locator::entitiesRegistry::value().Get<const Transform>(entity).position;
 		temple.destructionLoop = Locator::audio::value().StartSoundEffect(
 		    k_LoopSound.value(), {.position = position, .playType = audio::PlayType::Repeat, .owner = entity});
+		if (temple.destructionLoop != entt::null)
+		{
+			loops.emplace_back(entity, temple.destructionLoop);
+		}
 	}
 	if (events.glow)
 	{
@@ -117,6 +122,7 @@ void Step(entt::entity entity, Temple& temple)
 			if (temple.destructionLoop != entt::null)
 			{
 				audio.StopEmitter(temple.destructionLoop);
+				std::erase(loops, std::pair {entity, temple.destructionLoop});
 				temple.destructionLoop = entt::null;
 			}
 			const auto& position = Locator::entitiesRegistry::value().Get<const Transform>(entity).position;
@@ -155,7 +161,7 @@ void TempleDestructionSystem::Start(entt::entity temple)
 	// TODO(physics): the temple's other parts, its worship sites among them, go at once; openblack's temple has no parts
 }
 
-void TempleDestructionSystem::ProcessTurn()
+void TempleDestructionSystem::EndTurn()
 {
 	if (!Locator::entitiesRegistry::has_value())
 	{
@@ -181,6 +187,28 @@ void TempleDestructionSystem::ProcessTurn()
 			}
 		}
 	}
+}
+
+void TempleDestructionSystem::ProcessTurn()
+{
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	// A loop whose temple went some other way than its destruction's end stops with it
+	std::erase_if(_loops, [&registry](const std::pair<entt::entity, entt::entity>& loop) {
+		const auto* temple = registry.Valid(loop.first) ? registry.TryGet<const Temple>(loop.first) : nullptr;
+		if (temple != nullptr && temple->destructionLoop == loop.second)
+		{
+			return false;
+		}
+		if (Locator::audio::has_value())
+		{
+			Locator::audio::value().StopEmitter(loop.second);
+		}
+		return true;
+	});
 	std::vector<entt::entity> destroying;
 	registry.Each<const Temple>([&destroying](entt::entity entity, const Temple& temple) {
 		if (temple.destroying)
@@ -192,7 +220,7 @@ void TempleDestructionSystem::ProcessTurn()
 	{
 		if (registry.Valid(entity))
 		{
-			Step(entity, registry.Get<Temple>(entity));
+			Step(entity, registry.Get<Temple>(entity), _loops);
 		}
 	}
 }

@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <utility>
+#include <vector>
+
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -23,6 +26,11 @@ class TempleDestructionSystem final: public TempleDestructionSystemInterface
 public:
 	void Start(entt::entity temple) override;
 	void ProcessTurn() override;
+	void EndTurn() override;
+
+private:
+	/// The loops sounding over temples being destroyed, by temple, stopped when their temple goes another way
+	std::vector<std::pair<entt::entity, entt::entity>> _loops;
 };
 
 } // namespace openblack::ecs::systems
