@@ -42,6 +42,10 @@ public:
 	void SetFlight(glm::vec3 origin, glm::vec3 focus) final;
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const final;
 	[[nodiscard]] glm::vec3 GetTargetFocus() const final;
+	[[nodiscard]] Asked GetAsked() const final
+	{
+		return {.turn = _rotateAroundDelta.y, .tilt = _rotateAroundDelta.x, .zoom = _rotateAroundDelta.z};
+	}
 	[[nodiscard]] std::chrono::seconds GetIdleTime() const final;
 	[[nodiscard]] HandCues GetHandCues() const final;
 

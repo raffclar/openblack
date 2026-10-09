@@ -243,6 +243,29 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskTag, const std:
 	return texture;
 }
 
+Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskWithAlphaTag, const std::filesystem::path& rawTexturePath,
+                                                         const std::filesystem::path& alphaPath, uint16_t side) const
+{
+	auto& fileSystem = Locator::filesystem::value();
+	const auto colours = rawimage::DecodeRgb(fileSystem.ReadAll(rawTexturePath), side, side);
+	const auto alpha = rawimage::DecodeGrey(fileSystem.ReadAll(alphaPath), side, side);
+	if (!colours || !alpha)
+	{
+		throw std::runtime_error("Unexpected size of " + rawTexturePath.string() + " or its alpha");
+	}
+	std::vector<uint8_t> texels;
+	texels.reserve(colours->pixels.size() * 4);
+	for (size_t i = 0; i < colours->pixels.size(); ++i)
+	{
+		const auto& rgb = colours->pixels.at(i);
+		texels.insert(texels.end(), {rgb[0], rgb[1], rgb[2], alpha->pixels.at(i)});
+	}
+	auto texture = std::make_shared<graphics::Texture2D>(("raw" / rawTexturePath.stem()).string() + "+alpha");
+	texture->Create(side, side, 1, graphics::TextureFormat::RGBA8, graphics::Wrapping::Repeat, graphics::Filter::Linear,
+	                bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size())));
+	return texture;
+}
+
 L3DAnimLoader::result_type L3DAnimLoader::operator()(FromBufferTag, const std::vector<uint8_t>& data) const
 {
 	auto animation = std::make_shared<L3DAnim>();

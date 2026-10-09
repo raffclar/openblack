@@ -122,6 +122,9 @@ private:
 	void DrawWaterRings(const DrawSceneDesc& desc) const;
 	/// The snow falling about the camera where it snows, each quarter of a land block in its place among what blends
 	void DrawSnowfall(const DrawSceneDesc& desc) const;
+	/// After a knock, a row of little people over each house of the knocked town: one for each adult living there and
+	/// one for each free place
+	void DrawKnockReadout(const DrawSceneDesc& desc) const;
 	/// The smoke from the homes' chimneys, each in its place among what blends, in the main view
 	void DrawChimneySmoke(const DrawSceneDesc& desc) const;
 	/// Gathers what the particle effects draw this frame, once for every pass
@@ -260,11 +263,11 @@ private:
 	/// Draws a submesh, with a texture in place of its skins when given one
 	void DrawSubMesh(const L3DMesh& mesh, const L3DSubMesh& subMesh, const L3DMeshSubmitDesc& desc, bool preserveState,
 	                 const TextureHandle* texture = nullptr, glm::vec3 glow = glm::vec3(0.0f)) const;
-	/// What a primitive cut at a height in its model's own space shows: whether it has a whole triangle below the cut,
+	/// What a primitive cut at a height in its model's own space shows: whether anything of it is drawn below the cut,
 	/// and the cap over its cut walls. Made once for each cut.
 	struct Cap
 	{
-		bool wholeBelow {false};
+		bool drawsBelow {false};
 		std::vector<partial_build_cap::CapVertex> vertices;
 	};
 	struct CapPrimitive

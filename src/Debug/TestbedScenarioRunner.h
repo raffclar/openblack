@@ -135,6 +135,7 @@ private:
 	std::string GivePlayerCommand(const Command& command);
 	/// The hand goes over a fireball in flight to take hold of it; what came of that
 	std::string HandTakeFireBall();
+	std::string HandTapObject(size_t index);
 	/// Once the hand is over the fireball, it taps it, or presses the action button with a seed in it
 	void FinishTakingFireBall();
 	/// Draws a gesture through the gesture recogniser, across the middle of the screen
@@ -217,6 +218,8 @@ private:
 	/// The gesture being drawn, and the count of gestures recognised before it
 	std::optional<GestureType> _drawing;
 	uint32_t _recognisedBefore {0};
+	/// Whether the Action button went down on the miracles for the gesture being drawn, to come up once it is done
+	bool _drawingPressedAction {false};
 
 	/// The mouse moving along a sweep, in pixels a second, and for how much longer
 	struct PointerSweep

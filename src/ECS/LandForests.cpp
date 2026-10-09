@@ -60,3 +60,8 @@ bool land_forests::NearTown(float distance, float reach, float wood)
 {
 	return distance < reach && wood != 0.0f;
 }
+
+uint32_t land_forests::CountAfter(uint32_t count, uint32_t number)
+{
+	return number > count ? number + 1 : count;
+}

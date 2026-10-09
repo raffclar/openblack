@@ -47,9 +47,13 @@ public:
 	void CreateReaction(const ReactionRequest& request) override;
 	void RemoveReactions(entt::entity initiator, Reaction type) override;
 	void FireStartedMoving(entt::entity object, bool inHand) override;
+	void CatchFirefly(entt::entity object) override;
 	void HeatHeld(entt::entity object) override;
 	void PlaySample(uint32_t sample, glm::vec3 position) override;
 	bool TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player) override;
+	[[nodiscard]] bool HoldsLooseLeash() const override;
+	/// Whether the player's hand holds their creature's leash, rather than a post or a thing holding it
+	[[nodiscard]] static bool HoldsLeash(PlayerNames player);
 	[[nodiscard]] uint32_t LocalRandom(uint32_t count) override;
 	void VillagerIntoHand(entt::entity villager) override;
 	void AnimalIntoOwnFlock(entt::entity animal) override;

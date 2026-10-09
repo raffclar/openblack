@@ -28,6 +28,8 @@ namespace
 {
 /// Where the physics happens: south of the middle, in front of the camera and clear of the lake
 constexpr glm::vec2 k_Field {0.0f, -40.0f};
+/// How much closer than its overview a scenario is framed for the sounds of its field to be heard
+constexpr float k_WithinEarshot = 0.75f;
 /// A throw towards the field's middle from this far away lands near it
 constexpr float k_ThrowFrom = 30.0f;
 /// The hand's speed for a throw across the field, up and along
@@ -157,9 +159,13 @@ void AddBuildingBreak(std::vector<Scenario>& all)
 	    .name = "Huts broken by thrown boulders",
 	    .facet = Facet::Physics,
 	    .description = "Three huts in a row, and two boulders thrown at each from the south, again and again.",
-	    .expected = "A boulder knocks holes in a hut, pieces of it fly off and come to rest, and they fade away in time.",
+	    .expected = "A boulder knocks holes in a hut with a knock or a crash, pieces of it fly off and come to rest, and they "
+	                "fade away in time.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview, .include = {k_Field - glm::vec2 {40.0f}, k_Field + glm::vec2 {40.0f}}},
+	    // Closer than the overview of the field: the knocks and crashes don't start further than 150 m from the camera
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Field - glm::vec2 {40.0f}, k_Field + glm::vec2 {40.0f}},
+	                .distance = k_WithinEarshot},
 	    .objects = objects,
 	    .throws = throws,
 	});
@@ -218,6 +224,37 @@ void AddCreatureHit(std::vector<Scenario>& all)
 	    .creatures = {{.species = CreatureType::Cow, .offset = k_Field}},
 	    .objects = objects,
 	    .throws = throws,
+	});
+}
+
+void AddCreatureCatch(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "physics.creature_catches",
+	    .name = "A creature catching thrown villagers",
+	    .facet = Facet::Physics,
+	    .description = "Villagers are thrown at a tiger, one straight at it and one passing nine metres to "
+	                   "its side, every ten seconds.",
+	    .expected = "As each villager flies the tiger stops what it is doing and turns to it, waits breathing, steps across "
+	                "to where the wide one will pass (moving as it steps), and catches each in its hand as it arrives, "
+	                "or gives up when one has gone past it or landed short.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Field - glm::vec2 {20.0f}, k_Field + glm::vec2 {20.0f, 40.0f}}},
+	    .creatures = {{.species = CreatureType::Tiger, .offset = k_Field, .facingDegrees = 180.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = k_Field + glm::vec2 {-10.0f, 34.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_Field + glm::vec2 {10.0f, 34.0f}}},
+	    .throws = {{.object = 0,
+	                .from = k_Field + glm::vec2 {0.0f, 20.0f},
+	                .height = 14.0f,
+	                .velocity = {0.0f, 4.0f, -22.0f},
+	                .delaySeconds = 3.0f,
+	                .repeatSeconds = 10.0f},
+	               {.object = 1,
+	                .from = k_Field + glm::vec2 {8.8f, 40.0f},
+	                .height = 14.0f,
+	                .velocity = {0.0f, 8.0f, -24.0f},
+	                .delaySeconds = 8.0f,
+	                .repeatSeconds = 10.0f}},
 	});
 }
 
@@ -283,5 +320,6 @@ void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
 	AddBuildingBreak(all);
 	AddRockSplit(all);
 	AddCreatureHit(all);
+	AddCreatureCatch(all);
 	AddSinking(all);
 }
