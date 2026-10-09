@@ -55,6 +55,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -71,6 +72,7 @@
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/TownPlaythings.h"
 #include "Enums.h"
+#include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -1668,11 +1670,18 @@ void GetLandHeight() // 151 GET_LAND_HEIGHT
 
 void LoadMap() // 152 LOAD_MAP
 {
-	// const auto path = PopString();
-
-	// auto& fileSystem = Locator::filesystem::value();
-	// auto mapPath = fileSystem.GetGamePath() / path;
-	// TODO(Daniels118): LoadMap(mapPath);
+	// The story moves on to its next land: the land is laid out afresh at once, while the scripts go on running, the
+	// one that asked included
+	const auto path = PopString();
+	const auto& fileSystem = Locator::filesystem::value();
+	try
+	{
+		Game::Instance()->LoadMap(fileSystem.FindPath(filesystem::FileSystemInterface::FixPath(path)));
+	}
+	catch (const std::exception& e)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Could not load the map {}: {}", path, e.what());
+	}
 }
 
 void StopAllScriptsExcluding() // 153 STOP_ALL_SCRIPTS_EXCLUDING
@@ -2717,9 +2726,9 @@ void SetLeashWorks() // 249 SET_LEASH_WORKS
 
 void LoadMyCreature() // 250 LOAD_MY_CREATURE
 {
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
+	// The player's creature, as kept when a land was last cleared, comes out at the place, unless they have one already
+	const auto position = PopVec();
+	Locator::creatureCarryOverSystem::value().LoadPlayersCreature({position.x, position.z});
 }
 
 void ObjectRelativeBelief() // 251 OBJECT_RELATIVE_BELIEF

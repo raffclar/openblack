@@ -50,6 +50,10 @@ enum class Purpose : uint8_t
 	PickLeash,
 	/// In the leash picker, a scribble: the picker closes, leaving the leash on
 	ClosePicker,
+	/// While the player's creature duels: its special move is added to its fight's queue
+	FightSpecialMove,
+	/// While the player's creature duels: a miracle it knows is added to its fight's queue
+	FightMiracle,
 };
 
 [[nodiscard]] std::string_view Name(Purpose purpose);
@@ -72,6 +76,8 @@ struct Request
 	int powerUpLevel {-1};
 	/// PickLeash: the leash
 	LeashType leash {LeashType::None};
+	/// FightMiracle: the miracle
+	MagicType magic {MagicType::None};
 
 	bool operator==(const Request&) const = default;
 };
@@ -115,11 +121,22 @@ struct HandContext
 		/// The leashes it knows: aggression, learning, compassion
 		std::array<bool, 3> knows {false, false, false};
 		LeashType worn {LeashType::None};
+		/// It duels and takes more moves: then the hand waits only for the fight's gestures
+		bool takesFightMoves {false};
+		/// The miracles it knows that can be cast in a fight, each with its gesture, in the order of the miracles
+		struct FightMiracle
+		{
+			GestureType gesture {GestureType::None};
+			MagicType magic {MagicType::None};
+		};
+		std::vector<FightMiracle> fightMiracles;
 	};
 	std::optional<Creature> creature;
 	/// The leash picker is open
 	bool pickerOpen {false};
 
+	/// The gesture that calls a creature's special move in a fight
+	GestureType specialMoveGesture {GestureType::Star};
 	/// The gesture that puts the leash on, and each leash's gesture in the picker, by leash number (0 is unused)
 	GestureType leashGesture {GestureType::SquareSpirial};
 	std::array<GestureType, 4> leashGestures {GestureType::None, GestureType::VerticalScribble, GestureType::EShape,
