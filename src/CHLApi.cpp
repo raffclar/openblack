@@ -86,8 +86,10 @@
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/TownDesire.h"
 #include "ECS/TownPlaythings.h"
 #include "ECS/WorldObjects.h"
 #include "Enums.h"
@@ -4024,11 +4026,27 @@ void GamePlaySaySoundEffect() // 340 GAME_PLAY_SAY_SOUND_EFFECT
 
 void SetTownDesireBoost() // 341 SET_TOWN_DESIRE_BOOST
 {
-	// const auto boost = Popf();
-	// const auto desire = Pop().intVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A town wants one of its desires that much more, or less, until a script changes it again; its order of desires is
+	// put right at once
+	const auto boost = Popf();
+	const auto desire = Pop().intVal;
+	const auto town = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	const bool isTown = town != entt::null && registry.Valid(town) && registry.AllOf<ecs::components::Town>(town);
+	if (!isTown)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_TOWN_DESIRE_BOOST: object not a town");
+	}
+	if (!ecs::town_desire::ValidScriptBoost(desire, boost))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_TOWN_DESIRE_BOOST: desire {} or boost {} out of range", desire,
+		                    boost);
+		return;
+	}
+	if (isTown)
+	{
+		Locator::townDesireSystem::value().SetBoost(town, static_cast<TownDesireInfo>(desire), boost, true);
+	}
 }
 
 void IsLockedInteraction() // 342 IS_LOCKED_INTERACTION
@@ -4686,9 +4704,8 @@ void GetHandState() // 413 GET_HAND_STATE
 
 void SetInterfaceCitadel() // 414 SET_INTERFACE_CITADEL
 {
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Whether tapping the temple's entrance takes the player inside
+	Locator::entitiesRegistry::value().Context().scriptLetsTempleBeEntered = Pop().intVal != 0;
 }
 
 void MapScriptFunction() // 415 MAP_SCRIPT_FUNCTION
