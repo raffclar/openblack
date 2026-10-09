@@ -266,6 +266,7 @@ openblack_setup_and_add_test(
   test_magic_shield_forest test_magic_shield_forest.cpp
 )
 openblack_setup_and_add_test(test_reactions test_reactions.cpp)
+openblack_setup_and_add_test(test_map_production test_map_production.cpp)
 openblack_setup_and_add_test(test_magic_heal test_magic_heal.cpp)
 openblack_setup_and_add_test(test_lightning_maths test_lightning_maths.cpp)
 openblack_setup_and_add_test(test_tornado_creature test_tornado_creature.cpp)
