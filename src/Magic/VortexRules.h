@@ -46,8 +46,10 @@ inline constexpr int k_LevelHalfSide = 5;
 inline constexpr int k_LevelSide = k_LevelHalfSide * 2 + 1;
 inline constexpr size_t k_LevelCellCount = static_cast<size_t>(k_LevelSide) * k_LevelSide;
 
-/// The ground ring under a vortex is never quite opaque
-inline constexpr uint8_t k_GroundRingMaxAlpha = 235;
+/// The hole a vortex opens in the land never takes in the most opaque part of its texture
+inline constexpr uint8_t k_GroundHoleMaxThreshold = 235;
+/// The hole's and the ring's textures span this many land units times the kind's base size, centred on the vortex
+inline constexpr float k_GroundTextureSpan = 160.0f;
 
 /// Seconds since a vortex's state began: whole game turns since then and the part of the current one, at the game's
 /// turn length. Kept in double: the end of a fade is judged on it unrounded, the fades themselves on it as a float.
@@ -75,8 +77,13 @@ enum class Step
 /// opens; rising back to full as it fades out, then dying away over the last 2 seconds
 [[nodiscard]] float GlowBrightness(VortexStateType state, float seconds);
 
-/// The ground ring's alpha for an openness
-[[nodiscard]] uint8_t GroundRingAlpha(float openness);
+/// How opaque the hole texture must be, 0 to 255, for the land to be drawn there: the openness in 255ths, rounded down,
+/// and never more than 235. The hole widens from the texture's clearest strokes as the vortex opens.
+[[nodiscard]] uint8_t GroundHoleThreshold(float openness);
+
+/// Where a point of the land falls on the hole's and the ring's textures: across them with the world's z, down them
+/// with its x, the vortex in the middle, a whole texture spanning 160 units times the kind's base size
+[[nodiscard]] glm::vec2 GroundTextureCoordinates(glm::vec2 point, glm::vec2 centre, float baseScale);
 
 /// How far below the ground the swirl drawn under the land sits: 2.5 while the levelling hasn't begun, rising to 0.3
 [[nodiscard]] float SwirlDepth(float levelAmount);

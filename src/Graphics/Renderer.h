@@ -107,6 +107,9 @@ private:
 	/// anything is drawn there nearer than a depth
 	void AskGlareSampleDrawn(const Camera& camera, bgfx::OcclusionQueryHandle query, glm::vec2 topLeft, glm::vec2 bottomRight,
 	                         float depth) const;
+	/// Each vortex's walls, from the sea down under its middle, leaving only their depth: what is drawn after them is
+	/// hidden beyond them, which keeps its funnel to the shaft under its hole in the land
+	void DrawVortexDepthWalls(const DrawSceneDesc& desc, graphics::RenderPass viewId) const;
 	/// The puffs of mist, blended over the scene, the farthest first
 	void DrawMists(const DrawSceneDesc& desc) const;
 	/// The moon and its glow in the sky, after the sky's dome
@@ -424,6 +427,8 @@ private:
 	mutable particles::draw::Frame _particleFrame;
 	mutable std::vector<particles::draw::Command> _particleCommands;
 	mutable std::vector<uint32_t> _particleSpriteOrder;
+	mutable std::vector<particles::draw::Command> _particleBeforeLandCommands;
+	mutable std::vector<uint32_t> _particleBeforeLandSprites;
 	/// The particle light maps' frames stamped so far, by light map and frame
 	mutable std::unordered_map<uint64_t, std::unique_ptr<Texture2D>> _particleLightMaps;
 };

@@ -9,7 +9,12 @@
 
 #pragma once
 
+#include <cstdint>
+
+#include <span>
+
 #include <entt/entity/entity.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "Enums.h"
@@ -23,6 +28,19 @@ namespace openblack::ecs::systems
 class VortexSystemInterface
 {
 public:
+	/// What the land shows of an open vortex, on the one land block under its middle: a hole, through which the swirl
+	/// under the land shows, and a ring laid over the land around it
+	struct GroundMark
+	{
+		VortexType type;
+		glm::vec2 centre;
+		/// The land block it is laid on, by its place in the map's grid of blocks
+		glm::ivec2 block;
+		float baseScale;
+		/// How opaque the hole's texture must be, 0 to 255, for the land to be drawn there
+		uint8_t holeThreshold;
+	};
+
 	virtual ~VortexSystemInterface() = default;
 
 	/// A vortex of a kind made at a point on the land, raised by an altitude above the ground there
@@ -35,6 +53,12 @@ public:
 	/// At the end of each game turn the vortices whose fade is over open fully or go, and the land vortices level the
 	/// ground further as they open
 	virtual void ProcessTurn() = 0;
+	/// Once a frame, by the frame's game time (none while paused): each open vortex's swirl, kept just under the ground,
+	/// and its effect over the land step with its openness, its glow takes its brightness, and its marks on the ground
+	/// follow its openness
+	virtual void UpdateFrame(float gameSeconds) = 0;
+	/// The open vortices' marks on the ground as the last frame left them
+	[[nodiscard]] virtual std::span<const GroundMark> GetGroundMarks() const = 0;
 };
 
 } // namespace openblack::ecs::systems

@@ -118,10 +118,16 @@ float GlowBrightness(VortexStateType state, float seconds)
 	}
 }
 
-uint8_t GroundRingAlpha(float openness)
+uint8_t GroundHoleThreshold(float openness)
 {
 	const auto alpha = static_cast<uint32_t>(static_cast<int64_t>(static_cast<double>(openness) * 255.0));
-	return static_cast<uint8_t>(std::min<uint32_t>(alpha, k_GroundRingMaxAlpha));
+	return static_cast<uint8_t>(std::min<uint32_t>(alpha, k_GroundHoleMaxThreshold));
+}
+
+glm::vec2 GroundTextureCoordinates(glm::vec2 point, glm::vec2 centre, float baseScale)
+{
+	const auto offset = (point - centre) / (k_GroundTextureSpan * baseScale);
+	return glm::vec2(offset.y, offset.x) + 0.5f;
 }
 
 float SwirlDepth(float levelAmount)

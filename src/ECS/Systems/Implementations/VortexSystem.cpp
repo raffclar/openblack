@@ -20,10 +20,13 @@
 #include "ECS/Archetypes/VortexArchetype.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/VortexRules.h"
+#include "Particles/ParticleEffect.h"
+#include "Particles/ParticleSpellLink.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -47,19 +50,134 @@ double SecondsInState(const Vortex& vortex)
 	return vortex::ElapsedSeconds(turns, time.GetTurnFraction(),
 	                              static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count()));
 }
+
+const GVortexInfo* InfoOf(VortexType type)
+{
+	const auto& tables = Locator::infoConstants::value().vortex;
+	const auto row = static_cast<size_t>(type);
+	return row < tables.size() ? &tables.at(row) : nullptr;
+}
+
+/// The vortex's swirl and its effect over the land are stepped by the vortex itself; no miracle hears from them
+class NoMiracle final: public particles::SpellSink
+{
+public:
+	bool SpellEvent(const particles::SpellEventInfo& /*event*/) override { return false; }
+	[[nodiscard]] int PowerUpLevel() const override { return -1; }
+};
+NoMiracle g_noMiracle;
 } // namespace
 
 entt::entity VortexSystem::Create(glm::vec3 position, VortexType type, float altitude)
 {
-	const auto& tables = Locator::infoConstants::value().vortex;
-	const auto row = static_cast<size_t>(type);
-	if (row >= tables.size())
+	const auto* info = InfoOf(type);
+	if (info == nullptr)
 	{
 		return entt::null;
 	}
 	const auto ground = Locator::terrainSystem::value().GetHeightAt({position.x, position.z});
 	const glm::vec3 centre {position.x, ground + altitude, position.z};
-	return archetypes::VortexArchetype::Create(centre, type, tables.at(row).initialState, Locator::time::value().GetTurn());
+	const auto entity = archetypes::VortexArchetype::Create(centre, type, info->initialState, Locator::time::value().GetTurn());
+	StartEffects(Locator::entitiesRegistry::value().Get<Vortex>(entity));
+	return entity;
+}
+
+void VortexSystem::StartEffects(Vortex& vortex)
+{
+	if (!Locator::particleSystem::has_value())
+	{
+		return;
+	}
+	const auto* info = InfoOf(vortex.type);
+	auto& particles = Locator::particleSystem::value();
+	// The swirl starts on the ground under the middle, the others at the middle itself
+	const auto ground = Locator::terrainSystem::value().GetHeightAt({vortex.centre.x, vortex.centre.z});
+	const glm::vec3 onGround {vortex.centre.x, ground, vortex.centre.z};
+	const auto start = [&particles](ParticleType type, glm::vec3 origin) {
+		return type == ParticleType::None ? ParticleSystemInterface::k_NoEffect : particles.Start(type, origin, 1.0f);
+	};
+	const auto startStepped = [&particles](ParticleType type, glm::vec3 origin) {
+		return type == ParticleType::None ? ParticleSystemInterface::k_NoEffect
+		                                  : particles.StartForSpell(type, origin, glm::vec3(0.0f), 1.0f, g_noMiracle);
+	};
+	vortex.objectMoverEffect = start(info->particleTypeObjectMover, vortex.centre);
+	vortex.beforeLandEffect = startStepped(info->particleTypePreLandscape, onGround);
+	vortex.afterLandEffect = startStepped(info->particleTypePostLandscape, vortex.centre);
+	vortex.lightMapEffect = start(info->particleTypeLightMap, vortex.centre);
+	// The swirl is drawn before the land, which covers it but where the vortex opens its hole
+	if (vortex.beforeLandEffect != ParticleSystemInterface::k_NoEffect)
+	{
+		particles.SetDrawPath(vortex.beforeLandEffect, particles::draw::DrawPath::BeforeLand);
+	}
+}
+
+void VortexSystem::DeleteEffects(const Vortex& vortex)
+{
+	if (!Locator::particleSystem::has_value())
+	{
+		return;
+	}
+	auto& particles = Locator::particleSystem::value();
+	for (const auto effect : {vortex.objectMoverEffect, vortex.beforeLandEffect, vortex.afterLandEffect, vortex.lightMapEffect})
+	{
+		if (effect != ParticleSystemInterface::k_NoEffect)
+		{
+			particles.Delete(effect);
+		}
+	}
+}
+
+void VortexSystem::UpdateFrame(float gameSeconds)
+{
+	_groundMarks.clear();
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* particles = Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
+	registry.Each<Vortex>([this, gameSeconds, particles](entt::entity /*entity*/, Vortex& vortex) {
+		const auto seconds = static_cast<float>(SecondsInState(vortex));
+		const auto openness = vortex::Openness(vortex.state, seconds);
+		if (openness != 0.0f)
+		{
+			if (const auto* info = InfoOf(vortex.type); info != nullptr)
+			{
+				const auto cell = vortex::CentreCell({vortex.centre.x, vortex.centre.z});
+				_groundMarks.push_back({
+				    .type = vortex.type,
+				    .centre = {vortex.centre.x, vortex.centre.z},
+				    .block = {cell.x >> 4, cell.y >> 4},
+				    .baseScale = info->baseScale,
+				    .holeThreshold = vortex::GroundHoleThreshold(openness),
+				});
+			}
+		}
+		if (particles == nullptr)
+		{
+			return;
+		}
+		// The swirl and the effect over the land grow with the openness, stepped by the frame's game time; the swirl
+		// rises towards the ground as the land is levelled
+		const particles::ProcessInfo info {.power = openness, .enabled = true};
+		if (openness != 0.0f && vortex.beforeLandEffect != ParticleSystemInterface::k_NoEffect)
+		{
+			const auto ground = Locator::terrainSystem::value().GetHeightAt({vortex.centre.x, vortex.centre.z});
+			const auto depth = vortex::SwirlDepth(vortex::LevelAmount(vortex.state, seconds));
+			particles->SetOrigin(vortex.beforeLandEffect, {vortex.centre.x, ground - depth, vortex.centre.z});
+			if (!particles->ProcessForSpell(vortex.beforeLandEffect, info, gameSeconds))
+			{
+				vortex.beforeLandEffect = ParticleSystemInterface::k_NoEffect;
+			}
+		}
+		if (openness != 0.0f && vortex.afterLandEffect != ParticleSystemInterface::k_NoEffect &&
+		    !particles->ProcessForSpell(vortex.afterLandEffect, info, gameSeconds))
+		{
+			vortex.afterLandEffect = ParticleSystemInterface::k_NoEffect;
+		}
+		// The glow on the ground is as bright as the vortex's state has it
+		if (auto* lightMap = particles->Find(vortex.lightMapEffect))
+		{
+			const auto glow = static_cast<double>(vortex::GlowBrightness(vortex.state, seconds));
+			lightMap->SetGlobalAlpha(static_cast<float>(static_cast<int>(glow * 255.0)));
+		}
+	});
 }
 
 bool VortexSystem::StartFadeOut(entt::entity vortex)
@@ -128,6 +246,7 @@ void VortexSystem::ProcessTurn()
 	});
 	for (const auto entity : gone)
 	{
+		DeleteEffects(registry.Get<Vortex>(entity));
 		registry.Destroy(entity);
 	}
 	if (levelled)

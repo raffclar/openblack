@@ -10,6 +10,7 @@
 #include <array>
 #include <vector>
 
+#include <glm/vec2.hpp>
 #include <gtest/gtest.h>
 
 #include "Magic/VortexRules.h"
@@ -93,12 +94,27 @@ TEST(VortexRules, TheGlowRisesSettlesAndDies)
 	EXPECT_FLOAT_EQ(GlowBrightness(VortexStateType::Inactive, 1.0f), 0.0f);
 }
 
-TEST(VortexRules, TheGroundRingIsNeverQuiteOpaque)
+TEST(VortexRules, TheHoleNeverTakesInTheMostOpaquePartOfItsTexture)
 {
-	EXPECT_EQ(GroundRingAlpha(0.0f), 0);
-	EXPECT_EQ(GroundRingAlpha(0.5f), 127);
-	EXPECT_EQ(GroundRingAlpha(0.9f), 229);
-	EXPECT_EQ(GroundRingAlpha(1.0f), k_GroundRingMaxAlpha);
+	EXPECT_EQ(GroundHoleThreshold(0.0f), 0);
+	EXPECT_EQ(GroundHoleThreshold(0.5f), 127);
+	EXPECT_EQ(GroundHoleThreshold(0.9f), 229);
+	EXPECT_EQ(GroundHoleThreshold(1.0f), k_GroundHoleMaxThreshold);
+}
+
+TEST(VortexRules, TheHoleAndRingTexturesAreCentredOnTheVortexAcrossZAndDownX)
+{
+	const glm::vec2 centre {1000.0f, 2000.0f};
+	// A land vortex's base size of 0.28 makes the textures 44.8 across
+	EXPECT_EQ(GroundTextureCoordinates(centre, centre, 0.28f), glm::vec2(0.5f));
+	const auto alongZ = GroundTextureCoordinates(centre + glm::vec2(0.0f, 22.4f), centre, 0.28f);
+	EXPECT_NEAR(alongZ.x, 1.0f, 1e-5f);
+	EXPECT_NEAR(alongZ.y, 0.5f, 1e-5f);
+	const auto alongX = GroundTextureCoordinates(centre - glm::vec2(22.4f, 0.0f), centre, 0.28f);
+	EXPECT_NEAR(alongX.x, 0.5f, 1e-5f);
+	EXPECT_NEAR(alongX.y, 0.0f, 1e-5f);
+	// The volcano's base size of 0.75 spreads them over 120
+	EXPECT_NEAR(GroundTextureCoordinates(centre + glm::vec2(60.0f, 0.0f), centre, 0.75f).y, 1.0f, 1e-5f);
 }
 
 TEST(VortexRules, TheSwirlRisesTowardsTheGroundAsTheLandIsLevelled)

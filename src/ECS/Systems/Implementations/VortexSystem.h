@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <vector>
+
 #include "ECS/Systems/VortexSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -30,10 +32,18 @@ public:
 	bool StartFadeOut(entt::entity vortex) override;
 	[[nodiscard]] float GetOpenness(entt::entity vortex) const override;
 	void ProcessTurn() override;
+	void UpdateFrame(float gameSeconds) override;
+	[[nodiscard]] std::span<const GroundMark> GetGroundMarks() const override { return _groundMarks; }
 
 private:
+	/// A vortex's effects start where it is made
+	static void StartEffects(components::Vortex& vortex);
+	/// They go at once with it
+	static void DeleteEffects(const components::Vortex& vortex);
 	/// The land under a vortex is levelled as far as an amount: its heights are read the first time
 	static void LevelGround(components::Vortex& vortex, float amount);
+
+	std::vector<GroundMark> _groundMarks;
 };
 
 } // namespace openblack::ecs::systems
