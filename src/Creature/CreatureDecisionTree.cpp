@@ -312,7 +312,8 @@ float creature_tree::Evaluate(const Tree& tree, const Belief& belief)
 
 float creature_tree::Usefulness(float utility)
 {
-	return utility >= 0.0f ? 0.1f + 0.9f * utility : 0.1f * (utility + 1.0f);
+	const float usefulness = utility >= 0.0f ? 0.1f + 0.9f * utility : 0.1f * (utility + 1.0f);
+	return std::clamp(usefulness, 0.0f, k_MostUsefulness);
 }
 
 std::vector<std::string> creature_tree::Describe(const Tree& tree)

@@ -227,6 +227,37 @@ void AddCreatureHit(std::vector<Scenario>& all)
 	});
 }
 
+void AddCreatureCatch(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "physics.creature_catches",
+	    .name = "A creature catching thrown villagers",
+	    .facet = Facet::Physics,
+	    .description = "Villagers are thrown at a tiger, one straight at it and one passing nine metres to "
+	                   "its side, every ten seconds.",
+	    .expected = "As each villager flies the tiger stops what it is doing and turns to it, waits breathing, steps across "
+	                "to where the wide one will pass (moving as it steps), and catches each in its hand as it arrives, "
+	                "or gives up when one has gone past it or landed short.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Field - glm::vec2 {20.0f}, k_Field + glm::vec2 {20.0f, 40.0f}}},
+	    .creatures = {{.species = CreatureType::Tiger, .offset = k_Field, .facingDegrees = 180.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = k_Field + glm::vec2 {-10.0f, 34.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_Field + glm::vec2 {10.0f, 34.0f}}},
+	    .throws = {{.object = 0,
+	                .from = k_Field + glm::vec2 {0.0f, 20.0f},
+	                .height = 14.0f,
+	                .velocity = {0.0f, 4.0f, -22.0f},
+	                .delaySeconds = 3.0f,
+	                .repeatSeconds = 10.0f},
+	               {.object = 1,
+	                .from = k_Field + glm::vec2 {8.8f, 40.0f},
+	                .height = 14.0f,
+	                .velocity = {0.0f, 8.0f, -24.0f},
+	                .delaySeconds = 8.0f,
+	                .repeatSeconds = 10.0f}},
+	});
+}
+
 void AddSinking(std::vector<Scenario>& all)
 {
 	// One of each kind the physics treats differently in the water, dropped side by side into the lake's open water
@@ -279,6 +310,37 @@ void AddSinking(std::vector<Scenario>& all)
 	});
 }
 
+void AddTempleStruck(std::vector<Scenario>& all)
+{
+	std::vector<ObjectSetup> objects;
+	std::vector<ThrowSetup> throws;
+	for (size_t i = 0; i < 6; ++i)
+	{
+		const float angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i) / 6.0f;
+		objects.push_back({.type = MobileStaticInfo::Boulder2Chalk,
+		                   .offset = k_Field + glm::vec2 {std::cos(angle), std::sin(angle)} * k_ThrowFrom});
+		throws.push_back(Inward(i, angle, 2.0f + static_cast<float>(i) * 1.5f, 9.0f));
+	}
+	all.push_back({
+	    .id = "physics.temple_struck",
+	    .name = "A temple struck by thrown boulders",
+	    .facet = Facet::Physics,
+	    .description = "Another player's temple, with no town to pass its blows on to, stands in a ring of boulders thrown at "
+	                   "it one after another.",
+	    .expected =
+	        "Every two seconds at most, a boulder striking it makes its heart fire a plasma beam from its top down onto "
+	        "a point of its own surface, and the heart loses life; at none left, beams leap across it for fourteen "
+	        "seconds, it glows, fades and explodes, and is gone in smoke 22 seconds on.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Field - glm::vec2 {40.0f}, k_Field + glm::vec2 {40.0f}},
+	                .distance = k_WithinEarshot},
+	    .objects = objects,
+	    .temples = {{.offset = k_Field, .owner = PlayerNames::PLAYER_TWO}},
+	    .throws = throws,
+	});
+}
+
 } // namespace
 
 void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
@@ -289,5 +351,7 @@ void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
 	AddBuildingBreak(all);
 	AddRockSplit(all);
 	AddCreatureHit(all);
+	AddCreatureCatch(all);
 	AddSinking(all);
+	AddTempleStruck(all);
 }

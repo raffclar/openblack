@@ -13,8 +13,8 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
-#include "3D/SkyInterface.h"
 #include "AudioManagerInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -133,7 +133,7 @@ uint32_t AtmosAudio::GetGroup() const
 	return static_cast<double>(_alignment) <= k_EvilAlignment ? k_EvilGroup : k_GoodGroup;
 }
 
-float AtmosAudio::CalculateSkyType(float time, const SkyInterface::DayNightTimes& times)
+float AtmosAudio::CalculateSkyType(float time, const DayNightTimes& times)
 {
 	// Mirrored around midday
 	if (time > 12.0f)

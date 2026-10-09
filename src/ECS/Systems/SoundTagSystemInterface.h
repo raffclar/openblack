@@ -27,7 +27,7 @@ public:
 	virtual void ProcessTurn(const glm::vec3& camera) = 0;
 	/// Switches an object's tag on or off; off stops its sound at once
 	virtual void SetActive(entt::entity entity, bool active) = 0;
-	/// Sounds once at a point; a delayed sound travels to the camera at the speed of sound first
+	/// Sounds once at a point: at once, or, when delayed, once it has travelled to the camera at the speed of sound
 	virtual entt::entity CreatePointSound(entt::id_type sound, const glm::vec3& position, bool delayed) = 0;
 };
 
