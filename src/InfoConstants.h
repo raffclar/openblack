@@ -1126,14 +1126,16 @@ struct GMagicForestInfo: GMagicInfo
 
 struct GVillagerStateTableInfo
 {
-	/// The animation a villager plays in the state
-	uint32_t animation;
+	/// The animation a villager plays in the state: -4 hides it, other negatives keep the clip it has
+	int32_t animation;
 	int field0x4;
 	float field0x8;
 	uint32_t isFinalState;
 	/// A villager storing its state to come back to stores the one it stored before instead of this one
 	int keepsPreviousState;
-	uint32_t field0x14;
+	/// A moving state: its clip advances with the ground covered, and its life drain is its own rather than its final
+	/// state's
+	uint32_t movesWithGround;
 	uint32_t isScriptState;
 	uint32_t isScriptInterruptableState;
 	/// The state a villager goes back to once it stops reacting, if it was in this one
@@ -1154,18 +1156,26 @@ struct GVillagerStateTableInfo
 	int canPauseForASecond;
 	float field0xc8;
 	float field0xcc;
-	uint32_t field0xd0;
-	uint32_t field0xd4;
-	uint32_t field0xd8;
-	int field0xdc;
+	/// A hungry villager in the state goes to find food
+	uint32_t hungerInterrupts;
+	/// A starving villager in the state goes to find food
+	uint32_t starvingInterrupts;
+	/// A wounded villager in the state stays rather than going home
+	uint32_t woundedStays;
+	/// What a villager in the state carries whatever else it holds, 0 for no change
+	int carriedObject;
 	uint32_t field0xe0;
-	uint32_t field0xe4;
-	uint32_t field0xe8;
+	/// A villager in the state has its needs looked at: hunger, old age, wounds and growing up
+	uint32_t doesChecks;
+	/// A wounded villager in the state goes home
+	uint32_t woundedGoesHome;
 	/// A villager whose state this is may start reacting to things
 	uint32_t availableForReaction;
-	uint32_t field0xf0;
+	/// Going into the state cuts short the clip of leaving the state before
+	uint32_t skipsOutOfClip;
 	uint32_t field0xf4;
-	float field0xf8;
+	/// The life a villager in the state loses each turn
+	float lifeDrain;
 	uint32_t field0xfc;
 	uint32_t field0x100;
 };
