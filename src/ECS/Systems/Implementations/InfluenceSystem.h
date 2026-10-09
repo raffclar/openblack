@@ -10,10 +10,12 @@
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <vector>
 
 #include <entt/entity/fwd.hpp>
 
+#include "Common/VirtualInfluence.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -29,9 +31,15 @@ public:
 	void Reset() override;
 	void ProcessTurn(uint32_t turn) override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
+	void ShowHandInfluence(std::chrono::duration<float, std::milli> gameTime) override;
 
 	using InfluenceSystemInterface::PlayerInfluence;
 	[[nodiscard]] float PlayerInfluence(PlayerNames player, const map_coords::MapCoords& position) const override;
+	[[nodiscard]] float HandPointInfluence(PlayerNames player, const map_coords::MapCoords& hand) const override;
+	using InfluenceSystemInterface::PlayerRawInfluence;
+	[[nodiscard]] float PlayerRawInfluence(PlayerNames player, const map_coords::MapCoords& position) const override;
+	void HeldThingUsedOnLand(PlayerNames player) override;
+	void SetInGameTurn(bool inGameTurn) override { _inGameTurn = inGameTurn; }
 
 	[[nodiscard]] std::span<const influence::Circle> GetCircles() const override { return _circles; }
 	[[nodiscard]] bool IsBorderShown(PlayerNames player) const override;
@@ -50,12 +58,17 @@ private:
 	bool CrossBorders(const glm::vec3& hand);
 	/// Whether another player's shield keeps a player out of a place
 	[[nodiscard]] static bool Shielded(PlayerNames player, const glm::vec3& point);
+	[[nodiscard]] static bool Shielded(PlayerNames player, const map_coords::MapCoords& position);
 	/// The sum of the reach of a player's citadel, towns and other sources of influence
 	[[nodiscard]] static float InfluencePower(PlayerNames player);
-	/// What the local player's hand keeps of their influence past the border, once a turn
+	/// What each player's hand keeps of their influence past the border, once a turn
 	void ProcessVirtualInfluence(uint32_t turn);
-	/// The hum of the hand past the border, each frame
-	void HumVirtualInfluence();
+	/// One turn of what a player's hand keeps past the border, with the hand where it is
+	void ProcessVirtualInfluence(entt::entity playerEntity, PlayerNames player, glm::vec3 hand, uint32_t turn);
+	/// What a player's hand keeps of their influence past the border, if they have a hand
+	[[nodiscard]] static const virtual_influence::State* VirtualStateOf(PlayerNames player);
+	/// The game turn last played
+	uint32_t _turn {0};
 
 	std::vector<influence::Circle> _circles;
 	std::array<bool, k_Players> _borderShown {};
@@ -68,6 +81,7 @@ private:
 	std::array<bool, k_Players> _handWasInside {};
 	bool _handSeen {false};
 	glm::vec3 _handBefore {0.0f};
+	bool _inGameTurn {false};
 };
 
 } // namespace openblack::ecs::systems

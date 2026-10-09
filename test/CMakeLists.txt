@@ -44,6 +44,11 @@ openblack_setup_and_add_test(test_load_scene test_load_scene.cpp)
 openblack_setup_and_add_test(test_fixed test_fixed.cpp)
 openblack_setup_and_add_test(test_alignment test_alignment.cpp)
 openblack_setup_and_add_test(test_virtual_influence test_virtual_influence.cpp)
+openblack_setup_and_add_test(test_mana_path test_mana_path.cpp)
+target_link_libraries(test_mana_path PRIVATE psys)
+openblack_setup_and_add_test(
+  test_influence_virtual_grant test_influence_virtual_grant.cpp
+)
 openblack_setup_and_add_test(test_player_system test_player_system.cpp)
 openblack_setup_and_add_test(test_sound_tags test_sound_tags.cpp)
 target_link_libraries(test_sound_tags PRIVATE pack l3d morph)
