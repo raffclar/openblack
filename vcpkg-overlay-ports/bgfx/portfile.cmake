@@ -1,3 +1,5 @@
+# cmake-format: off
+# vcpkg's own bgfx port, kept as vcpkg writes it so it can be compared with the pinned port
 if(VCPKG_TARGET_IS_WINDOWS)
   vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
 endif()
@@ -76,3 +78,4 @@ file(REMOVE_RECURSE
   "${CURRENT_PACKAGES_DIR}/debug/include"
   "${CURRENT_PACKAGES_DIR}/debug/share"
 )
+# cmake-format: on
