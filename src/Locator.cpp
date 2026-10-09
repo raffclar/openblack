@@ -90,6 +90,7 @@
 #include "ECS/Systems/Implementations/TownSystem.h"
 #include "ECS/Systems/Implementations/VegetationSystem.h"
 #include "ECS/Systems/Implementations/VillageLightSystem.h"
+#include "ECS/Systems/Implementations/VillageTotemSystem.h"
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
 #include "ECS/Systems/Implementations/WeatherSystem.h"
 #include "Graphics/RendererInterface.h"
@@ -171,6 +172,7 @@ using openblack::ecs::systems::TownDesireSystem;
 using openblack::ecs::systems::TownSystem;
 using openblack::ecs::systems::VegetationSystem;
 using openblack::ecs::systems::VillageLightSystem;
+using openblack::ecs::systems::VillageTotemSystem;
 using openblack::ecs::systems::WaterRingSystem;
 using openblack::ecs::systems::WeatherSystem;
 using openblack::graphics::RendererInterface;
@@ -245,6 +247,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::mistSystem::emplace<MistSystem>();
 	Locator::cloudSystem::emplace<CloudSystem>();
 	Locator::villageLightSystem::emplace<VillageLightSystem>();
+	Locator::villageTotemSystem::emplace<VillageTotemSystem>();
 	Locator::fieldSystem::emplace<FieldSystem>();
 	Locator::animalSystem::emplace<AnimalSystem>();
 	Locator::snowSystem::emplace<SnowSystem>();
@@ -390,6 +393,7 @@ void openblack::ShutDownServices()
 	Locator::fieldSystem::reset();
 	Locator::animalSystem::reset();
 	Locator::soundTagSystem::reset();
+	Locator::villageTotemSystem::reset();
 	Locator::townDesireSystem::reset();
 	Locator::miracleFxSystem::reset();
 	Locator::fireSystem::reset();

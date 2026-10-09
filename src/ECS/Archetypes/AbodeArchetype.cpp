@@ -28,6 +28,7 @@
 #include "PotArchetype.h"
 #include "Resources/ResourcesInterface.h"
 #include "Utils.h"
+#include "VillageTotemArchetype.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
@@ -134,6 +135,10 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 	{
 	case AbodeType::StoragePit:
 		AddStoragePitComponents(entity, mesh, info, position, yAngleRadians, foodAmount, woodAmount);
+		break;
+	case AbodeType::TownCentre:
+		// A town centre standing built carries its town's totem
+		VillageTotemArchetype::Create(entity, info);
 		break;
 	default:
 		break;

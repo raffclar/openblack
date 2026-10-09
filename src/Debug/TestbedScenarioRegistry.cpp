@@ -2044,6 +2044,7 @@ std::vector<Scenario> Build()
 	AddPhysicsScenarios(all);
 	AddHandNavigationScenarios(all);
 	AddHandLookScenarios(all);
+	AddVillageTotemScenarios(all);
 	return all;
 }
 
