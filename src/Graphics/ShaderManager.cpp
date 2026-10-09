@@ -333,6 +333,12 @@ std::vector<shader_samplers::Sampler> ReflectSamplers(std::string_view shaderNam
 	                   shaderName);
 	return {};
 }
+
+/// The samplers of both of a program's shaders
+std::vector<shader_samplers::Sampler> SamplersOf(const ShaderDefinition& shader)
+{
+	return shader_samplers::Merge(ReflectSamplers(shader.vertexShaderName), ReflectSamplers(shader.fragmentShaderName));
+}
 } // namespace
 
 ShaderManager::ShaderManager() = default;
@@ -360,12 +366,20 @@ void ShaderManager::LoadShaders()
 		assert(bgfx::isValid(vs));
 		auto fs = bgfx::createEmbeddedShader(k_EmbeddedShaders.data(), type, shader.fragmentShaderName.data());
 		assert(bgfx::isValid(fs));
-		const auto vertexSamplers = ReflectSamplers(shader.vertexShaderName);
-		const auto fragmentSamplers = ReflectSamplers(shader.fragmentShaderName);
 		_shaderPrograms[shader.name.data()] =
-		    new ShaderProgram(shader.name.data(), fromBgfx(vs), fromBgfx(fs),
-		                      shader_samplers::Merge(vertexSamplers, fragmentSamplers), *_samplerDefaults);
+		    new ShaderProgram(shader.name.data(), fromBgfx(vs), fromBgfx(fs), SamplersOf(shader), *_samplerDefaults);
 	}
+}
+
+std::vector<std::pair<std::string, std::vector<shader_samplers::Sampler>>> ShaderManager::ProgramSamplers()
+{
+	std::vector<std::pair<std::string, std::vector<shader_samplers::Sampler>>> programs;
+	programs.reserve(k_Shaders.size());
+	for (const auto& shader : k_Shaders)
+	{
+		programs.emplace_back(std::string(shader.name), SamplersOf(shader));
+	}
+	return programs;
 }
 
 const ShaderProgram* ShaderManager::GetShader(const std::string& name) const

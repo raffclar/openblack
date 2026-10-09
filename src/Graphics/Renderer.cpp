@@ -571,7 +571,7 @@ const Texture2D* GetTexture(uint32_t skinID, const std::unordered_map<SkinId, st
 		}
 		else
 		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Could not find the texture");
+			SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Could not find the texture {:#x}", skinID);
 		}
 	}
 
@@ -660,7 +660,7 @@ void BindCreatureSpellLooks(const ShaderProgram& program)
 	const auto& textures = Locator::resources::value().GetTextures();
 	constexpr std::array<std::pair<const char*, std::pair<uint8_t, entt::hashed_string>>, 3> k_Looks {{
 	    {"s_iceEnvironment", {10, entt::hashed_string("raw/S_IceEnvMap")}},
-	    {"s_iceEnvironmentAlpha", {1, entt::hashed_string("raw/S_IceEnvMapa")}},
+	    {"s_iceEnvironmentAlpha", {5, entt::hashed_string("raw/S_IceEnvMapa")}},
 	    {"s_staticAlpha", {15, entt::hashed_string("raw/S_Statica")}},
 	}};
 	for (const auto& [sampler, binding] : k_Looks)
@@ -836,8 +836,13 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 		             glm::translate(glm::mat4(1.0f), -joint->pivot);
 		modelMatrices = &jointModel;
 	}
-	// A creature's body takes its blended skins in place of its base mesh's
-	const auto skinOf = [&desc, &skins](uint32_t skinID) -> const Texture2D* {
+	// A creature's body takes its blended skins in place of its base mesh's. A submesh drawn with a texture of its own,
+	// like the citadel's leash collars, never samples its primitives' skins, which its mesh may not even have.
+	const auto skinOf = [&desc, &skins, subMeshTexture](uint32_t skinID) -> const Texture2D* {
+		if (subMeshTexture != nullptr)
+		{
+			return nullptr;
+		}
 		if (desc.morphTargets != nullptr)
 		{
 			const auto& blended = desc.morphTargets->skins;
@@ -1977,9 +1982,9 @@ void Renderer::DrawLightBeams(const DrawSceneDesc& desc) const
 
 void Renderer::DrawMesh(const graphics::L3DMesh& mesh, const L3DMeshSubmitDesc& desc, uint8_t subMeshIndex) const noexcept
 {
+	// Some of the game's meshes hold no geometry at all, like the singing stones' centre: there is nothing to draw
 	if (mesh.GetNumSubMeshes() == 0)
 	{
-		SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "Mesh {} has no submeshes to draw", mesh.GetDebugName());
 		return;
 	}
 
