@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstddef>
+
 #include "Loaders.h"
 #include "ResourceManager.h"
 
@@ -62,6 +64,17 @@ public:
 	virtual ParticleBitmapManager& GetParticleBitmaps() = 0;
 	/// The templates the hand's drawn gestures are matched against, by gesture::k_TemplatesId
 	virtual GestureTemplatesManager& GetGestureTemplates() = 0;
+
+	/// Once a frame: moves what the loading threads have finished into the caches, then hands them more of the
+	/// prefetched resources, until about `budget` bytes of them are loading. What they make reaches the graphics card
+	/// about `uploadBudget` bytes a frame, so no frame waits long for it.
+	virtual void UpdateLoading(size_t budget, size_t uploadBudget) = 0;
+	/// Asks for every resource registered and not loaded yet to be loaded on the loading threads
+	virtual void PrefetchAll() = 0;
+	/// How many registered resources are not loaded yet
+	[[nodiscard]] virtual size_t PendingCount() const = 0;
+	/// Stops loading on the loading threads: drops what hasn't started and waits for what has
+	virtual void StopLoading() = 0;
 };
 
 } // namespace openblack::resources

@@ -9,7 +9,10 @@
 
 #pragma once
 
+#include <cstddef>
+
 #include <array>
+#include <chrono>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -114,6 +117,10 @@ class Game
 {
 public:
 	static constexpr auto k_TurnDuration = std::chrono::milliseconds(100);
+	/// About how many bytes of files the loading threads read at a time, and how many bytes of what they make may reach
+	/// the graphics card each frame, so no frame waits long for it
+	static constexpr size_t k_FrameLoadBudget = 256 << 10;
+	static constexpr size_t k_FrameUploadBudget = 128 << 10;
 	static constexpr float k_TurnDurationMultiplierSlow = 2.0f;
 	static constexpr float k_TurnDurationMultiplierNormal = 1.0f;
 	static constexpr float k_TurnDurationMultiplierFast = 0.5f;
@@ -196,6 +203,8 @@ private:
 	const LoadTimer::Clock::time_point _launchTime {LoadTimer::Clock::now()};
 	/// Times the start of the game, from its launch to the first frame drawn on the first land
 	std::optional<LoadTimer> _startupTimer;
+	/// Times the loading of every resource registered at the start, on the loading threads or where first wanted
+	std::optional<LoadTimer> _prefetchTimer;
 
 	/// path to Lionhead Studios Ltd/Black & White folder
 	const std::filesystem::path _gamePath;

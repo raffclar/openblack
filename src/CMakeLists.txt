@@ -214,18 +214,21 @@ if (MSVC)
 
   target_compile_options(
     openblack_lib
-    PRIVATE # Level 4 warnings
-            /W4
-            # Disable nonstandard extension used: nameless struct/union from glm
-            /wd4201
-            # Multi-threaded
-            /MP
-            # Enables stricter C++ standards conformance checks
-            /permissive-
-            # Set correct version of c++
-            /Zc:__cplusplus
-            # Use utf-8 for std::print and fmt/spdlog
-            /utf-8
+    PRIVATE
+      # Level 4 warnings
+      /W4
+      # Disable nonstandard extension used: nameless struct/union from glm
+      /wd4201
+      # Multi-threaded
+      /MP
+      # Enables stricter C++ standards conformance checks
+      /permissive-
+      # Set correct version of c++
+      /Zc:__cplusplus
+      # Use utf-8 for std::print and fmt/spdlog
+      /utf-8
+      # The service locator makes every system and resource cache, more sections than an object file holds
+      /bigobj
   )
 
   if (OPENBLACK_WARNINGS_AS_ERRORS)
