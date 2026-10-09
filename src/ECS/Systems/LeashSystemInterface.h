@@ -101,7 +101,7 @@ public:
 	/// Where the hand holding a creature's leash is, while a hand holds it rather than a post or a thing
 	[[nodiscard]] virtual std::optional<glm::vec3> HolderPoint(entt::entity creature) const = 0;
 	[[nodiscard]] virtual LeashType TypeOf(entt::entity creature) const = 0;
-	/// The player's creature: the one creature they can lead, if they have one
+	/// The player's primary creature, the earliest they got that is still theirs, if they have one
 	[[nodiscard]] virtual std::optional<entt::entity> PlayersCreature(PlayerNames player) const = 0;
 
 	/// A player presses a leash shortcut, which acts on their creature. Returns whether it did anything.

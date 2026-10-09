@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include <entt/fwd.hpp>
 
 #include "Enums.h"
@@ -21,6 +23,11 @@ public:
 	virtual void RegisterPlayers() = 0;
 	virtual void AddPlayer(entt::entity playerEntity) = 0;
 	[[nodiscard]] virtual entt::entity GetPlayer(PlayerNames name) const = 0;
+	/// Remembers that the owner of a newly made creature got it, after the creatures they got before
+	virtual void AddCreature(entt::entity creature) = 0;
+	/// The player's primary creature: the earliest they got that is still theirs. Every part of the game that asks for
+	/// "the player's creature" (scripts, the story, the leash, fights, the advisors, the Creature Cave) uses this one.
+	[[nodiscard]] virtual std::optional<entt::entity> GetPrimaryCreature(PlayerNames name) const = 0;
 	/// The player at this machine, whose hand the mouse moves. openblack is played by one player, the first.
 	[[nodiscard]] virtual PlayerNames GetLocalPlayer() const { return PlayerNames::PLAYER_ONE; }
 	/// Whether the computer plays a player: every player but the one at this machine

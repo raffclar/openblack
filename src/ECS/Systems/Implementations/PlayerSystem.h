@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -26,6 +27,8 @@ public:
 	void RegisterPlayers() override;
 	void AddPlayer(entt::entity playerEntity) override;
 	[[nodiscard]] entt::entity GetPlayer(PlayerNames playerName) const override;
+	void AddCreature(entt::entity creature) override;
+	[[nodiscard]] std::optional<entt::entity> GetPrimaryCreature(PlayerNames name) const override;
 
 private:
 	std::unordered_map<PlayerNames, entt::entity> _players;
