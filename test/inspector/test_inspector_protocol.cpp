@@ -82,6 +82,31 @@ TEST(InspectorProtocol, RefusesBadRequestsWithoutThrowing)
 	EXPECT_TRUE(
 	    std::holds_alternative<std::string>(DecodeRequest(R"({"query": "a.b", "where": [{"field": "x", "op": "~"}]})")));
 	EXPECT_TRUE(std::holds_alternative<std::string>(DecodeRequest(R"({"query": "a.b", "limit": -1})")));
+	EXPECT_TRUE(std::holds_alternative<std::string>(DecodeRequest(R"({"query": "a.b", "radius": 5})")));
+	EXPECT_TRUE(std::holds_alternative<std::string>(DecodeRequest(R"({"query": "a.b", "count": "yes"})")));
+	EXPECT_TRUE(std::holds_alternative<std::string>(DecodeRequest(R"({"query": "a.b", "summary": 3})")));
+	EXPECT_TRUE(std::holds_alternative<std::string>(DecodeRequest(R"({"query": "a.b", "where": [3]})")));
+}
+
+// A query's parameter put beside params rather than inside it would run the query without it: such a request is
+// refused, naming what it doesn't know and what a request may have
+TEST(InspectorProtocol, RefusesUnknownMembersNamingThem)
+{
+	const auto decoded = DecodeRequest(R"({"query": "ecs.entities", "component": "Temple", "kinds": "Abode", "limit": 5})");
+	ASSERT_TRUE(std::holds_alternative<std::string>(decoded));
+	const auto& error = std::get<std::string>(decoded);
+	EXPECT_NE(error.find("component"), std::string::npos) << error;
+	EXPECT_NE(error.find("kinds"), std::string::npos) << error;
+	EXPECT_NE(error.find("params"), std::string::npos) << error;
+	EXPECT_NE(error.find("max_bytes"), std::string::npos) << error;
+	EXPECT_EQ(error.find("limit,"), error.rfind("limit,")) << "limit is named only among the allowed: " << error;
+
+	const auto filter = DecodeRequest(R"({"query": "a.b", "where": [{"field": "x", "value": 1, "operator": "<"}]})");
+	ASSERT_TRUE(std::holds_alternative<std::string>(filter));
+	EXPECT_NE(std::get<std::string>(filter).find("operator"), std::string::npos);
+
+	// Every member a request may have is still taken
+	EXPECT_TRUE(std::holds_alternative<Request>(DecodeRequest(R"({"query": "a.b", "id": 1, "params": {"x": 1}})")));
 }
 
 TEST(InspectorProtocol, EncodedRequestsDecodeTheSame)

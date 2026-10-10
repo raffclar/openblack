@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -39,13 +40,25 @@ struct ScriptValue
 	uint32_t object {0};
 	int32_t integer {0};
 	bool boolean {false};
+	/// Given with its type ({"int": n}, {"float": x}): it goes on the stack as that, whatever the native's slot says
+	bool typeGiven {false};
 };
 
 /// A value as JSON: a number, true or false, or {"object": id}
 [[nodiscard]] Json ToJson(const ScriptValue& value);
 /// The values a native is given: a number is a float, true or false a boolean, [x, y, z] a vector (three values),
-/// {"object": id} an object and {"int": n} a whole number. None, with why not, when one doesn't read.
+/// {"object": id} an object, {"int": n} a whole number and {"float": x} a float, the last two kept as given. None, with why
+/// not, when one doesn't read.
 [[nodiscard]] std::optional<std::vector<ScriptValue>> ArgumentsFromJson(const Json& args, std::string& error);
+/// The types a native's stack slots take, from the language's table of natives' arguments (a position is three vector
+/// slots; a string or a value of any type is none); empty when the table doesn't know them or they don't add up to the
+/// slots the native takes
+[[nodiscard]] std::vector<std::optional<ScriptValue::Type>> NativeSlots(std::string_view name, int32_t stackIn);
+/// The values made the types a native's slots take, as a script's call gives them: a whole number is an integer for an
+/// integer slot (a text's number, a constant), any number a float for a float slot, 0 or 1 a truth for a truth slot, a
+/// whole number an object for an object slot. False, with why not, when a value can't be the slot's type.
+[[nodiscard]] bool TypeArguments(std::vector<ScriptValue>& values, std::span<const std::optional<ScriptValue::Type>> slots,
+                                 std::string& error);
 /// A value of a type from JSON, for a global
 [[nodiscard]] std::optional<ScriptValue> ValueOfType(ScriptValue::Type type, const Json& json, std::string& error);
 
@@ -71,6 +84,9 @@ struct ScriptNative
 	int32_t in {0};
 	uint32_t out {0};
 	bool implemented {false};
+	/// The type each of its stack slots takes, in the order a script pushes them (a position is three vector slots);
+	/// none for a slot of any type. Empty when its arguments' types aren't known.
+	std::vector<std::optional<ScriptValue::Type>> slots;
 };
 
 /// What the inspector runs scripts, natives and globals through: the game's script machine

@@ -222,7 +222,7 @@ magic::EffectDefence magic_living::DefenceOf(entt::entity entity)
 	}
 	const auto defence = magic::EffectDefence::From(*info);
 	const auto* creature = EntityRegistry().TryGet<const Creature>(entity);
-	return creature != nullptr ? magic::CreatureDefence(defence, creature->size) : defence;
+	return creature != nullptr ? magic::CreatureDefence(defence, ShownSize(*creature)) : defence;
 }
 
 namespace
@@ -316,7 +316,7 @@ void CutAndScarred(entt::entity entity, float damage, const magic::EffectValues&
 		return;
 	}
 	const auto groin = *groinAt;
-	const float reach = creature->size * creature_marks::scar::k_BurnReachPerSize;
+	const float reach = ShownSize(*creature) * creature_marks::scar::k_BurnReachPerSize;
 	auto& random = Locator::gameRandom::value();
 	if (values[magic::EffectKind::Burn] < values[magic::EffectKind::Crush])
 	{

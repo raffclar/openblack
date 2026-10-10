@@ -11,8 +11,13 @@
 
 #include "InspectorSystem.h"
 
+#include <cstdlib>
+
 #include <chrono>
+#include <filesystem>
+#include <optional>
 #include <string>
+#include <system_error>
 #include <utility>
 
 #include <spdlog/spdlog.h>
@@ -178,7 +183,19 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
 	_server->SetControlFilter(&inspector::Inspector::TakesControl);
 	namespace discovery = inspector::discovery;
 	const auto executable = discovery::ExecutablePath();
-	const auto worktree = discovery::FindWorktree(executable.parent_path());
+	// Builds live apart from their worktrees: the worktree is the one ob-build run names, else the one the game was
+	// built from
+#if defined(OPENBLACK_BUILT_SOURCE_DIR)
+	const std::filesystem::path builtFrom = OPENBLACK_BUILT_SOURCE_DIR;
+#else
+	const std::filesystem::path builtFrom;
+#endif
+	auto worktree = discovery::GameWorktree(builtFrom, executable);
+	const auto* fromEnvironment = std::getenv("OPENBLACK_WORKTREE");
+	if (fromEnvironment != nullptr && *fromEnvironment != '\0')
+	{
+		worktree = std::filesystem::path(fromEnvironment);
+	}
 	discovery::GameRecord record {
 	    .port = _server->Port(),
 	    .pid = discovery::CurrentProcessId(),
@@ -259,6 +276,8 @@ void InspectorSystem::Service()
 	const auto now = std::chrono::steady_clock::now();
 	const auto seconds = std::chrono::duration<float>(now - _lastService).count();
 	_lastService = now;
+	// The camera shown elsewhere last frame (an override, a picture's) gets its own state back before anything moves it
+	_controls->camera.Unpin();
 	// A request answered here may load a land, while the loading helper answers the others
 	_server->Poll([this](std::string_view line) {
 		auto answer = _inspector.Handle(line);
@@ -287,6 +306,12 @@ void InspectorSystem::Service()
 
 void InspectorSystem::PlaceCamera()
 {
+	// The view the inspector overrides the camera with, then a picture's own, which wins for its frames
+	auto& camera = _controls->camera;
+	if (const auto overridden = camera.Override(); overridden.has_value())
+	{
+		static_cast<void>(camera.Pin(*overridden));
+	}
 	_screenshots->PlaceCamera();
 }
 

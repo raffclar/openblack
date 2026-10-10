@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <limits>
 
+#include <glm/geometric.hpp>
+
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
 
@@ -148,6 +150,29 @@ std::optional<Placed> creature_arena::Place(glm::ivec2 start, float wantedRadius
 		}
 	}
 	return std::nullopt;
+}
+
+bool creature_arena::KeepsArenaOff(const ThingInCell& thing, float creatureSize, glm::ivec2 cell)
+{
+	if (thing.kind == ThingKind::Temple)
+	{
+		return true;
+	}
+	if (thing.living || !thing.hasModel)
+	{
+		return false;
+	}
+	const bool tall = creatureSize * k_TallPerSize < thing.height;
+	const bool ignored = !tall && (thing.kind == ThingKind::Building || thing.kind == ThingKind::Movable);
+	if (ignored)
+	{
+		return false;
+	}
+	// The cell's middle, on the ground the circles lie on
+	const glm::vec2 middle {static_cast<float>(cell.x * 10 + 5), static_cast<float>(cell.y * 10 + 5)};
+	return std::ranges::any_of(thing.circles, [&middle](const GroundCircle& circle) {
+		return glm::length(middle - circle.centre) - circle.radius < k_ThingClearance;
+	});
 }
 
 std::vector<glm::vec3> creature_arena::RingPoints(glm::vec2 centre, float radius, const GroundHeight& ground)

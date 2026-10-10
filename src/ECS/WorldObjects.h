@@ -52,6 +52,10 @@ struct Size
 
 /// Its life, 0 to 1: a villager's or a creature's life, any other object's own (1 until it is hurt)
 [[nodiscard]] float LifeOf(entt::entity object);
+/// An object's life set outright, as a script sets it: a villager counts as injured or not as it passes seven tenths,
+/// a tree with no life left goes from the world; anything else simply takes it. Unless allowed, the life isn't changed
+/// (a villager is still counted).
+void SetLife(entt::entity object, float life, bool allowed = true);
 /// Life taken from an object, as each kind takes it: a building's people come out, and it stops working once low; a
 /// field loses food rather than life; a creature that runs out is knocked out. Its life after.
 float ReduceLife(entt::entity object, float damage);

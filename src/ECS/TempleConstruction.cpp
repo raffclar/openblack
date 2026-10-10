@@ -189,8 +189,8 @@ std::optional<entt::entity> construction::StartPlannedAt(glm::vec3 place, float 
 	const auto transform = registry.Get<const Transform>(plan);
 	registry.Destroy(plan);
 	// The temple's heart goes up where it was planned, with nothing of it built, and a site for its builders
-	const auto temple = archetypes::CitadelArchetype::Create(transform.position, OwnerOf(planned), planned.facing,
-	                                                         glm::mat4(transform.rotation), transform.scale, 0.0f);
+	const auto temple =
+	    archetypes::CitadelArchetype::Create(transform.position, OwnerOf(planned), planned.yAngle, transform.scale, 0.0f);
 	registry.Get<Temple>(temple).town = planned.townId;
 	registry.Assign<BuildingSite>(temple, building_construction::SiteDesire(scriptDesire));
 	return temple;

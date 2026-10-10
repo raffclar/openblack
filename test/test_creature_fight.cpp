@@ -483,3 +483,70 @@ TEST(CreatureFightHud, LayoutAndColours)
 	EXPECT_EQ(creature_fight_hud::SpeciesName(CreatureType::Tiger), u"Tiger");
 	EXPECT_EQ(creature_fight_hud::SpeciesName(CreatureType::Unknown), u"Creature");
 }
+
+TEST(CreatureFight, AMoveForACreatureNobodyFightsLeavesItToTheQueue)
+{
+	// A script turned the computer off: moves added for it don't hand it to the player
+	Fighter fighter;
+	fighter.control = Control::None;
+	EXPECT_TRUE(PlayerMove(fighter, AttackMove(Band::High), false));
+	EXPECT_EQ(fighter.control, Control::None);
+	// The player's own creature stays the player's
+	fighter.control = Control::Player;
+	EXPECT_TRUE(PlayerMove(fighter, BlockMove(), false));
+	EXPECT_EQ(fighter.control, Control::Player);
+}
+
+TEST(CreatureFight, ScriptsNumberMovesAsTheGameQueuesThem)
+{
+	EXPECT_EQ(ScriptMove(0), Move {.kind = Move::Kind::High});
+	EXPECT_EQ(ScriptMove(1), Move {.kind = Move::Kind::Mid});
+	EXPECT_EQ(ScriptMove(2), Move {.kind = Move::Kind::Low});
+	EXPECT_EQ(ScriptMove(3), Move {.kind = Move::Kind::Block});
+	EXPECT_EQ(ScriptMove(4), Move {.kind = Move::Kind::Special});
+	EXPECT_FALSE(ScriptMove(5).has_value());
+	// A step is its animation with the high bit, a miracle its number with the next
+	EXPECT_EQ(ScriptMove(137 | k_ScriptAnimationBit), (Move {.kind = Move::Kind::Animation, .value = 137}));
+	EXPECT_EQ(ScriptMove(7 | k_ScriptSpellBit), (Move {.kind = Move::Kind::Spell, .value = 7}));
+	// The animation bit wins over the miracle's
+	EXPECT_EQ(ScriptMove(9 | k_ScriptAnimationBit | k_ScriptSpellBit), (Move {.kind = Move::Kind::Animation, .value = 9}));
+}
+
+TEST(CreatureFight, WhatAFighterIsDoingGoesByItsAnimation)
+{
+	EXPECT_EQ(FightActionOf(animations::k_Start), FightAction::Stance);
+	EXPECT_EQ(FightActionOf(animations::k_Stance), FightAction::Stance);
+	EXPECT_EQ(FightActionOf(animations::k_Finish), FightAction::Stance);
+	EXPECT_EQ(FightActionOf(animations::k_Block), FightAction::Block);
+	EXPECT_EQ(FightActionOf(142), FightAction::Block);
+	EXPECT_EQ(FightActionOf(144), FightAction::Block);
+	EXPECT_EQ(FightActionOf(141), FightAction::Other);
+	EXPECT_EQ(FightActionOf(animations::k_StepForward), FightAction::Step);
+	EXPECT_EQ(FightActionOf(animations::k_StepLeft), FightAction::Step);
+	EXPECT_EQ(FightActionOf(animations::k_AttackHigh), FightAction::Blow);
+	EXPECT_EQ(FightActionOf(129), FightAction::Blow);
+	EXPECT_EQ(FightActionOf(130), FightAction::Special);
+	EXPECT_EQ(FightActionOf(131), FightAction::Blow);
+	EXPECT_EQ(FightActionOf(135), FightAction::Blow);
+	EXPECT_EQ(FightActionOf(136), FightAction::Special);
+	EXPECT_EQ(FightActionOf(110), FightAction::Casting);
+	EXPECT_EQ(FightActionOf(112), FightAction::Casting);
+	EXPECT_EQ(FightActionOf(179), FightAction::ReelingHigh);
+	EXPECT_EQ(FightActionOf(184), FightAction::ReelingMiddle);
+	EXPECT_EQ(FightActionOf(193), FightAction::ReelingLow);
+	EXPECT_EQ(FightActionOf(194), FightAction::Other);
+	EXPECT_EQ(FightActionOf(animations::k_Faint), FightAction::Fainted);
+	EXPECT_EQ(FightActionOf(animations::k_Taunt), FightAction::Other);
+}
+
+TEST(CreatureFight, OnlyBlowsAtABandCountAsQueuedHits)
+{
+	MoveQueue queue;
+	ASSERT_TRUE(queue.Push(AttackMove(Band::High), false));
+	ASSERT_TRUE(queue.Push(BlockMove(), false));
+	ASSERT_TRUE(queue.Push(AttackMove(Band::Low), false));
+	ASSERT_TRUE(queue.Push({.kind = Move::Kind::Special}, false));
+	ASSERT_TRUE(queue.Push(StepMove(Step::Back), false));
+	ASSERT_TRUE(queue.Push({.kind = Move::Kind::Spell, .value = 3}, false));
+	EXPECT_EQ(QueuedBlows(queue.Moves()), 2u);
+}
