@@ -70,7 +70,8 @@ public:
 	[[nodiscard]] static uint32_t GetLandColour(const LandLightPalette& palette, float skyType, float alignment,
 	                                            float overcast) noexcept;
 
-	/// The moon's colour for the time of day and alignment, as Build finds it, 0xRRGGBB
+	/// The moon's colour for the time of day and alignment, 0xRRGGBB: the sky works it out once a frame onto the moon
+	/// (ecs::components::Moon), and the table itself has no use for it
 	[[nodiscard]] static uint32_t GetMoonColour(const LandLightPalette& palette, float skyType, float alignment) noexcept;
 
 	/// The table as RGBA8 texels
@@ -80,15 +81,12 @@ public:
 	[[nodiscard]] uint32_t GetLandColour() const noexcept { return _landColour; }
 	/// The palette's warm colour of the frame, which the darkest levels go on to, 0xRRGGBB
 	[[nodiscard]] uint32_t GetWarmColour() const noexcept { return _warmColour; }
-	/// The moon's colour of the frame, by the alignment, 0xRRGGBB
-	[[nodiscard]] uint32_t GetMoonColour() const noexcept { return _moonColour; }
 
 private:
 	std::array<uint32_t, k_Size> _texels {};
 	Haze _haze;
 	uint32_t _landColour {0xFFFFFF};
 	uint32_t _warmColour {0xFFFFFF};
-	uint32_t _moonColour {0xFFFFFF};
 };
 
 } // namespace openblack

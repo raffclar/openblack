@@ -48,3 +48,6 @@ compile_commands.json
 
 # Python bytecode left by running the tools and their tests
 __pycache__/
+
+# The shared build scripts (the build* rule above would hide them)
+!/tools/build/

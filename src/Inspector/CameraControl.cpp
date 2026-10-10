@@ -231,9 +231,9 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCameraProvider(Came
 	const std::vector<ParameterDescription> pose {
 	    Optional("position", "point", "Where the camera stands, [x, y, z]"),
 	    Optional("focus", "point", "What it looks at, [x, z] on the land or [x, y, z]"),
-	    Optional("yaw", "number", "Degrees about the up axis: 0 looks along +z, 90 along +x"),
-	    Optional("pitch", "number", "Degrees below the horizon"),
-	    Optional("distance", "number", "From the camera to its focus: the zoom"),
+	    Optional("yaw", "number", "Degrees (not radians) about the up axis: 0 looks along +z, 90 along +x"),
+	    Optional("pitch", "number", "Degrees (not radians) below the horizon: 0 looks level, 90 straight down"),
+	    Optional("distance", "number", "Metres from the camera to its focus: the zoom"),
 	};
 	const auto move = [&camera](bool fly) {
 		return [&camera, fly](const QueryContext& context) {
@@ -272,51 +272,52 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCameraProvider(Came
 	               .needsNear = false,
 	               .writes = true},
 	              move(false));
-	provider->Add({.name = "frame",
-	               .description = "Puts the camera at once to look at an entity where it is now, from the angles and "
-	                              "distance given, the camera's own otherwise. For a moving entity in a picture, give "
-	                              "screenshot.take's frame instead: it frames it at the picture's frame",
-	               .parameters = {{.name = "id", .type = "integer", .description = "The entity", .required = true},
-	                              Optional("yaw", "number", "Degrees about the up axis: 0 looks along +z, 90 along +x"),
-	                              Optional("pitch", "number", "Degrees below the horizon"),
-	                              Optional("distance", "number", "From the camera to the entity")},
-	               .kind = ResultKind::Object,
-	               .needsNear = false,
-	               .writes = true},
-	              [&camera](const QueryContext& context) {
-		              const auto now = camera.State();
-		              if (!now.has_value())
-		              {
-			              return QueryResult::Error("there is no camera");
-		              }
-		              std::string error;
-		              const auto request = ParseFrameRequest(context.params, error);
-		              if (!request.has_value())
-		              {
-			              return QueryResult::Error(error);
-		              }
-		              const auto target = camera.EntityPosition(request->id);
-		              if (!target.has_value())
-		              {
-			              return QueryResult::Error("no entity " + std::to_string(request->id) + " with a place");
-		              }
-		              const auto pose = FramePose(*target, *request, *now);
-		              if (auto why = camera.Set(pose); !why.empty())
-		              {
-			              return QueryResult::Error(why);
-		              }
-		              const auto angles = AnglesOf(pose);
-		              return QueryResult::Value({
-		                  {"set_to",
-		                   {{"origin", Point(pose.origin)},
-		                    {"focus", Point(pose.focus)},
-		                    {"yaw", angles.yaw},
-		                    {"pitch", angles.pitch},
-		                    {"distance", angles.distance}}},
-		                  {"entity", request->id},
-		                  {"model", now->model},
-		              });
-	              });
+	provider->Add(
+	    {.name = "frame",
+	     .description = "Puts the camera at once to look at an entity where it is now, from the angles and "
+	                    "distance given, the camera's own otherwise. For a moving entity in a picture, give "
+	                    "screenshot.take's frame instead: it frames it at the picture's frame",
+	     .parameters = {{.name = "id", .type = "integer", .description = "The entity", .required = true},
+	                    Optional("yaw", "number", "Degrees (not radians) about the up axis: 0 looks along +z, 90 along +x"),
+	                    Optional("pitch", "number", "Degrees (not radians) below the horizon: 0 looks level, 90 straight down"),
+	                    Optional("distance", "number", "Metres from the camera to the entity")},
+	     .kind = ResultKind::Object,
+	     .needsNear = false,
+	     .writes = true},
+	    [&camera](const QueryContext& context) {
+		    const auto now = camera.State();
+		    if (!now.has_value())
+		    {
+			    return QueryResult::Error("there is no camera");
+		    }
+		    std::string error;
+		    const auto request = ParseFrameRequest(context.params, error);
+		    if (!request.has_value())
+		    {
+			    return QueryResult::Error(error);
+		    }
+		    const auto target = camera.EntityPosition(request->id);
+		    if (!target.has_value())
+		    {
+			    return QueryResult::Error("no entity " + std::to_string(request->id) + " with a place");
+		    }
+		    const auto pose = FramePose(*target, *request, *now);
+		    if (auto why = camera.Set(pose); !why.empty())
+		    {
+			    return QueryResult::Error(why);
+		    }
+		    const auto angles = AnglesOf(pose);
+		    return QueryResult::Value({
+		        {"set_to",
+		         {{"origin", Point(pose.origin)},
+		          {"focus", Point(pose.focus)},
+		          {"yaw", angles.yaw},
+		          {"pitch", angles.pitch},
+		          {"distance", angles.distance}}},
+		        {"entity", request->id},
+		        {"model", now->model},
+		    });
+	    });
 	provider->Add({.name = "fly",
 	               .description = "Flies the camera somewhere as the bookmarks fly it; read camera.state as it goes",
 	               .parameters = pose,

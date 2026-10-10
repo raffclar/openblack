@@ -37,6 +37,7 @@ public:
 	SoundManager& GetSounds() override { return _sounds; }
 	GlowManager& GetGlows() override { return _glows; }
 	CameraPathManager& GetCameraPaths() override { return _cameraPaths; }
+	DanceFileManager& GetDanceFiles() override { return _danceFiles; }
 	ParticleFileManager& GetParticleFiles() override { return _particleFiles; }
 	ParticleBitmapManager& GetParticleBitmaps() override { return _particleBitmaps; }
 	GestureTemplatesManager& GetGestureTemplates() override { return _gestureTemplates; }
@@ -110,6 +111,7 @@ private:
 	SoundManager _sounds;
 	GlowManager _glows;
 	CameraPathManager _cameraPaths;
+	DanceFileManager _danceFiles;
 	ParticleFileManager _particleFiles;
 	ParticleBitmapManager _particleBitmaps;
 	GestureTemplatesManager _gestureTemplates;

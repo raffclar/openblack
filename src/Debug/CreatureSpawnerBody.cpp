@@ -123,7 +123,7 @@ void CreatureSpawner::DrawBody(entt::entity entity) noexcept
 	            RestName(needs->rest).data(), needs->restTurns, needs->rested ? ", rested" : "");
 	ImGui::Text("%s%s", needs->moving ? "On the move" : "Standing still",
 	            needs->moving ? ": tiring, not growing" : ": growing, not tiring");
-	Bar("Energy", body.energy, 0.0f, std::max(1.0f, creature->size),
+	Bar("Energy", body.energy, 0.0f, std::max(1.0f, ShownSize(*creature)),
 	    "Hunger is 1 less energy; a big meal fills it up to its size");
 	Bar("Exhaustion", body.exhaustion, 0.0f, 1.0f, "Slowed to its slow speed from 0.8, faints at 1");
 	Bar("Thirst", body.dehydration, 0.0f, 1.0f, "Fills in about 83 minutes; drinking clears it");
@@ -225,7 +225,7 @@ void CreatureSpawner::DrawBody(entt::entity entity) noexcept
 		auto ahead = -(transform->rotation * glm::vec3(0.0f, 0.0f, 1.0f));
 		ahead.y = 0.0f;
 		ahead = glm::length(ahead) > 0.0f ? glm::normalize(ahead) : glm::vec3(0.0f, 0.0f, -1.0f);
-		const auto at = transform->position + (ahead * (k_FoodAhead * std::max(creature->size, 1.0f)));
+		const auto at = transform->position + (ahead * (k_FoodAhead * std::max(ShownSize(*creature), 1.0f)));
 		ecs::archetypes::PotArchetype::Create(at, 0.0f, k_FoodPot, k_FoodAmount);
 		_lastNeed = fmt::format("Dropped a pot of {} food", k_FoodAmount);
 	}

@@ -1,18 +1,49 @@
 include(CTest)
 
+# The tests that use the game's library are built into one program, openblack_tests: linking a program for each of them
+# took most of a build. Each test source is still a ctest test of its own, named as before: ctest runs the program with
+# --openblack-test-source=<source>, which runs only that source's tests, in a process of its own.
+add_executable(openblack_tests test_runner_main.cpp)
+target_link_libraries(openblack_tests PRIVATE GTest::gtest openblack_lib)
+set_property(TARGET openblack_tests PROPERTY FOLDER "tests")
+# Its Debug link only references the objects' debug information, which is quicker (the game keeps full debug information)
+if (MSVC)
+  target_link_options(
+    openblack_tests PRIVATE $<$<CONFIG:Debug>:/DEBUG:FASTLINK>
+  )
+endif ()
+
+# The libraries each test links (target_link_libraries(test_x PRIVATE lib) after adding it) are linked into the program
+# once every test is added
+function (openblack_link_test_libraries)
+  get_property(targets GLOBAL PROPERTY OPENBLACK_TESTS_IN_PROGRAM)
+  foreach (target IN LISTS targets)
+    get_target_property(libraries ${target} LINK_LIBRARIES)
+    if (libraries)
+      target_link_libraries(openblack_tests PRIVATE ${libraries})
+    endif ()
+  endforeach ()
+endfunction ()
+cmake_language(DEFER CALL openblack_link_test_libraries)
+
 # Macro for setting up and adding a simple test.
-# TEST_NAME is the name of the test.
-# TEST_SOURCE is the source file of the test.
+# TEST_NAME is the name of the test: its ctest test and its target, an object library of the test program that
+# target_link_libraries, target_include_directories, target_compile_definitions and add_dependencies apply to.
+# TEST_SOURCE is the source file of the test, relative to this folder.
 macro (OPENBLACK_SETUP_AND_ADD_TEST TEST_NAME TEST_SOURCE)
-  add_executable(${TEST_NAME} ${TEST_SOURCE})
+  add_library(${TEST_NAME} OBJECT ${TEST_SOURCE})
   add_dependencies(${TEST_NAME} generate_mock_game_data)
-  target_link_libraries(${TEST_NAME} PRIVATE GTest::gtest_main openblack_lib)
+  target_link_libraries(${TEST_NAME} PRIVATE GTest::gtest openblack_lib)
   target_compile_definitions(
     ${TEST_NAME} PRIVATE TEST_BINARY_DIR="${CMAKE_CURRENT_BINARY_DIR}"
                          GLM_ENABLE_EXPERIMENTAL
   )
   set_property(TARGET ${TEST_NAME} PROPERTY FOLDER "tests")
-  add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
+  target_sources(openblack_tests PRIVATE $<TARGET_OBJECTS:${TEST_NAME}>)
+  set_property(GLOBAL APPEND PROPERTY OPENBLACK_TESTS_IN_PROGRAM ${TEST_NAME})
+  add_test(NAME ${TEST_NAME} COMMAND openblack_tests
+                                     --openblack-test-source=${TEST_SOURCE}
+  )
 endmacro ()
 
 # Macro for setting up a test that uses JSON scenario files for validation.
@@ -69,6 +100,10 @@ openblack_setup_and_add_test(test_music_decoding audio/test_music_decoding.cpp)
 openblack_setup_and_add_test(test_anim_effects audio/test_anim_effects.cpp)
 openblack_setup_and_add_test(test_listener_frame audio/test_listener_frame.cpp)
 openblack_setup_and_add_test(test_hearing_range audio/test_hearing_range.cpp)
+openblack_setup_and_add_test(
+  test_script_sound_effect audio/test_script_sound_effect.cpp
+)
+target_link_libraries(test_script_sound_effect PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_interface gui/test_interface.cpp)
 openblack_setup_and_add_test(test_skip_box gui/test_skip_box.cpp)
 openblack_setup_and_add_test(test_tool_tips gui/test_tool_tips.cpp)
@@ -111,6 +146,12 @@ openblack_setup_and_add_test(test_model_light graphics/test_model_light.cpp)
 openblack_setup_and_add_test(test_sun graphics/test_sun.cpp)
 openblack_setup_and_add_test(test_moon graphics/test_moon.cpp)
 openblack_setup_and_add_test(test_bone_budget graphics/test_bone_budget.cpp)
+openblack_setup_and_add_test(test_bone_palette graphics/test_bone_palette.cpp)
+openblack_setup_and_add_test(test_view_frustum graphics/test_view_frustum.cpp)
+openblack_setup_and_add_test(test_mesh_detail graphics/test_mesh_detail.cpp)
+openblack_setup_and_add_test(
+  test_sea_reflection graphics/test_sea_reflection.cpp
+)
 openblack_setup_and_add_test(
   test_shader_samplers graphics/test_shader_samplers.cpp
 )
@@ -247,6 +288,7 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_fight_view test_fight_view.cpp)
 openblack_setup_and_add_test(test_leash_rope test_leash_rope.cpp)
 openblack_setup_and_add_test(test_leash_rules test_leash_rules.cpp)
+openblack_setup_and_add_test(test_temple_pen test_temple_pen.cpp)
 openblack_setup_and_add_test(test_leash_ownership test_leash_ownership.cpp)
 openblack_setup_and_add_test(test_primary_creature test_primary_creature.cpp)
 openblack_setup_and_add_test(test_leash_orders test_leash_orders.cpp)
@@ -274,6 +316,9 @@ target_link_libraries(test_l3d_submesh_names PRIVATE l3d)
 openblack_setup_and_add_test(test_light_beams graphics/test_light_beams.cpp)
 target_link_libraries(test_light_beams PRIVATE l3d glw)
 openblack_setup_and_add_test(test_temple_camera camera/test_temple_camera.cpp)
+openblack_setup_and_add_test(
+  test_camera_projection camera/test_camera_projection.cpp
+)
 openblack_setup_and_add_test(test_temple_doors temple/test_temple_doors.cpp)
 openblack_setup_and_add_test(
   test_creature_cave_effects temple/test_creature_cave_effects.cpp
@@ -314,6 +359,7 @@ openblack_setup_and_add_test(test_animated_static test_animated_static.cpp)
 openblack_setup_and_add_test(test_animal_move test_animal_move.cpp)
 openblack_setup_and_add_test(test_bird_rules test_bird_rules.cpp)
 openblack_setup_and_add_test(test_teleport_rules test_teleport_rules.cpp)
+openblack_setup_and_add_test(test_vortex_rules test_vortex_rules.cpp)
 openblack_setup_and_add_test(test_fire test_fire.cpp)
 openblack_setup_and_add_test(test_blast test_blast.cpp)
 openblack_setup_and_add_test(test_gesture_events test_gesture_events.cpp)
@@ -335,9 +381,11 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_town_belief test_town_belief.cpp)
 openblack_setup_and_add_test(test_villager_speed test_villager_speed.cpp)
 openblack_setup_and_add_test(test_wall_hug_rules test_wall_hug_rules.cpp)
+openblack_setup_and_add_test(test_walker_placement test_walker_placement.cpp)
 openblack_setup_and_add_test(test_villager_age test_villager_age.cpp)
 openblack_setup_and_add_test(test_villager_needs test_villager_needs.cpp)
 openblack_setup_and_add_test(test_villager_routine test_villager_routine.cpp)
+openblack_setup_and_add_test(test_walk_arrival test_walk_arrival.cpp)
 openblack_setup_and_add_test(test_abode_knock test_abode_knock.cpp)
 openblack_setup_and_add_test(
   test_villager_animation test_villager_animation.cpp
@@ -422,10 +470,12 @@ openblack_setup_and_add_test(test_script_objects test_script_objects.cpp)
 openblack_setup_and_add_test(test_script_find test_script_find.cpp)
 openblack_setup_and_add_test(test_partial_build_cap test_partial_build_cap.cpp)
 openblack_setup_and_add_test(test_town_playthings test_town_playthings.cpp)
+openblack_setup_and_add_test(test_village_totem test_village_totem.cpp)
 openblack_setup_and_add_test(test_temple_heart test_temple_heart.cpp)
 openblack_setup_and_add_test(test_model_surface test_model_surface.cpp)
 target_link_libraries(test_model_surface PRIVATE l3d)
 openblack_setup_and_add_test(test_fireflies test_fireflies.cpp)
+openblack_setup_and_add_test(test_forest_growth test_forest_growth.cpp)
 openblack_setup_and_add_test(test_store_rules test_store_rules.cpp)
 openblack_setup_and_add_test(test_clip_sounds test_clip_sounds.cpp)
 target_link_libraries(test_clip_sounds PRIVATE sas)
@@ -455,6 +505,8 @@ openblack_setup_and_add_test(
   test_loading_screen_rules gui/test_loading_screen_rules.cpp
 )
 openblack_setup_and_add_test(test_story_land_change test_story_land_change.cpp)
+openblack_setup_and_add_test(test_dance_file test_dance_file.cpp)
+target_link_libraries(test_dance_file PRIVATE dance)
 target_link_libraries(test_story_land_change PRIVATE ScriptLibrary)
 
 # The inspector component's tests build without the game, as the component does
@@ -492,6 +544,16 @@ if (Python3_Interpreter_FOUND)
       ${CMAKE_SOURCE_DIR}/tools/inspector/generate_component_fields.py --check
   )
 endif ()
+# The tests talking over loopback sockets with threads of their own take turns, so that on a machine busy with a
+# parallel ctest they don't also crowd each other
+set(OPENBLACK_INSPECTOR_SOCKET_TESTS test_inspector_server)
+if (Python3_Interpreter_FOUND)
+  list(APPEND OPENBLACK_INSPECTOR_SOCKET_TESTS test_inspector_mcp)
+endif ()
+set_tests_properties(
+  ${OPENBLACK_INSPECTOR_SOCKET_TESTS} PROPERTIES RESOURCE_LOCK
+                                                 inspector_sockets
+)
 # The game's side of the inspector, built only with it
 if (OPENBLACK_INSPECTOR)
   openblack_setup_and_add_test(
@@ -514,8 +576,13 @@ if (OPENBLACK_INSPECTOR)
     test_inspector_control inspector/test_inspector_control.cpp
   )
   target_link_libraries(test_inspector_control PRIVATE inspector)
-  # The coverage test reads the locator's header for its services
+  # The coverage test reads the locator's header for its services. ctest also passes the folder when the test runs,
+  # since a compiler cache shared between worktrees can give the test an object built in another worktree.
   target_compile_definitions(
     test_inspector_systems PRIVATE OPENBLACK_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+  )
+  set_tests_properties(
+    test_inspector_systems
+    PROPERTIES ENVIRONMENT "OPENBLACK_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
   )
 endif ()
