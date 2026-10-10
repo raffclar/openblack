@@ -30,6 +30,7 @@
 #include "3D/LandLightFrame.h"
 #include "3D/LandLightTable.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureAudio.h"
@@ -213,7 +214,7 @@ void PlaySound(audio::SoundId sound, std::optional<glm::vec3> position)
 {
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(sound), position);
+		audio::PlayGameSoundEffect(static_cast<entt::id_type>(sound), position);
 	}
 }
 

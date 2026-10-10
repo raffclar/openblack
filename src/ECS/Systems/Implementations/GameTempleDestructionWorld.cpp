@@ -16,6 +16,7 @@
 #include <LHVM.h>
 
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Common/GameRandom.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
@@ -54,15 +55,14 @@ entt::entity GameTempleDestructionWorld::StartLoop(entt::id_type sound, glm::vec
 	{
 		return entt::null;
 	}
-	return Locator::audio::value().StartSoundEffect(
-	    sound, {.position = position, .playType = audio::PlayType::Repeat, .owner = owner});
+	return audio::StartGameSoundEffect(sound, {.position = position, .playType = audio::PlayType::Repeat, .owner = owner});
 }
 
 void GameTempleDestructionWorld::PlayOnce(entt::id_type sound, glm::vec3 position, entt::entity owner)
 {
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().StartSoundEffect(sound, {.position = position, .owner = owner});
+		audio::StartGameSoundEffect(sound, {.position = position, .owner = owner});
 	}
 }
 
