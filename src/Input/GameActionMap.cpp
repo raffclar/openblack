@@ -272,6 +272,13 @@ void GameActionMap::UpdateInputLock(bool clientConnected, float seconds)
 
 bool GameActionMap::AdmitEvent(const SDL_Event& event)
 {
+	// A hand demonstration moves the hand: the player's own mouse is kept out, the demonstration's moves let in
+	if (_playerMouseBlocked && !IsInjected(event) &&
+	    (event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP ||
+	     event.type == SDL_MOUSEWHEEL))
+	{
+		return false;
+	}
 	const bool was = _lock.Locked();
 	const auto verdict = _lock.Filter(event);
 	if (verdict == LockVerdict::Release)

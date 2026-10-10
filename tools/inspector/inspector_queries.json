@@ -1326,6 +1326,24 @@
   "query": "help.dialogue"
  },
  {
+  "description": "The help's count of what the player has done: its clock, and each event's total, seconds since and rate, for the events that have happened",
+  "kind": "list",
+  "parameters": [],
+  "query": "help.profile"
+ },
+ {
+  "description": "The tip bubble over the \"did you know\" sign tapped last: the sign, its tip, whether it is up, its time to show, the point it points at and its scroll",
+  "kind": "object",
+  "parameters": [],
+  "query": "help.bubble"
+ },
+ {
+  "description": "The tutorial's hand demonstration playing: its name, the script task that started it, the record it is at, whether it holds at a mark, and the camera and hints it has",
+  "kind": "object",
+  "parameters": [],
+  "query": "help.hand_demo"
+ },
+ {
   "description": "Whether the game is paused, its turn, the frames served, its speed and any stepping",
   "kind": "object",
   "parameters": [],

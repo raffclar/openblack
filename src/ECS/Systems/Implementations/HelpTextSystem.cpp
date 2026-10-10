@@ -250,6 +250,7 @@ void HelpTextSystem::Update(const Frame& frame)
 	}
 	_dialogue->ProcessClick(frame.click, frame.skipKey);
 	_dialogue->Update(static_cast<float>(frame.inTemple ? frame.realMs : frame.gameMs));
+	_dialogue->AdvanceClickCue(static_cast<float>(frame.realMs) * 0.001f);
 }
 
 bool HelpTextSystem::RunText(bool singleLine, uint32_t text, int32_t withInteraction)

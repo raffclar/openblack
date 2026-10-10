@@ -35,6 +35,7 @@ using CameraPathManager = ResourceManager<CameraPathLoader>;
 using CameraEditManager = ResourceManager<CameraEditLoader>;
 using CameraZoneManager = ResourceManager<CameraZoneLoader>;
 using DanceFileManager = ResourceManager<DanceFileLoader>;
+using HandDemoManager = ResourceManager<HandDemoLoader>;
 using ParticleFileManager = ResourceManager<ParticleFileLoader>;
 using GestureTemplatesManager = ResourceManager<GestureTemplatesLoader>;
 using VideoManager = ResourceManager<VideoLoader>;
@@ -70,6 +71,8 @@ public:
 	virtual CameraZoneManager& GetCameraZones() = 0;
 	/// The dances' choreographies, by their names in the dances' table
 	virtual DanceFileManager& GetDanceFiles() = 0;
+	/// The tutorial's hand demonstrations, read when a script first plays each
+	virtual HandDemoManager& GetHandDemos() = 0;
 	/// The particle effect files, by particles::ParticleFileId of their names
 	virtual ParticleFileManager& GetParticleFiles() = 0;
 	/// The light maps the particle effects stamp on the land, by their paths
