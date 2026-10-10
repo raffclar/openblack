@@ -160,6 +160,6 @@ void ParticleSystem::AddLightSheets(particles::draw::Frame& frame) const
 		// It takes its place by where its middle was when it was last drawn
 		const auto sortPoint = sheet->Middle();
 		sheet->Build(vertices, triangles);
-		particles::draw::AddLightSheet(frame, vertices, triangles, sortPoint);
+		particles::draw::AddLightSheet(frame, vertices, triangles, sortPoint, sheet->GetLook());
 	}
 }

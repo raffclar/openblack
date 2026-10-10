@@ -187,6 +187,7 @@
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
+#include "Particles/LightSheet.h"
 #include "Profiler.h"
 #include "RegistryProviders.h"
 #include "Resources/ResourcesInterface.h"
@@ -1510,7 +1511,8 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 	                  }));
 	provider->Add(
 	    Query("zones", "The camera zones the land's scripts set: their file, the fence the camera is kept inside, its "
-	                   "height limits and the places it is kept out of, and whether the camera is inside the fence"),
+	                   "height limits and the places it is kept out of, whether the camera is inside the fence, and the "
+	                   "force field the camera lights up where it hits the fence (its strongest point, how often hit)"),
 	    Serve<Locator::cameraZoneSystem>(
 	        "the camera zones", [](const ecs::systems::CameraZoneSystemInterface& system, const QueryContext&) {
 		        const auto& zones = system.GetZones();
@@ -1535,6 +1537,17 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 		                     {"height_above_land", zones.useHeightAboveLand ? Json(zones.heightAboveLand) : Json(nullptr)},
 		                     {"fence", std::move(fence)},
 		                     {"exclusions", std::move(exclusions)}};
+		        // The wall of light the camera lights up where it hits the fence
+		        const auto& forceField = system.GetForceField();
+		        const auto points = std::min(forceField.Points(), forceField.Strengths().size());
+		        const auto strengths = std::span(forceField.Strengths()).first(points);
+		        result["force_field"] = {
+		            {"drawn", !forceField.Hidden()},
+		            {"showing", !forceField.Hidden() && forceField.Showing()},
+		            {"points", points},
+		            {"strongest", strengths.empty() ? 0.0f : std::ranges::max(strengths)},
+		            {"hits", system.GetFenceHits()},
+		        };
 		        if (Locator::camera::has_value())
 		        {
 			        const auto& camera = Locator::camera::value();

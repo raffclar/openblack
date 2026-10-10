@@ -98,8 +98,10 @@ private:
 	/// @return If a modification to the camera position was applied.
 	bool ConstrainDisc();
 	/// The land's camera zones: the camera is put back inside the fence, raised off the land, and slid down under its
-	/// height limit; whether it was moved
-	bool ConstrainZones(glm::vec3 originAtFrameStart);
+	/// height limit; whether it was moved. Put back inside, the fence answers the hit, heard at `listener`.
+	bool ConstrainZones(glm::vec3 originAtFrameStart, glm::vec3 listener);
+	/// Whether the player is using any of the camera's controls this frame
+	[[nodiscard]] bool AnyControlHeld() const;
 
 	[[nodiscard]] glm::vec3 GetTargetForwardVector() const;
 	[[nodiscard]] glm::vec3 GetTargetForwardUnitVector() const;
@@ -168,6 +170,8 @@ private:
 	uint32_t _features {camera_drag::k_DefaultFeatures};
 	/// A drag gripping land too far ahead is given up until the buttons are let go
 	bool _dragGivenUp {false};
+	/// Put back inside the fence, the camera ignores its controls until every one of them is let go
+	bool _heldBack {false};
 	camera_drag::TwoButtonTurn _twoButtonTurn;
 	/// How far the clear view of Ctrl and Shift held together has come, easing in and out over half a second
 	Zoomer _clearView;

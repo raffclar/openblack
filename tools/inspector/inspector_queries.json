@@ -1107,7 +1107,7 @@
   "query": "view.bookmarks"
  },
  {
-  "description": "The camera zones the land's scripts set: their file, the fence the camera is kept inside, its height limits and the places it is kept out of, and whether the camera is inside the fence",
+  "description": "The camera zones the land's scripts set: their file, the fence the camera is kept inside, its height limits and the places it is kept out of, whether the camera is inside the fence, and the force field the camera lights up where it hits the fence (its strongest point, how often hit)",
   "kind": "object",
   "parameters": [],
   "query": "view.zones"
