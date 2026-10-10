@@ -57,6 +57,7 @@
 #include "3D/SnowCover.h"
 #include "3D/TempleInteriorInterface.h"
 #include "3D/WaterRings.h"
+#include "Animals/AnimalAnimation.h"
 #include "Audio/AtmosAudio.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/ClipSounds.h"
@@ -2338,6 +2339,9 @@ bool Game::Update() noexcept
 				// The villagers in view are posed for the camera the frame is drawn from
 				ShowInspectorCamera(true);
 				Locator::livingActionSystem::value().PoseVillagersInView(Locator::camera::value().GetViewProjectionMatrix());
+				// and the eyes of those drawn in high detail blink, look about and are placed on their heads
+				Locator::highDetailSystem::value().PlaceEyes(animals::DrawTime(clock.GetTurn(), clock.GetTurnFraction()),
+				                                             Locator::camera::value().GetViewProjectionMatrix());
 				// The trees out of the land are drawn with their roots, as each now is
 				ecs::tree_roots::Show(Locator::entitiesRegistry::value());
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,

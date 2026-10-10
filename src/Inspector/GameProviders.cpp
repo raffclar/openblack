@@ -1561,6 +1561,21 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 					    item["face"] = detail.face.has_value() ? static_cast<int>(*detail.face) : -1;
 					    item["follow_intro_hand"] = detail.orders.followIntroHand;
 					    item["turn_at_once"] = detail.orders.turnAtOnce;
+					    if (detail.eyes.has_value())
+					    {
+						    Json eyes = {{"blinking", detail.eyes->blink.blinking},
+						                 {"until_next_blink", detail.eyes->blink.untilNext},
+						                 {"into_blink", detail.eyes->blink.into},
+						                 {"roll", detail.eyes->roll},
+						                 {"drawn", detail.drawnEyes.has_value()}};
+						    if (detail.drawnEyes.has_value())
+						    {
+							    const auto& right = detail.drawnEyes->eyes[0].eyeball[3];
+							    eyes["closed"] = detail.drawnEyes->closed;
+							    eyes["right_eye"] = {right.x, right.y, right.z};
+						    }
+						    item["eyes"] = std::move(eyes);
+					    }
 					    items.push_back(std::move(item));
 				    });
 			    }

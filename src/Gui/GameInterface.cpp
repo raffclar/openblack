@@ -58,7 +58,8 @@ namespace
 constexpr std::array k_TextScripts = {"InfoScript2.txt", "InfoScriptPatch2.txt", "InfoScriptMultiplayer2.txt"};
 /// The dialogs' font, the first of the game's fonts
 constexpr std::string_view k_Font = "j0";
-/// The good advisor's font and the evil one's, which their words in the scripts' dialogue are in
+/// The good advisor's font and the evil one's: as in the original game, each advisor's dialogue lines are drawn in a
+/// font of its own, the other narrators' in j0
 constexpr std::string_view k_GoodAdvisorFont = "f1";
 constexpr std::string_view k_EvilAdvisorFont = "f3";
 constexpr uint16_t k_AtlasSize = 256;

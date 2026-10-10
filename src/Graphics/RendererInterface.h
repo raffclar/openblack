@@ -143,6 +143,10 @@ public:
 		bool alphaTexturedAdditive {false};
 		/// A colour the mesh is drawn in, where its program takes one: lit when w is 0, otherwise unlit with its alpha by w
 		glm::vec4 tint {1.0f, 1.0f, 1.0f, 0.0f};
+		/// A piece drawn on another object, as a detailed villager's eyes are, where its program takes it: xyz the point
+		/// whose land light, land colour and haze it takes, w its shade of 255 in place of the sun's on each vertex. w 0 for
+		/// none.
+		glm::vec4 shadeAt {0.0f};
 		/// The temple's light, which the lightmapped submeshes are multiplied by, and which is added to every submesh
 		/// that doesn't glow, as the game adds the vertices' specular
 		glm::vec3 lightMultiply {1.0f};
