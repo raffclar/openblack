@@ -42,7 +42,6 @@
 #include "3D/LandBlock.h"
 #include "3D/LandColourStamps.h"
 #include "3D/LandIslandInterface.h"
-#include "3D/LandLightFrame.h"
 #include "3D/LandLightTable.h"
 #include "3D/Lightning.h"
 #include "3D/Mists.h"
@@ -4055,11 +4054,16 @@ TextureHandle Renderer::UpdateLandLight() const
 		                                                   BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP | BGFX_SAMPLER_POINT));
 		bgfx::setName(toBgfx(*_landLightTexture), "Land Light");
 	}
+	const auto* dome =
+	    Locator::skySystem::has_value()
+	        ? Locator::entitiesRegistry::value().TryGet<const ecs::components::SkyDome>(Locator::skySystem::value().GetDome())
+	        : nullptr;
 	if (const auto& palettes = Locator::resources::value().GetLandLightPalettes();
-	    palettes.Contains(LandLightPalette::k_Id.value()))
+	    dome != nullptr && palettes.Contains(LandLightPalette::k_Id.value()))
 	{
-		// The clouds over the camera darken the land, and so does a flash of lightning
-		const auto [skyType, alignment, overcast, flash] = FrameLandLightInputs();
+		// The land's light as the sky worked it out for this frame: the clouds over the camera darken the land, and so
+		// does a flash of lightning
+		const auto [skyType, alignment, overcast, flash] = dome->landLight;
 		_landLightTable->Build(*palettes.Handle(LandLightPalette::k_Id.value()), skyType, alignment, overcast, flash);
 		const auto& haze = _landLightTable->GetHaze();
 		_haze = {glm::vec4(haze.nearDistance, haze.farDistance, haze.k, 1.0f), glm::vec4(haze.colour, 0.0f)};

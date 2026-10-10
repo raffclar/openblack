@@ -9,6 +9,8 @@
 
 #include "SkyFrame.h"
 
+#include "3D/LandLightTable.h"
+
 namespace openblack::sky_frame
 {
 
@@ -29,9 +31,10 @@ ecs::components::Moon MoonAt(float scriptHour, int64_t unixTime)
 
 void Update(const Inputs& inputs, ecs::components::SkyDome& dome, ecs::components::Sun& sun, ecs::components::Moon& moon)
 {
-	if (inputs.overcast.has_value())
+	dome.landLight = inputs.landLight;
+	if (inputs.palette != nullptr)
 	{
-		dome.overcast = *inputs.overcast;
+		dome.overcast = inputs.landLight.overcast;
 	}
 
 	sun.placement = graphics::sun::Place(inputs.scriptHour);
@@ -41,7 +44,9 @@ void Update(const Inputs& inputs, ecs::components::SkyDome& dome, ecs::component
 	const auto placed = MoonAt(inputs.scriptHour, inputs.unixTime);
 	moon.phase = placed.phase;
 	moon.placement = placed.placement;
-	moon.colour = Colour(inputs.moonColour);
+	moon.colour = Colour(inputs.palette != nullptr ? LandLightTable::GetMoonColour(*inputs.palette, inputs.landLight.skyType,
+	                                                                               inputs.landLight.alignment)
+	                                               : 0xFFFFFFu);
 	moon.strength =
 	    moon.placement.has_value() ? sky_dome::ThroughOvercast(moon.placement->alpha, dome.overcast, inputs.fog) : 0.0f;
 }
