@@ -3263,9 +3263,37 @@ void ConvertCameraFocus() // 082 CONVERT_CAMERA_FOCUS
 
 void CreatureSetPlayer() // 083 CREATURE_SET_PLAYER
 {
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("no creature");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(object))
+	{
+		ScriptMessage("not a creature");
+		return;
+	}
+	// The creature becomes the local player's: their creature from now on, which they lead on the leash when they have
+	// no other to lead
+	// TODO(opening-skip): the game also names it after the player's profile, and moves a reaction it started over to
+	// its new player; openblack keeps neither profiles nor creature reactions yet
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	if (Locator::leashSystem::has_value())
+	{
+		Locator::leashSystem::value().SetOwner(object, player);
+		Locator::leashSystem::value().ClaimOnArrival(object);
+	}
+	else
+	{
+		registry.Get<ecs::components::Creature>(object).owner = player;
+	}
+	if (Locator::playerSystem::has_value())
+	{
+		Locator::playerSystem::value().AddCreature(object);
+	}
 }
 
 void StartCountdownTimer() // 084 START_COUNTDOWN_TIMER
