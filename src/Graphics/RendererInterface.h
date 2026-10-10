@@ -16,6 +16,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string>
 #include <utility>
 
 #include <glm/mat4x4.hpp>
@@ -226,7 +227,10 @@ public:
 	virtual void Reset(glm::u16vec2 resolution) const noexcept = 0;
 	virtual void DrawScene(const DrawSceneDesc& drawDesc) const noexcept = 0;
 	virtual void Frame() noexcept = 0;
+	/// Asks for the frame being made to be written to a PNG once drawn; the file appears whole once written
 	virtual void RequestScreenshot(const std::filesystem::path& filepath) noexcept = 0;
+	/// Why a picture asked for was given up, once; none while it may still come
+	[[nodiscard]] virtual std::optional<std::string> TakeScreenshotFailure(const std::filesystem::path& filepath) noexcept = 0;
 	[[nodiscard]] virtual bool GetDebug() const noexcept = 0;
 	virtual void SetDebug(bool value) noexcept = 0;
 	[[nodiscard]] virtual bool GetProfile() const noexcept = 0;

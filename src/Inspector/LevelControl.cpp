@@ -346,6 +346,14 @@ void ScreenshotProvider::Catalogue()
 			_reserved.erase(each.path);
 			return true;
 		}
+		// The renderer says when it gives a picture up, so it fails at once rather than after all the frames
+		if (const auto why = _target.CaptureFailure(each.path); why.has_value())
+		{
+			_failures.push_back(each.path.generic_string() + ": " + *why +
+			                    (each.record.is_null() ? "" : ", so not catalogued"));
+			_reserved.erase(each.path);
+			return true;
+		}
 		if (_frame >= each.giveUpAt)
 		{
 			_failures.push_back(each.path.generic_string() + ": never written in " + std::to_string(k_MostWriteFrames) +

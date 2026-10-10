@@ -37,6 +37,7 @@ public:
 	[[nodiscard]] virtual uint32_t GetID() const = 0;
 	[[nodiscard]] virtual glm::ivec2 GetSize() const = 0;
 	[[nodiscard]] virtual float GetAspectRatio() const = 0;
+	[[nodiscard]] virtual bool IsMinimised() const = 0;
 
 	virtual WindowingInterface& SetDisplayMode(DisplayMode mode) = 0;
 };

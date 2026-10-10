@@ -17,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
@@ -63,6 +64,7 @@ namespace graphics
 {
 class FrameBuffer;
 class L3DSubMesh;
+class OffscreenScreenshots;
 class MorphStreamLayouts;
 class ShaderProgram;
 class Mesh;
@@ -81,6 +83,7 @@ public:
 	void DrawMesh(const L3DMesh& mesh, const L3DMeshSubmitDesc& desc, uint8_t subMeshIndex) const noexcept final;
 	void Frame() noexcept final;
 	void RequestScreenshot(const std::filesystem::path& filepath) noexcept final;
+	[[nodiscard]] std::optional<std::string> TakeScreenshotFailure(const std::filesystem::path& filepath) noexcept final;
 	[[nodiscard]] bool GetDebug() const noexcept final { return _bgfxDebug; }
 	void SetDebug(bool value) noexcept final { _bgfxDebug = value; }
 	[[nodiscard]] bool GetProfile() const noexcept final { return _bgfxProfile; }
@@ -364,6 +367,8 @@ private:
 	std::unique_ptr<ShaderManager> _shaderManager;
 	std::unique_ptr<BgfxCallback> _bgfxCallback;
 	uint32_t _bgfxReset;
+	/// Pictures of frames drawn aside, while the window has no buffers to read
+	std::unique_ptr<OffscreenScreenshots> _offscreenShots;
 	bool _bgfxDebug = false;
 	bool _bgfxProfile = false;
 

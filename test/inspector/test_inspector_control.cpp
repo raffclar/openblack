@@ -507,6 +507,17 @@ public:
 		hidden.push_back(hideDebugGui);
 		return {};
 	}
+	[[nodiscard]] std::optional<std::string> CaptureFailure(const std::filesystem::path& path) override
+	{
+		const auto found = gaveUp.find(path.generic_string());
+		if (found == gaveUp.end())
+		{
+			return std::nullopt;
+		}
+		auto why = found->second;
+		gaveUp.erase(found);
+		return why;
+	}
 	void HideDebugGui() override { ++hiddenFrames; }
 	[[nodiscard]] std::filesystem::path Directory() const override { return "shots"; }
 	[[nodiscard]] std::optional<std::filesystem::path> Root() const override { return root; }
@@ -540,6 +551,8 @@ public:
 	/// Files from before removed for a picture to be written in their place
 	std::vector<std::string> removed;
 	std::vector<std::pair<std::string, std::string>> lines;
+	/// The pictures the renderer gave up, with why, as it tells once
+	std::map<std::string, std::string> gaveUp;
 };
 
 /// Where the ray from the camera through the middle of the view meets the land (at height 10): the hand carries what it
@@ -897,6 +910,38 @@ TEST(InspectorScreenshot, APictureNeverWrittenFails)
 	ASSERT_EQ(failed["failed"].size(), 1u);
 	EXPECT_NE(failed["failed"][0].get<std::string>().find("lost.png: never written"), std::string::npos);
 	EXPECT_TRUE(failed["writing"].empty());
+}
+
+// A picture the renderer says it gave up (a minimised Vulkan window has no screen to read) fails the next frame with
+// the renderer's reason, without waiting for it to be written; a kept one isn't catalogued
+TEST(InspectorScreenshot, APictureTheRendererGivesUpFailsAtOnce)
+{
+	FakeScreenshots screenshots;
+	FakeCamera camera;
+	auto owned = std::make_unique<ScreenshotProvider>(screenshots, camera);
+	auto* provider = owned.get();
+	Inspector inspector;
+	inspector.Add(std::move(owned));
+	uint64_t frame = 10;
+	provider->Frame(frame);
+	Ask(inspector, R"({"query": "screenshot.take", "params": {"path": "dropped.png"}})");
+	Ask(inspector, R"({"query": "screenshot.take", "params": {"feature": "sky/moon", "what": "full-moon"}})");
+	provider->Frame(++frame);
+	ASSERT_EQ(screenshots.taken.size(), 2u);
+	const auto writing = Ask(inspector, R"({"query": "screenshot.pending"})");
+	ASSERT_EQ(writing["writing"].size(), 2u);
+	EXPECT_TRUE(writing["failed"].empty());
+
+	screenshots.gaveUp.emplace("dropped.png", "the renderer had no screen to read");
+	screenshots.gaveUp.emplace(screenshots.taken[1], "the renderer had no screen to read");
+	provider->Frame(++frame);
+	const auto failed = Ask(inspector, R"({"query": "screenshot.pending"})");
+	ASSERT_EQ(failed["failed"].size(), 2u);
+	EXPECT_EQ(failed["failed"][0], "dropped.png: the renderer had no screen to read");
+	EXPECT_EQ(failed["failed"][1], screenshots.taken[1] + ": the renderer had no screen to read, so not catalogued");
+	EXPECT_TRUE(failed["writing"].empty());
+	EXPECT_TRUE(screenshots.lines.empty());
+	EXPECT_TRUE(screenshots.gaveUp.empty());
 }
 
 // While a testbed scenario asked for hasn't laid out its things, the game is loading it: a query for its things is told
