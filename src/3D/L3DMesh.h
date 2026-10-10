@@ -154,6 +154,15 @@ public:
 	};
 	/// The first of the points fixed to its bones, when it has any: where a shark's wake comes from
 	[[nodiscard]] const std::optional<BonePoint>& GetFirstBonePoint() const { return _firstBonePoint; }
+	/// A frame fixed to one of the model's bones, in that bone's space: its axes and its origin
+	struct BoneFrame
+	{
+		uint32_t bone;
+		glm::mat4 frame;
+	};
+	/// The frames fixed to its bones, in the order the model gives them, while each names a bone: the detailed villagers'
+	/// eyes, right then left
+	[[nodiscard]] const std::vector<BoneFrame>& GetBoneFrames() const { return _boneFrames; }
 	/// The triangles of its physics submeshes in the model's space, as the game's physics collides with them
 	[[nodiscard]] const std::vector<std::array<glm::vec3, 3>>& GetPhysicsTriangles() const { return _physicsTriangles; }
 	/// Every submesh's vertex positions in the model's space and its primitives' triangles, each primitive's indices
@@ -196,6 +205,7 @@ private:
 	std::unordered_map<SkinId, screen_pick::AlphaMask> _skinMasks;
 	std::vector<Footprint> _footprints; ///< If ContainsLandscapeFeature() is true
 	std::optional<BonePoint> _firstBonePoint;
+	std::vector<BoneFrame> _boneFrames;
 	std::vector<VolumeLight> _volumeLights;
 	std::vector<std::unique_ptr<L3DSubMesh>> _subMeshes;
 	std::vector<uint32_t> _bonesParents;

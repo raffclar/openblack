@@ -189,6 +189,7 @@
 #include "ECS/ScriptHighlightRules.h"
 #include "ECS/TownAggression.h"
 #include "ECS/VillageTotem.h"
+#include "ECS/VillagerEyes.h"
 #include "Enums.h"
 #include "Fire/FireGraphic.h"
 #include "Fire/FireModel.h"
@@ -946,7 +947,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::HighDetail::usualModel>("usualModel")
 	    .Field<&components::HighDetail::usualDetailModels>("usualDetailModels")
 	    .Field<&components::HighDetail::face>("face")
-	    .Field<&components::HighDetail::orders>("orders");
+	    .Field<&components::HighDetail::orders>("orders")
+	    .Field<&components::HighDetail::eyes>("eyes")
+	    .Field<&components::HighDetail::drawnEyes>("drawnEyes");
 	Reflect<components::Indestructible> {context};
 	Reflect<components::InfluenceSource>(context)
 	    .Field<&components::InfluenceSource::player>("player")
@@ -2061,6 +2064,23 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::village_totem::Ease::jerk>("jerk")
 	    .Field<&openblack::ecs::village_totem::Ease::snap>("snap")
 	    .Field<&openblack::ecs::village_totem::Ease::moving>("moving");
+	Reflect<openblack::ecs::villager_eyes::Blink>(context, ValueOnly {})
+	    .Field<&openblack::ecs::villager_eyes::Blink::blinking>("blinking")
+	    .Field<&openblack::ecs::villager_eyes::Blink::untilNext>("untilNext")
+	    .Field<&openblack::ecs::villager_eyes::Blink::into>("into")
+	    .Field<&openblack::ecs::villager_eyes::Blink::closedFor>("closedFor");
+	Reflect<openblack::ecs::villager_eyes::DrawnEye>(context, ValueOnly {})
+	    .Field<&openblack::ecs::villager_eyes::DrawnEye::eyeball>("eyeball")
+	    .Field<&openblack::ecs::villager_eyes::DrawnEye::upperLid>("upperLid")
+	    .Field<&openblack::ecs::villager_eyes::DrawnEye::lowerLid>("lowerLid")
+	    .Field<&openblack::ecs::villager_eyes::DrawnEye::shade>("shade");
+	Reflect<openblack::ecs::villager_eyes::DrawnEyes>(context, ValueOnly {})
+	    .Field<&openblack::ecs::villager_eyes::DrawnEyes::eyes>("eyes")
+	    .Field<&openblack::ecs::villager_eyes::DrawnEyes::closed>("closed")
+	    .Field<&openblack::ecs::villager_eyes::DrawnEyes::standing>("standing");
+	Reflect<openblack::ecs::villager_eyes::Eyes>(context, ValueOnly {})
+	    .Field<&openblack::ecs::villager_eyes::Eyes::blink>("blink")
+	    .Field<&openblack::ecs::villager_eyes::Eyes::roll>("roll");
 	Reflect<openblack::field_crop::Crop>(context, ValueOnly {})
 	    .Field<&openblack::field_crop::Crop::timesSown>("timesSown")
 	    .Field<&openblack::field_crop::Crop::age>("age")

@@ -9,7 +9,10 @@
 
 #pragma once
 
+#include <optional>
+
 #include "ECS/Systems/HighDetailSystemInterface.h"
+#include "ECS/VillagerEyes.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -25,6 +28,13 @@ public:
 	void Release(entt::entity thing) override;
 	bool Order(entt::entity thing, high_detail_rules::ThingSpecial special, bool on) override;
 	void Update() override;
+	void PlaceEyes(uint32_t drawTime, const glm::mat4& viewProjection) override;
+
+private:
+	/// What every villager's eyes share
+	villager_eyes::Shared _eyes;
+	/// The game's clock for drawing when the eyes were last placed
+	std::optional<uint32_t> _eyesDrawTime;
 };
 
 } // namespace openblack::ecs::systems

@@ -1026,6 +1026,10 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				const auto u_creatureSpellLook = CreatureSpellLookOf(desc.fizz, desc.freeze);
 				setUniform(MeshUniform::CreatureSpellLook, &u_creatureSpellLook);
 			}
+			if (has(MeshUniform::ShadeAt))
+			{
+				setUniform(MeshUniform::ShadeAt, &desc.shadeAt);
+			}
 			if (has(MeshUniform::UvOffset))
 			{
 				const glm::vec4 u_uvOffset {desc.uvOffset, desc.uvScale, 0.0f};
@@ -5635,6 +5639,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawCaveSeeds(desc);
 			DrawGroundBlobs(desc);
 			DrawFarVillagerSmudges(desc);
+			DrawVillagerEyes(desc);
 			DrawGlobes(desc);
 			DrawHandMiracleBands(desc);
 			DrawTribalPower(desc);
