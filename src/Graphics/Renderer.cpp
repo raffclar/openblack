@@ -2753,14 +2753,18 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 		    {
 			    return;
 		    }
-		    const auto& bones = meshes.Handle(mesh.id)->GetBoneMatrices();
+		    // From the feet as they are drawn this frame, in the pose of its clip
+		    const auto& rest = meshes.Handle(mesh.id)->GetBoneMatrices();
+		    const auto* pose = desc.entities.TryGet<const ecs::components::VillagerPose>(entity);
+		    const auto bones = ground_blobs::FootBones(
+		        pose != nullptr ? std::span<const glm::mat4>(pose->bones) : std::span<const glm::mat4> {}, rest);
 		    if (std::ranges::any_of(ground_blobs::k_FootBones, [&bones](size_t bone) { return bone >= bones.size(); }))
 		    {
 			    return;
 		    }
 		    const auto model = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
 		    const auto foot = [&](size_t bone) {
-			    auto position = glm::vec3(model * bones.at(bone) * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+			    auto position = glm::vec3(model * bones[bone] * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
 			    position.y = island.GetHeightAt(glm::vec2(position.x, position.z)) + ground_blobs::k_Lift;
 			    return position;
 		    };
