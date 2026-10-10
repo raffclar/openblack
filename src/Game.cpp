@@ -2894,6 +2894,7 @@ bool Game::Run() noexcept
 		// The land's scripts start with every place of the scripts' object table free; each native tells the table
 		// whether it takes control of what it is given, and the scripts' variables keep their objects' references
 		Locator::scriptObjects::value().Reset();
+		chlapi.ResetSwitches();
 		lhvm.Initialise(
 		    &chlapi.GetFunctionsTable(),
 		    [](uint32_t func) {
@@ -3173,6 +3174,10 @@ bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept
 		if (Locator::scriptObjects::has_value())
 		{
 			Locator::scriptObjects::value().Reset();
+		}
+		if (Locator::chlapi::has_value())
+		{
+			Locator::chlapi::value().ResetSwitches();
 		}
 		auto& fileSystem = Locator::filesystem::value();
 		const auto challengePath = fileSystem.GetPath<filesystem::Path::Quests>() / "challenge.chl";

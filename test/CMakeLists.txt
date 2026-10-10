@@ -69,6 +69,10 @@ openblack_setup_and_add_test(test_music_decoding audio/test_music_decoding.cpp)
 openblack_setup_and_add_test(test_anim_effects audio/test_anim_effects.cpp)
 openblack_setup_and_add_test(test_listener_frame audio/test_listener_frame.cpp)
 openblack_setup_and_add_test(test_hearing_range audio/test_hearing_range.cpp)
+openblack_setup_and_add_test(
+  test_script_sound_effect audio/test_script_sound_effect.cpp
+)
+target_link_libraries(test_script_sound_effect PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_interface gui/test_interface.cpp)
 openblack_setup_and_add_test(test_skip_box gui/test_skip_box.cpp)
 openblack_setup_and_add_test(test_tool_tips gui/test_tool_tips.cpp)

@@ -9,6 +9,7 @@
 
 #include "CHLApi.h"
 
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 
@@ -17,8 +18,10 @@
 #include <iterator>
 #include <limits>
 #include <optional>
+#include <ranges>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
@@ -38,7 +41,10 @@
 #include "3D/MapCoords.h"
 #include "3D/ScreenPick.h"
 #include "3D/TempleInteriorInterface.h"
+#include "Audio/AudioManagerInterface.h"
 #include "Audio/GameMusic.h"
+#include "Audio/ScriptSoundEffect.h"
+#include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
 #include "Creature/LeashRules.h"
@@ -1230,14 +1236,64 @@ void GetHandPosition() // 042 GET_HAND_POSITION
 	PushVec(handTransform.position);
 }
 
+/// The loaded sound group of a bank's file, whatever the case of the file's name on disk
+static std::optional<std::string> LoadedSoundGroup(std::string_view file)
+{
+	const auto sameName = [file](const std::string& name) {
+		return std::ranges::equal(name, file, [](char a, char b) {
+			return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+		});
+	};
+	for (const auto& name : Locator::audio::value().GetSoundGroups() | std::views::keys)
+	{
+		if (sameName(name))
+		{
+			return name;
+		}
+	}
+	return std::nullopt;
+}
+
 void PlaySoundEffect() // 043 PLAY_SOUND_EFFECT
 {
-	// const auto withPosition = static_cast<bool>(Pop().intVal);
-	// const auto position = PopVec();
-	// const auto soundbank = Pop().intVal;
-	// const auto sound = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto withPosition = Pop().intVal != 0;
+	const auto position = PopVec();
+	const auto bank = Pop().intVal;
+	const auto sample = Pop().intVal;
+
+	// A number naming no bank, a bank the game doesn't ship and a sample the bank doesn't have all play nothing
+	const auto file = audio::ScriptSoundBankFile(bank);
+	if (!file.has_value())
+	{
+		return;
+	}
+	const auto group = LoadedSoundGroup(*file);
+	if (!group.has_value())
+	{
+		return;
+	}
+	const auto id = entt::hashed_string(fmt::format("{}/{}", *group, sample).c_str()).value();
+	auto& sounds = Locator::resources::value().GetSounds();
+	if (!sounds.Contains(id))
+	{
+		return;
+	}
+
+	const auto& director = Locator::cinematicDirectorSystem::value();
+	// TODO(script-natives): the player controlling a creature fight should quieten the samples kept out of fights;
+	// openblack's fights don't say yet when the interface is in those controls
+	const audio::SoundEffectConditions conditions {
+	    .scriptWideScreen = director.IsWideScreenOn() && director.GetWideScreenOwner() != 0,
+	    .insideTemple = PlayerInsideTemple(),
+	    .gameSoundOn = Locator::chlapi::value().IsGameSoundOn(),
+	    .creatureFightControl = false,
+	};
+	if (!audio::SoundEffectHeard(conditions, static_cast<audio::ScriptSoundBank>(bank), sounds.Handle(id)->userParam))
+	{
+		return;
+	}
+	// Placed, it isn't started further from the camera than the sample's maximum distance
+	Locator::audio::value().PlaySoundEffect(id, withPosition ? std::optional(position) : std::nullopt);
 }
 
 void StartMusic() // 044 START_MUSIC
@@ -4301,9 +4357,13 @@ void SetMagicProperties() // 356 SET_MAGIC_PROPERTIES
 
 void SetGameSound() // 357 SET_GAME_SOUND
 {
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Turned off, every sound effect playing stops and from then only the advisors' and villagers' speech plays
+	const auto enable = Pop().intVal != 0;
+	if (!enable)
+	{
+		Locator::audio::value().StopAllSoundEffects();
+	}
+	Locator::chlapi::value().SetGameSoundOn(enable);
 }
 
 void SexIsMale() // 358 SEX_IS_MALE

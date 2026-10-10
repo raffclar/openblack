@@ -731,6 +731,7 @@ SoundLoader::result_type SoundLoader::operator()(BaseLoader<audio::Sound>::FromB
 	sound->pitchDeviation = header.pitchDeviation;
 	sound->overrideFlags = header.overrideFlags;
 	sound->headerVolume = header.volume;
+	sound->userParam = header.userParam;
 	sound->loop = header.loop;
 	sound->minDistance = header.minDist;
 	sound->maxDistance = header.maxDist;
