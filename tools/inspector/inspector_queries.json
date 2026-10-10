@@ -1059,6 +1059,12 @@
   "query": "view.editor"
  },
  {
+  "description": "What is drawn of the advisors this frame: near the screen or in the world, alpha, how far out in the world, and how close their posed meshes come to the camera beside its near plane",
+  "kind": "list",
+  "parameters": [],
+  "query": "advisors.draws"
+ },
+ {
   "description": "The creature systems' own state: the creature followed or in the cave, the hand on a creature, the hair, voices, footprints, physiology and the mind kept between lands",
   "kind": "object",
   "parameters": [],

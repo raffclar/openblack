@@ -489,6 +489,8 @@ openblack_setup_and_add_test(test_story_land_change test_story_land_change.cpp)
 openblack_setup_and_add_test(test_dance_file test_dance_file.cpp)
 target_link_libraries(test_dance_file PRIVATE dance)
 target_link_libraries(test_story_land_change PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(test_spirit_distance test_spirit_distance.cpp)
+target_link_libraries(test_spirit_distance PRIVATE helpdude)
 
 # The inspector component's tests build without the game, as the component does
 macro (OPENBLACK_SETUP_AND_ADD_INSPECTOR_TEST TEST_NAME TEST_SOURCE)
