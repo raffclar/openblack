@@ -2509,44 +2509,9 @@ void FlockDisband() // 039 FLOCK_DISBAND
 		ScriptMessage("Bad Id for Disband");
 		return;
 	}
-	if (ecs::script_flocks::IsFlock(registry, container))
-	{
-		// Every member leaves, and one the script controls waits for it; the flock stays, empty
-		const auto members = registry.Get<const ecs::components::Flock>(container).members;
-		for (const auto member : members)
-		{
-			// TODO(opening): an animal is split off into a flock of its own
-			ecs::script_flocks::Remove(registry, member, false);
-			Locator::scriptObjects::value().RemoveReference(member);
-			if (registry.Valid(member) && registry.AllOf<ecs::components::ScriptControlled>(member) &&
-			    IsDirectableVillager(member))
-			{
-				Locator::livingActionSystem::value().VillagerSetScriptState(member, VillagerStates::InScript);
-			}
-		}
-		return;
-	}
-	if (ecs::dances::IsDance(registry, container))
-	{
-		// Every dancer leaves, and one the script controls waits for it; the dance stays, empty
-		while (ecs::dances::Size(registry, container) > 0)
-		{
-			const auto dancer = ecs::dances::FirstDancer(registry, container, entt::null);
-			if (dancer == entt::null)
-			{
-				ScriptMessage("Should never happen");
-				break;
-			}
-			ecs::dances::RemoveDancer(registry, dancer);
-			Locator::scriptObjects::value().RemoveReference(dancer);
-			if (registry.AllOf<ecs::components::ScriptControlled>(dancer) && IsDirectableVillager(dancer))
-			{
-				Locator::livingActionSystem::value().VillagerSetScriptState(dancer, VillagerStates::InScript);
-			}
-		}
-		return;
-	}
-	if (registry.AnyOf<ecs::components::Town, ecs::components::Abode>(container))
+	// Every member of a flock or dance leaves it, and one the script controls waits for it; the flock or dance stays,
+	// empty. A town or an abode keeps its own
+	if (Locator::scriptObjects::value().Disband(container) || registry.AllOf<ecs::components::Abode>(container))
 	{
 		return;
 	}

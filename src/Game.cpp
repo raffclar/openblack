@@ -412,8 +412,13 @@ Game::Game(Arguments&& args) noexcept
 	{
 		auto logger = createLogger(subsystem.data());
 		logger->set_level(args.logLevels.at(i));
+		// An error is written out at once, so it is in the file even if the process is then ended from outside, where no
+		// crash report can be written
+		logger->flush_on(spdlog::level::err);
 		++i;
 	}
+	// Everything else is written out within a second
+	spdlog::flush_every(std::chrono::seconds(1));
 	sInstance = this;
 
 	auto& config = Locator::config::emplace();
@@ -1178,6 +1183,8 @@ bool Game::GameLogicLoop() noexcept
 
 	auto& lhvm = Locator::vm::value();
 	lhvm.LookIn(lhvm::ScriptType::All);
+	// Every object the scripts no longer hold in a variable lets go of its place in their table, after their turn
+	Locator::scriptObjects::value().ReleaseUnreferenced();
 	// The scripts' fade moves on with their turn
 	Locator::cinematicDirectorSystem::value().ProcessTurn();
 	// The advisors follow what they point at and look at
@@ -3351,6 +3358,9 @@ bool Game::Run() noexcept
 		frameStart = frameEnd;
 	}
 
+	// The last line of an orderly end: a log that stops without it, and without a crash report, was ended from outside
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game ends after {} frames, at turn {}", _frameCount,
+	                   Locator::time::value().GetTurn());
 	return true;
 }
 
