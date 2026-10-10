@@ -235,7 +235,7 @@ void MeshViewer::Draw() noexcept
 	{
 		auto const& animation = animations.Handle(*_selectedAnimation);
 		ImGui::Text("%zu frames", animation->GetFrames().size());
-		ImGui::Text("Duration %u frames", animation->GetDuration());
+		ImGui::Text("Play time %u ms, %u bytes", animation->GetPlayTime(), animation->GetDataSize());
 		ImGui::SliderInt("frame", &_selectedFrame, 0, static_cast<int>(animation->GetFrames().size() - 1));
 		if (_selectedFrame > static_cast<int>(animation->GetFrames().size()))
 		{

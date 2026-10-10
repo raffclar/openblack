@@ -39,6 +39,7 @@
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/VillagerScriptRules.h"
+#include "ECS/WalkerPlacement.h"
 #include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -112,6 +113,11 @@ void villager_script::SetScriptState(entt::entity villager, VillagerStates state
 	if (FinalStateOf(action) != StateOf(action, LivingAction::Index::Top))
 	{
 		living.VillagerCallExitState(action, LivingAction::Index::Final, state);
+	}
+	// Only the walking states take steps: in any other the walk it was on ends where it stands
+	if (!rules::KeepsWalking(state))
+	{
+		walker_placement::Stop(Entities(), villager);
 	}
 	// TODO(opening): a state whose entry sets the villager off somewhere else first (a script's remembered walk) is not
 	// gone into directly; none of the states the scripts put villagers in has one yet

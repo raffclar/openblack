@@ -635,3 +635,5 @@ set_tests_properties(
   test_instance_data_inputs
   PROPERTIES ENVIRONMENT "OPENBLACK_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
 )
+openblack_setup_and_add_test(test_villager_clips test_villager_clips.cpp)
+target_link_libraries(test_villager_clips PRIVATE anm)

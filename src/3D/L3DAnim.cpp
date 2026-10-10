@@ -32,7 +32,7 @@ void L3DAnim::Load(const anm::ANMFile& anm) noexcept
 	_unknown_0x34 = anm.GetHeader().unknown0x34;
 	assert(anm.GetHeader().frameCount == anm.GetKeyframes().size());
 	_unknown_0x3C = anm.GetHeader().unknown0x3C;
-	_duration = anm.GetHeader().animationDuration;
+	_dataSize = anm.GetHeader().animationDataSize;
 	_unknown_0x44 = anm.GetHeader().unknown0x44;
 	_unknown_0x48 = anm.GetHeader().unknown0x48;
 	_unknown_0x50 = anm.GetHeader().unknown0x50;
@@ -114,11 +114,11 @@ std::vector<glm::mat4> L3DAnim::GetBoneMatrices(uint32_t time) const noexcept
 	{
 		return {};
 	}
-	if (_duration == 0)
+	if (_unknown_0x20 == 0)
 	{
 		return _frames[0].bones;
 	}
-	uint32_t animationTime = time % _duration;
+	uint32_t animationTime = time % _unknown_0x20;
 	uint32_t index = 0;
 	uint32_t previousTime = 0;
 	for (const auto& frame : _frames)

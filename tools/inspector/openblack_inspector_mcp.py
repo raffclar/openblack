@@ -1328,12 +1328,26 @@ class Session:
         if wait_file and answer.get("ok") and isinstance(answer.get("result"), dict) and answer["result"].get("path"):
             path = answer["result"]["path"]
             deadline = time.monotonic() + self.timeout * 3
+            failure = None
+            next_check = time.monotonic() + 0.25
             while not png_written(path, asked_at - 1.0) and time.monotonic() < deadline:
+                # A picture the game gives up (its camera never stayed put, the renderer never gave it back) is said at
+                # once, with why, rather than waited for
+                if time.monotonic() >= next_check:
+                    failure = picture_failure(connection, path)
+                    if failure is not None:
+                        break
+                    next_check = time.monotonic() + 0.25
                 time.sleep(0.05)
             answer["result"]["written"] = png_written(path, asked_at - 1.0)
             if not answer["result"]["written"]:
-                answer["result"]["note"] = ("the file isn't written yet: the game draws it at that frame; check "
-                                            "screenshot.pending, or step the game to it")
+                failure = failure if failure is not None else picture_failure(connection, path)
+                if failure is not None:
+                    answer["result"]["failed"] = failure
+                    answer["result"]["note"] = f"the game gave the picture up: {failure}"
+                else:
+                    answer["result"]["note"] = ("the file isn't written yet: the game draws it at that frame; check "
+                                                "screenshot.pending, or step the game to it")
         # A step waits for the game to have run it, polling the state as the game serves a request each frame
         if wait_step and answer.get("ok"):
             deadline = time.monotonic() + self.timeout * 4
@@ -1350,6 +1364,19 @@ def load_wait_of(arguments):
     if not isinstance(wait_ms, (int, float)) or isinstance(wait_ms, bool) or wait_ms < 0:
         return None
     return wait_ms / 1000.0
+
+
+def picture_failure(connection, path):
+    """Why the game gave up a picture at the path, as screenshot.pending lists it; none if it hasn't"""
+    answer = connection.request({"query": "screenshot.pending"})
+    if not answer.get("ok") or not isinstance(answer.get("result"), dict):
+        return None
+    wanted = os.path.normcase(os.path.normpath(path))
+    for failed in answer["result"].get("failed", []):
+        named, _, why = str(failed).partition(": ")
+        if why and os.path.normcase(os.path.normpath(named)) == wanted:
+            return why
+    return None
 
 
 def request_until_loaded(connection, request, load_timeout):
