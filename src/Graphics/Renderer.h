@@ -120,6 +120,8 @@ private:
 	void DrawFishShoals(const DrawSceneDesc& desc) const;
 	/// The villagers' ground blobs, in the main view
 	void DrawGroundBlobs(const DrawSceneDesc& desc) const;
+	/// The villagers too far away to be drawn, each a dark smudge facing the view
+	void DrawFarVillagerSmudges(const DrawSceneDesc& desc) const;
 	/// The rain about the camera, each block's in its place among what blends, in the main view
 	void DrawRain(const DrawSceneDesc& desc) const;
 	/// The rings on the water where things splashed, added over the land and the sea
@@ -245,6 +247,7 @@ private:
 		ObjectLook,
 		KeepBelow,
 		Inset,
+		BonePalette,
 		CreatureSpellLook,
 
 		_count
@@ -283,6 +286,7 @@ private:
 	    "u_objectLook",           //
 	    "u_keepBelow",            //
 	    "u_inset",                //
+	    "s_bonePalette",          //
 	    "u_creatureSpellLook",    //
 	};
 	using MeshUniforms = std::array<std::optional<UniformHandle>, static_cast<size_t>(MeshUniform::_count)>;

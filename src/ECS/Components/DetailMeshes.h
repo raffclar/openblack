@@ -9,25 +9,21 @@
 
 #pragma once
 
-#include <cstdint>
+#include <array>
 
-#include <vector>
-
-#include <glm/mat4x4.hpp>
-
-#include "3D/AllMeshes.h"
+#include <entt/core/fwd.hpp>
 
 namespace openblack::ecs::components
 {
 
-/// How a villager is drawn this frame: the clip its state plays, its place in it in milliseconds, and the bones posed
-/// from it. The bones are posed only while the villager is in view, and kept from the last time it was otherwise. With
-/// no bones the villager is drawn in the pose its model rests in.
-struct VillagerPose
+/// A model drawn in less detail the further into the view it stands (see graphics::mesh_detail): its high, standard and
+/// low meshes, whose skeletons are the same, so that one pose drives them all. Its Mesh is the one the rest of the game
+/// knows it by. The standard mesh's bounding box decides the bands.
+struct DetailMeshes
 {
-	AnimId clip {AnimId::Invalid};
-	uint32_t place {0};
-	std::vector<glm::mat4> bones;
+	std::array<entt::id_type, 3> meshes;
+	/// How important it is to keep in detail, which widens its bands
+	float importance {0.0f};
 };
 
 } // namespace openblack::ecs::components

@@ -16,7 +16,9 @@
 #include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 #include "3D/MapCoords.h"
 
@@ -100,6 +102,11 @@ struct Outline
 	/// Which way the model's x points across the land, a unit long
 	glm::vec2 axis {1.0f, 0.0f};
 };
+
+/// The outline of a model's box, centred at `boxCentre` with half sides `boxHalfSize` (unscaled), for the model placed
+/// at a position (taken to the map's whole units, as the game keeps it), turned and scaled
+[[nodiscard]] Outline OutlineOfBox(glm::vec3 position, const glm::mat3& rotation, float scale, glm::vec3 boxCentre,
+                                   glm::vec3 boxHalfSize);
 
 /// The radius of the circle at the middle of each cell that a building's outline is tested against
 inline constexpr float k_CellTestRadius = 7.1f;

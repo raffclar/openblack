@@ -57,6 +57,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageLight.h"
+#include "ECS/Components/WallHug.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
@@ -814,15 +815,22 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		              });
 		              return items;
 	              }));
-	provider->Add(Query("pathfinding", "The obstacles walkers hug, by the map's cells"),
+	provider->Add(Query("pathfinding", "The walkers, and the circles of the things in their way they head for or go round"),
 	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
-		              size_t obstacles = 0;
-		              for (const auto& [cell, entities] : registry.Context().wallHugObstacles)
-		              {
-			              obstacles += entities.size();
-		              }
-		              return Json {{"cells", registry.Context().wallHugObstacles.size()},
-		                           {"obstacles", obstacles},
+		              size_t walkers = 0;
+		              registry.Each<const WallHug>([&walkers](entt::entity, const WallHug&) { ++walkers; });
+		              Json heading = Json::array();
+		              registry.Each<const WallHugObjectReference>(
+		                  [&heading, &registry](entt::entity entity, const WallHugObjectReference& reference) {
+			                  auto item = Listed(registry, entity);
+			                  item["obstacle"] = Id(reference.entity);
+			                  item["centre"] = Point(reference.centre);
+			                  item["radius"] = reference.radius;
+			                  item["steps_away"] = reference.stepsAway;
+			                  heading.push_back(std::move(item));
+		                  });
+		              return Json {{"walkers", walkers},
+		                           {"heading_for", std::move(heading)},
 		                           {"system", Locator::pathfindingSystem::has_value()}};
 	              }));
 	provider->Add(Query("resource", "What a thing holds as a resource, and the store a pile belongs to",
