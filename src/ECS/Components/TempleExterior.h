@@ -26,6 +26,8 @@ struct TempleExterior
 	float sizeTarget {0.0f};
 	/// The size and alignment its mesh was last blended for, none before it first is
 	std::optional<glm::vec2> morphed;
+	/// How much of the temple its model shows built, following its heart each turn
+	float drawnBuilt {1.0f};
 };
 
 } // namespace openblack::ecs::components

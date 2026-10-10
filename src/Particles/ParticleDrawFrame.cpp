@@ -617,7 +617,7 @@ void draw::Order(const Frame& frame, const glm::vec3& camera, std::optional<glm:
 	// Each of the others at one place, in its own order
 	for (const auto& group : frame.groups)
 	{
-		if (group.path == DrawPath::Sorted)
+		if (group.path == DrawPath::Sorted || group.path == DrawPath::BeforeLand)
 		{
 			continue;
 		}
@@ -632,5 +632,51 @@ void draw::Order(const Frame& frame, const glm::vec3& camera, std::optional<glm:
 		const auto base = graphics::zsort::Depth(afterHand ? *hand : group.origin, camera);
 		const uint32_t depth = afterHand && base > 0 ? base - 1 : base;
 		emit(items, [depth](const Item&) { return depth; });
+	}
+}
+
+void draw::OrderBeforeLand(const Frame& frame, std::vector<Command>& commands, std::vector<uint32_t>& spriteOrder)
+{
+	commands.clear();
+	spriteOrder.clear();
+	for (const auto& group : frame.groups)
+	{
+		if (group.path != DrawPath::BeforeLand)
+		{
+			continue;
+		}
+		std::vector<uint32_t> items;
+		items.reserve(group.itemCount);
+		for (uint32_t i = group.firstItem; i < group.firstItem + group.itemCount; ++i)
+		{
+			items.push_back(i);
+		}
+		GatherCommutingRuns(frame, items);
+		for (const auto index : items)
+		{
+			const auto& item = frame.items[index];
+			const uint32_t material = item.kind == ItemKind::Sprite    ? frame.spriteMaterials[item.index]
+			                          : item.kind == ItemKind::Chain   ? frame.chains[item.index].material
+			                          : item.kind == ItemKind::Surface ? frame.surfaces[item.index].material
+			                                                           : 0;
+			if (item.kind == ItemKind::Sprite)
+			{
+				if (!commands.empty() && commands.back().kind == ItemKind::Sprite && commands.back().material == material)
+				{
+					++commands.back().count;
+				}
+				else
+				{
+					commands.push_back({.kind = ItemKind::Sprite,
+					                    .first = static_cast<uint32_t>(spriteOrder.size()),
+					                    .count = 1,
+					                    .material = material,
+					                    .depth = 0});
+				}
+				spriteOrder.push_back(item.index);
+				continue;
+			}
+			commands.push_back({.kind = item.kind, .first = item.index, .count = 1, .material = material, .depth = 0});
+		}
 	}
 }

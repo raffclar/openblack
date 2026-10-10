@@ -44,7 +44,6 @@
 #include <SDL2/SDL_syswm.h>
 #endif
 
-#include "3D/SkyInterface.h"
 #include "Audio.h"
 #include "Camera.h"
 #include "Camera/Camera.h"
@@ -58,6 +57,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/VillagerAge.h"
 #include "Editor/EditorWindow.h"
 #include "EngineConfig.h"
@@ -80,6 +80,7 @@
 #include "Temple.h"
 #include "TestbedScenarios.h"
 #include "TextureViewer.h"
+#include "VideoViewer.h"
 #include "Weather.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -138,6 +139,7 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 	debugWindows.emplace_back(new Gestures);
 	debugWindows.emplace_back(new Physics);
 	debugWindows.emplace_back(new KeyBindingsWindow);
+	debugWindows.emplace_back(new VideoViewer);
 	auto spawner = std::make_unique<CreatureSpawner>();
 	auto scenarios = std::make_unique<TestbedScenarios>(*spawner);
 	// The editor hosts the creature spawner's and the scenarios' windows, and the scripts
@@ -275,6 +277,56 @@ void Gui::OpenWindow(std::string_view name) noexcept
 	}
 }
 
+std::vector<DebugGuiInterface::WindowState> Gui::ListWindows() const noexcept
+{
+	std::vector<WindowState> windows;
+	for (const auto& window : _debugWindows)
+	{
+		windows.push_back({.name = window->GetName(), .open = window->IsOpen()});
+	}
+	return windows;
+}
+
+void Gui::CloseWindow(std::string_view name) noexcept
+{
+	for (auto& window : _debugWindows)
+	{
+		if (window->GetName() == name)
+		{
+			window->Close();
+		}
+	}
+}
+
+bool Gui::PressButton(std::string_view window, std::span<const ButtonPathStep> path) noexcept
+{
+	if (ImGui::GetCurrentContext() == nullptr)
+	{
+		return false;
+	}
+	const auto* found = ImGui::FindWindowByName(std::string(window).c_str());
+	if (found == nullptr || !found->WasActive)
+	{
+		return false;
+	}
+	// The button's id as its window makes it: each scope's label or number hashed onto the window's own, in turn
+	auto id = found->ID;
+	for (const auto& step : path)
+	{
+		if (const auto* label = std::get_if<std::string>(&step))
+		{
+			id = ImHashStr(label->c_str(), 0, id);
+		}
+		else
+		{
+			const auto number = std::get<int32_t>(step);
+			id = ImHashData(&number, sizeof(number), id);
+		}
+	}
+	ImGui::ActivateItemByID(id);
+	return true;
+}
+
 bool Gui::CreateFontsTextureBgfx() noexcept
 {
 	// Build texture atlas
@@ -345,6 +397,7 @@ bool Gui::Loop() noexcept
 	ShowVillagerNames();
 	ShowDispenserNames();
 	ShowCameraPositionOverlay();
+	ShowInputLockNotice();
 	// The game's Creature Cave screen, drawn with the debug windows' ImGui
 	openblack::gui::DrawCreatureCaveScreen();
 
@@ -1072,6 +1125,42 @@ void Gui::ShowVillagerNames() noexcept
 			    coveredAreas.emplace_back(area.value());
 		    }
 	    });
+}
+
+void Gui::SetInputLock(bool locked, bool pointerScripted) noexcept
+{
+	// While the player's input is locked out, the debug windows take nothing from the mouse either
+	if (ImGui::GetCurrentContext() != nullptr)
+	{
+		auto& io = ImGui::GetIO();
+		if (locked)
+		{
+			io.ConfigFlags |= ImGuiConfigFlags_NoMouse;
+		}
+		else if (_inputLocked && !pointerScripted)
+		{
+			io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
+		}
+	}
+	_inputLocked = locked;
+}
+
+void Gui::ShowInputLockNotice() const noexcept
+{
+	if (!_inputLocked)
+	{
+		return;
+	}
+	// A small notice at the top of the screen, over everything
+	constexpr std::string_view k_Notice = "Input locked: agent controlling (Ctrl+Alt+Shift+F12 to take over)";
+	auto* drawList = ImGui::GetForegroundDrawList();
+	const auto& displaySize = ImGui::GetIO().DisplaySize;
+	const auto size = ImGui::CalcTextSize(k_Notice.data(), k_Notice.data() + k_Notice.size());
+	const ImVec2 at {(displaySize.x - size.x) * 0.5f, _menuBarVisible ? _menuBarSize.y + 6.0f : 6.0f};
+	constexpr float k_Pad = 4.0f;
+	drawList->AddRectFilled(ImVec2(at.x - k_Pad, at.y - k_Pad), ImVec2(at.x + size.x + k_Pad, at.y + size.y + k_Pad),
+	                        IM_COL32(0, 0, 0, 160), 3.0f);
+	drawList->AddText(at, IM_COL32(255, 210, 80, 255), k_Notice.data(), k_Notice.data() + k_Notice.size());
 }
 
 void Gui::ShowCameraPositionOverlay() noexcept

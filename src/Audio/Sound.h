@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <memory>
 #include <queue>
 #include <string>
 #include <vector>
@@ -27,6 +28,8 @@ enum class AudioBankLoop : uint16_t;
 
 namespace openblack::audio
 {
+struct DecodeResult;
+
 using SourceId = ALuint;
 using BufferId = ALuint;
 
@@ -96,6 +99,7 @@ enum class SoundId : entt::id_type
 	G_CitadelDoorClose_02 = entt::hashed_string("InGame.sad/61").value(),
 	G_FireCreatureCave_01 = entt::hashed_string("InGame.sad/175").value(),
 	G_WaterCreatureCave_01 = entt::hashed_string("InGame.sad/177").value(),
+	G_Volcano_02 = entt::hashed_string("InGame.sad/172").value(),
 	G_CitadelButtonUp_01 = entt::hashed_string("InGame.sad/62").value(),
 	G_CitadelButtonDown_01 = entt::hashed_string("InGame.sad/63").value(),
 	G_FireballPast_01 = entt::hashed_string("InGame.sad/64").value(),
@@ -254,6 +258,8 @@ public:
 	BufferId bufferId;
 	float duration;
 	std::vector<std::vector<uint8_t>> buffer;
+	/// The parts of buffer decoded ahead of the sample's first play, on a loading thread; let go once it is played
+	std::shared_ptr<std::vector<DecodeResult>> decoded;
 	size_t sizeInBytes;
 };
 } // namespace openblack::audio

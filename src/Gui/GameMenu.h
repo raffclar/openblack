@@ -136,6 +136,9 @@ public:
 	[[nodiscard]] const std::u16string& GetButtonLabel(size_t index) const { return _buttonLabels.at(index); }
 	/// The lines of the Controls page
 	[[nodiscard]] const List& GetControls() const noexcept { return *_controls; }
+	/// What the player can press by name now: the question's answers while it is asked, else the page's buttons, check
+	/// boxes, sliders and tabs
+	[[nodiscard]] std::vector<Dialog::NamedControl> GetNamedControls() const;
 
 private:
 	struct Question

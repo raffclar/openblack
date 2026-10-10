@@ -298,3 +298,29 @@ TEST_F(TownDesireTest, NightPutsSleepFirst)
 	td::Process(_desire, Context());
 	EXPECT_NE(_desire.sorted.at(0).index, D(TownDesireInfo::ForSleep));
 }
+
+TEST(TownDesireScriptBoost, TakesTheTownsDesiresByAtMostOne)
+{
+	EXPECT_TRUE(td::ValidScriptBoost(9, 1.0f));
+	EXPECT_TRUE(td::ValidScriptBoost(9, -1.0f));
+	EXPECT_TRUE(td::ValidScriptBoost(0, 0.0f));
+	EXPECT_TRUE(td::ValidScriptBoost(16, 0.5f));
+	EXPECT_FALSE(td::ValidScriptBoost(17, 0.5f));
+	EXPECT_FALSE(td::ValidScriptBoost(-1, 0.5f));
+	EXPECT_FALSE(td::ValidScriptBoost(9, 1.5f));
+	EXPECT_FALSE(td::ValidScriptBoost(9, -1.01f));
+}
+
+TEST(TownDesireScriptBoost, BoostedDesireLeadsOnceSorted)
+{
+	TownDesire desire;
+	desire.desire.at(0) = 0.5f;
+	desire.boost.at(D(TownDesireInfo::ToBuild)) = 1.0f;
+	td::SortDesires(desire);
+	EXPECT_EQ(desire.sorted.at(0).index, D(TownDesireInfo::ToBuild));
+	EXPECT_FLOAT_EQ(desire.sorted.at(0).boosts, 1.0f);
+	// Boosted down, it falls behind those the town has no feeling for
+	desire.boost.at(D(TownDesireInfo::ToBuild)) = -1.0f;
+	td::SortDesires(desire);
+	EXPECT_EQ(desire.sorted.at(td::k_Count - 1).index, D(TownDesireInfo::ToBuild));
+}

@@ -275,5 +275,8 @@ struct Command
 /// a material at a time.
 void Order(const Frame& frame, const glm::vec3& camera, std::optional<glm::vec3> hand, std::vector<Command>& commands,
            std::vector<uint32_t>& spriteOrder);
+/// The order the effects drawn before the land are drawn in, each in its own order, the sprites as for Order. The view
+/// they are drawn in keeps the order they are given.
+void OrderBeforeLand(const Frame& frame, std::vector<Command>& commands, std::vector<uint32_t>& spriteOrder);
 
 } // namespace openblack::particles::draw

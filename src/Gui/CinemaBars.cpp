@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <limits>
 
 using namespace openblack::gui;
 
@@ -26,6 +27,14 @@ void CinemaBars::Set(bool on, float transitionSeconds)
 	const float fraction = Fraction();
 	_on = on;
 	_timer = (on ? fraction : 1.0f - fraction) * transitionSeconds * 1000.0f;
+}
+
+void CinemaBars::Snap()
+{
+	_on = true;
+	// So far along that the bars stay all the way in until they are next turned off
+	_timer = -std::numeric_limits<float>::max();
+	_fraction = Fraction();
 }
 
 void CinemaBars::Update(float gameMilliseconds, float transitionSeconds)

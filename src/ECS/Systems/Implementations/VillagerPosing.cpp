@@ -12,21 +12,25 @@
 #include <cmath>
 
 #include <algorithm>
-#include <limits>
 #include <optional>
+
+#include <glm/geometric.hpp>
 
 #include "3D/L3DAnim.h"
 #include "3D/L3DMesh.h"
 #include "Animals/AnimalAnimation.h"
 #include "ECS/ClipSoundPlayer.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingPhysics.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
+#include "Graphics/ViewFrustum.h"
 #include "InfoConstants.h"
 #include "LivingActionSystem.h"
 #include "Locator.h"
@@ -44,6 +48,9 @@ namespace
 constexpr float k_StationaryStride = 0.05f;
 /// The game's speed units in one metre a second
 constexpr float k_SpeedUnitsPerMetrePerSecond = 655.36f;
+/// How far outside the camera's view a villager is still posed, in metres, should the camera move a little more before
+/// the frame is drawn
+constexpr float k_ViewMargin = 2.0f;
 } // namespace
 
 void LivingActionSystem::UpdatePoses(uint32_t turn, float turnFraction)
@@ -91,12 +98,49 @@ void LivingActionSystem::UpdatePoses(uint32_t turn, float turnFraction)
 		    ecs::clip_sound_player::Play(entity, pose.clip, *clip, pose.place, static_cast<uint32_t>(played),
 		                                 transform.position);
 		    pose.place = animals::AdvanceClip(timing, pose.place, played);
+	    });
+	registry.SetDirty();
+}
 
-		    // The pose between the two keyframes around its place, each bone then placed by its parent
+void LivingActionSystem::PoseVillagersInView(const glm::mat4& viewProjection)
+{
+	if (!Locator::resources::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& animations = Locator::resources::value().GetAnimations();
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto view = graphics::view_frustum::FromViewProjection(viewProjection);
+
+	registry.Each<const Villager, const Mesh, const Transform, VillagerPose>(
+	    [&](entt::entity entity, const Villager& /*unused*/, const Mesh& mesh, const Transform& transform, VillagerPose& pose) {
+		    const auto clipId = resources::HashIdentifier(static_cast<uint32_t>(pose.clip));
+		    if (static_cast<int>(pose.clip) < 0 || !animations.Contains(clipId) || !meshes.Contains(mesh.id))
+		    {
+			    pose.bones.clear();
+			    return;
+		    }
 		    const auto model = meshes.Handle(mesh.id);
+		    // Out of view it keeps the bones it was last drawn with. The sea reflects only one flying in the physics, or
+		    // held in the hand.
+		    const auto box = model->GetBoundingBox();
+		    const float scale = std::max({transform.scale.x, transform.scale.y, transform.scale.z});
+		    const auto centre = transform.position + (transform.rotation * (box.Center() * transform.scale));
+		    const float radius = (glm::length(box.Size()) * 0.5f * scale) + k_ViewMargin;
+		    const bool seen = registry.AnyOf<InPhysics, InHand>(entity)
+		                          ? graphics::view_frustum::SeesSphereOrReflection(view, centre, radius)
+		                          : graphics::view_frustum::SeesSphere(view, centre, radius);
+		    if (!seen)
+		    {
+			    return;
+		    }
+		    // The pose between the two keyframes around its place
+		    const auto clip = animations.Handle(clipId);
 		    const auto& frames = clip->GetFrames();
 		    const auto& parents = model->GetBoneParents();
-		    const auto span = animals::SpanAt(timing, pose.place);
+		    const auto span = animals::SpanAt(
+		        {.playTime = clip->GetPlayTime(), .frameCount = frames.size(), .looping = clip->IsLooping()}, pose.place);
 		    if (!model->IsBoned() || frames.empty() || frames[span.from].bones.size() != parents.size() ||
 		        frames[span.to].bones.size() != parents.size())
 		    {
@@ -104,16 +148,6 @@ void LivingActionSystem::UpdatePoses(uint32_t turn, float turnFraction)
 			    return;
 		    }
 		    pose.bones.resize(parents.size());
-		    const auto& from = frames[span.from].bones;
-		    const auto& to = frames[span.to].bones;
-		    for (size_t i = 0; i < pose.bones.size(); ++i)
-		    {
-			    pose.bones[i] = from[i] + ((to[i] - from[i]) * span.t);
-			    if (parents[i] != std::numeric_limits<uint32_t>::max())
-			    {
-				    pose.bones[i] = pose.bones[parents[i]] * pose.bones[i];
-			    }
-		    }
+		    animals::PoseBetween(frames[span.from].bones, frames[span.to].bones, span.t, parents, pose.bones);
 	    });
-	registry.SetDirty();
 }
