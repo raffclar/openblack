@@ -22,9 +22,11 @@ started and restarted at any time: the adapter connects on each call.
 
 Several games can run at once, each started with --inspect-port 0 (any free port). Each keeps a file
 <pid>.json in openblack-inspector under the temporary directory while its inspector runs. inspector_games lists
-them; inspector_connect chooses the one this session talks to by worktree, pid or port (by worktree, a game
-restarted on another port is found again); any tool takes a port for a single call to another game. Only the
-connected game keeps its player's input out.
+them. One MCP session is shared by every agent using it, so every tool takes the game it is for (port, pid or
+worktree); with several games running a call naming none is refused with the list, rather than sent to a game chosen
+earlier by someone else. Every answer names the game it came from (pid, port, worktree), and the adapter checks with a
+ping on each new connection that the game answering is the one meant. While a game loads, calls wait for it.
+This works with games of older builds too, which don't name themselves: the adapter names them from the ping.
 
 Run it with --call QUERY [JSON] to send a single request from a shell, without MCP:
 
@@ -602,29 +604,40 @@ GAME_TOOLS = [
     {
         "name": "inspector_games",
         "description": "The openblack games running on this machine with their inspector on: pid, port, worktree, "
-                       "build_type, land, started, whether each answers, and which one this session is connected to. "
-                       "Games are found by the files they keep in the temporary directory; files of games that "
-                       "have gone are removed. Looking doesn't lock any game's input.",
+                       "build_type, land, started, whether each answers (responding), whether it is ready (not "
+                       "loading), and whether inspector_connect chose it. Games are found by the files they keep in "
+                       "the temporary directory; files of games that have gone are removed. Looking doesn't lock any "
+                       "game's input.",
         "inputSchema": schema(),
     },
     {
         "name": "inspector_connect",
-        "description": "Chooses the game this session talks to from now on: by worktree (its path, a path inside it, "
-                       "or its folder name such as ob-wt-inspect), by pid or by port. Connected by worktree, a "
-                       "restarted game on another port is found again. With nothing, goes back to the default port. "
-                       "The input lock follows: only the connected game keeps its player's input out.",
+        "description": "Waits (up to 30 s) until the game named by worktree (its path, a path inside it, or its folder "
+                       "name), pid or port answers that it is ready, and answers it, or why not. It becomes the game "
+                       "for calls naming none only while it is the one game running: the session is shared by every "
+                       "agent, so with several games running every call must name its game (port, pid or worktree).",
         "inputSchema": schema({"worktree": {"type": "string"}, "pid": {"type": "integer"},
                                "port": {"type": "integer"}}),
     },
 ]
-# Every game tool can also be sent once to another game without changing the connected one
-PORT_ARGUMENT = {"type": "integer",
-                 "description": "Send this one call to the game on this port instead of the connected game"}
+# Every game tool names the game it goes to: one MCP session is shared by every agent using it, so a game chosen
+# once for the session (inspector_connect) could be another agent's by the time a call is made. With several games
+# running, a call without one of these is refused.
+SELECTOR = {
+    "port": {"type": "integer", "description": "The game to ask, by its inspector's port"},
+    "pid": {"type": "integer", "description": "The game to ask, by its process id"},
+    "worktree": {"type": "string",
+                 "description": "The game to ask, by its worktree: path, a path inside it, or folder name"},
+}
+SELECTOR_KEYS = tuple(SELECTOR)
 for _tool in TOOLS:
     # A copy: several tools share their properties' dictionaries
-    _tool["inputSchema"]["properties"] = {**_tool["inputSchema"]["properties"], "port": PORT_ARGUMENT}
+    _tool["inputSchema"]["properties"] = {**_tool["inputSchema"]["properties"], **SELECTOR}
 TOOLS_BY_NAME = {tool["name"]: tool for tool in TOOLS}
 SHAPING_KEYS = set(SHAPING) | set(NEAR)
+# A connection nothing has used for this long is closed, so that a game an agent has finished with lets its player's
+# input in again
+IDLE_SECONDS = 60.0
 
 
 def discovery_folder():
@@ -634,7 +647,7 @@ def discovery_folder():
 
 def pid_alive(pid):
     """Whether a process of that id runs now"""
-    if pid <= 0:
+    if not isinstance(pid, int) or pid <= 0:
         return False
     if os.name == "nt":
         import ctypes
@@ -696,24 +709,49 @@ def read_games(folder, alive=pid_alive):
     return games
 
 
+def read_line(connection, buffer, wanted, timeout):
+    """The answer of that id from a socket, and what is left of the buffer; None when the time is up"""
+    deadline = time.monotonic() + timeout
+    while True:
+        end = buffer.find(b"\n")
+        if end >= 0:
+            line, buffer = buffer[:end], buffer[end + 1:]
+            try:
+                answer = json.loads(line.decode("utf-8", errors="replace"))
+            except ValueError:
+                continue
+            if isinstance(answer, dict) and answer.get("id") == wanted:
+                return answer, buffer
+            continue
+        left = deadline - time.monotonic()
+        if left <= 0:
+            return None, buffer
+        connection.settimeout(left)
+        try:
+            chunk = connection.recv(65536)
+        except socket.timeout:
+            return None, buffer
+        if not chunk:
+            raise OSError("the game closed the connection")
+        buffer += chunk
+
+
 def ping(port, timeout):
     """What the game on a port says of itself, None if nothing answers. A ping doesn't lock the game's input."""
     try:
         with socket.create_connection(("127.0.0.1", port), timeout=timeout) as connection:
             connection.sendall(b'{"id": 0, "query": "ping"}\n')
-            buffer = b""
-            deadline = time.monotonic() + timeout
-            while b"\n" not in buffer:
-                if time.monotonic() > deadline:
-                    return None
-                chunk = connection.recv(65536)
-                if not chunk:
-                    return None
-                buffer += chunk
-        answer = json.loads(buffer.split(b"\n", 1)[0].decode("utf-8", errors="replace"))
-    except (OSError, ValueError):
+            answer, _ = read_line(connection, b"", 0, timeout)
+    except OSError:
         return None
-    return answer.get("result") if answer.get("ok") else None
+    if answer is None or not answer.get("ok") or not isinstance(answer.get("result"), dict):
+        return None
+    return answer["result"]
+
+
+def is_ready(identity):
+    """Whether a ping's answer says the game serves its frames: older games don't say, and answer only when they do"""
+    return identity is not None and identity.get("ready", True) is not False
 
 
 def normalise_path(path):
@@ -732,7 +770,13 @@ def worktree_matches(game_worktree, wanted):
 
 
 def describe_game(game):
-    return f"pid {game['pid']} port {game['port']} worktree {game.get('worktree') or '?'} land {game.get('land') or '-'}"
+    return f"pid {game.get('pid', '?')} port {game['port']} worktree {game.get('worktree') or '?'} " \
+           f"land {game.get('land') or '-'}"
+
+
+def game_tag(game):
+    """How an answer names the game it came from"""
+    return {key: game[key] for key in ("pid", "port", "worktree") if game.get(key) is not None}
 
 
 def select_game(games, port=None, pid=None, worktree=None):
@@ -755,18 +799,27 @@ def select_game(games, port=None, pid=None, worktree=None):
     return candidates[0], None
 
 
-class InspectorConnection:
-    """One line in, one line out, over a socket that is reopened whenever the game has gone. The port is the one
-    given, or found again by a resolver each time the socket is reopened (a game restarted on another port)."""
+class GameError(ConnectionError):
+    """A call that couldn't be made to the game it names, or whose answer came from another"""
 
-    def __init__(self, port, timeout, resolve=None, describe=None):
-        self.port = port
+
+class InspectorConnection:
+    """One line in, one line out, to one game. The socket is reopened whenever the game has gone; each time, a ping on
+    it checks that the game answering is the one meant (a port can be reused by a game started later), so that no
+    answer comes from another game. Answers name the game they came from, as newer games do themselves."""
+
+    def __init__(self, game, timeout, alive=pid_alive, load_timeout=None, describe=None):
+        # The game meant: its port, and its pid and worktree when known
+        self.game = dict(game)
+        self.port = game["port"]
         self.timeout = timeout
-        self.resolve = resolve
+        self.load_timeout = load_timeout if load_timeout is not None else max(60.0, timeout * 6)
+        self.alive = alive
         self.describe = describe
         self.socket = None
         self.buffer = b""
         self.next_id = 1
+        self.used = time.monotonic()
 
     def close(self):
         if self.socket is not None:
@@ -774,12 +827,49 @@ class InspectorConnection:
         self.socket = None
         self.buffer = b""
 
+    def tag(self):
+        return game_tag(self.game)
+
+    def _process_alive(self):
+        return self.game.get("pid") is not None and self.alive(self.game["pid"])
+
     def _open(self):
-        if self.resolve is not None:
-            self.port = self.resolve()
-        self.socket = socket.create_connection(("127.0.0.1", self.port), timeout=self.timeout)
+        try:
+            self.socket = socket.create_connection(("127.0.0.1", self.port), timeout=self.timeout)
+        except OSError as error:
+            hint = self.describe() if self.describe is not None else ""
+            raise GameError(f"no inspector on 127.0.0.1:{self.port} ({error}); start the game with --inspect-port 0 "
+                            f"in a build with OPENBLACK_INSPECTOR{hint}") from error
+        # Which game this is: a ping takes no control of it. A game busy loading (an older one, which can't answer
+        # meanwhile) is waited for while its process runs.
+        self.socket.sendall(b'{"id": 0, "query": "ping"}\n')
+        answer, self.buffer = self._wait(0)
+        identity = answer.get("result") if answer.get("ok") else None
+        pid = identity.get("pid") if isinstance(identity, dict) else None
+        if self.game.get("pid") is not None and pid is not None and pid != self.game["pid"]:
+            self.close()
+            raise GameError(f"port {self.port} is now answered by another game (pid {pid}), not pid "
+                            f"{self.game['pid']}; inspector_games lists the running games")
+        if pid is not None:
+            self.game["pid"] = pid
+            if isinstance(identity.get("worktree"), str) and identity["worktree"]:
+                self.game["worktree"] = identity["worktree"]
+
+    def _wait(self, wanted):
+        """The answer of that id: waits longer while the game's process runs, as it may be loading a land"""
+        answer, self.buffer = read_line(self.socket, self.buffer, wanted, self.timeout)
+        if answer is None and self._process_alive():
+            answer, self.buffer = read_line(self.socket, self.buffer, wanted,
+                                            max(0.0, self.load_timeout - self.timeout))
+        if answer is None:
+            self.close()
+            waited = self.load_timeout if self._process_alive() else self.timeout
+            raise GameError(f"the game ({describe_game(self.game)}) didn't answer in {waited:.0f} s: busy loading, "
+                            f"or stuck (a dialog?)")
+        return answer, self.buffer
 
     def request(self, request):
+        self.used = time.monotonic()
         request = dict(request)
         request["id"] = self.next_id
         self.next_id += 1
@@ -789,112 +879,203 @@ class InspectorConnection:
                 if self.socket is None:
                     self._open()
                 self.socket.sendall(line)
-                return self._read_answer(request["id"])
+                answer, self.buffer = self._wait(request["id"])
+                break
+            except GameError:
+                raise
             except OSError as error:
+                # A socket left from a game that has gone: open it again once
                 self.close()
                 if attempt == 1:
-                    hint = self.describe() if self.describe is not None else ""
-                    raise ConnectionError(
-                        f"no inspector on 127.0.0.1:{self.port} ({error}); start the game with --inspect-port "
-                        f"{self.port} (or 0 and inspector_connect to it) in a build with OPENBLACK_INSPECTOR"
-                        f"{hint}") from error
-
-    def _read_answer(self, wanted):
-        # The game answers at its next frame, which may be slow while it loads
-        deadline = time.monotonic() + self.timeout
-        while True:
-            end = self.buffer.find(b"\n")
-            if end >= 0:
-                line, self.buffer = self.buffer[:end], self.buffer[end + 1:]
-                answer = json.loads(line.decode("utf-8", errors="replace"))
-                if answer.get("id") == wanted:
-                    return answer
-                continue
-            if time.monotonic() > deadline:
-                raise OSError("the game didn't answer in time")
-            chunk = self.socket.recv(65536)
-            if not chunk:
-                raise OSError("the game closed the connection")
-            self.buffer += chunk
+                    raise GameError(f"lost the game ({describe_game(self.game)}): {error}") from error
+        answered_by = answer.get("game")
+        if isinstance(answered_by, dict) and self.game.get("pid") is not None and \
+                answered_by.get("pid") not in (None, self.game["pid"]):
+            raise GameError(f"an answer came from another game (pid {answered_by.get('pid')}) than the one asked "
+                            f"({describe_game(self.game)}); nothing was taken from it")
+        if not isinstance(answered_by, dict):
+            # An older game doesn't name itself: the adapter does, from the ping it checked
+            answer["game"] = self.tag()
+        return answer
 
 
 class Session:
-    """Which game this adapter talks to: the default port until inspector_connect chooses another"""
+    """The games this adapter talks to. Every call finds its game anew from what it names, so that agents sharing the
+    session never get each other's game: with several games running, a call naming none is refused."""
 
-    def __init__(self, default_port, timeout, folder=None, alive=pid_alive, ping_timeout=2.0):
+    def __init__(self, default_port, timeout, folder=None, alive=pid_alive, ping_timeout=2.0, ready_timeout=30.0,
+                 load_timeout=None):
         self.default_port = default_port
         self.timeout = timeout
         self.folder = folder or discovery_folder()
         self.alive = alive
         self.ping_timeout = ping_timeout
-        # What was chosen: {"port"|"pid"|"worktree": value}, or None for the default port
+        self.ready_timeout = ready_timeout
+        self.load_timeout = load_timeout if load_timeout is not None else max(60.0, timeout * 6)
+        # What inspector_connect chose ({"port"|"pid"|"worktree": value}), used only while it can't be mistaken
         self.selection = None
-        self.connection = InspectorConnection(default_port, timeout, describe=self._running_hint)
+        # Chosen by whoever started the adapter (its command line): it is that caller's own, so always followed
+        self.pinned = None
+        # Open connections by game, kept so that a game driven call after call stays locked to its agent
+        self.connections = {}
 
-    def games(self):
-        """The running games, each with whether it answers and whether it is the connected one"""
-        games = read_games(self.folder, self.alive)
-        for game in games:
-            answer = ping(game["port"], self.ping_timeout)
-            # A port answering for another process is a reused port, not this game
-            game["responding"] = answer is not None and answer.get("pid", game["pid"]) == game["pid"]
-            game["connected"] = game["port"] == self.connection.port
-        return games
+    def close(self):
+        for connection in self.connections.values():
+            connection.close()
+        self.connections = {}
 
     def _running_hint(self):
         games = read_games(self.folder, self.alive)
         if not games:
             return ""
-        return "; running games: " + "; ".join(describe_game(game) for game in games) + \
-               " (inspector_connect to one)"
+        return "; running games: " + "; ".join(describe_game(game) for game in games)
 
-    def _resolver(self, selection):
-        def resolve():
-            game, error = select_game(read_games(self.folder, self.alive), **selection)
-            if game is None:
-                raise OSError(error)
-            return game["port"]
-        return resolve
+    def _connection(self, game):
+        """The open connection to a game, made if there is none; a game restarted on another port gets a new one"""
+        key = game.get("pid") or ("port", game["port"])
+        connection = self.connections.get(key)
+        if connection is not None and connection.port != game["port"]:
+            connection.close()
+            connection = None
+        if connection is None:
+            connection = InspectorConnection(game, self.timeout, alive=self.alive, load_timeout=self.load_timeout,
+                                             describe=self._running_hint)
+            self.connections[key] = connection
+        return connection
+
+    def _close_idle(self):
+        now = time.monotonic()
+        for key, connection in list(self.connections.items()):
+            if now - connection.used > IDLE_SECONDS:
+                connection.close()
+                del self.connections[key]
+
+    def find(self, selection):
+        """The game a selection names, or why there is none. A port that no file names is still a game when something
+        answers a ping on it (a game too old to keep a file)."""
+        games = read_games(self.folder, self.alive)
+        game, error = select_game(games, **selection)
+        if game is None and set(selection) == {"port"}:
+            identity = ping(selection["port"], self.ping_timeout)
+            if identity is None:
+                return None, error
+            game = {"port": selection["port"], "pid": identity.get("pid"), "worktree": identity.get("worktree")}
+        return game, error
+
+    def target(self, arguments):
+        """The game a call goes to: the one it names; else the one the adapter was started for; else the only one
+        running; else the connected or default port when no game keeps a file. Several running and none named: why
+        it was refused."""
+        selection = {key: arguments[key] for key in SELECTOR_KEYS if arguments.get(key) is not None}
+        if not selection and self.pinned is not None:
+            selection = self.pinned
+        if selection:
+            return self.find(selection)
+        games = read_games(self.folder, self.alive)
+        if len(games) > 1:
+            listed = "; ".join(describe_game(game) for game in games)
+            return None, (f"{len(games)} games are running: name the one meant with port, pid or worktree in every "
+                          f"call (the session is shared by every agent, so inspector_connect doesn't choose for "
+                          f"you). Running: {listed}")
+        if len(games) == 1:
+            return games[0], None
+        if self.selection is not None:
+            return self.find(self.selection)
+        return {"port": self.default_port}, None
+
+    def games(self):
+        """The running games, each with whether it answers, whether it is ready, and whether it is the connected one"""
+        games = read_games(self.folder, self.alive)
+        connected = self.selection or {}
+        for game in games:
+            identity = ping(game["port"], self.ping_timeout)
+            # A port answering for another process is a reused port, not this game
+            game["responding"] = identity is not None and identity.get("pid", game["pid"]) == game["pid"]
+            game["ready"] = game["responding"] and is_ready(identity)
+            if identity is not None and identity.get("loading"):
+                game["loading"] = identity["loading"]
+            game["connected"] = bool(connected) and select_game([game], **connected)[0] is not None
+        return games
+
+    def wait_until_ready(self, selection):
+        """The game a selection names once it answers that it is ready, or why not: a game just started may have no
+        file yet, not listen yet, or be loading"""
+        deadline = time.monotonic() + self.ready_timeout
+        while True:
+            game, error = self.find(selection)
+            identity = ping(game["port"], self.ping_timeout) if game is not None else None
+            if identity is not None and game.get("pid") is not None and identity.get("pid") not in (None, game["pid"]):
+                error = f"port {game['port']} is answered by pid {identity.get('pid')}, not {game['pid']}"
+            elif is_ready(identity):
+                return game, None
+            elif game is not None:
+                error = f"the game ({describe_game(game)}) " + \
+                        (f"is loading {identity['loading']}" if identity is not None and identity.get("loading")
+                         else "isn't answering yet")
+            if time.monotonic() > deadline:
+                return None, f"{error}; waited {self.ready_timeout:.0f} s, try again"
+            time.sleep(0.25)
 
     def connect(self, port=None, pid=None, worktree=None):
-        """Chooses the game; answers what was chosen, or an error. The old game's connection is closed, so its input
-        lock lets go."""
+        """Chooses the game calls go to while it is the only one running, once it is ready; answers what was chosen,
+        or why not"""
         selection = {key: value for key, value in (("port", port), ("pid", pid), ("worktree", worktree))
                      if value is not None}
         if not selection:
-            self.connection.close()
             self.selection = None
-            self.connection = InspectorConnection(self.default_port, self.timeout, describe=self._running_hint)
             return {"ok": True, "result": {"connected": {"port": self.default_port}, "default": True}}
-        game, error = select_game(read_games(self.folder, self.alive), **selection)
-        if game is None and set(selection) == {"port"}:
-            # A game on a fixed port that keeps no file, as an older build
-            if ping(port, self.ping_timeout) is None:
-                return {"ok": False, "error": error}
-            game = {"port": port}
-        elif game is None:
+        game, error = self.wait_until_ready(selection)
+        if game is None:
             return {"ok": False, "error": error}
-        self.connection.close()
         self.selection = selection
-        # By worktree a restarted game is found again on its new port; by pid or port the game must be that one
-        resolve = self._resolver(selection) if "worktree" in selection else None
-        self.connection = InspectorConnection(game["port"], self.timeout, resolve=resolve,
-                                              describe=self._running_hint)
-        return {"ok": True, "result": {"connected": game}}
+        result = {"connected": game}
+        running = read_games(self.folder, self.alive)
+        if len(running) > 1:
+            result["note"] = (f"{len(running)} games are running: every call must still name its game (port, pid or "
+                              f"worktree), because this session is shared by every agent")
+        return {"ok": True, "result": result, "game": game_tag(game)}
 
     def call(self, name, arguments):
         if name == "inspector_games":
-            return {"ok": True, "result": {"games": self.games(), "connected_port": self.connection.port}}
+            return {"ok": True, "result": {"games": self.games(), "selection": self.selection}}
         if name == "inspector_connect":
             return self.connect(arguments.get("port"), arguments.get("pid"), arguments.get("worktree"))
-        if "port" in arguments:
-            # One call to another game; the connected one stays chosen
-            once = InspectorConnection(arguments["port"], self.timeout, describe=self._running_hint)
-            try:
-                return call_tool(once, name, arguments)
-            finally:
-                once.close()
-        return call_tool(self.connection, name, arguments)
+        tool = TOOLS_BY_NAME.get(name)
+        if tool is None:
+            return {"ok": False, "error": f"no tool {name}"}
+        return self.send(build_request(tool, arguments), wait_step=name == "game_step" and arguments.get("wait", True),
+                         target=arguments)
+
+    def send(self, request, wait_step=False, target=None):
+        """A request to the game a call names, waiting while the game loads; the answer names the game"""
+        self._close_idle()
+        game, error = self.target(target or {})
+        if game is None:
+            return {"ok": False, "error": error}
+        connection = self._connection(game)
+        answer = request_until_loaded(connection, request, self.load_timeout)
+        # A step waits for the game to have run it, polling the state as the game serves a request each frame
+        if wait_step and answer.get("ok"):
+            deadline = time.monotonic() + self.timeout * 4
+            while answer.get("ok") and isinstance(answer.get("result"), dict) and \
+                    answer["result"].get("stepping") is not None and time.monotonic() < deadline:
+                time.sleep(0.02)
+                answer = request_until_loaded(connection, {"query": "game.state"}, self.load_timeout)
+        return answer
+
+
+def request_until_loaded(connection, request, load_timeout):
+    """A request asked again while the game answers that it is loading, until it is done or the time is up"""
+    deadline = time.monotonic() + load_timeout
+    while True:
+        answer = connection.request(request)
+        if answer.get("ok") or not answer.get("loading"):
+            return answer
+        if time.monotonic() > deadline:
+            answer["error"] = (f"the game is still loading {answer['loading']} after {load_timeout:.0f} s; "
+                               f"ask again later")
+            return answer
+        time.sleep(0.25)
 
 
 def build_request(tool, arguments):
@@ -913,24 +1094,16 @@ def build_request(tool, arguments):
     return request
 
 
-def call_tool(connection, name, arguments):
-    tool = TOOLS_BY_NAME.get(name)
-    if tool is None:
-        return {"ok": False, "error": f"no tool {name}"}
-    answer = connection.request(build_request(tool, arguments))
-    # A step waits for the game to have run it, polling the state as the game serves a request each frame
-    if name == "game_step" and answer.get("ok") and arguments.get("wait", True):
-        deadline = time.monotonic() + connection.timeout * 4
-        while answer.get("ok") and answer["result"].get("stepping") is not None and time.monotonic() < deadline:
-            time.sleep(0.02)
-            answer = connection.request({"query": "game.state"})
-    return answer
-
-
 def tool_result(answer):
+    """The MCP content of an answer: the result, or the error, with the game it came from"""
+    game = answer.get("game")
     if answer.get("ok"):
-        return {"content": [{"type": "text", "text": json.dumps(answer["result"], separators=(",", ":"))}]}
-    return {"content": [{"type": "text", "text": answer.get("error", "failed")}], "isError": True}
+        content = {"game": game, "result": answer["result"]} if game else answer["result"]
+        return {"content": [{"type": "text", "text": json.dumps(content, separators=(",", ":"))}]}
+    error = answer.get("error", "failed")
+    if game:
+        error += f" (game: {json.dumps(game, separators=(',', ':'))})"
+    return {"content": [{"type": "text", "text": error}], "isError": True}
 
 
 def serve(session):
@@ -954,7 +1127,7 @@ def serve(session):
                 result = {
                     "protocolVersion": version,
                     "capabilities": {"tools": {}},
-                    "serverInfo": {"name": "openblack-inspector", "version": "1.1.0"},
+                    "serverInfo": {"name": "openblack-inspector", "version": "1.2.0"},
                 }
             elif method == "tools/list":
                 result = {"tools": [{key: tool[key] for key in ("name", "description", "inputSchema")}
@@ -981,8 +1154,9 @@ def serve(session):
 
 def main():
     parser = argparse.ArgumentParser(description="MCP server for openblack's debug inspector")
-    parser.add_argument("--port", type=int, default=int(os.environ.get("OPENBLACK_INSPECT_PORT", DEFAULT_PORT)),
-                        help="The game talked to until inspector_connect chooses another (47800 by default)")
+    parser.add_argument("--port", type=int, default=None,
+                        help="The game talked to when no game keeps a discovery file (47800 by default, or "
+                             "OPENBLACK_INSPECT_PORT); with --call, the game asked")
     parser.add_argument("--worktree", help="Talk to the game running from this worktree (path or folder name)")
     parser.add_argument("--pid", type=int, help="Talk to the game of this process")
     parser.add_argument("--timeout", type=float, default=10.0, help="Seconds to wait for the game to answer")
@@ -991,12 +1165,15 @@ def main():
     parser.add_argument("request", nargs="?", default="{}", help="With --call: the rest of the request as JSON")
     args = parser.parse_args()
 
-    session = Session(args.port, args.timeout)
-    if args.worktree is not None or args.pid is not None:
-        chosen = session.connect(pid=args.pid, worktree=args.worktree)
-        if not chosen.get("ok"):
-            print(chosen.get("error"), file=sys.stderr)
-            return 1
+    default_port = args.port if args.port is not None else int(os.environ.get("OPENBLACK_INSPECT_PORT", DEFAULT_PORT))
+    session = Session(default_port, args.timeout)
+    # Chosen on the command line, the game is this caller's own: every call goes to it. As an MCP server shared by
+    # agents, --port only names the game of builds too old to keep a discovery file.
+    pinned = {key: value for key, value in (("worktree", args.worktree), ("pid", args.pid)) if value is not None}
+    if args.call and args.port is not None:
+        pinned["port"] = args.port
+    if pinned:
+        session.pinned = pinned
     if args.games:
         print(json.dumps(session.games(), indent=1))
         return 0
@@ -1004,12 +1181,16 @@ def main():
         request = json.loads(args.request)
         request["query"] = args.call
         try:
-            print(json.dumps(session.connection.request(request), indent=1))
+            answer = session.send(request)
         except ConnectionError as error:
             print(error, file=sys.stderr)
             return 1
-        return 0
-    serve(session)
+        print(json.dumps(answer, indent=1))
+        return 0 if answer.get("ok") else 1
+    try:
+        serve(session)
+    finally:
+        session.close()
     return 0
 
 

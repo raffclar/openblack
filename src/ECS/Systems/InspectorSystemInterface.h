@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <string_view>
+
 namespace openblack::ecs::systems
 {
 
@@ -27,6 +29,12 @@ public:
 	virtual void Service() = 0;
 	/// The port it listens on, on 127.0.0.1
 	[[nodiscard]] virtual uint16_t GetPort() const = 0;
+	/// The game is about to load something that takes long (a land, the testbed), during which it serves no frames:
+	/// meanwhile the inspector answers on its own, saying it is loading (game.state is not ready, other queries are
+	/// refused as loading), so tools wait rather than time out. Nested loads count as one.
+	virtual void BeginLoading(std::string_view what) = 0;
+	/// The load has finished: requests are answered by the game's frames again
+	virtual void EndLoading() = 0;
 };
 
 } // namespace openblack::ecs::systems

@@ -62,6 +62,22 @@ Json openblack::inspector::ToJson(const QueryDescription& description, std::stri
 	return result;
 }
 
+void Inspector::SetIdentity(Json identity)
+{
+	_identity = std::move(identity);
+	_tag = Json::object();
+	if (_identity.is_object())
+	{
+		for (const auto* key : {"pid", "port", "worktree"})
+		{
+			if (const auto found = _identity.find(key); found != _identity.end())
+			{
+				_tag[key] = *found;
+			}
+		}
+	}
+}
+
 void Inspector::Add(std::unique_ptr<ProviderInterface> provider)
 {
 	if (provider == nullptr)
@@ -141,6 +157,8 @@ QueryResult Inspector::Answer(const Request& request) const
 	{
 		Json answer = _identity.is_object() ? _identity : Json::object();
 		answer["pong"] = true;
+		// Answered here, the game is serving its frames; while it loads, the loading answer says otherwise
+		answer["ready"] = true;
 		return QueryResult::Value(std::move(answer));
 	}
 	if (request.query == "writes")
@@ -229,6 +247,7 @@ void Inspector::Remember(const Request& request, const QueryResult& answer) cons
 
 std::string Inspector::Handle(std::string_view line) const
 {
+	const Json extra = _tag.empty() ? Json::object() : Json {{"game", _tag}};
 	auto decoded = DecodeRequest(line);
 	if (auto* problem = std::get_if<std::string>(&decoded); problem != nullptr)
 	{
@@ -238,15 +257,43 @@ std::string Inspector::Handle(std::string_view line) const
 		{
 			id = (*parsed)["id"];
 		}
-		return EncodeError(id, *problem);
+		return EncodeError(id, *problem, extra);
 	}
 	const auto& request = std::get<Request>(decoded);
 	const auto answer = Answer(request);
 	if (!answer.Ok())
 	{
-		return EncodeError(request.id, answer.error);
+		return EncodeError(request.id, answer.error, extra);
 	}
-	return EncodeResult(request.id, answer.value);
+	return EncodeResult(request.id, answer.value, extra);
+}
+
+std::string Inspector::HandleWhileLoading(std::string_view line, std::string_view loading) const
+{
+	Json extra = _tag.empty() ? Json::object() : Json {{"game", _tag}};
+	extra["loading"] = loading;
+	auto decoded = DecodeRequest(line);
+	if (auto* problem = std::get_if<std::string>(&decoded); problem != nullptr)
+	{
+		return EncodeError(Json(), *problem, extra);
+	}
+	const auto& request = std::get<Request>(decoded);
+	if (request.query == "ping" || request.query == "describe")
+	{
+		auto answer = Answer(request);
+		if (request.query == "ping")
+		{
+			answer.value["ready"] = false;
+			answer.value["loading"] = loading;
+		}
+		return answer.Ok() ? EncodeResult(request.id, answer.value, extra) : EncodeError(request.id, answer.error, extra);
+	}
+	if (request.query == "game.state")
+	{
+		return EncodeResult(request.id, {{"ready", false}, {"loading", loading}}, extra);
+	}
+	return EncodeError(request.id, "the game is loading (" + std::string(loading) + "); ask again once game.state says ready",
+	                   extra);
 }
 
 bool Inspector::TakesControl(std::string_view line)

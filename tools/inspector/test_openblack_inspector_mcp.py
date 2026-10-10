@@ -7,7 +7,8 @@
 #
 # openblack is licensed under the GNU General Public License version 3.
 # ******************************************************************************
-"""Tests of the inspector adapter's choice of game, against fake games on loopback ports and fake discovery files"""
+"""Tests of the inspector adapter's choice of game, against fake games on loopback ports and fake discovery files,
+of this build's protocol and of older games' (which don't name themselves in answers nor say whether they are ready)"""
 
 import json
 import os
@@ -16,6 +17,7 @@ import socket
 import sys
 import tempfile
 import threading
+import time
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -25,11 +27,22 @@ import openblack_inspector_mcp as mcp  # noqa: E402
 
 class FakeGame:
     """A loopback server answering as a game's inspector does: ping with its identity, anything else with its name.
-    It counts the clients that sent something other than a ping, as the game's input lock does."""
+    It counts the clients that sent something other than a ping, as the game's input lock does.
 
-    def __init__(self, pid, name):
+    old: answers as a game built before answers named their game and before the ready state (no "game", no "ready").
+    loading: how many requests (other than pings) are answered "loading" first; pings say not ready meanwhile.
+    delay: seconds before each answer other than a ping, as an older game busy loading a land.
+    claims: the pid its answers name, when it isn't its own (a crossed answer)."""
+
+    def __init__(self, pid, name, old=False, loading=0, delay=0.0, claims=None, worktree=None):
         self.pid = pid
         self.name = name
+        self.old = old
+        self.loading = loading
+        self.delay = delay
+        self.claims = claims
+        self.worktree = worktree
+        self.requests = []
         self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.listener.bind(("127.0.0.1", 0))
         self.listener.listen(8)
@@ -47,6 +60,10 @@ class FakeGame:
         with self.lock:
             return len(self.controlling)
 
+    def asked(self):
+        with self.lock:
+            return list(self.requests)
+
     def _accept(self):
         while self.running:
             try:
@@ -54,6 +71,32 @@ class FakeGame:
             except OSError:
                 return
             threading.Thread(target=self._serve, args=(client,), daemon=True).start()
+
+    def _answer(self, client, request):
+        if request["query"] == "ping":
+            result = {"pong": True, "pid": self.pid, "port": self.port}
+            if self.worktree is not None:
+                result["worktree"] = self.worktree
+            if not self.old:
+                result["ready"] = self.loading == 0
+                if self.loading:
+                    result["loading"] = "Land1.txt"
+            answer = {"id": request.get("id"), "ok": True, "result": result}
+        else:
+            with self.lock:
+                self.controlling.add(id(client))
+                self.requests.append(request)
+            time.sleep(self.delay)
+            if self.loading > 0:
+                self.loading -= 1
+                answer = {"id": request.get("id"), "ok": False, "error": "the game is loading",
+                          "loading": "Land1.txt"}
+            else:
+                answer = {"id": request.get("id"), "ok": True, "result": {"who": self.name,
+                                                                           "query": request["query"]}}
+        if not self.old:
+            answer["game"] = {"pid": self.claims or self.pid, "port": self.port}
+        client.sendall((json.dumps(answer) + "\n").encode())
 
     def _serve(self, client):
         buffer = b""
@@ -68,15 +111,10 @@ class FakeGame:
                 buffer += chunk
                 while b"\n" in buffer:
                     line, buffer = buffer.split(b"\n", 1)
-                    request = json.loads(line)
-                    if request["query"] == "ping":
-                        result = {"pong": True, "pid": self.pid, "port": self.port}
-                    else:
-                        with self.lock:
-                            self.controlling.add(id(client))
-                        result = {"game": self.name, "query": request["query"]}
-                    answer = {"id": request.get("id"), "ok": True, "result": result}
-                    client.sendall((json.dumps(answer) + "\n").encode())
+                    try:
+                        self._answer(client, json.loads(line))
+                    except OSError:
+                        break
         with self.lock:
             self.controlling.discard(id(client))
 
@@ -85,6 +123,14 @@ def write_record(folder, pid, port, worktree, land="Land1"):
     with open(os.path.join(folder, f"{pid}.json"), "w", encoding="utf-8") as file:
         json.dump({"pid": pid, "port": port, "worktree": worktree, "executable": worktree + "/openblack.exe",
                    "build_type": "Debug", "land": land, "started": 1760000000}, file)
+
+
+def wait_for(condition, seconds=2.0):
+    deadline = time.monotonic() + seconds
+    while not condition():
+        if time.monotonic() > deadline:
+            raise AssertionError("timed out")
+        time.sleep(0.01)
 
 
 class ReadGamesTest(unittest.TestCase):
@@ -120,6 +166,7 @@ class ReadGamesTest(unittest.TestCase):
     def test_this_process_is_alive(self):
         self.assertTrue(mcp.pid_alive(os.getpid()))
         self.assertFalse(mcp.pid_alive(0))
+        self.assertFalse(mcp.pid_alive(None))
 
 
 class SelectGameTest(unittest.TestCase):
@@ -159,33 +206,58 @@ class SelectGameTest(unittest.TestCase):
         self.assertIn("running: none", error)
 
 
-class SessionTest(unittest.TestCase):
+class SessionBase(unittest.TestCase):
+    """Two games, from two worktrees; old=True makes them answer as games built before this adapter"""
+    old = False
+
     def setUp(self):
         self.folder = tempfile.mkdtemp(prefix="openblack-inspector-mcp-test-")
-        self.first = FakeGame(1001, "first")
-        self.second = FakeGame(1002, "second")
+        self.first = FakeGame(1001, "first", old=self.old)
+        self.second = FakeGame(1002, "second", old=self.old)
+        self.games = [self.first, self.second]
         write_record(self.folder, 1001, self.first.port, "C:/projects/ob-wt-first")
         write_record(self.folder, 1002, self.second.port, "C:/projects/ob-wt-second", land="Land2")
         self.running = {1001, 1002}
-        self.session = mcp.Session(self.first.port, 5.0, folder=self.folder, alive=lambda pid: pid in self.running)
+        self.session = self.make_session()
+
+    def make_session(self, **options):
+        options.setdefault("ready_timeout", 2.0)
+        options.setdefault("load_timeout", 3.0)
+        return mcp.Session(self.first.port, 1.0, folder=self.folder, alive=lambda pid: pid in self.running,
+                           ping_timeout=0.5, **options)
 
     def tearDown(self):
-        self.session.connection.close()
-        self.first.close()
-        self.second.close()
+        self.session.close()
+        for game in self.games:
+            game.close()
         shutil.rmtree(self.folder, ignore_errors=True)
+
+    def add_game(self, game, worktree):
+        self.games.append(game)
+        write_record(self.folder, game.pid, game.port, worktree)
+        self.running.add(game.pid)
+        return game
+
+    def stop(self, game):
+        self.running.discard(game.pid)
+        game.close()
 
     def moon(self, **arguments):
         answer = self.session.call("game_moon", arguments)
         self.assertTrue(answer["ok"], answer)
-        return answer["result"]["game"]
+        return answer["result"]["who"]
+
+
+class SessionTest(SessionBase):
+    """The rules every call follows, so that agents sharing the adapter never get each other's game"""
 
     def test_lists_games_without_taking_control(self):
         answer = self.session.call("inspector_games", {})
         games = answer["result"]["games"]
         self.assertEqual([game["pid"] for game in games], [1001, 1002])
         self.assertTrue(all(game["responding"] for game in games))
-        self.assertEqual([game["connected"] for game in games], [True, False])
+        self.assertTrue(all(game["ready"] for game in games))
+        self.assertEqual([game["connected"] for game in games], [False, False])
         self.assertEqual(games[1]["land"], "Land2")
         self.assertEqual(self.first.controlling_clients(), 0)
         self.assertEqual(self.second.controlling_clients(), 0)
@@ -196,76 +268,188 @@ class SessionTest(unittest.TestCase):
         self.assertEqual([game["pid"] for game in games], [1001])
         self.assertFalse(os.path.exists(os.path.join(self.folder, "1002.json")))
 
-    def test_the_default_port_is_talked_to_first(self):
-        self.assertEqual(self.moon(), "first")
+    def test_several_running_and_none_named_is_refused_with_the_list(self):
+        answer = self.session.call("game_moon", {})
+        self.assertFalse(answer["ok"])
+        self.assertIn("2 games are running", answer["error"])
+        self.assertIn("pid 1001", answer["error"])
+        self.assertIn("pid 1002", answer["error"])
+        # Nothing was sent to either
+        self.assertEqual(self.first.asked(), [])
+        self.assertEqual(self.second.asked(), [])
 
-    def test_connecting_switches_the_game_and_the_lock_follows(self):
-        self.assertEqual(self.moon(), "first")
-        self.assertEqual(self.first.controlling_clients(), 1)
-
+    def test_connecting_doesnt_choose_for_calls_while_several_run(self):
         connected = self.session.call("inspector_connect", {"worktree": "ob-wt-second"})
         self.assertTrue(connected["ok"], connected)
         self.assertEqual(connected["result"]["connected"]["pid"], 1002)
-        self.assertEqual(self.moon(), "second")
-        self.assertEqual(self.second.controlling_clients(), 1)
-        # The first game's connection was closed as the session moved on
-        self.wait_for(lambda: self.first.controlling_clients() == 0)
+        self.assertIn("every call must still name its game", connected["result"]["note"])
+        self.assertFalse(self.session.call("game_moon", {})["ok"])
 
-        self.assertTrue(self.session.call("inspector_connect", {"pid": 1001})["ok"])
+    def test_each_call_goes_to_the_game_it_names(self):
+        self.assertEqual(self.moon(worktree="ob-wt-first"), "first")
+        self.assertEqual(self.moon(pid=1002), "second")
+        self.assertEqual(self.moon(port=self.first.port), "first")
+        self.assertEqual(self.moon(worktree="C:/projects/ob-wt-second/src"), "second")
+        self.assertEqual(len(self.first.asked()), 2)
+        self.assertEqual(len(self.second.asked()), 2)
+
+    def test_two_agents_interleaved_never_cross(self):
+        # Two agents share the session, each naming its own game, their calls interleaved
+        for _ in range(5):
+            self.assertEqual(self.moon(pid=1001), "first")
+            self.session.call("inspector_connect", {"pid": 1002})
+            self.assertEqual(self.moon(pid=1002), "second")
+            self.session.call("inspector_connect", {"pid": 1001})
+        self.assertEqual(len(self.first.asked()), 5)
+        self.assertEqual(len(self.second.asked()), 5)
+
+    def test_the_only_game_running_needs_no_name(self):
+        self.stop(self.second)
         self.assertEqual(self.moon(), "first")
-        self.wait_for(lambda: self.second.controlling_clients() == 0)
 
-    def test_a_port_sends_one_call_elsewhere(self):
-        self.assertEqual(self.moon(port=self.second.port), "second")
-        self.assertEqual(self.moon(), "first")
-        # The one-off connection is closed after its call
-        self.wait_for(lambda: self.second.controlling_clients() == 0)
+    def test_every_answer_names_its_game(self):
+        answer = self.session.call("game_moon", {"pid": 1002})
+        self.assertEqual(answer["game"]["pid"], 1002)
+        self.assertEqual(answer["game"]["port"], self.second.port)
+        content = json.loads(mcp.tool_result(answer)["content"][0]["text"])
+        self.assertEqual(content["game"]["pid"], 1002)
+        self.assertEqual(content["result"]["who"], "second")
+        failed = mcp.tool_result({"ok": False, "error": "no", "game": {"pid": 1002}})
+        self.assertTrue(failed["isError"])
+        self.assertIn('"pid":1002', failed["content"][0]["text"])
 
-    def test_connecting_to_nothing_running_fails_and_keeps_the_game(self):
-        answer = self.session.call("inspector_connect", {"worktree": "ob-wt-none"})
+    def test_a_connection_stays_open_and_keeps_its_game_locked(self):
+        self.moon(pid=1001)
+        self.moon(pid=1001)
+        self.assertEqual(self.first.controlling_clients(), 1)
+        self.assertEqual(self.second.controlling_clients(), 0)
+
+    def test_a_named_game_not_running_is_refused(self):
+        answer = self.session.call("game_moon", {"worktree": "ob-wt-none"})
         self.assertFalse(answer["ok"])
         self.assertIn("no running game", answer["error"])
-        self.assertEqual(self.moon(), "first")
 
-    def test_connecting_with_nothing_goes_back_to_the_default(self):
-        self.session.call("inspector_connect", {"pid": 1002})
-        self.assertEqual(self.moon(), "second")
-        answer = self.session.call("inspector_connect", {})
-        self.assertTrue(answer["result"]["default"])
-        self.assertEqual(self.moon(), "first")
-
-    def test_by_worktree_a_restarted_game_is_found_on_its_new_port(self):
-        self.session.call("inspector_connect", {"worktree": "ob-wt-second"})
-        self.assertEqual(self.moon(), "second")
-        self.second.close()
+    def test_a_game_restarted_on_another_port_is_found_by_worktree(self):
+        self.assertEqual(self.moon(worktree="ob-wt-second"), "second")
+        self.stop(self.second)
         os.remove(os.path.join(self.folder, "1002.json"))
-        restarted = FakeGame(1003, "second again")
-        try:
-            write_record(self.folder, 1003, restarted.port, "C:/projects/ob-wt-second")
-            self.running.add(1003)
-            self.session.connection.close()
-            self.assertEqual(self.moon(), "second again")
-        finally:
-            self.session.connection.close()
-            restarted.close()
+        self.add_game(FakeGame(1003, "second again", old=self.old), "C:/projects/ob-wt-second")
+        self.assertEqual(self.moon(worktree="ob-wt-second"), "second again")
 
-    def test_tools_offer_a_port_and_the_game_tools(self):
+    def test_a_port_now_answered_by_another_game_is_refused(self):
+        # The file says pid 1002 is on this port, but another process answers it
+        impostor = FakeGame(1999, "impostor", old=self.old)
+        self.games.append(impostor)
+        write_record(self.folder, 1002, impostor.port, "C:/projects/ob-wt-second")
+        answer_or_error = None
+        try:
+            answer_or_error = self.session.call("game_moon", {"pid": 1002})
+        except ConnectionError as error:
+            answer_or_error = str(error)
+        self.assertIn("pid 1999", str(answer_or_error))
+        self.assertEqual(impostor.asked(), [])
+
+    def test_tools_take_a_game_and_the_game_tools_come_first(self):
         names = [tool["name"] for tool in mcp.GAME_TOOLS]
         self.assertEqual(names, ["inspector_games", "inspector_connect"])
         for tool in mcp.TOOLS:
-            self.assertIn("port", tool["inputSchema"]["properties"], tool["name"])
-        # The shaping options shared between tools were not given the port
-        self.assertNotIn("port", mcp.SHAPING)
-        self.assertNotIn("port", mcp.SHAPING_KEYS)
+            for key in ("port", "pid", "worktree"):
+                self.assertIn(key, tool["inputSchema"]["properties"], tool["name"])
+        # The shaping options shared between tools were not given the selector
+        for key in ("port", "pid", "worktree"):
+            self.assertNotIn(key, mcp.SHAPING)
+            self.assertNotIn(key, mcp.SHAPING_KEYS)
 
-    @staticmethod
-    def wait_for(condition, seconds=2.0):
-        import time
-        deadline = time.monotonic() + seconds
-        while not condition():
-            if time.monotonic() > deadline:
-                raise AssertionError("timed out")
-            time.sleep(0.01)
+    def test_a_game_pinned_on_the_command_line_is_always_followed(self):
+        self.session.pinned = {"worktree": "ob-wt-second"}
+        self.assertEqual(self.moon(), "second")
+        self.assertEqual(self.moon(pid=1001), "first")
+
+
+class OldGameSessionTest(SessionTest):
+    """The same rules hold with games built before answers named their game, as the adapter names them itself"""
+    old = True
+
+    def test_an_old_game_is_named_by_the_adapter(self):
+        answer = self.session.call("game_moon", {"pid": 1001})
+        self.assertEqual(answer["game"], {"pid": 1001, "port": self.first.port, "worktree": "C:/projects/ob-wt-first"})
+
+
+class WaitingTest(SessionBase):
+    """Loading, starting and crossed games"""
+
+    def test_a_loading_game_is_asked_again_until_it_has_loaded(self):
+        self.stop(self.second)
+        self.first.loading = 3
+        self.assertEqual(self.moon(), "first")
+        self.assertEqual(len(self.first.asked()), 4)
+
+    def test_a_game_loading_too_long_says_so(self):
+        self.stop(self.second)
+        self.first.loading = 1000
+        answer = self.session.call("game_moon", {})
+        self.assertFalse(answer["ok"])
+        self.assertIn("still loading Land1.txt", answer["error"])
+
+    def test_an_old_game_busy_loading_is_waited_for_while_it_runs(self):
+        self.stop(self.second)
+        self.first.old = True
+        self.first.delay = 1.5
+        # Longer than the answer timeout (1 s), but the process runs: the answer is waited for
+        self.assertEqual(self.moon(), "first")
+
+    def test_an_old_game_that_has_gone_isnt_waited_for(self):
+        self.stop(self.second)
+        self.first.old = True
+        self.first.delay = 2.5
+        self.running.discard(1001)
+        write_record(self.folder, 1001, self.first.port, "C:/projects/ob-wt-first")
+        # Its file is gone with its process; the default port is the first game's
+        start = time.monotonic()
+        with self.assertRaises(ConnectionError):
+            self.session.call("game_moon", {"port": self.first.port})
+        self.assertLess(time.monotonic() - start, 2.0)
+
+    def test_an_answer_from_another_game_is_refused(self):
+        self.second.claims = 1001
+        with self.assertRaises(ConnectionError) as raised:
+            self.session.call("game_moon", {"pid": 1002})
+        self.assertIn("another game", str(raised.exception))
+
+    def test_connect_waits_for_a_loading_game_to_be_ready(self):
+        self.second.loading = 2
+
+        def loaded():
+            time.sleep(0.6)
+            self.second.loading = 0
+
+        threading.Thread(target=loaded, daemon=True).start()
+        connected = self.session.call("inspector_connect", {"pid": 1002})
+        self.assertTrue(connected["ok"], connected)
+        self.assertEqual(connected["game"]["pid"], 1002)
+
+    def test_connect_refuses_a_game_never_ready(self):
+        self.second.loading = 1000
+        answer = self.session.call("inspector_connect", {"pid": 1002})
+        self.assertFalse(answer["ok"])
+        self.assertIn("is loading Land1.txt", answer["error"])
+
+    def test_connect_waits_for_a_game_just_started(self):
+        late = FakeGame(1004, "late")
+        self.games.append(late)
+
+        def start():
+            time.sleep(0.5)
+            self.add_game(late, "C:/projects/ob-wt-late")
+
+        threading.Thread(target=start, daemon=True).start()
+        connected = self.session.call("inspector_connect", {"worktree": "ob-wt-late"})
+        self.assertTrue(connected["ok"], connected)
+
+    def test_a_step_reports_once_run(self):
+        self.stop(self.second)
+        answer = self.session.call("game_step", {"frames": 2})
+        self.assertTrue(answer["ok"])
 
 
 if __name__ == "__main__":

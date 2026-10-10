@@ -40,8 +40,12 @@ public:
 	static constexpr size_t k_RememberedWrites = 50;
 
 	void SetWriteLog(WriteLog log) { _writeLog = std::move(log); }
-	/// What "ping" answers beside pong: the game's port, process and the like, for tools telling games apart
-	void SetIdentity(Json identity) { _identity = std::move(identity); }
+	/// What "ping" answers beside pong: the game's port, process and the like, for tools telling games apart. Every
+	/// answer also names the game it came from ("game": its pid, port and worktree), so that a tool talking to several
+	/// games can tell when an answer isn't from the one it meant.
+	void SetIdentity(Json identity);
+	/// The members of the identity every answer carries as "game"
+	[[nodiscard]] const Json& Tag() const { return _tag; }
 
 	/// Whether a request's line takes control of the game: everything but a ping does, so that tools can look for
 	/// running games without keeping their players out
@@ -56,6 +60,11 @@ public:
 	[[nodiscard]] QueryResult Answer(const Request& request) const;
 	/// The answer's line to a request's line, as the server passes them
 	[[nodiscard]] std::string Handle(std::string_view line) const;
+	/// The answer's line while the game is loading (a land, a scenario) and can't answer for its state: "ping" and
+	/// "describe" are answered as ever, "game.state" says it isn't ready and what is loading, and everything else is
+	/// refused with "loading": true beside the error, so that tools wait and ask again. Reads nothing of the game, so
+	/// it may run on another thread than the game's while the game is busy loading.
+	[[nodiscard]] std::string HandleWhileLoading(std::string_view line, std::string_view loading) const;
 
 private:
 	[[nodiscard]] QueryResult Describe(const Json& params) const;
@@ -65,6 +74,8 @@ private:
 	std::vector<std::unique_ptr<ProviderInterface>> _providers;
 	WriteLog _writeLog;
 	Json _identity = Json::object();
+	/// The identity's pid, port and worktree, put in every answer
+	Json _tag = Json::object();
 	/// Kept as requests are answered, which reading the game's state doesn't change
 	mutable std::deque<Json> _writes;
 };

@@ -169,7 +169,58 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
 	}
 }
 
-InspectorSystem::~InspectorSystem() = default;
+InspectorSystem::~InspectorSystem()
+{
+	_stopLoadingHelper = true;
+	if (_loadingHelper.joinable())
+	{
+		_loadingHelper.join();
+	}
+}
+
+void InspectorSystem::BeginLoading(std::string_view what)
+{
+	if (_loadingDepth++ > 0)
+	{
+		return;
+	}
+	{
+		const std::scoped_lock lock(_loadingMutex);
+		_loading = what;
+	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Inspector: answering as loading {}", what);
+	_stopLoadingHelper = false;
+	_loadingHelper = std::thread([this] { AnswerWhileLoading(); });
+}
+
+void InspectorSystem::EndLoading()
+{
+	if (_loadingDepth == 0 || --_loadingDepth > 0)
+	{
+		return;
+	}
+	_stopLoadingHelper = true;
+	if (_loadingHelper.joinable())
+	{
+		_loadingHelper.join();
+	}
+}
+
+void InspectorSystem::AnswerWhileLoading()
+{
+	constexpr auto k_Interval = std::chrono::milliseconds(20);
+	while (!_stopLoadingHelper)
+	{
+		std::string loading;
+		{
+			const std::scoped_lock lock(_loadingMutex);
+			loading = _loading;
+		}
+		// Only what reads nothing of the game is answered here; the game's own frames answer the rest once loaded
+		_server->Poll([this, &loading](std::string_view line) { return _inspector.HandleWhileLoading(line, loading); });
+		std::this_thread::sleep_for(k_Interval);
+	}
+}
 
 void InspectorSystem::Service()
 {
@@ -177,6 +228,7 @@ void InspectorSystem::Service()
 	const auto now = std::chrono::steady_clock::now();
 	const auto seconds = std::chrono::duration<float>(now - _lastService).count();
 	_lastService = now;
+	// A request answered here may load a land, while the loading helper answers the others
 	_server->Poll([this](std::string_view line) {
 		auto answer = _inspector.Handle(line);
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Inspector: {} -> {} bytes", line, answer.size());

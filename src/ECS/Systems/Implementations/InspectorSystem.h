@@ -11,8 +11,12 @@
 
 #include <cstdint>
 
+#include <atomic>
 #include <chrono>
 #include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
 
 #include <Inspector.h>
 #include <InspectorDiscovery.h>
@@ -51,8 +55,13 @@ public:
 
 	void Service() override;
 	[[nodiscard]] uint16_t GetPort() const override;
+	void BeginLoading(std::string_view what) override;
+	void EndLoading() override;
 
 private:
+	/// The helper answering while the game loads: until told to stop
+	void AnswerWhileLoading();
+
 	std::unique_ptr<inspector::Server> _server;
 	/// The components' reflection, the inspector's own rather than the library's shared one
 	std::unique_ptr<entt::meta_ctx> _reflection;
@@ -72,6 +81,12 @@ private:
 	std::unique_ptr<inspector::discovery::DiscoveryFile> _discovery;
 	/// When it last served requests, for how long the input lock lingers after a client goes
 	std::chrono::steady_clock::time_point _lastService {std::chrono::steady_clock::now()};
+	/// How many loads are under way, what the outermost is loading, and the helper answering meanwhile
+	int _loadingDepth {0};
+	std::string _loading;
+	std::mutex _loadingMutex;
+	std::atomic<bool> _stopLoadingHelper {false};
+	std::thread _loadingHelper;
 };
 
 } // namespace openblack::ecs::systems
