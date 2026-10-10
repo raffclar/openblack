@@ -156,6 +156,32 @@ TEST(DialogueText, WaitsForAClick)
 	EXPECT_EQ(f.interrupts, 0);
 }
 
+TEST(DialogueText, TheContinueCueFadesInWhileTheTextWaits)
+{
+	Fixture f;
+	f.texts[10] = {.text = u"click me"};
+	f.texts[11] = {.text = u"no click"};
+	auto dialogue = f.Make();
+	// Nothing waits: no cue
+	dialogue.RunText(false, 11, 0);
+	dialogue.AdvanceClickCue(0.5f);
+	EXPECT_FALSE(dialogue.GetClickCueShare().has_value());
+	// It fades in over a second of real time
+	dialogue.RunText(false, 10, 1);
+	EXPECT_FLOAT_EQ(dialogue.GetClickCueShare().value_or(-1.0f), 0.0f);
+	dialogue.AdvanceClickCue(0.25f);
+	EXPECT_FLOAT_EQ(dialogue.GetClickCueShare().value_or(-1.0f), 0.25f);
+	dialogue.AdvanceClickCue(2.0f);
+	EXPECT_FLOAT_EQ(dialogue.GetClickCueShare().value_or(-1.0f), 1.0f);
+	// The next waiting text starts it again
+	dialogue.RunText(false, 10, 1);
+	EXPECT_FLOAT_EQ(dialogue.GetClickCueShare().value_or(-1.0f), 0.0f);
+	// The click takes it away at once
+	f.turn += 1000;
+	dialogue.ProcessClick(true, false);
+	EXPECT_FALSE(dialogue.GetClickCueShare().has_value());
+}
+
 TEST(DialogueText, AClickTooSoonDoesNothing)
 {
 	Fixture f;

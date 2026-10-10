@@ -63,9 +63,9 @@ void ScriptHighlightSystem::OnHighlightGone(entt::registry& registry, entt::enti
 			_world->DeleteEffect(effect);
 		}
 	}
-	if (_tipShownBy == entity)
+	if (_world->TipShown() == entity)
 	{
-		_tipShownBy = entt::null;
+		_world->HideTip();
 	}
 }
 
@@ -198,9 +198,8 @@ bool ScriptHighlightSystem::Tap(entt::entity entity, bool byThisPlayer)
 	{
 		// The bubble shows the sign's tip, or, tapped again, shows none. The first tip the player ever reads has the
 		// advisors explain the signs.
-		if (_tipShownBy == entity)
+		if (_world->TipShown() == entity)
 		{
-			_tipShownBy = entt::null;
 			_world->HideTip();
 		}
 		else
@@ -210,7 +209,6 @@ bool ScriptHighlightSystem::Tap(entt::entity entity, bool byThisPlayer)
 				_world->StartHelpScript(rules::k_FirstTipScript);
 			}
 			_tipsRead.Add(highlight->scriptId, highlight->category);
-			_tipShownBy = entity;
 			_world->ShowTip(entity, highlight->scriptId, highlight->category);
 		}
 	}
@@ -411,5 +409,4 @@ void ScriptHighlightSystem::RemoveLoneGlows()
 void ScriptHighlightSystem::Reset()
 {
 	_pulse = {};
-	_tipShownBy = entt::null;
 }

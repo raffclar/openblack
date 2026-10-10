@@ -1290,6 +1290,12 @@
   "query": "help.profile"
  },
  {
+  "description": "The tip bubble over the \"did you know\" sign tapped last: the sign, its tip, whether it is up, its time to show, the point it points at and its scroll",
+  "kind": "object",
+  "parameters": [],
+  "query": "help.bubble"
+ },
+ {
   "description": "Whether the game is paused, its turn, the frames served, its speed and any stepping",
   "kind": "object",
   "parameters": [],

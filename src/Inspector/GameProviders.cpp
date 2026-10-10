@@ -151,6 +151,7 @@
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/TornadoSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
@@ -306,6 +307,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"advisorSystem", "help.advisors"},
     LocatorCoverage {"helpTextSystem", "help.dialogue"},
     LocatorCoverage {"helpProfileSystem", "help.profile"},
+    LocatorCoverage {"tipBubbleSystem", "help.bubble"},
     LocatorCoverage {"helpSpeechSystem", "help.dialogue"},
     LocatorCoverage {"dialogueControlSystem", "help.dialogue"},
 };
@@ -2024,6 +2026,25 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 			                         {"smoothed_rate", count.SmoothedRate()}});
 		        }
 		        return items;
+	        }));
+	provider->Add(
+	    Query("bubble", "The tip bubble over the \"did you know\" sign tapped last: the sign, its tip, whether it is up, "
+	                    "its time to show, the point it points at and its scroll"),
+	    Serve<Locator::tipBubbleSystem>(
+	        "the tip bubble", [](const ecs::systems::TipBubbleSystemInterface& bubble, const QueryContext& /*c*/) -> Json {
+		        const auto& scroll = bubble.GetScroll();
+		        const auto anchor = bubble.GetAnchor();
+		        return Json {
+		            {"sign", bubble.GetSign() == entt::null ? Json(nullptr) : Json(entt::to_integral(bubble.GetSign()))},
+		            {"text", bubble.GetText()},
+		            {"up", bubble.IsUp()},
+		            {"display_time", bubble.GetDisplayTime()},
+		            {"anchor", anchor.has_value() ? Point(*anchor) : Json(nullptr)},
+		            {"scroll_lines", scroll.lines},
+		            {"content_height", scroll.contentHeight},
+		            {"line_height", scroll.lineHeight},
+		            {"more_above", scroll.moreAbove},
+		            {"more_below", scroll.moreBelow}};
 	        }));
 	return provider;
 }

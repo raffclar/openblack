@@ -181,6 +181,7 @@
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/TornadoSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
@@ -1223,10 +1224,14 @@ bool Game::GameLogicLoop() noexcept
 	{
 		Locator::scriptHighlightSystem::value().ProcessTurn();
 	}
-	// The help's count of what the player has done moves on a turn
+	// The help's count of what the player has done moves on a turn, and its tip bubble stays while its sign shows
 	if (Locator::helpProfileSystem::has_value())
 	{
 		Locator::helpProfileSystem::value().ProcessTurn();
+	}
+	if (Locator::tipBubbleSystem::has_value())
+	{
+		Locator::tipBubbleSystem::value().ProcessTurn();
 	}
 	// Then the physics, after the living, the fires, the reactions, the miracles and the particles have had their turn,
 	// so a body any of them sets moving this turn flies this turn: what was thrown, dropped, knocked or pushed flies,
@@ -1726,6 +1731,8 @@ bool Game::Update() noexcept
 		});
 		_dialogueClick = false;
 	}
+	// The tip bubble's time to show runs down by the game's time while it is up
+	Locator::tipBubbleSystem::value().UpdateFrame(static_cast<float>(clock.GetFrameGameTime().count()));
 	// The cinema bars coming in hide the game's dialogs
 	if (Locator::cinematicDirectorSystem::value().TakeHideDialogs() && _interface && _interface->GetMenu().IsOpen())
 	{
@@ -3507,6 +3514,7 @@ void Game::PrepareNewLand()
 	Locator::fireSystem::value().Reset();
 	// Nor the beat of its scrolls
 	Locator::scriptHighlightSystem::value().Reset();
+	Locator::tipBubbleSystem::value().Reset();
 	Locator::creatureFightSystem::value().Reset();
 	Locator::explosionSystem::value().Reset();
 	Locator::magicSystem::value().SetIgnoreInfluence(false);

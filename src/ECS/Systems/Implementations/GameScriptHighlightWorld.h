@@ -43,6 +43,7 @@ public:
 	void StartHelpScript(std::string_view name) override;
 	void ShowTip(entt::entity sign, uint32_t text, uint32_t category) override;
 	void HideTip() override;
+	[[nodiscard]] entt::entity TipShown() const override;
 	void ReplayChallenge(uint32_t challenge) override;
 };
 

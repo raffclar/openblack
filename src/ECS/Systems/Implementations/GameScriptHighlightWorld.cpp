@@ -31,6 +31,7 @@
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "Graphics/Texture2D.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -248,14 +249,25 @@ void GameScriptHighlightWorld::StartHelpScript(std::string_view name)
 	}
 }
 
-void GameScriptHighlightWorld::ShowTip(entt::entity /*sign*/, uint32_t /*text*/, uint32_t /*category*/)
+void GameScriptHighlightWorld::ShowTip(entt::entity sign, uint32_t text, uint32_t /*category*/)
 {
-	// TODO(script-natives): the help system's bubble, which shows a sign's tip, isn't in openblack yet
+	if (Locator::tipBubbleSystem::has_value())
+	{
+		Locator::tipBubbleSystem::value().Show(sign, text);
+	}
 }
 
 void GameScriptHighlightWorld::HideTip()
 {
-	// TODO(script-natives): the help system's bubble isn't in openblack yet
+	if (Locator::tipBubbleSystem::has_value())
+	{
+		Locator::tipBubbleSystem::value().Hide();
+	}
+}
+
+entt::entity GameScriptHighlightWorld::TipShown() const
+{
+	return Locator::tipBubbleSystem::has_value() ? Locator::tipBubbleSystem::value().GetSign() : entt::null;
 }
 
 void GameScriptHighlightWorld::ReplayChallenge(uint32_t /*challenge*/)

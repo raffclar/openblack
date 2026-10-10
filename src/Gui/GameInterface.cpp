@@ -26,16 +26,22 @@
 
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
+#include "Camera/Camera.h"
+#include "Common/MachineClock.h"
 #include "Creature/CreatureSkin.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
+#include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/VideoOverlay.h"
 #include "Gui/CinemaBars.h"
+#include "Help/ClickCue.h"
+#include "Help/DialogueText.h"
 #include "Help/HelpTextDisplay.h"
+#include "Help/TipBubble.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -219,6 +225,8 @@ std::unique_ptr<GameInterface> GameInterface::Create(std::u16string_view playerN
 		auto texture = MakeFontTexture(*evil, k_EvilAdvisorFont);
 		created->_evilAdvisorFont = FontFace {.font = std::move(*evil), .texture = std::move(texture)};
 	}
+	// The tip bubble's box and tail
+	created->_gatheringText = LoadTexture("gatheringtext");
 	return created;
 }
 
@@ -454,6 +462,8 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	_canvas.Begin(resolution);
 	_pointerCanvas.Begin(resolution);
 	_painter.Begin(resolution);
+	// The tip bubble is part of the world's picture: under the interface, the cinema bars and the fades
+	DrawTipBubble(resolution, mouse);
 	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen();
 	if (_message.has_value())
 	{
@@ -552,14 +562,14 @@ void GameInterface::DrawVideo(glm::u16vec2 resolution)
 
 void GameInterface::DrawGlow(glm::vec2 min, glm::vec2 max, glm::vec4 colour)
 {
-	// A ninth of the glow at each corner, a quarter of the box's height square, outside the box
+	// A ninth of the glow at each corner, a square of half the box's height (in whole pixels) about each of its corners
 	if (_atmos == nullptr || colour.a <= 0.0f)
 	{
 		return;
 	}
-	const float corner = (max.y - min.y) * 0.25f;
-	const std::array x = {min.x - corner, min.x, max.x, max.x + corner};
-	const std::array y = {min.y - corner, min.y, max.y, max.y + corner};
+	const auto corner = static_cast<float>((static_cast<int>(max.y) - static_cast<int>(min.y)) / 4);
+	const std::array x = {min.x - corner, min.x + corner, max.x - corner, max.x + corner};
+	const std::array y = {min.y - corner, min.y + corner, max.y - corner, max.y + corner};
 	_canvas.SetBlend(Canvas::Blend::Additive);
 	for (size_t row = 0; row < 3; ++row)
 	{
@@ -614,10 +624,200 @@ void GameInterface::DrawDialogue(glm::u16vec2 resolution, int barPixels)
 		                 {static_cast<float>(box.right + 1), static_cast<float>(box.bottom + 1)}, glm::vec2(0.0f),
 		                 glm::vec2(1.0f), colour, nullptr);
 	}
+	// Over the box and under the words, the "Continue" cue while the text waits for a click, whether or not the texts
+	// are drawn
+	if (const auto* dialogue = Locator::helpTextSystem::value().GetDialogue(); dialogue != nullptr)
+	{
+		if (const auto share = dialogue->GetClickCueShare(); share.has_value())
+		{
+			DrawClickCue(resolution, frame->box, *share);
+		}
+	}
 	for (const auto& run : frame->runs)
 	{
 		DrawDialogueRun(run);
 	}
+}
+
+void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
+{
+	namespace tip = help::tip_bubble;
+	if (!Locator::tipBubbleSystem::has_value() || !Locator::camera::has_value() || _gatheringText == nullptr)
+	{
+		return;
+	}
+	auto& bubble = Locator::tipBubbleSystem::value();
+	const auto anchor = bubble.GetAnchor();
+	if (!bubble.IsUp() || !anchor.has_value() || bubble.GetDisplayTime() <= 0.0f)
+	{
+		return;
+	}
+	const auto clip = Locator::camera::value().GetViewProjectionMatrix() * glm::vec4(*anchor, 1.0f);
+	if (clip.w <= 0.0f)
+	{
+		return;
+	}
+	const auto screen = glm::vec2(resolution);
+	const glm::vec2 pixel {(clip.x / clip.w + 1.0f) * screen.x * 0.5f, (1.0f - clip.y / clip.w) * screen.y * 0.5f};
+	const auto placement = tip::Place(pixel, clip.w, screen.x);
+	if (!placement.has_value())
+	{
+		return;
+	}
+	auto& scroll = bubble.GetScroll();
+	tip::ClampScroll(scroll, *placement);
+	const float alpha = std::min(bubble.GetDisplayTime(), 1.0f) * placement->distanceAlpha;
+	// The pointer over the bubble keeps it showing
+	const auto pointer = glm::vec2(mouse);
+	if (pointer.x > placement->min.x && pointer.x < placement->max.x && pointer.y > placement->min.y &&
+	    pointer.y < placement->max.y)
+	{
+		bubble.Hover();
+	}
+	if (alpha <= 0.0f)
+	{
+		return;
+	}
+
+	// The box and its tail
+	for (const auto& quad : tip::BoxShape(*placement, alpha))
+	{
+		std::array<glm::vec2, 4> corners {};
+		std::array<glm::vec2, 4> uvs {};
+		std::array<glm::vec4, 4> colours {};
+		for (size_t i = 0; i < quad.size(); ++i)
+		{
+			corners.at(i) = quad.at(i).position;
+			uvs.at(i) = quad.at(i).uv;
+			colours.at(i) = glm::vec4(tip::k_BoxColour, quad.at(i).alpha);
+		}
+		_canvas.DrawShape(corners, uvs, colours, _gatheringText.get());
+	}
+	// The arrows, blinking, when there is more to read
+	if (_atmos != nullptr && tip::ArrowsLit(machine_clock::Ticks()))
+	{
+		for (const auto& [shown, arrow] :
+		     {std::pair {scroll.moreAbove, tip::UpArrow(*placement)}, std::pair {scroll.moreBelow, tip::DownArrow(*placement)}})
+		{
+			if (shown)
+			{
+				_canvas.DrawQuad(arrow.min, arrow.max, arrow.uvMin, arrow.uvMax, tip::k_ArrowColour, _atmos.get());
+			}
+		}
+	}
+	// The words: the tip at the bottom, a blank line and the title on top
+	const auto& tipText = _texts.GetHelpText(bubble.GetText()).text;
+	const auto& title = _texts.GetHelpText(tip::k_TitleText).text;
+	const std::array<std::u16string_view, 3> items {tipText, u" ", title};
+	const tip::WidthFn measure = [this](std::u16string_view text, float size) { return BubbleTextWidth(text, size); };
+	const tip::WrapFn wrap = [&measure](std::u16string_view text, float width, float size) {
+		return tip::Wrap(text, width, size, measure);
+	};
+	const auto words = tip::LayOutWords(*placement, items, scroll.Pixels(), alpha, wrap, measure);
+	scroll.contentHeight = words.contentHeight;
+	scroll.lineHeight = placement->sizes.lineHeight;
+	for (const auto& line : words.shadows)
+	{
+		DrawBubbleLine(line, glm::vec3(0.0f));
+	}
+	for (const auto& line : words.lines)
+	{
+		DrawBubbleLine(line, glm::vec3(1.0f));
+	}
+}
+
+float GameInterface::BubbleTextWidth(std::u16string_view text, float size) const
+{
+	// Every character's advance, the line breaks' too; the blank that adds no space has none; a missing one is a '?'
+	constexpr char16_t k_Tilde = 0xF8FE;
+	const float scale = size / static_cast<float>(_font.GetHeight());
+	float width = 0.0f;
+	for (const auto c : text)
+	{
+		if (c == k_Tilde)
+		{
+			continue;
+		}
+		const auto* glyph = _font.Find(c);
+		if (glyph == nullptr)
+		{
+			glyph = _font.Find(u'?');
+		}
+		if (glyph != nullptr)
+		{
+			width += (glyph->left + glyph->ink + glyph->right) * scale;
+		}
+	}
+	return width;
+}
+
+void GameInterface::DrawBubbleLine(const help::tip_bubble::Line& line, glm::vec3 colour)
+{
+	const float scale = line.size / static_cast<float>(_font.GetHeight());
+	const auto atlasSize = glm::vec2(_font.GetAtlasSize());
+	const float top = line.at.y;
+	const float bottom = line.at.y + line.size;
+	// The line fades from its top row to its bottom
+	const auto alphaAt = [&](float y) {
+		return line.topAlpha + ((line.bottomAlpha - line.topAlpha) * (y - top) / (bottom - top));
+	};
+	float pen = line.at.x;
+	for (const auto c : line.text)
+	{
+		const auto* glyph = _font.Find(c);
+		if (glyph == nullptr)
+		{
+			continue;
+		}
+		// The atlas holds the glyph at half size; it spans the whole line, cut to the box
+		const float width = static_cast<float>(glyph->atlasMax.x - glyph->atlasMin.x) * 2.0f * scale;
+		const float left = pen + (glyph->left * scale);
+		pen += (glyph->left + glyph->ink + glyph->right) * scale;
+		const float clippedTop = std::max(top, line.clipTop);
+		const float clippedBottom = std::min(bottom, line.clipBottom);
+		if (clippedBottom <= clippedTop)
+		{
+			continue;
+		}
+		auto uvMin = glm::vec2(glyph->atlasMin) / atlasSize;
+		auto uvMax = glm::vec2(glyph->atlasMax) / atlasSize;
+		const float vPerPixel = (uvMax.y - uvMin.y) / (bottom - top);
+		uvMin.y += (clippedTop - top) * vPerPixel;
+		uvMax.y -= (bottom - clippedBottom) * vPerPixel;
+		const auto topColour = glm::vec4(colour, alphaAt(clippedTop));
+		const auto bottomColour = glm::vec4(colour, alphaAt(clippedBottom));
+		_canvas.DrawShape({glm::vec2(left, clippedTop), glm::vec2(left + width, clippedTop),
+		                   glm::vec2(left + width, clippedBottom), glm::vec2(left, clippedBottom)},
+		                  {glm::vec2(uvMin.x, uvMin.y), glm::vec2(uvMax.x, uvMin.y), glm::vec2(uvMax.x, uvMax.y),
+		                   glm::vec2(uvMin.x, uvMax.y)},
+		                  {topColour, topColour, bottomColour, bottomColour}, _fontTexture.get());
+	}
+}
+
+void GameInterface::DrawClickCue(glm::u16vec2 resolution, const help::TextRegion& box, float share)
+{
+	// The languages that need bigger text aren't chosen in openblack yet
+	constexpr bool k_BiggerText = false;
+	const auto& label = _texts.GetHelpText(help::click_cue::k_LabelText).text;
+	const auto labelSize = static_cast<float>(help::click_cue::LabelSize(box.top, box.bottom, k_BiggerText));
+	const auto cue = help::click_cue::Layout(resolution.x, box.top, box.bottom, share, _font.GetWidth(label, labelSize),
+	                                         k_BiggerText, machine_clock::Ticks());
+	if (!cue.has_value())
+	{
+		return;
+	}
+	DrawGlow(cue->mouseGlow.min, cue->mouseGlow.max, cue->mouseGlowColour);
+	if (!label.empty())
+	{
+		DrawGlow(cue->labelGlow.min, cue->labelGlow.max, cue->labelGlowColour);
+	}
+	if (_mice != nullptr)
+	{
+		_canvas.DrawQuad(cue->mouse.min, cue->mouse.max, cue->uvMin, cue->uvMax, cue->mouseColour, _mice.get());
+	}
+	_painter.DrawString(cue->labelAt - 1.0f, label, cue->labelSize, cue->shadowColour);
+	_painter.DrawString(cue->labelAt + 1.0f, label, cue->labelSize, cue->shadowColour);
+	_painter.DrawString(cue->labelAt, label, cue->labelSize, cue->labelColour);
 }
 
 void GameInterface::DrawDialogueRun(const help::TextRun& run)

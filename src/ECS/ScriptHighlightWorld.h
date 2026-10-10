@@ -95,6 +95,8 @@ public:
 	/// The help system's bubble shows a tip of a sign, or shows none
 	virtual void ShowTip(entt::entity sign, uint32_t text, uint32_t category) = 0;
 	virtual void HideTip() = 0;
+	/// The sign whose tip the bubble shows, none while it is closed (it closes by itself once its sign is off screen)
+	[[nodiscard]] virtual entt::entity TipShown() const = 0;
 	/// A challenge's last message plays again, unless another script holds the dialogue (a help script holding it is
 	/// stopped first)
 	virtual void ReplayChallenge(uint32_t challenge) = 0;

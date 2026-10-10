@@ -42,6 +42,11 @@ class VideoOverlay;
 namespace openblack::help
 {
 enum class TextFont : uint8_t;
+struct TextRegion;
+namespace tip_bubble
+{
+struct Line;
+}
 struct TextRun;
 } // namespace openblack::help
 
@@ -144,6 +149,14 @@ private:
 	void DrawDialogue(glm::u16vec2 resolution, int barPixels);
 	/// One word of the dialogue, cut to the box's top and bottom
 	void DrawDialogueRun(const help::TextRun& run);
+	/// The tip bubble over the "did you know" sign tapped last, with the pointer over it keeping it up
+	void DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse);
+	/// A run of the bubble's words' width as the bubble measures it
+	[[nodiscard]] float BubbleTextWidth(std::u16string_view text, float size) const;
+	/// A line of the bubble's words in a colour, fading from its top to its bottom
+	void DrawBubbleLine(const help::tip_bubble::Line& line, glm::vec3 colour);
+	/// The "Continue" cue at the right of the dialogue box, so far through its fade
+	void DrawClickCue(glm::u16vec2 resolution, const help::TextRegion& box, float share);
 	/// The font of the dialogue's words: the advisors each have their own, and j0 stands in for one that is missing
 	[[nodiscard]] std::pair<const GameFont*, const graphics::Texture2D*> DialogueFont(help::TextFont font) const;
 
@@ -155,6 +168,8 @@ private:
 	std::unique_ptr<graphics::Texture2D> _mice;
 	/// The atmosphere texture of glows and arrows
 	std::unique_ptr<graphics::Texture2D> _atmos;
+	/// The tip bubble's texture of box corners and tails
+	std::unique_ptr<graphics::Texture2D> _gatheringText;
 	/// The good advisor's font f1 and the evil one's f3, which their words in the dialogue are in
 	std::optional<FontFace> _goodAdvisorFont;
 	std::optional<FontFace> _evilAdvisorFont;

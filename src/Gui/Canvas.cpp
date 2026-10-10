@@ -98,17 +98,25 @@ void Canvas::DrawQuad(glm::vec2 min, glm::vec2 max, glm::vec2 uvMin, glm::vec2 u
 
 void Canvas::DrawShape(const std::array<glm::vec2, 4>& corners, const std::array<glm::vec4, 4>& colours)
 {
-	const auto* white = _white.get();
-	if (_batches.empty() || _batches.back().texture != white || _batches.back().blend != _blend ||
+	const auto middle = glm::vec2(0.5f);
+	DrawShape(corners, {middle, middle, middle, middle}, colours, nullptr);
+}
+
+void Canvas::DrawShape(const std::array<glm::vec2, 4>& corners, const std::array<glm::vec2, 4>& uvs,
+                       const std::array<glm::vec4, 4>& colours, const graphics::Texture2D* texture)
+{
+	const auto* drawn = texture != nullptr ? texture : _white.get();
+	if (_batches.empty() || _batches.back().texture != drawn || _batches.back().blend != _blend ||
 	    _batches.back().vertexCount + 6 > k_MaxBatchVertices)
 	{
 		_batches.push_back(
-		    {.texture = white, .blend = _blend, .firstVertex = static_cast<uint32_t>(_vertices.size()), .vertexCount = 0});
+		    {.texture = drawn, .blend = _blend, .firstVertex = static_cast<uint32_t>(_vertices.size()), .vertexCount = 0});
 	}
 	std::array<Vertex, 4> vertices {};
 	for (size_t i = 0; i < 4; ++i)
 	{
-		vertices.at(i) = {.x = corners.at(i).x, .y = corners.at(i).y, .u = 0.5f, .v = 0.5f, .abgr = ToAbgr(colours.at(i))};
+		vertices.at(i) = {
+		    .x = corners.at(i).x, .y = corners.at(i).y, .u = uvs.at(i).x, .v = uvs.at(i).y, .abgr = ToAbgr(colours.at(i))};
 	}
 	_vertices.insert(_vertices.end(), {vertices[0], vertices[1], vertices[2], vertices[0], vertices[2], vertices[3]});
 	_batches.back().vertexCount += 6;

@@ -76,6 +76,7 @@
 #include "ECS/Systems/Implementations/HighDetailSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
 #include "ECS/Systems/Implementations/ScriptHighlightSystem.h"
+#include "ECS/Systems/Implementations/TipBubbleSystem.h"
 #if defined(OPENBLACK_INSPECTOR)
 #include "ECS/Systems/Implementations/InspectorSystem.h"
 #endif
@@ -213,6 +214,7 @@ using openblack::ecs::systems::TeleportSystem;
 using openblack::ecs::systems::TempleDestructionSystem;
 using openblack::ecs::systems::TempleExteriorSystem;
 using openblack::ecs::systems::TimeSystem;
+using openblack::ecs::systems::TipBubbleSystem;
 using openblack::ecs::systems::TornadoSystem;
 using openblack::ecs::systems::TownDesireSystem;
 using openblack::ecs::systems::TownSystem;
@@ -335,6 +337,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::videoSystem::emplace<VideoSystem>();
 	Locator::helpTextSystem::emplace<HelpTextSystem>();
 	Locator::helpProfileSystem::emplace<HelpProfileSystem>();
+	Locator::tipBubbleSystem::emplace<TipBubbleSystem>();
 	Locator::advisorSystem::emplace<AdvisorSystem>();
 	Locator::soundTagSystem::emplace<SoundTagSystem>();
 	Locator::rainSystem::emplace<RainSystem>();
@@ -478,6 +481,7 @@ void openblack::ShutDownServices()
 	Locator::videoSystem::reset();
 	Locator::helpTextSystem::reset();
 	Locator::helpProfileSystem::reset();
+	Locator::tipBubbleSystem::reset();
 	Locator::influenceSystem::reset();
 	Locator::chimneySmokeSystem::reset();
 	Locator::abodeKnockSystem::reset();

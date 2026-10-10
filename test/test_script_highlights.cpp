@@ -66,6 +66,7 @@ public:
 	std::vector<std::string> helpScripts;
 	std::vector<uint32_t> tipsShown;
 	int tipsHidden {0};
+	entt::entity tipShown {entt::null};
 	std::vector<uint32_t> replayed;
 
 	ecs::Registry& Entities() override { return registry; }
@@ -115,8 +116,17 @@ public:
 	}
 	void HelpEvent(uint32_t event) override { helpEvents.push_back(event); }
 	void StartHelpScript(std::string_view name) override { helpScripts.emplace_back(name); }
-	void ShowTip(entt::entity /*sign*/, uint32_t text, uint32_t /*category*/) override { tipsShown.push_back(text); }
-	void HideTip() override { ++tipsHidden; }
+	void ShowTip(entt::entity sign, uint32_t text, uint32_t /*category*/) override
+	{
+		tipShown = sign;
+		tipsShown.push_back(text);
+	}
+	void HideTip() override
+	{
+		tipShown = entt::null;
+		++tipsHidden;
+	}
+	[[nodiscard]] entt::entity TipShown() const override { return tipShown; }
 	void ReplayChallenge(uint32_t challenge) override { replayed.push_back(challenge); }
 };
 
@@ -366,6 +376,21 @@ TEST(ScriptHighlights, TappingASignShowsItsTipAndTheFirstExplainsThem)
 	// Tapped again, the bubble shows no tip
 	EXPECT_TRUE(system->Tap(sign, true));
 	EXPECT_EQ(world->tipsHidden, 1);
+	EXPECT_EQ(world->helpScripts.size(), 1u);
+}
+
+TEST(ScriptHighlights, ASignWhoseBubbleClosedShowsItsTipAgain)
+{
+	auto [world, system] = Make();
+	const auto sign = system->Create(k_Sign, {0.0f, 0.0f, 0.0f}, 0);
+	system->SetProperties(sign, 4127, 3);
+	system->Tap(sign, true);
+	// The bubble closed by itself (the sign went off screen): the next tap opens it again
+	world->tipShown = entt::null;
+	system->Tap(sign, true);
+	EXPECT_EQ(world->tipsShown, (std::vector<uint32_t> {4127, 4127}));
+	EXPECT_EQ(world->tipsHidden, 0);
+	// The advisors explain the signs only the first time
 	EXPECT_EQ(world->helpScripts.size(), 1u);
 }
 
