@@ -43,7 +43,15 @@ openblack_setup_and_add_test(test_game_initialize test_game_initialize.cpp)
 openblack_setup_and_add_test(test_load_scene test_load_scene.cpp)
 openblack_setup_and_add_test(test_fixed test_fixed.cpp)
 openblack_setup_and_add_test(test_alignment test_alignment.cpp)
+openblack_setup_and_add_test(test_virtual_influence test_virtual_influence.cpp)
+openblack_setup_and_add_test(test_mana_path test_mana_path.cpp)
+target_link_libraries(test_mana_path PRIVATE psys)
+openblack_setup_and_add_test(
+  test_influence_virtual_grant test_influence_virtual_grant.cpp
+)
 openblack_setup_and_add_test(test_player_system test_player_system.cpp)
+openblack_setup_and_add_test(test_sound_tags test_sound_tags.cpp)
+target_link_libraries(test_sound_tags PRIVATE pack l3d morph)
 openblack_setup_and_add_test(test_interpolator test_interpolator.cpp)
 openblack_setup_and_add_test(test_set_camera_pos camera/test_set_camera_pos.cpp)
 openblack_setup_and_add_test(
@@ -107,9 +115,14 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_pack_bank_info pack/test_pack_bank_info.cpp)
 target_link_libraries(test_pack_bank_info PRIVATE pack)
+openblack_setup_and_add_test(
+  test_pack_audio_index pack/test_pack_audio_index.cpp
+)
+target_link_libraries(test_pack_audio_index PRIVATE pack)
 openblack_setup_and_add_test(test_game_random test_game_random.cpp)
 openblack_setup_and_add_test(test_crash_report test_crash_report.cpp)
 openblack_setup_and_add_test(test_game_clock test_game_clock.cpp)
+openblack_setup_and_add_test(test_run_seed test_run_seed.cpp)
 openblack_setup_and_add_test(test_key_bindings input/test_key_bindings.cpp)
 openblack_setup_and_add_test(test_cursor_freeze input/test_cursor_freeze.cpp)
 openblack_setup_and_add_test(test_camera_drag camera/test_camera_drag.cpp)
@@ -147,6 +160,8 @@ openblack_setup_and_add_test(
   test_land_colour_stamps test_land_colour_stamps.cpp
 )
 openblack_setup_and_add_test(test_sky_dome test_sky_dome.cpp)
+openblack_setup_and_add_test(test_sky_frame test_sky_frame.cpp)
+openblack_setup_and_add_test(test_sky_system test_sky_system.cpp)
 openblack_setup_and_add_test(test_near_clipping test_near_clipping.cpp)
 openblack_setup_and_add_test(test_ground_blobs test_ground_blobs.cpp)
 openblack_setup_and_add_test(test_zsort test_zsort.cpp)
@@ -160,6 +175,8 @@ openblack_setup_and_add_test(test_snowfall test_snowfall.cpp)
 openblack_setup_and_add_test(test_water_rings test_water_rings.cpp)
 openblack_setup_and_add_test(test_flat_land test_flat_land.cpp)
 openblack_setup_and_add_test(test_creature_body test_creature_body.cpp)
+openblack_setup_and_add_test(test_creature_removal test_creature_removal.cpp)
+openblack_setup_and_add_test(test_injected_input test_injected_input.cpp)
 openblack_setup_and_add_test(test_creature_morph test_creature_morph.cpp)
 openblack_setup_and_add_test(
   test_creature_animation test_creature_animation.cpp
@@ -364,6 +381,9 @@ openblack_setup_and_add_test(test_physics_rest test_physics_rest.cpp)
 openblack_setup_and_add_test(test_dynamics_system test_dynamics_system.cpp)
 target_link_libraries(test_dynamics_system PRIVATE psys physconst lnd)
 openblack_setup_and_add_test(
+  test_physics_draw_matrix test_physics_draw_matrix.cpp
+)
+openblack_setup_and_add_test(
   test_temple_destruction test_temple_destruction.cpp
 )
 openblack_setup_and_add_test(
@@ -373,6 +393,15 @@ openblack_setup_and_add_test(test_physics_manager test_physics_manager.cpp)
 openblack_setup_and_add_test(test_physics_living test_physics_living.cpp)
 openblack_setup_and_add_test(test_physics_objects test_physics_objects.cpp)
 openblack_setup_and_add_test(test_damage_mesh test_damage_mesh.cpp)
+openblack_setup_and_add_test(
+  test_building_damage_system test_building_damage_system.cpp
+)
+openblack_setup_and_add_test(test_clip_sound_player test_clip_sound_player.cpp)
+target_link_libraries(test_clip_sound_player PRIVATE sas)
+openblack_setup_and_add_test(
+  test_physics_game_hooks test_physics_game_hooks.cpp
+)
+openblack_setup_and_add_test(test_town_homes test_town_homes.cpp)
 openblack_setup_and_add_test(test_reward test_reward.cpp)
 openblack_setup_and_add_test(test_scenic_forest test_scenic_forest.cpp)
 openblack_setup_and_add_test(test_nearest_search test_nearest_search.cpp)
@@ -382,9 +411,74 @@ openblack_setup_and_add_test(test_script_find test_script_find.cpp)
 openblack_setup_and_add_test(test_partial_build_cap test_partial_build_cap.cpp)
 openblack_setup_and_add_test(test_town_playthings test_town_playthings.cpp)
 openblack_setup_and_add_test(test_temple_heart test_temple_heart.cpp)
+openblack_setup_and_add_test(test_model_surface test_model_surface.cpp)
+target_link_libraries(test_model_surface PRIVATE l3d)
 openblack_setup_and_add_test(test_fireflies test_fireflies.cpp)
 openblack_setup_and_add_test(test_store_rules test_store_rules.cpp)
 openblack_setup_and_add_test(test_clip_sounds test_clip_sounds.cpp)
 target_link_libraries(test_clip_sounds PRIVATE sas)
 openblack_setup_and_add_test(test_story_land_change test_story_land_change.cpp)
 target_link_libraries(test_story_land_change PRIVATE ScriptLibrary)
+
+# The inspector component's tests build without the game, as the component does
+macro (OPENBLACK_SETUP_AND_ADD_INSPECTOR_TEST TEST_NAME TEST_SOURCE)
+  add_executable(${TEST_NAME} ${TEST_SOURCE})
+  target_link_libraries(${TEST_NAME} PRIVATE GTest::gtest_main inspector)
+  set_property(TARGET ${TEST_NAME} PROPERTY FOLDER "tests")
+  add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
+endmacro ()
+openblack_setup_and_add_inspector_test(
+  test_inspector_protocol inspector/test_inspector_protocol.cpp
+)
+openblack_setup_and_add_inspector_test(
+  test_inspector_query inspector/test_inspector_query.cpp
+)
+openblack_setup_and_add_inspector_test(
+  test_inspector_server inspector/test_inspector_server.cpp
+)
+openblack_setup_and_add_inspector_test(
+  test_inspector_discovery inspector/test_inspector_discovery.cpp
+)
+# The inspector's MCP adapter: its choice among several running games, against fake games
+find_package(Python3 COMPONENTS Interpreter)
+if (Python3_Interpreter_FOUND)
+  add_test(
+    NAME test_inspector_mcp
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/tools/inspector/test_openblack_inspector_mcp.py
+  )
+  # Every component's fields are registered: the generated file is up to date with src/ECS/Components
+  add_test(
+    NAME test_inspector_component_fields
+    COMMAND
+      ${Python3_EXECUTABLE}
+      ${CMAKE_SOURCE_DIR}/tools/inspector/generate_component_fields.py --check
+  )
+endif ()
+# The game's side of the inspector, built only with it
+if (OPENBLACK_INSPECTOR)
+  openblack_setup_and_add_test(
+    test_inspector_game inspector/test_inspector_game.cpp
+  )
+  target_link_libraries(test_inspector_game PRIVATE inspector psys)
+  openblack_setup_and_add_test(
+    test_inspector_edit inspector/test_inspector_edit.cpp
+  )
+  target_link_libraries(test_inspector_edit PRIVATE inspector)
+  openblack_setup_and_add_test(
+    test_inspector_systems inspector/test_inspector_systems.cpp
+  )
+  target_link_libraries(test_inspector_systems PRIVATE inspector psys)
+  openblack_setup_and_add_test(
+    test_inspector_input inspector/test_inspector_input.cpp
+  )
+  target_link_libraries(test_inspector_input PRIVATE inspector)
+  openblack_setup_and_add_test(
+    test_inspector_control inspector/test_inspector_control.cpp
+  )
+  target_link_libraries(test_inspector_control PRIVATE inspector)
+  # The coverage test reads the locator's header for its services
+  target_compile_definitions(
+    test_inspector_systems PRIVATE OPENBLACK_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+  )
+endif ()

@@ -129,6 +129,9 @@ struct Environment
 	std::optional<float> playerAlignment;
 	/// Where the cursor, and so the hand, is put, as a share of the window from its top left, until the mouse moves
 	std::optional<glm::vec2> cursor;
+	/// Where the player's temple stands, from the middle of the map, x east and y north in units of the land; with it
+	/// standing their influence border shows, as on a land. The testbed has none when not given.
+	std::optional<glm::vec2> temple;
 };
 
 /// Where the camera looks as the scenario starts
@@ -484,6 +487,8 @@ struct Command
 		WheelTurn,
 		/// The player's alignment jumps, which the hand shows
 		SetAlignment,
+		/// A script's cinema bars slide in (value 1) or out (value 0)
+		WideScreen,
 		/// Its history, as the Creature Cave's trophies show it: how it leans in fights (amount, -1 defensive to 1
 		/// aggressive) as if it had fought; how many times it has seen a miracle (value, by its magic type; amount, the
 		/// times), which it then knows about

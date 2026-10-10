@@ -52,6 +52,10 @@ public:
 	[[nodiscard]] virtual bool IsInteractive() const { return true; }
 	/// Drawn after the others, over them
 	[[nodiscard]] virtual bool IsOnTop() const { return false; }
+	/// What the control is called on the screen, its label, for tools pressing it by name; none for one without
+	[[nodiscard]] virtual std::u16string_view GetName() const { return {}; }
+	/// What kind of control it is, for tools listing a page's controls: "button", "check box", "slider", "tab"
+	[[nodiscard]] virtual std::string_view GetKind() const { return "control"; }
 
 	/// The pointer moved, wherever it is
 	virtual void MouseMove(glm::ivec2 /*point*/) {}
@@ -109,6 +113,8 @@ class Button final: public Control
 public:
 	Button(DialogRect rect, std::u16string label, int size = DialogPainter::k_BigTextSize);
 	void Draw(const DialogPainter& painter, bool hovered, bool focused, bool pressed) const override;
+	[[nodiscard]] std::u16string_view GetName() const override { return label; }
+	[[nodiscard]] std::string_view GetKind() const override { return "button"; }
 
 	std::u16string label;
 	int size;
@@ -138,6 +144,8 @@ public:
 	void Draw(const DialogPainter& painter, bool hovered, bool focused, bool pressed) const override;
 	/// The button or its label
 	[[nodiscard]] bool HitTest(glm::ivec2 point) const override;
+	[[nodiscard]] std::u16string_view GetName() const override { return label; }
+	[[nodiscard]] std::string_view GetKind() const override { return "button"; }
 
 	std::u16string label;
 	/// Labels beside the button are the dialog's text size, below it the middle size
@@ -160,6 +168,7 @@ class CheckBox final: public BigButton
 public:
 	CheckBox(const GameFont& font, glm::ivec2 position, std::u16string label, bool checked);
 	void Activate(glm::ivec2 point) override;
+	[[nodiscard]] std::string_view GetKind() const override { return "check box"; }
 
 	[[nodiscard]] bool IsChecked() const noexcept { return _checked; }
 	void SetChecked(bool checked) noexcept { _checked = checked; }
@@ -173,6 +182,8 @@ class Slider final: public Control
 public:
 	Slider(DialogRect rect, std::u16string label, float value);
 	void Draw(const DialogPainter& painter, bool hovered, bool focused, bool pressed) const override;
+	[[nodiscard]] std::u16string_view GetName() const override { return label; }
+	[[nodiscard]] std::string_view GetKind() const override { return "slider"; }
 	void MouseDown(glm::ivec2 point) override;
 	void Drag(glm::ivec2 point) override;
 

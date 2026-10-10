@@ -39,6 +39,8 @@ public:
 	}
 
 	void SetLabel(std::u16string label) { _label = std::move(label); }
+	[[nodiscard]] std::u16string_view GetName() const override { return _label; }
+	[[nodiscard]] std::string_view GetKind() const override { return "tab"; }
 
 	// Tabs without a label are only the line along the top of the box
 	[[nodiscard]] bool HitTest(glm::ivec2 point) const override { return !_label.empty() && Control::HitTest(point); }
@@ -70,6 +72,20 @@ void Dialog::SetTabLabel(size_t index, std::u16string label)
 	{
 		static_cast<TabControl&>(*_controls.at(index)).SetLabel(std::move(label));
 	}
+}
+
+std::vector<Dialog::NamedControl> Dialog::GetNamedControls() const
+{
+	std::vector<NamedControl> named;
+	for (const auto& control : _controls)
+	{
+		if (control->visible && control->IsInteractive() && !control->GetName().empty())
+		{
+			named.push_back(
+			    {.name = std::u16string(control->GetName()), .kind = std::string(control->GetKind()), .rect = control->rect});
+		}
+	}
+	return named;
 }
 
 DialogRect Dialog::GetTabRect(size_t index)

@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <string>
 #include <string_view>
 
@@ -26,6 +27,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "Game.h"
 #include "Locator.h"
 
@@ -121,12 +123,12 @@ TestbedScenarios::TestbedScenarios(CreatureSpawner& spawner) noexcept
 
 void TestbedScenarios::UpdateAlways() noexcept
 {
-	// Scenarios run in the game's time: not while it is paused, and faster as the game is
-	auto* game = Game::Instance();
-	float seconds = ImGui::GetIO().DeltaTime;
-	if (game != nullptr)
+	// Scenarios run in the game's time: not while it is paused, faster as the game is, and a fixed step a frame when the
+	// game is stepped, so that their timers keep in line with the game's turns
+	float seconds = 0.0f;
+	if (Locator::time::has_value())
 	{
-		seconds = game->IsPaused() ? 0.0f : seconds / std::max(game->GetGameSpeed(), 0.01f);
+		seconds = std::chrono::duration<float>(Locator::time::value().GetFrameGameTime()).count();
 	}
 	RunRequested();
 	_runner.Update(seconds);
@@ -163,7 +165,7 @@ void TestbedScenarios::RunRequested() noexcept
 	    .warmUpFrames = request->warmUpFrames,
 	    .frames = request->frames,
 	    // Without a crowd there is nothing to measure, and the game carries on with the scenario
-	    .autoSave = scenario->crowd.has_value()
+	    .autoSave = scenario->crowd.has_value() && request->benchmark
 	                    ? std::optional(request->results.value_or(std::filesystem::path("benchmarks") / scenario->id))
 	                    : std::nullopt,
 	});

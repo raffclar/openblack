@@ -19,9 +19,11 @@
 #include <vector>
 
 #include <entt/core/fwd.hpp>
+#include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
 #include "Enums.h"
+#include "Particles/ManaPathMaths.h"
 #include "Particles/ParticleDrawFrame.h"
 #include "Particles/ParticleSpellLink.h"
 #include "Particles/PlasmaCommand.h"
@@ -74,6 +76,8 @@ public:
 		/// Seconds left of a spot visual's life, none for one that lasts until it is closed
 		std::optional<float> secondsLeft;
 		std::vector<std::string> unportedClasses;
+		/// The object it follows and ends with, if any
+		entt::entity owner {entt::null};
 	};
 
 	virtual ~ParticleSystemInterface() = default;
@@ -119,6 +123,9 @@ public:
 	/// A symbol of belief rises from something that gained it, in the effect every symbol rises in, kept running once
 	/// wanted; no more than a few hundred wait
 	virtual void AddBeliefSprite(const particles::BeliefSprite& /*sprite*/) {}
+	/// A spark of the mana path the hand lets out past the border, in the effect every such spark runs in, started
+	/// once wanted and kept running
+	virtual void AddHandManaPathSpark(const particles::mana_path::Spark& /*spark*/) {}
 
 	/// This computer's hand in a frame, for the chain that follows it while it gestures
 	struct HandFrame

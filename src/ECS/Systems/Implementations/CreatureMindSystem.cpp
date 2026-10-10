@@ -30,7 +30,6 @@
 #include "3D/CreatureBody.h"
 #include "3D/DayNightClock.h"
 #include "3D/LandIslandInterface.h"
-#include "3D/SkyInterface.h"
 #include "Camera/Camera.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFace.h"
@@ -68,6 +67,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -178,6 +178,7 @@ std::array<creature_desires::DesireSetup, creature_desires::k_DesireCount> Setup
 			    .value = PerSpecies(info.creatureInitialSource1.at(type), row),
 			    .threshold = PerSpecies(info.creatureInitialSource2.at(type), row),
 			    .multiplier = info.desireSourceTable.at(type).field0x8,
+			    .clearedWhenSatisfied = info.desireSourceTable.at(type).field0x4 != 0,
 			});
 		}
 	}
@@ -596,28 +597,50 @@ creature_mind::Wants WantsOf(ecs::Registry& registry, entt::entity creature, con
 	return wants;
 }
 
-/// Having done an action, the desire it satisfies is less, by the game's action table, and its body pays for it
-void Satisfied(entt::entity creature, creature_desires::Desires& desires, std::string_view action)
+/// The least a creature's desires are lessened to by its actions, by its species
+float DesireFloorOf(entt::entity creature)
 {
-	if (Locator::infoConstants::has_value())
+	const auto* body = Locator::entitiesRegistry::value().TryGet<const Creature>(creature);
+	if (body == nullptr || !Locator::infoConstants::has_value())
 	{
-		const auto& actions = Locator::infoConstants::value().creatureAction;
-		const auto found = std::ranges::find_if(actions, [action](const auto& row) {
-			return std::string_view(row.name.data(), strnlen(row.name.data(), row.name.size())) == action;
-		});
-		if (found != actions.end() && found->desire < creature_desires::k_DesireCount)
-		{
-			auto& state = desires[static_cast<Desire>(found->desire)];
-			if (state.activated)
-			{
-				state.value = std::clamp(state.value * found->desireMultiplier, 0.0f, std::max(state.max, 0.0f));
-			}
-		}
+		return 0.0f;
 	}
+	const auto& species = Locator::infoConstants::value().creature;
+	const auto row = creature::InfoRow(body->species);
+	return row < species.size() ? species.at(row).desireFloor : 0.0f;
+}
+
+/// Having done an action, the desire it satisfies is less, by the game's action table
+void Lessen(entt::entity creature, creature_desires::Desires& desires, std::string_view action)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto& actions = Locator::infoConstants::value().creatureAction;
+	const auto found = std::ranges::find_if(actions, [action](const auto& row) {
+		return std::string_view(row.name.data(), strnlen(row.name.data(), row.name.size())) == action;
+	});
+	if (found != actions.end() && found->desire < creature_desires::k_DesireCount)
+	{
+		creature_desires::LessenAfterAction(desires[static_cast<Desire>(found->desire)], found->desireMultiplier,
+		                                    DesireFloorOf(creature));
+	}
+}
+
+/// Having done an action, its body pays for it
+void BodyPaysFor(entt::entity creature, std::string_view action)
+{
 	if (Locator::creaturePhysiologySystem::has_value())
 	{
 		Locator::creaturePhysiologySystem::value().FinishAction(creature, action);
 	}
+}
+
+void Satisfied(entt::entity creature, creature_desires::Desires& desires, std::string_view action)
+{
+	Lessen(creature, desires, action);
+	BodyPaysFor(creature, action);
 }
 
 /// What a step did to the body

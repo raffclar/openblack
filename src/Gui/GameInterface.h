@@ -65,6 +65,8 @@ public:
 	[[nodiscard]] GameMenu& GetMenu() noexcept { return *_menu; }
 	/// The tattoo editor's dialog, shown while the tattoo editor is open
 	[[nodiscard]] TattooEditorDialog& GetTattooEditor() noexcept { return *_tattooEditor; }
+	/// Where a point of the menu's dialog space is on the screen, as last drawn
+	[[nodiscard]] glm::ivec2 DialogToScreen(glm::ivec2 point) const { return _painter.ToScreenPoint(point); }
 	[[nodiscard]] const TextDatabase& GetTexts() const noexcept { return _texts; }
 	/// The dialogs' font, which the temple's scrolls are written in too
 	[[nodiscard]] const GameFont& GetFont() const noexcept { return _font; }

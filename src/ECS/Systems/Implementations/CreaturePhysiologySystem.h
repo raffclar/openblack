@@ -11,6 +11,7 @@
 
 #include <random>
 
+#include "Common/RandomNumberManager.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -44,7 +45,7 @@ private:
 	/// Turns of the body owed from a fractional time scale
 	float _owedTurns {0.0f};
 	bool _fainting {true};
-	std::mt19937 _random {std::random_device {}()};
+	RandomStreamSource _random {RandomStream::CreaturePhysiology};
 };
 
 } // namespace openblack::ecs::systems

@@ -36,6 +36,7 @@
 #include "Camera/Camera.h"
 #include "Camera/TempleCameraModel.h"
 #include "Common/EventManager.h"
+#include "Common/MachineClock.h"
 #include "Creature/CreatureCave.h"
 #include "ECS/Archetypes/GlowArchetype.h"
 #include "ECS/Components/Creature.h"
@@ -205,16 +206,14 @@ TempleInterior::TempleInterior()
 
 namespace
 {
-/// The temple is made as the game starts, which the save game room's time played counts from
-const auto k_GameStarted = std::chrono::steady_clock::now();
-
 /// What the rooms' scrolls tell of the game: made up, but for what openblack keeps
 TempleScrolls::Facts GatherScrollFacts()
 {
 	auto facts = TempleScrolls::Facts::Mock();
 	// The game's count of the people in the world
 	facts.population = static_cast<int32_t>(Locator::entitiesRegistry::value().Size<ecs::components::Villager>());
-	facts.timePlayed = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - k_GameStarted);
+	// The save game room's time played counts from the game's start, as the machine's clock is read
+	facts.timePlayed = std::chrono::seconds(machine_clock::Ticks() / 1000u);
 	// The creature's scrolls tell of the player's own creature, and are blank without one
 	if (Locator::creatureCaveSystem::has_value())
 	{
@@ -873,9 +872,7 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 		}
 		if (_signs != nullptr)
 		{
-			const auto ticks = static_cast<uint32_t>(
-			    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
-			        .count());
+			const auto ticks = machine_clock::Ticks();
 			for (const auto room : {TempleRoom::Main, TempleRoom::CreatureCave, TempleRoom::Credits})
 			{
 				if (IsRoomDrawn(room))
@@ -901,9 +898,7 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 		UpdateMapMarkers(milliseconds / 1000.0f);
 		// The temple is lit by the alignment, pulsing with the time
 		_light = TempleLight::At(Locator::alignmentSystem::value().GetCameraAlignment(),
-		                         static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
-		                                                   std::chrono::steady_clock::now().time_since_epoch())
-		                                                   .count()));
+		                         static_cast<uint32_t>(machine_clock::Ticks()));
 		// The creature's room chooses the belts and medals every frame
 		if (IsRoomDrawn(TempleRoom::CreatureCave))
 		{
@@ -930,9 +925,7 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 		// The creature's room moves its effects on while the room is drawn
 		if (_creatureCaveEffects != nullptr && IsRoomDrawn(TempleRoom::CreatureCave))
 		{
-			const auto tickCount = static_cast<uint32_t>(
-			    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
-			        .count());
+			const auto tickCount = machine_clock::Ticks();
 			_creatureCaveEffects->Update(static_cast<uint32_t>(milliseconds), tickCount);
 		}
 	}

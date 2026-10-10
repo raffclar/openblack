@@ -14,6 +14,7 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <string>
 
 #include <glm/gtc/type_precision.hpp>
 #include <glm/vec3.hpp>
@@ -32,6 +33,13 @@ inline constexpr uint16_t k_Rows = 256;
 inline constexpr uint16_t k_RowsPerFrame = 32;
 /// How far the sky moves on before the dome starts following it again
 inline constexpr double k_Hysteresis = static_cast<double>(0.03f);
+
+/// The pictures of the dome: one for each alignment, evil, neutral and good, at each time of day, night, dusk and day,
+/// in that order
+inline constexpr size_t k_Pictures = 9;
+/// The files of the pictures in the weather folder, in the order above: "sky_<alignment>_<time>.555", with the
+/// neutral ones capitalised as the game ships them ("Sky_Ntrl_Night.555")
+[[nodiscard]] std::array<std::string, k_Pictures> PictureFiles();
 
 /// Rows of the dome to blend again for a sky type
 struct Rows
