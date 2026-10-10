@@ -51,6 +51,7 @@
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
+#include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mist.h"
@@ -58,6 +59,7 @@
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptFlock.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Temple.h"
@@ -137,6 +139,7 @@
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
+#include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
@@ -289,6 +292,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"explosionSystem", "magic.state"},
     LocatorCoverage {"rewardSystem", "living.rewards"},
     LocatorCoverage {"scriptObjects", "script.objects"},
+    LocatorCoverage {"scriptHighlightSystem", "script.highlights"},
     LocatorCoverage {"buildingDamageSystem", "living.building"},
     LocatorCoverage {"inspector", "engine.services"},
     LocatorCoverage {"vm", "script.vm"},
@@ -1858,6 +1862,42 @@ std::unique_ptr<ProviderInterface> ScriptProvider(ScriptTargetInterface& scripts
 		                           {"script_controlled", CountOf<ScriptControlled>(registry)},
 		                           {"system", Locator::scriptObjects::has_value()}};
 	              }));
+	provider->Add(
+	    Query("highlights",
+	          "The scrolls and signs scripts put up: kind, challenge or text, started, height, where drawn; the beat and "
+	          "the switch that shows the scrolls",
+	          {}, ResultKind::List),
+	    Serve<Locator::scriptHighlightSystem>(
+	        "the script highlights",
+	        [](const ecs::systems::ScriptHighlightSystemInterface& highlights, const QueryContext& /*c*/) {
+		        Json items = Json::array();
+		        const auto* registry = Registry();
+		        if (registry == nullptr)
+		        {
+			        return items;
+		        }
+		        const bool scrollsDrawn = !Locator::chlapi::has_value() || Locator::chlapi::value().IsHighlightDrawOn();
+		        const auto& pulse = highlights.GetPulse();
+		        registry->Each<const ScriptHighlight>([&](entt::entity entity, const ScriptHighlight& highlight) {
+			        auto item = Listed(*registry, entity);
+			        item["kind"] = static_cast<int>(highlight.kind);
+			        item["script_id"] = highlight.scriptId;
+			        item["category"] = highlight.category;
+			        item["active"] = highlight.active;
+			        item["draw_height"] = highlight.drawHeight.has_value() ? Json(*highlight.drawHeight) : Json(nullptr);
+			        item["height_above"] = highlight.heightAbove;
+			        item["y_angle"] = highlight.yAngle;
+			        item["centre"] = Point(highlight.centre);
+			        item["radius"] = highlight.radius;
+			        item["glints"] = highlight.glints;
+			        item["active_effect"] = highlight.activeEffect;
+			        item["hidden"] = registry->AllOf<HiddenByState>(entity);
+			        item["scrolls_drawn"] = scrollsDrawn;
+			        item["pulse"] = pulse.level;
+			        items.push_back(std::move(item));
+		        });
+		        return items;
+	        }));
 	AddScriptControls(*provider, scripts);
 	return provider;
 }

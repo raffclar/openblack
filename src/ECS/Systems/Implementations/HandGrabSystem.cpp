@@ -29,6 +29,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Transform.h"
@@ -251,9 +252,11 @@ hand_grab::HoldFacts HandGrabSystem::HoldOfObject(entt::entity object) const
 
 void HandGrabSystem::Tap(entt::entity object)
 {
-	// Only within the player's influence, and not a thing a script holds out of reach
+	// Only within the player's influence (a script's scroll or sign is tapped anywhere), and not a thing a script holds
+	// out of reach
 	const auto& registry = _world->Entities();
-	if (!HandInInfluence() || registry.AllOf<CannotBePickedUp>(object))
+	const bool needsInfluence = !registry.AllOf<ScriptHighlight>(object);
+	if ((needsInfluence && !HandInInfluence()) || registry.AllOf<CannotBePickedUp>(object))
 	{
 		return;
 	}

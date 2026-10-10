@@ -34,10 +34,12 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptHighlightRules.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -255,12 +257,26 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		const float scale = transform != nullptr ? transform->scale.x : 1.0f;
 		const auto box = mesh->GetBoundingBox();
 		const auto halfExtents = box.Size() * 0.5f;
-		_candidates.push_back({
-		    .centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f)),
-		    .radius = glm::length(halfExtents) * scale,
-		    .origin = glm::vec3(model[3]),
-		    .halfExtents = glm::vec2(halfExtents.x, halfExtents.z),
-		});
+		// A script's scroll is picked by a ball a little larger than its model, about the model's middle
+		if (const auto* highlight = registry.TryGet<const ScriptHighlight>(entity);
+		    highlight != nullptr && ecs::script_highlights::PickedByBall(highlight->kind))
+		{
+			_candidates.push_back({
+			    .centre = highlight->centre,
+			    .radius = highlight->radius + ecs::script_highlights::k_PickBallMargin,
+			    .origin = highlight->centre,
+			    .halfExtents = glm::vec2(halfExtents.x, halfExtents.z),
+			});
+		}
+		else
+		{
+			_candidates.push_back({
+			    .centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f)),
+			    .radius = glm::length(halfExtents) * scale,
+			    .origin = glm::vec3(model[3]),
+			    .halfExtents = glm::vec2(halfExtents.x, halfExtents.z),
+			});
+		}
 		_candidateEntities.push_back(entity);
 		_candidateModels.push_back(model);
 	}
@@ -269,6 +285,12 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 	const auto distanceOf = [&](size_t i) -> std::optional<float> {
 		const auto entity = _candidateEntities[i];
 		const auto& model = _candidateModels[i];
+		// A scroll's ball is hit at its middle
+		if (const auto* highlight = registry.TryGet<const ScriptHighlight>(entity);
+		    highlight != nullptr && ecs::script_highlights::PickedByBall(highlight->kind))
+		{
+			return screen_pick::Depth(view, highlight->centre);
+		}
 		// A broken building is picked by its broken model's triangles, along the cursor's line
 		if (const auto* broken = registry.TryGet<const BuildingDamage>(entity); broken != nullptr && broken->drawMesh != 0)
 		{

@@ -108,6 +108,7 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
@@ -456,6 +457,7 @@ void Runner::Start(const Scenario& scenario)
 		                                          glm::vec3(1.0f));
 	}
 	PlaceObjects(scenario, _middle);
+	PlaceHighlights(scenario, _middle);
 	PlaceBirds(scenario, _middle);
 	PlaceCreatures(scenario, _middle);
 	PlaceDispensers(scenario);
@@ -641,6 +643,37 @@ void Runner::SetUpEnvironment(const Environment& environment)
 	{
 		const auto size = glm::vec2(Locator::windowing::value().GetSize());
 		Game::Instance()->SetMousePosition(glm::ivec2(*environment.cursor * size));
+	}
+}
+
+void Runner::PlaceHighlights(const Scenario& scenario, glm::vec2 middle)
+{
+	if (!Locator::scriptHighlightSystem::has_value())
+	{
+		return;
+	}
+	auto& highlights = Locator::scriptHighlightSystem::value();
+	const auto& land = Locator::terrainSystem::value();
+	for (const auto& setup : scenario.highlights)
+	{
+		const auto point = MapPoint(middle, setup.offset);
+		const auto highlight = highlights.Create(setup.kind, {point.x, land.GetHeightAt(point), point.y}, setup.challenge);
+		if (highlight != entt::null)
+		{
+			if (setup.tip.has_value())
+			{
+				highlights.SetProperties(highlight, setup.tip->first, setup.tip->second);
+			}
+			if (setup.height.has_value())
+			{
+				highlights.SetDrawHeight(highlight, *setup.height);
+			}
+			if (setup.active)
+			{
+				highlights.SetActive(highlight, true);
+			}
+		}
+		_objects.push_back(highlight);
 	}
 }
 
