@@ -20,6 +20,7 @@
 #include "Creature/CreatureLook.h"
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreaturePlanner.h"
+#include "Creature/CreatureTownCompassion.h"
 #include "Creature/LeashRules.h"
 #include "Creature/PerceivedDesires.h"
 
@@ -70,6 +71,8 @@ struct CreatureMindState
 	std::optional<creature_mind_model::Learnt> learnt;
 	/// The plans it weighs, and the one it carries out
 	creature_planner::PlannerState planner {};
+	/// Which of a town's desires its compassion helps with
+	creature_town_compassion::State townCompassion {};
 	/// The agenda carries out the planner's plan; the step that ends it took down the desire already
 	bool planActive {false};
 	bool satisfiedByEffect {false};

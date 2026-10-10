@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <functional>
 #include <vector>
 
 #include "Lexer.h"
@@ -21,7 +22,8 @@ class Script
 public:
 	Script();
 
-	void Load(const std::string&);
+	/// Carries out the commands of a map script, calling `afterCommand`, when given, after each one
+	void Load(const std::string& source, const std::function<void()>& afterCommand = {});
 
 private:
 	[[nodiscard]] bool IsCommand(const std::string& identifier) const;

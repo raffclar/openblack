@@ -22,12 +22,14 @@
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/ChimneySmoke.h"
 #include "ECS/Components/Cloud.h"
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureAudio.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCasting.h"
 #include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureFizz.h"
 #include "ECS/Components/CreatureHair.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
@@ -43,6 +45,7 @@
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Firefly.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/FlockSpell.h"
 #include "ECS/Components/Flowers.h"
@@ -244,6 +247,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::ChimneySmoke::ageRemainder>("ageRemainder")
 	    .Field<&components::ChimneySmoke::puffs>("puffs");
 	Reflect<components::Cloud>(context).Field<&components::Cloud::track>("track").Field<&components::Cloud::pinned>("pinned");
+	Reflect<components::PlannedTemple>(context)
+	    .Field<&components::PlannedTemple::townId>("townId")
+	    .Field<&components::PlannedTemple::owner>("owner");
+	Reflect<components::BuildingSite>(context).Field<&components::BuildingSite::desire>("desire");
 	Reflect<components::Creature>(context)
 	    .Field<&components::Creature::owner>("owner")
 	    .Field<&components::Creature::leashable>("leashable")
@@ -339,7 +346,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureKnockedOut::seconds>("seconds")
 	    .Field<&components::CreatureKnockedOut::rest>("rest")
 	    .Field<&components::CreatureKnockedOut::permanent>("permanent")
-	    .Field<&components::CreatureKnockedOut::home>("home");
+	    .Field<&components::CreatureKnockedOut::home>("home")
+	    .Field<&components::CreatureKnockedOut::fizzTurns>("fizzTurns");
+	Reflect<components::CreatureFizz>(context).Field<&components::CreatureFizz::fizz>("fizz");
 	Reflect<components::CreatureHair>(context)
 	    .Field<&components::CreatureHair::groups>("groups")
 	    .Field<&components::CreatureHair::started>("started");
@@ -415,6 +424,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::paused>("paused")
 	    .Field<&components::CreatureMindState::learnt>("learnt")
 	    .Field<&components::CreatureMindState::planner>("planner")
+	    .Field<&components::CreatureMindState::townCompassion>("townCompassion")
 	    .Field<&components::CreatureMindState::planActive>("planActive")
 	    .Field<&components::CreatureMindState::satisfiedByEffect>("satisfiedByEffect")
 	    .Field<&components::CreatureMindState::desireSeenTo>("desireSeenTo")
@@ -460,6 +470,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureObjectAction::maxReach>("maxReach")
 	    .Field<&components::CreatureObjectAction::attempts>("attempts")
 	    .Field<&components::CreatureObjectAction::flightSeconds>("flightSeconds")
+	    .Field<&components::CreatureObjectAction::givenFlightSeconds>("givenFlightSeconds")
+	    .Field<&components::CreatureObjectAction::waitsForLanding>("waitsForLanding")
+	    .Field<&components::CreatureObjectAction::thrown>("thrown")
 	    .Field<&components::CreatureObjectAction::catchHands>("catchHands")
 	    .Field<&components::CreatureObjectAction::catching>("catching")
 	    .Field<&components::CreatureObjectAction::catchTurned>("catchTurned")
@@ -492,6 +505,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureSpells::spells>("spells")
 	    .Field<&components::CreatureSpells::freeze>("freeze")
 	    .Field<&components::CreatureSpells::fizz>("fizz")
+	    .Field<&components::CreatureSpells::staticScroll>("staticScroll")
 	    .Field<&components::CreatureSpells::invisible>("invisible")
 	    .Field<&components::CreatureSpells::pausedMind>("pausedMind")
 	    .Field<&components::CreatureSpells::smallestSize>("smallestSize")
@@ -560,6 +574,13 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Firefly::flightSeconds>("flightSeconds")
 	    .Field<&components::Firefly::drift>("drift")
 	    .Field<&components::Firefly::hidden>("hidden");
+	Reflect<components::FishFarm>(context)
+	    .Field<&components::FishFarm::town>("town")
+	    .Field<&components::FishFarm::place>("place")
+	    .Field<&components::FishFarm::fish>("fish")
+	    .Field<&components::FishFarm::fishermen>("fishermen")
+	    .Field<&components::FishFarm::shoal>("shoal")
+	    .Field<&components::FishFarm::shownAlpha>("shownAlpha");
 	Reflect<components::Fixed>(context)
 	    .Field<&components::Fixed::boundingCenter>("boundingCenter")
 	    .Field<&components::Fixed::boundingRadius>("boundingRadius");
@@ -826,7 +847,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Pot::amount>("amount")
 	    .Field<&components::Pot::maxAmount>("maxAmount")
 	    .Field<&components::Pot::type>("type")
-	    .Field<&components::Pot::poisoned>("poisoned");
+	    .Field<&components::Pot::poisoned>("poisoned")
+	    .Field<&components::Pot::town>("town");
 	Reflect<components::PrayerPower>(context)
 	    .Field<&components::PrayerPower::chants>("chants")
 	    .Field<&components::PrayerPower::infinite>("infinite");
@@ -993,6 +1015,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Temple::destructionClock>("destructionClock")
 	    .Field<&components::Temple::destructionGlow>("destructionGlow")
 	    .Field<&components::Temple::destructionLoops>("destructionLoops")
+	    .Field<&components::Temple::town>("town")
 	    .Field<&components::Temple::destructionBeamClock>("destructionBeamClock")
 	    .Field<&components::Temple::destructionBeamSource>("destructionBeamSource");
 	Reflect<components::TempleEntrance>(context).Field<&components::TempleEntrance::temple>("temple");
@@ -1001,7 +1024,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::TempleExterior::alignmentTarget>("alignmentTarget")
 	    .Field<&components::TempleExterior::size>("size")
 	    .Field<&components::TempleExterior::sizeTarget>("sizeTarget")
-	    .Field<&components::TempleExterior::morphed>("morphed");
+	    .Field<&components::TempleExterior::morphed>("morphed")
+	    .Field<&components::TempleExterior::drawnBuilt>("drawnBuilt");
 	Reflect<components::Town>(context)
 	    .Field<&components::Town::id>("id")
 	    .Field<&components::Town::owner>("owner")
