@@ -164,6 +164,8 @@ struct DesireFunctions
 /// Works out a desire as the town feels it, keeps that and returns it lowered by its villagers, -1 to 1
 float CallDesireFunction(components::TownDesire& desire, const DesireContext& c, size_t d);
 void ProcessDesire(components::TownDesire& desire, const DesireContext& c, size_t d);
+/// Whether a script may boost a desire by that much: a desire the towns have, by at most 1 either way
+[[nodiscard]] bool ValidScriptBoost(int32_t desire, float boost);
 /// The game's C runtime quicksort, most first, which is not stable
 void MsvcQsort(std::array<components::DesireSort, k_Count>& entries);
 void SortDesires(components::TownDesire& desire);

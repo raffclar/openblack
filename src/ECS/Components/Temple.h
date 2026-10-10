@@ -60,6 +60,12 @@ struct Temple
 	/// while they play, each sounding over the others
 	std::optional<uint32_t> destructionGlow;
 	std::vector<entt::entity> destructionLoops;
+	/// The town that built it, for a temple a town planned
+	std::optional<int32_t> town;
+	/// The beams that leap across the heart as it is destroyed: the moment of the next on the clock, and the spot visual
+	/// they are fired from, made with the first and let go once it has ended
+	float destructionBeamClock {0.0f};
+	std::optional<uint32_t> destructionBeamSource;
 };
 
 /// The way into a temple, Entrance.l3d at the temple's place, which the temple makes and its player clicks the Action

@@ -163,14 +163,20 @@ public:
 	Texture2D(const Texture2D&) = delete;
 	Texture2D& operator=(const Texture2D&) = delete;
 
+	/// Makes the texture from bgfx memory, on any thread. The texels must be copied or allocated for bgfx, or, when only
+	/// referenced, outlive the texture.
 	void Create(uint16_t width, uint16_t height, uint16_t layers, TextureFormat format, Wrapping wrapping, Filter filter,
 	            const void* memory) noexcept;
-	/// As Create, but without moving bgfx on a frame, for textures made while a frame is being drawn
+	/// As Create, for textures made while a frame is being drawn
 	void CreateWithinFrame(uint16_t width, uint16_t height, uint16_t layers, TextureFormat format, Wrapping wrapping,
 	                       Filter filter, const void* memory) noexcept;
 
 	/// Replaces the first layer's texels of a texture created without any, with size bytes from data
 	void Update(const void* data, uint32_t size) const;
+	/// Replaces one layer's texels of a texture created without any, with size bytes from data
+	void UpdateLayer(uint16_t layer, const void* data, uint32_t size) const;
+	/// Replaces a rectangle of one layer's texels, from (x, y) and width by height, with size bytes from data
+	void UpdateLayerRegion(uint16_t layer, glm::u16vec2 origin, glm::u16vec2 size, const void* data, uint32_t bytes) const;
 
 	[[nodiscard]] const std::string& GetName() const { return _name; }
 	[[nodiscard]] const TextureHandle& GetNativeHandle() const { return _handle; }

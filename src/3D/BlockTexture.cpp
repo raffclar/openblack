@@ -161,8 +161,18 @@ uint16_t block_texture::BlendCorners(const std::array<uint16_t, 4>& texels, cons
 
 void block_texture::BuildBlock(std::span<const lnd::LNDCell> cells, const Sources& sources, std::span<uint8_t> rgba)
 {
+	PaintCells(cells, sources, {0, 0}, {k_BlockCells, k_BlockCells}, rgba);
+}
+
+void block_texture::PaintCells(std::span<const lnd::LNDCell> cells, const Sources& sources, glm::ivec2 firstCell,
+                               glm::ivec2 cellCount, std::span<uint8_t> rgba)
+{
 	std::ranges::fill(rgba, uint8_t {0});
-	if (cells.size() < static_cast<size_t>(k_CellsPerSide * k_CellsPerSide) || rgba.size() < k_BlockBytes ||
+	const auto rows = cellCount.x * k_TexelsPerCell;
+	const auto columns = cellCount.y * k_TexelsPerCell;
+	if (cells.size() < static_cast<size_t>(k_CellsPerSide * k_CellsPerSide) || cellCount.x <= 0 || cellCount.y <= 0 ||
+	    firstCell.x < 0 || firstCell.y < 0 || firstCell.x + cellCount.x > k_BlockCells ||
+	    firstCell.y + cellCount.y > k_BlockCells || rgba.size() < static_cast<size_t>(rows) * columns * 4 ||
 	    sources.countries.empty())
 	{
 		return;
@@ -171,9 +181,11 @@ void block_texture::BuildBlock(std::span<const lnd::LNDCell> cells, const Source
 	const auto countryOf = [&sources](const lnd::LNDCell& cell) -> const lnd::LNDCountry& {
 		return sources.countries[std::min<size_t>(cell.properties.country, sources.countries.size() - 1)];
 	};
-	for (int x = 0; x < k_Side; ++x)
+	const auto firstX = firstCell.x * k_TexelsPerCell;
+	const auto firstZ = firstCell.y * k_TexelsPerCell;
+	for (int x = firstX; x < firstX + rows; ++x)
 	{
-		for (int z = 0; z < k_Side; ++z)
+		for (int z = firstZ; z < firstZ + columns; ++z)
 		{
 			const auto cellIndex = static_cast<size_t>(((x / k_TexelsPerCell) * k_CellsPerSide) + (z / k_TexelsPerCell));
 			const auto& cell = cells[cellIndex];
@@ -210,7 +222,7 @@ void block_texture::BuildBlock(std::span<const lnd::LNDCell> cells, const Source
 				texel = BlendCorners(painted, weights);
 			}
 
-			const auto out = rgba.subspan(index * 4, 4);
+			const auto out = rgba.subspan(static_cast<size_t>(((x - firstX) * columns) + (z - firstZ)) * 4, 4);
 			out[0] = static_cast<uint8_t>(((texel >> 8) & 0xF) * 17);
 			out[1] = static_cast<uint8_t>(((texel >> 4) & 0xF) * 17);
 			out[2] = static_cast<uint8_t>((texel & 0xF) * 17);

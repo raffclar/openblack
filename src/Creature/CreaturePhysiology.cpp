@@ -252,6 +252,11 @@ std::optional<Faint> creature_physiology::ShouldFaint(const Needs& needs, uint32
 	return std::nullopt;
 }
 
+bool creature_physiology::CanFaintFromNeeds(bool ownedByPlayer, bool computerPlayer, bool scriptControlled)
+{
+	return ownedByPlayer && !computerPlayer && !scriptControlled;
+}
+
 void creature_physiology::WakeFromFaint(Needs& needs)
 {
 	needs.exhaustion = std::min(needs.exhaustion, k_FaintWakeExhaustion);

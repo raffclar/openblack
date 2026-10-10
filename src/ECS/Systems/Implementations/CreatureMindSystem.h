@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "Common/RandomNumberManager.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreaturePlanActions.h"
@@ -134,7 +135,7 @@ private:
 	bool GoNear(entt::entity creature, components::CreatureCasting& casting, bool reissue);
 	creature_mind::SubMove SubMoveOf(entt::entity creature);
 	/// The minds choose at random, apart from the game's own random numbers
-	std::mt19937 _random {std::random_device {}()};
+	RandomStreamSource _random {RandomStream::CreatureMind};
 	/// The game's tables for the minds, taken once the game's data is loaded
 	std::optional<creature_mind_tables::Tables> _tables;
 };

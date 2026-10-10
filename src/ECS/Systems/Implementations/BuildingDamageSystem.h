@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <memory>
+
+#include "ECS/BuildingDamageWorld.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -21,6 +24,12 @@ namespace openblack::ecs::systems
 class BuildingDamageSystem final: public BuildingDamageSystemInterface
 {
 public:
+	/// Breaks buildings in the game's own world
+	BuildingDamageSystem();
+	/// Breaks buildings in the world given
+	explicit BuildingDamageSystem(std::unique_ptr<building_world::World> world);
+	~BuildingDamageSystem() override;
+
 	void ReactToImpact(DynamicsSystemInterface& dynamics, PhysicsEntry& entry, const ImpactInfo& impact) override;
 	void ReactToPassedOnImpact(DynamicsSystemInterface& dynamics, entt::entity building, PhysicsEntry& struck,
 	                           const ImpactInfo& impact) override;
@@ -37,6 +46,8 @@ private:
 	/// A rock's blow on a building, struck on the building's own body or passed on to it from another's
 	void Blow(DynamicsSystemInterface& dynamics, entt::entity building, PhysicsEntry& entry, const ImpactInfo& impact,
 	          bool passedOn);
+
+	std::unique_ptr<building_world::World> _world;
 };
 
 } // namespace openblack::ecs::systems
