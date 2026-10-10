@@ -729,7 +729,7 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	    Locator::camera::has_value() ? Locator::camera::value().GetKeyboardMoveSpeed() : k_KeyboardMoveSpeedDefault;
 	const auto moveDp = ScaleKeyboardMove(dp, moveSpeed);
 
-	// What the scripts let the player do, less going to watch fights while watching one
+	// What the scripts let the player do, less double clicking while watching a fight
 	const auto help =
 	    Locator::cameraHelpSystem::has_value() ? Locator::cameraHelpSystem::value().Get() : camera_help::CameraHelp {};
 	const bool onFight = Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsCameraOnFight();
@@ -883,7 +883,10 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	}
 
 	_modePrev = _mode;
-	if (_handPosition.has_value() && actionSystem.Get(input::UnbindableActionMap::DOUBLE_CLICK))
+	// The camera takes a waiting double click once double clicks are allowed, and flies if the hand is on the land
+	const bool doubleClicked =
+	    (_features & camera_help::feature::k_DoubleClick) != 0 && Locator::gameActionSystem::value().TakeDoubleClick();
+	if (_handPosition.has_value() && doubleClicked)
 	{
 		_mode = Mode::FlyingToPoint;
 	}
