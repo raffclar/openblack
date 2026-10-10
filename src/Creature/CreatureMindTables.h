@@ -53,6 +53,8 @@ struct ActionInfo
 	bool learnable {false};
 	/// Stroked while holding something during it, the creature learns to eat what it holds
 	bool eatWhenStroked {false};
+	/// What the creature must know to choose it
+	creature_watching::ActionNeeds needs;
 };
 
 struct DesireTexts

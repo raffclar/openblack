@@ -446,6 +446,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::trainer>("trainer")
 	    .Field<&components::CreatureMindState::pendingFile>("pendingFile")
 	    .Field<&components::CreatureMindState::resourceChecked>("resourceChecked")
+	    .Field<&components::CreatureMindState::pendingTeaching>("pendingTeaching")
 	    .Field<&components::CreatureMindState::leash>("leash")
 	    .Field<&components::CreatureMindState::heldKinds>("heldKinds");
 	Reflect<components::CreatureNeeds>(context)

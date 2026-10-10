@@ -1903,9 +1903,9 @@ struct CreatureActionInfo
 	uint32_t field0x94;
 	/// The desire the action satisfies
 	uint32_t desire;
-	uint32_t field0x9c;
-	uint32_t field0xa0;
-	/// The miracle the action casts, 0 for none
+	/// The two ordinary skills the creature must know to do it, 6 for none
+	std::array<uint32_t, 2> skillsNeeded;
+	/// The miracle the action casts, 0 for none, which the creature must know to do it
 	uint32_t magicType;
 	uint32_t field0xa8;
 	uint32_t field0xac;
@@ -1931,6 +1931,7 @@ struct CreatureActionInfo
 	uint32_t field0xf8;
 };
 static_assert(offsetof(CreatureActionInfo, desire) == 0x98);
+static_assert(offsetof(CreatureActionInfo, skillsNeeded) == 0x9c);
 static_assert(offsetof(CreatureActionInfo, desireMultiplier) == 0xc0);
 static_assert(offsetof(CreatureActionInfo, magicType) == 0xa4);
 

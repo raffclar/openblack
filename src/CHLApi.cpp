@@ -94,6 +94,7 @@
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -1907,12 +1908,24 @@ void CreatureLearnEverything() // 070 CREATURE_LEARN_EVERYTHING
 
 void CreatureSetKnowsAction() // 071 CREATURE_SET_KNOWS_ACTION
 {
-	// const auto knows = Pop().intVal;
-	// const auto action = Pop().intVal;
-	// const auto typeOfAction = Pop().intVal;
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto knows = Pop().intVal != 0;
+	const auto action = Pop().uintVal;
+	const auto typeOfAction = Pop().uintVal;
+	const auto creature = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (creature == entt::null || !registry.Valid(creature))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "No creature for script");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(creature))
+	{
+		// The game goes on to teach nothing in particular and fails
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "No script for creature");
+		return;
+	}
+	Locator::creatureMindSystem::value().SetKnowsAction(creature, static_cast<CreatureActionLearningType>(typeOfAction), action,
+	                                                    knows);
 }
 
 void CreatureSetAgendaPriority() // 072 CREATURE_SET_AGENDA_PRIORITY
