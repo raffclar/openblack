@@ -62,7 +62,6 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/ScriptControl.h"
-#include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/Transform.h"
@@ -90,9 +89,12 @@
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TutorialSkipSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/TempleConstruction.h"
+#include "ECS/TownDesire.h"
 #include "ECS/TownPlaythings.h"
 #include "ECS/WorldObjects.h"
 #include "Enums.h"
@@ -875,6 +877,12 @@ void SetProperty() // 022 SET_PROPERTY
 		}
 		return;
 	}
+	if (prop == script::ObjectPropertyType::BuiltPercentage)
+	{
+		// A building is built that far, finished at all of it
+		ecs::construction::SetBuilt(object, value);
+		return;
+	}
 	// TODO(Daniels118): the other properties
 	NotImplemented(static_cast<int32_t>(prop));
 }
@@ -940,22 +948,11 @@ static map_coords::MapCoords ScriptFindPosition(const ecs::Registry& registry, e
 	return map_coords::FromMetres({position.x, position.z});
 }
 
-/// The things in a cell of the map that a search asks for. The temple isn't kept in the map's cells: it is looked at in
-/// the cell of its middle, after what the cell holds
+/// The things in a cell of the map that a search asks for
 static std::vector<ecs::script_find::Candidate> ScriptFindCandidates(const ScriptFindRequest& request, glm::ivec2 cell)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	std::vector<entt::entity> things = Locator::entitiesMap::value().GetAllInCell(cell);
-	if (request.type == ObjectType::Citadel)
-	{
-		registry.Each<const ecs::components::Temple, const Transform>(
-		    [&things, cell](entt::entity temple, const ecs::components::Temple&, const Transform& transform) {
-			    if (map_coords::CellOf(transform.position) == cell)
-			    {
-				    things.push_back(temple);
-			    }
-		    });
-	}
+	const std::vector<entt::entity> things = Locator::entitiesMap::value().GetAllInCell(cell);
 	std::vector<ecs::script_find::Candidate> found;
 	for (const auto thing : things)
 	{
@@ -1979,10 +1976,14 @@ void EndGameSpeed() // 129 END_GAME_SPEED
 
 void BuildBuilding() // 130 BUILD_BUILDING
 {
-	// const auto desire = Popf();
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto desire = Popf();
+	const auto position = PopVec();
+	// The towns start what they planned there: a planned temple goes up
+	// TODO(villager-life): the towns' other planned buildings
+	if (!ecs::construction::StartPlannedAt(position, desire).has_value())
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "BUILD_BUILDING: no planned temple at ({}, {})", position.x, position.z);
+	}
 }
 
 void SetAffectedByWind() // 131 SET_AFFECTED_BY_WIND
@@ -4074,11 +4075,27 @@ void GamePlaySaySoundEffect() // 340 GAME_PLAY_SAY_SOUND_EFFECT
 
 void SetTownDesireBoost() // 341 SET_TOWN_DESIRE_BOOST
 {
-	// const auto boost = Popf();
-	// const auto desire = Pop().intVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A town wants one of its desires that much more, or less, until a script changes it again; its order of desires is
+	// put right at once
+	const auto boost = Popf();
+	const auto desire = Pop().intVal;
+	const auto town = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	const bool isTown = town != entt::null && registry.Valid(town) && registry.AllOf<ecs::components::Town>(town);
+	if (!isTown)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_TOWN_DESIRE_BOOST: object not a town");
+	}
+	if (!ecs::town_desire::ValidScriptBoost(desire, boost))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_TOWN_DESIRE_BOOST: desire {} or boost {} out of range", desire,
+		                    boost);
+		return;
+	}
+	if (isTown)
+	{
+		Locator::townDesireSystem::value().SetBoost(town, static_cast<TownDesireInfo>(desire), boost, true);
+	}
 }
 
 void IsLockedInteraction() // 342 IS_LOCKED_INTERACTION
@@ -4750,9 +4767,8 @@ void GetHandState() // 413 GET_HAND_STATE
 
 void SetInterfaceCitadel() // 414 SET_INTERFACE_CITADEL
 {
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Whether tapping the temple's entrance takes the player inside
+	Locator::entitiesRegistry::value().Context().scriptLetsTempleBeEntered = Pop().intVal != 0;
 }
 
 void MapScriptFunction() // 415 MAP_SCRIPT_FUNCTION

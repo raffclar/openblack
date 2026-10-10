@@ -158,6 +158,8 @@ public:
 		/// The building's inner walls: each vertex moved in across the ground along its normal, by less for a two-sided
 		/// material than for another
 		bool innerWalls {false};
+		/// How far the inner walls stand in whatever the material, when given: a temple's
+		std::optional<float> innerWallInset;
 		/// Only the submeshes of this status are drawn, in place of those of status 0: a building's scaffold
 		std::optional<uint32_t> onlyStatus;
 		/// Where a building's model is cut, in its own space: its inner walls and the cap over them are drawn only for a

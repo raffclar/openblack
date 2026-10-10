@@ -41,6 +41,9 @@ struct RegistryContext
 	/// smash of a rock plays
 	uint8_t nextHandRockTap {0};
 	uint8_t nextCreatureRockSmash {0};
+	/// The scripts let the player go into their temple by tapping its entrance. They allow it until they say otherwise, and
+	/// every land starts allowing it again.
+	bool scriptLetsTempleBeEntered {true};
 	/// The game is over: the local player's temple is being destroyed
 	bool gameOver {false};
 	/// A skirmish: a playground land played rather than the story's. Losing a temple doesn't end it. openblack plays no

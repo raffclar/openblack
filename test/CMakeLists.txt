@@ -403,6 +403,9 @@ openblack_setup_and_add_test(test_physics_living test_physics_living.cpp)
 openblack_setup_and_add_test(test_physics_objects test_physics_objects.cpp)
 openblack_setup_and_add_test(test_damage_mesh test_damage_mesh.cpp)
 openblack_setup_and_add_test(
+  test_building_construction test_building_construction.cpp
+)
+openblack_setup_and_add_test(
   test_building_damage_system test_building_damage_system.cpp
 )
 openblack_setup_and_add_test(test_clip_sound_player test_clip_sound_player.cpp)
@@ -441,6 +444,11 @@ openblack_setup_and_add_test(test_video_rules video/test_video_rules.cpp)
 openblack_setup_and_add_test(test_video_system video/test_video_system.cpp)
 target_include_directories(
   test_video_system PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/bink
+)
+# The videos' frames decoded ahead on a thread of their own
+openblack_setup_and_add_test(test_frame_queue video/test_frame_queue.cpp)
+target_include_directories(
+  test_frame_queue PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/bink
 )
 # The loading screen's and the start-up screens' rules
 openblack_setup_and_add_test(
