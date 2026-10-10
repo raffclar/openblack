@@ -857,6 +857,30 @@
   "query": "living.forests"
  },
  {
+  "description": "The whales: where each is this turn and was at its start, the way it faces, its clip and the wake's timer",
+  "kind": "object",
+  "parameters": [],
+  "query": "living.whales"
+ },
+ {
+  "description": "The things walking the camera editor's tracks: the track, how far and up to where",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.walk_paths"
+ },
+ {
+  "description": "The dances: what they are danced for, whether dancing, their speed and clock, and each group's dancers",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.dances"
+ },
+ {
+  "description": "The scripts' flocks: their place, their domain and flock distances, and their members from the first to the leader",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.flocks"
+ },
+ {
   "description": "How many fireflies there are",
   "kind": "object",
   "parameters": [],
@@ -1058,10 +1082,22 @@
   "query": "view.cinematic"
  },
  {
+  "description": "The tasks with the camera and the dialogue, the scripts' spoken lines and the villagers drawn in high detail",
+  "kind": "object",
+  "parameters": [],
+  "query": "view.script_control"
+ },
+ {
   "description": "The editor: open, its tool, its camera and what is selected",
   "kind": "object",
   "parameters": [],
   "query": "view.editor"
+ },
+ {
+  "description": "What is drawn of the advisors this frame: near the screen or in the world, alpha, how far out in the world, and how close their posed meshes come to the camera beside its near plane",
+  "kind": "list",
+  "parameters": [],
+  "query": "advisors.draws"
  },
  {
   "description": "The creature systems' own state: the creature followed or in the cave, the hand on a creature, the hair, voices, footprints, physiology and the mind kept between lands",
@@ -1125,6 +1161,12 @@
   "kind": "object",
   "parameters": [],
   "query": "script.objects"
+ },
+ {
+  "description": "The scrolls and signs scripts put up: kind, challenge or text, started, height, where drawn; the beat and the switch that shows the scrolls",
+  "kind": "list",
+  "parameters": [],
+  "query": "script.highlights"
  },
  {
   "description": "The land's scripts whose names or files hold a text (any case): name, file, type (script, help, challenge_help, temple_help, temple_special, multiplayer_help) and parameters",
@@ -1228,6 +1270,18 @@
   ],
   "query": "script.call",
   "writes": true
+ },
+ {
+  "description": "The good and the evil advisor: what each does, where it hovers and whether it is talking",
+  "kind": "list",
+  "parameters": [],
+  "query": "help.advisors"
+ },
+ {
+  "description": "The scripts' dialogue: the text shown, whether it is read or waits for a click, who holds the dialogue and the line being said",
+  "kind": "object",
+  "parameters": [],
+  "query": "help.dialogue"
  },
  {
   "description": "Whether the game is paused, its turn, the frames served, its speed and any stepping",

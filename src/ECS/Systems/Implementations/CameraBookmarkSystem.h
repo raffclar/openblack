@@ -32,8 +32,11 @@ public:
 
 	void SetBookmark(uint8_t index, const glm::vec3& position, const glm::vec3& savedCameraOrigin) const override;
 	void ClearBookmark(uint8_t index) const override;
+	void SetEnabled(bool enabled) override { _enabled = enabled; }
+	[[nodiscard]] bool IsEnabled() const override { return _enabled; }
 
 private:
 	std::array<entt::entity, 8> _bookmarks;
+	bool _enabled {true};
 };
 } // namespace openblack::ecs::systems

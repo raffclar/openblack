@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <functional>
+#include <optional>
 #include <span>
 
 namespace openblack::ecs::components
@@ -79,6 +80,29 @@ struct Ages
 [[nodiscard]] constexpr bool IsChildAge(uint32_t age, uint32_t grownUp)
 {
 	return age < grownUp;
+}
+
+/// What giving a villager a new age changes: the age it is given, whether that makes it a child, and the model it
+/// changes to when it crosses between child and adult (none when it stays on the same side)
+struct AgeSetting
+{
+	uint32_t age {0};
+	bool child {false};
+	/// Set when its model changes: true for the child's model, false for its adult one
+	std::optional<bool> childModel;
+};
+
+/// A villager given an age: an adult is at least the youngest adult's age; its model changes only when the age it had
+/// was on the other side of growing up
+[[nodiscard]] constexpr AgeSetting SetAge(uint32_t age, uint32_t currentAge, uint32_t grownUp)
+{
+	AgeSetting setting {.age = GivenAge(age, grownUp)};
+	setting.child = IsChildAge(setting.age, grownUp);
+	if (setting.child != IsChildAge(currentAge, grownUp))
+	{
+		setting.childModel = setting.child;
+	}
+	return setting;
 }
 
 /// The size a villager starts at: a child its age's size from the table, an adult a little under full size

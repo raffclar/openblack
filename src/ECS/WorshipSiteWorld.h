@@ -51,11 +51,9 @@ public:
 	[[nodiscard]] virtual uint32_t PopulationOf(entt::entity town) const = 0;
 	/// The prayer power rules of a tribe's sites for a player: every site chants with the player's Aztec power
 	[[nodiscard]] virtual magic::WorshipBatteryRules ChantRules(Tribe tribe, PlayerNames player) const = 0;
-	/// Whether a dance of the info table starts by itself once its dancers have come
-	[[nodiscard]] virtual bool DanceStartsAutomatically(DanceInfo dance) const = 0;
-	/// How many lengths of the clock a dance of the info table runs before it starts over, from its dance file; none
-	/// when the file can't be read
-	[[nodiscard]] virtual std::optional<uint32_t> DanceLoops(DanceInfo dance) = 0;
+	/// A dance of the info table about a point, danced for a site: made as every dance is, stopped at a quarter speed
+	/// with the groups of its file; none when it can't be made
+	virtual entt::entity MakeDance(DanceInfo dance, glm::vec3 position, entt::entity site) = 0;
 	/// The game turn
 	[[nodiscard]] virtual uint32_t Turn() const = 0;
 	/// A site's food pot, empty, standing at a point and turned to an angle (radians)

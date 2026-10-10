@@ -15,6 +15,7 @@
 #include <vector>
 
 #include <LHVMTypes.h>
+#include <glm/vec3.hpp>
 
 #include "ScriptHeaders/NativeStubCalls.h"
 
@@ -30,6 +31,8 @@ public:
 	CHLApi();
 
 	[[nodiscard]] const std::vector<lhvm::NativeFunction>& GetFunctionsTable();
+	/// A script task has stopped: whatever it had control of goes back
+	static void TaskStopped(uint32_t task);
 
 	/// The scripts call a native: the one an unwritten native reports itself as
 	void EnterNative(uint32_t native) { _currentNative = native; }
@@ -46,6 +49,14 @@ public:
 	/// creature heard in its own voice
 	void ResetSwitches();
 
+	/// Whether the scripts show the challenge scrolls; the signs always show
+	[[nodiscard]] bool IsHighlightDrawOn() const { return _highlightDrawOn; }
+	void SetHighlightDrawOn(bool on) { _highlightDrawOn = on; }
+	/// A sound of one of the game's banks, by its number in the bank, through the game's common sound effect path: its
+	/// gates may keep it quiet (see audio::SoundEffectHeard). Placed, it isn't started further from the camera than the
+	/// sample's maximum distance.
+	void PlayBankSoundEffect(int32_t bank, int32_t sample, std::optional<glm::vec3> position) const;
+
 private:
 	void InitFunctionsTable0();
 	void InitFunctionsTable1();
@@ -57,6 +68,7 @@ private:
 	uint32_t _currentNative {0};
 	script::NativeStubCalls _stubCalls;
 	bool _gameSoundOn {true};
+	bool _highlightDrawOn {true};
 };
 
 } // namespace openblack::chlapi

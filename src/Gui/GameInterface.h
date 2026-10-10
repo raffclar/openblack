@@ -40,6 +40,12 @@ class Texture2D;
 class VideoOverlay;
 } // namespace openblack::graphics
 
+namespace openblack::help
+{
+enum class TextFont : uint8_t;
+struct TextRun;
+} // namespace openblack::help
+
 namespace openblack::gui
 {
 
@@ -118,6 +124,13 @@ public:
 	void SetFloatingNumbers(std::vector<FloatingNumber> numbers) { _floatingNumbers = std::move(numbers); }
 
 private:
+	/// A font with its glyphs, white with their coverage in alpha
+	struct FontFace
+	{
+		GameFont font;
+		std::unique_ptr<graphics::Texture2D> texture;
+	};
+
 	GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<graphics::Texture2D> atlas,
 	              std::unique_ptr<graphics::Texture2D> fontTexture, std::unique_ptr<graphics::Texture2D> symbols,
 	              std::unique_ptr<graphics::Texture2D> mice, std::unique_ptr<graphics::Texture2D> atmos,
@@ -141,6 +154,12 @@ private:
 	void DrawVideo(glm::u16vec2 resolution);
 	/// The tooltip's glow: a soft box of atmos.raw added round a rectangle
 	void DrawGlow(glm::vec2 min, glm::vec2 max, glm::vec4 colour);
+	/// The scripts' dialogue: its see-through box above the bottom cinema bar, then its words
+	void DrawDialogue(glm::u16vec2 resolution, int barPixels);
+	/// One word of the dialogue, cut to the box's top and bottom
+	void DrawDialogueRun(const help::TextRun& run);
+	/// The font of the dialogue's words: the advisors each have their own, and j0 stands in for one that is missing
+	[[nodiscard]] std::pair<const GameFont*, const graphics::Texture2D*> DialogueFont(help::TextFont font) const;
 
 	TextDatabase _texts;
 	GameFont _font;
@@ -150,6 +169,9 @@ private:
 	std::unique_ptr<graphics::Texture2D> _mice;
 	/// The atmosphere texture of glows and arrows
 	std::unique_ptr<graphics::Texture2D> _atmos;
+	/// The good advisor's font f1 and the evil one's f3, which their words in the dialogue are in
+	std::optional<FontFace> _goodAdvisorFont;
+	std::optional<FontFace> _evilAdvisorFont;
 	Canvas _canvas;
 	Canvas _pointerCanvas {graphics::RenderPass::Cursor};
 	DialogPainter _painter;

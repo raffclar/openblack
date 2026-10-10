@@ -92,6 +92,8 @@ enum class Facet : uint8_t
 	Animals,
 	/// The sky: the moon and its phases
 	Sky,
+	/// The player's two advisors, the good one and the evil one
+	Advisors,
 
 	_Count
 };
@@ -516,6 +518,9 @@ struct Command
 		/// The player's hand knocks on the scenario's object, a building, as the Action button pressed on it does, from
 		/// where the hand is
 		HandTapObject,
+		/// One of the player's advisors (value: 0 the good one, 1 the evil one) is told to do something, as the scripts
+		/// tell it (advisor). Needs no creature
+		Advisor,
 		/// The creature walks to its home: its temple's pen while its player has a temple
 		WalkHome,
 	};
@@ -558,6 +563,27 @@ struct Command
 	std::optional<size_t> atCreature;
 	/// The player's alignment jumped to, from -1 (evil) to 1 (good)
 	float alignment {0.0f};
+	/// What an advisor is told: to come out of its corner, or to appear in a puff of smoke; to go home, or to vanish; to
+	/// cling to or fly to a point on the screen (point, from 0 to 1 across and down); to point at that point on the
+	/// screen, or at a point of the land (point, from the middle of the map), out in the world or not (gentle); to look
+	/// at the point of the land; to play an anim (anim) at the point on the screen at a speed (amount); to feel an
+	/// emotion (anim)
+	enum class AdvisorAction : uint8_t
+	{
+		Out,
+		Appear,
+		Home,
+		Vanish,
+		Cling,
+		Fly,
+		PointOnScreen,
+		PointAtLand,
+		LookAtLand,
+		PlayAnim,
+		Feel,
+	};
+	AdvisorAction advisor {AdvisorAction::Out};
+	uint32_t anim {0};
 };
 [[nodiscard]] std::string_view Name(Command::Kind kind);
 /// Whether a command is the player's mouse, which needs no creature
@@ -610,6 +636,23 @@ struct ThrowSetup
 	std::optional<float> repeatSeconds;
 };
 
+/// A scroll or sign as a land's script puts one up, at a point from the middle of the map; it comes after the
+/// scenario's objects in their order, so commands reach it as the object after the last
+struct HighlightSetup
+{
+	/// Its row of the highlights' info table, as a script gives it (0 plain, 1 sign, 2 silver, 3 gold)
+	uint32_t kind {3};
+	glm::vec2 offset {0.0f};
+	/// The challenge it belongs to, as the script's own challenge gives it
+	uint32_t challenge {1};
+	/// A script's height above the land; none to stand on what is under it
+	std::optional<float> height;
+	/// A sign's tip text and category
+	std::optional<std::pair<uint32_t, uint32_t>> tip;
+	/// Started by the script as it is made
+	bool active {false};
+};
+
 struct Scenario
 {
 	/// Unique and never changed, for picking it from the command line or a test
@@ -629,6 +672,8 @@ struct Scenario
 	std::vector<VortexSetup> vortices;
 	std::vector<DispenserSetup> dispensers;
 	std::vector<MiracleCast> miracles;
+	/// The scrolls and signs scripts put up, made after the objects
+	std::vector<HighlightSetup> highlights;
 	std::vector<Command> commands;
 	/// After the last command, the commands go round again from this one
 	std::optional<size_t> repeatFrom;
@@ -699,8 +744,12 @@ void AddHandLookScenarios(std::vector<Scenario>& all);
 /// The Norse gate of the creatures' glade and the gate stone plinth: opening, closing and laying the stones
 void AddGateScenarios(std::vector<Scenario>& all);
 void AddKnockScenarios(std::vector<Scenario>& all);
+/// The scrolls and signs the land scripts put up
+void AddHighlightScenarios(std::vector<Scenario>& all);
 /// The moon at night, seen to the east, for trying its phases and its path with the moon debug window
 void AddSkyScenarios(std::vector<Scenario>& all);
+/// The advisors coming out, clinging, pointing and acting
+void AddAdvisorScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them
 [[nodiscard]] std::span<const Scenario> All();

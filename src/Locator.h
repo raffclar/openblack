@@ -126,7 +126,16 @@ class CreatureModeSystemInterface;
 class CreatureCaveSystemInterface;
 class TattooEditorSystemInterface;
 class CinematicDirectorSystemInterface;
+class ScriptControlSystemInterface;
+class DialogueControlSystemInterface;
+class HelpSpeechSystemInterface;
+class HighDetailSystemInterface;
+class WalkPathSystemInterface;
+class DanceSystemInterface;
+class WhaleSystemInterface;
 class VideoSystemInterface;
+class HelpTextSystemInterface;
+class AdvisorSystemInterface;
 class SoundTagSystemInterface;
 class RainSystemInterface;
 class ChimneySmokeSystemInterface;
@@ -169,6 +178,7 @@ class ExplosionSystemInterface;
 class RewardSystemInterface;
 class ScriptObjectsSystemInterface;
 class BuildingDamageSystemInterface;
+class ScriptHighlightSystemInterface;
 class InspectorSystemInterface;
 } // namespace ecs::systems
 
@@ -256,7 +266,16 @@ struct Locator
 	using creatureCaveSystem = entt::locator<ecs::systems::CreatureCaveSystemInterface>;
 	using tattooEditorSystem = entt::locator<ecs::systems::TattooEditorSystemInterface>;
 	using cinematicDirectorSystem = entt::locator<ecs::systems::CinematicDirectorSystemInterface>;
+	using scriptControlSystem = entt::locator<ecs::systems::ScriptControlSystemInterface>;
+	using dialogueControlSystem = entt::locator<ecs::systems::DialogueControlSystemInterface>;
+	using helpSpeechSystem = entt::locator<ecs::systems::HelpSpeechSystemInterface>;
+	using highDetailSystem = entt::locator<ecs::systems::HighDetailSystemInterface>;
+	using walkPathSystem = entt::locator<ecs::systems::WalkPathSystemInterface>;
+	using danceSystem = entt::locator<ecs::systems::DanceSystemInterface>;
+	using whaleSystem = entt::locator<ecs::systems::WhaleSystemInterface>;
 	using videoSystem = entt::locator<ecs::systems::VideoSystemInterface>;
+	using helpTextSystem = entt::locator<ecs::systems::HelpTextSystemInterface>;
+	using advisorSystem = entt::locator<ecs::systems::AdvisorSystemInterface>;
 	using soundTagSystem = entt::locator<ecs::systems::SoundTagSystemInterface>;
 	using rainSystem = entt::locator<ecs::systems::RainSystemInterface>;
 	using chimneySmokeSystem = entt::locator<ecs::systems::ChimneySmokeSystemInterface>;
@@ -282,6 +301,7 @@ struct Locator
 	using rewardSystem = entt::locator<ecs::systems::RewardSystemInterface>;
 	using scriptObjects = entt::locator<ecs::systems::ScriptObjectsSystemInterface>;
 	using buildingDamageSystem = entt::locator<ecs::systems::BuildingDamageSystemInterface>;
+	using scriptHighlightSystem = entt::locator<ecs::systems::ScriptHighlightSystemInterface>;
 	/// Only in builds with the inspector, and only once --inspect-port started it
 	using inspector = entt::locator<ecs::systems::InspectorSystemInterface>;
 	using vm = entt::locator<lhvm::LHVM>;

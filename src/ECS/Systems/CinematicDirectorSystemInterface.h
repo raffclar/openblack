@@ -26,6 +26,8 @@ public:
 	virtual void FadeTo(uint8_t red, uint8_t green, uint8_t blue, int8_t seconds) = 0;
 	/// Fades the picture from the colour back to clear over whole seconds, at once for none
 	virtual void FadeBackToNormal(int8_t seconds) = 0;
+	/// As the story's scripts start a new game: the picture is black from the first frame until they fade it in
+	virtual void StartStory() = 0;
 	[[nodiscard]] virtual bool IsFadeFinished() const = 0;
 	/// The fade's colour over the picture, 0xAARRGGBB, nothing for an alpha of 0
 	[[nodiscard]] virtual uint32_t GetFadeColour() const = 0;

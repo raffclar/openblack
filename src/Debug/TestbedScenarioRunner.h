@@ -104,6 +104,7 @@ public:
 
 private:
 	void SetUpEnvironment(const Environment& environment);
+	void PlaceHighlights(const Scenario& scenario, glm::vec2 middle);
 	void PlaceObjects(const Scenario& scenario, glm::vec2 middle);
 	/// The scenario's temples and its flocks of the land's birds
 	void PlaceBirds(const Scenario& scenario, glm::vec2 middle);
@@ -137,6 +138,8 @@ private:
 	std::string GiveLeashCommand(entt::entity creature, const Command& command);
 	/// The commands of the player's hand alone: a seed put in it, a gesture drawn with it
 	std::string GivePlayerCommand(const Command& command);
+	/// Tells one of the advisors what to do, as the scripts tell it
+	[[nodiscard]] std::string GiveAdvisorCommand(const Command& command) const;
 	/// The hand goes over a fireball in flight to take hold of it; what came of that
 	std::string HandTakeFireBall();
 	std::string HandTapObject(size_t index);

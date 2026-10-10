@@ -9,13 +9,16 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <algorithm>
 #include <array>
 #include <memory>
 #include <numbers>
 #include <optional>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
+#include <DanceFile.h>
 #include <glm/glm.hpp>
 #include <gtest/gtest.h>
 
@@ -30,6 +33,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/Dances.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/WorshipSiteSystem.h"
 #include "ECS/WorshipSites.h"
@@ -86,8 +90,16 @@ public:
 		return chantRules;
 	}
 
-	[[nodiscard]] bool DanceStartsAutomatically(DanceInfo /*dance*/) const override { return true; }
-	[[nodiscard]] std::optional<uint32_t> DanceLoops(DanceInfo /*dance*/) override { return 2; }
+	entt::entity MakeDance(DanceInfo dance, glm::vec3 position, entt::entity site) override
+	{
+		// Every dance file read here loops twice and the dances start by themselves
+		auto file = std::make_shared<dance::DanceFile>();
+		file->loops = 2;
+		return ecs::dances::Create(
+		    _registry,
+		    {.type = dance, .autostart = true, .place = map_coords::FromMetres({position.x, position.z}), .owner = site},
+		    std::move(file));
+	}
 	[[nodiscard]] uint32_t Turn() const override { return turn; }
 	entt::entity MakeFoodPot(glm::vec3 position, float yAngle) override
 	{
@@ -466,12 +478,14 @@ TEST(WorshipSiteSystem, TheDanceFollowsTheChantingAndItsClockRunsWhileDanced)
 	// With no dancers to chant, the game counts all their chanting as drawn: the dance is set going flat out
 	f.system->ProcessChants();
 	EXPECT_FLOAT_EQ(f.registry.Get<const Dance>(danceEntity).speed, 1.0f);
-	f.system->UpdateTurn();
+	// It goes on in the dances' turn, as every dance does
+	ecs::dances::TurnContext context {.turn = 0, .available = [](entt::entity) { return true; }, .finished = {}};
+	ecs::dances::ProcessTurn(f.registry, danceEntity, context);
 	EXPECT_FLOAT_EQ(f.registry.Get<const Dance>(danceEntity).clock, 0.0f);
 	f.system->SetDancers(site, 3);
 	EXPECT_EQ(f.registry.Get<const Dance>(danceEntity).dancers, 3u);
-	f.world->turn = 5;
-	f.system->UpdateTurn();
+	context.turn = 5;
+	ecs::dances::ProcessTurn(f.registry, danceEntity, context);
 	EXPECT_FLOAT_EQ(f.registry.Get<const Dance>(danceEntity).clock, 1.0f);
 }
 
