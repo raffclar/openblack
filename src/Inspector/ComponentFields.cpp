@@ -204,8 +204,14 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::AnimatedStatic>(context)
 	    .Field<&components::AnimatedStatic::type>("type")
 	    .Field<&components::AnimatedStatic::openState>("openState")
-	    .Field<&components::AnimatedStatic::plinthState>("plinthState")
-	    .Field<&components::AnimatedStatic::plinthFull>("plinthFull");
+	    .Field<&components::AnimatedStatic::gateStones>("gateStones");
+	Reflect<components::AnimatedStaticPose>(context)
+	    .Field<&components::AnimatedStaticPose::place>("place")
+	    .Field<&components::AnimatedStaticPose::bones>("bones")
+	    .Field<&components::AnimatedStaticPose::stones>("stones");
+	Reflect<components::PlinthStone>(context)
+	    .Field<&components::PlinthStone::plinth>("plinth")
+	    .Field<&components::PlinthStone::pickable>("pickable");
 	Reflect<components::AtHome>(context).Field<&components::AtHome::beenToBed>("beenToBed");
 	Reflect<components::AudioEmitter>(context)
 	    .Field<&components::AudioEmitter::sourceId>("sourceId")
