@@ -295,3 +295,84 @@ TEST(Inspector, OnlyAPingLeavesControl)
 	EXPECT_TRUE(Inspector::TakesControl(R"({"query": "sky.moon"})"));
 	EXPECT_TRUE(Inspector::TakesControl("not json"));
 }
+
+// Every answer names the game it came from, so that a tool talking to several games can tell a crossed answer
+TEST(Inspector, EveryAnswerNamesItsGame)
+{
+	Inspector inspector;
+	auto fake = std::make_unique<FakeProvider>();
+	inspector.Add(std::move(fake));
+	inspector.SetIdentity({{"pid", 1234}, {"port", 47801}, {"worktree", "C:/wt"}, {"land", "testbed"}});
+	const Json game = {{"pid", 1234}, {"port", 47801}, {"worktree", "C:/wt"}};
+	EXPECT_EQ(Ask(inspector, R"({"query": "fake.all"})")["game"], game);
+	EXPECT_EQ(Ask(inspector, R"({"query": "fake.none"})")["game"], game);
+	EXPECT_EQ(Ask(inspector, "not json")["game"], game);
+}
+
+// A game that hasn't said what it is answers as before, with nothing more
+TEST(Inspector, AnswersWithoutAnIdentityNameNoGame)
+{
+	const Inspector inspector;
+	EXPECT_FALSE(Ask(inspector, R"({"query": "ping"})").contains("game"));
+}
+
+TEST(Inspector, APingSaysTheGameIsReady)
+{
+	const Inspector inspector;
+	EXPECT_EQ(Ask(inspector, R"({"query": "ping"})")["result"]["ready"], true);
+}
+
+// While the game loads it can't answer for its state: a ping and describe still answer, game.state says it isn't
+// ready, and everything else is refused as loading, so that tools wait and ask again rather than time out
+TEST(Inspector, WhileLoadingOnlyWhatReadsNothingOfTheGameIsAnswered)
+{
+	Inspector inspector;
+	auto fake = std::make_unique<FakeProvider>();
+	auto* provider = fake.get();
+	inspector.Add(std::move(fake));
+	inspector.SetIdentity({{"pid", 7}, {"port", 50000}, {"worktree", "C:/wt"}});
+	const auto ask = [&inspector](const std::string& line) {
+		const auto answer = Parse(inspector.HandleWhileLoading(line, "Land1.txt"));
+		EXPECT_TRUE(answer.has_value());
+		return answer.value_or(Json());
+	};
+
+	const auto ping = ask(R"({"id": 1, "query": "ping"})");
+	EXPECT_EQ(ping["ok"], true);
+	EXPECT_EQ(ping["result"]["ready"], false);
+	EXPECT_EQ(ping["result"]["loading"], "Land1.txt");
+	EXPECT_EQ(ping["result"]["pid"], 7);
+	EXPECT_EQ(ping["loading"], "Land1.txt");
+	EXPECT_EQ(ping["game"]["pid"], 7);
+
+	EXPECT_EQ(ask(R"({"query": "describe"})")["ok"], true);
+
+	const auto state = ask(R"({"id": 2, "query": "game.state"})");
+	EXPECT_EQ(state["id"], 2);
+	EXPECT_EQ(state["ok"], true);
+	EXPECT_EQ(state["result"]["ready"], false);
+	EXPECT_EQ(state["result"]["loading"], "Land1.txt");
+
+	const auto other = ask(R"({"id": 3, "query": "fake.all"})");
+	EXPECT_EQ(other["id"], 3);
+	EXPECT_EQ(other["ok"], false);
+	EXPECT_EQ(other["loading"], "Land1.txt");
+	EXPECT_EQ(other["game"]["pid"], 7);
+	// The game's providers aren't asked while it loads
+	EXPECT_EQ(provider->asked, 0);
+
+	EXPECT_EQ(ask("not json")["ok"], false);
+}
+
+// The catalogue is every query in full, as tools build their schemas from it
+TEST(Inspector, TheCatalogueDescribesEveryQueryInFull)
+{
+	Inspector inspector;
+	inspector.Add(std::make_unique<FakeProvider>());
+	const auto catalogue = inspector.Catalogue();
+	ASSERT_EQ(catalogue.size(), 3u);
+	EXPECT_EQ(catalogue[0]["query"], "fake.one");
+	EXPECT_EQ(catalogue[0]["parameters"][0]["name"], "id");
+	EXPECT_EQ(catalogue[0]["parameters"][0]["required"], true);
+	EXPECT_EQ(catalogue[2]["needs_near"], true);
+}

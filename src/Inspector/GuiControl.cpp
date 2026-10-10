@@ -65,7 +65,7 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeGuiProvider(GuiTarg
 	auto provider = std::make_unique<FunctionProvider>("gui");
 	provider->Add({.name = "windows",
 	               .description = "The debug windows and the game's own (its menu, the Creature Cave): name, kind, open; "
-	                              "the menu's page and the buttons it can press by name",
+	                              "the menu's page (or question) and the controls on it that can be pressed by name",
 	               .parameters = {},
 	               .kind = ResultKind::List,
 	               .needsNear = false},
@@ -94,9 +94,11 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeGuiProvider(GuiTarg
 	              openOrClose(false));
 	provider->Add(
 	    Write("press",
-	          "Presses a button of a window by its label, as a click on it would. A debug window's button inside a table "
-	          "row or another scope its window pushed needs path: the labels and numbers leading to it. The press is "
-	          "made at the window's next frame; read what it changed after",
+	          "Presses a button of a window by its label, as a click on it would. The game's menu: any control of the page "
+	          "it shows (buttons, check boxes, sliders in their middle, tabs) or of the question it asks, as gui.windows "
+	          "lists them; path [n] for the n-th of a name. A debug window's button inside a table row or another scope "
+	          "its window pushed needs path: the labels and numbers leading to it. The press is made at the window's "
+	          "next frame; read what it changed after",
 	          {Required("window", "string", "The window's name"),
 	           Required("button", "string", "The button's label"),
 	           {.name = "path",

@@ -57,6 +57,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/CreatureHome.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
@@ -249,40 +250,6 @@ std::vector<feedback::Capsule> BodyOf(const ecs::Registry& registry, entt::entit
 	return feedback::BodyCapsules(animation->skeleton.parents, animation->boneMatrices,
 	                              creature::PlacementMatrix(transform->position, transform->rotation, transform->scale),
 	                              feedback::k_BodyRadiusShare * HeightOf(body->size));
-}
-
-/// Where a temple keeps its player's creature: the pen its mesh marks in front of it, turned and moved with the temple.
-/// None when its mesh marks no pen
-std::optional<glm::vec3> TemplePenOf(const Transform& transform, const Mesh* mesh)
-{
-	if (mesh == nullptr || !Locator::resources::has_value())
-	{
-		return std::nullopt;
-	}
-	const auto& meshes = Locator::resources::value().GetMeshes();
-	if (!meshes.Contains(mesh->id))
-	{
-		return std::nullopt;
-	}
-	return creature_mode::TemplePen(transform.position, transform.rotation, transform.scale,
-	                                meshes.Handle(mesh->id)->GetExtraMetrics());
-}
-
-/// A creature's home, where it is carried when it passes out: its player's temple's pen while the temple stands, else
-/// the home it was given, or else the fallback
-glm::vec3 HomeOf(ecs::Registry& registry, entt::entity creature, glm::vec3 fallback)
-{
-	const auto* leash = registry.TryGet<const CreatureLeash>(creature);
-	const auto owner = registry.Get<const Creature>(creature).owner;
-	std::optional<glm::vec3> temple;
-	registry.Each<const Temple, const Transform>(
-	    [&registry, &temple, owner](entt::entity entity, const Temple& building, const Transform& transform) {
-		    if (building.owner == owner && !temple.has_value())
-		    {
-			    temple = TemplePenOf(transform, registry.TryGet<const Mesh>(entity));
-		    }
-	    });
-	return creature_mode::PenOf(leash != nullptr ? leash->home : std::nullopt, temple, fallback);
 }
 
 /// Where a creature is carried when its player has no temple and it passed out outside a fight, as on the testbed: the
@@ -1090,7 +1057,8 @@ void CreatureFightSystem::Faint(entt::entity creature, std::optional<glm::vec3> 
 	const auto here = registry.Get<const Transform>(creature).position;
 	const auto fallback = start.has_value() ? start : NoPen();
 	registry.AssignOrReplace<CreatureKnockedOut>(
-	    creature, CreatureKnockedOut {.rest = rest, .home = HomeOf(registry, creature, fallback.value_or(here))});
+	    creature,
+	    CreatureKnockedOut {.rest = rest, .home = creature_home::HomeOf(registry, creature).value_or(fallback.value_or(here))});
 }
 
 void CreatureFightSystem::KillPermanently(entt::entity creature)
@@ -2089,7 +2057,8 @@ void CreatureFightSystem::ProcessKnockedOut()
 				if (knockedOut.home.has_value() && locomotion != nullptr)
 				{
 					// The temple's pen is taken again now, as the home follows the temple every turn
-					PlaceAt(*locomotion, registry.Get<Transform>(entity), HomeOf(registry, entity, *knockedOut.home));
+					PlaceAt(*locomotion, registry.Get<Transform>(entity),
+					        creature_home::HomeOf(registry, entity).value_or(*knockedOut.home));
 					registry.SetDirty();
 				}
 				SetFizz(entity, 0.0f, creature_fizz::k_CarryHomeSeconds);

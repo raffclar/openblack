@@ -31,6 +31,7 @@
 
 #include "AudioPlayerInterface.h"
 #include "Camera/Camera.h"
+#include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
 #include "ECS/Registry.h"
@@ -60,7 +61,9 @@ AudioManager::AudioManager()
     : _audioPlayer(new AudioPlayer())
 {
 	_audioPlayer->Initialize();
-	_atmos = std::make_unique<AtmosPlayer>(static_cast<VoiceBackend&>(*this));
+	// The atmosphere's random numbers are seeded from the date as the game reads it (pinned in a seeded run)
+	_atmos = std::make_unique<AtmosPlayer>(static_cast<VoiceBackend&>(*this),
+	                                       [] { return static_cast<uint32_t>(machine_clock::UnixTime()); });
 	_musicStreams = std::make_unique<MusicStreamBackend>(*_audioPlayer);
 	_musicPlayer = std::make_unique<MusicPlayer>(*_musicStreams);
 }
@@ -301,7 +304,9 @@ void AudioManager::CreateBuffer(Sound& sound)
 	auto sampleRate = sound.sampleRate;
 	for (size_t i = 0; i < sound.buffer.size(); ++i)
 	{
-		const auto result = DecodeSound(sound.buffer[i], sound.sampleRate);
+		// Decoded already when it was loaded, the same way
+		const auto result = sound.decoded && i < sound.decoded->size() ? std::move((*sound.decoded)[i])
+		                                                               : DecodeSound(sound.buffer[i], sound.sampleRate);
 		const auto part = sound.buffer.size() > 1 ? fmt::format(" part {}", i) : std::string();
 		if (!result.sound)
 		{
@@ -325,6 +330,7 @@ void AudioManager::CreateBuffer(Sound& sound)
 		sampleRate = decoded.sampleRate;
 		decodeBuffer.insert(decodeBuffer.end(), decoded.samples.begin(), decoded.samples.end());
 	}
+	sound.decoded.reset();
 	sound.bufferId = CreateBuffer(sound.channelLayout, decodeBuffer, sampleRate);
 	// A loop over part of the sample, as the game's mixer plays it: from the start, round its loop while looping, and on
 	// to the end once let go

@@ -44,6 +44,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mist.h"
 #include "ECS/Components/Player.h"
@@ -89,6 +90,7 @@
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
+#include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
@@ -106,6 +108,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -117,6 +120,7 @@
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
+#include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
@@ -124,7 +128,9 @@
 #include "ECS/Systems/TornadoSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/TutorialSkipSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -230,10 +236,12 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"teleportSystem", "magic.teleport"},
     LocatorCoverage {"creatureCarryOverSystem", "creatures.systems"},
     LocatorCoverage {"creatureFizzSystem", "creatures.systems"},
+    LocatorCoverage {"tattooEditorSystem", "creatures.systems"},
     LocatorCoverage {"tornadoSystem", "magic.state"},
     LocatorCoverage {"magicShieldSystem", "magic.state"},
     LocatorCoverage {"forestSystem", "living.forests"},
     LocatorCoverage {"fireflySystem", "living.fireflies"},
+    LocatorCoverage {"fishFarmSystem", "living.fish_farms"},
     LocatorCoverage {"gestureSystem", "players.gestures"},
     LocatorCoverage {"miracleFxSystem", "magic.state"},
     LocatorCoverage {"fireSystem", "magic.fires"},
@@ -244,6 +252,9 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"inspector", "engine.services"},
     LocatorCoverage {"vm", "script.vm"},
     LocatorCoverage {"chlapi", "script.natives"},
+    LocatorCoverage {"videoSystem", "view.video"},
+    LocatorCoverage {"playerProfileSystem", "players.new_game"},
+    LocatorCoverage {"tutorialSkipSystem", "players.new_game"},
 };
 
 constexpr std::string_view k_NoRegistry = "there is no registry: no land is loaded";
@@ -748,6 +759,25 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 	                  "the fireflies", [](const ecs::systems::FireflySystemInterface& fireflies, const QueryContext& /*c*/) {
 		                  return Json {{"fireflies", fireflies.GetFireflies().size()}};
 	                  }));
+	provider->Add(Query("fish_farms", "The fish farms: their town, fish left, fishermen and shoal", {}, ResultKind::List),
+	              Serve<Locator::fishFarmSystem>(
+	                  "the fish farms", [](const ecs::systems::FishFarmSystemInterface& farms, const QueryContext& /*c*/) {
+		                  Json items = Json::array();
+		                  const auto* registry = Registry();
+		                  if (registry == nullptr)
+		                  {
+			                  return items;
+		                  }
+		                  registry->Each<const FishFarm>([&](entt::entity entity, const FishFarm& farm) {
+			                  auto item = Listed(*registry, entity);
+			                  item["town"] = farm.town == entt::null ? Json(nullptr) : Json(ToId(farm.town));
+			                  item["fish_left"] = farms.FishLeft(entity);
+			                  item["fishermen"] = farm.fishermen.size();
+			                  item["shoal"] = farm.shoal.has_value() ? Point(farm.shoal->centre) : Json(nullptr);
+			                  items.push_back(std::move(item));
+		                  });
+		                  return items;
+	                  }));
 	provider->Add(Query("chimneys", "The chimneys smoking", {}, ResultKind::List),
 	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
 		              Json items = Json::array();
@@ -853,6 +883,25 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 std::unique_ptr<ProviderInterface> PlayersProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("players");
+	provider->Add(Query("new_game", "How the new game started: whether the tutorial and the creature training are "
+	                                "skipped and the old creature kept, and the player profiles"),
+	              [](const QueryContext& /*c*/) {
+		              Json result = Json::object();
+		              if (Locator::tutorialSkipSystem::has_value())
+		              {
+			              const auto& skip = Locator::tutorialSkipSystem::value().Get();
+			              result["skip_tutorial"] = skip.skipTutorial;
+			              result["skip_creature_training"] = skip.skipCreatureTraining;
+			              result["keep_old_creature"] = skip.keepOldCreature;
+		              }
+		              if (Locator::playerProfileSystem::has_value())
+		              {
+			              const auto& profiles = Locator::playerProfileSystem::value();
+			              result["profiles"] = profiles.GetProfileCount();
+			              result["profile_has_creature"] = profiles.CurrentProfileHasCreature();
+		              }
+		              return QueryResult::Value(std::move(result));
+	              });
 	provider->Add(Query("list", "The players: their entities, primary creatures and alignment", {}, ResultKind::List),
 	              Serve<Locator::playerSystem>(
 	                  "the players", [](const ecs::systems::PlayerSystemInterface& players, const QueryContext& /*c*/) {
@@ -1087,6 +1136,30 @@ std::unique_ptr<ProviderInterface> TempleProvider()
 std::unique_ptr<ProviderInterface> ViewProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("view");
+	provider->Add(Query("video", "The video playing: its frame, frame count and rate, its fade, the falling spell, and "
+	                             "whether films and 16-bit colour are on"),
+	              [](const QueryContext& /*c*/) {
+		              Json result = Json::object();
+		              if (Locator::videoSystem::has_value())
+		              {
+			              const auto& videos = Locator::videoSystem::value();
+			              result["playing"] = videos.IsPlaying();
+			              result["covers_screen"] = videos.CoversScreen();
+			              result["hides_world"] = videos.HidesWorld();
+			              result["films"] = videos.AreFilmsEnabled();
+			              result["sixteen_bit_colour"] = videos.IsSixteenBitColour();
+			              if (const auto status = videos.GetStatus())
+			              {
+				              result["frame"] = status->frame;
+				              result["frame_count"] = status->frameCount;
+				              result["fps"] = status->fps;
+				              result["alpha"] = status->alpha;
+				              result["falling_spell"] = status->fallingSpell;
+				              result["falling_spell_state"] = status->fallingSpellState;
+			              }
+		              }
+		              return QueryResult::Value(std::move(result));
+	              });
 	provider->Add(Query("state", "Whether a camera path holds the camera, the camera's help, and the knock readout"),
 	              [](const QueryContext& /*c*/) {
 		              Json result = Json::object();
@@ -1208,6 +1281,14 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		              {
 			              const auto scroll = Locator::creatureFizzSystem::value().EyeStaticScroll();
 			              result["eye_static_scroll"] = {scroll.x, scroll.y};
+		              }
+		              // The tattoo editor: whether it is open, on which creature, and the tattoo site under the pointer
+		              if (Locator::tattooEditorSystem::has_value())
+		              {
+			              const auto& editor = Locator::tattooEditorSystem::value();
+			              result["tattoo_editor"] = {{"open", editor.IsOpen()},
+			                                         {"creature", Id(editor.GetCreature())},
+			                                         {"hovered_site", Optional(editor.GetHoveredSite())}};
 		              }
 		              return QueryResult::Value(std::move(result));
 	              });

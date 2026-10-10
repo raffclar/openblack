@@ -210,6 +210,11 @@ std::vector<QueryDescription> RegistryProvider::Describe() const
 	     .parameters = {{.name = "component",
 	                     .type = "string",
 	                     .description = "Also hash this component's fields on each entity that has it",
+	                     .required = false},
+	                    {.name = "exclude",
+	                     .type = "array",
+	                     .description = "Leave out the entities with any of these components, e.g. [\"HandGrab\"]: the "
+	                                    "hand eases towards the pointer every frame drawn, paused or not",
 	                     .required = false}},
 	     .kind = ResultKind::Object,
 	     .needsNear = false},
@@ -297,9 +302,32 @@ QueryResult RegistryProvider::Hash(const ecs::Registry& registry, const Json& pa
 			return QueryResult::Error("no component " + *name + "; ask ecs.components for their names");
 		}
 	}
+	std::vector<const entt::sparse_set*> excluded;
+	if (const auto it = params.find("exclude"); it != params.end())
+	{
+		if (!it->is_array())
+		{
+			return QueryResult::Error("exclude is a list of component names");
+		}
+		for (const auto& name : *it)
+		{
+			const auto* storage =
+			    name.is_string() ? reflection::FindStorage(registry.Underlying(), name.get<std::string>()) : nullptr;
+			if (storage == nullptr)
+			{
+				return QueryResult::Error("no component " + Dump(name) + " to exclude; ask ecs.components for their names");
+			}
+			excluded.push_back(storage);
+		}
+	}
 	std::vector<entt::entity> entities;
 	registry.Each<const ecs::components::Transform>(
-	    [&entities](entt::entity entity, const ecs::components::Transform&) { entities.push_back(entity); });
+	    [&entities, &excluded](entt::entity entity, const ecs::components::Transform&) {
+		    if (std::ranges::none_of(excluded, [entity](const auto* storage) { return storage->contains(entity); }))
+		    {
+			    entities.push_back(entity);
+		    }
+	    });
 	std::ranges::sort(entities);
 	for (const auto entity : entities)
 	{

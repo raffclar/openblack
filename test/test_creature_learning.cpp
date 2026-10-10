@@ -10,6 +10,8 @@
 #include <cmath>
 
 #include <array>
+#include <functional>
+#include <optional>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -20,6 +22,7 @@
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreaturePlanner.h"
+#include "Creature/CreatureTownCompassion.h"
 #include "Creature/CreatureWatching.h"
 #include "Creature/PerceivedDesires.h"
 
@@ -521,6 +524,101 @@ TEST(CreaturePlanActions, BuildsAgendas)
 	EXPECT_EQ(creature_plan_actions::For("CastFireball"), nullptr);
 }
 
+TEST(CreaturePlanActions, FishingWalksToTheShoalBringsFoodOutOfTheSeaAndEatsIt)
+{
+	const auto random = [](uint32_t) { return 0u; };
+	const auto* fish = creature_plan_actions::For("FishAndEat");
+	ASSERT_NE(fish, nullptr);
+	// Only with a fish farm near
+	EXPECT_FALSE(creature_plan_actions::Possible(*fish, {}));
+	creature_plan_actions::Situation situation;
+	situation.fishing = creature_plan_actions::Situation::Fishing {.shoal = {12.0f, 22.0f}, .arriveWithin = 15.0f};
+	// Not with nowhere to stand near the shoal
+	EXPECT_FALSE(creature_plan_actions::Possible(*fish, situation));
+	situation.fishing->standAt = glm::vec2(10.0f, 20.0f);
+	const auto agenda = creature_plan_actions::Agenda(*fish, std::nullopt, {}, situation, random);
+	ASSERT_TRUE(agenda.has_value());
+	ASSERT_EQ(agenda->size(), 3u);
+	EXPECT_EQ(agenda->at(0).kind, creature_mind::Step::Kind::Move);
+	EXPECT_EQ(agenda->at(0).movement.point, glm::vec2(10.0f, 20.0f));
+	EXPECT_FLOAT_EQ(agenda->at(0).movement.maxDistance, 15.0f);
+	EXPECT_EQ(agenda->at(1).order.kind, creature_mind::ObjectOrder::Kind::FishFromSea);
+	EXPECT_EQ(agenda->at(2).order.kind, creature_mind::ObjectOrder::Kind::Eat);
+	EXPECT_EQ(agenda->at(2).effect, creature_mind::Effect::Eat);
+	// Its hand emptied first when it holds something it can't eat
+	situation.fishing->putDownFirst = true;
+	const auto emptied = creature_plan_actions::Agenda(*fish, std::nullopt, {}, situation, random);
+	ASSERT_TRUE(emptied.has_value());
+	ASSERT_EQ(emptied->size(), 4u);
+	EXPECT_EQ(emptied->at(1).order.kind, creature_mind::ObjectOrder::Kind::PutDown);
+}
+
+TEST(CreaturePlanActions, FishingForSomethingOtherThanEatingIsAllowedWithFoodInHand)
+{
+	const auto* fish = creature_plan_actions::For("FishAndEat");
+	ASSERT_NE(fish, nullptr);
+	creature_plan_actions::Situation situation;
+	situation.fishing = creature_plan_actions::Situation::Fishing {.standAt = glm::vec2(0.0f), .holdingFood = true};
+	// It doesn't fish to eat with food already in its hand
+	EXPECT_FALSE(creature_plan_actions::Possible(*fish, situation));
+}
+
+TEST(CreaturePlanActions, GivingFishToAStorePitFishesTurnsToThePitAndThrowsItIn)
+{
+	const auto random = [](uint32_t) { return 0u; };
+	const auto* give = creature_plan_actions::For("GiveFishToStoragePit");
+	ASSERT_NE(give, nullptr);
+	EXPECT_EQ(give->target, creature_plan_actions::Target::StoragePit);
+	creature_plan_actions::Situation situation;
+	EXPECT_FALSE(creature_plan_actions::Possible(*give, situation));
+	// It walks straight to the shoal, even where it couldn't stand to fish for itself
+	situation.fishing = creature_plan_actions::Situation::Fishing {
+	    .shoal = {10.0f, 20.0f}, .arriveWithin = 15.0f, .putDownFirst = true, .height = 12.0f};
+	constexpr uint32_t k_Pit = 7;
+	const auto agenda = creature_plan_actions::Agenda(*give, k_Pit, {}, situation, random);
+	ASSERT_TRUE(agenda.has_value());
+	ASSERT_EQ(agenda->size(), 6u);
+	EXPECT_EQ(agenda->at(0).movement.point, glm::vec2(10.0f, 20.0f));
+	EXPECT_EQ(agenda->at(1).order.kind, creature_mind::ObjectOrder::Kind::PutDown);
+	EXPECT_EQ(agenda->at(2).order.kind, creature_mind::ObjectOrder::Kind::FishFromSea);
+	EXPECT_EQ(agenda->at(3).movement.kind, creature_mind::Movement::Kind::ToThrowPosition);
+	EXPECT_EQ(agenda->at(3).movement.object, std::optional<uint32_t>(k_Pit));
+	EXPECT_FLOAT_EQ(agenda->at(3).movement.maxDistance, 12.0f);
+	EXPECT_EQ(agenda->at(3).face, creature_face::Cue::Compassion);
+	EXPECT_EQ(agenda->at(4).movement.kind, creature_mind::Movement::Kind::TurnToFaceObject);
+	EXPECT_FLOAT_EQ(agenda->at(4).seconds, 0.1f);
+	// Counted as done as it turns, before it throws
+	EXPECT_EQ(agenda->at(4).effect, creature_mind::Effect::Completed);
+	EXPECT_EQ(agenda->at(5).order.kind, creature_mind::ObjectOrder::Kind::ThrowInStore);
+	EXPECT_EQ(agenda->at(5).order.object, std::optional<uint32_t>(k_Pit));
+	// With food already in its hand it goes straight to the pit
+	situation.fishing->holdingFood = true;
+	const auto holding = creature_plan_actions::Agenda(*give, k_Pit, {}, situation, random);
+	ASSERT_TRUE(holding.has_value());
+	ASSERT_EQ(holding->size(), 3u);
+	EXPECT_EQ(holding->at(0).movement.kind, creature_mind::Movement::Kind::ToThrowPosition);
+}
+
+TEST(CreaturePlanActions, TakingFishHomePutsItDownWithinItsHeightOfHome)
+{
+	const auto random = [](uint32_t) { return 0u; };
+	const auto* take = creature_plan_actions::For("TakeFishHome");
+	ASSERT_NE(take, nullptr);
+	creature_plan_actions::Situation situation;
+	situation.fishing =
+	    creature_plan_actions::Situation::Fishing {.shoal = {10.0f, 20.0f}, .arriveWithin = 15.0f, .height = 12.0f};
+	// Not without a home
+	EXPECT_FALSE(creature_plan_actions::Possible(*take, situation));
+	situation.home = glm::vec2(100.0f, 200.0f);
+	const auto agenda = creature_plan_actions::Agenda(*take, std::nullopt, {}, situation, random);
+	ASSERT_TRUE(agenda.has_value());
+	ASSERT_EQ(agenda->size(), 4u);
+	EXPECT_EQ(agenda->at(1).order.kind, creature_mind::ObjectOrder::Kind::FishFromSea);
+	EXPECT_EQ(agenda->at(2).movement.point, glm::vec2(100.0f, 200.0f));
+	EXPECT_FLOAT_EQ(agenda->at(2).movement.maxDistance, 12.0f);
+	EXPECT_EQ(agenda->at(3).order.kind, creature_mind::ObjectOrder::Kind::PutDown);
+}
+
 // The model of what is learnt
 
 TEST(CreatureMindModel, LearningRebuildsTrees)
@@ -582,4 +680,152 @@ TEST(PerceivedDesires, ACreatureSeesTwoThirdsOfAHalfTurnEitherWayOrInItsCell)
 	// Across the turn's end
 	EXPECT_TRUE(CanSeePos(0x7FF, 0x2A9, false));
 	EXPECT_TRUE(CanSeePos(0, 0x400, true));
+}
+
+namespace
+{
+namespace town_compassion = creature_town_compassion;
+
+/// A town that wants food (0), wood (1) and protection (3), in that order, and relaxation (15) last; its other desires
+/// have no actions or aren't felt
+struct FakeTown
+{
+	std::array<float, town_compassion::k_TownDesireCount> felt {};
+	std::vector<uint32_t> order {0, 1, 3, 15, 2, 4};
+	town_compassion::DesireActions actions {};
+
+	FakeTown()
+	{
+		felt.at(0) = 0.8f;
+		felt.at(1) = 0.5f;
+		felt.at(3) = 0.3f;
+		felt.at(15) = 0.2f;
+		actions.at(0) = {29, 28};
+		actions.at(1) = {32};
+		actions.at(3) = {286};
+		actions.at(4) = {38, 101};
+		actions.at(15) = {288};
+	}
+};
+
+std::function<uint32_t(uint32_t)> Always(uint32_t value)
+{
+	return [value](uint32_t) { return value; };
+}
+} // namespace
+
+TEST(CreatureTownCompassion, ATownsDesiresToHelpWithRunInItsOrderToTheFirstItDoesntFeel)
+{
+	FakeTown town;
+	EXPECT_EQ(town_compassion::DesiresToHelp(town.order, town.felt, town.actions), (std::vector<uint32_t> {0, 1, 3, 15}));
+	// Mercy has actions but isn't felt: the list stops there, even with desires after it
+	town.order = {0, 4, 1};
+	EXPECT_EQ(town_compassion::DesiresToHelp(town.order, town.felt, town.actions), (std::vector<uint32_t> {0}));
+	// Desires without actions are passed over, felt or not
+	town.felt.at(2) = 0.9f;
+	town.order = {2, 1};
+	EXPECT_EQ(town_compassion::DesiresToHelp(town.order, town.felt, town.actions), (std::vector<uint32_t> {1}));
+}
+
+TEST(CreatureTownCompassion, ItTakesUpTheFirstDesireAndRemembersMostOfHowMuchTheTownFeelsIt)
+{
+	const FakeTown town;
+	const auto desires = town_compassion::DesiresToHelp(town.order, town.felt, town.actions);
+	town_compassion::State state;
+	town_compassion::Settle(state, desires, town.felt);
+	ASSERT_EQ(state.desire, 0u);
+	EXPECT_FLOAT_EQ(state.remembered, 0.8f * 0.85f);
+	EXPECT_EQ(town_compassion::Actions(state, town.actions, std::nullopt), (std::vector<uint32_t> {29, 28}));
+	// One it is already helping with stays
+	state.desire = 3;
+	town_compassion::Settle(state, desires, town.felt);
+	EXPECT_EQ(state.desire, 3u);
+	// With nothing to help with, nothing changes
+	state.desire = 7;
+	town_compassion::Settle(state, {}, town.felt);
+	EXPECT_EQ(state.desire, 7u);
+}
+
+TEST(CreatureTownCompassion, ItMovesOnAsItPlansOnlyWhenCompassionLeadsAndHalfAMinuteHasGone)
+{
+	town_compassion::State state {.lastTurn = 100};
+	EXPECT_FALSE(town_compassion::MovesOnWhilePlanning(state, true, false, 130));
+	EXPECT_TRUE(town_compassion::MovesOnWhilePlanning(state, true, false, 131));
+	EXPECT_FALSE(town_compassion::MovesOnWhilePlanning(state, false, false, 131));
+	EXPECT_FALSE(town_compassion::MovesOnWhilePlanning(state, true, true, 131));
+	state.choosesFreely = false;
+	EXPECT_FALSE(town_compassion::MovesOnWhilePlanning(state, true, false, 131));
+
+	const FakeTown town;
+	const auto desires = town_compassion::DesiresToHelp(town.order, town.felt, town.actions);
+	town_compassion::State going {.desire = 15, .index = 3, .timesKept = 2};
+	town_compassion::MoveOnWhilePlanning(going, desires, town.felt, 500);
+	EXPECT_EQ(going.desire, 0u);
+	EXPECT_EQ(going.index, 0u);
+	EXPECT_EQ(going.lastTurn, 500u);
+	EXPECT_EQ(going.timesKept, 0u);
+	town_compassion::MoveOn(going, {}, town.felt);
+	EXPECT_FALSE(going.desire.has_value());
+}
+
+TEST(CreatureTownCompassion, HavingHelpedItStaysWithADesireTheTownStillFeelsMoreAFewTimes)
+{
+	FakeTown town;
+	const auto desires = town_compassion::DesiresToHelp(town.order, town.felt, town.actions);
+	town_compassion::State state;
+	town_compassion::Settle(state, desires, town.felt);
+	// The town still wants food more than it remembered: with the low toss it stays three times more
+	for (uint32_t times = 1; times <= 3; ++times)
+	{
+		town_compassion::FinishedHelping(state, desires, town.felt, 10 * times, Always(0));
+		EXPECT_EQ(state.desire, 0u);
+		EXPECT_EQ(state.timesKept, times);
+		EXPECT_EQ(state.lastTurn, 10 * times);
+	}
+	town_compassion::FinishedHelping(state, desires, town.felt, 40, Always(0));
+	EXPECT_EQ(state.desire, 1u);
+	EXPECT_EQ(state.timesKept, 0u);
+	EXPECT_FLOAT_EQ(state.remembered, 0.5f * 0.85f);
+	// Once the town feels it no more than remembered, it moves on at once
+	town.felt.at(1) = 0.4f;
+	town_compassion::FinishedHelping(state, desires, town.felt, 50, Always(1));
+	EXPECT_EQ(state.desire, 3u);
+	// It never stays with relaxation
+	state = {.desire = 15, .index = 3, .remembered = 0.0f};
+	town_compassion::FinishedHelping(state, desires, town.felt, 60, Always(1));
+	EXPECT_EQ(state.desire, 0u);
+	// Held to a desire by the leash, it doesn't move on
+	state = {.desire = 1, .index = 1, .choosesFreely = false};
+	town_compassion::FinishedHelping(state, desires, town.felt, 70, Always(1));
+	EXPECT_EQ(state.desire, 1u);
+	EXPECT_EQ(state.lastTurn, 0u);
+}
+
+TEST(CreatureTownCompassion, HurtPeopleMakeItThinkOfHealingFirstOnceItHasSeenHealingEnough)
+{
+	EXPECT_TRUE(town_compassion::HealFirst(1, false, 7.0f, 10.0f, Always(0)));
+	EXPECT_FALSE(town_compassion::HealFirst(1, false, 7.0f, 10.0f, Always(1)));
+	EXPECT_FALSE(town_compassion::HealFirst(1, false, 6.0f, 10.0f, Always(0)));
+	EXPECT_FALSE(town_compassion::HealFirst(0, false, 10.0f, 10.0f, Always(0)));
+	EXPECT_FALSE(town_compassion::HealFirst(1, true, 10.0f, 10.0f, Always(0)));
+
+	const FakeTown town;
+	const town_compassion::State state {.desire = 0};
+	EXPECT_EQ(town_compassion::Actions(state, town.actions, 101u), (std::vector<uint32_t> {101, 28}));
+	// Healing comes first even with no desire to help with
+	EXPECT_EQ(town_compassion::Actions({}, town.actions, 101u), (std::vector<uint32_t> {101}));
+}
+
+TEST(CreatureTownCompassion, WhatACreatureMakesOfATown)
+{
+	EXPECT_EQ(town_compassion::ReligiousBelief(0.19f), 0u);
+	EXPECT_EQ(town_compassion::ReligiousBelief(0.2f), 1u);
+	EXPECT_EQ(town_compassion::ReligiousBelief(0.5f), 2u);
+	EXPECT_EQ(town_compassion::ReligiousBelief(0.6f), 3u);
+	EXPECT_EQ(town_compassion::ReligiousBelief(9.0f), 3u);
+	EXPECT_EQ(town_compassion::NeedsMost(4), 4u);
+	EXPECT_EQ(town_compassion::NeedsMost(-1), 16u);
+	EXPECT_EQ(town_compassion::TownSize(19), 0u);
+	EXPECT_EQ(town_compassion::TownSize(20), 1u);
+	EXPECT_EQ(town_compassion::TownSize(40), 2u);
 }

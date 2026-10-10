@@ -2252,6 +2252,7 @@ std::vector<Scenario> Build()
 	AddNatureScenarios(all);
 	AddHandNavigationScenarios(all);
 	AddHandLookScenarios(all);
+	AddFishScenarios(all);
 	AddKnockScenarios(all);
 	return all;
 }
@@ -2375,7 +2376,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 88> k_Names {
+	constexpr std::array<std::string_view, 89> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -2447,6 +2448,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "press F5",
 	    "tattoo",
 	    "take tattoo off",
+	    "open tattoo editor",
 	    "hold seed",
 	    "draw gesture",
 	    "summon seed",

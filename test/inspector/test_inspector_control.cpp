@@ -12,6 +12,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -21,6 +22,7 @@
 #include <Inspector/GuiControl.h>
 #include <Inspector/LevelControl.h>
 #include <Inspector/ScriptControl.h>
+#include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
 using namespace openblack::inspector;
@@ -66,8 +68,14 @@ public:
 		return {};
 	}
 	[[nodiscard]] float GroundHeight(glm::vec2 /*point*/) const override { return 10.0f; }
+	[[nodiscard]] std::optional<glm::vec3> EntityPosition(uint32_t id) const override
+	{
+		return id == 7 ? std::optional(walker) : std::nullopt;
+	}
 
 	CameraPose pose {.origin = {0.0f, 100.0f, -100.0f}, .focus = {0.0f, 0.0f, 0.0f}};
+	/// Entity 7, which may walk about
+	glm::vec3 walker {50.0f, 10.0f, 50.0f};
 	std::optional<CameraPose> flewTo;
 	bool held {false};
 	int sets {0};
@@ -332,14 +340,16 @@ public:
 class FakeScreenshots final: public ScreenshotTargetInterface
 {
 public:
-	std::string Capture(const std::filesystem::path& path) override
+	std::string Capture(const std::filesystem::path& path, bool hideDebugGui) override
 	{
 		taken.push_back(path.generic_string());
+		hidden.push_back(hideDebugGui);
 		return {};
 	}
 	[[nodiscard]] std::filesystem::path Directory() const override { return "shots"; }
 
 	std::vector<std::string> taken;
+	std::vector<bool> hidden;
 };
 
 } // namespace
@@ -389,9 +399,93 @@ TEST(InspectorScreenshot, TakenAtTheFrameAskedWithTheCameraAsked)
 	provider->Frame(14);
 	ASSERT_EQ(screenshots.taken.size(), 2u);
 	EXPECT_EQ(screenshots.taken[1], "a/b.png");
+	// The camera goes there once the player's camera has moved this frame, just before the frame is drawn
+	EXPECT_EQ(camera.sets, 0);
+	provider->PlaceCamera();
+	EXPECT_EQ(camera.sets, 1);
+	provider->PlaceCamera();
 	EXPECT_EQ(camera.sets, 1);
 	EXPECT_FLOAT_EQ(camera.pose.focus.x, 5.0f);
 
 	EXPECT_FALSE(Refused(inspector, R"({"query": "screenshot.take", "params": {"at_frame": 3}})").empty());
 	EXPECT_FALSE(Refused(inspector, R"({"query": "screenshot.take", "params": {"path": "x.bmp"}})").empty());
+}
+
+// Something moving the camera between the frame's start and its drawing (its own easing, a flight) doesn't spoil the
+// picture: the camera asked for is put in place after it, every time
+TEST(InspectorScreenshot, TheCameraAskedForAlwaysTakesEffect)
+{
+	FakeScreenshots screenshots;
+	FakeCamera camera;
+	auto owned = std::make_unique<ScreenshotProvider>(screenshots, camera);
+	auto* provider = owned.get();
+	Inspector inspector;
+	inspector.Add(std::move(owned));
+	provider->Frame(10);
+	Ask(inspector, R"({"query": "screenshot.take", "params": {"camera": {"position": [1, 2, 3], "focus": [4, 5, 6]}}})");
+	// The player's camera moves on this frame
+	camera.pose = {.origin = {9.0f, 9.0f, 9.0f}, .focus = {0.0f, 0.0f, 0.0f}};
+	provider->PlaceCamera();
+	EXPECT_FLOAT_EQ(camera.pose.origin.x, 1.0f);
+	EXPECT_FLOAT_EQ(camera.pose.focus.z, 6.0f);
+
+	// Held by a camera path, the picture is refused rather than taken from elsewhere
+	camera.held = true;
+	EXPECT_FALSE(Refused(inspector, R"({"query": "screenshot.take", "params": {"camera": {"yaw": 3}}})").empty());
+}
+
+// A moving entity is framed where it is at the picture's frame, not where it was when the picture was asked for
+TEST(InspectorScreenshot, AFramedEntityIsFramedWhereItIsAtThePicturesFrame)
+{
+	FakeScreenshots screenshots;
+	FakeCamera camera;
+	auto owned = std::make_unique<ScreenshotProvider>(screenshots, camera);
+	auto* provider = owned.get();
+	Inspector inspector;
+	inspector.Add(std::move(owned));
+	provider->Frame(10);
+
+	const auto asked = Ask(inspector, R"({"query": "screenshot.take", "params": {"in_frames": 2, "hide_gui": true,
+	                                     "frame": {"id": 7, "yaw": 90, "pitch": 0, "distance": 20}}})");
+	EXPECT_EQ(asked["framing"], 7);
+	EXPECT_EQ(asked["hide_gui"], true);
+	camera.walker = {100.0f, 10.0f, 30.0f};
+	EXPECT_EQ(asked["frame"], 13);
+	provider->Frame(11);
+	provider->Frame(12);
+	provider->PlaceCamera();
+	EXPECT_TRUE(screenshots.hidden.empty());
+	provider->Frame(13);
+	provider->PlaceCamera();
+	ASSERT_EQ(screenshots.hidden.size(), 1u);
+	EXPECT_TRUE(screenshots.hidden[0]);
+	ExpectNear(Json::array({camera.pose.focus.x, camera.pose.focus.y, camera.pose.focus.z}), {100.0f, 10.0f, 30.0f});
+	// Looking along +x from 20 away, level
+	ExpectNear(Json::array({camera.pose.origin.x, camera.pose.origin.y, camera.pose.origin.z}), {80.0f, 10.0f, 30.0f});
+
+	// An id alone keeps the camera's angles and distance
+	Ask(inspector, R"({"query": "screenshot.take", "params": {"frame": 7}})");
+	provider->PlaceCamera();
+	EXPECT_NEAR(glm::distance(camera.pose.origin, camera.pose.focus), 20.0f, 1e-3f);
+	EXPECT_FALSE(screenshots.hidden.back());
+
+	EXPECT_FALSE(Refused(inspector, R"({"query": "screenshot.take", "params": {"frame": 8}})").empty());
+	EXPECT_FALSE(Refused(inspector, R"({"query": "screenshot.take", "params": {"frame": "x"}})").empty());
+	EXPECT_FALSE(Refused(inspector, R"({"query": "screenshot.take", "params": {"frame": 7, "camera": {"yaw": 3}}})").empty());
+	EXPECT_FALSE(Refused(inspector, R"({"query": "screenshot.take", "params": {"frame": {"id": 7, "pitch": 95}}})").empty());
+}
+
+TEST(InspectorCamera, FrameLooksAtAnEntity)
+{
+	FakeCamera camera;
+	Inspector inspector;
+	inspector.Add(MakeCameraProvider(camera));
+	const auto framed = Ask(inspector, R"({"query": "camera.frame", "params": {"id": 7, "distance": 30}})");
+	EXPECT_EQ(framed["entity"], 7);
+	ExpectNear(framed["set_to"]["focus"], {50.0f, 10.0f, 50.0f});
+	EXPECT_NEAR(framed["set_to"]["distance"].get<double>(), 30.0, 1e-3);
+	// The camera's own angles: yaw 0, 45 degrees down
+	EXPECT_NEAR(framed["set_to"]["pitch"].get<double>(), 45.0, 1e-3);
+	EXPECT_FALSE(Refused(inspector, R"({"query": "camera.frame", "params": {"id": 3}})").empty());
+	EXPECT_FALSE(Refused(inspector, R"({"query": "camera.frame", "params": {}})").empty());
 }

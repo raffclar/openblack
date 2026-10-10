@@ -40,7 +40,9 @@
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureRoute.h"
+#include "Creature/CreatureThrow.h"
 #include "CreatureMindSystemDetail.h"
+#include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/CarriedByTornado.h"
@@ -284,12 +286,12 @@ void ApplyEyes(CreatureEyes* eyes, creature_mind::Eyes look)
 	eyes->blink.intervalMs = sleepy ? k_SleepyBlinkIntervalMs : creature_eyes::k_BlinkIntervalMs;
 }
 
-/// Sends the creature where its mind wants it to go
-void Move(entt::entity creature, const creature_mind::Commands& commands)
+/// Sends the creature where its mind wants it to go; whether it can't go there and gives up what it is doing
+bool Move(entt::entity creature, const creature_mind::Commands& commands)
 {
 	if (!Locator::creatureLocomotionSystem::has_value())
 	{
-		return;
+		return false;
 	}
 	auto& locomotion = Locator::creatureLocomotionSystem::value();
 	if (commands.stopMoving)
@@ -298,7 +300,7 @@ void Move(entt::entity creature, const creature_mind::Commands& commands)
 	}
 	if (!commands.move.has_value())
 	{
-		return;
+		return false;
 	}
 	using Kind = creature_mind::Movement::Kind;
 	using Pace = CreatureLocomotionSystemInterface::Pace;
@@ -309,7 +311,12 @@ void Move(entt::entity creature, const creature_mind::Commands& commands)
 	{
 	case Kind::ToPoint:
 	case Kind::Nearby:
-		locomotion.MoveTo(creature, move.point, pace, move.minDistance, move.maxDistance);
+		if (locomotion.MoveTo(creature, move.point, pace, move.minDistance, move.maxDistance) ==
+		        CreatureLocomotionSystemInterface::MoveResult::InvalidDestination &&
+		    move.giveUpIfUnreachable)
+		{
+			return true;
+		}
 		break;
 	case Kind::ToObject:
 		if (object.has_value())
@@ -332,15 +339,26 @@ void Move(entt::entity creature, const creature_mind::Commands& commands)
 	case Kind::GoNearObject:
 	case Kind::GetAwayFromObject:
 	case Kind::TurnToFaceObject:
+	case Kind::ToThrowPosition:
 		// Overseen turn by turn by the mind as it casts (StartSubMove)
 		break;
 	}
+	return false;
 }
 
 bool IsSubMove(creature_mind::Movement::Kind kind)
 {
 	using Kind = creature_mind::Movement::Kind;
-	return kind == Kind::GoNearObject || kind == Kind::GetAwayFromObject || kind == Kind::TurnToFaceObject;
+	return kind == Kind::GoNearObject || kind == Kind::GetAwayFromObject || kind == Kind::TurnToFaceObject ||
+	       kind == Kind::ToThrowPosition;
+}
+
+/// The rest of the agenda is no use: it gives it up
+void GiveUp(creature_mind::IdleMind& idle)
+{
+	idle.step = idle.agenda.size();
+	idle.stepStarted = false;
+	idle.gaveUp = true;
 }
 
 /// Whether the thing the creature's step waits for is back on the map: out of any hand, flight or tornado. None when the
@@ -688,9 +706,65 @@ void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, 
 	case Effect::CameRound:
 		physiology.WakeFromFaint(creature);
 		break;
+	case Effect::Completed:
 	case Effect::None:
 		break;
 	}
+}
+
+/// A step saying the plan's action counts as done there, before the step that finishes it, sees to its desire
+void CountCompleted(entt::entity creature, CreatureMindState& mind, const creature_mind::Commands& commands,
+                    const creature_mind_tables::Tables* tables)
+{
+	if (commands.effect != creature_mind::Effect::Completed || !mind.planActive || !mind.planner.current.has_value() ||
+	    tables == nullptr || !mind.desires.has_value() || mind.planner.current->action >= tables->actions.size())
+	{
+		return;
+	}
+	Satisfied(creature, *mind.desires, tables->actions[mind.planner.current->action].name);
+}
+
+/// The town nearest a point along the ground, of any player or none
+entt::entity NearestTown(const ecs::Registry& registry, glm::vec3 point)
+{
+	entt::entity nearest = entt::null;
+	auto best = std::numeric_limits<float>::max();
+	registry.Each<const Town, const Transform>([&](entt::entity entity, const Town&, const Transform& at) {
+		const float distance = glm::distance(glm::vec2(at.position.x, at.position.z), glm::vec2(point.x, point.z));
+		if (distance < best)
+		{
+			best = distance;
+			nearest = entity;
+		}
+	});
+	return nearest;
+}
+
+/// The food a creature fishing brings out of the sea: a handful at its feet of a thousand for each unit of its size,
+/// drawn half as big again as the creature, belonging to the nearest town. Nothing comes out of a fish farm.
+std::optional<entt::entity> FoodFromTheSea(ecs::Registry& registry, entt::entity creature)
+{
+	constexpr float k_FoodPerSize = 1000.0f;
+	constexpr float k_ScalePerSize = 1.5f;
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	if (transform == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const float size = body != nullptr ? body->size : 1.0f;
+	const auto amount = static_cast<int32_t>(size * k_FoodPerSize);
+	const auto food = ecs::archetypes::PotArchetype::Create(transform->position, 0.0f, PotInfo::WheatInHand, amount,
+	                                                        NearestTown(registry, transform->position));
+	if (food == entt::null)
+	{
+		return std::nullopt;
+	}
+	if (auto* foodTransform = registry.TryGet<Transform>(food))
+	{
+		foodTransform->scale = glm::vec3(size * k_ScalePerSize);
+	}
+	return food;
 }
 
 /// Tells the creature's hands what to do with a thing
@@ -756,6 +830,33 @@ void Order(ecs::Registry& registry, entt::entity creature, const creature_mind::
 		break;
 	case Kind::Catch:
 		if (!object.has_value() || !registry.Valid(*object) || !hands.Catch(creature, *object))
+		{
+			hands.Cancel(creature);
+		}
+		break;
+	case Kind::ThrowInStore:
+	{
+		// At the store's own place on the ground, taking as long to fly there as it would take to fall the distance
+		// along the ground
+		const auto* store = object.has_value() && registry.Valid(*object) ? registry.TryGet<const Transform>(*object) : nullptr;
+		const auto* self = registry.TryGet<const Transform>(creature);
+		if (store == nullptr || self == nullptr)
+		{
+			hands.Cancel(creature);
+			break;
+		}
+		const glm::vec2 at {store->position.x, store->position.z};
+		const auto height = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(at) : 0.0f;
+		const auto flight = creature_throw::FlightTime(glm::distance(at, glm::vec2(self->position.x, self->position.z)));
+		hands.ThrowTaking(creature, {at.x, height, at.y}, flight);
+		break;
+	}
+	case Kind::FishFromSea:
+		if (const auto food = FoodFromTheSea(registry, creature); food.has_value())
+		{
+			hands.PickUp(creature, *food);
+		}
+		else
 		{
 			hands.Cancel(creature);
 		}
@@ -928,7 +1029,10 @@ void CreatureMindSystem::ProcessTurn()
 		    };
 		    const auto commands = creature_mind::Think(mind.idle, senses, random);
 		    Apply(commands, animation, eyes);
-		    Move(entity, commands);
+		    if (Move(entity, commands))
+		    {
+			    GiveUp(mind.idle);
+		    }
 		    if (commands.move.has_value() && IsSubMove(commands.move->kind) && mind.idle.step < mind.idle.agenda.size())
 		    {
 			    StartSubMove(entity, *commands.move, mind.idle.agenda[mind.idle.step].seconds);
@@ -955,6 +1059,7 @@ void CreatureMindSystem::ProcessTurn()
 			    }
 		    }
 		    TakeEffect(entity, commands, *mind.desires);
+		    CountCompleted(entity, mind, commands, GetTables());
 		    if (commands.effect != creature_mind::Effect::None)
 		    {
 			    mind.satisfiedByEffect = true;

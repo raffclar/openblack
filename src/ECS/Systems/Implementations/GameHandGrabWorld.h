@@ -75,9 +75,12 @@ public:
 	uint32_t TakeFromPile(entt::entity pile, uint32_t amount) override;
 	[[nodiscard]] std::optional<FieldFacts> FieldFactsOf(entt::entity field) const override;
 	void TakeFromField(entt::entity field, uint32_t amount) override;
+	[[nodiscard]] std::optional<fish_farm::Type> FishFarmOf(entt::entity farm) const override;
+	uint32_t TakeFromFishFarm(entt::entity farm, uint32_t amount) override;
 	void ResizePot(entt::entity pot) override;
 	[[nodiscard]] entt::entity MakeHandful(PotInfo type, glm::vec3 position, uint32_t amount, bool poisoned) override;
 	[[nodiscard]] std::optional<uint32_t> StartScoopStream(ResourceType resource, glm::vec3 source, bool poisoned) override;
+	[[nodiscard]] std::optional<uint32_t> StartFishScoopStream(glm::vec3 source) override;
 	void StopScoopStream(uint32_t stream) override;
 	void PinCursor(bool pinned) override;
 	void MoveScoopStream(uint32_t stream, glm::vec3 hand) override;

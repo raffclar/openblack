@@ -43,6 +43,7 @@ namespace
 
 constexpr std::string_view k_FolderName = "openblack-inspector";
 constexpr std::string_view k_Extension = ".json";
+constexpr std::string_view k_ShotsFolderName = "shots";
 
 /// The whole text of a file, none if it can't be read
 std::optional<std::string> ReadText(const std::filesystem::path& path)
@@ -66,14 +67,9 @@ bool WriteText(const std::filesystem::path& path, std::string_view text)
 	return static_cast<bool>(stream);
 }
 
-/// The pid a file's name gives, none for files that aren't a game's
-std::optional<uint32_t> PidOfFile(const std::filesystem::path& path)
+/// The pid a name of digits gives, none for any other name
+std::optional<uint32_t> PidOfName(const std::string& stem)
 {
-	if (path.extension() != k_Extension)
-	{
-		return std::nullopt;
-	}
-	const auto stem = path.stem().string();
 	if (stem.empty() || stem.size() > 10 || !std::ranges::all_of(stem, [](char c) { return c >= '0' && c <= '9'; }))
 	{
 		return std::nullopt;
@@ -84,6 +80,44 @@ std::optional<uint32_t> PidOfFile(const std::filesystem::path& path)
 		return std::nullopt;
 	}
 	return static_cast<uint32_t>(value);
+}
+
+/// The pid a file's name gives, none for files that aren't a game's
+std::optional<uint32_t> PidOfFile(const std::filesystem::path& path)
+{
+	if (path.extension() != k_Extension)
+	{
+		return std::nullopt;
+	}
+	return PidOfName(path.stem().string());
+}
+
+/// Removes the picture folders of games whose processes have gone; anything else in shots is left
+void RemoveStaleShots(const std::filesystem::path& folder, const AliveCheck& alive)
+{
+	std::vector<std::filesystem::path> stale;
+	std::error_code error;
+	std::filesystem::directory_iterator entries(folder / k_ShotsFolderName, error);
+	if (error)
+	{
+		return;
+	}
+	for (const std::filesystem::directory_iterator end; entries != end; entries.increment(error))
+	{
+		if (error)
+		{
+			break;
+		}
+		const auto pid = PidOfName(entries->path().filename().string());
+		if (pid.has_value() && entries->is_directory(error) && !alive(*pid))
+		{
+			stale.push_back(entries->path());
+		}
+	}
+	for (const auto& path : stale)
+	{
+		std::filesystem::remove_all(path, error);
+	}
 }
 
 } // namespace
@@ -138,6 +172,11 @@ std::filesystem::path discovery::DefaultFolder()
 std::filesystem::path discovery::FileFor(const std::filesystem::path& folder, uint32_t pid)
 {
 	return folder / (std::to_string(pid) + std::string(k_Extension));
+}
+
+std::filesystem::path discovery::ShotsFolder(const std::filesystem::path& folder, uint32_t pid)
+{
+	return folder / k_ShotsFolderName / std::to_string(pid);
 }
 
 uint32_t discovery::CurrentProcessId()
@@ -269,6 +308,7 @@ std::vector<GameRecord> discovery::ReadGames(const std::filesystem::path& folder
 	{
 		std::filesystem::remove(path, error);
 	}
+	RemoveStaleShots(folder, alive);
 	std::ranges::sort(games, {}, &GameRecord::pid);
 	return games;
 }
@@ -286,6 +326,7 @@ DiscoveryFile::~DiscoveryFile()
 {
 	std::error_code error;
 	std::filesystem::remove(_path, error);
+	std::filesystem::remove_all(ShotsFolder(_path.parent_path(), _record.pid), error);
 }
 
 void DiscoveryFile::SetLand(const std::string& land)

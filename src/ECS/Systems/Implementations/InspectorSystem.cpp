@@ -17,6 +17,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "Common/RandomNumberManager.h"
 #include "Debug/TestbedScenarioRegistry.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Game.h"
@@ -41,6 +42,9 @@ namespace
 {
 
 /// The game's clock and the testbed's scenarios, through the locator
+// The inspector's seeded date is the game's own
+static_assert(inspector::GameProvider::k_SeededDate == TimeSystemInterface::k_DeterministicDate);
+
 class GameRunTarget final: public inspector::RunTargetInterface
 {
 public:
@@ -74,6 +78,31 @@ public:
 			Locator::time::value().SetFixedFrameTime(
 			    milliseconds.has_value() ? std::optional(std::chrono::milliseconds(*milliseconds)) : std::nullopt);
 		}
+	}
+	[[nodiscard]] uint32_t GetSeed() const override
+	{
+		return Locator::rng::has_value() ? Locator::rng::value().GetRunSeed() : 0;
+	}
+	void SetSeed(uint32_t seed, std::optional<int64_t> date) override
+	{
+		if (Locator::rng::has_value())
+		{
+			Locator::rng::value().SetRunSeed(seed);
+		}
+		if (Locator::time::has_value())
+		{
+			Locator::time::value().RestartClock(date);
+		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Inspector: seeded run, seed {}{}", seed,
+		                   date.has_value() ? ", date pinned" : ", wall clock");
+	}
+	[[nodiscard]] std::optional<int64_t> GetPinnedDate() const override
+	{
+		return Locator::time::has_value() ? Locator::time::value().GetPinnedDate() : std::nullopt;
+	}
+	[[nodiscard]] uint32_t GetTicks() const override
+	{
+		return Locator::time::has_value() ? Locator::time::value().GetTicks() : 0;
 	}
 	[[nodiscard]] std::optional<uint32_t> GetFixedFrameTime() const override
 	{
@@ -169,7 +198,60 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
 	}
 }
 
-InspectorSystem::~InspectorSystem() = default;
+InspectorSystem::~InspectorSystem()
+{
+	_stopLoadingHelper = true;
+	if (_loadingHelper.joinable())
+	{
+		_loadingHelper.join();
+	}
+}
+
+void InspectorSystem::BeginLoading(std::string_view what)
+{
+	if (_loadingDepth++ > 0)
+	{
+		return;
+	}
+	{
+		const std::scoped_lock lock(_loadingMutex);
+		_loading = what;
+	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Inspector: answering as loading {}", what);
+	_stopLoadingHelper = false;
+	_loadingHelper = std::thread([this] { AnswerWhileLoading(); });
+}
+
+void InspectorSystem::EndLoading()
+{
+	if (_loadingDepth == 0 || --_loadingDepth > 0)
+	{
+		return;
+	}
+	_stopLoadingHelper = true;
+	if (_loadingHelper.joinable())
+	{
+		_loadingHelper.join();
+	}
+	// The land has started, and none of its frames has run yet
+	_game->Loaded();
+}
+
+void InspectorSystem::AnswerWhileLoading()
+{
+	constexpr auto k_Interval = std::chrono::milliseconds(20);
+	while (!_stopLoadingHelper)
+	{
+		std::string loading;
+		{
+			const std::scoped_lock lock(_loadingMutex);
+			loading = _loading;
+		}
+		// Only what reads nothing of the game is answered here; the game's own frames answer the rest once loaded
+		_server->Poll([this, &loading](std::string_view line) { return _inspector.HandleWhileLoading(line, loading); });
+		std::this_thread::sleep_for(k_Interval);
+	}
+}
 
 void InspectorSystem::Service()
 {
@@ -177,6 +259,7 @@ void InspectorSystem::Service()
 	const auto now = std::chrono::steady_clock::now();
 	const auto seconds = std::chrono::duration<float>(now - _lastService).count();
 	_lastService = now;
+	// A request answered here may load a land, while the loading helper answers the others
 	_server->Poll([this](std::string_view line) {
 		auto answer = _inspector.Handle(line);
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Inspector: {} -> {} bytes", line, answer.size());
@@ -200,6 +283,11 @@ void InspectorSystem::Service()
 	_input->Frame(_game->FrameNumber());
 	// The pictures due this frame are asked for before it is drawn
 	_screenshots->Frame(_game->FrameNumber());
+}
+
+void InspectorSystem::PlaceCamera()
+{
+	_screenshots->PlaceCamera();
 }
 
 uint16_t InspectorSystem::GetPort() const

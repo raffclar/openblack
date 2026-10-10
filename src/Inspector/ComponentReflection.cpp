@@ -9,8 +9,12 @@
 
 #include "ComponentReflection.h"
 
+#include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 
+#include <array>
 #include <optional>
 #include <string>
 #include <vector>
@@ -19,6 +23,7 @@
 #include <entt/meta/container.hpp>
 #include <entt/meta/meta.hpp>
 #include <entt/meta/resolve.hpp>
+#include <glm/ext/vector_uint2_sized.hpp>
 
 using namespace openblack::inspector;
 
@@ -72,11 +77,52 @@ Json FieldsToJson(const entt::meta_any& any, int depth)
 	return object;
 }
 
+/// A value of one of the types JSON holds directly (or a list of them), written as Encode writes it; none for others
+template <typename... Types>
+std::optional<Json> PlainToJson(const entt::meta_any& any)
+{
+	std::optional<Json> json;
+	(
+	    [&any, &json] {
+		    if (!json.has_value())
+		    {
+			    if (const auto* value = any.try_cast<const Types>(); value != nullptr)
+			    {
+				    json = reflection::Encode(*value);
+			    }
+		    }
+	    }(),
+	    ...);
+	return json;
+}
+
+/// A map's key as an object's key, when it is a name or a number; none for anything else
+std::optional<std::string> KeyOf(const Json& key)
+{
+	if (key.is_string())
+	{
+		return key.get<std::string>();
+	}
+	if (key.is_number())
+	{
+		return key.dump();
+	}
+	return std::nullopt;
+}
+
 Json AnyToJson(const entt::meta_any& any, int depth)
 {
 	if (!any)
 	{
 		return nullptr;
+	}
+	// Values held directly, as fields of these types are: inside lists and maps too
+	if (auto plain = PlainToJson<bool, char, int8_t, uint8_t, int16_t, uint16_t, int32_t, uint32_t, int64_t, uint64_t, float,
+	                             double, std::string, entt::entity, glm::vec2, glm::vec3, glm::vec4, glm::ivec2, glm::ivec3,
+	                             glm::uvec2, glm::u16vec2, glm::mat3, glm::mat4>(any);
+	    plain.has_value())
+	{
+		return *std::move(plain);
 	}
 	const auto type = any.type();
 	if (type.is_enum())
@@ -114,7 +160,34 @@ Json AnyToJson(const entt::meta_any& any, int depth)
 	}
 	if (auto associative = any.as_associative_container(); associative)
 	{
-		return {{"size", associative.size()}};
+		// A map keyed by names or numbers as an object, anything else (sets, other keys) as a list; long ones by their
+		// first entries
+		Json object = Json::object();
+		Json list = Json::array();
+		bool byName = true;
+		size_t count = 0;
+		for (auto [key, value] : associative)
+		{
+			if (count++ == reflection::k_MostElements)
+			{
+				break;
+			}
+			auto keyJson = AnyToJson(key, depth + 1);
+			auto valueJson = value ? AnyToJson(value, depth + 1) : Json();
+			const auto name = value ? KeyOf(keyJson) : std::nullopt;
+			byName = byName && name.has_value();
+			if (name.has_value())
+			{
+				object[*name] = valueJson;
+			}
+			list.push_back(value ? Json::array({std::move(keyJson), std::move(valueJson)}) : std::move(keyJson));
+		}
+		auto entries = byName && count > 0 ? std::move(object) : std::move(list);
+		if (associative.size() <= reflection::k_MostElements)
+		{
+			return entries;
+		}
+		return {{"size", associative.size()}, {"first", std::move(entries)}};
 	}
 	// A value of a type that isn't registered: its name, to say what is there
 	return "<" + reflection::ShortTypeName(type.info()) + ">";
@@ -166,6 +239,25 @@ std::string SetPath(const entt::meta_ctx& context, entt::meta_any& instance, std
 }
 
 } // namespace
+
+double reflection::detail::Shortest(float value)
+{
+	if (!std::isfinite(value))
+	{
+		return static_cast<double>(value);
+	}
+	// Nine significant digits always read back as the same float; fewer often do
+	std::array<char, 32> text {};
+	for (int precision = 6; precision <= 9; ++precision)
+	{
+		std::snprintf(text.data(), text.size(), "%.*g", precision, static_cast<double>(value));
+		if (std::strtof(text.data(), nullptr) == value)
+		{
+			return std::strtod(text.data(), nullptr);
+		}
+	}
+	return static_cast<double>(value);
+}
 
 std::string reflection::detail::Describe(const Json& value)
 {

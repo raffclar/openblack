@@ -267,6 +267,11 @@ std::vector<Dialog::Tab> GameMenu::OptionsTabs(const TextDatabase& texts, Page s
 	};
 }
 
+std::vector<Dialog::NamedControl> GameMenu::GetNamedControls() const
+{
+	return _question.has_value() ? _question->answers->GetNamedControls() : CurrentDialog().GetNamedControls();
+}
+
 void GameMenu::BuildMain(const TextDatabase& texts)
 {
 	// The main menu's tabs: the third, Multiplayer, only has a label in a multiplayer game

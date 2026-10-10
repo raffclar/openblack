@@ -11,11 +11,13 @@
 
 #include <algorithm>
 #include <chrono>
+#include <filesystem>
 #include <initializer_list>
 #include <limits>
 #include <map>
 #include <memory>
 #include <span>
+#include <system_error>
 #define LOCATOR_IMPLEMENTATIONS
 
 #include <cstdint>
@@ -342,9 +344,13 @@ struct BgfxCallback: public bgfx::CallbackI
 		const auto ext = std::filesystem::path(filePath).extension();
 		if (std::filesystem::path(filePath).extension() == ".png")
 		{
+			// Written aside and renamed once whole, so that whoever waits for the file never reads half of it
+			const auto finalPath = std::filesystem::path(filePath);
+			auto partPath = finalPath;
+			partPath += ".part";
 			bx::FileWriter writer;
 			bx::Error err;
-			if (bx::open(&writer, filePath, false, &err))
+			if (bx::open(&writer, partPath.string().c_str(), false, &err))
 			{
 				// Strip out alpha for screenshot
 				std::vector<uint32_t> noAlpha;
@@ -360,6 +366,14 @@ struct BgfxCallback: public bgfx::CallbackI
 
 				bimg::imageWritePng(&writer, width, height, pitch, noAlpha.data(), bimg::TextureFormat::BGRA8, yflip, &err);
 				bx::close(&writer);
+				std::error_code renameError;
+				std::filesystem::rename(partPath, finalPath, renameError);
+				if (renameError)
+				{
+					SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Failed to save Screenshot at {}: {}", filePath,
+					                    renameError.message());
+					return;
+				}
 				SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Screenshot ({}x{}) saved at {}", width, height, filePath);
 			}
 			else
@@ -5471,6 +5485,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	{
 		DrawHandWaterGlow(desc);
 	}
+	// So do the fish farms' shoals, swimming under it
+	DrawFishShoals(desc);
 
 	// Enable stats or debug text.
 	auto debugMode = BGFX_DEBUG_NONE;
