@@ -118,6 +118,7 @@
 #include "ECS/Components/Unlit.h"
 #include "ECS/Components/Velocity.h"
 #include "ECS/Components/VillageLight.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/VillagerPose.h"
@@ -1059,6 +1060,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Town::scenicForest>("scenicForest")
 	    .Field<&components::Town::scenicForestCentre>("scenicForestCentre")
 	    .Field<&components::Town::playthings>("playthings")
+	    .Field<&components::Town::worshipShare>("worshipShare")
+	    .Field<&components::Town::worshipSite>("worshipSite")
 	    .Field<&components::Town::congregationPos>("congregationPos")
 	    .Field<&components::Town::emergencyTurn>("emergencyTurn");
 	Reflect<components::TownAggression>(context).Field<&components::TownAggression::record>("record");
@@ -1119,6 +1122,13 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::VillageLightSprite>(context)
 	    .Field<&components::VillageLightSprite::light>("light")
 	    .Field<&components::VillageLightSprite::index>("index");
+	Reflect<components::VillageTotem>(context)
+	    .Field<&components::VillageTotem::townCentre>("townCentre")
+	    .Field<&components::VillageTotem::icon>("icon")
+	    .Field<&components::VillageTotem::restY>("restY")
+	    .Field<&components::VillageTotem::ease>("ease")
+	    .Field<&components::VillageTotem::held>("held")
+	    .Field<&components::VillageTotem::gripped>("gripped");
 	Reflect<components::Villager>(context)
 	    .Field<&components::Villager::life>("life")
 	    .Field<&components::Villager::birthTurn>("birthTurn")

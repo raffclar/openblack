@@ -644,6 +644,8 @@ struct Scenario
 	std::vector<std::pair<std::string_view, float>> fireflyRewards;
 };
 
+/// A town centre's totem
+void AddVillageTotemScenarios(std::vector<Scenario>& all);
 /// The miracles' scenarios, added to every scenario by the registry
 void AddMiracleScenarios(std::vector<Scenario>& all);
 /// The miracles' globes and dispensers close up, and the hand's miracle effects

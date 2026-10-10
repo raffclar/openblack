@@ -2279,6 +2279,7 @@ std::vector<Scenario> Build()
 	AddNatureScenarios(all);
 	AddHandNavigationScenarios(all);
 	AddHandLookScenarios(all);
+	AddVillageTotemScenarios(all);
 	AddFishScenarios(all);
 	AddKnockScenarios(all);
 	AddSkyScenarios(all);
