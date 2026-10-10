@@ -160,6 +160,12 @@ Queries AdvisorSystem::MakeQueries()
 	queries.sayActive = [](int dude) {
 		return Locator::helpTextSystem::has_value() && Locator::helpTextSystem::value().GetVoices().IsActive(dude);
 	};
+	queries.updateSentence = [](int dude) {
+		if (Locator::helpTextSystem::has_value())
+		{
+			Locator::helpTextSystem::value().GetVoices().UpdateSaySentence(dude);
+		}
+	};
 	queries.lipSync = [](int dude, float dt) -> std::optional<LipSyncFrame> {
 		if (!Locator::helpTextSystem::has_value())
 		{

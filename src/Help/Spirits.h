@@ -298,6 +298,9 @@ struct Queries
 	std::function<bool(int dude)> talkedRecently;
 	/// Saying a sentence (audio::advisor::Active). Unset: false
 	std::function<bool(int dude)> sayActive;
+	/// The advisor's line starts if its delay is over: asked once a frame for each advisor, from its update before its
+	/// closeness, or alone for an advisor at home hovering. Unset: nothing
+	std::function<void(int dude)> updateSentence;
 	/// The voice's side of the lip sync for this frame of `dt` seconds: nullopt when the advisor is not saying a line,
 	/// the only case where its tags are not looked at. Unset: nullopt (no mouth shapes, no tags)
 	std::function<std::optional<LipSyncFrame>(int dude, float dt)> lipSync;

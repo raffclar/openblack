@@ -1841,8 +1841,12 @@ void AdvisorSpirit::UpdateMotion(float dt, bool focus, float zMin, bool sfx)
 		}
 	}
 
-	// 3. how close the spirit comes
+	// 3. its line starts if its delay is over, then how close the spirit comes
 	const Queries& q = _control.GetQueries();
+	if (q.updateSentence)
+	{
+		q.updateSentence(_index);
+	}
 	const bool talked = q.talkedRecently ? q.talkedRecently(_index) : (q.isTalking && q.isTalking(_index));
 	// four rules in order, the last that applies wins
 	if (talked)
@@ -3095,7 +3099,11 @@ void AdvisorSpiritController::Process(float dt, float focusBias)
 			d.UpdateMotion(dt, focus == i, 0.0f, true);
 			d.UpdateHead(dt);
 		}
-		// else only the sentence update (audio::advisor)
+		else if (_queries.updateSentence)
+		{
+			// At home hovering, only its line is looked at
+			_queries.updateSentence(i);
+		}
 	}
 	for (int i = 0; i < k_Dudes; ++i)
 	{

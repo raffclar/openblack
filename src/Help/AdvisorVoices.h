@@ -97,6 +97,9 @@ public:
 	void SaySentence(int advisor, uint32_t line, bool onlyIfSilent, uint32_t delayMs);
 	/// Once a frame, the good advisor first: a line whose delay is over starts, and whether each talks is looked at
 	void Update();
+	/// The advisor's line starts if its delay is over; the advisors' update asks this for each advisor at its point in
+	/// the frame, before Update
+	void UpdateSaySentence(int advisor);
 
 	/// The speaker is waiting to start or still saying its line. A line that has finished is stopped.
 	[[nodiscard]] bool IsTalking(int advisor);
@@ -144,7 +147,6 @@ private:
 		audio::lip_sync::Key key {};
 	};
 
-	void UpdateSaySentence(int advisor);
 	/// The recording of the line that started is kept and the speaker's tags built from its labels
 	void KeepRecording(int advisor, uint32_t line);
 	[[nodiscard]] uint32_t Now() const { return _audio.tickMs ? _audio.tickMs() : 0; }
