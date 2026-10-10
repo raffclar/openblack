@@ -16,6 +16,7 @@
 #include "3D/LandLightFrame.h"
 #include "3D/LandLightTable.h"
 #include "3D/SkyFrame.h"
+#include "Common/MachineClock.h"
 #include "ECS/Registry.h"
 #include "EngineConfig.h"
 #include "Graphics/DetailLevel.h"
@@ -83,7 +84,8 @@ void SkySystem::UpdateFrame(bool skyDrawn)
 		moonColour =
 		    LandLightTable::GetMoonColour(*palettes.Handle(LandLightPalette::k_Id.value()), inputs.skyType, inputs.alignment);
 	}
-	const auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch());
+	// The date as the game reads it: the wall clock's, or the one a seeded run pinned
+	const auto now = std::chrono::seconds(machine_clock::UnixTime());
 	sky_frame::Update(
 	    {
 	        .scriptHour = clock.GetScriptTime(),

@@ -6,6 +6,9 @@ Run it again after adding or changing a component (with clang-format on the PATH
 
     python tools/inspector/generate_component_fields.py
 
+With --check it writes nothing and fails if the file is out of date (spaces aside), as ctest's
+test_inspector_component_fields does, so that a branch adding a component without registering it is told so.
+
 Only plain structs in openblack::ecs::components are read. Members that are functions, static, references or C arrays
 are left out, as are templates. A struct with no members is still registered, so that it can be added to an entity.
 """
@@ -190,6 +193,7 @@ def components_of(path):
 
 
 def main():
+    check = "--check" in sys.argv[1:]
     headers = sorted(COMPONENTS.glob("*.h"))
     lines = [HEADER]
     for header in headers:
@@ -208,6 +212,16 @@ def main():
                 lines.append(f'\n\t    .Field<&components::{name}::{member}>("{member}")')
             lines.append(";\n")
     lines.append("}\n")
+    if check:
+        def squeezed(text):
+            return re.sub(r"\s+", "", text)
+        current = OUTPUT.read_text(encoding="utf-8") if OUTPUT.exists() else ""
+        if squeezed(current) != squeezed("".join(lines)):
+            print(f"{OUTPUT.relative_to(ROOT)} is out of date with src/ECS/Components: run "
+                  f"python tools/inspector/generate_component_fields.py", file=sys.stderr)
+            return 1
+        print(f"{OUTPUT.relative_to(ROOT)} is up to date ({count} components)")
+        return 0
     OUTPUT.write_text("".join(lines), encoding="utf-8", newline="\n")
     # Formatted as the rest of the code is, when clang-format is there
     clang_format = shutil.which("clang-format")

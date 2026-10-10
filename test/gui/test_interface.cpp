@@ -11,6 +11,7 @@
 
 #include <cstring>
 
+#include <algorithm>
 #include <span>
 #include <string>
 #include <string_view>
@@ -607,6 +608,79 @@ TEST(SymbolPicture, RingComesUpAndGoes)
 	EXPECT_EQ(picture.GetRingRect(0).Width(), 46);
 	EXPECT_EQ(picture.GetRingRect(3).Centre(), glm::ivec2(400, 327 + 56));
 	EXPECT_EQ(picture.GetRingRect(6).Centre(), glm::ivec2(400, 327 - 104));
+}
+
+namespace
+{
+std::vector<std::u16string> Names(const GameMenu& menu)
+{
+	std::vector<std::u16string> names;
+	for (const auto& control : menu.GetNamedControls())
+	{
+		names.push_back(control.name);
+	}
+	return names;
+}
+
+/// Clicks the first control of that name in its middle, as tools press a control by name
+Action Press(GameMenu& menu, std::u16string_view name)
+{
+	for (const auto& control : menu.GetNamedControls())
+	{
+		if (control.name == name)
+		{
+			return Click(menu, (control.rect.min + control.rect.max) / 2);
+		}
+	}
+	ADD_FAILURE() << "no control of that name";
+	return Action::None;
+}
+
+bool Has(const std::vector<std::u16string>& names, std::u16string_view name)
+{
+	return std::ranges::find(names, name) != names.end();
+}
+} // namespace
+
+// Every page's controls that act have their names, so that tools press them by name as the player clicks them: the
+// main page's buttons and tabs, the options' pages and tabs, and the question's answers while it is asked
+TEST(GameMenu, EveryPagesControlsArePressedByName)
+{
+	MenuFixture f;
+	const auto main = Names(f.menu);
+	for (const auto* name : {u"Continue", u"Options", u"Quit", u"Main", u"Stats"})
+	{
+		EXPECT_TRUE(Has(main, name)) << ToUtf8(name);
+	}
+	EXPECT_EQ(Press(f.menu, u"Options"), Action::None);
+	EXPECT_EQ(f.menu.GetPage(), Page::Options);
+	const auto options = Names(f.menu);
+	EXPECT_TRUE(Has(options, u"Players"));
+	EXPECT_TRUE(Has(options, u"Back"));
+	EXPECT_FALSE(Has(options, u"Continue"));
+	for (const auto& control : f.menu.GetNamedControls())
+	{
+		EXPECT_FALSE(control.kind.empty());
+	}
+
+	Press(f.menu, u"Advanced");
+	EXPECT_EQ(f.menu.GetPage(), Page::Advanced);
+	Press(f.menu, u"Controls");
+	EXPECT_EQ(f.menu.GetPage(), Page::Controls);
+	Press(f.menu, u"Back");
+	EXPECT_EQ(f.menu.GetPage(), Page::Main);
+
+	// The question's answers, and nothing behind it
+	Press(f.menu, u"Quit");
+	ASSERT_TRUE(f.menu.IsAskingToQuit());
+	const auto question = Names(f.menu);
+	EXPECT_TRUE(Has(question, u"Yes."));
+	EXPECT_TRUE(Has(question, u"No."));
+	EXPECT_FALSE(Has(question, u"Continue"));
+	EXPECT_EQ(Press(f.menu, u"No."), Action::None);
+	EXPECT_FALSE(f.menu.IsAskingToQuit());
+	Press(f.menu, u"Quit");
+	EXPECT_EQ(Press(f.menu, u"Yes."), Action::Quit);
 }
 
 TEST(GameMenu, ListsTheControls)

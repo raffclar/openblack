@@ -276,7 +276,7 @@ void Server::Accept()
 		{
 			continue;
 		}
-		_clients.push_back({.socket = std::move(socket), .received = {}, .sending = {}});
+		_clients.push_back(std::make_shared<Client>(Client {.socket = std::move(socket), .received = {}, .sending = {}}));
 	}
 }
 
@@ -306,44 +306,64 @@ bool Server::Send(Client& client)
 
 size_t Server::Poll(const Handler& handler)
 {
-	Accept();
-	size_t answered = 0;
-	for (auto& client : _clients)
+	// The lines that came in, taken under the lock; answered outside it
+	std::vector<std::pair<std::shared_ptr<Client>, std::string>> lines;
 	{
-		if (!Receive(client))
+		const std::scoped_lock lock(_mutex);
+		Accept();
+		for (auto& client : _clients)
 		{
-			client.socket = Socket();
-			continue;
-		}
-		size_t end = 0;
-		while ((end = client.received.find('\n')) != std::string::npos)
-		{
-			std::string_view line(client.received.data(), end);
-			if (!line.empty() && line.back() == '\r')
+			if (!Receive(*client))
 			{
-				line.remove_suffix(1);
+				client->socket = Socket();
+				continue;
 			}
-			if (!line.empty())
+			size_t end = 0;
+			while ((end = client->received.find('\n')) != std::string::npos)
 			{
-				client.controlling = client.controlling || !_takesControl || _takesControl(line);
-				client.sending += handler(line);
-				client.sending += '\n';
-				++answered;
+				std::string_view line(client->received.data(), end);
+				if (!line.empty() && line.back() == '\r')
+				{
+					line.remove_suffix(1);
+				}
+				if (!line.empty())
+				{
+					client->controlling = client->controlling || !_takesControl || _takesControl(line);
+					lines.emplace_back(client, std::string(line));
+				}
+				client->received.erase(0, end + 1);
 			}
-			client.received.erase(0, end + 1);
-		}
-		if (!Send(client))
-		{
-			client.socket = Socket();
 		}
 	}
-	std::erase_if(_clients, [](const Client& client) { return !client.socket.Valid(); });
-	return answered;
+	for (auto& [client, line] : lines)
+	{
+		auto answer = handler(line);
+		answer += '\n';
+		const std::scoped_lock lock(_mutex);
+		client->sending += answer;
+	}
+	const std::scoped_lock lock(_mutex);
+	for (auto& client : _clients)
+	{
+		if (client->socket.Valid() && !Send(*client))
+		{
+			client->socket = Socket();
+		}
+	}
+	std::erase_if(_clients, [](const auto& client) { return !client->socket.Valid(); });
+	return lines.size();
+}
+
+size_t Server::ClientCount() const
+{
+	const std::scoped_lock lock(_mutex);
+	return _clients.size();
 }
 
 size_t Server::ControllingClientCount() const
 {
-	return static_cast<size_t>(std::ranges::count_if(_clients, [](const Client& client) { return client.controlling; }));
+	const std::scoped_lock lock(_mutex);
+	return static_cast<size_t>(std::ranges::count_if(_clients, [](const auto& client) { return client->controlling; }));
 }
 
 std::optional<Client> Client::Connect(uint16_t port)

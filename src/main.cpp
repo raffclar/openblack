@@ -73,6 +73,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("scenario-hide-window", "With --scenario, keep the testbed's window of scenarios closed, so the view is clear.")
 		("benchmark-out", "With --scenario, where a benchmark writes its results (with .json and .csv after it); the game quits once they are written.", cxxopts::value<std::string>())
 		("crash-dialogs", "Show the system's and C runtime's crash dialogs (Abort/Retry/Ignore) instead of writing a crash report to crashes/ and exiting.")
+		("seed", "Start every random number the game draws from this seed and pin the date the game reads (1 January 2001), so that two runs of the same scenario with a fixed frame time and the same input go the same way.", cxxopts::value<uint32_t>())
 	;
 #if defined(OPENBLACK_INSPECTOR)
 	options.add_options()
@@ -185,6 +186,11 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		else
 		{
 			args.gamePath = result["game-path"].as<std::string>();
+		}
+
+		if (result.count("seed") != 0)
+		{
+			args.seed = result["seed"].as<uint32_t>();
 		}
 
 		if (result.count("screenshot-frame") != 0)

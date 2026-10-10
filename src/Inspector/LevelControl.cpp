@@ -106,12 +106,18 @@ std::vector<QueryDescription> ScreenshotProvider::Describe() const
 {
 	return {
 	    Description("take",
-	                "Takes a picture of the screen at an exact frame (this one by default), the camera put somewhere first "
-	                "if asked. The file is written once the frame is drawn, within a few frames; step the game to it",
+	                "Takes a picture of the screen at an exact frame (this one by default), the camera put somewhere or "
+	                "looking at an entity for it if asked. The file is written once the frame is drawn, within a few "
+	                "frames, and appears whole (the adapter waits for it)",
 	                {Parameter("path", "string", "Where to write the PNG; a file in the inspector's folder by default", false),
 	                 Parameter("in_frames", "integer", "Frames from now (0 is this frame)", false),
 	                 Parameter("at_frame", "integer", "The frame, as game.state counts them", false),
-	                 Parameter("camera", "object", "{position?, focus?, yaw?, pitch?, distance?} as camera.set takes", false)},
+	                 Parameter("camera", "object", "{position?, focus?, yaw?, pitch?, distance?} as camera.set takes", false),
+	                 Parameter("frame", "integer|object",
+	                           "An entity to look at where it is at the picture's frame: its id, or {id, yaw?, pitch?, "
+	                           "distance?}; not with camera",
+	                           false),
+	                 Parameter("hide_gui", "boolean", "Leave the debug windows and the menu bar out of the picture", false)},
 	                true),
 	    Description("pending", "The pictures still to take, and any that failed", {}, false),
 	};
@@ -119,14 +125,45 @@ std::vector<QueryDescription> ScreenshotProvider::Describe() const
 
 std::string ScreenshotProvider::Take(const Pending& pending)
 {
-	if (pending.camera.has_value())
+	if (auto why = _target.Capture(pending.path, pending.hideGui); !why.empty())
 	{
-		if (auto why = _camera.Set(*pending.camera); !why.empty())
-		{
-			return why;
-		}
+		return why;
 	}
-	return _target.Capture(pending.path);
+	if (pending.camera.has_value() || pending.framing.has_value())
+	{
+		_placing = pending;
+	}
+	return {};
+}
+
+void ScreenshotProvider::PlaceCamera()
+{
+	if (!_placing.has_value())
+	{
+		return;
+	}
+	const auto placing = std::move(*_placing);
+	_placing.reset();
+	const auto fail = [this, &placing](const std::string& why) {
+		_failures.push_back(placing.path.generic_string() + ": " + why);
+	};
+	auto pose = placing.camera;
+	if (placing.framing.has_value())
+	{
+		const auto now = _camera.State();
+		const auto target = _camera.EntityPosition(placing.framing->id);
+		if (!now.has_value() || !target.has_value())
+		{
+			fail(now.has_value() ? "no entity " + std::to_string(placing.framing->id) + " with a place to frame"
+			                     : "there is no camera");
+			return;
+		}
+		pose = FramePose(*target, *placing.framing, *now);
+	}
+	if (auto why = _camera.Set(*pose); !why.empty())
+	{
+		fail(why);
+	}
 }
 
 void ScreenshotProvider::Frame(uint64_t frame)
@@ -138,7 +175,7 @@ void ScreenshotProvider::Frame(uint64_t frame)
 		_pending.pop_front();
 		if (auto why = Take(pending); !why.empty())
 		{
-			_failures.push_back(pending.path.string() + ": " + why);
+			_failures.push_back(pending.path.generic_string() + ": " + why);
 		}
 	}
 }
@@ -185,6 +222,24 @@ QueryResult ScreenshotProvider::Run(std::string_view query, const QueryContext& 
 		frame = static_cast<uint64_t>(*at);
 	}
 	std::optional<CameraPose> camera;
+	std::optional<FrameRequest> framing;
+	if (params.contains("camera") && params.contains("frame"))
+	{
+		return QueryResult::Error("give camera or frame, not both");
+	}
+	if (const auto it = params.find("frame"); it != params.end())
+	{
+		std::string error;
+		framing = ParseFrameRequest(*it, error);
+		if (!framing.has_value())
+		{
+			return QueryResult::Error("frame: " + error);
+		}
+		if (!_camera.EntityPosition(framing->id).has_value())
+		{
+			return QueryResult::Error("frame: no entity " + std::to_string(framing->id) + " with a place");
+		}
+	}
 	if (const auto it = params.find("camera"); it != params.end())
 	{
 		const auto state = _camera.State();
@@ -202,10 +257,19 @@ QueryResult ScreenshotProvider::Run(std::string_view query, const QueryContext& 
 	{
 		return QueryResult::Error("the path is a .png file");
 	}
-	Pending pending {.frame = frame, .path = path, .camera = camera};
+	if (camera.has_value() || framing.has_value())
+	{
+		if (const auto state = _camera.State(); state.has_value() && state->heldByPath)
+		{
+			return QueryResult::Error("a camera path (a miracle's or a script's) holds the camera");
+		}
+	}
+	const auto hideParam = params.find("hide_gui");
+	const bool hideGui = hideParam != params.end() && hideParam->is_boolean() && hideParam->get<bool>();
+	Pending pending {.frame = frame, .path = path, .camera = camera, .framing = framing, .hideGui = hideGui};
 	if (frame == now)
 	{
-		// This frame: the camera goes there and the picture is asked for before the frame is drawn
+		// This frame: the picture is asked for, and the camera put in place before the frame is drawn
 		if (auto why = Take(pending); !why.empty())
 		{
 			return QueryResult::Error(why);
@@ -216,5 +280,10 @@ QueryResult ScreenshotProvider::Run(std::string_view query, const QueryContext& 
 		const auto after = std::ranges::upper_bound(_pending, frame, {}, &Pending::frame);
 		_pending.insert(after, std::move(pending));
 	}
-	return QueryResult::Value({{"path", path.generic_string()}, {"frame", frame}, {"now", now}});
+	Json answer = {{"path", path.generic_string()}, {"frame", frame}, {"now", now}, {"hide_gui", hideGui}};
+	if (framing.has_value())
+	{
+		answer["framing"] = framing->id;
+	}
+	return QueryResult::Value(std::move(answer));
 }
