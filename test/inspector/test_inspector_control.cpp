@@ -803,6 +803,35 @@ TEST(InspectorScreenshot, APictureWithItsCameraIsTakenAsTheGameDrawsIt)
 	EXPECT_NE(failed[0].get<std::string>().find("never.png"), std::string::npos);
 }
 
+// A picture the renderer never gives back fails, saying so, once it has had long enough to be written; one written is
+// let go of; meanwhile pending lists both as being written
+TEST(InspectorScreenshot, APictureNeverWrittenFails)
+{
+	FakeScreenshots screenshots;
+	FakeCamera camera;
+	auto owned = std::make_unique<ScreenshotProvider>(screenshots, camera);
+	auto* provider = owned.get();
+	Inspector inspector;
+	inspector.Add(std::move(owned));
+	uint64_t frame = 10;
+	provider->Frame(frame);
+	Ask(inspector, R"({"query": "screenshot.take", "params": {"path": "lost.png"}})");
+	Ask(inspector, R"({"query": "screenshot.take", "params": {"path": "kept.png"}})");
+	screenshots.written.insert("kept.png");
+	provider->Frame(++frame);
+	const auto writing = Ask(inspector, R"({"query": "screenshot.pending"})");
+	ASSERT_EQ(writing["writing"].size(), 1u);
+	EXPECT_EQ(writing["writing"][0]["path"], "lost.png");
+	while (frame < 11 + 600)
+	{
+		provider->Frame(++frame);
+	}
+	const auto failed = Ask(inspector, R"({"query": "screenshot.pending"})");
+	ASSERT_EQ(failed["failed"].size(), 1u);
+	EXPECT_NE(failed["failed"][0].get<std::string>().find("lost.png: never written"), std::string::npos);
+	EXPECT_TRUE(failed["writing"].empty());
+}
+
 // Two held pictures asked for at once take turns: the second's camera goes in place once the first's frames are free,
 // and each answer says the frame its picture is taken
 TEST(InspectorScreenshot, HeldPicturesTakeTurns)

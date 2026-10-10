@@ -1460,7 +1460,7 @@
   "writes": true
  },
  {
-  "description": "The pictures still to take, and any that failed",
+  "description": "The pictures still to take (pending), the held one waiting for its camera (holding), those taken but not yet written (writing), and any that failed with why",
   "kind": "object",
   "parameters": [],
   "query": "screenshot.pending"
