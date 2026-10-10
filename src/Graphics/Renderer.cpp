@@ -85,6 +85,7 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/HiddenByState.h"
+#include "ECS/Components/HighDetail.h"
 #include "ECS/Components/LightBeam.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
@@ -1008,6 +1009,10 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			{
 				const auto u_creatureSpellLook = CreatureSpellLookOf(desc.fizz, desc.freeze);
 				setUniform(MeshUniform::CreatureSpellLook, &u_creatureSpellLook);
+			}
+			if (has(MeshUniform::ShadeAt))
+			{
+				setUniform(MeshUniform::ShadeAt, &desc.shadeAt);
 			}
 			if (has(MeshUniform::UvOffset))
 			{
@@ -2740,6 +2745,7 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	};
 	// Every villager out of doors and out of the sea casts one from each foot, on the land beneath it; one too far away
 	// to be drawn a wider one from where it stands, as if the land there were flat
+	// A villager a script draws in high detail casts none
 	desc.entities.Each<const ecs::components::Villager, const ecs::components::Transform, const ecs::components::Mesh>(
 	    [&](entt::entity entity, const ecs::components::Villager& /*villager*/, const ecs::components::Transform& transform,
 	        const ecs::components::Mesh& mesh) {
@@ -2766,7 +2772,7 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 			    addQuad(quad);
 		    }
 	    },
-	    entt::exclude<ecs::components::AtHome, ecs::components::HiddenByState>);
+	    entt::exclude<ecs::components::AtHome, ecs::components::HiddenByState, ecs::components::HighDetail>);
 	for (const auto& far : farVillagers)
 	{
 		auto foot = far.position;
@@ -5618,6 +5624,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawCaveSeeds(desc);
 			DrawGroundBlobs(desc);
 			DrawFarVillagerSmudges(desc);
+			DrawVillagerEyes(desc);
 			DrawGlobes(desc);
 			DrawHandMiracleBands(desc);
 			DrawTribalPower(desc);

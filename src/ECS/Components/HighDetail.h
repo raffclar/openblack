@@ -15,6 +15,7 @@
 #include <entt/core/fwd.hpp>
 
 #include "ECS/HighDetailRules.h"
+#include "ECS/VillagerEyes.h"
 
 namespace openblack::ecs::components
 {
@@ -29,6 +30,10 @@ struct HighDetail
 	/// The face its eyes are drawn with, when it wears a detailed model
 	std::optional<high_detail_rules::Face> face;
 	high_detail_rules::DrawOrders orders;
+	/// Its eyes, when its detailed model has places for them: only the opening's family has
+	std::optional<villager_eyes::Eyes> eyes;
+	/// Where its eyes are drawn this frame, while it is in view
+	std::optional<villager_eyes::DrawnEyes> drawnEyes;
 };
 
 } // namespace openblack::ecs::components
