@@ -192,6 +192,7 @@
 #include "Magic/ScriptCast.h"
 #include "Physics/Body.h"
 #include "Resources/ResourcesInterface.h"
+#include "ScriptHeaders/ScriptChallengeSnapshots.h"
 #include "ScriptHeaders/ScriptEnums.h"
 #include "ScriptHeaders/ScriptInfluence.h"
 #include "ScriptHeaders/ScriptNameLists.h"
@@ -429,18 +430,6 @@ std::string PopString()
 {
 	auto& lhvm = Locator::vm::value();
 	return lhvm.GetString(lhvm.Pop().intVal);
-}
-
-std::vector<float> PopVarArg(const int32_t argc)
-{
-	std::vector<float> vals;
-	vals.resize(argc);
-	auto& lhvm = Locator::vm::value();
-	for (int i = argc - 1; i >= 0; i--)
-	{
-		vals[i] = lhvm.Popf();
-	}
-	return vals;
 }
 
 /// Whether a thing is one of the world's objects, which a miracle can be cast on, rather than something with only a place,
@@ -3071,19 +3060,33 @@ void ChangeInnerOuterProperties() // 056 CHANGE_INNER_OUTER_PROPERTIES
 	ScriptMessage("Invalid thing for Changing Variables");
 }
 
+/// What a script gave for a challenge's record, taken off its stack: every value, however many arguments it gave its
+/// reminder script, so that nothing is left behind for the script's next calls
+script::challenge_snapshots::Snapshot PopChallengeSnapshot(script::challenge_snapshots::Call call)
+{
+	auto& lhvm = Locator::vm::value();
+	const auto snapshot =
+	    script::challenge_snapshots::Read(call, {
+	                                                .pop =
+	                                                    [&lhvm]() {
+		                                                    script::challenge_snapshots::Value value;
+		                                                    value.value = lhvm.Pop(value.type);
+		                                                    return value;
+	                                                    },
+	                                                .text = [&lhvm](uint32_t offset) { return lhvm.GetString(offset); },
+	                                            });
+	if (snapshot.tooManyArguments)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Too many arguments for a challenge's reminder script: {}",
+		                    snapshot.arguments.size());
+	}
+	return snapshot;
+}
+
 void Snapshot() // 057 SNAPSHOT
 {
-	// const auto challengeId = Pop().intVal;
-	// const auto argc = Pop().intVal;
-	// const auto argv = PopVarArg(argc);
-	// const auto reminderScript = PopString();
-	// const auto titleStrID = Pop().intVal;
-	// const auto alignment = Popf();
-	// const auto success = Popf();
-	// const auto focus = PopVec();
-	// const auto position = PopVec();
-	// const auto quest = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
+	[[maybe_unused]] const auto snapshot = PopChallengeSnapshot(script::challenge_snapshots::Call::Start);
+	// TODO(raffclar): keep the challenge's record (Land 1 milestone #46)
 	NotImplemented();
 }
 
@@ -5279,14 +5282,8 @@ void GetTotalEvents() // 237 GET_TOTAL_EVENTS
 
 void UpdateSnapshot() // 238 UPDATE_SNAPSHOT
 {
-	// const auto challengeId = Pop().intVal;
-	// const auto argc = Pop().intVal;
-	// const auto argv = PopVarArg(argc);
-	// const auto reminderScript = PopString();
-	// const auto titleStrID = Pop().intVal;
-	// const auto alignment = Popf();
-	// const auto success = Popf();
-	// TODO(Daniels118): implement this
+	[[maybe_unused]] const auto snapshot = PopChallengeSnapshot(script::challenge_snapshots::Call::Update);
+	// TODO(raffclar): bring the challenge's record up to date (Land 1 milestone #46)
 	NotImplemented();
 }
 
@@ -6531,14 +6528,8 @@ void MusicPlayed350() // 350 MUSIC_PLAYED
 
 void UpdateSnapshotPicture() // 351 UPDATE_SNAPSHOT_PICTURE
 {
-	// const auto challengeID = Pop().intVal;
-	// const auto takingPicture = static_cast<bool>(Pop().intVal);
-	// const auto titleStrID = Pop().intVal;
-	// const auto alignment = Popf();
-	// const auto success = Popf();
-	// const auto focus = PopVec();
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
+	[[maybe_unused]] const auto snapshot = PopChallengeSnapshot(script::challenge_snapshots::Call::Picture);
+	// TODO(raffclar): the picture of the challenge's record (Land 1 milestone #46)
 	NotImplemented();
 }
 
