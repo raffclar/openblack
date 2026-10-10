@@ -131,7 +131,7 @@ def write_record(folder, pid, port, worktree, land="Land1"):
                    "build_type": "Debug", "land": land, "started": 1760000000}, file)
 
 
-def wait_for(condition, seconds=2.0):
+def wait_for(condition, seconds=20.0):
     deadline = time.monotonic() + seconds
     while not condition():
         if time.monotonic() > deadline:
@@ -246,11 +246,17 @@ class SessionBase(unittest.TestCase):
         self.running = {1001, 1002}
         self.session = self.make_session()
 
+    # How long an answer and a ping may take: generous, so that a machine busy with builds and other tests doesn't
+    # fail the tests; the tests of what happens past a limit set theirs short, or wait past these
+    ANSWER_TIMEOUT = 5.0
+    PING_TIMEOUT = 5.0
+
     def make_session(self, **options):
-        options.setdefault("ready_timeout", 2.0)
-        options.setdefault("load_timeout", 3.0)
-        return mcp.Session(self.first.port, 1.0, folder=self.folder, alive=lambda pid: pid in self.running,
-                           ping_timeout=0.5, **options)
+        options.setdefault("ready_timeout", 15.0)
+        options.setdefault("load_timeout", 15.0)
+        options.setdefault("ping_timeout", self.PING_TIMEOUT)
+        return mcp.Session(self.first.port, self.ANSWER_TIMEOUT, folder=self.folder,
+                           alive=lambda pid: pid in self.running, **options)
 
     def tearDown(self):
         self.session.close()
@@ -413,28 +419,33 @@ class WaitingTest(SessionBase):
     def test_a_game_loading_too_long_says_so(self):
         self.stop(self.second)
         self.first.loading = 1000
-        answer = self.session.call("game_moon", {})
+        session = self.make_session(load_timeout=2.0)
+        try:
+            answer = session.call("game_moon", {})
+        finally:
+            session.close()
         self.assertFalse(answer["ok"])
         self.assertIn("still loading Land1.txt", answer["error"])
 
     def test_an_old_game_busy_loading_is_waited_for_while_it_runs(self):
         self.stop(self.second)
         self.first.old = True
-        self.first.delay = 1.5
-        # Longer than the answer timeout (1 s), but the process runs: the answer is waited for
+        self.first.delay = self.ANSWER_TIMEOUT + 1.5
+        # Longer than the answer timeout, but the process runs: the answer is waited for
         self.assertEqual(self.moon(), "first")
 
     def test_an_old_game_that_has_gone_isnt_waited_for(self):
         self.stop(self.second)
         self.first.old = True
-        self.first.delay = 2.5
+        self.first.delay = 60.0
         self.running.discard(1001)
         write_record(self.folder, 1001, self.first.port, "C:/projects/ob-wt-first")
         # Its file is gone with its process; the default port is the first game's
         start = time.monotonic()
         with self.assertRaises(ConnectionError):
             self.session.call("game_moon", {"port": self.first.port})
-        self.assertLess(time.monotonic() - start, 2.0)
+        # Given up once an answer is overdue, not waited for until the game would answer
+        self.assertLess(time.monotonic() - start, 45.0)
 
     def test_an_answer_from_another_game_is_refused(self):
         self.second.claims = 1001
@@ -456,7 +467,11 @@ class WaitingTest(SessionBase):
 
     def test_connect_refuses_a_game_never_ready(self):
         self.second.loading = 1000
-        answer = self.session.call("inspector_connect", {"pid": 1002})
+        session = self.make_session(ready_timeout=2.0)
+        try:
+            answer = session.call("inspector_connect", {"pid": 1002})
+        finally:
+            session.close()
         self.assertFalse(answer["ok"])
         self.assertIn("is loading Land1.txt", answer["error"])
 

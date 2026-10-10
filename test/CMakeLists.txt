@@ -452,6 +452,16 @@ if (Python3_Interpreter_FOUND)
       ${CMAKE_SOURCE_DIR}/tools/inspector/generate_component_fields.py --check
   )
 endif ()
+# The tests talking over loopback sockets with threads of their own take turns, so that on a machine busy with a
+# parallel ctest they don't also crowd each other
+set(OPENBLACK_INSPECTOR_SOCKET_TESTS test_inspector_server)
+if (Python3_Interpreter_FOUND)
+  list(APPEND OPENBLACK_INSPECTOR_SOCKET_TESTS test_inspector_mcp)
+endif ()
+set_tests_properties(
+  ${OPENBLACK_INSPECTOR_SOCKET_TESTS} PROPERTIES RESOURCE_LOCK
+                                                 inspector_sockets
+)
 # The game's side of the inspector, built only with it
 if (OPENBLACK_INSPECTOR)
   openblack_setup_and_add_test(
