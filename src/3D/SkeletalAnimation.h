@@ -120,6 +120,20 @@ struct FrameSpan
 void AddLayer(std::vector<Pose>& poses, const Animation& layer, uint32_t timeMs, size_t referenceFrame,
               const Skeleton& skeleton, std::span<const uint32_t> mirror = {});
 
+/// Sets the bones an animation moves to its pose at a time, in place. The bones it doesn't move keep their poses, or,
+/// given a fill animation, take its first frame where it moves them: the advisors' stand pose under the rest of their
+/// clips.
+void SetLayer(std::vector<Pose>& poses, const Animation& animation, uint32_t timeMs, const Skeleton& skeleton,
+              const Animation* fill = nullptr);
+
+/// Two animations set over the same poses, each without a fill, and blended by t in the mesh's space, every element of
+/// each bone's matrix moved from the first towards the second, then made relative to the parents again
+void BlendLayers(std::vector<Pose>& poses, const Animation& first, uint32_t firstTimeMs, const Animation& second,
+                 uint32_t secondTimeMs, float t, const Skeleton& skeleton);
+
+/// Poses relative to their parents again from bone matrices in the mesh's space, as ComposeBoneMatrices gives them
+[[nodiscard]] std::vector<Pose> PosesFromBoneMatrices(std::span<const glm::mat4> matrices, std::span<const uint32_t> parents);
+
 /// Each bone's mirror bone across the body's x = 0 plane in the rest pose: a left leg's right leg, a bone along the
 /// middle itself. Bones are paired when each is where the other would be reflected; any without a clear partner keep
 /// their own place.

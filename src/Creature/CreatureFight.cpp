@@ -193,6 +193,88 @@ Move creature_fight::AttackMove(Band band)
 	return {.kind = Move::Kind::Mid};
 }
 
+std::optional<Move> creature_fight::ScriptMove(uint32_t value)
+{
+	constexpr uint32_t k_NumberMask = 0x3FFF;
+	if ((value & k_ScriptAnimationBit) != 0)
+	{
+		return Move {.kind = Move::Kind::Animation, .value = value & k_NumberMask};
+	}
+	if ((value & k_ScriptSpellBit) != 0)
+	{
+		return Move {.kind = Move::Kind::Spell, .value = value & k_NumberMask};
+	}
+	switch (value)
+	{
+	case 0:
+		return Move {.kind = Move::Kind::High};
+	case 1:
+		return Move {.kind = Move::Kind::Mid};
+	case 2:
+		return Move {.kind = Move::Kind::Low};
+	case 3:
+		return Move {.kind = Move::Kind::Block};
+	case 4:
+		return Move {.kind = Move::Kind::Special};
+	default:
+		return std::nullopt;
+	}
+}
+
+FightAction creature_fight::FightActionOf(size_t animation)
+{
+	const auto within = [animation](size_t first, size_t last) { return animation >= first && animation <= last; };
+	if (animation == animations::k_Faint)
+	{
+		return FightAction::Fainted;
+	}
+	if (within(110, 112))
+	{
+		return FightAction::Casting;
+	}
+	if (within(122, 124))
+	{
+		return FightAction::Stance;
+	}
+	if (animation == 130 || animation == 136)
+	{
+		return FightAction::Special;
+	}
+	if (within(125, 135))
+	{
+		return FightAction::Blow;
+	}
+	if (within(137, 140))
+	{
+		return FightAction::Step;
+	}
+	if (within(142, 144))
+	{
+		return FightAction::Block;
+	}
+	if (within(179, 183))
+	{
+		return FightAction::ReelingHigh;
+	}
+	if (within(184, 188))
+	{
+		return FightAction::ReelingMiddle;
+	}
+	if (within(189, 193))
+	{
+		return FightAction::ReelingLow;
+	}
+	return FightAction::Other;
+}
+
+uint32_t creature_fight::QueuedBlows(std::span<const QueuedMove> moves)
+{
+	return static_cast<uint32_t>(std::ranges::count_if(moves, [](const QueuedMove& queued) {
+		return queued.move.kind == Move::Kind::High || queued.move.kind == Move::Kind::Mid ||
+		       queued.move.kind == Move::Kind::Low;
+	}));
+}
+
 Move creature_fight::StepMove(Step step)
 {
 	return {.kind = Move::Kind::Animation, .value = static_cast<uint32_t>(StepAnimation(step))};
@@ -626,8 +708,10 @@ void creature_fight::Enter(Fighter& fighter, State state, std::optional<size_t> 
 
 bool creature_fight::PlayerMove(Fighter& fighter, const Move& move, bool replace)
 {
-	fighter.control = Control::Player;
-	fighter.autoFight = false;
+	if (fighter.control == Control::Computer)
+	{
+		fighter.control = Control::Player;
+	}
 	fighter.computerWaitMs = k_ComputerWaitsMs;
 	return fighter.queue.Push(move, replace);
 }

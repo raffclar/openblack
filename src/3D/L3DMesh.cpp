@@ -58,6 +58,12 @@ bool L3DMesh::LoadMade(const L3DMesh& skinSource, std::span<const std::vector<L3
 	return !_subMeshes.empty();
 }
 
+bool L3DMesh::LoadWithSkinsOf(const l3d::L3DFile& l3d, const L3DMesh& skinSource) noexcept
+{
+	_skinSource = &skinSource;
+	return Load(l3d);
+}
+
 bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 {
 	bool result = true;
@@ -154,6 +160,14 @@ bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 		{
 			_extraMetrics.emplace_back(static_cast<glm::mat4>(glm::make_mat4x3(e.data())));
 		}
+	}
+
+	// Each point's matrix is its rotation then its position
+	if (const auto& eBone = l3d.GetEBone(); eBone.has_value() && eBone->bones[0] >= 0)
+	{
+		const auto& matrix = eBone->matrices[0];
+		_firstBonePoint =
+		    BonePoint {.bone = static_cast<uint32_t>(eBone->bones[0]), .point = glm::vec3(matrix[9], matrix[10], matrix[11])};
 	}
 
 	std::map<uint32_t, glm::mat4> matrices;

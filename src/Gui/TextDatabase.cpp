@@ -67,8 +67,8 @@ public:
 		return Separator() ? std::optional(word) : std::nullopt;
 	}
 
-	/// The next argument, a quoted string with its escapes resolved
-	std::optional<std::u16string> String()
+	/// The next argument, a quoted string with its escapes resolved, or with `raw` as it is written
+	std::optional<std::u16string> String(bool raw = false)
 	{
 		SkipSpaces();
 		if (Peek() != u'"')
@@ -77,10 +77,15 @@ public:
 		}
 		++_position;
 		std::u16string result;
-		while (_position < _text.size() && _text[_position] != u'"' && _text[_position] != u'\n')
+		// A string may go on over a line break: two of the game's texts have their closing quote on the next line
+		while (_position < _text.size() && _text[_position] != u'"')
 		{
 			auto c = _text[_position++];
-			if (c == u'\\' && _position < _text.size())
+			if (c == u'\r')
+			{
+				continue;
+			}
+			if (!raw && c == u'\\' && _position < _text.size())
 			{
 				c = _text[_position++];
 				if (c == u'n')
@@ -127,9 +132,122 @@ private:
 	std::u16string_view _text;
 	size_t _position {0};
 };
+
+/// A string's escapes resolved: a backslash keeps the character after it, and a backslash and n is a line break
+std::u16string Unescape(std::u16string_view text)
+{
+	std::u16string result;
+	result.reserve(text.size());
+	for (size_t i = 0; i < text.size(); ++i)
+	{
+		auto c = text[i];
+		if (c == u'\\' && i + 1 < text.size())
+		{
+			c = text[++i];
+			if (c == u'n')
+			{
+				c = u'\n';
+			}
+		}
+		result.push_back(c);
+	}
+	return result;
+}
+
+/// The script's whole number constants: the lines "NAME = value"
+std::unordered_map<std::u16string, int32_t> ReadConstants(std::u16string_view text)
+{
+	std::unordered_map<std::u16string, int32_t> constants;
+	size_t start = 0;
+	while (start < text.size())
+	{
+		auto end = text.find_first_of(u"\r\n", start);
+		if (end == std::u16string_view::npos)
+		{
+			end = text.size();
+		}
+		const auto line = text.substr(start, end - start);
+		start = end + 1;
+		const auto equals = line.find(u'=');
+		if (equals == std::u16string_view::npos)
+		{
+			continue;
+		}
+		auto name = line.substr(0, equals);
+		while (!name.empty() && (name.back() == u' ' || name.back() == u'\t'))
+		{
+			name.remove_suffix(1);
+		}
+		while (!name.empty() && (name.front() == u' ' || name.front() == u'\t'))
+		{
+			name.remove_prefix(1);
+		}
+		const auto value = line.substr(equals + 1);
+		size_t i = value.find_first_not_of(u" \t");
+		if (name.empty() || i == std::u16string_view::npos)
+		{
+			continue;
+		}
+		const bool negative = value[i] == u'-';
+		i += negative ? 1 : 0;
+		if (i >= value.size() || value[i] < u'0' || value[i] > u'9')
+		{
+			continue;
+		}
+		int32_t number = 0;
+		for (; i < value.size() && value[i] >= u'0' && value[i] <= u'9'; ++i)
+		{
+			number = (number * 10) + (value[i] - u'0');
+		}
+		constants.insert_or_assign(std::u16string(name), negative ? -number : number);
+	}
+	return constants;
+}
+
+/// An argument's value: a whole number, or a constant of the script by its name; 0 for anything else
+int32_t ValueOf(std::u16string_view word, const std::unordered_map<std::u16string, int32_t>& constants)
+{
+	if (const auto found = constants.find(std::u16string(word)); found != constants.end())
+	{
+		return found->second;
+	}
+	int32_t number = 0;
+	const bool negative = !word.empty() && word.front() == u'-';
+	for (size_t i = negative ? 1 : 0; i < word.size(); ++i)
+	{
+		if (word[i] < u'0' || word[i] > u'9')
+		{
+			return 0;
+		}
+		number = (number * 10) + (word[i] - u'0');
+	}
+	return negative ? -number : number;
+}
 } // namespace
 
 size_t TextDatabase::AddScript(std::span<const uint8_t> script)
+{
+	return Add(script, nullptr, nullptr);
+}
+
+size_t TextDatabase::AddHelpScript(std::span<const uint8_t> script)
+{
+	_helpNames.clear();
+	_helpTexts.clear();
+	return Add(script, &_helpNames, &_helpTexts);
+}
+
+const TextDatabase::HelpText& TextDatabase::GetHelpText(uint32_t number) const
+{
+	static const HelpText k_None {};
+	if (_helpTexts.empty())
+	{
+		return k_None;
+	}
+	return number < _helpTexts.size() ? _helpTexts[number] : _helpTexts.front();
+}
+
+size_t TextDatabase::Add(std::span<const uint8_t> script, std::vector<std::string>* names, std::vector<HelpText>* helpTexts)
 {
 	std::u16string text(script.size() / 2, u'\0');
 	for (size_t i = 0; i < text.size(); ++i)
@@ -141,6 +259,9 @@ size_t TextDatabase::AddScript(std::span<const uint8_t> script)
 		text.erase(0, 1);
 	}
 
+	// The help texts name their narrators by the values the script gives them ("NAME = 2")
+	const auto constants = helpTexts != nullptr ? ReadConstants(text) : std::unordered_map<std::u16string, int32_t> {};
+
 	size_t count = 0;
 	ScriptReader reader(text);
 	while (reader.NextAddText())
@@ -148,12 +269,27 @@ size_t TextDatabase::AddScript(std::span<const uint8_t> script)
 		const auto number = reader.Word();
 		const auto narrator = reader.Word();
 		auto name = reader.String();
-		auto value = reader.String();
+		auto value = reader.String(helpTexts != nullptr);
 		if (!number || !narrator || !name || !value)
 		{
 			continue;
 		}
-		_texts.insert_or_assign(ToUtf8(*name), std::move(*value));
+		auto key = ToUtf8(*name);
+		if (names != nullptr)
+		{
+			names->push_back(key);
+		}
+		if (helpTexts != nullptr)
+		{
+			helpTexts->push_back({
+			    .narrator = ValueOf(*narrator, constants),
+			    .important = ValueOf(*number, constants) != 0,
+			    .text = *value,
+			});
+			// Looked up by name it reads as the other scripts' texts do
+			value = Unescape(*value);
+		}
+		_texts.insert_or_assign(std::move(key), std::move(*value));
 		++count;
 	}
 	return count;

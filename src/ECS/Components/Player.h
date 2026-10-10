@@ -70,6 +70,8 @@ struct Player
 	uint32_t villagersLost {0};
 	uint32_t villagersKilled {0};
 	uint32_t sacrifices {0};
+	/// All the prayer power the player's worship sites have given
+	float totalChantsUsed {0.0f};
 	Miracles miracles;
 
 	/// Each player's colour, 0xAARRGGBB, by player number; the neutral player's is black

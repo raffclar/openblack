@@ -24,4 +24,9 @@ struct ScriptControlled
 {
 };
 
+/// A point a script marked: a place and nothing else
+struct ScriptMarker
+{
+};
+
 } // namespace openblack::ecs::components

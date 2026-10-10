@@ -16,6 +16,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <glm/vec2.hpp>
 
@@ -38,6 +39,12 @@ namespace openblack::graphics
 class Texture2D;
 class VideoOverlay;
 } // namespace openblack::graphics
+
+namespace openblack::help
+{
+enum class TextFont : uint8_t;
+struct TextRun;
+} // namespace openblack::help
 
 namespace openblack::gui
 {
@@ -104,8 +111,26 @@ public:
 	void SetCreaturePanel(std::optional<creature_panel::Values> values) { _creaturePanel = values; }
 	/// The fight's panel shown this frame, or none: each fighter's name over its health and stamina
 	void SetFightPanel(std::optional<creature_fight_hud::Values> values) { _fightPanel = std::move(values); }
+	/// A number floating up from a point of the world, where it is on the screen this frame
+	struct FloatingNumber
+	{
+		glm::vec2 screen;
+		std::u16string text;
+		/// Its colour, 0xAARRGGBB; drawn at its alpha over a black shadow
+		uint32_t colour;
+		uint8_t alpha;
+	};
+	/// The numbers floating up this frame, drawn the furthest first, under the interface
+	void SetFloatingNumbers(std::vector<FloatingNumber> numbers) { _floatingNumbers = std::move(numbers); }
 
 private:
+	/// A font with its glyphs, white with their coverage in alpha
+	struct FontFace
+	{
+		GameFont font;
+		std::unique_ptr<graphics::Texture2D> texture;
+	};
+
 	GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<graphics::Texture2D> atlas,
 	              std::unique_ptr<graphics::Texture2D> fontTexture, std::unique_ptr<graphics::Texture2D> symbols,
 	              std::unique_ptr<graphics::Texture2D> mice, std::unique_ptr<graphics::Texture2D> atmos,
@@ -117,6 +142,8 @@ private:
 	bool ProcessTattooEditorEvent(const SDL_Event& event);
 	/// Opens the tattoo editor's dialog as the editor opens, and moves it on
 	void UpdateTattooEditor(float deltaSeconds);
+	/// The floating numbers, each ending at its point over its shadow
+	void DrawFloatingNumbers();
 	/// The tooltip by the hand, its words and then its mouse
 	void DrawToolTip(glm::u16vec2 resolution);
 	/// The creature's status panel, at the left of the screen
@@ -127,6 +154,12 @@ private:
 	void DrawVideo(glm::u16vec2 resolution);
 	/// The tooltip's glow: a soft box of atmos.raw added round a rectangle
 	void DrawGlow(glm::vec2 min, glm::vec2 max, glm::vec4 colour);
+	/// The scripts' dialogue: its see-through box above the bottom cinema bar, then its words
+	void DrawDialogue(glm::u16vec2 resolution, int barPixels);
+	/// One word of the dialogue, cut to the box's top and bottom
+	void DrawDialogueRun(const help::TextRun& run);
+	/// The font of the dialogue's words: the advisors each have their own, and j0 stands in for one that is missing
+	[[nodiscard]] std::pair<const GameFont*, const graphics::Texture2D*> DialogueFont(help::TextFont font) const;
 
 	TextDatabase _texts;
 	GameFont _font;
@@ -136,6 +169,9 @@ private:
 	std::unique_ptr<graphics::Texture2D> _mice;
 	/// The atmosphere texture of glows and arrows
 	std::unique_ptr<graphics::Texture2D> _atmos;
+	/// The good advisor's font f1 and the evil one's f3, which their words in the dialogue are in
+	std::optional<FontFace> _goodAdvisorFont;
+	std::optional<FontFace> _evilAdvisorFont;
 	Canvas _canvas;
 	Canvas _pointerCanvas {graphics::RenderPass::Cursor};
 	DialogPainter _painter;
@@ -153,6 +189,7 @@ private:
 	std::optional<glm::vec2> _handOnScreen;
 	std::optional<creature_panel::Values> _creaturePanel;
 	std::optional<creature_fight_hud::Values> _fightPanel;
+	std::vector<FloatingNumber> _floatingNumbers;
 	/// Whether the tooltip is left of the hand, which it moves to in the right third of the screen and from in the left
 	bool _toolTipOnLeft {false};
 	GameMenu::Action _action {GameMenu::Action::None};

@@ -55,6 +55,14 @@ public:
 		float closure {0.0f};
 	};
 	[[nodiscard]] virtual std::optional<HandHold> GetHandHold() const = 0;
+	/// The share a player's own totem shows by the hand as it moves, as a percentage, since this was last asked: the
+	/// latest of the player's totems drawn standing somewhere new or with its second totem showing
+	struct ShareToolTip
+	{
+		entt::entity totem {entt::null};
+		float percent {0.0f};
+	};
+	[[nodiscard]] virtual std::optional<ShareToolTip> TakeShareToolTip(PlayerNames player) = 0;
 };
 
 } // namespace openblack::ecs::systems
