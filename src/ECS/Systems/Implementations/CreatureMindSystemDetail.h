@@ -34,6 +34,10 @@ namespace openblack::ecs::components
 {
 struct CreatureMindState;
 }
+namespace openblack::creature_mind_tables
+{
+struct Tables;
+}
 
 /// What the creature mind system's files share: how a species' desires start, and finding food, water and things to
 /// hurl at about a creature
@@ -49,6 +53,11 @@ namespace openblack::ecs::systems::mind_detail
 /// How useful the creature has learnt a food is to eat, 0.1 when nothing is known
 [[nodiscard]] float FoodUsefulness(const ecs::Registry& registry, const components::CreatureMindState& mind, entt::entity self,
                                    entt::entity food);
+/// How often a creature has seen a miracle cast, and how often it must see it to learn it; none for a miracle it can't
+/// learn by watching
+[[nodiscard]] std::optional<std::pair<float, float>> MiracleSightings(const components::CreatureMindState& mind,
+                                                                      const creature_mind_tables::Tables& tables,
+                                                                      CreatureType species, MagicType magic);
 /// Having done an action, the desire it satisfies is less, by the game's action table: multiplied by the action's
 /// multiplier, no lower than the species' floor for desires
 void Lessen(entt::entity creature, creature_desires::Desires& desires, std::string_view action);

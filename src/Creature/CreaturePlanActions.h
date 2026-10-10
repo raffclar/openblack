@@ -50,9 +50,11 @@ enum class Target : uint8_t
 	/// Anything on fire, or anything not on fire
 	Burning,
 	Unburnt,
+	/// A storage pit
+	StoragePit,
 };
 /// How many kinds of target there are
-constexpr size_t k_TargetCount = static_cast<size_t>(Target::Unburnt) + 1;
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::StoragePit) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t
@@ -83,6 +85,12 @@ enum class Build : uint8_t
 	CastLightning,
 	CastHelpful,
 	CastPlayful,
+	/// Going to a fish farm's shoal, bringing food out of the sea there and eating it
+	FishAndEat,
+	/// Bringing food out of the sea, unless it has some in its hand, and throwing it into a storage pit, or putting it
+	/// down at its home
+	GiveFishToStore,
+	TakeFishHome,
 	/// Casting the water miracle at a burning thing
 	CastWater,
 	/// Setting a thing alight by tossing a burning thing at it
@@ -115,6 +123,22 @@ struct Situation
 	std::optional<creature_mind::Wants::WaterSpot> water;
 	std::optional<glm::vec2> hurlTarget;
 	std::optional<size_t> showDesireAnimation;
+	/// Fishing at the nearest fish farm: its shoal (the farm itself without one), where the creature would stand to fish
+	/// for itself (the shoal, or the nearest place it can stand near enough to it; none for none), how near it goes,
+	/// whether its hand must be emptied first, whether it already has food in its hand, and its height. None with no
+	/// farm near.
+	struct Fishing
+	{
+		glm::vec2 shoal {0.0f};
+		std::optional<glm::vec2> standAt;
+		float arriveWithin {0.0f};
+		bool putDownFirst {false};
+		bool holdingFood {false};
+		float height {0.0f};
+	};
+	std::optional<Fishing> fishing;
+	/// Where its home is, none for a creature without one
+	std::optional<glm::vec2> home;
 	/// The thing the action uses, by its entity's number, as a burning thing to set something alight with; and whether
 	/// its hand holds something already
 	std::optional<uint32_t> instrument;

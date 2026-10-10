@@ -33,10 +33,11 @@ if (OPENBLACK_USE_VCPKG AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
 endif ()
 
 # The repository patches some vcpkg ports, such as bgfx's Vulkan limits, wherever vcpkg is used, presets or not
-if (OPENBLACK_USE_VCPKG AND NOT DEFINED VCPKG_OVERLAY_PORTS)
+# A build folder configured before the patches existed can hold an empty value, which would build without them
+if (OPENBLACK_USE_VCPKG AND "${VCPKG_OVERLAY_PORTS}" STREQUAL "")
   set(VCPKG_OVERLAY_PORTS
       ${CMAKE_CURRENT_SOURCE_DIR}/vcpkg-overlay-ports
-      CACHE STRING "The repository's patched vcpkg ports"
+      CACHE STRING "The repository's patched vcpkg ports" FORCE
   )
 endif ()
 
@@ -180,6 +181,7 @@ add_subdirectory(components/psys)
 add_subdirectory(components/physconst)
 add_subdirectory(components/sas)
 add_subdirectory(components/bink)
+add_subdirectory(components/dance)
 add_subdirectory(components/gestures)
 add_subdirectory(components/rawimage)
 add_subdirectory(components/ScriptLibrary)

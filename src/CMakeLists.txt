@@ -118,6 +118,9 @@ target_include_directories(
 )
 # The game's videos: the container is always read, so that a build without the decoder keeps their timing
 target_link_libraries(openblack_lib PUBLIC bink)
+# Videos decode their frames on a thread of their own
+find_package(Threads REQUIRED)
+target_link_libraries(openblack_lib PUBLIC Threads::Threads)
 if (OPENBLACK_BINK_DECODER)
   target_compile_definitions(openblack_lib PUBLIC OPENBLACK_BINK_DECODER)
 endif ()
@@ -126,6 +129,7 @@ target_link_libraries(
   PRIVATE "$<$<CXX_COMPILER_ID:MSVC>:-SAFESEH:NO>"
           l3d
           cam
+          dance
           pack
           lnd
           anm

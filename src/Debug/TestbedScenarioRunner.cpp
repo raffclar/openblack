@@ -52,6 +52,7 @@
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/FieldArchetype.h"
+#include "ECS/Archetypes/FishFarmArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/PotArchetype.h"
@@ -664,7 +665,8 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    else if constexpr (std::is_same_v<T, AbodeInfo>)
 			    {
 				    return ecs::archetypes::AbodeArchetype::Create(ScenarioTown(middle), position, type, yaw, object.scale,
-				                                                   k_ScenarioTownFood, k_ScenarioTownWood);
+				                                                   object.storedFood.value_or(k_ScenarioTownFood),
+				                                                   k_ScenarioTownWood);
 			    }
 			    else if constexpr (std::is_same_v<T, FieldTypeInfo>)
 			    {
@@ -677,6 +679,10 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    else if constexpr (std::is_same_v<T, MobileStaticInfo>)
 			    {
 				    return ecs::archetypes::MobileStaticArchetype::Create(position, type, 0.0f, 0.0f, yaw, 0.0f, object.scale);
+			    }
+			    else if constexpr (std::is_same_v<T, FishFarmInfo>)
+			    {
+				    return ecs::archetypes::FishFarmArchetype::Create(position);
 			    }
 			    else
 			    {

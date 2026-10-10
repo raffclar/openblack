@@ -834,6 +834,12 @@
   "query": "living.fireflies"
  },
  {
+  "description": "The fish farms: their town, fish left, fishermen and shoal",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.fish_farms"
+ },
+ {
   "description": "The chimneys smoking",
   "kind": "list",
   "parameters": [],

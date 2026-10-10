@@ -9,10 +9,14 @@
 
 #include "CitadelArchetype.h"
 
+#include <algorithm>
+
 #include <entt/fwd.hpp>
 
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/TempleExterior.h"
 #include "ECS/Components/Transform.h"
@@ -27,17 +31,11 @@ using namespace openblack::ecs::components;
 entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames playerOwner, float facing,
                                       const glm::mat4& rotation, const glm::vec3& size)
 {
-	const auto entity = Make(position, playerOwner, rotation, size);
-	// Made standing whole, its player's towns are given their worship sites at once
-	if (Locator::worshipSiteSystem::has_value())
-	{
-		Locator::worshipSiteSystem::value().AddTemple(entity, facing, true);
-	}
-	return entity;
+	return Create(position, playerOwner, facing, rotation, size, 1.0f);
 }
 
-entt::entity CitadelArchetype::Make(const glm::vec3& position, PlayerNames playerOwner, const glm::mat4& rotation,
-                                    const glm::vec3& size)
+entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames playerOwner, float facing,
+                                      const glm::mat4& rotation, const glm::vec3& size, float built)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
@@ -46,24 +44,33 @@ entt::entity CitadelArchetype::Make(const glm::vec3& position, PlayerNames playe
 	const auto meshId = entt::hashed_string("temple/b_first_temple_l3d");
 	registry.Assign<Mesh>(entity, meshId, static_cast<int8_t>(0), static_cast<int8_t>(0));
 	// Its outside is blended for its player's alignment, each vertex then set on the land
-	registry.Assign<TempleExterior>(entity);
+	// Its model shows as much of it built as its heart is from the start
+	registry.Assign<TempleExterior>(entity).drawnBuilt = std::clamp(built, 0.0f, 1.0f);
 	registry.Assign<MorphWithTerrain>(entity);
+	// Under construction until all of it is built
+	if (built < 1.0f)
+	{
+		registry.Assign<BuildProgress>(entity, built < 0.0f ? 0.0f : built);
+	}
 	// The temple's heart, as it is made, puts its entrance where it is, turned as it is
 	const auto entrance = registry.Create();
 	registry.Assign<Transform>(entrance, position, rotation, size);
 	registry.Assign<TempleEntrance>(entrance, entity);
+	// It takes its worship sites' places; standing built, its player's towns are given their sites at once, and one
+	// under construction gives them once it is finished
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().AddTemple(entity, facing, built >= 1.0f);
+	}
 	return entity;
 }
 
-entt::entity CitadelArchetype::CreatePlan(int32_t /*townId*/, const glm::vec3& position, PlayerNames playerOwner, float facing,
+entt::entity CitadelArchetype::CreatePlan(int32_t townId, const glm::vec3& position, PlayerNames playerOwner, float facing,
                                           const glm::mat4& rotation, const glm::vec3& size)
 {
-	// Its worship sites open once it is built
-	// TODO(worship-sites): the temple is drawn whole though it is still to be built, and nothing builds it yet
-	const auto entity = Make(position, playerOwner, rotation, size);
-	if (Locator::worshipSiteSystem::has_value())
-	{
-		Locator::worshipSiteSystem::value().AddTemple(entity, facing, false);
-	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = registry.Create();
+	registry.Assign<Transform>(entity, position, rotation, size);
+	registry.Assign<PlannedTemple>(entity, townId, playerOwner, facing);
 	return entity;
 }
