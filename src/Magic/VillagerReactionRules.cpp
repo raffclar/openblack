@@ -26,6 +26,21 @@ float villager_reaction::SpreadDistance(glm::vec2 villager, glm::vec2 reaction)
 	return 0.5f * (std::abs(villager.x - reaction.x) + std::abs(villager.y - reaction.y));
 }
 
+uint8_t villager_reaction::VillagerInHandPriority(const VillagerInHandWatch& watch, uint32_t breederPriority)
+{
+	if (!watch.heldIsVillager || !watch.heldInHand || !watch.watcherSexuallyActive || !watch.otherSex || !watch.samePlayer ||
+	    watch.watcherScripted)
+	{
+		return 0;
+	}
+	return static_cast<uint8_t>(breederPriority & 0xFFu);
+}
+
+bool villager_reaction::KeepsWaitingForMate(float distance, float reach)
+{
+	return distance < reach;
+}
+
 uint8_t villager_reaction::Priority(uint8_t kindPriority, bool kindReacts, const Distance& distance, float at)
 {
 	if (!kindReacts || at > distance.maxDistance || !(distance.maxDistance > 0.0f))
