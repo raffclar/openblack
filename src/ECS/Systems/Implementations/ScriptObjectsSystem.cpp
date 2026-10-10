@@ -187,8 +187,13 @@ void ScriptObjectsSystem::EnterNative(uint32_t native)
 
 entt::entity ScriptObjectsSystem::Fetch(entt::entity object)
 {
+	// An object that has gone, or is no longer to be dealt with, is no object: the native is given nothing
+	if (!_world->Exists(object) || !_world->IsAvailable(object))
+	{
+		return entt::null;
+	}
 	// A native that takes control takes it of an object not yet controlled; any other native leaves it as it is
-	if (_takesControl && _world->Exists(object) && !_world->IsControlled(object))
+	if (_takesControl && !_world->IsControlled(object))
 	{
 		_world->SetControlled(object, true);
 	}
