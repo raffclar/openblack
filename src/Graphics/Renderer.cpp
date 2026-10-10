@@ -85,6 +85,7 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/HiddenByState.h"
+#include "ECS/Components/HighDetail.h"
 #include "ECS/Components/LightBeam.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
@@ -2761,6 +2762,7 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	};
 	// Every villager out of doors and out of the sea casts one from each foot, on the land beneath it; one too far away
 	// to be drawn a wider one from where it stands, as if the land there were flat
+	// A villager a script draws in high detail casts none
 	desc.entities.Each<const ecs::components::Villager, const ecs::components::Transform, const ecs::components::Mesh>(
 	    [&](entt::entity entity, const ecs::components::Villager& /*villager*/, const ecs::components::Transform& transform,
 	        const ecs::components::Mesh& mesh) {
@@ -2787,7 +2789,7 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 			    addQuad(quad);
 		    }
 	    },
-	    entt::exclude<ecs::components::AtHome, ecs::components::HiddenByState>);
+	    entt::exclude<ecs::components::AtHome, ecs::components::HiddenByState, ecs::components::HighDetail>);
 	for (const auto& far : farVillagers)
 	{
 		auto foot = far.position;
