@@ -269,6 +269,34 @@ TEST(Inspector, ExplainsWhatIsWrong)
 	EXPECT_EQ(fake->asked, 1);
 }
 
+// A parameter a query doesn't take is refused, naming it and the ones the query does take, rather than ignored
+TEST(Inspector, RefusesParametersAQueryDoesNotTake)
+{
+	Inspector inspector;
+	auto provider = std::make_unique<FakeProvider>();
+	auto* fake = provider.get();
+	inspector.Add(std::move(provider));
+
+	const auto one = Ask(inspector, R"({"query": "fake.one", "params": {"id": 3, "colour": "red"}})");
+	EXPECT_EQ(one["ok"], false);
+	const auto error = one["error"].get<std::string>();
+	EXPECT_NE(error.find("colour"), std::string::npos) << error;
+	EXPECT_NE(error.find("it takes id"), std::string::npos) << error;
+
+	// A query that takes none says so
+	const auto all = Ask(inspector, R"({"query": "fake.all", "params": {"component": "Temple"}})");
+	EXPECT_EQ(all["ok"], false);
+	EXPECT_NE(all["error"].get<std::string>().find("no parameters"), std::string::npos) << all["error"];
+
+	// The queries every inspector has are checked too
+	EXPECT_EQ(Ask(inspector, R"({"query": "describe", "params": {"provider": "fake", "verbose": true}})")["ok"], false);
+	EXPECT_EQ(Ask(inspector, R"({"query": "ping", "params": {"x": 1}})")["ok"], false);
+	EXPECT_EQ(Ask(inspector, R"({"query": "describe", "params": {"provider": "fake"}})")["ok"], true);
+	EXPECT_EQ(fake->asked, 0);
+
+	EXPECT_EQ(Ask(inspector, R"({"query": "fake.one", "params": {"id": 3}})")["ok"], true);
+}
+
 TEST(Inspector, Ping)
 {
 	const Inspector inspector;

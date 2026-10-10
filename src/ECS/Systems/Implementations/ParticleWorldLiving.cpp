@@ -326,7 +326,7 @@ std::optional<particles::CreatureSpellBody> GameParticleWorld::CreatureBody(entt
 	{
 		return std::nullopt;
 	}
-	particles::CreatureSpellBody result {.origin = transform->position, .size = body->size};
+	particles::CreatureSpellBody result {.origin = transform->position, .size = ShownSize(*body)};
 	// Each bone where it is drawn this frame, and its mirror as the species' file has it
 	if (const auto* animation = registry.TryGet<const CreatureAnimation>(creature))
 	{

@@ -14,6 +14,7 @@
 #include <optional>
 #include <string>
 
+#include <glm/gtc/constants.hpp>
 #include <gtest/gtest.h>
 
 #include "CHLApi.h"
@@ -111,4 +112,58 @@ TEST(ScriptProperties, NativesTakeAndGiveWhatTheGameDoes)
 		EXPECT_EQ(table[index].stackIn, in) << name;
 		EXPECT_EQ(table[index].stackOut, out) << name;
 	}
+}
+
+TEST(ScriptProperties, AnglesAreGivenAndTakenInDegrees)
+{
+	EXPECT_NEAR(AngleToScript(glm::pi<float>()), 180.0f, 1e-3f);
+	EXPECT_NEAR(AngleFromScript(90.0f), glm::half_pi<float>(), 1e-6f);
+	EXPECT_NEAR(AngleToScript(AngleFromScript(-45.0f)), -45.0f, 1e-3f);
+}
+
+TEST(ScriptProperties, AnUprightThingKeepsItsWholeTurn)
+{
+	for (const float y : {0.3f, 2.5f, -2.9f})
+	{
+		const auto angles = PlacedAngles(PlacedRotation({.x = 0.0f, .y = y, .z = 0.0f}));
+		EXPECT_NEAR(angles.y, y, 1e-5f);
+		EXPECT_FLOAT_EQ(angles.x, 0.0f);
+		EXPECT_FLOAT_EQ(angles.z, 0.0f);
+	}
+}
+
+TEST(ScriptProperties, ALeaningThingKeepsItsLeans)
+{
+	const Angles placed {.x = 0.2f, .y = 0.7f, .z = -0.4f};
+	const auto angles = PlacedAngles(PlacedRotation(placed));
+	EXPECT_NEAR(angles.x, placed.x, 1e-5f);
+	EXPECT_NEAR(angles.y, placed.y, 1e-5f);
+	EXPECT_NEAR(angles.z, placed.z, 1e-5f);
+}
+
+TEST(ScriptProperties, NearlyNoLifeIsKeptFromProtectedThings)
+{
+	EXPECT_TRUE(CanSetLife(0.0f, false, false));
+	EXPECT_FALSE(CanSetLife(0.0f, true, false));
+	EXPECT_FALSE(CanSetLife(0.01f, false, true));
+	// More than a hundredth may always be set
+	EXPECT_TRUE(CanSetLife(0.02f, true, true));
+}
+
+TEST(ScriptProperties, ACreatureStandsFifteenTimesItsSize)
+{
+	EXPECT_FLOAT_EQ(CreatureHeight(1.0f), 15.0f);
+	EXPECT_FLOAT_EQ(CreatureHeight(0.5f), 7.5f);
+	EXPECT_NEAR(CreatureSizeForHeight(30.0f), 2.0f, 1e-6f);
+}
+
+TEST(ScriptProperties, BeliefForAPlayer)
+{
+	// A town answers its belief, none when it was given none
+	EXPECT_FLOAT_EQ(BeliefForPlayer(true, 0.5f, PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE), 0.5f);
+	EXPECT_FLOAT_EQ(BeliefForPlayer(true, std::nullopt, PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE), 0.0f);
+	// Anything else believes wholly in its own player
+	EXPECT_FLOAT_EQ(BeliefForPlayer(false, std::nullopt, PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE), 1.0f);
+	EXPECT_FLOAT_EQ(BeliefForPlayer(false, std::nullopt, PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE), 0.0f);
+	EXPECT_FLOAT_EQ(BeliefForPlayer(false, std::nullopt, std::nullopt, PlayerNames::PLAYER_ONE), 0.0f);
 }

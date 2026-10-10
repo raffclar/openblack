@@ -34,6 +34,9 @@ public:
 	entt::entity CreateScriptFlock(int32_t id, glm::vec2 position, glm::vec2 home, float reach, float flockDistance) override;
 	[[nodiscard]] entt::entity FindScriptFlock(int32_t id) const override;
 	entt::entity CreateBird(AnimalInfo type, glm::vec2 position, uint32_t age, entt::entity flock) override;
+	entt::entity CreateScriptAnimal(AnimalInfo type, glm::vec2 position) override;
+	void JoinFlock(entt::entity animal, entt::entity flock) override;
+	bool SetScriptState(entt::entity animal, LivingStates state) override;
 	void SetScale(entt::entity animal, float scale) override;
 	[[nodiscard]] float RadiusOf(entt::entity animal) const override;
 	[[nodiscard]] glm::vec3 MovementOf(entt::entity animal) const override;
@@ -56,6 +59,8 @@ public:
 
 	[[nodiscard]] bool IsFrighteningToCreature(entt::entity animal) const override;
 	[[nodiscard]] bool CanPlayerPickUp(entt::entity animal) const override;
+	[[nodiscard]] bool CanBePickedUpByCreature(entt::entity animal) const override;
+	[[nodiscard]] bool CanBeStompedOnByCreature(entt::entity animal, float creatureHeight) const override;
 
 private:
 	// Moving
@@ -116,6 +121,8 @@ private:
 	void Remove(entt::entity animal);
 	/// A turn of a killed animal: falling dead, then lying dead its time before it goes
 	void ProcessDeath(entt::entity entity, components::Animal& animal);
+	/// The grey puff of smoke a dead body leaves as it goes
+	void LeaveSmoke(entt::entity entity, const components::Animal& animal) const;
 	/// A dying bird falls out of the sky through the physics
 	void FallDying(entt::entity entity, const components::Animal& animal);
 	/// An animal leaves its flock, which goes once empty
