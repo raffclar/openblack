@@ -8,7 +8,11 @@ target_include_directories(
                   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
 
-target_link_libraries(helpdude PUBLIC morph PRIVATE pack)
+target_link_libraries(
+  helpdude
+  PUBLIC morph
+  PRIVATE pack
+)
 
 if (OPENBLACK_CLANG_TIDY_CHECKS)
   if (CLANG_TIDY)
