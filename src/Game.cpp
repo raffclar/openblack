@@ -131,6 +131,7 @@
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
+#include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
@@ -203,6 +204,8 @@ using namespace std::chrono_literals;
 
 namespace
 {
+/// The hand's splash, its sound and the scare it gives the fish are this high over the sea
+constexpr float k_HandSplashHeight = 0.2f;
 // Where the camera starts on the testbed: above and behind the middle of the map
 constexpr float k_TestbedCameraHeight = 60.0f;
 /// How far the testbed's player's influence reaches from its middle, and the prayer power their worship has stored
@@ -993,6 +996,8 @@ bool Game::GameLogicLoop() noexcept
 	Locator::influenceSystem::value().ProcessTurn(Locator::time::value().GetTurn());
 	// The crops in the fields grow
 	Locator::fieldSystem::value().ProcessTurn(Locator::time::value().GetTurn());
+	// The fish come back to the fish farms
+	Locator::fishFarmSystem::value().ProcessTurn(Locator::time::value().GetTurn());
 	// The trees that are still growing grow, faster in the rain
 	Locator::vegetation::value().ProcessTurn();
 	{
@@ -1566,6 +1571,9 @@ bool Game::Update() noexcept
 	Locator::mistSystem::value().Update(gameTime);
 	Locator::villageLightSystem::value().Update(gameTime);
 	Locator::fieldSystem::value().Update(gameTime);
+	// The shoals near the camera swim, and dart from what scared them
+	Locator::fishFarmSystem::value().Update(std::chrono::duration<float>(gameTime).count(),
+	                                        Locator::camera::value().GetOrigin());
 	Locator::cinematicDirectorSystem::value().Update(gameTime);
 	// The cinema bars coming in hide the game's dialogs
 	if (Locator::cinematicDirectorSystem::value().TakeHideDialogs() && _interface && _interface->GetMenu().IsOpen())
@@ -3219,8 +3227,9 @@ void Game::PrepareNewLand()
 	Locator::cinematicDirectorSystem::value().Reset();
 	Locator::cameraHelpSystem::value().Get().ResetForNewLand();
 	Locator::influenceSystem::value().Reset();
-	// Nor its creatures' footprints
+	// Nor its creatures' footprints, nor a scare of its fish
 	Locator::footprintSystem::value().Reset();
+	Locator::fishFarmSystem::value().Reset();
 	// Nor its miracles, nor their particle effects, nor its fires
 	Locator::magicSystem::value().Reset();
 	Locator::miracleFxSystem::value().Reset();
@@ -3853,10 +3862,12 @@ void Game::PlayHandGrabSound()
 			const auto angle = Locator::gameRandom::value().CrtRandom(0.0f, glm::two_pi<float>());
 			Locator::waterRingSystem::value().Add(
 			    water_rings::HandSplash(glm::vec2(position.x, position.z), angle, FrameLandLight(255)));
+			// The fish near where the hand went in dart away
+			Locator::fishFarmSystem::value().Scare({position.x, k_HandSplashHeight, position.z});
 		}
 		// G_HandInWater_01 to _10 in turn, on the water's surface where the hand went in
 		const auto id = fmt::format("InGame.sad/{}", 99 + _handInWaterSample);
 		_handInWaterSample = (_handInWaterSample + 1) % 10;
-		audio.PlaySoundEffect(entt::hashed_string(id.c_str()), glm::vec3(position.x, 0.2f, position.z));
+		audio.PlaySoundEffect(entt::hashed_string(id.c_str()), glm::vec3(position.x, k_HandSplashHeight, position.z));
 	}
 }

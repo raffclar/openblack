@@ -1329,6 +1329,8 @@ void DynamicsSystem::AttemptCollisionSound(PhysicsEntry& entry)
 			{
 				hitType = SoundCollisionType::Water;
 				colour = turn::k_SeaFoam;
+				// The fish near the splash dart away
+				_world->ScareFish(centre);
 			}
 			_world->AddWaterRing(turn::ImpactRing(centre, entry.body->Radius()));
 		}

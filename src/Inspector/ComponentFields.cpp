@@ -43,6 +43,7 @@
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Firefly.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/FlockSpell.h"
 #include "ECS/Components/Flowers.h"
@@ -415,6 +416,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::paused>("paused")
 	    .Field<&components::CreatureMindState::learnt>("learnt")
 	    .Field<&components::CreatureMindState::planner>("planner")
+	    .Field<&components::CreatureMindState::townCompassion>("townCompassion")
 	    .Field<&components::CreatureMindState::planActive>("planActive")
 	    .Field<&components::CreatureMindState::satisfiedByEffect>("satisfiedByEffect")
 	    .Field<&components::CreatureMindState::desireSeenTo>("desireSeenTo")
@@ -460,6 +462,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureObjectAction::maxReach>("maxReach")
 	    .Field<&components::CreatureObjectAction::attempts>("attempts")
 	    .Field<&components::CreatureObjectAction::flightSeconds>("flightSeconds")
+	    .Field<&components::CreatureObjectAction::givenFlightSeconds>("givenFlightSeconds")
+	    .Field<&components::CreatureObjectAction::waitsForLanding>("waitsForLanding")
+	    .Field<&components::CreatureObjectAction::thrown>("thrown")
 	    .Field<&components::CreatureObjectAction::catchHands>("catchHands")
 	    .Field<&components::CreatureObjectAction::catching>("catching")
 	    .Field<&components::CreatureObjectAction::catchTurned>("catchTurned")
@@ -560,6 +565,13 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Firefly::flightSeconds>("flightSeconds")
 	    .Field<&components::Firefly::drift>("drift")
 	    .Field<&components::Firefly::hidden>("hidden");
+	Reflect<components::FishFarm>(context)
+	    .Field<&components::FishFarm::town>("town")
+	    .Field<&components::FishFarm::place>("place")
+	    .Field<&components::FishFarm::fish>("fish")
+	    .Field<&components::FishFarm::fishermen>("fishermen")
+	    .Field<&components::FishFarm::shoal>("shoal")
+	    .Field<&components::FishFarm::shownAlpha>("shownAlpha");
 	Reflect<components::Fixed>(context)
 	    .Field<&components::Fixed::boundingCenter>("boundingCenter")
 	    .Field<&components::Fixed::boundingRadius>("boundingRadius");
@@ -826,7 +838,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Pot::amount>("amount")
 	    .Field<&components::Pot::maxAmount>("maxAmount")
 	    .Field<&components::Pot::type>("type")
-	    .Field<&components::Pot::poisoned>("poisoned");
+	    .Field<&components::Pot::poisoned>("poisoned")
+	    .Field<&components::Pot::town>("town");
 	Reflect<components::PrayerPower>(context)
 	    .Field<&components::PrayerPower::chants>("chants")
 	    .Field<&components::PrayerPower::infinite>("infinite");
