@@ -10,6 +10,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 
 #include "ECS/Systems/HandGrabSystemInterface.h"
 
@@ -47,6 +48,7 @@ public:
 	void ForceDrop() override;
 	[[nodiscard]] std::optional<PullPose> GetPullPose() const override;
 	[[nodiscard]] bool IsInInfluence() const override { return HandInInfluence(); }
+	[[nodiscard]] std::string WhyNotTake(entt::entity object) const override;
 	void Reset() override;
 
 	[[nodiscard]] std::optional<entt::entity> GetHeld() const override;
@@ -65,6 +67,7 @@ private:
 	/// What deciding whether the hand may hold a thing needs to know of it
 	[[nodiscard]] hand_grab::Holdable HoldableOf(entt::entity object) const;
 	/// Whether the hand may take a thing now: what it is, what a script says of it, and the hand's influence
+	[[nodiscard]] hand_grab::Gate GateOf(entt::entity object) const;
 	[[nodiscard]] bool MayTake(entt::entity object) const;
 	/// A press that doesn't take the thing taps it, when the player may touch it
 	void Tap(entt::entity object);
@@ -88,6 +91,9 @@ private:
 	/// A field gives its food the same way, half of it once ripe
 	bool StartFieldScoop(components::HandGrab& grab, entt::entity field, const FieldFacts& facts);
 	bool ScoopField(components::HandGrab& grab, const FieldFacts& facts);
+	/// A fish farm gives a first handful whatever fish it has, and then its fish as the scoop ramps up
+	bool StartFishFarmScoop(components::HandGrab& grab, entt::entity farm, const fish_farm::Type& type);
+	bool ScoopFishFarm(components::HandGrab& grab, const fish_farm::Type& type);
 	/// The scoop ends: its stream stops, and the hand holds its handful as anything else
 	void EndScoop(components::HandGrab& grab);
 	/// The second press with the pointer on something the held thing is used on (a store, a pile of the same): it is

@@ -24,6 +24,7 @@
 #include "3D/TempleScroll.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/Sound.h"
+#include "Common/MachineClock.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Gui/GameFont.h"
 #include "Gui/TextDatabase.h"
@@ -267,9 +268,7 @@ bool TempleScrolls::Hold(bool pressed, float mouseY, const std::optional<TempleC
 		_squeaked = true;
 		if (Locator::audio::has_value())
 		{
-			const auto ticks =
-			    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
-			        .count();
+			const auto ticks = machine_clock::Ticks();
 			const auto squeak = k_Squeaks.at(static_cast<size_t>(ticks % static_cast<int64_t>(k_Squeaks.size())));
 			Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(squeak), std::nullopt);
 		}

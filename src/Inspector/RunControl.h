@@ -1,0 +1,146 @@
+/******************************************************************************
+ * Copyright (c) 2018-2026 openblack developers
+ *
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
+ *
+ * openblack is licensed under the GNU General Public License version 3.
+ *******************************************************************************/
+
+#pragma once
+
+#include <cstdint>
+
+#include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include <InspectorProvider.h>
+
+namespace openblack::inspector
+{
+
+/// Stepping the game by frames or by turns while it is held paused. Told each frame whether the game is paused and
+/// its turn, it says whether the game should be paused or running for the frame.
+class RunControl
+{
+public:
+	/// Stops any stepping
+	void Cancel();
+	/// Runs the game for this many frames from the next, then pauses it
+	void StepFrames(uint32_t frames);
+	/// Runs the game until this many more turns have been played, then pauses it
+	void StepTurns(uint32_t turns, uint32_t currentTurn);
+
+	/// Once a frame before the game's turn: whether the game is to be paused (true) or to run (false) this frame,
+	/// none to leave it as it is
+	[[nodiscard]] std::optional<bool> Frame(bool paused, uint32_t turn);
+
+	[[nodiscard]] bool Stepping() const { return _framesLeft.has_value() || _untilTurn.has_value(); }
+	[[nodiscard]] std::optional<uint32_t> FramesLeft() const { return _framesLeft; }
+	[[nodiscard]] std::optional<uint32_t> UntilTurn() const { return _untilTurn; }
+
+private:
+	std::optional<uint32_t> _framesLeft;
+	std::optional<uint32_t> _untilTurn;
+};
+
+/// A testbed scenario as the inspector lists it
+struct ScenarioSummary
+{
+	std::string id;
+	std::string name;
+	std::string facet;
+	std::string description;
+};
+
+/// What the inspector's run control drives: the game's clock and its scenarios
+class RunTargetInterface
+{
+public:
+	virtual ~RunTargetInterface() = default;
+	[[nodiscard]] virtual bool IsPaused() const = 0;
+	virtual void SetPaused(bool paused) = 0;
+	[[nodiscard]] virtual uint32_t GetTurn() const = 0;
+	/// The game's speed: 1 is normal, 2 twice as fast
+	[[nodiscard]] virtual float GetSpeed() const = 0;
+	virtual void SetSpeed(float speed) = 0;
+	/// Each frame taking a fixed time in milliseconds, for deterministic stepping, or the wall clock's time again
+	virtual void SetFixedFrameTime(std::optional<uint32_t> milliseconds) = 0;
+	[[nodiscard]] virtual std::optional<uint32_t> GetFixedFrameTime() const = 0;
+	/// The lock on the player's mouse and keyboard, as input.state gives it
+	[[nodiscard]] virtual Json InputLock() const { return nullptr; }
+	/// Starts a testbed scenario on a fresh testbed by its id: false if there is no such scenario
+	virtual bool LoadScenario(std::string_view id) = 0;
+	/// The seed every random number of the run is drawn from
+	[[nodiscard]] virtual uint32_t GetSeed() const = 0;
+	/// Starts every random number again from a seed, and the machine's clock as the game reads it from 0 at a pinned date
+	/// (none for the wall clock's date again)
+	virtual void SetSeed(uint32_t seed, std::optional<int64_t> date) = 0;
+	/// The date pinned for a seeded run, none while the wall clock's is read
+	[[nodiscard]] virtual std::optional<int64_t> GetPinnedDate() const = 0;
+	/// The machine's milliseconds as the game reads them
+	[[nodiscard]] virtual uint32_t GetTicks() const = 0;
+	[[nodiscard]] virtual std::vector<ScenarioSummary> Scenarios() const = 0;
+};
+
+///   game.state                       paused, turn, frame, speed and any stepping
+///   game.pause / game.resume         and the state after
+///   game.step     {frames | turns}   runs that many frames or turns, then pauses
+///   game.speed    {speed}            1 is normal, 2 twice as fast
+///   game.frame_time {ms}             each frame takes this long (0 for the wall clock's time), for deterministic runs
+///   game.scenario {id}               loads a testbed scenario on a fresh testbed
+///   game.scenarios                   the testbed scenarios there are
+///   game.seed {seed?, date?, wall_clock?}   the run's seed; with seed, every random number starts again from it and
+///                                    the date is pinned, for two runs to go the same way
+class GameProvider final: public ProviderInterface
+{
+public:
+	static constexpr float k_SlowestSpeed = 0.1f;
+	/// The date a seeded run pins unless given another, as the game's own: 1 January 2001, 12:00 UTC
+	static constexpr int64_t k_SeededDate = 978350400;
+	static constexpr float k_FastestSpeed = 16.0f;
+
+	explicit GameProvider(RunTargetInterface& target);
+
+	[[nodiscard]] std::string_view Name() const override { return "game"; }
+	[[nodiscard]] std::vector<QueryDescription> Describe() const override;
+	[[nodiscard]] QueryResult Run(std::string_view query, const QueryContext& context) override;
+
+	/// Once a frame before the game's turn: counts the frame and holds or releases the game for the stepping
+	void Frame();
+	/// A land or the testbed has just finished loading, before any frame of it has run: a seeded run that asked for it
+	/// is paused there, so that what follows is stepped exactly
+	void Loaded();
+
+	[[nodiscard]] Json State() const;
+	/// The frames served so far
+	[[nodiscard]] uint64_t FrameNumber() const { return _frame; }
+
+private:
+	RunTargetInterface& _target;
+	RunControl _control;
+	/// The last step asked for, as game.state reports it once done: what was asked, the frame time it ran with (the
+	/// frame time goes back to what it was once the step ends) and where it started and ended
+	struct StepRecord
+	{
+		std::optional<uint32_t> frames;
+		std::optional<uint32_t> turns;
+		std::optional<uint32_t> fixedMs;
+		uint64_t fromFrame {0};
+		uint32_t fromTurn {0};
+		std::optional<uint64_t> toFrame;
+		std::optional<uint32_t> toTurn;
+	};
+	[[nodiscard]] static Json ToJson(const StepRecord& step);
+
+	/// The frame time to go back to once a step with a fixed frame time ends
+	std::optional<std::optional<uint32_t>> _frameTimeAfterStep;
+	std::optional<StepRecord> _lastStep;
+	/// Seeded through game.seed: each land or scenario loaded afterwards starts paused
+	bool _pauseOnLoad {false};
+	uint64_t _frame {0};
+};
+
+} // namespace openblack::inspector

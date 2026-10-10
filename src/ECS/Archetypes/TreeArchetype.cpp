@@ -23,20 +23,16 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/ForestSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Nature/ForestGrowth.h"
 #include "Resources/ResourceManager.h"
 #include "Utils.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
 using namespace openblack::ecs::components;
-
-namespace
-{
-/// The turns a tree's growth clock takes to go round
-constexpr uint32_t k_GrowthClockTurns = 0x10000;
-} // namespace
 
 entt::entity TreeArchetype::Create(uint32_t forestId, const glm::vec3& position, TreeInfo type,
                                    [[maybe_unused]] bool isNonScenic, float yAngleRadians, float maxSize, float scale)
@@ -50,16 +46,22 @@ entt::entity TreeArchetype::Create(uint32_t forestId, const glm::vec3& position,
 	const auto [point, radius] = GetFixedObstacleBoundingCircle(info.normal, transform);
 	registry.Assign<Fixed>(entity, point, radius);
 	auto& tree = registry.Assign<Tree>(entity, type, maxSize);
+	// A tree made short of its full size grows while it is in a forest, first after a random part of its kind's wait
+	tree.madeToGrow = maxSize != scale;
+	if (tree.madeToGrow && Locator::gameRandom::has_value())
+	{
+		tree.growthCountdown = forest_growth::FirstWait(Locator::gameRandom::value().GameRand(info.growsAfterNumGameTurns));
+	}
 	if (forestId != 0)
 	{
-		registry.Assign<ForestMember>(entity, forestId);
-	}
-	// A tree short of its full size first grows after a random part of its kind's wait. The game counts it down on a 16
-	// bit clock, so a wait of none goes the whole clock round.
-	if (maxSize != scale && Locator::gameRandom::has_value())
-	{
-		const auto wait = Locator::gameRandom::value().GameRand(info.growsAfterNumGameTurns);
-		tree.turnsToGrowth = wait != 0 ? wait : k_GrowthClockTurns;
+		if (Locator::forestSystem::has_value())
+		{
+			Locator::forestSystem::value().JoinForest(entity, forestId);
+		}
+		else
+		{
+			registry.Assign<ForestMember>(entity, ForestMember {.forest = forestId});
+		}
 	}
 	const auto resourceId = resources::HashIdentifier(info.normal);
 	registry.Assign<Mesh>(entity, resourceId, static_cast<int8_t>(0), static_cast<int8_t>(-1));

@@ -12,6 +12,7 @@
 #include <gtest/gtest.h>
 
 #include "ECS/Components/Alignment.h"
+#include "ECS/Components/Influence.h"
 #include "ECS/Components/Player.h"
 #include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
@@ -198,4 +199,26 @@ TEST(PlayerMiracles, APlayerStartsWithNothingEnabledAndUsualTribalPower)
 	EXPECT_FALSE(player_miracles::IsMagicTypeEnabled(player.miracles, MagicType::Heal));
 	EXPECT_EQ(player.miracles.tribalPower, components::Player::k_UsualTribalPower);
 	EXPECT_EQ(player.miracles.maxTribalPower.at(static_cast<size_t>(Tribe::TIBETAN)), 1.0f);
+}
+
+TEST_F(PlayerSystemLands, TheHandKeepsWhatItKeptPastTheBorderOnTheNextLand)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto one = MakePlayer(PlayerNames::PLAYER_ONE);
+	auto& kept = registry.Assign<components::VirtualInfluence>(one).state;
+	kept.fraction = 0.4f;
+	kept.disabled = true;
+	kept.anchor = glm::vec3(10.0f, 0.0f, 20.0f);
+	_players.KeepForNextLand();
+	ClearLand();
+
+	const auto again = MakePlayer(PlayerNames::PLAYER_ONE);
+	_players.TakeUpKept(again);
+	const auto* virtualInfluence = registry.TryGet<components::VirtualInfluence>(again);
+	ASSERT_NE(virtualInfluence, nullptr);
+	EXPECT_EQ(virtualInfluence->state.fraction, 0.4f);
+	EXPECT_TRUE(virtualInfluence->state.disabled);
+	ASSERT_TRUE(virtualInfluence->state.anchor.has_value());
+	EXPECT_EQ(virtualInfluence->state.anchor->z, 20.0f);
+	EXPECT_TRUE(virtualInfluence->hum == entt::null);
 }

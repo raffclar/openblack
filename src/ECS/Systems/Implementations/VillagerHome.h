@@ -46,6 +46,10 @@ void LeaveHome(entt::entity villager);
 /// Its home was knocked on or hurt: a villager inside comes out a few steps from the door, yawns and decides afresh,
 /// and won't go back to bed for its next decision. Whether it came out.
 bool SetStateWhenTappedOnAbode(entt::entity villager);
+/// A villager about to leave its home: one inside comes out and decides again what to do
+void LeavingHome(entt::entity villager);
+/// A villager's home has gone: it is made homeless in its town and starts out as one of the homeless
+void HomeDeleted(entt::entity villager);
 
 /// Sends the villager to bed if it is home, or home if it has one, unless it was just knocked out of it. 1 when it went.
 uint32_t CheckSatisfySleep(components::LivingAction& action);

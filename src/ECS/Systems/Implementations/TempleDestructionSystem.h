@@ -44,6 +44,8 @@ public:
 private:
 	/// One turn of a temple being destroyed, in the order the game takes its steps
 	void Step(entt::entity entity, components::Temple& temple);
+	/// The beams across the heart while it beams, fired from a spot visual at its place
+	void Beam(entt::entity entity, components::Temple& temple, glm::vec3 position);
 	/// The temple goes, with its way in
 	void RemoveTemple(entt::entity temple);
 

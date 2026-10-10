@@ -26,6 +26,7 @@
 #include "ECS/Registry.h"
 #include "ECS/SnowDust.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
@@ -211,6 +212,14 @@ void GameDynamicsWorld::AddWaterRing(const water_rings::Ring& ring)
 	if (Locator::waterRingSystem::has_value())
 	{
 		Locator::waterRingSystem::value().Add(ring);
+	}
+}
+
+void GameDynamicsWorld::ScareFish(glm::vec3 point)
+{
+	if (Locator::fishFarmSystem::has_value())
+	{
+		Locator::fishFarmSystem::value().Scare(point);
 	}
 }
 

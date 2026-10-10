@@ -21,6 +21,7 @@
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureLearning.h"
+#include "Creature/CreatureTownCompassion.h"
 #include "Creature/CreatureWatching.h"
 
 namespace openblack
@@ -67,6 +68,8 @@ struct Tables
 	std::vector<ActionInfo> actions;
 	/// The actions that satisfy each desire
 	std::array<std::vector<uint32_t>, k_DesireCount> desireActions {};
+	/// The actions a creature's compassion for a town may take for each of the town's desires
+	creature_town_compassion::DesireActions townActions {};
 	creature_learning::AllDesireRules rules {};
 	creature_learning::Dependencies dependencies {};
 	std::array<std::vector<creature_tree::Attribute>, k_DesireCount> attributes {};

@@ -222,6 +222,48 @@ TEST(CreatureDesires, TheStrongestShowableDesire)
 	EXPECT_FALSE(creature_desires::StrongestShowable(desires, 0.55f).has_value());
 }
 
+TEST(CreatureDesires, AnUrgeIsSatisfiedOnceEnoughPlansForItAreCarriedOut)
+{
+	creature_desires::DesireState desire;
+	// Its weight's whole part: two and a half plans need two
+	desire.weight = 2.5f;
+	EXPECT_FALSE(creature_desires::CountTowardsUrge(desire));
+	EXPECT_EQ(desire.carriedOut, 1U);
+	EXPECT_TRUE(creature_desires::CountTowardsUrge(desire));
+	EXPECT_EQ(desire.carriedOut, 0U);
+	EXPECT_FALSE(creature_desires::CountTowardsUrge(desire));
+	// A weight under one is satisfied by every plan
+	desire.weight = 0.5f;
+	desire.carriedOut = 0;
+	EXPECT_TRUE(creature_desires::CountTowardsUrge(desire));
+}
+
+TEST(CreatureDesires, SatisfyingAnUrgeClearsOnlyTheClearableSources)
+{
+	creature_desires::DesireState desire;
+	desire.sources = {{.type = 1, .value = 0.7f, .clearedWhenSatisfied = true},
+	                  {.type = 2, .value = 0.4f, .clearedWhenSatisfied = false}};
+	creature_desires::ClearSourcesAfterSatisfying(desire);
+	EXPECT_EQ(desire.sources[0].value, 0.0f);
+	EXPECT_EQ(desire.sources[1].value, 0.4f);
+}
+
+TEST(CreatureDesires, AnActionLessensItsDesireNoLowerThanTheFloorNorHigherThanItsMaximum)
+{
+	creature_desires::DesireState desire {.value = 0.8f, .max = 1.0f};
+	creature_desires::LessenAfterAction(desire, 0.5f, 0.1f);
+	EXPECT_FLOAT_EQ(desire.value, 0.4f);
+	creature_desires::LessenAfterAction(desire, 0.1f, 0.1f);
+	EXPECT_FLOAT_EQ(desire.value, 0.1f);
+	// A multiplier over one raises it, to its maximum at most
+	creature_desires::LessenAfterAction(desire, 20.0f, 0.1f);
+	EXPECT_FLOAT_EQ(desire.value, 1.0f);
+	// An inactive desire is left as it is
+	desire.activated = false;
+	creature_desires::LessenAfterAction(desire, 0.5f, 0.1f);
+	EXPECT_FLOAT_EQ(desire.value, 1.0f);
+}
+
 TEST(CreatureIdleMind, BeingIdleIsWaitingThenYawningTwice)
 {
 	creature_mind::IdleMind mind;

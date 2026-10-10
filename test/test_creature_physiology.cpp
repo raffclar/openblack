@@ -137,19 +137,50 @@ TEST(CreaturePhysiology, ItGrowsOnlyStandingStillAndUpToFullSize)
 	shape.size = k_MaxGrownSize - 1e-6f;
 	TickTurn(needs, shape, species, Standing());
 	EXPECT_FLOAT_EQ(shape.size, k_MaxGrownSize);
-	// Made bigger by other means, it stays so
-	shape.size = 3.0f;
-	TickTurn(needs, shape, species, Standing());
+}
+
+TEST(CreaturePhysiology, MadeBiggerThanFullSizeItIsBroughtBackTheFirstTurnItGrows)
+{
+	const auto species = Fake();
+	auto needs = Start(species);
+	Shape shape {.fatness = 0.5f, .strength = 0.5f, .size = 3.0f};
+	// Not while it moves, nor while it is too young to grow
+	auto moving = Standing();
+	moving.moving = true;
+	TickTurn(needs, shape, species, moving);
 	EXPECT_FLOAT_EQ(shape.size, 3.0f);
+	auto young = Standing();
+	young.phase = 2;
+	TickTurn(needs, shape, species, young);
+	EXPECT_FLOAT_EQ(shape.size, 3.0f);
+	// Standing still, it is its full size again
+	TickTurn(needs, shape, species, Standing());
+	EXPECT_FLOAT_EQ(shape.size, k_MaxGrownSize);
+	// And stays there
+	TickTurn(needs, shape, species, Standing());
+	EXPECT_FLOAT_EQ(shape.size, k_MaxGrownSize);
+}
+
+TEST(CreaturePhysiology, ItIsShownNoSmallerOrBiggerThanACreatureCanBeDrawn)
+{
+	EXPECT_FLOAT_EQ(ShownSize(Shape {.size = 0.0f}), 0.05f);
+	EXPECT_FLOAT_EQ(ShownSize(Shape {.size = 0.01f}), 0.05f);
+	EXPECT_FLOAT_EQ(ShownSize(Shape {.size = 1.5f}), 1.5f);
+	EXPECT_FLOAT_EQ(ShownSize(Shape {.size = 4.0f}), 4.0f);
+	EXPECT_FLOAT_EQ(ShownSize(Shape {.size = 6.0f}), 4.0f);
+	// In its pen too
+	EXPECT_FLOAT_EQ(ShownSize(Shape {.size = 6.0f, .penSize = 5.0f}), 4.0f);
+	EXPECT_FLOAT_EQ(ShownSize(Shape {.size = 2.0f, .penSize = 0.0f}), 0.05f);
 }
 
 TEST(CreaturePhysiology, EnergyRunsDownSlowerForBigOrSleepingCreatures)
 {
 	const auto species = Fake();
 	auto small = Start(species);
+	// Of size 0, it is shown at the smallest size a creature is drawn at, 0.05
 	Shape smallShape {.fatness = 0.5f, .strength = 0.5f, .size = 0.0f};
 	TickTurn(small, smallShape, species, Standing());
-	EXPECT_NEAR(small.energy, 1.0f - 0.01f, k_Tolerance);
+	EXPECT_NEAR(small.energy, 1.0f - (0.01f / 1.025f), k_Tolerance);
 
 	auto big = Start(species);
 	Shape bigShape {.fatness = 0.5f, .strength = 0.5f, .size = 2.0f};
@@ -161,7 +192,7 @@ TEST(CreaturePhysiology, EnergyRunsDownSlowerForBigOrSleepingCreatures)
 	auto turn = Standing();
 	turn.asleep = true;
 	TickTurn(asleep, asleepShape, species, turn);
-	EXPECT_NEAR(asleep.energy, 1.0f - 0.0025f, k_Tolerance);
+	EXPECT_NEAR(asleep.energy, 1.0f - (0.01f / 4.025f), k_Tolerance);
 }
 
 TEST(CreaturePhysiology, HungryCreaturesBurnFat)
@@ -287,6 +318,38 @@ TEST(CreaturePhysiology, EatingFillsItUpFattensAndBuildsPoo)
 	EXPECT_FLOAT_EQ(needs.poo, 0.0f);
 }
 
+TEST(CreaturePhysiology, ShrunkInItsPenItUsesUpEnergyAsTheSizeItIsShownAt)
+{
+	const auto species = Fake();
+	auto needs = Start(species);
+	Shape shape {.fatness = 0.5f, .strength = 0.5f, .size = 2.0f, .penSize = 0.22f};
+	EXPECT_FLOAT_EQ(ShownSize(shape), 0.22f);
+	TickTurn(needs, shape, species, Standing());
+	EXPECT_NEAR(needs.energy, 1.0f - (0.01f / 1.11f), k_Tolerance);
+	// Its own size is untouched
+	EXPECT_FLOAT_EQ(shape.size, 2.0f);
+}
+
+TEST(CreaturePhysiology, ShrunkInItsPenAMealGoesByItsOwnSizeButFillsItOnlyToItsShownSize)
+{
+	const auto species = Fake();
+	auto needs = Start(species);
+	Shape shape {.fatness = 0.5f, .strength = 0.5f, .size = 1.5f, .penSize = 0.22f};
+	// The meal is 1500 / 800 for its own size, and fills it only up to 1, not to its own size
+	EXPECT_FLOAT_EQ(Eat(needs, shape, species, 1500.0f), 1.875f);
+	EXPECT_FLOAT_EQ(needs.energy, 1.0f);
+	EXPECT_NEAR(shape.fatness, 0.6875f, k_Tolerance);
+}
+
+TEST(CreaturePhysiology, ShrunkInItsPenActionsStillCostByItsOwnSize)
+{
+	auto needs = Start(Fake());
+	Shape shape {.fatness = 0.5f, .strength = 0.5f, .size = 1.0f, .penSize = 0.22f};
+	ApplyActionCost(needs, shape, {.strengthGain = 0.0f, .energyCost = 0.03f, .exhaustionCost = 0.16f}, 13);
+	EXPECT_NEAR(needs.energy, 1.0f - 0.015f, k_Tolerance);
+	EXPECT_NEAR(needs.exhaustion, 0.08f, k_Tolerance);
+}
+
 TEST(CreaturePhysiology, SleepHealsAndRestsThenWakes)
 {
 	const auto species = Fake();
@@ -306,6 +369,15 @@ TEST(CreaturePhysiology, SleepHealsAndRestsThenWakes)
 	// Still tired, it sleeps on
 	needs.exhaustion = 0.5f;
 	EXPECT_FALSE(SleepTurn(needs, species, 1.0f, 1000, false));
+}
+
+TEST(CreaturePhysiology, OnlyAPlayersOwnCreatureFaintsFromItsNeeds)
+{
+	EXPECT_TRUE(CanFaintFromNeeds(true, false, false));
+	// Nobody's creature, one the computer plays, and one a script controls never faint from their needs
+	EXPECT_FALSE(CanFaintFromNeeds(false, false, false));
+	EXPECT_FALSE(CanFaintFromNeeds(true, true, false));
+	EXPECT_FALSE(CanFaintFromNeeds(true, false, true));
 }
 
 TEST(CreaturePhysiology, FaintingOnlyForGrownUpOwnedCreatures)

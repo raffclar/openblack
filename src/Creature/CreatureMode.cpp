@@ -10,8 +10,11 @@
 #include "CreatureMode.h"
 
 #include <cmath>
+#include <cstdint>
 
 #include <algorithm>
+
+#include "3D/MapCoords.h"
 
 namespace openblack::creature_mode
 {
@@ -68,9 +71,35 @@ std::optional<creature_physiology::Faint> PassOutFrom(const creature_panel::Valu
 	return std::nullopt;
 }
 
+namespace
+{
+/// A metre value kept as a map position and read back: the product of the two floats is exact, then truncated
+float AsMapPosition(float metres)
+{
+	const auto fixed = static_cast<double>(metres) * static_cast<double>(map_coords::k_FixedPerMetre);
+	if (!(fixed > -2147483648.0 && fixed < 2147483648.0))
+	{
+		return map_coords::ToMetres(static_cast<int32_t>(0x80000000u));
+	}
+	return map_coords::ToMetres(static_cast<int32_t>(fixed));
+}
+} // namespace
+
+std::optional<glm::vec3> TemplePen(glm::vec3 templePosition, const glm::mat3& templeRotation, glm::vec3 templeScale,
+                                   std::span<const glm::mat4> markedPlaces)
+{
+	if (markedPlaces.size() <= k_TemplePenPlace)
+	{
+		return std::nullopt;
+	}
+	const auto local = glm::vec3(markedPlaces[k_TemplePenPlace][3]);
+	const auto world = templePosition + (templeRotation * (local * templeScale));
+	return glm::vec3(AsMapPosition(world.x), world.y, AsMapPosition(world.z));
+}
+
 glm::vec3 PenOf(std::optional<glm::vec3> home, std::optional<glm::vec3> temple, glm::vec3 noPen)
 {
-	return home.value_or(temple.value_or(noPen));
+	return temple.value_or(home.value_or(noPen));
 }
 
 } // namespace openblack::creature_mode

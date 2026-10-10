@@ -12,8 +12,10 @@
 #include "CreatureFightSystem.h"
 
 #include <cmath>
+#include <cstdint>
 
 #include <algorithm>
+#include <chrono>
 #include <limits>
 #include <vector>
 
@@ -34,6 +36,7 @@
 #include "Camera/FightCameraModel.h"
 #include "Creature/CreatureArena.h"
 #include "Creature/CreatureFeedback.h"
+#include "Creature/CreatureFizz.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLocomotion.h"
@@ -54,9 +57,11 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/CreatureHome.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
+#include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
@@ -82,6 +87,8 @@ namespace
 {
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 constexpr float k_TurnMs = k_TurnSeconds * 1000.0f;
+constexpr auto k_TurnMilliseconds =
+    static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(TimeSystemInterface::k_TurnDuration).count());
 /// Fighters turn to face their opponents this fast, in radians a second
 constexpr float k_FaceTurnRate = 3.0f;
 /// A blow lands on anything within this many units of its size of where it reaches, twice that for the special move
@@ -242,42 +249,7 @@ std::vector<feedback::Capsule> BodyOf(const ecs::Registry& registry, entt::entit
 	}
 	return feedback::BodyCapsules(animation->skeleton.parents, animation->boneMatrices,
 	                              creature::PlacementMatrix(transform->position, transform->rotation, transform->scale),
-	                              feedback::k_BodyRadiusShare * HeightOf(body->size));
-}
-
-/// Where a creature is taken when knocked out: the home its leash keeps it at, else its player's temple, else where it
-/// stood as the fight started
-/// Where a temple keeps its player's creature: the first place its mesh marks, turned and moved with the temple, or the
-/// temple itself when its mesh marks none
-glm::vec3 TempleCreatureHome(const Transform& transform, const Mesh* mesh)
-{
-	if (mesh != nullptr && Locator::resources::has_value())
-	{
-		const auto& meshes = Locator::resources::value().GetMeshes();
-		if (meshes.Contains(mesh->id) && !meshes.Handle(mesh->id)->GetExtraMetrics().empty())
-		{
-			const auto local = glm::vec3(meshes.Handle(mesh->id)->GetExtraMetrics().front()[3]);
-			return transform.position + (transform.rotation * (local * transform.scale));
-		}
-	}
-	return transform.position;
-}
-
-/// A creature's pen, where it is carried when it passes out: the home it was given, its player's temple's place for it,
-/// or else the fallback
-glm::vec3 HomeOf(ecs::Registry& registry, entt::entity creature, glm::vec3 fallback)
-{
-	const auto* leash = registry.TryGet<const CreatureLeash>(creature);
-	const auto owner = registry.Get<const Creature>(creature).owner;
-	std::optional<glm::vec3> temple;
-	registry.Each<const Temple, const Transform>(
-	    [&registry, &temple, owner](entt::entity entity, const Temple& building, const Transform& transform) {
-		    if (building.owner == owner && !temple.has_value())
-		    {
-			    temple = TempleCreatureHome(transform, registry.TryGet<const Mesh>(entity));
-		    }
-	    });
-	return creature_mode::PenOf(leash != nullptr ? leash->home : std::nullopt, temple, fallback);
+	                              feedback::k_BodyRadiusShare * HeightOf(ShownSize(*body)));
 }
 
 /// Where a creature is carried when its player has no temple and it passed out outside a fight, as on the testbed: the
@@ -291,6 +263,24 @@ std::optional<glm::vec3> NoPen()
 	const auto& land = Locator::terrainSystem::value();
 	const auto middle = (land.GetExtent().minimum + land.GetExtent().maximum) * 0.5f;
 	return glm::vec3(middle.x, land.GetHeightAt(middle), middle.y);
+}
+
+/// Sets a creature fizzing out of sight or back in
+void SetFizz(entt::entity creature, float target, float seconds)
+{
+	if (Locator::creatureFizzSystem::has_value())
+	{
+		Locator::creatureFizzSystem::value().SetFizz(creature, target, seconds, false);
+	}
+}
+
+/// Carried home and stopped part way, a creature is back in full sight at once
+void StopCarryingHome(entt::entity creature, const CreatureKnockedOut& knockedOut)
+{
+	if (knockedOut.stage == CreatureKnockedOut::Stage::FadingOut || knockedOut.stage == CreatureKnockedOut::Stage::FadingIn)
+	{
+		SetFizz(creature, 0.0f, 0.0f);
+	}
 }
 
 /// Whether a fighter faces its opponent closely enough to make a move
@@ -410,7 +400,7 @@ std::optional<entt::entity> TakeArena(ecs::Registry& registry, entt::entity crea
 		                            static_cast<double>(map_coords::k_FixedPerMetre));
 	};
 	const glm::ivec2 start {middle(from.x, to.x), middle(from.z, to.z)};
-	const float wanted = fight::ArenaRadius(body.size, registry.Get<const Creature>(opponent).size);
+	const float wanted = fight::ArenaRadius(ShownSize(body), ShownSize(registry.Get<const Creature>(opponent)));
 
 	std::vector<entt::entity> entities;
 	std::vector<glm::ivec2> places;
@@ -418,7 +408,7 @@ std::optional<entt::entity> TakeArena(ecs::Registry& registry, entt::entity crea
 		entities.push_back(entity);
 		places.push_back(found.place);
 	});
-	if (const auto nearest = arena::Nearest(places, start, arena::ReuseDistance(RunShareOf(body.species), body.size)))
+	if (const auto nearest = arena::Nearest(places, start, arena::ReuseDistance(RunShareOf(body.species), ShownSize(body))))
 	{
 		const auto entity = entities.at(*nearest);
 		auto& taken = registry.Get<CreatureArena>(entity);
@@ -563,7 +553,7 @@ fight_view::Fighter ViewedFighter(const ecs::Registry& registry, entt::entity cr
 	const auto* locomotion = registry.TryGet<const CreatureLocomotion>(creature);
 	return {.position = registry.Get<const Transform>(creature).position,
 	        .radius = locomotion != nullptr ? locomotion->radius : 5.0f,
-	        .height = HeightOf(registry.Get<const Creature>(creature).size)};
+	        .height = HeightOf(ShownSize(registry.Get<const Creature>(creature)))};
 }
 } // namespace
 
@@ -724,6 +714,36 @@ void CreatureFightSystem::AbortFight(entt::entity creature)
 	}
 }
 
+void CreatureFightSystem::Withdraw(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* fighting = registry.TryGet<const CreatureFighting>(creature);
+	if (fighting == nullptr)
+	{
+		return;
+	}
+	const auto opponent = fighting->opponent;
+	const auto arena = fighting->arenaEntity;
+	AbortFight(creature);
+	// It leaves at once, rather than finishing and standing, and lets go of an arena it made
+	Leave(creature);
+	// What it fought and where forget it: the opponent plays out the end of its fight alone
+	if (auto* other = registry.Valid(opponent) ? registry.TryGet<CreatureFighting>(opponent) : nullptr;
+	    other != nullptr && other->opponent == creature)
+	{
+		other->opponent = entt::null;
+	}
+	if (auto* taken = registry.Valid(arena) ? registry.TryGet<CreatureArena>(arena) : nullptr; taken != nullptr)
+	{
+		taken->first = taken->first == creature ? entt::null : taken->first;
+		taken->second = taken->second == creature ? entt::null : taken->second;
+	}
+	if (_view.has_value() && (_view->first == creature || _view->second == creature))
+	{
+		EndView();
+	}
+}
+
 bool CreatureFightSystem::IsFighting(entt::entity creature) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -816,7 +836,7 @@ bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& ray
 	const auto opponent = fighting.opponent;
 	const auto& selfAt = registry.Get<const Transform>(*self).position;
 	const auto& opponentAt = registry.Get<const Transform>(opponent).position;
-	const auto opponentHeight = HeightOf(registry.Get<const Creature>(opponent).size);
+	const auto opponentHeight = HeightOf(ShownSize(registry.Get<const Creature>(opponent)));
 	const auto onOpponent = feedback::RayHit(rayOrigin, rayDirection, BodyOf(registry, opponent));
 	const auto onSelf = feedback::RayHit(rayOrigin, rayDirection, BodyOf(registry, *self));
 
@@ -1037,7 +1057,8 @@ void CreatureFightSystem::Faint(entt::entity creature, std::optional<glm::vec3> 
 	const auto here = registry.Get<const Transform>(creature).position;
 	const auto fallback = start.has_value() ? start : NoPen();
 	registry.AssignOrReplace<CreatureKnockedOut>(
-	    creature, CreatureKnockedOut {.rest = rest, .home = HomeOf(registry, creature, fallback.value_or(here))});
+	    creature,
+	    CreatureKnockedOut {.rest = rest, .home = creature_home::HomeOf(registry, creature).value_or(fallback.value_or(here))});
 }
 
 void CreatureFightSystem::KillPermanently(entt::entity creature)
@@ -1055,6 +1076,7 @@ void CreatureFightSystem::KillPermanently(entt::entity creature)
 	KnockOut(creature);
 	if (auto* knockedOut = registry.TryGet<CreatureKnockedOut>(creature))
 	{
+		StopCarryingHome(creature, *knockedOut);
 		knockedOut->permanent = true;
 		knockedOut->stage = CreatureKnockedOut::Stage::Lying;
 	}
@@ -1076,6 +1098,7 @@ void CreatureFightSystem::Resurrect(entt::entity creature)
 	{
 		needs->needs.life = fight::k_GetUpLife;
 	}
+	StopCarryingHome(creature, *knockedOut);
 	knockedOut->permanent = false;
 	knockedOut->stage = CreatureKnockedOut::Stage::GettingUp;
 	knockedOut->seconds = 0.0f;
@@ -1188,7 +1211,7 @@ void CreatureFightSystem::StartFightsFromMinds()
 			    const auto* record = registry.TryGet<const CreatureFightRecord>(entity);
 			    const auto since = record != nullptr ? record->secondsSinceFight : fight::k_SecondsBetweenFights;
 			    if (nearest.has_value() &&
-			        fight::WantsToFight(anger.value, LifeOf(registry, entity), best, creature.size, since))
+			        fight::WantsToFight(anger.value, LifeOf(registry, entity), best, ShownSize(creature), since))
 			    {
 				    wanted.emplace_back(entity, *nearest);
 			    }
@@ -1250,8 +1273,8 @@ void CreatureFightSystem::ProcessStages()
 				fighting->played = true;
 				if (locomotion != nullptr)
 				{
-					const auto spot = fight::ArenaSpot(fighting->arena, body.size, fighting->madeArena);
-					locomotion->MoveTo(entity, spot, Pace::Walk, 0.0f, fight::ArrivalDistance(body.size));
+					const auto spot = fight::ArenaSpot(fighting->arena, ShownSize(body), fighting->madeArena);
+					locomotion->MoveTo(entity, spot, Pace::Walk, 0.0f, fight::ArrivalDistance(ShownSize(body)));
 				}
 			}
 			else if (!moving(entity) || fighting->stageSeconds > k_ApproachSeconds)
@@ -1623,8 +1646,8 @@ void CreatureFightSystem::AttemptBlow(entt::entity creature, fight::Band band, f
 	const auto gap = glm::distance(selfAt, opponentAt) - opponentRadius;
 	const auto scale = std::abs(registry.Get<const Transform>(creature).scale.x);
 	const auto stepLength = glm::length(DisplacementOf(body.species, fight::animations::k_StepForward)) * scale;
-	const auto choice = fight::ChooseAttack(fighting.reaches, band, gap, stepLength, body.size,
-	                                        HeightOf(registry.Get<const Creature>(opponent).size));
+	const auto choice = fight::ChooseAttack(fighting.reaches, band, gap, stepLength, ShownSize(body),
+	                                        HeightOf(ShownSize(registry.Get<const Creature>(opponent))));
 	if (choice.animation.has_value())
 	{
 		fight::Enter(fighting.fighter, fight::State::Action, *choice.animation, speed);
@@ -1786,8 +1809,8 @@ void CreatureFightSystem::TestHit(entt::entity creature)
 	const auto reach = found->reach - (rootAhead * fighting.movedShare);
 	const auto& at = registry.Get<const CreatureLocomotion>(creature).toPosition;
 	const auto point = glm::vec3(at.x + (ahead.x * reach), at.y + found->height, at.z + (ahead.y * reach));
-	const auto tolerance = k_BlowReachPerSize * body.size * (attacker.special ? 2.0f : 1.0f);
-	const auto opponentHeight = HeightOf(opponentBody.size);
+	const auto tolerance = k_BlowReachPerSize * ShownSize(body) * (attacker.special ? 2.0f : 1.0f);
+	const auto opponentHeight = HeightOf(ShownSize(opponentBody));
 	const auto capsules = BodyOf(registry, opponent);
 	bool hit = false;
 	if (!capsules.empty())
@@ -1816,8 +1839,8 @@ void CreatureFightSystem::TestHit(entt::entity creature)
 	const auto direction = fight::RecoilDirectionOf({local.x / victimRadius, (heightShare - 0.5f) * 2.0f});
 	const auto result = fight::ResolveBlow(
 	    {
-	        .attackerSize = body.size,
-	        .defenderSize = opponentBody.size,
+	        .attackerSize = ShownSize(body),
+	        .defenderSize = ShownSize(opponentBody),
 	        .attackerStrength = body.strength,
 	        .defenderStrength = opponentBody.strength,
 	        .speed = attacker.speed,
@@ -2009,12 +2032,15 @@ void CreatureFightSystem::ProcessKnockedOut()
 		switch (knockedOut.stage)
 		{
 		case CreatureKnockedOut::Stage::Lying:
-			if (!knockedOut.permanent && knockedOut.seconds >= fight::FaintSeconds(body.size))
+			if (!knockedOut.permanent && knockedOut.seconds >= fight::FaintSeconds(ShownSize(body)))
 			{
 				// A player's creature is taken home; any other comes round where it lies
 				if (body.owner != PlayerNames::NEUTRAL)
 				{
+					// It fizzes out of sight where it lies, with the teleport's sound
 					next(CreatureKnockedOut::Stage::FadingOut);
+					knockedOut.fizzTurns = creature_fizz::TurnsOf(creature_fizz::k_CarryHomeSeconds, k_TurnMilliseconds);
+					SetFizz(entity, 1.0f, creature_fizz::k_CarryHomeSeconds);
 				}
 				else
 				{
@@ -2023,25 +2049,32 @@ void CreatureFightSystem::ProcessKnockedOut()
 			}
 			break;
 		case CreatureKnockedOut::Stage::FadingOut:
-			if (knockedOut.seconds >= fight::k_FizzSeconds)
+			knockedOut.fizzTurns = knockedOut.fizzTurns > 0 ? knockedOut.fizzTurns - 1 : 0;
+			if (knockedOut.fizzTurns == 0)
 			{
+				// Out of sight, it is moved home and fizzes back into sight there
 				auto* locomotion = registry.TryGet<CreatureLocomotion>(entity);
 				if (knockedOut.home.has_value() && locomotion != nullptr)
 				{
-					PlaceAt(*locomotion, registry.Get<Transform>(entity), *knockedOut.home);
+					// The temple's pen is taken again now, as the home follows the temple every turn
+					PlaceAt(*locomotion, registry.Get<Transform>(entity),
+					        creature_home::HomeOf(registry, entity).value_or(*knockedOut.home));
 					registry.SetDirty();
 				}
-				next(CreatureKnockedOut::Stage::FadingIn);
-			}
-			break;
-		case CreatureKnockedOut::Stage::FadingIn:
-			if (knockedOut.seconds >= fight::k_FizzSeconds)
-			{
+				SetFizz(entity, 0.0f, creature_fizz::k_CarryHomeSeconds);
 				// Home, it is no more exhausted or thirsty than it can bear, with a little energy
 				if (Locator::creaturePhysiologySystem::has_value())
 				{
 					Locator::creaturePhysiologySystem::value().WakeFromFaint(entity);
 				}
+				next(CreatureKnockedOut::Stage::FadingIn);
+				knockedOut.fizzTurns = creature_fizz::TurnsOf(creature_fizz::k_CarryHomeSeconds, k_TurnMilliseconds);
+			}
+			break;
+		case CreatureKnockedOut::Stage::FadingIn:
+			knockedOut.fizzTurns = knockedOut.fizzTurns > 0 ? knockedOut.fizzTurns - 1 : 0;
+			if (knockedOut.fizzTurns == 0)
+			{
 				next(CreatureKnockedOut::Stage::Waiting);
 			}
 			break;

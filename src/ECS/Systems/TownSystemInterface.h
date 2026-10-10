@@ -22,9 +22,17 @@ namespace openblack::ecs::systems
 class TownSystemInterface
 {
 public:
-	[[nodiscard]] virtual entt::entity FindAbodeWithSpace(entt::entity townEntity) const = 0;
+	/// The functional building of a town that suits a villager best, scoring above a least score; none if none does
+	[[nodiscard]] virtual entt::entity FindAbodeWithSpace(entt::entity town, entt::entity villager, float leastScore) const = 0;
 	[[nodiscard]] virtual entt::entity FindClosestTown(const glm::vec3& point) const = 0;
-	virtual void AddHomelessVillagerToTown(entt::entity townEntity, entt::entity villagerEntity) = 0;
+	/// A villager joins a town, moving into the building that suits it best or joining the homeless; false for a town
+	/// nobody can live in
+	virtual bool AddVillagerToTown(entt::entity town, entt::entity villager) = 0;
+	/// A villager moves into a building, leaving the homeless or its old home
+	virtual void AddVillagerToAbode(entt::entity abode, entt::entity villager) = 0;
+	/// A villager leaves its home, keeping its town, and joins the town's homeless; false with no town or when it
+	/// already is one of them
+	virtual bool MakeHomeless(entt::entity villager) = 0;
 
 	/// What stands in the way of ground kept clear: for a town's gathering place, anything fixed but a tree; for a villager
 	/// to sit down, anything at all

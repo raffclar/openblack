@@ -19,6 +19,7 @@
 #include "3D/LandIslandInterface.h"
 #include "Creature/CreatureMorph.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/MorphWithTerrain.h"
@@ -48,6 +49,11 @@ std::span<const glm::mat4> posed_model::BonesOf(const ecs::Registry& registry, e
 		return pose->bones;
 	}
 	if (const auto* pose = registry.TryGet<const VillagerPose>(entity); pose != nullptr && pose->bones.size() == rest.size())
+	{
+		return pose->bones;
+	}
+	if (const auto* pose = registry.TryGet<const AnimatedStaticPose>(entity);
+	    pose != nullptr && pose->bones.size() == rest.size())
 	{
 		return pose->bones;
 	}

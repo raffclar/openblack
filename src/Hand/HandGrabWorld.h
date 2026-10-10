@@ -17,6 +17,7 @@
 #include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
+#include "Animals/FishFarmRules.h"
 #include "Enums.h"
 #include "HandGrabRules.h"
 
@@ -52,6 +53,11 @@ public:
 	[[nodiscard]] virtual std::optional<entt::entity> ObjectUnderCursor() const = 0;
 	/// Whether a point is in a player's influence
 	[[nodiscard]] virtual bool InInfluence(PlayerNames player, glm::vec3 point) const = 0;
+	/// Whether the hand, at its point, is in its player's influence: while it keeps any of it past the border it is
+	[[nodiscard]] virtual bool HandInInfluence(PlayerNames player, glm::vec3 hand) const { return InInfluence(player, hand); }
+	/// The hand let go of what it holds onto the land: what it keeps of its player's influence past the border wanes, or
+	/// comes back, as for one more turn
+	virtual void HeldThingUsedOnLand(PlayerNames /*player*/) {}
 	/// Whether a point is on the map
 	[[nodiscard]] virtual bool InBounds(glm::vec3 point) const = 0;
 	/// The flat normal of the land at a point
@@ -161,6 +167,10 @@ public:
 	[[nodiscard]] virtual std::optional<FieldFacts> FieldFactsOf(entt::entity field) const = 0;
 	/// Food is taken out of a field by the hand
 	virtual void TakeFromField(entt::entity field, uint32_t amount) = 0;
+	/// What a fish farm's table says of its fish, for the hand scooping them
+	[[nodiscard]] virtual std::optional<fish_farm::Type> FishFarmOf(entt::entity farm) const = 0;
+	/// Fish are taken out of a fish farm by the hand: no more than it has. What was taken.
+	virtual uint32_t TakeFromFishFarm(entt::entity farm, uint32_t amount) = 0;
 	/// A pot, a handful among them, is drawn at the size of what it holds
 	virtual void ResizePot(entt::entity pot) = 0;
 	[[nodiscard]] virtual ScoopFacts ScoopFactsOf(PotInfo handful) const = 0;
@@ -171,6 +181,8 @@ public:
 	[[nodiscard]] virtual entt::entity MakeHandful(PotInfo type, glm::vec3 position, uint32_t amount, bool poisoned) = 0;
 	/// The stream of what is scooped flowing from its source into the hand starts, and stops; its effect
 	[[nodiscard]] virtual std::optional<uint32_t> StartScoopStream(ResourceType resource, glm::vec3 source, bool poisoned) = 0;
+	/// The stream of fish leaping from a fish farm into the hand starts
+	[[nodiscard]] virtual std::optional<uint32_t> StartFishScoopStream(glm::vec3 source) = 0;
 	virtual void StopScoopStream(uint32_t stream) = 0;
 	/// The stream flows to where the hand now is
 	virtual void MoveScoopStream(uint32_t stream, glm::vec3 hand) = 0;
@@ -185,6 +197,8 @@ public:
 	virtual uint32_t AddToStore(entt::entity store, ResourceType resource, uint32_t amount, bool poisoned) = 0;
 	/// A store takes a thing whole, for the resource it is worth, and the thing goes; whether it took it
 	virtual bool TakeIntoStore(entt::entity store, entt::entity object) = 0;
+	/// Lays a gate stone in the gate stone plinth it is given to; false for anything else, which is left as it is
+	virtual bool LayGateStone(entt::entity plinth, entt::entity stone) = 0;
 	/// Some resource poured onto a point: to the stores and piles of it about the point, or a new pile
 	virtual void PourAt(ResourceType resource, glm::vec3 point, uint32_t amount, PlayerNames player, bool poisoned) = 0;
 	/// A thing is used up: a ghost of it flickers out where it was, and it goes
