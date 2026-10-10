@@ -24,6 +24,7 @@
 #include <ECS/Components/Abode.h>
 #include <ECS/Components/AudioEmitter.h>
 #include <ECS/Components/CreatureMind.h>
+#include <ECS/Components/Physics.h>
 #include <ECS/Components/Town.h>
 #include <ECS/Components/Transform.h>
 #include <ECS/Components/Tree.h>
@@ -31,12 +32,14 @@
 #include <ECS/Registry.h>
 #include <Inspector.h>
 #include <Inspector/ComponentReflection.h>
+#include <Inspector/EntityDescription.h>
 #include <Inspector/GameControls.h>
 #include <Inspector/GameInput.h>
 #include <Inspector/GameProviders.h>
 #include <Inspector/GameWorldEdit.h>
 #include <Inspector/InputControl.h>
 #include <Inspector/LevelControl.h>
+#include <Inspector/RegistryProviders.h>
 #include <Inspector/RunControl.h>
 #include <Inspector/SystemProviders.h>
 #include <Inspector/WorldProviders.h>
@@ -49,6 +52,17 @@ using namespace openblack::ecs::components;
 
 namespace
 {
+
+/// The source tree these tests read and update. ctest passes it when the test runs, because a compiler cache shared
+/// between worktrees can hand this test an object built in another worktree, whose built-in path names that worktree.
+std::string SourceDir()
+{
+	if (const auto* dir = std::getenv("OPENBLACK_SOURCE_DIR"); dir != nullptr && *dir != '\0')
+	{
+		return dir;
+	}
+	return OPENBLACK_SOURCE_DIR;
+}
 
 QueryResult AskAny(const Inspector& inspector, const std::string& line)
 {
@@ -319,7 +333,7 @@ TEST(InspectorParticles, EmittersByOwner)
 /// Every service the locator holds has a query that inspects it: a service added to the locator without one fails here
 TEST(InspectorCoverage, EveryLocatorServiceHasAQuery)
 {
-	std::ifstream header(std::string(OPENBLACK_SOURCE_DIR) + "/src/Locator.h");
+	std::ifstream header(SourceDir() + "/src/Locator.h");
 	ASSERT_TRUE(header.good());
 	std::stringstream text;
 	text << header.rdbuf();
@@ -405,7 +419,7 @@ TEST(InspectorCoverage, TheAdaptersCatalogueOfQueriesIsUpToDate)
 	inspector.Add(std::make_unique<InputProvider>(input));
 	const auto catalogue = inspector.Catalogue().dump(1) + "\n";
 
-	const auto path = std::string(OPENBLACK_SOURCE_DIR) + "/tools/inspector/inspector_queries.json";
+	const auto path = SourceDir() + "/tools/inspector/inspector_queries.json";
 	if (const auto* update = std::getenv("OPENBLACK_UPDATE_INSPECTOR_QUERIES"); update != nullptr && std::string(update) == "1")
 	{
 		std::ofstream(path, std::ios::binary) << catalogue;
@@ -414,4 +428,38 @@ TEST(InspectorCoverage, TheAdaptersCatalogueOfQueriesIsUpToDate)
 	std::stringstream written;
 	written << file.rdbuf();
 	EXPECT_EQ(written.str(), catalogue) << path << " is out of date: run this test with OPENBLACK_UPDATE_INSPECTOR_QUERIES=1";
+}
+
+// A thing moving in the physics is drawn at its body, which may be far from where it stood: lists and searches give
+// where it is drawn, and where it stands beside it
+TEST(InspectorEntities, PositionsAreWhereThingsAreDrawn)
+{
+	ecs::Registry registry;
+	const auto standing = Placed(registry, glm::vec3(2587.0f, 14.7f, 2690.0f));
+	const auto flying = Placed(registry, glm::vec3(2587.0f, 14.7f, 2690.0f));
+	registry.Assign<ecs::components::PhysicsDrawPose>(
+	    flying,
+	    ecs::components::PhysicsDrawPose {.axes = glm::mat3(1.0f), .origin = {2578.0f, 0.8f, 2790.0f}, .underSea = false});
+
+	EXPECT_EQ(DrawnPosition(registry, standing), glm::vec3(2587.0f, 14.7f, 2690.0f));
+	EXPECT_EQ(DrawnPosition(registry, flying), glm::vec3(2578.0f, 0.8f, 2790.0f));
+	EXPECT_FALSE(DrawnPosition(registry, registry.Create()).has_value());
+
+	const auto item = ToListItem(flying, Describe(registry, flying, nullptr));
+	EXPECT_EQ(item["position"], Json({2578.0f, 0.8f, 2790.0f}));
+	EXPECT_EQ(item["transform_position"], Json({2587.0f, 14.7f, 2690.0f}));
+	EXPECT_FALSE(ToListItem(standing, Describe(registry, standing, nullptr)).contains("transform_position"));
+
+	// A search around the body finds it, and one around where it stood finds only the one standing there
+	QueryOptions nearBody;
+	nearBody.near = Near {.point = {2578.0, 0.8, 2790.0}, .planar = true, .radius = 5.0};
+	const auto found = FindEntities(registry, nullptr, Json::object(), nearBody);
+	ASSERT_TRUE(found.Ok()) << found.error;
+	ASSERT_EQ(found.value.size(), 1u);
+	EXPECT_EQ(found.value[0]["id"], ToId(flying));
+	QueryOptions nearStand;
+	nearStand.near = Near {.point = {2587.0, 14.7, 2690.0}, .planar = true, .radius = 5.0};
+	const auto stood = FindEntities(registry, nullptr, Json::object(), nearStand);
+	ASSERT_EQ(stood.value.size(), 1u);
+	EXPECT_EQ(stood.value[0]["id"], ToId(standing));
 }

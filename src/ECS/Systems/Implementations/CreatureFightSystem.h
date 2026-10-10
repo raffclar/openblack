@@ -38,6 +38,10 @@ public:
 	void ReleaseCharge(entt::entity creature, float heldMs) override;
 	void SetAutoFighting(entt::entity creature, bool autoFight) override;
 	[[nodiscard]] bool IsAutoFighting(entt::entity creature) const override;
+	[[nodiscard]] creature_fight::FightAction CurrentFightAction(entt::entity creature) const override;
+	[[nodiscard]] uint32_t QueuedBlows(entt::entity creature) const override;
+	[[nodiscard]] std::optional<FoundArena> FindOrMakeArena(const glm::vec3& point, entt::entity creature, entt::entity other,
+	                                                        float within) override;
 
 	[[nodiscard]] std::optional<entt::entity> PlayersFighter() const override;
 	bool Press(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, creature_fight::Button button, uint32_t milliseconds,
@@ -87,8 +91,8 @@ private:
 	void EndFightFor(entt::entity creature, bool won);
 	void BeginDuel(entt::entity creature);
 	void MeasureBlows(entt::entity creature);
-	/// Faints and lies out cold, to be taken home later, or back to where it started fighting
-	void Faint(entt::entity creature, std::optional<glm::vec3> start);
+	/// Faints and lies out cold, to be taken home later
+	void Faint(entt::entity creature);
 	/// The camera's fight view: started by looking at an arena with a fight on, it follows the fight and lingers a little
 	/// after it, unless the player zooms out of it
 	void UpdateView(float seconds);

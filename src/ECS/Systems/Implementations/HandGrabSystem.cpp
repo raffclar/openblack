@@ -29,6 +29,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Transform.h"
@@ -210,15 +211,33 @@ bool HandGrabSystem::HandInInfluence() const
 	return grab != nullptr && grab->handPoint.has_value() && _world->HandInInfluence(_world->HandPlayer(), *grab->handPoint);
 }
 
-bool HandGrabSystem::MayTake(entt::entity object) const
+hand_grab::Gate HandGrabSystem::GateOf(entt::entity object) const
 {
 	const auto& registry = _world->Entities();
-	return hand_grab::PassesGate({.spaceInHand = true,
-	                              .alreadyInHand = registry.AllOf<InHand>(object),
-	                              .valid = hand_grab::ValidForPlaceInHand(HoldableOf(object)),
-	                              .cannotBePickedUp = registry.AllOf<CannotBePickedUp>(object),
-	                              .carried = registry.AllOf<CarriedByTornado>(object),
-	                              .inInfluence = HandInInfluence()});
+	return {.spaceInHand = true,
+	        .alreadyInHand = registry.AllOf<InHand>(object),
+	        .valid = hand_grab::ValidForPlaceInHand(HoldableOf(object)),
+	        .cannotBePickedUp = registry.AllOf<CannotBePickedUp>(object),
+	        .carried = registry.AllOf<CarriedByTornado>(object),
+	        .inInfluence = HandInInfluence()};
+}
+
+bool HandGrabSystem::MayTake(entt::entity object) const
+{
+	return hand_grab::PassesGate(GateOf(object));
+}
+
+std::string HandGrabSystem::WhyNotTake(entt::entity object) const
+{
+	if (!_world->Entities().Valid(object))
+	{
+		return "there is no such thing";
+	}
+	if (IsBusy())
+	{
+		return "the hand is busy with another thing";
+	}
+	return std::string(hand_grab::GateRefusal(GateOf(object)));
 }
 
 hand_grab::HoldFacts HandGrabSystem::HoldOfObject(entt::entity object) const
@@ -233,9 +252,11 @@ hand_grab::HoldFacts HandGrabSystem::HoldOfObject(entt::entity object) const
 
 void HandGrabSystem::Tap(entt::entity object)
 {
-	// Only within the player's influence, and not a thing a script holds out of reach
+	// Only within the player's influence (a script's scroll or sign is tapped anywhere), and not a thing a script holds
+	// out of reach
 	const auto& registry = _world->Entities();
-	if (!HandInInfluence() || registry.AllOf<CannotBePickedUp>(object))
+	const bool needsInfluence = !registry.AllOf<ScriptHighlight>(object);
+	if ((needsInfluence && !HandInInfluence()) || registry.AllOf<CannotBePickedUp>(object))
 	{
 		return;
 	}
@@ -668,8 +689,16 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 	const auto pot = _world->PotFactsOf(held);
 	if (!pot.has_value())
 	{
+		// A gate stone given to the gate stone plinth is laid in it and gone from the hand
+		if (_world->LayGateStone(target, held))
+		{
+			_world->Entities().Remove<InHand>(held);
+			_world->UseUp(held);
+			Empty(grab);
+			return true;
+		}
 		// A tree, a dead tree, a fence, a mushroom or an animal goes whole into a store of what it is worth
-		// TODO(stores): onto a worship totem, a teleport, a gate's plinth or a scaffold; openblack has none of those yet
+		// TODO(stores): onto a worship totem, a teleport or a scaffold; openblack has none of those yet
 		if (!_world->TakeIntoStore(target, held))
 		{
 			return false;

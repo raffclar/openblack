@@ -30,7 +30,7 @@ public:
 
 private:
 	bool _muted {false};
-	bool _otherVoices {false};
+	bool _otherVoices {true};
 };
 
 } // namespace openblack::ecs::systems

@@ -104,6 +104,7 @@ public:
 
 private:
 	void SetUpEnvironment(const Environment& environment);
+	void PlaceHighlights(const Scenario& scenario, glm::vec2 middle);
 	void PlaceObjects(const Scenario& scenario, glm::vec2 middle);
 	/// The scenario's temples and its flocks of the land's birds
 	void PlaceBirds(const Scenario& scenario, glm::vec2 middle);
@@ -152,6 +153,8 @@ private:
 	std::string GiveFightCommand(entt::entity creature, const Command& command);
 	/// Creature Mode's and the Creature Cave's commands, as the player's keys and clicks give them
 	std::string GiveCreatureModeCommand(entt::entity creature, const Command& command);
+	/// A script opening or closing the scenery, and the player's hand laying a gate stone in the plinth
+	void GiveSceneryCommand(const Command& command);
 	/// The player's mouse: presses, moves and the wheel, made as the mouse's own events
 	std::string GivePointerCommand(const Command& command);
 	/// Moves the mouse on along a sweep, and lets go of it once the scenario's commands are done

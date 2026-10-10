@@ -25,6 +25,7 @@
 #include "Creature/CreatureMorph.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -33,10 +34,13 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptHighlightRules.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -221,8 +225,8 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		return;
 	}
 
-	// The objects drawn this frame, in the order they are drawn: a hand, what a hand holds and a building not begun are
-	// not there for the cursor
+	// The objects drawn this frame, in the order they are drawn: a hand, what a hand holds, a see-through copy and a
+	// building not begun are not there for the cursor
 	const auto& registry = Locator::entitiesRegistry::value();
 	auto& meshes = Locator::resources::value().GetMeshes();
 	_candidates.clear();
@@ -230,7 +234,12 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 	_candidateModels.clear();
 	for (const auto& [entity, model] : Locator::rendereringSystem::value().GetContext().drawnObjects)
 	{
-		if (!registry.Valid(entity) || registry.AnyOf<Hand, InHand>(entity))
+		if (!registry.Valid(entity) || registry.AnyOf<Hand, InHand, SeeThrough>(entity))
+		{
+			continue;
+		}
+		// A gate stone on a plinth is found only while the plinth stands closed
+		if (const auto* stone = registry.TryGet<const PlinthStone>(entity); stone != nullptr && !stone->pickable)
 		{
 			continue;
 		}
@@ -249,12 +258,26 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		const float scale = transform != nullptr ? transform->scale.x : 1.0f;
 		const auto box = mesh->GetBoundingBox();
 		const auto halfExtents = box.Size() * 0.5f;
-		_candidates.push_back({
-		    .centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f)),
-		    .radius = glm::length(halfExtents) * scale,
-		    .origin = glm::vec3(model[3]),
-		    .halfExtents = glm::vec2(halfExtents.x, halfExtents.z),
-		});
+		// A script's scroll is picked by a ball a little larger than its model, about the model's middle
+		if (const auto* highlight = registry.TryGet<const ScriptHighlight>(entity);
+		    highlight != nullptr && ecs::script_highlights::PickedByBall(highlight->kind))
+		{
+			_candidates.push_back({
+			    .centre = highlight->centre,
+			    .radius = highlight->radius + ecs::script_highlights::k_PickBallMargin,
+			    .origin = highlight->centre,
+			    .halfExtents = glm::vec2(halfExtents.x, halfExtents.z),
+			});
+		}
+		else
+		{
+			_candidates.push_back({
+			    .centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f)),
+			    .radius = glm::length(halfExtents) * scale,
+			    .origin = glm::vec3(model[3]),
+			    .halfExtents = glm::vec2(halfExtents.x, halfExtents.z),
+			});
+		}
 		_candidateEntities.push_back(entity);
 		_candidateModels.push_back(model);
 	}
@@ -263,6 +286,12 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 	const auto distanceOf = [&](size_t i) -> std::optional<float> {
 		const auto entity = _candidateEntities[i];
 		const auto& model = _candidateModels[i];
+		// A scroll's ball is hit at its middle
+		if (const auto* highlight = registry.TryGet<const ScriptHighlight>(entity);
+		    highlight != nullptr && ecs::script_highlights::PickedByBall(highlight->kind))
+		{
+			return screen_pick::Depth(view, highlight->centre);
+		}
 		// A broken building is picked by its broken model's triangles, along the cursor's line
 		if (const auto* broken = registry.TryGet<const BuildingDamage>(entity); broken != nullptr && broken->drawMesh != 0)
 		{
@@ -343,7 +372,12 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 	}
 	if (picked.has_value())
 	{
-		const auto entity = _candidateEntities[picked->index];
+		auto entity = _candidateEntities[picked->index];
+		// A gate stone on a plinth is the plinth to the cursor
+		if (const auto* stone = registry.TryGet<const PlinthStone>(entity); stone != nullptr && registry.Valid(stone->plinth))
+		{
+			entity = stone->plinth;
+		}
 		_pick.object = entity;
 		const auto* transform = registry.TryGet<const Transform>(entity);
 		_pick.point = transform != nullptr ? transform->position : _candidates[picked->index].origin;

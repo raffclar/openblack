@@ -101,6 +101,7 @@ class LivingActionSystemInterface;
 class MistSystemInterface;
 class CloudSystemInterface;
 class VillageLightSystemInterface;
+class VillageTotemSystemInterface;
 class FieldSystemInterface;
 class FishFarmSystemInterface;
 class AnimalSystemInterface;
@@ -118,6 +119,7 @@ class FootprintSystemInterface;
 class CreatureSkinSystemInterface;
 class EditorSystemInterface;
 class CreaturePhysiologySystemInterface;
+class CreaturePenSystemInterface;
 class LeashSystemInterface;
 class CreatureFightSystemInterface;
 class CreatureModeSystemInterface;
@@ -152,6 +154,7 @@ class RenderingSystemInterface;
 class TownSystemInterface;
 class WorshipSiteSystemInterface;
 class ResourceStoreSystemInterface;
+class AnimatedStaticSystemInterface;
 class TimeSystemInterface;
 class VegetationInterface;
 class SkySystemInterface;
@@ -175,6 +178,7 @@ class ExplosionSystemInterface;
 class RewardSystemInterface;
 class ScriptObjectsSystemInterface;
 class BuildingDamageSystemInterface;
+class ScriptHighlightSystemInterface;
 class InspectorSystemInterface;
 } // namespace ecs::systems
 
@@ -217,6 +221,7 @@ struct Locator
 	using townSystem = entt::locator<ecs::systems::TownSystemInterface>;
 	using worshipSiteSystem = entt::locator<ecs::systems::WorshipSiteSystemInterface>;
 	using resourceStoreSystem = entt::locator<ecs::systems::ResourceStoreSystemInterface>;
+	using animatedStaticSystem = entt::locator<ecs::systems::AnimatedStaticSystemInterface>;
 	using weatherSystem = entt::locator<ecs::systems::WeatherSystemInterface>;
 	using pathfindingSystem = entt::locator<ecs::systems::PathfindingSystemInterface>;
 	using entitiesRegistry = entt::locator<ecs::Registry>;
@@ -236,6 +241,7 @@ struct Locator
 	using mistSystem = entt::locator<ecs::systems::MistSystemInterface>;
 	using cloudSystem = entt::locator<ecs::systems::CloudSystemInterface>;
 	using villageLightSystem = entt::locator<ecs::systems::VillageLightSystemInterface>;
+	using villageTotemSystem = entt::locator<ecs::systems::VillageTotemSystemInterface>;
 	using fieldSystem = entt::locator<ecs::systems::FieldSystemInterface>;
 	using fishFarmSystem = entt::locator<ecs::systems::FishFarmSystemInterface>;
 	using animalSystem = entt::locator<ecs::systems::AnimalSystemInterface>;
@@ -253,6 +259,7 @@ struct Locator
 	using creatureSkinSystem = entt::locator<ecs::systems::CreatureSkinSystemInterface>;
 	using editorSystem = entt::locator<ecs::systems::EditorSystemInterface>;
 	using creaturePhysiologySystem = entt::locator<ecs::systems::CreaturePhysiologySystemInterface>;
+	using creaturePenSystem = entt::locator<ecs::systems::CreaturePenSystemInterface>;
 	using leashSystem = entt::locator<ecs::systems::LeashSystemInterface>;
 	using creatureFightSystem = entt::locator<ecs::systems::CreatureFightSystemInterface>;
 	using creatureModeSystem = entt::locator<ecs::systems::CreatureModeSystemInterface>;
@@ -294,6 +301,7 @@ struct Locator
 	using rewardSystem = entt::locator<ecs::systems::RewardSystemInterface>;
 	using scriptObjects = entt::locator<ecs::systems::ScriptObjectsSystemInterface>;
 	using buildingDamageSystem = entt::locator<ecs::systems::BuildingDamageSystemInterface>;
+	using scriptHighlightSystem = entt::locator<ecs::systems::ScriptHighlightSystemInterface>;
 	/// Only in builds with the inspector, and only once --inspect-port started it
 	using inspector = entt::locator<ecs::systems::InspectorSystemInterface>;
 	using vm = entt::locator<lhvm::LHVM>;

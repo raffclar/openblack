@@ -181,7 +181,7 @@ void CreatureSpawner::DrawHands(entt::entity entity) noexcept
 			return;
 		}
 		const auto ahead = transform->rotation * glm::vec3(std::sin(angle), 0.0f, -std::cos(angle));
-		auto at = transform->position + (ahead * k_PutAtDistance * creature->size);
+		auto at = transform->position + (ahead * k_PutAtDistance * ShownSize(*creature));
 		at.y = Locator::terrainSystem::value().GetHeightAt(glm::xz(at));
 		ecs::archetypes::MobileObjectArchetype::Create(at, k_Objects.at(static_cast<size_t>(_objectType)).first, 0.0f, 1.0f);
 	};

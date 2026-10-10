@@ -26,6 +26,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Components/Abode.h"
@@ -43,6 +44,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
@@ -55,6 +57,7 @@
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -70,6 +73,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
+#include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/WorldObjects.h"
@@ -332,8 +336,7 @@ void GameHandGrabWorld::PlaySample(uint32_t sample, glm::vec3 position)
 {
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlaySoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(),
-		                                        position);
+		audio::PlayGameSoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(), position);
 	}
 }
 
@@ -424,6 +427,12 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 	{
 		const bool ownHand = !Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() == player;
 		return Locator::abodeKnockSystem::value().Tap(object, handPoint, ownHand);
+	}
+	// A script's scroll or sign answers the tap itself
+	if (Entities().AllOf<ScriptHighlight>(object) && Locator::scriptHighlightSystem::has_value())
+	{
+		const bool ownHand = !Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() == player;
+		return Locator::scriptHighlightSystem::value().Tap(object, ownHand);
 	}
 	// Other things' taps are the clicking and activating of the interface
 	return false;
@@ -746,8 +755,8 @@ void GameHandGrabWorld::PlayScoopSound(ResourceType resource, glm::vec3 hand, fl
 	// Wood rattles in, anything else pours; its pitch rises as the scoop ramps up
 	const uint32_t sample = resource == ResourceType::Wood ? k_ScoopWoodSample : k_ScoopSample;
 	const auto pitch = static_cast<uint32_t>(ramp * k_ScoopPitchRise + k_ScoopPitchStart);
-	Locator::audio::value().StartSoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(),
-	                                         {.position = hand, .pitchPercent = pitch});
+	audio::StartGameSoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(),
+	                            {.position = hand, .pitchPercent = pitch});
 }
 
 float GameHandGrabWorld::LandHeightAt(glm::vec3 point) const
@@ -776,6 +785,11 @@ bool GameHandGrabWorld::TakeIntoStore(entt::entity store, entt::entity object)
 	}
 	return Locator::resourceStoreSystem::has_value() &&
 	       Locator::resourceStoreSystem::value().TakeObject(store, object, HandPlayer());
+}
+
+bool GameHandGrabWorld::LayGateStone(entt::entity plinth, entt::entity stone)
+{
+	return Locator::animatedStaticSystem::has_value() && Locator::animatedStaticSystem::value().LayGateStone(plinth, stone);
 }
 
 void GameHandGrabWorld::PourAt(ResourceType resource, glm::vec3 point, uint32_t amount, PlayerNames player, bool poisoned)

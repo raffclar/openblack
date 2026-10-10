@@ -12,6 +12,7 @@
 #include "ScriptControlSystem.h"
 
 #include <memory>
+#include <string_view>
 #include <utility>
 
 #include <spdlog/spdlog.h>

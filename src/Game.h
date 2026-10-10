@@ -130,6 +130,9 @@ struct Arguments
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> requestScreenshot;
 	/// The port of 127.0.0.1 the debug inspector's server listens on, in builds with it; none to not start it
 	std::optional<uint16_t> inspectPort;
+	/// Where the inspector keeps pictures by feature, with their catalogue; OPENBLACK_SCREENSHOT_ROOT's or
+	/// E:/openblack/screenshots when not given
+	std::optional<std::filesystem::path> screenshotRoot;
 	/// The seed of every random number the game draws, and the date pinned, for a deterministic run; none for a seed of
 	/// the machine's and the wall clock's date
 	std::optional<uint32_t> seed;
@@ -224,6 +227,10 @@ public:
 
 	/// The frame being made is written to a PNG once drawn, without the debug windows if asked
 	void RequestScreenshot(const std::filesystem::path& path, bool hideDebugGui = false) noexcept;
+	/// The frame being made leaves the debug windows out, as a picture without them does, for the frames around one
+	void HideDebugGuiThisFrame() noexcept { _debugGuiHiddenFrame = _frameCount; }
+	/// Where the inspector keeps pictures, when given on the command line
+	[[nodiscard]] const std::optional<std::filesystem::path>& GetScreenshotRoot() const noexcept { return _screenshotRoot; }
 	/// The game's own interface (its menu), once it is made
 	[[nodiscard]] gui::GameInterface* GetInterface() noexcept { return _interface.get(); }
 	/// The map script of the land loaded last, or "testbed"; empty before one is
@@ -285,6 +292,7 @@ private:
 	std::optional<ScenarioRequest> _scenarioRequest;
 	/// The port the debug inspector is to listen on, if it is to start
 	std::optional<uint16_t> _inspectPort;
+	std::optional<std::filesystem::path> _screenshotRoot;
 	std::optional<uint32_t> _seed;
 	input::LockMode _inspectInputLock {input::LockMode::Auto};
 	/// Whether the testbed opens its window of scenarios
@@ -329,6 +337,8 @@ private:
 		std::chrono::microseconds time {0};
 	};
 	std::optional<HandKnock> _handKnock;
+	/// Where the pointer was last put on the hand while it holds a town's totem
+	std::optional<glm::ivec2> _totemPointer;
 	/// The hand plays its tap this frame
 	bool _handKnocking {false};
 	/// The way the surface the cursor is on in the temple faces, which the hand turns to
@@ -389,10 +399,16 @@ private:
 	/// Once a game turn outside the temple: the hand's tooltip for what it is over, "Interact" over the player's own
 	/// creature
 	void ProcessHandToolTipTurn();
+	/// Where a point of the world is on the screen, in whole pixels, when it is on it
+	[[nodiscard]] std::optional<glm::vec2> OnScreen(glm::vec3 point) const;
+	/// The floating numbers move on by some seconds and are given to the interface where they show
+	void UpdateFloatingNumbers(float seconds);
 
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> _requestScreenshot;
 	/// The requested screenshot leaves the debug windows out
 	bool _screenshotHidesDebugGui {false};
+	/// A frame drawn without the debug windows though no picture is taken of it
+	std::optional<uint32_t> _debugGuiHiddenFrame;
 	std::unique_ptr<audio::AtmosAudio> _atmosAudio;
 	std::unique_ptr<audio::GameMusic> _gameMusic;
 	std::unique_ptr<HandAnimation> _handAnimation;

@@ -18,6 +18,7 @@
 
 using openblack::ecs::components::PhysicsDrawPose;
 using openblack::physics_draw::ModelMatrix;
+using openblack::physics_draw::Position;
 
 namespace
 {
@@ -46,4 +47,15 @@ TEST(PhysicsDrawMatrix, ABodySunkWhollyUnderTheSeaIsDrawnNowhere)
 	// at the horizon
 	const PhysicsDrawPose pose {.axes = glm::mat3(1.0f), .origin = {1.0f, -6.0f, 3.0f}, .underSea = true};
 	EXPECT_FALSE(ModelMatrix(k_Standing, &pose).has_value());
+}
+
+// What looks at a thing looks where it is drawn: its body's place while it moves in the physics, even under the sea
+TEST(PhysicsDrawMatrix, AThingIsLookedAtWhereItIsDrawn)
+{
+	const glm::vec3 standing {2587.0f, 14.7f, 2690.0f};
+	EXPECT_EQ(Position(standing, nullptr), standing);
+	PhysicsDrawPose pose {.axes = glm::mat3(1.0f), .origin = {2578.0f, 0.8f, 2790.0f}, .underSea = false};
+	EXPECT_EQ(Position(standing, &pose), pose.origin);
+	pose.underSea = true;
+	EXPECT_EQ(Position(standing, &pose), pose.origin);
 }

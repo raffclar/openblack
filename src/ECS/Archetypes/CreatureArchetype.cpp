@@ -17,12 +17,14 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureHair.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/CreatureHome.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -72,7 +74,7 @@ float CreatureArchetype::SpeciesStrength(CreatureType species)
 float CreatureArchetype::StartScale(CreatureType species)
 {
 	const auto* info = SpeciesInfo(species);
-	return creature_morph::ClampScale(info != nullptr ? info->startScale : k_UnknownStartScale);
+	return info != nullptr ? info->startScale : k_UnknownStartScale;
 }
 
 CreatureArchetype::Body CreatureArchetype::StartBody(CreatureType species)
@@ -92,7 +94,6 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 	const auto entity = registry.Create();
 	const auto morph =
 	    creature_morph::FromAttributes(body.alignment, body.fatness, body.strength, SpeciesStrength(creatureType));
-	const auto size = creature_morph::ClampScale(scale);
 	registry.Assign<Creature>(entity, Creature {.owner = playerName,
 	                                            .leashable = false,
 	                                            .species = creatureType,
@@ -100,7 +101,7 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 	                                            .alignment = body.alignment,
 	                                            .fatness = body.fatness,
 	                                            .strength = body.strength,
-	                                            .size = size});
+	                                            .size = scale});
 	// The body is drawn with the base mesh's skins, its shape blended towards the other meshes
 	registry.Assign<Mesh>(entity, creature::GetIdFromType(creatureType, CreatureBody::Appearance::Base));
 	registry.Assign<CreatureMorph>(entity, CreatureMorph {.shownFatness = body.fatness, .drawn = morph, .revision = 0});
@@ -113,12 +114,16 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 	registry.Assign<CreatureMarks>(entity);
 	registry.Assign<CreatureSkin>(entity);
 	registry.Assign<CreatureLocomotion>(entity);
-	registry.Assign<Transform>(entity, position, glm::eulerAngleY(yAngleRadians), glm::vec3(DrawnScale(creatureType, size)));
+	// Its own size is kept as given; only the size it is drawn at is kept within what a creature can be drawn at
+	registry.Assign<Transform>(entity, position, glm::eulerAngleY(yAngleRadians),
+	                           glm::vec3(DrawnScale(creatureType, creature_morph::ClampScale(scale))));
 	// Its owner keeps their creatures in the order they got them, the first being their primary creature
 	if (Locator::playerSystem::has_value())
 	{
 		Locator::playerSystem::value().AddCreature(entity);
 	}
+	// Its home is its player's temple's pen if the temple stands, else where it was made
+	registry.Assign<CreatureLeash>(entity).home = ecs::creature_home::HomeOf(registry, entity).value_or(position);
 	// A player's first creature is the one they can lead on the leash
 	if (Locator::leashSystem::has_value())
 	{

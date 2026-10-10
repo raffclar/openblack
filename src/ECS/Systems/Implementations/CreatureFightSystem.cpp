@@ -31,6 +31,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
 #include "Camera/FightCameraModel.h"
@@ -44,6 +45,8 @@
 #include "Creature/CreatureMode.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Archetypes/ArenaArchetype.h"
+#include "ECS/Components/Abode.h"
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureBody.h"
@@ -53,11 +56,18 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/DeadTree.h"
+#include "ECS/Components/Field.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Mobile.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Tree.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/CreatureHome.h"
+#include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
@@ -68,7 +78,10 @@
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/ThingCircles.h"
+#include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -249,20 +262,7 @@ std::vector<feedback::Capsule> BodyOf(const ecs::Registry& registry, entt::entit
 	}
 	return feedback::BodyCapsules(animation->skeleton.parents, animation->boneMatrices,
 	                              creature::PlacementMatrix(transform->position, transform->rotation, transform->scale),
-	                              feedback::k_BodyRadiusShare * HeightOf(body->size));
-}
-
-/// Where a creature is carried when its player has no temple and it passed out outside a fight, as on the testbed: the
-/// middle of the land, where the testbed puts its creatures
-std::optional<glm::vec3> NoPen()
-{
-	if (!Locator::terrainSystem::has_value())
-	{
-		return std::nullopt;
-	}
-	const auto& land = Locator::terrainSystem::value();
-	const auto middle = (land.GetExtent().minimum + land.GetExtent().maximum) * 0.5f;
-	return glm::vec3(middle.x, land.GetHeightAt(middle), middle.y);
+	                              feedback::k_BodyRadiusShare * HeightOf(ShownSize(*body)));
 }
 
 /// Sets a creature fizzing out of sight or back in
@@ -370,8 +370,42 @@ const land_avoid::Map& LandAvoidOf(ecs::Registry& registry)
 	return *context.landAvoid;
 }
 
-/// Whether an arena may lie over a land cell: one on the map, of land without water, that creatures can walk to
-bool UsableForArena(glm::ivec2 cell, const land_avoid::Map& avoid)
+/// What a thing standing fixed in a land cell is, as an arena looking for room sees it
+arena::ThingInCell ThingInCellOf(const ecs::Registry& registry, entt::entity thing)
+{
+	arena::ThingInCell seen {.kind = arena::ThingKind::Fixed,
+	                         .living = registry.AnyOf<Villager, Creature, Animal>(thing),
+	                         .hasModel = registry.AllOf<Mesh>(thing),
+	                         .height = ecs::world_objects::SizeOf(thing).height,
+	                         .circles = {}};
+	if (registry.AllOf<Temple>(thing))
+	{
+		seen.kind = arena::ThingKind::Temple;
+	}
+	else if (const auto* info = ecs::world_objects::AbodeInfoOf(thing);
+	         info != nullptr && (info->abodeType == AbodeType::StoragePit || info->abodeType == AbodeType::TownCentre))
+	{
+		seen.kind = arena::ThingKind::StoragePitOrTownCentre;
+	}
+	else if (registry.AnyOf<Abode, Field, SpellDispenser>(thing))
+	{
+		seen.kind = arena::ThingKind::Building;
+	}
+	else if (registry.AnyOf<Tree, DeadTree, MobileStatic>(thing))
+	{
+		// Trees, dead trees and statics can all be thrown about
+		seen.kind = arena::ThingKind::Movable;
+	}
+	for (const auto& circle : ecs::thing_circles::CirclesOf(registry, thing))
+	{
+		seen.circles.push_back({.centre = circle.centre, .radius = circle.radius});
+	}
+	return seen;
+}
+
+/// Whether an arena for a creature of a size may lie over a land cell: one on the map, of land without water, with
+/// nothing standing in the way, that creatures can walk to
+bool UsableForArena(const ecs::Registry& registry, glm::ivec2 cell, const land_avoid::Map& avoid, float creatureSize)
 {
 	constexpr auto k_Side = LandIslandInterface::k_MapCellsPerSide;
 	if (cell.x < 0 || cell.y < 0 || cell.x >= k_Side || cell.y >= k_Side || !Locator::terrainSystem::has_value())
@@ -383,8 +417,51 @@ bool UsableForArena(glm::ivec2 cell, const land_avoid::Map& avoid)
 	{
 		return false;
 	}
-	// TODO(creature-fights): the things standing in the cell, as the game checks them against the creature
+	// Only things standing fixed cover circles on the ground; things that move about never keep an arena off
+	if (Locator::entitiesMap::has_value())
+	{
+		const auto things = Locator::entitiesMap::value().GetFixedInGridCell(
+		    ecs::MapInterface::CellId(static_cast<uint16_t>(cell.x), static_cast<uint16_t>(cell.y)));
+		const bool blocked = std::ranges::any_of(things, [&](entt::entity thing) {
+			return registry.Valid(thing) && arena::KeepsArenaOff(ThingInCellOf(registry, thing), creatureSize, cell);
+		});
+		if (blocked)
+		{
+			return false;
+		}
+	}
 	return avoid.At(cell) == land_avoid::k_Land;
+}
+
+/// The nearest arena strictly closer than a distance in metres to a point in map units, if any
+std::optional<entt::entity> NearestArena(const ecs::Registry& registry, glm::ivec2 point, float within)
+{
+	std::vector<entt::entity> entities;
+	std::vector<glm::ivec2> places;
+	registry.Each<const CreatureArena>([&](entt::entity entity, const CreatureArena& found) {
+		entities.push_back(entity);
+		places.push_back(found.place);
+	});
+	if (const auto nearest = arena::Nearest(places, point, within))
+	{
+		return entities.at(*nearest);
+	}
+	return std::nullopt;
+}
+
+/// A new arena of a radius wanted, or smaller, at the nearest place clear for a creature of a size round a point in map
+/// units; none without room. It lasts only for the fight that takes it.
+std::optional<entt::entity> MakeArena(ecs::Registry& registry, glm::ivec2 start, float wanted, float creatureSize)
+{
+	const auto& avoid = LandAvoidOf(registry);
+	const auto placed = arena::Place(start, wanted, [&registry, &avoid, creatureSize](glm::ivec2 cell) {
+		return UsableForArena(registry, cell, avoid, creatureSize);
+	});
+	if (!placed.has_value())
+	{
+		return std::nullopt;
+	}
+	return ecs::archetypes::ArenaArchetype::Create(placed->centre, placed->radius, true);
 }
 
 /// The arena two creatures about to fight take: the nearest one near enough to the middle between them, shrunk to the
@@ -400,29 +477,16 @@ std::optional<entt::entity> TakeArena(ecs::Registry& registry, entt::entity crea
 		                            static_cast<double>(map_coords::k_FixedPerMetre));
 	};
 	const glm::ivec2 start {middle(from.x, to.x), middle(from.z, to.z)};
-	const float wanted = fight::ArenaRadius(body.size, registry.Get<const Creature>(opponent).size);
+	const float wanted = fight::ArenaRadius(ShownSize(body), ShownSize(registry.Get<const Creature>(opponent)));
 
-	std::vector<entt::entity> entities;
-	std::vector<glm::ivec2> places;
-	registry.Each<const CreatureArena>([&](entt::entity entity, const CreatureArena& found) {
-		entities.push_back(entity);
-		places.push_back(found.place);
-	});
-	if (const auto nearest = arena::Nearest(places, start, arena::ReuseDistance(RunShareOf(body.species), body.size)))
+	if (const auto nearest = NearestArena(registry, start, arena::ReuseDistance(RunShareOf(body.species), ShownSize(body))))
 	{
-		const auto entity = entities.at(*nearest);
-		auto& taken = registry.Get<CreatureArena>(entity);
+		auto& taken = registry.Get<CreatureArena>(*nearest);
 		taken.radius = std::min(taken.radius, wanted);
 		taken.temporary = false;
-		return entity;
+		return nearest;
 	}
-	const auto& avoid = LandAvoidOf(registry);
-	const auto placed = arena::Place(start, wanted, [&avoid](glm::ivec2 cell) { return UsableForArena(cell, avoid); });
-	if (!placed.has_value())
-	{
-		return std::nullopt;
-	}
-	return ecs::archetypes::ArenaArchetype::Create(placed->centre, placed->radius, true);
+	return MakeArena(registry, start, wanted, ShownSize(body));
 }
 
 /// A fight is on in the arena: its ring of light stands and its sound plays
@@ -438,7 +502,7 @@ void StartArenaFight(ecs::Registry& registry, entt::entity entity, entt::entity 
 	}
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlaySoundEffect(k_ArenaDrawnSound.value(), registry.Get<const Transform>(entity).position);
+		audio::PlayGameSoundEffect(k_ArenaDrawnSound.value(), registry.Get<const Transform>(entity).position);
 	}
 }
 
@@ -523,7 +587,6 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 		    .arena = arena,
 		    .madeArena = self == creature,
 		    .arenaEntity = *arenaEntity,
-		    .startPosition = registry.Get<const Transform>(self).position,
 		};
 		auto& fighter = fighting.fighter;
 		fighter.health = fight::FightHealthAtStart(bodyNeeds.life);
@@ -553,7 +616,7 @@ fight_view::Fighter ViewedFighter(const ecs::Registry& registry, entt::entity cr
 	const auto* locomotion = registry.TryGet<const CreatureLocomotion>(creature);
 	return {.position = registry.Get<const Transform>(creature).position,
 	        .radius = locomotion != nullptr ? locomotion->radius : 5.0f,
-	        .height = HeightOf(registry.Get<const Creature>(creature).size)};
+	        .height = HeightOf(ShownSize(registry.Get<const Creature>(creature)))};
 }
 } // namespace
 
@@ -789,21 +852,80 @@ void CreatureFightSystem::ReleaseCharge(entt::entity creature, float heldMs)
 void CreatureFightSystem::SetAutoFighting(entt::entity creature, bool autoFight)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	if (auto* fighting = registry.Valid(creature) ? registry.TryGet<CreatureFighting>(creature) : nullptr)
+	if (!registry.Valid(creature) || !registry.AllOf<Creature>(creature))
 	{
-		fighting->fighter.autoFight = autoFight;
-		if (autoFight)
-		{
-			fighting->fighter.control = fight::Control::Computer;
-		}
+		return;
 	}
+	// The computer fights it, or nobody does and it makes only the moves queued for it
+	const auto control = autoFight ? fight::Control::Computer : fight::Control::None;
+	if (auto* fighting = registry.TryGet<CreatureFighting>(creature))
+	{
+		fighting->fighter.control = control;
+	}
+	auto& record = registry.AllOf<CreatureFightRecord>(creature) ? registry.Get<CreatureFightRecord>(creature)
+	                                                             : registry.Assign<CreatureFightRecord>(creature);
+	record.control = control;
 }
 
 bool CreatureFightSystem::IsAutoFighting(entt::entity creature) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature))
+	{
+		return false;
+	}
+	// Anyone choosing its moves, the player or the computer
+	if (const auto* fighting = registry.TryGet<const CreatureFighting>(creature))
+	{
+		return fighting->fighter.control != fight::Control::None;
+	}
+	const auto* record = registry.TryGet<const CreatureFightRecord>(creature);
+	return record != nullptr && record->control != fight::Control::None;
+}
+
+fight::FightAction CreatureFightSystem::CurrentFightAction(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature))
+	{
+		return fight::FightAction::Other;
+	}
+	if (const auto* fighting = registry.TryGet<const CreatureFighting>(creature))
+	{
+		return fight::FightActionOf(fighting->fighter.animation);
+	}
+	return registry.AllOf<CreatureKnockedOut>(creature) ? fight::FightAction::Fainted : fight::FightAction::Other;
+}
+
+uint32_t CreatureFightSystem::QueuedBlows(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* fighting = registry.Valid(creature) ? registry.TryGet<const CreatureFighting>(creature) : nullptr;
-	return fighting != nullptr && (fighting->fighter.autoFight || fighting->fighter.control == fight::Control::Computer);
+	return fighting != nullptr ? fight::QueuedBlows(fighting->fighter.queue.Moves()) : 0;
+}
+
+std::optional<CreatureFightSystemInterface::FoundArena>
+CreatureFightSystem::FindOrMakeArena(const glm::vec3& point, entt::entity creature, entt::entity other, float within)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* first = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	const auto* second = registry.Valid(other) ? registry.TryGet<const Creature>(other) : nullptr;
+	if (first == nullptr || second == nullptr)
+	{
+		return std::nullopt;
+	}
+	const glm::ivec2 start {map_coords::ToFixed(point.x), map_coords::ToFixed(point.z)};
+	// An arena found is taken as it is, whatever its size
+	if (const auto nearest = NearestArena(registry, start, within))
+	{
+		return FoundArena {.arena = *nearest, .made = false};
+	}
+	const float wanted = fight::ArenaRadius(ShownSize(*first), ShownSize(*second));
+	if (const auto made = MakeArena(registry, start, wanted, ShownSize(*first)))
+	{
+		return FoundArena {.arena = *made, .made = true};
+	}
+	return std::nullopt;
 }
 
 std::optional<entt::entity> CreatureFightSystem::PlayersFighter() const
@@ -836,7 +958,7 @@ bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& ray
 	const auto opponent = fighting.opponent;
 	const auto& selfAt = registry.Get<const Transform>(*self).position;
 	const auto& opponentAt = registry.Get<const Transform>(opponent).position;
-	const auto opponentHeight = HeightOf(registry.Get<const Creature>(opponent).size);
+	const auto opponentHeight = HeightOf(ShownSize(registry.Get<const Creature>(opponent)));
 	const auto onOpponent = feedback::RayHit(rayOrigin, rayDirection, BodyOf(registry, opponent));
 	const auto onSelf = feedback::RayHit(rayOrigin, rayDirection, BodyOf(registry, *self));
 
@@ -982,7 +1104,6 @@ void CreatureFightSystem::KnockOut(entt::entity creature)
 		return;
 	}
 	// In a duel, its opponent wins it
-	std::optional<glm::vec3> start;
 	if (auto* fighting = registry.TryGet<CreatureFighting>(creature))
 	{
 		if (fighting->stage == CreatureFighting::Stage::Duel && InDuel(registry, fighting->opponent))
@@ -990,10 +1111,9 @@ void CreatureFightSystem::KnockOut(entt::entity creature)
 			Win(fighting->opponent, creature);
 			return;
 		}
-		start = fighting->startPosition;
 		Leave(creature);
 	}
-	Faint(creature, start);
+	Faint(creature);
 }
 
 void CreatureFightSystem::ForceFaint(entt::entity creature)
@@ -1004,16 +1124,14 @@ void CreatureFightSystem::ForceFaint(entt::entity creature)
 	{
 		return;
 	}
-	std::optional<glm::vec3> start;
-	if (const auto* fighting = registry.TryGet<const CreatureFighting>(creature))
+	if (registry.AllOf<CreatureFighting>(creature))
 	{
-		start = fighting->startPosition;
 		Leave(creature);
 	}
-	Faint(creature, start);
+	Faint(creature);
 }
 
-void CreatureFightSystem::Faint(entt::entity creature, std::optional<glm::vec3> start)
+void CreatureFightSystem::Faint(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (Locator::creatureLocomotionSystem::has_value())
@@ -1052,13 +1170,11 @@ void CreatureFightSystem::Faint(entt::entity creature, std::optional<glm::vec3> 
 	{
 		creature_spells::TryFinishAll(spells->spells);
 	}
-	// It is taken to its pen, or else back to where it stood as its fight started; passing out outside a fight with no
-	// temple for a pen, to the middle of the land
+	// It is taken to its home: its temple's pen while the temple stands, else the home it was last given (where it was
+	// made, unless a script moved it). Only a creature with no home at all stays where it lies.
 	const auto here = registry.Get<const Transform>(creature).position;
-	const auto fallback = start.has_value() ? start : NoPen();
 	registry.AssignOrReplace<CreatureKnockedOut>(
-	    creature,
-	    CreatureKnockedOut {.rest = rest, .home = creature_home::HomeOf(registry, creature).value_or(fallback.value_or(here))});
+	    creature, CreatureKnockedOut {.rest = rest, .home = creature_home::HomeOf(registry, creature).value_or(here)});
 }
 
 void CreatureFightSystem::KillPermanently(entt::entity creature)
@@ -1211,7 +1327,7 @@ void CreatureFightSystem::StartFightsFromMinds()
 			    const auto* record = registry.TryGet<const CreatureFightRecord>(entity);
 			    const auto since = record != nullptr ? record->secondsSinceFight : fight::k_SecondsBetweenFights;
 			    if (nearest.has_value() &&
-			        fight::WantsToFight(anger.value, LifeOf(registry, entity), best, creature.size, since))
+			        fight::WantsToFight(anger.value, LifeOf(registry, entity), best, ShownSize(creature), since))
 			    {
 				    wanted.emplace_back(entity, *nearest);
 			    }
@@ -1273,8 +1389,8 @@ void CreatureFightSystem::ProcessStages()
 				fighting->played = true;
 				if (locomotion != nullptr)
 				{
-					const auto spot = fight::ArenaSpot(fighting->arena, body.size, fighting->madeArena);
-					locomotion->MoveTo(entity, spot, Pace::Walk, 0.0f, fight::ArrivalDistance(body.size));
+					const auto spot = fight::ArenaSpot(fighting->arena, ShownSize(body), fighting->madeArena);
+					locomotion->MoveTo(entity, spot, Pace::Walk, 0.0f, fight::ArrivalDistance(ShownSize(body)));
 				}
 			}
 			else if (!moving(entity) || fighting->stageSeconds > k_ApproachSeconds)
@@ -1513,7 +1629,7 @@ void CreatureFightSystem::ProcessDuels()
 				fighter.control = fight::Control::Computer;
 			}
 		}
-		const bool computer = fighter.autoFight || fighter.control == fight::Control::Computer;
+		const bool computer = fighter.control == fight::Control::Computer;
 		if (!FacesOpponent(registry, entity, opponent))
 		{
 			// It turns to its opponent first
@@ -1646,8 +1762,8 @@ void CreatureFightSystem::AttemptBlow(entt::entity creature, fight::Band band, f
 	const auto gap = glm::distance(selfAt, opponentAt) - opponentRadius;
 	const auto scale = std::abs(registry.Get<const Transform>(creature).scale.x);
 	const auto stepLength = glm::length(DisplacementOf(body.species, fight::animations::k_StepForward)) * scale;
-	const auto choice = fight::ChooseAttack(fighting.reaches, band, gap, stepLength, body.size,
-	                                        HeightOf(registry.Get<const Creature>(opponent).size));
+	const auto choice = fight::ChooseAttack(fighting.reaches, band, gap, stepLength, ShownSize(body),
+	                                        HeightOf(ShownSize(registry.Get<const Creature>(opponent))));
 	if (choice.animation.has_value())
 	{
 		fight::Enter(fighting.fighter, fight::State::Action, *choice.animation, speed);
@@ -1809,8 +1925,8 @@ void CreatureFightSystem::TestHit(entt::entity creature)
 	const auto reach = found->reach - (rootAhead * fighting.movedShare);
 	const auto& at = registry.Get<const CreatureLocomotion>(creature).toPosition;
 	const auto point = glm::vec3(at.x + (ahead.x * reach), at.y + found->height, at.z + (ahead.y * reach));
-	const auto tolerance = k_BlowReachPerSize * body.size * (attacker.special ? 2.0f : 1.0f);
-	const auto opponentHeight = HeightOf(opponentBody.size);
+	const auto tolerance = k_BlowReachPerSize * ShownSize(body) * (attacker.special ? 2.0f : 1.0f);
+	const auto opponentHeight = HeightOf(ShownSize(opponentBody));
 	const auto capsules = BodyOf(registry, opponent);
 	bool hit = false;
 	if (!capsules.empty())
@@ -1839,8 +1955,8 @@ void CreatureFightSystem::TestHit(entt::entity creature)
 	const auto direction = fight::RecoilDirectionOf({local.x / victimRadius, (heightShare - 0.5f) * 2.0f});
 	const auto result = fight::ResolveBlow(
 	    {
-	        .attackerSize = body.size,
-	        .defenderSize = opponentBody.size,
+	        .attackerSize = ShownSize(body),
+	        .defenderSize = ShownSize(opponentBody),
 	        .attackerStrength = body.strength,
 	        .defenderStrength = opponentBody.strength,
 	        .speed = attacker.speed,
@@ -1928,10 +2044,8 @@ void CreatureFightSystem::Win(entt::entity winner, entt::entity loser)
 	{
 		++record->wins;
 	}
-	const auto* lost = registry.TryGet<const CreatureFighting>(loser);
-	const auto start = lost != nullptr ? std::optional(lost->startPosition) : std::nullopt;
 	Leave(loser);
-	Faint(loser, start);
+	Faint(loser);
 	if (auto* fighting = registry.TryGet<CreatureFighting>(winner))
 	{
 		fighting->stage = CreatureFighting::Stage::Celebrate;
@@ -1940,6 +2054,18 @@ void CreatureFightSystem::Win(entt::entity winner, entt::entity loser)
 		fight::Enter(fighting->fighter, fight::State::Finish);
 		auto& won = registry.Get<CreatureAnimation>(winner);
 		won.face = creature_layers::RelaxFace(won.face);
+	}
+	// A fight won outright by a creature no script controls is seen by the living around it, its time running at once:
+	// the villagers' towns move its player's alignment by what the reaction table says of a fight won
+	if (!registry.AnyOf<ScriptControlled>(winner) && Locator::reactionSystem::has_value())
+	{
+		// TODO(creature-fights): how impressive the winner is to those watching (the creature's own impressiveness by
+		// what it does and the town's attitude to it) is not modelled, so the fight won gives no belief yet
+		Locator::reactionSystem::value().Create({.initiator = winner,
+		                                         .type = Reaction::ReactToFightWon,
+		                                         .player = registry.Get<const Creature>(winner).owner,
+		                                         .position = registry.Get<const Transform>(winner).position,
+		                                         .onCast = true});
 	}
 }
 
@@ -1960,6 +2086,7 @@ void CreatureFightSystem::EndFightFor(entt::entity creature, bool won)
 	auto& record = registry.AllOf<CreatureFightRecord>(creature) ? registry.Get<CreatureFightRecord>(creature)
 	                                                             : registry.Assign<CreatureFightRecord>(creature);
 	record.tendency = fighting->fighter.tendency;
+	record.control = fighting->fighter.control;
 	record.foughtBefore = true;
 	record.secondsSinceFight = 0.0f;
 	if (Locator::creatureMindSystem::has_value())
@@ -2032,7 +2159,7 @@ void CreatureFightSystem::ProcessKnockedOut()
 		switch (knockedOut.stage)
 		{
 		case CreatureKnockedOut::Stage::Lying:
-			if (!knockedOut.permanent && knockedOut.seconds >= fight::FaintSeconds(body.size))
+			if (!knockedOut.permanent && knockedOut.seconds >= fight::FaintSeconds(ShownSize(body)))
 			{
 				// A player's creature is taken home; any other comes round where it lies
 				if (body.owner != PlayerNames::NEUTRAL)

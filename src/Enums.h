@@ -1652,18 +1652,18 @@ enum class SpookyEnum
 	SpookyName_05 = 4,
 };
 
-enum class HighlightInfo
+/// The rows of the script highlights' info table, by the number a script gives when it makes one. The script headers'
+/// names (bronze, silver, gold) are a row out from what the shipped table holds; these follow the table.
+enum class HighlightInfo : uint8_t
 {
-	ScriptHighlightInfoScriptBronze = 0,
-	ScriptHighlightInfoScriptSilver = 1,
-	ScriptHighlightInfoScriptGold = 2,
-	// ScriptHighlightInfoScoreboard          = 3, // CREATUREISLE
-	// ScriptHighlightInfoScoreboardBig       = 4, // CREATUREISLE
-	// ScriptHighlightInfoScriptSilverCancel  = 5, // CREATUREISLE
-	// ScriptHighlightInfoScriptGoldCancel    = 6, // CREATUREISLE
-	// ScriptHighlightInfoScriptSwapCreature  = 7, // CREATUREISLE
-	// ScriptHighlightInfoScriptFightCreature = 8, // CREATUREISLE
-	// ScriptHighlightInfoBrotherhood         = 9, // CREATUREISLE
+	/// A plain scroll, with no glints
+	Scroll = 0,
+	/// A "did you know" sign, which gives a tip when tapped
+	DidYouKnowSign = 1,
+	/// A silver scroll: a side challenge
+	Silver = 2,
+	/// A gold scroll: a story challenge
+	Gold = 3,
 };
 
 enum class MapShieldInfo
