@@ -14,6 +14,15 @@
 namespace openblack
 {
 
+/// Hours of the morning at which the sky reaches each state, mirrored around midday for the evening
+struct DayNightTimes
+{
+	float nightFull;
+	float duskStart;
+	float duskEnd;
+	float dayFull;
+};
+
 /// Black & White's clock of day and night, in hours from 0 to 24.
 ///
 /// The visual time runs evenly, a whole day in a number of seconds of game time, moving on once a turn. The sky turns
@@ -41,6 +50,7 @@ public:
 	void SetCycleFromLand(float duration, float night, float change);
 	/// Whether the clock runs
 	void SetRunning(bool running) { _scale = running ? 1.0f : 0.0f; }
+	[[nodiscard]] bool IsRunning() const { return _scale != 0.0f; }
 	/// Jumps to an hour of script time
 	void SetScriptTime(float hour);
 	/// Moves to an hour of script time over `seconds` of game time, the short way round
@@ -50,6 +60,10 @@ public:
 	[[nodiscard]] float GetScriptTime() const { return VisualToScript(_visualTime); }
 	/// The hours of the visual time the sky turns at, as k_ScriptTimes
 	[[nodiscard]] const std::array<float, 4>& GetVisualTimes() const { return _times; }
+	[[nodiscard]] DayNightTimes GetDayNightTimes() const
+	{
+		return {.nightFull = _times[0], .duskStart = _times[1], .duskEnd = _times[2], .dayFull = _times[3]};
+	}
 	/// The sky at an hour of visual time: 0 at night, 1 at dusk and 2 by day, between them as it turns
 	[[nodiscard]] float SkyType(float visualHour) const;
 	/// Whether the visual time is night, as the game judges it for its houses' windows

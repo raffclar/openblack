@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <vector>
 
+#include <glm/gtc/matrix_transform.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
@@ -226,6 +227,28 @@ const GObjectInfo* world_objects::InfoOf(entt::entity object)
 	return nullptr;
 }
 
+std::vector<model_surface::Triangle> world_objects::DrawnTrianglesOf(entt::entity object)
+{
+	const auto* mesh = Locator::entitiesRegistry::value().TryGet<const Mesh>(object);
+	if (mesh == nullptr || !Locator::resources::has_value())
+	{
+		return {};
+	}
+	const auto& files = Locator::resources::value().GetL3DFiles();
+	if (!files.Contains(mesh->id))
+	{
+		return {};
+	}
+	return model_surface::DrawnTriangles(*files.Handle(mesh->id), {.detailLevels = 1, .latestState = 0});
+}
+
+glm::mat4 world_objects::PlacementOf(entt::entity object)
+{
+	const auto& transform = Locator::entitiesRegistry::value().Get<const Transform>(object);
+	return glm::translate(glm::mat4(1.0f), transform.position) * glm::mat4(transform.rotation) *
+	       glm::scale(glm::mat4(1.0f), transform.scale);
+}
+
 world_objects::Size world_objects::SizeOf(entt::entity object)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -289,8 +312,10 @@ float world_objects::ReduceLife(entt::entity object, float damage)
 	if (auto* needs = registry.TryGet<CreatureNeeds>(object))
 	{
 		needs->needs.life = std::max(needs->needs.life - damage, 0.0f);
-		// A creature with no life left is knocked out
+		// A fighting creature with no life left loses its fight there and then. Out of a fight it passes out on its next
+		// turn, as its body finds it has no life left
 		if (needs->needs.life <= 0.0f && Locator::creatureFightSystem::has_value() &&
+		    Locator::creatureFightSystem::value().IsFighting(object) &&
 		    !Locator::creatureFightSystem::value().IsKnockedOut(object))
 		{
 			Locator::creatureFightSystem::value().KnockOut(object);
@@ -480,8 +505,17 @@ void world_objects::Remove(entt::entity object)
 		{
 			if (auto* abode = registry.TryGet<Abode>(villager->abode))
 			{
-				abode->inhabitants.erase(object);
+				std::erase(abode->inhabitants, object);
 			}
+		}
+	}
+	// A building's people are made homeless as it goes, the newest first
+	if (const auto* abode = registry.TryGet<const Abode>(object); abode != nullptr && Locator::townSystem::has_value())
+	{
+		const auto inhabitants = abode->inhabitants;
+		for (const auto villager : inhabitants)
+		{
+			villager_home::HomeDeleted(villager);
 		}
 	}
 	registry.Destroy(object);

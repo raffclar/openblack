@@ -27,10 +27,12 @@ struct Spell;
 namespace openblack::ecs::systems
 {
 
-/// The forests the forest miracle plants. A forest miracle plants all its trees at once on a
-/// spiral round where it was cast, of the kinds the ground there grows; they grow a little each turn while the miracle
-/// lasts, and wither away once it has gone, the forest going with its last tree. They also grow by themselves as any tree
-/// short of its size does, which the vegetation system sees to.
+/// The land's forests and the forests the forest miracle plants.
+///
+/// Every game turn each forest, the newest first, grows its growing trees and now and then spreads, planting a young tree
+/// beside one of its grown trees (see Nature/ForestGrowth.h); trees in no forest never grow. A forest miracle's forest
+/// is a forest like any other, and besides, while the miracle lasts all its trees grow a little each turn; once it has
+/// gone they wither away. A forest left with no trees goes some while later.
 class ForestSystemInterface
 {
 public:
@@ -55,7 +57,7 @@ public:
 	[[nodiscard]] virtual std::optional<entt::entity> LandForestOf(uint32_t id) const = 0;
 	/// The land's forests, the newest first
 	[[nodiscard]] virtual std::vector<entt::entity> LandForests() const = 0;
-	/// A forest's grown or still growing trees, the nearest its place first (the older first when as near)
+	/// A forest's grown or still growing trees, the nearest its place first (the one listed first when as near)
 	[[nodiscard]] virtual std::vector<entt::entity> TreesOf(entt::entity forest, bool growing) const = 0;
 	/// The wood in a forest: its big forest's and every tree's
 	[[nodiscard]] virtual float WoodOf(entt::entity forest) const = 0;
@@ -70,7 +72,13 @@ public:
 	/// forests, into a forest of its own (taking a tree from another town's such forest when it stands nearer this town)
 	virtual void MakeScenicForests() = 0;
 
-	/// Once a game turn, after the miracles: the forests grow or wither
+	/// A tree joins a forest by its number: among its growing trees when made to grow and still short of its largest
+	/// size, or else among its grown trees
+	virtual void JoinForest(entt::entity tree, uint32_t forest) = 0;
+	/// Once a game turn, after the fields and before the living: each forest, the newest first, grows its growing trees
+	/// and may spread, and one long empty goes
+	virtual void GrowForests() = 0;
+	/// Once a game turn, after the miracles: the forest miracles' forests grow or wither
 	virtual void ProcessTurn() = 0;
 	/// A new land: no forests
 	virtual void Reset() = 0;

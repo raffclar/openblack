@@ -32,6 +32,19 @@ struct LandForest
 	uint32_t made {0};
 };
 
+/// On every forest, the land's and the forest miracles': what its turn keeps
+struct ForestTurns
+{
+	/// Its number, which its trees' ForestMember has
+	uint32_t id {0};
+	/// The order the forests were made in: they are met newest first
+	uint32_t made {0};
+	/// Turns left once it has been seen with no trees, none until then
+	uint16_t emptyCountdown {0};
+	/// Turns it has gone without spreading
+	uint16_t spreadCounter {0};
+};
+
 /// The forests near a town, which its people go to for wood
 struct TownForests
 {

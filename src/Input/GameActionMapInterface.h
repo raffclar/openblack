@@ -20,6 +20,7 @@
 #include <glm/vec3.hpp>
 
 #include "BindableActions.h"
+#include "InputLock.h"
 #include "KeyBindings.h"
 
 union SDL_Event;
@@ -175,6 +176,24 @@ public:
 	/// Reads the scripted pointer in place of the mouse, or the mouse again
 	virtual void SetScriptedPointer([[maybe_unused]] std::optional<ScriptedPointer> pointer) {}
 	[[nodiscard]] virtual std::optional<ScriptedPointer> GetScriptedPointer() const { return std::nullopt; }
+	/// While an agent drives the game through the debug inspector, the player's mouse and keyboard are kept out (see
+	/// InputLock): their events are dropped before the game, the debug windows and the camera see them, and the pointer
+	/// stays where the game's own input last put it
+	virtual void SetInputLockMode([[maybe_unused]] LockMode mode) {}
+	[[nodiscard]] virtual LockMode GetInputLockMode() const { return LockMode::Unlocked; }
+	/// Once a frame with the inspector: whether a client is connected, and the seconds since the last frame
+	virtual void UpdateInputLock([[maybe_unused]] bool clientConnected, [[maybe_unused]] float seconds) {}
+	/// Whether the player's input is kept out now
+	[[nodiscard]] virtual bool IsPlayerInputBlocked() const { return false; }
+	/// Whether an event from the window's queue reaches the game, under the lock
+	[[nodiscard]] virtual bool AdmitEvent([[maybe_unused]] const SDL_Event& event) { return true; }
+	/// Where the pointer the game follows is in the window, and its buttons held as SDL's masks: the mouse's, the scripted
+	/// pointer's, or none held while the player's devices are kept out
+	[[nodiscard]] virtual glm::ivec2 GetPointerPosition() const { return glm::ivec2(GetMousePosition()); }
+	[[nodiscard]] virtual uint32_t GetPointerButtons() const { return 0; }
+	/// A key held by a script or the debug inspector rather than on the keyboard, by its SDL scancode: it stays held until
+	/// its own key-up comes, though the keyboard says it is up
+	virtual void HoldScriptedKey([[maybe_unused]] int scancode, [[maybe_unused]] bool held) {}
 	/// Puts the cursor, and the pointer, somewhere in the window, as the camera does dragging round the screen's edge
 	virtual void WarpCursor([[maybe_unused]] glm::ivec2 position) {}
 	/// Where the cursor was put this frame, if it was

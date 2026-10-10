@@ -33,6 +33,8 @@ public:
 	/// Slides the cinema bars in or out. Bringing them in hides the game's dialogs, and while a script task has them
 	/// in, `owner` being its number, the player's interface is put away. 0 is for the game's own bars.
 	virtual void SetWideScreen(bool on, uint32_t owner) = 0;
+	/// The bars all the way in at once, as a full-screen video brings them; they then slide out as usual
+	virtual void SnapWideScreen() = 0;
 	[[nodiscard]] virtual bool IsWideScreenOn() const = 0;
 	/// The script task that brought the bars in, 0 for none
 	[[nodiscard]] virtual uint32_t GetWideScreenOwner() const = 0;

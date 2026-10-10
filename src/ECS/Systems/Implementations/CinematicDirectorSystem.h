@@ -29,6 +29,7 @@ public:
 	[[nodiscard]] uint32_t GetFadeColour() const override;
 
 	void SetWideScreen(bool on, uint32_t owner) override;
+	void SnapWideScreen() override { _bars.Snap(); }
 	[[nodiscard]] bool IsWideScreenOn() const override;
 	[[nodiscard]] uint32_t GetWideScreenOwner() const override;
 	[[nodiscard]] bool IsWideScreenTransitionFinished() const override;
