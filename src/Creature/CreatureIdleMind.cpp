@@ -37,7 +37,7 @@ float RandomFraction(const Random& random)
 bool IsSubMove(Movement::Kind kind)
 {
 	return kind == Movement::Kind::GoNearObject || kind == Movement::Kind::GetAwayFromObject ||
-	       kind == Movement::Kind::TurnToFaceObject;
+	       kind == Movement::Kind::TurnToFaceObject || kind == Movement::Kind::ToThrowPosition;
 }
 
 void FinishStep(IdleMind& mind)
@@ -216,6 +216,64 @@ std::vector<Step> creature_mind::Hurl(uint32_t object, glm::vec2 target, const R
 std::vector<Step> creature_mind::PutDownHeld()
 {
 	return {Object({.kind = ObjectOrder::Kind::PutDown})};
+}
+
+namespace
+{
+/// Bringing food out of the sea at a fish farm's shoal: walking there, emptying its hand if need be, and the food
+/// appearing at its feet to be picked up. Fishing pulls no face of its own.
+void Fish(std::vector<Step>& agenda, const creature_mind::FishingTrip& trip)
+{
+	Step walk {.kind = Step::Kind::Move};
+	walk.movement = {
+	    .kind = Movement::Kind::ToPoint, .point = trip.shoal, .maxDistance = trip.arriveWithin, .giveUpIfUnreachable = true};
+	agenda.push_back(walk);
+	// Its hand must be free to take the food
+	if (trip.putDownFirst)
+	{
+		agenda.push_back(Object({.kind = ObjectOrder::Kind::PutDown}));
+	}
+	agenda.push_back(Object({.kind = ObjectOrder::Kind::FishFromSea}));
+}
+} // namespace
+
+std::vector<Step> creature_mind::FishAndEat(glm::vec2 shoal, float arriveWithin, bool putDownFirst)
+{
+	std::vector<Step> agenda;
+	Fish(agenda, {.shoal = shoal, .arriveWithin = arriveWithin, .putDownFirst = putDownFirst});
+	agenda.push_back(Object({.kind = ObjectOrder::Kind::Eat}, Effect::Eat));
+	return agenda;
+}
+
+std::vector<Step> creature_mind::GiveFishToStore(const std::optional<FishingTrip>& trip, uint32_t store, float height)
+{
+	std::vector<Step> agenda;
+	if (trip.has_value())
+	{
+		Fish(agenda, *trip);
+	}
+	Step goTo {.kind = Step::Kind::Move, .face = creature_face::Cue::Compassion};
+	goTo.movement = {.kind = Movement::Kind::ToThrowPosition, .object = store, .maxDistance = height};
+	agenda.push_back(goTo);
+	Step turn {.kind = Step::Kind::Move, .seconds = k_FaceStoreSeconds, .effect = Effect::Completed};
+	turn.movement = {.kind = Movement::Kind::TurnToFaceObject, .object = store};
+	agenda.push_back(turn);
+	agenda.push_back(Object({.kind = ObjectOrder::Kind::ThrowInStore, .object = store}));
+	return agenda;
+}
+
+std::vector<Step> creature_mind::TakeFishTo(const std::optional<FishingTrip>& trip, glm::vec2 place, float height)
+{
+	std::vector<Step> agenda;
+	if (trip.has_value())
+	{
+		Fish(agenda, *trip);
+	}
+	Step walk {.kind = Step::Kind::Move};
+	walk.movement = {.kind = Movement::Kind::ToPoint, .point = place, .maxDistance = height, .giveUpIfUnreachable = true};
+	agenda.push_back(walk);
+	agenda.push_back(Object({.kind = ObjectOrder::Kind::PutDown}));
+	return agenda;
 }
 
 std::vector<Step> creature_mind::Drink(glm::vec2 shore, glm::vec2 water)
@@ -757,6 +815,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		{
 			if (senses.subMove == SubMove::Done)
 			{
+				commands.effect = step.effect;
 				FinishStep(mind);
 			}
 			else if (senses.subMove == SubMove::Failed)

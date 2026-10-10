@@ -100,6 +100,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
@@ -117,6 +118,7 @@
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
+#include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
@@ -131,6 +133,7 @@
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
+#include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
@@ -172,6 +175,7 @@
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
+#include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -203,6 +207,8 @@ using namespace std::chrono_literals;
 
 namespace
 {
+/// The hand's splash, its sound and the scare it gives the fish are this high over the sea
+constexpr float k_HandSplashHeight = 0.2f;
 // Where the camera starts on the testbed: above and behind the middle of the map
 constexpr float k_TestbedCameraHeight = 60.0f;
 /// How far the testbed's player's influence reaches from its middle, and the prayer power their worship has stored
@@ -993,6 +999,8 @@ bool Game::GameLogicLoop() noexcept
 	Locator::influenceSystem::value().ProcessTurn(Locator::time::value().GetTurn());
 	// The crops in the fields grow
 	Locator::fieldSystem::value().ProcessTurn(Locator::time::value().GetTurn());
+	// The fish come back to the fish farms
+	Locator::fishFarmSystem::value().ProcessTurn(Locator::time::value().GetTurn());
 	// The trees that are still growing grow, faster in the rain
 	Locator::vegetation::value().ProcessTurn();
 	{
@@ -1037,6 +1045,8 @@ bool Game::GameLogicLoop() noexcept
 		// Fights start and end, the fighters choose their moves, and creatures knocked out come round
 		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
 		Locator::creatureFightSystem::value().ProcessTurn();
+		// Creatures fizz on out of sight or back in, after they have acted
+		Locator::creatureFizzSystem::value().ProcessTurn();
 	}
 	{
 		auto actions = profiler.BeginScoped(Profiler::Stage::LivingActionUpdate);
@@ -1149,6 +1159,11 @@ bool Game::GameLogicLoop() noexcept
 	if (Locator::handGrabSystem::has_value())
 	{
 		Locator::handGrabSystem::value().ProcessTurn();
+	}
+	// At the end of the turn the vortices between the lands open, close and level the ground under them
+	if (Locator::vortexSystem::has_value())
+	{
+		Locator::vortexSystem::value().ProcessTurn();
 	}
 	// Once the whole turn is over, the local player whose temple is being destroyed has lost
 	if (Locator::templeDestructionSystem::has_value())
@@ -1462,12 +1477,19 @@ bool Game::Update() noexcept
 	Locator::cloudSystem::value().Update(gameTime);
 	// The rain falls as the storm nearest the camera has it
 	Locator::rainSystem::value().Update(std::chrono::duration<float>(gameTime).count(), camera.GetOrigin());
+	// The static the fizzing creatures are drawn through slides across them
+	Locator::creatureFizzSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	// The rings on the water grow and fade
 	Locator::waterRingSystem::value().Update(gameTime);
 	{
 		// The flames, steam and smoke of what burns move on
 		auto fire = profiler.BeginScoped(Profiler::Stage::FireUpdate);
 		Locator::fireSystem::value().Update(std::chrono::duration<float>(gameTime).count());
+	}
+	// The vortices' swirls and effects step with the frame, and their marks on the ground follow their openness
+	if (Locator::vortexSystem::has_value())
+	{
+		Locator::vortexSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	}
 	// The reward chests from the sky fall and thump down, and their dust fades
 	if (Locator::rewardSystem::has_value())
@@ -1499,7 +1521,7 @@ bool Game::Update() noexcept
 		// The animals are drawn between their last two turns, their models posed by their clips
 		auto animals = profiler.BeginScoped(Profiler::Stage::AnimalsUpdate);
 		Locator::animalSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
-		// The villagers are posed by the clips their states play
+		// The clips the villagers' states play go on, and the sounds of their frames play
 		Locator::livingActionSystem::value().UpdatePoses(clock.GetTurn(), clock.GetTurnFraction());
 	}
 	{
@@ -1566,6 +1588,9 @@ bool Game::Update() noexcept
 	Locator::mistSystem::value().Update(gameTime);
 	Locator::villageLightSystem::value().Update(gameTime);
 	Locator::fieldSystem::value().Update(gameTime);
+	// The shoals near the camera swim, and dart from what scared them
+	Locator::fishFarmSystem::value().Update(std::chrono::duration<float>(gameTime).count(),
+	                                        Locator::camera::value().GetOrigin());
 	Locator::cinematicDirectorSystem::value().Update(gameTime);
 	// The cinema bars coming in hide the game's dialogs
 	if (Locator::cinematicDirectorSystem::value().TakeHideDialogs() && _interface && _interface->GetMenu().IsOpen())
@@ -1615,10 +1640,10 @@ bool Game::Update() noexcept
 				}
 				else if (!glm::any(glm::isnan(rayOrigin) || glm::isnan(rayDirection)))
 				{
-					// The Action button on the player's own temple's entrance takes them inside
-					// TODO(raffclar): in a game of one player, only once a script lets the player use the temple
+					// The Action button on the player's own temple's entrance takes them inside, when the scripts let it
 					const auto& actions = Locator::gameActionSystem::value();
-					if (Locator::cinematicDirectorSystem::value().IsInterfaceActive() &&
+					if (Locator::entitiesRegistry::value().Context().scriptLetsTempleBeEntered &&
+					    Locator::cinematicDirectorSystem::value().IsInterfaceActive() &&
 					    !Locator::magicSystem::value().IsHandBusy() && actions.GetChanged(input::BindableActionMap::ACTION) &&
 					    actions.Get(input::BindableActionMap::ACTION))
 					{
@@ -2041,6 +2066,8 @@ bool Game::Update() noexcept
 			auto updateEntities = profiler.BeginScoped(Profiler::Stage::UpdateEntities);
 			if (config.drawEntities)
 			{
+				// The villagers in view are posed for the camera as it now is
+				Locator::livingActionSystem::value().PoseVillagersInView(Locator::camera::value().GetViewProjectionMatrix());
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
 				                                                config.drawStreams);
 				// The interface picks what is under the cursor as the frame is drawn, for the next frame to go by
@@ -2735,6 +2762,30 @@ bool Game::Initialize() noexcept
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
 		}
 	}
+	// The marks the vortices leave on the ground, with their alphas
+	for (const auto& textures : ecs::components::Vortex::k_GroundTextures)
+	{
+		for (const auto& [id, name] :
+		     {std::pair {textures.hole, textures.holeFile}, std::pair {textures.ring, textures.ringFile}})
+		{
+			const auto colours = fileSystem.GetPath<Path::Textures>() / fmt::format("{}.raw", name);
+			const auto alpha = fileSystem.GetPath<Path::Textures>() / fmt::format("{}a.raw", name);
+			if (!fileSystem.Exists(colours) || !fileSystem.Exists(alpha))
+			{
+				continue;
+			}
+			constexpr uint16_t k_VortexTextureSide = 256;
+			try
+			{
+				textureManager.Load(id, resources::Texture2DLoader::FromDiskWithAlphaTag {}, colours, alpha,
+				                    k_VortexTextureSide);
+			}
+			catch (std::runtime_error& err)
+			{
+				SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+			}
+		}
+	}
 	fileSystem.Iterate(fileSystem.GetPath<Path::Textures>(), false, [&textureManager](const std::filesystem::path& f) {
 		// The game ships a grey ice map it never loads, cut short of a whole texture
 		constexpr std::string_view k_UnusedTexture = "s_iceenvmapgrey.raw";
@@ -3219,8 +3270,9 @@ void Game::PrepareNewLand()
 	Locator::cinematicDirectorSystem::value().Reset();
 	Locator::cameraHelpSystem::value().Get().ResetForNewLand();
 	Locator::influenceSystem::value().Reset();
-	// Nor its creatures' footprints
+	// Nor its creatures' footprints, nor a scare of its fish
 	Locator::footprintSystem::value().Reset();
+	Locator::fishFarmSystem::value().Reset();
 	// Nor its miracles, nor their particle effects, nor its fires
 	Locator::magicSystem::value().Reset();
 	Locator::miracleFxSystem::value().Reset();
@@ -3853,10 +3905,12 @@ void Game::PlayHandGrabSound()
 			const auto angle = Locator::gameRandom::value().CrtRandom(0.0f, glm::two_pi<float>());
 			Locator::waterRingSystem::value().Add(
 			    water_rings::HandSplash(glm::vec2(position.x, position.z), angle, FrameLandLight(255)));
+			// The fish near where the hand went in dart away
+			Locator::fishFarmSystem::value().Scare({position.x, k_HandSplashHeight, position.z});
 		}
 		// G_HandInWater_01 to _10 in turn, on the water's surface where the hand went in
 		const auto id = fmt::format("InGame.sad/{}", 99 + _handInWaterSample);
 		_handInWaterSample = (_handInWaterSample + 1) % 10;
-		audio.PlaySoundEffect(entt::hashed_string(id.c_str()), glm::vec3(position.x, 0.2f, position.z));
+		audio.PlaySoundEffect(entt::hashed_string(id.c_str()), glm::vec3(position.x, k_HandSplashHeight, position.z));
 	}
 }

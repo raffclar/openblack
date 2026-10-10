@@ -387,7 +387,7 @@
         0.76202392578125
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x08",
         "field_0x5": "0x00",
         "field_0x6": "0x1133",
         "obj_index": 84
@@ -421,7 +421,7 @@
         0.811920166015625
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x07",
         "field_0x5": "0x00",
         "field_0x6": "0x1133",
         "obj_index": 84
@@ -455,7 +455,7 @@
         0.848388671875
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x06",
         "field_0x5": "0x00",
         "field_0x6": "0x1133",
         "obj_index": 84
@@ -489,7 +489,7 @@
         0.870819091796875
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x05",
         "field_0x5": "0x00",
         "field_0x6": "0x1133",
         "obj_index": 84
@@ -523,7 +523,7 @@
         0.878753662109375
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x04",
         "field_0x5": "0x00",
         "field_0x6": "0x1133",
         "obj_index": 84
@@ -557,7 +557,7 @@
         0.8721923828125
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x03",
         "field_0x5": "0x00",
         "field_0x6": "0x1133",
         "obj_index": 84
@@ -591,7 +591,7 @@
         0.85113525390625
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x02",
         "field_0x5": "0x00",
         "field_0x6": "0x1133",
         "obj_index": 84
@@ -625,7 +625,7 @@
         0.8160400390625
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x01",
         "field_0x5": "0x00",
         "field_0x6": "0x1133",
         "obj_index": 84
@@ -659,7 +659,7 @@
         0.767364501953125
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x00",
         "field_0x5": "0x00",
         "field_0x6": "0x1133",
         "obj_index": 84
@@ -693,7 +693,7 @@
         0.576019287109375
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x00",
         "field_0x5": "0x00",
         "field_0x6": "0x1133",
         "obj_index": 84
@@ -795,7 +795,7 @@
         0.16082763671875
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x1d",
         "field_0x5": "0x00",
         "field_0x6": "0x0cc7",
         "obj_index": 83
@@ -829,7 +829,7 @@
         0.270538330078125
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x1c",
         "field_0x5": "0x00",
         "field_0x6": "0x0cc7",
         "obj_index": 83
@@ -863,7 +863,7 @@
         0.37567138671875
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x1b",
         "field_0x5": "0x00",
         "field_0x6": "0x0cc7",
         "obj_index": 83
@@ -897,7 +897,7 @@
         0.474700927734375
       ],
       "circle_hug_info": {
-        "turns_to_obj": "0xff",
+        "turns_to_obj": "0x1a",
         "field_0x5": "0x00",
         "field_0x6": "0x0cc7",
         "obj_index": 83

@@ -92,6 +92,8 @@ public:
 	void BindStream(uint8_t stream, VertexLayoutHandle layout) const;
 	/// Replaces a dynamic buffer's vertices, from the start, with bgfx memory of as many or fewer
 	void Update(const void* memory) const;
+	/// Replaces a dynamic buffer's vertices from one on, with bgfx memory
+	void Update(uint32_t firstVertex, const void* memory) const;
 
 private:
 	std::string _name;

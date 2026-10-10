@@ -4,6 +4,7 @@ $input v_texcoord0, v_texcoord1, v_lightColour, v_smallBumpFade, v_shadowCoord, 
 
 #include "creature_shadow.sh"
 #include "snow.sh"
+#include "vortex_ground.sh"
 
 #define M_PI 3.1415926535897932384626433832795
 
@@ -21,6 +22,8 @@ SAMPLER2D(s8_landAlpha, 8);
 
 // The noise that makes the snow's edges ragged, once across each land block of 160 units
 SAMPLER2D(s12_snowNoise, 12);
+// The ring an open vortex lays over the land around its hole
+SAMPLER2D(s13_vortexRing, 13);
 
 // The land under the snow lying on it: whiter the deeper the snow over each texel of the noise, from its own colour to
 // a grey that is blue-white where it lies thickest. Where no corner of its cell has more than a little snow, none shows.
@@ -96,6 +99,20 @@ void main()
 		return;
 	}
 
+	// Where the vortex's hole texture is clearer than its threshold no land is drawn, not even its depth, and what was
+	// drawn before the land shows through
+	bool vortex = u_vortexGround.w >= 0.0f;
+	vec4 ring = vec4_splat(0.0f);
+	if (vortex)
+	{
+		vec2 vortexUv = VortexGroundUv(v_texcoord1.zw);
+		if (InVortexHole(texture2D(s6_vortexHole, vortexUv)))
+		{
+			discard;
+		}
+		ring = texture2D(s13_vortexRing, vortexUv);
+	}
+
 	col.rgb = col.rgb * v_lightColour * v_haze.a;
 
 	// the hand's shadow, projected along the sunlight onto the land beyond it
@@ -123,6 +140,15 @@ void main()
 	vec3 detail = min(smallBump + v_haze.rgb, vec3_splat(1.0f));
 	// The rivers' channels lower the coast alpha where they run, so the sea shows through as their water
 	float landAlpha = min(block.a, texture2D(s8_landAlpha, v_texcoord1.xy).r);
-	gl_FragColor = vec4(land * landAlpha * (1.0f - bumpAlpha) + detail * bumpAlpha,
-	                    1.0f - (1.0f - landAlpha) * (1.0f - bumpAlpha));
+	vec4 premultiplied = vec4(land * landAlpha * (1.0f - bumpAlpha) + detail * bumpAlpha,
+	                          1.0f - (1.0f - landAlpha) * (1.0f - bumpAlpha));
+	if (vortex)
+	{
+		// The hole texture's colour was added under the land before it (where the land lets the sea through, it shows).
+		// The ring, lit as the land, is blended over all of it by its alpha.
+		vec3 ringColour = min(ring.rgb * v_lightColour * v_haze.a + v_haze.rgb, vec3_splat(1.0f));
+		premultiplied = vec4(ringColour * ring.a + premultiplied.rgb * (1.0f - ring.a),
+		                     1.0f - (1.0f - premultiplied.a) * (1.0f - ring.a));
+	}
+	gl_FragColor = premultiplied;
 }
