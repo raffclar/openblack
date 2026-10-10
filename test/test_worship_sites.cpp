@@ -9,11 +9,13 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <algorithm>
 #include <array>
 #include <memory>
 #include <numbers>
 #include <optional>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <DanceFile.h>
