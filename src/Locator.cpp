@@ -39,6 +39,7 @@
 #include "ECS/Systems/Implementations/CameraBookmarkSystem.h"
 #include "ECS/Systems/Implementations/CameraHelpSystem.h"
 #include "ECS/Systems/Implementations/CameraPathSystem.h"
+#include "ECS/Systems/Implementations/CameraZoneSystem.h"
 #include "ECS/Systems/Implementations/ChimneySmokeSystem.h"
 #include "ECS/Systems/Implementations/CinematicDirectorSystem.h"
 #include "ECS/Systems/Implementations/CloudSystem.h"
@@ -153,6 +154,7 @@ using openblack::ecs::systems::AnimatedStaticSystem;
 using openblack::ecs::systems::CameraBookmarkSystem;
 using openblack::ecs::systems::CameraHelpSystem;
 using openblack::ecs::systems::CameraPathSystem;
+using openblack::ecs::systems::CameraZoneSystem;
 using openblack::ecs::systems::ChimneySmokeSystem;
 using openblack::ecs::systems::CinematicDirectorSystem;
 using openblack::ecs::systems::CloudSystem;
@@ -404,6 +406,8 @@ void InitializeLevelWith(const LandSource& land)
 	// Where creatures can walk is sorted anew for each land
 	Locator::creatureLocomotionSystem::emplace<CreatureLocomotionSystem>();
 	Locator::cameraBookmarkSystem::emplace<CameraBookmarkSystem>();
+	// A land starts with no camera zones
+	Locator::cameraZoneSystem::emplace<CameraZoneSystem>();
 	Locator::terrainSystem::emplace<LandIsland>(land);
 	Locator::cameraPathSystem::emplace<CameraPathSystem>();
 }
@@ -457,6 +461,7 @@ void openblack::ShutDownServices()
 	Locator::pickingSystem::reset();
 	Locator::editorSystem::reset();
 	Locator::cameraBookmarkSystem::reset();
+	Locator::cameraZoneSystem::reset();
 	Locator::livingActionSystem::reset();
 	Locator::townSystem::reset();
 	Locator::worshipSiteSystem::reset();

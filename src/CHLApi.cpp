@@ -55,6 +55,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Creature/CreatureScriptPlay.h"
 #include "Creature/LeashRules.h"
 #include "Creature/TemplePen.h"
 #include "ECS/Archetypes/BallArchetype.h"
@@ -121,6 +122,7 @@
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
+#include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
@@ -490,6 +492,22 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 	// The game's whale object type: the opening's sharks
 	case ObjectType::Whale:
 		return SharkArchetype::Create(position, scale);
+	case ObjectType::Creature:
+	{
+		// A creature of the species the scripts number, which belongs to no one and has its home where it is made. It
+		// stands on the ground, as big as its species starts.
+		// TODO(opening-skip): the game also keeps it out of the land's reactions until a script lets it react, and names
+		// it from the four creature names of the help texts; openblack keeps neither yet
+		const auto species = script::property_rules::CreatureTypeFromScript(subtype);
+		if (!species.has_value())
+		{
+			break;
+		}
+		const auto ground = Locator::terrainSystem::value().GetHeightAt(glm::vec2(position.x, position.z));
+		return ecs::archetypes::CreatureArchetype::Create(
+		    {position.x, ground, position.z}, PlayerNames::NEUTRAL, *species, 0, yAngleRadians,
+		    ecs::archetypes::CreatureArchetype::StartScale(*species), ecs::archetypes::CreatureArchetype::StartBody(*species));
+	}
 	case ObjectType::Vortex:
 	{
 		// A vortex of the three kinds; the game makes nothing for any other
@@ -994,7 +1012,22 @@ void SetScriptState() // 017 SET_SCRIPT_STATE
 		living.VillagerSetScriptState(object, static_cast<VillagerStates>(state));
 		return;
 	}
-	// TODO(opening): creatures, animals and groups of things
+	if (auto* mind = Locator::entitiesRegistry::value().TryGet<ecs::components::CreatureMindState>(object))
+	{
+		// A creature takes no state: it starts playing what the script last gave it to play
+		const auto agenda = creature_script_play::Agenda(mind->scriptPlay);
+		if (!agenda.has_value())
+		{
+			NotImplemented(mind->scriptPlay.animation);
+			return;
+		}
+		if (Locator::creatureMindSystem::has_value())
+		{
+			Locator::creatureMindSystem::value().CarryOutForScript(object, *agenda);
+		}
+		return;
+	}
+	// TODO(opening): animals and groups of things
 	NotImplemented();
 }
 
@@ -1030,7 +1063,13 @@ void SetScriptUlong() // 020 SET_SCRIPT_ULONG
 		Locator::livingActionSystem::value().VillagerSetScriptAnimation(object, static_cast<AnimId>(animation), plays);
 		return;
 	}
-	// TODO(opening): creatures and groups of things
+	if (auto* mind = Locator::entitiesRegistry::value().TryGet<ecs::components::CreatureMindState>(object))
+	{
+		// Kept for the creature until the script tells it to start
+		mind->scriptPlay = {.animation = animation, .plays = plays};
+		return;
+	}
+	// TODO(opening): groups of things
 	NotImplemented();
 }
 
@@ -2102,35 +2141,70 @@ void MoveGameThing() // 033 MOVE_GAME_THING
 	NotImplemented();
 }
 
+/// A thing a script tells to face a point turns to it: a villager or another living thing at once, with its walk; a
+/// creature is left to its own turning; anything else that stands on the land is turned at once about the upright,
+/// keeping any lean it has
+static void FacePoint(entt::entity object, glm::vec3 point)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (IsDirectableVillager(object))
+	{
+		Locator::livingActionSystem::value().VillagerFace(object, glm::vec2(point.x, point.z));
+		return;
+	}
+	auto* transform = registry.TryGet<Transform>(object);
+	if (transform == nullptr)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Jonty - Thing must be living to face position!");
+		return;
+	}
+	if (registry.AllOf<ecs::components::Creature>(object))
+	{
+		// TODO(creature-scripting): the creature is taken into the script's hands, gives up what it was doing and turns
+		// to face the point as an action of its own; openblack has no script control of a creature's mind yet
+		NotImplemented();
+		return;
+	}
+	const float angle = script::property_rules::FacingAngle(glm::vec2(transform->position.x, transform->position.z),
+	                                                        glm::vec2(point.x, point.z));
+	if (IsLivingThing(object))
+	{
+		TurnLivingThing(object, *transform, angle);
+		return;
+	}
+	auto angles = script::property_rules::PlacedAngles(transform->rotation);
+	if (!CanLean(object))
+	{
+		angles = {.x = 0.0f, .y = angles.y, .z = 0.0f};
+	}
+	angles.y = angle;
+	transform->rotation = script::property_rules::PlacedRotation(angles);
+	registry.SetDirty();
+}
+
 void SetFocus() // 034 SET_FOCUS
 {
 	const auto position = PopVec();
 	const auto object = PopObject();
-	if (!Locator::entitiesRegistry::value().Valid(object))
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
 	{
-		ScriptMessage("Object no longer valid");
+		ScriptMessage("Thing no longer valid");
 		return;
 	}
-	if (IsDirectableVillager(object))
+	if (IsScriptContainer(registry, object))
 	{
-		// It turns at once to face the point
-		Locator::livingActionSystem::value().VillagerFace(object, glm::vec2(position.x, position.z));
-		return;
-	}
-	if (IsScriptContainer(Locator::entitiesRegistry::value(), object))
-	{
-		// Each of its villagers turns to face the point
-		for (const auto member : ContainerMembers(Locator::entitiesRegistry::value(), object))
+		// Each of its members turns to face the point
+		for (const auto member : ContainerMembers(registry, object))
 		{
-			if (IsDirectableVillager(member))
+			if (registry.Valid(member))
 			{
-				Locator::livingActionSystem::value().VillagerFace(member, glm::vec2(position.x, position.z));
+				FacePoint(member, position);
 			}
 		}
 		return;
 	}
-	// TODO(opening): other objects and creatures
-	NotImplemented();
+	FacePoint(object, position);
 }
 
 void HasCameraArrived() // 035 HAS_CAMERA_ARRIVED
@@ -3021,7 +3095,12 @@ void Played() // 064 PLAYED
 		Pushb(Locator::livingActionSystem::value().VillagerHasPlayedScriptAnimation(object));
 		return;
 	}
-	// TODO(opening): creatures' plans, other living things, the weather and dances
+	if (Locator::entitiesRegistry::value().AllOf<ecs::components::Creature>(object))
+	{
+		Pushb(!Locator::creatureMindSystem::has_value() || Locator::creatureMindSystem::value().HasPlayed(object));
+		return;
+	}
+	// TODO(opening): other living things, the weather and dances
 	NotImplemented();
 	Pushb(true);
 }
@@ -3237,9 +3316,37 @@ void ConvertCameraFocus() // 082 CONVERT_CAMERA_FOCUS
 
 void CreatureSetPlayer() // 083 CREATURE_SET_PLAYER
 {
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("no creature");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(object))
+	{
+		ScriptMessage("not a creature");
+		return;
+	}
+	// The creature becomes the local player's: their creature from now on, which they lead on the leash when they have
+	// no other to lead
+	// TODO(opening-skip): the game also names it after the player's profile, and moves a reaction it started over to
+	// its new player; openblack keeps neither profiles nor creature reactions yet
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	if (Locator::leashSystem::has_value())
+	{
+		Locator::leashSystem::value().SetOwner(object, player);
+		Locator::leashSystem::value().ClaimOnArrival(object);
+	}
+	else
+	{
+		registry.Get<ecs::components::Creature>(object).owner = player;
+	}
+	if (Locator::playerSystem::has_value())
+	{
+		Locator::playerSystem::value().AddCreature(object);
+	}
 }
 
 void StartCountdownTimer() // 084 START_COUNTDOWN_TIMER
@@ -3574,9 +3681,15 @@ void GetRealYear() // 118 GET_REAL_YEAR
 
 void RunCameraPath() // 119 RUN_CAMERA_PATH
 {
-	// const auto cameraEnum = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto track = Pop().intVal;
+	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	if (camera == nullptr)
+	{
+		ScriptMessage("Script camera has been removed! - Exception happened?");
+		return;
+	}
+	// The script's camera runs the camera editor's track of that number; one the file doesn't have runs nothing
+	camera->RunTrack(camera_edits::FindTrack(track));
 }
 
 void StartDialogue() // 120 START_DIALOGUE
@@ -3824,9 +3937,12 @@ void CallInNotNear() // 141 CALL_IN_NOT_NEAR
 
 void SetCameraZone() // 142 SET_CAMERA_ZONE
 {
-	// const auto filename = PopString();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto fileName = PopString();
+	// The world camera is kept inside the file's fence and under its height limits from now on
+	if (!Locator::cameraZoneSystem::value().SetZones(fileName))
+	{
+		ScriptMessage(fmt::format("Couldn't load zone file-.\\Data\\Zones\\{}", fileName));
+	}
 }
 
 void GetObjectState() // 143 GET_OBJECT_STATE

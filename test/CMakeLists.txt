@@ -334,6 +334,9 @@ openblack_setup_and_add_test(
   test_camera_projection camera/test_camera_projection.cpp
 )
 openblack_setup_and_add_test(test_script_camera camera/test_script_camera.cpp)
+target_link_libraries(test_script_camera PRIVATE edt)
+openblack_setup_and_add_test(test_camera_zones camera/test_camera_zones.cpp)
+target_link_libraries(test_camera_zones PRIVATE exc)
 openblack_setup_and_add_test(test_temple_doors temple/test_temple_doors.cpp)
 openblack_setup_and_add_test(
   test_creature_cave_effects temple/test_creature_cave_effects.cpp
@@ -432,6 +435,9 @@ target_link_libraries(test_gesture_recognition PRIVATE gestures)
 openblack_setup_and_add_test(test_gesture_system test_gesture_system.cpp)
 target_link_libraries(test_gesture_system PRIVATE gestures)
 openblack_setup_and_add_test(test_creature_spells test_creature_spells.cpp)
+openblack_setup_and_add_test(
+  test_creature_script_play test_creature_script_play.cpp
+)
 openblack_setup_and_add_test(test_particle_miracles test_particle_miracles.cpp)
 target_link_libraries(test_particle_miracles PRIVATE psys)
 openblack_setup_and_add_test(test_storm_miracle test_storm_miracle.cpp)
@@ -465,6 +471,7 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_physics_manager test_physics_manager.cpp)
 openblack_setup_and_add_test(test_physics_living test_physics_living.cpp)
 openblack_setup_and_add_test(test_physics_objects test_physics_objects.cpp)
+openblack_setup_and_add_test(test_tree_roots test_tree_roots.cpp)
 openblack_setup_and_add_test(test_damage_mesh test_damage_mesh.cpp)
 openblack_setup_and_add_test(
   test_building_construction test_building_construction.cpp

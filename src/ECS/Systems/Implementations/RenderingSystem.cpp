@@ -20,6 +20,7 @@
 
 #include <glm/gtx/transform.hpp>
 
+#include "3D/AllMeshes.h"
 #include "3D/L3DMesh.h"
 #include "3D/PhysicsDrawMatrix.h"
 #include "Camera/Camera.h"
@@ -31,6 +32,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/DetailMeshes.h"
+#include "ECS/Components/FallingRoots.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/GroundMark.h"
@@ -72,7 +74,9 @@
 #include "Graphics/Texture2D.h"
 #include "Locator.h"
 #include "Physics/DamageMesh.h"
+#include "Physics/ObjectRules.h"
 #include "Profiler.h"
+#include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack::ecs::systems;
@@ -112,6 +116,11 @@ openblack::graphics::mesh_detail::Choice ChooseDetail(const DetailMeshes& detail
 	const float depth = mesh_detail::ViewDepth(centre, camera.GetOrigin(), camera.GetForward());
 	const float reach = mesh_detail::Reach(detail.importance, mesh_detail::ScaledRadius(box.Size(), scale), modelDetail);
 	return mesh_detail::Choose(depth, reach, disappears);
+}
+/// The model of the roots drawn under the trees out of the land
+entt::id_type RootsMesh()
+{
+	return openblack::resources::HashIdentifier(openblack::MeshId::TreeRoots);
 }
 } // namespace
 
@@ -200,6 +209,15 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		    prep(entity, mesh, true);
 	    },
 	    entt::exclude<Tree>);
+	// A tree out of the land has its roots drawn under it: once, or twice while it moves in the physics
+	const Mesh roots {.id = RootsMesh(), .submeshId = 0, .bbSubmeshId = 0};
+	registry.Each<const Tree, const ShownRoots>(
+	    [&prepMesh, &roots](entt::entity tree, const Tree& /*unused*/, const ShownRoots& shown) {
+		    for (size_t copy = 0; copy < openblack::physics::objects::ShownRootsScales(shown.place).size(); ++copy)
+		    {
+			    prepMesh(tree, roots.id, roots, false);
+		    }
+	    });
 
 	if (drawBoundingBox)
 	{
@@ -627,6 +645,41 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    ++slots->second.filled;
 	    },
 	    entt::exclude<TempleInteriorPart, Tree, AtHome, HiddenByState>);
+
+	// The roots under a tree out of the land, at its base, turned and stretched as the tree is placed
+	const auto rootsSlots = _instanceSlots.find(RootsMesh());
+	registry.Each<const Mesh, const Transform, const Tree, const ShownRoots>(
+	    [this, &registry, &meshes, &fits, &rootsSlots, drawBoundingBox](
+	        entt::entity tree, const Mesh& mesh, const Transform& transform, const Tree& /*unused*/, const ShownRoots& shown) {
+		    const auto scales = openblack::physics::objects::ShownRootsScales(shown.place);
+		    if (!fits || rootsSlots == _instanceSlots.end() ||
+		        rootsSlots->second.filled + scales.size() > rootsSlots->second.count)
+		    {
+			    fits = false;
+			    return;
+		    }
+		    auto standing = glm::mat4(transform.rotation);
+		    standing = glm::translate(standing, transform.position * transform.rotation);
+		    standing = glm::scale(standing, transform.scale);
+		    const auto placed = physics_draw::ModelMatrix(standing, registry.TryGet<const PhysicsDrawPose>(tree));
+		    const float halfWidth = meshes.Contains(mesh.id) ? meshes.Handle(mesh.id)->GetBoundingBox().Size().x * 0.5f : 0.0f;
+		    for (const float scale : scales)
+		    {
+			    const uint32_t idx = rootsSlots->second.offset + rootsSlots->second.filled;
+			    _renderContext.instanceUniforms[idx] =
+			        placed.has_value()
+			            ? RenderContext::ObjectInstance {.model = openblack::physics::objects::ShownRootsModel(*placed, scale,
+			                                                                                                   halfWidth),
+			                                             .look = glm::vec4(0.0f)}
+			            : RenderContext::ObjectInstance {.model = glm::mat4(0.0f), .look = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)};
+			    if (drawBoundingBox)
+			    {
+				    _renderContext.instanceUniforms[idx + (_renderContext.instanceUniforms.size() / 2)] = {.model =
+				                                                                                               glm::mat4(0.0f)};
+			    }
+			    ++rootsSlots->second.filled;
+		    }
+	    });
 
 	if (fits && !_renderContext.instanceUniforms.empty())
 	{

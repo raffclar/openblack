@@ -21,6 +21,7 @@
 #include "Creature/CreatureLook.h"
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreaturePlanner.h"
+#include "Creature/CreatureScriptPlay.h"
 #include "Creature/CreatureTownCompassion.h"
 #include "Creature/LeashRules.h"
 #include "Creature/PerceivedDesires.h"
@@ -38,6 +39,8 @@ struct CreatureMindState
 	/// The desires, set up from the species' tables when the mind first thinks
 	std::optional<creature_desires::Desires> desires;
 	creature_mind::IdleMind idle {};
+	/// What a script last gave it to play, kept until a script tells it to start
+	creature_script_play::Request scriptPlay {};
 	creature_look::Target look {};
 	/// Whether the head turns to what it watches this turn
 	bool lookingAbout {false};

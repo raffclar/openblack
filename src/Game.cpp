@@ -67,6 +67,7 @@
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/NearClipping.h"
+#include "Camera/ScriptCameraModel.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
@@ -198,6 +199,7 @@
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TreeRoots.h"
 #include "ECS/VillageTotem.h"
 #include "ECS/WorldObjects.h"
 #include "EngineConfig.h"
@@ -373,6 +375,7 @@ Game::Game(Arguments&& args) noexcept
     , _playVideo(args.playVideo)
     , _preIntro(args.preIntro)
     , _skipLogos(args.skipLogos)
+    , _newGameStart(args.newGameStart)
     , _startTestbed(args.startTestbed || args.scenario.has_value())
     , _scenarioRequest(args.scenario)
     , _inspectPort(args.inspectPort)
@@ -1561,7 +1564,13 @@ bool Game::Update() noexcept
 	// While a miracle's camera path has the camera, the player's camera doesn't move it
 	if (!Locator::cameraPathSystem::value().HoldsCamera())
 	{
-		camera.Update(deltaTime);
+		// A script's camera track runs on the game's time; the camera itself steps as the hand does, so that a cut scene
+		// holds while the game is paused and keeps pace with the game's speed
+		if (auto* scriptCamera = Locator::scriptControlSystem::value().GetScriptCamera(camera); scriptCamera != nullptr)
+		{
+			scriptCamera->PassGameTime(Locator::time::value().GetFrameGameTime());
+		}
+		camera.Update(std::chrono::duration_cast<std::chrono::microseconds>(CameraStepTime()));
 	}
 	// While the opening's camera chases the falling light, it is drawn from behind the light as the last frame left it,
 	// whatever the script's camera does underneath
@@ -2302,6 +2311,8 @@ bool Game::Update() noexcept
 				// The villagers in view are posed for the camera the frame is drawn from
 				ShowInspectorCamera(true);
 				Locator::livingActionSystem::value().PoseVillagersInView(Locator::camera::value().GetViewProjectionMatrix());
+				// The trees out of the land are drawn with their roots, as each now is
+				ecs::tree_roots::Show(Locator::entitiesRegistry::value());
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
 				                                                config.drawStreams);
 				ShowInspectorCamera(false);
@@ -3188,11 +3199,9 @@ bool Game::Run() noexcept
 		{
 			lhvm.LoadBinary(fileSystem.ReadAll(challengePath));
 			// The story's scripts run the first land; on the testbed they would set its time of day and stop its clock
-			// The story opens on a black screen: its first land comes up at noon, and its scripts set the dawn of the
-			// opening scene and fade the picture in from black some turns later
-			if (!_startTestbed && lhvm.StartScript("LandControlAll", lhvm::ScriptType::All) != 0)
+			if (!_startTestbed)
 			{
-				Locator::cinematicDirectorSystem::value().StartStory();
+				StartStoryScripts();
 			}
 		}
 		catch (const std::runtime_error& err)
@@ -3207,11 +3216,6 @@ bool Game::Run() noexcept
 		                    (fileSystem.GetGamePath() / challengePath).generic_string());
 		return false;
 	}
-	if (!_startTestbed)
-	{
-		AskNewGameChoice();
-	}
-
 	if (_startupTimer.has_value())
 	{
 		_startupTimer->Step("story scripts");
@@ -3664,18 +3668,71 @@ void Game::StartNewLand()
 	_gameMusic->Reset();
 }
 
-void Game::AskNewGameChoice()
+void Game::StartStoryScripts()
+{
+	const bool started = Locator::vm::value().StartScript("LandControlAll", lhvm::ScriptType::All) != 0;
+	// The question comes whether or not the story started
+	const bool asked = AskNewGameChoice();
+	// The story opens on a black screen: its first land comes up at noon, and its scripts set the dawn of the opening
+	// scene and fade the picture in from black some turns later. When the game was held for the question, the land is
+	// left as it is: the scripts that skip the opening fade it themselves.
+	if (started && !asked)
+	{
+		Locator::cinematicDirectorSystem::value().StartStory();
+	}
+}
+
+bool Game::AskNewGameChoice()
 {
 	// Every new game starts with nothing skipped, and only a returning player is asked
-	Locator::tutorialSkipSystem::value().Set({});
-	const auto& profiles = Locator::playerProfileSystem::value();
-	if (!new_game_choice::AsksAtNewGame(profiles.GetProfileCount(), profiles.CurrentProfileHasCreature()) || !_interface)
+	auto& skip = Locator::tutorialSkipSystem::value();
+	skip.Set({});
+	// For developers and agents: the question answered at once, as though the player had answered it before the
+	// story's first turn
+	if (_newGameStart.has_value() && _newGameStart->answer.has_value())
 	{
-		return;
+		skip.Set(new_game_choice::SkipFor(*_newGameStart->answer));
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "New game started with the start-of-game question answered {}",
+		                   static_cast<int>(*_newGameStart->answer));
+		return true;
+	}
+	const auto& profiles = Locator::playerProfileSystem::value();
+	const bool forced = _newGameStart.has_value() && _newGameStart->ask;
+	if ((!forced && !new_game_choice::AsksAtNewGame(profiles.GetProfileCount(), profiles.CurrentProfileHasCreature())) ||
+	    !_interface)
+	{
+		return false;
 	}
 	// The game waits, paused, for the answer
 	Locator::time::value().SetPaused(true);
 	_interface->ShowSkipBox();
+	return true;
+}
+
+bool Game::StartNewGame(std::optional<new_game_choice::NewGameStart> start) noexcept
+{
+	_newGameStart = start;
+	_startTestbed = false;
+	// A new game always begins on the first land
+	const auto land = Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / "Land1.txt";
+	if (!LoadMapWithFreshScripts(land))
+	{
+		return false;
+	}
+	if (!Locator::vm::has_value())
+	{
+		return false;
+	}
+	try
+	{
+		StartStoryScripts();
+	}
+	catch (const std::exception& err)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The story's scripts didn't start: {}", err.what());
+		return false;
+	}
+	return true;
 }
 
 void Game::HandleInterfaceAction()
@@ -4194,16 +4251,18 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 	}
 }
 
-float Game::HandStepSeconds() const
+std::chrono::milliseconds Game::CameraStepTime() const
 {
-	// The hand steps by the frame's real time in whole milliseconds, or by the game's time while a script holds the
-	// widescreen
 	const auto& time = Locator::time::value();
 	const bool scripted = Locator::cinematicDirectorSystem::has_value() &&
 	                      Locator::cinematicDirectorSystem::value().IsWideScreenOn() &&
 	                      Locator::cinematicDirectorSystem::value().GetWideScreenOwner() != 0;
-	const auto step = ecs::systems::CameraStep(time.GetFrameRealTime(), time.GetFrameGameTime(), scripted);
-	return static_cast<float>(static_cast<int32_t>(step.count())) * 0.001f;
+	return ecs::systems::CameraStep(time.GetFrameRealTime(), time.GetFrameGameTime(), scripted);
+}
+
+float Game::HandStepSeconds() const
+{
+	return static_cast<float>(static_cast<int32_t>(CameraStepTime().count())) * 0.001f;
 }
 
 void Game::UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds)

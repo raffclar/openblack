@@ -701,6 +701,19 @@
   "writes": true
  },
  {
+  "description": "Starts a new game on the first land from scratch, as the game's new game does: the land loads again and the story's scripts start again. skip answers the start-of-game question at once, the story then going exactly as it does for the player's answer: creature (straight to choosing a creature, the opening on the beach skipped), story (all of the first land's creature tutorial skipped too), old (keep the old creature, which needs a kept creature), normal; or ask, to be asked it. Without skip it is asked only of a returning player, as in the game. Answers once the land has loaded",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "creature, story, old, normal or ask",
+    "name": "skip",
+    "type": "string"
+   }
+  ],
+  "query": "level.new_game",
+  "writes": true
+ },
+ {
   "description": "The volumes, whether music plays, and how many sounds play",
   "kind": "object",
   "parameters": [],
@@ -1092,6 +1105,12 @@
   "kind": "list",
   "parameters": [],
   "query": "view.bookmarks"
+ },
+ {
+  "description": "The camera zones the land's scripts set: their file, the fence the camera is kept inside, its height limits and the places it is kept out of, and whether the camera is inside the fence",
+  "kind": "object",
+  "parameters": [],
+  "query": "view.zones"
  },
  {
   "description": "The fade, the wide screen and whether the interface is shown",

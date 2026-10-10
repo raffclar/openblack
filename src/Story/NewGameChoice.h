@@ -13,6 +13,8 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <optional>
+#include <string_view>
 
 namespace openblack::new_game_choice
 {
@@ -57,6 +59,44 @@ struct TutorialSkip
 [[nodiscard]] constexpr Choice ClampChoice(int selection) noexcept
 {
 	return static_cast<Choice>(std::clamp(selection, 0, static_cast<int>(k_ChoiceCount) - 1));
+}
+
+/// How a developer or an agent starts a new game from the command line or the inspector (not in the original game,
+/// which only asks a returning player): asked the start-of-game question whatever the profiles, or with the question
+/// answered at once, the story then going exactly as it does after the player answers it
+struct NewGameStart
+{
+	bool ask {false};
+	std::optional<Choice> answer;
+
+	[[nodiscard]] constexpr bool operator==(const NewGameStart&) const = default;
+};
+
+/// "ask", "normal", "creature" (straight to choosing a creature), "story" (skip all of the creature's tutorial too)
+/// or "old" (keep the old creature); nothing for anything else
+[[nodiscard]] constexpr std::optional<NewGameStart> ParseNewGameStart(std::string_view text) noexcept
+{
+	if (text == "ask")
+	{
+		return NewGameStart {.ask = true};
+	}
+	if (text == "normal")
+	{
+		return NewGameStart {.answer = Choice::StartNormally};
+	}
+	if (text == "creature")
+	{
+		return NewGameStart {.answer = Choice::SkipToCreatureSelect};
+	}
+	if (text == "story")
+	{
+		return NewGameStart {.answer = Choice::SkipCreatureTutorial};
+	}
+	if (text == "old")
+	{
+		return NewGameStart {.answer = Choice::KeepOldCreature};
+	}
+	return std::nullopt;
 }
 
 } // namespace openblack::new_game_choice

@@ -728,6 +728,10 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeAudioProvider(Audio
 		                                         {"sfx_volume", state->sfxVolume},
 		                                         {"music_volume", state->musicVolume},
 		                                         {"music_active", state->musicActive},
+		                                         {"music_playing", state->musicPlaying},
+		                                         {"land_music", state->landMusic},
+		                                         {"script_music", state->scriptMusic},
+		                                         {"alignment_music", state->alignmentMusic},
 		                                         {"sounds_playing", playing}});
 	              });
 	provider->Add(Query("sounds", "The sounds about a point, nearest first (sounds without a place are left out)", {},

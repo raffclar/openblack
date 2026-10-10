@@ -17,6 +17,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "3D/CameraTrack.h"
+
 using namespace openblack;
 using namespace openblack::script_camera;
 
@@ -140,26 +142,32 @@ ScriptCameraModel::ScriptCameraModel(const glm::vec3& origin, const glm::vec3& f
 	Place(_focus, focus);
 }
 
+ScriptCameraModel::~ScriptCameraModel() = default;
+
 void ScriptCameraModel::SetOrigin(const glm::vec3& origin)
 {
+	StopTrack();
 	StopFollowing();
 	Place(_origin, origin);
 }
 
 void ScriptCameraModel::SetFocus(const glm::vec3& focus)
 {
+	StopTrack();
 	StopLookingAt();
 	Place(_focus, focus);
 }
 
 void ScriptCameraModel::MoveOrigin(const glm::vec3& origin, float seconds)
 {
+	StopTrack();
 	StopFollowing();
 	Send(_origin, origin, seconds);
 }
 
 void ScriptCameraModel::MoveFocus(const glm::vec3& focus, float seconds)
 {
+	StopTrack();
 	StopLookingAt();
 	Send(_focus, focus, seconds);
 }
@@ -212,7 +220,47 @@ void ScriptCameraModel::Follow(ThingLookup thing)
 
 void ScriptCameraModel::LookAt(ThingLookup thing)
 {
+	StopTrack();
 	_lookedAt = std::move(thing);
+}
+
+void ScriptCameraModel::StopTrack()
+{
+	_track = nullptr;
+	_trackRunner.reset();
+}
+
+void ScriptCameraModel::RunTrack(std::shared_ptr<const edt::EDTTrack> track)
+{
+	StopLookingAt();
+	StopTrack();
+	_trackTime = std::chrono::milliseconds::zero();
+	if (track == nullptr || track->position.points.empty() || track->focus.points.empty())
+	{
+		return;
+	}
+	_track = std::move(track);
+	_trackRunner = std::make_unique<camera_track::WayRunner>(_track->position);
+}
+
+void ScriptCameraModel::PassGameTime(std::chrono::milliseconds gameTime)
+{
+	if (_track != nullptr)
+	{
+		_trackTime += gameTime;
+	}
+}
+
+void ScriptCameraModel::UpdateTrack()
+{
+	// Held at its start and its end
+	const auto duration = _track->position.duration;
+	const auto time = static_cast<int32_t>(std::clamp<int64_t>(_trackTime.count(), 0, duration));
+	const auto origin = _trackRunner->Get(_track->position, time);
+	const auto focus = camera_track::Bezier(_track->focus, _trackRunner->GetSegment(), _trackRunner->GetParameter());
+	// Put there still: the glides start from rest at the track's point
+	Place(_origin, origin);
+	Place(_focus, focus);
 }
 
 void ScriptCameraModel::SetFollowSettings(float distance, float zoomTimeScale, float heading, bool relativeHeading)
@@ -266,6 +314,10 @@ void ScriptCameraModel::UpdateFollowing()
 
 bool ScriptCameraModel::Arrived() const
 {
+	if (_track != nullptr)
+	{
+		return _track->position.duration <= _trackTime.count();
+	}
 	return DistanceSquared(DestinationOf(_origin), ValueOf(_origin)) < k_ArrivedDistanceSquared &&
 	       DistanceSquared(DestinationOf(_focus), ValueOf(_focus)) < k_ArrivedDistanceSquared;
 }
@@ -275,6 +327,11 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> ScriptCameraModel::Upd
 {
 	const float seconds = std::min(std::chrono::duration<float>(dt).count(), k_MaxFrameSeconds);
 	_seconds += seconds;
+	// A track puts the camera where it has got to before any following sends it on
+	if (_track != nullptr)
+	{
+		UpdateTrack();
+	}
 	UpdateFollowing();
 	for (auto& zoomer : _origin)
 	{

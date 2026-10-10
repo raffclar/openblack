@@ -35,6 +35,7 @@
 #include "Input/InputLock.h"
 #include "Input/ShortcutKeys.h"
 #include "Magic/HandHoldPoser.h"
+#include "Story/NewGameChoice.h"
 #include "Windowing/WindowingInterface.h" // For DisplayMode
 
 union SDL_Event;
@@ -125,6 +126,9 @@ struct Arguments
 	bool preIntro {false};
 	/// Leave out the logo pictures at start-up
 	bool skipLogos {false};
+	/// For developers and agents: how a new game on the first land starts, asked the start-of-game question whatever
+	/// the player's profiles, or with it answered at once; as the game decides when none
+	std::optional<new_game_choice::NewGameStart> newGameStart;
 	/// A testbed scenario to run as the game starts, by its id, and how to measure its crowd if it has one
 	std::optional<ScenarioRequest> scenario;
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> requestScreenshot;
@@ -198,6 +202,9 @@ public:
 	/// Loads the testbed: a flat plane over the whole map, with a lake north of the middle and nothing on it, for trying
 	/// out creatures
 	void LoadTestbed() noexcept;
+	/// Starts a new game on the first land from scratch, as the game's new game does, the story's scripts starting
+	/// again; for developers and agents, `start` asks the start-of-game question or answers it at once
+	bool StartNewGame(std::optional<new_game_choice::NewGameStart> start) noexcept;
 
 	void SetTime(float time) noexcept;
 	/// How many times longer a turn takes: 2 is half speed
@@ -284,6 +291,7 @@ private:
 	std::string _playVideo;
 	bool _preIntro {false};
 	bool _skipLogos {false};
+	std::optional<new_game_choice::NewGameStart> _newGameStart;
 	/// The screens drawn as the game starts and while a land loads, none without a window
 	std::unique_ptr<gui::LoadingScreen> _loadingScreen;
 	/// What is drawn at the loading's redraw points, nothing while not loading
@@ -372,6 +380,9 @@ private:
 	void PlayHandGrabSound();
 	/// What the hand steps by this frame, in seconds
 	[[nodiscard]] float HandStepSeconds() const;
+	/// What the camera and the hand step by this frame: the frame's real time in whole milliseconds, or the game's time
+	/// while a script holds the widescreen
+	[[nodiscard]] std::chrono::milliseconds CameraStepTime() const;
 	/// The miracles hear where the hand and cursor are, and the held miracle follows the hand
 	void UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds);
 	/// The gestures drawn with the cursor this frame, through the gesture system
@@ -390,8 +401,11 @@ private:
 	/// What moves each species' body, from Data/CTR's .cbn files, by the species their base mesh names
 	static void LoadCreatureRigs();
 	/// Acts on what the player chose in the game's menu: continuing restores the pause it had before it opened
-	/// As a new game starts: whether to ask a returning player what to skip, and asking
-	void AskNewGameChoice();
+	/// Starts the story's scripts of a new game on the first land, and asks a returning player what to skip
+	void StartStoryScripts();
+	/// As a new game starts: whether to ask a returning player what to skip, and asking. Whether the question was put
+	/// (or answered at once by the developers' start), which leaves the land as it is rather than black at its start
+	bool AskNewGameChoice();
 	void HandleInterfaceAction();
 	/// Once a frame outside the temple: where the hand's tooltip is drawn, and the status panel of the creature the hand
 	/// is held to, or over

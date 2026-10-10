@@ -33,8 +33,10 @@
 #include "3D/OceanInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameMusic.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
+#include "Camera/CameraZones.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
@@ -84,6 +86,7 @@
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
+#include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
@@ -168,6 +171,7 @@
 #include "Editor/EditorSelection.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Game.h"
 #include "GameControls.h"
 #include "Graphics/RendererInterface.h"
 #include "Help/AdvisorModel.h"
@@ -215,6 +219,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"dynamicsSystem", "physics.state"},
     LocatorCoverage {"pickingSystem", "players.pick"},
     LocatorCoverage {"cameraBookmarkSystem", "view.bookmarks"},
+    LocatorCoverage {"cameraZoneSystem", "view.zones"},
     LocatorCoverage {"cameraPathSystem", "view.state"},
     LocatorCoverage {"livingActionSystem", "living.action"},
     LocatorCoverage {"townSystem", "town.list"},
@@ -1495,6 +1500,47 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 		                  return items;
 	                  }));
 	provider->Add(
+	    Query("zones", "The camera zones the land's scripts set: their file, the fence the camera is kept inside, its "
+	                   "height limits and the places it is kept out of, and whether the camera is inside the fence"),
+	    Serve<Locator::cameraZoneSystem>(
+	        "the camera zones", [](const ecs::systems::CameraZoneSystemInterface& system, const QueryContext&) {
+		        const auto& zones = system.GetZones();
+		        Json fence = Json::array();
+		        for (const auto& corner : zones.fence)
+		        {
+			        fence.push_back(Json::array({corner.x, corner.y, corner.z}));
+		        }
+		        Json exclusions = Json::array();
+		        for (const auto& exclusion : zones.exclusions)
+		        {
+			        exclusions.push_back(
+			            {{"position", Json::array({exclusion.position.x, exclusion.position.y, exclusion.position.z})},
+			             {"radius", exclusion.radius},
+			             {"height", exclusion.height},
+			             {"kind", exclusion.kind == camera_zones::Exclusion::Kind::Cylinder ? "cylinder" : "dome"}});
+		        }
+		        Json result {{"file", system.GetFileName()},
+		                     {"exclusions_on", zones.exclusionsOn},
+		                     {"fence_on", zones.fenceOn},
+		                     {"max_altitude", zones.useMaxAltitude ? Json(zones.maxAltitude) : Json(nullptr)},
+		                     {"height_above_land", zones.useHeightAboveLand ? Json(zones.heightAboveLand) : Json(nullptr)},
+		                     {"fence", std::move(fence)},
+		                     {"exclusions", std::move(exclusions)}};
+		        if (Locator::camera::has_value())
+		        {
+			        const auto& camera = Locator::camera::value();
+			        const auto origin = camera.GetOrigin();
+			        result["camera_inside"] =
+			            camera_zones::CrossFence(zones.fence, zones.fenceOn, origin, camera.GetFocus() - origin).inside;
+			        if (Locator::terrainSystem::has_value())
+			        {
+				        result["height_limit"] = camera_zones::HeightLimit(
+				            zones, Locator::terrainSystem::value().GetHeightAt(glm::vec2(origin.x, origin.z)));
+			        }
+		        }
+		        return result;
+	        }));
+	provider->Add(
 	    Query("cinematic", "The fade, the wide screen and whether the interface is shown"),
 	    Serve<Locator::cinematicDirectorSystem>(
 	        "the cinematics", [](const ecs::systems::CinematicDirectorSystemInterface& director, const QueryContext&) {
@@ -2206,10 +2252,19 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 			    return std::nullopt;
 		    }
 		    auto& audio = Locator::audio::value();
-		    return AudioState {.globalVolume = audio.GetGlobalVolume(),
-		                       .sfxVolume = audio.GetSfxVolume(),
-		                       .musicVolume = audio.GetMusicVolume(),
-		                       .musicActive = audio.MusicIsActive()};
+		    AudioState state {.globalVolume = audio.GetGlobalVolume(),
+		                      .sfxVolume = audio.GetSfxVolume(),
+		                      .musicVolume = audio.GetMusicVolume(),
+		                      .musicActive = audio.MusicIsActive()};
+		    if (const auto* game = Game::Instance(); game != nullptr && game->GetGameMusic() != nullptr)
+		    {
+			    const auto& music = *game->GetGameMusic();
+			    state.musicPlaying = audio::GetMusicTypeName(music.GetPlaying());
+			    state.landMusic = audio::GetMusicTypeName(music.GetLandType());
+			    state.scriptMusic = audio::GetMusicTypeName(music.GetScriptType());
+			    state.alignmentMusic = music.IsAlignmentMusicEnabled();
+		    }
+		    return state;
 	    },
 	}));
 

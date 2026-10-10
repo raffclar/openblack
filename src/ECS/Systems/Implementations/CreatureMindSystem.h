@@ -77,6 +77,8 @@ public:
 	bool TellCast(entt::entity creature, MagicType type, entt::entity target) override;
 	bool ForcePlan(entt::entity creature, const ForcedPlan& plan) override;
 	std::optional<creature_desires::Desire> ForcePlanOn(entt::entity creature, entt::entity object) override;
+	bool CarryOutForScript(entt::entity creature, std::vector<creature_mind::Step> agenda) override;
+	[[nodiscard]] bool HasPlayed(entt::entity creature) const override;
 
 private:
 	/// Sets up what a creature has learnt the first time its mind thinks, from its mind file when it has one
