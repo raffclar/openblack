@@ -31,6 +31,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Common/MachineClock.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -92,8 +93,7 @@ const GPotInfo& PotInfoOf(PotInfo type)
 
 uint32_t TickMs()
 {
-	return static_cast<uint32_t>(
-	    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
+	return machine_clock::Ticks();
 }
 
 void PlayInGame(uint32_t sample, glm::vec3 position)

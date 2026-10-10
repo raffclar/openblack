@@ -62,6 +62,11 @@ struct CreatureObjectAction
 	uint32_t attempts {0};
 	/// Throwing: how long the throw is to take to get there
 	float flightSeconds {0.0f};
+	/// Throwing: how long it was asked to take, none to take as long as it would to fall the distance to the target
+	std::optional<float> givenFlightSeconds;
+	/// Throwing into a store: it isn't done until what it threw has stopped flying, which it keeps once let go
+	bool waitsForLanding {false};
+	std::optional<entt::entity> thrown;
 	/// Catching: where the hand closes in each catching animation, in the model's units, and how the catch goes: ready
 	/// and waiting for the thing, stepping across to where it will pass, reaching for it, missed and drawing back, or
 	/// caught and finishing
@@ -75,6 +80,8 @@ struct CreatureObjectAction
 	};
 	std::array<glm::vec3, 4> catchHands {};
 	Catching catching {Catching::Ready};
+	/// Whether it has finished turning to face the thing, which it waits for only once
+	bool catchTurned {false};
 	/// How high the thing was against the hand at the last frame it was still in the physics
 	float catchHeight {0.5f};
 	/// Why it gave up, when it did

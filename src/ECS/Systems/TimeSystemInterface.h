@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <chrono>
+#include <optional>
 
 #include <entt/fwd.hpp>
 
@@ -59,6 +60,26 @@ public:
 	/// The game's speed: 1 is normal and 2 twice as fast. The time already gone keeps the speed it went at
 	virtual void SetSpeed(float speed) = 0;
 	[[nodiscard]] virtual float GetSpeed() const = 0;
+
+	/// For stepping the game deterministically, as the debug inspector does: each frame takes this long, whatever the
+	/// wall clock says, until it is set back to none. The clock carries on from where it was either way.
+	virtual void SetFixedFrameTime([[maybe_unused]] std::optional<std::chrono::milliseconds> frameTime) {}
+	[[nodiscard]] virtual std::optional<std::chrono::milliseconds> GetFixedFrameTime() const { return std::nullopt; }
+
+	/// The machine's millisecond count as the game reads it to time presses and pick among sounds: the wall clock's, or
+	/// one moved on by the fixed time each frame while frames take a fixed time. It counts from when the clock was last
+	/// restarted, so that a deterministic run reads the same numbers each time.
+	[[nodiscard]] virtual uint32_t GetTicks() const = 0;
+	/// Seconds since 1970 as the sky reads the date: the wall clock's, or once pinned the pinned date and the ticks since
+	[[nodiscard]] virtual int64_t GetUnixTime() const = 0;
+	/// For a deterministic run: the ticks count from 0 from now, and the date is pinned to this one (none for the wall
+	/// clock's again)
+	virtual void RestartClock(std::optional<int64_t> unixTime) = 0;
+	/// The date pinned for a deterministic run, none while the wall clock's date is read
+	[[nodiscard]] virtual std::optional<int64_t> GetPinnedDate() const = 0;
+
+	/// The date a seeded run pins unless given another: 1 January 2001, 12:00 UTC
+	static constexpr int64_t k_DeterministicDate = 978350400;
 };
 
 /// What the hand and the camera step by in a frame: the frame's real time, except while a script holds the widescreen

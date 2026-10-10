@@ -87,6 +87,8 @@ constexpr uint32_t k_TossLots = 2;
 /// Throwing something about, it throws it this far away and up to this much further, in a random direction
 constexpr float k_ThrowAroundDistance = 30.0f;
 constexpr uint32_t k_ThrowAroundExtra = 21;
+/// Turning to face a store before throwing into it, it holds still this long
+constexpr float k_FaceStoreSeconds = 0.1f;
 /// Going up to something to act at it, it stops this close; following something, it keeps this close
 constexpr float k_ApproachDistance = 12.0f;
 constexpr float k_FollowDistance = 25.0f;
@@ -143,6 +145,12 @@ struct ObjectOrder
 		PointAt,
 		/// Catching a thing flying at it
 		Catch,
+		/// Bringing food out of the sea: a handful of it appears at its feet, sized to the creature, and it picks it up.
+		/// Nothing is taken from the fish farm it stands by.
+		FishFromSea,
+		/// Throwing what it holds into a store at the store's own place, taking as long to fly there as it would take to
+		/// fall the distance along the ground
+		ThrowInStore,
 	};
 	Kind kind {Kind::PickUp};
 	/// What it acts on, by its entity's number
@@ -171,6 +179,10 @@ struct Movement
 		GoNearObject,
 		GetAwayFromObject,
 		TurnToFaceObject,
+		/// Going to where it can throw into an object: nearer than its height three times over plus the object's radius
+		/// it backs away, further than three and a half times its height it walks up; the step's distance is the
+		/// creature's height
+		ToThrowPosition,
 	};
 	Kind kind {Kind::ToPoint};
 	glm::vec2 point {0.0f};
@@ -180,6 +192,8 @@ struct Movement
 	/// Arriving anywhere from min to max from the point, or keeping within max of what it follows
 	float minDistance {0.0f};
 	float maxDistance {0.0f};
+	/// Going to a point where it can't stand gives up the rest of the agenda, rather than counting as arrived
+	bool giveUpIfUnreachable {false};
 };
 
 /// A miracle cast at a thing, by its magic type's number
@@ -207,6 +221,8 @@ enum class Effect : uint8_t
 	Examined,
 	ThrewAbout,
 	Hurled,
+	/// The action it is carrying out counts as done here, before the step that finishes it
+	Completed,
 };
 
 struct Step
@@ -230,6 +246,11 @@ struct Step
 		/// Drawing a gesture in the air with its hand, by the gesture's number in the step's animation, until the
 		/// creature's movement says it is done or has failed
 		Gesture,
+		/// Waiting for the step's object to be back on the map (out of any hand, flight or tornado); if the object is
+		/// gone, the rest of the agenda is given up
+		WaitInMap,
+		/// Dousing the step's object with water at once, as a creature does after casting the water miracle at a fire
+		Douse,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -247,7 +268,7 @@ struct Step
 	bool closedEyes {false};
 	/// What the step does to the body: when an action is done (eating, as it starts), or a static step's loop ends
 	Effect effect {Effect::None};
-	/// The object eaten, by its entity's number
+	/// The object eaten, waited for or doused, by its entity's number
 	std::optional<uint32_t> object;
 	/// What an object step does
 	ObjectOrder order {};
@@ -353,6 +374,8 @@ struct Senses
 	Wants wants {};
 	bool rested {false};
 	HandsState hands {HandsState::Idle};
+	/// Whether the object a step waits for is on the map, none when the object is gone
+	std::optional<bool> objectInMap;
 	/// What picks the faces it pulls
 	creature_face::Feelings feelings {};
 };
@@ -395,6 +418,8 @@ struct Commands
 	/// A miracle to cast, and whether to let go of the one it holds
 	std::optional<CastOrder> cast;
 	bool releaseCast {false};
+	/// An object to douse with water, by its entity's number
+	std::optional<uint32_t> douse;
 };
 
 /// random(n) is a whole number from 0 to n - 1
@@ -422,6 +447,23 @@ using Random = std::function<uint32_t(uint32_t)>;
 [[nodiscard]] std::vector<Step> PutDownHeld();
 /// Walking to the water's edge, turning to the water and drinking
 [[nodiscard]] std::vector<Step> Drink(glm::vec2 shore, glm::vec2 water);
+/// Walking to a fish farm's shoal until within a distance of it, putting down what it holds first when it holds
+/// anything, bringing food out of the sea, and eating it
+[[nodiscard]] std::vector<Step> FishAndEat(glm::vec2 shoal, float arriveWithin, bool putDownFirst);
+/// Going to a fish farm's shoal to bring food out of the sea: until within a distance of it, putting down what it holds
+/// first when it holds anything
+struct FishingTrip
+{
+	glm::vec2 shoal {0.0f};
+	float arriveWithin {0.0f};
+	bool putDownFirst {false};
+};
+/// Fishing when it has no food in its hand, then going to where it can throw into a storage pit, turning to it and
+/// throwing the food in; the action counts as done as it turns
+[[nodiscard]] std::vector<Step> GiveFishToStore(const std::optional<FishingTrip>& trip, uint32_t store, float height);
+/// Fishing when it has no food in its hand, then walking to a place until within its height of it and putting the food
+/// down there
+[[nodiscard]] std::vector<Step> TakeFishTo(const std::optional<FishingTrip>& trip, glm::vec2 place, float height);
 /// A poo on the spot, a third of the time showing it needs one first
 [[nodiscard]] std::vector<Step> Poo(const Random& random);
 /// Being sick on the spot

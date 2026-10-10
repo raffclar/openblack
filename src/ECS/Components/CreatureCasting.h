@@ -31,6 +31,8 @@ struct CreatureCasting
 		GoNear,
 		GetAway,
 		TurnToFace,
+		/// Going to where it can throw into the target from
+		ToThrowPosition,
 	};
 	enum class Outcome : uint8_t
 	{

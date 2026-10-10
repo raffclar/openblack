@@ -70,6 +70,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Graphics/Texture2D.h"
 #include "Input/GameActionMapInterface.h"
@@ -816,6 +817,12 @@ LeashType LeashSystem::TypeOf(entt::entity creature) const
 
 std::optional<entt::entity> LeashSystem::PlayersCreature(PlayerNames player) const
 {
+	// The player's primary creature, the earliest they got that is still theirs; without the players' lists, the one
+	// creature they can lead, which is also the first they got
+	if (Locator::playerSystem::has_value())
+	{
+		return Locator::playerSystem::value().GetPrimaryCreature(player);
+	}
 	if (const auto id = leash::LeashableOf(Claims(), player))
 	{
 		return static_cast<entt::entity>(*id);
@@ -1341,7 +1348,7 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 	// The player's leash posts along the ray come first
 	std::optional<entt::entity> post;
 	float nearest = k_TapReach;
-	registry.Each<const LeashPost, const Transform>([&](entt::entity entity, const LeashPost& at, const Transform& where) {
+	registry.Each<const LeashPost, const Transform>([&](entt::entity entity, const LeashPost& at, const Transform&) {
 		// Only the leashes hanging there can be tapped, where they hang even when the picked one is carried
 		if (at.owner != player || !at.hung)
 		{

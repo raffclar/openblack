@@ -13,7 +13,6 @@
 
 #include <optional>
 #include <unordered_map>
-#include <unordered_set>
 
 #include <entt/entity/fwd.hpp>
 
@@ -34,15 +33,18 @@ struct RegistryContext
 	std::unordered_map<uint32_t, entt::entity> towns;
 	components::VillageLightFlames villageLightFlames {.clock = 0, .starts = village_lights::k_FlameStarts};
 	components::MapScriptGlobals mapScriptGlobals;
-	/// The walkers' obstacles by the cells their bounding circles reach, made afresh each turn: the walkers don't yet
-	/// sweep the map's cells for obstacles as the game does, and keep to this coarser look until they do
-	std::unordered_map<uint32_t, std::unordered_set<entt::entity>> wallHugObstacles;
 	/// The rock-tapping sounds go round in turn: the next of the four a tap of the hand plays, and the next a creature's
 	/// smash of a rock plays
 	uint8_t nextHandRockTap {0};
 	uint8_t nextCreatureRockSmash {0};
+	/// The scripts let the player go into their temple by tapping its entrance. They allow it until they say otherwise, and
+	/// every land starts allowing it again.
+	bool scriptLetsTempleBeEntered {true};
 	/// The game is over: the local player's temple is being destroyed
 	bool gameOver {false};
+	/// A skirmish: a playground land played rather than the story's. Losing a temple doesn't end it. openblack plays no
+	/// online games, which would be the same.
+	bool skirmish {false};
 	/// The temple hearts' beam sounds go round in turn: the next of the five a beam plays
 	uint32_t nextHeartBeamSound {0};
 	/// The order towns are gained by their players in, the next to be given

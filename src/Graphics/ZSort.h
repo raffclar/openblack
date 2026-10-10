@@ -34,4 +34,12 @@ namespace openblack::graphics::zsort
 	return std::bit_cast<uint32_t>(Key(point, camera));
 }
 
+/// The game draws a creature fizzing out of sight in its place among the solid models, before everything it sorts, and
+/// those models the nearest first. As a bgfx depth: above every sorted key (a distance's bits never reach the top bit),
+/// the nearest the greatest, with its lowest four bits left for the draws that follow it in turn.
+[[nodiscard]] inline uint32_t BeforeSorted(const glm::vec3& point, const glm::vec3& camera) noexcept
+{
+	return ~Depth(point, camera) | 0xFu;
+}
+
 } // namespace openblack::graphics::zsort

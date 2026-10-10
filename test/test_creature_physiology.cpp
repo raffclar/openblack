@@ -340,6 +340,15 @@ TEST(CreaturePhysiology, SleepHealsAndRestsThenWakes)
 	EXPECT_FALSE(SleepTurn(needs, species, 1.0f, 1000, false));
 }
 
+TEST(CreaturePhysiology, OnlyAPlayersOwnCreatureFaintsFromItsNeeds)
+{
+	EXPECT_TRUE(CanFaintFromNeeds(true, false, false));
+	// Nobody's creature, one the computer plays, and one a script controls never faint from their needs
+	EXPECT_FALSE(CanFaintFromNeeds(false, false, false));
+	EXPECT_FALSE(CanFaintFromNeeds(true, true, false));
+	EXPECT_FALSE(CanFaintFromNeeds(true, false, true));
+}
+
 TEST(CreaturePhysiology, FaintingOnlyForGrownUpOwnedCreatures)
 {
 	Needs needs;

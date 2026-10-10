@@ -98,6 +98,18 @@ Tables creature_mind_tables::Build(const InfoConstants& info)
 			}
 		}
 	}
+	// Each list of the town table runs up to its first empty slot
+	for (size_t d = 0; d < tables.townActions.size(); ++d)
+	{
+		for (const auto action : Words<uint32_t>(info.creatureDesireAction2.at(d)))
+		{
+			if (action == k_NoAction || action >= actionCount)
+			{
+				break;
+			}
+			tables.townActions.at(d).push_back(action);
+		}
+	}
 	for (const auto& entry : info.creatireActionKnownAboutEntry)
 	{
 		tables.skills.push_back({

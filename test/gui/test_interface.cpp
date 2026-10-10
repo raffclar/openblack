@@ -11,6 +11,7 @@
 
 #include <cstring>
 
+#include <algorithm>
 #include <span>
 #include <string>
 #include <string_view>
@@ -23,133 +24,14 @@
 #include <SDL_keycode.h>
 #include <gtest/gtest.h>
 
+#include "FakeGameFont.h"
+
 using namespace openblack::gui;
+
+using namespace openblack::gui::test;
 
 namespace
 {
-std::vector<uint8_t> Utf16Script(std::u16string_view text, bool byteOrderMark = true)
-{
-	std::vector<uint8_t> bytes;
-	if (byteOrderMark)
-	{
-		bytes.insert(bytes.end(), {0xFF, 0xFE});
-	}
-	for (const auto c : text)
-	{
-		bytes.push_back(static_cast<uint8_t>(c & 0xFF));
-		bytes.push_back(static_cast<uint8_t>(c >> 8));
-	}
-	return bytes;
-}
-
-struct FakeGlyph
-{
-	char16_t character;
-	uint16_t width;
-	float left;
-	float ink;
-	float right;
-	/// Rows of '#' and '.', as tall as the font
-	std::vector<std::string> rows;
-};
-
-/// A font in the format of data/j0.met and data/j0.fnt
-struct FakeFont
-{
-	uint32_t height;
-	std::vector<FakeGlyph> glyphs;
-	std::vector<uint8_t> met;
-	std::vector<uint8_t> fnt;
-
-	template <typename T>
-	static void Append(std::vector<uint8_t>& data, T value)
-	{
-		const auto offset = data.size();
-		data.resize(offset + sizeof(T));
-		std::memcpy(data.data() + offset, &value, sizeof(T));
-	}
-
-	void Build()
-	{
-		met.clear();
-		fnt.clear();
-		Append(met, height);
-		std::vector<uint8_t> name(0x100, 0);
-		const std::u16string_view fontName = u"Fake Sans";
-		for (size_t i = 0; i < fontName.size(); ++i)
-		{
-			name[i * 2] = static_cast<uint8_t>(fontName[i]);
-		}
-		met.insert(met.end(), name.begin(), name.end());
-		Append(met, static_cast<uint32_t>(glyphs.size()));
-		for (const auto& glyph : glyphs)
-		{
-			// Runs of clear and set pixels in turn, starting with clear
-			const auto offset = static_cast<uint32_t>(fnt.size());
-			bool set = false;
-			uint32_t run = 0;
-			auto flush = [this, &run]() {
-				if (run >= 0xFF)
-				{
-					fnt.push_back(0xFF);
-					Append(fnt, static_cast<uint16_t>(run));
-				}
-				else
-				{
-					fnt.push_back(static_cast<uint8_t>(run));
-				}
-				run = 0;
-			};
-			for (const auto& row : glyph.rows)
-			{
-				for (const auto pixel : row)
-				{
-					if ((pixel == '#') != set)
-					{
-						flush();
-						set = !set;
-					}
-					++run;
-				}
-			}
-			flush();
-
-			Append(met, static_cast<uint16_t>(glyph.character));
-			Append(met, glyph.width);
-			Append(met, static_cast<uint32_t>(0xCCCC0000));
-			Append(met, glyph.left);
-			Append(met, glyph.ink);
-			Append(met, glyph.right);
-			Append(met, offset);
-			Append(met, static_cast<uint32_t>(fnt.size() - offset));
-		}
-	}
-};
-
-/// Four pixels high: a solid A, a checkered B, a space, a question mark, a hyphen and a wide W
-FakeFont MakeFont()
-{
-	FakeFont font {.height = 4, .glyphs = {}, .met = {}, .fnt = {}};
-	font.glyphs = {
-	    {.character = u'A', .width = 2, .left = 1.0f, .ink = 2.0f, .right = 1.0f, .rows = {"##", "##", "##", "##"}},
-	    {.character = u'B', .width = 2, .left = 0.0f, .ink = 2.0f, .right = 0.0f, .rows = {"#.", ".#", "#.", ".#"}},
-	    {.character = u' ', .width = 0, .left = 1.0f, .ink = 0.0f, .right = 1.0f, .rows = {"", "", "", ""}},
-	    {.character = u'?', .width = 2, .left = 0.0f, .ink = 2.0f, .right = 2.0f, .rows = {"##", "..", "#.", ".."}},
-	    {.character = u'-', .width = 2, .left = 0.0f, .ink = 2.0f, .right = 0.0f, .rows = {"..", "##", "..", ".."}},
-	    {.character = u'W', .width = 4, .left = 0.0f, .ink = 8.0f, .right = 0.0f, .rows = {"####", "####", "####", "####"}},
-	};
-	font.Build();
-	return font;
-}
-
-GameFont LoadFont()
-{
-	auto fake = MakeFont();
-	auto font = GameFont::Load(fake.met, fake.fnt);
-	EXPECT_TRUE(font.has_value());
-	return std::move(*font);
-}
-
 std::u16string ToString(const std::vector<std::u16string_view>& lines)
 {
 	std::u16string result;
@@ -591,6 +473,79 @@ TEST(SymbolPicture, RingComesUpAndGoes)
 	EXPECT_EQ(picture.GetRingRect(0).Width(), 46);
 	EXPECT_EQ(picture.GetRingRect(3).Centre(), glm::ivec2(400, 327 + 56));
 	EXPECT_EQ(picture.GetRingRect(6).Centre(), glm::ivec2(400, 327 - 104));
+}
+
+namespace
+{
+std::vector<std::u16string> Names(const GameMenu& menu)
+{
+	std::vector<std::u16string> names;
+	for (const auto& control : menu.GetNamedControls())
+	{
+		names.push_back(control.name);
+	}
+	return names;
+}
+
+/// Clicks the first control of that name in its middle, as tools press a control by name
+Action Press(GameMenu& menu, std::u16string_view name)
+{
+	for (const auto& control : menu.GetNamedControls())
+	{
+		if (control.name == name)
+		{
+			return Click(menu, (control.rect.min + control.rect.max) / 2);
+		}
+	}
+	ADD_FAILURE() << "no control of that name";
+	return Action::None;
+}
+
+bool Has(const std::vector<std::u16string>& names, std::u16string_view name)
+{
+	return std::ranges::find(names, name) != names.end();
+}
+} // namespace
+
+// Every page's controls that act have their names, so that tools press them by name as the player clicks them: the
+// main page's buttons and tabs, the options' pages and tabs, and the question's answers while it is asked
+TEST(GameMenu, EveryPagesControlsArePressedByName)
+{
+	MenuFixture f;
+	const auto main = Names(f.menu);
+	for (const auto* name : {u"Continue", u"Options", u"Quit", u"Main", u"Stats"})
+	{
+		EXPECT_TRUE(Has(main, name)) << ToUtf8(name);
+	}
+	EXPECT_EQ(Press(f.menu, u"Options"), Action::None);
+	EXPECT_EQ(f.menu.GetPage(), Page::Options);
+	const auto options = Names(f.menu);
+	EXPECT_TRUE(Has(options, u"Players"));
+	EXPECT_TRUE(Has(options, u"Back"));
+	EXPECT_FALSE(Has(options, u"Continue"));
+	for (const auto& control : f.menu.GetNamedControls())
+	{
+		EXPECT_FALSE(control.kind.empty());
+	}
+
+	Press(f.menu, u"Advanced");
+	EXPECT_EQ(f.menu.GetPage(), Page::Advanced);
+	Press(f.menu, u"Controls");
+	EXPECT_EQ(f.menu.GetPage(), Page::Controls);
+	Press(f.menu, u"Back");
+	EXPECT_EQ(f.menu.GetPage(), Page::Main);
+
+	// The question's answers, and nothing behind it
+	Press(f.menu, u"Quit");
+	ASSERT_TRUE(f.menu.IsAskingToQuit());
+	const auto question = Names(f.menu);
+	EXPECT_TRUE(Has(question, u"Yes."));
+	EXPECT_TRUE(Has(question, u"No."));
+	EXPECT_FALSE(Has(question, u"Continue"));
+	EXPECT_EQ(Press(f.menu, u"No."), Action::None);
+	EXPECT_FALSE(f.menu.IsAskingToQuit());
+	Press(f.menu, u"Quit");
+	EXPECT_EQ(Press(f.menu, u"Yes."), Action::Quit);
 }
 
 TEST(GameMenu, ListsTheControls)

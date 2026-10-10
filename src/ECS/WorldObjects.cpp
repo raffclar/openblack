@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <vector>
 
+#include <glm/gtc/matrix_transform.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
@@ -57,6 +58,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/TownAggression.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -87,8 +89,6 @@ bool IsBuiltBuildingOfATown(const Registry& registry, entt::entity object)
 	return town != towns.end() && registry.Valid(town->second) && registry.AllOf<Town>(town->second);
 }
 
-/// A villager's health out of this is its life
-constexpr float k_VillagerHealthScale = 100.0f;
 /// An object with no model stands this big
 constexpr float k_DefaultRadius = 0.5f;
 constexpr float k_DefaultHeight = 1.0f;
@@ -101,24 +101,31 @@ const GObjectInfo* Row(const Array& rows, Index index)
 }
 
 /// The people at home in a building come out and decide again what to do
-void EmptyBuilding(entt::entity abode)
+/// A building hurt below its full life brings everyone inside out, as a knock does. One that stops working through it
+/// calls an emergency in its town when it is the town's storage pit or village centre.
+void BuildingHurt(entt::entity abode, float before, float after)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	std::vector<entt::entity> inside;
-	registry.Each<const Villager, const AtHome>([&](entt::entity villager, const Villager& person, const AtHome&) {
-		if (person.abode == abode)
-		{
-			inside.push_back(villager);
-		}
-	});
-	for (const auto villager : inside)
+	const auto inhabitants = registry.Get<const Abode>(abode).inhabitants;
+	for (const auto villager : inhabitants)
 	{
-		villager_home::LeaveHome(villager);
-		if (auto* action = registry.TryGet<LivingAction>(villager);
-		    action != nullptr && Locator::livingActionSystem::has_value())
+		villager_home::SetStateWhenTappedOnAbode(villager);
+	}
+	const auto* info = world_objects::AbodeInfoOf(abode);
+	if (info == nullptr)
+	{
+		return;
+	}
+	const float stops = info->thresholdForStopBeingFunctional;
+	const bool causesEmergency = info->abodeType == AbodeType::StoragePit || info->abodeType == AbodeType::TownCentre;
+	// TODO(villagers): a building that stops working is also marked so for its owner (the building phase)
+	if (before > stops && after <= stops && causesEmergency && Locator::townSystem::has_value())
+	{
+		const auto& towns = registry.Context().towns;
+		if (const auto town = towns.find(registry.Get<const Abode>(abode).townId);
+		    town != towns.end() && registry.Valid(town->second) && registry.AllOf<Town>(town->second))
 		{
-			Locator::livingActionSystem::value().VillagerSetState(*action, LivingAction::Index::Top,
-			                                                      VillagerStates::DecideWhatToDo, true);
+			Locator::townSystem::value().SetInStateOfEmergency(town->second);
 		}
 	}
 }
@@ -220,6 +227,28 @@ const GObjectInfo* world_objects::InfoOf(entt::entity object)
 	return nullptr;
 }
 
+std::vector<model_surface::Triangle> world_objects::DrawnTrianglesOf(entt::entity object)
+{
+	const auto* mesh = Locator::entitiesRegistry::value().TryGet<const Mesh>(object);
+	if (mesh == nullptr || !Locator::resources::has_value())
+	{
+		return {};
+	}
+	const auto& files = Locator::resources::value().GetL3DFiles();
+	if (!files.Contains(mesh->id))
+	{
+		return {};
+	}
+	return model_surface::DrawnTriangles(*files.Handle(mesh->id), {.detailLevels = 1, .latestState = 0});
+}
+
+glm::mat4 world_objects::PlacementOf(entt::entity object)
+{
+	const auto& transform = Locator::entitiesRegistry::value().Get<const Transform>(object);
+	return glm::translate(glm::mat4(1.0f), transform.position) * glm::mat4(transform.rotation) *
+	       glm::scale(glm::mat4(1.0f), transform.scale);
+}
+
 world_objects::Size world_objects::SizeOf(entt::entity object)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -258,7 +287,7 @@ float world_objects::LifeOf(entt::entity object)
 	}
 	if (const auto* villager = registry.TryGet<const Villager>(object))
 	{
-		return static_cast<float>(villager->health) / k_VillagerHealthScale;
+		return villager->life;
 	}
 	return 1.0f;
 }
@@ -283,8 +312,10 @@ float world_objects::ReduceLife(entt::entity object, float damage)
 	if (auto* needs = registry.TryGet<CreatureNeeds>(object))
 	{
 		needs->needs.life = std::max(needs->needs.life - damage, 0.0f);
-		// A creature with no life left is knocked out
+		// A fighting creature with no life left loses its fight there and then. Out of a fight it passes out on its next
+		// turn, as its body finds it has no life left
 		if (needs->needs.life <= 0.0f && Locator::creatureFightSystem::has_value() &&
+		    Locator::creatureFightSystem::value().IsFighting(object) &&
 		    !Locator::creatureFightSystem::value().IsKnockedOut(object))
 		{
 			Locator::creatureFightSystem::value().KnockOut(object);
@@ -302,20 +333,20 @@ float world_objects::ReduceLife(entt::entity object, float damage)
 		}
 		damage = LifeOf(object);
 	}
-	// Villagers keep their life to a fraction of their health, so that small hurts add up
 	const float before = LifeOf(object);
+	if (auto* villager = registry.TryGet<Villager>(object))
+	{
+		villager->life = std::max(villager->life - damage, 0.0f);
+		CountInjury(object, before, villager->life);
+		return villager->life;
+	}
 	auto& life = registry.AllOf<ObjectLife>(object) ? registry.Get<ObjectLife>(object)
 	                                                : registry.Assign<ObjectLife>(object, ObjectLife {.life = before});
 	life.life = std::max(life.life - damage, 0.0f);
-	if (auto* villager = registry.TryGet<Villager>(object))
-	{
-		villager->health = static_cast<uint32_t>(std::ceil(life.life * k_VillagerHealthScale));
-		CountInjury(object, before, life.life);
-	}
 	if (registry.AllOf<Abode>(object) && life.life < 1.0f)
 	{
 		// Its people come out of a building left under its full life, however little it lost
-		EmptyBuilding(object);
+		BuildingHurt(object, before, life.life);
 	}
 	// A built building of a town left under its full life gets a site for its repair, which starts from a little less
 	// than the life it is left with, whatever took it there
@@ -474,8 +505,17 @@ void world_objects::Remove(entt::entity object)
 		{
 			if (auto* abode = registry.TryGet<Abode>(villager->abode))
 			{
-				abode->inhabitants.erase(object);
+				std::erase(abode->inhabitants, object);
 			}
+		}
+	}
+	// A building's people are made homeless as it goes, the newest first
+	if (const auto* abode = registry.TryGet<const Abode>(object); abode != nullptr && Locator::townSystem::has_value())
+	{
+		const auto inhabitants = abode->inhabitants;
+		for (const auto villager : inhabitants)
+		{
+			villager_home::HomeDeleted(villager);
 		}
 	}
 	registry.Destroy(object);
@@ -565,6 +605,12 @@ float world_objects::IncreaseLife(entt::entity object, float amount)
 		return 0.0f;
 	}
 	const float before = LifeOf(object);
+	if (auto* villager = registry.TryGet<Villager>(object))
+	{
+		villager->life = std::min(villager->life + amount, 1.0f);
+		CountInjury(object, before, villager->life);
+		return villager->life;
+	}
 	auto& life = registry.AllOf<ObjectLife>(object) ? registry.Get<ObjectLife>(object)
 	                                                : registry.Assign<ObjectLife>(object, ObjectLife {.life = before});
 	life.life = std::min(life.life + amount, 1.0f);

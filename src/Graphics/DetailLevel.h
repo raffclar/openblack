@@ -24,6 +24,9 @@ inline constexpr uint8_t k_Default = 4;
 /// How finely the sea's texture repeats, from 0 to 1 (see sea_rows::Period). At 0 the sea is a still square.
 inline constexpr std::array<float, 7> k_WaterTiling = {0.0f, 0.2f, 0.4f, 0.6f, 0.8f, 0.5f, 1.0f};
 
+/// How far out models keep their finer meshes (see mesh_detail::Reach): the lowest levels swap them sooner
+inline constexpr std::array<float, 7> k_ModelDetail = {0.2f, 0.3f, 0.4f, 0.5f, 0.5f, 0.5f, 0.5f};
+
 /// Whether the sky has clouds
 inline constexpr std::array<bool, 7> k_Clouds = {false, false, false, true, true, true, true};
 
@@ -46,6 +49,11 @@ inline constexpr std::array<bool, 7> k_Weather = {false, false, false, true, tru
 [[nodiscard]] constexpr bool Clouds(uint8_t level)
 {
 	return k_Clouds.at(std::min<size_t>(level, k_Clouds.size() - 1));
+}
+
+[[nodiscard]] constexpr float ModelDetail(uint8_t level)
+{
+	return k_ModelDetail.at(std::min<size_t>(level, k_ModelDetail.size() - 1));
 }
 
 [[nodiscard]] constexpr float WaterTiling(uint8_t level)
