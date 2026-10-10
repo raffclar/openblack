@@ -1202,6 +1202,8 @@ bool Game::GameLogicLoop() noexcept
 
 	auto& lhvm = Locator::vm::value();
 	lhvm.LookIn(lhvm::ScriptType::All);
+	// Every object the scripts no longer hold in a variable lets go of its place in their table, after their turn
+	Locator::scriptObjects::value().ReleaseUnreferenced();
 	// The scripts' fade moves on with their turn
 	Locator::cinematicDirectorSystem::value().ProcessTurn();
 	// The advisors follow what they point at and look at

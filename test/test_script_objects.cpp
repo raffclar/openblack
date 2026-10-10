@@ -11,6 +11,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <vector>
 
@@ -31,6 +32,14 @@ using openblack::ecs::systems::ScriptObjectsSystem;
 
 namespace
 {
+enum class Container : uint8_t
+{
+	None,
+	Flock,
+	Dance,
+	Town,
+};
+
 /// A world of numbered objects, recording what the table does to them
 struct FakeWorld final: World
 {
@@ -42,12 +51,19 @@ struct FakeWorld final: World
 		bool controlled {false};
 		bool inPhysics {false};
 		bool inMap {true};
+		Container container {Container::None};
+		std::vector<entt::entity> members;
+		/// A marker or a timer
+		bool deletedWhenReleased {false};
+		bool highlight {false};
 	};
 	std::map<entt::entity, Object> objects;
 	std::vector<entt::entity> decided;
 	std::vector<entt::entity> decideAfterPhysics;
 	std::vector<entt::entity> abandoned;
 	std::vector<entt::entity> deleted;
+	/// The members that left a container, waiting for their script
+	std::vector<entt::entity> waiting;
 
 	entt::entity Add(uint32_t id, Object object)
 	{
@@ -77,6 +93,42 @@ struct FakeWorld final: World
 		deleted.push_back(object);
 		objects.erase(object);
 	}
+	[[nodiscard]] bool IsContainer(entt::entity object) const override
+	{
+		return objects.at(object).container != Container::None;
+	}
+	std::optional<std::vector<entt::entity>> Disband(entt::entity container) override
+	{
+		auto& object = objects.at(container);
+		if (object.container == Container::None)
+		{
+			return std::nullopt;
+		}
+		if (object.container == Container::Town)
+		{
+			return std::vector<entt::entity> {};
+		}
+		auto left = std::move(object.members);
+		object.members.clear();
+		for (const auto member : left)
+		{
+			if (objects.at(member).controlled)
+			{
+				waiting.push_back(member);
+			}
+		}
+		return left;
+	}
+	[[nodiscard]] std::vector<entt::entity> FlockMembers(entt::entity object) const override
+	{
+		const auto& found = objects.at(object);
+		return found.container == Container::Flock ? found.members : std::vector<entt::entity> {};
+	}
+	[[nodiscard]] bool IsDeletedWhenReleased(entt::entity object) const override
+	{
+		return objects.at(object).deletedWhenReleased;
+	}
+	[[nodiscard]] bool IsHighlight(entt::entity object) const override { return objects.at(object).highlight; }
 };
 
 struct System
@@ -110,30 +162,34 @@ TEST(ScriptObjects, OnlyTheNativesThatMoveOrSetObjectsTakeControl)
 	EXPECT_FALSE(TakesControl(110));
 }
 
-TEST(ScriptObjects, AnObjectInAScriptKeepsItsPlace)
+TEST(ScriptObjects, AnObjectKeepsItsPlace)
 {
 	Table table;
-	const auto first = table.Register(42, true, false);
+	const auto first = table.Register(42, true);
 	ASSERT_TRUE(first.has_value());
 	EXPECT_EQ(*first, 1);
-	// Not yet in a script, it would be given another place, as the game does
-	EXPECT_EQ(table.Register(42, false, false), 2);
-	EXPECT_EQ(table.Register(42, false, true), first);
+	// The scripts know it by the object itself, so it never takes a second place
+	EXPECT_EQ(table.Register(42, false), first);
 	EXPECT_TRUE(table.At(*first).createdByScript);
+	EXPECT_EQ(table.Register(43, false), 2);
 }
 
 TEST(ScriptObjects, TheFirstReferenceIsTold)
 {
 	Table table;
-	const auto place = *table.Register(7, false, false);
+	const auto place = *table.Register(7, false);
 	EXPECT_EQ(table.AddReference(place), Referenced::First);
 	EXPECT_EQ(table.AddReference(place), Referenced::Again);
 	table.RemoveReference(place);
 	table.RemoveReference(place);
 	table.RemoveReference(place);
 	EXPECT_EQ(table.At(place).count, 0);
-	// Let go of every reference, the place is still the object's: places are only freed when the land's scripts end
+	// Let go of every reference, the place is still the object's until it is freed
 	EXPECT_EQ(table.Find(7), place);
+	EXPECT_EQ(table.Unreferenced(), std::vector<uint16_t> {place});
+	table.Free(place);
+	EXPECT_FALSE(table.Find(7).has_value());
+	EXPECT_TRUE(table.Unreferenced().empty());
 	EXPECT_EQ(table.AddReference(0), Referenced::Nothing);
 }
 
@@ -142,25 +198,25 @@ TEST(ScriptObjects, TheTableFillsAndIsClearedWithTheProgram)
 	Table table;
 	for (uint32_t object = 1; object < k_Places; ++object)
 	{
-		ASSERT_TRUE(table.Register(object, false, false).has_value());
+		ASSERT_TRUE(table.Register(object, false).has_value());
 	}
-	EXPECT_FALSE(table.Register(9999, false, false).has_value());
+	EXPECT_FALSE(table.Register(9999, false).has_value());
 	table.Clear();
 	// Every place is free, and the search starts at the first again
-	EXPECT_EQ(table.Register(9999, false, false), 1);
+	EXPECT_EQ(table.Register(9999, false), 1);
 }
 
 TEST(ScriptObjects, ANewLandKeepsThePlacesStillCounted)
 {
 	Table table;
-	const auto counted = *table.Register(5, false, false);
+	const auto counted = *table.Register(5, false);
 	table.AddReference(counted);
-	const auto free = *table.Register(6, false, false);
+	const auto free = *table.Register(6, false);
 	table.ClearObjects();
 	EXPECT_FALSE(table.Find(5).has_value());
 	EXPECT_EQ(table.At(counted).count, 1);
 	// The search goes on from where it stopped: past the counted place, the other is free again once it comes round
-	const auto next = table.Register(7, false, false);
+	const auto next = table.Register(7, false);
 	ASSERT_TRUE(next.has_value());
 	EXPECT_NE(*next, counted);
 	EXPECT_EQ(*next, free);
@@ -169,7 +225,7 @@ TEST(ScriptObjects, ANewLandKeepsThePlacesStillCounted)
 TEST(ScriptObjects, ADeadTreeTakesItsTreesPlace)
 {
 	Table table;
-	const auto place = *table.Register(5, false, false);
+	const auto place = *table.Register(5, false);
 	table.Replace(5, 6);
 	EXPECT_EQ(table.Find(6), place);
 	EXPECT_FALSE(table.Find(5).has_value());
@@ -355,4 +411,174 @@ TEST(ScriptObjectsSystem, AVisualsThingGoesWhenItsVisualEnds)
 	openblack::ecs::script_spot_visuals::RemoveEnded(registry, [](uint32_t effect) { return effect == 5; });
 	EXPECT_FALSE(registry.Valid(ending));
 	EXPECT_TRUE(registry.Valid(lasting));
+}
+
+TEST(ScriptObjectsSystem, AnObjectNoVariableHoldsFreesItsPlaceAfterTheScriptsTurn)
+{
+	auto [world, system] = MakeSystem();
+	const auto found = world->Add(3);
+	const auto kept = world->Add(4);
+	ASSERT_TRUE(system->Register(found, false));
+	ASSERT_TRUE(system->Register(kept, false));
+	system->AddReference(kept);
+	system->ReleaseUnreferenced();
+	const auto places = system->Places();
+	ASSERT_EQ(places.size(), 1U);
+	EXPECT_TRUE(places.front().object == kept);
+	EXPECT_EQ(places.front().references, 1);
+	EXPECT_TRUE(world->objects.at(kept).inScript);
+	// Its variable let go, the kept one goes too, and is in no script
+	system->RemoveReference(kept);
+	system->ReleaseUnreferenced();
+	EXPECT_TRUE(system->Places().empty());
+	EXPECT_FALSE(world->objects.at(kept).inScript);
+	EXPECT_TRUE(world->deleted.empty());
+}
+
+TEST(ScriptObjectsSystem, ATableKeptFreeNeverFills)
+{
+	// A script that makes a marker each time round its loop, keeping only the last
+	auto [world, system] = MakeSystem();
+	entt::entity last = entt::null;
+	for (uint32_t i = 0; i < 5 * k_Places; ++i)
+	{
+		const auto marker = world->Add(1000 + i, {.deletedWhenReleased = true});
+		ASSERT_TRUE(system->Register(marker, true)) << i;
+		system->AddReference(marker);
+		if (last != entt::null)
+		{
+			system->RemoveReference(last);
+		}
+		last = marker;
+		system->ReleaseUnreferenced();
+	}
+	EXPECT_EQ(system->TimesFull(), 0U);
+	EXPECT_EQ(system->Places().size(), 1U);
+	// Every marker the script let go of went with it
+	EXPECT_EQ(world->deleted.size(), static_cast<std::size_t>(5 * k_Places - 1));
+	EXPECT_EQ(world->objects.size(), 1U);
+}
+
+TEST(ScriptObjectsSystem, ATableNeverFreedFillsAndSaysSo)
+{
+	auto [world, system] = MakeSystem();
+	for (uint32_t i = 1; i < k_Places; ++i)
+	{
+		const auto object = world->Add(i);
+		ASSERT_TRUE(system->Register(object, false));
+		system->AddReference(object);
+	}
+	EXPECT_FALSE(system->Register(world->Add(9999), false));
+	EXPECT_EQ(system->TimesFull(), 1U);
+	system->ReleaseUnreferenced();
+	EXPECT_EQ(system->Places().size(), k_Places - 1U);
+	system->Reset();
+	EXPECT_EQ(system->TimesFull(), 0U);
+}
+
+TEST(ScriptObjectsSystem, AMarkerOrTimerLetGoOfGoes)
+{
+	auto [world, system] = MakeSystem();
+	const auto marker = world->Add(3, {.deletedWhenReleased = true});
+	const auto found = world->Add(4, {.deletedWhenReleased = true});
+	ASSERT_TRUE(system->Register(marker, true));
+	system->AddReference(marker);
+	// A marker a script didn't make is only let go of while no script controls it
+	ASSERT_TRUE(system->Register(found, false));
+	system->AddReference(found);
+	system->RemoveReference(marker);
+	system->RemoveReference(found);
+	system->ReleaseUnreferenced();
+	EXPECT_EQ(world->deleted, std::vector {marker});
+	EXPECT_FALSE(world->objects.at(found).inScript);
+}
+
+TEST(ScriptObjectsSystem, AHighlightGoesOnlyWhenTheScriptMadeAndStillControlsIt)
+{
+	auto [world, system] = MakeSystem();
+	const auto held = world->Add(3, {.highlight = true});
+	const auto released = world->Add(4, {.highlight = true});
+	for (const auto highlight : {held, released})
+	{
+		ASSERT_TRUE(system->Register(highlight, true));
+		system->AddReference(highlight);
+	}
+	// A sign the script released stays up once its script ends
+	system->ReleaseFromScript(released);
+	system->RemoveReference(held);
+	system->RemoveReference(released);
+	system->ReleaseUnreferenced();
+	EXPECT_EQ(world->deleted, std::vector {held});
+	EXPECT_FALSE(world->objects.at(released).inScript);
+}
+
+TEST(ScriptObjectsSystem, AnythingElseAScriptMadeGoesBackIntoTheGame)
+{
+	auto [world, system] = MakeSystem();
+	const auto villager = world->Add(3, {.kind = Kind::Villager});
+	ASSERT_TRUE(system->Register(villager, true));
+	system->AddReference(villager);
+	EXPECT_TRUE(world->objects.at(villager).controlled);
+	system->RemoveReference(villager);
+	system->ReleaseUnreferenced();
+	EXPECT_TRUE(world->deleted.empty());
+	EXPECT_FALSE(world->objects.at(villager).controlled);
+	EXPECT_FALSE(world->objects.at(villager).inScript);
+	EXPECT_EQ(world->decided, std::vector {villager});
+}
+
+TEST(ScriptObjectsSystem, AFlockAScriptMadeIsDisbandedAndGoes)
+{
+	auto [world, system] = MakeSystem();
+	const auto member = world->Add(5, {.kind = Kind::Villager});
+	const auto flock = world->Add(4, {.container = Container::Flock, .members = {member}});
+	ASSERT_TRUE(system->Register(flock, true));
+	system->AddReference(flock);
+	// A member keeps a reference while in the flock
+	system->AddReference(member);
+	system->RemoveReference(flock);
+	system->ReleaseUnreferenced();
+	EXPECT_EQ(world->deleted, std::vector {flock});
+	// The member let go of its reference, and its place is freed in the same pass, coming after the flock's
+	EXPECT_TRUE(system->Places().empty());
+	EXPECT_FALSE(world->objects.at(member).inScript);
+}
+
+TEST(ScriptObjectsSystem, AFlockNoScriptControlsLetsGoOfItsMembersReferences)
+{
+	auto [world, system] = MakeSystem();
+	const auto member = world->Add(5);
+	const auto flock = world->Add(4, {.container = Container::Flock, .members = {member}});
+	system->AddReference(member);
+	system->AddReference(flock);
+	system->RemoveReference(flock);
+	system->ReleaseUnreferenced();
+	// The member came first in the table, so its place is freed at the next turn; the flock stays
+	EXPECT_TRUE(world->deleted.empty());
+	EXPECT_EQ(world->objects.at(flock).members, std::vector {member});
+	ASSERT_EQ(system->Places().size(), 1U);
+	EXPECT_EQ(system->Places().front().references, 0);
+	system->ReleaseUnreferenced();
+	EXPECT_TRUE(system->Places().empty());
+}
+
+TEST(ScriptObjectsSystem, DisbandingLetsEveryMemberGo)
+{
+	auto [world, system] = MakeSystem();
+	const auto controlled = world->Add(5, {.kind = Kind::Villager, .controlled = true});
+	const auto free = world->Add(6, {.kind = Kind::Villager});
+	const auto dance = world->Add(4, {.container = Container::Dance, .members = {controlled, free}});
+	const auto town = world->Add(7, {.container = Container::Town});
+	const auto rock = world->Add(8);
+	system->AddReference(controlled);
+	system->AddReference(free);
+	EXPECT_TRUE(system->Disband(dance));
+	EXPECT_TRUE(world->objects.at(dance).members.empty());
+	EXPECT_EQ(world->waiting, std::vector {controlled});
+	for (const auto& place : system->Places())
+	{
+		EXPECT_EQ(place.references, 0);
+	}
+	EXPECT_TRUE(system->Disband(town));
+	EXPECT_FALSE(system->Disband(rock));
 }
