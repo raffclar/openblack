@@ -887,7 +887,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::SkyDome::textureId>("textureId")
 	    .Field<&components::SkyDome::follow>("follow")
 	    .Field<&components::SkyDome::frameRows>("frameRows")
-	    .Field<&components::SkyDome::overcast>("overcast");
+	    .Field<&components::SkyDome::overcast>("overcast")
+	    .Field<&components::SkyDome::landLight>("landLight");
 	Reflect<components::DayNightCycle>(context).Field<&components::DayNightCycle::clock>("clock");
 	Reflect<components::CelestialBody>(context)
 	    .Field<&components::CelestialBody::meshId>("meshId")
