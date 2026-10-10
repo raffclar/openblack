@@ -621,6 +621,25 @@ std::string GameLevels::LoadTestbed()
 	return {};
 }
 
+std::string GameLevels::NewGame(std::string_view start)
+{
+	auto* game = Game::Instance();
+	if (game == nullptr)
+	{
+		return "there is no game to start";
+	}
+	std::optional<new_game_choice::NewGameStart> how;
+	if (!start.empty())
+	{
+		how = new_game_choice::ParseNewGameStart(start);
+		if (!how.has_value())
+		{
+			return "no way to start a new game called " + std::string(start);
+		}
+	}
+	return game->StartNewGame(how) ? std::string {} : "the new game didn't start";
+}
+
 std::string GameLevels::Current() const
 {
 	const auto* game = Game::Instance();
