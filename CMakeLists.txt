@@ -91,7 +91,11 @@ option(OPENBLACK_WARNINGS_AS_ERRORS
        "Treat warnings as errors (disable easier prototyping, enable for CI)"
        OFF
 )
-option(OPENBLACK_BINK_DECODER "Decode the game's Bink videos (without it they keep their timing and show black)" ON)
+option(
+  OPENBLACK_BINK_DECODER
+  "Decode the game's Bink videos (without it they keep their timing and show black)"
+  ON
+)
 option(OPENBLACK_TRACE_TIME
        "Compilation Time analysis (only available with clang)" OFF
 )
