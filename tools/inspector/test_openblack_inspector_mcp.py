@@ -266,8 +266,9 @@ class SessionBase(unittest.TestCase):
 
     def add_game(self, game, worktree):
         self.games.append(game)
-        write_record(self.folder, game.pid, game.port, worktree)
+        # Running before its file is there, as a real game is: a file seen for a process not running is removed
         self.running.add(game.pid)
+        write_record(self.folder, game.pid, game.port, worktree)
         return game
 
     def stop(self, game):
