@@ -1056,6 +1056,110 @@ void AddAudio(std::vector<Scenario>& all)
 	    .commands = voices,
 	    .repeatFrom = 0,
 	});
+
+	// A tiger to the east roars, then a cow to the west moos, the camera looking north between them
+	auto east = Content(CreatureType::Tiger, {40.0f, 0.0f}, 180.0f, "tiger, east");
+	east.pauseMind = true;
+	auto west = Content(CreatureType::Cow, {-40.0f, 0.0f}, 180.0f, "cow, west");
+	west.pauseMind = true;
+	all.push_back({
+	    .id = "audio.stereo",
+	    .name = "Voices from either side of the screen",
+	    .facet = Facet::Audio,
+	    .description = "The camera looks north between a tiger on the right of the screen and a cow on the left, who take "
+	                   "turns to be angry. The audio log gives the side each sound is heard from.",
+	    .expected = "The tiger is heard from the right and the cow from the left; turning the camera round swaps them.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 25.0f, -70.0f}, .look = {0.0f, 5.0f, 0.0f}},
+	    .creatures = {east, west},
+	    .commands = {Play(Kind::PlayAction, 0, animations::k_Angry, 1.0f, true),
+	                 Play(Kind::PlayAction, 1, animations::k_Angry, 1.0f, true)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "audio.alignment_music",
+	    .name = "The land's music following the alignment",
+	    .facet = Facet::Audio,
+	    .description = "The camera stays in the player's influence while their alignment goes from good to evil, to "
+	                   "neutral and back to good, twelve seconds apart. The audio log gives the music mix as it fades.",
+	    .expected = "The land's music crossfades to the version of each alignment, carrying on in time: the new version "
+	                "fades in over about two and a half seconds while the old one fades out over about three.",
+	    .environment = {.playerAlignment = 1.0f},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::SetAlignment, .delaySeconds = 12.0f, .alignment = -1.0f},
+	                 {.kind = Kind::SetAlignment, .delaySeconds = 12.0f, .alignment = 0.0f},
+	                 {.kind = Kind::SetAlignment, .delaySeconds = 12.0f, .alignment = 1.0f}},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "audio.cinema_music",
+	    .name = "The land's music waiting for the cinema bars",
+	    .facet = Facet::Audio,
+	    .description = "The camera stays in the player's influence while the land's music plays. After fifteen seconds a "
+	                   "script's cinema bars slide in, and twelve seconds later out again. The audio log gives when the "
+	                   "land's music waits and when it may play.",
+	    .expected = "The land's music fades out as the bars start to slide in and stays silent while they are up and "
+	                "while they slide out; once they are gone it comes back, carrying on from where it stopped.",
+	    .environment = {.playerAlignment = 1.0f},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 15.0f, .value = 1},
+	                 {.kind = Kind::WideScreen, .delaySeconds = 12.0f, .value = 0}},
+	});
+
+	all.push_back({
+	    .id = "audio.temple_music",
+	    .name = "The temple's music following the player's alignment",
+	    .facet = Facet::Audio,
+	    .description = "The temple opens on the creature's room, and the player's alignment goes from good to evil, to "
+	                   "neutral and back to good, twelve seconds apart. The audio log gives the music mix as it fades.",
+	    .expected = "The temple's music plays in the version of the player's own alignment, crossfading as it changes "
+	                "and carrying on in time.",
+	    .environment = {.playerAlignment = 1.0f},
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 40.0f}, 180.0f, "yours")},
+	    .commands = {{.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 1.0f},
+	                 {.kind = Kind::SetAlignment, .delaySeconds = 12.0f, .alignment = -1.0f},
+	                 {.kind = Kind::SetAlignment, .delaySeconds = 12.0f, .alignment = 0.0f},
+	                 {.kind = Kind::SetAlignment, .delaySeconds = 12.0f, .alignment = 1.0f}},
+	});
+
+	// The camera looks out across the north edge of the player's influence: the bottom of the screen is inside it,
+	// the middle and the top beyond it
+	all.push_back({
+	    .id = "audio.virtual_influence",
+	    .name = "The hand's hum past the influence border",
+	    .facet = Facet::Audio,
+	    .description = "The hand rests inside the player's influence near its border, goes out past the border for twenty "
+	                   "seconds, and comes back in. The audio log gives the hum's pitch as it changes.",
+	    .expected = "Outside, a hum is heard, not from any place, at full pitch at first, falling as the hand stays out and "
+	                "goes further; it stops when the hand comes back. With no temple standing the border isn't shown, so "
+	                "crossing it makes no sound.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 330.0f}, .look = {0.0f, 0.0f, 420.0f}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.95f}},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 3.0f, .point = {0.0f, -0.5f}, .amount = 2.0f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 10.0f, .point = {0.0f, -0.1f}, .amount = 2.0f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 10.0f, .point = {0.0f, 0.6f}, .amount = 2.0f}},
+	    .repeatFrom = 0,
+	});
+
+	// As above, but with the player's temple standing in the middle of their influence, so their border shows
+	all.push_back({
+	    .id = "audio.border_crossing",
+	    .name = "The hand crossing the influence border",
+	    .facet = Facet::Audio,
+	    .description = "The player's temple stands in the middle of their influence. The hand goes out over the north edge "
+	                   "of the influence and back in, every five seconds. The audio log gives where each sound is heard.",
+	    .expected = "Each time the hand goes over the border, out or in, the crossing sound plays once, from the hand, "
+	                "and smoke ripples along the border in the player's colour.",
+	    .environment = {.dispenserGrid = false, .temple = glm::vec2(0.0f)},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 330.0f}, .look = {0.0f, 0.0f, 420.0f}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.95f}},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 3.0f, .point = {0.0f, -0.5f}, .amount = 2.0f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 5.0f, .point = {0.0f, 0.5f}, .amount = 2.0f}},
+	    .repeatFrom = 1,
+	});
 }
 
 void AddObjects(std::vector<Scenario>& all)
@@ -1278,6 +1382,46 @@ void AddHand(std::vector<Scenario>& all)
 	    .commands = {Stroke(0, BodyPart::Head, 1.0f), Stroke(0, BodyPart::Belly, 1.0f), Stroke(0, BodyPart::RightHand, 1.0f),
 	                 Slap(0, 0.85f, true, false, 2.0f), Slap(0, 0.55f, false, true, 2.0f), Act(Kind::HandLetGo, 0, 3.0f, true)},
 	    .repeatFrom = 0,
+	});
+	// The camera looks down on the north edge of the player's influence, 400 m from the middle: the bottom of the
+	// screen is inside it, the rest beyond
+	all.push_back({
+	    .id = "hand.virtual_influence",
+	    .name = "The hand acting past the influence border",
+	    .facet = Facet::Hand,
+	    .description = "The hand picks up a ball inside the player's influence, carries it past the border and lets it "
+	                   "go, picks up a second ball just outside and drops it, then waits further out and tries a third "
+	                   "ball once the share it keeps has run out, and comes back in.",
+	    .expected = "Just past the border the hand still takes and lets go of the balls, keeping its inside look, with "
+	                "the hum playing; the game log gives the share it keeps falling a tenth at a time. Once the log says "
+	                "it has none, the third ball can't be taken and the hand changes to its outside look.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, 375.0f}, .look = {0.0f, 0.0f, 415.0f}},
+	    .objects = {{.type = MobileObjectInfo::Ball, .offset = {0.0f, 393.0f}},
+	                {.type = MobileObjectInfo::Ball, .offset = {5.0f, 408.0f}},
+	                {.type = MobileObjectInfo::Ball, .offset = {-5.0f, 430.0f}}},
+	    .commands =
+	        {// Inside, the hand takes the first ball
+	         {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.5f, 0.96f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3},
+	         // Carries it past the border and lets it go there
+	         {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.0f, -0.25f}, .amount = 1.0f},
+	         {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.3f, .value = 3},
+	         // Takes the second ball, just outside, and lets it go
+	         {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.582f, 0.6f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3},
+	         {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.3f, .value = 3},
+	         // Waits further out until nothing is left, then tries the third
+	         {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.44f, 0.02f}},
+	         {.kind = Kind::PointerTo, .delaySeconds = 10.0f, .point = {0.441f, 0.296f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3},
+	         // And comes back in
+	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.3f, 0.97f}}},
 	});
 }
 
@@ -2103,12 +2247,15 @@ std::vector<Scenario> Build()
 	AddFlockScenarios(all);
 	AddBirdScenarios(all);
 	AddTeleportScenarios(all);
+	AddVortexScenarios(all);
 	AddTornadoScenarios(all);
 	AddPhysicsScenarios(all);
 	AddNatureScenarios(all);
 	AddHandNavigationScenarios(all);
 	AddHandLookScenarios(all);
+	AddFishScenarios(all);
 	AddKnockScenarios(all);
+	AddSkyScenarios(all);
 	return all;
 }
 
@@ -2203,7 +2350,7 @@ std::string_view CommandProblem(const Command& command, std::span<const ObjectSe
 bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 {
 	return kind == Kind::SetHour || kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed ||
-	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment ||
+	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
 	       kind == Kind::HandTapObject || IsPointerCommand(kind);
 }
 
@@ -2212,7 +2359,7 @@ std::string_view testbed_scenarios::Name(Facet facet)
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
 	    "Idle",       "Expressions", "Senses",    "Needs",         "Growth",  "Appearance", "Light",   "Movement",
 	    "Footprints", "Audio",       "Objects",   "Hand",          "Leash",   "Combat",     "Mind",    "Particles",
-	    "Editor",     "Miracles",    "Benchmark", "Creature Mode", "Physics", "Nature",     "Animals",
+	    "Editor",     "Miracles",    "Benchmark", "Creature Mode", "Physics", "Nature",     "Animals", "Sky",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
@@ -2231,7 +2378,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 87> k_Names {
+	constexpr std::array<std::string_view, 89> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -2303,6 +2450,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "press F5",
 	    "tattoo",
 	    "take tattoo off",
+	    "open tattoo editor",
 	    "hold seed",
 	    "draw gesture",
 	    "summon seed",
@@ -2316,6 +2464,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "move mouse",
 	    "turn wheel",
 	    "set alignment",
+	    "cinema bars",
 	    "set fight lean",
 	    "set miracle sightings",
 	    "hand tap",
@@ -2366,11 +2515,11 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 	if (scenario.creatures.empty() && scenario.particles.empty() && scenario.miracles.empty() && scenario.dispensers.empty() &&
 	    scenario.birdFlocks.empty() && scenario.temples.empty() && !environment.dispenserGrid && !scenario.crowd.has_value() &&
 	    !environment.playerAlignment.has_value() && scenario.throws.empty() && scenario.objects.empty() &&
-	    scenario.fireflyRewards.empty() &&
+	    scenario.vortices.empty() && scenario.fireflyRewards.empty() &&
 	    std::ranges::none_of(scenario.commands, [](const Command& command) { return NeedsNoCreature(command.kind); }))
 	{
-		problems.emplace_back("no creatures, things, particles, miracles, dispensers, birds, temples, crowd, fireflies' "
-		                      "rewards, player's commands or alignment for the hand");
+		problems.emplace_back("no creatures, things, particles, miracles, dispensers, birds, temples, vortices, crowd, "
+		                      "fireflies' rewards, player's commands or alignment for the hand");
 	}
 	if ((environment.playerAlignment && !InRange(*environment.playerAlignment, -1.0f, 1.0f)) ||
 	    (environment.cursor && (!InRange(environment.cursor->x, 0.0f, 1.0f) || !InRange(environment.cursor->y, 0.0f, 1.0f))))

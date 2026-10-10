@@ -23,10 +23,13 @@
 #include "3D/L3DRayCast.h"
 #include "3D/TempleExteriorMorph.h"
 #include "Common/Bitmap16B.h"
+#include "ECS/BuildingConstruction.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/TempleExterior.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "Locator.h"
@@ -52,7 +55,17 @@ void TempleExteriorSystem::UpdateTurn()
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& alignment = Locator::alignmentSystem::value();
 	registry.Each<const Temple, TempleExterior, Mesh>(
-	    [&alignment](const entt::entity entity, const Temple& temple, TempleExterior& exterior, Mesh& mesh) {
+	    [&registry, &alignment](const entt::entity entity, const Temple& temple, TempleExterior& exterior, Mesh& mesh) {
+		    // Its model shows as much of it built as its heart is. Once it shows all of it, the temple is taken out of the
+		    // map's cells and put back in them.
+		    const auto* progress = registry.TryGet<const BuildProgress>(entity);
+		    const auto follow =
+		        building_construction::FollowBuilt(exterior.drawnBuilt, progress != nullptr ? progress->built : 1.0f);
+		    exterior.drawnBuilt = follow.drawn;
+		    if (follow.refile && Locator::entitiesMap::has_value())
+		    {
+			    Locator::entitiesMap::value().Refile(entity);
+		    }
 		    // Each turn the temple grows toward its player's goodness, and twice their share of the influence
 		    // TODO(raffclar): the player's share of the influence, once influence is simulated
 		    exterior.alignmentTarget = (alignment.GetPlayerAlignment(temple.owner) + 1.0f) * 0.5f;
@@ -82,7 +95,8 @@ std::optional<PlayerNames> TempleExteriorSystem::EntranceAt(glm::vec3 origin, gl
 	registry.Each<const TempleEntrance, const Transform>(
 	    [&](const entt::entity, const TempleEntrance& entrance, const Transform& transform) {
 		    const auto* temple = registry.TryGet<const Temple>(entrance.temple);
-		    if (temple == nullptr)
+		    // A temple's entrance can be clicked only once the temple is built
+		    if (temple == nullptr || registry.AllOf<BuildProgress>(entrance.temple))
 		    {
 			    return;
 		    }
@@ -156,6 +170,15 @@ void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleEx
 	}
 	auto& temple = *meshes.Handle(id);
 	temple.UpdateVertices(blended);
+	// Its shape is kept too, for what is done at points on its surface
+	if (files.Contains(id))
+	{
+		*files.Handle(id) = blended;
+	}
+	else
+	{
+		files.Load(id, resources::L3DFileLoader::FromFileTag {}, blended);
+	}
 
 	// Its texture, of its player's set, between the two looks about its alignment
 	const auto texture = TextureOf(exterior.alignment);

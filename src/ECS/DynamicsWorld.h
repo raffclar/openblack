@@ -121,6 +121,8 @@ public:
 	                                                                glm::vec3 position) = 0;
 	virtual void MoveSound(entt::entity emitter, glm::vec3 position) = 0;
 	virtual void AddWaterRing(const water_rings::Ring& ring) = 0;
+	/// Sends the fish near a splash in the sea darting away
+	virtual void ScareFish(glm::vec3 point) = 0;
 	/// How deep the snow lies at a point, 0 to 255
 	[[nodiscard]] virtual int32_t SnowAt(glm::vec3 point) const = 0;
 

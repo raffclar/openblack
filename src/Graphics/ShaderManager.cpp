@@ -63,6 +63,8 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME vs_object_few_bones_instanced
 #include "ShaderIncluder.h"
+#define SHADER_NAME vs_object_palette_instanced
+#include "ShaderIncluder.h"
 #define SHADER_NAME vs_object_morph_instanced
 #include "ShaderIncluder.h"
 #define SHADER_NAME vs_object_posed_instanced
@@ -95,6 +97,8 @@
 #define SHADER_NAME vs_terrain
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_terrain
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_terrain_vortex_hole
 #include "ShaderIncluder.h"
 
 #define SHADER_NAME vs_water
@@ -184,6 +188,8 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_interface
 #include "ShaderIncluder.h"
+#define SHADER_NAME fs_video
+#include "ShaderIncluder.h"
 
 // clang-format on
 
@@ -197,13 +203,14 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 64> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 67> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
     BGFX_EMBEDDED_SHADER(vs_object),
     BGFX_EMBEDDED_SHADER(vs_object_instanced),
     BGFX_EMBEDDED_SHADER(vs_object_few_bones_instanced),
+    BGFX_EMBEDDED_SHADER(vs_object_palette_instanced),
     BGFX_EMBEDDED_SHADER(vs_object_morph_instanced),
     BGFX_EMBEDDED_SHADER(vs_object_posed_instanced),
     BGFX_EMBEDDED_SHADER(vs_object_morph),
@@ -220,6 +227,7 @@ const std::array<bgfx::EmbeddedShader, 64> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(fs_sky), //
     BGFX_EMBEDDED_SHADER(vs_terrain),
     BGFX_EMBEDDED_SHADER(fs_terrain), //
+    BGFX_EMBEDDED_SHADER(fs_terrain_vortex_hole),
     BGFX_EMBEDDED_SHADER(vs_water),
     BGFX_EMBEDDED_SHADER(fs_water), //
     BGFX_EMBEDDED_SHADER(vs_sprite),
@@ -261,6 +269,7 @@ const std::array<bgfx::EmbeddedShader, 64> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_interface),
     BGFX_EMBEDDED_SHADER(vs_text3d),
     BGFX_EMBEDDED_SHADER(fs_interface), //
+    BGFX_EMBEDDED_SHADER(fs_video),     //
     BGFX_EMBEDDED_SHADER_END()          //
 }};
 
@@ -268,10 +277,12 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"DebugLine", "vs_line", "fs_line"},
     ShaderDefinition {"DebugLineInstanced", "vs_line_instanced", "fs_line"},
     ShaderDefinition {"Terrain", "vs_terrain", "fs_terrain"},
+    ShaderDefinition {"TerrainVortexHole", "vs_terrain", "fs_terrain_vortex_hole"},
     ShaderDefinition {"Object", "vs_object", "fs_object"},
     ShaderDefinition {"ObjectEnvironment", "vs_object_environment", "fs_object_environment"},
     ShaderDefinition {"ObjectInstanced", "vs_object_instanced", "fs_object"},
     ShaderDefinition {"ObjectFewBonesInstanced", "vs_object_few_bones_instanced", "fs_object"},
+    ShaderDefinition {"ObjectPaletteInstanced", "vs_object_palette_instanced", "fs_object"},
     ShaderDefinition {"ObjectMorphInstanced", "vs_object_morph_instanced", "fs_object"},
     ShaderDefinition {"ObjectPosedInstanced", "vs_object_posed_instanced", "fs_object"},
     ShaderDefinition {"ObjectHeightMapInstanced", "vs_object_hm_instanced", "fs_object"},
@@ -308,6 +319,7 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"ObjectShadowStaticInstanced", "vs_object_shadow_static_instanced", "fs_object_shadow"},
     ShaderDefinition {"Beam", "vs_beam", "fs_beam"},
     ShaderDefinition {"Interface", "vs_interface", "fs_interface"},
+    ShaderDefinition {"Video", "vs_interface", "fs_video"},
     ShaderDefinition {"Text3D", "vs_text3d", "fs_interface"},
 };
 
@@ -337,6 +349,12 @@ std::vector<shader_samplers::Sampler> ReflectSamplers(std::string_view shaderNam
 	                   shaderName);
 	return {};
 }
+
+/// The samplers of both of a program's shaders
+std::vector<shader_samplers::Sampler> SamplersOf(const ShaderDefinition& shader)
+{
+	return shader_samplers::Merge(ReflectSamplers(shader.vertexShaderName), ReflectSamplers(shader.fragmentShaderName));
+}
 } // namespace
 
 ShaderManager::ShaderManager() = default;
@@ -364,12 +382,20 @@ void ShaderManager::LoadShaders()
 		assert(bgfx::isValid(vs));
 		auto fs = bgfx::createEmbeddedShader(k_EmbeddedShaders.data(), type, shader.fragmentShaderName.data());
 		assert(bgfx::isValid(fs));
-		const auto vertexSamplers = ReflectSamplers(shader.vertexShaderName);
-		const auto fragmentSamplers = ReflectSamplers(shader.fragmentShaderName);
 		_shaderPrograms[shader.name.data()] =
-		    new ShaderProgram(shader.name.data(), fromBgfx(vs), fromBgfx(fs),
-		                      shader_samplers::Merge(vertexSamplers, fragmentSamplers), *_samplerDefaults);
+		    new ShaderProgram(shader.name.data(), fromBgfx(vs), fromBgfx(fs), SamplersOf(shader), *_samplerDefaults);
 	}
+}
+
+std::vector<std::pair<std::string, std::vector<shader_samplers::Sampler>>> ShaderManager::ProgramSamplers()
+{
+	std::vector<std::pair<std::string, std::vector<shader_samplers::Sampler>>> programs;
+	programs.reserve(k_Shaders.size());
+	for (const auto& shader : k_Shaders)
+	{
+		programs.emplace_back(std::string(shader.name), SamplersOf(shader));
+	}
+	return programs;
 }
 
 const ShaderProgram* ShaderManager::GetShader(const std::string& name) const

@@ -15,7 +15,6 @@
 
 #include "3D/Implementations/LandIsland.h"
 #include "3D/Implementations/Ocean.h"
-#include "3D/Implementations/Sky.h"
 #include "3D/Implementations/TempleInterior.h"
 #include "3D/Implementations/UnloadedIsland.h"
 #include "3D/LandData.h"
@@ -45,6 +44,7 @@
 #include "ECS/Systems/Implementations/CreatureCarryOverSystem.h"
 #include "ECS/Systems/Implementations/CreatureCaveSystem.h"
 #include "ECS/Systems/Implementations/CreatureFightSystem.h"
+#include "ECS/Systems/Implementations/CreatureFizzSystem.h"
 #include "ECS/Systems/Implementations/CreatureHairSystem.h"
 #include "ECS/Systems/Implementations/CreatureHandSystem.h"
 #include "ECS/Systems/Implementations/CreatureLocomotionSystem.h"
@@ -59,12 +59,16 @@
 #include "ECS/Systems/Implementations/FieldSystem.h"
 #include "ECS/Systems/Implementations/FireSystem.h"
 #include "ECS/Systems/Implementations/FireflySystem.h"
+#include "ECS/Systems/Implementations/FishFarmSystem.h"
 #include "ECS/Systems/Implementations/FootprintSystem.h"
 #include "ECS/Systems/Implementations/ForestSystem.h"
 #include "ECS/Systems/Implementations/GestureSystem.h"
 #include "ECS/Systems/Implementations/HandGrabSystem.h"
 #include "ECS/Systems/Implementations/HandSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
+#if defined(OPENBLACK_INSPECTOR)
+#include "ECS/Systems/Implementations/InspectorSystem.h"
+#endif
 #include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
 #include "ECS/Systems/Implementations/MagicShieldSystem.h"
@@ -74,6 +78,7 @@
 #include "ECS/Systems/Implementations/ParticleSystem.h"
 #include "ECS/Systems/Implementations/PathfindingSystem.h"
 #include "ECS/Systems/Implementations/PickingSystem.h"
+#include "ECS/Systems/Implementations/PlayerProfileSystem.h"
 #include "ECS/Systems/Implementations/PlayerSystem.h"
 #include "ECS/Systems/Implementations/RainSystem.h"
 #include "ECS/Systems/Implementations/ReactionSystem.h"
@@ -81,9 +86,11 @@
 #include "ECS/Systems/Implementations/ResourceStoreSystem.h"
 #include "ECS/Systems/Implementations/RewardSystem.h"
 #include "ECS/Systems/Implementations/ScriptObjectsSystem.h"
+#include "ECS/Systems/Implementations/SkySystem.h"
 #include "ECS/Systems/Implementations/SnowSystem.h"
 #include "ECS/Systems/Implementations/SnowfallSystem.h"
 #include "ECS/Systems/Implementations/SoundTagSystem.h"
+#include "ECS/Systems/Implementations/TattooEditorSystem.h"
 #include "ECS/Systems/Implementations/TeleportSystem.h"
 #include "ECS/Systems/Implementations/TempleDestructionSystem.h"
 #include "ECS/Systems/Implementations/TempleExteriorSystem.h"
@@ -91,10 +98,14 @@
 #include "ECS/Systems/Implementations/TornadoSystem.h"
 #include "ECS/Systems/Implementations/TownDesireSystem.h"
 #include "ECS/Systems/Implementations/TownSystem.h"
+#include "ECS/Systems/Implementations/TutorialSkipSystem.h"
 #include "ECS/Systems/Implementations/VegetationSystem.h"
+#include "ECS/Systems/Implementations/VideoSystem.h"
 #include "ECS/Systems/Implementations/VillageLightSystem.h"
+#include "ECS/Systems/Implementations/VortexSystem.h"
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
 #include "ECS/Systems/Implementations/WeatherSystem.h"
+#include "ECS/Systems/InspectorSystemInterface.h"
 #include "Graphics/RendererInterface.h"
 #include "Input/GameActionMap.h"
 #include "LHVM.h"
@@ -132,6 +143,7 @@ using openblack::ecs::systems::CreatureAudioSystem;
 using openblack::ecs::systems::CreatureCarryOverSystem;
 using openblack::ecs::systems::CreatureCaveSystem;
 using openblack::ecs::systems::CreatureFightSystem;
+using openblack::ecs::systems::CreatureFizzSystem;
 using openblack::ecs::systems::CreatureHairSystem;
 using openblack::ecs::systems::CreatureHandSystem;
 using openblack::ecs::systems::CreatureLocomotionSystem;
@@ -144,6 +156,7 @@ using openblack::ecs::systems::DynamicsSystem;
 using openblack::ecs::systems::EditorSystem;
 using openblack::ecs::systems::FieldSystem;
 using openblack::ecs::systems::FireflySystem;
+using openblack::ecs::systems::FishFarmSystem;
 using openblack::ecs::systems::FootprintSystem;
 using openblack::ecs::systems::ForestSystem;
 using openblack::ecs::systems::GestureEventsInterface;
@@ -160,6 +173,7 @@ using openblack::ecs::systems::MistSystem;
 using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PathfindingSystem;
 using openblack::ecs::systems::PickingSystem;
+using openblack::ecs::systems::PlayerProfileSystem;
 using openblack::ecs::systems::PlayerSystem;
 using openblack::ecs::systems::RainSystem;
 using openblack::ecs::systems::ReactionSystem;
@@ -168,6 +182,7 @@ using openblack::ecs::systems::ResourceStoreSystem;
 using openblack::ecs::systems::SnowfallSystem;
 using openblack::ecs::systems::SnowSystem;
 using openblack::ecs::systems::SoundTagSystem;
+using openblack::ecs::systems::TattooEditorSystem;
 using openblack::ecs::systems::TeleportSystem;
 using openblack::ecs::systems::TempleDestructionSystem;
 using openblack::ecs::systems::TempleExteriorSystem;
@@ -175,8 +190,11 @@ using openblack::ecs::systems::TimeSystem;
 using openblack::ecs::systems::TornadoSystem;
 using openblack::ecs::systems::TownDesireSystem;
 using openblack::ecs::systems::TownSystem;
+using openblack::ecs::systems::TutorialSkipSystem;
 using openblack::ecs::systems::VegetationSystem;
+using openblack::ecs::systems::VideoSystem;
 using openblack::ecs::systems::VillageLightSystem;
+using openblack::ecs::systems::VortexSystem;
 using openblack::ecs::systems::WaterRingSystem;
 using openblack::ecs::systems::WeatherSystem;
 using openblack::graphics::RendererInterface;
@@ -241,9 +259,11 @@ bool openblack::InitializeGame() noexcept
 	Locator::handGrabSystem::emplace<HandGrabSystem>();
 	Locator::temple::emplace<TempleInterior>();
 	Locator::oceanSystem::emplace<Ocean>();
-	Locator::skySystem::emplace<Sky>();
+	Locator::skySystem::emplace<ecs::systems::SkySystem>();
 	Locator::alignmentSystem::emplace<AlignmentSystem>();
 	Locator::cameraHelpSystem::emplace<CameraHelpSystem>();
+	Locator::tutorialSkipSystem::emplace<TutorialSkipSystem>();
+	Locator::playerProfileSystem::emplace<PlayerProfileSystem>();
 	Locator::templeExteriorSystem::emplace<TempleExteriorSystem>();
 	Locator::templeDestructionSystem::emplace<TempleDestructionSystem>();
 	Locator::time::emplace<TimeSystem>();
@@ -252,6 +272,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::cloudSystem::emplace<CloudSystem>();
 	Locator::villageLightSystem::emplace<VillageLightSystem>();
 	Locator::fieldSystem::emplace<FieldSystem>();
+	Locator::fishFarmSystem::emplace<FishFarmSystem>();
 	Locator::animalSystem::emplace<AnimalSystem>();
 	Locator::snowSystem::emplace<SnowSystem>();
 	Locator::snowfallSystem::emplace<SnowfallSystem>();
@@ -270,7 +291,9 @@ bool openblack::InitializeGame() noexcept
 	Locator::creatureFightSystem::emplace<CreatureFightSystem>();
 	Locator::creatureModeSystem::emplace<CreatureModeSystem>();
 	Locator::creatureCaveSystem::emplace<CreatureCaveSystem>();
+	Locator::tattooEditorSystem::emplace<TattooEditorSystem>();
 	Locator::cinematicDirectorSystem::emplace<CinematicDirectorSystem>();
+	Locator::videoSystem::emplace<VideoSystem>();
 	Locator::soundTagSystem::emplace<SoundTagSystem>();
 	Locator::rainSystem::emplace<RainSystem>();
 	Locator::chimneySmokeSystem::emplace<ChimneySmokeSystem>();
@@ -280,6 +303,8 @@ bool openblack::InitializeGame() noexcept
 	Locator::particleSystem::emplace<ParticleSystem>();
 	Locator::reactionSystem::emplace<ReactionSystem>();
 	Locator::teleportSystem::emplace<TeleportSystem>();
+	Locator::vortexSystem::emplace<VortexSystem>();
+	Locator::creatureFizzSystem::emplace<CreatureFizzSystem>();
 	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>();
 	Locator::tornadoSystem::emplace<TornadoSystem>();
 	Locator::magicShieldSystem::emplace<MagicShieldSystem>();
@@ -308,6 +333,18 @@ void InitializeLevelWith(const LandSource& land)
 {
 	// Both seeds go to 0 with every map, as the game clears them
 	Locator::gameRandom::value().SetSeeds({0, 0});
+	// The game's own streams start again from the run's seed with every map too, so that the same land loaded with the
+	// same seed draws the same numbers
+	auto& rng = Locator::rng::value();
+	rng.SetRunSeed(rng.GetRunSeed());
+	// In a seeded run the machine's clock, as the game reads it, counts from 0 again with every map, from the pinned date
+	if (Locator::time::has_value())
+	{
+		if (const auto date = Locator::time::value().GetPinnedDate(); date.has_value())
+		{
+			Locator::time::value().RestartClock(*date);
+		}
+	}
 	Locator::entitiesMap::emplace<MapProduction>();
 	Locator::dynamicsSystem::emplace<DynamicsSystem>();
 	// What lines and the cursor meet, as the game finds them
@@ -350,6 +387,8 @@ void openblack::ShutDownServices()
 	if (Locator::resources::has_value())
 	{
 		auto& resources = Locator::resources::value();
+		// Nothing more may be made on the loading threads once the renderer goes
+		resources.StopLoading();
 		resources.GetMeshes().Clear();
 		resources.GetTextures().Clear();
 		resources.GetAnimations().Clear();
@@ -362,6 +401,8 @@ void openblack::ShutDownServices()
 		Locator::audio::reset();
 	}
 
+	// The inspector goes first: its providers read the services below
+	Locator::inspector::reset();
 	Locator::rendereringSystem::reset();
 	Locator::dynamicsSystem::reset();
 	Locator::templeDestructionSystem::reset();
@@ -377,12 +418,14 @@ void openblack::ShutDownServices()
 	Locator::pathfindingSystem::reset();
 	Locator::creatureLocomotionSystem::reset();
 	Locator::cinematicDirectorSystem::reset();
+	Locator::videoSystem::reset();
 	Locator::influenceSystem::reset();
 	Locator::chimneySmokeSystem::reset();
 	Locator::abodeKnockSystem::reset();
 	Locator::rainSystem::reset();
 	Locator::snowfallSystem::reset();
 	Locator::waterRingSystem::reset();
+	Locator::tattooEditorSystem::reset();
 	Locator::creatureCaveSystem::reset();
 	Locator::creatureModeSystem::reset();
 	Locator::creatureFightSystem::reset();
@@ -398,6 +441,7 @@ void openblack::ShutDownServices()
 	Locator::creatureAnimationSystem::reset();
 	Locator::snowSystem::reset();
 	Locator::fieldSystem::reset();
+	Locator::fishFarmSystem::reset();
 	Locator::animalSystem::reset();
 	Locator::soundTagSystem::reset();
 	Locator::townDesireSystem::reset();
@@ -411,6 +455,8 @@ void openblack::ShutDownServices()
 	Locator::gestureEvents::reset();
 	Locator::reactionSystem::reset();
 	Locator::teleportSystem::reset();
+	Locator::vortexSystem::reset();
+	Locator::creatureFizzSystem::reset();
 	Locator::creatureCarryOverSystem::reset();
 	Locator::tornadoSystem::reset();
 	Locator::magicShieldSystem::reset();
@@ -438,4 +484,22 @@ void openblack::ShutDownServices()
 	Locator::profiler::reset();
 
 	Locator::vm::reset();
+}
+
+bool openblack::StartInspector([[maybe_unused]] uint16_t port)
+{
+#if defined(OPENBLACK_INSPECTOR)
+	std::string error;
+	auto server = inspector::Server::Listen(port, error);
+	if (server == nullptr)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The inspector couldn't start: {}", error);
+		return false;
+	}
+	Locator::inspector::emplace<ecs::systems::InspectorSystem>(std::move(server));
+	return true;
+#else
+	SPDLOG_LOGGER_ERROR(spdlog::get("game"), "This build has no inspector: configure with OPENBLACK_INSPECTOR on");
+	return false;
+#endif
 }

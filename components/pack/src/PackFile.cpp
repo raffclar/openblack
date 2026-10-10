@@ -230,7 +230,7 @@ std::string_view openblack::pack::ResultToStr(PackResult result)
 	std::unreachable();
 }
 
-PackResult PackFile::ReadBlocks(std::istream& stream) noexcept
+PackResult PackFile::ReadBlocks(std::istream& stream, const std::set<std::string>& unread) noexcept
 {
 	assert(!_isLoaded);
 
@@ -265,13 +265,26 @@ PackResult PackFile::ReadBlocks(std::istream& stream) noexcept
 	{
 		stream.read(reinterpret_cast<char*>(&header), sizeof(PackBlockHeader));
 
-		if (_blocks.contains(header.blockName.data()))
+		const std::string name(header.blockName.data());
+		if (_blocks.contains(name) || _unreadBlocks.contains(name))
 		{
 			return PackResult::ErrDuplicateBlockName;
 		}
 
-		_blocks[std::string(header.blockName.data())] = std::vector<uint8_t>(header.blockSize);
-		stream.read(reinterpret_cast<char*>(_blocks[header.blockName.data()].data()), header.blockSize);
+		if (unread.contains(name))
+		{
+			const auto offset = static_cast<uint64_t>(stream.tellg());
+			if (fsize < offset + header.blockSize)
+			{
+				return PackResult::ErrFileTooSmall;
+			}
+			_unreadBlocks[name] = UnreadBlock {.offset = offset, .size = header.blockSize};
+			stream.seekg(static_cast<std::streamoff>(offset + header.blockSize));
+			continue;
+		}
+
+		_blocks[name] = std::vector<uint8_t>(header.blockSize);
+		stream.read(reinterpret_cast<char*>(_blocks[name].data()), header.blockSize);
 	}
 
 	if (fsize < static_cast<std::size_t>(stream.tellg()))
@@ -701,9 +714,14 @@ PackFile::~PackFile() noexcept = default;
 
 PackResult PackFile::ReadFile(std::istream& stream) noexcept
 {
+	return ReadFile(stream, {});
+}
+
+PackResult PackFile::ReadFile(std::istream& stream, const std::set<std::string>& unreadBlocks) noexcept
+{
 	PackResult result;
 
-	result = ReadBlocks(stream);
+	result = ReadBlocks(stream, unreadBlocks);
 	if (result != PackResult::Success)
 	{
 		return result;
@@ -761,10 +779,14 @@ PackResult PackFile::ReadFile(std::istream& stream) noexcept
 		{
 			return result;
 		}
-		result = ExtractSoundsFromBlock();
-		if (result != PackResult::Success)
+		// Samples left unread are read from the file by their headers' offsets when wanted
+		if (!_unreadBlocks.contains("LHAudioWaveData"))
 		{
-			return result;
+			result = ExtractSoundsFromBlock();
+			if (result != PackResult::Success)
+			{
+				return result;
+			}
 		}
 	}
 
@@ -792,6 +814,60 @@ PackResult PackFile::Open(const std::vector<uint8_t>& buffer) noexcept
 	imemstream stream(reinterpret_cast<const char*>(buffer.data()), buffer.size() * sizeof(buffer[0]));
 
 	return ReadFile(stream);
+}
+
+PackResult PackFile::OpenAudioIndex(const std::filesystem::path& filepath) noexcept
+{
+	assert(!_isLoaded);
+
+	std::ifstream stream(filepath, std::ios::binary);
+	if (!stream.is_open())
+	{
+		return PackResult::ErrCantOpen;
+	}
+
+	auto result = ReadBlocks(stream, {"LHAudioWaveData"});
+	if (result != PackResult::Success)
+	{
+		return result;
+	}
+	const auto waveData = GetUnreadBlock("LHAudioWaveData");
+	if (!waveData)
+	{
+		return PackResult::ErrMissingAudioWaveDataBlock;
+	}
+	result = ResolveAudioBankSampleTableBlock();
+	if (result != PackResult::Success)
+	{
+		return result;
+	}
+	result = ResolveFileSegmentBankInfoBlock();
+	if (result != PackResult::Success)
+	{
+		return result;
+	}
+	// Every sample lies within the sample data
+	for (const auto& sample : _audioSampleHeaders)
+	{
+		if (static_cast<uint64_t>(sample.offset) + sample.size > waveData->size)
+		{
+			return PackResult::ErrFileTooSmall;
+		}
+	}
+
+	_isLoaded = true;
+	return PackResult::Success;
+}
+
+std::optional<std::pair<uint64_t, uint32_t>> PackFile::GetAudioSampleFileSpan(uint32_t index) const noexcept
+{
+	const auto waveData = GetUnreadBlock("LHAudioWaveData");
+	if (!waveData || index >= _audioSampleHeaders.size())
+	{
+		return std::nullopt;
+	}
+	const auto& sample = _audioSampleHeaders[index];
+	return std::pair {waveData->offset + sample.offset, sample.size};
 }
 
 PackResult PackFile::Write(const std::filesystem::path& filepath) noexcept

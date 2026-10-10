@@ -25,6 +25,7 @@
 #include <glm/geometric.hpp>
 
 #include "Common/GameRandom.h"
+#include "Common/MachineClock.h"
 #include "ParticleBlast.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleMiracleMaths.h"
@@ -417,9 +418,7 @@ public:
 		    maths::RushedPastCamera(atom.previous.position, atom.current.position, atom.velocity,
 		                            effect.Services().world.CameraPosition()))
 		{
-			const auto milliseconds =
-			    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
-			        .count();
+			const auto milliseconds = openblack::machine_clock::Ticks();
 			effect.Services().world.PlayListenerSound(k_FirstPastSample + static_cast<uint32_t>(milliseconds) % k_PastSamples);
 		}
 		return true;

@@ -157,3 +157,12 @@ void LandBlock::SetLndBlock(const lnd::LNDBlock& block)
 {
 	_block = std::make_unique<lnd::LNDBlock>(block);
 }
+
+void LandBlock::SetCellAltitude(size_t index, uint8_t altitude)
+{
+	assert(_block);
+	if (_block && index < _block->cells.size())
+	{
+		_block->cells.at(index).altitude = altitude;
+	}
+}
