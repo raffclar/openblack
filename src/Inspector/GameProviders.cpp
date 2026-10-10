@@ -726,6 +726,22 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("living");
 	provider->Add(
+	    Query("animated_statics", "The scenery the scripts open and close: its open word and its gate stones' value", {},
+	          ResultKind::List),
+	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
+		    Json items = Json::array();
+		    registry.Each<const AnimatedStatic>([&items, &registry](entt::entity entity, const AnimatedStatic& scenery) {
+			    auto item = Listed(registry, entity);
+			    item["open_state"] = scenery.openState;
+			    if (Locator::animatedStaticSystem::has_value())
+			    {
+				    item["gate_stones_value"] = Optional(Locator::animatedStaticSystem::value().GateStoneValue(entity));
+			    }
+			    items.push_back(std::move(item));
+		    });
+		    return items;
+	    }));
+	provider->Add(
 	    Query("totems",
 	          "The village centres' totems: their town centre, the share they are held at, and whether "
 	          "the hand grips one",
