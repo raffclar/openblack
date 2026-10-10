@@ -22,6 +22,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "InjectedInput.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -98,7 +99,7 @@ void GameActionMap::ReleaseKeysNoLongerHeld()
 	const auto* state = SDL_GetKeyboardState(&count);
 	for (int key = 0; key < std::min(count, static_cast<int>(_heldKeys.size())); ++key)
 	{
-		if (_heldKeys.test(static_cast<size_t>(key)) && state[key] == 0)
+		if (_heldKeys.test(static_cast<size_t>(key)) && state[key] == 0 && !_scriptedKeys.test(static_cast<size_t>(key)))
 		{
 			SDL_Event letGo {};
 			letGo.type = SDL_KEYUP;
@@ -221,11 +222,84 @@ uint32_t GameActionMap::PointerState(glm::ivec2* position) const
 		}
 		return _scriptedPointer->buttons;
 	}
+	// With the player's mouse kept out, the pointer stays where it was and holds nothing
+	if (_lock.Locked())
+	{
+		if (position != nullptr)
+		{
+			*position = glm::ivec2(_mousePosition);
+		}
+		return 0;
+	}
 	if (position != nullptr)
 	{
 		return SDL_GetMouseState(&position->x, &position->y);
 	}
 	return SDL_GetMouseState(nullptr, nullptr);
+}
+
+void GameActionMap::LogLock(bool wasLocked) const
+{
+	const auto logger = spdlog::get("game");
+	if (logger == nullptr || wasLocked == _lock.Locked())
+	{
+		return;
+	}
+	if (_lock.Locked())
+	{
+		SPDLOG_LOGGER_INFO(logger, "Input locked: an agent drives the game; the player's mouse and keyboard are kept out "
+		                           "(Ctrl+Alt+Shift+F12 takes the game back)");
+	}
+	else
+	{
+		SPDLOG_LOGGER_INFO(logger, "Input unlocked: the player's mouse and keyboard reach the game ({})", Name(_lock.Mode()));
+	}
+}
+
+void GameActionMap::SetInputLockMode(LockMode mode)
+{
+	const bool was = _lock.Locked();
+	_lock.SetMode(mode);
+	LogLock(was);
+}
+
+void GameActionMap::UpdateInputLock(bool clientConnected, float seconds)
+{
+	const bool was = _lock.Locked();
+	_lock.Update(clientConnected, seconds);
+	LogLock(was);
+}
+
+bool GameActionMap::AdmitEvent(const SDL_Event& event)
+{
+	const bool was = _lock.Locked();
+	const auto verdict = _lock.Filter(event);
+	if (verdict == LockVerdict::Release)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Input lock released by Ctrl+Alt+Shift+F12: the player has the game");
+		LogLock(was);
+	}
+	return verdict == LockVerdict::Pass;
+}
+
+glm::ivec2 GameActionMap::GetPointerPosition() const
+{
+	glm::ivec2 position {0, 0};
+	PointerState(&position);
+	return position;
+}
+
+uint32_t GameActionMap::GetPointerButtons() const
+{
+	return PointerState(nullptr);
+}
+
+void GameActionMap::HoldScriptedKey(int scancode, bool held)
+{
+	if (scancode > 0 && static_cast<size_t>(scancode) < _scriptedKeys.size())
+	{
+		_scriptedKeys.set(static_cast<size_t>(scancode), held);
+	}
 }
 
 void GameActionMap::WarpCursor(glm::ivec2 position)
@@ -241,10 +315,11 @@ void GameActionMap::WarpCursor(glm::ivec2 position)
 		event.motion.state = _scriptedPointer->buttons;
 		event.motion.x = position.x;
 		event.motion.y = position.y;
+		MarkInjected(event);
 		SDL_PushEvent(&event);
 		return;
 	}
-	if (Locator::windowing::has_value())
+	if (Locator::windowing::has_value() && !_lock.Locked())
 	{
 		SDL_WarpMouseInWindow(static_cast<SDL_Window*>(Locator::windowing::value().GetHandle()), position.x, position.y);
 	}

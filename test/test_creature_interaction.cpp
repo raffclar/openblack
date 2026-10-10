@@ -219,6 +219,14 @@ TEST(CreatureThrow, TossingKeepsSomeOfTheHandsSpeed)
 	EXPECT_NEAR(turned.z, 0.0f, k_Tolerance);
 }
 
+TEST(CreatureObjectActions, AThrowIntoAStoreIsOverOnlyOnceTheThingHasComeDown)
+{
+	EXPECT_FALSE(creature_object_actions::ThrowOver(false, false, false));
+	EXPECT_TRUE(creature_object_actions::ThrowOver(true, false, true));
+	EXPECT_FALSE(creature_object_actions::ThrowOver(true, true, true));
+	EXPECT_TRUE(creature_object_actions::ThrowOver(true, true, false));
+}
+
 TEST(CreatureFeedback, AStrokeLandsOnTheNearestPart)
 {
 	std::array<glm::vec3, creature_feedback::k_BodyPartCount> parts {};

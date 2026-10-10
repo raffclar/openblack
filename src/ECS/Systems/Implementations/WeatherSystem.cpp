@@ -21,11 +21,11 @@
 
 #include "3D/LandIslandInterface.h"
 #include "3D/Lightning.h"
-#include "3D/SkyInterface.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "InfoConstants.h"
@@ -170,7 +170,7 @@ float WindMax(const GClimateInfo& info, uint32_t season)
 }
 
 /// Maps an hour onto the sky's day so the temperature table follows dusk and dawn
-float RelativeHour(float hour, const SkyInterface::DayNightTimes& sky)
+float RelativeHour(float hour, const DayNightTimes& sky)
 {
 	const std::array<float, 4> actual = {sky.nightFull, sky.duskStart, sky.duskEnd, sky.dayFull};
 	const bool afternoon = hour > 12.0f;

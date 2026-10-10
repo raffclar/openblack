@@ -47,14 +47,14 @@ enum class Target : uint8_t
 	Frightening,
 	/// Anything at all it can see
 	Anything,
-	/// A storage pit
-	StoragePit,
 	/// Anything on fire, or anything not on fire
 	Burning,
 	Unburnt,
+	/// A storage pit
+	StoragePit,
 };
 /// How many kinds of target there are
-constexpr size_t k_TargetCount = static_cast<size_t>(Target::Unburnt) + 1;
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::StoragePit) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t

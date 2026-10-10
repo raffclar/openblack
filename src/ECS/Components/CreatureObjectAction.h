@@ -64,6 +64,9 @@ struct CreatureObjectAction
 	float flightSeconds {0.0f};
 	/// Throwing: how long it was asked to take, none to take as long as it would to fall the distance to the target
 	std::optional<float> givenFlightSeconds;
+	/// Throwing into a store: it isn't done until what it threw has stopped flying, which it keeps once let go
+	bool waitsForLanding {false};
+	std::optional<entt::entity> thrown;
 	/// Catching: where the hand closes in each catching animation, in the model's units, and how the catch goes: ready
 	/// and waiting for the thing, stepping across to where it will pass, reaching for it, missed and drawing back, or
 	/// caught and finishing

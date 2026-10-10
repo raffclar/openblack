@@ -246,7 +246,7 @@ void Consume(ecs::Registry& registry, entt::entity food)
 	{
 		if (auto* abode = registry.TryGet<Abode>(villager->abode))
 		{
-			abode->inhabitants.erase(food);
+			std::erase(abode->inhabitants, food);
 		}
 		if (auto* town = registry.TryGet<Town>(villager->town))
 		{
@@ -1054,6 +1054,7 @@ bool CreatureObjectActionSystem::ThrowTaking(entt::entity creature, const glm::v
 {
 	CreatureObjectAction action {.kind = Kind::Throw, .point = target};
 	action.givenFlightSeconds = flightSeconds;
+	action.waitsForLanding = true;
 	return Start(creature, std::move(action));
 }
 
@@ -1392,6 +1393,15 @@ void CreatureObjectActionSystem::Update(std::chrono::duration<float, std::milli>
 		    }
 		    else if (action.timeMs >= action.durationMs && (action.eventDone || action.eventMs > action.durationMs))
 		    {
+			    // Thrown into a store, it waits for the thing to come down first
+			    const bool flying = action.thrown.has_value() && registry.Valid(*action.thrown) &&
+			                        Locator::dynamicsSystem::has_value() &&
+			                        Locator::dynamicsSystem::value().IsFlying(*action.thrown);
+			    if (!creature_object_actions::ThrowOver(true, action.waitsForLanding, flying))
+			    {
+				    animation.slots.clear();
+				    return;
+			    }
 			    action.status = Status::Done;
 		    }
 		    if (action.status == Status::Done)
@@ -1529,6 +1539,7 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			break;
 		}
 		case Kind::Throw:
+			action.thrown = GetHeld(creature);
 			Release(creature, handPosition,
 			        creature_throw::ReleaseVelocity(action.point, handPosition, std::max(action.flightSeconds, k_Tiny)));
 			break;

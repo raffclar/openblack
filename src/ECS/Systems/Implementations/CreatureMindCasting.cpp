@@ -35,6 +35,7 @@
 #include "Creature/CreatureThrow.h"
 #include "Creature/CreatureWatching.h"
 #include "CreatureMindSystem.h"
+#include "CreatureMindSystemDetail.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Creature.h"
@@ -268,6 +269,18 @@ std::optional<uint32_t> CreatureMindSystem::CastMagicOf(uint32_t action)
 	return magic;
 }
 
+std::optional<std::pair<float, float>> mind_detail::MiracleSightings(const CreatureMindState& mind,
+                                                                     const creature_mind_tables::Tables& tables,
+                                                                     CreatureType species, MagicType magic)
+{
+	const auto sightings = SightingsOf(mind, tables, species, static_cast<uint32_t>(magic));
+	if (!sightings.has_value())
+	{
+		return std::nullopt;
+	}
+	return std::pair {sightings->seen, sightings->needed};
+}
+
 std::optional<std::pair<float, float>> CreatureMindSystem::MiracleSightings(entt::entity creature, MagicType type)
 {
 	const auto* tables = GetTables();
@@ -278,12 +291,7 @@ std::optional<std::pair<float, float>> CreatureMindSystem::MiracleSightings(entt
 	{
 		return std::nullopt;
 	}
-	const auto sightings = SightingsOf(*mind, *tables, body->species, static_cast<uint32_t>(type));
-	if (!sightings.has_value())
-	{
-		return std::nullopt;
-	}
-	return std::pair {sightings->seen, sightings->needed};
+	return mind_detail::MiracleSightings(*mind, *tables, body->species, type);
 }
 
 bool CreatureMindSystem::MayCast(entt::entity creature, const CreatureMindState& mind, uint32_t action, bool powerUp)

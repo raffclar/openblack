@@ -18,6 +18,7 @@
 #include <glm/gtx/transform.hpp>
 
 #include "3D/L3DMesh.h"
+#include "3D/PhysicsDrawMatrix.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AtHome.h"
@@ -329,12 +330,10 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    auto modelMatrix = glm::mat4(transform.rotation);
 		    modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
 		    modelMatrix = glm::scale(modelMatrix, transform.scale);
-		    // A body moving in the physics is drawn between its last two turns
+		    // A body moving in the physics is drawn between its last two turns, and not at all once sunk under the sea
 		    const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity);
-		    if (drawn != nullptr)
-		    {
-			    modelMatrix = glm::translate(glm::mat4(1.0f), drawn->origin) * glm::mat4(drawn->axes);
-		    }
+		    const auto placed = physics_draw::ModelMatrix(modelMatrix, drawn);
+		    modelMatrix = placed.value_or(glm::mat4(0.0f));
 		    // A home with someone in lights its windows at night
 		    const auto* abode = registry.TryGet<const Abode>(entity);
 		    glm::vec4 look {abode != nullptr && abode->presentAtHome > 0 ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
@@ -442,7 +441,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 
 		    // A body sunk wholly under the sea isn't drawn in any pass, its shadow included
-		    if (drawn != nullptr && drawn->underSea)
+		    if (!placed.has_value())
 		    {
 			    look.z = 1.0f;
 			    modelMatrix = glm::mat4(0.0f);
@@ -461,7 +460,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    {
 			    _renderContext.drawnObjects.push_back({.entity = entity, .model = modelMatrix});
 		    }
-		    if (slots->second.perEntity && (drawn == nullptr || !drawn->underSea))
+		    if (slots->second.perEntity && placed.has_value())
 		    {
 			    _renderContext.entityDraws.push_back({.entity = entity, .instance = idx});
 		    }
@@ -594,13 +593,17 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		auto modelMatrix = glm::mat4(transform.rotation);
 		modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
 		modelMatrix = glm::scale(modelMatrix, transform.scale);
-		// A body moving in the physics is drawn between its last two turns
-		if (const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity))
+		// A body moving in the physics is drawn between its last two turns. Sunk wholly under the sea it isn't drawn at
+		// all: every vertex lands on one point, which draws nothing, and it neither sways nor bends, which would take its
+		// vertices out to the horizon
+		const auto placed = physics_draw::ModelMatrix(modelMatrix, registry.TryGet<const PhysicsDrawPose>(entity));
+		if (!placed.has_value())
 		{
-			// Sunk wholly under the sea it isn't drawn: every vertex lands on one point, which draws nothing
-			modelMatrix =
-			    drawn->underSea ? glm::mat4(0.0f) : glm::translate(glm::mat4(1.0f), drawn->origin) * glm::mat4(drawn->axes);
+			_renderContext.treeInstanceData[idx] = {.modelMatrix = glm::mat4(0.0f), .burning = glm::vec4(0.0f)};
+			++slots->second.filled;
+			return;
 		}
+		modelMatrix = *placed;
 		// A tree with a fire on it is drawn darker, its foliage thinning as it burns, and narrows away at the last,
 		// keeping its height
 		glm::vec4 burning(0.0f);

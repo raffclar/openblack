@@ -121,7 +121,7 @@ void HandSystem::UpdateAlignmentMorph(std::optional<map_coords::MapCoords> picke
 		if (Locator::influenceSystem::has_value())
 		{
 			morph->pointInInfluence =
-			    Locator::influenceSystem::value().PlayerInfluence(PlayerNames::PLAYER_ONE, morph->point) > 0.0f;
+			    Locator::influenceSystem::value().HandPointInfluence(PlayerNames::PLAYER_ONE, morph->point) > 0.0f;
 		}
 		if (change.shape)
 		{
