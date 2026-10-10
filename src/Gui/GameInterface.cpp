@@ -602,45 +602,98 @@ std::pair<const GameFont*, const openblack::graphics::Texture2D*> GameInterface:
 
 void GameInterface::DrawDialogue(glm::u16vec2 resolution, int barPixels)
 {
-	if (!Locator::helpTextSystem::has_value())
-	{
-		return;
-	}
 	// Neither the box nor its words show while a video plays; the texts still move on underneath
-	if (Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying())
-	{
-		return;
-	}
-	const help::WidthFn widthOf = [this](help::TextFont font, std::u16string_view text, float size) {
-		return DialogueFont(font).first->GetWidth(text, size);
-	};
-	const auto* frame = Locator::helpTextSystem::value().Layout(glm::ivec2(resolution), barPixels, widthOf);
-	if (frame == nullptr)
-	{
-		return;
-	}
-	// The box covers whole pixels, its right and bottom ones included
-	if (frame->boxShown)
-	{
-		const auto& box = frame->box;
-		const auto colour = glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(frame->boxAlpha) / 255.0f);
-		_canvas.DrawQuad({static_cast<float>(box.left), static_cast<float>(box.top)},
-		                 {static_cast<float>(box.right + 1), static_cast<float>(box.bottom + 1)}, glm::vec2(0.0f),
-		                 glm::vec2(1.0f), colour, nullptr);
-	}
-	// Over the box and under the words, the "Continue" cue while the text waits for a click, whether or not the texts
-	// are drawn
-	if (const auto* dialogue = Locator::helpTextSystem::value().GetDialogue(); dialogue != nullptr)
-	{
-		if (const auto share = dialogue->GetClickCueShare(); share.has_value())
+	const bool videoPlaying = Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying();
+	const auto* frame = [&]() -> const help::TextFrame* {
+		if (!Locator::helpTextSystem::has_value() || videoPlaying)
 		{
-			DrawClickCue(resolution, frame->box, *share);
+			return nullptr;
+		}
+		const help::WidthFn widthOf = [this](help::TextFont font, std::u16string_view text, float size) {
+			return DialogueFont(font).first->GetWidth(text, size);
+		};
+		return Locator::helpTextSystem::value().Layout(glm::ivec2(resolution), barPixels, widthOf);
+	}();
+	if (frame != nullptr)
+	{
+		// The box covers whole pixels, its right and bottom ones included
+		if (frame->boxShown)
+		{
+			const auto& box = frame->box;
+			const auto colour = glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(frame->boxAlpha) / 255.0f);
+			_canvas.DrawQuad({static_cast<float>(box.left), static_cast<float>(box.top)},
+			                 {static_cast<float>(box.right + 1), static_cast<float>(box.bottom + 1)}, glm::vec2(0.0f),
+			                 glm::vec2(1.0f), colour, nullptr);
+		}
+		// Over the box and under the words, the "Continue" cue while the text waits for a click, whether or not the
+		// texts are drawn
+		if (const auto* dialogue = Locator::helpTextSystem::value().GetDialogue(); dialogue != nullptr)
+		{
+			if (const auto share = dialogue->GetClickCueShare(); share.has_value())
+			{
+				DrawClickCue(resolution, frame->box, *share);
+			}
 		}
 	}
-	for (const auto& run : frame->runs)
+	// The hand's helper icons go over the box and under the words
+	DrawHandTricons(resolution);
+	if (frame != nullptr)
 	{
-		DrawDialogueRun(run);
+		for (const auto& run : frame->runs)
+		{
+			DrawDialogueRun(run);
+		}
 	}
+}
+
+void GameInterface::DrawHandTricons(glm::u16vec2 resolution)
+{
+	namespace tricons = hand_tricons;
+	// Not under a dialog; otherwise the fades hold where they are until the icons are drawn again
+	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen();
+	if (!_handTricons.has_value() || menuOpen || _atmos == nullptr)
+	{
+		return;
+	}
+	const auto& in = *_handTricons;
+	const bool toolTipsOn = _menu->GetSettings().toolTips != 0;
+	tricons::Fade(_tricons, {
+	                            .icons = tricons::Shown(in.icons, toolTipsOn, in.handStateShowsIcons),
+	                            .seconds = in.seconds,
+	                            .demonstration = true,
+	                            .cameraBusy = false,
+	                        });
+	const auto screen = glm::ivec2(resolution);
+	const auto centre = tricons::Place(in.hand, in.lastGrip, screen, in.cinemaBars);
+	for (const auto& sprite : tricons::Sprites(glm::vec2(centre), in.halfSize, _tricons, in.rotateAngle))
+	{
+		if (sprite.has_value())
+		{
+			const auto colour = glm::vec4(1.0f, 1.0f, 1.0f, sprite->alpha);
+			_canvas.DrawShape(sprite->corners, sprite->uvs, {colour, colour, colour, colour}, _atmos.get());
+		}
+	}
+
+	// The demonstration's mouse beside them, whether or not an icon shows
+	// The languages that need bigger text aren't chosen in openblack yet
+	constexpr bool k_BiggerText = false;
+	_demoMouseOnLeft = tricons::LabelOnLeft(centre.x, screen.x, _demoMouseOnLeft);
+	const auto& label = _texts.GetHelpText(tricons::k_DemoText).text;
+	const auto labelSize = static_cast<float>(tricons::DemoLabelSize(k_BiggerText));
+	const auto mouse = tricons::LayoutDemoMouse(centre, _demoMouseOnLeft, _font.GetWidth(label, labelSize), k_BiggerText,
+	                                            in.moveHeld, in.actionHeld);
+	DrawGlow(mouse.mouseMin, mouse.mouseMax, mouse.mouseGlow);
+	if (!label.empty())
+	{
+		DrawGlow(mouse.labelGlowMin, mouse.labelGlowMax, mouse.labelGlow);
+	}
+	if (_mice != nullptr)
+	{
+		_canvas.DrawQuad(mouse.mouseMin, mouse.mouseMax, mouse.uvMin, mouse.uvMax, glm::vec4(1.0f), _mice.get());
+	}
+	_painter.DrawString({mouse.labelAt.x - 1.0f, mouse.labelAt.y - 1.0f}, label, mouse.labelSize, mouse.shadowColour);
+	_painter.DrawString({mouse.labelAt.x + 1.0f, mouse.labelAt.y + 1.0f}, label, mouse.labelSize, mouse.shadowColour);
+	_painter.DrawString(mouse.labelAt, label, mouse.labelSize, mouse.labelColour);
 }
 
 void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)

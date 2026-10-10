@@ -40,6 +40,8 @@ public:
 
 	[[nodiscard]] std::optional<CameraPose> GetCamera() const override;
 	[[nodiscard]] uint32_t GetHints() const override { return _hints; }
+	[[nodiscard]] float GetHintAngle() const override { return _hintAngle; }
+	[[nodiscard]] HeldButtons GetHeldButtons() const override { return _held; }
 	[[nodiscard]] std::optional<Status> GetStatus() const override;
 
 private:
@@ -55,6 +57,8 @@ private:
 	bool _triggerReached {false};
 	std::optional<CameraPose> _camera;
 	uint32_t _hints {0};
+	float _hintAngle {0.0f};
+	HeldButtons _held;
 };
 
 } // namespace openblack::ecs::systems

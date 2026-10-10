@@ -38,6 +38,28 @@ glm::ivec2 CursorPixel(std::span<const float, 2> cursor, glm::ivec2 screen, floa
 	        static_cast<int>(((height - (2.0f * barF)) * cursor[1]) + barF + 0.5f)};
 }
 
+HeldButtons AfterRecord(HeldButtons held, hnd::HNDMessage message)
+{
+	switch (message)
+	{
+	case hnd::HNDMessage::MoveButtonDown:
+		held.move = true;
+		break;
+	case hnd::HNDMessage::MoveButtonUp:
+		held.move = false;
+		break;
+	case hnd::HNDMessage::ActionButtonDown:
+		held.action = true;
+		break;
+	case hnd::HNDMessage::ActionButtonUp:
+		held.action = false;
+		break;
+	default:
+		break;
+	}
+	return held;
+}
+
 Playback::Playback(std::span<const hnd::HNDRecord> records, uint32_t gameTime, std::vector<Played>& played)
     : _records(records)
 {

@@ -26,6 +26,7 @@
 #include "DialogPainter.h"
 #include "GameFont.h"
 #include "GameMenu.h"
+#include "Hand/HandTricons.h"
 #include "ScreenFade.h"
 #include "SkipBox.h"
 #include "TattooEditorDialog.h"
@@ -125,6 +126,28 @@ public:
 		uint32_t colour;
 		uint8_t alpha;
 	};
+	/// The camera's helper icons by the hand this frame, while a tutorial demonstration plays; none while they aren't
+	/// drawn, when their fades hold where they are
+	struct HandTricons
+	{
+		/// The hand on the screen, and the last point it gripped the land at, in whole pixels
+		glm::ivec2 hand {0};
+		glm::ivec2 lastGrip {0};
+		/// An icon's half-width in pixels
+		float halfSize {0.0f};
+		/// The icons wanted, as hand_tricons::icon, and the rotate arrow's turn in radians
+		uint32_t icons {0};
+		float rotateAngle {0.0f};
+		/// The hand's state shows the camera icons: it holds nothing
+		bool handStateShowsIcons {true};
+		bool cinemaBars {false};
+		/// The demonstration's held buttons, which its mouse lights
+		bool moveHeld {false};
+		bool actionHeld {false};
+		/// The frame's time
+		float seconds {0.0f};
+	};
+	void SetHandTricons(std::optional<HandTricons> tricons) { _handTricons = tricons; }
 	/// The numbers floating up this frame, drawn the furthest first, under the interface
 	void SetFloatingNumbers(std::vector<FloatingNumber> numbers) { _floatingNumbers = std::move(numbers); }
 
@@ -159,8 +182,11 @@ private:
 	void DrawVideo(glm::u16vec2 resolution);
 	/// The tooltip's glow: a soft box of atmos.raw added round a rectangle
 	void DrawGlow(glm::vec2 min, glm::vec2 max, glm::vec4 colour);
-	/// The scripts' dialogue: its see-through box above the bottom cinema bar, then its words
+	/// The scripts' dialogue: its see-through box above the bottom cinema bar with the "Continue" cue, then the hand's
+	/// helper icons, then the dialogue's words
 	void DrawDialogue(glm::u16vec2 resolution, int barPixels);
+	/// The camera's helper icons by the hand and, in a demonstration, its mouse
+	void DrawHandTricons(glm::u16vec2 resolution);
 	/// One word of the dialogue, cut to the box's top and bottom
 	void DrawDialogueRun(const help::TextRun& run);
 	/// The tip bubble over the "did you know" sign tapped last, with the pointer over it keeping it up
@@ -205,6 +231,10 @@ private:
 	std::optional<creature_panel::Values> _creaturePanel;
 	std::optional<creature_fight_hud::Values> _fightPanel;
 	std::vector<FloatingNumber> _floatingNumbers;
+	std::optional<HandTricons> _handTricons;
+	/// The helper icons' strengths, and whether the demonstration's mouse is left of them
+	hand_tricons::Fades _tricons {};
+	bool _demoMouseOnLeft {false};
 	/// Whether the tooltip is left of the hand, which it moves to in the right third of the screen and from in the left
 	bool _toolTipOnLeft {false};
 	GameMenu::Action _action {GameMenu::Action::None};
