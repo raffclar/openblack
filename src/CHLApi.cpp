@@ -169,6 +169,7 @@
 #include "ECS/TownPlaythings.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerScriptRules.h"
+#include "ECS/WalkerPlacement.h"
 #include "ECS/WorldObjects.h"
 #include "Enums.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -1820,7 +1821,26 @@ void SetPosition() // 024 SET_POSITION
 		const auto& island = Locator::terrainSystem::value();
 		position.y = island.GetHeightAt(glm::vec2(position.x, position.z));
 		auto& registry = Locator::entitiesRegistry::value();
-		auto* transform = registry.TryGet<Transform>(static_cast<entt::entity>(objId));
+		const auto object = static_cast<entt::entity>(objId);
+		if (IsDirectableVillager(object))
+		{
+			// Something held or flying stays where it is
+			if (registry.AnyOf<ecs::components::InHand, ecs::components::InPhysics>(object))
+			{
+				ScriptMessage("Trying to set position. Object is in the hand or flying");
+				return;
+			}
+			// Its walk takes up the new place, and one under the script's control stops there and waits for it
+			ecs::walker_placement::Place(registry, object, position);
+			if (registry.AllOf<ecs::components::ScriptControlled>(object))
+			{
+				ecs::walker_placement::Stop(registry, object);
+				Locator::livingActionSystem::value().VillagerSetScriptState(object, VillagerStates::InScript);
+			}
+			registry.SetDirty();
+			return;
+		}
+		auto* transform = registry.TryGet<Transform>(object);
 		if (transform != nullptr)
 		{
 			transform->position = position;
@@ -2583,44 +2603,9 @@ void FlockDisband() // 039 FLOCK_DISBAND
 		ScriptMessage("Bad Id for Disband");
 		return;
 	}
-	if (ecs::script_flocks::IsFlock(registry, container))
-	{
-		// Every member leaves, and one the script controls waits for it; the flock stays, empty
-		const auto members = registry.Get<const ecs::components::Flock>(container).members;
-		for (const auto member : members)
-		{
-			// TODO(opening): an animal is split off into a flock of its own
-			ecs::script_flocks::Remove(registry, member, false);
-			Locator::scriptObjects::value().RemoveReference(member);
-			if (registry.Valid(member) && registry.AllOf<ecs::components::ScriptControlled>(member) &&
-			    IsDirectableVillager(member))
-			{
-				Locator::livingActionSystem::value().VillagerSetScriptState(member, VillagerStates::InScript);
-			}
-		}
-		return;
-	}
-	if (ecs::dances::IsDance(registry, container))
-	{
-		// Every dancer leaves, and one the script controls waits for it; the dance stays, empty
-		while (ecs::dances::Size(registry, container) > 0)
-		{
-			const auto dancer = ecs::dances::FirstDancer(registry, container, entt::null);
-			if (dancer == entt::null)
-			{
-				ScriptMessage("Should never happen");
-				break;
-			}
-			ecs::dances::RemoveDancer(registry, dancer);
-			Locator::scriptObjects::value().RemoveReference(dancer);
-			if (registry.AllOf<ecs::components::ScriptControlled>(dancer) && IsDirectableVillager(dancer))
-			{
-				Locator::livingActionSystem::value().VillagerSetScriptState(dancer, VillagerStates::InScript);
-			}
-		}
-		return;
-	}
-	if (registry.AnyOf<ecs::components::Town, ecs::components::Abode>(container))
+	// Every member of a flock or dance leaves it, and one the script controls waits for it; the flock or dance stays,
+	// empty. A town or an abode keeps its own
+	if (Locator::scriptObjects::value().Disband(container) || registry.AllOf<ecs::components::Abode>(container))
 	{
 		return;
 	}

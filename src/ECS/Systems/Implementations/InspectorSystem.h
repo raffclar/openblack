@@ -58,6 +58,7 @@ public:
 	void BeginLoading(std::string_view what) override;
 	void EndLoading() override;
 	void PlaceCamera() override;
+	void GiveCameraBack() override;
 
 private:
 	/// The helper answering while the game loads: until told to stop

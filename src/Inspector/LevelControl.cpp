@@ -285,6 +285,15 @@ std::vector<QueryDescription> ScreenshotProvider::Describe() const
 
 std::string ScreenshotProvider::Take(const Pending& pending, uint64_t frame, const std::optional<CameraPose>& placed)
 {
+	// A file of that name from before would read as this picture written at once, though the new one never comes
+	if (_target.Exists(pending.path))
+	{
+		if (auto why = _target.Remove(pending.path); !why.empty())
+		{
+			_reserved.erase(pending.path);
+			return "a file is there already and can't be replaced: " + why;
+		}
+	}
 	if (auto why = _target.Capture(pending.path, pending.hideGui); !why.empty())
 	{
 		_reserved.erase(pending.path);
@@ -400,6 +409,15 @@ void ScreenshotProvider::PlaceCamera()
 	                        (glm::length(now->forward) > 0.0f && glm::length(asked) > 0.0f &&
 	                         glm::dot(glm::normalize(now->forward), glm::normalize(asked)) >= 1.0f - k_Close);
 	_holding->inPlace = glm::distance(now->origin, pose->origin) <= k_Close && looksThere;
+}
+
+void openblack::inspector::ShowCameraForDrawing(CameraControlInterface& camera, ScreenshotProvider& screenshots)
+{
+	if (const auto overridden = camera.Override(); overridden.has_value())
+	{
+		static_cast<void>(camera.Pin(*overridden));
+	}
+	screenshots.PlaceCamera();
 }
 
 bool ScreenshotProvider::CameraSettled() const

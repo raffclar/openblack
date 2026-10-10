@@ -12,8 +12,10 @@
 #include <cstdint>
 
 #include <optional>
+#include <span>
 
 #include <glm/mat3x3.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -114,7 +116,8 @@ inline constexpr float k_TapEmpathy = 0.5f;
 /// Whether a rock can be broken by tapping it: only one tall enough
 [[nodiscard]] bool RockBreaksWhenTapped(float height);
 
-/// A tree that falls dead drops its roots: they are this share of the tree's model's half width, as big as the tree is
+/// The roots drawn under a tree out of the land, and those a tree that falls dead drops, are this share of the tree's
+/// model's half width, as big as the tree is
 inline constexpr float k_RootsScale = 0.15f;
 /// They come to rest this share of their own half width above the land
 inline constexpr float k_RootsRestShare = 0.1f;
@@ -132,6 +135,30 @@ inline constexpr float k_RootsFadePerSecond = 0.5f;
 [[nodiscard]] std::optional<uint8_t> RootsAlpha(float seconds);
 /// Whether the roots have gone
 [[nodiscard]] bool RootsGone(float seconds);
+
+/// Where a tree is, which decides whether its roots are drawn under it
+enum class TreePlace : uint8_t
+{
+	/// Standing in the land, or put back into it: drawn with the land's trees, its roots hidden in the ground
+	InTheLand,
+	/// Out of the land and drawn by itself, with its roots: pulled at by the hand, held in the hand or in a creature's
+	/// hand, or carried off by a tornado
+	OutOfTheLand,
+	/// Flying, sliding or rolling in the physics: drawn with its roots twice, once as the physics lists it and once
+	/// where it has moved to between the game's turns, the second roots a little bigger
+	Moving,
+	/// In the physics but at rest, or sunk under the sea: not drawn as a moving thing, so no roots
+	Still,
+};
+
+/// The roots a moving tree has drawn where it has got to between turns are this share of its model's half width
+inline constexpr float k_MovingRootsScale = 0.2f;
+
+/// The sizes of the roots drawn under a tree in a place, as shares of its model's half width: none in the land
+[[nodiscard]] std::span<const float> ShownRootsScales(TreePlace place);
+/// Where the roots drawn under a tree go: at its base, turned and stretched with it, the share of its model's half
+/// width as big as the tree is
+[[nodiscard]] glm::mat4 ShownRootsModel(const glm::mat4& treeModel, float scale, float treeHalfWidth);
 
 /// The deed of making an artefact, which the player's creature may copy
 inline constexpr uint32_t k_DeedMakeArtefact = 14;

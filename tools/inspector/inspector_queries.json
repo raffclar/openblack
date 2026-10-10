@@ -1188,9 +1188,15 @@
   "query": "script.natives"
  },
  {
-  "description": "How many things scripts hold and control",
+  "description": "How many things scripts hold and control, and the scripts' object table: places taken (of 511), times it was full, and its places by kind (taken, referenced, made by a script, object gone); places: true lists every taken place",
   "kind": "object",
-  "parameters": [],
+  "parameters": [
+   {
+    "description": "List every taken place",
+    "name": "places",
+    "type": "boolean"
+   }
+  ],
   "query": "script.objects"
  },
  {
