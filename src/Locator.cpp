@@ -30,6 +30,7 @@
 #include "ECS/PhysicsGameHooks.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/AbodeKnockSystem.h"
+#include "ECS/Systems/Implementations/AdvisorSystem.h"
 #include "ECS/Systems/Implementations/AlignmentSystem.h"
 #include "ECS/Systems/Implementations/AnimalSystem.h"
 #include "ECS/Systems/Implementations/BuildingDamageSystem.h"
@@ -67,6 +68,7 @@
 #include "ECS/Systems/Implementations/HandGrabSystem.h"
 #include "ECS/Systems/Implementations/HandSystem.h"
 #include "ECS/Systems/Implementations/HelpSpeechSystem.h"
+#include "ECS/Systems/Implementations/HelpTextSystem.h"
 #include "ECS/Systems/Implementations/HighDetailSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
 #if defined(OPENBLACK_INSPECTOR)
@@ -136,6 +138,7 @@ using openblack::debug::gui::DebugGuiInterface;
 using openblack::ecs::MapProduction;
 using openblack::ecs::Registry;
 using openblack::ecs::systems::AbodeKnockSystem;
+using openblack::ecs::systems::AdvisorSystem;
 using openblack::ecs::systems::AlignmentSystem;
 using openblack::ecs::systems::AnimalSystem;
 using openblack::ecs::systems::CameraBookmarkSystem;
@@ -172,6 +175,7 @@ using openblack::ecs::systems::GestureSystem;
 using openblack::ecs::systems::HandGrabSystem;
 using openblack::ecs::systems::HandSystem;
 using openblack::ecs::systems::HelpSpeechSystem;
+using openblack::ecs::systems::HelpTextSystem;
 using openblack::ecs::systems::HighDetailSystem;
 using openblack::ecs::systems::InfluenceSystem;
 using openblack::ecs::systems::LeashSystem;
@@ -313,6 +317,8 @@ bool openblack::InitializeGame() noexcept
 	Locator::danceSystem::emplace<DanceSystem>();
 	Locator::whaleSystem::emplace<WhaleSystem>();
 	Locator::videoSystem::emplace<VideoSystem>();
+	Locator::helpTextSystem::emplace<HelpTextSystem>();
+	Locator::advisorSystem::emplace<AdvisorSystem>();
 	Locator::soundTagSystem::emplace<SoundTagSystem>();
 	Locator::rainSystem::emplace<RainSystem>();
 	Locator::chimneySmokeSystem::emplace<ChimneySmokeSystem>();
@@ -411,7 +417,10 @@ void openblack::ShutDownServices()
 		resources.GetTextures().Clear();
 		resources.GetAnimations().Clear();
 		resources.GetSounds().Clear();
+		// The advisors' models hold meshes of their own
+		resources.GetAdvisorModels().Clear();
 	}
+	Locator::advisorSystem::reset();
 
 	// The audio resources have been cleared and all sounds have been stopped. It is now safe to reset audio
 	if (Locator::audio::has_value())
@@ -444,6 +453,7 @@ void openblack::ShutDownServices()
 	Locator::danceSystem::reset();
 	Locator::whaleSystem::reset();
 	Locator::videoSystem::reset();
+	Locator::helpTextSystem::reset();
 	Locator::influenceSystem::reset();
 	Locator::chimneySmokeSystem::reset();
 	Locator::abodeKnockSystem::reset();

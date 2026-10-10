@@ -1213,6 +1213,18 @@
   "writes": true
  },
  {
+  "description": "The good and the evil advisor: what each does, where it hovers and whether it is talking",
+  "kind": "list",
+  "parameters": [],
+  "query": "help.advisors"
+ },
+ {
+  "description": "The scripts' dialogue: the text shown, whether it is read or waits for a click, who holds the dialogue and the line being said",
+  "kind": "object",
+  "parameters": [],
+  "query": "help.dialogue"
+ },
+ {
   "description": "Whether the game is paused, its turn, the frames served, its speed and any stepping",
   "kind": "object",
   "parameters": [],

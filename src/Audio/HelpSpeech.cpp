@@ -12,7 +12,6 @@
 #include <cctype>
 
 #include <algorithm>
-#include <unordered_map>
 
 using namespace openblack::audio;
 
@@ -54,6 +53,7 @@ HelpSpeechTable::HelpSpeechTable(std::span<const std::string> textNames,
 	{
 		for (const auto& sample : banks[static_cast<size_t>(bank)])
 		{
+			_bankSounds.at(static_cast<size_t>(bank)).try_emplace(sample.sample, sample.sound);
 			byName.try_emplace(Upper(SampleName(sample.file)),
 			                   SpeechSample {.bank = bank, .sample = sample.sample, .sound = sample.sound});
 		}
@@ -81,6 +81,13 @@ size_t HelpSpeechTable::GetSpokenCount() const noexcept
 	return static_cast<size_t>(std::ranges::count_if(_samples, [](const auto& sample) { return sample.has_value(); }));
 }
 
+std::optional<entt::id_type> HelpSpeechTable::FindSound(SpeechBank bank, uint32_t sample) const
+{
+	const auto& sounds = _bankSounds.at(static_cast<size_t>(bank));
+	const auto found = sounds.find(sample);
+	return found != sounds.end() ? std::optional(found->second) : std::nullopt;
+}
+
 void SpeechVoices::Add(SpeechVoice voice, SpeechSample sample, entt::entity emitter)
 {
 	if (emitter != entt::null)
@@ -94,4 +101,16 @@ bool SpeechVoices::IsSaying(SpeechVoice voice, SpeechSample sample, const std::f
 	std::erase_if(_lines, [&isPlaying](const Line& line) { return !isPlaying(line.emitter); });
 	return std::ranges::any_of(_lines,
 	                           [voice, sample](const Line& line) { return line.voice == voice && line.sample == sample; });
+}
+
+void SpeechVoices::Stop(SpeechVoice voice, SpeechBank bank, const std::function<void(entt::entity)>& stop)
+{
+	std::erase_if(_lines, [voice, bank, &stop](const Line& line) {
+		if (line.voice != voice || line.sample.bank != bank)
+		{
+			return false;
+		}
+		stop(line.emitter);
+		return true;
+	});
 }

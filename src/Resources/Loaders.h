@@ -74,6 +74,11 @@ struct AudioBankSampleHeader;
 struct G3DTexture;
 } // namespace openblack::pack
 
+namespace openblack::help::spirits
+{
+struct AdvisorModel;
+}
+
 namespace openblack::physics
 {
 class MaterialTable;
@@ -287,6 +292,12 @@ struct CameraEditLoader final: BaseLoader<edt::EDTFile>
 struct DanceFileLoader final: BaseLoader<dance::DanceFile>
 {
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
+};
+
+/// An advisor from its .hd file: the file, its skeleton and its mesh
+struct AdvisorModelLoader final: BaseLoader<help::spirits::AdvisorModel>
+{
+	[[nodiscard]] result_type operator()(FromBufferTag, const std::string& debugName, const std::vector<uint8_t>& data) const;
 };
 
 struct CameraPathLoader final: BaseLoader<CameraPath>

@@ -95,6 +95,8 @@
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/ScriptFlocks.h"
+#include "ECS/Systems/AdvisorSystemInterface.h"
+#include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -108,6 +110,7 @@
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerDance.h"
 #include "ECS/Systems/Implementations/VillagerScript.h"
@@ -140,6 +143,9 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Hand/HandClickRules.h"
+#include "Help/DialogueText.h"
+#include "Help/ScriptSpirits.h"
+#include "Help/Spirits.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -291,6 +297,46 @@ void ReleaseDialogue(uint32_t task)
 	if (Locator::dialogueControlSystem::value().Release(task, TaskType(task) == lhvm::ScriptType::Help))
 	{
 		Locator::cinematicDirectorSystem::value().SetWideScreen(false, 0);
+	}
+}
+
+PlayerNames ScriptPlayerName(int32_t scriptPlayer);
+
+/// The advisors the scripts drive, nothing before they are loaded
+help::spirits::AdvisorSpiritController* ScriptAdvisors()
+{
+	if (!Locator::advisorSystem::has_value() || !Locator::advisorSystem::value().IsLoaded())
+	{
+		return nullptr;
+	}
+	return &Locator::advisorSystem::value().GetController();
+}
+
+/// The advisor a script's spirit means, 1 the good one or 2 the evil one, by the local player's alignment for those
+/// that go by it
+int32_t ScriptHelpSpirit(int32_t scriptSpirit)
+{
+	const auto alignment = Locator::alignmentSystem::has_value()
+	                           ? Locator::alignmentSystem::value().GetPlayerAlignment(ScriptPlayerName(0))
+	                           : 0.0f;
+	return help::script_spirits::HelpSpiritOf(scriptSpirit, help::script_spirits::DiscreteAlignment(alignment),
+	                                          []() { return Locator::gameRandom::value().LocalRand(100); });
+}
+
+/// The last of the advisors' animations a script can play
+constexpr int32_t k_LastSpiritAnim = 80;
+
+/// A script's place on the screen, as fractions across and down: each out of 0 to 1 is reported, down first, and the
+/// script goes on
+void CheckScreenFractions(float x, float y)
+{
+	if (!help::script_spirits::IsScreenFraction(y))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid Y");
+	}
+	if (!help::script_spirits::IsScreenFraction(x))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid X");
 	}
 }
 
@@ -693,25 +739,34 @@ void GetCameraFocus() // 006 GET_CAMERA_FOCUS
 
 void SpiritEject() // 007 SPIRIT_EJECT
 {
-	// const auto spirit = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto spirit = ScriptHelpSpirit(Pop().intVal);
+	if (auto* advisors = ScriptAdvisors(); advisors != nullptr)
+	{
+		// A help script's advisor appears where it is rather than flying out
+		advisors->SpiritEject(spirit, TaskType(CurrentTask()) == lhvm::ScriptType::Help);
+	}
 }
 
 void SpiritHome() // 008 SPIRIT_HOME
 {
-	// const auto spirit = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto spirit = ScriptHelpSpirit(Pop().intVal);
+	if (auto* advisors = ScriptAdvisors(); advisors != nullptr)
+	{
+		// A help script's advisor vanishes rather than flying home
+		advisors->SpiritHome(spirit, TaskType(CurrentTask()) == lhvm::ScriptType::Help);
+	}
 }
 
 void SpiritPointPos() // 009 SPIRIT_POINT_POS
 {
-	// const auto inWorld = static_cast<bool>(Pop().intVal);
-	// const auto position = PopVec();
-	// const auto spirit = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Only exactly 1 points in the world
+	const auto inWorld = Pop().uintVal == 1;
+	const auto position = PopVec();
+	const auto spirit = ScriptHelpSpirit(Pop().intVal);
+	if (auto* advisors = ScriptAdvisors(); advisors != nullptr)
+	{
+		advisors->SpiritPointPosition(spirit, position, inWorld);
+	}
 }
 
 void SpiritPointGameThing() // 010 SPIRIT_POINT_GAME_THING
@@ -795,11 +850,13 @@ void PosFieldOfView() // 012 POS_FIELD_OF_VIEW
 
 void RunText() // 013 RUN_TEXT
 {
-	// const auto withInteraction = Pop().intVal;
-	// const auto textID = Pop().intVal;
-	// const auto singleLine = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto withInteraction = Pop().intVal;
+	const auto text = Pop().uintVal;
+	const auto singleLine = Pop().uintVal != 0;
+	if (!Locator::helpTextSystem::value().RunText(singleLine, text, withInteraction))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid text");
+	}
 }
 
 void TempText() // 014 TEMP_TEXT
@@ -813,9 +870,7 @@ void TempText() // 014 TEMP_TEXT
 
 void TextRead() // 015 TEXT_READ
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(Locator::helpTextSystem::value().IsTextRead());
 }
 
 void GameThingClicked() // 016 GAME_THING_CLICKED
@@ -3131,35 +3186,49 @@ void GetTargetRelativePos() // 136 GET_TARGET_RELATIVE_POS
 
 void StopPointing() // 137 STOP_POINTING
 {
-	// const auto spirit = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto spirit = ScriptHelpSpirit(Pop().intVal);
+	if (auto* advisors = ScriptAdvisors(); advisors != nullptr)
+	{
+		advisors->SpiritStopPointing(spirit);
+	}
 }
 
 void StopLooking() // 138 STOP_LOOKING
 {
-	// const auto spirit = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto spirit = ScriptHelpSpirit(Pop().intVal);
+	if (auto* advisors = ScriptAdvisors(); advisors != nullptr)
+	{
+		advisors->SpiritStopLooking(spirit);
+	}
 }
 
 void LookAtPosition() // 139 LOOK_AT_POSITION
 {
-	// const auto position = PopVec();
-	// const auto spirit = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto position = PopVec();
+	const auto spirit = ScriptHelpSpirit(Pop().intVal);
+	if (auto* advisors = ScriptAdvisors(); advisors != nullptr)
+	{
+		advisors->SpiritLookAtPosition(spirit, position);
+	}
 }
 
 void PlaySpiritAnim() // 140 PLAY_SPIRIT_ANIM
 {
-	// const auto unk4 = Pop().intVal;
-	// const auto unk3 = Pop().intVal;
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto time = Popf();
+	const auto anim = Pop().intVal;
+	const auto y = Popf();
+	const auto x = Popf();
+	const auto spirit = ScriptHelpSpirit(Pop().intVal);
+	// None of the checks stops it
+	if (anim < 0 || anim > k_LastSpiritAnim)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid enum");
+	}
+	CheckScreenFractions(x, y);
+	if (auto* advisors = ScriptAdvisors(); advisors != nullptr)
+	{
+		advisors->SpiritPlayAnim(spirit, x, y, static_cast<uint32_t>(anim), time);
+	}
 }
 
 void CallInNotNear() // 141 CALL_IN_NOT_NEAR
@@ -3379,28 +3448,33 @@ void CallNotPoisonedIn() // 164 CALL_NOT_POISONED_IN
 
 void SpiritPlayed() // 165 SPIRIT_PLAYED
 {
-	// const auto spirit = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto spirit = ScriptHelpSpirit(Pop().intVal);
+	const auto* advisors = ScriptAdvisors();
+	Pushb(advisors == nullptr || !advisors->SpiritPlayingAnim(spirit));
 }
 
 void ClingSpirit() // 166 CLING_SPIRIT
 {
-	// const auto yPercent = Popf();
-	// const auto xPercent = Popf();
-	// const auto spirit = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto y = Popf();
+	const auto x = Popf();
+	const auto spirit = ScriptHelpSpirit(Pop().intVal);
+	CheckScreenFractions(x, y);
+	if (auto* advisors = ScriptAdvisors(); advisors != nullptr)
+	{
+		advisors->SpiritCling(spirit, x, y);
+	}
 }
 
 void FlySpirit() // 167 FLY_SPIRIT
 {
-	// const auto yPercent = Popf();
-	// const auto xPercent = Popf();
-	// const auto spirit = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto y = Popf();
+	const auto x = Popf();
+	const auto spirit = ScriptHelpSpirit(Pop().intVal);
+	CheckScreenFractions(x, y);
+	if (auto* advisors = ScriptAdvisors(); advisors != nullptr)
+	{
+		advisors->SpiritFly(spirit, x, y);
+	}
 }
 
 void SetIdMoveable() // 168 SET_ID_MOVEABLE
@@ -4353,11 +4427,15 @@ void HasPlayerMagic() // 245 HAS_PLAYER_MAGIC
 
 void SpiritSpeaks() // 246 SPIRIT_SPEAKS
 {
-	// const auto textID = Pop().intVal;
-	// const auto spirit = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto text = Pop().uintVal;
+	const auto spirit = ScriptHelpSpirit(Pop().intVal);
+	if (text >= help::k_HelpTextCount)
+	{
+		Pushb(false);
+		return;
+	}
+	const auto narrator = Locator::helpTextSystem::value().GetNarrator(text);
+	Pushb(help::script_spirits::SpiritWhoTalks(narrator) == spirit);
 }
 
 void BeliefForPlayer() // 247 BELIEF_FOR_PLAYER
@@ -4904,16 +4982,20 @@ void SetGraphicsClipping() // 299 SET_GRAPHICS_CLIPPING
 
 void SpiritAppear() // 300 SPIRIT_APPEAR
 {
-	// const auto spirit = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto spirit = ScriptHelpSpirit(Pop().intVal);
+	if (auto* advisors = ScriptAdvisors(); advisors != nullptr)
+	{
+		advisors->SpiritEject(spirit, true);
+	}
 }
 
 void SpiritDisappear() // 301 SPIRIT_DISAPPEAR
 {
-	// const auto spirit = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto spirit = ScriptHelpSpirit(Pop().intVal);
+	if (auto* advisors = ScriptAdvisors(); advisors != nullptr)
+	{
+		advisors->SpiritHome(spirit, true);
+	}
 }
 
 void SetFocusOnObject() // 302 SET_FOCUS_ON_OBJECT
@@ -5967,14 +6049,12 @@ void GetTownWorshipDeaths() // 410 GET_TOWN_WORSHIP_DEATHS
 
 void GameClearDialogue() // 411 GAME_CLEAR_DIALOGUE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	Locator::helpTextSystem::value().ClearAllText();
 }
 
 void GameCloseDialogue() // 412 GAME_CLOSE_DIALOGUE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	Locator::helpTextSystem::value().CloseDialogue();
 }
 
 void GetHandState() // 413 GET_HAND_STATE
@@ -6014,11 +6094,17 @@ void GetPlayerTownTotal() // 417 GET_PLAYER_TOWN_TOTAL
 
 void SpiritScreenPoint() // 418 SPIRIT_SCREEN_POINT
 {
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto y = Popf();
+	const auto x = Popf();
+	const auto spirit = ScriptHelpSpirit(Pop().intVal);
+	CheckScreenFractions(x, y);
+	if (auto* advisors = ScriptAdvisors(); advisors != nullptr)
+	{
+		const auto& screen = advisors->GetScreen();
+		const auto pixel = glm::ivec2(static_cast<int>(static_cast<float>(screen.width) * x),
+		                              static_cast<int>(static_cast<float>(screen.height) * y));
+		advisors->SpiritScreenPoint(spirit, pixel);
+	}
 }
 
 void KeyDown() // 419 KEY_DOWN

@@ -17,6 +17,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -76,12 +77,18 @@ public:
 	[[nodiscard]] size_t GetCount() const noexcept { return _samples.size(); }
 	/// How many of the texts have a sample saying them
 	[[nodiscard]] size_t GetSpokenCount() const noexcept;
+	/// How many samples a bank has
+	[[nodiscard]] size_t GetBankCount(SpeechBank bank) const { return _bankSounds.at(static_cast<size_t>(bank)).size(); }
+	/// The sound of a bank's sample by its number, nothing when the bank has no such sample
+	[[nodiscard]] std::optional<entt::id_type> FindSound(SpeechBank bank, uint32_t sample) const;
 
 	/// The name of the sample made from a file: its file name without folders or extension
 	[[nodiscard]] static std::string_view SampleName(std::string_view file);
 
 private:
 	std::vector<std::optional<SpeechSample>> _samples;
+	/// Each bank's sounds by sample number
+	std::array<std::unordered_map<uint32_t, entt::id_type>, 3> _bankSounds;
 };
 
 /// Who a script's spoken line is said by. The game keeps two, so that two people can speak at once and a script can
@@ -101,6 +108,8 @@ public:
 	/// Whether the voice is still saying the sample, by `isPlaying` of its sounds. Sounds that have finished are
 	/// forgotten.
 	[[nodiscard]] bool IsSaying(SpeechVoice voice, SpeechSample sample, const std::function<bool(entt::entity)>& isPlaying);
+	/// Stops what the voice is saying from a bank, by `stop` of each of its sounds
+	void Stop(SpeechVoice voice, SpeechBank bank, const std::function<void(entt::entity)>& stop);
 	void Clear() { _lines.clear(); }
 	[[nodiscard]] size_t GetCount() const noexcept { return _lines.size(); }
 

@@ -38,6 +38,7 @@ using ParticleFileManager = ResourceManager<ParticleFileLoader>;
 using GestureTemplatesManager = ResourceManager<GestureTemplatesLoader>;
 using VideoManager = ResourceManager<VideoLoader>;
 using ParticleBitmapManager = ResourceManager<ParticleBitmapLoader>;
+using AdvisorModelManager = ResourceManager<AdvisorModelLoader>;
 
 class ResourcesInterface
 {
@@ -85,6 +86,8 @@ public:
 	virtual void StopLoading() = 0;
 	/// The videos playing, by their paths; each is let go when it ends
 	virtual VideoManager& GetVideos() = 0;
+	/// The two advisors, by help::spirits::ModelId
+	virtual AdvisorModelManager& GetAdvisorModels() = 0;
 };
 
 } // namespace openblack::resources

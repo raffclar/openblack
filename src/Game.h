@@ -296,6 +296,8 @@ private:
 	std::chrono::steady_clock::duration _turnDeltaTime;
 	uint32_t _frameCount {0};
 	glm::ivec2 _mousePosition {0, 0};
+	/// The left button went down since the last frame, which may click the dialogue on
+	bool _dialogueClick {false};
 	bool _handGripping;
 	/// Whether the last press of the Action button went to letting go of a miracle in the hand or to a creature, so it
 	/// taps nothing else for the leash
@@ -358,8 +360,6 @@ private:
 	void PlayHandGrabSound();
 	/// What the hand steps by this frame, in seconds
 	[[nodiscard]] float HandStepSeconds() const;
-	/// Whether the player's hand is out, not put away for a dialog or a script's cinema bars
-	[[nodiscard]] bool IsHandShown() const;
 	/// The miracles hear where the hand and cursor are, and the held miracle follows the hand
 	void UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds);
 	/// The gestures drawn with the cursor this frame, through the gesture system

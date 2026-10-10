@@ -563,6 +563,12 @@ void Renderer::ConfigureView(graphics::RenderPass viewId, glm::u16vec2 resolutio
 		bgfx::setViewClear(static_cast<bgfx::ViewId>(viewId), BGFX_CLEAR_NONE);
 		bgfx::setViewRect(static_cast<bgfx::ViewId>(viewId), 0, 0, resolution.x, resolution.y);
 	}
+	// The advisors near the screen are drawn over the main view, its depth cleared
+	if (viewId == RenderPass::Main)
+	{
+		bgfx::setViewClear(static_cast<bgfx::ViewId>(RenderPass::Advisors), BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
+		bgfx::setViewRect(static_cast<bgfx::ViewId>(RenderPass::Advisors), 0, 0, resolution.x, resolution.y);
+	}
 	// And what blends in it is drawn over it after
 	if (const auto translucentId = TranslucentPassOf(viewId); translucentId != viewId)
 	{
@@ -5487,6 +5493,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				    });
 			}
 		}
+	}
+
+	if (desc.viewId == RenderPass::Main && desc.drawEntities)
+	{
+		DrawAdvisors(desc);
 	}
 
 	// The sun's glare over everything else in the view; the temple's comes before its glass

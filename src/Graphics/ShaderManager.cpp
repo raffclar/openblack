@@ -151,6 +151,12 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_world_textured
 #include "ShaderIncluder.h"
+#define SHADER_NAME vs_advisor
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_advisor
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_advisor_quad
+#include "ShaderIncluder.h"
 #define SHADER_NAME vs_fragment
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_ghost_depth
@@ -199,7 +205,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 65> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 68> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
@@ -248,6 +254,9 @@ const std::array<bgfx::EmbeddedShader, 65> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_blob),            //
     BGFX_EMBEDDED_SHADER(fs_blob),            //
     BGFX_EMBEDDED_SHADER(fs_world_textured),  //
+    BGFX_EMBEDDED_SHADER(vs_advisor),         //
+    BGFX_EMBEDDED_SHADER(fs_advisor),         //
+    BGFX_EMBEDDED_SHADER(fs_advisor_quad),    //
     BGFX_EMBEDDED_SHADER(vs_fragment),        //
     BGFX_EMBEDDED_SHADER(fs_ghost_depth),     //
     BGFX_EMBEDDED_SHADER(fs_fragment),        //
@@ -301,6 +310,8 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"Leash", "vs_leash", "fs_world_textured"},
     ShaderDefinition {"Blob", "vs_blob", "fs_blob"},
     ShaderDefinition {"WorldTextured", "vs_blob", "fs_world_textured"},
+    ShaderDefinition {"Advisor", "vs_advisor", "fs_advisor"},
+    ShaderDefinition {"AdvisorQuad", "vs_blob", "fs_advisor_quad"},
     ShaderDefinition {"Fragment", "vs_fragment", "fs_fragment"},
     ShaderDefinition {"GhostDepth", "vs_object", "fs_ghost_depth"},
     ShaderDefinition {"Vegetation", "vs_vegetation", "fs_vegetation"},

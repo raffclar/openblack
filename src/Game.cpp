@@ -104,6 +104,7 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
+#include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
@@ -143,6 +144,7 @@
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
@@ -194,6 +196,7 @@
 #include "Gui/LoadingScreen.h"
 #include "Hand/HandFeel.h"
 #include "Hand/HandVisibility.h"
+#include "Help/Spirits.h"
 #include "Input/GameActionMapInterface.h"
 #include "LHScriptX/Script.h"
 #include "Locator.h"
@@ -333,6 +336,18 @@ void RegisterFile(Manager& manager, Id id, const std::filesystem::path& path, Ar
 /// The sound banks whose samples are decoded as soon as they are read, as they are wanted at once and often: the hand's,
 /// the miracles' and the interface's
 constexpr std::array<std::string_view, 1> k_DecodedAheadBanks = {"InGame.sad"};
+/// Both advisors are sent home, the good one first; a help script's vanish rather than fly home
+void SendAdvisorsHome(bool helpScript)
+{
+	if (!Locator::advisorSystem::has_value() || !Locator::advisorSystem::value().IsLoaded())
+	{
+		return;
+	}
+	auto& advisors = Locator::advisorSystem::value().GetController();
+	advisors.SpiritHome(1, helpScript);
+	advisors.SpiritHome(2, helpScript);
+}
+
 /// While a land loads the game serves no frames: the inspector answers meanwhile that it is loading, so that tools
 /// wait for it rather than time out
 class InspectorLoading
@@ -463,6 +478,12 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	if ((event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) && event.button.button == SDL_BUTTON_LEFT)
 	{
 		leftMouseButton = event.type == SDL_MOUSEBUTTONDOWN;
+	}
+	// A press of the left button may click the dialogue on, whatever else it does
+	if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT &&
+	    !Locator::debugGui::value().IsMouseOverWindow())
+	{
+		_dialogueClick = true;
 	}
 	if ((event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) && event.button.button == SDL_BUTTON_MIDDLE)
 	{
@@ -748,7 +769,8 @@ bool Game::IsPaused() const
 
 bool Game::IsHandDrawn() const
 {
-	return (!_interface || !_interface->IsDialogOpen()) && Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+	return hand_visibility::IsShown(_interface && _interface->IsDialogOpen(),
+	                                Locator::cinematicDirectorSystem::value().IsInterfaceActive());
 }
 
 void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds)
@@ -1078,6 +1100,8 @@ bool Game::GameLogicLoop() noexcept
 	lhvm.LookIn(lhvm::ScriptType::All);
 	// The scripts' fade moves on with their turn
 	Locator::cinematicDirectorSystem::value().ProcessTurn();
+	// The advisors follow what they point at and look at
+	Locator::advisorSystem::value().ProcessTurn();
 
 	// The fireflies come out at nightfall and go home at dawn, by the time of day the turn began at
 	if (Locator::fireflySystem::has_value())
@@ -1599,6 +1623,35 @@ bool Game::Update() noexcept
 	Locator::fishFarmSystem::value().Update(std::chrono::duration<float>(gameTime).count(),
 	                                        Locator::camera::value().GetOrigin());
 	Locator::cinematicDirectorSystem::value().Update(gameTime);
+	// The advisors move and act once a frame, by the real time inside the temple and the game's otherwise
+	{
+		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+		const auto realMs = static_cast<int32_t>(clock.GetFrameRealTime().count());
+		const auto gameMs = static_cast<int32_t>(clock.GetFrameGameTime().count());
+		const auto screenSize = glm::max(Locator::windowing::value().GetSize(), glm::ivec2(1));
+		Locator::advisorSystem::value().Update({
+		    .camera = &camera,
+		    .screen = static_cast<glm::u16vec2>(screenSize),
+		    .mouse = _mousePosition,
+		    .frameMs = static_cast<uint32_t>(std::max(realMs, 1)),
+		    .stepMs = std::clamp(inTemple ? realMs : gameMs, 0, 500),
+		    .tickMs = machine_clock::Ticks(),
+		    .wideScreen = Locator::cinematicDirectorSystem::value().IsWideScreenOn(),
+		});
+	}
+	// The scripts' dialogue: the voices, the player's click and the newest text sliding in
+	{
+		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+		const auto* keys = SDL_GetKeyboardState(nullptr);
+		Locator::helpTextSystem::value().Update({
+		    .gameMs = static_cast<uint32_t>(clock.GetFrameGameTime().count()),
+		    .realMs = static_cast<uint32_t>(clock.GetFrameRealTime().count()),
+		    .inTemple = inTemple,
+		    .click = _dialogueClick,
+		    .skipKey = keys != nullptr && keys[SDL_SCANCODE_KP_ENTER] != 0,
+		});
+		_dialogueClick = false;
+	}
 	// The cinema bars coming in hide the game's dialogs
 	if (Locator::cinematicDirectorSystem::value().TakeHideDialogs() && _interface && _interface->GetMenu().IsOpen())
 	{
@@ -1776,7 +1829,7 @@ bool Game::Update() noexcept
 		// Update Hand
 		{
 			// Put away, it stays where it was and does nothing until it comes back
-			if (IsHandShown())
+			if (IsHandDrawn())
 			{
 				const glm::mat4 modelRotationCorrection = glm::eulerAngleX(glm::radians(90.0f));
 
@@ -2072,7 +2125,7 @@ bool Game::Update() noexcept
 		{
 			auto actions = profiler.BeginScoped(Profiler::Stage::VegetationUpdate);
 			auto& vegetation = Locator::vegetation::value();
-			vegetation.UpdateBendPoints(IsHandShown());
+			vegetation.UpdateBendPoints(IsHandDrawn());
 			vegetation.Rustle(gameTime);
 		}
 
@@ -2510,6 +2563,7 @@ bool Game::Initialize() noexcept
 		_startupTimer->Step("hand animations");
 		LoadCreatureRigs();
 		_startupTimer->Step("creature rigs");
+		Locator::advisorSystem::value().Load();
 		const auto registerMesh = [&meshManager](auto id, const std::filesystem::path& path) {
 			RegisterFile(meshManager, id, path, LFromDiskTag {}, path);
 		};
@@ -2768,6 +2822,22 @@ bool Game::Initialize() noexcept
 			}
 		}
 		Locator::helpSpeechSystem::value().SetTable(audio::HelpSpeechTable(_interface->GetTexts().GetHelpNames(), banks));
+		// The scripts' dialogue, its text sized for the screen it starts on
+		const int screenHeight = Locator::windowing::has_value() ? Locator::windowing::value().GetSize().y : 0;
+		Locator::helpTextSystem::value().Start(_interface->GetTexts(), screenHeight);
+		// What the dialogue changing hands does to the advisors and the texts
+		Locator::dialogueControlSystem::value().SetHooks({
+		    .sendSpiritsHome = [](bool helpScript) { SendAdvisorsHome(helpScript); },
+		    .taken = []() { Locator::helpTextSystem::value().ClearAllText(); },
+		    .released =
+		        [](bool helpScript) {
+			        // They fly home, are cut short in what they say, are sent home as the script would, and the texts go
+			        SendAdvisorsHome(false);
+			        Locator::helpTextSystem::value().InterruptAdvisors();
+			        SendAdvisorsHome(helpScript);
+			        Locator::helpTextSystem::value().ClearAllText();
+		        },
+		});
 	}
 
 	_startupTimer->Step("sound and music banks");
@@ -3303,6 +3373,8 @@ void Game::PrepareNewLand()
 	{
 		Locator::cameraBookmarkSystem::value().SetEnabled(true);
 	}
+	// The scripts start again, and the help's texts and voices with them
+	Locator::helpTextSystem::value().Reset();
 	Locator::cameraHelpSystem::value().Get().ResetForNewLand();
 	Locator::influenceSystem::value().Reset();
 	// Nor its creatures' footprints, nor a scare of its fish
@@ -3868,12 +3940,6 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 			handTransform.rotation = TipForwards(onLevelLand, _handHeading, *tip);
 		}
 	}
-}
-
-bool Game::IsHandShown() const
-{
-	return hand_visibility::IsShown(_interface && _interface->GetMenu().IsOpen(),
-	                                Locator::cinematicDirectorSystem::value().IsInterfaceActive());
 }
 
 float Game::HandStepSeconds() const

@@ -72,6 +72,7 @@ public:
 	}
 
 	void StopLoading() override { _loadQueue.Cancel(); }
+	AdvisorModelManager& GetAdvisorModels() override { return _advisorModels; }
 
 private:
 	template <typename Func>
@@ -120,5 +121,6 @@ private:
 	VideoManager _videos;
 	// Last, so its threads stop before the caches they load into go
 	LoadQueue _loadQueue {LoadQueue::DefaultThreadCount()};
+	AdvisorModelManager _advisorModels;
 };
 } // namespace openblack::resources

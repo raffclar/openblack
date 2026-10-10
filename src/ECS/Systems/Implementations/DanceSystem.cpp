@@ -47,16 +47,42 @@ namespace
 constexpr uint32_t k_TurnsPerSecond = 1000 / static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count());
 
 /// Where a dance's file is: its name in the table is under the game's scripts folder
-std::filesystem::path DanceFilePath(std::string name)
+std::filesystem::path DanceFilePath(const std::string& name)
 {
-	std::ranges::replace(name, '\\', '/');
-	constexpr std::string_view k_Scripts = "scripts/";
-	const bool underScripts =
-	    name.size() > k_Scripts.size() &&
-	    std::ranges::equal(std::string_view(name).substr(0, k_Scripts.size()), k_Scripts,
-	                       [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == b; });
-	const auto relative = underScripts ? name.substr(k_Scripts.size()) : name;
-	return Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / relative;
+	// The table's names separate their folders with one or two backslashes
+	std::vector<std::string> parts;
+	std::string part;
+	for (const char c : name)
+	{
+		if (c == '\\' || c == '/')
+		{
+			if (!part.empty())
+			{
+				parts.push_back(std::move(part));
+				part.clear();
+			}
+			continue;
+		}
+		part.push_back(c);
+	}
+	if (!part.empty())
+	{
+		parts.push_back(std::move(part));
+	}
+	const auto lower = [](std::string text) {
+		std::ranges::transform(text, text.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		return text;
+	};
+	auto path = Locator::filesystem::value().GetPath<filesystem::Path::Scripts>();
+	for (std::size_t i = 0; i < parts.size(); ++i)
+	{
+		if (i == 0 && lower(parts[i]) == "scripts")
+		{
+			continue;
+		}
+		path /= parts[i];
+	}
+	return path;
 }
 
 /// A dance's file, read once

@@ -38,6 +38,10 @@ public:
 	[[nodiscard]] virtual size_t GetSpokenTextCount() const = 0;
 	/// How many lines the scripts have had said that weren't yet found finished
 	[[nodiscard]] virtual size_t GetLineCount() const = 0;
+	/// Stops what the voice is saying from a bank
+	virtual void Stop(audio::SpeechVoice voice, audio::SpeechBank bank) = 0;
+	/// Which sample says each help text
+	[[nodiscard]] virtual const audio::HelpSpeechTable& GetTable() const = 0;
 };
 
 } // namespace openblack::ecs::systems

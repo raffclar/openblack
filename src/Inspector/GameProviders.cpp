@@ -66,6 +66,7 @@
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
+#include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
@@ -105,6 +106,7 @@
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
@@ -152,6 +154,9 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "GameControls.h"
 #include "Graphics/RendererInterface.h"
+#include "Help/AdvisorVoices.h"
+#include "Help/DialogueText.h"
+#include "Help/Spirits.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
@@ -274,6 +279,10 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"videoSystem", "view.video"},
     LocatorCoverage {"playerProfileSystem", "players.new_game"},
     LocatorCoverage {"tutorialSkipSystem", "players.new_game"},
+    LocatorCoverage {"advisorSystem", "help.advisors"},
+    LocatorCoverage {"helpTextSystem", "help.dialogue"},
+    LocatorCoverage {"helpSpeechSystem", "help.dialogue"},
+    LocatorCoverage {"dialogueControlSystem", "help.dialogue"},
 };
 
 constexpr std::string_view k_NoRegistry = "there is no registry: no land is loaded";
@@ -1618,6 +1627,71 @@ std::optional<std::vector<BodyInfo>> Bodies()
 	return bodies;
 }
 
+// The help: the advisors and the scripts' dialogue
+
+std::unique_ptr<ProviderInterface> HelpProvider()
+{
+	auto provider = std::make_unique<FunctionProvider>("help");
+	provider->Add(
+	    Query("advisors", "The good and the evil advisor: what each does, where it hovers and whether it is talking", {},
+	          ResultKind::List),
+	    Serve<Locator::advisorSystem>(
+	        "the advisors", [](const ecs::systems::AdvisorSystemInterface& advisors, const QueryContext& /*c*/) -> Json {
+		        if (!advisors.IsLoaded())
+		        {
+			        return Json::array();
+		        }
+		        const auto& controller = advisors.GetController();
+		        const auto* voices =
+		            Locator::helpTextSystem::has_value() ? &Locator::helpTextSystem::value().GetVoices() : nullptr;
+		        Json items = Json::array();
+		        for (int dude = 0; dude < 2; ++dude)
+		        {
+			        const auto& spirit = controller.Dude(dude);
+			        items.push_back({{"advisor", dude == 0 ? "good" : "evil"},
+			                         {"control_state", static_cast<int>(controller.State(dude))},
+			                         {"state", spirit.State()},
+			                         {"hover", Point(spirit.Hover())},
+			                         {"position", Point(spirit.Position())},
+			                         {"alpha", spirit.Alpha()},
+			                         {"playing_anim", spirit.IsPlayingAnim()},
+			                         {"given_line", voices != nullptr && voices->IsActive(dude)},
+			                         {"speaking", voices != nullptr && voices->GetSpeaker() == dude}});
+		        }
+		        return items;
+	        }));
+	provider->Add(Query("dialogue",
+	                    "The scripts' dialogue: the text shown, whether it is read or waits for a click, who holds the "
+	                    "dialogue and the line being said"),
+	              Serve<Locator::helpTextSystem>(
+	                  "the dialogue", [](const ecs::systems::HelpTextSystemInterface& help, const QueryContext& /*c*/) -> Json {
+		                  const auto& voices = help.GetVoices();
+		                  Json result {{"started", help.IsStarted()},
+		                               {"text_read", help.IsTextRead()},
+		                               {"speaker", voices.GetSpeaker()},
+		                               {"sentence", voices.GetSentence()},
+		                               {"owner", Locator::dialogueControlSystem::has_value()
+		                                             ? Json(Locator::dialogueControlSystem::value().GetOwner())
+		                                             : Json(nullptr)},
+		                               {"speech_banks", Locator::helpSpeechSystem::has_value()
+		                                                    ? Json(Locator::helpSpeechSystem::value().GetTable().GetBankCount(
+		                                                          audio::SpeechBank::HelpSprites))
+		                                                    : Json(nullptr)}};
+		                  if (const auto* dialogue = help.GetDialogue(); dialogue != nullptr)
+		                  {
+			                  result["text"] = dialogue->GetCurrentText();
+			                  result["narrator"] = help.GetNarrator(dialogue->GetCurrentText());
+			                  result["waiting_for_click"] = dialogue->IsWaitingForClick();
+			                  result["end_turn"] = dialogue->GetEndTurn();
+			                  result["end_ms"] = dialogue->GetEndMs();
+			                  result["drawn"] = dialogue->IsDrawn();
+			                  result["box_shown"] = dialogue->GetDisplay().IsBoxShown();
+		                  }
+		                  return result;
+	                  }));
+	return provider;
+}
+
 } // namespace
 
 std::span<const LocatorCoverage> openblack::inspector::CoveredServices()
@@ -1756,6 +1830,7 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	inspector.Add(ViewProvider());
 	inspector.Add(CreaturesProvider());
 	inspector.Add(ScriptProvider(controls.scripts));
+	inspector.Add(HelpProvider());
 
 	auto game = std::make_unique<GameProvider>(runTarget);
 	auto* gameProvider = game.get();

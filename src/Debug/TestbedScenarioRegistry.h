@@ -90,6 +90,8 @@ enum class Facet : uint8_t
 	Nature,
 	/// The land's animals: its birds and the doves or bats about the temples
 	Animals,
+	/// The player's two advisors, the good one and the evil one
+	Advisors,
 
 	_Count
 };
@@ -499,6 +501,9 @@ struct Command
 		/// The player's hand knocks on the scenario's object, a building, as the Action button pressed on it does, from
 		/// where the hand is
 		HandTapObject,
+		/// One of the player's advisors (value: 0 the good one, 1 the evil one) is told to do something, as the scripts
+		/// tell it (advisor). Needs no creature
+		Advisor,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -539,6 +544,27 @@ struct Command
 	std::optional<size_t> atCreature;
 	/// The player's alignment jumped to, from -1 (evil) to 1 (good)
 	float alignment {0.0f};
+	/// What an advisor is told: to come out of its corner, or to appear in a puff of smoke; to go home, or to vanish; to
+	/// cling to or fly to a point on the screen (point, from 0 to 1 across and down); to point at that point on the
+	/// screen, or at a point of the land (point, from the middle of the map), out in the world or not (gentle); to look
+	/// at the point of the land; to play an anim (anim) at the point on the screen at a speed (amount); to feel an
+	/// emotion (anim)
+	enum class AdvisorAction : uint8_t
+	{
+		Out,
+		Appear,
+		Home,
+		Vanish,
+		Cling,
+		Fly,
+		PointOnScreen,
+		PointAtLand,
+		LookAtLand,
+		PlayAnim,
+		Feel,
+	};
+	AdvisorAction advisor {AdvisorAction::Out};
+	uint32_t anim {0};
 };
 [[nodiscard]] std::string_view Name(Command::Kind kind);
 /// Whether a command is the player's mouse, which needs no creature
@@ -671,6 +697,8 @@ void AddHandNavigationScenarios(std::vector<Scenario>& all);
 /// The scenarios of how the hand looks for its player's alignment
 void AddHandLookScenarios(std::vector<Scenario>& all);
 void AddKnockScenarios(std::vector<Scenario>& all);
+/// The advisors coming out, clinging, pointing and acting
+void AddAdvisorScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them
 [[nodiscard]] std::span<const Scenario> All();
