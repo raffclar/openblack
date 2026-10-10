@@ -26,6 +26,7 @@ class LivingActionSystem final: public LivingActionSystemInterface
 public:
 	void Update() override;
 	void UpdatePoses(uint32_t turn, float turnFraction) override;
+	void PoseVillagersInView(const glm::mat4& viewProjection) override;
 
 	[[nodiscard]] VillagerStates VillagerGetState(const components::LivingAction& action,
 	                                              components::LivingAction::Index index) const override;

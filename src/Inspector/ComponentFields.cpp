@@ -41,6 +41,7 @@
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/DestructionGhost.h"
+#include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/FallingRoots.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
@@ -125,6 +126,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/VillagerPose.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
@@ -543,6 +545,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::DestructionGhost::model>("model")
 	    .Field<&components::DestructionGhost::millisecondsLeft>("millisecondsLeft")
 	    .Field<&components::DestructionGhost::shown>("shown");
+	Reflect<components::DetailMeshes>(context)
+	    .Field<&components::DetailMeshes::meshes>("meshes")
+	    .Field<&components::DetailMeshes::importance>("importance");
 	Reflect<components::DropsRoots> {context};
 	Reflect<components::FallingRoots>(context)
 	    .Field<&components::FallingRoots::seconds>("seconds")
@@ -625,7 +630,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::BigForest>(context).Field<&components::BigForest::type>("type").Field<&components::BigForest::worth>(
 	    "worth");
 	Reflect<components::Forest>(context).Field<&components::Forest::type>("type");
-	Reflect<components::ForestMember>(context).Field<&components::ForestMember::forest>("forest");
+	Reflect<components::ForestMember>(context)
+	    .Field<&components::ForestMember::forest>("forest")
+	    .Field<&components::ForestMember::growing>("growing")
+	    .Field<&components::ForestMember::listed>("listed");
 	Reflect<components::GripLandscapeParticle>(context)
 	    .Field<&components::GripLandscapeParticle::centre>("centre")
 	    .Field<&components::GripLandscapeParticle::offset>("offset")
@@ -727,6 +735,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::LandForest::bigForest>("bigForest")
 	    .Field<&components::LandForest::scenic>("scenic")
 	    .Field<&components::LandForest::made>("made");
+	Reflect<components::ForestTurns>(context)
+	    .Field<&components::ForestTurns::id>("id")
+	    .Field<&components::ForestTurns::made>("made")
+	    .Field<&components::ForestTurns::emptyCountdown>("emptyCountdown")
+	    .Field<&components::ForestTurns::spreadCounter>("spreadCounter");
 	Reflect<components::TownForests>(context).Field<&components::TownForests::forests>("forests");
 	Reflect<components::LightBeam>(context).Field<&components::LightBeam::cone>("cone");
 	Reflect<components::LivingAction>(context)
@@ -923,7 +936,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::SkyDome::textureId>("textureId")
 	    .Field<&components::SkyDome::follow>("follow")
 	    .Field<&components::SkyDome::frameRows>("frameRows")
-	    .Field<&components::SkyDome::overcast>("overcast");
+	    .Field<&components::SkyDome::overcast>("overcast")
+	    .Field<&components::SkyDome::landLight>("landLight");
 	Reflect<components::DayNightCycle>(context).Field<&components::DayNightCycle::clock>("clock");
 	Reflect<components::CelestialBody>(context)
 	    .Field<&components::CelestialBody::meshId>("meshId")
@@ -938,6 +952,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Sun::strength>("strength");
 	Reflect<components::Moon>(context)
 	    .Field<&components::Moon::phase>("phase")
+	    .Field<&components::Moon::date>("date")
+	    .Field<&components::Moon::dateReadAt>("dateReadAt")
+	    .Field<&components::Moon::dateOverride>("dateOverride")
 	    .Field<&components::Moon::placement>("placement")
 	    .Field<&components::Moon::colour>("colour")
 	    .Field<&components::Moon::strength>("strength");
@@ -1125,7 +1142,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::Tree>(context)
 	    .Field<&components::Tree::type>("type")
 	    .Field<&components::Tree::maxSize>("maxSize")
-	    .Field<&components::Tree::turnsToGrowth>("turnsToGrowth");
+	    .Field<&components::Tree::growthCountdown>("growthCountdown")
+	    .Field<&components::Tree::madeToGrow>("madeToGrow");
 	Reflect<components::Unlit> {context};
 	Reflect<components::Velocity>(context)
 	    .Field<&components::Velocity::dX>("dX")
@@ -1170,6 +1188,18 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::WalkPath::walk>("walk")
 	    .Field<&components::WalkPath::living>("living")
 	    .Field<&components::WalkPath::speed>("speed");
+	Reflect<components::Vortex>(context)
+	    .Field<&components::Vortex::type>("type")
+	    .Field<&components::Vortex::state>("state")
+	    .Field<&components::Vortex::stateStartTurn>("stateStartTurn")
+	    .Field<&components::Vortex::centre>("centre")
+	    .Field<&components::Vortex::levelApplied>("levelApplied")
+	    .Field<&components::Vortex::groundHeights>("groundHeights")
+	    .Field<&components::Vortex::groundAverage>("groundAverage")
+	    .Field<&components::Vortex::beforeLandEffect>("beforeLandEffect")
+	    .Field<&components::Vortex::afterLandEffect>("afterLandEffect")
+	    .Field<&components::Vortex::objectMoverEffect>("objectMoverEffect")
+	    .Field<&components::Vortex::lightMapEffect>("lightMapEffect");
 	Reflect<components::WallHugObjectReference>(context)
 	    .Field<&components::WallHugObjectReference::stepsAway>("stepsAway")
 	    .Field<&components::WallHugObjectReference::entity>("entity")

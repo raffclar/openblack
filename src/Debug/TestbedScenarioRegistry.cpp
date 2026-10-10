@@ -2247,6 +2247,7 @@ std::vector<Scenario> Build()
 	AddFlockScenarios(all);
 	AddBirdScenarios(all);
 	AddTeleportScenarios(all);
+	AddVortexScenarios(all);
 	AddTornadoScenarios(all);
 	AddPhysicsScenarios(all);
 	AddNatureScenarios(all);
@@ -2254,6 +2255,7 @@ std::vector<Scenario> Build()
 	AddHandLookScenarios(all);
 	AddFishScenarios(all);
 	AddKnockScenarios(all);
+	AddSkyScenarios(all);
 	AddAdvisorScenarios(all);
 	return all;
 }
@@ -2358,7 +2360,8 @@ std::string_view testbed_scenarios::Name(Facet facet)
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
 	    "Idle",       "Expressions", "Senses",    "Needs",         "Growth",  "Appearance", "Light",   "Movement",
 	    "Footprints", "Audio",       "Objects",   "Hand",          "Leash",   "Combat",     "Mind",    "Particles",
-	    "Editor",     "Miracles",    "Benchmark", "Creature Mode", "Physics", "Nature",     "Animals", "Advisors",
+	    "Editor",     "Miracles",    "Benchmark", "Creature Mode", "Physics", "Nature",     "Animals", "Sky",
+	    "Advisors",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
@@ -2515,11 +2518,11 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 	if (scenario.creatures.empty() && scenario.particles.empty() && scenario.miracles.empty() && scenario.dispensers.empty() &&
 	    scenario.birdFlocks.empty() && scenario.temples.empty() && !environment.dispenserGrid && !scenario.crowd.has_value() &&
 	    !environment.playerAlignment.has_value() && scenario.throws.empty() && scenario.objects.empty() &&
-	    scenario.fireflyRewards.empty() &&
+	    scenario.vortices.empty() && scenario.fireflyRewards.empty() &&
 	    std::ranges::none_of(scenario.commands, [](const Command& command) { return NeedsNoCreature(command.kind); }))
 	{
-		problems.emplace_back("no creatures, things, particles, miracles, dispensers, birds, temples, crowd, fireflies' "
-		                      "rewards, player's commands or alignment for the hand");
+		problems.emplace_back("no creatures, things, particles, miracles, dispensers, birds, temples, vortices, crowd, "
+		                      "fireflies' rewards, player's commands or alignment for the hand");
 	}
 	if ((environment.playerAlignment && !InRange(*environment.playerAlignment, -1.0f, 1.0f)) ||
 	    (environment.cursor && (!InRange(environment.cursor->x, 0.0f, 1.0f) || !InRange(environment.cursor->y, 0.0f, 1.0f))))

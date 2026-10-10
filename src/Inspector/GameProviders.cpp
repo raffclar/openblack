@@ -60,7 +60,9 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageLight.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Components/WalkPath.h"
+#include "ECS/Components/WallHug.h"
 #include "ECS/Components/Whale.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
@@ -144,6 +146,7 @@
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
+#include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -262,6 +265,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"creatureFizzSystem", "creatures.systems"},
     LocatorCoverage {"tattooEditorSystem", "creatures.systems"},
     LocatorCoverage {"tornadoSystem", "magic.state"},
+    LocatorCoverage {"vortexSystem", "magic.vortices"},
     LocatorCoverage {"magicShieldSystem", "magic.state"},
     LocatorCoverage {"forestSystem", "living.forests"},
     LocatorCoverage {"fireflySystem", "living.fireflies"},
@@ -940,15 +944,22 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		              });
 		              return items;
 	              }));
-	provider->Add(Query("pathfinding", "The obstacles walkers hug, by the map's cells"),
+	provider->Add(Query("pathfinding", "The walkers, and the circles of the things in their way they head for or go round"),
 	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
-		              size_t obstacles = 0;
-		              for (const auto& [cell, entities] : registry.Context().wallHugObstacles)
-		              {
-			              obstacles += entities.size();
-		              }
-		              return Json {{"cells", registry.Context().wallHugObstacles.size()},
-		                           {"obstacles", obstacles},
+		              size_t walkers = 0;
+		              registry.Each<const WallHug>([&walkers](entt::entity, const WallHug&) { ++walkers; });
+		              Json heading = Json::array();
+		              registry.Each<const WallHugObjectReference>(
+		                  [&heading, &registry](entt::entity entity, const WallHugObjectReference& reference) {
+			                  auto item = Listed(registry, entity);
+			                  item["obstacle"] = Id(reference.entity);
+			                  item["centre"] = Point(reference.centre);
+			                  item["radius"] = reference.radius;
+			                  item["steps_away"] = reference.stepsAway;
+			                  heading.push_back(std::move(item));
+		                  });
+		              return Json {{"walkers", walkers},
+		                           {"heading_for", std::move(heading)},
 		                           {"system", Locator::pathfindingSystem::has_value()}};
 	              }));
 	provider->Add(Query("resource", "What a thing holds as a resource, and the store a pile belongs to",
@@ -1188,6 +1199,31 @@ std::unique_ptr<ProviderInterface> MagicProvider()
 		        }
 		        return items;
 	        }));
+	provider->Add(Query("vortices",
+	                    "The vortices between the lands: their kind, state, openness and how far they levelled the ground", {},
+	                    ResultKind::List),
+	              Serve<Locator::vortexSystem>(
+	                  "the vortices", [](const ecs::systems::VortexSystemInterface& vortices, const QueryContext& /*c*/) {
+		                  Json items = Json::array();
+		                  if (auto* registry = Registry(); registry != nullptr)
+		                  {
+			                  registry->Each<const ecs::components::Vortex>(
+			                      [&items, &vortices](entt::entity entity, const ecs::components::Vortex& vortex) {
+				                      items.push_back({{"id", Id(entity)},
+				                                       {"type", static_cast<int>(vortex.type)},
+				                                       {"state", static_cast<int>(vortex.state)},
+				                                       {"state_start_turn", vortex.stateStartTurn},
+				                                       {"centre", Point(vortex.centre)},
+				                                       {"openness", vortices.GetOpenness(entity)},
+				                                       {"level_applied", vortex.levelApplied},
+				                                       {"before_land_effect", vortex.beforeLandEffect},
+				                                       {"after_land_effect", vortex.afterLandEffect},
+				                                       {"object_mover_effect", vortex.objectMoverEffect},
+				                                       {"light_map_effect", vortex.lightMapEffect}});
+			                      });
+		                  }
+		                  return items;
+	                  }));
 	provider->Add(Query("reactions", "The reactions going on, nearest first when searched about a point", {}, ResultKind::List),
 	              Serve<Locator::reactionSystem>(
 	                  "the reactions", [](const ecs::systems::ReactionSystemInterface& reactions, const QueryContext& /*c*/) {

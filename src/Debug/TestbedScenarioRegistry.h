@@ -90,6 +90,8 @@ enum class Facet : uint8_t
 	Nature,
 	/// The land's animals: its birds and the doves or bats about the temples
 	Animals,
+	/// The sky: the moon and its phases
+	Sky,
 	/// The player's two advisors, the good one and the evil one
 	Advisors,
 
@@ -285,6 +287,16 @@ struct ParticleSetup
 	int player {0};
 	/// Seconds after which it closes down and starts again, for effects that end; none to run until the scenario stops
 	float restartSeconds {0.0f};
+};
+
+/// A vortex between the lands opened as a script opens one, and later told to fade out
+struct VortexSetup
+{
+	VortexType type {VortexType::In};
+	glm::vec2 offset {0.0f};
+	/// Seconds into the scenario it is made, and after that it is told to fade out; none to stay
+	float delaySeconds {0.0f};
+	std::optional<float> fadeOutAfterSeconds;
 };
 
 /// A miracle dispenser, or a one-shot bubble on its own, put down for the scenario
@@ -631,6 +643,7 @@ struct Scenario
 	std::vector<BirdFlockSetup> birdFlocks;
 	std::vector<TempleSetup> temples;
 	std::vector<ParticleSetup> particles;
+	std::vector<VortexSetup> vortices;
 	std::vector<DispenserSetup> dispensers;
 	std::vector<MiracleCast> miracles;
 	std::vector<Command> commands;
@@ -680,6 +693,8 @@ void AddFlockScenarios(std::vector<Scenario>& all);
 void AddBirdScenarios(std::vector<Scenario>& all);
 /// The teleport miracle: stones, villagers jumping between them
 void AddTeleportScenarios(std::vector<Scenario>& all);
+/// The vortices between the lands: opening, levelling the ground and closing
+void AddVortexScenarios(std::vector<Scenario>& all);
 /// The tornado's scenarios: through a village and a wood, and meeting a creature
 void AddTornadoScenarios(std::vector<Scenario>& all);
 /// The land's nature: a tree pulled up leaving its roots, and the fireflies at nightfall
@@ -697,6 +712,8 @@ void AddHandNavigationScenarios(std::vector<Scenario>& all);
 /// The scenarios of how the hand looks for its player's alignment
 void AddHandLookScenarios(std::vector<Scenario>& all);
 void AddKnockScenarios(std::vector<Scenario>& all);
+/// The moon at night, seen to the east, for trying its phases and its path with the moon debug window
+void AddSkyScenarios(std::vector<Scenario>& all);
 /// The advisors coming out, clinging, pointing and acting
 void AddAdvisorScenarios(std::vector<Scenario>& all);
 

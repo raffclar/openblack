@@ -80,6 +80,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptFlock.h"
+#include "ECS/Components/Sky.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
@@ -132,6 +133,7 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/TutorialSkipSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
+#include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/TempleConstruction.h"
@@ -458,6 +460,16 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		return CreateScriptVillager(type == ObjectType::VillagerChild, subtype, position);
 	case ObjectType::Whale:
 		return WhaleArchetype::Create(position, scale);
+	case ObjectType::Vortex:
+	{
+		// A vortex of the three kinds; the game makes nothing for any other
+		if (subtype > static_cast<uint32_t>(VortexType::Volcano))
+		{
+			break;
+		}
+		const auto vortex = Locator::vortexSystem::value().Create(position, static_cast<VortexType>(subtype), altitude);
+		return vortex != entt::null ? vortex : static_cast<entt::entity>(0);
+	}
 	default:
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "CreateScriptObject not implemented for type {}", static_cast<int>(type));
 	}
@@ -2945,9 +2957,9 @@ void MoveCameraToFaceObject() // 107 MOVE_CAMERA_TO_FACE_OBJECT
 
 void GetMoonPercentage() // 108 GET_MOON_PERCENTAGE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// How full the moon was the last time it showed: 0 at the full moon, 1 at a new moon
+	const auto* moon = Locator::entitiesRegistry::value().TryGet<ecs::components::Moon>(Locator::skySystem::value().GetMoon());
+	Pushf(graphics::moon::ScriptPercentage(moon != nullptr ? moon->phase : 0.0f));
 }
 
 void PopulateContainer() // 109 POPULATE_CONTAINER
@@ -4586,9 +4598,26 @@ void ThingValid() // 256 THING_VALID
 
 void VortexFadeOut() // 257 VORTEX_FADE_OUT
 {
-	// const auto vortex = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The vortex starts to fade out, whatever it was doing. Nothing given at all is an error; a thing that isn't a vortex
+	// is one too.
+	DataType type {};
+	const auto value = Pop(type);
+	// A script's object 0 is none, as PopObject reads it
+	const auto vortex = value.uintVal == 0 ? entt::entity {entt::null}
+	                                       : Locator::scriptObjects::value().Fetch(static_cast<entt::entity>(value.uintVal));
+	if (vortex == entt::null || !Locator::entitiesRegistry::value().Valid(vortex))
+	{
+		if (type == DataType::None)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "vortex fade out failed");
+		}
+		return;
+	}
+	if (!Locator::vortexSystem::value().StartFadeOut(vortex))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Thing not vortex");
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "vortex fade out failed");
+	}
 }
 
 void RemoveReactionOfType() // 258 REMOVE_REACTION_OF_TYPE

@@ -160,6 +160,7 @@ class MagicSystemInterface;
 class GestureEventsInterface;
 class ReactionSystemInterface;
 class TeleportSystemInterface;
+class VortexSystemInterface;
 class CreatureFizzSystemInterface;
 class CreatureCarryOverSystemInterface;
 class TornadoSystemInterface;
@@ -277,6 +278,7 @@ struct Locator
 	using gestureEvents = entt::locator<ecs::systems::GestureEventsInterface>;
 	using reactionSystem = entt::locator<ecs::systems::ReactionSystemInterface>;
 	using teleportSystem = entt::locator<ecs::systems::TeleportSystemInterface>;
+	using vortexSystem = entt::locator<ecs::systems::VortexSystemInterface>;
 	using creatureFizzSystem = entt::locator<ecs::systems::CreatureFizzSystemInterface>;
 	using creatureCarryOverSystem = entt::locator<ecs::systems::CreatureCarryOverSystemInterface>;
 	using tornadoSystem = entt::locator<ecs::systems::TornadoSystemInterface>;

@@ -109,6 +109,7 @@
 #include "ECS/Systems/Implementations/VegetationSystem.h"
 #include "ECS/Systems/Implementations/VideoSystem.h"
 #include "ECS/Systems/Implementations/VillageLightSystem.h"
+#include "ECS/Systems/Implementations/VortexSystem.h"
 #include "ECS/Systems/Implementations/WalkPathSystem.h"
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
 #include "ECS/Systems/Implementations/WeatherSystem.h"
@@ -209,6 +210,7 @@ using openblack::ecs::systems::TutorialSkipSystem;
 using openblack::ecs::systems::VegetationSystem;
 using openblack::ecs::systems::VideoSystem;
 using openblack::ecs::systems::VillageLightSystem;
+using openblack::ecs::systems::VortexSystem;
 using openblack::ecs::systems::WalkPathSystem;
 using openblack::ecs::systems::WaterRingSystem;
 using openblack::ecs::systems::WeatherSystem;
@@ -328,6 +330,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::particleSystem::emplace<ParticleSystem>();
 	Locator::reactionSystem::emplace<ReactionSystem>();
 	Locator::teleportSystem::emplace<TeleportSystem>();
+	Locator::vortexSystem::emplace<VortexSystem>();
 	Locator::creatureFizzSystem::emplace<CreatureFizzSystem>();
 	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>();
 	Locator::tornadoSystem::emplace<TornadoSystem>();
@@ -490,6 +493,7 @@ void openblack::ShutDownServices()
 	Locator::gestureEvents::reset();
 	Locator::reactionSystem::reset();
 	Locator::teleportSystem::reset();
+	Locator::vortexSystem::reset();
 	Locator::creatureFizzSystem::reset();
 	Locator::creatureCarryOverSystem::reset();
 	Locator::tornadoSystem::reset();

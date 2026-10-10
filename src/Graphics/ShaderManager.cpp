@@ -63,6 +63,8 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME vs_object_few_bones_instanced
 #include "ShaderIncluder.h"
+#define SHADER_NAME vs_object_palette_instanced
+#include "ShaderIncluder.h"
 #define SHADER_NAME vs_object_morph_instanced
 #include "ShaderIncluder.h"
 #define SHADER_NAME vs_object_posed_instanced
@@ -95,6 +97,8 @@
 #define SHADER_NAME vs_terrain
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_terrain
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_terrain_vortex_hole
 #include "ShaderIncluder.h"
 
 #define SHADER_NAME vs_water
@@ -205,13 +209,14 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 68> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 70> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
     BGFX_EMBEDDED_SHADER(vs_object),
     BGFX_EMBEDDED_SHADER(vs_object_instanced),
     BGFX_EMBEDDED_SHADER(vs_object_few_bones_instanced),
+    BGFX_EMBEDDED_SHADER(vs_object_palette_instanced),
     BGFX_EMBEDDED_SHADER(vs_object_morph_instanced),
     BGFX_EMBEDDED_SHADER(vs_object_posed_instanced),
     BGFX_EMBEDDED_SHADER(vs_object_morph),
@@ -228,6 +233,7 @@ const std::array<bgfx::EmbeddedShader, 68> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(fs_sky), //
     BGFX_EMBEDDED_SHADER(vs_terrain),
     BGFX_EMBEDDED_SHADER(fs_terrain), //
+    BGFX_EMBEDDED_SHADER(fs_terrain_vortex_hole),
     BGFX_EMBEDDED_SHADER(vs_water),
     BGFX_EMBEDDED_SHADER(fs_water), //
     BGFX_EMBEDDED_SHADER(vs_sprite),
@@ -280,10 +286,12 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"DebugLine", "vs_line", "fs_line"},
     ShaderDefinition {"DebugLineInstanced", "vs_line_instanced", "fs_line"},
     ShaderDefinition {"Terrain", "vs_terrain", "fs_terrain"},
+    ShaderDefinition {"TerrainVortexHole", "vs_terrain", "fs_terrain_vortex_hole"},
     ShaderDefinition {"Object", "vs_object", "fs_object"},
     ShaderDefinition {"ObjectEnvironment", "vs_object_environment", "fs_object_environment"},
     ShaderDefinition {"ObjectInstanced", "vs_object_instanced", "fs_object"},
     ShaderDefinition {"ObjectFewBonesInstanced", "vs_object_few_bones_instanced", "fs_object"},
+    ShaderDefinition {"ObjectPaletteInstanced", "vs_object_palette_instanced", "fs_object"},
     ShaderDefinition {"ObjectMorphInstanced", "vs_object_morph_instanced", "fs_object"},
     ShaderDefinition {"ObjectPosedInstanced", "vs_object_posed_instanced", "fs_object"},
     ShaderDefinition {"ObjectHeightMapInstanced", "vs_object_hm_instanced", "fs_object"},

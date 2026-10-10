@@ -101,6 +101,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
@@ -182,6 +183,7 @@
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
+#include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -1036,8 +1038,8 @@ bool Game::GameLogicLoop() noexcept
 	Locator::fieldSystem::value().ProcessTurn(Locator::time::value().GetTurn());
 	// The fish come back to the fish farms
 	Locator::fishFarmSystem::value().ProcessTurn(Locator::time::value().GetTurn());
-	// The trees that are still growing grow, faster in the rain
-	Locator::vegetation::value().ProcessTurn();
+	// The forests' growing trees grow, faster in the rain, and the forests spread
+	Locator::forestSystem::value().GrowForests();
 	{
 		// The creatures age, grow, get hungry, tired and thirsty, and heal while they sleep
 		auto creaturePhysiology = profiler.BeginScoped(Profiler::Stage::CreaturePhysiologyUpdate);
@@ -1196,6 +1198,11 @@ bool Game::GameLogicLoop() noexcept
 	if (Locator::handGrabSystem::has_value())
 	{
 		Locator::handGrabSystem::value().ProcessTurn();
+	}
+	// At the end of the turn the vortices between the lands open, close and level the ground under them
+	if (Locator::vortexSystem::has_value())
+	{
+		Locator::vortexSystem::value().ProcessTurn();
 	}
 	// Once the whole turn is over, the local player whose temple is being destroyed has lost
 	if (Locator::templeDestructionSystem::has_value())
@@ -1520,6 +1527,11 @@ bool Game::Update() noexcept
 		auto fire = profiler.BeginScoped(Profiler::Stage::FireUpdate);
 		Locator::fireSystem::value().Update(std::chrono::duration<float>(gameTime).count());
 	}
+	// The vortices' swirls and effects step with the frame, and their marks on the ground follow their openness
+	if (Locator::vortexSystem::has_value())
+	{
+		Locator::vortexSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
+	}
 	// The reward chests from the sky fall and thump down, and their dust fades
 	if (Locator::rewardSystem::has_value())
 	{
@@ -1550,7 +1562,7 @@ bool Game::Update() noexcept
 		// The animals are drawn between their last two turns, their models posed by their clips
 		auto animals = profiler.BeginScoped(Profiler::Stage::AnimalsUpdate);
 		Locator::animalSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
-		// The villagers are posed by the clips their states play
+		// The clips the villagers' states play go on, and the sounds of their frames play
 		Locator::livingActionSystem::value().UpdatePoses(clock.GetTurn(), clock.GetTurnFraction());
 		// The whales swim between their last two turns and leave their wakes
 		Locator::whaleSystem::value().Update(gameTime, clock.GetTurnFraction());
@@ -2134,6 +2146,8 @@ bool Game::Update() noexcept
 			auto updateEntities = profiler.BeginScoped(Profiler::Stage::UpdateEntities);
 			if (config.drawEntities)
 			{
+				// The villagers in view are posed for the camera as it now is
+				Locator::livingActionSystem::value().PoseVillagersInView(Locator::camera::value().GetViewProjectionMatrix());
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
 				                                                config.drawStreams);
 				// The interface picks what is under the cursor as the frame is drawn, for the next frame to go by
@@ -2867,6 +2881,30 @@ bool Game::Initialize() noexcept
 		catch (std::runtime_error& err)
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+		}
+	}
+	// The marks the vortices leave on the ground, with their alphas
+	for (const auto& textures : ecs::components::Vortex::k_GroundTextures)
+	{
+		for (const auto& [id, name] :
+		     {std::pair {textures.hole, textures.holeFile}, std::pair {textures.ring, textures.ringFile}})
+		{
+			const auto colours = fileSystem.GetPath<Path::Textures>() / fmt::format("{}.raw", name);
+			const auto alpha = fileSystem.GetPath<Path::Textures>() / fmt::format("{}a.raw", name);
+			if (!fileSystem.Exists(colours) || !fileSystem.Exists(alpha))
+			{
+				continue;
+			}
+			constexpr uint16_t k_VortexTextureSide = 256;
+			try
+			{
+				textureManager.Load(id, resources::Texture2DLoader::FromDiskWithAlphaTag {}, colours, alpha,
+				                    k_VortexTextureSide);
+			}
+			catch (std::runtime_error& err)
+			{
+				SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+			}
 		}
 	}
 	fileSystem.Iterate(fileSystem.GetPath<Path::Textures>(), false, [&textureManager](const std::filesystem::path& f) {

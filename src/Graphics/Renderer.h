@@ -109,6 +109,12 @@ private:
 	/// anything is drawn there nearer than a depth
 	void AskGlareSampleDrawn(const Camera& camera, bgfx::OcclusionQueryHandle query, glm::vec2 topLeft, glm::vec2 bottomRight,
 	                         float depth) const;
+	/// Each vortex's walls, from the sea down under its middle, leaving only their depth: what is drawn after them is
+	/// hidden beyond them, which keeps its funnel to the shaft under its hole in the land
+	void DrawVortexDepthWalls(const DrawSceneDesc& desc, graphics::RenderPass viewId) const;
+	/// On the land block under each open vortex, its hole texture's colour added to what was drawn before the land, after
+	/// the swirl and before the land is drawn over it
+	void DrawVortexHoleColours(const DrawSceneDesc& desc, const glm::vec4& skyAndBump) const;
 	/// The puffs of mist, blended over the scene, the farthest first
 	void DrawMists(const DrawSceneDesc& desc) const;
 	/// The moon and its glow in the sky, after the sky's dome
@@ -123,6 +129,8 @@ private:
 	/// The advisors: those out in the world with the scene, their rainbow trails after all else that blends, and those
 	/// near the screen in a view of their own over everything, in the main view
 	void DrawAdvisors(const DrawSceneDesc& desc) const;
+	/// The villagers too far away to be drawn, each a dark smudge facing the view
+	void DrawFarVillagerSmudges(const DrawSceneDesc& desc) const;
 	/// The rain about the camera, each block's in its place among what blends, in the main view
 	void DrawRain(const DrawSceneDesc& desc) const;
 	/// The rings on the water where things splashed, added over the land and the sea
@@ -248,6 +256,7 @@ private:
 		ObjectLook,
 		KeepBelow,
 		Inset,
+		BonePalette,
 		CreatureSpellLook,
 
 		_count
@@ -286,6 +295,7 @@ private:
 	    "u_objectLook",           //
 	    "u_keepBelow",            //
 	    "u_inset",                //
+	    "s_bonePalette",          //
 	    "u_creatureSpellLook",    //
 	};
 	using MeshUniforms = std::array<std::optional<UniformHandle>, static_cast<size_t>(MeshUniform::_count)>;
@@ -474,6 +484,8 @@ private:
 	mutable particles::draw::Frame _particleFrame;
 	mutable std::vector<particles::draw::Command> _particleCommands;
 	mutable std::vector<uint32_t> _particleSpriteOrder;
+	mutable std::vector<particles::draw::Command> _particleBeforeLandCommands;
+	mutable std::vector<uint32_t> _particleBeforeLandSprites;
 	/// The particle light maps' frames stamped so far, by light map and frame
 	mutable std::unordered_map<uint64_t, std::unique_ptr<Texture2D>> _particleLightMaps;
 };

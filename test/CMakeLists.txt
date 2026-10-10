@@ -120,6 +120,12 @@ openblack_setup_and_add_test(test_model_light graphics/test_model_light.cpp)
 openblack_setup_and_add_test(test_sun graphics/test_sun.cpp)
 openblack_setup_and_add_test(test_moon graphics/test_moon.cpp)
 openblack_setup_and_add_test(test_bone_budget graphics/test_bone_budget.cpp)
+openblack_setup_and_add_test(test_bone_palette graphics/test_bone_palette.cpp)
+openblack_setup_and_add_test(test_view_frustum graphics/test_view_frustum.cpp)
+openblack_setup_and_add_test(test_mesh_detail graphics/test_mesh_detail.cpp)
+openblack_setup_and_add_test(
+  test_sea_reflection graphics/test_sea_reflection.cpp
+)
 openblack_setup_and_add_test(
   test_shader_samplers graphics/test_shader_samplers.cpp
 )
@@ -289,6 +295,9 @@ target_link_libraries(test_l3d_submesh_names PRIVATE l3d)
 openblack_setup_and_add_test(test_light_beams graphics/test_light_beams.cpp)
 target_link_libraries(test_light_beams PRIVATE l3d glw)
 openblack_setup_and_add_test(test_temple_camera camera/test_temple_camera.cpp)
+openblack_setup_and_add_test(
+  test_camera_projection camera/test_camera_projection.cpp
+)
 openblack_setup_and_add_test(test_script_camera camera/test_script_camera.cpp)
 openblack_setup_and_add_test(test_temple_doors temple/test_temple_doors.cpp)
 openblack_setup_and_add_test(
@@ -329,6 +338,7 @@ openblack_setup_and_add_test(test_animal_animation test_animal_animation.cpp)
 openblack_setup_and_add_test(test_animal_move test_animal_move.cpp)
 openblack_setup_and_add_test(test_bird_rules test_bird_rules.cpp)
 openblack_setup_and_add_test(test_teleport_rules test_teleport_rules.cpp)
+openblack_setup_and_add_test(test_vortex_rules test_vortex_rules.cpp)
 openblack_setup_and_add_test(test_fire test_fire.cpp)
 openblack_setup_and_add_test(test_blast test_blast.cpp)
 openblack_setup_and_add_test(test_gesture_events test_gesture_events.cpp)
@@ -353,6 +363,7 @@ openblack_setup_and_add_test(test_wall_hug_rules test_wall_hug_rules.cpp)
 openblack_setup_and_add_test(test_villager_age test_villager_age.cpp)
 openblack_setup_and_add_test(test_villager_needs test_villager_needs.cpp)
 openblack_setup_and_add_test(test_villager_routine test_villager_routine.cpp)
+openblack_setup_and_add_test(test_walk_arrival test_walk_arrival.cpp)
 openblack_setup_and_add_test(test_abode_knock test_abode_knock.cpp)
 openblack_setup_and_add_test(
   test_villager_animation test_villager_animation.cpp
@@ -442,6 +453,7 @@ openblack_setup_and_add_test(test_temple_heart test_temple_heart.cpp)
 openblack_setup_and_add_test(test_model_surface test_model_surface.cpp)
 target_link_libraries(test_model_surface PRIVATE l3d)
 openblack_setup_and_add_test(test_fireflies test_fireflies.cpp)
+openblack_setup_and_add_test(test_forest_growth test_forest_growth.cpp)
 openblack_setup_and_add_test(test_store_rules test_store_rules.cpp)
 openblack_setup_and_add_test(test_clip_sounds test_clip_sounds.cpp)
 target_link_libraries(test_clip_sounds PRIVATE sas)

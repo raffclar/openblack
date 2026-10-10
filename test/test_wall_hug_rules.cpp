@@ -171,3 +171,164 @@ TEST(WallHugRules, AWalkerLeavesTheCircleOnlyNearerItsGoalAndWithTheGoalAhead)
 	// No nearer than on starting round
 	EXPECT_FALSE(LeavesCircle(at(-11.0f), goal, {3277, 3277}, entry, false));
 }
+
+namespace
+{
+/// A walker at 1000 m, 1000 m stepping 5 m a turn along x
+const glm::ivec2 k_Walker = ToWhole({1000.0f, 1000.0f});
+constexpr glm::ivec2 k_FiveMetresAlongX {32768, 0};
+
+BlockingCircle Thing(glm::vec2 offset, float radius)
+{
+	return {.centre = glm::vec2(1000.0f, 1000.0f) + offset, .radius = radius, .landscape = false, .landscapeOrFence = false};
+}
+} // namespace
+
+TEST(WallHugRules, HeadingStraightOnTheWalkerHeadsForTheNearestCircleOnItsLine)
+{
+	// The far one comes first in the cell, the near one is reached first: its edge 38 m on, after 7 whole turns
+	const std::array<BlockingCircle, 3> circles {Thing({60.0f, 0.0f}, 2.0f), Thing({0.0f, 30.0f}, 2.0f),
+	                                             Thing({40.0f, 1.0f}, 2.0f)};
+	const auto scan = ScanLine(k_Walker, k_FiveMetresAlongX, circles);
+	ASSERT_TRUE(scan.circle.has_value());
+	EXPECT_EQ(*scan.circle, 2U);
+	EXPECT_EQ(scan.turnsToObstacle, 7);
+}
+
+TEST(WallHugRules, HeadingStraightOnNothingOnTheLineIsNothingInReach)
+{
+	const std::array<BlockingCircle, 2> circles {Thing({0.0f, 30.0f}, 2.0f), Thing({-20.0f, 0.0f}, 2.0f)};
+	const auto scan = ScanLine(k_Walker, k_FiveMetresAlongX, circles);
+	EXPECT_FALSE(scan.circle.has_value());
+	EXPECT_EQ(scan.turnsToObstacle, k_NoObstacleInReach);
+	// Nor is a circle more than 255 turns away
+	const std::array<BlockingCircle, 1> far {Thing({1300.0f, 0.0f}, 2.0f)};
+	EXPECT_FALSE(ScanLine(k_Walker, k_FiveMetresAlongX, far).circle.has_value());
+}
+
+TEST(WallHugRules, HeadingStraightOnACircleTheWalkerIsWellInsideDoesNotCount)
+{
+	// Five metres inside the first: it is passed over for the one ahead
+	const std::array<BlockingCircle, 2> circles {Thing({0.0f, 0.0f}, 5.0f), Thing({20.0f, 0.0f}, 2.0f)};
+	const auto scan = ScanLine(k_Walker, k_FiveMetresAlongX, circles);
+	ASSERT_TRUE(scan.circle.has_value());
+	EXPECT_EQ(*scan.circle, 1U);
+	EXPECT_EQ(scan.turnsToObstacle, 3);
+	// Just inside the edge of one, a tenth of a metre, it meets it at once
+	const std::array<BlockingCircle, 1> edge {Thing({2.1f, 0.0f}, 2.2f)};
+	const auto atOnce = ScanLine(k_Walker, k_FiveMetresAlongX, edge);
+	ASSERT_TRUE(atOnce.circle.has_value());
+	EXPECT_EQ(atOnce.turnsToObstacle, 0);
+}
+
+namespace
+{
+ThingOnMap Placed(ThingShape shape, glm::vec3 boxHalfSize, bool fence = false)
+{
+	return {.shape = shape,
+	        .position = {1000.0f, 0.0f, 1000.0f},
+	        .rotation = glm::mat3(1.0f),
+	        .scale = 1.0f,
+	        .boxCentre = glm::vec3(0.0f),
+	        .boxHalfSize = boxHalfSize,
+	        .fence = fence};
+}
+} // namespace
+
+TEST(WallHugRules, ATreeIsASmallCircleRoundItsTrunkWhateverItsSize)
+{
+	const auto circles = CirclesOf(Placed(ThingShape::Trunk, {6.0f, 10.0f, 6.0f}));
+	ASSERT_EQ(circles.size(), 1U);
+	EXPECT_FLOAT_EQ(circles[0].radius, k_TreeTrunkRadius);
+	EXPECT_NEAR(circles[0].centre.x, 1000.0f, 0.001f);
+	EXPECT_NEAR(circles[0].centre.y, 1000.0f, 0.001f);
+	EXPECT_TRUE(CirclesOf(Placed(ThingShape::None, {6.0f, 10.0f, 6.0f})).empty());
+}
+
+TEST(WallHugRules, AWalkerPassesUnderATreesCrownWithoutGoingRoundIt)
+{
+	// A tree 20 m ahead and a metre to the side of the walker's line, its crown 3.41 m across: only its trunk stands in
+	// the way, so the walker goes straight on under the crown
+	auto tree = Placed(ThingShape::Trunk, {3.41f, 8.0f, 3.41f});
+	tree.position = {1020.0f, 0.0f, 1001.0f};
+	EXPECT_FALSE(ScanLine(k_Walker, k_FiveMetresAlongX, CirclesOf(tree)).circle.has_value());
+	// A thing of that size with no trunk, a rock say, blocks it three turns on
+	auto rock = tree;
+	rock.shape = ThingShape::ModelBox;
+	const auto scan = ScanLine(k_Walker, k_FiveMetresAlongX, CirclesOf(rock));
+	ASSERT_TRUE(scan.circle.has_value());
+	EXPECT_EQ(scan.turnsToObstacle, 3);
+}
+
+TEST(WallHugRules, ALongModelBlocksWithEachCircleOfItsRowAndASquareOneWithOne)
+{
+	const auto square = CirclesOf(Placed(ThingShape::ModelBox, {4.0f, 3.0f, 5.0f}));
+	ASSERT_EQ(square.size(), 1U);
+	EXPECT_FLOAT_EQ(square[0].radius, 5.0f);
+	// Five times as long as wide: a row of six circles as wide as the box, not its bounding circle
+	const auto fence = CirclesOf(Placed(ThingShape::ModelBox, {10.0f, 1.0f, 2.0f}, true));
+	ASSERT_EQ(fence.size(), 6U);
+	for (const auto& circle : fence)
+	{
+		EXPECT_FLOAT_EQ(circle.radius, 2.0f);
+		EXPECT_TRUE(circle.landscapeOrFence);
+		EXPECT_FALSE(circle.landscape);
+	}
+	EXPECT_NEAR(fence.front().centre.x, 1000.0f - 10.0f + 20.0f / 12.0f, 0.01f);
+}
+
+TEST(WallHugRules, ATempleIsAWideCircleAndSevenSpokesWhateverItsModel)
+{
+	const auto circles = TempleRingCircles({1000.0f, 2000.0f}, 0.0f);
+	// One over its middle, two bent spokes of six and five straight ones of four
+	ASSERT_EQ(circles.size(), 33U);
+	EXPECT_FLOAT_EQ(circles[0].radius, 21.5f * 0.7f);
+	EXPECT_FLOAT_EQ(circles[0].centre.x, 1000.0f);
+	EXPECT_FLOAT_EQ(circles[0].centre.y, 2000.0f);
+	for (size_t i = 1; i < circles.size(); ++i)
+	{
+		EXPECT_NEAR(circles[i].radius, 21.5f * 0.11f * 1.4f, 1e-5f);
+		EXPECT_FALSE(circles[i].landscapeOrFence);
+	}
+	const auto expectAt = [&circles](size_t i, double distance, double angle) {
+		EXPECT_NEAR(circles[i].centre.x, 1000.0 + distance * std::cos(angle), 0.001) << i;
+		EXPECT_NEAR(circles[i].centre.y, 2000.0 + distance * std::sin(angle), 0.001) << i;
+	};
+	const double first = 3.83;
+	const double seventh = 2.0 * std::numbers::pi / 7.0;
+	// The first spoke: three straight out, then three bent round one way, each further out
+	expectAt(1, 15.91, first);
+	expectAt(3, 24.51, first);
+	expectAt(4, 28.81, first + 0.06);
+	expectAt(5, 30.96, first + 0.16);
+	expectAt(6, 32.465, first + 0.27);
+	// The second bends the other way, towards the first
+	expectAt(12, 32.465, first + seventh - 0.27);
+	// The others are four circles straight out
+	expectAt(13, 15.91, first + 2.0 * seventh);
+	expectAt(32, 28.81, first + 6.0 * seventh);
+}
+
+TEST(WallHugRules, ATempleTurnsItsSpokesWithItsModel)
+{
+	const float angle = 1.0f;
+	ThingOnMap temple = Placed(ThingShape::TempleRing, glm::vec3(0.0f));
+	temple.rotation = glm::mat3(glm::vec3(std::cos(angle), 0.0f, std::sin(angle)), glm::vec3(0.0f, 1.0f, 0.0f),
+	                            glm::vec3(-std::sin(angle), 0.0f, std::cos(angle)));
+	const auto circles = CirclesOf(temple);
+	const auto expected = TempleRingCircles({1000.0f, 1000.0f}, angle);
+	ASSERT_EQ(circles.size(), expected.size());
+	for (size_t i = 0; i < circles.size(); ++i)
+	{
+		EXPECT_NEAR(circles[i].centre.x, expected[i].centre.x, 0.001f);
+		EXPECT_NEAR(circles[i].centre.y, expected[i].centre.y, 0.001f);
+	}
+}
+
+TEST(WallHugRules, OnlyTheFencesModelsAreFences)
+{
+	EXPECT_TRUE(IsFenceModel(openblack::MeshId::BuildingAmericanFence));
+	EXPECT_TRUE(IsFenceModel(openblack::MeshId::BuildingCelticFenceShort));
+	EXPECT_TRUE(IsFenceModel(openblack::MeshId::BuildingCelticFenceTall));
+	EXPECT_FALSE(IsFenceModel(openblack::MeshId::BuildingCeltic4));
+}

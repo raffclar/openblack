@@ -876,7 +876,7 @@
   "query": "living.rewards"
  },
  {
-  "description": "The obstacles walkers hug, by the map's cells",
+  "description": "The walkers, and the circles of the things in their way they head for or go round",
   "kind": "object",
   "parameters": [],
   "query": "living.pathfinding"
@@ -985,6 +985,12 @@
    }
   ],
   "query": "magic.teleport"
+ },
+ {
+  "description": "The vortices between the lands: their kind, state, openness and how far they levelled the ground",
+  "kind": "list",
+  "parameters": [],
+  "query": "magic.vortices"
  },
  {
   "description": "The reactions going on, nearest first when searched about a point",
