@@ -40,6 +40,7 @@ public:
 	ParticleFileManager& GetParticleFiles() override { return _particleFiles; }
 	ParticleBitmapManager& GetParticleBitmaps() override { return _particleBitmaps; }
 	GestureTemplatesManager& GetGestureTemplates() override { return _gestureTemplates; }
+	VideoManager& GetVideos() override { return _videos; }
 
 	void UpdateLoading(size_t budget, graphics::UploadPacer::Allowance uploads) override
 	{
@@ -112,6 +113,7 @@ private:
 	ParticleFileManager _particleFiles;
 	ParticleBitmapManager _particleBitmaps;
 	GestureTemplatesManager _gestureTemplates;
+	VideoManager _videos;
 	// Last, so its threads stop before the caches they load into go
 	LoadQueue _loadQueue {LoadQueue::DefaultThreadCount()};
 };

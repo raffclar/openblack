@@ -61,6 +61,9 @@ public:
 	virtual StartResult StartFight(entt::entity creature, entt::entity opponent) = 0;
 	/// Ends a creature's fight with no winner: both finish and stand
 	virtual void AbortFight(entt::entity creature) = 0;
+	/// A creature taken out of the game leaves its fight at once, letting go of the arena it made; its opponent's fight
+	/// ends as a fight given up does, and it forgets the creature gone
+	virtual void Withdraw(entt::entity creature) { AbortFight(creature); }
 	[[nodiscard]] virtual bool IsFighting(entt::entity creature) const = 0;
 	[[nodiscard]] virtual std::optional<entt::entity> OpponentOf(entt::entity creature) const = 0;
 

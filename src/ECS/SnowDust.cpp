@@ -14,9 +14,9 @@
 #include <glm/vec2.hpp>
 
 #include "3D/LandLightTable.h"
-#include "3D/SkyInterface.h"
 #include "Camera/Camera.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "Locator.h"

@@ -21,11 +21,15 @@
 #include <entt/core/hashed_string.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/ModelSurface.h"
+#include "Common/GameRandom.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/TempleDestructionSystem.h"
 #include "ECS/TempleDestructionWorld.h"
+#include "Particles/PlasmaCommand.h"
+#include "Temple/TempleDestruction.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -70,10 +74,31 @@ public:
 	std::optional<uint32_t> StartSpotVisual(SpotVisualType type, glm::vec3 /*position*/, int32_t turns,
 	                                        PlayerNames player) override
 	{
+		// The beams' spot visuals are kept apart, numbered from 100
+		if (type == SpotVisualType::MagicBeamOnCitadel)
+		{
+			beamSources.push_back({.turn = turn, .type = type, .turns = turns, .player = player});
+			return static_cast<uint32_t>(99 + beamSources.size());
+		}
 		visuals.push_back({.turn = turn, .type = type, .turns = turns, .player = player});
 		return static_cast<uint32_t>(visuals.size());
 	}
 	void FollowWithSpotVisual(uint32_t visual, entt::entity target) override { followed.emplace_back(visual, target); }
+	void SetSpotVisualMagnitude(uint32_t visual, float magnitude) override { magnitudes.emplace_back(visual, magnitude); }
+	[[nodiscard]] bool SpotVisualRunning(uint32_t visual) const override
+	{
+		return std::ranges::find(ended, visual) == ended.end();
+	}
+	void AddPlasma(uint32_t source, const particles::PlasmaCommand& command) override
+	{
+		beams.push_back({.turn = turn, .source = source, .command = command});
+	}
+	[[nodiscard]] std::vector<model_surface::Triangle> DrawnTrianglesOf(entt::entity /*object*/) const override
+	{
+		return triangles;
+	}
+	[[nodiscard]] glm::mat4 PlacementOf(entt::entity /*object*/) const override { return glm::mat4(1.0f); }
+	[[nodiscard]] GameRandomInterface* Random() override { return random; }
 	float RandomShare(float /*spread*/) override { return share; }
 	void StartScript(std::string_view name) override { scripts.emplace_back(name); }
 	void Remove(entt::entity object) override
@@ -95,6 +120,37 @@ public:
 	std::vector<std::pair<uint32_t, entt::entity>> followed;
 	std::vector<std::string> scripts;
 	std::vector<int> removed;
+	struct Beam
+	{
+		int turn;
+		uint32_t source;
+		particles::PlasmaCommand command;
+	};
+	std::vector<Visual> beamSources;
+	std::vector<std::pair<uint32_t, float>> magnitudes;
+	std::vector<uint32_t> ended;
+	std::vector<Beam> beams;
+	std::vector<model_surface::Triangle> triangles;
+	GameRandomInterface* random {nullptr};
+};
+
+/// The game's random numbers on their own seeds
+class SeededRandom final: public GameRandomInterface
+{
+public:
+	uint32_t GameRand(uint32_t n) override { return n == 0 ? 0 : game_random::LHRand(n, _seeds.synced); }
+	float GameFloatRand(float x) override { return game_random::FloatRand(x, _seeds.synced); }
+	uint32_t LocalRand(int32_t n) override { return n == 0 ? 0 : game_random::LHRand(static_cast<uint32_t>(n), _seeds.local); }
+	float LocalFloatRand(float x) override { return game_random::FloatRand(x, _seeds.local); }
+	int32_t CrtRand() override { return 0; }
+	void CrtSrand(uint32_t /*seed*/) override {}
+	[[nodiscard]] GameRandomSeeds GetSeeds() const override { return _seeds; }
+	void SetSeeds(GameRandomSeeds seeds) override { _seeds = seeds; }
+	[[nodiscard]] ParticleRandomStream GetParticleStream() const override { return ParticleRandomStream::None; }
+	void SetParticleStream(ParticleRandomStream /*stream*/) override {}
+
+private:
+	GameRandomSeeds _seeds;
 };
 
 class TempleDestructionSystemTest: public ::testing::Test
@@ -159,10 +215,79 @@ TEST_F(TempleDestructionSystemTest, EachStepComesOnTheGameTurnOfIt)
 	EXPECT_EQ(_world->visuals[2].turn, 220);
 	EXPECT_EQ(_world->visuals[2].type, SpotVisualType::EvilSmoke);
 	EXPECT_EQ(_world->visuals[2].turns, 90);
+	// Ten times as big as it was made
+	EXPECT_EQ(_world->magnitudes, (std::vector<std::pair<uint32_t, float>> {{3u, 10.0f}}));
 	EXPECT_EQ(_world->removed, (std::vector<int> {220, 220}));
 	EXPECT_FALSE(_world->registry.Valid(temple));
 	// Another player's temple ends nothing
 	EXPECT_TRUE(_world->scripts.empty());
+}
+
+TEST_F(TempleDestructionSystemTest, BeamsLeapBetweenPointsOfTheHeartUntilItFades)
+{
+	const auto temple = MakeTemple(PlayerNames::PLAYER_TWO);
+	// The heart is one roof, facing up
+	const glm::vec3 up {0.0f, 1.0f, 0.0f};
+	_world->triangles = {{{{{0.0f, 5.0f, 0.0f}, up}, {{4.0f, 5.0f, 0.0f}, up}, {{0.0f, 5.0f, 4.0f}, up}}}};
+	SeededRandom random;
+	_world->random = &random;
+	_system->Start(temple);
+	for (int i = 0; i < 230 && _world->registry.Valid(temple); ++i)
+	{
+		Turn();
+	}
+	// None on the first turn; the first on the next, at the start of the beaming
+	ASSERT_FALSE(_world->beams.empty());
+	const auto& first = _world->beams.front();
+	EXPECT_EQ(first.turn, 2);
+	const float share = 0.2f / 14.0f;
+	EXPECT_NEAR(first.command.life, 3.0f - 2.3f * share, 1e-5f);
+	EXPECT_NEAR(first.command.speed, 1.0f + 0.5f * share, 1e-5f);
+	EXPECT_EQ(first.command.alpha, 52);
+	EXPECT_EQ(first.command.start.y, 5.0f);
+	EXPECT_EQ(first.command.end.y, 5.0f);
+	EXPECT_EQ(first.command.startTangent, up);
+	EXPECT_EQ(first.command.endTangent, -up);
+	// Fired from one spot visual of the heart's player's that lasts the beaming
+	ASSERT_EQ(_world->beamSources.size(), 1u);
+	EXPECT_EQ(_world->beamSources[0].turn, 2);
+	EXPECT_EQ(_world->beamSources[0].turns, 140);
+	EXPECT_EQ(_world->beamSources[0].player, PlayerNames::PLAYER_TWO);
+	EXPECT_TRUE(std::ranges::all_of(_world->beams, [](const FakeWorld::Beam& beam) { return beam.source == 100; }));
+	// About one every four turns at first and one every two at the end, until fourteen seconds on
+	const auto between = [this](int from, int to) {
+		return std::ranges::count_if(_world->beams,
+		                             [from, to](const FakeWorld::Beam& beam) { return beam.turn >= from && beam.turn <= to; });
+	};
+	EXPECT_EQ(between(2, 21), 6);
+	EXPECT_EQ(between(121, 140), 9);
+	EXPECT_EQ(_world->beams.size(), 48u);
+	EXPECT_EQ(_world->beams.back().turn, 138);
+	EXPECT_EQ(_world->beams.back().command.alpha, 197);
+}
+
+TEST_F(TempleDestructionSystemTest, ABeamSourceThatHasEndedIsMadeAgain)
+{
+	const auto temple = MakeTemple(PlayerNames::PLAYER_TWO);
+	const glm::vec3 up {0.0f, 1.0f, 0.0f};
+	_world->triangles = {{{{{0.0f, 5.0f, 0.0f}, up}, {{4.0f, 5.0f, 0.0f}, up}, {{0.0f, 5.0f, 4.0f}, up}}}};
+	SeededRandom random;
+	_world->random = &random;
+	_system->Start(temple);
+	for (int i = 0; i < 10; ++i)
+	{
+		Turn();
+	}
+	ASSERT_EQ(_world->beamSources.size(), 1u);
+	_world->ended.push_back(100);
+	const auto before = _world->beams.size();
+	for (int i = 0; i < 10; ++i)
+	{
+		Turn();
+	}
+	ASSERT_EQ(_world->beamSources.size(), 2u);
+	ASSERT_GT(_world->beams.size(), before);
+	EXPECT_EQ(_world->beams.back().source, 101u);
 }
 
 TEST_F(TempleDestructionSystemTest, StartedAgainWhileTheLoopPlaysASecondLoopSoundsAndBothStopAtTheExplosion)

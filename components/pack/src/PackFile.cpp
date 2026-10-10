@@ -816,6 +816,60 @@ PackResult PackFile::Open(const std::vector<uint8_t>& buffer) noexcept
 	return ReadFile(stream);
 }
 
+PackResult PackFile::OpenAudioIndex(const std::filesystem::path& filepath) noexcept
+{
+	assert(!_isLoaded);
+
+	std::ifstream stream(filepath, std::ios::binary);
+	if (!stream.is_open())
+	{
+		return PackResult::ErrCantOpen;
+	}
+
+	auto result = ReadBlocks(stream, {"LHAudioWaveData"});
+	if (result != PackResult::Success)
+	{
+		return result;
+	}
+	const auto waveData = GetUnreadBlock("LHAudioWaveData");
+	if (!waveData)
+	{
+		return PackResult::ErrMissingAudioWaveDataBlock;
+	}
+	result = ResolveAudioBankSampleTableBlock();
+	if (result != PackResult::Success)
+	{
+		return result;
+	}
+	result = ResolveFileSegmentBankInfoBlock();
+	if (result != PackResult::Success)
+	{
+		return result;
+	}
+	// Every sample lies within the sample data
+	for (const auto& sample : _audioSampleHeaders)
+	{
+		if (static_cast<uint64_t>(sample.offset) + sample.size > waveData->size)
+		{
+			return PackResult::ErrFileTooSmall;
+		}
+	}
+
+	_isLoaded = true;
+	return PackResult::Success;
+}
+
+std::optional<std::pair<uint64_t, uint32_t>> PackFile::GetAudioSampleFileSpan(uint32_t index) const noexcept
+{
+	const auto waveData = GetUnreadBlock("LHAudioWaveData");
+	if (!waveData || index >= _audioSampleHeaders.size())
+	{
+		return std::nullopt;
+	}
+	const auto& sample = _audioSampleHeaders[index];
+	return std::pair {waveData->offset + sample.offset, sample.size};
+}
+
 PackResult PackFile::Write(const std::filesystem::path& filepath) noexcept
 {
 	assert(!_isLoaded);

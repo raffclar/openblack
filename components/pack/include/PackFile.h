@@ -21,6 +21,8 @@
 #include <set>
 #include <streambuf>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 namespace openblack::pack
@@ -302,6 +304,10 @@ public:
 	/// Read g3d file from a buffer
 	PackResult Open(const std::vector<uint8_t>& buffer) noexcept;
 
+	/// Read a sound pack's sample headers and bank info from the filesystem, leaving its sample data in the file: the
+	/// samples can then be read from the file one at a time, at the file offsets GetAudioSampleFileSpan gives
+	PackResult OpenAudioIndex(const std::filesystem::path& filepath) noexcept;
+
 	/// Write pack file to path on the filesystem
 	PackResult Write(const std::filesystem::path& filepath) noexcept;
 
@@ -358,6 +364,8 @@ public:
 	{
 		return _audioSampleData[index];
 	}
+	/// Where a sample's data is in the file, after OpenAudioIndex: its byte offset and size
+	[[nodiscard]] std::optional<std::pair<uint64_t, uint32_t>> GetAudioSampleFileSpan(uint32_t index) const noexcept;
 };
 
 } // namespace openblack::pack

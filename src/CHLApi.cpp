@@ -37,7 +37,6 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "3D/ScreenPick.h"
-#include "3D/SkyInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/GameMusic.h"
 #include "Camera/Camera.h"
@@ -56,6 +55,7 @@
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
+#include "ECS/Components/Influence.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
@@ -83,10 +83,14 @@
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TutorialSkipSystemInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/TownPlaythings.h"
 #include "ECS/WorldObjects.h"
@@ -107,6 +111,8 @@ namespace openblack::chlapi
 {
 
 using namespace openblack::ecs::archetypes;
+
+PlayerNames ScriptPlayerName(int32_t scriptPlayer);
 
 using openblack::Locator;
 using openblack::MobileStaticInfo;
@@ -2165,7 +2171,8 @@ void LoadMap() // 152 LOAD_MAP
 	const auto& fileSystem = Locator::filesystem::value();
 	try
 	{
-		Game::Instance()->LoadMap(fileSystem.FindPath(filesystem::FileSystemInterface::FixPath(path)));
+		Game::Instance()->LoadMap(fileSystem.FindPath(filesystem::FileSystemInterface::FixPath(path)),
+		                          loading::LoadingClock::Mode::PleaseWait);
 	}
 	catch (const std::exception& e)
 	{
@@ -2712,10 +2719,31 @@ void SetAnimationModify() // 202 SET_ANIMATION_MODIFY
 
 void SetAviSequence() // 203 SET_AVI_SEQUENCE
 {
-	// const auto aviSequence = Pop().intVal;
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Sequence 1 is the story's intro, 2 the falling spell's film
+	const auto sequence = Pop().intVal;
+	const auto enable = static_cast<bool>(Pop().intVal);
+	auto& videos = Locator::videoSystem::value();
+	auto& director = Locator::cinematicDirectorSystem::value();
+	if (!enable)
+	{
+		if (sequence == 2)
+		{
+			videos.EndFallingSpell();
+		}
+		return;
+	}
+	if (sequence == 1)
+	{
+		// The intro is cut short: it fades from 58 s and ends at 60 s. The script's fade is lifted at once under it
+		videos.Play("Data/INTRO.bik");
+		videos.ScheduleIntro();
+		director.FadeBackToNormal(0);
+	}
+	else if (sequence == 2)
+	{
+		videos.StartFallingSpell();
+		director.FadeBackToNormal(0);
+	}
 }
 
 void PlayGesture() // 204 PLAY_GESTURE
@@ -3255,10 +3283,30 @@ void SetHelpSystem() // 253 SET_HELP_SYSTEM
 
 void SetVirtualInfluence() // 254 SET_VIRTUAL_INFLUENCE
 {
-	// const auto player = Popf();
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto enable = Pop().intVal != 0;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "The hand's virtual influence for player {} is turned {}",
+	                    static_cast<int>(player), enable ? "on" : "off");
+	// Turned off, the player's hand keeps nothing of their influence past the border, and loses what it had
+	if (!Locator::playerSystem::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = Locator::playerSystem::value().GetPlayer(player);
+	if (!registry.Valid(entity))
+	{
+		return;
+	}
+	auto& state =
+	    (registry.AnyOf<ecs::components::VirtualInfluence>(entity) ? registry.Get<ecs::components::VirtualInfluence>(entity)
+	                                                               : registry.Assign<ecs::components::VirtualInfluence>(entity))
+	        .state;
+	state.disabled = !enable;
+	if (state.disabled)
+	{
+		state.fraction = 0.0f;
+	}
 }
 
 void SetActive() // 255 SET_ACTIVE
@@ -4960,6 +5008,7 @@ void GameAddForBuilding() // 444 GAME_ADD_FOR_BUILDING
 void EnableDisableAlignmentMusic() // 445 ENABLE_DISABLE_ALIGNMENT_MUSIC
 {
 	const auto enable = Pop().intVal != 0;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "The land's music is turned {}", enable ? "on" : "off");
 	if (auto* gameMusic = Game::Instance()->GetGameMusic())
 	{
 		gameMusic->SetAlignmentMusicEnabled(enable);
@@ -5093,30 +5142,22 @@ void SetHandDemoKeys() // 459 SET_HAND_DEMO_KEYS
 
 void CanSkipTutorial() // 460 CAN_SKIP_TUTORIAL
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(Locator::tutorialSkipSystem::value().Get().skipTutorial);
 }
 
 void CanSkipCreatureTraining() // 461 CAN_SKIP_CREATURE_TRAINING
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(Locator::tutorialSkipSystem::value().Get().skipCreatureTraining);
 }
 
 void IsKeepingOldCreature() // 462 IS_KEEPING_OLD_CREATURE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(Locator::tutorialSkipSystem::value().Get().keepOldCreature);
 }
 
 void CurrentProfileHasCreature() // 463 CURRENT_PROFILE_HAS_CREATURE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(Locator::playerProfileSystem::value().CurrentProfileHasCreature());
 }
 
 void CHLApi::InitFunctionsTable0()

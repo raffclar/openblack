@@ -34,6 +34,7 @@ using GlowManager = ResourceManager<LightLoader>;
 using CameraPathManager = ResourceManager<CameraPathLoader>;
 using ParticleFileManager = ResourceManager<ParticleFileLoader>;
 using GestureTemplatesManager = ResourceManager<GestureTemplatesLoader>;
+using VideoManager = ResourceManager<VideoLoader>;
 using ParticleBitmapManager = ResourceManager<ParticleBitmapLoader>;
 
 class ResourcesInterface
@@ -76,6 +77,8 @@ public:
 	[[nodiscard]] virtual size_t PendingCount() const = 0;
 	/// Stops loading on the loading threads: drops what hasn't started and waits for what has
 	virtual void StopLoading() = 0;
+	/// The videos playing, by their paths; each is let go when it ends
+	virtual VideoManager& GetVideos() = 0;
 };
 
 } // namespace openblack::resources
