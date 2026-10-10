@@ -10,10 +10,13 @@
 #pragma once
 
 #include <optional>
+#include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/ModelSurface.h"
 #include "Enums.h"
 
 namespace openblack
@@ -40,6 +43,12 @@ struct Size
 	float height;
 };
 [[nodiscard]] Size SizeOf(entt::entity object);
+
+/// The triangles of the parts of an object's model drawn at the finest detail when it is whole, in its model's space;
+/// none without a model
+[[nodiscard]] std::vector<model_surface::Triangle> DrawnTrianglesOf(entt::entity object);
+/// Where an object's model is placed in the world: moved, turned and scaled as it is drawn
+[[nodiscard]] glm::mat4 PlacementOf(entt::entity object);
 
 /// Its life, 0 to 1: a villager's or a creature's life, any other object's own (1 until it is hurt)
 [[nodiscard]] float LifeOf(entt::entity object);

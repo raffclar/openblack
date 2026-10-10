@@ -1643,4 +1643,35 @@ void LHVM::Opcode29Swap(VMTask& /*task*/, const VMInstruction& instruction)
 
 void LHVM::Opcode30Line(VMTask& /*task*/, const VMInstruction& /*instruction*/) {}
 
+bool LHVM::CallNative(uint32_t id, std::span<const std::pair<VMValue, DataType>> arguments,
+                      std::vector<std::pair<VMValue, DataType>>& results)
+{
+	if (_functions == nullptr || id == 0 || id >= _functions->size() || _functions->at(id).impl == nullptr ||
+	    _currentTask != nullptr)
+	{
+		return false;
+	}
+	_currentStack = &_mainStack;
+	const auto before = _mainStack.count;
+	for (const auto& [value, type] : arguments)
+	{
+		Push(value, type);
+	}
+	_mainStack.pushCount = 0;
+	_mainStack.popCount = 0;
+	InvokeNativeCallEnterCallback(id);
+	_functions->at(id).impl();
+	InvokeNativeCallExitCallback(id);
+	// What it gave back sits on top of what was there before
+	results.clear();
+	const auto pushed = std::min<uint32_t>(_mainStack.pushCount, _mainStack.count);
+	const auto first = _mainStack.count - pushed;
+	for (uint32_t i = first; i < _mainStack.count; ++i)
+	{
+		results.emplace_back(_mainStack.values.at(i), _mainStack.types.at(i));
+	}
+	_mainStack.count = std::min(_mainStack.count, before);
+	return true;
+}
+
 } // namespace openblack::lhvm

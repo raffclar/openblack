@@ -25,6 +25,35 @@ Events Between(float before, float after)
 	};
 }
 
+float BeamShare(float clock)
+{
+	const float share = (clock - k_BeamsFrom) / k_BeamsOver;
+	if (share <= 0.0f)
+	{
+		return 0.0f;
+	}
+	return share >= 1.0f ? 1.0f : share;
+}
+
+float NextBeam(float beamClock, float share)
+{
+	// Worked out at the game's wider precision and kept as a float
+	const double gap = (static_cast<double>(k_LastBeamGap) - static_cast<double>(k_FirstBeamGap)) * share + k_FirstBeamGap;
+	return static_cast<float>(gap + beamClock);
+}
+
+BeamLook BeamLookAt(float share)
+{
+	const auto between = [share](float first, float last) {
+		return static_cast<float>((static_cast<double>(last) - static_cast<double>(first)) * share + first);
+	};
+	return {
+	    .life = between(k_FirstBeamLife, k_LastBeamLife),
+	    .speed = between(k_FirstBeamSpeed, k_LastBeamSpeed),
+	    .alpha = static_cast<uint8_t>(static_cast<int32_t>(between(k_FirstBeamAlpha, k_LastBeamAlpha))),
+	};
+}
+
 uint8_t HeartAlpha(float clock)
 {
 	constexpr float k_Whole = 255.0f;

@@ -17,6 +17,7 @@
 #include <stb_image_write.h>
 
 #include "GraphicsHandleBgfx.h"
+#include "UploadPacer.h"
 
 namespace openblack::graphics
 {
@@ -39,8 +40,6 @@ void Texture2D::Create(uint16_t width, uint16_t height, uint16_t layers, Texture
                        const void* memory) noexcept
 {
 	CreateWithinFrame(width, height, layers, format, wrapping, filter, memory);
-	bgfx::frame();
-	bgfx::frame();
 }
 
 void Texture2D::CreateWithinFrame(uint16_t width, uint16_t height, uint16_t layers, TextureFormat format, Wrapping wrapping,
@@ -71,8 +70,12 @@ void Texture2D::CreateWithinFrame(uint16_t width, uint16_t height, uint16_t laye
 	default:
 		assert(false);
 	}
-	_handle = fromBgfx(bgfx::createTexture2D(width, height, false, layers, toBgfx(format), flags,
-	                                         reinterpret_cast<const bgfx::Memory*>(memory)));
+	const auto* texels = reinterpret_cast<const bgfx::Memory*>(memory);
+	if (texels != nullptr)
+	{
+		UploadPacer::Pace(texels->size);
+	}
+	_handle = fromBgfx(bgfx::createTexture2D(width, height, false, layers, toBgfx(format), flags, texels));
 	// Out of textures, it isn't made: only one that is can be named
 	if (bgfx::isValid(toBgfx(_handle)))
 	{
@@ -90,7 +93,19 @@ void Texture2D::CreateWithinFrame(uint16_t width, uint16_t height, uint16_t laye
 
 void Texture2D::Update(const void* data, uint32_t size) const
 {
+	UploadPacer::Pace(size);
 	bgfx::updateTexture2D(toBgfx(_handle), 0, 0, 0, 0, _resolution.x, _resolution.y, bgfx::copy(data, size));
+}
+
+void Texture2D::UpdateLayerRegion(uint16_t layer, glm::u16vec2 origin, glm::u16vec2 size, const void* data,
+                                  uint32_t bytes) const
+{
+	bgfx::updateTexture2D(toBgfx(_handle), layer, 0, origin.x, origin.y, size.x, size.y, bgfx::copy(data, bytes));
+}
+
+void Texture2D::UpdateLayer(uint16_t layer, const void* data, uint32_t size) const
+{
+	bgfx::updateTexture2D(toBgfx(_handle), layer, 0, 0, 0, _resolution.x, _resolution.y, bgfx::copy(data, size));
 }
 
 void Texture2D::DumpTexture() const

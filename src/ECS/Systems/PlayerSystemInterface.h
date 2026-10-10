@@ -29,7 +29,8 @@ public:
 	/// "the player's creature" (scripts, the story, the leash, fights, the advisors, the Creature Cave) uses this one.
 	[[nodiscard]] virtual std::optional<entt::entity> GetPrimaryCreature(PlayerNames name) const = 0;
 	/// As a land is cleared: each player keeps what is theirs rather than the land's, their alignment, the harm others did
-	/// them and how the things their hand throws fly, for when they are made again on a later land
+	/// them, how the things their hand throws fly and what their hand keeps of their influence past the border, for when
+	/// they are made again on a later land
 	virtual void KeepForNextLand() = 0;
 	/// A player made on a land takes up what they kept from the lands before
 	virtual void TakeUpKept(entt::entity playerEntity) = 0;

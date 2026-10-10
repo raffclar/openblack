@@ -12,12 +12,15 @@
 #include "AlignmentSystem.h"
 
 #include <algorithm>
+#include <array>
+#include <span>
 
 #include "3D/CreatureBody.h"
 #include "ECS/Components/Alignment.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/InfluenceSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/AreaEffect.h"
@@ -100,7 +103,7 @@ void AlignmentSystem::AddPlayerAlignment(PlayerNames player, float change)
 	SetPlayerAlignment(player, GetPlayerAlignment(player) + change);
 }
 
-void AlignmentSystem::UpdateTurn()
+void AlignmentSystem::UpdateTurn(const glm::vec3& eye)
 {
 	// What the players' and the creatures' deeds changed comes through: each turn the change waiting, held to a whole one,
 	// moves the alignment by that share of the owner's change a turn, and the rest is gone
@@ -122,11 +125,25 @@ void AlignmentSystem::UpdateTurn()
 		});
 	}
 
-	// The game takes the most influential player at the camera's eye, the neutral player where none has any, and
-	// keeps their alignment as a goodness from 0 to 1, held there
-	// TODO(raffclar): once influence is simulated; until then it is the player's own
-	const float goodness = std::clamp((GetPlayerAlignment(PlayerNames::PLAYER_ONE) + 1.0f) * 0.5f, 0.0f, 1.0f);
-	_camera = (goodness * 2.0f) - 1.0f;
+	// The camera takes the alignment of the most influential player at its eye
+	std::array<alignment::PlayerAtPlace, static_cast<size_t>(PlayerNames::NEUTRAL)> players {};
+	size_t count = 0;
+	if (Locator::influenceSystem::has_value())
+	{
+		const auto& influence = Locator::influenceSystem::value();
+		for (size_t i = 0; i < players.size(); ++i)
+		{
+			const auto name = static_cast<PlayerNames>(i);
+			if (FindPlayer(name).has_value())
+			{
+				players.at(count++) = {
+				    .influence = influence.PlayerInfluence(name, eye),
+				    .alignment = GetPlayerAlignment(name),
+				};
+			}
+		}
+	}
+	_camera = alignment::LandAlignment(alignment::MostInfluentialAlignment(std::span(players).first(count)));
 }
 
 void AlignmentSystem::Update(std::chrono::duration<float, std::milli> gameTime)

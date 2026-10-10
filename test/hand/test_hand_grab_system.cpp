@@ -16,6 +16,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Animals/FishFarmRules.h"
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Mobile.h"
@@ -69,6 +70,7 @@ public:
 	[[nodiscard]] PlayerNames HandPlayer() const override { return PlayerNames::PLAYER_ONE; }
 	[[nodiscard]] std::optional<entt::entity> ObjectUnderCursor() const override { return underCursor; }
 	[[nodiscard]] bool InInfluence(PlayerNames, glm::vec3) const override { return influence; }
+	void HeldThingUsedOnLand(PlayerNames player) override { usedOnLand.push_back(player); }
 	[[nodiscard]] bool InBounds(glm::vec3) const override { return true; }
 	[[nodiscard]] glm::vec3 LandNormalAt(glm::vec3) const override { return {0.0f, 1.0f, 0.0f}; }
 	[[nodiscard]] Size SizeOf(entt::entity object) const override
@@ -163,6 +165,14 @@ public:
 		auto& facts = fields.at(field);
 		facts.food -= std::min(facts.food, amount);
 	}
+	[[nodiscard]] std::optional<fish_farm::Type> FishFarmOf(entt::entity farm) const override
+	{
+		return fishFarms.contains(farm) ? std::optional(fishFarmType) : std::nullopt;
+	}
+	uint32_t TakeFromFishFarm(entt::entity farm, uint32_t amount) override
+	{
+		return fish_farm::Take(fishFarms.at(farm), amount);
+	}
 	[[nodiscard]] std::optional<PotFacts> PotFactsOf(entt::entity pot) const override
 	{
 		const auto* data = registry.TryGet<const Pot>(pot);
@@ -205,6 +215,11 @@ public:
 		++streams;
 		return streams;
 	}
+	[[nodiscard]] std::optional<uint32_t> StartFishScoopStream(glm::vec3 source) override
+	{
+		fishStreams.push_back(source);
+		return ++streams;
+	}
 	void StopScoopStream(uint32_t stream) override { stopped.push_back(stream); }
 	void MoveScoopStream(uint32_t, glm::vec3 hand) override { streamPoints.push_back(hand); }
 	void PinCursor(bool pinned) override { cursorPinned = pinned; }
@@ -224,6 +239,15 @@ public:
 		}
 		takenWhole.emplace_back(store, object);
 		registry.Destroy(object);
+		return true;
+	}
+	bool LayGateStone(entt::entity plinth, entt::entity stone) override
+	{
+		if (!plinths.contains(plinth) || !gateStones.contains(stone))
+		{
+			return false;
+		}
+		laidStones.emplace_back(plinth, stone);
 		return true;
 	}
 	void PourAt(ResourceType, glm::vec3, uint32_t amount, PlayerNames, bool /*poisoned*/) override
@@ -253,6 +277,7 @@ public:
 	std::optional<entt::entity> underCursor;
 	bool influence {true};
 	bool looseLeash {false};
+	std::vector<PlayerNames> usedOnLand;
 	std::map<entt::entity, Size> sizes;
 	std::map<entt::entity, float> weights;
 	std::set<entt::entity> flying;
@@ -269,6 +294,9 @@ public:
 	std::vector<entt::entity> poured;
 	std::vector<entt::entity> potReactionsSetUp;
 	std::map<entt::entity, FieldFacts> fields;
+	std::map<entt::entity, float> fishFarms;
+	fish_farm::Type fishFarmType {.foodValue = 1400.0f, .foodType = 1, .turnsPerFish = 16};
+	std::vector<glm::vec3> fishStreams;
 	std::vector<std::pair<entt::entity, entt::entity>> takenWhole;
 	std::vector<std::pair<entt::entity, glm::vec3>> released;
 	std::vector<std::pair<entt::entity, glm::vec3>> twists;
@@ -279,6 +307,9 @@ public:
 	std::vector<float> scoopSounds;
 	bool cursorPinned {false};
 	std::set<entt::entity> stores;
+	std::set<entt::entity> plinths;
+	std::set<entt::entity> gateStones;
+	std::vector<std::pair<entt::entity, entt::entity>> laidStones;
 	std::map<entt::entity, uint32_t> stored;
 	std::vector<uint32_t> pouredAmounts;
 	std::vector<entt::entity> usedUp;
@@ -375,6 +406,25 @@ TEST_F(HandGrabSystemWithWorld, ThingsOutOfTheInfluenceOrHeldByAScriptAreLeft)
 	// Out of the influence or held by a script nothing is tapped; a boulder the hand can't lift is tapped at once
 	ASSERT_EQ(world->tapped.size(), 1u);
 	EXPECT_EQ(world->tapped.front(), boulder);
+}
+
+// The hand says why a press on a thing wouldn't take it, as the inspector shows it
+TEST_F(HandGrabSystemWithWorld, ItSaysWhyAThingWouldntBeTaken)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	EXPECT_EQ(system->WhyNotTake(rock), "");
+	world->influence = false;
+	EXPECT_NE(system->WhyNotTake(rock).find("influence"), std::string::npos);
+	world->influence = true;
+	world->registry.Assign<CannotBePickedUp>(rock);
+	EXPECT_NE(system->WhyNotTake(rock).find("script"), std::string::npos);
+	world->registry.Remove<CannotBePickedUp>(rock);
+	EXPECT_NE(system->WhyNotTake(world->AddRock({5.0f, 0.0f, 0.0f}, 4.0f)).find("can't hold"), std::string::npos);
+	EXPECT_NE(system->WhyNotTake(world->registry.Create()).find("can't hold"), std::string::npos);
+	// Busy taking the rock, it takes nothing else
+	EXPECT_TRUE(Press());
+	EXPECT_NE(system->WhyNotTake(rock).find("busy"), std::string::npos);
 }
 
 TEST_F(HandGrabSystemWithWorld, APressTheHandCantTakeClicksTheThing)
@@ -552,6 +602,64 @@ TEST_F(HandGrabSystemWithWorld, TheSpringTakesHoldTheFrameAfterThePressAndThrows
 	EXPECT_FALSE(system->GetHeld().has_value());
 }
 
+TEST_F(HandGrabSystemWithWorld, LettingGoOntoTheLandCountsAsATurnForTheInfluenceKeptPastTheBorder)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_TRUE(system->GetHeld().has_value());
+	// Taking it up isn't using it on the land
+	EXPECT_TRUE(world->usedOnLand.empty());
+	world->underCursor.reset();
+	Frame(10);
+	// Let go out of the influence the hand keeps hold, and nothing counts
+	Press();
+	Frame(10);
+	world->influence = false;
+	Frame(10);
+	Release();
+	EXPECT_TRUE(system->GetHeld().has_value());
+	EXPECT_TRUE(world->usedOnLand.empty());
+	// Let go inside it counts once, as it is thrown
+	world->influence = true;
+	Frame(10);
+	Press();
+	Frame(10);
+	Release();
+	EXPECT_EQ(world->usedOnLand, std::vector<PlayerNames> {PlayerNames::PLAYER_ONE});
+	ASSERT_EQ(world->released.size(), 1u);
+}
+
+TEST_F(HandGrabSystemWithWorld, APressOutsideTheInfluenceDoesNotMakeReadyToThrow)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_TRUE(system->GetHeld().has_value());
+	world->underCursor.reset();
+	world->influence = false;
+	Frame(10);
+	Press();
+	Frame(10);
+	// Back inside before the button is let go: still held, not thrown
+	world->influence = true;
+	Frame(10);
+	Release();
+	EXPECT_TRUE(system->GetHeld().has_value());
+	EXPECT_TRUE(world->released.empty());
+	EXPECT_TRUE(world->usedOnLand.empty());
+}
+
 TEST_F(HandGrabSystemWithWorld, WhatIsLetGoGetsItsTwistAFifthOfASecondLater)
 {
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
@@ -714,6 +822,50 @@ TEST_F(HandGrabSystemWithWorld, ATreePressedOntoAStoreGoesIntoItWhole)
 	EXPECT_FALSE(system->GetHeld().has_value());
 }
 
+TEST_F(HandGrabSystemWithWorld, AGateStonePressedOntoThePlinthIsLaidInIt)
+{
+	const auto stone = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	world->gateStones.insert(stone);
+	world->underCursor = stone;
+	Press();
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	Release();
+	const auto plinth = world->registry.Create();
+	world->plinths.insert(plinth);
+	world->underCursor = plinth;
+	EXPECT_TRUE(Press());
+	ASSERT_EQ(world->laidStones.size(), 1u);
+	EXPECT_EQ(world->laidStones.front().first, plinth);
+	EXPECT_EQ(world->laidStones.front().second, stone);
+	// The stone is used up, leaving its ghost, and the hand is empty
+	EXPECT_EQ(world->usedUp, std::vector<entt::entity> {stone});
+	EXPECT_TRUE(world->takenWhole.empty());
+	EXPECT_FALSE(system->GetHeld().has_value());
+}
+
+TEST_F(HandGrabSystemWithWorld, AnythingElsePressedOntoThePlinthIsMadeReadyToThrow)
+{
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	world->underCursor = tree;
+	Press();
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	Release();
+	const auto plinth = world->registry.Create();
+	world->plinths.insert(plinth);
+	world->underCursor = plinth;
+	EXPECT_TRUE(Press());
+	EXPECT_TRUE(world->laidStones.empty());
+	EXPECT_EQ(system->GetHeld(), std::optional<entt::entity> {tree});
+}
+
 TEST_F(HandGrabSystemWithWorld, APotLetGoOverTheLandCallsThePeopleAgain)
 {
 	const auto pile = world->registry.Create();
@@ -757,6 +909,39 @@ TEST_F(HandGrabSystemWithWorld, ARipeFieldGivesHalfOfEachScoop)
 	EXPECT_EQ(world->fields[field].food, 988u);
 	system->ProcessTurn();
 	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 16u);
+}
+
+TEST_F(HandGrabSystemWithWorld, AFishFarmGivesAFirstHandfulForNothingThenItsFishAsTheScoopRampsUp)
+{
+	const auto farm = world->registry.Create();
+	world->registry.Assign<Transform>(farm, glm::vec3(5.0f, 0.0f, 5.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->fishFarms[farm] = 100.0f;
+	world->underCursor = farm;
+	EXPECT_TRUE(Press());
+	const auto handful = system->GetHeld();
+	ASSERT_TRUE(handful.has_value());
+	// The first 25 come out of nothing, and the fish leap from the farm into the hand
+	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 25u);
+	EXPECT_FLOAT_EQ(world->fishFarms[farm], 100.0f);
+	ASSERT_EQ(world->fishStreams.size(), 1u);
+	EXPECT_EQ(world->fishStreams.front(), glm::vec3(5.0f, 0.0f, 5.0f));
+	// Each turn the ramp's fish are taken from the farm
+	system->ProcessTurn();
+	const auto first = world->registry.Get<const Pot>(*handful).amount - 25u;
+	EXPECT_GT(first, 0u);
+	EXPECT_FLOAT_EQ(world->fishFarms[farm], 100.0f - static_cast<float>(first));
+	// A farm with fewer left than the ramp wants still gives all of it
+	world->fishFarms[farm] = 1.0f;
+	const auto before = world->registry.Get<const Pot>(*handful).amount;
+	system->ProcessTurn();
+	EXPECT_GT(world->registry.Get<const Pot>(*handful).amount - before, 1u);
+	EXPECT_FLOAT_EQ(world->fishFarms[farm], 0.0f);
+	// An empty farm ends the scoop: its stream stops and the hand keeps its handful
+	EXPECT_TRUE(world->stopped.empty());
+	system->ProcessTurn();
+	EXPECT_FALSE(world->stopped.empty());
+	EXPECT_FALSE(world->cursorPinned);
+	EXPECT_EQ(system->GetHeld(), handful);
 }
 
 TEST_F(HandGrabSystemWithWorld, AScoopsStreamFollowsTheHandAndAPourEndsAfterThreeQuartersOfASecond)

@@ -25,6 +25,7 @@
 #include "Creature/CreatureMorph.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -37,6 +38,7 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -49,6 +51,26 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
+/// The fish farm whose fish show under the cursor's point on the sea: only over a cell of water, off the map counting as
+/// water, and only through the fish, as a farm has no model
+std::optional<entt::entity> FishFarmUnder(const std::optional<glm::vec3>& point)
+{
+	if (!point.has_value() || !Locator::fishFarmSystem::has_value() || !Locator::terrainSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto cell = map_coords::CellOf(*point);
+	if (map_coords::InBounds(cell))
+	{
+		const auto* landCell = Locator::terrainSystem::value().FindCell(glm::u16vec2(cell));
+		if (landCell != nullptr && landCell->properties.hasWater == 0)
+		{
+			return std::nullopt;
+		}
+	}
+	return Locator::fishFarmSystem::value().FarmWithFishAt({point->x, point->z});
+}
+
 /// The land's corner heights as the game reads them for its line test: the cell's own block holds its far corners
 std::optional<land_line::CellHeights> CornersOf(int32_t x, int32_t z)
 {
@@ -213,6 +235,11 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		{
 			continue;
 		}
+		// A gate stone on a plinth is found only while the plinth stands closed
+		if (const auto* stone = registry.TryGet<const PlinthStone>(entity); stone != nullptr && !stone->pickable)
+		{
+			continue;
+		}
 		if (const auto* progress = registry.TryGet<const BuildProgress>(entity);
 		    progress != nullptr && registry.AllOf<Abode>(entity) && progress->built == 0.0f)
 		{
@@ -322,7 +349,12 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 	}
 	if (picked.has_value())
 	{
-		const auto entity = _candidateEntities[picked->index];
+		auto entity = _candidateEntities[picked->index];
+		// A gate stone on a plinth is the plinth to the cursor
+		if (const auto* stone = registry.TryGet<const PlinthStone>(entity); stone != nullptr && registry.Valid(stone->plinth))
+		{
+			entity = stone->plinth;
+		}
 		_pick.object = entity;
 		const auto* transform = registry.TryGet<const Transform>(entity);
 		_pick.point = transform != nullptr ? transform->position : _candidates[picked->index].origin;
@@ -332,6 +364,8 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 	{
 		_pick.point = _pick.land;
 		_pick.distance = landDistance;
+		// With nothing else under the cursor, a fish farm is picked through its fish, the hand resting on the sea
+		_pick.object = FishFarmUnder(_pick.land);
 	}
 	picking::CarryHover(previous, _pick, frame.seconds);
 }

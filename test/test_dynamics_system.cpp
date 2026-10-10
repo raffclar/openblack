@@ -172,6 +172,7 @@ public:
 	}
 	void MoveSound(entt::entity, glm::vec3) override {}
 	void AddWaterRing(const water_rings::Ring&) override {}
+	void ScareFish(glm::vec3) override {}
 	[[nodiscard]] int32_t SnowAt(glm::vec3) const override { return 0; }
 	void StartedMoving(entt::entity) override {}
 	[[nodiscard]] bool IsOnFire(entt::entity) const override { return false; }
