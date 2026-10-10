@@ -254,3 +254,19 @@ TEST(GestureTrailSheet, ItsStrengthRunsAlongItAndTheWaveRolls)
 	// Its top spread out from the middle
 	EXPECT_NEAR(vertices[2].position.x, ((0.0f - 24.5f) * 1.1f) + 24.5f, 1e-4f);
 }
+
+TEST(LightSheet, TakesAnotherSpread)
+{
+	LightSheet sheet;
+	sheet.Start({{0.0f, 0.0f, 0.0f}, {10.0f, 0.0f, 0.0f}}, 0xB4B4B4u, 5.0f, 0.03f);
+	sheet.SetSpread(1.01f);
+	std::vector<LightSheet::Vertex> vertices;
+	std::vector<uint32_t> triangles;
+	sheet.Build(vertices, triangles);
+	ASSERT_EQ(vertices.size(), 6u);
+	// The top of the first point spread a hundredth out from the middle at 5
+	EXPECT_NEAR(vertices[2].position.x, ((0.0f - 5.0f) * 1.01f) + 5.0f, 1e-4f);
+	EXPECT_FALSE(sheet.Hidden());
+	sheet.SetHidden(true);
+	EXPECT_TRUE(sheet.Hidden());
+}

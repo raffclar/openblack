@@ -281,6 +281,19 @@ std::optional<std::pair<float, float>> mind_detail::MiracleSightings(const Creat
 	return std::pair {sightings->seen, sightings->needed};
 }
 
+std::optional<std::pair<float, float>> CreatureMindSystem::MiracleSightings(entt::entity creature, MagicType type)
+{
+	const auto* tables = GetTables();
+	const auto& registry = Entities();
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (tables == nullptr || mind == nullptr || body == nullptr)
+	{
+		return std::nullopt;
+	}
+	return mind_detail::MiracleSightings(*mind, *tables, body->species, type);
+}
+
 bool CreatureMindSystem::MayCast(entt::entity creature, const CreatureMindState& mind, uint32_t action, bool powerUp)
 {
 	const auto* tables = GetTables();

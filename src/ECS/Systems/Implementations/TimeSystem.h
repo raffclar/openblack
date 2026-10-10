@@ -74,11 +74,21 @@ public:
 	void SetSpeed(float speed) override;
 	[[nodiscard]] float GetSpeed() const override { return _speed; }
 
+	void SetFixedFrameTime(std::optional<std::chrono::milliseconds> frameTime) override;
+	[[nodiscard]] std::optional<std::chrono::milliseconds> GetFixedFrameTime() const override { return _fixedFrameTime; }
+
 private:
 	/// Sets the timer back to the current turn, from now
 	void ResetTimerToTurn();
+	/// The tick count the clock goes by: the tick source's, or while frames take a fixed time, one moved on by that
+	/// time each frame
+	[[nodiscard]] uint32_t Ticks() const;
 
 	TickSource _ticks;
+	std::optional<std::chrono::milliseconds> _fixedFrameTime;
+	/// While frames take a fixed time, the tick count; after, what is added to the tick source's to carry on from it
+	uint32_t _fixedTicks {0};
+	uint32_t _tickOffset {0};
 	/// The wall clock's whole milliseconds at the last frame, and the frame's real time
 	uint32_t _lastFrameTicks {0};
 	uint32_t _frameRealMs {1};

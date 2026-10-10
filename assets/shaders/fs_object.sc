@@ -27,9 +27,14 @@ uniform vec4 u_keepBelow;
 // the static an invisible one dissolves through by how far it has fizzed (a negative v_haze.w), which xy scrolls across
 // its skin
 SAMPLER2D(s_iceEnvironment, 10);
-// The ice's alpha, which weighs how much of it is added (the stage the vertex shaders of other objects read their height
-// map from)
+// The ice's alpha, which weighs how much of it is added. Every stage is taken by one shader or another: it goes at the
+// environment map's, which no creature's shader samples, and environment-mapped meshes, which are never frozen, have it at
+// the height map's, which their vertex shader doesn't sample
+#ifdef USE_ENVIRONMENT
 SAMPLER2D(s_iceEnvironmentAlpha, 1);
+#else
+SAMPLER2D(s_iceEnvironmentAlpha, 5);
+#endif // USE_ENVIRONMENT
 SAMPLER2D(s_staticAlpha, 15);
 uniform vec4 u_creatureSpellLook;
 

@@ -22,8 +22,9 @@
 
 namespace openblack::ecs::components
 {
+struct HandClicked;
 struct HandGrab;
-}
+} // namespace openblack::ecs::components
 
 namespace openblack::ecs::systems
 {
@@ -39,6 +40,8 @@ public:
 
 	bool Press(uint32_t nowMs, uint32_t turn) override;
 	std::optional<entt::entity> Release(uint32_t nowMs, uint32_t turn) override;
+	void ClickReleased(uint32_t turn) override;
+	void ClickThing(entt::entity object, uint32_t turn) override;
 	glm::vec3 UpdateFrame(const Frame& frame) override;
 	void ProcessTurn() override;
 	void ForceDrop() override;
@@ -65,6 +68,10 @@ private:
 	[[nodiscard]] bool MayTake(entt::entity object) const;
 	/// A press that doesn't take the thing taps it, when the player may touch it
 	void Tap(entt::entity object);
+	/// What the player clicked, made on the hand when first needed; none without a hand
+	[[nodiscard]] components::HandClicked* Clicked();
+	/// Whether a click on a thing marks it as clicked
+	[[nodiscard]] bool MarksThing(entt::entity object) const;
 	/// How a thing hangs in the hand
 	[[nodiscard]] hand_grab::HoldFacts HoldOfObject(entt::entity object) const;
 	/// The hand starts pulling at a thing: its base, the plane of the land the pull works in, and its lean

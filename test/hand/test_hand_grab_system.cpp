@@ -17,9 +17,11 @@
 #include <gtest/gtest.h>
 
 #include "Animals/FishFarmRules.h"
+#include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Reward.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
@@ -68,6 +70,7 @@ public:
 	[[nodiscard]] PlayerNames HandPlayer() const override { return PlayerNames::PLAYER_ONE; }
 	[[nodiscard]] std::optional<entt::entity> ObjectUnderCursor() const override { return underCursor; }
 	[[nodiscard]] bool InInfluence(PlayerNames, glm::vec3) const override { return influence; }
+	void HeldThingUsedOnLand(PlayerNames player) override { usedOnLand.push_back(player); }
 	[[nodiscard]] bool InBounds(glm::vec3) const override { return true; }
 	[[nodiscard]] glm::vec3 LandNormalAt(glm::vec3) const override { return {0.0f, 1.0f, 0.0f}; }
 	[[nodiscard]] Size SizeOf(entt::entity object) const override
@@ -98,6 +101,7 @@ public:
 	void CreateReaction(const ReactionRequest& request) override { reactions.push_back(request); }
 	void RemoveReactions(entt::entity, Reaction) override {}
 	void FireStartedMoving(entt::entity, bool) override {}
+	void CatchFirefly(entt::entity) override {}
 	void HeatHeld(entt::entity object) override { heated.push_back(object); }
 	void ArtefactTaken(entt::entity object, PlayerNames) override { artefactsTaken.push_back(object); }
 	void PlaySample(uint32_t sample, glm::vec3) override { samples.push_back(sample); }
@@ -106,6 +110,7 @@ public:
 		tapped.push_back(object);
 		return true;
 	}
+	[[nodiscard]] bool HoldsLooseLeash() const override { return looseLeash; }
 	[[nodiscard]] uint32_t LocalRandom(uint32_t) override { return 0; }
 	void VillagerIntoHand(entt::entity villager) override { villagersInHand.push_back(villager); }
 	void AnimalIntoOwnFlock(entt::entity) override {}
@@ -262,6 +267,8 @@ public:
 	entt::entity hand {entt::null};
 	std::optional<entt::entity> underCursor;
 	bool influence {true};
+	bool looseLeash {false};
+	std::vector<PlayerNames> usedOnLand;
 	std::map<entt::entity, Size> sizes;
 	std::map<entt::entity, float> weights;
 	std::set<entt::entity> flying;
@@ -389,6 +396,90 @@ TEST_F(HandGrabSystemWithWorld, ThingsOutOfTheInfluenceOrHeldByAScriptAreLeft)
 	EXPECT_EQ(world->tapped.front(), boulder);
 }
 
+TEST_F(HandGrabSystemWithWorld, APressTheHandCantTakeClicksTheThing)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	// Even out of the influence, where it isn't tapped
+	world->influence = false;
+	EXPECT_FALSE(Press());
+	const auto* clicked = world->registry.TryGet<const HandClicked>(world->hand);
+	ASSERT_NE(clicked, nullptr);
+	EXPECT_EQ(clicked->thing, rock);
+	EXPECT_EQ(clicked->thingTurn, now / 100);
+	EXPECT_TRUE(world->tapped.empty());
+}
+
+TEST_F(HandGrabSystemWithWorld, ATapClicksWhatIsUnderTheHandAsItIsLetGo)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	EXPECT_TRUE(Press());
+	// Taking hold isn't a click
+	EXPECT_FALSE(world->registry.AllOf<HandClicked>(world->hand) &&
+	             world->registry.Get<HandClicked>(world->hand).thing != entt::null);
+	Frame(50);
+	const auto other = world->AddRock({5.0f, 0.0f, 0.0f});
+	world->underCursor = other;
+	Release();
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, other);
+}
+
+TEST_F(HandGrabSystemWithWorld, AHeldPressIsNoClick)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	EXPECT_TRUE(Press());
+	Frame(300);
+	Release();
+	const auto* clicked = world->registry.TryGet<const HandClicked>(world->hand);
+	EXPECT_TRUE(clicked == nullptr || clicked->thing == entt::null);
+}
+
+TEST_F(HandGrabSystemWithWorld, LettingGoOverTheLandClicksThePlace)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	system->ClickReleased(7);
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, rock);
+	world->underCursor.reset();
+	Frame(10, {}, {20.0f, 0.0f, 30.0f});
+	system->ClickReleased(8);
+	const auto& clicked = world->registry.Get<HandClicked>(world->hand);
+	EXPECT_TRUE(clicked.thing == entt::null);
+	EXPECT_EQ(clicked.place.x, map_coords::ToFixed(20.0f));
+	EXPECT_EQ(clicked.place.z, map_coords::ToFixed(30.0f));
+	EXPECT_EQ(clicked.placeTurn, 8u);
+}
+
+TEST_F(HandGrabSystemWithWorld, ARewardWithTheLeashLooseInTheHandIsTheLand)
+{
+	const auto chest = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->registry.Assign<Reward>(chest);
+	world->underCursor = chest;
+	world->looseLeash = true;
+	Frame(10, {}, {20.0f, 0.0f, 30.0f});
+	system->ClickReleased(8);
+	const auto& clicked = world->registry.Get<HandClicked>(world->hand);
+	EXPECT_TRUE(clicked.thing == entt::null);
+	EXPECT_EQ(clicked.placeTurn, 8u);
+	world->looseLeash = false;
+	system->ClickReleased(9);
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, chest);
+}
+
+TEST_F(HandGrabSystemWithWorld, ClicksAreForgottenAfterFifteenSeconds)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	system->ClickReleased(now / 100);
+	// 149 turns of 100 ms is under 15 seconds; 150 is just over, as a thousandth in single precision is a little more
+	Frame(14900);
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, rock);
+	Frame(100);
+	EXPECT_TRUE(world->registry.Get<HandClicked>(world->hand).thing == entt::null);
+}
+
 TEST_F(HandGrabSystemWithWorld, AThingInFlightIsCaughtOnlyAfterTheWait)
 {
 	const auto rock = world->AddRock({0.0f, 5.0f, 0.0f});
@@ -478,6 +569,64 @@ TEST_F(HandGrabSystemWithWorld, TheSpringTakesHoldTheFrameAfterThePressAndThrows
 	EXPECT_EQ(world->released.front().first, rock);
 	EXPECT_GT(world->released.front().second.x, 0.0f);
 	EXPECT_FALSE(system->GetHeld().has_value());
+}
+
+TEST_F(HandGrabSystemWithWorld, LettingGoOntoTheLandCountsAsATurnForTheInfluenceKeptPastTheBorder)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_TRUE(system->GetHeld().has_value());
+	// Taking it up isn't using it on the land
+	EXPECT_TRUE(world->usedOnLand.empty());
+	world->underCursor.reset();
+	Frame(10);
+	// Let go out of the influence the hand keeps hold, and nothing counts
+	Press();
+	Frame(10);
+	world->influence = false;
+	Frame(10);
+	Release();
+	EXPECT_TRUE(system->GetHeld().has_value());
+	EXPECT_TRUE(world->usedOnLand.empty());
+	// Let go inside it counts once, as it is thrown
+	world->influence = true;
+	Frame(10);
+	Press();
+	Frame(10);
+	Release();
+	EXPECT_EQ(world->usedOnLand, std::vector<PlayerNames> {PlayerNames::PLAYER_ONE});
+	ASSERT_EQ(world->released.size(), 1u);
+}
+
+TEST_F(HandGrabSystemWithWorld, APressOutsideTheInfluenceDoesNotMakeReadyToThrow)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_TRUE(system->GetHeld().has_value());
+	world->underCursor.reset();
+	world->influence = false;
+	Frame(10);
+	Press();
+	Frame(10);
+	// Back inside before the button is let go: still held, not thrown
+	world->influence = true;
+	Frame(10);
+	Release();
+	EXPECT_TRUE(system->GetHeld().has_value());
+	EXPECT_TRUE(world->released.empty());
+	EXPECT_TRUE(world->usedOnLand.empty());
 }
 
 TEST_F(HandGrabSystemWithWorld, WhatIsLetGoGetsItsTwistAFifthOfASecondLater)

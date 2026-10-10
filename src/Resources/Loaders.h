@@ -9,7 +9,10 @@
 
 #pragma once
 
+#include <filesystem>
 #include <queue>
+#include <span>
+#include <string>
 
 #include <PackFile.h>
 
@@ -105,6 +108,11 @@ struct L3DLoader final: BaseLoader<graphics::L3DMesh>
 struct L3DFileLoader final: BaseLoader<l3d::L3DFile>
 {
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
+	/// A copy of a file made in the game, such as a blended mesh
+	struct FromFileTag
+	{
+	};
+	[[nodiscard]] result_type operator()(FromFileTag, const l3d::L3DFile& file) const;
 };
 
 /// A 16 bit image, .16B
@@ -145,8 +153,22 @@ struct Texture2DLoader final: BaseLoader<graphics::Texture2D>
 	{
 	};
 
+	/// A texture of colours with its alpha from the file beside it, "<name>a.raw"
+	struct FromDiskWithAlphaTag
+	{
+	};
+
+	/// A texture of layers, each a square 16-bit bitmap file of 5 bits a colour
+	struct FromBitmapLayersTag
+	{
+	};
+
 	[[nodiscard]] result_type operator()(FromPackTag, const std::string& name, const pack::G3DTexture& g3dTexture) const;
+	[[nodiscard]] result_type operator()(FromBitmapLayersTag, const std::string& name,
+	                                     std::span<const std::filesystem::path> layerPaths, uint16_t side) const;
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& rawTexturePath) const;
+	[[nodiscard]] result_type operator()(FromDiskWithAlphaTag, const std::filesystem::path& rawTexturePath,
+	                                     const std::filesystem::path& alphaPath, uint16_t side) const;
 };
 
 struct L3DAnimLoader final: BaseLoader<L3DAnim>

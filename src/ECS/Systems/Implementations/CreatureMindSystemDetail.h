@@ -58,6 +58,11 @@ namespace openblack::ecs::systems::mind_detail
 [[nodiscard]] std::optional<std::pair<float, float>> MiracleSightings(const components::CreatureMindState& mind,
                                                                       const creature_mind_tables::Tables& tables,
                                                                       CreatureType species, MagicType magic);
-/// Having done an action, the desire it satisfies is less, by the game's action table, and its body pays for it
+/// Having done an action, the desire it satisfies is less, by the game's action table: multiplied by the action's
+/// multiplier, no lower than the species' floor for desires
+void Lessen(entt::entity creature, creature_desires::Desires& desires, std::string_view action);
+/// Having done an action, its body pays for it
+void BodyPaysFor(entt::entity creature, std::string_view action);
+/// Both, as a step that takes effect at once does
 void Satisfied(entt::entity creature, creature_desires::Desires& desires, std::string_view action);
 } // namespace openblack::ecs::systems::mind_detail

@@ -25,10 +25,11 @@
 #include <span>
 #include <vector>
 
+#include <spdlog/spdlog.h>
+
 #include "3D/CreatureBody.h"
 #include "3D/DayNightClock.h"
 #include "3D/LandIslandInterface.h"
-#include "3D/SkyInterface.h"
 #include "Camera/Camera.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFace.h"
@@ -44,13 +45,17 @@
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/HandGrab.h"
+#include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -64,6 +69,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -174,6 +180,7 @@ std::array<creature_desires::DesireSetup, creature_desires::k_DesireCount> Setup
 			    .value = PerSpecies(info.creatureInitialSource1.at(type), row),
 			    .threshold = PerSpecies(info.creatureInitialSource2.at(type), row),
 			    .multiplier = info.desireSourceTable.at(type).field0x8,
+			    .clearedWhenSatisfied = info.desireSourceTable.at(type).field0x4 != 0,
 			});
 		}
 	}
@@ -352,6 +359,24 @@ void GiveUp(creature_mind::IdleMind& idle)
 	idle.step = idle.agenda.size();
 	idle.stepStarted = false;
 	idle.gaveUp = true;
+}
+
+/// Whether the thing the creature's step waits for is back on the map: out of any hand, flight or tornado. None when the
+/// thing is gone, and when the step waits for nothing.
+std::optional<bool> WaitedForInMap(const ecs::Registry& registry, const creature_mind::IdleMind& idle)
+{
+	if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::WaitInMap ||
+	    !idle.agenda[idle.step].object.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto object = static_cast<entt::entity>(*idle.agenda[idle.step].object);
+	if (!registry.Valid(object))
+	{
+		return std::nullopt;
+	}
+	return registry.AllOf<MapCellResident>(object) &&
+	       !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(object);
 }
 
 /// Lets go of the miracle the creature holds, as it stops what it was doing
@@ -590,28 +615,50 @@ creature_mind::Wants WantsOf(ecs::Registry& registry, entt::entity creature, con
 	return wants;
 }
 
-/// Having done an action, the desire it satisfies is less, by the game's action table, and its body pays for it
-void Satisfied(entt::entity creature, creature_desires::Desires& desires, std::string_view action)
+/// The least a creature's desires are lessened to by its actions, by its species
+float DesireFloorOf(entt::entity creature)
 {
-	if (Locator::infoConstants::has_value())
+	const auto* body = Locator::entitiesRegistry::value().TryGet<const Creature>(creature);
+	if (body == nullptr || !Locator::infoConstants::has_value())
 	{
-		const auto& actions = Locator::infoConstants::value().creatureAction;
-		const auto found = std::ranges::find_if(actions, [action](const auto& row) {
-			return std::string_view(row.name.data(), strnlen(row.name.data(), row.name.size())) == action;
-		});
-		if (found != actions.end() && found->desire < creature_desires::k_DesireCount)
-		{
-			auto& state = desires[static_cast<Desire>(found->desire)];
-			if (state.activated)
-			{
-				state.value = std::clamp(state.value * found->desireMultiplier, 0.0f, std::max(state.max, 0.0f));
-			}
-		}
+		return 0.0f;
 	}
+	const auto& species = Locator::infoConstants::value().creature;
+	const auto row = creature::InfoRow(body->species);
+	return row < species.size() ? species.at(row).desireFloor : 0.0f;
+}
+
+/// Having done an action, the desire it satisfies is less, by the game's action table
+void Lessen(entt::entity creature, creature_desires::Desires& desires, std::string_view action)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto& actions = Locator::infoConstants::value().creatureAction;
+	const auto found = std::ranges::find_if(actions, [action](const auto& row) {
+		return std::string_view(row.name.data(), strnlen(row.name.data(), row.name.size())) == action;
+	});
+	if (found != actions.end() && found->desire < creature_desires::k_DesireCount)
+	{
+		creature_desires::LessenAfterAction(desires[static_cast<Desire>(found->desire)], found->desireMultiplier,
+		                                    DesireFloorOf(creature));
+	}
+}
+
+/// Having done an action, its body pays for it
+void BodyPaysFor(entt::entity creature, std::string_view action)
+{
 	if (Locator::creaturePhysiologySystem::has_value())
 	{
 		Locator::creaturePhysiologySystem::value().FinishAction(creature, action);
 	}
+}
+
+void Satisfied(entt::entity creature, creature_desires::Desires& desires, std::string_view action)
+{
+	Lessen(creature, desires, action);
+	BodyPaysFor(creature, action);
 }
 
 /// What a step did to the body
@@ -749,7 +796,14 @@ void Order(ecs::Registry& registry, entt::entity creature, const creature_mind::
 		hands.PutDown(creature);
 		break;
 	case Kind::Discard:
-		hands.Discard(creature);
+		if (order.animation != 0)
+		{
+			hands.DiscardWith(creature, order.animation);
+		}
+		else
+		{
+			hands.Discard(creature);
+		}
 		break;
 	case Kind::Eat:
 		hands.EatHeld(creature);
@@ -940,9 +994,15 @@ void CreatureMindSystem::ProcessTurn()
 			    ++mind.stepTurns;
 		    }
 		    StepSubMove(entity, creature_layers::IsPlaying(animation.body));
+		    // A catch takes up the body until it is over, but the plan to catch is carried out as soon as the catch starts
+		    const bool catching = Locator::creatureObjectActionSystem::has_value() &&
+		                          Locator::creatureObjectActionSystem::value().IsCatching(entity);
+		    const bool catchStep = mind.idle.stepStarted && mind.idle.step < mind.idle.agenda.size() &&
+		                           mind.idle.agenda[mind.idle.step].kind == creature_mind::Step::Kind::Object &&
+		                           mind.idle.agenda[mind.idle.step].order.kind == creature_mind::ObjectOrder::Kind::Catch;
 		    const creature_mind::Senses senses {
 		        .seconds = k_TurnSeconds,
-		        .bodyBusy = creature_layers::IsPlaying(animation.body) || moving,
+		        .bodyBusy = creature_layers::IsPlaying(animation.body) || moving || catching,
 		        .bodyLooping = creature_layers::IsLooping(animation.body),
 		        .moving = moving,
 		        .subMove = SubMoveOf(entity),
@@ -958,7 +1018,8 @@ void CreatureMindSystem::ProcessTurn()
 		                               })
 		                     : creature_mind::Wants {},
 		        .rested = needs != nullptr && needs->rested,
-		        .hands = HandsOf(entity),
+		        .hands = catchStep && catching ? creature_mind::HandsState::Done : HandsOf(entity),
+		        .objectInMap = WaitedForInMap(registry, mind.idle),
 		        .feelings = FeelingsOf(mind),
 		    };
 		    const auto commands = creature_mind::Think(mind.idle, senses, random);
@@ -985,6 +1046,13 @@ void CreatureMindSystem::ProcessTurn()
 			    mind.idle.gaveUp = true;
 		    }
 		    Order(registry, entity, commands);
+		    if (commands.douse.has_value())
+		    {
+			    if (Douse(entity, static_cast<entt::entity>(*commands.douse)))
+			    {
+				    mind.desireSeenTo = true;
+			    }
+		    }
 		    TakeEffect(entity, commands, *mind.desires);
 		    CountCompleted(entity, mind, commands, GetTables());
 		    if (commands.effect != creature_mind::Effect::None)
@@ -1254,7 +1322,12 @@ bool CreatureMindSystem::Replan(entt::entity creature, creature_mind::Activity a
 	{
 		return false;
 	}
-	if (Locator::creatureLocomotionSystem::has_value())
+	// It stops walking, unless a catch it has started is turning it to face what it catches: changing what it does
+	// leaves a catch to its body
+	// TODO(physics): whether the game's stopping cuts short the turn a catch starts with wasn't traced
+	const bool catching =
+	    Locator::creatureObjectActionSystem::has_value() && Locator::creatureObjectActionSystem::value().IsCatching(creature);
+	if (Locator::creatureLocomotionSystem::has_value() && !catching)
 	{
 		Locator::creatureLocomotionSystem::value().Stop(creature);
 	}
@@ -1371,18 +1444,110 @@ void CreatureMindSystem::ForceCatch(entt::entity creature, entt::entity object)
 	}
 	if (const auto action = creature_mind_tables::FindAction(*tables, k_CatchAction))
 	{
-		mind->planner.current =
-		    creature_planner::Plan {.desire = Desire::Play, .action = *action, .object = entt::to_integral(object)};
+		mind->planner.current = creature_planner::Plan {.desire = Desire::Play,
+		                                                .action = *action,
+		                                                .object = entt::to_integral(object),
+		                                                .goalUsefulness = creature_planner::k_ForcedScore,
+		                                                .actionPriority = creature_planner::k_ForcedScore,
+		                                                .priority = creature_planner::k_ForcedScore};
 		mind->planActive = true;
 		mind->planSerial = mind->idle.serial;
 		mind->agendaSeen = mind->idle.serial;
 		mind->satisfiedByEffect = false;
+		mind->desireSeenTo = false;
 	}
 	// Having decided to play, the desires that go against it are held back
 	if (mind->desires.has_value())
 	{
 		creature_learning::SuppressOpposed(*mind->desires, Desire::Play, tables->dependencies, k_TurnsPerSecond);
 	}
+}
+
+bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivity& forced)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	auto* body = mind != nullptr ? registry.TryGet<CreatureAnimation>(creature) : nullptr;
+	const auto* tables = GetTables();
+	if (mind == nullptr || body == nullptr || tables == nullptr || !mind->learnt.has_value() || !mind->desires.has_value())
+	{
+		return false;
+	}
+	const auto action = creature_mind_tables::FindAction(*tables, forced.action);
+	if (!action.has_value())
+	{
+		return false;
+	}
+	// What it was doing stops as a failure, whatever comes of the new plan; a reaction it was in has been ended by
+	// whatever forces the plan
+	if (Locator::creatureObjectActionSystem::has_value() &&
+	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
+	{
+		Locator::creatureObjectActionSystem::value().Cancel(creature);
+	}
+	Abandon(*mind);
+	ReleaseCast(creature);
+	const auto toNumber = [](std::optional<entt::entity> entity) {
+		return entity.has_value() ? std::optional(entt::to_integral(*entity)) : std::nullopt;
+	};
+	const auto actionObject = forced.actionObject != entt::null ? toNumber(forced.actionObject) : std::nullopt;
+	const creature_plan_actions::Situation situation {
+	    .instrument = toNumber(forced.instrument),
+	    .handFull = registry.AllOf<CreatureHeldObject>(creature),
+	};
+	auto built = PlanAgenda(creature, *action, actionObject, situation);
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} is made to {} on {}: {}", entt::to_integral(creature), forced.action,
+	                    actionObject.value_or(0), built.has_value() ? "planned" : "can't be planned");
+	if (!built.has_value())
+	{
+		// The plan couldn't be made: it is left doing nothing, to decide afresh
+		if (Locator::creatureLocomotionSystem::has_value())
+		{
+			Locator::creatureLocomotionSystem::value().Stop(creature);
+		}
+		body->body = {};
+		creature_mind::Plan(mind->idle, creature_mind::Activity::None, {});
+		return false;
+	}
+	auto& [executor, agenda] = *built;
+	if (!Replan(creature, executor->activity, std::move(agenda)))
+	{
+		return false;
+	}
+	mind->planner.current = creature_planner::Plan {
+	    .desire = forced.desire,
+	    .action = *action,
+	    .object = actionObject,
+	    .goalUsefulness = creature_planner::k_ForcedScore,
+	    .actionPriority = creature_planner::k_ForcedScore,
+	    .priority = creature_planner::k_ForcedScore,
+	    .activityObject = toNumber(forced.activityObject),
+	    .instrument = situation.instrument,
+	};
+	mind->planActive = true;
+	mind->planSerial = mind->idle.serial;
+	mind->agendaSeen = mind->idle.serial;
+	mind->satisfiedByEffect = false;
+	mind->desireSeenTo = false;
+	// It is remembered for the player's feedback, unless nothing says why it wants what the plan serves
+	auto& desire = (*mind->desires)[forced.desire];
+	if (creature_learning::RemembersPlan(desire))
+	{
+		const auto& info = tables->actions[*action];
+		creature_learning::Remember(mind->learnt->contexts,
+		                            {
+		                                .action = *action,
+		                                .desire = forced.desire,
+		                                .object = actionObject,
+		                                .belief = actionObject.has_value()
+		                                              ? BeliefOf(registry, static_cast<entt::entity>(*actionObject), creature)
+		                                              : std::nullopt,
+		                                .learnable = info.learnable,
+		                                .windowSeconds = info.learningWindowSeconds,
+		                            });
+	}
+	creature_learning::SuppressOpposed(*mind->desires, forced.desire, tables->dependencies, k_TurnsPerSecond);
+	return true;
 }
 
 void CreatureMindSystem::AbandonAction(entt::entity creature)

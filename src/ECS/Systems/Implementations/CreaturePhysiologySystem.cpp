@@ -25,7 +25,6 @@
 #include "3D/CreatureBody.h"
 #include "3D/DayNightClock.h"
 #include "3D/LandIslandInterface.h"
-#include "3D/SkyInterface.h"
 #include "Creature/CreaturePhysiology.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
@@ -36,6 +35,7 @@
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "Graphics/Texture2D.h"
@@ -174,7 +174,8 @@ void StartNeeds(CreatureNeeds& needs, const physiology::Species& species)
 {
 	if (!needs.started)
 	{
-		needs.needs = physiology::Start(species);
+		needs.needs = needs.kept.has_value() ? physiology::Start(species, *needs.kept) : physiology::Start(species);
+		needs.kept.reset();
 		needs.started = true;
 	}
 }

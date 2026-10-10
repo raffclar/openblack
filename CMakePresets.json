@@ -15,6 +15,7 @@
           "type": "FILEPATH",
           "value": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
         },
+        "VCPKG_OVERLAY_PORTS": "${sourceDir}/vcpkg-overlay-ports",
         "OPENBLACK_USE_VCPKG": true
       },
       "environment": {
@@ -39,6 +40,7 @@
           "type": "FILEPATH",
           "value": "$env{ANDROID_NDK_HOME}"
         },
+        "VCPKG_OVERLAY_PORTS": "${sourceDir}/vcpkg-overlay-ports",
         "OPENBLACK_USE_VCPKG": true,
         "VCPKG_TARGET_ANDROID": true,
         "ANDROID_PLATFORM": "android-21"
@@ -61,6 +63,7 @@
           "type": "FILEPATH",
           "value": "${sourceDir}/CMakeModules/ios.toolchain.cmake"
         },
+        "VCPKG_OVERLAY_PORTS": "${sourceDir}/vcpkg-overlay-ports",
         "OPENBLACK_USE_VCPKG": true
       },
       "environment": {
@@ -81,6 +84,7 @@
           "type": "FILEPATH",
           "value": "$env{EMSDK}/cmake/Modules/Platform/Emscripten.cmake"
         },
+        "VCPKG_OVERLAY_PORTS": "${sourceDir}/vcpkg-overlay-ports",
         "OPENBLACK_USE_VCPKG": true,
         "VCPKG_TARGET_TRIPLET": "wasm32-emscripten"
       },

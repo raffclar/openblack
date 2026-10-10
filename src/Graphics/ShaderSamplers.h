@@ -61,6 +61,10 @@ struct Sampler
 /// and its compiler keeps only the samplers the shader reads. Nothing when the binary isn't a shader this can read.
 [[nodiscard]] std::optional<std::vector<Sampler>> ReadSpirvSamplers(std::span<const uint8_t> binary);
 
+/// The bytes of uniforms a shader's draw uploads, from its bgfx binary compiled for Vulkan (SPIR-V): every uniform it
+/// declares, whole arrays included, whatever the draw sets. Nothing when the binary isn't a shader this can read.
+[[nodiscard]] std::optional<uint16_t> ReadSpirvUniformBufferSize(std::span<const uint8_t> binary);
+
 /// The default texture for a sampler of the given kind: white, so that an unset texture modulates nothing. A 1D
 /// sampler reads a 2D texture (bgfx has no 1D textures), a cube array reads the cube and an unknown kind the 2D one.
 [[nodiscard]] DefaultTexture DefaultTextureFor(Dimension dimension) noexcept;

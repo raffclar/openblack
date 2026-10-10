@@ -28,6 +28,7 @@
 #include "3D/MapCoords.h"
 #include "Animals/AnimalAnimation.h"
 #include "Animals/AnimalRules.h"
+#include "Animals/BirdRules.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
@@ -38,11 +39,14 @@
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/Temple.h"
+#include "ECS/Components/TempleExterior.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -70,9 +74,6 @@ constexpr auto k_TurnMilliseconds =
 /// Game turns a second
 constexpr float k_TurnsPerSecond = 1000.0f / static_cast<float>(k_TurnMilliseconds);
 constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
-/// The miracles' doves and bats tilt half a radian into a turn, easing into it over half a second
-constexpr float k_SpellBirdBankAngle = 0.5f;
-constexpr float k_SpellBirdTimeToBank = 0.5f;
 /// A spell wolf eases into its tilt over a second, tilting by its speed times its turn, to at most half a radian
 constexpr float k_WolfTimeToBank = 1.0f;
 constexpr float k_WolfBankPerSpeedTurn = 0.5f / 20000.0f;
@@ -100,6 +101,12 @@ constexpr uint32_t k_BirthAgeMin = 5;
 constexpr int k_FollowInFormation = 3;
 /// The prey brought down plays its fall the turn after, and waits for it from the turn after that
 constexpr int k_FallStartsAfter = 2;
+/// The game's numbers for the animals' states whose table says whether an animal sees to its needs in them first
+constexpr size_t k_TableMoveToPos = 1;
+constexpr size_t k_TableStartWander = 31;
+constexpr size_t k_TableDecideWhatToDo = 43;
+constexpr size_t k_TableSpecialMoveToPos = 44;
+constexpr size_t k_TableFollowFlock = 45;
 /// The clip a villager brought down plays before it is eaten
 constexpr auto k_VillagerAttacked = static_cast<AnimId>(206);
 
@@ -130,23 +137,7 @@ uint32_t RandomWhole(uint32_t n)
 
 bool IsBird(AnimalInfo type)
 {
-	switch (type)
-	{
-	case AnimalInfo::Crow:
-	case AnimalInfo::Dove:
-	case AnimalInfo::Swallow:
-	case AnimalInfo::Pigeon:
-	case AnimalInfo::Seagull:
-	case AnimalInfo::Bat:
-	case AnimalInfo::Vulture:
-	case AnimalInfo::CitadelDove:
-	case AnimalInfo::CitadelBat:
-	case AnimalInfo::SpellDove:
-	case AnimalInfo::SpellBat:
-		return true;
-	default:
-		return false;
-	}
+	return animals::birds::IsBird(type);
 }
 
 uint16_t SpeedStateOf(const GAnimalInfo& info, size_t index)
@@ -182,9 +173,13 @@ bool OnMap(glm::vec2 point)
 }
 
 /// The clip of a state: the miracle's doves always flap their clip and its bats theirs; its wolves stand to decide,
-/// leap, settle down to eat and eat, and run otherwise
+/// leap, settle down to eat and eat, and run otherwise; the land's birds choose a flying clip afresh
 AnimId ClipFor(AnimalInfo type, AnimalState state)
 {
+	if (animals::birds::IsLandBird(type))
+	{
+		return animals::birds::FlyingClip(type, RandomWhole);
+	}
 	switch (type)
 	{
 	case AnimalInfo::SpellDove:
@@ -273,13 +268,108 @@ void SyncWorld(Animal& animal)
 	animal.position = {xz.x, Ground(xz) + animal.height, xz.y};
 	animal.heading = gutils::ConvertGameAngleTo3D(animal.move.angle);
 }
+
+/// Whether an animal sees to its needs before it does what its state does, by the game's table of the animals' states
+bool SeesToNeedsIn(AnimalState state)
+{
+	size_t row = 0;
+	switch (state)
+	{
+	case AnimalState::DecideWhatToDo:
+		row = k_TableDecideWhatToDo;
+		break;
+	case AnimalState::SpecialMoveToPos:
+		row = k_TableSpecialMoveToPos;
+		break;
+	case AnimalState::FollowFlock:
+		row = k_TableFollowFlock;
+		break;
+	case AnimalState::StartWander:
+		row = k_TableStartWander;
+		break;
+	case AnimalState::MoveToPos:
+		row = k_TableMoveToPos;
+		break;
+	default:
+		return false;
+	}
+	return Locator::infoConstants::value().animalStateTable.at(row).field0xa4 != 0;
+}
 } // namespace
 
 entt::entity AnimalSystem::CreateFlock(glm::vec2 centre, float domainRadius, float flockDistance)
 {
 	auto& registry = EntityRegistry();
 	const auto entity = registry.Create();
-	registry.Assign<Flock>(entity, Flock {.centre = centre, .domainRadius = domainRadius, .flockDistance = flockDistance});
+	registry.Assign<Flock>(
+	    entity, Flock {.centre = centre, .domainRadius = domainRadius, .flockDistance = flockDistance, .made = _flocksMade++});
+	return entity;
+}
+
+entt::entity AnimalSystem::CreateScriptFlock(int32_t id, glm::vec2 position, glm::vec2 home, float reach, float flockDistance)
+{
+	// Made where the script says, then its home moved to where it says; with no reach given it takes the game's
+	const auto entity = CreateFlock(position, reach != 0.0f ? reach : animals::birds::k_DefaultFlockReach, flockDistance);
+	auto& flockData = EntityRegistry().Get<Flock>(entity);
+	flockData.scriptId = id;
+	flockData.centre = home;
+	return entity;
+}
+
+entt::entity AnimalSystem::FindScriptFlock(int32_t id) const
+{
+	// The latest made with the number
+	entt::entity found = entt::null;
+	uint32_t latest = 0;
+	EntityRegistry().Each<const Flock>([&](entt::entity entity, const Flock& flockData) {
+		if (flockData.scriptId == id && (found == entt::null || flockData.made > latest))
+		{
+			found = entity;
+			latest = flockData.made;
+		}
+	});
+	return found;
+}
+
+entt::entity AnimalSystem::CreateBird(AnimalInfo type, glm::vec2 position, uint32_t age, entt::entity flockEntity)
+{
+	auto& registry = EntityRegistry();
+	if (!animals::birds::IsLandBird(type) || !OnMap(position))
+	{
+		return entt::null;
+	}
+	const auto& info = InfoOf(type);
+	const bool joins = registry.Valid(flockEntity) && registry.AllOf<Flock>(flockEntity);
+	const auto bornAt = animals::birds::ScriptBirdAge(age, joins, RandomWhole);
+	// The day it was born a random part of its starting age back, then its size for its age
+	(void)RandomWhole(info.startAge / 2);
+	const float scale = animals::BirthScale(bornAt, info.grownUpAge, info.ageToScale.values, Random);
+	// It flies at its kind's height over the land, facing along +x
+	const float height = info.altitudeNormal;
+	const glm::vec3 point(position.x, Ground(position) + height, position.y);
+	const auto entity =
+	    ecs::archetypes::AnimalArchetype::Create(type, point, gutils::ConvertGameAngleTo3D(0), scale, PlayerNames::NEUTRAL);
+	auto& animal = registry.Get<Animal>(entity);
+	animal.height = height;
+	animal.goalHeight = height;
+	animal.move.position = Fixed(position);
+	animal.move.goal = animal.move.position;
+	animal.move.angle = 0;
+	animal.move.speed = SpeedStateOf(info, 0);
+	SetTopState(animal, AnimalState::DecideWhatToDo);
+	SyncWorld(animal);
+	animal.previousPosition = animal.position;
+	animal.previousHeading = animal.heading;
+	// Every bird is drawn in the brightest of the land's light, wherever it is
+	registry.Assign<AnimalPose>(entity, AnimalPose {.light = AnimalLight::BrightestLand});
+	// Alone, it is a flock of its own about where it is, as far as its kind wanders
+	if (!joins)
+	{
+		flockEntity = CreateFlock(position, static_cast<float>(info.domainRadius),
+		                          static_cast<float>(static_cast<int32_t>(info.flockDistance)));
+	}
+	animal.flock = flockEntity;
+	registry.Get<Flock>(flockEntity).members.push_back(entity);
 	return entity;
 }
 
@@ -365,18 +455,18 @@ void AnimalSystem::SetupMoveTo(Animal& animal, glm::vec2 goal, float goalHeight,
 void AnimalSystem::Banked(Animal& animal, const animals::Turn& turn)
 {
 	const bool wolf = animal.type == AnimalInfo::SpellWolf;
-	const bool spellBird = animal.type == AnimalInfo::SpellDove || animal.type == AnimalInfo::SpellBat;
-	if (!wolf && !spellBird)
+	if (!wolf && !IsBird(animal.type))
 	{
 		return;
 	}
-	const float timeToBank = wolf ? k_WolfTimeToBank : k_SpellBirdTimeToBank;
+	const auto birdBank = animals::birds::BankOf(animal.type);
+	const float timeToBank = wolf ? k_WolfTimeToBank : birdBank.seconds;
 	if (turn.direction == 0)
 	{
 		animal.bank.SetTarget(0.0f, 0.0f, timeToBank);
 		return;
 	}
-	float tilt = k_SpellBirdBankAngle;
+	float tilt = birdBank.angle;
 	if (wolf)
 	{
 		tilt =
@@ -405,13 +495,14 @@ bool AnimalSystem::MoveTo3D(Animal& animal)
 glm::vec2 AnimalSystem::RandomPos(const Animal& animal, glm::vec2 centre, float inner, float outer) const
 {
 	const auto here = Metres(animal.move.position);
-	const bool overLandOnly = animal.type == AnimalInfo::SpellDove || animal.type == AnimalInfo::SpellBat;
+	// Every bird, seagulls too, keeps over the land's blocks
+	const bool overLandOnly = IsBird(animal.type);
 	const auto hasLand = [](glm::vec2 point) {
 		return Locator::terrainSystem::has_value() &&
 		       Locator::terrainSystem::value().FindCell(glm::u16vec2(map_coords::CellOf(point))) != nullptr;
 	};
-	// A point it may go to: on the map, one it can reach without circling, and for the doves and bats, over the land
-	// all the way. (The game also turns down a point the map's walls block; openblack's map has none of them.)
+	// A point it may go to: on the map, one it can reach without circling, and for a bird, over the land all the way. (The game
+	// also turns down a point the map's walls block; openblack's map has none of them.)
 	const auto valid = [&](glm::vec2 point) {
 		return OnMap(point) &&
 		       animals::OutsideTurningCircles(here, animal.move.angle, animal.move.speed, TurnAngleOf(animal), point) &&
@@ -490,6 +581,12 @@ void AnimalSystem::ProcessTurn()
 		}
 		if (IsBird(animal.type))
 		{
+			// Seeing to its needs, a flock's leader counts the turns it has kept to its leg
+			if (auto* flockData = registry.TryGet<Flock>(animal.flock);
+			    flockData != nullptr && SeesToNeedsIn(animal.state) && LeaderOf(animal.flock) == entity)
+			{
+				++flockData->turnsOnLeg;
+			}
 			Bird(entity, animal);
 		}
 		else if (registry.AllOf<SpellWolf>(entity))
@@ -499,6 +596,7 @@ void AnimalSystem::ProcessTurn()
 	}
 	ProcessEaten();
 	ProcessFading();
+	ProcessTempleBirds();
 	registry.SetDirty();
 }
 
@@ -552,9 +650,15 @@ void AnimalSystem::Bird(entt::entity entity, Animal& animal)
 	}
 }
 
-void AnimalSystem::SpecialMoveToPos(entt::entity /*entity*/, Animal& animal)
+void AnimalSystem::SpecialMoveToPos(entt::entity entity, Animal& animal)
 {
 	const auto* flockData = EntityRegistry().TryGet<const Flock>(animal.flock);
+	// A land bird's leader on its way, its flock following, may give the leg up instead of flying on
+	if (flockData != nullptr && flockData->followState == AnimalState::FollowFlock && LeaderOf(animal.flock) == entity &&
+	    LeaderGivesUpLeg(entity, animal))
+	{
+		return;
+	}
 	if (MoveTo3D(animal))
 	{
 		// There, the flock's state after a special move takes over its final state
@@ -569,7 +673,36 @@ void AnimalSystem::SpecialMoveToPos(entt::entity /*entity*/, Animal& animal)
 	if (animal.move.stage == animals::MoveStage::StepThrough &&
 	    glm::distance(Metres(animal.move.position), Metres(animal.move.goal)) <= k_SpecialMoveSlowing)
 	{
-		animal.move.speed = SpeedStateOf(InfoOf(animal.type), 0);
+		SetSpeed(animal, 0);
+	}
+}
+
+bool AnimalSystem::LeaderGivesUpLeg(entt::entity /*entity*/, Animal& animal)
+{
+	auto* flockData = EntityRegistry().TryGet<Flock>(animal.flock);
+	if (!animals::birds::IsLandBird(animal.type) || flockData == nullptr ||
+	    !animals::birds::LeaderPicksNewLeg(flockData->turnsOnLeg, InfoOf(animal.type).stayTime))
+	{
+		return false;
+	}
+	// Its time up, it picks its next leg next turn
+	flockData->turnsOnLeg = 0;
+	SetTopState(animal, AnimalState::StartWander);
+	return true;
+}
+
+void AnimalSystem::SetSpeed(Animal& animal, size_t speed)
+{
+	animal.move.speed = SpeedStateOf(InfoOf(animal.type), speed);
+	// A land bird chooses its flying clip afresh, starting a new one from its beginning
+	if (animals::birds::IsLandBird(animal.type))
+	{
+		const auto clip = ClipFor(animal.type, animal.state);
+		if (clip != animal.animation)
+		{
+			animal.animation = clip;
+			animal.clipPlace = 0;
+		}
 	}
 }
 
@@ -584,7 +717,11 @@ void AnimalSystem::DecideWhatToDo(entt::entity entity, Animal& animal)
 	const auto leaderEntity = LeaderOf(animal.flock);
 	if (leaderEntity == entity)
 	{
-		// The leader's next leg, at once
+		// A land bird's leader whose stay is up picks its next leg next turn; otherwise it picks it at once
+		if (LeaderGivesUpLeg(entity, animal))
+		{
+			return;
+		}
 		SetTopState(animal, AnimalState::StartWander);
 		StartWander(entity, animal);
 		return;
@@ -597,7 +734,7 @@ void AnimalSystem::DecideWhatToDo(entt::entity entity, Animal& animal)
 	const auto& leader = registry.Get<const Animal>(leaderEntity);
 	const auto point = RandomPos(animal, Metres(leader.move.position), 0.0f, flockData->flockDistance);
 	SetupMoveTo(animal, point, leader.height, AnimalState::DecideWhatToDo);
-	animal.move.speed = SpeedStateOf(InfoOf(animal.type), 0);
+	SetSpeed(animal, 0);
 	SetState(animal, flockData->followState);
 }
 
@@ -610,14 +747,15 @@ void AnimalSystem::StartWander(entt::entity entity, Animal& animal)
 		return;
 	}
 	const auto& info = InfoOf(animal.type);
-	animal.move.speed = SpeedStateOf(info, 0);
+	SetSpeed(animal, 0);
 	// A point about where the flock was made, between its kind's inner radius and the flock's reach
 	const auto point =
 	    RandomPos(animal, flockData->centre, static_cast<float>(info.domainInnerRadius), flockData->domainRadius);
 	// Higher or lower than its last goal by up to the variance; outside its kind's band about its normal height, back to
 	// the normal height
 	const float height = (animal.goalHeight + info.altitudeVariance) - Random(info.altitudeVariance + info.altitudeVariance);
-	const float base = info.altitudeNormal;
+	// About its flock's own height (a temple's), or its kind's
+	const float base = animals::birds::BaseHeight(flockData->height, info.altitudeNormal);
 	const float goalHeight = base + info.altitudeMin < height && height < base + info.altitudeMax ? height : base;
 	SetupMoveTo(animal, point, goalHeight, AnimalState::DecideWhatToDo);
 	SetState(animal, AnimalState::SpecialMoveToPos);
@@ -637,8 +775,22 @@ void AnimalSystem::FollowFlock(entt::entity entity, Animal& animal)
 		DecideWhatToDo(entity, animal);
 		return;
 	}
-	if (flockData->followMode != k_FollowInFormation || !MoveTo3D(animal))
+	if (flockData->followMode != k_FollowInFormation)
 	{
+		return;
+	}
+	if (!MoveTo3D(animal))
+	{
+		// A land bird following chooses its flying clip afresh once it has been following as long as its clip plays
+		if (animals::birds::IsLandBird(animal.type) && animal.turnsInState * k_TurnMilliseconds >= PlayTimeOf(animal.animation))
+		{
+			const auto clip = ClipFor(animal.type, animal.state);
+			if (clip != animal.animation)
+			{
+				animal.animation = clip;
+				animal.clipPlace = 0;
+			}
+		}
 		return;
 	}
 	// There: on to its place in the formation, by its place in the flock, at the leader's height
@@ -648,6 +800,105 @@ void AnimalSystem::FollowFlock(entt::entity entity, Animal& animal)
 	const auto goal =
 	    animals::FormationGoal(Metres(leader.move.position), Metres(animal.move.position), animals::FormationSlotOf(place));
 	SetupMoveTo(animal, goal, leader.height, AnimalState::DecideWhatToDo);
+}
+
+// The temples' birds
+
+void AnimalSystem::ProcessTempleBirds()
+{
+	auto& registry = EntityRegistry();
+	// A bird goes at once, out of its flock, which stays though it is empty
+	const auto vanish = [&registry](entt::entity bird, Flock& flockData) {
+		std::erase(flockData.members, bird);
+		registry.Destroy(bird);
+	};
+	// A temple gone takes its flock with it, every bird at once
+	std::vector<entt::entity> orphaned;
+	registry.Each<const Flock>([&registry, &orphaned](entt::entity entity, const Flock& flockData) {
+		if (flockData.temple != entt::null && !(registry.Valid(flockData.temple) && registry.AllOf<Temple>(flockData.temple)))
+		{
+			orphaned.push_back(entity);
+		}
+	});
+	for (const auto entity : orphaned)
+	{
+		auto& flockData = registry.Get<Flock>(entity);
+		for (const auto bird : std::vector(flockData.members))
+		{
+			vanish(bird, flockData);
+		}
+		registry.Destroy(entity);
+	}
+
+	// Each temple's flock is seen to every hundred turns of the game
+	if (!Locator::time::has_value() || !Locator::alignmentSystem::has_value() ||
+	    Locator::time::value().GetTurn() % animals::birds::k_TempleFlockEvery != 0)
+	{
+		return;
+	}
+	const auto most = Locator::infoConstants::value().citadelHeart.maxFlockCount;
+	std::vector<entt::entity> temples;
+	registry.Each<const Temple, const Transform>(
+	    [&temples](entt::entity entity, const Temple&, const Transform&) { temples.push_back(entity); });
+	for (const auto templeEntity : temples)
+	{
+		const auto& temple = registry.Get<const Temple>(templeEntity);
+		const auto& transform = registry.Get<const Transform>(templeEntity);
+		const glm::vec2 home {transform.position.x, transform.position.z};
+		// Doves for a good player, bats for an evil one, as many as how far the player is from neutral. openblack's
+		// temples stand built from the start.
+		const float alignment = Locator::alignmentSystem::value().GetPlayerAlignment(temple.owner);
+		const auto kind = animals::birds::TempleBirdKind(alignment);
+		const auto count = animals::birds::TempleBirdCount(alignment, most, true);
+
+		// Its flock, made the first time, about the temple
+		auto* templeBirds = registry.TryGet<TempleBirds>(templeEntity);
+		if (templeBirds == nullptr)
+		{
+			templeBirds = &registry.Assign<TempleBirds>(templeEntity);
+		}
+		if (!registry.Valid(templeBirds->flock) || !registry.AllOf<Flock>(templeBirds->flock))
+		{
+			templeBirds->flock = CreateFlock(home, animals::birds::k_TempleFlockReach, animals::birds::k_TempleFlockDistance);
+			registry.Get<Flock>(templeBirds->flock).temple = templeEntity;
+		}
+		const auto flockEntity = templeBirds->flock;
+		bool changed = false;
+		// Those of the other kind go at once, as the player crosses from good to evil or back
+		for (const auto bird : std::vector(registry.Get<Flock>(flockEntity).members))
+		{
+			if (registry.Get<const Animal>(bird).type != kind)
+			{
+				vanish(bird, registry.Get<Flock>(flockEntity));
+				changed = true;
+			}
+		}
+		// Then one bird more or one fewer: born over the temple, or the newest gone
+		auto& members = registry.Get<Flock>(flockEntity).members;
+		switch (animals::birds::StepTowards(static_cast<uint32_t>(members.size()), count))
+		{
+		case animals::birds::TempleFlockStep::AddOne:
+			changed = CreateBird(kind, home, 0, flockEntity) != entt::null || changed;
+			break;
+		case animals::birds::TempleFlockStep::RemoveOne:
+			vanish(members.back(), registry.Get<Flock>(flockEntity));
+			changed = true;
+			break;
+		case animals::birds::TempleFlockStep::None:
+			break;
+		}
+		// They fly about the temple's height, taken again as the temple's model or the flock changes
+		const auto* exterior = registry.TryGet<const TempleExterior>(templeEntity);
+		const auto look = exterior != nullptr ? exterior->morphed : std::nullopt;
+		const auto* mesh = registry.TryGet<const Mesh>(templeEntity);
+		const auto& meshes = Locator::resources::value().GetMeshes();
+		if ((changed || look != templeBirds->look) && mesh != nullptr && meshes.Contains(mesh->id))
+		{
+			templeBirds->look = look;
+			registry.Get<Flock>(flockEntity).height =
+			    animals::birds::TempleFlockHeight(transform.scale.y, meshes.Handle(mesh->id)->GetBoundingBox().Size().y);
+		}
+	}
 }
 
 // The wolves
@@ -839,7 +1090,7 @@ bool AnimalSystem::IsHuntingTargetValid(entt::entity wolf, const Animal& animal,
 	{
 		return false;
 	}
-	if (const auto* villager = registry.TryGet<const Villager>(prey); villager != nullptr && villager->health == 0)
+	if (const auto* villager = registry.TryGet<const Villager>(prey); villager != nullptr && villager->life <= 0.0f)
 	{
 		return false;
 	}
@@ -960,7 +1211,7 @@ void AnimalSystem::BringDown(entt::entity wolf, entt::entity prey)
 	if (auto* villager = registry.TryGet<Villager>(prey))
 	{
 		const float before = ecs::world_objects::LifeOf(prey);
-		villager->health = static_cast<uint32_t>(std::lround(flock_rules::k_DownedLife * 100.0f));
+		villager->life = flock_rules::k_DownedLife;
 		ecs::world_objects::CountInjury(prey, before, flock_rules::k_DownedLife);
 		if (auto* wallHug = registry.TryGet<WallHug>(prey))
 		{
@@ -1031,7 +1282,7 @@ entt::entity AnimalSystem::FindPrey(entt::entity wolf, const Animal& animal)
 		cells[{cell.x, cell.y}].emplace_back(entity, facts);
 	};
 	registry.Each<const Villager, const Transform>([&](entt::entity entity, const Villager& villager, const Transform& t) {
-		add(entity, t, {.isVillager = true, .helpless = villager.health == 0 || registry.AllOf<BeingEaten>(entity)});
+		add(entity, t, {.isVillager = true, .helpless = villager.life <= 0.0f || registry.AllOf<BeingEaten>(entity)});
 	});
 	registry.Each<const Animal, const Transform>([&](entt::entity entity, const Animal& other, const Transform& t) {
 		if (entity != wolf)
@@ -1249,6 +1500,12 @@ void AnimalSystem::ProcessDeath(entt::entity entity, Animal& animal)
 		}
 		LeaveFlock(entity, animal);
 		return;
+	}
+	// A land bird lies dead in its kind's clip
+	if (const auto clip = animals::birds::DeadClip(animal.type); clip.has_value() && animal.animation != *clip)
+	{
+		animal.animation = *clip;
+		animal.clipPlace = 0;
 	}
 	// Its time up, it goes. (The game lets out a puff of grey smoke as it goes; openblack doesn't draw that smoke yet.)
 	if (animal.deadTurns-- == 0)
@@ -1564,4 +1821,5 @@ void AnimalSystem::Reset()
 {
 	_drawTime = 0;
 	_turn = 0;
+	_flocksMade = 0;
 }

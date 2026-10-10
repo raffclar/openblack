@@ -53,6 +53,11 @@ public:
 	[[nodiscard]] virtual std::optional<entt::entity> ObjectUnderCursor() const = 0;
 	/// Whether a point is in a player's influence
 	[[nodiscard]] virtual bool InInfluence(PlayerNames player, glm::vec3 point) const = 0;
+	/// Whether the hand, at its point, is in its player's influence: while it keeps any of it past the border it is
+	[[nodiscard]] virtual bool HandInInfluence(PlayerNames player, glm::vec3 hand) const { return InInfluence(player, hand); }
+	/// The hand let go of what it holds onto the land: what it keeps of its player's influence past the border wanes, or
+	/// comes back, as for one more turn
+	virtual void HeldThingUsedOnLand(PlayerNames /*player*/) {}
 	/// Whether a point is on the map
 	[[nodiscard]] virtual bool InBounds(glm::vec3 point) const = 0;
 	/// The flat normal of the land at a point
@@ -98,12 +103,16 @@ public:
 	virtual void RemoveReactions(entt::entity initiator, Reaction type) = 0;
 	/// A burning thing starts moving, into a hand (or it is a villager) or not
 	virtual void FireStartedMoving(entt::entity object, bool inHand) = 0;
+	/// A thing goes into the hand from where it stood: a firefly hiding exactly there is caught, for its reward
+	virtual void CatchFirefly(entt::entity object) = 0;
 	/// A held thing catches from the fires in its cell
 	virtual void HeatHeld(entt::entity object) = 0;
 	/// A sound of the in-game bank where something is
 	virtual void PlaySample(uint32_t sample, glm::vec3 position) = 0;
 	/// The hand taps a thing at a point, for a player, as a rock breaks when tapped; whether the thing took the tap
 	virtual bool TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player) = 0;
+	/// Whether the hand's player holds their creature's leash loose in the hand, tied to nothing
+	[[nodiscard]] virtual bool HoldsLooseLeash() const = 0;
 	/// A local random number below a count
 	[[nodiscard]] virtual uint32_t LocalRandom(uint32_t count) = 0;
 	/// A villager goes into the hand: it remembers what it was doing and is held

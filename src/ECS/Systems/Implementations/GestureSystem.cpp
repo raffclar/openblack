@@ -21,6 +21,8 @@
 #include <spdlog/spdlog.h>
 
 #include "Creature/LeashRules.h"
+#include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -157,6 +159,7 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 	if (info != nullptr)
 	{
 		const auto& spellSystem = info->spellSystem;
+		context.specialMoveGesture = spellSystem.creatureSpecialMoveGesture;
 		context.leashGesture = spellSystem.leashSelectionStart;
 		context.leashGestures = spellSystem.leashSelectionGestures;
 	}
@@ -217,6 +220,31 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 			}
 			state.worn = state.leashed ? leashes.TypeOf(*creature) : LeashType::None;
 			context.creature = state;
+		}
+	}
+	// The player's creature in a duel waits for its special move and the fight miracles it knows, while it takes moves
+	if (const auto fighter =
+	        Locator::creatureFightSystem::has_value() ? Locator::creatureFightSystem::value().PlayersFighter() : std::nullopt)
+	{
+		auto& state = context.creature.has_value() ? *context.creature : context.creature.emplace();
+		const auto& registry = Locator::entitiesRegistry::value();
+		const auto* fighting = registry.TryGet<const ecs::components::CreatureFighting>(*fighter);
+		state.fighting = true;
+		state.takesFightMoves = fighting != nullptr && fighting->fighter.queue.Size() < creature_fight::MoveQueue::k_Capacity;
+		const auto* mind = registry.TryGet<const ecs::components::CreatureMindState>(*fighter);
+		const auto* knowledge = mind != nullptr && mind->learnt.has_value() ? &mind->learnt->knowledge : nullptr;
+		if (info != nullptr && knowledge != nullptr)
+		{
+			// The seeds marked for fights, by the miracle each casts unpowered
+			for (const auto& seed : info->spellSeed)
+			{
+				const auto magic = seed.magicTypes.front();
+				const auto index = static_cast<size_t>(magic);
+				if (seed.unknown0x17C != 0 && index < knowledge->miraclesKnown.size() && knowledge->miraclesKnown[index])
+				{
+					state.fightMiracles.push_back({.gesture = seed.gesture, .magic = magic});
+				}
+			}
 		}
 	}
 	context.pickerOpen = _picker.open;
@@ -431,6 +459,18 @@ void GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 		break;
 	case Purpose::ClosePicker:
 		_picker.Close();
+		break;
+	case Purpose::FightSpecialMove:
+		if (Locator::creatureFightSystem::has_value())
+		{
+			Locator::creatureFightSystem::value().GestureSpecialMove();
+		}
+		break;
+	case Purpose::FightMiracle:
+		if (Locator::creatureFightSystem::has_value())
+		{
+			Locator::creatureFightSystem::value().GestureSpell(request.magic);
+		}
 		break;
 	}
 

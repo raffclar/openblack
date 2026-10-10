@@ -80,6 +80,8 @@ struct CreatureObjectAction
 	};
 	std::array<glm::vec3, 4> catchHands {};
 	Catching catching {Catching::Ready};
+	/// Whether it has finished turning to face the thing, which it waits for only once
+	bool catchTurned {false};
 	/// How high the thing was against the hand at the last frame it was still in the physics
 	float catchHeight {0.5f};
 	/// Why it gave up, when it did
