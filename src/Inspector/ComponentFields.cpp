@@ -49,6 +49,7 @@
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Fixed.h"
+#include "ECS/Components/Flock.h"
 #include "ECS/Components/FlockSpell.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Footpath.h"
@@ -97,7 +98,6 @@
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptAnimation.h"
 #include "ECS/Components/ScriptControl.h"
-#include "ECS/Components/ScriptFlock.h"
 #include "ECS/Components/ScriptSpotVisual.h"
 #include "ECS/Components/SkinOverride.h"
 #include "ECS/Components/Sky.h"
@@ -172,19 +172,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Animal::heading>("heading")
 	    .Field<&components::Animal::life>("life")
 	    .Field<&components::Animal::deadTurns>("deadTurns");
-	Reflect<components::Flock>(context)
-	    .Field<&components::Flock::members>("members")
-	    .Field<&components::Flock::centre>("centre")
-	    .Field<&components::Flock::domainRadius>("domainRadius")
-	    .Field<&components::Flock::flockDistance>("flockDistance")
-	    .Field<&components::Flock::followState>("followState")
-	    .Field<&components::Flock::followMode>("followMode")
-	    .Field<&components::Flock::afterMove>("afterMove")
-	    .Field<&components::Flock::turnsOnLeg>("turnsOnLeg")
-	    .Field<&components::Flock::height>("height")
-	    .Field<&components::Flock::scriptId>("scriptId")
-	    .Field<&components::Flock::made>("made")
-	    .Field<&components::Flock::temple>("temple");
 	Reflect<components::TempleBirds>(context)
 	    .Field<&components::TempleBirds::flock>("flock")
 	    .Field<&components::TempleBirds::look>("look");
@@ -203,7 +190,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::AnimalPose>(context)
 	    .Field<&components::AnimalPose::bones>("bones")
 	    .Field<&components::AnimalPose::light>("light")
-	    .Field<&components::AnimalPose::alpha>("alpha");
+	    .Field<&components::AnimalPose::colour>("colour")
+	    .Field<&components::AnimalPose::alpha>("alpha")
+	    .Field<&components::AnimalPose::cutBelow>("cutBelow");
 	Reflect<components::BeingEaten>(context)
 	    .Field<&components::BeingEaten::hunter>("hunter")
 	    .Field<&components::BeingEaten::turns>("turns")
@@ -657,6 +646,23 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::Fixed>(context)
 	    .Field<&components::Fixed::boundingCenter>("boundingCenter")
 	    .Field<&components::Fixed::boundingRadius>("boundingRadius");
+	Reflect<components::Flock>(context)
+	    .Field<&components::Flock::place>("place")
+	    .Field<&components::Flock::members>("members")
+	    .Field<&components::Flock::domainRadius>("domainRadius")
+	    .Field<&components::Flock::flockDistance>("flockDistance")
+	    .Field<&components::Flock::calm>("calm")
+	    .Field<&components::Flock::followState>("followState")
+	    .Field<&components::Flock::followMode>("followMode")
+	    .Field<&components::Flock::afterMove>("afterMove")
+	    .Field<&components::Flock::turnsOnLeg>("turnsOnLeg")
+	    .Field<&components::Flock::height>("height")
+	    .Field<&components::Flock::scriptId>("scriptId")
+	    .Field<&components::Flock::made>("made")
+	    .Field<&components::Flock::temple>("temple");
+	Reflect<components::FlockMember>(context)
+	    .Field<&components::FlockMember::flock>("flock")
+	    .Field<&components::FlockMember::order>("order");
 	Reflect<components::FlockSpell>(context)
 	    .Field<&components::FlockSpell::flock>("flock")
 	    .Field<&components::FlockSpell::created>("created")
@@ -964,15 +970,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::InScript> {context};
 	Reflect<components::ScriptControlled> {context};
 	Reflect<components::ScriptMarker> {context};
-	Reflect<components::ScriptFlock>(context)
-	    .Field<&components::ScriptFlock::place>("place")
-	    .Field<&components::ScriptFlock::members>("members")
-	    .Field<&components::ScriptFlock::domainRadius>("domainRadius")
-	    .Field<&components::ScriptFlock::flockDistance>("flockDistance")
-	    .Field<&components::ScriptFlock::calm>("calm");
-	Reflect<components::ScriptFlockMember>(context)
-	    .Field<&components::ScriptFlockMember::flock>("flock")
-	    .Field<&components::ScriptFlockMember::order>("order");
 	Reflect<components::ScriptSpotVisual>(context).Field<&components::ScriptSpotVisual::effect>("effect");
 	Reflect<components::SkinOverride>(context)
 	    .Field<&components::SkinOverride::texture>("texture")

@@ -35,6 +35,7 @@
 #include "ECS/ClipSoundPlayer.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/CarriedByTornado.h"
+#include "ECS/Components/Flock.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
@@ -308,12 +309,23 @@ bool SeesToNeedsIn(AnimalState state)
 }
 } // namespace
 
+namespace
+{
+/// A newcomer goes first in a flock's line, so the first to join stays last, and leads
+void JoinLine(Flock& flock, entt::entity animal)
+{
+	flock.members.insert(flock.members.begin(), animal);
+}
+} // namespace
+
 entt::entity AnimalSystem::CreateFlock(glm::vec2 centre, float domainRadius, float flockDistance)
 {
 	auto& registry = EntityRegistry();
 	const auto entity = registry.Create();
-	registry.Assign<Flock>(
-	    entity, Flock {.centre = centre, .domainRadius = domainRadius, .flockDistance = flockDistance, .made = _flocksMade++});
+	registry.Assign<Flock>(entity, Flock {.place = map_coords::FromMetres(centre),
+	                                      .domainRadius = static_cast<uint16_t>(domainRadius),
+	                                      .flockDistance = static_cast<uint16_t>(flockDistance),
+	                                      .made = _flocksMade++});
 	return entity;
 }
 
@@ -323,7 +335,7 @@ entt::entity AnimalSystem::CreateScriptFlock(int32_t id, glm::vec2 position, glm
 	const auto entity = CreateFlock(position, reach != 0.0f ? reach : animals::birds::k_DefaultFlockReach, flockDistance);
 	auto& flockData = EntityRegistry().Get<Flock>(entity);
 	flockData.scriptId = id;
-	flockData.centre = home;
+	flockData.place = map_coords::FromMetres(home);
 	return entity;
 }
 
@@ -380,7 +392,7 @@ entt::entity AnimalSystem::CreateBird(AnimalInfo type, glm::vec2 position, uint3
 		                          static_cast<float>(static_cast<int32_t>(info.flockDistance)));
 	}
 	animal.flock = flockEntity;
-	registry.Get<Flock>(flockEntity).members.push_back(entity);
+	JoinLine(registry.Get<Flock>(flockEntity), entity);
 	return entity;
 }
 
@@ -395,8 +407,8 @@ entt::entity AnimalSystem::CreateScriptAnimal(AnimalInfo type, glm::vec2 positio
 	// Its own flock keeps it close about where it was made
 	auto& registry = EntityRegistry();
 	auto& flockData = registry.Get<Flock>(registry.Get<const Animal>(entity).flock);
-	flockData.domainRadius = k_ScriptAnimalFlockReach;
-	flockData.flockDistance = k_ScriptAnimalFlockDistance;
+	flockData.domainRadius = static_cast<uint16_t>(k_ScriptAnimalFlockReach);
+	flockData.flockDistance = static_cast<uint16_t>(k_ScriptAnimalFlockDistance);
 	// The script holds it still until it says otherwise
 	SetScriptState(entity, LivingStates::LivingInScript);
 	return entity;
@@ -418,7 +430,7 @@ void AnimalSystem::JoinFlock(entt::entity entity, entt::entity flockEntity)
 		return;
 	}
 	animal->flock = flockEntity;
-	registry.Get<Flock>(flockEntity).members.push_back(entity);
+	JoinLine(registry.Get<Flock>(flockEntity), entity);
 }
 
 bool AnimalSystem::SetScriptState(entt::entity entity, LivingStates state)
@@ -487,7 +499,7 @@ entt::entity AnimalSystem::CreateSpellAnimal(AnimalInfo type, glm::vec2 position
 	}
 	if (auto* flockData = registry.TryGet<Flock>(flockEntity))
 	{
-		flockData->members.push_back(entity);
+		JoinLine(*flockData, entity);
 	}
 	return entity;
 }
@@ -496,14 +508,17 @@ entt::entity AnimalSystem::LeaderOf(entt::entity flockEntity) const
 {
 	const auto& registry = EntityRegistry();
 	const auto* flockData = registry.Valid(flockEntity) ? registry.TryGet<const Flock>(flockEntity) : nullptr;
-	return flockData == nullptr || flockData->members.empty() ? entt::null : flockData->members.front();
+	// The last in the line leads: the first to join
+	return flockData == nullptr || flockData->members.empty() ? entt::null : flockData->members.back();
 }
 
 std::vector<entt::entity> AnimalSystem::MembersOf(entt::entity flockEntity) const
 {
 	const auto& registry = EntityRegistry();
 	const auto* flockData = registry.Valid(flockEntity) ? registry.TryGet<const Flock>(flockEntity) : nullptr;
-	return flockData != nullptr ? flockData->members : std::vector<entt::entity> {};
+	// The leader first, then the others from the earliest to join
+	return flockData != nullptr ? std::vector<entt::entity>(flockData->members.rbegin(), flockData->members.rend())
+	                            : std::vector<entt::entity> {};
 }
 
 glm::vec2 AnimalSystem::GoalOf(entt::entity animal) const
@@ -811,7 +826,7 @@ void AnimalSystem::DecideWhatToDo(entt::entity entity, Animal& animal)
 	}
 	// A follower picks a point near the leader, at its height, and then follows the flock
 	const auto& leader = registry.Get<const Animal>(leaderEntity);
-	const auto point = RandomPos(animal, Metres(leader.move.position), 0.0f, flockData->flockDistance);
+	const auto point = RandomPos(animal, Metres(leader.move.position), 0.0f, static_cast<float>(flockData->flockDistance));
 	SetupMoveTo(animal, point, leader.height, AnimalState::DecideWhatToDo);
 	SetSpeed(animal, 0);
 	SetState(animal, flockData->followState);
@@ -828,8 +843,8 @@ void AnimalSystem::StartWander(entt::entity entity, Animal& animal)
 	const auto& info = InfoOf(animal.type);
 	SetSpeed(animal, 0);
 	// A point about where the flock was made, between its kind's inner radius and the flock's reach
-	const auto point =
-	    RandomPos(animal, flockData->centre, static_cast<float>(info.domainInnerRadius), flockData->domainRadius);
+	const auto point = RandomPos(animal, map_coords::ToMetres(flockData->place), static_cast<float>(info.domainInnerRadius),
+	                             static_cast<float>(flockData->domainRadius));
 	// Higher or lower than its last goal by up to the variance; outside its kind's band about its normal height, back to
 	// the normal height
 	const float height = (animal.goalHeight + info.altitudeVariance) - Random(info.altitudeVariance + info.altitudeVariance);
@@ -874,7 +889,8 @@ void AnimalSystem::FollowFlock(entt::entity entity, Animal& animal)
 	}
 	// There: on to its place in the formation, by its place in the flock, at the leader's height
 	const auto found = std::ranges::find(flockData->members, entity);
-	const int place = static_cast<int>(found - flockData->members.begin()) + 1;
+	// Counted from the leader, the last in the line
+	const int place = static_cast<int>(flockData->members.end() - found);
 	const auto& leader = registry.Get<const Animal>(leaderEntity);
 	const auto goal =
 	    animals::FormationGoal(Metres(leader.move.position), Metres(animal.move.position), animals::FormationSlotOf(place));
@@ -960,7 +976,7 @@ void AnimalSystem::ProcessTempleBirds()
 			changed = CreateBird(kind, home, 0, flockEntity) != entt::null || changed;
 			break;
 		case animals::birds::TempleFlockStep::RemoveOne:
-			vanish(members.back(), registry.Get<Flock>(flockEntity));
+			vanish(members.front(), registry.Get<Flock>(flockEntity));
 			changed = true;
 			break;
 		case animals::birds::TempleFlockStep::None:
@@ -1127,8 +1143,8 @@ void AnimalSystem::WolfStartWander(entt::entity /*entity*/, Animal& animal)
 	if (flockData != nullptr && leaderEntity != entt::null)
 	{
 		const auto centre = Metres(registry.Get<const Animal>(leaderEntity).move.position);
-		const auto point =
-		    RandomPos(animal, centre, static_cast<float>(InfoOf(animal.type).domainInnerRadius), flockData->domainRadius);
+		const auto point = RandomPos(animal, centre, static_cast<float>(InfoOf(animal.type).domainInnerRadius),
+		                             static_cast<float>(flockData->domainRadius));
 		Banked(animal, animals::SetUpMove(animal.move, Fixed(point), TurnAngleOf(animal)));
 	}
 }
@@ -1598,7 +1614,7 @@ void AnimalSystem::SetFlockCentre(entt::entity flock, glm::vec2 centre)
 {
 	if (auto* flockData = EntityRegistry().TryGet<Flock>(flock))
 	{
-		flockData->centre = centre;
+		flockData->place = map_coords::FromMetres(centre);
 	}
 }
 

@@ -237,16 +237,18 @@ void villager_dance::PlayClipAgain(entt::entity villager)
 
 bool villager_dance::ExitInDance(LivingAction& action, VillagerStates next)
 {
-	// Into another of the scripts' states it stays in the dance
+	// Into another of the scripts' states it stays in the dance, and may go
 	if (StateInfo(next).isScriptState != 0)
 	{
-		return true;
+		return false;
 	}
 	// TODO(opening): it remembers it was dancing, to go back to the script's state after reacting
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto villager = registry.ToEntity(action);
 	ecs::dances::RemoveDancer(registry, villager);
 	// TODO(opening): its walk round things starts afresh
-	// It holds on for the states that come and go without changing what it was doing
-	return StateInfo(next).isScriptInterruptableState != 0 || next == k_InterfaceState || next == VillagerStates::InDance;
+	// Having left the dance, it may go only into the states that come and go without changing what it was doing
+	const bool letsGo =
+	    StateInfo(next).isScriptInterruptableState != 0 || next == k_InterfaceState || next == VillagerStates::InDance;
+	return !letsGo;
 }

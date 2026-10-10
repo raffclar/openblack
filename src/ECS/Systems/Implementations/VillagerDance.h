@@ -36,8 +36,8 @@ uint32_t MoveToDancePos(components::LivingAction& action);
 [[nodiscard]] int32_t DanceClip(entt::entity villager, int32_t walkClip);
 /// A dancer whose group starts a move plays its clip again
 void PlayClipAgain(entt::entity villager);
-/// Leaving the dance for a state of its own: it leaves the dance. Into another script state it stays in it. True
-/// refuses.
+/// Leaving the dance for a state of its own: it leaves the dance, and may go only into a state that comes and goes
+/// without changing what it was doing. Into another script state it stays in the dance and may go. True refuses.
 bool ExitInDance(components::LivingAction& action, VillagerStates next);
 
 } // namespace openblack::ecs::villager_dance
