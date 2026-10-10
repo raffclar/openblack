@@ -40,6 +40,7 @@
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/DestructionGhost.h"
+#include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/FallingRoots.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
@@ -520,6 +521,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::DestructionGhost::model>("model")
 	    .Field<&components::DestructionGhost::millisecondsLeft>("millisecondsLeft")
 	    .Field<&components::DestructionGhost::shown>("shown");
+	Reflect<components::DetailMeshes>(context)
+	    .Field<&components::DetailMeshes::meshes>("meshes")
+	    .Field<&components::DetailMeshes::importance>("importance");
 	Reflect<components::DropsRoots> {context};
 	Reflect<components::FallingRoots>(context)
 	    .Field<&components::FallingRoots::seconds>("seconds")
