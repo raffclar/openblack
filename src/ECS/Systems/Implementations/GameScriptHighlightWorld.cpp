@@ -29,8 +29,10 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "Graphics/Texture2D.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -51,8 +53,6 @@ constexpr entt::hashed_string k_SparkSheet = entt::hashed_string("raw/S_SpriteSh
 constexpr entt::hashed_string k_SparkSheetAlpha = entt::hashed_string("raw/S_SpriteSheet1a");
 /// The game's own bank of sounds
 constexpr int32_t k_InGameBank = 1;
-/// A help script may be started of any kind but the multiplayer ones
-constexpr auto k_AnySinglePlayerScript = static_cast<lhvm::ScriptType>(0x7f);
 } // namespace
 
 ecs::Registry& GameScriptHighlightWorld::Entities()
@@ -273,30 +273,41 @@ uint32_t GameScriptHighlightWorld::LocalRandom(uint32_t n)
 	return Locator::gameRandom::has_value() ? Locator::gameRandom::value().LocalRand(static_cast<int32_t>(n)) : 0;
 }
 
-void GameScriptHighlightWorld::HelpEvent(uint32_t /*event*/)
+void GameScriptHighlightWorld::HelpEvent(uint32_t event)
 {
-	// TODO(script-natives): the help system's profile of what the player has done and been told isn't in openblack yet;
-	// a tap is one of its events (see docs scripts/highlights.md)
+	if (Locator::helpProfileSystem::has_value())
+	{
+		Locator::helpProfileSystem::value().Trigger(event);
+	}
 }
 
 void GameScriptHighlightWorld::StartHelpScript(std::string_view name)
 {
-	// TODO(script-natives): the help system's dialogue control isn't in openblack yet: a help script holding the
-	// dialogue is stopped first, and none starts while any other script holds it
-	if (Locator::vm::has_value())
+	if (Locator::vm::has_value() && Locator::dialogueControlSystem::has_value())
 	{
-		Locator::vm::value().StartScript(std::string(name), k_AnySinglePlayerScript);
+		chlapi::CHLApi::StartHelpScript(name);
 	}
 }
 
-void GameScriptHighlightWorld::ShowTip(entt::entity /*sign*/, uint32_t /*text*/, uint32_t /*category*/)
+void GameScriptHighlightWorld::ShowTip(entt::entity sign, uint32_t text, uint32_t /*category*/)
 {
-	// TODO(script-natives): the help system's bubble, which shows a sign's tip, isn't in openblack yet
+	if (Locator::tipBubbleSystem::has_value())
+	{
+		Locator::tipBubbleSystem::value().Show(sign, text);
+	}
 }
 
 void GameScriptHighlightWorld::HideTip()
 {
-	// TODO(script-natives): the help system's bubble isn't in openblack yet
+	if (Locator::tipBubbleSystem::has_value())
+	{
+		Locator::tipBubbleSystem::value().Hide();
+	}
+}
+
+entt::entity GameScriptHighlightWorld::TipShown() const
+{
+	return Locator::tipBubbleSystem::has_value() ? Locator::tipBubbleSystem::value().GetSign() : entt::null;
 }
 
 void GameScriptHighlightWorld::ReplayChallenge(uint32_t /*challenge*/)

@@ -55,6 +55,8 @@ public:
 	[[nodiscard]] bool HasQueuedPresses() const final;
 
 	void SetScriptedPointer(std::optional<ScriptedPointer> pointer) final;
+	void SetPlayerMouseBlocked(bool blocked) final { _playerMouseBlocked = blocked; }
+	[[nodiscard]] bool IsPlayerMouseBlocked() const final { return _playerMouseBlocked; }
 	[[nodiscard]] std::optional<ScriptedPointer> GetScriptedPointer() const final;
 	void HoldScriptedKey(int scancode, bool held) final;
 	void SetInputLockMode(LockMode mode) final;
@@ -114,6 +116,7 @@ private:
 	std::optional<glm::ivec2> _cursorPinnedAt;
 	bool _cursorPinned {false};
 	std::optional<ScriptedPointer> _scriptedPointer;
+	bool _playerMouseBlocked {false};
 	std::optional<glm::ivec2> _cursorWarp;
 	BindableActionMap _blocked = BindableActionMap::NONE;
 	/// Keeps the player's mouse and keyboard out while an agent drives the game
