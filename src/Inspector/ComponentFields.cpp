@@ -94,6 +94,7 @@
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptSpotVisual.h"
+#include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/SkinOverride.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/SoundTag.h"
@@ -251,6 +252,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::PlannedTemple>(context)
 	    .Field<&components::PlannedTemple::townId>("townId")
 	    .Field<&components::PlannedTemple::owner>("owner");
+	Reflect<components::PlannedAbode>(context)
+	    .Field<&components::PlannedAbode::townId>("townId")
+	    .Field<&components::PlannedAbode::info>("info");
 	Reflect<components::BuildingSite>(context).Field<&components::BuildingSite::desire>("desire");
 	Reflect<components::Creature>(context)
 	    .Field<&components::Creature::owner>("owner")
@@ -686,7 +690,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::Indestructible> {context};
 	Reflect<components::InfluenceSource>(context)
 	    .Field<&components::InfluenceSource::player>("player")
-	    .Field<&components::InfluenceSource::radius>("radius");
+	    .Field<&components::InfluenceSource::radius>("radius")
+	    .Field<&components::InfluenceSource::anti>("anti")
+	    .Field<&components::InfluenceSource::follows>("follows");
 	Reflect<components::TownInfluence>(context)
 	    .Field<&components::TownInfluence::radius>("radius")
 	    .Field<&components::TownInfluence::drawnRadius>("drawnRadius");
@@ -876,6 +882,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::InScript> {context};
 	Reflect<components::ScriptControlled> {context};
 	Reflect<components::ScriptSpotVisual>(context).Field<&components::ScriptSpotVisual::effect>("effect");
+	Reflect<components::ScriptTimer>(context).Field<&components::ScriptTimer::timer>("timer");
 	Reflect<components::SkinOverride>(context)
 	    .Field<&components::SkinOverride::texture>("texture")
 	    .Field<&components::SkinOverride::uvOffset>("uvOffset");

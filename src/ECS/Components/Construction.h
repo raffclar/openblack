@@ -24,6 +24,14 @@ struct PlannedTemple
 	PlayerNames owner;
 };
 
+/// A building a town plans to build later, made by the land's script: nothing of it stands, it isn't drawn and it holds
+/// nothing yet. The Transform places it; a town centre is planned the same way, by its row.
+struct PlannedAbode
+{
+	uint32_t townId;
+	AbodeInfo info;
+};
+
 /// A building going up with a site for its builders: how much the town wants it built, which a script may force
 struct BuildingSite
 {
