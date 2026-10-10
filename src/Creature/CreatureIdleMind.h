@@ -18,6 +18,7 @@
 #include <vector>
 
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFace.h"
@@ -153,10 +154,14 @@ struct ObjectOrder
 		ThrowInStore,
 	};
 	Kind kind {Kind::PickUp};
-	/// What it acts on, by its entity's number
+	/// What it acts on, by its entity's number. Pointing at an object, it points at wherever the object is, turn by
+	/// turn.
 	std::optional<uint32_t> object;
 	glm::vec2 point {0.0f};
 	size_t animation {0};
+	/// Pointing: how high the point is, when it isn't on the ground, and how long it points, when not for its usual while
+	std::optional<float> pointHeight;
+	std::optional<float> seconds;
 };
 
 /// Going somewhere, or turning to face something
@@ -183,6 +188,12 @@ struct Movement
 		/// it backs away, further than three and a half times its height it walks up; the step's distance is the
 		/// creature's height
 		ToThrowPosition,
+		/// Turning to face a point as a script asks: within an eighth of a half turn of facing it, or right on top of it,
+		/// it counts as facing it already and doesn't turn
+		FacePoint,
+		/// Turning to face the lowest of the ground around it, done once it faces it, or at once when it stands on top of
+		/// it
+		FaceDownSlope,
 	};
 	Kind kind {Kind::ToPoint};
 	glm::vec2 point {0.0f};
@@ -223,6 +234,15 @@ enum class Effect : uint8_t
 	Hurled,
 	/// The action it is carrying out counts as done here, before the step that finishes it
 	Completed,
+};
+
+/// What a creature's head is made to look at: a thing (its top, or its foot), a point, or the player's camera
+struct Gaze
+{
+	std::optional<uint32_t> object;
+	bool bottom {false};
+	std::optional<glm::vec3> point;
+	bool camera {false};
 };
 
 struct Step
@@ -276,6 +296,8 @@ struct Step
 	CastOrder cast {};
 	/// The face pulled as the step starts
 	creature_face::Cue face {creature_face::Cue::None};
+	/// What its head looks at while the step lasts, in place of looking about
+	std::optional<Gaze> gaze;
 };
 
 struct IdleMind
@@ -378,6 +400,9 @@ struct Senses
 	std::optional<bool> objectInMap;
 	/// What picks the faces it pulls
 	creature_face::Feelings feelings {};
+	/// Whether it chooses what to do next by itself when its agenda runs out; under a script's control it only does
+	/// what it is given
+	bool choosesNext {true};
 };
 
 /// How the eyes should look
@@ -420,6 +445,8 @@ struct Commands
 	bool releaseCast {false};
 	/// An object to douse with water, by its entity's number
 	std::optional<uint32_t> douse;
+	/// What the head looks at this turn, for a step that gives it something to look at
+	std::optional<Gaze> gaze;
 };
 
 /// random(n) is a whole number from 0 to n - 1

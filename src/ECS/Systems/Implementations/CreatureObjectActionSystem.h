@@ -41,6 +41,7 @@ public:
 	bool ThrowTaking(entt::entity creature, const glm::vec3& target, float flightSeconds) override;
 	bool Destroy(entt::entity creature, entt::entity target) override;
 	bool PointAt(entt::entity creature, const glm::vec3& point) override;
+	bool PointAtFor(entt::entity creature, const glm::vec3& point, float seconds, std::optional<entt::entity> thing) override;
 	bool Catch(entt::entity creature, entt::entity object) override;
 	void Cancel(entt::entity creature) override;
 	void Drop(entt::entity creature) override;
