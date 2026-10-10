@@ -115,6 +115,7 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
@@ -461,6 +462,12 @@ void Runner::Start(const Scenario& scenario)
 	PlaceBirds(scenario, _middle);
 	PlaceCreatures(scenario, _middle);
 	PlaceDispensers(scenario);
+	// With the scenario's things laid out on the land, each town of a player with a temple is given its worship site, as
+	// a land's are once it is laid out
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().LandLaidOut();
+	}
 	if (Locator::fireflySystem::has_value())
 	{
 		for (const auto& [name, weight] : scenario.fireflyRewards)

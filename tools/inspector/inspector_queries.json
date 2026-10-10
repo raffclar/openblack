@@ -800,7 +800,7 @@
   "query": "living.animated_statics"
  },
  {
-  "description": "The village centres' totems: their town centre, the share they are held at, and whether the hand grips one",
+  "description": "The village centres' totems: their town centre and icon, the share they stand at, ease to and are held at, how fast they move, whether the hand grips one, and their see-through second totem",
   "kind": "list",
   "parameters": [],
   "query": "living.totems"

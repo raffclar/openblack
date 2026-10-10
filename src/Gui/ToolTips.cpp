@@ -147,6 +147,13 @@ void ToolTips::Update(float seconds)
 	icon.current = icon.fadeTime > 0.0f ? icon.start + ((icon.end - icon.start) * icon.elapsed / icon.fadeTime) : icon.end;
 }
 
+void ToolTips::Force(uint32_t index, float number)
+{
+	// Words only, with no mouse; the number is kept even when the tooltip isn't taken up
+	Submit(index, ToolTipAction::None, ToolTipArrows::k_None, true);
+	_number = std::pair(index, number);
+}
+
 std::optional<ToolTips::Shown> ToolTips::GetShown() const
 {
 	if (!_icon.has_value())
@@ -154,5 +161,6 @@ std::optional<ToolTips::Shown> ToolTips::GetShown() const
 		return std::nullopt;
 	}
 	const float alpha = _icon->current <= 0.0f ? 0.0f : std::min(_icon->current, 1.0f);
-	return Shown {.index = _icon->index, .action = _icon->action, .arrows = _icon->arrows, .alpha = alpha};
+	const auto number = _number.has_value() && _number->first == _icon->index ? std::optional(_number->second) : std::nullopt;
+	return Shown {.index = _icon->index, .action = _icon->action, .arrows = _icon->arrows, .alpha = alpha, .number = number};
 }
