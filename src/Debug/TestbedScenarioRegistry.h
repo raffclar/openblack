@@ -501,6 +501,8 @@ struct Command
 		WheelTurn,
 		/// The player's alignment jumps, which the hand shows
 		SetAlignment,
+		/// The creature walks to its home: its temple's pen while its player has a temple
+		WalkHome,
 		/// A script's cinema bars slide in (value 1) or out (value 0)
 		WideScreen,
 		/// Its history, as the Creature Cave's trophies show it: how it leans in fights (amount, -1 defensive to 1
@@ -570,11 +572,13 @@ struct BirdFlockSetup
 	float flockDistance {10.0f};
 };
 
-/// A temple of a player's, built, at a point from the middle of the map
+/// A temple of a player's, built, at a point from the middle of the map, turned by the angle as a land's script
+/// turns one (radians about the vertical)
 struct TempleSetup
 {
 	glm::vec2 offset {0.0f};
 	PlayerNames owner {PlayerNames::PLAYER_ONE};
+	float angle {0.0f};
 };
 
 /// The player's hand held still over the land for the whole scenario, as a player holds it: from the middle of the map,
@@ -638,6 +642,9 @@ struct Scenario
 	/// The weights a caught firefly's miracle is drawn by, by the miracles' names, as a land's script sets them; the
 	/// testbed's land sets none
 	std::vector<std::pair<std::string_view, float>> fireflyRewards;
+	/// A temple of the player's, at this place from the middle of the map, turned by the angle as a land's script turns
+	/// one (radians about the vertical)
+	std::optional<TempleSetup> temple;
 };
 
 /// The miracles' scenarios, added to every scenario by the registry

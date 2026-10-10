@@ -61,7 +61,7 @@ constexpr float k_LookSettled = 1e-4f;
 /// How heavy a creature is, by its size and how fat and strong its body is drawn
 float MassOf(const Creature& creature, const CreatureMorph* morph)
 {
-	return physics::living::CreatureMass(creature.size, morph != nullptr ? morph->drawn.thinFat : 0.0f,
+	return physics::living::CreatureMass(ShownSize(creature), morph != nullptr ? morph->drawn.thinFat : 0.0f,
 	                                     morph != nullptr ? morph->drawn.weakStrong : 0.0f);
 }
 
@@ -99,7 +99,7 @@ void Kick(const ecs::Registry& registry, entt::entity entity, CreatureAnimation&
 	}
 	const auto& creature = registry.Get<const Creature>(entity);
 	creature_sway::Kick(animation.sway, force, point.y - LandHeightAt(point),
-	                    creature_sway::k_UpperHeightPerSize * creature.size,
+	                    creature_sway::k_UpperHeightPerSize * ShownSize(creature),
 	                    MassOf(creature, registry.TryGet<const CreatureMorph>(entity)));
 }
 
@@ -415,7 +415,7 @@ void CreatureAnimationSystem::ProcessTurn()
 	// Breathing settles towards the period it should be at a step a turn; standing, that is its resting period
 	constexpr auto k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 	registry.Each<const Creature, CreatureAnimation>([](const Creature& creature, CreatureAnimation& animation) {
-		const auto resting = creature_animation::BreathPeriod(creature.size);
+		const auto resting = creature_animation::BreathPeriod(ShownSize(creature));
 		animation.breathPeriod = creature_animation::EaseBreathPeriod(animation.breathPeriod, resting, resting, k_TurnSeconds);
 	});
 }
@@ -471,7 +471,7 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		    // period
 		    if (animation.breathPeriod <= 0.0f)
 		    {
-			    animation.breathPeriod = creature_animation::BreathPeriod(creature.size);
+			    animation.breathPeriod = creature_animation::BreathPeriod(ShownSize(creature));
 		    }
 		    // A frozen creature plays slower, down to not at all
 		    const float scale = animation.playbackScale;
@@ -499,7 +499,8 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 
 		    if (rig != nullptr)
 		    {
-			    PoseBody(animation, *rig, morph.drawn, transform, creature.size, gameTime.count() * scale, seconds * scale);
+			    PoseBody(animation, *rig, morph.drawn, transform, ShownSize(creature), gameTime.count() * scale,
+			             seconds * scale);
 		    }
 		    if (animation.boneMatrices.size() != base->GetBoneMatrices().size())
 		    {
@@ -517,7 +518,7 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		    eyes->drawn = {};
 		    if (rig != nullptr && rig->eyes.has_value())
 		    {
-			    PlaceEyes(*eyes, *rig->eyes, morph.drawn, animation.boneMatrices, transform, creature.size, seconds);
+			    PlaceEyes(*eyes, *rig->eyes, morph.drawn, animation.boneMatrices, transform, ShownSize(creature), seconds);
 		    }
 	    });
 }

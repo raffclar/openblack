@@ -22,6 +22,8 @@ struct PlannedTemple
 {
 	int32_t townId;
 	PlayerNames owner;
+	/// How far round the temple will be turned, as the game measures it
+	float yAngle {0.0f};
 };
 
 /// A building going up with a site for its builders: how much the town wants it built, which a script may force

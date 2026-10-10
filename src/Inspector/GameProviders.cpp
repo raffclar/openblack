@@ -84,6 +84,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
+#include "ECS/Systems/CreaturePenSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -238,6 +239,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"reactionSystem", "magic.reactions"},
     LocatorCoverage {"teleportSystem", "magic.teleport"},
     LocatorCoverage {"creatureCarryOverSystem", "creatures.systems"},
+    LocatorCoverage {"creaturePenSystem", "creatures.systems"},
     LocatorCoverage {"creatureFizzSystem", "creatures.systems"},
     LocatorCoverage {"tattooEditorSystem", "creatures.systems"},
     LocatorCoverage {"tornadoSystem", "magic.state"},
@@ -1313,6 +1315,8 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		              {
 			              result["mind_kept"] = Locator::creatureCarryOverSystem::value().Kept() != nullptr;
 		              }
+		              // The temples' pens: each creature's shrunk size there is its Creature component's penSize
+		              result["pens"] = Locator::creaturePenSystem::has_value();
 		              if (Locator::creatureFizzSystem::has_value())
 		              {
 			              const auto scroll = Locator::creatureFizzSystem::value().EyeStaticScroll();
