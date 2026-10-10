@@ -19,6 +19,7 @@
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreaturePlanner.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureCasting.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -82,6 +83,9 @@ public:
 	[[nodiscard]] bool HasPlayed(entt::entity creature) const override;
 
 private:
+	/// Gives a creature its desires and what it has learnt, if it has none yet: the first time its mind thinks, or
+	/// sooner when it is told to do something before then
+	void SetUpMind(entt::entity creature, const components::Creature& body, components::CreatureMindState& mind);
 	/// Sets up what a creature has learnt the first time its mind thinks, from its mind file when it has one
 	void SetUpLearning(entt::entity creature, components::CreatureMindState& mind);
 	/// Takes up a mind file waiting to be loaded

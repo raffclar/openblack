@@ -675,6 +675,20 @@ const creature_mind_tables::Tables* CreatureMindSystem::GetTables()
 	return _tables.has_value() ? &*_tables : nullptr;
 }
 
+void CreatureMindSystem::SetUpMind(entt::entity creature, const Creature& body, CreatureMindState& mind)
+{
+	if (!mind.desires.has_value())
+	{
+		mind.desires = creature_desires::Create(SetupFor(body.species), [this](float low, float high) {
+			return high > low ? std::uniform_real_distribution<float>(low, high)(_random) : low;
+		});
+	}
+	if (!mind.learnt.has_value())
+	{
+		SetUpLearning(creature, mind);
+	}
+}
+
 void CreatureMindSystem::SetUpLearning(entt::entity creature, CreatureMindState& mind)
 {
 	const auto* tables = GetTables();
@@ -1203,11 +1217,12 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
 	const auto* transform = registry.Valid(creature) ? registry.TryGet<const Transform>(creature) : nullptr;
 	const auto* tables = GetTables();
-	if (mind == nullptr || body == nullptr || transform == nullptr || tables == nullptr || !mind->learnt.has_value() ||
-	    !mind->desires.has_value())
+	if (mind == nullptr || body == nullptr || transform == nullptr || tables == nullptr)
 	{
 		return false;
 	}
+	// A creature told to do something as soon as it is made has a mind ready for it
+	SetUpMind(creature, *body, *mind);
 	const glm::vec2 position {transform->position.x, transform->position.z};
 	const auto height = k_HeightOfSizeOne * ShownSize(*body);
 	const auto random = [this](uint32_t range) { return Random(range); };

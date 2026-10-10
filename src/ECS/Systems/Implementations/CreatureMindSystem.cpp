@@ -987,9 +987,6 @@ void CreatureMindSystem::ProcessTurn()
 	const auto random = [this](uint32_t range) {
 		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
 	};
-	const auto uniform = [this](float low, float high) {
-		return high > low ? std::uniform_real_distribution<float>(low, high)(_random) : low;
-	};
 	std::optional<std::vector<creature_look::Candidate>> candidates;
 	const bool night = IsNight();
 	// The creatures passing out this turn, which are knocked out once every mind has thought
@@ -998,14 +995,7 @@ void CreatureMindSystem::ProcessTurn()
 	registry.Each<const Creature, CreatureMindState, CreatureAnimation, const Transform>(
 	    [&](entt::entity entity, const Creature& creature, CreatureMindState& mind, CreatureAnimation& animation,
 	        const Transform& transform) {
-		    if (!mind.desires.has_value())
-		    {
-			    mind.desires = creature_desires::Create(SetupFor(creature.species), uniform);
-		    }
-		    if (!mind.learnt.has_value())
-		    {
-			    SetUpLearning(entity, mind);
-		    }
+		    SetUpMind(entity, creature, mind);
 		    if (mind.pendingFile != nullptr)
 		    {
 			    TakeUpFile(entity, mind);
