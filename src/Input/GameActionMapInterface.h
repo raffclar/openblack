@@ -175,6 +175,10 @@ public:
 	};
 	/// Reads the scripted pointer in place of the mouse, or the mouse again
 	virtual void SetScriptedPointer([[maybe_unused]] std::optional<ScriptedPointer> pointer) {}
+	/// While set (a hand demonstration plays), the player's own mouse moves, buttons and wheel don't reach the game; the
+	/// game's own injected ones still do
+	virtual void SetPlayerMouseBlocked([[maybe_unused]] bool blocked) {}
+	[[nodiscard]] virtual bool IsPlayerMouseBlocked() const { return false; }
 	[[nodiscard]] virtual std::optional<ScriptedPointer> GetScriptedPointer() const { return std::nullopt; }
 	/// While an agent drives the game through the debug inspector, the player's mouse and keyboard are kept out (see
 	/// InputLock): their events are dropped before the game, the debug windows and the camera see them, and the pointer

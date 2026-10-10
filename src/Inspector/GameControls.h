@@ -87,6 +87,7 @@ class GameScreenshots final: public ScreenshotTargetInterface
 {
 public:
 	std::string Capture(const std::filesystem::path& path, bool hideDebugGui) override;
+	[[nodiscard]] std::optional<std::string> CaptureFailure(const std::filesystem::path& path) override;
 	void HideDebugGui() override;
 	[[nodiscard]] std::filesystem::path Directory() const override;
 	[[nodiscard]] std::optional<std::filesystem::path> Root() const override;

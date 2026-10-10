@@ -45,6 +45,8 @@ struct InputEvent
 	glm::ivec2 position {0, 0};
 	/// The mouse button: 1 left, 2 middle, 3 right
 	uint8_t button {0};
+	/// The button's click count, as the mouse tells it: 2 for the second press of a double click and its letting go
+	uint8_t clicks {1};
 	/// The key, by its name as SDL names keys ("L", "Space", "Left Shift")
 	std::string key;
 	/// Notches of the wheel, away from the player positive
@@ -138,7 +140,8 @@ private:
 ///   input.state                                   the pointer, buttons, hand and pick, and the input still to come
 ///   input.names                                   the actions and gestures that can be pressed and drawn
 ///   input.pointer {screen | world}                moves the pointer to a pixel, or to where a point of the land is
-///   input.button  {button, action}                presses, lets go of or clicks a mouse button where the pointer is
+///   input.button  {button, action}                presses, lets go of, clicks or double-clicks a mouse button where
+///                                                 the pointer is
 ///   input.key     {key | action, how}             presses, lets go of or taps a key, or presses an action for a frame
 ///   input.wheel   {notches}                       turns the wheel
 ///   input.drag    {to, button, frames}            holds a button and moves the pointer there over some frames

@@ -132,6 +132,7 @@ target_link_libraries(
           edt
           exc
           dance
+          hnd
           pack
           lnd
           anm
