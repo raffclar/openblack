@@ -319,6 +319,8 @@ private:
 	/// What moves each species' body, from Data/CTR's .cbn files, by the species their base mesh names
 	static void LoadCreatureRigs();
 	/// Acts on what the player chose in the game's menu: continuing restores the pause it had before it opened
+	/// As a new game starts: whether to ask a returning player what to skip, and asking
+	void AskNewGameChoice();
 	void HandleInterfaceAction();
 	/// Once a frame outside the temple: where the hand's tooltip is drawn, and the status panel of the creature the hand
 	/// is held to, or over
