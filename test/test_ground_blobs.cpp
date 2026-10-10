@@ -7,7 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <vector>
+
 #include <glm/geometric.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
 
 #include "Graphics/GroundBlobs.h"
@@ -85,4 +88,22 @@ TEST(GroundBlobs, SmudgeStandsOverTheVillager)
 	ExpectNear(corners[1], {0.3f, 1.6f + 0.9f, 0.0f});
 	ExpectNear(corners[2], {0.3f, 1.6f - 0.9f, 0.0f});
 	ExpectNear(corners[3], {-0.3f, 1.6f - 0.9f, 0.0f});
+}
+
+TEST(GroundBlobs, FeetComeFromThePoseItIsDrawnIn)
+{
+	const std::vector<glm::mat4> rest(3, glm::mat4(1.0f));
+	const std::vector<glm::mat4> posed(3, glm::translate(glm::mat4(1.0f), glm::vec3(0.5f, 0.0f, 0.0f)));
+	const auto bones = ground_blobs::FootBones(posed, rest);
+	ASSERT_EQ(bones.size(), 3u);
+	EXPECT_EQ(bones.data(), posed.data());
+}
+
+TEST(GroundBlobs, FeetComeFromTheRestingBonesWithoutAPose)
+{
+	const std::vector<glm::mat4> rest(3, glm::mat4(1.0f));
+	EXPECT_EQ(ground_blobs::FootBones({}, rest).data(), rest.data());
+	// A pose for another model is no pose for this one
+	const std::vector<glm::mat4> other(2, glm::mat4(1.0f));
+	EXPECT_EQ(ground_blobs::FootBones(other, rest).data(), rest.data());
 }
