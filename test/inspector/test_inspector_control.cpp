@@ -484,10 +484,17 @@ public:
 		current = "testbed";
 		return {};
 	}
+	std::string NewGame(std::string_view start) override
+	{
+		current = "Land 1";
+		newGames.emplace_back(start);
+		return {};
+	}
 	[[nodiscard]] std::string Current() const override { return current; }
 
 	std::string current;
 	std::optional<LoadHow> lastHow;
+	std::vector<std::string> newGames;
 };
 
 class FakeScreenshots final: public ScreenshotTargetInterface
@@ -660,6 +667,20 @@ TEST(InspectorLevels, LoadByNameFreshOrAsTheStoryChangesLand)
 	EXPECT_FALSE(Refused(inspector, R"({"query": "level.load", "params": {"name": "Broken"}})").empty());
 	EXPECT_FALSE(Refused(inspector, R"({"query": "level.load", "params": {"name": "Nope"}})").empty());
 	EXPECT_EQ(Ask(inspector, R"({"query": "level.testbed"})")["land"], "testbed");
+}
+
+// A new game on the first land, the start-of-game question answered at once or left to the game
+TEST(InspectorLevels, NewGameSkipsTheOpeningAsTheQuestionAnswers)
+{
+	FakeLevels levels;
+	Inspector inspector;
+	inspector.Add(MakeLevelProvider(levels));
+	EXPECT_EQ(Ask(inspector, R"({"query": "level.new_game", "params": {"skip": "creature"}})")["land"], "Land 1");
+	Ask(inspector, R"({"query": "level.new_game", "params": {"skip": "story"}})");
+	Ask(inspector, R"({"query": "level.new_game"})");
+	EXPECT_EQ(levels.newGames, (std::vector<std::string> {"creature", "story", ""}));
+	EXPECT_FALSE(Refused(inspector, R"({"query": "level.new_game", "params": {"skip": "beach"}})").empty());
+	EXPECT_EQ(levels.newGames.size(), 3);
 }
 
 // A picture at an exact frame; one with a camera is held there a few frames first

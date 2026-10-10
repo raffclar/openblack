@@ -16,6 +16,7 @@
 #include <array>
 #include <chrono>
 #include <functional>
+#include <string_view>
 #include <utility>
 
 #include <glm/geometric.hpp>
@@ -99,6 +100,28 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeLevelProvider(Level
 		              }
 		              return QueryResult::Value({{"land", levels.Current()}});
 	              });
+	provider->Add(
+	    Description("new_game",
+	                "Starts a new game on the first land from scratch, as the game's new game does: the land loads again "
+	                "and the story's scripts start again. skip answers the start-of-game question at once, the story "
+	                "then going exactly as it does for the player's answer: creature (straight to choosing a creature, "
+	                "the opening on the beach skipped), story (all of the first land's creature tutorial skipped too), "
+	                "old (keep the old creature, which needs a kept creature), normal; or ask, to be asked it. Without "
+	                "skip it is asked only of a returning player, as in the game. Answers once the land has loaded",
+	                {Parameter("skip", "string", "creature, story, old, normal or ask", false)}, true),
+	    [&levels](const QueryContext& context) {
+		    const auto skip = StringMember(context.params, "skip").value_or("");
+		    constexpr std::array<std::string_view, 6> k_Starts {"", "ask", "normal", "creature", "story", "old"};
+		    if (std::ranges::find(k_Starts, skip) == k_Starts.end())
+		    {
+			    return QueryResult::Error("skip is creature, story, old, normal or ask");
+		    }
+		    if (auto why = levels.NewGame(skip); !why.empty())
+		    {
+			    return QueryResult::Error(why);
+		    }
+		    return QueryResult::Value({{"land", levels.Current()}, {"skip", skip}});
+	    });
 	return provider;
 }
 
