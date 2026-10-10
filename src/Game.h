@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstddef>
+
 #include <array>
 #include <chrono>
 #include <filesystem>
@@ -23,10 +25,12 @@
 
 #include "3D/HandCrossFade.h"
 #include "3D/HandNavigationPose.h"
+#include "Common/LoadTimer.h"
 #include "Common/Zoomer.h"
 #include "Creature/CreatureFight.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "EngineConfig.h"
+#include "Graphics/UploadPacer.h"
 #include "Gui/LoadingScreenRules.h"
 #include "Input/InputLock.h"
 #include "Input/ShortcutKeys.h"
@@ -138,6 +142,11 @@ class Game
 {
 public:
 	static constexpr auto k_TurnDuration = std::chrono::milliseconds(100);
+	/// About how many bytes of files the loading threads read at a time, and how much of what they make may reach the
+	/// graphics card each frame, so no frame waits long for it: sixteen buffers or textures keep the renderer's share of a
+	/// loading frame to about 6 ms on Vulkan, where some models' hundreds of small parts made it 17 ms
+	static constexpr size_t k_FrameLoadBudget = 256 << 10;
+	static constexpr graphics::UploadPacer::Allowance k_FrameUploads {.bytes = 128 << 10, .uploads = 16};
 	static constexpr float k_TurnDurationMultiplierSlow = 2.0f;
 	static constexpr float k_TurnDurationMultiplierNormal = 1.0f;
 	static constexpr float k_TurnDurationMultiplierFast = 0.5f;
@@ -251,6 +260,13 @@ private:
 	void SetUpLandscape();
 	/// Starts the game clock, the atmosphere's sounds and the music on the new land
 	void StartNewLand();
+
+	/// When the game was launched
+	const LoadTimer::Clock::time_point _launchTime {LoadTimer::Clock::now()};
+	/// Times the start of the game, from its launch to the first frame drawn on the first land
+	std::optional<LoadTimer> _startupTimer;
+	/// Times the loading of every resource registered at the start, on the loading threads or where first wanted
+	std::optional<LoadTimer> _prefetchTimer;
 
 	/// path to Lionhead Studios Ltd/Black & White folder
 	const std::filesystem::path _gamePath;

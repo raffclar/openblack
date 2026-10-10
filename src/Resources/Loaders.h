@@ -222,6 +222,14 @@ struct SoundLoader final: BaseLoader<audio::Sound>
 {
 	[[nodiscard]] result_type operator()(FromBufferTag, const pack::AudioBankSampleHeader& header,
 	                                     const std::vector<std::vector<uint8_t>>& buffer) const;
+
+	/// A sample of a sound bank read from the bank's file, from where the bank's wave data starts plus the sample's
+	/// offset; decoded too when `decode` is set, so its first play needn't
+	struct FromBankFileTag
+	{
+	};
+	[[nodiscard]] result_type operator()(FromBankFileTag, const std::filesystem::path& bank, uint64_t waveData,
+	                                     const pack::AudioBankSampleHeader& header, bool decode) const;
 };
 
 struct LightLoader final: BaseLoader<Lights>

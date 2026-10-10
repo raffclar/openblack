@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <tuple>
+
 #include "ResourcesInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -40,7 +42,59 @@ public:
 	GestureTemplatesManager& GetGestureTemplates() override { return _gestureTemplates; }
 	VideoManager& GetVideos() override { return _videos; }
 
+	void UpdateLoading(size_t budget, graphics::UploadPacer::Allowance uploads) override
+	{
+		_loadQueue.GetUploadPacer().BeginFrame(uploads);
+		ForEachManager([](auto& manager) { manager.Collect(); });
+		// What is still loading counts against the budget, so no more is made in a frame than it allows
+		size_t loading = 0;
+		ForEachManager([&loading](const auto& manager) { loading += manager.LoadingBytes(); });
+		ForEachManager([this, budget, &loading](auto& manager) {
+			if (loading < budget)
+			{
+				loading += manager.StartLoads(_loadQueue, budget - loading);
+			}
+		});
+	}
+
+	void PrefetchAll() override
+	{
+		ForEachManager([](auto& manager) { manager.PrefetchAll(); });
+	}
+
+	[[nodiscard]] size_t PendingCount() const override
+	{
+		size_t pending = 0;
+		ForEachManager([&pending](const auto& manager) { pending += manager.PendingCount(); });
+		return pending;
+	}
+
+	void StopLoading() override { _loadQueue.Cancel(); }
+
 private:
+	template <typename Func>
+	void ForEachManager(Func func)
+	{
+		ForEach(*this, func);
+	}
+
+	template <typename Func>
+	void ForEachManager(Func func) const
+	{
+		ForEach(*this, func);
+	}
+
+	/// Calls func with each cache, of a const Resources or not
+	template <typename Self, typename Func>
+	static void ForEach(Self& self, Func& func)
+	{
+		std::apply([&func](auto&... manager) { (func(manager), ...); },
+		           std::tie(self._meshes, self._l3dFiles, self._bitmaps, self._landLightPalettes, self._physicsMaterials,
+		                    self._clipSounds, self._textures, self._animations, self._levels, self._creatureMinds,
+		                    self._creatureRigs, self._creatureSkinArt, self._sounds, self._glows, self._cameraPaths,
+		                    self._particleFiles, self._particleBitmaps, self._gestureTemplates));
+	}
+
 	MeshManager _meshes;
 	L3DFileManager _l3dFiles;
 	Bitmap16BManager _bitmaps;
@@ -60,5 +114,7 @@ private:
 	ParticleBitmapManager _particleBitmaps;
 	GestureTemplatesManager _gestureTemplates;
 	VideoManager _videos;
+	// Last, so its threads stop before the caches they load into go
+	LoadQueue _loadQueue {LoadQueue::DefaultThreadCount()};
 };
 } // namespace openblack::resources

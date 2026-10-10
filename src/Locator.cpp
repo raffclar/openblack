@@ -378,6 +378,8 @@ void openblack::ShutDownServices()
 	if (Locator::resources::has_value())
 	{
 		auto& resources = Locator::resources::value();
+		// Nothing more may be made on the loading threads once the renderer goes
+		resources.StopLoading();
 		resources.GetMeshes().Clear();
 		resources.GetTextures().Clear();
 		resources.GetAnimations().Clear();

@@ -36,6 +36,7 @@
 #include "3D/Light.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/ClipSounds.h"
+#include "Audio/SoundDecoder.h"
 #include "Common/Bitmap16B.h"
 #include "Common/StringUtils.h"
 #include "Common/Zip.h"
@@ -200,7 +201,7 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromPackTag, const std:
 
 	texture2D->Create(static_cast<uint16_t>(g3dTexture.ddsHeader.width), static_cast<uint16_t>(g3dTexture.ddsHeader.height), 1,
 	                  internalFormat, graphics::Wrapping::Repeat, graphics::Filter::Linear,
-	                  bgfx::makeRef(g3dTexture.ddsData.data(), static_cast<uint32_t>(g3dTexture.ddsData.size())));
+	                  bgfx::copy(g3dTexture.ddsData.data(), static_cast<uint32_t>(g3dTexture.ddsData.size())));
 	return texture2D;
 }
 
@@ -243,7 +244,7 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskTag, const std:
 
 	auto texture = std::make_shared<graphics::Texture2D>(("raw" / rawTexturePath.stem()).string());
 	texture->Create(width, height, 1, format, graphics::Wrapping::Repeat, graphics::Filter::Linear,
-	                bgfx::makeRef(data.data(), static_cast<uint32_t>(data.size())));
+	                bgfx::copy(data.data(), static_cast<uint32_t>(data.size())));
 
 	return texture;
 }
@@ -740,6 +741,32 @@ SoundLoader::result_type SoundLoader::operator()(BaseLoader<audio::Sound>::FromB
 	sound->loopEnd = header.lEnd;
 	sound->group = static_cast<uint16_t>(header.group);
 	sound->buffer = buffer;
+	return sound;
+}
+
+SoundLoader::result_type SoundLoader::operator()(FromBankFileTag, const std::filesystem::path& bank, uint64_t waveData,
+                                                 const pack::AudioBankSampleHeader& header, bool decode) const
+{
+	auto stream = Locator::filesystem::value().GetData(bank);
+	std::vector<uint8_t> bytes(header.size);
+	stream->seekg(static_cast<std::streamoff>(waveData + header.offset));
+	stream->read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+	if (!*stream)
+	{
+		throw std::runtime_error(fmt::format("Unable to read sample {} of {}", header.id, bank.string()));
+	}
+	auto sound = (*this)(FromBufferTag {}, header, {});
+	sound->buffer.push_back(std::move(bytes));
+	if (decode)
+	{
+		auto decoded = std::make_shared<std::vector<audio::DecodeResult>>();
+		decoded->reserve(sound->buffer.size());
+		for (const auto& part : sound->buffer)
+		{
+			decoded->push_back(audio::DecodeSound(part, sound->sampleRate));
+		}
+		sound->decoded = std::move(decoded);
+	}
 	return sound;
 }
 
