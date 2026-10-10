@@ -14,9 +14,16 @@
 #include <cmath>
 
 #include <algorithm>
+#include <chrono>
+#include <optional>
 #include <unordered_map>
+#include <utility>
+#include <vector>
+
+#include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
+#include "Audio/AudioManagerInterface.h"
 #include "Audio/Sound.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -24,12 +31,15 @@
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Player.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
@@ -145,6 +155,30 @@ std::optional<glm::vec3> HandPosition()
 		return std::nullopt;
 	}
 	return transform->position;
+}
+
+/// Where a player's hand is in the world: this computer's player's is the hand the mouse moves. The computer's gods
+/// have no hand in the world yet, so theirs keep nothing past the border.
+std::optional<glm::vec3> HandOf(PlayerNames player)
+{
+	if (!Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() != player)
+	{
+		return std::nullopt;
+	}
+	return HandPosition();
+}
+
+/// A player's entity on this land, if they are on it
+std::optional<entt::entity> PlayerEntityOf(PlayerNames player)
+{
+	std::optional<entt::entity> found;
+	Locator::entitiesRegistry::value().Each<const Player>([&found, player](entt::entity entity, const Player& each) {
+		if (each.name == player)
+		{
+			found = entity;
+		}
+	});
+	return found;
 }
 
 influence::Ground LandHeight()
@@ -265,6 +299,203 @@ void InfluenceSystem::ProcessTurn(uint32_t turn)
 	{
 		DrawBorders();
 	}
+	ProcessVirtualInfluence(turn);
+}
+
+bool InfluenceSystem::Shielded(PlayerNames player, const glm::vec3& point)
+{
+	return Shielded(player, map_coords::FromMetres({point.x, point.z}));
+}
+
+bool InfluenceSystem::Shielded(PlayerNames player, const map_coords::MapCoords& position)
+{
+	bool shielded = false;
+	Locator::entitiesRegistry::value().Each<const AntiInfluence, const Transform>(
+	    [&](const AntiInfluence& ring, const Transform& transform) {
+		    shielded =
+		        shielded || (ring.owner != player &&
+		                     gutils::GetDistanceInMetres(map_coords::FromMetres({transform.position.x, transform.position.z}),
+		                                                 position) < ring.radius);
+	    });
+	return shielded;
+}
+
+float InfluenceSystem::InfluencePower(PlayerNames player)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	float power = 0.0f;
+	if (const auto citadel = Citadels().at(static_cast<size_t>(player)); citadel != entt::null)
+	{
+		power = CitadelReach(citadel);
+	}
+	registry.Each<const Town, const TownInfluence>([&](const Town& town, const TownInfluence& influence) {
+		if (town.owner == player)
+		{
+			power += influence.radius;
+		}
+	});
+	registry.Each<const InfluenceSource>([&](const InfluenceSource& source) {
+		if (source.player == player)
+		{
+			power += source.radius;
+		}
+	});
+	return power;
+}
+
+void InfluenceSystem::ProcessVirtualInfluence(uint32_t turn)
+{
+	_turn = turn;
+	if (!Locator::playerSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	// Every player's hand keeps a share of their influence past the border, the computer's gods' too
+	std::vector<std::pair<entt::entity, PlayerNames>> players;
+	Locator::entitiesRegistry::value().Each<const Player>(
+	    [&players](entt::entity entity, const Player& player) { players.emplace_back(entity, player.name); });
+	for (const auto& [entity, player] : players)
+	{
+		if (const auto hand = HandOf(player); hand.has_value())
+		{
+			ProcessVirtualInfluence(entity, player, *hand, turn);
+		}
+	}
+}
+
+void InfluenceSystem::HeldThingUsedOnLand(PlayerNames player)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	// Measured from where the hand was at the last turn
+	const auto* state = VirtualStateOf(player);
+	const auto entity = PlayerEntityOf(player);
+	if (state == nullptr || !state->turnHand.has_value() || !entity.has_value())
+	{
+		return;
+	}
+	const auto hand = *state->turnHand;
+	ProcessVirtualInfluence(*entity, player, hand, _turn);
+}
+
+void InfluenceSystem::ProcessVirtualInfluence(entt::entity entity, PlayerNames player, glm::vec3 hand, uint32_t turn)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& virtualInfluence = registry.AnyOf<VirtualInfluence>(entity) ? registry.Get<VirtualInfluence>(entity)
+	                                                                  : registry.Assign<VirtualInfluence>(entity);
+	const auto& citadel = Locator::infoConstants::value().citadel;
+	const bool shielded = Shielded(player, hand);
+	// Only the player's own influence counts here, not what the hand keeps
+	const bool inInfluence = !shielded && PlayerRawInfluence(player, hand) > 0.0f;
+	const auto before = virtualInfluence.state;
+	// TODO(raffclar): the chants waiting at the player's worship sites, which slow the waning and are used up by it, once
+	// worship sites gather chants; until then there are none
+	virtual_influence::ProcessTurn(virtualInfluence.state,
+	                               {
+	                                   .hand = hand,
+	                                   .turn = turn,
+	                                   .handShielded = shielded,
+	                                   .handInInfluence = inInfluence,
+	                                   .influencePower = InfluencePower(player),
+	                                   .chants = 0.0f,
+	                               },
+	                               {
+	                                   .maxDistance = citadel.virtualInfluenceMaxDistance,
+	                                   .maxTurns = citadel.virtualInfluenceMaxGameTicks,
+	                                   .chantsToDouble = citadel.virtualInfluenceChantsToDouble,
+	                               });
+	// The log follows the strength the hand keeps past the border, a tenth at a time
+	const auto& after = virtualInfluence.state;
+	if (static_cast<int>(before.fraction * 10.0f) != static_cast<int>(after.fraction * 10.0f) ||
+	    before.anchor.has_value() != after.anchor.has_value())
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Player {}'s hand {} their influence at ({:.1f}, {:.1f}), strength {:.2f}",
+		                    static_cast<int>(player), inInfluence ? "is in" : (shielded ? "is shielded from" : "is out of"),
+		                    hand.x, hand.z, after.fraction);
+	}
+}
+
+const virtual_influence::State* InfluenceSystem::VirtualStateOf(PlayerNames player)
+{
+	const auto entity = PlayerEntityOf(player);
+	if (!entity.has_value())
+	{
+		return nullptr;
+	}
+	const auto* virtualInfluence = Locator::entitiesRegistry::value().TryGet<const VirtualInfluence>(*entity);
+	return virtualInfluence != nullptr ? &virtualInfluence->state : nullptr;
+}
+
+void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli> gameTime)
+{
+	if (!Locator::playerSystem::has_value() || !Locator::audio::has_value())
+	{
+		return;
+	}
+	const auto player = Locator::playerSystem::value().GetLocalPlayer();
+	const auto entity = Locator::playerSystem::value().GetPlayer(player);
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(entity) || !registry.AnyOf<VirtualInfluence>(entity))
+	{
+		return;
+	}
+	auto& virtualInfluence = registry.Get<VirtualInfluence>(entity);
+	auto& state = virtualInfluence.state;
+	auto& audio = Locator::audio::value();
+	const auto hand = HandPosition();
+	const auto inInfluence = [this, player](const glm::vec3& point) { return PlayerRawInfluence(player, point) > 0.0f; };
+	const bool plays = hand.has_value() && state.anchor.has_value() &&
+	                   virtual_influence::HumPlays(state, Shielded(player, *hand), inInfluence(*hand),
+	                                               Shielded(player, *state.anchor), inInfluence(*state.anchor));
+	if (!plays)
+	{
+		if (state.soundStarted)
+		{
+			// A land change takes the sound with it
+			if (audio.EmitterExists(virtualInfluence.hum))
+			{
+				audio.DestroyEmitter(virtualInfluence.hum);
+			}
+			virtualInfluence.hum = entt::null;
+			state.soundStarted = false;
+		}
+		return;
+	}
+	// Past the border the hand hums, heard alike from both sides, lower the less of its strength is left; it is started
+	// again whenever it has played out
+	if (!state.soundStarted)
+	{
+		state.soundFraction = state.fraction;
+		state.soundStarted = true;
+	}
+	// The mana path runs from the hand back to halfway to where it last was in influence, worked out once for each trip
+	// out, its sparks in the player's colour dimmed by the strength left
+	const auto handCoords = map_coords::FromMetres({hand->x, hand->z});
+	if (!state.manaPathStart.has_value())
+	{
+		state.manaPathStart =
+		    virtual_influence::ManaPathStart(handCoords, map_coords::FromMetres({state.anchor->x, state.anchor->z}));
+	}
+	if (const auto scale = virtual_influence::EmitManaPath(state, gameTime.count());
+	    scale.has_value() && Locator::particleSystem::has_value() && Locator::terrainSystem::has_value())
+	{
+		const auto& land = Locator::terrainSystem::value();
+		const auto colour = Player::k_Colours.at(static_cast<size_t>(player) & (Player::k_Colours.size() - 1));
+		Locator::particleSystem::value().AddHandManaPathSpark({
+		    .from = map_coords::ToWorld(land, handCoords),
+		    .to = map_coords::ToWorld(land, *state.manaPathStart),
+		    .rgb = virtual_influence::ScaleColour(colour, *scale) & 0xFFFFFFu,
+		});
+	}
+	const auto pitch = virtual_influence::HumPitchPercent(state);
+	if (!audio.EmitterExists(virtualInfluence.hum))
+	{
+		virtualInfluence.hum =
+		    audio.StartSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_VirtualInfluence_04), {.pitchPercent = pitch});
+	}
+	audio.SetEmitterPitch(virtualInfluence.hum, pitch);
 }
 
 void InfluenceSystem::Update(std::chrono::duration<float, std::milli> gameTime)
@@ -337,17 +568,52 @@ bool InfluenceSystem::CrossBorders(const glm::vec3& hand)
 
 float InfluenceSystem::PlayerInfluence(PlayerNames player, const map_coords::MapCoords& position) const
 {
+	if (const auto* state = VirtualStateOf(player); state != nullptr)
+	{
+		// The questions of a game turn measure from where the hand was at the turn; between turns this computer's
+		// player's are measured from where their hand is now
+		auto hand = state->turnHand;
+		if (!_inGameTurn && Locator::playerSystem::has_value() && Locator::playerSystem::value().GetLocalPlayer() == player)
+		{
+			if (const auto live = HandPosition(); live.has_value())
+			{
+				hand = live;
+			}
+		}
+		if (hand.has_value() && !Shielded(player, position))
+		{
+			if (const auto granted = virtual_influence::Grant(*state, map_coords::FromMetres({hand->x, hand->z}), position);
+			    granted.has_value())
+			{
+				return *granted;
+			}
+		}
+	}
+	return PlayerRawInfluence(player, position);
+}
+
+float InfluenceSystem::HandPointInfluence(PlayerNames player, const map_coords::MapCoords& hand) const
+{
+	// The place asked is the hand's own, so the hand is inside while it keeps anything
+	if (const auto* state = VirtualStateOf(player); state != nullptr && !Shielded(player, hand))
+	{
+		if (const auto granted = virtual_influence::Grant(*state, hand, hand); granted.has_value())
+		{
+			return *granted;
+		}
+	}
+	return PlayerRawInfluence(player, hand);
+}
+
+float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::MapCoords& position) const
+{
 	auto& registry = Locator::entitiesRegistry::value();
 	// Each is measured from its map position, in the game's map units
 	const auto distanceTo = [&position](const glm::vec3& point) {
 		return gutils::GetDistanceInMetres(map_coords::FromMetres({point.x, point.z}), position);
 	};
 	// Under another player's shield a player has no influence at all
-	bool shielded = false;
-	registry.Each<const AntiInfluence, const Transform>([&](const AntiInfluence& ring, const Transform& transform) {
-		shielded = shielded || (ring.owner != player && distanceTo(transform.position) < ring.radius);
-	});
-	if (shielded)
+	if (Shielded(player, position))
 	{
 		return 0.0f;
 	}

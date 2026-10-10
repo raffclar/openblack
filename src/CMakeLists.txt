@@ -3,6 +3,15 @@ if (NOT ANDROID)
   list(REMOVE_ITEM OPENBLACK_SOURCES "${CMAKE_CURRENT_LIST_DIR}/main.cpp")
 endif ()
 file(GLOB_RECURSE OPENBLACK_HEADERS "${CMAKE_CURRENT_LIST_DIR}/*.h")
+# The debug inspector's game side is built only with the option
+if (NOT OPENBLACK_INSPECTOR)
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX
+       "/Inspector/|/InspectorSystem[.]cpp$"
+  )
+  list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX
+       "/Inspector/|/InspectorSystem[.]h$"
+  )
+endif ()
 if (APPLE)
   file(GLOB_RECURSE OPENBLACK_OBJC_SOURCES "${CMAKE_CURRENT_LIST_DIR}/*.mm")
   list(APPEND OPENBLACK_SOURCES "${OPENBLACK_OBJC_SOURCES}")
@@ -189,6 +198,21 @@ else ()
     PUBLIC $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
            $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
   )
+endif ()
+
+if (OPENBLACK_INSPECTOR)
+  target_link_libraries(openblack_lib PRIVATE inspector)
+  target_compile_definitions(openblack_lib PUBLIC OPENBLACK_INSPECTOR)
+  # The running game tells tools how it was built
+  target_compile_definitions(
+    openblack_lib PRIVATE OPENBLACK_BUILD_TYPE="$<CONFIG>"
+  )
+  # Every component's reflection in one file outgrows an object file's sections
+  if (MSVC)
+    set_source_files_properties(
+      Inspector/ComponentFields.cpp PROPERTIES COMPILE_OPTIONS /bigobj
+    )
+  endif ()
 endif ()
 
 target_compile_definitions(

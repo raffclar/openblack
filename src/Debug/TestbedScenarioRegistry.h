@@ -129,6 +129,9 @@ struct Environment
 	std::optional<float> playerAlignment;
 	/// Where the cursor, and so the hand, is put, as a share of the window from its top left, until the mouse moves
 	std::optional<glm::vec2> cursor;
+	/// Where the player's temple stands, from the middle of the map, x east and y north in units of the land; with it
+	/// standing their influence border shows, as on a land. The testbed has none when not given.
+	std::optional<glm::vec2> temple;
 };
 
 /// Where the camera looks as the scenario starts
@@ -453,6 +456,8 @@ struct Command
 		OpenCreatureCave,
 		ApplyTattoo,
 		RemoveTattoo,
+		/// The tattoo editor opened on the player's creature, as clicking it in the Creature Cave does
+		OpenTattooEditor,
 		/// The player's hand is given a seed (value, by the game's seed number) as if from a bubble; a gesture (value, by
 		/// the game's gesture number) is drawn with the hand across the middle of the screen, through the same recogniser
 		/// the cursor goes through. Neither needs a creature.
@@ -482,6 +487,8 @@ struct Command
 		WheelTurn,
 		/// The player's alignment jumps, which the hand shows
 		SetAlignment,
+		/// A script's cinema bars slide in (value 1) or out (value 0)
+		WideScreen,
 		/// Its history, as the Creature Cave's trophies show it: how it leans in fights (amount, -1 defensive to 1
 		/// aggressive) as if it had fought; how many times it has seen a miracle (value, by its magic type; amount, the
 		/// times), which it then knows about

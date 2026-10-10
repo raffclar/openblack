@@ -28,6 +28,7 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "EngineConfig.h"
 #include "Gui/LoadingScreenRules.h"
+#include "Input/InputLock.h"
 #include "Input/ShortcutKeys.h"
 #include "Magic/HandHoldPoser.h"
 #include "Windowing/WindowingInterface.h" // For DisplayMode
@@ -87,6 +88,9 @@ struct ScenarioRequest
 	std::optional<std::filesystem::path> results;
 	/// Without the testbed's window of scenarios over the view, as for screenshots of what a scenario shows
 	bool hideWindow {false};
+	/// A benchmark's crowd is measured, its results written and the game quit, as the command line asks; a scenario
+	/// asked for while the game runs (from the debug inspector) only runs
+	bool benchmark {true};
 };
 
 struct Arguments
@@ -120,6 +124,14 @@ struct Arguments
 	/// A testbed scenario to run as the game starts, by its id, and how to measure its crowd if it has one
 	std::optional<ScenarioRequest> scenario;
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> requestScreenshot;
+	/// The port of 127.0.0.1 the debug inspector's server listens on, in builds with it; none to not start it
+	std::optional<uint16_t> inspectPort;
+	/// The seed of every random number the game draws, and the date pinned, for a deterministic run; none for a seed of
+	/// the machine's and the wall clock's date
+	std::optional<uint32_t> seed;
+	/// How the player's mouse and keyboard are kept out while the inspector drives the game: while a client is
+	/// connected, from the start, or never
+	input::LockMode inspectInputLock {input::LockMode::Auto};
 };
 
 class Game
@@ -182,23 +194,31 @@ public:
 
 	[[nodiscard]] uint32_t GetTurn() const;
 	[[nodiscard]] bool IsPaused() const;
+	/// This computer's hand is drawn this frame: no menu is open over the game and the interface is not given over to a
+	/// cinematic
+	[[nodiscard]] bool IsHandDrawn() const;
 	/// The scenario asked for on the command line, once: the scenarios' window runs it as the game starts
 	/// The game ends after this frame. Unlike the window's events, which say each time whether to go on, nothing takes
 	/// it back
 	void RequestQuit() { _quitRequested = true; }
 	[[nodiscard]] std::optional<ScenarioRequest> TakeScenarioRequest() { return std::exchange(_scenarioRequest, std::nullopt); }
+	/// Asks for a scenario while the game runs: the scenarios' window runs it on a fresh testbed next frame
+	void RequestScenario(ScenarioRequest request) { _scenarioRequest = std::move(request); }
 	[[nodiscard]] std::chrono::duration<float, std::milli> GetDeltaTime() const { return _turnDeltaTime; }
 	[[nodiscard]] const glm::ivec2& GetMousePosition() const { return _mousePosition; }
 	/// Puts the cursor the game works with somewhere in the window, until the mouse next moves
 	void SetMousePosition(glm::ivec2 position) { _mousePosition = position; }
 	[[nodiscard]] const audio::AtmosAudio* GetAtmosAudio() const { return _atmosAudio.get(); }
 	[[nodiscard]] audio::GameMusic* GetGameMusic() { return _gameMusic.get(); }
-	/// The game's interface over the scene, none before it is made
-	[[nodiscard]] gui::GameInterface* GetInterface() { return _interface.get(); }
 	[[nodiscard]] const audio::GameMusic* GetGameMusic() const { return _gameMusic.get(); }
 	[[nodiscard]] const HandAnimation* GetHandAnimation() const { return _handAnimation.get(); }
 
-	void RequestScreenshot(const std::filesystem::path& path) noexcept;
+	/// The frame being made is written to a PNG once drawn, without the debug windows if asked
+	void RequestScreenshot(const std::filesystem::path& path, bool hideDebugGui = false) noexcept;
+	/// The game's own interface (its menu), once it is made
+	[[nodiscard]] gui::GameInterface* GetInterface() noexcept { return _interface.get(); }
+	/// The map script of the land loaded last, or "testbed"; empty before one is
+	[[nodiscard]] const std::filesystem::path& GetLandPath() const noexcept { return _landPath; }
 
 	static Game* Instance() { return sInstance; }
 
@@ -247,11 +267,16 @@ private:
 	bool _tipFadedIn {false};
 	bool _startTestbed {false};
 	std::optional<ScenarioRequest> _scenarioRequest;
+	/// The port the debug inspector is to listen on, if it is to start
+	std::optional<uint16_t> _inspectPort;
+	std::optional<uint32_t> _seed;
+	input::LockMode _inspectInputLock {input::LockMode::Auto};
 	/// Whether the testbed opens its window of scenarios
 	bool _testbedWindow {true};
 	bool _quitRequested {false};
 
-	std::chrono::steady_clock::time_point _lastGameLoopTime;
+	/// The machine's ticks at the last turn, as the game reads them
+	uint32_t _lastGameLoopTime {0};
 	std::chrono::steady_clock::duration _turnDeltaTime;
 	uint32_t _frameCount {0};
 	glm::ivec2 _mousePosition {0, 0};
@@ -335,6 +360,8 @@ private:
 	/// What moves each species' body, from Data/CTR's .cbn files, by the species their base mesh names
 	static void LoadCreatureRigs();
 	/// Acts on what the player chose in the game's menu: continuing restores the pause it had before it opened
+	/// As a new game starts: whether to ask a returning player what to skip, and asking
+	void AskNewGameChoice();
 	void HandleInterfaceAction();
 	/// Once a frame outside the temple: where the hand's tooltip is drawn, and the status panel of the creature the hand
 	/// is held to, or over
@@ -346,6 +373,8 @@ private:
 	void ProcessHandToolTipTurn();
 
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> _requestScreenshot;
+	/// The requested screenshot leaves the debug windows out
+	bool _screenshotHidesDebugGui {false};
 	std::unique_ptr<audio::AtmosAudio> _atmosAudio;
 	std::unique_ptr<audio::GameMusic> _gameMusic;
 	std::unique_ptr<HandAnimation> _handAnimation;
@@ -353,6 +382,7 @@ private:
 	magic::HandHoldPoser _handHold;
 	/// The game's own interface, null without the game's files for it
 	std::unique_ptr<gui::GameInterface> _interface;
+	std::filesystem::path _landPath;
 	/// Whether the game was paused when the menu opened, which pauses it
 	bool _pausedBeforeMenu {true};
 	bool _menuWasOpen {false};

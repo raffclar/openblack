@@ -38,6 +38,7 @@
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/TeleportStone.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
@@ -64,6 +65,8 @@ void ForEachMapComponent(Func&& func)
 	func.template operator()<MobileStatic>();
 	func.template operator()<SpellDispenser>();
 	func.template operator()<TeleportStone>();
+	// A temple's heart, which stands in the land as a building does
+	func.template operator()<Temple>();
 	// Trees and shields, each in one cell
 	func.template operator()<Tree>();
 	func.template operator()<DeadTree>();
@@ -146,7 +149,7 @@ MapProduction::~MapProduction()
 
 std::optional<MapProduction::Kind> MapProduction::KindOf(const Registry& registry, entt::entity entity)
 {
-	if (registry.AnyOf<Abode, Feature, Flowers, BigForest, SpellDispenser, TeleportStone>(entity))
+	if (registry.AnyOf<Abode, Feature, Flowers, BigForest, SpellDispenser, TeleportStone, Temple>(entity))
 	{
 		return Kind {.placement = Placement::FixedFront, .coversOutline = true, .moves = false};
 	}
