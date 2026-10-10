@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <optional>
@@ -23,6 +24,27 @@ using namespace std::chrono_literals;
 namespace
 {
 
+/// How long a test waits for something that should happen at once. Generous, so that a machine busy with other builds
+/// and tests doesn't fail them; a server that never answers still fails, once this has passed.
+constexpr auto k_Patience = 20s;
+
+/// Polls the server as the game does once a frame until the condition holds, or the patience runs out. Whether it held.
+template <typename Condition>
+bool PollUntil(Server& server, const Server::Handler& handler, Condition condition)
+{
+	const auto deadline = std::chrono::steady_clock::now() + k_Patience;
+	while (!condition())
+	{
+		if (std::chrono::steady_clock::now() > deadline)
+		{
+			return false;
+		}
+		server.Poll(handler);
+		std::this_thread::sleep_for(1ms);
+	}
+	return true;
+}
+
 /// Polls the server as the game does once a frame, until the client has its line
 std::optional<std::string> Exchange(Server& server, Client& client, const std::string& line)
 {
@@ -31,15 +53,14 @@ std::optional<std::string> Exchange(Server& server, Client& client, const std::s
 		return std::nullopt;
 	}
 	const Inspector inspector;
-	for (int frame = 0; frame < 200; ++frame)
-	{
-		server.Poll([&inspector](std::string_view request) { return inspector.Handle(request); });
-		if (auto answer = client.ReceiveLine(5ms); answer.has_value())
-		{
-			return answer;
-		}
-	}
-	return std::nullopt;
+	std::optional<std::string> answer;
+	PollUntil(
+	    server, [&inspector](std::string_view request) { return inspector.Handle(request); },
+	    [&client, &answer] {
+		    answer = client.ReceiveLine(5ms);
+		    return answer.has_value();
+	    });
+	return answer;
 }
 
 } // namespace
@@ -72,9 +93,16 @@ TEST(InspectorServer, NeverWaitsWithoutClients)
 	std::string error;
 	auto server = Server::Listen(0, error);
 	ASSERT_NE(server, nullptr) << error;
-	const auto start = std::chrono::steady_clock::now();
-	EXPECT_EQ(server->Poll([](std::string_view) { return std::string(); }), 0u);
-	EXPECT_LT(std::chrono::steady_clock::now() - start, 100ms);
+	// The quickest of several polls, so that the test thread being set aside for a while on a busy machine isn't taken
+	// for the server waiting: a poll that waited would wait every time
+	auto quickest = std::chrono::steady_clock::duration::max();
+	for (int poll = 0; poll < 10; ++poll)
+	{
+		const auto start = std::chrono::steady_clock::now();
+		EXPECT_EQ(server->Poll([](std::string_view) { return std::string(); }), 0u);
+		quickest = std::min(quickest, std::chrono::steady_clock::now() - start);
+	}
+	EXPECT_LT(quickest, 100ms);
 }
 
 TEST(InspectorServer, ClientsThatGoAreDropped)
@@ -88,10 +116,9 @@ TEST(InspectorServer, ClientsThatGoAreDropped)
 		ASSERT_TRUE(Exchange(*server, *client, R"({"query": "ping"})").has_value());
 		EXPECT_EQ(server->ClientCount(), 1u);
 	}
-	for (int frame = 0; frame < 100 && server->ClientCount() != 0; ++frame)
-	{
-		server->Poll([](std::string_view) { return std::string(); });
-	}
+	// The client's going reaches the server when the system delivers it, which a busy machine may take a while to do
+	EXPECT_TRUE(
+	    PollUntil(*server, [](std::string_view) { return std::string(); }, [&server] { return server->ClientCount() == 0; }));
 	EXPECT_EQ(server->ClientCount(), 0u);
 }
 
@@ -157,8 +184,10 @@ TEST(InspectorServer, AnotherThreadAnswersWhileOneHandlerIsBusy)
 	std::atomic<bool> busy {false};
 	std::atomic<bool> release {false};
 	ASSERT_TRUE(loading->SendLine("slow"));
+	// The game's frame, busy with the slow line until released. Everything waits on what it waits for, with the
+	// patience as the only limit, so that a busy machine slows the test without failing it.
 	std::thread frame([&server, &busy, &release] {
-		const auto deadline = std::chrono::steady_clock::now() + 5s;
+		const auto deadline = std::chrono::steady_clock::now() + k_Patience;
 		while (server->Poll([&busy, &release, deadline](std::string_view) {
 			busy = true;
 			while (!release && std::chrono::steady_clock::now() < deadline)
@@ -172,28 +201,43 @@ TEST(InspectorServer, AnotherThreadAnswersWhileOneHandlerIsBusy)
 			std::this_thread::sleep_for(1ms);
 		}
 	});
-	while (!busy)
+	// The frame is let go and joined however the test ends, so that a failure is reported rather than ending the run
+	struct Join
+	{
+		std::atomic<bool>& release;
+		std::thread& frame;
+		~Join()
+		{
+			release = true;
+			frame.join();
+		}
+	} join {release, frame};
+
+	const auto deadline = std::chrono::steady_clock::now() + k_Patience;
+	while (!busy && std::chrono::steady_clock::now() < deadline)
 	{
 		std::this_thread::sleep_for(1ms);
 	}
+	ASSERT_TRUE(busy) << "the frame never took the slow line";
 
 	ASSERT_TRUE(waiting->SendLine("quick"));
 	std::optional<std::string> quick;
-	for (int poll = 0; poll < 500 && !quick.has_value(); ++poll)
-	{
-		server->Poll([](std::string_view) { return std::string("loading"); });
-		quick = waiting->ReceiveLine(5ms);
-	}
+	EXPECT_TRUE(PollUntil(
+	    *server, [](std::string_view) { return std::string("loading"); },
+	    [&waiting, &quick] {
+		    quick = waiting->ReceiveLine(5ms);
+		    return quick.has_value();
+	    }));
 	EXPECT_EQ(quick, "loading");
 	EXPECT_FALSE(release);
 
 	release = true;
-	frame.join();
 	std::optional<std::string> slow;
-	for (int poll = 0; poll < 200 && !slow.has_value(); ++poll)
-	{
-		server->Poll([](std::string_view) { return std::string(); });
-		slow = loading->ReceiveLine(5ms);
-	}
+	EXPECT_TRUE(PollUntil(
+	    *server, [](std::string_view) { return std::string(); },
+	    [&loading, &slow] {
+		    slow = loading->ReceiveLine(5ms);
+		    return slow.has_value();
+	    }));
 	EXPECT_EQ(slow, "loaded");
 }

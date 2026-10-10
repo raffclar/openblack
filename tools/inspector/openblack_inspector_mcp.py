@@ -28,9 +28,13 @@ earlier by someone else. Every answer names the game it came from (pid, port, wo
 ping on each new connection that the game answering is the one meant. While a game loads, calls wait for it.
 This works with games of older builds too, which don't name themselves: the adapter names them from the ping.
 
-Run it with --call QUERY [JSON] to send a single request from a shell, without MCP:
+Run it with --call QUERY [JSON] to send a single request from a shell, without MCP. The JSON is the query's
+parameters, with any shaping options (near, radius, fields, where, limit...) beside them; a JSON with "params" is
+the rest of the request as the game reads it:
 
     python openblack_inspector_mcp.py --port 47800 --call sky.moon
+    python openblack_inspector_mcp.py --pid 1234 --call ecs.entities '{"component": "Temple", "limit": 5}'
+    python openblack_inspector_mcp.py --call objects.find '{"component": "Tree", "near": [0, 0], "radius": 50}'
     python openblack_inspector_mcp.py --call objects.find '{"params": {"component": "Tree"}, "near": [0, 0], "radius": 50}'
     python openblack_inspector_mcp.py --games
     python openblack_inspector_mcp.py --worktree ob-wt-inspect --call sky.moon
@@ -1193,7 +1197,11 @@ class Session:
         tool = TOOLS_BY_NAME.get(name)
         if tool is None:
             return {"ok": False, "error": f"no tool {name}"}
-        return self.send(build_request(tool, arguments), wait_step=name == "game_step" and arguments.get("wait", True),
+        try:
+            request = build_request(tool, arguments)
+        except ValueError as error:
+            return {"ok": False, "error": str(error)}
+        return self.send(request, wait_step=name == "game_step" and arguments.get("wait", True),
                          target=arguments, wait_file=name == "screenshot" and arguments.get("wait", True))
 
     def send(self, request, wait_step=False, target=None, wait_file=False):
@@ -1251,11 +1259,28 @@ def request_until_loaded(connection, request, load_timeout):
 
 
 def build_request(tool, arguments):
+    """The request a tool's arguments make. An argument the tool doesn't know is refused (ValueError), never dropped:
+    the query would otherwise run as if it hadn't been given. inspector_query takes its query's parameters in params,
+    or beside it as further arguments."""
+    known = set(tool["inputSchema"].get("properties", {})) | SHAPING_KEYS | set(SELECTOR_KEYS)
     if tool["name"] == "inspector_query":
         request = {"query": arguments.get("query", "")}
-        if "params" in arguments:
-            request["params"] = arguments["params"]
+        params = arguments.get("params")
+        if params is not None and not isinstance(params, dict):
+            raise ValueError("params must be an object of the query's parameters")
+        params = dict(params or {})
+        loose = {key: value for key, value in arguments.items() if key not in known}
+        both = sorted(set(loose) & set(params))
+        if both:
+            raise ValueError(f"{', '.join(both)} given both in params and beside it")
+        params.update(loose)
+        if params:
+            request["params"] = params
     else:
+        unknown = sorted(key for key in arguments if key not in known)
+        if unknown:
+            raise ValueError(f"{tool['name']} doesn't take {', '.join(unknown)}; it takes "
+                             f"{', '.join(sorted(tool['inputSchema'].get('properties', {})))}")
         request = {"query": tool["query"]}
         params = {key: arguments[key] for key in tool.get("params", []) if key in arguments}
         if params:
@@ -1263,6 +1288,30 @@ def build_request(tool, arguments):
     for key in SHAPING_KEYS:
         if key in arguments:
             request[key] = arguments[key]
+    return request
+
+
+def call_request(query, text, catalogue=None):
+    """The request --call QUERY [JSON] sends. The JSON is the query's parameters, as in {"component": "Temple"}, with
+    any shaping options (near, radius, fields, where, limit and the like) beside them; a key that is one of the
+    query's parameters is always taken as one. A JSON with "params" is instead the rest of the request as the game
+    reads it, as before: {"params": {"component": "Tree"}, "near": [0, 0], "radius": 50}."""
+    catalogue = CATALOGUE if catalogue is None else catalogue
+    given = json.loads(text) if text.strip() else {}
+    if not isinstance(given, dict):
+        raise ValueError("the request must be a JSON object")
+    if "params" in given:
+        request = dict(given)
+    else:
+        if query == "describe":
+            parameters = {"provider", "query"}
+        else:
+            parameters = {entry.get("name") for entry in catalogue.get(query, {}).get("parameters", [])}
+        params = {key: value for key, value in given.items() if key in parameters or key not in SHAPING_KEYS}
+        request = {key: value for key, value in given.items() if key not in params}
+        if params:
+            request["params"] = params
+    request["query"] = query
     return request
 
 
@@ -1350,8 +1399,11 @@ def main():
         print(json.dumps(session.games(), indent=1))
         return 0
     if args.call:
-        request = json.loads(args.request)
-        request["query"] = args.call
+        try:
+            request = call_request(args.call, args.request)
+        except ValueError as error:
+            print(error, file=sys.stderr)
+            return 2
         try:
             answer = session.send(request)
         except ConnectionError as error:

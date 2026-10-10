@@ -557,6 +557,68 @@ class ScreenshotTest(SessionBase):
         self.assertIn("older build", answer["error"])
 
 
+class ArgumentsTest(SessionBase):
+    """What a call's arguments become: the query's parameters go in params, and nothing given is dropped"""
+    CATALOGUE = {"ecs.entities": {"query": "ecs.entities", "parameters": [{"name": "component"}, {"name": "kind"}]},
+                 "edit.add": {"query": "edit.add", "parameters": [{"name": "id"}, {"name": "fields"}]}}
+
+    def test_call_json_is_the_parameters(self):
+        request = mcp.call_request("ecs.entities", '{"component": "Temple"}', self.CATALOGUE)
+        self.assertEqual(request, {"query": "ecs.entities", "params": {"component": "Temple"}})
+
+    def test_call_shaping_options_stay_beside_the_parameters(self):
+        request = mcp.call_request("ecs.entities", '{"component": "Tree", "near": [0, 0], "radius": 50, "limit": 5}',
+                                   self.CATALOGUE)
+        self.assertEqual(request, {"query": "ecs.entities", "params": {"component": "Tree"}, "near": [0, 0],
+                                   "radius": 50, "limit": 5})
+
+    def test_call_a_parameter_named_as_an_option_is_the_parameter(self):
+        request = mcp.call_request("edit.add", '{"id": 7, "fields": {"life": 1}}', self.CATALOGUE)
+        self.assertEqual(request, {"query": "edit.add", "params": {"id": 7, "fields": {"life": 1}}})
+
+    def test_call_describe_takes_its_query(self):
+        request = mcp.call_request("describe", '{"query": "sky.moon"}', self.CATALOGUE)
+        self.assertEqual(request, {"query": "describe", "params": {"query": "sky.moon"}})
+
+    def test_call_explicit_params_form_still_works(self):
+        request = mcp.call_request("ecs.entities", '{"params": {"component": "Tree"}, "limit": 3}', self.CATALOGUE)
+        self.assertEqual(request, {"query": "ecs.entities", "params": {"component": "Tree"}, "limit": 3})
+
+    def test_call_without_json_has_no_parameters(self):
+        self.assertEqual(mcp.call_request("sky.moon", "{}", self.CATALOGUE), {"query": "sky.moon"})
+        self.assertEqual(mcp.call_request("sky.moon", "", self.CATALOGUE), {"query": "sky.moon"})
+
+    def test_call_refuses_what_isnt_an_object(self):
+        with self.assertRaises(ValueError):
+            mcp.call_request("sky.moon", "[1]", self.CATALOGUE)
+        with self.assertRaises(ValueError):
+            mcp.call_request("sky.moon", "{nope", self.CATALOGUE)
+
+    def test_the_game_is_sent_the_parameters(self):
+        self.session.send(mcp.call_request("ecs.entities", '{"component": "Temple"}', self.CATALOGUE),
+                          target={"pid": 1001})
+        self.assertEqual(self.first.asked()[-1]["params"], {"component": "Temple"})
+        self.assertNotIn("component", self.first.asked()[-1])
+
+    def test_inspector_query_takes_parameters_beside_params(self):
+        answer = self.session.call("inspector_query", {"query": "ecs.entities", "component": "Temple", "limit": 2,
+                                                       "pid": 1001})
+        self.assertTrue(answer["ok"], answer)
+        self.assertEqual(self.first.asked()[-1]["params"], {"component": "Temple"})
+        self.assertEqual(self.first.asked()[-1]["limit"], 2)
+        clash = self.session.call("inspector_query", {"query": "ecs.entities", "params": {"component": "A"},
+                                                      "component": "B", "pid": 1001})
+        self.assertFalse(clash["ok"])
+        self.assertIn("component", clash["error"])
+
+    def test_a_tool_refuses_arguments_it_doesnt_take(self):
+        asked = len(self.first.asked())
+        answer = self.session.call("game_moon", {"pid": 1001, "colour": "red"})
+        self.assertFalse(answer["ok"])
+        self.assertIn("colour", answer["error"])
+        self.assertEqual(len(self.first.asked()), asked)
+
+
 class SchemaTest(unittest.TestCase):
     """Tools' parameters come from the game's own descriptions of its queries"""
     BUILT_IN = {"describe", "writes"}
