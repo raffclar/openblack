@@ -105,6 +105,15 @@ struct AgeSetting
 	return setting;
 }
 
+/// The models a villager given an age wears at its three distances (close, usual, far): its kind's child models when
+/// made young, its kind's adult models when made grown
+template <typename Model>
+[[nodiscard]] constexpr std::array<Model, 3> ModelsForAge(bool child, const std::array<Model, 3>& childModels,
+                                                          const std::array<Model, 3>& adultModels)
+{
+	return child ? childModels : adultModels;
+}
+
 /// The size a villager starts at: a child its age's size from the table, an adult a little under full size
 [[nodiscard]] float StartScale(uint32_t age, uint32_t grownUp, std::span<const float, 20> ageToScale);
 

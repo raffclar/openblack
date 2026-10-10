@@ -24,6 +24,7 @@
 #include <Inspector/CameraControl.h>
 #include <Inspector/GuiControl.h>
 #include <Inspector/LevelControl.h>
+#include <Inspector/RunControl.h>
 #include <Inspector/ScriptControl.h>
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
@@ -851,6 +852,22 @@ TEST(InspectorScreenshot, APictureNeverWrittenFails)
 	ASSERT_EQ(failed["failed"].size(), 1u);
 	EXPECT_NE(failed["failed"][0].get<std::string>().find("lost.png: never written"), std::string::npos);
 	EXPECT_TRUE(failed["writing"].empty());
+}
+
+// While a testbed scenario asked for hasn't laid out its things, the game is loading it: a query for its things is told
+// to wait, never that they aren't there
+TEST(InspectorRunControl, AScenarioAskedForIsLoadingUntilItsThingsAreLaidOut)
+{
+	EXPECT_FALSE(ScenarioLoading(std::nullopt).has_value());
+	const auto loading = ScenarioLoading("objects.village_totem");
+	ASSERT_TRUE(loading.has_value());
+	EXPECT_EQ(*loading, "scenario objects.village_totem");
+	Inspector inspector;
+	const auto answer = Json::parse(
+	    inspector.HandleWhileLoading(R"({"query": "ecs.entities", "params": {"component": "VillageTotem"}})", *loading));
+	EXPECT_EQ(answer["ok"], false);
+	EXPECT_EQ(answer["loading"], "scenario objects.village_totem");
+	EXPECT_EQ(Json::parse(inspector.HandleWhileLoading(R"({"query": "game.state"})", *loading))["result"]["ready"], false);
 }
 
 // Two held pictures asked for at once take turns: the second's camera goes in place once the first's frames are free,

@@ -18,6 +18,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Registry.h"
@@ -78,8 +79,11 @@ void HighDetailSystem::Make(entt::entity thing)
 	{
 		return;
 	}
+	// Known by the model it wears close up
+	auto* detailMeshes = registry.TryGet<DetailMeshes>(thing);
+	const auto worn = detailMeshes != nullptr ? detailMeshes->meshes[0] : mesh->id;
 	const auto model =
-	    std::ranges::find_if(k_ModelsWithDetail, [mesh](MeshId id) { return resources::HashIdentifier(id) == mesh->id; });
+	    std::ranges::find_if(k_ModelsWithDetail, [worn](MeshId id) { return resources::HashIdentifier(id) == worn; });
 	if (model == k_ModelsWithDetail.end())
 	{
 		return;
@@ -93,6 +97,12 @@ void HighDetailSystem::Make(entt::entity thing)
 	detail.usualModel = mesh->id;
 	detail.face = detailed->face;
 	mesh->id = *id;
+	// It wears the detailed model at every distance
+	if (detailMeshes != nullptr)
+	{
+		detail.usualDetailModels = detailMeshes->meshes;
+		detailMeshes->meshes = {*id, *id, *id};
+	}
 	registry.SetDirty();
 }
 
@@ -107,6 +117,11 @@ void HighDetailSystem::Release(entt::entity thing)
 	if (auto* mesh = registry.TryGet<Mesh>(thing); mesh != nullptr && detail->usualModel.has_value())
 	{
 		mesh->id = *detail->usualModel;
+	}
+	if (auto* detailMeshes = registry.TryGet<DetailMeshes>(thing);
+	    detailMeshes != nullptr && detail->usualDetailModels.has_value())
+	{
+		detailMeshes->meshes = *detail->usualDetailModels;
 	}
 	registry.Remove<HighDetail>(thing);
 	registry.SetDirty();

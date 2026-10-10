@@ -17,8 +17,8 @@
 #include "3D/LandIslandInterface.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/Flock.h"
 #include "ECS/Components/LivingAction.h"
-#include "ECS/Components/ScriptFlock.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Map.h"
@@ -114,7 +114,7 @@ uint32_t villager_flock::MoveInFlock(LivingAction& action)
 	{
 		return 1;
 	}
-	const auto& data = registry.Get<const ScriptFlock>(flock);
+	const auto& data = registry.Get<const Flock>(flock);
 	const auto leader = script_flocks::Leader(registry, flock);
 	const rules::FlockView view {.place = data.place,
 	                             .domainRadius = data.domainRadius,

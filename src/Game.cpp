@@ -154,6 +154,7 @@
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -173,6 +174,7 @@
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/Systems/SharkSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
@@ -194,7 +196,6 @@
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
-#include "ECS/Systems/WhaleSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/VillageTotem.h"
 #include "ECS/WorldObjects.h"
@@ -359,31 +360,6 @@ void SendAdvisorsHome(bool helpScript)
 	advisors.SpiritHome(2, helpScript);
 }
 
-/// While a land loads the game serves no frames: the inspector answers meanwhile that it is loading, so that tools
-/// wait for it rather than time out
-class InspectorLoading
-{
-public:
-	explicit InspectorLoading(std::string_view what)
-	{
-		if (Locator::inspector::has_value())
-		{
-			Locator::inspector::value().BeginLoading(what);
-		}
-	}
-	~InspectorLoading()
-	{
-		if (Locator::inspector::has_value())
-		{
-			Locator::inspector::value().EndLoading();
-		}
-	}
-	InspectorLoading(const InspectorLoading&) = delete;
-	InspectorLoading& operator=(const InspectorLoading&) = delete;
-	InspectorLoading(InspectorLoading&&) = delete;
-	InspectorLoading& operator=(InspectorLoading&&) = delete;
-};
-
 } // namespace
 
 const std::string k_WindowTitle = "openblack";
@@ -437,8 +413,13 @@ Game::Game(Arguments&& args) noexcept
 	{
 		auto logger = createLogger(subsystem.data());
 		logger->set_level(args.logLevels.at(i));
+		// An error is written out at once, so it is in the file even if the process is then ended from outside, where no
+		// crash report can be written
+		logger->flush_on(spdlog::level::err);
 		++i;
 	}
+	// Everything else is written out within a second
+	spdlog::flush_every(std::chrono::seconds(1));
 	sInstance = this;
 
 	auto& config = Locator::config::emplace();
@@ -1116,8 +1097,8 @@ bool Game::GameLogicLoop() noexcept
 	{
 		Locator::templeDestructionSystem::value().ProcessTurn();
 	}
-	// The whales' turns start where they are, then the things the scripts walk along tracks go on, before the living
-	Locator::whaleSystem::value().ProcessTurn();
+	// The sharks' turns start where they are, then the things the scripts walk along tracks go on, before the living
+	Locator::sharkSystem::value().ProcessTurn();
 	// The dances go on after the players and before the things walking tracks and the living
 	Locator::danceSystem::value().ProcessTurn();
 	Locator::walkPathSystem::value().ProcessTurn();
@@ -1203,6 +1184,8 @@ bool Game::GameLogicLoop() noexcept
 
 	auto& lhvm = Locator::vm::value();
 	lhvm.LookIn(lhvm::ScriptType::All);
+	// Every object the scripts no longer hold in a variable lets go of its place in their table, after their turn
+	Locator::scriptObjects::value().ReleaseUnreferenced();
 	// The scripts' fade moves on with their turn
 	Locator::cinematicDirectorSystem::value().ProcessTurn();
 	// The advisors follow what they point at and look at
@@ -1690,8 +1673,8 @@ bool Game::Update() noexcept
 		Locator::animalSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
 		// The clips the villagers' states play go on, and the sounds of their frames play
 		Locator::livingActionSystem::value().UpdatePoses(clock.GetTurn(), clock.GetTurnFraction());
-		// The whales swim between their last two turns and leave their wakes
-		Locator::whaleSystem::value().Update(gameTime, clock.GetTurnFraction());
+		// The sharks swim between their last two turns and leave their wakes
+		Locator::sharkSystem::value().Update(gameTime, clock.GetTurnFraction());
 		// The gates and the other scenery the scripts open and close play on, and the plinths' stones sit or sink
 		Locator::animatedStaticSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
 	}
@@ -2464,7 +2447,7 @@ bool Game::Initialize() noexcept
 	}
 	// The debug inspector answers from the first frame; the game carries on without it if it can't listen. Until then,
 	// while the game's data loads, it answers that the game is loading
-	std::optional<InspectorLoading> loadingData;
+	std::optional<ecs::systems::InspectorLoading> loadingData;
 	if (_inspectPort.has_value())
 	{
 		// An agent drives it: the player's mouse and keyboard are kept out while a client is connected, so that a knock
@@ -3381,12 +3364,15 @@ bool Game::Run() noexcept
 		frameStart = frameEnd;
 	}
 
+	// The last line of an orderly end: a log that stops without it, and without a crash report, was ended from outside
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game ends after {} frames, at turn {}", _frameCount,
+	                   Locator::time::value().GetTurn());
 	return true;
 }
 
 bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mode look) noexcept
 {
-	const InspectorLoading loading(path.filename().generic_string());
+	const ecs::systems::InspectorLoading loading(path.filename().generic_string());
 	auto& fileSystem = Locator::filesystem::value();
 
 	if (!fileSystem.Exists(path))
@@ -3499,7 +3485,7 @@ bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept
 
 void Game::LoadTestbed() noexcept
 {
-	const InspectorLoading loading("testbed");
+	const ecs::systems::InspectorLoading loading("testbed");
 	_landPath = "testbed";
 	// No script runs on the testbed: the story's would set its time of day and stop its clock a few turns in
 	if (Locator::vm::has_value())

@@ -13,6 +13,8 @@
 
 #include <cmath>
 
+#include <array>
+
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 
@@ -22,6 +24,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/CarriedByTornado.h"
+#include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
@@ -178,12 +181,24 @@ void villager_script::SetAge(entt::entity villager, uint32_t age)
 	    Locator::infoConstants::value().villager.at(static_cast<size_t>(GVillagerInfo::Find(person->tribe, person->number)));
 	const auto setting = villager_age::SetAge(age, villager_age::AgeNow(*person), info.grownUpAge);
 	person->lifeStage = setting.child ? Villager::LifeStage::Child : Villager::LifeStage::Adult;
-	if (auto* mesh = registry.TryGet<Mesh>(villager); mesh != nullptr && setting.childModel.has_value())
+	if (setting.childModel.has_value())
 	{
-		// A grown villager made young wears the child's model the game draws at its usual detail; a child made grown
-		// wears its kind's adult model
+		// A grown villager made young wears its kind's child models at their three distances; a child made grown its
+		// kind's adult models
 		// TODO(opening): a skeleton keeps its skeleton's model either way
-		mesh->id = resources::HashIdentifier(*setting.childModel ? info.childMeshMedium : info.highDetail);
+		const auto meshes = villager_age::ModelsForAge(*setting.childModel,
+		                                               std::array {info.childMeshHigh, info.childMeshMedium, info.childMeshLow},
+		                                               std::array {info.highDetail, info.stdDetail, info.lowDetail});
+		const std::array models {resources::HashIdentifier(meshes[0]), resources::HashIdentifier(meshes[1]),
+		                         resources::HashIdentifier(meshes[2])};
+		if (auto* mesh = registry.TryGet<Mesh>(villager); mesh != nullptr)
+		{
+			mesh->id = models[0];
+		}
+		if (auto* detail = registry.TryGet<DetailMeshes>(villager); detail != nullptr)
+		{
+			detail->meshes = models;
+		}
 	}
 	// Its size starts at its age's and then grows, as a newly made villager's does
 	if (auto* transform = registry.TryGet<Transform>(villager); transform != nullptr)

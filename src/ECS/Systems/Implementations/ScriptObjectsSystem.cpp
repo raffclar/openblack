@@ -16,14 +16,21 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/Flock.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/ScriptTimer.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Dances.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptFlocks.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/WorldObjects.h"
@@ -148,10 +155,103 @@ public:
 		}
 	}
 
-	void Delete(entt::entity object) override { ecs::world_objects::Remove(object); }
+	void Delete(entt::entity object) override
+	{
+		// A dance's dancers are told they have finished dancing, a flock's members are in no flock any more
+		auto& registry = Registry();
+		if (ecs::dances::IsDance(registry, object) && Locator::danceSystem::has_value())
+		{
+			Locator::danceSystem::value().Destroy(object);
+		}
+		else if (ecs::script_flocks::IsFlock(registry, object))
+		{
+			ecs::script_flocks::Destroy(registry, object);
+		}
+		else
+		{
+			ecs::world_objects::Remove(object);
+		}
+	}
+
+	[[nodiscard]] bool IsContainer(entt::entity object) const override
+	{
+		const auto& registry = Registry();
+		return ecs::script_flocks::IsFlock(registry, object) || ecs::dances::IsDance(registry, object) ||
+		       registry.AllOf<Town>(object);
+	}
+
+	std::optional<std::vector<entt::entity>> Disband(entt::entity container) override
+	{
+		auto& registry = Registry();
+		std::vector<entt::entity> left;
+		if (ecs::script_flocks::IsFlock(registry, container))
+		{
+			// Every member leaves, and the flock stays, empty
+			const auto members = registry.Get<const Flock>(container).members;
+			for (const auto member : members)
+			{
+				// TODO(opening): an animal is split off into a flock of its own
+				ecs::script_flocks::Remove(registry, member, false);
+				WaitForScript(member);
+				left.push_back(member);
+			}
+			return left;
+		}
+		if (ecs::dances::IsDance(registry, container))
+		{
+			// Every dancer leaves, and the dance stays, empty
+			while (ecs::dances::Size(registry, container) > 0)
+			{
+				const auto dancer = ecs::dances::FirstDancer(registry, container, entt::null);
+				if (dancer == entt::null)
+				{
+					SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Should never happen");
+					break;
+				}
+				ecs::dances::RemoveDancer(registry, dancer);
+				WaitForScript(dancer);
+				left.push_back(dancer);
+			}
+			return left;
+		}
+		if (registry.AllOf<Town>(container))
+		{
+			// A town keeps its villagers
+			return left;
+		}
+		return std::nullopt;
+	}
+
+	[[nodiscard]] std::vector<entt::entity> FlockMembers(entt::entity object) const override
+	{
+		const auto& registry = Registry();
+		if (!ecs::script_flocks::IsFlock(registry, object))
+		{
+			return {};
+		}
+		return registry.Get<const Flock>(object).members;
+	}
+
+	[[nodiscard]] bool IsDeletedWhenReleased(entt::entity object) const override
+	{
+		return Registry().AnyOf<ScriptMarker, ScriptTimer>(object);
+	}
+
+	[[nodiscard]] bool IsHighlight(entt::entity object) const override { return Registry().AllOf<ScriptHighlight>(object); }
 
 private:
 	static ecs::Registry& Registry() { return Locator::entitiesRegistry::value(); }
+
+	/// A villager a script controls, let out of a flock or dance, waits for the script to say what it does next
+	static void WaitForScript(entt::entity living)
+	{
+		auto& registry = Registry();
+		if (registry.Valid(living) && registry.AllOf<ScriptControlled, Villager, LivingAction>(living) &&
+		    Locator::livingActionSystem::has_value())
+		{
+			Locator::livingActionSystem::value().VillagerSetScriptState(living, VillagerStates::InScript);
+		}
+	}
 };
 } // namespace
 
@@ -172,8 +272,9 @@ bool ScriptObjectsSystem::Register(entt::entity object, bool createdByScript)
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Adding null script thing");
 		return false;
 	}
-	if (!_table.Register(Key(object), createdByScript, _world->IsInScript(object)))
+	if (!_table.Register(Key(object), createdByScript))
 	{
+		++_timesFull;
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Script offsets exceeded");
 		return false;
 	}
@@ -325,10 +426,118 @@ void ScriptObjectsSystem::Reset()
 	}
 	_table.Clear();
 	_takesControl = false;
+	_timesFull = 0;
 }
 
 void ScriptObjectsSystem::ClearForNewLand()
 {
 	_table.ClearObjects();
 	_takesControl = false;
+}
+
+void ScriptObjectsSystem::ReleaseUnreferenced()
+{
+	// The places are gone through in order, each as it then stands: a member a disbanded flock lets go of is freed in the
+	// same pass when its place comes later, and at the next turn when it came earlier
+	for (uint16_t index = 1; index < script_objects::k_Places; ++index)
+	{
+		const auto place = _table.At(index);
+		if (!place.used || place.count != 0)
+		{
+			continue;
+		}
+		const auto object = static_cast<entt::entity>(place.object);
+		if (_world->Exists(object) && _world->IsAvailable(object))
+		{
+			if (!_world->IsInScript(object))
+			{
+				// Every object a native found for a script that the script never kept comes here
+				SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "Releasing reference to script thing not in script");
+			}
+			ReleaseControl(object, place.createdByScript);
+			if (_world->Exists(object))
+			{
+				_world->SetInScript(object, false);
+			}
+		}
+		_table.Free(index);
+	}
+}
+
+void ScriptObjectsSystem::ReleaseControl(entt::entity object, bool createdByScript)
+{
+	if (!_world->IsControlled(object))
+	{
+		// A flock no script controls lets go of the references its members kept
+		for (const auto member : _world->FlockMembers(object))
+		{
+			RemoveReference(member);
+		}
+		return;
+	}
+	if (_world->IsContainer(object))
+	{
+		Disband(object);
+		if (createdByScript)
+		{
+			// A flock or dance a script made goes with the script's hold on it
+			_world->SetControlled(object, false);
+			_world->Delete(object);
+			return;
+		}
+	}
+	ReleaseThing(object, createdByScript);
+}
+
+void ScriptObjectsSystem::ReleaseThing(entt::entity object, bool createdByScript)
+{
+	if (_world->IsDeletedWhenReleased(object))
+	{
+		if (!createdByScript)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Deleting thing not created by script");
+		}
+		_world->SetControlled(object, false);
+		_world->Delete(object);
+		return;
+	}
+	if (_world->IsHighlight(object) && createdByScript)
+	{
+		_world->SetControlled(object, false);
+		_world->Delete(object);
+		return;
+	}
+	ReleaseIntoGame(object);
+}
+
+bool ScriptObjectsSystem::Disband(entt::entity container)
+{
+	const auto left = _world->Disband(container);
+	if (!left.has_value())
+	{
+		return false;
+	}
+	// Each member kept a reference while it was in the flock or dance
+	for (const auto member : *left)
+	{
+		RemoveReference(member);
+	}
+	return true;
+}
+
+std::vector<ScriptObjectPlace> ScriptObjectsSystem::Places() const
+{
+	std::vector<ScriptObjectPlace> places;
+	for (uint16_t index = 1; index < script_objects::k_Places; ++index)
+	{
+		const auto& place = _table.At(index);
+		if (place.used || place.count != 0)
+		{
+			places.push_back({.place = index,
+			                  .object = place.used ? static_cast<entt::entity>(place.object) : entt::null,
+			                  .createdByScript = place.createdByScript,
+			                  .references = place.count});
+		}
+	}
+	return places;
 }

@@ -13,8 +13,20 @@
 
 #include <algorithm>
 
+#include <glm/geometric.hpp>
+
 namespace openblack::graphics::mesh_detail
 {
+
+float ViewDepth(const glm::vec3& point, const glm::vec3& eye, const glm::vec3& forward) noexcept
+{
+	return glm::dot(point - eye, forward);
+}
+
+float ScaledRadius(const glm::vec3& boxSize, float scale) noexcept
+{
+	return glm::length(boxSize) * 0.5f * scale;
+}
 
 float Reach(float importance, float scaledRadius, float modelDetail) noexcept
 {
