@@ -20,6 +20,7 @@
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Registry.h"
@@ -166,6 +167,8 @@ TEST(ScriptFind, KindsOfThings)
 	registry.Assign<components::Pot>(pot).type = PotInfo {10};
 	const auto ball = registry.Create();
 	registry.Assign<components::Ball>(ball);
+	const auto sign = registry.Create();
+	registry.Assign<components::ScriptHighlight>(sign).kind = HighlightInfo::DidYouKnowSign;
 	const auto nothing = registry.Create();
 
 	const auto expect = [&registry](entt::entity entity, ScriptType type, std::optional<uint32_t> subtype) {
@@ -183,5 +186,8 @@ TEST(ScriptFind, KindsOfThings)
 	expect(crow, ScriptType::Bird, static_cast<uint32_t>(AnimalInfo::Crow));
 	expect(pot, ScriptType::Store, 10u);
 	expect(ball, ScriptType::Ball, std::nullopt);
+	// A script's scroll or sign (script type 37), by its row of the highlights' table
+	EXPECT_EQ(static_cast<int>(ScriptType::Highlight), 37);
+	expect(sign, ScriptType::Highlight, 1u);
 	EXPECT_FALSE(script_find::KindOf(registry, nothing).has_value());
 }

@@ -77,6 +77,40 @@ float creature_watching::TimesNeeded(uint32_t timesToSee, float speciesMultiplie
 	return static_cast<float>(timesToSee) * speciesMultiplier;
 }
 
+uint32_t creature_watching::TaughtSightings(uint32_t timesToSee, float speciesMultiplier)
+{
+	// The product is taken at full precision before it is rounded down, so a multiplier just under a whole share
+	// (10 * 0.7 is 6.99999...) gives one sighting fewer than single precision would
+	const auto times = static_cast<double>(timesToSee) * static_cast<double>(speciesMultiplier);
+	return times > 0.0 ? static_cast<uint32_t>(times) : 0;
+}
+
+bool creature_watching::SetKnown(Knowledge& knowledge, KnownList list, size_t index, bool knows, uint32_t taughtSightings)
+{
+	auto& known = list == KnownList::Skill ? knowledge.skillsKnown : knowledge.miraclesKnown;
+	if (index >= known.size())
+	{
+		return false;
+	}
+	const bool newlyKnown = knows && !known[index];
+	known[index] = knows;
+	if (knows && list == KnownList::Miracle && index < knowledge.miraclesSeen.size())
+	{
+		knowledge.miraclesSeen[index].count = taughtSightings;
+	}
+	return newlyKnown;
+}
+
+bool creature_watching::KnowsWhatItNeeds(const Knowledge& knowledge, const ActionNeeds& needs)
+{
+	const auto knowsOf = [](const std::vector<bool>& known, std::optional<size_t> index) {
+		return !index.has_value() || (*index < known.size() && known[*index]);
+	};
+	return std::ranges::all_of(needs.skills,
+	                           [&](std::optional<size_t> skill) { return knowsOf(knowledge.skillsKnown, skill); }) &&
+	       knowsOf(knowledge.miraclesKnown, needs.miracle);
+}
+
 std::optional<Prerequisite> creature_watching::MiraclePrerequisite(size_t miracle)
 {
 	using Kind = Prerequisite::Kind;
