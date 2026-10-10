@@ -3619,9 +3619,15 @@ void GetRealYear() // 118 GET_REAL_YEAR
 
 void RunCameraPath() // 119 RUN_CAMERA_PATH
 {
-	// const auto cameraEnum = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto track = Pop().intVal;
+	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	if (camera == nullptr)
+	{
+		ScriptMessage("Script camera has been removed! - Exception happened?");
+		return;
+	}
+	// The script's camera runs the camera editor's track of that number; one the file doesn't have runs nothing
+	camera->RunTrack(camera_edits::FindTrack(track));
 }
 
 void StartDialogue() // 120 START_DIALOGUE
