@@ -15,6 +15,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "Common/MachineClock.h"
 #include "ECS/DynamicsWorld.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -162,11 +163,8 @@ private:
 		entt::entity owner {entt::null};
 	};
 	std::vector<FollowingSound> _followingSounds;
-	/// The system clock's milliseconds, which pick the fly-by whoosh
-	std::function<uint64_t()> _ticks {[]() {
-		return static_cast<uint64_t>(
-		    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
-	}};
+	/// The machine's milliseconds as the game reads them, which pick the fly-by whoosh
+	std::function<uint64_t()> _ticks {[]() { return static_cast<uint64_t>(machine_clock::Ticks()); }};
 	/// What the dust's puffs are drawn as
 	particles::Creator _dustCreator;
 	entt::entity _hitObject {entt::null};

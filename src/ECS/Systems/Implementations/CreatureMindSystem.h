@@ -11,8 +11,10 @@
 
 #include <optional>
 #include <random>
+#include <utility>
 #include <vector>
 
+#include "Common/RandomNumberManager.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreaturePlanActions.h"
@@ -65,11 +67,15 @@ public:
 	void FoughtFight(entt::entity creature, bool won) override;
 	void AbandonAction(entt::entity creature) override;
 	void ForceCatch(entt::entity creature, entt::entity object) override;
+	bool ForceActivity(entt::entity creature, const ForcedActivity& plan) override;
+	void ReactToFire(entt::entity creature, entt::entity burning) override;
 	void ReactToNastyMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn) override;
 	void ReactToNiceMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn) override;
 	bool TryMiracle(entt::entity creature, MagicType type, entt::entity target) override;
 	void KnowMiracle(entt::entity creature, size_t miracle) override;
 	bool TellCast(entt::entity creature, MagicType type, entt::entity target) override;
+	bool ForcePlan(entt::entity creature, const ForcedPlan& plan) override;
+	std::optional<creature_desires::Desire> ForcePlanOn(entt::entity creature, entt::entity object) override;
 
 private:
 	/// Sets up what a creature has learnt the first time its mind thinks, from its mind file when it has one
@@ -96,6 +102,20 @@ private:
 	bool Replan(entt::entity creature, creature_mind::Activity activity, std::vector<creature_mind::Step> agenda);
 	/// The creature sees a miracle it reacted to, and learns from it
 	void WatchMiracle(entt::entity creature, size_t miracle);
+	/// How useful the creature has learnt a thing is for a desire, when it may act on it at all: nothing when it is kept
+	/// within an area and the thing lies outside it
+	[[nodiscard]] float ActivityUsefulness(entt::entity creature, const components::CreatureMindState& mind,
+	                                       creature_desires::Desire desire, entt::entity object) const;
+	/// A creature douses a thing with water, five times a bucket's worth, as it does after casting the water miracle at
+	/// a fire (CreatureMindFire.cpp); whether the thing is no longer on fire
+	bool Douse(entt::entity creature, entt::entity object);
+	/// What a thing belongs to, as a creature sees it: a building's, villager's or field's town, a tree's forest (or else
+	/// the nearest forest with trees), an animal's flock, a creature itself; nothing for anything else
+	[[nodiscard]] static std::optional<entt::entity> BelongsTo(entt::entity thing);
+	/// The agenda for an action of the game's table on an object, and what carries it out; none when it can't be made
+	[[nodiscard]] std::optional<std::pair<const creature_plan_actions::Executor*, std::vector<creature_mind::Step>>>
+	PlanAgenda(entt::entity creature, uint32_t action, std::optional<uint32_t> object,
+	           const creature_plan_actions::Situation& situation);
 
 	// Casting miracles (CreatureMindCasting.cpp)
 	/// The miracle an action of the game's table casts, if any
@@ -105,6 +125,8 @@ private:
 	bool MayCast(entt::entity creature, const components::CreatureMindState& mind, uint32_t action, bool powerUp);
 	/// What the creature casts for an action, the gesture it draws first and its height
 	std::optional<creature_plan_actions::CastInfo> CastInfoFor(entt::entity creature, uint32_t action);
+	/// How often the creature has seen a miracle and how often it needs to have seen it to cast it
+	[[nodiscard]] std::optional<std::pair<float, float>> MiracleSightings(entt::entity creature, MagicType type);
 	/// A fizzled try, shown as it next chooses what to do
 	void ShowFizzle(entt::entity creature, components::CreatureMindState& mind);
 	/// Going near, getting away from or turning to face an object begins, and each turn it goes on
@@ -113,7 +135,7 @@ private:
 	bool GoNear(entt::entity creature, components::CreatureCasting& casting, bool reissue);
 	creature_mind::SubMove SubMoveOf(entt::entity creature);
 	/// The minds choose at random, apart from the game's own random numbers
-	std::mt19937 _random {std::random_device {}()};
+	RandomStreamSource _random {RandomStream::CreatureMind};
 	/// The game's tables for the minds, taken once the game's data is loaded
 	std::optional<creature_mind_tables::Tables> _tables;
 };

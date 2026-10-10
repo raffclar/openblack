@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <glm/mat4x4.hpp>
+
 #include "ECS/Components/LivingAction.h"
 
 namespace openblack::ecs::systems
@@ -20,12 +22,17 @@ class LivingActionSystemInterface
 {
 public:
 	virtual void Update() = 0;
-	/// Every frame: each villager's model is posed by the clip its state plays, advanced by the game's clock since the
-	/// last frame, and the sounds of the clip's frames it passed are played
+	/// Every frame: the clip each villager's state plays is advanced by the game's clock since the last frame, the
+	/// sounds of the clip's frames it passed are played, and the keyframes it has reached are kept for posing it
 	virtual void UpdatePoses(uint32_t turn, float turnFraction) = 0;
+	/// Every frame, once the camera has moved: the villagers the camera sees, and those flying in the physics or held
+	/// in the hand that it sees reflected in the sea, are posed between the keyframes their clips have reached
+	virtual void PoseVillagersInView(const glm::mat4& viewProjection) = 0;
 
 	[[nodiscard]] virtual VillagerStates VillagerGetState(const components::LivingAction& action,
 	                                                      components::LivingAction::Index index) const = 0;
+	/// The state the villager works towards: its top state when that is a final one, else its final state
+	[[nodiscard]] virtual VillagerStates VillagerGetFinalState(const components::LivingAction& action) const = 0;
 	virtual void VillagerSetState(components::LivingAction& action, components::LivingAction::Index index, VillagerStates state,
 	                              bool skipTransition) const = 0;
 	virtual uint32_t VillagerCallState(components::LivingAction& action, components::LivingAction::Index index) const = 0;

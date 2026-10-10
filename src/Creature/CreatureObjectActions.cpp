@@ -113,3 +113,8 @@ float creature_object_actions::AttitudeSeconds(TownAttitude attitude)
 	}
 	return 0.0f;
 }
+
+bool creature_object_actions::ThrowOver(bool animationOver, bool waitsForLanding, bool thrownFlying)
+{
+	return animationOver && !(waitsForLanding && thrownFlying);
+}

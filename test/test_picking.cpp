@@ -147,12 +147,12 @@ TEST(LandLine, ThePointUnderTheCursorIsKeptNearTheMap)
 
 namespace
 {
-/// A camera at the origin looking down -z, 800 by 600 pixels, the cursor at the middle
+/// A camera at the origin looking down -z in a right-handed frame, 800 by 600 pixels, the cursor at the middle
 screen_pick::View View(glm::vec2 cursor = {400.0f, 300.0f})
 {
 	constexpr float k_Near = 1.0f;
-	const auto projection = glm::perspective(glm::radians(60.0f), 800.0f / 600.0f, k_Near, 1000.0f);
-	const auto view = glm::lookAt(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	const auto projection = glm::perspectiveRH_NO(glm::radians(60.0f), 800.0f / 600.0f, k_Near, 1000.0f);
+	const auto view = glm::lookAtRH(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 	return {.worldToClip = projection * view,
 	        .resolution = {800.0f, 600.0f},
 	        .near = k_Near,
@@ -181,6 +181,35 @@ TEST(ScreenPick, TheCursorMustBeInsideTheSpheresCircle)
 	EXPECT_FALSE(screen_pick::CursorOverSphere(view, {0.0f, 0.0f, 10.0f}, 1.0f, {0.0f, 0.0f, 10.0f}));
 	// A camera inside the sphere is over it wherever the cursor is
 	EXPECT_TRUE(screen_pick::CursorOverSphere(View({0.0f, 0.0f}), {0.0f, 0.0f, -1.0f}, 3.0f, {0.0f, 0.0f, -1.0f}));
+}
+
+TEST(ScreenPick, ASphereIsInViewWhileItsCircleReachesTheScreen)
+{
+	const auto view = View();
+	EXPECT_TRUE(screen_pick::SphereOnScreen(view, {0.0f, 0.0f, -10.0f}, 1.0f, {0.0f, 0.0f, -10.0f}));
+	// Its middle off the right edge, its circle still reaching in
+	EXPECT_TRUE(screen_pick::SphereOnScreen(view, {8.5f, 0.0f, -10.0f}, 1.0f, {8.5f, 0.0f, -10.0f}));
+	EXPECT_FALSE(screen_pick::SphereOnScreen(view, {10.0f, 0.0f, -10.0f}, 1.0f, {10.0f, 0.0f, -10.0f}));
+	// Wholly behind the near plane
+	EXPECT_FALSE(screen_pick::SphereOnScreen(view, {0.0f, 0.0f, 10.0f}, 1.0f, {0.0f, 0.0f, 10.0f}));
+	// The camera inside it, whichever way it looks
+	EXPECT_TRUE(screen_pick::SphereOnScreen(view, {0.0f, 0.0f, 1.0f}, 3.0f, {0.0f, 0.0f, 1.0f}));
+}
+
+TEST(ScreenPick, APointIsInViewOnAPixelOfTheScreen)
+{
+	const auto view = View();
+	EXPECT_TRUE(screen_pick::PointOnScreen(view, {0.0f, 0.0f, -10.0f}));
+	EXPECT_FALSE(screen_pick::PointOnScreen(view, {0.0f, 0.0f, 10.0f}));
+	// Nearer than the near plane
+	EXPECT_FALSE(screen_pick::PointOnScreen(view, {0.0f, 0.0f, -0.5f}));
+	// The point ten metres ahead falling on a pixel across: a pixel cut towards nothing is on the screen just past either
+	// edge's start, not past its end
+	const auto across = [&view](float pixel) { return glm::vec3((pixel / 400.0f - 1.0f) * 10.0f / view.xScale, 0.0f, -10.0f); };
+	EXPECT_TRUE(screen_pick::PointOnScreen(view, across(-0.5f)));
+	EXPECT_FALSE(screen_pick::PointOnScreen(view, across(-1.5f)));
+	EXPECT_TRUE(screen_pick::PointOnScreen(view, across(799.5f)));
+	EXPECT_FALSE(screen_pick::PointOnScreen(view, across(800.5f)));
 }
 
 TEST(ScreenPick, ATriangleFacingTheCameraIsHitAtItsDepth)

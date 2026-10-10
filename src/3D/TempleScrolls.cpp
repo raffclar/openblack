@@ -24,6 +24,7 @@
 #include "3D/TempleScroll.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/Sound.h"
+#include "Common/MachineClock.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Gui/GameFont.h"
 #include "Gui/TextDatabase.h"
@@ -267,9 +268,7 @@ bool TempleScrolls::Hold(bool pressed, float mouseY, const std::optional<TempleC
 		_squeaked = true;
 		if (Locator::audio::has_value())
 		{
-			const auto ticks =
-			    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
-			        .count();
+			const auto ticks = machine_clock::Ticks();
 			const auto squeak = k_Squeaks.at(static_cast<size_t>(ticks % static_cast<int64_t>(k_Squeaks.size())));
 			Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(squeak), std::nullopt);
 		}
@@ -295,6 +294,11 @@ void TempleScrolls::SetFocus(float zoom, const Facts& facts)
 			_focused.reset();
 		}
 	}
+}
+
+bool TempleScrolls::IsWrittenInFront(Content content) const
+{
+	return _focused.has_value() && _focusedText && _scrolls.at(*_focused).content == content;
 }
 
 bool TempleScrolls::IsControl(TempleRoom room, uint32_t subMesh) const
@@ -433,9 +437,9 @@ TempleScrolls::Facts TempleScrolls::Facts::Mock()
 	creature.known = {0, 1, 2, 3};
 	creature.fightBalance = 0.2f;
 	creature.miracles = {
-	    {"HELP_TEXT_CREATURE_LESSON_LEARN_MAGIC_ACTION_02", 12},
-	    {"HELP_TEXT_CREATURE_LESSON_LEARN_MAGIC_ACTION_03", 9},
-	    {"HELP_TEXT_CREATURE_LESSON_LEARN_MAGIC_ACTION_10", 97},
+	    {"HELP_TEXT_CREATURE_LESSON_LEARN_MAGIC_ACTION_02", 12, 1, 12.0f},
+	    {"HELP_TEXT_CREATURE_LESSON_LEARN_MAGIC_ACTION_03", 9, 2, 9.0f},
+	    {"HELP_TEXT_CREATURE_LESSON_LEARN_MAGIC_ACTION_10", 97, 9, 97.0f},
 	};
 	facts.creature = creature;
 	return facts;

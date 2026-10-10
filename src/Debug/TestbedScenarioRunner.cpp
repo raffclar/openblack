@@ -21,6 +21,7 @@
 #include <memory>
 #include <numbers>
 #include <ranges>
+#include <string>
 #include <system_error>
 #include <type_traits>
 #include <variant>
@@ -37,7 +38,7 @@
 
 #include "3D/DayNightClock.h"
 #include "3D/LandIslandInterface.h"
-#include "3D/SkyInterface.h"
+#include "3D/MapCoords.h"
 #include "Camera/Camera.h"
 #include "Common/FileDialog.h"
 #include "Creature/CreatureDecisionTree.h"
@@ -47,10 +48,12 @@
 #include "Creature/CreatureObjectActions.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
+#include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/FieldArchetype.h"
+#include "ECS/Archetypes/FishFarmArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/PotArchetype.h"
@@ -61,6 +64,8 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/LivingAction.h"
@@ -77,8 +82,11 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -89,21 +97,29 @@
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Gestures/GesturePaths.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
+#include "Input/InjectedInput.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Magic/SpellRules.h"
@@ -338,10 +354,9 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	}
 	if (object.life.has_value())
 	{
-		constexpr float k_VillagerHealthScale = 100.0f;
 		if (auto* villager = registry.TryGet<ecs::components::Villager>(entity))
 		{
-			villager->health = static_cast<uint32_t>(std::lround(std::clamp(*object.life, 0.0f, 1.0f) * k_VillagerHealthScale));
+			villager->life = std::clamp(*object.life, 0.0f, 1.0f);
 		}
 		if (auto* animal = registry.TryGet<ecs::components::Animal>(entity))
 		{
@@ -427,10 +442,23 @@ void Runner::Start(const Scenario& scenario)
 	_middle = (land.GetExtent().minimum + land.GetExtent().maximum) * 0.5f;
 
 	SetUpEnvironment(scenario.environment);
+	if (const auto& temple = scenario.environment.temple; temple.has_value())
+	{
+		const auto at = MapPoint(_middle, *temple);
+		ecs::archetypes::CitadelArchetype::Create({at.x, land.GetHeightAt(at), at.y}, PlayerNames::PLAYER_ONE, 0.0f,
+		                                          glm::vec3(1.0f));
+	}
 	PlaceObjects(scenario, _middle);
 	PlaceBirds(scenario, _middle);
 	PlaceCreatures(scenario, _middle);
 	PlaceDispensers(scenario);
+	if (Locator::fireflySystem::has_value())
+	{
+		for (const auto& [name, weight] : scenario.fireflyRewards)
+		{
+			Locator::fireflySystem::value().SetRewardWeight(name, weight);
+		}
+	}
 	if (scenario.tribalPower.has_value() && Locator::magicSystem::has_value())
 	{
 		Locator::magicSystem::value().SetTribalPower(PlayerNames::PLAYER_ONE, scenario.tribalPower->first,
@@ -459,6 +487,7 @@ void Runner::Start(const Scenario& scenario)
 	{
 		_particles.push_back({StartParticle(i), 0.0f});
 	}
+	_vortices.assign(scenario.vortices.size(), {});
 	Frame(scenario.framing.shot, scenario.framing.creature, scenario.framing.distance);
 	Log(fmt::format("Started {}", scenario.name));
 }
@@ -474,11 +503,12 @@ void Runner::Stop()
 	_sweep.reset();
 	if (Locator::gameActionSystem::has_value())
 	{
-		if (Locator::gameActionSystem::value().GetScriptedPointer().has_value())
+		if (_ownsPointer && Locator::gameActionSystem::value().GetScriptedPointer().has_value())
 		{
 			Locator::gameActionSystem::value().SetScriptedPointer(std::nullopt);
 			KeepDebugWindowsOffTheMouse(false);
 		}
+		_ownsPointer = false;
 	}
 	// Its particle effects die away
 	if (Locator::particleSystem::has_value())
@@ -489,6 +519,15 @@ void Runner::Stop()
 		}
 	}
 	_particles.clear();
+	// Its vortices go, though the ground they levelled stays levelled as the game leaves it
+	for (const auto& running : _vortices)
+	{
+		if (running.vortex != entt::null && Locator::entitiesRegistry::value().Valid(running.vortex))
+		{
+			Locator::entitiesRegistry::value().Destroy(running.vortex);
+		}
+	}
+	_vortices.clear();
 	// Its held miracles stop, and the hand is the mouse's again
 	if (Locator::magicSystem::has_value())
 	{
@@ -640,7 +679,8 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    else if constexpr (std::is_same_v<T, AbodeInfo>)
 			    {
 				    return ecs::archetypes::AbodeArchetype::Create(ScenarioTown(middle), position, type, yaw, object.scale,
-				                                                   k_ScenarioTownFood, k_ScenarioTownWood);
+				                                                   object.storedFood.value_or(k_ScenarioTownFood),
+				                                                   k_ScenarioTownWood);
 			    }
 			    else if constexpr (std::is_same_v<T, FieldTypeInfo>)
 			    {
@@ -654,6 +694,14 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    {
 				    return ecs::archetypes::MobileStaticArchetype::Create(position, type, 0.0f, 0.0f, yaw, 0.0f, object.scale);
 			    }
+			    else if constexpr (std::is_same_v<T, AnimatedStaticInfo>)
+			    {
+				    return ecs::archetypes::AnimatedStaticArchetype::Create(position, type, yaw, object.scale);
+			    }
+			    else if constexpr (std::is_same_v<T, FishFarmInfo>)
+			    {
+				    return ecs::archetypes::FishFarmArchetype::Create(position);
+			    }
 			    else
 			    {
 				    return ecs::archetypes::FeatureArchetype::Create(position, type, yaw, object.scale);
@@ -661,6 +709,11 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 		    },
 		    object.type));
 		SetLifeAndPoison(_objects.back(), object);
+		if (object.firefly && Locator::fireflySystem::has_value())
+		{
+			const auto& placed = Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(_objects.back());
+			Locator::fireflySystem::value().Create(map_coords::FromWorld(land, placed.position));
+		}
 	}
 }
 
@@ -670,7 +723,7 @@ void Runner::PlaceBirds(const Scenario& scenario, glm::vec2 middle)
 	for (const auto& setup : scenario.temples)
 	{
 		const auto point = MapPoint(middle, setup.offset);
-		ecs::archetypes::CitadelArchetype::Create({point.x, land.GetHeightAt(point), point.y}, setup.owner, glm::mat4(1.0f),
+		ecs::archetypes::CitadelArchetype::Create({point.x, land.GetHeightAt(point), point.y}, setup.owner, setup.angle,
 		                                          glm::vec3(1.0f));
 	}
 	if (!Locator::animalSystem::has_value())
@@ -928,6 +981,44 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 			return leashes.TieTo(creature, *object) ? "tied" : "can't";
 		}
 		return "it is gone";
+	case Kind::LeashOrderAt:
+	{
+		const auto point = MapPoint(_middle, command.point);
+		const glm::vec3 onLand {point.x, Locator::terrainSystem::value().GetHeightAt(point), point.y};
+		return leashes.OrderAt(command.player, onLand) ? "taken" : "refused";
+	}
+	case Kind::LeashOrderOn:
+		if (const auto object = ObjectAt(command.object))
+		{
+			return leashes.OrderOn(command.player, *object) ? "taken" : "refused";
+		}
+		return "it is gone";
+	case Kind::HangLeashPosts:
+	{
+		constexpr float k_Apart = 6.0f;
+		constexpr float k_Up = 5.0f;
+		const auto middle = MapPoint(_middle, command.point);
+		std::array<glm::vec3, 3> points {};
+		for (size_t i = 0; i < points.size(); ++i)
+		{
+			const glm::vec2 at {middle.x + ((static_cast<float>(i) - 1.0f) * k_Apart), middle.y};
+			points.at(i) = {at.x, Locator::terrainSystem::value().GetHeightAt(at) + k_Up, at.y};
+		}
+		leashes.PlacePosts(command.player, points);
+		return "hung";
+	}
+	case Kind::TapLeashPost:
+	{
+		std::optional<entt::entity> post;
+		Locator::entitiesRegistry::value().Each<const ecs::components::LeashPost>(
+		    [&post, &command](entt::entity entity, const ecs::components::LeashPost& at) {
+			    if (at.owner == command.player && at.type == creature_leash::k_Types.at(command.value))
+			    {
+				    post = entity;
+			    }
+		    });
+		return post.has_value() && leashes.TapPost(*post) ? "tapped" : "no such leash";
+	}
 	case Kind::UntieLeash:
 		leashes.UntieToHand(creature);
 		return {};
@@ -981,9 +1072,28 @@ std::string Runner::GivePlayerCommand(const Command& command)
 	}
 	case Kind::HandTakeFireBall:
 		return HandTakeFireBall();
+	case Kind::HandTapObject:
+		return HandTapObject(command.object);
 	default:
 		return {};
 	}
+}
+
+std::string Runner::HandTapObject(size_t index)
+{
+	const auto object = ObjectAt(index);
+	if (!object.has_value() || !Locator::handSystem::has_value() || !Locator::abodeKnockSystem::has_value())
+	{
+		return "nothing to tap";
+	}
+	// A knock on a building by this computer's hand, from where the hand is, as the Action button pressed on it makes
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hand =
+	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	const auto* transform = registry.TryGet<const Transform>(hand);
+	const bool took =
+	    Locator::abodeKnockSystem::value().Tap(*object, transform != nullptr ? transform->position : glm::vec3(0.0f), true);
+	return took ? "knocked" : "it takes no knock";
 }
 
 std::string Runner::HandTakeFireBall()
@@ -1071,7 +1181,16 @@ std::string Runner::DrawGesture(GestureType gesture)
 		}
 	}
 	// A circle sizes a storm or a shield readied by holding the Action button
-	gestures.DrawPath(std::move(*path), gesture == GestureType::Circle);
+	const bool holdingAction = gesture == GestureType::Circle;
+	gestures.DrawPath(std::move(*path), holdingAction);
+	// With a miracle in the hand the button goes down on it too, as the player's does, readying it to be cast
+	_drawingPressedAction = holdingAction && Locator::magicSystem::has_value() && Locator::magicSystem::value().IsHandBusy() &&
+	                        Locator::magicSystem::value().PressAction();
+	if (_drawingPressedAction)
+	{
+		Log(fmt::format("{:.1f}s: pressed for the circle: {}", _seconds,
+		                HandResultName(Locator::magicSystem::value().GetLastHandResult())));
+	}
 	_drawing = gesture;
 	const auto last = gestures.GetLastRecognised();
 	_recognisedBefore = last.has_value() ? last->number : 0;
@@ -1088,9 +1207,17 @@ void Runner::WatchGesture()
 	const auto recognised = gestures.GetLastRecognised();
 	// Recognised, or drawn to the end without being recognised
 	const bool done = recognised.has_value() && recognised->number != _recognisedBefore;
-	if (!done && gestures.IsDrawingPath())
+	// A button held for the gesture stays down until the path is drawn to its end
+	if ((!done || _drawingPressedAction) && gestures.IsDrawingPath())
 	{
 		return;
+	}
+	if (_drawingPressedAction && Locator::magicSystem::has_value())
+	{
+		auto& magic = Locator::magicSystem::value();
+		magic.ReleaseAction();
+		Log(fmt::format("{:.1f}s: let go after the circle: {}", _seconds, HandResultName(magic.GetLastHandResult())));
+		_drawingPressedAction = false;
 	}
 	if (!done)
 	{
@@ -1198,7 +1325,7 @@ bool Runner::IsFree(size_t creature) const
 void Runner::Give(const Command& command)
 {
 	if (command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed ||
-	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall)
+	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -1221,6 +1348,11 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the hour is {:.1f}", _seconds, command.hour));
 		return;
 	}
+	if (command.kind == Kind::SetOpenClose || command.kind == Kind::LayGateStone)
+	{
+		GiveSceneryCommand(command);
+		return;
+	}
 	if (command.kind == Kind::SetAlignment)
 	{
 		if (Locator::alignmentSystem::has_value())
@@ -1228,6 +1360,17 @@ void Runner::Give(const Command& command)
 			Locator::alignmentSystem::value().SetPlayerAlignment(command.player, command.alignment);
 		}
 		Log(fmt::format("{:.1f}s: the alignment is {:.2f}", _seconds, command.alignment));
+		return;
+	}
+	if (command.kind == Kind::WideScreen)
+	{
+		// Held by a script, as the land's scripts hold them
+		constexpr uint32_t k_ScriptOwner = 1;
+		if (Locator::cinematicDirectorSystem::has_value())
+		{
+			Locator::cinematicDirectorSystem::value().SetWideScreen(command.value != 0, k_ScriptOwner);
+		}
+		Log(fmt::format("{:.1f}s: the cinema bars slide {}", _seconds, command.value != 0 ? "in" : "out"));
 		return;
 	}
 	const auto entity = CreatureAt(command.creature);
@@ -1255,10 +1398,22 @@ void Runner::Give(const Command& command)
 		result =
 		    MoveResultName(locomotion.MoveTo(*entity, point, command.kind == Kind::RunTo ? Pace::Run : Pace::Walk, 0.0f, 1.0f));
 		break;
+	case Kind::WalkHome:
+		if (const auto* leash = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeash>(*entity);
+		    leash != nullptr && leash->home.has_value())
+		{
+			result =
+			    MoveResultName(locomotion.MoveTo(*entity, glm::vec2(leash->home->x, leash->home->z), Pace::Walk, 0.0f, 1.0f));
+		}
+		else
+		{
+			result = "it has no home";
+		}
+		break;
 	case Kind::Follow:
 		if (const auto leader = CreatureAt(command.value))
 		{
-			const auto size = Locator::entitiesRegistry::value().Get<Creature>(*entity).size;
+			const auto size = ShownSize(Locator::entitiesRegistry::value().Get<Creature>(*entity));
 			result = MoveResultName(locomotion.Follow(*entity, *leader, k_FollowDistance * std::max(size, 0.5f), Pace::Walk));
 		}
 		break;
@@ -1346,6 +1501,10 @@ void Runner::Give(const Command& command)
 	case Kind::HandTapLeash:
 	case Kind::LeashKey:
 	case Kind::LeashShake:
+	case Kind::LeashOrderAt:
+	case Kind::LeashOrderOn:
+	case Kind::HangLeashPosts:
+	case Kind::TapLeashPost:
 		result = GiveLeashCommand(*entity, command);
 		break;
 	case Kind::StartFight:
@@ -1367,6 +1526,7 @@ void Runner::Give(const Command& command)
 	case Kind::OpenCreatureCave:
 	case Kind::ApplyTattoo:
 	case Kind::RemoveTattoo:
+	case Kind::OpenTattooEditor:
 		result = GiveCreatureModeCommand(*entity, command);
 		break;
 	case Kind::SetHour:
@@ -1375,7 +1535,11 @@ void Runner::Give(const Command& command)
 	case Kind::SummonSeed:
 	case Kind::PressKey:
 	case Kind::HandTakeFireBall:
+	case Kind::HandTapObject:
 	case Kind::SetAlignment:
+	case Kind::SetOpenClose:
+	case Kind::LayGateStone:
+	case Kind::WideScreen:
 	// The mouse commands are given before a creature is looked for
 	case Kind::PointerTo:
 	case Kind::PointerPress:
@@ -1386,8 +1550,19 @@ void Runner::Give(const Command& command)
 	case Kind::SetDesire:
 	case Kind::SetPhase:
 	case Kind::RewardIf:
+	case Kind::SetMiracleSightings:
 		result = TeachMind(*entity, command);
 		break;
+	case Kind::SetFightLean:
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		auto* found = registry.TryGet<ecs::components::CreatureFightRecord>(*entity);
+		auto& record = found != nullptr ? *found : registry.Assign<ecs::components::CreatureFightRecord>(*entity);
+		record.tendency = command.amount;
+		record.foughtBefore = true;
+		result = fmt::format("leans {:+.2f}", record.tendency);
+		break;
+	}
 	case Kind::SeeSkill:
 		minds.SeeSkill(Locator::entitiesRegistry::value().Get<Transform>(*entity).position, command.value);
 		break;
@@ -1413,6 +1588,35 @@ void Runner::Give(const Command& command)
 	}
 	}
 	Log(fmt::format("{:.1f}s: {} {}{}{}", _seconds, who, Name(command.kind), result.empty() ? "" : ": ", result));
+}
+
+void Runner::GiveSceneryCommand(const Command& command)
+{
+	const auto object = ObjectAt(command.object);
+	if (!object.has_value() || !Locator::animatedStaticSystem::has_value())
+	{
+		Log(fmt::format("{:.1f}s: no such object", _seconds));
+		return;
+	}
+	auto& scenery = Locator::animatedStaticSystem::value();
+	if (command.kind == Kind::SetOpenClose)
+	{
+		const bool done = scenery.SetOpenState(*object, static_cast<int32_t>(command.value));
+		Log(fmt::format("{:.1f}s: {} object {}{}", _seconds, command.value == 1 ? "opened" : "closed", command.object,
+		                done ? "" : ", which isn't animated scenery"));
+		return;
+	}
+	// As the hand gives it: laid in the plinth, the stone is used up, leaving its ghost
+	const auto plinth = ObjectAt(command.value);
+	if (plinth.has_value() && scenery.LayGateStone(*plinth, *object))
+	{
+		ecs::world_objects::LeaveGhost(*object);
+		ecs::world_objects::Remove(*object);
+		Log(fmt::format("{:.1f}s: object {} laid in the plinth, now worth {}", _seconds, command.object,
+		                scenery.GateStoneValue(*plinth).value_or(0)));
+		return;
+	}
+	Log(fmt::format("{:.1f}s: object {} isn't taken by object {}", _seconds, command.object, command.value));
 }
 
 std::string Runner::GiveCreatureModeCommand(entt::entity creature, const Command& command)
@@ -1470,6 +1674,18 @@ std::string Runner::GiveCreatureModeCommand(entt::entity creature, const Command
 		           : "can't";
 	case Kind::RemoveTattoo:
 		return cave.RemoveTattoo(static_cast<uint8_t>(command.bodyPart)) ? "" : "nothing there";
+	case Kind::OpenTattooEditor:
+	{
+		const auto caveCreature = cave.GetCreature();
+		if (!caveCreature.has_value() || !Locator::tattooEditorSystem::has_value())
+		{
+			return "the player has no creature";
+		}
+		const auto& transform = Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(*caveCreature);
+		Locator::tattooEditorSystem::value().Open(*caveCreature,
+		                                          creature_tattoo_editor::CaveView(transform.position, transform.scale.x));
+		return "";
+	}
 	default:
 		return {};
 	}
@@ -1498,6 +1714,21 @@ std::string Runner::TeachMind(entt::entity entity, const Command& command)
 	case Kind::SetPhase:
 		mind->developmentPhase = static_cast<uint32_t>(command.value);
 		return fmt::format("stage {}", command.value);
+	case Kind::SetMiracleSightings:
+	{
+		if (!mind->learnt.has_value())
+		{
+			return "nothing learnt yet";
+		}
+		auto& knowledge = mind->learnt->knowledge;
+		if (command.value >= knowledge.miraclesSeen.size() || command.value >= knowledge.miraclesKnown.size())
+		{
+			return "no such miracle";
+		}
+		knowledge.miraclesSeen.at(command.value).count = static_cast<uint32_t>(command.amount);
+		knowledge.miraclesKnown.at(command.value) = true;
+		return fmt::format("miracle {} seen {} times", command.value, knowledge.miraclesSeen.at(command.value).count);
+	}
 	case Kind::RewardIf:
 		// From now on each thing it does to something is judged as soon as it is done
 		mind->trainer = static_cast<uint32_t>(command.value);
@@ -1629,7 +1860,7 @@ void Runner::UpdateCamera()
 		if (const auto entity = CreatureAt(_shotCreature))
 		{
 			const auto& transform = registry.Get<Transform>(*entity);
-			const auto height = CreatureHeight(registry.Get<Creature>(*entity).size);
+			const auto height = CreatureHeight(ShownSize(registry.Get<Creature>(*entity)));
 			placement = *_shot == Shot::Follow ? Follow(transform.position, height, _shotDistance)
 			                                   : Head(transform.position, AheadOf(transform), height, _shotDistance);
 		}
@@ -1673,6 +1904,7 @@ void Runner::Update(float seconds)
 	Measure();
 	SpawnCrowd();
 	UpdateParticles(seconds);
+	UpdateVortices();
 	UpdateMiracles(seconds);
 	UpdateVillagerWalks();
 	UpdateThrows();
@@ -2080,6 +2312,32 @@ uint32_t Runner::StartParticle(size_t index) const
 	return effect;
 }
 
+void Runner::UpdateVortices()
+{
+	if (!Locator::vortexSystem::has_value() || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	auto& vortices = Locator::vortexSystem::value();
+	for (size_t i = 0; i < _vortices.size(); ++i)
+	{
+		const auto& setup = _scenario->vortices.at(i);
+		auto& running = _vortices.at(i);
+		if (running.vortex == entt::null && _seconds >= setup.delaySeconds)
+		{
+			const auto point = MapPoint(_middle, setup.offset);
+			running.vortex = vortices.Create({point.x, 0.0f, point.y}, setup.type, 0.0f);
+			Log(fmt::format("Vortex {} opened at {:.0f}, {:.0f}", i, point.x, point.y));
+		}
+		if (running.vortex != entt::null && !running.fading && setup.fadeOutAfterSeconds.has_value() &&
+		    _seconds >= setup.delaySeconds + *setup.fadeOutAfterSeconds)
+		{
+			running.fading = vortices.StartFadeOut(running.vortex);
+			Log(fmt::format("Vortex {} fading out", i));
+		}
+	}
+}
+
 void Runner::UpdateParticles(float seconds)
 {
 	if (!Locator::particleSystem::has_value())
@@ -2135,7 +2393,18 @@ void PushMotion(const input::GameActionInterface::ScriptedPointer& pointer, glm:
 	event.motion.y = pointer.position.y;
 	event.motion.xrel = moved.x;
 	event.motion.yrel = moved.y;
+	input::MarkInjected(event);
 	SDL_PushEvent(&event);
+}
+/// What the player's hand holds, for the log
+std::string HeldByHand()
+{
+	if (!Locator::handGrabSystem::has_value())
+	{
+		return {};
+	}
+	const auto held = Locator::handGrabSystem::value().GetHeld();
+	return held.has_value() ? fmt::format(", holding {}", static_cast<uint32_t>(*held)) : std::string {};
 }
 } // namespace
 
@@ -2151,6 +2420,7 @@ std::string Runner::GivePointerCommand(const Command& command)
 	    .position = glm::ivec2(actions.GetMousePosition()),
 	});
 	KeepDebugWindowsOffTheMouse(true);
+	_ownsPointer = true;
 	switch (command.kind)
 	{
 	case Kind::PointerTo:
@@ -2177,6 +2447,7 @@ std::string Runner::GivePointerCommand(const Command& command)
 		event.button.clicks = 1;
 		event.button.x = pointer.position.x;
 		event.button.y = pointer.position.y;
+		input::MarkInjected(event);
 		SDL_PushEvent(&event);
 		_handWatchSeconds = 0.5f;
 		break;
@@ -2193,6 +2464,7 @@ std::string Runner::GivePointerCommand(const Command& command)
 		event.wheel.windowID = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0;
 		event.wheel.y = static_cast<int32_t>(command.value) * (command.ctrl ? -1 : 1);
 		event.wheel.preciseY = static_cast<float>(event.wheel.y);
+		input::MarkInjected(event);
 		SDL_PushEvent(&event);
 		break;
 	}
@@ -2210,11 +2482,12 @@ void Runner::UpdatePointer(float seconds)
 	}
 	auto& actions = Locator::gameActionSystem::value();
 	// Once the commands are done and the buttons let go, the mouse is the player's again
-	if (const auto pointer = actions.GetScriptedPointer();
-	    pointer.has_value() && pointer->buttons == 0 && !_sweep.has_value() && _timeline.done && _handWatchSeconds <= 0.0f)
+	if (const auto pointer = actions.GetScriptedPointer(); _ownsPointer && pointer.has_value() && pointer->buttons == 0 &&
+	                                                       !_sweep.has_value() && _timeline.done && _handWatchSeconds <= 0.0f)
 	{
 		actions.SetScriptedPointer(std::nullopt);
 		KeepDebugWindowsOffTheMouse(false);
+		_ownsPointer = false;
 	}
 	if (_handWatchSeconds > 0.0f || _sweep.has_value())
 	{
@@ -2266,11 +2539,11 @@ std::string Runner::HandOnScreen() const
 	                  : cues.dragMode.has_value() ? k_DragModes.at(static_cast<size_t>(*cues.dragMode))
 	                                              : std::string_view("undecided");
 	return fmt::format("cursor ({}, {}), hand ({:.0f}, {:.0f}) at ({:.1f}, {:.1f}, {:.1f}), {:.1f} from the camera, scale "
-	                   "{:.3f}, hints {:#x}, drag {}, camera heading {:.3f} pitch {:.3f}{}",
+	                   "{:.3f}, hints {:#x}, drag {}, camera heading {:.3f} pitch {:.3f}{}{}",
 	                   cursor.x, cursor.y, screen.x, screen.y, position.x, position.y, position.z,
 	                   glm::distance(position, camera.GetOrigin()), transform.scale.y, cues.tricons, drag,
 	                   camera.GetRotation().y, camera.GetRotation().x,
-	                   Locator::gameActionSystem::value().IsCursorFrozen() ? ", held" : "");
+	                   Locator::gameActionSystem::value().IsCursorFrozen() ? ", held" : "", HeldByHand());
 }
 
 void Runner::Log(std::string line)
@@ -2374,10 +2647,8 @@ void Runner::SpawnCrowdMember(size_t index)
 	const auto town = townIds.find(static_cast<uint32_t>(home.town));
 	if (abode != entt::null && registry.Valid(abode) && town != townIds.end())
 	{
-		auto& villager = registry.Get<ecs::components::Villager>(entity);
-		villager.abode = abode;
-		villager.town = town->second;
-		registry.Get<ecs::components::Abode>(abode).inhabitants.insert(entity);
+		Locator::townSystem::value().AddVillagerToAbode(abode, entity);
+		registry.Get<ecs::components::Villager>(entity).town = town->second;
 	}
 }
 

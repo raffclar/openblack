@@ -11,26 +11,44 @@
 
 #include "PathfindingSystem.h"
 
+#include <cmath>
+#include <cstdint>
+
 #include <algorithm>
+#include <array>
 #include <optional>
-#include <unordered_set>
 #include <vector>
 
+#include <LNDFile.h>
 #include <entt/entity/entity.hpp>
-#include <glm/gtx/component_wise.hpp>
 #include <glm/gtx/euler_angles.hpp>
-#include <glm/gtx/norm.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
-#include <spdlog/spdlog.h>
 
+#include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
+#include "Common/GUtilsAngle.h"
+#include "ECS/Components/Abode.h"
+#include "ECS/Components/AnimatedStatic.h"
+#include "ECS/Components/DeadTree.h"
+#include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
-#include "ECS/Components/Fixed.h"
+#include "ECS/Components/Flowers.h"
+#include "ECS/Components/MapCellResident.h"
+#include "ECS/Components/Mesh.h"
+#include "ECS/Components/Mobile.h"
+#include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/TeleportStone.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Tree.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/WallHugRules.h"
+#include "InfoConstants.h"
 #include "Locator.h"
+#include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -40,389 +58,532 @@ using namespace openblack::ecs::systems;
 namespace
 {
 
-void InitializeStep(Transform& transform, WallHug& wallHug, float angle)
+/// Turns until a walker stepping straight to its goal aims at it again: soon after it stops hugging a circle, then
+/// seldom
+constexpr int8_t k_TurnsToReaimAfterHugging = 16;
+constexpr int8_t k_TurnsToReaimStepping = 127;
+
+/// How a thing on the map stands in the walkers' way, from what it is
+wall_hug::ThingShape ShapeOf(const ecs::Registry& registry, entt::entity thing)
 {
-	transform.rotation = glm::eulerAngleY(-angle - glm::radians(90.0f));
-	wallHug.step = glm::vec2(glm::cos(angle), glm::sin(angle)) * wallHug.speed;
-	wallHug.yAngle = angle;
+	if (registry.AnyOf<Field>(thing))
+	{
+		return wall_hug::ThingShape::None;
+	}
+	if (registry.AnyOf<Tree>(thing))
+	{
+		return wall_hug::ThingShape::Trunk;
+	}
+	if (registry.AnyOf<Temple>(thing))
+	{
+		return wall_hug::ThingShape::TempleRing;
+	}
+	if (registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, MobileStatic, DeadTree, SpellDispenser, TeleportStone>(thing))
+	{
+		return wall_hug::ThingShape::ModelBox;
+	}
+	return wall_hug::ThingShape::None;
 }
 
-void InitializeStepToGoal(Transform& transform, WallHug& wallHug)
+/// The circles a thing on the map stands in the walkers' way with (see WallHugRules.h)
+std::vector<wall_hug::BlockingCircle> CirclesOf(const ecs::Registry& registry, entt::entity thing)
 {
-	const auto diff = wallHug.goal - glm::xz(transform.position);
-	const auto angle = glm::atan(diff.y, diff.x);
-	InitializeStep(transform, wallHug, angle);
+	const auto* transform = registry.TryGet<const Transform>(thing);
+	const auto shape = ShapeOf(registry, thing);
+	if (transform == nullptr || shape == wall_hug::ThingShape::None)
+	{
+		return {};
+	}
+	wall_hug::ThingOnMap onMap {.shape = shape,
+	                            .position = transform->position,
+	                            .rotation = transform->rotation,
+	                            .scale = transform->scale.x,
+	                            .boxCentre = glm::vec3(0.0f),
+	                            .boxHalfSize = glm::vec3(0.0f),
+	                            .fence = false};
+	if (shape == wall_hug::ThingShape::ModelBox)
+	{
+		const auto* mesh = registry.TryGet<const Mesh>(thing);
+		if (mesh == nullptr || !Locator::resources::has_value() || !Locator::resources::value().GetMeshes().Contains(mesh->id))
+		{
+			return {};
+		}
+		const auto box = Locator::resources::value().GetMeshes().Handle(mesh->id)->GetBoundingBox();
+		onMap.boxCentre = box.Center();
+		onMap.boxHalfSize = box.Size() * 0.5f;
+		if (const auto* mobileStatic = registry.TryGet<const MobileStatic>(thing);
+		    mobileStatic != nullptr && Locator::infoConstants::has_value())
+		{
+			const auto& info = Locator::infoConstants::value().mobileStatic.at(static_cast<size_t>(mobileStatic->type));
+			onMap.fence = wall_hug::IsFenceModel(info.meshId);
+		}
+	}
+	return wall_hug::CirclesOf(onMap);
 }
 
-void InitializeStepAroundObstacle(Transform& transform, WallHug& wallHug, const Fixed& obstacle, float numCirclesAway,
-                                  bool clockwise)
+/// Whether the circle a walker heads for or hugs is still there: water and the land's edge always are; a thing's is
+/// while the thing stands on the map where it stood, with that circle (a thing that is picked up or moved has a new
+/// shape when it is put down)
+bool CircleStillThere(const ecs::Registry& registry, const WallHugObjectReference& reference)
 {
-	// Use doubles for atan to have same precision on linux, osx and win32
-	const glm::dvec2 diff = obstacle.boundingCenter - glm::xz(transform.position);
-	const auto angle = static_cast<float>(glm::atan(diff.y, diff.x));
-
-	const float clockwiseModifier = clockwise ? 1.0f : -1.0f;
-	const float angleStep = glm::radians(90.0f) - glm::radians(90.0f / 8.0f) * numCirclesAway;
-	InitializeStep(transform, wallHug, angle + angleStep * clockwiseModifier);
+	if (reference.entity == entt::null)
+	{
+		return true;
+	}
+	if (!registry.Valid(reference.entity))
+	{
+		return false;
+	}
+	const auto* resident = registry.TryGet<const MapCellResident>(reference.entity);
+	if (resident == nullptr || resident->cells.empty())
+	{
+		return false;
+	}
+	const auto circles = CirclesOf(registry, reference.entity);
+	return std::ranges::any_of(circles, [&reference](const wall_hug::BlockingCircle& circle) {
+		return circle.centre == reference.centre && circle.radius == reference.radius;
+	});
 }
 
-void IterateStepAroundObstacle(Transform& transform, WallHug& wallHug, const Fixed& obstacle, bool clockwise)
+/// Whether a walker may go into a map cell: on the map, on land and not in water
+bool ValidForTravel(int32_t x, int32_t z)
 {
-	const float clockwiseModifier = clockwise ? 1.0f : -1.0f;
-	const float angle = wallHug.yAngle;
-	const float angleStep = -wallHug.speed / obstacle.boundingRadius;
-	InitializeStep(transform, wallHug, angle + angleStep * clockwiseModifier);
+	const auto size = MapInterface::k_GridSize;
+	if (x < 0 || z < 0 || x >= size.x || z >= size.y)
+	{
+		return false;
+	}
+	if (!Locator::terrainSystem::has_value())
+	{
+		return true;
+	}
+	const auto* cell = Locator::terrainSystem::value().FindCell({static_cast<uint16_t>(x), static_cast<uint16_t>(z)});
+	return cell != nullptr && cell->properties.hasWater == 0;
 }
 
-/// The wall-hug/orbit movement port has unfinished branches. To keep villager wandering
-/// working, we degrade gracefully instead of crashing: stop the villager where it is
-/// and drop all of its movement state. The LivingActionSystem's MoveToPos handler then sees no
-/// active move tags, treats the villager as "arrived", and picks a new destination.
-void AbandonMove(ecs::Registry& registry, entt::entity entity)
+/// The circles that may block a walker, looked for in the cell of a map position as the game comes across them: the
+/// circles of the things in it, newest first, then a circle in the middle of each of that cell and the eight round it
+/// that is water or off the land
+struct Blockers
 {
-	SPDLOG_LOGGER_WARN(spdlog::get("pathfinding"), "Villager #{}: unimplemented pathfinding case hit, abandoning move",
-	                   static_cast<uint32_t>(entity));
-	registry.Remove<MoveStateLinearTag, MoveStateOrbitTag, MoveStateExitCircleTag, MoveStateStepThroughTag,
-	                MoveStateFinalStepTag, MoveStateArrivedTag, WallHugObjectReference>(entity);
-}
-bool AreWeThere(const glm::vec2& pos, const glm::vec2& goal, float threshold)
-{
-	return glm::distance2(pos, goal) < threshold * threshold;
-}
+	std::vector<wall_hug::BlockingCircle> circles;
+	std::vector<entt::entity> entities;
+};
 
-/// Get neighbouring cells in this order for traversal
-/// +-----+-----+-----+
-/// | [5] | [4] | [7] |
-/// +-----+-----+-----+
-/// | [2] | [0] | [1] |
-/// +-----+-----+-----+
-/// | [6] | [3] | [8] |
-/// +-----+-----+-----+
-std::array<ecs::MapInterface::CellId, 9> GetNeighboringCells(const glm::vec2& pos)
+Blockers BlockersAround(const ecs::Registry& registry, glm::ivec2 coords)
 {
-	const auto cellIndex = MapInterface::GetGridCell(pos);
-	assert(glm::compMin(cellIndex) > 0 && glm::all(glm::lessThan(cellIndex, MapInterface::k_GridSize - glm::u16vec2(1))));
-	return {
-	    cellIndex,                          // Current
-	    {cellIndex.x + 1, cellIndex.y},     // Right
-	    {cellIndex.x - 1, cellIndex.y},     // Left
-	    {cellIndex.x, cellIndex.y + 1},     // Under
-	    {cellIndex.x, cellIndex.y - 1},     // Over
-	    {cellIndex.x - 1, cellIndex.y - 1}, // Over and left
-	    {cellIndex.x - 1, cellIndex.y + 1}, // Under and left
-	    {cellIndex.x + 1, cellIndex.y - 1}, // Over and right
-	    {cellIndex.x + 1, cellIndex.y + 1}, // Under and right
-	};
-}
-
-/// The walkers' obstacles in a cell, by their bounding circles
-const std::unordered_set<entt::entity>& ObstaclesIn(const ecs::Registry& registry, const MapInterface::CellId& cell)
-{
-	static const std::unordered_set<entt::entity> k_None;
-	const auto& obstacles = registry.Context().wallHugObstacles;
-	const auto found = obstacles.find(static_cast<uint32_t>(cell.x + cell.y * MapInterface::k_GridSize.x));
-	return found != obstacles.end() ? found->second : k_None;
+	Blockers blockers;
+	const glm::ivec2 cell {map_coords::CellOf(coords.x), map_coords::CellOf(coords.y)};
+	if (Locator::entitiesMap::has_value())
+	{
+		for (const auto thing : Locator::entitiesMap::value().GetFixedInGridCell(MapInterface::CellId(cell)))
+		{
+			for (const auto& circle : CirclesOf(registry, thing))
+			{
+				blockers.circles.push_back(circle);
+				blockers.entities.push_back(thing);
+			}
+		}
+	}
+	constexpr std::array<glm::ivec2, 9> k_Around {
+	    {{0, 0}, {1, 0}, {-1, 0}, {0, 1}, {0, -1}, {-1, -1}, {-1, 1}, {1, -1}, {1, 1}}};
+	constexpr float k_CellMetres = 10.0f;
+	for (const auto& offset : k_Around)
+	{
+		const glm::ivec2 around = cell + offset;
+		if (!ValidForTravel(around.x, around.y))
+		{
+			blockers.circles.push_back({.centre = (glm::vec2(around) + 0.5f) * k_CellMetres,
+			                            .radius = wall_hug::k_LandscapeBlockerRadius,
+			                            .landscape = true,
+			                            .landscapeOrFence = true});
+			blockers.entities.push_back(entt::null);
+		}
+	}
+	return blockers;
 }
 
-/// Files every fixed thing in the cells whose middles its bounding circle (a unit wider) takes in
-void FileObstacles(ecs::Registry& registry)
+/// A walker heading straight on looks along its step for the nearest circle in the cell of a map position (see
+/// WallHugRules.h), and heads for it, or for nothing in reach
+void ScanLine(ecs::Registry& registry, entt::entity entity, glm::ivec2 position, glm::ivec2 step, glm::ivec2 coords)
 {
-	auto& obstacles = registry.Context().wallHugObstacles;
-	obstacles.clear();
-	registry.Each<const Fixed, const Transform>(
-	    [&obstacles](entt::entity entity, const Fixed& fixed, const Transform& transform) {
-		    // TODO(bwrsandman): This is only in the case of a square bb underling the bounding circle (x/z) <= 1.4
-		    const float radius = fixed.boundingRadius * glm::compMax(transform.scale) + 1.0f;
-		    const auto min = MapInterface::GetGridCell(fixed.boundingCenter - radius);
-		    const auto max = MapInterface::GetGridCell(fixed.boundingCenter + radius);
-		    for (uint16_t x = min.x; x < max.x + 1; ++x)
-		    {
-			    for (uint16_t y = min.y; y < max.y + 1; ++y)
-			    {
-				    const auto cellId = MapInterface::CellId(x, y);
-				    if (glm::distance2(MapInterface::GetCellCenter(cellId), fixed.boundingCenter) < radius * radius)
-				    {
-					    obstacles[static_cast<uint32_t>(cellId.x + cellId.y * MapInterface::k_GridSize.x)].insert(entity);
-				    }
-			    }
-		    }
-	    });
-}
-
-/// Iterate between all adjacent grids and find closest object that the ray (step) intersects with (circle)
-/// If that object is in front (and we are not in it) and less than 256 steps away, set as target and store steps
-bool LinearScanForObstacle(entt::entity entity, const glm::vec2& pos, const glm::vec2& step)
-{
-	auto& registry = Locator::entitiesRegistry::value();
-
-	// Reference will be updated or removed
 	registry.Remove<WallHugObjectReference>(entity);
-
-	// FIXME(bwrsandman): This gets first, not closest
-	std::optional<entt::entity> fixedEntity = std::nullopt;
-	for (const auto& c : GetNeighboringCells(pos + step))
+	const auto blockers = BlockersAround(registry, coords);
+	const auto scan = wall_hug::ScanLine(position, step, blockers.circles);
+	if (!scan.circle.has_value())
 	{
-		// TODO(bwrsandman): Skip if out of bounds or in water
-		const auto& fixed = ObstaclesIn(registry, c);
-		if (!fixed.empty())
-		{
-			auto iter = std::find_if(fixed.cbegin(), fixed.cend(), [&registry](const auto& f) {
-				return !registry.AnyOf<Field>(f); // TODO(bwrsandman): && registry.AllOf<CollideData>();
-			});
-			if (iter != fixed.cend())
-			{
-				fixedEntity = std::make_optional(*iter);
-				break;
-			}
-		}
+		return;
 	}
-	if (!fixedEntity.has_value())
-	{
-		return false;
-	}
-
-	// Do ray-circle intersection with all objects found
-	const auto& fixed = registry.Get<Fixed>(*fixedEntity);
-	const auto stepSize = glm::length(step);
-	const auto direction = step / stepSize;
-	// Do a ray-circle intersection in 2d with ray = {pos, normal}, circle = {fixed.c, fixed.r} (same as ray-sphere)
-	const auto oc = pos - fixed.boundingCenter;
-	const auto halfB = glm::dot(oc, direction);
-	const auto c = glm::length2(oc) - fixed.boundingRadius * fixed.boundingRadius;
-	const float discriminant = halfB * halfB - c;
-	const bool hit = discriminant > 0;
-
-	// TODO(bwrsandman): if no hit, go through neighbouring cells, if still none, remove WallHugReference and return 1
-	if (!hit)
-	{
-		return false;
-	}
-
-	const float t = hit ? -halfB - glm::sqrt(discriminant) : -1.0f;
-	const bool inFront = t > 0.0f;
-
-	if (!inFront)
-	{
-		return false;
-	}
-
-	const auto numSteps = t / stepSize;
-	assert(numSteps >= 0); // t wouldn't be positive here and size should always be positive
-
-	// Too far
-	if (numSteps >= std::numeric_limits<decltype(WallHugObjectReference::stepsAway)>::max())
-	{
-		return false;
-	}
-
-	// Store object and number of steps away
-	registry.Assign<WallHugObjectReference>(entity, static_cast<decltype(WallHugObjectReference::stepsAway)>(numSteps),
-	                                        *fixedEntity);
-	return true;
+	const auto& circle = blockers.circles[*scan.circle];
+	registry.Assign<WallHugObjectReference>(entity, WallHugObjectReference {
+	                                                    .stepsAway = scan.turnsToObstacle,
+	                                                    .entity = blockers.entities[*scan.circle],
+	                                                    .centre = circle.centre,
+	                                                    .radius = circle.radius,
+	                                                });
 }
 
-/// If we have a number of turns to an obstacle but no obstacle saved: search in an arc to find one
-bool OrbitScanForObstacle(entt::entity entity, bool clockwise, Transform& transform, WallHug& wallHug)
+/// The walker's walk this turn: where the walk holds it, its speed and goal in whole map units
+struct Walker
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	auto& reference = registry.Get<WallHugObjectReference>(entity);
+	entt::entity entity;
+	Transform& transform;
+	WallHug& wallHug;
+	MoveState state;
+	MoveStateClockwise clockwise;
+	int32_t speed;
+	glm::ivec2 goal;
+};
 
-	const uint32_t numAttempts = 5;
-	bool found = false;
-	for (uint32_t attempt = 0; attempt < numAttempts; ++attempt)
+/// Where the walk holds a walker: its whole map position, taken up afresh when something else has moved it
+glm::ivec2 HeldPosition(WallHug& wallHug, const Transform& transform)
+{
+	const auto metres = glm::xz(transform.position);
+	if (metres != wallHug.placedAt)
 	{
-		const auto& obstacleFixed = registry.Get<const Fixed>(reference.entity);
-		const auto circleToVillager = glm::xz(transform.position) - obstacleFixed.boundingCenter;
-		const float circleToVillagerLength = glm::length(circleToVillager);
-		const float numCirclesAway = circleToVillagerLength / obstacleFixed.boundingRadius - 0.9f;
-		const auto circleNormal = circleToVillager / circleToVillagerLength;
+		wallHug.position = wall_hug::ToWhole(metres);
+		wallHug.placedAt = metres;
+	}
+	return wallHug.position;
+}
 
-		const bool closeEnough = glm::distance2(wallHug.goal, obstacleFixed.boundingCenter) <
-		                         obstacleFixed.boundingRadius * obstacleFixed.boundingRadius;
-		if (closeEnough)
+/// Puts the walker at a map position, on the ground
+void MoveWalker(Walker& walker, glm::ivec2 position)
+{
+	auto& wallHug = walker.wallHug;
+	wallHug.position = position;
+	wallHug.placedAt = wall_hug::ToPoint(position);
+	const float altitude = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(wallHug.placedAt)
+	                                                           : walker.transform.position.y;
+	walker.transform.position = glm::xzy(glm::vec3(wallHug.placedAt, altitude));
+}
+
+/// Faces the walker along a game angle and makes its step that way
+void FaceAngle(Walker& walker, uint16_t angle)
+{
+	auto& wallHug = walker.wallHug;
+	wallHug.gameAngle = static_cast<uint16_t>(angle & gutils::k_GameAngleMask);
+	wallHug.yAngle = gutils::ConvertGameAngleTo3D(wallHug.gameAngle);
+	walker.transform.rotation = glm::eulerAngleY(-wallHug.yAngle - glm::radians(90.0f));
+	wallHug.step = wall_hug::StepAlong(wallHug.gameAngle, walker.speed);
+}
+
+/// Faces the walker towards its goal
+void FaceGoal(Walker& walker)
+{
+	FaceAngle(walker, gutils::GetAngleFromXZ(walker.wallHug.position, walker.goal));
+}
+
+[[nodiscard]] bool AtGoal(const Walker& walker)
+{
+	return wall_hug::WithinStep(walker.wallHug.position, walker.goal, walker.speed);
+}
+
+/// Within a step of its goal the walker takes its last step onto it on the next turn
+void StartFinalStep(Walker& walker)
+{
+	walker.state = MoveState::FinalStep;
+	walker.clockwise = MoveStateClockwise::Undefined;
+	walker.wallHug.step = walker.wallHug.position - walker.goal;
+}
+
+/// Looks along the walker's straight way for the circle it will meet, among those in the cell of a map position: where
+/// it stands, unless it is about to step into another cell
+void ScanAhead(ecs::Registry& registry, Walker& walker, std::optional<glm::ivec2> coords = std::nullopt)
+{
+	ScanLine(registry, walker.entity, walker.wallHug.position, walker.wallHug.step, coords.value_or(walker.wallHug.position));
+}
+
+/// A walker going round its circle looks along it for what blocks it, from the cell of a map position (see
+/// WallHugRules.h): it may be handed over to another circle, keep going round for some turns facing round the circle,
+/// or stop hugging and face its goal to step straight to it
+void SweepAroundCircle(ecs::Registry& registry, Walker& walker, WallHugObjectReference& reference, glm::ivec2 coords)
+{
+	const auto blockers = BlockersAround(registry, coords);
+	const auto sweep = wall_hug::SweepCircle({
+	    .position = walker.wallHug.position,
+	    .goal = walker.goal,
+	    .centre = reference.centre,
+	    .radius = reference.radius,
+	    .clockwise = walker.clockwise == MoveStateClockwise::Clockwise,
+	    .wholeSpeed = walker.speed,
+	    .blockers = blockers.circles,
+	});
+	if (sweep.outcome == wall_hug::CircleSweep::Outcome::StepThrough)
+	{
+		FaceGoal(walker);
+		walker.wallHug.turnsUntilStepRebuild = k_TurnsToReaimAfterHugging;
+		registry.Remove<WallHugObjectReference>(walker.entity);
+		walker.state = MoveState::StepThrough;
+		walker.clockwise = MoveStateClockwise::Undefined;
+		return;
+	}
+	if (sweep.hugged.has_value())
+	{
+		const auto& circle = blockers.circles[*sweep.hugged];
+		reference.entity = blockers.entities[*sweep.hugged];
+		reference.centre = circle.centre;
+		reference.radius = circle.radius;
+	}
+	reference.stepsAway = sweep.turnsToObstacle;
+	if (sweep.heading.has_value())
+	{
+		FaceAngle(walker, *sweep.heading);
+	}
+}
+
+/// Counts down the turns to the circle ahead; true when they have run out this turn
+[[nodiscard]] bool TurnsRunOut(WallHugObjectReference& reference)
+{
+	if (reference.stepsAway == wall_hug::k_NoObstacleInReach)
+	{
+		return false;
+	}
+	return reference.stepsAway-- == 0;
+}
+
+/// The circle a walker hugs, if it is still there
+WallHugObjectReference* HuggedCircle(ecs::Registry& registry, entt::entity entity)
+{
+	auto* reference = registry.TryGet<WallHugObjectReference>(entity);
+	return reference != nullptr && CircleStillThere(registry, *reference) ? reference : nullptr;
+}
+
+/// A walker whose circle has gone heads for its goal again, round the same way, and stands still this turn
+void LoseCircle(ecs::Registry& registry, Walker& walker)
+{
+	FaceGoal(walker);
+	walker.state = MoveState::Linear;
+	ScanAhead(registry, walker);
+}
+
+/// Heading straight for its goal: on stepping into another map cell it faces its goal again and looks along its way;
+/// when the turns to the circle ahead run out it starts round it
+void WalkStraight(ecs::Registry& registry, Walker& walker)
+{
+	auto& wallHug = walker.wallHug;
+	if (wallHug.step == glm::ivec2(0, 0))
+	{
+		// A walk just set up faces its goal and looks along its way, or is there already
+		FaceGoal(walker);
+		if (AtGoal(walker))
 		{
-			// TODO(#864): CircleSquareSweep is unimplemented. Degrade gracefully instead of
-			// crashing, returning out of this scope so the external following code does not run.
-			AbandonMove(registry, entity);
-			return false;
+			walker.state = MoveState::Arrived;
+			MoveWalker(walker, walker.goal);
+			return;
 		}
+		ScanAhead(registry, walker);
+	}
+	else if (auto* reference = registry.TryGet<WallHugObjectReference>(walker.entity);
+	         reference != nullptr && reference->stepsAway != wall_hug::k_NoObstacleInReach &&
+	         !CircleStillThere(registry, *reference))
+	{
+		// The circle it was heading for went away
+		ScanAhead(registry, walker);
+	}
 
-		for (const auto& c : GetNeighboringCells(glm::xz(transform.position)))
-		{ // TODO(bwrsandman): Skip if out of bounds or in water
-			const auto& e = ObstaclesIn(registry, c);
-			if (!e.empty())
-			{
-				auto iter = std::find_if(e.cbegin(), e.cend(), [&registry, &reference, &obstacleFixed](const auto& f) {
-					if (f == reference.entity)
-					{
-						return false;
-					}
-					if (registry.AnyOf<Field>(f)) // TODO(bwrsandman): || !registry.AllOf<CollideData>();
-					{
-						return false;
-					}
-					const auto& fixed = registry.Get<const Fixed>(f);
-					const auto d2 = glm::distance2(fixed.boundingCenter, obstacleFixed.boundingCenter);
-					const auto r = fixed.boundingRadius + obstacleFixed.boundingRadius;
-					const auto r2 = r * r;
-					return d2 < r2 && d2 > 0.0f;
-				});
-				if (iter != e.cend())
-				{
-					// https://stackoverflow.com/questions/3349125/circle-circle-intersection-points
-					// http://paulbourke.net/geometry/circlesphere/
-					const auto& fixed = registry.Get<const Fixed>(*iter);
-					const auto d2 = glm::distance2(fixed.boundingCenter, obstacleFixed.boundingCenter);
-					const auto d = glm::sqrt(d2);
+	const glm::ivec2 position = wallHug.position;
+	const glm::ivec2 next = position + wallHug.step;
+	if (map_coords::CellOf(next.x) != map_coords::CellOf(position.x) ||
+	    map_coords::CellOf(next.y) != map_coords::CellOf(position.y))
+	{
+		FaceGoal(walker);
+		ScanAhead(registry, walker, next);
+	}
 
-					// Vanilla bug: Scaling is already applied to boundingRadius, but they apply scale again
-					const float fixedScale = glm::compMax(registry.Get<const Transform>(*iter).scale);
-					const float obstacleScale = glm::compMax(registry.Get<const Transform>(reference.entity).scale);
-					const auto r0 = fixed.boundingRadius * fixedScale;
-					const auto r1 = obstacleFixed.boundingRadius * obstacleScale;
-
-					const auto r02 = r0 * r0;
-					const auto r12 = r1 * r1;
-					const auto p0 = fixed.boundingCenter;
-					const auto p1 = obstacleFixed.boundingCenter;
-					const auto a = (r02 - r12 + d2) / (2.0f * d); // first circle to intersection midpoint
-					const auto h = glm::sqrt(r02 - a * a);        // half height of intersection area
-					const auto p2 = p0 + a * (p1 - p0) / d;       // midpoint of overlap
-					const auto diff = p1 - p0;
-					const auto difft = glm::vec2(diff.y, -diff.x); // 90 degree rotation
-					const auto p3 = p2 + h * difft / d;
-					const auto p4 = p2 - h * difft / d;
-
-					const auto v0 = p3 - obstacleFixed.boundingCenter;
-					const auto v1 = p4 - obstacleFixed.boundingCenter;
-					const auto n0 = glm::normalize(v0);
-					const auto n1 = glm::normalize(v1);
-					const auto dp0 = glm::dot(n0, circleNormal);
-					const auto dp1 = glm::dot(n1, circleNormal);
-					const auto cp0 = glm::cross(glm::vec3(n0, 0.0f), glm::vec3(circleNormal, 0.0f)).z;
-					const auto cp1 = glm::cross(glm::vec3(n1, 0.0f), glm::vec3(circleNormal, 0.0f)).z;
-					auto angle0 = glm::acos(dp0);
-					auto angle1 = glm::acos(dp1);
-
-					if ((cp0 > 0.0f) ^ clockwise)
-					{
-						angle0 = 2.0f * glm::pi<float>() - angle0;
-					}
-					if ((cp1 > 0.0f) ^ clockwise)
-					{
-						angle1 = 2.0f * glm::pi<float>() - angle1;
-					}
-
-					const auto t0 = angle0 * 2.0f / 3.0f * r1 / wallHug.speed;
-					const auto t1 = angle1 * 2.0f / 3.0f * r1 / wallHug.speed;
-					int t = static_cast<int>(glm::round(glm::min(t0, t1)));
-
-					if (t < 0)
-					{
-						// Unfinished orbit geometry produced a negative step count. Degrade gracefully
-						// (bail out of the scan) rather than asserting and crashing.
-						AbandonMove(registry, entity);
-						return false;
-					}
-					if (t < 1)
-					{
-						// We're too close to second circle. Act like we're on the second circle and continue looking forward by
-						// recursively calling function with new obstacle.
-						reference.entity = *iter;
-						found = false; // will do another loop
-					}
-					else if (t < 4)
-					{
-						t = 0;
-						found = true;
-					}
-					else
-					{
-						t = glm::min(t, 255);
-						found = true;
-					}
-
-					reference.stepsAway = static_cast<uint8_t>(t);
-				}
-				else
-				{
-					// TODO(bwrsandman):
-					// if intersect[0].obj is None:  # True
-					//     self.init_steps_xz()
-					//     # self.field_0x78 = 0x10
-					//     self.circle_hug_info.reset(self)
-					//     self.move_state = MoveState.STEP_THROUGH
-					// assert(false);
-					found = true;
-				}
-			}
-		}
-		if (found)
+	if (auto* reference = registry.TryGet<WallHugObjectReference>(walker.entity);
+	    reference != nullptr && TurnsRunOut(*reference))
+	{
+		if (walker.clockwise == MoveStateClockwise::Undefined)
 		{
-			InitializeStepAroundObstacle(transform, wallHug, obstacleFixed, numCirclesAway, clockwise);
-			break;
+			const bool clockwise = wall_hug::GoesRoundClockwise(position, wall_hug::ToWhole(reference->centre), wallHug.step);
+			walker.clockwise = clockwise ? MoveStateClockwise::Clockwise : MoveStateClockwise::CounterClockwise;
+		}
+		walker.state = MoveState::Orbit;
+		SweepAroundCircle(registry, walker, *reference, position);
+		if (auto* hugged = registry.TryGet<WallHugObjectReference>(walker.entity))
+		{
+			hugged->entryDistance = wall_hug::EntryDistance(position, walker.goal);
 		}
 	}
 
-	return found;
+	// This turn's step is the one it had before it looked
+	MoveWalker(walker, next);
+	if (AtGoal(walker))
+	{
+		StartFinalStep(walker);
+	}
 }
 
-template <MoveState S, typename... Exclude>
-void StepForward(ecs::Registry& registry, Exclude... exclude)
+/// Going round a circle: it turns by its step over the radius, looks along the circle on stepping into another map
+/// cell and when the turns of the last look run out, steps, and leaves the circle once nearer its goal than on
+/// starting round it, with the goal ahead, facing straight out from the circle's middle
+void WalkRound(ecs::Registry& registry, Walker& walker)
 {
-	registry.Each<MoveStateTagComponent<S>, const WallHug, Transform>(
-	    [](MoveStateTagComponent<S>& state, const WallHug& wallHug, const Transform& transform) {
-		    const auto goal = glm::xz(transform.position) + wallHug.step;
-		    state.stepGoal = goal;
-	    },
-	    exclude...);
+	auto* reference = HuggedCircle(registry, walker.entity);
+	if (reference == nullptr)
+	{
+		LoseCircle(registry, walker);
+		return;
+	}
+	auto& wallHug = walker.wallHug;
+	const bool clockwise = walker.clockwise == MoveStateClockwise::Clockwise;
+	const int32_t turn = wall_hug::OrbitTurn(walker.speed, reference->radius);
+	FaceAngle(walker, static_cast<uint16_t>((wallHug.gameAngle + (clockwise ? -turn : turn)) & gutils::k_GameAngleMask));
+
+	const glm::ivec2 position = wallHug.position;
+	const glm::ivec2 next = position + wallHug.step;
+	if (map_coords::CellOf(next.x) != map_coords::CellOf(position.x) ||
+	    map_coords::CellOf(next.y) != map_coords::CellOf(position.y))
+	{
+		SweepAroundCircle(registry, walker, *reference, next);
+	}
+	if (auto* hugged = registry.TryGet<WallHugObjectReference>(walker.entity); hugged != nullptr && TurnsRunOut(*hugged))
+	{
+		SweepAroundCircle(registry, walker, *hugged, next);
+	}
+	MoveWalker(walker, next);
+
+	const auto* hugged = registry.TryGet<WallHugObjectReference>(walker.entity);
+	const uint32_t entryDistance = hugged != nullptr ? hugged->entryDistance : 0;
+	if (AtGoal(walker))
+	{
+		StartFinalStep(walker);
+		return;
+	}
+	if (hugged != nullptr && wall_hug::LeavesCircle(wallHug.position, walker.goal, wallHug.step, entryDistance, clockwise))
+	{
+		FaceAngle(walker, gutils::GetAngleFromXZ(wall_hug::ToWhole(hugged->centre), wallHug.position));
+		walker.state = MoveState::ExitCircle;
+	}
+}
+
+/// Leaving a circle: it walks straight out until outside it, then heads for its goal again
+void WalkOut(ecs::Registry& registry, Walker& walker)
+{
+	const auto* reference = HuggedCircle(registry, walker.entity);
+	if (reference == nullptr)
+	{
+		LoseCircle(registry, walker);
+		return;
+	}
+	const auto centre = wall_hug::ToWhole(reference->centre);
+	const float radius = reference->radius;
+	MoveWalker(walker, walker.wallHug.position + walker.wallHug.step);
+	if (AtGoal(walker))
+	{
+		StartFinalStep(walker);
+		return;
+	}
+	if (radius * radius < wall_hug::MetresDistanceSq(centre, walker.wallHug.position))
+	{
+		FaceGoal(walker);
+		walker.state = MoveState::Linear;
+		ScanAhead(registry, walker);
+	}
+}
+
+/// Stepping straight to its goal, aiming at it again now and then
+void StepThrough(Walker& walker)
+{
+	auto& wallHug = walker.wallHug;
+	// A small signed count, as the game keeps it: from 0 it goes round through -128 to 127
+	wallHug.turnsUntilStepRebuild = static_cast<int8_t>(static_cast<uint8_t>(wallHug.turnsUntilStepRebuild) - 1U);
+	if (wallHug.turnsUntilStepRebuild == 0)
+	{
+		wallHug.turnsUntilStepRebuild = k_TurnsToReaimStepping;
+		FaceGoal(walker);
+	}
+	MoveWalker(walker, wallHug.position + wallHug.step);
+	if (AtGoal(walker))
+	{
+		StartFinalStep(walker);
+	}
+}
+
+void Walk(ecs::Registry& registry, Walker& walker)
+{
+	switch (walker.state)
+	{
+	case MoveState::FinalStep:
+		MoveWalker(walker, walker.goal);
+		return;
+	case MoveState::Arrived:
+		if (AtGoal(walker))
+		{
+			MoveWalker(walker, walker.goal);
+			return;
+		}
+		// Moved off its goal: it steps back to it
+		walker.wallHug.turnsUntilStepRebuild = k_TurnsToReaimAfterHugging;
+		walker.state = MoveState::StepThrough;
+		StepThrough(walker);
+		return;
+	case MoveState::StepThrough:
+		StepThrough(walker);
+		return;
+	case MoveState::Linear:
+		WalkStraight(registry, walker);
+		return;
+	case MoveState::Orbit:
+		WalkRound(registry, walker);
+		return;
+	case MoveState::ExitCircle:
+		WalkOut(registry, walker);
+		return;
+	}
 }
 
 template <MoveState S>
-bool CellTransition(entt::entity entity, const MoveStateTagComponent<S>& state, Transform& transform, WallHug& wallHug);
-
-template <>
-bool CellTransition(entt::entity entity, [[maybe_unused]] const MoveStateTagComponent<MoveState::Linear>& state,
-                    Transform& transform, WallHug& wallHug)
-{
-	InitializeStepToGoal(transform, wallHug);
-	return LinearScanForObstacle(entity, glm::xz(transform.position), wallHug.step);
-}
-
-template <>
-bool CellTransition(entt::entity entity, const MoveStateTagComponent<MoveState::Orbit>& state, Transform& transform,
-                    WallHug& wallHug)
-{
-	return OrbitScanForObstacle(entity, state.clockwise == MoveStateClockwise::Clockwise, transform, wallHug);
-}
-
-/// Transition from one grid cell to another requires another check for obstacle in the line
-template <MoveState S>
-void HandleCellTransition(ecs::Registry& registry)
+void CollectWalkers(ecs::Registry& registry, std::vector<Walker>& walkers)
 {
 	registry.Each<const MoveStateTagComponent<S>, WallHug, Transform>(
-	    [](entt::entity entity, const MoveStateTagComponent<S>& state, WallHug& wallHug, Transform& transform) {
-		    const auto position = glm::xz(transform.position);
-		    const auto positionId = MapInterface::GetGridCell(position);
-		    const auto goalId = MapInterface::GetGridCell(state.stepGoal);
-		    if (positionId != goalId)
-		    {
-			    CellTransition(entity, state, transform, wallHug);
-		    }
+	    [&walkers](entt::entity entity, const MoveStateTagComponent<S>& tag, WallHug& wallHug, Transform& transform) {
+		    walkers.push_back({
+		        .entity = entity,
+		        .transform = transform,
+		        .wallHug = wallHug,
+		        .state = S,
+		        .clockwise = tag.clockwise,
+		        .speed = wall_hug::WholeSpeed(wallHug.speed),
+		        .goal = wall_hug::ToWhole(wallHug.goal),
+		    });
 	    });
 }
 
-// TODO(bwrsandman): Vanilla is more complex than this. Update to the map might be needed when transitioning from one block to
-// the other.
-template <MoveState S, typename... Exclude>
-void ApplyStepGoal(ecs::Registry& registry, Exclude... exclude)
+template <MoveState S>
+void SetTag(ecs::Registry& registry, const Walker& walker)
 {
-	registry.Each<const MoveStateTagComponent<S>, Transform>(
-	    [](const MoveStateTagComponent<S>& state, Transform& transform) {
-		    const float altitude = Locator::terrainSystem::value().GetHeightAt(state.stepGoal);
-		    transform.position = glm::xzy(glm::vec3(state.stepGoal, altitude));
-	    },
-	    exclude...);
+	registry.AssignOrReplace<MoveStateTagComponent<S>>(walker.entity, walker.clockwise,
+	                                                   wall_hug::ToPoint(walker.wallHug.position));
+}
+
+/// Gives the walker the tag of the state it is now in, and takes the others off
+void Retag(ecs::Registry& registry, const Walker& walker)
+{
+	registry.Remove<MoveStateLinearTag, MoveStateOrbitTag, MoveStateExitCircleTag, MoveStateStepThroughTag,
+	                MoveStateFinalStepTag, MoveStateArrivedTag>(walker.entity);
+	switch (walker.state)
+	{
+	case MoveState::Linear:
+		SetTag<MoveState::Linear>(registry, walker);
+		break;
+	case MoveState::Orbit:
+		SetTag<MoveState::Orbit>(registry, walker);
+		break;
+	case MoveState::ExitCircle:
+		SetTag<MoveState::ExitCircle>(registry, walker);
+		break;
+	case MoveState::StepThrough:
+		SetTag<MoveState::StepThrough>(registry, walker);
+		break;
+	case MoveState::FinalStep:
+		SetTag<MoveState::FinalStep>(registry, walker);
+		break;
+	case MoveState::Arrived:
+		SetTag<MoveState::Arrived>(registry, walker);
+		break;
+	}
 }
 
 } // namespace
@@ -430,221 +591,19 @@ void ApplyStepGoal(ecs::Registry& registry, Exclude... exclude)
 void PathfindingSystem::Update()
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	FileObstacles(registry);
 
-	// 1.  ARRIVED:
-	//         If AreWeThere is false, set to STEP_THROUGH (and it will trigger following steps)
-	registry.Each<const MoveStateArrivedTag, const Transform, const WallHug>(
-	    [&registry](entt::entity entity, const MoveStateArrivedTag& state, const Transform& transform, const WallHug& wallHug) {
-		    if (AreWeThere(glm::xz(transform.position), wallHug.goal, wallHug.speed))
-		    {
-			    registry.SwapComponents<MoveStateStepThroughTag>(entity, state, state.clockwise);
-		    }
-	    });
-
-	// 2.  LINEAR, LINEAR_CW, LINEAR_CCW
-	//         If this is the first turn and there is step size defined
-	registry.Each<const MoveStateLinearTag, Transform, WallHug>(
-	    [](entt::entity entity, const MoveStateLinearTag&, Transform& transform, WallHug& wallHug) {
-		    if (wallHug.step == glm::vec2(0.0f, 0.0))
-		    {
-			    InitializeStepToGoal(transform, wallHug);
-			    LinearScanForObstacle(entity, glm::xz(transform.position), wallHug.step);
-		    }
-	    },
-	    entt::exclude<WallHugObjectReference>);
-
-	// 3.  ORBIT_CW, ORBIT_CCW, EXIT_CIRCLE_CW, EXIT_CIRCLE_CCW:
-	//         Orbiting requires a recorded obstacle to hug. Handling a missing one is unimplemented
-	//         in the port; abandon those moves instead of crashing. Collect
-	//         first, then remove, so we never mutate the pool being iterated for a non-current entity.
+	// Every walker takes its turn's walk on its own, in the state it is in
+	std::vector<Walker> walkers;
+	CollectWalkers<MoveState::Arrived>(registry, walkers);
+	CollectWalkers<MoveState::FinalStep>(registry, walkers);
+	CollectWalkers<MoveState::StepThrough>(registry, walkers);
+	CollectWalkers<MoveState::Linear>(registry, walkers);
+	CollectWalkers<MoveState::Orbit>(registry, walkers);
+	CollectWalkers<MoveState::ExitCircle>(registry, walkers);
+	for (auto& walker : walkers)
 	{
-		std::vector<entt::entity> missingObstacle;
-		const auto collectIfNoObstacle = [&registry, &missingObstacle](entt::entity entity) {
-			if (!registry.AllOf<WallHugObjectReference>(entity) ||
-			    registry.Get<WallHugObjectReference>(entity).entity == entt::null)
-			{
-				missingObstacle.push_back(entity);
-			}
-		};
-		registry.Each<const MoveStateOrbitTag>(
-		    [&collectIfNoObstacle](entt::entity entity, [[maybe_unused]] const MoveStateOrbitTag& state) {
-			    collectIfNoObstacle(entity);
-		    });
-		registry.Each<const MoveStateExitCircleTag>(
-		    [&collectIfNoObstacle](entt::entity entity, [[maybe_unused]] const MoveStateExitCircleTag& state) {
-			    collectIfNoObstacle(entity);
-		    });
-		for (const auto entity : missingObstacle)
-		{
-			AbandonMove(registry, entity);
-		}
+		HeldPosition(walker.wallHug, walker.transform);
+		Walk(registry, walker);
+		Retag(registry, walker);
 	}
-
-	// 4a. STEP_THROUGH, EXIT_CIRCLE_CW, EXIT_CIRCLE_CCW, LINEAR without obstacles:
-	//         Do StepForward and ApplyStepGoal for the step distance -> no change to state
-	StepForward<MoveState::StepThrough>(registry);
-	StepForward<MoveState::ExitCircle>(registry);
-	ApplyStepGoal<MoveState::StepThrough>(registry);
-	ApplyStepGoal<MoveState::ExitCircle>(registry);
-
-	// 4b. FINAL_STEP, ARRIVED:
-	//         Do ApplyStepGoal for the remaining distance to the goal and return a message to change LIVING STATE
-	//         exclude from next parts -> no change to state
-	ApplyStepGoal<MoveState::FinalStep>(registry);
-	ApplyStepGoal<MoveState::Arrived>(registry);
-
-	// 4c. ORBIT_CW, ORBIT_CCW:
-	registry.Each<const MoveStateOrbitTag, const WallHugObjectReference, WallHug, Transform>(
-	    [&registry](const MoveStateOrbitTag& state, const WallHugObjectReference& reference, WallHug& wallHug,
-	                Transform& transform) {
-		    IterateStepAroundObstacle(transform, wallHug, registry.Get<Fixed>(reference.entity),
-		                              state.clockwise == MoveStateClockwise::Clockwise);
-	    });
-	StepForward<MoveState::Orbit>(registry);
-	HandleCellTransition<MoveState::Orbit>(registry);
-	// Decrement turns to object, remove reference once at 0, 0xFF means there is obstacle
-	// TODO(#500): split WallHugObjectReference into FutureObstacle and HuggedObstacle
-	registry.Each<const MoveStateOrbitTag, WallHugObjectReference>(
-	    [](const MoveStateOrbitTag&, WallHugObjectReference& reference) {
-		    if (reference.stepsAway == std::numeric_limits<decltype(reference.stepsAway)>::max())
-		    {
-			    return;
-		    }
-		    if (reference.stepsAway == 0)
-		    {
-			    reference.stepsAway = std::numeric_limits<decltype(reference.stepsAway)>::max();
-		    }
-		    else
-		    {
-			    --reference.stepsAway;
-		    }
-	    });
-	// Call OrbitScanForObstacle for those without reference, jumping from one circle to the next
-	// registry.Each<const MoveStateOrbitTag, entt::exclude_t<WallHugObjectReference>>( // FIXME: Exclusion list is not working
-	registry.Each<const MoveStateOrbitTag>([&registry](entt::entity entity, [[maybe_unused]] const MoveStateOrbitTag& state) {
-		if (!registry.AnyOf<WallHugObjectReference>(entity))
-		{
-			// TODO(#865): circle-to-circle transition is unimplemented. Degrade gracefully.
-			AbandonMove(registry, entity);
-		}
-	});
-	ApplyStepGoal<MoveState::Orbit>(registry);
-	// Check if it's time to exit circle hug
-	registry.Each<const MoveStateOrbitTag, WallHug, Transform, WallHugObjectReference>(
-	    [&registry](entt::entity entity, const MoveStateOrbitTag& state, WallHug& wallHug, Transform& transform,
-	                WallHugObjectReference& reference) {
-		    const auto pos = glm::xz(transform.position);
-		    if (AreWeThere(pos, wallHug.goal, 0.0f))
-		    {
-			    registry.SwapComponents<MoveStateFinalStepTag>(entity, state, MoveStateClockwise::Undefined, wallHug.goal);
-			    registry.Remove<WallHugObjectReference>(entity);
-		    }
-
-		    const auto diff = pos - wallHug.goal;
-		    // If continuing around the circle gets us closer, keep hugging
-		    // 2D cross product gives the sin between both vectors
-		    const float sin = glm::cross(glm::vec3(wallHug.step, 0.0f), glm::vec3(diff, 0.0f)).z;
-		    const auto newClockwise = sin > 0.0f ? MoveStateClockwise::Clockwise : MoveStateClockwise::CounterClockwise;
-		    assert(state.clockwise != MoveStateClockwise::Undefined);
-		    if (state.clockwise == newClockwise)
-		    {
-			    return;
-		    }
-		    // If the angle isn't larger than 90 degrees, keep hugging
-		    if (glm::dot(wallHug.step, diff) > 0.0f)
-		    {
-			    return;
-		    }
-
-		    const auto& obstacle = registry.Get<const Fixed>(reference.entity);
-		    const auto normal = pos - obstacle.boundingCenter;
-		    InitializeStep(transform, wallHug, glm::atan(normal.y, normal.x));
-		    // Add exit tag, current tag stay to avoid 6. and is removed after
-		    registry.Assign<MoveStateExitCircleTag>(entity, state.clockwise, state.stepGoal);
-	    });
-
-	// 4d. LINEAR, LINEAR_CW, LINEAR_CCW:
-	//         Do move_to_circle_hug (complex) -> can change state to ORBIT*
-	StepForward<MoveState::Linear>(registry);
-	HandleCellTransition<MoveState::Linear>(registry);
-	// Decrement turns to object, transition to orbit at 0
-	registry.Each<const MoveStateLinearTag, Transform, WallHug, WallHugObjectReference>(
-	    [&registry](entt::entity entity, const MoveStateLinearTag& state, Transform& transform, WallHug& wallHug,
-	                WallHugObjectReference& reference) {
-		    assert(reference.stepsAway != 0xFF); // In this case, the component should have been removed
-		    if (reference.stepsAway == 0)
-		    {
-			    auto clockwise = state.clockwise;
-			    if (clockwise == MoveStateClockwise::Undefined)
-			    {
-				    const auto& circleHugFixed = registry.Get<Fixed>(reference.entity);
-				    const auto diff = glm::xz(transform.position) - circleHugFixed.boundingCenter;
-				    // 2D cross product gives the sin between both vectors
-				    const float sin = glm::cross(glm::vec3(wallHug.step, 0.0f), glm::vec3(diff, 0.0f)).z;
-				    // Positive is 180 degrees clockwise, negative is 180 degrees counter-clockwise
-				    clockwise = sin > 0.0f ? MoveStateClockwise::Clockwise : MoveStateClockwise::CounterClockwise;
-			    }
-			    // Add orbit, remove linear later
-			    auto& newState = registry.Assign<MoveStateOrbitTag>(entity, clockwise, state.stepGoal);
-			    reference.stepsAway = std::numeric_limits<decltype(reference.stepsAway)>::max(); // FIXME: useless value
-			    // TODO(#500): reference.entity should probably be put in another component
-			    // registry.Remove<WallHugObjectReference>(entity);
-			    // registry.Remove<MoveStateLinearTag>(entity); // TODO(#500): Maybe do this later
-
-			    // TODO(bwrsandman): perhaps move this to another Each call
-			    OrbitScanForObstacle(entity, newState.clockwise == MoveStateClockwise::Clockwise, transform, wallHug);
-		    }
-		    else
-		    {
-			    --reference.stepsAway;
-		    }
-	    });
-
-	ApplyStepGoal<MoveState::Linear>(registry);
-	// Clean-up: Remove those which have been transitioned
-	registry.Each<const MoveStateLinearTag, const MoveStateOrbitTag>(
-	    [&registry](entt::entity entity, const MoveStateLinearTag, const MoveStateOrbitTag) {
-		    registry.Remove<MoveStateLinearTag>(entity);
-	    });
-
-	// 5.  NOT(FINAL_STEP, ARRIVED): ** PRIOR TO ANY CHANGE OF THE ABOVE STEPS (4c):
-	//         if AreWeThere(): sets to FINAL_STEP
-	registry.Each<WallHug, const Transform>(
-	    [&registry](entt::entity entity, WallHug& wallHug, const Transform& transform) {
-		    if (AreWeThere(glm::xz(transform.position), wallHug.goal, wallHug.speed))
-		    {
-			    registry.Assign<MoveStateFinalStepTag>(entity, MoveStateClockwise::Undefined, wallHug.goal);
-			    registry.Remove<MoveStateLinearTag, MoveStateOrbitTag, MoveStateExitCircleTag, MoveStateStepThroughTag>(entity);
-		    }
-	    },
-	    entt::exclude<MoveStateFinalStepTag, MoveStateArrivedTag>);
-
-	// 6.  EXIT_CIRCLE_CW, EXIT_CIRCLE_CCW ** PRIOR TO ANY CHANGE OF THE ABOVE STEPS (4c):
-	//         if the distance to obstacle is greater than the radius of the circle: set to LINEAR_(C)CW and do
-	//         linear_square_sweep
-	registry.Each<const MoveStateExitCircleTag, WallHug, const WallHugObjectReference, Transform>(
-	    [&registry](entt::entity entity, const MoveStateExitCircleTag& state, WallHug& wallHug,
-	                const WallHugObjectReference& object, Transform& transform) {
-		    if (object.entity != entt::null && !registry.AnyOf<MoveStateOrbitTag>(entity))
-		    {
-			    const auto position = glm::xz(transform.position);
-			    const auto& fixed = registry.Get<const Fixed>(object.entity);
-			    if (!AreWeThere(position, fixed.boundingCenter, wallHug.speed))
-			    {
-				    if (!AreWeThere(position, fixed.boundingCenter, fixed.boundingRadius))
-				    {
-					    InitializeStepToGoal(transform, wallHug);
-					    registry.SwapComponents<MoveStateLinearTag>(entity, state, state.clockwise, state.stepGoal);
-					    LinearScanForObstacle(entity, position, wallHug.step);
-				    }
-			    }
-		    }
-	    });
-
-	// Remove leftover tag from orbit to exit circle transition
-	registry.Each<const MoveStateExitCircleTag, const MoveStateOrbitTag>(
-	    [&registry](entt::entity entity, const MoveStateExitCircleTag, const MoveStateOrbitTag) {
-		    registry.Remove<MoveStateOrbitTag>(entity);
-	    });
 }

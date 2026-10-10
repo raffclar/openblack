@@ -32,6 +32,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
@@ -50,13 +51,18 @@
 #include "ECS/PhysicsClasses.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/FireflySystemInterface.h"
+#include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
@@ -160,6 +166,19 @@ bool GameHandGrabWorld::InInfluence(PlayerNames player, glm::vec3 point) const
 	return Locator::influenceSystem::has_value() && Locator::influenceSystem::value().PlayerInfluence(player, point) > 0.0f;
 }
 
+bool GameHandGrabWorld::HandInInfluence(PlayerNames player, glm::vec3 hand) const
+{
+	return Locator::influenceSystem::has_value() && Locator::influenceSystem::value().IsHandInInfluence(player, hand);
+}
+
+void GameHandGrabWorld::HeldThingUsedOnLand(PlayerNames player)
+{
+	if (Locator::influenceSystem::has_value())
+	{
+		Locator::influenceSystem::value().HeldThingUsedOnLand(player);
+	}
+}
+
 bool GameHandGrabWorld::InBounds(glm::vec3 point) const
 {
 	return map_coords::InBounds(point);
@@ -173,6 +192,11 @@ glm::vec3 GameHandGrabWorld::LandNormalAt(glm::vec3 point) const
 
 hand_grab::HandGrabWorldInterface::Size GameHandGrabWorld::SizeOf(entt::entity object) const
 {
+	// A fish farm has no model: it reaches as far as its table says, and the hand keeps that high over it
+	if (Locator::entitiesRegistry::value().AllOf<FishFarm>(object))
+	{
+		return {.radius = fish_farm::k_Radius, .height = fish_farm::k_HandHeight};
+	}
 	const auto size = world_objects::SizeOf(object);
 	return {.radius = size.radius, .height = size.height};
 }
@@ -286,6 +310,16 @@ void GameHandGrabWorld::FireStartedMoving(entt::entity object, bool inHand)
 	}
 }
 
+void GameHandGrabWorld::CatchFirefly(entt::entity object)
+{
+	const auto* transform = Locator::entitiesRegistry::value().TryGet<const Transform>(object);
+	if (transform == nullptr || !Locator::fireflySystem::has_value() || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	Locator::fireflySystem::value().Catch(map_coords::FromWorld(Locator::terrainSystem::value(), transform->position));
+}
+
 void GameHandGrabWorld::HeatHeld(entt::entity object)
 {
 	if (Locator::fireSystem::has_value())
@@ -364,15 +398,46 @@ void GameHandGrabWorld::TreeUprooted(PlayerNames player, entt::entity /*tree*/)
 	    player, magic::DampAlignmentChange(-Info()->player.treePullPutAlignmentChange, alignment.GetPlayerAlignment(player)));
 }
 
-bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player)
+bool GameHandGrabWorld::HoldsLeash(PlayerNames player)
 {
-	// A rock tall enough breaks when tapped; other things' taps are the clicking and activating of the interface
-	if (!object_physics::CanTapRock(object) || !Locator::dynamicsSystem::has_value())
+	if (!Locator::leashSystem::has_value())
 	{
 		return false;
 	}
-	object_physics::TapRock(Locator::dynamicsSystem::value(), object, handPoint, player);
-	return true;
+	const auto& leashes = Locator::leashSystem::value();
+	const auto creature = leashes.PlayersCreature(player);
+	return creature.has_value() && leashes.IsLeashed(*creature) && !leashes.TiedTo(*creature).has_value() &&
+	       leashes.HolderPoint(*creature).has_value();
+}
+
+bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player)
+{
+	// A rock tall enough breaks when tapped
+	if (object_physics::CanTapRock(object) && Locator::dynamicsSystem::has_value())
+	{
+		object_physics::TapRock(Locator::dynamicsSystem::value(), object, handPoint, player);
+		return true;
+	}
+	// A town's building is knocked on, whoever's town it is, unless the hand holds its creature's leash, which takes the
+	// tap to send the creature there
+	if (Entities().AllOf<Abode>(object) && Locator::abodeKnockSystem::has_value() && !HoldsLeash(player))
+	{
+		const bool ownHand = !Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() == player;
+		return Locator::abodeKnockSystem::value().Tap(object, handPoint, ownHand);
+	}
+	// Other things' taps are the clicking and activating of the interface
+	return false;
+}
+
+bool GameHandGrabWorld::HoldsLooseLeash() const
+{
+	if (!Locator::leashSystem::has_value())
+	{
+		return false;
+	}
+	const auto& leashes = Locator::leashSystem::value();
+	const auto creature = leashes.PlayersCreature(HandPlayer());
+	return creature.has_value() && leashes.HolderPoint(*creature).has_value();
 }
 
 void GameHandGrabWorld::LeaveRootsHole(entt::entity tree)
@@ -552,6 +617,20 @@ uint32_t GameHandGrabWorld::TakeFromPile(entt::entity pile, uint32_t amount)
 	return Locator::resourceStoreSystem::value().TakeFromPile(pile, facts->resource, amount, HandPlayer());
 }
 
+std::optional<fish_farm::Type> GameHandGrabWorld::FishFarmOf(entt::entity farm) const
+{
+	if (!Locator::entitiesRegistry::value().AllOf<FishFarm>(farm) || !Locator::fishFarmSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	return Locator::fishFarmSystem::value().GetType();
+}
+
+uint32_t GameHandGrabWorld::TakeFromFishFarm(entt::entity farm, uint32_t amount)
+{
+	return Locator::fishFarmSystem::has_value() ? Locator::fishFarmSystem::value().TakeFish(farm, amount) : 0;
+}
+
 std::optional<hand_grab::HandGrabWorldInterface::FieldFacts> GameHandGrabWorld::FieldFactsOf(entt::entity field) const
 {
 	const auto* data = Locator::entitiesRegistry::value().TryGet<const Field>(field);
@@ -620,10 +699,18 @@ std::optional<uint32_t> GameHandGrabWorld::StartScoopStream(ResourceType resourc
 	{
 		return std::nullopt;
 	}
-	// TODO(hand): a fish farm's fish stream as their own (openblack has no fish farms)
 	// Poisoned food streams as its own
 	const auto stream = resource == ResourceType::Wood ? k_ScoopWood : poisoned ? k_ScoopPoisonedFood : k_ScoopFood;
 	return Locator::particleSystem::value().Start(stream, source, 1.0f);
+}
+
+std::optional<uint32_t> GameHandGrabWorld::StartFishScoopStream(glm::vec3 source)
+{
+	if (!Locator::particleSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	return Locator::particleSystem::value().Start(ParticleType::FoodPickupFish, source, 1.0f);
 }
 
 void GameHandGrabWorld::StopScoopStream(uint32_t stream)
@@ -689,6 +776,11 @@ bool GameHandGrabWorld::TakeIntoStore(entt::entity store, entt::entity object)
 	}
 	return Locator::resourceStoreSystem::has_value() &&
 	       Locator::resourceStoreSystem::value().TakeObject(store, object, HandPlayer());
+}
+
+bool GameHandGrabWorld::LayGateStone(entt::entity plinth, entt::entity stone)
+{
+	return Locator::animatedStaticSystem::has_value() && Locator::animatedStaticSystem::value().LayGateStone(plinth, stone);
 }
 
 void GameHandGrabWorld::PourAt(ResourceType resource, glm::vec3 point, uint32_t amount, PlayerNames player, bool poisoned)

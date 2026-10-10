@@ -29,6 +29,16 @@ int CellsFromOpenWater(int x, int z)
 	return std::max(outside(x, flat_land::k_LakeMinX, flat_land::k_LakeMaxX),
 	                outside(z, flat_land::k_LakeMinZ, flat_land::k_LakeMaxZ));
 }
+
+/// How many corners out from the pond's strip the map's corner (x, z) lies, 0 on it
+int CornersFromPond(int x, int z)
+{
+	const auto across = x - z - flat_land::k_PondDiagonal;
+	const auto along = x + z;
+	const auto fromStrip = across < 0 ? -across : std::max(across - 1, 0);
+	const auto fromEnds = std::max({flat_land::k_PondFirstSum - along, along - flat_land::k_PondLastSum, 0});
+	return std::max(fromStrip, fromEnds);
+}
 } // namespace
 
 flat_land::Colour flat_land::MaterialColour(int x, int z)
@@ -43,7 +53,7 @@ flat_land::Colour flat_land::MaterialColour(int x, int z)
 
 uint8_t flat_land::Altitude(int x, int z)
 {
-	const auto out = CellsFromOpenWater(x, z);
+	const auto out = std::min(CellsFromOpenWater(x, z), CornersFromPond(x, z));
 	return out < static_cast<int>(k_ShoreAltitudes.size()) ? k_ShoreAltitudes.at(static_cast<size_t>(out)) : k_Altitude;
 }
 

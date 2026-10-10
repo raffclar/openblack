@@ -34,22 +34,26 @@ public:
 	void AssignForestsToTowns() override;
 	[[nodiscard]] std::optional<glm::vec3> ForestLair(AnimalInfo kind, glm::vec3 from) const override;
 	void MakeScenicForests() override;
+	void JoinForest(entt::entity tree, uint32_t forest) override;
+	void GrowForests() override;
 	void ProcessTurn() override;
 	void Reset() override;
 
 private:
-	/// The forests' turn: growing while their miracles last, withering once they have gone
+	/// The forest miracles' forests' turn: growing while their miracles last, withering once they have gone
 	void ProcessForests();
+	/// A young tree of a tree's kind is planted at the first free spot of up to 160 tried round it, in its forest; none
+	/// when no spot is free
+	std::optional<entt::entity> PlantBeside(entt::entity tree);
 
 	/// The turn a forest last gained a tree planted near another, 0 on a new land
 	uint32_t _lastTreeAddedTurn {0};
-	/// The number the next forest miracle's forest takes
-	uint32_t _nextMiracleForestId {k_FirstMiracleForestId};
-	/// The number the next forest of the land takes when none is given, and how many have been made
+	/// The number the next forest of the land takes when none is given
 	uint32_t _nextLandForestId {1};
-	uint32_t _landForestsMade {0};
-	/// The forest miracles' forests are numbered from here, beyond any a land's script gives its forests
-	static constexpr uint32_t k_FirstMiracleForestId = 0x80000000u;
+	/// How many forests have been made, the forest miracles' included: the newest is met first
+	uint32_t _forestsMade {0};
+	/// How many times a tree has joined a forest's growing or grown trees
+	uint32_t _treesListed {0};
 };
 
 } // namespace openblack::ecs::systems

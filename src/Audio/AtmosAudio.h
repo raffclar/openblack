@@ -16,7 +16,7 @@
 
 #include <glm/vec3.hpp>
 
-#include "3D/SkyInterface.h"
+#include "3D/DayNightClock.h"
 #include "SoundMap.h"
 
 namespace openblack::audio
@@ -65,7 +65,7 @@ public:
 	[[nodiscard]] uint32_t GetGroup() const;
 
 	/// The sky type at a time of day: 0 day, 1 dusk, 2 night
-	[[nodiscard]] static float CalculateSkyType(float time, const SkyInterface::DayNightTimes& times);
+	[[nodiscard]] static float CalculateSkyType(float time, const DayNightTimes& times);
 	/// The value the game's audio keeps for an alignment, -1 (evil) to 1 (good)
 	[[nodiscard]] static float CalculateAlignmentValue(float alignment);
 	/// One turn of a bank's fade towards its target: the new volume and what is sent to the bank (0-127)

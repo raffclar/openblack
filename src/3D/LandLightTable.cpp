@@ -130,6 +130,11 @@ uint32_t LandLightTable::GetLandColour(const LandLightPalette& palette, float sk
 	return Overcast(LandColour(PaletteColours(palette, skyType, alignment), alignment), overcast) & 0xFFFFFFu;
 }
 
+uint32_t LandLightTable::GetMoonColour(const LandLightPalette& palette, float skyType, float alignment) noexcept
+{
+	return PaletteColours(palette, skyType, alignment)[k_Moon] & 0xFFFFFFu;
+}
+
 void LandLightTable::Build(const LandLightPalette& palette, float skyType, float alignment, float overcast,
                            uint8_t flash) noexcept
 {
@@ -138,7 +143,6 @@ void LandLightTable::Build(const LandLightPalette& palette, float skyType, float
 
 	_landColour = land & 0xFFFFFFu;
 	_warmColour = colours[k_Warm] & 0xFFFFFFu;
-	_moonColour = colours[k_Moon] & 0xFFFFFFu;
 
 	// The haze: a third of the land's colour, k by its brightness, and its distances drawn in at dusk
 	{

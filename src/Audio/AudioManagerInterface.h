@@ -141,9 +141,13 @@ public:
 	[[nodiscard]] virtual bool IsEmitterLooping(entt::entity emitter) = 0;
 	/// An emitter's volume, 0 to 127, as a fade sets it
 	virtual void SetEmitterVolume(entt::entity emitter, uint32_t volume) = 0;
+	/// Its playback rate in percent, as the mixer sets a playing sample's pitch
+	virtual void SetEmitterPitch(entt::entity emitter, uint32_t pitchPercent) = 0;
 	[[nodiscard]] virtual uint32_t GetEmitterVolume(entt::entity emitter) = 0;
 	/// Stops every sound played for an owner
 	virtual void StopOwnedSounds(entt::entity owner) = 0;
+	/// Stops every sound effect playing (not the music)
+	virtual void StopAllSoundEffects() = 0;
 	/// The animation effects of a loaded sound bank, named as its sounds are ("<bank>/<sample id>")
 	virtual void AddAnimEffects(const std::string& bankName, AnimEffectTable table) = 0;
 	/// One of the samples a bank's animation effects pick for keys, chosen at random, as
