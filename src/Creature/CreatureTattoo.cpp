@@ -174,6 +174,25 @@ void creature_tattoo::Paint(std::span<uint16_t> skin, const Design& design, cons
 	}
 }
 
+glm::u8vec3 creature_tattoo::Brightened(const glm::u8vec3& colour, float brightness)
+{
+	const glm::ivec3 channels {colour};
+	glm::ivec3 result;
+	if (brightness >= 0.5f)
+	{
+		// Towards white
+		const auto towards = static_cast<int32_t>((brightness - 0.5f) * 2.0f * 256.0f);
+		result = channels + (((glm::ivec3(255) - channels) * towards) / 256);
+	}
+	else
+	{
+		// Towards black
+		const auto factor = static_cast<int32_t>(brightness * 2.0f * 256.0f);
+		result = (channels * factor) / 256;
+	}
+	return glm::u8vec3(glm::clamp(result, 0, 255));
+}
+
 glm::u8vec3 creature_tattoo::PaletteColour(std::span<const std::array<uint8_t, 3>> palette, uint32_t column, uint32_t row,
                                            float brightness)
 {
@@ -183,21 +202,7 @@ glm::u8vec3 creature_tattoo::PaletteColour(std::span<const std::array<uint8_t, 3
 	{
 		return glm::u8vec3(255);
 	}
-	const glm::ivec3 colour {palette[index][0], palette[index][1], palette[index][2]};
-	glm::ivec3 result;
-	if (brightness >= 0.5f)
-	{
-		// Towards white
-		const auto towards = static_cast<int32_t>((brightness - 0.5f) * 2.0f * 256.0f);
-		result = colour + (((glm::ivec3(255) - colour) * towards) / 256);
-	}
-	else
-	{
-		// Towards black
-		const auto factor = static_cast<int32_t>(brightness * 2.0f * 256.0f);
-		result = (colour * factor) / 256;
-	}
-	return glm::u8vec3(glm::clamp(result, 0, 255));
+	return Brightened({palette[index][0], palette[index][1], palette[index][2]}, brightness);
 }
 
 std::optional<size_t> creature_tattoo::SlotFor(const Slots& slots, uint8_t site, uint8_t design)

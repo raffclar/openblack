@@ -74,7 +74,7 @@ bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 		const auto size = static_cast<uint32_t>(skin.texels.size() * sizeof(skin.texels[0]));
 		// bgfx only lets a texture created without texels have them changed
 		_skins[skin.id]->Create(l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height, 1, TextureFormat::BGRA4, Wrapping::Repeat,
-		                        Filter::Linear, _dynamic ? nullptr : bgfx::makeRef(skin.texels.data(), size));
+		                        Filter::Linear, _dynamic ? nullptr : bgfx::copy(skin.texels.data(), size));
 		if (_dynamic)
 		{
 			_skins[skin.id]->Update(skin.texels.data(), size);
@@ -114,7 +114,7 @@ bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 			texture->Create(
 			    static_cast<uint16_t>(footprint.header.width), static_cast<uint16_t>(footprint.header.height), 1,
 			    graphics::TextureFormat::BGRA4, Wrapping::ClampEdge, Filter::Linear,
-			    bgfx::makeRef(entry.pixels.data(), static_cast<uint32_t>(entry.pixels.size() * sizeof(entry.pixels[0]))));
+			    bgfx::copy(entry.pixels.data(), static_cast<uint32_t>(entry.pixels.size() * sizeof(entry.pixels[0]))));
 
 			const bgfx::Memory* verticesMem =
 			    bgfx::alloc(static_cast<uint32_t>(sizeof(FootprintVertex) * entry.triangles.size() * 3));
@@ -280,7 +280,6 @@ bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 	// TODO(bwrsandman): if no physics mesh was found, make physics mesh the bounding box
 
 	// TODO(bwrsandman): store vertex and index buffers at mesh level
-	bgfx::frame();
 
 	return result;
 }

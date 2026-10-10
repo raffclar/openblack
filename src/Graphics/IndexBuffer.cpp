@@ -18,6 +18,7 @@
 #include <spdlog/spdlog.h>
 
 #include "GraphicsHandleBgfx.h"
+#include "UploadPacer.h"
 
 using namespace openblack::graphics;
 
@@ -31,6 +32,7 @@ IndexBuffer::IndexBuffer(std::string name, const void* indices, uint32_t indexCo
 	assert(indexCount > 0);
 
 	const auto* mem = bgfx::makeRef(indices, indexCount * GetTypeSize(_type));
+	UploadPacer::Pace(mem->size);
 	_handle = fromBgfx(bgfx::createIndexBuffer(mem, type == Type::Uint32 ? BGFX_BUFFER_INDEX32 : 0));
 	if (!bgfx::isValid(toBgfx(_handle)))
 	{
@@ -48,6 +50,7 @@ IndexBuffer::IndexBuffer(std::string name, const void* mem, Type type)
 {
 	const auto* memBgfx = static_cast<const bgfx::Memory*>(mem);
 	_count = memBgfx->size / sizeof(uint16_t);
+	UploadPacer::Pace(memBgfx->size);
 
 	_handle = fromBgfx(bgfx::createIndexBuffer(memBgfx, type == Type::Uint32 ? BGFX_BUFFER_INDEX32 : 0));
 	if (!bgfx::isValid(toBgfx(_handle)))
