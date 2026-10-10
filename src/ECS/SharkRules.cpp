@@ -7,7 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#include "WhaleRules.h"
+#include "SharkRules.h"
 
 #include <cmath>
 
@@ -24,7 +24,7 @@ constexpr uint8_t k_WakeCell = 0x31;
 constexpr uint32_t k_WakeColour = 0x90FFFFFFu;
 } // namespace
 
-float whale_rules::Heading(const glm::vec3& turnStart, const glm::vec3& position, float facing)
+float shark_rules::Heading(const glm::vec3& turnStart, const glm::vec3& position, float facing)
 {
 	if (position.x == turnStart.x && position.z == turnStart.z)
 	{
@@ -34,7 +34,7 @@ float whale_rules::Heading(const glm::vec3& turnStart, const glm::vec3& position
 	return angle < 0.0f ? angle + (2.0f * std::numbers::pi_v<float>) : angle;
 }
 
-glm::vec3 whale_rules::Drawn(const glm::vec3& turnStart, float startHeight, const glm::vec3& position, float endHeight,
+glm::vec3 shark_rules::Drawn(const glm::vec3& turnStart, float startHeight, const glm::vec3& position, float endHeight,
                              float turnFraction)
 {
 	const float before = 1.0f - turnFraction;
@@ -42,7 +42,7 @@ glm::vec3 whale_rules::Drawn(const glm::vec3& turnStart, float startHeight, cons
 	        turnStart.z * before + position.z * turnFraction};
 }
 
-std::optional<water_rings::Ring> whale_rules::WakeRing(int32_t& timer, const glm::vec3& point, float heading,
+std::optional<water_rings::Ring> shark_rules::WakeRing(int32_t& timer, const glm::vec3& point, float heading,
                                                        int32_t frameMilliseconds)
 {
 	if (timer <= k_WakeInterval)

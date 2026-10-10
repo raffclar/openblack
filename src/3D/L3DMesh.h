@@ -152,7 +152,7 @@ public:
 		uint32_t bone;
 		glm::vec3 point;
 	};
-	/// The first of the points fixed to its bones, when it has any: where a whale's wake comes from
+	/// The first of the points fixed to its bones, when it has any: where a shark's wake comes from
 	[[nodiscard]] const std::optional<BonePoint>& GetFirstBonePoint() const { return _firstBonePoint; }
 	/// The triangles of its physics submeshes in the model's space, as the game's physics collides with them
 	[[nodiscard]] const std::vector<std::array<glm::vec3, 3>>& GetPhysicsTriangles() const { return _physicsTriangles; }

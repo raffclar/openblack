@@ -16,12 +16,12 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/Flock.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptControl.h"
-#include "ECS/Components/ScriptFlock.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/Town.h"
@@ -187,7 +187,7 @@ public:
 		if (ecs::script_flocks::IsFlock(registry, container))
 		{
 			// Every member leaves, and the flock stays, empty
-			const auto members = registry.Get<const ScriptFlock>(container).members;
+			const auto members = registry.Get<const Flock>(container).members;
 			for (const auto member : members)
 			{
 				// TODO(opening): an animal is split off into a flock of its own
@@ -229,7 +229,7 @@ public:
 		{
 			return {};
 		}
-		return registry.Get<const ScriptFlock>(object).members;
+		return registry.Get<const Flock>(object).members;
 	}
 
 	[[nodiscard]] bool IsDeletedWhenReleased(entt::entity object) const override
