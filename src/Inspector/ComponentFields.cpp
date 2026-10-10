@@ -119,8 +119,10 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/VillagerPose.h"
+#include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
+#include "ECS/Components/Whale.h"
 
 namespace components = openblack::ecs::components;
 
@@ -1109,6 +1111,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::VillagerPose::clip>("clip")
 	    .Field<&components::VillagerPose::place>("place")
 	    .Field<&components::VillagerPose::bones>("bones");
+	Reflect<components::WalkPath>(context)
+	    .Field<&components::WalkPath::number>("number")
+	    .Field<&components::WalkPath::track>("track")
+	    .Field<&components::WalkPath::walk>("walk");
 	Reflect<components::WallHugObjectReference>(context)
 	    .Field<&components::WallHugObjectReference::stepsAway>("stepsAway")
 	    .Field<&components::WallHugObjectReference::entity>("entity")
@@ -1184,4 +1190,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Storm::dead>("dead")
 	    .Field<&components::Storm::deadTurns>("deadTurns")
 	    .Field<&components::Storm::climate>("climate");
+	Reflect<components::Whale>(context)
+	    .Field<&components::Whale::position>("position")
+	    .Field<&components::Whale::turnStart>("turnStart")
+	    .Field<&components::Whale::heading>("heading")
+	    .Field<&components::Whale::clipPlace>("clipPlace");
 }

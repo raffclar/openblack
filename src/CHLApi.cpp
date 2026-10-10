@@ -14,6 +14,7 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <iterator>
 #include <limits>
@@ -36,6 +37,7 @@
 #include <glm/vec3.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/CameraEdits.h"
 #include "3D/DayNightClock.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
@@ -54,6 +56,8 @@
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
+#include "ECS/Archetypes/WhaleArchetype.h"
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureMind.h"
@@ -78,6 +82,8 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Components/Whale.h"
+#include "ECS/CreatureRemoval.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
@@ -105,6 +111,7 @@
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/TownPlaythings.h"
 #include "ECS/VillagerAge.h"
@@ -383,6 +390,8 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 	case ObjectType::Villager:
 	case ObjectType::VillagerChild:
 		return CreateScriptVillager(type == ObjectType::VillagerChild, subtype, position);
+	case ObjectType::Whale:
+		return WhaleArchetype::Create(position, scale);
 	default:
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "CreateScriptObject not implemented for type {}", static_cast<int>(type));
 	}
@@ -1156,7 +1165,12 @@ void GetPosition() // 023 GET_POSITION
 	{
 		auto& registry = Locator::entitiesRegistry::value();
 		auto* transform = registry.TryGet<Transform>(static_cast<entt::entity>(objId));
-		if (transform != nullptr)
+		if (const auto* whale = registry.TryGet<const ecs::components::Whale>(static_cast<entt::entity>(objId)))
+		{
+			// Where it is this turn, not where it is drawn on the way there
+			position = whale->position;
+		}
+		else if (transform != nullptr)
 		{
 			position = transform->position;
 		}
@@ -1630,10 +1644,31 @@ void DetachMusic() // 047 DETACH_MUSIC
 
 void ObjectDelete() // 048 OBJECT_DELETE
 {
-	// const auto withFade = Pop().intVal;
-	// const auto obj = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto mode = Pop().intVal;
+	const auto object = PopObject();
+	if (!Locator::entitiesRegistry::value().Valid(object))
+	{
+		return;
+	}
+	switch (mode)
+	{
+	case 0:
+		// It goes at once
+		if (Locator::entitiesRegistry::value().AllOf<ecs::components::Creature>(object))
+		{
+			static_cast<void>(ecs::creature_removal::RemoveFromGame(object));
+		}
+		else
+		{
+			ecs::world_objects::Remove(object);
+		}
+		break;
+	default:
+		// TODO(opening): 1 fizzes a creature out over two seconds and takes anything else away with a puff, 2 goes with
+		// its own effect, 3 starts a temple heart's destruction; a puzzle game is only let go of
+		NotImplemented(mode);
+		break;
+	}
 }
 
 void FocusFollow() // 049 FOCUS_FOLLOW
@@ -1995,22 +2030,23 @@ void CreatureSetDesireMaximum() // 080 CREATURE_SET_DESIRE_MAXIMUM
 
 void ConvertCameraPosition() // 081 CONVERT_CAMERA_POSITION
 {
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushv(0.0f); // x
-	Pushv(0.0f); // y
-	Pushv(0.0f); // z
+	// Where one of the camera editor's numbered cameras is. The game pushes whatever its stack held for a number the file
+	// doesn't have; here that is nowhere
+	const auto camera = camera_edits::FindCamera(Pop().intVal);
+	const auto position = camera.has_value() ? camera->position : std::array<float, 3> {};
+	Pushv(position[0]);
+	Pushv(position[1]);
+	Pushv(position[2]);
 }
 
 void ConvertCameraFocus() // 082 CONVERT_CAMERA_FOCUS
 {
-	// const auto camera_enum = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushv(0.0f); // x
-	Pushv(0.0f); // y
-	Pushv(0.0f); // z
+	// What one of the camera editor's numbered cameras looks at, nowhere for a number the file doesn't have
+	const auto camera = camera_edits::FindCamera(Pop().intVal);
+	const auto focus = camera.has_value() ? camera->focus : std::array<float, 3> {};
+	Pushv(focus[0]);
+	Pushv(focus[1]);
+	Pushv(focus[2]);
 }
 
 void CreatureSetPlayer() // 083 CREATURE_SET_PLAYER
@@ -2864,13 +2900,30 @@ void SetTarget() // 176 SET_TARGET
 
 void WalkPath() // 177 WALK_PATH
 {
-	[[maybe_unused]] const auto valTo = Popf();
-	[[maybe_unused]] const auto valFrom = Popf();
-	[[maybe_unused]] const auto camera_enum = Pop().intVal;
-	[[maybe_unused]] const auto forward = static_cast<bool>(Pop().intVal);
-	[[maybe_unused]] const auto object = PopObject();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto to = Popf();
+	const auto from = Popf();
+	const auto path = Pop().intVal;
+	const auto forward = Pop().intVal != 0;
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		ScriptMessage("Thing not valid");
+		return;
+	}
+	if (registry.AnyOf<ecs::components::Villager, ecs::components::Creature, ecs::components::Animal>(object))
+	{
+		// TODO(opening): the living walk the track at their own speed, as the opening's father does
+		NotImplemented();
+		return;
+	}
+	// The things that move as the game's mobile objects do walk the track, anything else can't
+	if (!registry.AnyOf<ecs::components::Whale, ecs::components::MobileObject>(object))
+	{
+		ScriptMessage("Thing is invalid for move path");
+		return;
+	}
+	static_cast<void>(Locator::walkPathSystem::value().Start(object, path, forward, from, to));
 }
 
 void FocusAndPositionFollow() // 178 FOCUS_AND_POSITION_FOLLOW
@@ -2883,10 +2936,23 @@ void FocusAndPositionFollow() // 178 FOCUS_AND_POSITION_FOLLOW
 
 void GetWalkPathPercentage() // 179 GET_WALK_PATH_PERCENTAGE
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		ScriptMessage("Thing not valid");
+		Pushf(1.0f);
+		return;
+	}
+	if (registry.AnyOf<ecs::components::Villager, ecs::components::Creature, ecs::components::Animal>(object))
+	{
+		// TODO(opening): how much of its track a living thing has walked
+		NotImplemented();
+		Pushf(1.0f);
+		return;
+	}
+	// Anything else, the things walking tracks too, has always walked the whole way
+	Pushf(1.0f);
 }
 
 void CameraProperties() // 180 CAMERA_PROPERTIES

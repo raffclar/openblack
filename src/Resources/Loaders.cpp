@@ -17,6 +17,7 @@
 #include <span>
 #include <utility>
 
+#include <EDTFile.h>
 #include <GLWFile.h>
 #include <GestureFile.h>
 #include <L3DFile.h>
@@ -776,6 +777,17 @@ CameraPathLoader::result_type CameraPathLoader::operator()(FromDiskTag, const st
 	}
 
 	return cameraPath;
+}
+
+CameraEditLoader::result_type CameraEditLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
+{
+	auto file = std::make_shared<edt::EDTFile>();
+	if (const auto result = file->Open(Locator::filesystem::value().ReadAll(path)); result != edt::EDTResult::Success)
+	{
+		throw std::runtime_error("Unable to load the camera editor's file " + path.string() + ": " +
+		                         std::string(edt::ResultToStr(result)));
+	}
+	return file;
 }
 
 GestureTemplatesLoader::result_type GestureTemplatesLoader::operator()(FromDiskTag, const std::filesystem::path& path) const

@@ -57,6 +57,8 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageLight.h"
+#include "ECS/Components/WalkPath.h"
+#include "ECS/Components/Whale.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
@@ -130,8 +132,10 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
+#include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WhaleSystemInterface.h"
 #include "EditProviders.h"
 #include "Editor/EditorSelection.h"
 #include "EngineConfig.h"
@@ -225,6 +229,8 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"dialogueControlSystem", "view.script_control"},
     LocatorCoverage {"helpSpeechSystem", "view.script_control"},
     LocatorCoverage {"highDetailSystem", "view.script_control"},
+    LocatorCoverage {"walkPathSystem", "living.walk_paths"},
+    LocatorCoverage {"whaleSystem", "living.whales"},
     LocatorCoverage {"soundTagSystem", "living.sound_tags"},
     LocatorCoverage {"rainSystem", "land.precipitation"},
     LocatorCoverage {"chimneySmokeSystem", "living.chimneys"},
@@ -747,6 +753,44 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 			                  item["trees"] = forests.TreesOf(forest, false).size();
 			                  item["growing"] = forests.TreesOf(forest, true).size();
 			                  items.push_back(std::move(item));
+		                  }
+		                  return items;
+	                  }));
+	provider->Add(Query("whales", "The whales: where each is this turn and was at its start, the way it faces, its clip "
+	                              "and the wake's timer"),
+	              Serve<Locator::whaleSystem>(
+	                  "the whales", [](const ecs::systems::WhaleSystemInterface& whales, const QueryContext& /*c*/) {
+		                  Json items = Json::array();
+		                  if (const auto* registry = Registry(); registry != nullptr)
+		                  {
+			                  registry->Each<const Whale>([&items, registry](entt::entity entity, const Whale& whale) {
+				                  auto item = Listed(*registry, entity);
+				                  item["at"] = Point(whale.position);
+				                  item["turn_start"] = Point(whale.turnStart);
+				                  item["heading"] = whale.heading;
+				                  item["clip_place"] = whale.clipPlace;
+				                  items.push_back(std::move(item));
+			                  });
+		                  }
+		                  return Json {{"wake_timer", whales.GetWakeTimer()}, {"whales", std::move(items)}};
+	                  }));
+	provider->Add(Query("walk_paths", "The things walking the camera editor's tracks: the track, how far and up to where", {},
+	                    ResultKind::List),
+	              Serve<Locator::walkPathSystem>(
+	                  "the walk paths", [](const ecs::systems::WalkPathSystemInterface& /*paths*/, const QueryContext&) {
+		                  Json items = Json::array();
+		                  if (const auto* registry = Registry(); registry != nullptr)
+		                  {
+			                  registry->Each<const WalkPath>([&items, registry](entt::entity entity, const WalkPath& path) {
+				                  auto item = Listed(*registry, entity);
+				                  item["track"] = path.number;
+				                  item["forward"] = path.walk.forward;
+				                  item["current"] = path.walk.current;
+				                  item["to"] = path.walk.to;
+				                  item["percentage"] = camera_track::Percentage(path.walk, *path.track);
+				                  item["segment"] = path.walk.runner.GetSegment();
+				                  items.push_back(std::move(item));
+			                  });
 		                  }
 		                  return items;
 	                  }));

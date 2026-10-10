@@ -126,6 +126,8 @@ class ScriptControlSystemInterface;
 class DialogueControlSystemInterface;
 class HelpSpeechSystemInterface;
 class HighDetailSystemInterface;
+class WalkPathSystemInterface;
+class WhaleSystemInterface;
 class SoundTagSystemInterface;
 class RainSystemInterface;
 class ChimneySmokeSystemInterface;
@@ -245,6 +247,8 @@ struct Locator
 	using dialogueControlSystem = entt::locator<ecs::systems::DialogueControlSystemInterface>;
 	using helpSpeechSystem = entt::locator<ecs::systems::HelpSpeechSystemInterface>;
 	using highDetailSystem = entt::locator<ecs::systems::HighDetailSystemInterface>;
+	using walkPathSystem = entt::locator<ecs::systems::WalkPathSystemInterface>;
+	using whaleSystem = entt::locator<ecs::systems::WhaleSystemInterface>;
 	using soundTagSystem = entt::locator<ecs::systems::SoundTagSystemInterface>;
 	using rainSystem = entt::locator<ecs::systems::RainSystemInterface>;
 	using chimneySmokeSystem = entt::locator<ecs::systems::ChimneySmokeSystemInterface>;

@@ -100,8 +100,10 @@
 #include "ECS/Systems/Implementations/TownSystem.h"
 #include "ECS/Systems/Implementations/VegetationSystem.h"
 #include "ECS/Systems/Implementations/VillageLightSystem.h"
+#include "ECS/Systems/Implementations/WalkPathSystem.h"
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
 #include "ECS/Systems/Implementations/WeatherSystem.h"
+#include "ECS/Systems/Implementations/WhaleSystem.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "Graphics/RendererInterface.h"
 #include "Input/GameActionMap.h"
@@ -189,8 +191,10 @@ using openblack::ecs::systems::TownDesireSystem;
 using openblack::ecs::systems::TownSystem;
 using openblack::ecs::systems::VegetationSystem;
 using openblack::ecs::systems::VillageLightSystem;
+using openblack::ecs::systems::WalkPathSystem;
 using openblack::ecs::systems::WaterRingSystem;
 using openblack::ecs::systems::WeatherSystem;
+using openblack::ecs::systems::WhaleSystem;
 using openblack::graphics::RendererInterface;
 using openblack::input::GameActionMap;
 using openblack::lhvm::LHVM;
@@ -287,6 +291,8 @@ bool openblack::InitializeGame() noexcept
 	Locator::dialogueControlSystem::emplace<DialogueControlSystem>();
 	Locator::helpSpeechSystem::emplace<HelpSpeechSystem>();
 	Locator::highDetailSystem::emplace<HighDetailSystem>();
+	Locator::walkPathSystem::emplace<WalkPathSystem>();
+	Locator::whaleSystem::emplace<WhaleSystem>();
 	Locator::soundTagSystem::emplace<SoundTagSystem>();
 	Locator::rainSystem::emplace<RainSystem>();
 	Locator::chimneySmokeSystem::emplace<ChimneySmokeSystem>();
@@ -399,6 +405,8 @@ void openblack::ShutDownServices()
 	Locator::dialogueControlSystem::reset();
 	Locator::helpSpeechSystem::reset();
 	Locator::highDetailSystem::reset();
+	Locator::walkPathSystem::reset();
+	Locator::whaleSystem::reset();
 	Locator::influenceSystem::reset();
 	Locator::chimneySmokeSystem::reset();
 	Locator::abodeKnockSystem::reset();

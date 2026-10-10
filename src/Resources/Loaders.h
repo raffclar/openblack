@@ -49,6 +49,11 @@ struct ParticleFile;
 struct StackedBitmap;
 } // namespace openblack::psys
 
+namespace openblack::edt
+{
+class EDTFile;
+} // namespace openblack::edt
+
 namespace openblack::gestures
 {
 class GestureFile;
@@ -247,6 +252,12 @@ struct ParticleBitmapLoader final: BaseLoader<psys::StackedBitmap>
 
 /// The templates the hand's drawn gestures are matched against
 struct GestureTemplatesLoader final: BaseLoader<gestures::GestureFile>
+{
+	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
+};
+
+/// The camera editor's file of the scripts' numbered cameras and tracks
+struct CameraEditLoader final: BaseLoader<edt::EDTFile>
 {
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
 };

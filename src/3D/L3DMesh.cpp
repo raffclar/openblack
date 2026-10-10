@@ -156,6 +156,14 @@ bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 		}
 	}
 
+	// Each point's matrix is its rotation then its position
+	if (const auto& eBone = l3d.GetEBone(); eBone.has_value() && eBone->bones[0] >= 0)
+	{
+		const auto& matrix = eBone->matrices[0];
+		_firstBonePoint =
+		    BonePoint {.bone = static_cast<uint32_t>(eBone->bones[0]), .point = glm::vec3(matrix[9], matrix[10], matrix[11])};
+	}
+
 	std::map<uint32_t, glm::mat4> matrices;
 	const auto& bones = l3d.GetBones();
 	_bonesParents.resize(bones.size());

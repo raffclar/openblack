@@ -170,8 +170,10 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
+#include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WhaleSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -908,6 +910,9 @@ bool Game::GameLogicLoop() noexcept
 	{
 		Locator::templeDestructionSystem::value().ProcessTurn();
 	}
+	// The whales' turns start where they are, then the things the scripts walk along tracks go on, before the living
+	Locator::whaleSystem::value().ProcessTurn();
+	Locator::walkPathSystem::value().ProcessTurn();
 
 	auto& profiler = Locator::profiler::value();
 
@@ -1422,6 +1427,8 @@ bool Game::Update() noexcept
 		Locator::animalSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
 		// The villagers are posed by the clips their states play
 		Locator::livingActionSystem::value().UpdatePoses(clock.GetTurn(), clock.GetTurnFraction());
+		// The whales swim between their last two turns and leave their wakes
+		Locator::whaleSystem::value().Update(gameTime, clock.GetTurnFraction());
 	}
 	{
 		// The creatures are drawn moving between the last two turns

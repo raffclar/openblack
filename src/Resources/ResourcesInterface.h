@@ -29,6 +29,7 @@ using CreatureSkinArtManager = ResourceManager<CreatureSkinArtLoader>;
 using SoundManager = ResourceManager<SoundLoader>;
 using GlowManager = ResourceManager<LightLoader>;
 using CameraPathManager = ResourceManager<CameraPathLoader>;
+using CameraEditManager = ResourceManager<CameraEditLoader>;
 using ParticleFileManager = ResourceManager<ParticleFileLoader>;
 using GestureTemplatesManager = ResourceManager<GestureTemplatesLoader>;
 using ParticleBitmapManager = ResourceManager<ParticleBitmapLoader>;
@@ -56,6 +57,8 @@ public:
 	virtual SoundManager& GetSounds() = 0;
 	virtual GlowManager& GetGlows() = 0;
 	virtual CameraPathManager& GetCameraPaths() = 0;
+	/// The scripts' numbered cameras and tracks, by camera_edits::k_FileId
+	virtual CameraEditManager& GetCameraEdits() = 0;
 	/// The particle effect files, by particles::ParticleFileId of their names
 	virtual ParticleFileManager& GetParticleFiles() = 0;
 	/// The light maps the particle effects stamp on the land, by their paths
