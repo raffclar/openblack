@@ -44,6 +44,7 @@ public:
 	[[nodiscard]] uint32_t GetID() const final;
 	[[nodiscard]] glm::ivec2 GetSize() const final;
 	[[nodiscard]] float GetAspectRatio() const final;
+	[[nodiscard]] bool IsMinimised() const final;
 
 	WindowingInterface& SetDisplayMode(DisplayMode mode) final { return SetFullscreen(mode != DisplayMode::Windowed); }
 

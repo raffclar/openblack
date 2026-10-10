@@ -16,15 +16,24 @@
 #include <string>
 #include <vector>
 
+#include <glm/gtx/transform.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/L3DMesh.h"
+#include "3D/PhysicsDrawMatrix.h"
+#include "Common/GameRandom.h"
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Physics.h"
+#include "ECS/Components/Transform.h"
+#include "ECS/Components/VillagerPose.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Graphics/MeshDetail.h"
+#include "Graphics/ViewFrustum.h"
 #include "Locator.h"
 #include "Resources/Loaders.h"
 #include "Resources/ResourcesInterface.h"
@@ -40,8 +49,8 @@ namespace
 constexpr std::array k_ModelsWithDetail = {MeshId::PersonNorseMaleA1, MeshId::PersonNorseFemaleA1, MeshId::PersonBoyWhite1,
                                            MeshId::PersonAnimalTrainer};
 
-/// The detailed model's id in the mesh cache, loaded from the misc folder the first time it is worn
-std::optional<entt::id_type> LoadDetailedModel(std::string_view file)
+/// A model's id in the mesh cache, loaded from the misc folder the first time it is needed
+std::optional<entt::id_type> LoadMiscModel(std::string_view file)
 {
 	if (!Locator::resources::has_value() || !Locator::filesystem::has_value())
 	{
@@ -58,7 +67,7 @@ std::optional<entt::id_type> LoadDetailedModel(std::string_view file)
 	const auto path = fileSystem.GetPath<filesystem::Path::Misc>() / file;
 	if (!fileSystem.Exists(path))
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "High detail model {} not found", path.generic_string());
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Model {} not found", path.generic_string());
 		return std::nullopt;
 	}
 	meshes.Load(id, resources::L3DLoader::FromDiskTag {}, path);
@@ -89,7 +98,7 @@ void HighDetailSystem::Make(entt::entity thing)
 		return;
 	}
 	const auto detailed = rules::DetailedModelFor(*model);
-	const auto id = LoadDetailedModel(detailed->file);
+	const auto id = LoadMiscModel(detailed->file);
 	if (!id.has_value())
 	{
 		return;
@@ -102,6 +111,23 @@ void HighDetailSystem::Make(entt::entity thing)
 	{
 		detail.usualDetailModels = detailMeshes->meshes;
 		detailMeshes->meshes = {*id, *id, *id};
+	}
+	// Only a detailed model with places on its head for both eyes has eyes, and only once all their pieces load
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto loaded = [face = detailed->face]() {
+		for (size_t piece = 0; piece < villager_eyes::k_PieceCount; ++piece)
+		{
+			if (!LoadMiscModel(villager_eyes::PieceFile(face, static_cast<villager_eyes::Piece>(piece))).has_value())
+			{
+				return false;
+			}
+		}
+		return true;
+	};
+	if (const auto detailedModel = meshes.Handle(*id);
+	    detailedModel->IsContainsEBone() && detailedModel->GetBoneFrames().size() >= 2 && loaded())
+	{
+		detail.eyes = villager_eyes::Eyes {};
 	}
 	registry.SetDirty();
 }
@@ -159,4 +185,57 @@ void HighDetailSystem::Update()
 	{
 		Release(entity);
 	}
+}
+
+void HighDetailSystem::PlaceEyes(uint32_t drawTime, const glm::mat4& viewProjection)
+{
+	// The milliseconds of the game's clock since the eyes were last placed, none when the clock went back
+	const uint32_t elapsed = _eyesDrawTime.has_value() && drawTime >= *_eyesDrawTime ? drawTime - *_eyesDrawTime : 0;
+	_eyesDrawTime = drawTime;
+	if (!Locator::resources::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto view = graphics::view_frustum::FromViewProjection(viewProjection);
+	auto& random = Locator::gameRandom::value();
+	registry.Each<HighDetail, const Mesh, const Transform>([&](entt::entity entity, HighDetail& detail, const Mesh& mesh,
+	                                                           const Transform& transform) {
+		detail.drawnEyes.reset();
+		if (!detail.eyes.has_value() || !detail.face.has_value() || !meshes.Contains(mesh.id))
+		{
+			return;
+		}
+		// Placed as its body is drawn, by its bones as posed or as its model rests
+		auto standing = glm::mat4(transform.rotation);
+		standing = glm::translate(standing, transform.position * transform.rotation);
+		standing = glm::scale(standing, transform.scale);
+		const auto model = physics_draw::ModelMatrix(standing, registry.TryGet<const PhysicsDrawPose>(entity));
+		const auto detailed = meshes.Handle(mesh.id);
+		const auto& frames = detailed->GetBoneFrames();
+		if (!model.has_value() || frames.size() < 2)
+		{
+			return;
+		}
+		// Its eyes blink and look about only while it is in view
+		const auto box = detailed->GetBoundingBox();
+		const auto centre = glm::vec3(*model * glm::vec4(box.Center(), 1.0f));
+		if (!graphics::view_frustum::SeesSphere(view, centre,
+		                                        graphics::mesh_detail::ScaledRadius(box.Size(), transform.scale.x)))
+		{
+			return;
+		}
+		const auto& rest = detailed->GetBoneMatrices();
+		const auto* pose = registry.TryGet<const VillagerPose>(entity);
+		const auto& bones = pose != nullptr && pose->bones.size() == rest.size() ? pose->bones : rest;
+		if (frames[0].bone >= bones.size() || frames[1].bone >= bones.size())
+		{
+			return;
+		}
+		const float closed =
+		    villager_eyes::Step(*detail.eyes, _eyes, elapsed, [&random](float a, float b) { return random.CrtRandom(a, b); });
+		detail.drawnEyes = villager_eyes::Place(*detail.face, *model, {bones[frames[0].bone], bones[frames[1].bone]},
+		                                        {frames[0].frame, frames[1].frame}, detail.eyes->roll, closed);
+	});
 }

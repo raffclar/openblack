@@ -111,8 +111,9 @@ protected:
 	bool TaskExists(uint32_t taskId);
 	uint32_t GetTicksCount();
 	VMVar& GetVar(VMTask& task, uint32_t id);
-	uint32_t GetExceptionHandlersCount();
-	uint32_t GetCurrentExceptionHandlerIp(uint32_t index);
+	/// The task's exception handlers, innermost first by index
+	[[nodiscard]] static uint32_t GetExceptionHandlersCount(const VMTask& task);
+	[[nodiscard]] static uint32_t GetCurrentExceptionHandlerIp(const VMTask& task, uint32_t index);
 
 	void PrintInstruction(const VMTask& task, const VMInstruction& instruction);
 	void CpuLoop(VMTask& task);

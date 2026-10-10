@@ -153,6 +153,39 @@ TEST(InspectorInput, AClickIsPressedNowAndLetGoTheNextFrame)
 	EXPECT_FALSE(rig.Refused(R"({"query": "input.button", "params": {"button": "fourth"}})").empty());
 }
 
+// A double click is a click, then a second press and its letting go a frame apart, which count two clicks as the mouse
+// tells a double click
+TEST(InspectorInput, ADoubleClickPressesASecondTimeCountingTwoClicks)
+{
+	Rig rig;
+	const auto answer = rig.Ask(R"({"query": "input.button", "params": {"button": "left", "action": "double_click"}})");
+	EXPECT_EQ(answer["action"], "double_click");
+	for (int i = 0; i < 4; ++i)
+	{
+		rig.Frame();
+	}
+	ASSERT_EQ(rig.target.made.size(), 4u);
+	const std::vector<std::pair<InputEvent::Kind, uint8_t>> expected {
+	    {InputEvent::Kind::ButtonDown, 1},
+	    {InputEvent::Kind::ButtonUp, 1},
+	    {InputEvent::Kind::ButtonDown, 2},
+	    {InputEvent::Kind::ButtonUp, 2},
+	};
+	for (size_t i = 0; i < expected.size(); ++i)
+	{
+		EXPECT_EQ(rig.target.made[i].event.kind, expected[i].first) << i;
+		EXPECT_EQ(rig.target.made[i].event.button, 1) << i;
+		EXPECT_EQ(rig.target.made[i].event.clicks, expected[i].second) << i;
+		if (i > 0)
+		{
+			EXPECT_EQ(rig.target.made[i].frame, rig.target.made[i - 1].frame + 1) << i;
+		}
+	}
+	EXPECT_EQ(rig.target.buttons, 0u);
+	EXPECT_NE(rig.Refused(R"({"query": "input.button", "params": {"action": "triple_click"}})").find("double_click"),
+	          std::string::npos);
+}
+
 // The left button never picks things up, which the answer says; the right (Action) button does, with no note
 TEST(InspectorInput, ALeftPressSaysTheHandTakesThingsWithTheRight)
 {
@@ -216,6 +249,7 @@ TEST(InspectorInput, EventsReadBackAsTheyAreWritten)
 	const std::vector<InputEvent> events {
 	    {.kind = InputEvent::Kind::PointerTo, .position = {3, 4}},
 	    {.kind = InputEvent::Kind::ButtonUp, .button = 2},
+	    {.kind = InputEvent::Kind::ButtonDown, .button = 1, .clicks = 2},
 	    {.kind = InputEvent::Kind::KeyDown, .key = "Left Shift"},
 	    {.kind = InputEvent::Kind::Wheel, .notches = -2},
 	    {.kind = InputEvent::Kind::Action, .name = "Zoom In"},
@@ -232,6 +266,9 @@ TEST(InspectorInput, EventsReadBackAsTheyAreWritten)
 	std::string error;
 	EXPECT_FALSE(InputEventFromJson(Json {{"kind", "teleport"}}, error).has_value());
 	EXPECT_FALSE(error.empty());
+	// A single click's count isn't written, so recordings made before read back the same
+	EXPECT_FALSE(ToJson({.kind = InputEvent::Kind::ButtonDown, .button = 1}).contains("clicks"));
+	EXPECT_FALSE(InputEventFromJson(Json {{"kind", "button_down"}, {"button", 1}, {"clicks", 3}}, error).has_value());
 }
 
 // Deterministic replay: input recorded over frames and replayed from the same start is made at the same frames in the

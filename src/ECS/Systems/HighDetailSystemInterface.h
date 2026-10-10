@@ -9,7 +9,10 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <entt/entity/fwd.hpp>
+#include <glm/mat4x4.hpp>
 
 #include "ECS/HighDetailRules.h"
 
@@ -31,6 +34,9 @@ public:
 	virtual bool Order(entt::entity thing, high_detail_rules::ThingSpecial special, bool on) = 0;
 	/// Each frame: they are all drawn as usual again once no script holds the cinema bars
 	virtual void Update() = 0;
+	/// Each frame, once the villagers in view are posed: the eyes of those in view blink and look about by the game's
+	/// clock for drawing (in milliseconds), and are placed on their heads
+	virtual void PlaceEyes(uint32_t drawTime, const glm::mat4& viewProjection) = 0;
 };
 
 } // namespace openblack::ecs::systems

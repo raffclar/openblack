@@ -39,6 +39,9 @@ uniform vec4 u_inset;
 uniform vec4 u_uvOffset;
 // xyz: a colour of the object's own, 0 to 255, in place of the land's light; w: its alpha, 0 for no colour of its own
 uniform vec4 u_objectLook;
+// A piece drawn on another object, as a detailed villager's eyes are: xyz the point whose land light, land colour and
+// haze it takes (the villager's), w its shade of 255 in place of the sun's on each vertex. w 0 for none.
+uniform vec4 u_shadeAt;
 #ifdef USE_MORPH
 // How far a creature's body is pulled towards its evil or good, thin or fat and weak or strong mesh, whose vertices
 // come in the second to fourth streams
@@ -184,10 +187,12 @@ void main()
 	                                  TO_WORLD(vec4(0.0f, 0.0f, 1.0f, 0.0f)).xyz, origin);
 	// The object takes the colour of the land's light where it stands, then the light shades it
 	vec3 colour = vec3_splat(255.0f);
+	bool shadedElsewhere = u_shadeAt.w > 0.0f;
+	vec3 lightOrigin = shadedElsewhere ? u_shadeAt.xyz : origin;
 #ifndef USE_LIGHTMAP
 	if (u_landLight.x > 0.0f)
 	{
-		colour = min(floor(LandLightAt(origin.xz) * u_landLight.y), vec3_splat(255.0f));
+		colour = min(floor(LandLightAt(lightOrigin.xz) * u_landLight.y), vec3_splat(255.0f));
 	}
 #endif // USE_LIGHTMAP
 	// An object of a colour of its own, as the game colours some animals, takes it in place of the land's light
@@ -204,14 +209,14 @@ void main()
 	}
 #endif // USE_INSTANCING
 	// The distance haze, once for the object at its origin: its colour fades and the haze's is added after the texture
-	float hazeT = HazeT(mul(u_view, vec4(origin, 1.0f)).z);
+	float hazeT = HazeT(mul(u_view, vec4(lightOrigin, 1.0f)).z);
 	colour = HazeDiffuse(colour, HazeFactor(hazeT));
 	// The haze is added with the land's colour where the object stands, each channel at most white
 	vec3 added = HazeColour(hazeT);
 #ifndef USE_LIGHTMAP
 	if (u_landLight.x > 0.0f)
 	{
-		added = min(added + LandColourAt(origin.xz), vec3_splat(255.0f));
+		added = min(added + LandColourAt(lightOrigin.xz), vec3_splat(255.0f));
 	}
 #endif // USE_LIGHTMAP
 	// w: how much snow shows on it, of 255. An instance can have its own rate and cap of 256 for it, as a field's crop has.
@@ -253,7 +258,7 @@ void main()
 		v_snow.w = i_data4.x - 1.0f;
 	}
 #endif // USE_INSTANCING
-	v_color0 = vec4(ModelLightColour(colour, ModelLightFactor(normal, localLight)), 1.0f);
+	v_color0 = vec4(ModelLightColour(colour, shadedElsewhere ? u_shadeAt.w : ModelLightFactor(normal, localLight)), 1.0f);
 #ifndef USE_LIGHTMAP
 	if (u_landLight.z > 0.0f)
 	{

@@ -306,6 +306,11 @@ Sdl2WindowingSystem& Sdl2WindowingSystem::SetSize(glm::ivec2 size)
 	return *this;
 }
 
+bool Sdl2WindowingSystem::IsMinimised() const
+{
+	return (SDL_GetWindowFlags(_window.get()) & SDL_WINDOW_MINIMIZED) != 0;
+}
+
 glm::ivec2 Sdl2WindowingSystem::GetSize() const
 {
 	glm::ivec2 result;
