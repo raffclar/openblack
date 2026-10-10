@@ -126,8 +126,8 @@ public:
 		uint32_t colour;
 		uint8_t alpha;
 	};
-	/// The camera's helper icons by the hand this frame, while a tutorial demonstration plays; none while they aren't
-	/// drawn, when their fades hold where they are
+	/// The camera's helper icons by the hand this frame, from the world camera or a tutorial demonstration; none while
+	/// they aren't drawn, when their fades hold where they are
 	struct HandTricons
 	{
 		/// The hand on the screen, and the last point it gripped the land at, in whole pixels
@@ -141,9 +141,15 @@ public:
 		/// The hand's state shows the camera icons: it holds nothing
 		bool handStateShowsIcons {true};
 		bool cinemaBars {false};
-		/// The demonstration's held buttons, which its mouse lights
+		/// They lean from the last grip towards the hand
+		bool leans {true};
+		/// A demonstration plays: no cross, and its mouse by the icons lighting the buttons it holds
+		bool demonstration {false};
 		bool moveHeld {false};
 		bool actionHeld {false};
+		/// The world camera moves the view itself, and how the cross is nudged
+		bool cameraBusy {false};
+		hand_tricons::CrossNudge crossNudge {hand_tricons::CrossNudge::None};
 		/// The frame's time
 		float seconds {0.0f};
 	};

@@ -86,21 +86,21 @@ TEST(HandTricons, TheCrossNeverShowsInADemonstration)
 
 TEST(HandTricons, SitThreeQuartersOfTheWayFromTheLastGripToTheHand)
 {
-	EXPECT_EQ(Place({400, 300}, {0, 0}, {1280, 720}, false), glm::ivec2(300, 225));
-	EXPECT_EQ(Place({400, 300}, {400, 300}, {1280, 720}, false), glm::ivec2(400, 300));
+	EXPECT_EQ(Place({400, 300}, {0, 0}, {1280, 720}, false, true), glm::ivec2(300, 225));
+	EXPECT_EQ(Place({400, 300}, {400, 300}, {1280, 720}, false, true), glm::ivec2(400, 300));
 	// Whole pixels, rounded towards zero
-	EXPECT_EQ(Place({401, 301}, {0, 0}, {1280, 720}, false), glm::ivec2(300, 225));
+	EXPECT_EQ(Place({401, 301}, {0, 0}, {1280, 720}, false, true), glm::ivec2(300, 225));
 }
 
 TEST(HandTricons, KeepSixteenPixelsInsideThePicture)
 {
-	EXPECT_EQ(Place({0, 0}, {0, 0}, {1280, 720}, false), glm::ivec2(16, 16));
-	EXPECT_EQ(Place({2000, 2000}, {2000, 2000}, {1280, 720}, false), glm::ivec2(1264, 704));
+	EXPECT_EQ(Place({0, 0}, {0, 0}, {1280, 720}, false, true), glm::ivec2(16, 16));
+	EXPECT_EQ(Place({2000, 2000}, {2000, 2000}, {1280, 720}, false, true), glm::ivec2(1264, 704));
 	// With the cinema bars on, inside the 16:9 picture across the screen's width
-	EXPECT_EQ(Place({640, 0}, {640, 0}, {1280, 1024}, true), glm::ivec2(640, 168));
-	EXPECT_EQ(Place({640, 1024}, {640, 1024}, {1280, 1024}, true), glm::ivec2(640, 856));
+	EXPECT_EQ(Place({640, 0}, {640, 0}, {1280, 1024}, true, true), glm::ivec2(640, 168));
+	EXPECT_EQ(Place({640, 1024}, {640, 1024}, {1280, 1024}, true, true), glm::ivec2(640, 856));
 	// A 16:9 screen has no bars to keep inside
-	EXPECT_EQ(Place({640, 0}, {640, 0}, {1280, 720}, true), glm::ivec2(640, 16));
+	EXPECT_EQ(Place({640, 0}, {640, 0}, {1280, 720}, true, true), glm::ivec2(640, 16));
 }
 
 TEST(HandTricons, EachIconIsItsFrameOfTheAtmosphereTexture)
@@ -191,4 +191,119 @@ TEST(HandTricons, TheDemoMouseLightsTheButtonsTheRecordingHolds)
 	mouse = LayoutDemoMouse({400, 300}, false, 40.0f, false, true, true);
 	EXPECT_EQ(mouse.uvMin, glm::vec2(0.5f, 0.5f));
 	EXPECT_EQ(mouse.uvMax, glm::vec2(0.75f, 0.75f));
+}
+
+TEST(HandTricons, WithoutLeaningTheyGoAtTheHand)
+{
+	EXPECT_EQ(Place({400, 300}, {0, 0}, {1280, 720}, false, false), glm::ivec2(400, 300));
+}
+
+namespace
+{
+constexpr uint32_t k_AllFeatures = 0x1BF;
+constexpr uint32_t k_HintRotate = 0x01;
+constexpr uint32_t k_HintPitch = 0x02;
+constexpr uint32_t k_HintTop = 0x04;
+constexpr uint32_t k_HintTurning = 0x40;
+constexpr uint32_t k_HintIdle = 0x80;
+constexpr uint32_t k_PitchOffered = icon::k_Pitch | (icon::k_Pitch << icon::k_OfferedShift);
+} // namespace
+
+TEST(HandTricons, HoveringAtTheBottomOffersThePitchAndRotateArrows)
+{
+	const auto icons = WorldCamera({.mouseHints = k_HintIdle | k_HintRotate | k_HintPitch | k_HintTurning,
+	                                .features = k_AllFeatures,
+	                                .cursor = {0.0f, 0.5f}},
+	                               1.0f);
+	EXPECT_EQ(icons.icons, k_PitchOffered | k_RotateOffered);
+	// The rotate arrow lies flat at the bottom of the screen
+	EXPECT_NEAR(icons.rotateAngle, 0.0f, 1e-6f);
+}
+
+TEST(HandTricons, DraggingToTiltShowsThePitchArrowInUse)
+{
+	const auto icons = WorldCamera(
+	    {.mouseHints = k_HintPitch, .gripping = true, .grippingOnly = true, .pitchDragging = true, .features = k_AllFeatures},
+	    0.0f);
+	EXPECT_EQ(icons.icons, icon::k_Pitch);
+}
+
+TEST(HandTricons, TheTiltKeysShowThePitchArrow)
+{
+	// Tilting: in use
+	auto icons = WorldCamera({.tilt = 0.5f, .features = k_AllFeatures}, 0.0f);
+	EXPECT_EQ(icons.icons, icon::k_Pitch);
+	// The rotate key held offers tilting and turning, the rotate arrow lying flat
+	icons = WorldCamera({.rotateKeyHeld = true, .features = k_AllFeatures}, 2.0f);
+	EXPECT_EQ(icons.icons, k_PitchOffered | k_RotateOffered);
+	EXPECT_FLOAT_EQ(icons.rotateAngle, 0.0f);
+	// The zoom key offers zooming and turning
+	icons = WorldCamera({.zoomKeyHeld = true, .features = k_AllFeatures}, 0.0f);
+	EXPECT_EQ(icons.icons, k_RotateOffered | k_ZoomOffered);
+	// Not while the land is gripped
+	icons = WorldCamera({.gripping = true, .zoomKeyHeld = true, .features = k_AllFeatures}, 0.0f);
+	EXPECT_EQ(icons.icons, 0u);
+}
+
+TEST(HandTricons, TurningRoundTheEdgeTurnsTheRotateArrow)
+{
+	const auto icons = WorldCamera({.mouseHints = k_HintRotate | k_HintTurning,
+	                                .gripping = true,
+	                                .grippingOnly = true,
+	                                .edgeTurning = true,
+	                                .features = k_AllFeatures,
+	                                .cursor = {-0.5f, 0.0f}},
+	                               0.0f);
+	EXPECT_EQ(icons.icons, icon::k_Rotate);
+	EXPECT_NEAR(icons.rotateAngle, glm::radians(90.0f), 1e-5f);
+}
+
+TEST(HandTricons, TheAngleIsKeptWhenNothingTurns)
+{
+	const auto icons = WorldCamera({.mouseHints = k_HintIdle, .features = k_AllFeatures}, 0.7f);
+	EXPECT_EQ(icons.icons, 0u);
+	EXPECT_FLOAT_EQ(icons.rotateAngle, 0.7f);
+}
+
+TEST(HandTricons, WhatTheScriptsDontAllowShowsNoIcon)
+{
+	const auto icons = WorldCamera(
+	    {.mouseHints = k_HintIdle | k_HintRotate | k_HintPitch | k_HintTop, .features = k_AllFeatures & ~0x01u}, 0.0f);
+	EXPECT_EQ(icons.icons, k_RotateOffered);
+}
+
+TEST(HandTricons, WatchingAFightOffersNoTilting)
+{
+	const auto icons = WorldCamera({.mouseHints = k_HintIdle | k_HintPitch, .fight = true, .features = k_AllFeatures}, 0.0f);
+	EXPECT_EQ(icons.icons, 0u);
+}
+
+TEST(HandTricons, TheClearViewShowsOnlyTheZoomGlass)
+{
+	const auto icons =
+	    WorldCamera({.mouseHints = k_HintIdle | k_HintPitch, .clearView = 0.6f, .features = k_AllFeatures}, 0.0f);
+	EXPECT_EQ(icons.icons, icon::k_Zoom);
+}
+
+TEST(HandTricons, TheCrossShowsOutOfTheHandsInfluence)
+{
+	auto icons = WorldCamera({.features = k_AllFeatures, .handInInfluence = false}, 0.0f);
+	EXPECT_EQ(icons.icons, icon::k_Cross);
+	icons = WorldCamera({.features = k_AllFeatures & ~k_HelpFeature, .handInInfluence = false}, 0.0f);
+	EXPECT_EQ(icons.icons, 0u);
+}
+
+TEST(HandTricons, HeldBackOnlyTheCrossShows)
+{
+	const auto icons = WorldCamera({.mouseHints = k_TooFar, .tilt = 1.0f, .features = k_AllFeatures, .blocked = true}, 0.0f);
+	EXPECT_EQ(icons.icons, icon::k_Cross);
+}
+
+TEST(HandTricons, TheCrossBrightensWithAThingUnderTheHandAndAtOnceWithTheAction)
+{
+	Fades fades {};
+	Fade(fades, {.icons = icon::k_Cross, .seconds = 1.0f, .crossNudge = CrossNudge::OverThing});
+	EXPECT_FLOAT_EQ(fades[3], 0.6f);
+	Fade(fades, {.icons = icon::k_Cross, .seconds = 0.01f, .crossNudge = CrossNudge::Action});
+	EXPECT_FLOAT_EQ(fades[3], 1.0f);
 }

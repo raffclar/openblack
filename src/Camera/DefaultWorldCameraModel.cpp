@@ -962,6 +962,42 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 		}
 	}
 	SendHelpEvents(_helpEvents);
+	UpdateIconFrame(onFight);
+}
+
+void DefaultWorldCameraModel::UpdateIconFrame(bool onFight)
+{
+	using camera_drag::DragMode;
+	const auto& actionSystem = Locator::gameActionSystem::value();
+	const auto& controls = _helpControls;
+	const bool asked = controls.turn != 0.0f || controls.tilt != 0.0f || controls.zoom != 0.0f;
+	const auto mode = _dragging ? _drag.GetMode() : std::nullopt;
+	glm::vec2 cursor {0.0f};
+	if (Locator::windowing::has_value())
+	{
+		const auto screenSize = Locator::windowing::value().GetSize();
+		cursor = camera_drag::NormalisedCursor(glm::ivec2(actionSystem.GetMousePosition()), screenSize, ViewHeight(screenSize));
+	}
+	_iconFrame = {
+	    // A drag given up too far ahead shows only that
+	    .mouseHints = _dragGivenUp ? hand_tricons::k_TooFar : (_dragging ? _drag.GetTricons() : _tricons),
+	    .gripping = controls.landGripped,
+	    // Gripping the land is all the camera has unless it is also turned, tilted or zoomed, or turned round the mouse
+	    .grippingOnly = controls.landGripped && !asked && !controls.rotateAroundMouse,
+	    .zoomKeyHeld = actionSystem.Get(input::BindableActionMap::ZOOM_ON),
+	    .rotateKeyHeld = actionSystem.Get(input::BindableActionMap::ROTATE_ON),
+	    .turn = controls.turn,
+	    .tilt = controls.tilt,
+	    .zoom = controls.zoom,
+	    .edgeTurning = mode == DragMode::EdgeRotate,
+	    .pitchDragging = mode == DragMode::Pitch || mode == DragMode::PitchFromTop,
+	    .rotatingAroundMouse = controls.rotateAroundMouse,
+	    .fight = onFight,
+	    .clearView = _clearView.GetValue(),
+	    .features = _features,
+	    .blocked = _heldBack || _dragGivenUp,
+	    .cursor = cursor,
+	};
 }
 
 bool DefaultWorldCameraModel::AnyControlHeld() const
@@ -1075,9 +1111,11 @@ CameraModel::HandCues DefaultWorldCameraModel::GetHandCues() const
 		return {.tricons = _drag.GetTricons(),
 		        .dragging = true,
 		        .dragMode = _drag.GetMode(),
-		        .clearViewGrip = _clearView.GetValue() > k_ClearViewGrips};
+		        .clearViewGrip = _clearView.GetValue() > k_ClearViewGrips,
+		        .icons = _iconFrame,
+		        .clearView = _clearView.GetValue()};
 	}
-	return {.tricons = _tricons};
+	return {.tricons = _tricons, .icons = _iconFrame, .clearView = _clearView.GetValue()};
 }
 
 void DefaultWorldCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus)

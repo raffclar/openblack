@@ -60,6 +60,67 @@ using Fades = std::array<float, k_IconCount>;
 /// holds something); the cross stays
 [[nodiscard]] uint32_t Shown(uint32_t icons, bool toolTipsOn, bool handStateShowsIcons);
 
+/// What the world camera does with the mouse and keys this frame, which picks its icons
+struct WorldCameraFrame
+{
+	/// The camera's mouse hints, as camera_drag::tricon, with k_TooFar for a drag of the land gone too far
+	uint32_t mouseHints {0};
+	/// The land is gripped with the move button, and whether that is all the camera has from the player (nothing else
+	/// turning, tilting, zooming or moving it)
+	bool gripping {false};
+	bool grippingOnly {false};
+	/// The keys that make the move keys zoom, or tilt and turn
+	bool zoomKeyHeld {false};
+	bool rotateKeyHeld {false};
+	/// What the player asks of the camera this frame: only whether each is non-zero matters
+	float turn {0.0f};
+	float tilt {0.0f};
+	float zoom {0.0f};
+	/// The land's drag turns the camera round the edge, or tilts it
+	bool edgeTurning {false};
+	bool pitchDragging {false};
+	/// The camera turned and tilted round the cursor with its button
+	bool rotatingAroundMouse {false};
+	/// The camera watches a fight: no tilting
+	bool fight {false};
+	/// How far the clear view (both keys held) has come in, 0 to 1
+	float clearView {0.0f};
+	/// What the scripts let the camera do, as camera_drag::feature, with k_HelpFeature
+	uint32_t features {0};
+	/// The hand is in its player's influence
+	bool handInInfluence {true};
+	/// The camera takes nothing from the player, or waits for every input to be let go
+	bool inputOff {false};
+	bool blocked {false};
+	/// The cursor from the screen's middle, as camera_drag::NormalisedCursor
+	glm::vec2 cursor {0.0f};
+	/// The computer's clock, for the cross's blink
+	uint32_t tickMs {0};
+};
+/// A mouse hint for a drag of the land gone too far from the camera: the cross blinks
+constexpr uint32_t k_TooFar = 0x10;
+/// The camera help's own feature, which shows the cross where the hand is out of its influence
+constexpr uint32_t k_HelpFeature = 0x80;
+/// The world camera's icons for a frame, and the rotate arrow's turn (kept from the frame before unless it changes)
+struct WorldCameraIcons
+{
+	uint32_t icons {0};
+	float rotateAngle {0.0f};
+};
+[[nodiscard]] WorldCameraIcons WorldCamera(const WorldCameraFrame& frame, float rotateAngle);
+/// Once the clear view has come in further than this, the world camera's icons sit at the hand without leaning towards
+/// its last grip
+constexpr float k_ClearViewLeans = 0.01f;
+
+/// How the cross is nudged this frame in the world camera: brighter with a thing under the hand, full at once with the
+/// action button held
+enum class CrossNudge : uint8_t
+{
+	None,
+	OverThing,
+	Action,
+};
+
 /// What the icons fade with this frame
 struct FadeFrame
 {
@@ -70,14 +131,15 @@ struct FadeFrame
 	bool demonstration {false};
 	/// The world camera is moving the view itself: the icons in use show a little dimmer
 	bool cameraBusy {false};
+	CrossNudge crossNudge {CrossNudge::None};
 };
 /// The icons fade towards their strength: in at the fade speed, out at the fade speed (the cross falling slowly to a
 /// faint mark)
 void Fade(Fades& fades, const FadeFrame& frame);
 
-/// Where the icons go on the screen: three quarters of the way from the hand's last gripping point to the hand, kept
-/// inside the picture between the cinema bars when they are on
-[[nodiscard]] glm::ivec2 Place(glm::ivec2 hand, glm::ivec2 lastGrip, glm::ivec2 screen, bool cinemaBars);
+/// Where the icons go on the screen: three quarters of the way from the hand's last gripping point to the hand (at the
+/// hand when they don't lean), kept inside the picture between the cinema bars when they are on
+[[nodiscard]] glm::ivec2 Place(glm::ivec2 hand, glm::ivec2 lastGrip, glm::ivec2 screen, bool cinemaBars, bool leans);
 
 /// One icon to draw: its corners on the screen (top left, top right, bottom right, bottom left), the matching places on
 /// atmos.raw, and its white's alpha

@@ -12,6 +12,9 @@
 #include <cmath>
 
 #include <algorithm>
+#include <utility>
+
+#include <glm/gtc/constants.hpp>
 
 namespace openblack::hand_tricons
 {
@@ -70,6 +73,16 @@ void Fade(Fades& fades, const FadeFrame& frame)
 		{
 			fallSpeed = k_CrossFallSpeed;
 			target = k_CrossAlpha;
+			// Brighter with a thing under the hand, at once full with the action button held
+			if (frame.crossNudge == CrossNudge::OverThing)
+			{
+				target = k_OfferedAlpha;
+			}
+			else if (frame.crossNudge == CrossNudge::Action)
+			{
+				target = k_UsedAlpha;
+				alpha = target;
+			}
 			// Never while a demonstration plays: it goes at once
 			if (frame.demonstration)
 			{
@@ -88,10 +101,149 @@ void Fade(Fades& fades, const FadeFrame& frame)
 	}
 }
 
-glm::ivec2 Place(glm::ivec2 hand, glm::ivec2 lastGrip, glm::ivec2 screen, bool cinemaBars)
+WorldCameraIcons WorldCamera(const WorldCameraFrame& frame, float rotateAngle)
 {
-	int x = ((hand.x * 3) + lastGrip.x) / 4;
-	int y = ((hand.y * 3) + lastGrip.y) / 4;
+	// The camera's mouse hints
+	constexpr uint32_t k_HintRotate = 0x01;
+	constexpr uint32_t k_HintPitch = 0x02;
+	constexpr uint32_t k_HintZoom = 0x08;
+	constexpr uint32_t k_HintTurning = 0x40;
+	constexpr uint32_t k_HintIdle = 0x80;
+	// What the scripts let the camera do
+	constexpr uint32_t k_FeaturePitch = 0x01;
+	constexpr uint32_t k_FeatureRotate = 0x02;
+	constexpr uint32_t k_FeatureZoom = 0x04;
+	constexpr uint32_t k_CrossBlinkMs = 200;
+	const auto offeredOf = [](uint32_t iconBit) { return iconBit << icon::k_OfferedShift; };
+
+	uint32_t mouse = frame.mouseHints;
+	// Gripping the land, the hints are no longer only offered, and the rotate hint turns with the drag
+	if (frame.grippingOnly)
+	{
+		mouse &= ~k_HintIdle;
+		if ((mouse & k_HintRotate) != 0)
+		{
+			mouse |= k_HintTurning;
+		}
+	}
+	// The keys: unless the land is gripped, the zoom key offers zooming and turning and the rotate key tilting and
+	// turning; tilting or turning, by keys or by dragging, shows its icon
+	uint32_t keys = 0;
+	if (!frame.gripping)
+	{
+		if (frame.zoomKeyHeld)
+		{
+			keys |= k_HintRotate | k_HintZoom;
+		}
+		else if (frame.rotateKeyHeld)
+		{
+			keys |= k_HintRotate | k_HintPitch;
+		}
+	}
+	if (frame.tilt != 0.0f || frame.pitchDragging)
+	{
+		keys |= k_HintPitch;
+	}
+	if (frame.turn != 0.0f || frame.edgeTurning)
+	{
+		keys |= k_HintRotate;
+	}
+	if (frame.fight)
+	{
+		mouse &= ~k_HintPitch;
+	}
+
+	// The mouse's hints, only offered while nothing is dragged
+	const bool offered = (mouse & k_HintIdle) != 0;
+	uint32_t icons = 0;
+	for (const auto [hint, iconBit] :
+	     {std::pair(k_HintPitch, icon::k_Pitch), std::pair(k_HintRotate, icon::k_Rotate), std::pair(k_HintZoom, icon::k_Zoom)})
+	{
+		if ((mouse & hint) != 0)
+		{
+			icons |= iconBit | (offered ? offeredOf(iconBit) : 0u);
+		}
+	}
+	bool turning = (mouse & k_HintTurning) != 0;
+	if (!frame.grippingOnly)
+	{
+		if (frame.rotatingAroundMouse)
+		{
+			turning = false;
+			rotateAngle = 0.0f;
+		}
+		// The keys' icons where the mouse shows none: in use while asked, else only offered
+		const auto keyIcon = [&](uint32_t hint, uint32_t iconBit, float asked) {
+			if ((icons & iconBit) == 0 && (keys & hint) != 0)
+			{
+				icons = (icons & ~offeredOf(iconBit)) | iconBit | (asked != 0.0f ? 0u : offeredOf(iconBit));
+				return true;
+			}
+			return false;
+		};
+		keyIcon(k_HintPitch, icon::k_Pitch, frame.tilt);
+		if (keyIcon(k_HintRotate, icon::k_Rotate, frame.turn))
+		{
+			turning = false;
+			rotateAngle = 0.0f;
+		}
+		keyIcon(k_HintZoom, icon::k_Zoom, frame.zoom);
+	}
+	// Coming in to the clear view, only the zoom glass
+	if (frame.clearView > 0.5f)
+	{
+		icons = icon::k_Zoom;
+	}
+	// Nothing the scripts don't let the camera do
+	if ((frame.features & k_FeaturePitch) == 0)
+	{
+		icons &= ~(icon::k_Pitch | offeredOf(icon::k_Pitch));
+	}
+	if ((frame.features & k_FeatureRotate) == 0)
+	{
+		icons &= ~(icon::k_Rotate | offeredOf(icon::k_Rotate));
+	}
+	if ((frame.features & k_FeatureZoom) == 0)
+	{
+		icons &= ~(icon::k_Zoom | offeredOf(icon::k_Zoom));
+	}
+	// The cross where the hand is out of its influence
+	if ((frame.features & k_HelpFeature) != 0 && !frame.handInInfluence)
+	{
+		icons |= icon::k_Cross;
+	}
+	// The rotate arrow lies along the circle round the screen's middle, where the cursor crosses it
+	if (turning)
+	{
+		rotateAngle = std::atan2(frame.cursor.y, frame.cursor.x) - glm::half_pi<float>();
+	}
+	// A drag gone too far blinks the cross alone
+	if ((mouse & k_TooFar) != 0)
+	{
+		if (((frame.tickMs / k_CrossBlinkMs) & 1u) != 0)
+		{
+			icons = icon::k_Cross;
+		}
+		else
+		{
+			icons &= ~icon::k_Cross;
+		}
+	}
+	if (frame.inputOff || frame.blocked)
+	{
+		icons = 0;
+	}
+	if (frame.blocked && (frame.features & k_HelpFeature) != 0)
+	{
+		icons |= icon::k_Cross;
+	}
+	return {.icons = icons, .rotateAngle = rotateAngle};
+}
+
+glm::ivec2 Place(glm::ivec2 hand, glm::ivec2 lastGrip, glm::ivec2 screen, bool cinemaBars, bool leans)
+{
+	int x = leans ? ((hand.x * 3) + lastGrip.x) / 4 : hand.x;
+	int y = leans ? ((hand.y * 3) + lastGrip.y) / 4 : hand.y;
 	// With the cinema bars on, the picture is 16:9 across the screen's width, whatever the bars' slide
 	int visibleHeight = screen.y;
 	if (cinemaBars)

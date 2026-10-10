@@ -660,11 +660,12 @@ void GameInterface::DrawHandTricons(glm::u16vec2 resolution)
 	tricons::Fade(_tricons, {
 	                            .icons = tricons::Shown(in.icons, toolTipsOn, in.handStateShowsIcons),
 	                            .seconds = in.seconds,
-	                            .demonstration = true,
-	                            .cameraBusy = false,
+	                            .demonstration = in.demonstration,
+	                            .cameraBusy = in.cameraBusy,
+	                            .crossNudge = in.crossNudge,
 	                        });
 	const auto screen = glm::ivec2(resolution);
-	const auto centre = tricons::Place(in.hand, in.lastGrip, screen, in.cinemaBars);
+	const auto centre = tricons::Place(in.hand, in.lastGrip, screen, in.cinemaBars, in.leans);
 	for (const auto& sprite : tricons::Sprites(glm::vec2(centre), in.halfSize, _tricons, in.rotateAngle))
 	{
 		if (sprite.has_value())
@@ -675,6 +676,10 @@ void GameInterface::DrawHandTricons(glm::u16vec2 resolution)
 	}
 
 	// The demonstration's mouse beside them, whether or not an icon shows
+	if (!in.demonstration)
+	{
+		return;
+	}
 	// The languages that need bigger text aren't chosen in openblack yet
 	constexpr bool k_BiggerText = false;
 	_demoMouseOnLeft = tricons::LabelOnLeft(centre.x, screen.x, _demoMouseOnLeft);

@@ -335,6 +335,8 @@ private:
 	hand_navigation_pose::Pose _handPose {hand_navigation_pose::Pose::Idle};
 	/// The last point on the screen the hand gripped the land at, which the camera's helper icons lean towards
 	glm::ivec2 _handLastGrip {0};
+	/// The rotate arrow's turn, kept from frame to frame, which a demonstration's recording sets too
+	float _triconAngle {0.0f};
 	/// How far from the camera the hand holds while it drags by the edge of the screen
 	Zoomer _handHoldZoomer;
 	/// The land the hand grips while it drags it, and where the hand was when it gripped
