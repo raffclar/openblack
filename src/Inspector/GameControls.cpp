@@ -733,6 +733,13 @@ bool GameScreenshots::Exists(const std::filesystem::path& path) const
 	return std::filesystem::exists(path, error);
 }
 
+std::string GameScreenshots::Remove(const std::filesystem::path& path)
+{
+	std::error_code error;
+	std::filesystem::remove(path, error);
+	return error ? error.message() : std::string {};
+}
+
 std::string GameScreenshots::AppendLine(const std::filesystem::path& file, std::string_view line)
 {
 	std::error_code error;

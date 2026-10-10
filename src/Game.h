@@ -398,6 +398,12 @@ private:
 	void UpdateHandInterface();
 	/// The interface's pick of what is under the cursor, at the frame as it is about to be drawn
 	void PickUnderCursor(float seconds);
+	/// The near plane for the camera where it is now
+	void FitNearClip();
+	/// Shows the camera where the inspector wants the frame drawn from (an override, a picture's), or gives the camera
+	/// back its own place: the game's own frame (the hand, picking, the sound) goes by its own camera, only the drawing
+	/// by the shown one
+	void ShowInspectorCamera(bool shown);
 	/// Once a game turn outside the temple: the hand's tooltip for what it is over, "Interact" over the player's own
 	/// creature
 	void ProcessHandToolTipTurn();
