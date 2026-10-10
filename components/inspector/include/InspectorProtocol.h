@@ -112,6 +112,9 @@ struct Request
 /// The lines of the two answers (without the line's end)
 [[nodiscard]] std::string EncodeResult(const Json& id, const Json& result);
 [[nodiscard]] std::string EncodeError(const Json& id, std::string_view error);
+/// The same, with more members beside id, ok and result or error: the game that answered, whether it is loading
+[[nodiscard]] std::string EncodeResult(const Json& id, const Json& result, const Json& extra);
+[[nodiscard]] std::string EncodeError(const Json& id, std::string_view error, const Json& extra);
 
 [[nodiscard]] std::optional<FilterOp> ParseFilterOp(std::string_view op);
 [[nodiscard]] std::string_view Name(FilterOp op);

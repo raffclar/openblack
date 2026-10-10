@@ -24,6 +24,22 @@ bool RandomNumberManagerTesting::SetSeed(int seed)
 	return true;
 }
 
+void RandomNumberManagerTesting::SetRunSeed(uint32_t seed)
+{
+	std::lock_guard<std::mutex> safeLock(_generatorLock);
+	_runSeed = seed;
+	_generator.seed(run_seed::StreamSeed(seed, RandomStream::General));
+	for (size_t i = 0; i < _streams.size(); ++i)
+	{
+		_streams.at(i).seed(run_seed::StreamSeed(seed, static_cast<RandomStream>(i)));
+	}
+}
+
+std::mt19937& RandomNumberManagerTesting::Stream(RandomStream stream)
+{
+	return _streams.at(static_cast<size_t>(stream));
+}
+
 std::mt19937& RandomNumberManagerTesting::Generator()
 {
 	return _generator;

@@ -91,6 +91,7 @@
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SkinOverride.h"
+#include "ECS/Components/Sky.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -854,6 +855,29 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::SkinOverride>(context)
 	    .Field<&components::SkinOverride::texture>("texture")
 	    .Field<&components::SkinOverride::uvOffset>("uvOffset");
+	Reflect<components::SkyDome>(context)
+	    .Field<&components::SkyDome::meshId>("meshId")
+	    .Field<&components::SkyDome::textureId>("textureId")
+	    .Field<&components::SkyDome::follow>("follow")
+	    .Field<&components::SkyDome::frameRows>("frameRows")
+	    .Field<&components::SkyDome::overcast>("overcast");
+	Reflect<components::DayNightCycle>(context).Field<&components::DayNightCycle::clock>("clock");
+	Reflect<components::CelestialBody>(context)
+	    .Field<&components::CelestialBody::meshId>("meshId")
+	    .Field<&components::CelestialBody::textureId>("textureId")
+	    .Field<&components::CelestialBody::alphaTextureId>("alphaTextureId");
+	Reflect<components::CelestialGlow>(context)
+	    .Field<&components::CelestialGlow::textureId>("textureId")
+	    .Field<&components::CelestialGlow::alphaTextureId>("alphaTextureId");
+	Reflect<components::Sun>(context)
+	    .Field<&components::Sun::placement>("placement")
+	    .Field<&components::Sun::colour>("colour")
+	    .Field<&components::Sun::strength>("strength");
+	Reflect<components::Moon>(context)
+	    .Field<&components::Moon::phase>("phase")
+	    .Field<&components::Moon::placement>("placement")
+	    .Field<&components::Moon::colour>("colour")
+	    .Field<&components::Moon::strength>("strength");
 	Reflect<components::SoundTag>(context)
 	    .Field<&components::SoundTag::sound>("sound")
 	    .Field<&components::SoundTag::offset>("offset")

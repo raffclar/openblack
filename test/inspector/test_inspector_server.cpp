@@ -7,9 +7,11 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <atomic>
 #include <chrono>
 #include <optional>
 #include <string>
+#include <thread>
 
 #include <Inspector.h>
 #include <InspectorServer.h>
@@ -138,4 +140,60 @@ TEST(InspectorServer, EveryLineTakesControlWithoutAFilter)
 	ASSERT_TRUE(client.has_value());
 	ASSERT_TRUE(Exchange(*server, *client, R"({"id": 1, "query": "ping"})").has_value());
 	EXPECT_EQ(server->ControllingClientCount(), 1);
+}
+
+// While the game's frame is busy answering one line (a land loading), a helper polling from another thread answers
+// other clients meanwhile; the slow answer still reaches its client once made
+TEST(InspectorServer, AnotherThreadAnswersWhileOneHandlerIsBusy)
+{
+	std::string error;
+	auto server = Server::Listen(0, error);
+	ASSERT_NE(server, nullptr) << error;
+	auto loading = Client::Connect(server->Port());
+	auto waiting = Client::Connect(server->Port());
+	ASSERT_TRUE(loading.has_value());
+	ASSERT_TRUE(waiting.has_value());
+
+	std::atomic<bool> busy {false};
+	std::atomic<bool> release {false};
+	ASSERT_TRUE(loading->SendLine("slow"));
+	std::thread frame([&server, &busy, &release] {
+		const auto deadline = std::chrono::steady_clock::now() + 5s;
+		while (server->Poll([&busy, &release, deadline](std::string_view) {
+			busy = true;
+			while (!release && std::chrono::steady_clock::now() < deadline)
+			{
+				std::this_thread::sleep_for(1ms);
+			}
+			return std::string("loaded");
+		}) == 0 &&
+		       std::chrono::steady_clock::now() < deadline)
+		{
+			std::this_thread::sleep_for(1ms);
+		}
+	});
+	while (!busy)
+	{
+		std::this_thread::sleep_for(1ms);
+	}
+
+	ASSERT_TRUE(waiting->SendLine("quick"));
+	std::optional<std::string> quick;
+	for (int poll = 0; poll < 500 && !quick.has_value(); ++poll)
+	{
+		server->Poll([](std::string_view) { return std::string("loading"); });
+		quick = waiting->ReceiveLine(5ms);
+	}
+	EXPECT_EQ(quick, "loading");
+	EXPECT_FALSE(release);
+
+	release = true;
+	frame.join();
+	std::optional<std::string> slow;
+	for (int poll = 0; poll < 200 && !slow.has_value(); ++poll)
+	{
+		server->Poll([](std::string_view) { return std::string(); });
+		slow = loading->ReceiveLine(5ms);
+	}
+	EXPECT_EQ(slow, "loaded");
 }

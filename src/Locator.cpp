@@ -312,6 +312,18 @@ void InitializeLevelWith(const LandSource& land)
 {
 	// Both seeds go to 0 with every map, as the game clears them
 	Locator::gameRandom::value().SetSeeds({0, 0});
+	// The game's own streams start again from the run's seed with every map too, so that the same land loaded with the
+	// same seed draws the same numbers
+	auto& rng = Locator::rng::value();
+	rng.SetRunSeed(rng.GetRunSeed());
+	// In a seeded run the machine's clock, as the game reads it, counts from 0 again with every map, from the pinned date
+	if (Locator::time::has_value())
+	{
+		if (const auto date = Locator::time::value().GetPinnedDate(); date.has_value())
+		{
+			Locator::time::value().RestartClock(*date);
+		}
+	}
 	Locator::entitiesMap::emplace<MapProduction>();
 	Locator::dynamicsSystem::emplace<DynamicsSystem>();
 	// What lines and the cursor meet, as the game finds them
