@@ -24,12 +24,14 @@
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/DanceMoves.h"
 #include "ECS/DanceRules.h"
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/VillagerClips.h"
 #include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -231,8 +233,21 @@ void villager_dance::PlayClipAgain(entt::entity villager)
 	{
 		return;
 	}
-	// TODO(opening): the game starts the clip again only when it loops and the villager is ready for it
+	// Its part in the move may want another clip, which takes over in time with the dance
 	villager_animate::SetAnim(villager, villager_animate::StateClip(villager), true);
+	// The clip starts over with the move once it has played through
+	const auto clip = villager_animate::CurrentClip(villager);
+	if (!villager_clips::ClipMilliseconds(clip).has_value())
+	{
+		return;
+	}
+	auto& action = registry.Get<LivingAction>(villager);
+	const auto move = villager_clips::OnDanceMove(action, clip);
+	action.turnsSinceStateChange = static_cast<uint16_t>(move.turnsSinceStateChange);
+	if (auto* pose = registry.TryGet<VillagerPose>(villager); move.restart && pose != nullptr)
+	{
+		pose->place = 0;
+	}
 }
 
 bool villager_dance::ExitInDance(LivingAction& action, VillagerStates next)

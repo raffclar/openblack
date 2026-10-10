@@ -230,6 +230,9 @@ void HandDemoSystem::Apply(const std::vector<hand_demo::Played>& played)
 		    .focus = {record->cameraFocus[0], record->cameraFocus[1], record->cameraFocus[2]},
 		};
 		_hints = hints;
+		_hintAngle = record->hintValue;
+		const auto held = hand_demo::AfterRecord({.move = _held.move, .action = _held.action}, record->message);
+		_held = {.move = held.move, .action = held.action};
 	}
 }
 
@@ -243,6 +246,8 @@ void HandDemoSystem::Stop()
 	_file.reset();
 	_camera.reset();
 	_hints = 0;
+	_hintAngle = 0.0f;
+	_held = {};
 	_pauseOnTrigger = false;
 	_task = 0;
 	// The player's mouse has the hand again; in a script's cut scene the interface is put away again

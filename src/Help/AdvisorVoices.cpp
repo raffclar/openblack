@@ -18,16 +18,30 @@ namespace openblack::help
 
 namespace
 {
+namespace lip_sync = openblack::audio::lip_sync;
+
 /// Inside this far towards an edge an advisor says its line at once
 constexpr float k_NoDelayHover = 0.95f;
 constexpr float k_DelayMsPerHover = 250.0f;
 constexpr float k_MaxDelayMs = 500.0f;
 /// The interruption lines an advisor picks from when cut short
 constexpr int32_t k_InterruptionLines = 5;
+constexpr float k_SecondsPerMs = 0.001f;
+/// A line whose sound has not started playing this long after it should have is stopped
+constexpr float k_NotPlayingStop = 0.5f;
+/// A stopping line's tags up to this long past its end are made
+constexpr float k_FlushPastEnd = 100.0f;
 } // namespace
 
 AdvisorVoices::AdvisorVoices(Audio audio)
+    : AdvisorVoices(std::move(audio), Hooks())
+{
+}
+
+AdvisorVoices::AdvisorVoices(Audio audio, Hooks hooks)
     : _audio(std::move(audio))
+    , _hooks(std::move(hooks))
+    , _spectrum(2 * static_cast<size_t>(lip_sync::k_Window))
 {
 }
 
@@ -77,11 +91,12 @@ void AdvisorVoices::SaySentence(int advisor, uint32_t line, bool onlyIfSilent, u
 	auto& state = _advisors.at(static_cast<size_t>(advisor));
 	state.line = line;
 	state.startTick = Now() + delayMs;
-	UpdateSaySentence(state);
+	UpdateSaySentence(advisor);
 }
 
-void AdvisorVoices::UpdateSaySentence(Advisor& advisor)
+void AdvisorVoices::UpdateSaySentence(int index)
 {
+	auto& advisor = _advisors.at(static_cast<size_t>(index));
 	if (advisor.startTick == 0)
 	{
 		return;
@@ -94,13 +109,44 @@ void AdvisorVoices::UpdateSaySentence(Advisor& advisor)
 	advisor.startTick = 0;
 	const bool started = _audio.start && _audio.start(advisor.line);
 	_sentence = started ? advisor.line : 0;
+	if (started)
+	{
+		KeepRecording(index, advisor.line);
+	}
+}
+
+void AdvisorVoices::KeepRecording(int advisor, uint32_t line)
+{
+	_sentenceStartTick = Now();
+	std::optional<Recording> recording = _audio.recording ? _audio.recording(line) : std::nullopt;
+	_samples.clear();
+	_frames = 0;
+	_sampleRate = 0;
+	_duration = 0.0f;
+	if (recording && recording->channels > 0 && recording->sampleRate > 0)
+	{
+		_samples = std::move(recording->samples);
+		_frames = static_cast<int>(_samples.size()) / recording->channels;
+		_sampleRate = recording->sampleRate;
+		_duration = static_cast<float>(_frames) / static_cast<float>(_sampleRate);
+	}
+	// A recording without tag data, or a label with a mistake in it, leaves the line without gestures
+	std::vector<spirits::AudioTag> tags;
+	if (recording && recording->labels)
+	{
+		tags = spirits::BuildSentenceTags(*recording->labels, _tagWord);
+	}
+	if (_hooks.setTags)
+	{
+		_hooks.setTags(advisor, std::move(tags));
+	}
 }
 
 void AdvisorVoices::Update()
 {
 	for (int i = 0; i < k_Advisors; ++i)
 	{
-		UpdateSaySentence(_advisors.at(static_cast<size_t>(i)));
+		UpdateSaySentence(i);
 		static_cast<void>(TalkingOrJustStopped(i));
 	}
 }
@@ -173,8 +219,43 @@ void AdvisorVoices::StopSentence(int advisor)
 	{
 		_audio.stop(_sentence);
 	}
+	// Whatever gestures the line had left are made now, by the advisor that was saying it
+	if (_hooks.stopTags)
+	{
+		_hooks.stopTags(advisor, _duration + k_FlushPastEnd);
+	}
 	_sentence = 0;
 	_speaker = -1;
+}
+
+std::optional<spirits::LipSyncFrame> AdvisorVoices::ApplyLipSync(int advisor, float dt)
+{
+	if (!IsTalking(advisor) || _sentence == 0)
+	{
+		return std::nullopt;
+	}
+	auto& state = _advisors.at(static_cast<size_t>(advisor));
+	spirits::LipSyncFrame frame;
+	frame.time = static_cast<float>(Now() - _sentenceStartTick) * k_SecondsPerMs;
+	const int64_t position = _audio.playPositionMs ? _audio.playPositionMs(_sentence) : -1;
+	if (position < 0)
+	{
+		if (frame.time > k_NotPlayingStop)
+		{
+			StopSentence(advisor);
+		}
+	}
+	else
+	{
+		frame.time = static_cast<float>(position) * k_SecondsPerMs;
+		frame.playing = true;
+		if (!_samples.empty())
+		{
+			lip_sync::UpdateKey(lip_sync::Settings {}, state.key, dt, frame.time, _samples, _frames, _sampleRate, _spectrum);
+		}
+	}
+	frame.weights = state.key.weights;
+	return frame;
 }
 
 void AdvisorVoices::Stop(int advisor)

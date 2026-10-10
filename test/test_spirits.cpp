@@ -16,8 +16,10 @@
 
 #include <algorithm>
 #include <array>
+#include <optional>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -37,6 +39,9 @@ struct Fixture
 	bool randomMax {false};
 	std::vector<int32_t> randCalls;
 	std::vector<glm::vec2> randomCalls; ///< the (a, b) of every Random
+	std::vector<int> sentenceUpdates;   ///< the advisor of every line update
+	std::optional<LipSyncFrame> lip;    ///< what the voice gives every lip sync
+	std::vector<std::pair<int, float>> lipCalls;
 	DudeData good;
 	DudeData evil;
 	AdvisorSpiritController control;
@@ -57,6 +62,11 @@ struct Fixture
 		q.random = [this](float a, float b) {
 			randomCalls.emplace_back(a, b);
 			return a;
+		};
+		q.updateSentence = [this](int dude) { sentenceUpdates.push_back(dude); };
+		q.lipSync = [this](int dude, float dt) {
+			lipCalls.emplace_back(dude, dt);
+			return lip;
 		};
 		return q;
 	}
@@ -419,6 +429,58 @@ TEST(Spirits, AudioTagsFromEveryBracket)
 	errors = 0;
 	std::ignore = ParseAudioTags("[TE sad", 0.0f, word, &errors);
 	EXPECT_EQ(errors, 1);
+}
+
+TEST(Spirits, EachAdvisorsLineIsLookedAtOnceAFrame)
+{
+	Fixture f;
+	f.Frames(1);
+	EXPECT_EQ(f.sentenceUpdates, (std::vector<int> {0, 1}));
+	f.control.SpiritEject(1, false);
+	f.sentenceUpdates.clear();
+	f.Frames(2);
+	EXPECT_EQ(f.sentenceUpdates, (std::vector<int> {0, 1, 0, 1}));
+}
+
+TEST(Spirits, ALinesTagsFireOnceItsTimePassesThem)
+{
+	std::string word;
+	Fixture f;
+	f.control.SpiritEject(1, false);
+	f.control.SetSentenceTags(0, ParseAudioTags("[TE sad]", 0.5f, word));
+	f.lip = LipSyncFrame {.time = 0.5f, .playing = false, .weights = {}};
+	f.Frames(1);
+	EXPECT_EQ(f.control.Dude(0).TagsLeft(), 1u);
+	EXPECT_EQ(f.control.Dude(0).EmotionTarget(), 0u);
+	// The lip sync is asked for with the frame's time, only for the advisor out
+	ASSERT_FALSE(f.lipCalls.empty());
+	EXPECT_EQ(f.lipCalls.back().first, 0);
+	EXPECT_FLOAT_EQ(f.lipCalls.back().second, 0.1f);
+	f.lip->time = 0.51f;
+	f.Frames(1);
+	EXPECT_EQ(f.control.Dude(0).TagsLeft(), 0u);
+	EXPECT_EQ(f.control.Dude(0).EmotionTarget(), 3u);
+}
+
+TEST(Spirits, AStoppingLinesTagsAllFireOnItsSpeaker)
+{
+	std::string word;
+	Fixture f;
+	AdvisorSpirit& evil = f.control.Dude(1);
+	evil.partner = &f.control.Dude(0);
+	auto tags = ParseAudioTags("[GA shrug]", 0.5f, word);
+	auto late = ParseAudioTags("[TE sad]", 200.0f, word);
+	tags.insert(tags.end(), late.begin(), late.end());
+	f.control.SetSentenceTags(1, tags);
+	// The line stops with 102 s as the limit: the good one's shrug is made by the evil one itself, the tag past the
+	// limit is dropped
+	f.control.StopSentence(1, 102.0f);
+	EXPECT_EQ(evil.SlotMode(64), 1);
+	EXPECT_EQ(f.control.Dude(0).SlotMode(64), 0);
+	EXPECT_EQ(evil.EmotionTarget(), 0u);
+	// Nothing is left to fire
+	f.control.StopSentence(1, 1000.0f);
+	EXPECT_EQ(evil.EmotionTarget(), 0u);
 }
 
 TEST(Spirits, OneBadLabelDropsTheSentencesTags)

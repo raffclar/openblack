@@ -116,6 +116,7 @@
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Influence.h"
+#include "ECS/Components/IntroHand.h"
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/LightBeam.h"
 #include "ECS/Components/LivingAction.h"
@@ -957,6 +958,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::HighDetail::usualDetailModels>("usualDetailModels")
 	    .Field<&components::HighDetail::face>("face")
 	    .Field<&components::HighDetail::orders>("orders")
+	    .Field<&components::HighDetail::heldAt>("heldAt")
 	    .Field<&components::HighDetail::eyes>("eyes")
 	    .Field<&components::HighDetail::drawnEyes>("drawnEyes");
 	Reflect<components::Indestructible> {context};
@@ -974,6 +976,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::VirtualInfluence>(context)
 	    .Field<&components::VirtualInfluence::state>("state")
 	    .Field<&components::VirtualInfluence::hum>("hum");
+	Reflect<components::IntroHand>(context)
+	    .Field<&components::IntroHand::clip>("clip")
+	    .Field<&components::IntroHand::time>("time")
+	    .Field<&components::IntroHand::yaw>("yaw")
+	    .Field<&components::IntroHand::scale>("scale");
 	Reflect<components::LandForest>(context)
 	    .Field<&components::LandForest::id>("id")
 	    .Field<&components::LandForest::bigForest>("bigForest")

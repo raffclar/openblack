@@ -52,6 +52,7 @@ public:
 	void SetKeyBinding(BindableActionMap action, std::optional<KeyChord> key) final;
 	void ResetKeyBindings() final;
 	void QueuePress(BindableActionMap action) final;
+	[[nodiscard]] bool TakeDoubleClick() final;
 	[[nodiscard]] bool HasQueuedPresses() const final;
 
 	void SetScriptedPointer(std::optional<ScriptedPointer> pointer) final;

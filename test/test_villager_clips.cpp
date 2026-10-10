@@ -51,3 +51,47 @@ TEST(VillagerClips, AClipHasPlayedOnceItsTurnsCoverItsPlayTime)
 	// A clip of no length has always played
 	EXPECT_TRUE(villager_clips::HasPlayed(0, 100, 0, 1));
 }
+
+TEST(VillagerClips, SettingTheSameClipAgainPlaysOn)
+{
+	using villager_clips::ClipPlace;
+	EXPECT_EQ(villager_clips::PlaceOnSetClip(true, true, false), ClipPlace::Keep);
+	EXPECT_EQ(villager_clips::PlaceOnSetClip(true, false, false), ClipPlace::Keep);
+	EXPECT_EQ(villager_clips::PlaceOnSetClip(true, true, true), ClipPlace::Keep);
+}
+
+TEST(VillagerClips, ADifferentClipStartsOverOnlyWhenAskedAndNotDancing)
+{
+	using villager_clips::ClipPlace;
+	EXPECT_EQ(villager_clips::PlaceOnSetClip(false, true, false), ClipPlace::Restart);
+	EXPECT_EQ(villager_clips::PlaceOnSetClip(false, false, false), ClipPlace::Keep);
+	// A dancer's new clip takes over in time with the dance
+	EXPECT_EQ(villager_clips::PlaceOnSetClip(false, true, true), ClipPlace::Keep);
+}
+
+TEST(VillagerClips, ADanceMoveStartsTheClipOverOnceItHasPlayedThrough)
+{
+	// A 1366 ms dance clip, 20 turns of 100 ms since the dancer's state changed: it starts over and the count restarts
+	const auto first = villager_clips::OnDanceMove(20, 100, 1366);
+	EXPECT_TRUE(first.restart);
+	EXPECT_EQ(first.turnsSinceStateChange, 0u);
+	// Halfway through it plays on, keeping its count
+	const auto halfway = villager_clips::OnDanceMove(7, 100, 1366);
+	EXPECT_FALSE(halfway.restart);
+	EXPECT_EQ(halfway.turnsSinceStateChange, 7u);
+}
+
+TEST(VillagerClips, AMoveStartedOnFiveTurnsStartsTheClipOverOnce)
+{
+	// The dance starts a move on five turns running; the clip starts over on the first only, then plays on
+	uint32_t turns = 30;
+	int restarts = 0;
+	for (int turn = 0; turn < 5; ++turn)
+	{
+		const auto move = villager_clips::OnDanceMove(turns, 100, 1366);
+		restarts += move.restart ? 1 : 0;
+		turns = move.turnsSinceStateChange + 1;
+	}
+	EXPECT_EQ(restarts, 1);
+	EXPECT_EQ(turns, 5u);
+}

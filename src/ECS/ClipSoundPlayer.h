@@ -61,15 +61,16 @@ public:
 	/// Whether the player is inside the temple
 	[[nodiscard]] virtual bool InsideTemple() const = 0;
 	[[nodiscard]] virtual float LifeOf(entt::entity object) const = 0;
-	/// A sound of a bank, as an animation's sound effect is played, belonging to an owner at a place
-	virtual void PlaySound(std::string_view bank, std::span<const int32_t> keys, entt::entity owner,
-	                       const glm::vec3& position) = 0;
+	/// A sound of a bank, as an animation's sound effect is played, belonging to an owner at a place; by the sample
+	/// rules, only when the sample picked may be heard now
+	virtual void PlaySound(std::string_view bank, std::span<const int32_t> keys, entt::entity owner, const glm::vec3& position,
+	                       bool bySampleRules) = 0;
 };
 
 /// Plays the sounds a living thing's clip passes as it plays on from a place by so many milliseconds, from where the
 /// thing is: a person's sounds by its size and only while it is alive, the banter from the villagers' bank (the first
-/// from its home), a thrown person's scream only early in its flight, anything else from the editor's bank. Nothing
-/// for a clip played once that has already finished.
+/// from its home), a thrown person's scream only early in its flight, anything else from the editor's bank, the ones
+/// played the ordinary way only as their samples allow. Nothing for a clip played once that has already finished.
 void Play(World& world, entt::entity entity, AnimId clipId, ClipTiming clip, uint32_t place, uint32_t played,
           const glm::vec3& position);
 

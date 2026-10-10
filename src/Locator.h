@@ -131,6 +131,7 @@ class ScriptControlSystemInterface;
 class DialogueControlSystemInterface;
 class HelpSpeechSystemInterface;
 class HighDetailSystemInterface;
+class IntroSystemInterface;
 class WalkPathSystemInterface;
 class DanceSystemInterface;
 class SharkSystemInterface;
@@ -275,6 +276,7 @@ struct Locator
 	using dialogueControlSystem = entt::locator<ecs::systems::DialogueControlSystemInterface>;
 	using helpSpeechSystem = entt::locator<ecs::systems::HelpSpeechSystemInterface>;
 	using highDetailSystem = entt::locator<ecs::systems::HighDetailSystemInterface>;
+	using introSystem = entt::locator<ecs::systems::IntroSystemInterface>;
 	using walkPathSystem = entt::locator<ecs::systems::WalkPathSystemInterface>;
 	using danceSystem = entt::locator<ecs::systems::DanceSystemInterface>;
 	using sharkSystem = entt::locator<ecs::systems::SharkSystemInterface>;

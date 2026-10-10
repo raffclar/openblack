@@ -79,6 +79,13 @@ struct Inputs
 /// Random numbers from 0 to a maximum, on the game's shared stream
 using FloatRandom = std::function<float(float)>;
 
+/// Whether a change of state gives the villager its state's speed. A villager a script controls keeps the speed the
+/// script gave it, and a dancer keeps its own.
+[[nodiscard]] constexpr bool StateChangeSetsSpeed(bool controlledByScript, bool dancing)
+{
+	return !controlledByScript && !dancing;
+}
+
 /// The speed of the state, before the villager's own way of going
 [[nodiscard]] int32_t StateSpeed(const Inputs& inputs, const FloatRandom& random);
 
