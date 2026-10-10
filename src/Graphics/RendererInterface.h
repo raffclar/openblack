@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <array>
 #include <filesystem>
 #include <memory>
@@ -193,6 +195,25 @@ public:
 			bool blendSeams {true};
 		};
 		const MorphTargets* morphTargets {nullptr};
+		/// A creature fizzing out of sight, drawn twice through the static scrolling over its skin (creature_fizz_look):
+		/// first its depth alone where the static is strong enough, then its body blended over that depth
+		struct Fizz
+		{
+			enum class Pass : uint8_t
+			{
+				Depth,
+				Body,
+			};
+			Pass pass;
+			/// How far it has fizzed, as a byte
+			uint8_t level;
+			/// How far the static has slid across its skin
+			glm::vec2 scroll;
+		};
+		std::optional<Fizz> fizz;
+		/// How frozen the mesh is drawn, 0 to 1, as a piece of a frozen creature that isn't instanced: sheened with ice by
+		/// it, where it isn't fizzing
+		float freeze {0.0f};
 	};
 
 	static std::unique_ptr<RendererInterface> Create(GraphicsBackend backend, bool vsync) noexcept;

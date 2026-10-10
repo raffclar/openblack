@@ -73,6 +73,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
+#include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -82,12 +83,15 @@
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
+#include "ECS/Systems/TutorialSkipSystemInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TownDesire.h"
@@ -2169,7 +2173,8 @@ void LoadMap() // 152 LOAD_MAP
 	const auto& fileSystem = Locator::filesystem::value();
 	try
 	{
-		Game::Instance()->LoadMap(fileSystem.FindPath(filesystem::FileSystemInterface::FixPath(path)));
+		Game::Instance()->LoadMap(fileSystem.FindPath(filesystem::FileSystemInterface::FixPath(path)),
+		                          loading::LoadingClock::Mode::PleaseWait);
 	}
 	catch (const std::exception& e)
 	{
@@ -2716,10 +2721,31 @@ void SetAnimationModify() // 202 SET_ANIMATION_MODIFY
 
 void SetAviSequence() // 203 SET_AVI_SEQUENCE
 {
-	// const auto aviSequence = Pop().intVal;
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Sequence 1 is the story's intro, 2 the falling spell's film
+	const auto sequence = Pop().intVal;
+	const auto enable = static_cast<bool>(Pop().intVal);
+	auto& videos = Locator::videoSystem::value();
+	auto& director = Locator::cinematicDirectorSystem::value();
+	if (!enable)
+	{
+		if (sequence == 2)
+		{
+			videos.EndFallingSpell();
+		}
+		return;
+	}
+	if (sequence == 1)
+	{
+		// The intro is cut short: it fades from 58 s and ends at 60 s. The script's fade is lifted at once under it
+		videos.Play("Data/INTRO.bik");
+		videos.ScheduleIntro();
+		director.FadeBackToNormal(0);
+	}
+	else if (sequence == 2)
+	{
+		videos.StartFallingSpell();
+		director.FadeBackToNormal(0);
+	}
 }
 
 void PlayGesture() // 204 PLAY_GESTURE
@@ -4460,10 +4486,24 @@ void CallFlying() // 383 CALL_FLYING
 
 void SetObjectFadeIn() // 384 SET_OBJECT_FADE_IN
 {
-	// const auto time = Popf();
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A creature drops out of sight at once (with the energise sound) and fizzes back in over the seconds given. The
+	// game fades nothing else in: any other object is only reported.
+	const auto seconds = Popf();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object dead man!");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_OBJECT_FADE_IN: only creatures fade in");
+		return;
+	}
+	auto& fizz = Locator::creatureFizzSystem::value();
+	fizz.SetFizz(object, 1.0f, 0.0f, false);
+	fizz.SetFizz(object, 0.0f, seconds, false);
 }
 
 void IsAffectedBySpell() // 385 IS_AFFECTED_BY_SPELL
@@ -5133,30 +5173,22 @@ void SetHandDemoKeys() // 459 SET_HAND_DEMO_KEYS
 
 void CanSkipTutorial() // 460 CAN_SKIP_TUTORIAL
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(Locator::tutorialSkipSystem::value().Get().skipTutorial);
 }
 
 void CanSkipCreatureTraining() // 461 CAN_SKIP_CREATURE_TRAINING
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(Locator::tutorialSkipSystem::value().Get().skipCreatureTraining);
 }
 
 void IsKeepingOldCreature() // 462 IS_KEEPING_OLD_CREATURE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(Locator::tutorialSkipSystem::value().Get().keepOldCreature);
 }
 
 void CurrentProfileHasCreature() // 463 CURRENT_PROFILE_HAS_CREATURE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(Locator::playerProfileSystem::value().CurrentProfileHasCreature());
 }
 
 void CHLApi::InitFunctionsTable0()

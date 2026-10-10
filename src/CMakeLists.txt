@@ -116,6 +116,11 @@ target_include_directories(
          ${CMAKE_BINARY_DIR}/include # For shaders and other bin2c
          ${Stb_INCLUDE_DIR} ${DRLIBS_INCLUDE_DIRS}
 )
+# The game's videos: the container is always read, so that a build without the decoder keeps their timing
+target_link_libraries(openblack_lib PUBLIC bink)
+if (OPENBLACK_BINK_DECODER)
+  target_compile_definitions(openblack_lib PUBLIC OPENBLACK_BINK_DECODER)
+endif ()
 target_link_libraries(
   openblack_lib
   PRIVATE "$<$<CXX_COMPILER_ID:MSVC>:-SAFESEH:NO>"
@@ -238,18 +243,21 @@ if (MSVC)
 
   target_compile_options(
     openblack_lib
-    PRIVATE # Level 4 warnings
-            /W4
-            # Disable nonstandard extension used: nameless struct/union from glm
-            /wd4201
-            # Multi-threaded
-            /MP
-            # Enables stricter C++ standards conformance checks
-            /permissive-
-            # Set correct version of c++
-            /Zc:__cplusplus
-            # Use utf-8 for std::print and fmt/spdlog
-            /utf-8
+    PRIVATE
+      # Level 4 warnings
+      /W4
+      # Disable nonstandard extension used: nameless struct/union from glm
+      /wd4201
+      # Multi-threaded
+      /MP
+      # Enables stricter C++ standards conformance checks
+      /permissive-
+      # Set correct version of c++
+      /Zc:__cplusplus
+      # Use utf-8 for std::print and fmt/spdlog
+      /utf-8
+      # The service locator makes every system and resource cache, more sections than an object file holds
+      /bigobj
   )
 
   if (OPENBLACK_WARNINGS_AS_ERRORS)

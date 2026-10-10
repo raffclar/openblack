@@ -88,6 +88,9 @@ private:
 	/// A field gives its food the same way, half of it once ripe
 	bool StartFieldScoop(components::HandGrab& grab, entt::entity field, const FieldFacts& facts);
 	bool ScoopField(components::HandGrab& grab, const FieldFacts& facts);
+	/// A fish farm gives a first handful whatever fish it has, and then its fish as the scoop ramps up
+	bool StartFishFarmScoop(components::HandGrab& grab, entt::entity farm, const fish_farm::Type& type);
+	bool ScoopFishFarm(components::HandGrab& grab, const fish_farm::Type& type);
 	/// The scoop ends: its stream stops, and the hand holds its handful as anything else
 	void EndScoop(components::HandGrab& grab);
 	/// The second press with the pointer on something the held thing is used on (a store, a pile of the same): it is

@@ -9,9 +9,12 @@
 
 #pragma once
 
+#include <cstddef>
+
 #include <array>
 #include <chrono>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -22,10 +25,13 @@
 
 #include "3D/HandCrossFade.h"
 #include "3D/HandNavigationPose.h"
+#include "Common/LoadTimer.h"
 #include "Common/Zoomer.h"
 #include "Creature/CreatureFight.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "EngineConfig.h"
+#include "Graphics/UploadPacer.h"
+#include "Gui/LoadingScreenRules.h"
 #include "Input/InputLock.h"
 #include "Input/ShortcutKeys.h"
 #include "Magic/HandHoldPoser.h"
@@ -46,7 +52,8 @@ class HandAnimation;
 namespace gui
 {
 class GameInterface;
-}
+class LoadingScreen;
+} // namespace gui
 namespace ecs::components
 {
 struct Transform;
@@ -112,6 +119,12 @@ struct Arguments
 	uint32_t frameStatsInterval {0};
 	/// With the frame statistics, the GPU time of each render view
 	bool frameStatsViews {false};
+	/// A full-screen video to play once the land is loaded: "intro", "fall" or a path under the game's folder
+	std::string playVideo;
+	/// Play the pre-intro film at start-up, as on a first run
+	bool preIntro {false};
+	/// Leave out the logo pictures at start-up
+	bool skipLogos {false};
 	/// A testbed scenario to run as the game starts, by its id, and how to measure its crowd if it has one
 	std::optional<ScenarioRequest> scenario;
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> requestScreenshot;
@@ -129,6 +142,11 @@ class Game
 {
 public:
 	static constexpr auto k_TurnDuration = std::chrono::milliseconds(100);
+	/// About how many bytes of files the loading threads read at a time, and how much of what they make may reach the
+	/// graphics card each frame, so no frame waits long for it: sixteen buffers or textures keep the renderer's share of a
+	/// loading frame to about 6 ms on Vulkan, where some models' hundreds of small parts made it 17 ms
+	static constexpr size_t k_FrameLoadBudget = 256 << 10;
+	static constexpr graphics::UploadPacer::Allowance k_FrameUploads {.bytes = 128 << 10, .uploads = 16};
 	static constexpr float k_TurnDurationMultiplierSlow = 2.0f;
 	static constexpr float k_TurnDurationMultiplierNormal = 1.0f;
 	static constexpr float k_TurnDurationMultiplierFast = 0.5f;
@@ -166,8 +184,11 @@ public:
 	bool Initialize() noexcept;
 	bool Run() noexcept;
 
-	/// Loads a land's map script, keeping the challenge's scripts running, as the story's own change of land does
-	bool LoadMap(const std::filesystem::path& path) noexcept;
+	/// Loads a land's map script, keeping the challenge's scripts running, as the story's own change of land does. The
+	/// tips screen shows while it loads, as for a new game; a script's own map command shows the "please wait" banner
+	/// instead, after five seconds
+	bool LoadMap(const std::filesystem::path& path,
+	             loading::LoadingClock::Mode look = loading::LoadingClock::Mode::Tips) noexcept;
 	/// Loads a land as the land menu does: the challenge's scripts start again from scratch before the land loads
 	bool LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept;
 	void LoadLandscape(const std::filesystem::path& path);
@@ -213,6 +234,26 @@ public:
 private:
 	static Game* sInstance;
 
+	/// What the game shows as it starts, before it loads the rest: the logo pictures, the pre-intro film on a first run
+	/// and the tips screen fading in, which stays up while the game loads
+	void PlayStartupScreens();
+	/// The logo film's two pictures, each fading in and out, any key or mouse button hurrying them on
+	void PlayLogoScreens();
+	/// The pre-intro film in its own loop with the trailer music, until its last frame or a key
+	void PlayPreIntro();
+	/// Picks the tip of the day and makes its picture; the first time, fades the tips screen in over a second
+	void StartTipOfTheDay();
+	/// The tips screen, or the banner, shows while a land loads, drawn again at the loading's redraw points
+	void BeginLoadingScreen(loading::LoadingClock::Mode look);
+	/// A redraw point inside the loading: the tips screen is drawn and shown if it is due
+	void RenderLoadingFrame();
+	/// The loading is over: its tip goes before the first frame of the game
+	void EndLoadingScreen();
+	/// Draws one frame outside the game's loop over a black screen and shows it
+	void PresentStartupFrame(const std::function<void(glm::u16vec2 resolution)>& draw);
+	/// Whether the player has a profile: openblack keeps none yet, so it counts as having one
+	[[nodiscard]] static bool HasPlayerProfiles() noexcept { return true; }
+
 	/// Clears the last land's entities, weather and effects before a new one loads
 	void PrepareNewLand();
 	/// What every land starts with once its landscape is loaded: the sky's clock, a player and the land's physics
@@ -220,10 +261,26 @@ private:
 	/// Starts the game clock, the atmosphere's sounds and the music on the new land
 	void StartNewLand();
 
+	/// When the game was launched
+	const LoadTimer::Clock::time_point _launchTime {LoadTimer::Clock::now()};
+	/// Times the start of the game, from its launch to the first frame drawn on the first land
+	std::optional<LoadTimer> _startupTimer;
+	/// Times the loading of every resource registered at the start, on the loading threads or where first wanted
+	std::optional<LoadTimer> _prefetchTimer;
+
 	/// path to Lionhead Studios Ltd/Black & White folder
 	const std::filesystem::path _gamePath;
 
 	std::filesystem::path _startMap;
+	std::string _playVideo;
+	bool _preIntro {false};
+	bool _skipLogos {false};
+	/// The screens drawn as the game starts and while a land loads, none without a window
+	std::unique_ptr<gui::LoadingScreen> _loadingScreen;
+	/// What is drawn at the loading's redraw points, nothing while not loading
+	std::optional<loading::LoadingClock::Mode> _loadingLook;
+	/// The tips screen has faded in once: later loads show it at once
+	bool _tipFadedIn {false};
 	bool _startTestbed {false};
 	std::optional<ScenarioRequest> _scenarioRequest;
 	/// The port the debug inspector is to listen on, if it is to start
@@ -319,6 +376,8 @@ private:
 	/// What moves each species' body, from Data/CTR's .cbn files, by the species their base mesh names
 	static void LoadCreatureRigs();
 	/// Acts on what the player chose in the game's menu: continuing restores the pause it had before it opened
+	/// As a new game starts: whether to ask a returning player what to skip, and asking
+	void AskNewGameChoice();
 	void HandleInterfaceAction();
 	/// Once a frame outside the temple: where the hand's tooltip is drawn, and the status panel of the creature the hand
 	/// is held to, or over
