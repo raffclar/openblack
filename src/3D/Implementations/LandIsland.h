@@ -11,10 +11,14 @@
 
 #include <array>
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <span>
 #include <string>
 #include <vector>
+
+#include <glm/common.hpp>
+#include <glm/vec2.hpp>
 
 #include "3D/LandIslandInterface.h"
 
@@ -44,6 +48,8 @@ public:
 	[[nodiscard]] const LandBlock* GetBlock(const glm::u8vec2& coordinates) const;
 	[[nodiscard]] const lnd::LNDCell& GetCell(const glm::u16vec2& coordinates) const override;
 	[[nodiscard]] const lnd::LNDCell* FindCell(const glm::u16vec2& coordinates) const override;
+	void SetCellAltitude(glm::u16vec2 coordinates, uint8_t altitude) override;
+	void CommitAltitudeChanges() override;
 
 	// Debug
 	void DumpTextures() const override;
@@ -60,6 +66,26 @@ private:
 
 	/// One more than the index of each block of the map, [x * 32 + z], or 0 where there is no land
 	std::array<uint16_t, 1024> _blockIndexLookup {0};
+
+	/// What the blocks' textures are painted from, kept to paint them again when the land changes height
+	std::vector<uint16_t> _materialTexels;
+	std::vector<uint8_t> _bump;
+	/// A rectangle of cells or corners, empty until something is added to it
+	struct ChangedArea
+	{
+		glm::ivec2 minimum {std::numeric_limits<int>::max()};
+		glm::ivec2 maximum {std::numeric_limits<int>::min()};
+		void Add(glm::ivec2 point)
+		{
+			minimum = glm::min(minimum, point);
+			maximum = glm::max(maximum, point);
+		}
+		[[nodiscard]] bool Empty() const { return maximum.x < minimum.x; }
+	};
+	/// Of each block, the cells whose corners changed height since its drawing last caught up
+	std::vector<ChangedArea> _changedCells;
+	/// The map's corners that changed height since the height map last caught up
+	ChangedArea _changedCorners;
 
 	// Renderer, Dynamics
 public:

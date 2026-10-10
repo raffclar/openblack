@@ -40,6 +40,7 @@
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/DestructionGhost.h"
+#include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/FallingRoots.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
@@ -120,6 +121,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/VillagerPose.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
 
@@ -520,6 +522,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::DestructionGhost::model>("model")
 	    .Field<&components::DestructionGhost::millisecondsLeft>("millisecondsLeft")
 	    .Field<&components::DestructionGhost::shown>("shown");
+	Reflect<components::DetailMeshes>(context)
+	    .Field<&components::DetailMeshes::meshes>("meshes")
+	    .Field<&components::DetailMeshes::importance>("importance");
 	Reflect<components::DropsRoots> {context};
 	Reflect<components::FallingRoots>(context)
 	    .Field<&components::FallingRoots::seconds>("seconds")
@@ -1123,6 +1128,18 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::VillagerPose::clip>("clip")
 	    .Field<&components::VillagerPose::place>("place")
 	    .Field<&components::VillagerPose::bones>("bones");
+	Reflect<components::Vortex>(context)
+	    .Field<&components::Vortex::type>("type")
+	    .Field<&components::Vortex::state>("state")
+	    .Field<&components::Vortex::stateStartTurn>("stateStartTurn")
+	    .Field<&components::Vortex::centre>("centre")
+	    .Field<&components::Vortex::levelApplied>("levelApplied")
+	    .Field<&components::Vortex::groundHeights>("groundHeights")
+	    .Field<&components::Vortex::groundAverage>("groundAverage")
+	    .Field<&components::Vortex::beforeLandEffect>("beforeLandEffect")
+	    .Field<&components::Vortex::afterLandEffect>("afterLandEffect")
+	    .Field<&components::Vortex::objectMoverEffect>("objectMoverEffect")
+	    .Field<&components::Vortex::lightMapEffect>("lightMapEffect");
 	Reflect<components::WallHugObjectReference>(context)
 	    .Field<&components::WallHugObjectReference::stepsAway>("stepsAway")
 	    .Field<&components::WallHugObjectReference::entity>("entity")

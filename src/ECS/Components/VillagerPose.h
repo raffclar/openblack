@@ -21,7 +21,8 @@ namespace openblack::ecs::components
 {
 
 /// How a villager is drawn this frame: the clip its state plays, its place in it in milliseconds, and the bones posed
-/// from it. With no bones the villager is drawn in the pose its model rests in.
+/// from it. The bones are posed only while the villager is in view, and kept from the last time it was otherwise. With
+/// no bones the villager is drawn in the pose its model rests in.
 struct VillagerPose
 {
 	AnimId clip {AnimId::Invalid};
