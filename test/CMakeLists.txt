@@ -586,3 +586,15 @@ if (OPENBLACK_INSPECTOR)
     PROPERTIES ENVIRONMENT "OPENBLACK_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
   )
 endif ()
+# Reads the shaders' sources; ctest also passes the folder, as a compiler cache shared between worktrees can give the
+# test an object built in another worktree
+openblack_setup_and_add_test(
+  test_instance_data_inputs graphics/test_instance_data_inputs.cpp
+)
+target_compile_definitions(
+  test_instance_data_inputs PRIVATE OPENBLACK_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(
+  test_instance_data_inputs
+  PROPERTIES ENVIRONMENT "OPENBLACK_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
+)
