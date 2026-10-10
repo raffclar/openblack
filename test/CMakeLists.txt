@@ -1,18 +1,49 @@
 include(CTest)
 
+# The tests that use the game's library are built into one program, openblack_tests: linking a program for each of them
+# took most of a build. Each test source is still a ctest test of its own, named as before: ctest runs the program with
+# --openblack-test-source=<source>, which runs only that source's tests, in a process of its own.
+add_executable(openblack_tests test_runner_main.cpp)
+target_link_libraries(openblack_tests PRIVATE GTest::gtest openblack_lib)
+set_property(TARGET openblack_tests PROPERTY FOLDER "tests")
+# Its Debug link only references the objects' debug information, which is quicker (the game keeps full debug information)
+if (MSVC)
+  target_link_options(
+    openblack_tests PRIVATE $<$<CONFIG:Debug>:/DEBUG:FASTLINK>
+  )
+endif ()
+
+# The libraries each test links (target_link_libraries(test_x PRIVATE lib) after adding it) are linked into the program
+# once every test is added
+function (openblack_link_test_libraries)
+  get_property(targets GLOBAL PROPERTY OPENBLACK_TESTS_IN_PROGRAM)
+  foreach (target IN LISTS targets)
+    get_target_property(libraries ${target} LINK_LIBRARIES)
+    if (libraries)
+      target_link_libraries(openblack_tests PRIVATE ${libraries})
+    endif ()
+  endforeach ()
+endfunction ()
+cmake_language(DEFER CALL openblack_link_test_libraries)
+
 # Macro for setting up and adding a simple test.
-# TEST_NAME is the name of the test.
-# TEST_SOURCE is the source file of the test.
+# TEST_NAME is the name of the test: its ctest test and its target, an object library of the test program that
+# target_link_libraries, target_include_directories, target_compile_definitions and add_dependencies apply to.
+# TEST_SOURCE is the source file of the test, relative to this folder.
 macro (OPENBLACK_SETUP_AND_ADD_TEST TEST_NAME TEST_SOURCE)
-  add_executable(${TEST_NAME} ${TEST_SOURCE})
+  add_library(${TEST_NAME} OBJECT ${TEST_SOURCE})
   add_dependencies(${TEST_NAME} generate_mock_game_data)
-  target_link_libraries(${TEST_NAME} PRIVATE GTest::gtest_main openblack_lib)
+  target_link_libraries(${TEST_NAME} PRIVATE GTest::gtest openblack_lib)
   target_compile_definitions(
     ${TEST_NAME} PRIVATE TEST_BINARY_DIR="${CMAKE_CURRENT_BINARY_DIR}"
                          GLM_ENABLE_EXPERIMENTAL
   )
   set_property(TARGET ${TEST_NAME} PROPERTY FOLDER "tests")
-  add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
+  target_sources(openblack_tests PRIVATE $<TARGET_OBJECTS:${TEST_NAME}>)
+  set_property(GLOBAL APPEND PROPERTY OPENBLACK_TESTS_IN_PROGRAM ${TEST_NAME})
+  add_test(NAME ${TEST_NAME} COMMAND openblack_tests
+                                     --openblack-test-source=${TEST_SOURCE}
+  )
 endmacro ()
 
 # Macro for setting up a test that uses JSON scenario files for validation.
