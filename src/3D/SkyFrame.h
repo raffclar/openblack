@@ -11,11 +11,14 @@
 
 #include <cstdint>
 
-#include <optional>
-
 #include <glm/vec3.hpp>
 
 #include "ECS/Components/Sky.h"
+
+namespace openblack
+{
+class LandLightPalette;
+}
 
 /// The sky of a frame: the sun and moon placed for the hour, the moon's phase taken from the date, both dimmed by the
 /// overcast, and the dome's blend following the sky
@@ -31,13 +34,14 @@ struct Inputs
 	int64_t unixTime;
 	/// The machine's clock in milliseconds, which paces how often the date is read
 	uint32_t ticks;
-	/// The clouds over the camera, 0 to 1. None without the land's light palette: then the sun and moon go on showing
-	/// through the overcast they last did.
-	std::optional<float> overcast;
+	/// What the land's light of the frame is built from: the sky's type, the alignment it shows, and the clouds and
+	/// lightning over the camera
+	LandLightInputs landLight;
+	/// The land's light palette, which gives the moon its colour for the time of day and alignment. None before it is
+	/// loaded: then the moon is white, and the sun and moon go on showing through the overcast they last did.
+	const LandLightPalette* palette;
 	/// The fog setting: only with it does an overcast dim the sun and moon
 	bool fog;
-	/// The moon's colour for the time of day and alignment, 0xRRGGBB
-	uint32_t moonColour;
 };
 
 /// A 0xRRGGBB colour as 0 to 1
@@ -53,7 +57,8 @@ inline constexpr int32_t k_MoonDateReadInterval = 2000;
 /// The date the moon's phase is taken from, in seconds since 1970: the override, or the computer's as last read
 [[nodiscard]] int64_t MoonDate(const ecs::components::Moon& moon);
 
-/// Places the sun and moon for the frame and works out how strongly they show. Only a moon that shows reads the date
+/// Keeps the frame's land light on the dome, places the sun and moon for the frame, gives the moon its colour and works
+/// out how strongly they show. Only a moon that shows reads the date
 /// (at most once every two seconds) and takes up its phase.
 void Update(const Inputs& inputs, ecs::components::SkyDome& dome, ecs::components::Sun& sun, ecs::components::Moon& moon);
 

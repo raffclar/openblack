@@ -17,6 +17,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/DayNightClock.h"
+#include "3D/LandLightFrame.h"
 #include "3D/SkyDome.h"
 #include "Graphics/Moon.h"
 #include "Graphics/Sun.h"
@@ -38,6 +39,9 @@ struct SkyDome
 	/// The clouds over the camera this frame, 0 for a clear sky and 1 for a full one, which the sun and moon show
 	/// through
 	float overcast {0.0f};
+	/// What the land's light of this frame is built from: the sky's type, the alignment it shows and the weather at the
+	/// camera, worked out once a frame before it is drawn, for the moon's colour and the land's light table
+	LandLightInputs landLight {};
 };
 
 /// The clock of day and night the sky follows, on the dome's entity

@@ -9,8 +9,12 @@
 
 #include <cmath>
 
+#include <optional>
+#include <vector>
+
 #include <gtest/gtest.h>
 
+#include "3D/LandLightTable.h"
 #include "3D/SkyFrame.h"
 
 using namespace openblack;
@@ -22,9 +26,36 @@ namespace
 // 2026-01-01
 constexpr int64_t k_Date = 1767225600;
 
+/// A palette whose moon row is 0x336699 at every time of day and alignment, everything else black
+const LandLightPalette& FakePalette()
+{
+	static const LandLightPalette palette = []() {
+		constexpr size_t k_MoonRow = 5;
+		std::vector<uint8_t> bytes(LandLightPalette::k_Side * LandLightPalette::k_Side * 4, 0);
+		for (size_t column = 0; column < LandLightPalette::k_Side; ++column)
+		{
+			const auto at = (k_MoonRow * LandLightPalette::k_Side + column) * 4;
+			bytes[at] = 0x33;
+			bytes[at + 1] = 0x66;
+			bytes[at + 2] = 0x99;
+			bytes[at + 3] = 0xFF;
+		}
+		return LandLightPalette(bytes);
+	}();
+	return palette;
+}
+
+/// A frame with the land's light palette and the given overcast, or without the palette for none
 sky_frame::Inputs Frame(float hour, std::optional<float> overcast = 0.0f, bool fog = true)
 {
-	return {.scriptHour = hour, .unixTime = k_Date, .ticks = 100000, .overcast = overcast, .fog = fog, .moonColour = 0x336699};
+	return {
+	    .scriptHour = hour,
+	    .unixTime = k_Date,
+	    .ticks = 100000,
+	    .landLight = {.skyType = 0.5f, .alignment = -0.25f, .overcast = overcast.value_or(0.75f), .flash = 3},
+	    .palette = overcast.has_value() ? &FakePalette() : nullptr,
+	    .fog = fog,
+	};
 }
 
 /// A clear midnight at a date and a time of the machine's clock
@@ -94,6 +125,38 @@ TEST(SkyFrame, WithoutTheLightPaletteTheLastOvercastIsKept)
 	sky_frame::Update(Frame(12.0f, std::nullopt), dome, sun, moon);
 	EXPECT_EQ(dome.overcast, 0.5f);
 	EXPECT_EQ(sun.strength, sky_dome::ThroughOvercast(graphics::sun::Place(12.0f)->alpha, 0.5f, true));
+}
+
+TEST(SkyFrame, TheMoonsColourIsThePalettesForTheLandsLight)
+{
+	SkyDome dome {};
+	Sun sun;
+	Moon moon;
+	const auto frame = Frame(0.0f, 0.25f);
+	sky_frame::Update(frame, dome, sun, moon);
+	EXPECT_EQ(moon.colour, sky_frame::Colour(LandLightTable::GetMoonColour(FakePalette(), frame.landLight.skyType,
+	                                                                       frame.landLight.alignment)));
+
+	// White without the palette
+	sky_frame::Update(Frame(0.0f, std::nullopt), dome, sun, moon);
+	EXPECT_EQ(moon.colour, glm::vec3(1.0f));
+}
+
+TEST(SkyFrame, TheDomeKeepsTheFramesLandLightForTheLandsLightTable)
+{
+	SkyDome dome {};
+	Sun sun;
+	Moon moon;
+	sky_frame::Update(Frame(12.0f, 0.25f), dome, sun, moon);
+	EXPECT_EQ(dome.landLight.skyType, 0.5f);
+	EXPECT_EQ(dome.landLight.alignment, -0.25f);
+	EXPECT_EQ(dome.landLight.overcast, 0.25f);
+	EXPECT_EQ(dome.landLight.flash, 3);
+
+	// Without the palette too, though the sun and moon keep the overcast they last showed through
+	sky_frame::Update(Frame(12.0f, std::nullopt), dome, sun, moon);
+	EXPECT_EQ(dome.landLight.overcast, 0.75f);
+	EXPECT_EQ(dome.overcast, 0.25f);
 }
 
 TEST(SkyFrame, TheMoonTakesItsPhaseOnlyWhileItShows)
