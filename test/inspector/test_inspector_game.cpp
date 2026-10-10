@@ -9,16 +9,23 @@
 
 #include <algorithm>
 #include <array>
+#include <bitset>
 #include <map>
 #include <memory>
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <variant>
 #include <vector>
 
 #include <3D/SkyFrame.h>
+#include <Creature/CreatureDesires.h>
+#include <Creature/CreatureFight.h>
+#include <ECS/Components/CreatureFight.h>
+#include <ECS/Components/CreatureNeeds.h>
 #include <ECS/Components/CreatureObjectAction.h>
 #include <ECS/Components/Transform.h>
 #include <ECS/Components/Tree.h>
@@ -420,6 +427,225 @@ TEST(InspectorReflection, ShortTypeNames)
 {
 	EXPECT_EQ(reflection::ShortTypeName(entt::type_id<Transform>()), "Transform");
 	EXPECT_EQ(reflection::ShortTypeName(entt::type_id<Villager>()), "Villager");
+}
+
+namespace
+{
+enum class Colour : uint8_t
+{
+	Red,
+	Green,
+	Blue,
+	_Count,
+};
+constexpr std::array<std::string_view, 3> k_ColourNames {"Red", "Green", "Blue"};
+
+struct Leaf
+{
+	float value {0.0f};
+	std::vector<int32_t> marks;
+};
+
+struct Orchard
+{
+	std::array<Leaf, 3> byColour {};
+	std::array<float, 3> weights {};
+	std::optional<Leaf> spare;
+	std::vector<Leaf> leaves;
+	std::array<std::array<int32_t, 3>, 2> grid {};
+	std::bitset<3> flags;
+	std::u16string name {u"Ogré"};
+};
+
+/// A value whose data is private, reached through functions
+class Box
+{
+public:
+	[[nodiscard]] const std::vector<Leaf>& Items() const { return _items; }
+	void Replace(std::vector<Leaf> items) { _items = std::move(items); }
+
+private:
+	std::vector<Leaf> _items;
+};
+
+std::vector<Leaf> BoxItems(const Box& box)
+{
+	return box.Items();
+}
+
+void SetBoxItems(Box& box, const std::vector<Leaf>& items)
+{
+	box.Replace(items);
+}
+
+struct Crate
+{
+	Box box;
+};
+
+void RegisterOrchard(entt::meta_ctx& context)
+{
+	reflection::Reflect<Leaf>(context, reflection::ValueOnly {}).Field<&Leaf::value>("value").Field<&Leaf::marks>("marks");
+	reflection::Reflect<Orchard>(context)
+	    .Field<&Orchard::byColour>("byColour", {k_ColourNames})
+	    .Field<&Orchard::weights>("weights", {k_ColourNames})
+	    .Field<&Orchard::spare>("spare")
+	    .Field<&Orchard::leaves>("leaves")
+	    .Field<&Orchard::grid>("grid", {std::span<const std::string_view> {}, k_ColourNames})
+	    .Field<&Orchard::flags>("flags")
+	    .Field<&Orchard::name>("name");
+	reflection::Reflect<Box>(context, reflection::ValueOnly {}).Property<&BoxItems, &SetBoxItems>("items");
+	reflection::Reflect<Crate>(context).Field<&Crate::box>("box");
+}
+
+std::string Set(const entt::meta_ctx& context, Orchard& orchard, std::string_view path, const std::string& json)
+{
+	return reflection::SetField(context, entt::type_id<Orchard>(), &orchard, path, Json::parse(json));
+}
+
+std::optional<Json> Read(const entt::meta_ctx& context, const Orchard& orchard, std::string_view path)
+{
+	return reflection::ReadField(context, entt::type_id<Orchard>(), &orchard, path);
+}
+} // namespace
+
+// A list indexed by an enumeration is written by its names, and its elements are read and set by name or by number
+TEST(InspectorReflection, ListsIndexedByAnEnumerationGoByItsNames)
+{
+	entt::meta_ctx context;
+	RegisterOrchard(context);
+	Orchard orchard;
+	orchard.weights = {0.5f, 1.0f, 2.0f};
+
+	const auto json = reflection::ComponentToJson(context, entt::type_id<Orchard>(), &orchard);
+	EXPECT_EQ(json["weights"], Json::parse(R"({"Red": 0.5, "Green": 1.0, "Blue": 2.0})"));
+	EXPECT_EQ(json["byColour"]["Green"], Json::parse(R"({"value": 0.0, "marks": []})"));
+	// Lists within lists: by number, then by name
+	EXPECT_EQ(json["grid"][1], Json::parse(R"({"Red": 0, "Green": 0, "Blue": 0})"));
+
+	EXPECT_EQ(Set(context, orchard, "byColour.Green.value", "2.5"), "");
+	EXPECT_FLOAT_EQ(orchard.byColour[1].value, 2.5f);
+	EXPECT_EQ(Read(context, orchard, "byColour.Green.value"), Json(2.5));
+	EXPECT_EQ(Set(context, orchard, "weights.2", "4"), "");
+	EXPECT_FLOAT_EQ(orchard.weights[2], 4.0f);
+	EXPECT_EQ(Read(context, orchard, "weights.Blue"), Json(4.0));
+	EXPECT_EQ(Set(context, orchard, "grid.1.Blue", "9"), "");
+	EXPECT_EQ(orchard.grid[1][2], 9);
+	EXPECT_EQ(Read(context, orchard, "grid.1"), Json::parse(R"({"Red": 0, "Green": 0, "Blue": 9})"));
+
+	// No such element: the names it has are given
+	EXPECT_NE(Set(context, orchard, "weights.Purple", "1").find("Red, Green, Blue"), std::string::npos);
+	EXPECT_FALSE(Set(context, orchard, "weights.3", "1").empty());
+	EXPECT_FALSE(Set(context, orchard, "weights.Red", "\"heavy\"").empty());
+	EXPECT_FALSE(Read(context, orchard, "weights.Purple").has_value());
+	// A whole list from an array of its size
+	EXPECT_EQ(Set(context, orchard, "weights", "[1, 2, 3]"), "");
+	EXPECT_EQ(orchard.weights, (std::array<float, 3> {1.0f, 2.0f, 3.0f}));
+	EXPECT_FALSE(Set(context, orchard, "weights", "[1, 2]").empty());
+}
+
+// Sets of bits are arrays of truths, and text of 16-bit units is written as UTF-8
+TEST(InspectorReflection, BitsAndWideTextAreWrittenAsWhatTheyHold)
+{
+	entt::meta_ctx context;
+	RegisterOrchard(context);
+	Orchard orchard;
+	orchard.flags.set(1);
+	const auto json = reflection::ComponentToJson(context, entt::type_id<Orchard>(), &orchard);
+	EXPECT_EQ(json["flags"], Json::parse("[false, true, false]"));
+	EXPECT_EQ(json["name"].get<std::string>(), std::string("Ogr\xC3\xA9"));
+	EXPECT_EQ(Set(context, orchard, "flags", "[true, false, true]"), "");
+	EXPECT_TRUE(orchard.flags.test(0));
+	EXPECT_FALSE(orchard.flags.test(1));
+	EXPECT_FALSE(Set(context, orchard, "flags", "[true]").empty());
+}
+
+// An option is written as what it holds or null, made when a field inside it is set, and emptied by null; lists of
+// values with fields are set from arrays of objects, taking the array's size
+TEST(InspectorReflection, OptionsAndListsOfValuesAreSetThroughTheirElements)
+{
+	entt::meta_ctx context;
+	RegisterOrchard(context);
+	Orchard orchard;
+
+	EXPECT_EQ(reflection::ComponentToJson(context, entt::type_id<Orchard>(), &orchard)["spare"], Json(nullptr));
+	EXPECT_FALSE(Read(context, orchard, "spare.value").has_value());
+	EXPECT_EQ(Set(context, orchard, "spare.value", "3"), "");
+	ASSERT_TRUE(orchard.spare.has_value());
+	EXPECT_FLOAT_EQ(orchard.spare->value, 3.0f);
+	EXPECT_EQ(reflection::ComponentToJson(context, entt::type_id<Orchard>(), &orchard)["spare"],
+	          Json::parse(R"({"value": 3.0, "marks": []})"));
+	EXPECT_EQ(Set(context, orchard, "spare", "null"), "");
+	EXPECT_FALSE(orchard.spare.has_value());
+
+	EXPECT_EQ(Set(context, orchard, "leaves", R"([{"value": 1}, {"value": 2, "marks": [4, 5]}])"), "");
+	ASSERT_EQ(orchard.leaves.size(), 2u);
+	EXPECT_EQ(orchard.leaves[1].marks, (std::vector<int32_t> {4, 5}));
+	EXPECT_EQ(Read(context, orchard, "leaves.1.marks.0"), Json(4));
+	EXPECT_EQ(Set(context, orchard, "leaves.1.marks.0", "7"), "");
+	EXPECT_EQ(orchard.leaves[1].marks[0], 7);
+	EXPECT_FALSE(Set(context, orchard, "leaves.2.value", "1").empty());
+	EXPECT_EQ(Set(context, orchard, "leaves", "[]"), "");
+	EXPECT_TRUE(orchard.leaves.empty());
+}
+
+// A value whose data is private is read through its getter, and set by changing what it gives and setting it back
+TEST(InspectorReflection, PropertiesAreReadAndSetBackWhole)
+{
+	entt::meta_ctx context;
+	RegisterOrchard(context);
+	Crate crate;
+	const auto type = entt::type_id<Crate>();
+
+	EXPECT_EQ(reflection::SetField(context, type, &crate, "box.items", Json::parse(R"([{"value": 5}])")), "");
+	ASSERT_EQ(crate.box.Items().size(), 1u);
+	EXPECT_EQ(reflection::ReadField(context, type, &crate, "box.items.0.value"), Json(5.0));
+	EXPECT_EQ(reflection::SetField(context, type, &crate, "box.items.0.value", Json(6)), "");
+	EXPECT_FLOAT_EQ(crate.box.Items()[0].value, 6.0f);
+	EXPECT_EQ(reflection::ComponentToJson(context, type, &crate)["box"]["items"],
+	          Json::parse(R"([{"value": 6.0, "marks": []}])"));
+}
+
+// The game's components: a creature's body needs, a fight's fighter (its health, control and queue of moves) and the
+// desires by name are registered with the values they hold, never written as a type's name
+TEST(InspectorReflection, TheGamesValuesAreRegisteredWithTheirComponents)
+{
+	entt::meta_ctx context;
+	reflection::RegisterComponents(context);
+
+	CreatureNeeds needs;
+	const auto needsType = entt::type_id<CreatureNeeds>();
+	EXPECT_EQ(reflection::SetField(context, needsType, &needs, "needs.life", Json(0.25)), "");
+	EXPECT_FLOAT_EQ(needs.needs.life, 0.25f);
+	EXPECT_EQ(reflection::ComponentToJson(context, needsType, &needs)["needs"]["life"], Json(0.25));
+
+	CreatureFighting fighting;
+	const auto fightingType = entt::type_id<CreatureFighting>();
+	EXPECT_EQ(reflection::SetField(context, fightingType, &fighting, "fighter.health", Json(0.5)), "");
+	EXPECT_EQ(reflection::SetField(context, fightingType, &fighting, "fighter.control",
+	                               Json(static_cast<int>(creature_fight::Control::Player))),
+	          "");
+	EXPECT_EQ(fighting.fighter.control, creature_fight::Control::Player);
+	EXPECT_EQ(reflection::SetField(context, fightingType, &fighting, "fighter.queue.moves",
+	                               Json::parse(R"([{"move": {"kind": 3}, "chargeMs": 0}, {"move": {"kind": 1}}])")),
+	          "");
+	ASSERT_EQ(fighting.fighter.queue.Size(), 2u);
+	EXPECT_EQ(fighting.fighter.queue.Moves()[0].move.kind, creature_fight::Move::Kind::Block);
+	// The blow left without a charge waits for the button to be let go
+	EXPECT_TRUE(fighting.fighter.queue.HasWaiting());
+	const auto json = reflection::ComponentToJson(context, fightingType, &fighting);
+	EXPECT_EQ(json["fighter"]["health"], Json(0.5));
+	EXPECT_EQ(json["fighter"]["queue"]["waiting"], Json(true));
+	EXPECT_EQ(Dump(json).find('<'), std::string::npos) << Dump(json);
+	EXPECT_EQ(reflection::ReadField(context, fightingType, &fighting, "fighter.queue.moves.0.move.kind"), Json(3));
+	EXPECT_EQ(reflection::ReadField(context, fightingType, &fighting, "fighter.queue.moves.1.chargeMs"), Json(nullptr));
+
+	creature_desires::Desires desires;
+	const auto desiresType = entt::type_id<creature_desires::Desires>();
+	EXPECT_EQ(reflection::SetField(context, desiresType, &desires, "desires.Hunger.value", Json(0.75)), "");
+	EXPECT_FLOAT_EQ(desires[creature_desires::Desire::Hunger].value, 0.75f);
+	EXPECT_EQ(reflection::ReadField(context, desiresType, &desires, "desires.Hunger.value"), Json(0.75));
+	EXPECT_TRUE(reflection::ComponentToJson(context, desiresType, &desires)["desires"].contains("Hunger"));
 }
 
 TEST(InspectorRunControl, StepsFramesThenPauses)

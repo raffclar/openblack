@@ -356,6 +356,13 @@ void MoveQueue::Pop()
 	_awaitingRelease = _awaitingRelease && _count > 0;
 }
 
+void MoveQueue::Assign(std::span<const QueuedMove> moves)
+{
+	_count = std::min(moves.size(), k_Capacity);
+	std::ranges::copy(moves.first(_count), _moves.begin());
+	_awaitingRelease = _count > 0 && !_moves.at(_count - 1).chargeMs.has_value();
+}
+
 void MoveQueue::Clear()
 {
 	_count = 0;
