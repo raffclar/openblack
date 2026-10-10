@@ -57,6 +57,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageLight.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
@@ -133,6 +134,7 @@
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
+#include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "EditProviders.h"
@@ -239,6 +241,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"creatureFizzSystem", "creatures.systems"},
     LocatorCoverage {"tattooEditorSystem", "creatures.systems"},
     LocatorCoverage {"tornadoSystem", "magic.state"},
+    LocatorCoverage {"vortexSystem", "magic.vortices"},
     LocatorCoverage {"magicShieldSystem", "magic.state"},
     LocatorCoverage {"forestSystem", "living.forests"},
     LocatorCoverage {"fireflySystem", "living.fireflies"},
@@ -1070,6 +1073,31 @@ std::unique_ptr<ProviderInterface> MagicProvider()
 		        }
 		        return items;
 	        }));
+	provider->Add(Query("vortices",
+	                    "The vortices between the lands: their kind, state, openness and how far they levelled the ground", {},
+	                    ResultKind::List),
+	              Serve<Locator::vortexSystem>(
+	                  "the vortices", [](const ecs::systems::VortexSystemInterface& vortices, const QueryContext& /*c*/) {
+		                  Json items = Json::array();
+		                  if (auto* registry = Registry(); registry != nullptr)
+		                  {
+			                  registry->Each<const ecs::components::Vortex>(
+			                      [&items, &vortices](entt::entity entity, const ecs::components::Vortex& vortex) {
+				                      items.push_back({{"id", Id(entity)},
+				                                       {"type", static_cast<int>(vortex.type)},
+				                                       {"state", static_cast<int>(vortex.state)},
+				                                       {"state_start_turn", vortex.stateStartTurn},
+				                                       {"centre", Point(vortex.centre)},
+				                                       {"openness", vortices.GetOpenness(entity)},
+				                                       {"level_applied", vortex.levelApplied},
+				                                       {"before_land_effect", vortex.beforeLandEffect},
+				                                       {"after_land_effect", vortex.afterLandEffect},
+				                                       {"object_mover_effect", vortex.objectMoverEffect},
+				                                       {"light_map_effect", vortex.lightMapEffect}});
+			                      });
+		                  }
+		                  return items;
+	                  }));
 	provider->Add(Query("reactions", "The reactions going on, nearest first when searched about a point", {}, ResultKind::List),
 	              Serve<Locator::reactionSystem>(
 	                  "the reactions", [](const ecs::systems::ReactionSystemInterface& reactions, const QueryContext& /*c*/) {

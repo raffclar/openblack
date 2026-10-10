@@ -100,6 +100,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
@@ -174,6 +175,7 @@
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
+#include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -1158,6 +1160,11 @@ bool Game::GameLogicLoop() noexcept
 	{
 		Locator::handGrabSystem::value().ProcessTurn();
 	}
+	// At the end of the turn the vortices between the lands open, close and level the ground under them
+	if (Locator::vortexSystem::has_value())
+	{
+		Locator::vortexSystem::value().ProcessTurn();
+	}
 	// Once the whole turn is over, the local player whose temple is being destroyed has lost
 	if (Locator::templeDestructionSystem::has_value())
 	{
@@ -1478,6 +1485,11 @@ bool Game::Update() noexcept
 		// The flames, steam and smoke of what burns move on
 		auto fire = profiler.BeginScoped(Profiler::Stage::FireUpdate);
 		Locator::fireSystem::value().Update(std::chrono::duration<float>(gameTime).count());
+	}
+	// The vortices' swirls and effects step with the frame, and their marks on the ground follow their openness
+	if (Locator::vortexSystem::has_value())
+	{
+		Locator::vortexSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	}
 	// The reward chests from the sky fall and thump down, and their dust fades
 	if (Locator::rewardSystem::has_value())
@@ -2748,6 +2760,30 @@ bool Game::Initialize() noexcept
 		catch (std::runtime_error& err)
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+		}
+	}
+	// The marks the vortices leave on the ground, with their alphas
+	for (const auto& textures : ecs::components::Vortex::k_GroundTextures)
+	{
+		for (const auto& [id, name] :
+		     {std::pair {textures.hole, textures.holeFile}, std::pair {textures.ring, textures.ringFile}})
+		{
+			const auto colours = fileSystem.GetPath<Path::Textures>() / fmt::format("{}.raw", name);
+			const auto alpha = fileSystem.GetPath<Path::Textures>() / fmt::format("{}a.raw", name);
+			if (!fileSystem.Exists(colours) || !fileSystem.Exists(alpha))
+			{
+				continue;
+			}
+			constexpr uint16_t k_VortexTextureSide = 256;
+			try
+			{
+				textureManager.Load(id, resources::Texture2DLoader::FromDiskWithAlphaTag {}, colours, alpha,
+				                    k_VortexTextureSide);
+			}
+			catch (std::runtime_error& err)
+			{
+				SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+			}
 		}
 	}
 	fileSystem.Iterate(fileSystem.GetPath<Path::Textures>(), false, [&textureManager](const std::filesystem::path& f) {

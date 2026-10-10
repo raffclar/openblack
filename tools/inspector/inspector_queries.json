@@ -963,6 +963,12 @@
   "query": "magic.teleport"
  },
  {
+  "description": "The vortices between the lands: their kind, state, openness and how far they levelled the ground",
+  "kind": "list",
+  "parameters": [],
+  "query": "magic.vortices"
+ },
+ {
   "description": "The reactions going on, nearest first when searched about a point",
   "kind": "list",
   "parameters": [],

@@ -121,6 +121,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/VillagerPose.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
 
@@ -1127,6 +1128,18 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::VillagerPose::clip>("clip")
 	    .Field<&components::VillagerPose::place>("place")
 	    .Field<&components::VillagerPose::bones>("bones");
+	Reflect<components::Vortex>(context)
+	    .Field<&components::Vortex::type>("type")
+	    .Field<&components::Vortex::state>("state")
+	    .Field<&components::Vortex::stateStartTurn>("stateStartTurn")
+	    .Field<&components::Vortex::centre>("centre")
+	    .Field<&components::Vortex::levelApplied>("levelApplied")
+	    .Field<&components::Vortex::groundHeights>("groundHeights")
+	    .Field<&components::Vortex::groundAverage>("groundAverage")
+	    .Field<&components::Vortex::beforeLandEffect>("beforeLandEffect")
+	    .Field<&components::Vortex::afterLandEffect>("afterLandEffect")
+	    .Field<&components::Vortex::objectMoverEffect>("objectMoverEffect")
+	    .Field<&components::Vortex::lightMapEffect>("lightMapEffect");
 	Reflect<components::WallHugObjectReference>(context)
 	    .Field<&components::WallHugObjectReference::stepsAway>("stepsAway")
 	    .Field<&components::WallHugObjectReference::entity>("entity")
