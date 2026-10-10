@@ -47,8 +47,6 @@ constexpr entt::hashed_string k_Sheet = entt::hashed_string("raw/S_SpriteSheet3"
 constexpr entt::hashed_string k_SheetAlpha = entt::hashed_string("raw/S_SpriteSheet3a");
 /// The game's own bank of sounds
 constexpr int32_t k_InGameBank = 1;
-/// A help script may be started of any kind but the multiplayer ones
-constexpr auto k_AnySinglePlayerScript = static_cast<lhvm::ScriptType>(0x7f);
 } // namespace
 
 ecs::Registry& GameScriptHighlightWorld::Entities()
@@ -241,11 +239,9 @@ void GameScriptHighlightWorld::HelpEvent(uint32_t /*event*/)
 
 void GameScriptHighlightWorld::StartHelpScript(std::string_view name)
 {
-	// TODO(script-natives): the help system's dialogue control isn't in openblack yet: a help script holding the
-	// dialogue is stopped first, and none starts while any other script holds it
-	if (Locator::vm::has_value())
+	if (Locator::vm::has_value() && Locator::dialogueControlSystem::has_value())
 	{
-		Locator::vm::value().StartScript(std::string(name), k_AnySinglePlayerScript);
+		chlapi::CHLApi::StartHelpScript(name);
 	}
 }
 

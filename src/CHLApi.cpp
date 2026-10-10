@@ -175,6 +175,7 @@
 #include "ScriptHeaders/ScriptEnums.h"
 #include "ScriptHeaders/ScriptNameLists.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
+#include "ScriptHeaders/ScriptSwitchChanges.h"
 #include "Windowing/WindowingInterface.h"
 
 namespace openblack::chlapi
@@ -310,6 +311,30 @@ void DrawLeashes(bool drawn)
 	{
 		Locator::leashSystem::value().SetDrawn(drawn);
 	}
+}
+
+/// The scripts' switches a change of control sets
+void ApplySwitchChanges(const script::switches::SwitchChanges& changes)
+{
+	if (changes.leashesDrawn.has_value())
+	{
+		DrawLeashes(*changes.leashesDrawn);
+	}
+	if (changes.highlightsDrawn.has_value() && Locator::chlapi::has_value())
+	{
+		Locator::chlapi::value().SetHighlightDrawOn(*changes.highlightsDrawn);
+	}
+	if (changes.otherCreatureVoices.has_value() && Locator::creatureAudioSystem::has_value())
+	{
+		Locator::creatureAudioSystem::value().SetOtherVoicesEnabled(*changes.otherCreatureVoices);
+	}
+}
+
+/// Every help script stops, in the world, the temple or a multiplayer game
+void StopHelpScripts()
+{
+	Locator::vm::value().StopTasksOfType(lhvm::ScriptType::Help | lhvm::ScriptType::TempleHelp |
+	                                     lhvm::ScriptType::MultiplayerHelp);
 }
 
 /// The task with the dialogue gives it back: the cinema bars go, and the advisors are sent home
@@ -648,12 +673,33 @@ void CHLApi::TaskStopped(uint32_t task)
 	const auto released = Locator::scriptControlSystem::value().TaskStopped(Locator::camera::value(), task);
 	if (released.camera)
 	{
-		DrawLeashes(true);
+		ApplySwitchChanges(script::switches::CameraReleased());
 	}
 	if (released.gameSpeed)
 	{
 		Locator::time::value().SetSpeed(1.0f);
 	}
+}
+
+bool CHLApi::StartHelpScript(std::string_view name)
+{
+	// The kinds of script a single player game starts by name
+	constexpr auto k_SinglePlayerScripts = static_cast<lhvm::ScriptType>(0x7f);
+	auto& dialogue = Locator::dialogueControlSystem::value();
+	if (const auto owner = dialogue.GetOwner(); owner != 0)
+	{
+		// A help script holding the dialogue gives way; its tasks give it back as they stop
+		if (TaskType(owner) == lhvm::ScriptType::Help)
+		{
+			StopHelpScripts();
+		}
+		if (dialogue.GetOwner() != 0)
+		{
+			return false;
+		}
+	}
+	Locator::vm::value().StartScript(std::string(name), k_SinglePlayerScripts);
+	return true;
 }
 
 /// An object handed to a script: none is the script's object 0
@@ -1837,10 +1883,9 @@ void StartCameraControl() // 030 START_CAMERA_CONTROL
 	const bool taken = Locator::scriptControlSystem::value().StartCameraControl(
 	    Locator::camera::value(), {.task = task, .templeScript = templeScript, .insideTemple = insideTemple},
 	    [](float x, float z) { return Locator::terrainSystem::value().GetHeightAt(glm::vec2(x, z)); });
-	// Out in the world the leashes aren't drawn during the script's shots
-	if (taken && !insideTemple)
+	if (taken)
 	{
-		DrawLeashes(false);
+		ApplySwitchChanges(script::switches::CameraTaken(insideTemple));
 	}
 	Pushb(taken);
 }
@@ -1849,7 +1894,7 @@ void EndCameraControl() // 031 END_CAMERA_CONTROL
 {
 	if (Locator::scriptControlSystem::value().EndCameraControl(Locator::camera::value(), CurrentTask()))
 	{
-		DrawLeashes(true);
+		ApplySwitchChanges(script::switches::CameraReleased());
 	}
 }
 
@@ -3465,8 +3510,7 @@ void StartDialogue() // 120 START_DIALOGUE
 		// A story script takes the dialogue from a help script, whose tasks are stopped and so give it back
 		if (TaskType(owner) == lhvm::ScriptType::Help && TaskType(task) == lhvm::ScriptType::Script)
 		{
-			Locator::vm::value().StopTasksOfType(lhvm::ScriptType::Help | lhvm::ScriptType::TempleHelp |
-			                                     lhvm::ScriptType::MultiplayerHelp);
+			StopHelpScripts();
 			owner = dialogue.GetOwner();
 		}
 		if (owner != 0)
@@ -3490,6 +3534,7 @@ void EndDialogue() // 121 END_DIALOGUE
 	}
 	dialogue.SendSpiritsHome(TaskType(task) == lhvm::ScriptType::Help);
 	ReleaseDialogue(task);
+	ApplySwitchChanges(script::switches::DialogueEnded());
 }
 
 void IsDialogueReady() // 122 IS_DIALOGUE_READY

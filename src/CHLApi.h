@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <string_view>
 #include <vector>
 
 #include <LHVMTypes.h>
@@ -33,6 +34,9 @@ public:
 	[[nodiscard]] const std::vector<lhvm::NativeFunction>& GetFunctionsTable();
 	/// A script task has stopped: whatever it had control of goes back
 	static void TaskStopped(uint32_t task);
+	/// The help system starts a help script by name, unless a script holds the dialogue: a help script holding it is
+	/// stopped first. True when it started.
+	static bool StartHelpScript(std::string_view name);
 
 	/// The scripts call a native: the one an unwritten native reports itself as
 	void EnterNative(uint32_t native) { _currentNative = native; }
