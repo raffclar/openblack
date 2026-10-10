@@ -105,6 +105,8 @@ public:
 private:
 	void SetUpEnvironment(const Environment& environment);
 	void PlaceObjects(const Scenario& scenario, glm::vec2 middle);
+	/// The scenario's temples and its flocks of the land's birds
+	void PlaceBirds(const Scenario& scenario, glm::vec2 middle);
 	void PlaceCreatures(const Scenario& scenario, glm::vec2 middle);
 	/// Spawns the next batch of the crowd
 	void SpawnCrowd();
@@ -135,6 +137,7 @@ private:
 	std::string GivePlayerCommand(const Command& command);
 	/// The hand goes over a fireball in flight to take hold of it; what came of that
 	std::string HandTakeFireBall();
+	std::string HandTapObject(size_t index);
 	/// Once the hand is over the fireball, it taps it, or presses the action button with a seed in it
 	void FinishTakingFireBall();
 	/// Draws a gesture through the gesture recogniser, across the middle of the screen
@@ -231,6 +234,8 @@ private:
 	std::optional<PointerSweep> _sweep;
 	/// The hand's place on the screen is logged every frame for a while after the mouse's buttons change
 	float _handWatchSeconds {0.0f};
+	/// The testbed took the pointer, and gives it back when it is done; a pointer the debug inspector holds it leaves be
+	bool _ownsPointer {false};
 
 	/// The crowd laid out, the next of it to spawn, its homes and towns as they have spawned, and how long it took
 	std::vector<CrowdCreature> _crowdCreatures;

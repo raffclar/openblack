@@ -19,6 +19,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
+#include "Common/MachineClock.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -117,8 +118,7 @@ void ShortcutKeys::Update()
 	std::optional<zoom_to::CameraView> flight;
 	if (temple)
 	{
-		const auto now =
-		    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch());
+		const auto now = std::chrono::milliseconds(machine_clock::Ticks());
 		const auto templePosition = PlayerTemplePosition();
 		flight = _zoomTo.PressTemple(
 		    now, current, GroundUnder(land, current.focus),

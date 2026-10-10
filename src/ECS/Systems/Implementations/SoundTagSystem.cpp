@@ -16,6 +16,7 @@
 #include <glm/geometric.hpp>
 
 #include "Audio/AudioManagerInterface.h"
+#include "Camera/Camera.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -64,6 +65,22 @@ bool WithinReach(float reach, const glm::vec3& position, const glm::vec3& camera
 	const auto offset = position - camera;
 	return reach <= 0.0f || glm::dot(offset, offset) <= reach * reach;
 }
+
+/// Starts a point's sound once, if it is switched on and the camera is within the sound's reach
+void StartPointSound(SoundTag& tag, const glm::vec3& position, const glm::vec3& camera)
+{
+	const auto& sounds = Locator::resources::value().GetSounds();
+	if (!tag.active || !sounds.Contains(tag.sound) || !WithinReach(sounds.Handle(tag.sound)->maxDistance, position, camera))
+	{
+		return;
+	}
+	auto& audio = Locator::audio::value();
+	tag.emitter = audio.CreateEmitter(tag.sound, position, audio::PlayType::Once);
+	if (tag.emitter != entt::null)
+	{
+		audio.PlayEmitter(tag.emitter);
+	}
+}
 } // namespace
 
 void SoundTagSystem::ProcessTurn(const glm::vec3& camera)
@@ -99,14 +116,7 @@ void SoundTagSystem::ProcessTurn(const glm::vec3& camera)
 				    {
 					    return;
 				    }
-				    if (tag.active && WithinReach(reach, position, camera))
-				    {
-					    tag.emitter = audio.CreateEmitter(tag.sound, position, audio::PlayType::Once);
-					    if (tag.emitter != entt::null)
-					    {
-						    audio.PlayEmitter(tag.emitter);
-					    }
-				    }
+				    StartPointSound(tag, position, camera);
 				    tag.delayed = false;
 				    return;
 			    }
@@ -154,14 +164,19 @@ entt::entity SoundTagSystem::CreatePointSound(entt::id_type sound, const glm::ve
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
 	registry.Assign<Transform>(entity, position, glm::mat3(1.0f), glm::vec3(1.0f));
-	registry.Assign<SoundTag>(entity, SoundTag {
-	                                      .sound = sound,
-	                                      .offset = glm::vec3(0.0f),
-	                                      .active = true,
-	                                      .emitter = entt::null,
-	                                      .point = true,
-	                                      .delayed = delayed,
-	                                      .turns = 0,
-	                                  });
+	auto& tag = registry.Assign<SoundTag>(entity, SoundTag {
+	                                                  .sound = sound,
+	                                                  .offset = glm::vec3(0.0f),
+	                                                  .active = true,
+	                                                  .emitter = entt::null,
+	                                                  .point = true,
+	                                                  .delayed = delayed,
+	                                                  .turns = 0,
+	                                              });
+	// One not delayed sounds at once, where it is made
+	if (!delayed && Locator::audio::has_value() && Locator::resources::has_value() && Locator::camera::has_value())
+	{
+		StartPointSound(tag, position, Locator::camera::value().GetOrigin());
+	}
 	return entity;
 }

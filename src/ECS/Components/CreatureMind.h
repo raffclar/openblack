@@ -73,6 +73,9 @@ struct CreatureMindState
 	/// The agenda carries out the planner's plan; the step that ends it took down the desire already
 	bool planActive {false};
 	bool satisfiedByEffect {false};
+	/// A step of the plan saw to what its desire wanted, as putting out a fire does once it is out: the desire is less
+	/// when the plan ends, even for an action that doesn't lessen it by itself
+	bool desireSeenTo {false};
 	/// The agenda carrying out the plan, and the last agenda remembered for feedback, by the idle mind's count of them
 	uint32_t planSerial {0};
 	uint32_t agendaSeen {0};

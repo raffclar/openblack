@@ -10,8 +10,8 @@
 #include "CreatureCaveTrophies.h"
 
 #include <algorithm>
-#include <functional>
 #include <string_view>
+#include <utility>
 
 #include <fmt/format.h>
 
@@ -31,8 +31,12 @@ constexpr uint32_t k_FirstMedalPoint = 6;
 /// A row of belts fills by this much of the fight balance's side, five to a colour
 constexpr float k_BeltFill = 34.0f;
 constexpr int32_t k_LevelsPerColour = 5;
-/// The creature's magic scroll divides the miracles' percentages by this many
-constexpr float k_MiracleCount = 42.0f;
+/// The scroll multiplies the miracles' percentages added together by a 42nd, kept as a float
+constexpr float k_OverMiracles = 1.0f / 42.0f;
+/// A medal's level is a hundredth of its percentage, kept as a float, of its 25 levels: 20% falls just short of the
+/// fifth level, and 100% reaches the last
+constexpr float k_Hundredth = 0.01f;
+constexpr float k_FullPercent = 100.0f;
 } // namespace
 
 std::string IconName(uint32_t icon)
@@ -45,33 +49,58 @@ std::string IconName(uint32_t icon)
 	return fmt::format("I_MEDAL_{}0{}", k_Medals.at(medal / k_MedalsPerMetal), (medal % k_MedalsPerMetal) + 1);
 }
 
-MiracleLearning LearningOf(std::span<const int32_t> percents)
+float PercentLearnt(uint32_t timesSeen, float timesNeeded)
+{
+	const float share = static_cast<float>(timesSeen) / timesNeeded;
+	return (share > 1.0f ? 1.0f : share) * k_FullPercent;
+}
+
+MiracleLearning LearningOf(std::span<const MiracleLearnt> miracles)
 {
 	MiracleLearning learning;
-	std::vector<int32_t> sorted(percents.begin(), percents.end());
-	std::ranges::sort(sorted, std::greater<> {});
-	for (size_t i = 0; i < sorted.size(); ++i)
+	auto& best = learning.best;
+	auto& which = learning.bestMiracles;
+	for (const auto& [miracle, percent] : miracles)
 	{
-		learning.overall += static_cast<float>(sorted[i]);
-		if (i < learning.best.size())
+		learning.overall += percent;
+		// A miracle takes the last place only by beating it, and moves up past each it beats
+		if (best.back() < percent)
 		{
-			learning.best.at(i) = static_cast<float>(sorted[i]);
+			best.back() = percent;
+			which.back() = miracle;
+			for (size_t i = best.size() - 1; i > 0; --i)
+			{
+				if (best.at(i - 1) < best.at(i))
+				{
+					std::swap(best.at(i - 1), best.at(i));
+					std::swap(which.at(i - 1), which.at(i));
+				}
+			}
 		}
 	}
-	learning.overall /= k_MiracleCount;
+	learning.overall *= k_OverMiracles;
 	return learning;
+}
+
+int32_t MedalLevel(float percent)
+{
+	// Each step is rounded to a float, as the game's single-precision arithmetic rounds it
+	const float hundredths = percent * k_Hundredth;
+	const float levels = hundredths * static_cast<float>(k_MedalLevels);
+	return std::min(static_cast<int32_t>(levels), static_cast<int32_t>(k_MedalLevels));
 }
 
 std::vector<Trophy> Choose(float fightBalance, const MiracleLearning& learning)
 {
 	std::vector<Trophy> trophies;
-	// Two rows of seven belts: the first fills as the balance leans one way, the second the other
+	// Two rows of seven belts: the first fills as the balance leans to attack, the second to defence
 	const float side = (fightBalance + 1.0f) * 0.5f;
 	for (uint32_t i = 0; i < 2 * k_BeltColours; ++i)
 	{
 		const float fill = i < k_BeltColours ? side : 1.0f - side;
+		const float levels = fill * k_BeltFill;
 		const auto colour = i % k_BeltColours;
-		const int32_t level = static_cast<int32_t>(fill * k_BeltFill) - static_cast<int32_t>(colour) * k_LevelsPerColour;
+		const int32_t level = static_cast<int32_t>(levels) - (static_cast<int32_t>(colour) * k_LevelsPerColour);
 		if (level >= 1)
 		{
 			const auto icon =
@@ -82,10 +111,7 @@ std::vector<Trophy> Choose(float fightBalance, const MiracleLearning& learning)
 	// A medal for all the miracles, then one for each of the best four
 	for (uint32_t k = 0; k <= k_BestMiracles; ++k)
 	{
-		const float percent = k == 0 ? learning.overall : learning.best.at(k - 1);
-		// The game takes a hundredth of it in the FPU's extended precision, where 20% is a whole five levels
-		const auto level = std::min(static_cast<int32_t>(static_cast<double>(percent) * 0.01 * k_MedalLevels),
-		                            static_cast<int32_t>(k_MedalLevels));
+		const auto level = MedalLevel(k == 0 ? learning.overall : learning.best.at(k - 1));
 		if (level >= 1)
 		{
 			trophies.push_back({.point = k_FirstMedalPoint + (2 * k),
@@ -95,6 +121,20 @@ std::vector<Trophy> Choose(float fightBalance, const MiracleLearning& learning)
 		}
 	}
 	return trophies;
+}
+
+std::array<std::optional<SpellSeedType>, k_BestMiracles> SeedsToMake(const std::array<bool, k_BestMiracles>& shown,
+                                                                     const std::array<SpellSeedType, k_BestMiracles>& seeds)
+{
+	std::array<std::optional<SpellSeedType>, k_BestMiracles> made {};
+	for (size_t i = 0; i < k_BestMiracles; ++i)
+	{
+		if (!shown.at(i) && seeds.at(i) != SpellSeedType::None)
+		{
+			made.at(i) = seeds.at(i);
+		}
+	}
+	return made;
 }
 
 } // namespace openblack::CreatureCaveTrophies

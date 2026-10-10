@@ -59,6 +59,12 @@ constexpr float k_ArrowHoveredU = 0.4375f;
 constexpr float k_ArrowShadowU = 0.5625f;
 constexpr float k_ArrowSize = 0.125f;
 
+// The rotation button's disc of turning arrows: grey, orange when hovered
+constexpr float k_RotationU = 0.25f;
+constexpr float k_RotationHoveredU = 0.625f;
+constexpr float k_RotationV = 0.625f;
+constexpr float k_RotationSize = 0.375f;
+
 // The front end's pointer: the cells of the atlas, 8 to a row, it turns through, one every 32 milliseconds
 constexpr std::array<uint8_t, 8> k_PointerFrames = {9, 10, 11, 12, 41, 49, 57, 23};
 constexpr float k_PointerCell = 0.125f;
@@ -277,11 +283,32 @@ void DialogPainter::DrawArrow(glm::ivec2 position, int size, Arrow arrow, bool h
 	DrawBox({.min = position + lift, .max = position + size + lift}, uvMin, uvMax);
 }
 
+void DialogPainter::DrawArrowAlone(glm::ivec2 position, int size, Arrow arrow, bool hovered) const
+{
+	const auto extent = k_ArrowSize - k_Texel;
+	auto uvMin = glm::vec2(hovered ? k_ArrowHoveredU : k_ArrowU, 0.0f) + k_HalfTexel;
+	auto uvMax = uvMin + extent;
+	if (arrow == Arrow::Right)
+	{
+		std::swap(uvMin, uvMax);
+	}
+	DrawBox({.min = position, .max = position + size}, uvMin, uvMax);
+}
+
+void DialogPainter::DrawRotation(glm::ivec2 position, int size, bool hovered) const
+{
+	const auto uvMin = glm::vec2(hovered ? k_RotationHoveredU : k_RotationU, k_RotationV) + k_HalfTexel;
+	DrawBox({.min = position, .max = position + size}, uvMin, uvMin + (k_RotationSize - k_Texel));
+}
+
 void DialogPainter::DrawSquare(glm::ivec2 position, int size, bool checked, bool hovered, bool pressed) const
 {
 	// The big buttons' first two styles: the black squares of the atlas, or below them those ticked
 	const auto style = (checked ? 0x20 : 0) + (hovered ? 2 : 0) + 0xB;
 	const auto push = pressed ? 2 : 0;
+	// A soft shadow under the square first, four pixels down and right, two when pressed in
+	const auto drop = pressed ? 2 : 4;
+	DrawBox({.min = position + drop, .max = position + size + drop}, {k_FrameLeft, k_FrameTop}, {k_FrameRight, k_FrameBottom});
 	DrawBevelBox({.min = position + push - 1, .max = position + size + push - 3}, style, All, glm::vec4(1.0f), 8);
 }
 

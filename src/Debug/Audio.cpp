@@ -11,6 +11,7 @@
 
 #include <cmath>
 
+#include <array>
 #include <string>
 #include <string_view>
 
@@ -23,6 +24,8 @@
 #include "Camera/Camera.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "Game.h"
 #include "Locator.h"
@@ -165,6 +168,22 @@ void Audio::Music() noexcept
 		ImGui::Text("Played out: %s, %u turns ago", std::string(audio::GetMusicTypeName(gameMusic->GetBlockedType())).c_str(),
 		            gameMusic->GetBlockedTurns());
 		ImGui::Text("Alignment music %s", gameMusic->IsAlignmentMusicEnabled() ? "enabled" : "disabled");
+	}
+	// Moves the player's alignment to hear the land's music change version, where the player is the most influential
+	if (Locator::alignmentSystem::has_value())
+	{
+		auto& alignment = Locator::alignmentSystem::value();
+		float own = alignment.GetPlayerAlignment(PlayerNames::PLAYER_ONE);
+		if (ImGui::SliderFloat("Player one's alignment", &own, -1.0f, 1.0f, "%.2f"))
+		{
+			alignment.SetPlayerAlignment(PlayerNames::PLAYER_ONE, own);
+		}
+		ImGui::Text("Alignment at the camera %.2f (%s)", alignment.GetCameraAlignment(),
+		            std::array {"evil", "neutral", "good"}.at(
+		                static_cast<size_t>(audio::GameMusic::GetAlignmentIndex(alignment.GetCameraAlignment()))));
+	}
+	if (const auto* gameMusic = game != nullptr ? game->GetGameMusic() : nullptr)
+	{
 		for (const auto& [group, chunk] : gameMusic->GetResumeChunks())
 		{
 			ImGui::Text("Group %d resumes from chunk %u", group, chunk);

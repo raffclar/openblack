@@ -9,7 +9,10 @@
 
 #pragma once
 
+#include <filesystem>
 #include <queue>
+#include <span>
+#include <string>
 
 #include <PackFile.h>
 
@@ -45,6 +48,11 @@ namespace openblack::psys
 struct ParticleFile;
 struct StackedBitmap;
 } // namespace openblack::psys
+
+namespace openblack::bink
+{
+class BinkFile;
+} // namespace openblack::bink
 
 namespace openblack::gestures
 {
@@ -111,6 +119,11 @@ struct L3DLoader final: BaseLoader<graphics::L3DMesh>
 struct L3DFileLoader final: BaseLoader<l3d::L3DFile>
 {
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
+	/// A copy of a file made in the game, such as a blended mesh
+	struct FromFileTag
+	{
+	};
+	[[nodiscard]] result_type operator()(FromFileTag, const l3d::L3DFile& file) const;
 };
 
 /// A 16 bit image, .16B
@@ -156,7 +169,14 @@ struct Texture2DLoader final: BaseLoader<graphics::Texture2D>
 	{
 	};
 
+	/// A texture of layers, each a square 16-bit bitmap file of 5 bits a colour
+	struct FromBitmapLayersTag
+	{
+	};
+
 	[[nodiscard]] result_type operator()(FromPackTag, const std::string& name, const pack::G3DTexture& g3dTexture) const;
+	[[nodiscard]] result_type operator()(FromBitmapLayersTag, const std::string& name,
+	                                     std::span<const std::filesystem::path> layerPaths, uint16_t side) const;
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& rawTexturePath) const;
 	[[nodiscard]] result_type operator()(FromDiskWithAlphaTag, const std::filesystem::path& rawTexturePath,
 	                                     const std::filesystem::path& alphaPath, uint16_t side) const;
@@ -193,10 +213,8 @@ struct CreatureSkinArtLoader final: BaseLoader<creature_skin::Art>
 {
 	struct Paths
 	{
-		/// The players' symbols as the game last wrote them, and the symbols it ships with, for the cells no player's
-		/// symbol has been written into
+		/// The symbols the game ships with, which the tattoos are cut from whatever symbol the players have chosen
 		std::filesystem::path symbols;
-		std::filesystem::path defaultSymbols;
 		std::filesystem::path freshDamage;
 		std::filesystem::path freshDamageAlpha;
 		std::filesystem::path oldDamage;
@@ -210,6 +228,14 @@ struct SoundLoader final: BaseLoader<audio::Sound>
 {
 	[[nodiscard]] result_type operator()(FromBufferTag, const pack::AudioBankSampleHeader& header,
 	                                     const std::vector<std::vector<uint8_t>>& buffer) const;
+
+	/// A sample of a sound bank read from the bank's file, from where the bank's wave data starts plus the sample's
+	/// offset; decoded too when `decode` is set, so its first play needn't
+	struct FromBankFileTag
+	{
+	};
+	[[nodiscard]] result_type operator()(FromBankFileTag, const std::filesystem::path& bank, uint64_t waveData,
+	                                     const pack::AudioBankSampleHeader& header, bool decode) const;
 };
 
 struct LightLoader final: BaseLoader<Lights>
@@ -234,6 +260,12 @@ struct ParticleBitmapLoader final: BaseLoader<psys::StackedBitmap>
 		int framesInUse;
 	};
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path, const Layout& layout) const;
+};
+
+/// A Bink video, .bik: its container, whose frames are decoded as it plays. None when it can't be read
+struct VideoLoader final: BaseLoader<bink::BinkFile>
+{
+	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
 };
 
 /// The templates the hand's drawn gestures are matched against

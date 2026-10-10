@@ -1,0 +1,22 @@
+diff --git a/bgfx/src/renderer_vk.cpp b/bgfx/src/renderer_vk.cpp
+index 81dd90d..531d8ab 100644
+--- a/bgfx/src/renderer_vk.cpp
++++ b/bgfx/src/renderer_vk.cpp
+@@ -1130,7 +1130,7 @@ VK_IMPORT_DEVICE
+ 			);
+ 	}
+ 
+-#define MAX_DESCRIPTOR_SETS (1024 * BGFX_CONFIG_MAX_FRAME_LATENCY)
++#define MAX_DESCRIPTOR_SETS (8192 * BGFX_CONFIG_MAX_FRAME_LATENCY)
+ 
+ 	struct RendererContextVK : public RendererContextI
+ 	{
+@@ -2008,7 +2008,7 @@ VK_IMPORT_DEVICE
+ 			}
+ 
+ 			{
+-				const uint32_t size = 128;
++				const uint32_t size = 512;
+ 				const uint32_t count = BGFX_CONFIG_MAX_DRAW_CALLS;
+ 
+ 				for (uint32_t ii = 0; ii < m_numFramesInFlight; ++ii)
