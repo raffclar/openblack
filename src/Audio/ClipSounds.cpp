@@ -76,14 +76,14 @@ clip_sounds::SoundRoute clip_sounds::RouteOf(const SoundSource& source)
 	{
 		return {.outcome = Outcome::Skip};
 	}
-	// Sounds played the ordinary way are not heard inside the temple
-	// TODO(audio): they are also kept quiet while the help system or the widescreen control holds the view, in some
-	// interface modes and, under a script's flag, outside two of the banks; and a villager's first-kind sound outside a
-	// script silences the rest of its clip while the help system holds the view. openblack has none of those yet
+	// Sounds played the ordinary way are not heard inside the temple, and otherwise only as their samples allow
+	// TODO(audio): a villager's first-kind sound outside a script silences the rest of its clip while a script holds the
+	// widescreen bars
 	if (source.mode == 0 && source.insideTemple)
 	{
 		return {.outcome = Outcome::Skip};
 	}
+	route.bySampleRules = source.mode == 0;
 	return route;
 }
 

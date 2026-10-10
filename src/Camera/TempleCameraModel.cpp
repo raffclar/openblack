@@ -35,7 +35,6 @@
 
 using namespace openblack;
 using input::BindableActionMap;
-using input::UnbindableActionMap;
 
 namespace
 {
@@ -521,7 +520,8 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> TempleCameraModel::Upd
 	const auto& actions = Locator::gameActionSystem::value();
 
 	Input input {};
-	if (actions.Get(UnbindableActionMap::DOUBLE_CLICK))
+	// A double click comes to the temple's camera once, as its second press
+	if (Locator::gameActionSystem::value().TakeDoubleClick())
 	{
 		input.button = 2;
 	}

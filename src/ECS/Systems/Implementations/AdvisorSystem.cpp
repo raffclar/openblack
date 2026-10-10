@@ -150,7 +150,7 @@ Queries AdvisorSystem::MakeQueries()
 	queries.localFloatRand = [](float x) { return Locator::gameRandom::value().LocalFloatRand(x); };
 	queries.random = [](float a, float b) { return Locator::gameRandom::value().CrtRandom(a, b); };
 
-	// The advisors talk with the voices the scripts' dialogue gives them; their lips are not moved by the sound
+	// The advisors talk with the voices the scripts' dialogue gives them, their mouths moved by the sound
 	queries.isTalking = [](int dude) {
 		return Locator::helpTextSystem::has_value() && Locator::helpTextSystem::value().GetVoices().IsTalking(dude);
 	};
@@ -159,6 +159,19 @@ Queries AdvisorSystem::MakeQueries()
 	};
 	queries.sayActive = [](int dude) {
 		return Locator::helpTextSystem::has_value() && Locator::helpTextSystem::value().GetVoices().IsActive(dude);
+	};
+	queries.updateSentence = [](int dude) {
+		if (Locator::helpTextSystem::has_value())
+		{
+			Locator::helpTextSystem::value().GetVoices().UpdateSaySentence(dude);
+		}
+	};
+	queries.lipSync = [](int dude, float dt) -> std::optional<LipSyncFrame> {
+		if (!Locator::helpTextSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		return Locator::helpTextSystem::value().GetVoices().ApplyLipSync(dude, dt);
 	};
 
 	queries.pointFromScreen = [this](glm::vec2 pixel, float depth) { return PointFromScreen(_view, pixel, depth); };

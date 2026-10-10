@@ -49,6 +49,8 @@ public:
 	void Draw() noexcept override;
 
 private:
+	/// Whether the debug windows are kept off the mouse, as while the input is locked or the pointer is driven
+	[[nodiscard]] static bool MouseKeptOff() noexcept;
 	bool CreateFontsTextureBgfx() noexcept;
 	bool CreateDeviceObjectsBgfx() noexcept;
 	void NewFrame() noexcept;

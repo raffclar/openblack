@@ -222,7 +222,12 @@ bool Gui::StealsFocus() const noexcept
 
 bool Gui::IsMouseOverWindow() const noexcept
 {
-	return ImGui::GetCurrentContext() != nullptr && ImGui::GetIO().WantCaptureMouse;
+	return ImGui::GetCurrentContext() != nullptr && ImGui::GetIO().WantCaptureMouse && !MouseKeptOff();
+}
+
+bool Gui::MouseKeptOff() noexcept
+{
+	return (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_NoMouse) != 0;
 }
 
 void Gui::SetScale(float scale) noexcept
@@ -241,10 +246,21 @@ bool Gui::ProcessEvents(const SDL_Event& event) noexcept
 		takenByWindow = window->WindowProcessEvent(event) || takenByWindow;
 	}
 
-	ImGui_ImplSDL2_ProcessEvent(&event);
+	// While the debug windows are kept off the mouse (the input is locked, or the inspector or a scenario moves the
+	// pointer), they take none of its events. A press reaching them would still make a window take the button as its
+	// own when their idea of the pointer is over one (with the game's window focused, that's the player's own mouse,
+	// wherever the driven pointer is), and they would then keep its letting go from the game. Lettings go still reach
+	// them, so that none of their buttons stays held.
+	const bool mouseKeptOff = MouseKeptOff();
+	const bool mouseEvent = event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEBUTTONDOWN ||
+	                        event.type == SDL_MOUSEBUTTONUP || event.type == SDL_MOUSEWHEEL;
+	if (!mouseKeptOff || (event.type != SDL_MOUSEBUTTONDOWN && event.type != SDL_MOUSEWHEEL))
+	{
+		ImGui_ImplSDL2_ProcessEvent(&event);
+	}
 
 	const auto& io = ImGui::GetIO();
-	_stealsFocus = io.WantCaptureMouse || takenByWindow;
+	_stealsFocus = (io.WantCaptureMouse && !(mouseKeptOff && mouseEvent)) || takenByWindow;
 	switch (event.type)
 	{
 	default:
