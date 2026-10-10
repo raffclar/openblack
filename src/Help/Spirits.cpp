@@ -1600,9 +1600,9 @@ void AdvisorSpirit::UpdateAnimStack(float dt, bool sfx)
 {
 	_gimme = false;
 	const Queries& q = _control.GetQueries();
-	// IsTalking, the sentence check, the times and the lip sync key are audio::advisor's (LipSyncFrame); so is the
-	// stop of a sentence whose position is still < 0 past 0.5 s
-	if (const std::optional<LipSyncFrame> lip = q.lipSync ? q.lipSync(_index) : std::nullopt; lip)
+	// Whether a line is being said, its time and the mouth's weights come from the voice, which also stops a line
+	// that has not started playing half a second after it should have
+	if (const std::optional<LipSyncFrame> lip = q.lipSync ? q.lipSync(_index, dt) : std::nullopt; lip)
 	{
 		if (lip->playing)
 		{
@@ -1817,8 +1817,12 @@ void AdvisorSpirit::UpdateMotion(float dt, bool focus, float zMin, bool sfx)
 		}
 	}
 
-	// 3. how close the spirit comes
+	// 3. its line starts if its delay is over, then how close the spirit comes
 	const Queries& q = _control.GetQueries();
+	if (q.updateSentence)
+	{
+		q.updateSentence(_index);
+	}
 	const bool talked = q.talkedRecently ? q.talkedRecently(_index) : (q.isTalking && q.isTalking(_index));
 	// four rules in order, the last that applies wins
 	if (talked)
@@ -2452,9 +2456,9 @@ std::array<TrailVertex, 2 * Trail::k_Points> AdvisorSpirit::TrailStrip() const
 	return strip;
 }
 
-void AdvisorSpirit::FlushTags()
+void AdvisorSpirit::FlushTags(float before)
 {
-	for (; _nextTag < _tags.size(); ++_nextTag)
+	for (; _nextTag < _tags.size() && _tags[_nextTag].time < before; ++_nextTag)
 	{
 		FireTag(_tags[_nextTag], false, true);
 	}
@@ -2979,9 +2983,9 @@ void AdvisorSpiritController::ProcessTurn()
 	}
 }
 
-void AdvisorSpiritController::StopSentence(int dude)
+void AdvisorSpiritController::StopSentence(int dude, float before)
 {
-	_dudes[dude]->FlushTags();
+	_dudes[dude]->FlushTags(before);
 }
 
 void AdvisorSpiritController::SetSentenceTags(int dude, std::vector<AudioTag> tags)
@@ -3071,7 +3075,11 @@ void AdvisorSpiritController::Process(float dt, float focusBias)
 			d.UpdateMotion(dt, focus == i, 0.0f, true);
 			d.UpdateHead(dt);
 		}
-		// else only the sentence update (audio::advisor)
+		else if (_queries.updateSentence)
+		{
+			// At home hovering, only its line is looked at
+			_queries.updateSentence(i);
+		}
 	}
 	for (int i = 0; i < k_Dudes; ++i)
 	{
