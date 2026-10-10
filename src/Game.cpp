@@ -1352,6 +1352,11 @@ bool Game::Update() noexcept
 	{
 		camera.Update(deltaTime);
 	}
+	// A picture the inspector takes this frame has the camera where it asked, whatever moved it this frame
+	if (Locator::inspector::has_value())
+	{
+		Locator::inspector::value().PlaceCamera();
+	}
 	// Outside a camera with a lens of its own, the near plane follows the camera's height over the land, but for close
 	// shots: a script's, and a miracle's camera path
 	if (!camera.GetModel().GetLens().has_value() && Locator::terrainSystem::has_value())
@@ -2813,7 +2818,11 @@ bool Game::Run() noexcept
 			{
 				Locator::rendererInterface::value().RequestScreenshot(_requestScreenshot->second);
 			}
-			Locator::debugGui::value().Draw();
+			// A picture without the debug windows: the frame's windows are made as ever but not drawn
+			if (!screenshotThisFrame || !_screenshotHidesDebugGui)
+			{
+				Locator::debugGui::value().Draw();
+			}
 		}
 
 		{
@@ -3169,9 +3178,10 @@ void Game::SetTime(float time) noexcept
 	Locator::skySystem::value().SetTime(time);
 }
 
-void Game::RequestScreenshot(const std::filesystem::path& path) noexcept
+void Game::RequestScreenshot(const std::filesystem::path& path, bool hideDebugGui) noexcept
 {
 	_requestScreenshot = std::make_pair(_frameCount, path);
+	_screenshotHidesDebugGui = hideDebugGui;
 }
 
 void Game::LoadHandAnimation()

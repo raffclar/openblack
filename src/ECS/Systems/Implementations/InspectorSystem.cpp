@@ -254,6 +254,11 @@ void InspectorSystem::Service()
 	_screenshots->Frame(_game->FrameNumber());
 }
 
+void InspectorSystem::PlaceCamera()
+{
+	_screenshots->PlaceCamera();
+}
+
 uint16_t InspectorSystem::GetPort() const
 {
 	return _server->Port();

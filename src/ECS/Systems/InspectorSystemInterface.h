@@ -35,6 +35,8 @@ public:
 	virtual void BeginLoading(std::string_view what) = 0;
 	/// The load has finished: requests are answered by the game's frames again
 	virtual void EndLoading() = 0;
+	/// Once a frame, after the player's camera has moved: a picture taken this frame gets the camera it asked for
+	virtual void PlaceCamera() = 0;
 };
 
 } // namespace openblack::ecs::systems

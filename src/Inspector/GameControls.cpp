@@ -27,6 +27,8 @@
 #include "Camera/FightCameraModel.h"
 #include "Camera/TempleCameraModel.h"
 #include "Debug/DebugGuiInterface.h"
+#include "ECS/Components/Transform.h"
+#include "ECS/Registry.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "Editor/EditorEntities.h"
@@ -229,6 +231,22 @@ std::string GameCamera::Fly(const CameraPose& pose)
 float GameCamera::GroundHeight(glm::vec2 point) const
 {
 	return editor::LandHeight(point);
+}
+
+std::optional<glm::vec3> GameCamera::EntityPosition(uint32_t id) const
+{
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = static_cast<entt::entity>(id);
+	if (!registry.Valid(entity))
+	{
+		return std::nullopt;
+	}
+	const auto* transform = registry.TryGet<ecs::components::Transform>(entity);
+	return transform != nullptr ? std::optional(transform->position) : std::nullopt;
 }
 
 // The windows
@@ -593,7 +611,7 @@ std::string GameLevels::Current() const
 
 // Pictures of the screen
 
-std::string GameScreenshots::Capture(const std::filesystem::path& path)
+std::string GameScreenshots::Capture(const std::filesystem::path& path, bool hideDebugGui)
 {
 	auto* game = Game::Instance();
 	if (game == nullptr)
@@ -609,7 +627,7 @@ std::string GameScreenshots::Capture(const std::filesystem::path& path)
 			return "can't make the folder " + path.parent_path().generic_string() + ": " + error.message();
 		}
 	}
-	game->RequestScreenshot(path);
+	game->RequestScreenshot(path, hideDebugGui);
 	return {};
 }
 

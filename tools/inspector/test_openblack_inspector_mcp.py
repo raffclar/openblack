@@ -43,6 +43,8 @@ class FakeGame:
         self.claims = claims
         self.worktree = worktree
         self.requests = []
+        # Answers of particular queries: query -> function(request) -> result, or an error string
+        self.handlers = {}
         self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.listener.bind(("127.0.0.1", 0))
         self.listener.listen(8)
@@ -91,6 +93,10 @@ class FakeGame:
                 self.loading -= 1
                 answer = {"id": request.get("id"), "ok": False, "error": "the game is loading",
                           "loading": "Land1.txt"}
+            elif request["query"] in self.handlers:
+                result = self.handlers[request["query"]](request)
+                answer = {"id": request.get("id"), "ok": not isinstance(result, str)}
+                answer["error" if isinstance(result, str) else "result"] = result
             else:
                 answer = {"id": request.get("id"), "ok": True, "result": {"who": self.name,
                                                                            "query": request["query"]}}
@@ -450,6 +456,85 @@ class WaitingTest(SessionBase):
         self.stop(self.second)
         answer = self.session.call("game_step", {"frames": 2})
         self.assertTrue(answer["ok"])
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\0" * 64 + b"\0\0\0\0IEND\xaeB`\x82"
+
+
+class ScreenshotTest(SessionBase):
+    """A picture is answered once its file is whole; a game too old for an option is told so"""
+
+    def setUp(self):
+        super().setUp()
+        self.stop(self.second)
+        self.path = os.path.join(self.folder, "shot.png")
+
+    def describe_screenshot(self, parameters):
+        def describe(request):
+            if request.get("params", {}).get("query") == "screenshot.take":
+                return {"query": "screenshot.take", "parameters": [{"name": name} for name in parameters]}
+            return "no query"
+        self.first.handlers["describe"] = describe
+
+    def write_slowly(self, request):
+        # Written in pieces a little after the answer, as the game draws the frame
+        def write():
+            time.sleep(0.2)
+            with open(self.path, "wb") as file:
+                file.write(PNG[:20])
+                file.flush()
+                time.sleep(0.3)
+                file.write(PNG[20:])
+        threading.Thread(target=write, daemon=True).start()
+        return {"path": self.path, "frame": 5}
+
+    def test_answered_once_the_file_is_whole(self):
+        self.first.handlers["screenshot.take"] = self.write_slowly
+        answer = self.session.call("screenshot", {})
+        self.assertTrue(answer["ok"], answer)
+        self.assertTrue(answer["result"]["written"])
+        with open(self.path, "rb") as file:
+            self.assertEqual(file.read(), PNG)
+
+    def test_an_old_file_at_the_path_is_not_taken_for_the_new_one(self):
+        with open(self.path, "wb") as file:
+            file.write(PNG)
+        old = time.time() - 60
+        os.utime(self.path, (old, old))
+        self.first.handlers["screenshot.take"] = lambda request: {"path": self.path, "frame": 5}
+        session = self.make_session()
+        session.timeout = 0.2
+        try:
+            answer = session.call("screenshot", {})
+        finally:
+            session.close()
+        self.assertFalse(answer["result"]["written"])
+        self.assertIn("isn't written yet", answer["result"]["note"])
+
+    def test_options_an_older_game_lacks_are_refused_clearly(self):
+        self.describe_screenshot(["path", "in_frames", "at_frame", "camera"])
+        self.first.handlers["screenshot.take"] = self.write_slowly
+        answer = self.session.call("screenshot", {"frame": 12, "hide_gui": True})
+        self.assertFalse(answer["ok"])
+        self.assertIn("older build", answer["error"])
+        self.assertIn("frame, hide_gui", answer["error"])
+        self.assertNotIn("screenshot.take", [request["query"] for request in self.first.asked()])
+        # Without them it is taken
+        self.assertTrue(self.session.call("screenshot", {})["ok"])
+
+    def test_options_a_newer_game_has_are_sent(self):
+        self.describe_screenshot(["path", "frame", "hide_gui"])
+        self.first.handlers["screenshot.take"] = self.write_slowly
+        answer = self.session.call("screenshot", {"frame": {"id": 12, "distance": 30}, "hide_gui": True})
+        self.assertTrue(answer["ok"], answer)
+        sent = [request for request in self.first.asked() if request["query"] == "screenshot.take"][0]
+        self.assertEqual(sent["params"], {"frame": {"id": 12, "distance": 30}, "hide_gui": True})
+
+    def test_a_query_an_older_game_lacks_says_why(self):
+        self.first.handlers["camera.frame"] = lambda request: "no query camera.frame; ask describe"
+        answer = self.session.call("camera_frame", {"id": 3})
+        self.assertFalse(answer["ok"])
+        self.assertIn("older build", answer["error"])
 
 
 if __name__ == "__main__":

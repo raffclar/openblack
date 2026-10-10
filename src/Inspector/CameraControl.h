@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <memory>
 #include <optional>
 #include <string>
@@ -66,7 +68,24 @@ public:
 	/// Flies the camera there as the bookmarks and the shortcuts fly it; why not, if it can't
 	virtual std::string Fly(const CameraPose& pose) = 0;
 	[[nodiscard]] virtual float GroundHeight(glm::vec2 point) const = 0;
+	/// Where an entity is now, for the camera to frame it; none if there is no such entity or it has no place
+	[[nodiscard]] virtual std::optional<glm::vec3> EntityPosition(uint32_t id) const = 0;
 };
+
+/// An entity for the camera to look at, and from where: the angles and distance not given are the camera's own
+struct FrameRequest
+{
+	uint32_t id {0};
+	std::optional<float> yaw;
+	std::optional<float> pitch;
+	std::optional<float> distance;
+};
+
+/// A frame request from an entity's id, or from {id, yaw?, pitch?, distance?}; none, with why not, if it doesn't make sense
+[[nodiscard]] std::optional<FrameRequest> ParseFrameRequest(const Json& value, std::string& error);
+/// Where the camera goes to look at a point, the entity's place, as the request asks and otherwise from the angles and
+/// distance it has now
+[[nodiscard]] CameraPose FramePose(glm::vec3 target, const FrameRequest& request, const CameraState& now);
 
 /// Where a request ({position?, focus?, yaw?, pitch?, distance?}) puts the camera, from where it is now: what isn't given
 /// is kept. None, with why not, when the request doesn't make sense
@@ -76,6 +95,7 @@ public:
 ///   camera.state                                  where the camera is, what it looks at, its angles and what moves it
 ///   camera.set {position?, focus?, yaw?, pitch?, distance?}   puts it there at once
 ///   camera.fly {position?, focus?, yaw?, pitch?, distance?}   flies it there
+///   camera.frame {id, yaw?, pitch?, distance?}                puts it to look at an entity, where it is now
 /// What isn't given is kept: a focus alone keeps the angles and distance, angles alone turn about the focus, a position
 /// alone keeps the direction it looks.
 [[nodiscard]] std::unique_ptr<ProviderInterface> MakeCameraProvider(CameraControlInterface& camera);

@@ -488,6 +488,15 @@ TOOLS = [
         "params": list(CAMERA_POSE),
     },
     {
+        "name": "camera_frame",
+        "description": "Puts the camera at once to look at an entity where it is now, from yaw/pitch/distance if "
+                       "given, the camera's own otherwise. For a picture of a moving entity use screenshot's frame.",
+        "inputSchema": schema({"id": {"type": "integer"}, "yaw": {"type": "number"}, "pitch": {"type": "number"},
+                               "distance": {"type": "number"}}, ["id"]),
+        "query": "camera.frame",
+        "params": ["id", "yaw", "pitch", "distance"],
+    },
+    {
         "name": "camera_fly",
         "description": "Flies the camera somewhere as the bookmarks fly it (same parameters as camera_set).",
         "inputSchema": schema(CAMERA_POSE),
@@ -497,13 +506,20 @@ TOOLS = [
     {
         "name": "screenshot",
         "description": "A PNG of the screen at an exact frame (this one by default; in_frames or at_frame for later), "
-                       "the camera placed first if camera is given (as camera_set takes it). Answers the path and frame; "
-                       "the file is written once that frame is drawn, so step to it (game_step) when paused.",
+                       "the camera put for it if camera is given (as camera_set takes it), or looking at an entity "
+                       "where it is at that frame if frame is given (its id, or {id, yaw?, pitch?, distance?}): "
+                       "moving targets aren't missed. hide_gui leaves the debug windows out. Answers once the PNG is "
+                       "written whole (written: true), unless wait is false.",
         "inputSchema": schema({"path": {"type": "string"}, "in_frames": {"type": "integer"},
                                "at_frame": {"type": "integer"},
-                               "camera": {"type": "object", "properties": CAMERA_POSE}}),
+                               "camera": {"type": "object", "properties": CAMERA_POSE},
+                               "frame": {"type": ["integer", "object"],
+                                         "description": "An entity to look at: its id, or {id, yaw?, pitch?, "
+                                                        "distance?}; not with camera"},
+                               "hide_gui": {"type": "boolean", "description": "Leave the debug windows out"},
+                               "wait": {"type": "boolean", "description": "Wait for the file (true by default)"}}),
         "query": "screenshot.take",
-        "params": ["path", "in_frames", "at_frame", "camera"],
+        "params": ["path", "in_frames", "at_frame", "camera", "frame", "hide_gui"],
     },
     {
         "name": "gui_windows",
@@ -635,6 +651,12 @@ for _tool in TOOLS:
     _tool["inputSchema"]["properties"] = {**_tool["inputSchema"]["properties"], **SELECTOR}
 TOOLS_BY_NAME = {tool["name"]: tool for tool in TOOLS}
 SHAPING_KEYS = set(SHAPING) | set(NEAR)
+# Parameters newer than some games still running: a game whose description of the query lacks one is an older build,
+# and is told so rather than silently ignoring it
+NEWER_PARAMETERS = {"screenshot.take": ["frame", "hide_gui"]}
+OLDER_BUILD = "merge master into its branch and rebuild it for this"
+# How a PNG ends: its IEND chunk, empty, with its CRC
+PNG_END = b"IEND\xaeB`\x82"
 # A connection nothing has used for this long is closed, so that a game an agent has finished with lets its player's
 # input in again
 IDLE_SECONDS = 60.0
@@ -820,6 +842,8 @@ class InspectorConnection:
         self.buffer = b""
         self.next_id = 1
         self.used = time.monotonic()
+        # The game's own description of queries, by query: the names of their parameters (None if it has none)
+        self.descriptions = {}
 
     def close(self):
         if self.socket is not None:
@@ -834,6 +858,7 @@ class InspectorConnection:
         return self.game.get("pid") is not None and self.alive(self.game["pid"])
 
     def _open(self):
+        self.descriptions = {}
         try:
             self.socket = socket.create_connection(("127.0.0.1", self.port), timeout=self.timeout)
         except OSError as error:
@@ -897,6 +922,31 @@ class InspectorConnection:
             # An older game doesn't name itself: the adapter does, from the ping it checked
             answer["game"] = self.tag()
         return answer
+
+
+def parameters_of(connection, query):
+    """The names of a query's parameters as the game describes it; None if it doesn't know the query"""
+    if query not in connection.descriptions:
+        answer = connection.request({"query": "describe", "params": {"query": query}})
+        result = answer.get("result") if answer.get("ok") else None
+        connection.descriptions[query] = None if not isinstance(result, dict) else \
+            {parameter.get("name") for parameter in result.get("parameters", []) if isinstance(parameter, dict)}
+    return connection.descriptions[query]
+
+
+def png_written(path, since):
+    """Whether a PNG has been written whole at the path since then"""
+    try:
+        if os.path.getmtime(path) < since:
+            return False
+        with open(path, "rb") as file:
+            file.seek(0, os.SEEK_END)
+            if file.tell() < len(PNG_END):
+                return False
+            file.seek(-len(PNG_END), os.SEEK_END)
+            return file.read() == PNG_END
+    except OSError:
+        return False
 
 
 class Session:
@@ -1044,16 +1094,38 @@ class Session:
         if tool is None:
             return {"ok": False, "error": f"no tool {name}"}
         return self.send(build_request(tool, arguments), wait_step=name == "game_step" and arguments.get("wait", True),
-                         target=arguments)
+                         target=arguments, wait_file=name == "screenshot" and arguments.get("wait", True))
 
-    def send(self, request, wait_step=False, target=None):
+    def send(self, request, wait_step=False, target=None, wait_file=False):
         """A request to the game a call names, waiting while the game loads; the answer names the game"""
         self._close_idle()
         game, error = self.target(target or {})
         if game is None:
             return {"ok": False, "error": error}
         connection = self._connection(game)
+        # A game too old for a parameter is told so, rather than leaving it out of what it does
+        newer = [name for name in NEWER_PARAMETERS.get(request["query"], []) if name in request.get("params", {})]
+        if newer:
+            known = parameters_of(connection, request["query"])
+            missing = [name for name in newer if known is not None and name not in known]
+            if missing:
+                return {"ok": False, "game": connection.tag(),
+                        "error": f"this game is an older build: {request['query']} doesn't take "
+                                 f"{', '.join(missing)}; {OLDER_BUILD}"}
+        asked_at = time.time()
         answer = request_until_loaded(connection, request, self.load_timeout)
+        if not answer.get("ok") and str(answer.get("error", "")).startswith("no query "):
+            answer["error"] += f" (if the query is new, this game may be an older build: {OLDER_BUILD})"
+        # A picture is answered once its file is whole, which the game writes a few frames on
+        if wait_file and answer.get("ok") and isinstance(answer.get("result"), dict) and answer["result"].get("path"):
+            path = answer["result"]["path"]
+            deadline = time.monotonic() + self.timeout * 3
+            while not png_written(path, asked_at - 1.0) and time.monotonic() < deadline:
+                time.sleep(0.05)
+            answer["result"]["written"] = png_written(path, asked_at - 1.0)
+            if not answer["result"]["written"]:
+                answer["result"]["note"] = ("the file isn't written yet: the game draws it at that frame; check "
+                                            "screenshot.pending, or step the game to it")
         # A step waits for the game to have run it, polling the state as the game serves a request each frame
         if wait_step and answer.get("ok"):
             deadline = time.monotonic() + self.timeout * 4

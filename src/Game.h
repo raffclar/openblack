@@ -198,7 +198,8 @@ public:
 	[[nodiscard]] const audio::GameMusic* GetGameMusic() const { return _gameMusic.get(); }
 	[[nodiscard]] const HandAnimation* GetHandAnimation() const { return _handAnimation.get(); }
 
-	void RequestScreenshot(const std::filesystem::path& path) noexcept;
+	/// The frame being made is written to a PNG once drawn, without the debug windows if asked
+	void RequestScreenshot(const std::filesystem::path& path, bool hideDebugGui = false) noexcept;
 	/// The game's own interface (its menu), once it is made
 	[[nodiscard]] gui::GameInterface* GetInterface() noexcept { return _interface.get(); }
 	/// The map script of the land loaded last, or "testbed"; empty before one is
@@ -324,6 +325,8 @@ private:
 	void ProcessHandToolTipTurn();
 
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> _requestScreenshot;
+	/// The requested screenshot leaves the debug windows out
+	bool _screenshotHidesDebugGui {false};
 	std::unique_ptr<audio::AtmosAudio> _atmosAudio;
 	std::unique_ptr<audio::GameMusic> _gameMusic;
 	std::unique_ptr<HandAnimation> _handAnimation;

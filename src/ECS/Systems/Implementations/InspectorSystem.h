@@ -57,6 +57,7 @@ public:
 	[[nodiscard]] uint16_t GetPort() const override;
 	void BeginLoading(std::string_view what) override;
 	void EndLoading() override;
+	void PlaceCamera() override;
 
 private:
 	/// The helper answering while the game loads: until told to stop
