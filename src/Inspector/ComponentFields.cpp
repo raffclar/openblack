@@ -749,6 +749,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::FallingRoots::seconds>("seconds")
 	    .Field<&components::FallingRoots::startHeight>("startHeight")
 	    .Field<&components::FallingRoots::restHeight>("restHeight");
+	Reflect<components::ShownRoots>(context).Field<&components::ShownRoots::place>("place");
 	Reflect<components::Feature>(context).Field<&components::Feature::type>("type");
 	Reflect<components::Field>(context)
 	    .Field<&components::Field::town>("town")

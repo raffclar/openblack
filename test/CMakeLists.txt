@@ -465,6 +465,7 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_physics_manager test_physics_manager.cpp)
 openblack_setup_and_add_test(test_physics_living test_physics_living.cpp)
 openblack_setup_and_add_test(test_physics_objects test_physics_objects.cpp)
+openblack_setup_and_add_test(test_tree_roots test_tree_roots.cpp)
 openblack_setup_and_add_test(test_damage_mesh test_damage_mesh.cpp)
 openblack_setup_and_add_test(
   test_building_construction test_building_construction.cpp

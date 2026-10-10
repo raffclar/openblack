@@ -196,6 +196,7 @@
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WhaleSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TreeRoots.h"
 #include "ECS/VillageTotem.h"
 #include "ECS/WorldObjects.h"
 #include "EngineConfig.h"
@@ -2327,6 +2328,8 @@ bool Game::Update() noexcept
 			{
 				// The villagers in view are posed for the camera as it now is
 				Locator::livingActionSystem::value().PoseVillagersInView(Locator::camera::value().GetViewProjectionMatrix());
+				// The trees out of the land are drawn with their roots, as each now is
+				ecs::tree_roots::Show(Locator::entitiesRegistry::value());
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
 				                                                config.drawStreams);
 				// The interface picks what is under the cursor as the frame is drawn, for the next frame to go by
