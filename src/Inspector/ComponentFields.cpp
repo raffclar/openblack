@@ -789,6 +789,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::HiddenByState> {context};
 	Reflect<components::HighDetail>(context)
 	    .Field<&components::HighDetail::usualModel>("usualModel")
+	    .Field<&components::HighDetail::usualDetailModels>("usualDetailModels")
 	    .Field<&components::HighDetail::face>("face")
 	    .Field<&components::HighDetail::orders>("orders");
 	Reflect<components::Indestructible> {context};

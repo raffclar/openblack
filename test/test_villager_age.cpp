@@ -220,3 +220,11 @@ TEST(VillagerAge, AChildGivenAGrownAgeWearsItsAdultModel)
 	ASSERT_TRUE(setting.childModel.has_value());
 	EXPECT_FALSE(*setting.childModel);
 }
+
+TEST(VillagerAge, AVillagerGivenAnAgeWearsItsKindsModelsForItAtEveryDistance)
+{
+	const std::array child {1, 2, 3};
+	const std::array adult {4, 5, 6};
+	EXPECT_EQ(openblack::ecs::villager_age::ModelsForAge(true, child, adult), child);
+	EXPECT_EQ(openblack::ecs::villager_age::ModelsForAge(false, child, adult), adult);
+}

@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <array>
 #include <optional>
 
 #include <entt/core/fwd.hpp>
@@ -21,8 +22,10 @@ namespace openblack::ecs::components
 /// A villager a script draws in high detail for its cinema
 struct HighDetail
 {
-	/// The model it wears when it is drawn as usual again, when it changed into a detailed one
+	/// The model it wears when it is drawn as usual again, when it changed into a detailed one, and its models at the
+	/// three distances
 	std::optional<entt::id_type> usualModel;
+	std::optional<std::array<entt::id_type, 3>> usualDetailModels;
 	/// The face its eyes are drawn with, when it wears a detailed model
 	std::optional<high_detail_rules::Face> face;
 	high_detail_rules::DrawOrders orders;
