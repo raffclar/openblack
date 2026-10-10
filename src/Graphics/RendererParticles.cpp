@@ -148,7 +148,13 @@ void Renderer::CollectParticles() const
 		_particleFrame.Clear();
 		return;
 	}
-	Locator::particleSystem::value().CollectDrawFrame(Locator::time::value().GetTurnFraction(), _particleFrame);
+	// In the temple only its rooms' effects are drawn
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	Locator::particleSystem::value().CollectDrawFrame(Locator::time::value().GetTurnFraction(), _particleFrame, inTemple);
+	if (inTemple)
+	{
+		return;
+	}
 	// What burns, among the other things that blend
 	if (Locator::fireSystem::has_value())
 	{
@@ -252,7 +258,7 @@ void Renderer::DrawParticleMist(const DrawSceneDesc& desc, const particles::draw
 	const glm::vec4 noHaze {0.0f};
 	const auto texture = textures.Handle(Mist::k_TextureId);
 	const auto alphaTexture = textures.Handle(Mist::k_AlphaTextureId);
-	const auto viewId = static_cast<bgfx::ViewId>(TranslucentPassOf(desc.viewId));
+	const auto viewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
 	for (const auto& subMesh : mesh->GetSubMeshes())
 	{
 		for (const auto& primitive : subMesh->GetPrimitives())
@@ -306,7 +312,7 @@ void Renderer::DrawParticleMesh(const DrawSceneDesc& desc, const particles::draw
 	}
 
 	L3DMeshSubmitDesc submitDesc = {};
-	submitDesc.viewId = TranslucentPassOf(desc.viewId);
+	submitDesc.viewId = TranslucentView(desc.viewId);
 	submitDesc.program = _shaderManager->GetShader("Object");
 	submitDesc.modelMatrices = bones.empty() ? &model : bones.data();
 	submitDesc.matrixCount = bones.empty() ? 1 : static_cast<uint8_t>(std::min<size_t>(bones.size(), UINT8_MAX));
@@ -380,7 +386,7 @@ void Renderer::DrawParticleFragment(const DrawSceneDesc& desc, const particles::
 	const auto& island = Locator::terrainSystem::value();
 	const glm::vec4 islandExtent {island.GetExtent().minimum, island.GetExtent().maximum};
 	const glm::vec4 origin {fragment.position, 0.0f};
-	const auto viewId = static_cast<bgfx::ViewId>(TranslucentPassOf(desc.viewId));
+	const auto viewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
 	// A draw for each of its skins, its triangles placed by its atom
 	const size_t triangles = shape.skins.size();
 	std::vector<bool> drawn(triangles, false);
@@ -443,8 +449,7 @@ void Renderer::DrawParticleFragment(const DrawSceneDesc& desc, const particles::
 void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 {
 	const bool reflection = desc.viewId == RenderPass::Reflection;
-	if ((desc.viewId != RenderPass::Main && !reflection) || _particleFrame.items.empty() ||
-	    (Locator::temple::has_value() && Locator::temple::value().Active()))
+	if ((desc.viewId != RenderPass::Main && !reflection) || _particleFrame.items.empty())
 	{
 		return;
 	}
@@ -455,7 +460,7 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 	                       _particleSpriteOrder);
 	const auto& frame = _particleFrame;
 	const auto& textures = Locator::resources::value().GetTextures();
-	const auto viewId = static_cast<bgfx::ViewId>(TranslucentPassOf(desc.viewId));
+	const auto viewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
 
 	// Every sprite of the pass in one buffer of instances, in the order drawn
 	bgfx::InstanceDataBuffer instances {};

@@ -20,6 +20,8 @@ class CinemaBars
 public:
 	/// Slides the bars in or out
 	void Set(bool on, float transitionSeconds);
+	/// Brings the bars all the way in at once, as a full-screen video does
+	void Snap();
 	/// Slides them on by the game time of the frame, none while the game is paused
 	void Update(float gameMilliseconds, float transitionSeconds);
 	/// How far in the bars are, 0 for none and 1 for a 16:9 picture

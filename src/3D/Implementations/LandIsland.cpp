@@ -51,7 +51,7 @@ constexpr int32_t k_MapSize = 0x200;
 // The 1/256 of the game's integer altitude interpolation
 constexpr double k_AltitudeFraction = 1.0 / 256.0;
 // Land at or below this altitude is at sea level. The game draws it at height 0, and GetAltitude treats it the same
-// in cells no higher than k_SeaLevelClampAltitude. The game only turns the latter off while it creates a fish farm.
+// in cells no higher than k_SeaLevelClampAltitude, unless asked for the land's own altitudes.
 constexpr uint8_t k_SeaLevelAltitude = 3;
 constexpr uint8_t k_SeaLevelClampAltitude = 4;
 } // namespace
@@ -66,7 +66,7 @@ float LandIslandInterface::GetDrawnAltitude(uint8_t altitude)
 	return altitude <= k_SeaLevelAltitude ? 0.0f : static_cast<float>(altitude) * k_HeightUnit;
 }
 
-double LandIslandInterface::GetAltitude(int32_t mapX, int32_t mapZ) const
+double LandIslandInterface::GetAltitude(int32_t mapX, int32_t mapZ, bool seaLevelFlat) const
 {
 	const auto cellX = static_cast<int16_t>(static_cast<uint32_t>(mapX) >> 16);
 	const auto cellZ = static_cast<int16_t>(static_cast<uint32_t>(mapZ) >> 16);
@@ -81,7 +81,7 @@ double LandIslandInterface::GetAltitude(int32_t mapX, int32_t mapZ) const
 	}
 
 	// Neighbours within the block's 17x17 cell array: +1 is z + 1, +17 is x + 1
-	const auto clamp = cell[0].altitude <= k_SeaLevelClampAltitude;
+	const auto clamp = seaLevelFlat && cell[0].altitude <= k_SeaLevelClampAltitude;
 	const auto altitude = [clamp](const lnd::LNDCell& c) -> int32_t {
 		return clamp && c.altitude <= k_SeaLevelAltitude ? 0 : c.altitude;
 	};

@@ -54,11 +54,16 @@ public:
 	virtual bool PickUp(entt::entity creature, entt::entity object) = 0;
 	virtual bool PutDown(entt::entity creature) = 0;
 	virtual bool Discard(entt::entity creature) = 0;
+	/// Tosses away what it holds with another animation, letting go at the same moment
+	virtual bool DiscardWith(entt::entity creature, size_t animation) = 0;
 	virtual bool Lob(entt::entity creature) = 0;
 	virtual bool EatHeld(entt::entity creature) = 0;
 	/// Strokes, shakes, smells or examines what it holds, by the animation of that
 	virtual bool Keep(entt::entity creature, size_t animation) = 0;
 	virtual bool Throw(entt::entity creature, const glm::vec3& target) = 0;
+	/// Throws what it holds at a point, to take the given seconds to get there, as into a store: done only once the thing
+	/// has stopped flying
+	virtual bool ThrowTaking(entt::entity creature, const glm::vec3& target, float flightSeconds) = 0;
 	virtual bool Destroy(entt::entity creature, entt::entity target) = 0;
 	virtual bool PointAt(entt::entity creature, const glm::vec3& point) = 0;
 	/// Catches something flying at it, when it can still reach where it passes
@@ -69,6 +74,8 @@ public:
 	virtual void Drop(entt::entity creature) = 0;
 
 	[[nodiscard]] virtual State GetState(entt::entity creature) const = 0;
+	/// Whether its body is taken up by a catch it has started: readying, stepping, reaching or bringing the hand back
+	[[nodiscard]] virtual bool IsCatching(entt::entity creature) const = 0;
 	/// How far through its animations the action is, 0 to 1, while it plays them
 	[[nodiscard]] virtual std::optional<float> GetProgress(entt::entity creature) const = 0;
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeld(entt::entity creature) const = 0;

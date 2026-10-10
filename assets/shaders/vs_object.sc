@@ -52,6 +52,27 @@ SAMPLER2D(s_blendThinFat, 4);
 SAMPLER2D(s_blendWeakStrong, 9);
 #endif // USE_MORPH
 
+#ifdef USE_BONE_TEXTURE
+// Many posed models of one mesh drawn at once, each with its own bones: every bone's matrix is four texels of a row, its
+// columns in turn. x: the first matrix of the draw, y: the bones of each instance, zw: the texture's width and height.
+// Each instance gives its place in the draw in its first column's w, which an affine model matrix keeps at 0.
+uniform vec4 u_bones;
+SAMPLER2D(s_bones, 2);
+
+vec4 BoneColumn(float texel)
+{
+	float row = floor(texel / u_bones.z);
+	vec2 at = vec2(texel - (row * u_bones.z), row);
+	return texture2DLod(s_bones, (at + 0.5f) / u_bones.zw, 0.0f);
+}
+
+mat4 BoneMatrix(float index)
+{
+	float texel = index * 4.0f;
+	return mtxFromCols(BoneColumn(texel), BoneColumn(texel + 1.0f), BoneColumn(texel + 2.0f), BoneColumn(texel + 3.0f));
+}
+#endif // USE_BONE_TEXTURE
+
 #ifdef USE_HEIGHT_MAP
 SAMPLER2D(s_heightmap, 1);
 #endif // USE_HEIGHT_MAP
@@ -79,12 +100,18 @@ void main()
 #endif // USE_MORPH
 
 #ifdef USE_INSTANCING
+	// An animal's first column carries its place among its model's instances in w, where an affine matrix has 0
 	mat4 model;
-	model[0] = i_data0;
+	model[0] = vec4(i_data0.xyz, 0.0f);
 	model[1] = i_data1;
 	model[2] = i_data2;
 	model[3] = i_data3;
+#ifdef USE_BONE_TEXTURE
+	mat4 bone = BoneMatrix(u_bones.x + (i_data0.w * u_bones.y) + float(modelIndex));
+#define TO_WORLD(p) instMul(model, mul(bone, p))
+#else
 #define TO_WORLD(p) instMul(model, mul(u_model[modelIndex], p))
+#endif // USE_BONE_TEXTURE
 #else
 #define TO_WORLD(p) mul(u_model[modelIndex], p)
 #endif // USE_INSTANCING
@@ -163,13 +190,9 @@ void main()
 	// w: how much snow shows on it, of 255. An instance can have its own rate and cap of 256 for it, as a field's crop has.
 	v_haze = vec4(added / 255.0f, 0.0f);
 #ifdef USE_INSTANCING
-	// w: how frozen a creature is, positive, or how far it has fizzed out of sight, negative. An instance gives the freeze
-	// as a negative w and the fizz as a w below -2 by it; a field's crop gives its snow cap as a positive one.
-	if (i_data4.w < -1.5f)
-	{
-		v_haze.w = i_data4.w + 2.0f;
-	}
-	else if (i_data4.w < 0.0f)
+	// w: how frozen a creature is. An instance gives the freeze as a negative w; a field's crop gives its snow cap as a
+	// positive one.
+	if (i_data4.w < 0.0f)
 	{
 		v_haze.w = -i_data4.w;
 	}

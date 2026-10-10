@@ -17,6 +17,7 @@
 #include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
+#include "Animals/FishFarmRules.h"
 #include "Enums.h"
 #include "HandGrabRules.h"
 
@@ -52,6 +53,11 @@ public:
 	[[nodiscard]] virtual std::optional<entt::entity> ObjectUnderCursor() const = 0;
 	/// Whether a point is in a player's influence
 	[[nodiscard]] virtual bool InInfluence(PlayerNames player, glm::vec3 point) const = 0;
+	/// Whether the hand, at its point, is in its player's influence: while it keeps any of it past the border it is
+	[[nodiscard]] virtual bool HandInInfluence(PlayerNames player, glm::vec3 hand) const { return InInfluence(player, hand); }
+	/// The hand let go of what it holds onto the land: what it keeps of its player's influence past the border wanes, or
+	/// comes back, as for one more turn
+	virtual void HeldThingUsedOnLand(PlayerNames /*player*/) {}
 	/// Whether a point is on the map
 	[[nodiscard]] virtual bool InBounds(glm::vec3 point) const = 0;
 	/// The flat normal of the land at a point
@@ -97,12 +103,16 @@ public:
 	virtual void RemoveReactions(entt::entity initiator, Reaction type) = 0;
 	/// A burning thing starts moving, into a hand (or it is a villager) or not
 	virtual void FireStartedMoving(entt::entity object, bool inHand) = 0;
+	/// A thing goes into the hand from where it stood: a firefly hiding exactly there is caught, for its reward
+	virtual void CatchFirefly(entt::entity object) = 0;
 	/// A held thing catches from the fires in its cell
 	virtual void HeatHeld(entt::entity object) = 0;
 	/// A sound of the in-game bank where something is
 	virtual void PlaySample(uint32_t sample, glm::vec3 position) = 0;
 	/// The hand taps a thing at a point, for a player, as a rock breaks when tapped; whether the thing took the tap
 	virtual bool TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player) = 0;
+	/// Whether the hand's player holds their creature's leash loose in the hand, tied to nothing
+	[[nodiscard]] virtual bool HoldsLooseLeash() const = 0;
 	/// A local random number below a count
 	[[nodiscard]] virtual uint32_t LocalRandom(uint32_t count) = 0;
 	/// A villager goes into the hand: it remembers what it was doing and is held
@@ -157,6 +167,10 @@ public:
 	[[nodiscard]] virtual std::optional<FieldFacts> FieldFactsOf(entt::entity field) const = 0;
 	/// Food is taken out of a field by the hand
 	virtual void TakeFromField(entt::entity field, uint32_t amount) = 0;
+	/// What a fish farm's table says of its fish, for the hand scooping them
+	[[nodiscard]] virtual std::optional<fish_farm::Type> FishFarmOf(entt::entity farm) const = 0;
+	/// Fish are taken out of a fish farm by the hand: no more than it has. What was taken.
+	virtual uint32_t TakeFromFishFarm(entt::entity farm, uint32_t amount) = 0;
 	/// A pot, a handful among them, is drawn at the size of what it holds
 	virtual void ResizePot(entt::entity pot) = 0;
 	[[nodiscard]] virtual ScoopFacts ScoopFactsOf(PotInfo handful) const = 0;
@@ -167,6 +181,8 @@ public:
 	[[nodiscard]] virtual entt::entity MakeHandful(PotInfo type, glm::vec3 position, uint32_t amount, bool poisoned) = 0;
 	/// The stream of what is scooped flowing from its source into the hand starts, and stops; its effect
 	[[nodiscard]] virtual std::optional<uint32_t> StartScoopStream(ResourceType resource, glm::vec3 source, bool poisoned) = 0;
+	/// The stream of fish leaping from a fish farm into the hand starts
+	[[nodiscard]] virtual std::optional<uint32_t> StartFishScoopStream(glm::vec3 source) = 0;
 	virtual void StopScoopStream(uint32_t stream) = 0;
 	/// The stream flows to where the hand now is
 	virtual void MoveScoopStream(uint32_t stream, glm::vec3 hand) = 0;

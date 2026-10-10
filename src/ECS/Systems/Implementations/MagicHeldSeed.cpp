@@ -133,7 +133,7 @@ bool MagicSystem::IsHandInInfluence() const
 		return true;
 	}
 	const auto& seed = registry.Get<const SpellSeed>(*_held);
-	return _hand.point.has_value() && _world.InInfluence(seed.player, *_hand.point);
+	return _hand.point.has_value() && _world.HandInInfluence(seed.player, *_hand.point);
 }
 
 std::optional<Tribe> MagicSystem::TribalPowerTribe(PlayerNames player, MagicType type) const

@@ -35,9 +35,12 @@ public:
 	virtual void ReleaseFromScript(entt::entity object) = 0;
 	/// What a script held as one object it now holds as another
 	virtual void Replace(entt::entity from, entt::entity to) = 0;
-	/// The land's scripts are cleared: every object a script made goes, every other one it held is let go back into the
-	/// game, and every place is free again
+	/// The scripts' program starts again: every object a script made goes, every other one it held is let go back into
+	/// the game, and every place is free again
 	virtual void Reset() = 0;
+	/// A new land: its objects have gone already, so nothing is let go back into the game; each place forgets its
+	/// object but keeps its count of references
+	virtual void ClearForNewLand() = 0;
 };
 
 } // namespace openblack::ecs::systems

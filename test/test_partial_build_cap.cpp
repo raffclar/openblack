@@ -69,8 +69,11 @@ TEST(PartialBuildCap, TooManySegmentsShowNoCap)
 	EXPECT_TRUE(Build(k_Positions, k_Uvs, k_Normals, indices, 0.5f, 0.2f).empty());
 }
 
-TEST(PartialBuildCap, OnlyAPrimitiveWithAWholeTriangleBelowTheCutHasWallsWithin)
+TEST(PartialBuildCap, APrimitiveWithAnyCornerBelowTheCutHasWallsWithin)
 {
-	EXPECT_FALSE(HasWholeTriangleBelow(k_Positions, k_Indices, 0.5f));
-	EXPECT_TRUE(HasWholeTriangleBelow(k_Positions, k_Indices, 1.5f));
+	// The wall's triangles all straddle a cut half way up: the parts below are drawn, so it has walls within
+	EXPECT_TRUE(DrawsAnythingBelow(k_Positions, k_Indices, 0.5f));
+	EXPECT_TRUE(DrawsAnythingBelow(k_Positions, k_Indices, 1.5f));
+	// Cut at its foot, nothing of it is below: a corner on the cut is not below it
+	EXPECT_FALSE(DrawsAnythingBelow(k_Positions, k_Indices, 0.0f));
 }

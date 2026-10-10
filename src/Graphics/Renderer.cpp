@@ -11,10 +11,13 @@
 
 #include <algorithm>
 #include <chrono>
+#include <filesystem>
+#include <initializer_list>
 #include <limits>
 #include <map>
 #include <memory>
 #include <span>
+#include <system_error>
 #define LOCATOR_IMPLEMENTATIONS
 
 #include <cstdint>
@@ -47,7 +50,6 @@
 #include "3D/OceanInterface.h"
 #include "3D/OrientedText.h"
 #include "3D/Rain.h"
-#include "3D/SkyInterface.h"
 #include "3D/SnowCover.h"
 #include "3D/TempleDoors.h"
 #include "3D/TempleInteriorInterface.h"
@@ -56,9 +58,13 @@
 #include "3D/WaterRings.h"
 #include "Camera/Camera.h"
 #include "Common/CrashHandler.h"
+#include "Creature/CreatureFizzLook.h"
 #include "Creature/CreatureHair.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureSkin.h"
+#include "Creature/CreatureSpells.h"
+#include "ECS/AbodeKnock.h"
+#include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
@@ -78,9 +84,11 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
 #include "ECS/Components/MistDome.h"
+#include "ECS/Components/Sky.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Temple.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageLight.h"
@@ -88,7 +96,9 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -96,6 +106,7 @@
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -104,6 +115,7 @@
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
+#include "Graphics/BoneBudget.h"
 #include "Graphics/DebugLines.h"
 #include "Graphics/DetailLevel.h"
 #include "Graphics/FrameBuffer.h"
@@ -123,6 +135,7 @@
 #include "Graphics/TreeBrightness.h"
 #include "Graphics/VertexBuffer.h"
 #include "Graphics/ZSort.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 #include "Profiler.h"
 #include "Renderer.h"
@@ -202,6 +215,8 @@ namespace
 {
 /// A creature frozen or fizzed this far casts no shadow
 constexpr float k_NoShadowSpellLook = 0.2f;
+/// How many buffers the frames are drawn into in turn
+constexpr uint8_t k_BackBuffers = 3;
 /// How deep the snow lies over the island, as a texture the shaders read point by point, refreshed when the snow
 /// changes; none without snow
 const Texture2D* SnowDepth(std::unique_ptr<Texture2D>& texture, std::optional<uint32_t>& revision)
@@ -227,13 +242,13 @@ const Texture2D* SnowDepth(std::unique_ptr<Texture2D>& texture, std::optional<ui
 	return texture.get();
 }
 
-/// The pass what blends in a scene goes to: its own pass after the scene's, but in the temple the scene's own, which
-/// draws everything in the order it comes
-RenderPass TranslucentView(RenderPass scene)
+} // namespace
+
+RenderPass Renderer::TranslucentView(RenderPass scene)
 {
+	// In the temple the scene's own pass draws everything in the order it comes
 	return Locator::temple::has_value() && Locator::temple::value().Active() ? scene : TranslucentPassOf(scene);
 }
-} // namespace
 
 /// How far back, as a fraction of their depth, the temple's rooms the player isn't in are drawn: a few millimetres at the
 /// doorways, past the rounding of the copies of their arches
@@ -330,9 +345,13 @@ struct BgfxCallback: public bgfx::CallbackI
 		const auto ext = std::filesystem::path(filePath).extension();
 		if (std::filesystem::path(filePath).extension() == ".png")
 		{
+			// Written aside and renamed once whole, so that whoever waits for the file never reads half of it
+			const auto finalPath = std::filesystem::path(filePath);
+			auto partPath = finalPath;
+			partPath += ".part";
 			bx::FileWriter writer;
 			bx::Error err;
-			if (bx::open(&writer, filePath, false, &err))
+			if (bx::open(&writer, partPath.string().c_str(), false, &err))
 			{
 				// Strip out alpha for screenshot
 				std::vector<uint32_t> noAlpha;
@@ -348,6 +367,14 @@ struct BgfxCallback: public bgfx::CallbackI
 
 				bimg::imageWritePng(&writer, width, height, pitch, noAlpha.data(), bimg::TextureFormat::BGRA8, yflip, &err);
 				bx::close(&writer);
+				std::error_code renameError;
+				std::filesystem::rename(partPath, finalPath, renameError);
+				if (renameError)
+				{
+					SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Failed to save Screenshot at {}: {}", filePath,
+					                    renameError.message());
+					return;
+				}
 				SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Screenshot ({}x{}) saved at {}", width, height, filePath);
 			}
 			else
@@ -422,6 +449,9 @@ std::unique_ptr<RendererInterface> RendererInterface::Create(GraphicsBackend bac
 		bgfxReset |= BGFX_RESET_VSYNC;
 	}
 	init.resolution.reset = bgfxReset;
+	// Three buffers to draw into: with two, a frame waits for the one on screen to be let go of, a whole refresh or two
+	// whenever the window is composited, as Direct3D 12 windows often are
+	init.resolution.numBackBuffers = k_BackBuffers;
 	init.callback = dynamic_cast<bgfx::CallbackI*>(bgfxCallback.get());
 
 	if (!bgfx::init(init))
@@ -475,6 +505,7 @@ Renderer::Renderer(uint32_t bgfxReset, std::unique_ptr<BgfxCallback>&& bgfxCallb
 Renderer::~Renderer() noexcept
 {
 	_creatureSkins.clear();
+	_animalBoneTexture.reset();
 	_handSkins.clear();
 	_handSkinTextures.clear();
 	_particleLightMaps.clear();
@@ -566,7 +597,7 @@ const Texture2D* GetTexture(uint32_t skinID, const std::unordered_map<SkinId, st
 		}
 		else
 		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Could not find the texture");
+			SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Could not find the texture {:#x}", skinID);
 		}
 	}
 
@@ -648,14 +679,14 @@ void BindBlendSources(const L3DMesh& mesh, const L3DSubMesh& subMesh,
 	}
 }
 
-/// The looks the creature spells give a creature: the ice sheen of a frozen one, and the static an invisible one dissolves
-/// through, scrolling across its skin
+/// The textures of the looks the creature spells give a creature: the ice sheen of a frozen one, and the static one
+/// fizzing out of sight is drawn through
 void BindCreatureSpellLooks(const ShaderProgram& program)
 {
 	const auto& textures = Locator::resources::value().GetTextures();
 	constexpr std::array<std::pair<const char*, std::pair<uint8_t, entt::hashed_string>>, 3> k_Looks {{
 	    {"s_iceEnvironment", {10, entt::hashed_string("raw/S_IceEnvMap")}},
-	    {"s_iceEnvironmentAlpha", {1, entt::hashed_string("raw/S_IceEnvMapa")}},
+	    {"s_iceEnvironmentAlpha", {5, entt::hashed_string("raw/S_IceEnvMapa")}},
 	    {"s_staticAlpha", {15, entt::hashed_string("raw/S_Statica")}},
 	}};
 	for (const auto& [sampler, binding] : k_Looks)
@@ -665,12 +696,22 @@ void BindCreatureSpellLooks(const ShaderProgram& program)
 			program.SetTextureSampler(sampler, binding.first, *textures.Handle(binding.second));
 		}
 	}
-	// The static scrolls a tenth of its width and a fifth of its height a second
-	using Clock = std::chrono::steady_clock;
-	static const auto k_Start = Clock::now();
-	const float seconds = std::chrono::duration<float>(Clock::now() - k_Start).count();
-	const glm::vec4 u_creatureSpellLook {std::fmod(seconds * 0.1f, 1.0f), std::fmod(seconds * 0.2f, 1.0f), 0.0f, 0.0f};
-	program.SetUniformValue("u_creatureSpellLook", &u_creatureSpellLook);
+}
+
+/// How a creature fizzing out of sight is drawn in the pass at hand: xy how far the static has slid across its skin, z
+/// 0 for none, 1 for its depth through the static, with w the least alpha the static must have, or 2 for its body over
+/// that depth, blended at w. With z 0, w is how frozen it is.
+glm::vec4 CreatureSpellLookOf(const std::optional<RendererInterface::L3DMeshSubmitDesc::Fizz>& fizz, float freeze)
+{
+	using Pass = RendererInterface::L3DMeshSubmitDesc::Fizz::Pass;
+	if (!fizz.has_value())
+	{
+		return {0.0f, 0.0f, 0.0f, freeze};
+	}
+	const bool depth = fizz->pass == Pass::Depth;
+	const float w = depth ? static_cast<float>(creature_fizz_look::StaticThreshold(fizz->level)) / 255.0f
+	                      : creature_fizz_look::BodyAlpha(fizz->level);
+	return {fizz->scroll, depth ? 1.0f : 2.0f, w};
 }
 
 /// The colour a recognised gesture's flash adds to the hand's light, 0 to 1 a channel
@@ -739,7 +780,7 @@ const Renderer::Cap& Renderer::CapOf(const L3DSubMesh& subMesh, const CapPrimiti
 	const auto first = std::min<size_t>(primitive.indicesOffset, indices.size());
 	indices = indices.subspan(first, std::min<size_t>(primitive.indicesCount, indices.size() - first));
 	Cap cap {
-	    .wholeBelow = partial_build_cap::HasWholeTriangleBelow(surface.positions, indices, height),
+	    .drawsBelow = partial_build_cap::DrawsAnythingBelow(surface.positions, indices, height),
 	    .vertices = partial_build_cap::Build(surface.positions, surface.uvs, surface.normals, indices, height,
 	                                         InsetOf(primitive.twoSided)),
 	};
@@ -831,8 +872,15 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 		             glm::translate(glm::mat4(1.0f), -joint->pivot);
 		modelMatrices = &jointModel;
 	}
-	// A creature's body takes its blended skins in place of its base mesh's
-	const auto skinOf = [&desc, &skins](uint32_t skinID) -> const Texture2D* {
+	// A creature's body takes its blended skins in place of its base mesh's. A draw given a skin of its own (the
+	// temple's icons) binds that for every skinned primitive, and a submesh drawn with a texture of its own (the
+	// citadel's leash collars) never samples its primitives' skins, which its mesh may not even have, so neither looks
+	// them up.
+	const auto skinOf = [&desc, &skins, subMeshTexture](uint32_t skinID) -> const Texture2D* {
+		if (subMeshTexture != nullptr || (desc.skinTexture != nullptr && skinID != 0xFFFFFFFF))
+		{
+			return nullptr;
+		}
 		if (desc.morphTargets != nullptr)
 		{
 			const auto& blended = desc.morphTargets->skins;
@@ -900,7 +948,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			                          .indicesCount = prim.indicesCount,
 			                          .twoSided = prim.twoSided},
 			                         *desc.modelCutHeight);
-			if (!made.wholeBelow || (desc.cap && made.vertices.empty()))
+			if (!made.drawsBelow || (desc.cap && made.vertices.empty()))
 			{
 				lastPreserveState = false;
 				continue;
@@ -914,6 +962,11 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			if (modelMatrices != nullptr && desc.matrixCount > 0)
 			{
 				bgfx::setTransform(modelMatrices, desc.matrixCount);
+			}
+			if (desc.boneTexture != nullptr)
+			{
+				program->SetUniformValue("u_bones", &desc.bones);
+				program->SetTextureSampler("s_bones", 2, *desc.boneTexture);
 			}
 			if (has(MeshUniform::DepthBias))
 			{
@@ -945,6 +998,16 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				BindBlendSources(mesh, subMesh, *desc.morphTargets, *program);
 				BindCreatureSpellLooks(*program);
 			}
+			else if (desc.fizz.has_value() || desc.freeze > 0.0f)
+			{
+				BindCreatureSpellLooks(*program);
+			}
+			// Set for every mesh, so that none is drawn with another's fizz
+			if (has(MeshUniform::CreatureSpellLook))
+			{
+				const auto u_creatureSpellLook = CreatureSpellLookOf(desc.fizz, desc.freeze);
+				setUniform(MeshUniform::CreatureSpellLook, &u_creatureSpellLook);
+			}
 			if (has(MeshUniform::UvOffset))
 			{
 				const glm::vec4 u_uvOffset {desc.uvOffset, desc.uvScale, 0.0f};
@@ -960,8 +1023,8 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			if (has(MeshUniform::Inset))
 			{
 				// y: 1 for the cap, which is set in already and drawn unlit
-				const glm::vec4 u_inset {desc.innerWalls ? InsetOf(prim.twoSided) : 0.0f, cap != nullptr ? 1.0f : 0.0f, 0.0f,
-				                         0.0f};
+				const glm::vec4 u_inset {desc.innerWalls ? desc.innerWallInset.value_or(InsetOf(prim.twoSided)) : 0.0f,
+				                         cap != nullptr ? 1.0f : 0.0f, 0.0f, 0.0f};
 				setUniform(MeshUniform::Inset, &u_inset);
 			}
 			if (has(MeshUniform::SeaClip))
@@ -1130,7 +1193,14 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			if ((skip & Mesh::SkipState::SkipRenderState) == 0)
 			{
 				auto state = desc.state;
-				if (desc.twoSided)
+				using FizzPass = L3DMeshSubmitDesc::Fizz::Pass;
+				if (desc.fizz.has_value() && desc.fizz->pass == FizzPass::Depth)
+				{
+					// A fizzing creature's depth through the static culls its back faces, whatever its materials say
+					state &= ~BGFX_STATE_CULL_MASK;
+					state |= desc.mirrored ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW;
+				}
+				else if (desc.twoSided)
 				{
 					state &= ~BGFX_STATE_CULL_MASK;
 				}
@@ -1143,7 +1213,8 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 						state |= desc.mirrored ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW;
 					}
 				}
-				if (materialBlending)
+				// A fizzing creature's passes keep the blending they are given
+				if (materialBlending && !desc.fizz.has_value())
 				{
 					using BlendMode = decltype(prim.blend);
 					constexpr uint32_t k_AlphaTextured = 4;
@@ -1175,12 +1246,12 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 					}
 				}
 				auto rgba = desc.rgba;
-				if (desc.instanceAlpha)
+				if (desc.instanceAlpha && !desc.fizz.has_value())
 				{
 					state &= ~BGFX_STATE_BLEND_MASK;
 					state |= BGFX_STATE_BLEND_ALPHA;
 				}
-				if (desc.additiveShare.has_value())
+				if (desc.additiveShare.has_value() && !desc.fizz.has_value())
 				{
 					// Added by a constant share, as the game draws a one-shot miracle's bubble
 					state &= ~BGFX_STATE_BLEND_MASK;
@@ -1640,12 +1711,14 @@ void Renderer::DrawCaveTrophies(const DrawSceneDesc& desc) const
 	}
 }
 
-void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, entt::entity entity, const L3DMeshSubmitDesc& bodyDesc) const
+void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, entt::entity entity, const L3DMeshSubmitDesc& bodyDesc, float fizz,
+                                float freeze, uint32_t fizzSortDepth) const
 {
 	using ecs::components::CreatureEyes;
 	const auto* eyes = desc.entities.TryGet<const CreatureEyes>(entity);
 	const auto& meshes = Locator::resources::value().GetMeshes();
-	if (eyes == nullptr || !meshes.Contains(CreatureEyes::k_EyeballMeshId) || !meshes.Contains(CreatureEyes::k_EyelidMeshId))
+	if (eyes == nullptr || !meshes.Contains(CreatureEyes::k_EyeballMeshId) || !meshes.Contains(CreatureEyes::k_EyelidMeshId) ||
+	    !creature_fizz_look::Drawn(fizz))
 	{
 		return;
 	}
@@ -1664,20 +1737,54 @@ void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, entt::entity entity, 
 	submitDesc.mirrored = bodyDesc.mirrored;
 	submitDesc.creatureShadows = false;
 	submitDesc.sortDepth = bodyDesc.sortDepth;
-	const auto tint = glm::vec4(bodyDesc.tint.r, bodyDesc.tint.g, bodyDesc.tint.b, 0.0f);
+	auto tint = glm::vec4(bodyDesc.tint.r, bodyDesc.tint.g, bodyDesc.tint.b, 0.0f);
+	// Frozen, each piece takes the body's freeze: its light tinted towards the icy colour and a sheen of ice over it
+	if (freeze > 0.0f)
+	{
+		const auto icy = creature_spells::FrozenTint(freeze);
+		tint *= glm::vec4(glm::vec3((icy >> 16) & 0xFFu, (icy >> 8) & 0xFFu, icy & 0xFFu) / 256.0f, 1.0f);
+		submitDesc.freeze = freeze;
+	}
+
+	// While the creature fizzes, its eyes fizz with it, each piece drawn twice as its body is, just after it: but through
+	// the one static all the creatures' eyes share. A frozen eye is drawn frozen instead.
+	const bool fizzing = creature_fizz_look::EyesFizz(fizz, freeze) && Locator::creatureFizzSystem::has_value();
+	const auto scroll = fizzing ? Locator::creatureFizzSystem::value().EyeStaticScroll() : glm::vec2(0.0f);
+	auto sortDepth = fizzSortDepth;
+	const auto draw = [&](const L3DMesh& piece) {
+		if (!fizzing)
+		{
+			DrawMesh(piece, submitDesc, std::numeric_limits<uint8_t>::max());
+			return;
+		}
+		using Pass = L3DMeshSubmitDesc::Fizz::Pass;
+		const auto level = creature_fizz_look::Level(fizz);
+		submitDesc.viewId = TranslucentView(desc.viewId);
+		for (const auto pass : {Pass::Depth, Pass::Body})
+		{
+			sortDepth = sortDepth > 0 ? sortDepth - 1 : 0;
+			submitDesc.sortDepth = sortDepth;
+			submitDesc.fizz = L3DMeshSubmitDesc::Fizz {.pass = pass, .level = level, .scroll = scroll};
+			submitDesc.state = pass == Pass::Depth ? BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA
+			                                       : BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_DEPTH_TEST_EQUAL |
+			                                             BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA;
+			DrawMesh(piece, submitDesc, std::numeric_limits<uint8_t>::max());
+		}
+	};
 	for (const auto& eye : eyes->drawn)
 	{
 		if (eye.eyeball.has_value())
 		{
 			submitDesc.modelMatrices = &*eye.eyeball;
 			submitDesc.tint = tint;
-			DrawMesh(*eyeball, submitDesc, std::numeric_limits<uint8_t>::max());
+			draw(*eyeball);
 		}
 		if (eye.eyelid.has_value())
 		{
 			submitDesc.modelMatrices = &*eye.eyelid;
-			submitDesc.tint = tint * glm::vec4(eyes->lidColour, 1.0f);
-			DrawMesh(*eyelid, submitDesc, std::numeric_limits<uint8_t>::max());
+			// Wholly frozen, the eyelids are white rather than the colour of the skin under them
+			submitDesc.tint = creature_fizz_look::EyelidsWhite(freeze) ? tint : tint * glm::vec4(eyes->lidColour, 1.0f);
+			draw(*eyelid);
 		}
 	}
 }
@@ -1972,9 +2079,9 @@ void Renderer::DrawLightBeams(const DrawSceneDesc& desc) const
 
 void Renderer::DrawMesh(const graphics::L3DMesh& mesh, const L3DMeshSubmitDesc& desc, uint8_t subMeshIndex) const noexcept
 {
+	// Some of the game's meshes hold no geometry at all, like the singing stones' centre: there is nothing to draw
 	if (mesh.GetNumSubMeshes() == 0)
 	{
-		SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "Mesh {} has no submeshes to draw", mesh.GetDebugName());
 		return;
 	}
 
@@ -2939,6 +3046,108 @@ void Renderer::DrawSnowfall(const DrawSceneDesc& desc) const
 	}
 }
 
+void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
+{
+	if (desc.viewId != RenderPass::Main || !Locator::abodeKnockSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto& knocks = Locator::abodeKnockSystem::value();
+	const auto town = knocks.GetReadoutTown();
+	static constexpr auto k_TextureId = entt::hashed_string("raw/misc0");
+	static constexpr auto k_AlphaTextureId = entt::hashed_string("raw/misc0a");
+	const auto& textures = Locator::resources::value().GetTextures();
+	const auto* townData = town.has_value() ? desc.entities.TryGet<const ecs::components::Town>(*town) : nullptr;
+	if (townData == nullptr || !textures.Contains(k_TextureId.value()) || !textures.Contains(k_AlphaTextureId.value()))
+	{
+		return;
+	}
+	struct Vertex
+	{
+		glm::vec3 position;
+		glm::vec2 uv;
+		uint32_t colour;
+	};
+	std::vector<Vertex> vertices;
+	// The little person is the second picture of the bottom row of the sheet's eight by eight
+	constexpr float k_Cell = 1.0f / 8.0f;
+	constexpr glm::vec2 k_Person {1.0f * k_Cell, 7.0f * k_Cell};
+	constexpr std::array<glm::vec2, 4> k_Corners {glm::vec2 {-1.0f, 1.0f}, glm::vec2 {1.0f, 1.0f}, glm::vec2 {1.0f, -1.0f},
+	                                              glm::vec2 {-1.0f, -1.0f}};
+	constexpr std::array<glm::vec2, 4> k_Uvs {glm::vec2 {0.0f, 0.0f}, glm::vec2 {k_Cell, 0.0f}, glm::vec2 {k_Cell, k_Cell},
+	                                          glm::vec2 {0.0f, k_Cell}};
+	const auto right = desc.camera->GetRight();
+	const auto up = desc.camera->GetUp();
+	const auto& infos = Locator::infoConstants::value().abode;
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const float scale = knocks.GetReadoutScale();
+	for (const auto abode : townData->abodes)
+	{
+		const auto* data = desc.entities.TryGet<const ecs::components::Abode>(abode);
+		const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(abode);
+		const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(abode);
+		if (data == nullptr || transform == nullptr || mesh == nullptr || !meshes.Contains(mesh->id))
+		{
+			continue;
+		}
+		const auto adults = static_cast<uint32_t>(std::ranges::count_if(data->inhabitants, [&desc](entt::entity villager) {
+			const auto* person = desc.entities.TryGet<const ecs::components::Villager>(villager);
+			return person != nullptr && person->lifeStage == ecs::components::Villager::LifeStage::Adult;
+		}));
+		// Above the house by its model's height and a little more
+		auto point = transform->position;
+		point.y += meshes.Handle(mesh->id)->GetBoundingBox().Size().y + ecs::abode_knock::k_RaisedAbove;
+		const auto places = infos.at(static_cast<size_t>(data->type)).maxVillagersInAbode;
+		for (const auto& marker : ecs::abode_knock::Readout(places, adults, scale))
+		{
+			const auto centre = point + right * marker.offset;
+			// The colour as the vertices take it, a byte each of red, green, blue and alpha from the lowest
+			const auto abgr =
+			    (marker.colour & 0xFF00FF00u) | ((marker.colour & 0xFFu) << 16u) | ((marker.colour >> 16u) & 0xFFu);
+			for (size_t c = 0; c < k_Corners.size(); ++c)
+			{
+				vertices.push_back({centre + (right * k_Corners.at(c).x + up * k_Corners.at(c).y) * marker.size,
+				                    k_Person + k_Uvs.at(c), abgr});
+			}
+		}
+	}
+	const auto count = static_cast<uint32_t>(vertices.size());
+	const auto quads = count / 4;
+	bgfx::VertexLayout layout;
+	layout.begin()
+	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+	    .end();
+	if (count == 0 || bgfx::getAvailTransientVertexBuffer(count, layout) < count ||
+	    bgfx::getAvailTransientIndexBuffer(quads * 6) < quads * 6)
+	{
+		return;
+	}
+	bgfx::TransientVertexBuffer vertexBuffer;
+	bgfx::TransientIndexBuffer indexBuffer;
+	bgfx::allocTransientVertexBuffer(&vertexBuffer, count, layout);
+	bgfx::allocTransientIndexBuffer(&indexBuffer, quads * 6);
+	std::memcpy(vertexBuffer.data, vertices.data(), count * sizeof(Vertex));
+	const auto indices = std::span(reinterpret_cast<uint16_t*>(indexBuffer.data), quads * 6);
+	constexpr std::array<uint16_t, 6> k_Triangles = {0, 1, 2, 2, 3, 0};
+	for (uint32_t q = 0; q < quads; ++q)
+	{
+		for (size_t t = 0; t < k_Triangles.size(); ++t)
+		{
+			indices[(q * 6) + t] = static_cast<uint16_t>((q * 4) + k_Triangles.at(t));
+		}
+	}
+	const auto* program = _shaderManager->GetShader("WorldTextured");
+	program->SetTextureSampler("s_diffuse", 0, *textures.Handle(k_TextureId));
+	program->SetTextureSampler("s_alpha", 1, *textures.Handle(k_AlphaTextureId));
+	bgfx::setVertexBuffer(0, &vertexBuffer);
+	bgfx::setIndexBuffer(&indexBuffer);
+	// Blended over what is behind, both sides, tested against depth but leaving none
+	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA);
+	program->Submit(static_cast<bgfx::ViewId>(TranslucentView(desc.viewId)));
+}
+
 void Renderer::DrawRain(const DrawSceneDesc& desc) const
 {
 	if (desc.viewId != RenderPass::Main || !Locator::rainSystem::has_value() ||
@@ -3010,29 +3219,27 @@ void Renderer::DrawRain(const DrawSceneDesc& desc) const
 
 void Renderer::DrawMoon(RenderPass viewId) const
 {
-	if (!Locator::camera::has_value())
+	if (!Locator::camera::has_value() || !Locator::skySystem::has_value())
 	{
 		return;
 	}
-	const auto placement = moon::Place(Locator::skySystem::value().GetClock().GetScriptTime());
-	if (!placement)
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto moonEntity = Locator::skySystem::value().GetMoon();
+	const auto [moon, body, glowLook] =
+	    registry.TryGet<ecs::components::Moon, ecs::components::CelestialBody, ecs::components::CelestialGlow>(moonEntity);
+	if (moon == nullptr || body == nullptr || !moon->placement.has_value())
 	{
 		return;
 	}
 	// The moon keeps its place beside the player's camera and faces it. Drawn so in the mirrored view, it is mirrored
 	// in the sea with everything else.
 	const auto& camera = Locator::camera::value();
-	const auto centre = camera.GetOrigin() + placement->offset;
+	const auto centre = camera.GetOrigin() + moon->placement->offset;
 	const auto view = camera.GetViewMatrix(Camera::Interpolation::Current);
 	const auto basis = moon::Basis(view, glm::inverse(view), centre);
-	const auto moonColour = _landLightTable ? _landLightTable->GetMoonColour() : 0xFFFFFFu;
-	const glm::vec3 colour = glm::vec3(static_cast<float>((moonColour >> 16) & 0xFFu),
-	                                   static_cast<float>((moonColour >> 8) & 0xFFu), static_cast<float>(moonColour & 0xFFu)) /
-	                         255.0f;
+	const auto& colour = moon->colour;
 	// It shows less through an overcast
-	const float alpha =
-	    sky_dome::ThroughOvercast(placement->alpha, _overcast, detail_level::Fog(Locator::config::value().detailLevel)) /
-	    255.0f;
+	const float alpha = moon->strength / 255.0f;
 	if (alpha <= 0.0f)
 	{
 		return;
@@ -3040,15 +3247,13 @@ void Renderer::DrawMoon(RenderPass viewId) const
 
 	// First its glow, added to the sky
 	const auto& textures = Locator::resources::value().GetTextures();
-	const auto atmos = entt::hashed_string("raw/ATMOS");
-	const auto atmosAlpha = entt::hashed_string("raw/ATMOSA");
 	bgfx::VertexLayout layout;
 	layout.begin()
 	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
 	    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
 	    .end();
 	constexpr auto k_GlowVertices = static_cast<uint32_t>(moon::k_GlowIndices.size());
-	if (textures.Contains(atmos.value()) && textures.Contains(atmosAlpha.value()) &&
+	if (glowLook != nullptr && textures.Contains(glowLook->textureId) && textures.Contains(glowLook->alphaTextureId) &&
 	    bgfx::getAvailTransientVertexBuffer(k_GlowVertices, layout) == k_GlowVertices)
 	{
 		struct Vertex
@@ -3070,8 +3275,8 @@ void Renderer::DrawMoon(RenderPass viewId) const
 		const glm::vec4 glowColour {moon::GlowColour(colour), alpha};
 		const glm::vec4 celestial {0.0f, 0.0f, 0.0f, 1.0f};
 		bgfx::setTransform(glm::value_ptr(identity));
-		program->SetTextureSampler("s_diffuse", 0, *textures.Handle(atmos));
-		program->SetTextureSampler("s_alpha", 1, *textures.Handle(atmosAlpha));
+		program->SetTextureSampler("s_diffuse", 0, *textures.Handle(glowLook->textureId));
+		program->SetTextureSampler("s_alpha", 1, *textures.Handle(glowLook->alphaTextureId));
 		program->SetUniformValue("u_colour", &glowColour);
 		program->SetUniformValue("u_celestial", &celestial);
 		bgfx::setVertexBuffer(0, &buffer);
@@ -3081,13 +3286,12 @@ void Renderer::DrawMoon(RenderPass viewId) const
 
 	// Then the moon, blended over the sky, its face turned to the real moon's phase. It leaves its depth, so the land
 	// nearer than it is drawn over it and the land beyond it stays hidden.
-	const auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch());
-	const auto phase = moon::Phase(now.count());
+	const auto phase = moon->phase;
 	DrawCelestialMesh(
 	    viewId, {
-	                .meshId = SkyInterface::k_MoonMeshId.value(),
-	                .textureId = SkyInterface::k_MoonTextureId.value(),
-	                .alphaTextureId = SkyInterface::k_MoonAlphaTextureId.value(),
+	                .meshId = body->meshId,
+	                .textureId = body->textureId,
+	                .alphaTextureId = body->alphaTextureId,
 	                .model = moon::Model(basis, centre, phase),
 	                .colour = glm::vec4(colour, alpha),
 	                .celestial = {std::cos(phase), std::sin(phase), 1.0f, 1.0f},
@@ -3097,21 +3301,24 @@ void Renderer::DrawMoon(RenderPass viewId) const
 
 void Renderer::DrawSun(RenderPass viewId) const
 {
-	const auto placement = sun::Place(Locator::skySystem::value().GetClock().GetScriptTime());
-	if (!placement)
+	if (!Locator::skySystem::has_value())
 	{
 		return;
 	}
-	// It shows less through an overcast
-	const float alpha =
-	    sky_dome::ThroughOvercast(placement->alpha, _overcast, detail_level::Fog(Locator::config::value().detailLevel));
-	// In a warm colour, added to the sky drawn before it, leaving no depth; the land drawn after it covers it
+	const auto [sun, body] = Locator::entitiesRegistry::value().TryGet<ecs::components::Sun, ecs::components::CelestialBody>(
+	    Locator::skySystem::value().GetSun());
+	if (sun == nullptr || body == nullptr || !sun->placement.has_value())
+	{
+		return;
+	}
+	// In a warm colour, shown less through an overcast, added to the sky drawn before it, leaving no depth; the land
+	// drawn after it covers it
 	DrawCelestialMesh(viewId, {
-	                              .meshId = SkyInterface::k_SunMeshId.value(),
-	                              .textureId = SkyInterface::k_SunTextureId.value(),
-	                              .alphaTextureId = SkyInterface::k_SunTextureId.value(),
-	                              .model = SunModel(placement->position),
-	                              .colour = {0x95 / 255.0f, 0x7C / 255.0f, 0x63 / 255.0f, alpha / 255.0f},
+	                              .meshId = body->meshId,
+	                              .textureId = body->textureId,
+	                              .alphaTextureId = body->alphaTextureId,
+	                              .model = SunModel(sun->placement->position),
+	                              .colour = glm::vec4(sun->colour, sun->strength / 255.0f),
 	                              .celestial = glm::vec4(0.0f),
 	                              .state = k_AdditiveState | BGFX_STATE_DEPTH_TEST_GREATER,
 	                          });
@@ -3119,11 +3326,17 @@ void Renderer::DrawSun(RenderPass viewId) const
 
 void Renderer::DrawSunGlare(const Camera& camera) const
 {
-	const auto placement = sun::Place(Locator::skySystem::value().GetClock().GetScriptTime());
-	if (!placement)
+	if (!Locator::skySystem::has_value())
 	{
 		return;
 	}
+	const auto [sun, body] = Locator::entitiesRegistry::value().TryGet<ecs::components::Sun, ecs::components::CelestialBody>(
+	    Locator::skySystem::value().GetSun());
+	if (sun == nullptr || body == nullptr || !sun->placement.has_value())
+	{
+		return;
+	}
+	const auto& placement = sun->placement;
 	const auto model = SunModel(placement->position);
 
 	// Each sample of the sun hidden from the camera dims the glare by a fifth. The land hides it where the line from the
@@ -3183,9 +3396,9 @@ void Renderer::DrawSunGlare(const Camera& camera) const
 	// it the glare is tested against the depth of what is drawn: its solid parts hide it, and it shows through its glass
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	DrawCelestialMesh(RenderPass::Main, {
-	                                        .meshId = SkyInterface::k_SunMeshId.value(),
-	                                        .textureId = SkyInterface::k_SunTextureId.value(),
-	                                        .alphaTextureId = SkyInterface::k_SunTextureId.value(),
+	                                        .meshId = body->meshId,
+	                                        .textureId = body->textureId,
+	                                        .alphaTextureId = body->alphaTextureId,
 	                                        .model = model * glm::scale(glm::vec3(sun::k_GlareScale)),
 	                                        .colour = {0xA0 / 255.0f, 0x6A / 255.0f, 0x35 / 255.0f,
 	                                                   _sunGlare * placement->alpha / (255.0f * 255.0f)},
@@ -3513,6 +3726,85 @@ void Renderer::UploadCreatureSkins(const DrawSceneDesc& drawDesc) const
 	std::erase_if(_creatureSkins, [&seen](const auto& entry) { return !std::ranges::binary_search(seen, entry.first); });
 }
 
+void Renderer::UploadAnimalBones(const DrawSceneDesc& drawDesc) const
+{
+	// The bones' texture is this many texels wide: 256 matrices a row
+	constexpr uint32_t k_BoneTextureWidth = 1024;
+	_animalBoneGroups.clear();
+	_animalBones.clear();
+	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	struct Drawn
+	{
+		uint32_t instance;
+		const ecs::components::AnimalPose* pose;
+	};
+	std::unordered_map<entt::id_type, std::vector<Drawn>> byModel;
+	for (const auto& [entity, instance] : renderCtx.entityDraws)
+	{
+		const auto* pose = drawDesc.entities.TryGet<const ecs::components::AnimalPose>(entity);
+		const auto* mesh = drawDesc.entities.TryGet<const ecs::components::Mesh>(entity);
+		if (pose != nullptr && mesh != nullptr)
+		{
+			byModel[mesh->id].push_back({.instance = instance, .pose = pose});
+		}
+	}
+	for (const auto& [meshId, animals] : byModel)
+	{
+		// Only a model all of whose instances are animals, none fading and all in the same light
+		const auto placers = renderCtx.instancedDrawDescs.find(meshId);
+		if (placers == renderCtx.instancedDrawDescs.end() || placers->second.count != animals.size() ||
+		    !meshes.Contains(meshId))
+		{
+			continue;
+		}
+		const auto model = meshes.Handle(meshId);
+		const auto& rest = model->GetBoneMatrices();
+		const auto light = animals.front().pose->light;
+		if (!model->IsBoned() || rest.empty() || std::ranges::any_of(animals, [light](const Drawn& drawn) {
+			    return drawn.pose->alpha < 255 || drawn.pose->light != light;
+		    }))
+		{
+			continue;
+		}
+		const auto first = static_cast<uint32_t>(_animalBones.size());
+		const auto bones = static_cast<uint32_t>(rest.size());
+		_animalBones.resize(_animalBones.size() + (static_cast<size_t>(bones) * animals.size()));
+		for (const auto& drawn : animals)
+		{
+			// Each in its place among the model's instances, in the pose its clip gives it, or its model's own
+			const auto& posed = drawn.pose->bones.size() == rest.size() ? drawn.pose->bones : rest;
+			const auto place = first + ((drawn.instance - placers->second.offset) * bones);
+			std::ranges::copy(posed, _animalBones.begin() + place);
+		}
+		_animalBoneGroups.emplace(meshId,
+		                          AnimalBoneGroup {.firstMatrix = first,
+		                                           .bones = bones,
+		                                           .brightestLand = light == ecs::components::AnimalLight::BrightestLand});
+	}
+	if (_animalBones.empty())
+	{
+		return;
+	}
+	// A texture tall enough for every matrix, grown by doubling as the animals grow in number
+	const auto texels = static_cast<uint32_t>(_animalBones.size()) * 4;
+	const auto rows = (texels + k_BoneTextureWidth - 1) / k_BoneTextureWidth;
+	if (!_animalBoneTexture || _animalBoneTexture->GetResolution().y < rows)
+	{
+		uint32_t height = 1;
+		while (height < rows)
+		{
+			height *= 2;
+		}
+		_animalBoneTexture = std::make_unique<Texture2D>("Animal Bones");
+		_animalBoneTexture->CreateWithinFrame(static_cast<uint16_t>(k_BoneTextureWidth), static_cast<uint16_t>(height), 1,
+		                                      TextureFormat::RGBA32F, Wrapping::ClampEdge, Filter::Nearest, nullptr);
+	}
+	const auto resolution = _animalBoneTexture->GetResolution();
+	_animalBones.resize(static_cast<size_t>(resolution.x) * resolution.y / 4);
+	_animalBoneTexture->Update(_animalBones.data(), static_cast<uint32_t>(_animalBones.size() * sizeof(glm::mat4)));
+}
+
 namespace
 {
 /// The hand the player moves, which the others follow in how they look
@@ -3589,9 +3881,14 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 	{
 		return;
 	}
-	auto& sky = Locator::skySystem::value();
-	const auto frame = sky.AdvanceDome();
-	if (frame.Get().empty())
+	const auto* dome =
+	    Locator::entitiesRegistry::value().TryGet<const ecs::components::SkyDome>(Locator::skySystem::value().GetDome());
+	if (dome == nullptr || dome->frameRows.Get().empty())
+	{
+		return;
+	}
+	const auto* pictures = Locator::resources::value().GetTextures().Find(dome->textureId);
+	if (pictures == nullptr)
 	{
 		return;
 	}
@@ -3605,7 +3902,7 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 	const auto viewId = SetUpLandView(RenderPass::SkyDome, *_skyDomeFrameBuffer, k_Size);
 	const auto& program = *_shaderManager->GetShader("SkyDome");
 	constexpr auto k_Rows = static_cast<float>(sky_dome::k_Rows);
-	for (const auto& rows : frame.Get())
+	for (const auto& rows : dome->frameRows.Get())
 	{
 		const auto times = sky_dome::TimePair(rows.skyType);
 		const auto first = static_cast<float>(rows.first);
@@ -3614,7 +3911,7 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 		{
 			// The pictures are laid out a layer for each time of day within each alignment
 			const glm::vec4 u_skyDome {alignment * 3, times.lower, times.upper, times.weight};
-			program.SetTextureSampler("s_diffuse", 0, sky.GetTexture());
+			program.SetTextureSampler("s_diffuse", 0, *pictures);
 			program.SetUniformValue("u_skyDome", &u_skyDome);
 			const auto top = static_cast<float>(alignment) * k_Rows;
 			SubmitLandQuad(viewId, program, {0.0f, top + first}, {k_Rows, top + last}, {0.0f, first / k_Rows},
@@ -3774,15 +4071,17 @@ void Renderer::DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const
 	const auto proj = island.GetOrthoProj();
 	bgfx::setViewTransform(viewId, &view, &proj);
 
+	// Meshes without bones cast with the shader that declares only their model matrix
 	const auto* shader = _shaderManager->GetShader("ObjectShadowInstanced");
+	const auto* staticShader = _shaderManager->GetShader("ObjectShadowStaticInstanced");
 	const auto sun = glm::vec4(ObjectShadows::k_Sun, 0.0f);
 	shader->SetUniformValue("u_shadowSun", &sun);
+	staticShader->SetUniformValue("u_shadowSun", &sun);
 
 	const auto& meshManager = Locator::resources::value().GetMeshes();
 	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
 	L3DMeshSubmitDesc submitDesc = {};
 	submitDesc.viewId = RenderPass::ObjectShadow;
-	submitDesc.program = shader;
 	// Overlapping shadows cover the same texels, both sides of every triangle cast
 	submitDesc.state = BGFX_STATE_WRITE_R;
 
@@ -3804,6 +4103,8 @@ void Renderer::DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const
 				submitDesc.modelMatrices = mesh->GetBoneMatrices().data();
 				submitDesc.matrixCount = static_cast<uint8_t>(mesh->GetBoneMatrices().size());
 			}
+			submitDesc.program =
+			    bone_budget::For(submitDesc.matrixCount) == bone_budget::Budget::Single ? staticShader : shader;
 			DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 		}
 	};
@@ -3832,7 +4133,6 @@ TextureHandle Renderer::UpdateLandLight() const
 		const auto& haze = _landLightTable->GetHaze();
 		_haze = {glm::vec4(haze.nearDistance, haze.farDistance, haze.k, 1.0f), glm::vec4(haze.colour, 0.0f)};
 		const auto detailLevel = Locator::config::value().detailLevel;
-		_overcast = overcast;
 		_skyTint = sky_dome::TintOf({
 		    .hazeColour = haze.colour,
 		    .overcast = overcast,
@@ -4217,6 +4517,7 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	SelectDrawnCreatures(drawDesc);
 	UploadCreatureSkins(drawDesc);
 	UploadHandSkins();
+	UploadAnimalBones(drawDesc);
 	{
 		const auto& textures = Locator::resources::value().GetTextures();
 		_snowTexture = textures.Find(snow_cover::k_TextureId.value());
@@ -4338,9 +4639,31 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	const auto* spriteShader = _shaderManager->GetShader("Sprite");
 	const auto* debugShaderInstanced = _shaderManager->GetShader("DebugLineInstanced");
 	const auto* objectShaderInstanced = _shaderManager->GetShader("ObjectInstanced");
+	const auto* objectShaderFewBonesInstanced = _shaderManager->GetShader("ObjectFewBonesInstanced");
 	const auto* objectShaderMorphInstanced = _shaderManager->GetShader("ObjectMorphInstanced");
+	const auto* objectShaderPosedInstanced = _shaderManager->GetShader("ObjectPosedInstanced");
 	const auto* objectShaderStaticInstanced = _shaderManager->GetShader("ObjectStaticInstanced");
 	const auto* objectShaderHeightMapInstanced = _shaderManager->GetShader("ObjectHeightMapInstanced");
+	const auto* objectShaderHeightMapStaticInstanced = _shaderManager->GetShader("ObjectHeightMapStaticInstanced");
+	// Each mesh is drawn with the shader declaring the fewest bones that hold its skeleton
+	const auto objectProgramFor = [&](uint8_t boneCount, bool morphWithTerrain) {
+		const auto budget = bone_budget::For(boneCount);
+		if (morphWithTerrain)
+		{
+			return budget == bone_budget::Budget::Single ? objectShaderHeightMapStaticInstanced
+			                                             : objectShaderHeightMapInstanced;
+		}
+		switch (budget)
+		{
+		case bone_budget::Budget::Single:
+			return objectShaderStaticInstanced;
+		case bone_budget::Budget::Few:
+			return objectShaderFewBonesInstanced;
+		case bone_budget::Budget::All:
+			break;
+		}
+		return objectShaderInstanced;
+	};
 	const auto* objectShaderLightmapInstanced = _shaderManager->GetShader("ObjectLightmapInstanced");
 	const auto* objectShaderReflectiveLightmapInstanced = _shaderManager->GetShader("ObjectReflectiveLightmapInstanced");
 
@@ -4376,7 +4699,12 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			submitDesc.matrixCount = 1;
 			submitDesc.isSky = true;
 
-			DrawMesh(Locator::skySystem::value().GetMesh(), submitDesc, 0);
+			const auto* dome =
+			    Locator::entitiesRegistry::value().TryGet<ecs::components::SkyDome>(Locator::skySystem::value().GetDome());
+			if (const auto* mesh = dome != nullptr ? Locator::resources::value().GetMeshes().Find(dome->meshId) : nullptr)
+			{
+				DrawMesh(*mesh, submitDesc, 0);
+			}
 			DrawSun(skyViewId);
 			DrawMoon(skyViewId);
 		}
@@ -4578,7 +4906,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			                               bool useMaterialBlending, uint32_t first, uint32_t count,
 			                               const EntityPose* pose = nullptr,
 			                               const L3DMeshSubmitDesc::MorphTargets* handMorph = nullptr,
-			                               std::optional<graphics::DynamicVertexBufferHandle> instances = std::nullopt) {
+			                               std::optional<graphics::DynamicVertexBufferHandle> instances = std::nullopt,
+			                               const AnimalBoneGroup* posedGroup = nullptr) {
 				auto mesh = meshManager.Handle(meshId);
 
 				submitDesc.useMaterialBlending = useMaterialBlending;
@@ -4634,9 +4963,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.joints = Locator::temple::value().GetDoors().GetJoints();
 				}
 				submitDesc.morphWithTerrain = placers.morphWithTerrain;
-				submitDesc.program = submitDesc.morphWithTerrain ? objectShaderHeightMapInstanced
-				                     : mesh->IsBoned()           ? objectShaderInstanced
-				                                                 : objectShaderStaticInstanced;
+				submitDesc.program = objectProgramFor(submitDesc.matrixCount, submitDesc.morphWithTerrain);
 				// Only the temple's meshes have lightmaps, and they don't stand on the land
 				submitDesc.lightmapProgram = submitDesc.morphWithTerrain ? nullptr
 				                             : placers.showsReflection   ? objectShaderReflectiveLightmapInstanced
@@ -4653,6 +4980,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.landLightScale = CreatureLandLightScale(desc.viewId);
 					submitDesc.modelMatrices = pose->bones.data();
 					submitDesc.matrixCount = static_cast<uint8_t>(pose->bones.size());
+					submitDesc.program = objectProgramFor(submitDesc.matrixCount, submitDesc.morphWithTerrain);
 					if (pose->morphTargets != nullptr)
 					{
 						submitDesc.program = objectShaderMorphInstanced;
@@ -4664,6 +4992,20 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					submitDesc.program = objectShaderMorphInstanced;
 					submitDesc.morphTargets = handMorph;
+				}
+				// The animals of a model all at once, each posed by its own bones from the texture
+				submitDesc.boneTexture = nullptr;
+				if (posedGroup != nullptr && _animalBoneTexture)
+				{
+					submitDesc.landLightScale = CreatureLandLightScale(desc.viewId);
+					submitDesc.program = objectShaderPosedInstanced;
+					const static auto identity = glm::mat4(1.0f);
+					submitDesc.modelMatrices = &identity;
+					submitDesc.matrixCount = 1;
+					const auto size = _animalBoneTexture->GetResolution();
+					submitDesc.boneTexture = _animalBoneTexture.get();
+					submitDesc.bones = {static_cast<float>(posedGroup->firstMatrix), static_cast<float>(posedGroup->bones),
+					                    static_cast<float>(size.x), static_cast<float>(size.y)};
 				}
 
 				// TODO(bwrsandman): choose the correct LOD
@@ -4687,12 +5029,15 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					continue;
 				}
 				const RenderContext::InstancedDrawDesc placers {0, 1, build.morphWithTerrain, false};
+				// A part cut at a height is drawn from both sides; a scaffold standing whole, only sunk into the land, is
+				// drawn as the building's own model is
 				const auto drawPart = [&](uint32_t instance, std::optional<float> cut, std::optional<uint32_t> status,
 				                          bool innerWalls) {
 					submitDesc.cutAbove = cut;
 					submitDesc.modelCutHeight = status.has_value() || build.morphWithTerrain ? std::nullopt : build.capHeight;
-					submitDesc.twoSided = true;
+					submitDesc.twoSided = cut.has_value();
 					submitDesc.innerWalls = innerWalls;
+					submitDesc.innerWallInset = build.innerWallInset;
 					submitDesc.onlyStatus = status;
 					drawInstances(build.meshId, placers, false, instance, 1, nullptr, nullptr,
 					              renderCtx.partialBuildInstanceBuffer);
@@ -4700,6 +5045,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.modelCutHeight.reset();
 					submitDesc.twoSided = false;
 					submitDesc.innerWalls = false;
+					submitDesc.innerWallInset.reset();
 					submitDesc.onlyStatus.reset();
 				};
 				if (build.modelCut.has_value())
@@ -4766,16 +5112,63 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					continue;
 				}
-				drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
-				DrawCreatureEyes(desc, entity, submitDesc);
-				DrawCreatureHair(desc, entity);
+				const auto* spells = desc.entities.TryGet<const ecs::components::CreatureSpells>(entity);
+				const float fizz = spells != nullptr ? spells->fizz : 0.0f;
+				if (desc.viewId == RenderPass::Reflection)
+				{
+					// The sea reflects the body alone, without its eyes or hair, whole, and only until it has fizzed a
+					// fifth of the way out
+					if (creature_fizz_look::ReflectionShown(fizz))
+					{
+						drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
+					}
+					continue;
+				}
+				uint32_t eyesSortDepth = 0;
+				if (creature_fizz_look::Fizzing(fizz) && instance < renderCtx.instanceUniforms.size())
+				{
+					// Fizzing, it blends with what is behind it, but in its place among the solid models: after them in
+					// this view, before all that blends, the nearest fizzing creature first. First its depth alone, where
+					// the static scrolling over its skin is strong enough, then its body blended over just that depth.
+					const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
+					const auto depth = zsort::BeforeSorted(position, cameraOrigin);
+					const auto level = creature_fizz_look::Level(fizz);
+					const auto mainState = submitDesc.state;
+					submitDesc.viewId = translucentViewId;
+					submitDesc.fizz = L3DMeshSubmitDesc::Fizz {
+					    .pass = L3DMeshSubmitDesc::Fizz::Pass::Depth, .level = level, .scroll = spells->staticScroll};
+					submitDesc.state = BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA;
+					submitDesc.sortDepth = depth;
+					drawInstances(mesh->id, placers->second, false, instance, 1, &pose);
+					submitDesc.fizz->pass = L3DMeshSubmitDesc::Fizz::Pass::Body;
+					submitDesc.state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_DEPTH_TEST_EQUAL |
+					                   BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA;
+					submitDesc.sortDepth = depth > 0 ? depth - 1 : 0;
+					drawInstances(mesh->id, placers->second, false, instance, 1, &pose);
+					eyesSortDepth = submitDesc.sortDepth;
+					submitDesc.fizz.reset();
+					submitDesc.state = mainState;
+					submitDesc.sortDepth = 0;
+					submitDesc.viewId = desc.viewId;
+				}
+				else if (creature_fizz_look::Drawn(fizz))
+				{
+					drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
+				}
+				const float freeze = spells != nullptr ? spells->freeze : 0.0f;
+				DrawCreatureEyes(desc, entity, submitDesc, fizz, freeze, eyesSortDepth);
+				// The hair is drawn as it is until the creature has fizzed or frozen a fifth of the way, then not at all
+				if (creature_fizz_look::HairShown(fizz, freeze))
+				{
+					DrawCreatureHair(desc, entity);
+				}
 			}
 			// The animals, each posed by its own clip and in its own light; one fading out blends over the rest
 			const auto drawAnimal = [&](entt::entity entity, uint32_t instance, bool translucent) {
 				const auto* pose = desc.entities.TryGet<const ecs::components::AnimalPose>(entity);
 				const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
 				if (pose == nullptr || mesh == nullptr || pose->bones.empty() || (pose->alpha < 255) != translucent ||
-				    !meshManager.Contains(mesh->id))
+				    !meshManager.Contains(mesh->id) || _animalBoneGroups.contains(mesh->id))
 				{
 					return;
 				}
@@ -4829,6 +5222,28 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				                             .morphTargets = nullptr};
 				drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &entityPose);
 			};
+			// The animals of a model drawn at once, in their light: the brightest of the land's, or white
+			for (const auto& [meshId, group] : _animalBoneGroups)
+			{
+				const auto placers = renderCtx.instancedDrawDescs.find(meshId);
+				if (placers == renderCtx.instancedDrawDescs.end() ||
+				    (desc.viewId == RenderPass::Reflection && placers->second.hiddenFromReflection))
+				{
+					continue;
+				}
+				glm::vec3 colour(255.0f);
+				if (group.brightestLand && _landLightTable)
+				{
+					const auto texel = _landLightTable->GetTexels().back();
+					colour = glm::vec3(static_cast<float>(texel & 0xFFu), static_cast<float>((texel >> 8) & 0xFFu),
+					                   static_cast<float>((texel >> 16) & 0xFFu));
+				}
+				submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = colour, .alpha = 1.0f};
+				drawInstances(meshId, placers->second, placers->second.materialBlending, placers->second.offset,
+				              placers->second.count, nullptr, nullptr, std::nullopt, &group);
+				submitDesc.objectLook.reset();
+				submitDesc.boneTexture = nullptr;
+			}
 			for (const auto& [entity, instance] : renderCtx.entityDraws)
 			{
 				drawAnimal(entity, instance, false);
@@ -4872,6 +5287,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawTempleMap(desc);
 			DrawTempleMapMarkers(desc);
 			DrawCaveTrophies(desc);
+			DrawCaveSeeds(desc);
 			DrawGroundBlobs(desc);
 			DrawGlobes(desc);
 			DrawHandMiracleBands(desc);
@@ -4880,6 +5296,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawWaterRings(desc);
 			DrawRain(desc);
 			DrawSnowfall(desc);
+			DrawKnockReadout(desc);
 			DrawChimneySmoke(desc);
 			DrawShieldDomes(desc);
 			DrawDestructionGhosts(desc);
@@ -5081,6 +5498,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	{
 		DrawHandWaterGlow(desc);
 	}
+	// So do the fish farms' shoals, swimming under it
+	DrawFishShoals(desc);
 
 	// Enable stats or debug text.
 	auto debugMode = BGFX_DEBUG_NONE;

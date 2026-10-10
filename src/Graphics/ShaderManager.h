@@ -12,6 +12,8 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "RenderPass.h"
 #include "ShaderProgram.h"
@@ -41,6 +43,9 @@ public:
 	void FrameEnded() const;
 
 	void SetCamera(RenderPass viewId, const Camera& camera);
+
+	/// Every program's name with the samplers of both its shaders, as their Vulkan builds give them
+	[[nodiscard]] static std::vector<std::pair<std::string, std::vector<shader_samplers::Sampler>>> ProgramSamplers();
 
 private:
 	using ShaderMap = std::map<std::string, const ShaderProgram*>;

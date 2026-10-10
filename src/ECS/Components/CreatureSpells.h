@@ -11,6 +11,8 @@
 
 #include <optional>
 
+#include <glm/vec2.hpp>
+
 #include "Creature/CreatureSpellMind.h"
 #include "Creature/CreatureSpells.h"
 
@@ -25,6 +27,8 @@ struct CreatureSpells
 	float freeze {0.0f};
 	/// How far it has fizzed out of sight, 0 to the most invisible makes it
 	float fizz {0.0f};
+	/// How far the static it fizzes through has slid across its skin, which slides on only while it is drawn fizzing
+	glm::vec2 staticScroll {0.0f};
 	/// Others don't see it while it is invisible
 	bool invisible {false};
 	/// The freeze paused its mind, which it starts again as it thaws

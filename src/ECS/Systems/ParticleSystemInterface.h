@@ -19,9 +19,11 @@
 #include <vector>
 
 #include <entt/core/fwd.hpp>
+#include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
 #include "Enums.h"
+#include "Particles/ManaPathMaths.h"
 #include "Particles/ParticleDrawFrame.h"
 #include "Particles/ParticleSpellLink.h"
 #include "Particles/PlasmaCommand.h"
@@ -30,6 +32,7 @@ namespace openblack::particles
 {
 class Effect;
 struct GestureTrail;
+class LightSheet;
 struct ShieldSphere;
 } // namespace openblack::particles
 
@@ -73,6 +76,8 @@ public:
 		/// Seconds left of a spot visual's life, none for one that lasts until it is closed
 		std::optional<float> secondsLeft;
 		std::vector<std::string> unportedClasses;
+		/// The object it follows and ends with, if any
+		entt::entity owner {entt::null};
 	};
 
 	virtual ~ParticleSystemInterface() = default;
@@ -103,6 +108,8 @@ public:
 	/// Everything the effect draws is moved by this from where its last step left it, as the miracle in the hand follows
 	/// the hand between turns
 	virtual void SetDrawOffset(EffectId id, glm::vec3 offset) = 0;
+	/// An effect of the temple's rooms, drawn while the player is in the temple rather than with the world's
+	virtual void SetInTemple(EffectId id) = 0;
 	/// The live shield holding a point, its sphere grown by a margin, if any
 	[[nodiscard]] virtual std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const = 0;
 	/// How many particle sounds are playing or dying away, for the debug window
@@ -116,6 +123,9 @@ public:
 	/// A symbol of belief rises from something that gained it, in the effect every symbol rises in, kept running once
 	/// wanted; no more than a few hundred wait
 	virtual void AddBeliefSprite(const particles::BeliefSprite& /*sprite*/) {}
+	/// A spark of the mana path the hand lets out past the border, in the effect every such spark runs in, started
+	/// once wanted and kept running
+	virtual void AddHandManaPathSpark(const particles::mana_path::Spark& /*spark*/) {}
 
 	/// This computer's hand in a frame, for the chain that follows it while it gestures
 	struct HandFrame
@@ -130,6 +140,9 @@ public:
 	};
 	/// A recognised gesture's trail to show on the land, in the effect every trail shows in, which runs all the time
 	virtual void AddGestureTrail(std::shared_ptr<particles::GestureTrail> trail) = 0;
+	/// A sheet of light standing on the land, drawn and moved on by time for as long as its owner keeps it and doesn't
+	/// hide it
+	virtual void AddLightSheet(const std::shared_ptr<particles::LightSheet>& /*sheet*/) {}
 	/// Once a frame, by the frame's game time (none while the game is paused): the trails' sheets of light move on, and
 	/// the chain behind the hand steps
 	virtual void UpdateFrame(float gameSeconds, const HandFrame& hand) = 0;
@@ -145,8 +158,9 @@ public:
 	virtual void Reset() = 0;
 
 	/// Everything the effects draw this frame, t of the way through the game turn, into a frame that is cleared first.
-	/// The frame doesn't depend on the camera: each pass orders it for its own (particles::draw::Order).
-	virtual void CollectDrawFrame(float turnFraction, particles::draw::Frame& frame) const = 0;
+	/// The frame doesn't depend on the camera: each pass orders it for its own (particles::draw::Order). In the temple
+	/// only the temple's effects are drawn, and outside it only the world's.
+	virtual void CollectDrawFrame(float turnFraction, particles::draw::Frame& frame, bool inTemple) const = 0;
 	[[nodiscard]] virtual DrawStats GetDrawStats() const = 0;
 	[[nodiscard]] virtual std::vector<EffectInfo> GetEffects() const = 0;
 	/// The particle files' names, for the debug window
