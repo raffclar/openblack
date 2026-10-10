@@ -42,6 +42,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
+#include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/SkinOverride.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Stream.h"
@@ -162,7 +163,8 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 			count.first->second.translucent = true;
 			count.first->second.additiveShare = translucent->share;
 		}
-		if (const auto* mark = registry.TryGet<const GroundMark>(entity); mark != nullptr && mark->alpha.has_value())
+		if (const auto* mark = registry.TryGet<const GroundMark>(entity);
+		    (mark != nullptr && mark->alpha.has_value()) || registry.AllOf<SeeThrough>(entity))
 		{
 			count.first->second.translucent = true;
 			count.first->second.instanceAlpha = true;
@@ -517,6 +519,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    if (const auto* mark = registry.TryGet<const GroundMark>(entity); mark != nullptr && mark->alpha.has_value())
 		    {
 			    look.z = -(1.0f - static_cast<float>(*mark->alpha) / 255.0f);
+		    }
+		    // A see-through copy is blended by its own alpha
+		    if (const auto* seeThrough = registry.TryGet<const SeeThrough>(entity))
+		    {
+			    look.z = -(1.0f - static_cast<float>(seeThrough->alpha) / 255.0f);
 		    }
 		    // Something charred by fire is drawn grey
 		    if (look.y == 0.0f && Locator::fireSystem::has_value())

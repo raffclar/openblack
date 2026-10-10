@@ -812,7 +812,7 @@
   "query": "living.animated_statics"
  },
  {
-  "description": "The village centres' totems: their town centre, the share they are held at, and whether the hand grips one",
+  "description": "The village centres' totems: their town centre and icon, the share they stand at, ease to and are held at, how fast they move, whether the hand grips one, and their see-through second totem",
   "kind": "list",
   "parameters": [],
   "query": "living.totems"
@@ -1278,6 +1278,11 @@
     "description": "Numbers, true or false, [x, y, z], {\"object\": id}, {\"int\": n} or {\"float\": x}, as many as it takes; a plain number goes on the stack as the type the native's slot takes, {\"int\"} and {\"float\"} as given. Each goes on the stack as the type the native takes, as a script's call puts it",
     "name": "args",
     "type": "array"
+   },
+   {
+    "description": "Pushes exactly the values given, past the check of how many the native takes and of their types (for a native that takes a different count than the language's table says, as GET_ARENA does): each number must say its type, {\"int\": n} or {\"float\": x}",
+    "name": "raw",
+    "type": "boolean"
    }
   ],
   "query": "script.call",
@@ -1467,7 +1472,7 @@
   "writes": true
  },
  {
-  "description": "The pictures still to take, and any that failed",
+  "description": "The pictures still to take (pending), the held one waiting for its camera (holding), those taken but not yet written (writing), and any that failed with why",
   "kind": "object",
   "parameters": [],
   "query": "screenshot.pending"

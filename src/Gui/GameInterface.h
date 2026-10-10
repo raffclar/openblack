@@ -16,6 +16,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <glm/vec2.hpp>
 
@@ -110,6 +111,17 @@ public:
 	void SetCreaturePanel(std::optional<creature_panel::Values> values) { _creaturePanel = values; }
 	/// The fight's panel shown this frame, or none: each fighter's name over its health and stamina
 	void SetFightPanel(std::optional<creature_fight_hud::Values> values) { _fightPanel = std::move(values); }
+	/// A number floating up from a point of the world, where it is on the screen this frame
+	struct FloatingNumber
+	{
+		glm::vec2 screen;
+		std::u16string text;
+		/// Its colour, 0xAARRGGBB; drawn at its alpha over a black shadow
+		uint32_t colour;
+		uint8_t alpha;
+	};
+	/// The numbers floating up this frame, drawn the furthest first, under the interface
+	void SetFloatingNumbers(std::vector<FloatingNumber> numbers) { _floatingNumbers = std::move(numbers); }
 
 private:
 	/// A font with its glyphs, white with their coverage in alpha
@@ -130,6 +142,8 @@ private:
 	bool ProcessTattooEditorEvent(const SDL_Event& event);
 	/// Opens the tattoo editor's dialog as the editor opens, and moves it on
 	void UpdateTattooEditor(float deltaSeconds);
+	/// The floating numbers, each ending at its point over its shadow
+	void DrawFloatingNumbers();
 	/// The tooltip by the hand, its words and then its mouse
 	void DrawToolTip(glm::u16vec2 resolution);
 	/// The creature's status panel, at the left of the screen
@@ -175,6 +189,7 @@ private:
 	std::optional<glm::vec2> _handOnScreen;
 	std::optional<creature_panel::Values> _creaturePanel;
 	std::optional<creature_fight_hud::Values> _fightPanel;
+	std::vector<FloatingNumber> _floatingNumbers;
 	/// Whether the tooltip is left of the hand, which it moves to in the right third of the screen and from in the left
 	bool _toolTipOnLeft {false};
 	GameMenu::Action _action {GameMenu::Action::None};

@@ -490,6 +490,7 @@ openblack_setup_and_add_test(test_script_populate test_script_populate.cpp)
 openblack_setup_and_add_test(test_worship_sites test_worship_sites.cpp)
 target_link_libraries(test_worship_sites PRIVATE dance)
 openblack_setup_and_add_test(test_village_totem test_village_totem.cpp)
+openblack_setup_and_add_test(test_floating_number test_floating_number.cpp)
 openblack_setup_and_add_test(test_temple_heart test_temple_heart.cpp)
 openblack_setup_and_add_test(test_model_surface test_model_surface.cpp)
 target_link_libraries(test_model_surface PRIVATE l3d)
@@ -618,3 +619,15 @@ openblack_setup_and_add_test(test_help_text_display test_help_text_display.cpp)
 openblack_setup_and_add_test(test_dialogue_text test_dialogue_text.cpp)
 openblack_setup_and_add_test(test_advisor_voices test_advisor_voices.cpp)
 openblack_setup_and_add_test(test_script_spirits test_script_spirits.cpp)
+# Reads the shaders' sources; ctest also passes the folder, as a compiler cache shared between worktrees can give the
+# test an object built in another worktree
+openblack_setup_and_add_test(
+  test_instance_data_inputs graphics/test_instance_data_inputs.cpp
+)
+target_compile_definitions(
+  test_instance_data_inputs PRIVATE OPENBLACK_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(
+  test_instance_data_inputs
+  PROPERTIES ENVIRONMENT "OPENBLACK_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
+)
