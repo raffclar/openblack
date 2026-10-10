@@ -102,6 +102,7 @@ class MistSystemInterface;
 class CloudSystemInterface;
 class VillageLightSystemInterface;
 class FieldSystemInterface;
+class FishFarmSystemInterface;
 class AnimalSystemInterface;
 class SnowSystemInterface;
 class SnowfallSystemInterface;
@@ -223,6 +224,7 @@ struct Locator
 	using cloudSystem = entt::locator<ecs::systems::CloudSystemInterface>;
 	using villageLightSystem = entt::locator<ecs::systems::VillageLightSystemInterface>;
 	using fieldSystem = entt::locator<ecs::systems::FieldSystemInterface>;
+	using fishFarmSystem = entt::locator<ecs::systems::FishFarmSystemInterface>;
 	using animalSystem = entt::locator<ecs::systems::AnimalSystemInterface>;
 	using snowSystem = entt::locator<ecs::systems::SnowSystemInterface>;
 	using snowfallSystem = entt::locator<ecs::systems::SnowfallSystemInterface>;

@@ -44,6 +44,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mist.h"
 #include "ECS/Components/Player.h"
@@ -88,6 +89,7 @@
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
+#include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
@@ -237,6 +239,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"magicShieldSystem", "magic.state"},
     LocatorCoverage {"forestSystem", "living.forests"},
     LocatorCoverage {"fireflySystem", "living.fireflies"},
+    LocatorCoverage {"fishFarmSystem", "living.fish_farms"},
     LocatorCoverage {"gestureSystem", "players.gestures"},
     LocatorCoverage {"miracleFxSystem", "magic.state"},
     LocatorCoverage {"fireSystem", "magic.fires"},
@@ -753,6 +756,25 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 	              Serve<Locator::fireflySystem>(
 	                  "the fireflies", [](const ecs::systems::FireflySystemInterface& fireflies, const QueryContext& /*c*/) {
 		                  return Json {{"fireflies", fireflies.GetFireflies().size()}};
+	                  }));
+	provider->Add(Query("fish_farms", "The fish farms: their town, fish left, fishermen and shoal", {}, ResultKind::List),
+	              Serve<Locator::fishFarmSystem>(
+	                  "the fish farms", [](const ecs::systems::FishFarmSystemInterface& farms, const QueryContext& /*c*/) {
+		                  Json items = Json::array();
+		                  const auto* registry = Registry();
+		                  if (registry == nullptr)
+		                  {
+			                  return items;
+		                  }
+		                  registry->Each<const FishFarm>([&](entt::entity entity, const FishFarm& farm) {
+			                  auto item = Listed(*registry, entity);
+			                  item["town"] = farm.town == entt::null ? Json(nullptr) : Json(ToId(farm.town));
+			                  item["fish_left"] = farms.FishLeft(entity);
+			                  item["fishermen"] = farm.fishermen.size();
+			                  item["shoal"] = farm.shoal.has_value() ? Point(farm.shoal->centre) : Json(nullptr);
+			                  items.push_back(std::move(item));
+		                  });
+		                  return items;
 	                  }));
 	provider->Add(Query("chimneys", "The chimneys smoking", {}, ResultKind::List),
 	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {

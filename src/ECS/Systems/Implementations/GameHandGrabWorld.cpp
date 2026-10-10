@@ -32,6 +32,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
@@ -57,6 +58,7 @@
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
+#include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -189,6 +191,11 @@ glm::vec3 GameHandGrabWorld::LandNormalAt(glm::vec3 point) const
 
 hand_grab::HandGrabWorldInterface::Size GameHandGrabWorld::SizeOf(entt::entity object) const
 {
+	// A fish farm has no model: it reaches as far as its table says, and the hand keeps that high over it
+	if (Locator::entitiesRegistry::value().AllOf<FishFarm>(object))
+	{
+		return {.radius = fish_farm::k_Radius, .height = fish_farm::k_HandHeight};
+	}
 	const auto size = world_objects::SizeOf(object);
 	return {.radius = size.radius, .height = size.height};
 }
@@ -609,6 +616,20 @@ uint32_t GameHandGrabWorld::TakeFromPile(entt::entity pile, uint32_t amount)
 	return Locator::resourceStoreSystem::value().TakeFromPile(pile, facts->resource, amount, HandPlayer());
 }
 
+std::optional<fish_farm::Type> GameHandGrabWorld::FishFarmOf(entt::entity farm) const
+{
+	if (!Locator::entitiesRegistry::value().AllOf<FishFarm>(farm) || !Locator::fishFarmSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	return Locator::fishFarmSystem::value().GetType();
+}
+
+uint32_t GameHandGrabWorld::TakeFromFishFarm(entt::entity farm, uint32_t amount)
+{
+	return Locator::fishFarmSystem::has_value() ? Locator::fishFarmSystem::value().TakeFish(farm, amount) : 0;
+}
+
 std::optional<hand_grab::HandGrabWorldInterface::FieldFacts> GameHandGrabWorld::FieldFactsOf(entt::entity field) const
 {
 	const auto* data = Locator::entitiesRegistry::value().TryGet<const Field>(field);
@@ -677,10 +698,18 @@ std::optional<uint32_t> GameHandGrabWorld::StartScoopStream(ResourceType resourc
 	{
 		return std::nullopt;
 	}
-	// TODO(hand): a fish farm's fish stream as their own (openblack has no fish farms)
 	// Poisoned food streams as its own
 	const auto stream = resource == ResourceType::Wood ? k_ScoopWood : poisoned ? k_ScoopPoisonedFood : k_ScoopFood;
 	return Locator::particleSystem::value().Start(stream, source, 1.0f);
+}
+
+std::optional<uint32_t> GameHandGrabWorld::StartFishScoopStream(glm::vec3 source)
+{
+	if (!Locator::particleSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	return Locator::particleSystem::value().Start(ParticleType::FoodPickupFish, source, 1.0f);
 }
 
 void GameHandGrabWorld::StopScoopStream(uint32_t stream)

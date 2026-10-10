@@ -5370,6 +5370,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	{
 		DrawHandWaterGlow(desc);
 	}
+	// So do the fish farms' shoals, swimming under it
+	DrawFishShoals(desc);
 
 	// Enable stats or debug text.
 	auto debugMode = BGFX_DEBUG_NONE;

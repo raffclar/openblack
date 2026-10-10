@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <entt/entity/entity.hpp>
 #include <entt/fwd.hpp>
 #include <glm/fwd.hpp>
 
@@ -19,7 +20,9 @@ namespace openblack::ecs::archetypes
 class PotArchetype
 {
 public:
-	static entt::entity Create(const glm::vec3& position, float yAngleRadians, PotInfo type, int32_t amount);
+	/// A pot or pile holding an amount, belonging to a town or to none
+	static entt::entity Create(const glm::vec3& position, float yAngleRadians, PotInfo type, int32_t amount,
+	                           entt::entity town = entt::null);
 	/// A pot or pile holding nothing yet, as a storage pit makes one for what it is given
 	static entt::entity CreateEmpty(const glm::vec3& position, float yAngleRadians, PotInfo type);
 	PotArchetype() = delete;

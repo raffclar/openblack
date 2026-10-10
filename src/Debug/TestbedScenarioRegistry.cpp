@@ -2252,6 +2252,7 @@ std::vector<Scenario> Build()
 	AddNatureScenarios(all);
 	AddHandNavigationScenarios(all);
 	AddHandLookScenarios(all);
+	AddFishScenarios(all);
 	AddKnockScenarios(all);
 	return all;
 }
