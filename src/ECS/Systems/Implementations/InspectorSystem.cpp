@@ -266,6 +266,8 @@ void InspectorSystem::Service()
 	const auto now = std::chrono::steady_clock::now();
 	const auto seconds = std::chrono::duration<float>(now - _lastService).count();
 	_lastService = now;
+	// The camera shown elsewhere last frame (an override, a picture's) gets its own state back before anything moves it
+	_controls->camera.Unpin();
 	// A request answered here may load a land, while the loading helper answers the others
 	_server->Poll([this](std::string_view line) {
 		auto answer = _inspector.Handle(line);
@@ -294,6 +296,12 @@ void InspectorSystem::Service()
 
 void InspectorSystem::PlaceCamera()
 {
+	// The view the inspector overrides the camera with, then a picture's own, which wins for its frames
+	auto& camera = _controls->camera;
+	if (const auto overridden = camera.Override(); overridden.has_value())
+	{
+		static_cast<void>(camera.Pin(*overridden));
+	}
 	_screenshots->PlaceCamera();
 }
 

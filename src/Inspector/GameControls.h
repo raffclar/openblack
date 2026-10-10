@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <optional>
+
+#include "Camera/Camera.h"
 #include "CameraControl.h"
 #include "GuiControl.h"
 #include "InputControl.h"
@@ -25,8 +28,17 @@ public:
 	[[nodiscard]] std::optional<CameraState> State() const override;
 	std::string Set(const CameraPose& pose) override;
 	std::string Fly(const CameraPose& pose) override;
+	std::string Pin(const CameraPose& pose) override;
+	void Unpin() override;
+	void SetOverride(std::optional<CameraPose> pose) override { _override = pose; }
+	[[nodiscard]] std::optional<CameraPose> Override() const override { return _override; }
 	[[nodiscard]] float GroundHeight(glm::vec2 point) const override;
 	[[nodiscard]] std::optional<glm::vec3> EntityPosition(uint32_t id) const override;
+
+private:
+	/// The camera's own state while it is shown elsewhere for a frame
+	std::optional<Camera::Motion> _own;
+	std::optional<CameraPose> _override;
 };
 
 /// The debug windows, and the game's own menu and Creature Cave. The menu's buttons are clicked through the game's

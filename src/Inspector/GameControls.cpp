@@ -223,6 +223,31 @@ std::string GameCamera::Set(const CameraPose& pose)
 	return {};
 }
 
+std::string GameCamera::Pin(const CameraPose& pose)
+{
+	if (!Locator::camera::has_value())
+	{
+		return "there is no camera";
+	}
+	auto& camera = Locator::camera::value();
+	// Its own state, kept from the first pin of the frame: a second pin (a picture's over an override) keeps it
+	if (!_own.has_value())
+	{
+		_own = camera.GetMotion();
+	}
+	camera.SetOrigin(pose.origin).SetFocus(pose.focus);
+	return {};
+}
+
+void GameCamera::Unpin()
+{
+	if (_own.has_value() && Locator::camera::has_value())
+	{
+		Locator::camera::value().SetMotion(*_own);
+	}
+	_own.reset();
+}
+
 std::string GameCamera::Fly(const CameraPose& pose)
 {
 	if (!Locator::camera::has_value())
