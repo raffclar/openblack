@@ -31,6 +31,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
 #include "Camera/FightCameraModel.h"
@@ -501,7 +502,7 @@ void StartArenaFight(ecs::Registry& registry, entt::entity entity, entt::entity 
 	}
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlaySoundEffect(k_ArenaDrawnSound.value(), registry.Get<const Transform>(entity).position);
+		audio::PlayGameSoundEffect(k_ArenaDrawnSound.value(), registry.Get<const Transform>(entity).position);
 	}
 }
 

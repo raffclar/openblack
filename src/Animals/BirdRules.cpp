@@ -159,3 +159,13 @@ float birds::TempleFlockHeight(float scale, float modelHeight)
 {
 	return scale * modelHeight + k_TempleFlockAbove;
 }
+
+bool birds::CreatureCanPickUp(float heightAboveLand)
+{
+	return heightAboveLand < k_CreaturePickUpBelow;
+}
+
+bool birds::CreatureCanStompOn(float heightAboveLand, float creatureHeight)
+{
+	return heightAboveLand < creatureHeight * k_CreatureStompBelowShare;
+}

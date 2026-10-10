@@ -16,6 +16,7 @@
 #include <glm/vec3.hpp>
 
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Game.h"
 #include "Gui/GameInterface.h"
 #include "Locator.h"
@@ -112,5 +113,6 @@ void FallingSpellAudio::Play(FallingSpellCue cue)
 		audio.StopEmitter(it->second);
 	}
 	const auto name = fmt::format("{}/{}", sound->bank, sound->sample);
-	_playing[key] = audio.StartSoundEffect(entt::hashed_string(name.c_str()).value(), {.pitchPercent = sound->pitchPercent});
+	_playing[key] = openblack::audio::StartGameSoundEffect(entt::hashed_string(name.c_str()).value(),
+	                                                       {.pitchPercent = sound->pitchPercent});
 }

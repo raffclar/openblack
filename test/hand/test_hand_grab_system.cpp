@@ -241,6 +241,15 @@ public:
 		registry.Destroy(object);
 		return true;
 	}
+	bool LayGateStone(entt::entity plinth, entt::entity stone) override
+	{
+		if (!plinths.contains(plinth) || !gateStones.contains(stone))
+		{
+			return false;
+		}
+		laidStones.emplace_back(plinth, stone);
+		return true;
+	}
 	void PourAt(ResourceType, glm::vec3, uint32_t amount, PlayerNames, bool /*poisoned*/) override
 	{
 		pouredAmounts.push_back(amount);
@@ -298,6 +307,9 @@ public:
 	std::vector<float> scoopSounds;
 	bool cursorPinned {false};
 	std::set<entt::entity> stores;
+	std::set<entt::entity> plinths;
+	std::set<entt::entity> gateStones;
+	std::vector<std::pair<entt::entity, entt::entity>> laidStones;
 	std::map<entt::entity, uint32_t> stored;
 	std::vector<uint32_t> pouredAmounts;
 	std::vector<entt::entity> usedUp;
@@ -808,6 +820,50 @@ TEST_F(HandGrabSystemWithWorld, ATreePressedOntoAStoreGoesIntoItWhole)
 	EXPECT_EQ(world->takenWhole.front().first, store);
 	EXPECT_EQ(world->takenWhole.front().second, tree);
 	EXPECT_FALSE(system->GetHeld().has_value());
+}
+
+TEST_F(HandGrabSystemWithWorld, AGateStonePressedOntoThePlinthIsLaidInIt)
+{
+	const auto stone = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	world->gateStones.insert(stone);
+	world->underCursor = stone;
+	Press();
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	Release();
+	const auto plinth = world->registry.Create();
+	world->plinths.insert(plinth);
+	world->underCursor = plinth;
+	EXPECT_TRUE(Press());
+	ASSERT_EQ(world->laidStones.size(), 1u);
+	EXPECT_EQ(world->laidStones.front().first, plinth);
+	EXPECT_EQ(world->laidStones.front().second, stone);
+	// The stone is used up, leaving its ghost, and the hand is empty
+	EXPECT_EQ(world->usedUp, std::vector<entt::entity> {stone});
+	EXPECT_TRUE(world->takenWhole.empty());
+	EXPECT_FALSE(system->GetHeld().has_value());
+}
+
+TEST_F(HandGrabSystemWithWorld, AnythingElsePressedOntoThePlinthIsMadeReadyToThrow)
+{
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	world->underCursor = tree;
+	Press();
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	Release();
+	const auto plinth = world->registry.Create();
+	world->plinths.insert(plinth);
+	world->underCursor = plinth;
+	EXPECT_TRUE(Press());
+	EXPECT_TRUE(world->laidStones.empty());
+	EXPECT_EQ(system->GetHeld(), std::optional<entt::entity> {tree});
 }
 
 TEST_F(HandGrabSystemWithWorld, APotLetGoOverTheLandCallsThePeopleAgain)

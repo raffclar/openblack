@@ -32,6 +32,7 @@
 #include "3D/TempleScrolls.h"
 #include "3D/TempleSigns.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Camera/TempleCameraModel.h"
@@ -193,7 +194,7 @@ void PlayDoorSound(entt::id_type sound)
 	// The game plays the doors' sounds without a place
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlaySoundEffect(sound, std::nullopt);
+		audio::PlayGameSoundEffect(sound, std::nullopt);
 	}
 }
 } // namespace
@@ -831,13 +832,13 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 			StopCreatureCaveSounds();
 		}
 		_soundsOfCreatureCave = inCreatureCave;
-		if (inCreatureCave && Locator::audio::has_value())
+		if (inCreatureCave)
 		{
-			auto& audio = Locator::audio::value();
-			audio.PlaySoundEffect(static_cast<entt::id_type>(audio::SoundId::G_WaterCreatureCave_01), k_CreatureCaveWaterSound);
+			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_WaterCreatureCave_01),
+			                           k_CreatureCaveWaterSound);
 			if (const auto fire = CreatureCaveFire(); fire.has_value())
 			{
-				audio.PlaySoundEffect(static_cast<entt::id_type>(audio::SoundId::G_FireCreatureCave_01), *fire);
+				audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_FireCreatureCave_01), *fire);
 			}
 		}
 

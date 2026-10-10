@@ -686,8 +686,16 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 	const auto pot = _world->PotFactsOf(held);
 	if (!pot.has_value())
 	{
+		// A gate stone given to the gate stone plinth is laid in it and gone from the hand
+		if (_world->LayGateStone(target, held))
+		{
+			_world->Entities().Remove<InHand>(held);
+			_world->UseUp(held);
+			Empty(grab);
+			return true;
+		}
 		// A tree, a dead tree, a fence, a mushroom or an animal goes whole into a store of what it is worth
-		// TODO(stores): onto a worship totem, a teleport, a gate's plinth or a scaffold; openblack has none of those yet
+		// TODO(stores): onto a worship totem, a teleport or a scaffold; openblack has none of those yet
 		if (!_world->TakeIntoStore(target, held))
 		{
 			return false;

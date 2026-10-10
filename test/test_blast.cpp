@@ -7,7 +7,11 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+
 #include <array>
+#include <utility>
+#include <vector>
 
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
@@ -159,6 +163,40 @@ TEST(DustPuff, FifteenSpritesFlyUpAndOutGrowingAndFadingOverASecondAndAHalf)
 	EXPECT_NEAR(look[0].halfWidth, 1.0f, k_Epsilon);
 	EXPECT_NEAR(look[0].alpha, 0.5f / 0.7f * 255.0f, 0.01f);
 	EXPECT_FALSE(dust_puff::Advance(puff, 0.76f));
+}
+
+TEST(DustPuff, ABodysGreySmokeDriftsOffFaintlyOverThreeSeconds)
+{
+	// Each sprite draws its place (z, y, x), its roll, its way out (z, x), then its speed
+	std::vector<std::pair<float, float>> draws;
+	auto puff = dust_puff::Make(
+	    {0.0f, 0.0f, 0.0f}, 2.0f,
+	    [&draws](float a, float b) {
+		    draws.emplace_back(a, b);
+		    return a;
+	    },
+	    dust_puff::Kind::Smoke);
+	ASSERT_EQ(draws.size(), dust_puff::k_Sprites * 7);
+	EXPECT_FLOAT_EQ(draws[3].second, 6.2831855f);
+	EXPECT_FLOAT_EQ(draws[6].first, 0.3f);
+	EXPECT_FLOAT_EQ(draws[6].second, 1.0f);
+	EXPECT_EQ(puff.colour, 0x808080u);
+	// The slowest share of its size: 0.3 x 2 m a second
+	EXPECT_NEAR(glm::length(puff.velocities[0]), 0.6f, k_Epsilon);
+	auto look = dust_puff::Look(puff);
+	EXPECT_FLOAT_EQ(look[0].alpha, 100.0f);
+	EXPECT_FLOAT_EQ(look[0].halfWidth, 1.0f);
+	EXPECT_TRUE(dust_puff::Advance(puff, 1.5f));
+	look = dust_puff::Look(puff);
+	// Its alpha is cut down to a whole step: half its life left, half its faintness
+	EXPECT_GE(look[0].alpha, 49.0f);
+	EXPECT_LE(look[0].alpha, 50.0f);
+	EXPECT_EQ(look[0].alpha, std::trunc(look[0].alpha));
+	EXPECT_TRUE(dust_puff::Advance(puff, 1.49f));
+	EXPECT_FALSE(dust_puff::Advance(puff, 0.02f));
+	// A colour given takes the place of its kind's
+	EXPECT_EQ(dust_puff::Make({}, 1.0f, [](float a, float) { return a; }, dust_puff::Kind::Smoke, 0x112233u).colour, 0x112233u);
+	EXPECT_EQ(dust_puff::Make({}, 1.0f, [](float a, float) { return a; }).colour, dust_puff::k_Colour);
 }
 
 TEST(Blast, AShieldOverTheBlastIsStruckWhereTheWayDownEntersIt)
