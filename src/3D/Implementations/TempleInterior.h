@@ -9,12 +9,15 @@
 
 #pragma once
 
+#include <array>
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include <glm/vec3.hpp>
 
+#include "3D/CreatureCaveTrophies.h"
 #include "3D/OrientedText.h"
 #include "3D/TempleDoors.h"
 #include "3D/TempleInteriorInterface.h"
@@ -63,6 +66,7 @@ public:
 	[[nodiscard]] uint32_t GetVisits() const override { return _visits; }
 	[[nodiscard]] const std::vector<TempleMapMarker>& GetMapMarkers() const override { return _mapMarkers; }
 	[[nodiscard]] const std::vector<TempleCaveTrophy>& GetCaveTrophies() const override { return _caveTrophies; }
+	[[nodiscard]] const std::vector<TempleCaveSeed>& GetCaveSeeds() const override { return _caveSeeds; }
 	[[nodiscard]] const TempleLight& GetLight() const override { return _light; }
 	[[nodiscard]] float GetMapMarkerTurn() const override { return _mapMarkerTurn; }
 	[[nodiscard]] float GetPoolTime() const override { return _poolTime; }
@@ -102,9 +106,25 @@ private:
 	std::vector<TempleMapMarker> _mapMarkers;
 	std::vector<TempleCaveTrophy> _caveTrophies;
 	TempleLight _light;
-	/// The creature's room's belts for how the creature fights and the medals for its miracles, at the
-	/// points of the room's mesh
-	void UpdateCaveTrophies();
+	/// The creature's room's belts for how the creature fights, the medals for its miracles and the seeds of its best
+	/// learnt, at the points of the room's mesh, while the room is drawn
+	void UpdateCaveTrophies(float seconds);
+	/// The seeds go, with their effects, as the player leaves the temple
+	void ClearCaveSeeds();
+	/// How the magic scroll last worked out the creature's miracles, which the medals and seeds show; none until the
+	/// room is first drawn on a visit
+	std::optional<CreatureCaveTrophies::MiracleLearning> _caveLearning;
+	/// Whether the magic scroll's text was in front of it last frame
+	bool _magicScrollWritten {false};
+	/// Each place by the plinths, with its seed once made and its holder's effect
+	struct CaveSeedPlace
+	{
+		TempleCaveSeed seed;
+		uint32_t holderEffect;
+	};
+	std::array<std::optional<CaveSeedPlace>, CreatureCaveTrophies::k_BestMiracles> _caveSeedPlaces;
+	/// The seeds drawn this frame
+	std::vector<TempleCaveSeed> _caveSeeds;
 	float _mapMarkerTurn {0.0f};
 	/// How long the main room's pool has shimmered, in seconds
 	float _poolTime {0.0f};

@@ -37,3 +37,14 @@ TEST(ZSort, DepthOrdersAsTheDistance)
 		previousDepth = depth;
 	}
 }
+
+TEST(ZSort, BeforeSortedComesFirstAndTheNearestFirst)
+{
+	const glm::vec3 camera {100.0f, 50.0f, -20.0f};
+	const auto nearer = zsort::BeforeSorted(camera + glm::vec3(10.0f, 0.0f, 0.0f), camera);
+	const auto farther = zsort::BeforeSorted(camera + glm::vec3(40.0f, 0.0f, 0.0f), camera);
+	EXPECT_GT(nearer, farther);
+	// Above anything sorted by its distance, however far, with room for the draws after it
+	EXPECT_GT(farther - 15u, zsort::Depth(camera + glm::vec3(1.0e6f, 0.0f, 0.0f), camera));
+	EXPECT_EQ(nearer & 0xFu, 0xFu);
+}

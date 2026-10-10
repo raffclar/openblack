@@ -40,7 +40,6 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "3D/ScreenPick.h"
-#include "3D/SkyInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameMusic.h"
@@ -62,13 +61,13 @@
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
+#include "ECS/Components/Influence.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/ScriptControl.h"
-#include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/Transform.h"
@@ -80,6 +79,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
+#include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -89,11 +89,18 @@
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TownDesireSystemInterface.h"
+#include "ECS/Systems/TutorialSkipSystemInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/TempleConstruction.h"
+#include "ECS/TownDesire.h"
 #include "ECS/TownPlaythings.h"
 #include "ECS/WorldObjects.h"
 #include "Enums.h"
@@ -113,6 +120,8 @@ namespace openblack::chlapi
 {
 
 using namespace openblack::ecs::archetypes;
+
+PlayerNames ScriptPlayerName(int32_t scriptPlayer);
 
 using openblack::Locator;
 using openblack::MobileStaticInfo;
@@ -874,6 +883,12 @@ void SetProperty() // 022 SET_PROPERTY
 		}
 		return;
 	}
+	if (prop == script::ObjectPropertyType::BuiltPercentage)
+	{
+		// A building is built that far, finished at all of it
+		ecs::construction::SetBuilt(object, value);
+		return;
+	}
 	// TODO(Daniels118): the other properties
 	NotImplemented(static_cast<int32_t>(prop));
 }
@@ -939,22 +954,11 @@ static map_coords::MapCoords ScriptFindPosition(const ecs::Registry& registry, e
 	return map_coords::FromMetres({position.x, position.z});
 }
 
-/// The things in a cell of the map that a search asks for. The temple isn't kept in the map's cells: it is looked at in
-/// the cell of its middle, after what the cell holds
+/// The things in a cell of the map that a search asks for
 static std::vector<ecs::script_find::Candidate> ScriptFindCandidates(const ScriptFindRequest& request, glm::ivec2 cell)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	std::vector<entt::entity> things = Locator::entitiesMap::value().GetAllInCell(cell);
-	if (request.type == ObjectType::Citadel)
-	{
-		registry.Each<const ecs::components::Temple, const Transform>(
-		    [&things, cell](entt::entity temple, const ecs::components::Temple&, const Transform& transform) {
-			    if (map_coords::CellOf(transform.position) == cell)
-			    {
-				    things.push_back(temple);
-			    }
-		    });
-	}
+	const std::vector<entt::entity> things = Locator::entitiesMap::value().GetAllInCell(cell);
 	std::vector<ecs::script_find::Candidate> found;
 	for (const auto thing : things)
 	{
@@ -2028,10 +2032,14 @@ void EndGameSpeed() // 129 END_GAME_SPEED
 
 void BuildBuilding() // 130 BUILD_BUILDING
 {
-	// const auto desire = Popf();
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto desire = Popf();
+	const auto position = PopVec();
+	// The towns start what they planned there: a planned temple goes up
+	// TODO(villager-life): the towns' other planned buildings
+	if (!ecs::construction::StartPlannedAt(position, desire).has_value())
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "BUILD_BUILDING: no planned temple at ({}, {})", position.x, position.z);
+	}
 }
 
 void SetAffectedByWind() // 131 SET_AFFECTED_BY_WIND
@@ -2221,7 +2229,8 @@ void LoadMap() // 152 LOAD_MAP
 	const auto& fileSystem = Locator::filesystem::value();
 	try
 	{
-		Game::Instance()->LoadMap(fileSystem.FindPath(filesystem::FileSystemInterface::FixPath(path)));
+		Game::Instance()->LoadMap(fileSystem.FindPath(filesystem::FileSystemInterface::FixPath(path)),
+		                          loading::LoadingClock::Mode::PleaseWait);
 	}
 	catch (const std::exception& e)
 	{
@@ -2768,10 +2777,31 @@ void SetAnimationModify() // 202 SET_ANIMATION_MODIFY
 
 void SetAviSequence() // 203 SET_AVI_SEQUENCE
 {
-	// const auto aviSequence = Pop().intVal;
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Sequence 1 is the story's intro, 2 the falling spell's film
+	const auto sequence = Pop().intVal;
+	const auto enable = static_cast<bool>(Pop().intVal);
+	auto& videos = Locator::videoSystem::value();
+	auto& director = Locator::cinematicDirectorSystem::value();
+	if (!enable)
+	{
+		if (sequence == 2)
+		{
+			videos.EndFallingSpell();
+		}
+		return;
+	}
+	if (sequence == 1)
+	{
+		// The intro is cut short: it fades from 58 s and ends at 60 s. The script's fade is lifted at once under it
+		videos.Play("Data/INTRO.bik");
+		videos.ScheduleIntro();
+		director.FadeBackToNormal(0);
+	}
+	else if (sequence == 2)
+	{
+		videos.StartFallingSpell();
+		director.FadeBackToNormal(0);
+	}
 }
 
 void PlayGesture() // 204 PLAY_GESTURE
@@ -3311,10 +3341,30 @@ void SetHelpSystem() // 253 SET_HELP_SYSTEM
 
 void SetVirtualInfluence() // 254 SET_VIRTUAL_INFLUENCE
 {
-	// const auto player = Popf();
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto enable = Pop().intVal != 0;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "The hand's virtual influence for player {} is turned {}",
+	                    static_cast<int>(player), enable ? "on" : "off");
+	// Turned off, the player's hand keeps nothing of their influence past the border, and loses what it had
+	if (!Locator::playerSystem::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = Locator::playerSystem::value().GetPlayer(player);
+	if (!registry.Valid(entity))
+	{
+		return;
+	}
+	auto& state =
+	    (registry.AnyOf<ecs::components::VirtualInfluence>(entity) ? registry.Get<ecs::components::VirtualInfluence>(entity)
+	                                                               : registry.Assign<ecs::components::VirtualInfluence>(entity))
+	        .state;
+	state.disabled = !enable;
+	if (state.disabled)
+	{
+		state.fraction = 0.0f;
+	}
 }
 
 void SetActive() // 255 SET_ACTIVE
@@ -4081,11 +4131,27 @@ void GamePlaySaySoundEffect() // 340 GAME_PLAY_SAY_SOUND_EFFECT
 
 void SetTownDesireBoost() // 341 SET_TOWN_DESIRE_BOOST
 {
-	// const auto boost = Popf();
-	// const auto desire = Pop().intVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A town wants one of its desires that much more, or less, until a script changes it again; its order of desires is
+	// put right at once
+	const auto boost = Popf();
+	const auto desire = Pop().intVal;
+	const auto town = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	const bool isTown = town != entt::null && registry.Valid(town) && registry.AllOf<ecs::components::Town>(town);
+	if (!isTown)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_TOWN_DESIRE_BOOST: object not a town");
+	}
+	if (!ecs::town_desire::ValidScriptBoost(desire, boost))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_TOWN_DESIRE_BOOST: desire {} or boost {} out of range", desire,
+		                    boost);
+		return;
+	}
+	if (isTown)
+	{
+		Locator::townDesireSystem::value().SetBoost(town, static_cast<TownDesireInfo>(desire), boost, true);
+	}
 }
 
 void IsLockedInteraction() // 342 IS_LOCKED_INTERACTION
@@ -4480,10 +4546,24 @@ void CallFlying() // 383 CALL_FLYING
 
 void SetObjectFadeIn() // 384 SET_OBJECT_FADE_IN
 {
-	// const auto time = Popf();
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A creature drops out of sight at once (with the energise sound) and fizzes back in over the seconds given. The
+	// game fades nothing else in: any other object is only reported.
+	const auto seconds = Popf();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object dead man!");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_OBJECT_FADE_IN: only creatures fade in");
+		return;
+	}
+	auto& fizz = Locator::creatureFizzSystem::value();
+	fizz.SetFizz(object, 1.0f, 0.0f, false);
+	fizz.SetFizz(object, 0.0f, seconds, false);
 }
 
 void IsAffectedBySpell() // 385 IS_AFFECTED_BY_SPELL
@@ -4747,9 +4827,8 @@ void GetHandState() // 413 GET_HAND_STATE
 
 void SetInterfaceCitadel() // 414 SET_INTERFACE_CITADEL
 {
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Whether tapping the temple's entrance takes the player inside
+	Locator::entitiesRegistry::value().Context().scriptLetsTempleBeEntered = Pop().intVal != 0;
 }
 
 void MapScriptFunction() // 415 MAP_SCRIPT_FUNCTION
@@ -5020,6 +5099,7 @@ void GameAddForBuilding() // 444 GAME_ADD_FOR_BUILDING
 void EnableDisableAlignmentMusic() // 445 ENABLE_DISABLE_ALIGNMENT_MUSIC
 {
 	const auto enable = Pop().intVal != 0;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "The land's music is turned {}", enable ? "on" : "off");
 	if (auto* gameMusic = Game::Instance()->GetGameMusic())
 	{
 		gameMusic->SetAlignmentMusicEnabled(enable);
@@ -5153,30 +5233,22 @@ void SetHandDemoKeys() // 459 SET_HAND_DEMO_KEYS
 
 void CanSkipTutorial() // 460 CAN_SKIP_TUTORIAL
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(Locator::tutorialSkipSystem::value().Get().skipTutorial);
 }
 
 void CanSkipCreatureTraining() // 461 CAN_SKIP_CREATURE_TRAINING
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(Locator::tutorialSkipSystem::value().Get().skipCreatureTraining);
 }
 
 void IsKeepingOldCreature() // 462 IS_KEEPING_OLD_CREATURE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(Locator::tutorialSkipSystem::value().Get().keepOldCreature);
 }
 
 void CurrentProfileHasCreature() // 463 CURRENT_PROFILE_HAS_CREATURE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(Locator::playerProfileSystem::value().CurrentProfileHasCreature());
 }
 
 void CHLApi::InitFunctionsTable0()

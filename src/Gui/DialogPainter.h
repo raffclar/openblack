@@ -95,6 +95,8 @@ public:
 	void Begin(glm::u16vec2 resolution);
 	/// Where a point of the screen is in the dialog space
 	[[nodiscard]] glm::ivec2 ToDialog(glm::ivec2 screen) const;
+	/// Where a point of the dialog space is on the screen
+	[[nodiscard]] glm::ivec2 ToScreenPoint(glm::ivec2 dialog) const { return glm::ivec2(ToScreen(glm::vec2(dialog))); }
 
 	/// From 0 to 1: how opaque everything drawn is
 	void SetAlpha(float alpha) const noexcept { _alpha = alpha; }
@@ -109,7 +111,7 @@ public:
 	/// With 8 cells to a row instead the box shows the whole 32 pixel cell of the atlas that starts at style's cell,
 	/// edged only for the square buttons (white, orange when hovered).
 	void DrawBevelBox(const DialogRect& rect, int style, uint8_t edges, glm::vec4 tint, int cellsToARow = 16) const;
-	/// Square buttons: a black square, ticked when checked, edged orange when hovered and
+	/// Square buttons: a black square over a soft shadow, ticked when checked, edged orange when hovered and
 	/// pushed in when pressed
 	void DrawSquare(glm::ivec2 position, int size, bool checked, bool hovered, bool pressed) const;
 	/// A four sided shape in the dialog space, its corners in order round it, each with its own
@@ -134,6 +136,11 @@ public:
 	/// A big arrow button: an arrow size pixels square with its shadow, orange when hovered and nearer its shadow
 	/// when pressed
 	void DrawArrow(glm::ivec2 position, int size, Arrow arrow, bool hovered, bool pressed) const;
+	/// A big arrow button without its shadow, as the colour pickers mark their sliders with
+	void DrawArrowAlone(glm::ivec2 position, int size, Arrow arrow, bool hovered) const;
+	/// The big round button that turns the view: the atlas's disc of turning arrows, size pixels square, orange when
+	/// hovered, without a shadow
+	void DrawRotation(glm::ivec2 position, int size, bool hovered) const;
 	/// The front end's pointer: an animated arrow at a point of the screen, in pixels, on a canvas of its own so that
 	/// it can be drawn over everything else
 	void DrawPointer(Canvas& canvas, glm::ivec2 screen, uint32_t milliseconds) const;

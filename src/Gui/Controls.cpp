@@ -21,6 +21,7 @@
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
 
+#include "Common/MachineClock.h"
 #include "GameFont.h"
 
 using namespace openblack::gui;
@@ -61,21 +62,28 @@ void StaticText::Draw(const DialogPainter& painter, bool /*hovered*/, bool /*foc
 	{
 		return;
 	}
-	// Static text shrinks the text until it fits: wrapped text in the height and on one line in the width
+	// Static text shrinks the text until it fits: wrapped text in the height, a line of text in the width
+	const bool wrapped = layout == Layout::Wrapped || layout == Layout::WrappedLeft;
 	auto fitted = size;
-	while (fitted > 10 && (painter.GetTextWidth(text, fitted) > static_cast<float>(rect.Width()) ||
-	                       (layout == Layout::Wrapped &&
-	                        painter.GetTextHeight(rect.Width(), text, fitted) > static_cast<float>(rect.Height()))))
+	const auto overflows = [&](int textSize) {
+		if (wrapped)
+		{
+			return painter.GetTextHeight(rect.Width(), text, textSize) > static_cast<float>(rect.Height());
+		}
+		return painter.GetTextWidth(text, textSize) > static_cast<float>(rect.Width());
+	};
+	while (fitted > 10 && overflows(fitted))
 	{
 		--fitted;
 	}
 
 	const auto shadow = DialogPainter::k_ShadowColour;
 	const auto white = DialogPainter::k_FocusColour;
-	if (layout == Layout::Wrapped)
+	if (wrapped)
 	{
-		painter.DrawTextWrapped({.min = rect.min + 2, .max = rect.max + 2}, true, text, fitted, shadow);
-		painter.DrawTextWrapped(rect, true, text, fitted, white);
+		const bool centred = layout == Layout::Wrapped;
+		painter.DrawTextWrapped({.min = rect.min + 2, .max = rect.max + 2}, centred, text, fitted, shadow);
+		painter.DrawTextWrapped(rect, centred, text, fitted, white);
 		return;
 	}
 	const auto y = rect.Centre().y - (fitted / 2);
@@ -130,18 +138,21 @@ BigButton::BigButton(const GameFont& font, glm::ivec2 position, int size, std::u
 
 DialogRect BigButton::GetLabelRect() const
 {
-	const auto width = static_cast<int>(std::ceil(_font.GetWidth(label, static_cast<float>(_labelSize))));
+	// The label's text as it is drawn, its width cut to whole pixels
+	const auto width = static_cast<int>(_font.GetWidth(label, static_cast<float>(_labelSize)));
 	const auto top = rect.Centre().y - (_labelSize / 2);
 	switch (_side)
 	{
 	case LabelSide::Right:
-		return {.min = {rect.max.x, top}, .max = {rect.max.x + width + 2, top + _labelSize + 2}};
+		return {.min = {rect.max.x + _labelGap, top}, .max = {rect.max.x + _labelGap + width, top + _labelSize}};
 	case LabelSide::Left:
-		return {.min = {rect.min.x - width, top}, .max = {rect.min.x + 2, top + _labelSize + 2}};
+		return {.min = {rect.min.x - _labelGap - width, top}, .max = {rect.min.x - _labelGap, top + _labelSize}};
 	case LabelSide::Below:
 	default:
-		return {.min = {rect.Centre().x - (width / 2), rect.max.y + 2},
-		        .max = {rect.Centre().x + (width / 2) + 2, rect.max.y + 4 + _labelSize}};
+	{
+		const auto left = rect.Centre().x - (width / 2);
+		return {.min = {left, rect.max.y + 2}, .max = {left + width, rect.max.y + 2 + _labelSize}};
+	}
 	}
 }
 
@@ -167,6 +178,9 @@ void BigButton::Draw(const DialogPainter& painter, bool hovered, bool /*focused*
 		                  _look == Look::LeftArrow ? DialogPainter::Arrow::Left : DialogPainter::Arrow::Right, hovered,
 		                  pressed && hovered);
 		break;
+	case Look::Rotation:
+		painter.DrawRotation(rect.min, rect.Width(), hovered);
+		break;
 	}
 	DrawLabel(painter, hovered);
 }
@@ -184,12 +198,12 @@ void BigButton::DrawLabel(const DialogPainter& painter, bool hovered) const
 	switch (_side)
 	{
 	case LabelSide::Right:
-		painter.DrawText({rect.max.x + 2, top + 2}, 1000, Justify::Left, label, _labelSize, shadow);
-		painter.DrawText({rect.max.x, top}, 1000, Justify::Left, label, _labelSize, colour);
+		painter.DrawText({rect.max.x + _labelGap + 2, top + 2}, 1000, Justify::Left, label, _labelSize, shadow);
+		painter.DrawText({rect.max.x + _labelGap, top}, 1000, Justify::Left, label, _labelSize, colour);
 		break;
 	case LabelSide::Left:
-		painter.DrawText({rect.min.x + 2, top + 2}, 1000, Justify::Right, label, _labelSize, shadow);
-		painter.DrawText({rect.min.x, top}, 1000, Justify::Right, label, _labelSize, colour);
+		painter.DrawText({rect.min.x - _labelGap + 2, top + 2}, 1000, Justify::Right, label, _labelSize, shadow);
+		painter.DrawText({rect.min.x - _labelGap, top}, 1000, Justify::Right, label, _labelSize, colour);
 		break;
 	case LabelSide::Below:
 		painter.DrawText({rect.Centre().x + 2, rect.max.y + 4}, 1000, Justify::Centre, label, _labelSize, shadow);
@@ -199,15 +213,35 @@ void BigButton::DrawLabel(const DialogPainter& painter, bool hovered) const
 }
 
 CheckBox::CheckBox(const GameFont& font, glm::ivec2 position, std::u16string label, bool checked)
-    // Check boxes are 25 pixel squares, labelled below
-    : BigButton(font, position, 25, std::move(label), LabelSide::Below, Look::Square)
+    : CheckBox(font, position, k_DefaultSize, std::move(label), LabelSide::Below, checked, false)
+{
+}
+
+CheckBox::CheckBox(const GameFont& font, glm::ivec2 position, int size, std::u16string label, LabelSide side, bool checked,
+                   bool radio)
+    : BigButton(font, position, size, std::move(label), side, Look::Square)
+    , _radio(radio)
 {
 	_checked = checked;
+	// A check box's label beside it stands four pixels further off than a big button's
+	_labelGap = 4;
+}
+
+bool CheckBox::HitTest(glm::ivec2 point) const
+{
+	if (!visible)
+	{
+		return false;
+	}
+	const auto offset = point - rect.Centre();
+	const auto radius = rect.Width() / 2;
+	return (offset.x * offset.x) + (offset.y * offset.y) < radius * radius ||
+	       (!label.empty() && GetLabelRect().Contains(point));
 }
 
 void CheckBox::Activate(glm::ivec2 point)
 {
-	_checked = !_checked;
+	_checked = _radio || !_checked;
 	if (onChange)
 	{
 		onChange(_checked);
@@ -480,8 +514,7 @@ void EditBox::Draw(const DialogPainter& painter, bool hovered, bool focused, boo
 	if (focused)
 	{
 		// A caret blinking twice a second
-		const auto now = std::chrono::steady_clock::now().time_since_epoch();
-		if ((std::chrono::duration_cast<std::chrono::milliseconds>(now).count() / 250) % 2 == 0)
+		if ((machine_clock::Ticks() / 250u) % 2u == 0u)
 		{
 			const auto x =
 			    position.x + static_cast<int>(painter.GetTextWidth(std::u16string_view(_text).substr(0, _caret), k_Size));
@@ -568,6 +601,126 @@ constexpr int k_Pickable = 0xFD;
 
 constexpr float k_TwoPi = glm::two_pi<float>();
 } // namespace
+
+namespace
+{
+// The colour pickers: the strip of colours or the bar is drawn 16 pixels in from each side, the box round it 14 in and
+// 2 beyond its top and bottom, and the arrow marking the height picked is 16 pixels square
+constexpr int k_PickerInset = 16;
+constexpr int k_PickerBoxInset = 14;
+constexpr int k_PickerArrowSize = 16;
+// The palette's strip of the front end atlas, down its left
+constexpr glm::vec2 k_PaletteUvMin {1.0f / 512.0f, 65.0f / 512.0f};
+constexpr glm::vec2 k_PaletteUvMax {63.0f / 512.0f, 511.0f / 512.0f};
+// A dragged symbol over somewhere it can go flashes every 400 milliseconds
+constexpr uint32_t k_FlashMilliseconds = 400;
+
+} // namespace
+
+ColourPicker::ColourPicker(DialogRect rect, Kind kind)
+    : Control(rect)
+    , _kind(kind)
+{
+}
+
+void ColourPicker::Drag(glm::ivec2 point)
+{
+	const auto position = static_cast<float>(point.y - rect.min.y) / static_cast<float>(rect.Height());
+	_position = position > 0.0f ? std::min(position, 1.0f) : 0.0f;
+	if (onDrag)
+	{
+		onDrag(point);
+	}
+}
+
+void ColourPicker::Draw(const DialogPainter& painter, bool hovered, bool /*focused*/, bool /*pressed*/) const
+{
+	if (!visible)
+	{
+		return;
+	}
+	painter.DrawBevelBox(
+	    {.min = {rect.min.x + k_PickerBoxInset, rect.min.y - 2}, .max = {rect.max.x - k_PickerBoxInset, rect.max.y + 2}},
+	    hovered ? 2 : 1, DialogPainter::All, glm::vec4(1.0f));
+	const auto y = static_cast<int>((_position * static_cast<float>(rect.Height())) + static_cast<float>(rect.min.y));
+	const auto left = static_cast<float>(rect.min.x + k_PickerInset);
+	const auto right = static_cast<float>(rect.max.x - k_PickerInset);
+	if (_kind == Kind::Brightness)
+	{
+		const auto top = static_cast<float>(rect.min.y);
+		const auto middle = static_cast<float>((rect.min.y + rect.max.y) / 2);
+		const auto bottom = static_cast<float>(rect.max.y);
+		// Fading in from see-through black at the top
+		const auto black = glm::vec4(0.0f);
+		const auto white = glm::vec4(1.0f);
+		const auto centre = glm::vec4(colour) / 255.0f;
+		painter.DrawShape({glm::vec2 {left, top}, {right, top}, {right, middle}, {left, middle}},
+		                  {black, black, centre, centre});
+		painter.DrawShape({glm::vec2 {left, middle}, {right, middle}, {right, bottom}, {left, bottom}},
+		                  {centre, centre, white, white});
+		const auto arrowHovered = hovered && _pointer.x > rect.max.x - k_PickerArrowSize;
+		painter.DrawArrowAlone({rect.max.x - k_PickerArrowSize, y - (k_PickerArrowSize / 2)}, k_PickerArrowSize,
+		                       DialogPainter::Arrow::Left, arrowHovered);
+		return;
+	}
+	painter.DrawBox({.min = {rect.min.x + k_PickerInset, rect.min.y}, .max = {rect.max.x - k_PickerInset, rect.max.y}},
+	                k_PaletteUvMin, k_PaletteUvMax);
+	const auto arrowHovered = hovered && _pointer.x < rect.min.x + k_PickerArrowSize;
+	painter.DrawArrowAlone({rect.min.x, y - (k_PickerArrowSize / 2)}, k_PickerArrowSize, DialogPainter::Arrow::Right,
+	                       arrowHovered);
+}
+
+DraggedSymbol::DraggedSymbol(glm::ivec2 position, int symbol)
+    : Control({.min = position, .max = position + k_Size})
+    , _symbol(symbol)
+{
+}
+
+void DraggedSymbol::Draw(const DialogPainter& painter, bool hovered, bool focused, bool /*pressed*/) const
+{
+	if (!visible)
+	{
+		return;
+	}
+	const auto untinted = tint == glm::u8vec4(0);
+	const auto colour = untinted ? TextColour(false, focused) : glm::vec4(tint) / 255.0f;
+	if (untinted)
+	{
+		painter.DrawSymbol({.min = rect.min + 2, .max = rect.max + 2}, _symbol, DialogPainter::k_ShadowColour);
+	}
+	painter.DrawSymbol(rect, _symbol, hovered ? DialogPainter::k_HoverColour : colour);
+	if (!_dragging)
+	{
+		return;
+	}
+	const auto min = _pointer - (k_Size / 2);
+	const auto max = min + (rect.max - rect.min);
+	if (untinted)
+	{
+		painter.DrawSymbol({.min = {min.x - 2, min.y + 2}, .max = {max.x - 2, max.y + 2}}, _symbol,
+		                   DialogPainter::k_ShadowColour);
+	}
+	auto shown = colour;
+	if (overTarget && ((milliseconds / k_FlashMilliseconds) & 1u) != 0)
+	{
+		// The colour's opposite, as opaque as it is
+		shown = glm::vec4(glm::vec3(1.0f) - glm::vec3(colour), colour.a);
+	}
+	painter.DrawSymbol({.min = min, .max = max}, _symbol, shown);
+}
+
+void DraggedSymbol::MouseDown(glm::ivec2 /*point*/)
+{
+	_dragging = true;
+}
+
+void DraggedSymbol::Release(glm::ivec2 /*point*/)
+{
+	if (std::exchange(_dragging, false) && onDrop)
+	{
+		onDrop();
+	}
+}
 
 SymbolPicture::SymbolPicture(DialogRect rect, int symbol)
     : Control(rect)

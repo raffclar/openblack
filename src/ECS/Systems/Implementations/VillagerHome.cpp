@@ -300,15 +300,14 @@ bool CheckHomelessMoveIntoAbode(LivingAction& action)
 	{
 		return false;
 	}
-	// TODO(villagers): the game scores the buildings with room and takes the best; openblack takes the first
-	const auto abode = Locator::townSystem::value().FindAbodeWithSpace(town);
+	auto& towns = Locator::townSystem::value();
+	const auto abode = towns.FindAbodeWithSpace(town, villager, 0.0f);
 	if (abode == entt::null)
 	{
 		return false;
 	}
 	std::erase(registry.Get<Town>(town).homelessVillagers, villager);
-	registry.Get<Villager>(villager).abode = abode;
-	registry.Get<Abode>(abode).inhabitants.insert(villager);
+	towns.AddVillagerToAbode(abode, villager);
 	SetTopState(action, VillagerStates::GoHome);
 	return true;
 }
@@ -707,6 +706,30 @@ glm::vec2 villager_home::ArrivePosition(entt::entity abode)
 	return glm::xz(point);
 }
 
+void villager_home::LeavingHome(entt::entity villager)
+{
+	auto& registry = WorldRegistry();
+	if (auto* action = registry.TryGet<LivingAction>(villager); action != nullptr && IsAtHome(villager))
+	{
+		SetTopState(*action, VillagerStates::DecideWhatToDo);
+	}
+}
+
+void villager_home::HomeDeleted(entt::entity villager)
+{
+	auto& registry = WorldRegistry();
+	if (!registry.Valid(villager) || !registry.AllOf<Villager>(villager) || AbodeOf(villager) == entt::null)
+	{
+		// TODO(villagers): one with no home leaves a town that goes, as its homeless do
+		return;
+	}
+	Locator::townSystem::value().MakeHomeless(villager);
+	if (auto* action = registry.TryGet<LivingAction>(villager); action != nullptr)
+	{
+		SetTopState(*action, VillagerStates::HomelessStart);
+	}
+}
+
 bool villager_home::SetStateWhenTappedOnAbode(entt::entity villager)
 {
 	auto& registry = WorldRegistry();
@@ -991,9 +1014,11 @@ uint32_t villager_home::VagrantStart(LivingAction& action)
 	const auto villager = EntityOf(action);
 	if (const auto town = NearbyTownToJoin(villager); town != entt::null)
 	{
-		Locator::townSystem::value().AddHomelessVillagerToTown(town, villager);
-		SetTopState(action, VillagerStates::DecideWhatToDo);
-		return 1;
+		if (Locator::townSystem::value().AddVillagerToTown(town, villager))
+		{
+			SetTopState(action, VillagerStates::DecideWhatToDo);
+			return 1;
+		}
 	}
 	const auto position = PositionOf(villager);
 	if (registry.Get<const Villager>(villager).life >= InfoOf(villager).damageThresholdToGoHome)

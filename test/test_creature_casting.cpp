@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <optional>
+
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureCastAgenda.h"
@@ -113,6 +115,27 @@ TEST(CreatureCastAgenda, AMoveTheBodySaysFailedGivesUpTheRest)
 	(void)Think(mind, senses, Always(0));
 	EXPECT_TRUE(mind.gaveUp);
 	EXPECT_EQ(mind.step, mind.agenda.size());
+}
+
+TEST(CreatureCastAgenda, AMoveTheBodySaysIsDoneTakesItsEffect)
+{
+	IdleMind mind;
+	Plan(mind, Activity::Planned, GiveFishToStore(std::nullopt, 7, 12.0f));
+	Senses senses {.seconds = 0.1f};
+	auto commands = Think(mind, senses, Always(0));
+	ASSERT_TRUE(commands.move.has_value());
+	EXPECT_EQ(commands.move->kind, Movement::Kind::ToThrowPosition);
+	senses.subMove = SubMove::Done;
+	commands = Think(mind, senses, Always(0));
+	EXPECT_EQ(commands.effect, Effect::None);
+	senses.subMove = SubMove::Running;
+	commands = Think(mind, senses, Always(0));
+	ASSERT_TRUE(commands.move.has_value());
+	EXPECT_EQ(commands.move->kind, Movement::Kind::TurnToFaceObject);
+	senses.subMove = SubMove::Done;
+	commands = Think(mind, senses, Always(0));
+	EXPECT_EQ(commands.effect, Effect::Completed);
+	EXPECT_EQ(mind.step, 2u);
 }
 
 TEST(CreatureCastMoves, RoutePlanRadiusAndArrival)

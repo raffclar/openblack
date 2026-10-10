@@ -18,6 +18,8 @@
 #include <glm/gtx/transform.hpp>
 
 #include "3D/L3DMesh.h"
+#include "3D/PhysicsDrawMatrix.h"
+#include "ECS/BuildingConstruction.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AtHome.h"
@@ -329,12 +331,10 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    auto modelMatrix = glm::mat4(transform.rotation);
 		    modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
 		    modelMatrix = glm::scale(modelMatrix, transform.scale);
-		    // A body moving in the physics is drawn between its last two turns
+		    // A body moving in the physics is drawn between its last two turns, and not at all once sunk under the sea
 		    const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity);
-		    if (drawn != nullptr)
-		    {
-			    modelMatrix = glm::translate(glm::mat4(1.0f), drawn->origin) * glm::mat4(drawn->axes);
-		    }
+		    const auto placed = physics_draw::ModelMatrix(modelMatrix, drawn);
+		    modelMatrix = placed.value_or(glm::mat4(0.0f));
 		    // A home with someone in lights its windows at night
 		    const auto* abode = registry.TryGet<const Abode>(entity);
 		    glm::vec4 look {abode != nullptr && abode->presentAtHome > 0 ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
@@ -380,18 +380,14 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 
-		    // A frozen creature takes an icy look, tinted dark blue and sheened with ice as it freezes, and an invisible one
-		    // dissolves through static
+		    // A frozen creature takes an icy look, tinted dark blue and sheened with ice as it freezes (one fizzing out of
+		    // sight is drawn through the static by the renderer)
 		    if (const auto* spells = registry.TryGet<const CreatureSpells>(entity))
 		    {
 			    if (spells->freeze > 0.0f)
 			    {
 				    look.y = static_cast<float>(creature_spells::FrozenTint(spells->freeze));
 				    look.w = -spells->freeze;
-			    }
-			    if (spells->fizz > 0.0f)
-			    {
-				    look.w = -(2.0f + spells->fizz);
 			    }
 		    }
 
@@ -442,19 +438,35 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 
 		    // A body sunk wholly under the sea isn't drawn in any pass, its shadow included
-		    if (drawn != nullptr && drawn->underSea)
+		    if (!placed.has_value())
 		    {
 			    look.z = 1.0f;
 			    modelMatrix = glm::mat4(0.0f);
 		    }
 
+		    // A building going up is drawn only as far up as it stands, with the broken and the unfinished ones, though
+		    // what of it stands can still be pointed at
+		    const auto* progress = registry.TryGet<const BuildProgress>(entity);
+		    const bool goingUp = progress != nullptr && DrawnMeshOf(entity, mesh) == mesh.id;
+		    if (goingUp)
+		    {
+			    look.z = 1.0f;
+		    }
+
 		    const uint32_t idx = slots->second.offset + slots->second.filled;
-		    _renderContext.instanceUniforms[idx] = {.model = modelMatrix, .look = look};
-		    if (look.z != 1.0f)
+		    // An animal finds its own bones by its place among its model's instances, kept in its first column's w, which
+		    // the model's affine matrix leaves at 0
+		    auto instanceModel = modelMatrix;
+		    if (registry.AllOf<AnimalPose>(entity))
+		    {
+			    instanceModel[0].w = static_cast<float>(slots->second.filled);
+		    }
+		    _renderContext.instanceUniforms[idx] = {.model = instanceModel, .look = look};
+		    if (look.z != 1.0f || (goingUp && progress->built > 0.0f))
 		    {
 			    _renderContext.drawnObjects.push_back({.entity = entity, .model = modelMatrix});
 		    }
-		    if (slots->second.perEntity && (drawn == nullptr || !drawn->underSea))
+		    if (slots->second.perEntity && placed.has_value())
 		    {
 			    _renderContext.entityDraws.push_back({.entity = entity, .instance = idx});
 		    }
@@ -522,6 +534,9 @@ void RenderingSystem::UploadPartialBuilds()
 		                     : std::nullopt,
 		    .scaffoldStatus = build.scaffoldShown ? scaffold : std::nullopt,
 		    .scaffoldCut = build.scaffoldCut,
+		    // A temple's inner walls stand in further than other buildings', whatever their material
+		    .innerWallInset =
+		        registry.AllOf<Temple>(entity) ? std::optional(building_construction::k_TempleInnerWallInset) : std::nullopt,
 		};
 		_renderContext.partialBuildInstances.push_back({.model = matrix});
 		// The scaffold sinks along its up axis while the building rises out of the land
@@ -587,13 +602,17 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		auto modelMatrix = glm::mat4(transform.rotation);
 		modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
 		modelMatrix = glm::scale(modelMatrix, transform.scale);
-		// A body moving in the physics is drawn between its last two turns
-		if (const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity))
+		// A body moving in the physics is drawn between its last two turns. Sunk wholly under the sea it isn't drawn at
+		// all: every vertex lands on one point, which draws nothing, and it neither sways nor bends, which would take its
+		// vertices out to the horizon
+		const auto placed = physics_draw::ModelMatrix(modelMatrix, registry.TryGet<const PhysicsDrawPose>(entity));
+		if (!placed.has_value())
 		{
-			// Sunk wholly under the sea it isn't drawn: every vertex lands on one point, which draws nothing
-			modelMatrix =
-			    drawn->underSea ? glm::mat4(0.0f) : glm::translate(glm::mat4(1.0f), drawn->origin) * glm::mat4(drawn->axes);
+			_renderContext.treeInstanceData[idx] = {.modelMatrix = glm::mat4(0.0f), .burning = glm::vec4(0.0f)};
+			++slots->second.filled;
+			return;
 		}
+		modelMatrix = *placed;
 		// A tree with a fire on it is drawn darker, its foliage thinning as it burns, and narrows away at the last,
 		// keeping its height
 		glm::vec4 burning(0.0f);

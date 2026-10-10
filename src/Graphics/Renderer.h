@@ -27,8 +27,10 @@
 #include <entt/entity/fwd.hpp>
 #include <glm/fwd.hpp>
 #include <glm/mat4x4.hpp>
+#include <glm/vec3.hpp>
 
 #include "3D/SkyDome.h"
+#include "Enums.h"
 #include "Graphics/CreatureShadow.h"
 #include "Graphics/HandShadow.h"
 #include "Graphics/PartialBuildCap.h"
@@ -114,6 +116,8 @@ private:
 	/// The creatures' footprints laid over the land, blended before the rest of what blends, in the main view and the
 	/// sea's reflection
 	void DrawCreatureFootprints(const DrawSceneDesc& desc) const;
+	/// The fish farms' shoals, drawn into what lies under the sea for the sea to be blended over them
+	void DrawFishShoals(const DrawSceneDesc& desc) const;
 	/// The villagers' ground blobs, in the main view
 	void DrawGroundBlobs(const DrawSceneDesc& desc) const;
 	/// The rain about the camera, each block's in its place among what blends, in the main view
@@ -143,6 +147,28 @@ private:
 	void DrawParticleMesh(const DrawSceneDesc& desc, const particles::draw::MeshDraw& mesh, uint32_t depth) const;
 	/// The one-shot globes, the miracles in them and the rings round the extreme ones, in the main and reflected views
 	void DrawGlobes(const DrawSceneDesc& desc) const;
+	/// A miracle's seed shown as a model, as a globe holds it or the creature's room shows it
+	struct SeedModelDraw
+	{
+		SpellSeedType seed;
+		/// The point its model stands its mesh height above, at its scale
+		glm::vec3 middle;
+		float scale;
+		/// Its turn about the up axis, in radians
+		float spin;
+		/// A phial's pulse and its texture's frame
+		float phialPhase;
+		float phialFrame;
+		/// How faint a phial is drawn, of 255
+		uint8_t phialAlpha;
+		/// The alignment of the player it is shown for, which makes the flying flock's seed a bat or a dove
+		float ownerAlignment;
+	};
+	void DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& shown) const;
+	/// The pass what blends in a scene goes to: its own pass after the scene's, but in the temple the scene's own
+	[[nodiscard]] static RenderPass TranslucentView(RenderPass scene);
+	/// The seeds of the creature's best-learnt miracles hovering by the plinths in the creature's room
+	void DrawCaveSeeds(const DrawSceneDesc& desc) const;
 	/// The hand holding a miracle glowing in its player's colour, just after the hand at its depth in the sort
 	void DrawHandGlow(const DrawSceneDesc& desc, uint32_t handDepth) const;
 	[[nodiscard]] const Texture2D* HandFlowTexture() const;
@@ -219,6 +245,7 @@ private:
 		ObjectLook,
 		KeepBelow,
 		Inset,
+		CreatureSpellLook,
 
 		_count
 	};
@@ -256,6 +283,7 @@ private:
 	    "u_objectLook",           //
 	    "u_keepBelow",            //
 	    "u_inset",                //
+	    "u_creatureSpellLook",    //
 	};
 	using MeshUniforms = std::array<std::optional<UniformHandle>, static_cast<size_t>(MeshUniform::_count)>;
 	/// A program's handles of the mesh uniforms it has, looked up by name the first time it draws a mesh
@@ -300,8 +328,10 @@ private:
 	void DrawTempleMapMarkers(const DrawSceneDesc& desc) const;
 	/// The creature's room's belts and medals
 	void DrawCaveTrophies(const DrawSceneDesc& desc) const;
-	/// A creature's eyes and eyelids, after its body
-	void DrawCreatureEyes(const DrawSceneDesc& desc, entt::entity entity, const L3DMeshSubmitDesc& bodyDesc) const;
+	/// A creature's eyes and eyelids, after its body: frozen with it, or else fizzing with it, drawn through the static
+	/// after its body's passes, from that sort depth on
+	void DrawCreatureEyes(const DrawSceneDesc& desc, entt::entity entity, const L3DMeshSubmitDesc& bodyDesc, float fizz,
+	                      float freeze, uint32_t fizzSortDepth) const;
 	/// A creature's strands of hair, as ribbons facing the camera blended over the scene
 	void DrawCreatureHair(const DrawSceneDesc& desc, entt::entity entity) const;
 	/// The leashes' ropes, each a ribbon lit by the land beneath it, and their shadows on the land
@@ -311,6 +341,10 @@ private:
 	void UploadCreatureSkins(const DrawSceneDesc& drawDesc) const;
 	/// The hand's skins as blended for its player's alignment (see components::HandMorph), taken up when they change
 	void UploadHandSkins() const;
+	/// Every animal's bones as posed this frame, in one texture, so that all the animals of a model, a flock's birds, are
+	/// drawn at once, each instance finding its own bones by its place among them. A model some of whose animals fade is
+	/// drawn an animal at a time as before.
+	void UploadAnimalBones(const DrawSceneDesc& drawDesc) const;
 	/// What the hand's base mesh is pulled towards for its player's alignment, none while it shows the base
 	[[nodiscard]] std::optional<L3DMeshSubmitDesc::MorphTargets> HandMorphTargets() const;
 
@@ -371,8 +405,6 @@ private:
 	mutable std::array<glm::vec4, 2> _haze {};
 	/// The colours the sky's dome is drawn in this frame
 	mutable sky_dome::Tint _skyTint;
-	/// The overcast at the camera this frame, which dims the sun and the moon
-	mutable float _overcast {0.0f};
 	/// icons.raw with iconsa.raw's alpha, which the creature's room's belts and medals are drawn with, once loaded
 	mutable std::optional<TextureHandle> _iconsTexture;
 	mutable bool _iconsLoaded {false};
@@ -389,6 +421,18 @@ private:
 		std::vector<std::pair<uint32_t, const Texture2D*>> drawn;
 	};
 	mutable std::unordered_map<entt::entity, CreatureSkins> _creatureSkins;
+	/// The animals of a model drawn at once this frame: where their bones start in the texture, how many each has, and
+	/// whether they take the brightest of the land's light or are white
+	struct AnimalBoneGroup
+	{
+		uint32_t firstMatrix {0};
+		uint32_t bones {0};
+		bool brightestLand {true};
+	};
+	mutable std::unordered_map<entt::id_type, AnimalBoneGroup> _animalBoneGroups;
+	/// The bones' matrices, four texels each, a row of the texture after another
+	mutable std::vector<glm::mat4> _animalBones;
+	mutable std::unique_ptr<Texture2D> _animalBoneTexture;
 	/// Whether running out of textures for the creatures' skins has been logged
 	mutable bool _warnedOutOfSkins {false};
 	/// The hand's skins as blended for its player's alignment, one texture each, and the blending they hold
