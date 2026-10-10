@@ -39,6 +39,7 @@
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/TeleportStone.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/WallHug.h"
@@ -72,6 +73,10 @@ wall_hug::ThingShape ShapeOf(const ecs::Registry& registry, entt::entity thing)
 	if (registry.AnyOf<Tree>(thing))
 	{
 		return wall_hug::ThingShape::Trunk;
+	}
+	if (registry.AnyOf<Temple>(thing))
+	{
+		return wall_hug::ThingShape::TempleRing;
 	}
 	if (registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, MobileStatic, DeadTree, SpellDispenser, TeleportStone>(thing))
 	{

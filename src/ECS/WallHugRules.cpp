@@ -573,6 +573,13 @@ std::vector<BlockingCircle> CirclesOf(const ThingOnMap& thing)
 		// At the tree's position on the map
 		return {blocking({.centre = {map_coords::Quantise(thing.position.x), map_coords::Quantise(thing.position.z)},
 		                  .radius = k_TreeTrunkRadius})};
+	case ThingShape::TempleRing:
+	{
+		// At the temple's place on the map, turned as its model is
+		const glm::vec3 xAxis = thing.rotation * glm::vec3(1.0f, 0.0f, 0.0f);
+		return TempleRingCircles({map_coords::Quantise(thing.position.x), map_coords::Quantise(thing.position.z)},
+		                         std::atan2(xAxis.z, xAxis.x));
+	}
 	case ThingShape::ModelBox:
 		break;
 	}
@@ -586,6 +593,63 @@ std::vector<BlockingCircle> CirclesOf(const ThingOnMap& thing)
 	std::vector<BlockingCircle> circles;
 	circles.reserve(outline.row.size());
 	std::ranges::transform(outline.row, std::back_inserter(circles), blocking);
+	return circles;
+}
+
+std::vector<BlockingCircle> TempleRingCircles(glm::vec2 centre, float yAngle)
+{
+	// Every length is a share of the temple's reach, whatever the temple's size
+	constexpr float k_Reach = 21.5f;
+	constexpr int k_Spokes = 7;
+	// The two spokes either side of the way in have six circles, the others four
+	constexpr int k_BentSpokes = 2;
+	constexpr int k_StraightCircles = 3;
+	constexpr int k_PlainSpokeCircles = 4;
+	constexpr float k_SpokeAngle = 0.8975979f; // a seventh of a turn
+	constexpr float k_FirstSpokeTurn = 3.83f;
+	constexpr float k_SpokeCircleRadius = k_Reach * 0.11f;
+	// The bent spokes' last three circles: how far round each is turned (towards the other bent spoke), and how much
+	// further out the next one is
+	constexpr std::array<float, 3> k_BendTurn {0.06f, 0.16f, 0.27f};
+	constexpr std::array<float, 3> k_BendStep {0.1f, 0.07f, 0.0f};
+
+	const auto blocking = [](glm::vec2 at, float radius) {
+		return BlockingCircle {.centre = at, .radius = radius, .landscape = false, .landscapeOrFence = false};
+	};
+	std::vector<BlockingCircle> circles;
+	circles.reserve(1 + k_BentSpokes * 6 + (k_Spokes - k_BentSpokes) * k_PlainSpokeCircles);
+	circles.push_back(blocking(centre, k_Reach * 0.7f));
+
+	// Worked out as the game does, each sum and product in double before it is kept as a float
+	const auto at = [&centre](double distance, double cosine, double sine) {
+		return glm::vec2 {static_cast<float>(distance * cosine + centre.x), static_cast<float>(distance * sine + centre.y)};
+	};
+	const float radius = 1.4f * k_SpokeCircleRadius;
+	float angle = yAngle + k_FirstSpokeTurn;
+	for (int spoke = 0; spoke < k_Spokes; ++spoke)
+	{
+		const auto sine = static_cast<float>(std::sin(static_cast<double>(angle)));
+		const auto cosine = static_cast<float>(std::cos(static_cast<double>(angle)));
+		float distance = k_Reach * 0.74f;
+		const int straight = spoke < k_BentSpokes ? k_StraightCircles : k_PlainSpokeCircles;
+		for (int i = 0; i < straight; ++i)
+		{
+			circles.push_back(blocking(at(distance, cosine, sine), radius));
+			distance = static_cast<float>(static_cast<double>(k_Reach) * 0.2f + distance);
+		}
+		if (spoke < k_BentSpokes)
+		{
+			// The first bends one way round, the second the other
+			const double side = spoke == 0 ? 1.0 : -1.0;
+			for (size_t i = 0; i < k_BendTurn.size(); ++i)
+			{
+				const double turned = side * k_BendTurn.at(i) + angle;
+				circles.push_back(blocking(at(distance, std::cos(turned), std::sin(turned)), radius));
+				distance = static_cast<float>(static_cast<double>(k_Reach) * k_BendStep.at(i) + distance);
+			}
+		}
+		angle += k_SpokeAngle;
+	}
 	return circles;
 }
 

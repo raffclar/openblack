@@ -111,6 +111,9 @@ enum class ThingShape : uint8_t
 	/// The outline of its model's box: one circle, or the row of circles along a long box (buildings, features, rocks,
 	/// gates and the like)
 	ModelBox,
+	/// A temple: a wide circle over its middle and seven spokes of small circles round it, two of them bent towards
+	/// each other where its way in is, the same whatever its model and size
+	TempleRing,
 };
 
 /// The radius of a tree's trunk to the walkers, in metres
@@ -131,6 +134,11 @@ struct ThingOnMap
 
 /// The circles a thing stands in the walkers' way with, in the order they come across them
 [[nodiscard]] std::vector<BlockingCircle> CirclesOf(const ThingOnMap& thing);
+
+/// The circles of a temple whose middle stands at a point on the land, turned by an angle about the vertical (radians,
+/// the direction its model's x axis points across the land, x towards z): the wide one over its middle, then each
+/// spoke's circles from the inside out, the spokes in turn round the temple
+[[nodiscard]] std::vector<BlockingCircle> TempleRingCircles(glm::vec2 centre, float yAngle);
 
 /// Whether a model is a fence's: the American fence and the Celtic short and tall fences
 [[nodiscard]] bool IsFenceModel(MeshId model);

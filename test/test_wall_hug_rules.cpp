@@ -262,6 +262,54 @@ TEST(WallHugRules, ALongModelBlocksWithEachCircleOfItsRowAndASquareOneWithOne)
 	EXPECT_NEAR(fence.front().centre.x, 1000.0f - 10.0f + 20.0f / 12.0f, 0.01f);
 }
 
+TEST(WallHugRules, ATempleIsAWideCircleAndSevenSpokesWhateverItsModel)
+{
+	const auto circles = TempleRingCircles({1000.0f, 2000.0f}, 0.0f);
+	// One over its middle, two bent spokes of six and five straight ones of four
+	ASSERT_EQ(circles.size(), 33U);
+	EXPECT_FLOAT_EQ(circles[0].radius, 21.5f * 0.7f);
+	EXPECT_FLOAT_EQ(circles[0].centre.x, 1000.0f);
+	EXPECT_FLOAT_EQ(circles[0].centre.y, 2000.0f);
+	for (size_t i = 1; i < circles.size(); ++i)
+	{
+		EXPECT_NEAR(circles[i].radius, 21.5f * 0.11f * 1.4f, 1e-5f);
+		EXPECT_FALSE(circles[i].landscapeOrFence);
+	}
+	const auto expectAt = [&circles](size_t i, double distance, double angle) {
+		EXPECT_NEAR(circles[i].centre.x, 1000.0 + distance * std::cos(angle), 0.001) << i;
+		EXPECT_NEAR(circles[i].centre.y, 2000.0 + distance * std::sin(angle), 0.001) << i;
+	};
+	const double first = 3.83;
+	const double seventh = 2.0 * std::numbers::pi / 7.0;
+	// The first spoke: three straight out, then three bent round one way, each further out
+	expectAt(1, 15.91, first);
+	expectAt(3, 24.51, first);
+	expectAt(4, 28.81, first + 0.06);
+	expectAt(5, 30.96, first + 0.16);
+	expectAt(6, 32.465, first + 0.27);
+	// The second bends the other way, towards the first
+	expectAt(12, 32.465, first + seventh - 0.27);
+	// The others are four circles straight out
+	expectAt(13, 15.91, first + 2.0 * seventh);
+	expectAt(32, 28.81, first + 6.0 * seventh);
+}
+
+TEST(WallHugRules, ATempleTurnsItsSpokesWithItsModel)
+{
+	const float angle = 1.0f;
+	ThingOnMap temple = Placed(ThingShape::TempleRing, glm::vec3(0.0f));
+	temple.rotation = glm::mat3(glm::vec3(std::cos(angle), 0.0f, std::sin(angle)), glm::vec3(0.0f, 1.0f, 0.0f),
+	                            glm::vec3(-std::sin(angle), 0.0f, std::cos(angle)));
+	const auto circles = CirclesOf(temple);
+	const auto expected = TempleRingCircles({1000.0f, 1000.0f}, angle);
+	ASSERT_EQ(circles.size(), expected.size());
+	for (size_t i = 0; i < circles.size(); ++i)
+	{
+		EXPECT_NEAR(circles[i].centre.x, expected[i].centre.x, 0.001f);
+		EXPECT_NEAR(circles[i].centre.y, expected[i].centre.y, 0.001f);
+	}
+}
+
 TEST(WallHugRules, OnlyTheFencesModelsAreFences)
 {
 	EXPECT_TRUE(IsFenceModel(openblack::MeshId::BuildingAmericanFence));
