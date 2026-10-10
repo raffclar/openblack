@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <initializer_list>
 #include <iterator>
 #include <string_view>
 #include <system_error>
@@ -267,6 +268,108 @@ std::optional<std::filesystem::path> discovery::FindWorktree(const std::filesyst
 		folder = std::move(parent);
 	}
 	return std::nullopt;
+}
+
+namespace
+{
+
+/// A small text file's first line, without its end; empty when it can't be read
+std::string FirstLine(const std::filesystem::path& path)
+{
+	std::ifstream file(path, std::ios::binary);
+	std::string line;
+	if (!file || !std::getline(file, line))
+	{
+		return {};
+	}
+	while (!line.empty() && (line.back() == '\r' || line.back() == ' ' || line.back() == '\t'))
+	{
+		line.pop_back();
+	}
+	return line;
+}
+
+/// A folder named in a git file, relative to the folder holding the file unless it is absolute
+std::filesystem::path FolderFrom(const std::filesystem::path& base, std::string_view named)
+{
+	std::filesystem::path folder {std::string(named)};
+	return folder.is_absolute() ? folder : base / folder;
+}
+
+} // namespace
+
+discovery::Revision discovery::ReadRevision(const std::filesystem::path& worktree)
+{
+	Revision revision;
+	std::error_code error;
+	const auto dotGit = worktree / ".git";
+	std::filesystem::path gitDir;
+	if (std::filesystem::is_directory(dotGit, error))
+	{
+		gitDir = dotGit;
+	}
+	else
+	{
+		// A worktree's .git is a file naming its folder in the main checkout's
+		constexpr std::string_view k_GitDir = "gitdir: ";
+		const auto line = FirstLine(dotGit);
+		if (!line.starts_with(k_GitDir))
+		{
+			return revision;
+		}
+		gitDir = FolderFrom(worktree, std::string_view(line).substr(k_GitDir.size()));
+	}
+	// Refs live in the folder shared by every worktree of the checkout
+	const auto common = FirstLine(gitDir / "commondir");
+	const auto commonDir = common.empty() ? gitDir : FolderFrom(gitDir, common);
+	const auto head = FirstLine(gitDir / "HEAD");
+	constexpr std::string_view k_Ref = "ref: ";
+	if (!head.starts_with(k_Ref))
+	{
+		revision.commit = head;
+		return revision;
+	}
+	const auto ref = head.substr(k_Ref.size());
+	constexpr std::string_view k_Heads = "refs/heads/";
+	revision.branch = ref.starts_with(k_Heads) ? ref.substr(k_Heads.size()) : ref;
+	for (const auto& folder : {gitDir, commonDir})
+	{
+		if (auto commit = FirstLine(folder / ref); !commit.empty())
+		{
+			revision.commit = std::move(commit);
+			return revision;
+		}
+	}
+	// Or packed: "<commit> <ref>" lines
+	std::ifstream packed(commonDir / "packed-refs", std::ios::binary);
+	std::string line;
+	while (packed && std::getline(packed, line))
+	{
+		if (!line.empty() && line.back() == '\r')
+		{
+			line.pop_back();
+		}
+		const auto space = line.find(' ');
+		if (space != std::string::npos && std::string_view(line).substr(space + 1) == ref)
+		{
+			revision.commit = line.substr(0, space);
+			break;
+		}
+	}
+	return revision;
+}
+
+std::optional<std::filesystem::path> discovery::GameWorktree(const std::filesystem::path& builtFrom,
+                                                             const std::filesystem::path& executable)
+{
+	if (!builtFrom.empty())
+	{
+		if (auto worktree = FindWorktree(builtFrom); worktree.has_value())
+		{
+			return worktree;
+		}
+	}
+	return FindWorktree(executable.parent_path());
 }
 
 std::vector<GameRecord> discovery::ReadGames(const std::filesystem::path& folder, const AliveCheck& alive)
