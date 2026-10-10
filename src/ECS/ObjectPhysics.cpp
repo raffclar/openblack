@@ -21,6 +21,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
@@ -96,7 +97,7 @@ void PlaySound(audio::SoundId sound, glm::vec3 point)
 {
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(sound), point);
+		audio::PlayGameSoundEffect(static_cast<entt::id_type>(sound), point);
 	}
 }
 
@@ -167,7 +168,7 @@ void Replant(const PhysicsEntry* entry, entt::entity tree, const LandIslandInter
 	const glm::vec3 foot = position;
 	if (Locator::explosionSystem::has_value())
 	{
-		Locator::explosionSystem::value().AddSmoke(foot, objects::k_ReplantSmokeSize, objects::k_ReplantSmokeColour);
+		Locator::explosionSystem::value().AddSmoke(foot, objects::k_ReplantSmokeSize, dust_puff::Kind::Dust);
 	}
 	// TODO(force-feedback): the player who dropped it feels the planting (force feedback effect 0x2E); openblack has none
 	// The things standing round it, in a spiral out from its own cell until the cells are too far away

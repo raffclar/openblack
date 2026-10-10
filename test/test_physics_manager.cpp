@@ -170,10 +170,14 @@ TEST_F(PhysicsClassesTest, AThingHeldImmovableNeverMoves)
 
 TEST_F(PhysicsClassesTest, GatesTheCaveAndThePhoneBoxCollideWithModelsOfTheirOwn)
 {
-	const auto make = [this](AnimatedStaticInfo type, int32_t open = 0, int32_t plinth = 0, int32_t full = 0) {
+	const auto make = [this](AnimatedStaticInfo type, int32_t open = 0, size_t stones = 0) {
 		const auto entity = _registry.Create();
-		_registry.Assign<AnimatedStatic>(
-		    entity, AnimatedStatic {.type = type, .openState = open, .plinthState = plinth, .plinthFull = full});
+		AnimatedStatic still {.type = type, .openState = open};
+		for (size_t i = 0; i < stones; ++i)
+		{
+			still.gateStones.at(i) = MeshId::ObjectGateTotemTiger;
+		}
+		_registry.Assign<AnimatedStatic>(entity, still);
 		return Classify(entity);
 	};
 	const auto gate = make(AnimatedStaticInfo::NorseGate);
@@ -188,8 +192,13 @@ TEST_F(PhysicsClassesTest, GatesTheCaveAndThePhoneBoxCollideWithModelsOfTheirOwn
 	EXPECT_EQ(make(AnimatedStaticInfo::GateStonePlinth).collisionMesh, static_cast<uint32_t>(MeshId::GateTotemPlinthePhys1));
 	EXPECT_EQ(make(AnimatedStaticInfo::GateStonePlinth, 0, 1).collisionMesh,
 	          static_cast<uint32_t>(MeshId::GateTotemPlinthePhys2));
-	EXPECT_EQ(make(AnimatedStaticInfo::GateStonePlinth, 0, 1, 1).collisionMesh,
+	EXPECT_EQ(make(AnimatedStaticInfo::GateStonePlinth, 0, 2).collisionMesh,
 	          static_cast<uint32_t>(MeshId::GateTotemPlinthePhys3));
+	EXPECT_EQ(make(AnimatedStaticInfo::GateStonePlinth, 0, 3).collisionMesh,
+	          static_cast<uint32_t>(MeshId::GateTotemPlinthePhys3));
+	// Open, the plinth has sunk its stones
+	EXPECT_EQ(make(AnimatedStaticInfo::GateStonePlinth, 1, 3).collisionMesh,
+	          static_cast<uint32_t>(MeshId::GateTotemPlinthePhys1));
 	EXPECT_EQ(make(AnimatedStaticInfo::PhoneBox).collisionMesh, static_cast<uint32_t>(MeshId::GateTotemPlinthePhys1));
 	EXPECT_EQ(make(AnimatedStaticInfo::PiperCaveEntrance).collisionMesh, static_cast<uint32_t>(MeshId::PiperEntrancePhys1));
 	EXPECT_FALSE(make(AnimatedStaticInfo::ChessKingTeamA).interacts);

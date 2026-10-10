@@ -61,6 +61,19 @@ struct GameRecord
 [[nodiscard]] bool ProcessAlive(uint32_t pid);
 /// The nearest folder at or above a path that holds a .git entry (a checkout or a worktree), none if there is none
 [[nodiscard]] std::optional<std::filesystem::path> FindWorktree(const std::filesystem::path& from);
+/// The branch a worktree is on and the commit it is at, read from its git files; the branch is empty when its head is
+/// detached, and both are when the worktree can't be read
+struct Revision
+{
+	std::string branch;
+	std::string commit;
+};
+[[nodiscard]] Revision ReadRevision(const std::filesystem::path& worktree);
+
+/// The worktree a game was built from: the one holding the source folder it was built from, when it was built with one
+/// that is still there (builds needn't live inside their worktree), else the one holding the executable
+[[nodiscard]] std::optional<std::filesystem::path> GameWorktree(const std::filesystem::path& builtFrom,
+                                                                const std::filesystem::path& executable);
 
 using AliveCheck = std::function<bool(uint32_t pid)>;
 

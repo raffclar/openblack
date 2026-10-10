@@ -65,8 +65,6 @@ struct CreatureFighting
 	bool taunted {false};
 	/// Whether its life has paid for the fight and its mind learnt from it
 	bool ended {false};
-	/// Where it stood as the fight started, the home it is taken to when it has no other
-	glm::vec3 startPosition {0.0f};
 };
 
 /// What a creature has learnt of fighting, kept between fights
@@ -79,6 +77,9 @@ struct CreatureFightRecord
 	uint32_t wins {0};
 	/// Seconds since its last fight ended
 	float secondsSinceFight {creature_fight::k_SecondsBetweenFights};
+	/// Who chose its moves when its last fight ended, or as a script last set it; nobody before its first fight. Each
+	/// fight starts it afresh.
+	creature_fight::Control control {creature_fight::Control::None};
 };
 
 /// A creature knocked out: lying where it fell, then taken home, resting there until better, and getting up again

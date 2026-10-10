@@ -30,6 +30,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Common/StringUtils.h"
@@ -159,7 +160,7 @@ void GameParticleWorld::PlayListenerSound(uint32_t inGameSample)
 	{
 		const auto id = entt::hashed_string(fmt::format("InGame.sad/{}", inGameSample).c_str()).value();
 		// Played once: not started again while the same sample still plays
-		Locator::audio::value().PlaySoundEffect(id, std::nullopt);
+		audio::PlayGameSoundEffect(id, std::nullopt);
 	}
 }
 

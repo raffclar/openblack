@@ -28,9 +28,13 @@ earlier by someone else. Every answer names the game it came from (pid, port, wo
 ping on each new connection that the game answering is the one meant. While a game loads, calls wait for it.
 This works with games of older builds too, which don't name themselves: the adapter names them from the ping.
 
-Run it with --call QUERY [JSON] to send a single request from a shell, without MCP:
+Run it with --call QUERY [JSON] to send a single request from a shell, without MCP. The JSON is the query's
+parameters, with any shaping options (near, radius, fields, where, limit...) beside them; a JSON with "params" is
+the rest of the request as the game reads it:
 
     python openblack_inspector_mcp.py --port 47800 --call sky.moon
+    python openblack_inspector_mcp.py --pid 1234 --call ecs.entities '{"component": "Temple", "limit": 5}'
+    python openblack_inspector_mcp.py --call objects.find '{"component": "Tree", "near": [0, 0], "radius": 50}'
     python openblack_inspector_mcp.py --call objects.find '{"params": {"component": "Tree"}, "near": [0, 0], "radius": 50}'
     python openblack_inspector_mcp.py --games
     python openblack_inspector_mcp.py --worktree ob-wt-inspect --call sky.moon
@@ -48,6 +52,8 @@ import time
 PROTOCOL_VERSION = "2024-11-05"
 DEFAULT_PORT = 47800
 
+# A value of any JSON type: given as such, so that clients send it as it is (a number as a number), not as text
+ANY_VALUE = {"type": ["number", "integer", "boolean", "string", "array", "object", "null"]}
 # Shaping options every query takes, described once for the tools' schemas
 SHAPING = {
     "fields": {"type": "array", "items": {"type": "string"},
@@ -77,10 +83,15 @@ def schema(properties=None, required=None):
     return {"type": "object", "properties": properties or {}, "required": required or []}
 
 
+CAMERA_UNITS = {
+    "yaw": {"type": "number", "description": "Degrees (not radians) about the up axis: 0 looks along +z, 90 along +x"},
+    "pitch": {"type": "number", "description": "Degrees (not radians) below the horizon: 0 level, 90 straight down"},
+    "distance": {"type": "number", "description": "Metres from the camera to its focus"},
+}
 CAMERA_POSE = {
     "position": {"type": "array", "items": {"type": "number"}, "description": "[x, y, z] where the camera stands"},
     "focus": {"type": "array", "items": {"type": "number"}, "description": "[x, z] on the land or [x, y, z]"},
-    "yaw": {"type": "number"}, "pitch": {"type": "number"}, "distance": {"type": "number"},
+    **CAMERA_UNITS,
 }
 POINT_SCHEMA = {"type": "object",
                 "description": "{\"screen\": [x, y]} pixels, or {\"world\": [x, z] or [x, y, z]}"}
@@ -261,7 +272,9 @@ TOOLS = [
         "description": "Sets one field of a component (a dotted path into nested values), its type checked; "
                        "answers the field as it now is.",
         "inputSchema": schema({"id": {"type": "integer"}, "component": {"type": "string"},
-                               "field": {"type": "string"}, "value": {"description": "Of the field's type"}},
+                               "field": {"type": "string"},
+                               "value": {**ANY_VALUE, "description": "Of the field's type, as JSON: a number, true or "
+                                                                     "false, text, an array or an object"}},
                               ["id", "component", "field", "value"]),
         "query": "edit.set",
         "params": ["id", "component", "field", "value"],
@@ -506,8 +519,7 @@ TOOLS = [
         "name": "camera_frame",
         "description": "Puts the camera at once to look at an entity where it is now, from yaw/pitch/distance if "
                        "given, the camera's own otherwise. For a picture of a moving entity use screenshot's frame.",
-        "inputSchema": schema({"id": {"type": "integer"}, "yaw": {"type": "number"}, "pitch": {"type": "number"},
-                               "distance": {"type": "number"}}, ["id"]),
+        "inputSchema": schema({"id": {"type": "integer"}, **CAMERA_UNITS}, ["id"]),
         "query": "camera.frame",
         "params": ["id", "yaw", "pitch", "distance"],
     },
@@ -523,8 +535,11 @@ TOOLS = [
         "description": "A PNG of the screen at an exact frame (this one by default; in_frames or at_frame for later), "
                        "the camera put for it if camera is given (as camera_set takes it), or looking at an entity "
                        "where it is at that frame if frame is given (its id, or {id, yaw?, pitch?, distance?}): "
-                       "moving targets aren't missed. hide_gui leaves the debug windows out. Answers once the PNG is "
-                       "written whole (written: true), unless wait is false.",
+                       "moving targets aren't missed. hide_gui leaves the debug windows out. Keep every picture: "
+                       "give feature (\"domain/feature\", as the progress tracker names them) and what (kebab-case), "
+                       "and it is saved by feature under the screenshot folder (E:/openblack/screenshots) and "
+                       "catalogued; without them it is temporary. Answers once the PNG is written whole "
+                       "(written: true), unless wait is false.",
         "inputSchema": schema({"path": {"type": "string"}, "in_frames": {"type": "integer"},
                                "at_frame": {"type": "integer"},
                                "camera": {"type": "object", "properties": CAMERA_POSE},
@@ -532,6 +547,12 @@ TOOLS = [
                                          "description": "An entity to look at: its id, or {id, yaw?, pitch?, "
                                                         "distance?}; not with camera"},
                                "hide_gui": {"type": "boolean", "description": "Leave the debug windows out"},
+                               "feature": {"type": "string",
+                                           "description": "Keep it by feature: \"domain/feature\", e.g. "
+                                                          "\"story/opening_cinematic\""},
+                               "what": {"type": "string",
+                                        "description": "With feature: a short kebab-case description"},
+                               "note": {"type": "string", "description": "With feature: a note for the catalogue"},
                                "wait": {"type": "boolean", "description": "Wait for the file (true by default)"}}),
         "query": "screenshot.take",
         "params": ["path", "in_frames", "at_frame", "camera", "frame", "hide_gui"],
@@ -613,7 +634,9 @@ TOOLS = [
     {
         "name": "script_set_global",
         "description": "Sets a global variable by exact name, keeping its type.",
-        "inputSchema": schema({"name": {"type": "string"}, "value": {}}, ["name", "value"]),
+        "inputSchema": schema({"name": {"type": "string"},
+                               "value": {**ANY_VALUE, "description": "Of the global's type, as JSON"}},
+                              ["name", "value"]),
         "query": "script.set_global",
         "params": ["name", "value"],
     },
@@ -658,6 +681,7 @@ GAME_TOOLS = [
 CATALOGUE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "inspector_queries.json")
 # How the game's parameter types are given to MCP
 PARAMETER_TYPES = {
+    "any": ANY_VALUE,
     "integer": {"type": "integer"},
     "number": {"type": "number"},
     "string": {"type": "string"},
@@ -679,11 +703,18 @@ def read_catalogue(path=CATALOGUE_PATH):
 
 def parameter_schema(parameter):
     """A parameter of the game's description as a JSON schema"""
-    types = [PARAMETER_TYPES.get(name.strip(), {}) for name in str(parameter.get("type", "")).split("|")]
+    # "integer|object", "string or array", 'array or "all"' (a quoted word is a string), "any"
+    names = [name.strip() for part in str(parameter.get("type", "")).split("|") for name in part.split(" or ")]
+    types = [{"type": "string"} if name.startswith('"') else PARAMETER_TYPES.get(name, {}) for name in names]
     if len(types) == 1:
         result = dict(types[0])
     else:
-        result = {"type": [each["type"] for each in types if "type" in each]}
+        listed = []
+        for each in types:
+            for name in each.get("type", []) if isinstance(each.get("type"), list) else [each.get("type")]:
+                if name and name not in listed:
+                    listed.append(name)
+        result = {"type": listed}
     if parameter.get("description"):
         result["description"] = parameter["description"]
     return result
@@ -731,14 +762,20 @@ SELECTOR = {
                  "description": "The game to ask, by its worktree: path, a path inside it, or folder name"},
 }
 SELECTOR_KEYS = tuple(SELECTOR)
+# How long a call waits while the game loads (its data, a land, a testbed scenario), unless it says otherwise: a Debug
+# build takes a while
+DEFAULT_LOAD_WAIT = 120.0
+WAIT_MS = {"wait_ms": {"type": "integer",
+                       "description": "Milliseconds to wait while the game loads before giving up (120000 by "
+                                      "default; 0 answers at once that it is loading)"}}
 for _tool in TOOLS:
     # A copy: several tools share their properties' dictionaries
-    _tool["inputSchema"]["properties"] = {**_tool["inputSchema"]["properties"], **SELECTOR}
+    _tool["inputSchema"]["properties"] = {**_tool["inputSchema"]["properties"], **SELECTOR, **WAIT_MS}
 TOOLS_BY_NAME = {tool["name"]: tool for tool in TOOLS}
 SHAPING_KEYS = set(SHAPING) | set(NEAR)
 # Parameters newer than some games still running: a game whose description of the query lacks one is an older build,
 # and is told so rather than silently ignoring it
-NEWER_PARAMETERS = {"screenshot.take": ["frame", "hide_gui"]}
+NEWER_PARAMETERS = {"screenshot.take": ["frame", "hide_gui", "feature", "what", "note", "root"]}
 OLDER_BUILD = "merge master into its branch and rebuild it for this"
 # How a PNG ends: its IEND chunk, empty, with its CRC
 PNG_END = b"IEND\xaeB`\x82"
@@ -752,8 +789,20 @@ def discovery_folder():
     return os.path.join(tempfile.gettempdir(), "openblack-inspector")
 
 
+def whole_number(value):
+    """A pid or a port as a whole number, however it came (77120, 77120.0 or "77120"); anything else as it is"""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return value
+
+
 def pid_alive(pid):
-    """Whether a process of that id runs now"""
+    """Whether a process of that id runs now. Only a process known to be gone counts as not running: a game's file is
+    removed on this, so a process that merely can't be asked (another user's, or a failing call) counts as running"""
     if not isinstance(pid, int) or pid <= 0:
         return False
     if os.name == "nt":
@@ -766,13 +815,16 @@ def pid_alive(pid):
         kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
         process_query_limited_information = 0x1000
         still_active = 259
+        error_invalid_parameter = 87
         handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
         if not handle:
-            # A process of another user can't be opened but is there
-            return ctypes.get_last_error() == 5
+            # No such process is the one answer meaning it has gone; another user's can't be opened but is there
+            return ctypes.get_last_error() != error_invalid_parameter
         try:
             code = wintypes.DWORD()
-            return bool(kernel32.GetExitCodeProcess(handle, ctypes.byref(code))) and code.value == still_active
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return True
+            return code.value == still_active
         finally:
             kernel32.CloseHandle(handle)
     try:
@@ -819,16 +871,32 @@ def read_games(folder, alive=pid_alive):
             except OSError:
                 pass
             continue
-        try:
-            with open(path, encoding="utf-8") as file:
-                record = json.load(file)
-        except (OSError, ValueError):
+        record = read_record(path)
+        if record is None:
             continue
-        if not isinstance(record, dict) or record.get("pid") != pid or not isinstance(record.get("port"), int):
+        record["pid"] = whole_number(record.get("pid"))
+        record["port"] = whole_number(record.get("port"))
+        if record["pid"] != pid or not isinstance(record["port"], int):
             continue
         games.append(record)
     games.sort(key=lambda game: game["pid"])
     return games
+
+
+def read_record(path, attempts=10):
+    """A game's file as a dict; none if it can't be read. A game rewrites its file (on a change of land) while another
+    reader may hold it, so a read that fails is tried again a few times before the game is left out of the list"""
+    for attempt in range(attempts):
+        try:
+            with open(path, encoding="utf-8") as file:
+                record = json.load(file)
+            return record if isinstance(record, dict) else None
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError):
+            if attempt + 1 < attempts:
+                time.sleep(0.02)
+    return None
 
 
 def read_line(connection, buffer, wanted, timeout):
@@ -891,6 +959,20 @@ def worktree_matches(game_worktree, wanted):
     return os.path.normcase(os.path.basename(game_path)) == os.path.normcase(wanted.strip("/\\"))
 
 
+def game_matches_worktree(game, wanted):
+    """A game is wanted by its worktree; a game that couldn't tell its worktree (an older build living apart from its
+    worktree) by a folder of its executable's path named as wanted, as E:/openblack/builds/<worktree>/bin/Debug"""
+    if worktree_matches(game.get("worktree") or "", wanted):
+        return True
+    if game.get("worktree") or not game.get("executable") or not wanted:
+        return False
+    name = os.path.normcase(wanted.strip("/\\"))
+    if not name or os.sep in name or "/" in name:
+        return False
+    folders = normalise_path(game["executable"]).split(os.sep)
+    return any(os.path.normcase(folder) == name for folder in folders[:-1])
+
+
 def describe_game(game):
     return f"pid {game.get('pid', '?')} port {game['port']} worktree {game.get('worktree') or '?'} " \
            f"land {game.get('land') or '-'}"
@@ -904,12 +986,15 @@ def game_tag(game):
 def select_game(games, port=None, pid=None, worktree=None):
     """The one game a selection names among those running, or why there is none"""
     candidates = games
+    # A pid or a port may come as text or a float from a client: both sides compare as whole numbers
+    port = whole_number(port)
+    pid = whole_number(pid)
     if port is not None:
-        candidates = [game for game in candidates if game["port"] == port]
+        candidates = [game for game in candidates if whole_number(game.get("port")) == port]
     if pid is not None:
-        candidates = [game for game in candidates if game["pid"] == pid]
+        candidates = [game for game in candidates if whole_number(game.get("pid")) == pid]
     if worktree is not None:
-        candidates = [game for game in candidates if worktree_matches(game.get("worktree", ""), worktree)]
+        candidates = [game for game in candidates if game_matches_worktree(game, worktree)]
     wanted = ", ".join(f"{key} {value}" for key, value in (("port", port), ("pid", pid), ("worktree", worktree))
                        if value is not None)
     if not candidates:
@@ -935,7 +1020,7 @@ class InspectorConnection:
         self.game = dict(game)
         self.port = game["port"]
         self.timeout = timeout
-        self.load_timeout = load_timeout if load_timeout is not None else max(60.0, timeout * 6)
+        self.load_timeout = load_timeout if load_timeout is not None else max(DEFAULT_LOAD_WAIT, timeout * 6)
         self.alive = alive
         self.describe = describe
         self.socket = None
@@ -1061,11 +1146,13 @@ class Session:
         self.alive = alive
         self.ping_timeout = ping_timeout
         self.ready_timeout = ready_timeout
-        self.load_timeout = load_timeout if load_timeout is not None else max(60.0, timeout * 6)
+        self.load_timeout = load_timeout if load_timeout is not None else max(DEFAULT_LOAD_WAIT, timeout * 6)
         # What inspector_connect chose ({"port"|"pid"|"worktree": value}), used only while it can't be mistaken
         self.selection = None
         # Chosen by whoever started the adapter (its command line): it is that caller's own, so always followed
         self.pinned = None
+        # Where kept pictures go, when the adapter was told (--screenshot-root): given to the game with each kept one
+        self.screenshot_root = None
         # Open connections by game, kept so that a game driven call after call stays locked to its agent
         self.connections = {}
 
@@ -1193,16 +1280,27 @@ class Session:
         tool = TOOLS_BY_NAME.get(name)
         if tool is None:
             return {"ok": False, "error": f"no tool {name}"}
-        return self.send(build_request(tool, arguments), wait_step=name == "game_step" and arguments.get("wait", True),
-                         target=arguments, wait_file=name == "screenshot" and arguments.get("wait", True))
+        try:
+            request = build_request(tool, arguments)
+        except ValueError as error:
+            return {"ok": False, "error": str(error)}
+        return self.send(request, wait_step=name == "game_step" and arguments.get("wait", True),
+                         target=arguments, wait_file=name == "screenshot" and arguments.get("wait", True),
+                         load_wait=load_wait_of(arguments))
 
-    def send(self, request, wait_step=False, target=None, wait_file=False):
-        """A request to the game a call names, waiting while the game loads; the answer names the game"""
+    def send(self, request, wait_step=False, target=None, wait_file=False, load_wait=None):
+        """A request to the game a call names, waiting while the game loads (load_wait seconds, the session's by
+        default); the answer names the game"""
+        load_wait = self.load_timeout if load_wait is None else load_wait
         self._close_idle()
         game, error = self.target(target or {})
         if game is None:
             return {"ok": False, "error": error}
         connection = self._connection(game)
+        # A kept picture goes to the adapter's screenshot folder when it was given one and the call names none
+        if self.screenshot_root and request.get("query") == "screenshot.take" and \
+                "feature" in request.get("params", {}) and "root" not in request["params"]:
+            request = {**request, "params": {**request["params"], "root": self.screenshot_root}}
         # A game too old for a parameter is told so, rather than leaving it out of what it does
         newer = [name for name in NEWER_PARAMETERS.get(request["query"], []) if name in request.get("params", {})]
         if newer:
@@ -1213,7 +1311,7 @@ class Session:
                         "error": f"this game is an older build: {request['query']} doesn't take "
                                  f"{', '.join(missing)}; {OLDER_BUILD}"}
         asked_at = time.time()
-        answer = request_until_loaded(connection, request, self.load_timeout)
+        answer = request_until_loaded(connection, request, load_wait)
         if not answer.get("ok") and str(answer.get("error", "")).startswith("no query "):
             answer["error"] += f" (if the query is new, this game may be an older build: {OLDER_BUILD})"
         # A picture is answered once its file is whole, which the game writes a few frames on
@@ -1232,8 +1330,16 @@ class Session:
             while answer.get("ok") and isinstance(answer.get("result"), dict) and \
                     answer["result"].get("stepping") is not None and time.monotonic() < deadline:
                 time.sleep(0.02)
-                answer = request_until_loaded(connection, {"query": "game.state"}, self.load_timeout)
+                answer = request_until_loaded(connection, {"query": "game.state"}, load_wait)
         return answer
+
+
+def load_wait_of(arguments):
+    """How long a call waits while the game loads, from its wait_ms: None for the session's own"""
+    wait_ms = whole_number(arguments.get("wait_ms"))
+    if not isinstance(wait_ms, (int, float)) or isinstance(wait_ms, bool) or wait_ms < 0:
+        return None
+    return wait_ms / 1000.0
 
 
 def request_until_loaded(connection, request, load_timeout):
@@ -1244,18 +1350,38 @@ def request_until_loaded(connection, request, load_timeout):
         if answer.get("ok") or not answer.get("loading"):
             return answer
         if time.monotonic() > deadline:
-            answer["error"] = (f"the game is still loading {answer['loading']} after {load_timeout:.0f} s; "
-                               f"ask again later")
+            if load_timeout <= 0:
+                answer["error"] = f"the game is loading {answer['loading']}; ask again once game.state says ready"
+            else:
+                answer["error"] = (f"the game is still loading {answer['loading']} after {load_timeout:.0f} s; "
+                                   f"ask again later, or give a longer wait_ms")
             return answer
         time.sleep(0.25)
 
 
 def build_request(tool, arguments):
+    """The request a tool's arguments make. An argument the tool doesn't know is refused (ValueError), never dropped:
+    the query would otherwise run as if it hadn't been given. inspector_query takes its query's parameters in params,
+    or beside it as further arguments."""
+    known = set(tool["inputSchema"].get("properties", {})) | SHAPING_KEYS | set(SELECTOR_KEYS) | set(WAIT_MS)
     if tool["name"] == "inspector_query":
         request = {"query": arguments.get("query", "")}
-        if "params" in arguments:
-            request["params"] = arguments["params"]
+        params = arguments.get("params")
+        if params is not None and not isinstance(params, dict):
+            raise ValueError("params must be an object of the query's parameters")
+        params = dict(params or {})
+        loose = {key: value for key, value in arguments.items() if key not in known and key not in WAIT_MS}
+        both = sorted(set(loose) & set(params))
+        if both:
+            raise ValueError(f"{', '.join(both)} given both in params and beside it")
+        params.update(loose)
+        if params:
+            request["params"] = params
     else:
+        unknown = sorted(key for key in arguments if key not in known)
+        if unknown:
+            raise ValueError(f"{tool['name']} doesn't take {', '.join(unknown)}; it takes "
+                             f"{', '.join(sorted(tool['inputSchema'].get('properties', {})))}")
         request = {"query": tool["query"]}
         params = {key: arguments[key] for key in tool.get("params", []) if key in arguments}
         if params:
@@ -1263,6 +1389,30 @@ def build_request(tool, arguments):
     for key in SHAPING_KEYS:
         if key in arguments:
             request[key] = arguments[key]
+    return request
+
+
+def call_request(query, text, catalogue=None):
+    """The request --call QUERY [JSON] sends. The JSON is the query's parameters, as in {"component": "Temple"}, with
+    any shaping options (near, radius, fields, where, limit and the like) beside them; a key that is one of the
+    query's parameters is always taken as one. A JSON with "params" is instead the rest of the request as the game
+    reads it, as before: {"params": {"component": "Tree"}, "near": [0, 0], "radius": 50}."""
+    catalogue = CATALOGUE if catalogue is None else catalogue
+    given = json.loads(text) if text.strip() else {}
+    if not isinstance(given, dict):
+        raise ValueError("the request must be a JSON object")
+    if "params" in given:
+        request = dict(given)
+    else:
+        if query == "describe":
+            parameters = {"provider", "query"}
+        else:
+            parameters = {entry.get("name") for entry in catalogue.get(query, {}).get("parameters", [])}
+        params = {key: value for key, value in given.items() if key in parameters or key not in SHAPING_KEYS}
+        request = {key: value for key, value in given.items() if key not in params}
+        if params:
+            request["params"] = params
+    request["query"] = query
     return request
 
 
@@ -1332,13 +1482,18 @@ def main():
     parser.add_argument("--worktree", help="Talk to the game running from this worktree (path or folder name)")
     parser.add_argument("--pid", type=int, help="Talk to the game of this process")
     parser.add_argument("--timeout", type=float, default=10.0, help="Seconds to wait for the game to answer")
+    parser.add_argument("--wait-ms", type=int, default=None,
+                        help="With --call: milliseconds to wait while the game loads (120000 by default; 0 for none)")
     parser.add_argument("--games", action="store_true", help="List the running games and exit")
+    parser.add_argument("--screenshot-root", help="Where kept pictures go (screenshot.take with feature and what); "
+                                                  "the game's own folder by default")
     parser.add_argument("--call", metavar="QUERY", help="Send one query and print the answer, without MCP")
     parser.add_argument("request", nargs="?", default="{}", help="With --call: the rest of the request as JSON")
     args = parser.parse_args()
 
     default_port = args.port if args.port is not None else int(os.environ.get("OPENBLACK_INSPECT_PORT", DEFAULT_PORT))
     session = Session(default_port, args.timeout)
+    session.screenshot_root = args.screenshot_root or os.environ.get("OPENBLACK_SCREENSHOT_ROOT") or None
     # Chosen on the command line, the game is this caller's own: every call goes to it. As an MCP server shared by
     # agents, --port only names the game of builds too old to keep a discovery file.
     pinned = {key: value for key, value in (("worktree", args.worktree), ("pid", args.pid)) if value is not None}
@@ -1350,10 +1505,13 @@ def main():
         print(json.dumps(session.games(), indent=1))
         return 0
     if args.call:
-        request = json.loads(args.request)
-        request["query"] = args.call
         try:
-            answer = session.send(request)
+            request = call_request(args.call, args.request)
+        except ValueError as error:
+            print(error, file=sys.stderr)
+            return 2
+        try:
+            answer = session.send(request, load_wait=None if args.wait_ms is None else args.wait_ms / 1000.0)
         except ConnectionError as error:
             print(error, file=sys.stderr)
             return 1

@@ -26,6 +26,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
@@ -1583,8 +1584,8 @@ void FireSystem::PlaySounds()
 			audio.SetEmitterPosition(slot.emitter, transform->position);
 			continue;
 		}
-		slot.emitter = audio.StartSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_Fire_01),
-		                                      {.position = transform->position, .owner = slot.fire});
+		slot.emitter = audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_Fire_01),
+		                                           {.position = transform->position, .owner = slot.fire});
 	}
 }
 
@@ -1645,8 +1646,8 @@ void FireSystem::Update(float seconds)
 			    // The steam hisses as it starts
 			    SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Fire: object {} hisses with steam at {:.0f}",
 			                        entt::to_integral(object), fire.state.temperature);
-			    Locator::audio::value().StartSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_Steam_01),
-			                                             {.position = transform.position});
+			    audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_Steam_01),
+			                                {.position = transform.position});
 		    }
 	    });
 }

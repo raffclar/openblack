@@ -12,6 +12,9 @@
 #include <cmath>
 
 #include <algorithm>
+#include <array>
+#include <string>
+#include <string_view>
 #include <utility>
 
 #include "InspectorQuery.h"
@@ -37,6 +40,40 @@ constexpr std::array<OpName, 8> k_OpNames {{
     {FilterOp::Contains, "contains"},
     {FilterOp::Exists, "exists"},
 }};
+
+/// Every member a request may have beside its query's parameters, which go in "params"
+constexpr std::array<std::string_view, 12> k_RequestMembers {
+    "id", "query", "params", "fields", "where", "near", "radius", "limit", "cursor", "count", "summary", "max_bytes",
+};
+
+/// The members of a filter
+constexpr std::array<std::string_view, 3> k_FilterMembers {"field", "op", "value"};
+
+/// The names of an object's members that aren't among the known ones, joined with commas; empty when there are none
+template <size_t N>
+std::string UnknownMembers(const Json& object, const std::array<std::string_view, N>& known)
+{
+	std::string unknown;
+	for (const auto& [key, value] : object.items())
+	{
+		if (std::ranges::find(known, std::string_view(key)) == known.end())
+		{
+			unknown += (unknown.empty() ? "" : ", ") + key;
+		}
+	}
+	return unknown;
+}
+
+template <size_t N>
+std::string Joined(const std::array<std::string_view, N>& names)
+{
+	std::string joined;
+	for (const auto name : names)
+	{
+		joined += (joined.empty() ? "" : ", ") + std::string(name);
+	}
+	return joined;
+}
 
 /// A count read from a request: a whole number of zero or more
 std::optional<size_t> ReadCount(const Json& value)
@@ -79,6 +116,14 @@ std::optional<std::string> ReadOptions(const Json& object, QueryOptions& options
 		}
 		for (const auto& each : *it)
 		{
+			if (!each.is_object())
+			{
+				return "where must be an array of {field, op, value}";
+			}
+			if (const auto unknown = UnknownMembers(each, k_FilterMembers); !unknown.empty())
+			{
+				return "a filter has only field, op and value, not " + unknown;
+			}
 			const auto field = StringMember(each, "field");
 			if (!field.has_value())
 			{
@@ -113,6 +158,10 @@ std::optional<std::string> ReadOptions(const Json& object, QueryOptions& options
 		}
 		options.near = Near {.point = *point, .planar = planar, .radius = *radius};
 	}
+	else if (object.contains("radius"))
+	{
+		return "radius is how far from near to search: give near too";
+	}
 	if (const auto it = object.find("limit"); it != object.end())
 	{
 		const auto limit = ReadCount(*it);
@@ -131,8 +180,22 @@ std::optional<std::string> ReadOptions(const Json& object, QueryOptions& options
 		}
 		options.cursor = *cursor;
 	}
-	options.countOnly = BoolMember(object, "count").value_or(false);
-	options.summary = StringMember(object, "summary");
+	if (const auto it = object.find("count"); it != object.end())
+	{
+		if (!it->is_boolean())
+		{
+			return "count must be true or false";
+		}
+		options.countOnly = it->get<bool>();
+	}
+	if (const auto it = object.find("summary"); it != object.end())
+	{
+		if (!it->is_string())
+		{
+			return "summary must be the name of a numeric field";
+		}
+		options.summary = it->get<std::string>();
+	}
 	if (const auto it = object.find("max_bytes"); it != object.end())
 	{
 		const auto bytes = ReadCount(*it);
@@ -174,6 +237,13 @@ std::variant<Request, std::string> openblack::inspector::DecodeRequest(std::stri
 	if (!object.is_object())
 	{
 		return std::string("the request must be a JSON object");
+	}
+	// A member the request doesn't know is refused rather than ignored: most often a query's parameter put beside
+	// "params" instead of inside it, which would otherwise run the query without it
+	if (const auto unknown = UnknownMembers(object, k_RequestMembers); !unknown.empty())
+	{
+		return "the request has unknown members " + unknown + " (a query's parameters go in \"params\"; a request has " +
+		       Joined(k_RequestMembers) + ")";
 	}
 	Request request;
 	if (const auto it = object.find("id"); it != object.end())

@@ -9,7 +9,11 @@
 
 #include "ScriptPropertyRules.h"
 
+#include <cmath>
+
 #include <algorithm>
+
+#include <glm/gtx/euler_angles.hpp>
 
 namespace openblack::script::property_rules
 {
@@ -63,6 +67,60 @@ float SetNeed(CreatureNeed need, float value)
 	default:
 		return value;
 	}
+}
+
+float AngleToScript(float radians)
+{
+	return radians * k_RadiansToTurns * k_DegreesInATurn;
+}
+
+float AngleFromScript(float degrees)
+{
+	return degrees * k_DegreesToRadians;
+}
+
+bool CanSetLife(float life, bool heldDuringCutscene, bool indestructible)
+{
+	return !((heldDuringCutscene || indestructible) && life <= k_LowestProtectedLife);
+}
+
+float CreatureHeight(float size)
+{
+	return size * k_CreatureHeightPerSize;
+}
+
+float CreatureSizeForHeight(float height)
+{
+	return height * k_CreatureSizePerHeight;
+}
+
+Angles PlacedAngles(const glm::mat3& rotation)
+{
+	// Upright: only turned about the upright axis, which is read whole
+	constexpr float k_Upright = 1e-6f;
+	if (std::abs(rotation[1][1] - 1.0f) < k_Upright)
+	{
+		return {.x = 0.0f, .y = -std::atan2(rotation[2][0], rotation[0][0]), .z = 0.0f};
+	}
+	float x = 0.0f;
+	float y = 0.0f;
+	float z = 0.0f;
+	glm::extractEulerAngleXYZ(glm::mat4(rotation), x, y, z);
+	return {.x = -x, .y = -y, .z = -z};
+}
+
+glm::mat3 PlacedRotation(const Angles& angles)
+{
+	return glm::mat3(glm::eulerAngleXYZ(-angles.x, -angles.y, -angles.z));
+}
+
+float BeliefForPlayer(bool town, std::optional<float> townBelief, std::optional<PlayerNames> owner, PlayerNames player)
+{
+	if (town)
+	{
+		return townBelief.value_or(0.0f);
+	}
+	return owner == player ? 1.0f : 0.0f;
 }
 
 } // namespace openblack::script::property_rules

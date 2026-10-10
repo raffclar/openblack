@@ -7,10 +7,12 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <numbers>
 #include <vector>
 
 #include <gtest/gtest.h>
 
+#include "Animals/AnimalRules.h"
 #include "Animals/BirdRules.h"
 
 using namespace openblack;
@@ -143,4 +145,48 @@ TEST(BirdRules, TheTemplesBirdsFlyTenMetresOverItsModel)
 {
 	EXPECT_FLOAT_EQ(TempleFlockHeight(1.0f, 30.0f), 40.0f);
 	EXPECT_FLOAT_EQ(TempleFlockHeight(1.5f, 20.0f), 40.0f);
+}
+
+TEST(BirdRules, ACreaturePicksUpOnlyABirdUnderAMetreAboveTheLand)
+{
+	EXPECT_TRUE(CreatureCanPickUp(0.0f));
+	EXPECT_TRUE(CreatureCanPickUp(0.99f));
+	EXPECT_FALSE(CreatureCanPickUp(1.0f));
+	EXPECT_FALSE(CreatureCanPickUp(20.0f));
+}
+
+TEST(BirdRules, ACreatureStampsOnlyOnABirdLowerThanAQuarterOfItsOwnHeight)
+{
+	// A creature 15 m tall reaches birds under 3.75 m
+	EXPECT_TRUE(CreatureCanStompOn(0.0f, 15.0f));
+	EXPECT_TRUE(CreatureCanStompOn(3.7f, 15.0f));
+	EXPECT_FALSE(CreatureCanStompOn(3.75f, 15.0f));
+	// A small one only those on the ground
+	EXPECT_TRUE(CreatureCanStompOn(0.5f, 3.0f));
+	EXPECT_FALSE(CreatureCanStompOn(1.0f, 3.0f));
+}
+
+TEST(BirdRules, ADeadBodyLiesItsTurnsAndOneMoreUnlessAScriptControlsIt)
+{
+	int32_t left = 2;
+	EXPECT_FALSE(animals::DeadBodyGoes(left, false));
+	EXPECT_FALSE(animals::DeadBodyGoes(left, false));
+	EXPECT_TRUE(animals::DeadBodyGoes(left, false));
+	// Under a script's control its turns don't count down
+	int32_t held = 0;
+	EXPECT_FALSE(animals::DeadBodyGoes(held, true));
+	EXPECT_EQ(held, 0);
+	EXPECT_TRUE(animals::DeadBodyGoes(held, false));
+}
+
+TEST(BirdRules, ADeadBodysSmokeRisesHalfItsHeightOutTheWayItFaces)
+{
+	const glm::vec3 lying {10.0f, 2.0f, 20.0f};
+	const auto east = animals::DeadBodySmokePlace(lying, 0.0f, 0.4f);
+	EXPECT_FLOAT_EQ(east.x, 10.2f);
+	EXPECT_FLOAT_EQ(east.y, 2.0f);
+	EXPECT_FLOAT_EQ(east.z, 20.0f);
+	const auto south = animals::DeadBodySmokePlace(lying, std::numbers::pi_v<float> * 0.5f, 0.4f);
+	EXPECT_NEAR(south.x, 10.0f, 1e-5f);
+	EXPECT_NEAR(south.z, 20.2f, 1e-5f);
 }

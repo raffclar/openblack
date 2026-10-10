@@ -44,8 +44,9 @@ public:
 	/// Whether the scripts let the game's sound effects play: off, only the advisors' and villagers' speech plays
 	[[nodiscard]] bool IsGameSoundOn() const { return _gameSoundOn; }
 	void SetGameSoundOn(bool on) { _gameSoundOn = on; }
-	/// The scripts start again: their switches go back to how a new game has them
-	void ResetSwitches() { _gameSoundOn = true; }
+	/// The scripts start again: their switches go back to how a new game has them, the game's sound effects on and every
+	/// creature heard in its own voice
+	void ResetSwitches();
 
 private:
 	void InitFunctionsTable0();
