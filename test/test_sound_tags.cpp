@@ -92,7 +92,6 @@ public:
 	void SetEmitterPitch(entt::entity, uint32_t) override {}
 	[[nodiscard]] uint32_t GetEmitterVolume(entt::entity) override { return 0; }
 	void StopOwnedSounds(entt::entity) override {}
-	void StopAllSoundEffects() override {}
 	void AddAnimEffects(const std::string&, audio::AnimEffectTable) override {}
 	audio::AnimEffectPlay PlayAnimEffect(const std::string&, std::span<const int32_t>, entt::entity, const glm::vec3&) override
 	{
