@@ -61,6 +61,9 @@ public:
 	/// Strokes, shakes, smells or examines what it holds, by the animation of that
 	virtual bool Keep(entt::entity creature, size_t animation) = 0;
 	virtual bool Throw(entt::entity creature, const glm::vec3& target) = 0;
+	/// Throws what it holds at a point, to take the given seconds to get there, as into a store: done only once the thing
+	/// has stopped flying
+	virtual bool ThrowTaking(entt::entity creature, const glm::vec3& target, float flightSeconds) = 0;
 	virtual bool Destroy(entt::entity creature, entt::entity target) = 0;
 	virtual bool PointAt(entt::entity creature, const glm::vec3& point) = 0;
 	/// Catches something flying at it, when it can still reach where it passes

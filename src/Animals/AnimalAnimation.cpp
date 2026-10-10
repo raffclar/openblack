@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <limits>
 
 using namespace openblack;
 
@@ -78,4 +79,17 @@ uint32_t animals::DrawTime(uint32_t turn, float turnFraction)
 {
 	const auto into = static_cast<uint32_t>(std::clamp(turnFraction, 0.0f, 1.0f) * static_cast<float>(k_TurnMilliseconds));
 	return (turn * k_TurnMilliseconds) + std::min(into, k_LastMillisecond);
+}
+
+void animals::PoseBetween(std::span<const glm::mat4> from, std::span<const glm::mat4> to, float t,
+                          std::span<const uint32_t> parents, std::span<glm::mat4> bones)
+{
+	for (size_t i = 0; i < parents.size(); ++i)
+	{
+		bones[i] = from[i] + ((to[i] - from[i]) * t);
+		if (parents[i] != std::numeric_limits<uint32_t>::max())
+		{
+			bones[i] = bones[parents[i]] * bones[i];
+		}
+	}
 }

@@ -25,7 +25,8 @@ using namespace openblack;
 using namespace openblack::ecs::archetypes;
 using namespace openblack::ecs::components;
 
-entt::entity PotArchetype::Create(const glm::vec3& position, float yAngleRadians, PotInfo type, int32_t amount)
+entt::entity PotArchetype::Create(const glm::vec3& position, float yAngleRadians, PotInfo type, int32_t amount,
+                                  entt::entity town)
 {
 	if (static_cast<int32_t>(type) < 0 || static_cast<int32_t>(type) >= static_cast<int32_t>(PotInfo::_COUNT))
 	{
@@ -36,7 +37,9 @@ entt::entity PotArchetype::Create(const glm::vec3& position, float yAngleRadians
 		return entt::null;
 	}
 	const auto entity = CreateEmpty(position, yAngleRadians, type);
-	Locator::entitiesRegistry::value().Get<Pot>(entity).amount = static_cast<uint32_t>(amount);
+	auto& pot = Locator::entitiesRegistry::value().Get<Pot>(entity);
+	pot.amount = static_cast<uint32_t>(amount);
+	pot.town = town;
 	return entity;
 }
 
