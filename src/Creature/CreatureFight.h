@@ -199,6 +199,31 @@ struct Move
 [[nodiscard]] Move BlockMove();
 [[nodiscard]] bool IsBlow(Move::Kind kind);
 
+/// A move as scripts number them: 0, 1 and 2 blows high, in the middle and low, 3 a block, 4 the special move; with the
+/// 0x8000 bit an animation played (a step), with the 0x4000 bit a miracle cast, each by the number in the low 14 bits.
+/// None for any other number, which the game would try as a blow of that number.
+[[nodiscard]] std::optional<Move> ScriptMove(uint32_t value);
+constexpr uint32_t k_ScriptAnimationBit = 0x8000;
+constexpr uint32_t k_ScriptSpellBit = 0x4000;
+
+/// What a fighter is doing, as scripts ask it, by the animation playing
+enum class FightAction : uint8_t
+{
+	/// Starting, in its stance, or finishing
+	Stance = 0,
+	Block = 1,
+	Step = 2,
+	Blow = 3,
+	Casting = 4,
+	Special = 5,
+	ReelingHigh = 6,
+	ReelingMiddle = 7,
+	ReelingLow = 8,
+	Fainted = 9,
+	Other = 10,
+};
+[[nodiscard]] FightAction FightActionOf(size_t animation);
+
 /// A blow is charged for as long as the click is held, up to 1.2 seconds
 constexpr float k_MaxChargeMs = 1200.0f;
 /// What a move starts charged at: a blow waits to be let go (none), blocks and animations need no charge, and special
@@ -248,6 +273,9 @@ private:
 	/// The move added last is a blow waiting for the button to be let go
 	bool _awaitingRelease {false};
 };
+
+/// How many of the queued moves are blows at a band (not blocks, steps, miracles or the special move)
+[[nodiscard]] uint32_t QueuedBlows(std::span<const QueuedMove> moves);
 
 // Learning to fight
 
@@ -392,6 +420,8 @@ enum class State : uint8_t
 /// Who chooses the creature's moves
 enum class Control : uint8_t
 {
+	/// Nobody: it only makes the moves a script queues for it
+	None,
 	Player,
 	Computer,
 };
@@ -418,14 +448,13 @@ struct Fighter
 	float health {1.0f};
 	float stamina {1.0f};
 	Control control {Control::Computer};
-	/// The computer always chooses, whatever the player does
-	bool autoFight {false};
 	float computerWaitMs {k_ComputerWaitsAtStartMs};
 	float tendency {0.0f};
 };
 /// Plays a state, with an action's animation and speed
 void Enter(Fighter& fighter, State state, std::optional<size_t> animation = std::nullopt, float speed = 1.0f);
-/// The player adds a move: the computer gives the creature back and waits 15 seconds
+/// The player (or a script) adds a move: a creature the computer was fighting with is given back to the player, and
+/// the computer waits 15 seconds
 bool PlayerMove(Fighter& fighter, const Move& move, bool replace);
 
 /// What to do with the move at the front of the queue
