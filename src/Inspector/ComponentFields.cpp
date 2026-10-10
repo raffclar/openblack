@@ -186,6 +186,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/HighDetailRules.h"
 #include "ECS/RewardRules.h"
+#include "ECS/ScriptHighlightRules.h"
 #include "ECS/TownAggression.h"
 #include "ECS/VillageTotem.h"
 #include "Enums.h"
@@ -1970,6 +1971,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::ecs::components::CreatureMindState::Feedback>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureMindState::Feedback::value>("value")
 	    .Field<&openblack::ecs::components::CreatureMindState::Feedback::activity>("activity");
+	Reflect<openblack::ecs::components::CreatureMindState::Teaching>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::type>("type")
+	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::action>("action")
+	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::knows>("knows");
 	Reflect<openblack::ecs::components::CreatureSkin::Painted>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureSkin::Painted::baseMesh>("baseMesh")
 	    .Field<&openblack::ecs::components::CreatureSkin::Painted::variantMesh>("variantMesh")
@@ -2009,6 +2014,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::reward::DustSprite::offset>("offset")
 	    .Field<&openblack::ecs::reward::DustSprite::frame>("frame")
 	    .Field<&openblack::ecs::reward::DustSprite::rgb>("rgb");
+	Reflect<openblack::ecs::script_highlights::Spark>(context, ValueOnly {})
+	    .Field<&openblack::ecs::script_highlights::Spark::ageMilliseconds>("ageMilliseconds")
+	    .Field<&openblack::ecs::script_highlights::Spark::angle>("angle");
+	Reflect<openblack::ecs::script_highlights::Sparks>(context, ValueOnly {})
+	    .Field<&openblack::ecs::script_highlights::Sparks::sparks>("sparks")
+	    .Field<&openblack::ecs::script_highlights::Sparks::firstPicture>("firstPicture");
 	Reflect<openblack::ecs::town_aggression::Record>(context, ValueOnly {})
 	    .Field<&openblack::ecs::town_aggression::Record::aggression>("aggression", {k_PlayerNamesNames})
 	    .Field<&openblack::ecs::town_aggression::Record::lastTurns>("lastTurns", {k_PlayerNamesNames})
