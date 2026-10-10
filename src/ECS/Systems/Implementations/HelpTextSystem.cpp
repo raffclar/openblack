@@ -14,6 +14,8 @@
 #include <spdlog/spdlog.h>
 
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/SoundDecoder.h"
+#include "Audio/WaveCueLabels.h"
 #include "Common/GameRandom.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -43,10 +45,37 @@ bool Sounding(entt::entity emitter)
 	auto& audio = Locator::audio::value();
 	return audio.EmitterExists(emitter) && audio.GetStatus(emitter) != audio::AudioStatus::Stopped;
 }
+
+/// A line's recording decoded once more, as the sound plays it, with the cue labels its gestures are read from
+help::AdvisorVoices::Recording LineRecording(const audio::Sound& sound)
+{
+	help::AdvisorVoices::Recording recording;
+	for (const auto& part : sound.buffer)
+	{
+		auto decoded = audio::DecodeSound(part, sound.sampleRate);
+		if (!decoded.sound)
+		{
+			continue;
+		}
+		recording.channels = decoded.sound->channelLayout == audio::ChannelLayout::Stereo ? 2 : 1;
+		recording.sampleRate = decoded.sound->sampleRate;
+		recording.samples.insert(recording.samples.end(), decoded.sound->samples.begin(), decoded.sound->samples.end());
+	}
+	if (!sound.buffer.empty())
+	{
+		std::vector<help::spirits::TagLabel> labels;
+		for (auto& label : audio::ReadWaveCueLabels(sound.buffer.front()))
+		{
+			labels.push_back({.text = std::move(label.text), .time = label.time});
+		}
+		recording.labels = std::move(labels);
+	}
+	return recording;
+}
 } // namespace
 
 HelpTextSystem::HelpTextSystem()
-    : _voices(VoiceAudio())
+    : _voices(VoiceAudio(), VoiceHooks())
 {
 }
 
@@ -65,6 +94,8 @@ help::AdvisorVoices::Audio HelpTextSystem::VoiceAudio()
 		}
 		// Heard everywhere, wherever the advisor is
 		_advisorLine = Locator::audio::value().StartSoundEffect(*sound, {});
+		// Its length is known once it has been made ready to play
+		_advisorLineMs = Locator::resources::value().GetSounds().Handle(*sound)->duration * 1000.0f;
 		return _advisorLine != entt::null;
 	};
 	audio.isPlaying = [this](uint32_t) { return Sounding(_advisorLine); };
@@ -78,9 +109,42 @@ help::AdvisorVoices::Audio HelpTextSystem::VoiceAudio()
 		}
 		_advisorLine = entt::null;
 	};
+	audio.recording = [](uint32_t line) -> std::optional<help::AdvisorVoices::Recording> {
+		const auto sound = Locator::helpSpeechSystem::value().GetTable().FindSound(audio::SpeechBank::HelpSprites, line);
+		if (!sound || !Locator::resources::value().GetSounds().Contains(*sound))
+		{
+			return std::nullopt;
+		}
+		return LineRecording(*Locator::resources::value().GetSounds().Handle(*sound));
+	};
+	audio.playPositionMs = [this](uint32_t) -> int64_t {
+		if (!Sounding(_advisorLine))
+		{
+			return -1;
+		}
+		return static_cast<int64_t>(Locator::audio::value().GetProgress(_advisorLine) * _advisorLineMs);
+	};
 	audio.tickMs = []() { return static_cast<uint32_t>(Locator::time::value().GetElapsedTime().count()); };
 	audio.localRand = [](int32_t n) { return Locator::gameRandom::value().LocalRand(n); };
 	return audio;
+}
+
+help::AdvisorVoices::Hooks HelpTextSystem::VoiceHooks()
+{
+	help::AdvisorVoices::Hooks hooks;
+	hooks.setTags = [](int advisor, std::vector<help::spirits::AudioTag> tags) {
+		if (Locator::advisorSystem::has_value() && Locator::advisorSystem::value().IsLoaded())
+		{
+			Locator::advisorSystem::value().GetController().SetSentenceTags(advisor, std::move(tags));
+		}
+	};
+	hooks.stopTags = [](int advisor, float before) {
+		if (Locator::advisorSystem::has_value() && Locator::advisorSystem::value().IsLoaded())
+		{
+			Locator::advisorSystem::value().GetController().StopSentence(advisor, before);
+		}
+	};
+	return hooks;
 }
 
 help::DialogueText::Queries HelpTextSystem::DialogueQueries()

@@ -1624,9 +1624,9 @@ void AdvisorSpirit::UpdateAnimStack(float dt, bool sfx)
 {
 	_gimme = false;
 	const Queries& q = _control.GetQueries();
-	// IsTalking, the sentence check, the times and the lip sync key are audio::advisor's (LipSyncFrame); so is the
-	// stop of a sentence whose position is still < 0 past 0.5 s
-	if (const std::optional<LipSyncFrame> lip = q.lipSync ? q.lipSync(_index) : std::nullopt; lip)
+	// Whether a line is being said, its time and the mouth's weights come from the voice, which also stops a line
+	// that has not started playing half a second after it should have
+	if (const std::optional<LipSyncFrame> lip = q.lipSync ? q.lipSync(_index, dt) : std::nullopt; lip)
 	{
 		if (lip->playing)
 		{
@@ -2476,9 +2476,9 @@ std::array<TrailVertex, 2 * Trail::k_Points> AdvisorSpirit::TrailStrip() const
 	return strip;
 }
 
-void AdvisorSpirit::FlushTags()
+void AdvisorSpirit::FlushTags(float before)
 {
-	for (; _nextTag < _tags.size(); ++_nextTag)
+	for (; _nextTag < _tags.size() && _tags[_nextTag].time < before; ++_nextTag)
 	{
 		FireTag(_tags[_nextTag], false, true);
 	}
@@ -3003,9 +3003,9 @@ void AdvisorSpiritController::ProcessTurn()
 	}
 }
 
-void AdvisorSpiritController::StopSentence(int dude)
+void AdvisorSpiritController::StopSentence(int dude, float before)
 {
-	_dudes[dude]->FlushTags();
+	_dudes[dude]->FlushTags(before);
 }
 
 void AdvisorSpiritController::SetSentenceTags(int dude, std::vector<AudioTag> tags)

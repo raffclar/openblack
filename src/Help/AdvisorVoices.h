@@ -13,6 +13,12 @@
 
 #include <array>
 #include <functional>
+#include <optional>
+#include <string>
+#include <vector>
+
+#include "Audio/LipSync.h"
+#include "Help/SpiritVoice.h"
 
 namespace openblack::help
 {
@@ -23,12 +29,27 @@ namespace openblack::help
 /// Only one advisor speaks at a time. A line starts after a short delay when the advisor is near the edge of the
 /// screen, as if it had to come in to say it. An advisor counts as talking while its line plays, and for 200 ms after,
 /// so that one advisor's line runs into the other's.
+///
+/// The line's recording is kept while it plays: its spectrum moves the speaker's mouth and its cue labels give the
+/// advisors' gestures.
 class AdvisorVoices
 {
 public:
 	static constexpr int k_Advisors = 2;
 	/// How long after its line an advisor still counts as talking
 	static constexpr uint32_t k_JustStoppedMs = 200;
+
+	/// A line's recording as the voices keep it while it plays
+	struct Recording
+	{
+		/// 16-bit samples, the channels interleaved
+		std::vector<int16_t> samples;
+		int channels {1};
+		int sampleRate {0};
+		/// The cue labels the gesture tags are read from; none when the recording has no tag data at all, which leaves
+		/// the line without tags
+		std::optional<std::vector<spirits::TagLabel>> labels;
+	};
 
 	/// What the voices need from the rest of the game; unset reads as the value next to each
 	struct Audio
@@ -47,9 +68,23 @@ public:
 		std::function<uint32_t()> tickMs;
 		/// A number below n from the game's local random numbers. Unset: 0
 		std::function<uint32_t(int32_t n)> localRand;
+		/// The recording of a line that has just started. Unset: none, so the mouth does not move and there are no tags
+		std::function<std::optional<Recording>(uint32_t line)> recording;
+		/// How far into the line the sound is playing, in milliseconds, -1 when it is not playing. Unset: -1
+		std::function<int64_t(uint32_t line)> playPositionMs;
+	};
+
+	/// What the voices tell the advisors' bodies; unset does nothing
+	struct Hooks
+	{
+		/// An advisor's line started with these gesture tags
+		std::function<void(int advisor, std::vector<spirits::AudioTag> tags)> setTags;
+		/// An advisor's line stopped: its tags before `before` seconds fire on it, then are dropped
+		std::function<void(int advisor, float before)> stopTags;
 	};
 
 	explicit AdvisorVoices(Audio audio);
+	AdvisorVoices(Audio audio, Hooks hooks);
 
 	/// The delay before an advisor's line starts, from how far across the screen it hovers (-1 the left edge, 1 the
 	/// right): none inside 0.95 of the way to an edge, then a quarter of a second rising to at most half a second
@@ -81,6 +116,17 @@ public:
 	/// interruption lines, but stopping its line leaves it no longer the speaker, so the interruption is never heard
 	void Interrupt(int advisor);
 
+	/// Once a frame for an advisor whose body is updated, before its gestures: nullopt unless it is the speaker and a
+	/// line has started. The line's time is the computer's clock since it started until the sound reports a play
+	/// position, then that position; a line whose sound has not reported one half a second in is stopped. While the
+	/// sound plays, the mouth's weights move towards the shape of the recording at that time.
+	[[nodiscard]] std::optional<spirits::LipSyncFrame> ApplyLipSync(int advisor, float dt);
+	/// The weights the advisor's mouth was last given
+	[[nodiscard]] const audio::lip_sync::Key& GetLipSyncKey(int advisor) const
+	{
+		return _advisors.at(static_cast<size_t>(advisor)).key;
+	}
+
 	/// The advisor speaking, -1 for none
 	[[nodiscard]] int GetSpeaker() const { return _speaker; }
 	/// The line being said, 0 for none
@@ -94,15 +140,30 @@ private:
 		uint32_t startTick {0};
 		uint32_t lastTalkTick {0};
 		bool active {false};
+		/// The mouth's weights, which carry over from line to line
+		audio::lip_sync::Key key {};
 	};
 
-	void UpdateSaySentence(Advisor& advisor);
+	void UpdateSaySentence(int advisor);
+	/// The recording of the line that started is kept and the speaker's tags built from its labels
+	void KeepRecording(int advisor, uint32_t line);
 	[[nodiscard]] uint32_t Now() const { return _audio.tickMs ? _audio.tickMs() : 0; }
 
 	Audio _audio;
+	Hooks _hooks;
 	std::array<Advisor, k_Advisors> _advisors {};
 	int _speaker {-1};
 	uint32_t _sentence {0};
+	/// When the last line started playing
+	uint32_t _sentenceStartTick {0};
+	/// The last line's recording, kept until the next one starts
+	std::vector<int16_t> _samples;
+	int _frames {0};
+	int _sampleRate {0};
+	float _duration {0.0f};
+	/// The tag parser's last word, which carries over from one label to the next
+	std::string _tagWord;
+	std::vector<float> _spectrum;
 };
 
 } // namespace openblack::help

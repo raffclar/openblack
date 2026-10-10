@@ -421,6 +421,27 @@ TEST(Spirits, AudioTagsFromEveryBracket)
 	EXPECT_EQ(errors, 1);
 }
 
+TEST(Spirits, AStoppingLinesTagsAllFireOnItsSpeaker)
+{
+	std::string word;
+	Fixture f;
+	AdvisorSpirit& evil = f.control.Dude(1);
+	evil.partner = &f.control.Dude(0);
+	auto tags = ParseAudioTags("[GA shrug]", 0.5f, word);
+	auto late = ParseAudioTags("[TE sad]", 200.0f, word);
+	tags.insert(tags.end(), late.begin(), late.end());
+	f.control.SetSentenceTags(1, tags);
+	// The line stops with 102 s as the limit: the good one's shrug is made by the evil one itself, the tag past the
+	// limit is dropped
+	f.control.StopSentence(1, 102.0f);
+	EXPECT_EQ(evil.SlotMode(64), 1);
+	EXPECT_EQ(f.control.Dude(0).SlotMode(64), 0);
+	EXPECT_EQ(evil.EmotionTarget(), 0u);
+	// Nothing is left to fire
+	f.control.StopSentence(1, 1000.0f);
+	EXPECT_EQ(evil.EmotionTarget(), 0u);
+}
+
 TEST(Spirits, OneBadLabelDropsTheSentencesTags)
 {
 	std::string word;
