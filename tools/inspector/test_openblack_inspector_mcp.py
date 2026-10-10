@@ -685,6 +685,14 @@ class ArgumentsTest(SessionBase):
         self.assertFalse(clash["ok"])
         self.assertIn("component", clash["error"])
 
+    def test_a_value_goes_as_it_is_given(self):
+        for value in (6.0, 3, True, "text", [1, 2, 3], {"a": 1}, None):
+            self.session.call("edit_set", {"id": 157, "component": "Creature", "field": "size", "value": value,
+                                           "pid": 1001})
+            sent = self.first.asked()[-1]["params"]["value"]
+            self.assertEqual(sent, value)
+            self.assertEqual(type(sent), type(value))
+
     def test_a_tool_refuses_arguments_it_doesnt_take(self):
         asked = len(self.first.asked())
         answer = self.session.call("game_moon", {"pid": 1001, "colour": "red"})
@@ -735,6 +743,18 @@ class SchemaTest(unittest.TestCase):
         self.assertIn("wait", properties)
         self.assertEqual(sorted(tool["inputSchema"]["required"]), ["id", "near", "radius"])
         self.assertEqual(tool["params"], ["id", "at", "frame", "legacy"])
+
+    def test_every_parameter_has_a_type(self):
+        # A parameter without one may be sent as text by a client (a number as "6.0")
+        for tool in mcp.TOOLS:
+            for name, prop in tool["inputSchema"]["properties"].items():
+                self.assertIn("type", prop, f"{tool['name']}.{name}")
+        value = mcp.TOOLS_BY_NAME["edit_set"]["inputSchema"]["properties"]["value"]["type"]
+        self.assertTrue({"number", "boolean", "string", "array", "object"} <= set(value))
+        self.assertIn("number", mcp.TOOLS_BY_NAME["script_set_global"]["inputSchema"]["properties"]["value"]["type"])
+        self.assertEqual(mcp.parameter_schema({"type": 'array or "all"'})["type"], ["array", "string"])
+        self.assertEqual(mcp.parameter_schema({"type": "string or integer"})["type"], ["string", "integer"])
+        self.assertIn("object", mcp.parameter_schema({"type": "any"})["type"])
 
     def test_a_missing_catalogue_is_empty(self):
         self.assertEqual(mcp.read_catalogue(os.path.join(tempfile.gettempdir(), "no-such-catalogue.json")), {})

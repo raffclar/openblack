@@ -299,6 +299,11 @@ TEST(InspectorScripts, RunGlobalsAndNatives)
 	    Refused(inspector, R"({"query": "script.set_global", "params": {"name": "HasCreature", "value": 1}})").empty());
 	Ask(inspector, R"({"query": "script.set_global", "params": {"name": "HasCreature", "value": true}})");
 	EXPECT_TRUE(scripts.hasCreature.boolean);
+	// A number written as text, as some tools send one, is the number: no global is text
+	Ask(inspector, R"({"query": "script.set_global", "params": {"name": "Land1Stage", "value": "7"}})");
+	EXPECT_FLOAT_EQ(scripts.stage.number, 7.0f);
+	EXPECT_FALSE(
+	    Refused(inspector, R"({"query": "script.set_global", "params": {"name": "Land1Stage", "value": "seven"}})").empty());
 
 	const auto added = Ask(inspector, R"({"query": "script.call", "params": {"native": "add", "args": [2, 3.5]}})");
 	EXPECT_EQ(scripts.called, 4u);

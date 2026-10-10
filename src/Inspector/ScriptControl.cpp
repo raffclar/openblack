@@ -112,6 +112,15 @@ Json openblack::inspector::ToJson(const ScriptValue& value)
 
 std::optional<ScriptValue> openblack::inspector::ValueOfType(ScriptValue::Type type, const Json& json, std::string& error)
 {
+	// No global is text: a number or a truth written as text, as some tools send one, is read as JSON
+	if (json.is_string())
+	{
+		if (const auto parsed = Parse(json.get<std::string>());
+		    parsed.has_value() && (parsed->is_number() || parsed->is_boolean()))
+		{
+			return ValueOfType(type, *parsed, error);
+		}
+	}
 	ScriptValue value {.type = type};
 	switch (type)
 	{

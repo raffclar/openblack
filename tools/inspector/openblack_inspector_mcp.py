@@ -52,6 +52,8 @@ import time
 PROTOCOL_VERSION = "2024-11-05"
 DEFAULT_PORT = 47800
 
+# A value of any JSON type: given as such, so that clients send it as it is (a number as a number), not as text
+ANY_VALUE = {"type": ["number", "integer", "boolean", "string", "array", "object", "null"]}
 # Shaping options every query takes, described once for the tools' schemas
 SHAPING = {
     "fields": {"type": "array", "items": {"type": "string"},
@@ -270,7 +272,9 @@ TOOLS = [
         "description": "Sets one field of a component (a dotted path into nested values), its type checked; "
                        "answers the field as it now is.",
         "inputSchema": schema({"id": {"type": "integer"}, "component": {"type": "string"},
-                               "field": {"type": "string"}, "value": {"description": "Of the field's type"}},
+                               "field": {"type": "string"},
+                               "value": {**ANY_VALUE, "description": "Of the field's type, as JSON: a number, true or "
+                                                                     "false, text, an array or an object"}},
                               ["id", "component", "field", "value"]),
         "query": "edit.set",
         "params": ["id", "component", "field", "value"],
@@ -630,7 +634,9 @@ TOOLS = [
     {
         "name": "script_set_global",
         "description": "Sets a global variable by exact name, keeping its type.",
-        "inputSchema": schema({"name": {"type": "string"}, "value": {}}, ["name", "value"]),
+        "inputSchema": schema({"name": {"type": "string"},
+                               "value": {**ANY_VALUE, "description": "Of the global's type, as JSON"}},
+                              ["name", "value"]),
         "query": "script.set_global",
         "params": ["name", "value"],
     },
@@ -675,6 +681,7 @@ GAME_TOOLS = [
 CATALOGUE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "inspector_queries.json")
 # How the game's parameter types are given to MCP
 PARAMETER_TYPES = {
+    "any": ANY_VALUE,
     "integer": {"type": "integer"},
     "number": {"type": "number"},
     "string": {"type": "string"},
@@ -696,11 +703,18 @@ def read_catalogue(path=CATALOGUE_PATH):
 
 def parameter_schema(parameter):
     """A parameter of the game's description as a JSON schema"""
-    types = [PARAMETER_TYPES.get(name.strip(), {}) for name in str(parameter.get("type", "")).split("|")]
+    # "integer|object", "string or array", 'array or "all"' (a quoted word is a string), "any"
+    names = [name.strip() for part in str(parameter.get("type", "")).split("|") for name in part.split(" or ")]
+    types = [{"type": "string"} if name.startswith('"') else PARAMETER_TYPES.get(name, {}) for name in names]
     if len(types) == 1:
         result = dict(types[0])
     else:
-        result = {"type": [each["type"] for each in types if "type" in each]}
+        listed = []
+        for each in types:
+            for name in each.get("type", []) if isinstance(each.get("type"), list) else [each.get("type")]:
+                if name and name not in listed:
+                    listed.append(name)
+        result = {"type": listed}
     if parameter.get("description"):
         result["description"] = parameter["description"]
     return result
