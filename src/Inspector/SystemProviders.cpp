@@ -402,6 +402,55 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 		              return QueryResult::Value(
 		                  {{"id", ToId(entity)}, {"sum", mind.desires->sum}, {"desires", DesireItems(*mind.desires, top)}});
 	              });
+	provider->Add(
+	    Query("known", "The ordinary skills and miracles a creature knows, and how often it has seen each miracle", {id}),
+	    [sources](const QueryContext& context) {
+		    const auto* registry = Registry(sources.world);
+		    if (registry == nullptr)
+		    {
+			    return QueryResult::Error(std::string(k_NoRegistry));
+		    }
+		    const auto creature = CreatureParam(*registry, context.params);
+		    if (const auto* problem = std::get_if<std::string>(&creature); problem != nullptr)
+		    {
+			    return QueryResult::Error(*problem);
+		    }
+		    const auto entity = std::get<entt::entity>(creature);
+		    const auto& mind = registry->Get<const CreatureMindState>(entity);
+		    if (!mind.learnt.has_value())
+		    {
+			    return QueryResult::Error("its learning isn't set up yet: its mind hasn't thought");
+		    }
+		    const auto* tables = sources.tables ? sources.tables() : nullptr;
+		    const auto& knowledge = mind.learnt->knowledge;
+		    auto skills = Json::array();
+		    for (size_t i = 0; i < knowledge.skillsKnown.size(); ++i)
+		    {
+			    if (knowledge.skillsKnown[i])
+			    {
+				    skills.push_back(
+				        {{"skill", i},
+				         {"name", tables != nullptr && i < tables->skills.size() ? tables->skills[i].name : std::string()}});
+			    }
+		    }
+		    auto miracles = Json::array();
+		    for (size_t i = 0; i < knowledge.miraclesKnown.size(); ++i)
+		    {
+			    const auto seen = i < knowledge.miraclesSeen.size() ? knowledge.miraclesSeen[i].count : 0u;
+			    if (knowledge.miraclesKnown[i] || seen > 0)
+			    {
+				    miracles.push_back(
+				        {{"miracle", i},
+				         {"name", tables != nullptr && i < tables->miracles.size() ? tables->miracles[i].name : std::string()},
+				         {"known", static_cast<bool>(knowledge.miraclesKnown[i])},
+				         {"seen", seen}});
+			    }
+		    }
+		    return QueryResult::Value({{"id", ToId(entity)},
+		                               {"skills", std::move(skills)},
+		                               {"miracles", std::move(miracles)},
+		                               {"pending_teaching", mind.pendingTeaching.size()}});
+	    });
 	provider->Add(Query("plan", "A creature's plan (desire, action, object, priority), activity and next agenda steps", {id}),
 	              [sources](const QueryContext& context) {
 		              const auto* registry = Registry(sources.world);

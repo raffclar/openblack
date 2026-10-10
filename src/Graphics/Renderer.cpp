@@ -3963,7 +3963,7 @@ void Renderer::UploadAnimalBones(const DrawSceneDesc& drawDesc) const
 	}
 	for (const auto& [meshId, animals] : byModel)
 	{
-		// Only a model all of whose instances are animals, none fading and all in the same light
+		// Only a model all of whose instances are animals, none fading, all in the same light and none cut
 		const auto placers = renderCtx.instancedDrawDescs.find(meshId);
 		if (placers == renderCtx.instancedDrawDescs.end() || placers->second.count != animals.size() ||
 		    !meshes.Contains(meshId))
@@ -3973,8 +3973,10 @@ void Renderer::UploadAnimalBones(const DrawSceneDesc& drawDesc) const
 		const auto model = meshes.Handle(meshId);
 		const auto& rest = model->GetBoneMatrices();
 		const auto light = animals.front().pose->light;
-		if (!model->IsBoned() || rest.empty() || std::ranges::any_of(animals, [light](const Drawn& drawn) {
-			    return drawn.pose->alpha < 255 || drawn.pose->light != light;
+		// Those in a colour of their own or cut by a plane are drawn one by one
+		if (!model->IsBoned() || rest.empty() || light == ecs::components::AnimalLight::Own ||
+		    std::ranges::any_of(animals, [light](const Drawn& drawn) {
+			    return drawn.pose->alpha < 255 || drawn.pose->light != light || drawn.pose->cutBelow.has_value();
 		    }))
 		{
 			continue;
@@ -5446,12 +5448,19 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					colour = glm::vec3(static_cast<float>(texel & 0xFFu), static_cast<float>((texel >> 8) & 0xFFu),
 					                   static_cast<float>((texel >> 16) & 0xFFu));
 				}
+				else if (pose->light == ecs::components::AnimalLight::Own)
+				{
+					colour = pose->colour;
+				}
 				submitDesc.objectLook =
 				    L3DMeshSubmitDesc::ObjectLook {.colour = colour, .alpha = static_cast<float>(pose->alpha) / 255.0f};
+				// An animal cut by a plane shows nothing below it
+				submitDesc.cutBelow = pose->cutBelow;
 				const EntityPose entityPose {.bones = pose->bones, .morphTargets = nullptr};
 				drawInstances(mesh->id, placers->second, translucent || placers->second.materialBlending, instance, 1,
 				              &entityPose);
 				submitDesc.objectLook.reset();
+				submitDesc.cutBelow.reset();
 			};
 			// The mesh, and its draw, whose instances hold this one: a villager's is the one its distance chose
 			const auto drawHolding =

@@ -12,8 +12,11 @@
 #include <cmath>
 
 #include <algorithm>
+#include <numbers>
 
 #include <glm/gtx/euler_angles.hpp>
+
+#include "3D/MapCoords.h"
 
 namespace openblack::script::property_rules
 {
@@ -112,6 +115,43 @@ Angles PlacedAngles(const glm::mat3& rotation)
 glm::mat3 PlacedRotation(const Angles& angles)
 {
 	return glm::mat3(glm::eulerAngleXYZ(-angles.x, -angles.y, -angles.z));
+}
+
+float CreatureHeadingToLivingAngle(float heading)
+{
+	constexpr float k_Turn = 2.0f * std::numbers::pi_v<float>;
+	const float angle = std::fmod(-heading - (std::numbers::pi_v<float> * 0.5f), k_Turn);
+	return angle < 0.0f ? angle + k_Turn : angle;
+}
+
+float LivingAngleToCreatureHeading(float angle)
+{
+	return -angle - (std::numbers::pi_v<float> * 0.5f);
+}
+
+bool MovedAcross(const glm::vec3& before, const glm::vec3& after)
+{
+	return map_coords::ToFixed(before.x) != map_coords::ToFixed(after.x) ||
+	       map_coords::ToFixed(before.z) != map_coords::ToFixed(after.z);
+}
+
+std::optional<CreatureType> CreatureTypeFromScript(uint32_t type)
+{
+	constexpr uint32_t k_GiantApe = 0;
+	if (type == k_GiantApe)
+	{
+		return CreatureType::GiantApe;
+	}
+	if (type < static_cast<uint32_t>(CreatureType::GiantApe))
+	{
+		return static_cast<CreatureType>(type);
+	}
+	return std::nullopt;
+}
+
+uint32_t ScriptCreatureType(CreatureType species)
+{
+	return species == CreatureType::GiantApe ? 0 : static_cast<uint32_t>(species);
 }
 
 float BeliefForPlayer(bool town, std::optional<float> townBelief, std::optional<PlayerNames> owner, PlayerNames player)

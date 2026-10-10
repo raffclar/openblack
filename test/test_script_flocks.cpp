@@ -18,7 +18,7 @@
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
-#include "ECS/Components/ScriptFlock.h"
+#include "ECS/Components/Flock.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
@@ -152,7 +152,7 @@ TEST(ScriptFlocks, NewcomersGoToTheFrontAndTheLeaderToTheBack)
 	EXPECT_EQ(script_flocks::Leader(registry, flock), first);
 	script_flocks::AddLeader(registry, flock, leader);
 	EXPECT_EQ(script_flocks::Leader(registry, flock), leader);
-	EXPECT_EQ(registry.Get<components::ScriptFlock>(flock).members, (std::vector {second, first, leader}));
+	EXPECT_EQ(registry.Get<components::Flock>(flock).members, (std::vector {second, first, leader}));
 	// Where the flock is: its leader's position
 	EXPECT_EQ(script_flocks::Position(registry, flock), Metres(3, 3));
 }
@@ -181,7 +181,7 @@ TEST(ScriptFlocks, MovingAFlockMovesItsPlaceAndItsLeadersGoal)
 	const auto leader = Living(registry, 1, 1);
 	script_flocks::AddLiving(registry, flock, leader);
 	script_flocks::MoveTo(registry, flock, Metres(30, 40));
-	EXPECT_EQ(registry.Get<components::ScriptFlock>(flock).place, Metres(30, 40));
+	EXPECT_EQ(registry.Get<components::Flock>(flock).place, Metres(30, 40));
 	EXPECT_NEAR(registry.Get<components::WallHug>(leader).goal.x, 30.0f, 0.001f);
 }
 

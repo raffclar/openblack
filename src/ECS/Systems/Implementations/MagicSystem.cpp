@@ -1604,6 +1604,28 @@ void MagicSystem::SetDispenserPeriod(entt::entity dispenser, float seconds)
 	}
 }
 
+void MagicSystem::SetDispenserActive(entt::entity dispenser, bool active)
+{
+	auto* component = EntityRegistry().TryGet<SpellDispenser>(dispenser);
+	if (component == nullptr)
+	{
+		return;
+	}
+	component->timer.active = active;
+	if (active && MakeOrb(dispenser) != entt::null)
+	{
+		EntityRegistry().Get<SpellDispenser>(dispenser).timer.tick = 0;
+	}
+}
+
+void MagicSystem::SetDispenserTurns(entt::entity dispenser, uint32_t turns)
+{
+	if (auto* component = EntityRegistry().TryGet<SpellDispenser>(dispenser); component != nullptr && turns != 0)
+	{
+		component->timer.period = turns;
+	}
+}
+
 entt::entity MagicSystem::CreateOneOffSeed(glm::vec3 position, SpellSeedType seed, int powerUp, float multiplier)
 {
 	return archetypes::OneOffSpellSeedArchetype::Create(position, seed, powerUp, multiplier);

@@ -145,6 +145,12 @@ public:
 	/// For the debug tools: the creature knows a miracle (by its magic type) as if it had learnt it, and is told to cast
 	/// one at a thing, going about it as it would by itself
 	virtual void KnowMiracle(entt::entity /*creature*/, size_t /*miracle*/) {}
+	/// A script makes the creature know an ordinary skill or a miracle (by its row in the game's tables), or forget it.
+	/// Taught a miracle, it has seen it as often as its species needs to.
+	virtual void SetKnowsAction(entt::entity /*creature*/, CreatureActionLearningType /*type*/, uint32_t /*action*/,
+	                            bool /*knows*/)
+	{
+	}
 	virtual bool TellCast(entt::entity /*creature*/, MagicType /*type*/, entt::entity /*target*/) { return false; }
 
 	/// A plan the creature is made to carry out, as an order given with the leash makes it: an action of the game's table

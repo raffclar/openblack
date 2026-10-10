@@ -430,7 +430,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* TURN_TO_FACE_MAGIC_TREE */ k_TodoEntry,
     /* LOOK_AT_MAGIC_TREE */ k_TodoEntry,
     /* DANCE_FOR_EDITING_PURPOSES */ k_TodoEntry,
-    /* MOVE_TO_DANCE_POS */ k_TodoEntry,
+    /* MOVE_TO_DANCE_POS */
+    VillagerStateTableEntry {
+        .state = &villager_dance::MoveToDancePos,
+    },
     /* INITIALISE_RESPECT_CREATURE_REACTION */ k_TodoEntry,
     /* PERFORM_RESPECT_CREATURE_REACTION */ k_TodoEntry,
     /* FINISH_RESPECT_CREATURE_REACTION */ k_TodoEntry,

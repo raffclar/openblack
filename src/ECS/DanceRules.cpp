@@ -11,8 +11,11 @@
 
 #include <algorithm>
 #include <ranges>
+#include <vector>
 
 #include <DanceFile.h>
+
+#include "ECS/DanceMoves.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -61,28 +64,30 @@ void SetMembership(DanceGroups& groups, std::size_t index, uint32_t limit, uint3
 	dance_rules::SetWeights(groups);
 }
 
-void ApplyAction(DanceGroups& groups, std::size_t index, const dance::DanceAction& action)
+/// One of a key frame's actions done to a group: membership by the rules here, the rest by the dance's moves. True when
+/// the group starts a move.
+bool ApplyAction(Dance& dance, std::size_t index, const dance::DanceAction& action, int32_t now)
 {
-	auto& group = groups.all[index];
+	auto& group = dance.groups.all[index];
 	switch (static_cast<dance_rules::ActionType>(action.type))
 	{
 	case dance_rules::ActionType::Membership:
-		SetMembership(groups, index, action.arguments[0], action.arguments[1]);
-		break;
+		SetMembership(dance.groups, index, action.arguments[0], action.arguments[1]);
+		return false;
 	case dance_rules::ActionType::Formation:
 		group.formation = action.arguments[0];
-		break;
+		return false;
 	case dance_rules::ActionType::DanceType:
 		group.danceType = action.arguments[0];
-		break;
+		return false;
 	case dance_rules::ActionType::Sexes:
 		group.sexes = action.arguments[0];
-		break;
+		return false;
 	default:
-		// TODO(opening): the actions that move the dancers about: their shape, turning, steps and clips
-		break;
+		return dance_moves::ApplyAction(dance, index, action.type, action.arguments, now);
 	}
 }
+
 } // namespace
 
 float dance_rules::RateForSpeed(float speed)
@@ -160,22 +165,28 @@ void dance_rules::SetWeights(DanceGroups& groups)
 	groups.roundLength = 100 / divisor;
 }
 
-void dance_rules::ApplyKeyFrame(DanceGroups& groups, const dance::DanceKeyFrame& keyFrame)
+std::vector<std::size_t> dance_rules::ApplyKeyFrame(Dance& dance, const dance::DanceKeyFrame& keyFrame)
 {
+	std::vector<std::size_t> moving;
+	const auto now = Truncate(dance.clock);
 	for (const auto& action : keyFrame.actions)
 	{
 		for (const auto index : action.groups | std::views::reverse)
 		{
-			while (groups.all.size() <= index)
+			while (dance.groups.all.size() <= index)
 			{
-				groups.all.emplace_back();
+				dance.groups.all.emplace_back();
 			}
-			ApplyAction(groups, index, action);
+			if (ApplyAction(dance, index, action, now) && std::ranges::find(moving, index) == moving.end())
+			{
+				moving.push_back(index);
+			}
 		}
 	}
+	return moving;
 }
 
-void dance_rules::ApplyKeyFramesUpTo(DanceGroups& groups, const dance::DanceFile& file, float clock)
+void dance_rules::ApplyKeyFramesUpTo(Dance& dance, const dance::DanceFile& file, float clock)
 {
 	for (const auto& keyFrame : file.keyFrames)
 	{
@@ -183,9 +194,9 @@ void dance_rules::ApplyKeyFramesUpTo(DanceGroups& groups, const dance::DanceFile
 		{
 			break;
 		}
-		ApplyKeyFrame(groups, keyFrame);
+		static_cast<void>(ApplyKeyFrame(dance, keyFrame));
 	}
-	SetWeights(groups);
+	SetWeights(dance.groups);
 }
 
 std::optional<std::size_t> dance_rules::AddDancer(Dance& dance, entt::entity dancer, uint32_t danceType, uint32_t sex)
@@ -274,7 +285,7 @@ float dance_rules::NextClock(float clock, uint32_t loopLength)
 	return static_cast<uint32_t>(Truncate(next)) >= loopTurns ? 0.0f : next;
 }
 
-void dance_rules::ProcessTurn(Dance& dance, uint32_t turn)
+std::vector<std::size_t> dance_rules::ProcessTurn(Dance& dance, uint32_t turn)
 {
 	if (dance.state == Dance::State::Stopped && dance.autostart && HasProperlyStarted(dance, turn))
 	{
@@ -288,16 +299,24 @@ void dance_rules::ProcessTurn(Dance& dance, uint32_t turn)
 	}
 	if (dance.state != Dance::State::Dancing || dance.dancers == 0)
 	{
-		return;
+		return {};
 	}
 	// TODO(opening): a town's dance counts the turns the camera is near it
+	std::vector<std::size_t> moving;
 	if (dance.file != nullptr)
 	{
 		if (const auto* keyFrame = DueKeyFrame(*dance.file, dance.clock))
 		{
-			ApplyKeyFrame(dance.groups, *keyFrame);
+			moving = ApplyKeyFrame(dance, *keyFrame);
 		}
 	}
-	// TODO(opening): each group's moves go on at the dance's rate, and the dance's lights
+	// Each group's move goes on, in the order the groups were made
+	const auto now = Truncate(dance.clock);
+	for (auto& group : dance.groups.all)
+	{
+		dance_moves::ProcessGroup(group, now);
+	}
+	// TODO(opening): the dance's lights
 	dance.clock = NextClock(dance.clock, dance.loopLength);
+	return moving;
 }

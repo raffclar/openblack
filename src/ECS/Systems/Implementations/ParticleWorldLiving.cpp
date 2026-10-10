@@ -38,6 +38,7 @@
 #include "ECS/Components/ObjectGlow.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
@@ -117,7 +118,8 @@ std::vector<particles::StrikeCandidate> GameParticleWorld::StrikeCandidates(glm:
 		// the cell it stands in
 		for (const auto entity : map.GetAllInCell(cell))
 		{
-			if (!registry.Valid(entity) || registry.AnyOf<OneOffSpellSeed>(entity))
+			// Nothing strikes a miracle's globe or a script's scroll or sign
+			if (!registry.Valid(entity) || registry.AnyOf<OneOffSpellSeed, ScriptHighlight>(entity))
 			{
 				continue;
 			}
