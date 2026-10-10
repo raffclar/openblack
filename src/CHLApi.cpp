@@ -6217,20 +6217,46 @@ void SexIsMale() // 358 SEX_IS_MALE
 	Pushb(false);
 }
 
-void GetFirstHelp() // 359 GET_FIRST_HELP
+/// The first help text the help gives about an object: a spell dispenser's is its miracle's, any other object's its
+/// kind's. Both GET_FIRST_HELP and GET_LAST_HELP give this one (the game reads the same text for both), so the scripts'
+/// run of texts from the first to the last is this text alone.
+void PushObjectHelpText()
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
+	const auto object = PopObject();
+	if (object == entt::null)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		Pushf(0.0f);
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (const auto* dispenser = registry.TryGet<const ecs::components::SpellDispenser>(object); dispenser != nullptr)
+	{
+		// The text of the effect its miracle casts
+		const auto& info = Locator::infoConstants::value();
+		if (static_cast<size_t>(dispenser->magicType) >= magic::k_MagicTypeCount)
+		{
+			Pushf(0.0f);
+			return;
+		}
+		const auto effect = magic::GetMagicInfo(info, dispenser->magicType).magicType;
+		Pushf(static_cast<float>(magic::GetMagicEffectInfo(info, effect).helpStartEnum));
+		return;
+	}
+	// TODO(advisor-help): an object's kind's help text needs the info row of every kind of object, which openblack
+	// doesn't look up by thing yet
 	NotImplemented();
 	Pushf(0.0f);
 }
 
+void GetFirstHelp() // 359 GET_FIRST_HELP
+{
+	PushObjectHelpText();
+}
+
 void GetLastHelp() // 360 GET_LAST_HELP
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	PushObjectHelpText();
 }
 
 void IsActive() // 361 IS_ACTIVE

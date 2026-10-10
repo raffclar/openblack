@@ -592,6 +592,11 @@ void GameInterface::DrawDialogue(glm::u16vec2 resolution, int barPixels)
 	{
 		return;
 	}
+	// Neither the box nor its words show while a video plays; the texts still move on underneath
+	if (Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying())
+	{
+		return;
+	}
 	const help::WidthFn widthOf = [this](help::TextFont font, std::u16string_view text, float size) {
 		return DialogueFont(font).first->GetWidth(text, size);
 	};
