@@ -1910,7 +1910,10 @@ std::unique_ptr<ProviderInterface> ScriptProvider(ScriptTargetInterface& scripts
 		                           {"current_task", vm.GetCurrentTaskNumber()}};
 	              }));
 	provider->Add(
-	    Query("tasks", "The script tasks running: their scripts, where they are and whether they sleep", {}, ResultKind::List),
+	    Query("tasks",
+	          "The script tasks running: their scripts, where they are, whether they sleep and how many values are on their "
+	          "stack",
+	          {}, ResultKind::List),
 	    Serve<Locator::vm>("the script machine", [](const lhvm::LHVM& vm, const QueryContext& /*c*/) {
 		    Json items = Json::array();
 		    for (const auto& [number, task] : vm.GetTasks())
@@ -1921,6 +1924,7 @@ std::unique_ptr<ProviderInterface> ScriptProvider(ScriptTargetInterface& scripts
 			                     {"address", task.instructionAddress},
 			                     {"sleeping", task.sleeping},
 			                     {"waiting_for", task.waitingTaskId},
+			                     {"stack", task.stack.count},
 			                     {"held", vm.IsTaskHeld(number)}});
 		    }
 		    return items;
