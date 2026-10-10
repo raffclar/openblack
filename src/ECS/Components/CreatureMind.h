@@ -12,6 +12,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <vector>
 
 #include <MindFile.h>
 
@@ -23,6 +24,7 @@
 #include "Creature/CreatureTownCompassion.h"
 #include "Creature/LeashRules.h"
 #include "Creature/PerceivedDesires.h"
+#include "Enums.h"
 
 namespace openblack::ecs::components
 {
@@ -95,6 +97,15 @@ struct CreatureMindState
 	/// resource has been looked at
 	std::shared_ptr<const creaturemind::MindFileData> pendingFile;
 	bool resourceChecked {false};
+	/// What scripts taught it or made it forget before its learning was set up or while a mind file waits, kept to be
+	/// applied in order over what it learns from the file
+	struct Teaching
+	{
+		CreatureActionLearningType type {CreatureActionLearningType::Normal};
+		uint32_t action {0};
+		bool knows {false};
+	};
+	std::vector<Teaching> pendingTeaching;
 
 	/// What the leash tells the mind: the desire it forces, whether the creature is following it to the hand, and what
 	/// the player has shown it on the leash
