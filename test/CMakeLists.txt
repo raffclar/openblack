@@ -262,6 +262,7 @@ target_link_libraries(test_l3d_submesh_names PRIVATE l3d)
 openblack_setup_and_add_test(test_light_beams graphics/test_light_beams.cpp)
 target_link_libraries(test_light_beams PRIVATE l3d glw)
 openblack_setup_and_add_test(test_temple_camera camera/test_temple_camera.cpp)
+openblack_setup_and_add_test(test_camera_projection camera/test_camera_projection.cpp)
 openblack_setup_and_add_test(test_temple_doors temple/test_temple_doors.cpp)
 openblack_setup_and_add_test(
   test_creature_cave_effects temple/test_creature_cave_effects.cpp
