@@ -17,6 +17,8 @@
 #include <span>
 #include <vector>
 
+#include <glm/vec2.hpp>
+
 #include "3D/AllMeshes.h"
 #include "Enums.h"
 
@@ -85,5 +87,24 @@ struct PlinthLook
 	std::array<std::optional<float>, k_GateStoneSlots> stoneHalfHeights {};
 };
 [[nodiscard]] std::vector<StoneDraw> PlinthStoneDraws(const PlinthLook& look);
+
+/// A circle a creature plans its route round
+struct RouteCircle
+{
+	glm::vec2 centre {0.0f};
+	float radius {0.0f};
+};
+/// Each of the gate's circles has this radius
+constexpr float k_GateRouteRadius = 2.5f;
+/// How many circles stand across the gate, and how many of the middle ones an open gate leaves out
+constexpr size_t k_GateRouteCircles = 15;
+constexpr size_t k_GateRouteGap = 5;
+/// The circles a creature plans its route round for the Norse gate, in place of one circle for the whole of it: fifteen
+/// across its width, the first at its middle and the others on alternate sides, a step further out each pair, the step
+/// two fifteenths of half the model's width times the gate's size. They lie along the gate's own across direction,
+/// sized as the gate is, so a resized gate's row is spread by its size twice. While it stands open and still the middle
+/// five are left out, so the way through is clear.
+[[nodiscard]] std::vector<RouteCircle> GateRouteCircles(glm::vec2 middle, glm::vec2 across, float halfWidth, float size,
+                                                        bool openAndStill);
 
 } // namespace openblack::animated_static

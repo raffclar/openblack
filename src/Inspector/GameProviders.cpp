@@ -36,6 +36,7 @@
 #include "Common/RandomNumberManager.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/CameraBookmark.h"
 #include "ECS/Components/ChimneySmoke.h"
@@ -63,6 +64,7 @@
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
@@ -242,6 +244,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"forestSystem", "living.forests"},
     LocatorCoverage {"fireflySystem", "living.fireflies"},
     LocatorCoverage {"fishFarmSystem", "living.fish_farms"},
+    LocatorCoverage {"animatedStaticSystem", "living.animated_statics"},
     LocatorCoverage {"gestureSystem", "players.gestures"},
     LocatorCoverage {"miracleFxSystem", "magic.state"},
     LocatorCoverage {"fireSystem", "magic.fires"},
@@ -778,6 +781,39 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                  });
 		                  return items;
 	                  }));
+	provider->Add(
+	    Query("animated_statics",
+	          "The scenery the scripts open and close (gates, the gate stone plinth, the piper's cave, the phone box): "
+	          "its open word, place in its clip and resting place, whether it is in the land's draw list and was on "
+	          "screen, its gate stones' value and the circles a creature's route goes round",
+	          {}, ResultKind::List),
+	    Serve<Locator::animatedStaticSystem>(
+	        "the animated scenery", [](const ecs::systems::AnimatedStaticSystemInterface& scenery, const QueryContext& /*c*/) {
+		        Json items = Json::array();
+		        const auto* registry = Registry();
+		        if (registry == nullptr)
+		        {
+			        return items;
+		        }
+		        registry->Each<const AnimatedStatic>([&](entt::entity entity, const AnimatedStatic& still) {
+			        auto item = Listed(*registry, entity);
+			        item["type"] = static_cast<int>(still.type);
+			        item["open"] = still.openState;
+			        if (const auto* pose = registry->TryGet<const AnimatedStaticPose>(entity); pose != nullptr)
+			        {
+				        item["place"] = pose->place;
+				        item["resting_place"] = pose->restingPlace;
+				        item["in_draw_list"] = pose->inDrawList;
+				        item["on_screen"] = pose->onScreen;
+				        item["stones_drawn"] = pose->stones.size();
+			        }
+			        item["stone_value"] = scenery.GateStoneValue(entity).value_or(0);
+			        const auto circles = scenery.RouteCircles(entity);
+			        item["route_circles"] = circles.has_value() ? Json(circles->size()) : Json(nullptr);
+			        items.push_back(std::move(item));
+		        });
+		        return items;
+	        }));
 	provider->Add(Query("chimneys", "The chimneys smoking", {}, ResultKind::List),
 	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
 		              Json items = Json::array();

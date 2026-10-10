@@ -204,6 +204,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::AnimatedStatic::gateStones>("gateStones");
 	Reflect<components::AnimatedStaticPose>(context)
 	    .Field<&components::AnimatedStaticPose::place>("place")
+	    .Field<&components::AnimatedStaticPose::restingPlace>("restingPlace")
+	    .Field<&components::AnimatedStaticPose::inDrawList>("inDrawList")
+	    .Field<&components::AnimatedStaticPose::onScreen>("onScreen")
 	    .Field<&components::AnimatedStaticPose::bones>("bones")
 	    .Field<&components::AnimatedStaticPose::stones>("stones");
 	Reflect<components::PlinthStone>(context)

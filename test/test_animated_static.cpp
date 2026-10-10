@@ -7,8 +7,12 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+
+#include <array>
 #include <memory>
 
+#include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
 
 #include "ECS/Components/AnimatedStatic.h"
@@ -17,6 +21,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Scenery/AnimatedStaticRules.h"
+#include "Scenery/ObjectDrawList.h"
 
 // Enable this define because we use a custom locator
 #define LOCATOR_IMPLEMENTATIONS
@@ -165,6 +170,45 @@ TEST(AnimatedStaticRules, OpeningThePlinthSinksItsStonesWithItsClip)
 	EXPECT_TRUE(PlinthStoneDraws(look).empty());
 }
 
+TEST(AnimatedStaticRules, TheGateIsARowOfFifteenSmallCirclesFromItsMiddleOutwards)
+{
+	// A gate 30 wide (half width 15) of size 1, across the x axis: a step of 2 between circles
+	const auto circles = GateRouteCircles(glm::vec2(100.0f, 50.0f), glm::vec2(1.0f, 0.0f), 15.0f, 1.0f, false);
+	ASSERT_EQ(circles.size(), k_GateRouteCircles);
+	const std::array<float, k_GateRouteCircles> along {0.0f,  2.0f,  -2.0f,  4.0f,  -4.0f,  6.0f,  -6.0f, 8.0f,
+	                                                   -8.0f, 10.0f, -10.0f, 12.0f, -12.0f, 14.0f, -14.0f};
+	for (size_t i = 0; i < circles.size(); ++i)
+	{
+		EXPECT_NEAR(circles[i].centre.x, 100.0f + along.at(i), 1e-4f) << i;
+		EXPECT_FLOAT_EQ(circles[i].centre.y, 50.0f) << i;
+		EXPECT_FLOAT_EQ(circles[i].radius, k_GateRouteRadius) << i;
+	}
+}
+
+TEST(AnimatedStaticRules, AnOpenStillGateLeavesOutItsMiddleFive)
+{
+	const auto circles = GateRouteCircles(glm::vec2(0.0f), glm::vec2(0.0f, 1.0f), 15.0f, 1.0f, true);
+	ASSERT_EQ(circles.size(), k_GateRouteCircles - k_GateRouteGap);
+	// The first left is the third step out, then they alternate on outwards
+	EXPECT_NEAR(circles.front().centre.y, 6.0f, 1e-4f);
+	EXPECT_NEAR(circles.at(1).centre.y, -6.0f, 1e-4f);
+	EXPECT_NEAR(circles.back().centre.y, -14.0f, 1e-4f);
+	for (const auto& circle : circles)
+	{
+		EXPECT_GE(std::abs(circle.centre.y), 6.0f - 1e-4f);
+	}
+}
+
+TEST(AnimatedStaticRules, AResizedGateSpreadsItsCirclesByItsSizeTwice)
+{
+	// The across direction comes sized as the gate is, and the step is sized again
+	const auto circles = GateRouteCircles(glm::vec2(0.0f), glm::vec2(2.0f, 0.0f), 15.0f, 2.0f, false);
+	ASSERT_EQ(circles.size(), k_GateRouteCircles);
+	EXPECT_NEAR(circles.at(1).centre.x, 8.0f, 1e-4f);
+	EXPECT_NEAR(circles.back().centre.x, -56.0f, 1e-3f);
+	EXPECT_FLOAT_EQ(circles.back().radius, k_GateRouteRadius);
+}
+
 TEST(AnimatedStaticRules, AClosingPlinthDrawsItsStonesBothSinkingAndStacked)
 {
 	const PlinthLook look {.openState = k_Closed,
@@ -259,4 +303,121 @@ TEST_F(AnimatedStaticSystemTest, OnlyThePlinthTakesStones)
 	EXPECT_FALSE(_system.LayGateStone(gate, Stone(MobileStaticInfo::GateTotemTiger)));
 	EXPECT_EQ(_system.GateStoneValue(gate), 0u);
 	EXPECT_FALSE(_system.GateStoneValue(Stone(MobileStaticInfo::GateTotemTiger)).has_value());
+}
+
+namespace
+{
+// A camera at (0, 50, 0) looking along +z, a 60 degree view up and down on a 2:1 screen, its near plane at 1
+constexpr float k_Near = 1.0f;
+constexpr float k_Aspect = 2.0f;
+const glm::vec3 k_Eye {0.0f, 50.0f, 0.0f};
+
+object_draw_list::View TestView()
+{
+	const auto projection = glm::perspective(glm::radians(60.0f), k_Aspect, k_Near, 10000.0f);
+	const auto view = glm::lookAt(k_Eye, k_Eye + glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	return {.viewProjection = projection * view,
+	        .nearPlane = k_Near,
+	        .focalHeight = projection[1][1],
+	        .aspect = k_Aspect,
+	        .eye = k_Eye};
+}
+} // namespace
+
+TEST(ObjectDrawList, ABlockIsInViewUnlessWhollyBeyondOneSide)
+{
+	const auto view = TestView();
+	// Straight ahead
+	EXPECT_TRUE(object_draw_list::BlockInView(view.viewProjection, view.nearPlane, {.corner = {-80.0f, 200.0f}}));
+	// Behind the eye
+	EXPECT_FALSE(object_draw_list::BlockInView(view.viewProjection, view.nearPlane, {.corner = {-80.0f, -400.0f}}));
+	// Far off to the side
+	EXPECT_FALSE(object_draw_list::BlockInView(view.viewProjection, view.nearPlane, {.corner = {2000.0f, 200.0f}}));
+	// The eye stands over a flat block: all of it lies below the view
+	EXPECT_FALSE(object_draw_list::BlockInView(view.viewProjection, view.nearPlane, {.corner = {-80.0f, -80.0f}}));
+	// A tall one reaches above and below it, so no one side has all of it
+	EXPECT_TRUE(object_draw_list::BlockInView(view.viewProjection, view.nearPlane,
+	                                          {.corner = {-80.0f, -80.0f}, .highestAltitude = 255}));
+}
+
+TEST(ObjectDrawList, ATallBlockBelowTheViewIsSeenByItsHeight)
+{
+	// Looking up from high: a flat block far below is out of view, a block reaching up into the view is in it
+	const auto projection = glm::perspective(glm::radians(20.0f), 1.0f, k_Near, 10000.0f);
+	const glm::vec3 eye {0.0f, 100.0f, 0.0f};
+	const auto viewProjection = projection * glm::lookAt(eye, eye + glm::vec3(0.0f, 0.2f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	const object_draw_list::Block flat {.corner = {-80.0f, 300.0f}, .highestAltitude = 0, .reflected = false};
+	object_draw_list::Block tall = flat;
+	tall.highestAltitude = 255;
+	EXPECT_FALSE(object_draw_list::BlockInView(viewProjection, k_Near, flat));
+	EXPECT_TRUE(object_draw_list::BlockInView(viewProjection, k_Near, tall));
+}
+
+TEST(ObjectDrawList, ABlocksDistanceIsToItsMiddle)
+{
+	// Half way up its box without the reflection, at the water with it
+	const object_draw_list::Block block {.corner = {0.0f, 0.0f}, .highestAltitude = 100, .reflected = false};
+	EXPECT_FLOAT_EQ(object_draw_list::BlockDistance({80.0f, 33.5f, 80.0f}, block), 0.0f);
+	object_draw_list::Block mirrored = block;
+	mirrored.reflected = true;
+	EXPECT_FLOAT_EQ(object_draw_list::BlockDistance({80.0f, 10.0f, 80.0f}, mirrored), 10.0f);
+	// Listed only within 700
+	const auto view = TestView();
+	EXPECT_TRUE(object_draw_list::BlockListed(view.viewProjection, view.nearPlane, view.eye, {.corner = {-80.0f, 500.0f}}));
+	EXPECT_FALSE(object_draw_list::BlockListed(view.viewProjection, view.nearPlane, view.eye, {.corner = {-80.0f, 700.0f}}));
+}
+
+TEST(ObjectDrawList, ASphereIsOnScreenWhenItsSquareOverlapsTheScreen)
+{
+	const auto view = TestView();
+	const glm::vec3 ahead {0.0f, 50.0f, 100.0f};
+	EXPECT_TRUE(object_draw_list::SphereOnScreen(view, ahead, ahead, 1.0f));
+	// Behind the near plane
+	const glm::vec3 behind {0.0f, 50.0f, -100.0f};
+	EXPECT_FALSE(object_draw_list::SphereOnScreen(view, behind, behind, 1.0f));
+	// The eye inside it, though its middle is behind
+	EXPECT_TRUE(object_draw_list::SphereOnScreen(view, k_Eye, behind, 150.0f));
+	// Just off the right of the screen: the screen's edge at 100 ahead is 100 tan(30) x 2 across
+	const float edge = 100.0f * std::tan(glm::radians(30.0f)) * k_Aspect;
+	const glm::vec3 right {-(edge + 5.0f), 50.0f, 100.0f};
+	EXPECT_FALSE(object_draw_list::SphereOnScreen(view, right, right, 1.0f));
+	EXPECT_TRUE(object_draw_list::SphereOnScreen(view, right, right, 6.0f));
+	// Up and down its square reaches twice as far on this screen: a sphere of radius 3 just off the top shows
+	const float top = 100.0f * std::tan(glm::radians(30.0f));
+	const glm::vec3 above {0.0f, 50.0f + top + 5.0f, 100.0f};
+	EXPECT_TRUE(object_draw_list::SphereOnScreen(view, above, above, 3.0f));
+	EXPECT_FALSE(object_draw_list::SphereOnScreen(view, above, above, 2.0f));
+}
+
+TEST(ObjectDrawList, TheListIsMadeAgainEveryElevenTurnsOrWhenForced)
+{
+	object_draw_list::Clock clock;
+	const glm::vec3 eye {0.0f};
+	const glm::vec3 focus {0.0f, 0.0f, 10.0f};
+	// The first frame makes it
+	EXPECT_TRUE(clock.Next(100, eye, focus, false).rebuilt);
+	EXPECT_FALSE(clock.Next(105, eye, focus, false).rebuilt);
+	EXPECT_FALSE(clock.Next(110, eye, focus, false).rebuilt);
+	EXPECT_TRUE(clock.Next(111, eye, focus, false).rebuilt);
+	EXPECT_TRUE(clock.Next(111, eye, focus, true).rebuilt);
+	clock.Reset();
+	EXPECT_TRUE(clock.Next(112, eye, focus, false).rebuilt);
+}
+
+TEST(ObjectDrawList, AStillCameraDrawsOnlyWhatWasOnScreen)
+{
+	object_draw_list::Clock clock;
+	const glm::vec3 focus {0.0f, 0.0f, 10.0f};
+	// The list is made: all drawn, and the camera's place isn't taken
+	EXPECT_TRUE(clock.Next(0, glm::vec3(0.0f), focus, false).drawAll);
+	// The eye has moved from where it was taken (nowhere yet): all drawn, and now it is taken
+	EXPECT_TRUE(clock.Next(1, glm::vec3(0.0f, 0.0f, 0.5f), focus, false).drawAll);
+	// Moving less than one from it is standing still
+	const auto still = clock.Next(2, glm::vec3(0.0f, 0.0f, 1.2f), focus + glm::vec3(0.9f, 0.0f, 0.0f), false);
+	EXPECT_FALSE(still.drawAll);
+	EXPECT_FALSE(object_draw_list::Drawn(still, true, false));
+	EXPECT_TRUE(object_draw_list::Drawn(still, true, true));
+	EXPECT_FALSE(object_draw_list::Drawn(still, false, true));
+	// What it looks at moving more than one moves it
+	EXPECT_TRUE(clock.Next(3, glm::vec3(0.0f, 0.0f, 0.5f), focus + glm::vec3(1.1f, 0.0f, 0.0f), false).drawAll);
 }

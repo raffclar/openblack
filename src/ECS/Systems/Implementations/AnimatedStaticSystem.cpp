@@ -11,13 +11,22 @@
 
 #include "AnimatedStaticSystem.h"
 
+#include <cmath>
+
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <vector>
 
+#include <LNDFile.h>
+#include <glm/geometric.hpp>
+
 #include "3D/L3DAnim.h"
 #include "3D/L3DMesh.h"
+#include "3D/LandBlock.h"
+#include "3D/LandIslandInterface.h"
 #include "Animals/AnimalAnimation.h"
+#include "Camera/Camera.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
@@ -124,6 +133,32 @@ bool AnimatedStaticSystem::LayGateStone(entt::entity plinth, entt::entity stone)
 	return true;
 }
 
+std::optional<std::vector<animated_static::RouteCircle>> AnimatedStaticSystem::RouteCircles(entt::entity gate) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(gate) || !Locator::resources::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto* still = registry.TryGet<const AnimatedStatic>(gate);
+	const auto* pose = registry.TryGet<const AnimatedStaticPose>(gate);
+	const auto* transform = registry.TryGet<const Transform>(gate);
+	const auto* mesh = registry.TryGet<const Mesh>(gate);
+	if (still == nullptr || pose == nullptr || transform == nullptr || mesh == nullptr ||
+	    still->type != AnimatedStaticInfo::NorseGate)
+	{
+		return std::nullopt;
+	}
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const float halfWidth = meshes.Contains(mesh->id) ? meshes.Handle(mesh->id)->GetBoundingBox().Size().x * 0.5f : 0.0f;
+	// Its own across direction on the land, sized as it is
+	const auto across = transform->rotation * glm::vec3(transform->scale.x, 0.0f, 0.0f);
+	const bool openAndStill = still->openState == animated_static::k_Open &&
+	                          !animated_static::IsMoving(still->openState, pose->place, pose->restingPlace);
+	return animated_static::GateRouteCircles(glm::vec2(transform->position.x, transform->position.z),
+	                                         glm::vec2(across.x, across.z), halfWidth, transform->scale.x, openAndStill);
+}
+
 void AnimatedStaticSystem::Update(uint32_t turn, float turnFraction)
 {
 	if (!Locator::resources::has_value() || !Locator::infoConstants::has_value())
@@ -153,6 +188,8 @@ void AnimatedStaticSystem::Update(uint32_t turn, float turnFraction)
 		registry.Destroy(orphan);
 	}
 
+	const auto frame = DrawFrame(turn);
+
 	struct StoneUpdate
 	{
 		entt::entity plinth;
@@ -161,12 +198,23 @@ void AnimatedStaticSystem::Update(uint32_t turn, float turnFraction)
 	std::vector<StoneUpdate> plinths;
 	bool changed = !orphans.empty();
 
-	registry.Each<const AnimatedStatic, const Mesh, AnimatedStaticPose>(
-	    [&](entt::entity entity, const AnimatedStatic& still, const Mesh& mesh, AnimatedStaticPose& pose) {
+	registry.Each<const AnimatedStatic, const Mesh, const Transform, AnimatedStaticPose>(
+	    [&](entt::entity entity, const AnimatedStatic& still, const Mesh& mesh, const Transform& transform,
+	        AnimatedStaticPose& pose) {
 		    const auto type = static_cast<size_t>(still.type);
 		    if (type >= infos.size())
 		    {
 			    return;
+		    }
+		    // It plays on only on the frames it is drawn, as the land's draw list draws it
+		    if (frame.rebuilt)
+		    {
+			    pose.inDrawList = InDrawList(transform.position);
+		    }
+		    const bool drawn = object_draw_list::Drawn(frame, pose.inDrawList, pose.onScreen);
+		    if (frame.drawAll && pose.inDrawList)
+		    {
+			    pose.onScreen = OnScreen(transform, mesh);
 		    }
 		    const auto clipId = resources::HashIdentifier(static_cast<uint32_t>(infos[type].defaultAnim));
 		    if (static_cast<int>(infos[type].defaultAnim) < 0 || !animations.Contains(clipId))
@@ -176,9 +224,10 @@ void AnimatedStaticSystem::Update(uint32_t turn, float turnFraction)
 		    }
 		    const auto clip = animations.Handle(clipId);
 		    const auto rest = animated_static::OpenRestingPlace(clip->GetPlayTime(), clip->GetFrames().size());
-		    const auto place = animated_static::StepClip(still.openState, pose.place, elapsed, rest);
+		    const auto place = drawn ? animated_static::StepClip(still.openState, pose.place, elapsed, rest) : pose.place;
 		    const bool moved = place != pose.place || pose.bones.empty();
 		    pose.place = place;
+		    pose.restingPlace = rest;
 		    if (moved && meshes.Contains(mesh.id))
 		    {
 			    const animals::ClipTiming timing {.playTime = clip->GetPlayTime(),
@@ -262,4 +311,110 @@ void AnimatedStaticSystem::Update(uint32_t turn, float turnFraction)
 void AnimatedStaticSystem::Reset()
 {
 	_drawTime.reset();
+	_drawClock.Reset();
+	_blocks.clear();
+	_blockGrid.fill(-1);
+	_view.reset();
+}
+
+void AnimatedStaticSystem::LoadBlocks()
+{
+	if (!_blocks.empty() || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	_blockGrid.fill(-1);
+	for (const auto& block : Locator::terrainSystem::value().GetBlocks())
+	{
+		const auto& lnd = block.GetLndBlock();
+		if (lnd == nullptr)
+		{
+			continue;
+		}
+		// The highest of its cells, as the land had them when it was loaded
+		uint8_t highest = 0;
+		for (const auto& cell : lnd->cells)
+		{
+			highest = std::max(highest, cell.altitude);
+		}
+		const auto at = block.GetBlockPosition();
+		if (at.x >= 0 && at.x < k_GridBlocks && at.y >= 0 && at.y < k_GridBlocks)
+		{
+			_blockGrid.at(static_cast<size_t>((at.x * k_GridBlocks) + at.y)) = static_cast<int32_t>(_blocks.size());
+		}
+		_blocks.push_back({.block = {.corner = block.GetMapPosition(), .highestAltitude = highest, .reflected = true}});
+	}
+}
+
+object_draw_list::Frame AnimatedStaticSystem::DrawFrame(uint32_t turn)
+{
+	if (!Locator::camera::has_value() || !Locator::terrainSystem::has_value())
+	{
+		// With nothing to see from, everything is drawn
+		_view.reset();
+		return {.rebuilt = true, .drawAll = true};
+	}
+	LoadBlocks();
+	const auto& camera = Locator::camera::value();
+	const auto& projection = camera.GetProjectionMatrix();
+	_view = object_draw_list::View {.viewProjection = camera.GetViewProjectionMatrix(),
+	                                .nearPlane = camera.GetNearClip(),
+	                                .focalHeight = projection[1][1],
+	                                .aspect = projection[0][0] != 0.0f ? projection[1][1] / projection[0][0] : 1.0f,
+	                                .eye = camera.GetOrigin()};
+	// A change in the blocks in view makes the list again
+	bool changed = false;
+	for (auto& block : _blocks)
+	{
+		const bool inView = object_draw_list::BlockInView(_view->viewProjection, _view->nearPlane, block.block);
+		changed = changed || inView != block.inView;
+		block.inView = inView;
+	}
+	const auto frame = _drawClock.Next(turn, _view->eye, camera.GetFocus(), changed);
+	if (frame.rebuilt)
+	{
+		_anyListed = false;
+		for (auto& block : _blocks)
+		{
+			block.listed = block.inView && object_draw_list::BlockDistance(_view->eye, block.block) < object_draw_list::k_Range;
+			_anyListed = _anyListed || block.listed;
+		}
+	}
+	return frame;
+}
+
+bool AnimatedStaticSystem::InDrawList(glm::vec3 position) const
+{
+	if (!_view.has_value())
+	{
+		return true;
+	}
+	// The block of the land cell it stands on; off the land's blocks it is listed with the first block listed
+	const auto cellX = static_cast<int32_t>(std::floor(position.x / 10.0f));
+	const auto cellZ = static_cast<int32_t>(std::floor(position.z / 10.0f));
+	const auto blockX = cellX >> 4;
+	const auto blockZ = cellZ >> 4;
+	if (cellX < 0 || cellZ < 0 || blockX >= k_GridBlocks || blockZ >= k_GridBlocks)
+	{
+		return _anyListed;
+	}
+	const auto index = _blockGrid.at(static_cast<size_t>((blockX * k_GridBlocks) + blockZ));
+	return index < 0 ? _anyListed : _blocks.at(static_cast<size_t>(index)).listed;
+}
+
+bool AnimatedStaticSystem::OnScreen(const Transform& transform, const Mesh& mesh) const
+{
+	if (!_view.has_value() || !Locator::resources::has_value())
+	{
+		return true;
+	}
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	if (!meshes.Contains(mesh.id))
+	{
+		return true;
+	}
+	const auto box = meshes.Handle(mesh.id)->GetBoundingBox();
+	const auto centre = transform.position + (transform.rotation * (transform.scale * box.Center()));
+	const float radius = std::abs(transform.scale.x) * glm::length(box.Size() * 0.5f);
+	return object_draw_list::SphereOnScreen(*_view, transform.position, centre, radius);
 }
