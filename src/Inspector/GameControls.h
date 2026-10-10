@@ -78,6 +78,7 @@ public:
 	[[nodiscard]] std::vector<LevelInfo> Levels() const override;
 	std::string Load(std::string_view name, LoadHow how) override;
 	std::string LoadTestbed() override;
+	std::string NewGame(std::string_view start) override;
 	[[nodiscard]] std::string Current() const override;
 };
 
@@ -91,6 +92,7 @@ public:
 	[[nodiscard]] std::optional<std::filesystem::path> Root() const override;
 	[[nodiscard]] ShotSource Source() const override;
 	[[nodiscard]] bool Exists(const std::filesystem::path& path) const override;
+	std::string Remove(const std::filesystem::path& path) override;
 	std::string AppendLine(const std::filesystem::path& file, std::string_view line) override;
 };
 

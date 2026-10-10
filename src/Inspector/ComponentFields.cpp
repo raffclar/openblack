@@ -46,6 +46,7 @@
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureRoute.h"
+#include "Creature/CreatureScriptPlay.h"
 #include "Creature/CreatureSpellMind.h"
 #include "Creature/CreatureSpells.h"
 #include "Creature/CreatureSway.h"
@@ -96,6 +97,7 @@
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/FloatingNumber.h"
+#include "ECS/Components/Flock.h"
 #include "ECS/Components/FlockSpell.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Footpath.h"
@@ -144,11 +146,11 @@
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptAnimation.h"
 #include "ECS/Components/ScriptControl.h"
-#include "ECS/Components/ScriptFlock.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/ScriptSpotVisual.h"
 #include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/SeeThrough.h"
+#include "ECS/Components/Shark.h"
 #include "ECS/Components/SkinOverride.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/SoundTag.h"
@@ -181,7 +183,6 @@
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
-#include "ECS/Components/Whale.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/HighDetailRules.h"
@@ -331,19 +332,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Animal::heading>("heading")
 	    .Field<&components::Animal::life>("life")
 	    .Field<&components::Animal::deadTurns>("deadTurns");
-	Reflect<components::Flock>(context)
-	    .Field<&components::Flock::members>("members")
-	    .Field<&components::Flock::centre>("centre")
-	    .Field<&components::Flock::domainRadius>("domainRadius")
-	    .Field<&components::Flock::flockDistance>("flockDistance")
-	    .Field<&components::Flock::followState>("followState")
-	    .Field<&components::Flock::followMode>("followMode")
-	    .Field<&components::Flock::afterMove>("afterMove")
-	    .Field<&components::Flock::turnsOnLeg>("turnsOnLeg")
-	    .Field<&components::Flock::height>("height")
-	    .Field<&components::Flock::scriptId>("scriptId")
-	    .Field<&components::Flock::made>("made")
-	    .Field<&components::Flock::temple>("temple");
 	Reflect<components::TempleBirds>(context)
 	    .Field<&components::TempleBirds::flock>("flock")
 	    .Field<&components::TempleBirds::look>("look");
@@ -362,7 +350,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::AnimalPose>(context)
 	    .Field<&components::AnimalPose::bones>("bones")
 	    .Field<&components::AnimalPose::light>("light")
-	    .Field<&components::AnimalPose::alpha>("alpha");
+	    .Field<&components::AnimalPose::colour>("colour")
+	    .Field<&components::AnimalPose::alpha>("alpha")
+	    .Field<&components::AnimalPose::cutBelow>("cutBelow");
 	Reflect<components::BeingEaten>(context)
 	    .Field<&components::BeingEaten::hunter>("hunter")
 	    .Field<&components::BeingEaten::turns>("turns")
@@ -594,6 +584,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::CreatureMindState>(context)
 	    .Field<&components::CreatureMindState::desires>("desires")
 	    .Field<&components::CreatureMindState::idle>("idle")
+	    .Field<&components::CreatureMindState::scriptPlay>("scriptPlay")
 	    .Field<&components::CreatureMindState::look>("look")
 	    .Field<&components::CreatureMindState::lookingAbout>("lookingAbout")
 	    .Field<&components::CreatureMindState::secondsAlone>("secondsAlone")
@@ -696,6 +687,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureSpells::smallestSize>("smallestSize")
 	    .Field<&components::CreatureSpells::largestSize>("largestSize")
 	    .Field<&components::CreatureSpells::cheat>("cheat");
+	Reflect<components::DanceMove>(context)
+	    .Field<&components::DanceMove::action>("action")
+	    .Field<&components::DanceMove::first>("first")
+	    .Field<&components::DanceMove::second>("second")
+	    .Field<&components::DanceMove::end>("end");
 	Reflect<components::DanceGroup>(context)
 	    .Field<&components::DanceGroup::name>("name")
 	    .Field<&components::DanceGroup::dancers>("dancers")
@@ -705,7 +701,23 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::DanceGroup::limitedDancers>("limitedDancers")
 	    .Field<&components::DanceGroup::danceType>("danceType")
 	    .Field<&components::DanceGroup::sexes>("sexes")
-	    .Field<&components::DanceGroup::formation>("formation");
+	    .Field<&components::DanceGroup::formation>("formation")
+	    .Field<&components::DanceGroup::inFormation>("inFormation")
+	    .Field<&components::DanceGroup::flag>("flag")
+	    .Field<&components::DanceGroup::shape>("shape")
+	    .Field<&components::DanceGroup::radius>("radius")
+	    .Field<&components::DanceGroup::offset>("offset")
+	    .Field<&components::DanceGroup::rotation>("rotation")
+	    .Field<&components::DanceGroup::spin>("spin")
+	    .Field<&components::DanceGroup::move>("move")
+	    .Field<&components::DanceGroup::spinRate>("spinRate")
+	    .Field<&components::DanceGroup::rotationRate>("rotationRate")
+	    .Field<&components::DanceGroup::radiusRate>("radiusRate")
+	    .Field<&components::DanceGroup::offsetRate>("offsetRate")
+	    .Field<&components::DanceGroup::moved>("moved")
+	    .Field<&components::DanceGroup::parent>("parent")
+	    .Field<&components::DanceGroup::indexInParent>("indexInParent")
+	    .Field<&components::DanceGroup::children>("children");
 	Reflect<components::DanceGroups>(context)
 	    .Field<&components::DanceGroups::all>("all")
 	    .Field<&components::DanceGroups::limited>("limited")
@@ -715,6 +727,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::Dance>(context)
 	    .Field<&components::Dance::type>("type")
 	    .Field<&components::Dance::place>("place")
+	    .Field<&components::Dance::angle>("angle")
 	    .Field<&components::Dance::owner>("owner")
 	    .Field<&components::Dance::state>("state")
 	    .Field<&components::Dance::autostart>("autostart")
@@ -749,6 +762,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::FallingRoots::seconds>("seconds")
 	    .Field<&components::FallingRoots::startHeight>("startHeight")
 	    .Field<&components::FallingRoots::restHeight>("restHeight");
+	Reflect<components::ShownRoots>(context).Field<&components::ShownRoots::place>("place");
 	Reflect<components::Feature>(context).Field<&components::Feature::type>("type");
 	Reflect<components::Field>(context)
 	    .Field<&components::Field::town>("town")
@@ -813,6 +827,23 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::FloatingNumber::position>("position")
 	    .Field<&components::FloatingNumber::colour>("colour")
 	    .Field<&components::FloatingNumber::life>("life");
+	Reflect<components::Flock>(context)
+	    .Field<&components::Flock::place>("place")
+	    .Field<&components::Flock::members>("members")
+	    .Field<&components::Flock::domainRadius>("domainRadius")
+	    .Field<&components::Flock::flockDistance>("flockDistance")
+	    .Field<&components::Flock::calm>("calm")
+	    .Field<&components::Flock::followState>("followState")
+	    .Field<&components::Flock::followMode>("followMode")
+	    .Field<&components::Flock::afterMove>("afterMove")
+	    .Field<&components::Flock::turnsOnLeg>("turnsOnLeg")
+	    .Field<&components::Flock::height>("height")
+	    .Field<&components::Flock::scriptId>("scriptId")
+	    .Field<&components::Flock::made>("made")
+	    .Field<&components::Flock::temple>("temple");
+	Reflect<components::FlockMember>(context)
+	    .Field<&components::FlockMember::flock>("flock")
+	    .Field<&components::FlockMember::order>("order");
 	Reflect<components::FlockSpell>(context)
 	    .Field<&components::FlockSpell::flock>("flock")
 	    .Field<&components::FlockSpell::created>("created")
@@ -916,6 +947,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::HiddenByState> {context};
 	Reflect<components::HighDetail>(context)
 	    .Field<&components::HighDetail::usualModel>("usualModel")
+	    .Field<&components::HighDetail::usualDetailModels>("usualDetailModels")
 	    .Field<&components::HighDetail::face>("face")
 	    .Field<&components::HighDetail::orders>("orders");
 	Reflect<components::Indestructible> {context};
@@ -1124,15 +1156,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::InScript> {context};
 	Reflect<components::ScriptControlled> {context};
 	Reflect<components::ScriptMarker> {context};
-	Reflect<components::ScriptFlock>(context)
-	    .Field<&components::ScriptFlock::place>("place")
-	    .Field<&components::ScriptFlock::members>("members")
-	    .Field<&components::ScriptFlock::domainRadius>("domainRadius")
-	    .Field<&components::ScriptFlock::flockDistance>("flockDistance")
-	    .Field<&components::ScriptFlock::calm>("calm");
-	Reflect<components::ScriptFlockMember>(context)
-	    .Field<&components::ScriptFlockMember::flock>("flock")
-	    .Field<&components::ScriptFlockMember::order>("order");
 	Reflect<components::ScriptHighlight>(context)
 	    .Field<&components::ScriptHighlight::kind>("kind")
 	    .Field<&components::ScriptHighlight::scriptId>("scriptId")
@@ -1152,6 +1175,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::ScriptSpotVisual>(context).Field<&components::ScriptSpotVisual::effect>("effect");
 	Reflect<components::ScriptTimer>(context).Field<&components::ScriptTimer::timer>("timer");
 	Reflect<components::SeeThrough>(context).Field<&components::SeeThrough::alpha>("alpha");
+	Reflect<components::Shark>(context)
+	    .Field<&components::Shark::position>("position")
+	    .Field<&components::Shark::turnStart>("turnStart")
+	    .Field<&components::Shark::heading>("heading")
+	    .Field<&components::Shark::clipPlace>("clipPlace");
 	Reflect<components::SkinOverride>(context)
 	    .Field<&components::SkinOverride::texture>("texture")
 	    .Field<&components::SkinOverride::uvOffset>("uvOffset");
@@ -1516,11 +1544,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Storm::dead>("dead")
 	    .Field<&components::Storm::deadTurns>("deadTurns")
 	    .Field<&components::Storm::climate>("climate");
-	Reflect<components::Whale>(context)
-	    .Field<&components::Whale::position>("position")
-	    .Field<&components::Whale::turnStart>("turnStart")
-	    .Field<&components::Whale::heading>("heading")
-	    .Field<&components::Whale::clipPlace>("clipPlace");
 	Reflect<components::WorshipChants>(context)
 	    .Field<&components::WorshipChants::battery>("battery")
 	    .Field<&components::WorshipChants::available>("available")
@@ -1842,6 +1865,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_route::Route::points>("points")
 	    .Field<&openblack::creature_route::Route::segment>("segment")
 	    .Field<&openblack::creature_route::Route::travelled>("travelled");
+	Reflect<openblack::creature_script_play::Request>(context, ValueOnly {})
+	    .Field<&openblack::creature_script_play::Request::animation>("animation")
+	    .Field<&openblack::creature_script_play::Request::plays>("plays");
 	Reflect<openblack::creature_spell_mind::Cheat>(context, ValueOnly {})
 	    .Field<&openblack::creature_spell_mind::Cheat::desire>("desire")
 	    .Field<&openblack::creature_spell_mind::Cheat::turns>("turns");

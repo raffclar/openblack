@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <vector>
 
 #include <entt/entity/entity.hpp>
 
@@ -38,7 +39,7 @@ inline constexpr uint32_t k_LongestWaitSeconds = 90;
 /// Every dance is made at a quarter speed
 inline constexpr float k_MadeSpeed = 0.25f;
 
-/// What a key frame's action does to a group (the rest move the dancers about and are not ported yet)
+/// What a key frame's action does to a group's membership (the dance's moves do the rest)
 enum class ActionType : uint32_t
 {
 	/// The group's shape about the dance's place
@@ -72,11 +73,12 @@ bool HasProperlyStarted(components::Dance& dance, uint32_t turn);
 /// round 100 over it. Nothing changes when no shared group has a quota.
 void SetWeights(components::DanceGroups& groups);
 
-/// What a key frame does to the groups' membership, each action done to its groups the last listed first. A group
-/// numbered past the last is made.
-void ApplyKeyFrame(components::DanceGroups& groups, const dance::DanceKeyFrame& keyFrame);
+/// What a key frame does to the groups, each action done to its groups the last listed first: their membership, and
+/// their shapes and moves. A group numbered past the last is made. The groups that start a move, whose dancers each
+/// play their clip again.
+std::vector<std::size_t> ApplyKeyFrame(components::Dance& dance, const dance::DanceKeyFrame& keyFrame);
 /// Every key frame up to a time on the clock, as a dance does once its file is read
-void ApplyKeyFramesUpTo(components::DanceGroups& groups, const dance::DanceFile& file, float clock);
+void ApplyKeyFramesUpTo(components::Dance& dance, const dance::DanceFile& file, float clock);
 
 /// A newcomer joins the first group with a fixed number of dancers that has room and takes its dance type and sex,
 /// else the shared group whose turn it is in the round that takes them, and the dance has one more dancer. None when
@@ -95,8 +97,9 @@ void RemoveDancer(components::Dance& dance, std::size_t group, entt::entity danc
 [[nodiscard]] float NextClock(float clock, uint32_t loopLength);
 
 /// One game turn of the dance: a stopped dance that starts by itself does once its dancers have come; one that lasts
-/// a while stops once that is over; while danced with dancers, the key frame due on its clock is done and its clock
-/// goes on, starting over at the end of its loop
-void ProcessTurn(components::Dance& dance, uint32_t turn);
+/// a while stops once that is over; while danced with dancers, the key frame due on its clock is done, each group's
+/// move goes on and its clock goes on, starting over at the end of its loop. The groups that started a move, whose
+/// dancers each play their clip again.
+std::vector<std::size_t> ProcessTurn(components::Dance& dance, uint32_t turn);
 
 } // namespace openblack::ecs::dance_rules

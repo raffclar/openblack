@@ -7,8 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-// The testbed's scenarios of the land's nature: a tree pulled up by the hand leaving its roots behind, and the fireflies
-// coming out of the trees and rocks at nightfall
+// The testbed's scenarios of the land's nature: a tree pulled up by the hand leaving its roots behind and showing its
+// own until it is planted again or falls dead, and the fireflies coming out of the trees and rocks at nightfall
 
 #include <array>
 #include <string_view>
@@ -93,6 +93,48 @@ void testbed_scenarios::AddNatureScenarios(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
 	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = k_Action},
 	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.0f, -0.35f}, .amount = 1.0f}},
+	});
+
+	all.push_back({
+	    .id = "nature.tree_roots",
+	    .name = "A tree pulled up shows its roots until it is planted again",
+	    .facet = Facet::Nature,
+	    .description = "An oak stands in the middle of the screen, close by. The pointer is put on its trunk, the action "
+	                   "(right) button held and the mouse pulled up a little until the tree comes free into the hand, "
+	                   "which holds it in view; then the hand puts it down gently to the lower left.",
+	    .expected = "The oak shows no roots while it stands. From the moment the hand takes hold and pulls, a clump of "
+	                "roots shows at its base, leaning and stretching with it; they stay under it while it is held. Put "
+	                "down, it takes root again and its roots are hidden in the ground once more. The heap of roots "
+	                "lies in the hole it came out of.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 10.0f, 4.0f}, .look = {k_Tree.x, 2.0f, k_Tree.y}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = k_Tree}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.55f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = k_Action},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.0f, 0.2f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = k_Action},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.3f, 0.8f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = k_Action},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.15f, .value = k_Action}},
+	});
+
+	all.push_back({
+	    .id = "nature.tree_roots_thrown",
+	    .name = "A thrown tree shows its roots as it flies",
+	    .facet = Facet::Nature,
+	    .description = "An oak is lifted from the left of the screen and thrown across it, up and to the right, every ten "
+	                   "seconds.",
+	    .expected = "As it flies, a clump of roots shows at its base, turning with it; it comes down hard and falls dead, "
+	                "and its roots drop out of it to the land, lie there and fade away. The dead tree shows no roots of "
+	                "its own.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 8.0f, 2.0f}, .look = {k_Tree.x, 4.0f, k_Tree.y}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = k_Tree + glm::vec2(-15.0f, 0.0f)}},
+	    .throws = {{.object = 0,
+	                .from = k_Tree + glm::vec2(-15.0f, 0.0f),
+	                .height = 4.0f,
+	                .velocity = {8.0f, 6.0f, 0.0f},
+	                .delaySeconds = 2.0f}},
 	});
 
 	all.push_back({

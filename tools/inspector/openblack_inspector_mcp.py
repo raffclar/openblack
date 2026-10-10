@@ -28,7 +28,8 @@ earlier by someone else. Every answer names the game it came from (pid, port, wo
 ping on each new connection that the game answering is the one meant. While a game loads, calls wait for it.
 This works with games of older builds too, which don't name themselves: the adapter names them from the ping.
 
-Run it with --call QUERY [JSON] to send a single request from a shell, without MCP. The JSON is the query's
+Run it with --call QUERY [JSON] to send a single request from a shell, without MCP (QUERY may also be one of the
+tools' names, such as screenshot or game_entities, which take the tool's own arguments). The JSON is the query's
 parameters, with any shaping options (near, radius, fields, where, limit...) beside them; a JSON with "params" is
 the rest of the request as the game reads it:
 
@@ -41,8 +42,10 @@ the rest of the request as the game reads it:
 """
 
 import argparse
+import difflib
 import json
 import os
+import re
 import shutil
 import socket
 import sys
@@ -1315,18 +1318,36 @@ class Session:
                                  f"{', '.join(missing)}; {OLDER_BUILD}"}
         asked_at = time.time()
         answer = request_until_loaded(connection, request, load_wait)
-        if not answer.get("ok") and str(answer.get("error", "")).startswith("no query "):
-            answer["error"] += f" (if the query is new, this game may be an older build: {OLDER_BUILD})"
+        if not answer.get("ok") and str(answer.get("error", "")).startswith(("no query ", "no provider ")):
+            if request["query"] in CATALOGUE:
+                # The adapter knows the query: the game is older than it
+                answer["error"] += f" (this game is an older build than the adapter: {OLDER_BUILD})"
+            else:
+                answer["error"] += suggestions(request["query"])
         # A picture is answered once its file is whole, which the game writes a few frames on
         if wait_file and answer.get("ok") and isinstance(answer.get("result"), dict) and answer["result"].get("path"):
             path = answer["result"]["path"]
             deadline = time.monotonic() + self.timeout * 3
+            failure = None
+            next_check = time.monotonic() + 0.25
             while not png_written(path, asked_at - 1.0) and time.monotonic() < deadline:
+                # A picture the game gives up (its camera never stayed put, the renderer never gave it back) is said at
+                # once, with why, rather than waited for
+                if time.monotonic() >= next_check:
+                    failure = picture_failure(connection, path)
+                    if failure is not None:
+                        break
+                    next_check = time.monotonic() + 0.25
                 time.sleep(0.05)
             answer["result"]["written"] = png_written(path, asked_at - 1.0)
             if not answer["result"]["written"]:
-                answer["result"]["note"] = ("the file isn't written yet: the game draws it at that frame; check "
-                                            "screenshot.pending, or step the game to it")
+                failure = failure if failure is not None else picture_failure(connection, path)
+                if failure is not None:
+                    answer["result"]["failed"] = failure
+                    answer["result"]["note"] = f"the game gave the picture up: {failure}"
+                else:
+                    answer["result"]["note"] = ("the file isn't written yet: the game draws it at that frame; check "
+                                                "screenshot.pending, or step the game to it")
         # A step waits for the game to have run it, polling the state as the game serves a request each frame
         if wait_step and answer.get("ok"):
             deadline = time.monotonic() + self.timeout * 4
@@ -1343,6 +1364,19 @@ def load_wait_of(arguments):
     if not isinstance(wait_ms, (int, float)) or isinstance(wait_ms, bool) or wait_ms < 0:
         return None
     return wait_ms / 1000.0
+
+
+def picture_failure(connection, path):
+    """Why the game gave up a picture at the path, as screenshot.pending lists it; none if it hasn't"""
+    answer = connection.request({"query": "screenshot.pending"})
+    if not answer.get("ok") or not isinstance(answer.get("result"), dict):
+        return None
+    wanted = os.path.normcase(os.path.normpath(path))
+    for failed in answer["result"].get("failed", []):
+        named, _, why = str(failed).partition(": ")
+        if why and os.path.normcase(os.path.normpath(named)) == wanted:
+            return why
+    return None
 
 
 def request_until_loaded(connection, request, load_timeout):
@@ -1393,6 +1427,27 @@ def build_request(tool, arguments):
         if key in arguments:
             request[key] = arguments[key]
     return request
+
+
+def suggestions(name, catalogue=None):
+    """The queries and tools whose names are closest to one that isn't either, to say what was meant"""
+    catalogue = CATALOGUE if catalogue is None else catalogue
+    names = list(catalogue) + [tool["name"] for tool in GAME_TOOLS + TOOLS]
+    # A tool name's words match a query's: screenshot is screenshot.take, game_entities ecs.entities
+    words = set(re.split(r"[._]", name))
+    close = difflib.get_close_matches(name, names, n=4, cutoff=0.5)
+    close += [each for each in names if each not in close and words & set(re.split(r"[._]", each))][:4]
+    if not close:
+        return "; ask describe for the queries there are"
+    # A tool says the query it sends
+    shown = [f"{each} ({TOOLS_BY_NAME[each]['query']})" if each in TOOLS_BY_NAME and "query" in TOOLS_BY_NAME[each]
+             else each for each in close[:6]]
+    return "; did you mean " + ", ".join(shown) + "? (--call takes a query or a tool's name)"
+
+
+def call_tool_name(name):
+    """Whether --call names one of the adapter's tools rather than a raw query (screenshot, game_entities)"""
+    return name not in CATALOGUE and name not in ("ping", "describe", "writes") and         (name in TOOLS_BY_NAME or name in ("inspector_games", "inspector_connect"))
 
 
 def call_request(query, text, catalogue=None):
@@ -1507,6 +1562,23 @@ def main():
     if args.games:
         print(json.dumps(session.games(), indent=1))
         return 0
+    if args.call and call_tool_name(args.call):
+        # A tool's name: called as the MCP client calls it, with the tool's own arguments
+        try:
+            arguments = json.loads(args.request) if args.request.strip() else {}
+        except ValueError as error:
+            print(error, file=sys.stderr)
+            return 2
+        if not isinstance(arguments, dict):
+            print("the arguments must be a JSON object", file=sys.stderr)
+            return 2
+        try:
+            answer = session.call(args.call, arguments)
+        except ConnectionError as error:
+            print(error, file=sys.stderr)
+            return 1
+        print(json.dumps(answer, indent=1))
+        return 0 if answer.get("ok") else 1
     if args.call:
         try:
             request = call_request(args.call, args.request)

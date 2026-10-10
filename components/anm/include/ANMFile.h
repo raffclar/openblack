@@ -38,9 +38,10 @@ struct ANMHeader
 	float unknown0x34;    // TODO(#471)
 	uint32_t frameCount;
 	uint32_t unknown0x3C; // TODO(#471): Always 1 in Body Block, a count
-	uint32_t animationDuration;
-	uint32_t unknown0x44; // TODO(#471): Always 1 in Body Block
-	uint32_t unknown0x48; // TODO(#471): Always 0 in Body Block
+	uint32_t
+	    animationDataSize; ///< The size in bytes of the animation's data (this header, its keyframes and bones), not a time
+	uint32_t unknown0x44;  // TODO(#471): Always 1 in Body Block
+	uint32_t unknown0x48;  // TODO(#471): Always 0 in Body Block
 	uint32_t framesBase;
 	uint32_t unknown0x50; // TODO(#471): Seems to be a uint16_t padded
 };

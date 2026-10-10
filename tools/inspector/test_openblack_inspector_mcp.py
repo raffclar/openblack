@@ -617,6 +617,19 @@ class ScreenshotTest(SessionBase):
         self.assertFalse(answer["result"]["written"])
         self.assertIn("isn't written yet", answer["result"]["note"])
 
+    def test_a_picture_the_game_gives_up_is_answered_with_why(self):
+        self.first.handlers["screenshot.take"] = lambda request: {"path": self.path, "frame": 5}
+        self.first.handlers["screenshot.pending"] = lambda request: {
+            "pending": [], "failed": [f"{self.path}: the camera didn't stay where it was put"]}
+        started = time.monotonic()
+        answer = self.session.call("screenshot", {})
+        self.assertTrue(answer["ok"], answer)
+        self.assertFalse(answer["result"]["written"])
+        self.assertEqual(answer["result"]["failed"], "the camera didn't stay where it was put")
+        self.assertIn("gave the picture up", answer["result"]["note"])
+        # Said as soon as the game gives it up, not after the whole wait
+        self.assertLess(time.monotonic() - started, self.session.timeout * 3)
+
     def test_options_an_older_game_lacks_are_refused_clearly(self):
         self.describe_screenshot(["path", "in_frames", "at_frame", "camera"])
         self.first.handlers["screenshot.take"] = self.write_slowly
@@ -658,6 +671,23 @@ class ScreenshotTest(SessionBase):
         answer = self.session.call("camera_frame", {"id": 3})
         self.assertFalse(answer["ok"])
         self.assertIn("older build", answer["error"])
+
+    def test_a_query_nobody_knows_is_answered_with_the_closest_names(self):
+        # A tool's name sent as a query: the game doesn't know it, nor does the adapter, so it is no older build
+        self.first.handlers["screenshot"] = lambda request: "no query screenshot; ask describe"
+        answer = self.session.send({"query": "screenshot"}, target={"pid": self.first.pid})
+        self.assertFalse(answer["ok"])
+        self.assertNotIn("older build", answer["error"])
+        self.assertIn("screenshot.take", answer["error"])
+
+    def test_call_takes_tool_names(self):
+        self.assertTrue(mcp.call_tool_name("screenshot"))
+        self.assertTrue(mcp.call_tool_name("game_entities"))
+        self.assertTrue(mcp.call_tool_name("inspector_games"))
+        self.assertFalse(mcp.call_tool_name("screenshot.take"))
+        self.assertFalse(mcp.call_tool_name("describe"))
+        self.assertFalse(mcp.call_tool_name("no_such_tool"))
+        self.assertIn("ecs.entities", mcp.suggestions("game_entitys"))
 
 
 class ArgumentsTest(SessionBase):

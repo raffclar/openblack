@@ -143,4 +143,9 @@ private:
 	uint64_t _frame {0};
 };
 
+/// What the game says it is loading while a testbed scenario asked for hasn't laid out its things yet (its name, as the
+/// scenario's own load says it): none when none is asked for. Until then every query but ping, describe and game.state
+/// is answered as loading, so that none reads the testbed without the scenario's things.
+[[nodiscard]] std::optional<std::string> ScenarioLoading(const std::optional<std::string_view>& scenario);
+
 } // namespace openblack::inspector

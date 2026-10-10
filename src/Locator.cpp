@@ -100,6 +100,7 @@
 #include "ECS/Systems/Implementations/RewardSystem.h"
 #include "ECS/Systems/Implementations/ScriptControlSystem.h"
 #include "ECS/Systems/Implementations/ScriptObjectsSystem.h"
+#include "ECS/Systems/Implementations/SharkSystem.h"
 #include "ECS/Systems/Implementations/SkySystem.h"
 #include "ECS/Systems/Implementations/SnowSystem.h"
 #include "ECS/Systems/Implementations/SnowfallSystem.h"
@@ -121,7 +122,6 @@
 #include "ECS/Systems/Implementations/WalkPathSystem.h"
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
 #include "ECS/Systems/Implementations/WeatherSystem.h"
-#include "ECS/Systems/Implementations/WhaleSystem.h"
 #include "ECS/Systems/Implementations/WorshipSiteSystem.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "Graphics/RendererInterface.h"
@@ -208,6 +208,7 @@ using openblack::ecs::systems::ReactionSystem;
 using openblack::ecs::systems::RenderingSystem;
 using openblack::ecs::systems::ResourceStoreSystem;
 using openblack::ecs::systems::ScriptControlSystem;
+using openblack::ecs::systems::SharkSystem;
 using openblack::ecs::systems::SnowfallSystem;
 using openblack::ecs::systems::SnowSystem;
 using openblack::ecs::systems::SoundTagSystem;
@@ -229,7 +230,6 @@ using openblack::ecs::systems::VortexSystem;
 using openblack::ecs::systems::WalkPathSystem;
 using openblack::ecs::systems::WaterRingSystem;
 using openblack::ecs::systems::WeatherSystem;
-using openblack::ecs::systems::WhaleSystem;
 using openblack::ecs::systems::WorshipSiteSystem;
 using openblack::graphics::RendererInterface;
 using openblack::input::GameActionMap;
@@ -335,7 +335,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::highDetailSystem::emplace<HighDetailSystem>();
 	Locator::walkPathSystem::emplace<WalkPathSystem>();
 	Locator::danceSystem::emplace<DanceSystem>();
-	Locator::whaleSystem::emplace<WhaleSystem>();
+	Locator::sharkSystem::emplace<SharkSystem>();
 	Locator::videoSystem::emplace<VideoSystem>();
 	Locator::helpTextSystem::emplace<HelpTextSystem>();
 	Locator::helpProfileSystem::emplace<HelpProfileSystem>();
@@ -480,7 +480,7 @@ void openblack::ShutDownServices()
 	Locator::highDetailSystem::reset();
 	Locator::walkPathSystem::reset();
 	Locator::danceSystem::reset();
-	Locator::whaleSystem::reset();
+	Locator::sharkSystem::reset();
 	Locator::videoSystem::reset();
 	Locator::helpTextSystem::reset();
 	Locator::helpProfileSystem::reset();

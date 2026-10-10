@@ -11,6 +11,9 @@
 
 #include <cstdint>
 
+#include <optional>
+#include <vector>
+
 #include <entt/entity/entity.hpp>
 
 namespace openblack::ecs::script_objects
@@ -57,6 +60,17 @@ public:
 	virtual void AbandonCreatureAction(entt::entity creature) = 0;
 	/// The object goes from the world at once
 	virtual void Delete(entt::entity object) = 0;
+	/// A flock, a dance or a town: something scripts fill with other things
+	[[nodiscard]] virtual bool IsContainer(entt::entity object) const = 0;
+	/// Every member leaves a flock or a dance, and one a script controls waits for the script: the members that left. A
+	/// town keeps its own (none left). Nothing when the object is none of these
+	virtual std::optional<std::vector<entt::entity>> Disband(entt::entity container) = 0;
+	/// The members of a flock (none for anything else)
+	[[nodiscard]] virtual std::vector<entt::entity> FlockMembers(entt::entity object) const = 0;
+	/// A marker or a timer, which has no use outside the script that holds it
+	[[nodiscard]] virtual bool IsDeletedWhenReleased(entt::entity object) const = 0;
+	/// A scroll or sign a script put up
+	[[nodiscard]] virtual bool IsHighlight(entt::entity object) const = 0;
 };
 
 } // namespace openblack::ecs::script_objects
