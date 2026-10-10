@@ -212,6 +212,8 @@ private:
 	std::chrono::steady_clock::duration _turnDeltaTime;
 	uint32_t _frameCount {0};
 	glm::ivec2 _mousePosition {0, 0};
+	/// The left button went down since the last frame, which may click the dialogue on
+	bool _dialogueClick {false};
 	bool _handGripping;
 	/// Whether the last press of the Action button went to letting go of a miracle in the hand or to a creature, so it
 	/// taps nothing else for the leash

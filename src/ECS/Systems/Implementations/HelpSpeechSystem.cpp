@@ -54,3 +54,14 @@ bool HelpSpeechSystem::IsSaying(uint32_t text, audio::SpeechVoice voice)
 		return audio.EmitterExists(emitter) && audio.GetStatus(emitter) != audio::AudioStatus::Stopped;
 	});
 }
+
+void HelpSpeechSystem::Stop(audio::SpeechVoice voice, audio::SpeechBank bank)
+{
+	auto& audio = Locator::audio::value();
+	_voices.Stop(voice, bank, [&audio](entt::entity emitter) {
+		if (audio.EmitterExists(emitter))
+		{
+			audio.StopEmitter(emitter);
+		}
+	});
+}

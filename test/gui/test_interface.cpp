@@ -201,6 +201,29 @@ TEST(TextDatabase, NumbersTheHelpTextsInTheirOrder)
 	EXPECT_EQ(texts.Get("PATCH"), u"Not numbered");
 }
 
+TEST(TextDatabase, KeepsTheHelpTextsNarratorsAndCodes)
+{
+	TextDatabase texts;
+	texts.AddHelpScript(Utf16Script(u"SLONG    HELP_TEXT_NARRATOR_NONE\r\n"
+	                                u"HELP_TEXT_NARRATOR_NONE =  0\r\n"
+	                                u"HELP_TEXT_NARRATOR_EVIL_SPIRIT =  3\r\n"
+	                                u"ADD_TEXT( 0, HELP_TEXT_NARRATOR_NONE, \"NONE\", \"Invalid\")\r\n"
+	                                u"ADD_TEXT( 1, HELP_TEXT_NARRATOR_EVIL_SPIRIT, \"EVIL\", \"Click. $m2\")\r\n"
+	                                u"ADD_TEXT( 0, 7, \"BREAK\", \"One\\nTwo\")\r\n"));
+	ASSERT_EQ(texts.GetHelpTextCount(), 3);
+	EXPECT_EQ(texts.GetHelpText(1).narrator, 3);
+	EXPECT_TRUE(texts.GetHelpText(1).important);
+	EXPECT_EQ(texts.GetHelpText(1).text, u"Click. $m2");
+	EXPECT_EQ(texts.GetHelpText(2).narrator, 7);
+	EXPECT_FALSE(texts.GetHelpText(2).important);
+	// The display reads the codes, so the help text keeps them; by name it reads as any other text
+	EXPECT_EQ(texts.GetHelpText(2).text, u"One\\nTwo");
+	EXPECT_EQ(texts.Get("BREAK"), u"One\nTwo");
+	// Past the last, the first
+	EXPECT_EQ(texts.GetHelpText(3).text, u"Invalid");
+	EXPECT_EQ(texts.GetHelpText(0).narrator, 0);
+}
+
 TEST(TextDatabase, ConvertsBetweenUtf8AndUtf16)
 {
 	const std::u16string text = u"Bläck & Wh€te \U0001F600";

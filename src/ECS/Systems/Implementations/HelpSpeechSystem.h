@@ -24,6 +24,8 @@ public:
 	void SetTable(audio::HelpSpeechTable table) override;
 	void Say(uint32_t text, audio::SpeechVoice voice, std::optional<glm::vec3> position) override;
 	[[nodiscard]] bool IsSaying(uint32_t text, audio::SpeechVoice voice) override;
+	void Stop(audio::SpeechVoice voice, audio::SpeechBank bank) override;
+	[[nodiscard]] const audio::HelpSpeechTable& GetTable() const override { return _table; }
 
 private:
 	audio::HelpSpeechTable _table;

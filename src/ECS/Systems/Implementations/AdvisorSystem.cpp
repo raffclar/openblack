@@ -27,7 +27,9 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Help/AdvisorVoices.h"
 #include "Help/SpiritPose.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -147,6 +149,17 @@ Queries AdvisorSystem::MakeQueries()
 	queries.localRand = [](int32_t n) { return Locator::gameRandom::value().LocalRand(n); };
 	queries.localFloatRand = [](float x) { return Locator::gameRandom::value().LocalFloatRand(x); };
 	queries.random = [](float a, float b) { return Locator::gameRandom::value().CrtRandom(a, b); };
+
+	// The advisors talk with the voices the scripts' dialogue gives them; their lips are not moved by the sound
+	queries.isTalking = [](int dude) {
+		return Locator::helpTextSystem::has_value() && Locator::helpTextSystem::value().GetVoices().IsTalking(dude);
+	};
+	queries.talkedRecently = [](int dude) {
+		return Locator::helpTextSystem::has_value() && Locator::helpTextSystem::value().GetVoices().TalkingOrJustStopped(dude);
+	};
+	queries.sayActive = [](int dude) {
+		return Locator::helpTextSystem::has_value() && Locator::helpTextSystem::value().GetVoices().IsActive(dude);
+	};
 
 	queries.pointFromScreen = [this](glm::vec2 pixel, float depth) { return PointFromScreen(_view, pixel, depth); };
 	queries.worldToPixel = [this](const glm::vec3& point, bool force) { return WorldToPixel(_view, point, force); };

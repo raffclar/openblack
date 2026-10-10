@@ -33,6 +33,10 @@ public:
 	virtual void Say(uint32_t text, audio::SpeechVoice voice, std::optional<glm::vec3> position) = 0;
 	/// Whether the voice is still saying the help text's line
 	[[nodiscard]] virtual bool IsSaying(uint32_t text, audio::SpeechVoice voice) = 0;
+	/// Stops what the voice is saying from a bank
+	virtual void Stop(audio::SpeechVoice voice, audio::SpeechBank bank) = 0;
+	/// Which sample says each help text
+	[[nodiscard]] virtual const audio::HelpSpeechTable& GetTable() const = 0;
 };
 
 } // namespace openblack::ecs::systems

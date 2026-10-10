@@ -126,6 +126,7 @@ class CinematicDirectorSystemInterface;
 class ScriptControlSystemInterface;
 class DialogueControlSystemInterface;
 class HelpSpeechSystemInterface;
+class HelpTextSystemInterface;
 class AdvisorSystemInterface;
 class SoundTagSystemInterface;
 class RainSystemInterface;
@@ -240,6 +241,7 @@ struct Locator
 	using scriptControlSystem = entt::locator<ecs::systems::ScriptControlSystemInterface>;
 	using dialogueControlSystem = entt::locator<ecs::systems::DialogueControlSystemInterface>;
 	using helpSpeechSystem = entt::locator<ecs::systems::HelpSpeechSystemInterface>;
+	using helpTextSystem = entt::locator<ecs::systems::HelpTextSystemInterface>;
 	using advisorSystem = entt::locator<ecs::systems::AdvisorSystemInterface>;
 	using soundTagSystem = entt::locator<ecs::systems::SoundTagSystemInterface>;
 	using rainSystem = entt::locator<ecs::systems::RainSystemInterface>;

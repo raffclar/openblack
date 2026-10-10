@@ -136,6 +136,7 @@
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -177,6 +178,7 @@
 #include "Gui/GameInterface.h"
 #include "Hand/HandFeel.h"
 #include "Hand/HandVisibility.h"
+#include "Help/Spirits.h"
 #include "Input/GameActionMapInterface.h"
 #include "LHScriptX/Script.h"
 #include "Locator.h"
@@ -276,6 +278,18 @@ bool FeelsModel(entt::entity object)
 	const auto* info = ecs::world_objects::InfoOf(object);
 	return info == nullptr || info->type != ObjectType::TotemStatue;
 }
+
+/// Both advisors are sent home, the good one first; a help script's vanish rather than fly home
+void SendAdvisorsHome(bool helpScript)
+{
+	if (!Locator::advisorSystem::has_value() || !Locator::advisorSystem::value().IsLoaded())
+	{
+		return;
+	}
+	auto& advisors = Locator::advisorSystem::value().GetController();
+	advisors.SpiritHome(1, helpScript);
+	advisors.SpiritHome(2, helpScript);
+}
 } // namespace
 
 const std::string k_WindowTitle = "openblack";
@@ -374,6 +388,12 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	if ((event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) && event.button.button == SDL_BUTTON_LEFT)
 	{
 		leftMouseButton = event.type == SDL_MOUSEBUTTONDOWN;
+	}
+	// A press of the left button may click the dialogue on, whatever else it does
+	if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT &&
+	    !Locator::debugGui::value().IsMouseOverWindow())
+	{
+		_dialogueClick = true;
 	}
 	if ((event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) && event.button.button == SDL_BUTTON_MIDDLE)
 	{
@@ -1455,6 +1475,19 @@ bool Game::Update() noexcept
 		    .wideScreen = Locator::cinematicDirectorSystem::value().IsWideScreenOn(),
 		});
 	}
+	// The scripts' dialogue: the voices, the player's click and the newest text sliding in
+	{
+		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+		const auto* keys = SDL_GetKeyboardState(nullptr);
+		Locator::helpTextSystem::value().Update({
+		    .gameMs = static_cast<uint32_t>(clock.GetFrameGameTime().count()),
+		    .realMs = static_cast<uint32_t>(clock.GetFrameRealTime().count()),
+		    .inTemple = inTemple,
+		    .click = _dialogueClick,
+		    .skipKey = keys != nullptr && keys[SDL_SCANCODE_KP_ENTER] != 0,
+		});
+		_dialogueClick = false;
+	}
 	// The cinema bars coming in hide the game's dialogs
 	if (Locator::cinematicDirectorSystem::value().TakeHideDialogs() && _interface && _interface->GetMenu().IsOpen())
 	{
@@ -2531,6 +2564,22 @@ bool Game::Initialize() noexcept
 			}
 		}
 		Locator::helpSpeechSystem::value().SetTable(audio::HelpSpeechTable(_interface->GetTexts().GetHelpNames(), banks));
+		// The scripts' dialogue, its text sized for the screen it starts on
+		const int screenHeight = Locator::windowing::has_value() ? Locator::windowing::value().GetSize().y : 0;
+		Locator::helpTextSystem::value().Start(_interface->GetTexts(), screenHeight);
+		// What the dialogue changing hands does to the advisors and the texts
+		Locator::dialogueControlSystem::value().SetHooks({
+		    .sendSpiritsHome = [](bool helpScript) { SendAdvisorsHome(helpScript); },
+		    .taken = []() { Locator::helpTextSystem::value().ClearAllText(); },
+		    .released =
+		        [](bool helpScript) {
+			        // They fly home, are cut short in what they say, are sent home as the script would, and the texts go
+			        SendAdvisorsHome(false);
+			        Locator::helpTextSystem::value().InterruptAdvisors();
+			        SendAdvisorsHome(helpScript);
+			        Locator::helpTextSystem::value().ClearAllText();
+		        },
+		});
 	}
 
 	{
@@ -2970,6 +3019,8 @@ void Game::PrepareNewLand()
 		scriptControl.Reset();
 	}
 	Locator::dialogueControlSystem::value().Reset();
+	// The scripts start again, and the help's texts and voices with them
+	Locator::helpTextSystem::value().Reset();
 	Locator::cameraHelpSystem::value().Get().ResetForNewLand();
 	Locator::influenceSystem::value().Reset();
 	// Nor its creatures' footprints
