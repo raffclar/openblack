@@ -90,6 +90,8 @@ enum class Facet : uint8_t
 	Nature,
 	/// The land's animals: its birds and the doves or bats about the temples
 	Animals,
+	/// The sky: the moon and its phases
+	Sky,
 
 	_Count
 };
@@ -509,6 +511,8 @@ struct Command
 		/// The player's hand knocks on the scenario's object, a building, as the Action button pressed on it does, from
 		/// where the hand is
 		HandTapObject,
+		/// The creature walks to its home: its temple's pen while its player has a temple
+		WalkHome,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -568,11 +572,13 @@ struct BirdFlockSetup
 	float flockDistance {10.0f};
 };
 
-/// A temple of a player's, built, at a point from the middle of the map
+/// A temple of a player's, built, at a point from the middle of the map, turned by the angle as a land's script turns
+/// one (radians about the vertical)
 struct TempleSetup
 {
 	glm::vec2 offset {0.0f};
 	PlayerNames owner {PlayerNames::PLAYER_ONE};
+	float angle {0.0f};
 };
 
 /// The player's hand held still over the land for the whole scenario, as a player holds it: from the middle of the map,
@@ -705,6 +711,8 @@ void AddHandLookScenarios(std::vector<Scenario>& all);
 void AddKnockScenarios(std::vector<Scenario>& all);
 /// The scrolls and signs the land scripts put up
 void AddHighlightScenarios(std::vector<Scenario>& all);
+/// The moon at night, seen to the east, for trying its phases and its path with the moon debug window
+void AddSkyScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them
 [[nodiscard]] std::span<const Scenario> All();

@@ -117,7 +117,7 @@ std::optional<std::pair<creature_spell_casting::Body, creature_spell_casting::Ra
 		return std::nullopt;
 	}
 	const auto& species = info.creature.at(row);
-	return std::pair {creature_spell_casting::Body {.size = body->size,
+	return std::pair {creature_spell_casting::Body {.size = ShownSize(*body),
 	                                                .strength = body->strength,
 	                                                .energy = needs->needs.energy,
 	                                                .exhaustion = needs->needs.exhaustion},
@@ -162,10 +162,10 @@ bool MagicSystem::CastByCreature(entt::entity creature, MagicType type, entt::en
 	// As big as what it is cast at
 	const auto* targetCreature = registry.TryGet<const Creature>(target);
 	const auto seed = magic::FindFirstSpellSeedForMagicType(info, type);
-	const float magnitude =
-	    creature_spell_casting::CastMagnitude(object_measures::TwoDRadius(registry, target),
-	                                          targetCreature != nullptr ? std::optional(targetCreature->size) : std::nullopt,
-	                                          seed == SpellSeedType::Fire, object_measures::Height(registry, creature));
+	const float magnitude = creature_spell_casting::CastMagnitude(
+	    object_measures::TwoDRadius(registry, target),
+	    targetCreature != nullptr ? std::optional(ShownSize(*targetCreature)) : std::nullopt, seed == SpellSeedType::Fire,
+	    object_measures::Height(registry, creature));
 	const auto& effect = magic::GetMagicEffectInfo(info, type);
 	const magic::SpellCastData cast {
 	    .magnitude = magnitude,
@@ -207,7 +207,7 @@ bool MagicSystem::CastByCreature(entt::entity creature, MagicType type, entt::en
 		if (const auto bones = HandBonesOf(creature))
 		{
 			auto& particles = Locator::particleSystem::value();
-			const float size = k_BeamSizeLeast + (k_BeamSizePerSize * body->size);
+			const float size = k_BeamSizeLeast + (k_BeamSizePerSize * ShownSize(*body));
 			auto& beams = _creatureBeams[creature];
 			beams = {particles.StartSpotVisual(SpotVisualType::MagicBeam, bones->first, std::nullopt, creature, size),
 			         particles.StartSpotVisual(SpotVisualType::MagicBeam, bones->second, std::nullopt, creature, size)};

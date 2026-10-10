@@ -46,6 +46,7 @@
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
 #include "Creature/LeashRules.h"
+#include "Creature/TemplePen.h"
 #include "ECS/Archetypes/BallArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
@@ -53,6 +54,7 @@
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -74,6 +76,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/ScriptTimer.h"
+#include "ECS/Components/Sky.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Town.h"
@@ -2230,9 +2233,9 @@ void MoveCameraToFaceObject() // 107 MOVE_CAMERA_TO_FACE_OBJECT
 
 void GetMoonPercentage() // 108 GET_MOON_PERCENTAGE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// How full the moon was the last time it showed: 0 at the full moon, 1 at a new moon
+	const auto* moon = Locator::entitiesRegistry::value().TryGet<ecs::components::Moon>(Locator::skySystem::value().GetMoon());
+	Pushf(graphics::moon::ScriptPercentage(moon != nullptr ? moon->phase : 0.0f));
 }
 
 void PopulateContainer() // 109 POPULATE_CONTAINER
@@ -3435,10 +3438,29 @@ void IsLeashed() // 222 IS_LEASHED
 
 void SetCreatureHome() // 223 SET_CREATURE_HOME
 {
-	// const auto position = PopVec();
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The creature's home becomes the point, on the ground and kept as precisely as a map position. While its player's
+	// temple stands the temple's pen is its home again from the next game turn.
+	const auto position = PopVec();
+	const auto creature = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_CREATURE_HOME: thing not found");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(creature))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_CREATURE_HOME: thing not creature");
+		return;
+	}
+	const auto place = temple_pen::MapPlace(position);
+	const auto ground = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(place) : 0.0f;
+	auto* leash = registry.TryGet<ecs::components::CreatureLeash>(creature);
+	if (leash == nullptr)
+	{
+		leash = &registry.Assign<ecs::components::CreatureLeash>(creature);
+	}
+	leash->home = glm::vec3(place.x, ground, place.y);
 }
 
 void GetHitObject() // 224 GET_HIT_OBJECT

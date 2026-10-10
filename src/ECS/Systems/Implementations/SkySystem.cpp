@@ -87,6 +87,7 @@ void SkySystem::UpdateFrame(bool skyDrawn)
 	    {
 	        .scriptHour = clock.GetScriptTime(),
 	        .unixTime = now.count(),
+	        .ticks = machine_clock::Ticks(),
 	        .landLight = FrameLandLightInputs(),
 	        .palette = palette,
 	        .fog = graphics::detail_level::Fog(Locator::config::value().detailLevel),
