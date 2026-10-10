@@ -304,6 +304,8 @@ private:
 	std::chrono::steady_clock::duration _turnDeltaTime;
 	uint32_t _frameCount {0};
 	glm::ivec2 _mousePosition {0, 0};
+	/// The left button went down since the last frame, which may click the dialogue on
+	bool _dialogueClick {false};
 	bool _handGripping;
 	/// Whether the last press of the Action button went to letting go of a miracle in the hand or to a creature, so it
 	/// taps nothing else for the leash
@@ -335,6 +337,8 @@ private:
 		std::chrono::microseconds time {0};
 	};
 	std::optional<HandKnock> _handKnock;
+	/// Where the pointer was last put on the hand while it holds a town's totem
+	std::optional<glm::ivec2> _totemPointer;
 	/// The hand plays its tap this frame
 	bool _handKnocking {false};
 	/// The way the surface the cursor is on in the temple faces, which the hand turns to
@@ -395,6 +399,10 @@ private:
 	/// Once a game turn outside the temple: the hand's tooltip for what it is over, "Interact" over the player's own
 	/// creature
 	void ProcessHandToolTipTurn();
+	/// Where a point of the world is on the screen, in whole pixels, when it is on it
+	[[nodiscard]] std::optional<glm::vec2> OnScreen(glm::vec3 point) const;
+	/// The floating numbers move on by some seconds and are given to the interface where they show
+	void UpdateFloatingNumbers(float seconds);
 
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> _requestScreenshot;
 	/// The requested screenshot leaves the debug windows out

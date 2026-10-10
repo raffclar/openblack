@@ -26,6 +26,7 @@
 #include "3D/InfluenceCircle.h"
 #include "3D/L3DMesh.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/LivingAction.h"
@@ -261,11 +262,11 @@ void BeliefVoiceOf(entt::entity villager, PlayerNames player, GuidanceAlignment 
 		return;
 	}
 	voice.lastVoice = turn;
-	Locator::audio::value().StartSoundEffect(resources::HashIdentifier(fmt::format("Guidance.sad/{}", *sample)),
-	                                         {.position = at,
-	                                          .pitchPercent = k_VoicePitch,
-	                                          .minDistance = k_VoiceReach * k_VoiceNearShare,
-	                                          .maxDistance = k_VoiceReach});
+	audio::StartGameSoundEffect(resources::HashIdentifier(fmt::format("Guidance.sad/{}", *sample)),
+	                            {.position = at,
+	                             .pitchPercent = k_VoicePitch,
+	                             .minDistance = k_VoiceReach * k_VoiceNearShare,
+	                             .maxDistance = k_VoiceReach});
 }
 } // namespace
 

@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <entt/core/fwd.hpp>
 #include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
@@ -50,6 +52,12 @@ public:
 	virtual void SetMovingSound(entt::entity totem, bool on) = 0;
 	/// The village bell sounds once at a point
 	virtual void RingBell(glm::vec3 position) = 0;
+	/// The hand takes hold of a player's totem: the living near it react to the hand using it
+	virtual void ReactToHandUsingTotem(entt::entity totem, PlayerNames player, glm::vec3 position) = 0;
+	/// The player's creature, if it can see the totem, takes it the player wants to impress, by half
+	virtual void EmpathiseWithPlayer(PlayerNames player, glm::vec3 position) = 0;
+	/// A number floats up from a point, in a colour (0xAARRGGBB)
+	virtual void FloatNumber(glm::vec3 position, float value, uint32_t colour) = 0;
 };
 
 } // namespace openblack::ecs::village_totem

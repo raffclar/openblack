@@ -17,12 +17,14 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureHair.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/CreatureHome.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -120,6 +122,8 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 	{
 		Locator::playerSystem::value().AddCreature(entity);
 	}
+	// Its home is its player's temple's pen if the temple stands, else where it was made
+	registry.Assign<CreatureLeash>(entity).home = ecs::creature_home::HomeOf(registry, entity).value_or(position);
 	// A player's first creature is the one they can lead on the leash
 	if (Locator::leashSystem::has_value())
 	{

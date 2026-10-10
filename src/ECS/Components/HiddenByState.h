@@ -12,8 +12,8 @@
 namespace openblack::ecs::components
 {
 
-/// A villager in a state that keeps it out of sight, as when it is inside a building or slaughtering out of view: it
-/// isn't drawn while it is
+/// A thing in a state that keeps it out of sight, as a villager inside a building or slaughtering out of view, or a
+/// script's scroll while the scripts hide the scrolls: it isn't drawn while it is
 struct HiddenByState
 {
 };

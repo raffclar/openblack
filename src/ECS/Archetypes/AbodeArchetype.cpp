@@ -10,10 +10,12 @@
 #include "AbodeArchetype.h"
 
 #include <glm/gtx/euler_angles.hpp>
+#include <glm/gtx/string_cast.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/L3DMesh.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
@@ -59,6 +61,28 @@ void AddStoragePitComponents(entt::entity entity, const Mesh& pitMesh, const GAb
 	const auto& m = extraMetrics.at(5);
 	auto translation = static_cast<glm::vec3>(glm::eulerAngleY(-yAngleRadians) * m[3]);
 	pit.foodPile = PotArchetype::Create(position + translation, yAngleRadians, info.potForResourceFood, foodAmount);
+}
+
+entt::entity AbodeArchetype::CreatePlan(uint32_t townId, const glm::vec3& position, AbodeInfo type, float yAngleRadians,
+                                        float scale)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// Without its town, the town nearest the place plans it
+	if (!registry.Context().towns.contains(townId))
+	{
+		const auto town = Locator::townSystem::value().FindClosestTown(position);
+		if (town == entt::null)
+		{
+			return entt::null;
+		}
+		townId = registry.Get<Town>(town).id;
+	}
+	const auto entity = registry.Create();
+	registry.Assign<Transform>(entity, position, glm::mat3(glm::eulerAngleY(-yAngleRadians)), glm::vec3(scale));
+	registry.Assign<PlannedAbode>(entity, townId, type);
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Town {} plans building {} at {}", townId, static_cast<int>(type),
+	                    glm::to_string(position));
+	return entity;
 }
 
 entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, AbodeInfo type, float yAngleRadians,

@@ -15,6 +15,8 @@
 
 #include "Audio/ScriptSoundEffect.h"
 #include "CHLApi.h"
+#include "ECS/Systems/CreatureAudioSystemInterface.h"
+#include "Locator.h"
 
 using namespace openblack;
 using namespace openblack::audio;
@@ -93,6 +95,9 @@ TEST(ScriptSoundEffect, NativesTakeWhatTheGameDoes)
 	EXPECT_EQ(table[357].name, std::string("SET_GAME_SOUND"));
 	EXPECT_EQ(table[357].stackIn, 1);
 	EXPECT_EQ(table[357].stackOut, 0u);
+	EXPECT_EQ(table[317].name, std::string("SET_CREATURE_SOUND"));
+	EXPECT_EQ(table[317].stackIn, 1);
+	EXPECT_EQ(table[317].stackOut, 0u);
 }
 
 TEST(ScriptSoundEffect, TheGameSoundIsOnUntilAScriptTurnsItOff)
@@ -104,4 +109,49 @@ TEST(ScriptSoundEffect, TheGameSoundIsOnUntilAScriptTurnsItOff)
 	// The scripts starting again turn it back on
 	api.ResetSwitches();
 	EXPECT_TRUE(api.IsGameSoundOn());
+}
+
+namespace
+{
+/// Keeps only whether the other players' creatures are heard in their own voices
+class FakeCreatureAudio final: public ecs::systems::CreatureAudioSystemInterface
+{
+public:
+	void Update(std::chrono::duration<float, std::milli>) override {}
+	[[nodiscard]] bool IsMuted() const override { return false; }
+	void SetMuted(bool) override {}
+	[[nodiscard]] bool AreOtherVoicesEnabled() const override { return otherVoices; }
+	void SetOtherVoicesEnabled(bool enabled) override { otherVoices = enabled; }
+	void Play(entt::entity, const creature_audio::SoundEvent&) override {}
+
+	bool otherVoices {false};
+};
+} // namespace
+
+TEST(ScriptSoundEffect, TheScriptsStartingAgainLetEveryCreatureBeHeard)
+{
+	Locator::creatureAudioSystem::emplace<FakeCreatureAudio>();
+	chlapi::CHLApi api;
+	api.ResetSwitches();
+	EXPECT_TRUE(Locator::creatureAudioSystem::value().AreOtherVoicesEnabled());
+	Locator::creatureAudioSystem::reset();
+}
+
+TEST(ScriptSoundEffect, ABanksFileNamesItWhateverItsCase)
+{
+	EXPECT_EQ(audio::BankOfFile("InGame.sad"), audio::ScriptSoundBank::InGame);
+	EXPECT_EQ(audio::BankOfFile("ingame.SAD"), audio::ScriptSoundBank::InGame);
+	EXPECT_EQ(audio::BankOfFile("HelpSprites.sad"), audio::ScriptSoundBank::HelpSprites);
+	EXPECT_EQ(audio::BankOfFile("Villagers.sad"), audio::ScriptSoundBank::Villagers);
+	EXPECT_EQ(audio::BankOfFile("Guidance.sad"), audio::ScriptSoundBank::Guidance);
+	EXPECT_EQ(audio::BankOfFile("music.sad"), audio::ScriptSoundBank::None);
+	EXPECT_EQ(audio::BankOfFile(""), audio::ScriptSoundBank::None);
+}
+
+TEST(ScriptSoundEffect, TheFightControlsNeedTheFightWatchedWithAnEmptyHand)
+{
+	EXPECT_TRUE(audio::InCreatureFightControls(true, true, true));
+	EXPECT_FALSE(audio::InCreatureFightControls(false, true, true));
+	EXPECT_FALSE(audio::InCreatureFightControls(true, false, true));
+	EXPECT_FALSE(audio::InCreatureFightControls(true, true, false));
 }

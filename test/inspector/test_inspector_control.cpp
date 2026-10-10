@@ -69,6 +69,28 @@ public:
 		flewTo = to;
 		return {};
 	}
+	/// Shown there this frame: what the camera holds itself is kept aside, as the game's camera keeps its movement
+	std::string Pin(const CameraPose& to) override
+	{
+		if (!own.has_value())
+		{
+			own = pose;
+		}
+		pose = to;
+		++sets;
+		++pins;
+		return {};
+	}
+	void Unpin() override
+	{
+		if (own.has_value())
+		{
+			pose = *own;
+		}
+		own.reset();
+	}
+	void SetOverride(std::optional<CameraPose> to) override { overridden = to; }
+	[[nodiscard]] std::optional<CameraPose> Override() const override { return overridden; }
 	[[nodiscard]] float GroundHeight(glm::vec2 /*point*/) const override { return 10.0f; }
 	[[nodiscard]] std::optional<glm::vec3> EntityPosition(uint32_t id) const override
 	{
@@ -81,6 +103,9 @@ public:
 	std::optional<CameraPose> flewTo;
 	bool held {false};
 	int sets {0};
+	int pins {0};
+	std::optional<CameraPose> own;
+	std::optional<CameraPose> overridden;
 };
 
 void ExpectNear(const Json& point, glm::vec3 expected)
@@ -146,7 +171,8 @@ TEST(InspectorCamera, FlyGoesThroughTheFlightAndAPathRefusesASet)
 	EXPECT_EQ(camera.sets, 0);
 
 	camera.held = true;
-	EXPECT_EQ(Refused(inspector, R"({"query": "camera.set", "params": {"yaw": 10}})"), "held");
+	EXPECT_EQ(Refused(inspector, R"({"query": "camera.set", "params": {"yaw": 10}})"),
+	          "held; override: true shows the camera there over it");
 }
 
 TEST(InspectorCamera, AnglesRoundTrip)
@@ -333,12 +359,6 @@ TEST(InspectorScripts, ANativeIsGivenTheTypesItTakes)
 	EXPECT_EQ(scripts.given[2].type, ScriptValue::Type::Boolean);
 	EXPECT_TRUE(scripts.given[2].boolean);
 
-	// Given as an integer, a float slot still takes a float; true for the truth
-	Ask(inspector, R"({"query": "script.call", "params": {"native": "SAY", "args": [{"int": 7}, {"int": 3}, true]}})");
-	EXPECT_EQ(scripts.given[0].integer, 7);
-	EXPECT_EQ(scripts.given[1].type, ScriptValue::Type::Float);
-	EXPECT_FLOAT_EQ(scripts.given[1].number, 3.0f);
-
 	// What can't be the slot's type is refused, naming the argument
 	EXPECT_NE(Refused(inspector, R"({"query": "script.call", "params": {"native": "SAY", "args": [1.5, 2, true]}})")
 	              .find("argument 1"),
@@ -346,6 +366,12 @@ TEST(InspectorScripts, ANativeIsGivenTheTypesItTakes)
 	EXPECT_NE(
 	    Refused(inspector, R"({"query": "script.call", "params": {"native": "SAY", "args": [3, 2, 5]}})").find("argument 3"),
 	    std::string::npos);
+	// {"int"} and {"float"} go as given, whatever the slot says: the explicit way past it
+	Ask(inspector, R"({"query": "script.call", "params": {"native": "SAY", "args": [{"float": 1203}, {"int": 2}, true]}})");
+	EXPECT_EQ(scripts.given[0].type, ScriptValue::Type::Float);
+	EXPECT_FLOAT_EQ(scripts.given[0].number, 1203.0f);
+	EXPECT_EQ(scripts.given[1].type, ScriptValue::Type::Int);
+	EXPECT_EQ(scripts.given[1].integer, 2);
 	// A native whose types aren't known takes the values as given
 	Ask(inspector, R"({"query": "script.call", "params": {"native": "ADD", "args": [2, 3]}})");
 	EXPECT_EQ(scripts.given[0].type, ScriptValue::Type::Float);
@@ -674,9 +700,7 @@ TEST(InspectorScreenshot, TheCameraIsHeldAroundThePicture)
 	ASSERT_EQ(screenshots.taken.size(), 2u);
 	EXPECT_FLOAT_EQ(camera.pose.origin.x, 7.0f);
 
-	// Held by a camera path, the picture is refused rather than taken from elsewhere
-	camera.held = true;
-	EXPECT_FALSE(Refused(inspector, R"({"query": "screenshot.take", "params": {"camera": {"yaw": 3}}})").empty());
+	// Held by a camera path or a script, a picture still has its camera (see below)
 }
 
 // Two held pictures asked for at once take turns: the second's camera goes in place once the first's frames are free,
@@ -786,6 +810,66 @@ TEST(InspectorScreenshot, AFramedEntityIsFramedWhereItIsAtThePicturesFrame)
 	EXPECT_FALSE(Refused(inspector, R"({"query": "screenshot.take", "params": {"frame": "x"}})").empty());
 	EXPECT_FALSE(Refused(inspector, R"({"query": "screenshot.take", "params": {"frame": 7, "camera": {"yaw": 3}}})").empty());
 	EXPECT_FALSE(Refused(inspector, R"({"query": "screenshot.take", "params": {"frame": {"id": 7, "pitch": 95}}})").empty());
+}
+
+// Held by a camera path or a script, a picture still has its camera: shown there over it, not set, and the camera's
+// own comes back before it next moves
+TEST(InspectorScreenshot, APictureIsShownOverAHeldCamera)
+{
+	FakeScreenshots screenshots;
+	FakeCamera camera;
+	camera.held = true;
+	auto owned = std::make_unique<ScreenshotProvider>(screenshots, camera);
+	auto* provider = owned.get();
+	Inspector inspector;
+	inspector.Add(std::move(owned));
+	provider->Frame(10);
+	const auto before = camera.pose;
+	Ask(inspector, R"({"query": "screenshot.take", "params": {"camera": {"position": [3, 3, 3], "focus": [0, 0, 0]}}})");
+	for (uint64_t frame = 11; frame <= 11 + ScreenshotProvider::k_SettleFrames; ++frame)
+	{
+		camera.Unpin();
+		EXPECT_EQ(camera.pose.origin, before.origin) << frame;
+		provider->PlaceCamera();
+		EXPECT_FLOAT_EQ(camera.pose.origin.x, 3.0f) << frame;
+		provider->Frame(frame + 1);
+	}
+	EXPECT_EQ(screenshots.taken.size(), 1u);
+	EXPECT_EQ(camera.pins, static_cast<int>(ScreenshotProvider::k_SettleFrames) + 1);
+}
+
+// An override shows the camera somewhere every frame over whatever holds it, without changing that camera, until it is
+// released
+TEST(InspectorCamera, AnOverrideWinsOverAScriptsCameraUntilReleased)
+{
+	FakeCamera camera;
+	camera.held = true;
+	Inspector inspector;
+	inspector.Add(MakeCameraProvider(camera));
+
+	// Held, a plain set is refused, saying how to override
+	EXPECT_NE(Refused(inspector, R"({"query": "camera.set", "params": {"position": [1, 2, 3], "focus": [4, 5, 6]}})")
+	              .find("override"),
+	          std::string::npos);
+	const auto set = Ask(inspector, R"({"query": "camera.set", "params": {"position": [1, 2, 3], "focus": [4, 5, 6],
+	                                   "override": true}})");
+	EXPECT_EQ(set["override"], true);
+	ASSERT_TRUE(camera.overridden.has_value());
+	EXPECT_EQ(camera.overridden->origin, glm::vec3(1.0f, 2.0f, 3.0f));
+	// The camera itself isn't set: it is shown there as each frame is drawn
+	EXPECT_EQ(camera.sets, 0);
+	const auto state = Ask(inspector, R"({"query": "camera.state"})");
+	ExpectNear(state["override"]["origin"], {1.0f, 2.0f, 3.0f});
+
+	// Framing an entity can override too
+	Ask(inspector, R"({"query": "camera.frame", "params": {"id": 7, "distance": 20, "override": true}})");
+	ExpectNear(Json::array({camera.overridden->focus.x, camera.overridden->focus.y, camera.overridden->focus.z}),
+	           camera.walker);
+
+	EXPECT_EQ(Ask(inspector, R"({"query": "camera.release"})")["released"], true);
+	EXPECT_FALSE(camera.overridden.has_value());
+	EXPECT_EQ(Ask(inspector, R"({"query": "camera.release"})")["released"], false);
+	EXPECT_TRUE(Ask(inspector, R"({"query": "camera.state"})")["override"].is_null());
 }
 
 TEST(InspectorCamera, FrameLooksAtAnEntity)

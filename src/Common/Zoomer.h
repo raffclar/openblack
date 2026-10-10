@@ -16,7 +16,9 @@ namespace openblack
 
 /// A value that eases to a destination over a set time, as the game's do, setting off from its current value and speed
 /// so that it can be given a new destination every frame. Its path is a quartic in time that arrives at the destination
-/// at the destination's speed, its last term ending at nothing, and its speed is kept as the game keeps it.
+/// at the destination's speed, its last term ending at nothing, and its speed is kept as the game keeps it. The path is
+/// solved in the game's order of float operations. Below about 0.05 seconds the game keeps the solution's determinant
+/// from vanishing, so such a short move barely moves and then jumps to its destination as its time ends.
 class Zoomer
 {
 public:
@@ -28,10 +30,17 @@ public:
 	void SetDestination(float destination, float seconds, float speed = 0.0f);
 	/// Moves the value on along its path
 	void Update(float deltaSeconds);
+	/// The same step with its terms summed in the other order the game uses where it moves a value on in place, which
+	/// rounds differently
+	void UpdateInline(float deltaSeconds);
 
 	[[nodiscard]] float GetValue() const { return _value; }
 	[[nodiscard]] float GetSpeed() const { return _speed; }
 	[[nodiscard]] float GetDestination() const { return _destination; }
+	/// How long its move to the destination takes
+	[[nodiscard]] float GetDuration() const { return _duration; }
+	/// Its time is up: it is at its destination, or was put somewhere and not sent on
+	[[nodiscard]] bool HasArrived() const { return _elapsed == _duration; }
 
 private:
 	float _value {0.0f};

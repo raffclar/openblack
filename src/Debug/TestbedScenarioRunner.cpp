@@ -83,6 +83,7 @@
 #include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
+#include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
@@ -107,16 +108,19 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Gestures/GesturePaths.h"
+#include "Help/Spirits.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/InjectedInput.h"
@@ -361,6 +365,11 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 		if (auto* animal = registry.TryGet<ecs::components::Animal>(entity))
 		{
 			animal->life = std::clamp(*object.life, 0.0f, 1.0f);
+			// One given no life is killed: it falls dead and lies its time
+			if (animal->Dead() && Locator::animalSystem::has_value())
+			{
+				Locator::animalSystem::value().SetDying(entity);
+			}
 		}
 	}
 	if (object.poisoned)
@@ -449,9 +458,16 @@ void Runner::Start(const Scenario& scenario)
 		                                          glm::vec3(1.0f));
 	}
 	PlaceObjects(scenario, _middle);
+	PlaceHighlights(scenario, _middle);
 	PlaceBirds(scenario, _middle);
 	PlaceCreatures(scenario, _middle);
 	PlaceDispensers(scenario);
+	// With the scenario's things laid out on the land, each town of a player with a temple is given its worship site, as
+	// a land's are once it is laid out
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().LandLaidOut();
+	}
 	if (Locator::fireflySystem::has_value())
 	{
 		for (const auto& [name, weight] : scenario.fireflyRewards)
@@ -634,6 +650,37 @@ void Runner::SetUpEnvironment(const Environment& environment)
 	{
 		const auto size = glm::vec2(Locator::windowing::value().GetSize());
 		Game::Instance()->SetMousePosition(glm::ivec2(*environment.cursor * size));
+	}
+}
+
+void Runner::PlaceHighlights(const Scenario& scenario, glm::vec2 middle)
+{
+	if (!Locator::scriptHighlightSystem::has_value())
+	{
+		return;
+	}
+	auto& highlights = Locator::scriptHighlightSystem::value();
+	const auto& land = Locator::terrainSystem::value();
+	for (const auto& setup : scenario.highlights)
+	{
+		const auto point = MapPoint(middle, setup.offset);
+		const auto highlight = highlights.Create(setup.kind, {point.x, land.GetHeightAt(point), point.y}, setup.challenge);
+		if (highlight != entt::null)
+		{
+			if (setup.tip.has_value())
+			{
+				highlights.SetProperties(highlight, setup.tip->first, setup.tip->second);
+			}
+			if (setup.height.has_value())
+			{
+				highlights.SetDrawHeight(highlight, *setup.height);
+			}
+			if (setup.active)
+			{
+				highlights.SetActive(highlight, true);
+			}
+		}
+		_objects.push_back(highlight);
 	}
 }
 
@@ -1348,6 +1395,11 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the hour is {:.1f}", _seconds, command.hour));
 		return;
 	}
+	if (command.kind == Kind::Advisor)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), GiveAdvisorCommand(command)));
+		return;
+	}
 	if (command.kind == Kind::SetOpenClose || command.kind == Kind::LayGateStone)
 	{
 		GiveSceneryCommand(command);
@@ -1537,6 +1589,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandTakeFireBall:
 	case Kind::HandTapObject:
 	case Kind::SetAlignment:
+	case Kind::Advisor:
 	case Kind::SetOpenClose:
 	case Kind::LayGateStone:
 	case Kind::WideScreen:
@@ -2772,4 +2825,66 @@ std::optional<std::filesystem::path> Runner::SaveResults(std::optional<std::file
 	csv << benchmark::ToCsv(run, results, _recorder->Stages());
 	Log(fmt::format("Saved {}", jsonPath.generic_string()));
 	return jsonPath;
+}
+
+std::string Runner::GiveAdvisorCommand(const Command& command) const
+{
+	if (!Locator::advisorSystem::has_value())
+	{
+		return "no advisors";
+	}
+	auto& control = Locator::advisorSystem::value().GetController();
+	// The scripts name the good advisor 1 and the evil one 2
+	const int32_t type = command.value == 0 ? 1 : 2;
+	const auto who = command.value == 0 ? "the good advisor" : "the evil advisor";
+	using Action = Command::AdvisorAction;
+	switch (command.advisor)
+	{
+	case Action::Out:
+		control.SpiritEject(type, false);
+		return fmt::format("{} comes out", who);
+	case Action::Appear:
+		control.SpiritEject(type, true);
+		return fmt::format("{} appears", who);
+	case Action::Home:
+		control.SpiritHome(type, false);
+		return fmt::format("{} goes home", who);
+	case Action::Vanish:
+		control.SpiritHome(type, true);
+		return fmt::format("{} vanishes", who);
+	case Action::Cling:
+		control.SpiritCling(type, command.point.x, command.point.y);
+		return fmt::format("{} clings at ({:.2f}, {:.2f})", who, command.point.x, command.point.y);
+	case Action::Fly:
+		control.SpiritFly(type, command.point.x, command.point.y);
+		return fmt::format("{} flies to ({:.2f}, {:.2f})", who, command.point.x, command.point.y);
+	case Action::PointOnScreen:
+	{
+		const auto& screen = control.GetScreen();
+		control.SpiritScreenPoint(type, glm::ivec2(static_cast<int32_t>(static_cast<float>(screen.width) * command.point.x),
+		                                           static_cast<int32_t>(static_cast<float>(screen.height) * command.point.y)));
+		return fmt::format("{} points at ({:.2f}, {:.2f}) on the screen", who, command.point.x, command.point.y);
+	}
+	case Action::PointAtLand:
+	case Action::LookAtLand:
+	{
+		const auto at = MapPoint(_middle, command.point);
+		const float height = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(at) : 0.0f;
+		const glm::vec3 position(at.x, height, at.y);
+		if (command.advisor == Action::LookAtLand)
+		{
+			control.SpiritLookAtPosition(type, position);
+			return fmt::format("{} looks at ({:.0f}, {:.0f})", who, at.x, at.y);
+		}
+		control.SpiritPointPosition(type, position, command.gentle);
+		return fmt::format("{} points at ({:.0f}, {:.0f}){}", who, at.x, at.y, command.gentle ? " out in the world" : "");
+	}
+	case Action::PlayAnim:
+		control.SpiritPlayAnim(type, command.point.x, command.point.y, command.anim, command.amount);
+		return fmt::format("{} plays {}", who, help::spirits::AnimName(command.anim));
+	case Action::Feel:
+		control.Dude(type == 1 ? help::spirits::k_GoodDude : help::spirits::k_EvilDude).SetEmotion(command.anim, 1.0f);
+		return fmt::format("{} feels {}", who, help::spirits::EmotionName(command.anim));
+	}
+	return "";
 }

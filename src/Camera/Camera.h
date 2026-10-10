@@ -126,6 +126,30 @@ public:
 	/// Hands the camera's control to another model, as the temple does inside, giving back the one it had
 	std::unique_ptr<CameraModel> SetModel(std::unique_ptr<CameraModel> model);
 
+	/// Where the camera is and how it is moving there, whole: a tool showing the camera elsewhere for a frame puts this
+	/// back before the camera next moves, so that its movement carries on as if it hadn't
+	struct Motion
+	{
+		ZoomInterpolator3f origin;
+		ZoomInterpolator3f focus;
+		std::chrono::microseconds time;
+		std::chrono::microseconds duration;
+	};
+	[[nodiscard]] Motion GetMotion() const
+	{
+		return {.origin = _originInterpolators,
+		        .focus = _focusInterpolators,
+		        .time = _interpolatorTime,
+		        .duration = _interpolatorDuration};
+	}
+	void SetMotion(const Motion& motion)
+	{
+		_originInterpolators = motion.origin;
+		_focusInterpolators = motion.focus;
+		_interpolatorTime = motion.time;
+		_interpolatorDuration = motion.duration;
+	}
+
 	/// How much faster than the game's own speed the movement keys move the camera, kept within the allowed range
 	void SetKeyboardMoveSpeed(float speed);
 	[[nodiscard]] float GetKeyboardMoveSpeed() const { return _keyboardMoveSpeed; }

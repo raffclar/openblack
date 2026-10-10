@@ -154,3 +154,18 @@ glm::vec2 animals::FormationGoal(glm::vec2 leader, glm::vec2 follower, Formation
 	    static_cast<float>(map_coords::ToMetres(map_coords::ToFixed(leader.y)) + (std::sin(angle) * slot.column * spacing));
 	return {map_coords::ToMetres(map_coords::ToFixedGUtils(x)), map_coords::ToMetres(map_coords::ToFixedGUtils(z))};
 }
+
+bool animals::DeadBodyGoes(int32_t& turnsLeft, bool scriptControlled)
+{
+	if (scriptControlled)
+	{
+		return false;
+	}
+	return turnsLeft-- == 0;
+}
+
+glm::vec3 animals::DeadBodySmokePlace(const glm::vec3& position, float heading, float height)
+{
+	const float out = height * 0.5f;
+	return position + glm::vec3(std::cos(heading) * out, 0.0f, std::sin(heading) * out);
+}

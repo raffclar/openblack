@@ -432,6 +432,12 @@
   "query": "town.homeless"
  },
  {
+  "description": "The worship sites: their temple, player, tribe, place round the temple, towns, altar, how far they are built, and their prayer power: dancers, battery, what can be drawn this turn and what has been, the dance's intensity and the strain",
+  "kind": "list",
+  "parameters": [],
+  "query": "worship.sites"
+ },
+ {
   "description": "The hand's share: the player's influence where their hand is (with what the hand keeps past the border), at the hand's own place, and their own; whether the hand is inside",
   "kind": "object",
   "parameters": [
@@ -474,7 +480,7 @@
   "query": "camera.state"
  },
  {
-  "description": "Puts the camera somewhere at once, as the scripts place it; what isn't given is kept. Refused while a camera path holds the camera",
+  "description": "Puts the camera somewhere at once, as the scripts place it; what isn't given is kept. Refused while a camera path holds the camera, unless override, which shows it there every frame over any camera until camera.release",
   "kind": "object",
   "parameters": [
    {
@@ -501,6 +507,11 @@
     "description": "Metres from the camera to its focus: the zoom",
     "name": "distance",
     "type": "number"
+   },
+   {
+    "description": "Show the camera there every frame over whatever holds it (a script's camera in a cinematic, a camera path) until camera.release, without changing that camera, which carries on beneath",
+    "name": "override",
+    "type": "boolean"
    }
   ],
   "query": "camera.set",
@@ -530,9 +541,21 @@
     "description": "Metres from the camera to the entity",
     "name": "distance",
     "type": "number"
+   },
+   {
+    "description": "Show the camera there every frame over whatever holds it (a script's camera in a cinematic, a camera path) until camera.release, without changing that camera, which carries on beneath",
+    "name": "override",
+    "type": "boolean"
    }
   ],
   "query": "camera.frame",
+  "writes": true
+ },
+ {
+  "description": "Lets go of the view camera.set or camera.frame with override showed: the camera is seen where it is (a script's camera carries on as it was)",
+  "kind": "object",
+  "parameters": [],
+  "query": "camera.release",
   "writes": true
  },
  {
@@ -777,7 +800,7 @@
   "query": "living.animated_statics"
  },
  {
-  "description": "The village centres' totems: their town centre, the share they are held at, and whether the hand grips one",
+  "description": "The village centres' totems: their town centre and icon, the share they stand at, ease to and are held at, how fast they move, whether the hand grips one, and their see-through second totem",
   "kind": "list",
   "parameters": [],
   "query": "living.totems"
@@ -832,6 +855,30 @@
   "kind": "list",
   "parameters": [],
   "query": "living.forests"
+ },
+ {
+  "description": "The whales: where each is this turn and was at its start, the way it faces, its clip and the wake's timer",
+  "kind": "object",
+  "parameters": [],
+  "query": "living.whales"
+ },
+ {
+  "description": "The things walking the camera editor's tracks: the track, how far and up to where",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.walk_paths"
+ },
+ {
+  "description": "The dances: what they are danced for, whether dancing, their speed and clock, and each group's dancers",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.dances"
+ },
+ {
+  "description": "The scripts' flocks: their place, their domain and flock distances, and their members from the first to the leader",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.flocks"
  },
  {
   "description": "How many fireflies there are",
@@ -1035,10 +1082,22 @@
   "query": "view.cinematic"
  },
  {
+  "description": "The tasks with the camera and the dialogue, the scripts' spoken lines and the villagers drawn in high detail",
+  "kind": "object",
+  "parameters": [],
+  "query": "view.script_control"
+ },
+ {
   "description": "The editor: open, its tool, its camera and what is selected",
   "kind": "object",
   "parameters": [],
   "query": "view.editor"
+ },
+ {
+  "description": "What is drawn of the advisors this frame: near the screen or in the world, alpha, how far out in the world, and how close their posed meshes come to the camera beside its near plane",
+  "kind": "list",
+  "parameters": [],
+  "query": "advisors.draws"
  },
  {
   "description": "The creature systems' own state: the creature followed or in the cave, the hand on a creature, the hair, voices, footprints, physiology and the mind kept between lands",
@@ -1102,6 +1161,12 @@
   "kind": "object",
   "parameters": [],
   "query": "script.objects"
+ },
+ {
+  "description": "The scrolls and signs scripts put up: kind, challenge or text, started, height, where drawn; the beat and the switch that shows the scrolls",
+  "kind": "list",
+  "parameters": [],
+  "query": "script.highlights"
  },
  {
   "description": "The land's scripts whose names or files hold a text (any case): name, file, type (script, help, challenge_help, temple_help, temple_special, multiplayer_help) and parameters",
@@ -1198,13 +1263,25 @@
     "type": "string or integer"
    },
    {
-    "description": "Numbers, true or false, [x, y, z], {\"object\": id} or {\"int\": n}, as many as it takes; each goes on the stack as the type the native takes, as a script's call puts it",
+    "description": "Numbers, true or false, [x, y, z], {\"object\": id}, {\"int\": n} or {\"float\": x}, as many as it takes; a plain number goes on the stack as the type the native's slot takes, {\"int\"} and {\"float\"} as given. Each goes on the stack as the type the native takes, as a script's call puts it",
     "name": "args",
     "type": "array"
    }
   ],
   "query": "script.call",
   "writes": true
+ },
+ {
+  "description": "The good and the evil advisor: what each does, where it hovers and whether it is talking",
+  "kind": "list",
+  "parameters": [],
+  "query": "help.advisors"
+ },
+ {
+  "description": "The scripts' dialogue: the text shown, whether it is read or waits for a click, who holds the dialogue and the line being said",
+  "kind": "object",
+  "parameters": [],
+  "query": "help.dialogue"
  },
  {
   "description": "Whether the game is paused, its turn, the frames served, its speed and any stepping",

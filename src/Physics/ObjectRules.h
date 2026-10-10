@@ -84,9 +84,8 @@ inline constexpr uint32_t k_DeedPlantTree = 11;
 /// A replanted tree away from towns shows the forest-made visual this strong, for this many turns
 inline constexpr float k_ReplantVisualMagnitude = 0.3f;
 inline constexpr int k_ReplantVisualTurns = 50;
-/// A replanted tree throws up a white puff of smoke this big
+/// A replanted tree throws up a brown puff of dust this big
 inline constexpr float k_ReplantSmokeSize = 1.0f;
-inline constexpr uint32_t k_ReplantSmokeColour = 0xFFFFFFu;
 
 /// A turned thing's axes stood upright, keeping only its heading: what stands upright takes from a body
 [[nodiscard]] glm::mat3 HeadingOnly(const glm::mat3& axes);

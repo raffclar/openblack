@@ -9,7 +9,10 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <numbers>
+#include <optional>
 
 /// The rules of a village's totem: the statue on the town centre that rises with the share of the town's people who
 /// worship, and that the hand takes hold of and slides up and down to set that share
@@ -38,6 +41,14 @@ constexpr float k_HandSize = 3.2f;
 constexpr float k_LowHand = 2.5f;
 /// How far the holding hand is tipped higher up: seven sixteenths of a half turn
 constexpr float k_HandTilt = 7.0f * std::numbers::pi_v<float> / 16.0f;
+
+/// The second, see-through totem showing the other share is drawn at this alpha, of 255
+constexpr uint8_t k_GhostAlpha = 0x80;
+/// The player's own town shows the share the hand holds it at with the hand's tooltip of the people worshipping, the
+/// 121st of the game's tooltips, which reads the share as a percentage
+constexpr uint32_t k_ShareToolTip = 120;
+/// Let go, the share floats up over the totem in grey
+constexpr uint32_t k_LetGoNumberColour = 0xFF808080;
 
 /// How the statue eases from where it stands, at the speed it moves, to a new share, coming to rest there with no
 /// jolt: its share and speed follow a curve of the fourth degree in the time since it set off
@@ -84,5 +95,22 @@ void Step(Ease& ease, float milliseconds);
 [[nodiscard]] float HandTiltAt(float handY);
 /// How far the hand closes on the icon: by how wide the icon is against the hand, at most fully
 [[nodiscard]] float GripClosure(float iconRadius);
+
+/// The moment of the hand's side hold it takes on the icon, in milliseconds into the hold, which lasts some milliseconds:
+/// at most a quarter of the way in, for an icon as wide as the hand or wider; cut to whole milliseconds
+[[nodiscard]] uint32_t GripTimeMs(float closure, uint32_t durationMs);
+
+/// Where the statue is drawn, and the see-through second statue at the other share. Held by the hand it stands where the
+/// hand holds it, the second at the town's share; otherwise it stands where it has eased to, the second where it is
+/// going. The second shows only while the two would stand apart.
+struct Shown
+{
+	float solid {0.0f};
+	std::optional<float> ghost;
+};
+[[nodiscard]] Shown ShownShares(float current, float held, bool gripped);
+
+/// The share as the tooltip and the floating number show it: as a percentage
+[[nodiscard]] float AsPercentage(float share);
 
 } // namespace openblack::ecs::village_totem
