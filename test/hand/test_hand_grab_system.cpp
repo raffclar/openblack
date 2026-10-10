@@ -396,6 +396,25 @@ TEST_F(HandGrabSystemWithWorld, ThingsOutOfTheInfluenceOrHeldByAScriptAreLeft)
 	EXPECT_EQ(world->tapped.front(), boulder);
 }
 
+// The hand says why a press on a thing wouldn't take it, as the inspector shows it
+TEST_F(HandGrabSystemWithWorld, ItSaysWhyAThingWouldntBeTaken)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	EXPECT_EQ(system->WhyNotTake(rock), "");
+	world->influence = false;
+	EXPECT_NE(system->WhyNotTake(rock).find("influence"), std::string::npos);
+	world->influence = true;
+	world->registry.Assign<CannotBePickedUp>(rock);
+	EXPECT_NE(system->WhyNotTake(rock).find("script"), std::string::npos);
+	world->registry.Remove<CannotBePickedUp>(rock);
+	EXPECT_NE(system->WhyNotTake(world->AddRock({5.0f, 0.0f, 0.0f}, 4.0f)).find("can't hold"), std::string::npos);
+	EXPECT_NE(system->WhyNotTake(world->registry.Create()).find("can't hold"), std::string::npos);
+	// Busy taking the rock, it takes nothing else
+	EXPECT_TRUE(Press());
+	EXPECT_NE(system->WhyNotTake(rock).find("busy"), std::string::npos);
+}
+
 TEST_F(HandGrabSystemWithWorld, APressTheHandCantTakeClicksTheThing)
 {
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});

@@ -349,6 +349,7 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_town_belief test_town_belief.cpp)
 openblack_setup_and_add_test(test_villager_speed test_villager_speed.cpp)
 openblack_setup_and_add_test(test_wall_hug_rules test_wall_hug_rules.cpp)
+openblack_setup_and_add_test(test_walker_placement test_walker_placement.cpp)
 openblack_setup_and_add_test(test_villager_age test_villager_age.cpp)
 openblack_setup_and_add_test(test_villager_needs test_villager_needs.cpp)
 openblack_setup_and_add_test(test_villager_routine test_villager_routine.cpp)
@@ -511,6 +512,16 @@ if (Python3_Interpreter_FOUND)
       ${CMAKE_SOURCE_DIR}/tools/inspector/generate_component_fields.py --check
   )
 endif ()
+# The tests talking over loopback sockets with threads of their own take turns, so that on a machine busy with a
+# parallel ctest they don't also crowd each other
+set(OPENBLACK_INSPECTOR_SOCKET_TESTS test_inspector_server)
+if (Python3_Interpreter_FOUND)
+  list(APPEND OPENBLACK_INSPECTOR_SOCKET_TESTS test_inspector_mcp)
+endif ()
+set_tests_properties(
+  ${OPENBLACK_INSPECTOR_SOCKET_TESTS} PROPERTIES RESOURCE_LOCK
+                                                 inspector_sockets
+)
 # The game's side of the inspector, built only with it
 if (OPENBLACK_INSPECTOR)
   openblack_setup_and_add_test(

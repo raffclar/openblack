@@ -12,6 +12,7 @@
 #include "InspectorSystem.h"
 
 #include <chrono>
+#include <filesystem>
 #include <string>
 #include <utility>
 
@@ -178,7 +179,13 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
 	_server->SetControlFilter(&inspector::Inspector::TakesControl);
 	namespace discovery = inspector::discovery;
 	const auto executable = discovery::ExecutablePath();
-	const auto worktree = discovery::FindWorktree(executable.parent_path());
+	// Builds live apart from their worktrees: the worktree is the one the game was built from
+#if defined(OPENBLACK_BUILT_SOURCE_DIR)
+	const std::filesystem::path builtFrom = OPENBLACK_BUILT_SOURCE_DIR;
+#else
+	const std::filesystem::path builtFrom;
+#endif
+	const auto worktree = discovery::GameWorktree(builtFrom, executable);
 	discovery::GameRecord record {
 	    .port = _server->Port(),
 	    .pid = discovery::CurrentProcessId(),

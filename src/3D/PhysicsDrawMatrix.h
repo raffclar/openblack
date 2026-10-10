@@ -12,6 +12,7 @@
 #include <optional>
 
 #include <glm/mat4x4.hpp>
+#include <glm/vec3.hpp>
 
 #include "ECS/Components/Physics.h"
 
@@ -22,5 +23,9 @@ namespace openblack::physics_draw
 /// its body has sunk wholly under the sea. Nowhere means in no pass at all, so nothing may be made of it afterwards: not
 /// its shadow or reflection, nor a tree's sway or bend.
 [[nodiscard]] std::optional<glm::mat4> ModelMatrix(const glm::mat4& standing, const ecs::components::PhysicsDrawPose* pose);
+
+/// Where a thing is drawn this frame, by the same rule: where it stands, or its body's place while it moves in the
+/// physics (under the sea too, where it isn't drawn). What looks at a thing, such as a camera framing it, looks here.
+[[nodiscard]] glm::vec3 Position(const glm::vec3& standing, const ecs::components::PhysicsDrawPose* pose);
 
 } // namespace openblack::physics_draw

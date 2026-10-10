@@ -16,6 +16,7 @@
 
 #include <fmt/format.h>
 
+#include "3D/PhysicsDrawMatrix.h"
 #include "ComponentReflection.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -24,6 +25,7 @@
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -89,7 +91,11 @@ EntityDescription openblack::inspector::Describe(const ecs::Registry& registry, 
 	EntityDescription description;
 	if (const auto* transform = registry.TryGet<Transform>(entity); transform != nullptr)
 	{
-		description.position = transform->position;
+		description.position = DrawnPosition(registry, entity);
+		if (description.position != transform->position)
+		{
+			description.standing = transform->position;
+		}
 	}
 	const auto set = [&description](std::string kind, std::string label) {
 		description.kind = std::move(kind);
@@ -164,6 +170,16 @@ EntityDescription openblack::inspector::Describe(const ecs::Registry& registry, 
 	return description;
 }
 
+std::optional<glm::vec3> openblack::inspector::DrawnPosition(const ecs::Registry& registry, entt::entity entity)
+{
+	const auto* transform = registry.TryGet<const Transform>(entity);
+	if (transform == nullptr)
+	{
+		return std::nullopt;
+	}
+	return physics_draw::Position(transform->position, registry.TryGet<const PhysicsDrawPose>(entity));
+}
+
 Json openblack::inspector::ToListItem(entt::entity entity, const EntityDescription& description)
 {
 	Json item = {{"id", ToId(entity)}, {"kind", description.kind}, {"label", description.label}};
@@ -171,6 +187,11 @@ Json openblack::inspector::ToListItem(entt::entity entity, const EntityDescripti
 	{
 		const auto& p = *description.position;
 		item["position"] = {p.x, p.y, p.z};
+	}
+	if (description.standing.has_value())
+	{
+		const auto& p = *description.standing;
+		item["transform_position"] = {p.x, p.y, p.z};
 	}
 	return item;
 }
