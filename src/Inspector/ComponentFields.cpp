@@ -518,7 +518,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::Dance>(context)
 	    .Field<&components::Dance::type>("type")
 	    .Field<&components::Dance::owner>("owner")
-	    .Field<&components::Dance::file>("file")
 	    .Field<&components::Dance::state>("state")
 	    .Field<&components::Dance::speed>("speed")
 	    .Field<&components::Dance::rate>("rate")

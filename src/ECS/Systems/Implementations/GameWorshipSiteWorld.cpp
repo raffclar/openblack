@@ -11,6 +11,11 @@
 
 #include "GameWorshipSiteWorld.h"
 
+#include <algorithm>
+#include <optional>
+#include <string>
+
+#include <DanceFile.h>
 #include <L3DFile.h>
 #include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
@@ -28,6 +33,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/WorshipSites.h"
+#include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
@@ -166,4 +172,36 @@ entt::entity GameWorshipSiteWorld::MakeFoodPot(glm::vec3 position, float yAngle)
 		Locator::entitiesRegistry::value().Get<Transform>(pot).scale = glm::vec3(worship_site::k_FoodPotScale);
 	}
 	return pot;
+}
+
+std::optional<uint32_t> GameWorshipSiteWorld::DanceLoops(DanceInfo dance)
+{
+	const auto& dances = Locator::infoConstants::value().dance;
+	const auto row = static_cast<size_t>(dance);
+	if (row >= dances.size() || !Locator::resources::has_value())
+	{
+		return std::nullopt;
+	}
+	// The table names the file from the game's folder, without an extension
+	const std::string name(dances.at(row).fileName.data());
+	auto& files = Locator::resources::value().GetDanceFiles();
+	try
+	{
+		if (!files.Contains(entt::hashed_string(name.c_str()).value()))
+		{
+			std::string path = name;
+			std::ranges::replace(path, '\\', '/');
+			files.Load(entt::hashed_string(name.c_str()), resources::DanceFileLoader::FromDiskTag {},
+			           Locator::filesystem::value().FindPath(path));
+		}
+		return files.Handle(entt::hashed_string(name.c_str()))->loops;
+	}
+	catch (const std::exception& e)
+	{
+		if (const auto logger = spdlog::get("game"))
+		{
+			logger->error("Can't read the dance {}: {}", name, e.what());
+		}
+		return std::nullopt;
+	}
 }

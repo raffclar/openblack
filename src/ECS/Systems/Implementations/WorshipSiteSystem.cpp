@@ -560,6 +560,10 @@ void WorshipSiteSystem::Init(entt::entity site)
 	auto& danced = registry.Assign<Dance>(
 	    dance,
 	    Dance {.type = static_cast<DanceInfo>(static_cast<int>(ws::k_FirstPlaceDance) + component.place), .owner = site});
+	if (const auto loops = _world->DanceLoops(danced.type); loops.has_value())
+	{
+		danced.loopLength = *loops;
+	}
 	dance_rules::SetSpeed(danced, ws::k_DanceMadeSpeed);
 	dance_rules::SetWorshipSpeed(danced, ws::k_SiteDanceStartSpeed);
 	component.dance = dance;

@@ -53,6 +53,9 @@ public:
 	[[nodiscard]] virtual magic::WorshipBatteryRules ChantRules(Tribe tribe, PlayerNames player) const = 0;
 	/// Whether a dance of the info table starts by itself once its dancers have come
 	[[nodiscard]] virtual bool DanceStartsAutomatically(DanceInfo dance) const = 0;
+	/// How many lengths of the clock a dance of the info table runs before it starts over, from its dance file; none
+	/// when the file can't be read
+	[[nodiscard]] virtual std::optional<uint32_t> DanceLoops(DanceInfo dance) = 0;
 	/// The game turn
 	[[nodiscard]] virtual uint32_t Turn() const = 0;
 	/// A site's food pot, empty, standing at a point and turned to an angle (radians)

@@ -13,7 +13,6 @@
 
 #include <optional>
 
-#include <entt/core/fwd.hpp>
 #include <entt/entity/entity.hpp>
 
 #include "Enums.h"
@@ -35,8 +34,6 @@ struct Dance
 	DanceInfo type {DanceInfo::None};
 	/// What it is danced for, such as a worship site; the dance ends when that is gone
 	entt::entity owner {entt::null};
-	/// The dance file it follows (the dance resource cache's id)
-	entt::id_type file {0};
 	State state {State::Stopped};
 	/// How fast it is asked to go, 0 to 1, as the worship sets it
 	float speed {0.0f};

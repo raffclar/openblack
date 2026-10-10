@@ -87,6 +87,7 @@ public:
 	}
 
 	[[nodiscard]] bool DanceStartsAutomatically(DanceInfo /*dance*/) const override { return true; }
+	[[nodiscard]] std::optional<uint32_t> DanceLoops(DanceInfo /*dance*/) override { return 2; }
 	[[nodiscard]] uint32_t Turn() const override { return turn; }
 	entt::entity MakeFoodPot(glm::vec3 position, float yAngle) override
 	{
@@ -437,6 +438,8 @@ TEST(WorshipSiteSystem, ANewSiteHasItsPlacesDanceSetGoingAndAnEmptyFoodPot)
 	const auto& dance = f.registry.Get<const Dance>(component.dance);
 	EXPECT_EQ(static_cast<int>(dance.type), static_cast<int>(DanceInfo::CitadelDance_1) + component.place);
 	EXPECT_TRUE(dance.owner == site);
+	// Its loop is as long as its dance file says
+	EXPECT_EQ(dance.loopLength, 2u);
 	// Made at a quarter speed, then set going at half: danced at twice its keyed speed
 	EXPECT_EQ(dance.state, Dance::State::Dancing);
 	EXPECT_FLOAT_EQ(dance.speed, 0.5f);

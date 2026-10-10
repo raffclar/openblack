@@ -31,6 +31,7 @@ public:
 	[[nodiscard]] uint32_t PopulationOf(entt::entity town) const override;
 	[[nodiscard]] magic::WorshipBatteryRules ChantRules(Tribe tribe, PlayerNames player) const override;
 	[[nodiscard]] bool DanceStartsAutomatically(DanceInfo dance) const override;
+	[[nodiscard]] std::optional<uint32_t> DanceLoops(DanceInfo dance) override;
 	[[nodiscard]] uint32_t Turn() const override;
 	entt::entity MakeFoodPot(glm::vec3 position, float yAngle) override;
 };
