@@ -1585,6 +1585,40 @@ entt::entity MagicSystem::CreateDispenser(glm::vec3 position, MagicType type, fl
 	return entity;
 }
 
+entt::entity MagicSystem::CreateScriptDispenser(glm::vec3 position, AbodeInfo building, float yAngleRadians, float scale)
+{
+	if (!Locator::infoConstants::has_value() || building == AbodeInfo::None ||
+	    static_cast<size_t>(building) >= Locator::infoConstants::value().abode.size())
+	{
+		return entt::null;
+	}
+	position.y = _world.LandHeight({position.x, position.z});
+	const auto entity = archetypes::SpellDispenserArchetype::Create(position, MagicType::None, building, yAngleRadians, scale);
+	auto& dispenser = EntityRegistry().Get<SpellDispenser>(entity);
+	// Made off: it floats nothing until a script turns it on
+	dispenser.timer.active = false;
+	if (Locator::particleSystem::has_value())
+	{
+		dispenser.effect = Locator::particleSystem::value().Start(ParticleType::SpelldispenserVortex, position, 1.0f, true);
+	}
+	return entity;
+}
+
+void MagicSystem::SetDispenserMagic(entt::entity dispenser, MagicType type, uint32_t turns)
+{
+	auto* component = EntityRegistry().TryGet<SpellDispenser>(dispenser);
+	if (component == nullptr)
+	{
+		return;
+	}
+	component->magicType = type;
+	component->timer.period = turns;
+	if (turns == 0)
+	{
+		SetDispenserActive(dispenser, false);
+	}
+}
+
 void MagicSystem::ChargeDispenser(entt::entity dispenser)
 {
 	auto& registry = EntityRegistry();

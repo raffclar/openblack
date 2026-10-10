@@ -59,6 +59,7 @@ public:
 	bool MoveMiracleStorm(entt::entity storm, glm::vec3 centre) override;
 	void KillStormsInArea(glm::vec3 position, float radius) override;
 	void RemoveMiracleStorm(entt::entity storm) override;
+	entt::entity CreateWeatherThing(const ScriptStorm& storm) override;
 
 	void Update(uint32_t turn) override;
 	[[nodiscard]] std::span<const components::Storm> GetActiveStorms() const override { return _activeStorms; }
@@ -80,6 +81,7 @@ private:
 	void InitialiseClimate(components::Climate& climate) const;
 
 	void UpdateStorms();
+	void ProcessWeatherThings();
 	void ProcessClimate(entt::entity entity, bool newDay);
 	void ProcessTemperature(components::Climate& climate) const;
 	void ProcessRain(components::Climate& climate);
