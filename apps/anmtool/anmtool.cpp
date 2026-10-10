@@ -34,7 +34,7 @@ int PrintHeader(openblack::anm::ANMFile& anm)
 	std::printf("unknown0x34: %f\n", header.unknown0x34);
 	std::printf("frame count: %u\n", header.frameCount);
 	std::printf("unknown0x3C: 0x%X\n", header.unknown0x3C);
-	std::printf("animation_duration: %u\n", header.animationDuration);
+	std::printf("animation data size: %u bytes\n", header.animationDataSize);
 	std::printf("unknown0x44: 0x%X\n", header.unknown0x44);
 	std::printf("unknown0x48: 0x%X\n", header.unknown0x48);
 	std::printf("frames base: 0x%X\n", header.framesBase);
@@ -120,7 +120,7 @@ int WriteFile(const Arguments::Write& args) noexcept
 	memcpy(anm.GetHeader().name.data(), name.c_str(),
 	       std::min(sizeof(anm.GetHeader().name[0]) * anm.GetHeader().name.size(), name.length()));
 	anm.GetHeader().frameCount = 0;
-	anm.GetHeader().animationDuration = 0;
+	anm.GetHeader().animationDataSize = 0;
 	anm.Write(args.outFilename);
 
 	return EXIT_SUCCESS;
