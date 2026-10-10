@@ -65,6 +65,12 @@ struct Sampler
 /// declares, whole arrays included, whatever the draw sets. Nothing when the binary isn't a shader this can read.
 [[nodiscard]] std::optional<uint16_t> ReadSpirvUniformBufferSize(std::span<const uint8_t> binary);
 
+/// The vertex attributes a vertex shader takes, from its bgfx binary for any backend, as bgfx's own attribute ids (a
+/// position is 1, a first colour 5, the first to eighth texture coordinates 0x10 to 0x17). Direct3D's binaries name an
+/// instanced shader's instance data among them, at the texture coordinates bgfx binds it to. Nothing when the binary
+/// isn't a shader this can read.
+[[nodiscard]] std::optional<std::vector<uint16_t>> ReadVertexAttributes(std::span<const uint8_t> binary);
+
 /// The default texture for a sampler of the given kind: white, so that an unset texture modulates nothing. A 1D
 /// sampler reads a 2D texture (bgfx has no 1D textures), a cube array reads the cube and an unknown kind the 2D one.
 [[nodiscard]] DefaultTexture DefaultTextureFor(Dimension dimension) noexcept;

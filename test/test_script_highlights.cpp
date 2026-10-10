@@ -113,6 +113,15 @@ public:
 	{
 		return Sprite {.texture = {}, .uvMin = {}, .uvExtent = glm::vec2(0.125f), .tint = glm::vec4(1.0f)};
 	}
+	[[nodiscard]] std::optional<Sprite> SparkLook(uint32_t picture) const override
+	{
+		return Sprite {.texture = {},
+		               .uvMin = glm::vec2(static_cast<float>(picture % 8), static_cast<float>(picture / 8)) * 0.125f,
+		               .uvExtent = glm::vec2(0.125f),
+		               .tint = glm::vec4(1.0f)};
+	}
+	float LocalFloatRandom(float x) override { return x * 0.5f; }
+	uint32_t LocalRandom(uint32_t n) override { return n - 1; }
 	void HelpEvent(uint32_t event) override { helpEvents.push_back(event); }
 	void StartHelpScript(std::string_view name) override { helpScripts.emplace_back(name); }
 	void ShowTip(entt::entity /*sign*/, uint32_t text, uint32_t /*category*/) override { tipsShown.push_back(text); }
@@ -397,4 +406,73 @@ TEST(ScriptHighlights, AStartedScrollTappedReplaysItsChallenge)
 	EXPECT_TRUE(system->Tap(scroll, true));
 	EXPECT_EQ(world->replayed, std::vector<uint32_t> {52});
 	EXPECT_TRUE(world->tipsShown.empty());
+}
+
+TEST(ScriptHighlightRules, AGoldScrollsSparksStartApartRiseShrinkAndFade)
+{
+	// The fake randoms: half of what is asked
+	auto sparks = MakeSparks([](float x) { return x * 0.5f; }, [](uint32_t n) { return n / 2; });
+	EXPECT_EQ(sparks.firstPicture, 16u);
+	EXPECT_EQ(sparks.sparks.at(0).ageMilliseconds, 0);
+	EXPECT_EQ(sparks.sparks.at(1).ageMilliseconds, -400);
+	EXPECT_EQ(sparks.sparks.at(19).ageMilliseconds, -7600);
+	EXPECT_NEAR(sparks.sparks.at(3).angle, glm::pi<float>(), 1e-6f);
+	const glm::vec3 from {1.0f, 10.0f, 2.0f};
+	// The first starts at the top of the model, as large as it gets, unseen; the others wait
+	const auto first = LookOf(sparks, 0, from);
+	ASSERT_TRUE(first.has_value());
+	EXPECT_FLOAT_EQ(first->position.y, 10.0f);
+	EXPECT_FLOAT_EQ(first->halfSize, 2.0f);
+	EXPECT_EQ(first->alpha, 0);
+	EXPECT_EQ(first->picture, 16u);
+	EXPECT_FALSE(LookOf(sparks, 1, from).has_value());
+	// Half way through its life it has risen a quarter of the way, is wholly seen, and has gone on 80 pictures
+	auto drawLater = [](float x) { return x * 0.25f; };
+	StepSparks(sparks, 4000, drawLater);
+	const auto half = LookOf(sparks, 0, from);
+	ASSERT_TRUE(half.has_value());
+	EXPECT_NEAR(half->position.y, 15.0f, 1e-4f);
+	EXPECT_NEAR(half->halfSize, 1.8f, 1e-5f);
+	// 4000 of the 5000 it fades in over: the game's 0.0002 is a hair under, so 203.99..., cut down
+	EXPECT_EQ(half->alpha, 203);
+	EXPECT_EQ(half->picture, (80u + 16u) & 31u);
+	// The second, 400 milliseconds behind, the picture after its own
+	EXPECT_EQ(LookOf(sparks, 1, from)->picture, (72u + 1u + 16u) & 31u);
+	// Fading out over its last three seconds
+	StepSparks(sparks, 2500, drawLater);
+	EXPECT_EQ(LookOf(sparks, 0, from)->alpha, 127); // 1.5 s of 3 left: 127.5, cut down
+	// Past 8 seconds it starts again, turned another way
+	StepSparks(sparks, 1600, drawLater);
+	EXPECT_EQ(sparks.sparks.at(0).ageMilliseconds, 100);
+	EXPECT_NEAR(sparks.sparks.at(0).angle, glm::half_pi<float>(), 1e-6f);
+}
+
+TEST(ScriptHighlights, OnlyGoldScrollsSendUpSparks)
+{
+	auto [world, system] = Make();
+	const auto gold = system->Create(k_Gold, {0.0f, 0.0f, 0.0f}, 52);
+	const auto silver = system->Create(static_cast<uint32_t>(HighlightInfo::Silver), {20.0f, 0.0f, 0.0f}, 53);
+	system->UpdateFrame(500.0f, 0.0f, {0.0f, 2.0f, 20.0f});
+	const auto& highlight = world->registry.Get<ScriptHighlight>(gold);
+	ASSERT_TRUE(highlight.sparks.has_value());
+	EXPECT_FALSE(world->registry.Get<ScriptHighlight>(silver).sparks.has_value());
+	// After half a second the first two are drawn above the model's top, the rest still wait
+	ASSERT_TRUE(highlight.sparkSprites.at(0) != entt::null);
+	const auto* sprite = world->registry.TryGet<Sprite>(highlight.sparkSprites.at(0));
+	ASSERT_NE(sprite, nullptr);
+	EXPECT_NEAR(sprite->tint.a, 25.0f / 255.0f, 1e-6f); // 500 ms of the 5000 it fades in over: 25.5, cut down
+	EXPECT_NE(world->registry.TryGet<Sprite>(highlight.sparkSprites.at(1)), nullptr);
+	EXPECT_TRUE(highlight.sparkSprites.at(2) == entt::null);
+	const auto& at = world->registry.Get<Transform>(highlight.sparkSprites.at(0)).position;
+	EXPECT_GT(at.y, highlight.centre.y + highlight.radius);
+	// Hidden, the scroll's sparks stop and aren't drawn
+	world->scrollsDrawn = false;
+	system->UpdateFrame(500.0f, 0.0f, {0.0f, 2.0f, 20.0f});
+	EXPECT_EQ(world->registry.TryGet<Sprite>(highlight.sparkSprites.at(0)), nullptr);
+	EXPECT_EQ(highlight.sparks->sparks.at(0).ageMilliseconds, 500);
+	// They go with it
+	const auto first = highlight.sparkSprites.at(0);
+	world->registry.Destroy(gold);
+	system->UpdateFrame(16.0f, 0.0f, {0.0f, 2.0f, 20.0f});
+	EXPECT_FALSE(world->registry.Valid(first));
 }

@@ -1115,6 +1115,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			        .turnsSinceDone = learnt.turnsSinceDone.at(action),
 			        .servesFirstDesire = tables->actions.at(action).desire == 0,
 			        .disabled = !creature_plan_actions::Possible(*executor, situation) ||
+			                    !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(action).needs) ||
 			                    (creature_plan_actions::IsCast(*executor) &&
 			                     !MayCast(creature, mind, action, IsPowerUpCast(tables->actions.at(action).name))),
 			    });
@@ -1569,7 +1570,8 @@ void CreatureMindSystem::LearnTurn()
 			for (const auto action : rule.copyActions)
 			{
 				const auto* executor = creature_plan_actions::For(tables->actions.at(action).name);
-				if (executor == nullptr || transform == nullptr)
+				if (executor == nullptr || transform == nullptr ||
+				    !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(action).needs))
 				{
 					continue;
 				}

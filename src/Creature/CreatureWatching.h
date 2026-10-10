@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <array>
 #include <functional>
 #include <optional>
 #include <span>
@@ -114,6 +115,29 @@ struct Prerequisite
 /// creature knows about the miracle from its first sighting, and it goes on counting sightings after it has learnt it.
 [[nodiscard]] Progress SeeMiracle(Knowledge& knowledge, size_t miracle, std::span<const MiracleRule> rules, uint32_t phase,
                                   uint32_t turn, uint32_t weight, float speciesMultiplier);
+
+/// The two lists of things a creature knows: the ordinary skills and the miracles
+enum class KnownList : uint8_t
+{
+	Skill,
+	Miracle,
+};
+/// The sightings a script's teaching gives a miracle: the times a species needs to see it, rounded down
+[[nodiscard]] uint32_t TaughtSightings(uint32_t timesToSee, float speciesMultiplier);
+/// A script makes the creature know a skill or miracle, or forget it. Taught a miracle, it also counts as having seen
+/// it the times given, whether or not it knew it already; forgetting leaves the sightings alone. Returns whether the
+/// thing is newly known, which is when the player is shown the lesson.
+bool SetKnown(Knowledge& knowledge, KnownList list, size_t index, bool knows, uint32_t taughtSightings);
+
+/// What a creature must know to carry out an action, from the game's table of actions: up to two ordinary skills and a
+/// miracle
+struct ActionNeeds
+{
+	std::array<std::optional<size_t>, 2> skills {};
+	std::optional<size_t> miracle;
+};
+/// Whether the creature knows everything an action needs, so it may choose to do it
+[[nodiscard]] bool KnowsWhatItNeeds(const Knowledge& knowledge, const ActionNeeds& needs);
 
 /// Something the player does that a creature might copy, from the game's table
 struct MimicRule

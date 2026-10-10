@@ -788,6 +788,40 @@ void CreatureMindSystem::KnowMiracle(entt::entity creature, size_t miracle)
 	mind->learnt->knowledge.miraclesKnown[miracle] = true;
 }
 
+void CreatureMindSystem::SetKnowsAction(entt::entity creature, CreatureActionLearningType type, uint32_t action, bool knows)
+{
+	auto* mind = Entities().TryGet<CreatureMindState>(creature);
+	if (mind == nullptr)
+	{
+		return;
+	}
+	// Taught before its learning is set up, or with a mind file still to take up, it is taught once it has those
+	if (!mind->learnt.has_value() || mind->pendingFile != nullptr)
+	{
+		mind->pendingTeaching.push_back({.type = type, .action = action, .knows = knows});
+		return;
+	}
+	if (type != CreatureActionLearningType::Normal && type != CreatureActionLearningType::Magic)
+	{
+		return;
+	}
+	const auto list =
+	    type == CreatureActionLearningType::Magic ? creature_watching::KnownList::Miracle : creature_watching::KnownList::Skill;
+	uint32_t sightings = 0;
+	const auto* body = Entities().TryGet<const Creature>(creature);
+	const auto* tables = GetTables();
+	if (list == creature_watching::KnownList::Miracle && body != nullptr && tables != nullptr &&
+	    action < tables->miracles.size())
+	{
+		sightings = creature_watching::TaughtSightings(
+		    tables->miracles[action].timesToSee, creature_mind_tables::MiracleMultiplier(creature::InfoRow(body->species)));
+	}
+	// TODO(script-natives): a newly known skill or miracle shows the player the creature's lesson ("has learnt"), through
+	// the creature's help scripts, which openblack doesn't have yet
+	[[maybe_unused]] const bool newlyKnown =
+	    creature_watching::SetKnown(mind->learnt->knowledge, list, action, knows, sightings);
+}
+
 bool CreatureMindSystem::TellCast(entt::entity creature, MagicType type, entt::entity target)
 {
 	auto& registry = Entities();

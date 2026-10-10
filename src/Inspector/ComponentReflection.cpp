@@ -9,6 +9,7 @@
 
 #include "ComponentReflection.h"
 
+#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -16,7 +17,9 @@
 
 #include <array>
 #include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -52,9 +55,70 @@ std::optional<FoundField> FindField(const entt::meta_type& type, std::string_vie
 	return std::nullopt;
 }
 
+const reflection::ValueInfo* ValueInfoOf(const entt::meta_any& any)
+{
+	if (!any)
+	{
+		return nullptr;
+	}
+	return any.type().custom();
+}
+
+bool HasFields(const entt::meta_any& any)
+{
+	return any && any.type().data().begin() != any.type().data().end();
+}
+
+/// The names indexing the lists of a field from a level of lists within lists on
+using IndexNames = std::span<const std::span<const std::string_view>>;
+
+/// A list indexed by an enumeration as an object by its names, all of them (an enumeration is never long); its elements
+/// that are lists indexed by another as objects too
+Json NamedListToJson(const entt::meta_any& any, IndexNames names, int depth)
+{
+	auto list = any;
+	auto sequence = list.as_sequence_container();
+	if (!sequence || names.empty())
+	{
+		return AnyToJson(any, depth);
+	}
+	// A level indexed by number is an array of what it holds, which may be lists by names in turn
+	const auto level = names.front();
+	Json written = level.empty() ? Json::array() : Json::object();
+	size_t index = 0;
+	for (auto element : sequence)
+	{
+		auto value = names.size() > 1 ? NamedListToJson(element, names.subspan(1), depth + 1) : AnyToJson(element, depth + 1);
+		if (level.empty())
+		{
+			written.push_back(std::move(value));
+		}
+		else
+		{
+			written[index < level.size() ? std::string(level[index]) : std::to_string(index)] = std::move(value);
+		}
+		++index;
+	}
+	return written;
+}
+
+/// A value with the index names of the lists it is, from its field: written by them, else as it is
+Json ValueToJson(const entt::meta_any& value, IndexNames names, int depth)
+{
+	if (!names.empty() && std::ranges::any_of(names, [](const auto& level) { return !level.empty(); }))
+	{
+		return NamedListToJson(value, names, depth);
+	}
+	return AnyToJson(value, depth);
+}
+
 Json FieldValueToJson(const entt::meta_data& data, const reflection::FieldInfo* info, const entt::meta_any& instance, int depth)
 {
 	const auto value = data.get(instance);
+	if (info != nullptr && !info->indexNames.empty())
+	{
+		return ValueToJson(value, info->indexNames, depth + 1);
+	}
 	if (info != nullptr && info->encode != nullptr)
 	{
 		if (auto encoded = info->encode(value); encoded.has_value())
@@ -63,6 +127,40 @@ Json FieldValueToJson(const entt::meta_data& data, const reflection::FieldInfo* 
 		}
 	}
 	return AnyToJson(value, depth + 1);
+}
+
+/// An element's place in a list by its number, or by its name in the enumeration indexing the list
+std::optional<size_t> IndexOf(std::string_view segment, std::span<const std::string_view> names)
+{
+	size_t index = 0;
+	const auto* end = segment.data() + segment.size();
+	if (const auto [last, error] = std::from_chars(segment.data(), end, index); error == std::errc {} && last == end)
+	{
+		return index;
+	}
+	const auto found = std::ranges::find(names, segment);
+	if (found != names.end())
+	{
+		return static_cast<size_t>(std::distance(names.begin(), found));
+	}
+	return std::nullopt;
+}
+
+/// Why a segment of a path doesn't name an element of a list
+std::string NotAnElement(std::string_view list, std::string_view segment, size_t size, std::span<const std::string_view> names)
+{
+	std::string why = std::string(list) + " has no element " + std::string(segment) + ": it has " + std::to_string(size) +
+	                  ", by number from 0";
+	if (!names.empty())
+	{
+		why += " or by name (";
+		for (size_t i = 0; i < names.size(); ++i)
+		{
+			why += (i > 0 ? ", " : "") + std::string(names[i]);
+		}
+		why += ")";
+	}
+	return why;
 }
 
 Json FieldsToJson(const entt::meta_any& any, int depth)
@@ -132,6 +230,13 @@ Json AnyToJson(const entt::meta_any& any, int depth)
 			return number.cast<int64_t>();
 		}
 	}
+	// An option as what it holds, or null
+	if (const auto* value = ValueInfoOf(any); value != nullptr && value->unwrap != nullptr)
+	{
+		auto option = any.as_ref();
+		const auto held = value->unwrap(option);
+		return held ? AnyToJson(held, depth) : Json(nullptr);
+	}
 	if (depth >= reflection::k_DeepestNesting)
 	{
 		return "...";
@@ -193,49 +298,211 @@ Json AnyToJson(const entt::meta_any& any, int depth)
 	return "<" + reflection::ShortTypeName(type.info()) + ">";
 }
 
-/// Sets a field of a value by a dotted path; the value is a reference to where it is kept
-std::string SetPath(const entt::meta_ctx& context, entt::meta_any& instance, std::string_view path, const Json& json)
+/// Where a dotted path has got to: the value there (a reference to where it is kept, or a copy of one given by a
+/// function), the path so far, and the names indexing the lists of the field it is in from its level on
+struct Place
 {
-	const auto dot = path.find('.');
-	const auto name = path.substr(0, dot);
-	const auto field = FindField(instance.type(), name);
-	if (!field.has_value())
+	entt::meta_any value;
+	std::string path;
+	IndexNames names;
+};
+
+/// Sets a value from JSON as a whole, or field by field from an object, or element by element from an array
+std::string SetWhole(const entt::meta_ctx& context, Place& place, const reflection::FieldInfo* field, const Json& json);
+
+/// Sets what is at a dotted path from a place
+std::string SetPath(const entt::meta_ctx& context, Place& place, const reflection::FieldInfo* field, std::string_view path,
+                    const Json& json)
+{
+	const auto* value = ValueInfoOf(place.value);
+	const bool option = value != nullptr && value->engage != nullptr;
+	if (option && path.empty())
 	{
-		return "no field " + std::string(name) + " in " + reflection::ShortTypeName(instance.type().info());
-	}
-	if (dot != std::string_view::npos)
-	{
-		// Further into a nested value, reached by reference
-		auto nested = field->data.get(instance);
-		if (!nested || nested.type().data().begin() == nested.type().data().end())
+		// An option set whole (null empties it) when the value reads as one, else what it holds is set from it
+		const auto decode = field != nullptr ? field->decode : value->decode;
+		std::string error;
+		if (auto decoded = decode != nullptr ? decode(context, json, error) : std::nullopt; decoded.has_value())
 		{
-			return std::string(name) + " has no fields to set by name";
+			return place.value.assign(*std::move(decoded)) ? std::string {} : place.path + " can't be set: it is read only";
 		}
-		return SetPath(context, nested, path.substr(dot + 1), json);
-	}
-	std::string error;
-	if (field->info->decode != nullptr)
-	{
-		if (auto value = field->info->decode(context, json, error); value.has_value())
+		if (json.is_null())
 		{
-			return field->data.set(instance, *std::move(value)) ? std::string {}
-			                                                    : std::string(name) + " can't be set: it is read only";
+			return place.path + " " + error;
+		}
+	}
+	if (option)
+	{
+		// Through an option to what it holds, made first if it holds nothing
+		Place held {.value = value->engage(place.value), .path = place.path, .names = place.names};
+		if (!held.value)
+		{
+			return place.path + " holds nothing, and nothing can be made for it";
+		}
+		return SetPath(context, held, nullptr, path, json);
+	}
+	if (path.empty())
+	{
+		return SetWhole(context, place, field, json);
+	}
+	const auto dot = path.find('.');
+	const auto segment = path.substr(0, dot);
+	const auto rest = dot == std::string_view::npos ? std::string_view {} : path.substr(dot + 1);
+	const auto here = place.path.empty() ? std::string(segment) : place.path + "." + std::string(segment);
+	if (HasFields(place.value))
+	{
+		const auto found = FindField(place.value.type(), segment);
+		if (!found.has_value())
+		{
+			return "no field " + std::string(segment) + " in " +
+			       (place.path.empty() ? reflection::ShortTypeName(place.value.type().info()) : place.path);
+		}
+		Place next {.value = found->data.get(place.value), .path = here, .names = found->info->indexNames};
+		if (auto problem = SetPath(context, next, found->info, rest, json); !problem.empty())
+		{
+			return problem;
+		}
+		// A value given by a function is a copy: it is set back whole. One kept in place was set where it is.
+		if (next.value.base().owner() && !found->data.set(place.value, std::move(next.value)))
+		{
+			return here + " can't be set: it is read only";
+		}
+		return {};
+	}
+	if (auto sequence = place.value.as_sequence_container(); sequence)
+	{
+		const auto names = place.names.empty() ? std::span<const std::string_view> {} : place.names.front();
+		const auto index = IndexOf(segment, names);
+		if (!index.has_value() || *index >= sequence.size())
+		{
+			return NotAnElement(place.path, segment, sequence.size(), names);
+		}
+		Place next {
+		    .value = sequence[*index], .path = here, .names = place.names.empty() ? IndexNames {} : place.names.subspan(1)};
+		return SetPath(context, next, nullptr, rest, json);
+	}
+	return place.path + " has no fields or elements to set by name";
+}
+
+std::string SetWhole(const entt::meta_ctx& context, Place& place, const reflection::FieldInfo* field, const Json& json)
+{
+	std::string error;
+	// The field's own reading, or its type's, for an element of a list
+	const auto* value = ValueInfoOf(place.value);
+	const auto decode = field != nullptr ? field->decode : (value != nullptr ? value->decode : nullptr);
+	if (decode != nullptr)
+	{
+		if (auto decoded = decode(context, json, error); decoded.has_value())
+		{
+			return place.value.assign(*std::move(decoded)) ? std::string {} : place.path + " can't be set: it is read only";
 		}
 	}
 	// A nested value set from an object of its fields, each in turn
-	auto nested = field->data.get(instance);
-	if (json.is_object() && nested && nested.type().data().begin() != nested.type().data().end())
+	if (json.is_object() && HasFields(place.value))
 	{
 		for (const auto& [key, member] : json.items())
 		{
-			if (auto problem = SetPath(context, nested, key, member); !problem.empty())
+			if (auto problem = SetPath(context, place, nullptr, key, member); !problem.empty())
 			{
 				return problem;
 			}
 		}
 		return {};
 	}
-	return std::string(name) + " " + error;
+	// A list set from an array of its elements, each in turn: one that can grow or shrink takes the array's size
+	if (auto sequence = place.value.as_sequence_container(); json.is_array() && sequence)
+	{
+		if (json.size() != sequence.size() && !sequence.resize(json.size()))
+		{
+			return place.path + " needs an array of " + std::to_string(sequence.size()) + ", not " +
+			       reflection::detail::Describe(json);
+		}
+		for (size_t i = 0; i < json.size(); ++i)
+		{
+			Place element {.value = sequence[i],
+			               .path = place.path + "." + std::to_string(i),
+			               .names = place.names.empty() ? IndexNames {} : place.names.subspan(1)};
+			if (auto problem = SetPath(context, element, nullptr, {}, json[i]); !problem.empty())
+			{
+				return problem;
+			}
+		}
+		return {};
+	}
+	if (error.empty())
+	{
+		error = "can't be set from " + reflection::detail::Describe(json);
+	}
+	return place.path + " " + error;
+}
+
+/// A value reached inside another, copied out when the other is a copy that is about to go (a value given by a function)
+entt::meta_any Detached(entt::meta_any inside, const entt::meta_any& from)
+{
+	if (from.base().owner() && !inside.base().owner())
+	{
+		const entt::meta_any& reference = inside;
+		return entt::meta_any {reference};
+	}
+	return inside;
+}
+
+/// What is at a dotted path from a value, read only; none, with why not, when there is nothing there
+std::optional<Place> Reach(Place place, std::string_view path, std::string& why)
+{
+	while (true)
+	{
+		if (const auto* value = ValueInfoOf(place.value); value != nullptr && value->unwrap != nullptr)
+		{
+			if (path.empty())
+			{
+				return place;
+			}
+			auto held = value->unwrap(place.value);
+			if (!held)
+			{
+				why = place.path + " holds nothing";
+				return std::nullopt;
+			}
+			place.value = Detached(std::move(held), place.value);
+			continue;
+		}
+		if (path.empty())
+		{
+			return place;
+		}
+		const auto dot = path.find('.');
+		const auto segment = path.substr(0, dot);
+		path = dot == std::string_view::npos ? std::string_view {} : path.substr(dot + 1);
+		const auto here = place.path.empty() ? std::string(segment) : place.path + "." + std::string(segment);
+		if (HasFields(place.value))
+		{
+			const auto found = FindField(place.value.type(), segment);
+			if (!found.has_value())
+			{
+				why = "no field " + here;
+				return std::nullopt;
+			}
+			auto value = Detached(found->data.get(place.value), place.value);
+			place = {.value = std::move(value), .path = here, .names = found->info->indexNames};
+			continue;
+		}
+		auto sequence = place.value.as_sequence_container();
+		if (!sequence)
+		{
+			why = place.path + " has no fields or elements";
+			return std::nullopt;
+		}
+		const auto names = place.names.empty() ? std::span<const std::string_view> {} : place.names.front();
+		const auto index = IndexOf(segment, names);
+		if (!index.has_value() || *index >= sequence.size())
+		{
+			why = NotAnElement(place.path, segment, sequence.size(), names);
+			return std::nullopt;
+		}
+		auto element = Detached(sequence[*index], place.value);
+		place = {
+		    .value = std::move(element), .path = here, .names = place.names.empty() ? IndexNames {} : place.names.subspan(1)};
+	}
 }
 
 } // namespace
@@ -257,6 +524,44 @@ double reflection::detail::Shortest(float value)
 		}
 	}
 	return static_cast<double>(value);
+}
+
+std::string reflection::detail::Utf8(std::u16string_view text)
+{
+	std::string utf8;
+	for (size_t i = 0; i < text.size(); ++i)
+	{
+		uint32_t code = text[i];
+		// A pair of surrogates is one character beyond the first 65536
+		if (code >= 0xD800 && code < 0xDC00 && i + 1 < text.size() && text[i + 1] >= 0xDC00 && text[i + 1] < 0xE000)
+		{
+			code = 0x10000 + ((code - 0xD800) << 10) + (text[i + 1] - 0xDC00);
+			++i;
+		}
+		if (code < 0x80)
+		{
+			utf8 += static_cast<char>(code);
+		}
+		else if (code < 0x800)
+		{
+			utf8 += static_cast<char>(0xC0 | (code >> 6));
+			utf8 += static_cast<char>(0x80 | (code & 0x3F));
+		}
+		else if (code < 0x10000)
+		{
+			utf8 += static_cast<char>(0xE0 | (code >> 12));
+			utf8 += static_cast<char>(0x80 | ((code >> 6) & 0x3F));
+			utf8 += static_cast<char>(0x80 | (code & 0x3F));
+		}
+		else
+		{
+			utf8 += static_cast<char>(0xF0 | (code >> 18));
+			utf8 += static_cast<char>(0x80 | ((code >> 12) & 0x3F));
+			utf8 += static_cast<char>(0x80 | ((code >> 6) & 0x3F));
+			utf8 += static_cast<char>(0x80 | (code & 0x3F));
+		}
+	}
+	return utf8;
 }
 
 std::string reflection::detail::Describe(const Json& value)
@@ -400,27 +705,38 @@ Json reflection::ComponentToJson(const entt::meta_ctx& context, const entt::type
 std::optional<Json> reflection::ReadField(const entt::meta_ctx& context, const entt::type_info& info, const void* component,
                                           std::string_view path)
 {
+	std::string why;
+	return ReadField(context, info, component, path, why);
+}
+
+std::optional<Json> reflection::ReadField(const entt::meta_ctx& context, const entt::type_info& info, const void* component,
+                                          std::string_view path, std::string& why)
+{
 	const auto type = entt::resolve(context, info);
 	if (!type || component == nullptr)
 	{
+		why = ShortTypeName(info) + " has no fields registered";
 		return std::nullopt;
 	}
-	auto instance = type.from_void(component);
-	while (true)
+	// The field's own encoding when the path ends at a field, as a whole component writes it
+	const auto dot = path.rfind('.');
+	if (dot == std::string_view::npos)
 	{
-		const auto dot = path.find('.');
-		const auto field = FindField(instance.type(), path.substr(0, dot));
+		const auto instance = type.from_void(component);
+		const auto field = FindField(instance.type(), path);
 		if (!field.has_value())
 		{
+			why = "no field " + std::string(path);
 			return std::nullopt;
 		}
-		if (dot == std::string_view::npos)
-		{
-			return FieldValueToJson(field->data, field->info, instance, 0);
-		}
-		instance = field->data.get(instance);
-		path.remove_prefix(dot + 1);
+		return FieldValueToJson(field->data, field->info, instance, 0);
 	}
+	const auto found = Reach({.value = type.from_void(component)}, path, why);
+	if (!found.has_value())
+	{
+		return std::nullopt;
+	}
+	return ValueToJson(found->value, found->names, 1);
 }
 
 std::string reflection::SetField(const entt::meta_ctx& context, const entt::type_info& info, void* component,
@@ -435,8 +751,12 @@ std::string reflection::SetField(const entt::meta_ctx& context, const entt::type
 	{
 		return ShortTypeName(info) + " holds no data";
 	}
-	auto instance = type.from_void(component);
-	return SetPath(context, instance, path, value);
+	if (path.empty())
+	{
+		return "no field given";
+	}
+	Place place {.value = type.from_void(component)};
+	return SetPath(context, place, nullptr, path, value);
 }
 
 entt::sparse_set* reflection::FindStorage(entt::registry& registry, const entt::meta_ctx& context, std::string_view name)
@@ -474,4 +794,5 @@ const entt::sparse_set* reflection::FindStorage(const entt::registry& registry, 
 void reflection::RegisterComponents(entt::meta_ctx& context)
 {
 	RegisterComponentFields(context);
+	RegisterHandWrittenFields(context);
 }

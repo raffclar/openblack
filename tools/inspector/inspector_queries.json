@@ -371,6 +371,18 @@
   "query": "creature.desires"
  },
  {
+  "description": "The ordinary skills and miracles a creature knows, and how often it has seen each miracle",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   }
+  ],
+  "query": "creature.known"
+ },
+ {
   "description": "A creature's plan (desire, action, object, priority), activity and next agenda steps",
   "kind": "object",
   "parameters": [
@@ -1266,6 +1278,11 @@
     "description": "Numbers, true or false, [x, y, z], {\"object\": id}, {\"int\": n} or {\"float\": x}, as many as it takes; a plain number goes on the stack as the type the native's slot takes, {\"int\"} and {\"float\"} as given. Each goes on the stack as the type the native takes, as a script's call puts it",
     "name": "args",
     "type": "array"
+   },
+   {
+    "description": "Pushes exactly the values given, past the check of how many the native takes and of their types (for a native that takes a different count than the language's table says, as GET_ARENA does): each number must say its type, {\"int\": n} or {\"float\": x}",
+    "name": "raw",
+    "type": "boolean"
    }
   ],
   "query": "script.call",
@@ -1455,7 +1472,7 @@
   "writes": true
  },
  {
-  "description": "The pictures still to take, and any that failed",
+  "description": "The pictures still to take (pending), the held one waiting for its camera (holding), those taken but not yet written (writing), and any that failed with why",
   "kind": "object",
   "parameters": [],
   "query": "screenshot.pending"

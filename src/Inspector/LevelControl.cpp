@@ -253,7 +253,10 @@ std::vector<QueryDescription> ScreenshotProvider::Describe() const
 	                           "frames held around it",
 	                           false)},
 	                true),
-	    Description("pending", "The pictures still to take, and any that failed", {}, false),
+	    Description("pending",
+	                "The pictures still to take (pending), the held one waiting for its camera (holding), those taken "
+	                "but not yet written (writing), and any that failed with why",
+	                {}, false),
 	};
 }
 
@@ -290,7 +293,10 @@ std::string ScreenshotProvider::Take(const Pending& pending, uint64_t frame, con
 		                        .catalogue = pending.catalogue,
 		                        .record = std::move(record),
 		                        .giveUpAt = frame + k_MostWriteFrames});
+		return {};
 	}
+	// Watched until written too, so that a picture the renderer never gives back fails, saying so
+	_cataloguing.push_back({.path = pending.path, .giveUpAt = frame + k_MostWriteFrames});
 	return {};
 }
 
@@ -299,8 +305,9 @@ void ScreenshotProvider::Catalogue()
 	std::erase_if(_cataloguing, [this](const Cataloguing& each) {
 		if (_target.Exists(each.path))
 		{
-			// Written whole: its line goes in the catalogue now, never before
-			if (auto why = _target.AppendLine(each.catalogue, Dump(each.record)); !why.empty())
+			// Written whole: a kept one's line goes in the catalogue now, never before
+			if (auto why = each.record.is_null() ? std::string {} : _target.AppendLine(each.catalogue, Dump(each.record));
+			    !why.empty())
 			{
 				_failures.push_back(each.path.generic_string() + ": not catalogued: " + why);
 			}
@@ -309,7 +316,9 @@ void ScreenshotProvider::Catalogue()
 		}
 		if (_frame >= each.giveUpAt)
 		{
-			_failures.push_back(each.path.generic_string() + ": never written, so not catalogued");
+			_failures.push_back(each.path.generic_string() + ": never written in " + std::to_string(k_MostWriteFrames) +
+			                    " frames: the renderer didn't give the picture back" +
+			                    (each.record.is_null() ? "" : ", so not catalogued"));
 			_reserved.erase(each.path);
 			return true;
 		}
@@ -353,6 +362,21 @@ void ScreenshotProvider::PlaceCamera()
 		return;
 	}
 	_holding->placed = *pose;
+	// Where the camera is now, after everything else moved it this frame, is where this frame is drawn from. Its focus
+	// reads back as where the middle of the view meets the land, which needn't be the point asked to look at: the
+	// direction it looks in is compared instead.
+	const auto now = _camera.State();
+	if (!now.has_value())
+	{
+		_holding->inPlace = false;
+		return;
+	}
+	constexpr float k_Close = 1e-3f;
+	const auto asked = pose->focus - pose->origin;
+	const bool looksThere = glm::distance(now->focus, pose->focus) <= k_Close ||
+	                        (glm::length(now->forward) > 0.0f && glm::length(asked) > 0.0f &&
+	                         glm::dot(glm::normalize(now->forward), glm::normalize(asked)) >= 1.0f - k_Close);
+	_holding->inPlace = glm::distance(now->origin, pose->origin) <= k_Close && looksThere;
 }
 
 bool ScreenshotProvider::CameraSettled() const
@@ -361,14 +385,9 @@ bool ScreenshotProvider::CameraSettled() const
 	{
 		return true;
 	}
-	const auto now = _camera.State();
-	if (!_holding->placed.has_value() || !now.has_value())
-	{
-		return false;
-	}
-	constexpr float k_Close = 1e-3f;
-	return glm::distance(now->origin, _holding->placed->origin) <= k_Close &&
-	       glm::distance(now->focus, _holding->placed->focus) <= k_Close;
+	// As the camera was put for the last frame drawn: by the time the next frame starts the inspector has given the
+	// camera back its own place (it carries on beneath the picture's), so it isn't read again here
+	return _holding->inPlace;
 }
 
 void ScreenshotProvider::Fail(const std::string& why)
@@ -381,7 +400,9 @@ void ScreenshotProvider::Frame(uint64_t frame)
 {
 	_frame = frame;
 	Catalogue();
-	if (_holding.has_value() && frame > _holding->until)
+	// Let go of once its frames are drawn after the picture: one not yet taken waits for its camera, and fails when it
+	// never comes, rather than being dropped unsaid
+	if (_holding.has_value() && _holding->taken && frame > _holding->until)
 	{
 		_holding.reset();
 	}
@@ -443,7 +464,21 @@ QueryResult ScreenshotProvider::Run(std::string_view query, const QueryContext& 
 		{
 			pending.push_back({{"frame", each.frame}, {"path", each.path.generic_string()}});
 		}
-		return QueryResult::Value({{"pending", std::move(pending)}, {"failed", _failures}});
+		Json answer = {{"pending", std::move(pending)}, {"failed", _failures}};
+		if (_holding.has_value() && !_holding->taken)
+		{
+			answer["holding"] = {{"path", _holding->pending.path.generic_string()},
+			                     {"held_from", _holding->pending.frame},
+			                     {"capture_at", _holding->captureAt},
+			                     {"camera_in_place", CameraSettled()}};
+		}
+		Json writing = Json::array();
+		for (const auto& each : _cataloguing)
+		{
+			writing.push_back({{"path", each.path.generic_string()}, {"gives_up_at", each.giveUpAt}});
+		}
+		answer["writing"] = std::move(writing);
+		return QueryResult::Value(std::move(answer));
 	}
 	if (query != "take")
 	{

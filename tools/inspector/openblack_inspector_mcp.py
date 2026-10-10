@@ -643,10 +643,13 @@ TOOLS = [
     {
         "name": "script_call",
         "description": "Calls a script native by name or number as a script would, with args in order: numbers, "
-                       "true/false, [x, y, z], {\"object\": id}, {\"int\": n}. Answers what it gave back.",
-        "inputSchema": schema({"native": {}, "args": {"type": "array"}}, ["native"]),
+                       "true/false, [x, y, z], {\"object\": id}, {\"int\": n}, {\"float\": x}; checked against the "
+                       "count and types the language's table gives the native. raw=true pushes exactly the values given "
+                       "(every number typed with int/float) past that check, for a native that takes a different count. "
+                       "Answers what it gave back.",
+        "inputSchema": schema({"native": {}, "args": {"type": "array"}, "raw": {"type": "boolean"}}, ["native"]),
         "query": "script.call",
-        "params": ["native", "args"],
+        "params": ["native", "args", "raw"],
     },
     {
         "name": "audio_sounds",
