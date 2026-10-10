@@ -431,6 +431,17 @@ Json GameInput::State() const
 		    {"object", pick.object.has_value() ? Json(entt::to_integral(*pick.object)) : Json(nullptr)},
 		    {"land", pick.land.has_value() ? Json::array({pick.land->x, pick.land->y, pick.land->z}) : Json(nullptr)},
 		};
+		// Whether the hand would take the thing under it: with the right button (Action), never the left, which grips
+		// the land
+		if (pick.object.has_value() && Locator::handGrabSystem::has_value())
+		{
+			const auto why = Locator::handGrabSystem::value().WhyNotTake(*pick.object);
+			state["pick"]["grab"] = {{"takes", why.empty()}, {"button", "right"}};
+			if (!why.empty())
+			{
+				state["pick"]["grab"]["why_not"] = why;
+			}
+		}
 	}
 	return state;
 }

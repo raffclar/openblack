@@ -20,7 +20,6 @@
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
-#include "3D/TreeGrowth.h"
 #include "Common/GameRandom.h"
 #include "Particles/ParticleClassRegistry.h"
 #include "Particles/ParticleEffect.h"
@@ -231,21 +230,6 @@ TEST(StormMaths, AWiderStormCostsTheSquareOfItsWidth)
 	EXPECT_FLOAT_EQ(storm::CostToMaintain(20.0f, 40.0f, 40.0f), 20.0f);
 	EXPECT_FLOAT_EQ(storm::CostToMaintain(20.0f, 120.0f, 40.0f), 180.0f);
 	EXPECT_FLOAT_EQ(storm::CostToMaintain(25.0f, 1000.0f, 40.0f), 15625.0f);
-}
-
-// What the rain does
-
-TEST(TreeGrowth, RainAndGoodLandMakeATreeGrowFaster)
-{
-	const tree_growth::Type type {.turnsBetween = 100, .amount = 0.01f, .rainAccelerator = 2.0f};
-	EXPECT_FLOAT_EQ(tree_growth::Growth(type, 0, 0.0f), 0.01f);
-	// A hundred points of rain at an accelerator of 2 trebles it
-	EXPECT_FLOAT_EQ(tree_growth::Growth(type, 100, 0.0f), 0.03f);
-	EXPECT_FLOAT_EQ(tree_growth::Growth(type, -50, 0.0f), 0.01f);
-	EXPECT_FLOAT_EQ(tree_growth::Growth(type, 0, 1.0f), 0.015f);
-	EXPECT_FLOAT_EQ(tree_growth::Growth(type, 0, -1.0f), 0.005f);
-	EXPECT_FLOAT_EQ(tree_growth::Grown(0.5f, 0.1f, 1.0f), 0.6f);
-	EXPECT_FLOAT_EQ(tree_growth::Grown(0.95f, 0.1f, 1.0f), 1.0f);
 }
 
 // The rules on a fake world

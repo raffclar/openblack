@@ -198,6 +198,9 @@ public:
 	/// A seed summoned from the player's worship into their hand, if it is free: its cost to create is charged from the
 	/// player's prayer power, as much as they have, and it is ready after the usual delay. The seed, or none.
 	virtual entt::entity SummonSeed(PlayerNames player, SpellSeedType seed, int powerUp) = 0;
+	/// A seed summoned from an icon of a worship site into its player's hand, if it is free: the site charges it with its
+	/// cost to create, as much as it has, and tops up what it casts. The seed, or none.
+	virtual entt::entity SummonSeedAtSite(entt::entity site, SpellSeedType seed, int powerUp) = 0;
 	/// The hand drops the miracle it holds, as a scribble or a shake does: what was started is called off and what the
 	/// seed still holds goes back to the player's worship
 	virtual void DiscardHeldSeed() = 0;
@@ -253,6 +256,8 @@ public:
 
 	/// For the testbed and the debug window, until worship sets them: a player's power multiplier for a tribe
 	virtual void SetTribalPower(PlayerNames /*player*/, Tribe /*tribe*/, float /*power*/) {}
+	/// A player's power multiplier for a tribe, 1 until something raises it
+	[[nodiscard]] virtual float GetTribalPower(PlayerNames /*player*/, Tribe /*tribe*/) const { return 1.0f; }
 	/// A cheat for the debug window: the miracles may be cast outside the player's influence
 	virtual void SetIgnoreInfluence(bool ignore) = 0;
 	/// For the testbed's scenarios: the hand is where the scenario puts it, not where the mouse is, until none is given,

@@ -58,6 +58,12 @@ bool L3DMesh::LoadMade(const L3DMesh& skinSource, std::span<const std::vector<L3
 	return !_subMeshes.empty();
 }
 
+bool L3DMesh::LoadWithSkinsOf(const l3d::L3DFile& l3d, const L3DMesh& skinSource) noexcept
+{
+	_skinSource = &skinSource;
+	return Load(l3d);
+}
+
 bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 {
 	bool result = true;

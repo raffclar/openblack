@@ -147,12 +147,12 @@ TEST(LandLine, ThePointUnderTheCursorIsKeptNearTheMap)
 
 namespace
 {
-/// A camera at the origin looking down -z, 800 by 600 pixels, the cursor at the middle
+/// A camera at the origin looking down -z in a right-handed frame, 800 by 600 pixels, the cursor at the middle
 screen_pick::View View(glm::vec2 cursor = {400.0f, 300.0f})
 {
 	constexpr float k_Near = 1.0f;
-	const auto projection = glm::perspective(glm::radians(60.0f), 800.0f / 600.0f, k_Near, 1000.0f);
-	const auto view = glm::lookAt(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	const auto projection = glm::perspectiveRH_NO(glm::radians(60.0f), 800.0f / 600.0f, k_Near, 1000.0f);
+	const auto view = glm::lookAtRH(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 	return {.worldToClip = projection * view,
 	        .resolution = {800.0f, 600.0f},
 	        .near = k_Near,

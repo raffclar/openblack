@@ -156,3 +156,31 @@ TEST_F(VirtualGrant, APlayerWithoutAHandShareHasTheirOwnInfluenceOnly)
 	EXPECT_EQ(_influence.PlayerInfluence(PlayerNames::PLAYER_ONE, k_Middle), 1.0f);
 	EXPECT_EQ(_influence.PlayerInfluence(PlayerNames::PLAYER_ONE, glm::vec3(1300.0f, 0.0f, 1000.0f)), 0.0f);
 }
+
+TEST_F(VirtualGrant, WithinAScriptsAntiInfluenceThePlayerHasNone)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto anti = registry.Create();
+	registry.Assign<components::Transform>(anti, k_Middle, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<components::InfluenceSource>(anti, PlayerNames::PLAYER_ONE, 30.0f, true);
+	EXPECT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_ONE, k_Middle), 0.0f);
+	EXPECT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_ONE, k_Middle + glm::vec3(29.0f, 0.0f, 0.0f)), 0.0f);
+	// Outside it the player's own influence is whole, and the other players keep theirs
+	EXPECT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_ONE, k_Middle + glm::vec3(50.0f, 0.0f, 0.0f)), 1.0f);
+}
+
+TEST_F(VirtualGrant, AScriptsInfluenceGoesAboutWithItsObject)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto object = registry.Create();
+	const glm::vec3 away {1500.0f, 0.0f, 1500.0f};
+	registry.Assign<components::Transform>(object, away, glm::mat3(1.0f), glm::vec3(1.0f));
+	const auto ring = registry.Create();
+	registry.Assign<components::Transform>(ring, k_Middle, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<components::InfluenceSource>(ring, PlayerNames::PLAYER_TWO, 20.0f, false, object);
+	EXPECT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_TWO, away), 1.0f);
+	EXPECT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_TWO, k_Middle), 0.0f);
+	// Once its object has gone it stays where it was put
+	registry.Destroy(object);
+	EXPECT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_TWO, k_Middle), 1.0f);
+}

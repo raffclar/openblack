@@ -15,6 +15,7 @@
 #include <span>
 
 #include <entt/entity/entity.hpp>
+#include <glm/mat3x3.hpp>
 
 #include "Enums.h"
 
@@ -59,5 +60,43 @@ enum class CreatureNeed : uint8_t
 /// The value a creature's need takes when a script sets it: warmth is kept between -1 and 1, energy between 0 and 1,
 /// the others are taken as they are
 [[nodiscard]] float SetNeed(CreatureNeed need, float value);
+
+/// The scripts give and take angles in degrees; the game turns them to and from radians with these factors
+constexpr float k_RadiansToTurns = 0.159154937f;
+constexpr float k_DegreesInATurn = 360.0f;
+constexpr float k_DegreesToRadians = 0.0174532924f;
+[[nodiscard]] float AngleToScript(float radians);
+[[nodiscard]] float AngleFromScript(float degrees);
+
+/// Whether a script may set a thing's life: a thing the scripts hold while they own the widescreen bars, and a thing
+/// made indestructible, can't be brought to a hundredth of its life or under it
+constexpr float k_LowestProtectedLife = 0.01f;
+[[nodiscard]] bool CanSetLife(float life, bool heldDuringCutscene, bool indestructible);
+
+/// A creature of size 1 stands this tall to the scripts
+constexpr float k_CreatureHeightPerSize = 15.0f;
+/// The size a creature takes for a height a script gives, as the game divides by its height per size
+constexpr float k_CreatureSizePerHeight = 0.0666666701f;
+[[nodiscard]] float CreatureHeight(float size);
+[[nodiscard]] float CreatureSizeForHeight(float height);
+
+/// A placed thing's angles in radians: its lean about the across axis, its turn about the upright axis and its lean
+/// about the forward axis. The world's things are placed turned the other way by them.
+struct Angles
+{
+	float x {0.0f};
+	float y {0.0f};
+	float z {0.0f};
+};
+/// The angles of a thing placed the way it faces. A thing that doesn't lean keeps its whole turn, past a quarter either
+/// way.
+[[nodiscard]] Angles PlacedAngles(const glm::mat3& rotation);
+/// The way a thing placed at these angles faces
+[[nodiscard]] glm::mat3 PlacedRotation(const Angles& angles);
+
+/// A thing's belief in a player, as the scripts ask it: a town's belief in the player (none it was given is no belief);
+/// anything else believes wholly in its own player and not at all in the others
+[[nodiscard]] float BeliefForPlayer(bool town, std::optional<float> townBelief, std::optional<PlayerNames> owner,
+                                    PlayerNames player);
 
 } // namespace openblack::script::property_rules
