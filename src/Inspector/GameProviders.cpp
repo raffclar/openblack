@@ -127,6 +127,7 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/TutorialSkipSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -246,6 +247,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"inspector", "engine.services"},
     LocatorCoverage {"vm", "script.vm"},
     LocatorCoverage {"chlapi", "script.natives"},
+    LocatorCoverage {"videoSystem", "view.video"},
     LocatorCoverage {"playerProfileSystem", "players.new_game"},
     LocatorCoverage {"tutorialSkipSystem", "players.new_game"},
 };
@@ -1110,6 +1112,30 @@ std::unique_ptr<ProviderInterface> TempleProvider()
 std::unique_ptr<ProviderInterface> ViewProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("view");
+	provider->Add(Query("video", "The video playing: its frame, frame count and rate, its fade, the falling spell, and "
+	                             "whether films and 16-bit colour are on"),
+	              [](const QueryContext& /*c*/) {
+		              Json result = Json::object();
+		              if (Locator::videoSystem::has_value())
+		              {
+			              const auto& videos = Locator::videoSystem::value();
+			              result["playing"] = videos.IsPlaying();
+			              result["covers_screen"] = videos.CoversScreen();
+			              result["hides_world"] = videos.HidesWorld();
+			              result["films"] = videos.AreFilmsEnabled();
+			              result["sixteen_bit_colour"] = videos.IsSixteenBitColour();
+			              if (const auto status = videos.GetStatus())
+			              {
+				              result["frame"] = status->frame;
+				              result["frame_count"] = status->frameCount;
+				              result["fps"] = status->fps;
+				              result["alpha"] = status->alpha;
+				              result["falling_spell"] = status->fallingSpell;
+				              result["falling_spell_state"] = status->fallingSpellState;
+			              }
+		              }
+		              return QueryResult::Value(std::move(result));
+	              });
 	provider->Add(Query("state", "Whether a camera path holds the camera, the camera's help, and the knock readout"),
 	              [](const QueryContext& /*c*/) {
 		              Json result = Json::object();
