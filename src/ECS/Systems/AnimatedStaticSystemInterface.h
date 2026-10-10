@@ -12,8 +12,11 @@
 #include <cstdint>
 
 #include <optional>
+#include <vector>
 
 #include <entt/fwd.hpp>
+
+#include "Scenery/AnimatedStaticRules.h"
 
 namespace openblack::ecs::systems
 {
@@ -36,6 +39,9 @@ public:
 	/// first empty slot (none when it is full). The giver uses the stone up.
 	virtual bool LayGateStone(entt::entity plinth, entt::entity stone) = 0;
 
+	/// The circles a creature plans its route round for a Norse gate, which stand in for its one bounding circle; none
+	/// for anything else
+	[[nodiscard]] virtual std::optional<std::vector<animated_static::RouteCircle>> RouteCircles(entt::entity gate) const = 0;
 	/// Once a frame: each animated static's clip plays on by the milliseconds of the game's clock since the last frame
 	/// and its model is posed, and the plinths' stones are placed
 	virtual void Update(uint32_t turn, float turnFraction) = 0;

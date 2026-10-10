@@ -22,6 +22,8 @@ constexpr float k_StoneSinkHeights = 7.15f;
 constexpr float k_StoneSeat = 0.2f;
 /// The sinking runs over the clip's play time less these milliseconds
 constexpr int32_t k_SinkTimeShort = 3;
+/// The step between the gate's circles, of half its model's width
+constexpr float k_GateRouteStep = 0.13333334f;
 } // namespace
 
 uint32_t animated_static::OpenRestingPlace(uint32_t playTime, size_t frameCount)
@@ -146,4 +148,29 @@ std::vector<StoneDraw> animated_static::PlinthStoneDraws(const PlinthLook& look)
 		}
 	}
 	return draws;
+}
+
+std::vector<RouteCircle> animated_static::GateRouteCircles(glm::vec2 middle, glm::vec2 across, float halfWidth, float size,
+                                                           bool openAndStill)
+{
+	std::vector<RouteCircle> circles;
+	circles.reserve(k_GateRouteCircles);
+	const float step = size * halfWidth * k_GateRouteStep;
+	float out = 0.0f;
+	for (size_t i = 0; i < k_GateRouteCircles; ++i)
+	{
+		// The odd circles go a step further out on one side, the even ones mirror the last on the other
+		float along = -out;
+		if ((i & 1u) != 0)
+		{
+			out += step;
+			along = out;
+		}
+		if (openAndStill && i < k_GateRouteGap)
+		{
+			continue;
+		}
+		circles.push_back({.centre = middle + across * along, .radius = k_GateRouteRadius});
+	}
+	return circles;
 }

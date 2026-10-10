@@ -38,6 +38,12 @@ struct AnimatedStatic
 struct AnimatedStaticPose
 {
 	uint32_t place {0};
+	/// Where its clip comes to rest when open, in the same milliseconds
+	uint32_t restingPlace {0};
+	/// It is in the land's draw list as it was last made, and was on screen when last drawn with the whole list; only then
+	/// does its clip play on, as the game advances it only as it is drawn
+	bool inDrawList {false};
+	bool onScreen {false};
 	std::vector<glm::mat4> bones;
 	/// The models of the gate stones drawn on a plinth this frame
 	std::vector<entt::entity> stones;

@@ -3906,7 +3906,7 @@ void SetOpenClose() // 307 SET_OPEN_CLOSE
 	// The script's word is kept as it is: 1 opens, 0 closes
 	const auto open = static_cast<int32_t>(Pop().uintVal);
 	auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(object))
+	if (object == entt::null || !registry.Valid(object))
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_OPEN_CLOSE: thing not found");
 		return;
@@ -4026,13 +4026,13 @@ void SetSunDraw() // 319 SET_SUN_DRAW
 
 void ObjectInfoBits() // 320 OBJECT_INFO_BITS
 {
-	// What the gate stones laid in a plinth are worth: ape 1, tiger 2, cow 4
+	// What the gate stones laid in a plinth are worth: ape 1, tiger 2, cow 4. Asked of anything else, the original
+	// reports the error and pushes no answer at all, so the script's next pop finds whatever lies below.
 	const auto object = PopObject();
 	auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(object))
+	if (object == entt::null || !registry.Valid(object))
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "OBJECT_INFO_BITS: thing not valid");
-		Pushf(0.0f);
 		return;
 	}
 	const auto value = Locator::animatedStaticSystem::has_value()
@@ -4041,7 +4041,6 @@ void ObjectInfoBits() // 320 OBJECT_INFO_BITS
 	if (!value.has_value())
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "OBJECT_INFO_BITS: thing must be an animated static");
-		Pushf(0.0f);
 		return;
 	}
 	Pushf(static_cast<float>(*value));
