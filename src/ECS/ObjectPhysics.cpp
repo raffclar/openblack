@@ -167,7 +167,7 @@ void Replant(const PhysicsEntry* entry, entt::entity tree, const LandIslandInter
 	const glm::vec3 foot = position;
 	if (Locator::explosionSystem::has_value())
 	{
-		Locator::explosionSystem::value().AddSmoke(foot, objects::k_ReplantSmokeSize, objects::k_ReplantSmokeColour);
+		Locator::explosionSystem::value().AddSmoke(foot, objects::k_ReplantSmokeSize, dust_puff::Kind::Dust);
 	}
 	// TODO(force-feedback): the player who dropped it feels the planting (force feedback effect 0x2E); openblack has none
 	// The things standing round it, in a spiral out from its own cell until the cells are too far away

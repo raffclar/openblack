@@ -361,6 +361,11 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 		if (auto* animal = registry.TryGet<ecs::components::Animal>(entity))
 		{
 			animal->life = std::clamp(*object.life, 0.0f, 1.0f);
+			// One given no life is killed: it falls dead and lies its time
+			if (animal->Dead() && Locator::animalSystem::has_value())
+			{
+				Locator::animalSystem::value().SetDying(entity);
+			}
 		}
 	}
 	if (object.poisoned)

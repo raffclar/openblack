@@ -23,6 +23,12 @@ namespace
 constexpr glm::vec2 k_Lake {0.0f, 220.0f};
 /// A temple north of the camera, well short of the lake
 constexpr glm::vec2 k_Temple {0.0f, 90.0f};
+
+/// A dove killed where it is made, on the ground
+ObjectSetup DeadDove(glm::vec2 offset)
+{
+	return {.type = AnimalInfo::Dove, .offset = offset, .life = 0.0f};
+}
 } // namespace
 
 void testbed_scenarios::AddBirdScenarios(std::vector<Scenario>& all)
@@ -103,6 +109,30 @@ void testbed_scenarios::AddBirdScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Overview, .include = {k_Temple - glm::vec2(50.0f), k_Temple + glm::vec2(50.0f)}},
 	    .temples = {{.offset = k_Temple}},
 	    .commands = {{.kind = Command::Kind::SetAlignment, .delaySeconds = 60.0f, .alignment = 0.3f}},
+	});
+
+	using Kind = Command::Kind;
+	all.push_back({
+	    .id = "birds.dead_doves",
+	    .name = "Birds: dead doves, picked up and gone in smoke",
+	    .facet = Facet::Animals,
+	    .description = "Two doves killed on the ground before a tiger. After a second the tiger walks to the nearer one, "
+	                   "picks it up and puts it down again.",
+	    .expected = "Both doves lie dead in their dead clip. The tiger can pick a dove up because it lies under a metre "
+	                "above the land (it couldn't reach a flying one). Each dead dove lies 60 seconds (the one put down "
+	                "lies its time afresh from landing), then goes in a faint grey puff of smoke that drifts slowly off "
+	                "and fades away over three seconds, half the dove's height out from where it lay. No sound.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 6.0f, -12.0f}, .look = {0.0f, 0.0f, 18.0f}},
+	    .creatures = {{.species = CreatureType::Tiger,
+	                   .offset = {-6.0f, 0.0f},
+	                   .facingDegrees = 180.0f,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f},
+	                   .hold = true,
+	                   .pauseMind = true}},
+	    .objects = {DeadDove({-3.0f, 14.0f}), DeadDove({4.0f, 18.0f})},
+	    .commands = {{.kind = Kind::PickUp, .creature = 0, .delaySeconds = 1.0f, .waitUntilFree = true, .object = 0},
+	                 {.kind = Kind::PutDown, .creature = 0, .delaySeconds = 1.0f, .waitUntilFree = true}},
 	});
 
 	// Many flocks across the land, more birds than any land of the game's places

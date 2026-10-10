@@ -2334,15 +2334,18 @@ bool ValidOffset(glm::vec2 offset)
 	return std::abs(offset.x) <= k_MaxOffset && std::abs(offset.y) <= k_MaxOffset;
 }
 
-/// What is wrong with what a command acts on, if anything: the object it picks up must be a thing, what it knocks down
-/// a thing or a tree, the part it strokes, the way it looks something over and the leash put on real ones
+/// What is wrong with what a command acts on, if anything: the object it picks up must be a thing or an animal, what it
+/// knocks down a thing or a tree, the part it strokes, the way it looks something over and the leash put on real ones
 std::string_view CommandProblem(const Command& command, std::span<const ObjectSetup> objects)
 {
 	const auto* object = command.object < objects.size() ? &objects[command.object] : nullptr;
 	switch (command.kind)
 	{
 	case Kind::PickUp:
-		return object != nullptr && std::holds_alternative<MobileObjectInfo>(object->type) ? "" : "picks up no thing";
+		return object != nullptr && (std::holds_alternative<MobileObjectInfo>(object->type) ||
+		                             std::holds_alternative<AnimalInfo>(object->type))
+		           ? ""
+		           : "picks up no thing";
 	case Kind::KnockDown:
 		return object != nullptr && !std::holds_alternative<FeatureInfo>(object->type) ? "" : "knocks down no thing or tree";
 	case Kind::TieLeash:

@@ -1770,7 +1770,7 @@ void ChangeInnerOuterProperties() // 056 CHANGE_INNER_OUTER_PROPERTIES
 		return;
 	}
 	// TODO(Daniels118): shields, storms and influences
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
+	NotImplemented();
 }
 
 void Snapshot() // 057 SNAPSHOT
