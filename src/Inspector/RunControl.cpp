@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <limits>
 #include <utility>
 
 using namespace openblack::inspector;
@@ -122,6 +123,31 @@ std::vector<QueryDescription> GameProvider::Describe() const
 	                      .parameters = {},
 	                      .kind = ResultKind::List,
 	                      .needsNear = false},
+	    QueryDescription {
+	        .name = "seed",
+	        .description =
+	            "The run's seed, the date pinned (null for the wall clock's) and the machine's milliseconds as the game "
+	            "reads them. With seed: every random number the game draws starts again from it, and the clock counts "
+	            "from 0 at a pinned date; each land or scenario loaded afterwards starts them again the same way. For two "
+	            "runs to go the same way: game.pause, game.frame_time, game.seed, load the land or scenario, then step; "
+	            "compare ecs.hash",
+	        .parameters = {{.name = "seed", .type = "integer", .description = "The seed, 0 to 4294967295", .required = false},
+	                       {.name = "date",
+	                        .type = "integer",
+	                        .description = "With seed: the date pinned, in seconds since 1970 (1 January 2001 by default)",
+	                        .required = false},
+	                       {.name = "wall_clock",
+	                        .type = "boolean",
+	                        .description = "With seed: keep reading the wall clock's date and ticks",
+	                        .required = false},
+	                       {.name = "pause_on_load",
+	                        .type = "boolean",
+	                        .description = "With seed: each land or scenario loaded afterwards starts paused, before "
+	                                       "any of its frames (true by default)",
+	                        .required = false}},
+	        .kind = ResultKind::Object,
+	        .needsNear = false,
+	        .writes = true},
 	};
 }
 
@@ -171,6 +197,15 @@ Json GameProvider::ToJson(const StepRecord& step)
 		json["turns"] = *step.turns;
 	}
 	return json;
+}
+
+void GameProvider::Loaded()
+{
+	if (_pauseOnLoad)
+	{
+		_control.Cancel();
+		_target.SetPaused(true);
+	}
 }
 
 void GameProvider::Frame()
@@ -275,6 +310,47 @@ QueryResult GameProvider::Run(std::string_view query, const QueryContext& contex
 		}
 		_control.Cancel();
 		return QueryResult::Value({{"loading", id}});
+	}
+	if (query == "seed")
+	{
+		if (params.contains("seed"))
+		{
+			const auto seed = NumberMember(params, "seed");
+			if (!seed.has_value() || *seed < 0.0 || *seed > static_cast<double>(std::numeric_limits<uint32_t>::max()) ||
+			    std::floor(*seed) != *seed)
+			{
+				return QueryResult::Error("game.seed's seed is a whole number from 0 to 4294967295");
+			}
+			const auto date = NumberMember(params, "date");
+			if (params.contains("date") && (!date.has_value() || std::floor(*date) != *date))
+			{
+				return QueryResult::Error("game.seed's date is whole seconds since 1970");
+			}
+			const auto wallClockParam = params.find("wall_clock");
+			const bool wallClock =
+			    wallClockParam != params.end() && wallClockParam->is_boolean() && wallClockParam->get<bool>();
+			if (wallClock && date.has_value())
+			{
+				return QueryResult::Error("give a date or wall_clock, not both");
+			}
+			const auto pauseParam = params.find("pause_on_load");
+			_pauseOnLoad = pauseParam == params.end() || !pauseParam->is_boolean() || pauseParam->get<bool>();
+			_target.SetSeed(static_cast<uint32_t>(*seed),
+			                wallClock ? std::nullopt
+			                          : std::optional(date.has_value() ? static_cast<int64_t>(*date) : k_SeededDate));
+		}
+		else if (params.contains("date") || params.contains("wall_clock") || params.contains("pause_on_load"))
+		{
+			return QueryResult::Error("date, wall_clock and pause_on_load go with a seed");
+		}
+		const auto pinned = _target.GetPinnedDate();
+		return QueryResult::Value({
+		    {"seed", _target.GetSeed()},
+		    {"date", pinned.has_value() ? Json(*pinned) : Json(nullptr)},
+		    {"ticks", _target.GetTicks()},
+		    {"fixed_ms", _target.GetFixedFrameTime().has_value() ? Json(*_target.GetFixedFrameTime()) : Json(nullptr)},
+		    {"pause_on_load", _pauseOnLoad},
+		});
 	}
 	if (query == "scenarios")
 	{

@@ -73,6 +73,15 @@ public:
 	[[nodiscard]] virtual Json InputLock() const { return nullptr; }
 	/// Starts a testbed scenario on a fresh testbed by its id: false if there is no such scenario
 	virtual bool LoadScenario(std::string_view id) = 0;
+	/// The seed every random number of the run is drawn from
+	[[nodiscard]] virtual uint32_t GetSeed() const = 0;
+	/// Starts every random number again from a seed, and the machine's clock as the game reads it from 0 at a pinned date
+	/// (none for the wall clock's date again)
+	virtual void SetSeed(uint32_t seed, std::optional<int64_t> date) = 0;
+	/// The date pinned for a seeded run, none while the wall clock's is read
+	[[nodiscard]] virtual std::optional<int64_t> GetPinnedDate() const = 0;
+	/// The machine's milliseconds as the game reads them
+	[[nodiscard]] virtual uint32_t GetTicks() const = 0;
 	[[nodiscard]] virtual std::vector<ScenarioSummary> Scenarios() const = 0;
 };
 
@@ -83,10 +92,14 @@ public:
 ///   game.frame_time {ms}             each frame takes this long (0 for the wall clock's time), for deterministic runs
 ///   game.scenario {id}               loads a testbed scenario on a fresh testbed
 ///   game.scenarios                   the testbed scenarios there are
+///   game.seed {seed?, date?, wall_clock?}   the run's seed; with seed, every random number starts again from it and
+///                                    the date is pinned, for two runs to go the same way
 class GameProvider final: public ProviderInterface
 {
 public:
 	static constexpr float k_SlowestSpeed = 0.1f;
+	/// The date a seeded run pins unless given another, as the game's own: 1 January 2001, 12:00 UTC
+	static constexpr int64_t k_SeededDate = 978350400;
 	static constexpr float k_FastestSpeed = 16.0f;
 
 	explicit GameProvider(RunTargetInterface& target);
@@ -97,6 +110,9 @@ public:
 
 	/// Once a frame before the game's turn: counts the frame and holds or releases the game for the stepping
 	void Frame();
+	/// A land or the testbed has just finished loading, before any frame of it has run: a seeded run that asked for it
+	/// is paused there, so that what follows is stepped exactly
+	void Loaded();
 
 	[[nodiscard]] Json State() const;
 	/// The frames served so far
@@ -122,6 +138,8 @@ private:
 	/// The frame time to go back to once a step with a fixed frame time ends
 	std::optional<std::optional<uint32_t>> _frameTimeAfterStep;
 	std::optional<StepRecord> _lastStep;
+	/// Seeded through game.seed: each land or scenario loaded afterwards starts paused
+	bool _pauseOnLoad {false};
 	uint64_t _frame {0};
 };
 

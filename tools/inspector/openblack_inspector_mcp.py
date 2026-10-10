@@ -176,11 +176,25 @@ TOOLS = [
         "params": ["ms"],
     },
     {
+        "name": "game_seed",
+        "description": "The run's seed, pinned date and ticks. With seed: every random number the game draws starts "
+                       "again from it and the date is pinned (1 January 2001 unless date is given; wall_clock keeps "
+                       "the real date); each land or scenario loaded afterwards starts them again. Two identical runs: "
+                       "game_pause, game_frame_time, game_seed, load the land or scenario, game_step; compare ecs_hash.",
+        "inputSchema": schema({"seed": {"type": "integer"}, "date": {"type": "integer"},
+                               "wall_clock": {"type": "boolean"}}),
+        "query": "game.seed",
+        "params": ["seed", "date", "wall_clock"],
+    },
+    {
         "name": "ecs_hash",
-        "description": "A hash of where every entity is (and of a component's fields when named), to compare runs.",
-        "inputSchema": schema({"component": {"type": "string"}}),
+        "description": "A hash of where every entity is (and of a component's fields when named), to compare runs. "
+                       "exclude leaves out entities with those components: [\"HandGrab\"] for the hand, which eases "
+                       "towards the pointer every frame drawn, paused or not.",
+        "inputSchema": schema({"component": {"type": "string"},
+                               "exclude": {"type": "array", "items": {"type": "string"}}}),
         "query": "ecs.hash",
-        "params": ["component"],
+        "params": ["component", "exclude"],
     },
     {
         "name": "game_speed",

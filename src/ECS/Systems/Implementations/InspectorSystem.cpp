@@ -17,6 +17,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "Common/RandomNumberManager.h"
 #include "Debug/TestbedScenarioRegistry.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Game.h"
@@ -41,6 +42,9 @@ namespace
 {
 
 /// The game's clock and the testbed's scenarios, through the locator
+// The inspector's seeded date is the game's own
+static_assert(inspector::GameProvider::k_SeededDate == TimeSystemInterface::k_DeterministicDate);
+
 class GameRunTarget final: public inspector::RunTargetInterface
 {
 public:
@@ -74,6 +78,31 @@ public:
 			Locator::time::value().SetFixedFrameTime(
 			    milliseconds.has_value() ? std::optional(std::chrono::milliseconds(*milliseconds)) : std::nullopt);
 		}
+	}
+	[[nodiscard]] uint32_t GetSeed() const override
+	{
+		return Locator::rng::has_value() ? Locator::rng::value().GetRunSeed() : 0;
+	}
+	void SetSeed(uint32_t seed, std::optional<int64_t> date) override
+	{
+		if (Locator::rng::has_value())
+		{
+			Locator::rng::value().SetRunSeed(seed);
+		}
+		if (Locator::time::has_value())
+		{
+			Locator::time::value().RestartClock(date);
+		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Inspector: seeded run, seed {}{}", seed,
+		                   date.has_value() ? ", date pinned" : ", wall clock");
+	}
+	[[nodiscard]] std::optional<int64_t> GetPinnedDate() const override
+	{
+		return Locator::time::has_value() ? Locator::time::value().GetPinnedDate() : std::nullopt;
+	}
+	[[nodiscard]] uint32_t GetTicks() const override
+	{
+		return Locator::time::has_value() ? Locator::time::value().GetTicks() : 0;
 	}
 	[[nodiscard]] std::optional<uint32_t> GetFixedFrameTime() const override
 	{
@@ -204,6 +233,8 @@ void InspectorSystem::EndLoading()
 	{
 		_loadingHelper.join();
 	}
+	// The land has started, and none of its frames has run yet
+	_game->Loaded();
 }
 
 void InspectorSystem::AnswerWhileLoading()

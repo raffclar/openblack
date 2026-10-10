@@ -117,6 +117,9 @@ struct Arguments
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> requestScreenshot;
 	/// The port of 127.0.0.1 the debug inspector's server listens on, in builds with it; none to not start it
 	std::optional<uint16_t> inspectPort;
+	/// The seed of every random number the game draws, and the date pinned, for a deterministic run; none for a seed of
+	/// the machine's and the wall clock's date
+	std::optional<uint32_t> seed;
 	/// How the player's mouse and keyboard are kept out while the inspector drives the game: while a client is
 	/// connected, from the start, or never
 	input::LockMode inspectInputLock {input::LockMode::Auto};
@@ -225,12 +228,14 @@ private:
 	std::optional<ScenarioRequest> _scenarioRequest;
 	/// The port the debug inspector is to listen on, if it is to start
 	std::optional<uint16_t> _inspectPort;
+	std::optional<uint32_t> _seed;
 	input::LockMode _inspectInputLock {input::LockMode::Auto};
 	/// Whether the testbed opens its window of scenarios
 	bool _testbedWindow {true};
 	bool _quitRequested {false};
 
-	std::chrono::steady_clock::time_point _lastGameLoopTime;
+	/// The machine's ticks at the last turn, as the game reads them
+	uint32_t _lastGameLoopTime {0};
 	std::chrono::steady_clock::duration _turnDeltaTime;
 	uint32_t _frameCount {0};
 	glm::ivec2 _mousePosition {0, 0};

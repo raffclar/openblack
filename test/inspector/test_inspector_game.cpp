@@ -141,7 +141,19 @@ public:
 	{
 		return {{.id = "idle.one", .name = "One", .facet = "Idle", .description = "A creature idles"}};
 	}
+	[[nodiscard]] uint32_t GetSeed() const override { return seed; }
+	void SetSeed(uint32_t value, std::optional<int64_t> pinned) override
+	{
+		seed = value;
+		date = pinned;
+		ticks = 0;
+	}
+	[[nodiscard]] std::optional<int64_t> GetPinnedDate() const override { return date; }
+	[[nodiscard]] uint32_t GetTicks() const override { return ticks; }
 
+	uint32_t seed {12345};
+	std::optional<int64_t> date;
+	uint32_t ticks {999};
 	bool paused {true};
 	uint32_t turn {10};
 	float speed {1.0f};
@@ -325,6 +337,17 @@ TEST_F(InspectorRegistry, HashOfWhereEverythingIs)
 	EXPECT_NE(Ask(_inspector, R"({"query": "ecs.hash", "params": {"component": "Tree"}})")["hash"], plain["hash"]);
 }
 
+// Entities with a component excluded are left out, as the hand is when comparing runs
+TEST_F(InspectorRegistry, HashLeavesOutExcludedEntities)
+{
+	const auto without = Ask(_inspector, R"({"query": "ecs.hash", "params": {"exclude": ["Villager"]}})");
+	EXPECT_EQ(without["entities"], 5);
+	_registry.Get<Transform>(_villager).position.x += 1.0f;
+	EXPECT_EQ(Ask(_inspector, R"({"query": "ecs.hash", "params": {"exclude": ["Villager"]}})")["hash"], without["hash"]);
+	const auto decoded = DecodeRequest(R"({"query": "ecs.hash", "params": {"exclude": ["Nope"]}})");
+	EXPECT_FALSE(_inspector.Answer(std::get<Request>(decoded)).Ok());
+}
+
 TEST_F(InspectorRegistry, UnknownComponentsAndEntitiesAreExplained)
 {
 	auto decoded = DecodeRequest(R"({"query": "ecs.entities", "params": {"component": "Nope"}})");
@@ -459,4 +482,62 @@ TEST(InspectorRunControl, TheLastStepIsReportedWithItsFixedFrameTime)
 	Ask(inspector, R"({"query": "game.frame_time", "params": {"ms": 10}})");
 	Ask(inspector, R"({"query": "game.step", "params": {"frames": 1}})");
 	EXPECT_EQ(Ask(inspector, R"({"query": "game.state"})")["last_step"]["fixed_ms"], 10);
+}
+
+// game.seed reads the run's seed; given one, every random number starts again from it and the date is pinned
+TEST(InspectorRunControl, SeedStartsTheRunAgainFromASeed)
+{
+	FakeRunTarget target;
+	Inspector inspector;
+	inspector.Add(std::make_unique<GameProvider>(target));
+
+	const auto now = Ask(inspector, R"({"query": "game.seed"})");
+	EXPECT_EQ(now["seed"], 12345);
+	EXPECT_TRUE(now["date"].is_null());
+	EXPECT_EQ(now["ticks"], 999);
+
+	const auto seeded = Ask(inspector, R"({"query": "game.seed", "params": {"seed": 42}})");
+	EXPECT_EQ(seeded["seed"], 42);
+	EXPECT_EQ(seeded["date"], GameProvider::k_SeededDate);
+	EXPECT_EQ(seeded["ticks"], 0);
+
+	EXPECT_EQ(Ask(inspector, R"({"query": "game.seed", "params": {"seed": 7, "date": 1000}})")["date"], 1000);
+	const auto wall = Ask(inspector, R"({"query": "game.seed", "params": {"seed": 7, "wall_clock": true}})");
+	EXPECT_TRUE(wall["date"].is_null());
+	EXPECT_EQ(target.seed, 7u);
+
+	for (const auto* refused :
+	     {R"({"query": "game.seed", "params": {"seed": -1}})", R"({"query": "game.seed", "params": {"seed": 1.5}})",
+	      R"({"query": "game.seed", "params": {"seed": 4294967296}})", R"({"query": "game.seed", "params": {"date": 5}})",
+	      R"({"query": "game.seed", "params": {"seed": 1, "date": 5, "wall_clock": true}})"})
+	{
+		const auto decoded = DecodeRequest(refused);
+		EXPECT_FALSE(inspector.Answer(std::get<Request>(decoded)).Ok()) << refused;
+	}
+	EXPECT_EQ(target.seed, 7u);
+}
+
+// In a seeded run each land loaded starts paused, before any of its frames, so that the turns after are stepped exactly
+TEST(InspectorRunControl, ASeededRunStartsEachLoadPaused)
+{
+	FakeRunTarget target;
+	Inspector inspector;
+	auto provider = std::make_unique<GameProvider>(target);
+	auto* game = provider.get();
+	inspector.Add(std::move(provider));
+
+	target.paused = false;
+	game->Loaded();
+	EXPECT_FALSE(target.paused);
+
+	EXPECT_EQ(Ask(inspector, R"({"query": "game.seed", "params": {"seed": 3}})")["pause_on_load"], true);
+	game->Loaded();
+	EXPECT_TRUE(target.paused);
+
+	Ask(inspector, R"({"query": "game.seed", "params": {"seed": 3, "pause_on_load": false}})");
+	target.paused = false;
+	game->Loaded();
+	EXPECT_FALSE(target.paused);
+	const auto decoded = DecodeRequest(R"({"query": "game.seed", "params": {"pause_on_load": true}})");
+	EXPECT_FALSE(inspector.Answer(std::get<Request>(decoded)).Ok());
 }

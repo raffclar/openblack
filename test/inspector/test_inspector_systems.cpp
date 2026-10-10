@@ -107,6 +107,10 @@ public:
 	[[nodiscard]] std::optional<uint32_t> GetFixedFrameTime() const override { return std::nullopt; }
 	bool LoadScenario(std::string_view /*id*/) override { return false; }
 	[[nodiscard]] std::vector<ScenarioSummary> Scenarios() const override { return {}; }
+	[[nodiscard]] uint32_t GetSeed() const override { return 0; }
+	void SetSeed(uint32_t /*seed*/, std::optional<int64_t> /*date*/) override {}
+	[[nodiscard]] std::optional<int64_t> GetPinnedDate() const override { return std::nullopt; }
+	[[nodiscard]] uint32_t GetTicks() const override { return 0; }
 };
 
 } // namespace

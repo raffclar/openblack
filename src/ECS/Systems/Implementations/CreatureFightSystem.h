@@ -11,6 +11,7 @@
 
 #include <random>
 
+#include "Common/RandomNumberManager.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -121,7 +122,7 @@ private:
 	float _lookSeconds {0.0f};
 	/// Whether the player may leave the fight view, and it ends by itself (scripts may forbid it)
 	bool _fightExit {true};
-	std::mt19937 _random {std::random_device {}()};
+	RandomStreamSource _random {RandomStream::CreatureFight};
 };
 
 } // namespace openblack::ecs::systems
