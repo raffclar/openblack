@@ -340,7 +340,8 @@ QueryResult RegistryProvider::Hash(const ecs::Registry& registry, const Json& pa
 		mix(&transform.scale, sizeof(transform.scale));
 		if (extra != nullptr && extra->contains(entity))
 		{
-			const auto fields = Dump(reflection::ComponentToJson(_context, extra->type(), extra->value(entity)));
+			const auto fields =
+			    Dump(reflection::ComponentToJson(_context, reflection::StorageType(*extra), extra->value(entity)));
 			mix(fields.data(), fields.size());
 		}
 	}
