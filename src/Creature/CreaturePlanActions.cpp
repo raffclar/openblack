@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <array>
 
+#include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureFireAgenda.h"
 #include "Creature/CreatureLayers.h"
@@ -28,8 +29,7 @@ namespace
 constexpr size_t k_Sneeze = 62;
 constexpr size_t k_LookAtMe = 69;
 constexpr size_t k_PickMe = 74;
-/// Looking something over from where it stands, following it about, and gazing at the view, last this long
-constexpr float k_LookSeconds = 4.0f;
+/// Following something about and gazing at the view last this long
 constexpr float k_FollowSeconds = 8.0f;
 constexpr float k_GazeSeconds = 6.0f;
 
@@ -85,7 +85,7 @@ constexpr std::array k_Executors {
     Executor {.action = "BePatheticToPlayer", .build = Build::FaceCameraEmote, .animation = k_PickMe},
     Executor {.action = "HowlAtPlayer", .build = Build::FaceCameraEmote, .animation = animations::k_Summon},
     Executor {.action = "RunAwayFromObject", .target = Target::Frightening, .build = Build::RunFromObject},
-    Executor {.action = "BeFrightenedOnTheSpot", .build = Build::Emote, .animation = animations::k_Frightened},
+    Executor {.action = "BeFrightenedOnTheSpot", .build = Build::BeFrightened},
     Executor {.action = "BeSad", .build = Build::Emote, .animation = animations::k_Sad},
     Executor {.action = "Scratch", .build = Build::Emote, .animation = animations::k_Scratch},
     Executor {.action = "Shiver", .build = Build::Emote, .animation = animations::k_Cold},
@@ -95,8 +95,7 @@ constexpr std::array k_Executors {
     Executor {.action = "ShowImpressiveAnimation", .build = Build::Emote, .animation = animations::k_Impress},
     Executor {
         .action = "Stroke", .target = Target::Villager, .build = Build::ApproachEmote, .animation = animations::k_FeelingNice},
-    Executor {
-        .action = "SmileAtFriend", .target = Target::Creature, .build = Build::ApproachEmote, .animation = animations::k_Happy},
+    Executor {.action = "SmileAtFriend", .target = Target::Creature, .build = Build::SmileAt},
     Executor {.action = "WaveAtFriend",
               .target = Target::Creature,
               .build = Build::ApproachEmote,
@@ -130,6 +129,11 @@ constexpr std::array k_Executors {
     Executor {.action = "PutOutFireWithMagicWater", .target = Target::Burning, .build = Build::CastWater},
     Executor {.action = "SetFireToObject", .target = Target::Unburnt, .build = Build::SetFire},
     Executor {.action = "StartFire", .build = Build::Never},
+    Executor {.action = "SleepAtHome", .build = Build::SleepAtHome, .activity = Activity::Sleep},
+    Executor {.action = "WaveAtObject", .target = Target::Anything, .build = Build::WaveAt},
+    Executor {.action = "PutDown", .build = Build::PutDown, .activity = Activity::PutDown},
+    Executor {.action = "CastHealSpellPU1", .target = Target::HurtVillager, .build = Build::CastHelpful},
+    Executor {.action = "DeadForever", .build = Build::DeadForever},
     // What scripts force on creatures to stage their scenes
     Executor {.action = "LookForever", .target = Target::Anything, .build = Build::LookForever},
     Executor {.action = "LookButDontApproach", .target = Target::Anything, .build = Build::LookButDontApproach},
@@ -180,7 +184,10 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 	case Build::TakeFishHome:
 		return situation.fishing.has_value() && situation.home.has_value();
 	case Build::Hurl:
-		return situation.hurlTarget.has_value();
+		// What to hurl is given, or it hurls what it picks up at somewhere it finds
+		return situation.instrument.has_value() || situation.hurlTarget.has_value();
+	case Build::SleepAtHome:
+		return situation.home.has_value();
 	case Build::FaceCameraEmote:
 	case Build::RunFromPlayer:
 		return situation.camera.has_value();
@@ -226,13 +233,30 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::ExamineByPickingUp:
 		return creature_mind::ExamineByPickingUp(*object, random);
 	case Build::ExamineByLooking:
-		return creature_mind::LookAt(objectPoint, k_LookSeconds);
+		return creature_mind::ExamineByLooking(*object, situation.height, situation.thingHeight);
 	case Build::ExamineByFollowing:
 		return creature_mind::FollowFor(*object, k_FollowSeconds);
 	case Build::ThrowAbout:
 		return creature_mind::ThrowAbout(*object, random);
 	case Build::Hurl:
+		if (situation.instrument.has_value())
+		{
+			return creature_mind::HurlAt(*situation.instrument, *object, objectPoint, situation.height, situation.handFull,
+			                             random);
+		}
 		return creature_mind::Hurl(*object, *situation.hurlTarget, random);
+	case Build::SleepAtHome:
+		return creature_mind::SleepAtHome(*situation.home, situation.height, random);
+	case Build::SmileAt:
+		return creature_mind::SmileAt(*object, situation.height, situation.chance, random);
+	case Build::WaveAt:
+		return creature_mind::WaveAt(*object, situation.height);
+	case Build::BeFrightened:
+		return creature_mind::BeFrightenedOnTheSpot();
+	case Build::PutDown:
+		return creature_mind::PutDown();
+	case Build::DeadForever:
+		return creature_mind::DeadForever();
 	case Build::Destroy:
 		return creature_mind::DestroyThing(*object);
 	case Build::SitDown:

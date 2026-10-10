@@ -103,6 +103,14 @@ enum class Build : uint8_t
 	LookAtCamera,
 	PointAtThing,
 	PointAtCamera,
+	/// Hurling, sleeping at home, smiling or waving at someone, being frightened on the spot, putting down what it
+	/// holds and lying dead for good, as the game builds them whoever chose them
+	SleepAtHome,
+	SmileAt,
+	WaveAt,
+	BeFrightened,
+	PutDown,
+	DeadForever,
 	/// An action whose agenda can never be made
 	Never,
 };
@@ -157,6 +165,9 @@ struct Situation
 	bool hasPlayer {false};
 	bool controlledByScript {false};
 	float radius {0.0f};
+	/// Its height, and the height of the thing the action is done to
+	float height {0.0f};
+	float thingHeight {0.0f};
 	float chance {0.0f};
 };
 /// What a casting action casts, from its row of the game's table and the creature

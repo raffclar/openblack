@@ -22,8 +22,10 @@
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -73,7 +75,20 @@ bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, 
 	{
 		return FightForScript(creature, target);
 	}
-	return ForcePlan(creature, {.desire = Desire::ObeyPlayer, .action = name, .object = target, .instrument = with});
+	if (!ForcePlan(creature, {.desire = Desire::ObeyPlayer, .action = name, .object = target, .instrument = with}))
+	{
+		return false;
+	}
+	// Falling dead, those about it react to the death
+	if (name == k_DeadForeverAction && Locator::reactionSystem::has_value())
+	{
+		if (const auto* transform = registry.TryGet<const Transform>(creature))
+		{
+			Locator::reactionSystem::value().Create(
+			    {.initiator = creature, .type = Reaction::ReactToDeath, .position = transform->position});
+		}
+	}
+	return true;
 }
 
 bool CreatureMindSystem::FightForScript(entt::entity creature, entt::entity opponent)

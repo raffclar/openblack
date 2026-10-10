@@ -668,3 +668,6 @@ target_link_libraries(test_camera_handback PRIVATE edt)
 openblack_setup_and_add_test(test_double_click input/test_double_click.cpp)
 openblack_setup_and_add_test(test_force_field camera/test_force_field.cpp)
 openblack_setup_and_add_test(test_intro_rules test_intro_rules.cpp)
+openblack_setup_and_add_test(
+  test_creature_action_agendas test_creature_action_agendas.cpp
+)
