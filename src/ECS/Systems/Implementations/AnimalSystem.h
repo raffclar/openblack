@@ -59,6 +59,8 @@ public:
 
 	[[nodiscard]] bool IsFrighteningToCreature(entt::entity animal) const override;
 	[[nodiscard]] bool CanPlayerPickUp(entt::entity animal) const override;
+	[[nodiscard]] bool CanBePickedUpByCreature(entt::entity animal) const override;
+	[[nodiscard]] bool CanBeStompedOnByCreature(entt::entity animal, float creatureHeight) const override;
 
 private:
 	// Moving
@@ -119,6 +121,8 @@ private:
 	void Remove(entt::entity animal);
 	/// A turn of a killed animal: falling dead, then lying dead its time before it goes
 	void ProcessDeath(entt::entity entity, components::Animal& animal);
+	/// The grey puff of smoke a dead body leaves as it goes
+	void LeaveSmoke(entt::entity entity, const components::Animal& animal) const;
 	/// A dying bird falls out of the sky through the physics
 	void FallDying(entt::entity entity, const components::Animal& animal);
 	/// An animal leaves its flock, which goes once empty

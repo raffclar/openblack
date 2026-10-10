@@ -117,6 +117,9 @@ public:
 	[[nodiscard]] virtual bool IsFrighteningToCreature(entt::entity animal) const = 0;
 	/// Whether the player's hand may pick the animal up
 	[[nodiscard]] virtual bool CanPlayerPickUp(entt::entity animal) const = 0;
+	/// Whether a creature may pick the animal up, and stamp on it, a creature of the height given (metres)
+	[[nodiscard]] virtual bool CanBePickedUpByCreature(entt::entity animal) const = 0;
+	[[nodiscard]] virtual bool CanBeStompedOnByCreature(entt::entity animal, float creatureHeight) const = 0;
 };
 
 } // namespace openblack::ecs::systems
