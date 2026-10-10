@@ -202,6 +202,8 @@ public:
 	                                                         const gui::GameFont& font, const Facts& facts);
 	/// Whether the scroll of some content is the one the camera is close to, its text written in front of it each frame
 	[[nodiscard]] bool IsWrittenInFront(Content content) const;
+	/// What the scroll the camera was last sent to look at has written on it, none before one
+	[[nodiscard]] std::optional<Content> GetFocusedContent() const;
 
 private:
 	struct Scroll
