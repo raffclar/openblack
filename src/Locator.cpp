@@ -24,6 +24,7 @@
 #include "Common/EventManager.h"
 #include "Common/GameRandomProduction.h"
 #include "Common/RandomNumberManagerProduction.h"
+#include "Common/UserData.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/MapProduction.h"
@@ -313,7 +314,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::teleportSystem::emplace<TeleportSystem>();
 	Locator::vortexSystem::emplace<VortexSystem>();
 	Locator::creatureFizzSystem::emplace<CreatureFizzSystem>();
-	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>();
+	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>(user_data::CreatureMindFolder());
 	Locator::tornadoSystem::emplace<TornadoSystem>();
 	Locator::magicShieldSystem::emplace<MagicShieldSystem>();
 	Locator::forestSystem::emplace<ForestSystem>();

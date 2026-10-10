@@ -17,6 +17,7 @@
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerCreatures.h"
+#include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
 
@@ -90,6 +91,7 @@ void PlayerSystem::KeepForNextLand()
 		    Kept {.alignment = alignment != nullptr ? std::optional(*alignment) : std::nullopt,
 		          .damageFrom = player.damageFrom,
 		          .windResistance = player.windResistance,
+		          .miracles = player.miracles,
 		          .virtualInfluence = virtualInfluence != nullptr ? std::optional(virtualInfluence->state) : std::nullopt});
 	});
 }
@@ -110,6 +112,8 @@ void PlayerSystem::TakeUpKept(entt::entity playerEntity)
 	const auto& kept = found->second;
 	player->damageFrom = kept.damageFrom;
 	player->windResistance = kept.windResistance;
+	// Their enabled miracles and their power with each tribe don't outlast the land
+	player->miracles = player_miracles::AfterLandCleared(kept.miracles);
 	if (kept.alignment.has_value())
 	{
 		registry.AssignOrReplace<Alignment>(playerEntity, *kept.alignment);
