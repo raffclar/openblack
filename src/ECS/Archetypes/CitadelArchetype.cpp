@@ -29,6 +29,15 @@ using namespace openblack;
 using namespace openblack::ecs::archetypes;
 using namespace openblack::ecs::components;
 
+namespace
+{
+/// The game's turn goes the other way round from the drawn one
+glm::mat3 Rotation(float yAngle)
+{
+	return glm::mat3(glm::eulerAngleY(-yAngle));
+}
+} // namespace
+
 entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames playerOwner, float yAngle, const glm::vec3& size)
 {
 	return Create(position, playerOwner, yAngle, size, 1.0f);
@@ -39,8 +48,7 @@ entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames pla
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
-	// The game's turn goes the other way round from the drawn one
-	const glm::mat3 rotation(glm::eulerAngleY(-yAngle));
+	const auto rotation = Rotation(yAngle);
 	registry.Assign<Transform>(entity, position, rotation, size);
 	registry.Assign<Temple>(entity, Temple {.owner = playerOwner, .yAngle = yAngle});
 	const auto meshId = entt::hashed_string("temple/b_first_temple_l3d");
@@ -66,9 +74,7 @@ entt::entity CitadelArchetype::CreatePlan(int32_t townId, const glm::vec3& posit
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
-	// The game's turn goes the other way round from the drawn one
-	const glm::mat3 rotation(glm::eulerAngleY(-yAngle));
-	registry.Assign<Transform>(entity, position, rotation, size);
+	registry.Assign<Transform>(entity, position, Rotation(yAngle), size);
 	registry.Assign<PlannedTemple>(entity, PlannedTemple {.townId = townId, .owner = playerOwner, .yAngle = yAngle});
 	return entity;
 }

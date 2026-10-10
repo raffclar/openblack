@@ -708,13 +708,6 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			Locator::fireflySystem::value().Create(map_coords::FromWorld(land, placed.position));
 		}
 	}
-	// The player's temple, at full size as a land's script makes one
-	if (scenario.temple.has_value())
-	{
-		const auto point = MapPoint(middle, scenario.temple->offset);
-		ecs::archetypes::CitadelArchetype::Create({point.x, land.GetHeightAt(point), point.y}, PlayerNames::PLAYER_ONE,
-		                                          scenario.temple->angle, glm::vec3(1.0f));
-	}
 }
 
 void Runner::PlaceBirds(const Scenario& scenario, glm::vec2 middle)

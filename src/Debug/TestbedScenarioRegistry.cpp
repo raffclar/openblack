@@ -723,9 +723,9 @@ void AddGrowth(std::vector<Scenario>& all)
 		    tiger.size = 2.0f;
 		    return tiger;
 	    }()},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
 	    .commands = {Act(Kind::WalkHome, 0, 1.0f, true), Go(Kind::WalkTo, 0, k_OutOfThePen, 4.0f)},
 	    .repeatFrom = 0,
-	    .temple = TempleSetup {.offset = k_Temple, .angle = k_TempleTurn},
 	});
 }
 
@@ -2490,11 +2490,11 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "move mouse",
 	    "turn wheel",
 	    "set alignment",
-	    "walk home",
 	    "cinema bars",
 	    "set fight lean",
 	    "set miracle sightings",
 	    "hand tap",
+	    "walk home",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

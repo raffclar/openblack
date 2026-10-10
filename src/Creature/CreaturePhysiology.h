@@ -114,7 +114,8 @@ struct Shape
 	std::optional<float> penSize;
 };
 
-/// The size its body is shown at, which sets how fast it uses up its energy and how much it can hold
+/// The size its body is shown at, which sets how fast it uses up its energy and how much it can hold: its own size, or
+/// the smaller one in its pen, kept within the sizes a creature can be drawn at
 [[nodiscard]] float ShownSize(const Shape& shape);
 
 /// What else the body goes through this turn

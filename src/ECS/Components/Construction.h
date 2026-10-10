@@ -22,7 +22,7 @@ struct PlannedTemple
 {
 	int32_t townId;
 	PlayerNames owner;
-	/// How far round the temple will be turned, as the game measures it
+	/// How far round it will be turned, in radians, as the game measures a temple's turn
 	float yAngle {0.0f};
 };
 
