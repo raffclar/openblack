@@ -38,6 +38,7 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/IntroSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
@@ -54,6 +55,7 @@
 #include "Locator.h"
 #include "Particles/ParticleBlast.h"
 #include "Particles/ParticleCreators.h"
+#include "Particles/ParticleMaths.h"
 #include "Particles/SurfaceOfRevolution.h"
 #include "Profiler.h"
 #include "Renderer.h"
@@ -660,4 +662,72 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 		    command.kind == ItemKind::Sprite || command.kind == ItemKind::Chain || command.kind == ItemKind::Surface;
 		submit(command, inSkyPass ? skyViewId : translucentViewId);
 	}
+}
+
+void Renderer::DrawIntroLight(const DrawSceneDesc& desc) const
+{
+	if (desc.viewId != RenderPass::Main || !Locator::introSystem::has_value())
+	{
+		return;
+	}
+	const auto& intro = Locator::introSystem::value();
+	const auto* frame = intro.GetLightFrame();
+	if (frame == nullptr || frame->drawn.empty())
+	{
+		return;
+	}
+	// Its sprites are cells of the misc sheet, its alpha beside it
+	static constexpr auto k_Sheet = entt::hashed_string("raw/misc0");
+	static constexpr auto k_SheetAlpha = entt::hashed_string("raw/misc0a");
+	constexpr int k_CellsPerRow = 8;
+	const auto& textures = Locator::resources::value().GetTextures();
+	if (!textures.Contains(k_Sheet.value()) || !textures.Contains(k_SheetAlpha.value()))
+	{
+		return;
+	}
+	constexpr auto k_Stride = static_cast<uint16_t>(sizeof(particles::sprites::SpriteInstance));
+	const auto count = static_cast<uint32_t>(frame->drawn.size());
+	if (bgfx::getAvailInstanceDataBuffer(count, k_Stride) < count)
+	{
+		return;
+	}
+	bgfx::InstanceDataBuffer instances {};
+	bgfx::allocInstanceDataBuffer(&instances, count, k_Stride);
+	auto* out = reinterpret_cast<particles::sprites::SpriteInstance*>(instances.data);
+	for (const auto& sprite : frame->drawn)
+	{
+		const auto cell = particles::maths::SpriteCellUv(sprite.cell, k_CellsPerRow);
+		const auto channel = [&sprite](uint32_t shift) { return static_cast<float>((sprite.argb >> shift) & 0xFFu) / 255.0f; };
+		*out++ = {
+		    .positionHalfWidth = {sprite.position, sprite.halfWidth},
+		    .shape = {sprite.halfWidth * sprite.heightFactor, sprite.angle, 0.0f, 0.0f},
+		    .uv = {cell.corner, cell.size},
+		    .colour = {channel(16), channel(8), channel(0), channel(24)},
+		    .flags = glm::vec4(0.0f),
+		};
+	}
+	const auto* program = _shaderManager->GetShader("ParticleInstanced");
+	glm::vec4 islandExtent(0.0f);
+	if (Locator::terrainSystem::has_value())
+	{
+		const auto extent = Locator::terrainSystem::value().GetExtent();
+		islandExtent = glm::vec4(extent.minimum, extent.maximum);
+	}
+	program->SetTextureSampler("s_diffuse", 0, *textures.Handle(k_Sheet));
+	program->SetTextureSampler("s_alpha", 1, *textures.Handle(k_SheetAlpha));
+	program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
+	program->SetTextureSampler("s_landLight", 7, GetLandLightTexture());
+	program->SetUniformValue("u_islandExtent", &islandExtent);
+	// Added to what is behind, writing no depth; near its end and once landed it shows through the land and the sea
+	auto state = BlendState(render_modes::Mode::AlphaTexturedAlphaAdditiveNz);
+	if (frame->throughEverything)
+	{
+		state = (state & ~BGFX_STATE_DEPTH_TEST_MASK) | BGFX_STATE_DEPTH_TEST_ALWAYS;
+	}
+	bgfx::setState(state);
+	_plane->GetVertexBuffer().Bind();
+	bgfx::setInstanceDataBuffer(&instances, 0, count);
+	// Among what blends, by how far its head is from the camera
+	program->Submit(static_cast<bgfx::ViewId>(TranslucentView(desc.viewId)),
+	                zsort::Depth(intro.GetLightSortPoint(), desc.camera->GetOrigin()));
 }

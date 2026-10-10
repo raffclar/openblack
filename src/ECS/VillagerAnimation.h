@@ -95,10 +95,11 @@ struct WalkInputs
 	float lifeWhenCrawlsWounded {0.15f};
 	float lifeWhenWalksWounded {0.3f};
 	bool female {false};
-	/// Its speed and the fastest it walks and runs, all in the same units
-	float speed {0.0f};
-	float walkMax {0.0f};
-	float runMax {0.0f};
+	/// Its speed and the fastest it walks and runs, in the game's whole speed units (655.36 to a metre a second), so a
+	/// speed right at a limit is still that limit's gait
+	int32_t speed {0};
+	int32_t walkMax {0};
+	int32_t runMax {0};
 };
 /// The badly hurt crawl and the hurt limp; the rest walk, run or sprint by their speed, men and women in their own way,
 /// and anyone carrying something big carries it walking or running

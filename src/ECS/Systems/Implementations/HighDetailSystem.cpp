@@ -207,9 +207,10 @@ void HighDetailSystem::PlaceEyes(uint32_t drawTime, const glm::mat4& viewProject
 		{
 			return;
 		}
-		// Placed as its body is drawn, by its bones as posed or as its model rests
+		// Placed as its body is drawn, by its bones as posed or as its model rests, in the opening hand's grip while held
+		const auto drawnAt = rules::DrawnAt(detail.heldAt, transform.position);
 		auto standing = glm::mat4(transform.rotation);
-		standing = glm::translate(standing, transform.position * transform.rotation);
+		standing = glm::translate(standing, drawnAt * transform.rotation);
 		standing = glm::scale(standing, transform.scale);
 		const auto model = physics_draw::ModelMatrix(standing, registry.TryGet<const PhysicsDrawPose>(entity));
 		const auto detailed = meshes.Handle(mesh.id);

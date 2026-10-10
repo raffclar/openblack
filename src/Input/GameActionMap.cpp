@@ -83,6 +83,14 @@ void GameActionMap::QueuePress(BindableActionMap action)
 	_queuedPresses.emplace_back(action);
 }
 
+bool GameActionMap::TakeDoubleClick()
+{
+	const bool marked = GetUnbindable(UnbindableActionMap::DOUBLE_CLICK);
+	_unbindableMap = static_cast<UnbindableActionMap>(static_cast<uint8_t>(_unbindableMap) &
+	                                                  ~static_cast<uint8_t>(UnbindableActionMap::DOUBLE_CLICK));
+	return marked;
+}
+
 bool GameActionMap::HasQueuedPresses() const
 {
 	return !_queuedPresses.empty() || !_queuedReleases.empty() || _queuedHeld != BindableActionMap::NONE;
@@ -488,7 +496,8 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 		    (static_cast<uint64_t>(_bindableMap) & ~static_cast<uint64_t>(ActionsForKey(_bindings, key))) |
 		    static_cast<uint64_t>(ActionsForKeyDown(_bindings, key, event.key.keysym.mod)));
 	}
-	// Double click will not count as a single click
+	// The second press of a double click with the left button marks the double click, and presses none of the button's
+	// actions again. The mark outlasts the press: it stays, through the button's letting go, until the camera takes it.
 	else if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT && event.button.clicks == 2)
 	{
 		_unbindableMap = static_cast<UnbindableActionMap>(static_cast<uint8_t>(_unbindableMap) |
@@ -573,11 +582,6 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 		_heldKeys.reset(static_cast<size_t>(key));
 		_bindableMap = static_cast<BindableActionMap>(static_cast<uint64_t>(_bindableMap) &
 		                                              ~static_cast<uint64_t>(ActionsForKey(_bindings, key)));
-	}
-	else if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT && event.button.clicks == 2)
-	{
-		_unbindableMap = static_cast<UnbindableActionMap>(static_cast<uint8_t>(_unbindableMap) &
-		                                                  ~static_cast<uint8_t>(UnbindableActionMap::DOUBLE_CLICK));
 	}
 	else if (event.type == SDL_MOUSEBUTTONUP)
 	{

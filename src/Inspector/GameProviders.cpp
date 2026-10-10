@@ -9,6 +9,8 @@
 
 #include "GameProviders.h"
 
+#include <cmath>
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -127,6 +129,7 @@
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
+#include "ECS/Systems/IntroSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -184,6 +187,7 @@
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
+#include "Particles/LightSheet.h"
 #include "Profiler.h"
 #include "RegistryProviders.h"
 #include "Resources/ResourcesInterface.h"
@@ -273,6 +277,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"walkPathSystem", "living.walk_paths"},
     LocatorCoverage {"danceSystem", "living.dances"},
     LocatorCoverage {"sharkSystem", "living.sharks"},
+    LocatorCoverage {"introSystem", "living.intro"},
     LocatorCoverage {"soundTagSystem", "living.sound_tags"},
     LocatorCoverage {"rainSystem", "land.precipitation"},
     LocatorCoverage {"chimneySmokeSystem", "living.chimneys"},
@@ -874,6 +879,30 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 			                  });
 		                  }
 		                  return Json {{"wake_timer", sharks.GetWakeTimer()}, {"sharks", std::move(items)}};
+	                  }));
+	provider->Add(Query("intro", "The opening's light falling onto the boy and the god's hand lifting him and setting him "
+	                             "down: the stage, the light's state and head, the chasing camera, the hand's clip time and "
+	                             "where it holds the boy"),
+	              Serve<Locator::introSystem>(
+	                  "the opening's light and hand", [](const ecs::systems::IntroSystemInterface& intro, const QueryContext&) {
+		                  const auto state = intro.GetState();
+		                  Json json {
+		                      {"stage", state.stage},
+		                      {"light", state.light.has_value() ? Json(static_cast<int32_t>(*state.light)) : Json(nullptr)},
+		                      {"light_head", state.lightHead.has_value() ? Point(*state.lightHead) : Json(nullptr)},
+		                      {"light_elapsed", state.lightElapsed},
+		                      {"camera_chasing", state.cameraChasing},
+		                      {"hand", state.hand == entt::null ? Json(nullptr) : Json(ToId(state.hand))},
+		                      {"hand_clip_time", state.handClipTime},
+		                      {"hand_playing", state.handPlaying},
+		                      {"holding_boy", state.holdingBoy},
+		                      {"grip", state.grip.has_value() ? Point(*state.grip) : Json(nullptr)},
+		                      {"lift_finished", state.liftFinished}};
+		                  if (const auto view = intro.GetCameraView(); view.has_value())
+		                  {
+			                  json["camera"] = {{"origin", Point(view->origin)}, {"focus", Point(view->focus)}};
+		                  }
+		                  return json;
 	                  }));
 	provider->Add(Query("walk_paths", "The things walking the camera editor's tracks: the track, how far and up to where", {},
 	                    ResultKind::List),
@@ -1482,7 +1511,8 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 	                  }));
 	provider->Add(
 	    Query("zones", "The camera zones the land's scripts set: their file, the fence the camera is kept inside, its "
-	                   "height limits and the places it is kept out of, and whether the camera is inside the fence"),
+	                   "height limits and the places it is kept out of, whether the camera is inside the fence, and the "
+	                   "force field the camera lights up where it hits the fence (its strongest point, how often hit)"),
 	    Serve<Locator::cameraZoneSystem>(
 	        "the camera zones", [](const ecs::systems::CameraZoneSystemInterface& system, const QueryContext&) {
 		        const auto& zones = system.GetZones();
@@ -1507,6 +1537,17 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 		                     {"height_above_land", zones.useHeightAboveLand ? Json(zones.heightAboveLand) : Json(nullptr)},
 		                     {"fence", std::move(fence)},
 		                     {"exclusions", std::move(exclusions)}};
+		        // The wall of light the camera lights up where it hits the fence
+		        const auto& forceField = system.GetForceField();
+		        const auto points = std::min(forceField.Points(), forceField.Strengths().size());
+		        const auto strengths = std::span(forceField.Strengths()).first(points);
+		        result["force_field"] = {
+		            {"drawn", !forceField.Hidden()},
+		            {"showing", !forceField.Hidden() && forceField.Showing()},
+		            {"points", points},
+		            {"strongest", strengths.empty() ? 0.0f : std::ranges::max(strengths)},
+		            {"hits", system.GetFenceHits()},
+		        };
 		        if (Locator::camera::has_value())
 		        {
 			        const auto& camera = Locator::camera::value();
@@ -2070,8 +2111,9 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("help");
 	provider->Add(
-	    Query("advisors", "The good and the evil advisor: what each does, where it hovers and whether it is talking", {},
-	          ResultKind::List),
+	    Query("advisors",
+	          "The good and the evil advisor: what each does, where it hovers, whether it is talking and its mouth's lip sync",
+	          {}, ResultKind::List),
 	    Serve<Locator::advisorSystem>(
 	        "the advisors", [](const ecs::systems::AdvisorSystemInterface& advisors, const QueryContext& /*c*/) -> Json {
 		        if (!advisors.IsLoaded())
@@ -2085,7 +2127,28 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 		        for (int dude = 0; dude < 2; ++dude)
 		        {
 			        const auto& spirit = controller.Dude(dude);
+			        // The mouth: the lip sync's three weights and the mouth clips posed this frame (clip, ms)
+			        Json shapes = Json::array();
+			        for (const auto& layer : spirit.Layers())
+			        {
+				        if (layer.kind == help::spirits::AnimLayer::Kind::Add && layer.clip >= help::spirits::anim::k_VowelE &&
+				            layer.clip < help::spirits::anim::k_VowelE + 3)
+				        {
+					        shapes.push_back({{"clip", layer.clip}, {"ms", layer.milliseconds}});
+				        }
+			        }
+			        Json weights = Json::array();
+			        if (voices != nullptr)
+			        {
+				        for (const float w : voices->GetLipSyncKey(dude).weights)
+				        {
+					        // Not a number after a window of pure silence, as in the game
+					        weights.push_back(std::isfinite(w) ? Json(w) : Json(nullptr));
+				        }
+			        }
 			        items.push_back({{"advisor", dude == 0 ? "good" : "evil"},
+			                         {"mouth", {{"weights", weights}, {"shapes", shapes}}},
+			                         {"tags_left", spirit.TagsLeft()},
 			                         {"control_state", static_cast<int>(controller.State(dude))},
 			                         {"state", spirit.State()},
 			                         {"hover", Point(spirit.Hover())},

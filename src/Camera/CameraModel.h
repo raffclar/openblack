@@ -18,6 +18,7 @@
 #include <glm/vec3.hpp>
 
 #include "CameraDrag.h"
+#include "Hand/HandTricons.h"
 
 namespace openblack
 {
@@ -65,6 +66,10 @@ public:
 		std::optional<camera_drag::DragMode> dragMode;
 		/// Ctrl and Shift held for a clear view: dragging, the hand grips
 		bool clearViewGrip {false};
+		/// What the world camera's helper icons by the hand are picked from this frame, none for other cameras (the
+		/// hand's influence and the clock are left for the caller), and how far the clear view has come in
+		std::optional<hand_tricons::WorldCameraFrame> icons;
+		float clearView {0.0f};
 	};
 
 	static std::unique_ptr<CameraModel> CreateModel(Model model);

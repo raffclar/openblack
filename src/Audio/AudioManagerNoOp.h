@@ -64,8 +64,10 @@ public:
 	}
 	void PlaySound([[maybe_unused]] entt::id_type id, [[maybe_unused]] PlayType type) override {}
 	void AddAnimEffects([[maybe_unused]] const std::string& bankName, [[maybe_unused]] AnimEffectTable table) override {}
+	using AudioManagerInterface::PlayAnimEffect;
 	AnimEffectPlay PlayAnimEffect([[maybe_unused]] const std::string& bankName, [[maybe_unused]] std::span<const int32_t> keys,
-	                              [[maybe_unused]] entt::entity owner, [[maybe_unused]] const glm::vec3& position) override
+	                              [[maybe_unused]] entt::entity owner, [[maybe_unused]] const glm::vec3& position,
+	                              [[maybe_unused]] const std::optional<SoundEffectConditions>& heardUnder) override
 	{
 		return {};
 	}

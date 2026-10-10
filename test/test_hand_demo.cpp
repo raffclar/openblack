@@ -205,3 +205,21 @@ TEST(HandDemo, NoHintsNearEitherEnd)
 	playback.Advance(410, false, trigger, played);
 	EXPECT_EQ(played.back().hints, 0u);
 }
+
+TEST(HandDemoPlayback, AButtonIsHeldFromItsPressToItsRelease)
+{
+	HeldButtons held;
+	held = AfterRecord(held, hnd::HNDMessage::MoveButtonDown);
+	EXPECT_TRUE(held.move);
+	EXPECT_FALSE(held.action);
+	held = AfterRecord(held, hnd::HNDMessage::Move);
+	EXPECT_TRUE(held.move);
+	held = AfterRecord(held, hnd::HNDMessage::ActionButtonDown);
+	EXPECT_TRUE(held.move);
+	EXPECT_TRUE(held.action);
+	held = AfterRecord(held, hnd::HNDMessage::MoveButtonUp);
+	EXPECT_FALSE(held.move);
+	EXPECT_TRUE(held.action);
+	held = AfterRecord(held, hnd::HNDMessage::ActionButtonUp);
+	EXPECT_FALSE(held.action);
+}

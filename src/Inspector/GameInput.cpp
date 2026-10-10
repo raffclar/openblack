@@ -405,6 +405,8 @@ Json GameInput::State() const
 		state["pointer"] = {pointer.x, pointer.y};
 		state["scripted"] = scripted.has_value();
 		state["buttons"] = actions.GetPointerButtons();
+		// A double click waits here until the camera takes it
+		state["double_click"] = actions.GetUnbindable(input::UnbindableActionMap::DOUBLE_CLICK);
 	}
 	state["keys_held"] = Json::array();
 	for (const auto key : _heldKeys)

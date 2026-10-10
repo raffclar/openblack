@@ -24,8 +24,10 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "EngineConfig.h"
 #include "GameActionMapInterface.h"
+#include "Help/HelpProfile.h"
 #include "Locator.h"
 
 namespace openblack::input
@@ -116,9 +118,12 @@ void ShortcutKeys::Update()
 	}
 	const zoom_to::CameraView current {.origin = camera.GetOrigin(), .focus = camera.GetFocus()};
 	std::optional<zoom_to::CameraView> flight;
+	// The help's profile counts every flight to the temple or over the realm, but not a single tap's view
+	bool flyingToPlace = true;
 	if (temple)
 	{
 		const auto now = std::chrono::milliseconds(machine_clock::Ticks());
+		flyingToPlace = _zoomTo.IsDoubleTap(now);
 		const auto templePosition = PlayerTemplePosition();
 		flight = _zoomTo.PressTemple(
 		    now, current, GroundUnder(land, current.focus),
@@ -131,6 +136,10 @@ void ShortcutKeys::Update()
 	if (flight.has_value())
 	{
 		camera.GetModel().SetFlight(flight->origin, flight->focus);
+	}
+	if (flyingToPlace && Locator::helpProfileSystem::has_value())
+	{
+		Locator::helpProfileSystem::value().Trigger(help::profile::k_CameraFlyToTemple);
 	}
 }
 
