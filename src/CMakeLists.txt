@@ -117,6 +117,7 @@ target_link_libraries(
           anm
           glw
           morph
+          helpdude
           psys
           physconst
           sas

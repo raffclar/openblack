@@ -2108,6 +2108,7 @@ std::vector<Scenario> Build()
 	AddHandNavigationScenarios(all);
 	AddHandLookScenarios(all);
 	AddKnockScenarios(all);
+	AddAdvisorScenarios(all);
 	return all;
 }
 
@@ -2203,7 +2204,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 {
 	return kind == Kind::SetHour || kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed ||
 	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment ||
-	       kind == Kind::HandTapObject || IsPointerCommand(kind);
+	       kind == Kind::HandTapObject || kind == Kind::Advisor || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -2211,7 +2212,7 @@ std::string_view testbed_scenarios::Name(Facet facet)
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
 	    "Idle",       "Expressions", "Senses",    "Needs",         "Growth",  "Appearance", "Light", "Movement",
 	    "Footprints", "Audio",       "Objects",   "Hand",          "Leash",   "Combat",     "Mind",  "Particles",
-	    "Editor",     "Miracles",    "Benchmark", "Creature Mode", "Physics", "Nature",
+	    "Editor",     "Miracles",    "Benchmark", "Creature Mode", "Physics", "Nature", "Advisors",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
@@ -2230,7 +2231,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 85> k_Names {
+	constexpr std::array<std::string_view, 86> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -2316,6 +2317,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "turn wheel",
 	    "set alignment",
 	    "hand tap",
+	    "tell an advisor",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

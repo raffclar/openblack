@@ -99,6 +99,7 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
+#include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
@@ -971,6 +972,8 @@ bool Game::GameLogicLoop() noexcept
 	lhvm.LookIn(lhvm::ScriptType::All);
 	// The scripts' fade moves on with their turn
 	Locator::cinematicDirectorSystem::value().ProcessTurn();
+	// The advisors follow what they point at and look at
+	Locator::advisorSystem::value().ProcessTurn();
 
 	// The fireflies come out at nightfall and go home at dawn, by the time of day the turn began at
 	if (Locator::fireflySystem::has_value())
@@ -1436,6 +1439,22 @@ bool Game::Update() noexcept
 	Locator::villageLightSystem::value().Update(gameTime);
 	Locator::fieldSystem::value().Update(gameTime);
 	Locator::cinematicDirectorSystem::value().Update(gameTime);
+	// The advisors move and act once a frame, by the real time inside the temple and the game's otherwise
+	{
+		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+		const auto realMs = static_cast<int32_t>(clock.GetFrameRealTime().count());
+		const auto gameMs = static_cast<int32_t>(clock.GetFrameGameTime().count());
+		const auto screenSize = glm::max(Locator::windowing::value().GetSize(), glm::ivec2(1));
+		Locator::advisorSystem::value().Update({
+		    .camera = &camera,
+		    .screen = static_cast<glm::u16vec2>(screenSize),
+		    .mouse = _mousePosition,
+		    .frameMs = static_cast<uint32_t>(std::max(realMs, 1)),
+		    .stepMs = std::clamp(inTemple ? realMs : gameMs, 0, 500),
+		    .tickMs = SDL_GetTicks(),
+		    .wideScreen = Locator::cinematicDirectorSystem::value().IsWideScreenOn(),
+		});
+	}
 	// The cinema bars coming in hide the game's dialogs
 	if (Locator::cinematicDirectorSystem::value().TakeHideDialogs() && _interface && _interface->GetMenu().IsOpen())
 	{
@@ -2283,6 +2302,7 @@ bool Game::Initialize() noexcept
 		meshManager.Load("hand", LFromDiskTag {}, fileSystem.GetPath<Path::CreatureMesh>() / "Hand_Boned_Base2.l3d");
 		LoadHandAnimation();
 		LoadCreatureRigs();
+		Locator::advisorSystem::value().Load();
 		meshManager.Load("coffre", LFromDiskTag {}, fileSystem.GetPath<Path::Misc>() / "coffre.l3d");
 		// The closed reward chest
 		if (const auto path = fileSystem.GetPath<Path::Misc>() / "chest0.l3d"; fileSystem.Exists(path))

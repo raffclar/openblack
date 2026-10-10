@@ -45,6 +45,7 @@
 #endif
 
 #include "3D/SkyInterface.h"
+#include "Advisors.h"
 #include "Audio.h"
 #include "Camera.h"
 #include "Camera/Camera.h"
@@ -134,6 +135,7 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 	debugWindows.emplace_back(new TempleInterior);
 	debugWindows.emplace_back(new gui::Camera);
 	debugWindows.emplace_back(new Weather);
+	debugWindows.emplace_back(new Advisors);
 	debugWindows.emplace_back(new Magic);
 	debugWindows.emplace_back(new Gestures);
 	debugWindows.emplace_back(new Physics);
