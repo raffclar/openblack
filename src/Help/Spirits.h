@@ -27,6 +27,7 @@
 
 #include "3D/SkeletalAnimation.h"
 #include "Common/Zoomer.h"
+#include "Help/SpiritVoice.h"
 
 // The two advisor spirits as pure logic: AdvisorSpiritController, the two help spirits that hold the targets (good and evil)
 // and AdvisorSpirit's motion and anim stack. Nothing here draws, plays a sound or reads the Locator: the camera, the voice
@@ -148,30 +149,6 @@ struct ObjectInfo
 	float height {0.0f};       ///< The object's height (added for a point, not for a look)
 };
 
-/// One audio tag (a 20-byte record): time, who, action, index, value
-struct AudioTag
-{
-	float time {0.0f};
-	int32_t who {0};    ///< 0 the speaker (T), 1 the other (O, !), 2 the good one (G), 3 the evil one (E), 4 both (B, *)
-	int32_t action {0}; ///< 1 A play, 2 AS loop, 3 AR / R release, 4 E emotion, 5 L / 6 LS look mode, 7 LR restore
-	int32_t index {0};  ///< anim (prefix match), emotion or look mode
-	int32_t value {100};
-};
-/// The audio tag builder's per-label loop: one tag parsed at a time until the NUL, "[" then
-/// "<talker><type> <name>[digits]" entries; each tag gets the cue's time. `errors` counts the "unrecognised ..." cases.
-/// `lastWord` is the parser's word buffer, which keeps its word from one call to the next: a tag with no name takes the
-/// last one read.
-[[nodiscard]] std::vector<AudioTag> ParseAudioTags(std::string_view label, float time, std::string& lastWord,
-                                                   int* errors = nullptr);
-
-/// One cue label of a voice recording and its time in seconds from the start
-struct TagLabel
-{
-	std::string text;
-	float time;
-};
-/// A sentence's tags from all its labels in order; any error in any label leaves it with none
-[[nodiscard]] std::vector<AudioTag> BuildSentenceTags(std::span<const TagLabel> labels, std::string& lastWord);
 /// The sounds of an anim whose points its phase passed since it was last heard at `last`, which becomes the phase's
 /// fraction; `last` below 0 means not heard yet
 [[nodiscard]] std::vector<helpdude::SoundEvent> CrossedSounds(std::span<const helpdude::SoundEvent> events, float& last,
@@ -305,19 +282,6 @@ struct FrameInput
 	bool wideScreen {false}; ///< Read by Feel and the mouse zone
 };
 
-/// What the lip sync left for the mouth
-struct LipSyncFrame
-{
-	/// (GetTickCount - the sentence's start tick) x 0.001, then the play position x 0.001 when it is >= 0. The tag
-	/// walker runs on it in both cases, so the tags fire on the tick time while the play position is still -1 (Say's
-	/// delay of up to 500 ms)
-	float time {0.0f};
-	/// The play position was >= 0: the vowels run
-	bool playing {false};
-	/// The key the last lip sync key step left (stale when it was skipped, no PCM)
-	std::array<float, 3> weights {};
-};
-
 /// What the logic reads from the rest of the game; unset gives the value written next to each
 struct Queries
 {
@@ -334,9 +298,12 @@ struct Queries
 	std::function<bool(int dude)> talkedRecently;
 	/// Saying a sentence (audio::advisor::Active). Unset: false
 	std::function<bool(int dude)> sayActive;
-	/// The lip sync's sound part this frame (audio::advisor::LipSyncThisFrame): nullopt when it stopped at IsTalking
-	/// or at no sentence, the only case where the tag walker does not run. Unset: nullopt (no vowels, no tags)
-	std::function<std::optional<LipSyncFrame>(int dude)> lipSync;
+	/// The advisor's line starts if its delay is over: asked once a frame for each advisor, from its update before its
+	/// closeness, or alone for an advisor at home hovering. Unset: nothing
+	std::function<void(int dude)> updateSentence;
+	/// The voice's side of the lip sync for this frame of `dt` seconds: nullopt when the advisor is not saying a line,
+	/// the only case where its tags are not looked at. Unset: nullopt (no mouth shapes, no tags)
+	std::function<std::optional<LipSyncFrame>(int dude, float dt)> lipSync;
 
 	/// The world point under a pixel at a camera depth. Unset: (px.x, px.y, depth)
 	std::function<glm::vec3(glm::vec2 pixel, float depth)> pointFromScreen;
@@ -399,8 +366,9 @@ public:
 	void UpdateTrail(float dt);
 	/// The strip's vertices, oldest point first, two per point
 	[[nodiscard]] std::array<TrailVertex, 2 * Trail::k_Points> TrailStrip() const;
-	/// Fires every tag the sentence has left on this advisor itself, whoever it names, as a sentence stops
-	void FlushTags();
+	/// Fires every tag the line has left before `before` seconds on this advisor itself, whoever it names, as its line
+	/// stops, then drops the line's tags
+	void FlushTags(float before);
 	/// Every anim slot's mode = 0
 	void ClearAnims();
 	/// The cling target and the fly target = (hx, hy), SnapClingEdge, from home a snap to the edge's off-screen point
@@ -498,6 +466,8 @@ public:
 		_slotPhase[i] = phase;
 	}
 	[[nodiscard]] const std::vector<AnimLayer>& Layers() const { return _layers; }
+	/// The gesture tags of the line being said that have not fired yet
+	[[nodiscard]] size_t TagsLeft() const { return _tags.size() - _nextTag; }
 	[[nodiscard]] const std::vector<AnimSound>& Sounds() const { return _sounds; }
 	/// Each eye's pupil texture scale across and down, once the face has been updated; until then the mesh keeps its
 	/// own texture coordinates
@@ -716,8 +686,8 @@ public:
 	void Update(const FrameInput& input);
 	/// The sentence's tags when it starts (from the WAV's cue labels, ParseAudioTags)
 	void SetSentenceTags(int dude, std::vector<AudioTag> tags);
-	/// The dude's sentence stops: its remaining tags all fire on it
-	void StopSentence(int dude);
+	/// The dude's line stops: its remaining tags before `before` seconds all fire on it
+	void StopSentence(int dude, float before);
 
 	[[nodiscard]] AdvisorSpirit& Dude(int dude) { return *_dudes[dude]; }
 	[[nodiscard]] const AdvisorSpirit& Dude(int dude) const { return *_dudes[dude]; }
