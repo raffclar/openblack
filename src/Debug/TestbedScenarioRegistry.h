@@ -226,11 +226,11 @@ struct CreatureSetup
 
 /// Something put on the land for the creatures: an object, a tree, a feature such as a pillar of rock, a villager, a pot
 /// or pile of food or wood, a building or field of the scenario's town, which is made with the first of them, or an
-/// animal
+/// animal, or a fish farm (which joins the nearest town)
 struct ObjectSetup
 {
 	std::variant<MobileObjectInfo, TreeInfo, FeatureInfo, VillagerInfo, PotInfo, AbodeInfo, FieldTypeInfo, AnimalInfo,
-	             MobileStaticInfo>
+	             MobileStaticInfo, FishFarmInfo>
 	    type;
 	glm::vec2 offset {0.0f};
 	float scale {1.0f};
@@ -260,6 +260,8 @@ struct ObjectSetup
 	std::optional<float> fullSize;
 	/// A villager or animal that has eaten poison
 	bool poisoned {false};
+	/// A building of the town holds this much food, rather than the scenario town's usual stock
+	std::optional<uint32_t> storedFood;
 	/// A firefly hides exactly where the thing stands, as a land's script places one
 	bool firefly {false};
 };
@@ -281,6 +283,16 @@ struct ParticleSetup
 	int player {0};
 	/// Seconds after which it closes down and starts again, for effects that end; none to run until the scenario stops
 	float restartSeconds {0.0f};
+};
+
+/// A vortex between the lands opened as a script opens one, and later told to fade out
+struct VortexSetup
+{
+	VortexType type {VortexType::In};
+	glm::vec2 offset {0.0f};
+	/// Seconds into the scenario it is made, and after that it is told to fade out; none to stay
+	float delaySeconds {0.0f};
+	std::optional<float> fadeOutAfterSeconds;
 };
 
 /// A miracle dispenser, or a one-shot bubble on its own, put down for the scenario
@@ -603,6 +615,7 @@ struct Scenario
 	std::vector<BirdFlockSetup> birdFlocks;
 	std::vector<TempleSetup> temples;
 	std::vector<ParticleSetup> particles;
+	std::vector<VortexSetup> vortices;
 	std::vector<DispenserSetup> dispensers;
 	std::vector<MiracleCast> miracles;
 	std::vector<Command> commands;
@@ -636,6 +649,8 @@ void AddBlastFireScenarios(std::vector<Scenario>& all);
 /// What the blast spares and does on a coast, the water over fields and forests and before the people watching a fire
 /// put out, and the hand catching a fireball or taking one into a fire seed
 void AddFirewaterScenarios(std::vector<Scenario>& all);
+/// A fish farm by a town: its shoal, the hand grabbing, scooping and scaring its fish
+void AddFishScenarios(std::vector<Scenario>& all);
 /// Creatures casting miracles
 void AddCreatureCastingScenarios(std::vector<Scenario>& all);
 /// Creature Mode's and the Creature Cave's scenarios
@@ -650,6 +665,8 @@ void AddFlockScenarios(std::vector<Scenario>& all);
 void AddBirdScenarios(std::vector<Scenario>& all);
 /// The teleport miracle: stones, villagers jumping between them
 void AddTeleportScenarios(std::vector<Scenario>& all);
+/// The vortices between the lands: opening, levelling the ground and closing
+void AddVortexScenarios(std::vector<Scenario>& all);
 /// The tornado's scenarios: through a village and a wood, and meeting a creature
 void AddTornadoScenarios(std::vector<Scenario>& all);
 /// The land's nature: a tree pulled up leaving its roots, and the fireflies at nightfall

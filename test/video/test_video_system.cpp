@@ -94,7 +94,7 @@ TEST(VideoSystem, PlayPausesAndBringsTheBarsInAtOnce)
 {
 	FakeGame game;
 	game.files["a.bik"] = MakeVideo(300, 24);
-	VideoSystem videos(game.Hooks());
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
 	EXPECT_TRUE(videos.Play("a.bik"));
 	EXPECT_TRUE(videos.IsPlaying());
 	EXPECT_TRUE(game.paused);
@@ -121,7 +121,7 @@ TEST(VideoSystem, TheBarsSnapEvenWhenAlreadyOn)
 	FakeGame game;
 	game.wideScreen = true;
 	game.files["a.bik"] = MakeVideo(10, 24);
-	VideoSystem videos(game.Hooks());
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
 	videos.Play("a.bik");
 	EXPECT_EQ(game.snaps, 1);
 	// They were on: they stay on afterwards
@@ -134,7 +134,7 @@ TEST(VideoSystem, TheBarsSnapEvenWhenAlreadyOn)
 TEST(VideoSystem, AFileThatDoesntOpenEndsAtOnce)
 {
 	FakeGame game;
-	VideoSystem videos(game.Hooks());
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
 	EXPECT_FALSE(videos.Play("missing.bik"));
 	EXPECT_TRUE(videos.IsPlaying());
 	EXPECT_TRUE(game.paused);
@@ -154,7 +154,7 @@ TEST(VideoSystem, FramesFollowTheRealClockAndNoneIsSkipped)
 {
 	FakeGame game;
 	game.files["a.bik"] = MakeVideo(300, 24);
-	VideoSystem videos(game.Hooks());
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
 	videos.Play("a.bik");
 	videos.Update(k_Start);
 	EXPECT_EQ(videos.GetStatus()->frame, 1);
@@ -173,7 +173,7 @@ TEST(VideoSystem, FadesOverItsLastFiveSecondsAndGivesThePauseBack)
 {
 	FakeGame game;
 	game.files["a.bik"] = MakeVideo(240, 24); // 10 s: the fade from frame 120
-	VideoSystem videos(game.Hooks());
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
 	videos.Play("a.bik");
 	EXPECT_EQ(videos.GetStatus()->schedule, (video::Schedule {.fadeStart = 120, .end = 240}));
 	auto now = Play(videos, k_Start, 120, 24);
@@ -196,7 +196,7 @@ TEST(VideoSystem, TheIntroEndsAtSixtySeconds)
 {
 	FakeGame game;
 	game.files["intro.bik"] = MakeVideo(1601, 24);
-	VideoSystem videos(game.Hooks());
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
 	videos.Play("intro.bik");
 	videos.ScheduleIntro();
 	EXPECT_EQ(videos.GetStatus()->schedule, (video::Schedule {.fadeStart = 1392, .end = 1440}));
@@ -210,7 +210,7 @@ TEST(VideoSystem, TheIntroEndsAtSixtySeconds)
 TEST(VideoSystem, AMissingIntroWaitsForEscape)
 {
 	FakeGame game;
-	VideoSystem videos(game.Hooks());
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
 	EXPECT_FALSE(videos.Play("intro.bik"));
 	videos.ScheduleIntro();
 	// Timed at one frame a second, but with no file no frame is counted: it stays, paused, however long
@@ -233,7 +233,7 @@ TEST(VideoSystem, WithFilmsOffTheIntroEndsAtOnce)
 {
 	FakeGame game;
 	game.files["intro.bik"] = MakeVideo(1601, 24);
-	VideoSystem videos(game.Hooks());
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
 	videos.SetFilmsEnabled(false);
 	videos.Play("intro.bik");
 	videos.ScheduleIntro();
@@ -245,7 +245,7 @@ TEST(VideoSystem, EscapeFadesOutOverFortyEightFrames)
 {
 	FakeGame game;
 	game.files["a.bik"] = MakeVideo(1000, 24);
-	VideoSystem videos(game.Hooks());
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
 	EXPECT_FALSE(videos.Escape(false, false)); // nothing to skip
 	videos.Play("a.bik");
 	auto now = Play(videos, k_Start, 100, 24);
@@ -274,7 +274,7 @@ TEST(VideoSystem, EndingClearsTheNoSkip)
 {
 	FakeGame game;
 	game.files["a.bik"] = MakeVideo(4, 24);
-	VideoSystem videos(game.Hooks());
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
 	videos.Play("a.bik");
 	videos.SetNoSkip(true);
 	Play(videos, k_Start, 10, 24);
@@ -290,7 +290,7 @@ TEST(VideoSystem, AReplacedVideoLeavesTheGamePaused)
 	FakeGame game;
 	game.files["a.bik"] = MakeVideo(1000, 24);
 	game.files["b.bik"] = MakeVideo(10, 24);
-	VideoSystem videos(game.Hooks());
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
 	videos.Play("a.bik");
 	videos.Update(k_Start);
 	// The second keeps the first's pause and bars as what to go back to
@@ -306,7 +306,7 @@ TEST(VideoSystem, FilmsTurnedOffPlayAsMissing)
 {
 	FakeGame game;
 	game.files["a.bik"] = MakeVideo(100, 24);
-	VideoSystem videos(game.Hooks());
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
 	videos.SetFilmsEnabled(false);
 	EXPECT_FALSE(videos.Play("a.bik"));
 	videos.Update(k_Start);
@@ -317,7 +317,7 @@ TEST(VideoSystem, TheFallingSpell)
 {
 	FakeGame game;
 	game.files["fall.bik"] = MakeVideo(1200, 24);
-	VideoSystem videos(game.Hooks());
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
 	game.hasCreature = false;
 	videos.StartFallingSpell();
 	EXPECT_FALSE(videos.IsPlaying());
@@ -352,7 +352,7 @@ TEST(VideoSystem, EscapeEndsTheFallingSpell)
 {
 	FakeGame game;
 	game.files["fall.bik"] = MakeVideo(1200, 24);
-	VideoSystem videos(game.Hooks());
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
 	videos.StartFallingSpell();
 	Play(videos, k_Start, 100, 24);
 	EXPECT_TRUE(videos.Escape(false, false));
