@@ -1558,6 +1558,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Storm::dead>("dead")
 	    .Field<&components::Storm::deadTurns>("deadTurns")
 	    .Field<&components::Storm::climate>("climate");
+	Reflect<components::WeatherThing>(context).Field<&components::WeatherThing::storm>("storm");
 	Reflect<components::WorshipChants>(context)
 	    .Field<&components::WorshipChants::battery>("battery")
 	    .Field<&components::WorshipChants::available>("available")

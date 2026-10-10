@@ -36,6 +36,15 @@ struct Played
 	uint32_t hints {0};
 };
 
+/// The mouse buttons a recording holds down: the one that moves the hand and the action button
+struct HeldButtons
+{
+	bool move {false};
+	bool action {false};
+};
+/// The buttons held once a record has played: each from its press to its release
+[[nodiscard]] HeldButtons AfterRecord(HeldButtons held, hnd::HNDMessage message);
+
 /// The camera hints are hidden for this many records at each end of the recording
 constexpr size_t k_HintlessRecords = 20;
 

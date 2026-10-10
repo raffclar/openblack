@@ -60,11 +60,14 @@
 #include "Creature/CreatureScriptPlay.h"
 #include "Creature/LeashRules.h"
 #include "Creature/TemplePen.h"
+#include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/BallArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
+#include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
 #include "ECS/Archetypes/SharkArchetype.h"
+#include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -151,6 +154,7 @@
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerDance.h"
 #include "ECS/Systems/Implementations/VillagerScript.h"
+#include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/IntroSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -191,12 +195,16 @@
 #include "Help/ScriptSpirits.h"
 #include "Help/Spirits.h"
 #include "InfoConstants.h"
+#include "LHScriptX/Script.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Magic/ScriptCast.h"
 #include "Physics/Body.h"
 #include "Resources/ResourcesInterface.h"
+#include "ScriptHeaders/ScriptChallengeSnapshots.h"
+#include "ScriptHeaders/ScriptCreateRules.h"
 #include "ScriptHeaders/ScriptEnums.h"
+#include "ScriptHeaders/ScriptInfluence.h"
 #include "ScriptHeaders/ScriptNameLists.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 #include "ScriptHeaders/ScriptRandom.h"
@@ -434,18 +442,6 @@ std::string PopString()
 	return lhvm.GetString(lhvm.Pop().intVal);
 }
 
-std::vector<float> PopVarArg(const int32_t argc)
-{
-	std::vector<float> vals;
-	vals.resize(argc);
-	auto& lhvm = Locator::vm::value();
-	for (int i = argc - 1; i >= 0; i--)
-	{
-		vals[i] = lhvm.Popf();
-	}
-	return vals;
-}
-
 /// Whether a thing is one of the world's objects, which a miracle can be cast on, rather than something with only a place,
 /// such as a town or a miracle: anything with a model but the hand, a creature, or a field
 bool IsScriptObject(const ecs::Registry& registry, entt::entity thing)
@@ -497,6 +493,39 @@ entt::entity CreateScriptVillager(bool child, uint32_t subtype, const glm::vec3&
 		Locator::livingActionSystem::value().VillagerSetScriptState(villager, VillagerStates::InScript);
 	}
 	return villager;
+}
+
+/// The point on the ground under where a script asks for a thing
+glm::vec3 OnGround(const glm::vec3& position)
+{
+	return {position.x, Locator::terrainSystem::value().GetHeightAt(glm::vec2(position.x, position.z)), position.z};
+}
+
+/// A one-shot miracle globe a script puts straight into the local player's hand, charged in full and ready, if the hand
+/// is free to take it: the seed, or none
+entt::entity CreateScriptSeedInHand(uint32_t subtype)
+{
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const auto seedType = static_cast<SpellSeedType>(subtype);
+	const auto seed = Locator::magicSystem::value().GiveSeedToHand(player, seedType, magic::k_BasePowerUpLevel, 1.0f);
+	if (seed == entt::null)
+	{
+		return entt::null;
+	}
+	// The player has now had the miracle it casts
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(Locator::infoConstants::value(), seedType),
+	                                                      magic::k_BasePowerUpLevel);
+	if (const auto playerEntity = Locator::playerSystem::value().GetPlayer(player);
+	    registry.Valid(playerEntity) && static_cast<size_t>(type) < ecs::components::Player::k_MagicTypeCount)
+	{
+		if (auto* component = registry.TryGet<ecs::components::Player>(playerEntity))
+		{
+			component->miracles.everEnabled.at(static_cast<size_t>(type)) = true;
+		}
+	}
+	return seed;
 }
 
 entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const glm::vec3& position, float altitude,
@@ -555,6 +584,57 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		const auto vortex = Locator::vortexSystem::value().Create(position, static_cast<VortexType>(subtype), altitude);
 		return vortex != entt::null ? vortex : static_cast<entt::entity>(0);
 	}
+	case ObjectType::Feature:
+	{
+		const auto& info = Locator::infoConstants::value();
+		if (!script::create_rules::IsRow(subtype, info.feature.size()))
+		{
+			break;
+		}
+		return FeatureArchetype::Create(OnGround(position), static_cast<FeatureInfo>(subtype), yAngleRadians, scale);
+	}
+	case ObjectType::Tree:
+	{
+		// A tree of the land's forests' kinds, in no forest, already as big as it will grow
+		const auto& info = Locator::infoConstants::value();
+		if (!script::create_rules::IsRow(subtype, info.tree.size()))
+		{
+			break;
+		}
+		return TreeArchetype::Create(0, OnGround(position), static_cast<TreeInfo>(subtype), false,
+		                             script::create_rules::TreeAngle(yAngleRadians), scale, scale);
+	}
+	case ObjectType::AnimatedStatic:
+	{
+		const auto& info = Locator::infoConstants::value();
+		if (!script::create_rules::IsRow(subtype, info.animatedStatic.size()))
+		{
+			break;
+		}
+		return AnimatedStaticArchetype::Create(OnGround(position), static_cast<AnimatedStaticInfo>(subtype), yAngleRadians,
+		                                       scale);
+	}
+	case ObjectType::WeatherThing:
+	{
+		// A weather thing of a kind of weather, bringing a small storm of that weather to the place
+		const auto& info = Locator::infoConstants::value();
+		if (!script::create_rules::IsRow(subtype, info.weather.size()) || !Locator::weatherSystem::has_value())
+		{
+			break;
+		}
+		return Locator::weatherSystem::value().CreateWeatherThing(
+		    script::create_rules::WeatherThingStorm(info.weather.at(subtype), OnGround(position)));
+	}
+	case ObjectType::OneShotSpell:
+		// A globe of a seed at its plain miracle, lying on the ground
+		return Locator::magicSystem::value().CreateOneOffSeed(OnGround(position), static_cast<SpellSeedType>(subtype),
+		                                                      magic::k_BasePowerUpLevel, 1.0f);
+	case ObjectType::OneShotSpellInHand:
+		return CreateScriptSeedInHand(subtype);
+	case ObjectType::SpellDispenser:
+		// A dispenser building of the buildings' kinds, holding no miracle and turned off until a script sets it up
+		return Locator::magicSystem::value().CreateScriptDispenser(position, static_cast<AbodeInfo>(subtype), yAngleRadians,
+		                                                           scale);
 	case ObjectType::Animal:
 	case ObjectType::Bird:
 		// Made on its own and held still for the script; openblack makes only the land's birds so far
@@ -769,6 +849,7 @@ void CHLApi::ResetSwitches()
 {
 	_gameSoundOn = true;
 	_highlightDrawOn = true;
+	_scriptHelpOn = true;
 	if (Locator::creatureAudioSystem::has_value())
 	{
 		Locator::creatureAudioSystem::value().SetOtherVoicesEnabled(true);
@@ -2067,16 +2148,36 @@ void Call() // 026 CALL
 	Pusho(found == entt::null ? 0u : static_cast<uint32_t>(found));
 }
 
+/// CREATE and CREATE_WITH_ANGLE_AND_SCALE: a thing of a type the scripts may create, turned and scaled, which the script
+/// then holds; none for any other type, or when nothing could be made
+void CreateForScript(int32_t type, int32_t subtype, const glm::vec3& position, float yAngleRadians, float scale)
+{
+	if (!script::create_rules::IsCreatableType(type))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid type {}", type);
+		PushObject(entt::null);
+		return;
+	}
+	auto object = CreateScriptObject(static_cast<ObjectType>(type), static_cast<uint32_t>(subtype), position, 0.0f, 0.0f,
+	                                 yAngleRadians, 0.0f, scale);
+	if (object == static_cast<entt::entity>(0))
+	{
+		object = entt::null;
+	}
+	if (object == entt::null)
+	{
+		ScriptMessage("Thing not created");
+	}
+	RegisterCreated(object);
+	PushObject(object);
+}
+
 void Create() // 027 CREATE
 {
 	const auto position = PopVec();
 	const auto subtype = Pop().intVal;
-	const auto type = static_cast<ObjectType>(Pop().intVal);
-
-	const auto object = CreateScriptObject(type, subtype, position, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-	RegisterCreated(object);
-
-	PushObject(object);
+	const auto type = Pop().intVal;
+	CreateForScript(type, subtype, position, 0.0f, 1.0f);
 }
 
 void Random() // 028 RANDOM
@@ -3074,19 +3175,33 @@ void ChangeInnerOuterProperties() // 056 CHANGE_INNER_OUTER_PROPERTIES
 	ScriptMessage("Invalid thing for Changing Variables");
 }
 
+/// What a script gave for a challenge's record, taken off its stack: every value, however many arguments it gave its
+/// reminder script, so that nothing is left behind for the script's next calls
+script::challenge_snapshots::Snapshot PopChallengeSnapshot(script::challenge_snapshots::Call call)
+{
+	auto& lhvm = Locator::vm::value();
+	const auto snapshot =
+	    script::challenge_snapshots::Read(call, {
+	                                                .pop =
+	                                                    [&lhvm]() {
+		                                                    script::challenge_snapshots::Value value;
+		                                                    value.value = lhvm.Pop(value.type);
+		                                                    return value;
+	                                                    },
+	                                                .text = [&lhvm](uint32_t offset) { return lhvm.GetString(offset); },
+	                                            });
+	if (snapshot.tooManyArguments)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Too many arguments for a challenge's reminder script: {}",
+		                    snapshot.arguments.size());
+	}
+	return snapshot;
+}
+
 void Snapshot() // 057 SNAPSHOT
 {
-	// const auto challengeId = Pop().intVal;
-	// const auto argc = Pop().intVal;
-	// const auto argv = PopVarArg(argc);
-	// const auto reminderScript = PopString();
-	// const auto titleStrID = Pop().intVal;
-	// const auto alignment = Popf();
-	// const auto success = Popf();
-	// const auto focus = PopVec();
-	// const auto position = PopVec();
-	// const auto quest = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
+	[[maybe_unused]] const auto snapshot = PopChallengeSnapshot(script::challenge_snapshots::Call::Start);
+	// TODO(raffclar): keep the challenge's record (Land 1 milestone #46)
 	NotImplemented();
 }
 
@@ -3154,12 +3269,19 @@ void InfluencePosition() // 061 INFLUENCE_POSITION
 
 void GetInfluence() // 062 GET_INFLUENCE
 {
-	// const auto position = PopVec();
-	// const auto raw = static_cast<bool>(Pop().intVal);
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto position = PopVec();
+	const auto raw = Pop().intVal != 0;
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	// A player who isn't in the game has no influence anywhere
+	std::optional<float> influence;
+	if (player < PlayerNames::_COUNT && Locator::playerSystem::has_value() && Locator::influenceSystem::has_value() &&
+	    Locator::entitiesRegistry::value().Valid(Locator::playerSystem::value().GetPlayer(player)))
+	{
+		influence = Locator::influenceSystem::value().PlayerInfluence(player, position);
+	}
+	// TODO(raffclar): the influence of the player's allies who let them use theirs, once players can be allies; until
+	// then no player has any
+	Pushf(script::influence::Answer(influence, raw, {}));
 }
 
 void SetInterfaceInteraction() // 063 SET_INTERFACE_INTERACTION
@@ -4824,9 +4946,7 @@ void GetObjectHeld199() // 199 GET_OBJECT_HELD
 
 void HelpSystemOn() // 200 HELP_SYSTEM_ON
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(Locator::chlapi::value().IsHelpSystemOn());
 }
 
 void ShakeCamera() // 201 SHAKE_CAMERA
@@ -5322,14 +5442,8 @@ void GetTotalEvents() // 237 GET_TOTAL_EVENTS
 
 void UpdateSnapshot() // 238 UPDATE_SNAPSHOT
 {
-	// const auto challengeId = Pop().intVal;
-	// const auto argc = Pop().intVal;
-	// const auto argv = PopVarArg(argc);
-	// const auto reminderScript = PopString();
-	// const auto titleStrID = Pop().intVal;
-	// const auto alignment = Popf();
-	// const auto success = Popf();
-	// TODO(Daniels118): implement this
+	[[maybe_unused]] const auto snapshot = PopChallengeSnapshot(script::challenge_snapshots::Call::Update);
+	// TODO(raffclar): bring the challenge's record up to date (Land 1 milestone #46)
 	NotImplemented();
 }
 
@@ -5495,23 +5609,18 @@ void ObjectRelativeBelief() // 251 OBJECT_RELATIVE_BELIEF
 
 void CreateWithAngleAndScale() // 252 CREATE_WITH_ANGLE_AND_SCALE
 {
+	// The angle is given in degrees
 	const auto position = PopVec();
 	const auto subtype = Pop().intVal;
-	const auto type = static_cast<ObjectType>(Pop().intVal);
+	const auto type = Pop().intVal;
 	const auto scale = Popf();
-	const auto angle = Popf();
-
-	const entt::entity object = CreateScriptObject(type, subtype, position, 0.0f, 0.0f, angle, 0.0f, scale);
-	RegisterCreated(object);
-
-	PushObject(object);
+	const auto angle = script::create_rules::AngleFromDegrees(Popf());
+	CreateForScript(type, subtype, position, angle, scale);
 }
 
 void SetHelpSystem() // 253 SET_HELP_SYSTEM
 {
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	Locator::chlapi::value().SetScriptHelpOn(Pop().intVal != 0);
 }
 
 void SetVirtualInfluence() // 254 SET_VIRTUAL_INFLUENCE
@@ -6626,14 +6735,8 @@ void MusicPlayed350() // 350 MUSIC_PLAYED
 
 void UpdateSnapshotPicture() // 351 UPDATE_SNAPSHOT_PICTURE
 {
-	// const auto challengeID = Pop().intVal;
-	// const auto takingPicture = static_cast<bool>(Pop().intVal);
-	// const auto titleStrID = Pop().intVal;
-	// const auto alignment = Popf();
-	// const auto success = Popf();
-	// const auto focus = PopVec();
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
+	[[maybe_unused]] const auto snapshot = PopChallengeSnapshot(script::challenge_snapshots::Call::Picture);
+	// TODO(raffclar): the picture of the challenge's record (Land 1 milestone #46)
 	NotImplemented();
 }
 
@@ -6678,11 +6781,32 @@ void GameSetMana() // 355 GAME_SET_MANA
 
 void SetMagicProperties() // 356 SET_MAGIC_PROPERTIES
 {
-	// const auto duration = Popf();
-	// const auto magicType = Pop().intVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A dispenser is given the miracle it holds and the seconds between its bubbles; for none it keeps its building's
+	// period, and with no turns between them it is turned off
+	const auto seconds = Popf();
+	const auto number = Pop().intVal;
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Thing not valid");
+		return;
+	}
+	const auto* dispenser = registry.TryGet<const ecs::components::SpellDispenser>(object);
+	if (dispenser == nullptr)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Thing must be a dispenser");
+		return;
+	}
+	const auto type = script::create_rules::MagicTypeFromScript(number);
+	if (!type.has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid magic type {}", number);
+		return;
+	}
+	const auto& building = Locator::infoConstants::value().abode.at(static_cast<size_t>(dispenser->building));
+	const auto turns = script::create_rules::DispenserTurns(seconds, building.timeEachMobileObjectTakesToProduce);
+	Locator::magicSystem::value().SetDispenserMagic(object, *type, turns);
 }
 
 void SetGameSound() // 357 SET_GAME_SOUND
@@ -7195,9 +7319,7 @@ void KillStormsInArea() // 404 KILL_STORMS_IN_AREA
 
 void InsideTemple() // 405 INSIDE_TEMPLE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(PlayerInsideTemple());
 }
 
 void RestartObject() // 406 RESTART_OBJECT
@@ -7261,9 +7383,17 @@ void SetInterfaceCitadel() // 414 SET_INTERFACE_CITADEL
 
 void MapScriptFunction() // 415 MAP_SCRIPT_FUNCTION
 {
-	// const auto command = PopString();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A line of a land's script, carried out as the land's script would
+	const auto line = PopString();
+	try
+	{
+		lhscriptx::Script script;
+		script.Load(line);
+	}
+	catch (const std::runtime_error& error)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Map script line \"{}\" failed: {}", line, error.what());
+	}
 }
 
 void WithinRotation() // 416 WITHIN_ROTATION

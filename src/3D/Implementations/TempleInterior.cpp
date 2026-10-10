@@ -35,6 +35,8 @@
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Camera/Camera.h"
+#include "Camera/DefaultWorldCameraModel.h"
+#include "Camera/ScriptCameraModel.h"
 #include "Camera/TempleCameraModel.h"
 #include "Common/EventManager.h"
 #include "Common/MachineClock.h"
@@ -62,6 +64,7 @@
 #include "Magic/MagicTables.h"
 #include "Magic/MiracleVisuals.h"
 #include "Resources/ResourcesInterface.h"
+#include "Temple/TempleHelpScripts.h"
 #include "Windowing/WindowingInterface.h"
 
 using namespace openblack;
@@ -282,6 +285,12 @@ bool TempleInterior::HoldControl(bool pressed, float mouseY)
 		if (focus.has_value() && _cameraModel != nullptr)
 		{
 			_cameraModel->LookAtSubMesh(focus->position, focus->lookAt);
+			// Sent to look at a scroll, the camera starts the scroll's help
+			if (const auto content = _scrolls->GetFocusedContent(); content.has_value())
+			{
+				temple_help::GameScripts scripts;
+				temple_help::LookAtScroll(scripts, *content);
+			}
 		}
 	}
 	return held;
@@ -708,6 +717,30 @@ bool TempleInterior::IsRoomDrawn(TempleRoom room) const
 	return room == TempleRoom::Main && !_transitionRoom.has_value() && _doors.GetSwing() > k_MainRoomOpenSwing;
 }
 
+void TempleInterior::SetCurrentRoom(TempleRoom room)
+{
+	_currentRoom = room;
+	// Coming into a room, on the way into the temple or from another room, stops the help running and starts the
+	// room's own
+	if (_active && _enteredRoom != room)
+	{
+		_enteredRoom = room;
+		temple_help::GameScripts scripts;
+		temple_help::EnterRoom(scripts, room, temple_help::HelpSystemOn());
+	}
+}
+
+bool TempleInterior::ReleaseOutsideScriptCamera()
+{
+	if (dynamic_cast<ScriptCameraModel*>(_outsideCameraModel.get()) == nullptr)
+	{
+		return false;
+	}
+	_outsideCameraModel = std::make_unique<DefaultWorldCameraModel>(_outsideCameraModel->GetTargetOrigin(),
+	                                                                _outsideCameraModel->GetTargetFocus());
+	return true;
+}
+
 void TempleInterior::GoToRoom(TempleRoom room)
 {
 	if (_active && _cameraModel != nullptr)
@@ -995,6 +1028,7 @@ void TempleInterior::Activate(TempleRoom room)
 		_creatureCaveEffects = std::make_unique<CreatureCaveEffects>(*fire);
 	}
 	_currentRoom = room;
+	_enteredRoom.reset();
 	auto model = std::make_unique<TempleCameraModel>(LoadCameraPaths(), _currentRoom);
 	_cameraModel = model.get();
 	_outsideCameraModel = camera.SetModel(std::move(model));
@@ -1060,6 +1094,10 @@ void TempleInterior::Deactivate()
 		_interface->GetScreenFade().FadeFrom(1.0f, glm::vec3(1.0f));
 	}
 	ApplyLens();
+	// The help running stops as the player leaves
+	_enteredRoom.reset();
+	temple_help::GameScripts scripts;
+	temple_help::Leave(scripts);
 	camera.SetOrigin(_playerPositionOutside);
 	camera.SetFocus(_playerPositionOutside + glm::quat(_playerRotationOutside) * glm::vec3(0.0f, 0.0f, 1.0f));
 	if (_leaveTo.has_value())

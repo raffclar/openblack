@@ -52,6 +52,22 @@ struct MiracleStorm
 	components::WeatherInfo effect;
 };
 
+/// A storm a script lays over the land where it makes a weather thing. Like the climates' storms it fades in and out
+/// over its fading time and ends once its life is over, but it stands where it was made and has no lightning.
+struct ScriptStorm
+{
+	glm::vec3 centre {0.0f};
+	float innerRadius {0.0f};
+	float outerRadius {0.0f};
+	float fadeSeconds {0.0f};
+	float lastsFor {0.0f};
+	float strength {0.0f};
+	float cloudHeight {0.0f};
+	float rainSpeed {0.0f};
+	/// What it brings: the temperature it pulls towards, and the rain, snow, cloud and wind it adds, in percent
+	components::WeatherInfo effect;
+};
+
 /// The island's weather: climates breed storms that drift with the wind and bring rain, snow and wind
 class WeatherSystemInterface
 {
@@ -94,6 +110,11 @@ public:
 	virtual bool MoveMiracleStorm(entt::entity storm, glm::vec3 centre) = 0;
 	/// The miracle's storm goes at once, its rain and wind with it
 	virtual void RemoveMiracleStorm(entt::entity storm) = 0;
+
+	// Scripts' weather things
+	/// A weather thing a script makes at a point, with the storm it brings there: the thing, which follows its storm
+	/// each turn and goes once the storm has ended, unless a script still holds it
+	virtual entt::entity CreateWeatherThing(const ScriptStorm& storm) = 0;
 
 	/// One game turn
 	virtual void Update(uint32_t turn) = 0;
