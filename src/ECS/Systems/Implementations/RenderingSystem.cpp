@@ -225,6 +225,8 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		drawDesc->second.perEntity = desc.perEntity;
 		// The villagers of a mesh are drawn together, their bones read from the bone palette
 		drawDesc->second.bonePalette = desc.villagers;
+		// The sea doesn't reflect villagers
+		drawDesc->second.hiddenFromReflection = desc.villagers;
 		// Blended by its materials, over the opaque things
 		drawDesc->second.materialBlending = desc.translucent;
 		drawDesc->second.translucent = desc.translucent;
@@ -248,6 +250,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		drawDesc->second.perEntity = true;
 		drawDesc->second.bonePalette = true;
 		drawDesc->second.instanceAlpha = true;
+		drawDesc->second.hiddenFromReflection = true;
 		_fadingSlots.emplace(
 		    meshId, InstanceSlots {
 		                .offset = offset, .count = count, .filled = 0, .perEntity = true, .height = 0.0f, .bonePalette = true});

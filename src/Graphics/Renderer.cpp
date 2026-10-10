@@ -11,10 +11,13 @@
 
 #include <algorithm>
 #include <chrono>
+#include <initializer_list>
 #include <limits>
 #include <map>
 #include <memory>
+#include <optional>
 #include <span>
+#include <utility>
 #define LOCATOR_IMPLEMENTATIONS
 
 #include <cstdint>
@@ -79,6 +82,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
 #include "ECS/Components/MistDome.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Temple.h"
@@ -5027,31 +5031,54 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				              &entityPose);
 				submitDesc.objectLook.reset();
 			};
-			// The villagers, each posed by its state's clip, or in its model's own pose while its state plays none
+			// The mesh, and its draw, whose instances hold this one: a villager's is the one its distance chose
+			const auto drawHolding =
+			    [&renderCtx](
+			        uint32_t instance) -> std::optional<std::pair<entt::id_type, const RenderContext::InstancedDrawDesc*>> {
+				for (const auto* descs : {&renderCtx.instancedDrawDescs, &renderCtx.fadingDrawDescs})
+				{
+					for (const auto& [meshId, placers] : *descs)
+					{
+						if (instance >= placers.offset && instance < placers.offset + placers.count)
+						{
+							return std::make_pair(meshId, &placers);
+						}
+					}
+				}
+				return std::nullopt;
+			};
+			// The villagers, each posed by its state's clip, or in its model's own pose while its state plays none. The
+			// sea reflects only those flying in the physics.
 			const auto drawVillager = [&](entt::entity entity, uint32_t instance) {
+				const bool reflection = desc.viewId == RenderPass::Reflection;
 				const auto* pose = desc.entities.TryGet<const ecs::components::VillagerPose>(entity);
-				const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
-				if (pose == nullptr || mesh == nullptr || !meshManager.Contains(mesh->id))
+				if (pose == nullptr || (reflection && !desc.entities.AllOf<ecs::components::InPhysics>(entity)))
 				{
 					return;
 				}
-				const auto placers = renderCtx.instancedDrawDescs.find(mesh->id);
-				if (placers == renderCtx.instancedDrawDescs.end() ||
-				    (desc.viewId == RenderPass::Reflection && placers->second.hiddenFromReflection))
+				const auto holding = drawHolding(instance);
+				if (!holding.has_value() || !meshManager.Contains(holding->first))
 				{
 					return;
 				}
-				// The villagers of a mesh drawn together from the bone palette
-				if (placers->second.bonePalette && renderCtx.bonePaletteTexture)
+				const auto& [meshId, placers] = *holding;
+				// The villagers of a mesh are drawn together from the bone palette; in the reflection one is drawn alone,
+				// still with its bones from the palette
+				if (placers->bonePalette && renderCtx.bonePaletteTexture)
 				{
+					if (reflection)
+					{
+						const EntityPose palettePose {.bones = {}, .morphTargets = nullptr, .bonePalette = true};
+						drawInstances(meshId, *placers, placers->materialBlending, instance, 1, &palettePose);
+					}
 					return;
 				}
-				const auto model = meshManager.Handle(mesh->id);
+				const auto model = meshManager.Handle(meshId);
 				const bool posed = pose->bones.size() == model->GetBoneMatrices().size();
 				const EntityPose entityPose {.bones = posed ? std::span<const glm::mat4>(pose->bones)
 				                                            : std::span<const glm::mat4>(model->GetBoneMatrices()),
 				                             .morphTargets = nullptr};
-				drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &entityPose);
+				drawInstances(meshId, *placers, placers->materialBlending, instance, 1, &entityPose);
 			};
 			for (const auto& [entity, instance] : renderCtx.entityDraws)
 			{
@@ -5086,7 +5113,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				const EntityPose palettePose {.bones = {}, .morphTargets = nullptr, .bonePalette = true};
 				for (const auto& [meshId, placers] : renderCtx.fadingDrawDescs)
 				{
-					if (placers.filled > 0 && meshManager.Contains(meshId))
+					if (placers.filled > 0 && !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection) &&
+					    meshManager.Contains(meshId))
 					{
 						const auto position = glm::vec3(renderCtx.instanceUniforms.at(placers.offset).model[3]);
 						submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);

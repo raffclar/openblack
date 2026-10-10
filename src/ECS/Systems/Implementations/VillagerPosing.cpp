@@ -23,6 +23,7 @@
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingPhysics.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
@@ -112,8 +113,7 @@ void LivingActionSystem::PoseVillagersInView(const glm::mat4& viewProjection)
 	const auto view = graphics::view_frustum::FromViewProjection(viewProjection);
 
 	registry.Each<const Villager, const Mesh, const Transform, VillagerPose>(
-	    [&](entt::entity /*unused*/, const Villager& /*unused*/, const Mesh& mesh, const Transform& transform,
-	        VillagerPose& pose) {
+	    [&](entt::entity entity, const Villager& /*unused*/, const Mesh& mesh, const Transform& transform, VillagerPose& pose) {
 		    const auto clipId = resources::HashIdentifier(static_cast<uint32_t>(pose.clip));
 		    if (static_cast<int>(pose.clip) < 0 || !animations.Contains(clipId) || !meshes.Contains(mesh.id))
 		    {
@@ -121,12 +121,15 @@ void LivingActionSystem::PoseVillagersInView(const glm::mat4& viewProjection)
 			    return;
 		    }
 		    const auto model = meshes.Handle(mesh.id);
-		    // Out of view, and out of the sea's reflection of it, it keeps the bones it was last drawn with
+		    // Out of view it keeps the bones it was last drawn with. The sea reflects only one flying in the physics.
 		    const auto box = model->GetBoundingBox();
 		    const float scale = std::max({transform.scale.x, transform.scale.y, transform.scale.z});
 		    const auto centre = transform.position + (transform.rotation * (box.Center() * transform.scale));
 		    const float radius = (glm::length(box.Size()) * 0.5f * scale) + k_ViewMargin;
-		    if (!graphics::view_frustum::SeesSphereOrReflection(view, centre, radius))
+		    const bool seen = registry.AllOf<InPhysics>(entity)
+		                          ? graphics::view_frustum::SeesSphereOrReflection(view, centre, radius)
+		                          : graphics::view_frustum::SeesSphere(view, centre, radius);
+		    if (!seen)
 		    {
 			    return;
 		    }
