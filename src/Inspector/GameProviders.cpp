@@ -57,6 +57,8 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageLight.h"
+#include "ECS/Components/VillageTotem.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
@@ -83,6 +85,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
+#include "ECS/Systems/CreaturePenSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -133,6 +136,8 @@
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
+#include "ECS/Systems/VillageTotemSystemInterface.h"
+#include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "EditProviders.h"
@@ -236,9 +241,11 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"reactionSystem", "magic.reactions"},
     LocatorCoverage {"teleportSystem", "magic.teleport"},
     LocatorCoverage {"creatureCarryOverSystem", "creatures.systems"},
+    LocatorCoverage {"creaturePenSystem", "creatures.systems"},
     LocatorCoverage {"creatureFizzSystem", "creatures.systems"},
     LocatorCoverage {"tattooEditorSystem", "creatures.systems"},
     LocatorCoverage {"tornadoSystem", "magic.state"},
+    LocatorCoverage {"vortexSystem", "magic.vortices"},
     LocatorCoverage {"magicShieldSystem", "magic.state"},
     LocatorCoverage {"forestSystem", "living.forests"},
     LocatorCoverage {"fireflySystem", "living.fireflies"},
@@ -253,6 +260,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"inspector", "engine.services"},
     LocatorCoverage {"vm", "script.vm"},
     LocatorCoverage {"chlapi", "script.natives"},
+    LocatorCoverage {"villageTotemSystem", "living.totems"},
     LocatorCoverage {"videoSystem", "view.video"},
     LocatorCoverage {"playerProfileSystem", "players.new_game"},
     LocatorCoverage {"tutorialSkipSystem", "players.new_game"},
@@ -676,6 +684,24 @@ std::unique_ptr<ProviderInterface> SkyStateProvider(std::unique_ptr<ProviderInte
 std::unique_ptr<ProviderInterface> LivingProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("living");
+	provider->Add(
+	    Query("totems",
+	          "The village centres' totems: their town centre, the share they are held at, and whether "
+	          "the hand grips one",
+	          {}, ResultKind::List),
+	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
+		    Json items = Json::array();
+		    const auto gripped =
+		        Locator::villageTotemSystem::has_value() ? Locator::villageTotemSystem::value().GetGripped() : std::nullopt;
+		    registry.Each<const VillageTotem>([&items, &registry, gripped](entt::entity entity, const VillageTotem& totem) {
+			    auto item = Listed(registry, entity);
+			    item["town_centre"] = Id(totem.townCentre);
+			    item["held"] = totem.held;
+			    item["gripped"] = gripped.has_value() && *gripped == entity;
+			    items.push_back(std::move(item));
+		    });
+		    return items;
+	    }));
 	provider->Add(Query("action", "A villager's or animal's action states: top, final, previous, and turns in them",
 	                    {IdParameter("The living thing's entity id")}),
 	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& context) {
@@ -1070,6 +1096,31 @@ std::unique_ptr<ProviderInterface> MagicProvider()
 		        }
 		        return items;
 	        }));
+	provider->Add(Query("vortices",
+	                    "The vortices between the lands: their kind, state, openness and how far they levelled the ground", {},
+	                    ResultKind::List),
+	              Serve<Locator::vortexSystem>(
+	                  "the vortices", [](const ecs::systems::VortexSystemInterface& vortices, const QueryContext& /*c*/) {
+		                  Json items = Json::array();
+		                  if (auto* registry = Registry(); registry != nullptr)
+		                  {
+			                  registry->Each<const ecs::components::Vortex>(
+			                      [&items, &vortices](entt::entity entity, const ecs::components::Vortex& vortex) {
+				                      items.push_back({{"id", Id(entity)},
+				                                       {"type", static_cast<int>(vortex.type)},
+				                                       {"state", static_cast<int>(vortex.state)},
+				                                       {"state_start_turn", vortex.stateStartTurn},
+				                                       {"centre", Point(vortex.centre)},
+				                                       {"openness", vortices.GetOpenness(entity)},
+				                                       {"level_applied", vortex.levelApplied},
+				                                       {"before_land_effect", vortex.beforeLandEffect},
+				                                       {"after_land_effect", vortex.afterLandEffect},
+				                                       {"object_mover_effect", vortex.objectMoverEffect},
+				                                       {"light_map_effect", vortex.lightMapEffect}});
+			                      });
+		                  }
+		                  return items;
+	                  }));
 	provider->Add(Query("reactions", "The reactions going on, nearest first when searched about a point", {}, ResultKind::List),
 	              Serve<Locator::reactionSystem>(
 	                  "the reactions", [](const ecs::systems::ReactionSystemInterface& reactions, const QueryContext& /*c*/) {
@@ -1285,6 +1336,8 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		              {
 			              result["mind_kept"] = Locator::creatureCarryOverSystem::value().Kept() != nullptr;
 		              }
+		              // The temples' pens: each creature's shrunk size there is its Creature component's penSize
+		              result["pens"] = Locator::creaturePenSystem::has_value();
 		              if (Locator::creatureFizzSystem::has_value())
 		              {
 			              const auto scroll = Locator::creatureFizzSystem::value().EyeStaticScroll();

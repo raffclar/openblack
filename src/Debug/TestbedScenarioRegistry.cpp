@@ -701,6 +701,32 @@ void AddGrowth(std::vector<Scenario>& all)
 	    .creatures = parade,
 	    .commands = parading,
 	});
+
+	// A temple well west of the middle, turned as Land 1's, and a tiger standing off to its east
+	constexpr glm::vec2 k_Temple {-300.0f, 100.0f};
+	constexpr float k_TempleTurn = 36.0f;
+	constexpr glm::vec2 k_OutOfThePen {-240.0f, 40.0f};
+	all.push_back({
+	    .id = "growth.temple_pen",
+	    .name = "Shrinking in the temple's pen",
+	    .facet = Facet::Growth,
+	    .description = "A tiger of size 2 belonging to the player, whose temple stands to the west, walks home to the "
+	                   "temple's pen, waits there and walks back out, and again.",
+	    .expected = "Its home is the pen in front of the temple. Walking in between the pen's two walls it shrinks, from its "
+	                "own size 16 units from the middle of the pen to a newborn's size (0.22) 14 units from it; small, it "
+	                "walks more slowly and its animations play faster. Walking out it grows back the same way. Its own "
+	                "size, which the spawner shows, stays 2 throughout.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .creature = 0, .distance = 1.5f},
+	    .creatures = {[&] {
+		    auto tiger = Posed(CreatureType::Tiger, k_OutOfThePen, 90.0f);
+		    tiger.size = 2.0f;
+		    return tiger;
+	    }()},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
+	    .commands = {Act(Kind::WalkHome, 0, 1.0f, true), Go(Kind::WalkTo, 0, k_OutOfThePen, 4.0f)},
+	    .repeatFrom = 0,
+	});
 }
 
 void AddAppearance(std::vector<Scenario>& all)
@@ -2247,13 +2273,16 @@ std::vector<Scenario> Build()
 	AddFlockScenarios(all);
 	AddBirdScenarios(all);
 	AddTeleportScenarios(all);
+	AddVortexScenarios(all);
 	AddTornadoScenarios(all);
 	AddPhysicsScenarios(all);
 	AddNatureScenarios(all);
 	AddHandNavigationScenarios(all);
 	AddHandLookScenarios(all);
+	AddVillageTotemScenarios(all);
 	AddFishScenarios(all);
 	AddKnockScenarios(all);
+	AddSkyScenarios(all);
 	return all;
 }
 
@@ -2357,7 +2386,7 @@ std::string_view testbed_scenarios::Name(Facet facet)
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
 	    "Idle",       "Expressions", "Senses",    "Needs",         "Growth",  "Appearance", "Light",   "Movement",
 	    "Footprints", "Audio",       "Objects",   "Hand",          "Leash",   "Combat",     "Mind",    "Particles",
-	    "Editor",     "Miracles",    "Benchmark", "Creature Mode", "Physics", "Nature",     "Animals",
+	    "Editor",     "Miracles",    "Benchmark", "Creature Mode", "Physics", "Nature",     "Animals", "Sky",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
@@ -2376,7 +2405,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 89> k_Names {
+	constexpr std::array<std::string_view, 90> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -2466,6 +2495,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "set fight lean",
 	    "set miracle sightings",
 	    "hand tap",
+	    "walk home",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
@@ -2513,11 +2543,11 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 	if (scenario.creatures.empty() && scenario.particles.empty() && scenario.miracles.empty() && scenario.dispensers.empty() &&
 	    scenario.birdFlocks.empty() && scenario.temples.empty() && !environment.dispenserGrid && !scenario.crowd.has_value() &&
 	    !environment.playerAlignment.has_value() && scenario.throws.empty() && scenario.objects.empty() &&
-	    scenario.fireflyRewards.empty() &&
+	    scenario.vortices.empty() && scenario.fireflyRewards.empty() &&
 	    std::ranges::none_of(scenario.commands, [](const Command& command) { return NeedsNoCreature(command.kind); }))
 	{
-		problems.emplace_back("no creatures, things, particles, miracles, dispensers, birds, temples, crowd, fireflies' "
-		                      "rewards, player's commands or alignment for the hand");
+		problems.emplace_back("no creatures, things, particles, miracles, dispensers, birds, temples, vortices, crowd, "
+		                      "fireflies' rewards, player's commands or alignment for the hand");
 	}
 	if ((environment.playerAlignment && !InRange(*environment.playerAlignment, -1.0f, 1.0f)) ||
 	    (environment.cursor && (!InRange(environment.cursor->x, 0.0f, 1.0f) || !InRange(environment.cursor->y, 0.0f, 1.0f))))

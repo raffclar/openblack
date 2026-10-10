@@ -658,9 +658,11 @@ void GameMagicWorld::WaterObject(entt::entity object, const magic::WaterDrop& dr
 	{
 		const auto& type = info.tree.at(static_cast<size_t>(tree->type));
 		auto& transform = registry.Get<Transform>(object);
-		const auto grown = magic::WaterTree(
-		    transform.scale.y, tree->maxSize,
-		    {.growthAmount = type.growthAmount, .waterAccelerator = type.waterSpellAcceleratorMultiplier}, drop.extreme);
+		const auto grown = magic::WaterTree(transform.scale.y, tree->maxSize,
+		                                    {.growthAmount = type.growthAmount,
+		                                     .waterAccelerator = type.waterSpellAcceleratorMultiplier,
+		                                     .madeToGrow = tree->madeToGrow},
+		                                    drop.extreme);
 		if (grown.scale != transform.scale.y)
 		{
 			const float ratio = grown.scale / std::max(transform.scale.y, 1e-4f);

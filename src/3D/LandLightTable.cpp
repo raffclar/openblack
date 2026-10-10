@@ -143,7 +143,6 @@ void LandLightTable::Build(const LandLightPalette& palette, float skyType, float
 
 	_landColour = land & 0xFFFFFFu;
 	_warmColour = colours[k_Warm] & 0xFFFFFFu;
-	_moonColour = colours[k_Moon] & 0xFFFFFFu;
 
 	// The haze: a third of the land's colour, k by its brightness, and its distances drawn in at dusk
 	{

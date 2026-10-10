@@ -100,6 +100,10 @@ openblack_setup_and_add_test(test_music_decoding audio/test_music_decoding.cpp)
 openblack_setup_and_add_test(test_anim_effects audio/test_anim_effects.cpp)
 openblack_setup_and_add_test(test_listener_frame audio/test_listener_frame.cpp)
 openblack_setup_and_add_test(test_hearing_range audio/test_hearing_range.cpp)
+openblack_setup_and_add_test(
+  test_script_sound_effect audio/test_script_sound_effect.cpp
+)
+target_link_libraries(test_script_sound_effect PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_interface gui/test_interface.cpp)
 openblack_setup_and_add_test(test_skip_box gui/test_skip_box.cpp)
 openblack_setup_and_add_test(test_tool_tips gui/test_tool_tips.cpp)
@@ -284,6 +288,7 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_fight_view test_fight_view.cpp)
 openblack_setup_and_add_test(test_leash_rope test_leash_rope.cpp)
 openblack_setup_and_add_test(test_leash_rules test_leash_rules.cpp)
+openblack_setup_and_add_test(test_temple_pen test_temple_pen.cpp)
 openblack_setup_and_add_test(test_leash_ownership test_leash_ownership.cpp)
 openblack_setup_and_add_test(test_primary_creature test_primary_creature.cpp)
 openblack_setup_and_add_test(test_leash_orders test_leash_orders.cpp)
@@ -311,6 +316,9 @@ target_link_libraries(test_l3d_submesh_names PRIVATE l3d)
 openblack_setup_and_add_test(test_light_beams graphics/test_light_beams.cpp)
 target_link_libraries(test_light_beams PRIVATE l3d glw)
 openblack_setup_and_add_test(test_temple_camera camera/test_temple_camera.cpp)
+openblack_setup_and_add_test(
+  test_camera_projection camera/test_camera_projection.cpp
+)
 openblack_setup_and_add_test(test_temple_doors temple/test_temple_doors.cpp)
 openblack_setup_and_add_test(
   test_creature_cave_effects temple/test_creature_cave_effects.cpp
@@ -350,6 +358,7 @@ openblack_setup_and_add_test(test_animal_animation test_animal_animation.cpp)
 openblack_setup_and_add_test(test_animal_move test_animal_move.cpp)
 openblack_setup_and_add_test(test_bird_rules test_bird_rules.cpp)
 openblack_setup_and_add_test(test_teleport_rules test_teleport_rules.cpp)
+openblack_setup_and_add_test(test_vortex_rules test_vortex_rules.cpp)
 openblack_setup_and_add_test(test_fire test_fire.cpp)
 openblack_setup_and_add_test(test_blast test_blast.cpp)
 openblack_setup_and_add_test(test_gesture_events test_gesture_events.cpp)
@@ -374,6 +383,7 @@ openblack_setup_and_add_test(test_wall_hug_rules test_wall_hug_rules.cpp)
 openblack_setup_and_add_test(test_villager_age test_villager_age.cpp)
 openblack_setup_and_add_test(test_villager_needs test_villager_needs.cpp)
 openblack_setup_and_add_test(test_villager_routine test_villager_routine.cpp)
+openblack_setup_and_add_test(test_walk_arrival test_walk_arrival.cpp)
 openblack_setup_and_add_test(test_abode_knock test_abode_knock.cpp)
 openblack_setup_and_add_test(
   test_villager_animation test_villager_animation.cpp
@@ -458,10 +468,12 @@ openblack_setup_and_add_test(test_script_objects test_script_objects.cpp)
 openblack_setup_and_add_test(test_script_find test_script_find.cpp)
 openblack_setup_and_add_test(test_partial_build_cap test_partial_build_cap.cpp)
 openblack_setup_and_add_test(test_town_playthings test_town_playthings.cpp)
+openblack_setup_and_add_test(test_village_totem test_village_totem.cpp)
 openblack_setup_and_add_test(test_temple_heart test_temple_heart.cpp)
 openblack_setup_and_add_test(test_model_surface test_model_surface.cpp)
 target_link_libraries(test_model_surface PRIVATE l3d)
 openblack_setup_and_add_test(test_fireflies test_fireflies.cpp)
+openblack_setup_and_add_test(test_forest_growth test_forest_growth.cpp)
 openblack_setup_and_add_test(test_store_rules test_store_rules.cpp)
 openblack_setup_and_add_test(test_clip_sounds test_clip_sounds.cpp)
 target_link_libraries(test_clip_sounds PRIVATE sas)
@@ -491,6 +503,8 @@ openblack_setup_and_add_test(
   test_loading_screen_rules gui/test_loading_screen_rules.cpp
 )
 openblack_setup_and_add_test(test_story_land_change test_story_land_change.cpp)
+openblack_setup_and_add_test(test_dance_file test_dance_file.cpp)
+target_link_libraries(test_dance_file PRIVATE dance)
 target_link_libraries(test_story_land_change PRIVATE ScriptLibrary)
 
 # The inspector component's tests build without the game, as the component does

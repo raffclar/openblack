@@ -100,6 +100,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
@@ -124,6 +125,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
+#include "ECS/Systems/CreaturePenSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -174,6 +176,8 @@
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
+#include "ECS/Systems/VillageTotemSystemInterface.h"
+#include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -490,6 +494,13 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	{
 		magicTookPress = magic.TapAction();
 	}
+	// Letting go of the Action button lets go of a town's totem, leaving it where it was slid
+	if (Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value() &&
+	    (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
+	{
+		Locator::villageTotemSystem::value().LetGo();
+		Locator::gameActionSystem::value().PinCursor(false);
+	}
 	// Letting go of the Action button lets go of what the hand was taking, or puts down or throws what it holds
 	if (handGrab != nullptr && (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
 	{
@@ -549,6 +560,21 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				{
 					// A creature the hand may not hold: a click on it still asks the leash, which says why not
 					Locator::leashSystem::value().TapCreature(PlayerNames::PLAYER_ONE, *under);
+				}
+			}
+		}
+		// A town's totem under the hand is taken hold of, to slide it up and down
+		if (!_actionPressTaken && !magic.IsHandBusy() && !handHoldsThing && Locator::villageTotemSystem::has_value() &&
+		    Locator::pickingSystem::has_value())
+		{
+			auto& totems = Locator::villageTotemSystem::value();
+			if (const auto picked = Locator::pickingSystem::value().GetPick().object; picked.has_value())
+			{
+				if (const auto totem = totems.TotemOf(*picked);
+				    totem.has_value() && totems.Grip(*totem, PlayerNames::PLAYER_ONE))
+				{
+					_actionPressTaken = true;
+					Locator::gameActionSystem::value().PinCursor(true);
 				}
 			}
 		}
@@ -999,13 +1025,15 @@ bool Game::GameLogicLoop() noexcept
 	Locator::fieldSystem::value().ProcessTurn(Locator::time::value().GetTurn());
 	// The fish come back to the fish farms
 	Locator::fishFarmSystem::value().ProcessTurn(Locator::time::value().GetTurn());
-	// The trees that are still growing grow, faster in the rain
-	Locator::vegetation::value().ProcessTurn();
+	// The forests' growing trees grow, faster in the rain, and the forests spread
+	Locator::forestSystem::value().GrowForests();
 	{
 		// The creatures age, grow, get hungry, tired and thirsty, and heal while they sleep
 		auto creaturePhysiology = profiler.BeginScoped(Profiler::Stage::CreaturePhysiologyUpdate);
 		Locator::creaturePhysiologySystem::value().ProcessTurn();
 	}
+	// A creature's home is its temple's pen, and in the pen it is shown smaller so that it fits
+	Locator::creaturePenSystem::value().ProcessTurn();
 	// The creatures' bodies follow their fatness, and their marks heal
 	Locator::creatureAnimationSystem::value().ProcessTurn();
 	Locator::creatureSkinSystem::value().ProcessTurn();
@@ -1157,6 +1185,11 @@ bool Game::GameLogicLoop() noexcept
 	if (Locator::handGrabSystem::has_value())
 	{
 		Locator::handGrabSystem::value().ProcessTurn();
+	}
+	// At the end of the turn the vortices between the lands open, close and level the ground under them
+	if (Locator::vortexSystem::has_value())
+	{
+		Locator::vortexSystem::value().ProcessTurn();
 	}
 	// Once the whole turn is over, the local player whose temple is being destroyed has lost
 	if (Locator::templeDestructionSystem::has_value())
@@ -1479,6 +1512,11 @@ bool Game::Update() noexcept
 		auto fire = profiler.BeginScoped(Profiler::Stage::FireUpdate);
 		Locator::fireSystem::value().Update(std::chrono::duration<float>(gameTime).count());
 	}
+	// The vortices' swirls and effects step with the frame, and their marks on the ground follow their openness
+	if (Locator::vortexSystem::has_value())
+	{
+		Locator::vortexSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
+	}
 	// The reward chests from the sky fall and thump down, and their dust fades
 	if (Locator::rewardSystem::has_value())
 	{
@@ -1575,6 +1613,8 @@ bool Game::Update() noexcept
 	}
 	Locator::mistSystem::value().Update(gameTime);
 	Locator::villageLightSystem::value().Update(gameTime);
+	// The town totems ease to their shares
+	Locator::villageTotemSystem::value().Update(gameTime.count());
 	Locator::fieldSystem::value().Update(gameTime);
 	// The shoals near the camera swim, and dart from what scared them
 	Locator::fishFarmSystem::value().Update(std::chrono::duration<float>(gameTime).count(),
@@ -1852,6 +1892,18 @@ bool Game::Update() noexcept
 					    .nowMs = machine_clock::Ticks(),
 					    .turn = Locator::time::value().GetTurn(),
 					});
+				}
+				// Holding a town's totem, the mouse slides it up and down and the hand stays on its icon
+				if (Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value())
+				{
+					auto& totems = Locator::villageTotemSystem::value();
+					const auto screenHeight = Locator::windowing::has_value() ? Locator::windowing::value().GetSize().y : 0;
+					totems.Slide(static_cast<float>(-Locator::gameActionSystem::value().GetMouseDelta().y),
+					             static_cast<float>(screenHeight));
+					if (const auto hold = totems.GetHandHold())
+					{
+						handTransform.position = hold->position;
+					}
 				}
 				UpdateMagicHand(handTransform.position,
 				                std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
@@ -2750,6 +2802,30 @@ bool Game::Initialize() noexcept
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
 		}
 	}
+	// The marks the vortices leave on the ground, with their alphas
+	for (const auto& textures : ecs::components::Vortex::k_GroundTextures)
+	{
+		for (const auto& [id, name] :
+		     {std::pair {textures.hole, textures.holeFile}, std::pair {textures.ring, textures.ringFile}})
+		{
+			const auto colours = fileSystem.GetPath<Path::Textures>() / fmt::format("{}.raw", name);
+			const auto alpha = fileSystem.GetPath<Path::Textures>() / fmt::format("{}a.raw", name);
+			if (!fileSystem.Exists(colours) || !fileSystem.Exists(alpha))
+			{
+				continue;
+			}
+			constexpr uint16_t k_VortexTextureSide = 256;
+			try
+			{
+				textureManager.Load(id, resources::Texture2DLoader::FromDiskWithAlphaTag {}, colours, alpha,
+				                    k_VortexTextureSide);
+			}
+			catch (std::runtime_error& err)
+			{
+				SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+			}
+		}
+	}
 	fileSystem.Iterate(fileSystem.GetPath<Path::Textures>(), false, [&textureManager](const std::filesystem::path& f) {
 		// The game ships a grey ice map it never loads, cut short of a whole texture
 		constexpr std::string_view k_UnusedTexture = "s_iceenvmapgrey.raw";
@@ -2858,6 +2934,7 @@ bool Game::Run() noexcept
 		// The land's scripts start with every place of the scripts' object table free; each native tells the table
 		// whether it takes control of what it is given, and the scripts' variables keep their objects' references
 		Locator::scriptObjects::value().Reset();
+		chlapi.ResetSwitches();
 		lhvm.Initialise(
 		    &chlapi.GetFunctionsTable(),
 		    [](uint32_t func) {
@@ -3137,6 +3214,10 @@ bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept
 		if (Locator::scriptObjects::has_value())
 		{
 			Locator::scriptObjects::value().Reset();
+		}
+		if (Locator::chlapi::has_value())
+		{
+			Locator::chlapi::value().ResetSwitches();
 		}
 		auto& fileSystem = Locator::filesystem::value();
 		const auto challengePath = fileSystem.GetPath<filesystem::Path::Quests>() / "challenge.chl";

@@ -178,7 +178,7 @@ float HeadingOfRotation(const glm::mat3& rotation)
 /// The creature's size and speeds this turn
 void Measure(CreatureLocomotion& self, const Creature& creature, const Transform& transform)
 {
-	self.speeds = locomotion::SpeedsFor(creature.size);
+	self.speeds = locomotion::SpeedsFor(ShownSize(creature));
 	self.scale = std::abs(transform.scale.x);
 	auto& meshes = Locator::resources::value().GetMeshes();
 	const auto meshId = creature::GetIdFromType(creature.species, creature::CreatureBody::Appearance::Base);
@@ -585,7 +585,7 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::StartMove(entt::e
 	self.fidgetMs = k_FidgetMs;
 	self.fidgeted = false;
 
-	const auto creatureHeight = creature_morph::k_HeightAtSizeOne * body->size;
+	const auto creatureHeight = creature_morph::k_HeightAtSizeOne * ShownSize(*body);
 	self.planner.emplace(route::Request {
 	    .start = position,
 	    .destination = point,
@@ -895,7 +895,7 @@ void CreatureLocomotionSystem::ProcessTurn()
 			    }
 			    break;
 		    case Motion::Turning:
-			    TurnStep(self, moves, creature_layers::PlaybackRate(creature.size));
+			    TurnStep(self, moves, creature_layers::PlaybackRate(ShownSize(creature)));
 			    break;
 		    case Motion::Stepping:
 			    StepOff(self, moves);

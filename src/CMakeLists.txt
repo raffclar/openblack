@@ -129,6 +129,7 @@ target_link_libraries(
   PRIVATE "$<$<CXX_COMPILER_ID:MSVC>:-SAFESEH:NO>"
           l3d
           cam
+          dance
           pack
           lnd
           anm
