@@ -28,12 +28,14 @@
 #include "Audio/GameSoundEffects.h"
 #include "Creature/CreatureSkin.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/VideoOverlay.h"
 #include "Gui/CinemaBars.h"
+#include "Help/HelpTextDisplay.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -48,6 +50,9 @@ namespace
 constexpr std::array k_TextScripts = {"InfoScript2.txt", "InfoScriptPatch2.txt", "InfoScriptMultiplayer2.txt"};
 /// The dialogs' font, the first of the game's fonts
 constexpr std::string_view k_Font = "j0";
+/// The good advisor's font and the evil one's, which their words in the scripts' dialogue are in
+constexpr std::string_view k_GoodAdvisorFont = "f1";
+constexpr std::string_view k_EvilAdvisorFont = "f3";
 constexpr uint16_t k_AtlasSize = 256;
 
 std::vector<uint8_t> ReadIfExists(const std::filesystem::path& path)
@@ -59,6 +64,38 @@ std::vector<uint8_t> ReadIfExists(const std::filesystem::path& path)
 		return {};
 	}
 	return fileSystem.ReadAll(path);
+}
+
+/// One of the game's fonts, from its glyph metrics and bitmaps. Nothing when they are missing or don't fit together.
+std::optional<GameFont> LoadFont(std::string_view name)
+{
+	auto& fileSystem = Locator::filesystem::value();
+	const auto met = ReadIfExists(fileSystem.GetPath<Path::Data>() / (std::string(name) + ".met"));
+	const auto fnt = ReadIfExists(fileSystem.GetPath<Path::Data>() / (std::string(name) + ".fnt"));
+	auto font = GameFont::Load(met, fnt);
+	if (!font)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Unable to read the font {}", name);
+	}
+	return font;
+}
+
+/// A font's glyphs, white with their coverage in alpha
+std::unique_ptr<openblack::graphics::Texture2D> MakeFontTexture(const GameFont& font, std::string_view name)
+{
+	const auto& coverage = font.GetAtlas();
+	const auto* fontData = bgfx::alloc(static_cast<uint32_t>(coverage.size() * 4));
+	for (size_t i = 0; i < coverage.size(); ++i)
+	{
+		fontData->data[(i * 4) + 0] = 0xFF;
+		fontData->data[(i * 4) + 1] = 0xFF;
+		fontData->data[(i * 4) + 2] = 0xFF;
+		fontData->data[(i * 4) + 3] = coverage[i];
+	}
+	auto texture = std::make_unique<openblack::graphics::Texture2D>(std::string("Font ") + std::string(name));
+	texture->Create(font.GetAtlasSize().x, font.GetAtlasSize().y, 1, openblack::graphics::TextureFormat::RGBA8,
+	                openblack::graphics::Wrapping::ClampEdge, openblack::graphics::Filter::Linear, fontData);
+	return texture;
 }
 } // namespace
 
@@ -136,15 +173,20 @@ std::unique_ptr<GameInterface> GameInterface::Create(std::u16string_view playerN
 	for (const auto* script : k_TextScripts)
 	{
 		const auto data = ReadIfExists(fileSystem.GetPath<Path::Scripts>() / script);
-		texts.AddScript(data);
+		// The first is the help texts' script, whose texts the game's scripts refer to by number
+		if (script == k_TextScripts.front())
+		{
+			texts.AddHelpScript(data);
+		}
+		else
+		{
+			texts.AddScript(data);
+		}
 	}
 
-	const auto met = ReadIfExists(fileSystem.GetPath<Path::Data>() / (std::string(k_Font) + ".met"));
-	const auto fnt = ReadIfExists(fileSystem.GetPath<Path::Data>() / (std::string(k_Font) + ".fnt"));
-	auto font = GameFont::Load(met, fnt);
+	auto font = LoadFont(k_Font);
 	if (!font)
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Unable to read the font {}", k_Font);
 		return nullptr;
 	}
 
@@ -159,25 +201,25 @@ std::unique_ptr<GameInterface> GameInterface::Create(std::u16string_view playerN
 	// The atmosphere texture's glows and the tooltips' arrows
 	auto atmos = LoadTexture("ATMOS");
 
-	// White glyphs, their coverage in alpha
-	const auto& coverage = font->GetAtlas();
-	const auto* fontData = bgfx::alloc(static_cast<uint32_t>(coverage.size() * 4));
-	for (size_t i = 0; i < coverage.size(); ++i)
-	{
-		fontData->data[(i * 4) + 0] = 0xFF;
-		fontData->data[(i * 4) + 1] = 0xFF;
-		fontData->data[(i * 4) + 2] = 0xFF;
-		fontData->data[(i * 4) + 3] = coverage[i];
-	}
-	auto fontTexture = std::make_unique<graphics::Texture2D>(std::string("Font ") + std::string(k_Font));
-	fontTexture->Create(font->GetAtlasSize().x, font->GetAtlasSize().y, 1, graphics::TextureFormat::RGBA8,
-	                    graphics::Wrapping::ClampEdge, graphics::Filter::Linear, fontData);
+	auto fontTexture = MakeFontTexture(*font, k_Font);
 
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Interface: {} texts, font {} with {} glyphs", texts.GetCount(), font->GetName(),
 	                    font->GetGlyphs().size());
-	return std::unique_ptr<GameInterface>(new GameInterface(std::move(texts), std::move(*font), std::move(atlas),
-	                                                        std::move(fontTexture), std::move(symbols), std::move(mice),
-	                                                        std::move(atmos), playerName, std::move(settings)));
+	auto created = std::unique_ptr<GameInterface>(new GameInterface(std::move(texts), std::move(*font), std::move(atlas),
+	                                                                std::move(fontTexture), std::move(symbols), std::move(mice),
+	                                                                std::move(atmos), playerName, std::move(settings)));
+	// The advisors' fonts for the dialogue, j0 standing in for one that is missing
+	if (auto good = LoadFont(k_GoodAdvisorFont))
+	{
+		auto texture = MakeFontTexture(*good, k_GoodAdvisorFont);
+		created->_goodAdvisorFont = FontFace {.font = std::move(*good), .texture = std::move(texture)};
+	}
+	if (auto evil = LoadFont(k_EvilAdvisorFont))
+	{
+		auto texture = MakeFontTexture(*evil, k_EvilAdvisorFont);
+		created->_evilAdvisorFont = FontFace {.font = std::move(*evil), .texture = std::move(texture)};
+	}
+	return created;
 }
 
 GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<graphics::Texture2D> atlas,
@@ -465,6 +507,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		_canvas.DrawQuad(glm::vec2(0.0f), {screen.x, bars}, glm::vec2(0.0f), glm::vec2(1.0f), black, nullptr);
 		_canvas.DrawQuad({0.0f, screen.y - bars}, screen, glm::vec2(0.0f), glm::vec2(1.0f), black, nullptr);
 	}
+	DrawDialogue(resolution, static_cast<int>(bars));
 	// The game covers the frame with the fade's colour last of all
 	if (const auto fade = _screenFade.GetColour(); fade.a > 0.0f)
 	{
@@ -528,6 +571,87 @@ void GameInterface::DrawGlow(glm::vec2 min, glm::vec2 max, glm::vec4 colour)
 		}
 	}
 	_canvas.SetBlend(Canvas::Blend::Alpha);
+}
+
+std::pair<const GameFont*, const openblack::graphics::Texture2D*> GameInterface::DialogueFont(help::TextFont font) const
+{
+	if (font == help::TextFont::F1 && _goodAdvisorFont.has_value())
+	{
+		return {&_goodAdvisorFont->font, _goodAdvisorFont->texture.get()};
+	}
+	if (font == help::TextFont::F3 && _evilAdvisorFont.has_value())
+	{
+		return {&_evilAdvisorFont->font, _evilAdvisorFont->texture.get()};
+	}
+	return {&_font, _fontTexture.get()};
+}
+
+void GameInterface::DrawDialogue(glm::u16vec2 resolution, int barPixels)
+{
+	if (!Locator::helpTextSystem::has_value())
+	{
+		return;
+	}
+	const help::WidthFn widthOf = [this](help::TextFont font, std::u16string_view text, float size) {
+		return DialogueFont(font).first->GetWidth(text, size);
+	};
+	const auto* frame = Locator::helpTextSystem::value().Layout(glm::ivec2(resolution), barPixels, widthOf);
+	if (frame == nullptr)
+	{
+		return;
+	}
+	// The box covers whole pixels, its right and bottom ones included
+	if (frame->boxShown)
+	{
+		const auto& box = frame->box;
+		const auto colour = glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(frame->boxAlpha) / 255.0f);
+		_canvas.DrawQuad({static_cast<float>(box.left), static_cast<float>(box.top)},
+		                 {static_cast<float>(box.right + 1), static_cast<float>(box.bottom + 1)}, glm::vec2(0.0f),
+		                 glm::vec2(1.0f), colour, nullptr);
+	}
+	for (const auto& run : frame->runs)
+	{
+		DrawDialogueRun(run);
+	}
+}
+
+void GameInterface::DrawDialogueRun(const help::TextRun& run)
+{
+	const auto [font, texture] = DialogueFont(run.font);
+	const auto colour = glm::vec4(run.r, run.g, run.b, run.a) / 255.0f;
+	const auto scale = run.size / static_cast<float>(font->GetHeight());
+	const auto atlasSize = glm::vec2(font->GetAtlasSize());
+	const float clipTop = run.clipTop;
+	const float clipBottom = run.clipBottom + 1.0f;
+	auto pen = glm::floor(glm::vec2(run.x, run.y));
+	for (const auto c : run.text)
+	{
+		const auto* glyph = font->Find(c);
+		if (glyph == nullptr)
+		{
+			continue;
+		}
+		// The atlas holds the glyph at half size
+		const auto cellSize = glm::vec2(glyph->atlasMax - glyph->atlasMin) * 2.0f * scale;
+		auto min = glm::vec2(pen.x + (glyph->left * scale), pen.y);
+		auto max = min + cellSize;
+		auto uvMin = glm::vec2(glyph->atlasMin) / atlasSize;
+		auto uvMax = glm::vec2(glyph->atlasMax) / atlasSize;
+		pen.x += (glyph->left + glyph->ink + glyph->right) * scale;
+		// Cut to the box, the glyph's picture with it
+		const float top = std::max(min.y, clipTop);
+		const float bottom = std::min(max.y, clipBottom);
+		if (bottom <= top)
+		{
+			continue;
+		}
+		const float vPerPixel = (uvMax.y - uvMin.y) / (max.y - min.y);
+		uvMin.y += (top - min.y) * vPerPixel;
+		uvMax.y -= (max.y - bottom) * vPerPixel;
+		min.y = top;
+		max.y = bottom;
+		_canvas.DrawQuad(min, max, uvMin, uvMax, colour, texture);
+	}
 }
 
 void GameInterface::DrawCreaturePanel(glm::u16vec2 resolution)

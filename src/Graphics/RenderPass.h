@@ -47,6 +47,8 @@ enum class RenderPass : uint8_t
 	Main,
 	/// What blends in the world, drawn after the rest of the scene, the farthest first
 	Translucent,
+	/// The advisors near the screen, drawn over the whole scene with its depth cleared
+	Advisors,
 	Interface,
 	ImGui,
 	/// The game's pointer, over the debug windows too
@@ -73,6 +75,7 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Sky Pass",                    //
     "Main Pass",                   //
     "Translucent Pass",            //
+    "Advisors Pass",               //
     "Interface Pass",              //
     "ImGui Pass",                  //
     "Cursor Pass",                 //

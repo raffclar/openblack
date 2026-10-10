@@ -49,15 +49,19 @@ struct ParticleFile;
 struct StackedBitmap;
 } // namespace openblack::psys
 
-namespace openblack::bink
+namespace openblack::edt
 {
-class BinkFile;
-} // namespace openblack::bink
+class EDTFile;
+} // namespace openblack::edt
 
 namespace openblack::dance
 {
 struct DanceFile;
 } // namespace openblack::dance
+namespace openblack::bink
+{
+class BinkFile;
+} // namespace openblack::bink
 
 namespace openblack::gestures
 {
@@ -69,6 +73,11 @@ namespace openblack::pack
 struct AudioBankSampleHeader;
 struct G3DTexture;
 } // namespace openblack::pack
+
+namespace openblack::help::spirits
+{
+struct AdvisorModel;
+}
 
 namespace openblack::physics
 {
@@ -279,10 +288,22 @@ struct GestureTemplatesLoader final: BaseLoader<gestures::GestureFile>
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
 };
 
+/// The camera editor's file of the scripts' numbered cameras and tracks
+struct CameraEditLoader final: BaseLoader<edt::EDTFile>
+{
+	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
+};
+
 /// A dance's choreography, from the files under the scripts' Dance folder
 struct DanceFileLoader final: BaseLoader<dance::DanceFile>
 {
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
+};
+
+/// An advisor from its .hd file: the file, its skeleton and its mesh
+struct AdvisorModelLoader final: BaseLoader<help::spirits::AdvisorModel>
+{
+	[[nodiscard]] result_type operator()(FromBufferTag, const std::string& debugName, const std::vector<uint8_t>& data) const;
 };
 
 struct CameraPathLoader final: BaseLoader<CameraPath>

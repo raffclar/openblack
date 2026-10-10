@@ -92,6 +92,8 @@ enum class Facet : uint8_t
 	Animals,
 	/// The sky: the moon and its phases
 	Sky,
+	/// The player's two advisors, the good one and the evil one
+	Advisors,
 
 	_Count
 };
@@ -516,6 +518,9 @@ struct Command
 		/// The player's hand knocks on the scenario's object, a building, as the Action button pressed on it does, from
 		/// where the hand is
 		HandTapObject,
+		/// One of the player's advisors (value: 0 the good one, 1 the evil one) is told to do something, as the scripts
+		/// tell it (advisor). Needs no creature
+		Advisor,
 		/// The creature walks to its home: its temple's pen while its player has a temple
 		WalkHome,
 	};
@@ -558,6 +563,27 @@ struct Command
 	std::optional<size_t> atCreature;
 	/// The player's alignment jumped to, from -1 (evil) to 1 (good)
 	float alignment {0.0f};
+	/// What an advisor is told: to come out of its corner, or to appear in a puff of smoke; to go home, or to vanish; to
+	/// cling to or fly to a point on the screen (point, from 0 to 1 across and down); to point at that point on the
+	/// screen, or at a point of the land (point, from the middle of the map), out in the world or not (gentle); to look
+	/// at the point of the land; to play an anim (anim) at the point on the screen at a speed (amount); to feel an
+	/// emotion (anim)
+	enum class AdvisorAction : uint8_t
+	{
+		Out,
+		Appear,
+		Home,
+		Vanish,
+		Cling,
+		Fly,
+		PointOnScreen,
+		PointAtLand,
+		LookAtLand,
+		PlayAnim,
+		Feel,
+	};
+	AdvisorAction advisor {AdvisorAction::Out};
+	uint32_t anim {0};
 };
 [[nodiscard]] std::string_view Name(Command::Kind kind);
 /// Whether a command is the player's mouse, which needs no creature
@@ -701,6 +727,8 @@ void AddGateScenarios(std::vector<Scenario>& all);
 void AddKnockScenarios(std::vector<Scenario>& all);
 /// The moon at night, seen to the east, for trying its phases and its path with the moon debug window
 void AddSkyScenarios(std::vector<Scenario>& all);
+/// The advisors coming out, clinging, pointing and acting
+void AddAdvisorScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them
 [[nodiscard]] std::span<const Scenario> All();

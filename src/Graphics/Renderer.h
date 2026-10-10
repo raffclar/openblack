@@ -126,6 +126,9 @@ private:
 	void DrawFishShoals(const DrawSceneDesc& desc) const;
 	/// The villagers' ground blobs, in the main view
 	void DrawGroundBlobs(const DrawSceneDesc& desc) const;
+	/// The advisors: those out in the world with the scene, their rainbow trails after all else that blends, and those
+	/// near the screen in a view of their own over everything, in the main view
+	void DrawAdvisors(const DrawSceneDesc& desc) const;
 	/// The villagers too far away to be drawn, each a dark smudge facing the view
 	void DrawFarVillagerSmudges(const DrawSceneDesc& desc) const;
 	/// The rain about the camera, each block's in its place among what blends, in the main view

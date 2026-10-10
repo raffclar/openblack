@@ -42,7 +42,6 @@ inline constexpr float k_FoodPotScale = 0.7f;
 /// Each place's dance, the first place's first: the citadel dances of the info table
 inline constexpr DanceInfo k_FirstPlaceDance = DanceInfo::CitadelDance_1;
 /// A new site's dance is set going at half speed, from the quarter speed every dance is made at
-inline constexpr float k_DanceMadeSpeed = 0.25f;
 inline constexpr float k_SiteDanceStartSpeed = 0.5f;
 /// The land on which no worship sites are made for towns: the first land, the tutorial's
 inline constexpr int32_t k_LandWithoutSites = 1;

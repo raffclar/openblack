@@ -31,6 +31,7 @@
 #include "ECS/PhysicsGameHooks.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/AbodeKnockSystem.h"
+#include "ECS/Systems/Implementations/AdvisorSystem.h"
 #include "ECS/Systems/Implementations/AlignmentSystem.h"
 #include "ECS/Systems/Implementations/AnimalSystem.h"
 #include "ECS/Systems/Implementations/AnimatedStaticSystem.h"
@@ -56,6 +57,7 @@
 #include "ECS/Systems/Implementations/CreaturePenSystem.h"
 #include "ECS/Systems/Implementations/CreaturePhysiologySystem.h"
 #include "ECS/Systems/Implementations/CreatureSkinSystem.h"
+#include "ECS/Systems/Implementations/DialogueControlSystem.h"
 #include "ECS/Systems/Implementations/DynamicsSystem.h"
 #include "ECS/Systems/Implementations/EditorSystem.h"
 #include "ECS/Systems/Implementations/ExplosionSystem.h"
@@ -68,10 +70,14 @@
 #include "ECS/Systems/Implementations/GestureSystem.h"
 #include "ECS/Systems/Implementations/HandGrabSystem.h"
 #include "ECS/Systems/Implementations/HandSystem.h"
+#include "ECS/Systems/Implementations/HelpSpeechSystem.h"
+#include "ECS/Systems/Implementations/HelpTextSystem.h"
+#include "ECS/Systems/Implementations/HighDetailSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
 #if defined(OPENBLACK_INSPECTOR)
 #include "ECS/Systems/Implementations/InspectorSystem.h"
 #endif
+#include "ECS/Systems/Implementations/DanceSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
 #include "ECS/Systems/Implementations/MagicShieldSystem.h"
@@ -88,6 +94,7 @@
 #include "ECS/Systems/Implementations/RenderingSystem.h"
 #include "ECS/Systems/Implementations/ResourceStoreSystem.h"
 #include "ECS/Systems/Implementations/RewardSystem.h"
+#include "ECS/Systems/Implementations/ScriptControlSystem.h"
 #include "ECS/Systems/Implementations/ScriptObjectsSystem.h"
 #include "ECS/Systems/Implementations/SkySystem.h"
 #include "ECS/Systems/Implementations/SnowSystem.h"
@@ -107,8 +114,10 @@
 #include "ECS/Systems/Implementations/VillageLightSystem.h"
 #include "ECS/Systems/Implementations/VillageTotemSystem.h"
 #include "ECS/Systems/Implementations/VortexSystem.h"
+#include "ECS/Systems/Implementations/WalkPathSystem.h"
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
 #include "ECS/Systems/Implementations/WeatherSystem.h"
+#include "ECS/Systems/Implementations/WhaleSystem.h"
 #include "ECS/Systems/Implementations/WorshipSiteSystem.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "Graphics/RendererInterface.h"
@@ -135,6 +144,7 @@ using openblack::debug::gui::DebugGuiInterface;
 using openblack::ecs::MapProduction;
 using openblack::ecs::Registry;
 using openblack::ecs::systems::AbodeKnockSystem;
+using openblack::ecs::systems::AdvisorSystem;
 using openblack::ecs::systems::AlignmentSystem;
 using openblack::ecs::systems::AnimalSystem;
 using openblack::ecs::systems::AnimatedStaticSystem;
@@ -159,6 +169,8 @@ using openblack::ecs::systems::CreatureObjectActionSystem;
 using openblack::ecs::systems::CreaturePenSystem;
 using openblack::ecs::systems::CreaturePhysiologySystem;
 using openblack::ecs::systems::CreatureSkinSystem;
+using openblack::ecs::systems::DanceSystem;
+using openblack::ecs::systems::DialogueControlSystem;
 using openblack::ecs::systems::DynamicsSystem;
 using openblack::ecs::systems::EditorSystem;
 using openblack::ecs::systems::FieldSystem;
@@ -170,6 +182,9 @@ using openblack::ecs::systems::GestureEventsInterface;
 using openblack::ecs::systems::GestureSystem;
 using openblack::ecs::systems::HandGrabSystem;
 using openblack::ecs::systems::HandSystem;
+using openblack::ecs::systems::HelpSpeechSystem;
+using openblack::ecs::systems::HelpTextSystem;
+using openblack::ecs::systems::HighDetailSystem;
 using openblack::ecs::systems::InfluenceSystem;
 using openblack::ecs::systems::LeashSystem;
 using openblack::ecs::systems::LivingActionSystem;
@@ -186,6 +201,7 @@ using openblack::ecs::systems::RainSystem;
 using openblack::ecs::systems::ReactionSystem;
 using openblack::ecs::systems::RenderingSystem;
 using openblack::ecs::systems::ResourceStoreSystem;
+using openblack::ecs::systems::ScriptControlSystem;
 using openblack::ecs::systems::SnowfallSystem;
 using openblack::ecs::systems::SnowSystem;
 using openblack::ecs::systems::SoundTagSystem;
@@ -203,8 +219,10 @@ using openblack::ecs::systems::VideoSystem;
 using openblack::ecs::systems::VillageLightSystem;
 using openblack::ecs::systems::VillageTotemSystem;
 using openblack::ecs::systems::VortexSystem;
+using openblack::ecs::systems::WalkPathSystem;
 using openblack::ecs::systems::WaterRingSystem;
 using openblack::ecs::systems::WeatherSystem;
+using openblack::ecs::systems::WhaleSystem;
 using openblack::ecs::systems::WorshipSiteSystem;
 using openblack::graphics::RendererInterface;
 using openblack::input::GameActionMap;
@@ -304,7 +322,16 @@ bool openblack::InitializeGame() noexcept
 	Locator::creatureCaveSystem::emplace<CreatureCaveSystem>();
 	Locator::tattooEditorSystem::emplace<TattooEditorSystem>();
 	Locator::cinematicDirectorSystem::emplace<CinematicDirectorSystem>();
+	Locator::scriptControlSystem::emplace<ScriptControlSystem>();
+	Locator::dialogueControlSystem::emplace<DialogueControlSystem>();
+	Locator::helpSpeechSystem::emplace<HelpSpeechSystem>();
+	Locator::highDetailSystem::emplace<HighDetailSystem>();
+	Locator::walkPathSystem::emplace<WalkPathSystem>();
+	Locator::danceSystem::emplace<DanceSystem>();
+	Locator::whaleSystem::emplace<WhaleSystem>();
 	Locator::videoSystem::emplace<VideoSystem>();
+	Locator::helpTextSystem::emplace<HelpTextSystem>();
+	Locator::advisorSystem::emplace<AdvisorSystem>();
 	Locator::soundTagSystem::emplace<SoundTagSystem>();
 	Locator::rainSystem::emplace<RainSystem>();
 	Locator::chimneySmokeSystem::emplace<ChimneySmokeSystem>();
@@ -406,7 +433,10 @@ void openblack::ShutDownServices()
 		resources.GetTextures().Clear();
 		resources.GetAnimations().Clear();
 		resources.GetSounds().Clear();
+		// The advisors' models hold meshes of their own
+		resources.GetAdvisorModels().Clear();
 	}
+	Locator::advisorSystem::reset();
 
 	// The audio resources have been cleared and all sounds have been stopped. It is now safe to reset audio
 	if (Locator::audio::has_value())
@@ -433,7 +463,15 @@ void openblack::ShutDownServices()
 	Locator::pathfindingSystem::reset();
 	Locator::creatureLocomotionSystem::reset();
 	Locator::cinematicDirectorSystem::reset();
+	Locator::scriptControlSystem::reset();
+	Locator::dialogueControlSystem::reset();
+	Locator::helpSpeechSystem::reset();
+	Locator::highDetailSystem::reset();
+	Locator::walkPathSystem::reset();
+	Locator::danceSystem::reset();
+	Locator::whaleSystem::reset();
 	Locator::videoSystem::reset();
+	Locator::helpTextSystem::reset();
 	Locator::influenceSystem::reset();
 	Locator::chimneySmokeSystem::reset();
 	Locator::abodeKnockSystem::reset();

@@ -38,6 +38,12 @@ void CinematicDirectorSystem::FadeBackToNormal(int8_t seconds)
 	_fade.FadeBackToNormal(seconds);
 }
 
+void CinematicDirectorSystem::StartStory()
+{
+	// The land opens on a black screen, so nothing of it shows before its scripts set the scene and fade it in
+	_fade.FadeTo(0, 0, 0, 0);
+}
+
 bool CinematicDirectorSystem::IsFadeFinished() const
 {
 	return _fade.IsFinished();

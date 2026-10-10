@@ -30,6 +30,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
+#include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/WorshipSites.h"
@@ -152,11 +153,10 @@ magic::WorshipBatteryRules GameWorshipSiteWorld::ChantRules(Tribe tribe, PlayerN
 	return row < sites.size() ? magic::WorshipBatteryRulesFor(sites.at(row), power) : magic::WorshipBatteryRules {};
 }
 
-bool GameWorshipSiteWorld::DanceStartsAutomatically(DanceInfo dance) const
+entt::entity GameWorshipSiteWorld::MakeDance(DanceInfo dance, glm::vec3 position, entt::entity site)
 {
-	const auto& dances = Locator::infoConstants::value().dance;
-	const auto row = static_cast<size_t>(dance);
-	return row < dances.size() && dances.at(row).startsAutomatically != 0;
+	return Locator::danceSystem::has_value() ? Locator::danceSystem::value().Create(dance, position, site, 0, false)
+	                                         : entt::null;
 }
 
 uint32_t GameWorshipSiteWorld::Turn() const
@@ -172,40 +172,4 @@ entt::entity GameWorshipSiteWorld::MakeFoodPot(glm::vec3 position, float yAngle)
 		Locator::entitiesRegistry::value().Get<Transform>(pot).scale = glm::vec3(worship_site::k_FoodPotScale);
 	}
 	return pot;
-}
-
-std::optional<uint32_t> GameWorshipSiteWorld::DanceLoops(DanceInfo dance)
-{
-	const auto& dances = Locator::infoConstants::value().dance;
-	const auto row = static_cast<size_t>(dance);
-	if (row >= dances.size() || !Locator::resources::has_value())
-	{
-		return std::nullopt;
-	}
-	// The table names the file from the game's folder, without an extension
-	const std::string name(dances.at(row).fileName.data());
-	auto& files = Locator::resources::value().GetDanceFiles();
-	const auto id = entt::hashed_string(name.c_str()).value();
-	try
-	{
-		if (!files.Contains(id))
-		{
-			std::string path = name;
-			std::ranges::replace(path, '\\', '/');
-			files.Load(id, resources::DanceFileLoader::FromDiskTag {}, Locator::filesystem::value().FindPath(path));
-		}
-		if (const auto file = files.Handle(id); file)
-		{
-			return file->loops;
-		}
-		return std::nullopt;
-	}
-	catch (const std::exception& e)
-	{
-		if (const auto logger = spdlog::get("game"))
-		{
-			logger->error("Can't read the dance {}: {}", name, e.what());
-		}
-		return std::nullopt;
-	}
 }

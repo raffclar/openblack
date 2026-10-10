@@ -15,6 +15,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 
 namespace openblack::gui
 {
@@ -31,13 +32,35 @@ public:
 	/// Adds the ADD_TEXT lines of a script, little endian UTF-16 with or without a byte order mark. A text replaces any
 	/// earlier one of the same name. Returns how many texts the script has.
 	size_t AddScript(std::span<const uint8_t> script);
+	/// Adds the help texts' script, whose texts the scripts also refer to by number: the order they come in
+	size_t AddHelpScript(std::span<const uint8_t> script);
 
 	/// The text of a name, empty when there is none. "\n" in the script is a line break.
 	[[nodiscard]] std::u16string_view Get(std::string_view name) const;
 	[[nodiscard]] size_t GetCount() const noexcept { return _texts.size(); }
+	/// The names of the help texts by their numbers
+	[[nodiscard]] std::span<const std::string> GetHelpNames() const noexcept { return _helpNames; }
+
+	/// A help text, which the scripts refer to by its number
+	struct HelpText
+	{
+		/// Who says it, a value of the script's narrators: 2 the good advisor, 3 the evil one
+		int32_t narrator {0};
+		/// Shown even when the player has only the important texts shown (the first argument of its line)
+		bool important {false};
+		/// As the script writes it, its codes ($ and backslash) left for the help text's display to read
+		std::u16string text;
+	};
+	/// The help text of a number. Number 0 and numbers past the last give the first text.
+	[[nodiscard]] const HelpText& GetHelpText(uint32_t number) const;
+	[[nodiscard]] size_t GetHelpTextCount() const noexcept { return _helpTexts.size(); }
 
 private:
+	size_t Add(std::span<const uint8_t> script, std::vector<std::string>* names, std::vector<HelpText>* helpTexts);
+
 	std::unordered_map<std::string, std::u16string> _texts;
+	std::vector<std::string> _helpNames;
+	std::vector<HelpText> _helpTexts;
 };
 
 /// Converts text for logs and the like

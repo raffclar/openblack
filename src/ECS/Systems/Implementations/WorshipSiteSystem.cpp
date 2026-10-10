@@ -221,14 +221,7 @@ void WorshipSiteSystem::UpdateTurn()
 	auto& registry = _world->Entities();
 	registry.Each<const WorshipSite, Mesh>(
 	    [this](const WorshipSite& site, Mesh& mesh) { mesh.id = _world->SiteMesh(site.temple); });
-	// The sites' dances go on
-	const auto turn = _world->Turn();
-	registry.Each<const WorshipSite>([this, turn](entt::entity site, const WorshipSite& /*unused*/) {
-		if (auto* dance = DanceOf(site); dance != nullptr)
-		{
-			dance_rules::ProcessTurn(*dance, _world->DanceStartsAutomatically(dance->type), turn);
-		}
-	});
+	// The sites' dances go on with every other dance, in the dances' own turn
 }
 
 void WorshipSiteSystem::ProcessChants()
@@ -265,6 +258,7 @@ void WorshipSiteSystem::ProcessChants()
 
 void WorshipSiteSystem::SetDancers(entt::entity site, uint32_t dancers)
 {
+	// TODO(worship): once the worshippers join the dance's groups as they arrive, the count follows them
 	if (auto* dance = DanceOf(site); dance != nullptr)
 	{
 		dance->dancers = dancers;
@@ -554,18 +548,14 @@ void WorshipSiteSystem::Init(entt::entity site)
 	// going at half speed at once
 	const auto dancePoint = _world->SitePoint(ws::k_DancePoint).value_or(glm::vec3(0.0f));
 	const auto danceAt = ws::TurnedPoint(at, component.facing, dancePoint);
-	const auto dance = registry.Create();
-	registry.Assign<Transform>(dance, glm::vec3(danceAt.x, _world->LandHeightAt(danceAt), danceAt.y), glm::mat3(1.0f),
-	                           glm::vec3(1.0f));
-	auto& danced = registry.Assign<Dance>(
-	    dance,
-	    Dance {.type = static_cast<DanceInfo>(static_cast<int>(ws::k_FirstPlaceDance) + component.place), .owner = site});
-	if (const auto loops = _world->DanceLoops(danced.type); loops.has_value())
+	const auto dance = _world->MakeDance(static_cast<DanceInfo>(static_cast<int>(ws::k_FirstPlaceDance) + component.place),
+	                                     glm::vec3(danceAt.x, _world->LandHeightAt(danceAt), danceAt.y), site);
+	if (dance != entt::null)
 	{
-		danced.loopLength = *loops;
+		registry.AssignOrReplace<Transform>(dance, glm::vec3(danceAt.x, _world->LandHeightAt(danceAt), danceAt.y),
+		                                    glm::mat3(1.0f), glm::vec3(1.0f));
+		dance_rules::SetWorshipSpeed(registry.Get<Dance>(dance), ws::k_SiteDanceStartSpeed);
 	}
-	dance_rules::SetSpeed(danced, ws::k_DanceMadeSpeed);
-	dance_rules::SetWorshipSpeed(danced, ws::k_SiteDanceStartSpeed);
 	component.dance = dance;
 
 	// Then its food pot, empty, beside the gate, turned a little further than the site
