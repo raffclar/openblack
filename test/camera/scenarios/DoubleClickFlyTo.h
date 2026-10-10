@@ -27,6 +27,9 @@ public:
 		return false;
 	}
 
+	// The double click the camera takes, on the same frame
+	[[nodiscard]] bool TakeDoubleClick() final { return frameNumber == k_StabilizeFrames + 1; }
+
 	[[nodiscard]] std::array<std::optional<glm::vec3>, 2> GetHandPositions() const final
 	{
 		return {{{}, {{1080.70996f, 0.0f, 966.307434f}}}};

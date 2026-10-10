@@ -63,6 +63,19 @@ struct CreatureMindState
 		creature_mind::Activity activity;
 	};
 	std::optional<Feedback> lastFeedback;
+	/// How strongly the player last rewarded (above 0) or punished (below 0) it: the feedback the hand let go with when
+	/// it was more than slight, or a blow from something its own player threw. Scripts read it, and one sets it back to 0
+	/// to wait for the next.
+	float interactionMagnitude {0.0f};
+	/// How many times it has carried out each action of the game's table to its end, by the action's number, for the
+	/// scripts to read; and the action of what the idle mind is carrying out, by its count of agendas
+	std::map<uint32_t, uint32_t> actionCounts;
+	struct ActionUnderway
+	{
+		uint32_t serial;
+		uint32_t action;
+	};
+	std::optional<ActionUnderway> underway;
 
 	/// How far the creature has grown up, which decides the desires it has and which of its body's needs it feels, and
 	/// the stage they were last set for. Until the game's story moves it on, a creature starts fully grown up.

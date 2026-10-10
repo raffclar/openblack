@@ -78,8 +78,9 @@ public:
 	void StopOwnedSounds(entt::entity owner) override;
 	void StopAllSoundEffects() override;
 	void AddAnimEffects(const std::string& bankName, AnimEffectTable table) override;
+	using AudioManagerInterface::PlayAnimEffect;
 	AnimEffectPlay PlayAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
-	                              const glm::vec3& position) override;
+	                              const glm::vec3& position, const std::optional<SoundEffectConditions>& heardUnder) override;
 	void SetGlobalVolume(float volume) override { _globalVolume = volume; }
 	void SetSfxVolume(float volume) override { _sfxVolume = volume; }
 	void SetMusicVolume(float volume) override { _musicVolume = volume; }

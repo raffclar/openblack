@@ -508,7 +508,7 @@ void draw::AddEffect(Frame& frame, const Effect::DrawWalk& walk, DrawPath path, 
 }
 
 void draw::AddLightSheet(Frame& frame, std::span<const LightSheet::Vertex> vertices, std::span<const uint32_t> triangles,
-                         const glm::vec3& sortPoint)
+                         const glm::vec3& sortPoint, LightSheet::Look look)
 {
 	if (vertices.empty() || triangles.empty())
 	{
@@ -516,8 +516,13 @@ void draw::AddLightSheet(Frame& frame, std::span<const LightSheet::Vertex> verti
 	}
 	static constexpr auto k_Stars = entt::hashed_string("raw/S_LightSheetStars");
 	static constexpr auto k_StarsAlpha = entt::hashed_string("raw/S_LightSheetStarsa");
-	const auto material = frame.MaterialIndex(
-	    {.texture = k_Stars.value(), .alphaTexture = k_StarsAlpha.value(), .mode = Mode::AlphaTexturedAlphaAdditiveNz});
+	static constexpr auto k_ForceField = entt::hashed_string("raw/forcefield");
+	static constexpr auto k_ForceFieldAlpha = entt::hashed_string("raw/forcefielda");
+	const bool forceField = look == LightSheet::Look::ForceField;
+	// Both are drawn the same way
+	const auto material = frame.MaterialIndex({.texture = forceField ? k_ForceField.value() : k_Stars.value(),
+	                                           .alphaTexture = forceField ? k_ForceFieldAlpha.value() : k_StarsAlpha.value(),
+	                                           .mode = Mode::AlphaTexturedAlphaAdditiveNz});
 	const auto firstItem = static_cast<uint32_t>(frame.items.size());
 	const auto firstVertex = static_cast<uint32_t>(frame.surfaceVertices.size());
 	for (const auto& vertex : vertices)

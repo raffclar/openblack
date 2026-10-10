@@ -28,11 +28,14 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MiracleImpression.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
@@ -45,13 +48,17 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/TownDesire.h"
+#include "ECS/VillagerAge.h"
 #include "ECS/VillagerSpeed.h"
+#include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/ReactionRules.h"
+#include "Magic/VillagerReactionRules.h"
 #include "MagicLiving.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "VillagerAnimate.h"
 #include "VillagerFire.h"
 #include "VillagerHome.h"
 #include "VillagerPhysics.h"
@@ -156,8 +163,8 @@ uint32_t GiveUp(LivingAction& action)
 	return 0;
 }
 
-/// The villager turns towards a point by at most a step a turn
-void TurnTowards(entt::entity villager, const glm::vec3& point)
+/// The villager turns towards a point by at most a step a turn: whether it now faces it
+bool TurnTowards(entt::entity villager, const glm::vec3& point)
 {
 	auto& registry = EntityRegistry();
 	auto& transform = registry.Get<Transform>(villager);
@@ -165,11 +172,12 @@ void TurnTowards(entt::entity villager, const glm::vec3& point)
 	const auto diff = glm::xz(point) - glm::xz(transform.position);
 	if (diff == glm::vec2(0.0f))
 	{
-		return;
+		return true;
 	}
 	const float wanted = std::atan2(diff.y, diff.x);
 	float turn = std::remainder(wanted - wallHug.yAngle, 2.0f * std::numbers::pi_v<float>);
-	if (std::abs(turn) > k_WatchTurn)
+	const bool faces = std::abs(turn) < k_WatchTurn;
+	if (!faces)
 	{
 		turn = std::copysign(k_WatchTurn, turn);
 	}
@@ -177,6 +185,7 @@ void TurnTowards(entt::entity villager, const glm::vec3& point)
 	// Turning the walker turns the way its walk faces as well
 	wallHug.gameAngle = static_cast<uint16_t>(gutils::ConvertAngle3DToGame(wallHug.yAngle));
 	transform.rotation = glm::eulerAngleY(-wallHug.yAngle - std::numbers::pi_v<float> * 0.5f);
+	return faces;
 }
 /// The awe of a villager's people at a miracle, heard now and then near the hand
 void BeliefVoiceOf(entt::entity villager, PlayerNames player, GuidanceAlignment alignment,
@@ -352,6 +361,10 @@ void villager_reactions::Start(entt::entity villager, Reaction type, LivingReact
 			}
 		}
 		break;
+	case Reaction::ReactToVillagerInHand:
+		// It waits for the one held, a mate to be
+		SetTop(*action, VillagerStates::WaitForMate);
+		break;
 	case Reaction::ReactToFire:
 		// The fire's own states take over, from the object burning
 		if (Locator::reactionSystem::has_value())
@@ -460,6 +473,62 @@ uint32_t villager_reactions::Watching(LivingAction& action)
 	return 0;
 }
 
+uint32_t villager_reactions::ReactToVillagerInHandPriority(entt::entity villager, entt::entity held)
+{
+	auto& registry = EntityRegistry();
+	if (!Locator::infoConstants::has_value() || !registry.Valid(held))
+	{
+		return 0;
+	}
+	const auto* watcher = registry.TryGet<const Villager>(villager);
+	const auto* heldVillager = registry.TryGet<const Villager>(held);
+	const auto* heldAction = registry.TryGet<const LivingAction>(held);
+	if (watcher == nullptr)
+	{
+		return 0;
+	}
+	const auto& kind = InfoOf(*watcher);
+	const auto age = villager_age::AgeNow(*watcher);
+	const auto& info = Locator::infoConstants::value();
+	const auto watch = magic::villager_reaction::VillagerInHandWatch {
+	    .heldIsVillager = heldVillager != nullptr,
+	    .heldInHand = heldAction != nullptr && FinalStateOf(*heldAction) == VillagerStates::InHand,
+	    .watcherSexuallyActive = kind.startHavingSexAge <= age && age < kind.stopHavingSexAge,
+	    .otherSex = heldVillager != nullptr && InfoOf(*heldVillager).sex != kind.sex,
+	    .samePlayer = world_objects::PlayerOf(held) == world_objects::PlayerOf(villager),
+	    .watcherScripted = registry.AllOf<ScriptControlled>(villager),
+	};
+	return magic::villager_reaction::VillagerInHandPriority(
+	    watch, info.reaction.at(static_cast<size_t>(Reaction::ReactToBreeder)).priority);
+}
+
+uint32_t villager_reactions::WaitForMate(LivingAction& action)
+{
+	auto& registry = EntityRegistry();
+	const auto villager = registry.ToEntity(action);
+	const auto reaction = ReactionOf(villager);
+	if (!reaction.has_value() || !Locator::infoConstants::has_value())
+	{
+		return GiveUp(action);
+	}
+	const auto& info = Locator::infoConstants::value().reaction.at(static_cast<size_t>(reaction->source.type));
+	const auto here = registry.Get<const Transform>(villager).position;
+	const auto* held =
+	    registry.Valid(reaction->source.initiator) ? registry.TryGet<const Transform>(reaction->source.initiator) : nullptr;
+	const auto there = held != nullptr ? held->position : reaction->source.position;
+	if (!magic::villager_reaction::KeepsWaitingForMate(gutils::GetDistanceInMetres(here, there), info.maxReactionDistance))
+	{
+		GiveUp(action);
+		return 1;
+	}
+	// It faces the one held, and stands afresh each time its clip has played through once it does
+	if (TurnTowards(villager, there) && villager_animate::IsReadyForNewAnimation(action))
+	{
+		villager_animate::SetStateAnim(villager);
+	}
+	return 1;
+}
+
 float villager_reactions::TownShare(entt::entity town)
 {
 	auto& registry = EntityRegistry();
@@ -492,7 +561,8 @@ void villager_reactions::SetStateSpeed(entt::entity villager, VillagerStates sta
 	auto& registry = EntityRegistry();
 	const auto* component = registry.TryGet<const Villager>(villager);
 	auto* wallHug = registry.TryGet<WallHug>(villager);
-	if (component == nullptr || wallHug == nullptr || !Locator::infoConstants::has_value())
+	if (component == nullptr || wallHug == nullptr || !Locator::infoConstants::has_value() ||
+	    !villager_speed::StateChangeSetsSpeed(registry.AllOf<ScriptControlled>(villager), registry.AllOf<Dancer>(villager)))
 	{
 		return;
 	}

@@ -23,9 +23,11 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Dances.h"
 #include "ECS/Registry.h"
 #include "ECS/VillagerAnimation.h"
 #include "ECS/VillagerClips.h"
+#include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -124,9 +126,9 @@ AnimId WalkClipOf(entt::entity entity, const Villager& villager)
 	    .lifeWhenCrawlsWounded = info.lifeWhenCrawlsWounded,
 	    .lifeWhenWalksWounded = info.lifeWhenWalksWounded,
 	    .female = IsWoman(villager),
-	    .speed = wallHug != nullptr ? wallHug->speed : 0.0f,
-	    .walkMax = GetSpeedStateSpeed(threshold.speedMaxWalk),
-	    .runMax = GetSpeedStateSpeed(threshold.speedMaxRun),
+	    .speed = wallHug != nullptr ? wall_hug::WholeSpeed(wallHug->speed) : 0,
+	    .walkMax = static_cast<int32_t>(threshold.speedMaxWalk),
+	    .runMax = static_cast<int32_t>(threshold.speedMaxRun),
 	});
 }
 
@@ -254,12 +256,10 @@ void villager_animate::SetAnim(entt::entity villager, int32_t clip, bool restart
 	{
 		return;
 	}
-	if (static_cast<AnimId>(clip) != pose->clip)
-	{
-		pose->clip = static_cast<AnimId>(clip);
-	}
-	// TODO(villagers): a villager dancing in time with others keeps its place in the dance
-	if (restart)
+	const bool sameClip = static_cast<AnimId>(clip) == pose->clip;
+	pose->clip = static_cast<AnimId>(clip);
+	const bool dancing = dances::DanceOf(Entities(), villager) != entt::null;
+	if (villager_clips::PlaceOnSetClip(sameClip, restart, dancing) == villager_clips::ClipPlace::Restart)
 	{
 		pose->place = 0;
 	}

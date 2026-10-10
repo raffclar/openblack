@@ -44,7 +44,9 @@ public:
 	    , _offsetY(object.Float("OffsetY", 0.0f))
 	{
 	}
-	[[nodiscard]] bool Creates() const override { return true; }
+	/// It waits for objects to be given only until the effect closes down, so a closed effect ends once its atoms have
+	/// gone
+	[[nodiscard]] bool KeepsAlive() const override { return true; }
 
 	bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& /*slot*/) const override
 	{

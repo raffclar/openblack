@@ -579,7 +579,7 @@ void AudioManager::AddAnimEffects(const std::string& bankName, AnimEffectTable t
 }
 
 AnimEffectPlay AudioManager::PlayAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
-                                            const glm::vec3& position)
+                                            const glm::vec3& position, const std::optional<SoundEffectConditions>& heardUnder)
 {
 	const auto effects = _animEffects.find(bankName);
 	if (effects == _animEffects.end())
@@ -601,6 +601,12 @@ AnimEffectPlay AudioManager::PlayAnimEffect(const std::string& bankName, std::sp
 		return {.outcome = AnimEffectPlay::Outcome::NotLoaded, .emitter = entt::null, .sample = sample};
 	}
 	const auto sound = sounds.Handle(id);
+	// The sample's own say in when it is heard, as for the scripts' sound effects
+	if (heardUnder.has_value() && !SoundEffectHeard(*heardUnder, BankOfFile(bankName), sound->userParam))
+	{
+		LogNotStarted(*sound, position, "its sample may not be heard now");
+		return {.outcome = AnimEffectPlay::Outcome::NotHeard, .emitter = entt::null, .sample = sample};
+	}
 
 	// The sample doesn't start further from the camera than its bank's maximum distance, applied to the voice or not
 	const auto range = AnimEffectStartRange(sound->maxDistance);

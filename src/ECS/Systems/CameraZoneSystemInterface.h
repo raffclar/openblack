@@ -9,10 +9,19 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <string>
 #include <string_view>
 
+#include <glm/vec3.hpp>
+
 #include "Camera/CameraZones.h"
+
+namespace openblack::particles
+{
+class LightSheet;
+} // namespace openblack::particles
 
 namespace openblack::ecs::systems
 {
@@ -30,6 +39,14 @@ public:
 	[[nodiscard]] virtual const camera_zones::Zones& GetZones() const = 0;
 	/// The file the zones came from, empty for none
 	[[nodiscard]] virtual const std::string& GetFileName() const = 0;
+
+	/// The world camera ran into the fence and was put back inside, its eye now at `origin`: the fence lights up round
+	/// there as a wall of light, the camera shakes and a sound is heard where the camera is (`listener`)
+	virtual void FenceHit(const glm::vec3& origin, const glm::vec3& listener) = 0;
+	/// The wall of light standing along the fence, unseen until the camera hits the fence
+	[[nodiscard]] virtual const particles::LightSheet& GetForceField() const = 0;
+	/// How many times the camera has hit the fence on this land
+	[[nodiscard]] virtual uint32_t GetFenceHits() const = 0;
 };
 
 } // namespace openblack::ecs::systems

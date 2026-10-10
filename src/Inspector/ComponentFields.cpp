@@ -116,6 +116,7 @@
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Influence.h"
+#include "ECS/Components/IntroHand.h"
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/LightBeam.h"
 #include "ECS/Components/LivingAction.h"
@@ -595,6 +596,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::averageFeedback>("averageFeedback")
 	    .Field<&components::CreatureMindState::perceivedDesires>("perceivedDesires")
 	    .Field<&components::CreatureMindState::lastFeedback>("lastFeedback")
+	    .Field<&components::CreatureMindState::interactionMagnitude>("interactionMagnitude")
+	    .Field<&components::CreatureMindState::actionCounts>("actionCounts")
+	    .Field<&components::CreatureMindState::underway>("underway")
 	    .Field<&components::CreatureMindState::developmentPhase>("developmentPhase")
 	    .Field<&components::CreatureMindState::desiresPhase>("desiresPhase")
 	    .Field<&components::CreatureMindState::paused>("paused")
@@ -952,6 +956,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::HighDetail::usualDetailModels>("usualDetailModels")
 	    .Field<&components::HighDetail::face>("face")
 	    .Field<&components::HighDetail::orders>("orders")
+	    .Field<&components::HighDetail::heldAt>("heldAt")
 	    .Field<&components::HighDetail::eyes>("eyes")
 	    .Field<&components::HighDetail::drawnEyes>("drawnEyes");
 	Reflect<components::Indestructible> {context};
@@ -969,6 +974,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::VirtualInfluence>(context)
 	    .Field<&components::VirtualInfluence::state>("state")
 	    .Field<&components::VirtualInfluence::hum>("hum");
+	Reflect<components::IntroHand>(context)
+	    .Field<&components::IntroHand::clip>("clip")
+	    .Field<&components::IntroHand::time>("time")
+	    .Field<&components::IntroHand::yaw>("yaw")
+	    .Field<&components::IntroHand::scale>("scale");
 	Reflect<components::LandForest>(context)
 	    .Field<&components::LandForest::id>("id")
 	    .Field<&components::LandForest::bigForest>("bigForest")
@@ -1548,6 +1558,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Storm::dead>("dead")
 	    .Field<&components::Storm::deadTurns>("deadTurns")
 	    .Field<&components::Storm::climate>("climate");
+	Reflect<components::WeatherThing>(context).Field<&components::WeatherThing::storm>("storm");
 	Reflect<components::WorshipChants>(context)
 	    .Field<&components::WorshipChants::battery>("battery")
 	    .Field<&components::WorshipChants::available>("available")
@@ -1882,7 +1893,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_script_play::Request::plays>("plays");
 	Reflect<openblack::creature_spell_mind::Cheat>(context, ValueOnly {})
 	    .Field<&openblack::creature_spell_mind::Cheat::desire>("desire")
-	    .Field<&openblack::creature_spell_mind::Cheat::turns>("turns");
+	    .Field<&openblack::creature_spell_mind::Cheat::turns>("turns")
+	    .Field<&openblack::creature_spell_mind::Cheat::seconds>("seconds");
 	Reflect<openblack::creature_spells::Slot>(context, ValueOnly {})
 	    .Field<&openblack::creature_spells::Slot::phase>("phase")
 	    .Field<&openblack::creature_spells::Slot::turnsLeft>("turnsLeft")
@@ -2006,6 +2018,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::weight>("weight")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::looping>("looping")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::breathing>("breathing");
+	Reflect<openblack::ecs::components::CreatureMindState::ActionUnderway>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::CreatureMindState::ActionUnderway::serial>("serial")
+	    .Field<&openblack::ecs::components::CreatureMindState::ActionUnderway::action>("action");
 	Reflect<openblack::ecs::components::CreatureMindState::Feedback>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureMindState::Feedback::value>("value")
 	    .Field<&openblack::ecs::components::CreatureMindState::Feedback::activity>("activity");

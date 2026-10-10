@@ -31,11 +31,11 @@
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Temple/TempleHelpScripts.h"
 #include "Windowing/WindowingInterface.h"
 
 using namespace openblack;
 using input::BindableActionMap;
-using input::UnbindableActionMap;
 
 namespace
 {
@@ -521,7 +521,8 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> TempleCameraModel::Upd
 	const auto& actions = Locator::gameActionSystem::value();
 
 	Input input {};
-	if (actions.Get(UnbindableActionMap::DOUBLE_CLICK))
+	// A double click comes to the temple's camera once, as its second press
+	if (Locator::gameActionSystem::value().TakeDoubleClick())
 	{
 		input.button = 2;
 	}
@@ -641,9 +642,16 @@ void TempleCameraModel::Step(float dt, const Input& input)
 		const auto& actions = Locator::gameActionSystem::value();
 		const bool turning = actions.GetAny(BindableActionMap::MOVE_LEFT, BindableActionMap::MOVE_RIGHT,
 		                                    BindableActionMap::MOVE_FORWARDS, BindableActionMap::MOVE_BACKWARDS);
-		if ((input.button != 0 && !_wasPressed) || turning || !inControl)
+		const bool leftByPlayer = (input.button != 0 && !_wasPressed) || turning;
+		if (leftByPlayer || !inControl)
 		{
 			_lookingAtSubMesh = false;
+		}
+		// The player taking the camera away from the scroll stops the scroll's help
+		if (leftByPlayer)
+		{
+			temple_help::GameScripts scripts;
+			temple_help::LeaveScroll(scripts, GetRoom());
 		}
 	}
 	_subMeshZoom = std::clamp(_subMeshZoom + ((_lookingAtSubMesh ? 0.75f : -0.7f) * dt), 0.0f, 1.0f);
@@ -985,8 +993,9 @@ void TempleCameraModel::ZoomToCaveTarget(CreatureCaveTargets::Target target)
 	case Target::Belts:
 	case Target::Medals:
 	{
-		// TODO(raffclar): with no script of the temple's running, the belts start "CitadelCreatureRoomAttackDummies" and
-		//                 the medals "CitadelCreatureRoomMagicPlinths"
+		// The belts and the medals start their help
+		temple_help::GameScripts scripts;
+		temple_help::ZoomToCaveTarget(scripts, target);
 		const auto offset = static_cast<uint32_t>(target);
 		const auto eye = CaveMeshPoint(k_FirstEyePoint + offset);
 		const auto look = CaveMeshPoint(k_FirstLookPoint + offset);

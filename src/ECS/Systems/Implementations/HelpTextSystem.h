@@ -47,6 +47,8 @@ public:
 private:
 	/// The voices' sounds and clock, from the game's audio
 	[[nodiscard]] help::AdvisorVoices::Audio VoiceAudio();
+	/// The voices' gestures, given to the advisors' bodies
+	[[nodiscard]] static help::AdvisorVoices::Hooks VoiceHooks();
 	/// What the dialogue reads and has done
 	[[nodiscard]] help::DialogueText::Queries DialogueQueries();
 	[[nodiscard]] help::DialogueText::Hooks DialogueHooks();
@@ -58,6 +60,8 @@ private:
 	std::unique_ptr<help::DialogueText> _dialogue;
 	/// The sound saying the advisors' line
 	entt::entity _advisorLine {entt::null};
+	/// That sound's length in milliseconds
+	float _advisorLineMs {0.0f};
 	/// The game clock the texts are timed by, in milliseconds
 	int32_t _clockMs {0};
 	bool _inTemple {false};

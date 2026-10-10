@@ -189,6 +189,17 @@ public:
 	}
 	/// Whether the creature has played what it was doing, as scripts ask: its agenda is over or it is only idle
 	[[nodiscard]] virtual bool HasPlayed(entt::entity /*creature*/) const { return true; }
+
+	/// How strongly the player last rewarded or punished the creature, and setting it back to 0
+	[[nodiscard]] virtual float GetInteractionMagnitude(entt::entity /*creature*/) const { return 0.0f; }
+	virtual void ClearInteractionMagnitude(entt::entity /*creature*/) {}
+	/// How many times the creature has carried out an action (by the game's numbering) to its end
+	[[nodiscard]] virtual uint32_t GetActionCount(entt::entity /*creature*/, uint32_t /*action*/) const { return 0; }
+	/// A script makes a desire the creature's only one for some seconds, or takes it away again
+	virtual void SetOnlyDesire(entt::entity /*creature*/, creature_desires::Desire /*desire*/, float /*seconds*/) {}
+	virtual void ClearOnlyDesire(entt::entity /*creature*/) {}
+	/// The creature is told to point out the lesson highlight about it, if there is one; whether one was found
+	virtual bool PointOutHighlight(entt::entity /*creature*/) { return false; }
 };
 
 } // namespace openblack::ecs::systems

@@ -60,6 +60,12 @@ public:
 	/// The realm key pressed
 	[[nodiscard]] std::optional<CameraView> PressRealm(const CameraView& current, glm::vec3 realmGround) noexcept;
 
+	/// Whether the temple key pressed at a time would be a double tap
+	[[nodiscard]] bool IsDoubleTap(std::chrono::milliseconds now) const noexcept
+	{
+		return _lastTap.has_value() && now - *_lastTap <= k_DoubleTapTime;
+	}
+
 	/// Whether the camera has been flown to a place it can be flown back from
 	[[nodiscard]] bool IsZoomedTo() const noexcept { return _returnTo.has_value(); }
 
