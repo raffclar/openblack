@@ -11,6 +11,7 @@
 
 #include "3D/LandIslandInterface.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/Creature.h"
@@ -204,7 +205,7 @@ void GamePhysicsHooksWorld::PlaySound(entt::id_type sound, glm::vec3 position, e
 {
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().StartSoundEffect(sound, {.position = position, .owner = owner});
+		audio::StartGameSoundEffect(sound, {.position = position, .owner = owner});
 	}
 }
 

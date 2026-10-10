@@ -14,6 +14,8 @@
 #include <cmath>
 
 #include <algorithm>
+#include <functional>
+#include <iterator>
 #include <numbers>
 #include <optional>
 #include <unordered_map>
@@ -56,16 +58,20 @@
 #include "ECS/Registry.h"
 #include "ECS/ScenicForest.h"
 #include "ECS/StoreRules.h"
+#include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/ForestRules.h"
 #include "Magic/MagicTables.h"
+#include "Nature/ForestGrowth.h"
 #include "ObjectMeasures.h"
 
 using namespace openblack;
@@ -93,6 +99,8 @@ constexpr float k_AddedTreeFullSizeMore = 0.4f;
 constexpr float k_AddedTreeStartSize = 0.1f;
 /// The circle round its spot that must be clear of what is fixed there
 constexpr float k_AddedTreeClearance = 0.5f;
+/// A forest's spreading roll is drawn below this (and 2000 added)
+constexpr float k_SpreadRoll = 1000.0f;
 
 ecs::Registry& EntityRegistry()
 {
@@ -226,6 +234,65 @@ void Resize(entt::entity entity, float scale)
 	}
 }
 
+/// A forest's growing or grown trees, the nearest its place first and, of those as near, the one listed first
+std::vector<entt::entity> ListedTrees(const ecs::Registry& registry, uint32_t forest, bool growing,
+                                      const map_coords::MapCoords& centre)
+{
+	struct Listed
+	{
+		float distance;
+		uint32_t listed;
+		entt::entity tree;
+	};
+	std::vector<Listed> trees;
+	registry.Each<const Tree, const ForestMember, const Transform>(
+	    [&](entt::entity tree, const Tree& /*unused*/, const ForestMember& member, const Transform& at) {
+		    if (member.forest == forest && member.growing == growing)
+		    {
+			    trees.push_back({.distance = gutils::GetDistanceInMetres(map_coords::FromMetres(glm::xz(at.position)), centre),
+			                     .listed = member.listed,
+			                     .tree = tree});
+		    }
+	    });
+	std::ranges::sort(trees, [](const Listed& a, const Listed& b) {
+		return a.distance != b.distance ? a.distance < b.distance : a.listed < b.listed;
+	});
+	std::vector<entt::entity> sorted;
+	sorted.reserve(trees.size());
+	std::ranges::transform(trees, std::back_inserter(sorted), &Listed::tree);
+	return sorted;
+}
+
+/// The land's alignment at a place: each player's influence there times their alignment, no more than wholly good or
+/// evil
+float LandAlignmentAt(const glm::vec3& position)
+{
+	if (!Locator::influenceSystem::has_value() || !Locator::alignmentSystem::has_value())
+	{
+		return 0.0f;
+	}
+	const auto& influence = Locator::influenceSystem::value();
+	const auto& alignment = Locator::alignmentSystem::value();
+	float sum = 0.0f;
+	for (size_t i = 0; i < static_cast<size_t>(PlayerNames::_COUNT); ++i)
+	{
+		const auto player = static_cast<PlayerNames>(i);
+		sum += alignment.GetPlayerAlignment(player) * influence.PlayerInfluence(player, position);
+	}
+	return std::clamp(sum, -1.0f, 1.0f);
+}
+
+/// How wet the ground is under a tree for its growing
+int WetnessAt(const glm::vec3& position)
+{
+	if (!Locator::weatherSystem::has_value())
+	{
+		return 0;
+	}
+	const auto here = Locator::weatherSystem::value().GetWeather(position);
+	return forest_growth::Wetness(here.rain, here.snowCover);
+}
+
 void RemoveTree(entt::entity tree)
 {
 	if (Locator::fireSystem::has_value())
@@ -356,6 +423,16 @@ bool ForestSystem::HasTrees(entt::entity spell) const
 
 std::optional<entt::entity> ForestSystem::AddTreeNear(entt::entity tree)
 {
+	// The water miracle's planting waits a while after any forest last gained a tree
+	if (!Locator::time::has_value() || !(Locator::time::value().GetTurn() - _lastTreeAddedTurn > k_TreeAddingGapTurns))
+	{
+		return std::nullopt;
+	}
+	return PlantBeside(tree);
+}
+
+std::optional<entt::entity> ForestSystem::PlantBeside(entt::entity tree)
+{
 	auto& registry = EntityRegistry();
 	const auto* member = registry.Valid(tree) ? registry.TryGet<const ForestMember>(tree) : nullptr;
 	const auto* kind = registry.Valid(tree) ? registry.TryGet<const Tree>(tree) : nullptr;
@@ -366,15 +443,15 @@ std::optional<entt::entity> ForestSystem::AddTreeNear(entt::entity tree)
 		return std::nullopt;
 	}
 	const uint32_t turn = Locator::time::value().GetTurn();
-	if (!(turn - _lastTreeAddedTurn > k_TreeAddingGapTurns))
-	{
-		return std::nullopt;
-	}
+	// Copied, as making the new tree may move the registry's storage
+	const uint32_t forestId = member->forest;
+	const TreeInfo type = kind->type;
+	const glm::vec3 from = transform->position;
 	auto& random = Locator::gameRandom::value();
 	const auto& land = Locator::terrainSystem::value();
 	// From the tree's own map position, keeping its height above the land
-	auto base = map_coords::FromMetres({transform->position.x, transform->position.z});
-	base.altitude = transform->position.y - land.GetHeightAt({transform->position.x, transform->position.z});
+	auto base = map_coords::FromMetres({from.x, from.z});
+	base.altitude = from.y - land.GetHeightAt({from.x, from.z});
 	float angle = random.GameFloatRand(k_TwoPi);
 	// Round the tree at a step of a sixteenth of a half turn, each time at a whole number of metres from 5 to 9 and four
 	// more, two apart and wrapping round 10: 5, 7, 9, 1 and 3, say
@@ -392,8 +469,8 @@ std::optional<entt::entity> ForestSystem::AddTreeNear(entt::entity tree)
 				// The way it faces is drawn before its full size
 				const float yaw = random.GameFloatRand(k_TwoPi);
 				const float fullSize = k_AddedTreeFullSize + random.GameFloatRand(k_AddedTreeFullSizeMore);
-				const auto added = ecs::archetypes::TreeArchetype::Create(member->forest, point, kind->type, false, yaw,
-				                                                          fullSize, k_AddedTreeStartSize);
+				const auto added =
+				    ecs::archetypes::TreeArchetype::Create(forestId, point, type, false, yaw, fullSize, k_AddedTreeStartSize);
 				// Beside a forest miracle's tree it is the miracle's forest's, and goes with it
 				if (const auto* magic = registry.TryGet<const MagicTree>(tree);
 				    magic != nullptr && registry.Valid(magic->forest))
@@ -416,6 +493,130 @@ std::optional<entt::entity> ForestSystem::AddTreeNear(entt::entity tree)
 	return std::nullopt;
 }
 
+void ForestSystem::JoinForest(entt::entity tree, uint32_t forest)
+{
+	auto& registry = EntityRegistry();
+	const auto* kind = registry.TryGet<const Tree>(tree);
+	const auto* transform = registry.TryGet<const Transform>(tree);
+	const bool growing = kind != nullptr && transform != nullptr && kind->madeToGrow && transform->scale.x < kind->maxSize;
+	registry.AssignOrReplace<ForestMember>(tree, ForestMember {.forest = forest, .growing = growing, .listed = _treesListed++});
+}
+
+void ForestSystem::GrowForests()
+{
+	if (!Locator::infoConstants::has_value() || !Locator::entitiesRegistry::has_value() || !Locator::time::has_value() ||
+	    !Locator::gameRandom::has_value())
+	{
+		return;
+	}
+	auto& registry = EntityRegistry();
+	auto& random = Locator::gameRandom::value();
+	const auto& kinds = Locator::infoConstants::value().tree;
+	const uint32_t turn = Locator::time::value().GetTurn();
+
+	// Each forest's growing trees and how many grown ones it has, by its number
+	struct Members
+	{
+		bool anyGrowing {false};
+		size_t grown {0};
+	};
+	std::unordered_map<uint32_t, Members> members;
+	registry.Each<const Tree, const ForestMember>([&members](const Tree& /*unused*/, const ForestMember& member) {
+		auto& forest = members[member.forest];
+		if (member.growing)
+		{
+			forest.anyGrowing = true;
+		}
+		else
+		{
+			++forest.grown;
+		}
+	});
+
+	// The newest forest first
+	std::vector<std::pair<uint32_t, entt::entity>> forests;
+	registry.Each<const ForestTurns>(
+	    [&forests](entt::entity forest, const ForestTurns& turns) { forests.emplace_back(turns.made, forest); });
+	std::ranges::sort(forests, std::greater {});
+
+	std::vector<entt::entity> gone;
+	for (const auto& [made, forest] : forests)
+	{
+		auto& turns = registry.Get<ForestTurns>(forest);
+		const auto* land = registry.TryGet<const LandForest>(forest);
+		const auto found = members.find(turns.id);
+		Members trees = found != members.end() ? found->second : Members {};
+		const bool bigForest = land != nullptr && land->bigForest != entt::null && registry.Valid(land->bigForest);
+		if (!trees.anyGrowing && trees.grown == 0 && !bigForest)
+		{
+			if (forest_growth::EmptyForestGoes(turns.emptyCountdown))
+			{
+				gone.push_back(forest);
+			}
+			continue;
+		}
+		// A town's forest of the lone trees about it never grows or spreads
+		if (land != nullptr && land->scenic)
+		{
+			continue;
+		}
+		const auto centre = map_coords::FromMetres(glm::xz(registry.Get<const Transform>(forest).position));
+
+		// Its growing trees grow, the nearest its place first; a tree that leaves them is listed among the grown ones
+		if (trees.anyGrowing)
+		{
+			for (const auto tree : ListedTrees(registry, turns.id, true, centre))
+			{
+				auto& kind = registry.Get<Tree>(tree);
+				auto& transform = registry.Get<Transform>(tree);
+				const auto& info = kinds.at(static_cast<size_t>(kind.type));
+				const forest_growth::Kind growth {.turnsBetween = info.growsAfterNumGameTurns,
+				                                  .amount = info.growthAmount,
+				                                  .rainAccelerator = info.rainingAcceleratorMultiplier};
+				const auto step = forest_growth::TreeStep(
+				    kind.growthCountdown, kind.madeToGrow, transform.scale.x, kind.maxSize, info.growsAfterNumGameTurns, [&] {
+					    return forest_growth::Growth(growth, WetnessAt(transform.position),
+					                                 LandAlignmentAt(transform.position));
+				    });
+				// Only its size: what it stands in the way of stays as it was
+				if (step.size.has_value())
+				{
+					transform.scale = glm::vec3(*step.size);
+				}
+				if (!step.staysGrowing)
+				{
+					auto& member = registry.Get<ForestMember>(tree);
+					member.growing = false;
+					member.listed = _treesListed++;
+					++trees.grown;
+				}
+			}
+		}
+
+		// Now and then it spreads, a young tree growing beside one of its nearer grown trees
+		const float roll = random.GameFloatRand(k_SpreadRoll);
+		if (!forest_growth::Spreads(roll, turns.spreadCounter, turn - _lastTreeAddedTurn, trees.grown))
+		{
+			continue;
+		}
+		const auto grown = ListedTrees(registry, turns.id, false, centre);
+		const auto pick = random.GameRand(forest_growth::ParentDraws(grown.size()));
+		if (pick < grown.size())
+		{
+			const auto parent = grown[pick];
+			const auto added = PlantBeside(parent);
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Forest: forest {} spread from tree #{} on turn {}: {}", turns.id,
+			                    entt::to_integral(parent), turn, added.has_value() ? "planted" : "no room");
+		}
+	}
+	for (const auto forest : gone)
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Forest: forest {} long empty, gone on turn {}",
+		                    registry.Get<const ForestTurns>(forest).id, turn);
+		registry.Destroy(forest);
+	}
+}
+
 void ForestSystem::ProcessTurn()
 {
 	if (!Locator::infoConstants::has_value() || !Locator::entitiesRegistry::has_value())
@@ -429,9 +630,8 @@ void ForestSystem::ProcessForests()
 {
 	auto& registry = EntityRegistry();
 	const auto& info = Locator::infoConstants::value();
-	std::vector<entt::entity> gone;
 	bool resized = false;
-	registry.Each<MagicForest>([&](entt::entity entity, MagicForest& forest) {
+	registry.Each<MagicForest>([&](MagicForest& forest) {
 		auto* spell =
 		    forest.spell != entt::null && registry.Valid(forest.spell) ? registry.TryGet<Spell>(forest.spell) : nullptr;
 		const auto* trees = spell != nullptr ? magic::GetMagicInfoAs<GMagicForestInfo>(info, spell->magicType) : nullptr;
@@ -468,16 +668,9 @@ void ForestSystem::ProcessForests()
 		{
 			spell->objectCount = static_cast<uint32_t>(forest.trees.size());
 		}
-		if (forest.trees.empty())
-		{
-			gone.push_back(entity);
-		}
+		// A forest left with no trees goes as any forest does, some while later
 	});
-	for (const auto entity : gone)
-	{
-		registry.Destroy(entity);
-	}
-	if (resized || !gone.empty())
+	if (resized)
 	{
 		registry.SetDirty();
 	}
@@ -500,8 +693,9 @@ uint32_t ForestSystem::MakeLandForest(std::optional<uint32_t> id, glm::vec3 posi
 	auto& registry = EntityRegistry();
 	const auto forest = registry.Create();
 	registry.Assign<Transform>(forest, position, glm::mat3(1.0f), glm::vec3(1.0f));
-	registry.Assign<LandForest>(
-	    forest, LandForest {.id = number, .bigForest = bigForest, .scenic = scenic, .made = _landForestsMade++});
+	const uint32_t made = _forestsMade++;
+	registry.Assign<LandForest>(forest, LandForest {.id = number, .bigForest = bigForest, .scenic = scenic, .made = made});
+	registry.Assign<ForestTurns>(forest, ForestTurns {.id = number, .made = made});
 	return number;
 }
 
@@ -539,19 +733,7 @@ std::vector<entt::entity> ForestSystem::TreesOf(entt::entity forest, bool growin
 		return {};
 	}
 	const auto centre = map_coords::FromMetres(glm::xz(registry.Get<const Transform>(forest).position));
-	std::vector<std::pair<float, entt::entity>> trees;
-	registry.Each<const Tree, const ForestMember, const Transform>(
-	    [&](entt::entity tree, const Tree& kind, const ForestMember& member, const Transform& at) {
-		    // A tree still short of its size grows on; the others are grown
-		    if (member.forest == record->id && (at.scale.x < kind.maxSize) == growing)
-		    {
-			    trees.emplace_back(gutils::GetDistanceInMetres(map_coords::FromMetres(glm::xz(at.position)), centre), tree);
-		    }
-	    });
-	std::ranges::stable_sort(trees, {}, &std::pair<float, entt::entity>::first);
-	std::vector<entt::entity> sorted;
-	std::ranges::transform(trees, std::back_inserter(sorted), [](const auto& pair) { return pair.second; });
-	return sorted;
+	return ListedTrees(registry, record->id, growing, centre);
 }
 
 float ForestSystem::WoodOf(entt::entity forest) const
@@ -766,7 +948,7 @@ void ForestSystem::MakeScenicForests()
 					centres[*forest] = centre;
 					town.scenicForestCentre = centre;
 				}
-				registry.AssignOrReplace<ForestMember>(tree, ForestMember {.forest = *forest});
+				JoinForest(tree, *forest);
 			}
 		}
 		town.scenicForest = forest;
@@ -777,5 +959,6 @@ void ForestSystem::Reset()
 {
 	_lastTreeAddedTurn = 0;
 	_nextLandForestId = 1;
-	_landForestsMade = 0;
+	_forestsMade = 0;
+	_treesListed = 0;
 }

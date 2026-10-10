@@ -16,6 +16,7 @@
 #include <glm/geometric.hpp>
 
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Transform.h"
@@ -66,11 +67,28 @@ bool WithinReach(float reach, const glm::vec3& position, const glm::vec3& camera
 	return reach <= 0.0f || glm::dot(offset, offset) <= reach * reach;
 }
 
-/// Starts a point's sound once, if it is switched on and the camera is within the sound's reach
-void StartPointSound(SoundTag& tag, const glm::vec3& position, const glm::vec3& camera)
+} // namespace
+
+SoundTagSystem::SoundTagSystem()
+    : SoundTagSystem(&audio::CurrentSoundEffectConditions)
+{
+}
+
+SoundTagSystem::SoundTagSystem(ConditionsSource conditions)
+    : _conditions(conditions)
+{
+}
+
+bool SoundTagSystem::Heard(entt::id_type sound) const
+{
+	return audio::GameSoundEffectHeard(_conditions(), sound);
+}
+
+void SoundTagSystem::StartPointSound(SoundTag& tag, const glm::vec3& position, const glm::vec3& camera) const
 {
 	const auto& sounds = Locator::resources::value().GetSounds();
-	if (!tag.active || !sounds.Contains(tag.sound) || !WithinReach(sounds.Handle(tag.sound)->maxDistance, position, camera))
+	if (!tag.active || !sounds.Contains(tag.sound) || !WithinReach(sounds.Handle(tag.sound)->maxDistance, position, camera) ||
+	    !Heard(tag.sound))
 	{
 		return;
 	}
@@ -81,7 +99,6 @@ void StartPointSound(SoundTag& tag, const glm::vec3& position, const glm::vec3& 
 		audio.PlayEmitter(tag.emitter);
 	}
 }
-} // namespace
 
 void SoundTagSystem::ProcessTurn(const glm::vec3& camera)
 {
@@ -126,7 +143,7 @@ void SoundTagSystem::ProcessTurn(const glm::vec3& camera)
 			    }
 			    return;
 		    }
-		    if (!tag.active || IsPlaying(tag) || !WithinReach(reach, position, camera))
+		    if (!tag.active || IsPlaying(tag) || !WithinReach(reach, position, camera) || !Heard(tag.sound))
 		    {
 			    return;
 		    }

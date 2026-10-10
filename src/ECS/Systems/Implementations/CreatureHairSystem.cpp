@@ -108,7 +108,7 @@ void CreatureHairSystem::Update(std::chrono::duration<float, std::milli> gameTim
 		    }
 		    // The hair takes the look of the alignment the body is drawn with
 		    const auto alignment = morph.drawn.evilGood;
-		    const auto scale = creature_hair::HairScale(creature.size);
+		    const auto scale = creature_hair::HairScale(ShownSize(creature));
 		    const auto model = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
 		    for (size_t g = 0; g < rig.hairGroups.size(); ++g)
 		    {

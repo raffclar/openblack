@@ -9,15 +9,17 @@
 
 #include "Zoomer.h"
 
-#include <glm/mat3x3.hpp>
-#include <glm/matrix.hpp>
+#include <cmath>
 
 using namespace openblack;
 
 namespace
 {
 constexpr float k_MinimumDuration = 0.001f;
-}
+constexpr float k_Third = 0.33333334f;
+constexpr float k_Sixth = 0.16666667f;
+constexpr float k_SmallestDeterminant = 1e-10f;
+} // namespace
 
 void Zoomer::Reset(float value)
 {
@@ -34,7 +36,8 @@ void Zoomer::Reset(float value)
 
 void Zoomer::SetDestination(float destination, float seconds, float speed)
 {
-	if (seconds < k_MinimumDuration)
+	// Too short a time, or none at all, puts it there
+	if (!(seconds >= k_MinimumDuration))
 	{
 		Reset(destination);
 		return;
@@ -46,32 +49,70 @@ void Zoomer::SetDestination(float destination, float seconds, float speed)
 	_duration = seconds;
 	_elapsed = 0.0f;
 
-	// The value and speed it is to have at the end, and the last term of its path, which is to be nothing there
-	const float t = seconds;
-	const float t2 = t * t * 0.5f;
-	const float t3 = t * t2 / 3.0f;
-	const float t4 = t2 * t2 / 6.0f;
-	const glm::mat3 equations(glm::vec3(t2, t, 1.0f), glm::vec3(t3, t2, t), glm::vec3(t4, t3, t2));
-	const glm::vec3 ends {destination - _startValue - (t * _startSpeed), speed - _startSpeed, 0.0f};
-	_coefficients = glm::inverse(equations) * ends;
+	// The end conditions, the value and speed it is to have at the end and its last term ending at nothing, solved as the
+	// game solves them: by the inverse of their matrix, its determinant kept at least 1e-10 across
+	const float s = seconds;
+	const float a = (s * s) * 0.5f;
+	const float b = (a * s) * k_Third;
+	const float c = (a * a) * k_Sixth;
+	const float cofactor11 = a - s * s;
+	const float cofactor21 = a * s - b;
+	const float cofactor22 = c - a * a;
+	const float cofactor13 = s * b - a * a;
+	const float cofactor23 = a * b - c * s;
+	float determinant = (cofactor21 * b + cofactor13 * a) + cofactor11 * c;
+	if (std::abs(determinant) < k_SmallestDeterminant)
+	{
+		determinant = determinant < 0.0f ? -k_SmallestDeterminant : k_SmallestDeterminant;
+	}
+	const float inverse = 1.0f / determinant;
+	const float i11 = cofactor11 * inverse;
+	const float i21 = cofactor21 * inverse;
+	const float i22 = cofactor22 * inverse;
+	const float i13 = cofactor13 * inverse;
+	const float i23 = cofactor23 * inverse;
+	const float r1 = (destination - _startValue) - _duration * _startSpeed;
+	const float r2 = speed - _startSpeed;
+	_coefficients.z = i21 * r2 + i11 * r1;
+	_coefficients.y = i21 * r1 + i22 * r2;
+	_coefficients.x = i23 * r2 + i13 * r1;
 }
 
 void Zoomer::Update(float deltaSeconds)
 {
-	_elapsed += deltaSeconds;
-	if (_duration <= _elapsed)
+	const float t = deltaSeconds + _elapsed;
+	_elapsed = t;
+	// Along the path while there is time left, or the time is not a number
+	if (t >= _duration)
 	{
 		_value = _destination;
 		_speed = _destinationSpeed;
 		_elapsed = _duration;
 		return;
 	}
-	const float t = _elapsed;
-	const float t2 = t * t * 0.5f;
-	const float t3 = t * t2 / 3.0f;
-	_speed = _startSpeed + (t * _coefficients.x) + (t2 * _coefficients.y) + (t3 * _coefficients.z);
+	const float a = (t * t) * 0.5f;
+	const float b = (t * a) * k_Third;
+	_speed = ((t * _coefficients.x + a * _coefficients.y) + b * _coefficients.z) + _startSpeed;
+	const float c = (a * a) * k_Sixth;
+	_value = ((((c * _coefficients.z) + b * _coefficients.y) + a * _coefficients.x) + t * _startSpeed) + _startValue;
+}
+
+void Zoomer::UpdateInline(float deltaSeconds)
+{
+	const float t = deltaSeconds + _elapsed;
+	_elapsed = t;
+	if (t >= _duration)
+	{
+		_value = _destination;
+		_speed = _destinationSpeed;
+		_elapsed = _duration;
+		return;
+	}
+	const float a = (t * t) * 0.5f;
+	const float b = (t * a) * k_Third;
+	_speed = ((a * _coefficients.y + b * _coefficients.z) + t * _coefficients.x) + _startSpeed;
 	_value =
-	    _startValue + (t * _startSpeed) + (t2 * _coefficients.x) + (t3 * _coefficients.y) + (t2 * t2 / 6.0f * _coefficients.z);
+	    (((((a * a) * k_Sixth) * _coefficients.z + b * _coefficients.y) + t * _startSpeed) + a * _coefficients.x) + _startValue;
 }
 
 Zoomer3::Zoomer3(glm::vec3 point)

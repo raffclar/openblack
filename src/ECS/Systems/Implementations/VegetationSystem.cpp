@@ -23,7 +23,6 @@
 #include <glm/gtx/vec_swizzle.hpp>
 
 #include "3D/L3DMesh.h"
-#include "3D/TreeGrowth.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Camera/Camera.h"
 #include "Common/RandomNumberManager.h"
@@ -33,68 +32,13 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
-#include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/TreeRustle.h"
-#include "ECS/Systems/WeatherSystemInterface.h"
-#include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
-
-namespace
-{
-/// The land's alignment at a place: each player's influence there times their alignment
-float LandAlignmentAt(const glm::vec3& position)
-{
-	if (!openblack::Locator::influenceSystem::has_value() || !openblack::Locator::alignmentSystem::has_value())
-	{
-		return 0.0f;
-	}
-	const auto& influence = openblack::Locator::influenceSystem::value();
-	const auto& alignment = openblack::Locator::alignmentSystem::value();
-	float sum = 0.0f;
-	for (size_t i = 0; i < static_cast<size_t>(openblack::PlayerNames::_COUNT); ++i)
-	{
-		const auto player = static_cast<openblack::PlayerNames>(i);
-		sum += alignment.GetPlayerAlignment(player) * influence.PlayerInfluence(player, position);
-	}
-	return std::clamp(sum, -1.0f, 1.0f);
-}
-} // namespace
-
-void VegetationSystem::ProcessTurn()
-{
-	if (!Locator::infoConstants::has_value())
-	{
-		return;
-	}
-	const auto& infos = Locator::infoConstants::value().tree;
-	auto* weather = Locator::weatherSystem::has_value() ? &Locator::weatherSystem::value() : nullptr;
-	Locator::entitiesRegistry::value().Each<Tree, Transform>([&](Tree& tree, Transform& transform) {
-		if (!(transform.scale.x < tree.maxSize) || --tree.turnsToGrowth != 0)
-		{
-			return;
-		}
-		const auto& info = infos.at(static_cast<size_t>(tree.type));
-		tree.turnsToGrowth = std::max<uint32_t>(info.growsAfterNumGameTurns, 1);
-		int wet = 0;
-		if (weather != nullptr)
-		{
-			const auto here = weather->GetWeather(transform.position);
-			wet = std::max<int>(here.rain, here.snow);
-		}
-		const openblack::tree_growth::Type type {.turnsBetween = info.growsAfterNumGameTurns,
-		                                         .amount = info.growthAmount,
-		                                         .rainAccelerator = info.rainingAcceleratorMultiplier};
-		const float grown = openblack::tree_growth::Grown(
-		    transform.scale.x, openblack::tree_growth::Growth(type, wet, LandAlignmentAt(transform.position)), tree.maxSize);
-		transform.scale = glm::vec3(grown);
-	});
-}
 
 namespace
 {
@@ -139,7 +83,7 @@ void VegetationSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 }
 
 // The game marks the trees around the hand to bend away from it, within its bounding sphere
-void VegetationSystem::UpdateBendPoints()
+void VegetationSystem::UpdateBendPoints(bool handShown)
 {
 	_bendPoints.clear();
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -149,6 +93,11 @@ void VegetationSystem::UpdateBendPoints()
 		    _bendPoints.push_back({.position = transform.position, .radius = creature.radius * k_CreatureBendReach});
 	    });
 
+	// The hand put away bends nothing: it is still and touches nothing until it comes back
+	if (!handShown)
+	{
+		return;
+	}
 	auto& handSystem = Locator::handSystem::value();
 	const auto handEntity = handSystem.GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 	const auto position = handSystem.GetPlayerHandPositions()[static_cast<size_t>(HandSystemInterface::Side::Left)];

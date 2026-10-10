@@ -107,6 +107,17 @@ private:
 	MagicType _type {MagicType::None};
 };
 
+/// A worship site as a caster tops up the miracles cast from seeds its icons made, from its prayer power
+class WorshipSiteSpellCaster final: public magic::SpellCasterInterface
+{
+public:
+	void Bind(entt::entity site) { _site = site; }
+	float MaintainSpell(float amount) override;
+
+private:
+	entt::entity _site {entt::null};
+};
+
 class MagicSystem final: public MagicSystemInterface, private magic::SpellServicesInterface
 {
 public:
@@ -148,6 +159,7 @@ public:
 	entt::entity CreateOneOffSeedFor(glm::vec3 position, MagicType type) override;
 	entt::entity GiveSeedToHand(PlayerNames player, SpellSeedType seed, int powerUp, float multiplier) override;
 	entt::entity SummonSeed(PlayerNames player, SpellSeedType seed, int powerUp) override;
+	entt::entity SummonSeedAtSite(entt::entity site, SpellSeedType seed, int powerUp) override;
 	void DiscardHeldSeed() override;
 
 	void UpdateHand(const HandFrame& frame, float seconds) override;
@@ -180,6 +192,7 @@ public:
 
 	void SetIgnoreInfluence(bool ignore) override { _ignoreInfluence = ignore; }
 	void SetTribalPower(PlayerNames player, Tribe tribe, float power) override;
+	[[nodiscard]] float GetTribalPower(PlayerNames player, Tribe tribe) const override;
 	void DriveHand(std::optional<HandFrame> frame) override { _driven = frame; }
 	[[nodiscard]] std::optional<HandFrame> GetDrivenHand() const override { return _driven; }
 	[[nodiscard]] bool IsIgnoringInfluence() const override { return _ignoreInfluence; }
@@ -292,6 +305,13 @@ private:
 	void StopHoldLoop();
 	/// The player's prayer power, if they have a store
 	[[nodiscard]] components::PrayerPower* PrayerOf(PlayerNames player) const;
+	/// Charges prayer power for a seed from the worship site that made it, or from its player's prayer power standing in
+	/// for worship: what was given
+	float DrawForSeed(const components::SpellSeed& seed, float amount);
+	/// A seed summoned into its player's hand from their worship: from a site's icon, or from none
+	entt::entity Summon(PlayerNames player, SpellSeedType seed, int powerUp, entt::entity site);
+	/// A seed's prayer power goes back to the worship site that made it, or to its player's prayer power
+	void ReturnFromSeed(const components::SpellSeed& seed, float amount);
 	/// The seed's in-hand effect, started, stepped and moved with the hand
 	void StartHandEffect(entt::entity seed);
 	void StopHandEffect(components::SpellSeed& seed);
@@ -325,6 +345,7 @@ private:
 	magic::ObjectSpellCaster _objectCaster;
 	magic::GlobeSpellCaster _globeCaster;
 	CreatureSpellCaster _creatureCaster;
+	WorshipSiteSpellCaster _siteCaster;
 	/// The miracle each creature cast and holds
 	std::unordered_map<entt::entity, entt::entity> _creatureCasts;
 	/// The two beams from a creature's hands as it casts from above, left then right
@@ -365,8 +386,6 @@ private:
 	uint32_t _turn {0};
 	HandResult _lastHandResult {HandResult::None};
 	bool _ignoreInfluence {false};
-	/// Each player's tribal power multipliers, all 1 until worship raises them (set for now by the testbed)
-	std::array<std::array<float, magic::k_TribeCount>, static_cast<size_t>(PlayerNames::_COUNT)> _tribalPowers {};
 	/// The hand as a testbed scenario puts it, in place of the mouse
 	std::optional<HandFrame> _driven;
 };

@@ -161,7 +161,7 @@ void HurtCreature(World& world, DynamicsSystemInterface& dynamics, const Physics
 		return;
 	}
 	const auto* morph = registry.TryGet<const CreatureMorph>(creature);
-	const float mass = living::CreatureMass(body.size, morph != nullptr ? morph->drawn.thinFat : 0.0f,
+	const float mass = living::CreatureMass(ShownSize(body), morph != nullptr ? morph->drawn.thinFat : 0.0f,
 	                                        morph != nullptr ? morph->drawn.weakStrong : 0.0f);
 	const auto crush = living::CreatureCrush(impact.impact, mass);
 	if (!crush.has_value())
@@ -675,7 +675,7 @@ void PhysicsGameHooks::OfferToCatchingCreatures(entt::entity object, PhysicsEntr
 		const auto& body = registry.Get<const Creature>(creature);
 		const auto& transform = registry.Get<const Transform>(creature);
 		const auto* morph = registry.TryGet<const CreatureMorph>(creature);
-		const float weight = living::CreatureMass(body.size, morph != nullptr ? morph->drawn.thinFat : 0.0f,
+		const float weight = living::CreatureMass(ShownSize(body), morph != nullptr ? morph->drawn.thinFat : 0.0f,
 		                                          morph != nullptr ? morph->drawn.weakStrong : 0.0f);
 		// The thing's own weight, not kept from nothing as its body's mass is
 		if (!(objectWeight < creature_catch::k_MostWeightShare * weight) || !world.CanPickUp(object))
@@ -702,7 +702,7 @@ void PhysicsGameHooks::OfferToCatchingCreatures(entt::entity object, PhysicsEntr
 		const creature_catch::Approach approach {.thing = entry.body->Centre(),
 		                                         .velocity = entry.body->velocity,
 		                                         .creature = transform.position,
-		                                         .size = body.size,
+		                                         .size = ShownSize(body),
 		                                         .modelScale = transform.scale.x,
 		                                         .catchMs = *catchMs,
 		                                         .stepMs = *stepMs,

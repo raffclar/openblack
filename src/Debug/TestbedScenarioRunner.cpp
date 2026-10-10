@@ -48,6 +48,7 @@
 #include "Creature/CreatureObjectActions.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
+#include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
@@ -82,8 +83,10 @@
 #include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
+#include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -112,9 +115,11 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Gestures/GesturePaths.h"
+#include "Help/Spirits.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/InjectedInput.h"
@@ -359,6 +364,11 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 		if (auto* animal = registry.TryGet<ecs::components::Animal>(entity))
 		{
 			animal->life = std::clamp(*object.life, 0.0f, 1.0f);
+			// One given no life is killed: it falls dead and lies its time
+			if (animal->Dead() && Locator::animalSystem::has_value())
+			{
+				Locator::animalSystem::value().SetDying(entity);
+			}
 		}
 	}
 	if (object.poisoned)
@@ -443,7 +453,7 @@ void Runner::Start(const Scenario& scenario)
 	if (const auto& temple = scenario.environment.temple; temple.has_value())
 	{
 		const auto at = MapPoint(_middle, *temple);
-		ecs::archetypes::CitadelArchetype::Create({at.x, land.GetHeightAt(at), at.y}, PlayerNames::PLAYER_ONE, glm::mat4(1.0f),
+		ecs::archetypes::CitadelArchetype::Create({at.x, land.GetHeightAt(at), at.y}, PlayerNames::PLAYER_ONE, 0.0f,
 		                                          glm::vec3(1.0f));
 	}
 	PlaceObjects(scenario, _middle);
@@ -724,6 +734,10 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    {
 				    return ecs::archetypes::MobileStaticArchetype::Create(position, type, 0.0f, 0.0f, yaw, 0.0f, object.scale);
 			    }
+			    else if constexpr (std::is_same_v<T, AnimatedStaticInfo>)
+			    {
+				    return ecs::archetypes::AnimatedStaticArchetype::Create(position, type, yaw, object.scale);
+			    }
 			    else if constexpr (std::is_same_v<T, FishFarmInfo>)
 			    {
 				    return ecs::archetypes::FishFarmArchetype::Create(position);
@@ -749,7 +763,7 @@ void Runner::PlaceBirds(const Scenario& scenario, glm::vec2 middle)
 	for (const auto& setup : scenario.temples)
 	{
 		const auto point = MapPoint(middle, setup.offset);
-		ecs::archetypes::CitadelArchetype::Create({point.x, land.GetHeightAt(point), point.y}, setup.owner, glm::mat4(1.0f),
+		ecs::archetypes::CitadelArchetype::Create({point.x, land.GetHeightAt(point), point.y}, setup.owner, setup.angle,
 		                                          glm::vec3(1.0f));
 	}
 	if (!Locator::animalSystem::has_value())
@@ -1374,6 +1388,16 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the hour is {:.1f}", _seconds, command.hour));
 		return;
 	}
+	if (command.kind == Kind::Advisor)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), GiveAdvisorCommand(command)));
+		return;
+	}
+	if (command.kind == Kind::SetOpenClose || command.kind == Kind::LayGateStone)
+	{
+		GiveSceneryCommand(command);
+		return;
+	}
 	if (command.kind == Kind::SetAlignment)
 	{
 		if (Locator::alignmentSystem::has_value())
@@ -1419,10 +1443,22 @@ void Runner::Give(const Command& command)
 		result =
 		    MoveResultName(locomotion.MoveTo(*entity, point, command.kind == Kind::RunTo ? Pace::Run : Pace::Walk, 0.0f, 1.0f));
 		break;
+	case Kind::WalkHome:
+		if (const auto* leash = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeash>(*entity);
+		    leash != nullptr && leash->home.has_value())
+		{
+			result =
+			    MoveResultName(locomotion.MoveTo(*entity, glm::vec2(leash->home->x, leash->home->z), Pace::Walk, 0.0f, 1.0f));
+		}
+		else
+		{
+			result = "it has no home";
+		}
+		break;
 	case Kind::Follow:
 		if (const auto leader = CreatureAt(command.value))
 		{
-			const auto size = Locator::entitiesRegistry::value().Get<Creature>(*entity).size;
+			const auto size = ShownSize(Locator::entitiesRegistry::value().Get<Creature>(*entity));
 			result = MoveResultName(locomotion.Follow(*entity, *leader, k_FollowDistance * std::max(size, 0.5f), Pace::Walk));
 		}
 		break;
@@ -1546,6 +1582,9 @@ void Runner::Give(const Command& command)
 	case Kind::HandTakeFireBall:
 	case Kind::HandTapObject:
 	case Kind::SetAlignment:
+	case Kind::Advisor:
+	case Kind::SetOpenClose:
+	case Kind::LayGateStone:
 	case Kind::WideScreen:
 	// The mouse commands are given before a creature is looked for
 	case Kind::PointerTo:
@@ -1595,6 +1634,35 @@ void Runner::Give(const Command& command)
 	}
 	}
 	Log(fmt::format("{:.1f}s: {} {}{}{}", _seconds, who, Name(command.kind), result.empty() ? "" : ": ", result));
+}
+
+void Runner::GiveSceneryCommand(const Command& command)
+{
+	const auto object = ObjectAt(command.object);
+	if (!object.has_value() || !Locator::animatedStaticSystem::has_value())
+	{
+		Log(fmt::format("{:.1f}s: no such object", _seconds));
+		return;
+	}
+	auto& scenery = Locator::animatedStaticSystem::value();
+	if (command.kind == Kind::SetOpenClose)
+	{
+		const bool done = scenery.SetOpenState(*object, static_cast<int32_t>(command.value));
+		Log(fmt::format("{:.1f}s: {} object {}{}", _seconds, command.value == 1 ? "opened" : "closed", command.object,
+		                done ? "" : ", which isn't animated scenery"));
+		return;
+	}
+	// As the hand gives it: laid in the plinth, the stone is used up, leaving its ghost
+	const auto plinth = ObjectAt(command.value);
+	if (plinth.has_value() && scenery.LayGateStone(*plinth, *object))
+	{
+		ecs::world_objects::LeaveGhost(*object);
+		ecs::world_objects::Remove(*object);
+		Log(fmt::format("{:.1f}s: object {} laid in the plinth, now worth {}", _seconds, command.object,
+		                scenery.GateStoneValue(*plinth).value_or(0)));
+		return;
+	}
+	Log(fmt::format("{:.1f}s: object {} isn't taken by object {}", _seconds, command.object, command.value));
 }
 
 std::string Runner::GiveCreatureModeCommand(entt::entity creature, const Command& command)
@@ -1838,7 +1906,7 @@ void Runner::UpdateCamera()
 		if (const auto entity = CreatureAt(_shotCreature))
 		{
 			const auto& transform = registry.Get<Transform>(*entity);
-			const auto height = CreatureHeight(registry.Get<Creature>(*entity).size);
+			const auto height = CreatureHeight(ShownSize(registry.Get<Creature>(*entity)));
 			placement = *_shot == Shot::Follow ? Follow(transform.position, height, _shotDistance)
 			                                   : Head(transform.position, AheadOf(transform), height, _shotDistance);
 		}
@@ -2750,4 +2818,66 @@ std::optional<std::filesystem::path> Runner::SaveResults(std::optional<std::file
 	csv << benchmark::ToCsv(run, results, _recorder->Stages());
 	Log(fmt::format("Saved {}", jsonPath.generic_string()));
 	return jsonPath;
+}
+
+std::string Runner::GiveAdvisorCommand(const Command& command) const
+{
+	if (!Locator::advisorSystem::has_value())
+	{
+		return "no advisors";
+	}
+	auto& control = Locator::advisorSystem::value().GetController();
+	// The scripts name the good advisor 1 and the evil one 2
+	const int32_t type = command.value == 0 ? 1 : 2;
+	const auto who = command.value == 0 ? "the good advisor" : "the evil advisor";
+	using Action = Command::AdvisorAction;
+	switch (command.advisor)
+	{
+	case Action::Out:
+		control.SpiritEject(type, false);
+		return fmt::format("{} comes out", who);
+	case Action::Appear:
+		control.SpiritEject(type, true);
+		return fmt::format("{} appears", who);
+	case Action::Home:
+		control.SpiritHome(type, false);
+		return fmt::format("{} goes home", who);
+	case Action::Vanish:
+		control.SpiritHome(type, true);
+		return fmt::format("{} vanishes", who);
+	case Action::Cling:
+		control.SpiritCling(type, command.point.x, command.point.y);
+		return fmt::format("{} clings at ({:.2f}, {:.2f})", who, command.point.x, command.point.y);
+	case Action::Fly:
+		control.SpiritFly(type, command.point.x, command.point.y);
+		return fmt::format("{} flies to ({:.2f}, {:.2f})", who, command.point.x, command.point.y);
+	case Action::PointOnScreen:
+	{
+		const auto& screen = control.GetScreen();
+		control.SpiritScreenPoint(type, glm::ivec2(static_cast<int32_t>(static_cast<float>(screen.width) * command.point.x),
+		                                           static_cast<int32_t>(static_cast<float>(screen.height) * command.point.y)));
+		return fmt::format("{} points at ({:.2f}, {:.2f}) on the screen", who, command.point.x, command.point.y);
+	}
+	case Action::PointAtLand:
+	case Action::LookAtLand:
+	{
+		const auto at = MapPoint(_middle, command.point);
+		const float height = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(at) : 0.0f;
+		const glm::vec3 position(at.x, height, at.y);
+		if (command.advisor == Action::LookAtLand)
+		{
+			control.SpiritLookAtPosition(type, position);
+			return fmt::format("{} looks at ({:.0f}, {:.0f})", who, at.x, at.y);
+		}
+		control.SpiritPointPosition(type, position, command.gentle);
+		return fmt::format("{} points at ({:.0f}, {:.0f}){}", who, at.x, at.y, command.gentle ? " out in the world" : "");
+	}
+	case Action::PlayAnim:
+		control.SpiritPlayAnim(type, command.point.x, command.point.y, command.anim, command.amount);
+		return fmt::format("{} plays {}", who, help::spirits::AnimName(command.anim));
+	case Action::Feel:
+		control.Dude(type == 1 ? help::spirits::k_GoodDude : help::spirits::k_EvilDude).SetEmotion(command.anim, 1.0f);
+		return fmt::format("{} feels {}", who, help::spirits::EmotionName(command.anim));
+	}
+	return "";
 }

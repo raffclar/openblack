@@ -1,0 +1,516 @@
+/******************************************************************************
+ * Copyright (c) 2018-2026 openblack developers
+ *
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
+ *
+ * openblack is licensed under the GNU General Public License version 3.
+ *******************************************************************************/
+
+#define LOCATOR_IMPLEMENTATIONS
+
+#include <algorithm>
+#include <array>
+#include <memory>
+#include <numbers>
+#include <optional>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+#include <DanceFile.h>
+#include <glm/glm.hpp>
+#include <gtest/gtest.h>
+
+#include "ECS/Components/Dance.h"
+#include "ECS/Components/Footpath.h"
+#include "ECS/Components/Mesh.h"
+#include "ECS/Components/Physics.h"
+#include "ECS/Components/Player.h"
+#include "ECS/Components/StoragePit.h"
+#include "ECS/Components/Temple.h"
+#include "ECS/Components/Town.h"
+#include "ECS/Components/Transform.h"
+#include "ECS/Components/WorshipChants.h"
+#include "ECS/Components/WorshipSite.h"
+#include "ECS/Dances.h"
+#include "ECS/Registry.h"
+#include "ECS/Systems/Implementations/WorshipSiteSystem.h"
+#include "ECS/WorshipSites.h"
+
+using namespace openblack;
+using namespace openblack::ecs;
+using namespace openblack::ecs::components;
+using namespace openblack::ecs::systems;
+namespace ws = openblack::ecs::worship_site;
+
+namespace
+{
+
+/// The place point and altar point of the site's model, as the game's model has them
+constexpr glm::vec3 k_PlacePoint {18.179f, 0.0f, -39.397f};
+constexpr glm::vec3 k_AltarPoint {11.910f, 0.0f, -25.560f};
+
+class FakeWorld final: public ws::WorldInterface
+{
+public:
+	explicit FakeWorld(Registry& registry)
+	    : _registry(registry)
+	{
+	}
+	Registry& Entities() override { return _registry; }
+	[[nodiscard]] int32_t LandNumber() const override { return landNumber; }
+	[[nodiscard]] std::optional<glm::vec3> SitePoint(uint32_t index) const override
+	{
+		if (index == ws::k_PlacePoint)
+		{
+			return k_PlacePoint;
+		}
+		if (index == ws::k_AltarPoint)
+		{
+			return k_AltarPoint;
+		}
+		return std::nullopt;
+	}
+	[[nodiscard]] entt::id_type SiteMesh(entt::entity temple) override
+	{
+		const auto skinned = templeSkins.find(temple);
+		return skinned != templeSkins.end() ? skinned->second : 1;
+	}
+	[[nodiscard]] entt::id_type AltarMesh(Tribe tribe) const override { return 100 + static_cast<entt::id_type>(tribe); }
+	[[nodiscard]] float LandHeightAt(glm::vec2 /*point*/) const override { return 0.0f; }
+	[[nodiscard]] uint32_t PopulationOf(entt::entity town) const override
+	{
+		const auto found = population.find(town);
+		return found != population.end() ? found->second : 0;
+	}
+
+	[[nodiscard]] magic::WorshipBatteryRules ChantRules(Tribe /*tribe*/, PlayerNames /*player*/) const override
+	{
+		return chantRules;
+	}
+
+	entt::entity MakeDance(DanceInfo dance, glm::vec3 position, entt::entity site) override
+	{
+		// Every dance file read here loops twice and the dances start by themselves
+		auto file = std::make_shared<dance::DanceFile>();
+		file->loops = 2;
+		return ecs::dances::Create(
+		    _registry,
+		    {.type = dance, .autostart = true, .place = map_coords::FromMetres({position.x, position.z}), .owner = site},
+		    std::move(file));
+	}
+	[[nodiscard]] uint32_t Turn() const override { return turn; }
+	entt::entity MakeFoodPot(glm::vec3 position, float yAngle) override
+	{
+		const auto pot = _registry.Create();
+		_registry.Assign<Transform>(pot, position, glm::mat3(1.0f), glm::vec3(1.0f));
+		potAngles[pot] = yAngle;
+		return pot;
+	}
+
+	int32_t landNumber {2};
+	uint32_t turn {0};
+	std::unordered_map<entt::entity, float> potAngles;
+	magic::WorshipBatteryRules chantRules {
+	    .chantsPerVillager = 2.0f, .chantsToFillBattery = 100.0f, .eachVillagerAddToFillBattery = 10.0f};
+	/// The site's model wearing a temple's skin, once the temple has one
+	std::unordered_map<entt::entity, entt::id_type> templeSkins;
+	std::unordered_map<entt::entity, uint32_t> population;
+
+private:
+	Registry& _registry;
+};
+
+struct Fixture
+{
+	Registry registry;
+	FakeWorld* world {nullptr};
+	std::unique_ptr<WorshipSiteSystem> system;
+
+	Fixture()
+	{
+		auto fake = std::make_unique<FakeWorld>(registry);
+		world = fake.get();
+		system = std::make_unique<WorshipSiteSystem>(std::move(fake));
+	}
+
+	entt::entity Temple(PlayerNames owner, glm::vec3 position = glm::vec3(0.0f))
+	{
+		const auto entity = registry.Create();
+		registry.Assign<Transform>(entity, position, glm::mat3(1.0f), glm::vec3(1.0f));
+		registry.Assign<components::Temple>(entity, owner);
+		return entity;
+	}
+
+	entt::entity Town(uint32_t id, PlayerNames owner, Tribe tribe, glm::vec3 position, uint32_t people = 10)
+	{
+		const auto entity = registry.Create();
+		auto& town = registry.Assign<components::Town>(entity);
+		town.id = id;
+		town.owner = owner;
+		town.gained = id;
+		registry.Assign<Tribe>(entity, tribe);
+		registry.Assign<Transform>(entity, position, glm::mat3(1.0f), glm::vec3(1.0f));
+		world->population[entity] = people;
+		return entity;
+	}
+};
+
+} // namespace
+
+TEST(WorshipSitePlaces, TheyGoRoundTheTempleASeventhOfATurnApart)
+{
+	EXPECT_FLOAT_EQ(ws::PlaceFacing(0.5f, 0), 0.5f);
+	EXPECT_FLOAT_EQ(ws::PlaceFacing(0.5f, 3), 0.5f + 3.0f * 0.8975979f);
+	EXPECT_NEAR(ws::k_PlaceSpacing * 7.0f, 2.0f * std::numbers::pi_v<float>, 1e-5f);
+}
+
+TEST(WorshipSitePlaces, APointIsTurnedAboutTheSpotAsTheGameTurnsModels)
+{
+	// A quarter turn takes a point ahead (+x) to the side (+z)
+	const auto turned = ws::TurnedPoint({10.0f, 20.0f}, std::numbers::pi_v<float> / 2.0f, {1.0f, 0.0f, 0.0f});
+	EXPECT_NEAR(turned.x, 10.0f, 1e-5f);
+	EXPECT_NEAR(turned.y, 21.0f, 1e-5f);
+}
+
+TEST(WorshipSitePlaces, TheFreePlaceNearestTheSpotIsChosen)
+{
+	std::array<bool, ws::k_Places> taken {};
+	const glm::vec2 temple {0.0f, 0.0f};
+	// Right where place 2's point lies
+	const auto atPlaceTwo = ws::TurnedPoint(temple, ws::PlaceFacing(0.0f, 2), k_PlacePoint);
+	EXPECT_EQ(ws::NearestFreePlace(taken, temple, k_PlacePoint, atPlaceTwo), 2u);
+	taken.at(2) = true;
+	const auto next = ws::NearestFreePlace(taken, temple, k_PlacePoint, atPlaceTwo);
+	ASSERT_TRUE(next.has_value());
+	EXPECT_TRUE(*next == 1u || *next == 3u);
+	taken.fill(true);
+	EXPECT_FALSE(ws::NearestFreePlace(taken, temple, k_PlacePoint, atPlaceTwo).has_value());
+}
+
+TEST(WorshipSitePlaces, ATownMayHaveASiteOffTheFirstLandWithPeopleAndNoScriptStoppingIt)
+{
+	EXPECT_TRUE(ws::MayHaveSite(2, false, 1));
+	EXPECT_FALSE(ws::MayHaveSite(1, false, 10));
+	EXPECT_FALSE(ws::MayHaveSite(2, true, 10));
+	EXPECT_FALSE(ws::MayHaveSite(2, false, 0));
+}
+
+TEST(WorshipSiteSystem, AStandingTempleGivesItsPlayersTownsTheirTribesSitesToBuild)
+{
+	Fixture f;
+	const auto norse = f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -100.0f});
+	const auto celtic = f.Town(1, PlayerNames::PLAYER_ONE, Tribe::CELTIC, {100.0f, 0.0f, 0.0f});
+	const auto otherNorse = f.Town(2, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -200.0f});
+	const auto neutral = f.Town(3, PlayerNames::NEUTRAL, Tribe::GREEK, {0.0f, 0.0f, 100.0f});
+	const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+	f.system->AddTemple(temple, 0.0f, true);
+
+	const auto& worship = f.registry.Get<const CitadelWorship>(temple);
+	const auto norseSite = f.registry.Get<const components::Town>(norse).worshipSite;
+	ASSERT_TRUE(norseSite != entt::null);
+	// One site for each tribe, shared by the tribe's towns
+	EXPECT_EQ(f.registry.Get<const components::Town>(otherNorse).worshipSite, norseSite);
+	const auto celticSite = f.registry.Get<const components::Town>(celtic).worshipSite;
+	ASSERT_TRUE(celticSite != entt::null);
+	EXPECT_NE(celticSite, norseSite);
+	EXPECT_TRUE(f.registry.Get<const components::Town>(neutral).worshipSite == entt::null);
+	EXPECT_EQ(std::ranges::count_if(worship.sites, [](auto site) { return site != entt::null; }), 2);
+
+	const auto& site = f.registry.Get<const WorshipSite>(norseSite);
+	EXPECT_EQ(site.tribe, Tribe::NORSE);
+	EXPECT_EQ(site.player, PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(worship.sites.at(site.place), norseSite);
+	// Not built, and both its towns are asked to build it
+	EXPECT_FALSE(f.system->IsBuilt(norseSite));
+	EXPECT_EQ(site.buildRequests.size(), 2u);
+	// It stands at the temple, its altar at the altar point turned to its facing
+	EXPECT_EQ(f.registry.Get<const Transform>(norseSite).position, glm::vec3(0.0f));
+	const auto altarAt = ws::TurnedPoint({0.0f, 0.0f}, site.facing, k_AltarPoint);
+	const auto& altar = f.registry.Get<const Transform>(site.altar).position;
+	EXPECT_NEAR(altar.x, altarAt.x, 1e-4f);
+	EXPECT_NEAR(altar.z, altarAt.y, 1e-4f);
+	// Its altar isn't seen until the site is built
+	EXPECT_FALSE(f.registry.AllOf<Mesh>(site.altar));
+	EXPECT_EQ(f.registry.Get<const Mesh>(norseSite).id, 1u);
+}
+
+TEST(WorshipSiteSystem, ASiteTakesThePlaceNearestItsTribesNearestTown)
+{
+	Fixture f;
+	// The nearest Norse town to the temple stands where place 4 points
+	const auto placeFour = ws::TurnedPoint({0.0f, 0.0f}, ws::PlaceFacing(0.0f, 4), k_PlacePoint) * 3.0f;
+	f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {placeFour.x, 0.0f, placeFour.y});
+	const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+	// Turned, the temple's places are still judged as if it faced the first way; the site faces round from the temple
+	f.system->AddTemple(temple, 1.0f, true);
+	const auto site = f.registry.Get<const CitadelWorship>(temple).sites.at(4);
+	ASSERT_TRUE(site != entt::null);
+	EXPECT_FLOAT_EQ(f.registry.Get<const WorshipSite>(site).facing, ws::PlaceFacing(1.0f, 4));
+}
+
+TEST(WorshipSiteSystem, NoSitesOnTheFirstLandNorForEmptyTownsNorForATempleStillToBeBuilt)
+{
+	{
+		Fixture f;
+		f.world->landNumber = 1;
+		const auto town = f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+		f.system->AddTemple(f.Temple(PlayerNames::PLAYER_ONE), 0.0f, true);
+		EXPECT_TRUE(f.registry.Get<const components::Town>(town).worshipSite == entt::null);
+	}
+	{
+		Fixture f;
+		const auto town = f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f}, 0);
+		f.system->AddTemple(f.Temple(PlayerNames::PLAYER_ONE), 0.0f, true);
+		EXPECT_TRUE(f.registry.Get<const components::Town>(town).worshipSite == entt::null);
+		// Its first person brings it its site
+		f.world->population[town] = 1;
+		f.system->PersonJoinedTown(town);
+		EXPECT_TRUE(f.registry.Get<const components::Town>(town).worshipSite != entt::null);
+	}
+	{
+		Fixture f;
+		const auto town = f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+		const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+		f.system->AddTemple(temple, 0.0f, false);
+		f.system->LandLaidOut();
+		EXPECT_TRUE(f.registry.Get<const components::Town>(town).worshipSite == entt::null);
+		f.system->TempleBuilt(temple);
+		EXPECT_TRUE(f.registry.Get<const components::Town>(town).worshipSite != entt::null);
+	}
+}
+
+TEST(WorshipSiteSystem, TheLandScriptsBuiltSiteIsBuiltOnlyWhenItsTownWasAskedToBuildIt)
+{
+	Fixture f;
+	const auto town = f.Town(0, PlayerNames::PLAYER_TWO, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+	const auto temple = f.Temple(PlayerNames::PLAYER_TWO);
+	f.system->AddTemple(temple, 0.0f, true);
+	const auto site = f.system->MakeBuiltSite(PlayerNames::PLAYER_TWO, Tribe::NORSE);
+	ASSERT_TRUE(site != entt::null);
+	EXPECT_EQ(site, f.registry.Get<const components::Town>(town).worshipSite);
+	EXPECT_TRUE(f.system->IsBuilt(site));
+	EXPECT_TRUE(f.registry.Get<const WorshipSite>(site).buildRequests.empty());
+	// Built, it no longer goes up, and its tribe's altar is seen
+	EXPECT_FALSE(f.registry.AllOf<BuildProgress>(site));
+	EXPECT_EQ(f.registry.Get<const Mesh>(f.registry.Get<const WorshipSite>(site).altar).id,
+	          100u + static_cast<uint32_t>(Tribe::NORSE));
+
+	// A tribe the player has no town of: built, but not handed back
+	EXPECT_TRUE(f.system->MakeBuiltSite(PlayerNames::PLAYER_TWO, Tribe::GREEK) == entt::null);
+	const auto& sites = f.registry.Get<const CitadelWorship>(temple).sites;
+	const auto greek = std::ranges::find_if(sites, [&f](auto entity) {
+		return entity != entt::null && f.registry.Get<const WorshipSite>(entity).tribe == Tribe::GREEK;
+	});
+	ASSERT_NE(greek, sites.end());
+	EXPECT_TRUE(f.system->IsBuilt(*greek));
+
+	// Without a temple, nothing
+	EXPECT_TRUE(f.system->MakeBuiltSite(PlayerNames::PLAYER_THREE, Tribe::NORSE) == entt::null);
+}
+
+TEST(WorshipSiteSystem, ScriptsStopAndAllowSitesForATempleOrATown)
+{
+	Fixture f;
+	const auto town = f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+	const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+	f.system->AddTemple(temple, 0.0f, false);
+	f.system->SetCanHaveSites(temple, false);
+	f.system->TempleBuilt(temple);
+	EXPECT_TRUE(f.registry.Get<const components::Town>(town).worshipSite == entt::null);
+	f.system->SetCanHaveSites(temple, true);
+	const auto site = f.registry.Get<const components::Town>(town).worshipSite;
+	ASSERT_TRUE(site != entt::null);
+	EXPECT_EQ(f.registry.Get<const WorshipSite>(site).buildRequests.size(), 1u);
+
+	const auto celtic = f.Town(1, PlayerNames::PLAYER_ONE, Tribe::CELTIC, {50.0f, 0.0f, 0.0f});
+	f.system->SetCanHaveSites(celtic, false);
+	f.system->LandLaidOut();
+	EXPECT_TRUE(f.registry.Get<const components::Town>(celtic).worshipSite == entt::null);
+	f.system->SetCanHaveSites(celtic, true);
+	EXPECT_TRUE(f.registry.Get<const components::Town>(celtic).worshipSite != entt::null);
+}
+
+TEST(WorshipSiteSystem, BuildingUpASiteFinishesItAtTheWhole)
+{
+	Fixture f;
+	f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+	const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+	f.system->AddTemple(temple, 0.0f, true);
+	const auto site = f.registry.Get<const CitadelWorship>(temple).sites.at(
+	    f.registry
+	        .Get<const WorshipSite>(*std::ranges::find_if(f.registry.Get<const CitadelWorship>(temple).sites,
+	                                                      [](auto entity) { return entity != entt::null; }))
+	        .place);
+	f.system->BuildBy(site, -0.5f);
+	EXPECT_FLOAT_EQ(f.registry.Get<const BuildProgress>(site).built, 0.0f);
+	f.system->BuildBy(site, 0.6f);
+	EXPECT_FALSE(f.system->IsBuilt(site));
+	EXPECT_FALSE(f.registry.Get<const WorshipSite>(site).buildRequests.empty());
+	f.system->BuildBy(site, 0.6f);
+	EXPECT_TRUE(f.system->IsBuilt(site));
+	EXPECT_TRUE(f.registry.Get<const WorshipSite>(site).buildRequests.empty());
+}
+
+TEST(WorshipSiteSystem, ASiteWearsItsTemplesSkinOnceTheTempleHasOne)
+{
+	Fixture f;
+	f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+	const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+	f.system->AddTemple(temple, 0.0f, true);
+	const auto site = *std::ranges::find_if(f.registry.Get<const CitadelWorship>(temple).sites,
+	                                        [](auto entity) { return entity != entt::null; });
+	f.system->UpdateTurn();
+	EXPECT_EQ(f.registry.Get<const Mesh>(site).id, 1u);
+	f.world->templeSkins[temple] = 7;
+	f.system->UpdateTurn();
+	EXPECT_EQ(f.registry.Get<const Mesh>(site).id, 7u);
+}
+
+namespace
+{
+/// A player's standing temple with a built site for one Norse town; the site
+std::pair<entt::entity, entt::entity> BuiltSite(Fixture& f, PlayerNames owner)
+{
+	f.Town(static_cast<uint32_t>(owner), owner, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+	const auto temple = f.Temple(owner);
+	f.system->AddTemple(temple, 0.0f, true);
+	const auto site = *std::ranges::find_if(f.registry.Get<const CitadelWorship>(temple).sites,
+	                                        [](auto entity) { return entity != entt::null; });
+	f.system->BuildBy(site, 1.0f);
+	return {temple, site};
+}
+} // namespace
+
+TEST(WorshipSiteChants, ASitesDancersChantIntoItEachTurn)
+{
+	Fixture f;
+	const auto [temple, site] = BuiltSite(f, PlayerNames::PLAYER_ONE);
+	f.system->SetDancers(site, 4);
+	EXPECT_EQ(f.system->Dancers(site), 4u);
+	f.system->ProcessChants();
+	const auto& chants = f.registry.Get<const WorshipChants>(site);
+	// Nothing drawn and an empty battery: the dance goes at the boost of an empty battery, 0.5, and the four dancers
+	// chant 4 x 2 x 0.5 into the battery; what can be drawn next turn is the battery and their full chanting
+	EXPECT_FLOAT_EQ(chants.danceIntensity, 0.5f);
+	EXPECT_FLOAT_EQ(chants.battery, 4.0f);
+	EXPECT_FLOAT_EQ(chants.available, 12.0f);
+	EXPECT_FLOAT_EQ(f.system->ChantsAvailable(site), 12.0f);
+}
+
+TEST(WorshipSiteChants, WhatIsDrawnCountsInThePlayersStatistics)
+{
+	Fixture f;
+	const auto player = f.registry.Create();
+	f.registry.Assign<Player>(player, Player {.name = PlayerNames::PLAYER_ONE});
+	const auto [temple, site] = BuiltSite(f, PlayerNames::PLAYER_ONE);
+	f.system->SetDancers(site, 4);
+	f.system->ProcessChants();
+	EXPECT_FLOAT_EQ(f.system->UseChants(site, 5.0f), 5.0f);
+	// Asked more than is left, the site gives what it has
+	EXPECT_FLOAT_EQ(f.system->UseChants(site, 50.0f), 7.0f);
+	EXPECT_FLOAT_EQ(f.system->ChantsAvailable(site), 0.0f);
+	EXPECT_FLOAT_EQ(f.registry.Get<const Player>(player).totalChantsUsed, 12.0f);
+	// A dropped seed's charge goes back into the battery
+	f.system->ReturnChants(site, 3.0f);
+	EXPECT_FLOAT_EQ(f.registry.Get<const WorshipChants>(site).battery, 7.0f);
+}
+
+TEST(WorshipSiteChants, CheatsGiveWithoutDrawing)
+{
+	Fixture f;
+	const auto [temple, site] = BuiltSite(f, PlayerNames::PLAYER_ONE);
+	auto& chants = f.registry.Get<WorshipChants>(site);
+	chants.infinite = true;
+	chants.freeMaintenance = true;
+	EXPECT_FLOAT_EQ(f.system->UseCreateChants(site, 40.0f), 40.0f);
+	EXPECT_FLOAT_EQ(f.system->MaintainSpell(site, 30.0f), 30.0f);
+	EXPECT_FLOAT_EQ(f.registry.Get<const WorshipChants>(site).used, 0.0f);
+}
+
+TEST(WorshipSiteChants, VirtualInfluenceTakesOnlyThisTurnsChantingSharedAmongHands)
+{
+	Fixture f;
+	const auto [temple, site] = BuiltSite(f, PlayerNames::PLAYER_ONE);
+	f.system->SetDancers(site, 4);
+	f.system->ProcessChants();
+	// 12 can be drawn, but only the dancers' 8 of chanting this turn is offered, split between two hands
+	EXPECT_FLOAT_EQ(f.system->TakeChantsForVirtualInfluence(PlayerNames::PLAYER_ONE, 2), 4.0f);
+	EXPECT_FLOAT_EQ(f.registry.Get<const WorshipChants>(site).used, 4.0f);
+	EXPECT_FLOAT_EQ(f.system->TakeChantsForVirtualInfluence(PlayerNames::PLAYER_TWO, 1), 0.0f);
+}
+
+TEST(WorshipSiteSystem, ANewSiteHasItsPlacesDanceSetGoingAndAnEmptyFoodPot)
+{
+	Fixture f;
+	const auto [temple, site] = BuiltSite(f, PlayerNames::PLAYER_ONE);
+	const auto& component = f.registry.Get<const WorshipSite>(site);
+	ASSERT_TRUE(component.dance != entt::null);
+	const auto& dance = f.registry.Get<const Dance>(component.dance);
+	EXPECT_EQ(static_cast<int>(dance.type), static_cast<int>(DanceInfo::CitadelDance_1) + component.place);
+	EXPECT_TRUE(dance.owner == site);
+	// Its loop is as long as its dance file says
+	EXPECT_EQ(dance.loopLength, 2u);
+	// Made at a quarter speed, then set going at half: danced at twice its keyed speed
+	EXPECT_EQ(dance.state, Dance::State::Dancing);
+	EXPECT_FLOAT_EQ(dance.speed, 0.5f);
+	EXPECT_FLOAT_EQ(dance.dancingRate, 2.0f);
+	// Centred on the altar's point, as the altar is
+	const auto& altarAt = f.registry.Get<const Transform>(component.altar).position;
+	const auto& danceAt = f.registry.Get<const Transform>(component.dance).position;
+	EXPECT_NEAR(danceAt.x, altarAt.x, 1e-4f);
+	EXPECT_NEAR(danceAt.z, altarAt.z, 1e-4f);
+	// The food pot stands at its own spot of the model, turned a further 1.5 radians
+	ASSERT_TRUE(component.foodPot != entt::null);
+	const auto expected = ws::TurnedPoint({0.0f, 0.0f}, component.facing, ws::k_FoodPotPoint);
+	const auto& potAt = f.registry.Get<const Transform>(component.foodPot).position;
+	EXPECT_NEAR(potAt.x, expected.x, 1e-4f);
+	EXPECT_NEAR(potAt.z, expected.y, 1e-4f);
+	EXPECT_FLOAT_EQ(f.world->potAngles.at(component.foodPot), component.facing + 1.5f);
+}
+
+TEST(WorshipSiteSystem, TheDanceFollowsTheChantingAndItsClockRunsWhileDanced)
+{
+	Fixture f;
+	const auto [temple, site] = BuiltSite(f, PlayerNames::PLAYER_ONE);
+	const auto danceEntity = f.registry.Get<const WorshipSite>(site).dance;
+	// With no dancers to chant, the game counts all their chanting as drawn: the dance is set going flat out
+	f.system->ProcessChants();
+	EXPECT_FLOAT_EQ(f.registry.Get<const Dance>(danceEntity).speed, 1.0f);
+	// It goes on in the dances' turn, as every dance does
+	ecs::dances::TurnContext context {.turn = 0, .available = [](entt::entity) { return true; }, .finished = {}};
+	ecs::dances::ProcessTurn(f.registry, danceEntity, context);
+	EXPECT_FLOAT_EQ(f.registry.Get<const Dance>(danceEntity).clock, 0.0f);
+	f.system->SetDancers(site, 3);
+	EXPECT_EQ(f.registry.Get<const Dance>(danceEntity).dancers, 3u);
+	context.turn = 5;
+	ecs::dances::ProcessTurn(f.registry, danceEntity, context);
+	EXPECT_FLOAT_EQ(f.registry.Get<const Dance>(danceEntity).clock, 1.0f);
+}
+
+TEST(WorshipSiteSystem, ATownWithAStoragePitIsLinkedToItsSiteByAFootpath)
+{
+	Fixture f;
+	const auto town = f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+	const auto pit = f.registry.Create();
+	f.registry.Assign<StoragePit>(pit);
+	f.registry.Get<components::Town>(town).abodes.push_back(pit);
+	f.Town(1, PlayerNames::PLAYER_ONE, Tribe::CELTIC, {50.0f, 0.0f, 0.0f});
+	const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+	f.system->AddTemple(temple, 0.0f, true);
+	const auto norse = f.registry.Get<const components::Town>(town).worshipSite;
+	ASSERT_TRUE(norse != entt::null);
+	ASSERT_TRUE(f.registry.AllOf<FootpathLink>(norse));
+	// Its end is the site's gate
+	const auto gate = ws::TurnedPoint({0.0f, 0.0f}, f.registry.Get<const WorshipSite>(norse).facing, k_PlacePoint);
+	EXPECT_NEAR(f.registry.Get<const FootpathLink>(norse).position.x, gate.x, 1e-4f);
+	// The Celtic town has no pit, so its site has no link
+	for (const auto site : f.registry.Get<const CitadelWorship>(temple).sites)
+	{
+		if (site != entt::null && site != norse)
+		{
+			EXPECT_FALSE(f.registry.AllOf<FootpathLink>(site));
+		}
+	}
+}

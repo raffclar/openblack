@@ -102,8 +102,10 @@ void DrawFighter(const char* who, const CreatureFighting& fighting)
 	            static_cast<double>(fighter.speed));
 	Bar("fight health", fighter.health);
 	Bar("stamina", fighter.stamina);
-	ImGui::Text("%s%s, computer waits %.1f s, tendency %+.2f (tier %u)",
-	            fighter.control == fight::Control::Player ? "player" : "computer", fighter.autoFight ? " (auto)" : "",
+	const auto* control = fighter.control == fight::Control::Player     ? "player"
+	                      : fighter.control == fight::Control::Computer ? "computer"
+	                                                                    : "nobody (queued moves only)";
+	ImGui::Text("%s, computer waits %.1f s, tendency %+.2f (tier %u)", control,
 	            static_cast<double>(std::max(fighter.computerWaitMs, 0.0f) / 1000.0f), static_cast<double>(fighter.tendency),
 	            fight::TierOf(fighter.tendency));
 	std::string queue;
@@ -231,7 +233,7 @@ void CreatureSpawner::DrawFight(entt::entity entity) noexcept
 		DrawFighter(fmt::format("Creature {}", entt::to_integral(fighting->opponent)).c_str(), *other);
 	}
 	ImGui::Text("Arena radius %.1f", static_cast<double>(fighting->arena.radius));
-	auto autoFight = fighting->fighter.autoFight;
+	auto autoFight = fighting->fighter.control != fight::Control::None;
 	if (ImGui::Checkbox("Fights by itself", &autoFight))
 	{
 		fights.SetAutoFighting(entity, autoFight);

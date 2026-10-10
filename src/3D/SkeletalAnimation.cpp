@@ -354,6 +354,97 @@ std::vector<Pose> SampleCycle(const Animation& animation, const Animation& stand
 	return poses;
 }
 
+void SetLayer(std::vector<Pose>& poses, const Animation& animation, uint32_t timeMs, const Skeleton& skeleton,
+              const Animation* fill)
+{
+	const auto count = std::min(poses.size(), skeleton.parents.size());
+	if (animation.frames.empty() || count == 0)
+	{
+		return;
+	}
+	const auto* fillFrame = fill != nullptr && !fill->frames.empty() ? &fill->frames.front() : nullptr;
+	const auto fillRotated =
+	    fillFrame != nullptr ? JointSlots(fill->rotatedJoints, count) : std::vector<std::optional<size_t>> {};
+	const auto fillTranslated =
+	    fillFrame != nullptr ? JointSlots(fill->translatedJoints, count) : std::vector<std::optional<size_t>> {};
+	const auto rotated = JointSlots(animation.rotatedJoints, count);
+	const auto translated = JointSlots(animation.translatedJoints, count);
+	const auto [from, to, t] = FindFrames(animation, timeMs);
+
+	for (uint32_t joint = 0; joint < count; ++joint)
+	{
+		auto& pose = poses[joint];
+		const auto parent = skeleton.parents[joint];
+		std::optional<Matrix> rotation;
+		if (const auto slot = rotated[joint])
+		{
+			rotation =
+			    BlendKeyframes(animation.frames[from].eulerAngles[*slot], animation.frames[to].eulerAngles[*slot], t, false);
+		}
+		else if (fillFrame != nullptr && fillRotated[joint])
+		{
+			rotation = RotationYXZ(fillFrame->eulerAngles[*fillRotated[joint]]);
+		}
+		if (rotation)
+		{
+			pose.rotation = Multiply(skeleton.restRotations[joint], *rotation);
+			if (joint != 0 && parent != k_NoParent && parent < count)
+			{
+				pose.rotation = Multiply(pose.rotation, skeleton.inverseRestRotations[parent]);
+			}
+		}
+
+		if (const auto slot = translated[joint])
+		{
+			const auto& a = animation.frames[from].translations[*slot];
+			const auto& b = animation.frames[to].translations[*slot];
+			pose.translation = (b - a) * t + a;
+		}
+		else if (fillFrame != nullptr && fillTranslated[joint])
+		{
+			pose.translation = fillFrame->translations[*fillTranslated[joint]];
+		}
+	}
+}
+
+void BlendLayers(std::vector<Pose>& poses, const Animation& first, uint32_t firstTimeMs, const Animation& second,
+                 uint32_t secondTimeMs, float t, const Skeleton& skeleton)
+{
+	auto a = poses;
+	auto b = poses;
+	SetLayer(a, first, firstTimeMs, skeleton);
+	SetLayer(b, second, secondTimeMs, skeleton);
+	const auto worldA = ComposeBoneMatrices(a, skeleton.parents);
+	auto blended = ComposeBoneMatrices(b, skeleton.parents);
+	for (size_t bone = 0; bone < blended.size(); ++bone)
+	{
+		for (glm::length_t c = 0; c < 4; ++c)
+		{
+			blended[bone][c] = ((blended[bone][c] - worldA[bone][c]) * t) + worldA[bone][c];
+		}
+	}
+	poses = PosesFromBoneMatrices(blended, skeleton.parents);
+}
+
+std::vector<Pose> PosesFromBoneMatrices(std::span<const glm::mat4> matrices, std::span<const uint32_t> parents)
+{
+	std::vector<Pose> poses(matrices.size());
+	for (size_t i = 0; i < matrices.size(); ++i)
+	{
+		const auto parent = i < parents.size() ? parents[i] : k_NoParent;
+		const glm::mat4 local = parent != k_NoParent && parent < i ? glm::inverse(matrices[parent]) * matrices[i] : matrices[i];
+		for (size_t r = 0; r < 3; ++r)
+		{
+			for (size_t c = 0; c < 3; ++c)
+			{
+				poses[i].rotation.at(r).at(c) = local[static_cast<glm::length_t>(r)][static_cast<glm::length_t>(c)];
+			}
+		}
+		poses[i].translation = glm::vec3(local[3]);
+	}
+	return poses;
+}
+
 std::vector<Pose> WeightedSum(std::span<const std::vector<Pose>> poses, std::span<const float> weights)
 {
 	if (poses.empty())
