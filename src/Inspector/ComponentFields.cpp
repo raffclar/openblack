@@ -862,7 +862,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Player::windResistance>("windResistance")
 	    .Field<&components::Player::villagersLost>("villagersLost")
 	    .Field<&components::Player::villagersKilled>("villagersKilled")
-	    .Field<&components::Player::sacrifices>("sacrifices");
+	    .Field<&components::Player::sacrifices>("sacrifices")
+	    .Field<&components::Player::miracles>("miracles");
 	Reflect<components::PlayerCreatures>(context).Field<&components::PlayerCreatures::acquired>("acquired");
 	Reflect<components::Poisoned>(context).Field<&components::Poisoned::dummy>("dummy");
 	Reflect<components::CreatureMiracleOpinion>(context)
