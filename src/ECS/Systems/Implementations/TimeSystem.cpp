@@ -86,8 +86,24 @@ TimeSystem::TimeSystem(TickSource ticks)
 
 void TimeSystem::Start()
 {
-	_start = std::chrono::steady_clock::now();
+	_elapsedTime = std::chrono::milliseconds(0);
 	_lastFrameTicks = Ticks();
+	_ticksEpoch = _lastFrameTicks;
+}
+
+int64_t TimeSystem::GetUnixTime() const
+{
+	if (_pinnedDate.has_value())
+	{
+		return *_pinnedDate + static_cast<int64_t>(GetTicks() / 1000u);
+	}
+	return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
+void TimeSystem::RestartClock(std::optional<int64_t> unixTime)
+{
+	_ticksEpoch = Ticks();
+	_pinnedDate = unixTime;
 }
 
 uint32_t TimeSystem::Ticks() const
@@ -115,13 +131,13 @@ void TimeSystem::Update()
 	{
 		_fixedTicks += static_cast<uint32_t>(_fixedFrameTime->count());
 	}
-	auto now = std::chrono::steady_clock::now();
-	_elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(now - _start);
 	// The frame's real time in whole milliseconds, never none
 	const auto ticks = Ticks();
 	const auto step = static_cast<int32_t>(ticks - _lastFrameTicks);
 	_frameRealMs = step > 0 ? static_cast<uint32_t>(step) : 1u;
 	_lastFrameTicks = ticks;
+	// The real time since the start, by the same count, so that it too follows a fixed frame time
+	_elapsedTime += std::chrono::milliseconds(step > 0 ? step : 0);
 }
 
 std::chrono::milliseconds TimeSystem::GetElapsedTime() const

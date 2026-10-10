@@ -12,6 +12,7 @@
 #include <optional>
 #include <random>
 
+#include "Common/RandomNumberManager.h"
 #include "Creature/CreatureRoute.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 
@@ -53,7 +54,7 @@ private:
 	/// land.
 	std::optional<creature_route::WalkableLand> _land;
 	/// Fidgets and running away distances are chosen at random, apart from the game's own random numbers
-	std::mt19937 _random {std::random_device {}()};
+	RandomStreamSource _random {RandomStream::CreatureLocomotion};
 };
 
 } // namespace openblack::ecs::systems

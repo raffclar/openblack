@@ -268,3 +268,33 @@ std::string openblack::inspector::EncodeError(const Json& id, std::string_view e
 {
 	return Dump({{"id", id}, {"ok", false}, {"error", error}});
 }
+
+namespace
+{
+
+openblack::inspector::Json WithExtra(openblack::inspector::Json answer, const openblack::inspector::Json& extra)
+{
+	if (extra.is_object())
+	{
+		for (const auto& [key, value] : extra.items())
+		{
+			if (!answer.contains(key))
+			{
+				answer[key] = value;
+			}
+		}
+	}
+	return answer;
+}
+
+} // namespace
+
+std::string openblack::inspector::EncodeResult(const Json& id, const Json& result, const Json& extra)
+{
+	return Dump(WithExtra({{"id", id}, {"ok", true}, {"result", result}}, extra));
+}
+
+std::string openblack::inspector::EncodeError(const Json& id, std::string_view error, const Json& extra)
+{
+	return Dump(WithExtra({{"id", id}, {"ok", false}, {"error", error}}, extra));
+}

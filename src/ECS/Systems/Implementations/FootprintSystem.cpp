@@ -20,6 +20,7 @@
 
 #include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
+#include "Common/MachineClock.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -37,7 +38,7 @@ namespace
 /// Today's month, counted from 1, and day by the local clock
 std::pair<int, int> Today()
 {
-	const auto now = std::time(nullptr);
+	const auto now = static_cast<std::time_t>(machine_clock::UnixTime());
 	std::tm local {};
 #if defined(_WIN32)
 	localtime_s(&local, &now);
