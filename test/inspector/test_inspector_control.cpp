@@ -24,6 +24,7 @@
 #include <Inspector/CameraControl.h>
 #include <Inspector/GuiControl.h>
 #include <Inspector/LevelControl.h>
+#include <Inspector/RunControl.h>
 #include <Inspector/ScriptControl.h>
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
@@ -484,10 +485,17 @@ public:
 		current = "testbed";
 		return {};
 	}
+	std::string NewGame(std::string_view start) override
+	{
+		current = "Land 1";
+		newGames.emplace_back(start);
+		return {};
+	}
 	[[nodiscard]] std::string Current() const override { return current; }
 
 	std::string current;
 	std::optional<LoadHow> lastHow;
+	std::vector<std::string> newGames;
 };
 
 class FakeScreenshots final: public ScreenshotTargetInterface
@@ -662,6 +670,20 @@ TEST(InspectorLevels, LoadByNameFreshOrAsTheStoryChangesLand)
 	EXPECT_EQ(Ask(inspector, R"({"query": "level.testbed"})")["land"], "testbed");
 }
 
+// A new game on the first land, the start-of-game question answered at once or left to the game
+TEST(InspectorLevels, NewGameSkipsTheOpeningAsTheQuestionAnswers)
+{
+	FakeLevels levels;
+	Inspector inspector;
+	inspector.Add(MakeLevelProvider(levels));
+	EXPECT_EQ(Ask(inspector, R"({"query": "level.new_game", "params": {"skip": "creature"}})")["land"], "Land 1");
+	Ask(inspector, R"({"query": "level.new_game", "params": {"skip": "story"}})");
+	Ask(inspector, R"({"query": "level.new_game"})");
+	EXPECT_EQ(levels.newGames, (std::vector<std::string> {"creature", "story", ""}));
+	EXPECT_FALSE(Refused(inspector, R"({"query": "level.new_game", "params": {"skip": "beach"}})").empty());
+	EXPECT_EQ(levels.newGames.size(), 3);
+}
+
 // A picture at an exact frame; one with a camera is held there a few frames first
 TEST(InspectorScreenshot, TakenAtTheFrameAskedWithTheCameraAsked)
 {
@@ -830,6 +852,22 @@ TEST(InspectorScreenshot, APictureNeverWrittenFails)
 	ASSERT_EQ(failed["failed"].size(), 1u);
 	EXPECT_NE(failed["failed"][0].get<std::string>().find("lost.png: never written"), std::string::npos);
 	EXPECT_TRUE(failed["writing"].empty());
+}
+
+// While a testbed scenario asked for hasn't laid out its things, the game is loading it: a query for its things is told
+// to wait, never that they aren't there
+TEST(InspectorRunControl, AScenarioAskedForIsLoadingUntilItsThingsAreLaidOut)
+{
+	EXPECT_FALSE(ScenarioLoading(std::nullopt).has_value());
+	const auto loading = ScenarioLoading("objects.village_totem");
+	ASSERT_TRUE(loading.has_value());
+	EXPECT_EQ(*loading, "scenario objects.village_totem");
+	Inspector inspector;
+	const auto answer = Json::parse(
+	    inspector.HandleWhileLoading(R"({"query": "ecs.entities", "params": {"component": "VillageTotem"}})", *loading));
+	EXPECT_EQ(answer["ok"], false);
+	EXPECT_EQ(answer["loading"], "scenario objects.village_totem");
+	EXPECT_EQ(Json::parse(inspector.HandleWhileLoading(R"({"query": "game.state"})", *loading))["result"]["ready"], false);
 }
 
 // Two held pictures asked for at once take turns: the second's camera goes in place once the first's frames are free,

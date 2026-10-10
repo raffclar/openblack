@@ -54,6 +54,10 @@ public:
 	/// Loads a land by its name, through the game's own loading; why not, if it couldn't
 	virtual std::string Load(std::string_view name, LoadHow how) = 0;
 	virtual std::string LoadTestbed() = 0;
+	/// Starts a new game on the first land from scratch, the story's scripts starting again; `start` is how the
+	/// start-of-game question goes: "" as the game decides, "ask", or answered at once "normal", "creature", "story" or
+	/// "old". Why not, if it couldn't
+	virtual std::string NewGame(std::string_view start) = 0;
 	/// The land loaded now, by its script's name, or "testbed"; empty before one is
 	[[nodiscard]] virtual std::string Current() const = 0;
 };
@@ -62,6 +66,8 @@ public:
 ///   level.current                      the land loaded now
 ///   level.load {name, how?}            loads one, fresh as the land menu does or as the story's change of land does
 ///   level.testbed                      loads the empty testbed
+///   level.new_game {skip?}             starts a new game on the first land, the opening skipped as the game's own
+///                                      start-of-game question skips it
 [[nodiscard]] std::unique_ptr<ProviderInterface> MakeLevelProvider(LevelTargetInterface& levels);
 
 /// Where a kept picture comes from, for its name and its line in the catalogue

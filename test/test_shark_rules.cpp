@@ -13,11 +13,11 @@
 
 #include <gtest/gtest.h>
 
-#include "ECS/WhaleRules.h"
+#include "ECS/SharkRules.h"
 
-using namespace openblack::ecs::whale_rules;
+using namespace openblack::ecs::shark_rules;
 
-TEST(WhaleRules, AWhaleFacesTheWayItMoved)
+TEST(SharkRules, ASharkFacesTheWayItMoved)
 {
 	EXPECT_FLOAT_EQ(Heading({0, 0, 0}, {0, 0, 5}, 1.0f), std::numbers::pi_v<float> / 2.0f);
 	// Turning the other way comes out as the angle from +x the long way round
@@ -26,7 +26,7 @@ TEST(WhaleRules, AWhaleFacesTheWayItMoved)
 	EXPECT_FLOAT_EQ(Heading({3, 0, 4}, {3, 7, 4}, 1.25f), 1.25f);
 }
 
-TEST(WhaleRules, AWhaleIsDrawnBetweenItsTurns)
+TEST(SharkRules, ASharkIsDrawnBetweenItsTurns)
 {
 	const auto drawn = Drawn({0, 0, 0}, 1.0f, {10, 0, 20}, 3.0f, 0.25f);
 	EXPECT_FLOAT_EQ(drawn.x, 2.5f);
@@ -34,7 +34,7 @@ TEST(WhaleRules, AWhaleIsDrawnBetweenItsTurns)
 	EXPECT_FLOAT_EQ(drawn.z, 5.0f);
 }
 
-TEST(WhaleRules, TheWakeRingsComeOnceMoreThanFiftyMillisecondsHaveGone)
+TEST(SharkRules, TheWakeRingsComeOnceMoreThanFiftyMillisecondsHaveGone)
 {
 	int32_t timer = 0;
 	EXPECT_FALSE(WakeRing(timer, {1, 2, 3}, 0.5f, 30).has_value());
@@ -46,7 +46,7 @@ TEST(WhaleRules, TheWakeRingsComeOnceMoreThanFiftyMillisecondsHaveGone)
 	const auto ring = WakeRing(timer, {1, 2, 3}, 0.5f, 30);
 	ASSERT_TRUE(ring.has_value());
 	EXPECT_EQ(timer, 60);
-	// On the water under the point, turned with the whale
+	// On the water under the point, turned with the shark
 	EXPECT_EQ(ring->position, glm::vec3(1, 0, 3));
 	EXPECT_FLOAT_EQ(ring->angle, 0.5f);
 	EXPECT_FLOAT_EQ(ring->growth, 10.0f);

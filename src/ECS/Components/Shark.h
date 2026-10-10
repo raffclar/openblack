@@ -16,9 +16,9 @@
 namespace openblack::ecs::components
 {
 
-/// A whale (the opening's sharks): it moves a turn at a time, as a script walks it, and is drawn swimming between where
+/// A shark (the opening's sharks): it moves a turn at a time, as a script walks it, and is drawn swimming between where
 /// it was at the start of the turn and where it is, facing the way it moves, its wake spreading on the water behind it
-struct Whale
+struct Shark
 {
 	/// Where it is this turn, on the land's grid
 	glm::vec3 position {0.0f};

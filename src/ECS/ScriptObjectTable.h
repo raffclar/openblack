@@ -13,6 +13,7 @@
 
 #include <array>
 #include <optional>
+#include <vector>
 
 namespace openblack::ecs::script_objects
 {
@@ -48,16 +49,16 @@ enum class Referenced : uint8_t
 };
 
 /// The table of the objects the scripts hold, as the game keeps it: places are handed out round the table from where
-/// the last search stopped, an object already in a script keeps its place, and places are only freed when the land's
-/// scripts are cleared
+/// the last search stopped, an object keeps the place it has, and a place is freed once no script reference holds it
+/// (after each turn of the scripts) or when the scripts are cleared
 class Table
 {
 public:
 	/// The place of an object, if it has one
 	[[nodiscard]] std::optional<uint16_t> Find(uint32_t object) const;
-	/// An object a native made or found for a script: its place if it is in a script already and has one, otherwise a
-	/// free place; none when every place is taken
-	std::optional<uint16_t> Register(uint32_t object, bool createdByScript, bool inScript);
+	/// An object a native made or found for a script: the place it has, otherwise a free place; none when every place is
+	/// taken
+	std::optional<uint16_t> Register(uint32_t object, bool createdByScript);
 	/// A script reference to the object in a place
 	Referenced AddReference(uint16_t place);
 	/// A script reference let go; a count never goes below nothing
@@ -65,6 +66,10 @@ public:
 	[[nodiscard]] const Place& At(uint16_t place) const { return _places.at(place); }
 	/// The place of one object now holds another, as a tree a script held becomes a dead tree
 	void Replace(uint32_t from, uint32_t to);
+	/// The places no script reference holds, in order
+	[[nodiscard]] std::vector<uint16_t> Unreferenced() const;
+	/// A place is free again
+	void Free(uint16_t place);
 	/// The land's scripts end: each place lets go of its object, but keeps its count of references, so a place still
 	/// counted stays taken, and the next search starts where the last stopped
 	void ClearObjects();

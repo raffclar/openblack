@@ -112,8 +112,8 @@ openblack::graphics::mesh_detail::Choice ChooseDetail(const DetailMeshes& detail
 	}
 	const auto box = meshes.Handle(bounding)->GetBoundingBox();
 	const auto centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
-	const float depth = glm::dot(centre - camera.GetOrigin(), camera.GetForward());
-	const float reach = mesh_detail::Reach(detail.importance, glm::length(box.Size()) * 0.5f * scale, modelDetail);
+	const float depth = mesh_detail::ViewDepth(centre, camera.GetOrigin(), camera.GetForward());
+	const float reach = mesh_detail::Reach(detail.importance, mesh_detail::ScaledRadius(box.Size(), scale), modelDetail);
 	return mesh_detail::Choose(depth, reach, disappears);
 }
 /// The model of the roots drawn under the trees out of the land

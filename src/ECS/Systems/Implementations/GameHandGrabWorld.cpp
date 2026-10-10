@@ -34,6 +34,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
+#include "ECS/Components/Flock.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
@@ -378,9 +379,9 @@ void GameHandGrabWorld::AnimalIntoOwnFlock(entt::entity animal)
 	const auto old = data->flock;
 	std::erase(flock->members, animal);
 	const auto& position = registry.Get<const Transform>(animal).position;
-	const auto own = Locator::animalSystem::value().CreateFlock(glm::vec2(position.x, position.z), flock->domainRadius,
-	                                                            flock->flockDistance);
-	registry.Get<Flock>(own).members.push_back(animal);
+	const auto own = Locator::animalSystem::value().CreateFlock(
+	    glm::vec2(position.x, position.z), static_cast<float>(flock->domainRadius), static_cast<float>(flock->flockDistance));
+	registry.Get<Flock>(own).members.insert(registry.Get<Flock>(own).members.begin(), animal);
 	data->flock = own;
 	if (registry.Get<const Flock>(old).members.empty())
 	{

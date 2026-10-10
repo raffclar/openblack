@@ -37,6 +37,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "VillagerDance.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -180,8 +181,10 @@ void DanceSystem::ProcessTurn()
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<entt::entity> all;
 	registry.Each<const Dance>([&all](entt::entity entity, const Dance&) { all.push_back(entity); });
-	const dances::TurnContext context {
-	    .turn = Locator::time::value().GetTurn(), .available = &Available, .finished = &FinishedDancing};
+	const dances::TurnContext context {.turn = Locator::time::value().GetTurn(),
+	                                   .available = &Available,
+	                                   .finished = &FinishedDancing,
+	                                   .playClipAgain = &ecs::villager_dance::PlayClipAgain};
 	for (const auto entity : all)
 	{
 		if (dances::IsDance(registry, entity))
