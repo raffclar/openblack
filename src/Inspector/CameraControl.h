@@ -67,8 +67,16 @@ public:
 	virtual std::string Set(const CameraPose& pose) = 0;
 	/// Flies the camera there as the bookmarks and the shortcuts fly it; why not, if it can't
 	virtual std::string Fly(const CameraPose& pose) = 0;
+	/// Shows the camera there for the frame being made only, whatever else holds it (a script's camera, a camera path):
+	/// its own state is kept aside and given back by Unpin before it next moves, so that nothing of it changes
+	virtual std::string Pin(const CameraPose& pose) = 0;
+	/// Gives the camera back its own state if it was pinned; once a frame, before anything moves it
+	virtual void Unpin() = 0;
+	/// Where the camera is shown every frame, over whatever holds it, until released (none)
+	virtual void SetOverride(std::optional<CameraPose> pose) = 0;
+	[[nodiscard]] virtual std::optional<CameraPose> Override() const = 0;
 	[[nodiscard]] virtual float GroundHeight(glm::vec2 point) const = 0;
-	/// Where an entity is now, for the camera to frame it; none if there is no such entity or it has no place
+	/// Where an entity is drawn now, for the camera to frame it; none if there is no such entity or it has no place
 	[[nodiscard]] virtual std::optional<glm::vec3> EntityPosition(uint32_t id) const = 0;
 };
 
@@ -93,7 +101,9 @@ struct FrameRequest
                                                           const CameraControlInterface& camera, std::string& error);
 
 ///   camera.state                                  where the camera is, what it looks at, its angles and what moves it
-///   camera.set {position?, focus?, yaw?, pitch?, distance?}   puts it there at once
+///   camera.set {position?, focus?, yaw?, pitch?, distance?, override?}   puts it there at once; with override, shows
+///                                                 it there every frame over a script's camera until camera.release
+///   camera.release                                gives the view back to what holds the camera
 ///   camera.fly {position?, focus?, yaw?, pitch?, distance?}   flies it there
 ///   camera.frame {id, yaw?, pitch?, distance?}                puts it to look at an entity, where it is now
 /// What isn't given is kept: a focus alone keeps the angles and distance, angles alone turn about the focus, a position

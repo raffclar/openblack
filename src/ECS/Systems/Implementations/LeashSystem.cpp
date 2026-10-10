@@ -112,7 +112,7 @@ std::optional<glm::vec3> HandPoint()
 
 float CreatureHeight(const Creature& creature)
 {
-	return creature_morph::k_HeightAtSizeOne * creature.size;
+	return creature_morph::k_HeightAtSizeOne * ShownSize(creature);
 }
 
 float GroundAt(glm::vec2 point)
@@ -182,7 +182,7 @@ leash::Lengths LengthsOf(const Registry& registry, entt::entity creature, const 
 	const auto& body = registry.Get<const Creature>(creature);
 	if (!worn.tiedTo.has_value())
 	{
-		return leash::InHand(body.size);
+		return leash::InHand(ShownSize(body));
 	}
 	if (IsMobile(registry, *worn.tiedTo))
 	{

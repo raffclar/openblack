@@ -153,6 +153,17 @@ TEST(InspectorInput, AClickIsPressedNowAndLetGoTheNextFrame)
 	EXPECT_FALSE(rig.Refused(R"({"query": "input.button", "params": {"button": "fourth"}})").empty());
 }
 
+// The left button never picks things up, which the answer says; the right (Action) button does, with no note
+TEST(InspectorInput, ALeftPressSaysTheHandTakesThingsWithTheRight)
+{
+	Rig rig;
+	const auto left = rig.Ask(R"({"query": "input.button", "params": {"button": "left", "action": "press"}})");
+	EXPECT_NE(left["note"].get<std::string>().find("right button"), std::string::npos);
+	EXPECT_NE(rig.Ask(R"({"query": "input.button"})")["note"].get<std::string>().find("right button"), std::string::npos);
+	EXPECT_FALSE(rig.Ask(R"({"query": "input.button", "params": {"button": "right", "action": "press"}})").contains("note"));
+	EXPECT_FALSE(rig.Ask(R"({"query": "input.button", "params": {"button": "left", "action": "release"}})").contains("note"));
+}
+
 TEST(InspectorInput, KeysAndActionsByName)
 {
 	Rig rig;

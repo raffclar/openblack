@@ -152,7 +152,7 @@ bool IsMoving(const CreatureLocomotion* locomotion)
 /// The creature's body as its needs see it, and back
 physiology::Shape ShapeOf(const Creature& creature)
 {
-	return {.fatness = creature.fatness, .strength = creature.strength, .size = creature.size};
+	return {.fatness = creature.fatness, .strength = creature.strength, .size = creature.size, .penSize = creature.penSize};
 }
 
 /// Takes on a changed shape; returns whether its drawn size changed
@@ -165,7 +165,8 @@ bool TakeShape(Creature& creature, Transform* transform, const physiology::Shape
 		return false;
 	}
 	creature.size = shape.size;
-	if (transform != nullptr)
+	// In its pen the pen sets how big it is drawn
+	if (transform != nullptr && !creature.penSize.has_value())
 	{
 		transform->scale = glm::vec3(ecs::archetypes::CreatureArchetype::DrawnScale(creature.species, creature.size));
 	}
@@ -328,10 +329,10 @@ void CreaturePhysiologySystem::Poo(entt::entity creature)
 	{
 		return;
 	}
-	const auto behind = transform->position - (AheadOf(*transform) * (k_PooBehind * self->size));
+	const auto behind = transform->position - (AheadOf(*transform) * (k_PooBehind * ShownSize(*self)));
 	const auto point = glm::vec3(behind.x, HeightAt(glm::vec2(behind.x, behind.z)), behind.z);
 	const auto yaw = std::uniform_real_distribution<float>(0.0f, 2.0f * std::numbers::pi_v<float>)(_random);
-	ecs::archetypes::MobileObjectArchetype::Create(point, MobileObjectInfo::LumpOfPoo, yaw, k_PooScale * self->size);
+	ecs::archetypes::MobileObjectArchetype::Create(point, MobileObjectInfo::LumpOfPoo, yaw, k_PooScale * ShownSize(*self));
 }
 
 void CreaturePhysiologySystem::Puke(entt::entity creature)
@@ -351,20 +352,21 @@ void CreaturePhysiologySystem::Puke(entt::entity creature)
 	const auto texture = textures.Handle(k_PukeSpriteSheet.value());
 	const auto ahead = AheadOf(*transform);
 	const glm::vec3 side {ahead.z, 0.0f, -ahead.x};
-	const auto mouth =
-	    transform->position + (ahead * (k_MouthAhead * self->size)) + glm::vec3(0.0f, k_MouthHeight * self->size, 0.0f);
+	const auto mouth = transform->position + (ahead * (k_MouthAhead * ShownSize(*self))) +
+	                   glm::vec3(0.0f, k_MouthHeight * ShownSize(*self), 0.0f);
 	std::uniform_real_distribution<float> unit(-1.0f, 1.0f);
 	std::uniform_real_distribution<float> green(0.4f, 0.9f);
 	for (int i = 0; i < k_PukeDrops; ++i)
 	{
 		const auto entity = registry.Create();
-		const auto velocity = (ahead * (k_PukeSpeed * self->size)) + (side * (unit(_random) * k_PukeSpread * self->size)) +
-		                      glm::vec3(0.0f, (1.0f + (0.5f * unit(_random))) * k_PukeSpeed * self->size * 0.5f, 0.0f);
+		const auto velocity = (ahead * (k_PukeSpeed * ShownSize(*self))) +
+		                      (side * (unit(_random) * k_PukeSpread * ShownSize(*self))) +
+		                      glm::vec3(0.0f, (1.0f + (0.5f * unit(_random))) * k_PukeSpeed * ShownSize(*self) * 0.5f, 0.0f);
 		const auto g = green(_random);
 		registry.Assign<CreaturePukeDrop>(entity, velocity, 0.0f);
 		registry.Assign<Sprite>(entity, texture->GetNativeHandle(), glm::vec2(0.0f), glm::vec2(k_PukeSheetCell),
 		                        glm::vec4(g * 0.6f, g, g * 0.2f, 1.0f), false);
-		registry.Assign<Transform>(entity, mouth, glm::mat3(1.0f), glm::vec3(k_PukeDropScale * self->size));
+		registry.Assign<Transform>(entity, mouth, glm::mat3(1.0f), glm::vec3(k_PukeDropScale * ShownSize(*self)));
 	}
 }
 

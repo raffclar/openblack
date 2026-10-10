@@ -31,4 +31,7 @@ namespace openblack::string_utils
 /// Extract a substring of the characters in between the first two quote of a string
 [[nodiscard]] std::string ExtractQuote(std::string& string);
 
+/// Case-insensitive comparison with a fixed-size, zero-padded name
+[[nodiscard]] bool EqualsIgnoringCase(std::string_view text, const std::array<char, 0x30>& name);
+
 } // namespace openblack::string_utils

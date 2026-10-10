@@ -131,7 +131,7 @@ def write_record(folder, pid, port, worktree, land="Land1"):
                    "build_type": "Debug", "land": land, "started": 1760000000}, file)
 
 
-def wait_for(condition, seconds=2.0):
+def wait_for(condition, seconds=20.0):
     deadline = time.monotonic() + seconds
     while not condition():
         if time.monotonic() > deadline:
@@ -202,6 +202,32 @@ class SelectGameTest(unittest.TestCase):
         {"pid": 12, "port": 47803, "worktree": "C:/projects/ob-wt-world"},
     ]
 
+    def test_a_pid_or_port_matches_however_it_comes(self):
+        # An MCP client may send 77120 as an integer, a float or text; a file may hold it either way too
+        for pid in (11, 11.0, "11", " 11 "):
+            game, error = mcp.select_game(self.games, pid=pid)
+            self.assertIsNotNone(game, error)
+            self.assertEqual(game["pid"], 11)
+        for port in (47803, "47803", 47803.0):
+            self.assertEqual(mcp.select_game(self.games, port=port)[0]["pid"], 12)
+        texts = [{**game, "pid": str(game["pid"]), "port": str(game["port"])} for game in self.games]
+        self.assertEqual(mcp.select_game(texts, pid=10)[0]["port"], "47801")
+        self.assertIsNone(mcp.select_game(self.games, pid="eleven")[0])
+
+    def test_a_build_apart_from_its_worktree_is_found_by_it(self):
+        # Built from E:/openblack/worktrees/ob-wt-gate into E:/openblack/builds/ob-wt-gate: the game names the worktree
+        games = [{"pid": 1, "port": 1, "worktree": "E:/openblack/worktrees/ob-wt-gate",
+                  "executable": "E:/openblack/builds/ob-wt-gate/bin/Debug/openblack.exe"},
+                 {"pid": 2, "port": 2, "worktree": "C:/projects/ob-wt-fish",
+                  "executable": "C:/projects/ob-wt-fish/cmake-build-debug/bin/Debug/openblack.exe"}]
+        for wanted in ("ob-wt-gate", "E:/openblack/worktrees/ob-wt-gate", "E:\\openblack\\worktrees\\ob-wt-gate\\src"):
+            self.assertEqual(mcp.select_game(games, worktree=wanted)[0]["pid"], 1, wanted)
+        self.assertEqual(mcp.select_game(games, worktree="ob-wt-fish")[0]["pid"], 2)
+        # An older build that couldn't tell its worktree is still found by the build folder named after it
+        games[0]["worktree"] = ""
+        self.assertEqual(mcp.select_game(games, worktree="ob-wt-gate")[0]["pid"], 1)
+        self.assertIsNone(mcp.select_game(games, worktree="ob-wt-none")[0])
+
     def test_by_port_and_pid(self):
         self.assertEqual(mcp.select_game(self.games, port=47802)[0]["pid"], 11)
         self.assertEqual(mcp.select_game(self.games, pid=12)[0]["port"], 47803)
@@ -246,11 +272,17 @@ class SessionBase(unittest.TestCase):
         self.running = {1001, 1002}
         self.session = self.make_session()
 
+    # How long an answer and a ping may take: generous, so that a machine busy with builds and other tests doesn't
+    # fail the tests; the tests of what happens past a limit set theirs short, or wait past these
+    ANSWER_TIMEOUT = 5.0
+    PING_TIMEOUT = 5.0
+
     def make_session(self, **options):
-        options.setdefault("ready_timeout", 2.0)
-        options.setdefault("load_timeout", 3.0)
-        return mcp.Session(self.first.port, 1.0, folder=self.folder, alive=lambda pid: pid in self.running,
-                           ping_timeout=0.5, **options)
+        options.setdefault("ready_timeout", 15.0)
+        options.setdefault("load_timeout", 15.0)
+        options.setdefault("ping_timeout", self.PING_TIMEOUT)
+        return mcp.Session(self.first.port, self.ANSWER_TIMEOUT, folder=self.folder,
+                           alive=lambda pid: pid in self.running, **options)
 
     def tearDown(self):
         self.session.close()
@@ -260,8 +292,9 @@ class SessionBase(unittest.TestCase):
 
     def add_game(self, game, worktree):
         self.games.append(game)
-        write_record(self.folder, game.pid, game.port, worktree)
+        # Running before its file is there, as a real game is: a file seen for a process not running is removed
         self.running.add(game.pid)
+        write_record(self.folder, game.pid, game.port, worktree)
         return game
 
     def stop(self, game):
@@ -276,6 +309,31 @@ class SessionBase(unittest.TestCase):
 
 class SessionTest(SessionBase):
     """The rules every call follows, so that agents sharing the adapter never get each other's game"""
+
+    def test_a_game_named_by_a_pid_as_text_is_found(self):
+        self.assertEqual(self.moon(pid="1002"), "second")
+        self.assertEqual(self.moon(port=str(self.first.port)), "first")
+
+    def test_a_file_written_with_text_numbers_is_still_a_game(self):
+        with open(os.path.join(self.folder, "1002.json"), "w", encoding="utf-8") as file:
+            json.dump({"pid": "1002", "port": str(self.second.port), "worktree": "C:/projects/ob-wt-second"}, file)
+        self.assertEqual([game["pid"] for game in mcp.read_games(self.folder, lambda pid: pid in self.running)],
+                         [1001, 1002])
+
+    def test_a_file_being_rewritten_is_read_again_not_left_out(self):
+        path = os.path.join(self.folder, "1002.json")
+        with open(path, encoding="utf-8") as file:
+            whole = file.read()
+        with open(path, "w", encoding="utf-8") as file:
+            file.write(whole[:10])
+
+        def finish():
+            time.sleep(0.05)
+            with open(path, "w", encoding="utf-8") as file:
+                file.write(whole)
+        threading.Thread(target=finish, daemon=True).start()
+        self.assertEqual([game["pid"] for game in mcp.read_games(self.folder, lambda pid: pid in self.running)],
+                         [1001, 1002])
 
     def test_lists_games_without_taking_control(self):
         answer = self.session.call("inspector_games", {})
@@ -410,31 +468,55 @@ class WaitingTest(SessionBase):
         self.assertEqual(self.moon(), "first")
         self.assertEqual(len(self.first.asked()), 4)
 
+    def test_wait_ms_bounds_the_wait_and_zero_answers_at_once(self):
+        self.stop(self.second)
+        self.first.loading = 1000
+        start = time.monotonic()
+        answer = self.session.call("game_moon", {"wait_ms": 0})
+        self.assertLess(time.monotonic() - start, 2.0)
+        self.assertFalse(answer["ok"])
+        self.assertIn("is loading Land1.txt", answer["error"])
+        answer = self.session.call("game_moon", {"wait_ms": 600})
+        self.assertFalse(answer["ok"])
+        self.assertIn("wait_ms", answer["error"])
+        # A wait long enough sees it through; wait_ms is the adapter's, never sent to the game
+        self.first.loading = 2
+        self.assertTrue(self.session.call("inspector_query", {"query": "sky.moon", "wait_ms": 20000})["ok"])
+        self.assertNotIn("wait_ms", self.first.asked()[-1].get("params", {}))
+
+    def test_the_default_wait_outlasts_a_debug_load(self):
+        self.assertGreaterEqual(mcp.Session(1, 10.0).load_timeout, 120.0)
+
     def test_a_game_loading_too_long_says_so(self):
         self.stop(self.second)
         self.first.loading = 1000
-        answer = self.session.call("game_moon", {})
+        session = self.make_session(load_timeout=2.0)
+        try:
+            answer = session.call("game_moon", {})
+        finally:
+            session.close()
         self.assertFalse(answer["ok"])
         self.assertIn("still loading Land1.txt", answer["error"])
 
     def test_an_old_game_busy_loading_is_waited_for_while_it_runs(self):
         self.stop(self.second)
         self.first.old = True
-        self.first.delay = 1.5
-        # Longer than the answer timeout (1 s), but the process runs: the answer is waited for
+        self.first.delay = self.ANSWER_TIMEOUT + 1.5
+        # Longer than the answer timeout, but the process runs: the answer is waited for
         self.assertEqual(self.moon(), "first")
 
     def test_an_old_game_that_has_gone_isnt_waited_for(self):
         self.stop(self.second)
         self.first.old = True
-        self.first.delay = 2.5
+        self.first.delay = 60.0
         self.running.discard(1001)
         write_record(self.folder, 1001, self.first.port, "C:/projects/ob-wt-first")
         # Its file is gone with its process; the default port is the first game's
         start = time.monotonic()
         with self.assertRaises(ConnectionError):
             self.session.call("game_moon", {"port": self.first.port})
-        self.assertLess(time.monotonic() - start, 2.0)
+        # Given up once an answer is overdue, not waited for until the game would answer
+        self.assertLess(time.monotonic() - start, 45.0)
 
     def test_an_answer_from_another_game_is_refused(self):
         self.second.claims = 1001
@@ -456,7 +538,11 @@ class WaitingTest(SessionBase):
 
     def test_connect_refuses_a_game_never_ready(self):
         self.second.loading = 1000
-        answer = self.session.call("inspector_connect", {"pid": 1002})
+        session = self.make_session(ready_timeout=2.0)
+        try:
+            answer = session.call("inspector_connect", {"pid": 1002})
+        finally:
+            session.close()
         self.assertFalse(answer["ok"])
         self.assertIn("is loading Land1.txt", answer["error"])
 
@@ -550,11 +636,134 @@ class ScreenshotTest(SessionBase):
         sent = [request for request in self.first.asked() if request["query"] == "screenshot.take"][0]
         self.assertEqual(sent["params"], {"frame": {"id": 12, "distance": 30}, "hide_gui": True})
 
+    def test_a_kept_picture_goes_to_the_adapters_screenshot_folder(self):
+        self.first.handlers["screenshot.take"] = lambda request: {"path": self.path, "frame": 5,
+                                                                  "params": request.get("params", {})}
+        self.describe_screenshot(["path", "frame", "hide_gui", "feature", "what", "note", "root"])
+        self.session.screenshot_root = "E:/openblack/screenshots"
+        answer = self.session.call("screenshot", {"feature": "sky/moon", "what": "full-moon", "wait": False})
+        self.assertTrue(answer["ok"], answer)
+        sent = [request for request in self.first.asked() if request["query"] == "screenshot.take"][-1]
+        self.assertEqual(sent["params"], {"feature": "sky/moon", "what": "full-moon",
+                                          "root": "E:/openblack/screenshots"})
+        # Not for a temporary one, nor over a folder the call names
+        self.session.call("screenshot", {"wait": False})
+        self.assertNotIn("root", [request for request in self.first.asked()
+                                  if request["query"] == "screenshot.take"][-1].get("params", {}))
+        self.session.call("screenshot", {"feature": "sky/moon", "what": "x", "root": "D:/s", "wait": False})
+        self.assertEqual(self.first.asked()[-1]["params"]["root"], "D:/s")
+
     def test_a_query_an_older_game_lacks_says_why(self):
         self.first.handlers["camera.frame"] = lambda request: "no query camera.frame; ask describe"
         answer = self.session.call("camera_frame", {"id": 3})
         self.assertFalse(answer["ok"])
         self.assertIn("older build", answer["error"])
+
+
+class ArgumentsTest(SessionBase):
+    """What a call's arguments become: the query's parameters go in params, and nothing given is dropped"""
+    CATALOGUE = {"ecs.entities": {"query": "ecs.entities", "parameters": [{"name": "component"}, {"name": "kind"}]},
+                 "edit.add": {"query": "edit.add", "parameters": [{"name": "id"}, {"name": "fields"}]}}
+
+    def test_call_json_is_the_parameters(self):
+        request = mcp.call_request("ecs.entities", '{"component": "Temple"}', self.CATALOGUE)
+        self.assertEqual(request, {"query": "ecs.entities", "params": {"component": "Temple"}})
+
+    def test_call_shaping_options_stay_beside_the_parameters(self):
+        request = mcp.call_request("ecs.entities", '{"component": "Tree", "near": [0, 0], "radius": 50, "limit": 5}',
+                                   self.CATALOGUE)
+        self.assertEqual(request, {"query": "ecs.entities", "params": {"component": "Tree"}, "near": [0, 0],
+                                   "radius": 50, "limit": 5})
+
+    def test_call_a_parameter_named_as_an_option_is_the_parameter(self):
+        request = mcp.call_request("edit.add", '{"id": 7, "fields": {"life": 1}}', self.CATALOGUE)
+        self.assertEqual(request, {"query": "edit.add", "params": {"id": 7, "fields": {"life": 1}}})
+
+    def test_call_reported_forms_with_the_games_own_catalogue(self):
+        # game.frame_time's ms is its parameter, not a request member the game refuses
+        self.assertEqual(mcp.call_request("game.frame_time", '{"ms": 100}'),
+                         {"query": "game.frame_time", "params": {"ms": 100}})
+        # level.testbed takes no parameters: an id goes in params, where the game refuses it by name, rather than
+        # loading the empty testbed as if it had been given (a scenario is game.scenario's id)
+        self.assertEqual(mcp.call_request("level.testbed", '{"id": "movement.course"}'),
+                         {"query": "level.testbed", "params": {"id": "movement.course"}})
+        self.assertEqual(mcp.call_request("game.scenario", '{"id": "movement.course"}'),
+                         {"query": "game.scenario", "params": {"id": "movement.course"}})
+
+    def test_the_game_refuses_by_name_what_the_call_sends(self):
+        def refuse_unknown(request):
+            known = {entry["name"] for entry in mcp.CATALOGUE[request["query"]]["parameters"]}
+            unknown = sorted(set(request.get("params", {})) - known)
+            if unknown:
+                return f"{request['query']} doesn't take {', '.join(unknown)}"
+            return {"params": request.get("params", {})}
+        for query in ("level.testbed", "game.frame_time"):
+            self.first.handlers[query] = refuse_unknown
+        refused = self.session.send(mcp.call_request("level.testbed", '{"id": "movement.course"}'), target={"pid": 1001})
+        self.assertFalse(refused["ok"])
+        self.assertIn("doesn't take id", refused["error"])
+        taken = self.session.send(mcp.call_request("game.frame_time", '{"ms": 100}'), target={"pid": 1001})
+        self.assertTrue(taken["ok"], taken)
+        self.assertEqual(taken["result"]["params"], {"ms": 100})
+
+    def test_call_screenshot_path_is_its_parameter(self):
+        # As the MCP tool sends it: the shell's path is screenshot.take's, never dropped for the temporary default
+        catalogue = {"screenshot.take": {"query": "screenshot.take",
+                                         "parameters": [{"name": "path"}, {"name": "hide_gui"}]}}
+        self.assertEqual(mcp.call_request("screenshot.take", '{"path": "E:/shots/x.png", "hide_gui": true}', catalogue),
+                         {"query": "screenshot.take", "params": {"path": "E:/shots/x.png", "hide_gui": True}})
+        self.assertEqual(mcp.call_request("screenshot.take", '{"path": "E:/shots/x.png"}'),
+                         {"query": "screenshot.take", "params": {"path": "E:/shots/x.png"}})
+
+    def test_call_describe_takes_its_query(self):
+        request = mcp.call_request("describe", '{"query": "sky.moon"}', self.CATALOGUE)
+        self.assertEqual(request, {"query": "describe", "params": {"query": "sky.moon"}})
+
+    def test_call_explicit_params_form_still_works(self):
+        request = mcp.call_request("ecs.entities", '{"params": {"component": "Tree"}, "limit": 3}', self.CATALOGUE)
+        self.assertEqual(request, {"query": "ecs.entities", "params": {"component": "Tree"}, "limit": 3})
+
+    def test_call_without_json_has_no_parameters(self):
+        self.assertEqual(mcp.call_request("sky.moon", "{}", self.CATALOGUE), {"query": "sky.moon"})
+        self.assertEqual(mcp.call_request("sky.moon", "", self.CATALOGUE), {"query": "sky.moon"})
+
+    def test_call_refuses_what_isnt_an_object(self):
+        with self.assertRaises(ValueError):
+            mcp.call_request("sky.moon", "[1]", self.CATALOGUE)
+        with self.assertRaises(ValueError):
+            mcp.call_request("sky.moon", "{nope", self.CATALOGUE)
+
+    def test_the_game_is_sent_the_parameters(self):
+        self.session.send(mcp.call_request("ecs.entities", '{"component": "Temple"}', self.CATALOGUE),
+                          target={"pid": 1001})
+        self.assertEqual(self.first.asked()[-1]["params"], {"component": "Temple"})
+        self.assertNotIn("component", self.first.asked()[-1])
+
+    def test_inspector_query_takes_parameters_beside_params(self):
+        answer = self.session.call("inspector_query", {"query": "ecs.entities", "component": "Temple", "limit": 2,
+                                                       "pid": 1001})
+        self.assertTrue(answer["ok"], answer)
+        self.assertEqual(self.first.asked()[-1]["params"], {"component": "Temple"})
+        self.assertEqual(self.first.asked()[-1]["limit"], 2)
+        clash = self.session.call("inspector_query", {"query": "ecs.entities", "params": {"component": "A"},
+                                                      "component": "B", "pid": 1001})
+        self.assertFalse(clash["ok"])
+        self.assertIn("component", clash["error"])
+
+    def test_a_value_goes_as_it_is_given(self):
+        for value in (6.0, 3, True, "text", [1, 2, 3], {"a": 1}, None):
+            self.session.call("edit_set", {"id": 157, "component": "Creature", "field": "size", "value": value,
+                                           "pid": 1001})
+            sent = self.first.asked()[-1]["params"]["value"]
+            self.assertEqual(sent, value)
+            self.assertEqual(type(sent), type(value))
+
+    def test_a_tool_refuses_arguments_it_doesnt_take(self):
+        asked = len(self.first.asked())
+        answer = self.session.call("game_moon", {"pid": 1001, "colour": "red"})
+        self.assertFalse(answer["ok"])
+        self.assertIn("colour", answer["error"])
+        self.assertEqual(len(self.first.asked()), asked)
 
 
 class SchemaTest(unittest.TestCase):
@@ -599,6 +808,18 @@ class SchemaTest(unittest.TestCase):
         self.assertIn("wait", properties)
         self.assertEqual(sorted(tool["inputSchema"]["required"]), ["id", "near", "radius"])
         self.assertEqual(tool["params"], ["id", "at", "frame", "legacy"])
+
+    def test_every_parameter_has_a_type(self):
+        # A parameter without one may be sent as text by a client (a number as "6.0")
+        for tool in mcp.TOOLS:
+            for name, prop in tool["inputSchema"]["properties"].items():
+                self.assertIn("type", prop, f"{tool['name']}.{name}")
+        value = mcp.TOOLS_BY_NAME["edit_set"]["inputSchema"]["properties"]["value"]["type"]
+        self.assertTrue({"number", "boolean", "string", "array", "object"} <= set(value))
+        self.assertIn("number", mcp.TOOLS_BY_NAME["script_set_global"]["inputSchema"]["properties"]["value"]["type"])
+        self.assertEqual(mcp.parameter_schema({"type": 'array or "all"'})["type"], ["array", "string"])
+        self.assertEqual(mcp.parameter_schema({"type": "string or integer"})["type"], ["string", "integer"])
+        self.assertIn("object", mcp.parameter_schema({"type": "any"})["type"])
 
     def test_a_missing_catalogue_is_empty(self):
         self.assertEqual(mcp.read_catalogue(os.path.join(tempfile.gettempdir(), "no-such-catalogue.json")), {})
