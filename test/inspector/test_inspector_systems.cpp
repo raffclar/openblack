@@ -24,10 +24,13 @@
 #include <ECS/Components/Abode.h>
 #include <ECS/Components/AudioEmitter.h>
 #include <ECS/Components/CreatureMind.h>
+#include <ECS/Components/Mesh.h>
 #include <ECS/Components/Physics.h>
+#include <ECS/Components/SoundTag.h>
 #include <ECS/Components/Town.h>
 #include <ECS/Components/Transform.h>
 #include <ECS/Components/Tree.h>
+#include <ECS/Components/VillageTotem.h>
 #include <ECS/Map.h>
 #include <ECS/Registry.h>
 #include <Inspector.h>
@@ -428,6 +431,23 @@ TEST(InspectorCoverage, TheAdaptersCatalogueOfQueriesIsUpToDate)
 	std::stringstream written;
 	written << file.rdbuf();
 	EXPECT_EQ(written.str(), catalogue) << path << " is out of date: run this test with OPENBLACK_UPDATE_INSPECTOR_QUERIES=1";
+}
+
+// A thing is known by what it is, not by what many kinds of thing share: a totem drawn with a mesh and heard by its
+// sound tag is a VillageTotem; one with only shared components is known by the first past its place
+TEST(InspectorEntities, KindsNameWhatAThingIs)
+{
+	ecs::Registry registry;
+	const auto drawn = Placed(registry, glm::vec3(0.0f));
+	registry.Assign<ecs::components::Mesh>(drawn, entt::id_type {0}, int8_t {0}, int8_t {-1});
+	const auto totem = Placed(registry, glm::vec3(1.0f));
+	registry.Assign<ecs::components::Mesh>(totem, entt::id_type {0}, int8_t {0}, int8_t {-1});
+	registry.Assign<ecs::components::SoundTag>(totem, entt::id_type {0}, glm::vec3(0.0f));
+	registry.Assign<ecs::components::VillageTotem>(totem);
+
+	EXPECT_EQ(Describe(registry, totem, nullptr).kind, "VillageTotem");
+	EXPECT_EQ(Describe(registry, drawn, nullptr).kind, "Mesh");
+	EXPECT_EQ(Describe(registry, registry.Create(), nullptr).kind, "Entity");
 }
 
 // A thing moving in the physics is drawn at its body, which may be far from where it stood: lists and searches give

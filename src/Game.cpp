@@ -154,6 +154,7 @@
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -358,31 +359,6 @@ void SendAdvisorsHome(bool helpScript)
 	advisors.SpiritHome(1, helpScript);
 	advisors.SpiritHome(2, helpScript);
 }
-
-/// While a land loads the game serves no frames: the inspector answers meanwhile that it is loading, so that tools
-/// wait for it rather than time out
-class InspectorLoading
-{
-public:
-	explicit InspectorLoading(std::string_view what)
-	{
-		if (Locator::inspector::has_value())
-		{
-			Locator::inspector::value().BeginLoading(what);
-		}
-	}
-	~InspectorLoading()
-	{
-		if (Locator::inspector::has_value())
-		{
-			Locator::inspector::value().EndLoading();
-		}
-	}
-	InspectorLoading(const InspectorLoading&) = delete;
-	InspectorLoading& operator=(const InspectorLoading&) = delete;
-	InspectorLoading(InspectorLoading&&) = delete;
-	InspectorLoading& operator=(InspectorLoading&&) = delete;
-};
 
 } // namespace
 
@@ -2463,7 +2439,7 @@ bool Game::Initialize() noexcept
 	}
 	// The debug inspector answers from the first frame; the game carries on without it if it can't listen. Until then,
 	// while the game's data loads, it answers that the game is loading
-	std::optional<InspectorLoading> loadingData;
+	std::optional<ecs::systems::InspectorLoading> loadingData;
 	if (_inspectPort.has_value())
 	{
 		// An agent drives it: the player's mouse and keyboard are kept out while a client is connected, so that a knock
@@ -3392,7 +3368,7 @@ bool Game::Run() noexcept
 
 bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mode look) noexcept
 {
-	const InspectorLoading loading(path.filename().generic_string());
+	const ecs::systems::InspectorLoading loading(path.filename().generic_string());
 	auto& fileSystem = Locator::filesystem::value();
 
 	if (!fileSystem.Exists(path))
@@ -3505,7 +3481,7 @@ bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept
 
 void Game::LoadTestbed() noexcept
 {
-	const InspectorLoading loading("testbed");
+	const ecs::systems::InspectorLoading loading("testbed");
 	_landPath = "testbed";
 	// No script runs on the testbed: the story's would set its time of day and stop its clock a few turns in
 	if (Locator::vm::has_value())
