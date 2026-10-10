@@ -202,6 +202,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"cameraHelpSystem", "view.state"},
     LocatorCoverage {"templeExteriorSystem", "temple.state"},
     LocatorCoverage {"templeDestructionSystem", "temple.state"},
+    LocatorCoverage {"worshipSiteSystem", "worship.sites"},
     LocatorCoverage {"handSystem", "players.hand"},
     LocatorCoverage {"handGrabSystem", "players.hand"},
     LocatorCoverage {"temple", "temple.interior"},
@@ -1649,6 +1650,7 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	    },
 	}));
 	inspector.Add(MakeTownProvider(World()));
+	inspector.Add(MakeWorshipProvider(World()));
 	inspector.Add(MakeInfluenceProvider({
 	    .hand = [](int player) -> std::optional<glm::vec3> {
 		    // Only this computer's player's hands are known; the first hand there is

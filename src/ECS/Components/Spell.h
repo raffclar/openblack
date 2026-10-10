@@ -45,6 +45,8 @@ struct SpellCaster
 	/// A player's miracle cast from a seed made without an icon of their worship (a seed from a globe or a dispenser when
 	/// they have no icon for it): the player made that seed themself, and tops up its miracle with nothing
 	bool withoutIcon {false};
+	/// A player's miracle from a seed made at a worship site's icon: the site tops it up
+	entt::entity worshipSite {entt::null};
 };
 
 /// A running miracle. Positions are points of the world.

@@ -143,6 +143,7 @@ class TempleDestructionSystemInterface;
 class PlayerSystemInterface;
 class RenderingSystemInterface;
 class TownSystemInterface;
+class WorshipSiteSystemInterface;
 class ResourceStoreSystemInterface;
 class AnimatedStaticSystemInterface;
 class TimeSystemInterface;
@@ -208,6 +209,7 @@ struct Locator
 	using cameraPathSystem = entt::locator<ecs::systems::CameraPathSystemInterface>;
 	using livingActionSystem = entt::locator<ecs::systems::LivingActionSystemInterface>;
 	using townSystem = entt::locator<ecs::systems::TownSystemInterface>;
+	using worshipSiteSystem = entt::locator<ecs::systems::WorshipSiteSystemInterface>;
 	using resourceStoreSystem = entt::locator<ecs::systems::ResourceStoreSystemInterface>;
 	using animatedStaticSystem = entt::locator<ecs::systems::AnimatedStaticSystemInterface>;
 	using weatherSystem = entt::locator<ecs::systems::WeatherSystemInterface>;
