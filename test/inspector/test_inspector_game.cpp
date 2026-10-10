@@ -8,10 +8,13 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <array>
+#include <map>
 #include <memory>
 #include <optional>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
@@ -141,7 +144,19 @@ public:
 	{
 		return {{.id = "idle.one", .name = "One", .facet = "Idle", .description = "A creature idles"}};
 	}
+	[[nodiscard]] uint32_t GetSeed() const override { return seed; }
+	void SetSeed(uint32_t value, std::optional<int64_t> pinned) override
+	{
+		seed = value;
+		date = pinned;
+		ticks = 0;
+	}
+	[[nodiscard]] std::optional<int64_t> GetPinnedDate() const override { return date; }
+	[[nodiscard]] uint32_t GetTicks() const override { return ticks; }
 
+	uint32_t seed {12345};
+	std::optional<int64_t> date;
+	uint32_t ticks {999};
 	bool paused {true};
 	uint32_t turn {10};
 	float speed {1.0f};
@@ -325,12 +340,80 @@ TEST_F(InspectorRegistry, HashOfWhereEverythingIs)
 	EXPECT_NE(Ask(_inspector, R"({"query": "ecs.hash", "params": {"component": "Tree"}})")["hash"], plain["hash"]);
 }
 
+// Entities with a component excluded are left out, as the hand is when comparing runs
+TEST_F(InspectorRegistry, HashLeavesOutExcludedEntities)
+{
+	const auto without = Ask(_inspector, R"({"query": "ecs.hash", "params": {"exclude": ["Villager"]}})");
+	EXPECT_EQ(without["entities"], 5);
+	_registry.Get<Transform>(_villager).position.x += 1.0f;
+	EXPECT_EQ(Ask(_inspector, R"({"query": "ecs.hash", "params": {"exclude": ["Villager"]}})")["hash"], without["hash"]);
+	const auto decoded = DecodeRequest(R"({"query": "ecs.hash", "params": {"exclude": ["Nope"]}})");
+	EXPECT_FALSE(_inspector.Answer(std::get<Request>(decoded)).Ok());
+}
+
 TEST_F(InspectorRegistry, UnknownComponentsAndEntitiesAreExplained)
 {
 	auto decoded = DecodeRequest(R"({"query": "ecs.entities", "params": {"component": "Nope"}})");
 	EXPECT_FALSE(_inspector.Answer(std::get<Request>(decoded)).Ok());
 	decoded = DecodeRequest(R"({"query": "ecs.entity", "params": {"id": 123456}})");
 	EXPECT_FALSE(_inspector.Answer(std::get<Request>(decoded)).Ok());
+}
+
+namespace
+{
+struct Cell
+{
+	float height {0.0f};
+	int32_t owner {0};
+};
+struct Holder
+{
+	std::vector<Cell> cells;
+	std::array<Cell, 2> pair {};
+	std::unordered_map<int32_t, float> weights;
+	std::map<std::string, Cell> named;
+	std::vector<std::vector<int32_t>> grid;
+	float scale {0.1f};
+};
+} // namespace
+
+// Containers are written as what they hold, briefly: lists as arrays, maps as their first entries, plain numbers as
+// numbers, floats in their shortest form; never as a type's name
+TEST(InspectorReflection, ContainersAreWrittenAsWhatTheyHold)
+{
+	entt::meta_ctx context;
+	reflection::Reflect<Cell>(context).Field<&Cell::height>("height").Field<&Cell::owner>("owner");
+	reflection::Reflect<Holder>(context)
+	    .Field<&Holder::cells>("cells")
+	    .Field<&Holder::pair>("pair")
+	    .Field<&Holder::weights>("weights")
+	    .Field<&Holder::named>("named")
+	    .Field<&Holder::grid>("grid")
+	    .Field<&Holder::scale>("scale");
+	Holder holder;
+	holder.cells = {{.height = 1.5f, .owner = 2}};
+	holder.pair = {Cell {.height = 0.1f, .owner = 1}, Cell {.height = 2.0f, .owner = 0}};
+	holder.weights = {{3, 0.25f}};
+	holder.named = {{"a", Cell {.height = 4.0f, .owner = 7}}};
+	holder.grid = {{1, 2}, {3}};
+	const auto json = reflection::ComponentToJson(context, entt::type_id<Holder>(), &holder);
+	EXPECT_EQ(json["cells"], Json::parse(R"([{"height": 1.5, "owner": 2}])"));
+	EXPECT_EQ(json["pair"], Json::parse(R"([{"height": 0.1, "owner": 1}, {"height": 2.0, "owner": 0}])"));
+	EXPECT_EQ(json["weights"], Json::parse(R"({"3": 0.25})"));
+	EXPECT_EQ(json["named"], Json::parse(R"({"a": {"height": 4.0, "owner": 7}})"));
+	EXPECT_EQ(json["grid"], Json::parse(R"([[1, 2], [3]])"));
+	// A float's shortest form, not its double's digits
+	EXPECT_EQ(json["scale"].dump(), "0.1");
+	EXPECT_EQ(Dump(json).find('<'), std::string::npos) << Dump(json);
+
+	// Long maps give their size and first entries
+	for (int32_t i = 0; i < 40; ++i)
+	{
+		holder.weights[i] = 1.0f;
+	}
+	const auto many = reflection::ComponentToJson(context, entt::type_id<Holder>(), &holder)["weights"];
+	EXPECT_EQ(many["size"], 40);
+	EXPECT_EQ(many["first"].size(), reflection::k_MostElements);
 }
 
 TEST(InspectorReflection, ShortTypeNames)
@@ -419,5 +502,102 @@ TEST(InspectorRunControl, StepWithAFixedFrameTimeGivesItBackAfter)
 	EXPECT_TRUE(Ask(inspector, R"({"query": "game.frame_time", "params": {"ms": 0}})")["fixed_ms"].is_null());
 
 	const auto decoded = DecodeRequest(R"({"query": "game.step", "params": {"frames": 1, "fixed_ms": 0}})");
+	EXPECT_FALSE(inspector.Answer(std::get<Request>(decoded)).Ok());
+}
+
+// Once a step has run, the frame time it ran with is gone back to what it was: game.state keeps the last step, with
+// the fixed frame time it ran with and where it started and ended, so that tools waiting for it can report it
+TEST(InspectorRunControl, TheLastStepIsReportedWithItsFixedFrameTime)
+{
+	FakeRunTarget target;
+	Inspector inspector;
+	auto provider = std::make_unique<GameProvider>(target);
+	auto* game = provider.get();
+	inspector.Add(std::move(provider));
+	EXPECT_TRUE(Ask(inspector, R"({"query": "game.state"})")["last_step"].is_null());
+	EXPECT_EQ(Ask(inspector, R"({"query": "game.state"})")["ready"], true);
+
+	const auto stepping = Ask(inspector, R"({"query": "game.step", "params": {"frames": 2, "fixed_ms": 16}})");
+	EXPECT_EQ(stepping["stepping"]["fixed_ms"], 16);
+	EXPECT_EQ(stepping["last_step"]["done"], false);
+	game->Frame();
+	target.turn = 11;
+	game->Frame();
+	game->Frame();
+	const auto state = Ask(inspector, R"({"query": "game.state"})");
+	EXPECT_TRUE(state["stepping"].is_null());
+	EXPECT_TRUE(state["fixed_ms"].is_null());
+	const auto& last = state["last_step"];
+	EXPECT_EQ(last["done"], true);
+	EXPECT_EQ(last["frames"], 2);
+	EXPECT_EQ(last["fixed_ms"], 16);
+	EXPECT_EQ(last["from_frame"], 0);
+	EXPECT_EQ(last["to_frame"], 3);
+	EXPECT_EQ(last["from_turn"], 10);
+	EXPECT_EQ(last["to_turn"], 11);
+
+	// A step without a fixed time reports the frame time set for good, or none
+	Ask(inspector, R"({"query": "game.step", "params": {"turns": 1}})");
+	EXPECT_TRUE(Ask(inspector, R"({"query": "game.state"})")["last_step"]["fixed_ms"].is_null());
+	Ask(inspector, R"({"query": "game.frame_time", "params": {"ms": 10}})");
+	Ask(inspector, R"({"query": "game.step", "params": {"frames": 1}})");
+	EXPECT_EQ(Ask(inspector, R"({"query": "game.state"})")["last_step"]["fixed_ms"], 10);
+}
+
+// game.seed reads the run's seed; given one, every random number starts again from it and the date is pinned
+TEST(InspectorRunControl, SeedStartsTheRunAgainFromASeed)
+{
+	FakeRunTarget target;
+	Inspector inspector;
+	inspector.Add(std::make_unique<GameProvider>(target));
+
+	const auto now = Ask(inspector, R"({"query": "game.seed"})");
+	EXPECT_EQ(now["seed"], 12345);
+	EXPECT_TRUE(now["date"].is_null());
+	EXPECT_EQ(now["ticks"], 999);
+
+	const auto seeded = Ask(inspector, R"({"query": "game.seed", "params": {"seed": 42}})");
+	EXPECT_EQ(seeded["seed"], 42);
+	EXPECT_EQ(seeded["date"], GameProvider::k_SeededDate);
+	EXPECT_EQ(seeded["ticks"], 0);
+
+	EXPECT_EQ(Ask(inspector, R"({"query": "game.seed", "params": {"seed": 7, "date": 1000}})")["date"], 1000);
+	const auto wall = Ask(inspector, R"({"query": "game.seed", "params": {"seed": 7, "wall_clock": true}})");
+	EXPECT_TRUE(wall["date"].is_null());
+	EXPECT_EQ(target.seed, 7u);
+
+	for (const auto* refused :
+	     {R"({"query": "game.seed", "params": {"seed": -1}})", R"({"query": "game.seed", "params": {"seed": 1.5}})",
+	      R"({"query": "game.seed", "params": {"seed": 4294967296}})", R"({"query": "game.seed", "params": {"date": 5}})",
+	      R"({"query": "game.seed", "params": {"seed": 1, "date": 5, "wall_clock": true}})"})
+	{
+		const auto decoded = DecodeRequest(refused);
+		EXPECT_FALSE(inspector.Answer(std::get<Request>(decoded)).Ok()) << refused;
+	}
+	EXPECT_EQ(target.seed, 7u);
+}
+
+// In a seeded run each land loaded starts paused, before any of its frames, so that the turns after are stepped exactly
+TEST(InspectorRunControl, ASeededRunStartsEachLoadPaused)
+{
+	FakeRunTarget target;
+	Inspector inspector;
+	auto provider = std::make_unique<GameProvider>(target);
+	auto* game = provider.get();
+	inspector.Add(std::move(provider));
+
+	target.paused = false;
+	game->Loaded();
+	EXPECT_FALSE(target.paused);
+
+	EXPECT_EQ(Ask(inspector, R"({"query": "game.seed", "params": {"seed": 3}})")["pause_on_load"], true);
+	game->Loaded();
+	EXPECT_TRUE(target.paused);
+
+	Ask(inspector, R"({"query": "game.seed", "params": {"seed": 3, "pause_on_load": false}})");
+	target.paused = false;
+	game->Loaded();
+	EXPECT_FALSE(target.paused);
+	const auto decoded = DecodeRequest(R"({"query": "game.seed", "params": {"pause_on_load": true}})");
 	EXPECT_FALSE(inspector.Answer(std::get<Request>(decoded)).Ok());
 }

@@ -11,6 +11,8 @@
 
 #include <cmath>
 
+#include <algorithm>
+#include <limits>
 #include <utility>
 
 #include <InspectorQuery.h>
@@ -169,6 +171,49 @@ glm::vec3 openblack::inspector::OriginFor(glm::vec3 focus, const CameraAngles& a
 	return focus - direction * angles.distance;
 }
 
+std::optional<FrameRequest> openblack::inspector::ParseFrameRequest(const Json& value, std::string& error)
+{
+	const auto entity =
+	    value.is_object() ? NumberMember(value, "id") : (value.is_number() ? std::optional(value.get<double>()) : std::nullopt);
+	if (!entity.has_value() || *entity < 0.0 || std::floor(*entity) != *entity ||
+	    *entity > static_cast<double>(std::numeric_limits<uint32_t>::max()))
+	{
+		error = "frame an entity by its id, or {id, yaw?, pitch?, distance?}";
+		return std::nullopt;
+	}
+	FrameRequest request {.id = static_cast<uint32_t>(*entity)};
+	if (!value.is_object())
+	{
+		return request;
+	}
+	const auto as = [](std::optional<double> number) {
+		return number.has_value() ? std::optional(static_cast<float>(*number)) : std::nullopt;
+	};
+	request.yaw = as(NumberMember(value, "yaw"));
+	request.pitch = as(NumberMember(value, "pitch"));
+	request.distance = as(NumberMember(value, "distance"));
+	if (request.pitch.has_value() && std::abs(*request.pitch) > k_SteepestPitch)
+	{
+		error = "pitch is from -89 to 89 degrees below the horizon";
+		return std::nullopt;
+	}
+	if (request.distance.has_value() && (*request.distance < k_ClosestDistance || *request.distance > k_FarthestDistance))
+	{
+		error = "distance is from 1 to 10000";
+		return std::nullopt;
+	}
+	return request;
+}
+
+CameraPose openblack::inspector::FramePose(glm::vec3 target, const FrameRequest& request, const CameraState& now)
+{
+	auto angles = AnglesOf({.origin = now.origin, .focus = now.focus});
+	angles.yaw = request.yaw.value_or(angles.yaw);
+	angles.pitch = request.pitch.value_or(angles.pitch);
+	angles.distance = std::max(request.distance.value_or(angles.distance), k_ClosestDistance);
+	return {.origin = OriginFor(target, angles), .focus = target};
+}
+
 std::unique_ptr<ProviderInterface> openblack::inspector::MakeCameraProvider(CameraControlInterface& camera)
 {
 	auto provider = std::make_unique<FunctionProvider>("camera");
@@ -227,6 +272,51 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCameraProvider(Came
 	               .needsNear = false,
 	               .writes = true},
 	              move(false));
+	provider->Add({.name = "frame",
+	               .description = "Puts the camera at once to look at an entity where it is now, from the angles and "
+	                              "distance given, the camera's own otherwise. For a moving entity in a picture, give "
+	                              "screenshot.take's frame instead: it frames it at the picture's frame",
+	               .parameters = {{.name = "id", .type = "integer", .description = "The entity", .required = true},
+	                              Optional("yaw", "number", "Degrees about the up axis: 0 looks along +z, 90 along +x"),
+	                              Optional("pitch", "number", "Degrees below the horizon"),
+	                              Optional("distance", "number", "From the camera to the entity")},
+	               .kind = ResultKind::Object,
+	               .needsNear = false,
+	               .writes = true},
+	              [&camera](const QueryContext& context) {
+		              const auto now = camera.State();
+		              if (!now.has_value())
+		              {
+			              return QueryResult::Error("there is no camera");
+		              }
+		              std::string error;
+		              const auto request = ParseFrameRequest(context.params, error);
+		              if (!request.has_value())
+		              {
+			              return QueryResult::Error(error);
+		              }
+		              const auto target = camera.EntityPosition(request->id);
+		              if (!target.has_value())
+		              {
+			              return QueryResult::Error("no entity " + std::to_string(request->id) + " with a place");
+		              }
+		              const auto pose = FramePose(*target, *request, *now);
+		              if (auto why = camera.Set(pose); !why.empty())
+		              {
+			              return QueryResult::Error(why);
+		              }
+		              const auto angles = AnglesOf(pose);
+		              return QueryResult::Value({
+		                  {"set_to",
+		                   {{"origin", Point(pose.origin)},
+		                    {"focus", Point(pose.focus)},
+		                    {"yaw", angles.yaw},
+		                    {"pitch", angles.pitch},
+		                    {"distance", angles.distance}}},
+		                  {"entity", request->id},
+		                  {"model", now->model},
+		              });
+	              });
 	provider->Add({.name = "fly",
 	               .description = "Flies the camera somewhere as the bookmarks fly it; read camera.state as it goes",
 	               .parameters = pose,

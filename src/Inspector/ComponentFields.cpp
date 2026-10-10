@@ -43,6 +43,7 @@
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Firefly.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/FlockSpell.h"
 #include "ECS/Components/Flowers.h"
@@ -91,6 +92,7 @@
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SkinOverride.h"
+#include "ECS/Components/Sky.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -414,6 +416,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::paused>("paused")
 	    .Field<&components::CreatureMindState::learnt>("learnt")
 	    .Field<&components::CreatureMindState::planner>("planner")
+	    .Field<&components::CreatureMindState::townCompassion>("townCompassion")
 	    .Field<&components::CreatureMindState::planActive>("planActive")
 	    .Field<&components::CreatureMindState::satisfiedByEffect>("satisfiedByEffect")
 	    .Field<&components::CreatureMindState::desireSeenTo>("desireSeenTo")
@@ -459,6 +462,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureObjectAction::maxReach>("maxReach")
 	    .Field<&components::CreatureObjectAction::attempts>("attempts")
 	    .Field<&components::CreatureObjectAction::flightSeconds>("flightSeconds")
+	    .Field<&components::CreatureObjectAction::givenFlightSeconds>("givenFlightSeconds")
+	    .Field<&components::CreatureObjectAction::waitsForLanding>("waitsForLanding")
+	    .Field<&components::CreatureObjectAction::thrown>("thrown")
 	    .Field<&components::CreatureObjectAction::catchHands>("catchHands")
 	    .Field<&components::CreatureObjectAction::catching>("catching")
 	    .Field<&components::CreatureObjectAction::catchTurned>("catchTurned")
@@ -559,6 +565,13 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Firefly::flightSeconds>("flightSeconds")
 	    .Field<&components::Firefly::drift>("drift")
 	    .Field<&components::Firefly::hidden>("hidden");
+	Reflect<components::FishFarm>(context)
+	    .Field<&components::FishFarm::town>("town")
+	    .Field<&components::FishFarm::place>("place")
+	    .Field<&components::FishFarm::fish>("fish")
+	    .Field<&components::FishFarm::fishermen>("fishermen")
+	    .Field<&components::FishFarm::shoal>("shoal")
+	    .Field<&components::FishFarm::shownAlpha>("shownAlpha");
 	Reflect<components::Fixed>(context)
 	    .Field<&components::Fixed::boundingCenter>("boundingCenter")
 	    .Field<&components::Fixed::boundingRadius>("boundingRadius");
@@ -825,7 +838,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Pot::amount>("amount")
 	    .Field<&components::Pot::maxAmount>("maxAmount")
 	    .Field<&components::Pot::type>("type")
-	    .Field<&components::Pot::poisoned>("poisoned");
+	    .Field<&components::Pot::poisoned>("poisoned")
+	    .Field<&components::Pot::town>("town");
 	Reflect<components::PrayerPower>(context)
 	    .Field<&components::PrayerPower::chants>("chants")
 	    .Field<&components::PrayerPower::infinite>("infinite");
@@ -854,6 +868,29 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::SkinOverride>(context)
 	    .Field<&components::SkinOverride::texture>("texture")
 	    .Field<&components::SkinOverride::uvOffset>("uvOffset");
+	Reflect<components::SkyDome>(context)
+	    .Field<&components::SkyDome::meshId>("meshId")
+	    .Field<&components::SkyDome::textureId>("textureId")
+	    .Field<&components::SkyDome::follow>("follow")
+	    .Field<&components::SkyDome::frameRows>("frameRows")
+	    .Field<&components::SkyDome::overcast>("overcast");
+	Reflect<components::DayNightCycle>(context).Field<&components::DayNightCycle::clock>("clock");
+	Reflect<components::CelestialBody>(context)
+	    .Field<&components::CelestialBody::meshId>("meshId")
+	    .Field<&components::CelestialBody::textureId>("textureId")
+	    .Field<&components::CelestialBody::alphaTextureId>("alphaTextureId");
+	Reflect<components::CelestialGlow>(context)
+	    .Field<&components::CelestialGlow::textureId>("textureId")
+	    .Field<&components::CelestialGlow::alphaTextureId>("alphaTextureId");
+	Reflect<components::Sun>(context)
+	    .Field<&components::Sun::placement>("placement")
+	    .Field<&components::Sun::colour>("colour")
+	    .Field<&components::Sun::strength>("strength");
+	Reflect<components::Moon>(context)
+	    .Field<&components::Moon::phase>("phase")
+	    .Field<&components::Moon::placement>("placement")
+	    .Field<&components::Moon::colour>("colour")
+	    .Field<&components::Moon::strength>("strength");
 	Reflect<components::SoundTag>(context)
 	    .Field<&components::SoundTag::sound>("sound")
 	    .Field<&components::SoundTag::offset>("offset")

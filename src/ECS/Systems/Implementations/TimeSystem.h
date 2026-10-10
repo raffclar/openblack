@@ -77,6 +77,11 @@ public:
 	void SetFixedFrameTime(std::optional<std::chrono::milliseconds> frameTime) override;
 	[[nodiscard]] std::optional<std::chrono::milliseconds> GetFixedFrameTime() const override { return _fixedFrameTime; }
 
+	[[nodiscard]] uint32_t GetTicks() const override { return Ticks() - _ticksEpoch; }
+	[[nodiscard]] int64_t GetUnixTime() const override;
+	void RestartClock(std::optional<int64_t> unixTime) override;
+	[[nodiscard]] std::optional<int64_t> GetPinnedDate() const override { return _pinnedDate; }
+
 private:
 	/// Sets the timer back to the current turn, from now
 	void ResetTimerToTurn();
@@ -92,8 +97,10 @@ private:
 	/// The wall clock's whole milliseconds at the last frame, and the frame's real time
 	uint32_t _lastFrameTicks {0};
 	uint32_t _frameRealMs {1};
-	std::chrono::time_point<std::chrono::steady_clock> _start;
 	std::chrono::milliseconds _elapsedTime {0};
+	/// The tick count the game's reading of the clock counts from, and the date pinned at that moment, if any
+	uint32_t _ticksEpoch {0};
+	std::optional<int64_t> _pinnedDate;
 
 	GameTimer _timer;
 	uint32_t _turn {0};

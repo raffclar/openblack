@@ -25,6 +25,7 @@
 #include "3D/MapCoords.h"
 #include "3D/ModelSurface.h"
 #include "Common/GameRandom.h"
+#include "Common/MachineClock.h"
 #include "Creature/CreatureCatch.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureMindTables.h"
@@ -642,8 +643,7 @@ bool PhysicsGameHooks::HasSunk(DynamicsSystemInterface& dynamics, PhysicsEntry& 
 
 void PhysicsGameHooks::DropSound(entt::entity object)
 {
-	const auto ticks =
-	    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+	const auto ticks = machine_clock::Ticks();
 	object_physics::TreeDropSound(object, static_cast<uint64_t>(ticks));
 }
 

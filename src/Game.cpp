@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -65,6 +66,7 @@
 #include "Camera/NearClipping.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandom.h"
+#include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
 #include "Creature/CreatureHandRules.h"
@@ -277,6 +279,31 @@ bool FeelsModel(entt::entity object)
 	const auto* info = ecs::world_objects::InfoOf(object);
 	return info == nullptr || info->type != ObjectType::TotemStatue;
 }
+/// While a land loads the game serves no frames: the inspector answers meanwhile that it is loading, so that tools
+/// wait for it rather than time out
+class InspectorLoading
+{
+public:
+	explicit InspectorLoading(std::string_view what)
+	{
+		if (Locator::inspector::has_value())
+		{
+			Locator::inspector::value().BeginLoading(what);
+		}
+	}
+	~InspectorLoading()
+	{
+		if (Locator::inspector::has_value())
+		{
+			Locator::inspector::value().EndLoading();
+		}
+	}
+	InspectorLoading(const InspectorLoading&) = delete;
+	InspectorLoading& operator=(const InspectorLoading&) = delete;
+	InspectorLoading(InspectorLoading&&) = delete;
+	InspectorLoading& operator=(InspectorLoading&&) = delete;
+};
+
 } // namespace
 
 const std::string k_WindowTitle = "openblack";
@@ -289,6 +316,7 @@ Game::Game(Arguments&& args) noexcept
     , _startTestbed(args.startTestbed || args.scenario.has_value())
     , _scenarioRequest(args.scenario)
     , _inspectPort(args.inspectPort)
+    , _seed(args.seed)
     , _inspectInputLock(args.inspectInputLock)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
     , _requestScreenshot(args.requestScreenshot)
@@ -417,7 +445,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	if (handGrab != nullptr && (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
 	{
 		// TODO(hand): a press too short to take the thing taps it
-		[[maybe_unused]] const auto tapped = handGrab->Release(SDL_GetTicks(), Locator::time::value().GetTurn());
+		[[maybe_unused]] const auto tapped = handGrab->Release(machine_clock::Ticks(), Locator::time::value().GetTurn());
 		// Let go with an empty hand that did nothing with the press, it clicks the thing or the place under it, for the
 		// scripts; not while the game is paused
 		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy() && !inTemple && !IsPaused())
@@ -440,7 +468,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		// Holding a thing, the hand makes ready to throw it
 		if (!_actionPressTaken && handHoldsThing)
 		{
-			_actionPressTaken = handGrab->Press(SDL_GetTicks(), Locator::time::value().GetTurn());
+			_actionPressTaken = handGrab->Press(machine_clock::Ticks(), Locator::time::value().GetTurn());
 		}
 		if (!_actionPressTaken)
 		{
@@ -451,7 +479,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			                                                    static_cast<glm::vec2>(glm::max(screenSize, glm::ivec2(1))),
 			                                                rayOrigin, rayDirection);
 			// While the player's creature duels, the Action button adds a move to its queue
-			if (fights.Press(rayOrigin, rayDirection, creature_fight::Button::Action, SDL_GetTicks(),
+			if (fights.Press(rayOrigin, rayDirection, creature_fight::Button::Action, machine_clock::Ticks(),
 			                 Locator::time::value().GetTurn()))
 			{
 				_actionPressTaken = true;
@@ -478,7 +506,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		// Otherwise the hand takes hold of a thing under it
 		if (!_actionPressTaken && !magic.IsHandBusy() && handGrab != nullptr)
 		{
-			_actionPressTaken = handGrab->Press(SDL_GetTicks(), Locator::time::value().GetTurn());
+			_actionPressTaken = handGrab->Press(machine_clock::Ticks(), Locator::time::value().GetTurn());
 		}
 	}
 	if (!magicTookPress && !magic.IsHandBusy() && !inTemple && event.type == SDL_MOUSEBUTTONDOWN &&
@@ -497,7 +525,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		                                                .screen = glm::vec2(event.button.x, event.button.y),
 		                                                .creature = creatureHand.CreatureUnderCursor()});
 		// While the player's creature duels, the Move button makes a move at once in place of those queued
-		if (!doubleClicked && fights.Press(rayOrigin, rayDirection, creature_fight::Button::Move, SDL_GetTicks(),
+		if (!doubleClicked && fights.Press(rayOrigin, rayDirection, creature_fight::Button::Move, machine_clock::Ticks(),
 		                                   Locator::time::value().GetTurn()))
 		{
 			_fightButton = creature_fight::Button::Move;
@@ -512,7 +540,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	    ((*_fightButton == creature_fight::Button::Move && !leftMouseButton) ||
 	     (*_fightButton == creature_fight::Button::Action && !rightMouseButton)))
 	{
-		fights.Release(SDL_GetTicks(), Locator::time::value().GetTurn());
+		fights.Release(machine_clock::Ticks(), Locator::time::value().GetTurn());
 		_fightButton.reset();
 	}
 	// Letting go of the right button lets go of the creature. Let go quickly, having neither stroked nor slapped it, the
@@ -864,8 +892,8 @@ bool Game::GameLogicLoop() noexcept
 	using namespace ecs::components;
 	using namespace ecs::systems;
 
-	const auto currentTime = std::chrono::steady_clock::now();
-	const auto delta = currentTime - _lastGameLoopTime;
+	const auto currentTime = machine_clock::Ticks();
+	const auto delta = std::chrono::milliseconds(currentTime - _lastGameLoopTime);
 	auto& clock = Locator::time::value();
 
 	// The game pauses the world while the player is in the temple, whose own turns keep the audio going
@@ -1331,6 +1359,11 @@ bool Game::Update() noexcept
 	{
 		camera.Update(deltaTime);
 	}
+	// A picture the inspector takes this frame has the camera where it asked, whatever moved it this frame
+	if (Locator::inspector::has_value())
+	{
+		Locator::inspector::value().PlaceCamera();
+	}
 	// Outside a camera with a lens of its own, the near plane follows the camera's height over the land, but for close
 	// shots: a script's, and a miracle's camera path
 	if (!camera.GetModel().GetLens().has_value() && Locator::terrainSystem::has_value())
@@ -1552,8 +1585,8 @@ bool Game::Update() noexcept
 					if (!Locator::debugGui::value().StealsFocus())
 					{
 						auto& leashes = Locator::leashSystem::value();
-						leashes.HandleInput(rayOrigin, rayDirection, static_cast<glm::vec2>(_mousePosition), SDL_GetTicks(),
-						                    _actionPressTaken);
+						leashes.HandleInput(rayOrigin, rayDirection, static_cast<glm::vec2>(_mousePosition),
+						                    machine_clock::Ticks(), _actionPressTaken);
 						_actionPressTaken = false;
 					}
 					// The gestures drawn with the hand: circles and power-ups for the miracles, the leash's gestures, and
@@ -1756,7 +1789,7 @@ bool Game::Update() noexcept
 					    .handSize = HandAnimation::SizeAtDistance(glm::distance(camera.GetOrigin(), land)),
 					    .seconds = std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count(),
 					    .gameMs = static_cast<uint32_t>(std::lround(gameTime.count())),
-					    .nowMs = SDL_GetTicks(),
+					    .nowMs = machine_clock::Ticks(),
 					    .turn = Locator::time::value().GetTurn(),
 					});
 				}
@@ -2071,13 +2104,23 @@ bool Game::Initialize() noexcept
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize game services.");
 		return false;
 	}
-	// The debug inspector answers from the first frame; the game carries on without it if it can't listen
+	// A deterministic run: every random number from the seed, the date pinned
+	if (_seed.has_value())
+	{
+		Locator::rng::value().SetRunSeed(*_seed);
+		Locator::time::value().RestartClock(ecs::systems::TimeSystemInterface::k_DeterministicDate);
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Seeded run: seed {}, date pinned", *_seed);
+	}
+	// The debug inspector answers from the first frame; the game carries on without it if it can't listen. Until then,
+	// while the game's data loads, it answers that the game is loading
+	std::optional<InspectorLoading> loadingData;
 	if (_inspectPort.has_value())
 	{
 		// An agent drives it: the player's mouse and keyboard are kept out while a client is connected, so that a knock
 		// of the mouse doesn't spoil its tests; from the start for a headless run, or never when asked
 		if (StartInspector(*_inspectPort))
 		{
+			loadingData.emplace("game data");
 			Locator::gameActionSystem::value().SetInputLockMode(_inspectInputLock);
 		}
 	}
@@ -2781,7 +2824,7 @@ bool Game::Run() noexcept
 		if (_interface && Locator::windowing::has_value())
 		{
 			const auto mouse = Locator::gameActionSystem::value().GetPointerPosition();
-			_interface->Draw(static_cast<glm::u16vec2>(Locator::windowing::value().GetSize()), mouse, SDL_GetTicks(),
+			_interface->Draw(static_cast<glm::u16vec2>(Locator::windowing::value().GetSize()), mouse, machine_clock::Ticks(),
 			                 Locator::debugGui::value().IsMouseOverWindow());
 		}
 
@@ -2792,7 +2835,11 @@ bool Game::Run() noexcept
 			{
 				Locator::rendererInterface::value().RequestScreenshot(_requestScreenshot->second);
 			}
-			Locator::debugGui::value().Draw();
+			// A picture without the debug windows: the frame's windows are made as ever but not drawn
+			if (!screenshotThisFrame || !_screenshotHidesDebugGui)
+			{
+				Locator::debugGui::value().Draw();
+			}
 		}
 
 		{
@@ -2824,6 +2871,7 @@ bool Game::Run() noexcept
 
 bool Game::LoadMap(const std::filesystem::path& path) noexcept
 {
+	const InspectorLoading loading(path.filename().generic_string());
 	auto& fileSystem = Locator::filesystem::value();
 
 	if (!fileSystem.Exists(path))
@@ -2915,6 +2963,7 @@ bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept
 
 void Game::LoadTestbed() noexcept
 {
+	const InspectorLoading loading("testbed");
 	_landPath = "testbed";
 	// No script runs on the testbed: the story's would set its time of day and stop its clock a few turns in
 	if (Locator::vm::has_value())
@@ -3041,7 +3090,7 @@ void Game::PrepareNewLand()
 
 void Game::StartNewLand()
 {
-	_lastGameLoopTime = std::chrono::steady_clock::now();
+	_lastGameLoopTime = machine_clock::Ticks();
 	_turnDeltaTime = 0ns;
 	// The game starts running, as Black & White does
 	Locator::time::value().StartGameClock(false);
@@ -3147,9 +3196,10 @@ void Game::SetTime(float time) noexcept
 	Locator::skySystem::value().SetTime(time);
 }
 
-void Game::RequestScreenshot(const std::filesystem::path& path) noexcept
+void Game::RequestScreenshot(const std::filesystem::path& path, bool hideDebugGui) noexcept
 {
 	_requestScreenshot = std::make_pair(_frameCount, path);
+	_screenshotHidesDebugGui = hideDebugGui;
 }
 
 void Game::LoadHandAnimation()

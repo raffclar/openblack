@@ -26,6 +26,7 @@
 #include <entt/entity/entity.hpp>
 #include <entt/entity/fwd.hpp>
 #include <entt/entity/registry.hpp>
+#include <entt/meta/container.hpp>
 #include <entt/meta/context.hpp>
 #include <entt/meta/factory.hpp>
 #include <entt/meta/meta.hpp>
@@ -84,6 +85,10 @@ using Comparable = std::conditional_t<
 /// What a JSON value is, for saying why it doesn't fit: "a string", "an array of 2"
 [[nodiscard]] std::string Describe(const Json& value);
 
+/// A float as the shortest number that reads back as it ("0.1", not its double's "0.10000000149011612"), so that answers
+/// stay small
+[[nodiscard]] double Shortest(float value);
+
 } // namespace detail
 
 /// A value as JSON when its type is one JSON holds directly, or a list or option of such; none for anything else, which
@@ -91,7 +96,11 @@ using Comparable = std::conditional_t<
 template <typename Type>
 [[nodiscard]] std::optional<Json> Encode(const Type& value)
 {
-	if constexpr (std::is_same_v<Type, bool> || std::is_arithmetic_v<Type> || std::is_same_v<Type, std::string>)
+	if constexpr (std::is_same_v<Type, float>)
+	{
+		return Json(detail::Shortest(value));
+	}
+	else if constexpr (std::is_same_v<Type, bool> || std::is_arithmetic_v<Type> || std::is_same_v<Type, std::string>)
 	{
 		return Json(value);
 	}
