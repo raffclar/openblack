@@ -31,16 +31,20 @@
 #include "3D/CreatureBody.h"
 #include "3D/DayNightClock.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 #include "Camera/Camera.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
+#include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureLook.h"
+#include "Creature/CreatureObjectActions.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureRoute.h"
+#include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureThrow.h"
 #include "CreatureMindSystemDetail.h"
 #include "ECS/Archetypes/PotArchetype.h"
@@ -50,6 +54,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -58,6 +63,7 @@
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -74,6 +80,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "ObjectMeasures.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -288,6 +295,40 @@ void ApplyEyes(CreatureEyes* eyes, creature_mind::Eyes look)
 }
 
 /// Sends the creature where its mind wants it to go; whether it can't go there and gives up what it is doing
+/// Turning to face a point as a script asks, or down the slope, unless it faces it already
+void FaceForScript(entt::entity creature, const creature_mind::Movement& move)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	const auto* self = registry.TryGet<const CreatureLocomotion>(creature);
+	if (transform == nullptr || self == nullptr)
+	{
+		return;
+	}
+	const glm::vec2 from {transform->position.x, transform->position.z};
+	auto point = move.point;
+	if (move.kind == creature_mind::Movement::Kind::FaceDownSlope)
+	{
+		point = creature_mind::DownSlope(from, [](glm::vec2 at) -> std::optional<float> {
+			if (!Locator::terrainSystem::has_value() || !map_coords::InBounds(glm::vec3(at.x, 0.0f, at.y)))
+			{
+				return std::nullopt;
+			}
+			return Locator::terrainSystem::value().GetHeightAt(at);
+		});
+	}
+	const auto offset = point - from;
+	const auto turn = creature_locomotion::WrapAngle(creature_locomotion::HeadingOf(offset) - self->heading);
+	// Down the slope it turns unless it stands on top of the place; to a script's point, unless it nearly faces it
+	const bool turns = move.kind == creature_mind::Movement::Kind::FaceDownSlope
+	                       ? glm::length(offset) >= creature_mind::k_OnTopOf
+	                       : creature_mind::NeedsToTurnToFace(glm::length(offset), turn);
+	if (turns)
+	{
+		Locator::creatureLocomotionSystem::value().TurnToFace(creature, point);
+	}
+}
+
 bool Move(entt::entity creature, const creature_mind::Commands& commands)
 {
 	if (!Locator::creatureLocomotionSystem::has_value())
@@ -337,6 +378,10 @@ bool Move(entt::entity creature, const creature_mind::Commands& commands)
 	case Kind::TurnToFace:
 		locomotion.TurnToFace(creature, move.point);
 		break;
+	case Kind::FacePoint:
+	case Kind::FaceDownSlope:
+		FaceForScript(creature, move);
+		break;
 	case Kind::GoNearObject:
 	case Kind::GetAwayFromObject:
 	case Kind::TurnToFaceObject:
@@ -352,6 +397,39 @@ bool IsSubMove(creature_mind::Movement::Kind kind)
 	using Kind = creature_mind::Movement::Kind;
 	return kind == Kind::GoNearObject || kind == Kind::GetAwayFromObject || kind == Kind::TurnToFaceObject ||
 	       kind == Kind::ToThrowPosition;
+}
+
+/// Where the creature's head looks for a step that gives it something to look at: the top of a thing, or its foot, a
+/// point, or the camera. It doesn't look at a thing it holds, nor at one it is walking past within ten of it.
+std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity creature, const creature_mind::Gaze& gaze,
+                                   bool moving)
+{
+	constexpr float k_NoLookWhileMovingWithin = 10.0f;
+	if (gaze.camera)
+	{
+		return Locator::camera::has_value() ? std::optional(Locator::camera::value().GetOrigin()) : std::nullopt;
+	}
+	if (!gaze.object.has_value())
+	{
+		return gaze.point;
+	}
+	const auto thing = static_cast<entt::entity>(*gaze.object);
+	const auto at = ecs::systems::object_measures::PositionOf(registry, thing);
+	const auto* self = registry.TryGet<const Transform>(creature);
+	const auto* held = registry.TryGet<const HeldByCreature>(thing);
+	if (!at.has_value() || self == nullptr || (held != nullptr && held->creature == creature) ||
+	    (moving &&
+	     glm::distance(glm::vec2(self->position.x, self->position.z), glm::vec2(at->x, at->z)) < k_NoLookWhileMovingWithin))
+	{
+		return std::nullopt;
+	}
+	const glm::vec2 flat {at->x, at->z};
+	const auto ground = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(flat) : at->y;
+	if (gaze.bottom)
+	{
+		return glm::vec3 {flat.x, ground, flat.y};
+	}
+	return glm::vec3 {flat.x, at->y + ecs::systems::object_measures::Height(registry, thing), flat.y};
 }
 
 /// The rest of the agenda is no use: it gives it up
@@ -827,6 +905,20 @@ void Order(ecs::Registry& registry, entt::entity creature, const creature_mind::
 		}
 		break;
 	case Kind::PointAt:
+		if (object.has_value() || order.seconds.has_value() || order.pointHeight.has_value())
+		{
+			// At a thing, wherever it is now and goes; or at a point in the air, as the camera
+			const auto* at =
+			    object.has_value() && registry.Valid(*object) ? registry.TryGet<const Transform>(*object) : nullptr;
+			if (object.has_value() && at == nullptr)
+			{
+				hands.Cancel(creature);
+				break;
+			}
+			const auto aim = at != nullptr ? at->position : glm::vec3 {point.x, order.pointHeight.value_or(point.y), point.z};
+			hands.PointAtFor(creature, aim, order.seconds.value_or(creature_object_actions::k_PointSeconds), object);
+			break;
+		}
 		hands.PointAt(creature, point);
 		break;
 	case Kind::Catch:
@@ -895,9 +987,6 @@ void CreatureMindSystem::ProcessTurn()
 	const auto random = [this](uint32_t range) {
 		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
 	};
-	const auto uniform = [this](float low, float high) {
-		return high > low ? std::uniform_real_distribution<float>(low, high)(_random) : low;
-	};
 	std::optional<std::vector<creature_look::Candidate>> candidates;
 	const bool night = IsNight();
 	// The creatures passing out this turn, which are knocked out once every mind has thought
@@ -906,14 +995,7 @@ void CreatureMindSystem::ProcessTurn()
 	registry.Each<const Creature, CreatureMindState, CreatureAnimation, const Transform>(
 	    [&](entt::entity entity, const Creature& creature, CreatureMindState& mind, CreatureAnimation& animation,
 	        const Transform& transform) {
-		    if (!mind.desires.has_value())
-		    {
-			    mind.desires = creature_desires::Create(SetupFor(creature.species), uniform);
-		    }
-		    if (!mind.learnt.has_value())
-		    {
-			    SetUpLearning(entity, mind);
-		    }
+		    SetUpMind(entity, creature, mind);
 		    if (mind.pendingFile != nullptr)
 		    {
 			    TakeUpFile(entity, mind);
@@ -944,12 +1026,18 @@ void CreatureMindSystem::ProcessTurn()
 			    *mind.feedbackSeconds += k_TurnSeconds;
 		    }
 		    auto* needs = registry.TryGet<CreatureNeeds>(entity);
-		    const auto body = needs != nullptr ? needs->needs : creature_physiology::Needs {};
-		    creature_desires::UpdateSources(*mind.desires,
-		                                    [&mind, &body, night](uint32_t type, const creature_desires::Desires& desires) {
-			                                    return ReadSource(type, desires, mind, body, night);
-		                                    });
-		    creature_desires::UpdateDesires(*mind.desires, k_TurnsPerSecond);
+		    // Under a script's control its desires stand still and it chooses nothing for itself: it only carries out
+		    // what it is given, and stands about once that is done
+		    const bool scripted = registry.AllOf<ScriptControlled>(entity);
+		    if (!scripted)
+		    {
+			    const auto body = needs != nullptr ? needs->needs : creature_physiology::Needs {};
+			    creature_desires::UpdateSources(*mind.desires,
+			                                    [&mind, &body, night](uint32_t type, const creature_desires::Desires& desires) {
+				                                    return ReadSource(type, desires, mind, body, night);
+			                                    });
+			    creature_desires::UpdateDesires(*mind.desires, k_TurnsPerSecond);
+		    }
 
 		    auto* eyes = registry.TryGet<CreatureEyes>(entity);
 		    // Paused, fighting or knocked out, the mind leaves the body alone
@@ -987,7 +1075,7 @@ void CreatureMindSystem::ProcessTurn()
 		    }
 		    // Free to choose what to do next, it weighs every desire's plans first; the idle policy only chooses when
 		    // none is pressing enough
-		    if (!mind.planActive && mind.idle.step >= mind.idle.agenda.size() &&
+		    if (!scripted && !mind.planActive && mind.idle.step >= mind.idle.agenda.size() &&
 		        !(needs != nullptr && needs->faint.has_value()))
 		    {
 			    // A try at a miracle that fizzled is what it shows first
@@ -1031,6 +1119,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .hands = catchStep && catching ? creature_mind::HandsState::Done : HandsOf(entity),
 		        .objectInMap = WaitedForInMap(registry, mind.idle),
 		        .feelings = FeelingsOf(mind),
+		        .choosesNext = !scripted,
 		    };
 		    const auto commands = creature_mind::Think(mind.idle, senses, random);
 		    Apply(commands, animation, eyes);
@@ -1079,7 +1168,11 @@ void CreatureMindSystem::ProcessTurn()
 
 		    // Looking about, the head turns to the most interesting thing in sight, or ahead
 		    mind.lookingAbout = commands.lookAbout;
-		    if (commands.lookAbout)
+		    if (commands.gaze.has_value())
+		    {
+			    animation.lookAt = GazePoint(registry, entity, *commands.gaze, moving);
+		    }
+		    else if (commands.lookAbout)
 		    {
 			    if (!candidates.has_value())
 			    {

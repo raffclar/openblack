@@ -55,6 +55,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "Creature/LeashRules.h"
 #include "Creature/TemplePen.h"
@@ -67,6 +68,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -84,6 +86,7 @@
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
@@ -128,6 +131,7 @@
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
+#include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
@@ -1317,7 +1321,8 @@ static float ScriptHeightOf(entt::entity object)
 	auto& registry = Locator::entitiesRegistry::value();
 	if (const auto* creature = registry.TryGet<const ecs::components::Creature>(object); creature != nullptr)
 	{
-		return script::property_rules::CreatureHeight(creature->size);
+		// As tall as its body is shown, kept within the sizes it can be drawn at
+		return script::property_rules::CreatureHeight(ecs::components::ShownSize(*creature));
 	}
 	const auto* transform = registry.TryGet<const Transform>(object);
 	const auto* mesh = registry.TryGet<const ecs::components::Mesh>(object);
@@ -1896,6 +1901,18 @@ void SetPosition() // 024 SET_POSITION
 			registry.SetDirty();
 			return;
 		}
+		// A creature is put there at once, without walking: where its walk goes from and to moves with it, so that the
+		// walk carries on from the new place rather than drawing it back
+		if (registry.AllOf<ecs::components::Creature>(object) && Locator::creatureLocomotionSystem::has_value())
+		{
+			if (registry.AnyOf<ecs::components::InHand, ecs::components::InPhysics>(object))
+			{
+				ScriptMessage("Trying to set position. Object is in the hand or flying");
+				return;
+			}
+			Locator::creatureLocomotionSystem::value().Place(object, position);
+			return;
+		}
 		auto* transform = registry.TryGet<Transform>(object);
 		if (transform != nullptr)
 		{
@@ -2166,7 +2183,7 @@ static std::vector<entt::entity> ContainerMembers(const ecs::Registry& registry,
 void MoveGameThing() // 033 MOVE_GAME_THING
 {
 	// How near a creature has to come; others go to the point itself
-	[[maybe_unused]] const auto radius = Popf();
+	const auto radius = Popf();
 	const auto position = PopVec();
 	const auto object = PopObject();
 	if (!Locator::entitiesRegistry::value().Valid(object))
@@ -2191,7 +2208,25 @@ void MoveGameThing() // 033 MOVE_GAME_THING
 		                           map_coords::FromMetres({position.x, position.z}));
 		return;
 	}
-	// TODO(opening): creatures, the weather, computer players and other things
+	if (const auto* creature = Locator::entitiesRegistry::value().TryGet<const ecs::components::Creature>(object);
+	    creature != nullptr)
+	{
+		// One in the map walks there in two goes under the script's control; one in a hand or in the air stays put
+		const auto& registry = Locator::entitiesRegistry::value();
+		const auto& transform = registry.Get<const Transform>(object);
+		const bool inMap =
+		    registry.AllOf<ecs::components::MapCellResident>(object) &&
+		    !registry.AnyOf<ecs::components::InHand, ecs::components::InPhysics, ecs::components::CarriedByTornado>(object);
+		if (inMap && Locator::creatureMindSystem::has_value())
+		{
+			Locator::creatureMindSystem::value().CarryOutForScript(
+			    object, creature_mind::MoveForScript(
+			                glm::vec2(transform.position.x, transform.position.z), position,
+			                script::property_rules::CreatureHeight(ecs::components::ShownSize(*creature)), radius));
+		}
+		return;
+	}
+	// TODO(opening): the weather, computer players and other things
 	NotImplemented();
 }
 
@@ -2214,9 +2249,12 @@ static void FacePoint(entt::entity object, glm::vec3 point)
 	}
 	if (registry.AllOf<ecs::components::Creature>(object))
 	{
-		// TODO(creature-scripting): the creature is taken into the script's hands, gives up what it was doing and turns
-		// to face the point as an action of its own; openblack has no script control of a creature's mind yet
-		NotImplemented();
+		// The script takes control of the creature, which gives up what it was doing and turns to face the point,
+		// watching it
+		if (Locator::creatureMindSystem::has_value())
+		{
+			Locator::creatureMindSystem::value().CarryOutForScript(object, creature_mind::FaceForScript(point));
+		}
 		return;
 	}
 	const float angle = script::property_rules::FacingAngle(glm::vec2(transform->position.x, transform->position.z),
@@ -3279,12 +3317,39 @@ void CreatureLearnDistinctionAboutActivityObject() // 074 CREATURE_LEARN_DISTINC
 
 void CreatureDoAction() // 075 CREATURE_DO_ACTION
 {
-	// const auto withObject = Pop().uintVal;
-	// const auto target = Pop().uintVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The thing used may be none; the creature and the thing acted on may not
+	const auto with = PopObject();
+	const auto target = PopObject();
+	const auto action = Pop().intVal;
+	const auto creature = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	const bool hasCreature = creature != entt::null && registry.Valid(creature);
+	const bool hasTarget = target != entt::null && registry.Valid(target);
+	if (!hasCreature)
+	{
+		ScriptMessage("No creature for script");
+	}
+	if (!hasTarget)
+	{
+		ScriptMessage("No object to act on for script");
+	}
+	if (!hasCreature || !hasTarget)
+	{
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(creature))
+	{
+		ScriptMessage("No creature for script");
+		return;
+	}
+	if (!Locator::creatureMindSystem::has_value() || action < 0 ||
+	    !Locator::creatureMindSystem::value().ScriptDoAction(creature, static_cast<uint32_t>(action), target,
+	                                                         with != entt::null && registry.Valid(with) ? std::optional(with)
+	                                                                                                    : std::nullopt))
+	{
+		// An action openblack's creatures can't carry out yet
+		NotImplemented(action);
+	}
 }
 
 void InCreatureHand() // 076 IN_CREATURE_HAND

@@ -64,6 +64,7 @@
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
@@ -85,6 +86,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "MagicLiving.h"
+#include "ObjectMeasures.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
@@ -673,6 +675,20 @@ const creature_mind_tables::Tables* CreatureMindSystem::GetTables()
 	return _tables.has_value() ? &*_tables : nullptr;
 }
 
+void CreatureMindSystem::SetUpMind(entt::entity creature, const Creature& body, CreatureMindState& mind)
+{
+	if (!mind.desires.has_value())
+	{
+		mind.desires = creature_desires::Create(SetupFor(body.species), [this](float low, float high) {
+			return high > low ? std::uniform_real_distribution<float>(low, high)(_random) : low;
+		});
+	}
+	if (!mind.learnt.has_value())
+	{
+		SetUpLearning(creature, mind);
+	}
+}
+
 void CreatureMindSystem::SetUpLearning(entt::entity creature, CreatureMindState& mind)
 {
 	const auto* tables = GetTables();
@@ -935,8 +951,14 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 		point = *at;
 	}
 	const auto cast = creature_plan_actions::IsCast(*executor) ? CastInfoFor(creature, action) : std::nullopt;
+	// Only what varies by chance draws one
+	auto situated = situation;
+	if (executor->build == creature_plan_actions::Build::LookButDontApproach)
+	{
+		situated.chance = Chance();
+	}
 	auto agenda = creature_plan_actions::Agenda(
-	    *executor, object, point, situation, [this](uint32_t range) { return Random(range); }, cast);
+	    *executor, object, point, situated, [this](uint32_t range) { return Random(range); }, cast);
 	if (!agenda.has_value())
 	{
 		return std::nullopt;
@@ -1004,6 +1026,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		const auto eye = Locator::camera::value().GetOrigin();
 		situation.camera = glm::vec2(eye.x, eye.z);
 	}
+	Situate(creature, situation);
 	if (mind.idle.showDesireSeconds <= 0.0f)
 	{
 		if (const auto strongest = creature_desires::StrongestShowable(desires, creature_mind::k_MinDesireShown))
@@ -1194,11 +1217,12 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
 	const auto* transform = registry.Valid(creature) ? registry.TryGet<const Transform>(creature) : nullptr;
 	const auto* tables = GetTables();
-	if (mind == nullptr || body == nullptr || transform == nullptr || tables == nullptr || !mind->learnt.has_value() ||
-	    !mind->desires.has_value())
+	if (mind == nullptr || body == nullptr || transform == nullptr || tables == nullptr)
 	{
 		return false;
 	}
+	// A creature told to do something as soon as it is made has a mind ready for it
+	SetUpMind(creature, *body, *mind);
 	const glm::vec2 position {transform->position.x, transform->position.z};
 	const auto height = k_HeightOfSizeOne * ShownSize(*body);
 	const auto random = [this](uint32_t range) { return Random(range); };
@@ -1245,6 +1269,12 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			{
 				const auto eye = Locator::camera::value().GetOrigin();
 				situation.camera = glm::vec2(eye.x, eye.z);
+			}
+			Situate(creature, situation);
+			situation.chance = Chance();
+			if (plan.instrument.has_value())
+			{
+				situation.instrument = entt::to_integral(*plan.instrument);
 			}
 			const auto point =
 			    plan.object.has_value() ? PointOf(registry, *plan.object).value_or(position) : plan.point.value_or(position);
@@ -1299,6 +1329,7 @@ bool CreatureMindSystem::CarryOutForScript(entt::entity creature, std::vector<cr
 	{
 		return false;
 	}
+	registry.AssignOrReplace<ScriptControlled>(creature);
 	// It obeys its player by following them, as far as its plan goes, which nothing it wants replaces until the agenda
 	// is over; unlike an order, it learns nothing from it
 	mind->leash.obeying = false;
@@ -1318,6 +1349,35 @@ bool CreatureMindSystem::CarryOutForScript(entt::entity creature, std::vector<cr
 	mind->satisfiedByEffect = false;
 	mind->desireSeenTo = false;
 	return true;
+}
+
+bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, entt::entity target,
+                                        std::optional<entt::entity> with)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* tables = GetTables();
+	if (tables == nullptr || action >= tables->actions.size() || !registry.Valid(creature) ||
+	    !registry.AllOf<CreatureMindState>(creature))
+	{
+		return false;
+	}
+	// The script takes control of it first, so the action's agenda is made for a creature under a script's control
+	registry.AssignOrReplace<ScriptControlled>(creature);
+	return ForcePlan(
+	    creature, {.desire = Desire::ObeyPlayer, .action = tables->actions[action].name, .object = target, .instrument = with});
+}
+
+void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::Situation& situation)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (Locator::camera::has_value())
+	{
+		situation.eye = Locator::camera::value().GetOrigin();
+	}
+	const auto* body = registry.TryGet<const Creature>(creature);
+	situation.hasPlayer = body != nullptr && body->owner != PlayerNames::NEUTRAL;
+	situation.controlledByScript = registry.AllOf<ScriptControlled>(creature);
+	situation.radius = object_measures::TwoDRadius(registry, creature);
 }
 
 bool CreatureMindSystem::HasPlayed(entt::entity creature) const
