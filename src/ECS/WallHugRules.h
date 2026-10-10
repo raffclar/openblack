@@ -111,8 +111,8 @@ enum class ThingShape : uint8_t
 	/// The outline of its model's box: one circle, or the row of circles along a long box (buildings, features, rocks,
 	/// gates and the like)
 	ModelBox,
-	/// A temple: a wide circle over its middle and seven spokes of small circles round it, two of them bent towards
-	/// each other where its way in is, the same whatever its model and size
+	/// A temple: a wide circle over its middle and seven spokes of small circles round it, the outer ends of the first
+	/// two bent towards each other, the same whatever its model and size
 	TempleRing,
 };
 

@@ -601,7 +601,7 @@ std::vector<BlockingCircle> TempleRingCircles(glm::vec2 centre, float yAngle)
 	// Every length is a share of the temple's reach, whatever the temple's size
 	constexpr float k_Reach = 21.5f;
 	constexpr int k_Spokes = 7;
-	// The two spokes either side of the way in have six circles, the others four
+	// The first two spokes have six circles, the last three bent, the others four
 	constexpr int k_BentSpokes = 2;
 	constexpr int k_StraightCircles = 3;
 	constexpr int k_PlainSpokeCircles = 4;
