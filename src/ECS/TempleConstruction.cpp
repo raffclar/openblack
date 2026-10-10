@@ -14,17 +14,25 @@
 #include <vector>
 
 #include <entt/core/hashed_string.hpp>
+#include <glm/geometric.hpp>
+#include <glm/gtx/transform.hpp>
 #include <glm/vec2.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/L3DMesh.h"
+#include "3D/LandIslandInterface.h"
 #include "Audio/GameMusic.h"
+#include "Common/GUtilsAngle.h"
 #include "ECS/Archetypes/CitadelArchetype.h"
+#include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/BuildingConstruction.h"
+#include "ECS/BuildingSiteRules.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Fire.h"
+#include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -121,12 +129,37 @@ void PlayFinishedMusic(PlayerNames owner)
 	}
 }
 
+/// A building's site goes: its builders are let go of it, and of a temple's piles of wood, those with wood in them stay
+/// on as piles of their own for anyone to take from, and the empty ones go
+void CloseSite(entt::entity building)
+{
+	auto& registry = Entities();
+	auto* site = registry.TryGet<BuildingSite>(building);
+	if (site == nullptr)
+	{
+		return;
+	}
+	for (const auto pile : site->piles)
+	{
+		if (!registry.Valid(pile) || !registry.AllOf<Pot>(pile))
+		{
+			continue;
+		}
+		if (registry.Get<const Pot>(pile).amount == 0)
+		{
+			world_objects::Remove(pile);
+		}
+		// TODO(temple-builders): a pile left with wood calls the villagers to it; piles' reactions aren't kept yet
+	}
+	registry.Remove<BuildingSite>(building);
+}
+
 /// A building is finished: no longer under construction, its site gone. A temple's heart is whole again.
 void Finish(entt::entity building)
 {
 	auto& registry = Entities();
 	registry.Remove<BuildProgress>(building);
-	registry.Remove<BuildingSite>(building);
+	CloseSite(building);
 	if (registry.AllOf<Temple>(building))
 	{
 		if (auto* life = registry.TryGet<ObjectLife>(building))
@@ -192,7 +225,7 @@ std::optional<entt::entity> construction::StartPlannedAt(glm::vec3 place, float 
 	const auto temple =
 	    archetypes::CitadelArchetype::Create(transform.position, OwnerOf(planned), planned.yAngle, transform.scale, 0.0f);
 	registry.Get<Temple>(temple).town = planned.townId;
-	registry.Assign<BuildingSite>(temple, building_construction::SiteDesire(scriptDesire));
+	OpenSite(temple, building_construction::SiteDesire(scriptDesire));
 	return temple;
 }
 
@@ -224,7 +257,7 @@ void construction::SetBuilt(entt::entity building, float built)
 	// A town's building left unfinished gets a site for its builders
 	if (!progress.finished && TownOf(building).has_value() && !registry.AllOf<BuildingSite>(building))
 	{
-		registry.Assign<BuildingSite>(building);
+		OpenSite(building, 0.0f);
 	}
 }
 
@@ -236,4 +269,99 @@ void construction::BuildBy(entt::entity building, float amount)
 		return;
 	}
 	Apply(building, building_construction::BuildBy(BuiltOf(building), amount));
+}
+
+namespace
+{
+/// The places round a building for its builders, from its model as it stands
+building_site::Places PlacesRound(entt::entity building)
+{
+	auto& registry = Entities();
+	const auto& transform = registry.Get<const Transform>(building);
+	const auto* mesh = registry.TryGet<const Mesh>(building);
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	building_site::Places places;
+	places.fill(transform.position);
+	if (mesh == nullptr || !meshes.Contains(mesh->id))
+	{
+		return places;
+	}
+	const auto& model = *meshes.Handle(mesh->id);
+	std::vector<building_site::Triangle> triangles;
+	for (const auto& surface : model.GetSurfaces())
+	{
+		for (const auto& primitive : surface.primitives)
+		{
+			for (uint32_t t = 0; t < primitive.numTriangles; ++t)
+			{
+				const auto first = primitive.indexBase + t * 3;
+				if (first + 2 >= surface.indices.size())
+				{
+					break;
+				}
+				building_site::Triangle triangle {};
+				bool inside = true;
+				for (uint32_t c = 0; c < 3; ++c)
+				{
+					const auto vertex = primitive.vertexBase + surface.indices[first + c];
+					inside = inside && vertex < surface.positions.size();
+					triangle.corners.at(c) = inside ? surface.positions[vertex] : glm::vec3(0.0f);
+				}
+				if (inside)
+				{
+					triangles.push_back(triangle);
+				}
+			}
+		}
+	}
+	const auto box = model.GetBoundingBox();
+	const auto matrix = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
+	// The model's reach is its box's half diagonal, scaled
+	const float reach = transform.scale.x * glm::length(box.Size()) * 0.5f;
+	// TODO(temple-builders): football pitches put their places on a circle (building_site::CirclePlaces)
+	return building_site::OutlinePlaces(triangles, matrix, box.Center(), reach);
+}
+} // namespace
+
+void construction::OpenSite(entt::entity building, float desire)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(building))
+	{
+		return;
+	}
+	auto& site = registry.AssignOrReplace<BuildingSite>(building);
+	site.desire = desire;
+	site.places = PlacesRound(building);
+	if (registry.AllOf<Temple>(building))
+	{
+		MakeSitePiles(building);
+	}
+}
+
+void construction::MakeSitePiles(entt::entity building)
+{
+	auto& registry = Entities();
+	auto* site = registry.TryGet<BuildingSite>(building);
+	const auto* temple = registry.TryGet<const Temple>(building);
+	if (site == nullptr || temple == nullptr)
+	{
+		return;
+	}
+	const auto& centre = registry.Get<const Transform>(building).position;
+	for (size_t i = 0; i < site->piles.size(); ++i)
+	{
+		auto& pile = site->piles.at(i);
+		if (registry.Valid(pile) && registry.AllOf<Pot>(pile))
+		{
+			continue;
+		}
+		auto position = centre + gutils::GetPointFromAngle(building_site::TemplePileAngle(temple->yAngle, i),
+		                                                   building_site::k_TemplePileDistance);
+		if (Locator::terrainSystem::has_value())
+		{
+			position.y = Locator::terrainSystem::value().GetHeightAt({position.x, position.z});
+		}
+		pile = archetypes::PotArchetype::CreateEmpty(position, 0.0f, PotInfo::MagicWood);
+	}
 }

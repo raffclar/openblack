@@ -30,6 +30,17 @@ struct DesireSort
 	uint32_t index {0};
 };
 
+/// What a town keeps count of as its people pick up, put down and build: kept as it goes rather than counted afresh, so
+/// it holds what the game's own running counts hold, wood put at the temple's site never coming off again among them
+struct TownResourceTally
+{
+	float foodCarried {0.0f};
+	float woodCarried {0.0f};
+	float woodAtSites {0.0f};
+	/// The wood its builders have built with
+	float woodUsed {0.0f};
+};
+
 /// What a town knows of its people and buildings, counted afresh each game turn for its desires
 struct TownStats
 {

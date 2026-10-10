@@ -60,6 +60,19 @@ public:
 	                    bool poisoned) = 0;
 	/// The store a pile is part of, none for a pile on its own
 	[[nodiscard]] virtual std::optional<entt::entity> StoreOf(entt::entity pile) const = 0;
+
+	/// How much of a resource a thing says it holds, as a script or a villager asks it: a store or building its count, a
+	/// pile its store's count or else its own, a building site the wood in its piles, anything else what it is worth of
+	/// that resource. A villager says none, whatever it carries.
+	[[nodiscard]] virtual uint32_t GetResource(entt::entity object, ResourceType type) const = 0;
+	/// A thing takes an amount of a resource as it takes it from a script or a villager, with nobody's giving counted:
+	/// a store into its piles, a pile into its store or itself, a building going up into its site (a temple's site into
+	/// the pile nearest a place, making its piles if it has none), a villager into its load. What it took, which for a
+	/// villager is always none.
+	virtual uint32_t AddResource(entt::entity object, ResourceType type, uint32_t amount, std::optional<glm::vec3> at) = 0;
+	/// A thing gives up to an amount of a resource, with nobody's taking counted: a store from its piles, a pile from its
+	/// store or itself, a building going up from its site's piles in turn. What it gave.
+	virtual uint32_t RemoveResource(entt::entity object, ResourceType type, uint32_t amount) = 0;
 };
 
 } // namespace openblack::ecs::systems

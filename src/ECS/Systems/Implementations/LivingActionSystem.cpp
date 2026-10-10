@@ -37,6 +37,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "VillagerAnimate.h"
+#include "VillagerBuild.h"
 #include "VillagerDance.h"
 #include "VillagerEaten.h"
 #include "VillagerFire.h"
@@ -61,6 +62,7 @@ namespace villager_dance = openblack::ecs::villager_dance;
 namespace villager_physics = openblack::ecs::villager_physics;
 namespace villager_animate = openblack::ecs::villager_animate;
 namespace villager_script = openblack::ecs::villager_script;
+namespace villager_build = openblack::ecs::villager_build;
 
 /// A villager with no state does nothing
 uint32_t VillagerInvalidState(LivingAction& /*action*/)
@@ -270,8 +272,14 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_reactions::Watching,
     },
-    /* GOTO_STORAGE_PIT_FOR_DROP_OFF */ k_TodoEntry,
-    /* ARRIVES_AT_STORAGE_PIT_FOR_DROP_OFF */ k_TodoEntry,
+    /* GOTO_STORAGE_PIT_FOR_DROP_OFF */
+    VillagerStateTableEntry {
+        .state = &villager_build::GotoStoragePitForDropOff,
+    },
+    /* ARRIVES_AT_STORAGE_PIT_FOR_DROP_OFF */
+    VillagerStateTableEntry {
+        .state = &villager_build::ArrivesAtStoragePitForDropOff,
+    },
     /* GOTO_STORAGE_PIT_FOR_FOOD */ k_TodoEntry,
     /* ARRIVES_AT_STORAGE_PIT_FOR_FOOD */ k_TodoEntry,
     /* ARRIVES_AT_HOME_WITH_FOOD */ k_TodoEntry,
@@ -290,9 +298,24 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .state = &villager_home::AtHome,
         .exitState = &villager_home::ExitAtHome,
     },
-    /* ARRIVES_AT_STORAGE_PIT_FOR_BUILDING_MATERIALS */ k_TodoEntry,
-    /* ARRIVES_AT_BUILDING_SITE */ k_TodoEntry,
-    /* BUILDING */ k_TodoEntry,
+    /* ARRIVES_AT_STORAGE_PIT_FOR_BUILDING_MATERIALS */
+    VillagerStateTableEntry {
+        .state = &villager_build::ArrivesAtStoragePitForBuildingMaterials,
+        .entryState = &villager_build::EnterBuilding,
+        .exitState = &villager_build::ExitBuilding,
+    },
+    /* ARRIVES_AT_BUILDING_SITE */
+    VillagerStateTableEntry {
+        .state = &villager_build::ArrivesAtBuildingSite,
+        .entryState = &villager_build::EnterBuilding,
+        .exitState = &villager_build::ExitBuilding,
+    },
+    /* BUILDING */
+    VillagerStateTableEntry {
+        .state = &villager_build::Building,
+        .entryState = &villager_build::EnterBuilding,
+        .exitState = &villager_build::ExitBuilding,
+    },
     /* GOTO_STORAGE_PIT_FOR_WORSHIP_SUPPLIES */ k_TodoEntry,
     /* ARRIVES_AT_STORAGE_PIT_FOR_WORSHIP_SUPPLIES */ k_TodoEntry,
     /* GOTO_WORSHIP_SITE_WITH_SUPPLIES */ k_TodoEntry,
@@ -472,7 +495,12 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* CHECK_INTERACT_WITH_ROCK */ k_TodoEntry,
     /* ARRIVES_AT_ROCK_FOR_WOOD */ k_TodoEntry,
     /* GOT_WOOD_FROM_ROCK */ k_TodoEntry,
-    /* REENTER_BUILDING_STATE */ k_TodoEntry,
+    /* REENTER_BUILDING_STATE */
+    VillagerStateTableEntry {
+        .state = &villager_build::ReenterBuildingState,
+        .entryState = &villager_build::EnterBuilding,
+        .exitState = &villager_build::ExitBuilding,
+    },
     /* ARRIVE_AT_PUSH_OBJECT */ k_TodoEntry,
     /* TAKE_WOOD_FROM_TREE */ k_TodoEntry,
     /* TAKE_WOOD_FROM_POT */ k_TodoEntry,
@@ -594,7 +622,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_home::CongregateInTownAfterEmergency,
     },
-    /* SCRIPT_IN_CROWD */ k_TodoEntry,
+    /* SCRIPT_IN_CROWD */
+    VillagerStateTableEntry {
+        .state = &villager_build::ScriptInCrowd,
+    },
     /* GO_AND_CHILLOUT_OUTSIDE_HOME */
     VillagerStateTableEntry {
         .state = &villager_home::GoAndChilloutOutsideHome,
@@ -775,6 +806,8 @@ LivingActionSystem::SetResult LivingActionSystem::ChangeTopState(LivingAction& a
 		return SetResult::Refused;
 	}
 	const auto outOf = villager_animate::OutOfClip(action, next);
+	// The state it works towards is told the state the villager was in before, as the one it now passes through is
+	const auto previous = VillagerGetState(action, LivingAction::Index::Top);
 	if (!EnterState(action, current))
 	{
 		return SetResult::EntryFailed;
@@ -782,7 +815,7 @@ LivingActionSystem::SetResult LivingActionSystem::ChangeTopState(LivingAction& a
 	if (destination.has_value())
 	{
 		const auto& entry = k_VillagerStateTable.at(static_cast<size_t>(*destination));
-		if (entry.entryState && !entry.entryState(action, current, *destination))
+		if (entry.entryState && !entry.entryState(action, previous, *destination))
 		{
 			return SetResult::EntryFailed;
 		}
@@ -840,7 +873,13 @@ void LivingActionSystem::SetTopState(LivingAction& action, VillagerStates state)
 bool LivingActionSystem::VillagerSetCurrentAndDestinationState(LivingAction& action, VillagerStates current,
                                                                VillagerStates destination) const
 {
-	return ChangeTopState(action, current, destination) == SetResult::Done;
+	const auto result = ChangeTopState(action, current, destination);
+	if (result == SetResult::EntryFailed)
+	{
+		// A state that won't be gone into leaves the villager deciding what to do
+		EnterState(action, VillagerStates::DecideWhatToDo);
+	}
+	return result == SetResult::Done;
 }
 
 void LivingActionSystem::VillagerPlayAnimThenSetState(LivingAction& action, VillagerStates next) const
