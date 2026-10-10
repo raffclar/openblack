@@ -332,6 +332,7 @@ openblack_setup_and_add_test(test_wall_hug_rules test_wall_hug_rules.cpp)
 openblack_setup_and_add_test(test_villager_age test_villager_age.cpp)
 openblack_setup_and_add_test(test_villager_needs test_villager_needs.cpp)
 openblack_setup_and_add_test(test_villager_routine test_villager_routine.cpp)
+openblack_setup_and_add_test(test_walk_arrival test_walk_arrival.cpp)
 openblack_setup_and_add_test(test_abode_knock test_abode_knock.cpp)
 openblack_setup_and_add_test(
   test_villager_animation test_villager_animation.cpp
