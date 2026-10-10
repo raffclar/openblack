@@ -73,16 +73,13 @@ void SkySystem::UpdateFrame(bool skyDrawn)
 	auto& dome = registry.Get<SkyDome>(_entities.dome);
 	const auto& clock = GetClock();
 
-	// The overcast and the moon's colour come with the land's light, as its palette gives it
-	std::optional<float> overcast;
-	uint32_t moonColour = 0xFFFFFFu;
+	// The land's light of the frame, which the renderer builds its light table from, and its palette, which gives the
+	// moon its colour
+	const LandLightPalette* palette = nullptr;
 	if (const auto& palettes = Locator::resources::value().GetLandLightPalettes();
 	    palettes.Contains(LandLightPalette::k_Id.value()))
 	{
-		const auto inputs = FrameLandLightInputs();
-		overcast = inputs.overcast;
-		moonColour =
-		    LandLightTable::GetMoonColour(*palettes.Handle(LandLightPalette::k_Id.value()), inputs.skyType, inputs.alignment);
+		palette = &*palettes.Handle(LandLightPalette::k_Id.value());
 	}
 	// The date as the game reads it: the wall clock's, or the one a seeded run pinned
 	const auto now = std::chrono::seconds(machine_clock::UnixTime());
@@ -90,9 +87,9 @@ void SkySystem::UpdateFrame(bool skyDrawn)
 	    {
 	        .scriptHour = clock.GetScriptTime(),
 	        .unixTime = now.count(),
-	        .overcast = overcast,
+	        .landLight = FrameLandLightInputs(),
+	        .palette = palette,
 	        .fog = graphics::detail_level::Fog(Locator::config::value().detailLevel),
-	        .moonColour = moonColour,
 	    },
 	    dome, registry.Get<Sun>(_entities.sun), registry.Get<Moon>(_entities.moon));
 	sky_frame::AdvanceDome(dome, GetCurrentSkyType(), skyDrawn);

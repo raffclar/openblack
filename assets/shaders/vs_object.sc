@@ -52,6 +52,25 @@ SAMPLER2D(s_blendThinFat, 4);
 SAMPLER2D(s_blendWeakStrong, 9);
 #endif // USE_MORPH
 
+#ifdef USE_BONE_PALETTE
+// Every posed villager's bones in a frame, three texels a bone (the first three rows of its matrix) in rows of
+// BONE_PALETTE_WIDTH texels (graphics::bone_palette); an instance's bones start at the w of its first column
+#define BONE_PALETTE_WIDTH 1024u
+SAMPLER2D(s_bonePalette, 2);
+
+vec4 PaletteTexel(uint texel)
+{
+	return texelFetch(s_bonePalette, ivec2(int(texel % BONE_PALETTE_WIDTH), int(texel / BONE_PALETTE_WIDTH)), 0);
+}
+
+mat4 PaletteBone(uint bone)
+{
+	uint texel = bone * 3u;
+	return mtxFromRows(PaletteTexel(texel), PaletteTexel(texel + 1u), PaletteTexel(texel + 2u),
+	                   vec4(0.0f, 0.0f, 0.0f, 1.0f));
+}
+#endif // USE_BONE_PALETTE
+
 #ifdef USE_BONE_TEXTURE
 // Many posed models of one mesh drawn at once, each with its own bones: every bone's matrix is four texels of a row, its
 // columns in turn. x: the first matrix of the draw, y: the bones of each instance, zw: the texture's width and height.
@@ -99,8 +118,16 @@ void main()
 	float blendWeight = float(a_indices.z) / 32767.0f;
 #endif // USE_MORPH
 
+#ifdef USE_BONE_PALETTE
+	// The vertex's bone, from the instance's own bones in the palette, which start where its matrix says
+	mat4 bone = PaletteBone(uint(i_data0.w + 0.5f) + modelIndex);
+#define BONE bone
+#else
+#define BONE u_model[modelIndex]
+#endif // USE_BONE_PALETTE
 #ifdef USE_INSTANCING
-	// An animal's first column carries its place among its model's instances in w, where an affine matrix has 0
+	// An instance's first column says in w where its bones are, where an affine matrix has 0: an animal's place among
+	// its model's instances, or a villager's first bone in the palette
 	mat4 model;
 	model[0] = vec4(i_data0.xyz, 0.0f);
 	model[1] = i_data1;
@@ -110,10 +137,10 @@ void main()
 	mat4 bone = BoneMatrix(u_bones.x + (i_data0.w * u_bones.y) + float(modelIndex));
 #define TO_WORLD(p) instMul(model, mul(bone, p))
 #else
-#define TO_WORLD(p) instMul(model, mul(u_model[modelIndex], p))
+#define TO_WORLD(p) instMul(model, mul(BONE, p))
 #endif // USE_BONE_TEXTURE
 #else
-#define TO_WORLD(p) mul(u_model[modelIndex], p)
+#define TO_WORLD(p) mul(BONE, p)
 #endif // USE_INSTANCING
 
 	vec3 position = a_position.xyz;
@@ -286,7 +313,7 @@ void main()
 #elif defined(USE_ENVIRONMENT)
 	// The environment-mapped mode: the environment map's coordinates are where the normal points across and up
 	// the camera's view, from 0 to 0.498
-	vec3 viewNormal = normalize(mul(u_view, mul(u_model[modelIndex], vec4(normal, 0.0f))).xyz);
+	vec3 viewNormal = normalize(mul(u_view, mul(BONE, vec4(normal, 0.0f))).xyz);
 	v_texcoord0 = vec4(a_texcoord0, (viewNormal.xy + 1.0f) * 0.498046875f);
 #else
 	v_texcoord0 = vec4(a_texcoord0, 0.0f, 0.0f);

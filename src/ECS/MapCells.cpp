@@ -13,6 +13,8 @@
 
 #include <algorithm>
 
+#include <glm/geometric.hpp>
+
 using namespace openblack::ecs::map_cells;
 using openblack::map_coords::FtoL;
 
@@ -94,6 +96,21 @@ void CellLists::Clear()
 		_cells.at(cell).mobile.clear();
 	}
 	_used.clear();
+}
+
+Outline openblack::ecs::map_cells::OutlineOfBox(glm::vec3 position, const glm::mat3& rotation, float scale, glm::vec3 boxCentre,
+                                                glm::vec3 boxHalfSize)
+{
+	// The game keeps positions as map positions
+	const glm::vec3 placed {openblack::map_coords::Quantise(position.x), position.y,
+	                        openblack::map_coords::Quantise(position.z)};
+	const glm::vec3 centre = placed + rotation * (boxCentre * scale);
+	glm::vec2 axis {(rotation * glm::vec3(1.0f, 0.0f, 0.0f)).x, (rotation * glm::vec3(1.0f, 0.0f, 0.0f)).z};
+	axis = glm::length(axis) > 0.0f ? glm::normalize(axis) : glm::vec2(1.0f, 0.0f);
+	return {.centre = {centre.x, centre.z},
+	        .halfSize = {boxHalfSize.x * scale, boxHalfSize.z * scale},
+	        .halfDiagonal = scale * glm::length(boxHalfSize),
+	        .axis = axis};
 }
 
 OutlineCircles openblack::ecs::map_cells::CirclesOf(const Outline& outline)

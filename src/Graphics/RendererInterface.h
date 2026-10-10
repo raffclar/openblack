@@ -126,6 +126,8 @@ public:
 		const TextureHandle* skinTexture;
 		/// The environment map added to the mesh where its program takes one (s_environment)
 		const Texture2D* environment;
+		/// The villagers' bones, read by the instances of a program that takes them (s_bonePalette)
+		const Texture2D* bonePalette {nullptr};
 		/// Above 0, the mesh is drawn as its environment map alone in its light, at this alpha, where its program takes
 		/// one: a frozen thing's ice shining over it
 		float environmentOnlyAlpha {0.0f};
