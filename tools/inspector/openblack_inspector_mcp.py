@@ -39,6 +39,7 @@ Run it with --call QUERY [JSON] to send a single request from a shell, without M
 import argparse
 import json
 import os
+import shutil
 import socket
 import sys
 import tempfile
@@ -783,9 +784,24 @@ def pid_alive(pid):
     return True
 
 
+def remove_stale_shots(folder, alive=pid_alive):
+    """Removes the picture folders (shots/<pid>) of games whose processes have gone; anything else is left"""
+    shots = os.path.join(folder, "shots")
+    try:
+        names = os.listdir(shots)
+    except OSError:
+        return
+    for name in names:
+        path = os.path.join(shots, name)
+        if not name.isdigit() or int(name) == 0 or not os.path.isdir(path) or alive(int(name)):
+            continue
+        shutil.rmtree(path, ignore_errors=True)
+
+
 def read_games(folder, alive=pid_alive):
-    """The games whose files are in the folder and whose processes run, by pid. Files of games that have gone are
-    removed; files that aren't a game's, or can't be read, are left."""
+    """The games whose files are in the folder and whose processes run, by pid. Files and picture folders of games
+    that have gone are removed; files that aren't a game's, or can't be read, are left."""
+    remove_stale_shots(folder, alive)
     games = []
     try:
         names = os.listdir(folder)

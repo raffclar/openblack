@@ -166,6 +166,26 @@ class ReadGamesTest(unittest.TestCase):
         for kept in ("100.json", "300.json", "400.json", "500.json", "frame_12.png"):
             self.assertTrue(os.path.exists(os.path.join(self.folder, kept)), kept)
 
+    def test_shots_of_games_that_have_gone_are_removed(self):
+        write_record(self.folder, 100, 47801, "C:/projects/ob-wt-a")
+        shots = os.path.join(self.folder, "shots")
+        for pid in ("100", "200", "300"):
+            os.makedirs(os.path.join(shots, pid))
+            with open(os.path.join(shots, pid, "frame_12.png"), "w", encoding="utf-8") as file:
+                file.write("picture")
+        os.makedirs(os.path.join(shots, "notes"))
+        with open(os.path.join(shots, "400"), "w", encoding="utf-8") as file:
+            file.write("a file, not a game's folder")
+
+        games = mcp.read_games(self.folder, lambda pid: pid == 100)
+
+        self.assertEqual([game["pid"] for game in games], [100])
+        self.assertTrue(os.path.exists(os.path.join(shots, "100", "frame_12.png")))
+        self.assertFalse(os.path.exists(os.path.join(shots, "200")))
+        self.assertFalse(os.path.exists(os.path.join(shots, "300")))
+        self.assertTrue(os.path.isdir(os.path.join(shots, "notes")))
+        self.assertTrue(os.path.isfile(os.path.join(shots, "400")))
+
     def test_a_missing_folder_has_no_games(self):
         self.assertEqual(mcp.read_games(os.path.join(self.folder, "absent"), lambda pid: True), [])
 

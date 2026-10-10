@@ -17,6 +17,7 @@
 #include <system_error>
 #include <utility>
 
+#include <InspectorDiscovery.h>
 #include <LHVM.h>
 #include <glm/trigonometric.hpp>
 
@@ -635,7 +636,6 @@ std::string GameScreenshots::Capture(const std::filesystem::path& path, bool hid
 
 std::filesystem::path GameScreenshots::Directory() const
 {
-	std::error_code error;
-	const auto temp = std::filesystem::temp_directory_path(error);
-	return (error ? std::filesystem::current_path(error) : temp) / "openblack-inspector";
+	// The game's own folder, so that two games never write the same file; it goes when the game does
+	return discovery::ShotsFolder(discovery::DefaultFolder(), discovery::CurrentProcessId());
 }

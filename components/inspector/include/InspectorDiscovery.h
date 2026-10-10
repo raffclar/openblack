@@ -21,7 +21,8 @@
 
 /// How tools find the games whose inspector is running: while it listens, each game keeps a small JSON file named after
 /// its process in a shared folder under the temporary directory, saying which port it is on and what it is. A clean exit
-/// removes the file; a file whose process has gone is stale, ignored and removed by whoever reads it.
+/// removes the file; a file whose process has gone is stale, ignored and removed by whoever reads it. Pictures taken
+/// without a path go in the game's own folder, shots/<pid>, which goes the same way as the file.
 namespace openblack::inspector::discovery
 {
 
@@ -49,6 +50,9 @@ struct GameRecord
 [[nodiscard]] std::filesystem::path DefaultFolder();
 /// A game's file in a folder: <pid>.json
 [[nodiscard]] std::filesystem::path FileFor(const std::filesystem::path& folder, uint32_t pid);
+/// A game's own folder for pictures taken without a path: shots/<pid> in the folder, apart from the files and from
+/// every other game's
+[[nodiscard]] std::filesystem::path ShotsFolder(const std::filesystem::path& folder, uint32_t pid);
 
 [[nodiscard]] uint32_t CurrentProcessId();
 /// The running program's file, empty if the system won't say
@@ -60,11 +64,12 @@ struct GameRecord
 
 using AliveCheck = std::function<bool(uint32_t pid)>;
 
-/// The games whose files are in a folder and whose processes run, by pid. Files of processes that have gone are
-/// removed; files that can't be read are skipped.
+/// The games whose files are in a folder and whose processes run, by pid. Files and picture folders of processes that
+/// have gone are removed; files that can't be read are skipped.
 [[nodiscard]] std::vector<GameRecord> ReadGames(const std::filesystem::path& folder, const AliveCheck& alive);
 
-/// A game's file, written as it is made, rewritten as the record changes and removed as it goes
+/// A game's file, written as it is made, rewritten as the record changes and removed as it goes, with the game's picture
+/// folder
 class DiscoveryFile
 {
 public:
