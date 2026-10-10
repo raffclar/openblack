@@ -157,6 +157,11 @@ public:
 		return _registry.view<Components...>().size();
 	}
 	[[nodiscard]] decltype(auto) Valid(entt::entity entity) const { return _registry.valid(entity); }
+	/// The registry beneath, read without knowing its component types, as the debug inspector lists entities
+	[[nodiscard]] const entt::registry& Underlying() const { return _registry; }
+	/// The same written to, as the debug inspector adds, removes and sets components by their names; whoever writes
+	/// through it marks what is drawn as changed
+	[[nodiscard]] entt::registry& Underlying() { return _registry; }
 	/// Told whenever an entity gains a component, or loses one (also as it is destroyed)
 	template <typename Component>
 	[[nodiscard]] decltype(auto) OnConstruct()

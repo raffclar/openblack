@@ -26,9 +26,14 @@ uniform vec4 u_keepBelow;
 // The creature spells' looks: the ice a frozen creature is sheened with by how frozen it is (a positive v_haze.w), and
 // the static one fizzing out of sight is drawn through, which slides across its skin by u_creatureSpellLook.xy
 SAMPLER2D(s_iceEnvironment, 10);
-// The ice's alpha, which weighs how much of it is added (the stage the vertex shaders of other objects read their height
-// map from)
+// The ice's alpha, which weighs how much of it is added. Every stage is taken by one shader or another: it goes at the
+// environment map's, which no creature's shader samples, and environment-mapped meshes, which are never frozen, have it at
+// the height map's, which their vertex shader doesn't sample
+#ifdef USE_ENVIRONMENT
 SAMPLER2D(s_iceEnvironmentAlpha, 1);
+#else
+SAMPLER2D(s_iceEnvironmentAlpha, 5);
+#endif // USE_ENVIRONMENT
 SAMPLER2D(s_staticAlpha, 15);
 // A creature fizzing out of sight is drawn twice. z 1: its depth alone, wherever the static's alpha is at least w; z 2:
 // its body, blended at w, over just that depth. z 0 for anything else, with w how frozen a piece of a creature drawn on its

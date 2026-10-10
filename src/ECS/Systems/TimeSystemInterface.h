@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <chrono>
+#include <optional>
 
 #include <entt/fwd.hpp>
 
@@ -59,6 +60,11 @@ public:
 	/// The game's speed: 1 is normal and 2 twice as fast. The time already gone keeps the speed it went at
 	virtual void SetSpeed(float speed) = 0;
 	[[nodiscard]] virtual float GetSpeed() const = 0;
+
+	/// For stepping the game deterministically, as the debug inspector does: each frame takes this long, whatever the
+	/// wall clock says, until it is set back to none. The clock carries on from where it was either way.
+	virtual void SetFixedFrameTime([[maybe_unused]] std::optional<std::chrono::milliseconds> frameTime) {}
+	[[nodiscard]] virtual std::optional<std::chrono::milliseconds> GetFixedFrameTime() const { return std::nullopt; }
 };
 
 /// What the hand and the camera step by in a frame: the frame's real time, except while a script holds the widescreen

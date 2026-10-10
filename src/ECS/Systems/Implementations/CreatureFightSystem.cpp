@@ -251,26 +251,25 @@ std::vector<feedback::Capsule> BodyOf(const ecs::Registry& registry, entt::entit
 	                              feedback::k_BodyRadiusShare * HeightOf(body->size));
 }
 
-/// Where a creature is taken when knocked out: the home its leash keeps it at, else its player's temple, else where it
-/// stood as the fight started
-/// Where a temple keeps its player's creature: the first place its mesh marks, turned and moved with the temple, or the
-/// temple itself when its mesh marks none
-glm::vec3 TempleCreatureHome(const Transform& transform, const Mesh* mesh)
+/// Where a temple keeps its player's creature: the pen its mesh marks in front of it, turned and moved with the temple.
+/// None when its mesh marks no pen
+std::optional<glm::vec3> TemplePenOf(const Transform& transform, const Mesh* mesh)
 {
-	if (mesh != nullptr && Locator::resources::has_value())
+	if (mesh == nullptr || !Locator::resources::has_value())
 	{
-		const auto& meshes = Locator::resources::value().GetMeshes();
-		if (meshes.Contains(mesh->id) && !meshes.Handle(mesh->id)->GetExtraMetrics().empty())
-		{
-			const auto local = glm::vec3(meshes.Handle(mesh->id)->GetExtraMetrics().front()[3]);
-			return transform.position + (transform.rotation * (local * transform.scale));
-		}
+		return std::nullopt;
 	}
-	return transform.position;
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	if (!meshes.Contains(mesh->id))
+	{
+		return std::nullopt;
+	}
+	return creature_mode::TemplePen(transform.position, transform.rotation, transform.scale,
+	                                meshes.Handle(mesh->id)->GetExtraMetrics());
 }
 
-/// A creature's pen, where it is carried when it passes out: the home it was given, its player's temple's place for it,
-/// or else the fallback
+/// A creature's home, where it is carried when it passes out: its player's temple's pen while the temple stands, else
+/// the home it was given, or else the fallback
 glm::vec3 HomeOf(ecs::Registry& registry, entt::entity creature, glm::vec3 fallback)
 {
 	const auto* leash = registry.TryGet<const CreatureLeash>(creature);
@@ -280,7 +279,7 @@ glm::vec3 HomeOf(ecs::Registry& registry, entt::entity creature, glm::vec3 fallb
 	    [&registry, &temple, owner](entt::entity entity, const Temple& building, const Transform& transform) {
 		    if (building.owner == owner && !temple.has_value())
 		    {
-			    temple = TempleCreatureHome(transform, registry.TryGet<const Mesh>(entity));
+			    temple = TemplePenOf(transform, registry.TryGet<const Mesh>(entity));
 		    }
 	    });
 	return creature_mode::PenOf(leash != nullptr ? leash->home : std::nullopt, temple, fallback);
@@ -745,6 +744,36 @@ void CreatureFightSystem::AbortFight(entt::entity creature)
 		{
 			Leave(self);
 		}
+	}
+}
+
+void CreatureFightSystem::Withdraw(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* fighting = registry.TryGet<const CreatureFighting>(creature);
+	if (fighting == nullptr)
+	{
+		return;
+	}
+	const auto opponent = fighting->opponent;
+	const auto arena = fighting->arenaEntity;
+	AbortFight(creature);
+	// It leaves at once, rather than finishing and standing, and lets go of an arena it made
+	Leave(creature);
+	// What it fought and where forget it: the opponent plays out the end of its fight alone
+	if (auto* other = registry.Valid(opponent) ? registry.TryGet<CreatureFighting>(opponent) : nullptr;
+	    other != nullptr && other->opponent == creature)
+	{
+		other->opponent = entt::null;
+	}
+	if (auto* taken = registry.Valid(arena) ? registry.TryGet<CreatureArena>(arena) : nullptr; taken != nullptr)
+	{
+		taken->first = taken->first == creature ? entt::null : taken->first;
+		taken->second = taken->second == creature ? entt::null : taken->second;
+	}
+	if (_view.has_value() && (_view->first == creature || _view->second == creature))
+	{
+		EndView();
 	}
 }
 
@@ -2059,7 +2088,8 @@ void CreatureFightSystem::ProcessKnockedOut()
 				auto* locomotion = registry.TryGet<CreatureLocomotion>(entity);
 				if (knockedOut.home.has_value() && locomotion != nullptr)
 				{
-					PlaceAt(*locomotion, registry.Get<Transform>(entity), *knockedOut.home);
+					// The temple's pen is taken again now, as the home follows the temple every turn
+					PlaceAt(*locomotion, registry.Get<Transform>(entity), HomeOf(registry, entity, *knockedOut.home));
 					registry.SetDirty();
 				}
 				SetFizz(entity, 0.0f, creature_fizz::k_CarryHomeSeconds);

@@ -17,7 +17,6 @@
 
 #include "3D/DayNightClock.h"
 #include "3D/LandLightTable.h"
-#include "3D/SkyInterface.h"
 #include "3D/VillageLights.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
@@ -27,6 +26,7 @@
 #include "ECS/Components/VillageLight.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "Locator.h"

@@ -13,12 +13,21 @@
 
 #include <optional>
 #include <string_view>
+#include <vector>
 
 #include <entt/core/fwd.hpp>
 #include <entt/entity/entity.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/ModelSurface.h"
 #include "Enums.h"
+#include "Particles/PlasmaCommand.h"
+
+namespace openblack
+{
+class GameRandomInterface;
+}
 
 namespace openblack::ecs
 {
@@ -26,8 +35,8 @@ class Registry;
 }
 
 /// What a temple's destruction needs of the rest of the game: the entities, the turn's length, the local player, its
-/// sounds and spot visuals, a random share, the game-over script and taking the temple away. The game's own world works
-/// through the game's systems; tests give a fake.
+/// sounds, spot visuals and plasma beams, its heart's model, random numbers, the game-over script and taking the temple away.
+/// The game's own world works through the game's systems; tests give a fake.
 namespace openblack::ecs::temple_world
 {
 
@@ -53,6 +62,17 @@ public:
 	                                                PlayerNames player) = 0;
 	/// The spot visual stays over a thing
 	virtual void FollowWithSpotVisual(uint32_t visual, entt::entity target) = 0;
+	/// A spot visual's magnitude, which scales its particles, set after it was made
+	virtual void SetSpotVisualMagnitude(uint32_t visual, float magnitude) = 0;
+	/// Whether a spot visual is still going
+	[[nodiscard]] virtual bool SpotVisualRunning(uint32_t visual) const = 0;
+	/// A plasma beam fired from a spot visual
+	virtual void AddPlasma(uint32_t source, const particles::PlasmaCommand& command) = 0;
+	/// The triangles of the drawn parts of a thing's model, in the model's space, and where the model is placed
+	[[nodiscard]] virtual std::vector<model_surface::Triangle> DrawnTrianglesOf(entt::entity object) const = 0;
+	[[nodiscard]] virtual glm::mat4 PlacementOf(entt::entity object) const = 0;
+	/// The game's random numbers, none when there are none
+	[[nodiscard]] virtual GameRandomInterface* Random() = 0;
 
 	/// A random share of the game's synced draws, from nothing up to the spread
 	[[nodiscard]] virtual float RandomShare(float spread) = 0;

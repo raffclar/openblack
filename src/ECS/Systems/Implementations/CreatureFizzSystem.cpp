@@ -19,6 +19,7 @@
 #include "ECS/Components/CreatureFizz.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/CreatureRemoval.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -94,10 +95,13 @@ void CreatureFizzSystem::ProcessTurn()
 			spells->fizz = component.fizz.now;
 		}
 	});
-	// Fizzed right out for good, it leaves the world
+	// Fizzed right out for good, it leaves the game the way any deleted creature does
 	for (const auto entity : gone)
 	{
-		registry.Destroy(entity);
+		if (!ecs::creature_removal::RemoveFromGame(entity))
+		{
+			registry.Destroy(entity);
+		}
 	}
 	if (!gone.empty())
 	{

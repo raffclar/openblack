@@ -36,9 +36,11 @@ public:
 	TownSystem(const TownSystem&) = delete;
 	TownSystem& operator=(const TownSystem&) = delete;
 
-	[[nodiscard]] entt::entity FindAbodeWithSpace(entt::entity townEntity) const override;
+	[[nodiscard]] entt::entity FindAbodeWithSpace(entt::entity town, entt::entity villager, float leastScore) const override;
 	[[nodiscard]] entt::entity FindClosestTown(const glm::vec3& point) const override;
-	void AddHomelessVillagerToTown(entt::entity townEntity, entt::entity villagerEntity) override;
+	bool AddVillagerToTown(entt::entity town, entt::entity villager) override;
+	void AddVillagerToAbode(entt::entity abode, entt::entity villager) override;
+	bool MakeHomeless(entt::entity villager) override;
 	[[nodiscard]] bool CheckForClearArea(glm::vec2 point, float radius, ClearAreaFilter filter,
 	                                     entt::entity ignore) const override;
 	[[nodiscard]] std::optional<glm::vec2> FindClearArea(glm::vec2 point, float searchRadius, float step, float radius,

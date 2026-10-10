@@ -48,7 +48,6 @@
 #include "3D/OceanInterface.h"
 #include "3D/OrientedText.h"
 #include "3D/Rain.h"
-#include "3D/SkyInterface.h"
 #include "3D/SnowCover.h"
 #include "3D/TempleDoors.h"
 #include "3D/TempleInteriorInterface.h"
@@ -82,6 +81,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
 #include "ECS/Components/MistDome.h"
+#include "ECS/Components/Sky.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Temple.h"
@@ -103,6 +103,7 @@
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -211,6 +212,8 @@ namespace
 {
 /// A creature frozen or fizzed this far casts no shadow
 constexpr float k_NoShadowSpellLook = 0.2f;
+/// How many buffers the frames are drawn into in turn
+constexpr uint8_t k_BackBuffers = 3;
 /// How deep the snow lies over the island, as a texture the shaders read point by point, refreshed when the snow
 /// changes; none without snow
 const Texture2D* SnowDepth(std::unique_ptr<Texture2D>& texture, std::optional<uint32_t>& revision)
@@ -431,6 +434,9 @@ std::unique_ptr<RendererInterface> RendererInterface::Create(GraphicsBackend bac
 		bgfxReset |= BGFX_RESET_VSYNC;
 	}
 	init.resolution.reset = bgfxReset;
+	// Three buffers to draw into: with two, a frame waits for the one on screen to be let go of, a whole refresh or two
+	// whenever the window is composited, as Direct3D 12 windows often are
+	init.resolution.numBackBuffers = k_BackBuffers;
 	init.callback = dynamic_cast<bgfx::CallbackI*>(bgfxCallback.get());
 
 	if (!bgfx::init(init))
@@ -576,7 +582,7 @@ const Texture2D* GetTexture(uint32_t skinID, const std::unordered_map<SkinId, st
 		}
 		else
 		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Could not find the texture");
+			SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Could not find the texture {:#x}", skinID);
 		}
 	}
 
@@ -665,7 +671,7 @@ void BindCreatureSpellLooks(const ShaderProgram& program)
 	const auto& textures = Locator::resources::value().GetTextures();
 	constexpr std::array<std::pair<const char*, std::pair<uint8_t, entt::hashed_string>>, 3> k_Looks {{
 	    {"s_iceEnvironment", {10, entt::hashed_string("raw/S_IceEnvMap")}},
-	    {"s_iceEnvironmentAlpha", {1, entt::hashed_string("raw/S_IceEnvMapa")}},
+	    {"s_iceEnvironmentAlpha", {5, entt::hashed_string("raw/S_IceEnvMapa")}},
 	    {"s_staticAlpha", {15, entt::hashed_string("raw/S_Statica")}},
 	}};
 	for (const auto& [sampler, binding] : k_Looks)
@@ -852,9 +858,11 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 		modelMatrices = &jointModel;
 	}
 	// A creature's body takes its blended skins in place of its base mesh's. A draw given a skin of its own (the
-	// temple's icons) binds that for every skinned primitive, so their own skins aren't looked up.
-	const auto skinOf = [&desc, &skins](uint32_t skinID) -> const Texture2D* {
-		if (desc.skinTexture != nullptr && skinID != 0xFFFFFFFF)
+	// temple's icons) binds that for every skinned primitive, and a submesh drawn with a texture of its own (the
+	// citadel's leash collars) never samples its primitives' skins, which its mesh may not even have, so neither looks
+	// them up.
+	const auto skinOf = [&desc, &skins, subMeshTexture](uint32_t skinID) -> const Texture2D* {
+		if (subMeshTexture != nullptr || (desc.skinTexture != nullptr && skinID != 0xFFFFFFFF))
 		{
 			return nullptr;
 		}
@@ -2056,9 +2064,9 @@ void Renderer::DrawLightBeams(const DrawSceneDesc& desc) const
 
 void Renderer::DrawMesh(const graphics::L3DMesh& mesh, const L3DMeshSubmitDesc& desc, uint8_t subMeshIndex) const noexcept
 {
+	// Some of the game's meshes hold no geometry at all, like the singing stones' centre: there is nothing to draw
 	if (mesh.GetNumSubMeshes() == 0)
 	{
-		SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "Mesh {} has no submeshes to draw", mesh.GetDebugName());
 		return;
 	}
 
@@ -3196,29 +3204,27 @@ void Renderer::DrawRain(const DrawSceneDesc& desc) const
 
 void Renderer::DrawMoon(RenderPass viewId) const
 {
-	if (!Locator::camera::has_value())
+	if (!Locator::camera::has_value() || !Locator::skySystem::has_value())
 	{
 		return;
 	}
-	const auto placement = moon::Place(Locator::skySystem::value().GetClock().GetScriptTime());
-	if (!placement)
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto moonEntity = Locator::skySystem::value().GetMoon();
+	const auto [moon, body, glowLook] =
+	    registry.TryGet<ecs::components::Moon, ecs::components::CelestialBody, ecs::components::CelestialGlow>(moonEntity);
+	if (moon == nullptr || body == nullptr || !moon->placement.has_value())
 	{
 		return;
 	}
 	// The moon keeps its place beside the player's camera and faces it. Drawn so in the mirrored view, it is mirrored
 	// in the sea with everything else.
 	const auto& camera = Locator::camera::value();
-	const auto centre = camera.GetOrigin() + placement->offset;
+	const auto centre = camera.GetOrigin() + moon->placement->offset;
 	const auto view = camera.GetViewMatrix(Camera::Interpolation::Current);
 	const auto basis = moon::Basis(view, glm::inverse(view), centre);
-	const auto moonColour = _landLightTable ? _landLightTable->GetMoonColour() : 0xFFFFFFu;
-	const glm::vec3 colour = glm::vec3(static_cast<float>((moonColour >> 16) & 0xFFu),
-	                                   static_cast<float>((moonColour >> 8) & 0xFFu), static_cast<float>(moonColour & 0xFFu)) /
-	                         255.0f;
+	const auto& colour = moon->colour;
 	// It shows less through an overcast
-	const float alpha =
-	    sky_dome::ThroughOvercast(placement->alpha, _overcast, detail_level::Fog(Locator::config::value().detailLevel)) /
-	    255.0f;
+	const float alpha = moon->strength / 255.0f;
 	if (alpha <= 0.0f)
 	{
 		return;
@@ -3226,15 +3232,13 @@ void Renderer::DrawMoon(RenderPass viewId) const
 
 	// First its glow, added to the sky
 	const auto& textures = Locator::resources::value().GetTextures();
-	const auto atmos = entt::hashed_string("raw/ATMOS");
-	const auto atmosAlpha = entt::hashed_string("raw/ATMOSA");
 	bgfx::VertexLayout layout;
 	layout.begin()
 	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
 	    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
 	    .end();
 	constexpr auto k_GlowVertices = static_cast<uint32_t>(moon::k_GlowIndices.size());
-	if (textures.Contains(atmos.value()) && textures.Contains(atmosAlpha.value()) &&
+	if (glowLook != nullptr && textures.Contains(glowLook->textureId) && textures.Contains(glowLook->alphaTextureId) &&
 	    bgfx::getAvailTransientVertexBuffer(k_GlowVertices, layout) == k_GlowVertices)
 	{
 		struct Vertex
@@ -3256,8 +3260,8 @@ void Renderer::DrawMoon(RenderPass viewId) const
 		const glm::vec4 glowColour {moon::GlowColour(colour), alpha};
 		const glm::vec4 celestial {0.0f, 0.0f, 0.0f, 1.0f};
 		bgfx::setTransform(glm::value_ptr(identity));
-		program->SetTextureSampler("s_diffuse", 0, *textures.Handle(atmos));
-		program->SetTextureSampler("s_alpha", 1, *textures.Handle(atmosAlpha));
+		program->SetTextureSampler("s_diffuse", 0, *textures.Handle(glowLook->textureId));
+		program->SetTextureSampler("s_alpha", 1, *textures.Handle(glowLook->alphaTextureId));
 		program->SetUniformValue("u_colour", &glowColour);
 		program->SetUniformValue("u_celestial", &celestial);
 		bgfx::setVertexBuffer(0, &buffer);
@@ -3267,13 +3271,12 @@ void Renderer::DrawMoon(RenderPass viewId) const
 
 	// Then the moon, blended over the sky, its face turned to the real moon's phase. It leaves its depth, so the land
 	// nearer than it is drawn over it and the land beyond it stays hidden.
-	const auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch());
-	const auto phase = moon::Phase(now.count());
+	const auto phase = moon->phase;
 	DrawCelestialMesh(
 	    viewId, {
-	                .meshId = SkyInterface::k_MoonMeshId.value(),
-	                .textureId = SkyInterface::k_MoonTextureId.value(),
-	                .alphaTextureId = SkyInterface::k_MoonAlphaTextureId.value(),
+	                .meshId = body->meshId,
+	                .textureId = body->textureId,
+	                .alphaTextureId = body->alphaTextureId,
 	                .model = moon::Model(basis, centre, phase),
 	                .colour = glm::vec4(colour, alpha),
 	                .celestial = {std::cos(phase), std::sin(phase), 1.0f, 1.0f},
@@ -3283,21 +3286,24 @@ void Renderer::DrawMoon(RenderPass viewId) const
 
 void Renderer::DrawSun(RenderPass viewId) const
 {
-	const auto placement = sun::Place(Locator::skySystem::value().GetClock().GetScriptTime());
-	if (!placement)
+	if (!Locator::skySystem::has_value())
 	{
 		return;
 	}
-	// It shows less through an overcast
-	const float alpha =
-	    sky_dome::ThroughOvercast(placement->alpha, _overcast, detail_level::Fog(Locator::config::value().detailLevel));
-	// In a warm colour, added to the sky drawn before it, leaving no depth; the land drawn after it covers it
+	const auto [sun, body] = Locator::entitiesRegistry::value().TryGet<ecs::components::Sun, ecs::components::CelestialBody>(
+	    Locator::skySystem::value().GetSun());
+	if (sun == nullptr || body == nullptr || !sun->placement.has_value())
+	{
+		return;
+	}
+	// In a warm colour, shown less through an overcast, added to the sky drawn before it, leaving no depth; the land
+	// drawn after it covers it
 	DrawCelestialMesh(viewId, {
-	                              .meshId = SkyInterface::k_SunMeshId.value(),
-	                              .textureId = SkyInterface::k_SunTextureId.value(),
-	                              .alphaTextureId = SkyInterface::k_SunTextureId.value(),
-	                              .model = SunModel(placement->position),
-	                              .colour = {0x95 / 255.0f, 0x7C / 255.0f, 0x63 / 255.0f, alpha / 255.0f},
+	                              .meshId = body->meshId,
+	                              .textureId = body->textureId,
+	                              .alphaTextureId = body->alphaTextureId,
+	                              .model = SunModel(sun->placement->position),
+	                              .colour = glm::vec4(sun->colour, sun->strength / 255.0f),
 	                              .celestial = glm::vec4(0.0f),
 	                              .state = k_AdditiveState | BGFX_STATE_DEPTH_TEST_GREATER,
 	                          });
@@ -3305,11 +3311,17 @@ void Renderer::DrawSun(RenderPass viewId) const
 
 void Renderer::DrawSunGlare(const Camera& camera) const
 {
-	const auto placement = sun::Place(Locator::skySystem::value().GetClock().GetScriptTime());
-	if (!placement)
+	if (!Locator::skySystem::has_value())
 	{
 		return;
 	}
+	const auto [sun, body] = Locator::entitiesRegistry::value().TryGet<ecs::components::Sun, ecs::components::CelestialBody>(
+	    Locator::skySystem::value().GetSun());
+	if (sun == nullptr || body == nullptr || !sun->placement.has_value())
+	{
+		return;
+	}
+	const auto& placement = sun->placement;
 	const auto model = SunModel(placement->position);
 
 	// Each sample of the sun hidden from the camera dims the glare by a fifth. The land hides it where the line from the
@@ -3369,9 +3381,9 @@ void Renderer::DrawSunGlare(const Camera& camera) const
 	// it the glare is tested against the depth of what is drawn: its solid parts hide it, and it shows through its glass
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	DrawCelestialMesh(RenderPass::Main, {
-	                                        .meshId = SkyInterface::k_SunMeshId.value(),
-	                                        .textureId = SkyInterface::k_SunTextureId.value(),
-	                                        .alphaTextureId = SkyInterface::k_SunTextureId.value(),
+	                                        .meshId = body->meshId,
+	                                        .textureId = body->textureId,
+	                                        .alphaTextureId = body->alphaTextureId,
 	                                        .model = model * glm::scale(glm::vec3(sun::k_GlareScale)),
 	                                        .colour = {0xA0 / 255.0f, 0x6A / 255.0f, 0x35 / 255.0f,
 	                                                   _sunGlare * placement->alpha / (255.0f * 255.0f)},
@@ -3854,9 +3866,14 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 	{
 		return;
 	}
-	auto& sky = Locator::skySystem::value();
-	const auto frame = sky.AdvanceDome();
-	if (frame.Get().empty())
+	const auto* dome =
+	    Locator::entitiesRegistry::value().TryGet<const ecs::components::SkyDome>(Locator::skySystem::value().GetDome());
+	if (dome == nullptr || dome->frameRows.Get().empty())
+	{
+		return;
+	}
+	const auto* pictures = Locator::resources::value().GetTextures().Find(dome->textureId);
+	if (pictures == nullptr)
 	{
 		return;
 	}
@@ -3870,7 +3887,7 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 	const auto viewId = SetUpLandView(RenderPass::SkyDome, *_skyDomeFrameBuffer, k_Size);
 	const auto& program = *_shaderManager->GetShader("SkyDome");
 	constexpr auto k_Rows = static_cast<float>(sky_dome::k_Rows);
-	for (const auto& rows : frame.Get())
+	for (const auto& rows : dome->frameRows.Get())
 	{
 		const auto times = sky_dome::TimePair(rows.skyType);
 		const auto first = static_cast<float>(rows.first);
@@ -3879,7 +3896,7 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 		{
 			// The pictures are laid out a layer for each time of day within each alignment
 			const glm::vec4 u_skyDome {alignment * 3, times.lower, times.upper, times.weight};
-			program.SetTextureSampler("s_diffuse", 0, sky.GetTexture());
+			program.SetTextureSampler("s_diffuse", 0, *pictures);
 			program.SetUniformValue("u_skyDome", &u_skyDome);
 			const auto top = static_cast<float>(alignment) * k_Rows;
 			SubmitLandQuad(viewId, program, {0.0f, top + first}, {k_Rows, top + last}, {0.0f, first / k_Rows},
@@ -4101,7 +4118,6 @@ TextureHandle Renderer::UpdateLandLight() const
 		const auto& haze = _landLightTable->GetHaze();
 		_haze = {glm::vec4(haze.nearDistance, haze.farDistance, haze.k, 1.0f), glm::vec4(haze.colour, 0.0f)};
 		const auto detailLevel = Locator::config::value().detailLevel;
-		_overcast = overcast;
 		_skyTint = sky_dome::TintOf({
 		    .hazeColour = haze.colour,
 		    .overcast = overcast,
@@ -4667,7 +4683,12 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			submitDesc.matrixCount = 1;
 			submitDesc.isSky = true;
 
-			DrawMesh(Locator::skySystem::value().GetMesh(), submitDesc, 0);
+			const auto* dome =
+			    Locator::entitiesRegistry::value().TryGet<ecs::components::SkyDome>(Locator::skySystem::value().GetDome());
+			if (const auto* mesh = dome != nullptr ? Locator::resources::value().GetMeshes().Find(dome->meshId) : nullptr)
+			{
+				DrawMesh(*mesh, submitDesc, 0);
+			}
 			DrawSun(skyViewId);
 			DrawMoon(skyViewId);
 		}
