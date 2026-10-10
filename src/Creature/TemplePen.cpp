@@ -32,18 +32,6 @@ float AsMapPosition(float metres)
 }
 } // namespace
 
-std::optional<glm::vec2> temple_pen::PenPlace(glm::vec3 templePosition, const glm::mat3& templeRotation, glm::vec3 templeScale,
-                                              std::span<const glm::mat4> markedPlaces)
-{
-	if (markedPlaces.size() <= k_PenPoint)
-	{
-		return std::nullopt;
-	}
-	const auto local = glm::vec3(markedPlaces[k_PenPoint][3]);
-	const auto world = templePosition + (templeRotation * (local * templeScale));
-	return MapPlace(world);
-}
-
 glm::vec2 temple_pen::MapPlace(glm::vec3 point)
 {
 	return {AsMapPosition(point.x), AsMapPosition(point.z)};

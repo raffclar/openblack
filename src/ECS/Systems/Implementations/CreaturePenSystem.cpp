@@ -18,6 +18,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "Common/GUtilsDistance.h"
+#include "Creature/CreatureMode.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/TemplePen.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
@@ -53,8 +54,10 @@ CreaturePenSystem::World GameWorld()
 		    {
 			    return std::nullopt;
 		    }
-		    return temple_pen::PenPlace(transform->position, transform->rotation, transform->scale,
-		                                meshes.Handle(mesh->id)->GetExtraMetrics());
+		    // The pen the carry home takes a creature to
+		    const auto pen = creature_mode::TemplePen(transform->position, transform->rotation, transform->scale,
+		                                              meshes.Handle(mesh->id)->GetExtraMetrics());
+		    return pen.has_value() ? std::optional<glm::vec2>(glm::vec2(pen->x, pen->z)) : std::nullopt;
 	    },
 	    .groundAt =
 	        [](glm::vec2 point) {

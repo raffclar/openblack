@@ -28,9 +28,6 @@
 namespace openblack::temple_pen
 {
 
-/// Which of the temple mesh's marked places is the creature's pen
-inline constexpr size_t k_PenPoint = 15;
-
 /// The creature is shown at its own size this far from its home and farther, and at the pen's size this near and
 /// nearer, in metres
 inline constexpr float k_OuterRadius = 16.0f;
@@ -45,11 +42,6 @@ inline constexpr float k_WallsApart = 0.8975979f;
 
 /// A point's (x, z) as precisely as a map position keeps it
 [[nodiscard]] glm::vec2 MapPlace(glm::vec3 point);
-
-/// Where the pen is: the temple mesh's marked place turned, scaled and moved with the temple, on the ground (the
-/// height is left to the caller), kept as precisely as a map position. None when the mesh marks no such place
-[[nodiscard]] std::optional<glm::vec2> PenPlace(glm::vec3 templePosition, const glm::mat3& templeRotation,
-                                                glm::vec3 templeScale, std::span<const glm::mat4> markedPlaces);
 
 /// Whether a point (x, z) is on the inner side of both of the pen's walls, for a temple whose heart is at `heart` and
 /// turned by `heartYAngle`. A point on a wall is inside
