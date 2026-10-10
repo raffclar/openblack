@@ -3371,7 +3371,9 @@ void VortexFadeOut() // 257 VORTEX_FADE_OUT
 	// is one too.
 	DataType type {};
 	const auto value = Pop(type);
-	const auto vortex = Locator::scriptObjects::value().Fetch(static_cast<entt::entity>(value.uintVal));
+	// A script's object 0 is none, as PopObject reads it
+	const auto vortex = value.uintVal == 0 ? entt::entity {entt::null}
+	                                       : Locator::scriptObjects::value().Fetch(static_cast<entt::entity>(value.uintVal));
 	if (vortex == entt::null || !Locator::entitiesRegistry::value().Valid(vortex))
 	{
 		if (type == DataType::None)
