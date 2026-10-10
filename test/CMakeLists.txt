@@ -519,8 +519,13 @@ if (OPENBLACK_INSPECTOR)
     test_inspector_control inspector/test_inspector_control.cpp
   )
   target_link_libraries(test_inspector_control PRIVATE inspector)
-  # The coverage test reads the locator's header for its services
+  # The coverage test reads the locator's header for its services. ctest also passes the folder when the test runs,
+  # since a compiler cache shared between worktrees can give the test an object built in another worktree.
   target_compile_definitions(
     test_inspector_systems PRIVATE OPENBLACK_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+  )
+  set_tests_properties(
+    test_inspector_systems
+    PROPERTIES ENVIRONMENT "OPENBLACK_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
   )
 endif ()

@@ -1,0 +1,477 @@
+#!/usr/bin/env bash
+# ******************************************************************************
+# Copyright (c) 2018-2026 openblack developers
+#
+# For a complete list of all authors, please refer to contributors.md
+# Interested in contributing? Visit https://github.com/openblack/openblack
+#
+# openblack is licensed under the GNU General Public License version 3.
+# ******************************************************************************
+# ob-build: the one build script every openblack agent and the PR manager uses on Windows.
+#
+#   ob-build configure [--worktree PATH] [--build-dir PATH] [--config Debug|RelWithDebInfo|Release] [--fresh]
+#   ob-build build     [options] [target...] [-- ninja arguments]
+#   ob-build test      [options] [-j N] [ctest arguments, e.g. -R regex]
+#   ob-build run       [options] [game arguments]      (adds -g C:/projects/black, and the screenshot root)
+#   ob-build clean     [options]                       (deletes the build folder; the next build refills from caches)
+#   ob-build dir       [options]                       (prints the build folder)
+#   ob-build stats                                     (sccache statistics)
+#   ob-build env       [options]                       (prints the tools and folders ob-build resolved)
+#   ob-build install   [folder]                        (copies these scripts to C:/projects/obtools or the folder)
+#
+# Options go right after the command. The worktree defaults to the git worktree of the current folder, the build
+# folder to E:/openblack/builds/<worktree folder name> and the config to Debug (or $OB_CONFIG).
+#
+# Builds use Ninja Multi-Config with MSVC from the Visual Studio developer environment, sccache in front of cl.exe
+# (through ob-cc.exe, see ob-cc.c) with /Z7 debug info, the shared vcpkg tree E:/openblack/builds/vcpkg_installed and
+# the vcpkg binary cache E:/openblack/cache/vcpkg-binary. Unchanged sources never recompile, even in a new folder or
+# another worktree, because sccache treats every worktree as the same root (see sccache_env).
+#
+# Environment overrides: OB_ROOT (E:/openblack), OB_CONFIG, OB_GAME_PATH (C:/projects/black), OB_VCPKG_ROOT,
+# OB_CMAKE, OB_NINJA, OB_SCCACHE, OB_COMPILE_JOBS (8), OB_LINK_JOBS (4), OB_CTEST_JOBS (8), OB_WERROR (1; 0 turns
+# warnings-as-errors off), OB_CMAKE_ARGS (extra configure arguments).
+set -uo pipefail
+
+die() {
+	echo "ob-build: error: $*" >&2
+	exit 1
+}
+note() { echo "ob-build: $*" >&2; }
+
+OB_SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+OB_ROOT=$(cygpath -m "${OB_ROOT:-E:/openblack}")
+OB_BUILDS="$OB_ROOT/builds"
+OB_CACHE="$OB_ROOT/cache"
+OB_VCPKG_INSTALLED="$OB_BUILDS/vcpkg_installed"
+OB_ROOTS_FILE="$OB_CACHE/ob-build-roots.txt"
+OB_GAME_PATH=${OB_GAME_PATH:-C:/projects/black}
+OB_SCREENSHOT_ROOT=${OB_SCREENSHOT_ROOT:-E:/openblack/screenshots}
+CONFIG=${OB_CONFIG:-Debug}
+
+WT=""
+B=""
+FRESH=0
+TEST_JOBS=${OB_CTEST_JOBS:-8}
+
+resolve_folders() {
+	if [ -z "$WT" ]; then
+		WT=$(git rev-parse --show-toplevel 2>/dev/null) || die "not inside a git worktree; pass --worktree PATH"
+	fi
+	[ -d "$WT" ] || die "no worktree at $WT"
+	WT=$(cygpath -m "$(cd "$WT" && pwd)")
+	[ -f "$WT/CMakeLists.txt" ] && [ -f "$WT/vcpkg.json" ] || die "$WT is not an openblack worktree"
+	if [ -z "$B" ]; then
+		B=${OB_BUILD_DIR:-$OB_BUILDS/$(basename "$WT")}
+	fi
+	B=$(cygpath -m "$B")
+	case "$(echo "$B" | tr 'A-Z' 'a-z')" in
+	"$(echo "$WT" | tr 'A-Z' 'a-z')"/*) die "the build folder $B is inside the worktree; build folders live on E:" ;;
+	esac
+	[ "$(basename "$B")" != vcpkg_installed ] || die "$B is the shared vcpkg tree, not a build folder"
+}
+
+# ---------------------------------------------------------------------------------------------------- tools
+
+lock() { # lock NAME: a folder lock shared by every ob-build; stale after 10 minutes
+	local dir="$OB_CACHE/locks/$1.lock" waited=0
+	mkdir -p "$OB_CACHE/locks"
+	until mkdir "$dir" 2>/dev/null; do
+		if [ -n "$(find "$dir" -maxdepth 0 -mmin +10 2>/dev/null)" ]; then rmdir "$dir" 2>/dev/null; continue; fi
+		sleep 1
+		waited=$((waited + 1))
+		[ $waited -lt 300 ] || die "timed out waiting for the lock $dir"
+	done
+}
+unlock() { rmdir "$OB_CACHE/locks/$1.lock" 2>/dev/null || true; }
+
+find_vs() {
+	local vswhere="/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
+	[ -x "$vswhere" ] || die "vswhere not found; install Visual Studio 2022 with the C++ workload"
+	VS=$("$vswhere" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 \
+		-property installationPath | tr -d '\r' | head -1)
+	[ -n "$VS" ] || die "no Visual Studio with the C++ x64 tools found"
+	VS=$(cygpath -m "$VS")
+}
+
+first_existing() {
+	local candidate
+	for candidate in "$@"; do
+		if [ -n "$candidate" ] && [ -f "$candidate" ]; then
+			cygpath -m "$candidate"
+			return 0
+		fi
+	done
+	return 1
+}
+
+find_sccache() {
+	local winget
+	winget=$(cygpath -u "${LOCALAPPDATA:-C:/Users/$USERNAME/AppData/Local}")/Microsoft/WinGet/Packages
+	winget=$(ls -d "$winget"/Mozilla.sccache*/*/sccache.exe 2>/dev/null | head -1)
+	SCCACHE=$(first_existing "${OB_SCCACHE:-}" "$(command -v sccache 2>/dev/null)" "$winget") ||
+		die "sccache not found; winget install Mozilla.sccache, or set OB_SCCACHE"
+}
+
+find_tools() {
+	[ -n "${VS:-}" ] || find_vs
+	local clion
+	clion=$(cygpath -u "${LOCALAPPDATA:-C:/Users/$USERNAME/AppData/Local}/Programs/CLion/bin")
+	CMAKE=$(first_existing "${OB_CMAKE:-}" "$clion/cmake/win/x64/bin/cmake.exe" \
+		"$VS/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" "$(command -v cmake 2>/dev/null)") ||
+		die "cmake not found; set OB_CMAKE"
+	CTEST="$(dirname "$CMAKE")/ctest.exe"
+	NINJA=$(first_existing "${OB_NINJA:-}" "$clion/ninja/win/x64/ninja.exe" \
+		"$VS/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe" "$(command -v ninja 2>/dev/null)") ||
+		die "ninja not found; set OB_NINJA"
+	find_sccache
+	if [ -n "${OB_VCPKG_ROOT:-}" ]; then
+		VCPKG_ROOT_DIR=$(cygpath -m "$OB_VCPKG_ROOT")
+	elif [ -f "$WT/vcpkg/vcpkg.exe" ]; then
+		VCPKG_ROOT_DIR="$WT/vcpkg"
+	else
+		VCPKG_ROOT_DIR="C:/projects/openblack/vcpkg"
+	fi
+	[ -f "$VCPKG_ROOT_DIR/scripts/buildsystems/vcpkg.cmake" ] || die "no vcpkg at $VCPKG_ROOT_DIR; set OB_VCPKG_ROOT"
+}
+
+# The Visual Studio developer environment (vcvars64.bat), captured once per toolset version and cached
+load_msvc() {
+	[ -z "${OB_MSVC_LOADED:-}" ] || return 0
+	[ -n "${VS:-}" ] || find_vs
+	local version
+	version=$(tr -d '\r\n ' <"$VS/VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt" 2>/dev/null) ||
+		die "no MSVC toolset in $VS"
+	local cache="$OB_CACHE/msvc-env/$version.sh"
+	if [ ! -s "$cache" ]; then
+		mkdir -p "$OB_CACHE/msvc-env"
+		local tmp
+		tmp=$(mktemp -d)
+		cat >"$tmp/env.cmd" <<-EOF
+			@echo off
+			set >"%~dp0before.txt"
+			call "$(cygpath -w "$VS/VC/Auxiliary/Build/vcvars64.bat")" >nul 2>&1
+			set >"%~dp0after.txt"
+		EOF
+		cmd.exe //d //c "$(cygpath -w "$tmp/env.cmd")" >/dev/null 2>&1
+		[ -s "$tmp/after.txt" ] || die "running vcvars64.bat failed"
+		awk -v keep="INCLUDE LIB LIBPATH VCINSTALLDIR VCToolsInstallDir VCToolsVersion VCToolsRedistDir VSINSTALLDIR \
+VisualStudioVersion WindowsSdkDir WindowsSDKVersion WindowsSdkBinPath WindowsSdkVerBinPath WindowsLibPath UCRTVersion \
+UniversalCRTSdkDir ExtensionSdkDir DevEnvDir Platform CommandPromptType VSCMD_ARG_TGT_ARCH VSCMD_ARG_HOST_ARCH VSCMD_VER" '
+			function q(s) { gsub(/\047/, "\047\\\047\047", s); return "\047" s "\047" }
+			BEGIN { n = split(keep, k, " "); for (i = 1; i <= n; i++) always[k[i]] = 1 }
+			{ sub(/\r$/, "") }
+			FNR == NR { p = index($0, "="); if (p > 1) before[toupper(substr($0, 1, p - 1))] = substr($0, p + 1); next }
+			{
+				p = index($0, "="); if (p <= 1) next
+				name = substr($0, 1, p - 1); value = substr($0, p + 1); upper = toupper(name)
+				if (upper == "PATH") {
+					n = split(before["PATH"], old, ";"); for (i = 1; i <= n; i++) seen[toupper(old[i])] = 1
+					m = split(value, now, ";"); added = ""
+					for (i = 1; i <= m; i++) if (now[i] != "" && !(toupper(now[i]) in seen)) added = added (added == "" ? "" : ";") now[i]
+					print "OB_MSVC_PATH=" q(added)
+					next
+				}
+				if (name !~ /^[A-Za-z_][A-Za-z0-9_]*$/) next
+				if ((name in always) || before[upper] != value) print "export " name "=" q(value)
+			}' "$tmp/before.txt" "$tmp/after.txt" >"$tmp/env.sh"
+		grep -q '^export INCLUDE=' "$tmp/env.sh" || die "vcvars64.bat gave no INCLUDE"
+		mv "$tmp/env.sh" "$cache"
+		rm -rf "$tmp"
+	fi
+	# shellcheck disable=SC1090
+	. "$cache"
+	[ -z "${OB_MSVC_PATH:-}" ] || PATH="$(cygpath -u -p "$OB_MSVC_PATH"):$PATH"
+	export PATH
+	CL="$(cygpath -m "$VCToolsInstallDir")/bin/Hostx64/x64/cl.exe"
+	CL=${CL//\/\//\/}
+	[ -f "$CL" ] || die "cl.exe not found at $CL"
+	OB_MSVC_LOADED=1
+}
+
+# The launcher that keeps Ninja's header dependencies pointing at this folder after a cache hit from another one
+build_ob_cc() {
+	local source="$OB_SCRIPT_DIR/ob-cc.c"
+	[ -f "$source" ] || die "ob-cc.c is missing next to $0"
+	local hash
+	hash=$(md5sum "$source" | cut -c1-12)
+	OB_CC="$OB_CACHE/bin/ob-cc-$hash.exe"
+	[ -f "$OB_CC" ] && return 0
+	load_msvc
+	mkdir -p "$OB_CACHE/bin"
+	local tmp
+	tmp=$(mktemp -d)
+	(cd "$tmp" && "$CL" //nologo //O2 //W4 //WX //MT "$(cygpath -w "$source")" //Fe:ob-cc.exe >build.log 2>&1) ||
+		{ cat "$tmp/build.log" >&2; die "could not build ob-cc.exe"; }
+	mv "$tmp/ob-cc.exe" "$OB_CC" 2>/dev/null || [ -f "$OB_CC" ] || die "could not install $OB_CC"
+	rm -rf "$tmp"
+}
+
+# ---------------------------------------------------------------------------------------------------- sccache
+
+register_roots() {
+	mkdir -p "$OB_CACHE"
+	lock roots
+	touch "$OB_ROOTS_FILE"
+	local line
+	for line in "S $WT" "B $B"; do
+		# (Git for Windows' grep crashes on -i -x -F with some files, so awk compares the lines)
+		awk -v want="$line" 'BEGIN { want = tolower(want) } { sub(/\r$/, "") } tolower($0) == want { found = 1 }
+			END { exit !found }' "$OB_ROOTS_FILE" || echo "$line" >>"$OB_ROOTS_FILE"
+	done
+	unlock roots
+}
+
+sccache_env() {
+	export SCCACHE_DIR=${SCCACHE_DIR:-$(cygpath -w "$OB_CACHE/sccache")}
+	export SCCACHE_CACHE_SIZE=${SCCACHE_CACHE_SIZE:-100G}
+	export SCCACHE_IDLE_TIMEOUT=0
+	export VCPKG_DEFAULT_BINARY_CACHE=${VCPKG_DEFAULT_BINARY_CACHE:-$(cygpath -w "$OB_CACHE/vcpkg-binary")}
+	mkdir -p "$(cygpath -u "$VCPKG_DEFAULT_BINARY_CACHE")"
+	# Only worktrees are base directories. A build folder's path must stay in the cache key wherever a source holds it
+	# as text (TEST_BINARY_DIR), so no test runs with another folder's path built in. Elsewhere build folder paths only
+	# appear in include paths, which sccache doesn't hash, so build folders share objects anyway.
+	local dirs
+	dirs=$(sed -n 's/^S //p' "$OB_ROOTS_FILE" | tr -d '\r' | paste -sd ';')
+	export SCCACHE_BASEDIRS="$dirs"
+}
+
+server_has_roots() {
+	local json want
+	json=$("$SCCACHE" --show-stats --stats-format json 2>/dev/null | tr 'A-Z' 'a-z') || return 1
+	want=$(echo "$WT/" | tr 'A-Z' 'a-z')
+	case "$json" in *"\"$want\""*) ;; *) return 1 ;; esac
+	# A server started with build folders as base directories (by an older ob-build) must be replaced
+	local folder
+	while read -r folder; do
+		folder=$(echo "${folder%$'\r'}/" | tr 'A-Z' 'a-z')
+		case "$json" in *"\"$folder\""*) return 1 ;; esac
+	done < <(sed -n 's/^B //p' "$OB_ROOTS_FILE")
+	return 0
+}
+
+# Starts the shared sccache server, or restarts it when it doesn't know this worktree yet
+# (base directories are fixed when the server starts). Compiles running elsewhere during a restart finish locally.
+ensure_sccache() {
+	register_roots
+	sccache_env
+	server_has_roots && return 0
+	lock sccache-server
+	local attempt
+	for attempt in 1 2 3; do
+		if server_has_roots; then
+			unlock sccache-server
+			return 0
+		fi
+		note "restarting the sccache server to add the worktree $WT"
+		"$SCCACHE" --stop-server >/dev/null 2>&1
+		"$SCCACHE" --start-server >/dev/null 2>&1
+	done
+	unlock sccache-server
+	server_has_roots || note "warning: the sccache server doesn't know $WT (fewer cache hits from other worktrees)"
+}
+
+# ---------------------------------------------------------------------------------------------------- commands
+
+configure_args() {
+	local launcher="$OB_CC;$OB_ROOTS_FILE;$WT;$B;$SCCACHE"
+	local werror=ON
+	[ "${OB_WERROR:-1}" != 0 ] || werror=OFF
+	ARGS=(
+		-S "$WT" -B "$B" -G "Ninja Multi-Config"
+		"-DCMAKE_MAKE_PROGRAM=$NINJA"
+		"-DCMAKE_CONFIGURATION_TYPES=Debug;RelWithDebInfo;Release"
+		"-DCMAKE_C_COMPILER=$CL" "-DCMAKE_CXX_COMPILER=$CL"
+		"-DCMAKE_C_COMPILER_LAUNCHER=$launcher" "-DCMAKE_CXX_COMPILER_LAUNCHER=$launcher"
+		# sccache can't cache /Zi (a PDB shared by many compiles); /Z7 puts the debug info in each object
+		-DCMAKE_POLICY_DEFAULT_CMP0141=NEW -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded
+		"-DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT_DIR/scripts/buildsystems/vcpkg.cmake"
+		-DOPENBLACK_USE_VCPKG=ON -DVCPKG_TARGET_TRIPLET=x64-windows
+		"-DVCPKG_INSTALLED_DIR=$OB_VCPKG_INSTALLED" -DVCPKG_MANIFEST_INSTALL=ON
+		"-DVCPKG_OVERLAY_PORTS=$WT/vcpkg-overlay-ports"
+		"-DVCPKG_INSTALL_OPTIONS=--x-buildtrees-root=$OB_CACHE/vcpkg-buildtrees;--x-packages-root=$OB_CACHE/vcpkg-packages"
+		"-DOPENBLACK_WARNINGS_AS_ERRORS=$werror"
+		"-DOPENBLACK_COMPILE_JOBS=${OB_COMPILE_JOBS:-8}" "-DOPENBLACK_LINK_JOBS=${OB_LINK_JOBS:-4}"
+		-DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+	)
+	local kind
+	for kind in EXE SHARED MODULE; do
+		ARGS+=("-DCMAKE_${kind}_LINKER_FLAGS_DEBUG=/debug /INCREMENTAL:NO"
+			"-DCMAKE_${kind}_LINKER_FLAGS_RELWITHDEBINFO=/debug /INCREMENTAL:NO")
+	done
+	if [ -n "${OB_CMAKE_ARGS:-}" ]; then
+		# shellcheck disable=SC2206
+		ARGS+=(${OB_CMAKE_ARGS})
+	fi
+}
+
+check_existing_folder() {
+	local cache="$B/CMakeCache.txt"
+	[ -f "$cache" ] || return 0
+	local generator home
+	generator=$(sed -n 's/^CMAKE_GENERATOR:INTERNAL=//p' "$cache" | tr -d '\r')
+	home=$(sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$cache" | tr -d '\r')
+	if [ "$generator" != "Ninja Multi-Config" ]; then
+		die "$B was made with '$generator'; run 'ob-build clean' once to replace it with a Ninja folder"
+	fi
+	if [ "$(echo "$home" | tr 'A-Z' 'a-z')" != "$(echo "$WT" | tr 'A-Z' 'a-z')" ]; then
+		die "$B belongs to the worktree $home; pass --build-dir, or 'ob-build clean' it first"
+	fi
+}
+
+do_configure() {
+	resolve_folders
+	find_tools
+	load_msvc
+	build_ob_cc
+	ensure_sccache
+	check_existing_folder
+	configure_args
+	local stamp="$B/.ob-build-configure"
+	local wanted
+	wanted=$(printf '%s\n' "$CMAKE" "${ARGS[@]}")
+	if [ $FRESH = 0 ] && [ -f "$B/build.ninja" ] && [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$wanted" ]; then
+		note "$B is already configured (Ninja reconfigures by itself when CMake files change; --fresh forces it)"
+		return 0
+	fi
+	mkdir -p "$B"
+	rm -f "$stamp"
+	local fresh=()
+	[ $FRESH = 0 ] || fresh=(--fresh)
+	note "configuring $WT into $B"
+	local t0=$SECONDS
+	"$CMAKE" "${fresh[@]}" "${ARGS[@]}" || die "configure failed"
+	printf '%s' "$wanted" >"$stamp"
+	note "configured in $((SECONDS - t0))s"
+}
+
+do_build() {
+	do_configure
+	local targets=() extra=()
+	while [ $# -gt 0 ]; do
+		if [ "$1" = -- ]; then
+			shift
+			extra=("$@")
+			break
+		fi
+		targets+=(--target "$1")
+		shift
+	done
+	local t0=$SECONDS
+	local args=(--build "$B" --config "$CONFIG" "${targets[@]}")
+	[ ${#extra[@]} = 0 ] || args+=(-- "${extra[@]}")
+	"$CMAKE" "${args[@]}"
+	local rc=$?
+	note "build $CONFIG ${targets[*]:-all} rc=$rc in $((SECONDS - t0))s ($B)"
+	return $rc
+}
+
+do_test() {
+	resolve_folders
+	find_tools
+	[ -f "$B/CTestTestfile.cmake" ] || die "$B has no tests yet; run 'ob-build build' first"
+	"$CTEST" --test-dir "$B" -C "$CONFIG" -j "$TEST_JOBS" --output-on-failure "$@"
+}
+
+do_run() {
+	resolve_folders
+	local exe="$B/bin/$CONFIG/openblack.exe"
+	[ -f "$exe" ] || die "no $exe; run 'ob-build build --config $CONFIG openblack' first"
+	local arg has_game=0 has_shots=0
+	for arg in "$@"; do
+		case "$arg" in
+		-g | --game-path | --game-path=*) has_game=1 ;;
+		--screenshot-root | --screenshot-root=*) has_shots=1 ;;
+		esac
+	done
+	if [ $has_game = 0 ]; then
+		set -- -g "$OB_GAME_PATH" "$@"
+	fi
+	# Screenshots agents take through the inspector go under the shared screenshot root (see its README). The root is
+	# passed as an option once the game has one, and always in the environment.
+	export OPENBLACK_WORKTREE="$WT"
+	export OPENBLACK_SCREENSHOT_ROOT=${OPENBLACK_SCREENSHOT_ROOT:-$OB_SCREENSHOT_ROOT}
+	if [ $has_shots = 0 ] && grep -a -q 'screenshot-root' "$exe" 2>/dev/null; then
+		set -- --screenshot-root "$OPENBLACK_SCREENSHOT_ROOT" "$@"
+	fi
+	exec "$exe" "$@"
+}
+
+do_clean() {
+	resolve_folders
+	[ -d "$B" ] || { note "$B doesn't exist"; return 0; }
+	note "deleting $B"
+	rm -rf "$B" || die "could not delete all of $B (is a game or test from it still running?)"
+}
+
+do_env() {
+	resolve_folders
+	find_tools
+	load_msvc
+	echo "worktree   $WT"
+	echo "build dir  $B"
+	echo "config     $CONFIG"
+	echo "cmake      $CMAKE"
+	echo "ninja      $NINJA"
+	echo "cl         $CL"
+	echo "sccache    $SCCACHE"
+	echo "vcpkg      $VCPKG_ROOT_DIR"
+	echo "installed  $OB_VCPKG_INSTALLED"
+	echo "roots      $OB_ROOTS_FILE"
+}
+
+# ---------------------------------------------------------------------------------------------------- main
+
+# Everything runs from this function, so bash has read the whole script before it starts: replacing the installed
+# copy while a build runs is safe.
+main() {
+	command=${1:-}
+	[ -n "$command" ] || { sed -n '/^# ob-build: the one/,/^# folder to E:/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 1; }
+	shift
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		--worktree) WT=$2; shift 2 ;;
+		--worktree=*) WT=${1#*=}; shift ;;
+		--build-dir) B=$2; shift 2 ;;
+		--build-dir=*) B=${1#*=}; shift ;;
+		--config) CONFIG=$2; shift 2 ;;
+		--config=*) CONFIG=${1#*=}; shift ;;
+		--fresh) FRESH=1; shift ;;
+		-j) [ "$command" = test ] || break; TEST_JOBS=$2; shift 2 ;;
+		-j[0-9]*) [ "$command" = test ] || break; TEST_JOBS=${1#-j}; shift ;;
+		*) break ;;
+		esac
+	done
+	case "$CONFIG" in Debug | RelWithDebInfo | Release) ;; *) die "unknown config '$CONFIG' (Debug, RelWithDebInfo or Release)" ;; esac
+
+	case "$command" in
+	configure) do_configure ;;
+	build) do_build "$@" ;;
+	test) do_test "$@" ;;
+	run) do_run "$@" ;;
+	clean) do_clean ;;
+	dir) resolve_folders && echo "$B" ;;
+	stats)
+		find_sccache
+		mkdir -p "$OB_CACHE" && touch "$OB_ROOTS_FILE"
+		sccache_env
+		"$SCCACHE" --show-stats
+		;;
+	env) do_env ;;
+	install)
+		# Copies these scripts to a folder outside every worktree (C:/projects/obtools by default). Each file is
+		# replaced in one rename, so builds running from the old copy carry on.
+		local target=${1:-C:/projects/obtools} file
+		target=$(cygpath -u "$target")
+		mkdir -p "$target"
+		for file in ob-build ob-build.cmd ob-cc.c; do
+			cp "$OB_SCRIPT_DIR/$file" "$target/.$file.new" && mv -f "$target/.$file.new" "$target/$file" ||
+				die "could not install $file into $target"
+		done
+		note "installed into $(cygpath -m "$target")"
+		;;
+	*) die "unknown command '$command' (configure, build, test, run, clean, dir, stats, env, install)" ;;
+	esac
+}
+
+main "$@"
+exit $?

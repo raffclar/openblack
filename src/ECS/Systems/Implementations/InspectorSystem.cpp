@@ -11,8 +11,13 @@
 
 #include "InspectorSystem.h"
 
+#include <cstdlib>
+
 #include <chrono>
+#include <filesystem>
+#include <optional>
 #include <string>
+#include <system_error>
 #include <utility>
 
 #include <spdlog/spdlog.h>
@@ -178,7 +183,23 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
 	_server->SetControlFilter(&inspector::Inspector::TakesControl);
 	namespace discovery = inspector::discovery;
 	const auto executable = discovery::ExecutablePath();
-	const auto worktree = discovery::FindWorktree(executable.parent_path());
+	// Builds live outside the worktrees, so the game also finds its worktree from the environment (ob-build run sets it)
+	// or from the folder it was started in
+	auto worktree = discovery::FindWorktree(executable.parent_path());
+	const auto* fromEnvironment = std::getenv("OPENBLACK_WORKTREE");
+	if (fromEnvironment != nullptr && *fromEnvironment != '\0')
+	{
+		worktree = std::filesystem::path(fromEnvironment);
+	}
+	else if (!worktree.has_value())
+	{
+		std::error_code error;
+		const auto current = std::filesystem::current_path(error);
+		if (!error)
+		{
+			worktree = discovery::FindWorktree(current);
+		}
+	}
 	discovery::GameRecord record {
 	    .port = _server->Port(),
 	    .pid = discovery::CurrentProcessId(),
