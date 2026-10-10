@@ -10,6 +10,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 
 #include "ECS/Systems/HandGrabSystemInterface.h"
 
@@ -47,6 +48,7 @@ public:
 	void ForceDrop() override;
 	[[nodiscard]] std::optional<PullPose> GetPullPose() const override;
 	[[nodiscard]] bool IsInInfluence() const override { return HandInInfluence(); }
+	[[nodiscard]] std::string WhyNotTake(entt::entity object) const override;
 	void Reset() override;
 
 	[[nodiscard]] std::optional<entt::entity> GetHeld() const override;
@@ -65,6 +67,7 @@ private:
 	/// What deciding whether the hand may hold a thing needs to know of it
 	[[nodiscard]] hand_grab::Holdable HoldableOf(entt::entity object) const;
 	/// Whether the hand may take a thing now: what it is, what a script says of it, and the hand's influence
+	[[nodiscard]] hand_grab::Gate GateOf(entt::entity object) const;
 	[[nodiscard]] bool MayTake(entt::entity object) const;
 	/// A press that doesn't take the thing taps it, when the player may touch it
 	void Tap(entt::entity object);
