@@ -480,7 +480,7 @@
   "query": "camera.state"
  },
  {
-  "description": "Puts the camera somewhere at once, as the scripts place it; what isn't given is kept. Refused while a camera path holds the camera",
+  "description": "Puts the camera somewhere at once, as the scripts place it; what isn't given is kept. Refused while a camera path holds the camera, unless override, which shows it there every frame over any camera until camera.release",
   "kind": "object",
   "parameters": [
    {
@@ -507,6 +507,11 @@
     "description": "Metres from the camera to its focus: the zoom",
     "name": "distance",
     "type": "number"
+   },
+   {
+    "description": "Show the camera there every frame over whatever holds it (a script's camera in a cinematic, a camera path) until camera.release, without changing that camera, which carries on beneath",
+    "name": "override",
+    "type": "boolean"
    }
   ],
   "query": "camera.set",
@@ -536,9 +541,21 @@
     "description": "Metres from the camera to the entity",
     "name": "distance",
     "type": "number"
+   },
+   {
+    "description": "Show the camera there every frame over whatever holds it (a script's camera in a cinematic, a camera path) until camera.release, without changing that camera, which carries on beneath",
+    "name": "override",
+    "type": "boolean"
    }
   ],
   "query": "camera.frame",
+  "writes": true
+ },
+ {
+  "description": "Lets go of the view camera.set or camera.frame with override showed: the camera is seen where it is (a script's camera carries on as it was)",
+  "kind": "object",
+  "parameters": [],
+  "query": "camera.release",
   "writes": true
  },
  {
@@ -1204,7 +1221,7 @@
     "type": "string or integer"
    },
    {
-    "description": "Numbers, true or false, [x, y, z], {\"object\": id} or {\"int\": n}, as many as it takes; each goes on the stack as the type the native takes, as a script's call puts it",
+    "description": "Numbers, true or false, [x, y, z], {\"object\": id}, {\"int\": n} or {\"float\": x}, as many as it takes; a plain number goes on the stack as the type the native's slot takes, {\"int\"} and {\"float\"} as given. Each goes on the stack as the type the native takes, as a script's call puts it",
     "name": "args",
     "type": "array"
    }

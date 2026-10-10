@@ -416,6 +416,20 @@ void RegisterComponentFields(entt::meta_ctx& context);
 /// A type's name without its namespaces or the compiler's "struct " or "class ": "Transform"
 [[nodiscard]] std::string ShortTypeName(const entt::type_info& info);
 
+/// The type of the components a storage holds. EnTT 3.16 names it info() and deprecates type(); 3.15 has only type()
+template <typename Storage>
+[[nodiscard]] const entt::type_info& StorageType(const Storage& storage)
+{
+	if constexpr (requires { storage.info(); })
+	{
+		return storage.info();
+	}
+	else
+	{
+		return storage.type();
+	}
+}
+
 /// A component of an entity as JSON: its registered fields, or null when it has none registered
 [[nodiscard]] Json ComponentToJson(const entt::meta_ctx& context, const entt::type_info& info, const void* component);
 

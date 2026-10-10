@@ -443,7 +443,7 @@ entt::sparse_set* reflection::FindStorage(entt::registry& registry, const entt::
 {
 	for (auto&& [id, storage] : registry.storage())
 	{
-		if (ShortTypeName(storage.type()) == name)
+		if (ShortTypeName(StorageType(storage)) == name)
 		{
 			return &storage;
 		}
@@ -463,7 +463,7 @@ const entt::sparse_set* reflection::FindStorage(const entt::registry& registry, 
 {
 	for (const auto& [id, storage] : registry.storage())
 	{
-		if (ShortTypeName(storage.type()) == name)
+		if (ShortTypeName(StorageType(storage)) == name)
 		{
 			return &storage;
 		}
