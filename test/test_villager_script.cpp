@@ -134,3 +134,12 @@ TEST(HighDetail, KeptOnlyWhileAScriptHoldsTheBars)
 	EXPECT_FALSE(hd::KeepsHighDetail(true, 0));
 	EXPECT_FALSE(hd::KeepsHighDetail(false, 12));
 }
+
+TEST(HighDetail, DrawnAndItsEyesPlacedInTheHandsGripWhileHeld)
+{
+	namespace hd = openblack::ecs::high_detail_rules;
+	const glm::vec3 standsAt {1494.895f, 0.0f, 2092.996f};
+	const glm::vec3 grip {1416.0f, 1.2f, 2053.0f};
+	EXPECT_EQ(hd::DrawnAt(std::nullopt, standsAt), standsAt);
+	EXPECT_EQ(hd::DrawnAt(grip, standsAt), grip);
+}

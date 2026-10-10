@@ -397,8 +397,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	     modelDetail](entt::entity entity, const Mesh& mesh, const Transform& transform) {
 		    // One held by the opening's hand is drawn in its grip, facing as it does
 		    const auto* highDetail = registry.TryGet<const HighDetail>(entity);
-		    const auto drawnAt =
-		        highDetail != nullptr && highDetail->heldAt.has_value() ? *highDetail->heldAt : transform.position;
+		    const auto drawnAt = highDetail != nullptr
+		                             ? openblack::ecs::high_detail_rules::DrawnAt(highDetail->heldAt, transform.position)
+		                             : transform.position;
 		    auto modelMatrix = glm::mat4(transform.rotation);
 		    modelMatrix = glm::translate(modelMatrix, drawnAt * transform.rotation);
 		    modelMatrix = glm::scale(modelMatrix, transform.scale);
