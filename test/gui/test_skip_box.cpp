@@ -25,6 +25,8 @@ using namespace openblack::gui::test;
 using openblack::new_game_choice::AsksAtNewGame;
 using openblack::new_game_choice::Choice;
 using openblack::new_game_choice::ClampChoice;
+using openblack::new_game_choice::NewGameStart;
+using openblack::new_game_choice::ParseNewGameStart;
 using openblack::new_game_choice::SkipFor;
 using openblack::new_game_choice::TutorialSkip;
 
@@ -94,6 +96,23 @@ TEST(NewGameChoice, SelectionsAreBroughtIntoRange)
 	EXPECT_EQ(ClampChoice(-1), Choice::StartNormally);
 	EXPECT_EQ(ClampChoice(2), Choice::SkipCreatureTutorial);
 	EXPECT_EQ(ClampChoice(7), Choice::KeepOldCreature);
+}
+
+// The developers' start answers the question with one of its own answers, or asks it
+TEST(NewGameChoice, DevelopersStartNamesTheQuestionsAnswers)
+{
+	EXPECT_EQ(ParseNewGameStart("creature"), NewGameStart {.answer = Choice::SkipToCreatureSelect});
+	EXPECT_EQ(ParseNewGameStart("story"), NewGameStart {.answer = Choice::SkipCreatureTutorial});
+	EXPECT_EQ(ParseNewGameStart("old"), NewGameStart {.answer = Choice::KeepOldCreature});
+	EXPECT_EQ(ParseNewGameStart("normal"), NewGameStart {.answer = Choice::StartNormally});
+	EXPECT_EQ(ParseNewGameStart("ask"), NewGameStart {.ask = true});
+	EXPECT_FALSE(ParseNewGameStart("beach").has_value());
+	EXPECT_FALSE(ParseNewGameStart("").has_value());
+	// Skipping to the creature select skips the opening only; the story's answer skips the creature's training too
+	EXPECT_EQ(SkipFor(ParseNewGameStart("creature")->answer.value()),
+	          (TutorialSkip {.skipTutorial = true, .skipCreatureTraining = false, .keepOldCreature = false}));
+	EXPECT_EQ(SkipFor(ParseNewGameStart("story")->answer.value()),
+	          (TutorialSkip {.skipTutorial = true, .skipCreatureTraining = true, .keepOldCreature = false}));
 }
 
 TEST(SkipBox, IsLaidOutAsTheOriginal)

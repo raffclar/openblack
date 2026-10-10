@@ -43,6 +43,7 @@
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureRoute.h"
+#include "Creature/CreatureScriptPlay.h"
 #include "Creature/CreatureTownCompassion.h"
 #include "Creature/CreatureWatching.h"
 #include "Creature/LeashOrders.h"
@@ -1288,6 +1289,42 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	                     });
 	creature_learning::SuppressOpposed(*mind->desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
 	return true;
+}
+
+bool CreatureMindSystem::CarryOutForScript(entt::entity creature, std::vector<creature_mind::Step> agenda)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	if (mind == nullptr || !Replan(creature, creature_mind::Activity::Told, std::move(agenda)))
+	{
+		return false;
+	}
+	// It obeys its player by following them, as far as its plan goes, which nothing it wants replaces until the agenda
+	// is over; unlike an order, it learns nothing from it
+	mind->leash.obeying = false;
+	if (const auto* tables = GetTables(); tables != nullptr)
+	{
+		if (const auto action = creature_mind_tables::FindAction(*tables, "FollowPlayer"); action.has_value())
+		{
+			mind->planner.current = creature_planner::Plan {.desire = creature_desires::Desire::ObeyPlayer,
+			                                                .action = *action,
+			                                                .object = entt::to_integral(creature),
+			                                                .priority = std::numeric_limits<float>::max()};
+		}
+	}
+	mind->planActive = true;
+	mind->planSerial = mind->idle.serial;
+	mind->agendaSeen = mind->idle.serial;
+	mind->satisfiedByEffect = false;
+	mind->desireSeenTo = false;
+	return true;
+}
+
+bool CreatureMindSystem::HasPlayed(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* mind = registry.Valid(creature) ? registry.TryGet<const CreatureMindState>(creature) : nullptr;
+	return mind == nullptr || creature_script_play::Played(mind->idle);
 }
 
 std::optional<creature_desires::Desire> CreatureMindSystem::ForcePlanOn(entt::entity creature, entt::entity object)

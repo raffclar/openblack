@@ -68,6 +68,7 @@
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/NearClipping.h"
+#include "Camera/ScriptCameraModel.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
@@ -198,6 +199,7 @@
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TreeRoots.h"
 #include "ECS/VillageTotem.h"
 #include "ECS/WorldObjects.h"
 #include "EngineConfig.h"
@@ -373,6 +375,7 @@ Game::Game(Arguments&& args) noexcept
     , _playVideo(args.playVideo)
     , _preIntro(args.preIntro)
     , _skipLogos(args.skipLogos)
+    , _newGameStart(args.newGameStart)
     , _startTestbed(args.startTestbed || args.scenario.has_value())
     , _scenarioRequest(args.scenario)
     , _inspectPort(args.inspectPort)
@@ -413,8 +416,13 @@ Game::Game(Arguments&& args) noexcept
 	{
 		auto logger = createLogger(subsystem.data());
 		logger->set_level(args.logLevels.at(i));
+		// An error is written out at once, so it is in the file even if the process is then ended from outside, where no
+		// crash report can be written
+		logger->flush_on(spdlog::level::err);
 		++i;
 	}
+	// Everything else is written out within a second
+	spdlog::flush_every(std::chrono::seconds(1));
 	sInstance = this;
 
 	auto& config = Locator::config::emplace();
@@ -1179,6 +1187,8 @@ bool Game::GameLogicLoop() noexcept
 
 	auto& lhvm = Locator::vm::value();
 	lhvm.LookIn(lhvm::ScriptType::All);
+	// Every object the scripts no longer hold in a variable lets go of its place in their table, after their turn
+	Locator::scriptObjects::value().ReleaseUnreferenced();
 	// The scripts' fade moves on with their turn
 	Locator::cinematicDirectorSystem::value().ProcessTurn();
 	// The advisors follow what they point at and look at
@@ -1552,29 +1562,17 @@ bool Game::Update() noexcept
 	}
 
 	// While a miracle's camera path has the camera, the player's camera doesn't move it
-	const bool pathHoldsCamera = Locator::cameraPathSystem::value().HoldsCamera();
-	if (!pathHoldsCamera)
+	if (!Locator::cameraPathSystem::value().HoldsCamera())
 	{
-		camera.Update(deltaTime);
-	}
-	// A picture the inspector takes this frame has the camera where it asked, whatever moved it this frame
-	if (Locator::inspector::has_value())
-	{
-		Locator::inspector::value().PlaceCamera();
-	}
-	// Outside a camera with a lens of its own, the near plane follows the camera's height over the land, but for close
-	// shots: a script's, and a miracle's camera path
-	if (!camera.GetModel().GetLens().has_value() && Locator::terrainSystem::has_value())
-	{
-		const auto origin = camera.GetOrigin();
-		const float height = origin.y - Locator::terrainSystem::value().GetHeightAt(glm::vec2(origin.x, origin.z));
-		const float nearClip =
-		    near_clipping::NearPlane(height, Locator::cinematicDirectorSystem::value().IsCloseClipping() || pathHoldsCamera);
-		if (nearClip != camera.GetNearClip())
+		// A script's camera track runs on the game's time; the camera itself steps as the hand does, so that a cut scene
+		// holds while the game is paused and keeps pace with the game's speed
+		if (auto* scriptCamera = Locator::scriptControlSystem::value().GetScriptCamera(camera); scriptCamera != nullptr)
 		{
-			camera.SetNearClip(nearClip);
+			scriptCamera->PassGameTime(Locator::time::value().GetFrameGameTime());
 		}
+		camera.Update(std::chrono::duration_cast<std::chrono::microseconds>(CameraStepTime()));
 	}
+	FitNearClip();
 	// The temple's camera may have taken the player out of the temple
 	if (Locator::temple::has_value())
 	{
@@ -2302,13 +2300,17 @@ bool Game::Update() noexcept
 			auto updateEntities = profiler.BeginScoped(Profiler::Stage::UpdateEntities);
 			if (config.drawEntities)
 			{
-				// The villagers in view are posed for the camera as it now is
+				// The villagers in view are posed for the camera the frame is drawn from
+				ShowInspectorCamera(true);
 				Locator::livingActionSystem::value().PoseVillagersInView(Locator::camera::value().GetViewProjectionMatrix());
 				// and the eyes of those drawn in high detail blink, look about and are placed on their heads
 				Locator::highDetailSystem::value().PlaceEyes(animals::DrawTime(clock.GetTurn(), clock.GetTurnFraction()),
 				                                             Locator::camera::value().GetViewProjectionMatrix());
+				// The trees out of the land are drawn with their roots, as each now is
+				ecs::tree_roots::Show(Locator::entitiesRegistry::value());
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
 				                                                config.drawStreams);
+				ShowInspectorCamera(false);
 				// The interface picks what is under the cursor as the frame is drawn, for the next frame to go by
 				PickUnderCursor(std::chrono::duration<float>(deltaTime).count());
 			}
@@ -3192,11 +3194,9 @@ bool Game::Run() noexcept
 		{
 			lhvm.LoadBinary(fileSystem.ReadAll(challengePath));
 			// The story's scripts run the first land; on the testbed they would set its time of day and stop its clock
-			// The story opens on a black screen: its first land comes up at noon, and its scripts set the dawn of the
-			// opening scene and fade the picture in from black some turns later
-			if (!_startTestbed && lhvm.StartScript("LandControlAll", lhvm::ScriptType::All) != 0)
+			if (!_startTestbed)
 			{
-				Locator::cinematicDirectorSystem::value().StartStory();
+				StartStoryScripts();
 			}
 		}
 		catch (const std::runtime_error& err)
@@ -3211,11 +3211,6 @@ bool Game::Run() noexcept
 		                    (fileSystem.GetGamePath() / challengePath).generic_string());
 		return false;
 	}
-	if (!_startTestbed)
-	{
-		AskNewGameChoice();
-	}
-
 	if (_startupTimer.has_value())
 	{
 		_startupTimer->Step("story scripts");
@@ -3279,6 +3274,9 @@ bool Game::Run() noexcept
 
 		auto duration = std::chrono::high_resolution_clock::now() - lastTime;
 		auto milliseconds = std::chrono::duration_cast<std::chrono::duration<uint32_t, std::milli>>(duration);
+		// The frame is drawn from where the inspector shows the camera (an override, a picture's), while everything the
+		// game did this frame went by its own camera, which it gets back once the frame is drawn
+		ShowInspectorCamera(true);
 		{
 			auto section = profiler.BeginScoped(Profiler::Stage::SceneDraw);
 			const graphics::RendererInterface::DrawSceneDesc drawDesc {
@@ -3341,6 +3339,7 @@ bool Game::Run() noexcept
 			auto section = profiler.BeginScoped(Profiler::Stage::RendererFrame);
 			Locator::rendererInterface::value().Frame();
 		}
+		ShowInspectorCamera(false);
 
 		// Clear the stale screenshot request
 		if (_requestScreenshot.has_value())
@@ -3367,6 +3366,9 @@ bool Game::Run() noexcept
 		frameStart = frameEnd;
 	}
 
+	// The last line of an orderly end: a log that stops without it, and without a crash report, was ended from outside
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game ends after {} frames, at turn {}", _frameCount,
+	                   Locator::time::value().GetTurn());
 	return true;
 }
 
@@ -3659,18 +3661,71 @@ void Game::StartNewLand()
 	_gameMusic->Reset();
 }
 
-void Game::AskNewGameChoice()
+void Game::StartStoryScripts()
+{
+	const bool started = Locator::vm::value().StartScript("LandControlAll", lhvm::ScriptType::All) != 0;
+	// The question comes whether or not the story started
+	const bool asked = AskNewGameChoice();
+	// The story opens on a black screen: its first land comes up at noon, and its scripts set the dawn of the opening
+	// scene and fade the picture in from black some turns later. When the game was held for the question, the land is
+	// left as it is: the scripts that skip the opening fade it themselves.
+	if (started && !asked)
+	{
+		Locator::cinematicDirectorSystem::value().StartStory();
+	}
+}
+
+bool Game::AskNewGameChoice()
 {
 	// Every new game starts with nothing skipped, and only a returning player is asked
-	Locator::tutorialSkipSystem::value().Set({});
-	const auto& profiles = Locator::playerProfileSystem::value();
-	if (!new_game_choice::AsksAtNewGame(profiles.GetProfileCount(), profiles.CurrentProfileHasCreature()) || !_interface)
+	auto& skip = Locator::tutorialSkipSystem::value();
+	skip.Set({});
+	// For developers and agents: the question answered at once, as though the player had answered it before the
+	// story's first turn
+	if (_newGameStart.has_value() && _newGameStart->answer.has_value())
 	{
-		return;
+		skip.Set(new_game_choice::SkipFor(*_newGameStart->answer));
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "New game started with the start-of-game question answered {}",
+		                   static_cast<int>(*_newGameStart->answer));
+		return true;
+	}
+	const auto& profiles = Locator::playerProfileSystem::value();
+	const bool forced = _newGameStart.has_value() && _newGameStart->ask;
+	if ((!forced && !new_game_choice::AsksAtNewGame(profiles.GetProfileCount(), profiles.CurrentProfileHasCreature())) ||
+	    !_interface)
+	{
+		return false;
 	}
 	// The game waits, paused, for the answer
 	Locator::time::value().SetPaused(true);
 	_interface->ShowSkipBox();
+	return true;
+}
+
+bool Game::StartNewGame(std::optional<new_game_choice::NewGameStart> start) noexcept
+{
+	_newGameStart = start;
+	_startTestbed = false;
+	// A new game always begins on the first land
+	const auto land = Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / "Land1.txt";
+	if (!LoadMapWithFreshScripts(land))
+	{
+		return false;
+	}
+	if (!Locator::vm::has_value())
+	{
+		return false;
+	}
+	try
+	{
+		StartStoryScripts();
+	}
+	catch (const std::exception& err)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The story's scripts didn't start: {}", err.what());
+		return false;
+	}
+	return true;
 }
 
 void Game::HandleInterfaceAction()
@@ -3766,6 +3821,43 @@ void Game::SetUpLandscape()
 void Game::SetTime(float time) noexcept
 {
 	Locator::skySystem::value().SetTime(time);
+}
+
+void Game::FitNearClip()
+{
+	// Outside a camera with a lens of its own, the near plane follows the camera's height over the land, but for close
+	// shots: a script's, and a miracle's camera path
+	auto& camera = Locator::camera::value();
+	if (camera.GetModel().GetLens().has_value() || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	const auto origin = camera.GetOrigin();
+	const float height = origin.y - Locator::terrainSystem::value().GetHeightAt(glm::vec2(origin.x, origin.z));
+	const float nearClip = near_clipping::NearPlane(height, Locator::cinematicDirectorSystem::value().IsCloseClipping() ||
+	                                                            Locator::cameraPathSystem::value().HoldsCamera());
+	if (nearClip != camera.GetNearClip())
+	{
+		camera.SetNearClip(nearClip);
+	}
+}
+
+void Game::ShowInspectorCamera(bool shown)
+{
+	if (!Locator::inspector::has_value())
+	{
+		return;
+	}
+	auto& inspector = Locator::inspector::value();
+	if (shown)
+	{
+		inspector.PlaceCamera();
+	}
+	else
+	{
+		inspector.GiveCameraBack();
+	}
+	FitNearClip();
 }
 
 void Game::RequestScreenshot(const std::filesystem::path& path, bool hideDebugGui) noexcept
@@ -4152,16 +4244,18 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 	}
 }
 
-float Game::HandStepSeconds() const
+std::chrono::milliseconds Game::CameraStepTime() const
 {
-	// The hand steps by the frame's real time in whole milliseconds, or by the game's time while a script holds the
-	// widescreen
 	const auto& time = Locator::time::value();
 	const bool scripted = Locator::cinematicDirectorSystem::has_value() &&
 	                      Locator::cinematicDirectorSystem::value().IsWideScreenOn() &&
 	                      Locator::cinematicDirectorSystem::value().GetWideScreenOwner() != 0;
-	const auto step = ecs::systems::CameraStep(time.GetFrameRealTime(), time.GetFrameGameTime(), scripted);
-	return static_cast<float>(static_cast<int32_t>(step.count())) * 0.001f;
+	return ecs::systems::CameraStep(time.GetFrameRealTime(), time.GetFrameGameTime(), scripted);
+}
+
+float Game::HandStepSeconds() const
+{
+	return static_cast<float>(static_cast<int32_t>(CameraStepTime().count())) * 0.001f;
 }
 
 void Game::UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds)

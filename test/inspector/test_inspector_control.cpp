@@ -485,10 +485,17 @@ public:
 		current = "testbed";
 		return {};
 	}
+	std::string NewGame(std::string_view start) override
+	{
+		current = "Land 1";
+		newGames.emplace_back(start);
+		return {};
+	}
 	[[nodiscard]] std::string Current() const override { return current; }
 
 	std::string current;
 	std::optional<LoadHow> lastHow;
+	std::vector<std::string> newGames;
 };
 
 class FakeScreenshots final: public ScreenshotTargetInterface
@@ -511,6 +518,12 @@ public:
 	{
 		return written.contains(path.generic_string());
 	}
+	std::string Remove(const std::filesystem::path& path) override
+	{
+		removed.push_back(path.generic_string());
+		written.erase(path.generic_string());
+		return {};
+	}
 	std::string AppendLine(const std::filesystem::path& file, std::string_view line) override
 	{
 		lines.emplace_back(file.generic_string(), std::string(line));
@@ -524,7 +537,46 @@ public:
 	std::optional<std::filesystem::path> root {"E:/openblack/screenshots"};
 	/// The files there, as the game writes them a few frames after it is asked
 	std::set<std::string> written;
+	/// Files from before removed for a picture to be written in their place
+	std::vector<std::string> removed;
 	std::vector<std::pair<std::string, std::string>> lines;
+};
+
+/// Where the ray from the camera through the middle of the view meets the land (at height 10): the hand carries what it
+/// holds under the pointer, here kept in the middle of the screen
+glm::vec3 UnderThePointer(const CameraPose& pose)
+{
+	const auto forward = glm::normalize(pose.focus - pose.origin);
+	return pose.origin + forward * ((10.0f - pose.origin.y) / forward.y);
+}
+
+/// The game's frame in its own order, with the hand holding a thing (entity 7) under the pointer while the inspector
+/// has the player's input locked out and drives the pointer itself
+struct HeldThingFrames
+{
+	FakeCamera& camera;
+	ScreenshotProvider& screenshots;
+	uint64_t frame {100};
+	/// Where the hand holds the thing this frame, and where the frame was drawn from
+	glm::vec3 held {0.0f};
+	CameraPose drawnFrom;
+
+	void Run()
+	{
+		// The inspector's service: the camera's own place back, the requests (asked between frames here), the pictures
+		camera.Unpin();
+		screenshots.Frame(++frame);
+		// The player's camera eases along on its own
+		camera.pose.origin.z += 0.5f;
+		camera.pose.focus.z += 0.5f;
+		// The hand carries what it holds to where the pointer meets the land, by the camera as the game has it
+		held = UnderThePointer(camera.pose);
+		camera.walker = held;
+		// Drawn from where the inspector shows the camera, then the camera's own given back
+		ShowCameraForDrawing(camera, screenshots);
+		drawnFrom = camera.pose;
+		camera.Unpin();
+	}
 };
 
 } // namespace
@@ -661,6 +713,20 @@ TEST(InspectorLevels, LoadByNameFreshOrAsTheStoryChangesLand)
 	EXPECT_FALSE(Refused(inspector, R"({"query": "level.load", "params": {"name": "Broken"}})").empty());
 	EXPECT_FALSE(Refused(inspector, R"({"query": "level.load", "params": {"name": "Nope"}})").empty());
 	EXPECT_EQ(Ask(inspector, R"({"query": "level.testbed"})")["land"], "testbed");
+}
+
+// A new game on the first land, the start-of-game question answered at once or left to the game
+TEST(InspectorLevels, NewGameSkipsTheOpeningAsTheQuestionAnswers)
+{
+	FakeLevels levels;
+	Inspector inspector;
+	inspector.Add(MakeLevelProvider(levels));
+	EXPECT_EQ(Ask(inspector, R"({"query": "level.new_game", "params": {"skip": "creature"}})")["land"], "Land 1");
+	Ask(inspector, R"({"query": "level.new_game", "params": {"skip": "story"}})");
+	Ask(inspector, R"({"query": "level.new_game"})");
+	EXPECT_EQ(levels.newGames, (std::vector<std::string> {"creature", "story", ""}));
+	EXPECT_FALSE(Refused(inspector, R"({"query": "level.new_game", "params": {"skip": "beach"}})").empty());
+	EXPECT_EQ(levels.newGames.size(), 3);
 }
 
 // A picture at an exact frame; one with a camera is held there a few frames first
@@ -1031,4 +1097,109 @@ TEST(InspectorCamera, FrameLooksAtAnEntity)
 	EXPECT_NEAR(framed["set_to"]["pitch"].get<double>(), 45.0, 1e-3);
 	EXPECT_FALSE(Refused(inspector, R"({"query": "camera.frame", "params": {"id": 3}})").empty());
 	EXPECT_FALSE(Refused(inspector, R"({"query": "camera.frame", "params": {}})").empty());
+}
+
+// With the hand holding a thing and the player's input locked, an override and held pictures are what each frame is drawn
+// from for as long as they last, paused or running, while the hand, which follows the pointer through the game's own
+// camera, never chases the camera shown: shown from in front of the thing, it stays where the game's camera puts it.
+// Released, the frames are drawn from the game's own camera, which carried on beneath.
+TEST(InspectorCamera, AnOverrideAndHeldPicturesWinWhileTheHandHoldsAThing)
+{
+	FakeScreenshots screenshots;
+	FakeCamera camera;
+	camera.pose = {.origin = {0.0f, 20.0f, 0.0f}, .focus = {0.0f, 10.0f, 20.0f}};
+	Inspector inspector;
+	auto owned = std::make_unique<ScreenshotProvider>(screenshots, camera);
+	auto& provider = *owned;
+	inspector.Add(std::move(owned));
+	inspector.Add(MakeCameraProvider(camera));
+	HeldThingFrames frames {.camera = camera, .screenshots = provider};
+	frames.Run();
+
+	// Shown from just in front of where the hand holds it, looking at it
+	Ask(inspector, R"({"query": "camera.set", "params": {"position": [0, 16, 8], "focus": [0, 10, 20], "override": true}})");
+	for (int each = 0; each < 20; ++each)
+	{
+		const auto own = camera.pose;
+		frames.Run();
+		EXPECT_EQ(frames.drawnFrom.origin, glm::vec3(0.0f, 16.0f, 8.0f)) << frames.frame;
+		// The hand went by the game's camera, as it moved on this frame, not by the override
+		const auto expected = UnderThePointer(
+		    {.origin = own.origin + glm::vec3(0.0f, 0.0f, 0.5f), .focus = own.focus + glm::vec3(0.0f, 0.0f, 0.5f)});
+		EXPECT_NEAR(glm::distance(frames.held, expected), 0.0f, 1e-3f) << frames.frame;
+		// Between frames, as requests are answered, the camera is the game's own
+		EXPECT_EQ(camera.pose.origin, own.origin + glm::vec3(0.0f, 0.0f, 0.5f));
+	}
+
+	// A picture framing the held thing over the override, and one with a camera of its own: each taken, from its own
+	// camera, none failed
+	const auto framed = Ask(inspector, R"({"query": "screenshot.take", "params": {"path": "held.png",
+	                                      "frame": {"id": 7, "yaw": 0, "pitch": 20, "distance": 15}}})");
+	const auto cameraShot = Ask(inspector, R"({"query": "screenshot.take", "params": {"path": "camera.png",
+	                                          "camera": {"position": [5, 30, 0], "focus": [0, 10, 30]}}})");
+	const auto last = cameraShot["frame"].get<uint64_t>();
+	while (frames.frame <= last + ScreenshotProvider::k_SettleFrames)
+	{
+		frames.Run();
+		if (frames.frame == framed["frame"].get<uint64_t>())
+		{
+			// Framed where the hand holds it this frame
+			EXPECT_NEAR(glm::distance(frames.drawnFrom.focus, frames.held), 0.0f, 1e-3f);
+		}
+		if (frames.frame == last)
+		{
+			EXPECT_EQ(frames.drawnFrom.origin, glm::vec3(5.0f, 30.0f, 0.0f));
+		}
+	}
+	ASSERT_EQ(screenshots.taken.size(), 2u);
+	EXPECT_EQ(screenshots.taken[0], "held.png");
+	EXPECT_EQ(screenshots.taken[1], "camera.png");
+	EXPECT_TRUE(Ask(inspector, R"({"query": "screenshot.pending"})")["failed"].empty());
+	// The override is back once the pictures are done
+	frames.Run();
+	EXPECT_EQ(frames.drawnFrom.origin, glm::vec3(0.0f, 16.0f, 8.0f));
+
+	// Paused, the game's camera stands still: the override still wins every frame
+	for (int each = 0; each < 5; ++each)
+	{
+		camera.Unpin();
+		provider.Frame(++frames.frame);
+		ShowCameraForDrawing(camera, provider);
+		EXPECT_EQ(camera.pose.origin, glm::vec3(0.0f, 16.0f, 8.0f));
+		camera.Unpin();
+	}
+
+	// Released: drawn from the game's own camera again, which carried on beneath
+	Ask(inspector, R"({"query": "camera.release"})");
+	const auto own = camera.pose;
+	frames.Run();
+	EXPECT_EQ(frames.drawnFrom.origin, own.origin + glm::vec3(0.0f, 0.0f, 0.5f));
+}
+
+// A picture asked to be written over a file there from before isn't taken as written at once: the old file is removed
+// as the picture is asked for, so the picture is watched until the new one comes, and fails, saying so, if it never does
+TEST(InspectorScreenshot, APictureOverAnOldFileWaitsForTheNewOne)
+{
+	FakeScreenshots screenshots;
+	screenshots.written.insert("again.png");
+	FakeCamera camera;
+	auto owned = std::make_unique<ScreenshotProvider>(screenshots, camera);
+	auto* provider = owned.get();
+	Inspector inspector;
+	inspector.Add(std::move(owned));
+	uint64_t frame = 10;
+	provider->Frame(frame);
+	Ask(inspector, R"({"query": "screenshot.take", "params": {"path": "again.png"}})");
+	ASSERT_EQ(screenshots.removed.size(), 1u);
+	EXPECT_EQ(screenshots.removed[0], "again.png");
+	provider->Frame(++frame);
+	const auto writing = Ask(inspector, R"({"query": "screenshot.pending"})");
+	ASSERT_EQ(writing["writing"].size(), 1u);
+	while (frame < 11 + 600)
+	{
+		provider->Frame(++frame);
+	}
+	const auto failed = Ask(inspector, R"({"query": "screenshot.pending"})")["failed"];
+	ASSERT_EQ(failed.size(), 1u);
+	EXPECT_NE(failed[0].get<std::string>().find("again.png: never written"), std::string::npos);
 }
