@@ -1628,10 +1628,10 @@ bool Game::Update() noexcept
 				}
 				else if (!glm::any(glm::isnan(rayOrigin) || glm::isnan(rayDirection)))
 				{
-					// The Action button on the player's own temple's entrance takes them inside
-					// TODO(raffclar): in a game of one player, only once a script lets the player use the temple
+					// The Action button on the player's own temple's entrance takes them inside, when the scripts let it
 					const auto& actions = Locator::gameActionSystem::value();
-					if (Locator::cinematicDirectorSystem::value().IsInterfaceActive() &&
+					if (Locator::entitiesRegistry::value().Context().scriptLetsTempleBeEntered &&
+					    Locator::cinematicDirectorSystem::value().IsInterfaceActive() &&
 					    !Locator::magicSystem::value().IsHandBusy() && actions.GetChanged(input::BindableActionMap::ACTION) &&
 					    actions.Get(input::BindableActionMap::ACTION))
 					{
