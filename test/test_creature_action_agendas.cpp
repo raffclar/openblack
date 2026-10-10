@@ -172,3 +172,27 @@ TEST(CreatureActionAgendas, TheForcedActionsOfLandOneCanBeCarriedOut)
 	EXPECT_TRUE(plan_actions::Agenda(*heal, 3, {}, {}, NeverFirst, plan_actions::CastInfo {.magicType = 1, .height = 15.0f})
 	                .has_value());
 }
+
+// A lesson's DEV_FUNCTION 6 has the creature point out the nearest highlight
+TEST(CreatureActionAgendas, PointingOutAHighlightCallsAFarCameraFirst)
+{
+	const auto near = PointOutHighlight(8, 20.0f);
+	ASSERT_EQ(near.size(), 2);
+	EXPECT_EQ(near[0].order.kind, ObjectOrder::Kind::PointAt);
+	EXPECT_EQ(near[0].order.object, 8u);
+	EXPECT_EQ(near[0].order.seconds, 1.0f);
+	EXPECT_EQ(near[0].face, creature_face::Cue::Amazed);
+	EXPECT_FLOAT_EQ(near[1].seconds, 2.0f);
+	ASSERT_TRUE(near[1].gaze.has_value());
+	EXPECT_TRUE(near[1].gaze->camera);
+
+	const auto far = PointOutHighlight(8, 31.0f);
+	ASSERT_EQ(far.size(), 4);
+	EXPECT_FLOAT_EQ(far[0].seconds, 1.0f);
+	EXPECT_EQ(far[0].face, creature_face::Cue::Curiosity);
+	EXPECT_EQ(far[1].animation, 69u);
+	// Without a camera to show it to, it can't
+	const auto* point = plan_actions::For("PointOutHighlight");
+	ASSERT_NE(point, nullptr);
+	EXPECT_FALSE(plan_actions::Possible(*point, {}));
+}

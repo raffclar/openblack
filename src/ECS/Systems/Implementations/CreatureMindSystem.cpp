@@ -33,7 +33,6 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Camera/Camera.h"
-#include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFeedback.h"
@@ -1599,10 +1598,7 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	    .instrument = toNumber(forced.instrument),
 	    .handFull = registry.AllOf<CreatureHeldObject>(creature),
 	};
-	if (const auto* shape = registry.TryGet<const Creature>(creature))
-	{
-		situation.height = creature_cast_moves::k_HeightOfSizeOne * ShownSize(*shape);
-	}
+	Situate(creature, situation);
 	auto built = PlanAgenda(creature, *action, actionObject, situation);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} is made to {} on {}: {}", entt::to_integral(creature), forced.action,
 	                    actionObject.value_or(0), built.has_value() ? "planned" : "can't be planned");

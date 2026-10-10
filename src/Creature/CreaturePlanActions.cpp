@@ -134,6 +134,7 @@ constexpr std::array k_Executors {
     Executor {.action = "PutDown", .build = Build::PutDown, .activity = Activity::PutDown},
     Executor {.action = "CastHealSpellPU1", .target = Target::HurtVillager, .build = Build::CastHelpful},
     Executor {.action = "DeadForever", .build = Build::DeadForever},
+    Executor {.action = "PointOutHighlight", .target = Target::Anything, .build = Build::PointOutHighlight},
     // What scripts force on creatures to stage their scenes
     Executor {.action = "LookForever", .target = Target::Anything, .build = Build::LookForever},
     Executor {.action = "LookButDontApproach", .target = Target::Anything, .build = Build::LookButDontApproach},
@@ -192,6 +193,7 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 	case Build::RunFromPlayer:
 		return situation.camera.has_value();
 	case Build::PointAtCamera:
+	case Build::PointOutHighlight:
 		return situation.eye.has_value();
 	case Build::ShowDesire:
 		return situation.showDesireAnimation.has_value();
@@ -257,6 +259,8 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::PutDown();
 	case Build::DeadForever:
 		return creature_mind::DeadForever();
+	case Build::PointOutHighlight:
+		return creature_mind::PointOutHighlight(*object, situation.eyeDistance);
 	case Build::Destroy:
 		return creature_mind::DestroyThing(*object);
 	case Build::SitDown:

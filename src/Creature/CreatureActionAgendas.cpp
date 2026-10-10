@@ -153,3 +153,24 @@ std::vector<Step> creature_mind::DeadForever()
 	         .holdLoop = true,
 	         .closedEyes = true}};
 }
+
+std::vector<Step> creature_mind::PointOutHighlight(uint32_t highlight, float cameraDistance)
+{
+	// TODO(creature-do-action-2): looking at the camera is only the look here, as for the scripts' look at the camera
+	const auto lookAtCamera = [](float seconds) {
+		return Step {
+		    .kind = Step::Kind::Wait, .seconds = seconds, .face = creature_face::Cue::Curiosity, .gaze = Gaze {.camera = true}};
+	};
+	std::vector<Step> agenda;
+	if (cameraDistance > k_CallCameraDistance)
+	{
+		agenda.push_back(lookAtCamera(k_CallCameraSeconds));
+		agenda.push_back(PlayOnce(k_LookAtMeAnimation));
+	}
+	agenda.push_back({.kind = Step::Kind::Object,
+	                  .order = {.kind = ObjectOrder::Kind::PointAt, .object = highlight, .seconds = k_PointOutSeconds},
+	                  .face = creature_face::Cue::Amazed,
+	                  .gaze = Gaze {.object = highlight}});
+	agenda.push_back(lookAtCamera(k_AfterPointingOutSeconds));
+	return agenda;
+}

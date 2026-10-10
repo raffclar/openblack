@@ -1381,6 +1381,10 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	situation.controlledByScript = registry.AllOf<ScriptControlled>(creature);
 	situation.radius = object_measures::TwoDRadius(registry, creature);
 	situation.height = body != nullptr ? k_HeightOfSizeOne * ShownSize(*body) : 0.0f;
+	if (const auto* transform = registry.TryGet<const Transform>(creature); transform != nullptr && situation.eye.has_value())
+	{
+		situation.eyeDistance = glm::distance(*situation.eye, transform->position);
+	}
 }
 
 bool CreatureMindSystem::HasPlayed(entt::entity creature) const

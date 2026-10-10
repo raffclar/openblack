@@ -66,4 +66,13 @@ constexpr float k_FrightenedSeconds = 3.0f;
 /// else is given
 [[nodiscard]] std::vector<Step> DeadForever();
 constexpr float k_DeadForeverSeconds = 864000.0f;
+/// Pointing out a lesson's highlight to the player: when the camera is more than 30 away it first looks at the camera
+/// a second, curious, and plays its look-at-me; then it points at the highlight a second, amazed, and looks at the
+/// camera two seconds more
+[[nodiscard]] std::vector<Step> PointOutHighlight(uint32_t highlight, float cameraDistance);
+constexpr float k_CallCameraDistance = 30.0f;
+constexpr size_t k_LookAtMeAnimation = 69;
+constexpr float k_CallCameraSeconds = 1.0f;
+constexpr float k_PointOutSeconds = 1.0f;
+constexpr float k_AfterPointingOutSeconds = 2.0f;
 } // namespace openblack::creature_mind

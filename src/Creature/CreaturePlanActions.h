@@ -111,6 +111,8 @@ enum class Build : uint8_t
 	BeFrightened,
 	PutDown,
 	DeadForever,
+	/// Pointing out a lesson's highlight to the player
+	PointOutHighlight,
 	/// An action whose agenda can never be made
 	Never,
 };
@@ -168,6 +170,8 @@ struct Situation
 	/// Its height, and the height of the thing the action is done to
 	float height {0.0f};
 	float thingHeight {0.0f};
+	/// How far the camera is from it
+	float eyeDistance {0.0f};
 	float chance {0.0f};
 };
 /// What a casting action casts, from its row of the game's table and the creature
