@@ -12,12 +12,11 @@
 #include <cstddef>
 #include <cstdint>
 
-#include <array>
 #include <optional>
-#include <string>
-#include <vector>
 
 #include <entt/entity/entity.hpp>
+
+#include "ECS/Components/Dance.h"
 
 namespace openblack::dance
 {
@@ -25,14 +24,19 @@ struct DanceFile;
 struct DanceKeyFrame;
 } // namespace openblack::dance
 
-/// How a dance shares its dancers between its groups and steps through its beats
+// How a dance runs from turn to turn: when it starts, how fast it goes, how it shares its dancers between its groups and
+// when its clock starts over. Pure rules on the dance's component, the same for every dance: a worship site's, a
+// town's or a script's.
+
 namespace openblack::ecs::dance_rules
 {
 
-/// Which dancers a group takes: men, women, or both (anything not a villager counts as both)
-inline constexpr uint32_t k_Men = 1;
-inline constexpr uint32_t k_Women = 2;
-inline constexpr uint32_t k_AnySex = k_Men | k_Women;
+/// The game's turns in a second, by which the dance's times are reckoned
+inline constexpr uint32_t k_TurnsPerSecond = 10;
+/// Waiting for the dancers on their way, a dance starts at the latest this many seconds after its first dancer came
+inline constexpr uint32_t k_LongestWaitSeconds = 90;
+/// Every dance is made at a quarter speed
+inline constexpr float k_MadeSpeed = 0.25f;
 
 /// What a key frame's action does to a group (the rest move the dancers about and are not ported yet)
 enum class ActionType : uint32_t
@@ -47,67 +51,52 @@ enum class ActionType : uint32_t
 	Sexes = 16,
 };
 
-/// A group of dancers dancing one part
-struct Group
-{
-	std::string name;
-	/// Its dancers in the order they joined: a dancer's place in the group is its place here
-	std::vector<entt::entity> dancers;
-	/// Taking a fixed number of dancers: `quota` of them. Else a share of the dance's dancers: `quota` in a hundred.
-	bool limited {false};
-	uint32_t quota {100};
-	/// Its share of each round of newcomers, its quota over what the shared groups' quotas have in common
-	uint32_t weight {100};
-	/// How many of its dancers it took as a group with a fixed number
-	uint32_t limitedDancers {0};
-	uint32_t danceType {0};
-	uint32_t sexes {k_AnySex};
-	/// Its shape about the dance's place; a group with one keeps its membership
-	uint32_t formation {0};
-};
+/// The rate the groups move at for a speed of 0 to 1: the speed in tenths, rounded down, times 0.4
+[[nodiscard]] float RateForSpeed(float speed);
 
-/// A dance's groups, in the order they were made, and the order newcomers try them in
-struct Groups
-{
-	std::vector<Group> all;
-	/// The groups with a fixed number of dancers, tried first in this order
-	std::vector<std::size_t> limited;
-	/// The groups sharing the dancers between them, in this order, a newcomer going to each in turn by its weight
-	std::vector<std::size_t> shared;
-	/// Where the round of newcomers is, and how long a round is
-	uint8_t round {0};
-	uint32_t roundLength {0};
-	uint32_t dancers {0};
-};
+/// The dance is asked to go at a speed: its rate follows, and a new rate while it is danced starts it over
+void SetSpeed(components::Dance& dance, float speed);
+
+/// A worship site's dance follows how hard its dancers are chanting: danced while the intensity is above 0, stopped at
+/// 0, at that speed
+void SetWorshipSpeed(components::Dance& dance, float intensity);
+
+/// Whether enough of its dancers have come for it to start: more than half of those on their way, or the longest wait
+/// gone by since the first came. Notes the turn the first dancer came.
+bool HasProperlyStarted(components::Dance& dance, uint32_t turn);
+
+/// How many turns the dance's loop lasts before its clock starts over: 120 half seconds for each length of its loop
+[[nodiscard]] uint32_t LoopTurns(const components::Dance& dance);
 
 /// The groups' weights in a round: each shared group's quota over the largest number that divides them all, and the
 /// round 100 over it. Nothing changes when no shared group has a quota.
-void SetWeights(Groups& groups);
+void SetWeights(components::DanceGroups& groups);
 
 /// What a key frame does to the groups' membership, each action done to its groups the last listed first. A group
 /// numbered past the last is made.
-void ApplyKeyFrame(Groups& groups, const dance::DanceKeyFrame& keyFrame);
-/// Every key frame up to a beat, as a dance does once its file is read
-void ApplyKeyFramesUpTo(Groups& groups, const dance::DanceFile& file, float beat);
+void ApplyKeyFrame(components::DanceGroups& groups, const dance::DanceKeyFrame& keyFrame);
+/// Every key frame up to a time on the clock, as a dance does once its file is read
+void ApplyKeyFramesUpTo(components::DanceGroups& groups, const dance::DanceFile& file, float clock);
 
 /// A newcomer joins the first group with a fixed number of dancers that has room and takes its dance type and sex,
-/// else the shared group whose turn it is in the round that takes them. None when no group does.
-std::optional<std::size_t> AddDancer(Groups& groups, entt::entity dancer, uint32_t danceType, uint32_t sex);
+/// else the shared group whose turn it is in the round that takes them, and the dance has one more dancer. None when
+/// no group does.
+std::optional<std::size_t> AddDancer(components::Dance& dance, entt::entity dancer, uint32_t danceType, uint32_t sex);
 /// A dancer leaves its group; those after it move up a place
-void RemoveDancer(Groups& groups, std::size_t group, entt::entity dancer);
+void RemoveDancer(components::Dance& dance, std::size_t group, entt::entity dancer);
 /// The first dancer of the first group that has one other than `exclude`
-[[nodiscard]] entt::entity FirstDancer(const Groups& groups, entt::entity exclude);
+[[nodiscard]] entt::entity FirstDancer(const components::DanceGroups& groups, entt::entity exclude);
 
-/// Whether a key frame is the one for a beat: the same half second of beats
-[[nodiscard]] bool KeyFrameDue(float keyFrameTime, float beat, uint32_t turnsPerSecond);
-/// The first key frame due at a beat, if any
-[[nodiscard]] const dance::DanceKeyFrame* DueKeyFrame(const dance::DanceFile& file, float beat, uint32_t turnsPerSecond);
-/// The next beat: one on, back to 0 after 120 half seconds' worth for each of the dance's loops
-[[nodiscard]] float NextBeat(float beat, uint32_t loops, uint32_t turnsPerSecond);
+/// Whether a key frame is the one for a time on the clock: the same half second
+[[nodiscard]] bool KeyFrameDue(float keyFrameTime, float clock);
+/// The first key frame due at a time on the clock, if any
+[[nodiscard]] const dance::DanceKeyFrame* DueKeyFrame(const dance::DanceFile& file, float clock);
+/// The clock a turn on: one on, back to 0 once the dance's loop has gone by
+[[nodiscard]] float NextClock(float clock, uint32_t loopLength);
 
-/// Whether a dance waiting to start starts: once it has dancers, when more than half `half` (none in the game) have
-/// come, or after 90 seconds of waiting. The wait starts the first turn it has a dancer.
-[[nodiscard]] bool ReadyToStart(uint32_t dancers, bool& waiting, uint32_t& waitStartTurn, uint32_t turn,
-                                uint32_t turnsPerSecond);
+/// One game turn of the dance: a stopped dance that starts by itself does once its dancers have come; one that lasts
+/// a while stops once that is over; while danced with dancers, the key frame due on its clock is done and its clock
+/// goes on, starting over at the end of its loop
+void ProcessTurn(components::Dance& dance, uint32_t turn);
 
 } // namespace openblack::ecs::dance_rules

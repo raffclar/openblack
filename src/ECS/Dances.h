@@ -18,6 +18,7 @@
 #include <entt/entity/entity.hpp>
 
 #include "3D/MapCoords.h"
+#include "Enums.h"
 
 namespace openblack::dance
 {
@@ -29,7 +30,8 @@ namespace openblack::ecs
 class Registry;
 }
 
-/// The dances: made about a place, joined and left by dancers, gone when what they are danced about goes
+/// The dances, the same for every dance (a worship site's, a town's or a script's): made about a place, joined and left by
+/// dancers, gone when what they are danced about goes
 namespace openblack::ecs::dances
 {
 
@@ -37,17 +39,18 @@ namespace openblack::ecs::dances
 struct DanceSetup
 {
 	/// Its row in the dances' table, and whether it starts by itself once it has dancers
-	uint32_t type {0};
+	DanceInfo type {DanceInfo::None};
 	bool autostart {false};
 	map_coords::MapCoords place;
-	/// What it is danced about, if anything
-	entt::entity centre {entt::null};
+	/// What it is danced for or about, if anything
+	entt::entity owner {entt::null};
 	/// The turns it dances before stopping to start again; none for no end
-	uint32_t durationTurns {0};
+	uint32_t duration {0};
 	bool madeByScript {false};
 };
 
-/// A new dance with the groups of its file, each set up by the file's key frames up to its first beat
+/// A new dance, stopped at a quarter speed, with the groups of its file, each set up by the file's key frames up to
+/// the start of its clock
 entt::entity Create(Registry& registry, const DanceSetup& setup, std::shared_ptr<const dance::DanceFile> file);
 /// A dance goes: its dancers leave it and each is told it has finished dancing
 void Destroy(Registry& registry, entt::entity dance, const std::function<void(entt::entity)>& finished);
@@ -71,7 +74,6 @@ void RemoveDancer(Registry& registry, entt::entity living);
 struct TurnContext
 {
 	uint32_t turn {0};
-	uint32_t turnsPerSecond {10};
 	/// Whether the thing danced about is still about
 	std::function<bool(entt::entity)> available;
 	/// A dancer told it has finished dancing
@@ -79,7 +81,7 @@ struct TurnContext
 };
 
 /// A dance's turn: it ends once what it is danced about has gone; it starts once it has dancers, stops when its time is
-/// up to start again on its next turn, and while dancing does its key frames and goes on a beat
+/// up to start again on its next turn, and while dancing does its key frames and its clock goes on
 void ProcessTurn(Registry& registry, entt::entity dance, const TurnContext& context);
 
 } // namespace openblack::ecs::dances

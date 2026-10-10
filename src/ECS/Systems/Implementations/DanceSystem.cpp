@@ -44,7 +44,6 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
-constexpr uint32_t k_TurnsPerSecond = 1000 / static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count());
 
 /// Where a dance's file is: its name in the table is under the game's scripts folder
 std::filesystem::path DanceFilePath(const std::string& name)
@@ -139,7 +138,7 @@ bool Available(entt::entity thing)
 }
 } // namespace
 
-entt::entity DanceSystem::Create(uint32_t type, const glm::vec3& place, entt::entity centre, uint32_t durationTurns,
+entt::entity DanceSystem::Create(DanceInfo type, const glm::vec3& place, entt::entity owner, uint32_t duration,
                                  bool madeByScript)
 {
 	if (!Locator::infoConstants::has_value())
@@ -147,11 +146,12 @@ entt::entity DanceSystem::Create(uint32_t type, const glm::vec3& place, entt::en
 		return entt::null;
 	}
 	const auto& table = Locator::infoConstants::value().dance;
-	if (type >= table.size())
+	const auto row = static_cast<std::size_t>(type);
+	if (type == DanceInfo::None || row >= table.size())
 	{
 		return entt::null;
 	}
-	const auto& info = table.at(type);
+	const auto& info = table.at(row);
 	const std::string_view field(info.fileName.data(), info.fileName.size());
 	const std::string fileName(field.substr(0, field.find('\0')));
 	auto file = LoadDanceFile(fileName);
@@ -164,8 +164,8 @@ entt::entity DanceSystem::Create(uint32_t type, const glm::vec3& place, entt::en
 	                      {.type = type,
 	                       .autostart = info.startsAutomatically != 0,
 	                       .place = map_coords::FromMetres(glm::xz(place)),
-	                       .centre = centre,
-	                       .durationTurns = durationTurns,
+	                       .owner = owner,
+	                       .duration = duration,
 	                       .madeByScript = madeByScript},
 	                      std::move(file));
 }
@@ -180,10 +180,8 @@ void DanceSystem::ProcessTurn()
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<entt::entity> all;
 	registry.Each<const Dance>([&all](entt::entity entity, const Dance&) { all.push_back(entity); });
-	const dances::TurnContext context {.turn = Locator::time::value().GetTurn(),
-	                                   .turnsPerSecond = k_TurnsPerSecond,
-	                                   .available = &Available,
-	                                   .finished = &FinishedDancing};
+	const dances::TurnContext context {
+	    .turn = Locator::time::value().GetTurn(), .available = &Available, .finished = &FinishedDancing};
 	for (const auto entity : all)
 	{
 		if (dances::IsDance(registry, entity))

@@ -214,6 +214,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"cameraHelpSystem", "view.state"},
     LocatorCoverage {"templeExteriorSystem", "temple.state"},
     LocatorCoverage {"templeDestructionSystem", "temple.state"},
+    LocatorCoverage {"worshipSiteSystem", "worship.sites"},
     LocatorCoverage {"handSystem", "players.hand"},
     LocatorCoverage {"handGrabSystem", "players.hand"},
     LocatorCoverage {"temple", "temple.interior"},
@@ -824,44 +825,48 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                  }
 		                  return items;
 	                  }));
-	provider->Add(Query("dances", "The dances: what they are danced about, whether dancing, the beat, and each group's dancers",
-	                    {}, ResultKind::List),
-	              Serve<Locator::danceSystem>(
-	                  "the dances", [](const ecs::systems::DanceSystemInterface& /*dances*/, const QueryContext&) {
-		                  Json items = Json::array();
-		                  if (const auto* registry = Registry(); registry != nullptr)
-		                  {
-			                  registry->Each<const Dance>([&items, registry](entt::entity entity, const Dance& dance) {
-				                  auto item = Listed(*registry, entity);
-				                  item["type"] = dance.type;
-				                  item["centre"] = ToId(dance.centre);
-				                  item["dancing"] = dance.dancing;
-				                  item["beat"] = dance.beat;
-				                  item["start_turn"] = dance.startTurn;
-				                  item["duration_turns"] = dance.durationTurns;
-				                  item["dancers"] = dance.groups.dancers;
-				                  item["round"] = dance.groups.round;
-				                  Json groups = Json::array();
-				                  for (const auto& group : dance.groups.all)
-				                  {
-					                  Json dancers = Json::array();
-					                  for (const auto dancer : group.dancers)
-					                  {
-						                  dancers.push_back(ToId(dancer));
-					                  }
-					                  groups.push_back({{"name", group.name},
-					                                    {"limited", group.limited},
-					                                    {"quota", group.quota},
-					                                    {"weight", group.weight},
-					                                    {"sexes", group.sexes},
-					                                    {"dancers", std::move(dancers)}});
-				                  }
-				                  item["groups"] = std::move(groups);
-				                  items.push_back(std::move(item));
-			                  });
-		                  }
-		                  return items;
-	                  }));
+	provider->Add(
+	    Query("dances",
+	          "The dances: what they are danced for, whether dancing, their speed and clock, and each group's dancers", {},
+	          ResultKind::List),
+	    Serve<Locator::danceSystem>(
+	        "the dances", [](const ecs::systems::DanceSystemInterface& /*dances*/, const QueryContext&) {
+		        Json items = Json::array();
+		        if (const auto* registry = Registry(); registry != nullptr)
+		        {
+			        registry->Each<const Dance>([&items, registry](entt::entity entity, const Dance& dance) {
+				        auto item = Listed(*registry, entity);
+				        item["type"] = static_cast<int>(dance.type);
+				        item["owner"] = ToId(dance.owner);
+				        item["dancing"] = dance.state == Dance::State::Dancing;
+				        item["speed"] = dance.speed;
+				        item["rate"] = dance.rate;
+				        item["clock"] = dance.clock;
+				        item["start_turn"] = dance.startTurn;
+				        item["duration"] = dance.duration;
+				        item["dancers"] = dance.dancers;
+				        item["round"] = dance.groups.round;
+				        Json groups = Json::array();
+				        for (const auto& group : dance.groups.all)
+				        {
+					        Json dancers = Json::array();
+					        for (const auto dancer : group.dancers)
+					        {
+						        dancers.push_back(ToId(dancer));
+					        }
+					        groups.push_back({{"name", group.name},
+					                          {"limited", group.limited},
+					                          {"quota", group.quota},
+					                          {"weight", group.weight},
+					                          {"sexes", group.sexes},
+					                          {"dancers", std::move(dancers)}});
+				        }
+				        item["groups"] = std::move(groups);
+				        items.push_back(std::move(item));
+			        });
+		        }
+		        return items;
+	        }));
 	provider->Add(Query("flocks",
 	                    "The scripts' flocks: their place, their domain and flock distances, and their members "
 	                    "from the first to the leader",
@@ -1799,6 +1804,7 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	    },
 	}));
 	inspector.Add(MakeTownProvider(World()));
+	inspector.Add(MakeWorshipProvider(World()));
 	inspector.Add(MakeInfluenceProvider({
 	    .hand = [](int player) -> std::optional<glm::vec3> {
 		    // Only this computer's player's hands are known; the first hand there is

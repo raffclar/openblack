@@ -39,11 +39,11 @@ uint32_t villager_dance::DanceSex(entt::entity villager)
 	const auto* person = Locator::entitiesRegistry::value().TryGet<const Villager>(villager);
 	if (person == nullptr || !Locator::infoConstants::has_value())
 	{
-		return ecs::dance_rules::k_AnySex;
+		return ecs::components::DanceGroup::k_AnySex;
 	}
 	const auto& info =
 	    Locator::infoConstants::value().villager.at(static_cast<size_t>(GVillagerInfo::Find(person->tribe, person->number)));
-	return info.sex == SexType::Male ? ecs::dance_rules::k_Men : ecs::dance_rules::k_Women;
+	return info.sex == SexType::Male ? ecs::components::DanceGroup::k_Men : ecs::components::DanceGroup::k_Women;
 }
 
 uint32_t villager_dance::InDance(LivingAction& /*action*/)

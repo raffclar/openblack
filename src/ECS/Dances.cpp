@@ -34,8 +34,8 @@ entt::entity dances::Create(Registry& registry, const DanceSetup& setup, std::sh
 	auto& dance = registry.Assign<Dance>(entity);
 	dance.type = setup.type;
 	dance.place = setup.place;
-	dance.centre = setup.centre;
-	dance.durationTurns = setup.durationTurns;
+	dance.owner = setup.owner;
+	dance.duration = setup.duration;
 	dance.autostart = setup.autostart;
 	dance.madeByScript = setup.madeByScript;
 	// A dance always has one group, and as many as its file names
@@ -47,11 +47,12 @@ entt::entity dances::Create(Registry& registry, const DanceSetup& setup, std::sh
 		{
 			dance.groups.all[i].name = file->groupNames[i];
 		}
-		dance.beat = file->beat;
-		dance.loops = file->loops;
-		dance_rules::ApplyKeyFramesUpTo(dance.groups, *file, dance.beat);
+		dance.clock = file->beat;
+		dance.loopLength = file->loops;
+		dance_rules::ApplyKeyFramesUpTo(dance.groups, *file, dance.clock);
 	}
 	dance.file = std::move(file);
+	dance_rules::SetSpeed(dance, dance_rules::k_MadeSpeed);
 	return entity;
 }
 
@@ -68,7 +69,7 @@ entt::entity dances::DanceOf(const Registry& registry, entt::entity living)
 
 uint32_t dances::Size(const Registry& registry, entt::entity dance)
 {
-	return IsDance(registry, dance) ? registry.Get<const Dance>(dance).groups.dancers : 0;
+	return IsDance(registry, dance) ? registry.Get<const Dance>(dance).dancers : 0;
 }
 
 bool dances::AddDancer(Registry& registry, entt::entity dance, entt::entity living, uint32_t sex)
@@ -78,7 +79,7 @@ bool dances::AddDancer(Registry& registry, entt::entity dance, entt::entity livi
 		return false;
 	}
 	auto& data = registry.Get<Dance>(dance);
-	const auto group = dance_rules::AddDancer(data.groups, living, k_LivingDanceType, sex);
+	const auto group = dance_rules::AddDancer(data, living, k_LivingDanceType, sex);
 	if (!group.has_value())
 	{
 		return false;
@@ -96,7 +97,7 @@ void dances::RemoveDancer(Registry& registry, entt::entity living)
 	}
 	if (IsDance(registry, dancer->dance))
 	{
-		dance_rules::RemoveDancer(registry.Get<Dance>(dancer->dance).groups, dancer->group, living);
+		dance_rules::RemoveDancer(registry.Get<Dance>(dancer->dance), dancer->group, living);
 	}
 	registry.Remove<Dancer>(living);
 }
@@ -140,36 +141,11 @@ void dances::Destroy(Registry& registry, entt::entity dance, const std::function
 void dances::ProcessTurn(Registry& registry, entt::entity entity, const TurnContext& context)
 {
 	auto& dance = registry.Get<Dance>(entity);
-	if (dance.centre != entt::null && !context.available(dance.centre))
+	if (dance.owner != entt::null && !context.available(dance.owner))
 	{
 		Destroy(registry, entity, context.finished);
 		return;
 	}
 	// TODO(opening): a dance that follows what it is danced about moves with it; the scripts' dances don't
-	if (!dance.dancing && dance.autostart &&
-	    dance_rules::ReadyToStart(dance.groups.dancers, dance.waiting, dance.waitStartTurn, context.turn,
-	                              context.turnsPerSecond))
-	{
-		dance.dancing = true;
-		dance.startTurn = context.turn;
-	}
-	else if (dance.durationTurns > 0 && context.turn - dance.startTurn > dance.durationTurns)
-	{
-		// TODO(opening): its lights go out
-		dance.dancing = false;
-	}
-	if (!dance.dancing || dance.groups.dancers == 0)
-	{
-		return;
-	}
-	// TODO(opening): a town's dance counts the turns the camera is near it
-	if (dance.file != nullptr)
-	{
-		if (const auto* keyFrame = dance_rules::DueKeyFrame(*dance.file, dance.beat, context.turnsPerSecond))
-		{
-			dance_rules::ApplyKeyFrame(dance.groups, *keyFrame);
-		}
-	}
-	// TODO(opening): each group's moves go on, and the dance's lights
-	dance.beat = dance_rules::NextBeat(dance.beat, dance.loops, context.turnsPerSecond);
+	dance_rules::ProcessTurn(dance, context.turn);
 }

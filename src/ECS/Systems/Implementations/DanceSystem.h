@@ -21,7 +21,7 @@ namespace openblack::ecs::systems
 class DanceSystem final: public DanceSystemInterface
 {
 public:
-	entt::entity Create(uint32_t type, const glm::vec3& place, entt::entity centre, uint32_t durationTurns,
+	entt::entity Create(DanceInfo type, const glm::vec3& place, entt::entity owner, uint32_t duration,
 	                    bool madeByScript) override;
 	void Destroy(entt::entity dance) override;
 	void ProcessTurn() override;

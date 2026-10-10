@@ -138,6 +138,7 @@
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TownDesire.h"
 #include "ECS/TownPlaythings.h"
@@ -1841,12 +1842,12 @@ static void JoinDance(entt::entity living, entt::entity dance, bool asCentre)
 	auto& registry = Locator::entitiesRegistry::value();
 	if (asCentre)
 	{
-		registry.Get<ecs::components::Dance>(dance).centre = living;
+		registry.Get<ecs::components::Dance>(dance).owner = living;
 	}
 	// One already dancing leaves its dance first
 	ecs::dances::RemoveDancer(registry, living);
-	const auto sex =
-	    registry.AllOf<ecs::components::Villager>(living) ? ecs::villager_dance::DanceSex(living) : ecs::dance_rules::k_AnySex;
+	const auto sex = registry.AllOf<ecs::components::Villager>(living) ? ecs::villager_dance::DanceSex(living)
+	                                                                   : ecs::components::DanceGroup::k_AnySex;
 	static_cast<void>(ecs::dances::AddDancer(registry, dance, living, sex));
 	if (IsDirectableVillager(living))
 	{
@@ -1979,7 +1980,7 @@ static void DetachFromDance(uint32_t objectId, entt::entity object, entt::entity
 		return;
 	}
 	const auto& data = registry.Get<const ecs::components::Dance>(dance);
-	const auto exclude = data.groups.dancers == 1 ? entt::null : data.centre;
+	const auto exclude = data.dancers == 1 ? entt::null : data.owner;
 	const auto dancer = ecs::dances::FirstDancer(registry, dance, exclude);
 	if (dancer == entt::null)
 	{
@@ -2386,7 +2387,7 @@ void DanceCreate() // 054 DANCE_CREATE
 	const auto type = Pop().intVal;
 	const auto centre = PopObject();
 	// What it is danced about may be nothing
-	const auto dance = Locator::danceSystem::value().Create(static_cast<uint32_t>(type), position, centre,
+	const auto dance = Locator::danceSystem::value().Create(static_cast<DanceInfo>(type), position, centre,
 	                                                        static_cast<uint32_t>(map_coords::FtoL(duration)), true);
 	if (dance == entt::null)
 	{
@@ -5843,10 +5844,13 @@ void CallBuildingInTown() // 375 CALL_BUILDING_IN_TOWN
 
 void SetCanBuildWorshipsite() // 376 SET_CAN_BUILD_WORSHIPSITE
 {
-	// const auto object = Pop().uintVal;
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A town or a temple is let have worship sites made, or stopped
+	const auto object = PopObject();
+	const auto enable = Pop().intVal != 0;
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().SetCanHaveSites(object, enable);
+	}
 }
 
 void GetFacingCameraPosition() // 377 GET_FACING_CAMERA_POSITION

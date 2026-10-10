@@ -22,6 +22,8 @@ struct PlannedTemple
 {
 	int32_t townId;
 	PlayerNames owner;
+	/// Which way the temple is to face, in radians, as the land's script gives it
+	float facing {0.0f};
 };
 
 /// A building going up with a site for its builders: how much the town wants it built, which a script may force

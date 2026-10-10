@@ -432,6 +432,12 @@
   "query": "town.homeless"
  },
  {
+  "description": "The worship sites: their temple, player, tribe, place round the temple, towns, altar, how far they are built, and their prayer power: dancers, battery, what can be drawn this turn and what has been, the dance's intensity and the strain",
+  "kind": "list",
+  "parameters": [],
+  "query": "worship.sites"
+ },
+ {
   "description": "The hand's share: the player's influence where their hand is (with what the hand keeps past the border), at the hand's own place, and their own; whether the hand is inside",
   "kind": "object",
   "parameters": [
@@ -834,7 +840,7 @@
   "query": "living.walk_paths"
  },
  {
-  "description": "The dances: what they are danced about, whether dancing, the beat, and each group's dancers",
+  "description": "The dances: what they are danced for, whether dancing, their speed and clock, and each group's dancers",
   "kind": "list",
   "parameters": [],
   "query": "living.dances"

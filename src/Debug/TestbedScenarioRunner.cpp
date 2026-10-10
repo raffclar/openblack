@@ -444,8 +444,8 @@ void Runner::Start(const Scenario& scenario)
 	if (const auto& temple = scenario.environment.temple; temple.has_value())
 	{
 		const auto at = MapPoint(_middle, *temple);
-		ecs::archetypes::CitadelArchetype::Create({at.x, land.GetHeightAt(at), at.y}, PlayerNames::PLAYER_ONE, glm::mat4(1.0f),
-		                                          glm::vec3(1.0f));
+		ecs::archetypes::CitadelArchetype::Create({at.x, land.GetHeightAt(at), at.y}, PlayerNames::PLAYER_ONE, 0.0f,
+		                                          glm::mat4(1.0f), glm::vec3(1.0f));
 	}
 	PlaceObjects(scenario, _middle);
 	PlaceBirds(scenario, _middle);
@@ -718,8 +718,8 @@ void Runner::PlaceBirds(const Scenario& scenario, glm::vec2 middle)
 	for (const auto& setup : scenario.temples)
 	{
 		const auto point = MapPoint(middle, setup.offset);
-		ecs::archetypes::CitadelArchetype::Create({point.x, land.GetHeightAt(point), point.y}, setup.owner, glm::mat4(1.0f),
-		                                          glm::vec3(1.0f));
+		ecs::archetypes::CitadelArchetype::Create({point.x, land.GetHeightAt(point), point.y}, setup.owner, 0.0f,
+		                                          glm::mat4(1.0f), glm::vec3(1.0f));
 	}
 	if (!Locator::animalSystem::has_value())
 	{

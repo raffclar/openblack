@@ -188,6 +188,7 @@
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WhaleSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -1128,6 +1129,11 @@ bool Game::GameLogicLoop() noexcept
 
 	// The objects' looping sounds start again where they have stopped
 	Locator::soundTagSystem::value().ProcessTurn(cameraPosition);
+	// The worship sites charge their icons and store what their dancers chant, before the miracles draw their upkeep
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().ProcessChants();
+	}
 	{
 		// The dispensers, then each miracle's upkeep, its own particle effect and what that effect tells it
 		auto magic = profiler.BeginScoped(Profiler::Stage::MagicUpdate);
@@ -1214,6 +1220,11 @@ bool Game::GameLogicLoop() noexcept
 	Locator::alignmentSystem::value().UpdateTurn(cameraPosition);
 	// The temples' outsides follow their players' alignments
 	Locator::templeExteriorSystem::value().UpdateTurn();
+	// And their worship sites wear their looks
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().UpdateTurn();
+	}
 
 	if (_atmosAudio)
 	{
@@ -2340,9 +2351,9 @@ bool Game::Initialize() noexcept
 				                   SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading temple mesh: {}", f.stem().string());
 				                   RegisterFile(meshManager, name, f, resources::L3DLoader::FromDiskTag {}, f);
 				                   // The temple's outside is blended from the temple meshes, into the first temple's,
-				                   // and its entrance is picked under the cursor
+				                   // its entrance is picked under the cursor, and its worship sites wear its skin
 				                   if (name.starts_with("temple/b_temple") || name.starts_with("temple/b_first_temple") ||
-				                       name == "temple/entrance_l3d")
+				                       name == "temple/entrance_l3d" || name == "temple/b_worship_l3d")
 				                   {
 					                   RegisterFile(resources.GetL3DFiles(), name, f, resources::L3DFileLoader::FromDiskTag {},
 					                                f);
@@ -3268,6 +3279,12 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	}
 
 	timer.Step("footpaths");
+	// With the land laid out, each town of a player with a temple is given its worship site if it has none
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().LandLaidOut();
+	}
+
 	// With the land laid out, each town gathers the lone trees about it into its scenic forest
 	if (Locator::forestSystem::has_value())
 	{
