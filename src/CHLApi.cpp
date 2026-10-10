@@ -55,6 +55,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Creature/CreatureDesires.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "Creature/LeashRules.h"
@@ -131,15 +132,18 @@
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
+#include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
+#include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
+#include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
@@ -4623,20 +4627,47 @@ void DetachObjectLeash() // 187 DETACH_OBJECT_LEASH
 	leashes.TakeOff(creature);
 }
 
+/// The creature a creature native is given, if it is one; else the game's complaint
+std::optional<entt::entity> CreatureForNative(entt::entity thing)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (thing == entt::null || !registry.Valid(thing))
+	{
+		ScriptMessage("Thing not found!");
+		return std::nullopt;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(thing))
+	{
+		ScriptMessage("Thing not creature!");
+		return std::nullopt;
+	}
+	return thing;
+}
+
 void SetCreatureOnlyDesire() // 188 SET_CREATURE_ONLY_DESIRE
 {
-	// const auto value = Popf();
-	// const auto desire = Pop().intVal;
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The desire is wanted above all for the seconds given, and most others are held down as long
+	const auto seconds = Popf();
+	const auto desire = Pop().intVal;
+	const auto creature = CreatureForNative(PopObject());
+	if (desire < 0 || desire >= static_cast<int32_t>(creature_desires::k_DesireCount))
+	{
+		ScriptMessage("Invalid desire");
+		return;
+	}
+	if (creature.has_value() && Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().SetOnlyDesire(*creature, static_cast<creature_desires::Desire>(desire), seconds);
+	}
 }
 
 void SetCreatureOnlyDesireOff() // 189 SET_CREATURE_ONLY_DESIRE_OFF
 {
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto creature = CreatureForNative(PopObject());
+	if (creature.has_value() && Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().ClearOnlyDesire(*creature);
+	}
 }
 
 void RestartMusic() // 190 RESTART_MUSIC
@@ -4780,9 +4811,15 @@ void GetSlowestSpeed() // 198 GET_SLOWEST_SPEED
 
 void GetObjectHeld199() // 199 GET_OBJECT_HELD
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// What the player's hand holds, if anything
+	const auto held = Locator::handGrabSystem::has_value() ? Locator::handGrabSystem::value().GetHeld() : std::nullopt;
+	if (!held.has_value() || !Locator::entitiesRegistry::value().Valid(*held))
+	{
+		PushObject(entt::null);
+		return;
+	}
+	Locator::scriptObjects::value().Register(*held, false);
+	PushObject(*held);
 }
 
 void HelpSystemOn() // 200 HELP_SYSTEM_ON
@@ -4882,6 +4919,20 @@ void DevFunction() // 205 DEV_FUNCTION
 	case 3:
 		leashes.SetKnown(*creature, LeashType::Good, true);
 		leashes.SetKnown(*creature, LeashType::Evil, true);
+		break;
+	case 6:
+		// It points out the lesson highlight about it
+		if (Locator::creatureMindSystem::has_value())
+		{
+			Locator::creatureMindSystem::value().PointOutHighlight(*creature);
+		}
+		break;
+	case 7:
+		// How it was last rewarded or punished is forgotten, so that a script can wait for the next time
+		if (Locator::creatureMindSystem::has_value())
+		{
+			Locator::creatureMindSystem::value().ClearInteractionMagnitude(*creature);
+		}
 		break;
 	case 8:
 	case 9:
@@ -5657,10 +5708,11 @@ void IsLeashedToObject() // 269 IS_LEASHED_TO_OBJECT
 
 void GetInteractionMagnitude() // 270 GET_INTERACTION_MAGNITUDE
 {
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// How strongly the player last rewarded (above 0) or punished (below 0) the creature
+	const auto creature = CreatureForNative(PopObject());
+	Pushf(creature.has_value() && Locator::creatureMindSystem::has_value()
+	          ? Locator::creatureMindSystem::value().GetInteractionMagnitude(*creature)
+	          : 0.0f);
 }
 
 void IsCreatureAvailable() // 271 IS_CREATURE_AVAILABLE
@@ -5690,19 +5742,54 @@ void CreateHighlight() // 272 CREATE_HIGHLIGHT
 
 void GetObjectHeld273() // 273 GET_OBJECT_HELD
 {
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// What a creature holds in its hand, if anything
+	const auto creature = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (creature == entt::null || !registry.Valid(creature))
+	{
+		ScriptMessage("No creature");
+		PushObject(entt::null);
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(creature))
+	{
+		ScriptMessage("Not creature");
+		PushObject(entt::null);
+		return;
+	}
+	const auto held = Locator::creatureObjectActionSystem::has_value()
+	                      ? Locator::creatureObjectActionSystem::value().GetHeld(creature)
+	                      : std::nullopt;
+	if (!held.has_value())
+	{
+		PushObject(entt::null);
+		return;
+	}
+	Locator::scriptObjects::value().Register(*held, false);
+	PushObject(*held);
 }
 
 void GetActionCount() // 274 GET_ACTION_COUNT
 {
-	// const auto creature = Pop().uintVal;
-	// const auto action = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// How many times a creature has carried out an action (by the game's numbering) to its end
+	const auto creature = PopObject();
+	const auto action = Pop().uintVal;
+	auto& registry = Locator::entitiesRegistry::value();
+	if (creature == entt::null || !registry.Valid(creature))
+	{
+		ScriptMessage("No creature");
+		Pushf(0.0f);
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(creature))
+	{
+		ScriptMessage("Not creature");
+		Pushf(0.0f);
+		return;
+	}
+	Pushf(Locator::creatureMindSystem::has_value()
+	          ? static_cast<float>(Locator::creatureMindSystem::value().GetActionCount(creature, action))
+	          : 0.0f);
 }
 
 void GetObjectLeashType() // 275 GET_OBJECT_LEASH_TYPE
@@ -6427,10 +6514,19 @@ void SetTownDesireBoost() // 341 SET_TOWN_DESIRE_BOOST
 
 void IsLockedInteraction() // 342 IS_LOCKED_INTERACTION
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// Whether the player's hand is locked onto the thing: held to a creature with the button, or gripping a totem
+	const auto object = PopObject();
+	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
+	{
+		ScriptMessage("Object no longer valid");
+		Pushb(false);
+		return;
+	}
+	const bool heldCreature =
+	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == object;
+	const bool grippedTotem =
+	    Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped() == object;
+	Pushb(heldCreature || grippedTotem);
 }
 
 void SetCreatureName() // 343 SET_CREATURE_NAME
