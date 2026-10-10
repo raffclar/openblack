@@ -71,6 +71,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureSight.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
@@ -92,6 +93,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
@@ -933,6 +935,16 @@ magic::SpellCasterInterface* MagicSystem::CasterOf(const Spell& spell)
 			_globeCaster.Bind(spell.caster.player);
 			return &_globeCaster;
 		}
+		// A miracle from a seed a worship site's icon made is topped up by that site while it stands
+		if (spell.caster.worshipSite != entt::null)
+		{
+			if (!EntityRegistry().Valid(spell.caster.worshipSite))
+			{
+				return nullptr;
+			}
+			_siteCaster.Bind(spell.caster.worshipSite);
+			return &_siteCaster;
+		}
 		return _players.at(static_cast<size_t>(spell.caster.player)).get();
 	case SpellCaster::Kind::Object:
 		return EntityRegistry().Valid(spell.caster.entity) ? &_objectCaster : nullptr;
@@ -962,6 +974,15 @@ void MagicSystem::SetTribalPower(PlayerNames player, Tribe tribe, float power)
 	{
 		_tribalPowers.at(static_cast<size_t>(player)).at(static_cast<size_t>(tribe)) = power;
 	}
+}
+
+float MagicSystem::GetTribalPower(PlayerNames player, Tribe tribe) const
+{
+	if (tribe == Tribe::NONE || static_cast<size_t>(tribe) >= magic::k_TribeCount)
+	{
+		return 1.0f;
+	}
+	return _tribalPowers.at(static_cast<size_t>(player)).at(static_cast<size_t>(tribe));
 }
 
 float MagicSystem::PlayerTribalPower(PlayerNames player, MagicType type) const
@@ -1716,17 +1737,29 @@ entt::entity MagicSystem::GiveSeedToHand(PlayerNames player, SpellSeedType seedT
 
 entt::entity MagicSystem::SummonSeed(PlayerNames player, SpellSeedType seedType, int powerUp)
 {
+	return Summon(player, seedType, powerUp, entt::null);
+}
+
+entt::entity MagicSystem::SummonSeedAtSite(entt::entity site, SpellSeedType seedType, int powerUp)
+{
+	const auto& registry = EntityRegistry();
+	const auto* worshipSite = registry.Valid(site) ? registry.TryGet<const WorshipSite>(site) : nullptr;
+	return worshipSite != nullptr ? Summon(worshipSite->player, seedType, powerUp, site) : entt::null;
+}
+
+entt::entity MagicSystem::Summon(PlayerNames player, SpellSeedType seedType, int powerUp, entt::entity site)
+{
 	const auto entity = GiveSeedToHand(player, seedType, powerUp, 1.0f);
 	if (entity == entt::null)
 	{
 		return entt::null;
 	}
 	auto& seed = EntityRegistry().Get<SpellSeed>(entity);
+	seed.worshipSite = site;
 	const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(Info(), seedType), powerUp);
 	const float cost = magic::GetChantsRequiredToCreate(Info(), type);
-	// The worship charges it from the player's prayer power, as much as there is, and it isn't ready at once
-	auto* store = PrayerOf(player);
-	seed.chantStore = store != nullptr ? magic::ChargeSeed(*store, cost) : 0.0f;
+	// The worship charges it, as much as it has, and it isn't ready at once
+	seed.chantStore = DrawForSeed(seed, cost);
 	seed.power = magic::SeedPower(seed.chantStore, cost);
 	seed.origin = magic::SeedOrigin::Worship;
 	seed.hasIcon = true;
@@ -2038,8 +2071,11 @@ entt::entity MagicSystem::CastHeldSeed(magic::CastTarget target)
 	}
 	const auto heldEntity = *_held;
 	// A seed made at an icon is topped up by its worship; one made without is the player's own
-	const SpellCaster caster {
-	    .kind = SpellCaster::Kind::Player, .player = seed.player, .entity = entt::null, .withoutIcon = !seed.hasIcon};
+	const SpellCaster caster {.kind = SpellCaster::Kind::Player,
+	                          .player = seed.player,
+	                          .entity = entt::null,
+	                          .withoutIcon = !seed.hasIcon,
+	                          .worshipSite = seed.worshipSite};
 	const auto spellEntity =
 	    object.has_value() ? CastOn(type, caster, *object, cast, HandInfo()) : Cast(type, caster, point, cast, HandInfo());
 	if (spellEntity == entt::null)
@@ -2335,10 +2371,7 @@ void MagicSystem::DiscardHeldSeed()
 	{
 		// What the seed still holds goes back to the player's worship
 		const auto& seed = registry.Get<const SpellSeed>(*_held);
-		if (auto* store = PrayerOf(seed.player))
-		{
-			magic::ReturnPrayer(*store, magic::SeedRefund(seed.hasIcon, seed.chantStore, seed.storedChants, seed.hasCast));
-		}
+		ReturnFromSeed(seed, magic::SeedRefund(seed.hasIcon, seed.chantStore, seed.storedChants, seed.hasCast));
 	}
 	if (Locator::audio::has_value())
 	{
@@ -2373,19 +2406,15 @@ void MagicSystem::PowerUpHeldSeed(int level)
 	}
 	const auto type = seedInfo.magicTypes.at(slot);
 	const float cost = magic::GetChantsRequiredToCreate(Info(), type);
-	auto* store = PrayerOf(seed.player);
 	// The worship charges what more it needs, or takes back what it no longer does
-	if (store != nullptr)
+	if (cost > seed.chantStore)
 	{
-		if (cost > seed.chantStore)
-		{
-			seed.chantStore += magic::DrawPrayer(*store, cost - seed.chantStore);
-		}
-		else
-		{
-			magic::ReturnPrayer(*store, seed.chantStore - cost);
-			seed.chantStore = cost;
-		}
+		seed.chantStore += DrawForSeed(seed, cost - seed.chantStore);
+	}
+	else
+	{
+		ReturnFromSeed(seed, seed.chantStore - cost);
+		seed.chantStore = cost;
 	}
 	const int previous = seed.powerUp;
 	seed.powerUp = level;
@@ -2441,6 +2470,37 @@ PrayerPower* MagicSystem::PrayerOf(PlayerNames player) const
 		}
 	});
 	return found;
+}
+
+float MagicSystem::DrawForSeed(const SpellSeed& seed, float amount)
+{
+	if (seed.worshipSite != entt::null && EntityRegistry().Valid(seed.worshipSite) && Locator::worshipSiteSystem::has_value())
+	{
+		return Locator::worshipSiteSystem::value().UseCreateChants(seed.worshipSite, amount);
+	}
+	auto* store = PrayerOf(seed.player);
+	return store != nullptr ? magic::ChargeSeed(*store, amount) : 0.0f;
+}
+
+void MagicSystem::ReturnFromSeed(const SpellSeed& seed, float amount)
+{
+	if (seed.worshipSite != entt::null && EntityRegistry().Valid(seed.worshipSite) && Locator::worshipSiteSystem::has_value())
+	{
+		if (amount > 0.0f)
+		{
+			Locator::worshipSiteSystem::value().ReturnChants(seed.worshipSite, amount);
+		}
+		return;
+	}
+	if (auto* store = PrayerOf(seed.player))
+	{
+		magic::ReturnPrayer(*store, amount);
+	}
+}
+
+float WorshipSiteSpellCaster::MaintainSpell(float amount)
+{
+	return Locator::worshipSiteSystem::has_value() ? Locator::worshipSiteSystem::value().MaintainSpell(_site, amount) : 0.0f;
 }
 
 MagicSystemInterface::HandCastState MagicSystem::GetHandCastState() const

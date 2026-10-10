@@ -29,6 +29,7 @@ public:
 	[[nodiscard]] entt::id_type AltarMesh(Tribe tribe) const override;
 	[[nodiscard]] float LandHeightAt(glm::vec2 point) const override;
 	[[nodiscard]] uint32_t PopulationOf(entt::entity town) const override;
+	[[nodiscard]] magic::WorshipBatteryRules ChantRules(Tribe tribe, PlayerNames player) const override;
 };
 
 } // namespace openblack::ecs::systems

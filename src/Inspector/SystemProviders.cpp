@@ -27,8 +27,11 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/WorshipChants.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 
@@ -540,6 +543,54 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeTownProvider(WorldS
 		              {
 			              items.push_back(Listed(*registry, Info(sources), villager));
 		              }
+		              return QueryResult::Value(std::move(items));
+	              });
+	return provider;
+}
+
+std::unique_ptr<ProviderInterface> openblack::inspector::MakeWorshipProvider(WorldSources sources)
+{
+	auto provider = std::make_unique<FunctionProvider>("worship");
+	provider->Add(Query("sites",
+	                    "The worship sites: their temple, player, tribe, place round the temple, towns, altar, how far "
+	                    "they are built, and their prayer power: dancers, battery, what can be drawn this turn and what "
+	                    "has been, the dance's intensity and the strain",
+	                    {}, ResultKind::List),
+	              [sources](const QueryContext& /*context*/) {
+		              const auto* registry = Registry(sources);
+		              if (registry == nullptr)
+		              {
+			              return QueryResult::Error(std::string(k_NoRegistry));
+		              }
+		              Json items = Json::array();
+		              registry->Each<const WorshipSite>([&](entt::entity entity, const WorshipSite& site) {
+			              auto item = Listed(*registry, Info(sources), entity);
+			              item["temple"] = Id(site.temple);
+			              item["player"] = static_cast<int>(site.player);
+			              item["tribe"] = static_cast<int>(site.tribe);
+			              item["place"] = site.place;
+			              item["facing"] = site.facing;
+			              Json towns = Json::array();
+			              for (const auto town : site.towns)
+			              {
+				              towns.push_back(Id(town));
+			              }
+			              item["towns"] = std::move(towns);
+			              item["altar"] = Id(site.altar);
+			              const auto* progress = registry->TryGet<const BuildProgress>(entity);
+			              item["built"] = progress == nullptr ? 1.0f : progress->built;
+			              if (const auto* chants = registry->TryGet<const WorshipChants>(entity); chants != nullptr)
+			              {
+				              item["dancers"] = chants->dancers;
+				              item["battery"] = chants->battery;
+				              item["available"] = chants->available;
+				              item["used"] = chants->used;
+				              item["requested"] = chants->requested;
+				              item["dance_intensity"] = chants->danceIntensity;
+				              item["strain"] = chants->strain;
+			              }
+			              items.push_back(std::move(item));
+		              });
 		              return QueryResult::Value(std::move(items));
 	              });
 	return provider;

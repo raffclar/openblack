@@ -119,6 +119,8 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
+#include "ECS/Components/WorshipChants.h"
+#include "ECS/Components/WorshipSite.h"
 
 namespace components = openblack::ecs::components;
 
@@ -816,7 +818,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Player::windResistance>("windResistance")
 	    .Field<&components::Player::villagersLost>("villagersLost")
 	    .Field<&components::Player::villagersKilled>("villagersKilled")
-	    .Field<&components::Player::sacrifices>("sacrifices");
+	    .Field<&components::Player::sacrifices>("sacrifices")
+	    .Field<&components::Player::totalChantsUsed>("totalChantsUsed");
 	Reflect<components::PlayerCreatures>(context).Field<&components::PlayerCreatures::acquired>("acquired");
 	Reflect<components::Poisoned>(context).Field<&components::Poisoned::dummy>("dummy");
 	Reflect<components::CreatureMiracleOpinion>(context)
@@ -890,7 +893,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::SpellCaster::kind>("kind")
 	    .Field<&components::SpellCaster::player>("player")
 	    .Field<&components::SpellCaster::entity>("entity")
-	    .Field<&components::SpellCaster::withoutIcon>("withoutIcon");
+	    .Field<&components::SpellCaster::withoutIcon>("withoutIcon")
+	    .Field<&components::SpellCaster::worshipSite>("worshipSite");
 	Reflect<components::Spell>(context)
 	    .Field<&components::Spell::magicType>("magicType")
 	    .Field<&components::Spell::spellClass>("spellClass")
@@ -941,6 +945,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::SpellSeed::power>("power")
 	    .Field<&components::SpellSeed::origin>("origin")
 	    .Field<&components::SpellSeed::hasIcon>("hasIcon")
+	    .Field<&components::SpellSeed::worshipSite>("worshipSite")
 	    .Field<&components::SpellSeed::ready>("ready")
 	    .Field<&components::SpellSeed::holdType>("holdType")
 	    .Field<&components::SpellSeed::followsSpell>("followsSpell")
@@ -1015,6 +1020,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Town::scenicForest>("scenicForest")
 	    .Field<&components::Town::scenicForestCentre>("scenicForestCentre")
 	    .Field<&components::Town::playthings>("playthings")
+	    .Field<&components::Town::worshipShare>("worshipShare")
+	    .Field<&components::Town::worshipSite>("worshipSite")
+	    .Field<&components::Town::cannotHaveWorshipSite>("cannotHaveWorshipSite")
 	    .Field<&components::Town::congregationPos>("congregationPos")
 	    .Field<&components::Town::emergencyTurn>("emergencyTurn");
 	Reflect<components::TownAggression>(context).Field<&components::TownAggression::record>("record");
@@ -1174,4 +1182,30 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Storm::dead>("dead")
 	    .Field<&components::Storm::deadTurns>("deadTurns")
 	    .Field<&components::Storm::climate>("climate");
+	Reflect<components::WorshipChants>(context)
+	    .Field<&components::WorshipChants::battery>("battery")
+	    .Field<&components::WorshipChants::available>("available")
+	    .Field<&components::WorshipChants::used>("used")
+	    .Field<&components::WorshipChants::requested>("requested")
+	    .Field<&components::WorshipChants::chantsPerDancer>("chantsPerDancer")
+	    .Field<&components::WorshipChants::danceIntensity>("danceIntensity")
+	    .Field<&components::WorshipChants::strain>("strain")
+	    .Field<&components::WorshipChants::infinite>("infinite")
+	    .Field<&components::WorshipChants::freeMaintenance>("freeMaintenance")
+	    .Field<&components::WorshipChants::dancers>("dancers");
+	Reflect<components::CitadelWorship>(context)
+	    .Field<&components::CitadelWorship::sites>("sites")
+	    .Field<&components::CitadelWorship::facing>("facing")
+	    .Field<&components::CitadelWorship::cannotMakeSites>("cannotMakeSites")
+	    .Field<&components::CitadelWorship::standing>("standing");
+	Reflect<components::WorshipSite>(context)
+	    .Field<&components::WorshipSite::temple>("temple")
+	    .Field<&components::WorshipSite::player>("player")
+	    .Field<&components::WorshipSite::tribe>("tribe")
+	    .Field<&components::WorshipSite::place>("place")
+	    .Field<&components::WorshipSite::facing>("facing")
+	    .Field<&components::WorshipSite::towns>("towns")
+	    .Field<&components::WorshipSite::altar>("altar")
+	    .Field<&components::WorshipSite::buildRequests>("buildRequests");
+	Reflect<components::WorshipAltar>(context).Field<&components::WorshipAltar::site>("site");
 }

@@ -1080,6 +1080,11 @@ bool Game::GameLogicLoop() noexcept
 
 	// The objects' looping sounds start again where they have stopped
 	Locator::soundTagSystem::value().ProcessTurn(cameraPosition);
+	// The worship sites charge their icons and store what their dancers chant, before the miracles draw their upkeep
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().ProcessChants();
+	}
 	{
 		// The dispensers, then each miracle's upkeep, its own particle effect and what that effect tells it
 		auto magic = profiler.BeginScoped(Profiler::Stage::MagicUpdate);

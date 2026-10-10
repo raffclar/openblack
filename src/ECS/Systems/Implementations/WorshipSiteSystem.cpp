@@ -25,13 +25,16 @@
 
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/Player.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/WorshipSites.h"
 #include "GameWorshipSiteWorld.h"
+#include "Magic/WorshipBattery.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -215,6 +218,109 @@ void WorshipSiteSystem::UpdateTurn()
 	    [this](const WorshipSite& site, Mesh& mesh) { mesh.id = _world->SiteMesh(site.temple); });
 }
 
+void WorshipSiteSystem::ProcessChants()
+{
+	auto& registry = _world->Entities();
+	// Every player in turn, the neutral player last, each site of their temple by its place round it
+	for (size_t player = 0; player < static_cast<size_t>(PlayerNames::_COUNT); ++player)
+	{
+		const auto temple = TempleOf(static_cast<PlayerNames>(player));
+		if (temple == entt::null)
+		{
+			continue;
+		}
+		for (const auto site : registry.Get<const CitadelWorship>(temple).sites)
+		{
+			if (site == entt::null || !registry.Valid(site))
+			{
+				continue;
+			}
+			const auto& component = registry.Get<const WorshipSite>(site);
+			auto& chants = registry.Get<WorshipChants>(site);
+			// Spell icons are not made at the sites yet, so none charges
+			const float drawn =
+			    magic::ProcessWorshipTurn(chants, _world->ChantRules(component.tribe, component.player), chants.dancers, {});
+			CountChantsUsed(site, drawn);
+		}
+	}
+}
+
+void WorshipSiteSystem::SetDancers(entt::entity site, uint32_t dancers)
+{
+	_world->Entities().Get<WorshipChants>(site).dancers = dancers;
+}
+
+uint32_t WorshipSiteSystem::Dancers(entt::entity site) const
+{
+	return _world->Entities().Get<const WorshipChants>(site).dancers;
+}
+
+float WorshipSiteSystem::UseChants(entt::entity site, float amount)
+{
+	const float given = magic::UseWorshipChants(_world->Entities().Get<WorshipChants>(site), amount);
+	CountChantsUsed(site, given);
+	return given;
+}
+
+float WorshipSiteSystem::UseCreateChants(entt::entity site, float amount)
+{
+	return _world->Entities().Get<const WorshipChants>(site).infinite ? amount : UseChants(site, amount);
+}
+
+float WorshipSiteSystem::MaintainSpell(entt::entity site, float amount)
+{
+	return _world->Entities().Get<const WorshipChants>(site).freeMaintenance ? amount : UseChants(site, amount);
+}
+
+void WorshipSiteSystem::ReturnChants(entt::entity site, float amount)
+{
+	// The battery takes it all, however full
+	_world->Entities().Get<WorshipChants>(site).battery += amount;
+}
+
+float WorshipSiteSystem::ChantsAvailable(entt::entity site) const
+{
+	return magic::WorshipAvailable(_world->Entities().Get<const WorshipChants>(site));
+}
+
+float WorshipSiteSystem::TakeChantsForVirtualInfluence(PlayerNames player, uint32_t interfaces)
+{
+	auto& registry = _world->Entities();
+	const auto temple = TempleOf(player);
+	if (temple == entt::null)
+	{
+		return 0.0f;
+	}
+	float asked = 0.0f;
+	for (const auto site : registry.Get<const CitadelWorship>(temple).sites)
+	{
+		if (site == entt::null || !registry.Valid(site))
+		{
+			continue;
+		}
+		const auto& component = registry.Get<const WorshipSite>(site);
+		const auto& chants = registry.Get<const WorshipChants>(site);
+		const float take = magic::WorshipAvailableForVirtualInfluence(
+		    chants, _world->ChantRules(component.tribe, component.player), chants.dancers, interfaces);
+		UseChants(site, take);
+		// What was asked is counted, not what was given
+		asked += take;
+	}
+	return asked;
+}
+
+void WorshipSiteSystem::CountChantsUsed(entt::entity site, float amount)
+{
+	auto& registry = _world->Entities();
+	const auto owner = registry.Get<const WorshipSite>(site).player;
+	registry.Each<Player>([owner, amount](Player& player) {
+		if (player.name == owner)
+		{
+			player.totalChantsUsed += amount;
+		}
+	});
+}
+
 void WorshipSiteSystem::BuildBy(entt::entity site, float share)
 {
 	auto& registry = _world->Entities();
@@ -372,6 +478,7 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 	registry.Assign<Transform>(site, ground, glm::mat3(glm::eulerAngleY(-facing)), glm::vec3(1.0f));
 	registry.Assign<Mesh>(site, _world->SiteMesh(temple), static_cast<int8_t>(0), static_cast<int8_t>(0));
 	registry.Assign<BuildProgress>(site, 0.0f);
+	registry.Assign<WorshipChants>(site);
 	registry.Assign<WorshipSite>(site, WorshipSite {
 	                                       .temple = temple,
 	                                       .player = templeOwner,

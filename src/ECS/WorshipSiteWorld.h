@@ -19,6 +19,7 @@
 #include <glm/vec3.hpp>
 
 #include "Enums.h"
+#include "Magic/WorshipBattery.h"
 
 namespace openblack::ecs
 {
@@ -48,6 +49,8 @@ public:
 	[[nodiscard]] virtual float LandHeightAt(glm::vec2 point) const = 0;
 	/// How many people live in a town, with a home or without
 	[[nodiscard]] virtual uint32_t PopulationOf(entt::entity town) const = 0;
+	/// The prayer power rules of a tribe's sites for a player: every site chants with the player's Aztec power
+	[[nodiscard]] virtual magic::WorshipBatteryRules ChantRules(Tribe tribe, PlayerNames player) const = 0;
 };
 
 } // namespace openblack::ecs::worship_site

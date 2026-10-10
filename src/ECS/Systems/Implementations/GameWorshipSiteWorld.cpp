@@ -23,6 +23,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
@@ -129,4 +130,14 @@ uint32_t GameWorshipSiteWorld::PopulationOf(entt::entity town) const
 		}
 	});
 	return population;
+}
+
+magic::WorshipBatteryRules GameWorshipSiteWorld::ChantRules(Tribe tribe, PlayerNames player) const
+{
+	const auto& sites = Locator::infoConstants::value().worshipSite;
+	const auto row = static_cast<size_t>(tribe);
+	// Whatever the site's tribe, its dancers chant with the player's Aztec power
+	const float power =
+	    Locator::magicSystem::has_value() ? Locator::magicSystem::value().GetTribalPower(player, Tribe::AZTEC) : 1.0f;
+	return row < sites.size() ? magic::WorshipBatteryRulesFor(sites.at(row), power) : magic::WorshipBatteryRules {};
 }

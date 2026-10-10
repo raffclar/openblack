@@ -21,9 +21,11 @@
 
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/Player.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/WorshipSiteSystem.h"
@@ -76,7 +78,14 @@ public:
 		return found != population.end() ? found->second : 0;
 	}
 
+	[[nodiscard]] magic::WorshipBatteryRules ChantRules(Tribe /*tribe*/, PlayerNames /*player*/) const override
+	{
+		return chantRules;
+	}
+
 	int32_t landNumber {2};
+	magic::WorshipBatteryRules chantRules {
+	    .chantsPerVillager = 2.0f, .chantsToFillBattery = 100.0f, .eachVillagerAddToFillBattery = 10.0f};
 	/// The site's model wearing a temple's skin, once the temple has one
 	std::unordered_map<entt::entity, entt::id_type> templeSkins;
 	std::unordered_map<entt::entity, uint32_t> population;
@@ -329,4 +338,77 @@ TEST(WorshipSiteSystem, ASiteWearsItsTemplesSkinOnceTheTempleHasOne)
 	f.world->templeSkins[temple] = 7;
 	f.system->UpdateTurn();
 	EXPECT_EQ(f.registry.Get<const Mesh>(site).id, 7u);
+}
+
+namespace
+{
+/// A player's standing temple with a built site for one Norse town; the site
+std::pair<entt::entity, entt::entity> BuiltSite(Fixture& f, PlayerNames owner)
+{
+	f.Town(static_cast<uint32_t>(owner), owner, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+	const auto temple = f.Temple(owner);
+	f.system->AddTemple(temple, 0.0f, true);
+	const auto site = *std::ranges::find_if(f.registry.Get<const CitadelWorship>(temple).sites,
+	                                        [](auto entity) { return entity != entt::null; });
+	f.system->BuildBy(site, 1.0f);
+	return {temple, site};
+}
+} // namespace
+
+TEST(WorshipSiteChants, ASitesDancersChantIntoItEachTurn)
+{
+	Fixture f;
+	const auto [temple, site] = BuiltSite(f, PlayerNames::PLAYER_ONE);
+	f.system->SetDancers(site, 4);
+	EXPECT_EQ(f.system->Dancers(site), 4u);
+	f.system->ProcessChants();
+	const auto& chants = f.registry.Get<const WorshipChants>(site);
+	// Nothing drawn and an empty battery: the dance goes at the boost of an empty battery, 0.5, and the four dancers
+	// chant 4 x 2 x 0.5 into the battery; what can be drawn next turn is the battery and their full chanting
+	EXPECT_FLOAT_EQ(chants.danceIntensity, 0.5f);
+	EXPECT_FLOAT_EQ(chants.battery, 4.0f);
+	EXPECT_FLOAT_EQ(chants.available, 12.0f);
+	EXPECT_FLOAT_EQ(f.system->ChantsAvailable(site), 12.0f);
+}
+
+TEST(WorshipSiteChants, WhatIsDrawnCountsInThePlayersStatistics)
+{
+	Fixture f;
+	const auto player = f.registry.Create();
+	f.registry.Assign<Player>(player, Player {.name = PlayerNames::PLAYER_ONE});
+	const auto [temple, site] = BuiltSite(f, PlayerNames::PLAYER_ONE);
+	f.system->SetDancers(site, 4);
+	f.system->ProcessChants();
+	EXPECT_FLOAT_EQ(f.system->UseChants(site, 5.0f), 5.0f);
+	// Asked more than is left, the site gives what it has
+	EXPECT_FLOAT_EQ(f.system->UseChants(site, 50.0f), 7.0f);
+	EXPECT_FLOAT_EQ(f.system->ChantsAvailable(site), 0.0f);
+	EXPECT_FLOAT_EQ(f.registry.Get<const Player>(player).totalChantsUsed, 12.0f);
+	// A dropped seed's charge goes back into the battery
+	f.system->ReturnChants(site, 3.0f);
+	EXPECT_FLOAT_EQ(f.registry.Get<const WorshipChants>(site).battery, 7.0f);
+}
+
+TEST(WorshipSiteChants, CheatsGiveWithoutDrawing)
+{
+	Fixture f;
+	const auto [temple, site] = BuiltSite(f, PlayerNames::PLAYER_ONE);
+	auto& chants = f.registry.Get<WorshipChants>(site);
+	chants.infinite = true;
+	chants.freeMaintenance = true;
+	EXPECT_FLOAT_EQ(f.system->UseCreateChants(site, 40.0f), 40.0f);
+	EXPECT_FLOAT_EQ(f.system->MaintainSpell(site, 30.0f), 30.0f);
+	EXPECT_FLOAT_EQ(f.registry.Get<const WorshipChants>(site).used, 0.0f);
+}
+
+TEST(WorshipSiteChants, VirtualInfluenceTakesOnlyThisTurnsChantingSharedAmongHands)
+{
+	Fixture f;
+	const auto [temple, site] = BuiltSite(f, PlayerNames::PLAYER_ONE);
+	f.system->SetDancers(site, 4);
+	f.system->ProcessChants();
+	// 12 can be drawn, but only the dancers' 8 of chanting this turn is offered, split between two hands
+	EXPECT_FLOAT_EQ(f.system->TakeChantsForVirtualInfluence(PlayerNames::PLAYER_ONE, 2), 4.0f);
+	EXPECT_FLOAT_EQ(f.registry.Get<const WorshipChants>(site).used, 4.0f);
+	EXPECT_FLOAT_EQ(f.system->TakeChantsForVirtualInfluence(PlayerNames::PLAYER_TWO, 1), 0.0f);
 }
