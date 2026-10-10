@@ -163,6 +163,19 @@ bool GameHandGrabWorld::InInfluence(PlayerNames player, glm::vec3 point) const
 	return Locator::influenceSystem::has_value() && Locator::influenceSystem::value().PlayerInfluence(player, point) > 0.0f;
 }
 
+bool GameHandGrabWorld::HandInInfluence(PlayerNames player, glm::vec3 hand) const
+{
+	return Locator::influenceSystem::has_value() && Locator::influenceSystem::value().IsHandInInfluence(player, hand);
+}
+
+void GameHandGrabWorld::HeldThingUsedOnLand(PlayerNames player)
+{
+	if (Locator::influenceSystem::has_value())
+	{
+		Locator::influenceSystem::value().HeldThingUsedOnLand(player);
+	}
+}
+
 bool GameHandGrabWorld::InBounds(glm::vec3 point) const
 {
 	return map_coords::InBounds(point);
@@ -406,6 +419,17 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 	}
 	// Other things' taps are the clicking and activating of the interface
 	return false;
+}
+
+bool GameHandGrabWorld::HoldsLooseLeash() const
+{
+	if (!Locator::leashSystem::has_value())
+	{
+		return false;
+	}
+	const auto& leashes = Locator::leashSystem::value();
+	const auto creature = leashes.PlayersCreature(HandPlayer());
+	return creature.has_value() && leashes.HolderPoint(*creature).has_value();
 }
 
 void GameHandGrabWorld::LeaveRootsHole(entt::entity tree)

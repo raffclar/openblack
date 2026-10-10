@@ -66,21 +66,12 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 	const auto sex = info.sex == SexType::Female ? Villager::Sex::FEMALE : Villager::Sex::MALE;
 	const auto task = Villager::Task::IDLE;
 
-	// TODO(bwrsandman): Might be better to make a FindClosestAbode
 	const entt::entity town = Locator::townSystem::value().FindClosestTown(abodePosition);
-	entt::entity abode = entt::null;
-	if (town != entt::null)
-	{
-		abode = Locator::townSystem::value().FindAbodeWithSpace(town);
-	}
-	if (abode != entt::null)
-	{
-		registry.Get<Abode>(abode).inhabitants.insert(entity);
-	}
 
 	registry.Assign<Villager>(entity, life, villager_age::BirthTurnFor(turn, born.age), born.food, lifeStage, sex,
-	                          info.tribeType, info.villagerNumber, task, town, abode, born.lastCheckTurn);
-	registry.Assign<WallHug>(entity, glm::vec2(), glm::vec2(), 0.0f, GetSpeedStateSpeed(info.speedGroup.speedDefault));
+	                          info.tribeType, info.villagerNumber, task, entt::null, entt::null, born.lastCheckTurn);
+	registry.Assign<WallHug>(
+	    entity, WallHug {.goal = glm::vec2(), .yAngle = 0.0f, .speed = GetSpeedStateSpeed(info.speedGroup.speedDefault)});
 	// A child made as a child wears its kind's child model; the rest their job's
 	const auto resourceId = resources::HashIdentifier(born.child ? info.childMeshHigh : info.highDetail);
 	registry.Assign<Mesh>(entity, resourceId, static_cast<int8_t>(0), static_cast<int8_t>(0));
@@ -93,11 +84,10 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 	const auto state = villager_clips::IsOnWater(position) ? VillagerStates::Drowning : VillagerStates::Created;
 	registry.Assign<LivingAction>(entity, state, born.turnsUntilFirstDecision);
 	registry.Assign<VillagerPose>(entity);
-	// One joining a town with no home in it to go to is one of its homeless
-	if (town != entt::null && abode == entt::null)
+	// It joins the nearest town: into the building there that suits it best, or one of its homeless
+	if (town != entt::null)
 	{
-		registry.Get<Villager>(entity).town = entt::null;
-		Locator::townSystem::value().AddHomelessVillagerToTown(town, entity);
+		Locator::townSystem::value().AddVillagerToTown(town, entity);
 	}
 
 	return entity;

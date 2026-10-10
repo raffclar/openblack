@@ -54,3 +54,13 @@ TEST(StoreRules, APileGivesOnlyWhatIsWithinItsStoresMaximum)
 	EXPECT_EQ(store_rules::AskedOfPile(150, 100), 50u);
 	EXPECT_EQ(store_rules::AskedOfPile(150, -10), 150u);
 }
+
+TEST(StoreRules, AForestCountsItsWoodWithoutTruncating)
+{
+	// A small tree worth less than one wood still counts for its forest
+	EXPECT_FLOAT_EQ(store_rules::TreeWoodValue(0.5f, 1.0f, 1u, 0.5f, 1.0f), 0.25f);
+	EXPECT_EQ(store_rules::TreeWood(0.5f, 1.0f, 1u, 0.5f, 1.0f), 0u);
+	// A big forest is made worth its kind's wood value by its scale, truncated, and counts it by its life
+	EXPECT_EQ(store_rules::BigForestWorth(1.5f, 25u), 37u);
+	EXPECT_FLOAT_EQ(store_rules::BigForestWood(0.5f, 37u), 18.5f);
+}

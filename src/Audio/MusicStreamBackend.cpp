@@ -63,14 +63,11 @@ bool MusicStreamBackend::QueueChunk(Stream stream, const MusicBank& bank, uint32
 	const auto decode = [this, &bank, sampleRate](std::optional<uint32_t> before, uint32_t chunk) {
 		if (!before)
 		{
-			const auto& data = bank.chunks[chunk];
+			const auto data = bank.ReadChunk(chunk);
 			return _decoder(std::span<const uint8_t>(data.data(), data.size()), sampleRate);
 		}
-		const auto& first = bank.chunks[*before];
-		const auto& second = bank.chunks[chunk];
-		std::vector<uint8_t> data;
-		data.reserve(first.size() + second.size());
-		data.insert(data.end(), first.begin(), first.end());
+		auto data = bank.ReadChunk(*before);
+		const auto second = bank.ReadChunk(chunk);
 		data.insert(data.end(), second.begin(), second.end());
 		return _decoder(std::span<const uint8_t>(data.data(), data.size()), sampleRate);
 	};

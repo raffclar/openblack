@@ -724,6 +724,36 @@ void CreatureFightSystem::AbortFight(entt::entity creature)
 	}
 }
 
+void CreatureFightSystem::Withdraw(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* fighting = registry.TryGet<const CreatureFighting>(creature);
+	if (fighting == nullptr)
+	{
+		return;
+	}
+	const auto opponent = fighting->opponent;
+	const auto arena = fighting->arenaEntity;
+	AbortFight(creature);
+	// It leaves at once, rather than finishing and standing, and lets go of an arena it made
+	Leave(creature);
+	// What it fought and where forget it: the opponent plays out the end of its fight alone
+	if (auto* other = registry.Valid(opponent) ? registry.TryGet<CreatureFighting>(opponent) : nullptr;
+	    other != nullptr && other->opponent == creature)
+	{
+		other->opponent = entt::null;
+	}
+	if (auto* taken = registry.Valid(arena) ? registry.TryGet<CreatureArena>(arena) : nullptr; taken != nullptr)
+	{
+		taken->first = taken->first == creature ? entt::null : taken->first;
+		taken->second = taken->second == creature ? entt::null : taken->second;
+	}
+	if (_view.has_value() && (_view->first == creature || _view->second == creature))
+	{
+		EndView();
+	}
+}
+
 bool CreatureFightSystem::IsFighting(entt::entity creature) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();

@@ -21,6 +21,7 @@
 #include <glm/gtx/transform.hpp>
 
 #include "3D/L3DMesh.h"
+#include "3D/PhysicsDrawMatrix.h"
 #include "Camera/Camera.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -75,6 +76,13 @@ using namespace openblack::ecs::components;
 
 namespace
 {
+/// Whether an object is drawn whole with the others: a building drawn as far up as it stands is drawn by itself
+bool DrawnWhole(entt::entity entity)
+{
+	return !openblack::Locator::buildingDamageSystem::has_value() ||
+	       openblack::Locator::buildingDamageSystem::value().DrawsWhole(entity);
+}
+
 /// The model an object is drawn with: a broken building's broken model in place of its own
 entt::id_type DrawnMeshOf(entt::entity entity, const Mesh& mesh)
 {
@@ -367,12 +375,10 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    auto modelMatrix = glm::mat4(transform.rotation);
 		    modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
 		    modelMatrix = glm::scale(modelMatrix, transform.scale);
-		    // A body moving in the physics is drawn between its last two turns
+		    // A body moving in the physics is drawn between its last two turns, and not at all once sunk under the sea
 		    const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity);
-		    if (drawn != nullptr)
-		    {
-			    modelMatrix = glm::translate(glm::mat4(1.0f), drawn->origin) * glm::mat4(drawn->axes);
-		    }
+		    const auto placed = physics_draw::ModelMatrix(modelMatrix, drawn);
+		    modelMatrix = placed.value_or(glm::mat4(0.0f));
 
 		    // A villager is drawn in less detail the further off it is, fades out, then shows only as a smudge on a blob
 		    // while it stands above the sea. One flying in the physics never fades.
@@ -387,7 +393,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    if (!choice.mesh.has_value())
 			    {
 				    const auto position = glm::vec3(modelMatrix[3]);
-				    if (position.y > graphics::ground_blobs::k_LowestHeight)
+				    if (placed.has_value() && position.y > graphics::ground_blobs::k_LowestHeight)
 				    {
 					    _renderContext.farVillagers.push_back(
 					        {.entity = entity, .position = position, .scale = transform.scale.x});
@@ -408,6 +414,20 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    if (!fits || slots == slotMap->end() || slots->second.filled >= slots->second.count)
 		    {
 			    fits = false;
+			    return;
+		    }
+		    // A building drawn only as far up as it stands keeps its place in the lists, not drawn there, so the lists
+		    // needn't be made again as it comes to stand whole
+		    if (!DrawnWhole(entity))
+		    {
+			    const uint32_t idx = slots->second.offset + slots->second.filled;
+			    _renderContext.instanceUniforms[idx] = {.model = glm::mat4(0.0f), .look = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)};
+			    if (drawBoundingBox)
+			    {
+				    _renderContext.instanceUniforms[idx + (_renderContext.instanceUniforms.size() / 2)] = {.model =
+				                                                                                               glm::mat4(0.0f)};
+			    }
+			    ++slots->second.filled;
 			    return;
 		    }
 		    // A mesh drawn with another texture, slid across it: the temple's leashes
@@ -535,10 +555,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 
-		    // A body sunk wholly under the sea isn't drawn
-		    if (drawn != nullptr && drawn->underSea)
+		    // A body sunk wholly under the sea isn't drawn in any pass, its shadow included
+		    if (!placed.has_value())
 		    {
 			    look.z = 1.0f;
+			    modelMatrix = glm::mat4(0.0f);
 		    }
 
 		    // Fading out in the distance
@@ -548,7 +569,14 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 
 		    const uint32_t idx = slots->second.offset + slots->second.filled;
-		    _renderContext.instanceUniforms[idx] = {.model = modelMatrix, .look = look};
+		    // An animal finds its own bones by its place among its model's instances, kept in its first column's w, which
+		    // the model's affine matrix leaves at 0
+		    auto instanceModel = modelMatrix;
+		    if (registry.AllOf<AnimalPose>(entity))
+		    {
+			    instanceModel[0].w = static_cast<float>(slots->second.filled);
+		    }
+		    _renderContext.instanceUniforms[idx] = {.model = instanceModel, .look = look};
 		    // A villager's bones go into the palette, as its clip poses it or as its model rests, and its instance says
 		    // where they start
 		    if (slots->second.bonePalette)
@@ -565,7 +593,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    {
 			    _renderContext.drawnObjects.push_back({.entity = entity, .model = modelMatrix});
 		    }
-		    if (slots->second.perEntity && (drawn == nullptr || !drawn->underSea))
+		    if (slots->second.perEntity && placed.has_value())
 		    {
 			    _renderContext.entityDraws.push_back({.entity = entity, .instance = idx});
 		    }
@@ -735,13 +763,17 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		auto modelMatrix = glm::mat4(transform.rotation);
 		modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
 		modelMatrix = glm::scale(modelMatrix, transform.scale);
-		// A body moving in the physics is drawn between its last two turns
-		if (const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity))
+		// A body moving in the physics is drawn between its last two turns. Sunk wholly under the sea it isn't drawn at
+		// all: every vertex lands on one point, which draws nothing, and it neither sways nor bends, which would take its
+		// vertices out to the horizon
+		const auto placed = physics_draw::ModelMatrix(modelMatrix, registry.TryGet<const PhysicsDrawPose>(entity));
+		if (!placed.has_value())
 		{
-			// Sunk wholly under the sea it isn't drawn: every vertex lands on one point, which draws nothing
-			modelMatrix =
-			    drawn->underSea ? glm::mat4(0.0f) : glm::translate(glm::mat4(1.0f), drawn->origin) * glm::mat4(drawn->axes);
+			_renderContext.treeInstanceData[idx] = {.modelMatrix = glm::mat4(0.0f), .burning = glm::vec4(0.0f)};
+			++slots->second.filled;
+			return;
 		}
+		modelMatrix = *placed;
 		// A tree with a fire on it is drawn darker, its foliage thinning as it burns, and narrows away at the last,
 		// keeping its height
 		glm::vec4 burning(0.0f);

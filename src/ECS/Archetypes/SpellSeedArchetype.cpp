@@ -82,7 +82,8 @@ entt::entity SpellDispenserArchetype::Create(const glm::vec3& position, MagicTyp
 	const auto [point, radius] = GetFixedObstacleBoundingCircle(info.meshId, transform);
 	registry.Assign<Fixed>(entity, point, radius);
 	const auto period = static_cast<uint32_t>(info.timeEachMobileObjectTakesToProduce);
-	registry.Assign<SpellDispenser>(
-	    entity, SpellDispenser {.magicType = magicType, .timer = {.tick = 0, .period = period, .active = period != 0}});
+	registry.Assign<SpellDispenser>(entity, SpellDispenser {.magicType = magicType,
+	                                                        .timer = {.tick = 0, .period = period, .active = period != 0},
+	                                                        .building = building});
 	return entity;
 }

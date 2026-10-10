@@ -180,10 +180,15 @@ bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 	auto submeshCount = l3d.GetSubmeshHeaders().size();
 	for (uint32_t i = 0; i < submeshCount; ++i)
 	{
+		// A submesh can hold nothing at all, like one of the temple library's: there is nothing of it to draw or touch
+		if (l3d.GetPrimitiveSpan(i).empty())
+		{
+			continue;
+		}
 		auto subMesh = std::make_unique<L3DSubMesh>(*this);
 		if (!subMesh->Load(l3d, i))
 		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to open L3DSubMesh");
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to open submesh {} of mesh {}", i, _debugName);
 			result = false;
 			continue;
 		}

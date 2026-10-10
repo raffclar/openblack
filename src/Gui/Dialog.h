@@ -66,6 +66,16 @@ public:
 	/// The box, its tabs and its controls. Inactive, behind a question, nothing lights up.
 	void Draw(const DialogPainter& painter, bool active) const;
 
+	/// A control that has a name on the screen, where it is, for tools pressing it by name
+	struct NamedControl
+	{
+		std::u16string name;
+		std::string kind;
+		DialogRect rect;
+	};
+	/// The visible controls that act and have a name: buttons, check boxes, sliders and tabs, in the order they were made
+	[[nodiscard]] std::vector<NamedControl> GetNamedControls() const;
+
 	[[nodiscard]] static DialogRect GetTabRect(size_t index);
 	/// Names one of the tabs again
 	void SetTabLabel(size_t index, std::u16string label);

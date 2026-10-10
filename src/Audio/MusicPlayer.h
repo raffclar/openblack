@@ -35,10 +35,18 @@ struct MusicBank
 	uint32_t bankVolume {127};
 	/// Loop count from the first sample's header where it overrides the caller's
 	std::optional<int32_t> loopOverride;
-	std::vector<std::vector<uint8_t>> chunks;
+	/// How many chunks the bank's music is cut into
+	uint32_t chunkCount {0};
 	std::vector<uint32_t> chunkSampleRates;
+	/// Reads a chunk's data, 0-based. A bank's music is far too big to hold: like the game, it stays in the bank's file,
+	/// and each chunk is read from it only as it is queued to play. Empty if it couldn't be read.
+	std::function<std::vector<uint8_t>(uint32_t chunk)> readChunk;
 
-	[[nodiscard]] uint32_t GetChunkCount() const { return static_cast<uint32_t>(chunks.size()); }
+	[[nodiscard]] uint32_t GetChunkCount() const { return chunkCount; }
+	[[nodiscard]] std::vector<uint8_t> ReadChunk(uint32_t chunk) const
+	{
+		return readChunk && chunk < chunkCount ? readChunk(chunk) : std::vector<uint8_t> {};
+	}
 };
 
 /// Where LHAudioDLL's music channels are streamed

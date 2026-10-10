@@ -58,6 +58,12 @@ public:
 	/// The Action button is let go: what the hand was taking is let be, or what it holds is put down or thrown. The thing a
 	/// press tapped, a press too short to take it.
 	virtual std::optional<entt::entity> Release(uint32_t nowMs, uint32_t turn) = 0;
+	/// The Action button is let go while the hand did nothing with the press: the thing under the hand is clicked, or
+	/// else the place on the land under it, for the scripts to ask about (see hand_click)
+	virtual void ClickReleased(uint32_t turn) = 0;
+	/// A press of the Action button on a thing the hand won't pick up, which something else takes (a creature the hand
+	/// holds to): the thing is clicked
+	virtual void ClickThing(entt::entity thing, uint32_t turn) = 0;
 	/// Each frame: the hand takes what it waited for, its spring drags it, and the twist of a throw is given. The hand's
 	/// position, risen for what it holds, or dragged by its spring.
 	virtual glm::vec3 UpdateFrame(const Frame& frame) = 0;

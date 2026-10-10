@@ -21,6 +21,7 @@
 
 #include "3D/TempleLight.h"
 #include "3D/TempleMap.h"
+#include "Enums.h"
 #include "Graphics/GraphicsHandle.h"
 
 namespace openblack
@@ -56,6 +57,19 @@ struct TempleCaveTrophy
 	uint32_t colour;
 	/// Whether it is drawn with an environment map added
 	bool environmentMapped;
+};
+
+/// The seed of one of the creature's best-learnt miracles, hovering by the creature's room's magic plinths
+struct TempleCaveSeed
+{
+	SpellSeedType seed;
+	/// The room's point it hovers at, in the temple; its model stands its mesh height above it
+	glm::vec3 point;
+	/// Its turn about the up axis, in radians
+	float spin;
+	/// A phial's pulse and its texture's frame
+	float phialPhase;
+	float phialFrame;
 };
 
 /// Where the cursor meets the temple's room, and the way the surface there faces
@@ -137,6 +151,8 @@ public:
 	[[nodiscard]] virtual const TempleLight& GetLight() const = 0;
 	/// The belts and medals the creature's room shows, while it is drawn
 	[[nodiscard]] virtual const std::vector<TempleCaveTrophy>& GetCaveTrophies() const = 0;
+	/// The seeds of the creature's best-learnt miracles hovering in the creature's room, drawn while it is drawn
+	[[nodiscard]] virtual const std::vector<TempleCaveSeed>& GetCaveSeeds() const = 0;
 	/// How far the markers have turned, in radians
 	[[nodiscard]] virtual float GetMapMarkerTurn() const = 0;
 	/// How long the main room's pool has shimmered, in seconds, which its two layers' alpha and texture follow
