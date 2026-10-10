@@ -63,9 +63,11 @@ Command Release(size_t button, float delay)
 }
 
 /// The pond north-west of the middle, a fish farm on its south-eastern bank whose shoal lies in the pond's shallows,
-/// where a creature can stand; the town's storage pit and three of its people on the plain beyond
+/// where a creature can stand; the town's storage pit and three of its people on the plain beyond. The pit lies well
+/// beyond a creature's throwing distance from the shoal, so that a creature bringing it fish climbs out of the pond
+/// before it throws: thrown from the pond, the food would leave its hand inside the steep bank.
 constexpr glm::vec2 k_PondFarm = glm::vec2(2295.0f, 2945.0f) - flat_land::k_MapMiddle;
-constexpr glm::vec2 k_PondPit = k_PondFarm + glm::vec2(25.0f, -45.0f);
+constexpr glm::vec2 k_PondPit = k_PondFarm + glm::vec2(90.0f, -65.0f);
 constexpr glm::vec2 k_PondCreature = k_PondFarm + glm::vec2(45.0f, -5.0f);
 
 std::vector<ObjectSetup> PondFarmAndPit()
@@ -158,8 +160,9 @@ void testbed_scenarios::AddFishScenarios(std::vector<Scenario>& all)
 	        "middle; a fish farm is on the pond's bank, the town's empty storage pit and three of its people beyond.",
 	    .expected = "Its compassion is for the town, and while the town wants food it sets about giving fish to the "
 	                "storage pit: it walks into the pond's shallows to within 15 m of the shoal, a bundle of food appears at "
-	                "its feet out of the water and it picks it up, walks back to throwing distance of the pit, turns to "
-	                "face it and throws the food in. It stands until the food has come down, then plans again.",
+	                "its feet out of the water and it picks it up, walks back out of the pond to throwing distance of the "
+	                "pit, turns to face it and throws the food in, and the pit's food goes up. It stands until the food "
+	                "has come down, then plans again.",
 	    .framing = {.shot = Shot::Follow},
 	    .creatures = {CreatureSetup {
 	        .species = CreatureType::Tiger,
