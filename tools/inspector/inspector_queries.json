@@ -846,7 +846,7 @@
   "query": "living.rewards"
  },
  {
-  "description": "The obstacles walkers hug, by the map's cells",
+  "description": "The walkers, and the circles of the things in their way they head for or go round",
   "kind": "object",
   "parameters": [],
   "query": "living.pathfinding"
