@@ -83,6 +83,10 @@ public:
 	[[nodiscard]] virtual bool IsLand(glm::vec3 point) const = 0;
 	/// Within a player's influence, where most of its miracles may be cast
 	[[nodiscard]] virtual bool InInfluence(PlayerNames player, glm::vec3 point) const = 0;
+	/// Whether the hand, at its point, is in its player's influence: while it keeps any of it past the border it is
+	[[nodiscard]] virtual bool HandInInfluence(PlayerNames player, glm::vec3 hand) const { return InInfluence(player, hand); }
+	/// The hand used what it holds on the land, which counts as a turn more for what it keeps past the border
+	virtual void HeldThingUsedOnLand(PlayerNames /*player*/) {}
 	/// Where an object stands, none once it has gone
 	[[nodiscard]] virtual std::optional<glm::vec3> PositionOf(entt::entity object) const = 0;
 

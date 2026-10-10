@@ -29,7 +29,6 @@ class OceanInterface;
 class Profiler;
 class GameRandomInterface;
 class RandomNumberManagerInterface;
-class SkyInterface;
 class TempleInteriorInterface;
 
 namespace v120
@@ -122,6 +121,7 @@ class LeashSystemInterface;
 class CreatureFightSystemInterface;
 class CreatureModeSystemInterface;
 class CreatureCaveSystemInterface;
+class TattooEditorSystemInterface;
 class CinematicDirectorSystemInterface;
 class ScriptControlSystemInterface;
 class DialogueControlSystemInterface;
@@ -137,6 +137,8 @@ class TownDesireSystemInterface;
 class PathfindingSystemInterface;
 class AlignmentSystemInterface;
 class CameraHelpSystemInterface;
+class TutorialSkipSystemInterface;
+class PlayerProfileSystemInterface;
 class TempleExteriorSystemInterface;
 class TempleDestructionSystemInterface;
 class PlayerSystemInterface;
@@ -145,6 +147,7 @@ class TownSystemInterface;
 class ResourceStoreSystemInterface;
 class TimeSystemInterface;
 class VegetationInterface;
+class SkySystemInterface;
 class WeatherSystemInterface;
 class ParticleSystemInterface;
 class MagicSystemInterface;
@@ -163,6 +166,7 @@ class ExplosionSystemInterface;
 class RewardSystemInterface;
 class ScriptObjectsSystemInterface;
 class BuildingDamageSystemInterface;
+class InspectorSystemInterface;
 } // namespace ecs::systems
 
 void InitializeWindow(const std::string& title, int width, int height, windowing::DisplayMode displayMode, uint32_t extraFlags);
@@ -172,6 +176,9 @@ void InitializeLevel(const std::filesystem::path& path);
 /// Starts a level on land that is generated rather than read from a file, as the flat testbed is
 void InitializeLevel(const LandData& land);
 void ShutDownServices();
+/// Starts the debug inspector's server on a port of 127.0.0.1 (any free one for 0): false, with why in the log, if it
+/// can't listen. Only in builds with the inspector.
+bool StartInspector(uint16_t port);
 
 struct Locator
 {
@@ -187,7 +194,7 @@ struct Locator
 	using gameRandom = entt::locator<GameRandomInterface>;
 	using terrainSystem = entt::locator<LandIslandInterface>;
 	using oceanSystem = entt::locator<OceanInterface>;
-	using skySystem = entt::locator<SkyInterface>;
+	using skySystem = entt::locator<ecs::systems::SkySystemInterface>;
 	using audio = entt::locator<audio::AudioManagerInterface>;
 	using camera = entt::locator<Camera>;
 	using gameActionSystem = entt::locator<input::GameActionInterface>;
@@ -207,6 +214,8 @@ struct Locator
 	using playerSystem = entt::locator<ecs::systems::PlayerSystemInterface>;
 	using alignmentSystem = entt::locator<ecs::systems::AlignmentSystemInterface>;
 	using cameraHelpSystem = entt::locator<ecs::systems::CameraHelpSystemInterface>;
+	using tutorialSkipSystem = entt::locator<ecs::systems::TutorialSkipSystemInterface>;
+	using playerProfileSystem = entt::locator<ecs::systems::PlayerProfileSystemInterface>;
 	using templeExteriorSystem = entt::locator<ecs::systems::TempleExteriorSystemInterface>;
 	using templeDestructionSystem = entt::locator<ecs::systems::TempleDestructionSystemInterface>;
 	using handSystem = entt::locator<ecs::systems::HandSystemInterface>;
@@ -237,6 +246,7 @@ struct Locator
 	using creatureFightSystem = entt::locator<ecs::systems::CreatureFightSystemInterface>;
 	using creatureModeSystem = entt::locator<ecs::systems::CreatureModeSystemInterface>;
 	using creatureCaveSystem = entt::locator<ecs::systems::CreatureCaveSystemInterface>;
+	using tattooEditorSystem = entt::locator<ecs::systems::TattooEditorSystemInterface>;
 	using cinematicDirectorSystem = entt::locator<ecs::systems::CinematicDirectorSystemInterface>;
 	using scriptControlSystem = entt::locator<ecs::systems::ScriptControlSystemInterface>;
 	using dialogueControlSystem = entt::locator<ecs::systems::DialogueControlSystemInterface>;
@@ -266,6 +276,8 @@ struct Locator
 	using rewardSystem = entt::locator<ecs::systems::RewardSystemInterface>;
 	using scriptObjects = entt::locator<ecs::systems::ScriptObjectsSystemInterface>;
 	using buildingDamageSystem = entt::locator<ecs::systems::BuildingDamageSystemInterface>;
+	/// Only in builds with the inspector, and only once --inspect-port started it
+	using inspector = entt::locator<ecs::systems::InspectorSystemInterface>;
 	using vm = entt::locator<lhvm::LHVM>;
 	using chlapi = entt::locator<chlapi::CHLApi>;
 };

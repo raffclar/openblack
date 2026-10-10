@@ -12,6 +12,7 @@
 #include "TownSystem.h"
 
 #include <algorithm>
+#include <optional>
 
 #include "3D/MapCoords.h"
 #include "Common/GameRandom.h"
@@ -25,8 +26,10 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/TownHomes.h"
 #include "ECS/VillagerRoutine.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -76,26 +79,35 @@ void TownSystem::OnVillagerGone(entt::registry& registry, entt::entity villager)
 	}
 }
 
-entt::entity TownSystem::FindAbodeWithSpace(entt::entity townEntity) const
+namespace
 {
-	const auto& infoConstants = Locator::infoConstants::value();
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto& town = registry.Get<Town>(townEntity);
+/// The room of the game's buildings, from their rows in the buildings' table, and their people coming out
+town_homes::Homes GameHomes()
+{
+	return {.room = [](entt::entity abode) -> std::optional<town_homes::AbodeRoom> {
+		        const auto& registry = Locator::entitiesRegistry::value();
+		        const auto* building = registry.TryGet<const Abode>(abode);
+		        if (building == nullptr || !Locator::infoConstants::has_value())
+		        {
+			        return std::nullopt;
+		        }
+		        const auto& rows = Locator::infoConstants::value().abode;
+		        const auto row = static_cast<size_t>(building->type);
+		        if (row >= rows.size())
+		        {
+			        return std::nullopt;
+		        }
+		        return town_homes::AbodeRoom {.maxAdults = rows.at(row).maxVillagersInAbode,
+		                                      .maxChildren = rows.at(row).maxChildrenInAbode,
+		                                      .functional = villager_home::IsFunctional(abode)};
+	        },
+	        .leaving = [](entt::entity villager) { villager_home::LeavingHome(villager); }};
+}
+} // namespace
 
-	entt::entity result = entt::null;
-	registry.Each<const Abode>([&town, &infoConstants, &result](entt::entity entity, auto component) {
-		if (result != entt::null || component.townId != town.id)
-		{
-			return;
-		}
-		const auto& info = infoConstants.abode.at(static_cast<size_t>(component.type));
-		if (static_cast<uint32_t>(component.inhabitants.size()) < info.maxVillagersInAbode)
-		{
-			result = entity;
-		}
-	});
-
-	return result;
+entt::entity TownSystem::FindAbodeWithSpace(entt::entity town, entt::entity villager, float leastScore) const
+{
+	return town_homes::FindAbodeWithSpace(Locator::entitiesRegistry::value(), GameHomes(), town, villager, leastScore);
 }
 
 entt::entity TownSystem::FindClosestTown(const glm::vec3& point) const
@@ -119,22 +131,19 @@ entt::entity TownSystem::FindClosestTown(const glm::vec3& point) const
 	return result;
 }
 
-void TownSystem::AddHomelessVillagerToTown(entt::entity townEntity, entt::entity villagerEntity)
+bool TownSystem::AddVillagerToTown(entt::entity town, entt::entity villager)
 {
-	[[maybe_unused]] auto& registry = Locator::entitiesRegistry::value();
-	[[maybe_unused]] auto& registryContext = registry.Context();
+	return town_homes::AddVillagerToTown(Locator::entitiesRegistry::value(), GameHomes(), town, villager);
+}
 
-	auto& town = registry.Get<Town>(townEntity);
-	auto& villager = registry.Get<Villager>(villagerEntity);
-	// TODO(bwrsandman): if already assigned to abode or other villager homeless list, remove
-	assert(villager.abode == entt::null);
-	assert(villager.town == entt::null || villager.town == registryContext.towns[town.id]);
-	// The newest homeless comes first
-	if (std::ranges::find(town.homelessVillagers, villagerEntity) == town.homelessVillagers.end())
-	{
-		town.homelessVillagers.insert(town.homelessVillagers.begin(), villagerEntity);
-	}
-	villager.town = townEntity;
+void TownSystem::AddVillagerToAbode(entt::entity abode, entt::entity villager)
+{
+	town_homes::AddVillagerToAbode(Locator::entitiesRegistry::value(), GameHomes(), abode, villager);
+}
+
+bool TownSystem::MakeHomeless(entt::entity villager)
+{
+	return town_homes::MakeHomeless(Locator::entitiesRegistry::value(), GameHomes(), villager);
 }
 
 namespace

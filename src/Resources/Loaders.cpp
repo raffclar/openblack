@@ -119,6 +119,11 @@ L3DLoader::result_type L3DLoader::operator()(FromMadeTag, const std::string& deb
 	return mesh;
 }
 
+L3DFileLoader::result_type L3DFileLoader::operator()(FromFileTag, const l3d::L3DFile& file) const
+{
+	return std::make_shared<l3d::L3DFile>(file);
+}
+
 L3DFileLoader::result_type L3DFileLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
 {
 	auto file = std::make_shared<l3d::L3DFile>();
@@ -264,6 +269,27 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskWithAlphaTag, c
 	auto texture = std::make_shared<graphics::Texture2D>(("raw" / rawTexturePath.stem()).string() + "+alpha");
 	texture->Create(side, side, 1, graphics::TextureFormat::RGBA8, graphics::Wrapping::Repeat, graphics::Filter::Linear,
 	                bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size())));
+	return texture;
+}
+
+Texture2DLoader::result_type Texture2DLoader::operator()(FromBitmapLayersTag, const std::string& name,
+                                                         std::span<const std::filesystem::path> layerPaths, uint16_t side) const
+{
+	auto& fileSystem = Locator::filesystem::value();
+	const size_t layerTexels = static_cast<size_t>(side) * side;
+	std::vector<uint16_t> texels(layerTexels * layerPaths.size(), 0);
+	for (size_t layer = 0; layer < layerPaths.size(); ++layer)
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading texture layer: {}", layerPaths[layer].generic_string());
+		const auto data = fileSystem.ReadAll(layerPaths[layer]);
+		Bitmap16B bitmap(data.data());
+		const auto count = std::min(layerTexels, static_cast<size_t>(bitmap.Width()) * bitmap.Height());
+		std::copy_n(bitmap.Data(), count, texels.begin() + static_cast<std::ptrdiff_t>(layer * layerTexels));
+	}
+	auto texture = std::make_shared<graphics::Texture2D>(name);
+	texture->Create(side, side, static_cast<uint16_t>(layerPaths.size()), graphics::TextureFormat::BGR5A1,
+	                graphics::Wrapping::ClampEdge, graphics::Filter::Linear,
+	                bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(texels[0]))));
 	return texture;
 }
 
@@ -677,14 +703,10 @@ CreatureSkinArtLoader::result_type CreatureSkinArtLoader::operator()(FromDiskTag
 		return std::move(image->pixels);
 	};
 	auto art = std::make_shared<creature_skin::Art>();
-	const auto symbols =
-	    fileSystem.Exists(paths.symbols) ? rgb(paths.symbols, k_Size, k_Size) : std::vector<std::array<uint8_t, 3>> {};
-	const auto defaults = rgb(paths.defaultSymbols, k_Size, k_Size);
+	const auto symbols = rgb(paths.symbols, k_Size, k_Size);
 	for (uint32_t design = 0; design < art->designs.size(); ++design)
 	{
-		auto written = creature_tattoo::DesignFromAtlas(symbols, k_Size, design);
-		const bool blank = std::ranges::all_of(written.front().levels, [](uint8_t level) { return level == 0; });
-		art->designs.at(design) = blank ? creature_tattoo::DesignFromAtlas(defaults, k_Size, design) : std::move(written);
+		art->designs.at(design) = creature_tattoo::DesignFromAtlas(symbols, k_Size, design);
 	}
 	art->damage.fresh = {.colours = rgb(paths.freshDamage, k_Size, k_Size),
 	                     .alpha = grey(paths.freshDamageAlpha, k_Size, k_Size)};

@@ -88,6 +88,8 @@ enum class Facet : uint8_t
 	Physics,
 	/// The land's nature: trees and their roots, fireflies
 	Nature,
+	/// The land's animals: its birds and the doves or bats about the temples
+	Animals,
 	/// The player's two advisors, the good one and the evil one
 	Advisors,
 
@@ -129,6 +131,9 @@ struct Environment
 	std::optional<float> playerAlignment;
 	/// Where the cursor, and so the hand, is put, as a share of the window from its top left, until the mouse moves
 	std::optional<glm::vec2> cursor;
+	/// Where the player's temple stands, from the middle of the map, x east and y north in units of the land; with it
+	/// standing their influence border shows, as on a land. The testbed has none when not given.
+	std::optional<glm::vec2> temple;
 };
 
 /// Where the camera looks as the scenario starts
@@ -453,6 +458,8 @@ struct Command
 		OpenCreatureCave,
 		ApplyTattoo,
 		RemoveTattoo,
+		/// The tattoo editor opened on the player's creature, as clicking it in the Creature Cave does
+		OpenTattooEditor,
 		/// The player's hand is given a seed (value, by the game's seed number) as if from a bubble; a gesture (value, by
 		/// the game's gesture number) is drawn with the hand across the middle of the screen, through the same recogniser
 		/// the cursor goes through. Neither needs a creature.
@@ -482,6 +489,13 @@ struct Command
 		WheelTurn,
 		/// The player's alignment jumps, which the hand shows
 		SetAlignment,
+		/// A script's cinema bars slide in (value 1) or out (value 0)
+		WideScreen,
+		/// Its history, as the Creature Cave's trophies show it: how it leans in fights (amount, -1 defensive to 1
+		/// aggressive) as if it had fought; how many times it has seen a miracle (value, by its magic type; amount, the
+		/// times), which it then knows about
+		SetFightLean,
+		SetMiracleSightings,
 		/// The player's hand knocks on the scenario's object, a building, as the Action button pressed on it does, from
 		/// where the hand is
 		HandTapObject,
@@ -554,6 +568,27 @@ struct Command
 /// Whether a command is the player's mouse, which needs no creature
 [[nodiscard]] bool IsPointerCommand(Command::Kind kind);
 
+/// A flock of the land's birds, made as a land script makes one: the flock, then its birds about a point, each at a
+/// random age
+struct BirdFlockSetup
+{
+	AnimalInfo kind {AnimalInfo::Dove};
+	/// Where the flock is made and its home, from the middle of the map
+	glm::vec2 offset {0.0f};
+	uint32_t count {10};
+	/// How far from its home the leader's legs take it (its kind's way for 0), and how far from the leader the others
+	/// keep
+	float reach {0.0f};
+	float flockDistance {10.0f};
+};
+
+/// A temple of a player's, built, at a point from the middle of the map
+struct TempleSetup
+{
+	glm::vec2 offset {0.0f};
+	PlayerNames owner {PlayerNames::PLAYER_ONE};
+};
+
 /// The player's hand held still over the land for the whole scenario, as a player holds it: from the middle of the map,
 /// and how high above the land
 struct HandHold
@@ -591,6 +626,8 @@ struct Scenario
 	Framing framing;
 	std::vector<CreatureSetup> creatures;
 	std::vector<ObjectSetup> objects;
+	std::vector<BirdFlockSetup> birdFlocks;
+	std::vector<TempleSetup> temples;
 	std::vector<ParticleSetup> particles;
 	std::vector<DispenserSetup> dispensers;
 	std::vector<MiracleCast> miracles;
@@ -635,6 +672,8 @@ void AddGestureScenarios(std::vector<Scenario>& all);
 void AddStormScenarios(std::vector<Scenario>& all);
 /// The flock miracles: doves, bats and wolves swept out by hand
 void AddFlockScenarios(std::vector<Scenario>& all);
+/// The land's birds of every kind, seagulls over the lake, the temples' doves and bats, and many flocks at once
+void AddBirdScenarios(std::vector<Scenario>& all);
 /// The teleport miracle: stones, villagers jumping between them
 void AddTeleportScenarios(std::vector<Scenario>& all);
 /// The tornado's scenarios: through a village and a wood, and meeting a creature

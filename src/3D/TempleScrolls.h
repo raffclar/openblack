@@ -90,6 +90,10 @@ public:
 		{
 			std::string_view text;
 			int32_t percent;
+			/// Its place in the game's table of miracles, and how far it is learnt, 0 to 100, which the medals and
+			/// seeds by the magic plinths show
+			uint32_t miracle {0};
+			float learnt {0.0f};
 		};
 		std::vector<Miracle> miracles;
 	};
@@ -196,6 +200,8 @@ public:
 	/// The text for a scroll, or none when the room leaves the scroll unwritten
 	[[nodiscard]] static std::optional<std::u16string> Write(Content content, const gui::TextDatabase& texts,
 	                                                         const gui::GameFont& font, const Facts& facts);
+	/// Whether the scroll of some content is the one the camera is close to, its text written in front of it each frame
+	[[nodiscard]] bool IsWrittenInFront(Content content) const;
 
 private:
 	struct Scroll

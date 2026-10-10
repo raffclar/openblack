@@ -125,6 +125,26 @@ struct Flock
 	components::AnimalState followState {components::AnimalState::DecideWhatToDo};
 	int followMode {0};
 	components::AnimalState afterMove {components::AnimalState::DecideWhatToDo};
+	/// The turns its leader has kept to its present leg, which a land bird's leader gives up after its kind's stay time
+	uint32_t turnsOnLeg {0};
+	/// The height above the land its leader picks its legs about, none to take its kind's: a temple's flock follows its
+	/// temple's height
+	float height {0.0f};
+	/// The number the land script made it with, none for a flock the script didn't number; the script's animals join
+	/// the latest flock made with their number
+	std::optional<int32_t> scriptId;
+	/// The order the flocks were made in
+	uint32_t made {0};
+	/// The temple it circles, none for a flock of the land
+	entt::entity temple {entt::null};
+};
+
+/// The doves or bats about a temple: its flock, made the first time it is seen to, and the look of the temple's model
+/// the flock's height was last taken for
+struct TempleBirds
+{
+	entt::entity flock {entt::null};
+	std::optional<glm::vec2> look;
 };
 
 /// An animal a miracle made: it fades out rather than dying, and it goes with its miracle

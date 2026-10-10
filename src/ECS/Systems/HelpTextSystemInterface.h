@@ -78,6 +78,9 @@ public:
 
 	/// The advisors' voices
 	[[nodiscard]] virtual help::AdvisorVoices& GetVoices() = 0;
+	[[nodiscard]] virtual const help::AdvisorVoices& GetVoices() const = 0;
+	/// The texts shown, nothing before the start
+	[[nodiscard]] virtual const help::DialogueText* GetDialogue() const = 0;
 };
 
 } // namespace openblack::ecs::systems

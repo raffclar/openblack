@@ -41,6 +41,8 @@ public:
 	[[nodiscard]] int32_t GetNarrator(uint32_t text) const override;
 	[[nodiscard]] const help::TextFrame* Layout(glm::ivec2 screen, int barPixels, const help::WidthFn& widthFn) const override;
 	[[nodiscard]] help::AdvisorVoices& GetVoices() override { return _voices; }
+	[[nodiscard]] const help::AdvisorVoices& GetVoices() const override { return _voices; }
+	[[nodiscard]] const help::DialogueText* GetDialogue() const override { return _dialogue.get(); }
 
 private:
 	/// The voices' sounds and clock, from the game's audio
