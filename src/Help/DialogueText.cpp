@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "ClickCue.h"
 #include "TextSplitter.h"
 
 namespace openblack::help
@@ -95,6 +96,7 @@ void DialogueText::AddText(const Text& text, uint32_t number, int32_t withIntera
 	StartReadingTime(text.text);
 	_waitClick = withInteraction == 1;
 	_noClick = withInteraction == 2;
+	_clickCueSeconds = 0.0f;
 	std::shift_right(_texts.begin(), _texts.end(), 1);
 	_texts[0] = number;
 }
@@ -148,6 +150,7 @@ void DialogueText::ClearTextDisplayed()
 {
 	_noClick = false;
 	_waitClick = false;
+	_clickCueSeconds = 0.0f;
 	_endTurn = 0;
 	_endMs = 0;
 }
@@ -213,6 +216,24 @@ void DialogueText::ProcessClick(bool click, bool skipKey)
 	}
 	// Otherwise the click only ends the wait for it
 	_waitClick = false;
+	_clickCueSeconds = 0.0f;
+}
+
+void DialogueText::AdvanceClickCue(float realSeconds)
+{
+	if (_waitClick)
+	{
+		_clickCueSeconds = std::clamp(_clickCueSeconds + realSeconds, 0.0f, click_cue::k_FadeSeconds);
+	}
+}
+
+std::optional<float> DialogueText::GetClickCueShare() const
+{
+	if (!_waitClick)
+	{
+		return std::nullopt;
+	}
+	return _clickCueSeconds / click_cue::k_FadeSeconds;
 }
 
 bool DialogueText::IsDrawn() const

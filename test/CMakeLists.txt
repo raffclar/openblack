@@ -139,6 +139,7 @@ target_link_libraries(test_hand_click PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_script_properties test_script_properties.cpp)
 target_link_libraries(test_script_properties PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_script_timers test_script_timers.cpp)
+openblack_setup_and_add_test(test_script_switches test_script_switches.cpp)
 openblack_setup_and_add_test(test_script_name_lists test_script_name_lists.cpp)
 openblack_setup_and_add_test(test_script_highlights test_script_highlights.cpp)
 openblack_setup_and_add_test(test_hand_hold_pose test_hand_hold_pose.cpp)
@@ -214,6 +215,7 @@ openblack_setup_and_add_test(test_sky_frame test_sky_frame.cpp)
 openblack_setup_and_add_test(test_camera_track test_camera_track.cpp)
 target_link_libraries(test_camera_track PRIVATE edt)
 openblack_setup_and_add_test(test_shark_rules test_shark_rules.cpp)
+openblack_setup_and_add_test(test_villager_eyes test_villager_eyes.cpp)
 openblack_setup_and_add_test(test_script_flocks test_script_flocks.cpp)
 openblack_setup_and_add_test(test_dances test_dances.cpp)
 target_link_libraries(test_dances PRIVATE dance)
@@ -638,6 +640,19 @@ set_tests_properties(
   test_instance_data_inputs
   PROPERTIES ENVIRONMENT "OPENBLACK_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
 )
+openblack_setup_and_add_test(test_help_profile test_help_profile.cpp)
+openblack_setup_and_add_test(test_tip_bubble test_tip_bubble.cpp)
+openblack_setup_and_add_test(test_click_cue test_click_cue.cpp)
+openblack_setup_and_add_test(test_hand_demo test_hand_demo.cpp)
+target_link_libraries(test_hand_demo PRIVATE hnd)
 openblack_setup_and_add_test(test_villager_clips test_villager_clips.cpp)
 target_link_libraries(test_villager_clips PRIVATE anm)
+openblack_setup_and_add_test(
+  test_screenshot_capture graphics/test_screenshot_capture.cpp
+)
+openblack_setup_and_add_test(test_script_random test_script_random.cpp)
+openblack_setup_and_add_test(
+  test_camera_handback camera/test_camera_handback.cpp
+)
+target_link_libraries(test_camera_handback PRIVATE edt)
 openblack_setup_and_add_test(test_intro_rules test_intro_rules.cpp)

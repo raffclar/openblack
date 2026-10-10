@@ -45,6 +45,8 @@ public:
 	[[nodiscard]] virtual float GetWideScreenFraction() const = 0;
 	/// Whether the player has their interface: the hand and its actions are put away while a script has the bars in
 	[[nodiscard]] virtual bool IsInterfaceActive() const = 0;
+	/// The player's interface is put away or given back whatever the bars are, as a hand demonstration does
+	virtual void SetInterfaceActive(bool active) = 0;
 	/// Whether the game's dialogs were told to hide since this was last asked
 	[[nodiscard]] virtual bool TakeHideDialogs() = 0;
 

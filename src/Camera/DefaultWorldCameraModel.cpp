@@ -130,6 +130,17 @@ float PointDistanceAlongLineSegment(const glm::vec3& p1, const glm::vec3& p2, co
 
 DefaultWorldCameraModel::DefaultWorldCameraModel() = default;
 
+DefaultWorldCameraModel::DefaultWorldCameraModel(glm::vec3 origin, glm::vec3 focus)
+    : _currentOrigin(origin)
+    , _currentFocus(focus)
+    , _targetOrigin(origin)
+    , _targetFocus(focus)
+    , _originFocusDistanceAtInteractionStart(glm::distance(origin, focus))
+    , _originAtClick(origin)
+    , _focusAtClick(focus)
+{
+}
+
 DefaultWorldCameraModel::~DefaultWorldCameraModel() = default;
 
 void DefaultWorldCameraModel::TiltZoom(glm::vec3& eulerAngles, float scalingFactor, float zoomDelta)

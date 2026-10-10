@@ -169,6 +169,14 @@ bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 		_firstBonePoint =
 		    BonePoint {.bone = static_cast<uint32_t>(eBone->bones[0]), .point = glm::vec3(matrix[9], matrix[10], matrix[11])};
 	}
+	if (const auto& eBone = l3d.GetEBone(); eBone.has_value())
+	{
+		for (size_t i = 0; i < eBone->bones.size() && eBone->bones.at(i) >= 0; ++i)
+		{
+			_boneFrames.push_back({.bone = static_cast<uint32_t>(eBone->bones.at(i)),
+			                       .frame = static_cast<glm::mat4>(glm::make_mat4x3(eBone->matrices.at(i).data()))});
+		}
+	}
 
 	std::map<uint32_t, glm::mat4> matrices;
 	const auto& bones = l3d.GetBones();

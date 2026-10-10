@@ -1332,6 +1332,24 @@
   "query": "help.dialogue"
  },
  {
+  "description": "The help's count of what the player has done: its clock, and each event's total, seconds since and rate, for the events that have happened",
+  "kind": "list",
+  "parameters": [],
+  "query": "help.profile"
+ },
+ {
+  "description": "The tip bubble over the \"did you know\" sign tapped last: the sign, its tip, whether it is up, its time to show, the point it points at and its scroll",
+  "kind": "object",
+  "parameters": [],
+  "query": "help.bubble"
+ },
+ {
+  "description": "The tutorial's hand demonstration playing: its name, the script task that started it, the record it is at, whether it holds at a mark, and the camera and hints it has",
+  "kind": "object",
+  "parameters": [],
+  "query": "help.hand_demo"
+ },
+ {
   "description": "Whether the game is paused, its turn, the frames served, its speed and any stepping",
   "kind": "object",
   "parameters": [],
@@ -1539,7 +1557,7 @@
   "writes": true
  },
  {
-  "description": "A mouse button where the pointer is: press, release, or click (pressed now, let go of the next frame)",
+  "description": "A mouse button where the pointer is: press, release, click (pressed now, let go of the next frame) or double_click (a click, then pressed and let go of again as the second click of a double click, a frame apart)",
   "kind": "object",
   "parameters": [
    {
@@ -1548,7 +1566,7 @@
     "type": "string"
    },
    {
-    "description": "press, release or click (the default)",
+    "description": "press, release, click (the default) or double_click",
     "name": "action",
     "type": "string"
    }

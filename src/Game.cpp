@@ -57,6 +57,7 @@
 #include "3D/SnowCover.h"
 #include "3D/TempleInteriorInterface.h"
 #include "3D/WaterRings.h"
+#include "Animals/AnimalAnimation.h"
 #include "Audio/AtmosAudio.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/ClipSounds.h"
@@ -148,8 +149,10 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
@@ -186,6 +189,7 @@
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/TornadoSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
@@ -1280,6 +1284,15 @@ bool Game::GameLogicLoop() noexcept
 	{
 		Locator::scriptHighlightSystem::value().ProcessTurn();
 	}
+	// The help's count of what the player has done moves on a turn, and its tip bubble stays while its sign shows
+	if (Locator::helpProfileSystem::has_value())
+	{
+		Locator::helpProfileSystem::value().ProcessTurn();
+	}
+	if (Locator::tipBubbleSystem::has_value())
+	{
+		Locator::tipBubbleSystem::value().ProcessTurn();
+	}
 	// Then the physics, after the living, the fires, the reactions, the miracles and the particles have had their turn,
 	// so a body any of them sets moving this turn flies this turn: what was thrown, dropped, knocked or pushed flies,
 	// collides and comes to rest
@@ -1482,6 +1495,11 @@ bool Game::Update() noexcept
 		{
 			actions.Frame();
 		}
+		// A hand demonstration plays its records due now through the hand's own input
+		if (Locator::handDemoSystem::has_value())
+		{
+			Locator::handDemoSystem::value().Update();
+		}
 		SDL_Event e;
 		while (SDL_PollEvent(&e) != 0)
 		{
@@ -1562,7 +1580,9 @@ bool Game::Update() noexcept
 	}
 
 	// While a miracle's camera path has the camera, the player's camera doesn't move it
-	if (!Locator::cameraPathSystem::value().HoldsCamera())
+	// A hand demonstration has the camera exactly where its recording had it, and the camera's own moves wait
+	const auto demoCamera = Locator::handDemoSystem::has_value() ? Locator::handDemoSystem::value().GetCamera() : std::nullopt;
+	if (!Locator::cameraPathSystem::value().HoldsCamera() && !demoCamera.has_value())
 	{
 		// A script's camera track runs on the game's time; the camera itself steps as the hand does, so that a cut scene
 		// holds while the game is paused and keeps pace with the game's speed
@@ -1571,6 +1591,15 @@ bool Game::Update() noexcept
 			scriptCamera->PassGameTime(Locator::time::value().GetFrameGameTime());
 		}
 		camera.Update(std::chrono::duration_cast<std::chrono::microseconds>(CameraStepTime()));
+	}
+	if (demoCamera.has_value())
+	{
+		camera.SetOrigin(demoCamera->origin).SetFocus(demoCamera->focus);
+		if (auto* script = dynamic_cast<ScriptCameraModel*>(&camera.GetModel()); script != nullptr)
+		{
+			script->SetOrigin(demoCamera->origin);
+			script->SetFocus(demoCamera->focus);
+		}
 	}
 	// While the opening's camera chases the falling light, it is drawn from behind the light as the last frame left it,
 	// whatever the script's camera does underneath
@@ -1767,15 +1796,19 @@ bool Game::Update() noexcept
 	{
 		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 		const auto* keys = SDL_GetKeyboardState(nullptr);
+		const bool demoPlaying = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsPlaying(0);
 		Locator::helpTextSystem::value().Update({
 		    .gameMs = static_cast<uint32_t>(clock.GetFrameGameTime().count()),
 		    .realMs = static_cast<uint32_t>(clock.GetFrameRealTime().count()),
 		    .inTemple = inTemple,
-		    .click = _dialogueClick,
-		    .skipKey = keys != nullptr && keys[SDL_SCANCODE_KP_ENTER] != 0,
+		    // Nor can the player click or key through the advisors' lines while a hand demonstration plays
+		    .click = _dialogueClick && !demoPlaying,
+		    .skipKey = !demoPlaying && keys != nullptr && keys[SDL_SCANCODE_KP_ENTER] != 0,
 		});
 		_dialogueClick = false;
 	}
+	// The tip bubble's time to show runs down by the game's time while it is up
+	Locator::tipBubbleSystem::value().UpdateFrame(static_cast<float>(clock.GetFrameGameTime().count()));
 	// The cinema bars coming in hide the game's dialogs
 	if (Locator::cinematicDirectorSystem::value().TakeHideDialogs() && _interface && _interface->GetMenu().IsOpen())
 	{
@@ -2311,6 +2344,9 @@ bool Game::Update() noexcept
 				// The villagers in view are posed for the camera the frame is drawn from
 				ShowInspectorCamera(true);
 				Locator::livingActionSystem::value().PoseVillagersInView(Locator::camera::value().GetViewProjectionMatrix());
+				// and the eyes of those drawn in high detail blink, look about and are placed on their heads
+				Locator::highDetailSystem::value().PlaceEyes(animals::DrawTime(clock.GetTurn(), clock.GetTurnFraction()),
+				                                             Locator::camera::value().GetViewProjectionMatrix());
 				// The trees out of the land are drawn with their roots, as each now is
 				ecs::tree_roots::Show(Locator::entitiesRegistry::value());
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
@@ -3599,6 +3635,8 @@ void Game::PrepareNewLand()
 	Locator::fireSystem::value().Reset();
 	// Nor the beat of its scrolls
 	Locator::scriptHighlightSystem::value().Reset();
+	Locator::tipBubbleSystem::value().Reset();
+	Locator::handDemoSystem::value().Reset();
 	Locator::creatureFightSystem::value().Reset();
 	Locator::explosionSystem::value().Reset();
 	Locator::magicSystem::value().SetIgnoreInfluence(false);
@@ -4145,7 +4183,12 @@ void Game::UpdateHandKnock(const ecs::components::Transform& handTransform)
 void Game::UpdateHandNavigation(const ecs::components::Transform& handTransform)
 {
 	using namespace hand_navigation_pose;
-	const auto cues = Locator::camera::value().GetModel().GetHandCues();
+	auto cues = Locator::camera::value().GetModel().GetHandCues();
+	// A hand demonstration shows the camera hints its recording had
+	if (Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsPlaying(0))
+	{
+		cues.tricons = Locator::handDemoSystem::value().GetHints();
+	}
 	// Dragging the land is the hand's camera state; turning the camera with the middle button or both buttons isn't
 	const bool cameraState = _handGripping && !_handRotating;
 	auto pose = Pose::Idle;
