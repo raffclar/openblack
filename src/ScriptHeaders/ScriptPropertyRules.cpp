@@ -135,6 +135,25 @@ bool MovedAcross(const glm::vec3& before, const glm::vec3& after)
 	       map_coords::ToFixed(before.z) != map_coords::ToFixed(after.z);
 }
 
+std::optional<CreatureType> CreatureTypeFromScript(uint32_t type)
+{
+	constexpr uint32_t k_GiantApe = 0;
+	if (type == k_GiantApe)
+	{
+		return CreatureType::GiantApe;
+	}
+	if (type < static_cast<uint32_t>(CreatureType::GiantApe))
+	{
+		return static_cast<CreatureType>(type);
+	}
+	return std::nullopt;
+}
+
+uint32_t ScriptCreatureType(CreatureType species)
+{
+	return species == CreatureType::GiantApe ? 0 : static_cast<uint32_t>(species);
+}
+
 float BeliefForPlayer(bool town, std::optional<float> townBelief, std::optional<PlayerNames> owner, PlayerNames player)
 {
 	if (town)

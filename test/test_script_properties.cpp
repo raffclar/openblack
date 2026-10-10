@@ -195,3 +195,18 @@ TEST(ScriptProperties, MovingIsAcrossTheLandInWholeMapUnits)
 	// Less than a map unit (a 65536th of ten metres) is no move
 	EXPECT_FALSE(MovedAcross({10.0f, 0.0f, 20.0f}, {10.00001f, 0.0f, 20.0f}));
 }
+
+TEST(ScriptProperties, ScriptsNumberTheSpeciesFromTheGiantApe)
+{
+	EXPECT_EQ(CreatureTypeFromScript(0), CreatureType::GiantApe);
+	EXPECT_EQ(CreatureTypeFromScript(1), CreatureType::Cow);
+	EXPECT_EQ(CreatureTypeFromScript(2), CreatureType::Tiger);
+	EXPECT_EQ(CreatureTypeFromScript(16), CreatureType::Gorilla);
+	EXPECT_FALSE(CreatureTypeFromScript(17).has_value());
+	EXPECT_EQ(ScriptCreatureType(CreatureType::GiantApe), 0u);
+	EXPECT_EQ(ScriptCreatureType(CreatureType::Lion), 5u);
+	for (uint32_t type = 0; type < 17; ++type)
+	{
+		EXPECT_EQ(ScriptCreatureType(*CreatureTypeFromScript(type)), type);
+	}
+}

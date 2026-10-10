@@ -4664,10 +4664,27 @@ void IsThatSpellCharging() // 331 IS_THAT_SPELL_CHARGING
 
 void OpposingCreature() // 332 OPPOSING_CREATURE
 {
-	// const auto god = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushi(0);
+	// The species a god's creature is against the player's creature, from the game's table, as the scripts number them
+	const auto god = Pop().uintVal;
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const auto creature =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetPrimaryCreature(player) : std::nullopt;
+	const auto* body =
+	    creature.has_value() ? Locator::entitiesRegistry::value().TryGet<const ecs::components::Creature>(*creature) : nullptr;
+	const auto& table = Locator::infoConstants::value().scriptOpposingCreature;
+	const auto row = body != nullptr ? script::property_rules::ScriptCreatureType(body->species) : 0;
+	constexpr uint32_t k_Gods = 3;
+	if (body == nullptr || row >= table.size() || god >= k_Gods)
+	{
+		// The game reads its table regardless (and without a creature fails)
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "No opposing creature for god {}", god);
+		Pushi(0);
+		return;
+	}
+	const auto& opposing = table.at(row);
+	const std::array<uint32_t, k_Gods> types {opposing.field0x0, opposing.field0x4, opposing.field0x8};
+	Pushi(static_cast<int32_t>(types.at(god)));
 }
 
 void FlockWithinLimits() // 333 FLOCK_WITHIN_LIMITS

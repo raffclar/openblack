@@ -104,6 +104,11 @@ struct Angles
 /// (a 65536th of ten metres), and not its height
 [[nodiscard]] bool MovedAcross(const glm::vec3& before, const glm::vec3& after);
 
+/// The scripts number the creature species as the game's creature tables do: the giant ape first, then the cow to the
+/// gorilla in openblack's order. None for a number past the last.
+[[nodiscard]] std::optional<CreatureType> CreatureTypeFromScript(uint32_t type);
+[[nodiscard]] uint32_t ScriptCreatureType(CreatureType species);
+
 /// A thing's belief in a player, as the scripts ask it: a town's belief in the player (none it was given is no belief);
 /// anything else believes wholly in its own player and not at all in the others
 [[nodiscard]] float BeliefForPlayer(bool town, std::optional<float> townBelief, std::optional<PlayerNames> owner,
