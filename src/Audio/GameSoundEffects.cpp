@@ -109,10 +109,14 @@ bool GameSoundEffectHeard(const SoundEffectConditions& conditions, entt::id_type
 	{
 		return true;
 	}
-	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Sound {} not heard (use {}): {}{}{}{}", handle->name, handle->userParam,
-	                    conditions.scriptWideScreen ? "cut scene " : "", conditions.insideTemple ? "in the temple " : "",
-	                    conditions.gameSoundOn ? "" : "game sound off ",
-	                    conditions.creatureFightControl ? "fight controls" : "");
+	// The log may not be set up (tests)
+	if (const auto logger = spdlog::get("audio"); logger != nullptr)
+	{
+		SPDLOG_LOGGER_DEBUG(logger, "Sound {} not heard (use {}): {}{}{}{}", handle->name, handle->userParam,
+		                    conditions.scriptWideScreen ? "cut scene " : "", conditions.insideTemple ? "in the temple " : "",
+		                    conditions.gameSoundOn ? "" : "game sound off ",
+		                    conditions.creatureFightControl ? "fight controls" : "");
+	}
 	return false;
 }
 
