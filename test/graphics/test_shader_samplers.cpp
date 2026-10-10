@@ -14,6 +14,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Graphics/ShaderManager.h"
 #include "Graphics/ShaderSamplers.h"
 
 using namespace openblack::graphics::shader_samplers;
@@ -195,4 +196,17 @@ TEST(ShaderSamplers, FindsSamplersSharingAStage)
 	ASSERT_EQ(collisions.size(), 1);
 	EXPECT_EQ(collisions.front().first, "s_landColour");
 	EXPECT_EQ(collisions.front().second, "s_landAlpha");
+}
+
+TEST(ShaderSamplers, NoProgramSamplesTwoTexturesAtOneStage)
+{
+	const auto programs = openblack::graphics::ShaderManager::ProgramSamplers();
+	ASSERT_FALSE(programs.empty());
+	for (const auto& [name, samplers] : programs)
+	{
+		for (const auto& [first, second] : StageCollisions(samplers))
+		{
+			ADD_FAILURE() << name << " samples " << first << " and " << second << " at the same stage";
+		}
+	}
 }

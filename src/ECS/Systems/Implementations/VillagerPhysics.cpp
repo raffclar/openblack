@@ -137,13 +137,20 @@ void PlayerDid(uint32_t deed, entt::entity object, PlayerNames player)
 
 std::optional<PlayerNames> villager_physics::DropperOf(entt::entity object)
 {
+	return DropperOf(Entities(), object,
+	                 Locator::playerSystem::has_value() ? std::optional(Locator::playerSystem::value().GetLocalPlayer())
+	                                                    : std::nullopt);
+}
+
+std::optional<PlayerNames> villager_physics::DropperOf(const Registry& registry, entt::entity object,
+                                                       std::optional<PlayerNames> localPlayer)
+{
 	// The hand whose last let-go thing it is: the local player's hands are the only ones on the screen
 	std::optional<PlayerNames> dropper;
-	Entities().Each<const HandGrab>([&dropper, object](const HandGrab& hand) {
+	registry.Each<const HandGrab>([&dropper, object, localPlayer](const HandGrab& hand) {
 		if (hand.lastDropped == object)
 		{
-			dropper =
-			    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+			dropper = localPlayer.value_or(PlayerNames::PLAYER_ONE);
 		}
 	});
 	return dropper;

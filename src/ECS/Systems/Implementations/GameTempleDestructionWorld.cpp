@@ -23,6 +23,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "Locator.h"
+#include "Particles/ParticleEffect.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -92,6 +93,46 @@ void GameTempleDestructionWorld::FollowWithSpotVisual(uint32_t visual, entt::ent
 	{
 		Locator::particleSystem::value().AddTarget(visual, target);
 	}
+}
+
+void GameTempleDestructionWorld::SetSpotVisualMagnitude(uint32_t visual, float magnitude)
+{
+	if (!Locator::particleSystem::has_value())
+	{
+		return;
+	}
+	if (auto* effect = Locator::particleSystem::value().Find(visual); effect != nullptr)
+	{
+		effect->SetMagnitude(magnitude);
+	}
+}
+
+bool GameTempleDestructionWorld::SpotVisualRunning(uint32_t visual) const
+{
+	return Locator::particleSystem::has_value() && Locator::particleSystem::value().IsRunning(visual);
+}
+
+void GameTempleDestructionWorld::AddPlasma(uint32_t source, const particles::PlasmaCommand& command)
+{
+	if (Locator::particleSystem::has_value())
+	{
+		Locator::particleSystem::value().AddPlasma(source, command);
+	}
+}
+
+std::vector<model_surface::Triangle> GameTempleDestructionWorld::DrawnTrianglesOf(entt::entity object) const
+{
+	return world_objects::DrawnTrianglesOf(object);
+}
+
+glm::mat4 GameTempleDestructionWorld::PlacementOf(entt::entity object) const
+{
+	return world_objects::PlacementOf(object);
+}
+
+GameRandomInterface* GameTempleDestructionWorld::Random()
+{
+	return Locator::gameRandom::has_value() ? &Locator::gameRandom::value() : nullptr;
 }
 
 float GameTempleDestructionWorld::RandomShare(float spread)

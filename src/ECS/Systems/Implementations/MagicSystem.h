@@ -55,6 +55,8 @@ public:
 	[[nodiscard]] bool IsDryLand(glm::vec3 point) const override;
 	[[nodiscard]] bool IsLand(glm::vec3 point) const override;
 	[[nodiscard]] bool InInfluence(PlayerNames player, glm::vec3 point) const override;
+	[[nodiscard]] bool HandInInfluence(PlayerNames player, glm::vec3 hand) const override;
+	void HeldThingUsedOnLand(PlayerNames player) override;
 	[[nodiscard]] std::optional<glm::vec3> PositionOf(entt::entity object) const override;
 	bool ApplyEffect(entt::entity object, const magic::EffectValues& values, const magic::EffectSource& source) override;
 	std::vector<entt::entity> ApplyEffectAt(glm::vec3 point, const magic::EffectValues& values,

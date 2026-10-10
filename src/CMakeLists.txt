@@ -3,6 +3,15 @@ if (NOT ANDROID)
   list(REMOVE_ITEM OPENBLACK_SOURCES "${CMAKE_CURRENT_LIST_DIR}/main.cpp")
 endif ()
 file(GLOB_RECURSE OPENBLACK_HEADERS "${CMAKE_CURRENT_LIST_DIR}/*.h")
+# The debug inspector's game side is built only with the option
+if (NOT OPENBLACK_INSPECTOR)
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX
+       "/Inspector/|/InspectorSystem[.]cpp$"
+  )
+  list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX
+       "/Inspector/|/InspectorSystem[.]h$"
+  )
+endif ()
 if (APPLE)
   file(GLOB_RECURSE OPENBLACK_OBJC_SOURCES "${CMAKE_CURRENT_LIST_DIR}/*.mm")
   list(APPEND OPENBLACK_SOURCES "${OPENBLACK_OBJC_SOURCES}")
@@ -107,11 +116,20 @@ target_include_directories(
          ${CMAKE_BINARY_DIR}/include # For shaders and other bin2c
          ${Stb_INCLUDE_DIR} ${DRLIBS_INCLUDE_DIRS}
 )
+# The game's videos: the container is always read, so that a build without the decoder keeps their timing
+target_link_libraries(openblack_lib PUBLIC bink)
+# Videos decode their frames on a thread of their own
+find_package(Threads REQUIRED)
+target_link_libraries(openblack_lib PUBLIC Threads::Threads)
+if (OPENBLACK_BINK_DECODER)
+  target_compile_definitions(openblack_lib PUBLIC OPENBLACK_BINK_DECODER)
+endif ()
 target_link_libraries(
   openblack_lib
   PRIVATE "$<$<CXX_COMPILER_ID:MSVC>:-SAFESEH:NO>"
           l3d
           cam
+          dance
           pack
           lnd
           anm
@@ -186,11 +204,31 @@ else ()
   )
 endif ()
 
+if (OPENBLACK_INSPECTOR)
+  target_link_libraries(openblack_lib PRIVATE inspector)
+  target_compile_definitions(openblack_lib PUBLIC OPENBLACK_INSPECTOR)
+  # The worktree the game is built from, which the inspector names it by wherever the build lives
+  target_compile_definitions(
+    openblack_lib PRIVATE OPENBLACK_BUILT_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+  )
+  # The running game tells tools how it was built
+  target_compile_definitions(
+    openblack_lib PRIVATE OPENBLACK_BUILD_TYPE="$<CONFIG>"
+  )
+  # Every component's reflection in one file outgrows an object file's sections
+  if (MSVC)
+    set_source_files_properties(
+      Inspector/ComponentFields.cpp PROPERTIES COMPILE_OPTIONS /bigobj
+    )
+  endif ()
+endif ()
+
+# The library's headers do their maths left-handed in radians, so everything that includes them must too: glm's inline
+# functions built either way in one program would leave the linker to pick one at random
 target_compile_definitions(
   openblack_lib
+  PUBLIC "GLM_FORCE_LEFT_HANDED" "GLM_FORCE_RADIANS"
   PRIVATE
-    "GLM_FORCE_LEFT_HANDED"
-    "GLM_FORCE_RADIANS"
     "GLM_ENABLE_EXPERIMENTAL"
     # "IMGUI_DISABLE_OBSOLETE_FUNCTIONS"
     # Compile-time optimize out log messages (debug level if debug, else info)
@@ -214,18 +252,21 @@ if (MSVC)
 
   target_compile_options(
     openblack_lib
-    PRIVATE # Level 4 warnings
-            /W4
-            # Disable nonstandard extension used: nameless struct/union from glm
-            /wd4201
-            # Multi-threaded
-            /MP
-            # Enables stricter C++ standards conformance checks
-            /permissive-
-            # Set correct version of c++
-            /Zc:__cplusplus
-            # Use utf-8 for std::print and fmt/spdlog
-            /utf-8
+    PRIVATE
+      # Level 4 warnings
+      /W4
+      # Disable nonstandard extension used: nameless struct/union from glm
+      /wd4201
+      # Multi-threaded
+      /MP
+      # Enables stricter C++ standards conformance checks
+      /permissive-
+      # Set correct version of c++
+      /Zc:__cplusplus
+      # Use utf-8 for std::print and fmt/spdlog
+      /utf-8
+      # The service locator makes every system and resource cache, more sections than an object file holds
+      /bigobj
   )
 
   if (OPENBLACK_WARNINGS_AS_ERRORS)

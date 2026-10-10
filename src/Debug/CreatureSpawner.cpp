@@ -41,6 +41,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/CreatureRemoval.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
@@ -778,7 +779,11 @@ void CreatureSpawner::DrawCreatures() noexcept
 	ImGui::BeginDisabled(creatures.empty());
 	if (ImGui::Button("Remove all"))
 	{
-		registry.Destroy(creatures.begin(), creatures.end());
+		// Each goes through the game's removal, which lets go of its leash, fights, hand and lists
+		for (const auto creature : creatures)
+		{
+			ecs::creature_removal::RemoveFromGame(creature);
+		}
 		creatures.clear();
 		_selected.reset();
 	}
@@ -827,7 +832,7 @@ void CreatureSpawner::DrawCreatures() noexcept
 		{
 			_selected.reset();
 		}
-		registry.Destroy(*remove);
+		ecs::creature_removal::RemoveFromGame(*remove);
 	}
 }
 

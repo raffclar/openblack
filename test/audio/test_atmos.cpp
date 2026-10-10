@@ -269,7 +269,7 @@ void RunVolumeScenario(const std::string& name)
 	{
 		const auto& sky = scenario.at("sky").at(i);
 		const auto& times = sky.at("times");
-		const SkyInterface::DayNightTimes dayNight {
+		const DayNightTimes dayNight {
 		    .nightFull = FloatFromBits(times.at(3)),
 		    .duskStart = FloatFromBits(times.at(2)),
 		    .duskEnd = FloatFromBits(times.at(1)),

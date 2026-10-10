@@ -21,6 +21,7 @@
 #include "3D/MapCoords.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/DeadTree.h"
@@ -38,6 +39,7 @@
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/TeleportStone.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
@@ -59,14 +61,17 @@ void ForEachMapComponent(Func&& func)
 	// Buildings and features, which cover their outline
 	func.template operator()<Abode>();
 	func.template operator()<Feature>();
+	func.template operator()<AnimatedStatic>();
 	func.template operator()<Flowers>();
 	func.template operator()<BigForest>();
 	func.template operator()<MobileStatic>();
+	func.template operator()<DeadTree>();
 	func.template operator()<SpellDispenser>();
 	func.template operator()<TeleportStone>();
+	// A temple's heart, which stands in the land as a building does
+	func.template operator()<Temple>();
 	// Trees and shields, each in one cell
 	func.template operator()<Tree>();
-	func.template operator()<DeadTree>();
 	func.template operator()<ShieldDome>();
 	// Things that count as staying put but can be carried
 	func.template operator()<Pot>();
@@ -93,18 +98,7 @@ std::optional<map_cells::Outline> OutlineOf(const Transform& transform, entt::id
 		return std::nullopt;
 	}
 	const auto box = meshes.Handle(meshId)->GetBoundingBox();
-	const float scale = transform.scale.x;
-	const glm::vec3 half = box.Size() * 0.5f;
-	// The game keeps positions as map positions
-	const glm::vec3 position {openblack::map_coords::Quantise(transform.position.x), transform.position.y,
-	                          openblack::map_coords::Quantise(transform.position.z)};
-	const glm::vec3 centre = position + transform.rotation * (box.Center() * scale);
-	glm::vec2 axis = glm::xz(transform.rotation * glm::vec3(1.0f, 0.0f, 0.0f));
-	axis = glm::length(axis) > 0.0f ? glm::normalize(axis) : glm::vec2(1.0f, 0.0f);
-	return map_cells::Outline {.centre = glm::xz(centre),
-	                           .halfSize = glm::vec2(half.x * scale, half.z * scale),
-	                           .halfDiagonal = scale * glm::length(half),
-	                           .axis = axis};
+	return map_cells::OutlineOfBox(transform.position, transform.rotation, transform.scale.x, box.Center(), box.Size() * 0.5f);
 }
 } // namespace
 
@@ -146,15 +140,16 @@ MapProduction::~MapProduction()
 
 std::optional<MapProduction::Kind> MapProduction::KindOf(const Registry& registry, entt::entity entity)
 {
-	if (registry.AnyOf<Abode, Feature, Flowers, BigForest, SpellDispenser, TeleportStone>(entity))
+	if (registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, BigForest, SpellDispenser, TeleportStone, Temple>(entity))
 	{
 		return Kind {.placement = Placement::FixedFront, .coversOutline = true, .moves = false};
 	}
-	if (registry.AnyOf<MobileStatic>(entity))
+	// Dead trees are rocks of a kind, so they cover their outline as other rocks do
+	if (registry.AnyOf<MobileStatic, DeadTree>(entity))
 	{
 		return Kind {.placement = Placement::FixedFront, .coversOutline = true, .moves = true};
 	}
-	if (registry.AnyOf<Tree, DeadTree, ShieldDome>(entity))
+	if (registry.AnyOf<Tree, ShieldDome>(entity))
 	{
 		return Kind {.placement = Placement::FixedFront, .coversOutline = false, .moves = false};
 	}

@@ -13,17 +13,24 @@
 
 #include <algorithm>
 #include <iostream>
+#include <memory>
+#include <optional>
+#include <span>
 #include <unordered_map>
 
 #include <glm/gtx/transform.hpp>
 
 #include "3D/L3DMesh.h"
+#include "3D/PhysicsDrawMatrix.h"
+#include "Camera/Camera.h"
+#include "ECS/BuildingConstruction.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/GroundMark.h"
@@ -53,9 +60,14 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "Game.h"
+#include "Graphics/BonePalette.h"
 #include "Graphics/DebugLines.h"
+#include "Graphics/DetailLevel.h"
 #include "Graphics/GraphicsHandleBgfx.h"
+#include "Graphics/GroundBlobs.h"
+#include "Graphics/MeshDetail.h"
 #include "Graphics/ShaderManager.h"
+#include "Graphics/Texture2D.h"
 #include "Locator.h"
 #include "Physics/DamageMesh.h"
 #include "Profiler.h"
@@ -80,6 +92,25 @@ entt::id_type DrawnMeshOf(entt::entity entity, const Mesh& mesh)
 	           ? openblack::Locator::buildingDamageSystem::value().DrawnMesh(entity, mesh.id)
 	           : mesh.id;
 }
+
+/// Which of a villager's meshes it is drawn as this frame, by how deep into the view the middle of its standard mesh's
+/// bounding sphere is, drawn by `model`
+openblack::graphics::mesh_detail::Choice ChooseDetail(const DetailMeshes& detail, const glm::mat4& model, float scale,
+                                                      bool disappears, const openblack::Camera& camera, float modelDetail)
+{
+	namespace mesh_detail = openblack::graphics::mesh_detail;
+	const auto& meshes = entt::locator<openblack::resources::ResourcesInterface>::value().GetMeshes();
+	const auto bounding = detail.meshes.at(static_cast<size_t>(mesh_detail::Mesh::Standard));
+	if (!meshes.Contains(bounding))
+	{
+		return {.mesh = mesh_detail::Mesh::High, .alpha = std::nullopt};
+	}
+	const auto box = meshes.Handle(bounding)->GetBoundingBox();
+	const auto centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
+	const float depth = glm::dot(centre - camera.GetOrigin(), camera.GetForward());
+	const float reach = mesh_detail::Reach(detail.importance, glm::length(box.Size()) * 0.5f * scale, modelDetail);
+	return mesh_detail::Choose(depth, reach, disappears);
+}
 } // namespace
 
 RenderingSystem::~RenderingSystem() = default;
@@ -102,25 +133,30 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		bool translucent;
 		std::optional<float> additiveShare;
 		bool instanceAlpha;
+		/// Every instance is a posed villager
+		bool villagers;
 	};
 	std::unordered_map<entt::id_type, MeshInstances> meshIds;
+	std::unordered_map<entt::id_type, uint32_t> fadingCounts;
 
-	auto prep = [&registry, &meshIds, &instanceCount](entt::entity entity, const Mesh& mesh, bool morphWithTerrain) {
-		auto count = meshIds.insert(
-		    std::make_pair(DrawnMeshOf(entity, mesh), MeshInstances {.count = static_cast<uint32_t>(mesh.submeshId),
-		                                                             .morphWithTerrain = morphWithTerrain,
-		                                                             .castsShadow = false,
-		                                                             .unlit = false,
-		                                                             .perEntity = false,
-		                                                             .translucent = false,
-		                                                             .additiveShare = std::nullopt,
-		                                                             .instanceAlpha = false}));
+	auto prepMesh = [&registry, &meshIds, &instanceCount](entt::entity entity, entt::id_type drawnMesh, const Mesh& mesh,
+	                                                      bool morphWithTerrain) {
+		auto count = meshIds.insert(std::make_pair(drawnMesh, MeshInstances {.count = static_cast<uint32_t>(mesh.submeshId),
+		                                                                     .morphWithTerrain = morphWithTerrain,
+		                                                                     .castsShadow = false,
+		                                                                     .unlit = false,
+		                                                                     .perEntity = false,
+		                                                                     .translucent = false,
+		                                                                     .additiveShare = std::nullopt,
+		                                                                     .instanceAlpha = false,
+		                                                                     .villagers = true}));
 		count.first->second.count++;
 		// The things whose shadows Black & White bakes into the land (IsCastShadowAtNight), and its features
 		count.first->second.castsShadow |= registry.AnyOf<Abode, Feature, MobileStatic, StoragePit>(entity);
 		count.first->second.unlit |= registry.AnyOf<Unlit>(entity);
 		// The creatures and the animals are each posed as they are
 		count.first->second.perEntity |= registry.AnyOf<CreatureMorph, AnimalPose, VillagerPose, AnimatedStaticPose>(entity);
+		count.first->second.villagers &= registry.AllOf<VillagerPose>(entity) && !morphWithTerrain;
 		if (const auto* translucent = registry.TryGet<const Translucent>(entity))
 		{
 			count.first->second.translucent = true;
@@ -132,6 +168,25 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 			count.first->second.instanceAlpha = true;
 		}
 		instanceCount++;
+	};
+	auto prep = [&registry, &prepMesh, &fadingCounts, &instanceCount](entt::entity entity, const Mesh& mesh,
+	                                                                  bool morphWithTerrain) {
+		const auto* detail = registry.TryGet<const DetailMeshes>(entity);
+		if (detail == nullptr || morphWithTerrain)
+		{
+			prepMesh(entity, DrawnMeshOf(entity, mesh), mesh, morphWithTerrain);
+			return;
+		}
+		// One drawn in less detail further off has room in each of its meshes, and among those fading out
+		for (auto it = detail->meshes.begin(); it != detail->meshes.end(); ++it)
+		{
+			if (std::find(detail->meshes.begin(), it, *it) == it)
+			{
+				prepMesh(entity, *it, mesh, morphWithTerrain);
+			}
+		}
+		++fadingCounts[detail->meshes.back()];
+		++instanceCount;
 	};
 
 	registry.Each<const Mesh, const Transform>(
@@ -178,15 +233,38 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		    std::forward_as_tuple(offset, desc.count, desc.morphWithTerrain, desc.castsShadow));
 		drawDesc->second.unlit = desc.unlit;
 		drawDesc->second.perEntity = desc.perEntity;
+		// The villagers of a mesh are drawn together, their bones read from the bone palette
+		drawDesc->second.bonePalette = desc.villagers;
+		// The sea doesn't reflect villagers
+		drawDesc->second.hiddenFromReflection = desc.villagers;
 		// Blended by its materials, over the opaque things
 		drawDesc->second.materialBlending = desc.translucent;
 		drawDesc->second.translucent = desc.translucent;
 		drawDesc->second.additiveShare = desc.additiveShare;
 		drawDesc->second.instanceAlpha = desc.instanceAlpha;
-		_instanceSlots.emplace(
-		    meshId,
-		    InstanceSlots {.offset = offset, .count = desc.count, .filled = 0, .perEntity = desc.perEntity, .height = 0.0f});
+		_instanceSlots.emplace(meshId, InstanceSlots {.offset = offset,
+		                                              .count = desc.count,
+		                                              .filled = 0,
+		                                              .perEntity = desc.perEntity,
+		                                              .height = 0.0f,
+		                                              .bonePalette = desc.villagers});
 		offset += desc.count;
+	}
+	// The villagers fading out in the distance, blended by their own alpha
+	_renderContext.fadingDrawDescs.clear();
+	_fadingSlots.clear();
+	for (const auto& [meshId, count] : fadingCounts)
+	{
+		const auto [drawDesc, inserted] = _renderContext.fadingDrawDescs.emplace(
+		    std::piecewise_construct, std::forward_as_tuple(meshId), std::forward_as_tuple(offset, count, false, false));
+		drawDesc->second.perEntity = true;
+		drawDesc->second.bonePalette = true;
+		drawDesc->second.instanceAlpha = true;
+		drawDesc->second.hiddenFromReflection = true;
+		_fadingSlots.emplace(
+		    meshId, InstanceSlots {
+		                .offset = offset, .count = count, .filled = 0, .perEntity = true, .height = 0.0f, .bonePalette = true});
+		offset += count;
 	}
 
 	// Prepare tree instances separately
@@ -277,19 +355,65 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	{
 		slots.filled = 0;
 	}
+	for (auto& [meshId, slots] : _fadingSlots)
+	{
+		slots.filled = 0;
+	}
+	_renderContext.farVillagers.clear();
+	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
+	const float modelDetail = graphics::detail_level::ModelDetail(Locator::config::value().detailLevel);
 
 	const auto& vegetation = Locator::vegetation::value();
 
 	// Set transforms for instanced draw at offsets
 	_renderContext.entityDraws.clear();
 	_renderContext.drawnObjects.clear();
+	_renderContext.bonePalette.clear();
+	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
 	bool fits = true;
 	registry.Each<const Mesh, const Transform>(
-	    [this, &registry, &vegetation, &fits, drawBoundingBox](entt::entity entity, const Mesh& mesh,
-	                                                           const Transform& transform) {
+	    [this, &registry, &vegetation, &meshes, &fits, drawBoundingBox, camera,
+	     modelDetail](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+		    auto modelMatrix = glm::mat4(transform.rotation);
+		    modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
+		    modelMatrix = glm::scale(modelMatrix, transform.scale);
+		    // A body moving in the physics is drawn between its last two turns, and not at all once sunk under the sea
+		    const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity);
+		    const auto placed = physics_draw::ModelMatrix(modelMatrix, drawn);
+		    modelMatrix = placed.value_or(glm::mat4(0.0f));
+
+		    // A villager is drawn in less detail the further off it is, fades out, then shows only as a smudge on a blob
+		    // while it stands above the sea. One flying in the physics never fades.
+		    auto drawnMesh = DrawnMeshOf(entity, mesh);
+		    auto* slotMap = &_instanceSlots;
+		    std::optional<uint8_t> fade;
+		    if (const auto* detail = registry.TryGet<const DetailMeshes>(entity);
+		        detail != nullptr && camera != nullptr && !registry.AllOf<MorphWithTerrain>(entity))
+		    {
+			    const auto choice = ChooseDetail(*detail, modelMatrix, transform.scale.x, !registry.AllOf<InPhysics>(entity),
+			                                     *camera, modelDetail);
+			    if (!choice.mesh.has_value())
+			    {
+				    const auto position = glm::vec3(modelMatrix[3]);
+				    if (placed.has_value() && position.y > graphics::ground_blobs::k_LowestHeight)
+				    {
+					    _renderContext.farVillagers.push_back(
+					        {.entity = entity, .position = position, .scale = transform.scale.x});
+					    _farSmudgeScale = _farSmudgeScale.value_or(transform.scale.x);
+				    }
+				    return;
+			    }
+			    drawnMesh = detail->meshes.at(static_cast<size_t>(*choice.mesh));
+			    if (choice.alpha.has_value())
+			    {
+				    slotMap = &_fadingSlots;
+				    fade = choice.alpha;
+			    }
+		    }
+
 		    // A mesh the draw lists don't have room for, which has changed since they were made
-		    const auto slots = _instanceSlots.find(DrawnMeshOf(entity, mesh));
-		    if (!fits || slots == _instanceSlots.end() || slots->second.filled >= slots->second.count)
+		    const auto slots = slotMap->find(drawnMesh);
+		    if (!fits || slots == slotMap->end() || slots->second.filled >= slots->second.count)
 		    {
 			    fits = false;
 			    return;
@@ -317,9 +441,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    desc->second.uvOffset = skin->uvOffset;
 				    if (desc->second.subMeshTextures.empty())
 				    {
-					    const auto drawn =
+					    const auto skinned =
 					        entt::locator<resources::ResourcesInterface>::value().GetMeshes().Handle(slots->first);
-					    for (uint32_t i = 0; i < static_cast<uint32_t>(drawn->GetSubMeshes().size()); ++i)
+					    for (uint32_t i = 0; i < static_cast<uint32_t>(skinned->GetSubMeshes().size()); ++i)
 					    {
 						    desc->second.subMeshTextures.emplace_back(i, skin->texture);
 					    }
@@ -327,15 +451,6 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 
-		    auto modelMatrix = glm::mat4(transform.rotation);
-		    modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
-		    modelMatrix = glm::scale(modelMatrix, transform.scale);
-		    // A body moving in the physics is drawn between its last two turns
-		    const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity);
-		    if (drawn != nullptr)
-		    {
-			    modelMatrix = glm::translate(glm::mat4(1.0f), drawn->origin) * glm::mat4(drawn->axes);
-		    }
 		    // A home with someone in lights its windows at night
 		    const auto* abode = registry.TryGet<const Abode>(entity);
 		    glm::vec4 look {abode != nullptr && abode->presentAtHome > 0 ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
@@ -381,18 +496,14 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 
-		    // A frozen creature takes an icy look, tinted dark blue and sheened with ice as it freezes, and an invisible one
-		    // dissolves through static
+		    // A frozen creature takes an icy look, tinted dark blue and sheened with ice as it freezes (one fizzing out of
+		    // sight is drawn through the static by the renderer)
 		    if (const auto* spells = registry.TryGet<const CreatureSpells>(entity))
 		    {
 			    if (spells->freeze > 0.0f)
 			    {
 				    look.y = static_cast<float>(creature_spells::FrozenTint(spells->freeze));
 				    look.w = -spells->freeze;
-			    }
-			    if (spells->fizz > 0.0f)
-			    {
-				    look.w = -(2.0f + spells->fizz);
 			    }
 		    }
 
@@ -443,10 +554,25 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 
 		    // A body sunk wholly under the sea isn't drawn in any pass, its shadow included
-		    if (drawn != nullptr && drawn->underSea)
+		    if (!placed.has_value())
 		    {
 			    look.z = 1.0f;
 			    modelMatrix = glm::mat4(0.0f);
+		    }
+
+		    // A building going up is drawn only as far up as it stands, with the broken and the unfinished ones, though
+		    // what of it stands can still be pointed at
+		    const auto* progress = registry.TryGet<const BuildProgress>(entity);
+		    const bool goingUp = progress != nullptr && DrawnMeshOf(entity, mesh) == mesh.id;
+		    if (goingUp)
+		    {
+			    look.z = 1.0f;
+		    }
+
+		    // Fading out in the distance
+		    if (fade.has_value() && look.z != 1.0f)
+		    {
+			    look.z = -(1.0f - (static_cast<float>(*fade) / 255.0f));
 		    }
 
 		    const uint32_t idx = slots->second.offset + slots->second.filled;
@@ -458,11 +584,23 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    instanceModel[0].w = static_cast<float>(slots->second.filled);
 		    }
 		    _renderContext.instanceUniforms[idx] = {.model = instanceModel, .look = look};
-		    if (look.z != 1.0f)
+		    // A villager's bones go into the palette, as its clip poses it or as its model rests, and its instance says
+		    // where they start
+		    if (slots->second.bonePalette)
+		    {
+			    const auto* pose = registry.TryGet<const VillagerPose>(entity);
+			    const auto& rest = meshes.Handle(slots->first)->GetBoneMatrices();
+			    const auto bones = pose != nullptr && pose->bones.size() == rest.size()
+			                           ? std::span<const glm::mat4>(pose->bones)
+			                           : std::span<const glm::mat4>(rest);
+			    graphics::bone_palette::SetFirstBone(_renderContext.instanceUniforms[idx].model,
+			                                         graphics::bone_palette::Append(_renderContext.bonePalette, bones));
+		    }
+		    if (look.z != 1.0f || (goingUp && progress->built > 0.0f))
 		    {
 			    _renderContext.drawnObjects.push_back({.entity = entity, .model = modelMatrix});
 		    }
-		    if (slots->second.perEntity && (drawn == nullptr || !drawn->underSea))
+		    if (slots->second.perEntity && placed.has_value())
 		    {
 			    _renderContext.entityDraws.push_back({.entity = entity, .instance = idx});
 		    }
@@ -484,8 +622,45 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		bgfx::update(toBgfx(_renderContext.instanceUniformBuffer), 0,
 		             bgfx::makeRef(_renderContext.instanceUniforms.data(), size));
 	}
+	for (auto& [meshId, desc] : _renderContext.instancedDrawDescs)
+	{
+		const auto slots = _instanceSlots.find(meshId);
+		desc.filled = slots != _instanceSlots.end() ? slots->second.filled : 0;
+	}
+	for (auto& [meshId, desc] : _renderContext.fadingDrawDescs)
+	{
+		const auto slots = _fadingSlots.find(meshId);
+		desc.filled = slots != _fadingSlots.end() ? slots->second.filled : 0;
+	}
+	std::ranges::sort(_renderContext.farVillagers, {}, &RenderContext::FarVillager::entity);
+	_renderContext.farSmudgeScale = _farSmudgeScale.value_or(1.0f);
+	UploadBonePalette();
 	UploadPartialBuilds();
 	return fits;
+}
+
+void RenderingSystem::UploadBonePalette()
+{
+	auto& texels = _renderContext.bonePalette;
+	if (texels.empty())
+	{
+		return;
+	}
+	// Whole rows are sent, the last one filled out
+	const auto rows = graphics::bone_palette::RowsFor(texels.size());
+	texels.resize(static_cast<size_t>(rows) * graphics::bone_palette::k_Width, glm::vec4(0.0f));
+	auto& texture = _renderContext.bonePaletteTexture;
+	// The texture grows to twice the rows it needs, so that a growing crowd doesn't make it again every frame
+	if (!texture || texture->GetResolution().y < rows)
+	{
+		texture = std::make_unique<graphics::Texture2D>("BonePalette");
+		texture->CreateWithinFrame(graphics::bone_palette::k_Width, static_cast<uint16_t>(rows * 2), 1,
+		                           graphics::TextureFormat::RGBA32F, graphics::Wrapping::ClampEdge, graphics::Filter::Nearest,
+		                           nullptr);
+	}
+	const auto bytes = static_cast<uint32_t>(texels.size() * sizeof(glm::vec4));
+	bgfx::updateTexture2D(toBgfx(texture->GetNativeHandle()), 0, 0, 0, 0, graphics::bone_palette::k_Width, rows,
+	                      bgfx::copy(texels.data(), bytes));
 }
 
 void RenderingSystem::UploadPartialBuilds()
@@ -530,6 +705,9 @@ void RenderingSystem::UploadPartialBuilds()
 		                     : std::nullopt,
 		    .scaffoldStatus = build.scaffoldShown ? scaffold : std::nullopt,
 		    .scaffoldCut = build.scaffoldCut,
+		    // A temple's inner walls stand in further than other buildings', whatever their material
+		    .innerWallInset =
+		        registry.AllOf<Temple>(entity) ? std::optional(building_construction::k_TempleInnerWallInset) : std::nullopt,
 		};
 		_renderContext.partialBuildInstances.push_back({.model = matrix});
 		// The scaffold sinks along its up axis while the building rises out of the land
@@ -595,13 +773,17 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		auto modelMatrix = glm::mat4(transform.rotation);
 		modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
 		modelMatrix = glm::scale(modelMatrix, transform.scale);
-		// A body moving in the physics is drawn between its last two turns
-		if (const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity))
+		// A body moving in the physics is drawn between its last two turns. Sunk wholly under the sea it isn't drawn at
+		// all: every vertex lands on one point, which draws nothing, and it neither sways nor bends, which would take its
+		// vertices out to the horizon
+		const auto placed = physics_draw::ModelMatrix(modelMatrix, registry.TryGet<const PhysicsDrawPose>(entity));
+		if (!placed.has_value())
 		{
-			// Sunk wholly under the sea it isn't drawn: every vertex lands on one point, which draws nothing
-			modelMatrix =
-			    drawn->underSea ? glm::mat4(0.0f) : glm::translate(glm::mat4(1.0f), drawn->origin) * glm::mat4(drawn->axes);
+			_renderContext.treeInstanceData[idx] = {.modelMatrix = glm::mat4(0.0f), .burning = glm::vec4(0.0f)};
+			++slots->second.filled;
+			return;
 		}
+		modelMatrix = *placed;
 		// A tree with a fire on it is drawn darker, its foliage thinning as it burns, and narrows away at the last,
 		// keeping its height
 		glm::vec4 burning(0.0f);

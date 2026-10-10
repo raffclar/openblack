@@ -49,6 +49,8 @@
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerNeeds.h"
 #include "ECS/VillagerRoutine.h"
+#include "ECS/WalkArrival.h"
+#include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -64,6 +66,8 @@ namespace needs = openblack::ecs::villager_needs;
 namespace villager_age = openblack::ecs::villager_age;
 namespace world_objects = openblack::ecs::world_objects;
 namespace villager_fire = openblack::ecs::villager_fire;
+namespace wall_hug = openblack::ecs::wall_hug;
+namespace walk_arrival = openblack::ecs::walk_arrival;
 using ClearAreaFilter = openblack::ecs::systems::TownSystemInterface::ClearAreaFilter;
 
 namespace
@@ -223,13 +227,41 @@ void LookAtPos(entt::entity villager, glm::vec2 point, int32_t step)
 	WorldRegistry().SetDirty();
 }
 
-/// Whether the villager is about as close to a point as a step of its walk takes it
+/// Where the walk holds the villager, in whole map units: where it last put it, unless something else has moved it since
+glm::ivec2 WalkPositionOf(entt::entity villager)
+{
+	const auto metres = PositionOf(villager);
+	const auto* wallHug = WorldRegistry().TryGet<const WallHug>(villager);
+	if (wallHug != nullptr && wallHug->placedAt == metres)
+	{
+		return wallHug->position;
+	}
+	return wall_hug::ToWhole(metres);
+}
+
+/// Whether the villager is closer to a point than the step its walk makes in a turn
 bool AreWeThere(entt::entity villager, glm::vec2 point)
 {
 	const auto* wallHug = WorldRegistry().TryGet<const WallHug>(villager);
-	const float reach = wallHug != nullptr ? wallHug->speed : 0.0f;
-	const auto offset = PositionOf(villager) - point;
-	return glm::dot(offset, offset) < reach * reach;
+	const float speed = wallHug != nullptr ? wallHug->speed : 0.0f;
+	return walk_arrival::WithinAStep(WalkPositionOf(villager), wall_hug::ToWhole(point), speed);
+}
+
+/// The state of the first of these walk tags the villager carries
+template <typename... Tags>
+std::optional<MoveState> FirstWalkTag(entt::entity villager)
+{
+	const auto& registry = WorldRegistry();
+	std::optional<MoveState> state;
+	((state = !state.has_value() && registry.AnyOf<Tags>(villager) ? std::optional(Tags::k_Value) : state), ...);
+	return state;
+}
+
+/// The state of the villager's walk, none when it has no walk under way
+std::optional<MoveState> WalkStateOf(entt::entity villager)
+{
+	return FirstWalkTag<MoveStateLinearTag, MoveStateOrbitTag, MoveStateExitCircleTag, MoveStateStepThroughTag,
+	                    MoveStateFinalStepTag, MoveStateArrivedTag>(villager);
 }
 
 const GAbodeInfo& AbodeInfoOf(entt::entity abode)
@@ -300,15 +332,14 @@ bool CheckHomelessMoveIntoAbode(LivingAction& action)
 	{
 		return false;
 	}
-	// TODO(villagers): the game scores the buildings with room and takes the best; openblack takes the first
-	const auto abode = Locator::townSystem::value().FindAbodeWithSpace(town);
+	auto& towns = Locator::townSystem::value();
+	const auto abode = towns.FindAbodeWithSpace(town, villager, 0.0f);
 	if (abode == entt::null)
 	{
 		return false;
 	}
 	std::erase(registry.Get<Town>(town).homelessVillagers, villager);
-	registry.Get<Villager>(villager).abode = abode;
-	registry.Get<Abode>(abode).inhabitants.insert(villager);
+	towns.AddVillagerToAbode(abode, villager);
 	SetTopState(action, VillagerStates::GoHome);
 	return true;
 }
@@ -707,6 +738,30 @@ glm::vec2 villager_home::ArrivePosition(entt::entity abode)
 	return glm::xz(point);
 }
 
+void villager_home::LeavingHome(entt::entity villager)
+{
+	auto& registry = WorldRegistry();
+	if (auto* action = registry.TryGet<LivingAction>(villager); action != nullptr && IsAtHome(villager))
+	{
+		SetTopState(*action, VillagerStates::DecideWhatToDo);
+	}
+}
+
+void villager_home::HomeDeleted(entt::entity villager)
+{
+	auto& registry = WorldRegistry();
+	if (!registry.Valid(villager) || !registry.AllOf<Villager>(villager) || AbodeOf(villager) == entt::null)
+	{
+		// TODO(villagers): one with no home leaves a town that goes, as its homeless do
+		return;
+	}
+	Locator::townSystem::value().MakeHomeless(villager);
+	if (auto* action = registry.TryGet<LivingAction>(villager); action != nullptr)
+	{
+		SetTopState(*action, VillagerStates::HomelessStart);
+	}
+}
+
 bool villager_home::SetStateWhenTappedOnAbode(entt::entity villager)
 {
 	auto& registry = WorldRegistry();
@@ -837,10 +892,9 @@ uint32_t villager_home::MoveToPos(LivingAction& action)
 {
 	auto& registry = WorldRegistry();
 	const auto villager = EntityOf(action);
-	// The pathfinding system takes the moving tags off once the goal is reached
-	const bool stillMoving =
-	    registry.AnyOf<MoveStateLinearTag, MoveStateOrbitTag, MoveStateExitCircleTag, MoveStateStepThroughTag>(villager);
-	if (stillMoving)
+	// The walk goes on until its last step has put the villager on its goal
+	const auto goal = wall_hug::ToWhole(registry.Get<const WallHug>(villager).goal);
+	if (!walk_arrival::WalkIsOver(WalkStateOf(villager), WalkPositionOf(villager), goal))
 	{
 		return 0;
 	}
@@ -991,9 +1045,11 @@ uint32_t villager_home::VagrantStart(LivingAction& action)
 	const auto villager = EntityOf(action);
 	if (const auto town = NearbyTownToJoin(villager); town != entt::null)
 	{
-		Locator::townSystem::value().AddHomelessVillagerToTown(town, villager);
-		SetTopState(action, VillagerStates::DecideWhatToDo);
-		return 1;
+		if (Locator::townSystem::value().AddVillagerToTown(town, villager))
+		{
+			SetTopState(action, VillagerStates::DecideWhatToDo);
+			return 1;
+		}
 	}
 	const auto position = PositionOf(villager);
 	if (registry.Get<const Villager>(villager).life >= InfoOf(villager).damageThresholdToGoHome)
