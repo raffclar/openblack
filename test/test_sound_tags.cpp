@@ -83,6 +83,7 @@ public:
 	void PlaySound(entt::id_type, audio::PlayType) override {}
 	void PlaySoundEffect(entt::id_type, std::optional<glm::vec3>) override {}
 	void StopSoundEffect(entt::id_type) override {}
+	void StopAllSoundEffects() override {}
 	entt::entity StartSoundEffect(entt::id_type, const audio::SoundEffectOptions&) override { return entt::null; }
 	void SetEmitterPosition(entt::entity, const glm::vec3&) override {}
 	void ReleaseEmitterLoop(entt::entity) override {}

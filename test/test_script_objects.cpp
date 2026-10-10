@@ -18,8 +18,12 @@
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
 
+#include "ECS/Components/ScriptSpotVisual.h"
+#include "ECS/Components/Transform.h"
+#include "ECS/Registry.h"
 #include "ECS/ScriptObjectTable.h"
 #include "ECS/ScriptObjectsWorld.h"
+#include "ECS/ScriptSpotVisuals.h"
 #include "ECS/Systems/Implementations/ScriptObjectsSystem.h"
 
 using namespace openblack::ecs::script_objects;
@@ -201,6 +205,25 @@ TEST(ScriptObjectsSystem, OnlyAControllingNativeTakesControlOfWhatItIsGiven)
 	EXPECT_TRUE(world->objects.at(object).controlled);
 }
 
+TEST(ScriptObjectsSystem, AnObjectThatHasGoneIsNoObject)
+{
+	auto [world, system] = MakeSystem();
+	const auto object = world->Add(3);
+	world->Delete(object);
+	system->EnterNative(k_MoveNative);
+	EXPECT_TRUE(system->Fetch(object) == entt::null);
+	EXPECT_TRUE(system->Fetch(static_cast<entt::entity>(99999)) == entt::null);
+}
+
+TEST(ScriptObjectsSystem, AnObjectNoLongerToBeDealtWithIsNoObjectAndStaysUncontrolled)
+{
+	auto [world, system] = MakeSystem();
+	const auto villager = world->Add(4, {.kind = Kind::Villager, .available = false});
+	system->EnterNative(k_MoveNative);
+	EXPECT_TRUE(system->Fetch(villager) == entt::null);
+	EXPECT_FALSE(world->objects.at(villager).controlled);
+}
+
 TEST(ScriptObjectsSystem, AReleasedVillagerInTheMapDecidesWhatToDo)
 {
 	auto [world, system] = MakeSystem();
@@ -296,4 +319,40 @@ TEST(ScriptObjectsSystem, ADeadTreeTakesOnlyItsTreesPlace)
 	system->AddReference(dead);
 	EXPECT_TRUE(world->objects.at(dead).inScript);
 	EXPECT_FALSE(world->objects.at(dead).controlled);
+}
+
+TEST(ScriptObjectsSystem, AVisualAScriptKeepsPutsOnlyItsOwnThingInTheScript)
+{
+	// A land's things, the visual's own number among them
+	openblack::ecs::Registry registry;
+	constexpr uint32_t k_Things = 152;
+	constexpr uint32_t k_Effect = 86;
+	auto [world, system] = MakeSystem();
+	for (uint32_t i = 0; i < k_Things; ++i)
+	{
+		world->Add(entt::to_integral(registry.Create()));
+	}
+	// The script is given the visual's thing, not the visual's number
+	const auto thing = openblack::ecs::script_spot_visuals::MakeThing(registry, k_Effect, {1.0f, 2.0f, 3.0f});
+	EXPECT_EQ(registry.Get<openblack::ecs::components::ScriptSpotVisual>(thing).effect, k_Effect);
+	EXPECT_EQ(registry.Get<openblack::ecs::components::Transform>(thing).position, glm::vec3(1.0f, 2.0f, 3.0f));
+	world->Add(entt::to_integral(thing));
+	ASSERT_TRUE(system->Register(thing, true));
+	// Keeping it in a variable references the thing alone
+	system->AddReference(thing);
+	EXPECT_TRUE(world->objects.at(thing).inScript);
+	for (const auto& [entity, object] : world->objects)
+	{
+		EXPECT_TRUE(entity == thing || !object.inScript) << entt::to_integral(entity);
+	}
+}
+
+TEST(ScriptObjectsSystem, AVisualsThingGoesWhenItsVisualEnds)
+{
+	openblack::ecs::Registry registry;
+	const auto ending = openblack::ecs::script_spot_visuals::MakeThing(registry, 4, glm::vec3(0.0f));
+	const auto lasting = openblack::ecs::script_spot_visuals::MakeThing(registry, 5, glm::vec3(0.0f));
+	openblack::ecs::script_spot_visuals::RemoveEnded(registry, [](uint32_t effect) { return effect == 5; });
+	EXPECT_FALSE(registry.Valid(ending));
+	EXPECT_TRUE(registry.Valid(lasting));
 }

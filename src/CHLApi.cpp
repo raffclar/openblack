@@ -95,6 +95,7 @@
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/ScriptFlocks.h"
+#include "ECS/ScriptSpotVisuals.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
@@ -460,7 +461,7 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 	default:
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "CreateScriptObject not implemented for type {}", static_cast<int>(type));
 	}
-	return static_cast<entt::entity>(0);
+	return entt::null;
 }
 
 VMValue Pop(DataType& type)
@@ -542,6 +543,19 @@ uint32_t StartScriptSpotVisual(int32_t effect, glm::vec3 position, int turns, en
 	return id;
 }
 
+/// The thing a script holds for a visual it started, taking its place in the scripts' table as made by a script; none
+/// when no visual was started. The script holds the thing, never the visual's own number.
+static entt::entity ScriptSpotVisualThing(uint32_t effect, glm::vec3 position)
+{
+	if (effect == ecs::systems::ParticleSystemInterface::k_NoEffect)
+	{
+		return entt::null;
+	}
+	const auto thing = ecs::script_spot_visuals::MakeThing(Locator::entitiesRegistry::value(), effect, position);
+	RegisterCreated(thing);
+	return thing;
+}
+
 void Push(VMValue value, DataType type)
 {
 	auto& lhvm = Locator::vm::value();
@@ -596,6 +610,12 @@ void CHLApi::TaskStopped(uint32_t task)
 	{
 		Locator::time::value().SetSpeed(1.0f);
 	}
+}
+
+/// An object handed to a script: none is the script's object 0
+void PushObject(entt::entity object)
+{
+	Pusho(object == entt::null ? 0u : static_cast<uint32_t>(object));
 }
 
 CHLApi::CHLApi()
@@ -1236,7 +1256,8 @@ void SetProperty() // 022 SET_PROPERTY
 
 void GetPosition() // 023 GET_POSITION
 {
-	const auto objId = Pop().uintVal;
+	// No object, or one that has gone, finds no transform: it is at the origin
+	const auto objId = entt::to_integral(PopObject());
 
 	glm::vec3 position(0.0f);
 	if (objId != 0)
@@ -1277,7 +1298,8 @@ void GetPosition() // 023 GET_POSITION
 void SetPosition() // 024 SET_POSITION
 {
 	auto position = PopVec();
-	const auto objId = Pop().uintVal;
+	// No object, or one that has gone, finds no transform: nothing moves
+	const auto objId = entt::to_integral(PopObject());
 
 	if (objId != 0)
 	{
@@ -1443,7 +1465,7 @@ void Create() // 027 CREATE
 	const auto object = CreateScriptObject(type, subtype, position, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
 	RegisterCreated(object);
 
-	Pusho(object == entt::null ? 0 : static_cast<uint32_t>(object));
+	PushObject(object);
 }
 
 void Random() // 028 RANDOM
@@ -2308,7 +2330,7 @@ void SpecialEffectPosition() // 052 SPECIAL_EFFECT_POSITION
 	const auto turns = SpecialEffectTurns(Popf());
 	const auto position = PopVec();
 	const auto effect = Pop().intVal;
-	Pusho(StartScriptSpotVisual(effect, position, turns, entt::null));
+	PushObject(ScriptSpotVisualThing(StartScriptSpotVisual(effect, position, turns, entt::null), position));
 }
 
 void SpecialEffectObject() // 053 SPECIAL_EFFECT_OBJECT
@@ -2321,11 +2343,12 @@ void SpecialEffectObject() // 053 SPECIAL_EFFECT_OBJECT
 	if (transform == nullptr)
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SPECIAL_EFFECT_OBJECT: thing invalid, spell not created");
-		Pusho(0);
+		PushObject(entt::null);
 		return;
 	}
 	// The effect stands on the object and ends when it goes
-	Pusho(StartScriptSpotVisual(effect, transform->position, turns, object));
+	const auto position = transform->position;
+	PushObject(ScriptSpotVisualThing(StartScriptSpotVisual(effect, position, turns, object), position));
 }
 
 void DanceCreate() // 054 DANCE_CREATE
@@ -2757,7 +2780,7 @@ void RemoveCountdownTimer() // 087 REMOVE_COUNTDOWN_TIMER
 void GetObjectDropped() // 088 GET_OBJECT_DROPPED
 {
 	// The last thing a creature let go of, none once it has gone; asked only of creatures
-	const auto creature = static_cast<entt::entity>(Pop().uintVal);
+	const auto creature = PopObject();
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* dropped = registry.Valid(creature) && registry.AllOf<ecs::components::Creature>(creature)
 	                          ? registry.TryGet<const ecs::components::CreatureDroppedObject>(creature)
@@ -2773,7 +2796,7 @@ void GetObjectDropped() // 088 GET_OBJECT_DROPPED
 void ClearDroppedByObject() // 089 CLEAR_DROPPED_BY_OBJECT
 {
 	// The creature forgets what it last let go of
-	const auto creature = static_cast<entt::entity>(Pop().uintVal);
+	const auto creature = PopObject();
 	auto& registry = Locator::entitiesRegistry::value();
 	if (registry.Valid(creature) && registry.AllOf<ecs::components::CreatureDroppedObject>(creature))
 	{
@@ -2940,12 +2963,19 @@ void PopulateContainer() // 109 POPULATE_CONTAINER
 void AddReference() // 110 ADD_REFERENCE
 {
 	// A script takes hold of an object. The game's table says one value comes back, but the game's function pushes none
-	Locator::scriptObjects::value().AddReference(static_cast<entt::entity>(Pop().uintVal));
+	// A variable that holds no object references nothing
+	if (const auto id = Pop().uintVal; id != 0)
+	{
+		Locator::scriptObjects::value().AddReference(static_cast<entt::entity>(id));
+	}
 }
 
 void RemoveReference() // 111 REMOVE_REFERENCE
 {
-	Locator::scriptObjects::value().RemoveReference(static_cast<entt::entity>(Pop().uintVal));
+	if (const auto id = Pop().uintVal; id != 0)
+	{
+		Locator::scriptObjects::value().RemoveReference(static_cast<entt::entity>(id));
+	}
 }
 
 void SetGameTime() // 112 SET_GAME_TIME
@@ -3479,7 +3509,7 @@ void FlySpirit() // 167 FLY_SPIRIT
 
 void SetIdMoveable() // 168 SET_ID_MOVEABLE
 {
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	const auto moveable = static_cast<bool>(Pop().intVal);
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object))
@@ -3500,7 +3530,7 @@ void SetIdMoveable() // 168 SET_ID_MOVEABLE
 
 void SetIdPickupable() // 169 SET_ID_PICKUPABLE
 {
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	const auto pickupable = Pop().uintVal != 0;
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object))
@@ -3521,7 +3551,7 @@ void SetIdPickupable() // 169 SET_ID_PICKUPABLE
 
 void IsOnFire() // 170 IS_ON_FIRE
 {
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	Pushb(Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(object));
 }
 
@@ -3554,7 +3584,7 @@ void SetPoisoned() // 173 SET_POISONED
 void SetTemperature() // 174 SET_TEMPERATURE
 {
 	const auto temperature = Popf();
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	if (Locator::fireSystem::has_value())
 	{
 		Locator::fireSystem::value().SetTemperature(object, temperature, entt::null);
@@ -3564,7 +3594,7 @@ void SetTemperature() // 174 SET_TEMPERATURE
 void SetOnFire() // 175 SET_ON_FIRE
 {
 	const auto burnSpeed = Popf();
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	const auto enable = static_cast<bool>(Pop().intVal);
 	if (!Locator::fireSystem::has_value())
 	{
@@ -3718,8 +3748,13 @@ void SetMusicPlayPosition() // 184 SET_MUSIC_PLAY_POSITION
 
 void AttachObjectLeashToObject() // 185 ATTACH_OBJECT_LEASH_TO_OBJECT
 {
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
-	const auto creature = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
+	const auto creature = PopObject();
+	if (object == entt::null || creature == entt::null)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Thing for leash not found");
+		return;
+	}
 	if (!Locator::leashSystem::has_value())
 	{
 		return;
@@ -3730,7 +3765,7 @@ void AttachObjectLeashToObject() // 185 ATTACH_OBJECT_LEASH_TO_OBJECT
 
 void AttachObjectLeashToHand() // 186 ATTACH_OBJECT_LEASH_TO_HAND
 {
-	const auto creature = static_cast<entt::entity>(Pop().uintVal);
+	const auto creature = PopObject();
 	if (!Locator::leashSystem::has_value())
 	{
 		return;
@@ -3748,7 +3783,7 @@ void AttachObjectLeashToHand() // 186 ATTACH_OBJECT_LEASH_TO_HAND
 
 void DetachObjectLeash() // 187 DETACH_OBJECT_LEASH
 {
-	const auto creature = static_cast<entt::entity>(Pop().uintVal);
+	const auto creature = PopObject();
 	if (!Locator::leashSystem::has_value())
 	{
 		return;
@@ -3818,7 +3853,7 @@ void SpellAtThing() // 195 SPELL_AT_THING
 	const auto duration = Popf();
 	const auto radius = Popf();
 	const auto from = PopVec();
-	const auto target = static_cast<entt::entity>(Pop().uintVal);
+	const auto target = PopObject();
 	const auto spell = Pop().intVal;
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* transform = registry.Valid(target) ? registry.TryGet<const ecs::components::Transform>(target) : nullptr;
@@ -4163,7 +4198,7 @@ void GameSubType() // 221 GAME_SUB_TYPE
 
 void IsLeashed() // 222 IS_LEASHED
 {
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	Pushb(Locator::leashSystem::has_value() && Locator::leashSystem::value().IsLeashed(object));
 }
 
@@ -4271,7 +4306,7 @@ void CreatureSpellReversion() // 233 CREATURE_SPELL_REVERSION
 {
 	// Whether the spells on a creature put it back as it was once they wear off. The creature is on top of the stack, the
 	// flag under it.
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	const auto enable = Pop().intVal != 0;
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object))
@@ -4373,7 +4408,7 @@ void CreateRewardInTown() // 240 CREATE_REWARD_IN_TOWN
 {
 	const auto fromSky = Pop().intVal != 0;
 	const auto position = PopVec();
-	const auto town = static_cast<entt::entity>(Pop().uintVal);
+	const auto town = PopObject();
 	const auto type = Pop().intVal;
 	// The town must be one
 	if (!Locator::entitiesRegistry::value().Valid(town) ||
@@ -4457,7 +4492,7 @@ void GetHelp() // 248 GET_HELP
 
 void SetLeashWorks() // 249 SET_LEASH_WORKS
 {
-	const auto creature = static_cast<entt::entity>(Pop().uintVal);
+	const auto creature = PopObject();
 	const auto enable = Pop().intVal != 0;
 	if (!Locator::leashSystem::has_value())
 	{
@@ -4494,7 +4529,7 @@ void CreateWithAngleAndScale() // 252 CREATE_WITH_ANGLE_AND_SCALE
 	const entt::entity object = CreateScriptObject(type, subtype, position, 0.0f, 0.0f, angle, 0.0f, scale);
 	RegisterCreated(object);
 
-	Pusho(static_cast<uint32_t>(object));
+	PushObject(object);
 }
 
 void SetHelpSystem() // 253 SET_HELP_SYSTEM
@@ -4542,15 +4577,11 @@ void SetActive() // 255 SET_ACTIVE
 
 void ThingValid() // 256 THING_VALID
 {
-	const auto objId = Pop().uintVal;
-	// TODO(Daniels118): is this the right way?
-	bool valid = false;
-	if (objId != 0)
-	{
-		auto& registry = Locator::entitiesRegistry::value();
-		valid = registry.Valid(static_cast<entt::entity>(objId));
-	}
-	Pushb(valid);
+	// No object, one that has gone or one no longer to be dealt with is not valid; a town is valid while any of it stands
+	const auto object = PopObject();
+	const auto* town =
+	    object != entt::null ? Locator::entitiesRegistry::value().TryGet<const ecs::components::Town>(object) : nullptr;
+	Pushb(object != entt::null && (town == nullptr || !TownCompletelyDestroyed(*town)));
 }
 
 void VortexFadeOut() // 257 VORTEX_FADE_OUT
@@ -4663,8 +4694,8 @@ void GetArsePosition() // 268 GET_ARSE_POSITION
 
 void IsLeashedToObject() // 269 IS_LEASHED_TO_OBJECT
 {
-	const auto target = static_cast<entt::entity>(Pop().uintVal);
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto target = PopObject();
+	const auto object = PopObject();
 	Pushb(Locator::leashSystem::has_value() && Locator::leashSystem::value().TiedTo(object) == target);
 }
 
@@ -4713,7 +4744,7 @@ void GetActionCount() // 274 GET_ACTION_COUNT
 
 void GetObjectLeashType() // 275 GET_OBJECT_LEASH_TYPE
 {
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	// The scripts count no leash as 0
 	const auto type = Locator::leashSystem::has_value() ? Locator::leashSystem::value().TypeOf(object) : LeashType::None;
 	Pushi(type == LeashType::None ? 0 : static_cast<int32_t>(type));
@@ -4939,7 +4970,7 @@ void AddSpotVisualTargetObject() // 297 ADD_SPOT_VISUAL_TARGET_OBJECT
 
 void SetIndestructable() // 298 SET_INDESTRUCTABLE
 {
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	const bool indestructible = (Pop().uintVal & 1u) != 0;
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object))
@@ -5161,7 +5192,7 @@ void ObjectInfoBits() // 320 OBJECT_INFO_BITS
 
 void SetHurtByFire() // 321 SET_HURT_BY_FIRE
 {
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	const auto enable = static_cast<bool>(Pop().intVal);
 	if (Locator::fireSystem::has_value())
 	{
@@ -6170,7 +6201,7 @@ void GetTotemStatue() // 425 GET_TOTEM_STATUE
 
 void SetSetOnFire() // 426 SET_SET_ON_FIRE
 {
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	const auto enable = static_cast<bool>(Pop().intVal);
 	if (Locator::fireSystem::has_value())
 	{
@@ -6306,7 +6337,7 @@ void PosValidForCreature() // 441 POS_VALID_FOR_CREATURE
 
 void GetTimeSinceObjectAttacked() // 442 GET_TIME_SINCE_OBJECT_ATTACKED
 {
-	const auto town = static_cast<entt::entity>(Pop().uintVal);
+	const auto town = PopObject();
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* aggression = registry.Valid(town) ? registry.TryGet<const ecs::components::TownAggression>(town) : nullptr;
