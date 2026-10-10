@@ -2388,6 +2388,61 @@ void Renderer::DrawVortexDepthWalls(const DrawSceneDesc& desc, RenderPass viewId
 	});
 }
 
+void Renderer::DrawVortexHoleColours(const DrawSceneDesc& desc, const glm::vec4& skyAndBump) const
+{
+	if (!Locator::vortexSystem::has_value())
+	{
+		return;
+	}
+	const auto marks = Locator::vortexSystem::value().GetGroundMarks();
+	if (marks.empty())
+	{
+		return;
+	}
+	const auto* program = _shaderManager->GetShader("TerrainVortexHole");
+	const auto& island = Locator::terrainSystem::value();
+	const auto& textures = Locator::resources::value().GetTextures();
+	const auto islandExtent = glm::vec4(island.GetExtent().minimum, island.GetExtent().maximum);
+	const auto& blocks = island.GetBlocks();
+	// The game adds the colour before it draws the land, on the sea and the swirl, saturating there; the land is then
+	// blended over it by its coast alpha
+	constexpr auto k_State = BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GEQUAL |
+	                         BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE) | BGFX_STATE_MSAA;
+	const auto viewId = static_cast<bgfx::ViewId>(SkyPassOf(desc.viewId));
+	// The last vortex on a block is the one it shows
+	for (size_t i = 0; i < blocks.size(); ++i)
+	{
+		const auto& block = blocks[i];
+		const auto mark = std::ranges::find(marks | std::views::reverse, block.GetBlockPosition(),
+		                                    &ecs::systems::VortexSystemInterface::GroundMark::block);
+		if (mark == (marks | std::views::reverse).end())
+		{
+			continue;
+		}
+		const auto& marked = ecs::components::Vortex::GroundTexturesOf(mark->type);
+		if (!textures.Contains(marked.hole))
+		{
+			continue;
+		}
+		const glm::vec4 vortexGround {mark->centre, 1.0f / (vortex::k_GroundTextureSpan * mark->baseScale),
+		                              static_cast<float>(mark->holeThreshold)};
+		const glm::vec4 mapPositionAndSize = glm::vec4(block.GetMapPosition(), 160.0f, 160.0f);
+		program->SetUniformValue("u_blockPositionAndSize", &mapPositionAndSize);
+		program->SetUniformValue("u_islandExtent", &islandExtent);
+		program->SetUniformValue("u_skyAndBump", &skyAndBump);
+		program->SetUniformValue("u_haze", &_haze[0]);
+		program->SetUniformValue("u_hazeColour", &_haze[1]);
+		program->SetUniformValue("u_vortexGround", &vortexGround);
+		program->SetTextureSampler("s9_landLuminosity", 9, GetLandLuminosity());
+		program->SetTextureSampler("s10_landColour", 10, GetLandColour());
+		program->SetTextureSampler("s7_landLight", 7, GetLandLightTexture());
+		program->SetTextureSampler("s6_vortexHole", 6, *textures.Handle(marked.hole));
+		block.BindVertices();
+		bgfx::setState(k_State | (desc.cullBack ? BGFX_STATE_CULL_CCW : BGFX_STATE_CULL_CW));
+		program->Submit(viewId);
+	}
+}
+
 void Renderer::DrawMists(const DrawSceneDesc& desc) const
 {
 	if (Locator::temple::has_value() && Locator::temple::value().Active())
@@ -4708,6 +4763,9 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 		}
 	}
 
+	// The land mirrored under the sea is lit at half
+	const float landLightScale = desc.viewId == RenderPass::Reflection ? 0.5f : 1.0f;
+	const glm::vec4 landSkyAndBump = {skyType, landLightScale, desc.smallBumpMapStrength, 0.0f};
 	{
 		auto section = profiler.BeginScoped(desc.viewId == RenderPass::Reflection ? Profiler::Stage::ReflectionDrawIsland
 		                                                                          : Profiler::Stage::MainPassDrawIsland);
@@ -4719,9 +4777,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			const auto& textures = Locator::resources::value().GetTextures();
 			auto smallBump = textures.Handle(LandIslandInterface::k_SmallBumpTextureId);
 			auto smallBumpAlpha = textures.Handle(LandIslandInterface::k_SmallBumpAlphaTextureId);
-			// The land mirrored under the sea is lit at half
-			const float lightScale = desc.viewId == RenderPass::Reflection ? 0.5f : 1.0f;
-			const glm::vec4 u_skyAndBump = {skyType, lightScale, desc.smallBumpMapStrength, 0.0f};
+			const auto& u_skyAndBump = landSkyAndBump;
 
 			// The small bump detail fades out about a line across the ground: where the plane square to the camera's
 			// view, 50 units ahead of it, meets the ground at the camera's height, or at 110.55 if the camera is higher
@@ -5426,6 +5482,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				});
 			}
 		}
+	}
+
+	// After the swirl drawn before the land, an open vortex's hole texture adds its colour under its land block, which
+	// the land is then blended over
+	if (desc.drawIsland)
+	{
+		DrawVortexHoleColours(desc, landSkyAndBump);
 	}
 
 	// The sun's glare over everything else in the view; the temple's comes before its glass

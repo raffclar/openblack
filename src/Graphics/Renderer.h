@@ -112,6 +112,9 @@ private:
 	/// Each vortex's walls, from the sea down under its middle, leaving only their depth: what is drawn after them is
 	/// hidden beyond them, which keeps its funnel to the shaft under its hole in the land
 	void DrawVortexDepthWalls(const DrawSceneDesc& desc, graphics::RenderPass viewId) const;
+	/// On the land block under each open vortex, its hole texture's colour added to what was drawn before the land, after
+	/// the swirl and before the land is drawn over it
+	void DrawVortexHoleColours(const DrawSceneDesc& desc, const glm::vec4& skyAndBump) const;
 	/// The puffs of mist, blended over the scene, the farthest first
 	void DrawMists(const DrawSceneDesc& desc) const;
 	/// The moon and its glow in the sky, after the sky's dome

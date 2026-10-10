@@ -4,6 +4,7 @@ $input v_texcoord0, v_texcoord1, v_lightColour, v_smallBumpFade, v_shadowCoord, 
 
 #include "creature_shadow.sh"
 #include "snow.sh"
+#include "vortex_ground.sh"
 
 #define M_PI 3.1415926535897932384626433832795
 
@@ -21,9 +22,7 @@ SAMPLER2D(s8_landAlpha, 8);
 
 // The noise that makes the snow's edges ragged, once across each land block of 160 units
 SAMPLER2D(s12_snowNoise, 12);
-// An open vortex's marks on the block under its middle: the texture whose alpha opens its hole in the land (its colour
-// is added under the land), and the ring laid over the land around it
-SAMPLER2D(s6_vortexHole, 6);
+// The ring an open vortex lays over the land around its hole
 SAMPLER2D(s13_vortexRing, 13);
 
 // The land under the snow lying on it: whiter the deeper the snow over each texel of the noise, from its own colour to
@@ -64,9 +63,6 @@ uniform vec4 u_objectShadows;
 // x: darkness of the hand's shadow where its silhouette fully covers a texel, 0 without a shadow
 // y: how far before the hand along the light the shadow starts
 uniform vec4 u_handShadow;
-// xy: the vortex's middle on the ground, x and z; z: one over its textures' span; w: how opaque its hole's texture must
-// be, 0 to 255, for the land to be drawn, below 0 on a block without a vortex
-uniform vec4 u_vortexGround;
 
 void main()
 {
@@ -104,16 +100,13 @@ void main()
 	}
 
 	// Where the vortex's hole texture is clearer than its threshold no land is drawn, not even its depth, and what was
-	// drawn before the land shows through. Its textures run across with z and down with x, clamped at their edges.
+	// drawn before the land shows through
 	bool vortex = u_vortexGround.w >= 0.0f;
-	vec4 hole = vec4_splat(0.0f);
 	vec4 ring = vec4_splat(0.0f);
 	if (vortex)
 	{
-		vec2 offset = (v_texcoord1.zw - u_vortexGround.xy) * u_vortexGround.z;
-		vec2 vortexUv = clamp(offset.yx + 0.5f, vec2_splat(0.5f / 256.0f), vec2_splat(1.0f - 0.5f / 256.0f));
-		hole = texture2D(s6_vortexHole, vortexUv);
-		if (floor(hole.a * 255.0f + 0.5f) < u_vortexGround.w)
+		vec2 vortexUv = VortexGroundUv(v_texcoord1.zw);
+		if (InVortexHole(texture2D(s6_vortexHole, vortexUv)))
 		{
 			discard;
 		}
@@ -151,10 +144,8 @@ void main()
 	                          1.0f - (1.0f - landAlpha) * (1.0f - bumpAlpha));
 	if (vortex)
 	{
-		// The hole texture's colour, lit as the land and by its alpha, is added to what is under the land, so it shows
-		// where the land lets the sea through. The ring, lit as the land, is blended over all of it by its alpha.
-		vec3 glow = min(hole.rgb * v_lightColour * v_haze.a + v_haze.rgb, vec3_splat(1.0f)) * hole.a;
-		premultiplied.rgb += glow * (1.0f - premultiplied.a);
+		// The hole texture's colour was added under the land before it (where the land lets the sea through, it shows).
+		// The ring, lit as the land, is blended over all of it by its alpha.
 		vec3 ringColour = min(ring.rgb * v_lightColour * v_haze.a + v_haze.rgb, vec3_splat(1.0f));
 		premultiplied = vec4(ringColour * ring.a + premultiplied.rgb * (1.0f - ring.a),
 		                     1.0f - (1.0f - premultiplied.a) * (1.0f - ring.a));
