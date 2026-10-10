@@ -56,6 +56,12 @@ public:
 	/// Whether the scripts show the challenge scrolls; the signs always show
 	[[nodiscard]] bool IsHighlightDrawOn() const { return _highlightDrawOn; }
 	void SetHighlightDrawOn(bool on) { _highlightDrawOn = on; }
+	/// The help level the player chose, 0 for no help. openblack has no option for it yet, so it is the game's default.
+	static constexpr uint32_t k_PlayerHelpLevel = 3;
+	/// Whether the scripts let the help system run; they turn it off and on again, and it is on as they start again
+	void SetScriptHelpOn(bool on) { _scriptHelpOn = on; }
+	/// Whether the help system is on: the scripts let it run and the player wants help
+	[[nodiscard]] bool IsHelpSystemOn() const { return _scriptHelpOn && k_PlayerHelpLevel != 0; }
 	/// A sound of one of the game's banks, by its number in the bank, through the game's common sound effect path: its
 	/// gates may keep it quiet (see audio::SoundEffectHeard). Placed, it isn't started further from the camera than the
 	/// sample's maximum distance.
@@ -73,6 +79,7 @@ private:
 	script::NativeStubCalls _stubCalls;
 	bool _gameSoundOn {true};
 	bool _highlightDrawOn {true};
+	bool _scriptHelpOn {true};
 };
 
 } // namespace openblack::chlapi

@@ -159,6 +159,10 @@ public:
 	[[nodiscard]] virtual float GetPoolTime() const = 0;
 	/// Escape takes the player back to the main room, and out of the temple from there, as the temple's keys do
 	virtual void Escape() = 0;
+	/// A script's camera the player came into the temple from gives way to a camera of the player's own, which the
+	/// player goes back out to, as the script ends its control of the camera while the player is inside. True when
+	/// there was one.
+	virtual bool ReleaseOutsideScriptCamera() = 0;
 	/// Leaves the temple once the frame is done with it
 	virtual void RequestLeave() = 0;
 	/// Fades the screen to white over a second, as the temple does before the player leaves it for the island
