@@ -169,6 +169,7 @@
 #include "ECS/TownPlaythings.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerScriptRules.h"
+#include "ECS/WalkerPlacement.h"
 #include "ECS/WorldObjects.h"
 #include "Enums.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -1820,7 +1821,26 @@ void SetPosition() // 024 SET_POSITION
 		const auto& island = Locator::terrainSystem::value();
 		position.y = island.GetHeightAt(glm::vec2(position.x, position.z));
 		auto& registry = Locator::entitiesRegistry::value();
-		auto* transform = registry.TryGet<Transform>(static_cast<entt::entity>(objId));
+		const auto object = static_cast<entt::entity>(objId);
+		if (IsDirectableVillager(object))
+		{
+			// Something held or flying stays where it is
+			if (registry.AnyOf<ecs::components::InHand, ecs::components::InPhysics>(object))
+			{
+				ScriptMessage("Trying to set position. Object is in the hand or flying");
+				return;
+			}
+			// Its walk takes up the new place, and one under the script's control stops there and waits for it
+			ecs::walker_placement::Place(registry, object, position);
+			if (registry.AllOf<ecs::components::ScriptControlled>(object))
+			{
+				ecs::walker_placement::Stop(registry, object);
+				Locator::livingActionSystem::value().VillagerSetScriptState(object, VillagerStates::InScript);
+			}
+			registry.SetDirty();
+			return;
+		}
+		auto* transform = registry.TryGet<Transform>(object);
 		if (transform != nullptr)
 		{
 			transform->position = position;

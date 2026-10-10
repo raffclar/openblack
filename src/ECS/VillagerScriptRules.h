@@ -77,6 +77,14 @@ struct ScriptClipStep
 	return {.playsLeft = playsLeft, .then = playsLeft == 0 ? VillagerStates::InScript : VillagerStates::ScriptPlayAnim};
 }
 
+/// Whether a villager put into a state by a script carries on with the walk it was on: only the walking states walk.
+/// Put into any other, the villager stops where it is, as its new state takes no steps.
+[[nodiscard]] constexpr bool KeepsWalking(VillagerStates state)
+{
+	return state == VillagerStates::MoveToPos || state == VillagerStates::MoveToObject ||
+	       state == VillagerStates::MoveOnStructure;
+}
+
 /// Whether a villager has played the clip a script asked for: not while a clip plays out, nor while plays are left
 [[nodiscard]] constexpr bool HasPlayedScriptClip(VillagerStates top, uint32_t playsLeft)
 {

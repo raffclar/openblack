@@ -66,6 +66,17 @@ TEST(VillagerScriptRules, PlayedOnceTheLastPlayEnds)
 	EXPECT_TRUE(rules::HasPlayedScriptClip(VillagerStates::MoveToPos, 3));
 }
 
+TEST(VillagerScriptRules, OnlyTheWalkingStatesCarryOnWithAWalk)
+{
+	EXPECT_TRUE(rules::KeepsWalking(VillagerStates::MoveToPos));
+	EXPECT_TRUE(rules::KeepsWalking(VillagerStates::MoveToObject));
+	EXPECT_TRUE(rules::KeepsWalking(VillagerStates::MoveOnStructure));
+	// The opening's boy is set swimming, put in the script's hands and set playing clips: each stops his walk
+	EXPECT_FALSE(rules::KeepsWalking(VillagerStates::InScript));
+	EXPECT_FALSE(rules::KeepsWalking(VillagerStates::ScriptPlayAnim));
+	EXPECT_FALSE(rules::KeepsWalking(VillagerStates::WaitForAnimation));
+}
+
 TEST(VillagerScriptRules, ScriptLetsGoOnlyForItsOwnStates)
 {
 	constexpr rules::StateRules k_Plain {.isScriptState = false, .isScriptInterruptable = false};

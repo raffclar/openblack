@@ -58,3 +58,17 @@ void walker_placement::Place(Registry& registry, entt::entity entity, glm::vec3 
 	// On its way, it sets off for its goal from here, as a walk newly set up does
 	registry.Assign<MoveStateLinearTag>(entity, MoveStateClockwise::Undefined, metres);
 }
+
+void walker_placement::Stop(Registry& registry, entt::entity entity)
+{
+	auto* wallHug = registry.TryGet<WallHug>(entity);
+	if (wallHug == nullptr)
+	{
+		return;
+	}
+	registry.Remove<MoveStateLinearTag, MoveStateOrbitTag, MoveStateExitCircleTag, MoveStateStepThroughTag,
+	                MoveStateFinalStepTag, MoveStateArrivedTag>(entity);
+	registry.Remove<WallHugObjectReference>(entity);
+	wallHug->step = {0, 0};
+	wallHug->turnsUntilStepRebuild = 0;
+}
