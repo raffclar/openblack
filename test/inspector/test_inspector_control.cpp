@@ -246,17 +246,30 @@ public:
 	[[nodiscard]] std::vector<ScriptNative> Natives() const override
 	{
 		return {{.id = 4, .name = "ADD", .in = 2, .out = 1, .implemented = true},
-		        {.id = 5, .name = "UNWRITTEN", .in = 0, .out = 0, .implemented = false}};
+		        {.id = 5, .name = "UNWRITTEN", .in = 0, .out = 0, .implemented = false},
+		        // Takes a text's number, a time and a truth, as a script gives them
+		        {.id = 6,
+		         .name = "SAY",
+		         .in = 3,
+		         .out = 0,
+		         .implemented = true,
+		         .slots = {ScriptValue::Type::Int, ScriptValue::Type::Float, ScriptValue::Type::Boolean}}};
 	}
 	std::variant<std::vector<ScriptValue>, std::string> CallNative(uint32_t id, const std::vector<ScriptValue>& args) override
 	{
 		called = id;
+		given = args;
+		if (id != 4)
+		{
+			return std::vector<ScriptValue> {};
+		}
 		return std::vector<ScriptValue> {{.type = ScriptValue::Type::Float, .number = args[0].number + args[1].number}};
 	}
 
 	ScriptValue stage {.type = ScriptValue::Type::Float, .number = 2.0f};
 	ScriptValue hasCreature {.type = ScriptValue::Type::Boolean, .boolean = false};
 	uint32_t called {0};
+	std::vector<ScriptValue> given;
 };
 
 } // namespace
@@ -291,6 +304,57 @@ TEST(InspectorScripts, RunGlobalsAndNatives)
 	EXPECT_FALSE(Refused(inspector, R"({"query": "script.call", "params": {"native": "ADD", "args": [1]}})").empty());
 	EXPECT_FALSE(Refused(inspector, R"({"query": "script.call", "params": {"native": 5}})").empty());
 	EXPECT_EQ(Ask(inspector, R"({"query": "script.functions", "params": {"name": "ad"}})")["total"], 1);
+}
+
+// A number reaches a native as the type it takes, as a script's call puts it on the stack: an integer for an integer
+// (a text's number read as a float's bits would be another number), a float for a float
+TEST(InspectorScripts, ANativeIsGivenTheTypesItTakes)
+{
+	FakeScripts scripts;
+	auto provider = std::make_unique<FunctionProvider>("script");
+	AddScriptControls(*provider, scripts);
+	Inspector inspector;
+	inspector.Add(std::move(provider));
+
+	Ask(inspector, R"({"query": "script.call", "params": {"native": "SAY", "args": [1203, 2, 1]}})");
+	EXPECT_EQ(scripts.called, 6u);
+	ASSERT_EQ(scripts.given.size(), 3u);
+	EXPECT_EQ(scripts.given[0].type, ScriptValue::Type::Int);
+	EXPECT_EQ(scripts.given[0].integer, 1203);
+	EXPECT_EQ(scripts.given[1].type, ScriptValue::Type::Float);
+	EXPECT_FLOAT_EQ(scripts.given[1].number, 2.0f);
+	EXPECT_EQ(scripts.given[2].type, ScriptValue::Type::Boolean);
+	EXPECT_TRUE(scripts.given[2].boolean);
+
+	// Given as an integer, a float slot still takes a float; true for the truth
+	Ask(inspector, R"({"query": "script.call", "params": {"native": "SAY", "args": [{"int": 7}, {"int": 3}, true]}})");
+	EXPECT_EQ(scripts.given[0].integer, 7);
+	EXPECT_EQ(scripts.given[1].type, ScriptValue::Type::Float);
+	EXPECT_FLOAT_EQ(scripts.given[1].number, 3.0f);
+
+	// What can't be the slot's type is refused, naming the argument
+	EXPECT_NE(Refused(inspector, R"({"query": "script.call", "params": {"native": "SAY", "args": [1.5, 2, true]}})")
+	              .find("argument 1"),
+	          std::string::npos);
+	EXPECT_NE(
+	    Refused(inspector, R"({"query": "script.call", "params": {"native": "SAY", "args": [3, 2, 5]}})").find("argument 3"),
+	    std::string::npos);
+	// A native whose types aren't known takes the values as given
+	Ask(inspector, R"({"query": "script.call", "params": {"native": "ADD", "args": [2, 3]}})");
+	EXPECT_EQ(scripts.given[0].type, ScriptValue::Type::Float);
+}
+
+// The game's natives take the types the language's table gives them: RUN_TEXT a truth and two integers, a camera move
+// a position's three slots and a float
+TEST(InspectorScripts, TheNativesTypesComeFromTheLanguage)
+{
+	using Type = ScriptValue::Type;
+	EXPECT_EQ(NativeSlots("RUN_TEXT", 3), (std::vector<std::optional<Type>> {Type::Boolean, Type::Int, Type::Int}));
+	EXPECT_EQ(NativeSlots("MOVE_CAMERA_POSITION", 4),
+	          (std::vector<std::optional<Type>> {Type::Vector, Type::Vector, Type::Vector, Type::Float}));
+	// Unknown, or not adding up to what the native takes: no types
+	EXPECT_TRUE(NativeSlots("NO_SUCH_NATIVE", 2).empty());
+	EXPECT_TRUE(NativeSlots("RUN_TEXT", 2).empty());
 }
 
 TEST(InspectorScripts, ArgumentsReadAsTheScriptsGiveThem)

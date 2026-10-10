@@ -14,8 +14,11 @@
 #include <algorithm>
 #include <array>
 #include <iterator>
+#include <optional>
+#include <string_view>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 #include <InspectorDiscovery.h>
 #include <LHVM.h>
@@ -513,7 +516,8 @@ std::vector<ScriptNative> GameScripts::Natives() const
 		                   .name = function.name,
 		                   .in = function.stackIn,
 		                   .out = function.stackOut,
-		                   .implemented = function.impl != nullptr});
+		                   .implemented = function.impl != nullptr,
+		                   .slots = NativeSlots(function.name, function.stackIn)});
 	}
 	return natives;
 }
