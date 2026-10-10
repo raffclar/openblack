@@ -260,6 +260,8 @@ struct ObjectSetup
 	std::optional<float> fullSize;
 	/// A villager or animal that has eaten poison
 	bool poisoned {false};
+	/// A building of the town holds this much food, rather than the scenario town's usual stock
+	std::optional<uint32_t> storedFood;
 	/// A firefly hides exactly where the thing stands, as a land's script places one
 	bool firefly {false};
 };

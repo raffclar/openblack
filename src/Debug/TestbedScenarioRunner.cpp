@@ -664,7 +664,8 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    else if constexpr (std::is_same_v<T, AbodeInfo>)
 			    {
 				    return ecs::archetypes::AbodeArchetype::Create(ScenarioTown(middle), position, type, yaw, object.scale,
-				                                                   k_ScenarioTownFood, k_ScenarioTownWood);
+				                                                   object.storedFood.value_or(k_ScenarioTownFood),
+				                                                   k_ScenarioTownWood);
 			    }
 			    else if constexpr (std::is_same_v<T, FieldTypeInfo>)
 			    {
