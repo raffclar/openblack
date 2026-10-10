@@ -20,6 +20,8 @@
 #include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <entt/entity/registry.hpp>
+#include <entt/signal/sigh.hpp>
 
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ParticleObjectEffects.h"
@@ -227,6 +229,9 @@ public:
 	[[nodiscard]] bool IsPaused() const override { return _paused; }
 
 private:
+	/// A thing holding a visual a script started has been deleted: its visual ends at once
+	void OnScriptSpotVisualGone(entt::registry& registry, entt::entity thing);
+	std::vector<entt::scoped_connection> _connections;
 	/// The effect that throws the pieces of what the blasts break
 	EffectId _explodeObject {k_NoEffect};
 	/// The effect every recognised gesture's trail shows in, and the chain behind the hand while it gestures; both run

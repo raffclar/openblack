@@ -110,7 +110,6 @@ protected:
 	const VMScript* GetScript(const std::string& name);
 	bool TaskExists(uint32_t taskId);
 	uint32_t GetTicksCount();
-	void PushElaspedTime();
 	VMVar& GetVar(VMTask& task, uint32_t id);
 	uint32_t GetExceptionHandlersCount();
 	uint32_t GetCurrentExceptionHandlerIp(uint32_t index);
@@ -126,6 +125,10 @@ protected:
 
 public:
 	LHVM();
+
+	/// The scripts' own clock, which the game's DLL_GETTIME gives: a tenth of a second for each of the machine's ticks,
+	/// pushed as a float
+	void PushElaspedTime();
 
 	~LHVM();
 
