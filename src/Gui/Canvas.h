@@ -56,6 +56,9 @@ public:
 	              const graphics::Texture2D* texture);
 	/// A filled four sided shape, its corners in order round it, each with its own colour
 	void DrawShape(const std::array<glm::vec2, 4>& corners, const std::array<glm::vec4, 4>& colours);
+	/// A four sided shape of a texture, its corners in order round it, each with its own place on the texture and colour
+	void DrawShape(const std::array<glm::vec2, 4>& corners, const std::array<glm::vec2, 4>& uvs,
+	               const std::array<glm::vec4, 4>& colours, const graphics::Texture2D* texture);
 	/// A one pixel wide line between the centres of two pixels, along a row or a column
 	void DrawLine(glm::ivec2 from, glm::ivec2 to, glm::vec4 colour);
 	/// Submits the frame's interface

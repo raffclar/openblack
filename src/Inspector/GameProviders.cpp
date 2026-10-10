@@ -117,8 +117,10 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
@@ -153,6 +155,7 @@
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/TornadoSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
@@ -174,6 +177,7 @@
 #include "Help/AdvisorModel.h"
 #include "Help/AdvisorVoices.h"
 #include "Help/DialogueText.h"
+#include "Help/HelpProfile.h"
 #include "Help/Spirits.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
@@ -306,6 +310,9 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"tutorialSkipSystem", "players.new_game"},
     LocatorCoverage {"advisorSystem", "help.advisors"},
     LocatorCoverage {"helpTextSystem", "help.dialogue"},
+    LocatorCoverage {"helpProfileSystem", "help.profile"},
+    LocatorCoverage {"tipBubbleSystem", "help.bubble"},
+    LocatorCoverage {"handDemoSystem", "help.hand_demo"},
     LocatorCoverage {"helpSpeechSystem", "help.dialogue"},
     LocatorCoverage {"dialogueControlSystem", "help.dialogue"},
 };
@@ -2095,6 +2102,78 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 			                  result["end_ms"] = dialogue->GetEndMs();
 			                  result["drawn"] = dialogue->IsDrawn();
 			                  result["box_shown"] = dialogue->GetDisplay().IsBoxShown();
+		                  }
+		                  return result;
+	                  }));
+	provider->Add(
+	    Query("profile",
+	          "The help's count of what the player has done: its clock, and each event's total, seconds since "
+	          "and rate, for the events that have happened",
+	          {}, ResultKind::List),
+	    Serve<Locator::helpProfileSystem>(
+	        "the help profile", [](const ecs::systems::HelpProfileSystemInterface& system, const QueryContext& /*c*/) -> Json {
+		        const auto& profile = system.Get();
+		        Json items = Json::array();
+		        for (uint32_t event = 0; event < help::profile::k_EventCount; ++event)
+		        {
+			        // A copy: reading the times may tidy them, and a query changes nothing
+			        auto count = profile.Count(event);
+			        if (count.Total() == 0)
+			        {
+				        continue;
+			        }
+			        items.push_back({{"event", event},
+			                         {"clock", profile.Clock()},
+			                         {"total", count.Total()},
+			                         {"seconds_since", count.SecondsSince(profile.Clock())},
+			                         {"per_second", count.PerSecond(profile.Clock())},
+			                         {"smoothed_rate", count.SmoothedRate()}});
+		        }
+		        return items;
+	        }));
+	provider->Add(
+	    Query("bubble", "The tip bubble over the \"did you know\" sign tapped last: the sign, its tip, whether it is up, "
+	                    "its time to show, the point it points at and its scroll"),
+	    Serve<Locator::tipBubbleSystem>(
+	        "the tip bubble", [](const ecs::systems::TipBubbleSystemInterface& bubble, const QueryContext& /*c*/) -> Json {
+		        const auto& scroll = bubble.GetScroll();
+		        const auto anchor = bubble.GetAnchor();
+		        return Json {
+		            {"sign", bubble.GetSign() == entt::null ? Json(nullptr) : Json(entt::to_integral(bubble.GetSign()))},
+		            {"text", bubble.GetText()},
+		            {"up", bubble.IsUp()},
+		            {"display_time", bubble.GetDisplayTime()},
+		            {"anchor", anchor.has_value() ? Point(*anchor) : Json(nullptr)},
+		            {"scroll_lines", scroll.lines},
+		            {"content_height", scroll.contentHeight},
+		            {"line_height", scroll.lineHeight},
+		            {"more_above", scroll.moreAbove},
+		            {"more_below", scroll.moreBelow}};
+	        }));
+	provider->Add(Query("hand_demo",
+	                    "The tutorial's hand demonstration playing: its name, the script task that started it, the record "
+	                    "it is at, whether it holds at a mark, and the camera and hints it has"),
+	              Serve<Locator::handDemoSystem>(
+	                  "the hand demonstrations",
+	                  [](const ecs::systems::HandDemoSystemInterface& demos, const QueryContext& /*c*/) -> Json {
+		                  const auto status = demos.GetStatus();
+		                  if (!status.has_value())
+		                  {
+			                  return Json {{"playing", false}};
+		                  }
+		                  Json result {{"playing", true},
+		                               {"name", status->name},
+		                               {"task", status->task},
+		                               {"record", status->record},
+		                               {"records", status->records},
+		                               {"pause_on_trigger", status->pauseOnTrigger},
+		                               {"trigger_reached", status->triggerReached},
+		                               {"holding", status->holding},
+		                               {"hints", demos.GetHints()}};
+		                  if (const auto camera = demos.GetCamera(); camera.has_value())
+		                  {
+			                  result["camera_origin"] = Point(camera->origin);
+			                  result["camera_focus"] = Point(camera->focus);
 		                  }
 		                  return result;
 	                  }));
