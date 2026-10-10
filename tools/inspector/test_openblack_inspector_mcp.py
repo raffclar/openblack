@@ -617,6 +617,19 @@ class ScreenshotTest(SessionBase):
         self.assertFalse(answer["result"]["written"])
         self.assertIn("isn't written yet", answer["result"]["note"])
 
+    def test_a_picture_the_game_gives_up_is_answered_with_why(self):
+        self.first.handlers["screenshot.take"] = lambda request: {"path": self.path, "frame": 5}
+        self.first.handlers["screenshot.pending"] = lambda request: {
+            "pending": [], "failed": [f"{self.path}: the camera didn't stay where it was put"]}
+        started = time.monotonic()
+        answer = self.session.call("screenshot", {})
+        self.assertTrue(answer["ok"], answer)
+        self.assertFalse(answer["result"]["written"])
+        self.assertEqual(answer["result"]["failed"], "the camera didn't stay where it was put")
+        self.assertIn("gave the picture up", answer["result"]["note"])
+        # Said as soon as the game gives it up, not after the whole wait
+        self.assertLess(time.monotonic() - started, self.session.timeout * 3)
+
     def test_options_an_older_game_lacks_are_refused_clearly(self):
         self.describe_screenshot(["path", "in_frames", "at_frame", "camera"])
         self.first.handlers["screenshot.take"] = self.write_slowly

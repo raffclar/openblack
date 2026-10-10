@@ -1561,8 +1561,7 @@ bool Game::Update() noexcept
 	}
 
 	// While a miracle's camera path has the camera, the player's camera doesn't move it
-	const bool pathHoldsCamera = Locator::cameraPathSystem::value().HoldsCamera();
-	if (!pathHoldsCamera)
+	if (!Locator::cameraPathSystem::value().HoldsCamera())
 	{
 		// A script's camera track runs on the game's time; the camera itself steps as the hand does, so that a cut scene
 		// holds while the game is paused and keeps pace with the game's speed
@@ -1572,24 +1571,7 @@ bool Game::Update() noexcept
 		}
 		camera.Update(std::chrono::duration_cast<std::chrono::microseconds>(CameraStepTime()));
 	}
-	// A picture the inspector takes this frame has the camera where it asked, whatever moved it this frame
-	if (Locator::inspector::has_value())
-	{
-		Locator::inspector::value().PlaceCamera();
-	}
-	// Outside a camera with a lens of its own, the near plane follows the camera's height over the land, but for close
-	// shots: a script's, and a miracle's camera path
-	if (!camera.GetModel().GetLens().has_value() && Locator::terrainSystem::has_value())
-	{
-		const auto origin = camera.GetOrigin();
-		const float height = origin.y - Locator::terrainSystem::value().GetHeightAt(glm::vec2(origin.x, origin.z));
-		const float nearClip =
-		    near_clipping::NearPlane(height, Locator::cinematicDirectorSystem::value().IsCloseClipping() || pathHoldsCamera);
-		if (nearClip != camera.GetNearClip())
-		{
-			camera.SetNearClip(nearClip);
-		}
-	}
+	FitNearClip();
 	// The temple's camera may have taken the player out of the temple
 	if (Locator::temple::has_value())
 	{
@@ -2317,12 +2299,14 @@ bool Game::Update() noexcept
 			auto updateEntities = profiler.BeginScoped(Profiler::Stage::UpdateEntities);
 			if (config.drawEntities)
 			{
-				// The villagers in view are posed for the camera as it now is
+				// The villagers in view are posed for the camera the frame is drawn from
+				ShowInspectorCamera(true);
 				Locator::livingActionSystem::value().PoseVillagersInView(Locator::camera::value().GetViewProjectionMatrix());
 				// The trees out of the land are drawn with their roots, as each now is
 				ecs::tree_roots::Show(Locator::entitiesRegistry::value());
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
 				                                                config.drawStreams);
+				ShowInspectorCamera(false);
 				// The interface picks what is under the cursor as the frame is drawn, for the next frame to go by
 				PickUnderCursor(std::chrono::duration<float>(deltaTime).count());
 			}
@@ -3286,6 +3270,9 @@ bool Game::Run() noexcept
 
 		auto duration = std::chrono::high_resolution_clock::now() - lastTime;
 		auto milliseconds = std::chrono::duration_cast<std::chrono::duration<uint32_t, std::milli>>(duration);
+		// The frame is drawn from where the inspector shows the camera (an override, a picture's), while everything the
+		// game did this frame went by its own camera, which it gets back once the frame is drawn
+		ShowInspectorCamera(true);
 		{
 			auto section = profiler.BeginScoped(Profiler::Stage::SceneDraw);
 			const graphics::RendererInterface::DrawSceneDesc drawDesc {
@@ -3348,6 +3335,7 @@ bool Game::Run() noexcept
 			auto section = profiler.BeginScoped(Profiler::Stage::RendererFrame);
 			Locator::rendererInterface::value().Frame();
 		}
+		ShowInspectorCamera(false);
 
 		// Clear the stale screenshot request
 		if (_requestScreenshot.has_value())
@@ -3829,6 +3817,43 @@ void Game::SetUpLandscape()
 void Game::SetTime(float time) noexcept
 {
 	Locator::skySystem::value().SetTime(time);
+}
+
+void Game::FitNearClip()
+{
+	// Outside a camera with a lens of its own, the near plane follows the camera's height over the land, but for close
+	// shots: a script's, and a miracle's camera path
+	auto& camera = Locator::camera::value();
+	if (camera.GetModel().GetLens().has_value() || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	const auto origin = camera.GetOrigin();
+	const float height = origin.y - Locator::terrainSystem::value().GetHeightAt(glm::vec2(origin.x, origin.z));
+	const float nearClip = near_clipping::NearPlane(height, Locator::cinematicDirectorSystem::value().IsCloseClipping() ||
+	                                                            Locator::cameraPathSystem::value().HoldsCamera());
+	if (nearClip != camera.GetNearClip())
+	{
+		camera.SetNearClip(nearClip);
+	}
+}
+
+void Game::ShowInspectorCamera(bool shown)
+{
+	if (!Locator::inspector::has_value())
+	{
+		return;
+	}
+	auto& inspector = Locator::inspector::value();
+	if (shown)
+	{
+		inspector.PlaceCamera();
+	}
+	else
+	{
+		inspector.GiveCameraBack();
+	}
+	FitNearClip();
 }
 
 void Game::RequestScreenshot(const std::filesystem::path& path, bool hideDebugGui) noexcept
