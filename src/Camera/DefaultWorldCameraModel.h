@@ -13,6 +13,7 @@
 
 #include <glm/vec2.hpp>
 
+#include "CameraHelpEvents.h"
 #include "CameraModel.h"
 #include "CameraPan.h"
 #include "Common/Zoomer.h"
@@ -58,6 +59,8 @@ private:
 	/// What a drag of the land does, from where it was pressed and how the mouse moves: pans, turns round the edge or
 	/// tilts. Gives the mode the camera takes for it.
 	[[nodiscard]] Mode HandleDrag(bool held);
+	/// The help's profile counts the camera controls used
+	static void SendHelpEvents(camera_help::events::EventSet events);
 	/// The height the mouse controls measure by, the cinema bars' picture's while they are in
 	[[nodiscard]] static int ViewHeight(glm::ivec2 screenSize);
 
@@ -95,8 +98,10 @@ private:
 	/// @return If a modification to the camera position was applied.
 	bool ConstrainDisc();
 	/// The land's camera zones: the camera is put back inside the fence, raised off the land, and slid down under its
-	/// height limit; whether it was moved
-	bool ConstrainZones(glm::vec3 originAtFrameStart);
+	/// height limit; whether it was moved. Put back inside, the fence answers the hit, heard at `listener`.
+	bool ConstrainZones(glm::vec3 originAtFrameStart, glm::vec3 listener);
+	/// Whether the player is using any of the camera's controls this frame
+	[[nodiscard]] bool AnyControlHeld() const;
 
 	[[nodiscard]] glm::vec3 GetTargetForwardVector() const;
 	[[nodiscard]] glm::vec3 GetTargetForwardUnitVector() const;
@@ -165,9 +170,15 @@ private:
 	uint32_t _features {camera_drag::k_DefaultFeatures};
 	/// A drag gripping land too far ahead is given up until the buttons are let go
 	bool _dragGivenUp {false};
+	/// Put back inside the fence, the camera ignores its controls until every one of them is let go
+	bool _heldBack {false};
 	camera_drag::TwoButtonTurn _twoButtonTurn;
 	/// How far the clear view of Ctrl and Shift held together has come, easing in and out over half a second
 	Zoomer _clearView;
+	/// The player's camera controls this frame, and the help events they make while the controls are handled
+	camera_help::events::ControlsFrame _helpControls;
+	camera_help::events::EventSet _helpEvents;
+	bool _doubleClickHeld {false};
 	/// Time spent handling the controls, for timing the start of a drag
 	std::chrono::microseconds _controlsTime {std::chrono::microseconds::zero()};
 

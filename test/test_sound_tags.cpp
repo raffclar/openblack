@@ -101,7 +101,9 @@ public:
 	[[nodiscard]] uint32_t GetEmitterVolume(entt::entity) override { return 0; }
 	void StopOwnedSounds(entt::entity) override {}
 	void AddAnimEffects(const std::string&, audio::AnimEffectTable) override {}
-	audio::AnimEffectPlay PlayAnimEffect(const std::string&, std::span<const int32_t>, entt::entity, const glm::vec3&) override
+	using audio::AudioManagerInterface::PlayAnimEffect;
+	audio::AnimEffectPlay PlayAnimEffect(const std::string&, std::span<const int32_t>, entt::entity, const glm::vec3&,
+	                                     const std::optional<audio::SoundEffectConditions>&) override
 	{
 		return {};
 	}
