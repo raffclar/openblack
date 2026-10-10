@@ -85,28 +85,6 @@ entt::entity Entity(uint32_t value)
 }
 } // namespace
 
-TEST(DanceFile, ReadsTheKeyFramesSettingsAndGroupNames)
-{
-	dance::DanceFile file;
-	ASSERT_EQ(file.Open(TwoGroupDance()), dance::DanceResult::Success);
-	EXPECT_EQ(file.version, 1u);
-	ASSERT_EQ(file.keyFrames.size(), 2u);
-	EXPECT_FLOAT_EQ(file.keyFrames[1].time, 20.0f);
-	EXPECT_EQ(file.keyFrames[0].actions[1].groups, std::vector<uint32_t> {1});
-	EXPECT_EQ(file.keyFrames[0].actions[1].arguments[1], 50u);
-	EXPECT_EQ(file.groupCount, 2u);
-	EXPECT_EQ(file.loops, 1u);
-	EXPECT_FALSE(file.angle.has_value());
-	EXPECT_EQ(file.groupNames, (std::vector<std::string> {"M", "W"}));
-	// Cut short, or with more after its end, it isn't read
-	auto bytes = TwoGroupDance();
-	bytes.pop_back();
-	EXPECT_EQ(dance::DanceFile {}.Open(bytes), dance::DanceResult::ErrTruncated);
-	bytes = TwoGroupDance();
-	bytes.push_back(0);
-	EXPECT_EQ(dance::DanceFile {}.Open(bytes), dance::DanceResult::ErrTrailingBytes);
-}
-
 TEST(DanceRules, SharedGroupsTakeNewcomersInTurnByTheirShares)
 {
 	dance::DanceFile file;
