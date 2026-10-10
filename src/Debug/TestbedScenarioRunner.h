@@ -138,6 +138,8 @@ private:
 	std::string GiveLeashCommand(entt::entity creature, const Command& command);
 	/// The commands of the player's hand alone: a seed put in it, a gesture drawn with it
 	std::string GivePlayerCommand(const Command& command);
+	/// Tells one of the advisors what to do, as the scripts tell it
+	[[nodiscard]] std::string GiveAdvisorCommand(const Command& command) const;
 	/// The hand goes over a fireball in flight to take hold of it; what came of that
 	std::string HandTakeFireBall();
 	std::string HandTapObject(size_t index);
@@ -151,6 +153,8 @@ private:
 	std::string GiveFightCommand(entt::entity creature, const Command& command);
 	/// Creature Mode's and the Creature Cave's commands, as the player's keys and clicks give them
 	std::string GiveCreatureModeCommand(entt::entity creature, const Command& command);
+	/// A script opening or closing the scenery, and the player's hand laying a gate stone in the plinth
+	void GiveSceneryCommand(const Command& command);
 	/// The player's mouse: presses, moves and the wheel, made as the mouse's own events
 	std::string GivePointerCommand(const Command& command);
 	/// Moves the mouse on along a sweep, and lets go of it once the scenario's commands are done

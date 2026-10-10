@@ -26,6 +26,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Components/Abode.h"
@@ -55,6 +56,7 @@
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -333,8 +335,7 @@ void GameHandGrabWorld::PlaySample(uint32_t sample, glm::vec3 position)
 {
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlaySoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(),
-		                                        position);
+		audio::PlayGameSoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(), position);
 	}
 }
 
@@ -753,8 +754,8 @@ void GameHandGrabWorld::PlayScoopSound(ResourceType resource, glm::vec3 hand, fl
 	// Wood rattles in, anything else pours; its pitch rises as the scoop ramps up
 	const uint32_t sample = resource == ResourceType::Wood ? k_ScoopWoodSample : k_ScoopSample;
 	const auto pitch = static_cast<uint32_t>(ramp * k_ScoopPitchRise + k_ScoopPitchStart);
-	Locator::audio::value().StartSoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(),
-	                                         {.position = hand, .pitchPercent = pitch});
+	audio::StartGameSoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(),
+	                            {.position = hand, .pitchPercent = pitch});
 }
 
 float GameHandGrabWorld::LandHeightAt(glm::vec3 point) const
@@ -783,6 +784,11 @@ bool GameHandGrabWorld::TakeIntoStore(entt::entity store, entt::entity object)
 	}
 	return Locator::resourceStoreSystem::has_value() &&
 	       Locator::resourceStoreSystem::value().TakeObject(store, object, HandPlayer());
+}
+
+bool GameHandGrabWorld::LayGateStone(entt::entity plinth, entt::entity stone)
+{
+	return Locator::animatedStaticSystem::has_value() && Locator::animatedStaticSystem::value().LayGateStone(plinth, stone);
 }
 
 void GameHandGrabWorld::PourAt(ResourceType resource, glm::vec3 point, uint32_t amount, PlayerNames player, bool poisoned)

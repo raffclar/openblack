@@ -77,6 +77,53 @@ struct Placed
 };
 [[nodiscard]] std::optional<Placed> Place(glm::ivec2 start, float wantedRadius, const UsableCell& usable);
 
+/// A thing standing in a land cell blocks an arena there when one of its circles on the ground comes within this
+/// distance of the cell's middle
+constexpr float k_ThingClearance = 5.0f;
+/// Anything taller than this many times the creature's size is looked at whatever it is
+constexpr float k_TallPerSize = 15.0f;
+
+/// What a thing standing in a land cell is, as an arena looking for room sees it
+enum class ThingKind : uint8_t
+{
+	/// A temple: no arena goes in its cells
+	Temple,
+	/// A storage pit or a town centre, always looked at
+	StoragePitOrTownCentre,
+	/// Any other building, field, totem or miracle dispenser, looked at only when tall
+	Building,
+	/// Something that can be thrown about (trees, dead trees, rocks and the like), looked at only when tall
+	Movable,
+	/// Anything else that stands fixed on the land: features, animated statics, flowers
+	Fixed,
+};
+
+/// A circle a thing covers on the ground, centre (x, z) and radius in metres
+struct GroundCircle
+{
+	glm::vec2 centre;
+	float radius;
+};
+
+/// A thing standing in a land cell, as the arena's search sees it
+struct ThingInCell
+{
+	ThingKind kind;
+	/// Villagers, creatures and animals are never in the way
+	bool living {false};
+	/// A thing without a model is never in the way
+	bool hasModel {true};
+	/// Its height, from its model's box as it is scaled
+	float height {0.0f};
+	/// The circles it covers on the ground: one, or a row along a long thing
+	std::vector<GroundCircle> circles;
+};
+
+/// Whether a thing in a land cell keeps an arena off it, for a creature of a size (its shown size): a temple always;
+/// living things, things without a model, and buildings or things that can be thrown about no taller than 15 times the
+/// creature's size never; anything else when one of its circles comes within 5 m of the cell's middle
+[[nodiscard]] bool KeepsArenaOff(const ThingInCell& thing, float creatureSize, glm::ivec2 cell);
+
 /// The ring's points round an arena, each on the land's height there; the last closes the ring on the first
 using GroundHeight = std::function<float(glm::vec2)>;
 [[nodiscard]] std::vector<glm::vec3> RingPoints(glm::vec2 centre, float radius, const GroundHeight& ground);

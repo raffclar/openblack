@@ -194,7 +194,8 @@ def components_of(path):
 
 def main():
     check = "--check" in sys.argv[1:]
-    headers = sorted(COMPONENTS.glob("*.h"))
+    # By name, as clang-format sorts the includes: a Windows path sorts without regard to case
+    headers = sorted(COMPONENTS.glob("*.h"), key=lambda header: header.name)
     lines = [HEADER]
     for header in headers:
         lines.append(f'#include "ECS/Components/{header.name}"\n')

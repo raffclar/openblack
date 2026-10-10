@@ -32,11 +32,13 @@ using CreatureSkinArtManager = ResourceManager<CreatureSkinArtLoader>;
 using SoundManager = ResourceManager<SoundLoader>;
 using GlowManager = ResourceManager<LightLoader>;
 using CameraPathManager = ResourceManager<CameraPathLoader>;
+using CameraEditManager = ResourceManager<CameraEditLoader>;
 using DanceFileManager = ResourceManager<DanceFileLoader>;
 using ParticleFileManager = ResourceManager<ParticleFileLoader>;
 using GestureTemplatesManager = ResourceManager<GestureTemplatesLoader>;
 using VideoManager = ResourceManager<VideoLoader>;
 using ParticleBitmapManager = ResourceManager<ParticleBitmapLoader>;
+using AdvisorModelManager = ResourceManager<AdvisorModelLoader>;
 
 class ResourcesInterface
 {
@@ -61,6 +63,8 @@ public:
 	virtual SoundManager& GetSounds() = 0;
 	virtual GlowManager& GetGlows() = 0;
 	virtual CameraPathManager& GetCameraPaths() = 0;
+	/// The scripts' numbered cameras and tracks, by camera_edits::k_FileId
+	virtual CameraEditManager& GetCameraEdits() = 0;
 	/// The dances' choreographies, by their names in the dances' table
 	virtual DanceFileManager& GetDanceFiles() = 0;
 	/// The particle effect files, by particles::ParticleFileId of their names
@@ -82,6 +86,8 @@ public:
 	virtual void StopLoading() = 0;
 	/// The videos playing, by their paths; each is let go when it ends
 	virtual VideoManager& GetVideos() = 0;
+	/// The two advisors, by help::spirits::ModelId
+	virtual AdvisorModelManager& GetAdvisorModels() = 0;
 };
 
 } // namespace openblack::resources

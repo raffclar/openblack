@@ -560,9 +560,9 @@ std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& 
 		const bool mine = me != nullptr && me->owner == creature->owner;
 		common(types::k_Creature, mine ? 0 : 2, 0, 1, PlayerNumberOf(creature->owner));
 		belief.Set(Attribute::HarderThanMe,
-		           me != nullptr && creature->strength * creature->size > me->strength * me->size ? 1 : 0);
+		           me != nullptr && creature->strength * ShownSize(*creature) > me->strength * ShownSize(*me) ? 1 : 0);
 		belief.Set(Attribute::CreatureType, static_cast<uint32_t>(creature::InfoRow(creature->species)));
-		belief.Set(Attribute::Height, static_cast<uint32_t>(std::lround(creature->size * 3.0f)));
+		belief.Set(Attribute::Height, static_cast<uint32_t>(std::lround(ShownSize(*creature) * 3.0f)));
 		belief.Set(Attribute::SpellKnowledge, 0);
 		belief.Set(Attribute::Carrying, registry.AllOf<CreatureHeldObject>(entity) ? 1 : 0);
 		uint32_t dominant = 0;
@@ -1198,7 +1198,7 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 		return false;
 	}
 	const glm::vec2 position {transform->position.x, transform->position.z};
-	const auto height = k_HeightOfSizeOne * body->size;
+	const auto height = k_HeightOfSizeOne * ShownSize(*body);
 	const auto random = [this](uint32_t range) { return Random(range); };
 	auto activity = creature_mind::Activity::Told;
 	auto agenda = plan.agenda;

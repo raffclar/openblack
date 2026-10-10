@@ -18,6 +18,7 @@
 #include "3D/L3DSubMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/WaterRings.h"
+#include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/DeadTreeArchetype.h"
@@ -185,7 +186,7 @@ void GameDynamicsWorld::PlaySound(audio::SoundId sound)
 {
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(sound), std::nullopt);
+		audio::PlayGameSoundEffect(static_cast<entt::id_type>(sound), std::nullopt);
 	}
 }
 

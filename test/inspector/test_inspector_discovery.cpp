@@ -251,3 +251,64 @@ TEST(InspectorDiscovery, TheWorktreeIsTheNearestFolderWithGit)
 	ASSERT_TRUE(found.has_value());
 	EXPECT_TRUE(std::filesystem::equivalent(*found, worktree));
 }
+
+// The branch and commit a picture is catalogued with come from the worktree's git files: a checkout's own, or a
+// worktree's in the main checkout, loose or packed
+TEST(InspectorDiscovery, TheRevisionIsReadFromGit)
+{
+	const Folder folder("revision");
+	const auto checkout = folder.Path() / "checkout";
+	const auto git = checkout / ".git";
+	std::filesystem::create_directories(git / "refs" / "heads");
+	WriteFile(git / "HEAD", "ref: refs/heads/master\n");
+	WriteFile(git / "refs" / "heads" / "master", "1111111111111111111111111111111111111111\n");
+	auto revision = ReadRevision(checkout);
+	EXPECT_EQ(revision.branch, "master");
+	EXPECT_EQ(revision.commit, "1111111111111111111111111111111111111111");
+
+	// A worktree: its .git names its folder, whose commondir is the checkout's, where its branch is packed
+	const auto worktree = folder.Path() / "worktrees" / "ob-wt-moon";
+	std::filesystem::create_directories(worktree);
+	const auto own = git / "worktrees" / "ob-wt-moon";
+	std::filesystem::create_directories(own);
+	WriteFile(worktree / ".git", "gitdir: " + own.generic_string() + "\n");
+	WriteFile(own / "commondir", "../..\n");
+	WriteFile(own / "HEAD", "ref: refs/heads/moon/two\r\n");
+	WriteFile(git / "packed-refs", "# pack-refs with: peeled\n2222222222222222222222222222222222222222 refs/heads/moon/two\n");
+	revision = ReadRevision(worktree);
+	EXPECT_EQ(revision.branch, "moon/two");
+	EXPECT_EQ(revision.commit, "2222222222222222222222222222222222222222");
+
+	// Detached: the commit, no branch; nothing to read: nothing
+	WriteFile(own / "HEAD", "3333333333333333333333333333333333333333\n");
+	revision = ReadRevision(worktree);
+	EXPECT_EQ(revision.branch, "");
+	EXPECT_EQ(revision.commit, "3333333333333333333333333333333333333333");
+	EXPECT_EQ(ReadRevision(folder.Path() / "nothing").commit, "");
+}
+
+// A build living apart from its worktree (E:/openblack/builds/<worktree>) is named by the worktree it was built from,
+// found from the source folder it was built with; without one still there, from where the executable is
+TEST(InspectorDiscovery, AGameIsNamedByTheWorktreeItWasBuiltFrom)
+{
+	const Folder folder("built-from");
+	const auto worktree = folder.Path() / "worktrees" / "ob-wt-gate";
+	std::filesystem::create_directories(worktree);
+	WriteFile(worktree / ".git", "gitdir: elsewhere");
+	const auto bin = folder.Path() / "builds" / "ob-wt-gate" / "bin" / "Debug";
+	std::filesystem::create_directories(bin);
+	const auto executable = bin / "openblack.exe";
+
+	auto found = GameWorktree(worktree, executable);
+	ASSERT_TRUE(found.has_value());
+	EXPECT_TRUE(std::filesystem::equivalent(*found, worktree));
+	// The build alone holds no worktree
+	EXPECT_FALSE(GameWorktree({}, executable).has_value());
+	EXPECT_FALSE(GameWorktree(folder.Path() / "gone", executable).has_value());
+	// A build inside its worktree is still found from the executable
+	const auto inside = worktree / "cmake-build-debug" / "bin";
+	std::filesystem::create_directories(inside);
+	found = GameWorktree({}, inside / "openblack.exe");
+	ASSERT_TRUE(found.has_value());
+	EXPECT_TRUE(std::filesystem::equivalent(*found, worktree));
+}

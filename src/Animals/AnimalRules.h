@@ -17,6 +17,7 @@
 
 #include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 #include "3D/AllMeshes.h"
 #include "Enums.h"
@@ -60,5 +61,11 @@ inline constexpr int32_t k_TurnsToDieOver = 600;
 /// the clip it had
 [[nodiscard]] std::optional<AnimId> DyingClip(AnimalInfo type);
 [[nodiscard]] std::optional<AnimId> DeadClip(AnimalInfo type);
+/// A turn of a body lying dead: whether it goes now. Its turns left count down to none, then it goes; a body a script
+/// controls never counts down and lies there until the script lets it go
+[[nodiscard]] bool DeadBodyGoes(int32_t& turnsLeft, bool scriptControlled);
+/// A body going leaves a grey puff of smoke this big, half its height out along the way it faces from where it lies
+inline constexpr float k_DeadBodySmokeSize = 1.0f;
+[[nodiscard]] glm::vec3 DeadBodySmokePlace(const glm::vec3& position, float heading, float height);
 
 } // namespace openblack::animals

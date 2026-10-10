@@ -54,6 +54,12 @@ struct Bank
 [[nodiscard]] uint32_t ScriptBirdAge(uint32_t scriptAge, bool joinsFlock, const std::function<uint32_t(uint32_t)>& roll);
 /// A land script's flock wanders this far from its home when the script gives no reach
 inline constexpr float k_DefaultFlockReach = 80.0f;
+/// A creature can pick a bird up only while it is less than a metre above the land: one on the ground, as a dead one
+inline constexpr float k_CreaturePickUpBelow = 1.0f;
+[[nodiscard]] bool CreatureCanPickUp(float heightAboveLand);
+/// A creature can stamp on a bird only while it is lower above the land than a quarter of the creature's height
+inline constexpr float k_CreatureStompBelowShare = 0.25f;
+[[nodiscard]] bool CreatureCanStompOn(float heightAboveLand, float creatureHeight);
 /// The height a flock's leader picks its legs about: the flock's own when it has one (a temple's), else its kind's
 [[nodiscard]] float BaseHeight(float flockHeight, float kindHeight);
 

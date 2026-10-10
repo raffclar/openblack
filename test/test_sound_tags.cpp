@@ -32,6 +32,14 @@ namespace
 {
 constexpr entt::id_type k_Sound = 52;
 constexpr float k_Reach = 100.0f;
+/// A sound heard in the temple too, by its bank's word
+constexpr entt::id_type k_TempleSound = 54;
+
+/// The camera inside the temple, where only the sounds the bank keeps for it are heard
+audio::SoundEffectConditions InsideTemple()
+{
+	return {.insideTemple = true};
+}
 
 /// Keeps the emitters asked for and whether each was played, and plays nothing
 class FakeAudio final: public audio::AudioManagerInterface
@@ -136,6 +144,10 @@ protected:
 		header.maxDist = k_Reach;
 		Locator::resources::value().GetSounds().Load(k_Sound, resources::SoundLoader::FromBufferTag {}, header,
 		                                             std::vector<std::vector<uint8_t>> {});
+		header.id = static_cast<int32_t>(k_TempleSound);
+		header.userParam = static_cast<uint16_t>(audio::SoundEffectUse::HeardInTemple);
+		Locator::resources::value().GetSounds().Load(k_TempleSound, resources::SoundLoader::FromBufferTag {}, header,
+		                                             std::vector<std::vector<uint8_t>> {});
 	}
 	void TearDown() override
 	{
@@ -192,4 +204,24 @@ TEST_F(SoundTags, ADelayedPointSoundWaitsToReachTheCamera)
 	_tags.ProcessTurn(glm::vec3(0.0f));
 	ASSERT_EQ(Audio().emitters.size(), 1u);
 	EXPECT_TRUE(Audio().emitters.begin()->second.played);
+}
+
+TEST_F(SoundTags, InsideTheTempleOnlyTheTemplesSoundsStart)
+{
+	ecs::systems::SoundTagSystem tags(&InsideTemple);
+
+	// Not heard: it doesn't start, and its point goes on the next turn
+	const auto quiet = tags.CreatePointSound(k_Sound, {10.0f, 0.0f, 0.0f}, false);
+	EXPECT_TRUE(Audio().emitters.empty());
+	tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_FALSE(Locator::entitiesRegistry::value().Valid(quiet));
+
+	// A delayed one is asked about when it reaches the camera
+	tags.CreatePointSound(k_Sound, {10.0f, 0.0f, 0.0f}, true);
+	tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_TRUE(Audio().emitters.empty());
+
+	tags.CreatePointSound(k_TempleSound, {10.0f, 0.0f, 0.0f}, false);
+	ASSERT_EQ(Audio().emitters.size(), 1u);
+	EXPECT_EQ(Audio().emitters.begin()->second.sound, k_TempleSound);
 }

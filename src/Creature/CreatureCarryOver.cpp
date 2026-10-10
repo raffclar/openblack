@@ -10,6 +10,7 @@
 #include "CreatureCarryOver.h"
 
 #include <algorithm>
+#include <string>
 
 using namespace openblack;
 using namespace openblack::creature_carry_over;
@@ -57,4 +58,11 @@ map_coords::MapCoords creature_carry_over::ArrivalCoords(glm::vec2 place)
 {
 	return map_coords::CellCentre(map_coords::CellOf(map_coords::ToFixed(place.x)),
 	                              map_coords::CellOf(map_coords::ToFixed(place.y)));
+}
+
+creature_carry_over::KeptFiles creature_carry_over::KeptFilesIn(const std::filesystem::path& folder,
+                                                                std::string_view profileFile)
+{
+	const std::string name(profileFile);
+	return {.mind = folder / name, .physique = folder / ("Physique" + name)};
 }

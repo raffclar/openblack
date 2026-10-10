@@ -37,6 +37,7 @@ public:
 	SoundManager& GetSounds() override { return _sounds; }
 	GlowManager& GetGlows() override { return _glows; }
 	CameraPathManager& GetCameraPaths() override { return _cameraPaths; }
+	CameraEditManager& GetCameraEdits() override { return _cameraEdits; }
 	DanceFileManager& GetDanceFiles() override { return _danceFiles; }
 	ParticleFileManager& GetParticleFiles() override { return _particleFiles; }
 	ParticleBitmapManager& GetParticleBitmaps() override { return _particleBitmaps; }
@@ -71,6 +72,7 @@ public:
 	}
 
 	void StopLoading() override { _loadQueue.Cancel(); }
+	AdvisorModelManager& GetAdvisorModels() override { return _advisorModels; }
 
 private:
 	template <typename Func>
@@ -111,6 +113,7 @@ private:
 	SoundManager _sounds;
 	GlowManager _glows;
 	CameraPathManager _cameraPaths;
+	CameraEditManager _cameraEdits;
 	DanceFileManager _danceFiles;
 	ParticleFileManager _particleFiles;
 	ParticleBitmapManager _particleBitmaps;
@@ -118,5 +121,6 @@ private:
 	VideoManager _videos;
 	// Last, so its threads stop before the caches they load into go
 	LoadQueue _loadQueue {LoadQueue::DefaultThreadCount()};
+	AdvisorModelManager _advisorModels;
 };
 } // namespace openblack::resources

@@ -131,3 +131,51 @@ TEST(CreatureArena, RingPointsCloseOnTheLand)
 	EXPECT_NEAR(points.at(8).x, 100.0f + (30.0f * std::cos(angle)), 1e-3f);
 	EXPECT_NEAR(points.at(8).z, 200.0f + (30.0f * std::sin(angle)), 1e-3f);
 }
+
+TEST(CreatureArena, ATempleAlwaysKeepsAnArenaOffItsCells)
+{
+	const ThingInCell temple {.kind = ThingKind::Temple, .height = 1.0f, .circles = {}};
+	EXPECT_TRUE(KeepsArenaOff(temple, 1.0f, {10, 10}));
+}
+
+TEST(CreatureArena, LivingThingsAndThingsWithoutAModelAreNeverInTheWay)
+{
+	// A circle right on the cell's middle (105, 105)
+	const std::vector<GroundCircle> onTheMiddle {{.centre = {105.0f, 105.0f}, .radius = 1.0f}};
+	EXPECT_FALSE(
+	    KeepsArenaOff({.kind = ThingKind::Fixed, .living = true, .height = 100.0f, .circles = onTheMiddle}, 1.0f, {10, 10}));
+	EXPECT_FALSE(
+	    KeepsArenaOff({.kind = ThingKind::Fixed, .hasModel = false, .height = 100.0f, .circles = onTheMiddle}, 1.0f, {10, 10}));
+	EXPECT_TRUE(KeepsArenaOff({.kind = ThingKind::Fixed, .height = 1.0f, .circles = onTheMiddle}, 1.0f, {10, 10}));
+}
+
+TEST(CreatureArena, BuildingsAndThingsThatCanBeThrownAreInTheWayOnlyWhenTallerThanFifteenTimesTheCreature)
+{
+	const std::vector<GroundCircle> onTheMiddle {{.centre = {105.0f, 105.0f}, .radius = 1.0f}};
+	for (const auto kind : {ThingKind::Building, ThingKind::Movable})
+	{
+		EXPECT_FALSE(KeepsArenaOff({.kind = kind, .height = 15.0f, .circles = onTheMiddle}, 1.0f, {10, 10}));
+		EXPECT_TRUE(KeepsArenaOff({.kind = kind, .height = 15.5f, .circles = onTheMiddle}, 1.0f, {10, 10}));
+		// A smaller creature finds the same thing taller
+		EXPECT_TRUE(KeepsArenaOff({.kind = kind, .height = 8.0f, .circles = onTheMiddle}, 0.5f, {10, 10}));
+	}
+	// Storage pits and town centres are looked at however low
+	EXPECT_TRUE(
+	    KeepsArenaOff({.kind = ThingKind::StoragePitOrTownCentre, .height = 1.0f, .circles = onTheMiddle}, 1.0f, {10, 10}));
+}
+
+TEST(CreatureArena, AThingIsInTheWayWhenACircleComesWithinFiveMetresOfTheCellsMiddle)
+{
+	// 7 m east of the middle with a radius of 2: 5 m clear, not in the way; a little bigger and it is
+	EXPECT_FALSE(KeepsArenaOff(
+	    {.kind = ThingKind::Fixed, .height = 1.0f, .circles = {{.centre = {112.0f, 105.0f}, .radius = 2.0f}}}, 1.0f, {10, 10}));
+	EXPECT_TRUE(KeepsArenaOff(
+	    {.kind = ThingKind::Fixed, .height = 1.0f, .circles = {{.centre = {112.0f, 105.0f}, .radius = 2.1f}}}, 1.0f, {10, 10}));
+	// Any one circle of a row is enough
+	EXPECT_TRUE(
+	    KeepsArenaOff({.kind = ThingKind::Fixed,
+	                   .height = 1.0f,
+	                   .circles = {{.centre = {200.0f, 200.0f}, .radius = 1.0f}, {.centre = {106.0f, 106.0f}, .radius = 1.0f}}},
+	                  1.0f, {10, 10}));
+	EXPECT_FALSE(KeepsArenaOff({.kind = ThingKind::Fixed, .height = 1.0f, .circles = {}}, 1.0f, {10, 10}));
+}

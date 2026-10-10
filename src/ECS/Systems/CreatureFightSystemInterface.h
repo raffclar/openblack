@@ -72,9 +72,34 @@ public:
 	virtual bool QueueMove(entt::entity creature, const creature_fight::Move& move, bool replace) = 0;
 	/// The charge, in milliseconds held, of the blow waiting in the fighter's queue
 	virtual void ReleaseCharge(entt::entity creature, float heldMs) = 0;
-	/// Whether the creature fights by itself whatever the player does
+	/// Scripts: the computer fights the creature (until the player makes a move for it), or nobody does and it makes
+	/// only the moves queued for it. Each fight starts with the player fighting their own creature and the computer
+	/// any other, so it is set once a fight is on.
 	virtual void SetAutoFighting(entt::entity creature, bool autoFight) = 0;
+	/// Whether anyone, the player or the computer, chooses the creature's moves, in its fight or as its last ended
 	[[nodiscard]] virtual bool IsAutoFighting(entt::entity creature) const = 0;
+	/// Scripts: what a creature in a fight is doing, by the animation it plays; a creature knocked out has fainted, and
+	/// one not fighting does something else
+	[[nodiscard]] virtual creature_fight::FightAction CurrentFightAction(entt::entity /*creature*/) const
+	{
+		return creature_fight::FightAction::Other;
+	}
+	/// Scripts: how many blows a creature in a fight has queued
+	[[nodiscard]] virtual uint32_t QueuedBlows(entt::entity /*creature*/) const { return 0; }
+
+	/// An arena a script asks for, and whether it was made for it
+	struct FoundArena
+	{
+		entt::entity arena;
+		bool made;
+	};
+	/// Scripts: the nearest arena closer than a distance to a point, or else a new one there for two creatures, as a fight
+	/// makes one (sized for the bigger of them, with room clear for the first); none without room
+	[[nodiscard]] virtual std::optional<FoundArena> FindOrMakeArena(const glm::vec3& /*point*/, entt::entity /*creature*/,
+	                                                                entt::entity /*other*/, float /*within*/)
+	{
+		return std::nullopt;
+	}
 
 	/// The player's creature, the first they got, while it duels
 	[[nodiscard]] virtual std::optional<entt::entity> PlayersFighter() const = 0;

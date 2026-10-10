@@ -9,12 +9,11 @@
 
 #include "MagicTables.h"
 
-#include <cctype>
-#include <cstring>
-
 #include <algorithm>
 #include <array>
 #include <numeric>
+
+#include "Common/StringUtils.h"
 
 using namespace openblack;
 using namespace openblack::magic;
@@ -39,15 +38,6 @@ constexpr std::array<MagicInfoSlot, k_MagicTypeCount> k_Slots = [] {
 	}
 	return slots;
 }();
-
-/// Case-insensitive comparison with a fixed-size, zero-padded name
-bool EqualsIgnoringCase(std::string_view text, const std::array<char, 0x30>& name)
-{
-	const auto length = strnlen(name.data(), name.size());
-	return text.size() == length && std::ranges::equal(text, std::string_view(name.data(), length), [](char a, char b) {
-		       return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
-	       });
-}
 
 std::optional<SpellSeedType> FindSeed(const InfoConstants& info, auto&& predicate)
 {
@@ -114,7 +104,7 @@ std::optional<MagicType> magic::FindMagicTypeByName(const InfoConstants& info, s
 	for (size_t i = 0; i < k_MagicTypeCount; ++i)
 	{
 		const auto& record = GetMagicInfo(info, static_cast<MagicType>(i));
-		if (EqualsIgnoringCase(name, GetMagicEffectInfo(info, record.magicType).debugString))
+		if (string_utils::EqualsIgnoringCase(name, GetMagicEffectInfo(info, record.magicType).debugString))
 		{
 			return static_cast<MagicType>(i);
 		}
@@ -267,7 +257,8 @@ std::optional<SpellSeedType> magic::FindSpellSeedByIcon(const InfoConstants& inf
 
 std::optional<SpellSeedType> magic::FindSpellSeedByName(const InfoConstants& info, std::string_view name)
 {
-	return FindSeed(info, [name](const GSpellSeedInfo& seed) { return EqualsIgnoringCase(name, seed.debugString); });
+	return FindSeed(info,
+	                [name](const GSpellSeedInfo& seed) { return string_utils::EqualsIgnoringCase(name, seed.debugString); });
 }
 
 int magic::GetPowerUpLevel(const InfoConstants& info, MagicType type)

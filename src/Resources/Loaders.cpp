@@ -19,8 +19,10 @@
 
 #include <BinkFile.h>
 #include <DanceFile.h>
+#include <EDTFile.h>
 #include <GLWFile.h>
 #include <GestureFile.h>
+#include <HelpDudeFile.h>
 #include <L3DFile.h>
 #include <MorphFile.h>
 #include <PackFile.h>
@@ -43,6 +45,7 @@
 #include "Common/Zip.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/Texture2D.h"
+#include "Help/AdvisorModel.h"
 #include "Locator.h"
 #include "Physics/Materials.h"
 
@@ -116,6 +119,17 @@ L3DLoader::result_type L3DLoader::operator()(FromMadeTag, const std::string& deb
 	if (!mesh->LoadMade(skinSource, subMeshes))
 	{
 		throw std::runtime_error("Unable to make mesh");
+	}
+	return mesh;
+}
+
+L3DLoader::result_type L3DLoader::operator()(FromFileWithSkinsOfTag, const std::string& debugName, const l3d::L3DFile& file,
+                                             const graphics::L3DMesh& skinSource) const
+{
+	auto mesh = std::make_shared<graphics::L3DMesh>(debugName);
+	if (!mesh->LoadWithSkinsOf(file, skinSource))
+	{
+		throw std::runtime_error("Unable to load mesh");
 	}
 	return mesh;
 }
@@ -803,16 +817,15 @@ CameraPathLoader::result_type CameraPathLoader::operator()(FromDiskTag, const st
 	return cameraPath;
 }
 
-VideoLoader::result_type VideoLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
+CameraEditLoader::result_type CameraEditLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
 {
-	std::string error;
-	auto file = bink::BinkFile::Parse(Locator::filesystem::value().ReadAll(path), &error);
-	if (!file)
+	auto file = std::make_shared<edt::EDTFile>();
+	if (const auto result = file->Open(Locator::filesystem::value().ReadAll(path)); result != edt::EDTResult::Success)
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Can't play the video {}: {}", path.generic_string(), error);
-		return nullptr;
+		throw std::runtime_error("Unable to load the camera editor's file " + path.string() + ": " +
+		                         std::string(edt::ResultToStr(result)));
 	}
-	return std::make_shared<bink::BinkFile>(std::move(*file));
+	return file;
 }
 
 DanceFileLoader::result_type DanceFileLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
@@ -823,6 +836,18 @@ DanceFileLoader::result_type DanceFileLoader::operator()(FromDiskTag, const std:
 		throw std::runtime_error("Unable to load the dance " + path.string() + ": " + std::string(dance::ResultToStr(result)));
 	}
 	return file;
+}
+
+VideoLoader::result_type VideoLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
+{
+	std::string error;
+	auto file = bink::BinkFile::Parse(Locator::filesystem::value().ReadAll(path), &error);
+	if (!file)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Can't play the video {}: {}", path.generic_string(), error);
+		return nullptr;
+	}
+	return std::make_shared<bink::BinkFile>(std::move(*file));
 }
 
 GestureTemplatesLoader::result_type GestureTemplatesLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
@@ -877,4 +902,22 @@ ParticleBitmapLoader::result_type ParticleBitmapLoader::operator()(FromDiskTag, 
 		throw std::runtime_error("Light map " + path.string() + " is not the size its effect says");
 	}
 	return std::make_shared<psys::StackedBitmap>(std::move(*bitmap));
+}
+
+AdvisorModelLoader::result_type AdvisorModelLoader::operator()(FromBufferTag, const std::string& debugName,
+                                                               const std::vector<uint8_t>& data) const
+{
+	auto model = std::make_shared<help::spirits::AdvisorModel>();
+	if (const auto result = helpdude::ReadHelpDudeFile(data, model->file); result != helpdude::HelpDudeResult::Success)
+	{
+		throw std::runtime_error("Unable to read the advisor " + debugName + ": " + std::string(helpdude::ResultToStr(result)));
+	}
+	model->data = help::spirits::DudeData::FromFile(model->file);
+	if (model->file.hasData && !model->file.mesh.empty())
+	{
+		auto mesh = L3DLoader {}(L3DLoader::FromBufferTag {}, debugName, model->file.mesh);
+		model->rig = help::spirits::MakeSpiritRig(mesh->GetBoneParents(), mesh->GetBoneMatrices());
+		model->mesh = std::move(mesh);
+	}
+	return model;
 }

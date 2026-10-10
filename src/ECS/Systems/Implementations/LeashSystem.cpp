@@ -30,6 +30,7 @@
 #include "3D/LandLightFrame.h"
 #include "3D/LandLightTable.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureAudio.h"
@@ -111,7 +112,7 @@ std::optional<glm::vec3> HandPoint()
 
 float CreatureHeight(const Creature& creature)
 {
-	return creature_morph::k_HeightAtSizeOne * creature.size;
+	return creature_morph::k_HeightAtSizeOne * ShownSize(creature);
 }
 
 float GroundAt(glm::vec2 point)
@@ -181,7 +182,7 @@ leash::Lengths LengthsOf(const Registry& registry, entt::entity creature, const 
 	const auto& body = registry.Get<const Creature>(creature);
 	if (!worn.tiedTo.has_value())
 	{
-		return leash::InHand(body.size);
+		return leash::InHand(ShownSize(body));
 	}
 	if (IsMobile(registry, *worn.tiedTo))
 	{
@@ -213,7 +214,7 @@ void PlaySound(audio::SoundId sound, std::optional<glm::vec3> position)
 {
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(sound), position);
+		audio::PlayGameSoundEffect(static_cast<entt::id_type>(sound), position);
 	}
 }
 

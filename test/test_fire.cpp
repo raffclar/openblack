@@ -303,6 +303,11 @@ TEST(WaterRules, TheWaterGrowsYoungTreesAndTheExtremeAnyTree)
 	EXPECT_NEAR(grown.scale, 1.2f + 0.01f * 0.8855627f * 0.5f, 1e-6f);
 	EXPECT_FLOAT_EQ(grown.target, grown.scale);
 	EXPECT_FLOAT_EQ(magic::WaterTree(3.0f, 3.0f, type, true).scale, 3.0f);
+	// A tree made at its full size never counts as still growing, even short of its size
+	const magic::WaterTreeType made {.growthAmount = 0.01f, .waterAccelerator = 1.0f, .madeToGrow = false};
+	grown = magic::WaterTree(0.5f, 1.2f, made, false);
+	EXPECT_FALSE(grown.canGrow);
+	EXPECT_FLOAT_EQ(grown.scale, 0.5f);
 }
 
 TEST(MiracleDeeds, TheLastThingAMiracleReachedSaysWhatThePlayerDid)

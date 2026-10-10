@@ -29,6 +29,7 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "VillagerScript.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -229,8 +230,8 @@ int32_t villager_animate::StateClip(entt::entity entity)
 		// TODO(villagers): watching fights and dancing in groups; with no fight or group the game stands them
 		return Clip(AnimId::PStand);
 	case animation::ClipChoice::Script:
-		// TODO(villagers): the clip a script asked it to play
-		return -1;
+		// The clip a script asked it to play; none keeps the one it has
+		return villager_script::ScriptClip(entity);
 	case animation::ClipChoice::Table:
 	default:
 		return StateInfo(state).animation;

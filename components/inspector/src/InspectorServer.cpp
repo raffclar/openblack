@@ -418,7 +418,7 @@ std::optional<std::string> Client::ReceiveLine(std::chrono::milliseconds timeout
 			_received.erase(0, end + 1);
 			return line;
 		}
-		const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now());
+		const auto left = std::chrono::ceil<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now());
 		if (left.count() <= 0 || !WaitReadable(_socket, left))
 		{
 			return std::nullopt;

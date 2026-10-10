@@ -9,6 +9,7 @@
 
 #include "StringUtils.h"
 
+#include <array>
 #include <string_view>
 #include <vector>
 
@@ -75,4 +76,12 @@ std::string openblack::string_utils::ExtractQuote(std::string& string)
 	size_t const first(string.find('\"'));
 	size_t const second(string.find('\"', first + 1));
 	return string.substr(first + 1, second - first - 1);
+}
+
+bool openblack::string_utils::EqualsIgnoringCase(std::string_view text, const std::array<char, 0x30>& name)
+{
+	const auto length = strnlen(name.data(), name.size());
+	return text.size() == length && std::ranges::equal(text, std::string_view(name.data(), length), [](char a, char b) {
+		       return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+	       });
 }

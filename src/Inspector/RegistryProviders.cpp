@@ -98,7 +98,7 @@ QueryResult openblack::inspector::FindEntities(const ecs::Registry& registry, co
 		const entt::sparse_set* found = nullptr;
 		for (const auto& [id, storage] : underlying.storage())
 		{
-			if (reflection::ShortTypeName(storage.type()) == name)
+			if (reflection::ShortTypeName(reflection::StorageType(storage)) == name)
 			{
 				found = &storage;
 				break;
@@ -123,14 +123,15 @@ QueryResult openblack::inspector::FindEntities(const ecs::Registry& registry, co
 		{
 			return true;
 		}
-		const auto* transform = registry.TryGet<ecs::components::Transform>(entity);
-		if (transform == nullptr)
+		// Where it is drawn, as the search afterwards measures it
+		const auto position = DrawnPosition(registry, entity);
+		if (!position.has_value())
 		{
 			return false;
 		}
 		const auto& near = *options.near;
 		const glm::dvec3 point(near.point[0], near.point[1], near.point[2]);
-		glm::dvec3 offset = glm::dvec3(transform->position) - point;
+		glm::dvec3 offset = glm::dvec3(*position) - point;
 		if (near.planar)
 		{
 			offset.y = 0.0;
@@ -339,7 +340,8 @@ QueryResult RegistryProvider::Hash(const ecs::Registry& registry, const Json& pa
 		mix(&transform.scale, sizeof(transform.scale));
 		if (extra != nullptr && extra->contains(entity))
 		{
-			const auto fields = Dump(reflection::ComponentToJson(_context, extra->type(), extra->value(entity)));
+			const auto fields =
+			    Dump(reflection::ComponentToJson(_context, reflection::StorageType(*extra), extra->value(entity)));
 			mix(fields.data(), fields.size());
 		}
 	}
@@ -358,14 +360,16 @@ QueryResult RegistryProvider::References(const ecs::Registry& registry, const Js
 	Json items = Json::array();
 	for (const auto& [storageId, storage] : registry.Underlying().storage())
 	{
-		if (storage.type() == entt::type_id<entt::entity>() || !reflection::IsReflected(_context, storage.type()))
+		if (reflection::StorageType(storage) == entt::type_id<entt::entity>() ||
+		    !reflection::IsReflected(_context, reflection::StorageType(storage)))
 		{
 			continue;
 		}
-		const auto component = reflection::ShortTypeName(storage.type());
+		const auto component = reflection::ShortTypeName(reflection::StorageType(storage));
 		for (const auto holder : storage)
 		{
-			for (auto& field : reflection::References(_context, storage.type(), storage.value(holder), *target))
+			for (auto& field :
+			     reflection::References(_context, reflection::StorageType(storage), storage.value(holder), *target))
 			{
 				items.push_back({
 				    {"id", entt::to_integral(holder)},
@@ -384,14 +388,14 @@ QueryResult RegistryProvider::Components(const ecs::Registry& registry) const
 	Json items = Json::array();
 	for (const auto& [id, storage] : registry.Underlying().storage())
 	{
-		if (storage.type() == entt::type_id<entt::entity>() || storage.empty())
+		if (reflection::StorageType(storage) == entt::type_id<entt::entity>() || storage.empty())
 		{
 			continue;
 		}
 		items.push_back({
-		    {"name", reflection::ShortTypeName(storage.type())},
+		    {"name", reflection::ShortTypeName(reflection::StorageType(storage))},
 		    {"count", storage.size()},
-		    {"reflected", reflection::IsReflected(_context, storage.type())},
+		    {"reflected", reflection::IsReflected(_context, reflection::StorageType(storage))},
 		});
 	}
 	std::stable_sort(items.begin(), items.end(), [](const Json& a, const Json& b) { return a["count"] > b["count"]; });
