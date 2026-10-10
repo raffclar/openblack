@@ -134,6 +134,7 @@ openblack_setup_and_add_test(
   test_hand_grab_system hand/test_hand_grab_system.cpp
 )
 openblack_setup_and_add_test(test_hand_feel hand/test_hand_feel.cpp)
+openblack_setup_and_add_test(test_villager_pickup hand/test_villager_pickup.cpp)
 openblack_setup_and_add_test(test_hand_click hand/test_hand_click.cpp)
 target_link_libraries(test_hand_click PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_script_properties test_script_properties.cpp)
@@ -665,6 +666,13 @@ openblack_setup_and_add_test(
   test_camera_handback camera/test_camera_handback.cpp
 )
 target_link_libraries(test_camera_handback PRIVATE edt)
+openblack_setup_and_add_test(test_script_influence test_script_influence.cpp)
+openblack_setup_and_add_test(
+  test_script_challenge_snapshots test_script_challenge_snapshots.cpp
+)
+target_link_libraries(test_script_challenge_snapshots PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(test_hand_tricons hand/test_hand_tricons.cpp)
+openblack_setup_and_add_test(test_double_click input/test_double_click.cpp)
 openblack_setup_and_add_test(test_force_field camera/test_force_field.cpp)
 openblack_setup_and_add_test(test_intro_rules test_intro_rules.cpp)
 openblack_setup_and_add_test(test_temple_help test_temple_help.cpp)

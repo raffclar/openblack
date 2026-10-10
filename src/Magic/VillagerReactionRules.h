@@ -43,6 +43,29 @@ struct Distance
 /// much again by its nearness; none beyond its reach or when the villager's kind doesn't react to it
 [[nodiscard]] uint8_t Priority(uint8_t kindPriority, bool kindReacts, const Distance& distance, float at);
 
+/// What a villager weighs when the hand has picked up one of its people: whether the one held is a villager still in the
+/// hand, whether the watcher is of an age to make love, of the other sex and of the same player, and whether a script
+/// controls the watcher
+struct VillagerInHandWatch
+{
+	bool heldIsVillager {false};
+	bool heldInHand {false};
+	bool watcherSexuallyActive {false};
+	bool otherSex {false};
+	bool samePlayer {false};
+	bool watcherScripted {false};
+};
+
+/// How urgently a villager heeds one of its people held in the hand: only a villager of an age to make love, of the other
+/// sex and of the same player, not under a script, heeds a villager held, and it does so by the priority of the
+/// breeder's row of the reaction table (the game reads that row for this reaction), as a byte, whatever the distance.
+/// None for anyone else.
+[[nodiscard]] uint8_t VillagerInHandPriority(const VillagerInHandWatch& watch, uint32_t breederPriority);
+
+/// Whether a villager waiting for the one held in the hand as a mate keeps waiting, by how far that one now is, in metres
+/// across the land, against the reaction's reach
+[[nodiscard]] bool KeepsWaitingForMate(float distance, float reach);
+
 /// The kinds of reaction a villager has taken up lately and when
 class Memory
 {

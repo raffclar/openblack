@@ -86,7 +86,7 @@ TEST(CameraHelpEvents, FeaturesTakenAwayAreNotCounted)
 	frame.zoom = 2.0f;
 	frame.move = {1.0f, 0.0f};
 	EXPECT_EQ(List(InputEvents(frame)), (std::vector<uint32_t> {25, 26, 28, 29, 33}));
-	frame.features = feature::k_WatchFights;
+	frame.features = feature::k_DoubleClick;
 	EXPECT_TRUE(InputEvents(frame).Empty());
 }
 
@@ -188,7 +188,7 @@ TEST(CameraHelpEvents, ADoubleClickCountsTheObjectFirstThenTheLand)
 	EXPECT_EQ(List(DoubleClickEvents(k_AllFeatures, true, true)), (std::vector<uint32_t> {31}));
 	EXPECT_EQ(List(DoubleClickEvents(k_AllFeatures, false, true)), (std::vector<uint32_t> {30}));
 	EXPECT_TRUE(DoubleClickEvents(k_AllFeatures, false, false).Empty());
-	EXPECT_TRUE(DoubleClickEvents(k_AllFeatures & ~feature::k_WatchFights, true, true).Empty());
+	EXPECT_TRUE(DoubleClickEvents(k_AllFeatures & ~feature::k_DoubleClick, true, true).Empty());
 }
 
 TEST(CameraHelpEvents, TheTempleKeysSecondTapWithinHalfASecondIsADoubleTap)

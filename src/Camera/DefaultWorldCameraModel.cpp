@@ -738,7 +738,7 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	    Locator::camera::has_value() ? Locator::camera::value().GetKeyboardMoveSpeed() : k_KeyboardMoveSpeedDefault;
 	const auto moveDp = ScaleKeyboardMove(dp, moveSpeed);
 
-	// What the scripts let the player do, less going to watch fights while watching one
+	// What the scripts let the player do, less double clicking while watching a fight
 	const auto help =
 	    Locator::cameraHelpSystem::has_value() ? Locator::cameraHelpSystem::value().Get() : camera_help::CameraHelp {};
 	const bool onFight = Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsCameraOnFight();
@@ -861,16 +861,16 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	    .mouseDelta = glm::ivec2(actionSystem.GetMouseDelta()),
 	};
 	_helpEvents = {};
-	// A double click is counted once, as it is pressed
-	const bool doubleClicked = actionSystem.Get(input::UnbindableActionMap::DOUBLE_CLICK);
-	const bool doubleClickPressed = doubleClicked && !_doubleClickHeld;
-	_doubleClickHeld = doubleClicked;
+	// The camera takes a waiting double click once double clicks are allowed: it is counted here and flies the camera
+	// below if the hand is on the land
+	const bool doubleClicked =
+	    (_features & camera_help::feature::k_DoubleClick) != 0 && Locator::gameActionSystem::value().TakeDoubleClick();
 	// A drag of the land given up too far ahead takes every control away until the buttons are let go
 	if (!_dragGivenUp)
 	{
 		_helpEvents.Add(camera_help::events::InputEvents(_helpControls));
 		// A double click flies the camera, unless anything else is asked for
-		if (doubleClickPressed && !camera_help::events::AnyInput(_helpControls) && Locator::pickingSystem::has_value())
+		if (doubleClicked && !camera_help::events::AnyInput(_helpControls) && Locator::pickingSystem::has_value())
 		{
 			const auto& pick = Locator::pickingSystem::value().GetPick();
 			_helpEvents.Add(camera_help::events::DoubleClickEvents(_features, pick.object.has_value(), pick.land.has_value()));
@@ -922,7 +922,8 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	}
 
 	_modePrev = _mode;
-	if (_handPosition.has_value() && actionSystem.Get(input::UnbindableActionMap::DOUBLE_CLICK))
+	// The double click taken above flies the camera if the hand is on the land
+	if (_handPosition.has_value() && doubleClicked)
 	{
 		_mode = Mode::FlyingToPoint;
 	}
@@ -961,6 +962,42 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 		}
 	}
 	SendHelpEvents(_helpEvents);
+	UpdateIconFrame(onFight);
+}
+
+void DefaultWorldCameraModel::UpdateIconFrame(bool onFight)
+{
+	using camera_drag::DragMode;
+	const auto& actionSystem = Locator::gameActionSystem::value();
+	const auto& controls = _helpControls;
+	const bool asked = controls.turn != 0.0f || controls.tilt != 0.0f || controls.zoom != 0.0f;
+	const auto mode = _dragging ? _drag.GetMode() : std::nullopt;
+	glm::vec2 cursor {0.0f};
+	if (Locator::windowing::has_value())
+	{
+		const auto screenSize = Locator::windowing::value().GetSize();
+		cursor = camera_drag::NormalisedCursor(glm::ivec2(actionSystem.GetMousePosition()), screenSize, ViewHeight(screenSize));
+	}
+	_iconFrame = {
+	    // A drag given up too far ahead shows only that
+	    .mouseHints = _dragGivenUp ? hand_tricons::k_TooFar : (_dragging ? _drag.GetTricons() : _tricons),
+	    .gripping = controls.landGripped,
+	    // Gripping the land is all the camera has unless it is also turned, tilted or zoomed, or turned round the mouse
+	    .grippingOnly = controls.landGripped && !asked && !controls.rotateAroundMouse,
+	    .zoomKeyHeld = actionSystem.Get(input::BindableActionMap::ZOOM_ON),
+	    .rotateKeyHeld = actionSystem.Get(input::BindableActionMap::ROTATE_ON),
+	    .turn = controls.turn,
+	    .tilt = controls.tilt,
+	    .zoom = controls.zoom,
+	    .edgeTurning = mode == DragMode::EdgeRotate,
+	    .pitchDragging = mode == DragMode::Pitch || mode == DragMode::PitchFromTop,
+	    .rotatingAroundMouse = controls.rotateAroundMouse,
+	    .fight = onFight,
+	    .clearView = _clearView.GetValue(),
+	    .features = _features,
+	    .blocked = _heldBack || _dragGivenUp,
+	    .cursor = cursor,
+	};
 }
 
 bool DefaultWorldCameraModel::AnyControlHeld() const
@@ -1074,9 +1111,11 @@ CameraModel::HandCues DefaultWorldCameraModel::GetHandCues() const
 		return {.tricons = _drag.GetTricons(),
 		        .dragging = true,
 		        .dragMode = _drag.GetMode(),
-		        .clearViewGrip = _clearView.GetValue() > k_ClearViewGrips};
+		        .clearViewGrip = _clearView.GetValue() > k_ClearViewGrips,
+		        .icons = _iconFrame,
+		        .clearView = _clearView.GetValue()};
 	}
-	return {.tricons = _tricons};
+	return {.tricons = _tricons, .icons = _iconFrame, .clearView = _clearView.GetValue()};
 }
 
 void DefaultWorldCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus)
