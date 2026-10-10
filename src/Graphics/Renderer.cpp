@@ -77,6 +77,7 @@
 #include "ECS/Components/DestructionGhost.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGlow.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/LightBeam.h"
@@ -128,6 +129,7 @@
 #include "Graphics/Moon.h"
 #include "Graphics/ObjectShadows.h"
 #include "Graphics/Primitive.h"
+#include "Graphics/SeaReflection.h"
 #include "Graphics/SeaRows.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Sun.h"
@@ -5192,11 +5194,17 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				return std::nullopt;
 			};
 			// The villagers, each posed by its state's clip, or in its model's own pose while its state plays none. The
-			// sea reflects only those flying in the physics.
+			// sea reflects only those flying in the physics, and one held in the hand while the hand is reflected.
+			const auto handDraw = renderCtx.instancedDrawDescs.find(ecs::components::Hand::k_MeshId);
+			const bool handReflected = desc.drawHand && handDraw != renderCtx.instancedDrawDescs.end() &&
+			                           handDraw->second.count > 0 && !handDraw->second.hiddenFromReflection;
 			const auto drawVillager = [&](entt::entity entity, uint32_t instance) {
 				const bool reflection = desc.viewId == RenderPass::Reflection;
 				const auto* pose = desc.entities.TryGet<const ecs::components::VillagerPose>(entity);
-				if (pose == nullptr || (reflection && !desc.entities.AllOf<ecs::components::InPhysics>(entity)))
+				if (pose == nullptr || (reflection && !graphics::sea_reflection::ReflectsVillager(
+				                                          {.inPhysics = desc.entities.AllOf<ecs::components::InPhysics>(entity),
+				                                           .inHand = desc.entities.AllOf<ecs::components::InHand>(entity),
+				                                           .handReflected = handReflected})))
 				{
 					return;
 				}

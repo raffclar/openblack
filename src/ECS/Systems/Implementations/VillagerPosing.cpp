@@ -20,6 +20,7 @@
 #include "3D/L3DMesh.h"
 #include "Animals/AnimalAnimation.h"
 #include "ECS/ClipSoundPlayer.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingPhysics.h"
 #include "ECS/Components/Mesh.h"
@@ -121,12 +122,13 @@ void LivingActionSystem::PoseVillagersInView(const glm::mat4& viewProjection)
 			    return;
 		    }
 		    const auto model = meshes.Handle(mesh.id);
-		    // Out of view it keeps the bones it was last drawn with. The sea reflects only one flying in the physics.
+		    // Out of view it keeps the bones it was last drawn with. The sea reflects only one flying in the physics, or
+		    // held in the hand.
 		    const auto box = model->GetBoundingBox();
 		    const float scale = std::max({transform.scale.x, transform.scale.y, transform.scale.z});
 		    const auto centre = transform.position + (transform.rotation * (box.Center() * transform.scale));
 		    const float radius = (glm::length(box.Size()) * 0.5f * scale) + k_ViewMargin;
-		    const bool seen = registry.AllOf<InPhysics>(entity)
+		    const bool seen = registry.AnyOf<InPhysics, InHand>(entity)
 		                          ? graphics::view_frustum::SeesSphereOrReflection(view, centre, radius)
 		                          : graphics::view_frustum::SeesSphere(view, centre, radius);
 		    if (!seen)

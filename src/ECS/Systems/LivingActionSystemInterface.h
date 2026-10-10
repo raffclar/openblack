@@ -25,8 +25,8 @@ public:
 	/// Every frame: the clip each villager's state plays is advanced by the game's clock since the last frame, the
 	/// sounds of the clip's frames it passed are played, and the keyframes it has reached are kept for posing it
 	virtual void UpdatePoses(uint32_t turn, float turnFraction) = 0;
-	/// Every frame, once the camera has moved: the villagers the camera sees, and those flying in the
-	/// physics it sees reflected in the sea, are posed between the keyframes their clips have reached
+	/// Every frame, once the camera has moved: the villagers the camera sees, and those flying in the physics or held
+	/// in the hand that it sees reflected in the sea, are posed between the keyframes their clips have reached
 	virtual void PoseVillagersInView(const glm::mat4& viewProjection) = 0;
 
 	[[nodiscard]] virtual VillagerStates VillagerGetState(const components::LivingAction& action,
