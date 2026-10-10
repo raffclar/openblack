@@ -26,7 +26,9 @@
 
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
+#include "Common/FixedFormat.h"
 #include "Creature/CreatureSkin.h"
+#include "ECS/FloatingNumber.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
@@ -455,6 +457,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	_pointerCanvas.Begin(resolution);
 	_painter.Begin(resolution);
 	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen();
+	DrawFloatingNumbers();
 	if (_message.has_value())
 	{
 		_painter.DrawTextWrapped(DialogRect {{0, 0}, DialogPainter::k_Size}, true, _message->text, 60,
@@ -762,6 +765,23 @@ void GameInterface::DrawFightPanel(glm::u16vec2 resolution)
 	}
 }
 
+void GameInterface::DrawFloatingNumbers()
+{
+	for (const auto& number : _floatingNumbers)
+	{
+		const float width = _font.GetWidth(number.text, ecs::floating_number::k_TextSize);
+		const auto at = ecs::floating_number::TextPlace(number.screen, width);
+		const float alpha = static_cast<float>(number.alpha) / 255.0f;
+		const glm::vec4 colour {static_cast<float>((number.colour >> 16u) & 0xFFu) / 255.0f,
+		                        static_cast<float>((number.colour >> 8u) & 0xFFu) / 255.0f,
+		                        static_cast<float>(number.colour & 0xFFu) / 255.0f, alpha};
+		constexpr float k_Shadow = ecs::floating_number::k_ShadowOffset;
+		_painter.DrawString({at.x - k_Shadow, at.y + k_Shadow}, number.text, ecs::floating_number::k_TextSize,
+		                    glm::vec4(0.0f, 0.0f, 0.0f, alpha));
+		_painter.DrawString(at, number.text, ecs::floating_number::k_TextSize, colour);
+	}
+}
+
 void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 {
 	const auto shown = _toolTips.GetShown();
@@ -775,7 +795,9 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	{
 		return;
 	}
-	const auto text = _texts.Get(ToolTips::TextName(shown->index));
+	const auto words = _texts.Get(ToolTips::TextName(shown->index));
+	const std::u16string text =
+	    shown->number.has_value() ? fixed_format::WithNumber(words, *shown->number) : std::u16string(words);
 	const glm::vec4 yellow {1.0f, 1.0f, 0.0f, alpha};
 	const glm::vec4 white {1.0f, 1.0f, 1.0f, alpha};
 	const glm::vec4 shadow {0.0f, 0.0f, 0.0f, alpha};

@@ -30,6 +30,9 @@ public:
 	[[nodiscard]] bool Built(entt::entity building) const override;
 	void SetMovingSound(entt::entity totem, bool on) override;
 	void RingBell(glm::vec3 position) override;
+	void ReactToHandUsingTotem(entt::entity totem, PlayerNames player, glm::vec3 position) override;
+	void EmpathiseWithPlayer(PlayerNames player, glm::vec3 position) override;
+	void FloatNumber(glm::vec3 position, float value, uint32_t colour) override;
 };
 
 } // namespace openblack::ecs::systems

@@ -35,6 +35,7 @@
 #include "ECS/Components/MorphWithTerrain.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/PosedModel.h"
@@ -224,8 +225,8 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		return;
 	}
 
-	// The objects drawn this frame, in the order they are drawn: a hand, what a hand holds and a building not begun are
-	// not there for the cursor
+	// The objects drawn this frame, in the order they are drawn: a hand, what a hand holds, a see-through copy and a
+	// building not begun are not there for the cursor
 	const auto& registry = Locator::entitiesRegistry::value();
 	auto& meshes = Locator::resources::value().GetMeshes();
 	_candidates.clear();
@@ -233,7 +234,7 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 	_candidateModels.clear();
 	for (const auto& [entity, model] : Locator::rendereringSystem::value().GetContext().drawnObjects)
 	{
-		if (!registry.Valid(entity) || registry.AnyOf<Hand, InHand>(entity))
+		if (!registry.Valid(entity) || registry.AnyOf<Hand, InHand, SeeThrough>(entity))
 		{
 			continue;
 		}

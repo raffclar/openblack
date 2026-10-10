@@ -17,11 +17,14 @@
 #include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
 #include "Audio/Sound.h"
+#include "ECS/Archetypes/FloatingNumberArchetype.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Temple.h"
+#include "ECS/CreatureSight.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -113,4 +116,27 @@ void GameVillageTotemWorld::RingBell(glm::vec3 position)
 		Locator::soundTagSystem::value().CreatePointSound(static_cast<entt::id_type>(audio::SoundId::G_VillageBell), position,
 		                                                  false);
 	}
+}
+
+void GameVillageTotemWorld::ReactToHandUsingTotem(entt::entity totem, PlayerNames player, glm::vec3 position)
+{
+	if (Locator::reactionSystem::has_value())
+	{
+		// Its time starts as it is made
+		Locator::reactionSystem::value().Create({.initiator = totem,
+		                                         .type = Reaction::ReactToHandUsingTotem,
+		                                         .player = player,
+		                                         .position = position,
+		                                         .onCast = true});
+	}
+}
+
+void GameVillageTotemWorld::EmpathiseWithPlayer(PlayerNames player, glm::vec3 position)
+{
+	creature_sight::EmpathiseWithPlayer(player, CreatureDesires::ToImpress, 0.5f, position);
+}
+
+void GameVillageTotemWorld::FloatNumber(glm::vec3 position, float value, uint32_t colour)
+{
+	archetypes::FloatingNumberArchetype::Create(position, value, colour);
 }

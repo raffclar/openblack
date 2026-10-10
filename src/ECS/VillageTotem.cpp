@@ -112,4 +112,27 @@ float GripClosure(float iconRadius)
 	return std::min(iconRadius / (k_HandSize * 0.5f), 1.0f);
 }
 
+uint32_t GripTimeMs(float closure, uint32_t durationMs)
+{
+	// Worked in double, as the game's maths is worked wider than a float before it is cut
+	return static_cast<uint32_t>(static_cast<double>(closure) * 0.5 * static_cast<double>(durationMs >> 1u));
+}
+
+Shown ShownShares(float current, float held, bool gripped)
+{
+	const float solid = gripped ? held : current;
+	const float other = gripped ? current : held;
+	// They are told apart by how high each stands
+	if (RiseOf(other) == RiseOf(solid))
+	{
+		return {.solid = solid, .ghost = std::nullopt};
+	}
+	return {.solid = solid, .ghost = other};
+}
+
+float AsPercentage(float share)
+{
+	return share * 100.0f;
+}
+
 } // namespace openblack::ecs::village_totem

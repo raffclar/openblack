@@ -15,6 +15,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <utility>
 
 namespace openblack::gui
 {
@@ -83,6 +84,9 @@ public:
 
 	/// The tooltip of an index for this turn. A forced one shows at once, even over one still being shown.
 	void Submit(uint32_t index, ToolTipAction action, uint32_t arrows, bool force = false);
+	/// A tooltip forced to show at once, with a number written into its words (as the share of a town's people
+	/// worshipping): a tooltip that has one shows the latest number given
+	void Force(uint32_t index, float number);
 	/// Ends the turn: keeps the tooltip submitted, or one lingering after it was, and ends any other
 	void ProcessTurn();
 	/// Fades the shown tooltip in or out
@@ -95,6 +99,8 @@ public:
 		uint32_t arrows;
 		/// From 0 to 1
 		float alpha;
+		/// The number its words show, for one given a number
+		std::optional<float> number;
 	};
 	[[nodiscard]] std::optional<Shown> GetShown() const;
 
@@ -132,6 +138,8 @@ private:
 	/// How many times each tooltip has been shown afresh, which is how many seconds it takes to fade in
 	std::array<uint32_t, k_Count> _timesShown {};
 	std::optional<Icon> _icon;
+	/// The tooltip given a number, and the latest number
+	std::optional<std::pair<uint32_t, float>> _number;
 };
 
 } // namespace openblack::gui
