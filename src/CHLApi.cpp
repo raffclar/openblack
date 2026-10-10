@@ -5738,8 +5738,7 @@ void SetHighGraphicsDetail() // 290 SET_HIGH_GRAPHICS_DETAIL
 		return;
 	}
 	// The thing is drawn in high detail for the script's cinema, or as usual again
-	// TODO(opening): the high-detail drawing itself: the eyes and their blinking, the eased turning and the blending
-	// between clips
+	// TODO(opening): the high-detail body's eased turning and its blending between clips
 	auto& highDetail = Locator::highDetailSystem::value();
 	if (enable)
 	{
