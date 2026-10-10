@@ -173,6 +173,10 @@ public:
 
 	/// Replaces the first layer's texels of a texture created without any, with size bytes from data
 	void Update(const void* data, uint32_t size) const;
+	/// Replaces one layer's texels of a texture created without any, with size bytes from data
+	void UpdateLayer(uint16_t layer, const void* data, uint32_t size) const;
+	/// Replaces a rectangle of one layer's texels, from (x, y) and width by height, with size bytes from data
+	void UpdateLayerRegion(uint16_t layer, glm::u16vec2 origin, glm::u16vec2 size, const void* data, uint32_t bytes) const;
 
 	[[nodiscard]] const std::string& GetName() const { return _name; }
 	[[nodiscard]] const TextureHandle& GetNativeHandle() const { return _handle; }

@@ -458,9 +458,25 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 	const auto origin = desc.camera->GetOrigin();
 	particles::draw::Order(_particleFrame, origin, reflection ? std::nullopt : HandPoint(), _particleCommands,
 	                       _particleSpriteOrder);
+	// A vortex's swirl is drawn before the land, after the sea in the sky's pass, which keeps its order. Its sprites
+	// follow the others' in the one buffer of instances.
+	_particleBeforeLandCommands.clear();
+	if (!reflection)
+	{
+		particles::draw::OrderBeforeLand(_particleFrame, _particleBeforeLandCommands, _particleBeforeLandSprites);
+		const auto offset = static_cast<uint32_t>(_particleSpriteOrder.size());
+		for (auto& command : _particleBeforeLandCommands)
+		{
+			if (command.kind == particles::draw::ItemKind::Sprite)
+			{
+				command.first += offset;
+			}
+		}
+		_particleSpriteOrder.insert(_particleSpriteOrder.end(), _particleBeforeLandSprites.begin(),
+		                            _particleBeforeLandSprites.end());
+	}
 	const auto& frame = _particleFrame;
 	const auto& textures = Locator::resources::value().GetTextures();
-	const auto viewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
 
 	// Every sprite of the pass in one buffer of instances, in the order drawn
 	bgfx::InstanceDataBuffer instances {};
@@ -572,8 +588,7 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 		bgfx::setState(BlendState(material.mode));
 		return true;
 	};
-	for (const auto& command : _particleCommands)
-	{
+	const auto submit = [&](const particles::draw::Command& command, bgfx::ViewId viewId) {
 		switch (command.kind)
 		{
 		case ItemKind::Sprite:
@@ -630,5 +645,19 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 			DrawParticleFragment(desc, frame.fragments[command.first], command.depth);
 			break;
 		}
+	};
+	const auto translucentViewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
+	for (const auto& command : _particleCommands)
+	{
+		submit(command, translucentViewId);
+	}
+	// Only the surfaces, sprites and ribbons of what is drawn before the land go in the sky's pass: a vortex's swirl is
+	// surfaces of revolution
+	const auto skyViewId = static_cast<bgfx::ViewId>(SkyPassOf(desc.viewId));
+	for (const auto& command : _particleBeforeLandCommands)
+	{
+		const bool inSkyPass =
+		    command.kind == ItemKind::Sprite || command.kind == ItemKind::Chain || command.kind == ItemKind::Surface;
+		submit(command, inSkyPass ? skyViewId : translucentViewId);
 	}
 }

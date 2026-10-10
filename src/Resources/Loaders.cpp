@@ -18,6 +18,7 @@
 #include <utility>
 
 #include <BinkFile.h>
+#include <DanceFile.h>
 #include <GLWFile.h>
 #include <GestureFile.h>
 #include <L3DFile.h>
@@ -731,6 +732,7 @@ SoundLoader::result_type SoundLoader::operator()(BaseLoader<audio::Sound>::FromB
 	sound->pitchDeviation = header.pitchDeviation;
 	sound->overrideFlags = header.overrideFlags;
 	sound->headerVolume = header.volume;
+	sound->userParam = header.userParam;
 	sound->loop = header.loop;
 	sound->minDistance = header.minDist;
 	sound->maxDistance = header.maxDist;
@@ -811,6 +813,16 @@ VideoLoader::result_type VideoLoader::operator()(FromDiskTag, const std::filesys
 		return nullptr;
 	}
 	return std::make_shared<bink::BinkFile>(std::move(*file));
+}
+
+DanceFileLoader::result_type DanceFileLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
+{
+	auto file = std::make_shared<dance::DanceFile>();
+	if (const auto result = file->Open(Locator::filesystem::value().ReadAll(path)); result != dance::DanceResult::Success)
+	{
+		throw std::runtime_error("Unable to load the dance " + path.string() + ": " + std::string(dance::ResultToStr(result)));
+	}
+	return file;
 }
 
 GestureTemplatesLoader::result_type GestureTemplatesLoader::operator()(FromDiskTag, const std::filesystem::path& path) const

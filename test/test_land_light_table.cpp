@@ -74,23 +74,70 @@ TEST(LandLightTable, OvercastClosesTheHazeIn)
 	EXPECT_NEAR(table.GetHaze().farDistance, 350.0f, 0.01f);
 }
 
-TEST(LandLightTable, TheMoonsColourAloneIsTheBuiltTablesOne)
+TEST(LandLightTable, TheMoonsColourIsThePalettesMoonRowByAlignmentAlone)
 {
-	// Every colour of the palette different, so the moon's row and column are told apart from the others
+	// Every other colour of the palette noise, the moon's row a ramp across its columns
 	std::vector<uint8_t> bytes(LandLightPalette::k_Side * LandLightPalette::k_Side * 4);
 	for (size_t i = 0; i < bytes.size(); ++i)
 	{
 		bytes[i] = static_cast<uint8_t>((i * 37u) + (i / 97u));
 	}
-	const LandLightPalette palette(bytes);
-	for (const float skyType : {0.0f, 0.6f, 1.0f, 1.4f, 2.0f})
+	constexpr size_t k_MoonRow = 5;
+	for (size_t column = 0; column < LandLightPalette::k_Side; ++column)
 	{
-		for (const float alignment : {-1.0f, -0.3f, 0.0f, 0.5f, 1.0f})
+		const auto at = (k_MoonRow * LandLightPalette::k_Side + column) * 4;
+		bytes[at] = static_cast<uint8_t>(column * 8);
+		bytes[at + 1] = static_cast<uint8_t>(255 - column * 8);
+		bytes[at + 2] = static_cast<uint8_t>(column * 4);
+		bytes[at + 3] = 0xFF;
+	}
+	const LandLightPalette palette(bytes);
+	for (const float skyType : {0.0f, 0.6f, 1.0f, 2.0f})
+	{
+		// Good is the first column, neutral the fifteenth, evil the thirtieth
+		EXPECT_EQ(LandLightTable::GetMoonColour(palette, skyType, 1.0f), 0x00FF00u) << skyType;
+		EXPECT_EQ(LandLightTable::GetMoonColour(palette, skyType, 0.0f), 0x78873Cu) << skyType;
+		EXPECT_EQ(LandLightTable::GetMoonColour(palette, skyType, -1.0f), 0xF00F78u) << skyType;
+		// Halfway between the seventh and eighth columns
+		EXPECT_EQ(LandLightTable::GetMoonColour(palette, skyType, 0.5f), 0x3CC31Eu) << skyType;
+	}
+}
+
+TEST(LandLightTable, TheNightIsLitByTheLandRowsNotTheMoonsColour)
+{
+	// Two palettes alike but for the moon's row: the land's light at night, its haze and its colours are the same, so
+	// the moon's colour only tints the moon
+	std::vector<uint8_t> bytes(LandLightPalette::k_Side * LandLightPalette::k_Side * 4);
+	for (size_t i = 0; i < bytes.size(); ++i)
+	{
+		bytes[i] = static_cast<uint8_t>((i * 37u + 11u) & 0xFFu);
+	}
+	auto otherMoon = bytes;
+	constexpr size_t k_MoonRow = 5;
+	for (size_t column = 0; column < LandLightPalette::k_Side; ++column)
+	{
+		const auto at = (k_MoonRow * LandLightPalette::k_Side + column) * 4;
+		otherMoon[at] = static_cast<uint8_t>(otherMoon[at] ^ 0xFFu);
+		otherMoon[at + 1] = static_cast<uint8_t>(otherMoon[at + 1] ^ 0xFFu);
+		otherMoon[at + 2] = static_cast<uint8_t>(otherMoon[at + 2] ^ 0xFFu);
+	}
+	const LandLightPalette palette(bytes);
+	const LandLightPalette paletteWithOtherMoon(otherMoon);
+	for (const float alignment : {-1.0f, 0.0f, 1.0f})
+	{
+		// Full night, and on into dusk
+		for (const float skyType : {0.0f, 0.5f})
 		{
 			LandLightTable table;
-			table.Build(palette, skyType, alignment, 0.25f);
-			EXPECT_EQ(LandLightTable::GetMoonColour(palette, skyType, alignment), table.GetMoonColour())
-			    << skyType << " " << alignment;
+			LandLightTable other;
+			table.Build(palette, skyType, alignment, 0.0f);
+			other.Build(paletteWithOtherMoon, skyType, alignment, 0.0f);
+			EXPECT_EQ(table.GetTexels(), other.GetTexels());
+			EXPECT_EQ(table.GetLandColour(), other.GetLandColour());
+			EXPECT_EQ(table.GetWarmColour(), other.GetWarmColour());
+			EXPECT_EQ(table.GetHaze().colour, other.GetHaze().colour);
+			EXPECT_NE(LandLightTable::GetMoonColour(palette, skyType, alignment),
+			          LandLightTable::GetMoonColour(paletteWithOtherMoon, skyType, alignment));
 		}
 	}
 }
