@@ -96,9 +96,11 @@
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/ScriptFlocks.h"
+#include "ECS/ScriptPopulate.h"
 #include "ECS/ScriptSpotVisuals.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -470,6 +472,20 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		const auto vortex = Locator::vortexSystem::value().Create(position, static_cast<VortexType>(subtype), altitude);
 		return vortex != entt::null ? vortex : static_cast<entt::entity>(0);
 	}
+	case ObjectType::Animal:
+	case ObjectType::Bird:
+		// Made on its own and held still for the script; openblack makes only the land's birds so far
+		if (Locator::animalSystem::has_value())
+		{
+			const auto animal = Locator::animalSystem::value().CreateScriptAnimal(static_cast<AnimalInfo>(subtype),
+			                                                                      glm::vec2(position.x, position.z));
+			if (animal != entt::null)
+			{
+				return animal;
+			}
+		}
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "CreateScriptObject not implemented for animal kind {}", subtype);
+		return static_cast<entt::entity>(0);
 	default:
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "CreateScriptObject not implemented for type {}", static_cast<int>(type));
 	}
@@ -2964,12 +2980,65 @@ void GetMoonPercentage() // 108 GET_MOON_PERCENTAGE
 
 void PopulateContainer() // 109 POPULATE_CONTAINER
 {
-	[[maybe_unused]] const auto subtype = Pop().intVal;
-	[[maybe_unused]] const auto type = Pop().intVal;
-	[[maybe_unused]] const auto quantity = Popf();
-	[[maybe_unused]] const auto obj = PopObject();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	namespace populate = ecs::script_populate;
+	const auto subtype = Pop().intVal;
+	const auto type = Pop().intVal;
+	const auto count = populate::CountOf(Popf());
+	const auto container = PopObject();
+	if (!populate::IsValidType(type))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid type={}", type);
+		// The game leaves a value on the stack here although the statement gives none back
+		Pusho(0);
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(container) || container == static_cast<entt::entity>(0))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Container not valid");
+		return;
+	}
+	// About the container's place: openblack's containers that can be filled are flocks, at their home on the land
+	glm::vec3 centre(0.0f);
+	if (const auto* flock = registry.TryGet<const ecs::components::Flock>(container))
+	{
+		centre = {flock->centre.x, Locator::terrainSystem::value().GetHeightAt(flock->centre), flock->centre.y};
+	}
+	else if (const auto* transform = registry.TryGet<const Transform>(container))
+	{
+		centre = transform->position;
+	}
+	const float spread = populate::SpreadOf(count);
+	const auto floatRand = [](float x) { return Locator::gameRandom::value().GameFloatRand(x); };
+	auto& scriptObjects = Locator::scriptObjects::value();
+	for (uint32_t i = 0; i < count; ++i)
+	{
+		const auto place = populate::PlaceOf(centre, spread, floatRand);
+		const auto thing = CreateScriptObject(static_cast<ObjectType>(type), static_cast<uint32_t>(subtype), place, 0.0f, 0.0f,
+		                                      0.0f, 0.0f, 1.0f);
+		if (thing == static_cast<entt::entity>(0) || !registry.Valid(thing))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Could not create thing for populate");
+			return;
+		}
+		if (!registry.AnyOf<ecs::components::Animal, ecs::components::Villager, ecs::components::Creature>(thing))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Created Thing Not Living");
+			registry.Destroy(thing);
+			return;
+		}
+		RegisterCreated(thing);
+		// A flock takes it as its newest member and it goes about with it
+		if (!registry.AllOf<ecs::components::Flock>(container) || !registry.AllOf<ecs::components::Animal>(thing))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Not implemented - Thing not added to id");
+			return;
+		}
+		auto& animals = Locator::animalSystem::value();
+		animals.JoinFlock(thing, container);
+		animals.SetScriptState(thing, LivingStates::LivingMoveInFlock);
+		scriptObjects.AddReference(thing);
+	}
 }
 
 void AddReference() // 110 ADD_REFERENCE
