@@ -185,6 +185,11 @@ public:
 	virtual void ChargeDispenser(entt::entity /*dispenser*/) {}
 	/// The time from a dispenser's bubble being taken to the next, in seconds
 	virtual void SetDispenserPeriod(entt::entity dispenser, float seconds) = 0;
+	/// A script turns a dispenser on or off. Turned on, it floats a new bubble at once, even over one it already has,
+	/// and starts counting again.
+	virtual void SetDispenserActive(entt::entity /*dispenser*/, bool /*active*/) {}
+	/// A script sets the turns from a dispenser's bubble being taken to the next; none leaves it as it was
+	virtual void SetDispenserTurns(entt::entity /*dispenser*/, uint32_t /*turns*/) {}
 	/// A one-shot bubble of a seed at a point, floating there
 	virtual entt::entity CreateOneOffSeed(glm::vec3 position, SpellSeedType seed, int powerUp, float multiplier) = 0;
 	/// A one-shot bubble of whatever seed casts a magic type, at the power-up level that casts it

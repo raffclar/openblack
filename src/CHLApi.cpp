@@ -2678,8 +2678,14 @@ void SetTimerTime() // 145 SET_TIMER_TIME
 	}
 	if (registry.AllOf<ecs::components::SpellDispenser>(object))
 	{
-		// TODO(script-natives): a spell dispenser's time to make its next spell
-		NotImplemented();
+		// The turns from its bubble being taken to its next, counted as a timer's are; none leaves it as it was, and a
+		// time before now is so many turns it never makes another
+		const auto turns = script::timers::TurnsFor(seconds);
+		if (turns != 0)
+		{
+			Locator::magicSystem::value().SetDispenserTurns(object, static_cast<uint32_t>(turns));
+		}
+		return;
 	}
 }
 
@@ -3953,12 +3959,13 @@ void SetActive() // 255 SET_ACTIVE
 		Locator::scriptHighlightSystem::value().SetActive(object, active);
 		return;
 	}
-	// TODO(script-natives): a spell dispenser set active makes its one-shot miracle; a scaffold set active is built at once
-	if (registry.AnyOf<ecs::components::SpellDispenser>(object))
+	// A dispenser set active floats a new bubble at once
+	if (registry.AllOf<ecs::components::SpellDispenser>(object))
 	{
-		NotImplemented();
+		Locator::magicSystem::value().SetDispenserActive(object, active);
 		return;
 	}
+	// TODO(script-natives): a scaffold set active is built at once, for the script's player; openblack has no scaffolds
 	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid object type");
 }
 
@@ -4963,11 +4970,13 @@ void IsActive() // 361 IS_ACTIVE
 		Pushb(highlight->active);
 		return;
 	}
-	// TODO(script-natives): a reward and a spell dispenser answer whether they are active
-	if (registry.AnyOf<ecs::components::Reward, ecs::components::SpellDispenser>(object))
+	if (const auto* dispenser = registry.TryGet<const ecs::components::SpellDispenser>(object); dispenser != nullptr)
 	{
-		NotImplemented();
+		Pushb(dispenser->timer.active);
+		return;
 	}
+	// A reward is active once the player has tapped it open.
+	// TODO(script-natives): openblack's rewards can't be tapped open yet, so none is ever active
 	// Nothing else is ever active
 	Pushb(false);
 }
