@@ -26,8 +26,15 @@ struct LivingAction;
 namespace openblack::ecs::villager_clips
 {
 
-/// A clip's length in milliseconds, none for one not loaded
+/// A clip's length in milliseconds (its play time), none for one not loaded
 [[nodiscard]] std::optional<float> ClipMilliseconds(AnimId clip);
+/// Whether a clip lasting so many milliseconds has played through so many times in the turns since the villager went
+/// into its state, the turns counted in whole milliseconds as the game counts them
+[[nodiscard]] constexpr bool HasPlayed(uint32_t turnsSinceStateChange, uint32_t turnMilliseconds, uint32_t playTime,
+                                       uint32_t times)
+{
+	return turnsSinceStateChange * turnMilliseconds >= playTime * times;
+}
 /// Whether a clip has played through so many times since the villager went into its state
 [[nodiscard]] bool ClipPlayed(const components::LivingAction& action, AnimId clip, uint32_t times = 1);
 /// Whether the land under a point is water, the shallow shore included

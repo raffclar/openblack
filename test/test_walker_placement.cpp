@@ -119,3 +119,38 @@ TEST(WalkerPlacement, AnythingElseOnlyMoves)
 	// Nothing to place
 	ecs::walker_placement::Place(registry, registry.Create(), k_New);
 }
+
+// A walker stopped where it stands no longer heads for its goal, whichever way it was going
+TEST(WalkerPlacement, AStoppedWalkerStaysWhereItStands)
+{
+	ecs::Registry registry;
+	const auto walker = Walker<MoveStateOrbitTag>(registry);
+	ecs::walker_placement::Stop(registry, walker);
+	EXPECT_EQ(registry.Get<const Transform>(walker).position, k_Old);
+	EXPECT_FALSE((registry.AnyOf<MoveStateLinearTag, MoveStateOrbitTag, MoveStateExitCircleTag, MoveStateStepThroughTag,
+	                             MoveStateFinalStepTag, MoveStateArrivedTag>(walker)));
+	EXPECT_FALSE(registry.AllOf<WallHugObjectReference>(walker));
+	EXPECT_EQ(registry.Get<const WallHug>(walker).step, glm::ivec2(0, 0));
+}
+
+// Put somewhere else and then stopped, as a script's SET_POSITION does to a villager it controls, it stays at the new
+// place rather than walking on from there or back to its goal
+TEST(WalkerPlacement, PlacedThenStoppedItStaysAtTheNewPlace)
+{
+	ecs::Registry registry;
+	const auto walker = Walker<MoveStateFinalStepTag>(registry);
+	ecs::walker_placement::Place(registry, walker, k_New);
+	ecs::walker_placement::Stop(registry, walker);
+	ExpectHeldAtTheNewPlace(registry, walker);
+	EXPECT_FALSE((registry.AnyOf<MoveStateLinearTag, MoveStateFinalStepTag, MoveStateArrivedTag>(walker)));
+}
+
+// Something that doesn't walk is left as it is
+TEST(WalkerPlacement, StoppingAThingThatDoesntWalkDoesNothing)
+{
+	ecs::Registry registry;
+	const auto thing = registry.Create();
+	registry.Assign<Transform>(thing, k_Old, glm::mat3(1.0f), glm::vec3(1.0f));
+	ecs::walker_placement::Stop(registry, thing);
+	EXPECT_EQ(registry.Get<const Transform>(thing).position, k_Old);
+}

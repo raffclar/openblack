@@ -38,14 +38,15 @@ std::optional<float> villager_clips::ClipMilliseconds(AnimId clip)
 	{
 		return std::nullopt;
 	}
-	return static_cast<float>(animations.Handle(key)->GetDuration());
+	return static_cast<float>(animations.Handle(key)->GetPlayTime());
 }
 
 bool villager_clips::ClipPlayed(const components::LivingAction& action, AnimId clip, uint32_t times)
 {
-	constexpr auto k_TurnMilliseconds = std::chrono::milliseconds(systems::TimeSystemInterface::k_TurnDuration).count();
-	return static_cast<float>(action.turnsSinceStateChange) * static_cast<float>(k_TurnMilliseconds) >=
-	       ClipMilliseconds(clip).value_or(0.0f) * static_cast<float>(times);
+	constexpr auto k_TurnMilliseconds =
+	    static_cast<uint32_t>(std::chrono::milliseconds(systems::TimeSystemInterface::k_TurnDuration).count());
+	return HasPlayed(action.turnsSinceStateChange, k_TurnMilliseconds,
+	                 static_cast<uint32_t>(ClipMilliseconds(clip).value_or(0.0f)), times);
 }
 
 bool villager_clips::IsOnWater(glm::vec3 point)
