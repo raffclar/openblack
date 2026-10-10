@@ -26,6 +26,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "ECS/Components/Hand.h"
@@ -87,7 +88,7 @@ void PlaySound(entt::id_type id)
 {
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().StartSoundEffect(id, {});
+		audio::StartGameSoundEffect(id, {});
 	}
 }
 } // namespace

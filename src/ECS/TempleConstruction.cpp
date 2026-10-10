@@ -31,6 +31,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "Game.h"
 #include "Locator.h"
@@ -132,7 +133,11 @@ void Finish(entt::entity building)
 		{
 			life->life = 1.0f;
 		}
-		// TODO(worship-sites): its player's worship sites are planned for each of its towns
+		// Its player's towns are given their worship sites, each asked to build its own
+		if (Locator::worshipSiteSystem::has_value())
+		{
+			Locator::worshipSiteSystem::value().TempleBuilt(building);
+		}
 		PlayFinishedMusic(registry.Get<const Temple>(building).owner);
 	}
 	else

@@ -20,7 +20,7 @@
 #include <sstream>
 #include <system_error>
 
-#include <SDL.h>
+#include "UserData.h"
 
 #ifdef _WIN32
 #include <shobjidl.h>
@@ -82,14 +82,12 @@ std::string AppleScriptString(std::string_view text)
 
 std::optional<std::filesystem::path> PreferencesFile()
 {
-	char* folder = SDL_GetPrefPath("openblack", "openblack");
-	if (folder == nullptr)
+	const auto folder = user_data::Folder();
+	if (!folder.has_value())
 	{
 		return std::nullopt;
 	}
-	auto path = FromUtf8(folder) / k_PathsFile;
-	SDL_free(folder);
-	return path;
+	return *folder / k_PathsFile;
 }
 
 Paths ReadPaths()

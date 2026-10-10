@@ -12,15 +12,19 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <limits>
 #include <optional>
+#include <span>
 #include <string>
 #include <type_traits>
 #include <utility>
 
 #include <Inspector.h>
 #include <InspectorQuery.h>
+#include <L3DFile.h>
 #include <LHVM.h>
 #include <LNDFile.h>
+#include <glm/matrix.hpp>
 #include <glm/trigonometric.hpp>
 
 #include "3D/DayNightClock.h"
@@ -36,6 +40,7 @@
 #include "Common/RandomNumberManager.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/CameraBookmark.h"
 #include "ECS/Components/ChimneySmoke.h"
@@ -43,14 +48,17 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureSkin.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/HiddenByState.h"
+#include "ECS/Components/HighDetail.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mist.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/ScriptFlock.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/SoundTag.h"
@@ -59,14 +67,19 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageLight.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Components/Whale.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
+#include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
@@ -89,6 +102,8 @@
 #include "ECS/Systems/CreaturePenSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/DanceSystemInterface.h"
+#include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
@@ -102,6 +117,9 @@
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpSpeechSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
+#include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -120,6 +138,7 @@
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
+#include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
@@ -138,15 +157,22 @@
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
+#include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
+#include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WhaleSystemInterface.h"
 #include "EditProviders.h"
 #include "Editor/EditorSelection.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "GameControls.h"
 #include "Graphics/RendererInterface.h"
+#include "Help/AdvisorModel.h"
+#include "Help/AdvisorVoices.h"
+#include "Help/DialogueText.h"
+#include "Help/Spirits.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
@@ -201,6 +227,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"cameraHelpSystem", "view.state"},
     LocatorCoverage {"templeExteriorSystem", "temple.state"},
     LocatorCoverage {"templeDestructionSystem", "temple.state"},
+    LocatorCoverage {"worshipSiteSystem", "worship.sites"},
     LocatorCoverage {"handSystem", "players.hand"},
     LocatorCoverage {"handGrabSystem", "players.hand"},
     LocatorCoverage {"temple", "temple.interior"},
@@ -230,6 +257,13 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"creatureModeSystem", "creatures.systems"},
     LocatorCoverage {"creatureCaveSystem", "creatures.systems"},
     LocatorCoverage {"cinematicDirectorSystem", "view.cinematic"},
+    LocatorCoverage {"scriptControlSystem", "view.script_control"},
+    LocatorCoverage {"dialogueControlSystem", "view.script_control"},
+    LocatorCoverage {"helpSpeechSystem", "view.script_control"},
+    LocatorCoverage {"highDetailSystem", "view.script_control"},
+    LocatorCoverage {"walkPathSystem", "living.walk_paths"},
+    LocatorCoverage {"danceSystem", "living.dances"},
+    LocatorCoverage {"whaleSystem", "living.whales"},
     LocatorCoverage {"soundTagSystem", "living.sound_tags"},
     LocatorCoverage {"rainSystem", "land.precipitation"},
     LocatorCoverage {"chimneySmokeSystem", "living.chimneys"},
@@ -251,6 +285,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"forestSystem", "living.forests"},
     LocatorCoverage {"fireflySystem", "living.fireflies"},
     LocatorCoverage {"fishFarmSystem", "living.fish_farms"},
+    LocatorCoverage {"animatedStaticSystem", "living.animated_statics"},
     LocatorCoverage {"gestureSystem", "players.gestures"},
     LocatorCoverage {"miracleFxSystem", "magic.state"},
     LocatorCoverage {"fireSystem", "magic.fires"},
@@ -262,9 +297,14 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"inspector", "engine.services"},
     LocatorCoverage {"vm", "script.vm"},
     LocatorCoverage {"chlapi", "script.natives"},
+    LocatorCoverage {"villageTotemSystem", "living.totems"},
     LocatorCoverage {"videoSystem", "view.video"},
     LocatorCoverage {"playerProfileSystem", "players.new_game"},
     LocatorCoverage {"tutorialSkipSystem", "players.new_game"},
+    LocatorCoverage {"advisorSystem", "help.advisors"},
+    LocatorCoverage {"helpTextSystem", "help.dialogue"},
+    LocatorCoverage {"helpSpeechSystem", "help.dialogue"},
+    LocatorCoverage {"dialogueControlSystem", "help.dialogue"},
 };
 
 constexpr std::string_view k_NoRegistry = "there is no registry: no land is loaded";
@@ -685,6 +725,40 @@ std::unique_ptr<ProviderInterface> SkyStateProvider(std::unique_ptr<ProviderInte
 std::unique_ptr<ProviderInterface> LivingProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("living");
+	provider->Add(
+	    Query("animated_statics", "The scenery the scripts open and close: its open word and its gate stones' value", {},
+	          ResultKind::List),
+	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
+		    Json items = Json::array();
+		    registry.Each<const AnimatedStatic>([&items, &registry](entt::entity entity, const AnimatedStatic& scenery) {
+			    auto item = Listed(registry, entity);
+			    item["open_state"] = scenery.openState;
+			    if (Locator::animatedStaticSystem::has_value())
+			    {
+				    item["gate_stones_value"] = Optional(Locator::animatedStaticSystem::value().GateStoneValue(entity));
+			    }
+			    items.push_back(std::move(item));
+		    });
+		    return items;
+	    }));
+	provider->Add(
+	    Query("totems",
+	          "The village centres' totems: their town centre, the share they are held at, and whether "
+	          "the hand grips one",
+	          {}, ResultKind::List),
+	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
+		    Json items = Json::array();
+		    const auto gripped =
+		        Locator::villageTotemSystem::has_value() ? Locator::villageTotemSystem::value().GetGripped() : std::nullopt;
+		    registry.Each<const VillageTotem>([&items, &registry, gripped](entt::entity entity, const VillageTotem& totem) {
+			    auto item = Listed(registry, entity);
+			    item["town_centre"] = Id(totem.townCentre);
+			    item["held"] = totem.held;
+			    item["gripped"] = gripped.has_value() && *gripped == entity;
+			    items.push_back(std::move(item));
+		    });
+		    return items;
+	    }));
 	provider->Add(Query("action", "A villager's or animal's action states: top, final, previous, and turns in them",
 	                    {IdParameter("The living thing's entity id")}),
 	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& context) {
@@ -764,6 +838,108 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                  }
 		                  return items;
 	                  }));
+	provider->Add(Query("whales", "The whales: where each is this turn and was at its start, the way it faces, its clip "
+	                              "and the wake's timer"),
+	              Serve<Locator::whaleSystem>(
+	                  "the whales", [](const ecs::systems::WhaleSystemInterface& whales, const QueryContext& /*c*/) {
+		                  Json items = Json::array();
+		                  if (const auto* registry = Registry(); registry != nullptr)
+		                  {
+			                  registry->Each<const Whale>([&items, registry](entt::entity entity, const Whale& whale) {
+				                  auto item = Listed(*registry, entity);
+				                  item["at"] = Point(whale.position);
+				                  item["turn_start"] = Point(whale.turnStart);
+				                  item["heading"] = whale.heading;
+				                  item["clip_place"] = whale.clipPlace;
+				                  items.push_back(std::move(item));
+			                  });
+		                  }
+		                  return Json {{"wake_timer", whales.GetWakeTimer()}, {"whales", std::move(items)}};
+	                  }));
+	provider->Add(Query("walk_paths", "The things walking the camera editor's tracks: the track, how far and up to where", {},
+	                    ResultKind::List),
+	              Serve<Locator::walkPathSystem>(
+	                  "the walk paths", [](const ecs::systems::WalkPathSystemInterface& /*paths*/, const QueryContext&) {
+		                  Json items = Json::array();
+		                  if (const auto* registry = Registry(); registry != nullptr)
+		                  {
+			                  registry->Each<const WalkPath>([&items, registry](entt::entity entity, const WalkPath& path) {
+				                  auto item = Listed(*registry, entity);
+				                  item["track"] = path.number;
+				                  item["forward"] = path.walk.forward;
+				                  item["current"] = path.walk.current;
+				                  item["to"] = path.walk.to;
+				                  item["percentage"] = camera_track::Percentage(path.walk, *path.track);
+				                  item["segment"] = path.walk.runner.GetSegment();
+				                  items.push_back(std::move(item));
+			                  });
+		                  }
+		                  return items;
+	                  }));
+	provider->Add(
+	    Query("dances",
+	          "The dances: what they are danced for, whether dancing, their speed and clock, and each group's dancers", {},
+	          ResultKind::List),
+	    Serve<Locator::danceSystem>(
+	        "the dances", [](const ecs::systems::DanceSystemInterface& /*dances*/, const QueryContext&) {
+		        Json items = Json::array();
+		        if (const auto* registry = Registry(); registry != nullptr)
+		        {
+			        registry->Each<const Dance>([&items, registry](entt::entity entity, const Dance& dance) {
+				        auto item = Listed(*registry, entity);
+				        item["type"] = static_cast<int>(dance.type);
+				        item["owner"] = ToId(dance.owner);
+				        item["dancing"] = dance.state == Dance::State::Dancing;
+				        item["speed"] = dance.speed;
+				        item["rate"] = dance.rate;
+				        item["clock"] = dance.clock;
+				        item["start_turn"] = dance.startTurn;
+				        item["duration"] = dance.duration;
+				        item["dancers"] = dance.dancers;
+				        item["round"] = dance.groups.round;
+				        Json groups = Json::array();
+				        for (const auto& group : dance.groups.all)
+				        {
+					        Json dancers = Json::array();
+					        for (const auto dancer : group.dancers)
+					        {
+						        dancers.push_back(ToId(dancer));
+					        }
+					        groups.push_back({{"name", group.name},
+					                          {"limited", group.limited},
+					                          {"quota", group.quota},
+					                          {"weight", group.weight},
+					                          {"sexes", group.sexes},
+					                          {"dancers", std::move(dancers)}});
+				        }
+				        item["groups"] = std::move(groups);
+				        items.push_back(std::move(item));
+			        });
+		        }
+		        return items;
+	        }));
+	provider->Add(Query("flocks",
+	                    "The scripts' flocks: their place, their domain and flock distances, and their members "
+	                    "from the first to the leader",
+	                    {}, ResultKind::List),
+	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
+		              Json items = Json::array();
+		              registry.Each<const ScriptFlock>([&items](entt::entity entity, const ScriptFlock& flock) {
+			              Json members = Json::array();
+			              for (const auto member : flock.members)
+			              {
+				              members.push_back(ToId(member));
+			              }
+			              const auto place = map_coords::ToMetres(flock.place);
+			              items.push_back({{"id", ToId(entity)},
+			                               {"place", {place.x, place.y}},
+			                               {"domain_radius", flock.domainRadius},
+			                               {"flock_distance", flock.flockDistance},
+			                               {"calm", flock.calm},
+			                               {"members", std::move(members)}});
+		              });
+		              return items;
+	              }));
 	provider->Add(Query("fireflies", "How many fireflies there are"),
 	              Serve<Locator::fireflySystem>(
 	                  "the fireflies", [](const ecs::systems::FireflySystemInterface& fireflies, const QueryContext& /*c*/) {
@@ -788,6 +964,39 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                  });
 		                  return items;
 	                  }));
+	provider->Add(
+	    Query("animated_statics",
+	          "The scenery the scripts open and close (gates, the gate stone plinth, the piper's cave, the phone box): "
+	          "its open word, place in its clip and resting place, whether it is in the land's draw list and was on "
+	          "screen, its gate stones' value and the circles a creature's route goes round",
+	          {}, ResultKind::List),
+	    Serve<Locator::animatedStaticSystem>(
+	        "the animated scenery", [](const ecs::systems::AnimatedStaticSystemInterface& scenery, const QueryContext& /*c*/) {
+		        Json items = Json::array();
+		        const auto* registry = Registry();
+		        if (registry == nullptr)
+		        {
+			        return items;
+		        }
+		        registry->Each<const AnimatedStatic>([&](entt::entity entity, const AnimatedStatic& still) {
+			        auto item = Listed(*registry, entity);
+			        item["type"] = static_cast<int>(still.type);
+			        item["open"] = still.openState;
+			        if (const auto* pose = registry->TryGet<const AnimatedStaticPose>(entity); pose != nullptr)
+			        {
+				        item["place"] = pose->place;
+				        item["resting_place"] = pose->restingPlace;
+				        item["in_draw_list"] = pose->inDrawList;
+				        item["on_screen"] = pose->onScreen;
+				        item["stones_drawn"] = pose->stones.size();
+			        }
+			        item["stone_value"] = scenery.GateStoneValue(entity).value_or(0);
+			        const auto circles = scenery.RouteCircles(entity);
+			        item["route_circles"] = circles.has_value() ? Json(circles->size()) : Json(nullptr);
+			        items.push_back(std::move(item));
+		        });
+		        return items;
+	        }));
 	provider->Add(Query("chimneys", "The chimneys smoking", {}, ResultKind::List),
 	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
 		              Json items = Json::array();
@@ -1255,6 +1464,42 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 		                     {"interface_active", director.IsInterfaceActive()},
 		                     {"close_clipping", director.IsCloseClipping()}};
 	        }));
+	provider->Add(
+	    Query("script_control", "The tasks with the camera and the dialogue, the scripts' spoken lines and the "
+	                            "villagers drawn in high detail"),
+	    [](const QueryContext& /*c*/) {
+		    Json result = Json::object();
+		    if (Locator::scriptControlSystem::has_value())
+		    {
+			    result["camera_owner"] = Locator::scriptControlSystem::value().GetCameraOwner();
+		    }
+		    if (Locator::dialogueControlSystem::has_value())
+		    {
+			    result["dialogue_owner"] = Locator::dialogueControlSystem::value().GetOwner();
+		    }
+		    if (Locator::helpSpeechSystem::has_value())
+		    {
+			    const auto& speech = Locator::helpSpeechSystem::value();
+			    result["speech"] = {{"spoken_texts", speech.GetSpokenTextCount()}, {"lines_playing", speech.GetLineCount()}};
+		    }
+		    if (Locator::highDetailSystem::has_value())
+		    {
+			    Json items = Json::array();
+			    if (const auto* registry = Registry(); registry != nullptr)
+			    {
+				    registry->Each<const HighDetail>([&items, registry](entt::entity entity, const HighDetail& detail) {
+					    auto item = Listed(*registry, entity);
+					    item["detailed_model"] = detail.usualModel.has_value();
+					    item["face"] = detail.face.has_value() ? static_cast<int>(*detail.face) : -1;
+					    item["follow_intro_hand"] = detail.orders.followIntroHand;
+					    item["turn_at_once"] = detail.orders.turnAtOnce;
+					    items.push_back(std::move(item));
+				    });
+			    }
+			    result["high_detail"] = std::move(items);
+		    }
+		    return QueryResult::Value(std::move(result));
+	    });
 	provider->Add(Query("editor", "The editor: open, its tool, its camera and what is selected"),
 	              Serve<Locator::editorSystem>(
 	                  "the editor", [](const ecs::systems::EditorSystemInterface& editor, const QueryContext& /*c*/) {
@@ -1263,6 +1508,150 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 		                               {"camera_mode", static_cast<int>(editor.GetCameraMode())},
 		                               {"stepping", editor.IsStepping()},
 		                               {"selected", Id(editor.GetSelection().Get())}};
+	                  }));
+	return provider;
+}
+
+// The advisors
+
+/// How an advisor's mesh, posed with its bones this frame, lies before the camera: its depths along the view, the
+/// vertices the projection clips, and its triangles by the way they wind on the screen
+struct AdvisorDepths
+{
+	float nearestVertex {0.0f};
+	float furthestVertex {0.0f};
+	size_t vertices {0};
+	size_t closerThanNear {0};
+	size_t clippedNear {0};
+	size_t clippedFar {0};
+	size_t clockwise {0};
+	size_t counterClockwise {0};
+	size_t mirroredBones {0};
+};
+
+std::optional<AdvisorDepths> MeasureAdvisorDepths(const help::spirits::AdvisorModel& model, std::span<const glm::mat4> bones,
+                                                  const Camera& camera)
+{
+	l3d::L3DFile file;
+	if (bones.empty() || file.Open(model.file.mesh) != l3d::L3DResult::Success)
+	{
+		return std::nullopt;
+	}
+	const auto view = camera.GetViewMatrix(Camera::Interpolation::Current);
+	const auto viewProjection = camera.GetProjectionMatrix(Camera::Projection::ReversedZ) * view;
+	AdvisorDepths depths {.nearestVertex = std::numeric_limits<float>::max(),
+	                      .furthestVertex = std::numeric_limits<float>::lowest()};
+	for (const auto& bone : bones)
+	{
+		depths.mirroredBones += glm::determinant(glm::mat3(bone)) < 0.0f ? 1 : 0;
+	}
+	for (uint32_t submesh = 0; submesh < file.GetSubmeshHeaders().size(); ++submesh)
+	{
+		const auto& header = file.GetSubmeshHeaders()[submesh];
+		// The drawn level of detail only, as the renderer picks it
+		if (header.flags.isPhysics || header.flags.status != 0 || (header.flags.lodMask & 1) != 1)
+		{
+			continue;
+		}
+		const auto vertices = file.GetVertexSpan(submesh);
+		std::vector<glm::vec4> clip(vertices.size(), glm::vec4(0.0f));
+		size_t vertex = 0;
+		for (const auto& group : file.GetVertexGroupSpan(submesh))
+		{
+			const auto& bone = bones[std::min<size_t>(group.boneIndex, bones.size() - 1)];
+			for (uint16_t i = 0; i < group.vertexCount && vertex < vertices.size(); ++i, ++vertex)
+			{
+				const auto& position = vertices[vertex].position;
+				const glm::vec4 world = bone * glm::vec4(position.x, position.y, position.z, 1.0f);
+				// The view is left handed: it looks down its positive z
+				const float depth = (view * world).z;
+				depths.nearestVertex = std::min(depths.nearestVertex, depth);
+				depths.furthestVertex = std::max(depths.furthestVertex, depth);
+				depths.closerThanNear += depth < camera.GetNearClip() ? 1 : 0;
+				clip[vertex] = viewProjection * world;
+				// Reversed, depth runs from w at the near plane to 0 at the far plane; the renderer clips outside it
+				depths.clippedNear += clip[vertex].z > clip[vertex].w ? 1 : 0;
+				depths.clippedFar += clip[vertex].z < 0.0f ? 1 : 0;
+				++depths.vertices;
+			}
+		}
+		const auto indices = file.GetIndexSpan(submesh);
+		uint32_t firstVertex = 0;
+		uint32_t firstIndex = 0;
+		for (const auto& primitive : file.GetPrimitiveSpan(submesh))
+		{
+			for (uint32_t triangle = 0; triangle < primitive.numTriangles; ++triangle)
+			{
+				std::array<glm::vec2, 3> corner {};
+				bool inside = true;
+				for (uint32_t k = 0; k < 3; ++k)
+				{
+					const uint32_t index = firstIndex + 3 * triangle + k;
+					const size_t at = index < indices.size() ? size_t {indices[index]} + firstVertex : clip.size();
+					if (at >= clip.size() || clip[at].w <= 0.0f)
+					{
+						inside = false;
+						break;
+					}
+					corner.at(k) = glm::vec2(clip[at]) / clip[at].w;
+				}
+				if (!inside)
+				{
+					continue;
+				}
+				const glm::vec2 a = corner[1] - corner[0];
+				const glm::vec2 b = corner[2] - corner[0];
+				const float area = a.x * b.y - a.y * b.x;
+				depths.counterClockwise += area > 0.0f ? 1 : 0;
+				depths.clockwise += area < 0.0f ? 1 : 0;
+			}
+			firstVertex += primitive.numVertices;
+			firstIndex += primitive.numTriangles * 3;
+		}
+	}
+	return depths.vertices > 0 ? std::optional(depths) : std::nullopt;
+}
+
+std::unique_ptr<ProviderInterface> AdvisorsProvider()
+{
+	auto provider = std::make_unique<FunctionProvider>("advisors");
+	provider->Add(Query("draws",
+	                    "What is drawn of the advisors this frame: near the screen or in the world, alpha, how far out in "
+	                    "the world, and how close their posed meshes come to the camera beside its near plane",
+	                    {}, ResultKind::List),
+	              Serve<Locator::advisorSystem>(
+	                  "the advisors", [](const ecs::systems::AdvisorSystemInterface& advisors, const QueryContext& /*c*/) {
+		                  const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
+		                  Json items = Json::array();
+		                  for (const auto& draw : advisors.GetDraws())
+		                  {
+			                  Json item = {{"advisor", draw.advisor},    {"near_screen", draw.nearScreen},
+			                               {"alpha", draw.alpha},        {"in_world", draw.inWorld},
+			                               {"bones", draw.bones.size()}, {"sprites", draw.sprites.size()}};
+			                  if (!draw.bones.empty())
+			                  {
+				                  item["root"] = Point(glm::vec3(draw.bones.front()[3]));
+			                  }
+			                  const auto* model = advisors.GetModel(draw.advisor);
+			                  if (camera != nullptr && model != nullptr)
+			                  {
+				                  item["near_clip"] = camera->GetNearClip();
+				                  if (const auto depths = MeasureAdvisorDepths(*model, draw.bones, *camera))
+				                  {
+					                  item["nearest_vertex_depth"] = depths->nearestVertex;
+					                  item["furthest_vertex_depth"] = depths->furthestVertex;
+					                  item["vertices"] = depths->vertices;
+					                  item["vertices_closer_than_near"] = depths->closerThanNear;
+					                  item["vertices_clipped_near"] = depths->clippedNear;
+					                  item["vertices_clipped_far"] = depths->clippedFar;
+					                  item["triangles_clockwise"] = depths->clockwise;
+					                  item["triangles_counter_clockwise"] = depths->counterClockwise;
+					                  item["mirrored_bones"] = depths->mirroredBones;
+				                  }
+			                  }
+			                  items.push_back(std::move(item));
+		                  }
+		                  return items;
 	                  }));
 	return provider;
 }
@@ -1545,6 +1934,71 @@ std::optional<std::vector<BodyInfo>> Bodies()
 	return bodies;
 }
 
+// The help: the advisors and the scripts' dialogue
+
+std::unique_ptr<ProviderInterface> HelpProvider()
+{
+	auto provider = std::make_unique<FunctionProvider>("help");
+	provider->Add(
+	    Query("advisors", "The good and the evil advisor: what each does, where it hovers and whether it is talking", {},
+	          ResultKind::List),
+	    Serve<Locator::advisorSystem>(
+	        "the advisors", [](const ecs::systems::AdvisorSystemInterface& advisors, const QueryContext& /*c*/) -> Json {
+		        if (!advisors.IsLoaded())
+		        {
+			        return Json::array();
+		        }
+		        const auto& controller = advisors.GetController();
+		        const auto* voices =
+		            Locator::helpTextSystem::has_value() ? &Locator::helpTextSystem::value().GetVoices() : nullptr;
+		        Json items = Json::array();
+		        for (int dude = 0; dude < 2; ++dude)
+		        {
+			        const auto& spirit = controller.Dude(dude);
+			        items.push_back({{"advisor", dude == 0 ? "good" : "evil"},
+			                         {"control_state", static_cast<int>(controller.State(dude))},
+			                         {"state", spirit.State()},
+			                         {"hover", Point(spirit.Hover())},
+			                         {"position", Point(spirit.Position())},
+			                         {"alpha", spirit.Alpha()},
+			                         {"playing_anim", spirit.IsPlayingAnim()},
+			                         {"given_line", voices != nullptr && voices->IsActive(dude)},
+			                         {"speaking", voices != nullptr && voices->GetSpeaker() == dude}});
+		        }
+		        return items;
+	        }));
+	provider->Add(Query("dialogue",
+	                    "The scripts' dialogue: the text shown, whether it is read or waits for a click, who holds the "
+	                    "dialogue and the line being said"),
+	              Serve<Locator::helpTextSystem>(
+	                  "the dialogue", [](const ecs::systems::HelpTextSystemInterface& help, const QueryContext& /*c*/) -> Json {
+		                  const auto& voices = help.GetVoices();
+		                  Json result {{"started", help.IsStarted()},
+		                               {"text_read", help.IsTextRead()},
+		                               {"speaker", voices.GetSpeaker()},
+		                               {"sentence", voices.GetSentence()},
+		                               {"owner", Locator::dialogueControlSystem::has_value()
+		                                             ? Json(Locator::dialogueControlSystem::value().GetOwner())
+		                                             : Json(nullptr)},
+		                               {"speech_banks", Locator::helpSpeechSystem::has_value()
+		                                                    ? Json(Locator::helpSpeechSystem::value().GetTable().GetBankCount(
+		                                                          audio::SpeechBank::HelpSprites))
+		                                                    : Json(nullptr)}};
+		                  if (const auto* dialogue = help.GetDialogue(); dialogue != nullptr)
+		                  {
+			                  result["text"] = dialogue->GetCurrentText();
+			                  result["narrator"] = help.GetNarrator(dialogue->GetCurrentText());
+			                  result["waiting_for_click"] = dialogue->IsWaitingForClick();
+			                  result["end_turn"] = dialogue->GetEndTurn();
+			                  result["end_ms"] = dialogue->GetEndMs();
+			                  result["drawn"] = dialogue->IsDrawn();
+			                  result["box_shown"] = dialogue->GetDisplay().IsBoxShown();
+		                  }
+		                  return result;
+	                  }));
+	return provider;
+}
+
 } // namespace
 
 std::span<const LocatorCoverage> openblack::inspector::CoveredServices()
@@ -1616,6 +2070,7 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	    },
 	}));
 	inspector.Add(MakeTownProvider(World()));
+	inspector.Add(MakeWorshipProvider(World()));
 	inspector.Add(MakeInfluenceProvider({
 	    .hand = [](int player) -> std::optional<glm::vec3> {
 		    // Only this computer's player's hands are known; the first hand there is
@@ -1681,8 +2136,10 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	inspector.Add(MagicProvider());
 	inspector.Add(TempleProvider());
 	inspector.Add(ViewProvider());
+	inspector.Add(AdvisorsProvider());
 	inspector.Add(CreaturesProvider());
 	inspector.Add(ScriptProvider(controls.scripts));
+	inspector.Add(HelpProvider());
 
 	auto game = std::make_unique<GameProvider>(runTarget);
 	auto* gameProvider = game.get();

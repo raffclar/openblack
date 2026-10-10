@@ -26,7 +26,7 @@ class ExplosionSystem final: public ExplosionSystemInterface
 {
 public:
 	void AddRubble(const glm::vec3& centre, float yaw, float scale) override;
-	void AddSmoke(const glm::vec3& centre, float size, uint32_t colour) override;
+	void AddSmoke(const glm::vec3& centre, float size, dust_puff::Kind kind, std::optional<uint32_t> colour) override;
 	void AddShake(const glm::vec3& position, float radius, float strength, float seconds, bool verticalOnly) override;
 	[[nodiscard]] bool IsShaking() const override { return !_shakes.empty(); }
 	void Update(float milliseconds) override;

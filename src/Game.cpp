@@ -61,6 +61,8 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/ClipSounds.h"
 #include "Audio/GameMusic.h"
+#include "Audio/GameSoundEffects.h"
+#include "Audio/HelpSpeech.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
@@ -104,8 +106,10 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
+#include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
@@ -128,6 +132,8 @@
 #include "ECS/Systems/CreaturePenSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/DanceSystemInterface.h"
+#include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
@@ -141,6 +147,9 @@
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpSpeechSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
+#include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
@@ -159,6 +168,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
+#include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
@@ -177,9 +187,13 @@
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
+#include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
+#include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WhaleSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -189,6 +203,8 @@
 #include "Gui/GameInterface.h"
 #include "Gui/LoadingScreen.h"
 #include "Hand/HandFeel.h"
+#include "Hand/HandVisibility.h"
+#include "Help/Spirits.h"
 #include "Input/GameActionMapInterface.h"
 #include "LHScriptX/Script.h"
 #include "Locator.h"
@@ -328,6 +344,18 @@ void RegisterFile(Manager& manager, Id id, const std::filesystem::path& path, Ar
 /// The sound banks whose samples are decoded as soon as they are read, as they are wanted at once and often: the hand's,
 /// the miracles' and the interface's
 constexpr std::array<std::string_view, 1> k_DecodedAheadBanks = {"InGame.sad"};
+/// Both advisors are sent home, the good one first; a help script's vanish rather than fly home
+void SendAdvisorsHome(bool helpScript)
+{
+	if (!Locator::advisorSystem::has_value() || !Locator::advisorSystem::value().IsLoaded())
+	{
+		return;
+	}
+	auto& advisors = Locator::advisorSystem::value().GetController();
+	advisors.SpiritHome(1, helpScript);
+	advisors.SpiritHome(2, helpScript);
+}
+
 /// While a land loads the game serves no frames: the inspector answers meanwhile that it is loading, so that tools
 /// wait for it rather than time out
 class InspectorLoading
@@ -368,6 +396,7 @@ Game::Game(Arguments&& args) noexcept
     , _startTestbed(args.startTestbed || args.scenario.has_value())
     , _scenarioRequest(args.scenario)
     , _inspectPort(args.inspectPort)
+    , _screenshotRoot(args.screenshotRoot)
     , _seed(args.seed)
     , _inspectInputLock(args.inspectInputLock)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
@@ -459,6 +488,12 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	{
 		leftMouseButton = event.type == SDL_MOUSEBUTTONDOWN;
 	}
+	// A press of the left button may click the dialogue on, whatever else it does
+	if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT &&
+	    !Locator::debugGui::value().IsMouseOverWindow())
+	{
+		_dialogueClick = true;
+	}
 	if ((event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) && event.button.button == SDL_BUTTON_MIDDLE)
 	{
 		middleMouseButton = event.type == SDL_MOUSEBUTTONDOWN;
@@ -493,6 +528,13 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	    !middleMouseButton && !Locator::debugGui::value().IsMouseOverWindow())
 	{
 		magicTookPress = magic.TapAction();
+	}
+	// Letting go of the Action button lets go of a town's totem, leaving it where it was slid
+	if (Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value() &&
+	    (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
+	{
+		Locator::villageTotemSystem::value().LetGo();
+		Locator::gameActionSystem::value().PinCursor(false);
 	}
 	// Letting go of the Action button lets go of what the hand was taking, or puts down or throws what it holds
 	if (handGrab != nullptr && (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
@@ -553,6 +595,21 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				{
 					// A creature the hand may not hold: a click on it still asks the leash, which says why not
 					Locator::leashSystem::value().TapCreature(PlayerNames::PLAYER_ONE, *under);
+				}
+			}
+		}
+		// A town's totem under the hand is taken hold of, to slide it up and down
+		if (!_actionPressTaken && !magic.IsHandBusy() && !handHoldsThing && Locator::villageTotemSystem::has_value() &&
+		    Locator::pickingSystem::has_value())
+		{
+			auto& totems = Locator::villageTotemSystem::value();
+			if (const auto picked = Locator::pickingSystem::value().GetPick().object; picked.has_value())
+			{
+				if (const auto totem = totems.TotemOf(*picked);
+				    totem.has_value() && totems.Grip(*totem, PlayerNames::PLAYER_ONE))
+				{
+					_actionPressTaken = true;
+					Locator::gameActionSystem::value().PinCursor(true);
 				}
 			}
 		}
@@ -672,7 +729,8 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		case SDLK_7:
 		case SDLK_8:
 			// The camera's bookmarks aren't for the player while a script has the cinema bars in
-			if (!Locator::cinematicDirectorSystem::value().IsInterfaceActive())
+			if (!Locator::cinematicDirectorSystem::value().IsInterfaceActive() ||
+			    !Locator::cameraBookmarkSystem::value().IsEnabled())
 			{
 				break;
 			}
@@ -742,7 +800,8 @@ bool Game::IsPaused() const
 
 bool Game::IsHandDrawn() const
 {
-	return (!_interface || !_interface->IsDialogOpen()) && Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+	return hand_visibility::IsShown(_interface && _interface->IsDialogOpen(),
+	                                Locator::cinematicDirectorSystem::value().IsInterfaceActive());
 }
 
 void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds)
@@ -985,6 +1044,11 @@ bool Game::GameLogicLoop() noexcept
 	{
 		Locator::templeDestructionSystem::value().ProcessTurn();
 	}
+	// The whales' turns start where they are, then the things the scripts walk along tracks go on, before the living
+	Locator::whaleSystem::value().ProcessTurn();
+	// The dances go on after the players and before the things walking tracks and the living
+	Locator::danceSystem::value().ProcessTurn();
+	Locator::walkPathSystem::value().ProcessTurn();
 
 	auto& profiler = Locator::profiler::value();
 
@@ -1069,6 +1133,8 @@ bool Game::GameLogicLoop() noexcept
 	lhvm.LookIn(lhvm::ScriptType::All);
 	// The scripts' fade moves on with their turn
 	Locator::cinematicDirectorSystem::value().ProcessTurn();
+	// The advisors follow what they point at and look at
+	Locator::advisorSystem::value().ProcessTurn();
 
 	// The fireflies come out at nightfall and go home at dawn, by the time of day the turn began at
 	if (Locator::fireflySystem::has_value())
@@ -1093,6 +1159,11 @@ bool Game::GameLogicLoop() noexcept
 
 	// The objects' looping sounds start again where they have stopped
 	Locator::soundTagSystem::value().ProcessTurn(cameraPosition);
+	// The worship sites charge their icons and store what their dancers chant, before the miracles draw their upkeep
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().ProcessChants();
+	}
 	{
 		// The dispensers, then each miracle's upkeep, its own particle effect and what that effect tells it
 		auto magic = profiler.BeginScoped(Profiler::Stage::MagicUpdate);
@@ -1184,6 +1255,11 @@ bool Game::GameLogicLoop() noexcept
 	Locator::alignmentSystem::value().UpdateTurn(cameraPosition);
 	// The temples' outsides follow their players' alignments
 	Locator::templeExteriorSystem::value().UpdateTurn();
+	// And their worship sites wear their looks
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().UpdateTurn();
+	}
 
 	if (_atmosAudio)
 	{
@@ -1455,6 +1531,8 @@ bool Game::Update() noexcept
 		Locator::temple::value().Update(deltaTime);
 	}
 	Locator::cameraBookmarkSystem::value().Update(deltaTime);
+	// The villagers a script draws in high detail are drawn as usual once its cinema bars are gone
+	Locator::highDetailSystem::value().Update();
 	if (_interface)
 	{
 		_interface->Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
@@ -1538,6 +1616,10 @@ bool Game::Update() noexcept
 		Locator::animalSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
 		// The clips the villagers' states play go on, and the sounds of their frames play
 		Locator::livingActionSystem::value().UpdatePoses(clock.GetTurn(), clock.GetTurnFraction());
+		// The whales swim between their last two turns and leave their wakes
+		Locator::whaleSystem::value().Update(gameTime, clock.GetTurnFraction());
+		// The gates and the other scenery the scripts open and close play on, and the plinths' stones sit or sink
+		Locator::animatedStaticSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
 	}
 	{
 		// The creatures are drawn moving between the last two turns
@@ -1602,11 +1684,42 @@ bool Game::Update() noexcept
 	}
 	Locator::mistSystem::value().Update(gameTime);
 	Locator::villageLightSystem::value().Update(gameTime);
+	// The town totems ease to their shares
+	Locator::villageTotemSystem::value().Update(gameTime.count());
 	Locator::fieldSystem::value().Update(gameTime);
 	// The shoals near the camera swim, and dart from what scared them
 	Locator::fishFarmSystem::value().Update(std::chrono::duration<float>(gameTime).count(),
 	                                        Locator::camera::value().GetOrigin());
 	Locator::cinematicDirectorSystem::value().Update(gameTime);
+	// The advisors move and act once a frame, by the real time inside the temple and the game's otherwise
+	{
+		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+		const auto realMs = static_cast<int32_t>(clock.GetFrameRealTime().count());
+		const auto gameMs = static_cast<int32_t>(clock.GetFrameGameTime().count());
+		const auto screenSize = glm::max(Locator::windowing::value().GetSize(), glm::ivec2(1));
+		Locator::advisorSystem::value().Update({
+		    .camera = &camera,
+		    .screen = static_cast<glm::u16vec2>(screenSize),
+		    .mouse = _mousePosition,
+		    .frameMs = static_cast<uint32_t>(std::max(realMs, 1)),
+		    .stepMs = std::clamp(inTemple ? realMs : gameMs, 0, 500),
+		    .tickMs = machine_clock::Ticks(),
+		    .wideScreen = Locator::cinematicDirectorSystem::value().IsWideScreenOn(),
+		});
+	}
+	// The scripts' dialogue: the voices, the player's click and the newest text sliding in
+	{
+		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+		const auto* keys = SDL_GetKeyboardState(nullptr);
+		Locator::helpTextSystem::value().Update({
+		    .gameMs = static_cast<uint32_t>(clock.GetFrameGameTime().count()),
+		    .realMs = static_cast<uint32_t>(clock.GetFrameRealTime().count()),
+		    .inTemple = inTemple,
+		    .click = _dialogueClick,
+		    .skipKey = keys != nullptr && keys[SDL_SCANCODE_KP_ENTER] != 0,
+		});
+		_dialogueClick = false;
+	}
 	// The cinema bars coming in hide the game's dialogs
 	if (Locator::cinematicDirectorSystem::value().TakeHideDialogs() && _interface && _interface->GetMenu().IsOpen())
 	{
@@ -1783,102 +1896,124 @@ bool Game::Update() noexcept
 
 		// Update Hand
 		{
-			const glm::mat4 modelRotationCorrection = glm::eulerAngleX(glm::radians(90.0f));
+			// Put away, it stays where it was and does nothing until it comes back
+			if (IsHandDrawn())
+			{
+				const glm::mat4 modelRotationCorrection = glm::eulerAngleX(glm::radians(90.0f));
 
-			const auto handEntity = Locator::handSystem::value()
-			                            .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
-			auto& handTransform = Locator::entitiesRegistry::value().Get<ecs::components::Transform>(handEntity);
-			UpdateHandNavigation(handTransform);
-			UpdateHandKnock(handTransform);
-			if (Locator::temple::has_value() && Locator::temple::value().Active())
-			{
-				if (!_handGripping)
+				const auto handEntity =
+				    Locator::handSystem::value()
+				        .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+				auto& handTransform = Locator::entitiesRegistry::value().Get<ecs::components::Transform>(handEntity);
+				UpdateHandNavigation(handTransform);
+				UpdateHandKnock(handTransform);
+				if (Locator::temple::has_value() && Locator::temple::value().Active())
 				{
-					handTransform.rotation = glm::eulerAngleY(camera.GetRotation().y) * modelRotationCorrection;
-					handTransform.rotation = intersectionTransform.rotation * handTransform.rotation;
-				}
-			}
-			else
-			{
-				OrientHand(handTransform, glm::mat3(glm::eulerAngleY(camera.GetRotation().y) * modelRotationCorrection),
-				           intersectionTransform.rotation * glm::vec3(0.0f, 1.0f, 0.0f),
-				           std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
-			}
-			PlaceHand(handTransform, std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
-			// Held to a creature, the hand rests on its body under the cursor, stroking and slapping it
-			{
-				auto creatureHand = profiler.BeginScoped(Profiler::Stage::CreatureHandUpdate);
-				const auto screenSize =
-				    Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::zero<glm::ivec2>();
-				_handOnCreature.reset();
-				_creatureUnderHand.reset();
-				if (screenSize.x > 0 && screenSize.y > 0)
-				{
-					auto& hands = Locator::creatureHandSystem::value();
-					glm::vec3 rayOrigin;
-					glm::vec3 rayDirection;
-					camera.DeprojectScreenToWorld(static_cast<glm::vec2>(_mousePosition) / static_cast<glm::vec2>(screenSize),
-					                              rayOrigin, rayDirection);
-					// The hand isn't over the world while it is over a debug window, or in the temple
-					const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-					if (!inTemple && !Locator::debugGui::value().IsMouseOverWindow())
+					if (!_handGripping)
 					{
-						_creatureUnderHand = hands.CreatureUnderCursor();
-					}
-					if (hands.GetCreature().has_value())
-					{
-						_handOnCreature =
-						    hands.Update(rayOrigin, rayDirection, static_cast<glm::vec2>(_mousePosition), HandStepSeconds());
-					}
-					if (_handOnCreature.has_value())
-					{
-						handTransform.position = _handOnCreature->position;
+						handTransform.rotation = glm::eulerAngleY(camera.GetRotation().y) * modelRotationCorrection;
+						handTransform.rotation = intersectionTransform.rotation * handTransform.rotation;
 					}
 				}
-				UpdateHandInterface();
-			}
-			{
-				auto magic = profiler.BeginScoped(Profiler::Stage::MagicUpdate);
-				// Food and wood pouring from the hand lift it and tip it forward, and what it pours comes from there
-				const auto pour = Locator::magicSystem::value().GetHandPour(Locator::time::value().GetTurnFraction());
-				// The hand is drawn where a scenario puts it, and stays where a pour that holds it began
-				const auto driven = Locator::magicSystem::value().GetDrivenHand();
-				if (driven.has_value())
+				else
 				{
-					handTransform.position = driven->handPosition;
+					OrientHand(handTransform, glm::mat3(glm::eulerAngleY(camera.GetRotation().y) * modelRotationCorrection),
+					           intersectionTransform.rotation * glm::vec3(0.0f, 1.0f, 0.0f),
+					           std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 				}
-				handTransform.position = pour.pinned.value_or(handTransform.position);
-				handTransform.position.y += pour.raise;
-				// A seed in the hand lifts it, by how it is held; the pour tips it as the hand is posed (magic::HandHoldPoser)
-				if (const auto held = magic::HandHoldPoser::Find())
+				PlaceHand(handTransform, std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
+				// Held to a creature, the hand rests on its body under the cursor, stroking and slapping it
 				{
-					// Measured to the land under the cursor, or under the hand a scenario puts
-					const auto land = driven.has_value() ? driven->point : _cursorWorldPosition;
-					handTransform.position.y += magic::HandHoldPoser::Lift(
-					    *held, glm::distance(camera.GetOrigin(), land.value_or(handTransform.position)));
+					auto creatureHand = profiler.BeginScoped(Profiler::Stage::CreatureHandUpdate);
+					const auto screenSize =
+					    Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::zero<glm::ivec2>();
+					_handOnCreature.reset();
+					_creatureUnderHand.reset();
+					if (screenSize.x > 0 && screenSize.y > 0)
+					{
+						auto& hands = Locator::creatureHandSystem::value();
+						glm::vec3 rayOrigin;
+						glm::vec3 rayDirection;
+						camera.DeprojectScreenToWorld(static_cast<glm::vec2>(_mousePosition) /
+						                                  static_cast<glm::vec2>(screenSize),
+						                              rayOrigin, rayDirection);
+						// The hand isn't over the world while it is over a debug window, or in the temple
+						const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+						if (!inTemple && !Locator::debugGui::value().IsMouseOverWindow())
+						{
+							_creatureUnderHand = hands.CreatureUnderCursor();
+						}
+						if (hands.GetCreature().has_value())
+						{
+							_handOnCreature = hands.Update(rayOrigin, rayDirection, static_cast<glm::vec2>(_mousePosition),
+							                               HandStepSeconds());
+						}
+						if (_handOnCreature.has_value())
+						{
+							handTransform.position = _handOnCreature->position;
+						}
+					}
+					UpdateHandInterface();
 				}
-				else if (const auto screenSize =
-				             Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::zero<glm::ivec2>();
-				         Locator::handGrabSystem::has_value() && screenSize.x > 0 && screenSize.y > 0)
 				{
-					// A thing the hand takes or holds lifts it, and makes ready to throw, its spring drags it
-					glm::vec3 rayOrigin;
-					glm::vec3 rayDirection;
-					camera.DeprojectScreenToWorld(static_cast<glm::vec2>(_mousePosition) / static_cast<glm::vec2>(screenSize),
-					                              rayOrigin, rayDirection);
-					const auto land = _cursorWorldPosition.value_or(handTransform.position);
-					handTransform.position = Locator::handGrabSystem::value().UpdateFrame({
-					    .target = handTransform.position,
-					    .rayOrigin = rayOrigin,
-					    .rayDirection = rayDirection,
-					    .camera = camera.GetOrigin(),
-					    .cursorGround = _cursorWorldPosition,
-					    .handSize = HandAnimation::SizeAtDistance(glm::distance(camera.GetOrigin(), land)),
-					    .seconds = std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count(),
-					    .gameMs = static_cast<uint32_t>(std::lround(gameTime.count())),
-					    .nowMs = machine_clock::Ticks(),
-					    .turn = Locator::time::value().GetTurn(),
-					});
+					auto magic = profiler.BeginScoped(Profiler::Stage::MagicUpdate);
+					// Food and wood pouring from the hand lift it and tip it forward, and what it pours comes from there
+					const auto pour = Locator::magicSystem::value().GetHandPour(Locator::time::value().GetTurnFraction());
+					// The hand is drawn where a scenario puts it, and stays where a pour that holds it began
+					const auto driven = Locator::magicSystem::value().GetDrivenHand();
+					if (driven.has_value())
+					{
+						handTransform.position = driven->handPosition;
+					}
+					handTransform.position = pour.pinned.value_or(handTransform.position);
+					handTransform.position.y += pour.raise;
+					// A seed in the hand lifts it, by how it is held; the pour tips it as the hand is posed
+					// (magic::HandHoldPoser)
+					if (const auto held = magic::HandHoldPoser::Find())
+					{
+						// Measured to the land under the cursor, or under the hand a scenario puts
+						const auto land = driven.has_value() ? driven->point : _cursorWorldPosition;
+						handTransform.position.y += magic::HandHoldPoser::Lift(
+						    *held, glm::distance(camera.GetOrigin(), land.value_or(handTransform.position)));
+					}
+					else if (const auto screenSize = Locator::windowing::has_value() ? Locator::windowing::value().GetSize()
+					                                                                 : glm::zero<glm::ivec2>();
+					         Locator::handGrabSystem::has_value() && screenSize.x > 0 && screenSize.y > 0)
+					{
+						// A thing the hand takes or holds lifts it, and makes ready to throw, its spring drags it
+						glm::vec3 rayOrigin;
+						glm::vec3 rayDirection;
+						camera.DeprojectScreenToWorld(static_cast<glm::vec2>(_mousePosition) /
+						                                  static_cast<glm::vec2>(screenSize),
+						                              rayOrigin, rayDirection);
+						const auto land = _cursorWorldPosition.value_or(handTransform.position);
+						handTransform.position = Locator::handGrabSystem::value().UpdateFrame({
+						    .target = handTransform.position,
+						    .rayOrigin = rayOrigin,
+						    .rayDirection = rayDirection,
+						    .camera = camera.GetOrigin(),
+						    .cursorGround = _cursorWorldPosition,
+						    .handSize = HandAnimation::SizeAtDistance(glm::distance(camera.GetOrigin(), land)),
+						    .seconds = std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count(),
+						    .gameMs = static_cast<uint32_t>(std::lround(gameTime.count())),
+						    .nowMs = machine_clock::Ticks(),
+						    .turn = Locator::time::value().GetTurn(),
+						});
+					}
+					UpdateMagicHand(handTransform.position,
+					                std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
+				}
+				// Holding a town's totem, the mouse slides it up and down and the hand stays on its icon
+				if (Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value())
+				{
+					auto& totems = Locator::villageTotemSystem::value();
+					const auto screenHeight = Locator::windowing::has_value() ? Locator::windowing::value().GetSize().y : 0;
+					totems.Slide(static_cast<float>(-Locator::gameActionSystem::value().GetMouseDelta().y),
+					             static_cast<float>(screenHeight));
+					if (const auto hold = totems.GetHandHold())
+					{
+						handTransform.position = hold->position;
+					}
 				}
 				UpdateMagicHand(handTransform.position,
 				                std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
@@ -2072,7 +2207,7 @@ bool Game::Update() noexcept
 		{
 			auto actions = profiler.BeginScoped(Profiler::Stage::VegetationUpdate);
 			auto& vegetation = Locator::vegetation::value();
-			vegetation.UpdateBendPoints();
+			vegetation.UpdateBendPoints(IsHandDrawn());
 			vegetation.Rustle(gameTime);
 		}
 
@@ -2275,9 +2410,9 @@ bool Game::Initialize() noexcept
 				                   SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading temple mesh: {}", f.stem().string());
 				                   RegisterFile(meshManager, name, f, resources::L3DLoader::FromDiskTag {}, f);
 				                   // The temple's outside is blended from the temple meshes, into the first temple's,
-				                   // and its entrance is picked under the cursor
+				                   // its entrance is picked under the cursor, and its worship sites wear its skin
 				                   if (name.starts_with("temple/b_temple") || name.starts_with("temple/b_first_temple") ||
-				                       name == "temple/entrance_l3d")
+				                       name == "temple/entrance_l3d" || name == "temple/b_worship_l3d")
 				                   {
 					                   RegisterFile(resources.GetL3DFiles(), name, f, resources::L3DFileLoader::FromDiskTag {},
 					                                f);
@@ -2512,6 +2647,7 @@ bool Game::Initialize() noexcept
 		_startupTimer->Step("hand animations");
 		LoadCreatureRigs();
 		_startupTimer->Step("creature rigs");
+		Locator::advisorSystem::value().Load();
 		const auto registerMesh = [&meshManager](auto id, const std::filesystem::path& path) {
 			RegisterFile(meshManager, id, path, LFromDiskTag {}, path);
 		};
@@ -2748,6 +2884,46 @@ bool Game::Initialize() noexcept
 		    }
 	    });
 
+	// Which sample of the speech banks says each help text, for the lines the scripts have spoken
+	if (_interface)
+	{
+		auto& sounds = Locator::resources::value().GetSounds();
+		std::array<std::vector<audio::SpeechBankSample>, audio::k_SpeechBankFiles.size()> banks;
+		for (const auto& [groupName, group] : audioManager.GetSoundGroups())
+		{
+			const auto bank = std::ranges::find_if(audio::k_SpeechBankFiles, [&groupName](std::string_view file) {
+				return string_utils::LowerCase(std::string(file)) == string_utils::LowerCase(groupName);
+			});
+			if (bank == audio::k_SpeechBankFiles.end())
+			{
+				continue;
+			}
+			auto& samples = banks.at(static_cast<size_t>(std::distance(audio::k_SpeechBankFiles.begin(), bank)));
+			for (const auto id : group.sounds)
+			{
+				const auto& sound = *sounds.Handle(id);
+				samples.push_back({.sample = static_cast<uint32_t>(sound.id), .file = sound.name, .sound = id});
+			}
+		}
+		Locator::helpSpeechSystem::value().SetTable(audio::HelpSpeechTable(_interface->GetTexts().GetHelpNames(), banks));
+		// The scripts' dialogue, its text sized for the screen it starts on
+		const int screenHeight = Locator::windowing::has_value() ? Locator::windowing::value().GetSize().y : 0;
+		Locator::helpTextSystem::value().Start(_interface->GetTexts(), screenHeight);
+		// What the dialogue changing hands does to the advisors and the texts
+		Locator::dialogueControlSystem::value().SetHooks({
+		    .sendSpiritsHome = [](bool helpScript) { SendAdvisorsHome(helpScript); },
+		    .taken = []() { Locator::helpTextSystem::value().ClearAllText(); },
+		    .released =
+		        [](bool helpScript) {
+			        // They fly home, are cut short in what they say, are sent home as the script would, and the texts go
+			        SendAdvisorsHome(false);
+			        Locator::helpTextSystem::value().InterruptAdvisors();
+			        SendAdvisorsHome(helpScript);
+			        Locator::helpTextSystem::value().ClearAllText();
+		        },
+		});
+	}
+
 	_startupTimer->Step("sound and music banks");
 	{
 		InfoFile infoFile;
@@ -2916,7 +3092,7 @@ bool Game::Run() noexcept
 			    Locator::scriptObjects::value().EnterNative(func);
 			    Locator::chlapi::value().EnterNative(func);
 		    },
-		    nullptr, nullptr,
+		    nullptr, [](uint32_t task) { chlapi::CHLApi::TaskStopped(task); },
 		    [](lhvm::ErrorCode code, const std::string& text, uint32_t number) {
 			    SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Script error: {} ({} {})",
 			                        lhvm::k_ErrorMsg.at(static_cast<size_t>(code)), text, number);
@@ -2927,9 +3103,11 @@ bool Game::Run() noexcept
 		{
 			lhvm.LoadBinary(fileSystem.ReadAll(challengePath));
 			// The story's scripts run the first land; on the testbed they would set its time of day and stop its clock
-			if (!_startTestbed)
+			// The story opens on a black screen: its first land comes up at noon, and its scripts set the dawn of the
+			// opening scene and fade the picture in from black some turns later
+			if (!_startTestbed && lhvm.StartScript("LandControlAll", lhvm::ScriptType::All) != 0)
 			{
-				lhvm.StartScript("LandControlAll", lhvm::ScriptType::All);
+				Locator::cinematicDirectorSystem::value().StartStory();
 			}
 		}
 		catch (const std::runtime_error& err)
@@ -3014,7 +3192,6 @@ bool Game::Run() noexcept
 		auto milliseconds = std::chrono::duration_cast<std::chrono::duration<uint32_t, std::milli>>(duration);
 		{
 			auto section = profiler.BeginScoped(Profiler::Stage::SceneDraw);
-
 			const graphics::RendererInterface::DrawSceneDesc drawDesc {
 			    .camera = &Locator::camera::value(),
 			    .frameBuffer = nullptr,
@@ -3064,7 +3241,8 @@ bool Game::Run() noexcept
 				Locator::rendererInterface::value().RequestScreenshot(_requestScreenshot->second);
 			}
 			// A picture without the debug windows: the frame's windows are made as ever but not drawn
-			if (!screenshotThisFrame || !_screenshotHidesDebugGui)
+			const bool hiddenThisFrame = _debugGuiHiddenFrame == _frameCount;
+			if ((!screenshotThisFrame || !_screenshotHidesDebugGui) && !hiddenThisFrame)
 			{
 				Locator::debugGui::value().Draw();
 			}
@@ -3161,6 +3339,12 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	}
 
 	timer.Step("footpaths");
+	// With the land laid out, each town of a player with a temple is given its worship site if it has none
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().LandLaidOut();
+	}
+
 	// With the land laid out, each town gathers the lone trees about it into its scenic forest
 	if (Locator::forestSystem::has_value())
 	{
@@ -3288,6 +3472,24 @@ void Game::PrepareNewLand()
 		Locator::waterRingSystem::value().Reset();
 	}
 	Locator::cinematicDirectorSystem::value().Reset();
+	// Nor does any script keep the camera, the game's speed or the dialogue
+	if (Locator::camera::has_value())
+	{
+		auto& scriptControl = Locator::scriptControlSystem::value();
+		if (const auto owner = scriptControl.GetCameraOwner(); owner != 0)
+		{
+			scriptControl.EndCameraControl(Locator::camera::value(), owner);
+		}
+		scriptControl.Reset();
+	}
+	Locator::dialogueControlSystem::value().Reset();
+	// The camera's bookmarks a script put away come back (a land's first load makes them anew)
+	if (Locator::cameraBookmarkSystem::has_value())
+	{
+		Locator::cameraBookmarkSystem::value().SetEnabled(true);
+	}
+	// The scripts start again, and the help's texts and voices with them
+	Locator::helpTextSystem::value().Reset();
 	Locator::cameraHelpSystem::value().Get().ResetForNewLand();
 	Locator::influenceSystem::value().Reset();
 	// Nor its creatures' footprints, nor a scare of its fish
@@ -3303,6 +3505,10 @@ void Game::PrepareNewLand()
 	Locator::explosionSystem::value().Reset();
 	Locator::magicSystem::value().SetIgnoreInfluence(false);
 	Locator::animalSystem::value().Reset();
+	if (Locator::animatedStaticSystem::has_value())
+	{
+		Locator::animatedStaticSystem::value().Reset();
+	}
 	Locator::magicShieldSystem::value().Reset();
 	Locator::forestSystem::value().Reset();
 	// Nor its fireflies, nor what they give
@@ -3905,7 +4111,6 @@ void Game::PlayHandGrabSound()
 		isLand = landCell != nullptr && landCell->properties.hasWater == 0;
 	}
 
-	auto& audio = Locator::audio::value();
 	if (isLand)
 	{
 		// The game throws up a spot visual where the hand grips the land, as it plays the sound
@@ -3917,7 +4122,7 @@ void Game::PlayHandGrabSound()
 		// One of G_HandGrabLand_01 to _06, centred on the listener
 		const auto sample = 4 + Locator::rng::value().NextValue(0, 5);
 		const auto id = fmt::format("InGame.sad/{}", sample);
-		audio.PlaySoundEffect(entt::hashed_string(id.c_str()), std::nullopt);
+		audio::PlayGameSoundEffect(entt::hashed_string(id.c_str()), std::nullopt);
 	}
 	else
 	{
@@ -3933,6 +4138,6 @@ void Game::PlayHandGrabSound()
 		// G_HandInWater_01 to _10 in turn, on the water's surface where the hand went in
 		const auto id = fmt::format("InGame.sad/{}", 99 + _handInWaterSample);
 		_handInWaterSample = (_handInWaterSample + 1) % 10;
-		audio.PlaySoundEffect(entt::hashed_string(id.c_str()), glm::vec3(position.x, k_HandSplashHeight, position.z));
+		audio::PlayGameSoundEffect(entt::hashed_string(id.c_str()), glm::vec3(position.x, k_HandSplashHeight, position.z));
 	}
 }

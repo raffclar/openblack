@@ -45,6 +45,16 @@ public:
 	void VillagerPlayAnimThenSetState(components::LivingAction& action, VillagerStates next) const override;
 	void VillagerSetTopStateToFinal(components::LivingAction& action) const override;
 	[[nodiscard]] bool VillagerIsReadyForNewAnimation(const components::LivingAction& action, uint32_t times) const override;
+	[[nodiscard]] bool VillagerCanBeDirected(entt::entity villager) const override;
+	void VillagerSetScriptState(entt::entity villager, VillagerStates state) const override;
+	void VillagerScriptMoveTo(entt::entity villager, glm::vec2 goal) const override;
+	void VillagerSetScriptAnimation(entt::entity villager, AnimId clip, uint32_t plays) const override;
+	[[nodiscard]] bool VillagerHasPlayedScriptAnimation(entt::entity villager) const override;
+	void VillagerFace(entt::entity villager, glm::vec2 point) const override;
+	[[nodiscard]] std::optional<float> VillagerYAngle(entt::entity villager) const override;
+	void VillagerSetYAngle(entt::entity villager, float angle) const override;
+	void VillagerOverrideAnimation(entt::entity villager, int32_t clip) const override;
+	void VillagerSetAge(entt::entity villager, uint32_t age) const override;
 
 private:
 	enum class SetResult : uint8_t

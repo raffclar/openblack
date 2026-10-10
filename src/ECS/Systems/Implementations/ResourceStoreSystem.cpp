@@ -31,6 +31,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Common/MachineClock.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Components/Abode.h"
@@ -100,8 +101,7 @@ void PlayInGame(uint32_t sample, glm::vec3 position)
 {
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlaySoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(),
-		                                        position);
+		audio::PlayGameSoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(), position);
 	}
 }
 

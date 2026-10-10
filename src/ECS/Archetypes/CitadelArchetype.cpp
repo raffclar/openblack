@@ -23,6 +23,7 @@
 #include "ECS/Components/TempleExterior.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -66,6 +67,12 @@ entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames pla
 	const auto entrance = registry.Create();
 	registry.Assign<Transform>(entrance, position, rotation, size);
 	registry.Assign<TempleEntrance>(entrance, entity);
+	// It takes its worship sites' places; standing built, its player's towns are given their sites at once, and one
+	// under construction gives them once it is finished
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().AddTemple(entity, yAngle, built >= 1.0f);
+	}
 	return entity;
 }
 

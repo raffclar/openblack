@@ -1228,9 +1228,12 @@ bool CreatureObjectActionSystem::CanPickUp(entt::entity object) const
 	{
 		return false;
 	}
-	// Of pots and piles, only food can be picked up, to eat
+	// Of pots and piles, only food can be picked up, to eat; of animals, those the animals' own rules allow, as a bird
+	// low over the land
 	return registry.AnyOf<MobileObject, Ball, Villager>(object) ||
-	       (registry.AllOf<Pot>(object) && FoodValueOf(object).has_value());
+	       (registry.AllOf<Pot>(object) && FoodValueOf(object).has_value()) ||
+	       (registry.AllOf<Animal>(object) && Locator::animalSystem::has_value() &&
+	        Locator::animalSystem::value().CanBePickedUpByCreature(object));
 }
 
 bool CreatureObjectActionSystem::CanDestroy(entt::entity target) const

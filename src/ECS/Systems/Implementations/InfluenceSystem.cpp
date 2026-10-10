@@ -24,6 +24,7 @@
 
 #include "3D/LandIslandInterface.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -505,8 +506,8 @@ void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli>
 	const auto pitch = virtual_influence::HumPitchPercent(state);
 	if (!audio.EmitterExists(virtualInfluence.hum))
 	{
-		virtualInfluence.hum =
-		    audio.StartSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_VirtualInfluence_04), {.pitchPercent = pitch});
+		virtualInfluence.hum = audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_VirtualInfluence_04),
+		                                                   {.pitchPercent = pitch});
 	}
 	audio.SetEmitterPitch(virtualInfluence.hum, pitch);
 }
