@@ -17,6 +17,7 @@
 #include <system_error>
 #include <utility>
 
+#include <InspectorDiscovery.h>
 #include <LHVM.h>
 #include <glm/trigonometric.hpp>
 
@@ -27,6 +28,8 @@
 #include "Camera/FightCameraModel.h"
 #include "Camera/TempleCameraModel.h"
 #include "Debug/DebugGuiInterface.h"
+#include "ECS/Components/Transform.h"
+#include "ECS/Registry.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "Editor/EditorEntities.h"
@@ -231,6 +234,22 @@ float GameCamera::GroundHeight(glm::vec2 point) const
 	return editor::LandHeight(point);
 }
 
+std::optional<glm::vec3> GameCamera::EntityPosition(uint32_t id) const
+{
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = static_cast<entt::entity>(id);
+	if (!registry.Valid(entity))
+	{
+		return std::nullopt;
+	}
+	const auto* transform = registry.TryGet<ecs::components::Transform>(entity);
+	return transform != nullptr ? std::optional(transform->position) : std::nullopt;
+}
+
 // The windows
 
 GameGui::GameGui(InputTargetInterface& input)
@@ -247,14 +266,12 @@ std::vector<WindowInfo> GameGui::Windows() const
 		WindowInfo info {.name = std::string(k_Menu),
 		                 .kind = "game",
 		                 .open = menu.IsOpen(),
-		                 .page = std::string(PageName(menu.GetPage())),
+		                 .page = menu.IsAskingToQuit() ? "question" : std::string(PageName(menu.GetPage())),
 		                 .buttons = {}};
-		if (menu.GetPage() == gui::GameMenu::Page::Main)
+		// Every page's buttons, check boxes, sliders and tabs, or the question's answers while it is asked
+		for (const auto& control : menu.GetNamedControls())
 		{
-			for (size_t i = 0; i < gui::GameMenu::k_ButtonCount; ++i)
-			{
-				info.buttons.push_back(Plain(menu.GetButtonLabel(i)));
-			}
+			info.buttons.push_back(Plain(control.name));
 		}
 		windows.push_back(std::move(info));
 	}
@@ -349,21 +366,24 @@ std::string GameGui::Press(std::string_view window, const std::vector<ButtonPath
 		{
 			return "the game's menu isn't open: gui.open it first";
 		}
-		auto& menu = game->GetInterface()->GetMenu();
-		if (menu.GetPage() != gui::GameMenu::Page::Main || path.size() != 1 ||
-		    !std::holds_alternative<std::string>(path.back()))
+		const auto& menu = game->GetInterface()->GetMenu();
+		// A control by its name on the page shown, and which of those of the same name if there are several
+		if (path.empty() || path.size() > 2 || !std::holds_alternative<std::string>(path.back()) ||
+		    (path.size() == 2 && !std::holds_alternative<int32_t>(path.front())))
 		{
-			return "only the main page's buttons are pressed by name; gui.windows lists them";
+			return "press a control of the menu's page by its name, with path [n] for the n-th of that name from 0; "
+			       "gui.windows lists them";
 		}
 		const auto label = Lower(std::get<std::string>(path.back()));
-		for (size_t i = 0; i < gui::GameMenu::k_ButtonCount; ++i)
+		auto which = path.size() == 2 ? std::get<int32_t>(path.front()) : 0;
+		for (const auto& control : menu.GetNamedControls())
 		{
-			if (Lower(Plain(menu.GetButtonLabel(i))) != label)
+			if (Lower(Plain(control.name)) != label || which-- > 0)
 			{
 				continue;
 			}
-			// Clicked in the middle of the button, through the game's input as the player clicks it
-			const auto rect = gui::GameMenu::GetButtonRect(i);
+			// Clicked in the middle of the control, through the game's input as the player clicks it
+			const auto& rect = control.rect;
 			const auto at = game->GetInterface()->DialogToScreen((rect.min + rect.max) / 2);
 			for (const auto& event : {InputEvent {.kind = InputEvent::Kind::PointerTo, .position = at},
 			                          InputEvent {.kind = InputEvent::Kind::ButtonDown, .button = 1},
@@ -376,7 +396,8 @@ std::string GameGui::Press(std::string_view window, const std::vector<ButtonPath
 			}
 			return {};
 		}
-		return "the menu has no button " + std::get<std::string>(path.back());
+		return "the menu's " + std::string(menu.IsAskingToQuit() ? "question" : PageName(menu.GetPage())) + " has no control " +
+		       std::get<std::string>(path.back()) + "; gui.windows lists them";
 	}
 	const auto name = DebugWindowNamed(window);
 	if (!name.has_value())
@@ -593,7 +614,7 @@ std::string GameLevels::Current() const
 
 // Pictures of the screen
 
-std::string GameScreenshots::Capture(const std::filesystem::path& path)
+std::string GameScreenshots::Capture(const std::filesystem::path& path, bool hideDebugGui)
 {
 	auto* game = Game::Instance();
 	if (game == nullptr)
@@ -609,13 +630,12 @@ std::string GameScreenshots::Capture(const std::filesystem::path& path)
 			return "can't make the folder " + path.parent_path().generic_string() + ": " + error.message();
 		}
 	}
-	game->RequestScreenshot(path);
+	game->RequestScreenshot(path, hideDebugGui);
 	return {};
 }
 
 std::filesystem::path GameScreenshots::Directory() const
 {
-	std::error_code error;
-	const auto temp = std::filesystem::temp_directory_path(error);
-	return (error ? std::filesystem::current_path(error) : temp) / "openblack-inspector";
+	// The game's own folder, so that two games never write the same file; it goes when the game does
+	return discovery::ShotsFolder(discovery::DefaultFolder(), discovery::CurrentProcessId());
 }

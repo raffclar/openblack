@@ -45,3 +45,6 @@ openblack.log
 screenshot.png
 compile_commands.json
 .cache
+
+# Python bytecode left by running the tools and their tests
+__pycache__/

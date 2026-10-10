@@ -122,6 +122,7 @@ target_link_libraries(test_pack_audio_index PRIVATE pack)
 openblack_setup_and_add_test(test_game_random test_game_random.cpp)
 openblack_setup_and_add_test(test_crash_report test_crash_report.cpp)
 openblack_setup_and_add_test(test_game_clock test_game_clock.cpp)
+openblack_setup_and_add_test(test_run_seed test_run_seed.cpp)
 openblack_setup_and_add_test(test_key_bindings input/test_key_bindings.cpp)
 openblack_setup_and_add_test(test_cursor_freeze input/test_cursor_freeze.cpp)
 openblack_setup_and_add_test(test_camera_drag camera/test_camera_drag.cpp)
@@ -442,6 +443,13 @@ if (Python3_Interpreter_FOUND)
     NAME test_inspector_mcp
     COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_SOURCE_DIR}/tools/inspector/test_openblack_inspector_mcp.py
+  )
+  # Every component's fields are registered: the generated file is up to date with src/ECS/Components
+  add_test(
+    NAME test_inspector_component_fields
+    COMMAND
+      ${Python3_EXECUTABLE}
+      ${CMAKE_SOURCE_DIR}/tools/inspector/generate_component_fields.py --check
   )
 endif ()
 # The game's side of the inspector, built only with it

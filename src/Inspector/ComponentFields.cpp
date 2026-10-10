@@ -91,6 +91,7 @@
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SkinOverride.h"
+#include "ECS/Components/Sky.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -116,6 +117,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/VillagerPose.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
 
@@ -854,6 +856,29 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::SkinOverride>(context)
 	    .Field<&components::SkinOverride::texture>("texture")
 	    .Field<&components::SkinOverride::uvOffset>("uvOffset");
+	Reflect<components::SkyDome>(context)
+	    .Field<&components::SkyDome::meshId>("meshId")
+	    .Field<&components::SkyDome::textureId>("textureId")
+	    .Field<&components::SkyDome::follow>("follow")
+	    .Field<&components::SkyDome::frameRows>("frameRows")
+	    .Field<&components::SkyDome::overcast>("overcast");
+	Reflect<components::DayNightCycle>(context).Field<&components::DayNightCycle::clock>("clock");
+	Reflect<components::CelestialBody>(context)
+	    .Field<&components::CelestialBody::meshId>("meshId")
+	    .Field<&components::CelestialBody::textureId>("textureId")
+	    .Field<&components::CelestialBody::alphaTextureId>("alphaTextureId");
+	Reflect<components::CelestialGlow>(context)
+	    .Field<&components::CelestialGlow::textureId>("textureId")
+	    .Field<&components::CelestialGlow::alphaTextureId>("alphaTextureId");
+	Reflect<components::Sun>(context)
+	    .Field<&components::Sun::placement>("placement")
+	    .Field<&components::Sun::colour>("colour")
+	    .Field<&components::Sun::strength>("strength");
+	Reflect<components::Moon>(context)
+	    .Field<&components::Moon::phase>("phase")
+	    .Field<&components::Moon::placement>("placement")
+	    .Field<&components::Moon::colour>("colour")
+	    .Field<&components::Moon::strength>("strength");
 	Reflect<components::SoundTag>(context)
 	    .Field<&components::SoundTag::sound>("sound")
 	    .Field<&components::SoundTag::offset>("offset")
@@ -1075,6 +1100,18 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::VillagerPose::clip>("clip")
 	    .Field<&components::VillagerPose::place>("place")
 	    .Field<&components::VillagerPose::bones>("bones");
+	Reflect<components::Vortex>(context)
+	    .Field<&components::Vortex::type>("type")
+	    .Field<&components::Vortex::state>("state")
+	    .Field<&components::Vortex::stateStartTurn>("stateStartTurn")
+	    .Field<&components::Vortex::centre>("centre")
+	    .Field<&components::Vortex::levelApplied>("levelApplied")
+	    .Field<&components::Vortex::groundHeights>("groundHeights")
+	    .Field<&components::Vortex::groundAverage>("groundAverage")
+	    .Field<&components::Vortex::beforeLandEffect>("beforeLandEffect")
+	    .Field<&components::Vortex::afterLandEffect>("afterLandEffect")
+	    .Field<&components::Vortex::objectMoverEffect>("objectMoverEffect")
+	    .Field<&components::Vortex::lightMapEffect>("lightMapEffect");
 	Reflect<components::WallHugObjectReference>(context)
 	    .Field<&components::WallHugObjectReference::stepsAway>("stepsAway")
 	    .Field<&components::WallHugObjectReference::entity>("entity")
