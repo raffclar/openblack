@@ -36,6 +36,7 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/DestructionGhost.h"
 #include "ECS/Components/FallingRoots.h"
@@ -92,6 +93,7 @@
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptAnimation.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/ScriptFlock.h"
 #include "ECS/Components/SkinOverride.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/SoundTag.h"
@@ -501,6 +503,22 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureSpells::smallestSize>("smallestSize")
 	    .Field<&components::CreatureSpells::largestSize>("largestSize")
 	    .Field<&components::CreatureSpells::cheat>("cheat");
+	Reflect<components::Dance>(context)
+	    .Field<&components::Dance::type>("type")
+	    .Field<&components::Dance::place>("place")
+	    .Field<&components::Dance::centre>("centre")
+	    .Field<&components::Dance::dancing>("dancing")
+	    .Field<&components::Dance::durationTurns>("durationTurns")
+	    .Field<&components::Dance::startTurn>("startTurn")
+	    .Field<&components::Dance::waiting>("waiting")
+	    .Field<&components::Dance::waitStartTurn>("waitStartTurn")
+	    .Field<&components::Dance::autostart>("autostart")
+	    .Field<&components::Dance::madeByScript>("madeByScript")
+	    .Field<&components::Dance::groups>("groups")
+	    .Field<&components::Dance::beat>("beat")
+	    .Field<&components::Dance::loops>("loops")
+	    .Field<&components::Dance::file>("file");
+	Reflect<components::Dancer>(context).Field<&components::Dancer::dance>("dance").Field<&components::Dancer::group>("group");
 	Reflect<components::DeadTree>(context)
 	    .Field<&components::DeadTree::type>("type")
 	    .Field<&components::DeadTree::woodMultiplier>("woodMultiplier")
@@ -864,6 +882,15 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::InScript> {context};
 	Reflect<components::ScriptControlled> {context};
 	Reflect<components::ScriptMarker> {context};
+	Reflect<components::ScriptFlock>(context)
+	    .Field<&components::ScriptFlock::place>("place")
+	    .Field<&components::ScriptFlock::members>("members")
+	    .Field<&components::ScriptFlock::domainRadius>("domainRadius")
+	    .Field<&components::ScriptFlock::flockDistance>("flockDistance")
+	    .Field<&components::ScriptFlock::calm>("calm");
+	Reflect<components::ScriptFlockMember>(context)
+	    .Field<&components::ScriptFlockMember::flock>("flock")
+	    .Field<&components::ScriptFlockMember::order>("order");
 	Reflect<components::SkinOverride>(context)
 	    .Field<&components::SkinOverride::texture>("texture")
 	    .Field<&components::SkinOverride::uvOffset>("uvOffset");
@@ -1114,7 +1141,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::WalkPath>(context)
 	    .Field<&components::WalkPath::number>("number")
 	    .Field<&components::WalkPath::track>("track")
-	    .Field<&components::WalkPath::walk>("walk");
+	    .Field<&components::WalkPath::walk>("walk")
+	    .Field<&components::WalkPath::living>("living")
+	    .Field<&components::WalkPath::speed>("speed");
 	Reflect<components::WallHugObjectReference>(context)
 	    .Field<&components::WallHugObjectReference::stepsAway>("stepsAway")
 	    .Field<&components::WallHugObjectReference::entity>("entity")

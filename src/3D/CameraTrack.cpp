@@ -194,3 +194,55 @@ std::optional<glm::vec2> camera_track::WalkTurn(Walk& walk, const edt::EDTTrack&
 	// On the land's grid
 	return glm::vec2(map_coords::Quantise(point.x), map_coords::Quantise(point.z));
 }
+
+float camera_track::WayLength(const edt::EDTWay& way)
+{
+	constexpr float k_SecondsPerMillisecond = 0.001f;
+	// The game sums at double precision and stores the sum as a float after each segment
+	float length = 0.0f;
+	for (std::size_t i = 0; i + 1 < way.times.size(); ++i)
+	{
+		if (way.times[i] == way.times[i + 1])
+		{
+			continue;
+		}
+		const double start = static_cast<double>(way.times[i]) * k_SecondsPerMillisecond;
+		const double span = static_cast<double>(way.times[i + 1]) * k_SecondsPerMillisecond - start;
+		const double change = (static_cast<double>(way.speeds[i + 1]) - way.speeds[i]) / span;
+		length = static_cast<float>((change * 0.5 + (way.speeds[i] - change * start)) * span + length);
+	}
+	return length == 0.0f ? 0.1f : length;
+}
+
+float camera_track::LivingStep(const edt::EDTTrack& track, int32_t wholeSpeed, bool checked)
+{
+	constexpr double k_WholePerMetre = 655.0;
+	constexpr double k_TurnSeconds = static_cast<double>(0.1f);
+	constexpr double k_ShortestTurns = static_cast<double>(0.01f);
+	const double metresPerTurn = static_cast<double>(wholeSpeed) / k_WholePerMetre * k_TurnSeconds;
+	const double length = WayLength(track.focus);
+	if (!checked)
+	{
+		return static_cast<float>(static_cast<double>(track.position.duration) / (length / metresPerTurn));
+	}
+	// Here the game keeps the speed as a float first
+	const auto stored = static_cast<double>(static_cast<float>(metresPerTurn));
+	const double turns = stored != 0.0 ? length / stored : 0.0;
+	return turns > k_ShortestTurns ? static_cast<float>(static_cast<double>(track.position.duration) / turns) : 0.0f;
+}
+
+std::optional<glm::vec2> camera_track::LivingWalkTurn(Walk& walk, const edt::EDTTrack& track)
+{
+	const auto duration = track.position.duration;
+	auto sample =
+	    walk.forward ? static_cast<int32_t>(walk.current) : static_cast<int32_t>(static_cast<float>(duration) - walk.current);
+	sample = std::clamp(sample, 0, duration);
+	static_cast<void>(walk.runner.Get(track.position, sample));
+	const auto point = Bezier(track.focus, walk.runner.GetSegment(), walk.runner.GetParameter());
+	if (!(Percentage(walk, track) < walk.to))
+	{
+		return std::nullopt;
+	}
+	walk.current = std::min(walk.current + walk.step, static_cast<float>(duration));
+	return glm::vec2(point.x, point.z);
+}

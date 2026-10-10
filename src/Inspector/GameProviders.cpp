@@ -43,6 +43,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureSkin.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/LivingAction.h"
@@ -50,6 +51,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/ScriptFlock.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Temple.h"
@@ -85,6 +87,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
@@ -230,6 +233,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"helpSpeechSystem", "view.script_control"},
     LocatorCoverage {"highDetailSystem", "view.script_control"},
     LocatorCoverage {"walkPathSystem", "living.walk_paths"},
+    LocatorCoverage {"danceSystem", "living.dances"},
     LocatorCoverage {"whaleSystem", "living.whales"},
     LocatorCoverage {"soundTagSystem", "living.sound_tags"},
     LocatorCoverage {"rainSystem", "land.precipitation"},
@@ -794,6 +798,66 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                  }
 		                  return items;
 	                  }));
+	provider->Add(Query("dances", "The dances: what they are danced about, whether dancing, the beat, and each group's dancers",
+	                    {}, ResultKind::List),
+	              Serve<Locator::danceSystem>(
+	                  "the dances", [](const ecs::systems::DanceSystemInterface& /*dances*/, const QueryContext&) {
+		                  Json items = Json::array();
+		                  if (const auto* registry = Registry(); registry != nullptr)
+		                  {
+			                  registry->Each<const Dance>([&items, registry](entt::entity entity, const Dance& dance) {
+				                  auto item = Listed(*registry, entity);
+				                  item["type"] = dance.type;
+				                  item["centre"] = ToId(dance.centre);
+				                  item["dancing"] = dance.dancing;
+				                  item["beat"] = dance.beat;
+				                  item["start_turn"] = dance.startTurn;
+				                  item["duration_turns"] = dance.durationTurns;
+				                  item["dancers"] = dance.groups.dancers;
+				                  item["round"] = dance.groups.round;
+				                  Json groups = Json::array();
+				                  for (const auto& group : dance.groups.all)
+				                  {
+					                  Json dancers = Json::array();
+					                  for (const auto dancer : group.dancers)
+					                  {
+						                  dancers.push_back(ToId(dancer));
+					                  }
+					                  groups.push_back({{"name", group.name},
+					                                    {"limited", group.limited},
+					                                    {"quota", group.quota},
+					                                    {"weight", group.weight},
+					                                    {"sexes", group.sexes},
+					                                    {"dancers", std::move(dancers)}});
+				                  }
+				                  item["groups"] = std::move(groups);
+				                  items.push_back(std::move(item));
+			                  });
+		                  }
+		                  return items;
+	                  }));
+	provider->Add(Query("flocks",
+	                    "The scripts' flocks: their place, their domain and flock distances, and their members "
+	                    "from the first to the leader",
+	                    {}, ResultKind::List),
+	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
+		              Json items = Json::array();
+		              registry.Each<const ScriptFlock>([&items](entt::entity entity, const ScriptFlock& flock) {
+			              Json members = Json::array();
+			              for (const auto member : flock.members)
+			              {
+				              members.push_back(ToId(member));
+			              }
+			              const auto place = map_coords::ToMetres(flock.place);
+			              items.push_back({{"id", ToId(entity)},
+			                               {"place", {place.x, place.y}},
+			                               {"domain_radius", flock.domainRadius},
+			                               {"flock_distance", flock.flockDistance},
+			                               {"calm", flock.calm},
+			                               {"members", std::move(members)}});
+		              });
+		              return items;
+	              }));
 	provider->Add(Query("fireflies", "How many fireflies there are"),
 	              Serve<Locator::fireflySystem>(
 	                  "the fireflies", [](const ecs::systems::FireflySystemInterface& fireflies, const QueryContext& /*c*/) {

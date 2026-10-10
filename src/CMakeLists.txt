@@ -122,6 +122,7 @@ target_link_libraries(
           l3d
           cam
           edt
+          dance
           pack
           lnd
           anm

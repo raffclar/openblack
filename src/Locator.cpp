@@ -70,6 +70,7 @@
 #if defined(OPENBLACK_INSPECTOR)
 #include "ECS/Systems/Implementations/InspectorSystem.h"
 #endif
+#include "ECS/Systems/Implementations/DanceSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
 #include "ECS/Systems/Implementations/MagicShieldSystem.h"
@@ -150,6 +151,7 @@ using openblack::ecs::systems::CreatureModeSystem;
 using openblack::ecs::systems::CreatureObjectActionSystem;
 using openblack::ecs::systems::CreaturePhysiologySystem;
 using openblack::ecs::systems::CreatureSkinSystem;
+using openblack::ecs::systems::DanceSystem;
 using openblack::ecs::systems::DialogueControlSystem;
 using openblack::ecs::systems::DynamicsSystem;
 using openblack::ecs::systems::EditorSystem;
@@ -292,6 +294,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::helpSpeechSystem::emplace<HelpSpeechSystem>();
 	Locator::highDetailSystem::emplace<HighDetailSystem>();
 	Locator::walkPathSystem::emplace<WalkPathSystem>();
+	Locator::danceSystem::emplace<DanceSystem>();
 	Locator::whaleSystem::emplace<WhaleSystem>();
 	Locator::soundTagSystem::emplace<SoundTagSystem>();
 	Locator::rainSystem::emplace<RainSystem>();
@@ -418,6 +421,7 @@ void openblack::ShutDownServices()
 	Locator::helpSpeechSystem::reset();
 	Locator::highDetailSystem::reset();
 	Locator::walkPathSystem::reset();
+	Locator::danceSystem::reset();
 	Locator::whaleSystem::reset();
 	Locator::influenceSystem::reset();
 	Locator::chimneySmokeSystem::reset();

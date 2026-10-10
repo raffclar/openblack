@@ -184,3 +184,32 @@ TEST(CameraTrack, ABackwardWalkStartsWhereTheRunnerWas)
 	EXPECT_NEAR(WalkTurn(walk, track)->y, 18.0f, k_Tolerance);
 	EXPECT_NEAR(WalkTurn(walk, track)->y, 16.0f, k_Tolerance);
 }
+
+TEST(CameraTrack, AWaysLengthComesFromItsTimesAndSpeeds)
+{
+	edt::EDTWay way;
+	way.times = {0.0f, 1000.0f, 1000.0f};
+	way.speeds = {2.0f, 4.0f, 9.0f};
+	// One second from 2 to 4 metres a second: the game's sum gives (2 / 2 + 2) x 1; a segment taking no time adds nothing
+	EXPECT_FLOAT_EQ(WayLength(way), 3.0f);
+	// Nothing to cover counts as a tenth
+	way.speeds = {0.0f, 0.0f, 0.0f};
+	EXPECT_FLOAT_EQ(WayLength(way), 0.1f);
+}
+
+TEST(CameraTrack, ALivingWalksATrackAtItsOwnSpeed)
+{
+	edt::EDTFile file;
+	ASSERT_EQ(file.Open(File()), edt::EDTResult::Success);
+	const auto& track = file.GetTracks().at(7);
+	const float length = WayLength(track.focus);
+	// 655 whole units a turn is a tenth of a metre: the whole look-at way in length / 0.1 turns
+	const float step = LivingStep(track, 655, false);
+	EXPECT_NEAR(step, static_cast<float>(track.position.duration) * 0.1f / length, 1e-3f);
+	// Standing still it doesn't go on once the speed has changed
+	EXPECT_EQ(LivingStep(track, 0, true), 0.0f);
+	auto walk = StartWalk(track, true, 0.0f, 1.0f);
+	walk.step = step;
+	ASSERT_TRUE(LivingWalkTurn(walk, track).has_value());
+	EXPECT_FLOAT_EQ(walk.current, step);
+}

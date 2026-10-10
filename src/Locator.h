@@ -127,6 +127,7 @@ class DialogueControlSystemInterface;
 class HelpSpeechSystemInterface;
 class HighDetailSystemInterface;
 class WalkPathSystemInterface;
+class DanceSystemInterface;
 class WhaleSystemInterface;
 class SoundTagSystemInterface;
 class RainSystemInterface;
@@ -248,6 +249,7 @@ struct Locator
 	using helpSpeechSystem = entt::locator<ecs::systems::HelpSpeechSystemInterface>;
 	using highDetailSystem = entt::locator<ecs::systems::HighDetailSystemInterface>;
 	using walkPathSystem = entt::locator<ecs::systems::WalkPathSystemInterface>;
+	using danceSystem = entt::locator<ecs::systems::DanceSystemInterface>;
 	using whaleSystem = entt::locator<ecs::systems::WhaleSystemInterface>;
 	using soundTagSystem = entt::locator<ecs::systems::SoundTagSystemInterface>;
 	using rainSystem = entt::locator<ecs::systems::RainSystemInterface>;

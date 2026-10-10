@@ -51,12 +51,14 @@
 #include "Camera/Camera.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/GameRandom.h"
 #include "Creature/LeashRules.h"
 #include "ECS/Archetypes/BallArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Archetypes/WhaleArchetype.h"
+#include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
@@ -64,6 +66,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandClicked.h"
@@ -76,6 +79,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/ScriptFlock.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
@@ -84,15 +88,19 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Whale.h"
 #include "ECS/CreatureRemoval.h"
+#include "ECS/DanceRules.h"
+#include "ECS/Dances.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
+#include "ECS/ScriptFlocks.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
+#include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
@@ -100,6 +108,8 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
+#include "ECS/Systems/Implementations/VillagerDance.h"
+#include "ECS/Systems/Implementations/VillagerScript.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -110,7 +120,9 @@
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/TownPlaythings.h"
@@ -1165,7 +1177,24 @@ void GetPosition() // 023 GET_POSITION
 	{
 		auto& registry = Locator::entitiesRegistry::value();
 		auto* transform = registry.TryGet<Transform>(static_cast<entt::entity>(objId));
-		if (const auto* whale = registry.TryGet<const ecs::components::Whale>(static_cast<entt::entity>(objId)))
+		const auto object = static_cast<entt::entity>(objId);
+		if (ecs::script_flocks::IsFlock(registry, object))
+		{
+			// Where its leader is, or its own place on the ground when it has nobody
+			const auto leader = ecs::script_flocks::Leader(registry, object);
+			const auto* leaderTransform = leader != entt::null ? registry.TryGet<Transform>(leader) : nullptr;
+			if (leaderTransform != nullptr)
+			{
+				position = leaderTransform->position;
+			}
+			else
+			{
+				const auto& place = registry.Get<const ecs::components::ScriptFlock>(object).place;
+				const auto xz = map_coords::ToMetres(place);
+				position = {xz.x, Locator::terrainSystem::value().GetHeightAt(xz) + place.altitude, xz.y};
+			}
+		}
+		else if (const auto* whale = registry.TryGet<const ecs::components::Whale>(static_cast<entt::entity>(objId)))
 		{
 			// Where it is this turn, not where it is drawn on the way there
 			position = whale->position;
@@ -1422,6 +1451,52 @@ void SetWidescreen() // 032 SET_WIDESCREEN
 	}
 }
 
+/// The villagers of a town in the order the scripts look through them: each building's people, the newest building
+/// first and each building's newest person first, then the homeless, the newest first
+static std::vector<entt::entity> TownVillagersInOrder(const ecs::Registry& registry, entt::entity town)
+{
+	std::vector<entt::entity> villagers;
+	const auto* data = registry.TryGet<const ecs::components::Town>(town);
+	if (data == nullptr)
+	{
+		return villagers;
+	}
+	for (const auto abode : data->abodes)
+	{
+		if (const auto* building = registry.Valid(abode) ? registry.TryGet<const ecs::components::Abode>(abode) : nullptr)
+		{
+			villagers.insert(villagers.end(), building->inhabitants.begin(), building->inhabitants.end());
+		}
+	}
+	villagers.insert(villagers.end(), data->homelessVillagers.begin(), data->homelessVillagers.end());
+	return villagers;
+}
+
+/// Whether a container a script can look in: a town, a flock or a dance
+static bool IsScriptContainer(const ecs::Registry& registry, entt::entity thing)
+{
+	return registry.Valid(thing) && (registry.AllOf<ecs::components::Town>(thing) ||
+	                                 ecs::script_flocks::IsFlock(registry, thing) || ecs::dances::IsDance(registry, thing));
+}
+
+/// The things in a script container, in the order the scripts look through them
+static std::vector<entt::entity> ContainerMembers(const ecs::Registry& registry, entt::entity container)
+{
+	if (ecs::script_flocks::IsFlock(registry, container))
+	{
+		return registry.Get<const ecs::components::ScriptFlock>(container).members;
+	}
+	if (registry.AllOf<ecs::components::Town>(container))
+	{
+		return TownVillagersInOrder(registry, container);
+	}
+	if (ecs::dances::IsDance(registry, container))
+	{
+		return ecs::dances::Dancers(registry, container);
+	}
+	return {};
+}
+
 void MoveGameThing() // 033 MOVE_GAME_THING
 {
 	// How near a creature has to come; others go to the point itself
@@ -1443,7 +1518,14 @@ void MoveGameThing() // 033 MOVE_GAME_THING
 		}
 		return;
 	}
-	// TODO(opening): creatures, flocks, the weather, computer players and other things
+	if (ecs::script_flocks::IsFlock(Locator::entitiesRegistry::value(), object))
+	{
+		// Its place moves, and the goal of its leader, who isn't sent there
+		ecs::script_flocks::MoveTo(Locator::entitiesRegistry::value(), object,
+		                           map_coords::FromMetres({position.x, position.z}));
+		return;
+	}
+	// TODO(opening): creatures, the weather, computer players and other things
 	NotImplemented();
 }
 
@@ -1462,7 +1544,19 @@ void SetFocus() // 034 SET_FOCUS
 		Locator::livingActionSystem::value().VillagerFace(object, glm::vec2(position.x, position.z));
 		return;
 	}
-	// TODO(opening): other objects, creatures and groups of things
+	if (IsScriptContainer(Locator::entitiesRegistry::value(), object))
+	{
+		// Each of its villagers turns to face the point
+		for (const auto member : ContainerMembers(Locator::entitiesRegistry::value(), object))
+		{
+			if (IsDirectableVillager(member))
+			{
+				Locator::livingActionSystem::value().VillagerFace(member, glm::vec2(position.x, position.z));
+			}
+		}
+		return;
+	}
+	// TODO(opening): other objects and creatures
 	NotImplemented();
 }
 
@@ -1486,55 +1580,464 @@ void HasCameraArrived() // 035 HAS_CAMERA_ARRIVED
 	          script_camera::k_ArrivedDistanceSquared);
 }
 
+/// A villager's town: it leaves its old town's homeless, then joins the new town
+static void MoveVillagerToTown(entt::entity villager, entt::entity town)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& person = registry.Get<ecs::components::Villager>(villager);
+	if (auto* old = registry.Valid(person.town) ? registry.TryGet<ecs::components::Town>(person.town) : nullptr)
+	{
+		std::erase(old->homelessVillagers, villager);
+	}
+	static_cast<void>(Locator::townSystem::value().AddVillagerToTown(town, villager));
+}
+
+/// A living a script puts in a flock keeps up with it from then on
+static void SetFlockState(entt::entity living)
+{
+	if (IsDirectableVillager(living))
+	{
+		Locator::livingActionSystem::value().VillagerSetScriptState(living, VillagerStates::MoveInFlock);
+	}
+}
+
+/// Whether a thing is a living a flock can take
+static bool IsFlockLiving(const ecs::Registry& registry, entt::entity thing)
+{
+	return registry.Valid(thing) && registry.AnyOf<ecs::components::Villager>(thing);
+}
+
 void FlockCreate() // 036 FLOCK_CREATE
 {
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	const auto position = PopVec();
+	auto& registry = Locator::entitiesRegistry::value();
+	// Nobody owns a script's flock: it belongs to the neutral player
+	const auto flock = ecs::script_flocks::Create(registry, map_coords::FromMetres({position.x, position.z}));
+	RegisterCreated(flock);
+	Pusho(static_cast<uint32_t>(flock));
+}
+
+/// A living or a flock put in a flock, or two livings made a flock together
+static void FlockAttachToFlock(entt::entity object, entt::entity target, bool asLeader)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& scripts = Locator::scriptObjects::value();
+	const bool objectFlock = ecs::script_flocks::IsFlock(registry, object);
+	const bool targetFlock = ecs::script_flocks::IsFlock(registry, target);
+	if (objectFlock && targetFlock)
+	{
+		// The flock takes in every member of the other, which goes once it is empty
+		while (ecs::script_flocks::Size(registry, object) > 0)
+		{
+			ecs::script_flocks::AddLiving(registry, target,
+			                              registry.Get<const ecs::components::ScriptFlock>(object).members.front());
+		}
+		Pusho(static_cast<uint32_t>(target));
+		return;
+	}
+	if (objectFlock || targetFlock)
+	{
+		const auto flock = targetFlock ? target : object;
+		const auto living = targetFlock ? object : target;
+		if (!IsFlockLiving(registry, living))
+		{
+			ScriptMessage("JONTY-Trying to add non living to flock");
+			ScriptMessage("Thing not added to Flock");
+			Pusho(0);
+			return;
+		}
+		if (asLeader)
+		{
+			ecs::script_flocks::AddLeader(registry, flock, living);
+		}
+		else if (!ecs::script_flocks::AddLiving(registry, flock, living))
+		{
+			ScriptMessage("Living already in Flock");
+		}
+		SetFlockState(living);
+		Pusho(static_cast<uint32_t>(flock));
+		scripts.AddReference(living);
+		return;
+	}
+	if (!IsFlockLiving(registry, object) || !IsFlockLiving(registry, target))
+	{
+		ScriptMessage("JONTY- Something is seriously wrong with my code");
+		ScriptMessage("Thing not added to Flock");
+		Pusho(0);
+		return;
+	}
+	// Two livings make a new flock where the second stands
+	const auto flock = ecs::script_flocks::Create(registry, ecs::script_flocks::PositionOf(registry, target));
+	if (!scripts.Register(flock, true))
+	{
+		ScriptMessage("Flock ID failed");
+		ecs::script_flocks::Destroy(registry, flock);
+		ScriptMessage("Thing not added to Flock");
+		Pusho(0);
+		return;
+	}
+	scripts.AddReference(target);
+	Pusho(static_cast<uint32_t>(flock));
+	// The leader keeps what it is doing; the others keep up with the flock
+	if (asLeader)
+	{
+		ecs::script_flocks::AddLeader(registry, flock, object);
+		scripts.AddReference(object);
+	}
+	else if (ecs::script_flocks::AddLiving(registry, flock, object))
+	{
+		SetFlockState(object);
+		scripts.AddReference(object);
+	}
+	else
+	{
+		ScriptMessage("Living already in Flock");
+	}
+	if (!ecs::script_flocks::AddLiving(registry, flock, target))
+	{
+		ScriptMessage("Living already in Flock");
+		return;
+	}
+	SetFlockState(target);
+	scripts.AddReference(target);
+}
+
+/// A villager, or each villager of a container, joins a town
+static void FlockAttachToTown(entt::entity object, entt::entity town)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (IsScriptContainer(registry, object))
+	{
+		for (const auto member : ContainerMembers(registry, object))
+		{
+			if (registry.Valid(member) && registry.AllOf<ecs::components::Villager>(member))
+			{
+				MoveVillagerToTown(member, town);
+			}
+		}
+		Pusho(static_cast<uint32_t>(town));
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Villager>(object))
+	{
+		// TODO(opening): a spell dispenser given to a town is the town's from then on
+		ScriptMessage("JONTY-Trying to add non villager to town");
+		Pusho(0);
+		return;
+	}
+	// It stays in any flock it is in, doing what it was doing
+	MoveVillagerToTown(object, town);
+	Pusho(static_cast<uint32_t>(town));
+}
+
+/// A living joins a dance, dancing in the group whose turn it is that takes it, or standing in the dance in none
+static void JoinDance(entt::entity living, entt::entity dance, bool asCentre)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (asCentre)
+	{
+		registry.Get<ecs::components::Dance>(dance).centre = living;
+	}
+	// One already dancing leaves its dance first
+	ecs::dances::RemoveDancer(registry, living);
+	const auto sex =
+	    registry.AllOf<ecs::components::Villager>(living) ? ecs::villager_dance::DanceSex(living) : ecs::dance_rules::k_AnySex;
+	static_cast<void>(ecs::dances::AddDancer(registry, dance, living, sex));
+	if (IsDirectableVillager(living))
+	{
+		Locator::livingActionSystem::value().VillagerSetScriptState(living, VillagerStates::InDance);
+	}
+}
+
+/// A living, or each villager of a container, joins a dance
+static void FlockAttachToDance(entt::entity object, entt::entity dance, bool asCentre)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& scripts = Locator::scriptObjects::value();
+	if (IsScriptContainer(registry, object))
+	{
+		for (const auto member : ContainerMembers(registry, object))
+		{
+			if (IsFlockLiving(registry, member))
+			{
+				registry.AssignOrReplace<ecs::components::ScriptControlled>(member);
+				JoinDance(member, dance, asCentre);
+				scripts.AddReference(member);
+			}
+		}
+		Pusho(static_cast<uint32_t>(dance));
+		return;
+	}
+	if (!IsFlockLiving(registry, object))
+	{
+		ScriptMessage("JONTY-Trying to add non living to dance");
+		Pusho(0);
+		return;
+	}
+	JoinDance(object, dance, asCentre);
+	scripts.AddReference(object);
+	Pusho(static_cast<uint32_t>(dance));
 }
 
 void FlockAttach() // 037 FLOCK_ATTACH
 {
-	[[maybe_unused]] const auto asLeader = static_cast<bool>(Pop().intVal);
-	[[maybe_unused]] const auto flock = PopObject();
-	[[maybe_unused]] const auto obj = PopObject();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto asLeader = Pop().intVal != 0;
+	const auto target = PopObject();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("Id deleted to attach");
+		Pusho(0);
+		return;
+	}
+	if (target == entt::null || !registry.Valid(target))
+	{
+		ScriptMessage("Id deleted to attach to");
+		Pusho(0);
+		return;
+	}
+	if (ecs::script_flocks::IsFlock(registry, target) || ecs::script_flocks::IsFlock(registry, object))
+	{
+		FlockAttachToFlock(object, target, asLeader);
+		return;
+	}
+	if (ecs::dances::IsDance(registry, target))
+	{
+		registry.AssignOrReplace<ecs::components::ScriptControlled>(target);
+		FlockAttachToDance(object, target, asLeader);
+		return;
+	}
+	if (registry.AllOf<ecs::components::Town>(target))
+	{
+		FlockAttachToTown(object, target);
+		return;
+	}
+	ScriptMessage("Thing not added to id");
 	Pusho(0);
+}
+
+/// A living leaves a flock, keeping its state, the flock staying when it is left empty
+static void DetachFromFlock(uint32_t objectId, entt::entity object, entt::entity flock)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& scripts = Locator::scriptObjects::value();
+	if (objectId != 0)
+	{
+		if (!IsFlockLiving(registry, object))
+		{
+			ScriptMessage("Trying to remove non living from flock");
+			ScriptMessage("Thing not removed from Flock");
+			Pusho(0);
+			return;
+		}
+		// TODO(opening): an animal is split off into a flock of its own
+		ecs::script_flocks::Remove(registry, object, false);
+		scripts.RemoveReference(object);
+		Pusho(objectId);
+		return;
+	}
+	// A member at random, not the leader when there are others
+	const auto member = ecs::script_flocks::RandomMember(registry, flock, ecs::script_flocks::Leader(registry, flock),
+	                                                     [](uint32_t n) { return Locator::gameRandom::value().GameRand(n); });
+	if (member == entt::null)
+	{
+		ScriptMessage("Thing not found from Flock");
+		ScriptMessage("Thing not removed from Flock");
+		Pusho(0);
+		return;
+	}
+	ecs::script_flocks::Remove(registry, member, false);
+	scripts.Register(member, false);
+	scripts.RemoveReference(member);
+	Pusho(static_cast<uint32_t>(member));
+}
+
+/// A dancer leaves a dance: the one given, or with none given the first of its groups', passing over what the dance is
+/// danced about while others dance
+static void DetachFromDance(uint32_t objectId, entt::entity object, entt::entity dance)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& scripts = Locator::scriptObjects::value();
+	if (objectId != 0)
+	{
+		if (!IsFlockLiving(registry, object))
+		{
+			ScriptMessage("Trying to remove non living from dance");
+			ScriptMessage("Thing not removed from Dance");
+			Pusho(0);
+			return;
+		}
+		ecs::dances::RemoveDancer(registry, object);
+		scripts.RemoveReference(object);
+		Pusho(objectId);
+		return;
+	}
+	const auto& data = registry.Get<const ecs::components::Dance>(dance);
+	const auto exclude = data.groups.dancers == 1 ? entt::null : data.centre;
+	const auto dancer = ecs::dances::FirstDancer(registry, dance, exclude);
+	if (dancer == entt::null)
+	{
+		ScriptMessage("Thing not removed from Dance");
+		Pusho(0);
+		return;
+	}
+	ecs::dances::RemoveDancer(registry, dancer);
+	scripts.Register(dancer, false);
+	Pusho(static_cast<uint32_t>(dancer));
+	scripts.RemoveReference(dancer);
 }
 
 void FlockDetach() // 038 FLOCK_DETACH
 {
-	// const auto flock = Pop().uintVal;
-	// const auto obj = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto container = PopObject();
+	const auto objectId = Pop().uintVal;
+	auto& registry = Locator::entitiesRegistry::value();
+	if (container == entt::null || !registry.Valid(container))
+	{
+		// The game pushes nothing here
+		ScriptMessage("From thing dead!");
+		return;
+	}
+	const auto object = objectId != 0 ? Locator::scriptObjects::value().Fetch(static_cast<entt::entity>(objectId)) : entt::null;
+	if (ecs::script_flocks::IsFlock(registry, container))
+	{
+		DetachFromFlock(objectId, object, container);
+		return;
+	}
+	if (registry.AllOf<ecs::components::Town>(container))
+	{
+		const auto* person = registry.Valid(object) ? registry.TryGet<const ecs::components::Villager>(object) : nullptr;
+		if (person != nullptr && person->town == container)
+		{
+			// TODO(opening): the villager leaves the town altogether
+			NotImplemented();
+			Pusho(0);
+			return;
+		}
+		if (person != nullptr)
+		{
+			ScriptMessage("Wrong Town");
+		}
+		ScriptMessage("Thing not removed from Town");
+		Pusho(0);
+		return;
+	}
+	if (IsFlockLiving(registry, container))
+	{
+		const auto flock = ecs::script_flocks::FlockOf(registry, container);
+		if (flock == entt::null)
+		{
+			ScriptMessage("No flock for living so what the...");
+			Pusho(0);
+			return;
+		}
+		DetachFromFlock(objectId, object, flock);
+		return;
+	}
+	if (ecs::dances::IsDance(registry, container))
+	{
+		DetachFromDance(objectId, object, container);
+		return;
+	}
+	ScriptMessage("Not living - confused");
 	Pusho(0);
 }
 
 void FlockDisband() // 039 FLOCK_DISBAND
 {
-	// const auto flock = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto container = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (container == entt::null || !registry.Valid(container))
+	{
+		ScriptMessage("Disbanding a NULL object");
+		ScriptMessage("Bad Id for Disband");
+		return;
+	}
+	if (ecs::script_flocks::IsFlock(registry, container))
+	{
+		// Every member leaves, and one the script controls waits for it; the flock stays, empty
+		const auto members = registry.Get<const ecs::components::ScriptFlock>(container).members;
+		for (const auto member : members)
+		{
+			// TODO(opening): an animal is split off into a flock of its own
+			ecs::script_flocks::Remove(registry, member, false);
+			Locator::scriptObjects::value().RemoveReference(member);
+			if (registry.Valid(member) && registry.AllOf<ecs::components::ScriptControlled>(member) &&
+			    IsDirectableVillager(member))
+			{
+				Locator::livingActionSystem::value().VillagerSetScriptState(member, VillagerStates::InScript);
+			}
+		}
+		return;
+	}
+	if (ecs::dances::IsDance(registry, container))
+	{
+		// Every dancer leaves, and one the script controls waits for it; the dance stays, empty
+		while (ecs::dances::Size(registry, container) > 0)
+		{
+			const auto dancer = ecs::dances::FirstDancer(registry, container, entt::null);
+			if (dancer == entt::null)
+			{
+				ScriptMessage("Should never happen");
+				break;
+			}
+			ecs::dances::RemoveDancer(registry, dancer);
+			Locator::scriptObjects::value().RemoveReference(dancer);
+			if (registry.AllOf<ecs::components::ScriptControlled>(dancer) && IsDirectableVillager(dancer))
+			{
+				Locator::livingActionSystem::value().VillagerSetScriptState(dancer, VillagerStates::InScript);
+			}
+		}
+		return;
+	}
+	if (registry.AnyOf<ecs::components::Town, ecs::components::Abode>(container))
+	{
+		return;
+	}
+	ScriptMessage("Bad Id for Disband");
 }
 
 void IdSize() // 040 ID_SIZE
 {
-	// const auto container = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto container = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (container != entt::null && ecs::script_flocks::IsFlock(registry, container))
+	{
+		Pushf(static_cast<float>(ecs::script_flocks::Size(registry, container)));
+		return;
+	}
+	if (container != entt::null && registry.Valid(container) && registry.AllOf<ecs::components::Town>(container))
+	{
+		// Its grown-ups and its children
+		uint32_t people = 0;
+		registry.Each<const ecs::components::Villager>(
+		    [&people, container](const ecs::components::Villager& person) { people += person.town == container ? 1 : 0; });
+		Pushf(static_cast<float>(people));
+		return;
+	}
+	if (container != entt::null && ecs::dances::IsDance(registry, container))
+	{
+		Pushf(static_cast<float>(ecs::dances::Size(registry, container)));
+		return;
+	}
+	// TODO(opening): footballs
+	ScriptMessage("Cannot Find Flock/Dance/Town Size");
 	Pushf(0.0f);
 }
 
 void FlockMember() // 041 FLOCK_MEMBER
 {
-	// const auto flock = Pop().uintVal;
-	// const auto obj = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto flock = PopObject();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!ecs::script_flocks::IsFlock(registry, flock) || !IsFlockLiving(registry, object))
+	{
+		ScriptMessage("Invalid Flock or Thing");
+		Pushb(false);
+		return;
+	}
+	Pushb(ecs::script_flocks::IsMember(registry, flock, object));
 }
 
 void GetHandPosition() // 042 GET_HAND_POSITION
@@ -1642,32 +2145,80 @@ void DetachMusic() // 047 DETACH_MUSIC
 	NotImplemented();
 }
 
+/// A thing a script deletes goes at once: a creature leaves the game, a dance's dancers go back to deciding what to do,
+/// a flock's members are in no flock any more
+static void DeleteNow(entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (registry.AllOf<ecs::components::Creature>(object))
+	{
+		static_cast<void>(ecs::creature_removal::RemoveFromGame(object));
+	}
+	else if (ecs::dances::IsDance(registry, object))
+	{
+		Locator::danceSystem::value().Destroy(object);
+	}
+	else if (ecs::script_flocks::IsFlock(registry, object))
+	{
+		ecs::script_flocks::Destroy(registry, object);
+	}
+	else
+	{
+		ecs::world_objects::Remove(object);
+	}
+}
+
 void ObjectDelete() // 048 OBJECT_DELETE
 {
 	const auto mode = Pop().intVal;
 	const auto object = PopObject();
-	if (!Locator::entitiesRegistry::value().Valid(object))
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
 	{
 		return;
 	}
+	// TODO(opening): a puzzle game is only let go of by the script
 	switch (mode)
 	{
 	case 0:
 		// It goes at once
-		if (Locator::entitiesRegistry::value().AllOf<ecs::components::Creature>(object))
+		DeleteNow(object);
+		return;
+	case 1:
+		// Only one of the world's objects goes this way
+		if (!IsScriptObject(registry, object))
 		{
-			static_cast<void>(ecs::creature_removal::RemoveFromGame(object));
+			return;
 		}
-		else
+		if (registry.AllOf<ecs::components::Creature>(object))
 		{
-			ecs::world_objects::Remove(object);
+			// TODO(opening): a creature fizzes out over two seconds
+			NotImplemented(mode);
+			return;
 		}
-		break;
+		// A ghost of it flickers out where it stood
+		ecs::world_objects::LeaveGhost(object);
+		DeleteNow(object);
+		return;
+	case 2:
+		if (!IsScriptObject(registry, object))
+		{
+			return;
+		}
+		// TODO(opening): its model breaks up where it stood (15 and 3 to the 3D engine's break-up)
+		DeleteNow(object);
+		return;
+	case 3:
+		// A temple starts its destruction
+		// TODO(opening): a heart already flagged breaks up instead (80 and 3 to the 3D engine's break-up), and is let go
+		if (registry.AllOf<ecs::components::Temple>(object) && Locator::templeDestructionSystem::has_value())
+		{
+			Locator::templeDestructionSystem::value().Start(object);
+		}
+		return;
 	default:
-		// TODO(opening): 1 fizzes a creature out over two seconds and takes anything else away with a puff, 2 goes with
-		// its own effect, 3 starts a temple heart's destruction; a puzzle game is only let go of
-		NotImplemented(mode);
-		break;
+		// Any other mode only lets it go
+		return;
 	}
 }
 
@@ -1724,34 +2275,96 @@ void SpecialEffectObject() // 053 SPECIAL_EFFECT_OBJECT
 
 void DanceCreate() // 054 DANCE_CREATE
 {
-	// const auto duration = Popf();
-	// const auto position = PopVec();
-	// const auto type = Pop().intVal;
-	// const auto obj = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	const auto duration = Popf();
+	const auto position = PopVec();
+	const auto type = Pop().intVal;
+	const auto centre = PopObject();
+	// What it is danced about may be nothing
+	const auto dance = Locator::danceSystem::value().Create(static_cast<uint32_t>(type), position, centre,
+	                                                        static_cast<uint32_t>(map_coords::FtoL(duration)), true);
+	if (dance == entt::null)
+	{
+		ScriptMessage("Dance not created");
+		Pusho(0);
+		return;
+	}
+	RegisterCreated(dance);
+	Pusho(static_cast<uint32_t>(dance));
 }
 
 void CallIn() // 055 CALL_IN
 {
-	// const auto excludingScripted = static_cast<bool>(Pop().intVal);
-	// const auto container = Pop().uintVal;
-	// const auto subtype = Pop().intVal;
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto excludingScripted = Pop().intVal != 0;
+	const auto container = PopObject();
+	const auto subtype = Pop().uintVal;
+	const auto type = Pop().intVal;
+	auto& registry = Locator::entitiesRegistry::value();
+	if (container == entt::null || !registry.Valid(container))
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "Cannot find in");
+		Pusho(0);
+		return;
+	}
+	if (!IsScriptContainer(registry, container))
+	{
+		ScriptMessage("Cannot look in object");
+		ScriptMessage("Cannot find in");
+		Pusho(0);
+		return;
+	}
+	// TODO(opening): a town's animals and its storage pit
+	const auto objectType = static_cast<ObjectType>(type);
+	if (registry.AllOf<ecs::components::Town>(container) && objectType != ObjectType::Villager &&
+	    objectType != ObjectType::VillagerChild)
+	{
+		ScriptMessage("Looking for strange type in Town");
+		ScriptMessage("Cannot find in");
+		Pusho(0);
+		return;
+	}
+	// The first of its things of the type and subtype, passing over those a script holds when asked to
+	for (const auto member : ContainerMembers(registry, container))
+	{
+		if (!registry.Valid(member) || (excludingScripted && registry.AllOf<ecs::components::InScript>(member)))
+		{
+			continue;
+		}
+		const auto kind = ecs::script_find::KindOf(registry, member);
+		if (kind.has_value() && ecs::script_find::Matches(*kind, objectType, subtype))
+		{
+			Locator::scriptObjects::value().Register(member, false);
+			Pusho(static_cast<uint32_t>(member));
+			return;
+		}
+	}
+	ScriptMessage("Cannot find in");
 	Pusho(0);
 }
 
 void ChangeInnerOuterProperties() // 056 CHANGE_INNER_OUTER_PROPERTIES
 {
-	// const auto calm = Popf();
-	// const auto outer = Popf();
-	// const auto inner = Popf();
-	// const auto obj = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto calm = Popf();
+	const auto outer = Popf();
+	const auto inner = Popf();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object != entt::null && ecs::script_flocks::IsFlock(registry, object))
+	{
+		// A nought leaves that distance as it was; the calm is kept whatever it is
+		auto& flock = registry.Get<ecs::components::ScriptFlock>(object);
+		if (outer != 0.0f)
+		{
+			flock.domainRadius = static_cast<uint16_t>(map_coords::FtoL(outer));
+		}
+		if (inner != 0.0f)
+		{
+			flock.flockDistance = static_cast<uint16_t>(map_coords::FtoL(inner));
+		}
+		flock.calm = map_coords::FtoL(calm);
+		return;
+	}
+	// TODO(opening): the weather's own inner and outer sizes
+	ScriptMessage("Invalid thing for Changing Variables");
 }
 
 void Snapshot() // 057 SNAPSHOT
@@ -2911,9 +3524,18 @@ void WalkPath() // 177 WALK_PATH
 		ScriptMessage("Thing not valid");
 		return;
 	}
-	if (registry.AnyOf<ecs::components::Villager, ecs::components::Creature, ecs::components::Animal>(object))
+	if (registry.AllOf<ecs::components::Villager>(object))
 	{
-		// TODO(opening): the living walk the track at their own speed, as the opening's father does
+		// A villager walks the track at its own speed, then waits for the script
+		if (!ecs::villager_script::StartPathWalk(object, path, forward, from, to))
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "Cannot load track No {}", path);
+		}
+		return;
+	}
+	if (registry.AnyOf<ecs::components::Creature, ecs::components::Animal>(object))
+	{
+		// TODO(opening): creatures and animals walk the track at their own speed too
 		NotImplemented();
 		return;
 	}
@@ -2944,9 +3566,16 @@ void GetWalkPathPercentage() // 179 GET_WALK_PATH_PERCENTAGE
 		Pushf(1.0f);
 		return;
 	}
-	if (registry.AnyOf<ecs::components::Villager, ecs::components::Creature, ecs::components::Animal>(object))
+	if (registry.AllOf<ecs::components::Villager>(object))
 	{
-		// TODO(opening): how much of its track a living thing has walked
+		// How much of its track it has walked
+		// TODO(opening): the game reads the walk of a villager given none to walk; here it has walked the whole way
+		Pushf(ecs::villager_script::PathWalkPercentage(object).value_or(1.0f));
+		return;
+	}
+	if (registry.AnyOf<ecs::components::Creature, ecs::components::Animal>(object))
+	{
+		// TODO(opening): how much of its track a creature or an animal has walked
 		NotImplemented();
 		Pushf(1.0f);
 		return;

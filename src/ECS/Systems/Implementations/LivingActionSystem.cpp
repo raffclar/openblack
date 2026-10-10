@@ -37,8 +37,10 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "VillagerAnimate.h"
+#include "VillagerDance.h"
 #include "VillagerEaten.h"
 #include "VillagerFire.h"
+#include "VillagerFlock.h"
 #include "VillagerHome.h"
 #include "VillagerPhysics.h"
 #include "VillagerReactions.h"
@@ -54,6 +56,8 @@ namespace villager_eaten = openblack::ecs::villager_eaten;
 namespace villager_teleport = openblack::ecs::villager_teleport;
 namespace villager_shield = openblack::ecs::villager_shield;
 namespace villager_fire = openblack::ecs::villager_fire;
+namespace villager_flock = openblack::ecs::villager_flock;
+namespace villager_dance = openblack::ecs::villager_dance;
 namespace villager_physics = openblack::ecs::villager_physics;
 namespace villager_animate = openblack::ecs::villager_animate;
 namespace villager_script = openblack::ecs::villager_script;
@@ -193,7 +197,11 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .state = &villager_script::InScript,
         .exitState = &villager_script::ExitInScript,
     },
-    /* IN_DANCE */ k_TodoEntry,
+    /* IN_DANCE */
+    VillagerStateTableEntry {
+        .state = &villager_dance::InDance,
+        .exitState = &villager_dance::ExitInDance,
+    },
     /* FLEEING_FROM_OBJECT_REACTION */
     VillagerStateTableEntry {
         .state = &villager_reactions::Fleeing,
@@ -249,8 +257,14 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     },
     /* GOTO_PICKUP_BALL_REACTION */ k_TodoEntry,
     /* ARRIVES_AT_PICKUP_BALL_REACTION */ k_TodoEntry,
-    /* MOVE_IN_FLOCK */ k_TodoEntry,
-    /* MOVE_ALONG_PATH */ k_TodoEntry,
+    /* MOVE_IN_FLOCK */
+    VillagerStateTableEntry {
+        .state = &villager_flock::MoveInFlock,
+    },
+    /* MOVE_ALONG_PATH */
+    VillagerStateTableEntry {
+        .state = &villager_script::MoveAlongPath,
+    },
     /* MOVE_ON_PATH */ k_TodoEntry,
     /* FLEEING_AND_LOOKING_AT_OBJECT_REACTION */
     VillagerStateTableEntry {

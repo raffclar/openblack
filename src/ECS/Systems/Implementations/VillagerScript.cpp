@@ -16,6 +16,9 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 
+#include "3D/CameraEdits.h"
+#include "3D/CameraTrack.h"
+#include "3D/LandIslandInterface.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/CarriedByTornado.h"
@@ -26,12 +29,14 @@
 #include "ECS/Components/ScriptAnimation.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/VillagerScriptRules.h"
+#include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
@@ -42,6 +47,7 @@ using namespace openblack;
 using namespace openblack::ecs::components;
 namespace villager_script = openblack::ecs::villager_script;
 namespace rules = openblack::ecs::villager_script_rules;
+namespace wall_hug = openblack::ecs::wall_hug;
 
 namespace
 {
@@ -240,6 +246,79 @@ void villager_script::SetYAngle(entt::entity villager, float angle)
 	wallHug->gameAngle = static_cast<uint16_t>(gutils::ConvertAngle3DToGame(angle));
 	transform->rotation = glm::eulerAngleY(-angle - glm::radians(90.0f));
 	registry.SetDirty();
+}
+
+bool villager_script::StartPathWalk(entt::entity villager, int32_t number, bool forward, float from, float to)
+{
+	auto& registry = Entities();
+	auto track = camera_edits::FindTrack(number);
+	if (track == nullptr || !registry.AllOf<LivingAction, WallHug>(villager))
+	{
+		return false;
+	}
+	const auto speed = wall_hug::WholeSpeed(registry.Get<const WallHug>(villager).speed);
+	auto walk = camera_track::StartWalk(*track, forward, from, to);
+	walk.step = camera_track::LivingStep(*track, speed, false);
+	registry.AssignOrReplace<WalkPath>(
+	    villager,
+	    WalkPath {.number = number, .track = std::move(track), .walk = std::move(walk), .living = true, .speed = speed});
+	// It walks it, then waits for the script; its clip starts again
+	auto& action = registry.Get<LivingAction>(villager);
+	if (Locator::livingActionSystem::value().VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveAlongPath,
+	                                                                               VillagerStates::InScript))
+	{
+		villager_animate::SetAnim(villager, villager_animate::StateClip(villager), true);
+	}
+	return true;
+}
+
+std::optional<float> villager_script::PathWalkPercentage(entt::entity villager)
+{
+	const auto* path = Entities().TryGet<const WalkPath>(villager);
+	if (path == nullptr || !path->living)
+	{
+		return std::nullopt;
+	}
+	return camera_track::Percentage(path->walk, *path->track);
+}
+
+uint32_t villager_script::MoveAlongPath(LivingAction& action)
+{
+	auto& registry = Entities();
+	const auto villager = registry.ToEntity(action);
+	auto* path = registry.TryGet<WalkPath>(villager);
+	if (path == nullptr || !path->living || !registry.AllOf<WallHug, Transform>(villager))
+	{
+		return 1;
+	}
+	// A change of walking speed changes how far along the track it gets each turn, and its clip starts again
+	const auto speed = wall_hug::WholeSpeed(registry.Get<const WallHug>(villager).speed);
+	if (speed != path->speed)
+	{
+		path->walk.step = camera_track::LivingStep(*path->track, speed, true);
+		villager_animate::SetAnim(villager, villager_animate::StateClip(villager), true);
+		path->speed = speed;
+	}
+	const auto point = camera_track::LivingWalkTurn(path->walk, *path->track);
+	if (!point.has_value())
+	{
+		Locator::livingActionSystem::value().VillagerSetTopStateToFinal(action);
+		return 1;
+	}
+	auto& transform = registry.Get<Transform>(villager);
+	// It faces where it goes, unless that is right where it stands
+	const auto offset = *point - glm::xz(transform.position);
+	constexpr float k_LeastSquaredDistance = 0.001f;
+	if (glm::dot(offset, offset) > k_LeastSquaredDistance)
+	{
+		SetYAngle(villager, std::atan2(offset.y, offset.x));
+	}
+	// On the ground, on the land's grid
+	const glm::vec2 placed(map_coords::Quantise(point->x), map_coords::Quantise(point->y));
+	const float height = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(placed) : 0.0f;
+	transform.position = glm::vec3(placed.x, height, placed.y);
+	registry.SetDirty();
+	return 1;
 }
 
 uint32_t villager_script::InScript(LivingAction& /*action*/)

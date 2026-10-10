@@ -54,10 +54,18 @@ void OverrideAnimation(entt::entity villager, int32_t clip);
 /// The villager turns at once to face the way of an angle about the upright
 void SetYAngle(entt::entity villager, float angle);
 
+/// A script sets the villager walking one of the camera editor's tracks, from `from` to `to` (shares of its way), at
+/// its own walking speed, then waiting for the script. False when there is no such track.
+bool StartPathWalk(entt::entity villager, int32_t number, bool forward, float from, float to);
+/// How much of its track's way the villager has walked; none when it was given none to walk
+[[nodiscard]] std::optional<float> PathWalkPercentage(entt::entity villager);
+
 /// Waiting in a script's hands: nothing to do
 uint32_t InScript(components::LivingAction& action);
 /// Playing a script's clip: one more play starts, and after it the villager plays again or stands waiting
 uint32_t ScriptPlayAnim(components::LivingAction& action);
+/// Walking a script's track: on along it, facing the way it goes, and waiting for the script at its end
+uint32_t MoveAlongPath(components::LivingAction& action);
 /// Leaving a script's hands: only for the states a script lets take it away. True refuses.
 bool ExitInScript(components::LivingAction& action, VillagerStates next);
 

@@ -52,6 +52,11 @@ void WalkPathSystem::ProcessTurn()
 	const auto& land = Locator::terrainSystem::value();
 	std::vector<entt::entity> done;
 	registry.Each<WalkPath, Transform>([&](entt::entity entity, WalkPath& path, Transform& transform) {
+		// A living walks its own track in its state
+		if (path.living)
+		{
+			return;
+		}
 		const auto at = camera_track::WalkTurn(path.walk, *path.track);
 		if (!at.has_value())
 		{

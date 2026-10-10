@@ -834,6 +834,18 @@
   "query": "living.walk_paths"
  },
  {
+  "description": "The dances: what they are danced about, whether dancing, the beat, and each group's dancers",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.dances"
+ },
+ {
+  "description": "The scripts' flocks: their place, their domain and flock distances, and their members from the first to the leader",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.flocks"
+ },
+ {
   "description": "How many fireflies there are",
   "kind": "object",
   "parameters": [],

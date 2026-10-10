@@ -77,4 +77,18 @@ struct Walk
 /// It goes where the track's camera looks when the camera is where the walk has got to.
 [[nodiscard]] std::optional<glm::vec2> WalkTurn(Walk& walk, const edt::EDTTrack& track);
 
+/// A way's length as the game works it out when it reads the way: for each segment with time to cover, its
+/// duration in seconds times its starting speed plus half its change in speed a second, less that change times its
+/// starting time in seconds. 0.1 when that comes to nothing.
+[[nodiscard]] float WayLength(const edt::EDTWay& way);
+
+/// How many milliseconds of the track a walker covers in a turn at its walking speed (in whole map units a turn): the
+/// track's duration over the look-at way's length in the walker's turns. The game sets this up without the check; when
+/// the speed changes it takes 0 instead when the way is no longer than a hundredth of a turn's walk.
+[[nodiscard]] float LivingStep(const edt::EDTTrack& track, int32_t wholeSpeed, bool checked);
+
+/// A turn of a living's walk: where it goes this turn, without being put on the land's grid, or nothing once it has
+/// gone its share of the way. The step is its own, from its walking speed.
+[[nodiscard]] std::optional<glm::vec2> LivingWalkTurn(Walk& walk, const edt::EDTTrack& track);
+
 } // namespace openblack::camera_track

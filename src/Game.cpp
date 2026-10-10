@@ -125,6 +125,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
@@ -940,6 +941,8 @@ bool Game::GameLogicLoop() noexcept
 	}
 	// The whales' turns start where they are, then the things the scripts walk along tracks go on, before the living
 	Locator::whaleSystem::value().ProcessTurn();
+	// The dances go on after the players and before the things walking tracks and the living
+	Locator::danceSystem::value().ProcessTurn();
 	Locator::walkPathSystem::value().ProcessTurn();
 
 	auto& profiler = Locator::profiler::value();

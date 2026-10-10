@@ -54,6 +54,11 @@ namespace openblack::edt
 class EDTFile;
 } // namespace openblack::edt
 
+namespace openblack::dance
+{
+struct DanceFile;
+} // namespace openblack::dance
+
 namespace openblack::gestures
 {
 class GestureFile;
@@ -258,6 +263,12 @@ struct GestureTemplatesLoader final: BaseLoader<gestures::GestureFile>
 
 /// The camera editor's file of the scripts' numbered cameras and tracks
 struct CameraEditLoader final: BaseLoader<edt::EDTFile>
+{
+	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
+};
+
+/// A dance's choreography, from the files under the scripts' Dance folder
+struct DanceFileLoader final: BaseLoader<dance::DanceFile>
 {
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
 };
