@@ -16,6 +16,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Animals/FishFarmRules.h"
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Mobile.h"
@@ -164,6 +165,14 @@ public:
 		auto& facts = fields.at(field);
 		facts.food -= std::min(facts.food, amount);
 	}
+	[[nodiscard]] std::optional<fish_farm::Type> FishFarmOf(entt::entity farm) const override
+	{
+		return fishFarms.contains(farm) ? std::optional(fishFarmType) : std::nullopt;
+	}
+	uint32_t TakeFromFishFarm(entt::entity farm, uint32_t amount) override
+	{
+		return fish_farm::Take(fishFarms.at(farm), amount);
+	}
 	[[nodiscard]] std::optional<PotFacts> PotFactsOf(entt::entity pot) const override
 	{
 		const auto* data = registry.TryGet<const Pot>(pot);
@@ -205,6 +214,11 @@ public:
 	{
 		++streams;
 		return streams;
+	}
+	[[nodiscard]] std::optional<uint32_t> StartFishScoopStream(glm::vec3 source) override
+	{
+		fishStreams.push_back(source);
+		return ++streams;
 	}
 	void StopScoopStream(uint32_t stream) override { stopped.push_back(stream); }
 	void MoveScoopStream(uint32_t, glm::vec3 hand) override { streamPoints.push_back(hand); }
@@ -271,6 +285,9 @@ public:
 	std::vector<entt::entity> poured;
 	std::vector<entt::entity> potReactionsSetUp;
 	std::map<entt::entity, FieldFacts> fields;
+	std::map<entt::entity, float> fishFarms;
+	fish_farm::Type fishFarmType {.foodValue = 1400.0f, .foodType = 1, .turnsPerFish = 16};
+	std::vector<glm::vec3> fishStreams;
 	std::vector<std::pair<entt::entity, entt::entity>> takenWhole;
 	std::vector<std::pair<entt::entity, glm::vec3>> released;
 	std::vector<std::pair<entt::entity, glm::vec3>> twists;
@@ -817,6 +834,39 @@ TEST_F(HandGrabSystemWithWorld, ARipeFieldGivesHalfOfEachScoop)
 	EXPECT_EQ(world->fields[field].food, 988u);
 	system->ProcessTurn();
 	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 16u);
+}
+
+TEST_F(HandGrabSystemWithWorld, AFishFarmGivesAFirstHandfulForNothingThenItsFishAsTheScoopRampsUp)
+{
+	const auto farm = world->registry.Create();
+	world->registry.Assign<Transform>(farm, glm::vec3(5.0f, 0.0f, 5.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->fishFarms[farm] = 100.0f;
+	world->underCursor = farm;
+	EXPECT_TRUE(Press());
+	const auto handful = system->GetHeld();
+	ASSERT_TRUE(handful.has_value());
+	// The first 25 come out of nothing, and the fish leap from the farm into the hand
+	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 25u);
+	EXPECT_FLOAT_EQ(world->fishFarms[farm], 100.0f);
+	ASSERT_EQ(world->fishStreams.size(), 1u);
+	EXPECT_EQ(world->fishStreams.front(), glm::vec3(5.0f, 0.0f, 5.0f));
+	// Each turn the ramp's fish are taken from the farm
+	system->ProcessTurn();
+	const auto first = world->registry.Get<const Pot>(*handful).amount - 25u;
+	EXPECT_GT(first, 0u);
+	EXPECT_FLOAT_EQ(world->fishFarms[farm], 100.0f - static_cast<float>(first));
+	// A farm with fewer left than the ramp wants still gives all of it
+	world->fishFarms[farm] = 1.0f;
+	const auto before = world->registry.Get<const Pot>(*handful).amount;
+	system->ProcessTurn();
+	EXPECT_GT(world->registry.Get<const Pot>(*handful).amount - before, 1u);
+	EXPECT_FLOAT_EQ(world->fishFarms[farm], 0.0f);
+	// An empty farm ends the scoop: its stream stops and the hand keeps its handful
+	EXPECT_TRUE(world->stopped.empty());
+	system->ProcessTurn();
+	EXPECT_FALSE(world->stopped.empty());
+	EXPECT_FALSE(world->cursorPinned);
+	EXPECT_EQ(system->GetHeld(), handful);
 }
 
 TEST_F(HandGrabSystemWithWorld, AScoopsStreamFollowsTheHandAndAPourEndsAfterThreeQuartersOfASecond)

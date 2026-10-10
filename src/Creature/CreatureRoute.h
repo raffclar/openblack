@@ -37,6 +37,10 @@ constexpr float k_SteepRise = 10.0f;
 /// A creature stands clear of cells it can't walk on by this much, and a destination by a little more
 constexpr float k_Clearance = 7.05f;
 constexpr float k_DestinationClearance = 7.1f;
+/// Where a creature can't stand at a point, it looks this far round for the nearest place it can, which is only any use
+/// nearer than the second
+constexpr float k_ValidPointSearch = 1000.0f;
+constexpr float k_ValidPointReach = 30.0f;
 /// The spacing of the lattice routes are planned on
 constexpr float k_LatticeStep = 2.5f;
 

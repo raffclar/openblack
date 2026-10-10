@@ -13,6 +13,8 @@
 
 #include <algorithm>
 
+#include <glm/geometric.hpp>
+
 using namespace openblack;
 using namespace openblack::creature_throw;
 
@@ -62,4 +64,32 @@ glm::vec3 creature_throw::TossVelocity(const glm::vec3& handVelocity, bool mirro
 		local.x = -local.x;
 	}
 	return rotation * local;
+}
+
+std::optional<creature_throw::ThrowStand> creature_throw::WhereToThrowFrom(glm::vec2 creature, glm::vec2 target, float height,
+                                                                           float targetRadius, float keep)
+{
+	const float distance = glm::distance(creature, target);
+	const float nearest = keep + targetRadius + k_ThrowStandHeights * height;
+	const float furthest = k_ThrowReachHeights * height;
+	if (distance < nearest)
+	{
+		if (distance <= 0.0f)
+		{
+			return std::nullopt;
+		}
+		// Back along the line from the thing to where it stands, to the nearest it may stand
+		return ThrowStand {.kind = ThrowStand::Kind::BackOff,
+		                   .point = target - (target - creature) * (nearest / distance),
+		                   .minDistance = 0.0f,
+		                   .maxDistance = k_ThrowBackOffHeights * height};
+	}
+	if (distance > furthest)
+	{
+		return ThrowStand {.kind = ThrowStand::Kind::WalkUp,
+		                   .point = target,
+		                   .minDistance = nearest,
+		                   .maxDistance = furthest > nearest ? furthest : nearest + k_ThrowWalkUpSpare};
+	}
+	return ThrowStand {};
 }

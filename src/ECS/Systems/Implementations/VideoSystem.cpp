@@ -104,8 +104,9 @@ VideoSystem::VideoSystem()
 {
 }
 
-VideoSystem::VideoSystem(Hooks hooks)
+VideoSystem::VideoSystem(Hooks hooks, video::DecodeMode mode)
     : _hooks(std::move(hooks))
+    , _decodeMode(mode)
 {
 }
 
@@ -133,8 +134,11 @@ bool VideoSystem::Play(const std::filesystem::path& path)
 		video.frameCount = static_cast<int32_t>(video.file->FrameCount());
 #if defined(OPENBLACK_BINK_DECODER)
 		std::string error;
-		video.reader = bink::FrameReader::Create(video.file, &error);
-		if (!video.reader)
+		if (auto reader = bink::FrameReader::Create(video.file, &error))
+		{
+			video.frames = std::make_unique<video::FrameQueue>(std::move(*reader), _decodeMode);
+		}
+		else
 		{
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The video {} plays black: {}", path.generic_string(), error);
 		}
@@ -267,30 +271,20 @@ void VideoSystem::DecodeDue(std::chrono::steady_clock::time_point now)
 	const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - *video.start);
 	const auto due = static_cast<int32_t>(video::FramesDue(elapsed, header.fpsNumerator > 0 ? header.fpsNumerator : 1,
 	                                                       header.fpsDenominator > 0 ? header.fpsDenominator : 1));
-	// Every frame due is decoded, however late
-	while (_video && _video->frame < due)
+	// Every frame due is counted, however late; the picture is the newest of them decoded so far
+	while (_video->frame < due)
 	{
 		if (_video->frame > _schedule.end)
 		{
 			Delete();
-			break;
+			return;
 		}
-		DecodeNext();
+		++_video->frame;
 	}
-}
-
-void VideoSystem::DecodeNext()
-{
-	auto& video = *_video;
-	if (video.frame < video.frameCount && video.reader)
+	if (_video->frames && _video->frame > 0)
 	{
-		if (video.reader->DecodeFrame(static_cast<uint32_t>(video.frame)))
-		{
-			video.hasPicture = true;
-			++video.serial;
-		}
+		_video->shown = _video->frames->Latest(static_cast<uint32_t>(_video->frame - 1));
 	}
-	++video.frame;
 }
 
 void VideoSystem::Delete()
@@ -378,8 +372,10 @@ std::optional<VideoPicture> VideoSystem::GetPicture() const
 	{
 		return std::nullopt;
 	}
+	const auto* shown = _video->shown;
+	const bool hasPicture = shown != nullptr && shown->goodFrames > 0;
 	VideoPicture picture {
-	    .serial = _video->serial,
+	    .serial = hasPicture ? shown->goodFrames : 0,
 	    .alpha = video::DrawAlpha(_alpha, _fallingSpell),
 	};
 	if (_video->file)
@@ -387,14 +383,13 @@ std::optional<VideoPicture> VideoSystem::GetPicture() const
 		picture.width = _video->file->Width();
 		picture.height = _video->file->Height();
 	}
-	if (_video->reader && _video->hasPicture)
+	if (hasPicture)
 	{
-		const auto planes = _video->reader->GetPicture();
-		picture.y = planes.y.pixels;
-		picture.u = planes.u.pixels;
-		picture.v = planes.v.pixels;
-		picture.yStride = planes.y.stride;
-		picture.chromaStride = planes.u.stride;
+		picture.y = shown->planes[0];
+		picture.u = shown->planes[1];
+		picture.v = shown->planes[2];
+		picture.yStride = shown->strides[0];
+		picture.chromaStride = shown->strides[1];
 	}
 	return picture;
 }

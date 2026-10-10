@@ -195,6 +195,9 @@ enum class Faint : uint8_t
 };
 /// Whether it faints now: only once far enough grown up and owned by a player
 [[nodiscard]] std::optional<Faint> ShouldFaint(const Needs& needs, uint32_t phase, bool ownedByPlayer);
+/// Whether its body can make it faint at all: only a creature of a player the computer doesn't play, and not while a
+/// script controls it
+[[nodiscard]] bool CanFaintFromNeeds(bool ownedByPlayer, bool computerPlayer, bool scriptControlled);
 /// Coming round from a faint: no longer quite exhausted, starved or parched
 void WakeFromFaint(Needs& needs);
 

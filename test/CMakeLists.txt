@@ -186,6 +186,7 @@ openblack_setup_and_add_test(test_chimney_smoke test_chimney_smoke.cpp)
 openblack_setup_and_add_test(test_native_stub_calls test_native_stub_calls.cpp)
 openblack_setup_and_add_test(test_influence_circle test_influence_circle.cpp)
 openblack_setup_and_add_test(test_field_crop test_field_crop.cpp)
+openblack_setup_and_add_test(test_fish_farm test_fish_farm.cpp)
 openblack_setup_and_add_test(test_snow_cover test_snow_cover.cpp)
 openblack_setup_and_add_test(test_snowfall test_snowfall.cpp)
 openblack_setup_and_add_test(test_water_rings test_water_rings.cpp)
@@ -249,6 +250,10 @@ openblack_setup_and_add_test(
   test_creature_footprints test_creature_footprints.cpp
 )
 openblack_setup_and_add_test(test_creature_fight test_creature_fight.cpp)
+openblack_setup_and_add_test(test_creature_fizz test_creature_fizz.cpp)
+openblack_setup_and_add_test(
+  test_creature_fizz_look test_creature_fizz_look.cpp
+)
 openblack_setup_and_add_test(test_creature_arena test_creature_arena.cpp)
 openblack_setup_and_add_test(test_land_avoid test_land_avoid.cpp)
 openblack_setup_and_add_test(
@@ -414,6 +419,9 @@ openblack_setup_and_add_test(test_physics_living test_physics_living.cpp)
 openblack_setup_and_add_test(test_physics_objects test_physics_objects.cpp)
 openblack_setup_and_add_test(test_damage_mesh test_damage_mesh.cpp)
 openblack_setup_and_add_test(
+  test_building_construction test_building_construction.cpp
+)
+openblack_setup_and_add_test(
   test_building_damage_system test_building_damage_system.cpp
 )
 openblack_setup_and_add_test(test_clip_sound_player test_clip_sound_player.cpp)
@@ -452,6 +460,11 @@ openblack_setup_and_add_test(test_video_rules video/test_video_rules.cpp)
 openblack_setup_and_add_test(test_video_system video/test_video_system.cpp)
 target_include_directories(
   test_video_system PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/bink
+)
+# The videos' frames decoded ahead on a thread of their own
+openblack_setup_and_add_test(test_frame_queue video/test_frame_queue.cpp)
+target_include_directories(
+  test_frame_queue PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/bink
 )
 # The loading screen's and the start-up screens' rules
 openblack_setup_and_add_test(

@@ -17,6 +17,7 @@
 #include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
+#include "Animals/FishFarmRules.h"
 #include "Enums.h"
 #include "HandGrabRules.h"
 
@@ -166,6 +167,10 @@ public:
 	[[nodiscard]] virtual std::optional<FieldFacts> FieldFactsOf(entt::entity field) const = 0;
 	/// Food is taken out of a field by the hand
 	virtual void TakeFromField(entt::entity field, uint32_t amount) = 0;
+	/// What a fish farm's table says of its fish, for the hand scooping them
+	[[nodiscard]] virtual std::optional<fish_farm::Type> FishFarmOf(entt::entity farm) const = 0;
+	/// Fish are taken out of a fish farm by the hand: no more than it has. What was taken.
+	virtual uint32_t TakeFromFishFarm(entt::entity farm, uint32_t amount) = 0;
 	/// A pot, a handful among them, is drawn at the size of what it holds
 	virtual void ResizePot(entt::entity pot) = 0;
 	[[nodiscard]] virtual ScoopFacts ScoopFactsOf(PotInfo handful) const = 0;
@@ -176,6 +181,8 @@ public:
 	[[nodiscard]] virtual entt::entity MakeHandful(PotInfo type, glm::vec3 position, uint32_t amount, bool poisoned) = 0;
 	/// The stream of what is scooped flowing from its source into the hand starts, and stops; its effect
 	[[nodiscard]] virtual std::optional<uint32_t> StartScoopStream(ResourceType resource, glm::vec3 source, bool poisoned) = 0;
+	/// The stream of fish leaping from a fish farm into the hand starts
+	[[nodiscard]] virtual std::optional<uint32_t> StartFishScoopStream(glm::vec3 source) = 0;
 	virtual void StopScoopStream(uint32_t stream) = 0;
 	/// The stream flows to where the hand now is
 	virtual void MoveScoopStream(uint32_t stream, glm::vec3 hand) = 0;
