@@ -71,8 +71,19 @@ constexpr glm::vec2 k_LakeCentre {static_cast<float>(k_LakeMinX + k_LakeMaxX) * 
                                   static_cast<float>(k_LakeMinZ + k_LakeMaxZ) * k_CellSize * 0.5f};
 constexpr glm::vec2 k_LakeHalfExtent {static_cast<float>(k_LakeMaxX - k_LakeMinX) * k_CellSize * 0.5f,
                                       static_cast<float>(k_LakeMaxZ - k_LakeMinZ) * k_CellSize * 0.5f};
-/// The shore round the open water, by how many cells out from it each corner of a cell lies: two cells of shallows at
-/// sea level that can be waded, then a bank climbing to the plane no steeper than a creature can walk
+/// The pond: a strip of shallows running diagonally to the north-west of the middle, beyond what the other scenarios
+/// use, whose middle runs along the map's corners from (224, 292) to (232, 300). The land is at the sea bed along the
+/// strip's middle, two corners wide, so that half of each cell there is at the sea bed while one of its corners is a
+/// little higher. A creature can stand anywhere in it, and a fish farm on its bank finds its shoal in it. The corners
+/// along the strip are those where x - z is the first or the second here, from the first sum of x and z to the last.
+constexpr int k_PondDiagonal = -68;
+constexpr int k_PondFirstSum = 516;
+constexpr int k_PondLastSum = 532;
+/// The middle of the pond, in units of the map
+constexpr glm::vec2 k_PondCentre {2282.5f, 2957.5f};
+
+/// The shore round the open water and the pond, by how many cells out from it each corner of a cell lies: two cells of
+/// shallows at sea level that can be waded, then a bank climbing to the plane no steeper than a creature can walk
 constexpr std::array<uint8_t, 6> k_ShoreAltitudes {0, 3, 3, 12, 22, k_Altitude};
 /// How far the shore reaches out from the open water, in cells; the lake takes this much more on every side
 constexpr int k_ShoreCells = static_cast<int>(k_ShoreAltitudes.size()) - 1;

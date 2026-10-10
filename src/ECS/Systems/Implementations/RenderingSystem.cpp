@@ -23,6 +23,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/PhysicsDrawMatrix.h"
 #include "Camera/Camera.h"
+#include "ECS/BuildingConstruction.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AtHome.h"
@@ -494,18 +495,14 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 
-		    // A frozen creature takes an icy look, tinted dark blue and sheened with ice as it freezes, and an invisible one
-		    // dissolves through static
+		    // A frozen creature takes an icy look, tinted dark blue and sheened with ice as it freezes (one fizzing out of
+		    // sight is drawn through the static by the renderer)
 		    if (const auto* spells = registry.TryGet<const CreatureSpells>(entity))
 		    {
 			    if (spells->freeze > 0.0f)
 			    {
 				    look.y = static_cast<float>(creature_spells::FrozenTint(spells->freeze));
 				    look.w = -spells->freeze;
-			    }
-			    if (spells->fizz > 0.0f)
-			    {
-				    look.w = -(2.0f + spells->fizz);
 			    }
 		    }
 
@@ -562,6 +559,15 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    modelMatrix = glm::mat4(0.0f);
 		    }
 
+		    // A building going up is drawn only as far up as it stands, with the broken and the unfinished ones, though
+		    // what of it stands can still be pointed at
+		    const auto* progress = registry.TryGet<const BuildProgress>(entity);
+		    const bool goingUp = progress != nullptr && DrawnMeshOf(entity, mesh) == mesh.id;
+		    if (goingUp)
+		    {
+			    look.z = 1.0f;
+		    }
+
 		    // Fading out in the distance
 		    if (fade.has_value() && look.z != 1.0f)
 		    {
@@ -589,7 +595,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    graphics::bone_palette::SetFirstBone(_renderContext.instanceUniforms[idx].model,
 			                                         graphics::bone_palette::Append(_renderContext.bonePalette, bones));
 		    }
-		    if (look.z != 1.0f)
+		    if (look.z != 1.0f || (goingUp && progress->built > 0.0f))
 		    {
 			    _renderContext.drawnObjects.push_back({.entity = entity, .model = modelMatrix});
 		    }
@@ -698,6 +704,9 @@ void RenderingSystem::UploadPartialBuilds()
 		                     : std::nullopt,
 		    .scaffoldStatus = build.scaffoldShown ? scaffold : std::nullopt,
 		    .scaffoldCut = build.scaffoldCut,
+		    // A temple's inner walls stand in further than other buildings', whatever their material
+		    .innerWallInset =
+		        registry.AllOf<Temple>(entity) ? std::optional(building_construction::k_TempleInnerWallInset) : std::nullopt,
 		};
 		_renderContext.partialBuildInstances.push_back({.model = matrix});
 		// The scaffold sinks along its up axis while the building rises out of the land

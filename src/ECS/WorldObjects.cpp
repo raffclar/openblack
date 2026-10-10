@@ -312,8 +312,10 @@ float world_objects::ReduceLife(entt::entity object, float damage)
 	if (auto* needs = registry.TryGet<CreatureNeeds>(object))
 	{
 		needs->needs.life = std::max(needs->needs.life - damage, 0.0f);
-		// A creature with no life left is knocked out
+		// A fighting creature with no life left loses its fight there and then. Out of a fight it passes out on its next
+		// turn, as its body finds it has no life left
 		if (needs->needs.life <= 0.0f && Locator::creatureFightSystem::has_value() &&
+		    Locator::creatureFightSystem::value().IsFighting(object) &&
 		    !Locator::creatureFightSystem::value().IsKnockedOut(object))
 		{
 			Locator::creatureFightSystem::value().KnockOut(object);

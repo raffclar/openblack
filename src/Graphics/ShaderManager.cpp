@@ -186,6 +186,8 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_interface
 #include "ShaderIncluder.h"
+#define SHADER_NAME fs_video
+#include "ShaderIncluder.h"
 
 // clang-format on
 
@@ -199,7 +201,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 65> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 66> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
@@ -264,6 +266,7 @@ const std::array<bgfx::EmbeddedShader, 65> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_interface),
     BGFX_EMBEDDED_SHADER(vs_text3d),
     BGFX_EMBEDDED_SHADER(fs_interface), //
+    BGFX_EMBEDDED_SHADER(fs_video),     //
     BGFX_EMBEDDED_SHADER_END()          //
 }};
 
@@ -312,6 +315,7 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"ObjectShadowStaticInstanced", "vs_object_shadow_static_instanced", "fs_object_shadow"},
     ShaderDefinition {"Beam", "vs_beam", "fs_beam"},
     ShaderDefinition {"Interface", "vs_interface", "fs_interface"},
+    ShaderDefinition {"Video", "vs_interface", "fs_video"},
     ShaderDefinition {"Text3D", "vs_text3d", "fs_interface"},
 };
 

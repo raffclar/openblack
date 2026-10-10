@@ -217,13 +217,9 @@ void main()
 	// w: how much snow shows on it, of 255. An instance can have its own rate and cap of 256 for it, as a field's crop has.
 	v_haze = vec4(added / 255.0f, 0.0f);
 #ifdef USE_INSTANCING
-	// w: how frozen a creature is, positive, or how far it has fizzed out of sight, negative. An instance gives the freeze
-	// as a negative w and the fizz as a w below -2 by it; a field's crop gives its snow cap as a positive one.
-	if (i_data4.w < -1.5f)
-	{
-		v_haze.w = i_data4.w + 2.0f;
-	}
-	else if (i_data4.w < 0.0f)
+	// w: how frozen a creature is. An instance gives the freeze as a negative w; a field's crop gives its snow cap as a
+	// positive one.
+	if (i_data4.w < 0.0f)
 	{
 		v_haze.w = -i_data4.w;
 	}

@@ -40,6 +40,9 @@ constexpr std::array k_Executors {
     Executor {.action = "Poo", .build = Build::Poo, .activity = Activity::Poo},
     Executor {.action = "Puke", .build = Build::Puke, .activity = Activity::Puke},
     Executor {.action = "DrinkFromTheSea", .build = Build::Drink, .activity = Activity::Drink},
+    Executor {.action = "FishAndEat", .build = Build::FishAndEat, .activity = Activity::Eat},
+    Executor {.action = "GiveFishToStoragePit", .target = Target::StoragePit, .build = Build::GiveFishToStore},
+    Executor {.action = "TakeFishHome", .build = Build::TakeFishHome},
     Executor {.action = "ExamineByPickingUp",
               .target = Target::Pickable,
               .build = Build::ExamineByPickingUp,
@@ -127,6 +130,18 @@ constexpr std::array k_Executors {
     Executor {.action = "SetFireToObject", .target = Target::Unburnt, .build = Build::SetFire},
     Executor {.action = "StartFire", .build = Build::Never},
 };
+
+/// The trip to the shoal to bring food out of the sea, none when it already has food in its hand; it walks straight to the
+/// shoal
+std::optional<creature_mind::FishingTrip> TripFor(const Situation::Fishing& fishing)
+{
+	if (fishing.holdingFood)
+	{
+		return std::nullopt;
+	}
+	return creature_mind::FishingTrip {
+	    .shoal = fishing.shoal, .arriveWithin = fishing.arriveWithin, .putDownFirst = fishing.putDownFirst};
+}
 } // namespace
 
 std::span<const Executor> creature_plan_actions::All()
@@ -152,6 +167,12 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 	{
 	case Build::Drink:
 		return situation.water.has_value();
+	case Build::FishAndEat:
+		return situation.fishing.has_value() && !situation.fishing->holdingFood && situation.fishing->standAt.has_value();
+	case Build::GiveFishToStore:
+		return situation.fishing.has_value();
+	case Build::TakeFishHome:
+		return situation.fishing.has_value() && situation.home.has_value();
 	case Build::Hurl:
 		return situation.hurlTarget.has_value();
 	case Build::FaceCameraEmote:
@@ -187,6 +208,13 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::Puke();
 	case Build::Drink:
 		return creature_mind::Drink(situation.water->shore, situation.water->water);
+	case Build::FishAndEat:
+		return creature_mind::FishAndEat(*situation.fishing->standAt, situation.fishing->arriveWithin,
+		                                 situation.fishing->putDownFirst);
+	case Build::GiveFishToStore:
+		return creature_mind::GiveFishToStore(TripFor(*situation.fishing), *object, situation.fishing->height);
+	case Build::TakeFishHome:
+		return creature_mind::TakeFishTo(TripFor(*situation.fishing), *situation.home, situation.fishing->height);
 	case Build::ExamineByPickingUp:
 		return creature_mind::ExamineByPickingUp(*object, random);
 	case Build::ExamineByLooking:
