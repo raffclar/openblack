@@ -376,7 +376,8 @@ QueryResult EditProvider::Set(ecs::Registry& registry, const Json& params)
 		return QueryResult::Error("the entity has no " + *component + "; ask ecs.entity for its components");
 	}
 	auto* data = storage->value(*entity);
-	if (auto problem = reflection::SetField(_context, storage->type(), data, *field, Member(params, "value")); !problem.empty())
+	if (auto problem = reflection::SetField(_context, reflection::StorageType(*storage), data, *field, Member(params, "value"));
+	    !problem.empty())
 	{
 		return QueryResult::Error(*component + "." + problem);
 	}
@@ -385,7 +386,7 @@ QueryResult EditProvider::Set(ecs::Registry& registry, const Json& params)
 	    {"id", ToId(*entity)},
 	    {"component", *component},
 	    {"field", *field},
-	    {"value", reflection::ReadField(_context, storage->type(), data, *field).value_or(nullptr)},
+	    {"value", reflection::ReadField(_context, reflection::StorageType(*storage), data, *field).value_or(nullptr)},
 	});
 }
 
@@ -423,7 +424,8 @@ QueryResult EditProvider::Add(ecs::Registry& registry, const Json& params)
 	{
 		for (const auto& [name, value] : fields->items())
 		{
-			auto problem = reflection::SetField(_context, storage->type(), storage->value(*entity), name, value);
+			auto problem =
+			    reflection::SetField(_context, reflection::StorageType(*storage), storage->value(*entity), name, value);
 			if (!problem.empty())
 			{
 				// Nothing half made is left behind
@@ -437,7 +439,7 @@ QueryResult EditProvider::Add(ecs::Registry& registry, const Json& params)
 	return QueryResult::Value({
 	    {"id", ToId(*entity)},
 	    {"component", *component},
-	    {"value", reflection::ComponentToJson(_context, storage->type(), storage->value(*entity))},
+	    {"value", reflection::ComponentToJson(_context, reflection::StorageType(*storage), storage->value(*entity))},
 	});
 }
 

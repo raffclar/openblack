@@ -706,6 +706,15 @@ class ArgumentsTest(SessionBase):
         self.assertTrue(taken["ok"], taken)
         self.assertEqual(taken["result"]["params"], {"ms": 100})
 
+    def test_call_screenshot_path_is_its_parameter(self):
+        # As the MCP tool sends it: the shell's path is screenshot.take's, never dropped for the temporary default
+        catalogue = {"screenshot.take": {"query": "screenshot.take",
+                                         "parameters": [{"name": "path"}, {"name": "hide_gui"}]}}
+        self.assertEqual(mcp.call_request("screenshot.take", '{"path": "E:/shots/x.png", "hide_gui": true}', catalogue),
+                         {"query": "screenshot.take", "params": {"path": "E:/shots/x.png", "hide_gui": True}})
+        self.assertEqual(mcp.call_request("screenshot.take", '{"path": "E:/shots/x.png"}'),
+                         {"query": "screenshot.take", "params": {"path": "E:/shots/x.png"}})
+
     def test_call_describe_takes_its_query(self):
         request = mcp.call_request("describe", '{"query": "sky.moon"}', self.CATALOGUE)
         self.assertEqual(request, {"query": "describe", "params": {"query": "sky.moon"}})

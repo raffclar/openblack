@@ -347,7 +347,7 @@ void ScreenshotProvider::PlaceCamera()
 		}
 		pose = FramePose(*target, *holding.framing, *now);
 	}
-	if (auto why = _camera.Set(*pose); !why.empty())
+	if (auto why = _camera.Pin(*pose); !why.empty())
 	{
 		Fail(why);
 		return;
@@ -562,13 +562,6 @@ QueryResult ScreenshotProvider::Run(std::string_view query, const QueryContext& 
 	if (path.extension() != ".png")
 	{
 		return QueryResult::Error("the path is a .png file");
-	}
-	if (camera.has_value() || framing.has_value())
-	{
-		if (const auto state = _camera.State(); state.has_value() && state->heldByPath)
-		{
-			return QueryResult::Error("a camera path (a miracle's or a script's) holds the camera");
-		}
 	}
 	Pending pending {.frame = frame, .path = path, .camera = camera, .framing = framing, .hideGui = hideGui};
 	if (feature.has_value())

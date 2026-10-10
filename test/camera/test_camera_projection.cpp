@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <chrono>
 #include <memory>
 
 #include <glm/mat4x4.hpp>
@@ -74,4 +75,31 @@ TEST(CameraProjection, AGivenProjectionClipsAtItsNearPlane)
 	camera.SetProjectionMatrix(source->GetProjectionMatrix(Camera::Projection::Normal));
 	EXPECT_FALSE(KeptByDepth(Clip(camera, 3.4f)));
 	EXPECT_TRUE(KeptByDepth(Clip(camera, 3.6f)));
+}
+
+// A camera shown elsewhere for a frame (the inspector's override) is given its whole movement back, so that it carries
+// on from where it was going, not from where it was shown
+TEST(CameraProjection, ItsMovementIsGivenBackWhole)
+{
+	using namespace std::chrono_literals;
+	Camera camera;
+	camera.SetOriginInterpolator({0.0f, 10.0f, 0.0f}, {100.0f, 10.0f, 0.0f}, glm::vec3(0.0f), glm::vec3(0.0f));
+	camera.SetFocusInterpolator({0.0f, 0.0f, 50.0f}, {100.0f, 0.0f, 50.0f}, glm::vec3(0.0f), glm::vec3(0.0f));
+	camera.SetInterpolatorDuration(2s);
+	camera.SetInterpolatorTime(1s);
+	const auto origin = camera.GetOrigin();
+	const auto focus = camera.GetFocus();
+	const auto own = camera.GetMotion();
+
+	camera.SetOrigin({5.0f, 500.0f, 5.0f}).SetFocus({6.0f, 0.0f, 6.0f});
+	EXPECT_EQ(camera.GetOrigin(), glm::vec3(5.0f, 500.0f, 5.0f));
+
+	camera.SetMotion(own);
+	EXPECT_EQ(camera.GetOrigin(), origin);
+	EXPECT_EQ(camera.GetFocus(), focus);
+	EXPECT_EQ(camera.GetInterpolatorTime(), 1s);
+	EXPECT_EQ(camera.GetInterpolatorDuration(), 2s);
+	// And carries on to where it was going
+	camera.SetInterpolatorT(1.0f);
+	EXPECT_NEAR(camera.GetOrigin().x, 100.0f, 1e-3f);
 }
