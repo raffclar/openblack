@@ -77,7 +77,6 @@ private:
 	/// The tips the player has read, which the temple keeps from land to land
 	script_highlights::TipsRead _tipsRead;
 	/// The sign whose tip the help system's bubble shows
-	entt::entity _tipShownBy {entt::null};
 	std::vector<entt::scoped_connection> _connections;
 };
 

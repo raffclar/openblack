@@ -18,6 +18,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Camera/Camera.h"
+#include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
 
 using namespace openblack;
@@ -76,8 +77,8 @@ void ScriptControlSystem::ReleaseCamera(Camera& camera)
 {
 	if (GetScriptCamera(camera) != nullptr)
 	{
-		// The player gets a camera of their own, starting from where the script left it
-		camera.SetModel(CameraModel::CreateModel(CameraModel::Model::DefaultWorld));
+		// The player gets a camera of their own, starting from where the script left it and looking the same way
+		camera.SetModel(std::make_unique<DefaultWorldCameraModel>(camera.GetOrigin(), camera.GetFocus()));
 	}
 	else
 	{

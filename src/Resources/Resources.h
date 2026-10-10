@@ -40,6 +40,7 @@ public:
 	CameraEditManager& GetCameraEdits() override { return _cameraEdits; }
 	CameraZoneManager& GetCameraZones() override { return _cameraZones; }
 	DanceFileManager& GetDanceFiles() override { return _danceFiles; }
+	HandDemoManager& GetHandDemos() override { return _handDemos; }
 	ParticleFileManager& GetParticleFiles() override { return _particleFiles; }
 	ParticleBitmapManager& GetParticleBitmaps() override { return _particleBitmaps; }
 	GestureTemplatesManager& GetGestureTemplates() override { return _gestureTemplates; }
@@ -117,6 +118,7 @@ private:
 	CameraEditManager _cameraEdits;
 	CameraZoneManager _cameraZones;
 	DanceFileManager _danceFiles;
+	HandDemoManager _handDemos;
 	ParticleFileManager _particleFiles;
 	ParticleBitmapManager _particleBitmaps;
 	GestureTemplatesManager _gestureTemplates;
