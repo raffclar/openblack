@@ -40,6 +40,7 @@
 #include "Common/RandomNumberManager.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/CameraBookmark.h"
 #include "ECS/Components/ChimneySmoke.h"
@@ -64,6 +65,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageLight.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WallHug.h"
@@ -75,6 +77,7 @@
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
@@ -94,6 +97,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
+#include "ECS/Systems/CreaturePenSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
@@ -150,6 +154,7 @@
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
+#include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
@@ -268,6 +273,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"reactionSystem", "magic.reactions"},
     LocatorCoverage {"teleportSystem", "magic.teleport"},
     LocatorCoverage {"creatureCarryOverSystem", "creatures.systems"},
+    LocatorCoverage {"creaturePenSystem", "creatures.systems"},
     LocatorCoverage {"creatureFizzSystem", "creatures.systems"},
     LocatorCoverage {"tattooEditorSystem", "creatures.systems"},
     LocatorCoverage {"tornadoSystem", "magic.state"},
@@ -276,6 +282,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"forestSystem", "living.forests"},
     LocatorCoverage {"fireflySystem", "living.fireflies"},
     LocatorCoverage {"fishFarmSystem", "living.fish_farms"},
+    LocatorCoverage {"animatedStaticSystem", "living.animated_statics"},
     LocatorCoverage {"gestureSystem", "players.gestures"},
     LocatorCoverage {"miracleFxSystem", "magic.state"},
     LocatorCoverage {"fireSystem", "magic.fires"},
@@ -286,6 +293,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"inspector", "engine.services"},
     LocatorCoverage {"vm", "script.vm"},
     LocatorCoverage {"chlapi", "script.natives"},
+    LocatorCoverage {"villageTotemSystem", "living.totems"},
     LocatorCoverage {"videoSystem", "view.video"},
     LocatorCoverage {"playerProfileSystem", "players.new_game"},
     LocatorCoverage {"tutorialSkipSystem", "players.new_game"},
@@ -713,6 +721,40 @@ std::unique_ptr<ProviderInterface> SkyStateProvider(std::unique_ptr<ProviderInte
 std::unique_ptr<ProviderInterface> LivingProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("living");
+	provider->Add(
+	    Query("animated_statics", "The scenery the scripts open and close: its open word and its gate stones' value", {},
+	          ResultKind::List),
+	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
+		    Json items = Json::array();
+		    registry.Each<const AnimatedStatic>([&items, &registry](entt::entity entity, const AnimatedStatic& scenery) {
+			    auto item = Listed(registry, entity);
+			    item["open_state"] = scenery.openState;
+			    if (Locator::animatedStaticSystem::has_value())
+			    {
+				    item["gate_stones_value"] = Optional(Locator::animatedStaticSystem::value().GateStoneValue(entity));
+			    }
+			    items.push_back(std::move(item));
+		    });
+		    return items;
+	    }));
+	provider->Add(
+	    Query("totems",
+	          "The village centres' totems: their town centre, the share they are held at, and whether "
+	          "the hand grips one",
+	          {}, ResultKind::List),
+	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
+		    Json items = Json::array();
+		    const auto gripped =
+		        Locator::villageTotemSystem::has_value() ? Locator::villageTotemSystem::value().GetGripped() : std::nullopt;
+		    registry.Each<const VillageTotem>([&items, &registry, gripped](entt::entity entity, const VillageTotem& totem) {
+			    auto item = Listed(registry, entity);
+			    item["town_centre"] = Id(totem.townCentre);
+			    item["held"] = totem.held;
+			    item["gripped"] = gripped.has_value() && *gripped == entity;
+			    items.push_back(std::move(item));
+		    });
+		    return items;
+	    }));
 	provider->Add(Query("action", "A villager's or animal's action states: top, final, previous, and turns in them",
 	                    {IdParameter("The living thing's entity id")}),
 	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& context) {
@@ -918,6 +960,39 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                  });
 		                  return items;
 	                  }));
+	provider->Add(
+	    Query("animated_statics",
+	          "The scenery the scripts open and close (gates, the gate stone plinth, the piper's cave, the phone box): "
+	          "its open word, place in its clip and resting place, whether it is in the land's draw list and was on "
+	          "screen, its gate stones' value and the circles a creature's route goes round",
+	          {}, ResultKind::List),
+	    Serve<Locator::animatedStaticSystem>(
+	        "the animated scenery", [](const ecs::systems::AnimatedStaticSystemInterface& scenery, const QueryContext& /*c*/) {
+		        Json items = Json::array();
+		        const auto* registry = Registry();
+		        if (registry == nullptr)
+		        {
+			        return items;
+		        }
+		        registry->Each<const AnimatedStatic>([&](entt::entity entity, const AnimatedStatic& still) {
+			        auto item = Listed(*registry, entity);
+			        item["type"] = static_cast<int>(still.type);
+			        item["open"] = still.openState;
+			        if (const auto* pose = registry->TryGet<const AnimatedStaticPose>(entity); pose != nullptr)
+			        {
+				        item["place"] = pose->place;
+				        item["resting_place"] = pose->restingPlace;
+				        item["in_draw_list"] = pose->inDrawList;
+				        item["on_screen"] = pose->onScreen;
+				        item["stones_drawn"] = pose->stones.size();
+			        }
+			        item["stone_value"] = scenery.GateStoneValue(entity).value_or(0);
+			        const auto circles = scenery.RouteCircles(entity);
+			        item["route_circles"] = circles.has_value() ? Json(circles->size()) : Json(nullptr);
+			        items.push_back(std::move(item));
+		        });
+		        return items;
+	        }));
 	provider->Add(Query("chimneys", "The chimneys smoking", {}, ResultKind::List),
 	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
 		              Json items = Json::array();
@@ -1629,6 +1704,8 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		              {
 			              result["mind_kept"] = Locator::creatureCarryOverSystem::value().Kept() != nullptr;
 		              }
+		              // The temples' pens: each creature's shrunk size there is its Creature component's penSize
+		              result["pens"] = Locator::creaturePenSystem::has_value();
 		              if (Locator::creatureFizzSystem::has_value())
 		              {
 			              const auto scroll = Locator::creatureFizzSystem::value().EyeStaticScroll();

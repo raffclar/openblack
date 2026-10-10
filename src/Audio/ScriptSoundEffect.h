@@ -62,6 +62,16 @@ struct SoundEffectConditions
 /// The file of a bank a script names by number, without its folder, or none for a number that names no bank
 [[nodiscard]] std::optional<std::string_view> ScriptSoundBankFile(int32_t bank);
 
+/// The bank a sound group's file is, by its file name whatever its case, None for a file that is no such bank
+[[nodiscard]] ScriptSoundBank BankOfFile(std::string_view file);
+
+/// Whether the interface is in the player's creature fight controls: the player's creature fights while the camera
+/// watches the fight and the hand holds nothing (pressing on either fighter keeps the controls)
+[[nodiscard]] constexpr bool InCreatureFightControls(bool playersCreatureFights, bool cameraWatchesFight, bool handEmpty)
+{
+	return playersCreatureFights && cameraWatchesFight && handEmpty;
+}
+
 /// Whether a sound effect of this bank, with this user parameter, is heard in these conditions. With the game's sound
 /// turned off by a script, only the advisors' and the villagers' speech still play.
 [[nodiscard]] bool SoundEffectHeard(const SoundEffectConditions& conditions, ScriptSoundBank bank, uint16_t userParam);
