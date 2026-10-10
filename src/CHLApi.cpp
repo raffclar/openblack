@@ -103,6 +103,7 @@
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TownDesire.h"
 #include "ECS/TownPlaythings.h"
@@ -4545,10 +4546,13 @@ void CallBuildingInTown() // 375 CALL_BUILDING_IN_TOWN
 
 void SetCanBuildWorshipsite() // 376 SET_CAN_BUILD_WORSHIPSITE
 {
-	// const auto object = Pop().uintVal;
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A town or a temple is let have worship sites made, or stopped
+	const auto object = PopObject();
+	const auto enable = Pop().intVal != 0;
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().SetCanHaveSites(object, enable);
+	}
 }
 
 void GetFacingCameraPosition() // 377 GET_FACING_CAMERA_POSITION

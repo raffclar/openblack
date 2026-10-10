@@ -52,6 +52,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "InfoConstants.h"
@@ -408,18 +409,27 @@ void FeatureScriptCommands::CreateCreaturePen([[maybe_unused]] glm::vec3 positio
 	// __func__);
 }
 
-void FeatureScriptCommands::CreateWorshipSite([[maybe_unused]] glm::vec3 position, int32_t, const std::string&,
-                                              const std::string&, int32_t, int32_t)
+void FeatureScriptCommands::CreateWorshipSite(glm::vec3 /*position*/, int32_t /*siteType*/, const std::string& playerOwner,
+                                              const std::string& tribeType, int32_t /*rotation*/, int32_t /*size*/)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The site goes in its tribe's place round the player's temple, whatever spot, kind, facing and size the line gives
+	const auto tribe = k_TribeLookup.find(tribeType);
+	if (tribe == k_TribeLookup.end())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: CREATE_WORSHIP_SITE: unknown tribe {}", tribeType);
+		return;
+	}
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().MakeBuiltSite(GetPlayerName(playerOwner), tribe->second);
+	}
 }
 
-void FeatureScriptCommands::CreatePlannedWorshipSite([[maybe_unused]] glm::vec3 position, int32_t, const std::string&,
-                                                     const std::string&, int32_t, int32_t)
+void FeatureScriptCommands::CreatePlannedWorshipSite(glm::vec3 /*position*/, int32_t, const std::string&, const std::string&,
+                                                     int32_t, int32_t)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The game reads the line and does nothing with it: a worship site to come is only ever asked for by a town of its
+	// tribe once the temple stands
 }
 
 void FeatureScriptCommands::CreateAnimal(glm::vec3 position, int32_t type, int32_t flockId, int32_t townId)

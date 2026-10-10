@@ -124,6 +124,12 @@ struct MapSources
 ///   town.homeless {id}                  a town's people without a home
 [[nodiscard]] std::unique_ptr<ProviderInterface> MakeTownProvider(WorldSources sources);
 
+// The worship sites
+
+///   worship.sites                       the worship sites: temple, player, tribe, place, towns, built, prayer power
+///   worship.totems                      the town centres' totems: share, ease, the hand's hold
+[[nodiscard]] std::unique_ptr<ProviderInterface> MakeWorshipProvider(WorldSources sources);
+
 // The players' influence
 
 /// A player's influence at a point: with what the hand keeps past the border, at the hand's own place, and its own

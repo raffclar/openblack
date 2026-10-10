@@ -27,8 +27,13 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/Dance.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/VillageTotem.h"
+#include "ECS/Components/WorshipChants.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 
@@ -540,6 +545,84 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeTownProvider(WorldS
 		              {
 			              items.push_back(Listed(*registry, Info(sources), villager));
 		              }
+		              return QueryResult::Value(std::move(items));
+	              });
+	return provider;
+}
+
+std::unique_ptr<ProviderInterface> openblack::inspector::MakeWorshipProvider(WorldSources sources)
+{
+	auto provider = std::make_unique<FunctionProvider>("worship");
+	provider->Add(Query("sites",
+	                    "The worship sites: their temple, player, tribe, place round the temple, towns, altar, how far "
+	                    "they are built, and their prayer power: dancers, battery, what can be drawn this turn and what "
+	                    "has been, the dance's intensity and the strain",
+	                    {}, ResultKind::List),
+	              [sources](const QueryContext& /*context*/) {
+		              const auto* registry = Registry(sources);
+		              if (registry == nullptr)
+		              {
+			              return QueryResult::Error(std::string(k_NoRegistry));
+		              }
+		              Json items = Json::array();
+		              registry->Each<const WorshipSite>([&](entt::entity entity, const WorshipSite& site) {
+			              auto item = Listed(*registry, Info(sources), entity);
+			              item["temple"] = Id(site.temple);
+			              item["player"] = static_cast<int>(site.player);
+			              item["tribe"] = static_cast<int>(site.tribe);
+			              item["place"] = site.place;
+			              item["facing"] = site.facing;
+			              Json towns = Json::array();
+			              for (const auto town : site.towns)
+			              {
+				              towns.push_back(Id(town));
+			              }
+			              item["towns"] = std::move(towns);
+			              item["altar"] = Id(site.altar);
+			              item["dance"] = Id(site.dance);
+			              item["food_pot"] = Id(site.foodPot);
+			              const auto* dance = registry->Valid(site.dance) ? registry->TryGet<const Dance>(site.dance) : nullptr;
+			              item["dancers"] = dance != nullptr ? dance->dancers : 0;
+			              item["dancing"] = dance != nullptr && dance->state == Dance::State::Dancing;
+			              const auto* progress = registry->TryGet<const BuildProgress>(entity);
+			              item["built"] = progress == nullptr ? 1.0f : progress->built;
+			              if (const auto* chants = registry->TryGet<const WorshipChants>(entity); chants != nullptr)
+			              {
+				              item["battery"] = chants->battery;
+				              item["available"] = chants->available;
+				              item["used"] = chants->used;
+				              item["requested"] = chants->requested;
+				              item["dance_intensity"] = chants->danceIntensity;
+				              item["strain"] = chants->strain;
+			              }
+			              items.push_back(std::move(item));
+		              });
+		              return QueryResult::Value(std::move(items));
+	              });
+	provider->Add(Query("totems",
+	                    "The town centres' totems: their town centre, icon, the share they stand at and ease to, how fast "
+	                    "they move, the share the hand holds one at, and whether the hand holds it",
+	                    {}, ResultKind::List),
+	              [sources](const QueryContext& /*context*/) {
+		              const auto* registry = Registry(sources);
+		              if (registry == nullptr)
+		              {
+			              return QueryResult::Error(std::string(k_NoRegistry));
+		              }
+		              Json items = Json::array();
+		              registry->Each<const VillageTotem>([&](entt::entity entity, const VillageTotem& totem) {
+			              auto item = Listed(*registry, Info(sources), entity);
+			              item["town_centre"] = Id(totem.townCentre);
+			              item["icon"] = Id(totem.icon);
+			              item["rest_y"] = totem.restY;
+			              item["share"] = totem.ease.share;
+			              item["speed"] = totem.ease.speed;
+			              item["target"] = totem.ease.target;
+			              item["moving"] = totem.ease.moving;
+			              item["held"] = totem.held;
+			              item["gripped"] = totem.gripped;
+			              items.push_back(std::move(item));
+		              });
 		              return QueryResult::Value(std::move(items));
 	              });
 	return provider;
