@@ -11,6 +11,8 @@
 
 #include "HelpTextSystem.h"
 
+#include <chrono>
+
 #include <spdlog/spdlog.h>
 
 #include "Audio/AudioManagerInterface.h"
@@ -115,7 +117,16 @@ help::AdvisorVoices::Audio HelpTextSystem::VoiceAudio()
 		{
 			return std::nullopt;
 		}
-		return LineRecording(*Locator::resources::value().GetSounds().Handle(*sound));
+		const auto begin = std::chrono::steady_clock::now();
+		auto recording = LineRecording(*Locator::resources::value().GetSounds().Handle(*sound));
+		if (const auto logger = spdlog::get("audio"); logger != nullptr)
+		{
+			const std::chrono::duration<float, std::milli> took = std::chrono::steady_clock::now() - begin;
+			SPDLOG_LOGGER_DEBUG(logger, "Advisor line {}: {} samples at {} Hz, {} cue labels, read in {:.2f} ms", line,
+			                    recording.samples.size(), recording.sampleRate, recording.labels ? recording.labels->size() : 0,
+			                    took.count());
+		}
+		return recording;
 	};
 	audio.playPositionMs = [this](uint32_t) -> int64_t {
 		if (!Sounding(_advisorLine))

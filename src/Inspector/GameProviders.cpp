@@ -2090,6 +2090,7 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 			        }
 			        items.push_back({{"advisor", dude == 0 ? "good" : "evil"},
 			                         {"mouth", {{"weights", weights}, {"shapes", shapes}}},
+			                         {"tags_left", spirit.TagsLeft()},
 			                         {"control_state", static_cast<int>(controller.State(dude))},
 			                         {"state", spirit.State()},
 			                         {"hover", Point(spirit.Hover())},

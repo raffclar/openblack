@@ -463,6 +463,8 @@ public:
 		_slotPhase[i] = phase;
 	}
 	[[nodiscard]] const std::vector<AnimLayer>& Layers() const { return _layers; }
+	/// The gesture tags of the line being said that have not fired yet
+	[[nodiscard]] size_t TagsLeft() const { return _tags.size() - _nextTag; }
 	[[nodiscard]] const std::vector<AnimSound>& Sounds() const { return _sounds; }
 	/// Each eye's pupil texture scale across and down, once the face has been updated; until then the mesh keeps its
 	/// own texture coordinates
