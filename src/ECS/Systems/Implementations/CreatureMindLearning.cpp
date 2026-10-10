@@ -1351,22 +1351,6 @@ bool CreatureMindSystem::CarryOutForScript(entt::entity creature, std::vector<cr
 	return true;
 }
 
-bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, entt::entity target,
-                                        std::optional<entt::entity> with)
-{
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto* tables = GetTables();
-	if (tables == nullptr || action >= tables->actions.size() || !registry.Valid(creature) ||
-	    !registry.AllOf<CreatureMindState>(creature))
-	{
-		return false;
-	}
-	// The script takes control of it first, so the action's agenda is made for a creature under a script's control
-	registry.AssignOrReplace<ScriptControlled>(creature);
-	return ForcePlan(
-	    creature, {.desire = Desire::ObeyPlayer, .action = tables->actions[action].name, .object = target, .instrument = with});
-}
-
 void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::Situation& situation)
 {
 	const auto& registry = Locator::entitiesRegistry::value();

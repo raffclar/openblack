@@ -97,6 +97,9 @@ private:
 	           const creature_plan_actions::Situation& situation);
 	/// Gives up the plan carried out, if any
 	static void Abandon(components::CreatureMindState& mind);
+	/// A script makes a creature pick a fight with another: it asks, and they fight if the other agrees; either way the
+	/// script's order is carried out
+	bool FightForScript(entt::entity creature, entt::entity opponent);
 	/// Learns what feedback teaches, from what the creature did lately
 	void LearnFromFeedback(entt::entity creature, components::CreatureMindState& mind, float feedback);
 	/// Plans the desires due this turn for one creature
