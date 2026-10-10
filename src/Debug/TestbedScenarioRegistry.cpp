@@ -701,6 +701,32 @@ void AddGrowth(std::vector<Scenario>& all)
 	    .creatures = parade,
 	    .commands = parading,
 	});
+
+	// A temple well west of the middle, turned as Land 1's, and a tiger standing off to its east
+	constexpr glm::vec2 k_Temple {-300.0f, 100.0f};
+	constexpr float k_TempleTurn = 36.0f;
+	constexpr glm::vec2 k_OutOfThePen {-240.0f, 40.0f};
+	all.push_back({
+	    .id = "growth.temple_pen",
+	    .name = "Shrinking in the temple's pen",
+	    .facet = Facet::Growth,
+	    .description = "A tiger of size 2 belonging to the player, whose temple stands to the west, walks home to the "
+	                   "temple's pen, waits there and walks back out, and again.",
+	    .expected = "Its home is the pen in front of the temple. Walking in between the pen's two walls it shrinks, from its "
+	                "own size 16 units from the middle of the pen to a newborn's size (0.22) 14 units from it; small, it "
+	                "walks more slowly and its animations play faster. Walking out it grows back the same way. Its own "
+	                "size, which the spawner shows, stays 2 throughout.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .creature = 0, .distance = 1.5f},
+	    .creatures = {[&] {
+		    auto tiger = Posed(CreatureType::Tiger, k_OutOfThePen, 90.0f);
+		    tiger.size = 2.0f;
+		    return tiger;
+	    }()},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
+	    .commands = {Act(Kind::WalkHome, 0, 1.0f, true), Go(Kind::WalkTo, 0, k_OutOfThePen, 4.0f)},
+	    .repeatFrom = 0,
+	});
 }
 
 void AddAppearance(std::vector<Scenario>& all)
@@ -1159,6 +1185,46 @@ void AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerSweep, .delaySeconds = 3.0f, .point = {0.0f, -0.5f}, .amount = 2.0f},
 	                 {.kind = Kind::PointerSweep, .delaySeconds = 5.0f, .point = {0.0f, 0.5f}, .amount = 2.0f}},
 	    .repeatFrom = 1,
+	});
+
+	// Two teleport stones the villagers jump between, the first jumps heard from the land, the later ones while the
+	// camera is in the temple
+	constexpr glm::vec2 k_StoneA {-40.0f, 20.0f};
+	constexpr glm::vec2 k_StoneB {40.0f, 70.0f};
+	all.push_back({
+	    .id = "audio.temple_quiet",
+	    .name = "The land's sound effects while the camera is in the temple",
+	    .facet = Facet::Audio,
+	    .description = "Two teleport stones; a villager beside the first walks to beside the second, through the stones, "
+	                   "and another is put down on the first. Then the temple opens on the creature's room, and the "
+	                   "villager walks back. The audio log gives the sounds started and those not heard.",
+	    .expected = "The first jumps sound where they leave and arrive. In the temple the creature's room's water and "
+	                "fire are heard, but the jumps on the land are not.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_StoneA, k_StoneB}, .distance = 0.8f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -40.0f}, 180.0f, "yours")},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = k_StoneA + glm::vec2(6.0f, 4.0f),
+	                 .walkTo = k_StoneB + glm::vec2(6.0f, 4.0f),
+	                 .walkAfterSeconds = 5.0f,
+	                 .walkRepeatSeconds = 15.0f,
+	                 .walkFinal = VillagerStates::ArrivesHome},
+	                {.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = k_StoneA + glm::vec2(-8.0f, -4.0f),
+	                 .dropOnStoneSeconds = 16.0f}},
+	    .miracles = {{.type = MagicType::Teleport,
+	                  .point = k_StoneA,
+	                  .handOffset = k_StoneA,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 1.0f,
+	                  .byHand = true},
+	                 {.type = MagicType::Teleport,
+	                  .point = k_StoneB,
+	                  .handOffset = k_StoneB,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 3.0f,
+	                  .byHand = true}},
+	    .commands = {{.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 12.0f}},
 	});
 }
 
@@ -2253,9 +2319,13 @@ std::vector<Scenario> Build()
 	AddNatureScenarios(all);
 	AddHandNavigationScenarios(all);
 	AddHandLookScenarios(all);
+	AddGateScenarios(all);
+	AddVillageTotemScenarios(all);
 	AddFishScenarios(all);
 	AddKnockScenarios(all);
 	AddHighlightScenarios(all);
+	AddSkyScenarios(all);
+	AddAdvisorScenarios(all);
 	return all;
 }
 
@@ -2306,15 +2376,18 @@ bool ValidOffset(glm::vec2 offset)
 	return std::abs(offset.x) <= k_MaxOffset && std::abs(offset.y) <= k_MaxOffset;
 }
 
-/// What is wrong with what a command acts on, if anything: the object it picks up must be a thing, what it knocks down
-/// a thing or a tree, the part it strokes, the way it looks something over and the leash put on real ones
+/// What is wrong with what a command acts on, if anything: the object it picks up must be a thing or an animal, what it
+/// knocks down a thing or a tree, the part it strokes, the way it looks something over and the leash put on real ones
 std::string_view CommandProblem(const Command& command, std::span<const ObjectSetup> objects)
 {
 	const auto* object = command.object < objects.size() ? &objects[command.object] : nullptr;
 	switch (command.kind)
 	{
 	case Kind::PickUp:
-		return object != nullptr && std::holds_alternative<MobileObjectInfo>(object->type) ? "" : "picks up no thing";
+		return object != nullptr && (std::holds_alternative<MobileObjectInfo>(object->type) ||
+		                             std::holds_alternative<AnimalInfo>(object->type))
+		           ? ""
+		           : "picks up no thing";
 	case Kind::KnockDown:
 		return object != nullptr && !std::holds_alternative<FeatureInfo>(object->type) ? "" : "knocks down no thing or tree";
 	case Kind::TieLeash:
@@ -2351,15 +2424,16 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 {
 	return kind == Kind::SetHour || kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed ||
 	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
-	       kind == Kind::HandTapObject || IsPointerCommand(kind);
+	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
+	       IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
 {
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
-	    "Idle",       "Expressions", "Senses",    "Needs",         "Growth",  "Appearance", "Light",   "Movement",
-	    "Footprints", "Audio",       "Objects",   "Hand",          "Leash",   "Combat",     "Mind",    "Particles",
-	    "Editor",     "Miracles",    "Benchmark", "Creature Mode", "Physics", "Nature",     "Animals",
+	    "Idle",      "Expressions",   "Senses",  "Needs",  "Growth",  "Appearance", "Light",     "Movement", "Footprints",
+	    "Audio",     "Objects",       "Hand",    "Leash",  "Combat",  "Mind",       "Particles", "Editor",   "Miracles",
+	    "Benchmark", "Creature Mode", "Physics", "Nature", "Animals", "Sky",        "Advisors",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
@@ -2378,7 +2452,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 89> k_Names {
+	constexpr std::array<std::string_view, 93> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -2464,10 +2538,14 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "move mouse",
 	    "turn wheel",
 	    "set alignment",
+	    "open or close",
+	    "lay gate stone",
 	    "cinema bars",
 	    "set fight lean",
 	    "set miracle sightings",
 	    "hand tap",
+	    "tell an advisor",
+	    "walk home",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
@@ -2671,6 +2749,12 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		if (command.kind == Kind::SetAlignment && !InRange(command.alignment, -1.0f, 1.0f))
 		{
 			problems.push_back(fmt::format("{}: alignment out of range", what));
+		}
+		if ((command.kind == Kind::SetOpenClose && command.object >= scenario.objects.size()) ||
+		    (command.kind == Kind::LayGateStone &&
+		     (command.object >= scenario.objects.size() || command.value >= scenario.objects.size())))
+		{
+			problems.push_back(fmt::format("{}: no such object", what));
 		}
 		if ((command.kind == Kind::Follow || command.kind == Kind::StartFight || command.kind == Kind::TieLeashToCreature) &&
 		    (command.value >= creatures || command.value == command.creature))

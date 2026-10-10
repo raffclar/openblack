@@ -90,6 +90,10 @@ enum class Facet : uint8_t
 	Nature,
 	/// The land's animals: its birds and the doves or bats about the temples
 	Animals,
+	/// The sky: the moon and its phases
+	Sky,
+	/// The player's two advisors, the good one and the evil one
+	Advisors,
 
 	_Count
 };
@@ -230,7 +234,7 @@ struct CreatureSetup
 struct ObjectSetup
 {
 	std::variant<MobileObjectInfo, TreeInfo, FeatureInfo, VillagerInfo, PotInfo, AbodeInfo, FieldTypeInfo, AnimalInfo,
-	             MobileStaticInfo, FishFarmInfo>
+	             MobileStaticInfo, AnimatedStaticInfo, FishFarmInfo>
 	    type;
 	glm::vec2 offset {0.0f};
 	float scale {1.0f};
@@ -499,6 +503,11 @@ struct Command
 		WheelTurn,
 		/// The player's alignment jumps, which the hand shows
 		SetAlignment,
+		/// A script's open (value 1) or close (value 0) of the scenario's object (a gate, the gate stone plinth); the
+		/// player's hand laying the scenario's object, a gate stone, in the plinth that is the scenario's object of this
+		/// place (value). Neither needs a creature.
+		SetOpenClose,
+		LayGateStone,
 		/// A script's cinema bars slide in (value 1) or out (value 0)
 		WideScreen,
 		/// Its history, as the Creature Cave's trophies show it: how it leans in fights (amount, -1 defensive to 1
@@ -509,6 +518,11 @@ struct Command
 		/// The player's hand knocks on the scenario's object, a building, as the Action button pressed on it does, from
 		/// where the hand is
 		HandTapObject,
+		/// One of the player's advisors (value: 0 the good one, 1 the evil one) is told to do something, as the scripts
+		/// tell it (advisor). Needs no creature
+		Advisor,
+		/// The creature walks to its home: its temple's pen while its player has a temple
+		WalkHome,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -549,6 +563,27 @@ struct Command
 	std::optional<size_t> atCreature;
 	/// The player's alignment jumped to, from -1 (evil) to 1 (good)
 	float alignment {0.0f};
+	/// What an advisor is told: to come out of its corner, or to appear in a puff of smoke; to go home, or to vanish; to
+	/// cling to or fly to a point on the screen (point, from 0 to 1 across and down); to point at that point on the
+	/// screen, or at a point of the land (point, from the middle of the map), out in the world or not (gentle); to look
+	/// at the point of the land; to play an anim (anim) at the point on the screen at a speed (amount); to feel an
+	/// emotion (anim)
+	enum class AdvisorAction : uint8_t
+	{
+		Out,
+		Appear,
+		Home,
+		Vanish,
+		Cling,
+		Fly,
+		PointOnScreen,
+		PointAtLand,
+		LookAtLand,
+		PlayAnim,
+		Feel,
+	};
+	AdvisorAction advisor {AdvisorAction::Out};
+	uint32_t anim {0};
 };
 [[nodiscard]] std::string_view Name(Command::Kind kind);
 /// Whether a command is the player's mouse, which needs no creature
@@ -568,11 +603,13 @@ struct BirdFlockSetup
 	float flockDistance {10.0f};
 };
 
-/// A temple of a player's, built, at a point from the middle of the map
+/// A temple of a player's, built, at a point from the middle of the map, turned by the angle as a land's script turns
+/// one (radians about the vertical)
 struct TempleSetup
 {
 	glm::vec2 offset {0.0f};
 	PlayerNames owner {PlayerNames::PLAYER_ONE};
+	float angle {0.0f};
 };
 
 /// The player's hand held still over the land for the whole scenario, as a player holds it: from the middle of the map,
@@ -657,6 +694,8 @@ struct Scenario
 	std::vector<std::pair<std::string_view, float>> fireflyRewards;
 };
 
+/// A town centre's totem
+void AddVillageTotemScenarios(std::vector<Scenario>& all);
 /// The miracles' scenarios, added to every scenario by the registry
 void AddMiracleScenarios(std::vector<Scenario>& all);
 /// The miracles' globes and dispensers close up, and the hand's miracle effects
@@ -702,9 +741,15 @@ void AddPhysicsScenarios(std::vector<Scenario>& all);
 void AddHandNavigationScenarios(std::vector<Scenario>& all);
 /// The scenarios of how the hand looks for its player's alignment
 void AddHandLookScenarios(std::vector<Scenario>& all);
+/// The Norse gate of the creatures' glade and the gate stone plinth: opening, closing and laying the stones
+void AddGateScenarios(std::vector<Scenario>& all);
 void AddKnockScenarios(std::vector<Scenario>& all);
 /// The scrolls and signs the land scripts put up
 void AddHighlightScenarios(std::vector<Scenario>& all);
+/// The moon at night, seen to the east, for trying its phases and its path with the moon debug window
+void AddSkyScenarios(std::vector<Scenario>& all);
+/// The advisors coming out, clinging, pointing and acting
+void AddAdvisorScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them
 [[nodiscard]] std::span<const Scenario> All();

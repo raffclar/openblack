@@ -27,6 +27,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerClips.h"
 #include "Graphics/MeshDetail.h"
@@ -88,6 +89,11 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 	if (town != entt::null)
 	{
 		Locator::townSystem::value().AddVillagerToTown(town, entity);
+	}
+	// A town's first person may bring it its worship site
+	if (town != entt::null && Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().PersonJoinedTown(town);
 	}
 
 	return entity;

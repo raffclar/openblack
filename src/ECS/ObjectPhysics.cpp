@@ -21,6 +21,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
@@ -96,7 +97,7 @@ void PlaySound(audio::SoundId sound, glm::vec3 point)
 {
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(sound), point);
+		audio::PlayGameSoundEffect(static_cast<entt::id_type>(sound), point);
 	}
 }
 
@@ -167,7 +168,7 @@ void Replant(const PhysicsEntry* entry, entt::entity tree, const LandIslandInter
 	const glm::vec3 foot = position;
 	if (Locator::explosionSystem::has_value())
 	{
-		Locator::explosionSystem::value().AddSmoke(foot, objects::k_ReplantSmokeSize, objects::k_ReplantSmokeColour);
+		Locator::explosionSystem::value().AddSmoke(foot, objects::k_ReplantSmokeSize, dust_puff::Kind::Dust);
 	}
 	// TODO(force-feedback): the player who dropped it feels the planting (force feedback effect 0x2E); openblack has none
 	// The things standing round it, in a spiral out from its own cell until the cells are too far away
@@ -206,15 +207,19 @@ void Replant(const PhysicsEntry* entry, entt::entity tree, const LandIslandInter
 		}
 		map_coords::AddCells(coords, spiral.Next());
 	}
+	// It leaves its forest and joins another, keeping its size and whether it was made to grow
 	registry.Remove<ForestMember>(tree);
-	if (const auto forest = search.Forest())
+	if (Locator::forestSystem::has_value())
 	{
-		registry.Assign<ForestMember>(tree, *forest);
-	}
-	else if (search.StartsForest() && Locator::forestSystem::has_value())
-	{
-		registry.Assign<ForestMember>(tree,
-		                              Locator::forestSystem::value().MakeLandForest(std::nullopt, position, entt::null, false));
+		auto& forests = Locator::forestSystem::value();
+		if (const auto forest = search.Forest())
+		{
+			forests.JoinForest(tree, *forest);
+		}
+		else if (search.StartsForest())
+		{
+			forests.JoinForest(tree, forests.MakeLandForest(std::nullopt, position, entt::null, false));
+		}
 	}
 	// Away from towns, the player sees the forest grow
 	if (!search.NearTown() && Locator::particleSystem::has_value())

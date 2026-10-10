@@ -108,6 +108,8 @@ public:
 	/// A model made while the game runs from the triangles of another, whose skins it is drawn with (which must outlive
 	/// it): one submesh for each group of primitives
 	bool LoadMade(const L3DMesh& skinSource, std::span<const std::vector<L3DSubMesh::MadePrimitive>> subMeshes) noexcept;
+	/// A model of a file drawn with the skins of another (which must outlive it), as they change
+	bool LoadWithSkinsOf(const l3d::L3DFile& l3d, const L3DMesh& skinSource) noexcept;
 	/// A dynamic mesh takes its vertices afresh from a file of the same shape
 	void UpdateVertices(const l3d::L3DFile& l3d) noexcept;
 	/// A dynamic mesh's skin takes its texels afresh
@@ -144,6 +146,14 @@ public:
 	/// The top of the chimney the smoke rises from, in the mesh
 	[[nodiscard]] const std::optional<glm::vec3>& GetChimneyPos() const { return _chimneyPos; }
 	[[nodiscard]] const std::vector<glm::mat4>& GetExtraMetrics() const { return _extraMetrics; }
+	/// A point fixed to one of the model's bones, in that bone's space
+	struct BonePoint
+	{
+		uint32_t bone;
+		glm::vec3 point;
+	};
+	/// The first of the points fixed to its bones, when it has any: where a whale's wake comes from
+	[[nodiscard]] const std::optional<BonePoint>& GetFirstBonePoint() const { return _firstBonePoint; }
 	/// The triangles of its physics submeshes in the model's space, as the game's physics collides with them
 	[[nodiscard]] const std::vector<std::array<glm::vec3, 3>>& GetPhysicsTriangles() const { return _physicsTriangles; }
 	/// Every submesh's vertex positions in the model's space and its primitives' triangles, each primitive's indices
@@ -185,6 +195,7 @@ private:
 	const L3DMesh* _skinSource {nullptr};
 	std::unordered_map<SkinId, screen_pick::AlphaMask> _skinMasks;
 	std::vector<Footprint> _footprints; ///< If ContainsLandscapeFeature() is true
+	std::optional<BonePoint> _firstBonePoint;
 	std::vector<VolumeLight> _volumeLights;
 	std::vector<std::unique_ptr<L3DSubMesh>> _subMeshes;
 	std::vector<uint32_t> _bonesParents;

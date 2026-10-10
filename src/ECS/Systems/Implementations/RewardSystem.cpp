@@ -18,6 +18,7 @@
 
 #include "3D/LandIslandInterface.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Reward.h"
@@ -129,7 +130,7 @@ void RewardSystem::Update(float milliseconds)
 		chest.goesIntoMap = true;
 		if (Locator::audio::has_value())
 		{
-			Locator::audio::value().PlaySoundEffect(k_LandingSound.value(), std::nullopt);
+			audio::PlayGameSoundEffect(k_LandingSound.value(), std::nullopt);
 		}
 		if (Locator::explosionSystem::has_value())
 		{

@@ -29,6 +29,9 @@ public:
 	/// and the saved camera origin is restored. The original focus is lost.
 	virtual void SetBookmark(uint8_t index, const glm::vec3& position, const glm::vec3& savedCameraOrigin) const = 0;
 	virtual void ClearBookmark(uint8_t index) const = 0;
+	/// A script puts the bookmarks away, neither shown nor taken by their keys, or brings them back
+	virtual void SetEnabled(bool enabled) = 0;
+	[[nodiscard]] virtual bool IsEnabled() const = 0;
 };
 
 } // namespace openblack::ecs::systems

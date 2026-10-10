@@ -23,6 +23,7 @@
 #include "3D/L3DSubMesh.h"
 #include "3D/TempleScroll.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Common/MachineClock.h"
 #include "Graphics/GraphicsHandleBgfx.h"
@@ -270,7 +271,7 @@ bool TempleScrolls::Hold(bool pressed, float mouseY, const std::optional<TempleC
 		{
 			const auto ticks = machine_clock::Ticks();
 			const auto squeak = k_Squeaks.at(static_cast<size_t>(ticks % static_cast<int64_t>(k_Squeaks.size())));
-			Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(squeak), std::nullopt);
+			audio::PlayGameSoundEffect(static_cast<entt::id_type>(squeak), std::nullopt);
 		}
 	}
 	return true;

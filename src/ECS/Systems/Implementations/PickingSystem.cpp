@@ -25,6 +25,7 @@
 #include "Creature/CreatureMorph.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -236,6 +237,11 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		{
 			continue;
 		}
+		// A gate stone on a plinth is found only while the plinth stands closed
+		if (const auto* stone = registry.TryGet<const PlinthStone>(entity); stone != nullptr && !stone->pickable)
+		{
+			continue;
+		}
 		if (const auto* progress = registry.TryGet<const BuildProgress>(entity);
 		    progress != nullptr && registry.AllOf<Abode>(entity) && progress->built == 0.0f)
 		{
@@ -365,7 +371,12 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 	}
 	if (picked.has_value())
 	{
-		const auto entity = _candidateEntities[picked->index];
+		auto entity = _candidateEntities[picked->index];
+		// A gate stone on a plinth is the plinth to the cursor
+		if (const auto* stone = registry.TryGet<const PlinthStone>(entity); stone != nullptr && registry.Valid(stone->plinth))
+		{
+			entity = stone->plinth;
+		}
 		_pick.object = entity;
 		const auto* transform = registry.TryGet<const Transform>(entity);
 		_pick.point = transform != nullptr ? transform->position : _candidates[picked->index].origin;

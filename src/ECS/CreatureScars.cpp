@@ -107,7 +107,7 @@ void creature_scars::BurnOnCatching(entt::entity creature)
 	const auto* standing = registry.TryGet<const Transform>(creature);
 	const glm::vec3 groin = posedGroin.value_or(standing != nullptr ? standing->position : glm::vec3(0.0f));
 	auto& random = Locator::gameRandom::value();
-	const float reach = body->size * creature_marks::scar::k_BurnReachPerSize;
+	const float reach = ShownSize(*body) * creature_marks::scar::k_BurnReachPerSize;
 	for (int32_t i = 0; i < creature_marks::scar::k_CatchingBurnTries; ++i)
 	{
 		// Each try's point is drawn across, then up, then along
