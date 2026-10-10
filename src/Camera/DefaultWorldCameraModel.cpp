@@ -566,22 +566,27 @@ void DefaultWorldCameraModel::UpdateFocusDistance()
 	        .value_or(glm::max(10.0f, _averageIslandDistance));
 }
 
-bool DefaultWorldCameraModel::ConstrainZones(glm::vec3 originAtFrameStart)
+bool DefaultWorldCameraModel::ConstrainZones(glm::vec3 originAtFrameStart, glm::vec3 listener)
 {
 	if (!Locator::cameraZoneSystem::has_value() || !Locator::terrainSystem::has_value())
 	{
 		return false;
 	}
-	const auto& zones = Locator::cameraZoneSystem::value().GetZones();
+	auto& zoneSystem = Locator::cameraZoneSystem::value();
+	const auto& zones = zoneSystem.GetZones();
 	bool adjusted = false;
-	// Outside the fence it is put back inside, what it looks at moving with it
+	// Outside the fence it is put back inside, what it looks at moving with it; turned by a drag round the edge of the
+	// screen, it is put further in, and goes on turning
+	const bool edgeTurning = _dragging && _drag.GetMode() == camera_drag::DragMode::EdgeRotate;
 	if (const auto pushed = camera_zones::PushInsideFence(zones.fence, zones.fenceOn, originAtFrameStart, _targetOrigin,
-	                                                      _targetFocus, camera_zones::k_SearchRadius);
+	                                                      _targetFocus, camera_zones::SearchRadius(edgeTurning));
 	    pushed.has_value())
 	{
 		_targetOrigin += *pushed;
 		_targetFocus += *pushed;
 		adjusted = true;
+		zoneSystem.FenceHit(_targetOrigin, listener);
+		_heldBack = _heldBack || !edgeTurning;
 	}
 	adjusted |= ConstrainAltitude();
 	// Above its height limit it slides down the line it looks along
@@ -675,7 +680,7 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 		_targetOrigin = origin;
 	}
 
-	originHasBeenAdjusted |= ConstrainZones(originAtFrameStart);
+	originHasBeenAdjusted |= ConstrainZones(originAtFrameStart, camera.GetOrigin());
 
 	return ComputeUpdateReturnInfo(originHasBeenAdjusted, camera.GetInterpolatorTime());
 }
@@ -903,6 +908,32 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	{
 		_mode = Mode::Cartesian;
 	}
+
+	// Put back inside the fence, nothing the player does moves the camera until every control is let go
+	if (_heldBack)
+	{
+		if (!AnyControlHeld())
+		{
+			_heldBack = false;
+			return;
+		}
+		_rotateAroundDelta = glm::vec3();
+		_keyBoardMoveDelta = glm::vec2();
+		std::ignore = HandleDrag(false);
+		_mode = Mode::Cartesian;
+	}
+}
+
+bool DefaultWorldCameraModel::AnyControlHeld() const
+{
+	using input::BindableActionMap;
+	const auto& actionSystem = Locator::gameActionSystem::value();
+	return actionSystem.GetAny(BindableActionMap::MOVE, BindableActionMap::ROTATE_AROUND_MOUSE_ON,
+	                           BindableActionMap::ROTATE_LEFT, BindableActionMap::ROTATE_RIGHT, BindableActionMap::TILT_UP,
+	                           BindableActionMap::TILT_DOWN, BindableActionMap::MOVE_FORWARDS,
+	                           BindableActionMap::MOVE_BACKWARDS, BindableActionMap::MOVE_LEFT, BindableActionMap::MOVE_RIGHT,
+	                           BindableActionMap::ZOOM_IN, BindableActionMap::ZOOM_OUT) ||
+	       actionSystem.Get(input::UnbindableActionMap::TWO_BUTTON_CLICK) || actionSystem.GetMouseWheelDelta() != 0.0f;
 }
 
 DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
@@ -999,6 +1030,12 @@ CameraModel::HandCues DefaultWorldCameraModel::GetHandCues() const
 
 void DefaultWorldCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus)
 {
+	// A flight ending outside the fence ends where the line from there to what it looks at meets the fence
+	if (Locator::cameraZoneSystem::has_value())
+	{
+		const auto& zones = Locator::cameraZoneSystem::value().GetZones();
+		origin = camera_zones::FlightOriginInsideFence(zones.fence, zones.fenceOn, origin, focus);
+	}
 	_flightPath = CharterFlight(origin, focus, _currentOrigin, k_FlightHeightFactor);
 	// One of four wooshes, picked by the clock, centred on the listener
 	static constexpr auto k_WooshingNoiseIds = std::array<audio::SoundId, 4> {

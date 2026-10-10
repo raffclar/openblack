@@ -235,9 +235,9 @@ constexpr int k_NeutralPlayer = 7;
 void AddEffect(Frame& frame, const Effect::DrawWalk& walk, DrawPath path, const glm::vec3& origin, int player,
                const Sources& sources);
 /// Adds a sheet of light to the frame, sorted with everything else that blends by a point: added to what is behind it,
-/// seen from both sides, its sheet of stars repeating along and up it
+/// seen from both sides, its texture (a sheet of stars, or the force field's) repeating along and up it
 void AddLightSheet(Frame& frame, std::span<const LightSheet::Vertex> vertices, std::span<const uint32_t> triangles,
-                   const glm::vec3& sortPoint);
+                   const glm::vec3& sortPoint, LightSheet::Look look = LightSheet::Look::Stars);
 
 /// The three sprites of a player's symbol, in the order drawn: a still glow, a turning glow, then the symbol. Their
 /// materials are the glow's for the first two and the symbol's for the third.
