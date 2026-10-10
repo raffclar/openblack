@@ -148,6 +148,17 @@ moon::Glow moon::MakeGlow(const glm::mat3& basis, const glm::vec3& position)
 	};
 }
 
+moon::Glow moon::SeaGlow(const glm::mat4& view, const glm::mat4& inverseView, const glm::vec3& position)
+{
+	const glm::vec3 inTheSea {position.x, -position.y, position.z};
+	auto glow = MakeGlow(Basis(view, inverseView, inTheSea), inTheSea);
+	for (auto& corner : glow.corners)
+	{
+		corner.y = -corner.y;
+	}
+	return glow;
+}
+
 glm::vec3 moon::GlowColour(const glm::vec3& moonColour)
 {
 	return {moonColour.r / 6.0f, moonColour.g / 5.0f, moonColour.b / 4.0f};

@@ -3229,12 +3229,14 @@ void Renderer::DrawMoon(RenderPass viewId) const
 	{
 		return;
 	}
-	// The moon keeps its place beside the player's camera and faces it. Drawn so in the mirrored view, it is mirrored
-	// in the sea with everything else.
+	// The moon keeps its place beside the player's camera and faces it. The sea shows it mirrored, and the glow of a
+	// copy of it with its height mirrored through sea level.
+	const bool inTheSea = viewId == RenderPass::ReflectionSky;
 	const auto& camera = Locator::camera::value();
 	const auto centre = camera.GetOrigin() + moon->placement->offset;
 	const auto view = camera.GetViewMatrix(Camera::Interpolation::Current);
-	const auto basis = moon::Basis(view, glm::inverse(view), centre);
+	const auto inverseView = glm::inverse(view);
+	const auto basis = moon::Basis(view, inverseView, centre);
 	const auto& colour = moon->colour;
 	// It shows less through an overcast
 	const float alpha = moon->strength / 255.0f;
@@ -3243,17 +3245,20 @@ void Renderer::DrawMoon(RenderPass viewId) const
 		return;
 	}
 
-	// First its glow, added to the sky
-	const auto& textures = Locator::resources::value().GetTextures();
-	bgfx::VertexLayout layout;
-	layout.begin()
-	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-	    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
-	    .end();
-	constexpr auto k_GlowVertices = static_cast<uint32_t>(moon::k_GlowIndices.size());
-	if (glowLook != nullptr && textures.Contains(glowLook->textureId) && textures.Contains(glowLook->alphaTextureId) &&
-	    bgfx::getAvailTransientVertexBuffer(k_GlowVertices, layout) == k_GlowVertices)
-	{
+	// Its glow, added to the sky
+	const auto drawGlow = [&](const moon::Glow& glow) {
+		const auto& textures = Locator::resources::value().GetTextures();
+		bgfx::VertexLayout layout;
+		layout.begin()
+		    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+		    .end();
+		constexpr auto k_GlowVertices = static_cast<uint32_t>(moon::k_GlowIndices.size());
+		if (glowLook == nullptr || !textures.Contains(glowLook->textureId) || !textures.Contains(glowLook->alphaTextureId) ||
+		    bgfx::getAvailTransientVertexBuffer(k_GlowVertices, layout) != k_GlowVertices)
+		{
+			return;
+		}
 		struct Vertex
 		{
 			glm::vec3 position;
@@ -3262,7 +3267,6 @@ void Renderer::DrawMoon(RenderPass viewId) const
 		bgfx::TransientVertexBuffer buffer;
 		bgfx::allocTransientVertexBuffer(&buffer, k_GlowVertices, layout);
 		const auto vertices = std::span(reinterpret_cast<Vertex*>(buffer.data), k_GlowVertices);
-		const auto glow = moon::MakeGlow(basis, centre);
 		for (size_t i = 0; i < vertices.size(); ++i)
 		{
 			const auto corner = moon::k_GlowIndices.at(i);
@@ -3280,21 +3284,37 @@ void Renderer::DrawMoon(RenderPass viewId) const
 		bgfx::setVertexBuffer(0, &buffer);
 		bgfx::setState(k_AdditiveState | BGFX_STATE_DEPTH_TEST_GREATER);
 		program->Submit(static_cast<bgfx::ViewId>(viewId));
-	}
+	};
 
-	// Then the moon, blended over the sky, its face turned to the real moon's phase. It leaves its depth, so the land
-	// nearer than it is drawn over it and the land beyond it stays hidden.
-	const auto phase = moon->phase;
-	DrawCelestialMesh(
-	    viewId, {
-	                .meshId = body->meshId,
-	                .textureId = body->textureId,
-	                .alphaTextureId = body->alphaTextureId,
-	                .model = moon::Model(basis, centre, phase),
-	                .colour = glm::vec4(colour, alpha),
-	                .celestial = {std::cos(phase), std::sin(phase), 1.0f, 1.0f},
-	                .state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA,
-	            });
+	// The moon, blended over the sky, its face turned to the real moon's phase. It leaves its depth, so the land nearer
+	// than it is drawn over it and the land beyond it stays hidden. Its half sphere shows only its outside, as its
+	// material is one sided: the half turned away from the camera, around a new moon, shows nothing. Mirrored in the
+	// sea, the faces that turn towards the camera are the other way round.
+	const auto drawMoon = [&]() {
+		const auto phase = moon->phase;
+		DrawCelestialMesh(viewId, {
+		                              .meshId = body->meshId,
+		                              .textureId = body->textureId,
+		                              .alphaTextureId = body->alphaTextureId,
+		                              .model = moon::Model(basis, centre, phase),
+		                              .colour = glm::vec4(colour, alpha),
+		                              .celestial = {std::cos(phase), std::sin(phase), 1.0f, 1.0f},
+		                              .state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER |
+		                                       BGFX_STATE_BLEND_ALPHA | (inTheSea ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW),
+		                          });
+	};
+
+	if (inTheSea)
+	{
+		// In the sea, the moon mirrored with everything else by the mirrored view, then the glow of its copy, which
+		// the mirrored moon in front of it hides
+		drawMoon();
+		drawGlow(moon::SeaGlow(view, inverseView, centre));
+		return;
+	}
+	// In the sky, the glow first, then the moon over it
+	drawGlow(moon::MakeGlow(basis, centre));
+	drawMoon();
 }
 
 void Renderer::DrawSun(RenderPass viewId) const

@@ -79,6 +79,11 @@ struct Glow
 	std::array<glm::vec2, 4> uvs;
 };
 [[nodiscard]] Glow MakeGlow(const glm::mat3& basis, const glm::vec3& position);
+/// The glow of the moon's copy in the sea, for drawing in the view mirrored through sea level. The copy stands where
+/// the moon is with its height mirrored through sea level, and its glow faces the camera from there; its corners are
+/// mirrored back, so that the mirrored view shows it so. The copy's glow is all that is drawn of it: the moon in the sea
+/// is the moon itself, mirrored.
+[[nodiscard]] Glow SeaGlow(const glm::mat4& view, const glm::mat4& inverseView, const glm::vec3& position);
 /// The glow's two triangles
 inline constexpr std::array<uint16_t, 6> k_GlowIndices = {0, 1, 3, 3, 2, 0};
 
