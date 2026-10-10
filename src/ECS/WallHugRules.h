@@ -13,8 +13,13 @@
 
 #include <optional>
 #include <span>
+#include <vector>
 
+#include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
+
+#include "3D/AllMeshes.h"
 
 // The rules of the wall-hugging walk that villagers (and other walkers) use to get round the circles of the things in
 // their way.
@@ -96,6 +101,48 @@ struct BlockingCircle
 	bool landscapeOrFence;
 };
 
+/// How a thing on the map stands in the walkers' way
+enum class ThingShape : uint8_t
+{
+	/// Not at all: forests as a whole, fields (walked over), and things that can be carried, like pots
+	None,
+	/// A small circle round its trunk, whatever its size: a tree
+	Trunk,
+	/// The outline of its model's box: one circle, or the row of circles along a long box (buildings, features, rocks,
+	/// gates and the like)
+	ModelBox,
+	/// A temple: a wide circle over its middle and seven spokes of small circles round it, the outer ends of the first
+	/// two bent towards each other, the same whatever its model and size
+	TempleRing,
+};
+
+/// The radius of a tree's trunk to the walkers, in metres
+constexpr float k_TreeTrunkRadius = 0.3f;
+
+/// A thing as the walkers see it: how it stands in their way, where it is placed, and its model's box (unscaled)
+struct ThingOnMap
+{
+	ThingShape shape;
+	glm::vec3 position;
+	glm::mat3 rotation;
+	float scale;
+	glm::vec3 boxCentre;
+	glm::vec3 boxHalfSize;
+	/// A fence, which the walkers take as they take water or the land's edge
+	bool fence;
+};
+
+/// The circles a thing stands in the walkers' way with, in the order they come across them
+[[nodiscard]] std::vector<BlockingCircle> CirclesOf(const ThingOnMap& thing);
+
+/// The circles of a temple whose middle stands at a point on the land, turned by an angle about the vertical (radians,
+/// the direction its model's x axis points across the land, x towards z): the wide one over its middle, then each
+/// spoke's circles from the inside out, the spokes in turn round the temple
+[[nodiscard]] std::vector<BlockingCircle> TempleRingCircles(glm::vec2 centre, float yAngle);
+
+/// Whether a model is a fence's: the American fence and the Celtic short and tall fences
+[[nodiscard]] bool IsFenceModel(MeshId model);
+
 /// What a walker going round a circle does after looking along it
 struct CircleSweep
 {
@@ -135,5 +182,20 @@ struct CircleSweepInput
 
 /// A walker going round a circle looks along its arc, as above
 [[nodiscard]] CircleSweep SweepCircle(const CircleSweepInput& input);
+
+/// What a walker heading straight on finds ahead of it
+struct LineScan
+{
+	/// The turns until it reaches the circle ahead; k_NoObstacleInReach when nothing is in reach
+	uint8_t turnsToObstacle;
+	/// The circle it will reach, of those it was given
+	std::optional<size_t> circle;
+};
+
+/// A walker heading straight on from its map position along its step looks for the nearest circle its line meets, of
+/// those given in the order the game comes across them: the first circle whose near edge comes before every other's
+/// along the line, where a circle the walker has gone more than a fifth of a metre into doesn't count. It reaches it
+/// after the distance to that edge over its step, in whole turns; more than 255 turns away is out of reach.
+[[nodiscard]] LineScan ScanLine(glm::ivec2 position, glm::ivec2 step, std::span<const BlockingCircle> circles);
 
 } // namespace openblack::ecs::wall_hug

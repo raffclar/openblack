@@ -16,6 +16,7 @@
 #include <vector>
 
 #include <entt/core/hashed_string.hpp>
+#include <glm/gtc/type_precision.hpp>
 #include <glm/mat4x4.hpp>
 
 #include "Extent.h"
@@ -52,6 +53,12 @@ public:
 	/// The cell at the given coordinates in the 17x17 cell array of its block, so the neighbours at +1 (z + 1),
 	/// +17 (x + 1) and +18 are also valid. Null outside the map or where there is no block.
 	[[nodiscard]] virtual const lnd::LNDCell* FindCell(const glm::u16vec2& coordinates) const = 0;
+	/// Sets a cell corner's altitude while the game runs, in every block that shares the corner. The land the game reads
+	/// changes at once; its drawing follows at the next CommitAltitudeChanges. Lands that can't change ignore it.
+	virtual void SetCellAltitude(glm::u16vec2 /*coordinates*/, uint8_t /*altitude*/) {}
+	/// The land's drawing catches up with the altitudes set since the last time: the shapes of the blocks that changed,
+	/// the height map, and the blocks' textures, whose ground follows the height
+	virtual void CommitAltitudeChanges() {}
 
 	// Debug
 	virtual void DumpTextures() const = 0;

@@ -45,7 +45,9 @@
 #include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/GameRandom.h"
 #include "Creature/LeashRules.h"
+#include "Creature/TemplePen.h"
 #include "ECS/Archetypes/BallArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
@@ -53,6 +55,7 @@
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -72,6 +75,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptTimer.h"
+#include "ECS/Components/Sky.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Town.h"
@@ -83,8 +87,11 @@
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
+#include "ECS/ScriptPopulate.h"
 #include "ECS/ScriptSpotVisuals.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
@@ -107,6 +114,7 @@
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TutorialSkipSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
+#include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TownDesire.h"
@@ -241,6 +249,30 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 	}
 	case ObjectType::Ball:
 		return CreateScriptBall(position);
+	case ObjectType::Animal:
+	case ObjectType::Bird:
+		// Made on its own and held still for the script; openblack makes only the land's birds so far
+		if (Locator::animalSystem::has_value())
+		{
+			const auto animal = Locator::animalSystem::value().CreateScriptAnimal(static_cast<AnimalInfo>(subtype),
+			                                                                      glm::vec2(position.x, position.z));
+			if (animal != entt::null)
+			{
+				return animal;
+			}
+		}
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "CreateScriptObject not implemented for animal kind {}", subtype);
+		return static_cast<entt::entity>(0);
+	case ObjectType::Vortex:
+	{
+		// A vortex of the three kinds; the game makes nothing for any other
+		if (subtype > static_cast<uint32_t>(VortexType::Volcano))
+		{
+			break;
+		}
+		const auto vortex = Locator::vortexSystem::value().Create(position, static_cast<VortexType>(subtype), altitude);
+		return vortex != entt::null ? vortex : static_cast<entt::entity>(0);
+	}
 	default:
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "CreateScriptObject not implemented for type {}", static_cast<int>(type));
 	}
@@ -1467,10 +1499,21 @@ void HasCameraArrived() // 035 HAS_CAMERA_ARRIVED
 
 void FlockCreate() // 036 FLOCK_CREATE
 {
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// An empty flock at the point, held by the script that made it: it wanders 80 m about the point, its followers
+	// within 30 m of their leader
+	constexpr float k_FlockReach = 80.0f;
+	constexpr float k_FlockDistance = 30.0f;
+	const auto position = PopVec();
+	if (!Locator::animalSystem::has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Thing not created");
+		Pusho(0);
+		return;
+	}
+	const auto flock =
+	    Locator::animalSystem::value().CreateFlock(glm::vec2(position.x, position.z), k_FlockReach, k_FlockDistance);
+	RegisterCreated(flock);
+	PushObject(flock);
 }
 
 void FlockAttach() // 037 FLOCK_ATTACH
@@ -1705,12 +1748,28 @@ void CallIn() // 055 CALL_IN
 
 void ChangeInnerOuterProperties() // 056 CHANGE_INNER_OUTER_PROPERTIES
 {
-	// const auto calm = Popf();
-	// const auto outer = Popf();
-	// const auto inner = Popf();
-	// const auto obj = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	[[maybe_unused]] const auto calm = Popf();
+	const auto outer = Popf();
+	const auto inner = Popf();
+	const auto obj = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	// A flock: the outer radius is how far it wanders about its home, the inner how far its followers keep from their
+	// leader, each in whole metres and only when given
+	if (auto* flock = registry.Valid(obj) ? registry.TryGet<ecs::components::Flock>(obj) : nullptr)
+	{
+		if (outer != 0.0f)
+		{
+			flock->domainRadius = static_cast<float>(static_cast<int16_t>(static_cast<int32_t>(outer)));
+		}
+		if (inner != 0.0f)
+		{
+			flock->flockDistance = static_cast<float>(static_cast<int16_t>(static_cast<int32_t>(inner)));
+		}
+		// TODO(birds): the flock also keeps the calm, which nothing in openblack reads yet
+		return;
+	}
+	// TODO(Daniels118): shields, storms and influences
+	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
 }
 
 void Snapshot() // 057 SNAPSHOT
@@ -2206,19 +2265,72 @@ void MoveCameraToFaceObject() // 107 MOVE_CAMERA_TO_FACE_OBJECT
 
 void GetMoonPercentage() // 108 GET_MOON_PERCENTAGE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// How full the moon was the last time it showed: 0 at the full moon, 1 at a new moon
+	const auto* moon = Locator::entitiesRegistry::value().TryGet<ecs::components::Moon>(Locator::skySystem::value().GetMoon());
+	Pushf(graphics::moon::ScriptPercentage(moon != nullptr ? moon->phase : 0.0f));
 }
 
 void PopulateContainer() // 109 POPULATE_CONTAINER
 {
-	[[maybe_unused]] const auto subtype = Pop().intVal;
-	[[maybe_unused]] const auto type = Pop().intVal;
-	[[maybe_unused]] const auto quantity = Popf();
-	[[maybe_unused]] const auto obj = PopObject();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	namespace populate = ecs::script_populate;
+	const auto subtype = Pop().intVal;
+	const auto type = Pop().intVal;
+	const auto count = populate::CountOf(Popf());
+	const auto container = PopObject();
+	if (!populate::IsValidType(type))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid type={}", type);
+		// The game leaves a value on the stack here although the statement gives none back
+		Pusho(0);
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(container) || container == static_cast<entt::entity>(0))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Container not valid");
+		return;
+	}
+	// About the container's place: openblack's containers that can be filled are flocks, at their home on the land
+	glm::vec3 centre(0.0f);
+	if (const auto* flock = registry.TryGet<const ecs::components::Flock>(container))
+	{
+		centre = {flock->centre.x, Locator::terrainSystem::value().GetHeightAt(flock->centre), flock->centre.y};
+	}
+	else if (const auto* transform = registry.TryGet<const Transform>(container))
+	{
+		centre = transform->position;
+	}
+	const float spread = populate::SpreadOf(count);
+	const auto floatRand = [](float x) { return Locator::gameRandom::value().GameFloatRand(x); };
+	auto& scriptObjects = Locator::scriptObjects::value();
+	for (uint32_t i = 0; i < count; ++i)
+	{
+		const auto place = populate::PlaceOf(centre, spread, floatRand);
+		const auto thing = CreateScriptObject(static_cast<ObjectType>(type), static_cast<uint32_t>(subtype), place, 0.0f, 0.0f,
+		                                      0.0f, 0.0f, 1.0f);
+		if (thing == static_cast<entt::entity>(0) || !registry.Valid(thing))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Could not create thing for populate");
+			return;
+		}
+		if (!registry.AnyOf<ecs::components::Animal, ecs::components::Villager, ecs::components::Creature>(thing))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Created Thing Not Living");
+			registry.Destroy(thing);
+			return;
+		}
+		RegisterCreated(thing);
+		// A flock takes it as its newest member and it goes about with it
+		if (!registry.AllOf<ecs::components::Flock>(container) || !registry.AllOf<ecs::components::Animal>(thing))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Not implemented - Thing not added to id");
+			return;
+		}
+		auto& animals = Locator::animalSystem::value();
+		animals.JoinFlock(thing, container);
+		animals.SetScriptState(thing, LivingStates::LivingMoveInFlock);
+		scriptObjects.AddReference(thing);
+	}
 }
 
 void AddReference() // 110 ADD_REFERENCE
@@ -3411,10 +3523,29 @@ void IsLeashed() // 222 IS_LEASHED
 
 void SetCreatureHome() // 223 SET_CREATURE_HOME
 {
-	// const auto position = PopVec();
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The creature's home becomes the point, on the ground and kept as precisely as a map position. While its player's
+	// temple stands the temple's pen is its home again from the next game turn.
+	const auto position = PopVec();
+	const auto creature = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_CREATURE_HOME: thing not found");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(creature))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_CREATURE_HOME: thing not creature");
+		return;
+	}
+	const auto place = temple_pen::MapPlace(position);
+	const auto ground = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(place) : 0.0f;
+	auto* leash = registry.TryGet<ecs::components::CreatureLeash>(creature);
+	if (leash == nullptr)
+	{
+		leash = &registry.Assign<ecs::components::CreatureLeash>(creature);
+	}
+	leash->home = glm::vec3(place.x, ground, place.y);
 }
 
 void GetHitObject() // 224 GET_HIT_OBJECT
@@ -3804,9 +3935,26 @@ void ThingValid() // 256 THING_VALID
 
 void VortexFadeOut() // 257 VORTEX_FADE_OUT
 {
-	// const auto vortex = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The vortex starts to fade out, whatever it was doing. Nothing given at all is an error; a thing that isn't a vortex
+	// is one too.
+	DataType type {};
+	const auto value = Pop(type);
+	// A script's object 0 is none, as PopObject reads it
+	const auto vortex = value.uintVal == 0 ? entt::entity {entt::null}
+	                                       : Locator::scriptObjects::value().Fetch(static_cast<entt::entity>(value.uintVal));
+	if (vortex == entt::null || !Locator::entitiesRegistry::value().Valid(vortex))
+	{
+		if (type == DataType::None)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "vortex fade out failed");
+		}
+		return;
+	}
+	if (!Locator::vortexSystem::value().StartFadeOut(vortex))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Thing not vortex");
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "vortex fade out failed");
+	}
 }
 
 void RemoveReactionOfType() // 258 REMOVE_REACTION_OF_TYPE
@@ -4243,10 +4391,19 @@ void SetDrawHighlight() // 306 SET_DRAW_HIGHLIGHT
 
 void SetOpenClose() // 307 SET_OPEN_CLOSE
 {
-	// const auto object = Pop().uintVal;
-	// const auto open = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopObject();
+	// The script's word is kept as it is: 1 opens, 0 closes
+	const auto open = static_cast<int32_t>(Pop().uintVal);
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_OPEN_CLOSE: thing not found");
+		return;
+	}
+	if (!Locator::animatedStaticSystem::has_value() || !Locator::animatedStaticSystem::value().SetOpenState(object, open))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_OPEN_CLOSE: thing must be an animated static");
+	}
 }
 
 void SetIntroBuilding() // 308 SET_INTRO_BUILDING
@@ -4358,10 +4515,24 @@ void SetSunDraw() // 319 SET_SUN_DRAW
 
 void ObjectInfoBits() // 320 OBJECT_INFO_BITS
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// What the gate stones laid in a plinth are worth: ape 1, tiger 2, cow 4. Asked of anything else, the original
+	// reports the error and pushes no answer at all, so the script's next pop finds whatever lies below.
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "OBJECT_INFO_BITS: thing not valid");
+		return;
+	}
+	const auto value = Locator::animatedStaticSystem::has_value()
+	                       ? Locator::animatedStaticSystem::value().GateStoneValue(object)
+	                       : std::nullopt;
+	if (!value.has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "OBJECT_INFO_BITS: thing must be an animated static");
+		return;
+	}
+	Pushf(static_cast<float>(*value));
 }
 
 void SetHurtByFire() // 321 SET_HURT_BY_FIRE

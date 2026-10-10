@@ -54,6 +54,11 @@ namespace openblack::bink
 class BinkFile;
 } // namespace openblack::bink
 
+namespace openblack::dance
+{
+struct DanceFile;
+} // namespace openblack::dance
+
 namespace openblack::gestures
 {
 class GestureFile;
@@ -264,6 +269,12 @@ struct VideoLoader final: BaseLoader<bink::BinkFile>
 
 /// The templates the hand's drawn gestures are matched against
 struct GestureTemplatesLoader final: BaseLoader<gestures::GestureFile>
+{
+	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
+};
+
+/// A dance's choreography, from the files under the scripts' Dance folder
+struct DanceFileLoader final: BaseLoader<dance::DanceFile>
 {
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
 };

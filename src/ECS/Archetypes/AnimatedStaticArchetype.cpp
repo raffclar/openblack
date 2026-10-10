@@ -65,6 +65,8 @@ entt::entity AnimatedStaticArchetype::Create(const glm::vec3& position, Animated
 	registry.Assign<Mesh>(entity, resourceId, static_cast<int8_t>(0), static_cast<int8_t>(1));
 
 	registry.Assign<AnimatedStatic>(entity, type);
+	// It is drawn posed by its clip, which starts closed
+	registry.Assign<AnimatedStaticPose>(entity);
 
 	if (info.meshId == MeshId::BuildingNorseGate)
 	{

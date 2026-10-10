@@ -65,6 +65,10 @@ enum class AnimalState : uint8_t
 	FleeingFromObject,
 	/// Far enough from the thing it fled, turned to watch it
 	FleeingAndLookingAtObject,
+	/// Held by a script that has given it nothing to do: it stays as it is
+	InScript,
+	/// Set by a script to go about with its flock: a bird picks its next leg as its leader would, about its flock's home
+	MoveInFlock,
 };
 
 /// A living animal: a kind of the tables, flying or on the land

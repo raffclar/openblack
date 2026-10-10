@@ -101,7 +101,7 @@ float object_measures::Height(const Registry& registry, entt::entity entity)
 {
 	if (const auto* creature = registry.TryGet<const Creature>(entity))
 	{
-		return cast_moves::k_HeightOfSizeOne * creature->size;
+		return cast_moves::k_HeightOfSizeOne * ShownSize(*creature);
 	}
 	const auto half = HalfExtentsOf(registry, entity);
 	return half.has_value() ? 2.0f * half->y : 0.0f;
