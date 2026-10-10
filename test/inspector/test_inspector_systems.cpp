@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdlib>
+
 #include <fstream>
 #include <memory>
 #include <regex>
@@ -33,6 +35,8 @@
 #include <Inspector/GameInput.h>
 #include <Inspector/GameProviders.h>
 #include <Inspector/GameWorldEdit.h>
+#include <Inspector/InputControl.h>
+#include <Inspector/LevelControl.h>
 #include <Inspector/RunControl.h>
 #include <Inspector/SystemProviders.h>
 #include <Inspector/WorldProviders.h>
@@ -107,6 +111,10 @@ public:
 	[[nodiscard]] std::optional<uint32_t> GetFixedFrameTime() const override { return std::nullopt; }
 	bool LoadScenario(std::string_view /*id*/) override { return false; }
 	[[nodiscard]] std::vector<ScenarioSummary> Scenarios() const override { return {}; }
+	[[nodiscard]] uint32_t GetSeed() const override { return 0; }
+	void SetSeed(uint32_t /*seed*/, std::optional<int64_t> /*date*/) override {}
+	[[nodiscard]] std::optional<int64_t> GetPinnedDate() const override { return std::nullopt; }
+	[[nodiscard]] uint32_t GetTicks() const override { return 0; }
 };
 
 } // namespace
@@ -377,4 +385,33 @@ TEST(InspectorCoverage, EveryQueryAnswersWithNoGame)
 		}
 	}
 	EXPECT_GT(queries, 60);
+}
+
+/// The MCP adapter builds its tools' schemas (parameters, which are required) from the game's own descriptions of its
+/// queries, kept in tools/inspector/inspector_queries.json. A query added or changed without that file written again
+/// fails here; set OPENBLACK_UPDATE_INSPECTOR_QUERIES=1 and run this test to write it.
+TEST(InspectorCoverage, TheAdaptersCatalogueOfQueriesIsUpToDate)
+{
+	entt::meta_ctx reflection;
+	reflection::RegisterComponents(reflection);
+	StillRunTarget run;
+	GameWorldEdit world;
+	GameInput input;
+	GameControlSet controls(input);
+	Inspector inspector;
+	// The providers the game's inspector has, as its system adds them
+	AddGameProviders(inspector, reflection, run, world, controls.View());
+	inspector.Add(std::make_unique<ScreenshotProvider>(controls.screenshots, controls.camera));
+	inspector.Add(std::make_unique<InputProvider>(input));
+	const auto catalogue = inspector.Catalogue().dump(1) + "\n";
+
+	const auto path = std::string(OPENBLACK_SOURCE_DIR) + "/tools/inspector/inspector_queries.json";
+	if (const auto* update = std::getenv("OPENBLACK_UPDATE_INSPECTOR_QUERIES"); update != nullptr && std::string(update) == "1")
+	{
+		std::ofstream(path, std::ios::binary) << catalogue;
+	}
+	std::ifstream file(path, std::ios::binary);
+	std::stringstream written;
+	written << file.rdbuf();
+	EXPECT_EQ(written.str(), catalogue) << path << " is out of date: run this test with OPENBLACK_UPDATE_INSPECTOR_QUERIES=1";
 }

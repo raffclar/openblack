@@ -15,6 +15,7 @@
 #include <chrono>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -69,13 +70,17 @@ public:
 
 	/// The port it listens on, the one chosen when asked for any
 	[[nodiscard]] uint16_t Port() const { return _port; }
-	[[nodiscard]] size_t ClientCount() const { return _clients.size(); }
+	[[nodiscard]] size_t ClientCount() const;
 	/// The clients that have sent a line taking control; every line does unless a filter says otherwise
 	[[nodiscard]] size_t ControllingClientCount() const;
 	void SetControlFilter(ControlFilter filter) { _takesControl = std::move(filter); }
 
 	/// Takes new clients, reads what they sent, and answers each whole line through the handler. Never waits. The
 	/// number of lines answered.
+	///
+	/// Safe to call from two threads at once (the game's frame, and a helper answering while the game loads): the
+	/// handler runs outside the server's lock, so a handler that takes long (a land loading) doesn't stop the other
+	/// thread answering other lines meanwhile. Each client's answers go out whole, in the order they were made.
 	size_t Poll(const Handler& handler);
 
 private:
@@ -89,13 +94,15 @@ private:
 
 	void Accept();
 	/// False once the client has gone
-	bool Receive(Client& client);
-	bool Send(Client& client);
+	static bool Receive(Client& client);
+	static bool Send(Client& client);
 
 	Socket _listener;
 	uint16_t _port;
-	std::vector<Client> _clients;
+	/// Shared so that a client a handler is answering outlives its removal by the other thread
+	std::vector<std::shared_ptr<Client>> _clients;
 	ControlFilter _takesControl;
+	mutable std::mutex _mutex;
 };
 
 /// A blocking client of the server, as the tests and tools use it

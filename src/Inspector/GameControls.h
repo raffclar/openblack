@@ -26,6 +26,7 @@ public:
 	std::string Set(const CameraPose& pose) override;
 	std::string Fly(const CameraPose& pose) override;
 	[[nodiscard]] float GroundHeight(glm::vec2 point) const override;
+	[[nodiscard]] std::optional<glm::vec3> EntityPosition(uint32_t id) const override;
 };
 
 /// The debug windows, and the game's own menu and Creature Cave. The menu's buttons are clicked through the game's
@@ -72,7 +73,7 @@ public:
 class GameScreenshots final: public ScreenshotTargetInterface
 {
 public:
-	std::string Capture(const std::filesystem::path& path) override;
+	std::string Capture(const std::filesystem::path& path, bool hideDebugGui) override;
 	[[nodiscard]] std::filesystem::path Directory() const override;
 };
 

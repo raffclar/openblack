@@ -31,6 +31,7 @@
 
 #include "AudioPlayerInterface.h"
 #include "Camera/Camera.h"
+#include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
 #include "ECS/Registry.h"
@@ -60,7 +61,9 @@ AudioManager::AudioManager()
     : _audioPlayer(new AudioPlayer())
 {
 	_audioPlayer->Initialize();
-	_atmos = std::make_unique<AtmosPlayer>(static_cast<VoiceBackend&>(*this));
+	// The atmosphere's random numbers are seeded from the date as the game reads it (pinned in a seeded run)
+	_atmos = std::make_unique<AtmosPlayer>(static_cast<VoiceBackend&>(*this),
+	                                       [] { return static_cast<uint32_t>(machine_clock::UnixTime()); });
 	_musicStreams = std::make_unique<MusicStreamBackend>(*_audioPlayer);
 	_musicPlayer = std::make_unique<MusicPlayer>(*_musicStreams);
 }

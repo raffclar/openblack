@@ -66,14 +66,15 @@ class ScreenshotTargetInterface
 {
 public:
 	virtual ~ScreenshotTargetInterface() = default;
-	/// Asks for the frame being made to be written to a file once it is drawn
-	virtual std::string Capture(const std::filesystem::path& path) = 0;
+	/// Asks for the frame being made to be written to a file once it is drawn, without the debug windows if asked. The
+	/// file appears whole once written (it is written aside, then renamed).
+	virtual std::string Capture(const std::filesystem::path& path, bool hideDebugGui) = 0;
 	/// Where pictures go when no path is given
 	[[nodiscard]] virtual std::filesystem::path Directory() const = 0;
 };
 
-/// Pictures of the screen at exact frames, the camera put somewhere first if asked:
-///   screenshot.take {path?, in_frames?, at_frame?, camera?}   the picture's path and the frame it is of
+/// Pictures of the screen at exact frames, the camera put somewhere, or looking at an entity, for the picture if asked:
+///   screenshot.take {path?, in_frames?, at_frame?, camera? | frame?, hide_gui?}   the picture's path and its frame
 ///   screenshot.pending                                         the pictures still to take
 class ScreenshotProvider final: public ProviderInterface
 {
@@ -86,6 +87,10 @@ public:
 
 	/// Once a frame, as the inspector serves its requests: takes the pictures due this frame
 	void Frame(uint64_t frame);
+	/// Once a frame, after the player's camera has moved and before the frame is drawn: puts the camera where a picture
+	/// due this frame wants it, so that nothing moving the camera this frame (its own easing, a flight, the land's
+	/// height under it) spoils the picture, and a framed entity is framed where it is at the picture's frame
+	void PlaceCamera();
 
 private:
 	struct Pending
@@ -93,6 +98,8 @@ private:
 		uint64_t frame;
 		std::filesystem::path path;
 		std::optional<CameraPose> camera;
+		std::optional<FrameRequest> framing;
+		bool hideGui {false};
 	};
 	/// Places the camera and asks for the picture; why not, if it couldn't
 	std::string Take(const Pending& pending);
@@ -100,6 +107,8 @@ private:
 	ScreenshotTargetInterface& _target;
 	CameraControlInterface& _camera;
 	std::deque<Pending> _pending;
+	/// The picture of this frame whose camera is still to be put in place
+	std::optional<Pending> _placing;
 	uint64_t _frame {0};
 	std::vector<std::string> _failures;
 };
