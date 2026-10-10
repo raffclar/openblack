@@ -154,6 +154,8 @@ public:
 	entt::entity CreateDispenser(glm::vec3 position, MagicType type, float yAngleRadians) override;
 	void SetDispenserPeriod(entt::entity dispenser, float seconds) override;
 	void ChargeDispenser(entt::entity dispenser) override;
+	void SetDispenserActive(entt::entity dispenser, bool active) override;
+	void SetDispenserTurns(entt::entity dispenser, uint32_t turns) override;
 	bool Remove(entt::entity entity) override;
 	entt::entity CreateOneOffSeed(glm::vec3 position, SpellSeedType seed, int powerUp, float multiplier) override;
 	entt::entity CreateOneOffSeedFor(glm::vec3 position, MagicType type) override;

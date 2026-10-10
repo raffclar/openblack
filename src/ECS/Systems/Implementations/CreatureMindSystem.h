@@ -73,6 +73,7 @@ public:
 	void ReactToNiceMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn) override;
 	bool TryMiracle(entt::entity creature, MagicType type, entt::entity target) override;
 	void KnowMiracle(entt::entity creature, size_t miracle) override;
+	void SetKnowsAction(entt::entity creature, CreatureActionLearningType type, uint32_t action, bool knows) override;
 	bool TellCast(entt::entity creature, MagicType type, entt::entity target) override;
 	bool ForcePlan(entt::entity creature, const ForcedPlan& plan) override;
 	std::optional<creature_desires::Desire> ForcePlanOn(entt::entity creature, entt::entity object) override;

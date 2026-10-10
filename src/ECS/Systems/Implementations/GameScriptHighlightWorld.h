@@ -39,6 +39,9 @@ public:
 	void DeleteEffect(uint32_t effect) override;
 	void PlaySound(uint32_t sample) override;
 	[[nodiscard]] std::optional<components::Sprite> GlowLook() const override;
+	[[nodiscard]] std::optional<components::Sprite> SparkLook(uint32_t picture) const override;
+	float LocalFloatRandom(float x) override;
+	uint32_t LocalRandom(uint32_t n) override;
 	void HelpEvent(uint32_t event) override;
 	void StartHelpScript(std::string_view name) override;
 	void ShowTip(entt::entity sign, uint32_t text, uint32_t category) override;

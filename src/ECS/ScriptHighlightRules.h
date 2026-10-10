@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <functional>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -80,6 +81,48 @@ void StepPulse(Pulse& pulse, float millisecondsPerTurn);
 /// The picture of the sprite sheet it is: the first of 8 by 8
 constexpr uint32_t k_GlowPicture = 0;
 constexpr uint32_t k_GlowSheetPictures = 8;
+
+/// The sparks a gold scroll sends up from the top of its model, whether started or not: twenty, starting 0.4 seconds
+/// apart, each rising 20 metres over 8 seconds of the frames' game time (faster as it goes), shrinking from 2 to 1.2
+/// metres across, fading in over 5 seconds and out over the last 3, turned its own random way, and going through the
+/// first sprite sheet's first 32 pictures, one each 50 milliseconds. Each starts again, turned another way, once its 8
+/// seconds are up. Their time passes only while the scroll is drawn.
+[[nodiscard]] constexpr bool SendsSparks(HighlightInfo kind)
+{
+	return kind == HighlightInfo::Gold;
+}
+constexpr size_t k_Sparks = 20;
+constexpr int32_t k_SparkLifeMilliseconds = 8000;
+struct Spark
+{
+	/// Milliseconds since it started; it waits to start while this is below none
+	int32_t ageMilliseconds {0};
+	/// Its turn in the picture, in radians
+	float angle {0.0f};
+};
+struct Sparks
+{
+	std::array<Spark, k_Sparks> sparks {};
+	/// The picture the first spark starts at, of 32
+	uint32_t firstPicture {0};
+};
+/// A random angle up to a whole turn, and a random number below 32, from the game's local random numbers
+[[nodiscard]] Sparks MakeSparks(const std::function<float(float)>& randomFloat,
+                                const std::function<uint32_t(uint32_t)>& random);
+/// The sparks as a frame of the game's time passes
+void StepSparks(Sparks& sparks, uint32_t gameMilliseconds, const std::function<float(float)>& randomFloat);
+/// How a spark is drawn: where, its half size, how much of its colour it adds (of 255), its picture of the sheet and its
+/// turn; none while it waits to start. `from` is the top of the scroll's model.
+struct SparkLook
+{
+	glm::vec3 position {0.0f};
+	float halfSize {0.0f};
+	uint8_t alpha {0};
+	uint32_t picture {0};
+	float angle {0.0f};
+};
+[[nodiscard]] std::optional<SparkLook> LookOf(const Sparks& sparks, size_t index, glm::vec3 from);
+constexpr uint32_t k_SparkSheetPictures = 8;
 
 /// A scroll is picked under the cursor by a ball a little larger than its model; a sign by its model
 [[nodiscard]] constexpr bool PickedByBall(HighlightInfo kind)

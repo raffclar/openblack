@@ -22,6 +22,14 @@ namespace
 {
 /// The tables mark unused slots of the action lists with 0 (no action) or with a number past the last action
 constexpr uint32_t k_NoAction = 0;
+/// The action table's marks for an action that needs no skill (one past the last) or no miracle
+constexpr uint32_t k_NoSkill = 6;
+constexpr uint32_t k_NoMiracle = 0;
+
+std::optional<size_t> SkillNeeded(uint32_t skill)
+{
+	return skill != k_NoSkill ? std::optional<size_t>(skill) : std::nullopt;
+}
 
 constexpr std::array<float, 17> k_MiracleMultipliers {1.0f, 1.7f,  1.5f, 1.2f, 1.1f, 1.3f, 1.4f, 1.2f, 1.4f,
                                                       1.3f, 1.35f, 1.9f, 0.9f, 4.0f, 1.2f, 1.5f, 1.1f};
@@ -56,6 +64,8 @@ Tables creature_mind_tables::Build(const InfoConstants& info)
 		    .learningWindowSeconds = row.field0xd0,
 		    .learnable = row.field0xf0 != 0,
 		    .eatWhenStroked = row.field0xe0 != 0,
+		    .needs = {.skills = {SkillNeeded(row.skillsNeeded[0]), SkillNeeded(row.skillsNeeded[1])},
+		              .miracle = row.magicType != k_NoMiracle ? std::optional<size_t>(row.magicType) : std::nullopt},
 		});
 	}
 	const auto actionCount = static_cast<uint32_t>(tables.actions.size());

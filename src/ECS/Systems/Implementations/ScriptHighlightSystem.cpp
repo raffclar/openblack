@@ -91,6 +91,11 @@ entt::entity ScriptHighlightSystem::Create(uint32_t kind, glm::vec3 at, uint32_t
 		SetActive(entity, true);
 	}
 	ShowModel(entity, registry.Get<ScriptHighlight>(entity));
+	if (rules::SendsSparks(highlight.kind))
+	{
+		registry.Get<ScriptHighlight>(entity).sparks = rules::MakeSparks(
+		    [this](float x) { return _world->LocalFloatRandom(x); }, [this](uint32_t n) { return _world->LocalRandom(n); });
+	}
 	// Its glints, as long as it stands, and stepped as it is drawn
 	if (info->glints != ParticleType::None)
 	{
@@ -308,6 +313,7 @@ void ScriptHighlightSystem::UpdateFrame(float frameMilliseconds, float /*turnFra
 			    moved = true;
 		    }
 		    UpdateGlow(entity, highlight, drawn && rules::GlowShown(highlight.kind, highlight.active), camera);
+		    UpdateSparks(entity, drawn, frameMilliseconds);
 	    });
 	if (moved)
 	{
@@ -390,6 +396,53 @@ void ScriptHighlightSystem::UpdateGlow(entt::entity entity, const ScriptHighligh
 		sprite = &registry.Assign<Sprite>(glow, *look);
 	}
 	sprite->tint = glm::vec4(1.0f, 1.0f, 1.0f, static_cast<float>(rules::GlowAlpha(highlight.kind)) / 255.0f);
+}
+
+void ScriptHighlightSystem::UpdateSparks(entt::entity entity, bool drawn, float frameMilliseconds)
+{
+	auto& registry = _world->Entities();
+	auto& highlight = registry.Get<ScriptHighlight>(entity);
+	if (!highlight.sparks.has_value())
+	{
+		return;
+	}
+	if (drawn)
+	{
+		// The frame's game time, in whole milliseconds as the game counts it
+		rules::StepSparks(*highlight.sparks, static_cast<uint32_t>(std::max(frameMilliseconds, 0.0f)),
+		                  [this](float x) { return _world->LocalFloatRandom(x); });
+	}
+	// They rise from the top of the model
+	const auto from = highlight.centre + glm::vec3(0.0f, highlight.radius, 0.0f);
+	for (size_t i = 0; i < rules::k_Sparks; ++i)
+	{
+		auto& sprite = highlight.sparkSprites.at(i);
+		const auto look = drawn ? rules::LookOf(*highlight.sparks, i, from) : std::nullopt;
+		const auto picture = look.has_value() ? _world->SparkLook(look->picture) : std::nullopt;
+		if (!picture.has_value())
+		{
+			if (sprite != entt::null && registry.Valid(sprite))
+			{
+				registry.Remove<Sprite>(sprite);
+			}
+			continue;
+		}
+		if (sprite == entt::null || !registry.Valid(sprite))
+		{
+			sprite = registry.Create();
+			registry.Assign<ScriptHighlightGlow>(sprite, entity);
+			registry.Assign<Transform>(sprite, from, glm::mat3(1.0f), glm::vec3(1.0f));
+		}
+		const auto made = sprite;
+		auto& transform = registry.Get<Transform>(made);
+		transform.position = look->position;
+		// Turned about the line to the camera, as it faces it
+		transform.rotation = glm::mat3(glm::eulerAngleZ(look->angle));
+		transform.scale = glm::vec3(look->halfSize, look->halfSize, 1.0f);
+		auto& drawnSprite = registry.AllOf<Sprite>(made) ? registry.Get<Sprite>(made) : registry.Assign<Sprite>(made, *picture);
+		drawnSprite = *picture;
+		drawnSprite.tint = glm::vec4(1.0f, 1.0f, 1.0f, static_cast<float>(look->alpha) / 255.0f);
+	}
 }
 
 void ScriptHighlightSystem::RemoveLoneGlows()
