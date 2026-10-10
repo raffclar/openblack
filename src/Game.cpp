@@ -160,6 +160,7 @@
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
+#include "ECS/Systems/IntroSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -1600,6 +1601,12 @@ bool Game::Update() noexcept
 			script->SetFocus(demoCamera->focus);
 		}
 	}
+	// While the opening's camera chases the falling light, it is drawn from behind the light as the last frame left it,
+	// whatever the script's camera does underneath
+	if (const auto chase = Locator::introSystem::value().GetCameraView(); chase.has_value())
+	{
+		camera.SetOrigin(chase->origin).SetFocus(chase->focus);
+	}
 	FitNearClip();
 	// The temple's camera may have taken the player out of the temple
 	if (Locator::temple::has_value())
@@ -1694,6 +1701,8 @@ bool Game::Update() noexcept
 		Locator::livingActionSystem::value().UpdatePoses(clock.GetTurn(), clock.GetTurnFraction());
 		// The sharks swim between their last two turns and leave their wakes
 		Locator::sharkSystem::value().Update(gameTime, clock.GetTurnFraction());
+		// The opening's light falls and its hand lifts the boy and sets him down, by the frame's game time
+		Locator::introSystem::value().Update(static_cast<uint32_t>(clock.GetFrameGameTime().count()));
 		// The gates and the other scenery the scripts open and close play on, and the plinths' stones sit or sink
 		Locator::animatedStaticSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
 	}
@@ -1829,6 +1838,8 @@ bool Game::Update() noexcept
 				                              rayOrigin, rayDirection);
 
 				_cursorWorldPosition.reset();
+				_cursorLand.reset();
+				_handRestOnThing.reset();
 				if (Locator::temple::has_value() && Locator::temple::value().Active())
 				{
 					// In the temple, the hand goes where the cursor meets the room, turning to its surface
@@ -1954,6 +1965,8 @@ bool Game::Update() noexcept
 							}
 						}
 					}
+					_cursorLand = pick.land;
+					_handRestOnThing = rest;
 					const auto restPoint = rest.has_value() ? rest : pick.point;
 					if (restPoint.has_value())
 					{
@@ -3595,6 +3608,8 @@ void Game::PrepareNewLand()
 		Locator::waterRingSystem::value().Reset();
 	}
 	Locator::cinematicDirectorSystem::value().Reset();
+	// Nor the opening's light and hand
+	Locator::introSystem::value().ReleaseAll();
 	// Nor does any script keep the camera, the game's speed or the dialogue
 	if (Locator::camera::has_value())
 	{
@@ -4097,32 +4112,39 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 	// always under the cursor on screen. How far along it depends on the land the cursor is over. Turning the camera
 	// with the mouse holds the cursor still, so the hand stays where it is on screen and eases to the land coming under
 	// it.
-	if (_cursorWorldPosition)
+	if (_cursorLand.has_value() || _handRestOnThing.has_value())
 	{
-		const auto toLand = *_cursorWorldPosition - eye;
-		const auto landDistance = glm::length(toLand);
-		if (landDistance > 0.0f)
+		// Over the land the hand points at it; over a thing, at where it rests on the thing
+		const auto toward = _handRestOnThing.value_or(_cursorLand.value_or(eye)) - eye;
+		if (const auto length = glm::length(toward); length > 0.0f)
 		{
-			_handRayDirection = toLand / landDistance;
+			_handRayDirection = toward / length;
 		}
 
-		// The hand is pulled back from the land towards the camera by its height, so its fingers hang
-		// down to the land. Over the sea it rests on the water.
-		const auto overSea = Locator::terrainSystem::value().GetHeightAt(glm::xz(*_cursorWorldPosition)) < k_HandSeaAltitude;
-		const auto handHeight = k_HandHeight * HandAnimation::SizeAtDistance(_handDistance);
-		const auto nearest = glm::clamp(overSea ? landDistance : landDistance - handHeight, k_HandMinDistance, handReach);
+		// The furthest the hand may be is the land less its height, so its fingers hang down to the land, or the
+		// water over the sea. Over a thing it eases to where it rests on the thing, touching it.
+		const auto overSea =
+		    _cursorLand.has_value() && Locator::terrainSystem::value().GetHeightAt(glm::xz(*_cursorLand)) < k_HandSeaAltitude;
+		const auto hover = hand_feel::HoverDistancesOf({
+		    .camera = eye,
+		    .land = _cursorLand,
+		    .landIsSea = overSea,
+		    .restOnThing = _handRestOnThing,
+		    .handHeight = k_HandHeight * HandAnimation::SizeAtDistance(_handDistance),
+		    .currentDistance = _handDistance,
+		    .minDistance = k_HandMinDistance,
+		    .reach = handReach,
+		});
 
-		// The hand eases out to the land, slowly away from the camera and quickly towards it
-		const auto target = glm::max(landDistance, 1.0f);
-		const auto easeTime = _handHoverZoomer.GetValue() <= target ? k_HandEaseOutTime : k_HandEaseInTime;
-		_handHoverZoomer.SetDestination(target, easeTime);
+		// The hand eases out slowly away from the camera and quickly towards it
+		const auto easeTime = _handHoverZoomer.GetValue() <= hover.target ? k_HandEaseOutTime : k_HandEaseInTime;
+		_handHoverZoomer.SetDestination(hover.target, easeTime);
 		_handHoverZoomer.Update(deltaSeconds);
 		if (_handHoverZoomer.GetValue() < 1.0f)
 		{
 			_handHoverZoomer.Reset(1.0f);
 		}
-		// The hand's distance from the camera, no further out than the land less the hand's height
-		_handDistance = glm::clamp(glm::min(_handHoverZoomer.GetValue(), nearest), k_HandMinDistance, handReach);
+		_handDistance = glm::clamp(glm::min(_handHoverZoomer.GetValue(), hover.limit), k_HandMinDistance, handReach);
 	}
 	_handPosition = eye + _handRayDirection * _handDistance;
 	_handCrossFade.Update(deltaSeconds);

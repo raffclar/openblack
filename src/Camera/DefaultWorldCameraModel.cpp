@@ -34,6 +34,7 @@
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
@@ -442,6 +443,9 @@ void DefaultWorldCameraModel::UpdateModeDragging(const Camera& camera, glm::u16v
 	{
 		return;
 	}
+	// Counted once for each time the controls are handled
+	SendHelpEvents(camera_help::events::LandDragEvents(_helpControls));
+	_helpControls = {};
 
 	// The camera stops short of land in its way, or of the sea
 	auto stopped = *place;
@@ -843,6 +847,36 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 		std::ignore = HandleDrag(false);
 	}
 
+	// The help's profile weighs the controls as they were asked for, before the features take any away
+	const bool gripping = _handPosition.has_value() && actionSystem.Get(input::BindableActionMap::MOVE);
+	_helpControls = {
+	    .features = _features,
+	    .turn = _rotateAroundDelta.y,
+	    .tilt = _rotateAroundDelta.x,
+	    .zoom = _rotateAroundDelta.z,
+	    .move = _keyBoardMoveDelta,
+	    .landGripped = gripping,
+	    .rotateAroundMouse = rotateAroundMouse,
+	    .bothButtons = twoButtons,
+	    .mouseDelta = glm::ivec2(actionSystem.GetMouseDelta()),
+	};
+	_helpEvents = {};
+	// A double click is counted once, as it is pressed
+	const bool doubleClicked = actionSystem.Get(input::UnbindableActionMap::DOUBLE_CLICK);
+	const bool doubleClickPressed = doubleClicked && !_doubleClickHeld;
+	_doubleClickHeld = doubleClicked;
+	// A drag of the land given up too far ahead takes every control away until the buttons are let go
+	if (!_dragGivenUp)
+	{
+		_helpEvents.Add(camera_help::events::InputEvents(_helpControls));
+		// A double click flies the camera, unless anything else is asked for
+		if (doubleClickPressed && !camera_help::events::AnyInput(_helpControls) && Locator::pickingSystem::has_value())
+		{
+			const auto& pick = Locator::pickingSystem::value().GetPick();
+			_helpEvents.Add(camera_help::events::DoubleClickEvents(_features, pick.object.has_value(), pick.land.has_value()));
+		}
+	}
+
 	// Without zooming the zoom does nothing, without turning nothing turns, without tilting nothing tilts unless the
 	// camera tilts itself, and without strafing the movement keys do nothing
 	if ((_features & camera_help::feature::k_Zoom) == 0)
@@ -909,19 +943,24 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 		_mode = Mode::Cartesian;
 	}
 
-	// Put back inside the fence, nothing the player does moves the camera until every control is let go
+	// Put back inside the fence, nothing the player does moves the camera, or counts towards the help, until every
+	// control is let go
 	if (_heldBack)
 	{
 		if (!AnyControlHeld())
 		{
 			_heldBack = false;
-			return;
 		}
-		_rotateAroundDelta = glm::vec3();
-		_keyBoardMoveDelta = glm::vec2();
-		std::ignore = HandleDrag(false);
-		_mode = Mode::Cartesian;
+		else
+		{
+			_rotateAroundDelta = glm::vec3();
+			_keyBoardMoveDelta = glm::vec2();
+			std::ignore = HandleDrag(false);
+			_mode = Mode::Cartesian;
+			_helpEvents = {};
+		}
 	}
+	SendHelpEvents(_helpEvents);
 }
 
 bool DefaultWorldCameraModel::AnyControlHeld() const
@@ -934,6 +973,16 @@ bool DefaultWorldCameraModel::AnyControlHeld() const
 	                           BindableActionMap::MOVE_BACKWARDS, BindableActionMap::MOVE_LEFT, BindableActionMap::MOVE_RIGHT,
 	                           BindableActionMap::ZOOM_IN, BindableActionMap::ZOOM_OUT) ||
 	       actionSystem.Get(input::UnbindableActionMap::TWO_BUTTON_CLICK) || actionSystem.GetMouseWheelDelta() != 0.0f;
+}
+
+void DefaultWorldCameraModel::SendHelpEvents(camera_help::events::EventSet events)
+{
+	if (events.Empty() || !Locator::helpProfileSystem::has_value())
+	{
+		return;
+	}
+	auto& profile = Locator::helpProfileSystem::value();
+	events.ForEach([&profile](uint32_t event) { profile.Trigger(event); });
 }
 
 DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
@@ -988,6 +1037,7 @@ DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
 		// The cursor is held on the ring, and the camera turns about its focus by the angle swept round the middle
 		const auto step = camera_drag::EdgeRotate(cursor, _ringCursor, screenSize, ViewHeight(screenSize));
 		_ringCursor = step.cursor;
+		_helpEvents.Add(camera_help::events::EdgeTurnEvents(_helpControls, step.angle));
 		if ((_features & camera_help::feature::k_Rotate) != 0)
 		{
 			_rotateAroundDelta.y += step.angle * static_cast<float>(screenSize.x) / glm::pi<float>();
@@ -999,6 +1049,7 @@ DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
 	case DragMode::PitchFromTop:
 	{
 		const auto fov = Locator::camera::has_value() ? Locator::camera::value().GetHorizontalFieldOfView() : 0.0f;
+		_helpEvents.Add(camera_help::events::TiltDragEvents(_helpControls));
 		if ((_features & camera_help::feature::k_Pitch) != 0)
 		{
 			_rotateAroundDelta.x += camera_drag::PitchStep(actionSystem.GetMouseDelta().y, screenSize.y, fov) / k_PitchPerInput;

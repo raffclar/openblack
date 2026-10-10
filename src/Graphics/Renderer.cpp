@@ -5637,6 +5637,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawShieldDomes(desc);
 			DrawDestructionGhosts(desc);
 			DrawParticles(desc);
+			DrawIntroLight(desc);
 			DrawInfluenceBorder(desc);
 			DrawInfluenceRipples(desc);
 			// The mists blend over the rest, the farthest first
