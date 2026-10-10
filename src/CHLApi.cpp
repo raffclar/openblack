@@ -19,10 +19,8 @@
 #include <limits>
 #include <optional>
 #include <ranges>
-#include <sstream>
 #include <string>
 #include <string_view>
-#include <unordered_set>
 #include <vector>
 
 #include <LHVM.h>
@@ -124,6 +122,7 @@
 #include "Physics/Body.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptEnums.h"
+#include "ScriptHeaders/ScriptNameLists.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -151,18 +150,6 @@ using openblack::script::ObjectType;
 const std::vector<lhvm::NativeFunction>& CHLApi::GetFunctionsTable()
 {
 	return _functionsTable;
-}
-
-std::unordered_set<std::string> GetUniqueWords(const std::string& strings)
-{
-	std::unordered_set<std::string> result;
-	std::istringstream iss(strings);
-	std::string word;
-	while (std::getline(iss, word, ' '))
-	{
-		result.insert(word);
-	}
-	return result;
 }
 
 glm::vec3 PopVec()
@@ -1420,8 +1407,8 @@ void Random() // 028 RANDOM
 
 void DllGettime() // 029 DLL_GETTIME
 {
-	// TODO(Daniels118): need a way to access Game::GetTurn()
-	// Pushf(static_cast<float>(_turnCount) / 10.0f); // TODO(Daniels118): should it be divided by 10 or not?
+	// The game leaves this one to the script machine: its own clock
+	Locator::vm::value().PushElaspedTime();
 }
 
 void StartCameraControl() // 030 START_CAMERA_CONTROL
@@ -2646,10 +2633,9 @@ void StopAllScriptsExcluding() // 153 STOP_ALL_SCRIPTS_EXCLUDING
 {
 	const auto scriptNames = PopString();
 
-	const auto names = GetUniqueWords(scriptNames);
 	auto& lhvm = Locator::vm::value();
-	lhvm.StopScripts([&names](const std::string& name, [[maybe_unused]] const std::string& filename) -> bool {
-		return !names.contains(name);
+	lhvm.StopScripts([&scriptNames](const std::string& name, [[maybe_unused]] const std::string& filename) -> bool {
+		return !script::name_lists::HoldsScript(scriptNames, name);
 	});
 }
 
@@ -2657,10 +2643,9 @@ void StopAllScriptsInFilesExcluding() // 154 STOP_ALL_SCRIPTS_IN_FILES_EXCLUDING
 {
 	const auto sourceFilenames = PopString();
 
-	const auto filenames = GetUniqueWords(sourceFilenames);
 	auto& lhvm = Locator::vm::value();
-	lhvm.StopScripts([&filenames]([[maybe_unused]] const std::string& name, const std::string& filename) -> bool {
-		return !filenames.contains(filename);
+	lhvm.StopScripts([&sourceFilenames]([[maybe_unused]] const std::string& name, const std::string& filename) -> bool {
+		return !script::name_lists::HoldsFile(sourceFilenames, filename);
 	});
 }
 
@@ -2668,8 +2653,9 @@ void StopScript() // 155 STOP_SCRIPT
 {
 	const auto scriptName = PopString();
 	auto& lhvm = Locator::vm::value();
+	// It may name several, as "ScriptA, ScriptB"
 	lhvm.StopScripts([&scriptName](const std::string& name, [[maybe_unused]] const std::string& filename) -> bool {
-		return name == scriptName;
+		return script::name_lists::HoldsScript(scriptName, name);
 	});
 }
 
@@ -2834,10 +2820,9 @@ void StopScriptsInFiles() // 172 STOP_SCRIPTS_IN_FILES
 {
 	const auto sourceFilenames = PopString();
 
-	const auto filenames = GetUniqueWords(sourceFilenames);
 	auto& lhvm = Locator::vm::value();
-	lhvm.StopScripts([&filenames]([[maybe_unused]] const std::string& name, const std::string& filename) -> bool {
-		return filenames.contains(filename);
+	lhvm.StopScripts([&sourceFilenames]([[maybe_unused]] const std::string& name, const std::string& filename) -> bool {
+		return script::name_lists::HoldsFile(sourceFilenames, filename);
 	});
 }
 
@@ -4689,11 +4674,9 @@ void StopScriptsInFilesExcluding() // 352 STOP_SCRIPTS_IN_FILES_EXCLUDING
 	const auto scriptNames = PopString();
 	const auto sourceFilenames = PopString();
 
-	const auto names = GetUniqueWords(scriptNames);
-	const auto filenames = GetUniqueWords(sourceFilenames);
 	auto& lhvm = Locator::vm::value();
-	lhvm.StopScripts([&names, &filenames](const std::string& name, const std::string& filename) -> bool {
-		return filenames.contains(filename) && !names.contains(name);
+	lhvm.StopScripts([&scriptNames, &sourceFilenames](const std::string& name, const std::string& filename) -> bool {
+		return script::name_lists::HoldsFile(sourceFilenames, filename) && !script::name_lists::HoldsScript(scriptNames, name);
 	});
 }
 
