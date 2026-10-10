@@ -251,7 +251,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::Cloud>(context).Field<&components::Cloud::track>("track").Field<&components::Cloud::pinned>("pinned");
 	Reflect<components::PlannedTemple>(context)
 	    .Field<&components::PlannedTemple::townId>("townId")
-	    .Field<&components::PlannedTemple::owner>("owner");
+	    .Field<&components::PlannedTemple::owner>("owner")
+	    .Field<&components::PlannedTemple::yAngle>("yAngle");
 	Reflect<components::BuildingSite>(context).Field<&components::BuildingSite::desire>("desire");
 	Reflect<components::Creature>(context)
 	    .Field<&components::Creature::owner>("owner")
@@ -263,6 +264,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Creature::fatness>("fatness")
 	    .Field<&components::Creature::strength>("strength")
 	    .Field<&components::Creature::size>("size")
+	    .Field<&components::Creature::penSize>("penSize")
 	    .Field<&components::Creature::objectsDestroyed>("objectsDestroyed")
 	    .Field<&components::Creature::canDie>("canDie");
 	Reflect<components::CreatureArena>(context)
@@ -1024,6 +1026,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::TempleInteriorPart::mesh>("mesh");
 	Reflect<components::Temple>(context)
 	    .Field<&components::Temple::owner>("owner")
+	    .Field<&components::Temple::yAngle>("yAngle")
 	    .Field<&components::Temple::lastHitTurn>("lastHitTurn")
 	    .Field<&components::Temple::beamTarget>("beamTarget")
 	    .Field<&components::Temple::beamTurn>("beamTurn")
