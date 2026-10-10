@@ -24,3 +24,8 @@ std::optional<glm::mat4> openblack::physics_draw::ModelMatrix(const glm::mat4& s
 	}
 	return glm::translate(glm::mat4(1.0f), pose->origin) * glm::mat4(pose->axes);
 }
+
+glm::vec3 openblack::physics_draw::Position(const glm::vec3& standing, const ecs::components::PhysicsDrawPose* pose)
+{
+	return pose == nullptr ? standing : pose->origin;
+}

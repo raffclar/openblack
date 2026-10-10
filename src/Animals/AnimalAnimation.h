@@ -12,6 +12,10 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <span>
+
+#include <glm/mat4x4.hpp>
+
 // How an animal plays its clip: each animal keeps its own place in its clip, in milliseconds. Standing, the clip plays
 // by the clock; moving, by the ground the animal covers, a play of the clip for each stride of its scaled model. The
 // pose is the clip's keyframes, spread evenly over its play time, blended between the two around that place. Pure
@@ -52,6 +56,12 @@ struct KeyframeSpan
 	float t {0.0f};
 };
 [[nodiscard]] KeyframeSpan SpanAt(const ClipTiming& clip, uint32_t place);
+
+/// A model posed between two keyframes: each bone's matrix blended element by element between its two keyframes, then
+/// placed by its parent's, which comes before it (a root bone's parent is the largest index). The bones written are
+/// as many as there are parents; both keyframes have at least that many.
+void PoseBetween(std::span<const glm::mat4> from, std::span<const glm::mat4> to, float t, std::span<const uint32_t> parents,
+                 std::span<glm::mat4> bones);
 
 /// The game's clock for drawing things between turns: the turn's start plus the milliseconds into it, at most 99
 [[nodiscard]] uint32_t DrawTime(uint32_t turn, float turnFraction);

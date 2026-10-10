@@ -16,8 +16,11 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <optional>
+#include <ranges>
 #include <span>
 #include <system_error>
+#include <utility>
 #define LOCATOR_IMPLEMENTATIONS
 
 #include <cstdint>
@@ -32,6 +35,7 @@
 #include <glm/gtx/transform.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/AllMeshes.h"
 #include "3D/ChimneySmoke.h"
 #include "3D/Clouds.h"
 #include "3D/DayNightClock.h"
@@ -43,7 +47,6 @@
 #include "3D/LandBlock.h"
 #include "3D/LandColourStamps.h"
 #include "3D/LandIslandInterface.h"
-#include "3D/LandLightFrame.h"
 #include "3D/LandLightTable.h"
 #include "3D/Lightning.h"
 #include "3D/Mists.h"
@@ -78,12 +81,14 @@
 #include "ECS/Components/DestructionGhost.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGlow.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/LightBeam.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
 #include "ECS/Components/MistDome.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Stream.h"
@@ -94,6 +99,7 @@
 #include "ECS/Components/VillageLight.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
@@ -110,6 +116,7 @@
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "EngineConfig.h"
@@ -129,6 +136,7 @@
 #include "Graphics/Moon.h"
 #include "Graphics/ObjectShadows.h"
 #include "Graphics/Primitive.h"
+#include "Graphics/SeaReflection.h"
 #include "Graphics/SeaRows.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Sun.h"
@@ -137,6 +145,7 @@
 #include "Graphics/ZSort.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/VortexRules.h"
 #include "Profiler.h"
 #include "Renderer.h"
 #include "Resources/ResourceManager.h"
@@ -1100,6 +1109,10 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			{
 				setSampler(MeshUniform::Environment, 5, *desc.environment);
 			}
+			if (desc.bonePalette != nullptr && has(MeshUniform::BonePalette))
+			{
+				setSampler(MeshUniform::BonePalette, 2, *desc.bonePalette); // vs
+			}
 			if (desc.morphWithTerrain)
 			{
 				setSampler(MeshUniform::Heightmap, 1, heightMap);     // vs
@@ -1457,6 +1470,9 @@ void Renderer::DrawTempleMapPass() const
 	terrainShader->SetUniformValue("u_islandExtent", &islandExtent);
 	terrainShader->SetUniformValue("u_handShadowMatrix", &noHandShadow);
 	terrainShader->SetUniformValue("u_handShadow", &noHand);
+	// The map shows no vortex's hole
+	const glm::vec4 noVortex {0.0f, 0.0f, 0.0f, -1.0f};
+	terrainShader->SetUniformValue("u_vortexGround", &noVortex);
 	for (size_t i = 0; const auto& block : island.GetBlocks())
 	{
 		const glm::vec4 mapPositionAndSize = glm::vec4(block.GetMapPosition(), 160.0f, 160.0f);
@@ -2418,6 +2434,92 @@ glm::mat4 SunModel(const glm::vec3& position)
 }
 } // namespace
 
+void Renderer::DrawVortexDepthWalls(const DrawSceneDesc& desc, RenderPass viewId) const
+{
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto wallsId = resources::HashIdentifier(MeshId::SpellZCheatBox);
+	if (!meshes.Contains(wallsId))
+	{
+		return;
+	}
+	const auto& walls = *meshes.Handle(wallsId);
+	const auto& infos = Locator::infoConstants::value().vortex;
+	// Every frame, open or not: four walls round a square under the vortex's middle, from the sea's level down, at the
+	// kind's base size and facing out, that write their depth and no colour, before the funnel and the land
+	desc.entities.Each<const ecs::components::Vortex>([&](entt::entity, const ecs::components::Vortex& vortex) {
+		const auto row = static_cast<size_t>(vortex.type);
+		if (row >= infos.size())
+		{
+			return;
+		}
+		const auto model =
+		    glm::translate(glm::vec3(vortex.centre.x, 0.0f, vortex.centre.z)) * glm::scale(glm::vec3(infos.at(row).baseScale));
+		L3DMeshSubmitDesc submitDesc = {};
+		submitDesc.viewId = viewId;
+		submitDesc.program = _shaderManager->GetShader("Object");
+		submitDesc.state = BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA;
+		submitDesc.useMaterialCulling = true;
+		submitDesc.modelMatrices = &model;
+		submitDesc.matrixCount = 1;
+		DrawMesh(walls, submitDesc, std::numeric_limits<uint8_t>::max());
+	});
+}
+
+void Renderer::DrawVortexHoleColours(const DrawSceneDesc& desc, const glm::vec4& skyAndBump) const
+{
+	if (!Locator::vortexSystem::has_value())
+	{
+		return;
+	}
+	const auto marks = Locator::vortexSystem::value().GetGroundMarks();
+	if (marks.empty())
+	{
+		return;
+	}
+	const auto* program = _shaderManager->GetShader("TerrainVortexHole");
+	const auto& island = Locator::terrainSystem::value();
+	const auto& textures = Locator::resources::value().GetTextures();
+	const auto islandExtent = glm::vec4(island.GetExtent().minimum, island.GetExtent().maximum);
+	const auto& blocks = island.GetBlocks();
+	// The game adds the colour before it draws the land, on the sea and the swirl, saturating there; the land is then
+	// blended over it by its coast alpha
+	constexpr auto k_State = BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GEQUAL |
+	                         BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE) | BGFX_STATE_MSAA;
+	const auto viewId = static_cast<bgfx::ViewId>(SkyPassOf(desc.viewId));
+	// The last vortex on a block is the one it shows
+	for (size_t i = 0; i < blocks.size(); ++i)
+	{
+		const auto& block = blocks[i];
+		const auto mark = std::ranges::find(marks | std::views::reverse, block.GetBlockPosition(),
+		                                    &ecs::systems::VortexSystemInterface::GroundMark::block);
+		if (mark == (marks | std::views::reverse).end())
+		{
+			continue;
+		}
+		const auto& marked = ecs::components::Vortex::GroundTexturesOf(mark->type);
+		if (!textures.Contains(marked.hole))
+		{
+			continue;
+		}
+		const glm::vec4 vortexGround {mark->centre, 1.0f / (vortex::k_GroundTextureSpan * mark->baseScale),
+		                              static_cast<float>(mark->holeThreshold)};
+		const glm::vec4 mapPositionAndSize = glm::vec4(block.GetMapPosition(), 160.0f, 160.0f);
+		program->SetUniformValue("u_blockPositionAndSize", &mapPositionAndSize);
+		program->SetUniformValue("u_islandExtent", &islandExtent);
+		program->SetUniformValue("u_skyAndBump", &skyAndBump);
+		program->SetUniformValue("u_haze", &_haze[0]);
+		program->SetUniformValue("u_hazeColour", &_haze[1]);
+		program->SetUniformValue("u_vortexGround", &vortexGround);
+		program->SetTextureSampler("s9_landLuminosity", 9, GetLandLuminosity());
+		program->SetTextureSampler("s10_landColour", 10, GetLandColour());
+		program->SetTextureSampler("s7_landLight", 7, GetLandLightTexture());
+		program->SetTextureSampler("s6_vortexHole", 6, *textures.Handle(marked.hole));
+		block.BindVertices();
+		bgfx::setState(k_State | (desc.cullBack ? BGFX_STATE_CULL_CCW : BGFX_STATE_CULL_CW));
+		program->Submit(viewId);
+	}
+}
+
 void Renderer::DrawMists(const DrawSceneDesc& desc) const
 {
 	if (Locator::temple::has_value() && Locator::temple::value().Active())
@@ -2639,11 +2741,17 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 			vertices.push_back({quad.corners.at(corner), ground_blobs::k_Uvs.at(corner), (opacity << 24u) | 0xFFFFFFu});
 		}
 	};
-	// Every villager out of doors and out of the sea casts one from each foot, on the land beneath it
+	const auto& farVillagers = Locator::rendereringSystem::value().GetContext().farVillagers;
+	const auto isFar = [&farVillagers](entt::entity entity) {
+		const auto found = std::ranges::lower_bound(farVillagers, entity, {}, &RenderContext::FarVillager::entity);
+		return found != farVillagers.end() && found->entity == entity;
+	};
+	// Every villager out of doors and out of the sea casts one from each foot, on the land beneath it; one too far away
+	// to be drawn a wider one from where it stands, as if the land there were flat
 	desc.entities.Each<const ecs::components::Villager, const ecs::components::Transform, const ecs::components::Mesh>(
-	    [&](const ecs::components::Villager& /*villager*/, const ecs::components::Transform& transform,
+	    [&](entt::entity entity, const ecs::components::Villager& /*villager*/, const ecs::components::Transform& transform,
 	        const ecs::components::Mesh& mesh) {
-		    if (transform.position.y <= ground_blobs::k_LowestHeight || !meshes.Contains(mesh.id))
+		    if (transform.position.y <= ground_blobs::k_LowestHeight || !meshes.Contains(mesh.id) || isFar(entity))
 		    {
 			    return;
 		    }
@@ -2667,6 +2775,15 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 		    }
 	    },
 	    entt::exclude<ecs::components::AtHome, ecs::components::HiddenByState>);
+	for (const auto& far : farVillagers)
+	{
+		auto foot = far.position;
+		foot.y = island.GetHeightAt(glm::vec2(foot.x, foot.z)) + ground_blobs::k_FarLift;
+		for (const auto& quad : ground_blobs::Far(foot, far.scale))
+		{
+			addQuad(quad);
+		}
+	}
 	if (vertices.empty())
 	{
 		return;
@@ -2691,6 +2808,72 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	// Blended over the land, tested against depth but leaving none, both sides
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA);
 	program->Submit(static_cast<bgfx::ViewId>(desc.viewId));
+}
+
+void Renderer::DrawFarVillagerSmudges(const DrawSceneDesc& desc) const
+{
+	using ecs::components::Mist;
+	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
+	const auto& textures = Locator::resources::value().GetTextures();
+	if (desc.viewId != RenderPass::Main || renderCtx.farVillagers.empty() || !textures.Contains(Mist::k_TextureId) ||
+	    !textures.Contains(Mist::k_AlphaTextureId))
+	{
+		return;
+	}
+	struct Vertex
+	{
+		glm::vec3 position;
+		glm::vec2 uv;
+		uint32_t colour;
+	};
+	bgfx::VertexLayout layout;
+	layout.begin()
+	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+	    .end();
+	constexpr std::array<uint16_t, 6> k_Triangles = {0, 1, 2, 0, 2, 3};
+	const auto smudges = static_cast<uint32_t>(renderCtx.farVillagers.size());
+	const auto vertexCount = smudges * 4;
+	const auto indexCount = smudges * 6;
+	if (vertexCount > std::numeric_limits<uint16_t>::max() ||
+	    bgfx::getAvailTransientVertexBuffer(vertexCount, layout) < vertexCount ||
+	    bgfx::getAvailTransientIndexBuffer(indexCount) < indexCount)
+	{
+		return;
+	}
+	bgfx::TransientVertexBuffer vertexBuffer;
+	bgfx::TransientIndexBuffer indexBuffer;
+	bgfx::allocTransientVertexBuffer(&vertexBuffer, vertexCount, layout);
+	bgfx::allocTransientIndexBuffer(&indexBuffer, indexCount);
+	const auto vertices = std::span(reinterpret_cast<Vertex*>(vertexBuffer.data), vertexCount);
+	const auto indices = std::span(reinterpret_cast<uint16_t*>(indexBuffer.data), indexCount);
+	// Black, a little see-through
+	constexpr auto k_Colour = static_cast<uint32_t>(ground_blobs::k_SmudgeAlpha) << 24u;
+	const auto right = desc.camera->GetRight();
+	const auto up = desc.camera->GetUp();
+	for (size_t i = 0; i < renderCtx.farVillagers.size(); ++i)
+	{
+		const auto& far = renderCtx.farVillagers.at(i);
+		const auto corners = ground_blobs::SmudgeCorners(far.position, far.scale, renderCtx.farSmudgeScale, right, up);
+		for (size_t c = 0; c < corners.size(); ++c)
+		{
+			vertices[(i * 4) + c] = {corners.at(c), ground_blobs::k_SmudgeUvs.at(c), k_Colour};
+		}
+		for (size_t t = 0; t < k_Triangles.size(); ++t)
+		{
+			indices[(i * 6) + t] = static_cast<uint16_t>((i * 4) + k_Triangles.at(t));
+		}
+	}
+	const auto* program = _shaderManager->GetShader("WorldTextured");
+	program->SetTextureSampler("s_diffuse", 0, *textures.Handle(Mist::k_TextureId));
+	program->SetTextureSampler("s_alpha", 1, *textures.Handle(Mist::k_AlphaTextureId));
+	bgfx::setVertexBuffer(0, &vertexBuffer);
+	bgfx::setIndexBuffer(&indexBuffer);
+	// Both sides, blended over what is behind, tested against but not writing depth; far off, among the first to blend
+	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA);
+	program->Submit(static_cast<bgfx::ViewId>(TranslucentView(desc.viewId)),
+	                zsort::Depth(renderCtx.farVillagers.front().position, desc.camera->GetOrigin()));
 }
 
 void Renderer::DrawInfluenceRipples(const DrawSceneDesc& desc) const
@@ -3231,12 +3414,14 @@ void Renderer::DrawMoon(RenderPass viewId) const
 	{
 		return;
 	}
-	// The moon keeps its place beside the player's camera and faces it. Drawn so in the mirrored view, it is mirrored
-	// in the sea with everything else.
+	// The moon keeps its place beside the player's camera and faces it. The sea shows it mirrored, and the glow of a
+	// copy of it with its height mirrored through sea level.
+	const bool inTheSea = viewId == RenderPass::ReflectionSky;
 	const auto& camera = Locator::camera::value();
 	const auto centre = camera.GetOrigin() + moon->placement->offset;
 	const auto view = camera.GetViewMatrix(Camera::Interpolation::Current);
-	const auto basis = moon::Basis(view, glm::inverse(view), centre);
+	const auto inverseView = glm::inverse(view);
+	const auto basis = moon::Basis(view, inverseView, centre);
 	const auto& colour = moon->colour;
 	// It shows less through an overcast
 	const float alpha = moon->strength / 255.0f;
@@ -3245,17 +3430,20 @@ void Renderer::DrawMoon(RenderPass viewId) const
 		return;
 	}
 
-	// First its glow, added to the sky
-	const auto& textures = Locator::resources::value().GetTextures();
-	bgfx::VertexLayout layout;
-	layout.begin()
-	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-	    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
-	    .end();
-	constexpr auto k_GlowVertices = static_cast<uint32_t>(moon::k_GlowIndices.size());
-	if (glowLook != nullptr && textures.Contains(glowLook->textureId) && textures.Contains(glowLook->alphaTextureId) &&
-	    bgfx::getAvailTransientVertexBuffer(k_GlowVertices, layout) == k_GlowVertices)
-	{
+	// Its glow, added to the sky
+	const auto drawGlow = [&](const moon::Glow& glow) {
+		const auto& textures = Locator::resources::value().GetTextures();
+		bgfx::VertexLayout layout;
+		layout.begin()
+		    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+		    .end();
+		constexpr auto k_GlowVertices = static_cast<uint32_t>(moon::k_GlowIndices.size());
+		if (glowLook == nullptr || !textures.Contains(glowLook->textureId) || !textures.Contains(glowLook->alphaTextureId) ||
+		    bgfx::getAvailTransientVertexBuffer(k_GlowVertices, layout) != k_GlowVertices)
+		{
+			return;
+		}
 		struct Vertex
 		{
 			glm::vec3 position;
@@ -3264,7 +3452,6 @@ void Renderer::DrawMoon(RenderPass viewId) const
 		bgfx::TransientVertexBuffer buffer;
 		bgfx::allocTransientVertexBuffer(&buffer, k_GlowVertices, layout);
 		const auto vertices = std::span(reinterpret_cast<Vertex*>(buffer.data), k_GlowVertices);
-		const auto glow = moon::MakeGlow(basis, centre);
 		for (size_t i = 0; i < vertices.size(); ++i)
 		{
 			const auto corner = moon::k_GlowIndices.at(i);
@@ -3282,21 +3469,37 @@ void Renderer::DrawMoon(RenderPass viewId) const
 		bgfx::setVertexBuffer(0, &buffer);
 		bgfx::setState(k_AdditiveState | BGFX_STATE_DEPTH_TEST_GREATER);
 		program->Submit(static_cast<bgfx::ViewId>(viewId));
-	}
+	};
 
-	// Then the moon, blended over the sky, its face turned to the real moon's phase. It leaves its depth, so the land
-	// nearer than it is drawn over it and the land beyond it stays hidden.
-	const auto phase = moon->phase;
-	DrawCelestialMesh(
-	    viewId, {
-	                .meshId = body->meshId,
-	                .textureId = body->textureId,
-	                .alphaTextureId = body->alphaTextureId,
-	                .model = moon::Model(basis, centre, phase),
-	                .colour = glm::vec4(colour, alpha),
-	                .celestial = {std::cos(phase), std::sin(phase), 1.0f, 1.0f},
-	                .state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA,
-	            });
+	// The moon, blended over the sky, its face turned to the real moon's phase. It leaves its depth, so the land nearer
+	// than it is drawn over it and the land beyond it stays hidden. Its half sphere shows only its outside, as its
+	// material is one sided: the half turned away from the camera, around a new moon, shows nothing. Mirrored in the
+	// sea, the faces that turn towards the camera are the other way round.
+	const auto drawMoon = [&]() {
+		const auto phase = moon->phase;
+		DrawCelestialMesh(viewId, {
+		                              .meshId = body->meshId,
+		                              .textureId = body->textureId,
+		                              .alphaTextureId = body->alphaTextureId,
+		                              .model = moon::Model(basis, centre, phase),
+		                              .colour = glm::vec4(colour, alpha),
+		                              .celestial = {std::cos(phase), std::sin(phase), 1.0f, 1.0f},
+		                              .state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER |
+		                                       BGFX_STATE_BLEND_ALPHA | (inTheSea ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW),
+		                          });
+	};
+
+	if (inTheSea)
+	{
+		// In the sea, the moon mirrored with everything else by the mirrored view, then the glow of its copy, which
+		// the mirrored moon in front of it hides
+		drawMoon();
+		drawGlow(moon::SeaGlow(view, inverseView, centre));
+		return;
+	}
+	// In the sky, the glow first, then the moon over it
+	drawGlow(moon::MakeGlow(basis, centre));
+	drawMoon();
 }
 
 void Renderer::DrawSun(RenderPass viewId) const
@@ -4124,11 +4327,16 @@ TextureHandle Renderer::UpdateLandLight() const
 		                                                   BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP | BGFX_SAMPLER_POINT));
 		bgfx::setName(toBgfx(*_landLightTexture), "Land Light");
 	}
+	const auto* dome =
+	    Locator::skySystem::has_value()
+	        ? Locator::entitiesRegistry::value().TryGet<const ecs::components::SkyDome>(Locator::skySystem::value().GetDome())
+	        : nullptr;
 	if (const auto& palettes = Locator::resources::value().GetLandLightPalettes();
-	    palettes.Contains(LandLightPalette::k_Id.value()))
+	    dome != nullptr && palettes.Contains(LandLightPalette::k_Id.value()))
 	{
-		// The clouds over the camera darken the land, and so does a flash of lightning
-		const auto [skyType, alignment, overcast, flash] = FrameLandLightInputs();
+		// The land's light as the sky worked it out for this frame: the clouds over the camera darken the land, and so
+		// does a flash of lightning
+		const auto [skyType, alignment, overcast, flash] = dome->landLight;
 		_landLightTable->Build(*palettes.Handle(LandLightPalette::k_Id.value()), skyType, alignment, overcast, flash);
 		const auto& haze = _landLightTable->GetHaze();
 		_haze = {glm::vec4(haze.nearDistance, haze.farDistance, haze.k, 1.0f), glm::vec4(haze.colour, 0.0f)};
@@ -4664,6 +4872,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 		}
 		return objectShaderInstanced;
 	};
+	const auto* objectShaderPaletteInstanced = _shaderManager->GetShader("ObjectPaletteInstanced");
 	const auto* objectShaderLightmapInstanced = _shaderManager->GetShader("ObjectLightmapInstanced");
 	const auto* objectShaderReflectiveLightmapInstanced = _shaderManager->GetShader("ObjectReflectiveLightmapInstanced");
 
@@ -4719,17 +4928,29 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			const auto& mesh = ocean.GetMesh();
 			mesh.GetIndexBuffer().Bind(mesh.GetIndexBuffer().GetCount(), 0);
 			mesh.GetVertexBuffer().Bind();
-			bgfx::setState(k_BgfxDefaultStateInvertedZ);
+			// The sea is a backdrop, as the game draws it: over whatever was there and leaving no depth, so the land under
+			// the water, blended by its coast alpha, and a vortex's funnel down through a hole in the land show over it
+			constexpr auto k_SeaState = k_BgfxDefaultStateInvertedZ & ~(BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_MASK);
+			bgfx::setState(k_SeaState);
 			auto diffuse = Locator::resources::value().GetTextures().Handle(ocean.GetDiffuseTexture());
 			auto alpha = Locator::resources::value().GetTextures().Handle(ocean.GetAlphaTexture());
 			waterShader->SetTextureSampler("s_diffuse", 0, *diffuse);
 			waterShader->SetTextureSampler("s_alpha", 1, *alpha);
 			waterShader->SetTextureSampler("s_reflection", 2, ocean.GetReflectionFramebuffer().GetColorAttachment());
 			SetSeaUniforms(*waterShader, *desc.camera);
-			waterShader->Submit(static_cast<bgfx::ViewId>(desc.viewId));
+			// The sea is drawn in the sky's pass, which keeps its order, so that what is drawn before the land (a vortex's
+			// swirl) goes over the sea and under the land, as the game draws them in turn
+			waterShader->Submit(static_cast<bgfx::ViewId>(skyViewId));
+		}
+		if (desc.viewId != RenderPass::Reflection)
+		{
+			DrawVortexDepthWalls(desc, skyViewId);
 		}
 	}
 
+	// The land mirrored under the sea is lit at half
+	const float landLightScale = desc.viewId == RenderPass::Reflection ? 0.5f : 1.0f;
+	const glm::vec4 landSkyAndBump = {skyType, landLightScale, desc.smallBumpMapStrength, 0.0f};
 	{
 		auto section = profiler.BeginScoped(desc.viewId == RenderPass::Reflection ? Profiler::Stage::ReflectionDrawIsland
 		                                                                          : Profiler::Stage::MainPassDrawIsland);
@@ -4741,9 +4962,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			const auto& textures = Locator::resources::value().GetTextures();
 			auto smallBump = textures.Handle(LandIslandInterface::k_SmallBumpTextureId);
 			auto smallBumpAlpha = textures.Handle(LandIslandInterface::k_SmallBumpAlphaTextureId);
-			// The land mirrored under the sea is lit at half
-			const float lightScale = desc.viewId == RenderPass::Reflection ? 0.5f : 1.0f;
-			const glm::vec4 u_skyAndBump = {skyType, lightScale, desc.smallBumpMapStrength, 0.0f};
+			const auto& u_skyAndBump = landSkyAndBump;
 
 			// The small bump detail fades out about a line across the ground: where the plane square to the camera's
 			// view, 50 units ahead of it, meets the ground at the camera's height, or at 110.55 if the camera is higher
@@ -4850,12 +5069,33 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			};
 			const ProgramUniform blockPositionUniform {*terrainShader, "u_blockPositionAndSize"};
 			const ProgramUniform blockUniform {*terrainShader, "u_block"};
+			const ProgramUniform vortexGroundUniform {*terrainShader, "u_vortexGround"};
+			// An open vortex opens a hole in the land block under its middle and lays a ring on it; the last vortex on a
+			// block is the one it shows
+			const std::span<const ecs::systems::VortexSystemInterface::GroundMark> groundMarks =
+			    Locator::vortexSystem::has_value() ? Locator::vortexSystem::value().GetGroundMarks()
+			                                       : std::span<const ecs::systems::VortexSystemInterface::GroundMark> {};
 			const auto submitBlock = [&](size_t index) {
 				const auto& block = blocks[index];
 				const glm::vec4 mapPositionAndSize = glm::vec4(block.GetMapPosition(), 160.0f, 160.0f);
 				blockPositionUniform.Set(&mapPositionAndSize);
 				const glm::vec4 u_block {static_cast<float>(index), 0.0f, 0.0f, 0.0f};
 				blockUniform.Set(&u_block);
+				glm::vec4 vortexGround {0.0f, 0.0f, 0.0f, -1.0f};
+				const auto mark = std::ranges::find(groundMarks | std::views::reverse, block.GetBlockPosition(),
+				                                    &ecs::systems::VortexSystemInterface::GroundMark::block);
+				if (mark != (groundMarks | std::views::reverse).end())
+				{
+					const auto& marked = ecs::components::Vortex::GroundTexturesOf(mark->type);
+					if (textures.Contains(marked.hole) && textures.Contains(marked.ring))
+					{
+						vortexGround = {mark->centre, 1.0f / (vortex::k_GroundTextureSpan * mark->baseScale),
+						                static_cast<float>(mark->holeThreshold)};
+						terrainShader->SetTextureSampler("s6_vortexHole", 6, *textures.Handle(marked.hole));
+						terrainShader->SetTextureSampler("s13_vortexRing", 13, *textures.Handle(marked.ring));
+					}
+				}
+				vortexGroundUniform.Set(&vortexGround);
 				block.BindVertices();
 				bgfx::setState(defaultState | (desc.cullBack ? BGFX_STATE_CULL_CCW : BGFX_STATE_CULL_CW), 0);
 				terrainShader->Submit(static_cast<bgfx::ViewId>(desc.viewId), blockDepth(block), discard);
@@ -4901,6 +5141,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			{
 				std::span<const glm::mat4> bones;
 				const L3DMeshSubmitDesc::MorphTargets* morphTargets;
+				/// Each instance's bones are read from the bone palette, where its instance says they start
+				bool bonePalette {false};
 			};
 			const auto drawInstances = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers,
 			                               bool useMaterialBlending, uint32_t first, uint32_t count,
@@ -4975,12 +5217,22 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 
 				submitDesc.morphTargets = nullptr;
+				submitDesc.bonePalette = nullptr;
 				if (pose != nullptr)
 				{
 					submitDesc.landLightScale = CreatureLandLightScale(desc.viewId);
 					submitDesc.modelMatrices = pose->bones.data();
 					submitDesc.matrixCount = static_cast<uint8_t>(pose->bones.size());
 					submitDesc.program = objectProgramFor(submitDesc.matrixCount, submitDesc.morphWithTerrain);
+					if (pose->bonePalette)
+					{
+						const static auto identity = glm::mat4(1.0f);
+						submitDesc.modelMatrices = &identity;
+						submitDesc.matrixCount = 1;
+						submitDesc.program = objectShaderPaletteInstanced;
+						submitDesc.lightmapProgram = nullptr;
+						submitDesc.bonePalette = renderCtx.bonePaletteTexture.get();
+					}
 					if (pose->morphTargets != nullptr)
 					{
 						submitDesc.program = objectShaderMorphInstanced;
@@ -5192,20 +5444,66 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				              &entityPose);
 				submitDesc.objectLook.reset();
 			};
-			// The villagers, each posed by its state's clip, or in its model's own pose while its state plays none; and the
-			// gates and other scenery the scripts open and close, each posed by its own clip
+			// The mesh, and its draw, whose instances hold this one: a villager's is the one its distance chose
+			const auto drawHolding =
+			    [&renderCtx](
+			        uint32_t instance) -> std::optional<std::pair<entt::id_type, const RenderContext::InstancedDrawDesc*>> {
+				for (const auto* descs : {&renderCtx.instancedDrawDescs, &renderCtx.fadingDrawDescs})
+				{
+					for (const auto& [meshId, placers] : *descs)
+					{
+						if (instance >= placers.offset && instance < placers.offset + placers.count)
+						{
+							return std::make_pair(meshId, &placers);
+						}
+					}
+				}
+				return std::nullopt;
+			};
+			// The villagers, each posed by its state's clip, or in its model's own pose while its state plays none. The
+			// sea reflects only those flying in the physics, and one held in the hand while the hand is reflected.
+			const auto handDraw = renderCtx.instancedDrawDescs.find(ecs::components::Hand::k_MeshId);
+			const bool handReflected = desc.drawHand && handDraw != renderCtx.instancedDrawDescs.end() &&
+			                           handDraw->second.count > 0 && !handDraw->second.hiddenFromReflection;
 			const auto drawVillager = [&](entt::entity entity, uint32_t instance) {
-				const std::vector<glm::mat4>* bones = nullptr;
-				if (const auto* pose = desc.entities.TryGet<const ecs::components::VillagerPose>(entity))
+				const bool reflection = desc.viewId == RenderPass::Reflection;
+				const auto* pose = desc.entities.TryGet<const ecs::components::VillagerPose>(entity);
+				if (pose == nullptr || (reflection && !graphics::sea_reflection::ReflectsVillager(
+				                                          {.inPhysics = desc.entities.AllOf<ecs::components::InPhysics>(entity),
+				                                           .inHand = desc.entities.AllOf<ecs::components::InHand>(entity),
+				                                           .handReflected = handReflected})))
 				{
-					bones = &pose->bones;
+					return;
 				}
-				else if (const auto* still = desc.entities.TryGet<const ecs::components::AnimatedStaticPose>(entity))
+				const auto holding = drawHolding(instance);
+				if (!holding.has_value() || !meshManager.Contains(holding->first))
 				{
-					bones = &still->bones;
+					return;
 				}
+				const auto& [meshId, placers] = *holding;
+				// The villagers of a mesh are drawn together from the bone palette; in the reflection one is drawn alone,
+				// still with its bones from the palette
+				if (placers->bonePalette && renderCtx.bonePaletteTexture)
+				{
+					if (reflection)
+					{
+						const EntityPose palettePose {.bones = {}, .morphTargets = nullptr, .bonePalette = true};
+						drawInstances(meshId, *placers, placers->materialBlending, instance, 1, &palettePose);
+					}
+					return;
+				}
+				const auto model = meshManager.Handle(meshId);
+				const bool posed = pose->bones.size() == model->GetBoneMatrices().size();
+				const EntityPose entityPose {.bones = posed ? std::span<const glm::mat4>(pose->bones)
+				                                            : std::span<const glm::mat4>(model->GetBoneMatrices()),
+				                             .morphTargets = nullptr};
+				drawInstances(meshId, *placers, placers->materialBlending, instance, 1, &entityPose);
+			};
+			// The gates and other scenery the scripts open and close, each posed by its own clip
+			const auto drawPosedStill = [&](entt::entity entity, uint32_t instance) {
+				const auto* still = desc.entities.TryGet<const ecs::components::AnimatedStaticPose>(entity);
 				const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
-				if (bones == nullptr || mesh == nullptr || !meshManager.Contains(mesh->id))
+				if (still == nullptr || mesh == nullptr || !meshManager.Contains(mesh->id))
 				{
 					return;
 				}
@@ -5216,8 +5514,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					return;
 				}
 				const auto model = meshManager.Handle(mesh->id);
-				const bool posed = bones->size() == model->GetBoneMatrices().size();
-				const EntityPose entityPose {.bones = posed ? std::span<const glm::mat4>(*bones)
+				const bool posed = still->bones.size() == model->GetBoneMatrices().size();
+				const EntityPose entityPose {.bones = posed ? std::span<const glm::mat4>(still->bones)
 				                                            : std::span<const glm::mat4>(model->GetBoneMatrices()),
 				                             .morphTargets = nullptr};
 				drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &entityPose);
@@ -5248,6 +5546,20 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			{
 				drawAnimal(entity, instance, false);
 				drawVillager(entity, instance);
+				drawPosedStill(entity, instance);
+			}
+			// The villagers, a draw for each of their meshes, each instance posed by its own bones in the bone palette
+			if (renderCtx.bonePaletteTexture)
+			{
+				const EntityPose palettePose {.bones = {}, .morphTargets = nullptr, .bonePalette = true};
+				for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
+				{
+					if (placers.bonePalette && placers.filled > 0 &&
+					    !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
+					{
+						drawInstances(meshId, placers, placers.materialBlending, placers.offset, placers.filled, &palettePose);
+					}
+				}
 			}
 			DrawTempleUnderside(desc);
 			// In the temple, whose draws keep their order, the sun's glare comes after its solid parts, which hide it, and
@@ -5258,6 +5570,21 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			}
 			// The translucent meshes blend over the opaque ones, each in its own place in the sort
 			submitDesc.viewId = translucentViewId;
+			// The villagers fading out in the distance, a draw for each low mesh, blended by each one's alpha
+			if (renderCtx.bonePaletteTexture)
+			{
+				const EntityPose palettePose {.bones = {}, .morphTargets = nullptr, .bonePalette = true};
+				for (const auto& [meshId, placers] : renderCtx.fadingDrawDescs)
+				{
+					if (placers.filled > 0 && !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection) &&
+					    meshManager.Contains(meshId))
+					{
+						const auto position = glm::vec3(renderCtx.instanceUniforms.at(placers.offset).model[3]);
+						submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
+						drawInstances(meshId, placers, false, placers.offset, placers.filled, &palettePose);
+					}
+				}
+			}
 			for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
 			{
 				if (placers.translucent && !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
@@ -5289,6 +5616,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawCaveTrophies(desc);
 			DrawCaveSeeds(desc);
 			DrawGroundBlobs(desc);
+			DrawFarVillagerSmudges(desc);
 			DrawGlobes(desc);
 			DrawHandMiracleBands(desc);
 			DrawTribalPower(desc);
@@ -5485,6 +5813,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				});
 			}
 		}
+	}
+
+	// After the swirl drawn before the land, an open vortex's hole texture adds its colour under its land block, which
+	// the land is then blended over
+	if (desc.drawIsland)
+	{
+		DrawVortexHoleColours(desc, landSkyAndBump);
 	}
 
 	// The sun's glare over everything else in the view; the temple's comes before its glass

@@ -94,7 +94,7 @@ void CreatureSpawner::DrawAudio(entt::entity entity) noexcept
 	}
 	ImGui::Text("Voice bank %s, sound object %d, size key %d",
 	            creature_audio::VoiceBank(rig->soundBankName, creature->species).c_str(), rig->soundObject,
-	            static_cast<int32_t>(creature_audio::SizeKey(creature->size)));
+	            static_cast<int32_t>(creature_audio::SizeKey(ShownSize(*creature))));
 
 	if (const auto* heard = registry.TryGet<const CreatureAudio>(entity); heard != nullptr && !heard->recent.empty())
 	{

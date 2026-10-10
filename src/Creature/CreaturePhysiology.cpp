@@ -14,6 +14,7 @@
 #include <algorithm>
 
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureMorph.h"
 
 using namespace openblack;
 using namespace openblack::creature_physiology;
@@ -118,8 +119,9 @@ void creature_physiology::TickTurn(Needs& needs, Shape& shape, const Species& sp
 		ModifyStrength(shape, k_CarryStrength / turnsToStrength * Clamp01(*turn.carriedWeight));
 	}
 
-	// It grows while it stands still, up to its full size; bigger by other means, it stays as it is
-	if (!turn.moving && turn.phase >= k_GrowingPhase && shape.size < k_MaxGrownSize)
+	// It grows while it stands still, never past its full size: made bigger by other means, it is brought back to its
+	// full size the first turn it grows
+	if (!turn.moving && turn.phase >= k_GrowingPhase)
 	{
 		const auto growth = Growth(needs, species, turn.asleep, turn.turnsPerSecond);
 		shape.size = std::clamp(shape.size + growth, 0.0f, k_MaxGrownSize);
@@ -127,8 +129,9 @@ void creature_physiology::TickTurn(Needs& needs, Shape& shape, const Species& sp
 
 	shape.strength = Clamp01(shape.strength * species.strengthDecay);
 
-	// It uses up its energy, more slowly the bigger it is and much more slowly asleep or resting
-	auto divisor = std::clamp(1.0f + (k_EnergySizeFactor * std::clamp(shape.size, 0.0f, 2.0f)), 1.0f, 2.0f);
+	// It uses up its energy, more slowly the bigger it looks (shrunk in its pen, faster) and much more slowly asleep or
+	// resting
+	auto divisor = std::clamp(1.0f + (k_EnergySizeFactor * std::clamp(ShownSize(shape), 0.0f, 2.0f)), 1.0f, 2.0f);
 	if (turn.asleep || turn.resting)
 	{
 		divisor += k_RestingEnergyDivisor;
@@ -168,6 +171,11 @@ void creature_physiology::TickTurn(Needs& needs, Shape& shape, const Species& sp
 	needs.warmth = std::clamp(needs.warmth + (difference > 0.0f ? change : -change), -1.0f, 1.0f);
 }
 
+float creature_physiology::ShownSize(const Shape& shape)
+{
+	return creature_morph::ClampScale(shape.penSize.value_or(shape.size));
+}
+
 void creature_physiology::ModifyStrength(Shape& shape, float amount)
 {
 	shape.strength = Clamp01(shape.strength + amount);
@@ -195,7 +203,8 @@ float creature_physiology::Eat(Needs& needs, Shape& shape, const Species& specie
 	{
 		shape.fatness = Clamp01(shape.fatness + over);
 	}
-	needs.energy = std::clamp(needs.energy + energy, 0.0f, std::max(1.0f, shape.size));
+	// A meal is measured by its own size, but it fills up only as far as the size it is shown at
+	needs.energy = std::clamp(needs.energy + energy, 0.0f, std::max(1.0f, ShownSize(shape)));
 	needs.poo = Clamp01(needs.poo + (Clamp01(energy) * species.pooPerEnergy));
 	++needs.meals;
 	return energy;
