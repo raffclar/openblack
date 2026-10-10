@@ -15,13 +15,13 @@
 #include <ranges>
 
 #include "3D/DayNightClock.h"
-#include "3D/SkyInterface.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TownDesire.h"
 #include "InfoConstants.h"

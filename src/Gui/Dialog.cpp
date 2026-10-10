@@ -39,6 +39,8 @@ public:
 	}
 
 	void SetLabel(std::u16string label) { _label = std::move(label); }
+	[[nodiscard]] std::u16string_view GetName() const override { return _label; }
+	[[nodiscard]] std::string_view GetKind() const override { return "tab"; }
 
 	// Tabs without a label are only the line along the top of the box
 	[[nodiscard]] bool HitTest(glm::ivec2 point) const override { return !_label.empty() && Control::HitTest(point); }
@@ -70,6 +72,20 @@ void Dialog::SetTabLabel(size_t index, std::u16string label)
 	{
 		static_cast<TabControl&>(*_controls.at(index)).SetLabel(std::move(label));
 	}
+}
+
+std::vector<Dialog::NamedControl> Dialog::GetNamedControls() const
+{
+	std::vector<NamedControl> named;
+	for (const auto& control : _controls)
+	{
+		if (control->visible && control->IsInteractive() && !control->GetName().empty())
+		{
+			named.push_back(
+			    {.name = std::u16string(control->GetName()), .kind = std::string(control->GetKind()), .rect = control->rect});
+		}
+	}
+	return named;
 }
 
 DialogRect Dialog::GetTabRect(size_t index)
@@ -132,6 +148,10 @@ bool Dialog::MouseUp(glm::ivec2 point)
 	auto* released = HitTest(point);
 	auto* pressed = std::exchange(_pressed, nullptr);
 	_hovered = released;
+	if (pressed != nullptr)
+	{
+		pressed->Release(point);
+	}
 	if (auto* picture = dynamic_cast<SymbolPicture*>(pressed); picture != nullptr && released != pressed)
 	{
 		picture->Release();
@@ -142,6 +162,18 @@ bool Dialog::MouseUp(glm::ivec2 point)
 	}
 	pressed->Activate(point);
 	return true;
+}
+
+void Dialog::Hold(Control& control)
+{
+	_pressed = &control;
+	_focused = &control;
+	_hovered = &control;
+}
+
+bool Dialog::IsPointerOverControl() const
+{
+	return HitTest(_pointer) != nullptr;
 }
 
 void Dialog::Wheel(glm::ivec2 point, int steps)

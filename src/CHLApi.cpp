@@ -37,7 +37,6 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "3D/ScreenPick.h"
-#include "3D/SkyInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/GameMusic.h"
 #include "Camera/Camera.h"
@@ -56,6 +55,7 @@
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
+#include "ECS/Components/Influence.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
@@ -87,6 +87,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TutorialSkipSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -109,6 +110,8 @@ namespace openblack::chlapi
 {
 
 using namespace openblack::ecs::archetypes;
+
+PlayerNames ScriptPlayerName(int32_t scriptPlayer);
 
 using openblack::Locator;
 using openblack::MobileStaticInfo;
@@ -3257,10 +3260,30 @@ void SetHelpSystem() // 253 SET_HELP_SYSTEM
 
 void SetVirtualInfluence() // 254 SET_VIRTUAL_INFLUENCE
 {
-	// const auto player = Popf();
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto enable = Pop().intVal != 0;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "The hand's virtual influence for player {} is turned {}",
+	                    static_cast<int>(player), enable ? "on" : "off");
+	// Turned off, the player's hand keeps nothing of their influence past the border, and loses what it had
+	if (!Locator::playerSystem::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = Locator::playerSystem::value().GetPlayer(player);
+	if (!registry.Valid(entity))
+	{
+		return;
+	}
+	auto& state =
+	    (registry.AnyOf<ecs::components::VirtualInfluence>(entity) ? registry.Get<ecs::components::VirtualInfluence>(entity)
+	                                                               : registry.Assign<ecs::components::VirtualInfluence>(entity))
+	        .state;
+	state.disabled = !enable;
+	if (state.disabled)
+	{
+		state.fraction = 0.0f;
+	}
 }
 
 void SetActive() // 255 SET_ACTIVE
@@ -4962,6 +4985,7 @@ void GameAddForBuilding() // 444 GAME_ADD_FOR_BUILDING
 void EnableDisableAlignmentMusic() // 445 ENABLE_DISABLE_ALIGNMENT_MUSIC
 {
 	const auto enable = Pop().intVal != 0;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "The land's music is turned {}", enable ? "on" : "off");
 	if (auto* gameMusic = Game::Instance()->GetGameMusic())
 	{
 		gameMusic->SetAlignmentMusicEnabled(enable);

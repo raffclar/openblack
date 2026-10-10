@@ -310,6 +310,37 @@ void AddSinking(std::vector<Scenario>& all)
 	});
 }
 
+void AddTempleStruck(std::vector<Scenario>& all)
+{
+	std::vector<ObjectSetup> objects;
+	std::vector<ThrowSetup> throws;
+	for (size_t i = 0; i < 6; ++i)
+	{
+		const float angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i) / 6.0f;
+		objects.push_back({.type = MobileStaticInfo::Boulder2Chalk,
+		                   .offset = k_Field + glm::vec2 {std::cos(angle), std::sin(angle)} * k_ThrowFrom});
+		throws.push_back(Inward(i, angle, 2.0f + static_cast<float>(i) * 1.5f, 9.0f));
+	}
+	all.push_back({
+	    .id = "physics.temple_struck",
+	    .name = "A temple struck by thrown boulders",
+	    .facet = Facet::Physics,
+	    .description = "Another player's temple, with no town to pass its blows on to, stands in a ring of boulders thrown at "
+	                   "it one after another.",
+	    .expected =
+	        "Every two seconds at most, a boulder striking it makes its heart fire a plasma beam from its top down onto "
+	        "a point of its own surface, and the heart loses life; at none left, beams leap across it for fourteen "
+	        "seconds, it glows, fades and explodes, and is gone in smoke 22 seconds on.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Field - glm::vec2 {40.0f}, k_Field + glm::vec2 {40.0f}},
+	                .distance = k_WithinEarshot},
+	    .objects = objects,
+	    .temples = {{.offset = k_Field, .owner = PlayerNames::PLAYER_TWO}},
+	    .throws = throws,
+	});
+}
+
 } // namespace
 
 void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
@@ -322,4 +353,5 @@ void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
 	AddCreatureHit(all);
 	AddCreatureCatch(all);
 	AddSinking(all);
+	AddTempleStruck(all);
 }

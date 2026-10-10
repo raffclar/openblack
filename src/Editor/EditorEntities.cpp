@@ -49,6 +49,7 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/WorldObjects.h"
 #include "EditorMath.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -566,7 +567,8 @@ void Remove(entt::entity entity)
 	{
 		registry.Context().towns.erase(town->id);
 	}
-	registry.Destroy(entity);
+	// As the game takes things out: its fire, its home and its building's people go with it
+	ecs::world_objects::Remove(entity);
 }
 
 void MoveTo(entt::entity entity, glm::vec3 position)

@@ -16,7 +16,9 @@
 #include <functional>
 #include <map>
 #include <set>
+#include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "LHVMFile.h"
@@ -192,6 +194,11 @@ public:
 
 	/// Changes a global variable's value, keeping its type
 	void SetVariable(uint32_t id, VMValue value);
+	/// Calls a native between the tasks' turns, as a script's call to it is made: its arguments pushed in order, the
+	/// native run with its entering and leaving told, and what it pushed taken back, the first pushed first. False when
+	/// there is no such native or it isn't written, or a task is running.
+	bool CallNative(uint32_t id, std::span<const std::pair<VMValue, DataType>> arguments,
+	                std::vector<std::pair<VMValue, DataType>>& results);
 	/// Changes one of a task's local variables, by its place among them, keeping its type
 	void SetTaskVariable(uint32_t taskNumber, size_t index, VMValue value);
 

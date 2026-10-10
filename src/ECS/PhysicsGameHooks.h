@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <memory>
+
+#include "ECS/PhysicsHooksWorld.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 
 namespace openblack::ecs
@@ -21,6 +24,12 @@ namespace openblack::ecs
 class PhysicsGameHooks: public systems::PhysicsClassHooks
 {
 public:
+	/// The game's kinds of thing in the game's own world
+	PhysicsGameHooks();
+	/// The same in the world given
+	explicit PhysicsGameHooks(std::unique_ptr<physics_hooks::World> world);
+	~PhysicsGameHooks() override;
+
 	systems::PhysicsStarted InitialisePhysics(systems::DynamicsSystemInterface& dynamics, entt::entity object,
 	                                          const systems::PhysicsStart& start) override;
 	entt::entity EndPhysics(systems::DynamicsSystemInterface& dynamics, PhysicsEntry* entry, entt::entity object,
@@ -31,6 +40,9 @@ public:
 	bool HasSunk(systems::DynamicsSystemInterface& dynamics, PhysicsEntry& entry) override;
 	void DropSound(entt::entity object) override;
 	void OfferToCatchingCreatures(entt::entity object, PhysicsEntry& entry) override;
+
+private:
+	std::unique_ptr<physics_hooks::World> _world;
 };
 
 } // namespace openblack::ecs

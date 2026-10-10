@@ -27,6 +27,7 @@
 #include "GameMenu.h"
 #include "ScreenFade.h"
 #include "SkipBox.h"
+#include "TattooEditorDialog.h"
 #include "TextDatabase.h"
 #include "ToolTips.h"
 
@@ -72,6 +73,10 @@ public:
 	/// Whether a dialog is up taking the mouse: the menu, or the start-of-game question
 	[[nodiscard]] bool IsDialogOpen() const noexcept { return _menu->IsOpen() || _skipBox->IsActive(); }
 
+	/// The tattoo editor's dialog, shown while the tattoo editor is open
+	[[nodiscard]] TattooEditorDialog& GetTattooEditor() noexcept { return *_tattooEditor; }
+	/// Where a point of the menu's dialog space is on the screen, as last drawn
+	[[nodiscard]] glm::ivec2 DialogToScreen(glm::ivec2 point) const { return _painter.ToScreenPoint(point); }
 	[[nodiscard]] const TextDatabase& GetTexts() const noexcept { return _texts; }
 	/// The dialogs' font, which the temple's scrolls are written in too
 	[[nodiscard]] const GameFont& GetFont() const noexcept { return _font; }
@@ -107,6 +112,10 @@ private:
 
 	/// Every mouse event and key press goes to the start-of-game question while it is up
 	bool ProcessSkipBoxEvent(const SDL_Event& event);
+	/// While the tattoo editor is open its dialog takes the mouse and keyboard
+	bool ProcessTattooEditorEvent(const SDL_Event& event);
+	/// Opens the tattoo editor's dialog as the editor opens, and moves it on
+	void UpdateTattooEditor(float deltaSeconds);
 	/// The tooltip by the hand, its words and then its mouse
 	void DrawToolTip(glm::u16vec2 resolution);
 	/// The creature's status panel, at the left of the screen
@@ -131,6 +140,9 @@ private:
 	/// Made once and kept, so that the answer picked stays picked
 	std::unique_ptr<SkipBox> _skipBox;
 	std::optional<new_game_choice::Choice> _skipBoxAnswer;
+	std::unique_ptr<TattooEditorDialog> _tattooEditor;
+	/// Whether the left mouse button is down, as the tattoo editor's dialog has seen it
+	bool _leftButtonDown {false};
 	std::optional<Message> _message;
 	ToolTips _toolTips;
 	ScreenFade _screenFade;

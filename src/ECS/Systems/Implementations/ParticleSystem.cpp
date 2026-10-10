@@ -1028,6 +1028,19 @@ void ParticleSystem::SetDrawOffset(EffectId id, glm::vec3 offset)
 	}
 }
 
+void ParticleSystem::AddHandManaPathSpark(const particles::mana_path::Spark& spark)
+{
+	// Only this computer's hand shows it, so its random numbers are this computer's own
+	if (FindRunning(_handManaPath) == _effects.end())
+	{
+		_handManaPath = Start(ParticleType::ManaPath, glm::vec3(0.0f), 1.0f, false);
+	}
+	if (const auto it = FindRunning(_handManaPath); it != _effects.end())
+	{
+		it->effect->AddManaPathSpark(spark);
+	}
+}
+
 std::shared_ptr<particles::ShieldSphere> ParticleSystem::FindShield(glm::vec3 point, float margin) const
 {
 	return _world.FindShield(point, margin);
@@ -1292,6 +1305,7 @@ std::vector<ParticleSystemInterface::EffectInfo> ParticleSystem::GetEffects() co
 		    .targets = effect.TargetCount(),
 		    .secondsLeft = secondsLeft,
 		    .unportedClasses = effect.UnportedClasses(),
+		    .owner = running.owner,
 		});
 	}
 	return result;

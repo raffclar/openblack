@@ -15,6 +15,7 @@
 #include <array>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -24,12 +25,15 @@
 #include <spdlog/spdlog.h>
 
 #include "Audio/AudioManagerInterface.h"
+#include "Creature/CreatureSkin.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/Texture2D.h"
 #include "Gui/CinemaBars.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Resources/ResourcesInterface.h"
 
 using namespace openblack::gui;
 using openblack::Locator;
@@ -187,6 +191,7 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _painter(_canvas, _font, *_atlas, *_fontTexture)
     , _menu(std::make_unique<GameMenu>(_texts, _font, playerName, std::move(settings)))
     , _skipBox(std::make_unique<SkipBox>(_texts, _font, DialogPainter::k_MidTextSize))
+    , _tattooEditor(std::make_unique<TattooEditorDialog>(_texts, _font))
     , _toolTips(ReadToolTipsInfo())
 {
 	_painter.SetPictures(_symbols.get(), _mice.get());
@@ -248,6 +253,10 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 	if (_skipBox->IsActive())
 	{
 		return ProcessSkipBoxEvent(event);
+	}
+	if (_tattooEditor->IsOpen() && Locator::tattooEditorSystem::has_value())
+	{
+		return ProcessTattooEditorEvent(event);
 	}
 	if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE)
 	{
@@ -319,6 +328,43 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 	}
 }
 
+bool GameInterface::ProcessTattooEditorEvent(const SDL_Event& event)
+{
+	auto& editor = Locator::tattooEditorSystem::value();
+	switch (event.type)
+	{
+	case SDL_MOUSEMOTION:
+		_tattooEditor->MouseMove(_painter.ToDialog({event.motion.x, event.motion.y}));
+		return true;
+	case SDL_MOUSEBUTTONDOWN:
+		if (event.button.button == SDL_BUTTON_LEFT)
+		{
+			_leftButtonDown = true;
+			_tattooEditor->MouseDown(_painter.ToDialog({event.button.x, event.button.y}));
+		}
+		return true;
+	case SDL_MOUSEBUTTONUP:
+		if (event.button.button == SDL_BUTTON_LEFT)
+		{
+			_leftButtonDown = false;
+		}
+		if (event.button.button == SDL_BUTTON_LEFT &&
+		    _tattooEditor->MouseUp(_painter.ToDialog({event.button.x, event.button.y}), editor))
+		{
+			// In the game's dialogs every control clicks as it acts
+			Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+		}
+		return true;
+	case SDL_MOUSEWHEEL:
+		return true;
+	case SDL_KEYDOWN:
+		_tattooEditor->KeyDown(event.key.keysym.sym, editor);
+		return true;
+	default:
+		return false;
+	}
+}
+
 GameMenu::Action GameInterface::TakeAction()
 {
 	return std::exchange(_action, GameMenu::Action::None);
@@ -328,8 +374,34 @@ void GameInterface::Update(float deltaSeconds)
 {
 	_menu->Update(deltaSeconds);
 	_skipBox->Update(deltaSeconds);
+	UpdateTattooEditor(deltaSeconds);
 	_toolTips.Update(deltaSeconds);
 	_screenFade.Update(deltaSeconds);
+}
+
+void GameInterface::UpdateTattooEditor(float deltaSeconds)
+{
+	if (!Locator::tattooEditorSystem::has_value())
+	{
+		return;
+	}
+	auto& editor = Locator::tattooEditorSystem::value();
+	if (editor.IsOpen() && !_tattooEditor->IsOpen())
+	{
+		// In the temple the dialog stands over the cave without a frame
+		_tattooEditor->Open(false);
+	}
+	std::span<const std::array<uint8_t, 3>> palette;
+	auto& arts = Locator::resources::value().GetCreatureSkinArt();
+	if (arts.Contains(creature_skin::k_ArtId))
+	{
+		palette = arts.Handle(creature_skin::k_ArtId)->palette;
+	}
+	if (!_tattooEditor->IsOpen())
+	{
+		_leftButtonDown = false;
+	}
+	_tattooEditor->Update(deltaSeconds, editor, palette, _leftButtonDown);
 }
 
 void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds, bool overDebugWindow)
@@ -337,7 +409,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	_canvas.Begin(resolution);
 	_pointerCanvas.Begin(resolution);
 	_painter.Begin(resolution);
-	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive();
+	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen();
 	if (_message.has_value())
 	{
 		_painter.DrawTextWrapped(DialogRect {{0, 0}, DialogPainter::k_Size}, true, _message->text, 60,
@@ -349,6 +421,19 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		DrawFightPanel(resolution);
 		DrawCreaturePanel(resolution);
 		DrawToolTip(resolution);
+	}
+	if (_tattooEditor->IsVisible())
+	{
+		// The marker on the place under the pointer while the mouse button is down
+		std::optional<glm::ivec2> marker;
+		if (Locator::tattooEditorSystem::has_value() && _leftButtonDown)
+		{
+			if (const auto point = Locator::tattooEditorSystem::value().GetHoveredPoint(); point.has_value())
+			{
+				marker = _painter.ToDialog(*point);
+			}
+		}
+		_tattooEditor->Draw(_painter, marker, milliseconds);
 	}
 	if (_menu->IsVisible())
 	{
