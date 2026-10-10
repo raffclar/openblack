@@ -353,6 +353,21 @@ void ScreenshotProvider::PlaceCamera()
 		return;
 	}
 	_holding->placed = *pose;
+	// Where the camera is now, after everything else moved it this frame, is where this frame is drawn from. Its focus
+	// reads back as where the middle of the view meets the land, which needn't be the point asked to look at: the
+	// direction it looks in is compared instead.
+	const auto now = _camera.State();
+	if (!now.has_value())
+	{
+		_holding->inPlace = false;
+		return;
+	}
+	constexpr float k_Close = 1e-3f;
+	const auto asked = pose->focus - pose->origin;
+	const bool looksThere = glm::distance(now->focus, pose->focus) <= k_Close ||
+	                        (glm::length(now->forward) > 0.0f && glm::length(asked) > 0.0f &&
+	                         glm::dot(glm::normalize(now->forward), glm::normalize(asked)) >= 1.0f - k_Close);
+	_holding->inPlace = glm::distance(now->origin, pose->origin) <= k_Close && looksThere;
 }
 
 bool ScreenshotProvider::CameraSettled() const
@@ -361,14 +376,9 @@ bool ScreenshotProvider::CameraSettled() const
 	{
 		return true;
 	}
-	const auto now = _camera.State();
-	if (!_holding->placed.has_value() || !now.has_value())
-	{
-		return false;
-	}
-	constexpr float k_Close = 1e-3f;
-	return glm::distance(now->origin, _holding->placed->origin) <= k_Close &&
-	       glm::distance(now->focus, _holding->placed->focus) <= k_Close;
+	// As the camera was put for the last frame drawn: by the time the next frame starts the inspector has given the
+	// camera back its own place (it carries on beneath the picture's), so it isn't read again here
+	return _holding->inPlace;
 }
 
 void ScreenshotProvider::Fail(const std::string& why)
@@ -381,7 +391,9 @@ void ScreenshotProvider::Frame(uint64_t frame)
 {
 	_frame = frame;
 	Catalogue();
-	if (_holding.has_value() && frame > _holding->until)
+	// Let go of once its frames are drawn after the picture: one not yet taken waits for its camera, and fails when it
+	// never comes, rather than being dropped unsaid
+	if (_holding.has_value() && _holding->taken && frame > _holding->until)
 	{
 		_holding.reset();
 	}
