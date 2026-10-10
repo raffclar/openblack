@@ -76,6 +76,7 @@
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
+#include "ECS/ScriptSpotVisuals.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
@@ -318,6 +319,19 @@ uint32_t StartScriptSpotVisual(int32_t effect, glm::vec3 position, int turns, en
 		particles.SetPlayer(id, static_cast<int>(Locator::playerSystem::value().GetLocalPlayer()));
 	}
 	return id;
+}
+
+/// The thing a script holds for a visual it started, taking its place in the scripts' table as made by a script; none
+/// when no visual was started. The script holds the thing, never the visual's own number.
+static entt::entity ScriptSpotVisualThing(uint32_t effect, glm::vec3 position)
+{
+	if (effect == ecs::systems::ParticleSystemInterface::k_NoEffect)
+	{
+		return entt::null;
+	}
+	const auto thing = ecs::script_spot_visuals::MakeThing(Locator::entitiesRegistry::value(), effect, position);
+	RegisterCreated(thing);
+	return thing;
 }
 
 void Push(VMValue value, DataType type)
@@ -1361,7 +1375,7 @@ void SpecialEffectPosition() // 052 SPECIAL_EFFECT_POSITION
 	const auto turns = SpecialEffectTurns(Popf());
 	const auto position = PopVec();
 	const auto effect = Pop().intVal;
-	Pusho(StartScriptSpotVisual(effect, position, turns, entt::null));
+	PushObject(ScriptSpotVisualThing(StartScriptSpotVisual(effect, position, turns, entt::null), position));
 }
 
 void SpecialEffectObject() // 053 SPECIAL_EFFECT_OBJECT
@@ -1374,11 +1388,12 @@ void SpecialEffectObject() // 053 SPECIAL_EFFECT_OBJECT
 	if (transform == nullptr)
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SPECIAL_EFFECT_OBJECT: thing invalid, spell not created");
-		Pusho(0);
+		PushObject(entt::null);
 		return;
 	}
 	// The effect stands on the object and ends when it goes
-	Pusho(StartScriptSpotVisual(effect, transform->position, turns, object));
+	const auto position = transform->position;
+	PushObject(ScriptSpotVisualThing(StartScriptSpotVisual(effect, position, turns, object), position));
 }
 
 void DanceCreate() // 054 DANCE_CREATE
