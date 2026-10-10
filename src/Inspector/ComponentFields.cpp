@@ -910,7 +910,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::ScriptHighlight::activeEffect>("activeEffect")
 	    .Field<&components::ScriptHighlight::glow>("glow")
 	    .Field<&components::ScriptHighlight::centre>("centre")
-	    .Field<&components::ScriptHighlight::radius>("radius");
+	    .Field<&components::ScriptHighlight::radius>("radius")
+	    .Field<&components::ScriptHighlight::sparks>("sparks")
+	    .Field<&components::ScriptHighlight::sparkSprites>("sparkSprites");
 	Reflect<components::ScriptHighlightGlow>(context).Field<&components::ScriptHighlightGlow::highlight>("highlight");
 	Reflect<components::ScriptSpotVisual>(context).Field<&components::ScriptSpotVisual::effect>("effect");
 	Reflect<components::ScriptTimer>(context).Field<&components::ScriptTimer::timer>("timer");
