@@ -1871,12 +1871,55 @@ std::unique_ptr<ProviderInterface> ScriptProvider(ScriptTargetInterface& scripts
 		    }
 		    return items;
 	    }));
-	provider->Add(Query("objects", "How many things scripts hold and control"),
-	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
-		              return Json {{"in_script", CountOf<InScript>(registry)},
-		                           {"script_controlled", CountOf<ScriptControlled>(registry)},
-		                           {"system", Locator::scriptObjects::has_value()}};
-	              }));
+	provider->Add(
+	    Query("objects",
+	          "How many things scripts hold and control, and the scripts' object table: places taken (of 511), times it "
+	          "was full, and its places by kind (taken, referenced, made by a script, object gone); places: true lists "
+	          "every taken place",
+	          {{.name = "places", .type = "boolean", .description = "List every taken place", .required = false}}),
+	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& context) {
+		    Json result {{"in_script", CountOf<InScript>(registry)},
+		                 {"script_controlled", CountOf<ScriptControlled>(registry)},
+		                 {"system", Locator::scriptObjects::has_value()}};
+		    if (!Locator::scriptObjects::has_value())
+		    {
+			    return result;
+		    }
+		    const auto& scripts = Locator::scriptObjects::value();
+		    const auto places = scripts.Places();
+		    const bool listed = context.params.is_object() && context.params.value("places", false);
+		    Json byKind = Json::object();
+		    Json list = Json::array();
+		    for (const auto& place : places)
+		    {
+			    const bool gone = place.object == entt::null || !registry.Valid(place.object);
+			    const auto kind = gone ? std::string("gone") : Describe(registry, place.object, Info()).kind;
+			    auto& counts = byKind[kind];
+			    if (counts.is_null())
+			    {
+				    counts = {{"places", 0}, {"referenced", 0}, {"made_by_script", 0}};
+			    }
+			    counts["places"] = counts["places"].get<int>() + 1;
+			    counts["referenced"] = counts["referenced"].get<int>() + (place.references != 0 ? 1 : 0);
+			    counts["made_by_script"] = counts["made_by_script"].get<int>() + (place.createdByScript ? 1 : 0);
+			    if (listed)
+			    {
+				    list.push_back({{"place", place.place},
+				                    {"id", gone ? Json(nullptr) : Json(ToId(place.object))},
+				                    {"kind", kind},
+				                    {"references", place.references},
+				                    {"made_by_script", place.createdByScript}});
+			    }
+		    }
+		    result["places_taken"] = places.size();
+		    result["times_full"] = scripts.TimesFull();
+		    result["by_kind"] = std::move(byKind);
+		    if (listed)
+		    {
+			    result["places"] = std::move(list);
+		    }
+		    return result;
+	    }));
 	provider->Add(
 	    Query("highlights",
 	          "The scrolls and signs scripts put up: kind, challenge or text, started, height, where drawn; the beat and "

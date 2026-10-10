@@ -38,14 +38,13 @@ std::optional<uint16_t> Table::Find(uint32_t object) const
 	return std::nullopt;
 }
 
-std::optional<uint16_t> Table::Register(uint32_t object, bool createdByScript, bool inScript)
+std::optional<uint16_t> Table::Register(uint32_t object, bool createdByScript)
 {
-	if (inScript)
+	// The game gives an object not yet in a script a new place each time, but its scripts know objects by place and
+	// openblack's by the object itself, so a second place could never be referenced: the object keeps the one it has
+	if (const auto place = Find(object))
 	{
-		if (const auto place = Find(object))
-		{
-			return place;
-		}
+		return place;
 	}
 	// The search goes round from where the last one stopped, never at the first place, and gives up after a lap
 	for (uint32_t tries = 0; tries < k_Places - 1; ++tries)
@@ -100,6 +99,27 @@ void Table::Replace(uint32_t from, uint32_t to)
 	if (const auto place = Find(from))
 	{
 		_places.at(*place).object = to;
+	}
+}
+
+std::vector<uint16_t> Table::Unreferenced() const
+{
+	std::vector<uint16_t> places;
+	for (uint16_t place = 1; place < k_Places; ++place)
+	{
+		if (_places.at(place).used && _places.at(place).count == 0)
+		{
+			places.push_back(place);
+		}
+	}
+	return places;
+}
+
+void Table::Free(uint16_t place)
+{
+	if (place != 0 && place < k_Places)
+	{
+		_places.at(place) = {};
 	}
 }
 
