@@ -76,6 +76,7 @@
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/Flock.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
@@ -90,7 +91,6 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
-#include "ECS/Components/ScriptFlock.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/Sky.h"
@@ -1750,7 +1750,7 @@ void GetPosition() // 023 GET_POSITION
 			}
 			else
 			{
-				const auto& place = registry.Get<const ecs::components::ScriptFlock>(object).place;
+				const auto& place = registry.Get<const ecs::components::Flock>(object).place;
 				const auto xz = map_coords::ToMetres(place);
 				position = {xz.x, Locator::terrainSystem::value().GetHeightAt(xz) + place.altitude, xz.y};
 			}
@@ -2035,7 +2035,7 @@ static std::vector<entt::entity> ContainerMembers(const ecs::Registry& registry,
 {
 	if (ecs::script_flocks::IsFlock(registry, container))
 	{
-		return registry.Get<const ecs::components::ScriptFlock>(container).members;
+		return registry.Get<const ecs::components::Flock>(container).members;
 	}
 	if (registry.AllOf<ecs::components::Town>(container))
 	{
@@ -2150,12 +2150,16 @@ static void SetFlockState(entt::entity living)
 	{
 		Locator::livingActionSystem::value().VillagerSetScriptState(living, VillagerStates::MoveInFlock);
 	}
+	else if (Locator::animalSystem::has_value() && Locator::entitiesRegistry::value().AllOf<ecs::components::Animal>(living))
+	{
+		Locator::animalSystem::value().SetScriptState(living, LivingStates::LivingMoveInFlock);
+	}
 }
 
-/// Whether a thing is a living a flock can take
+/// Whether a thing is a living a flock can take: a villager or an animal
 static bool IsFlockLiving(const ecs::Registry& registry, entt::entity thing)
 {
-	return registry.Valid(thing) && registry.AnyOf<ecs::components::Villager>(thing);
+	return registry.Valid(thing) && registry.AnyOf<ecs::components::Villager, ecs::components::Animal>(thing);
 }
 
 void FlockCreate() // 036 FLOCK_CREATE
@@ -2180,8 +2184,7 @@ static void FlockAttachToFlock(entt::entity object, entt::entity target, bool as
 		// The flock takes in every member of the other, which goes once it is empty
 		while (ecs::script_flocks::Size(registry, object) > 0)
 		{
-			ecs::script_flocks::AddLiving(registry, target,
-			                              registry.Get<const ecs::components::ScriptFlock>(object).members.front());
+			ecs::script_flocks::AddLiving(registry, target, registry.Get<const ecs::components::Flock>(object).members.front());
 		}
 		Pusho(static_cast<uint32_t>(target));
 		return;
@@ -2508,7 +2511,7 @@ void FlockDisband() // 039 FLOCK_DISBAND
 	if (ecs::script_flocks::IsFlock(registry, container))
 	{
 		// Every member leaves, and one the script controls waits for it; the flock stays, empty
-		const auto members = registry.Get<const ecs::components::ScriptFlock>(container).members;
+		const auto members = registry.Get<const ecs::components::Flock>(container).members;
 		for (const auto member : members)
 		{
 			// TODO(opening): an animal is split off into a flock of its own
@@ -2898,7 +2901,7 @@ void ChangeInnerOuterProperties() // 056 CHANGE_INNER_OUTER_PROPERTIES
 	if (object != entt::null && ecs::script_flocks::IsFlock(registry, object))
 	{
 		// A nought leaves that distance as it was; the calm is kept whatever it is
-		auto& flock = registry.Get<ecs::components::ScriptFlock>(object);
+		auto& flock = registry.Get<ecs::components::Flock>(object);
 		if (outer != 0.0f)
 		{
 			flock.domainRadius = static_cast<uint16_t>(map_coords::FtoL(outer));
@@ -3479,7 +3482,8 @@ void PopulateContainer() // 109 POPULATE_CONTAINER
 	glm::vec3 centre(0.0f);
 	if (const auto* flock = registry.TryGet<const ecs::components::Flock>(container))
 	{
-		centre = {flock->centre.x, Locator::terrainSystem::value().GetHeightAt(flock->centre), flock->centre.y};
+		const auto place = map_coords::ToMetres(flock->place);
+		centre = {place.x, Locator::terrainSystem::value().GetHeightAt(place), place.y};
 	}
 	else if (const auto* transform = registry.TryGet<const Transform>(container))
 	{
@@ -3506,14 +3510,13 @@ void PopulateContainer() // 109 POPULATE_CONTAINER
 		}
 		RegisterCreated(thing);
 		// A flock takes it as its newest member and it goes about with it
-		if (!registry.AllOf<ecs::components::Flock>(container) || !registry.AllOf<ecs::components::Animal>(thing))
+		if (!registry.AllOf<ecs::components::Flock>(container) || !IsFlockLiving(registry, thing))
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Not implemented - Thing not added to id");
 			return;
 		}
-		auto& animals = Locator::animalSystem::value();
-		animals.JoinFlock(thing, container);
-		animals.SetScriptState(thing, LivingStates::LivingMoveInFlock);
+		ecs::script_flocks::AddLiving(registry, container, thing);
+		SetFlockState(thing);
 		scriptObjects.AddReference(thing);
 	}
 }

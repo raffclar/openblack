@@ -23,6 +23,10 @@ namespace openblack::ecs::whale_rules
 
 /// A wake ring comes once more than this many milliseconds have gone since the last
 inline constexpr int32_t k_WakeInterval = 50;
+/// A whale's colour, 0x303070, which the game's light shades as it does every model's
+inline constexpr glm::vec3 k_Colour {48.0f, 48.0f, 112.0f};
+/// A whale is drawn cut at the sea: nothing of it below this height shows
+inline constexpr float k_SeaLevel = 0.0f;
 
 /// The way a whale faces, radians from +x towards +z: the way it moved this turn, or the way it faced if it didn't move
 /// across the land

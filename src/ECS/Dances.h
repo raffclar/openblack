@@ -47,6 +47,8 @@ struct DanceSetup
 	/// The turns it dances before stopping to start again; none for no end
 	uint32_t duration {0};
 	bool madeByScript {false};
+	/// The way it faces: a worship site's dance faces the way the site does
+	float angle {0.0f};
 };
 
 /// A new dance, stopped at a quarter speed, with the groups of its file, each set up by the file's key frames up to
@@ -78,6 +80,8 @@ struct TurnContext
 	std::function<bool(entt::entity)> available;
 	/// A dancer told it has finished dancing
 	std::function<void(entt::entity)> finished;
+	/// A dancer of a group that starts a move plays its clip again
+	std::function<void(entt::entity)> playClipAgain;
 };
 
 /// A dance's turn: it ends once what it is danced about has gone; it starts once it has dancers, stops when its time is

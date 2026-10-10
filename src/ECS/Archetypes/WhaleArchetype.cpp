@@ -20,6 +20,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Whale.h"
 #include "ECS/Registry.h"
+#include "ECS/WhaleRules.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
 
@@ -40,7 +41,8 @@ entt::entity WhaleArchetype::Create(const glm::vec3& position, float scale)
 	registry.Assign<Mesh>(entity, resources::HashIdentifier(MeshId::SharkBoned), static_cast<int8_t>(0),
 	                      static_cast<int8_t>(0));
 	registry.Assign<Whale>(entity, Whale {.position = at, .turnStart = at});
-	// Posed by its swimming clip as the animals are; how the game lights it isn't known, so it takes the animals' light
-	registry.Assign<AnimalPose>(entity, AnimalPose {.light = AnimalLight::BrightestLand});
+	// Posed by its swimming clip as the animals are, in its own dark blue lit by the game's light, and cut at the sea
+	registry.Assign<AnimalPose>(
+	    entity, AnimalPose {.light = AnimalLight::Own, .colour = whale_rules::k_Colour, .cutBelow = whale_rules::k_SeaLevel});
 	return entity;
 }

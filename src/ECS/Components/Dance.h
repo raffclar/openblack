@@ -18,6 +18,7 @@
 #include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <glm/vec2.hpp>
 
 #include "3D/MapCoords.h"
 #include "Enums.h"
@@ -29,6 +30,17 @@ struct DanceFile;
 
 namespace openblack::ecs::components
 {
+
+/// What a dance's group does, until a beat of the dance's clock: spinning, turning, growing or moving off, and the clips
+/// its dancers play
+struct DanceMove
+{
+	uint32_t action {0};
+	/// The move's two arguments, whole numbers or floats as the move takes them
+	uint32_t first {0};
+	uint32_t second {0};
+	uint32_t end {10000};
+};
 
 /// A group of a dance's dancers, dancing one part of it
 struct DanceGroup
@@ -50,8 +62,38 @@ struct DanceGroup
 	uint32_t limitedDancers {0};
 	uint32_t danceType {0};
 	uint32_t sexes {k_AnySex};
-	/// Its shape about the dance's place; a group with one keeps its membership
+	/// Its formation; a group in one keeps its membership
 	uint32_t formation {0};
+	/// The places in its formation, counted as other groups join it
+	uint32_t inFormation {0};
+	/// Set and cleared by key frames; nothing is known to read it
+	bool flag {true};
+
+	/// The shape its dancers stand in (a row of the dance shapes), how far out it reaches in metres, how far it is
+	/// set off from its centre, and how far it is turned (2048 to the turn, though where it turns the shape it is added
+	/// to an angle in radians, as the game does)
+	uint32_t shape {0};
+	float radius {20.0f};
+	glm::vec2 offset {0.0f, 0.0f};
+	float rotation {0.0f};
+	/// How far round its shape its dancers have gone, 256 to the way round
+	float spin {0.0f};
+
+	/// What it does now, until a beat: spinning, turning, growing or moving off, and the clips its dancers play
+	DanceMove move;
+	/// How much its move changes it each turn
+	float spinRate {0.0f};
+	float rotationRate {0.0f};
+	float radiusRate {0.0f};
+	glm::vec2 offsetRate {0.0f, 0.0f};
+	/// Whether its move changed it this turn
+	bool moved {false};
+
+	/// The group it stands about as part of, if any, and its place among that group's parts
+	std::optional<std::size_t> parent;
+	uint8_t indexInParent {0};
+	/// The groups standing about it, by number
+	std::vector<std::size_t> children;
 };
 
 /// A dance's groups, in the order they were made, and the order newcomers try them in
@@ -79,8 +121,10 @@ struct Dance
 
 	/// Which dance of the info table it is
 	DanceInfo type {DanceInfo::None};
-	/// The place it is danced about
+	/// The place it is danced about, and the way it faces: a worship site's dance faces the way the site does, every
+	/// other faces 0
 	map_coords::MapCoords place;
+	float angle {0.0f};
 	/// What it is danced for or about, such as a worship site or a script's villager; the dance ends when that is gone
 	entt::entity owner {entt::null};
 	State state {State::Stopped};
