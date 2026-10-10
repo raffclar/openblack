@@ -554,7 +554,10 @@ void WorshipSiteSystem::Init(entt::entity site)
 	{
 		registry.AssignOrReplace<Transform>(dance, glm::vec3(danceAt.x, _world->LandHeightAt(danceAt), danceAt.y),
 		                                    glm::mat3(1.0f), glm::vec3(1.0f));
-		dance_rules::SetWorshipSpeed(registry.Get<Dance>(dance), ws::k_SiteDanceStartSpeed);
+		auto& danced = registry.Get<Dance>(dance);
+		// It faces the way the site does
+		danced.angle = component.facing;
+		dance_rules::SetWorshipSpeed(danced, ws::k_SiteDanceStartSpeed);
 	}
 	component.dance = dance;
 

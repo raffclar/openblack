@@ -14,12 +14,12 @@
 
 namespace openblack::ecs::archetypes
 {
-class WhaleArchetype
+class SharkArchetype
 {
 public:
-	/// A whale where a script makes one, on the land's grid at the height of the land there, facing +x, at twice its
+	/// A shark where a script makes one, on the land's grid at the height of the land there, facing +x, at twice its
 	/// size
 	static entt::entity Create(const glm::vec3& position, float scale);
-	WhaleArchetype() = delete;
+	SharkArchetype() = delete;
 };
 } // namespace openblack::ecs::archetypes

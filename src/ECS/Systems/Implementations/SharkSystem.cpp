@@ -9,7 +9,7 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
-#include "WhaleSystem.h"
+#include "SharkSystem.h"
 
 #include <limits>
 #include <optional>
@@ -27,11 +27,11 @@
 #include "Animals/AnimalRules.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Shark.h"
 #include "ECS/Components/Transform.h"
-#include "ECS/Components/Whale.h"
 #include "ECS/Registry.h"
+#include "ECS/SharkRules.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
-#include "ECS/WhaleRules.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
@@ -42,7 +42,7 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
-/// Whales swim with the boned shark's swimming clip, round and round
+/// Sharks swim with the boned shark's swimming clip, round and round
 constexpr auto k_SwimClip = AnimId::SharkBonedSwim;
 
 /// The model's bones posed `place` milliseconds into the clip, each placed by its parent; none when the clip doesn't fit
@@ -73,12 +73,12 @@ void Pose(const graphics::L3DMesh& model, const L3DAnim& clip, const animals::Cl
 }
 } // namespace
 
-void WhaleSystem::ProcessTurn()
+void SharkSystem::ProcessTurn()
 {
-	Locator::entitiesRegistry::value().Each<Whale>([](Whale& whale) { whale.turnStart = whale.position; });
+	Locator::entitiesRegistry::value().Each<Shark>([](Shark& shark) { shark.turnStart = shark.position; });
 }
 
-void WhaleSystem::Update(std::chrono::duration<float, std::milli> gameTime, float turnFraction)
+void SharkSystem::Update(std::chrono::duration<float, std::milli> gameTime, float turnFraction)
 {
 	if (!Locator::terrainSystem::has_value() || !Locator::resources::has_value())
 	{
@@ -92,7 +92,7 @@ void WhaleSystem::Update(std::chrono::duration<float, std::milli> gameTime, floa
 	// The frame's whole milliseconds of game time
 	const auto frameMilliseconds = static_cast<int32_t>(gameTime.count());
 	const auto clipId = resources::HashIdentifier(static_cast<uint32_t>(k_SwimClip));
-	registry.Each<Whale, Transform, const Mesh, AnimalPose>([&](Whale& whale, Transform& transform, const Mesh& mesh,
+	registry.Each<Shark, Transform, const Mesh, AnimalPose>([&](Shark& shark, Transform& transform, const Mesh& mesh,
 	                                                            AnimalPose& pose) {
 		// It swims on through its clip
 		std::optional<animals::ClipTiming> timing;
@@ -101,22 +101,22 @@ void WhaleSystem::Update(std::chrono::duration<float, std::milli> gameTime, floa
 			const auto clip = animations.Handle(clipId);
 			timing = animals::ClipTiming {
 			    .playTime = clip->GetPlayTime(), .frameCount = clip->GetFrames().size(), .looping = clip->IsLooping()};
-			whale.clipPlace = animals::AdvanceClip(*timing, whale.clipPlace, frameMilliseconds);
+			shark.clipPlace = animals::AdvanceClip(*timing, shark.clipPlace, frameMilliseconds);
 		}
 
 		// Drawn between the start of its turn and where it is, facing the way it moved
-		whale.heading = ecs::whale_rules::Heading(whale.turnStart, whale.position, whale.heading);
-		const auto startHeight = land.GetHeightAt(glm::vec2(whale.turnStart.x, whale.turnStart.z));
-		const auto endHeight = land.GetHeightAt(glm::vec2(whale.position.x, whale.position.z));
-		transform.position = ecs::whale_rules::Drawn(whale.turnStart, startHeight, whale.position, endHeight, turnFraction);
-		transform.rotation = animals::Orientation(whale.heading, 0.0f);
+		shark.heading = ecs::shark_rules::Heading(shark.turnStart, shark.position, shark.heading);
+		const auto startHeight = land.GetHeightAt(glm::vec2(shark.turnStart.x, shark.turnStart.z));
+		const auto endHeight = land.GetHeightAt(glm::vec2(shark.position.x, shark.position.z));
+		transform.position = ecs::shark_rules::Drawn(shark.turnStart, startHeight, shark.position, endHeight, turnFraction);
+		transform.rotation = animals::Orientation(shark.heading, 0.0f);
 
 		if (!timing.has_value() || !meshes.Contains(mesh.id))
 		{
 			return;
 		}
 		const auto model = meshes.Handle(mesh.id);
-		Pose(*model, *animations.Handle(clipId), *timing, whale.clipPlace, pose.bones);
+		Pose(*model, *animations.Handle(clipId), *timing, shark.clipPlace, pose.bones);
 
 		// The wake comes from the point fixed to its bones, where it is drawn this frame
 		const auto& bonePoint = model->GetFirstBonePoint();
@@ -127,7 +127,7 @@ void WhaleSystem::Update(std::chrono::duration<float, std::milli> gameTime, floa
 		const auto placed =
 		    glm::scale(glm::translate(glm::mat4(1.0f), transform.position) * glm::mat4(transform.rotation), transform.scale);
 		const auto world = placed * pose.bones[bonePoint->bone] * glm::vec4(bonePoint->point, 1.0f);
-		if (const auto ring = ecs::whale_rules::WakeRing(_wakeTimer, glm::vec3(world), whale.heading, frameMilliseconds);
+		if (const auto ring = ecs::shark_rules::WakeRing(_wakeTimer, glm::vec3(world), shark.heading, frameMilliseconds);
 		    ring.has_value() && Locator::waterRingSystem::has_value())
 		{
 			// A ring that doesn't fit among the many already on the water isn't made

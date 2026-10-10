@@ -114,35 +114,6 @@ struct Animal
 	[[nodiscard]] bool Dead() const { return !(life > 0.0f); }
 };
 
-/// A flock: its animals in the order they joined, the first its leader, and how its followers follow
-struct Flock
-{
-	std::vector<entt::entity> members;
-	/// The point its leader's legs wander about: where it was made, and for a miracle's flock where its leader is, each
-	/// turn of the miracle
-	glm::vec2 centre {0.0f};
-	/// How far from its centre the leader's legs take it, and how far from the leader its followers pick their points
-	float domainRadius {0.0f};
-	float flockDistance {0.0f};
-	/// The state the followers take once the leader has set off, how (3 for in formation), and the state a special move
-	/// ends in
-	components::AnimalState followState {components::AnimalState::DecideWhatToDo};
-	int followMode {0};
-	components::AnimalState afterMove {components::AnimalState::DecideWhatToDo};
-	/// The turns its leader has kept to its present leg, which a land bird's leader gives up after its kind's stay time
-	uint32_t turnsOnLeg {0};
-	/// The height above the land its leader picks its legs about, none to take its kind's: a temple's flock follows its
-	/// temple's height
-	float height {0.0f};
-	/// The number the land script made it with, none for a flock the script didn't number; the script's animals join
-	/// the latest flock made with their number
-	std::optional<int32_t> scriptId;
-	/// The order the flocks were made in
-	uint32_t made {0};
-	/// The temple it circles, none for a flock of the land
-	entt::entity temple {entt::null};
-};
-
 /// The doves or bats about a temple: its flock, made the first time it is seen to, and the look of the temple's model
 /// the flock's height was last taken for
 struct TempleBirds
@@ -187,6 +158,8 @@ enum class AnimalLight : uint8_t
 	BrightestLand,
 	/// White: the miracles' wolves
 	White,
+	/// A colour of its own, the land's light left out: the sharks' dark blue
+	Own,
 };
 
 /// How an animal is drawn this frame: its bones as its clip poses it, its light, and its alpha (0..255), less than
@@ -195,7 +168,11 @@ struct AnimalPose
 {
 	std::vector<glm::mat4> bones;
 	AnimalLight light {AnimalLight::BrightestLand};
+	/// Its own colour, 0 to 255, for an animal in a light of its own
+	glm::vec3 colour {255.0f, 255.0f, 255.0f};
 	uint8_t alpha {255};
+	/// The height in the world below which nothing of it is drawn, if any: a shark shows only what breaks the sea
+	std::optional<float> cutBelow;
 };
 
 /// A villager or animal a hunter brought down: it falls, then is eaten over the turns, then dies

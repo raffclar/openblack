@@ -13,6 +13,8 @@
 
 #include <optional>
 
+#include <glm/vec3.hpp>
+
 /// Which of its meshes a model with several is drawn as, chosen afresh every frame by how deep into the view it stands:
 /// its high mesh close by, its standard one further off, its low one beyond, then faded out and at last left out. The
 /// bands grow with the model's size and importance. There is no blending and no lag between bands: a model switches
@@ -45,6 +47,14 @@ struct Choice
 	/// While it fades out, how opaque it is drawn, of 255
 	std::optional<uint8_t> alpha;
 };
+
+/// How deep into the view a point is: its distance along the way the camera looks, not the straight distance to it, so
+/// that a model at the side of the view keeps the detail of one in the middle at the same depth. It doesn't depend on
+/// the field of view or the screen's size.
+[[nodiscard]] float ViewDepth(const glm::vec3& point, const glm::vec3& eye, const glm::vec3& forward) noexcept;
+
+/// The radius of the sphere around a model's bounding box (half the box's diagonal) at the model's scale
+[[nodiscard]] float ScaledRadius(const glm::vec3& boxSize, float scale) noexcept;
 
 /// How far a model's bands reach, one unit of depth for each: its importance (0 for most things) and its bounding
 /// sphere's radius at its scale make it bigger, as the model detail setting does (see detail_level::ModelDetail)
