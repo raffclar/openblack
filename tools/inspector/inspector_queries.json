@@ -981,6 +981,12 @@
   "query": "temple.interior"
  },
  {
+  "description": "The video playing: its frame, frame count and rate, its fade, the falling spell, and whether films and 16-bit colour are on",
+  "kind": "object",
+  "parameters": [],
+  "query": "view.video"
+ },
+ {
   "description": "Whether a camera path holds the camera, the camera's help, and the knock readout",
   "kind": "object",
   "parameters": [],

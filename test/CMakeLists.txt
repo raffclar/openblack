@@ -418,6 +418,26 @@ openblack_setup_and_add_test(test_fireflies test_fireflies.cpp)
 openblack_setup_and_add_test(test_store_rules test_store_rules.cpp)
 openblack_setup_and_add_test(test_clip_sounds test_clip_sounds.cpp)
 target_link_libraries(test_clip_sounds PRIVATE sas)
+
+# The Bink video component's tests need nothing from the game; those that read the game's videos skip without
+# OPENBLACK_GAME_PATH
+foreach (BINK_TEST file bitstream blocks decoder yuv robustness)
+  add_executable(test_bink_${BINK_TEST} bink/test_bink_${BINK_TEST}.cpp)
+  target_link_libraries(test_bink_${BINK_TEST} PRIVATE GTest::gtest_main bink)
+  set_property(TARGET test_bink_${BINK_TEST} PROPERTY FOLDER "tests")
+  add_test(NAME test_bink_${BINK_TEST} COMMAND test_bink_${BINK_TEST})
+endforeach ()
+
+# The full-screen videos' rules and system, over synthetic Bink files
+openblack_setup_and_add_test(test_video_rules video/test_video_rules.cpp)
+openblack_setup_and_add_test(test_video_system video/test_video_system.cpp)
+target_include_directories(
+  test_video_system PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/bink
+)
+# The loading screen's and the start-up screens' rules
+openblack_setup_and_add_test(
+  test_loading_screen_rules gui/test_loading_screen_rules.cpp
+)
 openblack_setup_and_add_test(test_story_land_change test_story_land_change.cpp)
 target_link_libraries(test_story_land_change PRIVATE ScriptLibrary)
 

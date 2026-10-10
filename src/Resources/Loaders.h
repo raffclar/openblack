@@ -49,6 +49,11 @@ struct ParticleFile;
 struct StackedBitmap;
 } // namespace openblack::psys
 
+namespace openblack::bink
+{
+class BinkFile;
+} // namespace openblack::bink
+
 namespace openblack::gestures
 {
 class GestureFile;
@@ -241,6 +246,12 @@ struct ParticleBitmapLoader final: BaseLoader<psys::StackedBitmap>
 		int framesInUse;
 	};
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path, const Layout& layout) const;
+};
+
+/// A Bink video, .bik: its container, whose frames are decoded as it plays. None when it can't be read
+struct VideoLoader final: BaseLoader<bink::BinkFile>
+{
+	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
 };
 
 /// The templates the hand's drawn gestures are matched against

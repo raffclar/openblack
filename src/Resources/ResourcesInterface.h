@@ -31,6 +31,7 @@ using GlowManager = ResourceManager<LightLoader>;
 using CameraPathManager = ResourceManager<CameraPathLoader>;
 using ParticleFileManager = ResourceManager<ParticleFileLoader>;
 using GestureTemplatesManager = ResourceManager<GestureTemplatesLoader>;
+using VideoManager = ResourceManager<VideoLoader>;
 using ParticleBitmapManager = ResourceManager<ParticleBitmapLoader>;
 
 class ResourcesInterface
@@ -62,6 +63,8 @@ public:
 	virtual ParticleBitmapManager& GetParticleBitmaps() = 0;
 	/// The templates the hand's drawn gestures are matched against, by gesture::k_TemplatesId
 	virtual GestureTemplatesManager& GetGestureTemplates() = 0;
+	/// The videos playing, by their paths; each is let go when it ends
+	virtual VideoManager& GetVideos() = 0;
 };
 
 } // namespace openblack::resources

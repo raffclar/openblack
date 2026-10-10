@@ -123,6 +123,7 @@ class CreatureModeSystemInterface;
 class CreatureCaveSystemInterface;
 class TattooEditorSystemInterface;
 class CinematicDirectorSystemInterface;
+class VideoSystemInterface;
 class SoundTagSystemInterface;
 class RainSystemInterface;
 class ChimneySmokeSystemInterface;
@@ -243,6 +244,7 @@ struct Locator
 	using creatureCaveSystem = entt::locator<ecs::systems::CreatureCaveSystemInterface>;
 	using tattooEditorSystem = entt::locator<ecs::systems::TattooEditorSystemInterface>;
 	using cinematicDirectorSystem = entt::locator<ecs::systems::CinematicDirectorSystemInterface>;
+	using videoSystem = entt::locator<ecs::systems::VideoSystemInterface>;
 	using soundTagSystem = entt::locator<ecs::systems::SoundTagSystemInterface>;
 	using rainSystem = entt::locator<ecs::systems::RainSystemInterface>;
 	using chimneySmokeSystem = entt::locator<ecs::systems::ChimneySmokeSystemInterface>;

@@ -116,6 +116,11 @@ target_include_directories(
          ${CMAKE_BINARY_DIR}/include # For shaders and other bin2c
          ${Stb_INCLUDE_DIR} ${DRLIBS_INCLUDE_DIRS}
 )
+# The game's videos: the container is always read, so that a build without the decoder keeps their timing
+target_link_libraries(openblack_lib PUBLIC bink)
+if (OPENBLACK_BINK_DECODER)
+  target_compile_definitions(openblack_lib PUBLIC OPENBLACK_BINK_DECODER)
+endif ()
 target_link_libraries(
   openblack_lib
   PRIVATE "$<$<CXX_COMPILER_ID:MSVC>:-SAFESEH:NO>"

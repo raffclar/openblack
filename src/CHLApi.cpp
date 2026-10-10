@@ -90,6 +90,7 @@
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TutorialSkipSystemInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/TownPlaythings.h"
 #include "ECS/WorldObjects.h"
@@ -2170,7 +2171,8 @@ void LoadMap() // 152 LOAD_MAP
 	const auto& fileSystem = Locator::filesystem::value();
 	try
 	{
-		Game::Instance()->LoadMap(fileSystem.FindPath(filesystem::FileSystemInterface::FixPath(path)));
+		Game::Instance()->LoadMap(fileSystem.FindPath(filesystem::FileSystemInterface::FixPath(path)),
+		                          loading::LoadingClock::Mode::PleaseWait);
 	}
 	catch (const std::exception& e)
 	{
@@ -2717,10 +2719,31 @@ void SetAnimationModify() // 202 SET_ANIMATION_MODIFY
 
 void SetAviSequence() // 203 SET_AVI_SEQUENCE
 {
-	// const auto aviSequence = Pop().intVal;
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Sequence 1 is the story's intro, 2 the falling spell's film
+	const auto sequence = Pop().intVal;
+	const auto enable = static_cast<bool>(Pop().intVal);
+	auto& videos = Locator::videoSystem::value();
+	auto& director = Locator::cinematicDirectorSystem::value();
+	if (!enable)
+	{
+		if (sequence == 2)
+		{
+			videos.EndFallingSpell();
+		}
+		return;
+	}
+	if (sequence == 1)
+	{
+		// The intro is cut short: it fades from 58 s and ends at 60 s. The script's fade is lifted at once under it
+		videos.Play("Data/INTRO.bik");
+		videos.ScheduleIntro();
+		director.FadeBackToNormal(0);
+	}
+	else if (sequence == 2)
+	{
+		videos.StartFallingSpell();
+		director.FadeBackToNormal(0);
+	}
 }
 
 void PlayGesture() // 204 PLAY_GESTURE

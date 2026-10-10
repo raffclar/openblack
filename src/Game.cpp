@@ -25,6 +25,7 @@
 #include <MorphFile.h>
 #include <PackFile.h>
 #include <SDL.h>
+#include <bgfx/bgfx.h>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -169,6 +170,7 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/TutorialSkipSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -179,6 +181,7 @@
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
+#include "Gui/LoadingScreen.h"
 #include "Hand/HandFeel.h"
 #include "Input/GameActionMapInterface.h"
 #include "LHScriptX/Script.h"
@@ -313,6 +316,9 @@ Game* Game::sInstance = nullptr;
 Game::Game(Arguments&& args) noexcept
     : _gamePath(args.gamePath)
     , _startMap(args.startLevel)
+    , _playVideo(args.playVideo)
+    , _preIntro(args.preIntro)
+    , _skipLogos(args.skipLogos)
     , _startTestbed(args.startTestbed || args.scenario.has_value())
     , _scenarioRequest(args.scenario)
     , _inspectPort(args.inspectPort)
@@ -384,6 +390,7 @@ Game::~Game() noexcept
 		Locator::miracleFxSystem::value().SetInterface(nullptr);
 	}
 	_interface.reset();
+	_loadingScreen.reset();
 	// What the scripts asked of openblack that it can't do yet, for the natives to write next
 	if (Locator::chlapi::has_value())
 	{
@@ -1131,7 +1138,7 @@ bool Game::GameLogicLoop() noexcept
 		    .paused = false,
 		    .turn = clock.GetTurn(),
 		    .inCitadel = false,
-		    .videoPlaying = false,
+		    .videoPlaying = Locator::videoSystem::value().IsPlaying(),
 		});
 	}
 
@@ -1223,7 +1230,8 @@ void Game::ProcessTempleAudioTurn()
 	ProcessMusicTurn(Locator::camera::value().GetOrigin(), true);
 	if (_atmosAudio)
 	{
-		_atmosAudio->ContinueTurn({.paused = false, .turn = GetTurn(), .inCitadel = true, .videoPlaying = false});
+		_atmosAudio->ContinueTurn(
+		    {.paused = false, .turn = GetTurn(), .inCitadel = true, .videoPlaying = Locator::videoSystem::value().IsPlaying()});
 	}
 }
 
@@ -1404,6 +1412,8 @@ bool Game::Update() noexcept
 	// The frame's game time: none while paused, quicker or slower with the game speed
 	auto& clock = Locator::time::value();
 	clock.UpdateFrame();
+	// A full-screen video decodes the frames due by the real clock, fades, and ends
+	Locator::videoSystem::value().Update(std::chrono::steady_clock::now());
 	const auto gameTime = std::chrono::duration<float, std::milli>(clock.GetFrameGameTime());
 	Locator::alignmentSystem::value().Update(gameTime);
 	{
@@ -2037,6 +2047,13 @@ bool Game::Initialize() noexcept
 		// If gui captures this input, do not propagate
 		if (!Locator::debugGui::value().ProcessEvents(event))
 		{
+			// A full-screen video takes Escape: it fades out, unless Shift or Ctrl is held
+			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE && event.key.repeat == 0 &&
+			    Locator::videoSystem::value().Escape((event.key.keysym.mod & KMOD_SHIFT) != 0,
+			                                         (event.key.keysym.mod & KMOD_CTRL) != 0))
+			{
+				return;
+			}
 			// The tattoo editor's dialog takes the keyboard and mouse while it is open, Escape and Enter included
 			if (_interface && _interface->GetTattooEditor().IsOpen() && Locator::windowing::has_value() &&
 			    _interface->ProcessEvent(event, static_cast<glm::u16vec2>(Locator::windowing::value().GetSize())))
@@ -2129,6 +2146,10 @@ bool Game::Initialize() noexcept
 			Locator::gameActionSystem::value().SetInputLockMode(_inspectInputLock);
 		}
 	}
+
+	// The logos, the first run's pre-intro and the tips screen, which stays up while the rest loads. Closing the window
+	// meanwhile ends the game at its first frame
+	PlayStartupScreens();
 
 	auto& resources = Locator::resources::value();
 	auto& meshManager = resources.GetMeshes();
@@ -2784,6 +2805,20 @@ bool Game::Run() noexcept
 	Game::SetTime(config.timeOfDay);
 	Locator::time::value().Start();
 
+	if (_playVideo == "intro")
+	{
+		Locator::videoSystem::value().Play("Data/INTRO.bik");
+		Locator::videoSystem::value().ScheduleIntro();
+	}
+	else if (_playVideo == "fall")
+	{
+		Locator::videoSystem::value().StartFallingSpell();
+	}
+	else if (!_playVideo.empty())
+	{
+		Locator::videoSystem::value().Play(_playVideo);
+	}
+
 	_frameCount = 0;
 	auto lastTime = std::chrono::high_resolution_clock::now();
 	auto& profiler = Locator::profiler::value();
@@ -2825,7 +2860,16 @@ bool Game::Run() noexcept
 			};
 			// The sun, the moon and the dome's blend of this frame, for drawing it
 			Locator::skySystem::value().UpdateFrame(config.drawSky);
-			Locator::rendererInterface::value().DrawScene(drawDesc);
+			// Nothing of the world shows under a video that covers the screen, nor behind the falling spell's film
+			const auto& videos = Locator::videoSystem::value();
+			if (videos.CoversScreen() || videos.HidesWorld())
+			{
+				bgfx::touch(static_cast<bgfx::ViewId>(graphics::RenderPass::Main));
+			}
+			else
+			{
+				Locator::rendererInterface::value().DrawScene(drawDesc);
+			}
 		}
 
 		// The game's interface over the scene
@@ -2877,7 +2921,7 @@ bool Game::Run() noexcept
 	return true;
 }
 
-bool Game::LoadMap(const std::filesystem::path& path) noexcept
+bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mode look) noexcept
 {
 	const InspectorLoading loading(path.filename().generic_string());
 	auto& fileSystem = Locator::filesystem::value();
@@ -2888,10 +2932,12 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 		return false;
 	}
 
+	BeginLoadingScreen(look);
 	const auto data = fileSystem.ReadAll(path);
 	const auto source = std::string(reinterpret_cast<const char*>(data.data()), data.size());
 
 	PrepareNewLand();
+	RenderLoadingFrame();
 
 	// A playground land is played as a skirmish, in which losing a temple doesn't end the game
 	bool skirmish = false;
@@ -2905,7 +2951,8 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 	Script script;
 	try
 	{
-		script.Load(source);
+		// The tips screen is drawn again as the map's commands are carried out, when it is due
+		script.Load(source, [this]() { RenderLoadingFrame(); });
 	}
 	catch (const std::exception& e)
 	{
@@ -2936,7 +2983,9 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 		Locator::forestSystem::value().AssignForestsToTowns();
 	}
 
+	RenderLoadingFrame();
 	StartNewLand();
+	EndLoadingScreen();
 	return true;
 }
 
@@ -2978,9 +3027,13 @@ void Game::LoadTestbed() noexcept
 	{
 		Locator::vm::value().StopAllTasks();
 	}
+	BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
 	PrepareNewLand();
+	RenderLoadingFrame();
 	InitializeLevel(flat_land::Build());
 	SetUpLandscape();
+	RenderLoadingFrame();
+	EndLoadingScreen();
 
 	// Looking down over the middle of the map, from the south
 	const auto& land = Locator::terrainSystem::value();
