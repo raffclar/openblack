@@ -46,6 +46,9 @@ struct SpellSeed
 	/// an icon for the seed. Only such a seed can be powered up; its worship tops up what it casts, and it gives back
 	/// what it holds when dropped.
 	bool hasIcon {false};
+	/// The worship site whose icon made it, which charges it and tops up what it casts. None for a seed made at no site,
+	/// whose player's prayer power stands in for their worship.
+	entt::entity worshipSite {entt::null};
 	/// Held long enough to cast (a seed from a dispenser is ready at once)
 	bool ready {false};
 	/// How the hand holds it: as a miracle not yet ready until it is ready, then as its record says. The hand looks again

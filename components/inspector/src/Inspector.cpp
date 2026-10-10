@@ -10,8 +10,12 @@
 #include "Inspector.h"
 
 #include <algorithm>
+#include <iterator>
+#include <optional>
+#include <string>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "InspectorQuery.h"
 
@@ -29,6 +33,30 @@ std::pair<std::string_view, std::string_view> Split(std::string_view query)
 		return {query, {}};
 	}
 	return {query.substr(0, dot), query.substr(dot + 1)};
+}
+
+/// Why a request's parameters aren't all ones its query takes, naming those it doesn't and those it does; nothing when
+/// they all are. A parameter a query doesn't know would otherwise be ignored, and the query answer as if it weren't given.
+std::optional<std::string> UnknownParameters(std::string_view query, const Json& params, const std::vector<std::string>& known)
+{
+	std::string unknown;
+	for (const auto& [key, value] : params.items())
+	{
+		if (std::ranges::find(known, key) == known.end())
+		{
+			unknown += (unknown.empty() ? "" : ", ") + key;
+		}
+	}
+	if (unknown.empty())
+	{
+		return std::nullopt;
+	}
+	std::string takes;
+	for (const auto& name : known)
+	{
+		takes += (takes.empty() ? "" : ", ") + name;
+	}
+	return std::string(query) + " doesn't take " + unknown + "; it takes " + (takes.empty() ? "no parameters" : takes);
 }
 
 } // namespace
@@ -166,6 +194,15 @@ QueryResult Inspector::Describe(const Json& params) const
 QueryResult Inspector::Answer(const Request& request) const
 {
 	const auto error = [](std::string text) { return QueryResult::Error(std::move(text)); };
+	if (request.query == "ping" || request.query == "writes" || request.query == "describe")
+	{
+		const auto known =
+		    request.query == "describe" ? std::vector<std::string> {"provider", "query"} : std::vector<std::string> {};
+		if (auto unknown = UnknownParameters(request.query, request.params, known); unknown.has_value())
+		{
+			return error(*std::move(unknown));
+		}
+	}
 	if (request.query == "ping")
 	{
 		Json answer = _identity.is_object() ? _identity : Json::object();
@@ -201,6 +238,13 @@ QueryResult Inspector::Answer(const Request& request) const
 	{
 		return error("no query " + request.query + "; ask \"describe\" with {\"provider\": \"" + std::string(providerName) +
 		             "\"}");
+	}
+	std::vector<std::string> known;
+	known.reserve(description->parameters.size());
+	std::ranges::transform(description->parameters, std::back_inserter(known), &ParameterDescription::name);
+	if (auto unknown = UnknownParameters(request.query, request.params, known); unknown.has_value())
+	{
+		return error(*std::move(unknown));
 	}
 	for (const auto& parameter : description->parameters)
 	{

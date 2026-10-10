@@ -137,3 +137,78 @@ void magic::EndWorshipTurn(WorshipBattery& site, const WorshipBatteryRules& rule
 	site.requested = 0.0f;
 	site.available = site.battery + capacity;
 }
+
+float magic::AddToIconStore(WorshipIconCharge& icon, float share)
+{
+	if (icon.store + share > icon.required)
+	{
+		// The game charges the site only what overflows the icon, not what went into it
+		const float charged = share - (icon.required - icon.store);
+		icon.store = icon.required;
+		return charged;
+	}
+	icon.store += share;
+	return share;
+}
+
+float magic::ProcessWorshipTurn(WorshipBattery& site, const WorshipBatteryRules& rules, uint32_t dancers,
+                                std::span<WorshipIconCharge> icons)
+{
+	float drawn = 0.0f;
+	UpdateWorshipStrain(site, rules, dancers);
+	if (site.strain <= 0.0f)
+	{
+		uint32_t charging = 0;
+		float needed = 0.0f;
+		bool seedsOut = false;
+		for (const auto& icon : icons)
+		{
+			const float need = icon.required - icon.store;
+			if (icon.charging && need > 0.0f)
+			{
+				++charging;
+				needed += need;
+			}
+			seedsOut = seedsOut || icon.seedOut;
+		}
+		const float share = WorshipIconShare(site, rules, charging, needed, seedsOut);
+		if (share != 0.0f)
+		{
+			for (auto& icon : icons)
+			{
+				if (icon.charging && icon.required - icon.store > 0.0f)
+				{
+					const float charged = AddToIconStore(icon, share);
+					if (!site.infinite)
+					{
+						drawn += UseWorshipChants(site, charged);
+					}
+				}
+			}
+		}
+	}
+	EndWorshipTurn(site, rules, dancers);
+	return drawn;
+}
+
+float magic::WorshipAvailableForVirtualInfluence(const WorshipBattery& site, const WorshipBatteryRules& rules, uint32_t dancers,
+                                                 uint32_t interfaces)
+{
+	const float available = WorshipAvailable(site);
+	if (available == 0.0f || interfaces == 0)
+	{
+		return 0.0f;
+	}
+	float taken = available - rules.chantsToReserveForMaintaining;
+	// Only what the dancers chant this turn, never the battery
+	const float chanting = WorshipCapacity(rules, dancers) - site.used;
+	if (chanting <= taken)
+	{
+		taken = chanting;
+	}
+	if (taken < 0.0f)
+	{
+		taken = 0.0f;
+	}
+	return taken / static_cast<float>(interfaces);
+}

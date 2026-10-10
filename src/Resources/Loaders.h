@@ -112,6 +112,12 @@ struct L3DLoader final: BaseLoader<graphics::L3DMesh>
 	};
 	[[nodiscard]] result_type operator()(FromMadeTag, const std::string& debugName, const graphics::L3DMesh& skinSource,
 	                                     std::span<const std::vector<graphics::L3DSubMesh::MadePrimitive>> subMeshes) const;
+	/// From a file already read, drawn with the skins of another model (which must outlive it) as they change
+	struct FromFileWithSkinsOfTag
+	{
+	};
+	[[nodiscard]] result_type operator()(FromFileWithSkinsOfTag, const std::string& debugName, const l3d::L3DFile& file,
+	                                     const graphics::L3DMesh& skinSource) const;
 };
 
 /// The data of an L3D file, .l3d or zipped .zzz, for what changes meshes on the CPU

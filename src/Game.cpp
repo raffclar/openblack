@@ -106,6 +106,7 @@
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
@@ -125,6 +126,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
+#include "ECS/Systems/CreaturePenSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -175,9 +177,11 @@
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
+#include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -366,6 +370,7 @@ Game::Game(Arguments&& args) noexcept
     , _startTestbed(args.startTestbed || args.scenario.has_value())
     , _scenarioRequest(args.scenario)
     , _inspectPort(args.inspectPort)
+    , _screenshotRoot(args.screenshotRoot)
     , _seed(args.seed)
     , _inspectInputLock(args.inspectInputLock)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
@@ -492,6 +497,13 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	{
 		magicTookPress = magic.TapAction();
 	}
+	// Letting go of the Action button lets go of a town's totem, leaving it where it was slid
+	if (Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value() &&
+	    (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
+	{
+		Locator::villageTotemSystem::value().LetGo();
+		Locator::gameActionSystem::value().PinCursor(false);
+	}
 	// Letting go of the Action button lets go of what the hand was taking, or puts down or throws what it holds
 	if (handGrab != nullptr && (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
 	{
@@ -551,6 +563,21 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				{
 					// A creature the hand may not hold: a click on it still asks the leash, which says why not
 					Locator::leashSystem::value().TapCreature(PlayerNames::PLAYER_ONE, *under);
+				}
+			}
+		}
+		// A town's totem under the hand is taken hold of, to slide it up and down
+		if (!_actionPressTaken && !magic.IsHandBusy() && !handHoldsThing && Locator::villageTotemSystem::has_value() &&
+		    Locator::pickingSystem::has_value())
+		{
+			auto& totems = Locator::villageTotemSystem::value();
+			if (const auto picked = Locator::pickingSystem::value().GetPick().object; picked.has_value())
+			{
+				if (const auto totem = totems.TotemOf(*picked);
+				    totem.has_value() && totems.Grip(*totem, PlayerNames::PLAYER_ONE))
+				{
+					_actionPressTaken = true;
+					Locator::gameActionSystem::value().PinCursor(true);
 				}
 			}
 		}
@@ -1001,13 +1028,15 @@ bool Game::GameLogicLoop() noexcept
 	Locator::fieldSystem::value().ProcessTurn(Locator::time::value().GetTurn());
 	// The fish come back to the fish farms
 	Locator::fishFarmSystem::value().ProcessTurn(Locator::time::value().GetTurn());
-	// The trees that are still growing grow, faster in the rain
-	Locator::vegetation::value().ProcessTurn();
+	// The forests' growing trees grow, faster in the rain, and the forests spread
+	Locator::forestSystem::value().GrowForests();
 	{
 		// The creatures age, grow, get hungry, tired and thirsty, and heal while they sleep
 		auto creaturePhysiology = profiler.BeginScoped(Profiler::Stage::CreaturePhysiologyUpdate);
 		Locator::creaturePhysiologySystem::value().ProcessTurn();
 	}
+	// A creature's home is its temple's pen, and in the pen it is shown smaller so that it fits
+	Locator::creaturePenSystem::value().ProcessTurn();
 	// The creatures' bodies follow their fatness, and their marks heal
 	Locator::creatureAnimationSystem::value().ProcessTurn();
 	Locator::creatureSkinSystem::value().ProcessTurn();
@@ -1089,6 +1118,11 @@ bool Game::GameLogicLoop() noexcept
 
 	// The objects' looping sounds start again where they have stopped
 	Locator::soundTagSystem::value().ProcessTurn(cameraPosition);
+	// The worship sites charge their icons and store what their dancers chant, before the miracles draw their upkeep
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().ProcessChants();
+	}
 	{
 		// The dispensers, then each miracle's upkeep, its own particle effect and what that effect tells it
 		auto magic = profiler.BeginScoped(Profiler::Stage::MagicUpdate);
@@ -1175,6 +1209,11 @@ bool Game::GameLogicLoop() noexcept
 	Locator::alignmentSystem::value().UpdateTurn(cameraPosition);
 	// The temples' outsides follow their players' alignments
 	Locator::templeExteriorSystem::value().UpdateTurn();
+	// And their worship sites wear their looks
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().UpdateTurn();
+	}
 
 	if (_atmosAudio)
 	{
@@ -1523,6 +1562,8 @@ bool Game::Update() noexcept
 		Locator::animalSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
 		// The clips the villagers' states play go on, and the sounds of their frames play
 		Locator::livingActionSystem::value().UpdatePoses(clock.GetTurn(), clock.GetTurnFraction());
+		// The gates and the other scenery the scripts open and close play on, and the plinths' stones sit or sink
+		Locator::animatedStaticSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
 	}
 	{
 		// The creatures are drawn moving between the last two turns
@@ -1587,6 +1628,8 @@ bool Game::Update() noexcept
 	}
 	Locator::mistSystem::value().Update(gameTime);
 	Locator::villageLightSystem::value().Update(gameTime);
+	// The town totems ease to their shares
+	Locator::villageTotemSystem::value().Update(gameTime.count());
 	Locator::fieldSystem::value().Update(gameTime);
 	// The shoals near the camera swim, and dart from what scared them
 	Locator::fishFarmSystem::value().Update(std::chrono::duration<float>(gameTime).count(),
@@ -1864,6 +1907,18 @@ bool Game::Update() noexcept
 					    .nowMs = machine_clock::Ticks(),
 					    .turn = Locator::time::value().GetTurn(),
 					});
+				}
+				// Holding a town's totem, the mouse slides it up and down and the hand stays on its icon
+				if (Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value())
+				{
+					auto& totems = Locator::villageTotemSystem::value();
+					const auto screenHeight = Locator::windowing::has_value() ? Locator::windowing::value().GetSize().y : 0;
+					totems.Slide(static_cast<float>(-Locator::gameActionSystem::value().GetMouseDelta().y),
+					             static_cast<float>(screenHeight));
+					if (const auto hold = totems.GetHandHold())
+					{
+						handTransform.position = hold->position;
+					}
 				}
 				UpdateMagicHand(handTransform.position,
 				                std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
@@ -2260,9 +2315,9 @@ bool Game::Initialize() noexcept
 				                   SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading temple mesh: {}", f.stem().string());
 				                   RegisterFile(meshManager, name, f, resources::L3DLoader::FromDiskTag {}, f);
 				                   // The temple's outside is blended from the temple meshes, into the first temple's,
-				                   // and its entrance is picked under the cursor
+				                   // its entrance is picked under the cursor, and its worship sites wear its skin
 				                   if (name.starts_with("temple/b_temple") || name.starts_with("temple/b_first_temple") ||
-				                       name == "temple/entrance_l3d")
+				                       name == "temple/entrance_l3d" || name == "temple/b_worship_l3d")
 				                   {
 					                   RegisterFile(resources.GetL3DFiles(), name, f, resources::L3DFileLoader::FromDiskTag {},
 					                                f);
@@ -3049,7 +3104,8 @@ bool Game::Run() noexcept
 				Locator::rendererInterface::value().RequestScreenshot(_requestScreenshot->second);
 			}
 			// A picture without the debug windows: the frame's windows are made as ever but not drawn
-			if (!screenshotThisFrame || !_screenshotHidesDebugGui)
+			const bool hiddenThisFrame = _debugGuiHiddenFrame == _frameCount;
+			if ((!screenshotThisFrame || !_screenshotHidesDebugGui) && !hiddenThisFrame)
 			{
 				Locator::debugGui::value().Draw();
 			}
@@ -3146,6 +3202,12 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	}
 
 	timer.Step("footpaths");
+	// With the land laid out, each town of a player with a temple is given its worship site if it has none
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().LandLaidOut();
+	}
+
 	// With the land laid out, each town gathers the lone trees about it into its scenic forest
 	if (Locator::forestSystem::has_value())
 	{
@@ -3286,6 +3348,10 @@ void Game::PrepareNewLand()
 	Locator::explosionSystem::value().Reset();
 	Locator::magicSystem::value().SetIgnoreInfluence(false);
 	Locator::animalSystem::value().Reset();
+	if (Locator::animatedStaticSystem::has_value())
+	{
+		Locator::animatedStaticSystem::value().Reset();
+	}
 	Locator::magicShieldSystem::value().Reset();
 	Locator::forestSystem::value().Reset();
 	// Nor its fireflies, nor what they give

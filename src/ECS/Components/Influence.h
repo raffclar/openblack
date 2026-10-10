@@ -24,6 +24,10 @@ struct InfluenceSource
 {
 	PlayerNames player {PlayerNames::PLAYER_ONE};
 	float radius {0.0f};
+	/// Anti-influence, which a script makes: the player has no influence at all within it
+	bool anti {false};
+	/// The object it goes about with, which a script made it on; none for one that stays where it is
+	entt::entity follows {entt::null};
 };
 
 /// How far a town's influence reaches, worked out each turn from its own and its buildings', and how far it reached

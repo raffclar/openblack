@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <tuple>
 
-#include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/polar_coordinates.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
@@ -53,6 +52,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "InfoConstants.h"
@@ -227,9 +227,10 @@ const std::array<const ScriptCommandSignature, 106> FeatureScriptCommands::k_Sig
     CREATE_COMMAND_BINDING("SET_LOST_TOWN_SCALE", SetLostTownScale),
 }};
 
-inline glm::mat4 GetRotation(int rotation)
+/// A script's turn in thousandths of a radian, as the game reads it
+inline float GetYAngle(int rotation)
 {
-	return glm::eulerAngleY(static_cast<float>(rotation) * -0.001f);
+	return static_cast<float>(rotation) * 0.001f;
 }
 
 inline glm::vec3 GetSize(int size)
@@ -290,8 +291,13 @@ void FeatureScriptCommands::SetTownBeliefCap(int32_t townId, const std::string& 
 
 void FeatureScriptCommands::SetTownUninhabitable(int32_t townId)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}) not implemented.", __FILE__, __LINE__,
-	                    __func__, townId);
+	// Nobody comes to live in the town: a ruin or an empty village
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& towns = registry.Context().towns;
+	if (const auto town = towns.find(townId); town != towns.end())
+	{
+		registry.Get<Town>(town->second).uninhabitable = true;
+	}
 }
 
 void FeatureScriptCommands::SetTownCongregationPos(int32_t townId, glm::vec3 position)
@@ -314,11 +320,15 @@ void FeatureScriptCommands::CreateAbode(int32_t townId, glm::vec3 position, cons
 }
 
 void FeatureScriptCommands::CreatePlannedAbode(int32_t townId, glm::vec3 position, const std::string& abodeInfo,
-                                               int32_t rotation, int32_t size, int32_t foodAmount, int32_t woodAmount)
+                                               int32_t rotation, int32_t size, int32_t /*foodAmount*/, int32_t /*woodAmount*/)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}, {}, {}, {}, {}, {}) not implemented.",
-	                    __FILE__, __LINE__, __func__, townId, glm::to_string(position), abodeInfo, rotation, size, foodAmount,
-	                    woodAmount);
+	// A building the town is to build later: nothing of it stands yet, and it holds no food or wood
+	const auto type = GAbodeInfo::Find(abodeInfo);
+	if (type == AbodeInfo::None)
+	{
+		return;
+	}
+	AbodeArchetype::CreatePlan(townId, position, type, rotation * 0.001f, size * 0.001f);
 }
 
 void FeatureScriptCommands::CreateTownCentre(int32_t townId, glm::vec3 position, const std::string& abodeInfo, int32_t rotation,
@@ -393,13 +403,13 @@ void FeatureScriptCommands::CreateVillagerPos(glm::vec3 abodePosition, glm::vec3
 void FeatureScriptCommands::CreateCitadel(glm::vec3 position, int32_t, const std::string& playerOwner, int32_t rotation,
                                           int32_t size)
 {
-	CitadelArchetype::Create(position, GetPlayerName(playerOwner), GetRotation(rotation), GetSize(size));
+	CitadelArchetype::Create(position, GetPlayerName(playerOwner), GetYAngle(rotation), GetSize(size));
 }
 
 void FeatureScriptCommands::CreatePlannedCitadel(int32_t townId, glm::vec3 position, int32_t, const std::string& playerOwner,
                                                  int32_t rotation, int32_t size)
 {
-	CitadelArchetype::CreatePlan(townId, position, GetPlayerName(playerOwner), GetRotation(rotation), GetSize(size));
+	CitadelArchetype::CreatePlan(townId, position, GetPlayerName(playerOwner), GetYAngle(rotation), GetSize(size));
 }
 
 void FeatureScriptCommands::CreateCreaturePen([[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t, int32_t, int32_t)
@@ -408,18 +418,27 @@ void FeatureScriptCommands::CreateCreaturePen([[maybe_unused]] glm::vec3 positio
 	// __func__);
 }
 
-void FeatureScriptCommands::CreateWorshipSite([[maybe_unused]] glm::vec3 position, int32_t, const std::string&,
-                                              const std::string&, int32_t, int32_t)
+void FeatureScriptCommands::CreateWorshipSite(glm::vec3 /*position*/, int32_t /*siteType*/, const std::string& playerOwner,
+                                              const std::string& tribeType, int32_t /*rotation*/, int32_t /*size*/)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The site goes in its tribe's place round the player's temple, whatever spot, kind, facing and size the line gives
+	const auto tribe = k_TribeLookup.find(tribeType);
+	if (tribe == k_TribeLookup.end())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: CREATE_WORSHIP_SITE: unknown tribe {}", tribeType);
+		return;
+	}
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().MakeBuiltSite(GetPlayerName(playerOwner), tribe->second);
+	}
 }
 
-void FeatureScriptCommands::CreatePlannedWorshipSite([[maybe_unused]] glm::vec3 position, int32_t, const std::string&,
-                                                     const std::string&, int32_t, int32_t)
+void FeatureScriptCommands::CreatePlannedWorshipSite(glm::vec3 /*position*/, int32_t, const std::string&, const std::string&,
+                                                     int32_t, int32_t)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The game reads the line and does nothing with it: a worship site to come is only ever asked for by a town of its
+	// tribe once the temple stands
 }
 
 void FeatureScriptCommands::CreateAnimal(glm::vec3 position, int32_t type, int32_t flockId, int32_t townId)

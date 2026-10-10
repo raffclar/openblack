@@ -15,6 +15,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 
 #include "Enums.h"
@@ -45,6 +46,12 @@ struct Town
 	glm::vec2 scenicForestCentre {0.0f};
 	/// The things its people play with, the newest first: footballs
 	std::vector<entt::entity> playthings;
+	/// The share of its people wanted at worship, 0 to 1, set by its totem; always none while it has no worship site
+	float worshipShare {0.0f};
+	/// The worship site its people worship at, none until one is made for it
+	entt::entity worshipSite {entt::null};
+	/// A script has stopped a worship site being made for it
+	bool cannotHaveWorshipSite {false};
 	/// Where its people gather, worked out the first time it is wanted and again once a new building stands on it
 	std::optional<glm::vec2> congregationPos;
 	/// The turn its latest emergency was called, 0 when it is in none
