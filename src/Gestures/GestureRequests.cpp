@@ -34,6 +34,10 @@ std::string_view gesture::Name(Purpose purpose)
 		return "pick a leash";
 	case Purpose::ClosePicker:
 		return "close the picker";
+	case Purpose::FightSpecialMove:
+		return "special move";
+	case Purpose::FightMiracle:
+		return "fight miracle";
 	}
 	return "";
 }
@@ -51,6 +55,8 @@ bool gesture::ShowsRecognition(Purpose purpose)
 	case Purpose::PowerUp:
 	case Purpose::LeashGesture:
 	case Purpose::PickLeash:
+	case Purpose::FightSpecialMove:
+	case Purpose::FightMiracle:
 		return true;
 	}
 	return false;
@@ -97,6 +103,23 @@ std::vector<Request> gesture::Requests(const HandContext& context)
 {
 	std::vector<Request> requests;
 	const auto& seed = context.seed;
+
+	// While the player's creature duels, the hand waits only for its special move and the fight miracles it knows
+	if (context.creature.has_value() && context.creature->takesFightMoves)
+	{
+		if (context.specialMoveGesture != GestureType::None)
+		{
+			requests.push_back({.gesture = context.specialMoveGesture, .purpose = Purpose::FightSpecialMove});
+		}
+		for (const auto& miracle : context.creature->fightMiracles)
+		{
+			if (miracle.gesture != GestureType::None)
+			{
+				requests.push_back({.gesture = miracle.gesture, .purpose = Purpose::FightMiracle, .magic = miracle.magic});
+			}
+		}
+		return requests;
+	}
 
 	// A circle for the storm or shield in the hand, drawn while the Action button is held, until one is remembered
 	if (context.actionHeld && seed.has_value() && seed->sizingGesture != GestureType::None && !context.circleRemembered)

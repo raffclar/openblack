@@ -126,6 +126,8 @@ private:
 	/// Casts the scenario's miracle of that index; the running miracle, or none
 	entt::entity CastMiracle(size_t index);
 	void UpdateParticles(float seconds);
+	/// The scenario's vortices open when it is time and are told to fade out when it is time
+	void UpdateVortices();
 	/// The needs and desires go on once the body and mind have started, and every frame for those that hold them
 	void ApplyStates();
 	void Give(const Command& command);
@@ -137,6 +139,7 @@ private:
 	std::string GivePlayerCommand(const Command& command);
 	/// The hand goes over a fireball in flight to take hold of it; what came of that
 	std::string HandTakeFireBall();
+	std::string HandTapObject(size_t index);
 	/// Once the hand is over the fireball, it taps it, or presses the action button with a seed in it
 	void FinishTakingFireBall();
 	/// Draws a gesture through the gesture recogniser, across the middle of the screen
@@ -194,6 +197,13 @@ private:
 		float seconds;
 	};
 	std::vector<RunningParticle> _particles;
+	/// The scenario's vortices: each once made, and whether it has been told to fade out
+	struct RunningVortex
+	{
+		entt::entity vortex {entt::null};
+		bool fading {false};
+	};
+	std::vector<RunningVortex> _vortices;
 	/// The scenario's miracles: when each is next cast, and the one held in its hand until when
 	struct RunningMiracle
 	{
@@ -219,6 +229,8 @@ private:
 	/// The gesture being drawn, and the count of gestures recognised before it
 	std::optional<GestureType> _drawing;
 	uint32_t _recognisedBefore {0};
+	/// Whether the Action button went down on the miracles for the gesture being drawn, to come up once it is done
+	bool _drawingPressedAction {false};
 
 	/// The mouse moving along a sweep, in pixels a second, and for how much longer
 	struct PointerSweep
@@ -231,6 +243,8 @@ private:
 	std::optional<PointerSweep> _sweep;
 	/// The hand's place on the screen is logged every frame for a while after the mouse's buttons change
 	float _handWatchSeconds {0.0f};
+	/// The testbed took the pointer, and gives it back when it is done; a pointer the debug inspector holds it leaves be
+	bool _ownsPointer {false};
 
 	/// The crowd laid out, the next of it to spawn, its homes and towns as they have spawned, and how long it took
 	std::vector<CrowdCreature> _crowdCreatures;

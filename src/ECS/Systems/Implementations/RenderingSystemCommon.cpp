@@ -24,6 +24,7 @@
 #include "Graphics/DebugLines.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/ShaderManager.h"
+#include "Graphics/Texture2D.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 

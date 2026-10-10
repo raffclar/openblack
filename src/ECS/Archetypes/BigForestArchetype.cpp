@@ -18,6 +18,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Unlit.h"
 #include "ECS/Registry.h"
+#include "ECS/StoreRules.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -40,7 +41,8 @@ entt::entity BigForestArchetype::Create(const glm::vec3& position, BigForestInfo
 	const auto [point, radius] = GetFixedObstacleBoundingCircle(info.meshId, transform);
 	registry.Assign<Fixed>(entity, point, radius);
 	registry.Assign<Forest>(entity);
-	registry.Assign<BigForest>(entity);
+	registry.Assign<BigForest>(
+	    entity, BigForest {.type = static_cast<int>(type), .worth = ecs::store_rules::BigForestWorth(scale, info.woodValue)});
 	registry.Assign<MorphWithTerrain>(entity);
 	registry.Assign<Unlit>(entity);
 	const auto resourceId = resources::HashIdentifier(info.meshId);

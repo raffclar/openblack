@@ -254,6 +254,29 @@ TEST(ParticleDraw, TheMiracleInTheHandIsDrawnJustAfterTheHand)
 	EXPECT_EQ(commands[0].depth, graphics::zsort::Depth({0.0f, 0.0f, 300.0f}, glm::vec3(0.0f)));
 }
 
+TEST(ParticleDraw, WhatIsDrawnBeforeTheLandIsLeftOutOfTheRestAndKeepsItsOwnOrder)
+{
+	auto frame = MakeFrame();
+	// A sorted sprite, then an effect drawn before the land: two sprites on one sheet and one on another
+	AddSprite(frame, {0.0f, 0.0f, 100.0f}, 0);
+	AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), 0);
+	AddSprite(frame, {0.0f, 0.0f, 5.0f}, 1);
+	AddSprite(frame, {0.0f, 0.0f, 50.0f}, 1);
+	AddSprite(frame, {0.0f, 0.0f, 20.0f}, 0);
+	AddGroup(frame, DrawPath::BeforeLand, glm::vec3(0.0f), 1);
+	std::vector<Command> commands;
+	std::vector<uint32_t> order;
+	Order(frame, glm::vec3(0.0f), std::nullopt, commands, order);
+	ASSERT_EQ(commands.size(), 1u);
+	EXPECT_EQ(order, (std::vector<uint32_t> {0}));
+	OrderBeforeLand(frame, commands, order);
+	ASSERT_EQ(commands.size(), 2u);
+	EXPECT_EQ(commands[0].material, 1u);
+	EXPECT_EQ(commands[0].count, 2u);
+	EXPECT_EQ(commands[1].material, 0u);
+	EXPECT_EQ(order, (std::vector<uint32_t> {1, 2, 3}));
+}
+
 TEST(ParticleDraw, RibbonsMatchTheGamesStrip)
 {
 	ChainCreator creator;

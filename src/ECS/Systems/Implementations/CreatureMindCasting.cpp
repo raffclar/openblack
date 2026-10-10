@@ -29,10 +29,13 @@
 #include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureMindTables.h"
+#include "Creature/CreatureRoute.h"
 #include "Creature/CreatureSpellCasting.h"
 #include "Creature/CreatureSpellMind.h"
+#include "Creature/CreatureThrow.h"
 #include "Creature/CreatureWatching.h"
 #include "CreatureMindSystem.h"
+#include "CreatureMindSystemDetail.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Creature.h"
@@ -266,6 +269,31 @@ std::optional<uint32_t> CreatureMindSystem::CastMagicOf(uint32_t action)
 	return magic;
 }
 
+std::optional<std::pair<float, float>> mind_detail::MiracleSightings(const CreatureMindState& mind,
+                                                                     const creature_mind_tables::Tables& tables,
+                                                                     CreatureType species, MagicType magic)
+{
+	const auto sightings = SightingsOf(mind, tables, species, static_cast<uint32_t>(magic));
+	if (!sightings.has_value())
+	{
+		return std::nullopt;
+	}
+	return std::pair {sightings->seen, sightings->needed};
+}
+
+std::optional<std::pair<float, float>> CreatureMindSystem::MiracleSightings(entt::entity creature, MagicType type)
+{
+	const auto* tables = GetTables();
+	const auto& registry = Entities();
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (tables == nullptr || mind == nullptr || body == nullptr)
+	{
+		return std::nullopt;
+	}
+	return mind_detail::MiracleSightings(*mind, *tables, body->species, type);
+}
+
 bool CreatureMindSystem::MayCast(entt::entity creature, const CreatureMindState& mind, uint32_t action, bool powerUp)
 {
 	const auto* tables = GetTables();
@@ -423,6 +451,9 @@ void CreatureMindSystem::StartSubMove(entt::entity creature, const creature_mind
 		break;
 	case Kind::TurnToFaceObject:
 		casting.move = CreatureCasting::Move::TurnToFace;
+		break;
+	case Kind::ToThrowPosition:
+		casting.move = CreatureCasting::Move::ToThrowPosition;
 		break;
 	default:
 		casting.move = CreatureCasting::Move::None;
@@ -583,6 +614,66 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 		if (!bodyBusy)
 		{
 			done();
+		}
+		break;
+	}
+	case CreatureCasting::Move::ToThrowPosition:
+	{
+		if (casting->phase == 1)
+		{
+			if (!locomotion.IsMoving(creature))
+			{
+				done();
+			}
+			break;
+		}
+		if (!at.has_value())
+		{
+			fail();
+			break;
+		}
+		const auto stand =
+		    creature_throw::WhereToThrowFrom(here, Flat(*at), object_measures::Height(registry, creature),
+		                                     object_measures::TwoDRadius(registry, casting->target), casting->keep);
+		if (!stand.has_value())
+		{
+			fail();
+			break;
+		}
+		if (stand->kind == creature_throw::ThrowStand::Kind::There)
+		{
+			done();
+			break;
+		}
+		auto point = stand->point;
+		// Backing away, where it can't stand it goes to the nearest place it can, if near enough
+		if (stand->kind == creature_throw::ThrowStand::Kind::BackOff)
+		{
+			const auto& land = locomotion.GetWalkableLand();
+			if (!land.IsValid(point, creature_route::k_DestinationClearance))
+			{
+				const auto valid =
+				    land.NearestValid(point, creature_route::k_DestinationClearance, creature_route::k_ValidPointSearch);
+				if (!valid.has_value() || glm::distance(*valid, point) >= creature_route::k_ValidPointReach)
+				{
+					fail();
+					break;
+				}
+				point = *valid;
+			}
+		}
+		switch (locomotion.MoveTo(creature, point, CreatureLocomotionSystemInterface::Pace::Walk, stand->minDistance,
+		                          stand->maxDistance))
+		{
+		case CreatureLocomotionSystemInterface::MoveResult::Started:
+			casting->phase = 1;
+			break;
+		case CreatureLocomotionSystemInterface::MoveResult::Busy:
+			// It tries again next turn
+			break;
+		case CreatureLocomotionSystemInterface::MoveResult::InvalidDestination:
+			fail();
+			break;
 		}
 		break;
 	}

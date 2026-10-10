@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <map>
+#include <memory>
 #include <span>
 #include <utility>
 #include <vector>
@@ -108,11 +109,14 @@ MusicBank MakeBank(uint32_t chunks)
 {
 	MusicBank bank;
 	bank.path = "fake.sad";
+	auto data = std::make_shared<std::vector<std::vector<uint8_t>>>();
 	for (uint32_t i = 0; i < chunks; ++i)
 	{
-		bank.chunks.push_back(MakeChunk(i));
+		data->push_back(MakeChunk(i));
 		bank.chunkSampleRates.push_back(k_SampleRate);
 	}
+	bank.chunkCount = chunks;
+	bank.readChunk = [data](uint32_t chunk) { return data->at(chunk); };
 	return bank;
 }
 
@@ -122,7 +126,8 @@ std::vector<int16_t> DecodeWhole(const MusicBank& bank, const std::vector<uint32
 	std::vector<uint8_t> stream;
 	for (const auto chunk : chunks)
 	{
-		stream.insert(stream.end(), bank.chunks[chunk].begin(), bank.chunks[chunk].end());
+		const auto data = bank.ReadChunk(chunk);
+		stream.insert(stream.end(), data.begin(), data.end());
 	}
 	auto decoded = ColdDecoder(stream, k_SampleRate);
 	if (!decoded.sound)

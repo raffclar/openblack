@@ -73,8 +73,10 @@ public:
 	void ReleaseEmitterLoop(entt::entity emitter) override;
 	[[nodiscard]] bool IsEmitterLooping(entt::entity emitter) override;
 	void SetEmitterVolume(entt::entity emitter, uint32_t volume) override;
+	void SetEmitterPitch(entt::entity emitter, uint32_t pitchPercent) override;
 	[[nodiscard]] uint32_t GetEmitterVolume(entt::entity emitter) override;
 	void StopOwnedSounds(entt::entity owner) override;
+	void StopAllSoundEffects() override;
 	void AddAnimEffects(const std::string& bankName, AnimEffectTable table) override;
 	AnimEffectPlay PlayAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
 	                              const glm::vec3& position) override;
@@ -122,7 +124,8 @@ private:
 	                                               PlayType playType);
 	/// An emitter playing for owner a sound of bank that is id or else in group, null if there is none
 	[[nodiscard]] entt::entity FindPlaying(entt::entity owner, entt::id_type bank, entt::id_type id, uint16_t group) const;
-	/// A music bank loaded from a path relative to the game, shared with any channel playing it already
+	/// A music bank by its path relative to the game: its headers are read the first time, and it is kept from then on,
+	/// its chunks left in its file. Null if it couldn't be read.
 	[[nodiscard]] std::shared_ptr<const MusicBank> LoadMusicBank(const std::string& bankPath);
 	/// LHAudio's listener frame (x right, y forward, z up) for a world position
 	[[nodiscard]] static glm::vec3 ToListenerFrame(glm::vec3 worldPosition);
@@ -139,10 +142,8 @@ private:
 	float _sfxVolume {1.0f};
 	std::unique_ptr<MusicStreamBackend> _musicStreams;
 	std::unique_ptr<MusicPlayer> _musicPlayer;
-	/// Banks stay loaded while a channel plays them
-	std::map<std::string, std::weak_ptr<const MusicBank>> _musicBanks;
-	std::map<std::string, std::optional<MusicBankInfo>> _musicBankInfo;
-	std::shared_ptr<const MusicBank> _recentMusicBank;
+	/// The music banks registered, by path, null where one couldn't be read
+	std::map<std::string, std::shared_ptr<const MusicBank>> _musicBanks;
 	std::chrono::steady_clock::time_point _lastMusicUpdate {std::chrono::steady_clock::now()};
 	std::map<Handle, AtmosVoice> _atmosVoices;
 	/// Decoded samples, kept for the lifetime of the audio manager

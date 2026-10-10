@@ -24,7 +24,7 @@ using namespace openblack::lhscriptx;
 
 Script::Script() = default;
 
-void Script::Load(const std::string& source)
+void Script::Load(const std::string& source, const std::function<void()>& afterCommand)
 {
 	Lexer lexer(source);
 
@@ -79,6 +79,10 @@ void Script::Load(const std::string& source)
 			this->AdvanceToken(lexer);
 
 			RunCommand(identifier, args);
+			if (afterCommand)
+			{
+				afterCommand();
+			}
 		}
 
 		this->AdvanceToken(lexer);
