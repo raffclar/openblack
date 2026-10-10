@@ -63,6 +63,8 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME vs_object_few_bones_instanced
 #include "ShaderIncluder.h"
+#define SHADER_NAME vs_object_palette_instanced
+#include "ShaderIncluder.h"
 #define SHADER_NAME vs_object_morph_instanced
 #include "ShaderIncluder.h"
 #define SHADER_NAME vs_object_posed_instanced
@@ -186,6 +188,8 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_interface
 #include "ShaderIncluder.h"
+#define SHADER_NAME fs_video
+#include "ShaderIncluder.h"
 
 // clang-format on
 
@@ -199,13 +203,14 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 65> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 67> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
     BGFX_EMBEDDED_SHADER(vs_object),
     BGFX_EMBEDDED_SHADER(vs_object_instanced),
     BGFX_EMBEDDED_SHADER(vs_object_few_bones_instanced),
+    BGFX_EMBEDDED_SHADER(vs_object_palette_instanced),
     BGFX_EMBEDDED_SHADER(vs_object_morph_instanced),
     BGFX_EMBEDDED_SHADER(vs_object_posed_instanced),
     BGFX_EMBEDDED_SHADER(vs_object_morph),
@@ -264,6 +269,7 @@ const std::array<bgfx::EmbeddedShader, 65> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_interface),
     BGFX_EMBEDDED_SHADER(vs_text3d),
     BGFX_EMBEDDED_SHADER(fs_interface), //
+    BGFX_EMBEDDED_SHADER(fs_video),     //
     BGFX_EMBEDDED_SHADER_END()          //
 }};
 
@@ -276,6 +282,7 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"ObjectEnvironment", "vs_object_environment", "fs_object_environment"},
     ShaderDefinition {"ObjectInstanced", "vs_object_instanced", "fs_object"},
     ShaderDefinition {"ObjectFewBonesInstanced", "vs_object_few_bones_instanced", "fs_object"},
+    ShaderDefinition {"ObjectPaletteInstanced", "vs_object_palette_instanced", "fs_object"},
     ShaderDefinition {"ObjectMorphInstanced", "vs_object_morph_instanced", "fs_object"},
     ShaderDefinition {"ObjectPosedInstanced", "vs_object_posed_instanced", "fs_object"},
     ShaderDefinition {"ObjectHeightMapInstanced", "vs_object_hm_instanced", "fs_object"},
@@ -312,6 +319,7 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"ObjectShadowStaticInstanced", "vs_object_shadow_static_instanced", "fs_object_shadow"},
     ShaderDefinition {"Beam", "vs_beam", "fs_beam"},
     ShaderDefinition {"Interface", "vs_interface", "fs_interface"},
+    ShaderDefinition {"Video", "vs_interface", "fs_video"},
     ShaderDefinition {"Text3D", "vs_text3d", "fs_interface"},
 };
 

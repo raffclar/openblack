@@ -600,6 +600,11 @@ void MsvcQsort(std::array<DesireSort, k_Count>& entries)
 	}
 }
 
+bool ValidScriptBoost(int32_t desire, float boost)
+{
+	return desire >= 0 && static_cast<size_t>(desire) < k_Count && boost >= -1.0f && boost <= 1.0f;
+}
+
 void SortDesires(TownDesire& desire)
 {
 	for (size_t d = 0; d < k_Count; ++d)

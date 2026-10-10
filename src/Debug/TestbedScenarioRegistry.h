@@ -226,11 +226,11 @@ struct CreatureSetup
 
 /// Something put on the land for the creatures: an object, a tree, a feature such as a pillar of rock, a villager, a pot
 /// or pile of food or wood, a building or field of the scenario's town, which is made with the first of them, or an
-/// animal
+/// animal, or a fish farm (which joins the nearest town)
 struct ObjectSetup
 {
 	std::variant<MobileObjectInfo, TreeInfo, FeatureInfo, VillagerInfo, PotInfo, AbodeInfo, FieldTypeInfo, AnimalInfo,
-	             MobileStaticInfo>
+	             MobileStaticInfo, FishFarmInfo>
 	    type;
 	glm::vec2 offset {0.0f};
 	float scale {1.0f};
@@ -260,6 +260,8 @@ struct ObjectSetup
 	std::optional<float> fullSize;
 	/// A villager or animal that has eaten poison
 	bool poisoned {false};
+	/// A building of the town holds this much food, rather than the scenario town's usual stock
+	std::optional<uint32_t> storedFood;
 	/// A firefly hides exactly where the thing stands, as a land's script places one
 	bool firefly {false};
 };
@@ -466,6 +468,8 @@ struct Command
 		OpenCreatureCave,
 		ApplyTattoo,
 		RemoveTattoo,
+		/// The tattoo editor opened on the player's creature, as clicking it in the Creature Cave does
+		OpenTattooEditor,
 		/// The player's hand is given a seed (value, by the game's seed number) as if from a bubble; a gesture (value, by
 		/// the game's gesture number) is drawn with the hand across the middle of the screen, through the same recogniser
 		/// the cursor goes through. Neither needs a creature.
@@ -645,6 +649,8 @@ void AddBlastFireScenarios(std::vector<Scenario>& all);
 /// What the blast spares and does on a coast, the water over fields and forests and before the people watching a fire
 /// put out, and the hand catching a fireball or taking one into a fire seed
 void AddFirewaterScenarios(std::vector<Scenario>& all);
+/// A fish farm by a town: its shoal, the hand grabbing, scooping and scaring its fish
+void AddFishScenarios(std::vector<Scenario>& all);
 /// Creatures casting miracles
 void AddCreatureCastingScenarios(std::vector<Scenario>& all);
 /// Creature Mode's and the Creature Cave's scenarios

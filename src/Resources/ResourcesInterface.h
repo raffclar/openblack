@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <cstddef>
+
+#include "Graphics/UploadPacer.h"
 #include "Loaders.h"
 #include "ResourceManager.h"
 
@@ -31,6 +34,7 @@ using GlowManager = ResourceManager<LightLoader>;
 using CameraPathManager = ResourceManager<CameraPathLoader>;
 using ParticleFileManager = ResourceManager<ParticleFileLoader>;
 using GestureTemplatesManager = ResourceManager<GestureTemplatesLoader>;
+using VideoManager = ResourceManager<VideoLoader>;
 using ParticleBitmapManager = ResourceManager<ParticleBitmapLoader>;
 
 class ResourcesInterface
@@ -62,6 +66,19 @@ public:
 	virtual ParticleBitmapManager& GetParticleBitmaps() = 0;
 	/// The templates the hand's drawn gestures are matched against, by gesture::k_TemplatesId
 	virtual GestureTemplatesManager& GetGestureTemplates() = 0;
+
+	/// Once a frame: moves what the loading threads have finished into the caches, then hands them more of the
+	/// prefetched resources, until about `budget` bytes of them are loading. What they make reaches the graphics card
+	/// within `uploads` a frame, so no frame waits long for it.
+	virtual void UpdateLoading(size_t budget, graphics::UploadPacer::Allowance uploads) = 0;
+	/// Asks for every resource registered and not loaded yet to be loaded on the loading threads
+	virtual void PrefetchAll() = 0;
+	/// How many registered resources are not loaded yet
+	[[nodiscard]] virtual size_t PendingCount() const = 0;
+	/// Stops loading on the loading threads: drops what hasn't started and waits for what has
+	virtual void StopLoading() = 0;
+	/// The videos playing, by their paths; each is let go when it ends
+	virtual VideoManager& GetVideos() = 0;
 };
 
 } // namespace openblack::resources

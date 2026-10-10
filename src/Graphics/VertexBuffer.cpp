@@ -16,6 +16,7 @@
 #include <spdlog/spdlog.h>
 
 #include "GraphicsHandleBgfx.h"
+#include "UploadPacer.h"
 
 using namespace openblack::graphics;
 
@@ -73,6 +74,7 @@ VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, b
 	const auto* bgfxMem = reinterpret_cast<const bgfx::Memory*>(mem);
 
 	_vertexCount = bgfxMem->size / _strideBytes;
+	UploadPacer::Pace(bgfxMem->size);
 
 	if (_dynamic)
 	{

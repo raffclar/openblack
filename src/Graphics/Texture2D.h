@@ -163,9 +163,11 @@ public:
 	Texture2D(const Texture2D&) = delete;
 	Texture2D& operator=(const Texture2D&) = delete;
 
+	/// Makes the texture from bgfx memory, on any thread. The texels must be copied or allocated for bgfx, or, when only
+	/// referenced, outlive the texture.
 	void Create(uint16_t width, uint16_t height, uint16_t layers, TextureFormat format, Wrapping wrapping, Filter filter,
 	            const void* memory) noexcept;
-	/// As Create, but without moving bgfx on a frame, for textures made while a frame is being drawn
+	/// As Create, for textures made while a frame is being drawn
 	void CreateWithinFrame(uint16_t width, uint16_t height, uint16_t layers, TextureFormat format, Wrapping wrapping,
 	                       Filter filter, const void* memory) noexcept;
 
