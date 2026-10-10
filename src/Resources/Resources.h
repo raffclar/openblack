@@ -38,6 +38,7 @@ public:
 	GlowManager& GetGlows() override { return _glows; }
 	CameraPathManager& GetCameraPaths() override { return _cameraPaths; }
 	CameraEditManager& GetCameraEdits() override { return _cameraEdits; }
+	CameraZoneManager& GetCameraZones() override { return _cameraZones; }
 	DanceFileManager& GetDanceFiles() override { return _danceFiles; }
 	HandDemoManager& GetHandDemos() override { return _handDemos; }
 	ParticleFileManager& GetParticleFiles() override { return _particleFiles; }
@@ -115,6 +116,7 @@ private:
 	GlowManager _glows;
 	CameraPathManager _cameraPaths;
 	CameraEditManager _cameraEdits;
+	CameraZoneManager _cameraZones;
 	DanceFileManager _danceFiles;
 	HandDemoManager _handDemos;
 	ParticleFileManager _particleFiles;

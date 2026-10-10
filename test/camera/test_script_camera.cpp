@@ -16,6 +16,7 @@
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/CameraTrack.h"
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
@@ -29,6 +30,28 @@ namespace
 float FlatLand(float /*x*/, float /*z*/)
 {
 	return 0.0f;
+}
+
+/// A straight way along x from `from`, 100 long, covered in two seconds at an even 50 metres a second, its handles a
+/// third and two thirds along
+edt::EDTWay StraightWay(std::array<float, 3> from)
+{
+	edt::EDTWay way {};
+	const std::array<float, 3> to {from[0] + 100.0f, from[1], from[2]};
+	way.duration = 2000;
+	way.points = {from, to};
+	way.handles = {{{{from[0] + 100.0f / 3.0f, from[1], from[2]}, {from[0] + 200.0f / 3.0f, from[1], from[2]}}}};
+	way.times = {0.0f, 2000.0f};
+	way.speeds = {50.0f, 50.0f};
+	return way;
+}
+
+std::shared_ptr<const edt::EDTTrack> StraightTrack()
+{
+	auto track = std::make_shared<edt::EDTTrack>();
+	track->position = StraightWay({2400.0f, 60.0f, 2500.0f});
+	track->focus = StraightWay({2400.0f, 10.0f, 2550.0f});
+	return track;
 }
 
 ScriptControlSystem::CameraRequest Outside(uint32_t task)
@@ -233,4 +256,58 @@ TEST(ScriptCamera, ItFollowsAThingAtOnceWithNoGlideUntilSentElsewhere)
 	static_cast<void>(model.Update(std::chrono::milliseconds(16), camera));
 	EXPECT_NEAR(glm::distance(model.GetTargetOrigin(), glm::vec3(980.0f, 50.0f, 980.0f)), 0.0f, 1e-4f);
 	EXPECT_NEAR(glm::distance(model.GetTargetFocus(), lastSeen), 0.0f, 1e-4f);
+}
+
+TEST(ScriptCamera, ATrackPutsTheCameraWhereItsWaysHaveGotToAtTheFramesTime)
+{
+	Camera camera;
+	ScriptCameraModel model({2500.0f, 50.0f, 2500.0f}, {2600.0f, 0.0f, 2500.0f}, FlatLand);
+	const auto track = StraightTrack();
+	model.RunTrack(track);
+	EXPECT_TRUE(model.OnTrack());
+	EXPECT_FALSE(model.Arrived());
+
+	// The track runs on the game's time, which isn't held to a tenth of a second a frame; with none it holds
+	camera_track::WayRunner runner(track->position);
+	model.PassGameTime(std::chrono::milliseconds(1250));
+	const auto first = model.Update(std::chrono::milliseconds(16), camera);
+	ASSERT_TRUE(first.has_value());
+	const auto expected = runner.Get(track->position, 1250);
+	EXPECT_FLOAT_EQ(first->origin.x, expected.x);
+	EXPECT_FLOAT_EQ(first->origin.y, expected.y);
+	EXPECT_NEAR(first->origin.x, 2462.5f, 2.0f);
+	// It looks where the look-at way is at the same point of its curve
+	const auto look = camera_track::Bezier(track->focus, runner.GetSegment(), runner.GetParameter());
+	EXPECT_FLOAT_EQ(first->focus.x, look.x);
+	EXPECT_FLOAT_EQ(first->focus.z, 2550.0f);
+	EXPECT_FALSE(model.Arrived());
+
+	const auto paused = model.Update(std::chrono::milliseconds(16), camera);
+	ASSERT_TRUE(paused.has_value());
+	EXPECT_FLOAT_EQ(paused->origin.x, first->origin.x);
+	model.PassGameTime(std::chrono::milliseconds(749));
+	model.Update(std::chrono::milliseconds(16), camera);
+	EXPECT_FALSE(model.Arrived());
+	model.PassGameTime(std::chrono::milliseconds(1));
+	model.Update(std::chrono::milliseconds(16), camera);
+	EXPECT_TRUE(model.Arrived());
+	// At the end it holds the last point
+	model.PassGameTime(std::chrono::milliseconds(500));
+	const auto end = model.Update(std::chrono::milliseconds(16), camera);
+	ASSERT_TRUE(end.has_value());
+	EXPECT_FLOAT_EQ(end->origin.x, 2500.0f);
+	EXPECT_TRUE(model.Arrived());
+
+	// Placing or sending the camera takes it off the track
+	model.MoveFocus({2505.0f, 6.0f, 2507.0f}, 1.0f);
+	EXPECT_FALSE(model.OnTrack());
+	EXPECT_FALSE(model.Arrived());
+}
+
+TEST(ScriptCamera, NoTrackRunsNothing)
+{
+	ScriptCameraModel model({2500.0f, 50.0f, 2500.0f}, {2600.0f, 0.0f, 2500.0f}, FlatLand);
+	model.RunTrack(nullptr);
+	EXPECT_FALSE(model.OnTrack());
+	EXPECT_TRUE(model.Arrived());
 }
