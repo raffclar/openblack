@@ -368,3 +368,12 @@ QueryResult GameProvider::Run(std::string_view query, const QueryContext& contex
 	}
 	return QueryResult::Error("no query game." + std::string(query));
 }
+
+std::optional<std::string> openblack::inspector::ScenarioLoading(const std::optional<std::string_view>& scenario)
+{
+	if (!scenario.has_value())
+	{
+		return std::nullopt;
+	}
+	return "scenario " + std::string(*scenario);
+}
