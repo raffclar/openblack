@@ -13,6 +13,7 @@
 
 #include <glm/vec2.hpp>
 
+#include "CameraHelpEvents.h"
 #include "CameraModel.h"
 #include "CameraPan.h"
 #include "Common/Zoomer.h"
@@ -56,6 +57,8 @@ private:
 	/// What a drag of the land does, from where it was pressed and how the mouse moves: pans, turns round the edge or
 	/// tilts. Gives the mode the camera takes for it.
 	[[nodiscard]] Mode HandleDrag(bool held);
+	/// The help's profile counts the camera controls used
+	static void SendHelpEvents(camera_help::events::EventSet events);
 	/// The height the mouse controls measure by, the cinema bars' picture's while they are in
 	[[nodiscard]] static int ViewHeight(glm::ivec2 screenSize);
 
@@ -166,6 +169,9 @@ private:
 	camera_drag::TwoButtonTurn _twoButtonTurn;
 	/// How far the clear view of Ctrl and Shift held together has come, easing in and out over half a second
 	Zoomer _clearView;
+	/// The player's camera controls this frame, and the help events they make while the controls are handled
+	camera_help::events::ControlsFrame _helpControls;
+	camera_help::events::EventSet _helpEvents;
 	/// Time spent handling the controls, for timing the start of a drag
 	std::chrono::microseconds _controlsTime {std::chrono::microseconds::zero()};
 

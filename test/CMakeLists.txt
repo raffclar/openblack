@@ -179,6 +179,9 @@ openblack_setup_and_add_test(test_cursor_freeze input/test_cursor_freeze.cpp)
 openblack_setup_and_add_test(test_camera_drag camera/test_camera_drag.cpp)
 openblack_setup_and_add_test(test_camera_pan camera/test_camera_pan.cpp)
 openblack_setup_and_add_test(test_camera_help camera/test_camera_help.cpp)
+openblack_setup_and_add_test(
+  test_camera_help_events camera/test_camera_help_events.cpp
+)
 openblack_setup_and_add_test(test_magic_tables test_magic_tables.cpp)
 openblack_setup_and_add_test(test_spell_chants test_spell_chants.cpp)
 openblack_setup_and_add_test(test_worship_battery test_worship_battery.cpp)
