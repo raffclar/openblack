@@ -39,6 +39,7 @@
 #include "ECS/Systems/Implementations/CameraBookmarkSystem.h"
 #include "ECS/Systems/Implementations/CameraHelpSystem.h"
 #include "ECS/Systems/Implementations/CameraPathSystem.h"
+#include "ECS/Systems/Implementations/CameraZoneSystem.h"
 #include "ECS/Systems/Implementations/ChimneySmokeSystem.h"
 #include "ECS/Systems/Implementations/CinematicDirectorSystem.h"
 #include "ECS/Systems/Implementations/CloudSystem.h"
@@ -100,6 +101,7 @@
 #include "ECS/Systems/Implementations/RewardSystem.h"
 #include "ECS/Systems/Implementations/ScriptControlSystem.h"
 #include "ECS/Systems/Implementations/ScriptObjectsSystem.h"
+#include "ECS/Systems/Implementations/SharkSystem.h"
 #include "ECS/Systems/Implementations/SkySystem.h"
 #include "ECS/Systems/Implementations/SnowSystem.h"
 #include "ECS/Systems/Implementations/SnowfallSystem.h"
@@ -121,7 +123,6 @@
 #include "ECS/Systems/Implementations/WalkPathSystem.h"
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
 #include "ECS/Systems/Implementations/WeatherSystem.h"
-#include "ECS/Systems/Implementations/WhaleSystem.h"
 #include "ECS/Systems/Implementations/WorshipSiteSystem.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "Graphics/RendererInterface.h"
@@ -155,6 +156,7 @@ using openblack::ecs::systems::AnimatedStaticSystem;
 using openblack::ecs::systems::CameraBookmarkSystem;
 using openblack::ecs::systems::CameraHelpSystem;
 using openblack::ecs::systems::CameraPathSystem;
+using openblack::ecs::systems::CameraZoneSystem;
 using openblack::ecs::systems::ChimneySmokeSystem;
 using openblack::ecs::systems::CinematicDirectorSystem;
 using openblack::ecs::systems::CloudSystem;
@@ -208,6 +210,7 @@ using openblack::ecs::systems::ReactionSystem;
 using openblack::ecs::systems::RenderingSystem;
 using openblack::ecs::systems::ResourceStoreSystem;
 using openblack::ecs::systems::ScriptControlSystem;
+using openblack::ecs::systems::SharkSystem;
 using openblack::ecs::systems::SnowfallSystem;
 using openblack::ecs::systems::SnowSystem;
 using openblack::ecs::systems::SoundTagSystem;
@@ -229,7 +232,6 @@ using openblack::ecs::systems::VortexSystem;
 using openblack::ecs::systems::WalkPathSystem;
 using openblack::ecs::systems::WaterRingSystem;
 using openblack::ecs::systems::WeatherSystem;
-using openblack::ecs::systems::WhaleSystem;
 using openblack::ecs::systems::WorshipSiteSystem;
 using openblack::graphics::RendererInterface;
 using openblack::input::GameActionMap;
@@ -335,7 +337,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::highDetailSystem::emplace<HighDetailSystem>();
 	Locator::walkPathSystem::emplace<WalkPathSystem>();
 	Locator::danceSystem::emplace<DanceSystem>();
-	Locator::whaleSystem::emplace<WhaleSystem>();
+	Locator::sharkSystem::emplace<SharkSystem>();
 	Locator::videoSystem::emplace<VideoSystem>();
 	Locator::helpTextSystem::emplace<HelpTextSystem>();
 	Locator::helpProfileSystem::emplace<HelpProfileSystem>();
@@ -410,6 +412,8 @@ void InitializeLevelWith(const LandSource& land)
 	// Where creatures can walk is sorted anew for each land
 	Locator::creatureLocomotionSystem::emplace<CreatureLocomotionSystem>();
 	Locator::cameraBookmarkSystem::emplace<CameraBookmarkSystem>();
+	// A land starts with no camera zones
+	Locator::cameraZoneSystem::emplace<CameraZoneSystem>();
 	Locator::terrainSystem::emplace<LandIsland>(land);
 	Locator::cameraPathSystem::emplace<CameraPathSystem>();
 }
@@ -463,6 +467,7 @@ void openblack::ShutDownServices()
 	Locator::pickingSystem::reset();
 	Locator::editorSystem::reset();
 	Locator::cameraBookmarkSystem::reset();
+	Locator::cameraZoneSystem::reset();
 	Locator::livingActionSystem::reset();
 	Locator::townSystem::reset();
 	Locator::worshipSiteSystem::reset();
@@ -480,7 +485,7 @@ void openblack::ShutDownServices()
 	Locator::highDetailSystem::reset();
 	Locator::walkPathSystem::reset();
 	Locator::danceSystem::reset();
-	Locator::whaleSystem::reset();
+	Locator::sharkSystem::reset();
 	Locator::videoSystem::reset();
 	Locator::helpTextSystem::reset();
 	Locator::helpProfileSystem::reset();

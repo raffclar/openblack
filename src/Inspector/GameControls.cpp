@@ -621,6 +621,25 @@ std::string GameLevels::LoadTestbed()
 	return {};
 }
 
+std::string GameLevels::NewGame(std::string_view start)
+{
+	auto* game = Game::Instance();
+	if (game == nullptr)
+	{
+		return "there is no game to start";
+	}
+	std::optional<new_game_choice::NewGameStart> how;
+	if (!start.empty())
+	{
+		how = new_game_choice::ParseNewGameStart(start);
+		if (!how.has_value())
+		{
+			return "no way to start a new game called " + std::string(start);
+		}
+	}
+	return game->StartNewGame(how) ? std::string {} : "the new game didn't start";
+}
+
 std::string GameLevels::Current() const
 {
 	const auto* game = Game::Instance();
@@ -731,6 +750,13 @@ bool GameScreenshots::Exists(const std::filesystem::path& path) const
 {
 	std::error_code error;
 	return std::filesystem::exists(path, error);
+}
+
+std::string GameScreenshots::Remove(const std::filesystem::path& path)
+{
+	std::error_code error;
+	std::filesystem::remove(path, error);
+	return error ? error.message() : std::string {};
 }
 
 std::string GameScreenshots::AppendLine(const std::filesystem::path& file, std::string_view line)

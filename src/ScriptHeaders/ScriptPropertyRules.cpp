@@ -82,6 +82,18 @@ float AngleFromScript(float degrees)
 	return degrees * k_DegreesToRadians;
 }
 
+float FacingAngle(glm::vec2 from, glm::vec2 to)
+{
+	// Worked out at the wider precision before it is kept as a float
+	double angle = std::atan2(static_cast<double>(to.y) - static_cast<double>(from.y),
+	                          static_cast<double>(to.x) - static_cast<double>(from.x));
+	if (angle < 0.0)
+	{
+		angle += static_cast<double>(k_WholeTurnRadians);
+	}
+	return static_cast<float>(angle);
+}
+
 bool CanSetLife(float life, bool heldDuringCutscene, bool indestructible)
 {
 	return !((heldDuringCutscene || indestructible) && life <= k_LowestProtectedLife);

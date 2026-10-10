@@ -16,6 +16,7 @@
 
 #include <entt/entity/entity.hpp>
 #include <glm/mat3x3.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "Enums.h"
@@ -68,6 +69,11 @@ constexpr float k_DegreesInATurn = 360.0f;
 constexpr float k_DegreesToRadians = 0.0174532924f;
 [[nodiscard]] float AngleToScript(float radians);
 [[nodiscard]] float AngleFromScript(float degrees);
+
+/// The angle about the upright a thing at `from` turns to so that it faces `to`, from 0 up to a whole turn: the way
+/// from one to the other across the ground, measured from the x axis towards the z axis
+constexpr float k_WholeTurnRadians = 6.28318548f;
+[[nodiscard]] float FacingAngle(glm::vec2 from, glm::vec2 to);
 
 /// Whether a script may set a thing's life: a thing the scripts hold while they own the widescreen bars, and a thing
 /// made indestructible, can't be brought to a hundredth of its life or under it

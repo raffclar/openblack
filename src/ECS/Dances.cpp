@@ -38,6 +38,9 @@ entt::entity dances::Create(Registry& registry, const DanceSetup& setup, std::sh
 	dance.duration = setup.duration;
 	dance.autostart = setup.autostart;
 	dance.madeByScript = setup.madeByScript;
+	dance.angle = setup.angle;
+	// Made at a quarter speed, before its file sets its groups going
+	dance_rules::SetSpeed(dance, dance_rules::k_MadeSpeed);
 	// A dance always has one group, and as many as its file names
 	dance.groups.all.resize(1);
 	if (file != nullptr)
@@ -49,10 +52,9 @@ entt::entity dances::Create(Registry& registry, const DanceSetup& setup, std::sh
 		}
 		dance.clock = file->beat;
 		dance.loopLength = file->loops;
-		dance_rules::ApplyKeyFramesUpTo(dance.groups, *file, dance.clock);
+		dance_rules::ApplyKeyFramesUpTo(dance, *file, dance.clock);
 	}
 	dance.file = std::move(file);
-	dance_rules::SetSpeed(dance, dance_rules::k_MadeSpeed);
 	return entity;
 }
 
@@ -147,5 +149,18 @@ void dances::ProcessTurn(Registry& registry, entt::entity entity, const TurnCont
 		return;
 	}
 	// TODO(opening): a dance that follows what it is danced about moves with it; the scripts' dances don't
-	dance_rules::ProcessTurn(dance, context.turn);
+	const auto moving = dance_rules::ProcessTurn(dance, context.turn);
+	if (!context.playClipAgain)
+	{
+		return;
+	}
+	for (const auto index : moving)
+	{
+		// Copied, as a clip played again may look at the dance
+		const auto dancers = registry.Get<const Dance>(entity).groups.all.at(index).dancers;
+		for (const auto dancer : dancers)
+		{
+			context.playClipAgain(dancer);
+		}
+	}
 }

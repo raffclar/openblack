@@ -13,6 +13,7 @@
 
 #include <array>
 #include <functional>
+#include <memory>
 #include <numbers>
 #include <optional>
 
@@ -23,6 +24,16 @@
 
 namespace openblack
 {
+
+namespace edt
+{
+struct EDTTrack;
+} // namespace edt
+
+namespace camera_track
+{
+class WayRunner;
+} // namespace camera_track
 
 namespace script_camera
 {
@@ -122,6 +133,11 @@ public:
 
 	/// It takes over from where the camera is
 	ScriptCameraModel(const glm::vec3& origin, const glm::vec3& focus, GroundHeight groundAt);
+	~ScriptCameraModel() override;
+	ScriptCameraModel(const ScriptCameraModel&) = delete;
+	ScriptCameraModel& operator=(const ScriptCameraModel&) = delete;
+	ScriptCameraModel(ScriptCameraModel&&) = delete;
+	ScriptCameraModel& operator=(ScriptCameraModel&&) = delete;
 
 	/// The camera is put somewhere, still
 	void SetOrigin(const glm::vec3& origin);
@@ -129,8 +145,19 @@ public:
 	/// The camera glides somewhere from where it is, arriving still after some seconds; at once in under a thousandth
 	void MoveOrigin(const glm::vec3& origin, float seconds);
 	void MoveFocus(const glm::vec3& focus, float seconds);
-	/// Whether both where it is and what it looks at have arrived where they were sent
+	/// Whether both where it is and what it looks at have arrived where they were sent; on a track, whether the track's
+	/// time has run out
 	[[nodiscard]] bool Arrived() const;
+
+	/// The camera runs one of the camera editor's tracks from its start: each frame it is put where the track's camera is
+	/// after the time run so far, looking where the track's look-at way is at the same point of its curve. It stops
+	/// looking at a thing; any following goes on. With no track it only stops looking at a thing.
+	void RunTrack(std::shared_ptr<const edt::EDTTrack> track);
+	/// Whether it is running a track
+	[[nodiscard]] bool OnTrack() const { return _track != nullptr; }
+	/// A track runs on the game's time, not the camera's: the frame's game time is passed on before the frame's update,
+	/// so that it holds while the game is paused
+	void PassGameTime(std::chrono::milliseconds gameTime);
 
 	/// Finds a followed thing now; nothing once it is gone
 	using ThingLookup = std::function<std::optional<script_camera::FollowedThing>()>;
@@ -161,6 +188,9 @@ private:
 	void UpdateFollowing();
 	void StopFollowing();
 	void StopLookingAt();
+	void StopTrack();
+	/// Puts the camera where its track has got to
+	void UpdateTrack();
 
 	Zoomers _origin;
 	Zoomers _focus;
@@ -170,6 +200,10 @@ private:
 	script_camera::FollowSettings _follow;
 	/// Seconds since the script took the camera, or since it last began following
 	float _seconds {0.0f};
+	/// The track it runs, the runner along the track's camera way, and the game time run on it
+	std::shared_ptr<const edt::EDTTrack> _track;
+	std::unique_ptr<camera_track::WayRunner> _trackRunner;
+	std::chrono::milliseconds _trackTime {0};
 };
 
 } // namespace openblack

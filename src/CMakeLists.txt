@@ -130,6 +130,7 @@ target_link_libraries(
           l3d
           cam
           edt
+          exc
           dance
           hnd
           pack

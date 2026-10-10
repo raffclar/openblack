@@ -19,9 +19,9 @@
 
 #include "3D/CameraEdits.h"
 #include "3D/LandIslandInterface.h"
+#include "ECS/Components/Shark.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WalkPath.h"
-#include "ECS/Components/Whale.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
 
@@ -64,11 +64,11 @@ void WalkPathSystem::ProcessTurn()
 			done.push_back(entity);
 			return;
 		}
-		// On the land there; a whale moves for its turn and is drawn getting there
+		// On the land there; a shark moves for its turn and is drawn getting there
 		const glm::vec3 position(at->x, land.GetHeightAt(*at), at->y);
-		if (auto* whale = registry.TryGet<Whale>(entity))
+		if (auto* shark = registry.TryGet<Shark>(entity))
 		{
-			whale->position = position;
+			shark->position = position;
 		}
 		else
 		{

@@ -33,8 +33,10 @@
 #include "3D/OceanInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameMusic.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
+#include "Camera/CameraZones.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
@@ -51,6 +53,7 @@
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
+#include "ECS/Components/Flock.h"
 #include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/LivingAction.h"
@@ -58,8 +61,8 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
-#include "ECS/Components/ScriptFlock.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/Shark.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Temple.h"
@@ -71,7 +74,6 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WallHug.h"
-#include "ECS/Components/Whale.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
@@ -84,6 +86,7 @@
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
+#include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
@@ -143,6 +146,7 @@
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/Systems/SharkSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
@@ -165,11 +169,11 @@
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
-#include "ECS/Systems/WhaleSystemInterface.h"
 #include "EditProviders.h"
 #include "Editor/EditorSelection.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Game.h"
 #include "GameControls.h"
 #include "Graphics/RendererInterface.h"
 #include "Help/AdvisorModel.h"
@@ -218,6 +222,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"dynamicsSystem", "physics.state"},
     LocatorCoverage {"pickingSystem", "players.pick"},
     LocatorCoverage {"cameraBookmarkSystem", "view.bookmarks"},
+    LocatorCoverage {"cameraZoneSystem", "view.zones"},
     LocatorCoverage {"cameraPathSystem", "view.state"},
     LocatorCoverage {"livingActionSystem", "living.action"},
     LocatorCoverage {"townSystem", "town.list"},
@@ -267,7 +272,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"highDetailSystem", "view.script_control"},
     LocatorCoverage {"walkPathSystem", "living.walk_paths"},
     LocatorCoverage {"danceSystem", "living.dances"},
-    LocatorCoverage {"whaleSystem", "living.whales"},
+    LocatorCoverage {"sharkSystem", "living.sharks"},
     LocatorCoverage {"soundTagSystem", "living.sound_tags"},
     LocatorCoverage {"rainSystem", "land.precipitation"},
     LocatorCoverage {"chimneySmokeSystem", "living.chimneys"},
@@ -852,23 +857,23 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                  }
 		                  return items;
 	                  }));
-	provider->Add(Query("whales", "The whales: where each is this turn and was at its start, the way it faces, its clip "
+	provider->Add(Query("sharks", "The sharks: where each is this turn and was at its start, the way it faces, its clip "
 	                              "and the wake's timer"),
-	              Serve<Locator::whaleSystem>(
-	                  "the whales", [](const ecs::systems::WhaleSystemInterface& whales, const QueryContext& /*c*/) {
+	              Serve<Locator::sharkSystem>(
+	                  "the sharks", [](const ecs::systems::SharkSystemInterface& sharks, const QueryContext& /*c*/) {
 		                  Json items = Json::array();
 		                  if (const auto* registry = Registry(); registry != nullptr)
 		                  {
-			                  registry->Each<const Whale>([&items, registry](entt::entity entity, const Whale& whale) {
+			                  registry->Each<const Shark>([&items, registry](entt::entity entity, const Shark& shark) {
 				                  auto item = Listed(*registry, entity);
-				                  item["at"] = Point(whale.position);
-				                  item["turn_start"] = Point(whale.turnStart);
-				                  item["heading"] = whale.heading;
-				                  item["clip_place"] = whale.clipPlace;
+				                  item["at"] = Point(shark.position);
+				                  item["turn_start"] = Point(shark.turnStart);
+				                  item["heading"] = shark.heading;
+				                  item["clip_place"] = shark.clipPlace;
 				                  items.push_back(std::move(item));
 			                  });
 		                  }
-		                  return Json {{"wake_timer", whales.GetWakeTimer()}, {"whales", std::move(items)}};
+		                  return Json {{"wake_timer", sharks.GetWakeTimer()}, {"sharks", std::move(items)}};
 	                  }));
 	provider->Add(Query("walk_paths", "The things walking the camera editor's tracks: the track, how far and up to where", {},
 	                    ResultKind::List),
@@ -892,53 +897,61 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 	                  }));
 	provider->Add(
 	    Query("dances",
-	          "The dances: what they are danced for, whether dancing, their speed and clock, and each group's dancers", {},
-	          ResultKind::List),
-	    Serve<Locator::danceSystem>(
-	        "the dances", [](const ecs::systems::DanceSystemInterface& /*dances*/, const QueryContext&) {
-		        Json items = Json::array();
-		        if (const auto* registry = Registry(); registry != nullptr)
-		        {
-			        registry->Each<const Dance>([&items, registry](entt::entity entity, const Dance& dance) {
-				        auto item = Listed(*registry, entity);
-				        item["type"] = static_cast<int>(dance.type);
-				        item["owner"] = ToId(dance.owner);
-				        item["dancing"] = dance.state == Dance::State::Dancing;
-				        item["speed"] = dance.speed;
-				        item["rate"] = dance.rate;
-				        item["clock"] = dance.clock;
-				        item["start_turn"] = dance.startTurn;
-				        item["duration"] = dance.duration;
-				        item["dancers"] = dance.dancers;
-				        item["round"] = dance.groups.round;
-				        Json groups = Json::array();
-				        for (const auto& group : dance.groups.all)
-				        {
-					        Json dancers = Json::array();
-					        for (const auto dancer : group.dancers)
-					        {
-						        dancers.push_back(ToId(dancer));
-					        }
-					        groups.push_back({{"name", group.name},
-					                          {"limited", group.limited},
-					                          {"quota", group.quota},
-					                          {"weight", group.weight},
-					                          {"sexes", group.sexes},
-					                          {"dancers", std::move(dancers)}});
-				        }
-				        item["groups"] = std::move(groups);
-				        items.push_back(std::move(item));
-			        });
-		        }
-		        return items;
-	        }));
+	          "The dances: what they are danced for, whether dancing, their speed and clock, and each group's shape, move "
+	          "and dancers",
+	          {}, ResultKind::List),
+	    Serve<Locator::danceSystem>("the dances", [](const ecs::systems::DanceSystemInterface& /*dances*/,
+	                                                 const QueryContext&) {
+		    Json items = Json::array();
+		    if (const auto* registry = Registry(); registry != nullptr)
+		    {
+			    registry->Each<const Dance>([&items, registry](entt::entity entity, const Dance& dance) {
+				    auto item = Listed(*registry, entity);
+				    item["type"] = static_cast<int>(dance.type);
+				    item["owner"] = ToId(dance.owner);
+				    item["dancing"] = dance.state == Dance::State::Dancing;
+				    item["speed"] = dance.speed;
+				    item["rate"] = dance.rate;
+				    item["clock"] = dance.clock;
+				    item["start_turn"] = dance.startTurn;
+				    item["duration"] = dance.duration;
+				    item["dancers"] = dance.dancers;
+				    item["round"] = dance.groups.round;
+				    Json groups = Json::array();
+				    for (const auto& group : dance.groups.all)
+				    {
+					    Json dancers = Json::array();
+					    for (const auto dancer : group.dancers)
+					    {
+						    dancers.push_back(ToId(dancer));
+					    }
+					    groups.push_back({{"name", group.name},
+					                      {"limited", group.limited},
+					                      {"quota", group.quota},
+					                      {"weight", group.weight},
+					                      {"sexes", group.sexes},
+					                      {"shape", group.shape},
+					                      {"radius", group.radius},
+					                      {"offset", {group.offset.x, group.offset.y}},
+					                      {"rotation", group.rotation},
+					                      {"spin", group.spin},
+					                      {"move", {group.move.action, group.move.first, group.move.second, group.move.end}},
+					                      {"moved", group.moved},
+					                      {"dancers", std::move(dancers)}});
+				    }
+				    item["groups"] = std::move(groups);
+				    items.push_back(std::move(item));
+			    });
+		    }
+		    return items;
+	    }));
 	provider->Add(Query("flocks",
-	                    "The scripts' flocks: their place, their domain and flock distances, and their members "
-	                    "from the first to the leader",
+	                    "The flocks, of animals and of the scripts' villagers: their place, their domain and flock distances, "
+	                    "and their members from the first to the leader",
 	                    {}, ResultKind::List),
 	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
 		              Json items = Json::array();
-		              registry.Each<const ScriptFlock>([&items](entt::entity entity, const ScriptFlock& flock) {
+		              registry.Each<const Flock>([&items](entt::entity entity, const Flock& flock) {
 			              Json members = Json::array();
 			              for (const auto member : flock.members)
 			              {
@@ -1468,6 +1481,47 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 		                  return items;
 	                  }));
 	provider->Add(
+	    Query("zones", "The camera zones the land's scripts set: their file, the fence the camera is kept inside, its "
+	                   "height limits and the places it is kept out of, and whether the camera is inside the fence"),
+	    Serve<Locator::cameraZoneSystem>(
+	        "the camera zones", [](const ecs::systems::CameraZoneSystemInterface& system, const QueryContext&) {
+		        const auto& zones = system.GetZones();
+		        Json fence = Json::array();
+		        for (const auto& corner : zones.fence)
+		        {
+			        fence.push_back(Json::array({corner.x, corner.y, corner.z}));
+		        }
+		        Json exclusions = Json::array();
+		        for (const auto& exclusion : zones.exclusions)
+		        {
+			        exclusions.push_back(
+			            {{"position", Json::array({exclusion.position.x, exclusion.position.y, exclusion.position.z})},
+			             {"radius", exclusion.radius},
+			             {"height", exclusion.height},
+			             {"kind", exclusion.kind == camera_zones::Exclusion::Kind::Cylinder ? "cylinder" : "dome"}});
+		        }
+		        Json result {{"file", system.GetFileName()},
+		                     {"exclusions_on", zones.exclusionsOn},
+		                     {"fence_on", zones.fenceOn},
+		                     {"max_altitude", zones.useMaxAltitude ? Json(zones.maxAltitude) : Json(nullptr)},
+		                     {"height_above_land", zones.useHeightAboveLand ? Json(zones.heightAboveLand) : Json(nullptr)},
+		                     {"fence", std::move(fence)},
+		                     {"exclusions", std::move(exclusions)}};
+		        if (Locator::camera::has_value())
+		        {
+			        const auto& camera = Locator::camera::value();
+			        const auto origin = camera.GetOrigin();
+			        result["camera_inside"] =
+			            camera_zones::CrossFence(zones.fence, zones.fenceOn, origin, camera.GetFocus() - origin).inside;
+			        if (Locator::terrainSystem::has_value())
+			        {
+				        result["height_limit"] = camera_zones::HeightLimit(
+				            zones, Locator::terrainSystem::value().GetHeightAt(glm::vec2(origin.x, origin.z)));
+			        }
+		        }
+		        return result;
+	        }));
+	provider->Add(
 	    Query("cinematic", "The fade, the wide screen and whether the interface is shown"),
 	    Serve<Locator::cinematicDirectorSystem>(
 	        "the cinematics", [](const ecs::systems::CinematicDirectorSystemInterface& director, const QueryContext&) {
@@ -1870,12 +1924,55 @@ std::unique_ptr<ProviderInterface> ScriptProvider(ScriptTargetInterface& scripts
 		    }
 		    return items;
 	    }));
-	provider->Add(Query("objects", "How many things scripts hold and control"),
-	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
-		              return Json {{"in_script", CountOf<InScript>(registry)},
-		                           {"script_controlled", CountOf<ScriptControlled>(registry)},
-		                           {"system", Locator::scriptObjects::has_value()}};
-	              }));
+	provider->Add(
+	    Query("objects",
+	          "How many things scripts hold and control, and the scripts' object table: places taken (of 511), times it "
+	          "was full, and its places by kind (taken, referenced, made by a script, object gone); places: true lists "
+	          "every taken place",
+	          {{.name = "places", .type = "boolean", .description = "List every taken place", .required = false}}),
+	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& context) {
+		    Json result {{"in_script", CountOf<InScript>(registry)},
+		                 {"script_controlled", CountOf<ScriptControlled>(registry)},
+		                 {"system", Locator::scriptObjects::has_value()}};
+		    if (!Locator::scriptObjects::has_value())
+		    {
+			    return result;
+		    }
+		    const auto& scripts = Locator::scriptObjects::value();
+		    const auto places = scripts.Places();
+		    const bool listed = context.params.is_object() && context.params.value("places", false);
+		    Json byKind = Json::object();
+		    Json list = Json::array();
+		    for (const auto& place : places)
+		    {
+			    const bool gone = place.object == entt::null || !registry.Valid(place.object);
+			    const auto kind = gone ? std::string("gone") : Describe(registry, place.object, Info()).kind;
+			    auto& counts = byKind[kind];
+			    if (counts.is_null())
+			    {
+				    counts = {{"places", 0}, {"referenced", 0}, {"made_by_script", 0}};
+			    }
+			    counts["places"] = counts["places"].get<int>() + 1;
+			    counts["referenced"] = counts["referenced"].get<int>() + (place.references != 0 ? 1 : 0);
+			    counts["made_by_script"] = counts["made_by_script"].get<int>() + (place.createdByScript ? 1 : 0);
+			    if (listed)
+			    {
+				    list.push_back({{"place", place.place},
+				                    {"id", gone ? Json(nullptr) : Json(ToId(place.object))},
+				                    {"kind", kind},
+				                    {"references", place.references},
+				                    {"made_by_script", place.createdByScript}});
+			    }
+		    }
+		    result["places_taken"] = places.size();
+		    result["times_full"] = scripts.TimesFull();
+		    result["by_kind"] = std::move(byKind);
+		    if (listed)
+		    {
+			    result["places"] = std::move(list);
+		    }
+		    return result;
+	    }));
 	provider->Add(
 	    Query("highlights",
 	          "The scrolls and signs scripts put up: kind, challenge or text, started, height, where drawn; the beat and "
@@ -2208,10 +2305,19 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 			    return std::nullopt;
 		    }
 		    auto& audio = Locator::audio::value();
-		    return AudioState {.globalVolume = audio.GetGlobalVolume(),
-		                       .sfxVolume = audio.GetSfxVolume(),
-		                       .musicVolume = audio.GetMusicVolume(),
-		                       .musicActive = audio.MusicIsActive()};
+		    AudioState state {.globalVolume = audio.GetGlobalVolume(),
+		                      .sfxVolume = audio.GetSfxVolume(),
+		                      .musicVolume = audio.GetMusicVolume(),
+		                      .musicActive = audio.MusicIsActive()};
+		    if (const auto* game = Game::Instance(); game != nullptr && game->GetGameMusic() != nullptr)
+		    {
+			    const auto& music = *game->GetGameMusic();
+			    state.musicPlaying = audio::GetMusicTypeName(music.GetPlaying());
+			    state.landMusic = audio::GetMusicTypeName(music.GetLandType());
+			    state.scriptMusic = audio::GetMusicTypeName(music.GetScriptType());
+			    state.alignmentMusic = music.IsAlignmentMusicEnabled();
+		    }
+		    return state;
 	    },
 	}));
 

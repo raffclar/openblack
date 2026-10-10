@@ -46,7 +46,8 @@ public:
 	bool LoadFromBuffer(const std::vector<uint8_t>& data) noexcept;
 
 	[[nodiscard]] const std::string& GetName() const noexcept { return _name; }
-	[[nodiscard]] uint32_t GetDuration() const noexcept { return _duration; }
+	/// The size in bytes of the clip's data in its file: not a time (the play time is GetPlayTime)
+	[[nodiscard]] uint32_t GetDataSize() const noexcept { return _dataSize; }
 	[[nodiscard]] const std::vector<Frame>& GetFrames() const noexcept { return _frames; }
 	[[nodiscard]] std::vector<glm::mat4> GetBoneMatrices(uint32_t time) const noexcept;
 	/// How long one play of the clip lasts in milliseconds, over which its keyframes are evenly spread
@@ -72,7 +73,7 @@ private:
 	float _unknown_0x30;    // TODO(#471)
 	float _unknown_0x34;    // TODO(#471)
 	uint32_t _unknown_0x3C; // TODO(#471): Always 1 in Body Block, a count
-	uint32_t _duration;
+	uint32_t _dataSize;     // The size in bytes of the clip's data
 	uint32_t _unknown_0x44; // TODO(#471): Always 1 in Body Block
 	uint32_t _unknown_0x48; // TODO(#471): Always 0 in Body Block
 	uint32_t _unknown_0x50; // Flags: 0x100 looping, 0x200 played by time

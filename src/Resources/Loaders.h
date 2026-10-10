@@ -54,6 +54,11 @@ namespace openblack::edt
 class EDTFile;
 } // namespace openblack::edt
 
+namespace openblack::exc
+{
+class EXCFile;
+} // namespace openblack::exc
+
 namespace openblack::dance
 {
 struct DanceFile;
@@ -294,6 +299,12 @@ struct GestureTemplatesLoader final: BaseLoader<gestures::GestureFile>
 
 /// The camera editor's file of the scripts' numbered cameras and tracks
 struct CameraEditLoader final: BaseLoader<edt::EDTFile>
+{
+	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
+};
+
+/// A land's camera zones, from the files under Data/Zones
+struct CameraZoneLoader final: BaseLoader<exc::EXCFile>
 {
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
 };

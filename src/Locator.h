@@ -92,6 +92,7 @@ class MapInterface;
 namespace ecs::systems
 {
 class CameraBookmarkSystemInterface;
+class CameraZoneSystemInterface;
 class DynamicsSystemInterface;
 class PickingSystemInterface;
 class HandSystemInterface;
@@ -132,7 +133,7 @@ class HelpSpeechSystemInterface;
 class HighDetailSystemInterface;
 class WalkPathSystemInterface;
 class DanceSystemInterface;
-class WhaleSystemInterface;
+class SharkSystemInterface;
 class VideoSystemInterface;
 class HelpTextSystemInterface;
 class HelpProfileSystemInterface;
@@ -219,6 +220,7 @@ struct Locator
 	using dynamicsSystem = entt::locator<ecs::systems::DynamicsSystemInterface>;
 	using pickingSystem = entt::locator<ecs::systems::PickingSystemInterface>;
 	using cameraBookmarkSystem = entt::locator<ecs::systems::CameraBookmarkSystemInterface>;
+	using cameraZoneSystem = entt::locator<ecs::systems::CameraZoneSystemInterface>;
 	using cameraPathSystem = entt::locator<ecs::systems::CameraPathSystemInterface>;
 	using livingActionSystem = entt::locator<ecs::systems::LivingActionSystemInterface>;
 	using townSystem = entt::locator<ecs::systems::TownSystemInterface>;
@@ -275,7 +277,7 @@ struct Locator
 	using highDetailSystem = entt::locator<ecs::systems::HighDetailSystemInterface>;
 	using walkPathSystem = entt::locator<ecs::systems::WalkPathSystemInterface>;
 	using danceSystem = entt::locator<ecs::systems::DanceSystemInterface>;
-	using whaleSystem = entt::locator<ecs::systems::WhaleSystemInterface>;
+	using sharkSystem = entt::locator<ecs::systems::SharkSystemInterface>;
 	using videoSystem = entt::locator<ecs::systems::VideoSystemInterface>;
 	using helpTextSystem = entt::locator<ecs::systems::HelpTextSystemInterface>;
 	using helpProfileSystem = entt::locator<ecs::systems::HelpProfileSystemInterface>;

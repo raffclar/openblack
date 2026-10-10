@@ -11,13 +11,17 @@
 
 #include <bit>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <DanceFile.h>
 #include <gtest/gtest.h>
 
+#include "3D/AllMeshes.h"
 #include "ECS/Components/Dance.h"
+#include "ECS/DanceMoves.h"
 #include "ECS/DanceRules.h"
+#include "ECS/DanceShapes.h"
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
 
@@ -26,6 +30,8 @@ using namespace openblack::ecs;
 using openblack::ecs::components::Dance;
 using openblack::ecs::components::DanceGroup;
 namespace rules = openblack::ecs::dance_rules;
+namespace moves = openblack::ecs::dance_moves;
+namespace shapes = openblack::ecs::dance_shapes;
 
 namespace
 {
@@ -182,7 +188,7 @@ TEST(DanceRules, SharedGroupsTakeNewcomersInTurnByTheirShares)
 	ASSERT_EQ(file.Open(TwoGroupDance()), dance::DanceResult::Success);
 	Dance dance;
 	dance.groups.all.resize(2);
-	rules::ApplyKeyFramesUpTo(dance.groups, file, 0.0f);
+	rules::ApplyKeyFramesUpTo(dance, file, 0.0f);
 	// Half and half: one each in a round of two
 	EXPECT_EQ(dance.groups.shared, (std::vector<std::size_t> {0, 1}));
 	EXPECT_EQ(dance.groups.all[0].weight, 1u);
@@ -285,4 +291,159 @@ TEST(Dances, ADanceGoesWhenWhatItIsDancedForGoes)
 	dances::TurnContext context {.turn = 1, .available = [](entt::entity) { return false; }, .finished = {}};
 	dances::ProcessTurn(registry, entity, context);
 	EXPECT_FALSE(registry.Valid(entity));
+}
+
+TEST(DanceShapes, TheShapesAreWorkedOutAsTheGameDoes)
+{
+	const auto circle = shapes::Build(0);
+	EXPECT_EQ(circle[0], glm::ivec2(65535, 0));
+	EXPECT_EQ(circle[1], glm::ivec2(65515, 1608));
+	EXPECT_EQ(circle[64], glm::ivec2(0, 65535));
+	EXPECT_EQ(circle[100], glm::ivec2(-50659, 41574));
+	const auto wavy = shapes::Build(1);
+	EXPECT_EQ(wavy[5], glm::ivec2(70501, 8695));
+	EXPECT_EQ(wavy[37], glm::ivec2(36585, 46879));
+	const auto spiral = shapes::Build(2);
+	EXPECT_EQ(spiral[10], glm::ivec2(1787, 1619));
+	EXPECT_EQ(spiral[255], glm::ivec2(61343, -4522));
+	const auto octagon = shapes::Build(10);
+	EXPECT_EQ(octagon[0], glm::ivec2(65535, 0));
+	EXPECT_EQ(octagon[33], glm::ivec2(44891, 46939));
+	EXPECT_EQ(octagon[100], glm::ivec2(-48739, 40547));
+	EXPECT_EQ(octagon[255], glm::ivec2(64935, -1448));
+	// The square's sides and the wave's first half stop after their first points
+	const auto square = shapes::Build(4);
+	EXPECT_EQ(square[0], glm::ivec2(-0xFFFF, -0xFFE0));
+	EXPECT_EQ(square[1], glm::ivec2(0, 0));
+	EXPECT_EQ(square[192], glm::ivec2(0xFFE0, -0xFFFF));
+	const auto wave = shapes::Build(3);
+	EXPECT_EQ(wave[0], glm::ivec2(0, -8160));
+	EXPECT_EQ(wave[1], glm::ivec2(0, 0));
+	EXPECT_EQ(wave[128].y, -8160);
+	EXPECT_EQ(shapes::Build(5)[3], glm::ivec2(0, 3 * 512 - 65536));
+	EXPECT_EQ(shapes::Build(6)[3], glm::ivec2(3 * 512 - 65536, 0));
+	EXPECT_EQ(shapes::Build(11)[2], glm::ivec2(2 * 224 + 0x2000, 0));
+	EXPECT_EQ(std::string(shapes::FileName(19)), "Arc");
+}
+
+TEST(DanceMoves, APointTurnsThroughTheGamesSineTable)
+{
+	// Unturned, it still goes through the table's 2048 steps
+	const auto same = moves::RotatePointByAngle({3.0f, 0.0f}, 0.0f);
+	EXPECT_FLOAT_EQ(same.x, 3.0f);
+	EXPECT_FLOAT_EQ(same.y, 0.0f);
+	const auto quarter = moves::RotatePointByAngle({0.0f, 2.0f}, 0.0f);
+	EXPECT_NEAR(quarter.x, 0.0f, 1e-6f);
+	EXPECT_FLOAT_EQ(quarter.y, 2.0f);
+	const auto half = moves::RotatePointByAngle({1.0f, 0.0f}, 3.1415927f);
+	EXPECT_FLOAT_EQ(half.x, -1.0f);
+}
+
+TEST(DanceMoves, AMoveSharesTheDancesRateOverTheBeatsLeft)
+{
+	components::DanceGroup group;
+	group.radius = 10.0f;
+	moves::StartMove(group, {.action = 11, .first = std::bit_cast<uint32_t>(20.0f), .second = 0, .end = 10}, 0, 0.8f);
+	EXPECT_FLOAT_EQ(group.radiusRate, 0.8f);
+	moves::ProcessGroup(group, 0);
+	EXPECT_FLOAT_EQ(group.radius, 10.8f);
+	EXPECT_TRUE(group.moved);
+	// At its end beat the move stops
+	moves::ProcessGroup(group, 10);
+	EXPECT_EQ(group.move.action, 0u);
+	moves::ProcessGroup(group, 11);
+	EXPECT_FALSE(group.moved);
+	EXPECT_FLOAT_EQ(group.radius, 11.6f);
+
+	// A spin goes round 256 over the move, and starts round again
+	components::DanceGroup spinning;
+	moves::StartMove(spinning, {.action = 1, .first = 0, .second = 0, .end = 100}, 0, 1.0f);
+	EXPECT_FLOAT_EQ(spinning.spinRate, 2.56f);
+	spinning.spin = 255.0f;
+	moves::ProcessGroup(spinning, 1);
+	EXPECT_NEAR(spinning.spin, 1.56f, 1e-5f);
+	// Backwards it comes round the other way
+	spinning.move.first = 1;
+	moves::ProcessGroup(spinning, 2);
+	EXPECT_NEAR(spinning.spin, 255.0f, 1e-4f);
+}
+
+TEST(DanceMoves, ADancersPlaceIsRoundItsGroupsShape)
+{
+	Dance dance;
+	dance.place = map_coords::FromMetres({1000.0f, 2000.0f});
+	dance.groups.all.resize(1);
+	auto& group = dance.groups.all[0];
+	group.radius = 10.0f;
+	group.dancers = {Entity(1), Entity(2)};
+	// Half the radius out, the first along x and the second on the far side
+	const auto first = map_coords::ToMetres(moves::SlotPosition(dance, 0, 0, moves::Shapes()));
+	EXPECT_NEAR(first.x, 1005.0f, 0.01f);
+	EXPECT_NEAR(first.y, 2000.0f, 0.01f);
+	const auto second = map_coords::ToMetres(moves::SlotPosition(dance, 0, 1, moves::Shapes()));
+	EXPECT_NEAR(second.x, 995.0f, 0.01f);
+	EXPECT_NEAR(second.y, 2000.0f, 0.01f);
+	// Moved off, the group's centre moves by whole metres
+	group.offset = {2.7f, -1.2f};
+	const auto centre = map_coords::ToMetres(moves::GroupCentre(dance, 0));
+	EXPECT_NEAR(centre.x, 1002.0f, 0.01f);
+	EXPECT_NEAR(centre.y, 1999.0f, 0.01f);
+}
+
+TEST(DanceMoves, DancersFaceAsTheirGroupsMoveHasThem)
+{
+	EXPECT_EQ(moves::Facing({.action = moves::Action::FaceCentre, .towardsCentre = 300}), 300);
+	EXPECT_EQ(moves::Facing({.action = moves::Action::FaceAway, .towardsCentre = 300}), 1324);
+	EXPECT_EQ(moves::Facing({.action = moves::Action::FaceAway, .towardsCentre = 1500}), 476);
+	EXPECT_EQ(moves::Facing({.action = moves::Action::TurnOnTheSpot, .facing = 2000}), 80);
+	EXPECT_FALSE(moves::Facing({.action = moves::Action::Turn, .distance = 1.0f}).has_value());
+	EXPECT_FALSE(moves::Facing({.action = moves::Action::Clip}).has_value());
+}
+
+TEST(DanceMoves, ADancersClipFollowsItsGroupsMove)
+{
+	const auto never = [](uint32_t) -> uint32_t { return 0; };
+	EXPECT_EQ(moves::DanceClip({}, never), static_cast<int32_t>(AnimId::PStand));
+	EXPECT_EQ(moves::DanceClip({.inGroup = true, .stopped = true}, never), 0x171);
+	// The clip table: a man's DanceA, a woman's Pray
+	EXPECT_EQ(moves::DanceClip({.inGroup = true, .action = 10, .first = 0}, never), static_cast<int32_t>(AnimId::PMDanceA));
+	EXPECT_EQ(moves::DanceClip({.inGroup = true, .action = 10, .first = 22, .female = true}, never),
+	          static_cast<int32_t>(AnimId::PPray));
+	// One of three dances, drawn
+	EXPECT_EQ(moves::DanceClip({.inGroup = true, .action = 4, .female = true}, [](uint32_t) -> uint32_t { return 2; }),
+	          static_cast<int32_t>(AnimId::PFDanceC));
+	// Growing, they walk
+	EXPECT_EQ(moves::DanceClip({.inGroup = true, .action = 11, .walkClip = 7}, never), 7);
+	EXPECT_EQ(moves::DanceClip({.inGroup = true, .action = 1, .rate = 0.0f, .walkClip = 7}, never),
+	          static_cast<int32_t>(AnimId::PStand));
+}
+
+TEST(Dances, AKeyFramesMoveSetsItsGroupGoingAndItsDancersClipsAgain)
+{
+	Registry registry;
+	auto file = std::make_shared<dance::DanceFile>();
+	ASSERT_EQ(file->Open(TwoGroupDance()), dance::DanceResult::Success);
+	dance::DanceAction grow;
+	grow.groups = {0};
+	grow.type = 3;
+	grow.arguments[4] = 11;
+	grow.arguments[5] = std::bit_cast<uint32_t>(15.0f);
+	grow.arguments[7] = 100;
+	file->keyFrames.at(1).actions.push_back(grow);
+	const auto entity = dances::Create(registry, {.type = DanceInfo::NewDanceAroundPerson, .autostart = true}, file);
+	const auto dancer = registry.Create();
+	ASSERT_TRUE(dances::AddDancer(registry, entity, dancer, DanceGroup::k_Men));
+	auto& dance = registry.Get<Dance>(entity);
+	dance.clock = 20.0f;
+	std::vector<entt::entity> playedAgain;
+	dances::TurnContext context {.turn = 1,
+	                             .available = [](entt::entity) { return true; },
+	                             .finished = {},
+	                             .playClipAgain = [&playedAgain](entt::entity e) { playedAgain.push_back(e); }};
+	dances::ProcessTurn(registry, entity, context);
+	EXPECT_EQ(playedAgain, std::vector<entt::entity> {dancer});
+	const auto& group = registry.Get<const Dance>(entity).groups.all[0];
+	// At a quarter speed (rate 0.8) over the 80 beats left: (15 - 20) * 0.01 a turn
+	EXPECT_FLOAT_EQ(group.radiusRate, -0.05f);
+	EXPECT_FLOAT_EQ(group.radius, 19.95f);
 }
