@@ -36,6 +36,7 @@
 #include "Common/RandomNumberManager.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/CameraBookmark.h"
 #include "ECS/Components/ChimneySmoke.h"
@@ -66,6 +67,7 @@
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
@@ -250,6 +252,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"forestSystem", "living.forests"},
     LocatorCoverage {"fireflySystem", "living.fireflies"},
     LocatorCoverage {"fishFarmSystem", "living.fish_farms"},
+    LocatorCoverage {"animatedStaticSystem", "living.animated_statics"},
     LocatorCoverage {"gestureSystem", "players.gestures"},
     LocatorCoverage {"miracleFxSystem", "magic.state"},
     LocatorCoverage {"fireSystem", "magic.fires"},
@@ -684,6 +687,22 @@ std::unique_ptr<ProviderInterface> SkyStateProvider(std::unique_ptr<ProviderInte
 std::unique_ptr<ProviderInterface> LivingProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("living");
+	provider->Add(
+	    Query("animated_statics", "The scenery the scripts open and close: its open word and its gate stones' value", {},
+	          ResultKind::List),
+	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
+		    Json items = Json::array();
+		    registry.Each<const AnimatedStatic>([&items, &registry](entt::entity entity, const AnimatedStatic& scenery) {
+			    auto item = Listed(registry, entity);
+			    item["open_state"] = scenery.openState;
+			    if (Locator::animatedStaticSystem::has_value())
+			    {
+				    item["gate_stones_value"] = Optional(Locator::animatedStaticSystem::value().GateStoneValue(entity));
+			    }
+			    items.push_back(std::move(item));
+		    });
+		    return items;
+	    }));
 	provider->Add(
 	    Query("totems",
 	          "The village centres' totems: their town centre, the share they are held at, and whether "
