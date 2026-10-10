@@ -98,6 +98,7 @@
 #include "ECS/Components/ScriptAnimation.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptFlock.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/ScriptSpotVisual.h"
 #include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/SkinOverride.h"
@@ -969,6 +970,20 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::ScriptFlockMember>(context)
 	    .Field<&components::ScriptFlockMember::flock>("flock")
 	    .Field<&components::ScriptFlockMember::order>("order");
+	Reflect<components::ScriptHighlight>(context)
+	    .Field<&components::ScriptHighlight::kind>("kind")
+	    .Field<&components::ScriptHighlight::scriptId>("scriptId")
+	    .Field<&components::ScriptHighlight::category>("category")
+	    .Field<&components::ScriptHighlight::active>("active")
+	    .Field<&components::ScriptHighlight::drawHeight>("drawHeight")
+	    .Field<&components::ScriptHighlight::heightAbove>("heightAbove")
+	    .Field<&components::ScriptHighlight::yAngle>("yAngle")
+	    .Field<&components::ScriptHighlight::glints>("glints")
+	    .Field<&components::ScriptHighlight::activeEffect>("activeEffect")
+	    .Field<&components::ScriptHighlight::glow>("glow")
+	    .Field<&components::ScriptHighlight::centre>("centre")
+	    .Field<&components::ScriptHighlight::radius>("radius");
+	Reflect<components::ScriptHighlightGlow>(context).Field<&components::ScriptHighlightGlow::highlight>("highlight");
 	Reflect<components::ScriptSpotVisual>(context).Field<&components::ScriptSpotVisual::effect>("effect");
 	Reflect<components::ScriptTimer>(context).Field<&components::ScriptTimer::timer>("timer");
 	Reflect<components::SkinOverride>(context)
