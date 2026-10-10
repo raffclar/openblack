@@ -91,3 +91,66 @@ TEST(HandFeel, TheHandTurnsToTheLandOffAFaceOrLowOverAThing)
 	EXPECT_TRUE(hand_feel::TurnsToLand(true, true, 1.0f, 3.2f));
 	EXPECT_FALSE(hand_feel::TurnsToLand(true, false, 1.0f, 3.2f));
 }
+
+TEST(HandFeel, OverTheLandTheHandEasesToTheLandLessItsHeight)
+{
+	const auto hover = hand_feel::HoverDistancesOf(
+	    {.camera = {}, .land = glm::vec3(0.0f, 0.0f, -50.0f), .handHeight = 3.2f, .minDistance = 2.0f, .reach = 1000.0f});
+	EXPECT_NEAR(hover.limit, 46.8f, 1e-4f);
+	EXPECT_NEAR(hover.target, 46.8f, 1e-4f);
+}
+
+TEST(HandFeel, OnTheSeaTheHandRestsOnTheWater)
+{
+	const auto hover = hand_feel::HoverDistancesOf({.camera = {},
+	                                                .land = glm::vec3(0.0f, 0.0f, -50.0f),
+	                                                .landIsSea = true,
+	                                                .handHeight = 3.2f,
+	                                                .minDistance = 2.0f,
+	                                                .reach = 1000.0f});
+	EXPECT_NEAR(hover.limit, 50.0f, 1e-4f);
+}
+
+TEST(HandFeel, OverAThingTheHandEasesToWhereItRestsOnIt)
+{
+	// A creature's back 30 along the line, the land behind it 50: the hand goes to the back, not pulled back by its
+	// height
+	const auto hover = hand_feel::HoverDistancesOf({.camera = {},
+	                                                .land = glm::vec3(0.0f, 0.0f, -50.0f),
+	                                                .restOnThing = glm::vec3(0.0f, 0.0f, -30.0f),
+	                                                .handHeight = 3.2f,
+	                                                .minDistance = 2.0f,
+	                                                .reach = 1000.0f});
+	EXPECT_NEAR(hover.target, 30.0f, 1e-4f);
+	EXPECT_NEAR(hover.limit, 46.8f, 1e-4f);
+	// Grazing a thing nearly as far as the land, the land less the hand's height still limits it
+	const auto grazing = hand_feel::HoverDistancesOf({.camera = {},
+	                                                  .land = glm::vec3(0.0f, 0.0f, -50.0f),
+	                                                  .restOnThing = glm::vec3(0.0f, 0.0f, -49.0f),
+	                                                  .handHeight = 3.2f,
+	                                                  .minDistance = 2.0f,
+	                                                  .reach = 1000.0f});
+	EXPECT_LT(grazing.limit, grazing.target);
+}
+
+TEST(HandFeel, TheHandKeepsItsDistanceUnderTheSkyAndStaysWithinItsReach)
+{
+	const auto sky =
+	    hand_feel::HoverDistancesOf({.camera = {}, .currentDistance = 25.0f, .minDistance = 2.0f, .reach = 1000.0f});
+	EXPECT_EQ(sky.limit, 25.0f);
+	EXPECT_EQ(sky.target, 25.0f);
+	const auto beyondReach = hand_feel::HoverDistancesOf(
+	    {.camera = {}, .land = glm::vec3(0.0f, 0.0f, -500.0f), .handHeight = 3.2f, .minDistance = 2.0f, .reach = 300.0f});
+	EXPECT_EQ(beyondReach.limit, 300.0f);
+	const auto closeLand = hand_feel::HoverDistancesOf(
+	    {.camera = {}, .land = glm::vec3(0.0f, 0.0f, -3.0f), .handHeight = 3.2f, .minDistance = 2.0f, .reach = 300.0f});
+	EXPECT_EQ(closeLand.limit, 2.0f);
+	// A thing right at the camera is eased to no nearer than a unit
+	const auto close = hand_feel::HoverDistancesOf({.camera = {},
+	                                                .land = glm::vec3(0.0f, 0.0f, -50.0f),
+	                                                .restOnThing = glm::vec3(0.0f, 0.0f, -0.25f),
+	                                                .handHeight = 3.2f,
+	                                                .minDistance = 2.0f,
+	                                                .reach = 300.0f});
+	EXPECT_EQ(close.target, 1.0f);
+}

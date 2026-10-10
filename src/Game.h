@@ -369,6 +369,10 @@ private:
 	bool _handOverObject {false};
 	/// Where the cursor points at in the world, on the landscape or the sea
 	std::optional<glm::vec3> _cursorWorldPosition;
+	/// The land or sea under the cursor, whatever thing is in front of it
+	std::optional<glm::vec3> _cursorLand;
+	/// Where the hand rests on or before the thing under the cursor, which it hovers at rather than over the land
+	std::optional<glm::vec3> _handRestOnThing;
 	/// Where the hand is and how it is posed while it is held to a creature
 	std::optional<ecs::systems::CreatureHandSystemInterface::HandPose> _handOnCreature;
 	/// The creature the hand is over this frame, if any
