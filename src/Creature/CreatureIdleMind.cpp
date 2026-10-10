@@ -596,7 +596,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 {
 	Commands commands;
 	mind.showDesireSeconds = std::max(mind.showDesireSeconds - senses.seconds, 0.0f);
-	if (mind.step >= mind.agenda.size())
+	if (mind.step >= mind.agenda.size() && senses.choosesNext)
 	{
 		ChooseNext(mind, senses, random);
 	}
@@ -605,6 +605,8 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		return commands;
 	}
 	const auto& step = mind.agenda[mind.step];
+	// A step with something to look at has the head on it for as long as it lasts
+	commands.gaze = step.gaze;
 	const bool sitting = step.kind == Step::Kind::Static && mind.stepStarted;
 	// A step that goes on pulls its face again every few seconds
 	if (mind.stepStarted && step.face != creature_face::Cue::None)
@@ -623,7 +625,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 
 	if (!mind.stepStarted)
 	{
-		commands.lookAbout = step.kind == Step::Kind::Wait;
+		commands.lookAbout = step.kind == Step::Kind::Wait && !step.gaze.has_value();
 		// Nothing starts while the body still plays an action
 		if (step.kind != Step::Kind::Wait && senses.bodyBusy)
 		{
@@ -694,7 +696,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	switch (step.kind)
 	{
 	case Step::Kind::Wait:
-		commands.lookAbout = true;
+		commands.lookAbout = !step.gaze.has_value();
 		if (mind.stepSeconds >= step.seconds)
 		{
 			FinishStep(mind);

@@ -642,6 +642,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureObjectAction::eventMs>("eventMs")
 	    .Field<&components::CreatureObjectAction::eventDone>("eventDone")
 	    .Field<&components::CreatureObjectAction::holdMs>("holdMs")
+	    .Field<&components::CreatureObjectAction::pointSeconds>("pointSeconds")
 	    .Field<&components::CreatureObjectAction::reach>("reach")
 	    .Field<&components::CreatureObjectAction::maxReach>("maxReach")
 	    .Field<&components::CreatureObjectAction::attempts>("attempts")
@@ -1765,6 +1766,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::creature_mind::CastOrder>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::CastOrder::magicType>("magicType")
 	    .Field<&openblack::creature_mind::CastOrder::object>("object");
+	Reflect<openblack::creature_mind::Gaze>(context, ValueOnly {})
+	    .Field<&openblack::creature_mind::Gaze::object>("object")
+	    .Field<&openblack::creature_mind::Gaze::bottom>("bottom")
+	    .Field<&openblack::creature_mind::Gaze::point>("point")
+	    .Field<&openblack::creature_mind::Gaze::camera>("camera");
 	Reflect<openblack::creature_mind::IdleMind>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::IdleMind::activity>("activity")
 	    .Field<&openblack::creature_mind::IdleMind::agenda>("agenda")
@@ -1793,7 +1799,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::ObjectOrder::kind>("kind")
 	    .Field<&openblack::creature_mind::ObjectOrder::object>("object")
 	    .Field<&openblack::creature_mind::ObjectOrder::point>("point")
-	    .Field<&openblack::creature_mind::ObjectOrder::animation>("animation");
+	    .Field<&openblack::creature_mind::ObjectOrder::animation>("animation")
+	    .Field<&openblack::creature_mind::ObjectOrder::pointHeight>("pointHeight")
+	    .Field<&openblack::creature_mind::ObjectOrder::seconds>("seconds");
 	Reflect<openblack::creature_mind::Step>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::Step::kind>("kind")
 	    .Field<&openblack::creature_mind::Step::seconds>("seconds")
@@ -1808,7 +1816,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Step::object>("object")
 	    .Field<&openblack::creature_mind::Step::order>("order")
 	    .Field<&openblack::creature_mind::Step::cast>("cast")
-	    .Field<&openblack::creature_mind::Step::face>("face");
+	    .Field<&openblack::creature_mind::Step::face>("face")
+	    .Field<&openblack::creature_mind::Step::gaze>("gaze");
 	Reflect<openblack::creature_mind_model::Learnt>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind_model::Learnt::opinions>("opinions")
 	    .Field<&openblack::creature_mind_model::Learnt::turnsSinceDone>("turnsSinceDone")

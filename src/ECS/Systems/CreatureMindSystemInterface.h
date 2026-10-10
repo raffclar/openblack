@@ -162,6 +162,8 @@ public:
 		std::optional<entt::entity> object;
 		std::optional<glm::vec2> point;
 		std::optional<std::vector<creature_mind::Step>> agenda;
+		/// The thing used, if any
+		std::optional<entt::entity> instrument;
 	};
 	/// The creature gives up what it was doing for the plan, which nothing it wants replaces until it is done. Returns
 	/// whether it could be carried out.
@@ -172,10 +174,19 @@ public:
 	{
 		return std::nullopt;
 	}
-	/// A script has the creature carry out an agenda, as it plays what a script gave it: it stops what it was doing as a
-	/// failure and obeys, nothing it wants replacing the agenda until it is over, then goes back to its own plans.
-	/// Returns whether it could.
+	/// A script has the creature carry out an agenda, as it plays what a script gave it, turns it to face a point or
+	/// sends it somewhere: the script takes control of it, and it stops what it was doing as a failure and obeys. Under
+	/// a script's control it chooses nothing for itself, standing about once the agenda is over, until the script lets
+	/// it go. Returns whether it could.
 	virtual bool CarryOutForScript(entt::entity /*creature*/, std::vector<creature_mind::Step> /*agenda*/) { return false; }
+	/// A script forces an action of the game's table on the creature, by its row, done to a thing and with another, as
+	/// it stages a scene: the script takes control of it, and it carries the action out as an order from its player.
+	/// Returns whether the action could be carried out.
+	virtual bool ScriptDoAction(entt::entity /*creature*/, uint32_t /*action*/, entt::entity /*target*/,
+	                            std::optional<entt::entity> /*with*/)
+	{
+		return false;
+	}
 	/// Whether the creature has played what it was doing, as scripts ask: its agenda is over or it is only idle
 	[[nodiscard]] virtual bool HasPlayed(entt::entity /*creature*/) const { return true; }
 };

@@ -640,3 +640,6 @@ set_tests_properties(
 )
 openblack_setup_and_add_test(test_villager_clips test_villager_clips.cpp)
 target_link_libraries(test_villager_clips PRIVATE anm)
+openblack_setup_and_add_test(
+  test_creature_script_agendas test_creature_script_agendas.cpp
+)
