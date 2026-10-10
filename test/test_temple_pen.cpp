@@ -194,6 +194,28 @@ TEST_F(CreaturePenSystemTest, GrowsBackWalkingOut)
 	EXPECT_FLOAT_EQ(transform.scale.x, 20.0f);
 }
 
+TEST_F(CreaturePenSystemTest, ABigCreatureIsDrawnNoBiggerThanACreatureCanBe)
+{
+	const auto creature = MakeCreature(PlayerNames::PLAYER_ONE, {50.0f, 0.0f, 50.0f});
+	_registry.Get<Creature>(creature).size = 6.0f;
+	_system.ProcessTurn(_registry);
+	const auto& body = _registry.Get<const Creature>(creature);
+	EXPECT_EQ(body.size, 6.0f);
+	EXPECT_EQ(ShownSize(body), 4.0f);
+	EXPECT_FLOAT_EQ(_registry.Get<const Transform>(creature).scale.x, 40.0f);
+}
+
+TEST_F(CreaturePenSystemTest, ATinyCreatureIsDrawnNoSmallerThanACreatureCanBe)
+{
+	const auto creature = MakeCreature(PlayerNames::PLAYER_ONE, {50.0f, 0.0f, 50.0f});
+	_registry.Get<Creature>(creature).size = 0.01f;
+	_system.ProcessTurn(_registry);
+	const auto& body = _registry.Get<const Creature>(creature);
+	EXPECT_EQ(body.size, 0.01f);
+	EXPECT_EQ(ShownSize(body), 0.05f);
+	EXPECT_FLOAT_EQ(_registry.Get<const Transform>(creature).scale.x, 0.5f);
+}
+
 TEST_F(CreaturePenSystemTest, NotShrunkOutsideTheWalls)
 {
 	// Near the pen but on the far side of the heart

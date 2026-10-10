@@ -14,6 +14,7 @@
 #include <algorithm>
 
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureMorph.h"
 
 using namespace openblack;
 using namespace openblack::creature_physiology;
@@ -118,8 +119,9 @@ void creature_physiology::TickTurn(Needs& needs, Shape& shape, const Species& sp
 		ModifyStrength(shape, k_CarryStrength / turnsToStrength * Clamp01(*turn.carriedWeight));
 	}
 
-	// It grows while it stands still, up to its full size; bigger by other means, it stays as it is
-	if (!turn.moving && turn.phase >= k_GrowingPhase && shape.size < k_MaxGrownSize)
+	// It grows while it stands still, never past its full size: made bigger by other means, it is brought back to its
+	// full size the first turn it grows
+	if (!turn.moving && turn.phase >= k_GrowingPhase)
 	{
 		const auto growth = Growth(needs, species, turn.asleep, turn.turnsPerSecond);
 		shape.size = std::clamp(shape.size + growth, 0.0f, k_MaxGrownSize);
@@ -171,7 +173,7 @@ void creature_physiology::TickTurn(Needs& needs, Shape& shape, const Species& sp
 
 float creature_physiology::ShownSize(const Shape& shape)
 {
-	return shape.penSize.value_or(shape.size);
+	return creature_morph::ClampScale(shape.penSize.value_or(shape.size));
 }
 
 void creature_physiology::ModifyStrength(Shape& shape, float amount)

@@ -18,7 +18,6 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "Common/GUtilsDistance.h"
-#include "Creature/CreatureMorph.h"
 #include "Creature/TemplePen.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Creature.h"
@@ -128,7 +127,7 @@ void CreaturePenSystem::ProcessTurn(ecs::Registry& registry) const
 			}
 		}
 		creature.penSize = penSize;
-		const auto shown = creature_morph::ClampScale(penSize.value_or(creature.size));
+		const auto shown = ShownSize(creature);
 		transform.scale = glm::vec3(_world.drawnScale(creature.species, shown));
 	});
 }
