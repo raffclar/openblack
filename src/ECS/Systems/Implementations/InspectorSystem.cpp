@@ -278,12 +278,25 @@ void InspectorSystem::Service()
 	_lastService = now;
 	// The camera shown elsewhere last frame (an override, a picture's) gets its own state back before anything moves it
 	_controls->camera.Unpin();
-	// A request answered here may load a land, while the loading helper answers the others
-	_server->Poll([this](std::string_view line) {
-		auto answer = _inspector.Handle(line);
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Inspector: {} -> {} bytes", line, answer.size());
-		return answer;
-	});
+	// A scenario asked for is loading from the moment it is asked until its things are laid out: the frames before the
+	// scenarios' window starts it answer as loading too, so that nothing reads the testbed without them
+	const auto* game = Game::Instance();
+	const auto pending = game != nullptr && game->PendingScenario().has_value()
+	                         ? std::optional<std::string_view>(game->PendingScenario()->id)
+	                         : std::nullopt;
+	if (const auto loading = inspector::ScenarioLoading(pending); loading.has_value())
+	{
+		_server->Poll([this, &loading](std::string_view line) { return _inspector.HandleWhileLoading(line, *loading); });
+	}
+	else
+	{
+		// A request answered here may load a land, while the loading helper answers the others
+		_server->Poll([this](std::string_view line) {
+			auto answer = _inspector.Handle(line);
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Inspector: {} -> {} bytes", line, answer.size());
+			return answer;
+		});
+	}
 	if (Locator::gameActionSystem::has_value())
 	{
 		// Only a client driving this game keeps the player out: tools pinging it to find it don't

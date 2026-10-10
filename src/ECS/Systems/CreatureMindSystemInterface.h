@@ -172,6 +172,12 @@ public:
 	{
 		return std::nullopt;
 	}
+	/// A script has the creature carry out an agenda, as it plays what a script gave it: it stops what it was doing as a
+	/// failure and obeys, nothing it wants replacing the agenda until it is over, then goes back to its own plans.
+	/// Returns whether it could.
+	virtual bool CarryOutForScript(entt::entity /*creature*/, std::vector<creature_mind::Step> /*agenda*/) { return false; }
+	/// Whether the creature has played what it was doing, as scripts ask: its agenda is over or it is only idle
+	[[nodiscard]] virtual bool HasPlayed(entt::entity /*creature*/) const { return true; }
 };
 
 } // namespace openblack::ecs::systems

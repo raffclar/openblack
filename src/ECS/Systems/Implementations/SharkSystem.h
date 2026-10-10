@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include "ECS/Systems/WhaleSystemInterface.h"
+#include "ECS/Systems/SharkSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -18,7 +18,7 @@
 namespace openblack::ecs::systems
 {
 
-class WhaleSystem final: public WhaleSystemInterface
+class SharkSystem final: public SharkSystemInterface
 {
 public:
 	void ProcessTurn() override;

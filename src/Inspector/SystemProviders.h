@@ -163,6 +163,12 @@ struct AudioState
 	float sfxVolume {0.0f};
 	float musicVolume {0.0f};
 	bool musicActive {false};
+	/// The game's music: what is heard, the land's, the one a script started, by their names, and whether the land's
+	/// music is on; empty names for none
+	std::string musicPlaying;
+	std::string landMusic;
+	std::string scriptMusic;
+	bool alignmentMusic {false};
 };
 
 struct AudioSources

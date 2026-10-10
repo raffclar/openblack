@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <array>
 
 #include <glm/geometric.hpp>
 
@@ -97,6 +98,35 @@ std::optional<uint8_t> objects::RootsAlpha(float seconds)
 bool objects::RootsGone(float seconds)
 {
 	return seconds > k_RootsLife;
+}
+
+std::span<const float> objects::ShownRootsScales(TreePlace place)
+{
+	static constexpr std::array k_OutOfTheLand {k_RootsScale};
+	static constexpr std::array k_Moving {k_RootsScale, k_MovingRootsScale};
+	switch (place)
+	{
+	case TreePlace::OutOfTheLand:
+		return k_OutOfTheLand;
+	case TreePlace::Moving:
+		return k_Moving;
+	case TreePlace::InTheLand:
+	case TreePlace::Still:
+		break;
+	}
+	return {};
+}
+
+glm::mat4 objects::ShownRootsModel(const glm::mat4& treeModel, float scale, float treeHalfWidth)
+{
+	// The tree's axes, its size and any stretch on them, scaled evenly; its base stays where it is
+	auto model = treeModel;
+	const float size = scale * treeHalfWidth;
+	for (glm::length_t column = 0; column < 3; ++column)
+	{
+		model[column] *= size;
+	}
+	return model;
 }
 
 Felling objects::FellingOf(float height, glm::vec2 fellerToTree)

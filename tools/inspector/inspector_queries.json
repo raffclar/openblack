@@ -701,6 +701,19 @@
   "writes": true
  },
  {
+  "description": "Starts a new game on the first land from scratch, as the game's new game does: the land loads again and the story's scripts start again. skip answers the start-of-game question at once, the story then going exactly as it does for the player's answer: creature (straight to choosing a creature, the opening on the beach skipped), story (all of the first land's creature tutorial skipped too), old (keep the old creature, which needs a kept creature), normal; or ask, to be asked it. Without skip it is asked only of a returning player, as in the game. Answers once the land has loaded",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "creature, story, old, normal or ask",
+    "name": "skip",
+    "type": "string"
+   }
+  ],
+  "query": "level.new_game",
+  "writes": true
+ },
+ {
   "description": "The volumes, whether music plays, and how many sounds play",
   "kind": "object",
   "parameters": [],
@@ -869,10 +882,10 @@
   "query": "living.forests"
  },
  {
-  "description": "The whales: where each is this turn and was at its start, the way it faces, its clip and the wake's timer",
+  "description": "The sharks: where each is this turn and was at its start, the way it faces, its clip and the wake's timer",
   "kind": "object",
   "parameters": [],
-  "query": "living.whales"
+  "query": "living.sharks"
  },
  {
   "description": "The things walking the camera editor's tracks: the track, how far and up to where",
@@ -881,13 +894,13 @@
   "query": "living.walk_paths"
  },
  {
-  "description": "The dances: what they are danced for, whether dancing, their speed and clock, and each group's dancers",
+  "description": "The dances: what they are danced for, whether dancing, their speed and clock, and each group's shape, move and dancers",
   "kind": "list",
   "parameters": [],
   "query": "living.dances"
  },
  {
-  "description": "The scripts' flocks: their place, their domain and flock distances, and their members from the first to the leader",
+  "description": "The flocks, of animals and of the scripts' villagers: their place, their domain and flock distances, and their members from the first to the leader",
   "kind": "list",
   "parameters": [],
   "query": "living.flocks"
@@ -1175,9 +1188,15 @@
   "query": "script.natives"
  },
  {
-  "description": "How many things scripts hold and control",
+  "description": "How many things scripts hold and control, and the scripts' object table: places taken (of 511), times it was full, and its places by kind (taken, referenced, made by a script, object gone); places: true lists every taken place",
   "kind": "object",
-  "parameters": [],
+  "parameters": [
+   {
+    "description": "List every taken place",
+    "name": "places",
+    "type": "boolean"
+   }
+  ],
   "query": "script.objects"
  },
  {

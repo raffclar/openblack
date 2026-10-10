@@ -16,18 +16,18 @@
 namespace openblack::ecs::systems
 {
 
-/// The whales: the opening's sharks
-class WhaleSystemInterface
+/// The sharks: the opening's sharks
+class SharkSystemInterface
 {
 public:
-	virtual ~WhaleSystemInterface() = default;
+	virtual ~SharkSystemInterface() = default;
 
-	/// At the start of each turn, before anything moves them: each whale's turn starts where it is
+	/// At the start of each turn, before anything moves them: each shark's turn starts where it is
 	virtual void ProcessTurn() = 0;
 	/// Each frame: they swim, drawn between where they were at the start of the turn and where they are, facing the way
 	/// they move, and their wake spreads on the water
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime, float turnFraction) = 0;
-	/// The milliseconds counted towards the next wake ring, shared by every whale
+	/// The milliseconds counted towards the next wake ring, shared by every shark
 	[[nodiscard]] virtual int32_t GetWakeTimer() const = 0;
 };
 

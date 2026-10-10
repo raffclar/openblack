@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <string_view>
 
 #include <fmt/format.h>
 
@@ -57,6 +58,64 @@ std::string TypeName(const Table* table, Type type)
 		}
 	}
 	return std::to_string(index);
+}
+
+/// Components that many kinds of thing have, which don't say what a thing is
+bool IsSharedComponent(std::string_view name)
+{
+	static constexpr std::array k_Shared = std::to_array<std::string_view>({
+	    "AtHome",
+	    "AudioEmitter",
+	    "BeingEaten",
+	    "CannotBePickedUp",
+	    "CarriedByTornado",
+	    "CaughtByTornado",
+	    "CreatureDroppedObject",
+	    "CreatureHeldObject",
+	    "DestructionGhost",
+	    "DetailMeshes",
+	    "DropsRoots",
+	    "FireProofing",
+	    "Fixed",
+	    "FootpathLink",
+	    "ForestMember",
+	    "HandClicked",
+	    "HandGlow",
+	    "HeldByCreature",
+	    "HiddenByState",
+	    "HighDetail",
+	    "Immovable",
+	    "InHand",
+	    "InPhysics",
+	    "InScript",
+	    "Indestructible",
+	    "LastInteractingPlayer",
+	    "MapCellMover",
+	    "MapCellResident",
+	    "Mesh",
+	    "Mobile",
+	    "MorphWithTerrain",
+	    "ObjectGlow",
+	    "ObjectLife",
+	    "PhysicsDrawPose",
+	    "Poisoned",
+	    "ResourceLastTaken",
+	    "ScriptControlled",
+	    "SeeThrough",
+	    "SkinOverride",
+	    "SoundTag",
+	    "Sprite",
+	    "Swayable",
+	    "Transform",
+	    "Translucent",
+	    "Unlit",
+	    "Velocity",
+	    "WalkPath",
+	    "WallHug",
+	    "WallHugObjectReference",
+	    "WatchedFlyingObject",
+	});
+	return std::ranges::find(k_Shared, name) != k_Shared.end();
 }
 
 template <typename Member>
@@ -161,9 +220,15 @@ EntityDescription openblack::inspector::Describe(const ecs::Registry& registry, 
 	}
 	else
 	{
-		// Anything else is known by its first component other than its place
+		// Anything else is known by the first component that says what it is, past those many kinds of thing share (its
+		// place, how it is drawn and heard, where it is on the map): a totem is a VillageTotem, not its Mesh
 		const auto names = ComponentNames(registry, entity);
-		const auto first = std::ranges::find_if(names, [](const auto& name) { return name != "Transform"; });
+		auto first = std::ranges::find_if(names, [](const auto& name) { return !IsSharedComponent(name); });
+		if (first == names.end())
+		{
+			// Only shared ones: the first past its place, as what it is drawn with
+			first = std::ranges::find_if(names, [](const auto& name) { return name != "Transform"; });
+		}
 		const auto kind = first != names.end() ? *first : (names.empty() ? std::string("Entity") : names.front());
 		set(kind, kind);
 	}

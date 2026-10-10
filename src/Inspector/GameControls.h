@@ -78,6 +78,7 @@ public:
 	[[nodiscard]] std::vector<LevelInfo> Levels() const override;
 	std::string Load(std::string_view name, LoadHow how) override;
 	std::string LoadTestbed() override;
+	std::string NewGame(std::string_view start) override;
 	[[nodiscard]] std::string Current() const override;
 };
 
