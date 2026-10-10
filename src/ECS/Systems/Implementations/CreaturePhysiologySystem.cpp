@@ -32,9 +32,11 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -235,7 +237,13 @@ void CreaturePhysiologySystem::ProcessTurn()
 		needs.faint.reset();
 		if (_fainting && needs.rest != CreatureNeeds::Rest::Unconscious)
 		{
-			needs.faint = physiology::ShouldFaint(needs.needs, phase, creature.owner != PlayerNames::NEUTRAL);
+			const bool owned = creature.owner != PlayerNames::NEUTRAL;
+			const bool computer =
+			    Locator::playerSystem::has_value() && Locator::playerSystem::value().IsComputerPlayer(creature.owner);
+			if (physiology::CanFaintFromNeeds(owned, computer, registry.AllOf<ScriptControlled>(entity)))
+			{
+				needs.faint = physiology::ShouldFaint(needs.needs, phase, owned);
+			}
 		}
 	});
 	if (resized)

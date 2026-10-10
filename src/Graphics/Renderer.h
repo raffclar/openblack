@@ -245,6 +245,7 @@ private:
 		ObjectLook,
 		KeepBelow,
 		Inset,
+		CreatureSpellLook,
 
 		_count
 	};
@@ -282,6 +283,7 @@ private:
 	    "u_objectLook",           //
 	    "u_keepBelow",            //
 	    "u_inset",                //
+	    "u_creatureSpellLook",    //
 	};
 	using MeshUniforms = std::array<std::optional<UniformHandle>, static_cast<size_t>(MeshUniform::_count)>;
 	/// A program's handles of the mesh uniforms it has, looked up by name the first time it draws a mesh
@@ -326,8 +328,10 @@ private:
 	void DrawTempleMapMarkers(const DrawSceneDesc& desc) const;
 	/// The creature's room's belts and medals
 	void DrawCaveTrophies(const DrawSceneDesc& desc) const;
-	/// A creature's eyes and eyelids, after its body
-	void DrawCreatureEyes(const DrawSceneDesc& desc, entt::entity entity, const L3DMeshSubmitDesc& bodyDesc) const;
+	/// A creature's eyes and eyelids, after its body: frozen with it, or else fizzing with it, drawn through the static
+	/// after its body's passes, from that sort depth on
+	void DrawCreatureEyes(const DrawSceneDesc& desc, entt::entity entity, const L3DMeshSubmitDesc& bodyDesc, float fizz,
+	                      float freeze, uint32_t fizzSortDepth) const;
 	/// A creature's strands of hair, as ribbons facing the camera blended over the scene
 	void DrawCreatureHair(const DrawSceneDesc& desc, entt::entity entity) const;
 	/// The leashes' ropes, each a ribbon lit by the land beneath it, and their shadows on the land

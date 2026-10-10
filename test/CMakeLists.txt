@@ -235,6 +235,10 @@ openblack_setup_and_add_test(
   test_creature_footprints test_creature_footprints.cpp
 )
 openblack_setup_and_add_test(test_creature_fight test_creature_fight.cpp)
+openblack_setup_and_add_test(test_creature_fizz test_creature_fizz.cpp)
+openblack_setup_and_add_test(
+  test_creature_fizz_look test_creature_fizz_look.cpp
+)
 openblack_setup_and_add_test(test_creature_arena test_creature_arena.cpp)
 openblack_setup_and_add_test(test_land_avoid test_land_avoid.cpp)
 openblack_setup_and_add_test(

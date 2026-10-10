@@ -117,6 +117,7 @@
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
+#include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
@@ -1042,6 +1043,8 @@ bool Game::GameLogicLoop() noexcept
 		// Fights start and end, the fighters choose their moves, and creatures knocked out come round
 		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
 		Locator::creatureFightSystem::value().ProcessTurn();
+		// Creatures fizz on out of sight or back in, after they have acted
+		Locator::creatureFizzSystem::value().ProcessTurn();
 	}
 	{
 		auto actions = profiler.BeginScoped(Profiler::Stage::LivingActionUpdate);
@@ -1467,6 +1470,8 @@ bool Game::Update() noexcept
 	Locator::cloudSystem::value().Update(gameTime);
 	// The rain falls as the storm nearest the camera has it
 	Locator::rainSystem::value().Update(std::chrono::duration<float>(gameTime).count(), camera.GetOrigin());
+	// The static the fizzing creatures are drawn through slides across them
+	Locator::creatureFizzSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	// The rings on the water grow and fade
 	Locator::waterRingSystem::value().Update(gameTime);
 	{

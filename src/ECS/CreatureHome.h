@@ -23,7 +23,8 @@ class Registry;
 namespace openblack::ecs::creature_home
 {
 
-/// A creature's home: the home its leash keeps it at, else its player's temple's place for it; none without either
+/// A creature's home: its player's temple's pen while the temple stands, else the home its leash keeps it at; none
+/// without either
 [[nodiscard]] std::optional<glm::vec3> HomeOf(const Registry& registry, entt::entity creature);
 
 } // namespace openblack::ecs::creature_home

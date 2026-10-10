@@ -28,6 +28,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCasting.h"
 #include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureFizz.h"
 #include "ECS/Components/CreatureHair.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
@@ -340,7 +341,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureKnockedOut::seconds>("seconds")
 	    .Field<&components::CreatureKnockedOut::rest>("rest")
 	    .Field<&components::CreatureKnockedOut::permanent>("permanent")
-	    .Field<&components::CreatureKnockedOut::home>("home");
+	    .Field<&components::CreatureKnockedOut::home>("home")
+	    .Field<&components::CreatureKnockedOut::fizzTurns>("fizzTurns");
+	Reflect<components::CreatureFizz>(context).Field<&components::CreatureFizz::fizz>("fizz");
 	Reflect<components::CreatureHair>(context)
 	    .Field<&components::CreatureHair::groups>("groups")
 	    .Field<&components::CreatureHair::started>("started");
@@ -497,6 +500,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureSpells::spells>("spells")
 	    .Field<&components::CreatureSpells::freeze>("freeze")
 	    .Field<&components::CreatureSpells::fizz>("fizz")
+	    .Field<&components::CreatureSpells::staticScroll>("staticScroll")
 	    .Field<&components::CreatureSpells::invisible>("invisible")
 	    .Field<&components::CreatureSpells::pausedMind>("pausedMind")
 	    .Field<&components::CreatureSpells::smallestSize>("smallestSize")

@@ -74,6 +74,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
+#include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -4468,10 +4469,24 @@ void CallFlying() // 383 CALL_FLYING
 
 void SetObjectFadeIn() // 384 SET_OBJECT_FADE_IN
 {
-	// const auto time = Popf();
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A creature drops out of sight at once (with the energise sound) and fizzes back in over the seconds given. The
+	// game fades nothing else in: any other object is only reported.
+	const auto seconds = Popf();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object dead man!");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_OBJECT_FADE_IN: only creatures fade in");
+		return;
+	}
+	auto& fizz = Locator::creatureFizzSystem::value();
+	fizz.SetFizz(object, 1.0f, 0.0f, false);
+	fizz.SetFizz(object, 0.0f, seconds, false);
 }
 
 void IsAffectedBySpell() // 385 IS_AFFECTED_BY_SPELL

@@ -75,6 +75,7 @@
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
+#include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
@@ -234,6 +235,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"reactionSystem", "magic.reactions"},
     LocatorCoverage {"teleportSystem", "magic.teleport"},
     LocatorCoverage {"creatureCarryOverSystem", "creatures.systems"},
+    LocatorCoverage {"creatureFizzSystem", "creatures.systems"},
     LocatorCoverage {"tattooEditorSystem", "creatures.systems"},
     LocatorCoverage {"tornadoSystem", "magic.state"},
     LocatorCoverage {"magicShieldSystem", "magic.state"},
@@ -1274,6 +1276,11 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		              if (Locator::creatureCarryOverSystem::has_value())
 		              {
 			              result["mind_kept"] = Locator::creatureCarryOverSystem::value().Kept() != nullptr;
+		              }
+		              if (Locator::creatureFizzSystem::has_value())
+		              {
+			              const auto scroll = Locator::creatureFizzSystem::value().EyeStaticScroll();
+			              result["eye_static_scroll"] = {scroll.x, scroll.y};
 		              }
 		              // The tattoo editor: whether it is open, on which creature, and the tattoo site under the pointer
 		              if (Locator::tattooEditorSystem::has_value())
