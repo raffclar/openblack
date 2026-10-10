@@ -131,6 +131,7 @@
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
+#include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
@@ -1842,6 +1843,18 @@ void SetPosition() // 024 SET_POSITION
 				Locator::livingActionSystem::value().VillagerSetScriptState(object, VillagerStates::InScript);
 			}
 			registry.SetDirty();
+			return;
+		}
+		// A creature is put there at once, without walking: where its walk goes from and to moves with it, so that the
+		// walk carries on from the new place rather than drawing it back
+		if (registry.AllOf<ecs::components::Creature>(object) && Locator::creatureLocomotionSystem::has_value())
+		{
+			if (registry.AnyOf<ecs::components::InHand, ecs::components::InPhysics>(object))
+			{
+				ScriptMessage("Trying to set position. Object is in the hand or flying");
+				return;
+			}
+			Locator::creatureLocomotionSystem::value().Place(object, position);
 			return;
 		}
 		auto* transform = registry.TryGet<Transform>(object);
