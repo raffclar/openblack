@@ -41,14 +41,32 @@ void Update(const Inputs& inputs, ecs::components::SkyDome& dome, ecs::component
 	sun.strength =
 	    sun.placement.has_value() ? sky_dome::ThroughOvercast(sun.placement->alpha, dome.overcast, inputs.fog) : 0.0f;
 
-	const auto placed = MoonAt(inputs.scriptHour, inputs.unixTime);
-	moon.phase = placed.phase;
-	moon.placement = placed.placement;
+	moon.placement = graphics::moon::Place(inputs.scriptHour);
 	moon.colour = Colour(inputs.palette != nullptr ? LandLightTable::GetMoonColour(*inputs.palette, inputs.landLight.skyType,
 	                                                                               inputs.landLight.alignment)
 	                                               : 0xFFFFFFu);
 	moon.strength =
 	    moon.placement.has_value() ? sky_dome::ThroughOvercast(moon.placement->alpha, dome.overcast, inputs.fog) : 0.0f;
+	if (moon.strength <= 0.0f)
+	{
+		return;
+	}
+	// The date is kept between reads, and read again once two seconds have gone by (or before it was ever read)
+	if (static_cast<int32_t>(inputs.ticks - moon.dateReadAt) > k_MoonDateReadInterval)
+	{
+		moon.dateReadAt = inputs.ticks;
+		moon.date = 0;
+	}
+	if (moon.date == 0)
+	{
+		moon.date = inputs.unixTime;
+	}
+	moon.phase = graphics::moon::Phase(MoonDate(moon));
+}
+
+int64_t MoonDate(const ecs::components::Moon& moon)
+{
+	return moon.dateOverride.value_or(moon.date);
 }
 
 void AdvanceDome(ecs::components::SkyDome& dome, float skyType, bool drawn)

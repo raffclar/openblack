@@ -903,6 +903,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Sun::strength>("strength");
 	Reflect<components::Moon>(context)
 	    .Field<&components::Moon::phase>("phase")
+	    .Field<&components::Moon::date>("date")
+	    .Field<&components::Moon::dateReadAt>("dateReadAt")
+	    .Field<&components::Moon::dateOverride>("dateOverride")
 	    .Field<&components::Moon::placement>("placement")
 	    .Field<&components::Moon::colour>("colour")
 	    .Field<&components::Moon::strength>("strength");
