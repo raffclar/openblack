@@ -36,6 +36,7 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/DestructionGhost.h"
 #include "ECS/Components/FallingRoots.h"
@@ -499,6 +500,21 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureSpells::smallestSize>("smallestSize")
 	    .Field<&components::CreatureSpells::largestSize>("largestSize")
 	    .Field<&components::CreatureSpells::cheat>("cheat");
+	Reflect<components::Dance>(context)
+	    .Field<&components::Dance::type>("type")
+	    .Field<&components::Dance::owner>("owner")
+	    .Field<&components::Dance::file>("file")
+	    .Field<&components::Dance::state>("state")
+	    .Field<&components::Dance::speed>("speed")
+	    .Field<&components::Dance::rate>("rate")
+	    .Field<&components::Dance::dancingRate>("dancingRate")
+	    .Field<&components::Dance::clock>("clock")
+	    .Field<&components::Dance::loopLength>("loopLength")
+	    .Field<&components::Dance::duration>("duration")
+	    .Field<&components::Dance::startTurn>("startTurn")
+	    .Field<&components::Dance::dancers>("dancers")
+	    .Field<&components::Dance::onTheirWay>("onTheirWay")
+	    .Field<&components::Dance::firstDancerTurn>("firstDancerTurn");
 	Reflect<components::DeadTree>(context)
 	    .Field<&components::DeadTree::type>("type")
 	    .Field<&components::DeadTree::woodMultiplier>("woodMultiplier")
@@ -1191,8 +1207,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::WorshipChants::danceIntensity>("danceIntensity")
 	    .Field<&components::WorshipChants::strain>("strain")
 	    .Field<&components::WorshipChants::infinite>("infinite")
-	    .Field<&components::WorshipChants::freeMaintenance>("freeMaintenance")
-	    .Field<&components::WorshipChants::dancers>("dancers");
+	    .Field<&components::WorshipChants::freeMaintenance>("freeMaintenance");
 	Reflect<components::CitadelWorship>(context)
 	    .Field<&components::CitadelWorship::sites>("sites")
 	    .Field<&components::CitadelWorship::facing>("facing")
@@ -1206,6 +1221,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::WorshipSite::facing>("facing")
 	    .Field<&components::WorshipSite::towns>("towns")
 	    .Field<&components::WorshipSite::altar>("altar")
+	    .Field<&components::WorshipSite::dance>("dance")
+	    .Field<&components::WorshipSite::foodPot>("foodPot")
 	    .Field<&components::WorshipSite::buildRequests>("buildRequests");
 	Reflect<components::WorshipAltar>(context).Field<&components::WorshipAltar::site>("site");
 }

@@ -28,8 +28,6 @@ struct WorshipChants
 	float strain {0.0f};          ///< how far demand outstrips the dancers: (requested - capacity) / capacity
 	bool infinite {false};        ///< a cheat: the site never runs dry
 	bool freeMaintenance {false}; ///< a cheat: maintaining miracles costs nothing
-	/// The villagers dancing at the site, who chant; those hiding at its door don't
-	uint32_t dancers {0};
 };
 
 } // namespace openblack::ecs::components

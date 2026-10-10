@@ -23,14 +23,18 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <spdlog/spdlog.h>
 
+#include "ECS/Components/Dance.h"
+#include "ECS/Components/Footpath.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/DanceRules.h"
 #include "ECS/Registry.h"
 #include "ECS/WorshipSites.h"
 #include "GameWorshipSiteWorld.h"
@@ -214,8 +218,17 @@ void WorshipSiteSystem::SetCanHaveSites(entt::entity townOrTemple, bool can)
 
 void WorshipSiteSystem::UpdateTurn()
 {
-	_world->Entities().Each<const WorshipSite, Mesh>(
+	auto& registry = _world->Entities();
+	registry.Each<const WorshipSite, Mesh>(
 	    [this](const WorshipSite& site, Mesh& mesh) { mesh.id = _world->SiteMesh(site.temple); });
+	// The sites' dances go on
+	const auto turn = _world->Turn();
+	registry.Each<const WorshipSite>([this, turn](entt::entity site, const WorshipSite& /*unused*/) {
+		if (auto* dance = DanceOf(site); dance != nullptr)
+		{
+			dance_rules::ProcessTurn(*dance, _world->DanceStartsAutomatically(dance->type), turn);
+		}
+	});
 }
 
 void WorshipSiteSystem::ProcessChants()
@@ -239,20 +252,37 @@ void WorshipSiteSystem::ProcessChants()
 			auto& chants = registry.Get<WorshipChants>(site);
 			// Spell icons are not made at the sites yet, so none charges
 			const float drawn =
-			    magic::ProcessWorshipTurn(chants, _world->ChantRules(component.tribe, component.player), chants.dancers, {});
+			    magic::ProcessWorshipTurn(chants, _world->ChantRules(component.tribe, component.player), Dancers(site), {});
 			CountChantsUsed(site, drawn);
+			// The dance goes as hard as its dancers chant, stopping when they don't
+			if (auto* dance = DanceOf(site); dance != nullptr)
+			{
+				dance_rules::SetWorshipSpeed(*dance, chants.danceIntensity);
+			}
 		}
 	}
 }
 
 void WorshipSiteSystem::SetDancers(entt::entity site, uint32_t dancers)
 {
-	_world->Entities().Get<WorshipChants>(site).dancers = dancers;
+	if (auto* dance = DanceOf(site); dance != nullptr)
+	{
+		dance->dancers = dancers;
+	}
 }
 
 uint32_t WorshipSiteSystem::Dancers(entt::entity site) const
 {
-	return _world->Entities().Get<const WorshipChants>(site).dancers;
+	// Those dancing its dance chant; a site without a dance has none
+	const auto* dance = DanceOf(site);
+	return dance != nullptr ? dance->dancers : 0;
+}
+
+Dance* WorshipSiteSystem::DanceOf(entt::entity site) const
+{
+	auto& registry = _world->Entities();
+	const auto dance = registry.Get<const WorshipSite>(site).dance;
+	return registry.Valid(dance) ? registry.TryGet<Dance>(dance) : nullptr;
 }
 
 float WorshipSiteSystem::UseChants(entt::entity site, float amount)
@@ -301,7 +331,7 @@ float WorshipSiteSystem::TakeChantsForVirtualInfluence(PlayerNames player, uint3
 		const auto& component = registry.Get<const WorshipSite>(site);
 		const auto& chants = registry.Get<const WorshipChants>(site);
 		const float take = magic::WorshipAvailableForVirtualInfluence(
-		    chants, _world->ChantRules(component.tribe, component.player), chants.dancers, interfaces);
+		    chants, _world->ChantRules(component.tribe, component.player), Dancers(site), interfaces);
 		UseChants(site, take);
 		// What was asked is counted, not what was given
 		asked += take;
@@ -505,6 +535,7 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 	                           glm::mat3(glm::eulerAngleY(-facing)), glm::vec3(1.0f));
 	registry.Assign<WorshipAltar>(altar, site);
 	registry.Get<WorshipSite>(site).altar = altar;
+	Init(site);
 	if (const auto logger = spdlog::get("game"))
 	{
 		logger->debug("Worship site of tribe {} made for player {} in place {}", static_cast<int>(tribe),
@@ -513,10 +544,49 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 	return site;
 }
 
+void WorshipSiteSystem::Init(entt::entity site)
+{
+	auto& registry = _world->Entities();
+	auto& component = registry.Get<WorshipSite>(site);
+	const auto at = Across(registry.Get<const Transform>(site).position);
+
+	// Its dance, its place's own, is centred on the altar's point; made at a quarter speed and stopped, it is set
+	// going at half speed at once
+	const auto dancePoint = _world->SitePoint(ws::k_DancePoint).value_or(glm::vec3(0.0f));
+	const auto danceAt = ws::TurnedPoint(at, component.facing, dancePoint);
+	const auto dance = registry.Create();
+	registry.Assign<Transform>(dance, glm::vec3(danceAt.x, _world->LandHeightAt(danceAt), danceAt.y), glm::mat3(1.0f),
+	                           glm::vec3(1.0f));
+	auto& danced = registry.Assign<Dance>(
+	    dance,
+	    Dance {.type = static_cast<DanceInfo>(static_cast<int>(ws::k_FirstPlaceDance) + component.place), .owner = site});
+	dance_rules::SetSpeed(danced, ws::k_DanceMadeSpeed);
+	dance_rules::SetWorshipSpeed(danced, ws::k_SiteDanceStartSpeed);
+	component.dance = dance;
+
+	// Then its food pot, empty, beside the gate, turned a little further than the site
+	const auto potAt = ws::TurnedPoint(at, component.facing, ws::k_FoodPotPoint);
+	component.foodPot =
+	    _world->MakeFoodPot(glm::vec3(potAt.x, _world->LandHeightAt(potAt), potAt.y), component.facing + ws::k_FoodPotTurn);
+}
+
 void WorshipSiteSystem::AddTown(entt::entity site, entt::entity town)
 {
 	auto& registry = _world->Entities();
 	registry.Get<Town>(town).worshipSite = site;
+	// A town with a storage pit, built or planned, is linked to the site by a footpath from its pit to the site's gate.
+	// The site keeps the link; finding the footpath's way between them isn't done yet, so it holds none.
+	const auto& abodes = registry.Get<const Town>(town).abodes;
+	const bool hasPit = std::ranges::any_of(
+	    abodes, [&registry](entt::entity abode) { return registry.Valid(abode) && registry.AllOf<StoragePit>(abode); });
+	if (hasPit && !registry.AllOf<FootpathLink>(site))
+	{
+		const auto gate =
+		    ws::TurnedPoint(Across(registry.Get<const Transform>(site).position), registry.Get<const WorshipSite>(site).facing,
+		                    _world->SitePoint(ws::k_PlacePoint).value_or(glm::vec3(0.0f)));
+		registry.Assign<FootpathLink>(site, glm::vec3(gate.x, _world->LandHeightAt(gate), gate.y),
+		                              std::vector<Footpath::Id> {});
+	}
 	auto& towns = registry.Get<WorshipSite>(site).towns;
 	towns.insert(towns.begin(), town);
 }

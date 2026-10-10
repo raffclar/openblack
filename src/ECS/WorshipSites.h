@@ -17,6 +17,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Enums.h"
+
 // Where a player's worship sites stand around the temple, and when a town may have one: pure rules, free of the game
 
 namespace openblack::ecs::worship_site
@@ -29,6 +31,19 @@ inline constexpr float k_PlaceSpacing = 0.8975979f;
 /// The points of the worship site's model: where a site's place is judged from, and where its altar stands
 inline constexpr uint32_t k_PlacePoint = 9;
 inline constexpr uint32_t k_AltarPoint = 8;
+/// The dance at a site is centred on its altar's point
+inline constexpr uint32_t k_DancePoint = k_AltarPoint;
+/// Where on the site's model its food pot stands, which isn't one of the model's points
+inline constexpr glm::vec3 k_FoodPotPoint {9.0f, 0.0f, -38.0f};
+/// The food pot is turned this much further than the site, in radians
+inline constexpr float k_FoodPotTurn = 1.5f;
+/// The food pot is made smaller than its kind, until the food in it sets its size
+inline constexpr float k_FoodPotScale = 0.7f;
+/// Each place's dance, the first place's first: the citadel dances of the info table
+inline constexpr DanceInfo k_FirstPlaceDance = DanceInfo::CitadelDance_1;
+/// A new site's dance is set going at half speed, from the quarter speed every dance is made at
+inline constexpr float k_DanceMadeSpeed = 0.25f;
+inline constexpr float k_SiteDanceStartSpeed = 0.5f;
 /// The land on which no worship sites are made for towns: the first land, the tutorial's
 inline constexpr int32_t k_LandWithoutSites = 1;
 

@@ -51,6 +51,12 @@ public:
 	[[nodiscard]] virtual uint32_t PopulationOf(entt::entity town) const = 0;
 	/// The prayer power rules of a tribe's sites for a player: every site chants with the player's Aztec power
 	[[nodiscard]] virtual magic::WorshipBatteryRules ChantRules(Tribe tribe, PlayerNames player) const = 0;
+	/// Whether a dance of the info table starts by itself once its dancers have come
+	[[nodiscard]] virtual bool DanceStartsAutomatically(DanceInfo dance) const = 0;
+	/// The game turn
+	[[nodiscard]] virtual uint32_t Turn() const = 0;
+	/// A site's food pot, empty, standing at a point and turned to an angle (radians)
+	virtual entt::entity MakeFoodPot(glm::vec3 position, float yAngle) = 0;
 };
 
 } // namespace openblack::ecs::worship_site

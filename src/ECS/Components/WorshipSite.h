@@ -56,6 +56,10 @@ struct WorshipSite
 	std::vector<entt::entity> towns;
 	/// The altar of its tribe at the head of it
 	entt::entity altar {entt::null};
+	/// The dance its worshippers dance round the altar, whose dancers chant
+	entt::entity dance {entt::null};
+	/// The pot its worshippers eat from
+	entt::entity foodPot {entt::null};
 	/// A town asked to build it while it isn't built, and how much more than its other building the town wants to
 	struct BuildRequest
 	{

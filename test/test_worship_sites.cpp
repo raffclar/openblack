@@ -19,9 +19,12 @@
 #include <glm/glm.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/Components/Dance.h"
+#include "ECS/Components/Footpath.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -83,7 +86,19 @@ public:
 		return chantRules;
 	}
 
+	[[nodiscard]] bool DanceStartsAutomatically(DanceInfo /*dance*/) const override { return true; }
+	[[nodiscard]] uint32_t Turn() const override { return turn; }
+	entt::entity MakeFoodPot(glm::vec3 position, float yAngle) override
+	{
+		const auto pot = _registry.Create();
+		_registry.Assign<Transform>(pot, position, glm::mat3(1.0f), glm::vec3(1.0f));
+		potAngles[pot] = yAngle;
+		return pot;
+	}
+
 	int32_t landNumber {2};
+	uint32_t turn {0};
+	std::unordered_map<entt::entity, float> potAngles;
 	magic::WorshipBatteryRules chantRules {
 	    .chantsPerVillager = 2.0f, .chantsToFillBattery = 100.0f, .eachVillagerAddToFillBattery = 10.0f};
 	/// The site's model wearing a temple's skin, once the temple has one
@@ -411,4 +426,74 @@ TEST(WorshipSiteChants, VirtualInfluenceTakesOnlyThisTurnsChantingSharedAmongHan
 	EXPECT_FLOAT_EQ(f.system->TakeChantsForVirtualInfluence(PlayerNames::PLAYER_ONE, 2), 4.0f);
 	EXPECT_FLOAT_EQ(f.registry.Get<const WorshipChants>(site).used, 4.0f);
 	EXPECT_FLOAT_EQ(f.system->TakeChantsForVirtualInfluence(PlayerNames::PLAYER_TWO, 1), 0.0f);
+}
+
+TEST(WorshipSiteSystem, ANewSiteHasItsPlacesDanceSetGoingAndAnEmptyFoodPot)
+{
+	Fixture f;
+	const auto [temple, site] = BuiltSite(f, PlayerNames::PLAYER_ONE);
+	const auto& component = f.registry.Get<const WorshipSite>(site);
+	ASSERT_TRUE(component.dance != entt::null);
+	const auto& dance = f.registry.Get<const Dance>(component.dance);
+	EXPECT_EQ(static_cast<int>(dance.type), static_cast<int>(DanceInfo::CitadelDance_1) + component.place);
+	EXPECT_TRUE(dance.owner == site);
+	// Made at a quarter speed, then set going at half: danced at twice its keyed speed
+	EXPECT_EQ(dance.state, Dance::State::Dancing);
+	EXPECT_FLOAT_EQ(dance.speed, 0.5f);
+	EXPECT_FLOAT_EQ(dance.dancingRate, 2.0f);
+	// Centred on the altar's point, as the altar is
+	const auto& altarAt = f.registry.Get<const Transform>(component.altar).position;
+	const auto& danceAt = f.registry.Get<const Transform>(component.dance).position;
+	EXPECT_NEAR(danceAt.x, altarAt.x, 1e-4f);
+	EXPECT_NEAR(danceAt.z, altarAt.z, 1e-4f);
+	// The food pot stands at its own spot of the model, turned a further 1.5 radians
+	ASSERT_TRUE(component.foodPot != entt::null);
+	const auto expected = ws::TurnedPoint({0.0f, 0.0f}, component.facing, ws::k_FoodPotPoint);
+	const auto& potAt = f.registry.Get<const Transform>(component.foodPot).position;
+	EXPECT_NEAR(potAt.x, expected.x, 1e-4f);
+	EXPECT_NEAR(potAt.z, expected.y, 1e-4f);
+	EXPECT_FLOAT_EQ(f.world->potAngles.at(component.foodPot), component.facing + 1.5f);
+}
+
+TEST(WorshipSiteSystem, TheDanceFollowsTheChantingAndItsClockRunsWhileDanced)
+{
+	Fixture f;
+	const auto [temple, site] = BuiltSite(f, PlayerNames::PLAYER_ONE);
+	const auto danceEntity = f.registry.Get<const WorshipSite>(site).dance;
+	// With no dancers to chant, the game counts all their chanting as drawn: the dance is set going flat out
+	f.system->ProcessChants();
+	EXPECT_FLOAT_EQ(f.registry.Get<const Dance>(danceEntity).speed, 1.0f);
+	f.system->UpdateTurn();
+	EXPECT_FLOAT_EQ(f.registry.Get<const Dance>(danceEntity).clock, 0.0f);
+	f.system->SetDancers(site, 3);
+	EXPECT_EQ(f.registry.Get<const Dance>(danceEntity).dancers, 3u);
+	f.world->turn = 5;
+	f.system->UpdateTurn();
+	EXPECT_FLOAT_EQ(f.registry.Get<const Dance>(danceEntity).clock, 1.0f);
+}
+
+TEST(WorshipSiteSystem, ATownWithAStoragePitIsLinkedToItsSiteByAFootpath)
+{
+	Fixture f;
+	const auto town = f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+	const auto pit = f.registry.Create();
+	f.registry.Assign<StoragePit>(pit);
+	f.registry.Get<components::Town>(town).abodes.push_back(pit);
+	f.Town(1, PlayerNames::PLAYER_ONE, Tribe::CELTIC, {50.0f, 0.0f, 0.0f});
+	const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+	f.system->AddTemple(temple, 0.0f, true);
+	const auto norse = f.registry.Get<const components::Town>(town).worshipSite;
+	ASSERT_TRUE(norse != entt::null);
+	ASSERT_TRUE(f.registry.AllOf<FootpathLink>(norse));
+	// Its end is the site's gate
+	const auto gate = ws::TurnedPoint({0.0f, 0.0f}, f.registry.Get<const WorshipSite>(norse).facing, k_PlacePoint);
+	EXPECT_NEAR(f.registry.Get<const FootpathLink>(norse).position.x, gate.x, 1e-4f);
+	// The Celtic town has no pit, so its site has no link
+	for (const auto site : f.registry.Get<const CitadelWorship>(temple).sites)
+	{
+		if (site != entt::null && site != norse)
+		{
+			EXPECT_FALSE(f.registry.AllOf<FootpathLink>(site));
+		}
+	}
 }

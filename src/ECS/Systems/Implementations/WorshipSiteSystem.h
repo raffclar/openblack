@@ -19,6 +19,11 @@
 #error "ECS System implementations should only be included in Locator.cpp"
 #endif
 
+namespace openblack::ecs::components
+{
+struct Dance;
+} // namespace openblack::ecs::components
+
 namespace openblack::ecs::systems
 {
 
@@ -62,6 +67,10 @@ private:
 	[[nodiscard]] entt::entity FindForTribe(entt::entity temple, Tribe tribe) const;
 	/// A new site in the free place nearest the town of the tribe nearest the temple
 	entt::entity Make(entt::entity temple, Tribe tribe);
+	/// A site's dance, if it has one
+	[[nodiscard]] components::Dance* DanceOf(entt::entity site) const;
+	/// A new site is given its dance and its food pot
+	void Init(entt::entity site);
 	/// The town's people worship at the site from now on
 	void AddTown(entt::entity site, entt::entity town);
 	/// The site has been wholly built: no town is asked to build it any more

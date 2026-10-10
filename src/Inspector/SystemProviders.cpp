@@ -27,6 +27,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -577,11 +578,15 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeWorshipProvider(Wor
 			              }
 			              item["towns"] = std::move(towns);
 			              item["altar"] = Id(site.altar);
+			              item["dance"] = Id(site.dance);
+			              item["food_pot"] = Id(site.foodPot);
+			              const auto* dance = registry->Valid(site.dance) ? registry->TryGet<const Dance>(site.dance) : nullptr;
+			              item["dancers"] = dance != nullptr ? dance->dancers : 0;
+			              item["dancing"] = dance != nullptr && dance->state == Dance::State::Dancing;
 			              const auto* progress = registry->TryGet<const BuildProgress>(entity);
 			              item["built"] = progress == nullptr ? 1.0f : progress->built;
 			              if (const auto* chants = registry->TryGet<const WorshipChants>(entity); chants != nullptr)
 			              {
-				              item["dancers"] = chants->dancers;
 				              item["battery"] = chants->battery;
 				              item["available"] = chants->available;
 				              item["used"] = chants->used;

@@ -18,12 +18,16 @@
 
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/WorshipSites.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
@@ -140,4 +144,26 @@ magic::WorshipBatteryRules GameWorshipSiteWorld::ChantRules(Tribe tribe, PlayerN
 	const float power =
 	    Locator::magicSystem::has_value() ? Locator::magicSystem::value().GetTribalPower(player, Tribe::AZTEC) : 1.0f;
 	return row < sites.size() ? magic::WorshipBatteryRulesFor(sites.at(row), power) : magic::WorshipBatteryRules {};
+}
+
+bool GameWorshipSiteWorld::DanceStartsAutomatically(DanceInfo dance) const
+{
+	const auto& dances = Locator::infoConstants::value().dance;
+	const auto row = static_cast<size_t>(dance);
+	return row < dances.size() && dances.at(row).startsAutomatically != 0;
+}
+
+uint32_t GameWorshipSiteWorld::Turn() const
+{
+	return Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+}
+
+entt::entity GameWorshipSiteWorld::MakeFoodPot(glm::vec3 position, float yAngle)
+{
+	const auto pot = archetypes::PotArchetype::CreateEmpty(position, yAngle, PotInfo::StoragePitFoodPile);
+	if (pot != entt::null)
+	{
+		Locator::entitiesRegistry::value().Get<Transform>(pot).scale = glm::vec3(worship_site::k_FoodPotScale);
+	}
+	return pot;
 }
