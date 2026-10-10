@@ -3902,7 +3902,7 @@ void SetDrawHighlight() // 306 SET_DRAW_HIGHLIGHT
 
 void SetOpenClose() // 307 SET_OPEN_CLOSE
 {
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	// The script's word is kept as it is: 1 opens, 0 closes
 	const auto open = static_cast<int32_t>(Pop().uintVal);
 	auto& registry = Locator::entitiesRegistry::value();
@@ -4027,7 +4027,7 @@ void SetSunDraw() // 319 SET_SUN_DRAW
 void ObjectInfoBits() // 320 OBJECT_INFO_BITS
 {
 	// What the gate stones laid in a plinth are worth: ape 1, tiger 2, cow 4
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object))
 	{
