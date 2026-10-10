@@ -125,6 +125,11 @@ public:
 	/// The player clicked (or holds the keypad's Enter): it may end the wait for a click or cut the text short
 	void ProcessClick(bool click, bool skipKey);
 
+	/// Once a frame, with the frame's real seconds: the "Continue" cue fades in while the text waits for a click
+	void AdvanceClickCue(float realSeconds);
+	/// How far the "Continue" cue has faded in, from 0 to 1; none while no text waits for a click
+	[[nodiscard]] std::optional<float> GetClickCueShare() const;
+
 	/// Once a frame: the newest text slides in by the frame's game milliseconds (inside the temple its real ones)
 	void Update(float frameMs);
 
@@ -160,6 +165,8 @@ private:
 	std::array<uint32_t, 6> _texts {};
 	bool _waitClick {false};
 	bool _noClick {false};
+	/// How long the "Continue" cue has been fading in
+	float _clickCueSeconds {0.0f};
 	uint32_t _startTurn {0};
 	uint32_t _endTurn {0};
 	int32_t _startMs {0};

@@ -63,6 +63,10 @@ namespace openblack::dance
 {
 struct DanceFile;
 } // namespace openblack::dance
+namespace openblack::hnd
+{
+struct HNDFile;
+} // namespace openblack::hnd
 namespace openblack::bink
 {
 class BinkFile;
@@ -307,6 +311,12 @@ struct CameraZoneLoader final: BaseLoader<exc::EXCFile>
 
 /// A dance's choreography, from the files under the scripts' Dance folder
 struct DanceFileLoader final: BaseLoader<dance::DanceFile>
+{
+	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
+};
+
+/// A hand demonstration, from the files under Data/HandDemo
+struct HandDemoLoader final: BaseLoader<hnd::HNDFile>
 {
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
 };
