@@ -163,6 +163,9 @@ public:
 	virtual void ResetKeyBindings() {}
 	/// Presses an action's key for one frame, as if the player had, so its handling can be tried out
 	virtual void QueuePress([[maybe_unused]] BindableActionMap action) {}
+	/// Whether a double click is waiting, and takes it: a double click is marked as its second press comes and stays
+	/// marked, whatever the button does next, until the camera takes it. DOUBLE_CLICK reads the mark without taking it.
+	[[nodiscard]] virtual bool TakeDoubleClick() { return false; }
 	/// Whether presses are waiting to be made
 	[[nodiscard]] virtual bool HasQueuedPresses() const { return false; }
 

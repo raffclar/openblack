@@ -21,6 +21,18 @@ namespace openblack::help::profile
 
 /// The things counted, numbered as the scripts number them; 0 is never asked for by a script
 constexpr uint32_t k_EventCount = 49;
+/// The world camera's controls: turning it (and which way: positive is the way the turn-right key turns it), tilting,
+/// zooming, a double click on the land or on an object, flying to the temple or over the realm, and dragging it across
+/// the land
+constexpr uint32_t k_CameraTurn = 25;
+constexpr uint32_t k_CameraTurnPositive = 26;
+constexpr uint32_t k_CameraTurnNegative = 27;
+constexpr uint32_t k_CameraTilt = 28;
+constexpr uint32_t k_CameraZoom = 29;
+constexpr uint32_t k_CameraDoubleClickLand = 30;
+constexpr uint32_t k_CameraDoubleClickObject = 31;
+constexpr uint32_t k_CameraFlyToTemple = 32;
+constexpr uint32_t k_CameraDrag = 33;
 /// The hand tapped a scroll or sign with a challenge or tip, or one without
 constexpr uint32_t k_TapWithText = 34;
 constexpr uint32_t k_TapWithoutText = 35;

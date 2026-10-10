@@ -15,6 +15,8 @@
 #include <optional>
 #include <string_view>
 
+#include <glm/vec3.hpp>
+
 #include "3D/AllMeshes.h"
 
 /// The rules of the villagers a script draws in high detail for its cinema, such as the opening's family: the detailed
@@ -125,6 +127,13 @@ constexpr float k_QuarterTurn = std::numbers::pi_v<float> / 2.0f;
 [[nodiscard]] constexpr bool KeepsHighDetail(bool wideScreenOn, uint32_t wideScreenOwner)
 {
 	return wideScreenOn && wideScreenOwner != 0;
+}
+
+/// Where a high-detail villager's body, and so its eyes, are drawn: in the opening hand's grip while it holds the
+/// villager, otherwise where the villager stands
+[[nodiscard]] constexpr glm::vec3 DrawnAt(const std::optional<glm::vec3>& heldAt, const glm::vec3& standsAt)
+{
+	return heldAt.value_or(standsAt);
 }
 
 } // namespace openblack::ecs::high_detail_rules

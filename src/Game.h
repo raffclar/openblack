@@ -333,6 +333,10 @@ private:
 	/// Dragging the land, and the pose the camera's hints give the hand
 	bool _handCameraState {false};
 	hand_navigation_pose::Pose _handPose {hand_navigation_pose::Pose::Idle};
+	/// The last point on the screen the hand gripped the land at, which the camera's helper icons lean towards
+	glm::ivec2 _handLastGrip {0};
+	/// The rotate arrow's turn, kept from frame to frame, which a demonstration's recording sets too
+	float _triconAngle {0.0f};
 	/// How far from the camera the hand holds while it drags by the edge of the screen
 	Zoomer _handHoldZoomer;
 	/// The land the hand grips while it drags it, and where the hand was when it gripped
@@ -396,6 +400,9 @@ private:
 	                float deltaSeconds);
 	/// Decides how the hand moves this frame, gripping the land, held as it drags by the edge, or hovering, and its pose
 	void UpdateHandNavigation(const ecs::components::Transform& handTransform);
+	/// The camera's helper icons by the hand while a tutorial demonstration plays, from where the hand is drawn; none
+	/// while the hand is put away
+	void UpdateHandTricons(std::optional<glm::vec3> handPosition, float seconds);
 	/// Places the hand on the line of sight through the cursor the way the game does
 	void PlaceHand(ecs::components::Transform& handTransform, float deltaSeconds);
 	/// A knock on a house: the hand's tap starts, waits while the hand holds something, and the houses' read-out runs

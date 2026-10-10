@@ -30,6 +30,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/Mesh.h"
@@ -560,7 +561,8 @@ void villager_reactions::SetStateSpeed(entt::entity villager, VillagerStates sta
 	auto& registry = EntityRegistry();
 	const auto* component = registry.TryGet<const Villager>(villager);
 	auto* wallHug = registry.TryGet<WallHug>(villager);
-	if (component == nullptr || wallHug == nullptr || !Locator::infoConstants::has_value())
+	if (component == nullptr || wallHug == nullptr || !Locator::infoConstants::has_value() ||
+	    !villager_speed::StateChangeSetsSpeed(registry.AllOf<ScriptControlled>(villager), registry.AllOf<Dancer>(villager)))
 	{
 		return;
 	}

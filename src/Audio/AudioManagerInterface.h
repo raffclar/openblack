@@ -22,6 +22,7 @@
 #include "AudioPlayerInterface.h"
 #include "ECS/Components/AudioEmitter.h"
 #include "MusicPlayer.h"
+#include "ScriptSoundEffect.h"
 #include "Sound.h"
 #include "SoundGroup.h"
 
@@ -52,6 +53,8 @@ struct AnimEffectPlay
 		TooFar,
 		/// The bank header plays the sample once and the owner is playing it or another of its voice group
 		AlreadyPlaying,
+		/// The sample the effect picked may not be heard in the conditions it was asked under
+		NotHeard,
 	};
 	Outcome outcome {Outcome::NoEffect};
 	/// The emitter playing it, null when nothing plays
@@ -153,9 +156,17 @@ public:
 	/// One of the samples a bank's animation effects pick for keys, chosen at random, as
 	/// a one-shot 3D sound at position on behalf of owner. Nothing plays when the listener is beyond the sample's
 	/// maximum distance, or when the bank header plays the sample once and owner is playing it, or another of its
-	/// voice group, already.
+	/// voice group, already. Given conditions, nothing plays when the picked sample may not be heard in them (by its
+	/// user parameter, as the scripts' sound effects).
 	virtual AnimEffectPlay PlayAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
-	                                      const glm::vec3& position) = 0;
+	                                      const glm::vec3& position,
+	                                      const std::optional<SoundEffectConditions>& heardUnder) = 0;
+	/// The same, whatever the conditions
+	AnimEffectPlay PlayAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
+	                              const glm::vec3& position)
+	{
+		return PlayAnimEffect(bankName, keys, owner, position, std::nullopt);
+	}
 	virtual const Sound& GetSound(entt::id_type id) = 0;
 	virtual void CreateSoundGroup(const std::string& name) = 0;
 	virtual void AddToSoundGroup(const std::string& name, entt::id_type id) = 0;
