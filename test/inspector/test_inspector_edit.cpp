@@ -55,7 +55,7 @@ public:
 		_registry.Assign<Transform>(entity, position, glm::mat3(1.0f), glm::vec3(1.0f));
 		if (kind == "tree")
 		{
-			_registry.Assign<Tree>(entity, static_cast<TreeInfo>(type), 1.0f, 1u);
+			_registry.Assign<Tree>(entity, static_cast<TreeInfo>(type), 1.0f);
 		}
 		inMap.push_back(entity);
 		return entity;
@@ -201,10 +201,10 @@ TEST_F(InspectorEdit, SettingChecksTheFieldsType)
 TEST_F(InspectorEdit, AddsAndRemovesComponents)
 {
 	const auto added = Ask(R"({"query": "edit.add", "params": {"id": )" + Id() +
-	                       R"(, "component": "Tree", "fields": {"maxSize": 3.5, "turnsToGrowth": 4}}})");
+	                       R"(, "component": "Tree", "fields": {"maxSize": 3.5, "growthCountdown": 4}}})");
 	ASSERT_TRUE(_registry.AllOf<Tree>(_villager));
 	EXPECT_FLOAT_EQ(_registry.Get<Tree>(_villager).maxSize, 3.5f);
-	EXPECT_EQ(added["value"]["turnsToGrowth"], 4);
+	EXPECT_EQ(added["value"]["growthCountdown"], 4);
 
 	EXPECT_NE(Refusal(R"({"query": "edit.add", "params": {"id": )" + Id() + R"(, "component": "Tree"}})").find("already"),
 	          std::string::npos);

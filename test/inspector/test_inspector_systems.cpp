@@ -205,7 +205,7 @@ TEST(InspectorMap, TheContentsOfACell)
 	ecs::Registry registry;
 	FakeMap map;
 	map.contents = {Placed(registry, glm::vec3(125.0f, 0.0f, 345.0f)), Placed(registry, glm::vec3(121.0f, 0.0f, 341.0f))};
-	registry.Assign<Tree>(map.contents[0], static_cast<TreeInfo>(0), 1.0f, 1u);
+	registry.Assign<Tree>(map.contents[0], static_cast<TreeInfo>(0), 1.0f);
 	Inspector inspector;
 	inspector.Add(MakeMapProvider({.world = {.registry = [&registry]() -> const ecs::Registry* { return &registry; },
 	                                         .info = []() -> const InfoConstants* { return nullptr; }},
