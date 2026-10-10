@@ -647,3 +647,7 @@ target_link_libraries(test_hand_demo PRIVATE hnd)
 openblack_setup_and_add_test(test_villager_clips test_villager_clips.cpp)
 target_link_libraries(test_villager_clips PRIVATE anm)
 openblack_setup_and_add_test(test_script_random test_script_random.cpp)
+openblack_setup_and_add_test(
+  test_camera_handback camera/test_camera_handback.cpp
+)
+target_link_libraries(test_camera_handback PRIVATE edt)
