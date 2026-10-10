@@ -110,6 +110,44 @@ Dimension DimensionFromId(uint8_t id)
 	}
 }
 
+/// Reads a bgfx shader binary's header up to its vertex attributes: past its uniforms and its code. False when the
+/// binary isn't a shader this can read.
+bool SkipToAttributes(Reader& reader)
+{
+	const auto kind = static_cast<char>(reader.Read<uint8_t>());
+	const auto s = static_cast<char>(reader.Read<uint8_t>());
+	const auto h = static_cast<char>(reader.Read<uint8_t>());
+	const auto version = reader.Read<uint8_t>();
+	if (!reader.Ok() || (kind != 'V' && kind != 'F' && kind != 'C') || s != 'S' || h != 'H')
+	{
+		return false;
+	}
+	reader.Read<uint32_t>(); // the hash of its inputs
+	if (version >= k_FirstVersionWithOutputHash)
+	{
+		reader.Read<uint32_t>(); // and of its outputs
+	}
+
+	const auto count = reader.Read<uint16_t>();
+	for (uint16_t i = 0; i < count && reader.Ok(); ++i)
+	{
+		reader.Skip(reader.Read<uint8_t>());                                                  // its name
+		reader.Skip(sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint16_t) + sizeof(uint16_t)); // type, size, binding, count
+		if (version >= k_FirstVersionWithTextureInfo)
+		{
+			reader.Skip(sizeof(uint8_t) + sizeof(uint8_t)); // its texture's component type and dimension
+		}
+		if (version >= k_FirstVersionWithTextureFormat)
+		{
+			reader.Skip(sizeof(uint16_t)); // the format of a storage image
+		}
+	}
+
+	// Its code ends with a terminating zero
+	reader.Skip(reader.Read<uint32_t>() + 1);
+	return reader.Ok();
+}
+
 } // namespace
 
 std::optional<std::vector<Sampler>> ReadSpirvSamplers(std::span<const uint8_t> binary)
@@ -179,45 +217,33 @@ std::optional<std::vector<Sampler>> ReadSpirvSamplers(std::span<const uint8_t> b
 std::optional<uint16_t> ReadSpirvUniformBufferSize(std::span<const uint8_t> binary)
 {
 	Reader reader(binary);
-	const auto kind = static_cast<char>(reader.Read<uint8_t>());
-	const auto s = static_cast<char>(reader.Read<uint8_t>());
-	const auto h = static_cast<char>(reader.Read<uint8_t>());
-	const auto version = reader.Read<uint8_t>();
-	if (!reader.Ok() || (kind != 'V' && kind != 'F' && kind != 'C') || s != 'S' || h != 'H')
+	if (!SkipToAttributes(reader))
 	{
 		return std::nullopt;
 	}
-	reader.Read<uint32_t>(); // the hash of its inputs
-	if (version >= k_FirstVersionWithOutputHash)
-	{
-		reader.Read<uint32_t>(); // and of its outputs
-	}
-
-	// Past its uniforms
-	const auto count = reader.Read<uint16_t>();
-	for (uint16_t i = 0; i < count && reader.Ok(); ++i)
-	{
-		reader.Skip(reader.Read<uint8_t>());                                                  // its name
-		reader.Skip(sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint16_t) + sizeof(uint16_t)); // type, size, binding, count
-		if (version >= k_FirstVersionWithTextureInfo)
-		{
-			reader.Skip(sizeof(uint8_t) + sizeof(uint8_t)); // its texture's component type and dimension
-		}
-		if (version >= k_FirstVersionWithTextureFormat)
-		{
-			reader.Skip(sizeof(uint16_t)); // the format of a storage image
-		}
-	}
-
-	// Past its code, which ends with a terminating zero, and its vertex attributes
-	reader.Skip(reader.Read<uint32_t>() + 1);
-	reader.Skip(sizeof(uint16_t) * reader.Read<uint8_t>());
+	reader.Skip(sizeof(uint16_t) * reader.Read<uint8_t>()); // past its vertex attributes
 	const auto size = reader.Read<uint16_t>();
 	if (!reader.Ok())
 	{
 		return std::nullopt;
 	}
 	return size;
+}
+
+std::optional<std::vector<uint16_t>> ReadVertexAttributes(std::span<const uint8_t> binary)
+{
+	Reader reader(binary);
+	if (!SkipToAttributes(reader))
+	{
+		return std::nullopt;
+	}
+	std::vector<uint16_t> attributes(reader.Read<uint8_t>());
+	std::ranges::generate(attributes, [&reader] { return reader.Read<uint16_t>(); });
+	if (!reader.Ok())
+	{
+		return std::nullopt;
+	}
+	return attributes;
 }
 
 DefaultTexture DefaultTextureFor(Dimension dimension) noexcept
