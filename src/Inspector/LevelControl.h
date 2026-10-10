@@ -107,6 +107,9 @@ public:
 	/// Asks for the frame being made to be written to a file once it is drawn, without the debug windows if asked. The
 	/// file appears whole once written (it is written aside, then renamed).
 	virtual std::string Capture(const std::filesystem::path& path, bool hideDebugGui) = 0;
+	/// Why the renderer gave up a picture asked for (it had no screen to read, the file couldn't be written), once; none
+	/// while it may still come
+	[[nodiscard]] virtual std::optional<std::string> CaptureFailure(const std::filesystem::path& path) = 0;
 	/// Leaves the debug windows (and the input lock's notice) out of the frame being made, for the frames around a
 	/// picture without them
 	virtual void HideDebugGui() = 0;

@@ -107,6 +107,10 @@ Json openblack::inspector::ToJson(const InputEvent& event)
 	case InputEvent::Kind::ButtonDown:
 	case InputEvent::Kind::ButtonUp:
 		json["button"] = event.button;
+		if (event.clicks != 1)
+		{
+			json["clicks"] = event.clicks;
+		}
 		break;
 	case InputEvent::Kind::KeyDown:
 	case InputEvent::Kind::KeyUp:
@@ -162,6 +166,13 @@ std::optional<InputEvent> openblack::inspector::InputEventFromJson(const Json& j
 			return std::nullopt;
 		}
 		event.button = static_cast<uint8_t>(button);
+		const auto clicks = NumberMember(json, "clicks").value_or(1.0);
+		if (clicks != 1.0 && clicks != 2.0)
+		{
+			error = "a button event's clicks is 1, or 2 for the second press of a double click";
+			return std::nullopt;
+		}
+		event.clicks = static_cast<uint8_t>(clicks);
 		break;
 	}
 	case InputEvent::Kind::KeyDown:
@@ -284,9 +295,10 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	          "screen. The hand follows it this frame.",
 	          {screen, world}),
 	    Write("button",
-	          "A mouse button where the pointer is: press, release, or click (pressed now, let go of the next "
-	          "frame)",
-	          {button, Optional("action", "string", "press, release or click (the default)")}),
+	          "A mouse button where the pointer is: press, release, click (pressed now, let go of the next "
+	          "frame) or double_click (a click, then pressed and let go of again as the second click of a double "
+	          "click, a frame apart)",
+	          {button, Optional("action", "string", "press, release, click (the default) or double_click")}),
 	    Write("key",
 	          "A key by its name (\"L\", \"Space\", \"Left Shift\"), or an action by the options screen's name, "
 	          "pressed for a frame",
@@ -434,18 +446,24 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 	{
 		const auto button = ButtonParam(params, error);
 		const auto action = StringMember(params, "action").value_or("click");
-		if (!button.has_value() || (action != "press" && action != "release" && action != "click"))
+		if (!button.has_value() || (action != "press" && action != "release" && action != "click" && action != "double_click"))
 		{
-			return failed(error.empty() ? "action is press, release or click" : error);
+			return failed(error.empty() ? "action is press, release, click or double_click" : error);
 		}
 		const auto kind = action == "release" ? InputEvent::Kind::ButtonUp : InputEvent::Kind::ButtonDown;
 		if (auto why = Now({.kind = kind, .button = *button}); !why.empty())
 		{
 			return failed(why);
 		}
-		if (action == "click")
+		if (action == "click" || action == "double_click")
 		{
 			_timeline.Schedule(_frame + 2, {.kind = InputEvent::Kind::ButtonUp, .button = *button});
+		}
+		if (action == "double_click")
+		{
+			// The second press and its letting go count two clicks, as the mouse tells a double click
+			_timeline.Schedule(_frame + 3, {.kind = InputEvent::Kind::ButtonDown, .button = *button, .clicks = 2});
+			_timeline.Schedule(_frame + 4, {.kind = InputEvent::Kind::ButtonUp, .button = *button, .clicks = 2});
 		}
 		auto answer = Answer({{"button", *button}, {"action", action}});
 		if (action != "release" && StringMember(params, "button").value_or("left") == "left")
