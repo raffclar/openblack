@@ -771,6 +771,12 @@
   "query": "land.atmosphere"
  },
  {
+  "description": "The scenery the scripts open and close: its open word and its gate stones' value",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.animated_statics"
+ },
+ {
   "description": "The village centres' totems: their town centre, the share they are held at, and whether the hand grips one",
   "kind": "list",
   "parameters": [],
