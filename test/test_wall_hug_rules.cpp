@@ -245,6 +245,21 @@ TEST(WallHugRules, ATreeIsASmallCircleRoundItsTrunkWhateverItsSize)
 	EXPECT_TRUE(CirclesOf(Placed(ThingShape::None, {6.0f, 10.0f, 6.0f})).empty());
 }
 
+TEST(WallHugRules, AWalkerPassesUnderATreesCrownWithoutGoingRoundIt)
+{
+	// A tree 20 m ahead and a metre to the side of the walker's line, its crown 3.41 m across: only its trunk stands in
+	// the way, so the walker goes straight on under the crown
+	auto tree = Placed(ThingShape::Trunk, {3.41f, 8.0f, 3.41f});
+	tree.position = {1020.0f, 0.0f, 1001.0f};
+	EXPECT_FALSE(ScanLine(k_Walker, k_FiveMetresAlongX, CirclesOf(tree)).circle.has_value());
+	// A thing of that size with no trunk, a rock say, blocks it three turns on
+	auto rock = tree;
+	rock.shape = ThingShape::ModelBox;
+	const auto scan = ScanLine(k_Walker, k_FiveMetresAlongX, CirclesOf(rock));
+	ASSERT_TRUE(scan.circle.has_value());
+	EXPECT_EQ(scan.turnsToObstacle, 3);
+}
+
 TEST(WallHugRules, ALongModelBlocksWithEachCircleOfItsRowAndASquareOneWithOne)
 {
 	const auto square = CirclesOf(Placed(ThingShape::ModelBox, {4.0f, 3.0f, 5.0f}));
