@@ -748,8 +748,8 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 	    }));
 	provider->Add(
 	    Query("totems",
-	          "The village centres' totems: their town centre, the share they are held at, and whether "
-	          "the hand grips one",
+	          "The village centres' totems: their town centre and icon, the share they stand at, ease to and are "
+	          "held at, how fast they move, whether the hand grips one, and their see-through second totem",
 	          {}, ResultKind::List),
 	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
 		    Json items = Json::array();
@@ -758,8 +758,15 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		    registry.Each<const VillageTotem>([&items, &registry, gripped](entt::entity entity, const VillageTotem& totem) {
 			    auto item = Listed(registry, entity);
 			    item["town_centre"] = Id(totem.townCentre);
+			    item["icon"] = Id(totem.icon);
+			    item["rest_y"] = totem.restY;
+			    item["share"] = totem.ease.share;
+			    item["speed"] = totem.ease.speed;
+			    item["target"] = totem.ease.target;
+			    item["moving"] = totem.ease.moving;
 			    item["held"] = totem.held;
 			    item["gripped"] = gripped.has_value() && *gripped == entity;
+			    item["ghost"] = Id(totem.ghost);
 			    items.push_back(std::move(item));
 		    });
 		    return items;

@@ -11,11 +11,13 @@
 
 #include <cstdint>
 
+#include <array>
 #include <optional>
 
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "ECS/ScriptHighlightRules.h"
 #include "Enums.h"
 
 namespace openblack::ecs::components
@@ -47,9 +49,20 @@ struct ScriptHighlight
 	/// Where its model's middle was last drawn, and how far its model reaches from there
 	glm::vec3 centre {0.0f};
 	float radius {0.0f};
+	/// A gold scroll's sparks, and the things they are drawn as (none while one waits to start)
+	std::optional<script_highlights::Sparks> sparks;
+	std::array<entt::entity, script_highlights::k_Sparks> sparkSprites = NoSparkSprites();
+
+	[[nodiscard]] static constexpr std::array<entt::entity, script_highlights::k_Sparks> NoSparkSprites()
+	{
+		std::array<entt::entity, script_highlights::k_Sparks> none {};
+		none.fill(entt::null);
+		return none;
+	}
 };
 
-/// The glow drawn before a highlight, towards the camera; it goes when its highlight has gone
+/// A sprite drawn for a highlight: its glow before it, towards the camera, or one of a gold scroll's sparks; it goes when
+/// its highlight has gone
 struct ScriptHighlightGlow
 {
 	entt::entity highlight {entt::null};

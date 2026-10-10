@@ -87,6 +87,12 @@ public:
 	virtual void PlaySound(uint32_t sample) = 0;
 	/// The glow's sprite, none when it can't be drawn
 	[[nodiscard]] virtual std::optional<components::Sprite> GlowLook() const = 0;
+	/// A gold scroll's sparks' sprite, at a picture of their sheet; none when it can't be drawn
+	[[nodiscard]] virtual std::optional<components::Sprite> SparkLook(uint32_t picture) const = 0;
+	/// The game's local random numbers, which don't keep the players' games in step: a float up to x, and a whole number
+	/// below n
+	virtual float LocalFloatRandom(float x) = 0;
+	virtual uint32_t LocalRandom(uint32_t n) = 0;
 
 	/// The help system hears of a tap
 	virtual void HelpEvent(uint32_t event) = 0;

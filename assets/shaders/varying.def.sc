@@ -3,18 +3,19 @@ vec3 a_normal            : NORMAL;
 ivec4 a_indices          : BLENDINDICES; // bone index, morph partner vertex and weight (int16)
 vec4 a_color0            : COLOR0;     // time of day
 vec2 a_texcoord0         : TEXCOORD0;
-vec2 a_texcoord3         : TEXCOORD3;  // lightmap coordinates
+vec2 a_texcoord1         : TEXCOORD1;  // lightmap coordinates, clear of the instance data on Direct3D
+vec2 a_texcoord3         : TEXCOORD3;  // a particle chain's or fragment's own data, never drawn instanced
 vec3 a_tangent           : TANGENT;    // a creature's evil or good position
 vec3 a_bitangent         : BITANGENT;  // a creature's evil or good normal
 vec3 a_color1            : COLOR1;     // a creature's thin or fat position
 vec3 a_color2            : COLOR2;     // a creature's thin or fat normal
 vec3 a_color3            : COLOR3;     // a creature's weak or strong position
 vec4 a_weight            : BLENDWEIGHT; // a creature's weak or strong normal
-vec4 i_data0             : TEXCOORD7;
+vec4 i_data0             : TEXCOORD7;  // Direct3D binds instance data by these semantics alone, so no vertex attribute goes at 3 to 7
 vec4 i_data1             : TEXCOORD6;
 vec4 i_data2             : TEXCOORD5;
 vec4 i_data3             : TEXCOORD4;
-vec4 i_data4             : COLOR0;     // Wind for instanced draws
+vec4 i_data4             : TEXCOORD3;
 
 vec4 v_position          : TEXCOORD1 = vec4(0.0, 0.0, 0.0, 0.0);
 vec4 v_color0            : COLOR0    = vec4(1.0, 0.0, 0.0, 1.0);

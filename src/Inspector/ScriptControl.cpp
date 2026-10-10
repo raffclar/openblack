@@ -13,8 +13,12 @@
 #include <cmath>
 
 #include <algorithm>
+#include <iterator>
 #include <span>
+#include <string>
 #include <utility>
+#include <variant>
+#include <vector>
 
 #include <LHVMNatives.h>
 
@@ -89,6 +93,28 @@ std::optional<ScriptNative> FindNative(const ScriptTargetInterface& scripts, con
 		return found != natives.end() ? std::optional(*found) : std::nullopt;
 	}
 	return std::nullopt;
+}
+
+/// A plain number, whose type the native's slot would have given it
+bool IsUntypedNumber(const ScriptValue& value)
+{
+	return value.type == ScriptValue::Type::Float && !value.typeGiven;
+}
+
+/// Calls a native with values on the stack and answers what it gave back
+QueryResult Called(ScriptTargetInterface& scripts, const ScriptNative& native, const std::vector<ScriptValue>& values)
+{
+	auto called = scripts.CallNative(native.id, values);
+	if (const auto* why = std::get_if<std::string>(&called))
+	{
+		return QueryResult::Error(*why);
+	}
+	Json results = Json::array();
+	for (const auto& value : std::get<std::vector<ScriptValue>>(called))
+	{
+		results.push_back({{"type", TypeName(value.type)}, {"value", ToJson(value)}});
+	}
+	return QueryResult::Value({{"native", native.name}, {"returned", std::move(results)}});
 }
 
 } // namespace
@@ -485,7 +511,12 @@ void openblack::inspector::AddScriptControls(FunctionProvider& provider, ScriptT
 	             "plain number goes on the stack as the type the native's slot takes, {\"int\"} and {\"float\"} as "
 	             "given. Each goes on "
 	             "the stack as the type the native takes, as a script's call puts it",
-	             false)},
+	             false),
+	         Parameter("raw", "boolean",
+	                   "Pushes exactly the values given, past the check of how many the native takes and of their "
+	                   "types (for a native that takes a different count than the language's table says, as GET_ARENA "
+	                   "does): each number must say its type, {\"int\": n} or {\"float\": x}",
+	                   false)},
 	        true),
 	    [&scripts, notLoaded](const QueryContext& context) {
 		    if (!scripts.Loaded())
@@ -508,6 +539,21 @@ void openblack::inspector::AddScriptControls(FunctionProvider& provider, ScriptT
 		    {
 			    return QueryResult::Error(error);
 		    }
+		    const auto raw = context.params.find("raw");
+		    if (raw != context.params.end() && !raw->is_boolean())
+		    {
+			    return QueryResult::Error("raw is true or false");
+		    }
+		    if (raw != context.params.end() && raw->get<bool>())
+		    {
+			    // Exactly what was given, in its own types: no count or slot types to fill in a number's type from
+			    if (const auto untyped = std::ranges::find_if(*values, &IsUntypedNumber); untyped != values->end())
+			    {
+				    return QueryResult::Error("argument " + std::to_string(std::distance(values->begin(), untyped) + 1) +
+				                              ": with raw, a number says its type: {\"int\": n} or {\"float\": x}");
+			    }
+			    return Called(scripts, *native, *values);
+		    }
 		    if (native->in >= 0 && values->size() != static_cast<size_t>(native->in))
 		    {
 			    return QueryResult::Error(native->name + " takes " + std::to_string(native->in) +
@@ -519,16 +565,6 @@ void openblack::inspector::AddScriptControls(FunctionProvider& provider, ScriptT
 		    {
 			    return QueryResult::Error(native->name + ": " + error);
 		    }
-		    auto called = scripts.CallNative(native->id, *values);
-		    if (const auto* why = std::get_if<std::string>(&called))
-		    {
-			    return QueryResult::Error(*why);
-		    }
-		    Json results = Json::array();
-		    for (const auto& value : std::get<std::vector<ScriptValue>>(called))
-		    {
-			    results.push_back({{"type", TypeName(value.type)}, {"value", ToJson(value)}});
-		    }
-		    return QueryResult::Value({{"native", native->name}, {"returned", std::move(results)}});
+		    return Called(scripts, *native, *values);
 	    });
 }

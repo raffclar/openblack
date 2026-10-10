@@ -19,6 +19,7 @@
 #include "Common/GUtilsAngle.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
@@ -90,11 +91,18 @@ void VillageTotemSystem::AddToPlayer(entt::entity totem)
 			iconTransform->rotation = transform.rotation;
 		}
 	}
-	// The player's creature stands on top, or the hand
-	if (auto* mesh = registry.TryGet<Mesh>(totemComponent->icon))
+	// The player's creature stands on top, or the hand, on the second totem too. It is drawn afresh where it stands, which
+	// shows no tooltip.
+	const auto iconMesh = _world->IconMeshFor(townComponent.owner);
+	for (const auto icon : {totemComponent->icon, totemComponent->ghostIcon})
 	{
-		mesh->id = _world->IconMeshFor(townComponent.owner);
+		if (auto* mesh = registry.Valid(icon) ? registry.TryGet<Mesh>(icon) : nullptr)
+		{
+			mesh->id = iconMesh;
+		}
 	}
+	totemComponent->lastShownRise.reset();
+	totemComponent->quietOnce = true;
 	SetTownShare(town, 0.0f);
 }
 
@@ -143,6 +151,80 @@ void VillageTotemSystem::Place(entt::entity totem)
 	}
 }
 
+void VillageTotemSystem::PlaceGhost(entt::entity totem, std::optional<float> share)
+{
+	auto& registry = _world->Entities();
+	auto& totemComponent = registry.Get<VillageTotem>(totem);
+	if (!share.has_value())
+	{
+		for (auto* ghost : {&totemComponent.ghost, &totemComponent.ghostIcon})
+		{
+			if (registry.Valid(*ghost))
+			{
+				registry.Destroy(*ghost);
+			}
+			*ghost = entt::null;
+		}
+		return;
+	}
+	// A copy of the plinth and of its icon, drawn half see-through
+	const auto copy = [&registry](entt::entity& ghost, entt::entity of) {
+		if (registry.Valid(ghost) || !registry.Valid(of))
+		{
+			return;
+		}
+		// Copied out first: adding to a pool may move what is in it
+		const Transform transform = registry.Get<const Transform>(of);
+		const auto* mesh = registry.TryGet<const Mesh>(of);
+		const std::optional<Mesh> drawn = mesh != nullptr ? std::optional(*mesh) : std::nullopt;
+		ghost = registry.Create();
+		registry.Assign<Transform>(ghost, transform);
+		if (drawn.has_value())
+		{
+			registry.Assign<Mesh>(ghost, *drawn);
+		}
+		registry.Assign<SeeThrough>(ghost, village_totem::k_GhostAlpha);
+	};
+	copy(totemComponent.ghost, totem);
+	copy(totemComponent.ghostIcon, totemComponent.icon);
+	auto& transform = registry.Get<Transform>(totemComponent.ghost);
+	transform.position.y = totemComponent.restY + village_totem::RiseOf(*share);
+	if (auto* icon = registry.Valid(totemComponent.ghostIcon) ? registry.TryGet<Transform>(totemComponent.ghostIcon) : nullptr)
+	{
+		icon->position = transform.position + glm::vec3(0.0f, village_totem::k_IconAbovePlinth, 0.0f);
+	}
+}
+
+void VillageTotemSystem::NoteToolTip(entt::entity totem, const village_totem::Shown& shown)
+{
+	auto& totemComponent = _world->Entities().Get<VillageTotem>(totem);
+	const float rise = village_totem::RiseOf(shown.solid);
+	if (totemComponent.lastShownRise == rise && !shown.ghost.has_value())
+	{
+		return;
+	}
+	// The town's player sees the share the totem is held at, unless it was only just given its icon
+	if (const auto town = TownOf(totem); !totemComponent.quietOnce && town != entt::null)
+	{
+		_toolTips[_world->Entities().Get<const Town>(town).owner] =
+		    ShareToolTip {.totem = totem, .percent = village_totem::AsPercentage(totemComponent.held)};
+	}
+	totemComponent.quietOnce = false;
+	totemComponent.lastShownRise = rise;
+}
+
+void VillageTotemSystem::Remove(entt::entity totem)
+{
+	auto& registry = _world->Entities();
+	_world->SetMovingSound(totem, false);
+	PlaceGhost(totem, std::nullopt);
+	if (const auto icon = registry.Get<const VillageTotem>(totem).icon; registry.Valid(icon))
+	{
+		registry.Destroy(icon);
+	}
+	registry.Destroy(totem);
+}
+
 void VillageTotemSystem::Update(float gameMilliseconds)
 {
 	auto& registry = _world->Entities();
@@ -154,12 +236,7 @@ void VillageTotemSystem::Update(float gameMilliseconds)
 		// It goes with its town centre
 		if (!registry.Valid(totemComponent.townCentre))
 		{
-			_world->SetMovingSound(totem, false);
-			if (registry.Valid(totemComponent.icon))
-			{
-				registry.Destroy(totemComponent.icon);
-			}
-			registry.Destroy(totem);
+			Remove(totem);
 			continue;
 		}
 		village_totem::Step(totemComponent.ease, gameMilliseconds);
@@ -170,6 +247,10 @@ void VillageTotemSystem::Update(float gameMilliseconds)
 			_world->RingBell(registry.Get<const Transform>(totem).position);
 		}
 		Place(totem);
+		// The second totem shows the other share, and the player sees the share as it moves
+		const auto shown = village_totem::ShownShares(totemComponent.ease.share, totemComponent.held, totemComponent.gripped);
+		PlaceGhost(totem, shown.ghost);
+		NoteToolTip(totem, shown);
 	}
 	if (_gripped != entt::null && !registry.Valid(_gripped))
 	{
@@ -219,7 +300,16 @@ bool VillageTotemSystem::Grip(entt::entity totem, PlayerNames player)
 	totemComponent->gripped = true;
 	_gripped = totem;
 	Place(totem);
+	// The living near it react to the hand using it
+	_world->ReactToHandUsingTotem(totem, player, StandingAt(totem));
 	return true;
+}
+
+glm::vec3 VillageTotemSystem::StandingAt(entt::entity totem) const
+{
+	const auto& registry = _world->Entities();
+	const auto& position = registry.Get<const Transform>(totem).position;
+	return {position.x, registry.Get<const VillageTotem>(totem).restY, position.z};
 }
 
 float VillageTotemSystem::GripY(entt::entity totem) const
@@ -259,9 +349,15 @@ void VillageTotemSystem::LetGo()
 	auto& totemComponent = registry.Get<VillageTotem>(totem);
 	totemComponent.gripped = false;
 	const float share = totemComponent.held;
-	// Where it was left becomes the town's share, which a town without a worship site refuses
+	const auto at = StandingAt(totem);
+	// Where it was left becomes the town's share, which a town without a worship site refuses. Raised from none at all,
+	// the town's player's creature takes it the player wants to impress.
 	if (const auto town = TownOf(totem); town != entt::null)
 	{
+		if (share > 0.0f)
+		{
+			_world->EmpathiseWithPlayer(registry.Get<const Town>(town).owner, at);
+		}
 		SetTownShare(town, share);
 	}
 	else
@@ -270,6 +366,20 @@ void VillageTotemSystem::LetGo()
 	}
 	totemComponent.held = totemComponent.ease.target;
 	Place(totem);
+	// The share it was left at floats up from it in grey
+	_world->FloatNumber(at, village_totem::AsPercentage(share), village_totem::k_LetGoNumberColour);
+}
+
+std::optional<VillageTotemSystemInterface::ShareToolTip> VillageTotemSystem::TakeShareToolTip(PlayerNames player)
+{
+	const auto found = _toolTips.find(player);
+	if (found == _toolTips.end())
+	{
+		return std::nullopt;
+	}
+	const auto toolTip = found->second;
+	_toolTips.erase(found);
+	return toolTip;
 }
 
 std::optional<entt::entity> VillageTotemSystem::GetGripped() const

@@ -1,13 +1,13 @@
 #if defined(USE_INSTANCING) && defined(USE_MORPH)
 $input a_position, a_texcoord0, a_normal, a_indices, a_tangent, a_bitangent, a_color1, a_color2, a_color3, a_weight, i_data0, i_data1, i_data2, i_data3, i_data4
 #elif defined(USE_INSTANCING) && defined(USE_LIGHTMAP)
-$input a_position, a_texcoord0, a_normal, a_indices, a_texcoord3, i_data0, i_data1, i_data2, i_data3, i_data4
+$input a_position, a_texcoord0, a_normal, a_indices, a_texcoord1, i_data0, i_data1, i_data2, i_data3, i_data4
 #elif defined(USE_INSTANCING)
 $input a_position, a_texcoord0, a_normal, a_indices, i_data0, i_data1, i_data2, i_data3, i_data4
 #elif defined(USE_MORPH)
 $input a_position, a_texcoord0, a_normal, a_indices, a_tangent, a_bitangent, a_color1, a_color2, a_color3, a_weight
 #elif defined(USE_LIGHTMAP)
-$input a_position, a_texcoord0, a_normal, a_indices, a_texcoord3
+$input a_position, a_texcoord0, a_normal, a_indices, a_texcoord1
 #else
 $input a_position, a_texcoord0, a_normal, a_indices
 #endif
@@ -309,7 +309,7 @@ void main()
 #endif // USE_HEIGHT_MAP
 
 #ifdef USE_LIGHTMAP
-	v_texcoord0 = vec4(a_texcoord0, a_texcoord3);
+	v_texcoord0 = vec4(a_texcoord0, a_texcoord1);
 #elif defined(USE_ENVIRONMENT)
 	// The environment-mapped mode: the environment map's coordinates are where the normal points across and up
 	// the camera's view, from 0 to 0.498

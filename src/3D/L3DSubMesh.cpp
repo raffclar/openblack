@@ -322,9 +322,11 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 	// attribute's format matches the shader's input on every backend
 	decl.emplace_back(VertexAttrib::Attribute::Indices, static_cast<uint8_t>(4), VertexAttrib::Type::Int16,
 	                  /*normalized=*/false, /*asInt=*/true);
+	// The lightmap coordinates go at the second texture coordinates: Direct3D gives the fourth to eighth to an instanced
+	// draw's instance data, which would replace them
 	if (_hasLightmapCoordinates)
 	{
-		decl.emplace_back(VertexAttrib::Attribute::TexCoord3, static_cast<uint8_t>(2), VertexAttrib::Type::Float);
+		decl.emplace_back(VertexAttrib::Attribute::TexCoord1, static_cast<uint8_t>(2), VertexAttrib::Type::Float);
 	}
 
 	// build our buffers

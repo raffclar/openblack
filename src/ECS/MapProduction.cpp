@@ -37,6 +37,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
@@ -70,9 +71,10 @@ void ForEachMapComponent(Func&& func)
 	func.template operator()<TeleportStone>();
 	// A temple's heart, which stands in the land as a building does
 	func.template operator()<Temple>();
-	// Trees and shields, each in one cell
+	// Trees, shields and the scripts' scrolls and signs, each in one cell
 	func.template operator()<Tree>();
 	func.template operator()<ShieldDome>();
+	func.template operator()<ScriptHighlight>();
 	// Things that count as staying put but can be carried
 	func.template operator()<Pot>();
 	func.template operator()<OneOffSpellSeed>();
@@ -149,7 +151,7 @@ std::optional<MapProduction::Kind> MapProduction::KindOf(const Registry& registr
 	{
 		return Kind {.placement = Placement::FixedFront, .coversOutline = true, .moves = true};
 	}
-	if (registry.AnyOf<Tree, ShieldDome>(entity))
+	if (registry.AnyOf<Tree, ShieldDome, ScriptHighlight>(entity))
 	{
 		return Kind {.placement = Placement::FixedFront, .coversOutline = false, .moves = false};
 	}

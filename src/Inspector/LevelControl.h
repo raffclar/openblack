@@ -197,6 +197,8 @@ private:
 		bool taken {false};
 		/// Where the camera was last put
 		std::optional<CameraPose> placed;
+		/// Whether the camera was where it was put for the last frame drawn
+		bool inPlace {false};
 	};
 	std::optional<Holding> _holding;
 	/// The last frame the held pictures asked for so far hold: the next held picture starts after it

@@ -65,6 +65,8 @@ private:
 	                     glm::vec3 camera);
 	/// Its glow, made the first time it shows, hidden while it doesn't
 	void UpdateGlow(entt::entity entity, const components::ScriptHighlight& highlight, bool shown, glm::vec3 camera);
+	/// A gold scroll's sparks go on while it is drawn
+	void UpdateSparks(entt::entity entity, bool drawn, float frameMilliseconds);
 	/// The glows whose highlight has gone go too
 	void RemoveLoneGlows();
 

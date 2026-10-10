@@ -20,6 +20,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "CHLApi.h"
+#include "Common/GameRandom.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Mesh.h"
@@ -47,6 +48,9 @@ namespace
 /// The sprite sheet the glow is on, and its alpha
 constexpr entt::hashed_string k_Sheet = entt::hashed_string("raw/S_SpriteSheet3");
 constexpr entt::hashed_string k_SheetAlpha = entt::hashed_string("raw/S_SpriteSheet3a");
+/// The sprite sheet a gold scroll's sparks are on, and its alpha
+constexpr entt::hashed_string k_SparkSheet = entt::hashed_string("raw/S_SpriteSheet1");
+constexpr entt::hashed_string k_SparkSheetAlpha = entt::hashed_string("raw/S_SpriteSheet1a");
 /// The game's own bank of sounds
 constexpr int32_t k_InGameBank = 1;
 } // namespace
@@ -231,6 +235,42 @@ std::optional<Sprite> GameScriptHighlightWorld::GlowLook() const
 	    .facesCamera = true,
 	    .alpha = textures.Handle(k_SheetAlpha.value())->GetNativeHandle(),
 	};
+}
+
+std::optional<Sprite> GameScriptHighlightWorld::SparkLook(uint32_t picture) const
+{
+	if (!Locator::resources::has_value())
+	{
+		return std::nullopt;
+	}
+	auto& textures = Locator::resources::value().GetTextures();
+	if (!textures.Contains(k_SparkSheet.value()) || !textures.Contains(k_SparkSheetAlpha.value()))
+	{
+		return std::nullopt;
+	}
+	// One picture of the sheet's 8 by 8, white, added to what is behind it by its alpha
+	constexpr float k_Cell = 1.0f / static_cast<float>(rules::k_SparkSheetPictures);
+	const auto column = static_cast<float>(picture % rules::k_SparkSheetPictures);
+	const auto row = static_cast<float>(picture / rules::k_SparkSheetPictures);
+	return Sprite {
+	    .texture = textures.Handle(k_SparkSheet.value())->GetNativeHandle(),
+	    .uvMin = glm::vec2(column, row) * k_Cell,
+	    .uvExtent = glm::vec2(k_Cell),
+	    .tint = glm::vec4(1.0f),
+	    .additive = true,
+	    .facesCamera = true,
+	    .alpha = textures.Handle(k_SparkSheetAlpha.value())->GetNativeHandle(),
+	};
+}
+
+float GameScriptHighlightWorld::LocalFloatRandom(float x)
+{
+	return Locator::gameRandom::has_value() ? Locator::gameRandom::value().LocalFloatRand(x) : 0.0f;
+}
+
+uint32_t GameScriptHighlightWorld::LocalRandom(uint32_t n)
+{
+	return Locator::gameRandom::has_value() ? Locator::gameRandom::value().LocalRand(static_cast<int32_t>(n)) : 0;
 }
 
 void GameScriptHighlightWorld::HelpEvent(uint32_t event)
