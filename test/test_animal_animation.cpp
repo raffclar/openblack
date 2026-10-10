@@ -7,6 +7,12 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
+#include <array>
+#include <limits>
+
+#include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
 
 #include "Animals/AnimalAnimation.h"
@@ -71,4 +77,23 @@ TEST(AnimalAnimation, TheDrawClockCountsMillisecondsIntoTheTurn)
 	EXPECT_EQ(DrawTime(10, 0.0f), 1000u);
 	EXPECT_EQ(DrawTime(10, 0.456f), 1045u);
 	EXPECT_EQ(DrawTime(10, 1.0f), 1099u);
+}
+
+TEST(AnimalAnimation, APoseBlendsEachBoneThenPlacesItByItsParent)
+{
+	constexpr auto k_Root = std::numeric_limits<uint32_t>::max();
+	const std::array<uint32_t, 3> parents {k_Root, 0, 1};
+	const std::array from {glm::translate(glm::mat4(1.0f), {0.0f, 1.0f, 0.0f}),
+	                       glm::translate(glm::mat4(1.0f), {2.0f, 0.0f, 0.0f}), glm::mat4(1.0f)};
+	const std::array to {glm::translate(glm::mat4(1.0f), {0.0f, 3.0f, 0.0f}),
+	                     glm::rotate(glm::mat4(1.0f), 1.0f, glm::vec3(0.0f, 1.0f, 0.0f)),
+	                     glm::scale(glm::mat4(1.0f), glm::vec3(3.0f))};
+	std::array<glm::mat4, 3> bones {};
+	PoseBetween(from, to, 0.25f, parents, bones);
+
+	// Each bone's own matrix is blended element by element, not turned between its keyframes
+	const auto own = [&from, &to](size_t i) { return from.at(i) + ((to.at(i) - from.at(i)) * 0.25f); };
+	EXPECT_EQ(bones[0], own(0));
+	EXPECT_EQ(bones[1], own(0) * own(1));
+	EXPECT_EQ(bones[2], own(0) * own(1) * own(2));
 }

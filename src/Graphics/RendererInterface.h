@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <array>
 #include <filesystem>
 #include <memory>
@@ -19,6 +21,7 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 
 #include "InstanceDesc.h"
 #include "RenderPass.h"
@@ -41,6 +44,7 @@ class Registry;
 namespace openblack::graphics
 {
 class L3DMesh;
+class Texture2D;
 class FrameBuffer;
 class ShaderManager;
 class ShaderProgram;
@@ -88,6 +92,10 @@ public:
 		uint32_t rgba;
 		const glm::mat4* modelMatrices;
 		uint8_t matrixCount;
+		/// Each instance's own bones, for a program that takes them from a texture (s_bones), with where the draw's
+		/// first are, how many each instance has and the texture's size (u_bones)
+		const graphics::Texture2D* boneTexture {nullptr};
+		glm::vec4 bones {0.0f};
 		std::unique_ptr<const graphics::InstanceDesc> instanceDesc;
 		uint32_t instanceStart;
 		uint32_t instanceCount;
@@ -118,6 +126,8 @@ public:
 		const TextureHandle* skinTexture;
 		/// The environment map added to the mesh where its program takes one (s_environment)
 		const Texture2D* environment;
+		/// The villagers' bones, read by the instances of a program that takes them (s_bonePalette)
+		const Texture2D* bonePalette {nullptr};
 		/// Above 0, the mesh is drawn as its environment map alone in its light, at this alpha, where its program takes
 		/// one: a frozen thing's ice shining over it
 		float environmentOnlyAlpha {0.0f};
@@ -150,6 +160,8 @@ public:
 		/// The building's inner walls: each vertex moved in across the ground along its normal, by less for a two-sided
 		/// material than for another
 		bool innerWalls {false};
+		/// How far the inner walls stand in whatever the material, when given: a temple's
+		std::optional<float> innerWallInset;
 		/// Only the submeshes of this status are drawn, in place of those of status 0: a building's scaffold
 		std::optional<uint32_t> onlyStatus;
 		/// Where a building's model is cut, in its own space: its inner walls and the cap over them are drawn only for a
@@ -185,6 +197,25 @@ public:
 			bool blendSeams {true};
 		};
 		const MorphTargets* morphTargets {nullptr};
+		/// A creature fizzing out of sight, drawn twice through the static scrolling over its skin (creature_fizz_look):
+		/// first its depth alone where the static is strong enough, then its body blended over that depth
+		struct Fizz
+		{
+			enum class Pass : uint8_t
+			{
+				Depth,
+				Body,
+			};
+			Pass pass;
+			/// How far it has fizzed, as a byte
+			uint8_t level;
+			/// How far the static has slid across its skin
+			glm::vec2 scroll;
+		};
+		std::optional<Fizz> fizz;
+		/// How frozen the mesh is drawn, 0 to 1, as a piece of a frozen creature that isn't instanced: sheened with ice by
+		/// it, where it isn't fizzing
+		float freeze {0.0f};
 	};
 
 	static std::unique_ptr<RendererInterface> Create(GraphicsBackend backend, bool vsync) noexcept;

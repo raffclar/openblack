@@ -26,7 +26,8 @@ public:
 	virtual bool Register(entt::entity object, bool createdByScript) = 0;
 	/// Before each native runs: whether it takes control of the objects it is given
 	virtual void EnterNative(uint32_t native) = 0;
-	/// An object a native is given: a native that takes control takes control of it
+	/// An object a native is given: a native that takes control takes control of it; none (null) when the object has gone
+	/// or is no longer to be dealt with
 	virtual entt::entity Fetch(entt::entity object) = 0;
 	/// A script variable takes or lets go of an object
 	virtual void AddReference(entt::entity object) = 0;

@@ -70,6 +70,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Graphics/Texture2D.h"
 #include "Input/GameActionMapInterface.h"
@@ -110,7 +111,7 @@ std::optional<glm::vec3> HandPoint()
 
 float CreatureHeight(const Creature& creature)
 {
-	return creature_morph::k_HeightAtSizeOne * creature.size;
+	return creature_morph::k_HeightAtSizeOne * ShownSize(creature);
 }
 
 float GroundAt(glm::vec2 point)
@@ -180,7 +181,7 @@ leash::Lengths LengthsOf(const Registry& registry, entt::entity creature, const 
 	const auto& body = registry.Get<const Creature>(creature);
 	if (!worn.tiedTo.has_value())
 	{
-		return leash::InHand(body.size);
+		return leash::InHand(ShownSize(body));
 	}
 	if (IsMobile(registry, *worn.tiedTo))
 	{
@@ -816,6 +817,12 @@ LeashType LeashSystem::TypeOf(entt::entity creature) const
 
 std::optional<entt::entity> LeashSystem::PlayersCreature(PlayerNames player) const
 {
+	// The player's primary creature, the earliest they got that is still theirs; without the players' lists, the one
+	// creature they can lead, which is also the first they got
+	if (Locator::playerSystem::has_value())
+	{
+		return Locator::playerSystem::value().GetPrimaryCreature(player);
+	}
 	if (const auto id = leash::LeashableOf(Claims(), player))
 	{
 		return static_cast<entt::entity>(*id);

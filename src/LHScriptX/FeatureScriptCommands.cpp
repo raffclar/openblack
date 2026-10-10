@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <tuple>
 
-#include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/polar_coordinates.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
@@ -21,7 +20,6 @@
 #include "3D/DayNightClock.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "3D/SkyInterface.h"
 #include "Camera/Camera.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
@@ -32,6 +30,7 @@
 #include "ECS/Archetypes/DeadTreeArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/FieldArchetype.h"
+#include "ECS/Archetypes/FishFarmArchetype.h"
 #include "ECS/Archetypes/FlowersArchetype.h"
 #include "ECS/Archetypes/MistArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
@@ -46,10 +45,12 @@
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
@@ -225,9 +226,10 @@ const std::array<const ScriptCommandSignature, 106> FeatureScriptCommands::k_Sig
     CREATE_COMMAND_BINDING("SET_LOST_TOWN_SCALE", SetLostTownScale),
 }};
 
-inline glm::mat4 GetRotation(int rotation)
+/// A script's turn in thousandths of a radian, as the game reads it
+inline float GetYAngle(int rotation)
 {
-	return glm::eulerAngleY(static_cast<float>(rotation) * -0.001f);
+	return static_cast<float>(rotation) * 0.001f;
 }
 
 inline glm::vec3 GetSize(int size)
@@ -391,13 +393,13 @@ void FeatureScriptCommands::CreateVillagerPos(glm::vec3 abodePosition, glm::vec3
 void FeatureScriptCommands::CreateCitadel(glm::vec3 position, int32_t, const std::string& playerOwner, int32_t rotation,
                                           int32_t size)
 {
-	CitadelArchetype::Create(position, GetPlayerName(playerOwner), GetRotation(rotation), GetSize(size));
+	CitadelArchetype::Create(position, GetPlayerName(playerOwner), GetYAngle(rotation), GetSize(size));
 }
 
 void FeatureScriptCommands::CreatePlannedCitadel(int32_t townId, glm::vec3 position, int32_t, const std::string& playerOwner,
                                                  int32_t rotation, int32_t size)
 {
-	CitadelArchetype::CreatePlan(townId, position, GetPlayerName(playerOwner), GetRotation(rotation), GetSize(size));
+	CitadelArchetype::CreatePlan(townId, position, GetPlayerName(playerOwner), GetYAngle(rotation), GetSize(size));
 }
 
 void FeatureScriptCommands::CreateCreaturePen([[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t, int32_t, int32_t)
@@ -420,16 +422,24 @@ void FeatureScriptCommands::CreatePlannedWorshipSite([[maybe_unused]] glm::vec3 
 	// __func__);
 }
 
-void FeatureScriptCommands::CreateAnimal([[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t)
+void FeatureScriptCommands::CreateAnimal(glm::vec3 position, int32_t type, int32_t flockId, int32_t townId)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// As a new animal at no age, which takes a random one
+	CreateNewAnimal(position, type, flockId, townId, 0);
 }
 
-void FeatureScriptCommands::CreateNewAnimal([[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t, int32_t)
+void FeatureScriptCommands::CreateNewAnimal(glm::vec3 position, int32_t type, int32_t flockId, int32_t /*townId*/, int32_t age)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	if (!Locator::animalSystem::has_value() || type < 0 || type >= static_cast<int32_t>(AnimalInfo::_COUNT))
+	{
+		return;
+	}
+	// The type is the row of the animals' table; the animal joins the latest flock made with the number, or is a flock
+	// of its own when there is none. A bird never belongs to a town.
+	// TODO: the land's other animals, which openblack doesn't make yet
+	auto& animals = Locator::animalSystem::value();
+	animals.CreateBird(static_cast<AnimalInfo>(type), glm::vec2(position.x, position.z),
+	                   static_cast<uint32_t>(std::max(age, 0)), animals.FindScriptFlock(flockId));
 }
 
 void FeatureScriptCommands::CreateForest(int32_t forestId, glm::vec3 position)
@@ -475,16 +485,21 @@ void FeatureScriptCommands::CreateTownField(int32_t townId, glm::vec3 position, 
 	CreateNewTownField(townId, position, type, 0.0f);
 }
 
-void FeatureScriptCommands::CreateFishFarm([[maybe_unused]] glm::vec3 position, int32_t)
+void FeatureScriptCommands::CreateFishFarm(glm::vec3 position, [[maybe_unused]] int32_t type)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The fish farms' table has a single row
+	FishFarmArchetype::Create(position);
 }
 
-void FeatureScriptCommands::CreateTownFishFarm([[maybe_unused]] int32_t townId, [[maybe_unused]] glm::vec3 position, int32_t)
+void FeatureScriptCommands::CreateTownFishFarm(int32_t townId, glm::vec3 position, [[maybe_unused]] int32_t type)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// Only for a town there is, though the farm then joins whichever town is nearest
+	const auto& towns = Locator::entitiesRegistry::value().Context().towns;
+	if (townId < 0 || !towns.contains(static_cast<uint32_t>(townId)))
+	{
+		return;
+	}
+	FishFarmArchetype::Create(position);
 }
 
 void FeatureScriptCommands::CreateFeature(glm::vec3 position, FeatureInfo type, int32_t rotation, int32_t scale, int32_t)
@@ -581,10 +596,17 @@ void FeatureScriptCommands::CreateCreatureFromFile(const std::string& playerName
 	                          CreatureArchetype::StartScale(creatureType), CreatureArchetype::StartBody(creatureType));
 }
 
-void FeatureScriptCommands::CreateFlock(int32_t, glm::vec3, glm::vec3, int32_t, int32_t, int32_t)
+void FeatureScriptCommands::CreateFlock(int32_t id, glm::vec3 position, glm::vec3 home, int32_t reach, int32_t flockDistance,
+                                        int32_t /*townId*/)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// A flock of the land's, numbered for its animals to join, made where the script says with its home where it says.
+	// Every land of the game's is of a version that gives the flock distance and then the town. A flock with a bird in it
+	// keeps no town, and birds are the only animals openblack makes so far.
+	if (Locator::animalSystem::has_value())
+	{
+		Locator::animalSystem::value().CreateScriptFlock(id, glm::vec2(position.x, position.z), glm::vec2(home.x, home.z),
+		                                                 static_cast<float>(reach), static_cast<float>(flockDistance));
+	}
 }
 
 void FeatureScriptCommands::LoadLandscape(const std::string& path)

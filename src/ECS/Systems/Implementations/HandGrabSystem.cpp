@@ -207,7 +207,7 @@ hand_grab::Holdable HandGrabSystem::HoldableOf(entt::entity object) const
 bool HandGrabSystem::HandInInfluence() const
 {
 	const auto* grab = _world->Entities().TryGet<const HandGrab>(_world->Hand());
-	return grab != nullptr && grab->handPoint.has_value() && _world->InInfluence(_world->HandPlayer(), *grab->handPoint);
+	return grab != nullptr && grab->handPoint.has_value() && _world->HandInInfluence(_world->HandPlayer(), *grab->handPoint);
 }
 
 bool HandGrabSystem::MayTake(entt::entity object) const
@@ -305,6 +305,12 @@ bool HandGrabSystem::Press(uint32_t nowMs, uint32_t turn)
 		{
 			return true;
 		}
+		// Out of the player's influence the press does nothing: the hand keeps hold, and letting go of the button later,
+		// even back inside, doesn't throw
+		if (!HandInInfluence())
+		{
+			return true;
+		}
 		grab->state = HandGrab::State::ReadyToThrow;
 		grab->springPending = true;
 		return true;
@@ -388,6 +394,9 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 			grab->springPending = false;
 			return std::nullopt;
 		}
+		// Letting go onto the land counts as one more turn for what the hand keeps of the player's influence past the
+		// border, before the throw
+		_world->HeldThingUsedOnLand(_world->HandPlayer());
 		LetGo(*grab, grab->springOn ? grab->spring.Velocity() : glm::vec3(0.0f), false);
 		return std::nullopt;
 	}
@@ -409,6 +418,10 @@ bool HandGrabSystem::StartScoop(HandGrab& grab, entt::entity source)
 	if (const auto field = _world->FieldFactsOf(source))
 	{
 		return StartFieldScoop(grab, source, *field);
+	}
+	if (const auto farm = _world->FishFarmOf(source))
+	{
+		return StartFishFarmScoop(grab, source, *farm);
 	}
 	const auto facts = _world->PotFactsOf(source);
 	// Only a pile is scooped from, never a handful, and only inside the player's influence
@@ -525,11 +538,75 @@ bool HandGrabSystem::ScoopField(HandGrab& grab, const FieldFacts& facts)
 	return true;
 }
 
+bool HandGrabSystem::StartFishFarmScoop(HandGrab& grab, entt::entity farm, const fish_farm::Type& type)
+{
+	if (!HandInInfluence())
+	{
+		return false;
+	}
+	// The first handful comes by what a full farm holds, not out of the fish in it
+	const auto scoop = _world->ScoopFactsOf(PotInfo::HandFood);
+	const auto first = fish_farm::FirstHandful(scoop.initial, type);
+	if (first == 0)
+	{
+		return false;
+	}
+	const auto hand = _world->PoseOf(_world->Hand()).origin;
+	const auto handful = _world->MakeHandful(PotInfo::HandFood, hand, first, false);
+	if (!Exists(handful))
+	{
+		return false;
+	}
+	Take(grab, handful, false);
+	if (grab.state != HandGrab::State::Holding)
+	{
+		return false;
+	}
+	grab.scoopSource = farm;
+	grab.scoopTurns = 0;
+	grab.scoopAnchor = hand;
+	grab.scoopStreamSeconds = 0.0f;
+	// The cursor is pinned while it scoops
+	_world->PinCursor(true);
+	grab.scoopStream = _world->StartFishScoopStream(_world->PoseOf(farm).origin);
+	return true;
+}
+
+bool HandGrabSystem::ScoopFishFarm(HandGrab& grab, const fish_farm::Type& type)
+{
+	auto& registry = _world->Entities();
+	auto* handful = registry.TryGet<Pot>(grab.object);
+	if (handful == nullptr)
+	{
+		return false;
+	}
+	const auto scoop = _world->ScoopFactsOf(PotInfo::HandFood);
+	const auto wanted =
+	    fish_farm::ScoopWanted(hand_grab::ScoopAmount(grab.scoopTurns, scoop), type, handful->amount, scoop.maxPickedUp);
+	// Once the farm gives nothing the scoop ends; while it gives any, the hand gets all it wanted
+	if (_world->TakeFromFishFarm(grab.scoopSource, wanted) == 0)
+	{
+		if (grab.scoopStream.has_value())
+		{
+			_world->StopScoopStream(*grab.scoopStream);
+			grab.scoopStream.reset();
+		}
+		return false;
+	}
+	handful->amount += wanted;
+	_world->ResizePot(grab.object);
+	return true;
+}
+
 bool HandGrabSystem::Scoop(HandGrab& grab)
 {
 	if (const auto field = _world->FieldFactsOf(grab.scoopSource))
 	{
 		return ScoopField(grab, *field);
+	}
+	if (const auto farm = _world->FishFarmOf(grab.scoopSource))
+	{
+		return ScoopFishFarm(grab, *farm);
 	}
 	auto& registry = _world->Entities();
 	const auto* handful = registry.TryGet<Pot>(grab.object);

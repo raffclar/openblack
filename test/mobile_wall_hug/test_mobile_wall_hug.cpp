@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdlib>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -425,8 +426,9 @@ protected:
 // The walks were first recorded in 2021 with continuous angles, so they were never the game's own state: the game walks
 // in whole map units at whole game angles. They match the 2021 recordings only up to the walker's first re-aim at its
 // goal; from there they are recorded from this walk (run the test with OPENBLACK_RECORD_WALKS set to a folder to record
-// them again). Things are still filed in map cells by their bounding circles rather than their footprints, so the
-// turns to the houses ahead may change once that is done.
+// them again). With buildings filed in every map cell their outline covers and the straight-line check taking the
+// nearest circle on the walker's line, walk 2 sees each house as many turns ahead as the 2021 recording does, all the
+// way to its goal (give or take a turn where the 2021 recording's continuous positions drift from the whole ones).
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(MobileWallHugWalks, mobilewallhug1)
@@ -452,4 +454,92 @@ TEST_F(MobileWallHugWalks, DISABLED_footpath1)
 TEST_F(MobileWallHugWalks, DISABLED_footpath2)
 {
 	MobileWallHugScenarioAssert();
+}
+
+/// A walker sent to a goal beside the things in its way, as a script sends one
+class WalkerToGoal: public ::testing::Test
+{
+protected:
+	/// Which states the walk went through on the way
+	struct Walk
+	{
+		uint32_t turns;
+		bool wentRound;
+		bool leftCircle;
+	};
+
+	void Load(const std::string& mapFile)
+	{
+		static const auto mockGamePath = std::filesystem::path(TEST_BINARY_DIR) / "mock";
+		auto args = openblack::Arguments {
+		    .graphicsBackend = openblack::GraphicsBackend::Noop,
+		    .gamePath = mockGamePath.string(),
+		    .logFile = "stdout",
+		};
+		std::fill_n(args.logLevels.begin(), args.logLevels.size(), spdlog::level::warn);
+		_game = std::make_unique<openblack::Game>(std::move(args));
+		ASSERT_TRUE(_game->Initialize());
+		std::ifstream ifs(std::filesystem::path(k_ScenarioPath) / mapFile);
+		openblack::lhscriptx::Script script;
+		script.Load(std::string(std::istreambuf_iterator<char> {ifs}, {}));
+		_walker = Locator::entitiesRegistry::value().Front<const ecs::components::Villager>();
+	}
+
+	void TearDown() override { _game.reset(); }
+
+	/// Walks from a point to a goal at a speed (metres a second) until it takes its last step, for at most some turns
+	Walk WalkTo(glm::vec2 from, glm::vec2 goal, float speed, uint32_t mostTurns)
+	{
+		using namespace openblack::ecs::components;
+		auto& registry = Locator::entitiesRegistry::value();
+		Locator::entitiesMap::value().Sync();
+		registry.Get<Transform>(_walker).position = glm::vec3(from.x, 0.0f, from.y);
+		auto& wallHug = registry.Get<WallHug>(_walker);
+		registry.Assign<MoveStateLinearTag>(_walker);
+		wallHug.speed = speed;
+		wallHug.step = {0, 0};
+		wallHug.goal = goal;
+		Walk walk {.turns = mostTurns, .wentRound = false, .leftCircle = false};
+		for (uint32_t turn = 1; turn <= mostTurns; ++turn)
+		{
+			Locator::pathfindingSystem::value().Update();
+			walk.wentRound = walk.wentRound || registry.AllOf<MoveStateOrbitTag>(_walker);
+			walk.leftCircle = walk.leftCircle || registry.AllOf<MoveStateExitCircleTag>(_walker);
+			if (registry.AnyOf<MoveStateFinalStepTag, MoveStateArrivedTag>(_walker))
+			{
+				walk.turns = turn;
+				break;
+			}
+		}
+		return walk;
+	}
+
+	static constexpr std::string_view k_ScenarioPath = TEST_BINARY_DIR "/mobile_wall_hug/scenarios";
+	std::unique_ptr<openblack::Game> _game;
+	entt::entity _walker;
+};
+
+// A goal two metres outside a 3.41 m circle, the walker coming from the far side: it goes round the circle, leaves it
+// once nearer its goal with the goal ahead, and reaches it soon after, as the game's walk does
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(WalkerToGoal, AGoalBesideACircleIsReachedOnceRoundIt)
+{
+	Load("goal_beside_circle.txt");
+	const auto walk = WalkTo({2149.5f, 2235.0f}, {2150.0f, 2255.41f}, 2.0f, 2000);
+	EXPECT_TRUE(walk.wentRound);
+	EXPECT_TRUE(walk.leftCircle);
+	// Twenty metres at a fifth of a metre a turn, and the way round: not thousands of turns orbiting the circle
+	EXPECT_EQ(walk.turns, 117);
+}
+
+// A goal among trees, as the opening's mother walks to her mark: a tree stands in the way only with its trunk, so the
+// walker goes straight past the crowns to its goal
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(WalkerToGoal, AGoalAmongTreesIsReachedStraight)
+{
+	Load("goal_beside_trees.txt");
+	const auto walk = WalkTo({2161.24f, 2276.99f}, {2150.0f, 2250.0f}, 2.0f, 2000);
+	EXPECT_FALSE(walk.wentRound);
+	// Its 29.2 m at a fifth of a metre a turn
+	EXPECT_EQ(walk.turns, 147);
 }

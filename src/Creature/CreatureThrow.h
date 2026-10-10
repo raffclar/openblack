@@ -10,8 +10,12 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
+
+#include <optional>
 
 #include <glm/mat3x3.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 /// How a creature lets go of what it holds: thrown at something, tossed away, lobbed or put down, and how the thing then
@@ -58,5 +62,34 @@ constexpr float k_HeightAtSizeOne = 15.0f;
 /// The velocity something tossed away leaves with: a share of the hand's own, measured in the creature's space, flipped
 /// to the other side when tossed by the other hand and turned with the creature
 [[nodiscard]] glm::vec3 TossVelocity(const glm::vec3& handVelocity, bool mirrored, const glm::mat3& rotation, float share);
+
+/// Going to throw into something, a creature stands no nearer to it than the distance it was given, twice its height
+/// and the thing's radius together, and no further than three and a half times its height
+constexpr float k_ThrowStandHeights = 2.0f;
+constexpr float k_ThrowReachHeights = 3.5f;
+/// Backing away to throw, it goes to within twice its height of the point it backs away to
+constexpr float k_ThrowBackOffHeights = 2.0f;
+/// Walking up to throw where it may go no nearer than it may stand off, it may stand off this much more
+constexpr float k_ThrowWalkUpSpare = 0.01f;
+
+/// What a creature does to get where it can throw into something from: nothing when it is there already, backing away
+/// to a point, or walking up to the thing until within a ring about it
+struct ThrowStand
+{
+	enum class Kind : uint8_t
+	{
+		There,
+		BackOff,
+		WalkUp,
+	};
+	Kind kind {Kind::There};
+	glm::vec2 point {0.0f};
+	float minDistance {0.0f};
+	float maxDistance {0.0f};
+};
+/// Where a creature of a height goes to throw into a thing of a radius, keeping the distance it was given; none when it
+/// stands right on the thing's centre, with no way to back away
+[[nodiscard]] std::optional<ThrowStand> WhereToThrowFrom(glm::vec2 creature, glm::vec2 target, float height, float targetRadius,
+                                                         float keep);
 
 } // namespace openblack::creature_throw

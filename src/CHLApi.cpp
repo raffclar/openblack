@@ -9,6 +9,7 @@
 
 #include "CHLApi.h"
 
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 
@@ -17,8 +18,10 @@
 #include <iterator>
 #include <limits>
 #include <optional>
+#include <ranges>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
@@ -37,16 +40,20 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "3D/ScreenPick.h"
-#include "3D/SkyInterface.h"
 #include "3D/TempleInteriorInterface.h"
+#include "Audio/AudioManagerInterface.h"
 #include "Audio/GameMusic.h"
+#include "Audio/ScriptSoundEffect.h"
+#include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
 #include "Creature/LeashRules.h"
+#include "Creature/TemplePen.h"
 #include "ECS/Archetypes/BallArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -56,13 +63,14 @@
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
+#include "ECS/Components/Influence.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/ScriptControl.h"
-#include "ECS/Components/Temple.h"
+#include "ECS/Components/Sky.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/Transform.h"
@@ -74,6 +82,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
+#include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -83,11 +92,19 @@
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TownDesireSystemInterface.h"
+#include "ECS/Systems/TutorialSkipSystemInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
+#include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/TempleConstruction.h"
+#include "ECS/TownDesire.h"
 #include "ECS/TownPlaythings.h"
 #include "ECS/WorldObjects.h"
 #include "Enums.h"
@@ -107,6 +124,8 @@ namespace openblack::chlapi
 {
 
 using namespace openblack::ecs::archetypes;
+
+PlayerNames ScriptPlayerName(int32_t scriptPlayer);
 
 using openblack::Locator;
 using openblack::MobileStaticInfo;
@@ -228,10 +247,20 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 	}
 	case ObjectType::Ball:
 		return CreateScriptBall(position);
+	case ObjectType::Vortex:
+	{
+		// A vortex of the three kinds; the game makes nothing for any other
+		if (subtype > static_cast<uint32_t>(VortexType::Volcano))
+		{
+			break;
+		}
+		const auto vortex = Locator::vortexSystem::value().Create(position, static_cast<VortexType>(subtype), altitude);
+		return vortex != entt::null ? vortex : static_cast<entt::entity>(0);
+	}
 	default:
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "CreateScriptObject not implemented for type {}", static_cast<int>(type));
 	}
-	return static_cast<entt::entity>(0);
+	return entt::null;
 }
 
 VMValue Pop(DataType& type)
@@ -265,7 +294,13 @@ void RegisterCreated(entt::entity object)
 /// An object given to a native: a native that takes control of what it is given takes control of it
 entt::entity PopObject()
 {
-	return Locator::scriptObjects::value().Fetch(static_cast<entt::entity>(Pop().uintVal));
+	// A script's object 0 is none: the native was given nothing, or a creation that failed
+	const auto id = Pop().uintVal;
+	if (id == 0)
+	{
+		return entt::null;
+	}
+	return Locator::scriptObjects::value().Fetch(static_cast<entt::entity>(id));
 }
 
 /// A script effect's seconds as game turns: a whole number of turns a second, as the game's turn length gives it
@@ -333,6 +368,12 @@ void Pushb(bool value)
 {
 	auto& lhvm = Locator::vm::value();
 	lhvm.Pushb(value);
+}
+
+/// An object handed to a script: none is the script's object 0
+void PushObject(entt::entity object)
+{
+	Pusho(object == entt::null ? 0u : static_cast<uint32_t>(object));
 }
 
 CHLApi::CHLApi()
@@ -868,13 +909,20 @@ void SetProperty() // 022 SET_PROPERTY
 		}
 		return;
 	}
+	if (prop == script::ObjectPropertyType::BuiltPercentage)
+	{
+		// A building is built that far, finished at all of it
+		ecs::construction::SetBuilt(object, value);
+		return;
+	}
 	// TODO(Daniels118): the other properties
 	NotImplemented(static_cast<int32_t>(prop));
 }
 
 void GetPosition() // 023 GET_POSITION
 {
-	const auto objId = Pop().uintVal;
+	// No object, or one that has gone, finds no transform: it is at the origin
+	const auto objId = entt::to_integral(PopObject());
 
 	glm::vec3 position(0.0f);
 	if (objId != 0)
@@ -893,7 +941,8 @@ void GetPosition() // 023 GET_POSITION
 void SetPosition() // 024 SET_POSITION
 {
 	auto position = PopVec();
-	const auto objId = Pop().uintVal;
+	// No object, or one that has gone, finds no transform: nothing moves
+	const auto objId = entt::to_integral(PopObject());
 
 	if (objId != 0)
 	{
@@ -933,22 +982,11 @@ static map_coords::MapCoords ScriptFindPosition(const ecs::Registry& registry, e
 	return map_coords::FromMetres({position.x, position.z});
 }
 
-/// The things in a cell of the map that a search asks for. The temple isn't kept in the map's cells: it is looked at in
-/// the cell of its middle, after what the cell holds
+/// The things in a cell of the map that a search asks for
 static std::vector<ecs::script_find::Candidate> ScriptFindCandidates(const ScriptFindRequest& request, glm::ivec2 cell)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	std::vector<entt::entity> things = Locator::entitiesMap::value().GetAllInCell(cell);
-	if (request.type == ObjectType::Citadel)
-	{
-		registry.Each<const ecs::components::Temple, const Transform>(
-		    [&things, cell](entt::entity temple, const ecs::components::Temple&, const Transform& transform) {
-			    if (map_coords::CellOf(transform.position) == cell)
-			    {
-				    things.push_back(temple);
-			    }
-		    });
-	}
+	const std::vector<entt::entity> things = Locator::entitiesMap::value().GetAllInCell(cell);
 	std::vector<ecs::script_find::Candidate> found;
 	for (const auto thing : things)
 	{
@@ -1071,7 +1109,7 @@ void Create() // 027 CREATE
 	const auto object = CreateScriptObject(type, subtype, position, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
 	RegisterCreated(object);
 
-	Pusho(static_cast<uint32_t>(object));
+	PushObject(object);
 }
 
 void Random() // 028 RANDOM
@@ -1201,14 +1239,64 @@ void GetHandPosition() // 042 GET_HAND_POSITION
 	PushVec(handTransform.position);
 }
 
+/// The loaded sound group of a bank's file, whatever the case of the file's name on disk
+static std::optional<std::string> LoadedSoundGroup(std::string_view file)
+{
+	const auto sameName = [file](const std::string& name) {
+		return std::ranges::equal(name, file, [](char a, char b) {
+			return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+		});
+	};
+	for (const auto& name : Locator::audio::value().GetSoundGroups() | std::views::keys)
+	{
+		if (sameName(name))
+		{
+			return name;
+		}
+	}
+	return std::nullopt;
+}
+
 void PlaySoundEffect() // 043 PLAY_SOUND_EFFECT
 {
-	// const auto withPosition = static_cast<bool>(Pop().intVal);
-	// const auto position = PopVec();
-	// const auto soundbank = Pop().intVal;
-	// const auto sound = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto withPosition = Pop().intVal != 0;
+	const auto position = PopVec();
+	const auto bank = Pop().intVal;
+	const auto sample = Pop().intVal;
+
+	// A number naming no bank, a bank the game doesn't ship and a sample the bank doesn't have all play nothing
+	const auto file = audio::ScriptSoundBankFile(bank);
+	if (!file.has_value())
+	{
+		return;
+	}
+	const auto group = LoadedSoundGroup(*file);
+	if (!group.has_value())
+	{
+		return;
+	}
+	const auto id = entt::hashed_string(fmt::format("{}/{}", *group, sample).c_str()).value();
+	auto& sounds = Locator::resources::value().GetSounds();
+	if (!sounds.Contains(id))
+	{
+		return;
+	}
+
+	const auto& director = Locator::cinematicDirectorSystem::value();
+	// TODO(script-natives): the player controlling a creature fight should quieten the samples kept out of fights;
+	// openblack's fights don't say yet when the interface is in those controls
+	const audio::SoundEffectConditions conditions {
+	    .scriptWideScreen = director.IsWideScreenOn() && director.GetWideScreenOwner() != 0,
+	    .insideTemple = PlayerInsideTemple(),
+	    .gameSoundOn = Locator::chlapi::value().IsGameSoundOn(),
+	    .creatureFightControl = false,
+	};
+	if (!audio::SoundEffectHeard(conditions, static_cast<audio::ScriptSoundBank>(bank), sounds.Handle(id)->userParam))
+	{
+		return;
+	}
+	// Placed, it isn't started further from the camera than the sample's maximum distance
+	Locator::audio::value().PlaySoundEffect(id, withPosition ? std::optional(position) : std::nullopt);
 }
 
 void StartMusic() // 044 START_MUSIC
@@ -1643,7 +1731,7 @@ void RemoveCountdownTimer() // 087 REMOVE_COUNTDOWN_TIMER
 void GetObjectDropped() // 088 GET_OBJECT_DROPPED
 {
 	// The last thing a creature let go of, none once it has gone; asked only of creatures
-	const auto creature = static_cast<entt::entity>(Pop().uintVal);
+	const auto creature = PopObject();
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* dropped = registry.Valid(creature) && registry.AllOf<ecs::components::Creature>(creature)
 	                          ? registry.TryGet<const ecs::components::CreatureDroppedObject>(creature)
@@ -1659,7 +1747,7 @@ void GetObjectDropped() // 088 GET_OBJECT_DROPPED
 void ClearDroppedByObject() // 089 CLEAR_DROPPED_BY_OBJECT
 {
 	// The creature forgets what it last let go of
-	const auto creature = static_cast<entt::entity>(Pop().uintVal);
+	const auto creature = PopObject();
 	auto& registry = Locator::entitiesRegistry::value();
 	if (registry.Valid(creature) && registry.AllOf<ecs::components::CreatureDroppedObject>(creature))
 	{
@@ -1808,9 +1896,9 @@ void MoveCameraToFaceObject() // 107 MOVE_CAMERA_TO_FACE_OBJECT
 
 void GetMoonPercentage() // 108 GET_MOON_PERCENTAGE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// How full the moon was the last time it showed: 0 at the full moon, 1 at a new moon
+	const auto* moon = Locator::entitiesRegistry::value().TryGet<ecs::components::Moon>(Locator::skySystem::value().GetMoon());
+	Pushf(graphics::moon::ScriptPercentage(moon != nullptr ? moon->phase : 0.0f));
 }
 
 void PopulateContainer() // 109 POPULATE_CONTAINER
@@ -1826,12 +1914,19 @@ void PopulateContainer() // 109 POPULATE_CONTAINER
 void AddReference() // 110 ADD_REFERENCE
 {
 	// A script takes hold of an object. The game's table says one value comes back, but the game's function pushes none
-	Locator::scriptObjects::value().AddReference(static_cast<entt::entity>(Pop().uintVal));
+	// A variable that holds no object references nothing
+	if (const auto id = Pop().uintVal; id != 0)
+	{
+		Locator::scriptObjects::value().AddReference(static_cast<entt::entity>(id));
+	}
 }
 
 void RemoveReference() // 111 REMOVE_REFERENCE
 {
-	Locator::scriptObjects::value().RemoveReference(static_cast<entt::entity>(Pop().uintVal));
+	if (const auto id = Pop().uintVal; id != 0)
+	{
+		Locator::scriptObjects::value().RemoveReference(static_cast<entt::entity>(id));
+	}
 }
 
 void SetGameTime() // 112 SET_GAME_TIME
@@ -1972,10 +2067,14 @@ void EndGameSpeed() // 129 END_GAME_SPEED
 
 void BuildBuilding() // 130 BUILD_BUILDING
 {
-	// const auto desire = Popf();
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto desire = Popf();
+	const auto position = PopVec();
+	// The towns start what they planned there: a planned temple goes up
+	// TODO(villager-life): the towns' other planned buildings
+	if (!ecs::construction::StartPlannedAt(position, desire).has_value())
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "BUILD_BUILDING: no planned temple at ({}, {})", position.x, position.z);
+	}
 }
 
 void SetAffectedByWind() // 131 SET_AFFECTED_BY_WIND
@@ -2165,7 +2264,8 @@ void LoadMap() // 152 LOAD_MAP
 	const auto& fileSystem = Locator::filesystem::value();
 	try
 	{
-		Game::Instance()->LoadMap(fileSystem.FindPath(filesystem::FileSystemInterface::FixPath(path)));
+		Game::Instance()->LoadMap(fileSystem.FindPath(filesystem::FileSystemInterface::FixPath(path)),
+		                          loading::LoadingClock::Mode::PleaseWait);
 	}
 	catch (const std::exception& e)
 	{
@@ -2308,7 +2408,7 @@ void FlySpirit() // 167 FLY_SPIRIT
 
 void SetIdMoveable() // 168 SET_ID_MOVEABLE
 {
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	const auto moveable = static_cast<bool>(Pop().intVal);
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object))
@@ -2329,7 +2429,7 @@ void SetIdMoveable() // 168 SET_ID_MOVEABLE
 
 void SetIdPickupable() // 169 SET_ID_PICKUPABLE
 {
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	const auto pickupable = Pop().uintVal != 0;
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object))
@@ -2350,7 +2450,7 @@ void SetIdPickupable() // 169 SET_ID_PICKUPABLE
 
 void IsOnFire() // 170 IS_ON_FIRE
 {
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	Pushb(Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(object));
 }
 
@@ -2383,7 +2483,7 @@ void SetPoisoned() // 173 SET_POISONED
 void SetTemperature() // 174 SET_TEMPERATURE
 {
 	const auto temperature = Popf();
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	if (Locator::fireSystem::has_value())
 	{
 		Locator::fireSystem::value().SetTemperature(object, temperature, entt::null);
@@ -2393,7 +2493,7 @@ void SetTemperature() // 174 SET_TEMPERATURE
 void SetOnFire() // 175 SET_ON_FIRE
 {
 	const auto burnSpeed = Popf();
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	const auto enable = static_cast<bool>(Pop().intVal);
 	if (!Locator::fireSystem::has_value())
 	{
@@ -2492,8 +2592,13 @@ void SetMusicPlayPosition() // 184 SET_MUSIC_PLAY_POSITION
 
 void AttachObjectLeashToObject() // 185 ATTACH_OBJECT_LEASH_TO_OBJECT
 {
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
-	const auto creature = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
+	const auto creature = PopObject();
+	if (object == entt::null || creature == entt::null)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Thing for leash not found");
+		return;
+	}
 	if (!Locator::leashSystem::has_value())
 	{
 		return;
@@ -2504,7 +2609,7 @@ void AttachObjectLeashToObject() // 185 ATTACH_OBJECT_LEASH_TO_OBJECT
 
 void AttachObjectLeashToHand() // 186 ATTACH_OBJECT_LEASH_TO_HAND
 {
-	const auto creature = static_cast<entt::entity>(Pop().uintVal);
+	const auto creature = PopObject();
 	if (!Locator::leashSystem::has_value())
 	{
 		return;
@@ -2522,7 +2627,7 @@ void AttachObjectLeashToHand() // 186 ATTACH_OBJECT_LEASH_TO_HAND
 
 void DetachObjectLeash() // 187 DETACH_OBJECT_LEASH
 {
-	const auto creature = static_cast<entt::entity>(Pop().uintVal);
+	const auto creature = PopObject();
 	if (!Locator::leashSystem::has_value())
 	{
 		return;
@@ -2592,7 +2697,7 @@ void SpellAtThing() // 195 SPELL_AT_THING
 	const auto duration = Popf();
 	const auto radius = Popf();
 	const auto from = PopVec();
-	const auto target = static_cast<entt::entity>(Pop().uintVal);
+	const auto target = PopObject();
 	const auto spell = Pop().intVal;
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* transform = registry.Valid(target) ? registry.TryGet<const ecs::components::Transform>(target) : nullptr;
@@ -2712,10 +2817,31 @@ void SetAnimationModify() // 202 SET_ANIMATION_MODIFY
 
 void SetAviSequence() // 203 SET_AVI_SEQUENCE
 {
-	// const auto aviSequence = Pop().intVal;
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Sequence 1 is the story's intro, 2 the falling spell's film
+	const auto sequence = Pop().intVal;
+	const auto enable = static_cast<bool>(Pop().intVal);
+	auto& videos = Locator::videoSystem::value();
+	auto& director = Locator::cinematicDirectorSystem::value();
+	if (!enable)
+	{
+		if (sequence == 2)
+		{
+			videos.EndFallingSpell();
+		}
+		return;
+	}
+	if (sequence == 1)
+	{
+		// The intro is cut short: it fades from 58 s and ends at 60 s. The script's fade is lifted at once under it
+		videos.Play("Data/INTRO.bik");
+		videos.ScheduleIntro();
+		director.FadeBackToNormal(0);
+	}
+	else if (sequence == 2)
+	{
+		videos.StartFallingSpell();
+		director.FadeBackToNormal(0);
+	}
 }
 
 void PlayGesture() // 204 PLAY_GESTURE
@@ -2916,16 +3042,35 @@ void GameSubType() // 221 GAME_SUB_TYPE
 
 void IsLeashed() // 222 IS_LEASHED
 {
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	Pushb(Locator::leashSystem::has_value() && Locator::leashSystem::value().IsLeashed(object));
 }
 
 void SetCreatureHome() // 223 SET_CREATURE_HOME
 {
-	// const auto position = PopVec();
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The creature's home becomes the point, on the ground and kept as precisely as a map position. While its player's
+	// temple stands the temple's pen is its home again from the next game turn.
+	const auto position = PopVec();
+	const auto creature = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_CREATURE_HOME: thing not found");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(creature))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_CREATURE_HOME: thing not creature");
+		return;
+	}
+	const auto place = temple_pen::MapPlace(position);
+	const auto ground = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(place) : 0.0f;
+	auto* leash = registry.TryGet<ecs::components::CreatureLeash>(creature);
+	if (leash == nullptr)
+	{
+		leash = &registry.Assign<ecs::components::CreatureLeash>(creature);
+	}
+	leash->home = glm::vec3(place.x, ground, place.y);
 }
 
 void GetHitObject() // 224 GET_HIT_OBJECT
@@ -3024,7 +3169,7 @@ void CreatureSpellReversion() // 233 CREATURE_SPELL_REVERSION
 {
 	// Whether the spells on a creature put it back as it was once they wear off. The creature is on top of the stack, the
 	// flag under it.
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	const auto enable = Pop().intVal != 0;
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object))
@@ -3126,7 +3271,7 @@ void CreateRewardInTown() // 240 CREATE_REWARD_IN_TOWN
 {
 	const auto fromSky = Pop().intVal != 0;
 	const auto position = PopVec();
-	const auto town = static_cast<entt::entity>(Pop().uintVal);
+	const auto town = PopObject();
 	const auto type = Pop().intVal;
 	// The town must be one
 	if (!Locator::entitiesRegistry::value().Valid(town) ||
@@ -3206,7 +3351,7 @@ void GetHelp() // 248 GET_HELP
 
 void SetLeashWorks() // 249 SET_LEASH_WORKS
 {
-	const auto creature = static_cast<entt::entity>(Pop().uintVal);
+	const auto creature = PopObject();
 	const auto enable = Pop().intVal != 0;
 	if (!Locator::leashSystem::has_value())
 	{
@@ -3243,7 +3388,7 @@ void CreateWithAngleAndScale() // 252 CREATE_WITH_ANGLE_AND_SCALE
 	const entt::entity object = CreateScriptObject(type, subtype, position, 0.0f, 0.0f, angle, 0.0f, scale);
 	RegisterCreated(object);
 
-	Pusho(static_cast<uint32_t>(object));
+	PushObject(object);
 }
 
 void SetHelpSystem() // 253 SET_HELP_SYSTEM
@@ -3255,10 +3400,30 @@ void SetHelpSystem() // 253 SET_HELP_SYSTEM
 
 void SetVirtualInfluence() // 254 SET_VIRTUAL_INFLUENCE
 {
-	// const auto player = Popf();
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto enable = Pop().intVal != 0;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "The hand's virtual influence for player {} is turned {}",
+	                    static_cast<int>(player), enable ? "on" : "off");
+	// Turned off, the player's hand keeps nothing of their influence past the border, and loses what it had
+	if (!Locator::playerSystem::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = Locator::playerSystem::value().GetPlayer(player);
+	if (!registry.Valid(entity))
+	{
+		return;
+	}
+	auto& state =
+	    (registry.AnyOf<ecs::components::VirtualInfluence>(entity) ? registry.Get<ecs::components::VirtualInfluence>(entity)
+	                                                               : registry.Assign<ecs::components::VirtualInfluence>(entity))
+	        .state;
+	state.disabled = !enable;
+	if (state.disabled)
+	{
+		state.fraction = 0.0f;
+	}
 }
 
 void SetActive() // 255 SET_ACTIVE
@@ -3271,22 +3436,35 @@ void SetActive() // 255 SET_ACTIVE
 
 void ThingValid() // 256 THING_VALID
 {
-	const auto objId = Pop().uintVal;
-	// TODO(Daniels118): is this the right way?
-	bool valid = false;
-	if (objId != 0)
-	{
-		auto& registry = Locator::entitiesRegistry::value();
-		valid = registry.Valid(static_cast<entt::entity>(objId));
-	}
-	Pushb(valid);
+	// No object, one that has gone or one no longer to be dealt with is not valid; a town is valid while any of it stands
+	const auto object = PopObject();
+	const auto* town =
+	    object != entt::null ? Locator::entitiesRegistry::value().TryGet<const ecs::components::Town>(object) : nullptr;
+	Pushb(object != entt::null && (town == nullptr || !TownCompletelyDestroyed(*town)));
 }
 
 void VortexFadeOut() // 257 VORTEX_FADE_OUT
 {
-	// const auto vortex = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The vortex starts to fade out, whatever it was doing. Nothing given at all is an error; a thing that isn't a vortex
+	// is one too.
+	DataType type {};
+	const auto value = Pop(type);
+	// A script's object 0 is none, as PopObject reads it
+	const auto vortex = value.uintVal == 0 ? entt::entity {entt::null}
+	                                       : Locator::scriptObjects::value().Fetch(static_cast<entt::entity>(value.uintVal));
+	if (vortex == entt::null || !Locator::entitiesRegistry::value().Valid(vortex))
+	{
+		if (type == DataType::None)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "vortex fade out failed");
+		}
+		return;
+	}
+	if (!Locator::vortexSystem::value().StartFadeOut(vortex))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Thing not vortex");
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "vortex fade out failed");
+	}
 }
 
 void RemoveReactionOfType() // 258 REMOVE_REACTION_OF_TYPE
@@ -3392,8 +3570,8 @@ void GetArsePosition() // 268 GET_ARSE_POSITION
 
 void IsLeashedToObject() // 269 IS_LEASHED_TO_OBJECT
 {
-	const auto target = static_cast<entt::entity>(Pop().uintVal);
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto target = PopObject();
+	const auto object = PopObject();
 	Pushb(Locator::leashSystem::has_value() && Locator::leashSystem::value().TiedTo(object) == target);
 }
 
@@ -3442,7 +3620,7 @@ void GetActionCount() // 274 GET_ACTION_COUNT
 
 void GetObjectLeashType() // 275 GET_OBJECT_LEASH_TYPE
 {
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	// The scripts count no leash as 0
 	const auto type = Locator::leashSystem::has_value() ? Locator::leashSystem::value().TypeOf(object) : LeashType::None;
 	Pushi(type == LeashType::None ? 0 : static_cast<int32_t>(type));
@@ -3628,7 +3806,7 @@ void AddSpotVisualTargetObject() // 297 ADD_SPOT_VISUAL_TARGET_OBJECT
 
 void SetIndestructable() // 298 SET_INDESTRUCTABLE
 {
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	const bool indestructible = (Pop().uintVal & 1u) != 0;
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object))
@@ -3846,7 +4024,7 @@ void ObjectInfoBits() // 320 OBJECT_INFO_BITS
 
 void SetHurtByFire() // 321 SET_HURT_BY_FIRE
 {
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	const auto enable = static_cast<bool>(Pop().intVal);
 	if (Locator::fireSystem::has_value())
 	{
@@ -4025,11 +4203,27 @@ void GamePlaySaySoundEffect() // 340 GAME_PLAY_SAY_SOUND_EFFECT
 
 void SetTownDesireBoost() // 341 SET_TOWN_DESIRE_BOOST
 {
-	// const auto boost = Popf();
-	// const auto desire = Pop().intVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A town wants one of its desires that much more, or less, until a script changes it again; its order of desires is
+	// put right at once
+	const auto boost = Popf();
+	const auto desire = Pop().intVal;
+	const auto town = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	const bool isTown = town != entt::null && registry.Valid(town) && registry.AllOf<ecs::components::Town>(town);
+	if (!isTown)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_TOWN_DESIRE_BOOST: object not a town");
+	}
+	if (!ecs::town_desire::ValidScriptBoost(desire, boost))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_TOWN_DESIRE_BOOST: desire {} or boost {} out of range", desire,
+		                    boost);
+		return;
+	}
+	if (isTown)
+	{
+		Locator::townDesireSystem::value().SetBoost(town, static_cast<TownDesireInfo>(desire), boost, true);
+	}
 }
 
 void IsLockedInteraction() // 342 IS_LOCKED_INTERACTION
@@ -4185,9 +4379,13 @@ void SetMagicProperties() // 356 SET_MAGIC_PROPERTIES
 
 void SetGameSound() // 357 SET_GAME_SOUND
 {
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Turned off, every sound effect playing stops and from then only the advisors' and villagers' speech plays
+	const auto enable = Pop().intVal != 0;
+	if (!enable)
+	{
+		Locator::audio::value().StopAllSoundEffects();
+	}
+	Locator::chlapi::value().SetGameSoundOn(enable);
 }
 
 void SexIsMale() // 358 SEX_IS_MALE
@@ -4420,10 +4618,24 @@ void CallFlying() // 383 CALL_FLYING
 
 void SetObjectFadeIn() // 384 SET_OBJECT_FADE_IN
 {
-	// const auto time = Popf();
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A creature drops out of sight at once (with the energise sound) and fizzes back in over the seconds given. The
+	// game fades nothing else in: any other object is only reported.
+	const auto seconds = Popf();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object dead man!");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_OBJECT_FADE_IN: only creatures fade in");
+		return;
+	}
+	auto& fizz = Locator::creatureFizzSystem::value();
+	fizz.SetFizz(object, 1.0f, 0.0f, false);
+	fizz.SetFizz(object, 0.0f, seconds, false);
 }
 
 void IsAffectedBySpell() // 385 IS_AFFECTED_BY_SPELL
@@ -4687,9 +4899,8 @@ void GetHandState() // 413 GET_HAND_STATE
 
 void SetInterfaceCitadel() // 414 SET_INTERFACE_CITADEL
 {
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Whether tapping the temple's entrance takes the player inside
+	Locator::entitiesRegistry::value().Context().scriptLetsTempleBeEntered = Pop().intVal != 0;
 }
 
 void MapScriptFunction() // 415 MAP_SCRIPT_FUNCTION
@@ -4786,7 +4997,7 @@ void GetTotemStatue() // 425 GET_TOTEM_STATUE
 
 void SetSetOnFire() // 426 SET_SET_ON_FIRE
 {
-	const auto object = static_cast<entt::entity>(Pop().uintVal);
+	const auto object = PopObject();
 	const auto enable = static_cast<bool>(Pop().intVal);
 	if (Locator::fireSystem::has_value())
 	{
@@ -4922,7 +5133,7 @@ void PosValidForCreature() // 441 POS_VALID_FOR_CREATURE
 
 void GetTimeSinceObjectAttacked() // 442 GET_TIME_SINCE_OBJECT_ATTACKED
 {
-	const auto town = static_cast<entt::entity>(Pop().uintVal);
+	const auto town = PopObject();
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* aggression = registry.Valid(town) ? registry.TryGet<const ecs::components::TownAggression>(town) : nullptr;
@@ -4960,6 +5171,7 @@ void GameAddForBuilding() // 444 GAME_ADD_FOR_BUILDING
 void EnableDisableAlignmentMusic() // 445 ENABLE_DISABLE_ALIGNMENT_MUSIC
 {
 	const auto enable = Pop().intVal != 0;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "The land's music is turned {}", enable ? "on" : "off");
 	if (auto* gameMusic = Game::Instance()->GetGameMusic())
 	{
 		gameMusic->SetAlignmentMusicEnabled(enable);
@@ -5093,30 +5305,22 @@ void SetHandDemoKeys() // 459 SET_HAND_DEMO_KEYS
 
 void CanSkipTutorial() // 460 CAN_SKIP_TUTORIAL
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(Locator::tutorialSkipSystem::value().Get().skipTutorial);
 }
 
 void CanSkipCreatureTraining() // 461 CAN_SKIP_CREATURE_TRAINING
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(Locator::tutorialSkipSystem::value().Get().skipCreatureTraining);
 }
 
 void IsKeepingOldCreature() // 462 IS_KEEPING_OLD_CREATURE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(Locator::tutorialSkipSystem::value().Get().keepOldCreature);
 }
 
 void CurrentProfileHasCreature() // 463 CURRENT_PROFILE_HAS_CREATURE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(Locator::playerProfileSystem::value().CurrentProfileHasCreature());
 }
 
 void CHLApi::InitFunctionsTable0()

@@ -86,19 +86,58 @@ TimeSystem::TimeSystem(TickSource ticks)
 
 void TimeSystem::Start()
 {
-	_start = std::chrono::steady_clock::now();
-	_lastFrameTicks = _ticks();
+	_elapsedTime = std::chrono::milliseconds(0);
+	_lastFrameTicks = Ticks();
+	_ticksEpoch = _lastFrameTicks;
+}
+
+int64_t TimeSystem::GetUnixTime() const
+{
+	if (_pinnedDate.has_value())
+	{
+		return *_pinnedDate + static_cast<int64_t>(GetTicks() / 1000u);
+	}
+	return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
+void TimeSystem::RestartClock(std::optional<int64_t> unixTime)
+{
+	_ticksEpoch = Ticks();
+	_pinnedDate = unixTime;
+}
+
+uint32_t TimeSystem::Ticks() const
+{
+	return _fixedFrameTime.has_value() ? _fixedTicks : _ticks() + _tickOffset;
+}
+
+void TimeSystem::SetFixedFrameTime(std::optional<std::chrono::milliseconds> frameTime)
+{
+	if (frameTime.has_value() && !_fixedFrameTime.has_value())
+	{
+		_fixedTicks = Ticks();
+	}
+	else if (!frameTime.has_value() && _fixedFrameTime.has_value())
+	{
+		// The tick source's count carries on from the fixed one, the wraps of both alike
+		_tickOffset = _fixedTicks - _ticks();
+	}
+	_fixedFrameTime = frameTime;
 }
 
 void TimeSystem::Update()
 {
-	auto now = std::chrono::steady_clock::now();
-	_elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(now - _start);
+	if (_fixedFrameTime.has_value())
+	{
+		_fixedTicks += static_cast<uint32_t>(_fixedFrameTime->count());
+	}
 	// The frame's real time in whole milliseconds, never none
-	const auto ticks = _ticks();
+	const auto ticks = Ticks();
 	const auto step = static_cast<int32_t>(ticks - _lastFrameTicks);
 	_frameRealMs = step > 0 ? static_cast<uint32_t>(step) : 1u;
 	_lastFrameTicks = ticks;
+	// The real time since the start, by the same count, so that it too follows a fixed frame time
+	_elapsedTime += std::chrono::milliseconds(step > 0 ? step : 0);
 }
 
 std::chrono::milliseconds TimeSystem::GetElapsedTime() const
@@ -108,7 +147,7 @@ std::chrono::milliseconds TimeSystem::GetElapsedTime() const
 
 void TimeSystem::StartGameClock(bool paused)
 {
-	const auto now = _ticks();
+	const auto now = Ticks();
 	_turn = 0;
 	_timer.base = now;
 	_timer.elapsed = 0;
@@ -135,7 +174,7 @@ bool TimeSystem::IsTurnDue()
 	{
 		return false;
 	}
-	const auto timer = _timer.Milliseconds(_ticks());
+	const auto timer = _timer.Milliseconds(Ticks());
 	const auto due = static_cast<int32_t>(_turn * k_TurnMs);
 	if (timer - due > k_MaxLagMs)
 	{
@@ -156,7 +195,7 @@ void TimeSystem::StartTurn()
 
 void TimeSystem::ResetTimerToTurn()
 {
-	const auto now = _ticks();
+	const auto now = Ticks();
 	const auto running = _timer.speed != 0.0f;
 	_timer.Stop(now);
 	_timer.base = now;
@@ -176,7 +215,7 @@ void TimeSystem::UpdateFrame()
 		_frameGameMs = 0;
 		return;
 	}
-	const auto sample = _timer.Milliseconds(_ticks());
+	const auto sample = _timer.Milliseconds(Ticks());
 	const auto delta = sample - _lastFrameSample;
 	_lastFrameSample = sample;
 	// The time past the last turn played: a new turn takes a turn's length off it
@@ -209,7 +248,7 @@ void TimeSystem::SetPaused(bool paused)
 		return;
 	}
 	_paused = paused;
-	const auto now = _ticks();
+	const auto now = Ticks();
 	if (paused)
 	{
 		_timer.Stop(now);
@@ -223,5 +262,5 @@ void TimeSystem::SetPaused(bool paused)
 void TimeSystem::SetSpeed(float speed)
 {
 	_speed = speed;
-	_timer.SetSpeed(speed, _ticks());
+	_timer.SetSpeed(speed, Ticks());
 }

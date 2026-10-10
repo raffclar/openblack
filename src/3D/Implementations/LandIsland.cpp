@@ -21,8 +21,10 @@
 
 #include <LNDFile.h>
 #include <bgfx/bgfx.h>
+#include <glm/common.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/transform.hpp>
+#include <glm/vector_relational.hpp>
 #include <spdlog/spdlog.h>
 #include <stb_image_write.h>
 
@@ -51,7 +53,7 @@ constexpr int32_t k_MapSize = 0x200;
 // The 1/256 of the game's integer altitude interpolation
 constexpr double k_AltitudeFraction = 1.0 / 256.0;
 // Land at or below this altitude is at sea level. The game draws it at height 0, and GetAltitude treats it the same
-// in cells no higher than k_SeaLevelClampAltitude. The game only turns the latter off while it creates a fish farm.
+// in cells no higher than k_SeaLevelClampAltitude, unless asked for the land's own altitudes.
 constexpr uint8_t k_SeaLevelAltitude = 3;
 constexpr uint8_t k_SeaLevelClampAltitude = 4;
 } // namespace
@@ -66,7 +68,7 @@ float LandIslandInterface::GetDrawnAltitude(uint8_t altitude)
 	return altitude <= k_SeaLevelAltitude ? 0.0f : static_cast<float>(altitude) * k_HeightUnit;
 }
 
-double LandIslandInterface::GetAltitude(int32_t mapX, int32_t mapZ) const
+double LandIslandInterface::GetAltitude(int32_t mapX, int32_t mapZ, bool seaLevelFlat) const
 {
 	const auto cellX = static_cast<int16_t>(static_cast<uint32_t>(mapX) >> 16);
 	const auto cellZ = static_cast<int16_t>(static_cast<uint32_t>(mapZ) >> 16);
@@ -81,7 +83,7 @@ double LandIslandInterface::GetAltitude(int32_t mapX, int32_t mapZ) const
 	}
 
 	// Neighbours within the block's 17x17 cell array: +1 is z + 1, +17 is x + 1
-	const auto clamp = cell[0].altitude <= k_SeaLevelClampAltitude;
+	const auto clamp = seaLevelFlat && cell[0].altitude <= k_SeaLevelClampAltitude;
 	const auto altitude = [clamp](const lnd::LNDCell& c) -> int32_t {
 		return clamp && c.altitude <= k_SeaLevelAltitude ? 0 : c.altitude;
 	};
@@ -196,11 +198,12 @@ void LandIsland::Build(const LandData& data)
 
 	const auto indexSize = _extentIndexMax - _extentIndexMin + glm::u16vec2(1, 1);
 
+	// The height map is made empty and filled after, so it can be filled again when the land changes height
 	_heightMap = std::make_unique<Texture2D>("Height Map");
 	const auto heightMapData = CreateHeightMap();
 	_heightMap->Create(indexSize.x * k_CellCount + 1, indexSize.y * k_CellCount + 1, 1, graphics::TextureFormat::RG8,
-	                   Wrapping::ClampEdge, Filter::Nearest,
-	                   bgfx::copy(heightMapData.data(), static_cast<uint32_t>(heightMapData.size())));
+	                   Wrapping::ClampEdge, Filter::Nearest, nullptr);
+	_heightMap->Update(heightMapData.data(), static_cast<uint32_t>(heightMapData.size()));
 
 	_luminosityMap = std::make_unique<Texture2D>("Luminosity Map");
 	const auto luminosityMapData = CreateLuminosityMap();
@@ -228,34 +231,34 @@ void LandIsland::Build(const LandData& data)
 	                       [](const lnd::LNDMaterial& material) { return material.type; });
 
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "[LandIsland] loading {} textures", data.materials.size());
-	std::vector<uint16_t> rgba5TextureData;
-	rgba5TextureData.resize(lnd::LNDMaterial::k_Width * lnd::LNDMaterial::k_Height * data.materials.size());
+	_materialTexels.resize(lnd::LNDMaterial::k_Width * lnd::LNDMaterial::k_Height * data.materials.size());
 	for (size_t i = 0; i < data.materials.size(); i++)
 	{
-		std::memcpy(&rgba5TextureData[lnd::LNDMaterial::k_Width * lnd::LNDMaterial::k_Height * i],
+		std::memcpy(&_materialTexels[lnd::LNDMaterial::k_Width * lnd::LNDMaterial::k_Height * i],
 		            data.materials[i].texels.data(), sizeof(data.materials[i].texels[0]) * data.materials[i].texels.size());
 	}
 	std::ranges::copy(data.noise, _noiseMap.begin());
+	_bump = data.bump;
 
-	// Paint each block's texture from the countries, the materials, the noise and the bump map
+	// Paint each block's texture from the countries, the materials, the noise and the bump map. The texture is made
+	// empty and its layers filled after, so a block can be painted again when the land under it changes height.
 	const block_texture::Sources sources {
 	    .countries = _countries,
-	    .materials = rgba5TextureData,
+	    .materials = _materialTexels,
 	    .noise = _noiseMap,
-	    .bump = data.bump,
+	    .bump = _bump,
 	};
-	const auto* blockTexels = bgfx::alloc(static_cast<uint32_t>(_landBlocks.size() * block_texture::k_BlockBytes));
-	const auto blockTexelSpan = std::span(blockTexels->data, blockTexels->size);
-	for (size_t i = 0; i < _landBlocks.size(); ++i)
-	{
-		block_texture::BuildBlock(_landBlocks[i].GetLndBlock()->cells, sources,
-		                          blockTexelSpan.subspan(i * block_texture::k_BlockBytes, block_texture::k_BlockBytes));
-	}
 	_blockTextures = std::make_unique<Texture2D>("LandIslandBlockTextures");
 	_blockTextures->Create(block_texture::k_Side, block_texture::k_Side, static_cast<uint16_t>(_landBlocks.size()),
-	                       TextureFormat::RGBA8, Wrapping::ClampEdge, Filter::Linear, blockTexels);
+	                       TextureFormat::RGBA8, Wrapping::ClampEdge, Filter::Linear, nullptr);
+	std::vector<uint8_t> blockTexels(block_texture::k_BlockBytes);
+	for (size_t i = 0; i < _landBlocks.size(); ++i)
+	{
+		block_texture::BuildBlock(_landBlocks[i].GetLndBlock()->cells, sources, blockTexels);
+		_blockTextures->UpdateLayer(static_cast<uint16_t>(i), blockTexels.data(), static_cast<uint32_t>(blockTexels.size()));
+	}
 
-	// The blocks' vertices, one after another in one buffer
+	// The blocks' vertices, one after another in one buffer, which changes where the land changes height
 	const auto vertexCount = _landBlocks.size() * LandBlock::k_VertexCount;
 	const auto* vertexMemory = bgfx::alloc(static_cast<uint32_t>(vertexCount * sizeof(LandVertex)));
 	const auto vertices = std::span(reinterpret_cast<LandVertex*>(vertexMemory->data), vertexCount);
@@ -265,7 +268,9 @@ void LandIsland::Build(const LandData& data)
 	}
 	VertexDecl decl;
 	decl.emplace_back(VertexAttrib::Attribute::Position, static_cast<uint8_t>(3), VertexAttrib::Type::Float);
-	_blockVertices = std::make_unique<VertexBuffer>("LandBlocks", vertexMemory, decl);
+	_blockVertices = std::make_unique<VertexBuffer>("LandBlocks", vertexMemory, decl, true);
+	_changedCells.assign(_landBlocks.size(), {});
+	_changedCorners = {};
 	for (size_t i = 0; i < _landBlocks.size(); ++i)
 	{
 		_landBlocks[i].SetVertices(*_blockVertices, static_cast<uint32_t>(i * LandBlock::k_VertexCount));
@@ -357,6 +362,114 @@ const lnd::LNDCell* LandIsland::FindCell(const glm::u16vec2& coordinates) const
 	}
 	assert(_landBlocks.size() >= blockIndex);
 	return &_landBlocks[blockIndex - 1].GetCells()[cellIndex];
+}
+
+void LandIsland::SetCellAltitude(glm::u16vec2 coordinates, uint8_t altitude)
+{
+	if (coordinates.x >= k_MapSize || coordinates.y >= k_MapSize)
+	{
+		return;
+	}
+	// A block keeps a 17th row and column of its neighbours' first cells: a corner on a block's edge is in up to four
+	// blocks, and each copy changes, with the cells of each block it is a corner of
+	const auto setIn = [this, altitude](int blockX, int blockZ, int x, int z) {
+		if (blockX < 0 || blockZ < 0 || blockX >= 32 || blockZ >= 32)
+		{
+			return;
+		}
+		const auto blockIndex = _blockIndexLookup.at(static_cast<size_t>(blockX * 32 + blockZ));
+		if (blockIndex == 0)
+		{
+			return;
+		}
+		_landBlocks.at(blockIndex - 1u).SetCellAltitude(static_cast<size_t>(x * 17 + z), altitude);
+		auto& cells = _changedCells.at(blockIndex - 1u);
+		constexpr int k_LastCell = block_texture::k_BlockCells - 1;
+		cells.Add(glm::clamp(glm::ivec2(x - 1, z - 1), 0, k_LastCell));
+		cells.Add(glm::clamp(glm::ivec2(x, z), 0, k_LastCell));
+	};
+	const int blockX = coordinates.x >> 4;
+	const int blockZ = coordinates.y >> 4;
+	const int x = coordinates.x & 0xF;
+	const int z = coordinates.y & 0xF;
+	setIn(blockX, blockZ, x, z);
+	if (x == 0)
+	{
+		setIn(blockX - 1, blockZ, 16, z);
+	}
+	if (z == 0)
+	{
+		setIn(blockX, blockZ - 1, x, 16);
+	}
+	if (x == 0 && z == 0)
+	{
+		setIn(blockX - 1, blockZ - 1, 16, 16);
+	}
+	_changedCorners.Add(glm::ivec2(coordinates));
+}
+
+void LandIsland::CommitAltitudeChanges()
+{
+	if (_changedCorners.Empty())
+	{
+		return;
+	}
+	const block_texture::Sources sources {
+	    .countries = _countries,
+	    .materials = _materialTexels,
+	    .noise = _noiseMap,
+	    .bump = _bump,
+	};
+	std::vector<uint8_t> texels;
+	for (size_t i = 0; i < _landBlocks.size(); ++i)
+	{
+		auto& changed = _changedCells[i];
+		if (changed.Empty())
+		{
+			continue;
+		}
+		const auto* vertexMemory = bgfx::alloc(static_cast<uint32_t>(LandBlock::k_VertexCount * sizeof(LandVertex)));
+		_landBlocks[i].BuildMesh(*this, std::span(reinterpret_cast<LandVertex*>(vertexMemory->data), LandBlock::k_VertexCount));
+		_blockVertices->Update(static_cast<uint32_t>(i * LandBlock::k_VertexCount), vertexMemory);
+		// The ground's materials follow the height, so the changed cells are painted again. A block's texture has a
+		// row for each texel along x, so x is the texture's height and z its width.
+		const auto cellCount = changed.maximum - changed.minimum + 1;
+		texels.resize(static_cast<size_t>(cellCount.x * cellCount.y) * block_texture::k_TexelsPerCell *
+		              block_texture::k_TexelsPerCell * 4);
+		block_texture::PaintCells(_landBlocks[i].GetLndBlock()->cells, sources, changed.minimum, cellCount, texels);
+		_blockTextures->UpdateLayerRegion(
+		    static_cast<uint16_t>(i),
+		    glm::u16vec2(changed.minimum.y * block_texture::k_TexelsPerCell,
+		                 changed.minimum.x * block_texture::k_TexelsPerCell),
+		    glm::u16vec2(cellCount.y * block_texture::k_TexelsPerCell, cellCount.x * block_texture::k_TexelsPerCell),
+		    texels.data(), static_cast<uint32_t>(texels.size()));
+		changed = {};
+	}
+	// The height map's changed corners, a texel each, two bytes a texel: its altitude and its cell's split
+	const auto first =
+	    glm::max(_changedCorners.minimum - glm::ivec2(_extentIndexMin) * static_cast<int>(k_CellCount), glm::ivec2(0));
+	const auto resolution = glm::ivec2(_heightMap->GetResolution());
+	const auto last =
+	    glm::min(_changedCorners.maximum - glm::ivec2(_extentIndexMin) * static_cast<int>(k_CellCount), resolution - 1);
+	if (glm::all(glm::lessThanEqual(first, last)))
+	{
+		const auto size = last - first + 1;
+		std::vector<uint8_t> heights(static_cast<size_t>(size.x * size.y) * 2, 0);
+		for (int z = 0; z < size.y; ++z)
+		{
+			for (int x = 0; x < size.x; ++x)
+			{
+				const auto corner = first + glm::ivec2(x, z) + glm::ivec2(_extentIndexMin) * static_cast<int>(k_CellCount);
+				const auto& cell = GetCell(glm::u16vec2(corner));
+				const auto texel = static_cast<size_t>(z * size.x + x) * 2;
+				heights[texel] = cell.altitude;
+				heights[texel + 1] = cell.properties.split != 0 ? 255 : 0;
+			}
+		}
+		_heightMap->UpdateLayerRegion(0, glm::u16vec2(first), glm::u16vec2(size), heights.data(),
+		                              static_cast<uint32_t>(heights.size()));
+	}
+	_changedCorners = {};
 }
 
 void LandIsland::DumpTextures() const

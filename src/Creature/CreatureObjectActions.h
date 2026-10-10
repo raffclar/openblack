@@ -92,4 +92,7 @@ enum class Status : uint8_t
 	Done,
 	Failed,
 };
+
+/// Whether a throw is over: its animation has played out, and, thrown into a store, what it threw has stopped flying
+[[nodiscard]] bool ThrowOver(bool animationOver, bool waitsForLanding, bool thrownFlying);
 } // namespace openblack::creature_object_actions

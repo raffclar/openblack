@@ -23,6 +23,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
@@ -46,12 +47,12 @@ CreatureModeSystem::~CreatureModeSystem() = default;
 
 std::optional<entt::entity> CreatureModeSystem::PlayersCreature() const
 {
-	// The player's creature as the leash knows it: the one held on its leash, or its first
-	if (!Locator::leashSystem::has_value())
+	// The player's primary creature, the earliest they got that is still theirs
+	if (!Locator::playerSystem::has_value())
 	{
 		return std::nullopt;
 	}
-	return Locator::leashSystem::value().PlayersCreature(k_LocalPlayer);
+	return Locator::playerSystem::value().GetPrimaryCreature(k_LocalPlayer);
 }
 
 std::optional<creature_follow::View> CreatureModeSystem::GetView() const
@@ -117,7 +118,7 @@ bool CreatureModeSystem::Enter(entt::entity creature)
 	const auto& body = registry.Get<const components::Creature>(creature);
 	const auto& transform = registry.Get<const components::Transform>(creature);
 	auto model = std::make_unique<CreatureCameraModel>(camera.GetOrigin(), camera.GetFocus(), transform.position,
-	                                                   creature_mode::CreatureHeight(body.size));
+	                                                   creature_mode::CreatureHeight(ShownSize(body)));
 	_model = model.get();
 	_playerModel = camera.SetModel(std::move(model));
 	_creature = creature;
@@ -230,7 +231,7 @@ void CreatureModeSystem::Update(std::chrono::microseconds dt, const Frame& frame
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto& body = registry.Get<const components::Creature>(*_creature);
 	const auto& transform = registry.Get<const components::Transform>(*_creature);
-	_model->SetTarget(transform.position, creature_mode::CreatureHeight(body.size));
+	_model->SetTarget(transform.position, creature_mode::CreatureHeight(ShownSize(body)));
 
 	if (_held.seconds > 0.0f)
 	{
