@@ -207,6 +207,10 @@ endif ()
 if (OPENBLACK_INSPECTOR)
   target_link_libraries(openblack_lib PRIVATE inspector)
   target_compile_definitions(openblack_lib PUBLIC OPENBLACK_INSPECTOR)
+  # The worktree the game is built from, which the inspector names it by wherever the build lives
+  target_compile_definitions(
+    openblack_lib PRIVATE OPENBLACK_BUILT_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+  )
   # The running game tells tools how it was built
   target_compile_definitions(
     openblack_lib PRIVATE OPENBLACK_BUILD_TYPE="$<CONFIG>"

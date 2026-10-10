@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <string_view>
 
 #include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
@@ -148,6 +149,8 @@ struct Gate
 };
 /// Whether a press on a thing takes it; otherwise the press is a tap
 [[nodiscard]] bool PassesGate(const Gate& gate);
+/// Why a press on a thing doesn't take it, in a few words; empty when it does
+[[nodiscard]] std::string_view GateRefusal(const Gate& gate);
 
 /// How long a press has been held: by the clock, but no more than the game turns gone by allow
 [[nodiscard]] uint32_t ElapsedMs(uint32_t nowMs, uint32_t pressMs, uint32_t turn, uint32_t pressTurn);

@@ -183,22 +183,18 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
 	_server->SetControlFilter(&inspector::Inspector::TakesControl);
 	namespace discovery = inspector::discovery;
 	const auto executable = discovery::ExecutablePath();
-	// Builds live outside the worktrees, so the game also finds its worktree from the environment (ob-build run sets it)
-	// or from the folder it was started in
-	auto worktree = discovery::FindWorktree(executable.parent_path());
+	// Builds live apart from their worktrees: the worktree is the one ob-build run names, else the one the game was
+	// built from
+#if defined(OPENBLACK_BUILT_SOURCE_DIR)
+	const std::filesystem::path builtFrom = OPENBLACK_BUILT_SOURCE_DIR;
+#else
+	const std::filesystem::path builtFrom;
+#endif
+	auto worktree = discovery::GameWorktree(builtFrom, executable);
 	const auto* fromEnvironment = std::getenv("OPENBLACK_WORKTREE");
 	if (fromEnvironment != nullptr && *fromEnvironment != '\0')
 	{
 		worktree = std::filesystem::path(fromEnvironment);
-	}
-	else if (!worktree.has_value())
-	{
-		std::error_code error;
-		const auto current = std::filesystem::current_path(error);
-		if (!error)
-		{
-			worktree = discovery::FindWorktree(current);
-		}
 	}
 	discovery::GameRecord record {
 	    .port = _server->Port(),
