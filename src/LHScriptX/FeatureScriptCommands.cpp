@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <tuple>
 
-#include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/polar_coordinates.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
@@ -228,15 +227,10 @@ const std::array<const ScriptCommandSignature, 106> FeatureScriptCommands::k_Sig
     CREATE_COMMAND_BINDING("SET_LOST_TOWN_SCALE", SetLostTownScale),
 }};
 
-/// Which way a thing faces, in radians, from the thousandths of a radian a land's script gives
-inline float GetFacing(int rotation)
+/// A script's turn in thousandths of a radian, as the game reads it
+inline float GetYAngle(int rotation)
 {
 	return static_cast<float>(rotation) * 0.001f;
-}
-
-inline glm::mat4 GetRotation(int rotation)
-{
-	return glm::eulerAngleY(static_cast<float>(rotation) * -0.001f);
 }
 
 inline glm::vec3 GetSize(int size)
@@ -297,8 +291,13 @@ void FeatureScriptCommands::SetTownBeliefCap(int32_t townId, const std::string& 
 
 void FeatureScriptCommands::SetTownUninhabitable(int32_t townId)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}) not implemented.", __FILE__, __LINE__,
-	                    __func__, townId);
+	// Nobody comes to live in the town: a ruin or an empty village
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& towns = registry.Context().towns;
+	if (const auto town = towns.find(townId); town != towns.end())
+	{
+		registry.Get<Town>(town->second).uninhabitable = true;
+	}
 }
 
 void FeatureScriptCommands::SetTownCongregationPos(int32_t townId, glm::vec3 position)
@@ -321,11 +320,15 @@ void FeatureScriptCommands::CreateAbode(int32_t townId, glm::vec3 position, cons
 }
 
 void FeatureScriptCommands::CreatePlannedAbode(int32_t townId, glm::vec3 position, const std::string& abodeInfo,
-                                               int32_t rotation, int32_t size, int32_t foodAmount, int32_t woodAmount)
+                                               int32_t rotation, int32_t size, int32_t /*foodAmount*/, int32_t /*woodAmount*/)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}, {}, {}, {}, {}, {}) not implemented.",
-	                    __FILE__, __LINE__, __func__, townId, glm::to_string(position), abodeInfo, rotation, size, foodAmount,
-	                    woodAmount);
+	// A building the town is to build later: nothing of it stands yet, and it holds no food or wood
+	const auto type = GAbodeInfo::Find(abodeInfo);
+	if (type == AbodeInfo::None)
+	{
+		return;
+	}
+	AbodeArchetype::CreatePlan(townId, position, type, rotation * 0.001f, size * 0.001f);
 }
 
 void FeatureScriptCommands::CreateTownCentre(int32_t townId, glm::vec3 position, const std::string& abodeInfo, int32_t rotation,
@@ -400,14 +403,13 @@ void FeatureScriptCommands::CreateVillagerPos(glm::vec3 abodePosition, glm::vec3
 void FeatureScriptCommands::CreateCitadel(glm::vec3 position, int32_t, const std::string& playerOwner, int32_t rotation,
                                           int32_t size)
 {
-	CitadelArchetype::Create(position, GetPlayerName(playerOwner), GetFacing(rotation), GetRotation(rotation), GetSize(size));
+	CitadelArchetype::Create(position, GetPlayerName(playerOwner), GetYAngle(rotation), GetSize(size));
 }
 
 void FeatureScriptCommands::CreatePlannedCitadel(int32_t townId, glm::vec3 position, int32_t, const std::string& playerOwner,
                                                  int32_t rotation, int32_t size)
 {
-	CitadelArchetype::CreatePlan(townId, position, GetPlayerName(playerOwner), GetFacing(rotation), GetRotation(rotation),
-	                             GetSize(size));
+	CitadelArchetype::CreatePlan(townId, position, GetPlayerName(playerOwner), GetYAngle(rotation), GetSize(size));
 }
 
 void FeatureScriptCommands::CreateCreaturePen([[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t, int32_t, int32_t)

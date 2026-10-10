@@ -24,6 +24,7 @@
 
 #include "3D/LandIslandInterface.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -52,6 +53,19 @@ using namespace openblack::ecs::components;
 
 namespace
 {
+/// Where an influence of its own is: about the object it goes with while there is one, otherwise where it was put
+glm::vec3 SourcePosition(const ecs::Registry& registry, const InfluenceSource& source, const Transform& transform)
+{
+	if (source.follows != entt::null && registry.Valid(source.follows))
+	{
+		if (const auto* followed = registry.TryGet<const Transform>(source.follows); followed != nullptr)
+		{
+			return followed->position;
+		}
+	}
+	return transform.position;
+}
+
 /// The border is drawn again only on every tenth turn, and only once a reach has moved by more than this
 constexpr uint32_t k_RedrawTurns = 10;
 constexpr float k_RedrawReach = 0.01f;
@@ -282,9 +296,9 @@ void InfluenceSystem::DrawBorders()
 			    influence.drawnRadius = influence.radius;
 		    });
 		registry.Each<const InfluenceSource, const Transform>([&](const InfluenceSource& source, const Transform& transform) {
-			if (source.player == name && source.radius > 0.0f)
+			if (source.player == name && source.radius > 0.0f && !source.anti)
 			{
-				influence::AddCircle(_circles, name, transform.position, source.radius, ground);
+				influence::AddCircle(_circles, name, SourcePosition(registry, source, transform), source.radius, ground);
 			}
 		});
 	}
@@ -335,7 +349,7 @@ float InfluenceSystem::InfluencePower(PlayerNames player)
 		}
 	});
 	registry.Each<const InfluenceSource>([&](const InfluenceSource& source) {
-		if (source.player == player)
+		if (source.player == player && !source.anti)
 		{
 			power += source.radius;
 		}
@@ -492,8 +506,8 @@ void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli>
 	const auto pitch = virtual_influence::HumPitchPercent(state);
 	if (!audio.EmitterExists(virtualInfluence.hum))
 	{
-		virtualInfluence.hum =
-		    audio.StartSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_VirtualInfluence_04), {.pitchPercent = pitch});
+		virtualInfluence.hum = audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_VirtualInfluence_04),
+		                                                   {.pitchPercent = pitch});
 	}
 	audio.SetEmitterPitch(virtualInfluence.hum, pitch);
 }
@@ -612,8 +626,17 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 	const auto distanceTo = [&position](const glm::vec3& point) {
 		return gutils::GetDistanceInMetres(map_coords::FromMetres({point.x, point.z}), position);
 	};
-	// Under another player's shield a player has no influence at all
+	// Under another player's shield a player has no influence at all, nor within an anti-influence a script made for them
 	if (Shielded(player, position))
+	{
+		return 0.0f;
+	}
+	bool anti = false;
+	registry.Each<const InfluenceSource, const Transform>([&](const InfluenceSource& source, const Transform& transform) {
+		anti = anti || (source.anti && source.player == player &&
+		                distanceTo(SourcePosition(registry, source, transform)) <= source.radius);
+	});
+	if (anti)
 	{
 		return 0.0f;
 	}
@@ -638,7 +661,7 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 	    });
 	// And any other source of the player's, where it reaches
 	registry.Each<const InfluenceSource, const Transform>([&](const InfluenceSource& source, const Transform& transform) {
-		if (source.player == player && distanceTo(transform.position) < source.radius)
+		if (source.player == player && !source.anti && distanceTo(SourcePosition(registry, source, transform)) < source.radius)
 		{
 			sum += source.radius;
 		}

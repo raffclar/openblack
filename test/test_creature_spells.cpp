@@ -188,6 +188,18 @@ TEST(CreatureSpells, ASpellWithoutATimeHoldsUntilCutShort)
 	EXPECT_LT(run.turns, 100);
 }
 
+TEST(CreatureSpells, TheSizeLimitsTheScriptsRead)
+{
+	// Its own limits out of a fight
+	EXPECT_NEAR(SmallestSizeNow(k_SmallestSize, std::nullopt), 0.2f, k_Epsilon);
+	EXPECT_NEAR(LargestSizeNow(k_LargestSize, std::nullopt), 2.4f, k_Epsilon);
+	// In a fight its size now by the spells' factors, within them
+	EXPECT_NEAR(SmallestSizeNow(0.1f, 1.0f), 0.1f, k_Epsilon);
+	EXPECT_NEAR(SmallestSizeNow(0.9f, 1.0f), 0.5555556f, k_Epsilon);
+	EXPECT_NEAR(LargestSizeNow(k_LargestSize, 1.0f), 1.8f, k_Epsilon);
+	EXPECT_NEAR(LargestSizeNow(k_LargestSize, 2.0f), 2.4f, k_Epsilon);
+}
+
 TEST(CreatureSpells, TheBodySpellsTargets)
 {
 	// Out of a fight: all the way to the smallest or largest, never the other way

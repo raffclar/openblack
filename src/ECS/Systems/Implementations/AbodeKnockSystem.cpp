@@ -15,6 +15,7 @@
 #include <utility>
 
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "ECS/AbodeKnock.h"
 #include "ECS/Components/Abode.h"
@@ -79,7 +80,7 @@ bool AbodeKnockSystem::Tap(entt::entity abodeEntity, glm::vec3 handPoint, bool o
 	// Every player hears it, at the hand
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(k_KnockSounds.at(_knockSound)), handPoint);
+		audio::PlayGameSoundEffect(static_cast<entt::id_type>(k_KnockSounds.at(_knockSound)), handPoint);
 	}
 	_knockSound = ecs::abode_knock::NextKnockSound(_knockSound);
 	return true;

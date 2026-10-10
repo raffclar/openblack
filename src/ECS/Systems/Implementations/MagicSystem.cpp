@@ -29,6 +29,7 @@
 #include "3D/MapCoords.h"
 #include "3D/WaterRings.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsAngle.h"
@@ -680,8 +681,8 @@ void GameMagicWorld::WaterObject(entt::entity object, const magic::WaterDrop& dr
 			{
 				const auto sample =
 				    k_TreeGrowSounds.at(Locator::gameRandom::value().LocalRand(static_cast<int32_t>(k_TreeGrowSounds.size())));
-				Locator::audio::value().StartSoundEffect(static_cast<entt::id_type>(sample),
-				                                         {.position = transform.position, .owner = object});
+				audio::StartGameSoundEffect(static_cast<entt::id_type>(sample),
+				                            {.position = transform.position, .owner = object});
 			}
 		}
 		else if (!grown.canGrow && !drop.extreme)
@@ -913,10 +914,6 @@ MagicSystem::MagicSystem()
 		_players.at(p) = std::make_unique<magic::PlayerSpellCaster>(static_cast<PlayerNames>(p),
 		                                                            [this](PlayerNames player) { return PrayerOf(player); });
 	}
-	for (auto& powers : _tribalPowers)
-	{
-		powers.fill(1.0f);
-	}
 }
 
 MagicSystem::~MagicSystem() = default;
@@ -964,18 +961,40 @@ magic::SpellCasterInterface* MagicSystem::CasterOf(const Spell& spell)
 	return nullptr;
 }
 
+namespace
+{
+/// The player's record on the land, if they are on it
+Player* PlayerRecord(PlayerNames player)
+{
+	Player* found = nullptr;
+	EntityRegistry().Each<Player>([player, &found](entt::entity, Player& record) {
+		if (record.name == player)
+		{
+			found = &record;
+		}
+	});
+	return found;
+}
+} // namespace
+
 std::array<float, magic::k_TribeCount> MagicSystem::PlayerTribalMultipliers(PlayerNames player) const
 {
-	// The players' tribal power multipliers come with worship; until then every tribe's is 1 unless the testbed sets it
-	return _tribalPowers.at(static_cast<size_t>(player));
+	// The power each tribe gives the player's miracles is the player's; a player not on the land has the usual
+	const auto* record = PlayerRecord(player);
+	return record != nullptr ? record->miracles.tribalPower : Player::k_UsualTribalPower;
 }
 
 void MagicSystem::SetTribalPower(PlayerNames player, Tribe tribe, float power)
 {
-	if (tribe != Tribe::NONE && static_cast<size_t>(tribe) < magic::k_TribeCount)
+	auto* record = PlayerRecord(player);
+	if (record == nullptr || tribe == Tribe::NONE || static_cast<size_t>(tribe) >= magic::k_TribeCount)
 	{
-		_tribalPowers.at(static_cast<size_t>(player)).at(static_cast<size_t>(tribe)) = power;
+		return;
 	}
+	// The most it has been goes with it, so that the power holds
+	const auto index = static_cast<size_t>(tribe);
+	record->miracles.tribalPower.at(index) = power;
+	record->miracles.maxTribalPower.at(index) = power;
 }
 
 float MagicSystem::GetTribalPower(PlayerNames player, Tribe tribe) const
@@ -1541,10 +1560,6 @@ void MagicSystem::Reset()
 	_handVelocity = glm::vec3(0.0f);
 	_handEffectPoint.reset();
 	_handScale = 1.0f;
-	for (auto& powers : _tribalPowers)
-	{
-		powers.fill(1.0f);
-	}
 	_lastHandResult = HandResult::None;
 	_world.Reset();
 	_grid.Clear();
@@ -1783,8 +1798,7 @@ bool MagicSystem::TapOrb(entt::entity orb)
 	// The pop is heard where the hand took it
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(audio::SoundId::G_SpellBubblePop_04),
-		                                        _hand.handPosition);
+		audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_SpellBubblePop_04), _hand.handPosition);
 	}
 	DestroyOrb(orb);
 	_lastHandResult = HandResult::TookMiracle;
@@ -1900,9 +1914,9 @@ void MagicSystem::StartHoldLoop()
 	StopHoldLoop();
 	if (Locator::audio::has_value() && _held.has_value())
 	{
-		_holdLoop = Locator::audio::value().StartSoundEffect(
-		    static_cast<entt::id_type>(audio::SoundId::G_HandGesture_02),
-		    {.position = _hand.handPosition, .playType = audio::PlayType::Repeat, .owner = *_held});
+		_holdLoop =
+		    audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_HandGesture_02),
+		                                {.position = _hand.handPosition, .playType = audio::PlayType::Repeat, .owner = *_held});
 	}
 }
 
@@ -2158,7 +2172,7 @@ void MagicSystem::FailCast()
 	}
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(audio::SoundId::G_SpellCastFailure), std::nullopt);
+		audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_SpellCastFailure), std::nullopt);
 	}
 	if (_lastHandResult != HandResult::NoCircle)
 	{
@@ -2378,8 +2392,7 @@ void MagicSystem::DiscardHeldSeed()
 	if (Locator::audio::has_value())
 	{
 		constexpr uint32_t k_ShakeVolume = 35;
-		Locator::audio::value().StartSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_ShakeHand_01),
-		                                         {.volume = k_ShakeVolume});
+		audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_ShakeHand_01), {.volume = k_ShakeVolume});
 	}
 	// A band flies off the hand
 	if (Locator::miracleFxSystem::has_value())

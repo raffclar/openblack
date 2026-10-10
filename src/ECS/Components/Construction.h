@@ -22,8 +22,16 @@ struct PlannedTemple
 {
 	int32_t townId;
 	PlayerNames owner;
-	/// Which way the temple is to face, in radians, as the land's script gives it
-	float facing {0.0f};
+	/// How far round it will be turned, in radians, as the game measures a temple's turn
+	float yAngle {0.0f};
+};
+
+/// A building a town plans to build later, made by the land's script: nothing of it stands, it isn't drawn and it holds
+/// nothing yet. The Transform places it; a town centre is planned the same way, by its row.
+struct PlannedAbode
+{
+	uint32_t townId;
+	AbodeInfo info;
 };
 
 /// A building going up with a site for its builders: how much the town wants it built, which a script may force
