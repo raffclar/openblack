@@ -129,6 +129,7 @@
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
+#include "ECS/Systems/IntroSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -275,6 +276,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"walkPathSystem", "living.walk_paths"},
     LocatorCoverage {"danceSystem", "living.dances"},
     LocatorCoverage {"sharkSystem", "living.sharks"},
+    LocatorCoverage {"introSystem", "living.intro"},
     LocatorCoverage {"soundTagSystem", "living.sound_tags"},
     LocatorCoverage {"rainSystem", "land.precipitation"},
     LocatorCoverage {"chimneySmokeSystem", "living.chimneys"},
@@ -876,6 +878,30 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 			                  });
 		                  }
 		                  return Json {{"wake_timer", sharks.GetWakeTimer()}, {"sharks", std::move(items)}};
+	                  }));
+	provider->Add(Query("intro", "The opening's light falling onto the boy and the god's hand lifting him and setting him "
+	                             "down: the stage, the light's state and head, the chasing camera, the hand's clip time and "
+	                             "where it holds the boy"),
+	              Serve<Locator::introSystem>(
+	                  "the opening's light and hand", [](const ecs::systems::IntroSystemInterface& intro, const QueryContext&) {
+		                  const auto state = intro.GetState();
+		                  Json json {
+		                      {"stage", state.stage},
+		                      {"light", state.light.has_value() ? Json(static_cast<int32_t>(*state.light)) : Json(nullptr)},
+		                      {"light_head", state.lightHead.has_value() ? Point(*state.lightHead) : Json(nullptr)},
+		                      {"light_elapsed", state.lightElapsed},
+		                      {"camera_chasing", state.cameraChasing},
+		                      {"hand", state.hand == entt::null ? Json(nullptr) : Json(ToId(state.hand))},
+		                      {"hand_clip_time", state.handClipTime},
+		                      {"hand_playing", state.handPlaying},
+		                      {"holding_boy", state.holdingBoy},
+		                      {"grip", state.grip.has_value() ? Point(*state.grip) : Json(nullptr)},
+		                      {"lift_finished", state.liftFinished}};
+		                  if (const auto view = intro.GetCameraView(); view.has_value())
+		                  {
+			                  json["camera"] = {{"origin", Point(view->origin)}, {"focus", Point(view->focus)}};
+		                  }
+		                  return json;
 	                  }));
 	provider->Add(Query("walk_paths", "The things walking the camera editor's tracks: the track, how far and up to where", {},
 	                    ResultKind::List),

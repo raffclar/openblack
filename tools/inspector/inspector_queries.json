@@ -888,6 +888,12 @@
   "query": "living.sharks"
  },
  {
+  "description": "The opening's light falling onto the boy and the god's hand lifting him and setting him down: the stage, the light's state and head, the chasing camera, the hand's clip time and where it holds the boy",
+  "kind": "object",
+  "parameters": [],
+  "query": "living.intro"
+ },
+ {
   "description": "The things walking the camera editor's tracks: the track, how far and up to where",
   "kind": "list",
   "parameters": [],

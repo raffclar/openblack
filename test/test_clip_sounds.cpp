@@ -110,4 +110,7 @@ TEST(ClipSounds, ASoundsRouteFollowsTheGamesRules)
 	// Inside the temple only sounds played another way than the ordinary one are heard
 	EXPECT_EQ(RouteOf({.soundType = 3, .mode = 0, .insideTemple = true}).outcome, Outcome::Skip);
 	EXPECT_EQ(RouteOf({.soundType = 3, .mode = 1, .insideTemple = true}).outcome, Outcome::Play);
+	// Elsewhere the ordinary ones are heard only as their samples allow
+	EXPECT_TRUE(RouteOf({.soundType = 3, .mode = 0}).bySampleRules);
+	EXPECT_FALSE(RouteOf({.soundType = 3, .mode = 1}).bySampleRules);
 }
