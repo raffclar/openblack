@@ -13,9 +13,12 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
+#include <limits>
 
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
+#include "ECS/MapCells.h"
 
 namespace openblack::ecs::wall_hug
 {
@@ -438,6 +441,222 @@ CircleSweep SweepCircle(const CircleSweepInput& input)
 		}
 		}
 	}
+}
+
+namespace
+{
+
+/// How far into a circle the walker may already be and still count it as ahead, in metres
+constexpr double k_AlreadyInside = -0.2;
+/// Out of reach along the line
+constexpr float k_Unreachable = std::numeric_limits<float>::max();
+
+/// Where along the walker's line a circle is: `near` is where the line comes into it, or until worked out only as near
+/// as the circle's radius short of `closest`, the point of the line nearest the circle's middle
+struct LineInterval
+{
+	float near;
+	float closest;
+	/// The radius squared less the square of the middle's distance from the line: above 0 when the line meets it
+	float meets;
+	size_t circle;
+
+	/// Works out where the line comes into the circle, once
+	void Resolve()
+	{
+		if (near != closest)
+		{
+			near = closest = closest - std::sqrt(meets);
+			if (static_cast<double>(near) < k_AlreadyInside)
+			{
+				near = closest = k_Unreachable;
+			}
+		}
+	}
+
+	/// Whether this circle comes before another along the line
+	[[nodiscard]] bool Before(LineInterval& other)
+	{
+		if (closest < other.near)
+		{
+			return true;
+		}
+		if (near > other.closest)
+		{
+			return false;
+		}
+		Resolve();
+		other.Resolve();
+		return closest < other.near;
+	}
+};
+
+[[nodiscard]] LineInterval IntervalOf(const BlockingCircle& circle, size_t index, glm::vec2 origin, glm::vec2 direction)
+{
+	const glm::vec2 offset = circle.centre - origin;
+	LineInterval interval {};
+	interval.closest = offset.x * direction.x + offset.y * direction.y;
+	interval.near = interval.closest - circle.radius;
+	interval.meets =
+	    interval.closest * interval.closest + (circle.radius * circle.radius - (offset.x * offset.x + offset.y * offset.y));
+	interval.circle = index;
+	if (static_cast<double>(interval.near) < k_AlreadyInside && interval.meets > 0.0f)
+	{
+		interval.Resolve();
+	}
+	return interval;
+}
+
+} // namespace
+
+LineScan ScanLine(glm::ivec2 position, glm::ivec2 step, std::span<const BlockingCircle> circles)
+{
+	constexpr LineScan k_Nothing {.turnsToObstacle = k_NoObstacleInReach, .circle = std::nullopt};
+	const glm::vec2 origin = ToPoint(position);
+	glm::vec2 direction = ToPoint(step);
+	float length = 0.0f;
+	if (direction != glm::vec2(0.0f))
+	{
+		length = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+		direction *= 1.0f / length;
+	}
+
+	// The first circle the line meets, then each later one that comes before it
+	std::optional<LineInterval> nearest;
+	for (size_t i = 0; i < circles.size(); ++i)
+	{
+		auto interval = IntervalOf(circles[i], i, origin, direction);
+		if (interval.meets <= 0.0f)
+		{
+			continue;
+		}
+		if (!nearest.has_value() || interval.Before(*nearest))
+		{
+			nearest = interval;
+		}
+	}
+	if (!nearest.has_value())
+	{
+		return k_Nothing;
+	}
+	nearest->Resolve();
+	if (nearest->near == k_Unreachable)
+	{
+		return k_Nothing;
+	}
+	const float turns = nearest->near / length;
+	if (!(turns <= 255.0f))
+	{
+		return k_Nothing;
+	}
+	// Truncated towards nothing; a line with no length right inside a circle meets it at once
+	const auto whole = turns < static_cast<float>(std::numeric_limits<int32_t>::min()) ? 0 : static_cast<int32_t>(turns);
+	const auto turnsToObstacle = static_cast<uint8_t>(whole & 0xff);
+	if (turnsToObstacle == k_NoObstacleInReach)
+	{
+		return k_Nothing;
+	}
+	return {.turnsToObstacle = turnsToObstacle, .circle = nearest->circle};
+}
+
+std::vector<BlockingCircle> CirclesOf(const ThingOnMap& thing)
+{
+	const auto blocking = [&thing](const map_cells::Circle& circle) {
+		return BlockingCircle {
+		    .centre = circle.centre, .radius = circle.radius, .landscape = false, .landscapeOrFence = thing.fence};
+	};
+	switch (thing.shape)
+	{
+	case ThingShape::None:
+		return {};
+	case ThingShape::Trunk:
+		// At the tree's position on the map
+		return {blocking({.centre = {map_coords::Quantise(thing.position.x), map_coords::Quantise(thing.position.z)},
+		                  .radius = k_TreeTrunkRadius})};
+	case ThingShape::TempleRing:
+	{
+		// At the temple's place on the map, turned as its model is
+		const glm::vec3 xAxis = thing.rotation * glm::vec3(1.0f, 0.0f, 0.0f);
+		return TempleRingCircles({map_coords::Quantise(thing.position.x), map_coords::Quantise(thing.position.z)},
+		                         std::atan2(xAxis.z, xAxis.x));
+	}
+	case ThingShape::ModelBox:
+		break;
+	}
+	const auto outline = map_cells::CirclesOf(
+	    map_cells::OutlineOfBox(thing.position, thing.rotation, thing.scale, thing.boxCentre, thing.boxHalfSize));
+	// A long box's own bounding circle is never in the way: only the row along it
+	if (outline.row.empty())
+	{
+		return {blocking(outline.bounds)};
+	}
+	std::vector<BlockingCircle> circles;
+	circles.reserve(outline.row.size());
+	std::ranges::transform(outline.row, std::back_inserter(circles), blocking);
+	return circles;
+}
+
+std::vector<BlockingCircle> TempleRingCircles(glm::vec2 centre, float yAngle)
+{
+	// Every length is a share of the temple's reach, whatever the temple's size
+	constexpr float k_Reach = 21.5f;
+	constexpr int k_Spokes = 7;
+	// The first two spokes have six circles, the last three bent, the others four
+	constexpr int k_BentSpokes = 2;
+	constexpr int k_StraightCircles = 3;
+	constexpr int k_PlainSpokeCircles = 4;
+	constexpr float k_SpokeAngle = 0.8975979f; // a seventh of a turn
+	constexpr float k_FirstSpokeTurn = 3.83f;
+	constexpr float k_SpokeCircleRadius = k_Reach * 0.11f;
+	// The bent spokes' last three circles: how far round each is turned (towards the other bent spoke), and how much
+	// further out the next one is
+	constexpr std::array<float, 3> k_BendTurn {0.06f, 0.16f, 0.27f};
+	constexpr std::array<float, 3> k_BendStep {0.1f, 0.07f, 0.0f};
+
+	const auto blocking = [](glm::vec2 at, float radius) {
+		return BlockingCircle {.centre = at, .radius = radius, .landscape = false, .landscapeOrFence = false};
+	};
+	std::vector<BlockingCircle> circles;
+	circles.reserve(1 + k_BentSpokes * 6 + (k_Spokes - k_BentSpokes) * k_PlainSpokeCircles);
+	circles.push_back(blocking(centre, k_Reach * 0.7f));
+
+	// Worked out as the game does, each sum and product in double before it is kept as a float
+	const auto at = [&centre](double distance, double cosine, double sine) {
+		return glm::vec2 {static_cast<float>(distance * cosine + centre.x), static_cast<float>(distance * sine + centre.y)};
+	};
+	const float radius = 1.4f * k_SpokeCircleRadius;
+	float angle = yAngle + k_FirstSpokeTurn;
+	for (int spoke = 0; spoke < k_Spokes; ++spoke)
+	{
+		const auto sine = static_cast<float>(std::sin(static_cast<double>(angle)));
+		const auto cosine = static_cast<float>(std::cos(static_cast<double>(angle)));
+		float distance = k_Reach * 0.74f;
+		const int straight = spoke < k_BentSpokes ? k_StraightCircles : k_PlainSpokeCircles;
+		for (int i = 0; i < straight; ++i)
+		{
+			circles.push_back(blocking(at(distance, cosine, sine), radius));
+			distance = static_cast<float>(static_cast<double>(k_Reach) * 0.2f + distance);
+		}
+		if (spoke < k_BentSpokes)
+		{
+			// The first bends one way round, the second the other
+			const double side = spoke == 0 ? 1.0 : -1.0;
+			for (size_t i = 0; i < k_BendTurn.size(); ++i)
+			{
+				const double turned = side * k_BendTurn.at(i) + angle;
+				circles.push_back(blocking(at(distance, std::cos(turned), std::sin(turned)), radius));
+				distance = static_cast<float>(static_cast<double>(k_Reach) * k_BendStep.at(i) + distance);
+			}
+		}
+		angle += k_SpokeAngle;
+	}
+	return circles;
+}
+
+bool IsFenceModel(MeshId model)
+{
+	return model == MeshId::BuildingAmericanFence || model == MeshId::BuildingCelticFenceShort ||
+	       model == MeshId::BuildingCelticFenceTall;
 }
 
 } // namespace openblack::ecs::wall_hug

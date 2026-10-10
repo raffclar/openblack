@@ -2247,6 +2247,7 @@ std::vector<Scenario> Build()
 	AddFlockScenarios(all);
 	AddBirdScenarios(all);
 	AddTeleportScenarios(all);
+	AddVortexScenarios(all);
 	AddTornadoScenarios(all);
 	AddPhysicsScenarios(all);
 	AddNatureScenarios(all);
@@ -2514,11 +2515,11 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 	if (scenario.creatures.empty() && scenario.particles.empty() && scenario.miracles.empty() && scenario.dispensers.empty() &&
 	    scenario.birdFlocks.empty() && scenario.temples.empty() && !environment.dispenserGrid && !scenario.crowd.has_value() &&
 	    !environment.playerAlignment.has_value() && scenario.throws.empty() && scenario.objects.empty() &&
-	    scenario.fireflyRewards.empty() &&
+	    scenario.vortices.empty() && scenario.fireflyRewards.empty() &&
 	    std::ranges::none_of(scenario.commands, [](const Command& command) { return NeedsNoCreature(command.kind); }))
 	{
-		problems.emplace_back("no creatures, things, particles, miracles, dispensers, birds, temples, crowd, fireflies' "
-		                      "rewards, player's commands or alignment for the hand");
+		problems.emplace_back("no creatures, things, particles, miracles, dispensers, birds, temples, vortices, crowd, "
+		                      "fireflies' rewards, player's commands or alignment for the hand");
 	}
 	if ((environment.playerAlignment && !InRange(*environment.playerAlignment, -1.0f, 1.0f)) ||
 	    (environment.cursor && (!InRange(environment.cursor->x, 0.0f, 1.0f) || !InRange(environment.cursor->y, 0.0f, 1.0f))))
