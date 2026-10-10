@@ -70,6 +70,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/Sky.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/Transform.h"
@@ -1895,9 +1896,9 @@ void MoveCameraToFaceObject() // 107 MOVE_CAMERA_TO_FACE_OBJECT
 
 void GetMoonPercentage() // 108 GET_MOON_PERCENTAGE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// How full the moon was the last time it showed: 0 at the full moon, 1 at a new moon
+	const auto* moon = Locator::entitiesRegistry::value().TryGet<ecs::components::Moon>(Locator::skySystem::value().GetMoon());
+	Pushf(graphics::moon::ScriptPercentage(moon != nullptr ? moon->phase : 0.0f));
 }
 
 void PopulateContainer() // 109 POPULATE_CONTAINER
@@ -3050,7 +3051,7 @@ void SetCreatureHome() // 223 SET_CREATURE_HOME
 	// The creature's home becomes the point, on the ground and kept as precisely as a map position. While its player's
 	// temple stands the temple's pen is its home again from the next game turn.
 	const auto position = PopVec();
-	const auto creature = static_cast<entt::entity>(Pop().uintVal);
+	const auto creature = PopObject();
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(creature))
 	{

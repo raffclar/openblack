@@ -40,7 +40,7 @@ void magic::WaterField(WaterCrop& crop, const WaterCropType& type)
 
 WaterTreeResult magic::WaterTree(float scale, float target, const WaterTreeType& type, bool extreme)
 {
-	WaterTreeResult result {.scale = scale, .target = target, .canGrow = scale < target};
+	WaterTreeResult result {.scale = scale, .target = target, .canGrow = type.madeToGrow && scale < target};
 	if (!result.canGrow && !extreme)
 	{
 		return result;

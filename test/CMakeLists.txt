@@ -441,6 +441,7 @@ openblack_setup_and_add_test(test_temple_heart test_temple_heart.cpp)
 openblack_setup_and_add_test(test_model_surface test_model_surface.cpp)
 target_link_libraries(test_model_surface PRIVATE l3d)
 openblack_setup_and_add_test(test_fireflies test_fireflies.cpp)
+openblack_setup_and_add_test(test_forest_growth test_forest_growth.cpp)
 openblack_setup_and_add_test(test_store_rules test_store_rules.cpp)
 openblack_setup_and_add_test(test_clip_sounds test_clip_sounds.cpp)
 target_link_libraries(test_clip_sounds PRIVATE sas)
@@ -470,6 +471,8 @@ openblack_setup_and_add_test(
   test_loading_screen_rules gui/test_loading_screen_rules.cpp
 )
 openblack_setup_and_add_test(test_story_land_change test_story_land_change.cpp)
+openblack_setup_and_add_test(test_dance_file test_dance_file.cpp)
+target_link_libraries(test_dance_file PRIVATE dance)
 target_link_libraries(test_story_land_change PRIVATE ScriptLibrary)
 
 # The inspector component's tests build without the game, as the component does

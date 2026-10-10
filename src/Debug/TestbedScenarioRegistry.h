@@ -90,6 +90,8 @@ enum class Facet : uint8_t
 	Nature,
 	/// The land's animals: its birds and the doves or bats about the temples
 	Animals,
+	/// The sky: the moon and its phases
+	Sky,
 
 	_Count
 };
@@ -688,6 +690,8 @@ void AddHandNavigationScenarios(std::vector<Scenario>& all);
 /// The scenarios of how the hand looks for its player's alignment
 void AddHandLookScenarios(std::vector<Scenario>& all);
 void AddKnockScenarios(std::vector<Scenario>& all);
+/// The moon at night, seen to the east, for trying its phases and its path with the moon debug window
+void AddSkyScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them
 [[nodiscard]] std::span<const Scenario> All();

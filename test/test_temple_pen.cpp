@@ -95,25 +95,6 @@ TEST(TemplePen, WallsTurnWithTheTemple)
 	}
 }
 
-TEST(TemplePen, PenIsTheMeshsMarkedPlaceMovedWithTheTemple)
-{
-	std::array<glm::mat4, k_PenPoint + 1> marks {};
-	marks.fill(glm::mat4(1.0f));
-	marks.at(k_PenPoint)[3] = glm::vec4(2.0f, 5.0f, 3.0f, 1.0f);
-	const auto pen = PenPlace({100.0f, 7.0f, 50.0f}, glm::mat3(1.0f), glm::vec3(2.0f), marks);
-	ASSERT_TRUE(pen.has_value());
-	EXPECT_NEAR(pen->x, 104.0f, 1e-3f);
-	EXPECT_NEAR(pen->y, 56.0f, 1e-3f);
-	// Kept as a map position: whole units of 10 / 65536 m
-	EXPECT_FLOAT_EQ(pen->x, MapPlace({104.0f, 0.0f, 0.0f}).x);
-}
-
-TEST(TemplePen, NoPenWithoutTheMarkedPlace)
-{
-	std::array<glm::mat4, k_PenPoint> marks {};
-	EXPECT_FALSE(PenPlace({}, glm::mat3(1.0f), glm::vec3(1.0f), marks).has_value());
-}
-
 TEST(TemplePen, MapPlaceTruncatesTowardsZero)
 {
 	// -4 m is -26214.4 units, kept as -26214

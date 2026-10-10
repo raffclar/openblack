@@ -32,6 +32,7 @@ using CreatureSkinArtManager = ResourceManager<CreatureSkinArtLoader>;
 using SoundManager = ResourceManager<SoundLoader>;
 using GlowManager = ResourceManager<LightLoader>;
 using CameraPathManager = ResourceManager<CameraPathLoader>;
+using DanceFileManager = ResourceManager<DanceFileLoader>;
 using ParticleFileManager = ResourceManager<ParticleFileLoader>;
 using GestureTemplatesManager = ResourceManager<GestureTemplatesLoader>;
 using VideoManager = ResourceManager<VideoLoader>;
@@ -60,6 +61,8 @@ public:
 	virtual SoundManager& GetSounds() = 0;
 	virtual GlowManager& GetGlows() = 0;
 	virtual CameraPathManager& GetCameraPaths() = 0;
+	/// The dances' choreographies, by their names in the dances' table
+	virtual DanceFileManager& GetDanceFiles() = 0;
 	/// The particle effect files, by particles::ParticleFileId of their names
 	virtual ParticleFileManager& GetParticleFiles() = 0;
 	/// The light maps the particle effects stamp on the land, by their paths
