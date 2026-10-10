@@ -105,6 +105,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -124,6 +125,7 @@
 #include "ECS/Systems/TornadoSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/TutorialSkipSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
@@ -244,6 +246,8 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"inspector", "engine.services"},
     LocatorCoverage {"vm", "script.vm"},
     LocatorCoverage {"chlapi", "script.natives"},
+    LocatorCoverage {"playerProfileSystem", "players.new_game"},
+    LocatorCoverage {"tutorialSkipSystem", "players.new_game"},
 };
 
 constexpr std::string_view k_NoRegistry = "there is no registry: no land is loaded";
@@ -853,6 +857,25 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 std::unique_ptr<ProviderInterface> PlayersProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("players");
+	provider->Add(Query("new_game", "How the new game started: whether the tutorial and the creature training are "
+	                                "skipped and the old creature kept, and the player profiles"),
+	              [](const QueryContext& /*c*/) {
+		              Json result = Json::object();
+		              if (Locator::tutorialSkipSystem::has_value())
+		              {
+			              const auto& skip = Locator::tutorialSkipSystem::value().Get();
+			              result["skip_tutorial"] = skip.skipTutorial;
+			              result["skip_creature_training"] = skip.skipCreatureTraining;
+			              result["keep_old_creature"] = skip.keepOldCreature;
+		              }
+		              if (Locator::playerProfileSystem::has_value())
+		              {
+			              const auto& profiles = Locator::playerProfileSystem::value();
+			              result["profiles"] = profiles.GetProfileCount();
+			              result["profile_has_creature"] = profiles.CurrentProfileHasCreature();
+		              }
+		              return QueryResult::Value(std::move(result));
+	              });
 	provider->Add(Query("list", "The players: their entities, primary creatures and alignment", {}, ResultKind::List),
 	              Serve<Locator::playerSystem>(
 	                  "the players", [](const ecs::systems::PlayerSystemInterface& players, const QueryContext& /*c*/) {
