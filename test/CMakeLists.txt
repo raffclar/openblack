@@ -157,6 +157,7 @@ openblack_setup_and_add_test(test_sun graphics/test_sun.cpp)
 openblack_setup_and_add_test(test_moon graphics/test_moon.cpp)
 openblack_setup_and_add_test(test_bone_budget graphics/test_bone_budget.cpp)
 openblack_setup_and_add_test(test_bone_palette graphics/test_bone_palette.cpp)
+openblack_setup_and_add_test(test_draw_order graphics/test_draw_order.cpp)
 openblack_setup_and_add_test(test_view_frustum graphics/test_view_frustum.cpp)
 openblack_setup_and_add_test(test_mesh_detail graphics/test_mesh_detail.cpp)
 openblack_setup_and_add_test(
