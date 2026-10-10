@@ -173,6 +173,7 @@
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/Systems/SharkSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
@@ -194,7 +195,6 @@
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
-#include "ECS/Systems/WhaleSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/VillageTotem.h"
 #include "ECS/WorldObjects.h"
@@ -1115,8 +1115,8 @@ bool Game::GameLogicLoop() noexcept
 	{
 		Locator::templeDestructionSystem::value().ProcessTurn();
 	}
-	// The whales' turns start where they are, then the things the scripts walk along tracks go on, before the living
-	Locator::whaleSystem::value().ProcessTurn();
+	// The sharks' turns start where they are, then the things the scripts walk along tracks go on, before the living
+	Locator::sharkSystem::value().ProcessTurn();
 	// The dances go on after the players and before the things walking tracks and the living
 	Locator::danceSystem::value().ProcessTurn();
 	Locator::walkPathSystem::value().ProcessTurn();
@@ -1689,8 +1689,8 @@ bool Game::Update() noexcept
 		Locator::animalSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
 		// The clips the villagers' states play go on, and the sounds of their frames play
 		Locator::livingActionSystem::value().UpdatePoses(clock.GetTurn(), clock.GetTurnFraction());
-		// The whales swim between their last two turns and leave their wakes
-		Locator::whaleSystem::value().Update(gameTime, clock.GetTurnFraction());
+		// The sharks swim between their last two turns and leave their wakes
+		Locator::sharkSystem::value().Update(gameTime, clock.GetTurnFraction());
 		// The gates and the other scenery the scripts open and close play on, and the plinths' stones sit or sink
 		Locator::animatedStaticSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
 	}

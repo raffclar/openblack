@@ -869,10 +869,10 @@
   "query": "living.forests"
  },
  {
-  "description": "The whales: where each is this turn and was at its start, the way it faces, its clip and the wake's timer",
+  "description": "The sharks: where each is this turn and was at its start, the way it faces, its clip and the wake's timer",
   "kind": "object",
   "parameters": [],
-  "query": "living.whales"
+  "query": "living.sharks"
  },
  {
   "description": "The things walking the camera editor's tracks: the track, how far and up to where",
