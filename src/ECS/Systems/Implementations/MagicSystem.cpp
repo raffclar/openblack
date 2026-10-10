@@ -1003,7 +1003,7 @@ float MagicSystem::GetTribalPower(PlayerNames player, Tribe tribe) const
 	{
 		return 1.0f;
 	}
-	return _tribalPowers.at(static_cast<size_t>(player)).at(static_cast<size_t>(tribe));
+	return PlayerTribalMultipliers(player).at(static_cast<size_t>(tribe));
 }
 
 float MagicSystem::PlayerTribalPower(PlayerNames player, MagicType type) const

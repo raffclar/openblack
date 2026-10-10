@@ -502,16 +502,6 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		}
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "CreateScriptObject not implemented for animal kind {}", subtype);
 		return static_cast<entt::entity>(0);
-	case ObjectType::Vortex:
-	{
-		// A vortex of the three kinds; the game makes nothing for any other
-		if (subtype > static_cast<uint32_t>(VortexType::Volcano))
-		{
-			break;
-		}
-		const auto vortex = Locator::vortexSystem::value().Create(position, static_cast<VortexType>(subtype), altitude);
-		return vortex != entt::null ? vortex : static_cast<entt::entity>(0);
-	}
 	default:
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "CreateScriptObject not implemented for type {}", static_cast<int>(type));
 	}
