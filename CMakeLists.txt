@@ -91,6 +91,11 @@ option(OPENBLACK_WARNINGS_AS_ERRORS
        "Treat warnings as errors (disable easier prototyping, enable for CI)"
        OFF
 )
+option(
+  OPENBLACK_BINK_DECODER
+  "Decode the game's Bink videos (without it they keep their timing and show black)"
+  ON
+)
 option(OPENBLACK_TRACE_TIME
        "Compilation Time analysis (only available with clang)" OFF
 )
@@ -174,6 +179,7 @@ add_subdirectory(components/creaturemind)
 add_subdirectory(components/psys)
 add_subdirectory(components/physconst)
 add_subdirectory(components/sas)
+add_subdirectory(components/bink)
 add_subdirectory(components/gestures)
 add_subdirectory(components/rawimage)
 add_subdirectory(components/ScriptLibrary)
@@ -189,6 +195,7 @@ add_subdirectory(apps/lndtool)
 add_subdirectory(apps/anmtool)
 add_subdirectory(apps/glwtool)
 add_subdirectory(apps/morphtool)
+add_subdirectory(apps/binktool)
 add_subdirectory(apps/creaturemindtool)
 add_subdirectory(apps/lhvmtool)
 

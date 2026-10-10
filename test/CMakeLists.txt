@@ -70,6 +70,7 @@ openblack_setup_and_add_test(test_anim_effects audio/test_anim_effects.cpp)
 openblack_setup_and_add_test(test_listener_frame audio/test_listener_frame.cpp)
 openblack_setup_and_add_test(test_hearing_range audio/test_hearing_range.cpp)
 openblack_setup_and_add_test(test_interface gui/test_interface.cpp)
+openblack_setup_and_add_test(test_skip_box gui/test_skip_box.cpp)
 openblack_setup_and_add_test(test_tool_tips gui/test_tool_tips.cpp)
 openblack_setup_and_add_test(test_screen_fade gui/test_screen_fade.cpp)
 openblack_setup_and_add_test(test_cinematics gui/test_cinematics.cpp)
@@ -201,6 +202,10 @@ openblack_setup_and_add_test(test_creature_hair test_creature_hair.cpp)
 openblack_setup_and_add_test(test_creature_sway test_creature_sway.cpp)
 openblack_setup_and_add_test(test_creature_catch test_creature_catch.cpp)
 openblack_setup_and_add_test(test_creature_tattoo test_creature_tattoo.cpp)
+openblack_setup_and_add_test(test_tattoo_editor test_tattoo_editor.cpp)
+openblack_setup_and_add_test(
+  test_tattoo_editor_system test_tattoo_editor_system.cpp
+)
 openblack_setup_and_add_test(test_creature_marks test_creature_marks.cpp)
 openblack_setup_and_add_test(
   test_creature_carry_over test_creature_carry_over.cpp
@@ -216,6 +221,8 @@ openblack_setup_and_add_test(test_miracle_surfaces test_miracle_surfaces.cpp)
 target_link_libraries(test_miracle_surfaces PRIVATE psys)
 openblack_setup_and_add_test(test_miracle_visuals test_miracle_visuals.cpp)
 openblack_setup_and_add_test(test_resource_piles test_resource_piles.cpp)
+openblack_setup_and_add_test(test_resource_cache test_resource_cache.cpp)
+openblack_setup_and_add_test(test_upload_pacer test_upload_pacer.cpp)
 openblack_setup_and_add_test(test_map_cells test_map_cells.cpp)
 openblack_setup_and_add_test(test_script_cast test_script_cast.cpp)
 openblack_setup_and_add_test(test_creature_route test_creature_route.cpp)
@@ -414,6 +421,26 @@ openblack_setup_and_add_test(test_fireflies test_fireflies.cpp)
 openblack_setup_and_add_test(test_store_rules test_store_rules.cpp)
 openblack_setup_and_add_test(test_clip_sounds test_clip_sounds.cpp)
 target_link_libraries(test_clip_sounds PRIVATE sas)
+
+# The Bink video component's tests need nothing from the game; those that read the game's videos skip without
+# OPENBLACK_GAME_PATH
+foreach (BINK_TEST file bitstream blocks decoder yuv robustness)
+  add_executable(test_bink_${BINK_TEST} bink/test_bink_${BINK_TEST}.cpp)
+  target_link_libraries(test_bink_${BINK_TEST} PRIVATE GTest::gtest_main bink)
+  set_property(TARGET test_bink_${BINK_TEST} PROPERTY FOLDER "tests")
+  add_test(NAME test_bink_${BINK_TEST} COMMAND test_bink_${BINK_TEST})
+endforeach ()
+
+# The full-screen videos' rules and system, over synthetic Bink files
+openblack_setup_and_add_test(test_video_rules video/test_video_rules.cpp)
+openblack_setup_and_add_test(test_video_system video/test_video_system.cpp)
+target_include_directories(
+  test_video_system PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/bink
+)
+# The loading screen's and the start-up screens' rules
+openblack_setup_and_add_test(
+  test_loading_screen_rules gui/test_loading_screen_rules.cpp
+)
 openblack_setup_and_add_test(test_story_land_change test_story_land_change.cpp)
 target_link_libraries(test_story_land_change PRIVATE ScriptLibrary)
 

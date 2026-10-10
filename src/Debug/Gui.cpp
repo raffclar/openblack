@@ -80,6 +80,7 @@
 #include "Temple.h"
 #include "TestbedScenarios.h"
 #include "TextureViewer.h"
+#include "VideoViewer.h"
 #include "Weather.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -138,6 +139,7 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 	debugWindows.emplace_back(new Gestures);
 	debugWindows.emplace_back(new Physics);
 	debugWindows.emplace_back(new KeyBindingsWindow);
+	debugWindows.emplace_back(new VideoViewer);
 	auto spawner = std::make_unique<CreatureSpawner>();
 	auto scenarios = std::make_unique<TestbedScenarios>(*spawner);
 	// The editor hosts the creature spawner's and the scenarios' windows, and the scripts

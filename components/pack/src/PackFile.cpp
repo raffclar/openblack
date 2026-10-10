@@ -230,7 +230,7 @@ std::string_view openblack::pack::ResultToStr(PackResult result)
 	std::unreachable();
 }
 
-PackResult PackFile::ReadBlocks(std::istream& stream, std::string_view leftInFile) noexcept
+PackResult PackFile::ReadBlocks(std::istream& stream, const std::set<std::string>& unread) noexcept
 {
 	assert(!_isLoaded);
 
@@ -265,25 +265,26 @@ PackResult PackFile::ReadBlocks(std::istream& stream, std::string_view leftInFil
 	{
 		stream.read(reinterpret_cast<char*>(&header), sizeof(PackBlockHeader));
 
-		if (_blocks.contains(header.blockName.data()))
+		const std::string name(header.blockName.data());
+		if (_blocks.contains(name) || _unreadBlocks.contains(name))
 		{
 			return PackResult::ErrDuplicateBlockName;
 		}
 
-		if (!leftInFile.empty() && std::string_view(header.blockName.data()) == leftInFile)
+		if (unread.contains(name))
 		{
 			const auto offset = static_cast<uint64_t>(stream.tellg());
-			if (offset + header.blockSize > fsize)
+			if (fsize < offset + header.blockSize)
 			{
 				return PackResult::ErrFileTooSmall;
 			}
-			_audioWaveDataSpan = BlockSpan {.offset = offset, .size = header.blockSize};
-			stream.seekg(static_cast<std::streamoff>(header.blockSize), std::ios_base::cur);
+			_unreadBlocks[name] = UnreadBlock {.offset = offset, .size = header.blockSize};
+			stream.seekg(static_cast<std::streamoff>(offset + header.blockSize));
 			continue;
 		}
 
-		_blocks[std::string(header.blockName.data())] = std::vector<uint8_t>(header.blockSize);
-		stream.read(reinterpret_cast<char*>(_blocks[header.blockName.data()].data()), header.blockSize);
+		_blocks[name] = std::vector<uint8_t>(header.blockSize);
+		stream.read(reinterpret_cast<char*>(_blocks[name].data()), header.blockSize);
 	}
 
 	if (fsize < static_cast<std::size_t>(stream.tellg()))
@@ -713,9 +714,14 @@ PackFile::~PackFile() noexcept = default;
 
 PackResult PackFile::ReadFile(std::istream& stream) noexcept
 {
+	return ReadFile(stream, {});
+}
+
+PackResult PackFile::ReadFile(std::istream& stream, const std::set<std::string>& unreadBlocks) noexcept
+{
 	PackResult result;
 
-	result = ReadBlocks(stream, {});
+	result = ReadBlocks(stream, unreadBlocks);
 	if (result != PackResult::Success)
 	{
 		return result;
@@ -773,10 +779,14 @@ PackResult PackFile::ReadFile(std::istream& stream) noexcept
 		{
 			return result;
 		}
-		result = ExtractSoundsFromBlock();
-		if (result != PackResult::Success)
+		// Samples left unread are read from the file by their headers' offsets when wanted
+		if (!_unreadBlocks.contains("LHAudioWaveData"))
 		{
-			return result;
+			result = ExtractSoundsFromBlock();
+			if (result != PackResult::Success)
+			{
+				return result;
+			}
 		}
 	}
 
@@ -816,12 +826,13 @@ PackResult PackFile::OpenAudioIndex(const std::filesystem::path& filepath) noexc
 		return PackResult::ErrCantOpen;
 	}
 
-	auto result = ReadBlocks(stream, "LHAudioWaveData");
+	auto result = ReadBlocks(stream, {"LHAudioWaveData"});
 	if (result != PackResult::Success)
 	{
 		return result;
 	}
-	if (!_audioWaveDataSpan)
+	const auto waveData = GetUnreadBlock("LHAudioWaveData");
+	if (!waveData)
 	{
 		return PackResult::ErrMissingAudioWaveDataBlock;
 	}
@@ -838,7 +849,7 @@ PackResult PackFile::OpenAudioIndex(const std::filesystem::path& filepath) noexc
 	// Every sample lies within the sample data
 	for (const auto& sample : _audioSampleHeaders)
 	{
-		if (static_cast<uint64_t>(sample.offset) + sample.size > _audioWaveDataSpan->size)
+		if (static_cast<uint64_t>(sample.offset) + sample.size > waveData->size)
 		{
 			return PackResult::ErrFileTooSmall;
 		}
@@ -850,12 +861,13 @@ PackResult PackFile::OpenAudioIndex(const std::filesystem::path& filepath) noexc
 
 std::optional<std::pair<uint64_t, uint32_t>> PackFile::GetAudioSampleFileSpan(uint32_t index) const noexcept
 {
-	if (!_audioWaveDataSpan || index >= _audioSampleHeaders.size())
+	const auto waveData = GetUnreadBlock("LHAudioWaveData");
+	if (!waveData || index >= _audioSampleHeaders.size())
 	{
 		return std::nullopt;
 	}
 	const auto& sample = _audioSampleHeaders[index];
-	return std::pair {_audioWaveDataSpan->offset + sample.offset, sample.size};
+	return std::pair {waveData->offset + sample.offset, sample.size};
 }
 
 PackResult PackFile::Write(const std::filesystem::path& filepath) noexcept

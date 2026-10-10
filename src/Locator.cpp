@@ -76,6 +76,7 @@
 #include "ECS/Systems/Implementations/ParticleSystem.h"
 #include "ECS/Systems/Implementations/PathfindingSystem.h"
 #include "ECS/Systems/Implementations/PickingSystem.h"
+#include "ECS/Systems/Implementations/PlayerProfileSystem.h"
 #include "ECS/Systems/Implementations/PlayerSystem.h"
 #include "ECS/Systems/Implementations/RainSystem.h"
 #include "ECS/Systems/Implementations/ReactionSystem.h"
@@ -87,6 +88,7 @@
 #include "ECS/Systems/Implementations/SnowSystem.h"
 #include "ECS/Systems/Implementations/SnowfallSystem.h"
 #include "ECS/Systems/Implementations/SoundTagSystem.h"
+#include "ECS/Systems/Implementations/TattooEditorSystem.h"
 #include "ECS/Systems/Implementations/TeleportSystem.h"
 #include "ECS/Systems/Implementations/TempleDestructionSystem.h"
 #include "ECS/Systems/Implementations/TempleExteriorSystem.h"
@@ -94,7 +96,9 @@
 #include "ECS/Systems/Implementations/TornadoSystem.h"
 #include "ECS/Systems/Implementations/TownDesireSystem.h"
 #include "ECS/Systems/Implementations/TownSystem.h"
+#include "ECS/Systems/Implementations/TutorialSkipSystem.h"
 #include "ECS/Systems/Implementations/VegetationSystem.h"
+#include "ECS/Systems/Implementations/VideoSystem.h"
 #include "ECS/Systems/Implementations/VillageLightSystem.h"
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
 #include "ECS/Systems/Implementations/WeatherSystem.h"
@@ -164,6 +168,7 @@ using openblack::ecs::systems::MistSystem;
 using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PathfindingSystem;
 using openblack::ecs::systems::PickingSystem;
+using openblack::ecs::systems::PlayerProfileSystem;
 using openblack::ecs::systems::PlayerSystem;
 using openblack::ecs::systems::RainSystem;
 using openblack::ecs::systems::ReactionSystem;
@@ -172,6 +177,7 @@ using openblack::ecs::systems::ResourceStoreSystem;
 using openblack::ecs::systems::SnowfallSystem;
 using openblack::ecs::systems::SnowSystem;
 using openblack::ecs::systems::SoundTagSystem;
+using openblack::ecs::systems::TattooEditorSystem;
 using openblack::ecs::systems::TeleportSystem;
 using openblack::ecs::systems::TempleDestructionSystem;
 using openblack::ecs::systems::TempleExteriorSystem;
@@ -179,7 +185,9 @@ using openblack::ecs::systems::TimeSystem;
 using openblack::ecs::systems::TornadoSystem;
 using openblack::ecs::systems::TownDesireSystem;
 using openblack::ecs::systems::TownSystem;
+using openblack::ecs::systems::TutorialSkipSystem;
 using openblack::ecs::systems::VegetationSystem;
+using openblack::ecs::systems::VideoSystem;
 using openblack::ecs::systems::VillageLightSystem;
 using openblack::ecs::systems::WaterRingSystem;
 using openblack::ecs::systems::WeatherSystem;
@@ -248,6 +256,8 @@ bool openblack::InitializeGame() noexcept
 	Locator::skySystem::emplace<ecs::systems::SkySystem>();
 	Locator::alignmentSystem::emplace<AlignmentSystem>();
 	Locator::cameraHelpSystem::emplace<CameraHelpSystem>();
+	Locator::tutorialSkipSystem::emplace<TutorialSkipSystem>();
+	Locator::playerProfileSystem::emplace<PlayerProfileSystem>();
 	Locator::templeExteriorSystem::emplace<TempleExteriorSystem>();
 	Locator::templeDestructionSystem::emplace<TempleDestructionSystem>();
 	Locator::time::emplace<TimeSystem>();
@@ -274,7 +284,9 @@ bool openblack::InitializeGame() noexcept
 	Locator::creatureFightSystem::emplace<CreatureFightSystem>();
 	Locator::creatureModeSystem::emplace<CreatureModeSystem>();
 	Locator::creatureCaveSystem::emplace<CreatureCaveSystem>();
+	Locator::tattooEditorSystem::emplace<TattooEditorSystem>();
 	Locator::cinematicDirectorSystem::emplace<CinematicDirectorSystem>();
+	Locator::videoSystem::emplace<VideoSystem>();
 	Locator::soundTagSystem::emplace<SoundTagSystem>();
 	Locator::rainSystem::emplace<RainSystem>();
 	Locator::chimneySmokeSystem::emplace<ChimneySmokeSystem>();
@@ -366,6 +378,8 @@ void openblack::ShutDownServices()
 	if (Locator::resources::has_value())
 	{
 		auto& resources = Locator::resources::value();
+		// Nothing more may be made on the loading threads once the renderer goes
+		resources.StopLoading();
 		resources.GetMeshes().Clear();
 		resources.GetTextures().Clear();
 		resources.GetAnimations().Clear();
@@ -395,12 +409,14 @@ void openblack::ShutDownServices()
 	Locator::pathfindingSystem::reset();
 	Locator::creatureLocomotionSystem::reset();
 	Locator::cinematicDirectorSystem::reset();
+	Locator::videoSystem::reset();
 	Locator::influenceSystem::reset();
 	Locator::chimneySmokeSystem::reset();
 	Locator::abodeKnockSystem::reset();
 	Locator::rainSystem::reset();
 	Locator::snowfallSystem::reset();
 	Locator::waterRingSystem::reset();
+	Locator::tattooEditorSystem::reset();
 	Locator::creatureCaveSystem::reset();
 	Locator::creatureModeSystem::reset();
 	Locator::creatureFightSystem::reset();
