@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include <algorithm>
 #include <chrono>
 #include <map>
 #include <memory>
@@ -52,7 +53,14 @@ class FakeCamera final: public CameraControlInterface
 public:
 	[[nodiscard]] std::optional<CameraState> State() const override
 	{
-		return CameraState {.origin = pose.origin, .focus = pose.focus, .model = "world", .heldByPath = held};
+		const auto forward = glm::normalize(pose.focus - pose.origin);
+		auto focus = pose.focus;
+		// As the game's camera reads it back: where the middle of the view meets the land
+		if (focusOnLand && forward.y < 0.0f)
+		{
+			focus = pose.origin + forward * ((10.0f - pose.origin.y) / forward.y);
+		}
+		return CameraState {.origin = pose.origin, .focus = focus, .forward = forward, .model = "world", .heldByPath = held};
 	}
 	std::string Set(const CameraPose& to) override
 	{
@@ -77,6 +85,8 @@ public:
 			own = pose;
 		}
 		pose = to;
+		// A camera that keeps itself above a height, which a picture asked for lower never gets
+		pose.origin.y = std::max(pose.origin.y, lowest);
 		++sets;
 		++pins;
 		return {};
@@ -90,6 +100,12 @@ public:
 		own.reset();
 	}
 	void SetOverride(std::optional<CameraPose> to) override { overridden = to; }
+	/// A frame's update: the camera moves itself somewhere, then the inspector puts a picture's camera back
+	void PlaceCameraLikeTheGame(ScreenshotProvider& provider)
+	{
+		pose = {.origin = {0.0f, 100.0f, -100.0f}, .focus = {0.0f, 0.0f, 0.0f}};
+		provider.PlaceCamera();
+	}
 	[[nodiscard]] std::optional<CameraPose> Override() const override { return overridden; }
 	[[nodiscard]] float GroundHeight(glm::vec2 /*point*/) const override { return 10.0f; }
 	[[nodiscard]] std::optional<glm::vec3> EntityPosition(uint32_t id) const override
@@ -102,6 +118,8 @@ public:
 	glm::vec3 walker {50.0f, 10.0f, 50.0f};
 	std::optional<CameraPose> flewTo;
 	bool held {false};
+	bool focusOnLand {false};
+	float lowest {-1000.0f};
 	int sets {0};
 	int pins {0};
 	std::optional<CameraPose> own;
@@ -375,6 +393,44 @@ TEST(InspectorScripts, ANativeIsGivenTheTypesItTakes)
 	// A native whose types aren't known takes the values as given
 	Ask(inspector, R"({"query": "script.call", "params": {"native": "ADD", "args": [2, 3]}})");
 	EXPECT_EQ(scripts.given[0].type, ScriptValue::Type::Float);
+}
+
+// raw pushes exactly the typed values given, past the count and types the table says: for a native that pops more
+// than the language's table gives it (as the game's GET_ARENA does)
+TEST(InspectorScripts, RawPushesExactlyTheValuesGiven)
+{
+	FakeScripts scripts;
+	auto provider = std::make_unique<FunctionProvider>("script");
+	AddScriptControls(*provider, scripts);
+	Inspector inspector;
+	inspector.Add(std::move(provider));
+
+	// Four values for a native the table says takes three, in their own types
+	Ask(inspector, R"({"query": "script.call", "params": {"native": "SAY", "raw": true,)"
+	               R"( "args": [{"int": 1}, {"float": 2.5}, true, {"object": 9}]}})");
+	EXPECT_EQ(scripts.called, 6u);
+	ASSERT_EQ(scripts.given.size(), 4u);
+	EXPECT_EQ(scripts.given[0].type, ScriptValue::Type::Int);
+	EXPECT_EQ(scripts.given[0].integer, 1);
+	EXPECT_EQ(scripts.given[1].type, ScriptValue::Type::Float);
+	EXPECT_FLOAT_EQ(scripts.given[1].number, 2.5f);
+	EXPECT_EQ(scripts.given[2].type, ScriptValue::Type::Boolean);
+	EXPECT_EQ(scripts.given[3].type, ScriptValue::Type::Object);
+	EXPECT_EQ(scripts.given[3].object, 9u);
+	// Its types aren't taken from the slots: the first slot's integer stays a float when given as one
+	Ask(inspector, R"({"query": "script.call", "params": {"native": "SAY", "raw": true, "args": [{"float": 1203}]}})");
+	ASSERT_EQ(scripts.given.size(), 1u);
+	EXPECT_EQ(scripts.given[0].type, ScriptValue::Type::Float);
+
+	// A plain number has no type of its own to push with raw: it is refused, naming it
+	EXPECT_NE(Refused(inspector, R"({"query": "script.call", "params": {"native": "SAY", "raw": true, "args": [true, 3]}})")
+	              .find("argument 2"),
+	          std::string::npos);
+	EXPECT_FALSE(Refused(inspector, R"({"query": "script.call", "params": {"native": "SAY", "raw": 1, "args": []}})").empty());
+	// Without raw the count is still checked
+	EXPECT_FALSE(Refused(inspector, R"({"query": "script.call", "params": {"native": "SAY", "raw": false,)"
+	                                R"( "args": [{"int": 1}, {"float": 2.5}, true, {"object": 9}]}})")
+	                 .empty());
 }
 
 // The game's natives take the types the language's table gives them: RUN_TEXT a truth and two integers, a camera move
@@ -701,6 +757,79 @@ TEST(InspectorScreenshot, TheCameraIsHeldAroundThePicture)
 	EXPECT_FLOAT_EQ(camera.pose.origin.x, 7.0f);
 
 	// Held by a camera path or a script, a picture still has its camera (see below)
+}
+
+// As in the game, each frame the camera gets its own place back before the requests and the pictures due, and the
+// picture's camera is put back after everything else moved it: paused or not, the picture is taken from a camera
+// looking at a point above the land, whose focus reads back where the view meets the land
+TEST(InspectorScreenshot, APictureWithItsCameraIsTakenAsTheGameDrawsIt)
+{
+	FakeScreenshots screenshots;
+	FakeCamera camera;
+	camera.focusOnLand = true;
+	auto owned = std::make_unique<ScreenshotProvider>(screenshots, camera);
+	auto* provider = owned.get();
+	Inspector inspector;
+	inspector.Add(std::move(owned));
+	uint64_t frame = 165;
+	provider->Frame(frame);
+	const auto asked = Ask(inspector, R"({"query": "screenshot.take", "params": {"path": "held.png", "hide_gui": true,
+	                                     "camera": {"focus": [2560, 33, 2600], "yaw": 200, "pitch": 5, "distance": 20}}})");
+	const auto shot = asked["frame"].get<uint64_t>();
+	EXPECT_EQ(asked["held_from"], asked["now"]);
+	while (frame < shot + 2 * ScreenshotProvider::k_SettleFrames)
+	{
+		camera.PlaceCameraLikeTheGame(*provider);
+		camera.Unpin();
+		provider->Frame(++frame);
+	}
+	ASSERT_EQ(screenshots.taken.size(), 1u);
+	EXPECT_EQ(screenshots.taken[0], "held.png");
+	EXPECT_EQ(Ask(inspector, R"({"query": "screenshot.pending"})")["failed"].size(), 0u);
+
+	// A camera that never gets where it was put fails the picture, saying so, rather than dropping it unsaid
+	camera.lowest = 500.0f;
+	Ask(inspector, R"({"query": "screenshot.take", "params": {"path": "never.png", "camera": {"position": [0, 20, 0],
+	                  "focus": [5, 10, 5]}}})");
+	for (uint64_t each = 0; each < 40 + (4 * ScreenshotProvider::k_SettleFrames); ++each)
+	{
+		camera.PlaceCameraLikeTheGame(*provider);
+		camera.Unpin();
+		provider->Frame(++frame);
+	}
+	EXPECT_EQ(screenshots.taken.size(), 1u);
+	const auto failed = Ask(inspector, R"({"query": "screenshot.pending"})")["failed"];
+	ASSERT_EQ(failed.size(), 1u);
+	EXPECT_NE(failed[0].get<std::string>().find("never.png"), std::string::npos);
+}
+
+// A picture the renderer never gives back fails, saying so, once it has had long enough to be written; one written is
+// let go of; meanwhile pending lists both as being written
+TEST(InspectorScreenshot, APictureNeverWrittenFails)
+{
+	FakeScreenshots screenshots;
+	FakeCamera camera;
+	auto owned = std::make_unique<ScreenshotProvider>(screenshots, camera);
+	auto* provider = owned.get();
+	Inspector inspector;
+	inspector.Add(std::move(owned));
+	uint64_t frame = 10;
+	provider->Frame(frame);
+	Ask(inspector, R"({"query": "screenshot.take", "params": {"path": "lost.png"}})");
+	Ask(inspector, R"({"query": "screenshot.take", "params": {"path": "kept.png"}})");
+	screenshots.written.insert("kept.png");
+	provider->Frame(++frame);
+	const auto writing = Ask(inspector, R"({"query": "screenshot.pending"})");
+	ASSERT_EQ(writing["writing"].size(), 1u);
+	EXPECT_EQ(writing["writing"][0]["path"], "lost.png");
+	while (frame < 11 + 600)
+	{
+		provider->Frame(++frame);
+	}
+	const auto failed = Ask(inspector, R"({"query": "screenshot.pending"})");
+	ASSERT_EQ(failed["failed"].size(), 1u);
+	EXPECT_NE(failed["failed"][0].get<std::string>().find("lost.png: never written"), std::string::npos);
+	EXPECT_TRUE(failed["writing"].empty());
 }
 
 // Two held pictures asked for at once take turns: the second's camera goes in place once the first's frames are free,
