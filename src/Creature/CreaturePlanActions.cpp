@@ -15,6 +15,7 @@
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureFireAgenda.h"
 #include "Creature/CreatureLayers.h"
+#include "Creature/CreatureScriptAgendas.h"
 
 using namespace openblack;
 using namespace openblack::creature_plan_actions;
@@ -80,7 +81,7 @@ constexpr std::array k_Executors {
     Executor {.action = "CommunicateState", .build = Build::ShowDesire, .activity = Activity::ShowDesire},
     Executor {.action = "WaveAtPlayer", .build = Build::FaceCameraEmote, .animation = animations::k_FriendlyWave},
     Executor {.action = "LookAtHand", .build = Build::FaceCameraEmote, .animation = k_LookAtMe},
-    Executor {.action = "PointAtCamera", .build = Build::FaceCameraEmote, .animation = k_LookAtMe},
+    Executor {.action = "PointAtCamera", .build = Build::PointAtCamera},
     Executor {.action = "BePatheticToPlayer", .build = Build::FaceCameraEmote, .animation = k_PickMe},
     Executor {.action = "HowlAtPlayer", .build = Build::FaceCameraEmote, .animation = animations::k_Summon},
     Executor {.action = "RunAwayFromObject", .target = Target::Frightening, .build = Build::RunFromObject},
@@ -129,6 +130,11 @@ constexpr std::array k_Executors {
     Executor {.action = "PutOutFireWithMagicWater", .target = Target::Burning, .build = Build::CastWater},
     Executor {.action = "SetFireToObject", .target = Target::Unburnt, .build = Build::SetFire},
     Executor {.action = "StartFire", .build = Build::Never},
+    // What scripts force on creatures to stage their scenes
+    Executor {.action = "LookForever", .target = Target::Anything, .build = Build::LookForever},
+    Executor {.action = "LookButDontApproach", .target = Target::Anything, .build = Build::LookButDontApproach},
+    Executor {.action = "LookAtCamera", .build = Build::LookAtCamera},
+    Executor {.action = "PointAtObject", .target = Target::Anything, .build = Build::PointAtThing},
 };
 
 /// The trip to the shoal to bring food out of the sea, none when it already has food in its hand; it walks straight to the
@@ -178,6 +184,8 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 	case Build::FaceCameraEmote:
 	case Build::RunFromPlayer:
 		return situation.camera.has_value();
+	case Build::PointAtCamera:
+		return situation.eye.has_value();
 	case Build::ShowDesire:
 		return situation.showDesireAnimation.has_value();
 	default:
@@ -228,6 +236,13 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::Destroy:
 		return creature_mind::DestroyThing(*object);
 	case Build::SitDown:
+		// Told by a script where to sit, it goes there; otherwise it sits where it is
+		// TODO(creature-mind): left to itself the game first looks for a clear area about four times its radius around
+		// the place, and gives up when it finds none; openblack sits on the spot
+		if (situation.controlledByScript && object.has_value())
+		{
+			return creature_mind::SitDownAt(*object, objectPoint, situation.radius, random);
+		}
 		return std::vector {creature_mind::SitDown(random)};
 	case Build::BeIdle:
 		return creature_mind::BeIdle(random);
@@ -260,6 +275,16 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::PutOutFireWithWater(*object, cast->height);
 	case Build::SetFire:
 		return creature_mind::SetFireTo(*object, situation.instrument, situation.handFull);
+	case Build::LookForever:
+		return creature_mind::LookForever(*object);
+	case Build::LookButDontApproach:
+		return creature_mind::LookButDontApproach(*object, situation.chance);
+	case Build::LookAtCamera:
+		return creature_mind::LookAtCamera(situation.hasPlayer);
+	case Build::PointAtThing:
+		return creature_mind::PointAtThing(*object);
+	case Build::PointAtCamera:
+		return creature_mind::PointAtCamera(situation.hasPlayer, *situation.eye);
 	case Build::Never:
 		return std::nullopt;
 	}

@@ -19,6 +19,7 @@
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreaturePlanner.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureCasting.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -78,9 +79,13 @@ public:
 	bool ForcePlan(entt::entity creature, const ForcedPlan& plan) override;
 	std::optional<creature_desires::Desire> ForcePlanOn(entt::entity creature, entt::entity object) override;
 	bool CarryOutForScript(entt::entity creature, std::vector<creature_mind::Step> agenda) override;
+	bool ScriptDoAction(entt::entity creature, uint32_t action, entt::entity target, std::optional<entt::entity> with) override;
 	[[nodiscard]] bool HasPlayed(entt::entity creature) const override;
 
 private:
+	/// Gives a creature its desires and what it has learnt, if it has none yet: the first time its mind thinks, or
+	/// sooner when it is told to do something before then
+	void SetUpMind(entt::entity creature, const components::Creature& body, components::CreatureMindState& mind);
 	/// Sets up what a creature has learnt the first time its mind thinks, from its mind file when it has one
 	void SetUpLearning(entt::entity creature, components::CreatureMindState& mind);
 	/// Takes up a mind file waiting to be loaded
@@ -100,6 +105,9 @@ private:
 	/// Uniform random numbers from 0 to n - 1, and from 0 to 1
 	uint32_t Random(uint32_t range);
 	float Chance();
+	/// What an agenda needs to know of the creature itself: the camera's position, whether it has a player, whether a
+	/// script controls it, its radius, and a chance for what varies
+	void Situate(entt::entity creature, creature_plan_actions::Situation& situation);
 
 	/// Plans an activity in place of what the creature was doing, getting it up and stopping it first
 	bool Replan(entt::entity creature, creature_mind::Activity activity, std::vector<creature_mind::Step> agenda);

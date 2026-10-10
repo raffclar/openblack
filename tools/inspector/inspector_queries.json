@@ -1551,7 +1551,7 @@
   "writes": true
  },
  {
-  "description": "A mouse button where the pointer is: press, release, or click (pressed now, let go of the next frame)",
+  "description": "A mouse button where the pointer is: press, release, click (pressed now, let go of the next frame) or double_click (a click, then pressed and let go of again as the second click of a double click, a frame apart)",
   "kind": "object",
   "parameters": [
    {
@@ -1560,7 +1560,7 @@
     "type": "string"
    },
    {
-    "description": "press, release or click (the default)",
+    "description": "press, release, click (the default) or double_click",
     "name": "action",
     "type": "string"
    }

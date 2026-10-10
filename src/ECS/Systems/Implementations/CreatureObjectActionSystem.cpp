@@ -473,7 +473,7 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		else
 		{
 			SetPointing(action, transform, body, held);
-			action.holdMs = creature_object_actions::k_PointSeconds * 1000.0f;
+			action.holdMs = action.pointSeconds.value_or(creature_object_actions::k_PointSeconds) * 1000.0f;
 		}
 		BeginPlaying(creature, action, animation);
 		return;
@@ -1068,6 +1068,12 @@ bool CreatureObjectActionSystem::PointAt(entt::entity creature, const glm::vec3&
 	return Start(creature, {.kind = Kind::Point, .point = point});
 }
 
+bool CreatureObjectActionSystem::PointAtFor(entt::entity creature, const glm::vec3& point, float seconds,
+                                            std::optional<entt::entity> thing)
+{
+	return Start(creature, {.kind = Kind::Point, .target = thing, .point = point, .pointSeconds = seconds});
+}
+
 void CreatureObjectActionSystem::Cancel(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -1388,6 +1394,15 @@ void CreatureObjectActionSystem::Update(std::chrono::duration<float, std::milli>
 
 		    if (action.holdMs > 0.0f)
 		    {
+			    // Pointing at a thing, it points wherever the thing has got to
+			    if (action.kind == Kind::Point && action.target.has_value() && registry.Valid(*action.target))
+			    {
+				    if (const auto* at = registry.TryGet<const Transform>(*action.target); at != nullptr)
+				    {
+					    action.point = at->position;
+					    SetPointing(action, transform, body, registry.TryGet<const CreatureHeldObject>(entity));
+				    }
+			    }
 			    action.holdMs -= gameTime.count();
 			    if (action.holdMs <= 0.0f)
 			    {

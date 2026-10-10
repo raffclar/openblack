@@ -16,6 +16,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string>
 #include <utility>
 
 #include <glm/mat4x4.hpp>
@@ -142,6 +143,10 @@ public:
 		bool alphaTexturedAdditive {false};
 		/// A colour the mesh is drawn in, where its program takes one: lit when w is 0, otherwise unlit with its alpha by w
 		glm::vec4 tint {1.0f, 1.0f, 1.0f, 0.0f};
+		/// A piece drawn on another object, as a detailed villager's eyes are, where its program takes it: xyz the point
+		/// whose land light, land colour and haze it takes, w its shade of 255 in place of the sun's on each vertex. w 0 for
+		/// none.
+		glm::vec4 shadeAt {0.0f};
 		/// The temple's light, which the lightmapped submeshes are multiplied by, and which is added to every submesh
 		/// that doesn't glow, as the game adds the vertices' specular
 		glm::vec3 lightMultiply {1.0f};
@@ -226,7 +231,10 @@ public:
 	virtual void Reset(glm::u16vec2 resolution) const noexcept = 0;
 	virtual void DrawScene(const DrawSceneDesc& drawDesc) const noexcept = 0;
 	virtual void Frame() noexcept = 0;
+	/// Asks for the frame being made to be written to a PNG once drawn; the file appears whole once written
 	virtual void RequestScreenshot(const std::filesystem::path& filepath) noexcept = 0;
+	/// Why a picture asked for was given up, once; none while it may still come
+	[[nodiscard]] virtual std::optional<std::string> TakeScreenshotFailure(const std::filesystem::path& filepath) noexcept = 0;
 	[[nodiscard]] virtual bool GetDebug() const noexcept = 0;
 	virtual void SetDebug(bool value) noexcept = 0;
 	[[nodiscard]] virtual bool GetProfile() const noexcept = 0;
