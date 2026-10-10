@@ -9,9 +9,11 @@
 
 #include "SkyDome.h"
 
+#include <cctype>
 #include <cmath>
 
 #include <algorithm>
+#include <string_view>
 
 namespace openblack::sky_dome
 {
@@ -28,6 +30,29 @@ uint8_t Weight(float fraction)
 	return static_cast<uint8_t>(static_cast<int>(fraction * 255.0f));
 }
 } // namespace
+
+std::array<std::string, k_Pictures> PictureFiles()
+{
+	constexpr std::array<std::string_view, 3> k_Alignments = {"evil", "Ntrl", "good"};
+	constexpr std::array<std::string_view, 3> k_Times = {"night", "dusk", "day"};
+	std::array<std::string, k_Pictures> files;
+	size_t index = 0;
+	for (const auto alignment : k_Alignments)
+	{
+		for (const auto time : k_Times)
+		{
+			std::string prefix = "sky";
+			std::string hour(time);
+			if (alignment == "Ntrl")
+			{
+				prefix[0] = 'S';
+				hour[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(hour[0])));
+			}
+			files.at(index++) = prefix + "_" + std::string(alignment) + "_" + hour + ".555";
+		}
+	}
+	return files;
+}
 
 Follow::Follow(float skyType)
     : _wholeDome(skyType)

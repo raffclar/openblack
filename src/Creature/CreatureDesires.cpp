@@ -268,3 +268,44 @@ std::optional<Desire> creature_desires::StrongestShowable(const Desires& desires
 	}
 	return strongest;
 }
+
+bool creature_desires::CountTowardsUrge(DesireState& desire)
+{
+	++desire.carriedOut;
+	// The weight is cut down to a whole number of plans, read as unsigned as the game reads it
+	const auto needed = static_cast<uint32_t>(static_cast<int64_t>(desire.weight));
+	if (desire.carriedOut < needed)
+	{
+		return false;
+	}
+	desire.carriedOut = 0;
+	return true;
+}
+
+void creature_desires::ClearSourcesAfterSatisfying(DesireState& desire)
+{
+	for (auto& source : desire.sources)
+	{
+		if (source.clearedWhenSatisfied)
+		{
+			source.value = 0.0f;
+		}
+	}
+}
+
+void creature_desires::LessenAfterAction(DesireState& desire, float multiplier, float floor)
+{
+	if (!desire.activated)
+	{
+		return;
+	}
+	desire.value *= multiplier;
+	if (desire.value < floor)
+	{
+		desire.value = floor;
+	}
+	else if (desire.max < desire.value)
+	{
+		desire.value = desire.max;
+	}
+}

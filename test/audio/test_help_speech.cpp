@@ -56,6 +56,8 @@ TEST(HelpSpeech, TextsAreSpokenByTheSampleNamedAfterThem)
 	EXPECT_EQ(table.Find(2), (SpeechSample {.bank = SpeechBank::HelpSprites, .sample = 7, .sound = 207}));
 	EXPECT_EQ(table.Find(3), (SpeechSample {.bank = SpeechBank::Guidance, .sample = 3, .sound = 303}));
 	EXPECT_FALSE(table.Find(4).has_value());
+	// The first and the silent text have no sample
+	EXPECT_EQ(table.GetSpokenCount(), k_Texts.size() - 2);
 }
 
 TEST(HelpSpeech, TheVillagersBankComesFirst)
@@ -88,6 +90,7 @@ TEST(HelpSpeech, AVoiceSaysItsLineUntilTheSoundStops)
 	voices.Add(SpeechVoice::First, family, first);
 	voices.Add(SpeechVoice::Second, advisor, second);
 	voices.Add(SpeechVoice::First, advisor, entt::null);
+	EXPECT_EQ(voices.GetCount(), 2);
 
 	EXPECT_TRUE(voices.IsSaying(SpeechVoice::First, family, isPlaying));
 	EXPECT_FALSE(voices.IsSaying(SpeechVoice::Second, family, isPlaying));

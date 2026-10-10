@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <optional>
@@ -33,6 +34,10 @@ public:
 	virtual void Say(uint32_t text, audio::SpeechVoice voice, std::optional<glm::vec3> position) = 0;
 	/// Whether the voice is still saying the help text's line
 	[[nodiscard]] virtual bool IsSaying(uint32_t text, audio::SpeechVoice voice) = 0;
+	/// How many help texts have a spoken line, 0 until the texts and the speech banks are loaded
+	[[nodiscard]] virtual size_t GetSpokenTextCount() const = 0;
+	/// How many lines the scripts have had said that weren't yet found finished
+	[[nodiscard]] virtual size_t GetLineCount() const = 0;
 };
 
 } // namespace openblack::ecs::systems

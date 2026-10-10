@@ -76,6 +76,11 @@ std::optional<SpeechSample> HelpSpeechTable::Find(uint32_t text) const
 	return text < _samples.size() ? _samples[text] : std::nullopt;
 }
 
+size_t HelpSpeechTable::GetSpokenCount() const noexcept
+{
+	return static_cast<size_t>(std::ranges::count_if(_samples, [](const auto& sample) { return sample.has_value(); }));
+}
+
 void SpeechVoices::Add(SpeechVoice voice, SpeechSample sample, entt::entity emitter)
 {
 	if (emitter != entt::null)

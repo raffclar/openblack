@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <chrono>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -50,7 +51,7 @@
 #include "3D/LandLightTable.h"
 #include "3D/MapCoords.h"
 #include "3D/OceanInterface.h"
-#include "3D/SkyInterface.h"
+#include "3D/SkyDome.h"
 #include "3D/SnowCover.h"
 #include "3D/TempleInteriorInterface.h"
 #include "3D/WaterRings.h"
@@ -72,6 +73,7 @@
 #include "Debug/FrameStatsLog.h"
 #include "Debug/TestbedDispenserGrid.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
+#include "ECS/Archetypes/SkyArchetype.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/CameraBookmark.h"
@@ -138,6 +140,7 @@
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -154,6 +157,7 @@
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -287,6 +291,8 @@ Game::Game(Arguments&& args) noexcept
     , _startMap(args.startLevel)
     , _startTestbed(args.startTestbed || args.scenario.has_value())
     , _scenarioRequest(args.scenario)
+    , _inspectPort(args.inspectPort)
+    , _inspectInputLock(args.inspectInputLock)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
     , _requestScreenshot(args.requestScreenshot)
 {
@@ -657,6 +663,11 @@ bool Game::IsPaused() const
 	return Locator::time::value().IsPaused();
 }
 
+bool Game::IsHandDrawn() const
+{
+	return (!_interface || !_interface->GetMenu().IsOpen()) && Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+}
+
 void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds)
 {
 	if (!Locator::gestureSystem::has_value() || screenSize.x <= 0 || screenSize.y <= 0)
@@ -784,7 +795,7 @@ void Game::UpdateHandInterface()
 	// The creature the hand is held to, or else the one it is over, any player's
 	const auto& creatureHand = Locator::creatureHandSystem::value();
 	auto creature = creatureHand.GetCreature();
-	const bool rightButtonHeld = (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_RMASK) != 0;
+	const bool rightButtonHeld = (Locator::gameActionSystem::value().GetPointerButtons() & SDL_BUTTON_RMASK) != 0;
 	if (!creature.has_value() && creature_panel::Triggered(rightButtonHeld))
 	{
 		creature = _creatureUnderHand;
@@ -885,6 +896,8 @@ bool Game::GameLogicLoop() noexcept
 		return false;
 	}
 	clock.StartTurn();
+	// The influence asked during the turn is measured from where the hands were at it
+	Locator::influenceSystem::value().SetInGameTurn(true);
 	ProcessHandToolTipTurn();
 
 	// What moved since the last turn goes into its new map cell
@@ -981,7 +994,7 @@ bool Game::GameLogicLoop() noexcept
 	}
 
 	// The time of day moves on
-	Locator::skySystem::value().GetClock().ProcessTurn();
+	Locator::skySystem::value().ProcessTurn();
 
 	// The weather moves on, then the ambience follows the weather at the camera
 	const auto cameraPosition = Locator::camera::value().GetOrigin();
@@ -1074,8 +1087,8 @@ bool Game::GameLogicLoop() noexcept
 		Locator::templeDestructionSystem::value().EndTurn();
 	}
 
-	// Each turn ends with the camera taking the alignment of the player of most influence where it is
-	Locator::alignmentSystem::value().UpdateTurn();
+	// Each turn ends with the camera taking the alignment of the player of most influence at its eye
+	Locator::alignmentSystem::value().UpdateTurn(cameraPosition);
 	// The temples' outsides follow their players' alignments
 	Locator::templeExteriorSystem::value().UpdateTurn();
 
@@ -1099,6 +1112,7 @@ bool Game::GameLogicLoop() noexcept
 	}
 
 	ProcessMusicTurn(cameraPosition, false);
+	Locator::influenceSystem::value().SetInGameTurn(false);
 
 	_lastGameLoopTime = currentTime;
 	_turnDeltaTime = delta;
@@ -1113,13 +1127,23 @@ void Game::ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel)
 	{
 		return;
 	}
+	const auto& alignment = Locator::alignmentSystem::value();
+	// The land's music waits while a script holds the cinema bars, and while they slide in or out
+	bool cinema = false;
+	if (Locator::cinematicDirectorSystem::has_value())
+	{
+		const auto& director = Locator::cinematicDirectorSystem::value();
+		cinema =
+		    (director.IsWideScreenOn() && director.GetWideScreenOwner() != 0) || !director.IsWideScreenTransitionFinished();
+	}
 	audio::GameMusic::TurnInputs music {
 	    .turn = GetTurn(),
 	    .camera = cameraPosition,
 	    .groundHeight = Locator::terrainSystem::value().GetHeightAt(glm::xz(cameraPosition)),
 	    .inCitadel = inCitadel,
-	    // TODO(raffclar): the player's alignment once it is simulated
-	    .alignment = 0.0f,
+	    .alignment = alignment.GetCameraAlignment(),
+	    .playerAlignment = alignment.GetPlayerAlignment(Locator::playerSystem::value().GetLocalPlayer()),
+	    .cinema = cinema,
 	    .towns = {},
 	};
 	Locator::entitiesRegistry::value().Each<const ecs::components::Town, const Tribe, const ecs::components::Transform>(
@@ -1199,6 +1223,17 @@ bool Game::Update() noexcept
 
 	Locator::debugGui::value().SetScale(config.guiScale);
 	Locator::time::value().Update();
+	// The debug inspector answers what was asked since the last frame, and holds or releases the game for stepping,
+	// before the frame's input and turn
+	if (Locator::inspector::has_value())
+	{
+		Locator::inspector::value().Service();
+	}
+	// Stepped deterministically, a frame takes the fixed time the clock gives it, whatever the wall clock says
+	if (const auto fixed = Locator::time::value().GetFixedFrameTime(); fixed.has_value())
+	{
+		deltaTime = std::chrono::duration_cast<std::chrono::microseconds>(*fixed);
+	}
 
 	// The physics world isn't stepped: the game's objects don't move as rigid bodies, and the world only answers the
 	// rays cast for the hand, the camera and the like. Stepping it let the features fall and lose their turn.
@@ -1222,6 +1257,11 @@ bool Game::Update() noexcept
 		SDL_Event e;
 		while (SDL_PollEvent(&e) != 0)
 		{
+			// While an agent drives the game, the player's mouse and keyboard are kept out of it
+			if (!actions.AdmitEvent(e))
+			{
+				continue;
+			}
 			Locator::events::value().Create<SDL_Event>(e);
 		}
 		if (actions.IsCursorFrozen())
@@ -1258,6 +1298,9 @@ bool Game::Update() noexcept
 	// ImGui events + prepare
 	{
 		auto guiLoop = profiler.BeginScoped(Profiler::Stage::GuiLoop);
+		// The debug windows keep off the mouse while the player's input is locked out, and show a notice
+		Locator::debugGui::value().SetInputLock(Locator::gameActionSystem::value().IsPlayerInputBlocked(),
+		                                        Locator::gameActionSystem::value().GetScriptedPointer().has_value());
 		// The debug menu bar comes up with the game's menu, or always without it
 		Locator::debugGui::value().SetMenuBarVisible(!_interface || _interface->GetMenu().IsOpen());
 		if (Locator::debugGui::value().Loop())
@@ -1436,6 +1479,11 @@ bool Game::Update() noexcept
 	// The homes' smoke rises while someone is in
 	Locator::chimneySmokeSystem::value().Update(gameTime);
 	Locator::influenceSystem::value().Update(gameTime);
+	// What the hand shows past the border is shown with the hand
+	if (IsHandDrawn())
+	{
+		Locator::influenceSystem::value().ShowHandInfluence(gameTime);
+	}
 	Locator::mistSystem::value().Update(gameTime);
 	Locator::villageLightSystem::value().Update(gameTime);
 	Locator::fieldSystem::value().Update(gameTime);
@@ -2032,6 +2080,16 @@ bool Game::Initialize() noexcept
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize game services.");
 		return false;
 	}
+	// The debug inspector answers from the first frame; the game carries on without it if it can't listen
+	if (_inspectPort.has_value())
+	{
+		// An agent drives it: the player's mouse and keyboard are kept out while a client is connected, so that a knock
+		// of the mouse doesn't spoil its tests; from the start for a headless run, or never when asked
+		if (StartInspector(*_inspectPort))
+		{
+			Locator::gameActionSystem::value().SetInputLockMode(_inspectInputLock);
+		}
+	}
 
 	auto& resources = Locator::resources::value();
 	auto& meshManager = resources.GetMeshes();
@@ -2321,9 +2379,22 @@ bool Game::Initialize() noexcept
 		meshManager.Load("river", LFromDiskTag {}, fileSystem.GetPath<Path::Data>() / "river.l3d");
 		meshManager.Load("river2", LFromDiskTag {}, fileSystem.GetPath<Path::Data>() / "river2.l3d");
 		meshManager.Load("metre_sphere", LFromDiskTag {}, fileSystem.GetPath<Path::Data>() / "metre_sphere.l3d");
-		meshManager.Load(SkyInterface::k_SunMeshId.value(), LFromDiskTag {},
+		// The sky: its dome, with the dome's pictures, the sun and the moon
+		using SkyArchetype = ecs::archetypes::SkyArchetype;
+		meshManager.Load(SkyArchetype::k_DomeMeshId.value(), LFromDiskTag {},
+		                 fileSystem.GetPath<Path::WeatherSystem>() / "sky.l3d");
+		{
+			std::vector<std::filesystem::path> pictures;
+			for (const auto& file : sky_dome::PictureFiles())
+			{
+				pictures.push_back(fileSystem.GetPath<Path::WeatherSystem>() / file);
+			}
+			textureManager.Load(SkyArchetype::k_DomeTextureId.value(), resources::Texture2DLoader::FromBitmapLayersTag {},
+			                    "Sky", pictures, sky_dome::k_Rows);
+		}
+		meshManager.Load(SkyArchetype::k_SunMeshId.value(), LFromDiskTag {},
 		                 fileSystem.GetPath<Path::WeatherSystem>() / "sun.l3d");
-		meshManager.Load(SkyInterface::k_MoonMeshId.value(), LFromDiskTag {},
+		meshManager.Load(SkyArchetype::k_MoonMeshId.value(), LFromDiskTag {},
 		                 fileSystem.GetPath<Path::WeatherSystem>() / "moon.l3d");
 		meshManager.Load(ecs::components::Mist::k_MeshId, LFromDiskTag {}, fileSystem.GetPath<Path::Landscape>() / "mist.l3d");
 
@@ -2545,7 +2616,10 @@ bool Game::Initialize() noexcept
 		}
 	}
 	fileSystem.Iterate(fileSystem.GetPath<Path::Textures>(), false, [&textureManager](const std::filesystem::path& f) {
-		if (string_utils::LowerCase(f.extension().string()) == ".raw")
+		// The game ships a grey ice map it never loads, cut short of a whole texture
+		constexpr std::string_view k_UnusedTexture = "s_iceenvmapgrey.raw";
+		if (string_utils::LowerCase(f.extension().string()) == ".raw" &&
+		    string_utils::LowerCase(f.filename().string()) != k_UnusedTexture)
 		{
 			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading raw texture: {}", f.stem().string());
 			try
@@ -2731,16 +2805,17 @@ bool Game::Run() noexcept
 			    .drawBoundingBoxes = config.drawBoundingBoxes,
 			    .cullBack = false,
 			    .wireframe = config.wireframe,
-			    .drawHand = IsHandShown(),
+			    .drawHand = IsHandDrawn(),
 			};
+			// The sun, the moon and the dome's blend of this frame, for drawing it
+			Locator::skySystem::value().UpdateFrame(config.drawSky);
 			Locator::rendererInterface::value().DrawScene(drawDesc);
 		}
 
 		// The game's interface over the scene
 		if (_interface && Locator::windowing::has_value())
 		{
-			glm::ivec2 mouse;
-			SDL_GetMouseState(&mouse.x, &mouse.y);
+			const auto mouse = Locator::gameActionSystem::value().GetPointerPosition();
 			_interface->Draw(static_cast<glm::u16vec2>(Locator::windowing::value().GetSize()), mouse, SDL_GetTicks(),
 			                 Locator::debugGui::value().IsMouseOverWindow());
 		}
@@ -2804,6 +2879,7 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 		                        level.GetScriptPath().lexically_normal() == path.lexically_normal());
 	});
 	Locator::entitiesRegistry::value().Context().skirmish = skirmish;
+	_landPath = path;
 
 	Script script;
 	try
@@ -2878,6 +2954,7 @@ bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept
 
 void Game::LoadTestbed() noexcept
 {
+	_landPath = "testbed";
 	// No script runs on the testbed: the story's would set its time of day and stop its clock a few turns in
 	if (Locator::vm::has_value())
 	{
@@ -3000,8 +3077,11 @@ void Game::PrepareNewLand()
 		Locator::handGrabSystem::value().Reset();
 	}
 
+	// The sky goes on as it was: it is kept while every entity goes, and made again after
+	Locator::skySystem::value().KeepForNextLand();
 	// Reset everything. Deletes all entities and their components
 	Locator::entitiesRegistry::value().Reset();
+	Locator::skySystem::value().Initialize();
 	// TODO(#661): split entities that are permanent from map entities and move hand and camera to init
 	// We need a hand for the player
 	Locator::handSystem::value().Initialize();
@@ -3029,6 +3109,7 @@ void Game::StartNewLand()
 	if (!_gameMusic)
 	{
 		_gameMusic = std::make_unique<audio::GameMusic>();
+		audio::GameMusic::RegisterBanks();
 	}
 	_gameMusic->Reset();
 }

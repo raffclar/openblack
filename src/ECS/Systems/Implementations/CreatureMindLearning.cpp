@@ -520,15 +520,26 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 	auto& idle = mind.idle;
 	if (mind.planActive && (idle.serial != mind.planSerial || idle.step >= idle.agenda.size()))
 	{
-		// The plan is over. Carried out to its end, the desire it served is less, unless one of its steps saw to that
-		// already; cut short by something else (fainting, a fight, a more pressing plan) or given up, it is still wanted.
-		// Only an action the game's table says lessens its desire does so, or one whose step saw to the desire.
+		// The plan is over. Carried out to its end, its body pays for the action and it counts towards satisfying the
+		// urge of the desire it served, unless one of its steps saw to that already; cut short by something else
+		// (fainting, a fight, a more pressing plan) or given up, it is still wanted. Once enough plans have been carried
+		// out, the desire's clearable sources are cleared, and the desire is less if the game's table says the action
+		// lessens it or one of its steps saw to the desire.
 		const auto plan = *mind.planner.current;
 		const bool carriedOut = idle.serial == mind.planSerial && !idle.gaveUp;
-		if (carriedOut && !mind.satisfiedByEffect && tables != nullptr && plan.action < tables->actions.size() &&
-		    (tables->actions[plan.action].alwaysApplies || mind.desireSeenTo))
+		if (carriedOut && !mind.satisfiedByEffect && tables != nullptr && plan.action < tables->actions.size())
 		{
-			Satisfied(creature, *mind.desires, tables->actions[plan.action].name);
+			const auto& action = tables->actions[plan.action];
+			BodyPaysFor(creature, action.name);
+			auto& served = (*mind.desires)[plan.desire];
+			if (creature_desires::CountTowardsUrge(served))
+			{
+				creature_desires::ClearSourcesAfterSatisfying(served);
+				if (action.alwaysApplies || mind.desireSeenTo)
+				{
+					Lessen(creature, *mind.desires, action.name);
+				}
+			}
 		}
 		mind.desireSeenTo = false;
 		Abandon(mind);

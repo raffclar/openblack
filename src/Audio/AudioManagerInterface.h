@@ -141,6 +141,8 @@ public:
 	[[nodiscard]] virtual bool IsEmitterLooping(entt::entity emitter) = 0;
 	/// An emitter's volume, 0 to 127, as a fade sets it
 	virtual void SetEmitterVolume(entt::entity emitter, uint32_t volume) = 0;
+	/// Its playback rate in percent, as the mixer sets a playing sample's pitch
+	virtual void SetEmitterPitch(entt::entity emitter, uint32_t pitchPercent) = 0;
 	[[nodiscard]] virtual uint32_t GetEmitterVolume(entt::entity emitter) = 0;
 	/// Stops every sound played for an owner
 	virtual void StopOwnedSounds(entt::entity owner) = 0;

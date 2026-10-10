@@ -54,3 +54,8 @@ bool HelpSpeechSystem::IsSaying(uint32_t text, audio::SpeechVoice voice)
 		return audio.EmitterExists(emitter) && audio.GetStatus(emitter) != audio::AudioStatus::Stopped;
 	});
 }
+
+size_t HelpSpeechSystem::GetSpokenTextCount() const
+{
+	return _table.GetSpokenCount();
+}

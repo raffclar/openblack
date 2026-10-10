@@ -15,7 +15,6 @@
 
 #include "3D/Implementations/LandIsland.h"
 #include "3D/Implementations/Ocean.h"
-#include "3D/Implementations/Sky.h"
 #include "3D/Implementations/TempleInterior.h"
 #include "3D/Implementations/UnloadedIsland.h"
 #include "3D/LandData.h"
@@ -68,6 +67,9 @@
 #include "ECS/Systems/Implementations/HelpSpeechSystem.h"
 #include "ECS/Systems/Implementations/HighDetailSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
+#if defined(OPENBLACK_INSPECTOR)
+#include "ECS/Systems/Implementations/InspectorSystem.h"
+#endif
 #include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
 #include "ECS/Systems/Implementations/MagicShieldSystem.h"
@@ -85,6 +87,7 @@
 #include "ECS/Systems/Implementations/RewardSystem.h"
 #include "ECS/Systems/Implementations/ScriptControlSystem.h"
 #include "ECS/Systems/Implementations/ScriptObjectsSystem.h"
+#include "ECS/Systems/Implementations/SkySystem.h"
 #include "ECS/Systems/Implementations/SnowSystem.h"
 #include "ECS/Systems/Implementations/SnowfallSystem.h"
 #include "ECS/Systems/Implementations/SoundTagSystem.h"
@@ -99,6 +102,7 @@
 #include "ECS/Systems/Implementations/VillageLightSystem.h"
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
 #include "ECS/Systems/Implementations/WeatherSystem.h"
+#include "ECS/Systems/InspectorSystemInterface.h"
 #include "Graphics/RendererInterface.h"
 #include "Input/GameActionMap.h"
 #include "LHVM.h"
@@ -249,7 +253,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::handGrabSystem::emplace<HandGrabSystem>();
 	Locator::temple::emplace<TempleInterior>();
 	Locator::oceanSystem::emplace<Ocean>();
-	Locator::skySystem::emplace<Sky>();
+	Locator::skySystem::emplace<ecs::systems::SkySystem>();
 	Locator::alignmentSystem::emplace<AlignmentSystem>();
 	Locator::cameraHelpSystem::emplace<CameraHelpSystem>();
 	Locator::templeExteriorSystem::emplace<TempleExteriorSystem>();
@@ -374,6 +378,8 @@ void openblack::ShutDownServices()
 		Locator::audio::reset();
 	}
 
+	// The inspector goes first: its providers read the services below
+	Locator::inspector::reset();
 	Locator::rendereringSystem::reset();
 	Locator::dynamicsSystem::reset();
 	Locator::templeDestructionSystem::reset();
@@ -454,4 +460,22 @@ void openblack::ShutDownServices()
 	Locator::profiler::reset();
 
 	Locator::vm::reset();
+}
+
+bool openblack::StartInspector([[maybe_unused]] uint16_t port)
+{
+#if defined(OPENBLACK_INSPECTOR)
+	std::string error;
+	auto server = inspector::Server::Listen(port, error);
+	if (server == nullptr)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The inspector couldn't start: {}", error);
+		return false;
+	}
+	Locator::inspector::emplace<ecs::systems::InspectorSystem>(std::move(server));
+	return true;
+#else
+	SPDLOG_LOGGER_ERROR(spdlog::get("game"), "This build has no inspector: configure with OPENBLACK_INSPECTOR on");
+	return false;
+#endif
 }

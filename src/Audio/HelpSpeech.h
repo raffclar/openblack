@@ -74,6 +74,8 @@ public:
 	/// The sample that says a text. A number beyond the texts is taken as the first text, which says nothing.
 	[[nodiscard]] std::optional<SpeechSample> Find(uint32_t text) const;
 	[[nodiscard]] size_t GetCount() const noexcept { return _samples.size(); }
+	/// How many of the texts have a sample saying them
+	[[nodiscard]] size_t GetSpokenCount() const noexcept;
 
 	/// The name of the sample made from a file: its file name without folders or extension
 	[[nodiscard]] static std::string_view SampleName(std::string_view file);
@@ -100,6 +102,7 @@ public:
 	/// forgotten.
 	[[nodiscard]] bool IsSaying(SpeechVoice voice, SpeechSample sample, const std::function<bool(entt::entity)>& isPlaying);
 	void Clear() { _lines.clear(); }
+	[[nodiscard]] size_t GetCount() const noexcept { return _lines.size(); }
 
 private:
 	struct Line

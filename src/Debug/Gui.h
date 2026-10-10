@@ -41,6 +41,10 @@ public:
 	void SetMenuBarVisible(bool visible) noexcept override { _menuBarVisible = visible; }
 	bool ProcessEvents(const SDL_Event& event) noexcept override;
 	void OpenWindow(std::string_view name) noexcept override;
+	void SetInputLock(bool locked, bool pointerScripted) noexcept override;
+	[[nodiscard]] std::vector<WindowState> ListWindows() const noexcept override;
+	void CloseWindow(std::string_view name) noexcept override;
+	bool PressButton(std::string_view window, std::span<const ButtonPathStep> path) noexcept override;
 	bool Loop() noexcept override;
 	void Draw() noexcept override;
 
@@ -59,6 +63,8 @@ private:
 	/// Each miracle dispenser's miracle over it
 	void ShowDispenserNames() noexcept;
 	void ShowCameraPositionOverlay() noexcept;
+	/// While the player's input is locked out for an agent, a notice saying so
+	void ShowInputLockNotice() const noexcept;
 
 	ImGuiContext* _imgui;
 	const bool _headless;
@@ -74,5 +80,7 @@ private:
 	std::string _screenshotFilename = "screenshot.png";
 	bool _stealsFocus = false;
 	bool _menuBarVisible = true;
+	/// The player's input was locked out last frame
+	bool _inputLocked = false;
 };
 } // namespace openblack::debug::gui

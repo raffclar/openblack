@@ -24,6 +24,8 @@ public:
 	void SetTable(audio::HelpSpeechTable table) override;
 	void Say(uint32_t text, audio::SpeechVoice voice, std::optional<glm::vec3> position) override;
 	[[nodiscard]] bool IsSaying(uint32_t text, audio::SpeechVoice voice) override;
+	[[nodiscard]] size_t GetSpokenTextCount() const override;
+	[[nodiscard]] size_t GetLineCount() const override { return _voices.GetCount(); }
 
 private:
 	audio::HelpSpeechTable _table;
