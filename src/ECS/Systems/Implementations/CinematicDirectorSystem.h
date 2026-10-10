@@ -25,6 +25,7 @@ class CinematicDirectorSystem final: public CinematicDirectorSystemInterface
 public:
 	void FadeTo(uint8_t red, uint8_t green, uint8_t blue, int8_t seconds) override;
 	void FadeBackToNormal(int8_t seconds) override;
+	void StartStory() override;
 	[[nodiscard]] bool IsFadeFinished() const override;
 	[[nodiscard]] uint32_t GetFadeColour() const override;
 

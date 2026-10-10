@@ -35,10 +35,12 @@
 #include "ECS/ClipSoundPlayer.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/CarriedByTornado.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/TempleExterior.h"
 #include "ECS/Components/Transform.h"
@@ -48,6 +50,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -99,10 +102,15 @@ constexpr uint32_t k_BirthAgeRange = 20;
 constexpr uint32_t k_BirthAgeMin = 5;
 /// How a flock's followers follow: in formation
 constexpr int k_FollowInFormation = 3;
+/// A challenge script's animal on its own keeps within 2 m of where it was made, its flock's followers within 1 m
+constexpr float k_ScriptAnimalFlockReach = 2.0f;
+constexpr float k_ScriptAnimalFlockDistance = 1.0f;
 /// The prey brought down plays its fall the turn after, and waits for it from the turn after that
 constexpr int k_FallStartsAfter = 2;
 /// The game's numbers for the animals' states whose table says whether an animal sees to its needs in them first
 constexpr size_t k_TableMoveToPos = 1;
+constexpr size_t k_TableInScript = 4;
+constexpr size_t k_TableMoveInFlock = 27;
 constexpr size_t k_TableStartWander = 31;
 constexpr size_t k_TableDecideWhatToDo = 43;
 constexpr size_t k_TableSpecialMoveToPos = 44;
@@ -290,6 +298,12 @@ bool SeesToNeedsIn(AnimalState state)
 	case AnimalState::MoveToPos:
 		row = k_TableMoveToPos;
 		break;
+	case AnimalState::InScript:
+		row = k_TableInScript;
+		break;
+	case AnimalState::MoveInFlock:
+		row = k_TableMoveInFlock;
+		break;
 	default:
 		return false;
 	}
@@ -371,6 +385,72 @@ entt::entity AnimalSystem::CreateBird(AnimalInfo type, glm::vec2 position, uint3
 	animal.flock = flockEntity;
 	registry.Get<Flock>(flockEntity).members.push_back(entity);
 	return entity;
+}
+
+entt::entity AnimalSystem::CreateScriptAnimal(AnimalInfo type, glm::vec2 position)
+{
+	// Made as a land script makes an animal with no flock, at a random age
+	const auto entity = CreateBird(type, position, 0, entt::null);
+	if (entity == entt::null)
+	{
+		return entt::null;
+	}
+	// Its own flock keeps it close about where it was made
+	auto& registry = EntityRegistry();
+	auto& flockData = registry.Get<Flock>(registry.Get<const Animal>(entity).flock);
+	flockData.domainRadius = k_ScriptAnimalFlockReach;
+	flockData.flockDistance = k_ScriptAnimalFlockDistance;
+	// The script holds it still until it says otherwise
+	SetScriptState(entity, LivingStates::LivingInScript);
+	return entity;
+}
+
+void AnimalSystem::JoinFlock(entt::entity entity, entt::entity flockEntity)
+{
+	auto& registry = EntityRegistry();
+	auto* animal = registry.TryGet<Animal>(entity);
+	auto* flockData = registry.Valid(flockEntity) ? registry.TryGet<Flock>(flockEntity) : nullptr;
+	if (animal == nullptr || flockData == nullptr)
+	{
+		return;
+	}
+	// Out of its flock first, even when it is the same one, then in after the others: the first to join leads
+	LeaveFlock(entity, *animal);
+	if (!registry.Valid(flockEntity))
+	{
+		return;
+	}
+	animal->flock = flockEntity;
+	registry.Get<Flock>(flockEntity).members.push_back(entity);
+}
+
+bool AnimalSystem::SetScriptState(entt::entity entity, LivingStates state)
+{
+	auto* animal = EntityRegistry().TryGet<Animal>(entity);
+	if (animal == nullptr)
+	{
+		return false;
+	}
+	AnimalState next {};
+	switch (state)
+	{
+	case LivingStates::LivingInScript:
+		next = AnimalState::InScript;
+		break;
+	case LivingStates::LivingMoveInFlock:
+		next = AnimalState::MoveInFlock;
+		break;
+	default:
+		return false;
+	}
+	// Only an animal out in the world takes it: not one held in a hand, carried off or flying through the air
+	if (EntityRegistry().AnyOf<CarriedByTornado, InHand, InPhysics>(entity))
+	{
+		return true;
+	}
+	// The state starts afresh, a land bird choosing its flying clip again
+	SetTopState(*animal, next);
+	return true;
 }
 
 entt::entity AnimalSystem::CreateSpellAnimal(AnimalInfo type, glm::vec2 position, float heightAboveLand, uint16_t angle,
@@ -549,9 +629,9 @@ void AnimalSystem::ProcessTurn()
 		{
 			continue;
 		}
-		// Carried off by a tornado, it is the tornado's until it lets go; held in a hand or flying, the hand's or the
-		// physics'
-		if (registry.AnyOf<CarriedByTornado, InHand, InPhysics>(entity))
+		// Carried off by a tornado, it is the tornado's until it lets go; held in a hand, a creature's or the player's, or
+		// flying, the hand's or the physics'
+		if (registry.AnyOf<CarriedByTornado, InHand, HeldByCreature, InPhysics>(entity))
 		{
 			continue;
 		}
@@ -633,6 +713,8 @@ void AnimalSystem::Bird(entt::entity entity, Animal& animal)
 		DecideWhatToDo(entity, animal);
 		break;
 	case AnimalState::StartWander:
+	case AnimalState::MoveInFlock:
+		// Moving with its flock as a script set it, a bird starts on a leg of its own
 		StartWander(entity, animal);
 		break;
 	case AnimalState::FollowFlock:
@@ -1507,10 +1589,11 @@ void AnimalSystem::ProcessDeath(entt::entity entity, Animal& animal)
 		animal.animation = *clip;
 		animal.clipPlace = 0;
 	}
-	// Its time up, it goes. (The game lets out a puff of grey smoke as it goes; openblack doesn't draw that smoke yet.)
-	if (animal.deadTurns-- == 0)
+	// Its time up, it goes in a puff of grey smoke; a body a script controls lies there until the script lets it go
+	if (animals::DeadBodyGoes(animal.deadTurns, EntityRegistry().AllOf<ScriptControlled>(entity)))
 	{
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Animals: #{} dead body goes", static_cast<uint32_t>(entity));
+		LeaveSmoke(entity, animal);
 		Remove(entity);
 	}
 }
@@ -1689,6 +1772,42 @@ bool AnimalSystem::Flee(entt::entity entity, Animal& animal)
 	return true;
 }
 
+bool AnimalSystem::CanBePickedUpByCreature(entt::entity animal) const
+{
+	const auto* data = EntityRegistry().TryGet<const Animal>(animal);
+	// TODO(animals): the other kinds take the rules of things in general, which aren't ported; a creature picks none up
+	return data != nullptr && IsBird(data->type) && animals::birds::CreatureCanPickUp(data->height);
+}
+
+bool AnimalSystem::CanBeStompedOnByCreature(entt::entity animal, float creatureHeight) const
+{
+	const auto* data = EntityRegistry().TryGet<const Animal>(animal);
+	// TODO(animals): the other kinds have a rule of their own, not ported; a creature stamps on none of them
+	return data != nullptr && IsBird(data->type) && animals::birds::CreatureCanStompOn(data->height, creatureHeight);
+}
+
+void AnimalSystem::LeaveSmoke(entt::entity entity, const Animal& animal) const
+{
+	if (!Locator::explosionSystem::has_value())
+	{
+		return;
+	}
+	const auto& registry = EntityRegistry();
+	const auto* transform = registry.TryGet<const Transform>(entity);
+	const auto* mesh = registry.TryGet<const Mesh>(entity);
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	if (transform == nullptr)
+	{
+		return;
+	}
+	// Its height: its model's, times its size
+	const float height = mesh != nullptr && meshes.Contains(mesh->id)
+	                         ? meshes.Handle(mesh->id)->GetBoundingBox().Size().y * transform->scale.x
+	                         : 0.0f;
+	Locator::explosionSystem::value().AddSmoke(animals::DeadBodySmokePlace(transform->position, animal.heading, height),
+	                                           animals::k_DeadBodySmokeSize, dust_puff::Kind::Smoke);
+}
+
 bool AnimalSystem::CanPlayerPickUp(entt::entity animal) const
 {
 	const auto* data = EntityRegistry().TryGet<const Animal>(animal);
@@ -1745,8 +1864,9 @@ void AnimalSystem::Update(uint32_t turn, float turnFraction)
 	auto& meshes = Locator::resources::value().GetMeshes();
 	registry.Each<Animal, Transform, const Mesh>([&](entt::entity entity, Animal& animal, Transform& transform,
 	                                                 const Mesh& mesh) {
-		// A tornado carrying it places it, as does a hand holding it or the physics moving it; it still plays its clip
-		if (!registry.AnyOf<CarriedByTornado, InHand, InPhysics>(entity))
+		// A tornado carrying it places it, as does a hand or a creature holding it or the physics moving it; it still plays
+		// its clip
+		if (!registry.AnyOf<CarriedByTornado, InHand, HeldByCreature, InPhysics>(entity))
 		{
 			// Drawn between its last two turns, tilted as far as its bank has glided
 			transform.position = animal.previousPosition + ((animal.position - animal.previousPosition) * t);

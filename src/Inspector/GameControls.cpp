@@ -10,15 +10,23 @@
 #include "GameControls.h"
 
 #include <cctype>
+#include <cstdlib>
 
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <iterator>
+#include <optional>
+#include <string_view>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 #include <InspectorDiscovery.h>
 #include <LHVM.h>
+#include <bgfx/bgfx.h>
 #include <glm/trigonometric.hpp>
 
 #include "Camera/Camera.h"
@@ -28,11 +36,11 @@
 #include "Camera/FightCameraModel.h"
 #include "Camera/TempleCameraModel.h"
 #include "Debug/DebugGuiInterface.h"
-#include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "Editor/EditorEntities.h"
+#include "EntityDescription.h"
 #include "Game.h"
 #include "Gui/GameInterface.h"
 #include "Gui/GameMenu.h"
@@ -246,8 +254,8 @@ std::optional<glm::vec3> GameCamera::EntityPosition(uint32_t id) const
 	{
 		return std::nullopt;
 	}
-	const auto* transform = registry.TryGet<ecs::components::Transform>(entity);
-	return transform != nullptr ? std::optional(transform->position) : std::nullopt;
+	// Where it is drawn, so that a camera framing a body moving in the physics looks at it rather than where it stood
+	return DrawnPosition(registry, entity);
 }
 
 // The windows
@@ -513,7 +521,8 @@ std::vector<ScriptNative> GameScripts::Natives() const
 		                   .name = function.name,
 		                   .in = function.stackIn,
 		                   .out = function.stackOut,
-		                   .implemented = function.impl != nullptr});
+		                   .implemented = function.impl != nullptr,
+		                   .slots = NativeSlots(function.name, function.stackIn)});
 	}
 	return natives;
 }
@@ -632,6 +641,89 @@ std::string GameScreenshots::Capture(const std::filesystem::path& path, bool hid
 	}
 	game->RequestScreenshot(path, hideDebugGui);
 	return {};
+}
+
+void GameScreenshots::HideDebugGui()
+{
+	if (auto* game = Game::Instance(); game != nullptr)
+	{
+		game->HideDebugGuiThisFrame();
+	}
+}
+
+std::optional<std::filesystem::path> GameScreenshots::Root() const
+{
+	const auto* game = Game::Instance();
+	// NOLINTNEXTLINE(concurrency-mt-unsafe): read once a picture is asked for, on the game's thread
+	const char* environment = std::getenv("OPENBLACK_SCREENSHOT_ROOT");
+	return ResolveShotRoot(game != nullptr ? game->GetScreenshotRoot() : std::nullopt, environment,
+	                       [](const std::filesystem::path& path) {
+		                       std::error_code error;
+		                       return std::filesystem::exists(path, error);
+	                       });
+}
+
+ShotSource GameScreenshots::Source() const
+{
+	ShotSource source;
+	namespace discovery = inspector::discovery;
+#if defined(OPENBLACK_BUILT_SOURCE_DIR)
+	const std::filesystem::path builtFrom = OPENBLACK_BUILT_SOURCE_DIR;
+#else
+	const std::filesystem::path builtFrom;
+#endif
+	if (const auto worktree = discovery::GameWorktree(builtFrom, discovery::ExecutablePath()); worktree.has_value())
+	{
+		const auto revision = discovery::ReadRevision(*worktree);
+		source.branch = revision.branch;
+		source.commit = revision.commit.substr(0, 9);
+	}
+	switch (bgfx::getRendererType())
+	{
+	case bgfx::RendererType::Vulkan:
+		source.backend = "vulkan";
+		break;
+	case bgfx::RendererType::Direct3D12:
+		source.backend = "d3d12";
+		break;
+	case bgfx::RendererType::Direct3D11:
+		source.backend = "d3d11";
+		break;
+	case bgfx::RendererType::OpenGL:
+		source.backend = "opengl";
+		break;
+	case bgfx::RendererType::Metal:
+		source.backend = "metal";
+		break;
+	default:
+		break;
+	}
+	source.date = DateOf(std::chrono::system_clock::now());
+	return source;
+}
+
+bool GameScreenshots::Exists(const std::filesystem::path& path) const
+{
+	std::error_code error;
+	return std::filesystem::exists(path, error);
+}
+
+std::string GameScreenshots::AppendLine(const std::filesystem::path& file, std::string_view line)
+{
+	std::error_code error;
+	if (file.has_parent_path())
+	{
+		std::filesystem::create_directories(file.parent_path(), error);
+	}
+	std::ofstream out(file, std::ios::app | std::ios::binary);
+	if (!out)
+	{
+		return "can't open " + file.generic_string();
+	}
+	// One write for the line and its end, so that games appending at once don't mix their lines
+	const std::string whole = std::string(line) + "\n";
+	out.write(whole.data(), static_cast<std::streamsize>(whole.size()));
+	return out ? std::string {} : "can't write to " + file.generic_string();
 }
 
 std::filesystem::path GameScreenshots::Directory() const

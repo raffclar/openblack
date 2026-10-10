@@ -18,6 +18,7 @@
 
 #include "Common/VirtualInfluence.h"
 #include "ECS/Components/Alignment.h"
+#include "ECS/Components/Player.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -44,6 +45,7 @@ private:
 		std::optional<components::Alignment> alignment;
 		std::array<float, 8> damageFrom {};
 		uint32_t windResistance {0};
+		components::Player::Miracles miracles;
 		/// What their hand keeps of their influence past the border, and whether a script switched it off
 		std::optional<virtual_influence::State> virtualInfluence;
 	};

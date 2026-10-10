@@ -85,6 +85,10 @@ using Comparable = std::conditional_t<
 /// What a JSON value is, for saying why it doesn't fit: "a string", "an array of 2"
 [[nodiscard]] std::string Describe(const Json& value);
 
+/// A number or a truth written as text ("6.0", "3", "true"), as some tools send a value they don't know the type of;
+/// none for any other text, which stays text
+[[nodiscard]] std::optional<Json> ScalarFromText(const Json& value);
+
 /// A float as the shortest number that reads back as it ("0.1", not its double's "0.10000000149011612"), so that answers
 /// stay small
 [[nodiscard]] double Shortest(float value);
@@ -163,6 +167,17 @@ template <typename Type>
 template <typename Type>
 [[nodiscard]] std::optional<Type> Decode(const Json& json, std::string& error)
 {
+	// A field taking a number or a truth takes one written as text too, read as JSON; never another field's type
+	if constexpr (std::is_same_v<Type, bool> || std::is_arithmetic_v<Type> || std::is_enum_v<Type>)
+	{
+		if (json.is_string())
+		{
+			if (const auto scalar = detail::ScalarFromText(json); scalar.has_value())
+			{
+				return Decode<Type>(*scalar, error);
+			}
+		}
+	}
 	if constexpr (std::is_same_v<Type, bool>)
 	{
 		if (json.is_boolean())

@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <string>
 
 #include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
@@ -80,6 +81,9 @@ public:
 	[[nodiscard]] virtual bool IsBusy() const = 0;
 	/// Whether the hand's point on the land is in its player's influence
 	[[nodiscard]] virtual bool IsInInfluence() const = 0;
+	/// Why a press of the Action button on a thing wouldn't take it (out of the influence, a thing the hand can't hold,
+	/// a script holding it out of reach...); empty when it would
+	[[nodiscard]] virtual std::string WhyNotTake(entt::entity object) const = 0;
 	/// How what it holds hangs: its hold, how far below the hand its model hangs, and how far it spreads out of the hand
 	struct HeldPose
 	{

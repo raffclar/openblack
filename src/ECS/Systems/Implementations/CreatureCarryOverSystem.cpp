@@ -12,15 +12,20 @@
 #include "CreatureCarryOverSystem.h"
 
 #include <chrono>
+#include <system_error>
+#include <utility>
 
 #include <MindFile.h>
+#include <PhysiqueFile.h>
 #include <glm/trigonometric.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
 #include "Audio/Sound.h"
 #include "Creature/CreatureMindFileBody.h"
+#include "Creature/CreatureSpells.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/Registry.h"
@@ -54,6 +59,11 @@ std::optional<entt::entity> PlayersCreature()
 }
 } // namespace
 
+CreatureCarryOverSystem::CreatureCarryOverSystem(std::optional<std::filesystem::path> folder)
+    : _folder(std::move(folder))
+{
+}
+
 void CreatureCarryOverSystem::KeepPlayersCreature()
 {
 	const auto creature = PlayersCreature();
@@ -68,8 +78,64 @@ void CreatureCarryOverSystem::KeepPlayersCreature()
 		                   entt::to_integral(*creature));
 		return;
 	}
+	// Its physique is saved beside its mind: its body as it is now, but for the alignment, as no spell made it
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto now = ecs::creature_body_file::Capture(registry, *creature);
+	const creature_spells::SavedBody nowValues {
+	    .size = now.size.value_or(1.0f), .strength = now.strength, .alignment = now.alignment.value_or(0.0f)};
+	const auto* spells = registry.TryGet<const CreatureSpells>(*creature);
+	const auto saved = spells != nullptr ? creature_spells::ValuesToSave(spells->spells, nowValues) : nowValues;
+	const auto physique = creature_mind_body::ToPhysiqueFile(now, file->speciesRow, saved.alignment);
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Kept the player's creature {} for the next land", entt::to_integral(*creature));
+	Write(*file, physique);
 	Keep(std::make_shared<const creaturemind::MindFileData>(std::move(*file)));
+}
+
+void CreatureCarryOverSystem::Write(const creaturemind::MindFileData& mind,
+                                    const creaturemind::PhysiqueFileData& physique) const
+{
+	if (!_folder.has_value())
+	{
+		return;
+	}
+	std::error_code error;
+	std::filesystem::create_directories(*_folder, error);
+	const auto files = creature_carry_over::KeptFilesIn(*_folder, k_ProfileFile);
+	const auto written = creaturemind::WriteFile(files.mind, mind);
+	if (written != creaturemind::MindResult::Success)
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The player's creature could not be written to {}: {}", files.mind.string(),
+		                   creaturemind::ResultToStr(written));
+		return;
+	}
+	if (!creaturemind::WritePhysiqueFile(files.physique, physique))
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The player's creature's physique could not be written to {}",
+		                   files.physique.string());
+	}
+}
+
+void CreatureCarryOverSystem::ReadIfNoneKept()
+{
+	if (_kept != nullptr || !_folder.has_value())
+	{
+		return;
+	}
+	const auto path = creature_carry_over::KeptFilesIn(*_folder, k_ProfileFile).mind;
+	std::error_code error;
+	if (!std::filesystem::exists(path, error))
+	{
+		return;
+	}
+	auto file = std::make_shared<creaturemind::MindFileData>();
+	const auto read = creaturemind::ReadFile(path, *file);
+	if (read != creaturemind::MindResult::Success)
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The player's kept creature could not be read from {}: {}", path.string(),
+		                   creaturemind::ResultToStr(read));
+		return;
+	}
+	_kept = std::move(file);
 }
 
 void CreatureCarryOverSystem::Keep(std::shared_ptr<const creaturemind::MindFileData> file)
@@ -92,6 +158,8 @@ std::optional<entt::entity> CreatureCarryOverSystem::LoadPlayersCreature(glm::ve
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player already has a creature, so theirs is not loaded");
 		return std::nullopt;
 	}
+	// The creature is loaded from its file, as the last land kept it or as an earlier game did
+	ReadIfNoneKept();
 	if (_kept == nullptr || !Locator::terrainSystem::has_value())
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player has no creature kept to load");

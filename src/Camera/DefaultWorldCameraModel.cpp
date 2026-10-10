@@ -10,6 +10,7 @@
 #include "DefaultWorldCameraModel.h"
 
 #include <algorithm>
+#include <array>
 #include <numeric>
 #include <ranges>
 #include <tuple>
@@ -23,8 +24,10 @@
 
 #include "3D/LandIslandInterface.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
+#include "Audio/Sound.h"
 #include "Camera.h"
-#include "Common/RandomNumberManager.h"
+#include "Common/MachineClock.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -948,14 +951,15 @@ CameraModel::HandCues DefaultWorldCameraModel::GetHandCues() const
 void DefaultWorldCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus)
 {
 	_flightPath = CharterFlight(origin, focus, _currentOrigin, k_FlightHeightFactor);
+	// One of four wooshes, picked by the clock, centred on the listener
 	static constexpr auto k_WooshingNoiseIds = std::array<audio::SoundId, 4> {
 	    audio::SoundId::G_Woosh_01,
 	    audio::SoundId::G_Woosh_02,
 	    audio::SoundId::G_Woosh_03,
 	    audio::SoundId::G_Woosh_04,
 	};
-	const auto wooshNoiseId = static_cast<entt::id_type>(Locator::rng::value().Choose(k_WooshingNoiseIds));
-	Locator::audio::value().PlaySound(wooshNoiseId, audio::PlayType::Once);
+	const auto woosh = k_WooshingNoiseIds.at(static_cast<size_t>(machine_clock::Ticks() & 3));
+	audio::PlayGameSoundEffect(static_cast<entt::id_type>(woosh), std::nullopt);
 }
 
 glm::vec3 DefaultWorldCameraModel::GetTargetOrigin() const

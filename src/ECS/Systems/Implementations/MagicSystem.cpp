@@ -29,6 +29,7 @@
 #include "3D/MapCoords.h"
 #include "3D/WaterRings.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsAngle.h"
@@ -71,6 +72,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureSight.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
@@ -92,6 +94,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
@@ -658,9 +661,11 @@ void GameMagicWorld::WaterObject(entt::entity object, const magic::WaterDrop& dr
 	{
 		const auto& type = info.tree.at(static_cast<size_t>(tree->type));
 		auto& transform = registry.Get<Transform>(object);
-		const auto grown = magic::WaterTree(
-		    transform.scale.y, tree->maxSize,
-		    {.growthAmount = type.growthAmount, .waterAccelerator = type.waterSpellAcceleratorMultiplier}, drop.extreme);
+		const auto grown = magic::WaterTree(transform.scale.y, tree->maxSize,
+		                                    {.growthAmount = type.growthAmount,
+		                                     .waterAccelerator = type.waterSpellAcceleratorMultiplier,
+		                                     .madeToGrow = tree->madeToGrow},
+		                                    drop.extreme);
 		if (grown.scale != transform.scale.y)
 		{
 			const float ratio = grown.scale / std::max(transform.scale.y, 1e-4f);
@@ -676,8 +681,8 @@ void GameMagicWorld::WaterObject(entt::entity object, const magic::WaterDrop& dr
 			{
 				const auto sample =
 				    k_TreeGrowSounds.at(Locator::gameRandom::value().LocalRand(static_cast<int32_t>(k_TreeGrowSounds.size())));
-				Locator::audio::value().StartSoundEffect(static_cast<entt::id_type>(sample),
-				                                         {.position = transform.position, .owner = object});
+				audio::StartGameSoundEffect(static_cast<entt::id_type>(sample),
+				                            {.position = transform.position, .owner = object});
 			}
 		}
 		else if (!grown.canGrow && !drop.extreme)
@@ -909,10 +914,6 @@ MagicSystem::MagicSystem()
 		_players.at(p) = std::make_unique<magic::PlayerSpellCaster>(static_cast<PlayerNames>(p),
 		                                                            [this](PlayerNames player) { return PrayerOf(player); });
 	}
-	for (auto& powers : _tribalPowers)
-	{
-		powers.fill(1.0f);
-	}
 }
 
 MagicSystem::~MagicSystem() = default;
@@ -933,6 +934,16 @@ magic::SpellCasterInterface* MagicSystem::CasterOf(const Spell& spell)
 			_globeCaster.Bind(spell.caster.player);
 			return &_globeCaster;
 		}
+		// A miracle from a seed a worship site's icon made is topped up by that site while it stands
+		if (spell.caster.worshipSite != entt::null)
+		{
+			if (!EntityRegistry().Valid(spell.caster.worshipSite))
+			{
+				return nullptr;
+			}
+			_siteCaster.Bind(spell.caster.worshipSite);
+			return &_siteCaster;
+		}
 		return _players.at(static_cast<size_t>(spell.caster.player)).get();
 	case SpellCaster::Kind::Object:
 		return EntityRegistry().Valid(spell.caster.entity) ? &_objectCaster : nullptr;
@@ -950,18 +961,49 @@ magic::SpellCasterInterface* MagicSystem::CasterOf(const Spell& spell)
 	return nullptr;
 }
 
+namespace
+{
+/// The player's record on the land, if they are on it
+Player* PlayerRecord(PlayerNames player)
+{
+	Player* found = nullptr;
+	EntityRegistry().Each<Player>([player, &found](entt::entity, Player& record) {
+		if (record.name == player)
+		{
+			found = &record;
+		}
+	});
+	return found;
+}
+} // namespace
+
 std::array<float, magic::k_TribeCount> MagicSystem::PlayerTribalMultipliers(PlayerNames player) const
 {
-	// The players' tribal power multipliers come with worship; until then every tribe's is 1 unless the testbed sets it
-	return _tribalPowers.at(static_cast<size_t>(player));
+	// The power each tribe gives the player's miracles is the player's; a player not on the land has the usual
+	const auto* record = PlayerRecord(player);
+	return record != nullptr ? record->miracles.tribalPower : Player::k_UsualTribalPower;
 }
 
 void MagicSystem::SetTribalPower(PlayerNames player, Tribe tribe, float power)
 {
-	if (tribe != Tribe::NONE && static_cast<size_t>(tribe) < magic::k_TribeCount)
+	auto* record = PlayerRecord(player);
+	if (record == nullptr || tribe == Tribe::NONE || static_cast<size_t>(tribe) >= magic::k_TribeCount)
 	{
-		_tribalPowers.at(static_cast<size_t>(player)).at(static_cast<size_t>(tribe)) = power;
+		return;
 	}
+	// The most it has been goes with it, so that the power holds
+	const auto index = static_cast<size_t>(tribe);
+	record->miracles.tribalPower.at(index) = power;
+	record->miracles.maxTribalPower.at(index) = power;
+}
+
+float MagicSystem::GetTribalPower(PlayerNames player, Tribe tribe) const
+{
+	if (tribe == Tribe::NONE || static_cast<size_t>(tribe) >= magic::k_TribeCount)
+	{
+		return 1.0f;
+	}
+	return _tribalPowers.at(static_cast<size_t>(player)).at(static_cast<size_t>(tribe));
 }
 
 float MagicSystem::PlayerTribalPower(PlayerNames player, MagicType type) const
@@ -1518,10 +1560,6 @@ void MagicSystem::Reset()
 	_handVelocity = glm::vec3(0.0f);
 	_handEffectPoint.reset();
 	_handScale = 1.0f;
-	for (auto& powers : _tribalPowers)
-	{
-		powers.fill(1.0f);
-	}
 	_lastHandResult = HandResult::None;
 	_world.Reset();
 	_grid.Clear();
@@ -1716,17 +1754,29 @@ entt::entity MagicSystem::GiveSeedToHand(PlayerNames player, SpellSeedType seedT
 
 entt::entity MagicSystem::SummonSeed(PlayerNames player, SpellSeedType seedType, int powerUp)
 {
+	return Summon(player, seedType, powerUp, entt::null);
+}
+
+entt::entity MagicSystem::SummonSeedAtSite(entt::entity site, SpellSeedType seedType, int powerUp)
+{
+	const auto& registry = EntityRegistry();
+	const auto* worshipSite = registry.Valid(site) ? registry.TryGet<const WorshipSite>(site) : nullptr;
+	return worshipSite != nullptr ? Summon(worshipSite->player, seedType, powerUp, site) : entt::null;
+}
+
+entt::entity MagicSystem::Summon(PlayerNames player, SpellSeedType seedType, int powerUp, entt::entity site)
+{
 	const auto entity = GiveSeedToHand(player, seedType, powerUp, 1.0f);
 	if (entity == entt::null)
 	{
 		return entt::null;
 	}
 	auto& seed = EntityRegistry().Get<SpellSeed>(entity);
+	seed.worshipSite = site;
 	const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(Info(), seedType), powerUp);
 	const float cost = magic::GetChantsRequiredToCreate(Info(), type);
-	// The worship charges it from the player's prayer power, as much as there is, and it isn't ready at once
-	auto* store = PrayerOf(player);
-	seed.chantStore = store != nullptr ? magic::ChargeSeed(*store, cost) : 0.0f;
+	// The worship charges it, as much as it has, and it isn't ready at once
+	seed.chantStore = DrawForSeed(seed, cost);
 	seed.power = magic::SeedPower(seed.chantStore, cost);
 	seed.origin = magic::SeedOrigin::Worship;
 	seed.hasIcon = true;
@@ -1748,8 +1798,7 @@ bool MagicSystem::TapOrb(entt::entity orb)
 	// The pop is heard where the hand took it
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(audio::SoundId::G_SpellBubblePop_04),
-		                                        _hand.handPosition);
+		audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_SpellBubblePop_04), _hand.handPosition);
 	}
 	DestroyOrb(orb);
 	_lastHandResult = HandResult::TookMiracle;
@@ -1865,9 +1914,9 @@ void MagicSystem::StartHoldLoop()
 	StopHoldLoop();
 	if (Locator::audio::has_value() && _held.has_value())
 	{
-		_holdLoop = Locator::audio::value().StartSoundEffect(
-		    static_cast<entt::id_type>(audio::SoundId::G_HandGesture_02),
-		    {.position = _hand.handPosition, .playType = audio::PlayType::Repeat, .owner = *_held});
+		_holdLoop =
+		    audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_HandGesture_02),
+		                                {.position = _hand.handPosition, .playType = audio::PlayType::Repeat, .owner = *_held});
 	}
 }
 
@@ -2038,8 +2087,11 @@ entt::entity MagicSystem::CastHeldSeed(magic::CastTarget target)
 	}
 	const auto heldEntity = *_held;
 	// A seed made at an icon is topped up by its worship; one made without is the player's own
-	const SpellCaster caster {
-	    .kind = SpellCaster::Kind::Player, .player = seed.player, .entity = entt::null, .withoutIcon = !seed.hasIcon};
+	const SpellCaster caster {.kind = SpellCaster::Kind::Player,
+	                          .player = seed.player,
+	                          .entity = entt::null,
+	                          .withoutIcon = !seed.hasIcon,
+	                          .worshipSite = seed.worshipSite};
 	const auto spellEntity =
 	    object.has_value() ? CastOn(type, caster, *object, cast, HandInfo()) : Cast(type, caster, point, cast, HandInfo());
 	if (spellEntity == entt::null)
@@ -2120,7 +2172,7 @@ void MagicSystem::FailCast()
 	}
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(audio::SoundId::G_SpellCastFailure), std::nullopt);
+		audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_SpellCastFailure), std::nullopt);
 	}
 	if (_lastHandResult != HandResult::NoCircle)
 	{
@@ -2335,16 +2387,12 @@ void MagicSystem::DiscardHeldSeed()
 	{
 		// What the seed still holds goes back to the player's worship
 		const auto& seed = registry.Get<const SpellSeed>(*_held);
-		if (auto* store = PrayerOf(seed.player))
-		{
-			magic::ReturnPrayer(*store, magic::SeedRefund(seed.hasIcon, seed.chantStore, seed.storedChants, seed.hasCast));
-		}
+		ReturnFromSeed(seed, magic::SeedRefund(seed.hasIcon, seed.chantStore, seed.storedChants, seed.hasCast));
 	}
 	if (Locator::audio::has_value())
 	{
 		constexpr uint32_t k_ShakeVolume = 35;
-		Locator::audio::value().StartSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_ShakeHand_01),
-		                                         {.volume = k_ShakeVolume});
+		audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_ShakeHand_01), {.volume = k_ShakeVolume});
 	}
 	// A band flies off the hand
 	if (Locator::miracleFxSystem::has_value())
@@ -2373,19 +2421,15 @@ void MagicSystem::PowerUpHeldSeed(int level)
 	}
 	const auto type = seedInfo.magicTypes.at(slot);
 	const float cost = magic::GetChantsRequiredToCreate(Info(), type);
-	auto* store = PrayerOf(seed.player);
 	// The worship charges what more it needs, or takes back what it no longer does
-	if (store != nullptr)
+	if (cost > seed.chantStore)
 	{
-		if (cost > seed.chantStore)
-		{
-			seed.chantStore += magic::DrawPrayer(*store, cost - seed.chantStore);
-		}
-		else
-		{
-			magic::ReturnPrayer(*store, seed.chantStore - cost);
-			seed.chantStore = cost;
-		}
+		seed.chantStore += DrawForSeed(seed, cost - seed.chantStore);
+	}
+	else
+	{
+		ReturnFromSeed(seed, seed.chantStore - cost);
+		seed.chantStore = cost;
 	}
 	const int previous = seed.powerUp;
 	seed.powerUp = level;
@@ -2441,6 +2485,37 @@ PrayerPower* MagicSystem::PrayerOf(PlayerNames player) const
 		}
 	});
 	return found;
+}
+
+float MagicSystem::DrawForSeed(const SpellSeed& seed, float amount)
+{
+	if (seed.worshipSite != entt::null && EntityRegistry().Valid(seed.worshipSite) && Locator::worshipSiteSystem::has_value())
+	{
+		return Locator::worshipSiteSystem::value().UseCreateChants(seed.worshipSite, amount);
+	}
+	auto* store = PrayerOf(seed.player);
+	return store != nullptr ? magic::ChargeSeed(*store, amount) : 0.0f;
+}
+
+void MagicSystem::ReturnFromSeed(const SpellSeed& seed, float amount)
+{
+	if (seed.worshipSite != entt::null && EntityRegistry().Valid(seed.worshipSite) && Locator::worshipSiteSystem::has_value())
+	{
+		if (amount > 0.0f)
+		{
+			Locator::worshipSiteSystem::value().ReturnChants(seed.worshipSite, amount);
+		}
+		return;
+	}
+	if (auto* store = PrayerOf(seed.player))
+	{
+		magic::ReturnPrayer(*store, amount);
+	}
+}
+
+float WorshipSiteSpellCaster::MaintainSpell(float amount)
+{
+	return Locator::worshipSiteSystem::has_value() ? Locator::worshipSiteSystem::value().MaintainSpell(_site, amount) : 0.0f;
 }
 
 MagicSystemInterface::HandCastState MagicSystem::GetHandCastState() const

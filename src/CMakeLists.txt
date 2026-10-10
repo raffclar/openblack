@@ -129,12 +129,14 @@ target_link_libraries(
   PRIVATE "$<$<CXX_COMPILER_ID:MSVC>:-SAFESEH:NO>"
           l3d
           cam
+          edt
           dance
           pack
           lnd
           anm
           glw
           morph
+          helpdude
           psys
           physconst
           sas
@@ -207,6 +209,10 @@ endif ()
 if (OPENBLACK_INSPECTOR)
   target_link_libraries(openblack_lib PRIVATE inspector)
   target_compile_definitions(openblack_lib PUBLIC OPENBLACK_INSPECTOR)
+  # The worktree the game is built from, which the inspector names it by wherever the build lives
+  target_compile_definitions(
+    openblack_lib PRIVATE OPENBLACK_BUILT_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+  )
   # The running game tells tools how it was built
   target_compile_definitions(
     openblack_lib PRIVATE OPENBLACK_BUILD_TYPE="$<CONFIG>"
@@ -219,11 +225,12 @@ if (OPENBLACK_INSPECTOR)
   endif ()
 endif ()
 
+# The library's headers do their maths left-handed in radians, so everything that includes them must too: glm's inline
+# functions built either way in one program would leave the linker to pick one at random
 target_compile_definitions(
   openblack_lib
+  PUBLIC "GLM_FORCE_LEFT_HANDED" "GLM_FORCE_RADIANS"
   PRIVATE
-    "GLM_FORCE_LEFT_HANDED"
-    "GLM_FORCE_RADIANS"
     "GLM_ENABLE_EXPERIMENTAL"
     # "IMGUI_DISABLE_OBSOLETE_FUNCTIONS"
     # Compile-time optimize out log messages (debug level if debug, else info)

@@ -432,6 +432,12 @@
   "query": "town.homeless"
  },
  {
+  "description": "The worship sites: their temple, player, tribe, place round the temple, towns, altar, how far they are built, and their prayer power: dancers, battery, what can be drawn this turn and what has been, the dance's intensity and the strain",
+  "kind": "list",
+  "parameters": [],
+  "query": "worship.sites"
+ },
+ {
   "description": "The hand's share: the player's influence where their hand is (with what the hand keeps past the border), at the hand's own place, and their own; whether the hand is inside",
   "kind": "object",
   "parameters": [
@@ -488,17 +494,17 @@
     "type": "point"
    },
    {
-    "description": "Degrees about the up axis: 0 looks along +z, 90 along +x",
+    "description": "Degrees (not radians) about the up axis: 0 looks along +z, 90 along +x",
     "name": "yaw",
     "type": "number"
    },
    {
-    "description": "Degrees below the horizon",
+    "description": "Degrees (not radians) below the horizon: 0 looks level, 90 straight down",
     "name": "pitch",
     "type": "number"
    },
    {
-    "description": "From the camera to its focus: the zoom",
+    "description": "Metres from the camera to its focus: the zoom",
     "name": "distance",
     "type": "number"
    }
@@ -517,17 +523,17 @@
     "type": "integer"
    },
    {
-    "description": "Degrees about the up axis: 0 looks along +z, 90 along +x",
+    "description": "Degrees (not radians) about the up axis: 0 looks along +z, 90 along +x",
     "name": "yaw",
     "type": "number"
    },
    {
-    "description": "Degrees below the horizon",
+    "description": "Degrees (not radians) below the horizon: 0 looks level, 90 straight down",
     "name": "pitch",
     "type": "number"
    },
    {
-    "description": "From the camera to the entity",
+    "description": "Metres from the camera to the entity",
     "name": "distance",
     "type": "number"
    }
@@ -550,17 +556,17 @@
     "type": "point"
    },
    {
-    "description": "Degrees about the up axis: 0 looks along +z, 90 along +x",
+    "description": "Degrees (not radians) about the up axis: 0 looks along +z, 90 along +x",
     "name": "yaw",
     "type": "number"
    },
    {
-    "description": "Degrees below the horizon",
+    "description": "Degrees (not radians) below the horizon: 0 looks level, 90 straight down",
     "name": "pitch",
     "type": "number"
    },
    {
-    "description": "From the camera to its focus: the zoom",
+    "description": "Metres from the camera to its focus: the zoom",
     "name": "distance",
     "type": "number"
    }
@@ -771,6 +777,12 @@
   "query": "land.atmosphere"
  },
  {
+  "description": "The village centres' totems: their town centre, the share they are held at, and whether the hand grips one",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.totems"
+ },
+ {
   "description": "A villager's or animal's action states: top, final, previous, and turns in them",
   "kind": "object",
   "parameters": [
@@ -822,6 +834,30 @@
   "query": "living.forests"
  },
  {
+  "description": "The whales: where each is this turn and was at its start, the way it faces, its clip and the wake's timer",
+  "kind": "object",
+  "parameters": [],
+  "query": "living.whales"
+ },
+ {
+  "description": "The things walking the camera editor's tracks: the track, how far and up to where",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.walk_paths"
+ },
+ {
+  "description": "The dances: what they are danced for, whether dancing, their speed and clock, and each group's dancers",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.dances"
+ },
+ {
+  "description": "The scripts' flocks: their place, their domain and flock distances, and their members from the first to the leader",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.flocks"
+ },
+ {
   "description": "How many fireflies there are",
   "kind": "object",
   "parameters": [],
@@ -832,6 +868,12 @@
   "kind": "list",
   "parameters": [],
   "query": "living.fish_farms"
+ },
+ {
+  "description": "The scenery the scripts open and close (gates, the gate stone plinth, the piper's cave, the phone box): its open word, place in its clip and resting place, whether it is in the land's draw list and was on screen, its gate stones' value and the circles a creature's route goes round",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.animated_statics"
  },
  {
   "description": "The chimneys smoking",
@@ -1017,10 +1059,22 @@
   "query": "view.cinematic"
  },
  {
+  "description": "The tasks with the camera and the dialogue, the scripts' spoken lines and the villagers drawn in high detail",
+  "kind": "object",
+  "parameters": [],
+  "query": "view.script_control"
+ },
+ {
   "description": "The editor: open, its tool, its camera and what is selected",
   "kind": "object",
   "parameters": [],
   "query": "view.editor"
+ },
+ {
+  "description": "What is drawn of the advisors this frame: near the screen or in the world, alpha, how far out in the world, and how close their posed meshes come to the camera beside its near plane",
+  "kind": "list",
+  "parameters": [],
+  "query": "advisors.draws"
  },
  {
   "description": "The creature systems' own state: the creature followed or in the cave, the hand on a creature, the hair, voices, footprints, physiology and the mind kept between lands",
@@ -1186,13 +1240,25 @@
     "type": "string or integer"
    },
    {
-    "description": "Numbers, true or false, [x, y, z], {\"object\": id} or {\"int\": n}, as many as it takes",
+    "description": "Numbers, true or false, [x, y, z], {\"object\": id} or {\"int\": n}, as many as it takes; each goes on the stack as the type the native takes, as a script's call puts it",
     "name": "args",
     "type": "array"
    }
   ],
   "query": "script.call",
   "writes": true
+ },
+ {
+  "description": "The good and the evil advisor: what each does, where it hovers and whether it is talking",
+  "kind": "list",
+  "parameters": [],
+  "query": "help.advisors"
+ },
+ {
+  "description": "The scripts' dialogue: the text shown, whether it is read or waits for a click, who holds the dialogue and the line being said",
+  "kind": "object",
+  "parameters": [],
+  "query": "help.dialogue"
  },
  {
   "description": "Whether the game is paused, its turn, the frames served, its speed and any stepping",
@@ -1312,7 +1378,7 @@
   "kind": "object",
   "parameters": [
    {
-    "description": "Where to write the PNG; a file in the inspector's folder by default",
+    "description": "Where to write the PNG; without it and without feature, a temporary file in this game's own folder, gone with the game",
     "name": "path",
     "type": "string"
    },
@@ -1327,17 +1393,37 @@
     "type": "integer"
    },
    {
-    "description": "{position?, focus?, yaw?, pitch?, distance?} as camera.set takes",
+    "description": "{position?, focus?, yaw?, pitch?, distance?} as camera.set takes: yaw and pitch in degrees, distance in metres",
     "name": "camera",
     "type": "object"
    },
    {
-    "description": "An entity to look at where it is at the picture's frame: its id, or {id, yaw?, pitch?, distance?}; not with camera",
+    "description": "An entity to look at where it is drawn at the picture's frame: its id, or {id, yaw?, pitch?, distance?} (yaw and pitch in degrees, pitch below the horizon; distance in metres); not with camera",
     "name": "frame",
     "type": "integer|object"
    },
    {
-    "description": "Leave the debug windows and the menu bar out of the picture",
+    "description": "Keep it under the screenshot folder by feature, as the progress tracker names them: \"domain/feature\", e.g. \"story/opening_cinematic\"; with what",
+    "name": "feature",
+    "type": "string"
+   },
+   {
+    "description": "With feature: a short kebab-case description, e.g. \"yogi-face-whole-f30\". It is saved as <root>/<domain>/<feature>/<date>_<branch>_<what>_<backend>.png, never over another, and catalogued in <root>/catalogue.jsonl once written",
+    "name": "what",
+    "type": "string"
+   },
+   {
+    "description": "With feature: a note for the catalogue's line",
+    "name": "note",
+    "type": "string"
+   },
+   {
+    "description": "The screenshot folder, for this picture; the game's own (--screenshot-root, OPENBLACK_SCREENSHOT_ROOT or E:/openblack/screenshots) by default",
+    "name": "root",
+    "type": "string"
+   },
+   {
+    "description": "Leave the debug windows, the menu bar and the input lock's notice out of the picture and the frames held around it",
     "name": "hide_gui",
     "type": "boolean"
    }

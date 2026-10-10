@@ -441,6 +441,8 @@ public:
 	[[nodiscard]] std::span<L3DVertex> EditVertices() noexcept { return _vertices; }
 	/// The skins to change in place
 	[[nodiscard]] std::span<L3DTexture> EditSkins() noexcept { return _skins; }
+	/// The primitives' headers to change in place, as to draw them with another skin
+	[[nodiscard]] std::span<L3DPrimitiveHeader> EditPrimitiveHeaders() noexcept { return _primitiveHeaders; }
 	[[nodiscard]] const std::vector<uint16_t>& GetIndices() const noexcept { return _indices; }
 	[[nodiscard]] const std::vector<L3DVertexGroup>& GetLookUpTableData() const noexcept { return _vertexGroups; }
 	[[nodiscard]] const std::vector<L3DBlend>& GetBlends() const noexcept { return _blends; }

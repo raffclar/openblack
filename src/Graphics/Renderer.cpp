@@ -69,7 +69,9 @@
 #include "ECS/AbodeKnock.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
+#include "ECS/Components/CameraBookmark.h"
 #include "ECS/Components/ChimneySmoke.h"
 #include "ECS/Components/Cloud.h"
 #include "ECS/Components/Creature.h"
@@ -103,6 +105,8 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/CameraBookmarkSystemInterface.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
@@ -568,6 +572,12 @@ void Renderer::ConfigureView(graphics::RenderPass viewId, glm::u16vec2 resolutio
 	{
 		bgfx::setViewClear(static_cast<bgfx::ViewId>(viewId), BGFX_CLEAR_NONE);
 		bgfx::setViewRect(static_cast<bgfx::ViewId>(viewId), 0, 0, resolution.x, resolution.y);
+	}
+	// The advisors near the screen are drawn over the main view, its depth cleared
+	if (viewId == RenderPass::Main)
+	{
+		bgfx::setViewClear(static_cast<bgfx::ViewId>(RenderPass::Advisors), BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
+		bgfx::setViewRect(static_cast<bgfx::ViewId>(RenderPass::Advisors), 0, 0, resolution.x, resolution.y);
 	}
 	// And what blends in it is drawn over it after
 	if (const auto translucentId = TranslucentPassOf(viewId); translucentId != viewId)
@@ -3413,12 +3423,14 @@ void Renderer::DrawMoon(RenderPass viewId) const
 	{
 		return;
 	}
-	// The moon keeps its place beside the player's camera and faces it. Drawn so in the mirrored view, it is mirrored
-	// in the sea with everything else.
+	// The moon keeps its place beside the player's camera and faces it. The sea shows it mirrored, and the glow of a
+	// copy of it with its height mirrored through sea level.
+	const bool inTheSea = viewId == RenderPass::ReflectionSky;
 	const auto& camera = Locator::camera::value();
 	const auto centre = camera.GetOrigin() + moon->placement->offset;
 	const auto view = camera.GetViewMatrix(Camera::Interpolation::Current);
-	const auto basis = moon::Basis(view, glm::inverse(view), centre);
+	const auto inverseView = glm::inverse(view);
+	const auto basis = moon::Basis(view, inverseView, centre);
 	const auto& colour = moon->colour;
 	// It shows less through an overcast
 	const float alpha = moon->strength / 255.0f;
@@ -3427,17 +3439,20 @@ void Renderer::DrawMoon(RenderPass viewId) const
 		return;
 	}
 
-	// First its glow, added to the sky
-	const auto& textures = Locator::resources::value().GetTextures();
-	bgfx::VertexLayout layout;
-	layout.begin()
-	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-	    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
-	    .end();
-	constexpr auto k_GlowVertices = static_cast<uint32_t>(moon::k_GlowIndices.size());
-	if (glowLook != nullptr && textures.Contains(glowLook->textureId) && textures.Contains(glowLook->alphaTextureId) &&
-	    bgfx::getAvailTransientVertexBuffer(k_GlowVertices, layout) == k_GlowVertices)
-	{
+	// Its glow, added to the sky
+	const auto drawGlow = [&](const moon::Glow& glow) {
+		const auto& textures = Locator::resources::value().GetTextures();
+		bgfx::VertexLayout layout;
+		layout.begin()
+		    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+		    .end();
+		constexpr auto k_GlowVertices = static_cast<uint32_t>(moon::k_GlowIndices.size());
+		if (glowLook == nullptr || !textures.Contains(glowLook->textureId) || !textures.Contains(glowLook->alphaTextureId) ||
+		    bgfx::getAvailTransientVertexBuffer(k_GlowVertices, layout) != k_GlowVertices)
+		{
+			return;
+		}
 		struct Vertex
 		{
 			glm::vec3 position;
@@ -3446,7 +3461,6 @@ void Renderer::DrawMoon(RenderPass viewId) const
 		bgfx::TransientVertexBuffer buffer;
 		bgfx::allocTransientVertexBuffer(&buffer, k_GlowVertices, layout);
 		const auto vertices = std::span(reinterpret_cast<Vertex*>(buffer.data), k_GlowVertices);
-		const auto glow = moon::MakeGlow(basis, centre);
 		for (size_t i = 0; i < vertices.size(); ++i)
 		{
 			const auto corner = moon::k_GlowIndices.at(i);
@@ -3464,21 +3478,37 @@ void Renderer::DrawMoon(RenderPass viewId) const
 		bgfx::setVertexBuffer(0, &buffer);
 		bgfx::setState(k_AdditiveState | BGFX_STATE_DEPTH_TEST_GREATER);
 		program->Submit(static_cast<bgfx::ViewId>(viewId));
-	}
+	};
 
-	// Then the moon, blended over the sky, its face turned to the real moon's phase. It leaves its depth, so the land
-	// nearer than it is drawn over it and the land beyond it stays hidden.
-	const auto phase = moon->phase;
-	DrawCelestialMesh(
-	    viewId, {
-	                .meshId = body->meshId,
-	                .textureId = body->textureId,
-	                .alphaTextureId = body->alphaTextureId,
-	                .model = moon::Model(basis, centre, phase),
-	                .colour = glm::vec4(colour, alpha),
-	                .celestial = {std::cos(phase), std::sin(phase), 1.0f, 1.0f},
-	                .state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA,
-	            });
+	// The moon, blended over the sky, its face turned to the real moon's phase. It leaves its depth, so the land nearer
+	// than it is drawn over it and the land beyond it stays hidden. Its half sphere shows only its outside, as its
+	// material is one sided: the half turned away from the camera, around a new moon, shows nothing. Mirrored in the
+	// sea, the faces that turn towards the camera are the other way round.
+	const auto drawMoon = [&]() {
+		const auto phase = moon->phase;
+		DrawCelestialMesh(viewId, {
+		                              .meshId = body->meshId,
+		                              .textureId = body->textureId,
+		                              .alphaTextureId = body->alphaTextureId,
+		                              .model = moon::Model(basis, centre, phase),
+		                              .colour = glm::vec4(colour, alpha),
+		                              .celestial = {std::cos(phase), std::sin(phase), 1.0f, 1.0f},
+		                              .state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER |
+		                                       BGFX_STATE_BLEND_ALPHA | (inTheSea ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW),
+		                          });
+	};
+
+	if (inTheSea)
+	{
+		// In the sea, the moon mirrored with everything else by the mirrored view, then the glow of its copy, which
+		// the mirrored moon in front of it hides
+		drawMoon();
+		drawGlow(moon::SeaGlow(view, inverseView, centre));
+		return;
+	}
+	// In the sky, the glow first, then the moon over it
+	drawGlow(moon::MakeGlow(basis, centre));
+	drawMoon();
 }
 
 void Renderer::DrawSun(RenderPass viewId) const
@@ -4654,7 +4684,8 @@ void Renderer::SelectDrawnCreatures(const DrawSceneDesc& drawDesc) const
 	for (const auto& [entity, instance] : draws)
 	{
 		// The animals are drawn one by one by themselves
-		if (!drawDesc.entities.AnyOf<ecs::components::AnimalPose, ecs::components::VillagerPose>(entity))
+		if (!drawDesc.entities.AnyOf<ecs::components::AnimalPose, ecs::components::VillagerPose,
+		                             ecs::components::AnimatedStaticPose>(entity))
 		{
 			_drawnCreatures.push_back({.entity = entity, .instance = instance});
 		}
@@ -5477,6 +5508,27 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				                             .morphTargets = nullptr};
 				drawInstances(meshId, *placers, placers->materialBlending, instance, 1, &entityPose);
 			};
+			// The gates and other scenery the scripts open and close, each posed by its own clip
+			const auto drawPosedStill = [&](entt::entity entity, uint32_t instance) {
+				const auto* still = desc.entities.TryGet<const ecs::components::AnimatedStaticPose>(entity);
+				const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
+				if (still == nullptr || mesh == nullptr || !meshManager.Contains(mesh->id))
+				{
+					return;
+				}
+				const auto placers = renderCtx.instancedDrawDescs.find(mesh->id);
+				if (placers == renderCtx.instancedDrawDescs.end() ||
+				    (desc.viewId == RenderPass::Reflection && placers->second.hiddenFromReflection))
+				{
+					return;
+				}
+				const auto model = meshManager.Handle(mesh->id);
+				const bool posed = still->bones.size() == model->GetBoneMatrices().size();
+				const EntityPose entityPose {.bones = posed ? std::span<const glm::mat4>(still->bones)
+				                                            : std::span<const glm::mat4>(model->GetBoneMatrices()),
+				                             .morphTargets = nullptr};
+				drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &entityPose);
+			};
 			// The animals of a model drawn at once, in their light: the brightest of the land's, or white
 			for (const auto& [meshId, group] : _animalBoneGroups)
 			{
@@ -5503,6 +5555,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			{
 				drawAnimal(entity, instance, false);
 				drawVillager(entity, instance);
+				drawPosedStill(entity, instance);
 			}
 			// The villagers, a draw for each of their meshes, each instance posed by its own bones in the bone palette
 			if (renderCtx.bonePaletteTexture)
@@ -5722,51 +5775,61 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				using namespace ecs::components;
 
 				auto& registry = Locator::entitiesRegistry::value();
-				registry.Each<const Sprite, const Transform>([this, &spriteShader, &desc, translucentViewId, cameraOrigin,
-				                                              &registry](entt::entity entity, const Sprite& sprite,
-				                                                         const Transform& transform) {
-					// The temple draws the glows of the rooms it draws whole, and the main room reflects its own glows
-					// alone in its floor
-					if (const auto* templePart = registry.TryGet<const TempleInteriorPart>(entity); templePart != nullptr)
-					{
-						const bool inMainRoom = templePart->room == TempleRoom::Main;
-						const bool drawn = Locator::temple::value().IsRoomDrawn(templePart->room);
-						if (desc.viewId == RenderPass::Reflection ? !inMainRoom : !drawn)
-						{
-							return;
-						}
-					}
-					glm::mat4 modelMatrix = glm::mat4(1.0f);
-					modelMatrix = glm::translate(modelMatrix, transform.position);
-					modelMatrix *= glm::mat4(transform.rotation);
-					modelMatrix = glm::scale(modelMatrix, transform.scale);
+				// The camera's bookmarks are drawn unless a script put them away or holds the cinema bars
+				const bool bookmarksShown =
+				    (!Locator::cameraBookmarkSystem::has_value() || Locator::cameraBookmarkSystem::value().IsEnabled()) &&
+				    (!Locator::cinematicDirectorSystem::has_value() ||
+				     Locator::cinematicDirectorSystem::value().IsInterfaceActive());
+				registry.Each<const Sprite, const Transform>(
+				    [this, &spriteShader, &desc, translucentViewId, cameraOrigin, &registry,
+				     bookmarksShown](entt::entity entity, const Sprite& sprite, const Transform& transform) {
+					    if (!bookmarksShown && registry.AllOf<CameraBookmark>(entity))
+					    {
+						    return;
+					    }
+					    // The temple draws the glows of the rooms it draws whole, and the main room reflects its own glows
+					    // alone in its floor
+					    if (const auto* templePart = registry.TryGet<const TempleInteriorPart>(entity); templePart != nullptr)
+					    {
+						    const bool inMainRoom = templePart->room == TempleRoom::Main;
+						    const bool drawn = Locator::temple::value().IsRoomDrawn(templePart->room);
+						    if (desc.viewId == RenderPass::Reflection ? !inMainRoom : !drawn)
+						    {
+							    return;
+						    }
+					    }
+					    glm::mat4 modelMatrix = glm::mat4(1.0f);
+					    modelMatrix = glm::translate(modelMatrix, transform.position);
+					    modelMatrix *= glm::mat4(transform.rotation);
+					    modelMatrix = glm::scale(modelMatrix, transform.scale);
 
-					glm::vec4 u_sampleRect(sprite.uvExtent, sprite.uvMin);
+					    glm::vec4 u_sampleRect(sprite.uvExtent, sprite.uvMin);
 
-					bgfx::setTransform(glm::value_ptr(modelMatrix));
-					spriteShader->SetUniformValue("u_sampleRect", glm::value_ptr(u_sampleRect));
-					const glm::vec4 u_spriteParams {sprite.facesCamera ? 1.0f : 0.0f, sprite.alpha.has_value() ? 1.0f : 0.0f,
-					                                sprite.additive ? 1.0f : 0.0f, 0.0f};
-					spriteShader->SetUniformValue("u_spriteParams", glm::value_ptr(u_spriteParams));
-					spriteShader->SetTextureSampler("s_alpha", 1, sprite.alpha.value_or(sprite.texture));
-					// The shader multiplies the tint by the texture's alpha, which for alpha blending gives colours
-					// premultiplied by alpha when the tint is
-					const auto tint =
-					    sprite.additive ? sprite.tint : glm::vec4(glm::vec3(sprite.tint) * sprite.tint.a, sprite.tint.a);
-					spriteShader->SetUniformValue("u_tint", glm::value_ptr(tint));
-					spriteShader->SetTextureSampler("s_diffuse", 0, sprite.texture);
+					    bgfx::setTransform(glm::value_ptr(modelMatrix));
+					    spriteShader->SetUniformValue("u_sampleRect", glm::value_ptr(u_sampleRect));
+					    const glm::vec4 u_spriteParams {sprite.facesCamera ? 1.0f : 0.0f,
+					                                    sprite.alpha.has_value() ? 1.0f : 0.0f, sprite.additive ? 1.0f : 0.0f,
+					                                    0.0f};
+					    spriteShader->SetUniformValue("u_spriteParams", glm::value_ptr(u_spriteParams));
+					    spriteShader->SetTextureSampler("s_alpha", 1, sprite.alpha.value_or(sprite.texture));
+					    // The shader multiplies the tint by the texture's alpha, which for alpha blending gives colours
+					    // premultiplied by alpha when the tint is
+					    const auto tint =
+					        sprite.additive ? sprite.tint : glm::vec4(glm::vec3(sprite.tint) * sprite.tint.a, sprite.tint.a);
+					    spriteShader->SetUniformValue("u_tint", glm::value_ptr(tint));
+					    spriteShader->SetTextureSampler("s_diffuse", 0, sprite.texture);
 
-					_plane->GetVertexBuffer().Bind();
+					    _plane->GetVertexBuffer().Bind();
 
-					const auto blend = sprite.additive
-					                       ? BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE)
-					                       : BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA);
-					bgfx::setState(0 | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | blend |
-					               BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_ADD));
+					    const auto blend = sprite.additive
+					                           ? BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE)
+					                           : BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA);
+					    bgfx::setState(0 | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | blend |
+					                   BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_ADD));
 
-					spriteShader->Submit(static_cast<bgfx::ViewId>(translucentViewId),
-					                     zsort::Depth(transform.position, cameraOrigin));
-				});
+					    spriteShader->Submit(static_cast<bgfx::ViewId>(translucentViewId),
+					                         zsort::Depth(transform.position, cameraOrigin));
+				    });
 			}
 		}
 	}
@@ -5776,6 +5839,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	if (desc.drawIsland)
 	{
 		DrawVortexHoleColours(desc, landSkyAndBump);
+	}
+
+	if (desc.viewId == RenderPass::Main && desc.drawEntities)
+	{
+		DrawAdvisors(desc);
 	}
 
 	// The sun's glare over everything else in the view; the temple's comes before its glass

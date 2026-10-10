@@ -23,7 +23,8 @@
 namespace openblack::creaturemind
 {
 struct MindFileData;
-}
+struct PhysiqueFileData;
+} // namespace openblack::creaturemind
 
 /// The creature a mind file describes besides its mind: a saved creature carries its species, name, alignment,
 /// strength, fatness, size, age, energy, tiredness, tattoos and the marks on its skin, so that a creature can be made
@@ -61,5 +62,9 @@ struct Body
 /// The creature's body written over a file of the current version, as it is saved with its mind: everything but its
 /// species and name, which go with the mind
 void ToMindFile(const Body& body, creaturemind::MindFileData& file);
+
+/// The physique file saved beside the mind: the species row, the body's size, strength and fatness as they are now, the
+/// alignment it is saved with (as it was before any spell changed it) and the marks on its skin
+[[nodiscard]] creaturemind::PhysiqueFileData ToPhysiqueFile(const Body& now, uint32_t speciesRow, float savedAlignment);
 
 } // namespace openblack::creature_mind_body

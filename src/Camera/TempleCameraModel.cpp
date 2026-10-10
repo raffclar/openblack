@@ -24,6 +24,7 @@
 #include "3D/TempleDoors.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Camera.h"
 #include "Common/MachineClock.h"
@@ -1260,8 +1261,7 @@ void TempleCameraModel::LookAtSubMesh(glm::vec3 position, glm::vec3 lookAt)
 		constexpr std::array k_Wooshes {audio::SoundId::G_Woosh_01, audio::SoundId::G_Woosh_02, audio::SoundId::G_Woosh_03,
 		                                audio::SoundId::G_Woosh_04};
 		const auto ticks = machine_clock::Ticks();
-		Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(k_Wooshes.at(static_cast<size_t>(ticks & 3))),
-		                                        std::nullopt);
+		audio::PlayGameSoundEffect(static_cast<entt::id_type>(k_Wooshes.at(static_cast<size_t>(ticks & 3))), std::nullopt);
 	}
 	_subMeshLook = Pose {position, lookAt};
 	_lookingAtSubMesh = true;

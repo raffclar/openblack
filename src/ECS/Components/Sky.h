@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <optional>
 
 #include <entt/core/fwd.hpp>
@@ -77,8 +79,15 @@ struct Sun
 /// The moon: where it stands from the camera this frame, its phase, and how it is drawn
 struct Moon
 {
-	/// The phase of the real moon, 0 to 2 pi
+	/// The phase of the real moon as it last showed, 0 to 2 pi: a full turn at a new moon and half a turn at a full
+	/// moon. It is taken from the date only while the moon shows, and stays as it was otherwise; 0 until it first shows.
 	float phase {0.0f};
+	/// The computer's date as last read for the phase, in seconds since 1970; 0 until it is first read
+	int64_t date {0};
+	/// The machine's clock, in milliseconds, when the date was last read: it is read again only after two seconds
+	uint32_t dateReadAt {0};
+	/// A date to take the phase from instead of the computer's, for trying the phases
+	std::optional<int64_t> dateOverride;
 	/// Where it stands from the camera and how strongly it shows before any overcast, 0 to 200; none while it is down
 	std::optional<graphics::moon::Placement> placement;
 	/// Its colour for the time of day and alignment, 0 to 1

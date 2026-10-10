@@ -153,9 +153,9 @@ void ExplosionSystem::AddRubble(const glm::vec3& centre, float yaw, float scale)
 	_puffs.push_back(dust_puff::Make(centre, k_DustSize, LocalRandom));
 }
 
-void ExplosionSystem::AddSmoke(const glm::vec3& centre, float size, uint32_t colour)
+void ExplosionSystem::AddSmoke(const glm::vec3& centre, float size, dust_puff::Kind kind, std::optional<uint32_t> colour)
 {
-	_puffs.push_back(dust_puff::Make(centre, size, LocalRandom, colour));
+	_puffs.push_back(dust_puff::Make(centre, size, LocalRandom, kind, colour));
 }
 
 void ExplosionSystem::AddShake(const glm::vec3& position, float radius, float strength, float seconds, bool verticalOnly)
