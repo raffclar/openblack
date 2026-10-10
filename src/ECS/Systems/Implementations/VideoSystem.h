@@ -19,6 +19,7 @@
 #include <BinkFile.h>
 
 #include "ECS/Systems/VideoSystemInterface.h"
+#include "Video/FrameQueue.h"
 #include "Video/VideoRules.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -59,7 +60,8 @@ public:
 
 	/// The game's: the time system's pause, the cinematic director's bars, the scripts' music, the resource cache
 	VideoSystem();
-	explicit VideoSystem(Hooks hooks);
+	/// Its frames are decoded on a thread of their own unless `mode` says otherwise
+	explicit VideoSystem(Hooks hooks, video::DecodeMode mode = video::DecodeMode::Worker);
 
 	bool Play(const std::filesystem::path& path) override;
 	void ScheduleIntro() override;
@@ -88,7 +90,10 @@ private:
 	{
 		std::filesystem::path path;
 		std::shared_ptr<const bink::BinkFile> file;
-		std::optional<bink::FrameReader> reader;
+		/// Its frames, decoded ahead; none when they can't be decoded
+		std::unique_ptr<video::FrameQueue> frames;
+		/// The frame shown, held by the queue until the next update
+		const video::DecodedFrame* shown {nullptr};
 		/// Whole frames a second, for the schedule; 1 when the file didn't open
 		int32_t fps {1};
 		int32_t frameCount {0};
@@ -96,14 +101,10 @@ private:
 		int32_t frame {0};
 		/// When its first frame was due
 		std::optional<std::chrono::steady_clock::time_point> start;
-		uint32_t serial {0};
-		bool hasPicture {false};
 	};
 
-	/// Decodes every frame due by the real clock, one after the other
+	/// Counts the frames due by the real clock and takes the newest of them decoded
 	void DecodeDue(std::chrono::steady_clock::time_point now);
-	/// The next frame; a frame that fails keeps the picture before it
-	void DecodeNext();
 	/// The video goes; the next update puts the pause and the bars back
 	void Delete();
 	/// The update after a video ended: the pause and the bars as they were before it
@@ -111,6 +112,7 @@ private:
 	void UpdateFallingSpell();
 
 	Hooks _hooks;
+	video::DecodeMode _decodeMode;
 	std::optional<Video> _video;
 	std::atomic<bool> _playing {false};
 	video::Schedule _schedule;
