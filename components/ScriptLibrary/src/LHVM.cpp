@@ -371,10 +371,11 @@ void LHVM::LookIn(const ScriptType allowedScriptTypesMask)
 			else if (task.waitingTaskId == 0)
 			{
 				task.currentExceptionHandlerIndex = 0;
-				if (GetExceptionHandlersCount() > 0)
+				// Checked for this task itself: the conditions that end its loops (until) and the handlers of its blocks
+				if (GetExceptionHandlersCount(task) > 0)
 				{
 					task.pevInstructionAddress = task.instructionAddress;
-					task.instructionAddress = GetCurrentExceptionHandlerIp(task.currentExceptionHandlerIndex);
+					task.instructionAddress = GetCurrentExceptionHandlerIp(task, task.currentExceptionHandlerIndex);
 					task.inExceptionHandler = true;
 					CpuLoop(task);
 				}
@@ -668,22 +669,14 @@ VMVar& LHVM::GetVar(VMTask& task, const uint32_t id)
 	return (id > offset) ? task.localVars.at(id - offset - 1) : _variables.at(id);
 }
 
-uint32_t LHVM::GetExceptionHandlersCount()
+uint32_t LHVM::GetExceptionHandlersCount(const VMTask& task)
 {
-	if (_currentTask != nullptr)
-	{
-		return _currentTask->exceptionHandlerIps.size();
-	}
-	return 0;
+	return static_cast<uint32_t>(task.exceptionHandlerIps.size());
 }
 
-uint32_t LHVM::GetCurrentExceptionHandlerIp(const uint32_t index)
+uint32_t LHVM::GetCurrentExceptionHandlerIp(const VMTask& task, const uint32_t index)
 {
-	if (_currentTask != nullptr)
-	{
-		return _currentTask->exceptionHandlerIps.at(_currentTask->exceptionHandlerIps.size() - index - 1);
-	}
-	return 0;
+	return task.exceptionHandlerIps.at(task.exceptionHandlerIps.size() - index - 1);
 }
 
 void LHVM::PrintInstruction(const VMTask& task, const VMInstruction& instruction)
@@ -1549,7 +1542,7 @@ void LHVM::Opcode27IterExcept(VMTask& task, const VMInstruction& /*instruction*/
 	task.currentExceptionHandlerIndex++;
 	if (task.currentExceptionHandlerIndex < task.exceptionHandlerIps.size())
 	{
-		task.instructionAddress = GetCurrentExceptionHandlerIp(task.currentExceptionHandlerIndex) - 1;
+		task.instructionAddress = GetCurrentExceptionHandlerIp(task, task.currentExceptionHandlerIndex) - 1;
 	}
 	else
 	{

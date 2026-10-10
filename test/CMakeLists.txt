@@ -643,3 +643,5 @@ target_link_libraries(test_villager_clips PRIVATE anm)
 openblack_setup_and_add_test(
   test_creature_script_agendas test_creature_script_agendas.cpp
 )
+openblack_setup_and_add_test(test_lhvm_exceptions lhvm/test_lhvm_exceptions.cpp)
+target_link_libraries(test_lhvm_exceptions PRIVATE ScriptLibrary)
