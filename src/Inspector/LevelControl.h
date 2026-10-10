@@ -118,6 +118,8 @@ public:
 	[[nodiscard]] virtual ShotSource Source() const = 0;
 	/// Whether a file is there (a picture is, once written whole)
 	[[nodiscard]] virtual bool Exists(const std::filesystem::path& path) const = 0;
+	/// Removes a file left there from before, for a picture to be written in its place; why not, if it couldn't
+	virtual std::string Remove(const std::filesystem::path& path) = 0;
 	/// Appends a line to a text file, making it if need be; why not, if it couldn't
 	virtual std::string AppendLine(const std::filesystem::path& file, std::string_view line) = 0;
 };
@@ -215,5 +217,10 @@ private:
 	uint64_t _frame {0};
 	std::vector<std::string> _failures;
 };
+
+/// Just before a frame is drawn: shows the camera where the inspector overrides it, then where a held picture wants it,
+/// which wins for its frames. The game gives the camera its own place back once the frame is drawn (Unpin), so that
+/// nothing the game does by its camera (the hand following the pointer, picking, the sound) follows the shown one.
+void ShowCameraForDrawing(CameraControlInterface& camera, ScreenshotProvider& screenshots);
 
 } // namespace openblack::inspector

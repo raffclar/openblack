@@ -35,8 +35,12 @@ public:
 	virtual void BeginLoading(std::string_view what) = 0;
 	/// The load has finished: requests are answered by the game's frames again
 	virtual void EndLoading() = 0;
-	/// Once a frame, after the player's camera has moved: a picture taken this frame gets the camera it asked for
+	/// Once a frame, just before it is drawn, after everything the game does with its camera: the frame is drawn from
+	/// where the inspector shows the camera (an override, a picture's camera or framing), over whatever holds it
 	virtual void PlaceCamera() = 0;
+	/// Once the frame is drawn: the camera gets its own place back, so that the rest of the game (the hand, picking,
+	/// the sound) goes by the game's own camera, never by the one shown
+	virtual void GiveCameraBack() = 0;
 };
 
 } // namespace openblack::ecs::systems

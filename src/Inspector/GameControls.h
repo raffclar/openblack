@@ -92,6 +92,7 @@ public:
 	[[nodiscard]] std::optional<std::filesystem::path> Root() const override;
 	[[nodiscard]] ShotSource Source() const override;
 	[[nodiscard]] bool Exists(const std::filesystem::path& path) const override;
+	std::string Remove(const std::filesystem::path& path) override;
 	std::string AppendLine(const std::filesystem::path& file, std::string_view line) override;
 };
 

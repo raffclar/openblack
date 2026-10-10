@@ -319,13 +319,12 @@ void InspectorSystem::Service()
 
 void InspectorSystem::PlaceCamera()
 {
-	// The view the inspector overrides the camera with, then a picture's own, which wins for its frames
-	auto& camera = _controls->camera;
-	if (const auto overridden = camera.Override(); overridden.has_value())
-	{
-		static_cast<void>(camera.Pin(*overridden));
-	}
-	_screenshots->PlaceCamera();
+	inspector::ShowCameraForDrawing(_controls->camera, *_screenshots);
+}
+
+void InspectorSystem::GiveCameraBack()
+{
+	_controls->camera.Unpin();
 }
 
 uint16_t InspectorSystem::GetPort() const
