@@ -81,6 +81,12 @@ public:
 	bool CarryOutForScript(entt::entity creature, std::vector<creature_mind::Step> agenda) override;
 	bool ScriptDoAction(entt::entity creature, uint32_t action, entt::entity target, std::optional<entt::entity> with) override;
 	[[nodiscard]] bool HasPlayed(entt::entity creature) const override;
+	[[nodiscard]] float GetInteractionMagnitude(entt::entity creature) const override;
+	void ClearInteractionMagnitude(entt::entity creature) override;
+	[[nodiscard]] uint32_t GetActionCount(entt::entity creature, uint32_t action) const override;
+	void SetOnlyDesire(entt::entity creature, creature_desires::Desire desire, float seconds) override;
+	void ClearOnlyDesire(entt::entity creature) override;
+	bool PointOutHighlight(entt::entity creature) override;
 
 private:
 	/// Gives a creature its desires and what it has learnt, if it has none yet: the first time its mind thinks, or

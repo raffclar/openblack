@@ -211,6 +211,35 @@ TEST_F(ParticleEffectTest, AtomsDieOfOldAgeAndTheEffectEndsAfterClosingDown)
 	EXPECT_TRUE(effect->Finished());
 }
 
+TEST_F(ParticleEffectTest, AnEffectOnAnObjectEndsOnceItHasClosedDownAndItsAtomsHaveGone)
+{
+	// The highlight a script puts on an object: one atom kept on each object it is given, all removed a delay after
+	// closing down
+	auto effect = Make(Header() +
+	                   Object("CreateRule_GameObjectRef", "Create0",
+	                          "PROPERTY Group INTEGER 0\nPROPERTY NextGroups ARRAY SIZE 1 1 \n"
+	                          "PROPERTY PCreator PERSIS_PNTR NULL_STRING\nPROPERTY Alpha INTEGER 100\n") +
+	                   Object("RemoveRuleAfterCloseDown", "Remove0", "PROPERTY Group INTEGER 0\nPROPERTY Delay FLOAT 0.25\n"));
+	effect->AddTarget(static_cast<entt::entity>(5));
+	for (int i = 0; i < 10; ++i)
+	{
+		effect->Step(k_Step);
+	}
+	// Until it closes down it waits for more objects
+	EXPECT_EQ(effect->AtomCount(), 1u);
+	EXPECT_FALSE(effect->Finished());
+	effect->CloseDown();
+	for (int i = 0; i < 3; ++i)
+	{
+		effect->Step(k_Step);
+	}
+	EXPECT_EQ(effect->AtomCount(), 1u);
+	EXPECT_FALSE(effect->Finished());
+	effect->Step(k_Step);
+	EXPECT_EQ(effect->AtomCount(), 0u);
+	EXPECT_TRUE(effect->Finished());
+}
+
 TEST_F(ParticleEffectTest, ItEndsAtItsFilesAge)
 {
 	auto effect =
