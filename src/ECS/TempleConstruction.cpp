@@ -31,6 +31,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "Game.h"
 #include "Locator.h"
@@ -132,7 +133,11 @@ void Finish(entt::entity building)
 		{
 			life->life = 1.0f;
 		}
-		// TODO(worship-sites): its player's worship sites are planned for each of its towns
+		// Its player's towns are given their worship sites, each asked to build its own
+		if (Locator::worshipSiteSystem::has_value())
+		{
+			Locator::worshipSiteSystem::value().TempleBuilt(building);
+		}
 		PlayFinishedMusic(registry.Get<const Temple>(building).owner);
 	}
 	else
@@ -184,8 +189,8 @@ std::optional<entt::entity> construction::StartPlannedAt(glm::vec3 place, float 
 	const auto transform = registry.Get<const Transform>(plan);
 	registry.Destroy(plan);
 	// The temple's heart goes up where it was planned, with nothing of it built, and a site for its builders
-	const auto temple = archetypes::CitadelArchetype::Create(transform.position, OwnerOf(planned),
-	                                                         glm::mat4(transform.rotation), transform.scale, 0.0f);
+	const auto temple =
+	    archetypes::CitadelArchetype::Create(transform.position, OwnerOf(planned), planned.yAngle, transform.scale, 0.0f);
 	registry.Get<Temple>(temple).town = planned.townId;
 	registry.Assign<BuildingSite>(temple, building_construction::SiteDesire(scriptDesire));
 	return temple;

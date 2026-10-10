@@ -108,6 +108,8 @@ public:
 	/// A model made while the game runs from the triangles of another, whose skins it is drawn with (which must outlive
 	/// it): one submesh for each group of primitives
 	bool LoadMade(const L3DMesh& skinSource, std::span<const std::vector<L3DSubMesh::MadePrimitive>> subMeshes) noexcept;
+	/// A model of a file drawn with the skins of another (which must outlive it), as they change
+	bool LoadWithSkinsOf(const l3d::L3DFile& l3d, const L3DMesh& skinSource) noexcept;
 	/// A dynamic mesh takes its vertices afresh from a file of the same shape
 	void UpdateVertices(const l3d::L3DFile& l3d) noexcept;
 	/// A dynamic mesh's skin takes its texels afresh

@@ -24,6 +24,7 @@
 #include "Common/EventManager.h"
 #include "Common/GameRandomProduction.h"
 #include "Common/RandomNumberManagerProduction.h"
+#include "Common/UserData.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/MapProduction.h"
@@ -32,6 +33,7 @@
 #include "ECS/Systems/Implementations/AbodeKnockSystem.h"
 #include "ECS/Systems/Implementations/AlignmentSystem.h"
 #include "ECS/Systems/Implementations/AnimalSystem.h"
+#include "ECS/Systems/Implementations/AnimatedStaticSystem.h"
 #include "ECS/Systems/Implementations/BuildingDamageSystem.h"
 #include "ECS/Systems/Implementations/CameraBookmarkSystem.h"
 #include "ECS/Systems/Implementations/CameraHelpSystem.h"
@@ -51,6 +53,7 @@
 #include "ECS/Systems/Implementations/CreatureMindSystem.h"
 #include "ECS/Systems/Implementations/CreatureModeSystem.h"
 #include "ECS/Systems/Implementations/CreatureObjectActionSystem.h"
+#include "ECS/Systems/Implementations/CreaturePenSystem.h"
 #include "ECS/Systems/Implementations/CreaturePhysiologySystem.h"
 #include "ECS/Systems/Implementations/CreatureSkinSystem.h"
 #include "ECS/Systems/Implementations/DynamicsSystem.h"
@@ -102,9 +105,11 @@
 #include "ECS/Systems/Implementations/VegetationSystem.h"
 #include "ECS/Systems/Implementations/VideoSystem.h"
 #include "ECS/Systems/Implementations/VillageLightSystem.h"
+#include "ECS/Systems/Implementations/VillageTotemSystem.h"
 #include "ECS/Systems/Implementations/VortexSystem.h"
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
 #include "ECS/Systems/Implementations/WeatherSystem.h"
+#include "ECS/Systems/Implementations/WorshipSiteSystem.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "Graphics/RendererInterface.h"
 #include "Input/GameActionMap.h"
@@ -132,6 +137,7 @@ using openblack::ecs::Registry;
 using openblack::ecs::systems::AbodeKnockSystem;
 using openblack::ecs::systems::AlignmentSystem;
 using openblack::ecs::systems::AnimalSystem;
+using openblack::ecs::systems::AnimatedStaticSystem;
 using openblack::ecs::systems::CameraBookmarkSystem;
 using openblack::ecs::systems::CameraHelpSystem;
 using openblack::ecs::systems::CameraPathSystem;
@@ -150,6 +156,7 @@ using openblack::ecs::systems::CreatureLocomotionSystem;
 using openblack::ecs::systems::CreatureMindSystem;
 using openblack::ecs::systems::CreatureModeSystem;
 using openblack::ecs::systems::CreatureObjectActionSystem;
+using openblack::ecs::systems::CreaturePenSystem;
 using openblack::ecs::systems::CreaturePhysiologySystem;
 using openblack::ecs::systems::CreatureSkinSystem;
 using openblack::ecs::systems::DynamicsSystem;
@@ -194,9 +201,11 @@ using openblack::ecs::systems::TutorialSkipSystem;
 using openblack::ecs::systems::VegetationSystem;
 using openblack::ecs::systems::VideoSystem;
 using openblack::ecs::systems::VillageLightSystem;
+using openblack::ecs::systems::VillageTotemSystem;
 using openblack::ecs::systems::VortexSystem;
 using openblack::ecs::systems::WaterRingSystem;
 using openblack::ecs::systems::WeatherSystem;
+using openblack::ecs::systems::WorshipSiteSystem;
 using openblack::graphics::RendererInterface;
 using openblack::input::GameActionMap;
 using openblack::lhvm::LHVM;
@@ -271,6 +280,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::mistSystem::emplace<MistSystem>();
 	Locator::cloudSystem::emplace<CloudSystem>();
 	Locator::villageLightSystem::emplace<VillageLightSystem>();
+	Locator::villageTotemSystem::emplace<VillageTotemSystem>();
 	Locator::fieldSystem::emplace<FieldSystem>();
 	Locator::fishFarmSystem::emplace<FishFarmSystem>();
 	Locator::animalSystem::emplace<AnimalSystem>();
@@ -287,6 +297,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::footprintSystem::emplace<FootprintSystem>();
 	Locator::editorSystem::emplace<EditorSystem>();
 	Locator::creatureSkinSystem::emplace<CreatureSkinSystem>();
+	Locator::creaturePenSystem::emplace<CreaturePenSystem>();
 	Locator::leashSystem::emplace<LeashSystem>();
 	Locator::creatureFightSystem::emplace<CreatureFightSystem>();
 	Locator::creatureModeSystem::emplace<CreatureModeSystem>();
@@ -305,7 +316,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::teleportSystem::emplace<TeleportSystem>();
 	Locator::vortexSystem::emplace<VortexSystem>();
 	Locator::creatureFizzSystem::emplace<CreatureFizzSystem>();
-	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>();
+	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>(user_data::CreatureMindFolder());
 	Locator::tornadoSystem::emplace<TornadoSystem>();
 	Locator::magicShieldSystem::emplace<MagicShieldSystem>();
 	Locator::forestSystem::emplace<ForestSystem>();
@@ -353,7 +364,9 @@ void InitializeLevelWith(const LandSource& land)
 	Locator::dynamicsSystem::value().SetClassHooks(std::make_unique<openblack::ecs::PhysicsGameHooks>());
 	Locator::livingActionSystem::emplace<LivingActionSystem>();
 	Locator::townSystem::emplace<TownSystem>();
+	Locator::worshipSiteSystem::emplace<WorshipSiteSystem>();
 	Locator::resourceStoreSystem::emplace<ResourceStoreSystem>();
+	Locator::animatedStaticSystem::emplace<AnimatedStaticSystem>();
 	Locator::weatherSystem::emplace<WeatherSystem>();
 	Locator::pathfindingSystem::emplace<PathfindingSystem>();
 	// Where creatures can walk is sorted anew for each land
@@ -411,7 +424,9 @@ void openblack::ShutDownServices()
 	Locator::cameraBookmarkSystem::reset();
 	Locator::livingActionSystem::reset();
 	Locator::townSystem::reset();
+	Locator::worshipSiteSystem::reset();
 	Locator::resourceStoreSystem::reset();
+	Locator::animatedStaticSystem::reset();
 	Locator::weatherSystem::reset();
 	Locator::handGrabSystem::reset();
 	Locator::handSystem::reset();
@@ -432,6 +447,7 @@ void openblack::ShutDownServices()
 	Locator::leashSystem::reset();
 	Locator::creatureMindSystem::reset();
 	Locator::creaturePhysiologySystem::reset();
+	Locator::creaturePenSystem::reset();
 	Locator::creatureSkinSystem::reset();
 	Locator::creatureHairSystem::reset();
 	Locator::footprintSystem::reset();
@@ -444,6 +460,7 @@ void openblack::ShutDownServices()
 	Locator::fishFarmSystem::reset();
 	Locator::animalSystem::reset();
 	Locator::soundTagSystem::reset();
+	Locator::villageTotemSystem::reset();
 	Locator::townDesireSystem::reset();
 	Locator::miracleFxSystem::reset();
 	Locator::fireSystem::reset();

@@ -283,6 +283,20 @@ std::string reflection::detail::Describe(const Json& value)
 	}
 }
 
+std::optional<Json> reflection::detail::ScalarFromText(const Json& value)
+{
+	if (!value.is_string())
+	{
+		return std::nullopt;
+	}
+	auto parsed = Parse(value.get<std::string>());
+	if (!parsed.has_value() || !(parsed->is_number() || parsed->is_boolean()))
+	{
+		return std::nullopt;
+	}
+	return parsed;
+}
+
 std::string reflection::ShortTypeName(const entt::type_info& info)
 {
 	std::string_view name = info.name();
@@ -429,7 +443,7 @@ entt::sparse_set* reflection::FindStorage(entt::registry& registry, const entt::
 {
 	for (auto&& [id, storage] : registry.storage())
 	{
-		if (ShortTypeName(storage.type()) == name)
+		if (ShortTypeName(StorageType(storage)) == name)
 		{
 			return &storage;
 		}
@@ -449,7 +463,7 @@ const entt::sparse_set* reflection::FindStorage(const entt::registry& registry, 
 {
 	for (const auto& [id, storage] : registry.storage())
 	{
-		if (ShortTypeName(storage.type()) == name)
+		if (ShortTypeName(StorageType(storage)) == name)
 		{
 			return &storage;
 		}

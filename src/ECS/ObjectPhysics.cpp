@@ -206,15 +206,19 @@ void Replant(const PhysicsEntry* entry, entt::entity tree, const LandIslandInter
 		}
 		map_coords::AddCells(coords, spiral.Next());
 	}
+	// It leaves its forest and joins another, keeping its size and whether it was made to grow
 	registry.Remove<ForestMember>(tree);
-	if (const auto forest = search.Forest())
+	if (Locator::forestSystem::has_value())
 	{
-		registry.Assign<ForestMember>(tree, *forest);
-	}
-	else if (search.StartsForest() && Locator::forestSystem::has_value())
-	{
-		registry.Assign<ForestMember>(tree,
-		                              Locator::forestSystem::value().MakeLandForest(std::nullopt, position, entt::null, false));
+		auto& forests = Locator::forestSystem::value();
+		if (const auto forest = search.Forest())
+		{
+			forests.JoinForest(tree, *forest);
+		}
+		else if (search.StartsForest())
+		{
+			forests.JoinForest(tree, forests.MakeLandForest(std::nullopt, position, entt::null, false));
+		}
 	}
 	// Away from towns, the player sees the forest grow
 	if (!search.NearTown() && Locator::particleSystem::has_value())

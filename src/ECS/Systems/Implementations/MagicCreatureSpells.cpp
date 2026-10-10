@@ -111,7 +111,7 @@ float CreatureSpellCaster::MaintainSpell(float amount)
 	const creature_spell_casting::Rates rates {.chantsPerEnergy = species.chantsPerEnergy,
 	                                           .energyFloor = species.spellEnergyFloor,
 	                                           .sizeFactor = species.spellSizeFactor};
-	creature_spell_casting::Body body {.size = creature->size,
+	creature_spell_casting::Body body {.size = ShownSize(*creature),
 	                                   .strength = creature->strength,
 	                                   .energy = needs->needs.energy,
 	                                   .exhaustion = needs->needs.exhaustion};
@@ -180,7 +180,7 @@ void MagicSystem::StartHandGrain(const Spell& spell, entt::entity creature)
 		return;
 	}
 	const auto* body = EntityRegistry().TryGet<const Creature>(creature);
-	const float height = body != nullptr ? body->size * k_HeightOfSizeOne : k_HeightOfSizeOne;
+	const float height = body != nullptr ? ShownSize(*body) * k_HeightOfSizeOne : k_HeightOfSizeOne;
 	magic::StartPour(_pour, {.totalTime = k_GrainSeconds,
 	                         .heightToRaise = height * k_GrainRaiseShare,
 	                         .angleToRaise = k_GrainTilt,
