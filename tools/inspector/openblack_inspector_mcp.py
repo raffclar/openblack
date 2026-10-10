@@ -557,9 +557,11 @@ TOOLS = [
     },
     {
         "name": "gui_press",
-        "description": "Presses a button by its label: a debug window's (made at its next frame), or the game menu's "
-                       "main page (clicked through the game's input). A debug button inside a table row or other "
-                       "scope needs path: the labels and numbers its window pushed before it.",
+        "description": "Presses a button by its label: a debug window's (made at its next frame), or any control "
+                       "of the page the game's menu shows, or of its question (buttons, tabs, check boxes, sliders; "
+                       "clicked through the game's input; gui_windows lists them; path [n] for the n-th of a name). A "
+                       "debug button inside a table row or other scope needs path: the labels and numbers its window "
+                       "pushed before it.",
         "inputSchema": schema({"window": {"type": "string"}, "button": {"type": "string"},
                                "path": {"type": "array"}}, ["window", "button"]),
         "query": "gui.press",
