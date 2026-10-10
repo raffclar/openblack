@@ -68,6 +68,7 @@
 #include "ECS/Systems/Implementations/FootprintSystem.h"
 #include "ECS/Systems/Implementations/ForestSystem.h"
 #include "ECS/Systems/Implementations/GestureSystem.h"
+#include "ECS/Systems/Implementations/HandDemoSystem.h"
 #include "ECS/Systems/Implementations/HandGrabSystem.h"
 #include "ECS/Systems/Implementations/HandSystem.h"
 #include "ECS/Systems/Implementations/HelpProfileSystem.h"
@@ -183,6 +184,7 @@ using openblack::ecs::systems::FootprintSystem;
 using openblack::ecs::systems::ForestSystem;
 using openblack::ecs::systems::GestureEventsInterface;
 using openblack::ecs::systems::GestureSystem;
+using openblack::ecs::systems::HandDemoSystem;
 using openblack::ecs::systems::HandGrabSystem;
 using openblack::ecs::systems::HandSystem;
 using openblack::ecs::systems::HelpProfileSystem;
@@ -338,6 +340,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::helpTextSystem::emplace<HelpTextSystem>();
 	Locator::helpProfileSystem::emplace<HelpProfileSystem>();
 	Locator::tipBubbleSystem::emplace<TipBubbleSystem>();
+	Locator::handDemoSystem::emplace<HandDemoSystem>();
 	Locator::advisorSystem::emplace<AdvisorSystem>();
 	Locator::soundTagSystem::emplace<SoundTagSystem>();
 	Locator::rainSystem::emplace<RainSystem>();
@@ -482,6 +485,7 @@ void openblack::ShutDownServices()
 	Locator::helpTextSystem::reset();
 	Locator::helpProfileSystem::reset();
 	Locator::tipBubbleSystem::reset();
+	Locator::handDemoSystem::reset();
 	Locator::influenceSystem::reset();
 	Locator::chimneySmokeSystem::reset();
 	Locator::abodeKnockSystem::reset();

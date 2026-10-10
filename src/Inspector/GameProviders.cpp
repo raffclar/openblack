@@ -115,6 +115,7 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
@@ -308,6 +309,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"helpTextSystem", "help.dialogue"},
     LocatorCoverage {"helpProfileSystem", "help.profile"},
     LocatorCoverage {"tipBubbleSystem", "help.bubble"},
+    LocatorCoverage {"handDemoSystem", "help.hand_demo"},
     LocatorCoverage {"helpSpeechSystem", "help.dialogue"},
     LocatorCoverage {"dialogueControlSystem", "help.dialogue"},
 };
@@ -2053,6 +2055,33 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 		            {"more_above", scroll.moreAbove},
 		            {"more_below", scroll.moreBelow}};
 	        }));
+	provider->Add(Query("hand_demo",
+	                    "The tutorial's hand demonstration playing: its name, the script task that started it, the record "
+	                    "it is at, whether it holds at a mark, and the camera and hints it has"),
+	              Serve<Locator::handDemoSystem>(
+	                  "the hand demonstrations",
+	                  [](const ecs::systems::HandDemoSystemInterface& demos, const QueryContext& /*c*/) -> Json {
+		                  const auto status = demos.GetStatus();
+		                  if (!status.has_value())
+		                  {
+			                  return Json {{"playing", false}};
+		                  }
+		                  Json result {{"playing", true},
+		                               {"name", status->name},
+		                               {"task", status->task},
+		                               {"record", status->record},
+		                               {"records", status->records},
+		                               {"pause_on_trigger", status->pauseOnTrigger},
+		                               {"trigger_reached", status->triggerReached},
+		                               {"holding", status->holding},
+		                               {"hints", demos.GetHints()}};
+		                  if (const auto camera = demos.GetCamera(); camera.has_value())
+		                  {
+			                  result["camera_origin"] = Point(camera->origin);
+			                  result["camera_focus"] = Point(camera->focus);
+		                  }
+		                  return result;
+	                  }));
 	return provider;
 }
 

@@ -36,6 +36,7 @@ public:
 	[[nodiscard]] bool IsWideScreenTransitionFinished() const override;
 	[[nodiscard]] float GetWideScreenFraction() const override;
 	[[nodiscard]] bool IsInterfaceActive() const override;
+	void SetInterfaceActive(bool active) override { _interfaceActive = active; }
 	[[nodiscard]] bool TakeHideDialogs() override;
 
 	void Reset() override { *this = CinematicDirectorSystem {}; }

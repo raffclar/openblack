@@ -133,6 +133,7 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
@@ -680,6 +681,11 @@ void CHLApi::TaskStopped(uint32_t task)
 	if (director.IsWideScreenOn() && director.GetWideScreenOwner() == task)
 	{
 		director.SetWideScreen(false, 0);
+	}
+	// A hand demonstration it started ends with it
+	if (Locator::handDemoSystem::has_value())
+	{
+		Locator::handDemoSystem::value().TaskStopped(task);
 	}
 	const auto released = Locator::scriptControlSystem::value().TaskStopped(Locator::camera::value(), task);
 	if (released.camera)
@@ -5450,18 +5456,16 @@ void GetObjectFade() // 265 GET_OBJECT_FADE
 
 void PlayHandDemo() // 266 PLAY_HAND_DEMO
 {
-	// const auto withoutHandModify = static_cast<bool>(Pop().intVal);
-	// const auto withPause = static_cast<bool>(Pop().intVal);
-	// const auto string = PopString();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto withoutHandModify = Pop().intVal != 0;
+	const auto withPause = Pop().intVal != 0;
+	const auto name = PopString();
+	Locator::handDemoSystem::value().Play(name, CurrentTask(), withPause, withoutHandModify);
 }
 
 void IsPlayingHandDemo() // 267 IS_PLAYING_HAND_DEMO
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// The scripts' "hand demonstration played": true when none plays
+	Pushb(!Locator::handDemoSystem::value().IsPlaying(0));
 }
 
 void GetArsePosition() // 268 GET_ARSE_POSITION
@@ -6179,9 +6183,8 @@ void LastMusicLine() // 335 LAST_MUSIC_LINE
 
 void HandDemoTrigger() // 336 HAND_DEMO_TRIGGER
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// Whether the demonstration reached a mark; asking lets a demonstration held there go on
+	Pushb(Locator::handDemoSystem::value().TakeTrigger());
 }
 
 void GetBellyPosition() // 337 GET_BELLY_POSITION
@@ -7386,9 +7389,8 @@ void SaySoundEffectPlaying() // 458 SAY_SOUND_EFFECT_PLAYING
 
 void SetHandDemoKeys() // 459 SET_HAND_DEMO_KEYS
 {
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The game does nothing with it
+	static_cast<void>(Pop());
 }
 
 void CanSkipTutorial() // 460 CAN_SKIP_TUTORIAL

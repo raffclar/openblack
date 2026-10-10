@@ -22,6 +22,7 @@
 #include <EDTFile.h>
 #include <GLWFile.h>
 #include <GestureFile.h>
+#include <HNDFile.h>
 #include <HelpDudeFile.h>
 #include <L3DFile.h>
 #include <MorphFile.h>
@@ -834,6 +835,17 @@ DanceFileLoader::result_type DanceFileLoader::operator()(FromDiskTag, const std:
 	if (const auto result = file->Open(Locator::filesystem::value().ReadAll(path)); result != dance::DanceResult::Success)
 	{
 		throw std::runtime_error("Unable to load the dance " + path.string() + ": " + std::string(dance::ResultToStr(result)));
+	}
+	return file;
+}
+
+HandDemoLoader::result_type HandDemoLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
+{
+	auto file = std::make_shared<hnd::HNDFile>();
+	if (const auto result = file->Open(Locator::filesystem::value().ReadAll(path)); result != hnd::HNDResult::Success)
+	{
+		throw std::runtime_error("Unable to load the hand demonstration " + path.string() + ": " +
+		                         std::string(hnd::ResultToStr(result)));
 	}
 	return file;
 }

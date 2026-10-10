@@ -1313,6 +1313,12 @@
   "query": "help.bubble"
  },
  {
+  "description": "The tutorial's hand demonstration playing: its name, the script task that started it, the record it is at, whether it holds at a mark, and the camera and hints it has",
+  "kind": "object",
+  "parameters": [],
+  "query": "help.hand_demo"
+ },
+ {
   "description": "Whether the game is paused, its turn, the frames served, its speed and any stepping",
   "kind": "object",
   "parameters": [],

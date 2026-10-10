@@ -39,6 +39,7 @@ public:
 	CameraPathManager& GetCameraPaths() override { return _cameraPaths; }
 	CameraEditManager& GetCameraEdits() override { return _cameraEdits; }
 	DanceFileManager& GetDanceFiles() override { return _danceFiles; }
+	HandDemoManager& GetHandDemos() override { return _handDemos; }
 	ParticleFileManager& GetParticleFiles() override { return _particleFiles; }
 	ParticleBitmapManager& GetParticleBitmaps() override { return _particleBitmaps; }
 	GestureTemplatesManager& GetGestureTemplates() override { return _gestureTemplates; }
@@ -115,6 +116,7 @@ private:
 	CameraPathManager _cameraPaths;
 	CameraEditManager _cameraEdits;
 	DanceFileManager _danceFiles;
+	HandDemoManager _handDemos;
 	ParticleFileManager _particleFiles;
 	ParticleBitmapManager _particleBitmaps;
 	GestureTemplatesManager _gestureTemplates;

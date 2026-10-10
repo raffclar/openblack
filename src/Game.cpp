@@ -67,6 +67,7 @@
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/NearClipping.h"
+#include "Camera/ScriptCameraModel.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
@@ -147,6 +148,7 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
@@ -1506,6 +1508,11 @@ bool Game::Update() noexcept
 		{
 			actions.Frame();
 		}
+		// A hand demonstration plays its records due now through the hand's own input
+		if (Locator::handDemoSystem::has_value())
+		{
+			Locator::handDemoSystem::value().Update();
+		}
 		SDL_Event e;
 		while (SDL_PollEvent(&e) != 0)
 		{
@@ -1587,9 +1594,20 @@ bool Game::Update() noexcept
 
 	// While a miracle's camera path has the camera, the player's camera doesn't move it
 	const bool pathHoldsCamera = Locator::cameraPathSystem::value().HoldsCamera();
-	if (!pathHoldsCamera)
+	// A hand demonstration has the camera exactly where its recording had it, and the camera's own moves wait
+	const auto demoCamera = Locator::handDemoSystem::has_value() ? Locator::handDemoSystem::value().GetCamera() : std::nullopt;
+	if (!pathHoldsCamera && !demoCamera.has_value())
 	{
 		camera.Update(deltaTime);
+	}
+	if (demoCamera.has_value())
+	{
+		camera.SetOrigin(demoCamera->origin).SetFocus(demoCamera->focus);
+		if (auto* script = dynamic_cast<ScriptCameraModel*>(&camera.GetModel()); script != nullptr)
+		{
+			script->SetOrigin(demoCamera->origin);
+			script->SetFocus(demoCamera->focus);
+		}
 	}
 	// A picture the inspector takes this frame has the camera where it asked, whatever moved it this frame
 	if (Locator::inspector::has_value())
@@ -1795,12 +1813,14 @@ bool Game::Update() noexcept
 	{
 		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 		const auto* keys = SDL_GetKeyboardState(nullptr);
+		const bool demoPlaying = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsPlaying(0);
 		Locator::helpTextSystem::value().Update({
 		    .gameMs = static_cast<uint32_t>(clock.GetFrameGameTime().count()),
 		    .realMs = static_cast<uint32_t>(clock.GetFrameRealTime().count()),
 		    .inTemple = inTemple,
-		    .click = _dialogueClick,
-		    .skipKey = keys != nullptr && keys[SDL_SCANCODE_KP_ENTER] != 0,
+		    // Nor can the player click or key through the advisors' lines while a hand demonstration plays
+		    .click = _dialogueClick && !demoPlaying,
+		    .skipKey = !demoPlaying && keys != nullptr && keys[SDL_SCANCODE_KP_ENTER] != 0,
 		});
 		_dialogueClick = false;
 	}
@@ -3624,6 +3644,7 @@ void Game::PrepareNewLand()
 	// Nor the beat of its scrolls
 	Locator::scriptHighlightSystem::value().Reset();
 	Locator::tipBubbleSystem::value().Reset();
+	Locator::handDemoSystem::value().Reset();
 	Locator::creatureFightSystem::value().Reset();
 	Locator::explosionSystem::value().Reset();
 	Locator::magicSystem::value().SetIgnoreInfluence(false);
@@ -4080,7 +4101,12 @@ void Game::UpdateHandKnock(const ecs::components::Transform& handTransform)
 void Game::UpdateHandNavigation(const ecs::components::Transform& handTransform)
 {
 	using namespace hand_navigation_pose;
-	const auto cues = Locator::camera::value().GetModel().GetHandCues();
+	auto cues = Locator::camera::value().GetModel().GetHandCues();
+	// A hand demonstration shows the camera hints its recording had
+	if (Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsPlaying(0))
+	{
+		cues.tricons = Locator::handDemoSystem::value().GetHints();
+	}
 	// Dragging the land is the hand's camera state; turning the camera with the middle button or both buttons isn't
 	const bool cameraState = _handGripping && !_handRotating;
 	auto pose = Pose::Idle;

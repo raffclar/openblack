@@ -131,6 +131,7 @@ target_link_libraries(
           cam
           edt
           dance
+          hnd
           pack
           lnd
           anm

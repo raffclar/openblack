@@ -635,3 +635,5 @@ set_tests_properties(
 openblack_setup_and_add_test(test_help_profile test_help_profile.cpp)
 openblack_setup_and_add_test(test_tip_bubble test_tip_bubble.cpp)
 openblack_setup_and_add_test(test_click_cue test_click_cue.cpp)
+openblack_setup_and_add_test(test_hand_demo test_hand_demo.cpp)
+target_link_libraries(test_hand_demo PRIVATE hnd)
