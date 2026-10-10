@@ -377,6 +377,44 @@ TEST(InspectorScripts, ANativeIsGivenTheTypesItTakes)
 	EXPECT_EQ(scripts.given[0].type, ScriptValue::Type::Float);
 }
 
+// raw pushes exactly the typed values given, past the count and types the table says: for a native that pops more
+// than the language's table gives it (as the game's GET_ARENA does)
+TEST(InspectorScripts, RawPushesExactlyTheValuesGiven)
+{
+	FakeScripts scripts;
+	auto provider = std::make_unique<FunctionProvider>("script");
+	AddScriptControls(*provider, scripts);
+	Inspector inspector;
+	inspector.Add(std::move(provider));
+
+	// Four values for a native the table says takes three, in their own types
+	Ask(inspector, R"({"query": "script.call", "params": {"native": "SAY", "raw": true,)"
+	               R"( "args": [{"int": 1}, {"float": 2.5}, true, {"object": 9}]}})");
+	EXPECT_EQ(scripts.called, 6u);
+	ASSERT_EQ(scripts.given.size(), 4u);
+	EXPECT_EQ(scripts.given[0].type, ScriptValue::Type::Int);
+	EXPECT_EQ(scripts.given[0].integer, 1);
+	EXPECT_EQ(scripts.given[1].type, ScriptValue::Type::Float);
+	EXPECT_FLOAT_EQ(scripts.given[1].number, 2.5f);
+	EXPECT_EQ(scripts.given[2].type, ScriptValue::Type::Boolean);
+	EXPECT_EQ(scripts.given[3].type, ScriptValue::Type::Object);
+	EXPECT_EQ(scripts.given[3].object, 9u);
+	// Its types aren't taken from the slots: the first slot's integer stays a float when given as one
+	Ask(inspector, R"({"query": "script.call", "params": {"native": "SAY", "raw": true, "args": [{"float": 1203}]}})");
+	ASSERT_EQ(scripts.given.size(), 1u);
+	EXPECT_EQ(scripts.given[0].type, ScriptValue::Type::Float);
+
+	// A plain number has no type of its own to push with raw: it is refused, naming it
+	EXPECT_NE(Refused(inspector, R"({"query": "script.call", "params": {"native": "SAY", "raw": true, "args": [true, 3]}})")
+	              .find("argument 2"),
+	          std::string::npos);
+	EXPECT_FALSE(Refused(inspector, R"({"query": "script.call", "params": {"native": "SAY", "raw": 1, "args": []}})").empty());
+	// Without raw the count is still checked
+	EXPECT_FALSE(Refused(inspector, R"({"query": "script.call", "params": {"native": "SAY", "raw": false,)"
+	                                R"( "args": [{"int": 1}, {"float": 2.5}, true, {"object": 9}]}})")
+	                 .empty());
+}
+
 // The game's natives take the types the language's table gives them: RUN_TEXT a truth and two integers, a camera move
 // a position's three slots and a float
 TEST(InspectorScripts, TheNativesTypesComeFromTheLanguage)

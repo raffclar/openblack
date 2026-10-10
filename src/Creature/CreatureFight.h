@@ -241,6 +241,9 @@ public:
 	[[nodiscard]] size_t Size() const { return _count; }
 	[[nodiscard]] bool Empty() const { return _count == 0; }
 	[[nodiscard]] std::span<const QueuedMove> Moves() const { return {_moves.data(), _count}; }
+	/// The queue made these moves (as many as it holds) with their charges as given, a blow without a charge waiting
+	/// for the button to be let go if it is the last
+	void Assign(std::span<const QueuedMove> moves);
 
 private:
 	std::array<QueuedMove, k_Capacity> _moves {};
