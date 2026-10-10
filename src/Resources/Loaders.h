@@ -202,10 +202,8 @@ struct CreatureSkinArtLoader final: BaseLoader<creature_skin::Art>
 {
 	struct Paths
 	{
-		/// The players' symbols as the game last wrote them, and the symbols it ships with, for the cells no player's
-		/// symbol has been written into
+		/// The symbols the game ships with, which the tattoos are cut from whatever symbol the players have chosen
 		std::filesystem::path symbols;
-		std::filesystem::path defaultSymbols;
 		std::filesystem::path freshDamage;
 		std::filesystem::path freshDamageAlpha;
 		std::filesystem::path oldDamage;

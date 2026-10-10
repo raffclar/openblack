@@ -25,6 +25,7 @@
 #include "GameFont.h"
 #include "GameMenu.h"
 #include "ScreenFade.h"
+#include "TattooEditorDialog.h"
 #include "TextDatabase.h"
 #include "ToolTips.h"
 
@@ -62,6 +63,8 @@ public:
 	void Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds, bool overDebugWindow);
 
 	[[nodiscard]] GameMenu& GetMenu() noexcept { return *_menu; }
+	/// The tattoo editor's dialog, shown while the tattoo editor is open
+	[[nodiscard]] TattooEditorDialog& GetTattooEditor() noexcept { return *_tattooEditor; }
 	/// Where a point of the menu's dialog space is on the screen, as last drawn
 	[[nodiscard]] glm::ivec2 DialogToScreen(glm::ivec2 point) const { return _painter.ToScreenPoint(point); }
 	[[nodiscard]] const TextDatabase& GetTexts() const noexcept { return _texts; }
@@ -97,6 +100,10 @@ private:
 	              std::unique_ptr<graphics::Texture2D> mice, std::unique_ptr<graphics::Texture2D> atmos,
 	              std::u16string_view playerName, MenuSettings settings);
 
+	/// While the tattoo editor is open its dialog takes the mouse and keyboard
+	bool ProcessTattooEditorEvent(const SDL_Event& event);
+	/// Opens the tattoo editor's dialog as the editor opens, and moves it on
+	void UpdateTattooEditor(float deltaSeconds);
 	/// The tooltip by the hand, its words and then its mouse
 	void DrawToolTip(glm::u16vec2 resolution);
 	/// The creature's status panel, at the left of the screen
@@ -118,6 +125,9 @@ private:
 	Canvas _pointerCanvas {graphics::RenderPass::Cursor};
 	DialogPainter _painter;
 	std::unique_ptr<GameMenu> _menu;
+	std::unique_ptr<TattooEditorDialog> _tattooEditor;
+	/// Whether the left mouse button is down, as the tattoo editor's dialog has seen it
+	bool _leftButtonDown {false};
 	std::optional<Message> _message;
 	ToolTips _toolTips;
 	ScreenFade _screenFade;

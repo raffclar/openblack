@@ -701,14 +701,10 @@ CreatureSkinArtLoader::result_type CreatureSkinArtLoader::operator()(FromDiskTag
 		return std::move(image->pixels);
 	};
 	auto art = std::make_shared<creature_skin::Art>();
-	const auto symbols =
-	    fileSystem.Exists(paths.symbols) ? rgb(paths.symbols, k_Size, k_Size) : std::vector<std::array<uint8_t, 3>> {};
-	const auto defaults = rgb(paths.defaultSymbols, k_Size, k_Size);
+	const auto symbols = rgb(paths.symbols, k_Size, k_Size);
 	for (uint32_t design = 0; design < art->designs.size(); ++design)
 	{
-		auto written = creature_tattoo::DesignFromAtlas(symbols, k_Size, design);
-		const bool blank = std::ranges::all_of(written.front().levels, [](uint8_t level) { return level == 0; });
-		art->designs.at(design) = blank ? creature_tattoo::DesignFromAtlas(defaults, k_Size, design) : std::move(written);
+		art->designs.at(design) = creature_tattoo::DesignFromAtlas(symbols, k_Size, design);
 	}
 	art->damage.fresh = {.colours = rgb(paths.freshDamage, k_Size, k_Size),
 	                     .alpha = grey(paths.freshDamageAlpha, k_Size, k_Size)};

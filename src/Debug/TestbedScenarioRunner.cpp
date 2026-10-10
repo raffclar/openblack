@@ -105,6 +105,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -1484,6 +1485,7 @@ void Runner::Give(const Command& command)
 	case Kind::OpenCreatureCave:
 	case Kind::ApplyTattoo:
 	case Kind::RemoveTattoo:
+	case Kind::OpenTattooEditor:
 		result = GiveCreatureModeCommand(*entity, command);
 		break;
 	case Kind::SetHour:
@@ -1600,6 +1602,18 @@ std::string Runner::GiveCreatureModeCommand(entt::entity creature, const Command
 		           : "can't";
 	case Kind::RemoveTattoo:
 		return cave.RemoveTattoo(static_cast<uint8_t>(command.bodyPart)) ? "" : "nothing there";
+	case Kind::OpenTattooEditor:
+	{
+		const auto caveCreature = cave.GetCreature();
+		if (!caveCreature.has_value() || !Locator::tattooEditorSystem::has_value())
+		{
+			return "the player has no creature";
+		}
+		const auto& transform = Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(*caveCreature);
+		Locator::tattooEditorSystem::value().Open(*caveCreature,
+		                                          creature_tattoo_editor::CaveView(transform.position, transform.scale.x));
+		return "";
+	}
 	default:
 		return {};
 	}
