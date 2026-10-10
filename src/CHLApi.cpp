@@ -100,6 +100,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/WallHug.h"
@@ -156,6 +157,7 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/TutorialSkipSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
+#include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -1234,6 +1236,23 @@ static float ScriptHeightOf(entt::entity object)
 	return meshes.Handle(mesh->id)->GetBoundingBox().Size().y * transform->scale.y;
 }
 
+/// The town a totem stands in: the town of the town centre it stands on
+static entt::entity TownOfTotem(entt::entity totem)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* totemComponent = registry.TryGet<const ecs::components::VillageTotem>(totem);
+	const auto* abode = totemComponent != nullptr && registry.Valid(totemComponent->townCentre)
+	                        ? registry.TryGet<const ecs::components::Abode>(totemComponent->townCentre)
+	                        : nullptr;
+	if (abode == nullptr)
+	{
+		return entt::null;
+	}
+	const auto& towns = registry.Context().towns;
+	const auto found = towns.find(abode->townId);
+	return found != towns.end() && registry.Valid(found->second) ? found->second : entt::null;
+}
+
 /// The script asked for a property the thing doesn't have
 static void CannotGetProperty(script::ObjectPropertyType prop)
 {
@@ -1457,6 +1476,12 @@ void GetProperty() // 021 GET_PROPERTY
 		return;
 	}
 	case script::ObjectPropertyType::Height:
+		// A town's totem answers the share of its people it was last set to send to worship
+		if (const auto* totem = registry.TryGet<const ecs::components::VillageTotem>(object); totem != nullptr)
+		{
+			Pushf(totem->ease.target);
+			return;
+		}
 		Pushf(IsWorldObject(object) ? ScriptHeightOf(object) : 0.0f);
 		return;
 	case script::ObjectPropertyType::MaxHeight:
@@ -1622,6 +1647,16 @@ void SetProperty() // 022 SET_PROPERTY
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "UNEXPECTED Alignment change");
 		return;
 	case script::ObjectPropertyType::Height:
+		if (registry.AllOf<ecs::components::VillageTotem>(object))
+		{
+			// A totem sets its town's share of people at worship
+			if (const auto town = TownOfTotem(object); town != entt::null && Locator::villageTotemSystem::has_value())
+			{
+				Locator::villageTotemSystem::value().SetTownShare(town, value);
+			}
+			// TODO(script-natives): a totem with no town takes the share itself
+			return;
+		}
 		if (auto* creature = registry.TryGet<ecs::components::Creature>(object); creature != nullptr)
 		{
 			// It grows or shrinks to that height at once
