@@ -856,13 +856,16 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	    .mouseDelta = glm::ivec2(actionSystem.GetMouseDelta()),
 	};
 	_helpEvents = {};
+	// A double click is counted once, as it is pressed
+	const bool doubleClicked = actionSystem.Get(input::UnbindableActionMap::DOUBLE_CLICK);
+	const bool doubleClickPressed = doubleClicked && !_doubleClickHeld;
+	_doubleClickHeld = doubleClicked;
 	// A drag of the land given up too far ahead takes every control away until the buttons are let go
 	if (!_dragGivenUp)
 	{
 		_helpEvents.Add(camera_help::events::InputEvents(_helpControls));
 		// A double click flies the camera, unless anything else is asked for
-		if (actionSystem.Get(input::UnbindableActionMap::DOUBLE_CLICK) && !camera_help::events::AnyInput(_helpControls) &&
-		    Locator::pickingSystem::has_value())
+		if (doubleClickPressed && !camera_help::events::AnyInput(_helpControls) && Locator::pickingSystem::has_value())
 		{
 			const auto& pick = Locator::pickingSystem::value().GetPick();
 			_helpEvents.Add(camera_help::events::DoubleClickEvents(_features, pick.object.has_value(), pick.land.has_value()));

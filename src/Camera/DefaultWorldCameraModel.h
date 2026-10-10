@@ -174,6 +174,7 @@ private:
 	/// The player's camera controls this frame, and the help events they make while the controls are handled
 	camera_help::events::ControlsFrame _helpControls;
 	camera_help::events::EventSet _helpEvents;
+	bool _doubleClickHeld {false};
 	/// Time spent handling the controls, for timing the start of a drag
 	std::chrono::microseconds _controlsTime {std::chrono::microseconds::zero()};
 
