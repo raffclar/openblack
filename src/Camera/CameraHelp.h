@@ -28,8 +28,9 @@ using camera_drag::feature::k_Pitch;
 using camera_drag::feature::k_Rotate;
 using camera_drag::feature::k_Strafe;
 using camera_drag::feature::k_Zoom;
-/// Clicking near a creature fight takes the camera to watch it
-constexpr uint32_t k_WatchFights = 0x10;
+/// A double click flies the camera to the thing or place clicked (near a creature fight's arena, to watch the fight).
+/// While it is taken away, a double click waits for it.
+constexpr uint32_t k_DoubleClick = 0x10;
 /// Turning the camera around the mouse with the middle button, and with both buttons
 constexpr uint32_t k_RotateAroundMouse = 0x20;
 /// The camera tilts itself to a set pitch and keeps to a set height
@@ -68,10 +69,10 @@ struct CameraHelp
 	[[nodiscard]] input::BindableActionMap BlockedActions() const;
 };
 
-/// The features in a creature fight the camera watches, which can't send the camera to a fight
+/// The features in a creature fight the camera watches: a double click flies nowhere, and waits until the fight is over
 [[nodiscard]] constexpr uint32_t DuringFight(uint32_t features)
 {
-	return features & ~feature::k_WatchFights;
+	return features & ~feature::k_DoubleClick;
 }
 
 /// How strongly the self-tilting camera tilts this frame towards its pitch, as pitch input: nothing within a hundredth

@@ -738,7 +738,7 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	    Locator::camera::has_value() ? Locator::camera::value().GetKeyboardMoveSpeed() : k_KeyboardMoveSpeedDefault;
 	const auto moveDp = ScaleKeyboardMove(dp, moveSpeed);
 
-	// What the scripts let the player do, less going to watch fights while watching one
+	// What the scripts let the player do, less double clicking while watching a fight
 	const auto help =
 	    Locator::cameraHelpSystem::has_value() ? Locator::cameraHelpSystem::value().Get() : camera_help::CameraHelp {};
 	const bool onFight = Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsCameraOnFight();
@@ -861,16 +861,16 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	    .mouseDelta = glm::ivec2(actionSystem.GetMouseDelta()),
 	};
 	_helpEvents = {};
-	// A double click is counted once, as it is pressed
-	const bool doubleClicked = actionSystem.Get(input::UnbindableActionMap::DOUBLE_CLICK);
-	const bool doubleClickPressed = doubleClicked && !_doubleClickHeld;
-	_doubleClickHeld = doubleClicked;
+	// The camera takes a waiting double click once double clicks are allowed: it is counted here and flies the camera
+	// below if the hand is on the land
+	const bool doubleClicked =
+	    (_features & camera_help::feature::k_DoubleClick) != 0 && Locator::gameActionSystem::value().TakeDoubleClick();
 	// A drag of the land given up too far ahead takes every control away until the buttons are let go
 	if (!_dragGivenUp)
 	{
 		_helpEvents.Add(camera_help::events::InputEvents(_helpControls));
 		// A double click flies the camera, unless anything else is asked for
-		if (doubleClickPressed && !camera_help::events::AnyInput(_helpControls) && Locator::pickingSystem::has_value())
+		if (doubleClicked && !camera_help::events::AnyInput(_helpControls) && Locator::pickingSystem::has_value())
 		{
 			const auto& pick = Locator::pickingSystem::value().GetPick();
 			_helpEvents.Add(camera_help::events::DoubleClickEvents(_features, pick.object.has_value(), pick.land.has_value()));
@@ -922,7 +922,8 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	}
 
 	_modePrev = _mode;
-	if (_handPosition.has_value() && actionSystem.Get(input::UnbindableActionMap::DOUBLE_CLICK))
+	// The double click taken above flies the camera if the hand is on the land
+	if (_handPosition.has_value() && doubleClicked)
 	{
 		_mode = Mode::FlyingToPoint;
 	}

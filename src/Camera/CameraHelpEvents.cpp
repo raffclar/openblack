@@ -150,8 +150,8 @@ EventSet LandDragEvents(const ControlsFrame& frame)
 EventSet DoubleClickEvents(uint32_t features, bool objectUnderHand, bool landUnderCursor)
 {
 	EventSet events;
-	// The feature that lets a double click fly the camera, to a fight near the click among other places
-	if (!Allows(features, feature::k_WatchFights))
+	// The feature that lets a double click fly the camera
+	if (!Allows(features, feature::k_DoubleClick))
 	{
 		return events;
 	}
