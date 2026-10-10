@@ -176,6 +176,7 @@
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
+#include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -494,6 +495,13 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	{
 		magicTookPress = magic.TapAction();
 	}
+	// Letting go of the Action button lets go of a town's totem, leaving it where it was slid
+	if (Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value() &&
+	    (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
+	{
+		Locator::villageTotemSystem::value().LetGo();
+		Locator::gameActionSystem::value().PinCursor(false);
+	}
 	// Letting go of the Action button lets go of what the hand was taking, or puts down or throws what it holds
 	if (handGrab != nullptr && (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
 	{
@@ -553,6 +561,21 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				{
 					// A creature the hand may not hold: a click on it still asks the leash, which says why not
 					Locator::leashSystem::value().TapCreature(PlayerNames::PLAYER_ONE, *under);
+				}
+			}
+		}
+		// A town's totem under the hand is taken hold of, to slide it up and down
+		if (!_actionPressTaken && !magic.IsHandBusy() && !handHoldsThing && Locator::villageTotemSystem::has_value() &&
+		    Locator::pickingSystem::has_value())
+		{
+			auto& totems = Locator::villageTotemSystem::value();
+			if (const auto picked = Locator::pickingSystem::value().GetPick().object; picked.has_value())
+			{
+				if (const auto totem = totems.TotemOf(*picked);
+				    totem.has_value() && totems.Grip(*totem, PlayerNames::PLAYER_ONE))
+				{
+					_actionPressTaken = true;
+					Locator::gameActionSystem::value().PinCursor(true);
 				}
 			}
 		}
@@ -1591,6 +1614,8 @@ bool Game::Update() noexcept
 	}
 	Locator::mistSystem::value().Update(gameTime);
 	Locator::villageLightSystem::value().Update(gameTime);
+	// The town totems ease to their shares
+	Locator::villageTotemSystem::value().Update(gameTime.count());
 	Locator::fieldSystem::value().Update(gameTime);
 	// The shoals near the camera swim, and dart from what scared them
 	Locator::fishFarmSystem::value().Update(std::chrono::duration<float>(gameTime).count(),
@@ -1868,6 +1893,18 @@ bool Game::Update() noexcept
 					    .nowMs = machine_clock::Ticks(),
 					    .turn = Locator::time::value().GetTurn(),
 					});
+				}
+				// Holding a town's totem, the mouse slides it up and down and the hand stays on its icon
+				if (Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value())
+				{
+					auto& totems = Locator::villageTotemSystem::value();
+					const auto screenHeight = Locator::windowing::has_value() ? Locator::windowing::value().GetSize().y : 0;
+					totems.Slide(static_cast<float>(-Locator::gameActionSystem::value().GetMouseDelta().y),
+					             static_cast<float>(screenHeight));
+					if (const auto hold = totems.GetHandHold())
+					{
+						handTransform.position = hold->position;
+					}
 				}
 				UpdateMagicHand(handTransform.position,
 				                std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());

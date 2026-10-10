@@ -53,6 +53,17 @@ using namespace openblack::ecs::components;
 namespace
 {
 
+/// The source tree these tests read and update. ctest passes it when the test runs, because a compiler cache shared
+/// between worktrees can hand this test an object built in another worktree, whose built-in path names that worktree.
+std::string SourceDir()
+{
+	if (const auto* dir = std::getenv("OPENBLACK_SOURCE_DIR"); dir != nullptr && *dir != '\0')
+	{
+		return dir;
+	}
+	return OPENBLACK_SOURCE_DIR;
+}
+
 QueryResult AskAny(const Inspector& inspector, const std::string& line)
 {
 	const auto decoded = DecodeRequest(line);
@@ -322,7 +333,7 @@ TEST(InspectorParticles, EmittersByOwner)
 /// Every service the locator holds has a query that inspects it: a service added to the locator without one fails here
 TEST(InspectorCoverage, EveryLocatorServiceHasAQuery)
 {
-	std::ifstream header(std::string(OPENBLACK_SOURCE_DIR) + "/src/Locator.h");
+	std::ifstream header(SourceDir() + "/src/Locator.h");
 	ASSERT_TRUE(header.good());
 	std::stringstream text;
 	text << header.rdbuf();
@@ -408,7 +419,7 @@ TEST(InspectorCoverage, TheAdaptersCatalogueOfQueriesIsUpToDate)
 	inspector.Add(std::make_unique<InputProvider>(input));
 	const auto catalogue = inspector.Catalogue().dump(1) + "\n";
 
-	const auto path = std::string(OPENBLACK_SOURCE_DIR) + "/tools/inspector/inspector_queries.json";
+	const auto path = SourceDir() + "/tools/inspector/inspector_queries.json";
 	if (const auto* update = std::getenv("OPENBLACK_UPDATE_INSPECTOR_QUERIES"); update != nullptr && std::string(update) == "1")
 	{
 		std::ofstream(path, std::ios::binary) << catalogue;
