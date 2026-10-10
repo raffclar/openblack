@@ -105,6 +105,7 @@
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
+#include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
@@ -381,6 +382,9 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 
 void Runner::Start(const Scenario& scenario)
 {
+	// Loading until its things are laid out on the fresh testbed, so that the inspector's tools never see the land
+	// without them
+	const ecs::systems::InspectorLoading loading("scenario " + std::string(scenario.id));
 	Stop();
 	// The camera is the player's again before the scenario frames it, and the cave closes
 	if (Locator::creatureModeSystem::has_value())
