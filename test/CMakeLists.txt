@@ -665,6 +665,11 @@ openblack_setup_and_add_test(
   test_camera_handback camera/test_camera_handback.cpp
 )
 target_link_libraries(test_camera_handback PRIVATE edt)
+openblack_setup_and_add_test(test_script_influence test_script_influence.cpp)
+openblack_setup_and_add_test(
+  test_script_challenge_snapshots test_script_challenge_snapshots.cpp
+)
+target_link_libraries(test_script_challenge_snapshots PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_hand_tricons hand/test_hand_tricons.cpp)
 openblack_setup_and_add_test(test_double_click input/test_double_click.cpp)
 openblack_setup_and_add_test(test_force_field camera/test_force_field.cpp)

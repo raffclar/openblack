@@ -1182,7 +1182,7 @@
   "query": "script.vm"
  },
  {
-  "description": "The script tasks running: their scripts, where they are and whether they sleep",
+  "description": "The script tasks running: their scripts, where they are, whether they sleep and how many values are on their stack",
   "kind": "list",
   "parameters": [],
   "query": "script.tasks"
