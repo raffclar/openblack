@@ -158,6 +158,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
+#include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
@@ -1142,6 +1143,11 @@ bool Game::GameLogicLoop() noexcept
 	{
 		Locator::rewardSystem::value().ProcessTurn();
 	}
+	// The scrolls and signs the scripts put up pulse, find what they stand on, and the signs whose tips were read start
+	if (Locator::scriptHighlightSystem::has_value())
+	{
+		Locator::scriptHighlightSystem::value().ProcessTurn();
+	}
 	// Then the physics, after the living, the fires, the reactions, the miracles and the particles have had their turn,
 	// so a body any of them sets moving this turn flies this turn: what was thrown, dropped, knocked or pushed flies,
 	// collides and comes to rest
@@ -1506,6 +1512,12 @@ bool Game::Update() noexcept
 	{
 		Locator::fireflySystem::value().Update(std::chrono::duration<float, std::milli>(gameTime).count(),
 		                                       clock.GetTurnFraction());
+	}
+	// The scrolls and signs spin, scale and glow towards the camera, and their glints play
+	if (Locator::scriptHighlightSystem::has_value())
+	{
+		Locator::scriptHighlightSystem::value().UpdateFrame(std::chrono::duration<float, std::milli>(gameTime).count(),
+		                                                    clock.GetTurnFraction(), camera.GetOrigin());
 	}
 	// The moving bodies are drawn between their last two turns, and the dust their landings threw up flies and fades
 	if (Locator::dynamicsSystem::has_value())
@@ -3282,6 +3294,8 @@ void Game::PrepareNewLand()
 	Locator::magicSystem::value().Reset();
 	Locator::miracleFxSystem::value().Reset();
 	Locator::fireSystem::value().Reset();
+	// Nor the beat of its scrolls
+	Locator::scriptHighlightSystem::value().Reset();
 	Locator::creatureFightSystem::value().Reset();
 	Locator::explosionSystem::value().Reset();
 	Locator::magicSystem::value().SetIgnoreInfluence(false);

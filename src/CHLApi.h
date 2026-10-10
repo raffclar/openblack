@@ -15,6 +15,7 @@
 #include <vector>
 
 #include <LHVMTypes.h>
+#include <glm/vec3.hpp>
 
 #include "ScriptHeaders/NativeStubCalls.h"
 
@@ -42,8 +43,20 @@ public:
 	/// Whether the scripts let the game's sound effects play: off, only the advisors' and villagers' speech plays
 	[[nodiscard]] bool IsGameSoundOn() const { return _gameSoundOn; }
 	void SetGameSoundOn(bool on) { _gameSoundOn = on; }
+	/// Whether the scripts show the challenge scrolls; the signs always show
+	[[nodiscard]] bool IsHighlightDrawOn() const { return _highlightDrawOn; }
+	void SetHighlightDrawOn(bool on) { _highlightDrawOn = on; }
 	/// The scripts start again: their switches go back to how a new game has them
-	void ResetSwitches() { _gameSoundOn = true; }
+	void ResetSwitches()
+	{
+		_gameSoundOn = true;
+		_highlightDrawOn = true;
+	}
+
+	/// A sound of one of the game's banks, by its number in the bank, through the game's common sound effect path: its
+	/// gates may keep it quiet (see audio::SoundEffectHeard). Placed, it isn't started further from the camera than the
+	/// sample's maximum distance.
+	void PlayBankSoundEffect(int32_t bank, int32_t sample, std::optional<glm::vec3> position) const;
 
 private:
 	void InitFunctionsTable0();
@@ -56,6 +69,7 @@ private:
 	uint32_t _currentNative {0};
 	script::NativeStubCalls _stubCalls;
 	bool _gameSoundOn {true};
+	bool _highlightDrawOn {true};
 };
 
 } // namespace openblack::chlapi

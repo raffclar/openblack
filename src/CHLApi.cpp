@@ -70,7 +70,9 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellSeed.h"
@@ -101,6 +103,7 @@
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
+#include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -1080,6 +1083,11 @@ void SetProperty() // 022 SET_PROPERTY
 	}
 	if (prop == script::ObjectPropertyType::YPos)
 	{
+		// A highlight keeps the height it is given, whatever stands under it
+		if (registry.AllOf<ecs::components::ScriptHighlight>(object))
+		{
+			Locator::scriptHighlightSystem::value().SetDrawHeight(object, value);
+		}
 		// How high above the land it is: it is drawn there at once
 		if (auto* transform = registry.TryGet<Transform>(object); transform != nullptr)
 		{
@@ -1553,16 +1561,11 @@ static std::optional<std::string> LoadedSoundGroup(std::string_view file)
 	return std::nullopt;
 }
 
-void PlaySoundEffect() // 043 PLAY_SOUND_EFFECT
+void CHLApi::PlayBankSoundEffect(int32_t bank, int32_t sample, std::optional<glm::vec3> position) const
 {
-	const auto withPosition = Pop().intVal != 0;
-	const auto position = PopVec();
-	const auto bank = Pop().intVal;
-	const auto sample = Pop().intVal;
-
 	// A number naming no bank, a bank the game doesn't ship and a sample the bank doesn't have all play nothing
 	const auto file = audio::ScriptSoundBankFile(bank);
-	if (!file.has_value())
+	if (!file.has_value() || !Locator::audio::has_value() || !Locator::resources::has_value())
 	{
 		return;
 	}
@@ -1578,21 +1581,31 @@ void PlaySoundEffect() // 043 PLAY_SOUND_EFFECT
 		return;
 	}
 
-	const auto& director = Locator::cinematicDirectorSystem::value();
+	const bool wideScreen = Locator::cinematicDirectorSystem::has_value() &&
+	                        Locator::cinematicDirectorSystem::value().IsWideScreenOn() &&
+	                        Locator::cinematicDirectorSystem::value().GetWideScreenOwner() != 0;
 	// TODO(script-natives): the player controlling a creature fight should quieten the samples kept out of fights;
 	// openblack's fights don't say yet when the interface is in those controls
 	const audio::SoundEffectConditions conditions {
-	    .scriptWideScreen = director.IsWideScreenOn() && director.GetWideScreenOwner() != 0,
+	    .scriptWideScreen = wideScreen,
 	    .insideTemple = PlayerInsideTemple(),
-	    .gameSoundOn = Locator::chlapi::value().IsGameSoundOn(),
+	    .gameSoundOn = _gameSoundOn,
 	    .creatureFightControl = false,
 	};
 	if (!audio::SoundEffectHeard(conditions, static_cast<audio::ScriptSoundBank>(bank), sounds.Handle(id)->userParam))
 	{
 		return;
 	}
-	// Placed, it isn't started further from the camera than the sample's maximum distance
-	Locator::audio::value().PlaySoundEffect(id, withPosition ? std::optional(position) : std::nullopt);
+	Locator::audio::value().PlaySoundEffect(id, position);
+}
+
+void PlaySoundEffect() // 043 PLAY_SOUND_EFFECT
+{
+	const auto withPosition = Pop().intVal != 0;
+	const auto position = PopVec();
+	const auto bank = Pop().intVal;
+	const auto sample = Pop().intVal;
+	Locator::chlapi::value().PlayBankSoundEffect(bank, sample, withPosition ? std::optional(position) : std::nullopt);
 }
 
 void StartMusic() // 044 START_MUSIC
@@ -3798,10 +3811,26 @@ void SetVirtualInfluence() // 254 SET_VIRTUAL_INFLUENCE
 
 void SetActive() // 255 SET_ACTIVE
 {
-	// const auto object = Pop().uintVal;
-	// const auto active = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopObject();
+	const auto active = Pop().intVal != 0;
+	if (object == entt::null)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (registry.AllOf<ecs::components::ScriptHighlight>(object))
+	{
+		Locator::scriptHighlightSystem::value().SetActive(object, active);
+		return;
+	}
+	// TODO(script-natives): a spell dispenser set active makes its one-shot miracle; a scaffold set active is built at once
+	if (registry.AnyOf<ecs::components::SpellDispenser>(object))
+	{
+		NotImplemented();
+		return;
+	}
+	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid object type");
 }
 
 void ThingValid() // 256 THING_VALID
@@ -3963,12 +3992,19 @@ void IsCreatureAvailable() // 271 IS_CREATURE_AVAILABLE
 
 void CreateHighlight() // 272 CREATE_HIGHLIGHT
 {
-	// const auto challengeID = Pop().intVal;
-	// const auto position = PopVec();
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	const auto challenge = Pop().uintVal;
+	const auto position = PopVec();
+	const auto kind = Pop().uintVal;
+	// A kind past the info table makes none (the game reads past its table)
+	const auto highlight = Locator::scriptHighlightSystem::value().Create(kind, position, challenge);
+	if (highlight == entt::null)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Highlight not created");
+		PushObject(entt::null);
+		return;
+	}
+	RegisterCreated(highlight);
+	PushObject(highlight);
 }
 
 void GetObjectHeld273() // 273 GET_OBJECT_HELD
@@ -4264,9 +4300,8 @@ void SetDrawLeash() // 305 SET_DRAW_LEASH
 
 void SetDrawHighlight() // 306 SET_DRAW_HIGHLIGHT
 {
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The challenge scrolls show or hide; the signs always show
+	Locator::chlapi::value().SetHighlightDrawOn(Pop().intVal != 0);
 }
 
 void SetOpenClose() // 307 SET_OPEN_CLOSE
@@ -4509,11 +4544,15 @@ void FlockWithinLimits() // 333 FLOCK_WITHIN_LIMITS
 
 void HighlightProperties() // 334 HIGHLIGHT_PROPERTIES
 {
-	// const auto category = Pop().intVal;
-	// const auto text = Pop().intVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto category = Pop().uintVal;
+	const auto text = Pop().uintVal;
+	const auto object = PopObject();
+	if (object == entt::null || !Locator::entitiesRegistry::value().AllOf<ecs::components::ScriptHighlight>(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Thing not valid");
+		return;
+	}
+	Locator::scriptHighlightSystem::value().SetProperties(object, text, category);
 }
 
 void LastMusicLine() // 335 LAST_MUSIC_LINE
@@ -4782,9 +4821,25 @@ void GetLastHelp() // 360 GET_LAST_HELP
 
 void IsActive() // 361 IS_ACTIVE
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopObject();
+	if (object == entt::null)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		Pushb(false);
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (const auto* highlight = registry.TryGet<const ecs::components::ScriptHighlight>(object); highlight != nullptr)
+	{
+		Pushb(highlight->active);
+		return;
+	}
+	// TODO(script-natives): a reward and a spell dispenser answer whether they are active
+	if (registry.AnyOf<ecs::components::Reward, ecs::components::SpellDispenser>(object))
+	{
+		NotImplemented();
+	}
+	// Nothing else is ever active
 	Pushb(false);
 }
 

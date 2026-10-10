@@ -599,6 +599,23 @@ struct ThrowSetup
 	std::optional<float> repeatSeconds;
 };
 
+/// A scroll or sign as a land's script puts one up, at a point from the middle of the map; it comes after the
+/// scenario's objects in their order, so commands reach it as the object after the last
+struct HighlightSetup
+{
+	/// Its row of the highlights' info table, as a script gives it (0 plain, 1 sign, 2 silver, 3 gold)
+	uint32_t kind {3};
+	glm::vec2 offset {0.0f};
+	/// The challenge it belongs to, as the script's own challenge gives it
+	uint32_t challenge {1};
+	/// A script's height above the land; none to stand on what is under it
+	std::optional<float> height;
+	/// A sign's tip text and category
+	std::optional<std::pair<uint32_t, uint32_t>> tip;
+	/// Started by the script as it is made
+	bool active {false};
+};
+
 struct Scenario
 {
 	/// Unique and never changed, for picking it from the command line or a test
@@ -618,6 +635,8 @@ struct Scenario
 	std::vector<VortexSetup> vortices;
 	std::vector<DispenserSetup> dispensers;
 	std::vector<MiracleCast> miracles;
+	/// The scrolls and signs scripts put up, made after the objects
+	std::vector<HighlightSetup> highlights;
 	std::vector<Command> commands;
 	/// After the last command, the commands go round again from this one
 	std::optional<size_t> repeatFrom;
@@ -684,6 +703,8 @@ void AddHandNavigationScenarios(std::vector<Scenario>& all);
 /// The scenarios of how the hand looks for its player's alignment
 void AddHandLookScenarios(std::vector<Scenario>& all);
 void AddKnockScenarios(std::vector<Scenario>& all);
+/// The scrolls and signs the land scripts put up
+void AddHighlightScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them
 [[nodiscard]] std::span<const Scenario> All();

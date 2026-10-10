@@ -1086,6 +1086,12 @@
   "query": "script.objects"
  },
  {
+  "description": "The scrolls and signs scripts put up: kind, challenge or text, started, height, where drawn; the beat and the switch that shows the scrolls",
+  "kind": "list",
+  "parameters": [],
+  "query": "script.highlights"
+ },
+ {
   "description": "The land's scripts whose names or files hold a text (any case): name, file, type (script, help, challenge_help, temple_help, temple_special, multiplayer_help) and parameters",
   "kind": "list",
   "parameters": [

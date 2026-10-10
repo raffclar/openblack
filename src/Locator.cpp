@@ -66,6 +66,7 @@
 #include "ECS/Systems/Implementations/HandGrabSystem.h"
 #include "ECS/Systems/Implementations/HandSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
+#include "ECS/Systems/Implementations/ScriptHighlightSystem.h"
 #if defined(OPENBLACK_INSPECTOR)
 #include "ECS/Systems/Implementations/InspectorSystem.h"
 #endif
@@ -321,6 +322,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::rewardSystem::emplace<ecs::systems::RewardSystem>();
 	Locator::scriptObjects::emplace<ecs::systems::ScriptObjectsSystem>();
 	Locator::buildingDamageSystem::emplace<ecs::systems::BuildingDamageSystem>();
+	Locator::scriptHighlightSystem::emplace<ecs::systems::ScriptHighlightSystem>();
 	return true;
 }
 
@@ -451,6 +453,7 @@ void openblack::ShutDownServices()
 	Locator::rewardSystem::reset();
 	Locator::scriptObjects::reset();
 	Locator::buildingDamageSystem::reset();
+	Locator::scriptHighlightSystem::reset();
 	Locator::magicSystem::reset();
 	Locator::gestureEvents::reset();
 	Locator::reactionSystem::reset();
