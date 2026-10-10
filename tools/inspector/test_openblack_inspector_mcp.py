@@ -202,6 +202,18 @@ class SelectGameTest(unittest.TestCase):
         {"pid": 12, "port": 47803, "worktree": "C:/projects/ob-wt-world"},
     ]
 
+    def test_a_pid_or_port_matches_however_it_comes(self):
+        # An MCP client may send 77120 as an integer, a float or text; a file may hold it either way too
+        for pid in (11, 11.0, "11", " 11 "):
+            game, error = mcp.select_game(self.games, pid=pid)
+            self.assertIsNotNone(game, error)
+            self.assertEqual(game["pid"], 11)
+        for port in (47803, "47803", 47803.0):
+            self.assertEqual(mcp.select_game(self.games, port=port)[0]["pid"], 12)
+        texts = [{**game, "pid": str(game["pid"]), "port": str(game["port"])} for game in self.games]
+        self.assertEqual(mcp.select_game(texts, pid=10)[0]["port"], "47801")
+        self.assertIsNone(mcp.select_game(self.games, pid="eleven")[0])
+
     def test_a_build_apart_from_its_worktree_is_found_by_it(self):
         # Built from E:/openblack/worktrees/ob-wt-gate into E:/openblack/builds/ob-wt-gate: the game names the worktree
         games = [{"pid": 1, "port": 1, "worktree": "E:/openblack/worktrees/ob-wt-gate",
@@ -297,6 +309,31 @@ class SessionBase(unittest.TestCase):
 
 class SessionTest(SessionBase):
     """The rules every call follows, so that agents sharing the adapter never get each other's game"""
+
+    def test_a_game_named_by_a_pid_as_text_is_found(self):
+        self.assertEqual(self.moon(pid="1002"), "second")
+        self.assertEqual(self.moon(port=str(self.first.port)), "first")
+
+    def test_a_file_written_with_text_numbers_is_still_a_game(self):
+        with open(os.path.join(self.folder, "1002.json"), "w", encoding="utf-8") as file:
+            json.dump({"pid": "1002", "port": str(self.second.port), "worktree": "C:/projects/ob-wt-second"}, file)
+        self.assertEqual([game["pid"] for game in mcp.read_games(self.folder, lambda pid: pid in self.running)],
+                         [1001, 1002])
+
+    def test_a_file_being_rewritten_is_read_again_not_left_out(self):
+        path = os.path.join(self.folder, "1002.json")
+        with open(path, encoding="utf-8") as file:
+            whole = file.read()
+        with open(path, "w", encoding="utf-8") as file:
+            file.write(whole[:10])
+
+        def finish():
+            time.sleep(0.05)
+            with open(path, "w", encoding="utf-8") as file:
+                file.write(whole)
+        threading.Thread(target=finish, daemon=True).start()
+        self.assertEqual([game["pid"] for game in mcp.read_games(self.folder, lambda pid: pid in self.running)],
+                         [1001, 1002])
 
     def test_lists_games_without_taking_control(self):
         answer = self.session.call("inspector_games", {})
@@ -430,6 +467,25 @@ class WaitingTest(SessionBase):
         self.first.loading = 3
         self.assertEqual(self.moon(), "first")
         self.assertEqual(len(self.first.asked()), 4)
+
+    def test_wait_ms_bounds_the_wait_and_zero_answers_at_once(self):
+        self.stop(self.second)
+        self.first.loading = 1000
+        start = time.monotonic()
+        answer = self.session.call("game_moon", {"wait_ms": 0})
+        self.assertLess(time.monotonic() - start, 2.0)
+        self.assertFalse(answer["ok"])
+        self.assertIn("is loading Land1.txt", answer["error"])
+        answer = self.session.call("game_moon", {"wait_ms": 600})
+        self.assertFalse(answer["ok"])
+        self.assertIn("wait_ms", answer["error"])
+        # A wait long enough sees it through; wait_ms is the adapter's, never sent to the game
+        self.first.loading = 2
+        self.assertTrue(self.session.call("inspector_query", {"query": "sky.moon", "wait_ms": 20000})["ok"])
+        self.assertNotIn("wait_ms", self.first.asked()[-1].get("params", {}))
+
+    def test_the_default_wait_outlasts_a_debug_load(self):
+        self.assertGreaterEqual(mcp.Session(1, 10.0).load_timeout, 120.0)
 
     def test_a_game_loading_too_long_says_so(self):
         self.stop(self.second)

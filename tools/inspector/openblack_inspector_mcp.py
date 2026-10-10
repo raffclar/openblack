@@ -762,9 +762,15 @@ SELECTOR = {
                  "description": "The game to ask, by its worktree: path, a path inside it, or folder name"},
 }
 SELECTOR_KEYS = tuple(SELECTOR)
+# How long a call waits while the game loads (its data, a land, a testbed scenario), unless it says otherwise: a Debug
+# build takes a while
+DEFAULT_LOAD_WAIT = 120.0
+WAIT_MS = {"wait_ms": {"type": "integer",
+                       "description": "Milliseconds to wait while the game loads before giving up (120000 by "
+                                      "default; 0 answers at once that it is loading)"}}
 for _tool in TOOLS:
     # A copy: several tools share their properties' dictionaries
-    _tool["inputSchema"]["properties"] = {**_tool["inputSchema"]["properties"], **SELECTOR}
+    _tool["inputSchema"]["properties"] = {**_tool["inputSchema"]["properties"], **SELECTOR, **WAIT_MS}
 TOOLS_BY_NAME = {tool["name"]: tool for tool in TOOLS}
 SHAPING_KEYS = set(SHAPING) | set(NEAR)
 # Parameters newer than some games still running: a game whose description of the query lacks one is an older build,
@@ -783,8 +789,20 @@ def discovery_folder():
     return os.path.join(tempfile.gettempdir(), "openblack-inspector")
 
 
+def whole_number(value):
+    """A pid or a port as a whole number, however it came (77120, 77120.0 or "77120"); anything else as it is"""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return value
+
+
 def pid_alive(pid):
-    """Whether a process of that id runs now"""
+    """Whether a process of that id runs now. Only a process known to be gone counts as not running: a game's file is
+    removed on this, so a process that merely can't be asked (another user's, or a failing call) counts as running"""
     if not isinstance(pid, int) or pid <= 0:
         return False
     if os.name == "nt":
@@ -797,13 +815,16 @@ def pid_alive(pid):
         kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
         process_query_limited_information = 0x1000
         still_active = 259
+        error_invalid_parameter = 87
         handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
         if not handle:
-            # A process of another user can't be opened but is there
-            return ctypes.get_last_error() == 5
+            # No such process is the one answer meaning it has gone; another user's can't be opened but is there
+            return ctypes.get_last_error() != error_invalid_parameter
         try:
             code = wintypes.DWORD()
-            return bool(kernel32.GetExitCodeProcess(handle, ctypes.byref(code))) and code.value == still_active
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return True
+            return code.value == still_active
         finally:
             kernel32.CloseHandle(handle)
     try:
@@ -850,16 +871,32 @@ def read_games(folder, alive=pid_alive):
             except OSError:
                 pass
             continue
-        try:
-            with open(path, encoding="utf-8") as file:
-                record = json.load(file)
-        except (OSError, ValueError):
+        record = read_record(path)
+        if record is None:
             continue
-        if not isinstance(record, dict) or record.get("pid") != pid or not isinstance(record.get("port"), int):
+        record["pid"] = whole_number(record.get("pid"))
+        record["port"] = whole_number(record.get("port"))
+        if record["pid"] != pid or not isinstance(record["port"], int):
             continue
         games.append(record)
     games.sort(key=lambda game: game["pid"])
     return games
+
+
+def read_record(path, attempts=10):
+    """A game's file as a dict; none if it can't be read. A game rewrites its file (on a change of land) while another
+    reader may hold it, so a read that fails is tried again a few times before the game is left out of the list"""
+    for attempt in range(attempts):
+        try:
+            with open(path, encoding="utf-8") as file:
+                record = json.load(file)
+            return record if isinstance(record, dict) else None
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError):
+            if attempt + 1 < attempts:
+                time.sleep(0.02)
+    return None
 
 
 def read_line(connection, buffer, wanted, timeout):
@@ -949,10 +986,13 @@ def game_tag(game):
 def select_game(games, port=None, pid=None, worktree=None):
     """The one game a selection names among those running, or why there is none"""
     candidates = games
+    # A pid or a port may come as text or a float from a client: both sides compare as whole numbers
+    port = whole_number(port)
+    pid = whole_number(pid)
     if port is not None:
-        candidates = [game for game in candidates if game["port"] == port]
+        candidates = [game for game in candidates if whole_number(game.get("port")) == port]
     if pid is not None:
-        candidates = [game for game in candidates if game["pid"] == pid]
+        candidates = [game for game in candidates if whole_number(game.get("pid")) == pid]
     if worktree is not None:
         candidates = [game for game in candidates if game_matches_worktree(game, worktree)]
     wanted = ", ".join(f"{key} {value}" for key, value in (("port", port), ("pid", pid), ("worktree", worktree))
@@ -980,7 +1020,7 @@ class InspectorConnection:
         self.game = dict(game)
         self.port = game["port"]
         self.timeout = timeout
-        self.load_timeout = load_timeout if load_timeout is not None else max(60.0, timeout * 6)
+        self.load_timeout = load_timeout if load_timeout is not None else max(DEFAULT_LOAD_WAIT, timeout * 6)
         self.alive = alive
         self.describe = describe
         self.socket = None
@@ -1106,7 +1146,7 @@ class Session:
         self.alive = alive
         self.ping_timeout = ping_timeout
         self.ready_timeout = ready_timeout
-        self.load_timeout = load_timeout if load_timeout is not None else max(60.0, timeout * 6)
+        self.load_timeout = load_timeout if load_timeout is not None else max(DEFAULT_LOAD_WAIT, timeout * 6)
         # What inspector_connect chose ({"port"|"pid"|"worktree": value}), used only while it can't be mistaken
         self.selection = None
         # Chosen by whoever started the adapter (its command line): it is that caller's own, so always followed
@@ -1245,10 +1285,13 @@ class Session:
         except ValueError as error:
             return {"ok": False, "error": str(error)}
         return self.send(request, wait_step=name == "game_step" and arguments.get("wait", True),
-                         target=arguments, wait_file=name == "screenshot" and arguments.get("wait", True))
+                         target=arguments, wait_file=name == "screenshot" and arguments.get("wait", True),
+                         load_wait=load_wait_of(arguments))
 
-    def send(self, request, wait_step=False, target=None, wait_file=False):
-        """A request to the game a call names, waiting while the game loads; the answer names the game"""
+    def send(self, request, wait_step=False, target=None, wait_file=False, load_wait=None):
+        """A request to the game a call names, waiting while the game loads (load_wait seconds, the session's by
+        default); the answer names the game"""
+        load_wait = self.load_timeout if load_wait is None else load_wait
         self._close_idle()
         game, error = self.target(target or {})
         if game is None:
@@ -1268,7 +1311,7 @@ class Session:
                         "error": f"this game is an older build: {request['query']} doesn't take "
                                  f"{', '.join(missing)}; {OLDER_BUILD}"}
         asked_at = time.time()
-        answer = request_until_loaded(connection, request, self.load_timeout)
+        answer = request_until_loaded(connection, request, load_wait)
         if not answer.get("ok") and str(answer.get("error", "")).startswith("no query "):
             answer["error"] += f" (if the query is new, this game may be an older build: {OLDER_BUILD})"
         # A picture is answered once its file is whole, which the game writes a few frames on
@@ -1287,8 +1330,16 @@ class Session:
             while answer.get("ok") and isinstance(answer.get("result"), dict) and \
                     answer["result"].get("stepping") is not None and time.monotonic() < deadline:
                 time.sleep(0.02)
-                answer = request_until_loaded(connection, {"query": "game.state"}, self.load_timeout)
+                answer = request_until_loaded(connection, {"query": "game.state"}, load_wait)
         return answer
+
+
+def load_wait_of(arguments):
+    """How long a call waits while the game loads, from its wait_ms: None for the session's own"""
+    wait_ms = whole_number(arguments.get("wait_ms"))
+    if not isinstance(wait_ms, (int, float)) or isinstance(wait_ms, bool) or wait_ms < 0:
+        return None
+    return wait_ms / 1000.0
 
 
 def request_until_loaded(connection, request, load_timeout):
@@ -1299,8 +1350,11 @@ def request_until_loaded(connection, request, load_timeout):
         if answer.get("ok") or not answer.get("loading"):
             return answer
         if time.monotonic() > deadline:
-            answer["error"] = (f"the game is still loading {answer['loading']} after {load_timeout:.0f} s; "
-                               f"ask again later")
+            if load_timeout <= 0:
+                answer["error"] = f"the game is loading {answer['loading']}; ask again once game.state says ready"
+            else:
+                answer["error"] = (f"the game is still loading {answer['loading']} after {load_timeout:.0f} s; "
+                                   f"ask again later, or give a longer wait_ms")
             return answer
         time.sleep(0.25)
 
@@ -1309,14 +1363,14 @@ def build_request(tool, arguments):
     """The request a tool's arguments make. An argument the tool doesn't know is refused (ValueError), never dropped:
     the query would otherwise run as if it hadn't been given. inspector_query takes its query's parameters in params,
     or beside it as further arguments."""
-    known = set(tool["inputSchema"].get("properties", {})) | SHAPING_KEYS | set(SELECTOR_KEYS)
+    known = set(tool["inputSchema"].get("properties", {})) | SHAPING_KEYS | set(SELECTOR_KEYS) | set(WAIT_MS)
     if tool["name"] == "inspector_query":
         request = {"query": arguments.get("query", "")}
         params = arguments.get("params")
         if params is not None and not isinstance(params, dict):
             raise ValueError("params must be an object of the query's parameters")
         params = dict(params or {})
-        loose = {key: value for key, value in arguments.items() if key not in known}
+        loose = {key: value for key, value in arguments.items() if key not in known and key not in WAIT_MS}
         both = sorted(set(loose) & set(params))
         if both:
             raise ValueError(f"{', '.join(both)} given both in params and beside it")
@@ -1428,6 +1482,8 @@ def main():
     parser.add_argument("--worktree", help="Talk to the game running from this worktree (path or folder name)")
     parser.add_argument("--pid", type=int, help="Talk to the game of this process")
     parser.add_argument("--timeout", type=float, default=10.0, help="Seconds to wait for the game to answer")
+    parser.add_argument("--wait-ms", type=int, default=None,
+                        help="With --call: milliseconds to wait while the game loads (120000 by default; 0 for none)")
     parser.add_argument("--games", action="store_true", help="List the running games and exit")
     parser.add_argument("--screenshot-root", help="Where kept pictures go (screenshot.take with feature and what); "
                                                   "the game's own folder by default")
@@ -1455,7 +1511,7 @@ def main():
             print(error, file=sys.stderr)
             return 2
         try:
-            answer = session.send(request)
+            answer = session.send(request, load_wait=None if args.wait_ms is None else args.wait_ms / 1000.0)
         except ConnectionError as error:
             print(error, file=sys.stderr)
             return 1

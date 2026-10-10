@@ -10,11 +10,13 @@
 #include "InspectorDiscovery.h"
 
 #include <algorithm>
+#include <chrono>
 #include <fstream>
 #include <initializer_list>
 #include <iterator>
 #include <string_view>
 #include <system_error>
+#include <thread>
 #include <utility>
 
 #if defined(_WIN32)
@@ -234,13 +236,14 @@ bool discovery::ProcessAlive(uint32_t pid)
 	HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, static_cast<DWORD>(pid));
 	if (process == nullptr)
 	{
-		// A process of another user can't be opened but is there
-		return GetLastError() == ERROR_ACCESS_DENIED;
+		// No such process is the one answer meaning it has gone (a game's file is removed on it); another user's can't
+		// be opened but is there
+		return GetLastError() != ERROR_INVALID_PARAMETER;
 	}
 	DWORD code = 0;
-	const bool running = GetExitCodeProcess(process, &code) != 0 && code == STILL_ACTIVE;
+	const bool asked = GetExitCodeProcess(process, &code) != 0;
 	CloseHandle(process);
-	return running;
+	return !asked || code == STILL_ACTIVE;
 #else
 	return ::kill(static_cast<pid_t>(pid), 0) == 0 || errno == EPERM;
 #endif
@@ -451,11 +454,17 @@ void DiscoveryFile::Write()
 	std::error_code error;
 	if (WriteText(writing, text))
 	{
-		std::filesystem::rename(writing, _path, error);
-		if (!error)
+		// A reader holding the file stops the move for a moment on Windows: it is tried again before writing in place
+		constexpr int k_Attempts = 20;
+		for (int attempt = 0; attempt < k_Attempts; ++attempt)
 		{
-			_written = true;
-			return;
+			std::filesystem::rename(writing, _path, error);
+			if (!error)
+			{
+				_written = true;
+				return;
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(5));
 		}
 		std::filesystem::remove(writing, error);
 	}
