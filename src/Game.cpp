@@ -225,6 +225,7 @@
 #include "Resources/Loaders.h"
 #include "Resources/ResourcesInterface.h"
 #include "Serializer/FotFile.h"
+#include "Temple/TempleHelp.h"
 
 #ifdef __ANDROID__
 #include <spdlog/sinks/android_sink.h>
@@ -1068,13 +1069,16 @@ bool Game::GameLogicLoop() noexcept
 	const auto delta = std::chrono::milliseconds(currentTime - _lastGameLoopTime);
 	auto& clock = Locator::time::value();
 
-	// The game pauses the world while the player is in the temple, whose own turns keep the audio going
+	// The game pauses the world while the player is in the temple. The temple's own turns, by real time whatever the
+	// game's speed, run the temple's scripts and its help scripts, keep the audio going and have the advisors follow
+	// what they point at.
 	if (Locator::temple::has_value() && Locator::temple::value().Active())
 	{
-		// NOLINTNEXTLINE(modernize-use-nullptr): clang-tidy bug
-		if (delta >= k_TurnDuration * GetGameSpeed())
+		if (temple_help::TurnDue(_lastTempleTurnTime, currentTime))
 		{
+			Locator::vm::value().LookIn(lhvm::ScriptType::TempleHelp | lhvm::ScriptType::TempleSpecial);
 			ProcessTempleAudioTurn();
+			Locator::advisorSystem::value().ProcessTurn();
 			_lastGameLoopTime = currentTime;
 		}
 		return false;

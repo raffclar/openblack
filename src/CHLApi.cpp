@@ -845,6 +845,7 @@ void CHLApi::ResetSwitches()
 {
 	_gameSoundOn = true;
 	_highlightDrawOn = true;
+	_scriptHelpOn = true;
 	if (Locator::creatureAudioSystem::has_value())
 	{
 		Locator::creatureAudioSystem::value().SetOtherVoicesEnabled(true);
@@ -4908,9 +4909,7 @@ void GetObjectHeld199() // 199 GET_OBJECT_HELD
 
 void HelpSystemOn() // 200 HELP_SYSTEM_ON
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(Locator::chlapi::value().IsHelpSystemOn());
 }
 
 void ShakeCamera() // 201 SHAKE_CAMERA
@@ -5570,9 +5569,7 @@ void CreateWithAngleAndScale() // 252 CREATE_WITH_ANGLE_AND_SCALE
 
 void SetHelpSystem() // 253 SET_HELP_SYSTEM
 {
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	Locator::chlapi::value().SetScriptHelpOn(Pop().intVal != 0);
 }
 
 void SetVirtualInfluence() // 254 SET_VIRTUAL_INFLUENCE
@@ -7226,9 +7223,7 @@ void KillStormsInArea() // 404 KILL_STORMS_IN_AREA
 
 void InsideTemple() // 405 INSIDE_TEMPLE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	Pushb(PlayerInsideTemple());
 }
 
 void RestartObject() // 406 RESTART_OBJECT

@@ -311,6 +311,8 @@ private:
 
 	/// The machine's ticks at the last turn, as the game reads them
 	uint32_t _lastGameLoopTime {0};
+	/// When the scripts last took a turn inside the temple, in real time
+	std::optional<uint32_t> _lastTempleTurnTime;
 	std::chrono::steady_clock::duration _turnDeltaTime;
 	uint32_t _frameCount {0};
 	glm::ivec2 _mousePosition {0, 0};
