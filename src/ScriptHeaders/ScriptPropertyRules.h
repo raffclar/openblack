@@ -16,6 +16,7 @@
 
 #include <entt/entity/entity.hpp>
 #include <glm/mat3x3.hpp>
+#include <glm/vec3.hpp>
 
 #include "Enums.h"
 
@@ -93,6 +94,15 @@ struct Angles
 [[nodiscard]] Angles PlacedAngles(const glm::mat3& rotation);
 /// The way a thing placed at these angles faces
 [[nodiscard]] glm::mat3 PlacedRotation(const Angles& angles);
+
+/// A living thing's angle as the scripts take it is the way it faces across the land, in radians from +x towards +z.
+/// Villagers and animals keep their facing that way. A creature's heading turns its model the other way round, a quarter
+/// turn on: these turn one into the other, the angle kept from 0 to a whole turn.
+[[nodiscard]] float CreatureHeadingToLivingAngle(float heading);
+[[nodiscard]] float LivingAngleToCreatureHeading(float angle);
+/// Whether a living thing moved in its last turn: the game compares where it stood across the land, in whole map units
+/// (a 65536th of ten metres), and not its height
+[[nodiscard]] bool MovedAcross(const glm::vec3& before, const glm::vec3& after);
 
 /// A thing's belief in a player, as the scripts ask it: a town's belief in the player (none it was given is no belief);
 /// anything else believes wholly in its own player and not at all in the others

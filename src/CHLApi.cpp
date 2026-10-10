@@ -28,6 +28,7 @@
 #include <entt/entity/entity.hpp>
 #include <entt/entity/fwd.hpp>
 #include <glm/geometric.hpp>
+#include <glm/gtx/euler_angles.hpp>
 #include <glm/matrix.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -44,6 +45,7 @@
 #include "Audio/ScriptSoundEffect.h"
 #include "Audio/Sound.h"
 #include "Camera/Camera.h"
+#include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Creature/LeashRules.h"
 #include "Creature/TemplePen.h"
@@ -55,6 +57,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -83,6 +86,7 @@
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
@@ -820,6 +824,53 @@ static bool IsLivingThing(entt::entity object)
 	    .AnyOf<ecs::components::Villager, ecs::components::Creature, ecs::components::Animal>(object);
 }
 
+/// The way a living thing faces, as the scripts take it: radians from +x towards +z
+static float LivingAngleOf(entt::entity object, const Transform& transform)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (const auto* walk = registry.TryGet<const ecs::components::WallHug>(object); walk != nullptr)
+	{
+		return walk->yAngle;
+	}
+	if (const auto* animal = registry.TryGet<const ecs::components::Animal>(object); animal != nullptr)
+	{
+		return animal->heading;
+	}
+	if (const auto* locomotion = registry.TryGet<const ecs::components::CreatureLocomotion>(object);
+	    locomotion != nullptr && locomotion->started)
+	{
+		return script::property_rules::CreatureHeadingToLivingAngle(locomotion->heading);
+	}
+	// Standing still, a living thing is turned as it is drawn: its model faces the other way round, a quarter turn on
+	return script::property_rules::CreatureHeadingToLivingAngle(-script::property_rules::PlacedAngles(transform.rotation).y);
+}
+
+/// Turns a living thing to face a way, given as the scripts take it: its walk, if it has one, faces that way from now
+static void TurnLivingThing(entt::entity object, Transform& transform, float angle)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const float heading = script::property_rules::LivingAngleToCreatureHeading(angle);
+	if (auto* walk = registry.TryGet<ecs::components::WallHug>(object); walk != nullptr)
+	{
+		walk->yAngle = angle;
+		walk->gameAngle = static_cast<uint16_t>(gutils::ConvertAngle3DToGame(angle));
+	}
+	if (auto* animal = registry.TryGet<ecs::components::Animal>(object); animal != nullptr)
+	{
+		animal->heading = angle;
+		animal->previousHeading = angle;
+	}
+	if (auto* locomotion = registry.TryGet<ecs::components::CreatureLocomotion>(object); locomotion != nullptr)
+	{
+		locomotion->heading = heading;
+		locomotion->targetHeading = heading;
+		locomotion->fromHeading = heading;
+		locomotion->toHeading = heading;
+	}
+	transform.rotation = glm::mat3(glm::eulerAngleY(heading));
+	registry.SetDirty();
+}
+
 /// Whether a thing may lean, so that its angles across and forward are its own; the others always stand upright
 static bool CanLean(entt::entity object)
 {
@@ -958,6 +1009,40 @@ void GetProperty() // 021 GET_PROPERTY
 		}
 		Pushf(ecs::world_objects::LifeOf(object));
 		return;
+	case script::ObjectPropertyType::Moving:
+	{
+		// A creature moves while it is on its way somewhere, from being given where to go until it stops
+		if (const auto* locomotion = registry.TryGet<const ecs::components::CreatureLocomotion>(object); locomotion != nullptr)
+		{
+			Pushb(locomotion->destination.has_value() && !locomotion->facingOnly &&
+			      locomotion->motion != ecs::components::CreatureLocomotion::Motion::Standing);
+			return;
+		}
+		// An animal moved across the land in its last turn
+		if (const auto* animal = registry.TryGet<const ecs::components::Animal>(object); animal != nullptr)
+		{
+			Pushb(script::property_rules::MovedAcross(animal->previousPosition, animal->position));
+			return;
+		}
+		// Things that aren't in the map's cells never move
+		if (!IsWorldObject(object))
+		{
+			Pushb(false);
+			return;
+		}
+		// TODO(script-natives): a villager moved in its last turn, and any other thing has moved from where it was made or
+		// came to rest from the physics: openblack keeps neither position
+		NotImplemented(static_cast<int32_t>(prop));
+		Pushb(false);
+		return;
+	}
+	case script::ObjectPropertyType::Death:
+	{
+		// What a dead villager died of; every other thing (and a living villager) answers none
+		const auto* death = registry.TryGet<const ecs::components::VillagerDeath>(object);
+		Pushf(death != nullptr && death->reason.has_value() ? static_cast<float>(*death->reason) : 0.0f);
+		return;
+	}
 	case script::ObjectPropertyType::Angle:
 	case script::ObjectPropertyType::XAngle:
 	case script::ObjectPropertyType::ZAngle:
@@ -979,9 +1064,7 @@ void GetProperty() // 021 GET_PROPERTY
 		}
 		if (IsLivingThing(object))
 		{
-			// TODO(script-natives): the way a living thing faces is kept by its walking, in each kind's own terms
-			NotImplemented(static_cast<int32_t>(prop));
-			Pushf(0.0f);
+			Pushf(script::property_rules::AngleToScript(LivingAngleOf(object, *transform)));
 			return;
 		}
 		Pushf(script::property_rules::AngleToScript(script::property_rules::PlacedAngles(transform->rotation).y));
@@ -994,11 +1077,15 @@ void GetProperty() // 021 GET_PROPERTY
 			Pushf(creature->strength);
 			return;
 		}
-		if (registry.AnyOf<ecs::components::OneOffSpellSeed, ecs::components::SpellSeed>(object))
+		// A miracle's globe or seed: what scales the prayer power and the time of what it casts
+		if (const auto* globe = registry.TryGet<const ecs::components::OneOffSpellSeed>(object); globe != nullptr)
 		{
-			// TODO(script-natives): the strength of a spell seed
-			NotImplemented(static_cast<int32_t>(prop));
-			Pushf(0.0f);
+			Pushf(globe->multiplier);
+			return;
+		}
+		if (const auto* seed = registry.TryGet<const ecs::components::SpellSeed>(object); seed != nullptr)
+		{
+			Pushf(seed->castMultiplier);
 			return;
 		}
 		// Anything else answers its life
@@ -1147,8 +1234,11 @@ void SetProperty() // 022 SET_PROPERTY
 		}
 		if (IsLivingThing(object))
 		{
-			// TODO(script-natives): turning a living thing turns its walking, in each kind's own terms
-			NotImplemented(static_cast<int32_t>(prop));
+			// Unless it already faces that way
+			if (radians != LivingAngleOf(object, *transform))
+			{
+				TurnLivingThing(object, *transform, radians);
+			}
 			return;
 		}
 		(prop == script::ObjectPropertyType::Angle    ? angles.y
@@ -1165,10 +1255,14 @@ void SetProperty() // 022 SET_PROPERTY
 			creature->strength = value;
 			return;
 		}
-		if (registry.AnyOf<ecs::components::OneOffSpellSeed, ecs::components::SpellSeed>(object))
+		if (auto* globe = registry.TryGet<ecs::components::OneOffSpellSeed>(object); globe != nullptr)
 		{
-			// TODO(script-natives): the strength of a spell seed
-			NotImplemented(static_cast<int32_t>(prop));
+			globe->multiplier = value;
+			return;
+		}
+		if (auto* seed = registry.TryGet<ecs::components::SpellSeed>(object); seed != nullptr)
+		{
+			seed->castMultiplier = value;
 			return;
 		}
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Cannot set strength of this");

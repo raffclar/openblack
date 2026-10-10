@@ -371,6 +371,18 @@
   "query": "creature.desires"
  },
  {
+  "description": "The ordinary skills and miracles a creature knows, and how often it has seen each miracle",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   }
+  ],
+  "query": "creature.known"
+ },
+ {
   "description": "A creature's plan (desire, action, object, priority), activity and next agenda steps",
   "kind": "object",
   "parameters": [

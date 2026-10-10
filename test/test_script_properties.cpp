@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
 #include <cstdint>
 
 #include <array>
@@ -166,4 +167,31 @@ TEST(ScriptProperties, BeliefForAPlayer)
 	EXPECT_FLOAT_EQ(BeliefForPlayer(false, std::nullopt, PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE), 1.0f);
 	EXPECT_FLOAT_EQ(BeliefForPlayer(false, std::nullopt, PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE), 0.0f);
 	EXPECT_FLOAT_EQ(BeliefForPlayer(false, std::nullopt, std::nullopt, PlayerNames::PLAYER_ONE), 0.0f);
+}
+
+TEST(ScriptProperties, ACreaturesHeadingIsTheWayItFacesAcrossTheLand)
+{
+	// A creature with a heading walks towards (-sin, -cos); a living thing at an angle faces (cos, sin)
+	for (const float heading : {0.0f, 0.5f, 1.5707964f, 2.0f, 3.1415927f, -1.0f, 5.5f})
+	{
+		const float angle = CreatureHeadingToLivingAngle(heading);
+		EXPECT_GE(angle, 0.0f);
+		EXPECT_LT(angle, 2.0f * glm::pi<float>());
+		EXPECT_NEAR(std::cos(angle), -std::sin(heading), 1e-5f);
+		EXPECT_NEAR(std::sin(angle), -std::cos(heading), 1e-5f);
+		const float back = LivingAngleToCreatureHeading(angle);
+		EXPECT_NEAR(std::sin(back), std::sin(heading), 1e-5f);
+		EXPECT_NEAR(std::cos(back), std::cos(heading), 1e-5f);
+	}
+	// Facing +x is no angle at all
+	EXPECT_NEAR(CreatureHeadingToLivingAngle(-glm::half_pi<float>()), 0.0f, 1e-6f);
+}
+
+TEST(ScriptProperties, MovingIsAcrossTheLandInWholeMapUnits)
+{
+	EXPECT_FALSE(MovedAcross({10.0f, 0.0f, 20.0f}, {10.0f, 5.0f, 20.0f}));
+	EXPECT_TRUE(MovedAcross({10.0f, 0.0f, 20.0f}, {10.01f, 0.0f, 20.0f}));
+	EXPECT_TRUE(MovedAcross({10.0f, 0.0f, 20.0f}, {10.0f, 0.0f, 19.99f}));
+	// Less than a map unit (a 65536th of ten metres) is no move
+	EXPECT_FALSE(MovedAcross({10.0f, 0.0f, 20.0f}, {10.00001f, 0.0f, 20.0f}));
 }
