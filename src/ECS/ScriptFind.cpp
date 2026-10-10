@@ -27,6 +27,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/Temple.h"
@@ -199,6 +200,10 @@ std::optional<script_find::Kind> script_find::KindOf(const Registry& registry, e
 	if (const auto* reward = registry.TryGet<const Reward>(entity))
 	{
 		return Kind {.type = ScriptType::Reward, .subtype = Row(reward->type)};
+	}
+	if (const auto* highlight = registry.TryGet<const ScriptHighlight>(entity))
+	{
+		return Kind {.type = ScriptType::Highlight, .subtype = Row(highlight->kind)};
 	}
 	return std::nullopt;
 }

@@ -829,3 +829,65 @@ TEST(CreatureTownCompassion, WhatACreatureMakesOfATown)
 	EXPECT_EQ(town_compassion::TownSize(20), 1u);
 	EXPECT_EQ(town_compassion::TownSize(40), 2u);
 }
+
+// What a script teaches
+
+TEST(CreatureWatching, AScriptTeachesAndTakesAwaySkillsAndMiracles)
+{
+	const std::vector<creature_watching::SkillRule> skills(6);
+	const std::vector<creature_watching::MiracleRule> miracles(42);
+	auto knowledge = creature_watching::StartKnowledge(skills, miracles);
+	using creature_watching::KnownList;
+	// Newly known the first time only
+	EXPECT_TRUE(creature_watching::SetKnown(knowledge, KnownList::Skill, 4, true, 0));
+	EXPECT_FALSE(creature_watching::SetKnown(knowledge, KnownList::Skill, 4, true, 0));
+	EXPECT_TRUE(knowledge.skillsKnown[4]);
+	EXPECT_EQ(knowledge.skillsSeen[4].count, 0u);
+	// A miracle taught counts as seen the times given, even when it was known already
+	knowledge.miraclesSeen[10].count = 3;
+	EXPECT_TRUE(creature_watching::SetKnown(knowledge, KnownList::Miracle, 10, true, 15));
+	EXPECT_EQ(knowledge.miraclesSeen[10].count, 15u);
+	EXPECT_FALSE(creature_watching::SetKnown(knowledge, KnownList::Miracle, 10, true, 12));
+	EXPECT_EQ(knowledge.miraclesSeen[10].count, 12u);
+	// Forgetting leaves the sightings
+	EXPECT_FALSE(creature_watching::SetKnown(knowledge, KnownList::Miracle, 10, false, 0));
+	EXPECT_FALSE(knowledge.miraclesKnown[10]);
+	EXPECT_EQ(knowledge.miraclesSeen[10].count, 12u);
+	EXPECT_FALSE(creature_watching::SetKnown(knowledge, KnownList::Skill, 4, false, 0));
+	EXPECT_FALSE(knowledge.skillsKnown[4]);
+	// Past the lists nothing happens
+	EXPECT_FALSE(creature_watching::SetKnown(knowledge, KnownList::Skill, 6, true, 0));
+	EXPECT_FALSE(creature_watching::SetKnown(knowledge, KnownList::Miracle, 42, true, 9));
+}
+
+TEST(CreatureWatching, TaughtSightingsAreTheTimesNeededRoundedDown)
+{
+	EXPECT_EQ(creature_watching::TaughtSightings(10, 1.5f), 15u);
+	// 9 * 1.7 is 15.3
+	EXPECT_EQ(creature_watching::TaughtSightings(9, 1.7f), 15u);
+	// 10 * 0.7 falls just short of 7 at full precision
+	EXPECT_EQ(creature_watching::TaughtSightings(10, 0.7f), 6u);
+	EXPECT_EQ(creature_watching::TaughtSightings(0, 4.0f), 0u);
+}
+
+TEST(CreatureWatching, AnActionNeedsItsSkillsAndMiracleKnown)
+{
+	const std::vector<creature_watching::SkillRule> skills(6);
+	const std::vector<creature_watching::MiracleRule> miracles(42);
+	auto knowledge = creature_watching::StartKnowledge(skills, miracles);
+	EXPECT_TRUE(creature_watching::KnowsWhatItNeeds(knowledge, {}));
+	const creature_watching::ActionNeeds fishing {.skills = {4, std::nullopt}};
+	const creature_watching::ActionNeeds casting {.miracle = 21};
+	const creature_watching::ActionNeeds both {.skills = {4, 5}, .miracle = 21};
+	EXPECT_FALSE(creature_watching::KnowsWhatItNeeds(knowledge, fishing));
+	EXPECT_FALSE(creature_watching::KnowsWhatItNeeds(knowledge, casting));
+	knowledge.skillsKnown[4] = true;
+	EXPECT_TRUE(creature_watching::KnowsWhatItNeeds(knowledge, fishing));
+	knowledge.miraclesKnown[21] = true;
+	EXPECT_TRUE(creature_watching::KnowsWhatItNeeds(knowledge, casting));
+	EXPECT_FALSE(creature_watching::KnowsWhatItNeeds(knowledge, both));
+	knowledge.skillsKnown[5] = true;
+	EXPECT_TRUE(creature_watching::KnowsWhatItNeeds(knowledge, both));
+	// A need past the lists is never known
+	EXPECT_FALSE(creature_watching::KnowsWhatItNeeds(knowledge, {.skills = {9, std::nullopt}}));
+}

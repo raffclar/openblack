@@ -23,6 +23,7 @@
 #include <random>
 #include <ranges>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <spdlog/spdlog.h>
@@ -916,6 +917,10 @@ void CreatureMindSystem::ProcessTurn()
 		    if (mind.pendingFile != nullptr)
 		    {
 			    TakeUpFile(entity, mind);
+		    }
+		    for (const auto& teaching : std::exchange(mind.pendingTeaching, {}))
+		    {
+			    SetKnowsAction(entity, teaching.type, teaching.action, teaching.knows);
 		    }
 		    ++mind.turn;
 		    // What it thinks its player wants fades
