@@ -487,6 +487,22 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		return CreateScriptVillager(type == ObjectType::VillagerChild, subtype, position);
 	case ObjectType::Whale:
 		return WhaleArchetype::Create(position, scale);
+	case ObjectType::Creature:
+	{
+		// A creature of the species the scripts number, which belongs to no one and has its home where it is made. It
+		// stands on the ground, as big as its species starts.
+		// TODO(opening-skip): the game also keeps it out of the land's reactions until a script lets it react, and names
+		// it from the four creature names of the help texts; openblack keeps neither yet
+		const auto species = script::property_rules::CreatureTypeFromScript(subtype);
+		if (!species.has_value())
+		{
+			break;
+		}
+		const auto ground = Locator::terrainSystem::value().GetHeightAt(glm::vec2(position.x, position.z));
+		return ecs::archetypes::CreatureArchetype::Create(
+		    {position.x, ground, position.z}, PlayerNames::NEUTRAL, *species, 0, yAngleRadians,
+		    ecs::archetypes::CreatureArchetype::StartScale(*species), ecs::archetypes::CreatureArchetype::StartBody(*species));
+	}
 	case ObjectType::Vortex:
 	{
 		// A vortex of the three kinds; the game makes nothing for any other
