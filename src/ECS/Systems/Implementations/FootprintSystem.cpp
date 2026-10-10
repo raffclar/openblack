@@ -26,6 +26,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/FishFarmSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -35,6 +36,9 @@ using namespace openblack::ecs::components;
 
 namespace
 {
+/// A foot set down lower than this scares the fish
+constexpr float k_FishScareFootHeight = 1.0f;
+
 /// Today's month, counted from 1, and day by the local clock
 std::pair<int, int> Today()
 {
@@ -93,6 +97,11 @@ void FootprintSystem::Step(entt::entity creature)
 	if (!creature_footprints::Add(_trail, laid))
 	{
 		++_dropped;
+	}
+	// A step low enough to be in the water scares the fish near it
+	if (foot.position.y < k_FishScareFootHeight && Locator::fishFarmSystem::has_value())
+	{
+		Locator::fishFarmSystem::value().Scare(foot.position);
 	}
 }
 
