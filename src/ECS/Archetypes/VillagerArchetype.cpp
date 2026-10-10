@@ -9,11 +9,14 @@
 
 #include "VillagerArchetype.h"
 
+#include <array>
+
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/vec3.hpp>
 
 #include "Common/GameRandom.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
@@ -26,6 +29,7 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerClips.h"
+#include "Graphics/MeshDetail.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
@@ -71,6 +75,11 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 	// A child made as a child wears its kind's child model; the rest their job's
 	const auto resourceId = resources::HashIdentifier(born.child ? info.childMeshHigh : info.highDetail);
 	registry.Assign<Mesh>(entity, resourceId, static_cast<int8_t>(0), static_cast<int8_t>(0));
+	// Drawn in less detail further off: a child made as a child has its high child model at every distance
+	const auto detailMeshes = born.child ? std::array {resourceId, resourceId, resourceId}
+	                                     : std::array {resourceId, resources::HashIdentifier(info.stdDetail),
+	                                                   resources::HashIdentifier(info.lowDetail)};
+	registry.Assign<DetailMeshes>(entity, detailMeshes, graphics::mesh_detail::VillagerImportance(born.age));
 	// One made over water starts drowning
 	const auto state = villager_clips::IsOnWater(position) ? VillagerStates::Drowning : VillagerStates::Created;
 	registry.Assign<LivingAction>(entity, state, born.turnsUntilFirstDecision);

@@ -20,6 +20,7 @@
 #include <vector>
 
 #include <MindFile.h>
+#include <PhysiqueFile.h>
 
 #include "Creature/CreatureMorph.h"
 
@@ -130,4 +131,16 @@ void creature_mind_body::ToMindFile(const Body& body, creaturemind::MindFileData
 	std::ranges::transform(body.wounds, std::back_inserter(physique.wounds), creature_marks::WoundToWord);
 	physique.blood.clear();
 	std::ranges::transform(body.blood, std::back_inserter(physique.blood), creature_marks::BloodToWord);
+}
+
+creaturemind::PhysiqueFileData creature_mind_body::ToPhysiqueFile(const Body& now, uint32_t speciesRow, float savedAlignment)
+{
+	creaturemind::PhysiqueFileData physique {.speciesRow = speciesRow,
+	                                         .drawnSize = now.size.value_or(1.0f),
+	                                         .strength = now.strength,
+	                                         .fatness = now.fatness,
+	                                         .alignment = savedAlignment};
+	std::ranges::transform(now.blood, std::back_inserter(physique.blood), creature_marks::BloodToWord);
+	std::ranges::transform(now.wounds, std::back_inserter(physique.wounds), creature_marks::WoundToWord);
+	return physique;
 }

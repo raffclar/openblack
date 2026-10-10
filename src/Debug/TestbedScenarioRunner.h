@@ -126,6 +126,8 @@ private:
 	/// Casts the scenario's miracle of that index; the running miracle, or none
 	entt::entity CastMiracle(size_t index);
 	void UpdateParticles(float seconds);
+	/// The scenario's vortices open when it is time and are told to fade out when it is time
+	void UpdateVortices();
 	/// The needs and desires go on once the body and mind have started, and every frame for those that hold them
 	void ApplyStates();
 	void Give(const Command& command);
@@ -148,6 +150,8 @@ private:
 	std::string GiveFightCommand(entt::entity creature, const Command& command);
 	/// Creature Mode's and the Creature Cave's commands, as the player's keys and clicks give them
 	std::string GiveCreatureModeCommand(entt::entity creature, const Command& command);
+	/// A script opening or closing the scenery, and the player's hand laying a gate stone in the plinth
+	void GiveSceneryCommand(const Command& command);
 	/// The player's mouse: presses, moves and the wheel, made as the mouse's own events
 	std::string GivePointerCommand(const Command& command);
 	/// Moves the mouse on along a sweep, and lets go of it once the scenario's commands are done
@@ -195,6 +199,13 @@ private:
 		float seconds;
 	};
 	std::vector<RunningParticle> _particles;
+	/// The scenario's vortices: each once made, and whether it has been told to fade out
+	struct RunningVortex
+	{
+		entt::entity vortex {entt::null};
+		bool fading {false};
+	};
+	std::vector<RunningVortex> _vortices;
 	/// The scenario's miracles: when each is next cast, and the one held in its hand until when
 	struct RunningMiracle
 	{

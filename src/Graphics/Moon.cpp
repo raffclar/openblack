@@ -15,6 +15,7 @@
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
+#include <glm/trigonometric.hpp>
 
 using namespace openblack::graphics;
 
@@ -27,6 +28,11 @@ constexpr float k_MeshScale = 0.65f;
 constexpr float k_GlowHalfSize = 500.0f;
 constexpr float k_GlowUvMinimum = 0.25f;
 constexpr float k_GlowUvMaximum = 0.49375f;
+constexpr double k_FullTurn = 6.2831854820251465;
+constexpr float k_HalfTurn = 3.14159274f;
+constexpr float k_OverHalfTurn = 0.318309873f;
+/// Days either side of a date searched for a point of the moon month
+constexpr int64_t k_HalfMonthDays = 15;
 
 /// Turns two of a matrix's axes into each other by an angle, as the game's matrices turn their rows
 void TurnAxes(glm::mat3& m, int i, int j, float c, float s)
@@ -38,11 +44,16 @@ void TurnAxes(glm::mat3& m, int i, int j, float c, float s)
 }
 } // namespace
 
-std::optional<moon::Placement> moon::Place(float scriptHour)
+glm::vec3 moon::Offset(float scriptHour)
 {
 	// An hour of the day is a twelfth of half a turn
 	const float angle = scriptHour * 0.2617993950843811f;
-	const glm::vec3 offset {4000.0f, (1100.0f * std::cos(angle)) - 150.0f, 800.0f * std::sin(angle)};
+	return {4000.0f, (1100.0f * std::cos(angle)) - 150.0f, 800.0f * std::sin(angle)};
+}
+
+std::optional<moon::Placement> moon::Place(float scriptHour)
+{
+	const auto offset = Offset(scriptHour);
 	const float alpha = std::min(200.0f, std::floor((0.5f * offset.y) - 110.0f));
 	if (alpha <= 0.0f)
 	{
@@ -51,13 +62,54 @@ std::optional<moon::Placement> moon::Place(float scriptHour)
 	return Placement {.offset = offset, .alpha = alpha};
 }
 
+double moon::MonthFraction(int64_t unixTime)
+{
+	// Whole days from a new moon, in moon months of about 29.5 days, kept at full precision until the phase is made
+	const auto days = static_cast<int32_t>((unixTime / k_SecondsPerDay) - k_NewMoonDay);
+	const double months = static_cast<double>(days) * k_MonthsPerDay;
+	return months - static_cast<double>(static_cast<int32_t>(months));
+}
+
 float moon::Phase(int64_t unixTime)
 {
-	// Whole days from a new moon, in moon months of about 29.5 days
-	const auto days = static_cast<int32_t>(unixTime / 86400) - 0x2AD2;
-	const auto months = static_cast<float>(static_cast<double>(days) * 0.03386318012808897);
-	const float fraction = months - static_cast<float>(static_cast<int32_t>(months));
-	return static_cast<float>(static_cast<double>(1.0f - fraction) * 6.2831854820251465);
+	return static_cast<float>((1.0 - MonthFraction(unixTime)) * k_FullTurn);
+}
+
+float moon::ScriptPercentage(float phase)
+{
+	if (phase >= k_HalfTurn)
+	{
+		return (phase - k_HalfTurn) * k_OverHalfTurn;
+	}
+	return 1.0f - (phase * k_OverHalfTurn);
+}
+
+int64_t moon::DateAtFraction(int64_t unixTime, double fraction)
+{
+	const int64_t today = unixTime / k_SecondsPerDay;
+	const auto distance = [fraction](int64_t day) {
+		const double apart = std::abs(MonthFraction(day * k_SecondsPerDay) - fraction);
+		const double wrapped = apart - std::floor(apart);
+		return std::min(wrapped, 1.0 - wrapped);
+	};
+	int64_t best = today;
+	for (int64_t day = today - k_HalfMonthDays; day <= today + k_HalfMonthDays; ++day)
+	{
+		if (distance(day) < distance(best))
+		{
+			best = day;
+		}
+	}
+	return (best * k_SecondsPerDay) + (k_SecondsPerDay / 2);
+}
+
+moon::SkyAngles moon::Angles(const glm::vec3& offset)
+{
+	const float across = std::hypot(offset.x, offset.z);
+	return {
+	    .azimuth = glm::degrees(std::atan2(offset.x, offset.z)),
+	    .elevation = glm::degrees(std::atan2(offset.y, across)),
+	};
 }
 
 glm::mat3 moon::Basis(const glm::mat4& view, const glm::mat4& inverseView, const glm::vec3& position)
@@ -94,6 +146,17 @@ moon::Glow moon::MakeGlow(const glm::mat3& basis, const glm::vec3& position)
 	    .uvs = {glm::vec2(k_GlowUvMinimum, k_GlowUvMinimum), glm::vec2(k_GlowUvMaximum, k_GlowUvMinimum),
 	            glm::vec2(k_GlowUvMinimum, k_GlowUvMaximum), glm::vec2(k_GlowUvMaximum, k_GlowUvMaximum)},
 	};
+}
+
+moon::Glow moon::SeaGlow(const glm::mat4& view, const glm::mat4& inverseView, const glm::vec3& position)
+{
+	const glm::vec3 inTheSea {position.x, -position.y, position.z};
+	auto glow = MakeGlow(Basis(view, inverseView, inTheSea), inTheSea);
+	for (auto& corner : glow.corners)
+	{
+		corner.y = -corner.y;
+	}
+	return glow;
 }
 
 glm::vec3 moon::GlowColour(const glm::vec3& moonColour)

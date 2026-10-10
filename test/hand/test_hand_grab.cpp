@@ -67,6 +67,24 @@ TEST(HandGrab, AnyFailedCheckMakesThePressATap)
 	EXPECT_FALSE(PassesGate({.valid = true, .inInfluence = false}));
 }
 
+// Each failed check says why the press doesn't take the thing, the influence first
+TEST(HandGrab, AFailedCheckSaysWhy)
+{
+	EXPECT_TRUE(GateRefusal({.valid = true}).empty());
+	EXPECT_NE(GateRefusal({.valid = true, .inInfluence = false}).find("influence"), std::string_view::npos);
+	EXPECT_NE(GateRefusal({.valid = false, .inInfluence = false}).find("influence"), std::string_view::npos);
+	EXPECT_NE(GateRefusal({.spaceInHand = false, .valid = true}).find("holds"), std::string_view::npos);
+	EXPECT_NE(GateRefusal({.alreadyInHand = true, .valid = true}).find("in a hand"), std::string_view::npos);
+	EXPECT_NE(GateRefusal({.valid = true, .cannotBePickedUp = true}).find("script"), std::string_view::npos);
+	EXPECT_NE(GateRefusal({.valid = true, .carried = true}).find("carries"), std::string_view::npos);
+	EXPECT_NE(GateRefusal({.valid = false}).find("can't hold"), std::string_view::npos);
+	// It says why exactly when the gate is shut
+	for (const Gate gate : {Gate {.valid = true}, Gate {.valid = false}, Gate {.valid = true, .carried = true}})
+	{
+		EXPECT_EQ(GateRefusal(gate).empty(), PassesGate(gate));
+	}
+}
+
 TEST(HandGrab, APressIsTimedByTheClockButNoLongerThanTheTurnsAllow)
 {
 	// By the clock 500 ms, but the game has only moved on from turn 10 to turn 11
