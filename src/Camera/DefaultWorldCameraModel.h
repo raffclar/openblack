@@ -61,6 +61,8 @@ private:
 	[[nodiscard]] Mode HandleDrag(bool held);
 	/// The help's profile counts the camera controls used
 	static void SendHelpEvents(camera_help::events::EventSet events);
+	/// Notes what the helper icons by the hand are picked from, once the controls are handled
+	void UpdateIconFrame(bool onFight);
 	/// The height the mouse controls measure by, the cinema bars' picture's while they are in
 	[[nodiscard]] static int ViewHeight(glm::ivec2 screenSize);
 
@@ -178,6 +180,8 @@ private:
 	/// The player's camera controls this frame, and the help events they make while the controls are handled
 	camera_help::events::ControlsFrame _helpControls;
 	camera_help::events::EventSet _helpEvents;
+	/// What the helper icons by the hand are picked from this frame
+	hand_tricons::WorldCameraFrame _iconFrame;
 	/// Time spent handling the controls, for timing the start of a drag
 	std::chrono::microseconds _controlsTime {std::chrono::microseconds::zero()};
 
