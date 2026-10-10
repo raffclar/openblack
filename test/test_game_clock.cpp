@@ -208,3 +208,25 @@ TEST(GameClock, FixedFrameTimeIgnoresTheWallClock)
 	EXPECT_TRUE(clock.Frame());
 	EXPECT_EQ(clock.time.GetTurn(), 7);
 }
+
+// What times the testbed's scenarios: the frame's game time follows a fixed frame time while stepping, so that their
+// seconds and fades keep in line with the turns stepped, and is none while paused
+TEST(GameClock, TheFrameGameTimeFollowsAFixedFrameTime)
+{
+	Clock clock;
+	clock.time.StartGameClock(false);
+	clock.time.SetFixedFrameTime(std::chrono::milliseconds(20));
+	clock.time.Update();
+	clock.Frame();
+	for (int frame = 0; frame < 3; ++frame)
+	{
+		clock.now += 500;
+		clock.time.Update();
+		clock.Frame();
+		EXPECT_EQ(clock.time.GetFrameGameTime().count(), 20);
+	}
+	clock.time.SetPaused(true);
+	clock.time.Update();
+	clock.Frame();
+	EXPECT_EQ(clock.time.GetFrameGameTime().count(), 0);
+}

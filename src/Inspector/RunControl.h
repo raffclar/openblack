@@ -105,8 +105,23 @@ public:
 private:
 	RunTargetInterface& _target;
 	RunControl _control;
+	/// The last step asked for, as game.state reports it once done: what was asked, the frame time it ran with (the
+	/// frame time goes back to what it was once the step ends) and where it started and ended
+	struct StepRecord
+	{
+		std::optional<uint32_t> frames;
+		std::optional<uint32_t> turns;
+		std::optional<uint32_t> fixedMs;
+		uint64_t fromFrame {0};
+		uint32_t fromTurn {0};
+		std::optional<uint64_t> toFrame;
+		std::optional<uint32_t> toTurn;
+	};
+	[[nodiscard]] static Json ToJson(const StepRecord& step);
+
 	/// The frame time to go back to once a step with a fixed frame time ends
 	std::optional<std::optional<uint32_t>> _frameTimeAfterStep;
+	std::optional<StepRecord> _lastStep;
 	uint64_t _frame {0};
 };
 

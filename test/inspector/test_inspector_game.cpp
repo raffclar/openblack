@@ -421,3 +421,42 @@ TEST(InspectorRunControl, StepWithAFixedFrameTimeGivesItBackAfter)
 	const auto decoded = DecodeRequest(R"({"query": "game.step", "params": {"frames": 1, "fixed_ms": 0}})");
 	EXPECT_FALSE(inspector.Answer(std::get<Request>(decoded)).Ok());
 }
+
+// Once a step has run, the frame time it ran with is gone back to what it was: game.state keeps the last step, with
+// the fixed frame time it ran with and where it started and ended, so that tools waiting for it can report it
+TEST(InspectorRunControl, TheLastStepIsReportedWithItsFixedFrameTime)
+{
+	FakeRunTarget target;
+	Inspector inspector;
+	auto provider = std::make_unique<GameProvider>(target);
+	auto* game = provider.get();
+	inspector.Add(std::move(provider));
+	EXPECT_TRUE(Ask(inspector, R"({"query": "game.state"})")["last_step"].is_null());
+	EXPECT_EQ(Ask(inspector, R"({"query": "game.state"})")["ready"], true);
+
+	const auto stepping = Ask(inspector, R"({"query": "game.step", "params": {"frames": 2, "fixed_ms": 16}})");
+	EXPECT_EQ(stepping["stepping"]["fixed_ms"], 16);
+	EXPECT_EQ(stepping["last_step"]["done"], false);
+	game->Frame();
+	target.turn = 11;
+	game->Frame();
+	game->Frame();
+	const auto state = Ask(inspector, R"({"query": "game.state"})");
+	EXPECT_TRUE(state["stepping"].is_null());
+	EXPECT_TRUE(state["fixed_ms"].is_null());
+	const auto& last = state["last_step"];
+	EXPECT_EQ(last["done"], true);
+	EXPECT_EQ(last["frames"], 2);
+	EXPECT_EQ(last["fixed_ms"], 16);
+	EXPECT_EQ(last["from_frame"], 0);
+	EXPECT_EQ(last["to_frame"], 3);
+	EXPECT_EQ(last["from_turn"], 10);
+	EXPECT_EQ(last["to_turn"], 11);
+
+	// A step without a fixed time reports the frame time set for good, or none
+	Ask(inspector, R"({"query": "game.step", "params": {"turns": 1}})");
+	EXPECT_TRUE(Ask(inspector, R"({"query": "game.state"})")["last_step"]["fixed_ms"].is_null());
+	Ask(inspector, R"({"query": "game.frame_time", "params": {"ms": 10}})");
+	Ask(inspector, R"({"query": "game.step", "params": {"frames": 1}})");
+	EXPECT_EQ(Ask(inspector, R"({"query": "game.state"})")["last_step"]["fixed_ms"], 10);
+}

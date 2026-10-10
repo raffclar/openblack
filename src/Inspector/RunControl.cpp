@@ -137,15 +137,40 @@ Json GameProvider::State() const
 		stepping = {{"until_turn", *turn}};
 	}
 	const auto fixed = _target.GetFixedFrameTime();
+	if (!stepping.is_null() && _lastStep.has_value())
+	{
+		stepping["fixed_ms"] = _lastStep->fixedMs.has_value() ? Json(*_lastStep->fixedMs) : Json(nullptr);
+	}
 	return {
+	    // The frames are being served: while a land loads the inspector answers on its own with ready false
+	    {"ready", true},
 	    {"paused", _target.IsPaused()},
 	    {"turn", _target.GetTurn()},
 	    {"frame", _frame},
 	    {"speed", _target.GetSpeed()},
 	    {"stepping", std::move(stepping)},
 	    {"fixed_ms", fixed.has_value() ? Json(*fixed) : Json(nullptr)},
+	    {"last_step", _lastStep.has_value() ? ToJson(*_lastStep) : Json(nullptr)},
 	    {"input_lock", _target.InputLock()},
 	};
+}
+
+Json GameProvider::ToJson(const StepRecord& step)
+{
+	const auto optional = [](const auto& value) { return value.has_value() ? Json(*value) : Json(nullptr); };
+	Json json = {
+	    {"fixed_ms", optional(step.fixedMs)}, {"from_frame", step.fromFrame},     {"from_turn", step.fromTurn},
+	    {"to_frame", optional(step.toFrame)}, {"to_turn", optional(step.toTurn)}, {"done", step.toFrame.has_value()},
+	};
+	if (step.frames.has_value())
+	{
+		json["frames"] = *step.frames;
+	}
+	if (step.turns.has_value())
+	{
+		json["turns"] = *step.turns;
+	}
+	return json;
 }
 
 void GameProvider::Frame()
@@ -154,6 +179,11 @@ void GameProvider::Frame()
 	if (const auto paused = _control.Frame(_target.IsPaused(), _target.GetTurn()); paused.has_value())
 	{
 		_target.SetPaused(*paused);
+	}
+	if (!_control.Stepping() && _lastStep.has_value() && !_lastStep->toFrame.has_value())
+	{
+		_lastStep->toFrame = _frame;
+		_lastStep->toTurn = _target.GetTurn();
 	}
 	// A step with a fixed frame time gives the frame time back once it has run
 	if (!_control.Stepping() && _frameTimeAfterStep.has_value())
@@ -196,6 +226,15 @@ QueryResult GameProvider::Run(std::string_view query, const QueryContext& contex
 			}
 			_target.SetFixedFrameTime(static_cast<uint32_t>(*fixed));
 		}
+		_lastStep = StepRecord {
+		    .frames = frames,
+		    .turns = turns,
+		    .fixedMs = fixed.has_value() ? std::optional(static_cast<uint32_t>(*fixed)) : _target.GetFixedFrameTime(),
+		    .fromFrame = _frame,
+		    .fromTurn = _target.GetTurn(),
+		    .toFrame = std::nullopt,
+		    .toTurn = std::nullopt,
+		};
 		if (frames.has_value())
 		{
 			_control.StepFrames(*frames);
