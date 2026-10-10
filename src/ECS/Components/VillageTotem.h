@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include <entt/entity/entity.hpp>
 
 #include "ECS/VillageTotem.h"
@@ -31,6 +33,13 @@ struct VillageTotem
 	float held {0.0f};
 	/// Whether the hand holds it
 	bool gripped {false};
+	/// The see-through second plinth and icon at the other share, while the two stand apart
+	entt::entity ghost {entt::null};
+	entt::entity ghostIcon {entt::null};
+	/// How high it was last drawn risen, none until it is drawn after its icon is put on
+	std::optional<float> lastShownRise;
+	/// The next time it moves shows no tooltip: it was only just given its player's icon
+	bool quietOnce {false};
 };
 
 } // namespace openblack::ecs::components

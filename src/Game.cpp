@@ -87,6 +87,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/DeadTree.h"
+#include "ECS/Components/FloatingNumber.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/Influence.h"
@@ -101,6 +102,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/FloatingNumber.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
@@ -181,6 +183,7 @@
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/VillageTotem.h"
 #include "ECS/WorldObjects.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -500,7 +503,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	    (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
 	{
 		Locator::villageTotemSystem::value().LetGo();
-		Locator::gameActionSystem::value().PinCursor(false);
+		_totemPointer.reset();
 	}
 	// Letting go of the Action button lets go of what the hand was taking, or puts down or throws what it holds
 	if (handGrab != nullptr && (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
@@ -575,7 +578,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				    totem.has_value() && totems.Grip(*totem, PlayerNames::PLAYER_ONE))
 				{
 					_actionPressTaken = true;
-					Locator::gameActionSystem::value().PinCursor(true);
+					_totemPointer = _mousePosition;
 				}
 			}
 		}
@@ -919,6 +922,65 @@ void Game::UpdateHandInterface()
 	}
 }
 
+std::optional<glm::vec2> Game::OnScreen(glm::vec3 point) const
+{
+	if (!Locator::windowing::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto size = Locator::windowing::value().GetSize();
+	glm::vec3 screen;
+	if (!Locator::camera::value().ProjectWorldToScreen(point, glm::vec4(0.0f, 0.0f, glm::vec2(size)), screen))
+	{
+		return std::nullopt;
+	}
+	// The game takes the whole pixel it falls in, which must be on the screen
+	const glm::ivec2 pixel {static_cast<int>(screen.x), static_cast<int>(screen.y)};
+	if (pixel.x < 0 || pixel.y < 0 || pixel.x >= size.x || pixel.y >= size.y)
+	{
+		return std::nullopt;
+	}
+	return glm::vec2(pixel);
+}
+
+void Game::UpdateFloatingNumbers(float seconds)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	ecs::floating_number::StepAll(registry, seconds);
+	if (!_interface)
+	{
+		return;
+	}
+	// Those on the screen, the furthest first so the nearer are drawn over them
+	struct Placed
+	{
+		float distance;
+		gui::GameInterface::FloatingNumber number;
+	};
+	std::vector<Placed> placed;
+	const auto eye = Locator::camera::value().GetOrigin();
+	registry.Each<const ecs::components::FloatingNumber>(
+	    [this, &placed, eye](entt::entity /*unused*/, const ecs::components::FloatingNumber& number) {
+		    const auto alpha = ecs::floating_number::Alpha(number.life);
+		    const auto screen = OnScreen(number.position);
+		    if (!alpha.has_value() || !screen.has_value())
+		    {
+			    return;
+		    }
+		    placed.push_back(
+		        {.distance = glm::distance(eye, number.position),
+		         .number = {.screen = *screen, .text = gui::ToUtf16(number.text), .colour = number.colour, .alpha = *alpha}});
+	    });
+	std::ranges::sort(placed, std::ranges::greater {}, &Placed::distance);
+	std::vector<gui::GameInterface::FloatingNumber> numbers;
+	numbers.reserve(placed.size());
+	for (auto& each : placed)
+	{
+		numbers.push_back(std::move(each.number));
+	}
+	_interface->SetFloatingNumbers(std::move(numbers));
+}
+
 void Game::ProcessHandToolTipTurn()
 {
 	if (!_interface || (Locator::temple::has_value() && Locator::temple::value().Active()))
@@ -926,6 +988,15 @@ void Game::ProcessHandToolTipTurn()
 		return;
 	}
 	auto& toolTips = _interface->GetToolTips();
+	// As the player's own totem moves on the screen, the hand shows the share it is held at, over anything else
+	if (const auto tip = Locator::villageTotemSystem::has_value()
+	                         ? Locator::villageTotemSystem::value().TakeShareToolTip(PlayerNames::PLAYER_ONE)
+	                         : std::nullopt;
+	    tip.has_value() && Locator::entitiesRegistry::value().Valid(tip->totem) &&
+	    OnScreen(Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(tip->totem).position).has_value())
+	{
+		toolTips.Force(ecs::village_totem::k_ShareToolTip, tip->percent);
+	}
 	// With the leash held, the hand says what a tap of the Action button does with it, before anything else
 	if (!_interface->IsDialogOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive())
 	{
@@ -1411,6 +1482,8 @@ bool Game::Update() noexcept
 		_shortcutKeys.Update();
 	}
 	Locator::cameraPathSystem::value().Update(deltaTime);
+	// The numbers floating up from things rise and fade, and are shown where they are on the screen
+	UpdateFloatingNumbers(std::chrono::duration<float>(deltaTime).count());
 
 	if (!config.running || _quitRequested)
 	{
@@ -1908,12 +1981,37 @@ bool Game::Update() noexcept
 				if (Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value())
 				{
 					auto& totems = Locator::villageTotemSystem::value();
-					const auto screenHeight = Locator::windowing::has_value() ? Locator::windowing::value().GetSize().y : 0;
-					totems.Slide(static_cast<float>(-Locator::gameActionSystem::value().GetMouseDelta().y),
-					             static_cast<float>(screenHeight));
+					const auto screenSize =
+					    Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::ivec2(0);
+					// The pointer is put back on the hand every frame, so how far it went from there is how far the mouse
+					// moved
+					const int up = _totemPointer.has_value() ? _totemPointer->y - _mousePosition.y : 0;
+					totems.Slide(static_cast<float>(up), static_cast<float>(screenSize.y));
 					if (const auto hold = totems.GetHandHold())
 					{
 						handTransform.position = hold->position;
+						// It faces the way it always does, tipped forwards over the icon
+						using namespace hand_orientation;
+						const auto facingCamera = glm::mat3(glm::eulerAngleY(camera.GetRotation().y) * modelRotationCorrection);
+						const auto cameraHeading = HeadingAlongRay(camera.GetForward(), _handHeading);
+						handTransform.rotation =
+						    TipForwards(TurnToHeading(facingCamera, cameraHeading, _handHeading), _handHeading, hold->tilt);
+						// The pointer goes where the hand is on the screen, while it is on it
+						glm::vec3 screen;
+						if (camera.ProjectWorldToScreen(hold->position, glm::vec4(0.0f, 0.0f, glm::vec2(screenSize)), screen))
+						{
+							const glm::ivec2 at {std::lrint(screen.x), std::lrint(screen.y)};
+							if (at.x >= 0 && at.y >= 0 && at.x < screenSize.x && at.y < screenSize.y)
+							{
+								// Only put when it isn't there already
+								if (at != _mousePosition)
+								{
+									Locator::gameActionSystem::value().WarpCursor(at);
+									_mousePosition = at;
+								}
+								_totemPointer = at;
+							}
+						}
 					}
 				}
 				UpdateMagicHand(handTransform.position,
@@ -2015,7 +2113,18 @@ bool Game::Update() noexcept
 			const auto pullCycle = pull.has_value() ? magic::hand_hold::HoldCycle(pull->hold) : std::nullopt;
 			const auto* pullClip =
 			    pullCycle.has_value() ? _handAnimation->GetAnimation(static_cast<size_t>(*pullCycle)) : nullptr;
-			if (pullClip != nullptr)
+			// Holding a town's totem, the hand takes its side hold on the icon, closed by how wide the icon is
+			const auto totemHold =
+			    Locator::villageTotemSystem::has_value() ? Locator::villageTotemSystem::value().GetHandHold() : std::nullopt;
+			const auto* sideHold =
+			    totemHold.has_value() ? _handAnimation->GetAnimation(static_cast<size_t>(HandCycle::HoldSide)) : nullptr;
+			if (sideHold != nullptr)
+			{
+				_handAnimation->UpdateHeld(deltaTime, HandCycle::HoldSide,
+				                           ecs::village_totem::GripTimeMs(totemHold->closure, sideHold->duration),
+				                           _mousePosition);
+			}
+			else if (pullClip != nullptr)
 			{
 				const float handSize = HandAnimation::SizeAtDistance(glm::distance(camera.GetOrigin(), _handPosition));
 				_handAnimation->UpdateHeld(deltaTime, *pullCycle,

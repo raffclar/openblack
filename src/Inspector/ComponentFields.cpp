@@ -49,6 +49,7 @@
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Fixed.h"
+#include "ECS/Components/FloatingNumber.h"
 #include "ECS/Components/FlockSpell.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Footpath.h"
@@ -95,6 +96,7 @@
 #include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/SkinOverride.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/SoundTag.h"
@@ -609,6 +611,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::Fixed>(context)
 	    .Field<&components::Fixed::boundingCenter>("boundingCenter")
 	    .Field<&components::Fixed::boundingRadius>("boundingRadius");
+	Reflect<components::FloatingNumber>(context)
+	    .Field<&components::FloatingNumber::text>("text")
+	    .Field<&components::FloatingNumber::position>("position")
+	    .Field<&components::FloatingNumber::colour>("colour")
+	    .Field<&components::FloatingNumber::life>("life");
 	Reflect<components::FlockSpell>(context)
 	    .Field<&components::FlockSpell::flock>("flock")
 	    .Field<&components::FlockSpell::created>("created")
@@ -908,6 +915,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::RewardOnLand> {context};
 	Reflect<components::InScript> {context};
 	Reflect<components::ScriptControlled> {context};
+	Reflect<components::SeeThrough>(context).Field<&components::SeeThrough::alpha>("alpha");
 	Reflect<components::SkinOverride>(context)
 	    .Field<&components::SkinOverride::texture>("texture")
 	    .Field<&components::SkinOverride::uvOffset>("uvOffset");
@@ -1149,7 +1157,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::VillageTotem::restY>("restY")
 	    .Field<&components::VillageTotem::ease>("ease")
 	    .Field<&components::VillageTotem::held>("held")
-	    .Field<&components::VillageTotem::gripped>("gripped");
+	    .Field<&components::VillageTotem::gripped>("gripped")
+	    .Field<&components::VillageTotem::ghost>("ghost")
+	    .Field<&components::VillageTotem::ghostIcon>("ghostIcon")
+	    .Field<&components::VillageTotem::lastShownRise>("lastShownRise")
+	    .Field<&components::VillageTotem::quietOnce>("quietOnce");
 	Reflect<components::Villager>(context)
 	    .Field<&components::Villager::life>("life")
 	    .Field<&components::Villager::birthTurn>("birthTurn")
