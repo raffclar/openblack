@@ -28,11 +28,11 @@
 #include "Camera/FightCameraModel.h"
 #include "Camera/TempleCameraModel.h"
 #include "Debug/DebugGuiInterface.h"
-#include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "Editor/EditorEntities.h"
+#include "EntityDescription.h"
 #include "Game.h"
 #include "Gui/GameInterface.h"
 #include "Gui/GameMenu.h"
@@ -246,8 +246,8 @@ std::optional<glm::vec3> GameCamera::EntityPosition(uint32_t id) const
 	{
 		return std::nullopt;
 	}
-	const auto* transform = registry.TryGet<ecs::components::Transform>(entity);
-	return transform != nullptr ? std::optional(transform->position) : std::nullopt;
+	// Where it is drawn, so that a camera framing a body moving in the physics looks at it rather than where it stood
+	return DrawnPosition(registry, entity);
 }
 
 // The windows
