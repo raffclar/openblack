@@ -74,6 +74,7 @@
 #include "ECS/Systems/Implementations/HelpTextSystem.h"
 #include "ECS/Systems/Implementations/HighDetailSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
+#include "ECS/Systems/Implementations/IntroSystem.h"
 #include "ECS/Systems/Implementations/ScriptHighlightSystem.h"
 #if defined(OPENBLACK_INSPECTOR)
 #include "ECS/Systems/Implementations/InspectorSystem.h"
@@ -187,6 +188,7 @@ using openblack::ecs::systems::HelpSpeechSystem;
 using openblack::ecs::systems::HelpTextSystem;
 using openblack::ecs::systems::HighDetailSystem;
 using openblack::ecs::systems::InfluenceSystem;
+using openblack::ecs::systems::IntroSystem;
 using openblack::ecs::systems::LeashSystem;
 using openblack::ecs::systems::LivingActionSystem;
 using openblack::ecs::systems::MagicShieldSystem;
@@ -327,6 +329,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::dialogueControlSystem::emplace<DialogueControlSystem>();
 	Locator::helpSpeechSystem::emplace<HelpSpeechSystem>();
 	Locator::highDetailSystem::emplace<HighDetailSystem>();
+	Locator::introSystem::emplace<IntroSystem>();
 	Locator::walkPathSystem::emplace<WalkPathSystem>();
 	Locator::danceSystem::emplace<DanceSystem>();
 	Locator::sharkSystem::emplace<SharkSystem>();
@@ -469,6 +472,7 @@ void openblack::ShutDownServices()
 	Locator::dialogueControlSystem::reset();
 	Locator::helpSpeechSystem::reset();
 	Locator::highDetailSystem::reset();
+	Locator::introSystem::reset();
 	Locator::walkPathSystem::reset();
 	Locator::danceSystem::reset();
 	Locator::sharkSystem::reset();

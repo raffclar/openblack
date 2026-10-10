@@ -139,6 +139,7 @@
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerDance.h"
 #include "ECS/Systems/Implementations/VillagerScript.h"
+#include "ECS/Systems/IntroSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -5998,12 +5999,15 @@ void PlayJcSpecial() // 326 PLAY_JC_SPECIAL
 	case 0:
 	case 1:
 	case 2:
-	case 3:
 	case 4:
 	case 5:
+		// The opening's light from the sky, the camera chasing it, and the hand that lifts the boy from the sea and sets
+		// him down beside his parents
+		Locator::introSystem::value().Play(special);
+		return;
+	case 3:
 	case 6:
-		// TODO(opening): the opening's light from the sky, its camera, the hand that lifts the boy from the sea and the
-		// missionaries' boat
+		// TODO(opening): the clouds' effect, which no script uses, and the missionaries' boat
 		NotImplemented(special);
 		return;
 	default:
@@ -6014,10 +6018,10 @@ void PlayJcSpecial() // 326 PLAY_JC_SPECIAL
 
 void IsPlayingJcSpecial() // 327 IS_PLAYING_JC_SPECIAL
 {
-	// const auto feature = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// Every special counts as playing, but for whether the hand's lifting clip has come round
+	constexpr int32_t k_LiftComeRound = 13;
+	const auto special = Pop().intVal;
+	Pushb(special != k_LiftComeRound || Locator::introSystem::value().HasLiftFinished());
 }
 
 void VortexParameters() // 328 VORTEX_PARAMETERS
@@ -6267,9 +6271,13 @@ void ThingJcSpecial() // 349 THING_JC_SPECIAL
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
 		return;
 	}
-	// The orders are for a thing drawn in high detail and are ignored by anything else; releasing the opening's own
-	// specials releases nothing while openblack doesn't make them
-	Locator::highDetailSystem::value().Order(target, special, on);
+	// The orders are for a thing drawn in high detail and are ignored by anything else
+	const bool drawnInHighDetail = Locator::highDetailSystem::value().Order(target, special, on);
+	if (drawnInHighDetail && special == ecs::high_detail_rules::ThingSpecial::ReleaseIntroSpecials)
+	{
+		// Given to one drawn in high detail, the opening's light, its hand and its chasing camera all go
+		Locator::introSystem::value().ReleaseAll();
+	}
 	if (special == ecs::high_detail_rules::ThingSpecial::DrawnObjectSpecial)
 	{
 		// TODO(opening): the drawn object's own special

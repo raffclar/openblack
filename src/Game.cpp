@@ -156,6 +156,7 @@
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
+#include "ECS/Systems/IntroSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -1562,6 +1563,12 @@ bool Game::Update() noexcept
 	{
 		camera.Update(deltaTime);
 	}
+	// While the opening's camera chases the falling light, it is drawn from behind the light as the last frame left it,
+	// whatever the script's camera does underneath
+	if (const auto chase = Locator::introSystem::value().GetCameraView(); chase.has_value())
+	{
+		camera.SetOrigin(chase->origin).SetFocus(chase->focus);
+	}
 	FitNearClip();
 	// The temple's camera may have taken the player out of the temple
 	if (Locator::temple::has_value())
@@ -1656,6 +1663,8 @@ bool Game::Update() noexcept
 		Locator::livingActionSystem::value().UpdatePoses(clock.GetTurn(), clock.GetTurnFraction());
 		// The sharks swim between their last two turns and leave their wakes
 		Locator::sharkSystem::value().Update(gameTime, clock.GetTurnFraction());
+		// The opening's light falls and its hand lifts the boy and sets him down, by the frame's game time
+		Locator::introSystem::value().Update(static_cast<uint32_t>(clock.GetFrameGameTime().count()));
 		// The gates and the other scenery the scripts open and close play on, and the plinths' stones sit or sink
 		Locator::animatedStaticSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
 	}
@@ -3555,6 +3564,8 @@ void Game::PrepareNewLand()
 		Locator::waterRingSystem::value().Reset();
 	}
 	Locator::cinematicDirectorSystem::value().Reset();
+	// Nor the opening's light and hand
+	Locator::introSystem::value().ReleaseAll();
 	// Nor does any script keep the camera, the game's speed or the dialogue
 	if (Locator::camera::has_value())
 	{

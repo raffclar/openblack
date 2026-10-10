@@ -13,6 +13,7 @@
 #include <optional>
 
 #include <entt/core/fwd.hpp>
+#include <glm/vec3.hpp>
 
 #include "ECS/HighDetailRules.h"
 
@@ -29,6 +30,8 @@ struct HighDetail
 	/// The face its eyes are drawn with, when it wears a detailed model
 	std::optional<high_detail_rules::Face> face;
 	high_detail_rules::DrawOrders orders;
+	/// Drawn here, facing as it does, rather than where it stands: while the opening's hand holds it
+	std::optional<glm::vec3> heldAt;
 };
 
 } // namespace openblack::ecs::components

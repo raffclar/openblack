@@ -147,6 +147,8 @@ private:
 	/// The particle effects in the order the camera of the pass draws them, among the other things that blend: runs of
 	/// sprites that share a sheet as one instanced draw, ribbons, models and mists
 	void DrawParticles(const DrawSceneDesc& desc) const;
+	/// The opening's light falling from the sky, and its flash where it lands
+	void DrawIntroLight(const DrawSceneDesc& desc) const;
 	/// The ghosts of the buildings effects destroyed, each laying its depth through a scrolling pattern and then added
 	/// over itself where it did, the farthest first
 	void DrawDestructionGhosts(const DrawSceneDesc& desc) const;
