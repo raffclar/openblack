@@ -121,6 +121,7 @@
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
+#include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
@@ -3875,9 +3876,12 @@ void CallInNotNear() // 141 CALL_IN_NOT_NEAR
 
 void SetCameraZone() // 142 SET_CAMERA_ZONE
 {
-	// const auto filename = PopString();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto fileName = PopString();
+	// The world camera is kept inside the file's fence and under its height limits from now on
+	if (!Locator::cameraZoneSystem::value().SetZones(fileName))
+	{
+		ScriptMessage(fmt::format("Couldn't load zone file-.\\Data\\Zones\\{}", fileName));
+	}
 }
 
 void GetObjectState() // 143 GET_OBJECT_STATE

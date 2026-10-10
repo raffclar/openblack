@@ -92,6 +92,9 @@ private:
 	/// Corrects distance of the camera from the island
 	/// @return If a modification to the camera position was applied.
 	bool ConstrainDisc();
+	/// The land's camera zones: the camera is put back inside the fence, raised off the land, and slid down under its
+	/// height limit; whether it was moved
+	bool ConstrainZones(glm::vec3 originAtFrameStart);
 
 	[[nodiscard]] glm::vec3 GetTargetForwardVector() const;
 	[[nodiscard]] glm::vec3 GetTargetForwardUnitVector() const;

@@ -335,6 +335,8 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_script_camera camera/test_script_camera.cpp)
 target_link_libraries(test_script_camera PRIVATE edt)
+openblack_setup_and_add_test(test_camera_zones camera/test_camera_zones.cpp)
+target_link_libraries(test_camera_zones PRIVATE exc)
 openblack_setup_and_add_test(test_temple_doors temple/test_temple_doors.cpp)
 openblack_setup_and_add_test(
   test_creature_cave_effects temple/test_creature_cave_effects.cpp
