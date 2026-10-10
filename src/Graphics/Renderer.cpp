@@ -69,6 +69,7 @@
 #include "ECS/AbodeKnock.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/ChimneySmoke.h"
 #include "ECS/Components/Cloud.h"
@@ -3413,12 +3414,14 @@ void Renderer::DrawMoon(RenderPass viewId) const
 	{
 		return;
 	}
-	// The moon keeps its place beside the player's camera and faces it. Drawn so in the mirrored view, it is mirrored
-	// in the sea with everything else.
+	// The moon keeps its place beside the player's camera and faces it. The sea shows it mirrored, and the glow of a
+	// copy of it with its height mirrored through sea level.
+	const bool inTheSea = viewId == RenderPass::ReflectionSky;
 	const auto& camera = Locator::camera::value();
 	const auto centre = camera.GetOrigin() + moon->placement->offset;
 	const auto view = camera.GetViewMatrix(Camera::Interpolation::Current);
-	const auto basis = moon::Basis(view, glm::inverse(view), centre);
+	const auto inverseView = glm::inverse(view);
+	const auto basis = moon::Basis(view, inverseView, centre);
 	const auto& colour = moon->colour;
 	// It shows less through an overcast
 	const float alpha = moon->strength / 255.0f;
@@ -3427,17 +3430,20 @@ void Renderer::DrawMoon(RenderPass viewId) const
 		return;
 	}
 
-	// First its glow, added to the sky
-	const auto& textures = Locator::resources::value().GetTextures();
-	bgfx::VertexLayout layout;
-	layout.begin()
-	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-	    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
-	    .end();
-	constexpr auto k_GlowVertices = static_cast<uint32_t>(moon::k_GlowIndices.size());
-	if (glowLook != nullptr && textures.Contains(glowLook->textureId) && textures.Contains(glowLook->alphaTextureId) &&
-	    bgfx::getAvailTransientVertexBuffer(k_GlowVertices, layout) == k_GlowVertices)
-	{
+	// Its glow, added to the sky
+	const auto drawGlow = [&](const moon::Glow& glow) {
+		const auto& textures = Locator::resources::value().GetTextures();
+		bgfx::VertexLayout layout;
+		layout.begin()
+		    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+		    .end();
+		constexpr auto k_GlowVertices = static_cast<uint32_t>(moon::k_GlowIndices.size());
+		if (glowLook == nullptr || !textures.Contains(glowLook->textureId) || !textures.Contains(glowLook->alphaTextureId) ||
+		    bgfx::getAvailTransientVertexBuffer(k_GlowVertices, layout) != k_GlowVertices)
+		{
+			return;
+		}
 		struct Vertex
 		{
 			glm::vec3 position;
@@ -3446,7 +3452,6 @@ void Renderer::DrawMoon(RenderPass viewId) const
 		bgfx::TransientVertexBuffer buffer;
 		bgfx::allocTransientVertexBuffer(&buffer, k_GlowVertices, layout);
 		const auto vertices = std::span(reinterpret_cast<Vertex*>(buffer.data), k_GlowVertices);
-		const auto glow = moon::MakeGlow(basis, centre);
 		for (size_t i = 0; i < vertices.size(); ++i)
 		{
 			const auto corner = moon::k_GlowIndices.at(i);
@@ -3464,21 +3469,37 @@ void Renderer::DrawMoon(RenderPass viewId) const
 		bgfx::setVertexBuffer(0, &buffer);
 		bgfx::setState(k_AdditiveState | BGFX_STATE_DEPTH_TEST_GREATER);
 		program->Submit(static_cast<bgfx::ViewId>(viewId));
-	}
+	};
 
-	// Then the moon, blended over the sky, its face turned to the real moon's phase. It leaves its depth, so the land
-	// nearer than it is drawn over it and the land beyond it stays hidden.
-	const auto phase = moon->phase;
-	DrawCelestialMesh(
-	    viewId, {
-	                .meshId = body->meshId,
-	                .textureId = body->textureId,
-	                .alphaTextureId = body->alphaTextureId,
-	                .model = moon::Model(basis, centre, phase),
-	                .colour = glm::vec4(colour, alpha),
-	                .celestial = {std::cos(phase), std::sin(phase), 1.0f, 1.0f},
-	                .state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA,
-	            });
+	// The moon, blended over the sky, its face turned to the real moon's phase. It leaves its depth, so the land nearer
+	// than it is drawn over it and the land beyond it stays hidden. Its half sphere shows only its outside, as its
+	// material is one sided: the half turned away from the camera, around a new moon, shows nothing. Mirrored in the
+	// sea, the faces that turn towards the camera are the other way round.
+	const auto drawMoon = [&]() {
+		const auto phase = moon->phase;
+		DrawCelestialMesh(viewId, {
+		                              .meshId = body->meshId,
+		                              .textureId = body->textureId,
+		                              .alphaTextureId = body->alphaTextureId,
+		                              .model = moon::Model(basis, centre, phase),
+		                              .colour = glm::vec4(colour, alpha),
+		                              .celestial = {std::cos(phase), std::sin(phase), 1.0f, 1.0f},
+		                              .state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER |
+		                                       BGFX_STATE_BLEND_ALPHA | (inTheSea ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW),
+		                          });
+	};
+
+	if (inTheSea)
+	{
+		// In the sea, the moon mirrored with everything else by the mirrored view, then the glow of its copy, which
+		// the mirrored moon in front of it hides
+		drawMoon();
+		drawGlow(moon::SeaGlow(view, inverseView, centre));
+		return;
+	}
+	// In the sky, the glow first, then the moon over it
+	drawGlow(moon::MakeGlow(basis, centre));
+	drawMoon();
 }
 
 void Renderer::DrawSun(RenderPass viewId) const
@@ -4654,7 +4675,8 @@ void Renderer::SelectDrawnCreatures(const DrawSceneDesc& drawDesc) const
 	for (const auto& [entity, instance] : draws)
 	{
 		// The animals are drawn one by one by themselves
-		if (!drawDesc.entities.AnyOf<ecs::components::AnimalPose, ecs::components::VillagerPose>(entity))
+		if (!drawDesc.entities.AnyOf<ecs::components::AnimalPose, ecs::components::VillagerPose,
+		                             ecs::components::AnimatedStaticPose>(entity))
 		{
 			_drawnCreatures.push_back({.entity = entity, .instance = instance});
 		}
@@ -5477,6 +5499,27 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				                             .morphTargets = nullptr};
 				drawInstances(meshId, *placers, placers->materialBlending, instance, 1, &entityPose);
 			};
+			// The gates and other scenery the scripts open and close, each posed by its own clip
+			const auto drawPosedStill = [&](entt::entity entity, uint32_t instance) {
+				const auto* still = desc.entities.TryGet<const ecs::components::AnimatedStaticPose>(entity);
+				const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
+				if (still == nullptr || mesh == nullptr || !meshManager.Contains(mesh->id))
+				{
+					return;
+				}
+				const auto placers = renderCtx.instancedDrawDescs.find(mesh->id);
+				if (placers == renderCtx.instancedDrawDescs.end() ||
+				    (desc.viewId == RenderPass::Reflection && placers->second.hiddenFromReflection))
+				{
+					return;
+				}
+				const auto model = meshManager.Handle(mesh->id);
+				const bool posed = still->bones.size() == model->GetBoneMatrices().size();
+				const EntityPose entityPose {.bones = posed ? std::span<const glm::mat4>(still->bones)
+				                                            : std::span<const glm::mat4>(model->GetBoneMatrices()),
+				                             .morphTargets = nullptr};
+				drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &entityPose);
+			};
 			// The animals of a model drawn at once, in their light: the brightest of the land's, or white
 			for (const auto& [meshId, group] : _animalBoneGroups)
 			{
@@ -5503,6 +5546,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			{
 				drawAnimal(entity, instance, false);
 				drawVillager(entity, instance);
+				drawPosedStill(entity, instance);
 			}
 			// The villagers, a draw for each of their meshes, each instance posed by its own bones in the bone palette
 			if (renderCtx.bonePaletteTexture)

@@ -32,6 +32,8 @@ struct Inputs
 	float scriptHour;
 	/// The computer's date and time, in seconds since 1970, which gives the moon's phase
 	int64_t unixTime;
+	/// The machine's clock in milliseconds, which paces how often the date is read
+	uint32_t ticks;
 	/// What the land's light of the frame is built from: the sky's type, the alignment it shows, and the clouds and
 	/// lightning over the camera
 	LandLightInputs landLight;
@@ -48,8 +50,16 @@ struct Inputs
 /// The moon at an hour of script time and a date: its place and phase, its colour and strength not yet worked out
 [[nodiscard]] ecs::components::Moon MoonAt(float scriptHour, int64_t unixTime);
 
+/// The date is read again for the moon's phase only once more than this has gone by on the machine's clock since it was
+/// last read
+inline constexpr int32_t k_MoonDateReadInterval = 2000;
+
+/// The date the moon's phase is taken from, in seconds since 1970: the override, or the computer's as last read
+[[nodiscard]] int64_t MoonDate(const ecs::components::Moon& moon);
+
 /// Keeps the frame's land light on the dome, places the sun and moon for the frame, gives the moon its colour and works
-/// out how strongly they show
+/// out how strongly they show. Only a moon that shows reads the date
+/// (at most once every two seconds) and takes up its phase.
 void Update(const Inputs& inputs, ecs::components::SkyDome& dome, ecs::components::Sun& sun, ecs::components::Moon& moon);
 
 /// The rows of the dome to blend again this frame, for the frame's sky type: the blend follows the sky only while
