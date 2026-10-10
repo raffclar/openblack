@@ -27,9 +27,11 @@
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Camera.h"
+#include "CameraZones.h"
 #include "Common/MachineClock.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
+#include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
@@ -553,6 +555,40 @@ void DefaultWorldCameraModel::UpdateFocusDistance()
 	        .value_or(glm::max(10.0f, _averageIslandDistance));
 }
 
+bool DefaultWorldCameraModel::ConstrainZones(glm::vec3 originAtFrameStart)
+{
+	if (!Locator::cameraZoneSystem::has_value() || !Locator::terrainSystem::has_value())
+	{
+		return false;
+	}
+	const auto& zones = Locator::cameraZoneSystem::value().GetZones();
+	bool adjusted = false;
+	// Outside the fence it is put back inside, what it looks at moving with it
+	if (const auto pushed = camera_zones::PushInsideFence(zones.fence, zones.fenceOn, originAtFrameStart, _targetOrigin,
+	                                                      _targetFocus, camera_zones::k_SearchRadius);
+	    pushed.has_value())
+	{
+		_targetOrigin += *pushed;
+		_targetFocus += *pushed;
+		adjusted = true;
+	}
+	adjusted |= ConstrainAltitude();
+	// Above its height limit it slides down the line it looks along
+	if (zones.exclusionsOn)
+	{
+		const auto ground = Locator::terrainSystem::value().GetHeightAt(glm::xz(_targetOrigin));
+		if (const auto slide =
+		        camera_zones::SlideUnderLimit(_targetOrigin, _targetFocus, camera_zones::HeightLimit(zones, ground));
+		    slide.has_value())
+		{
+			_targetOrigin += *slide;
+			_targetFocus += *slide;
+			adjusted = true;
+		}
+	}
+	return adjusted;
+}
+
 std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraModel::Update(std::chrono::microseconds dt,
                                                                                           const Camera& camera)
 {
@@ -611,7 +647,7 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 
 	UpdateMode(camera, eulerAngles, zoomDelta, mouseCurrent);
 
-	const bool originHasBeenAdjusted = ConstrainCamera(dt, mouseMovementDistance, eulerAngles, camera);
+	bool originHasBeenAdjusted = ConstrainCamera(dt, mouseMovementDistance, eulerAngles, camera);
 
 	// The self-tilting camera keeps to its height over the land, where it was at the start of the frame, looking the way
 	// it now does, unless the land is dragged without turning or zooming
@@ -627,6 +663,8 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 		_targetFocus += origin - _targetOrigin;
 		_targetOrigin = origin;
 	}
+
+	originHasBeenAdjusted |= ConstrainZones(originAtFrameStart);
 
 	return ComputeUpdateReturnInfo(originHasBeenAdjusted, camera.GetInterpolatorTime());
 }

@@ -67,6 +67,7 @@
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/NearClipping.h"
+#include "Camera/ScriptCameraModel.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
@@ -1562,7 +1563,13 @@ bool Game::Update() noexcept
 	// While a miracle's camera path has the camera, the player's camera doesn't move it
 	if (!Locator::cameraPathSystem::value().HoldsCamera())
 	{
-		camera.Update(deltaTime);
+		// A script's camera track runs on the game's time; the camera itself steps as the hand does, so that a cut scene
+		// holds while the game is paused and keeps pace with the game's speed
+		if (auto* scriptCamera = Locator::scriptControlSystem::value().GetScriptCamera(camera); scriptCamera != nullptr)
+		{
+			scriptCamera->PassGameTime(Locator::time::value().GetFrameGameTime());
+		}
+		camera.Update(std::chrono::duration_cast<std::chrono::microseconds>(CameraStepTime()));
 	}
 	FitNearClip();
 	// The temple's camera may have taken the player out of the temple
@@ -4233,16 +4240,18 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 	}
 }
 
-float Game::HandStepSeconds() const
+std::chrono::milliseconds Game::CameraStepTime() const
 {
-	// The hand steps by the frame's real time in whole milliseconds, or by the game's time while a script holds the
-	// widescreen
 	const auto& time = Locator::time::value();
 	const bool scripted = Locator::cinematicDirectorSystem::has_value() &&
 	                      Locator::cinematicDirectorSystem::value().IsWideScreenOn() &&
 	                      Locator::cinematicDirectorSystem::value().GetWideScreenOwner() != 0;
-	const auto step = ecs::systems::CameraStep(time.GetFrameRealTime(), time.GetFrameGameTime(), scripted);
-	return static_cast<float>(static_cast<int32_t>(step.count())) * 0.001f;
+	return ecs::systems::CameraStep(time.GetFrameRealTime(), time.GetFrameGameTime(), scripted);
+}
+
+float Game::HandStepSeconds() const
+{
+	return static_cast<float>(static_cast<int32_t>(CameraStepTime().count())) * 0.001f;
 }
 
 void Game::UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds)

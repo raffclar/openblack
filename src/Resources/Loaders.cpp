@@ -20,6 +20,7 @@
 #include <BinkFile.h>
 #include <DanceFile.h>
 #include <EDTFile.h>
+#include <EXCFile.h>
 #include <GLWFile.h>
 #include <GestureFile.h>
 #include <HelpDudeFile.h>
@@ -824,6 +825,17 @@ CameraEditLoader::result_type CameraEditLoader::operator()(FromDiskTag, const st
 	{
 		throw std::runtime_error("Unable to load the camera editor's file " + path.string() + ": " +
 		                         std::string(edt::ResultToStr(result)));
+	}
+	return file;
+}
+
+CameraZoneLoader::result_type CameraZoneLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
+{
+	auto file = std::make_shared<exc::EXCFile>();
+	if (const auto result = file->Open(Locator::filesystem::value().ReadAll(path)); result != exc::EXCResult::Success)
+	{
+		throw std::runtime_error("Unable to load the camera zones " + path.string() + ": " +
+		                         std::string(exc::ResultToStr(result)));
 	}
 	return file;
 }
