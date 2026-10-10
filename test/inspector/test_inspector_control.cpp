@@ -359,12 +359,6 @@ TEST(InspectorScripts, ANativeIsGivenTheTypesItTakes)
 	EXPECT_EQ(scripts.given[2].type, ScriptValue::Type::Boolean);
 	EXPECT_TRUE(scripts.given[2].boolean);
 
-	// Given as an integer, a float slot still takes a float; true for the truth
-	Ask(inspector, R"({"query": "script.call", "params": {"native": "SAY", "args": [{"int": 7}, {"int": 3}, true]}})");
-	EXPECT_EQ(scripts.given[0].integer, 7);
-	EXPECT_EQ(scripts.given[1].type, ScriptValue::Type::Float);
-	EXPECT_FLOAT_EQ(scripts.given[1].number, 3.0f);
-
 	// What can't be the slot's type is refused, naming the argument
 	EXPECT_NE(Refused(inspector, R"({"query": "script.call", "params": {"native": "SAY", "args": [1.5, 2, true]}})")
 	              .find("argument 1"),
@@ -372,6 +366,12 @@ TEST(InspectorScripts, ANativeIsGivenTheTypesItTakes)
 	EXPECT_NE(
 	    Refused(inspector, R"({"query": "script.call", "params": {"native": "SAY", "args": [3, 2, 5]}})").find("argument 3"),
 	    std::string::npos);
+	// {"int"} and {"float"} go as given, whatever the slot says: the explicit way past it
+	Ask(inspector, R"({"query": "script.call", "params": {"native": "SAY", "args": [{"float": 1203}, {"int": 2}, true]}})");
+	EXPECT_EQ(scripts.given[0].type, ScriptValue::Type::Float);
+	EXPECT_FLOAT_EQ(scripts.given[0].number, 1203.0f);
+	EXPECT_EQ(scripts.given[1].type, ScriptValue::Type::Int);
+	EXPECT_EQ(scripts.given[1].integer, 2);
 	// A native whose types aren't known takes the values as given
 	Ask(inspector, R"({"query": "script.call", "params": {"native": "ADD", "args": [2, 3]}})");
 	EXPECT_EQ(scripts.given[0].type, ScriptValue::Type::Float);

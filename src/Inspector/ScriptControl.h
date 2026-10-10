@@ -40,12 +40,15 @@ struct ScriptValue
 	uint32_t object {0};
 	int32_t integer {0};
 	bool boolean {false};
+	/// Given with its type ({"int": n}, {"float": x}): it goes on the stack as that, whatever the native's slot says
+	bool typeGiven {false};
 };
 
 /// A value as JSON: a number, true or false, or {"object": id}
 [[nodiscard]] Json ToJson(const ScriptValue& value);
 /// The values a native is given: a number is a float, true or false a boolean, [x, y, z] a vector (three values),
-/// {"object": id} an object and {"int": n} a whole number. None, with why not, when one doesn't read.
+/// {"object": id} an object, {"int": n} a whole number and {"float": x} a float, the last two kept as given. None, with why
+/// not, when one doesn't read.
 [[nodiscard]] std::optional<std::vector<ScriptValue>> ArgumentsFromJson(const Json& args, std::string& error);
 /// The types a native's stack slots take, from the language's table of natives' arguments (a position is three vector
 /// slots; a string or a value of any type is none); empty when the table doesn't know them or they don't add up to the

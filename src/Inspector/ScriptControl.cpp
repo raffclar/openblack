@@ -206,12 +206,19 @@ std::optional<std::vector<ScriptValue>> openblack::inspector::ArgumentsFromJson(
 		}
 		else if (arg.is_object() && arg.contains("int") && arg.find("int")->is_number_integer())
 		{
-			values.push_back(
-			    {.type = ScriptValue::Type::Int, .integer = static_cast<int32_t>(arg.find("int")->get<int64_t>())});
+			values.push_back({.type = ScriptValue::Type::Int,
+			                  .integer = static_cast<int32_t>(arg.find("int")->get<int64_t>()),
+			                  .typeGiven = true});
+		}
+		else if (arg.is_object() && arg.contains("float") && arg.find("float")->is_number())
+		{
+			values.push_back({.type = ScriptValue::Type::Float,
+			                  .number = static_cast<float>(arg.find("float")->get<double>()),
+			                  .typeGiven = true});
 		}
 		else
 		{
-			error = "an argument is a number, true or false, [x, y, z], {\"object\": id} or {\"int\": n}";
+			error = "an argument is a number, true or false, [x, y, z], {\"object\": id}, {\"int\": n} or {\"float\": x}";
 			return std::nullopt;
 		}
 		if (values.size() > k_MostArguments)
@@ -287,7 +294,8 @@ bool openblack::inspector::TypeArguments(std::vector<ScriptValue>& values,
 		}
 		auto& value = values[i];
 		const auto wanted = *slots[i];
-		if (value.type == wanted)
+		// Given with its type, it goes as that: the explicit way past a native's slot
+		if (value.type == wanted || value.typeGiven)
 		{
 			continue;
 		}
@@ -471,10 +479,13 @@ void openblack::inspector::AddScriptControls(FunctionProvider& provider, ScriptT
 	        "Calls a script native as a script's call to it would, with its arguments in order (a vector is "
 	        "[x, y, z]); what it gave back. Natives that wait for something or run over turns aren't for this",
 	        {Parameter("native", "string or integer", "The native's name or number, from script.functions", true),
-	         Parameter("args", "array",
-	                   "Numbers, true or false, [x, y, z], {\"object\": id} or {\"int\": n}, as many as it takes; each goes on "
-	                   "the stack as the type the native takes, as a script's call puts it",
-	                   false)},
+	         Parameter(
+	             "args", "array",
+	             "Numbers, true or false, [x, y, z], {\"object\": id}, {\"int\": n} or {\"float\": x}, as many as it takes; a "
+	             "plain number goes on the stack as the type the native's slot takes, {\"int\"} and {\"float\"} as "
+	             "given. Each goes on "
+	             "the stack as the type the native takes, as a script's call puts it",
+	             false)},
 	        true),
 	    [&scripts, notLoaded](const QueryContext& context) {
 		    if (!scripts.Loaded())
