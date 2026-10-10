@@ -190,6 +190,7 @@
 #include "ScriptHeaders/ScriptEnums.h"
 #include "ScriptHeaders/ScriptNameLists.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
+#include "ScriptHeaders/ScriptRandom.h"
 #include "ScriptHeaders/ScriptSwitchChanges.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -3159,11 +3160,9 @@ void Played() // 064 PLAYED
 
 void RandomUlong() // 065 RANDOM_ULONG
 {
-	// const auto max = Pop().intVal;
-	// const auto min = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushi(0);
+	const auto high = Pop().uintVal;
+	const auto low = Pop().uintVal;
+	Pushi(static_cast<int32_t>(script::random::WholeNumberBetween(low, high, Locator::gameRandom::value())));
 }
 
 void SetGamespeed() // 066 SET_GAMESPEED
