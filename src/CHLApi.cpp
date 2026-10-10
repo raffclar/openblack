@@ -139,7 +139,9 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
@@ -180,6 +182,7 @@
 #include "Game.h"
 #include "Hand/HandClickRules.h"
 #include "Help/DialogueText.h"
+#include "Help/HelpProfile.h"
 #include "Help/ScriptSpirits.h"
 #include "Help/Spirits.h"
 #include "InfoConstants.h"
@@ -191,6 +194,8 @@
 #include "ScriptHeaders/ScriptEnums.h"
 #include "ScriptHeaders/ScriptNameLists.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
+#include "ScriptHeaders/ScriptRandom.h"
+#include "ScriptHeaders/ScriptSwitchChanges.h"
 #include "Windowing/WindowingInterface.h"
 
 namespace openblack::chlapi
@@ -326,6 +331,30 @@ void DrawLeashes(bool drawn)
 	{
 		Locator::leashSystem::value().SetDrawn(drawn);
 	}
+}
+
+/// The scripts' switches a change of control sets
+void ApplySwitchChanges(const script::switches::SwitchChanges& changes)
+{
+	if (changes.leashesDrawn.has_value())
+	{
+		DrawLeashes(*changes.leashesDrawn);
+	}
+	if (changes.highlightsDrawn.has_value() && Locator::chlapi::has_value())
+	{
+		Locator::chlapi::value().SetHighlightDrawOn(*changes.highlightsDrawn);
+	}
+	if (changes.otherCreatureVoices.has_value() && Locator::creatureAudioSystem::has_value())
+	{
+		Locator::creatureAudioSystem::value().SetOtherVoicesEnabled(*changes.otherCreatureVoices);
+	}
+}
+
+/// Every help script stops, in the world, the temple or a multiplayer game
+void StopHelpScripts()
+{
+	Locator::vm::value().StopTasksOfType(lhvm::ScriptType::Help | lhvm::ScriptType::TempleHelp |
+	                                     lhvm::ScriptType::MultiplayerHelp);
 }
 
 /// The task with the dialogue gives it back: the cinema bars go, and the advisors are sent home
@@ -678,15 +707,41 @@ void CHLApi::TaskStopped(uint32_t task)
 	{
 		director.SetWideScreen(false, 0);
 	}
+	// A hand demonstration it started ends with it
+	if (Locator::handDemoSystem::has_value())
+	{
+		Locator::handDemoSystem::value().TaskStopped(task);
+	}
 	const auto released = Locator::scriptControlSystem::value().TaskStopped(Locator::camera::value(), task);
 	if (released.camera)
 	{
-		DrawLeashes(true);
+		ApplySwitchChanges(script::switches::CameraReleased());
 	}
 	if (released.gameSpeed)
 	{
 		Locator::time::value().SetSpeed(1.0f);
 	}
+}
+
+bool CHLApi::StartHelpScript(std::string_view name)
+{
+	// The kinds of script a single player game starts by name
+	constexpr auto k_SinglePlayerScripts = static_cast<lhvm::ScriptType>(0x7f);
+	auto& dialogue = Locator::dialogueControlSystem::value();
+	if (const auto owner = dialogue.GetOwner(); owner != 0)
+	{
+		// A help script holding the dialogue gives way; its tasks give it back as they stop
+		if (TaskType(owner) == lhvm::ScriptType::Help)
+		{
+			StopHelpScripts();
+		}
+		if (dialogue.GetOwner() != 0)
+		{
+			return false;
+		}
+	}
+	Locator::vm::value().StartScript(std::string(name), k_SinglePlayerScripts);
+	return true;
 }
 
 /// An object handed to a script: none is the script's object 0
@@ -2046,10 +2101,9 @@ void StartCameraControl() // 030 START_CAMERA_CONTROL
 	const bool taken = Locator::scriptControlSystem::value().StartCameraControl(
 	    Locator::camera::value(), {.task = task, .templeScript = templeScript, .insideTemple = insideTemple},
 	    [](float x, float z) { return Locator::terrainSystem::value().GetHeightAt(glm::vec2(x, z)); });
-	// Out in the world the leashes aren't drawn during the script's shots
-	if (taken && !insideTemple)
+	if (taken)
 	{
-		DrawLeashes(false);
+		ApplySwitchChanges(script::switches::CameraTaken(insideTemple));
 	}
 	Pushb(taken);
 }
@@ -2058,7 +2112,7 @@ void EndCameraControl() // 031 END_CAMERA_CONTROL
 {
 	if (Locator::scriptControlSystem::value().EndCameraControl(Locator::camera::value(), CurrentTask()))
 	{
-		DrawLeashes(true);
+		ApplySwitchChanges(script::switches::CameraReleased());
 	}
 }
 
@@ -3144,11 +3198,9 @@ void Played() // 064 PLAYED
 
 void RandomUlong() // 065 RANDOM_ULONG
 {
-	// const auto max = Pop().intVal;
-	// const auto min = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushi(0);
+	const auto high = Pop().uintVal;
+	const auto low = Pop().uintVal;
+	Pushi(static_cast<int32_t>(script::random::WholeNumberBetween(low, high, Locator::gameRandom::value())));
 }
 
 void SetGamespeed() // 066 SET_GAMESPEED
@@ -3776,8 +3828,7 @@ void StartDialogue() // 120 START_DIALOGUE
 		// A story script takes the dialogue from a help script, whose tasks are stopped and so give it back
 		if (TaskType(owner) == lhvm::ScriptType::Help && TaskType(task) == lhvm::ScriptType::Script)
 		{
-			Locator::vm::value().StopTasksOfType(lhvm::ScriptType::Help | lhvm::ScriptType::TempleHelp |
-			                                     lhvm::ScriptType::MultiplayerHelp);
+			StopHelpScripts();
 			owner = dialogue.GetOwner();
 		}
 		if (owner != 0)
@@ -3801,6 +3852,7 @@ void EndDialogue() // 121 END_DIALOGUE
 	}
 	dialogue.SendSpiritsHome(TaskType(task) == lhvm::ScriptType::Help);
 	ReleaseDialogue(task);
+	ApplySwitchChanges(script::switches::DialogueEnded());
 }
 
 void IsDialogueReady() // 122 IS_DIALOGUE_READY
@@ -5186,28 +5238,34 @@ void GetDesire() // 234 GET_DESIRE
 	Pushf(0.0f);
 }
 
+/// The help profile's count of an event the script asks about, none (with an error) for a number it may not ask about
+help::profile::EventCount* ScriptHelpEvent()
+{
+	const auto event = Pop().intVal;
+	if (!help::profile::HelpProfile::ScriptMayAsk(event))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid event");
+		return nullptr;
+	}
+	return &Locator::helpProfileSystem::value().Get().Count(static_cast<uint32_t>(event));
+}
+
 void GetEventsPerSecond() // 235 GET_EVENTS_PER_SECOND
 {
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	auto* count = ScriptHelpEvent();
+	Pushf(count != nullptr ? count->PerSecond(Locator::helpProfileSystem::value().Get().Clock()) : 0.0f);
 }
 
 void GetTimeSince() // 236 GET_TIME_SINCE
 {
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	auto* count = ScriptHelpEvent();
+	Pushf(count != nullptr ? count->SecondsSince(Locator::helpProfileSystem::value().Get().Clock()) : 0.0f);
 }
 
 void GetTotalEvents() // 237 GET_TOTAL_EVENTS
 {
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto* count = ScriptHelpEvent();
+	Pushf(count != nullptr ? static_cast<float>(count->Total()) : 0.0f);
 }
 
 void UpdateSnapshot() // 238 UPDATE_SNAPSHOT
@@ -5567,18 +5625,16 @@ void GetObjectFade() // 265 GET_OBJECT_FADE
 
 void PlayHandDemo() // 266 PLAY_HAND_DEMO
 {
-	// const auto withoutHandModify = static_cast<bool>(Pop().intVal);
-	// const auto withPause = static_cast<bool>(Pop().intVal);
-	// const auto string = PopString();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto withoutHandModify = Pop().intVal != 0;
+	const auto withPause = Pop().intVal != 0;
+	const auto name = PopString();
+	Locator::handDemoSystem::value().Play(name, CurrentTask(), withPause, withoutHandModify);
 }
 
 void IsPlayingHandDemo() // 267 IS_PLAYING_HAND_DEMO
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// The scripts' "hand demonstration played": true when none plays
+	Pushb(!Locator::handDemoSystem::value().IsPlaying(0));
 }
 
 void GetArsePosition() // 268 GET_ARSE_POSITION
@@ -5803,8 +5859,7 @@ void SetHighGraphicsDetail() // 290 SET_HIGH_GRAPHICS_DETAIL
 		return;
 	}
 	// The thing is drawn in high detail for the script's cinema, or as usual again
-	// TODO(opening): the high-detail drawing itself: the eyes and their blinking, the eased turning and the blending
-	// between clips
+	// TODO(opening): the high-detail body's eased turning and its blending between clips
 	auto& highDetail = Locator::highDetailSystem::value();
 	if (enable)
 	{
@@ -6296,9 +6351,8 @@ void LastMusicLine() // 335 LAST_MUSIC_LINE
 
 void HandDemoTrigger() // 336 HAND_DEMO_TRIGGER
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// Whether the demonstration reached a mark; asking lets a demonstration held there go on
+	Pushb(Locator::handDemoSystem::value().TakeTrigger());
 }
 
 void GetBellyPosition() // 337 GET_BELLY_POSITION
@@ -6546,20 +6600,46 @@ void SexIsMale() // 358 SEX_IS_MALE
 	Pushb(false);
 }
 
-void GetFirstHelp() // 359 GET_FIRST_HELP
+/// The first help text the help gives about an object: a spell dispenser's is its miracle's, any other object's its
+/// kind's. Both GET_FIRST_HELP and GET_LAST_HELP give this one (the game reads the same text for both), so the scripts'
+/// run of texts from the first to the last is this text alone.
+void PushObjectHelpText()
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
+	const auto object = PopObject();
+	if (object == entt::null)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		Pushf(0.0f);
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (const auto* dispenser = registry.TryGet<const ecs::components::SpellDispenser>(object); dispenser != nullptr)
+	{
+		// The text of the effect its miracle casts
+		const auto& info = Locator::infoConstants::value();
+		if (static_cast<size_t>(dispenser->magicType) >= magic::k_MagicTypeCount)
+		{
+			Pushf(0.0f);
+			return;
+		}
+		const auto effect = magic::GetMagicInfo(info, dispenser->magicType).magicType;
+		Pushf(static_cast<float>(magic::GetMagicEffectInfo(info, effect).helpStartEnum));
+		return;
+	}
+	// TODO(advisor-help): an object's kind's help text needs the info row of every kind of object, which openblack
+	// doesn't look up by thing yet
 	NotImplemented();
 	Pushf(0.0f);
 }
 
+void GetFirstHelp() // 359 GET_FIRST_HELP
+{
+	PushObjectHelpText();
+}
+
 void GetLastHelp() // 360 GET_LAST_HELP
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	PushObjectHelpText();
 }
 
 void IsActive() // 361 IS_ACTIVE
@@ -7477,9 +7557,8 @@ void SaySoundEffectPlaying() // 458 SAY_SOUND_EFFECT_PLAYING
 
 void SetHandDemoKeys() // 459 SET_HAND_DEMO_KEYS
 {
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The game does nothing with it
+	static_cast<void>(Pop());
 }
 
 void CanSkipTutorial() // 460 CAN_SKIP_TUTORIAL

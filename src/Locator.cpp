@@ -69,13 +69,16 @@
 #include "ECS/Systems/Implementations/FootprintSystem.h"
 #include "ECS/Systems/Implementations/ForestSystem.h"
 #include "ECS/Systems/Implementations/GestureSystem.h"
+#include "ECS/Systems/Implementations/HandDemoSystem.h"
 #include "ECS/Systems/Implementations/HandGrabSystem.h"
 #include "ECS/Systems/Implementations/HandSystem.h"
+#include "ECS/Systems/Implementations/HelpProfileSystem.h"
 #include "ECS/Systems/Implementations/HelpSpeechSystem.h"
 #include "ECS/Systems/Implementations/HelpTextSystem.h"
 #include "ECS/Systems/Implementations/HighDetailSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
 #include "ECS/Systems/Implementations/ScriptHighlightSystem.h"
+#include "ECS/Systems/Implementations/TipBubbleSystem.h"
 #if defined(OPENBLACK_INSPECTOR)
 #include "ECS/Systems/Implementations/InspectorSystem.h"
 #endif
@@ -183,8 +186,10 @@ using openblack::ecs::systems::FootprintSystem;
 using openblack::ecs::systems::ForestSystem;
 using openblack::ecs::systems::GestureEventsInterface;
 using openblack::ecs::systems::GestureSystem;
+using openblack::ecs::systems::HandDemoSystem;
 using openblack::ecs::systems::HandGrabSystem;
 using openblack::ecs::systems::HandSystem;
+using openblack::ecs::systems::HelpProfileSystem;
 using openblack::ecs::systems::HelpSpeechSystem;
 using openblack::ecs::systems::HelpTextSystem;
 using openblack::ecs::systems::HighDetailSystem;
@@ -214,6 +219,7 @@ using openblack::ecs::systems::TeleportSystem;
 using openblack::ecs::systems::TempleDestructionSystem;
 using openblack::ecs::systems::TempleExteriorSystem;
 using openblack::ecs::systems::TimeSystem;
+using openblack::ecs::systems::TipBubbleSystem;
 using openblack::ecs::systems::TornadoSystem;
 using openblack::ecs::systems::TownDesireSystem;
 using openblack::ecs::systems::TownSystem;
@@ -334,6 +340,9 @@ bool openblack::InitializeGame() noexcept
 	Locator::sharkSystem::emplace<SharkSystem>();
 	Locator::videoSystem::emplace<VideoSystem>();
 	Locator::helpTextSystem::emplace<HelpTextSystem>();
+	Locator::helpProfileSystem::emplace<HelpProfileSystem>();
+	Locator::tipBubbleSystem::emplace<TipBubbleSystem>();
+	Locator::handDemoSystem::emplace<HandDemoSystem>();
 	Locator::advisorSystem::emplace<AdvisorSystem>();
 	Locator::soundTagSystem::emplace<SoundTagSystem>();
 	Locator::rainSystem::emplace<RainSystem>();
@@ -479,6 +488,9 @@ void openblack::ShutDownServices()
 	Locator::sharkSystem::reset();
 	Locator::videoSystem::reset();
 	Locator::helpTextSystem::reset();
+	Locator::helpProfileSystem::reset();
+	Locator::tipBubbleSystem::reset();
+	Locator::handDemoSystem::reset();
 	Locator::influenceSystem::reset();
 	Locator::chimneySmokeSystem::reset();
 	Locator::abodeKnockSystem::reset();

@@ -37,6 +37,7 @@
 #include "ECS/Components/Field.h"
 #include "ECS/Components/GroundMark.h"
 #include "ECS/Components/HiddenByState.h"
+#include "ECS/Components/HighDetail.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/MorphWithTerrain.h"
@@ -403,12 +404,17 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    modelMatrix = placed.value_or(glm::mat4(0.0f));
 
 		    // A villager is drawn in less detail the further off it is, fades out, then shows only as a smudge on a blob
-		    // while it stands above the sea. One flying in the physics never fades.
+		    // while it stands above the sea. One flying in the physics never fades, and one a script draws in high detail
+		    // is drawn in full however far off.
 		    auto drawnMesh = DrawnMeshOf(entity, mesh);
 		    auto* slotMap = &_instanceSlots;
 		    std::optional<uint8_t> fade;
-		    if (const auto* detail = registry.TryGet<const DetailMeshes>(entity);
-		        detail != nullptr && camera != nullptr && !registry.AllOf<MorphWithTerrain>(entity))
+		    const auto* detail = registry.TryGet<const DetailMeshes>(entity);
+		    if (detail != nullptr && registry.AllOf<HighDetail>(entity) && !registry.AllOf<MorphWithTerrain>(entity))
+		    {
+			    drawnMesh = detail->meshes.at(static_cast<size_t>(graphics::mesh_detail::Mesh::High));
+		    }
+		    else if (detail != nullptr && camera != nullptr && !registry.AllOf<MorphWithTerrain>(entity))
 		    {
 			    const auto choice = ChooseDetail(*detail, modelMatrix, transform.scale.x, !registry.AllOf<InPhysics>(entity),
 			                                     *camera, modelDetail);

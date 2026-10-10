@@ -85,6 +85,7 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/HiddenByState.h"
+#include "ECS/Components/HighDetail.h"
 #include "ECS/Components/LightBeam.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
@@ -139,6 +140,7 @@
 #include "Graphics/Moon.h"
 #include "Graphics/ObjectShadows.h"
 #include "Graphics/Primitive.h"
+#include "Graphics/ScreenshotCapture.h"
 #include "Graphics/SeaReflection.h"
 #include "Graphics/SeaRows.h"
 #include "Graphics/ShaderManager.h"
@@ -318,6 +320,12 @@ struct BgfxCallback: public bgfx::CallbackI
 			{
 				out[len - 1] = '\0';
 			}
+			// bgfx only says so in its notes when it had no screen to read for a picture, which is then never written
+			if (const auto uncaptured = graphics::UncapturedScreenshotPath(out); uncaptured.has_value())
+			{
+				failures.Record(std::string(*uncaptured),
+				                "the renderer had no screen to read (a Vulkan window has none while it is minimised)");
+			}
 // TODO(bwrsandman): change level to trace
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_DEBUG
 			spdlog::get("graphics")->log(spdlog::source_loc {filePath, line, SPDLOG_FUNCTION}, spdlog::level::debug, out);
@@ -349,57 +357,28 @@ struct BgfxCallback: public bgfx::CallbackI
 	}
 	void cacheWrite([[maybe_unused]] uint64_t id, [[maybe_unused]] const void* data, [[maybe_unused]] uint32_t size) override {}
 	// Saving a screenshot
-	void screenShot(const char* filePath, uint32_t width, uint32_t height, uint32_t pitch, const void* data,
-	                [[maybe_unused]] uint32_t size, bool yflip) override
+	void screenShot(const char* filePath, uint32_t width, uint32_t height, uint32_t pitch, const void* data, uint32_t size,
+	                bool yflip) override
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Taking a screenshot...");
 
-		const auto ext = std::filesystem::path(filePath).extension();
-		if (std::filesystem::path(filePath).extension() == ".png")
+		const auto path = std::filesystem::path(filePath);
+		if (path.extension() != ".png")
 		{
-			// Written aside and renamed once whole, so that whoever waits for the file never reads half of it
-			const auto finalPath = std::filesystem::path(filePath);
-			auto partPath = finalPath;
-			partPath += ".part";
-			bx::FileWriter writer;
-			bx::Error err;
-			if (bx::open(&writer, partPath.string().c_str(), false, &err))
-			{
-				// Strip out alpha for screenshot
-				std::vector<uint32_t> noAlpha;
-				noAlpha.resize(size / sizeof(noAlpha[0]), 0);
-				memcpy(noAlpha.data(), data, size);
-				for (uint32_t y = 0; y < height; ++y)
-				{
-					for (uint32_t x = 0; x < width; ++x)
-					{
-						noAlpha[x + pitch / sizeof(noAlpha[0]) * y] |= 0xFF000000;
-					}
-				}
-
-				bimg::imageWritePng(&writer, width, height, pitch, noAlpha.data(), bimg::TextureFormat::BGRA8, yflip, &err);
-				bx::close(&writer);
-				std::error_code renameError;
-				std::filesystem::rename(partPath, finalPath, renameError);
-				if (renameError)
-				{
-					SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Failed to save Screenshot at {}: {}", filePath,
-					                    renameError.message());
-					return;
-				}
-				SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Screenshot ({}x{}) saved at {}", width, height, filePath);
-			}
-			else
-			{
-				SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Failed to save Screenshot ({}x{}) at {}: {}", width, height,
-				                    filePath, std::string(err.getMessage().getCPtr(), err.getMessage().getLength()));
-			}
+			SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "Not Implemented: {} screenshot ({}x{}) requested at {}",
+			                   path.extension().string(), width, height, filePath);
+			failures.Record(filePath, "only .png pictures can be written");
+			return;
 		}
-		else
+		const auto pixels = std::span(static_cast<const uint8_t*>(data), size);
+		if (const auto why = graphics::WriteScreenshotPng(path, width, height, pitch, pixels, yflip); !why.empty())
 		{
-			SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "Not Implemented: {} screenshot ({}x{}) requested at {}", ext.string(),
-			                   width, height, filePath);
+			SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Failed to save Screenshot ({}x{}) at {}: {}", width, height, filePath,
+			                    why);
+			failures.Record(filePath, "couldn't be written: " + why);
+			return;
 		}
+		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Screenshot ({}x{}) saved at {}", width, height, filePath);
 	}
 	// Saving a video
 	void captureBegin(uint32_t width, uint32_t height, [[maybe_unused]] uint32_t pitch,
@@ -412,6 +391,9 @@ struct BgfxCallback: public bgfx::CallbackI
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "Not Implemented: Video Capture Frame requested");
 	}
+
+	/// The pictures bgfx gave up or couldn't write, told from its render thread
+	graphics::ScreenshotFailures failures;
 };
 
 } // namespace openblack
@@ -486,6 +468,7 @@ Renderer::Renderer(uint32_t bgfxReset, std::unique_ptr<BgfxCallback>&& bgfxCallb
     : _shaderManager(std::make_unique<ShaderManager>())
     , _bgfxCallback(std::move(bgfxCallback))
     , _bgfxReset(bgfxReset)
+    , _offscreenShots(std::make_unique<OffscreenScreenshots>())
 {
 	_shaderManager->LoadShaders();
 	_plane = Primitive::CreatePlane();
@@ -516,6 +499,7 @@ Renderer::Renderer(uint32_t bgfxReset, std::unique_ptr<BgfxCallback>&& bgfxCallb
 
 Renderer::~Renderer() noexcept
 {
+	_offscreenShots.reset();
 	_creatureSkins.clear();
 	_animalBoneTexture.reset();
 	_handSkins.clear();
@@ -1025,6 +1009,10 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			{
 				const auto u_creatureSpellLook = CreatureSpellLookOf(desc.fizz, desc.freeze);
 				setUniform(MeshUniform::CreatureSpellLook, &u_creatureSpellLook);
+			}
+			if (has(MeshUniform::ShadeAt))
+			{
+				setUniform(MeshUniform::ShadeAt, &desc.shadeAt);
 			}
 			if (has(MeshUniform::UvOffset))
 			{
@@ -2757,6 +2745,7 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	};
 	// Every villager out of doors and out of the sea casts one from each foot, on the land beneath it; one too far away
 	// to be drawn a wider one from where it stands, as if the land there were flat
+	// A villager a script draws in high detail casts none
 	desc.entities.Each<const ecs::components::Villager, const ecs::components::Transform, const ecs::components::Mesh>(
 	    [&](entt::entity entity, const ecs::components::Villager& /*villager*/, const ecs::components::Transform& transform,
 	        const ecs::components::Mesh& mesh) {
@@ -2783,7 +2772,7 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 			    addQuad(quad);
 		    }
 	    },
-	    entt::exclude<ecs::components::AtHome, ecs::components::HiddenByState>);
+	    entt::exclude<ecs::components::AtHome, ecs::components::HiddenByState, ecs::components::HighDetail>);
 	for (const auto& far : farVillagers)
 	{
 		auto foot = far.position;
@@ -5635,6 +5624,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawCaveSeeds(desc);
 			DrawGroundBlobs(desc);
 			DrawFarVillagerSmudges(desc);
+			DrawVillagerEyes(desc);
 			DrawGlobes(desc);
 			DrawHandMiracleBands(desc);
 			DrawTribalPower(desc);
@@ -5889,12 +5879,40 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 void Renderer::Frame() noexcept
 {
 	// Advance to next frame. Process submitted rendering primitives.
-	bgfx::frame();
+	const auto frame = bgfx::frame();
 	_shaderManager->FrameEnded();
+	_offscreenShots->FrameEnded(frame, _bgfxCallback->failures);
 }
 
 void Renderer::RequestScreenshot(const std::filesystem::path& filepath) noexcept
 {
-	const bgfx::FrameBufferHandle mainBackbuffer = BGFX_INVALID_HANDLE;
-	bgfx::requestScreenShot(mainBackbuffer, filepath.string().c_str());
+	const bool minimised = Locator::windowing::has_value() && Locator::windowing::value().IsMinimised();
+	const auto size = Locator::windowing::has_value() ? glm::u16vec2(Locator::windowing::value().GetSize()) : glm::u16vec2(0);
+	constexpr uint64_t k_ReadBackCaps = BGFX_CAPS_TEXTURE_READ_BACK | BGFX_CAPS_TEXTURE_BLIT;
+	const bool canReadBack = (bgfx::getCaps()->supported & k_ReadBackCaps) == k_ReadBackCaps;
+	// Vulkan lets go of the window's buffers while it is minimised, where the other renderers keep drawing into them
+	const bool screenDropped = bgfx::getRendererType() == bgfx::RendererType::Vulkan;
+	switch (const auto plan = PlanScreenshot(screenDropped, minimised, canReadBack, size); plan.route)
+	{
+	case ScreenshotRoute::Screen:
+	{
+		const bgfx::FrameBufferHandle mainBackbuffer = BGFX_INVALID_HANDLE;
+		bgfx::requestScreenShot(mainBackbuffer, filepath.string().c_str());
+		break;
+	}
+	case ScreenshotRoute::Offscreen:
+		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "The window is minimised: drawing the frame aside for {}",
+		                   filepath.string());
+		_offscreenShots->Begin(filepath, size);
+		break;
+	case ScreenshotRoute::Refused:
+		SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "No screenshot at {}: {}", filepath.string(), plan.why);
+		_bgfxCallback->failures.Record(filepath.string(), plan.why);
+		break;
+	}
+}
+
+std::optional<std::string> Renderer::TakeScreenshotFailure(const std::filesystem::path& filepath) noexcept
+{
+	return _bgfxCallback->failures.Take(filepath.string());
 }

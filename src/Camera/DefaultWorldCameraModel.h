@@ -35,6 +35,8 @@ class DefaultWorldCameraModel final: public CameraModel
 
 public:
 	DefaultWorldCameraModel();
+	/// A camera taking over from another one keeps its pose: it looks from origin at focus, as it was left
+	DefaultWorldCameraModel(glm::vec3 origin, glm::vec3 focus);
 	~DefaultWorldCameraModel() final;
 
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) final;

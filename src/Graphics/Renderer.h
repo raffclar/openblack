@@ -17,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
@@ -63,6 +64,7 @@ namespace graphics
 {
 class FrameBuffer;
 class L3DSubMesh;
+class OffscreenScreenshots;
 class MorphStreamLayouts;
 class ShaderProgram;
 class Mesh;
@@ -81,6 +83,7 @@ public:
 	void DrawMesh(const L3DMesh& mesh, const L3DMeshSubmitDesc& desc, uint8_t subMeshIndex) const noexcept final;
 	void Frame() noexcept final;
 	void RequestScreenshot(const std::filesystem::path& filepath) noexcept final;
+	[[nodiscard]] std::optional<std::string> TakeScreenshotFailure(const std::filesystem::path& filepath) noexcept final;
 	[[nodiscard]] bool GetDebug() const noexcept final { return _bgfxDebug; }
 	void SetDebug(bool value) noexcept final { _bgfxDebug = value; }
 	[[nodiscard]] bool GetProfile() const noexcept final { return _bgfxProfile; }
@@ -131,6 +134,8 @@ private:
 	void DrawAdvisors(const DrawSceneDesc& desc) const;
 	/// The villagers too far away to be drawn, each a dark smudge facing the view
 	void DrawFarVillagerSmudges(const DrawSceneDesc& desc) const;
+	/// The eyes of the villagers a script draws in high detail, over their faces, in the main view
+	void DrawVillagerEyes(const DrawSceneDesc& desc) const;
 	/// The rain about the camera, each block's in its place among what blends, in the main view
 	void DrawRain(const DrawSceneDesc& desc) const;
 	/// The rings on the water where things splashed, added over the land and the sea
@@ -258,6 +263,7 @@ private:
 		Inset,
 		BonePalette,
 		CreatureSpellLook,
+		ShadeAt,
 
 		_count
 	};
@@ -297,6 +303,7 @@ private:
 	    "u_inset",                //
 	    "s_bonePalette",          //
 	    "u_creatureSpellLook",    //
+	    "u_shadeAt",              //
 	};
 	using MeshUniforms = std::array<std::optional<UniformHandle>, static_cast<size_t>(MeshUniform::_count)>;
 	/// A program's handles of the mesh uniforms it has, looked up by name the first time it draws a mesh
@@ -364,6 +371,8 @@ private:
 	std::unique_ptr<ShaderManager> _shaderManager;
 	std::unique_ptr<BgfxCallback> _bgfxCallback;
 	uint32_t _bgfxReset;
+	/// Pictures of frames drawn aside, while the window has no buffers to read
+	std::unique_ptr<OffscreenScreenshots> _offscreenShots;
 	bool _bgfxDebug = false;
 	bool _bgfxProfile = false;
 
