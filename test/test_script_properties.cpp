@@ -210,3 +210,15 @@ TEST(ScriptProperties, ScriptsNumberTheSpeciesFromTheGiantApe)
 		EXPECT_EQ(ScriptCreatureType(*CreatureTypeFromScript(type)), type);
 	}
 }
+
+TEST(ScriptProperties, AThingFacesAPointByTheWayAcrossTheGroundFromTheXAxis)
+{
+	constexpr float k_Quarter = k_WholeTurnRadians / 4.0f;
+	EXPECT_FLOAT_EQ(FacingAngle({10.0f, 10.0f}, {20.0f, 10.0f}), 0.0f);
+	EXPECT_FLOAT_EQ(FacingAngle({10.0f, 10.0f}, {10.0f, 20.0f}), k_Quarter);
+	EXPECT_FLOAT_EQ(FacingAngle({10.0f, 10.0f}, {0.0f, 10.0f}), 2.0f * k_Quarter);
+	// The ways below the x axis are counted on round the turn, never below 0
+	EXPECT_FLOAT_EQ(FacingAngle({10.0f, 10.0f}, {10.0f, 0.0f}), 3.0f * k_Quarter);
+	EXPECT_GE(FacingAngle({0.0f, 0.0f}, {1.0f, -0.0001f}), 0.0f);
+	EXPECT_LT(FacingAngle({0.0f, 0.0f}, {1.0f, -0.0001f}), k_WholeTurnRadians);
+}
