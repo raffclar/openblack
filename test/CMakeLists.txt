@@ -660,3 +660,4 @@ openblack_setup_and_add_test(
   test_camera_handback camera/test_camera_handback.cpp
 )
 target_link_libraries(test_camera_handback PRIVATE edt)
+openblack_setup_and_add_test(test_script_influence test_script_influence.cpp)

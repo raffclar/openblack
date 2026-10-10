@@ -147,6 +147,7 @@
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerDance.h"
 #include "ECS/Systems/Implementations/VillagerScript.h"
+#include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -192,6 +193,7 @@
 #include "Physics/Body.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptEnums.h"
+#include "ScriptHeaders/ScriptInfluence.h"
 #include "ScriptHeaders/ScriptNameLists.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 #include "ScriptHeaders/ScriptRandom.h"
@@ -3149,12 +3151,19 @@ void InfluencePosition() // 061 INFLUENCE_POSITION
 
 void GetInfluence() // 062 GET_INFLUENCE
 {
-	// const auto position = PopVec();
-	// const auto raw = static_cast<bool>(Pop().intVal);
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto position = PopVec();
+	const auto raw = Pop().intVal != 0;
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	// A player who isn't in the game has no influence anywhere
+	std::optional<float> influence;
+	if (player < PlayerNames::_COUNT && Locator::playerSystem::has_value() && Locator::influenceSystem::has_value() &&
+	    Locator::entitiesRegistry::value().Valid(Locator::playerSystem::value().GetPlayer(player)))
+	{
+		influence = Locator::influenceSystem::value().PlayerInfluence(player, position);
+	}
+	// TODO(raffclar): the influence of the player's allies who let them use theirs, once players can be allies; until
+	// then no player has any
+	Pushf(script::influence::Answer(influence, raw, {}));
 }
 
 void SetInterfaceInteraction() // 063 SET_INTERFACE_INTERACTION
