@@ -271,7 +271,9 @@ QueryResult RegistryProvider::Entity(const ecs::Registry& registry, const Json& 
 	const auto it = params.find("components");
 	if (it != params.end())
 	{
-		const bool all = it->is_string() && it->get<std::string>() == "all";
+		// "all" asks for every component, also when a client sends it as a list (the parameter is a list or "all")
+		const bool all = (it->is_string() && it->get<std::string>() == "all") ||
+		                 (it->is_array() && std::ranges::find(*it, Json("all")) != it->end());
 		const auto names = all ? std::vector<std::string> {} : Names(params, "components");
 		if (all || !names.empty())
 		{
