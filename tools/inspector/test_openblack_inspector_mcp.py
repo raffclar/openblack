@@ -591,6 +591,33 @@ class ArgumentsTest(SessionBase):
         request = mcp.call_request("edit.add", '{"id": 7, "fields": {"life": 1}}', self.CATALOGUE)
         self.assertEqual(request, {"query": "edit.add", "params": {"id": 7, "fields": {"life": 1}}})
 
+    def test_call_reported_forms_with_the_games_own_catalogue(self):
+        # game.frame_time's ms is its parameter, not a request member the game refuses
+        self.assertEqual(mcp.call_request("game.frame_time", '{"ms": 100}'),
+                         {"query": "game.frame_time", "params": {"ms": 100}})
+        # level.testbed takes no parameters: an id goes in params, where the game refuses it by name, rather than
+        # loading the empty testbed as if it had been given (a scenario is game.scenario's id)
+        self.assertEqual(mcp.call_request("level.testbed", '{"id": "movement.course"}'),
+                         {"query": "level.testbed", "params": {"id": "movement.course"}})
+        self.assertEqual(mcp.call_request("game.scenario", '{"id": "movement.course"}'),
+                         {"query": "game.scenario", "params": {"id": "movement.course"}})
+
+    def test_the_game_refuses_by_name_what_the_call_sends(self):
+        def refuse_unknown(request):
+            known = {entry["name"] for entry in mcp.CATALOGUE[request["query"]]["parameters"]}
+            unknown = sorted(set(request.get("params", {})) - known)
+            if unknown:
+                return f"{request['query']} doesn't take {', '.join(unknown)}"
+            return {"params": request.get("params", {})}
+        for query in ("level.testbed", "game.frame_time"):
+            self.first.handlers[query] = refuse_unknown
+        refused = self.session.send(mcp.call_request("level.testbed", '{"id": "movement.course"}'), target={"pid": 1001})
+        self.assertFalse(refused["ok"])
+        self.assertIn("doesn't take id", refused["error"])
+        taken = self.session.send(mcp.call_request("game.frame_time", '{"ms": 100}'), target={"pid": 1001})
+        self.assertTrue(taken["ok"], taken)
+        self.assertEqual(taken["result"]["params"], {"ms": 100})
+
     def test_call_describe_takes_its_query(self):
         request = mcp.call_request("describe", '{"query": "sky.moon"}', self.CATALOGUE)
         self.assertEqual(request, {"query": "describe", "params": {"query": "sky.moon"}})
