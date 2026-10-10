@@ -147,6 +147,10 @@ TEST(InspectorServer, OnlyClientsTakingControlCountAsControlling)
 	ASSERT_TRUE(driving.has_value());
 
 	ASSERT_TRUE(Exchange(*server, *looking, R"({"id": 1, "query": "ping"})").has_value());
+	// The second connection is taken when the server next polls after the system has completed it, which the first's
+	// answer doesn't wait for
+	EXPECT_TRUE(
+	    PollUntil(*server, [](std::string_view) { return std::string(); }, [&server] { return server->ClientCount() == 2; }));
 	EXPECT_EQ(server->ClientCount(), 2);
 	EXPECT_EQ(server->ControllingClientCount(), 0);
 
