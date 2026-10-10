@@ -116,6 +116,7 @@
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
+#include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
@@ -228,6 +229,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"reactionSystem", "magic.reactions"},
     LocatorCoverage {"teleportSystem", "magic.teleport"},
     LocatorCoverage {"creatureCarryOverSystem", "creatures.systems"},
+    LocatorCoverage {"tattooEditorSystem", "creatures.systems"},
     LocatorCoverage {"tornadoSystem", "magic.state"},
     LocatorCoverage {"magicShieldSystem", "magic.state"},
     LocatorCoverage {"forestSystem", "living.forests"},
@@ -1201,6 +1203,14 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		              if (Locator::creatureCarryOverSystem::has_value())
 		              {
 			              result["mind_kept"] = Locator::creatureCarryOverSystem::value().Kept() != nullptr;
+		              }
+		              // The tattoo editor: whether it is open, on which creature, and the tattoo site under the pointer
+		              if (Locator::tattooEditorSystem::has_value())
+		              {
+			              const auto& editor = Locator::tattooEditorSystem::value();
+			              result["tattoo_editor"] = {{"open", editor.IsOpen()},
+			                                         {"creature", Id(editor.GetCreature())},
+			                                         {"hovered_site", Optional(editor.GetHoveredSite())}};
 		              }
 		              return QueryResult::Value(std::move(result));
 	              });
