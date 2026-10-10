@@ -201,11 +201,11 @@ std::vector<std::string> openblack::inspector::ComponentNames(const ecs::Registr
 	std::vector<std::string> names;
 	for (const auto& [id, storage] : registry.Underlying().storage())
 	{
-		if (storage.type() == entt::type_id<entt::entity>() || !storage.contains(entity))
+		if (reflection::StorageType(storage) == entt::type_id<entt::entity>() || !storage.contains(entity))
 		{
 			continue;
 		}
-		names.push_back(reflection::ShortTypeName(storage.type()));
+		names.push_back(reflection::ShortTypeName(reflection::StorageType(storage)));
 	}
 	return names;
 }
@@ -216,17 +216,17 @@ Json openblack::inspector::ComponentsToJson(const ecs::Registry& registry, const
 	Json components = Json::object();
 	for (const auto& [id, storage] : registry.Underlying().storage())
 	{
-		if (storage.type() == entt::type_id<entt::entity>() || !storage.contains(entity))
+		if (reflection::StorageType(storage) == entt::type_id<entt::entity>() || !storage.contains(entity))
 		{
 			continue;
 		}
-		auto name = reflection::ShortTypeName(storage.type());
+		auto name = reflection::ShortTypeName(reflection::StorageType(storage));
 		if (!names.empty() && std::ranges::find(names, name) == names.end())
 		{
 			continue;
 		}
 		// Empty components (tags) hold no value, and are null
-		components[name] = reflection::ComponentToJson(context, storage.type(), storage.value(entity));
+		components[name] = reflection::ComponentToJson(context, reflection::StorageType(storage), storage.value(entity));
 	}
 	return components;
 }
