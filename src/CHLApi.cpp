@@ -55,6 +55,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Creature/CreatureScriptPlay.h"
 #include "Creature/LeashRules.h"
 #include "Creature/TemplePen.h"
 #include "ECS/Archetypes/BallArchetype.h"
@@ -1007,7 +1008,22 @@ void SetScriptState() // 017 SET_SCRIPT_STATE
 		living.VillagerSetScriptState(object, static_cast<VillagerStates>(state));
 		return;
 	}
-	// TODO(opening): creatures, animals and groups of things
+	if (auto* mind = Locator::entitiesRegistry::value().TryGet<ecs::components::CreatureMindState>(object))
+	{
+		// A creature takes no state: it starts playing what the script last gave it to play
+		const auto agenda = creature_script_play::Agenda(mind->scriptPlay);
+		if (!agenda.has_value())
+		{
+			NotImplemented(mind->scriptPlay.animation);
+			return;
+		}
+		if (Locator::creatureMindSystem::has_value())
+		{
+			Locator::creatureMindSystem::value().CarryOutForScript(object, *agenda);
+		}
+		return;
+	}
+	// TODO(opening): animals and groups of things
 	NotImplemented();
 }
 
@@ -1043,7 +1059,13 @@ void SetScriptUlong() // 020 SET_SCRIPT_ULONG
 		Locator::livingActionSystem::value().VillagerSetScriptAnimation(object, static_cast<AnimId>(animation), plays);
 		return;
 	}
-	// TODO(opening): creatures and groups of things
+	if (auto* mind = Locator::entitiesRegistry::value().TryGet<ecs::components::CreatureMindState>(object))
+	{
+		// Kept for the creature until the script tells it to start
+		mind->scriptPlay = {.animation = animation, .plays = plays};
+		return;
+	}
+	// TODO(opening): groups of things
 	NotImplemented();
 }
 
@@ -3047,7 +3069,12 @@ void Played() // 064 PLAYED
 		Pushb(Locator::livingActionSystem::value().VillagerHasPlayedScriptAnimation(object));
 		return;
 	}
-	// TODO(opening): creatures' plans, other living things, the weather and dances
+	if (Locator::entitiesRegistry::value().AllOf<ecs::components::Creature>(object))
+	{
+		Pushb(!Locator::creatureMindSystem::has_value() || Locator::creatureMindSystem::value().HasPlayed(object));
+		return;
+	}
+	// TODO(opening): other living things, the weather and dances
 	NotImplemented();
 	Pushb(true);
 }
