@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <filesystem>
+#include <string_view>
+
 #include <glm/vec2.hpp>
 
 #include "3D/MapCoords.h"
@@ -41,5 +44,14 @@ struct Fizz
 /// Where on the map a script's place puts a loaded creature: only the place's cell is taken, and the creature stands on
 /// the ground in the middle of it
 [[nodiscard]] map_coords::MapCoords ArrivalCoords(glm::vec2 place);
+
+/// The player's creature is kept in two files named after the player's profile file: its mind under the profile's name,
+/// and its physique under the name with "Physique" before it
+struct KeptFiles
+{
+	std::filesystem::path mind;
+	std::filesystem::path physique;
+};
+[[nodiscard]] KeptFiles KeptFilesIn(const std::filesystem::path& folder, std::string_view profileFile);
 
 } // namespace openblack::creature_carry_over

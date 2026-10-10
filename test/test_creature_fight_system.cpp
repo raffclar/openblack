@@ -7,14 +7,18 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <vector>
+
 #include <gtest/gtest.h>
 
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLocomotion.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "Locator.h"
 
 #define LOCATOR_IMPLEMENTATIONS
@@ -27,6 +31,33 @@ namespace fight = openblack::creature_fight;
 
 namespace
 {
+/// Keeps the reactions made, and does nothing else
+class RecordedReactions final: public ecs::systems::ReactionSystemInterface
+{
+public:
+	uint32_t Create(const Source& source) override
+	{
+		made.push_back(source);
+		return static_cast<uint32_t>(made.size());
+	}
+	void Move(uint32_t, const glm::vec3&, const glm::vec3&, float) override {}
+	[[nodiscard]] std::optional<Active> Find(uint32_t) const override { return std::nullopt; }
+	void RemoveFrom(entt::entity) override {}
+	void RemoveFrom(entt::entity, Reaction) override {}
+	void Remove(uint32_t) override {}
+	void SetInitiator(uint32_t, entt::entity) override {}
+	[[nodiscard]] bool IsActive(uint32_t) const override { return false; }
+	[[nodiscard]] bool HasReaction(entt::entity) const override { return false; }
+	void ProcessTurn() override {}
+	void Reset() override {}
+	void SetLandBalance(float) override {}
+	[[nodiscard]] float GetLandBalance() const override { return 1.0f; }
+	[[nodiscard]] std::span<const Active> GetReactions() const override { return {}; }
+	[[nodiscard]] std::vector<Active> ReactionsAt(const glm::vec3&) const override { return {}; }
+
+	std::vector<Source> made;
+};
+
 /// Two creatures duelling in an arena on flat land, neither with a body to click on
 class CreatureFightSystemTest: public ::testing::Test
 {
@@ -117,4 +148,60 @@ TEST_F(CreatureFightSystemTest, ANewLandForgetsThePressAndTheView)
 	Locator::entitiesRegistry::value().Destroy(first);
 	fights.Release(400, 5);
 	EXPECT_FALSE(fights.IsPressed());
+}
+
+TEST_F(CreatureFightSystemTest, AScriptHandsAFighterToTheComputerOrToNobody)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Get<CreatureFighting>(first).fighter.control = fight::Control::Player;
+	EXPECT_TRUE(fights.IsAutoFighting(first));
+	fights.SetAutoFighting(first, false);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(first).fighter.control, fight::Control::None);
+	EXPECT_FALSE(fights.IsAutoFighting(first));
+	// Moves queued for it don't hand it back to anyone
+	EXPECT_TRUE(fights.QueueMove(first, fight::AttackMove(fight::Band::Low), false));
+	EXPECT_FALSE(fights.IsAutoFighting(first));
+	EXPECT_EQ(fights.QueuedBlows(first), 1u);
+	fights.SetAutoFighting(first, true);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(first).fighter.control, fight::Control::Computer);
+	EXPECT_TRUE(fights.IsAutoFighting(first));
+	// A creature that never fought has nobody choosing its moves yet
+	const auto newcomer = MakeCreature(registry, PlayerNames::PLAYER_ONE, {100.0f, 0.0f, 0.0f});
+	EXPECT_FALSE(fights.IsAutoFighting(newcomer));
+	fights.SetAutoFighting(newcomer, true);
+	EXPECT_TRUE(fights.IsAutoFighting(newcomer));
+}
+
+TEST_F(CreatureFightSystemTest, ScriptsAskWhatAFighterIsDoing)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	fight::Enter(registry.Get<CreatureFighting>(first).fighter, fight::State::Stance);
+	EXPECT_EQ(fights.CurrentFightAction(first), fight::FightAction::Stance);
+	const auto newcomer = MakeCreature(registry, PlayerNames::PLAYER_ONE, {100.0f, 0.0f, 0.0f});
+	EXPECT_EQ(fights.CurrentFightAction(newcomer), fight::FightAction::Other);
+	registry.Assign<CreatureKnockedOut>(newcomer);
+	EXPECT_EQ(fights.CurrentFightAction(newcomer), fight::FightAction::Fainted);
+}
+
+TEST_F(CreatureFightSystemTest, AFightWonIsSeenByThoseAroundUnlessAScriptControlsTheWinner)
+{
+	Locator::reactionSystem::emplace<RecordedReactions>();
+	auto& reactions = static_cast<RecordedReactions&>(Locator::reactionSystem::value());
+	fights.KnockOut(second);
+	ASSERT_EQ(reactions.made.size(), 1u);
+	EXPECT_EQ(reactions.made[0].type, Reaction::ReactToFightWon);
+	EXPECT_EQ(reactions.made[0].initiator, first);
+	EXPECT_EQ(reactions.made[0].player, PlayerNames::PLAYER_ONE);
+	EXPECT_TRUE(reactions.made[0].onCast);
+	Locator::reactionSystem::reset();
+}
+
+TEST_F(CreatureFightSystemTest, AScriptControlledWinnerMakesNoReaction)
+{
+	Locator::reactionSystem::emplace<RecordedReactions>();
+	auto& reactions = static_cast<RecordedReactions&>(Locator::reactionSystem::value());
+	Locator::entitiesRegistry::value().Assign<ScriptControlled>(first);
+	fights.KnockOut(second);
+	EXPECT_TRUE(reactions.made.empty());
+	Locator::reactionSystem::reset();
 }

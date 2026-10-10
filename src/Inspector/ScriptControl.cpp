@@ -13,7 +13,10 @@
 #include <cmath>
 
 #include <algorithm>
+#include <span>
 #include <utility>
+
+#include <LHVMNatives.h>
 
 using namespace openblack::inspector;
 
@@ -109,6 +112,15 @@ Json openblack::inspector::ToJson(const ScriptValue& value)
 
 std::optional<ScriptValue> openblack::inspector::ValueOfType(ScriptValue::Type type, const Json& json, std::string& error)
 {
+	// No global is text: a number or a truth written as text, as some tools send one, is read as JSON
+	if (json.is_string())
+	{
+		if (const auto parsed = Parse(json.get<std::string>());
+		    parsed.has_value() && (parsed->is_number() || parsed->is_boolean()))
+		{
+			return ValueOfType(type, *parsed, error);
+		}
+	}
 	ScriptValue value {.type = type};
 	switch (type)
 	{
@@ -194,12 +206,19 @@ std::optional<std::vector<ScriptValue>> openblack::inspector::ArgumentsFromJson(
 		}
 		else if (arg.is_object() && arg.contains("int") && arg.find("int")->is_number_integer())
 		{
-			values.push_back(
-			    {.type = ScriptValue::Type::Int, .integer = static_cast<int32_t>(arg.find("int")->get<int64_t>())});
+			values.push_back({.type = ScriptValue::Type::Int,
+			                  .integer = static_cast<int32_t>(arg.find("int")->get<int64_t>()),
+			                  .typeGiven = true});
+		}
+		else if (arg.is_object() && arg.contains("float") && arg.find("float")->is_number())
+		{
+			values.push_back({.type = ScriptValue::Type::Float,
+			                  .number = static_cast<float>(arg.find("float")->get<double>()),
+			                  .typeGiven = true});
 		}
 		else
 		{
-			error = "an argument is a number, true or false, [x, y, z], {\"object\": id} or {\"int\": n}";
+			error = "an argument is a number, true or false, [x, y, z], {\"object\": id}, {\"int\": n} or {\"float\": x}";
 			return std::nullopt;
 		}
 		if (values.size() > k_MostArguments)
@@ -209,6 +228,129 @@ std::optional<std::vector<ScriptValue>> openblack::inspector::ArgumentsFromJson(
 		}
 	}
 	return values;
+}
+
+std::vector<std::optional<ScriptValue::Type>> openblack::inspector::NativeSlots(std::string_view name, int32_t stackIn)
+{
+	std::vector<std::optional<ScriptValue::Type>> slots;
+	const auto natives = openblack::lhvm::DefaultNativeSignatures();
+	const auto found = std::ranges::find(natives, name, &openblack::lhvm::NativeSignature::name);
+	if (found == natives.end() || found->params.empty() || stackIn < 0)
+	{
+		return {};
+	}
+	for (const auto& param : found->params)
+	{
+		switch (param.type)
+		{
+		case openblack::lhvm::ArgType::Int:
+			slots.emplace_back(ScriptValue::Type::Int);
+			break;
+		case openblack::lhvm::ArgType::Float:
+			slots.emplace_back(ScriptValue::Type::Float);
+			break;
+		case openblack::lhvm::ArgType::Bool:
+			slots.emplace_back(ScriptValue::Type::Boolean);
+			break;
+		case openblack::lhvm::ArgType::Object:
+			slots.emplace_back(ScriptValue::Type::Object);
+			break;
+		case openblack::lhvm::ArgType::Coord:
+			slots.insert(slots.end(), 3, ScriptValue::Type::Vector);
+			break;
+		case openblack::lhvm::ArgType::VarArgs:
+			return {};
+		case openblack::lhvm::ArgType::None:
+		case openblack::lhvm::ArgType::String:
+		case openblack::lhvm::ArgType::Any:
+			slots.emplace_back(std::nullopt);
+			break;
+		}
+	}
+	if (slots.size() != static_cast<size_t>(stackIn))
+	{
+		return {};
+	}
+	return slots;
+}
+
+bool openblack::inspector::TypeArguments(std::vector<ScriptValue>& values,
+                                         std::span<const std::optional<ScriptValue::Type>> slots, std::string& error)
+{
+	if (slots.empty())
+	{
+		return true;
+	}
+	if (slots.size() != values.size())
+	{
+		error = "the native takes " + std::to_string(slots.size()) + " values; " + std::to_string(values.size()) + " given";
+		return false;
+	}
+	for (size_t i = 0; i < values.size(); ++i)
+	{
+		if (!slots[i].has_value())
+		{
+			continue;
+		}
+		auto& value = values[i];
+		const auto wanted = *slots[i];
+		// Given with its type, it goes as that: the explicit way past a native's slot
+		if (value.type == wanted || value.typeGiven)
+		{
+			continue;
+		}
+		const bool number = value.type == ScriptValue::Type::Float || value.type == ScriptValue::Type::Int;
+		const float asFloat = value.type == ScriptValue::Type::Int ? static_cast<float>(value.integer) : value.number;
+		const bool whole = number && std::floor(asFloat) == asFloat;
+		const auto refuse = [&error, i](std::string_view what) {
+			error = "argument " + std::to_string(i + 1) + " must be " + std::string(what);
+			return false;
+		};
+		switch (wanted)
+		{
+		case ScriptValue::Type::Int:
+			if (!whole)
+			{
+				return refuse("a whole number");
+			}
+			value = {.type = ScriptValue::Type::Int, .integer = static_cast<int32_t>(asFloat)};
+			break;
+		case ScriptValue::Type::Float:
+			if (!number)
+			{
+				return refuse("a number");
+			}
+			value = {.type = ScriptValue::Type::Float, .number = asFloat};
+			break;
+		case ScriptValue::Type::Boolean:
+			if (whole && (asFloat == 0.0f || asFloat == 1.0f))
+			{
+				value = {.type = ScriptValue::Type::Boolean, .boolean = asFloat == 1.0f};
+			}
+			else if (value.type != ScriptValue::Type::Boolean)
+			{
+				return refuse("true or false");
+			}
+			break;
+		case ScriptValue::Type::Object:
+			if (whole && asFloat >= 0.0f)
+			{
+				value = {.type = ScriptValue::Type::Object, .object = static_cast<uint32_t>(asFloat)};
+			}
+			else if (value.type != ScriptValue::Type::Object)
+			{
+				return refuse("{\"object\": id}");
+			}
+			break;
+		case ScriptValue::Type::Vector:
+			if (value.type != ScriptValue::Type::Vector)
+			{
+				return refuse("part of a position [x, y, z]");
+			}
+			break;
+		}
+	}
+	return true;
 }
 
 void openblack::inspector::AddScriptControls(FunctionProvider& provider, ScriptTargetInterface& scripts)
@@ -337,8 +479,13 @@ void openblack::inspector::AddScriptControls(FunctionProvider& provider, ScriptT
 	        "Calls a script native as a script's call to it would, with its arguments in order (a vector is "
 	        "[x, y, z]); what it gave back. Natives that wait for something or run over turns aren't for this",
 	        {Parameter("native", "string or integer", "The native's name or number, from script.functions", true),
-	         Parameter("args", "array",
-	                   "Numbers, true or false, [x, y, z], {\"object\": id} or {\"int\": n}, as many as it takes", false)},
+	         Parameter(
+	             "args", "array",
+	             "Numbers, true or false, [x, y, z], {\"object\": id}, {\"int\": n} or {\"float\": x}, as many as it takes; a "
+	             "plain number goes on the stack as the type the native's slot takes, {\"int\"} and {\"float\"} as "
+	             "given. Each goes on "
+	             "the stack as the type the native takes, as a script's call puts it",
+	             false)},
 	        true),
 	    [&scripts, notLoaded](const QueryContext& context) {
 		    if (!scripts.Loaded())
@@ -356,7 +503,7 @@ void openblack::inspector::AddScriptControls(FunctionProvider& provider, ScriptT
 		    }
 		    std::string error;
 		    const auto args = context.params.find("args");
-		    const auto values = ArgumentsFromJson(args != context.params.end() ? *args : Json(nullptr), error);
+		    auto values = ArgumentsFromJson(args != context.params.end() ? *args : Json(nullptr), error);
 		    if (!values.has_value())
 		    {
 			    return QueryResult::Error(error);
@@ -365,6 +512,12 @@ void openblack::inspector::AddScriptControls(FunctionProvider& provider, ScriptT
 		    {
 			    return QueryResult::Error(native->name + " takes " + std::to_string(native->in) +
 			                              " values (a vector is three); " + std::to_string(values->size()) + " given");
+		    }
+		    // Each value goes on the stack as the type the native takes, as a script's call puts it: a number given for
+		    // an integer (a text's number) is an integer, not a float the native would read as a different number
+		    if (!TypeArguments(*values, native->slots, error))
+		    {
+			    return QueryResult::Error(native->name + ": " + error);
 		    }
 		    auto called = scripts.CallNative(native->id, *values);
 		    if (const auto* why = std::get_if<std::string>(&called))

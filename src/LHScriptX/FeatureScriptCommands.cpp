@@ -291,8 +291,13 @@ void FeatureScriptCommands::SetTownBeliefCap(int32_t townId, const std::string& 
 
 void FeatureScriptCommands::SetTownUninhabitable(int32_t townId)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}) not implemented.", __FILE__, __LINE__,
-	                    __func__, townId);
+	// Nobody comes to live in the town: a ruin or an empty village
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& towns = registry.Context().towns;
+	if (const auto town = towns.find(townId); town != towns.end())
+	{
+		registry.Get<Town>(town->second).uninhabitable = true;
+	}
 }
 
 void FeatureScriptCommands::SetTownCongregationPos(int32_t townId, glm::vec3 position)
@@ -315,11 +320,15 @@ void FeatureScriptCommands::CreateAbode(int32_t townId, glm::vec3 position, cons
 }
 
 void FeatureScriptCommands::CreatePlannedAbode(int32_t townId, glm::vec3 position, const std::string& abodeInfo,
-                                               int32_t rotation, int32_t size, int32_t foodAmount, int32_t woodAmount)
+                                               int32_t rotation, int32_t size, int32_t /*foodAmount*/, int32_t /*woodAmount*/)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}, {}, {}, {}, {}, {}) not implemented.",
-	                    __FILE__, __LINE__, __func__, townId, glm::to_string(position), abodeInfo, rotation, size, foodAmount,
-	                    woodAmount);
+	// A building the town is to build later: nothing of it stands yet, and it holds no food or wood
+	const auto type = GAbodeInfo::Find(abodeInfo);
+	if (type == AbodeInfo::None)
+	{
+		return;
+	}
+	AbodeArchetype::CreatePlan(townId, position, type, rotation * 0.001f, size * 0.001f);
 }
 
 void FeatureScriptCommands::CreateTownCentre(int32_t townId, glm::vec3 position, const std::string& abodeInfo, int32_t rotation,

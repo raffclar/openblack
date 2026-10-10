@@ -238,6 +238,10 @@ inline constexpr uint32_t k_FrozenColour = 0x354F8Du;
 /// 1.8 times, within the same limits.
 [[nodiscard]] float SizeTarget(Spell spell, float before, float smallest, float largest,
                                std::optional<float> sizeInFight = std::nullopt);
+/// The smallest and largest a size spell would take a creature now, as the scripts read them: its own limits out of a
+/// fight, and in one its size now taken down to five ninths or up to 1.8 times, within those limits
+[[nodiscard]] float SmallestSizeNow(float smallest, std::optional<float> sizeInFight);
+[[nodiscard]] float LargestSizeNow(float largest, std::optional<float> sizeInFight);
 /// A creature's smallest and largest sizes unless a script changes them
 inline constexpr float k_SmallestSize = 0.2f;
 inline constexpr float k_LargestSize = 2.4f;

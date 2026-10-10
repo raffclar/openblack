@@ -127,7 +127,6 @@ struct MapSources
 // The worship sites
 
 ///   worship.sites                       the worship sites: temple, player, tribe, place, towns, built, prayer power
-///   worship.totems                      the town centres' totems: share, ease, the hand's hold
 [[nodiscard]] std::unique_ptr<ProviderInterface> MakeWorshipProvider(WorldSources sources);
 
 // The players' influence

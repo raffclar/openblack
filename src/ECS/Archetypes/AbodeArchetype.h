@@ -21,6 +21,9 @@ class AbodeArchetype
 public:
 	static entt::entity Create(uint32_t townId, const glm::vec3& position, AbodeInfo type, float yAngleRadians, float scale,
 	                           uint32_t foodAmount, uint32_t woodAmount);
+	/// A building a town is to build later, planned where it will stand; none without a town
+	static entt::entity CreatePlan(uint32_t townId, const glm::vec3& position, AbodeInfo type, float yAngleRadians,
+	                               float scale);
 	AbodeArchetype() = delete;
 };
 } // namespace openblack::ecs::archetypes

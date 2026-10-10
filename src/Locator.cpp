@@ -24,6 +24,7 @@
 #include "Common/EventManager.h"
 #include "Common/GameRandomProduction.h"
 #include "Common/RandomNumberManagerProduction.h"
+#include "Common/UserData.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/MapProduction.h"
@@ -32,6 +33,7 @@
 #include "ECS/Systems/Implementations/AbodeKnockSystem.h"
 #include "ECS/Systems/Implementations/AlignmentSystem.h"
 #include "ECS/Systems/Implementations/AnimalSystem.h"
+#include "ECS/Systems/Implementations/AnimatedStaticSystem.h"
 #include "ECS/Systems/Implementations/BuildingDamageSystem.h"
 #include "ECS/Systems/Implementations/CameraBookmarkSystem.h"
 #include "ECS/Systems/Implementations/CameraHelpSystem.h"
@@ -107,8 +109,8 @@
 #include "ECS/Systems/Implementations/VortexSystem.h"
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
 #include "ECS/Systems/Implementations/WeatherSystem.h"
-#include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/Implementations/WorshipSiteSystem.h"
+#include "ECS/Systems/InspectorSystemInterface.h"
 #include "Graphics/RendererInterface.h"
 #include "Input/GameActionMap.h"
 #include "LHVM.h"
@@ -135,6 +137,7 @@ using openblack::ecs::Registry;
 using openblack::ecs::systems::AbodeKnockSystem;
 using openblack::ecs::systems::AlignmentSystem;
 using openblack::ecs::systems::AnimalSystem;
+using openblack::ecs::systems::AnimatedStaticSystem;
 using openblack::ecs::systems::CameraBookmarkSystem;
 using openblack::ecs::systems::CameraHelpSystem;
 using openblack::ecs::systems::CameraPathSystem;
@@ -313,7 +316,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::teleportSystem::emplace<TeleportSystem>();
 	Locator::vortexSystem::emplace<VortexSystem>();
 	Locator::creatureFizzSystem::emplace<CreatureFizzSystem>();
-	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>();
+	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>(user_data::CreatureMindFolder());
 	Locator::tornadoSystem::emplace<TornadoSystem>();
 	Locator::magicShieldSystem::emplace<MagicShieldSystem>();
 	Locator::forestSystem::emplace<ForestSystem>();
@@ -363,6 +366,7 @@ void InitializeLevelWith(const LandSource& land)
 	Locator::townSystem::emplace<TownSystem>();
 	Locator::worshipSiteSystem::emplace<WorshipSiteSystem>();
 	Locator::resourceStoreSystem::emplace<ResourceStoreSystem>();
+	Locator::animatedStaticSystem::emplace<AnimatedStaticSystem>();
 	Locator::weatherSystem::emplace<WeatherSystem>();
 	Locator::pathfindingSystem::emplace<PathfindingSystem>();
 	// Where creatures can walk is sorted anew for each land
@@ -422,6 +426,7 @@ void openblack::ShutDownServices()
 	Locator::townSystem::reset();
 	Locator::worshipSiteSystem::reset();
 	Locator::resourceStoreSystem::reset();
+	Locator::animatedStaticSystem::reset();
 	Locator::weatherSystem::reset();
 	Locator::handGrabSystem::reset();
 	Locator::handSystem::reset();

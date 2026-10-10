@@ -19,10 +19,8 @@
 #include <limits>
 #include <optional>
 #include <ranges>
-#include <sstream>
 #include <string>
 #include <string_view>
-#include <unordered_set>
 #include <vector>
 
 #include <LHVM.h>
@@ -43,16 +41,21 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameMusic.h"
+#include "Audio/GameSoundEffects.h"
 #include "Audio/ScriptSoundEffect.h"
 #include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/GameRandom.h"
 #include "Creature/LeashRules.h"
 #include "Creature/TemplePen.h"
 #include "ECS/Archetypes/BallArchetype.h"
+#include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
@@ -67,21 +70,34 @@
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/Sky.h"
+#include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WallHug.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
+#include "ECS/ScriptPopulate.h"
+#include "ECS/ScriptSpotVisuals.h"
+#include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
+#include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
@@ -118,6 +134,7 @@
 #include "Physics/Body.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptEnums.h"
+#include "ScriptHeaders/ScriptNameLists.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -145,18 +162,6 @@ using openblack::script::ObjectType;
 const std::vector<lhvm::NativeFunction>& CHLApi::GetFunctionsTable()
 {
 	return _functionsTable;
-}
-
-std::unordered_set<std::string> GetUniqueWords(const std::string& strings)
-{
-	std::unordered_set<std::string> result;
-	std::istringstream iss(strings);
-	std::string word;
-	while (std::getline(iss, word, ' '))
-	{
-		result.insert(word);
-	}
-	return result;
 }
 
 glm::vec3 PopVec()
@@ -248,6 +253,20 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 	}
 	case ObjectType::Ball:
 		return CreateScriptBall(position);
+	case ObjectType::Animal:
+	case ObjectType::Bird:
+		// Made on its own and held still for the script; openblack makes only the land's birds so far
+		if (Locator::animalSystem::has_value())
+		{
+			const auto animal = Locator::animalSystem::value().CreateScriptAnimal(static_cast<AnimalInfo>(subtype),
+			                                                                      glm::vec2(position.x, position.z));
+			if (animal != entt::null)
+			{
+				return animal;
+			}
+		}
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "CreateScriptObject not implemented for animal kind {}", subtype);
+		return static_cast<entt::entity>(0);
 	case ObjectType::Vortex:
 	{
 		// A vortex of the three kinds; the game makes nothing for any other
@@ -335,6 +354,19 @@ uint32_t StartScriptSpotVisual(int32_t effect, glm::vec3 position, int turns, en
 	return id;
 }
 
+/// The thing a script holds for a visual it started, taking its place in the scripts' table as made by a script; none
+/// when no visual was started. The script holds the thing, never the visual's own number.
+static entt::entity ScriptSpotVisualThing(uint32_t effect, glm::vec3 position)
+{
+	if (effect == ecs::systems::ParticleSystemInterface::k_NoEffect)
+	{
+		return entt::null;
+	}
+	const auto thing = ecs::script_spot_visuals::MakeThing(Locator::entitiesRegistry::value(), effect, position);
+	RegisterCreated(thing);
+	return thing;
+}
+
 void Push(VMValue value, DataType type)
 {
 	auto& lhvm = Locator::vm::value();
@@ -385,6 +417,15 @@ CHLApi::CHLApi()
 	InitFunctionsTable2();
 	InitFunctionsTable3();
 	InitFunctionsTable4();
+}
+
+void CHLApi::ResetSwitches()
+{
+	_gameSoundOn = true;
+	if (Locator::creatureAudioSystem::has_value())
+	{
+		Locator::creatureAudioSystem::value().SetOtherVoicesEnabled(true);
+	}
 }
 
 void CHLApi::NotImplemented(std::optional<int32_t> detail)
@@ -793,6 +834,73 @@ static float& NeedValue(creature_physiology::Needs& needs, script::property_rule
 	}
 }
 
+/// Whether a thing is one of the world's objects, which have a life, angles and a height; a town isn't
+static bool IsWorldObject(entt::entity object)
+{
+	return !Locator::entitiesRegistry::value().AllOf<ecs::components::Town>(object);
+}
+
+/// Whether a living thing: its angle is kept by its walking, not by how it was placed
+static bool IsLivingThing(entt::entity object)
+{
+	return Locator::entitiesRegistry::value()
+	    .AnyOf<ecs::components::Villager, ecs::components::Creature, ecs::components::Animal>(object);
+}
+
+/// Whether a thing may lean, so that its angles across and forward are its own; the others always stand upright
+static bool CanLean(entt::entity object)
+{
+	return Locator::entitiesRegistry::value()
+	    .AnyOf<ecs::components::MobileStatic, ecs::components::MobileObject, ecs::components::Pot>(object);
+}
+
+/// Whether a script holds the thing while it owns the widescreen bars
+static bool HeldDuringCutscene(entt::entity object)
+{
+	if (!Locator::entitiesRegistry::value().AllOf<ecs::components::InScript>(object) ||
+	    !Locator::cinematicDirectorSystem::has_value())
+	{
+		return false;
+	}
+	const auto& director = Locator::cinematicDirectorSystem::value();
+	return director.IsWideScreenOn() && director.GetWideScreenOwner() != 0;
+}
+
+/// How tall an object stands to the scripts: a creature by its size, anything else by its model as it is scaled, none
+/// without a model
+static float ScriptHeightOf(entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (const auto* creature = registry.TryGet<const ecs::components::Creature>(object); creature != nullptr)
+	{
+		return script::property_rules::CreatureHeight(creature->size);
+	}
+	const auto* transform = registry.TryGet<const Transform>(object);
+	const auto* mesh = registry.TryGet<const ecs::components::Mesh>(object);
+	if (transform == nullptr || mesh == nullptr || !Locator::resources::has_value())
+	{
+		return 0.0f;
+	}
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	if (!meshes.Contains(mesh->id))
+	{
+		return 0.0f;
+	}
+	return meshes.Handle(mesh->id)->GetBoundingBox().Size().y * transform->scale.y;
+}
+
+/// The script asked for a property the thing doesn't have
+static void CannotGetProperty(script::ObjectPropertyType prop)
+{
+	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Cannot Get Property {}", static_cast<int>(prop));
+	Pushf(0.0f);
+}
+
+static void CannotSetProperty(script::ObjectPropertyType prop)
+{
+	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Cannot Set Property {}", static_cast<int>(prop));
+}
+
 void GetProperty() // 021 GET_PROPERTY
 {
 	const auto object = PopObject();
@@ -868,6 +976,112 @@ void GetProperty() // 021 GET_PROPERTY
 		Pushf(map_coords::Quantise(prop == script::ObjectPropertyType::XPos ? at.x : at.z));
 		return;
 	}
+	case script::ObjectPropertyType::Health:
+		if (!IsWorldObject(object))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object not an object");
+			CannotGetProperty(prop);
+			return;
+		}
+		Pushf(ecs::world_objects::LifeOf(object));
+		return;
+	case script::ObjectPropertyType::Angle:
+	case script::ObjectPropertyType::XAngle:
+	case script::ObjectPropertyType::ZAngle:
+	{
+		const auto* transform = registry.TryGet<const Transform>(object);
+		if (!IsWorldObject(object) || transform == nullptr)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object not an object");
+			CannotGetProperty(prop);
+			return;
+		}
+		if (prop != script::ObjectPropertyType::Angle)
+		{
+			// Only the things that may lean have a lean; everything else stands upright
+			const auto angles = script::property_rules::PlacedAngles(transform->rotation);
+			const float lean = !CanLean(object) ? 0.0f : prop == script::ObjectPropertyType::XAngle ? angles.x : angles.z;
+			Pushf(script::property_rules::AngleToScript(lean));
+			return;
+		}
+		if (IsLivingThing(object))
+		{
+			// TODO(script-natives): the way a living thing faces is kept by its walking, in each kind's own terms
+			NotImplemented(static_cast<int32_t>(prop));
+			Pushf(0.0f);
+			return;
+		}
+		Pushf(script::property_rules::AngleToScript(script::property_rules::PlacedAngles(transform->rotation).y));
+		return;
+	}
+	case script::ObjectPropertyType::Strength:
+	{
+		if (const auto* creature = registry.TryGet<const ecs::components::Creature>(object); creature != nullptr)
+		{
+			Pushf(creature->strength);
+			return;
+		}
+		if (registry.AnyOf<ecs::components::OneOffSpellSeed, ecs::components::SpellSeed>(object))
+		{
+			// TODO(script-natives): the strength of a spell seed
+			NotImplemented(static_cast<int32_t>(prop));
+			Pushf(0.0f);
+			return;
+		}
+		// Anything else answers its life
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Script-Did you want the strength of this?");
+		Pushf(ecs::world_objects::LifeOf(object));
+		return;
+	}
+	case script::ObjectPropertyType::Alignment:
+	{
+		if (const auto* creature = registry.TryGet<const ecs::components::Creature>(object); creature != nullptr)
+		{
+			Pushf(creature->alignment);
+			return;
+		}
+		// Anything else its player's, none without a player
+		const auto player = ecs::world_objects::PlayerOf(object);
+		Pushf(player.has_value() && Locator::alignmentSystem::has_value()
+		          ? Locator::alignmentSystem::value().GetPlayerAlignment(*player)
+		          : 0.0f);
+		return;
+	}
+	case script::ObjectPropertyType::Height:
+		Pushf(IsWorldObject(object) ? ScriptHeightOf(object) : 0.0f);
+		return;
+	case script::ObjectPropertyType::MaxHeight:
+		// Nothing keeps a greatest height
+		Pushf(0.0f);
+		return;
+	case script::ObjectPropertyType::CreatureMinSize:
+	case script::ObjectPropertyType::CreatureMaxSize:
+	{
+		const auto* spells = registry.TryGet<const ecs::components::CreatureSpells>(object);
+		const auto* creature = registry.TryGet<const ecs::components::Creature>(object);
+		if (spells == nullptr || creature == nullptr)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object not a creature");
+			CannotGetProperty(prop);
+			return;
+		}
+		// What the size spells would take it to now: in a fight they go by its size
+		const auto inFight =
+		    registry.AllOf<ecs::components::CreatureFighting>(object) ? std::optional(creature->size) : std::nullopt;
+		Pushf(prop == script::ObjectPropertyType::CreatureMinSize
+		          ? creature_spells::SmallestSizeNow(spells->smallestSize, inFight)
+		          : creature_spells::LargestSizeNow(spells->largestSize, inFight));
+		return;
+	}
+	case script::ObjectPropertyType::CreatureFatness:
+		if (const auto* creature = registry.TryGet<const ecs::components::Creature>(object); creature != nullptr)
+		{
+			Pushf(creature->fatness);
+			return;
+		}
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object not a creature");
+		CannotGetProperty(prop);
+		return;
 	default:
 		// TODO(Daniels118): the other properties
 		NotImplemented(static_cast<int32_t>(prop));
@@ -916,8 +1130,123 @@ void SetProperty() // 022 SET_PROPERTY
 		ecs::construction::SetBuilt(object, value);
 		return;
 	}
-	// TODO(Daniels118): the other properties
-	NotImplemented(static_cast<int32_t>(prop));
+	switch (prop)
+	{
+	case script::ObjectPropertyType::Health:
+		if (!IsWorldObject(object))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object not an object");
+			CannotSetProperty(prop);
+			return;
+		}
+		// A thing a script holds in a cutscene, or made indestructible, can't be brought to nearly no life
+		ecs::world_objects::SetLife(
+		    object, value,
+		    script::property_rules::CanSetLife(value, HeldDuringCutscene(object),
+		                                       registry.AllOf<ecs::components::Indestructible>(object)));
+		return;
+	case script::ObjectPropertyType::Angle:
+	case script::ObjectPropertyType::XAngle:
+	case script::ObjectPropertyType::ZAngle:
+	{
+		auto* transform = registry.TryGet<Transform>(object);
+		if (!IsWorldObject(object) || transform == nullptr)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object not an object");
+			CannotSetProperty(prop);
+			return;
+		}
+		const float radians = script::property_rules::AngleFromScript(value);
+		auto angles = script::property_rules::PlacedAngles(transform->rotation);
+		if (!CanLean(object))
+		{
+			// Only its turn is its own: a lean asked for changes nothing
+			if (prop != script::ObjectPropertyType::Angle)
+			{
+				return;
+			}
+			angles = {.x = 0.0f, .y = angles.y, .z = 0.0f};
+		}
+		if (IsLivingThing(object))
+		{
+			// TODO(script-natives): turning a living thing turns its walking, in each kind's own terms
+			NotImplemented(static_cast<int32_t>(prop));
+			return;
+		}
+		(prop == script::ObjectPropertyType::Angle    ? angles.y
+		 : prop == script::ObjectPropertyType::XAngle ? angles.x
+		                                              : angles.z) = radians;
+		transform->rotation = script::property_rules::PlacedRotation(angles);
+		registry.SetDirty();
+		return;
+	}
+	case script::ObjectPropertyType::Strength:
+		if (auto* creature = registry.TryGet<ecs::components::Creature>(object); creature != nullptr)
+		{
+			// Its body shows it
+			creature->strength = value;
+			return;
+		}
+		if (registry.AnyOf<ecs::components::OneOffSpellSeed, ecs::components::SpellSeed>(object))
+		{
+			// TODO(script-natives): the strength of a spell seed
+			NotImplemented(static_cast<int32_t>(prop));
+			return;
+		}
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Cannot set strength of this");
+		CannotSetProperty(prop);
+		return;
+	case script::ObjectPropertyType::Alignment:
+		if (auto* creature = registry.TryGet<ecs::components::Creature>(object); creature != nullptr)
+		{
+			// Its body shows it
+			creature->alignment = value;
+			return;
+		}
+		// Only a creature (or a reward, which openblack doesn't keep an alignment for) takes one
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "UNEXPECTED Alignment change");
+		return;
+	case script::ObjectPropertyType::Height:
+		if (auto* creature = registry.TryGet<ecs::components::Creature>(object); creature != nullptr)
+		{
+			// It grows or shrinks to that height at once
+			creature->size = script::property_rules::CreatureSizeForHeight(value);
+			if (auto* transform = registry.TryGet<Transform>(object); transform != nullptr)
+			{
+				transform->scale = glm::vec3(ecs::archetypes::CreatureArchetype::DrawnScale(creature->species, creature->size));
+				registry.SetDirty();
+			}
+		}
+		// Nothing else takes a height
+		return;
+	case script::ObjectPropertyType::MaxHeight:
+		// Nothing keeps a greatest height
+		return;
+	case script::ObjectPropertyType::CreatureMinSize:
+	case script::ObjectPropertyType::CreatureMaxSize:
+		if (auto* spells = registry.TryGet<ecs::components::CreatureSpells>(object); spells != nullptr)
+		{
+			// The size spells take it no further
+			(prop == script::ObjectPropertyType::CreatureMinSize ? spells->smallestSize : spells->largestSize) = value;
+			return;
+		}
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object not a creature");
+		CannotSetProperty(prop);
+		return;
+	case script::ObjectPropertyType::CreatureFatness:
+		if (auto* creature = registry.TryGet<ecs::components::Creature>(object); creature != nullptr)
+		{
+			creature->fatness = value;
+			return;
+		}
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object not a creature");
+		CannotSetProperty(prop);
+		return;
+	default:
+		// TODO(Daniels118): the other properties
+		NotImplemented(static_cast<int32_t>(prop));
+		return;
+	}
 }
 
 void GetPosition() // 023 GET_POSITION
@@ -1123,8 +1452,8 @@ void Random() // 028 RANDOM
 
 void DllGettime() // 029 DLL_GETTIME
 {
-	// TODO(Daniels118): need a way to access Game::GetTurn()
-	// Pushf(static_cast<float>(_turnCount) / 10.0f); // TODO(Daniels118): should it be divided by 10 or not?
+	// The game leaves this one to the script machine: its own clock
+	Locator::vm::value().PushElaspedTime();
 }
 
 void StartCameraControl() // 030 START_CAMERA_CONTROL
@@ -1183,10 +1512,21 @@ void HasCameraArrived() // 035 HAS_CAMERA_ARRIVED
 
 void FlockCreate() // 036 FLOCK_CREATE
 {
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// An empty flock at the point, held by the script that made it: it wanders 80 m about the point, its followers
+	// within 30 m of their leader
+	constexpr float k_FlockReach = 80.0f;
+	constexpr float k_FlockDistance = 30.0f;
+	const auto position = PopVec();
+	if (!Locator::animalSystem::has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Thing not created");
+		Pusho(0);
+		return;
+	}
+	const auto flock =
+	    Locator::animalSystem::value().CreateFlock(glm::vec2(position.x, position.z), k_FlockReach, k_FlockDistance);
+	RegisterCreated(flock);
+	PushObject(flock);
 }
 
 void FlockAttach() // 037 FLOCK_ATTACH
@@ -1283,15 +1623,7 @@ void PlaySoundEffect() // 043 PLAY_SOUND_EFFECT
 		return;
 	}
 
-	const auto& director = Locator::cinematicDirectorSystem::value();
-	// TODO(script-natives): the player controlling a creature fight should quieten the samples kept out of fights;
-	// openblack's fights don't say yet when the interface is in those controls
-	const audio::SoundEffectConditions conditions {
-	    .scriptWideScreen = director.IsWideScreenOn() && director.GetWideScreenOwner() != 0,
-	    .insideTemple = PlayerInsideTemple(),
-	    .gameSoundOn = Locator::chlapi::value().IsGameSoundOn(),
-	    .creatureFightControl = false,
-	};
+	const auto conditions = audio::CurrentSoundEffectConditions();
 	if (!audio::SoundEffectHeard(conditions, static_cast<audio::ScriptSoundBank>(bank), sounds.Handle(id)->userParam))
 	{
 		return;
@@ -1376,7 +1708,7 @@ void SpecialEffectPosition() // 052 SPECIAL_EFFECT_POSITION
 	const auto turns = SpecialEffectTurns(Popf());
 	const auto position = PopVec();
 	const auto effect = Pop().intVal;
-	Pusho(StartScriptSpotVisual(effect, position, turns, entt::null));
+	PushObject(ScriptSpotVisualThing(StartScriptSpotVisual(effect, position, turns, entt::null), position));
 }
 
 void SpecialEffectObject() // 053 SPECIAL_EFFECT_OBJECT
@@ -1389,11 +1721,12 @@ void SpecialEffectObject() // 053 SPECIAL_EFFECT_OBJECT
 	if (transform == nullptr)
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SPECIAL_EFFECT_OBJECT: thing invalid, spell not created");
-		Pusho(0);
+		PushObject(entt::null);
 		return;
 	}
 	// The effect stands on the object and ends when it goes
-	Pusho(StartScriptSpotVisual(effect, transform->position, turns, object));
+	const auto position = transform->position;
+	PushObject(ScriptSpotVisualThing(StartScriptSpotVisual(effect, position, turns, object), position));
 }
 
 void DanceCreate() // 054 DANCE_CREATE
@@ -1420,11 +1753,27 @@ void CallIn() // 055 CALL_IN
 
 void ChangeInnerOuterProperties() // 056 CHANGE_INNER_OUTER_PROPERTIES
 {
-	// const auto calm = Popf();
-	// const auto outer = Popf();
-	// const auto inner = Popf();
-	// const auto obj = Pop().uintVal;
-	// TODO(Daniels118): implement this
+	[[maybe_unused]] const auto calm = Popf();
+	const auto outer = Popf();
+	const auto inner = Popf();
+	const auto obj = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	// A flock: the outer radius is how far it wanders about its home, the inner how far its followers keep from their
+	// leader, each in whole metres and only when given
+	if (auto* flock = registry.Valid(obj) ? registry.TryGet<ecs::components::Flock>(obj) : nullptr)
+	{
+		if (outer != 0.0f)
+		{
+			flock->domainRadius = static_cast<float>(static_cast<int16_t>(static_cast<int32_t>(outer)));
+		}
+		if (inner != 0.0f)
+		{
+			flock->flockDistance = static_cast<float>(static_cast<int16_t>(static_cast<int32_t>(inner)));
+		}
+		// TODO(birds): the flock also keeps the calm, which nothing in openblack reads yet
+		return;
+	}
+	// TODO(Daniels118): shields, storms and influences
 	NotImplemented();
 }
 
@@ -1460,26 +1809,50 @@ void SetAlignment() // 059 SET_ALIGNMENT
 	NotImplemented();
 }
 
+/// An influence a script makes for a player, at a place or going about with an object: within it the player has
+/// influence, or none at all for an anti-influence. It takes its place in the scripts' table as made by a script; none for
+/// a player there isn't.
+static entt::entity CreateScriptInfluence(uint32_t player, float radius, bool anti, glm::vec3 position, entt::entity follows)
+{
+	if (player >= static_cast<uint32_t>(PlayerNames::_COUNT))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Could not make influence ring!");
+		return entt::null;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto ring = registry.Create();
+	registry.Assign<Transform>(ring, position, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<ecs::components::InfluenceSource>(ring, static_cast<PlayerNames>(player), radius, anti, follows);
+	RegisterCreated(ring);
+	return ring;
+}
+
 void InfluenceObject() // 060 INFLUENCE_OBJECT
 {
-	// const auto anti = Pop().intVal;
-	// const auto zero = Pop().intVal;
-	// const auto radius = Popf();
-	// const auto target = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	const auto anti = Pop().intVal != 0;
+	// The game's own player number, not the scripts'
+	const auto player = Pop().uintVal;
+	const auto radius = Popf();
+	const auto target = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* transform = target != entt::null && registry.Valid(target) ? registry.TryGet<Transform>(target) : nullptr;
+	if (transform == nullptr)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "thing not valid");
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Could not make influence ring!");
+		PushObject(entt::null);
+		return;
+	}
+	PushObject(CreateScriptInfluence(player, radius, anti, transform->position, target));
 }
 
 void InfluencePosition() // 061 INFLUENCE_POSITION
 {
-	// const auto anti = Pop().intVal;
-	// const auto zero = Pop().intVal;
-	// const auto radius = Popf();
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	const auto anti = Pop().intVal != 0;
+	const auto player = Pop().uintVal;
+	const auto radius = Popf();
+	const auto position = PopVec();
+	PushObject(CreateScriptInfluence(player, radius, anti, position, entt::null));
 }
 
 void GetInfluence() // 062 GET_INFLUENCE
@@ -1904,12 +2277,65 @@ void GetMoonPercentage() // 108 GET_MOON_PERCENTAGE
 
 void PopulateContainer() // 109 POPULATE_CONTAINER
 {
-	[[maybe_unused]] const auto subtype = Pop().intVal;
-	[[maybe_unused]] const auto type = Pop().intVal;
-	[[maybe_unused]] const auto quantity = Popf();
-	[[maybe_unused]] const auto obj = PopObject();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	namespace populate = ecs::script_populate;
+	const auto subtype = Pop().intVal;
+	const auto type = Pop().intVal;
+	const auto count = populate::CountOf(Popf());
+	const auto container = PopObject();
+	if (!populate::IsValidType(type))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid type={}", type);
+		// The game leaves a value on the stack here although the statement gives none back
+		Pusho(0);
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(container) || container == static_cast<entt::entity>(0))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Container not valid");
+		return;
+	}
+	// About the container's place: openblack's containers that can be filled are flocks, at their home on the land
+	glm::vec3 centre(0.0f);
+	if (const auto* flock = registry.TryGet<const ecs::components::Flock>(container))
+	{
+		centre = {flock->centre.x, Locator::terrainSystem::value().GetHeightAt(flock->centre), flock->centre.y};
+	}
+	else if (const auto* transform = registry.TryGet<const Transform>(container))
+	{
+		centre = transform->position;
+	}
+	const float spread = populate::SpreadOf(count);
+	const auto floatRand = [](float x) { return Locator::gameRandom::value().GameFloatRand(x); };
+	auto& scriptObjects = Locator::scriptObjects::value();
+	for (uint32_t i = 0; i < count; ++i)
+	{
+		const auto place = populate::PlaceOf(centre, spread, floatRand);
+		const auto thing = CreateScriptObject(static_cast<ObjectType>(type), static_cast<uint32_t>(subtype), place, 0.0f, 0.0f,
+		                                      0.0f, 0.0f, 1.0f);
+		if (thing == static_cast<entt::entity>(0) || !registry.Valid(thing))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Could not create thing for populate");
+			return;
+		}
+		if (!registry.AnyOf<ecs::components::Animal, ecs::components::Villager, ecs::components::Creature>(thing))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Created Thing Not Living");
+			registry.Destroy(thing);
+			return;
+		}
+		RegisterCreated(thing);
+		// A flock takes it as its newest member and it goes about with it
+		if (!registry.AllOf<ecs::components::Flock>(container) || !registry.AllOf<ecs::components::Animal>(thing))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Not implemented - Thing not added to id");
+			return;
+		}
+		auto& animals = Locator::animalSystem::value();
+		animals.JoinFlock(thing, container);
+		animals.SetScriptState(thing, LivingStates::LivingMoveInFlock);
+		scriptObjects.AddReference(thing);
+	}
 }
 
 void AddReference() // 110 ADD_REFERENCE
@@ -2200,36 +2626,82 @@ void RevealCountdownTimer() // 144 REVEAL_COUNTDOWN_TIMER
 	NotImplemented();
 }
 
+/// The game's turn now, by which the scripts' timers count
+static uint32_t TimerTurn()
+{
+	return Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+}
+
+/// The timer a script names, none for anything else (which the script is told of)
+static ecs::components::ScriptTimer* ScriptTimerOf(entt::entity object)
+{
+	auto* timer = Locator::entitiesRegistry::value().TryGet<ecs::components::ScriptTimer>(object);
+	if (timer == nullptr && !Locator::entitiesRegistry::value().AllOf<ecs::components::SpellDispenser>(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid script thing");
+	}
+	return timer;
+}
+
 void SetTimerTime() // 145 SET_TIMER_TIME
 {
-	// const auto time = Popf();
-	// const auto timer = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto seconds = Popf();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		return;
+	}
+	if (auto* timer = ScriptTimerOf(object); timer != nullptr)
+	{
+		// It starts again from now
+		timer->timer = script::timers::Set(TimerTurn(), seconds);
+		return;
+	}
+	if (registry.AllOf<ecs::components::SpellDispenser>(object))
+	{
+		// TODO(script-natives): a spell dispenser's time to make its next spell
+		NotImplemented();
+	}
 }
 
 void CreateTimer() // 146 CREATE_TIMER
 {
-	// const auto timeout = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	const auto seconds = Popf();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto timer = registry.Create();
+	registry.Assign<ecs::components::ScriptTimer>(timer, script::timers::Set(TimerTurn(), seconds));
+	// The script controls it from its first reference
+	RegisterCreated(timer);
+	PushObject(timer);
 }
 
 void GetTimerTimeRemaining() // 147 GET_TIMER_TIME_REMAINING
 {
-	// const auto timer = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto object = PopObject();
+	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		Pushf(0.0f);
+		return;
+	}
+	const auto* timer = ScriptTimerOf(object);
+	Pushf(timer != nullptr ? script::timers::SecondsRemaining(timer->timer, TimerTurn()) : 0.0f);
 }
 
 void GetTimerTimeSinceSet() // 148 GET_TIMER_TIME_SINCE_SET
 {
-	// const auto timer = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto object = PopObject();
+	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		Pushf(std::numeric_limits<float>::max());
+		return;
+	}
+	// Anything but a timer has been set for ever
+	const auto* timer = ScriptTimerOf(object);
+	Pushf(timer != nullptr ? script::timers::SecondsSinceSet(timer->timer, TimerTurn()) : std::numeric_limits<float>::max());
 }
 
 void MoveMusic() // 149 MOVE_MUSIC
@@ -2278,10 +2750,9 @@ void StopAllScriptsExcluding() // 153 STOP_ALL_SCRIPTS_EXCLUDING
 {
 	const auto scriptNames = PopString();
 
-	const auto names = GetUniqueWords(scriptNames);
 	auto& lhvm = Locator::vm::value();
-	lhvm.StopScripts([&names](const std::string& name, [[maybe_unused]] const std::string& filename) -> bool {
-		return !names.contains(name);
+	lhvm.StopScripts([&scriptNames](const std::string& name, [[maybe_unused]] const std::string& filename) -> bool {
+		return !script::name_lists::HoldsScript(scriptNames, name);
 	});
 }
 
@@ -2289,10 +2760,9 @@ void StopAllScriptsInFilesExcluding() // 154 STOP_ALL_SCRIPTS_IN_FILES_EXCLUDING
 {
 	const auto sourceFilenames = PopString();
 
-	const auto filenames = GetUniqueWords(sourceFilenames);
 	auto& lhvm = Locator::vm::value();
-	lhvm.StopScripts([&filenames]([[maybe_unused]] const std::string& name, const std::string& filename) -> bool {
-		return !filenames.contains(filename);
+	lhvm.StopScripts([&sourceFilenames]([[maybe_unused]] const std::string& name, const std::string& filename) -> bool {
+		return !script::name_lists::HoldsFile(sourceFilenames, filename);
 	});
 }
 
@@ -2300,8 +2770,9 @@ void StopScript() // 155 STOP_SCRIPT
 {
 	const auto scriptName = PopString();
 	auto& lhvm = Locator::vm::value();
+	// It may name several, as "ScriptA, ScriptB"
 	lhvm.StopScripts([&scriptName](const std::string& name, [[maybe_unused]] const std::string& filename) -> bool {
-		return name == scriptName;
+		return script::name_lists::HoldsScript(scriptName, name);
 	});
 }
 
@@ -2466,10 +2937,9 @@ void StopScriptsInFiles() // 172 STOP_SCRIPTS_IN_FILES
 {
 	const auto sourceFilenames = PopString();
 
-	const auto filenames = GetUniqueWords(sourceFilenames);
 	auto& lhvm = Locator::vm::value();
-	lhvm.StopScripts([&filenames]([[maybe_unused]] const std::string& name, const std::string& filename) -> bool {
-		return filenames.contains(filename);
+	lhvm.StopScripts([&sourceFilenames]([[maybe_unused]] const std::string& name, const std::string& filename) -> bool {
+		return script::name_lists::HoldsFile(sourceFilenames, filename);
 	});
 }
 
@@ -2769,10 +3239,19 @@ void SpellAtPos() // 196 SPELL_AT_POS
 
 void CallPlayerCreature() // 197 CALL_PLAYER_CREATURE
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// The player's creature is their primary one: the first they got that is still theirs
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto creature =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetPrimaryCreature(player) : std::nullopt;
+	if (!creature.has_value() || !Locator::entitiesRegistry::value().Valid(*creature))
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "Player {} has no creature", static_cast<int>(player));
+		PushObject(entt::null);
+		return;
+	}
+	// It takes a place in the scripts' table
+	Locator::scriptObjects::value().Register(*creature, false);
+	PushObject(*creature);
 }
 
 void GetSlowestSpeed() // 198 GET_SLOWEST_SPEED
@@ -2945,13 +3424,34 @@ void SwapCreature() // 210 SWAP_CREATURE
 
 void GetArena() // 211 GET_ARENA
 {
-	// const auto unk4 = Pop().intVal;
-	// const auto unk3 = Pop().intVal;
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The nearest arena closer than the distance to the point, or else a new one there for the two creatures, as a fight
+	// makes one: sized for the bigger of them, with room clear for the first
+	const auto second = PopObject();
+	const auto first = PopObject();
+	const auto distance = Popf();
+	const auto position = PopVec();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(first) || !registry.Valid(second))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "GET_ARENA: creature for arena not found!");
+	}
+	else if (!registry.AllOf<ecs::components::Creature>(first) || !registry.AllOf<ecs::components::Creature>(second))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "GET_ARENA: thing not creature");
+	}
+	else if (Locator::creatureFightSystem::has_value())
+	{
+		if (const auto found = Locator::creatureFightSystem::value().FindOrMakeArena(position, first, second, distance))
+		{
+			if (Locator::scriptObjects::has_value())
+			{
+				Locator::scriptObjects::value().Register(found->arena, found->made);
+			}
+			PushObject(found->arena);
+			return;
+		}
+	}
+	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "GET_ARENA: Arena not found or created!");
 	Pusho(0);
 }
 
@@ -3130,12 +3630,35 @@ void SetAttackOwnTown() // 228 SET_ATTACK_OWN_TOWN
 	NotImplemented();
 }
 
+/// The creature a fight native is given, or none (logged) when it is not a creature
+std::optional<entt::entity> FightCreature(const char* native, entt::entity thing)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(thing))
+	{
+		return std::nullopt;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(thing))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "{}: thing not creature", native);
+		return std::nullopt;
+	}
+	if (!Locator::creatureFightSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	return thing;
+}
+
 void IsFighting() // 229 IS_FIGHTING
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto object = PopObject();
+	if (!Locator::entitiesRegistry::value().Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "IS_FIGHTING: thing not found");
+	}
+	const auto creature = FightCreature("IS_FIGHTING", object);
+	Pushb(creature.has_value() && Locator::creatureFightSystem::value().IsFighting(*creature));
 }
 
 void SetMagicRadius() // 230 SET_MAGIC_RADIUS
@@ -3335,11 +3858,26 @@ void SpiritSpeaks() // 246 SPIRIT_SPEAKS
 
 void BeliefForPlayer() // 247 BELIEF_FOR_PLAYER
 {
-	// const auto player = Popf();
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object) || player >= PlayerNames::_COUNT)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object or player no longer valid");
+		Pushf(0.0f);
+		return;
+	}
+	const auto* town = registry.TryGet<const ecs::components::Town>(object);
+	std::optional<float> townBelief;
+	if (town != nullptr)
+	{
+		const auto belief = town->beliefs.find(std::string(k_PlayerNamesStrs.at(static_cast<size_t>(player))));
+		if (belief != town->beliefs.end())
+		{
+			townBelief = belief->second;
+		}
+	}
+	Pushf(script::property_rules::BeliefForPlayer(town != nullptr, townBelief, ecs::world_objects::PlayerOf(object), player));
 }
 
 void GetHelp() // 248 GET_HELP
@@ -3902,10 +4440,19 @@ void SetDrawHighlight() // 306 SET_DRAW_HIGHLIGHT
 
 void SetOpenClose() // 307 SET_OPEN_CLOSE
 {
-	// const auto object = Pop().uintVal;
-	// const auto open = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopObject();
+	// The script's word is kept as it is: 1 opens, 0 closes
+	const auto open = static_cast<int32_t>(Pop().uintVal);
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_OPEN_CLOSE: thing not found");
+		return;
+	}
+	if (!Locator::animatedStaticSystem::has_value() || !Locator::animatedStaticSystem::value().SetOpenState(object, open))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_OPEN_CLOSE: thing must be an animated static");
+	}
 }
 
 void SetIntroBuilding() // 308 SET_INTRO_BUILDING
@@ -3994,9 +4541,12 @@ void CallNearInState() // 316 CALL_NEAR_IN_STATE
 
 void SetCreatureSound() // 317 SET_CREATURE_SOUND
 {
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Off, the creatures of players other than this computer's are not heard in their own voices
+	const auto enable = Pop().intVal != 0;
+	if (Locator::creatureAudioSystem::has_value())
+	{
+		Locator::creatureAudioSystem::value().SetOtherVoicesEnabled(enable);
+	}
 }
 
 void CreatureInteractingWith() // 318 CREATURE_INTERACTING_WITH
@@ -4017,10 +4567,24 @@ void SetSunDraw() // 319 SET_SUN_DRAW
 
 void ObjectInfoBits() // 320 OBJECT_INFO_BITS
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// What the gate stones laid in a plinth are worth: ape 1, tiger 2, cow 4. Asked of anything else, the original
+	// reports the error and pushes no answer at all, so the script's next pop finds whatever lies below.
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "OBJECT_INFO_BITS: thing not valid");
+		return;
+	}
+	const auto value = Locator::animatedStaticSystem::has_value()
+	                       ? Locator::animatedStaticSystem::value().GateStoneValue(object)
+	                       : std::nullopt;
+	if (!value.has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "OBJECT_INFO_BITS: thing must be an animated static");
+		return;
+	}
+	Pushf(static_cast<float>(*value));
 }
 
 void SetHurtByFire() // 321 SET_HURT_BY_FIRE
@@ -4333,11 +4897,9 @@ void StopScriptsInFilesExcluding() // 352 STOP_SCRIPTS_IN_FILES_EXCLUDING
 	const auto scriptNames = PopString();
 	const auto sourceFilenames = PopString();
 
-	const auto names = GetUniqueWords(scriptNames);
-	const auto filenames = GetUniqueWords(sourceFilenames);
 	auto& lhvm = Locator::vm::value();
-	lhvm.StopScripts([&names, &filenames](const std::string& name, const std::string& filename) -> bool {
-		return filenames.contains(filename) && !names.contains(name);
+	lhvm.StopScripts([&scriptNames, &sourceFilenames](const std::string& name, const std::string& filename) -> bool {
+		return script::name_lists::HoldsFile(sourceFilenames, filename) && !script::name_lists::HoldsScript(scriptNames, name);
 	});
 }
 
@@ -4686,58 +5248,61 @@ void ObjectAdultCapacity() // 389 OBJECT_ADULT_CAPACITY
 
 void SetCreatureAutoFighting() // 390 SET_CREATURE_AUTO_FIGHTING
 {
-	// const auto creature = Pop().uintVal;
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// On, the computer fights the creature until the player makes a move for it; off, nobody does and it makes only the
+	// moves queued for it
+	const auto object = PopObject();
+	const bool enable = Pop().intVal != 0;
+	if (const auto creature = FightCreature("SET_CREATURE_AUTO_FIGHTING", object))
+	{
+		Locator::creatureFightSystem::value().SetAutoFighting(*creature, enable);
+	}
 }
 
 void IsAutoFighting() // 391 IS_AUTO_FIGHTING
 {
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto creature = FightCreature("IS_AUTO_FIGHTING", PopObject());
+	Pushb(creature.has_value() && Locator::creatureFightSystem::value().IsAutoFighting(*creature));
+}
+
+/// A move a script adds to the end of a creature's fight queue, numbered as the scripts number them
+void QueueScriptFightMove(const char* native, uint32_t value)
+{
+	const auto creature = FightCreature(native, PopObject());
+	const auto move = creature_fight::ScriptMove(value);
+	if (creature.has_value() && move.has_value())
+	{
+		Locator::creatureFightSystem::value().QueueMove(*creature, *move, false);
+	}
 }
 
 void SetCreatureQueueFightMove() // 392 SET_CREATURE_QUEUE_FIGHT_MOVE
 {
-	// const auto move = Pop().intVal;
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto move = static_cast<uint32_t>(Pop().intVal);
+	QueueScriptFightMove("SET_CREATURE_QUEUE_FIGHT_MOVE", move);
 }
 
 void SetCreatureQueueFightSpell() // 393 SET_CREATURE_QUEUE_FIGHT_SPELL
 {
-	// const auto spell = Pop().intVal;
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto spell = static_cast<uint32_t>(Pop().intVal);
+	QueueScriptFightMove("SET_CREATURE_QUEUE_FIGHT_SPELL", spell | creature_fight::k_ScriptSpellBit);
 }
 
 void SetCreatureQueueFightStep() // 394 SET_CREATURE_QUEUE_FIGHT_STEP
 {
-	// const auto step = Pop().intVal;
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto step = static_cast<uint32_t>(Pop().intVal);
+	QueueScriptFightMove("SET_CREATURE_QUEUE_FIGHT_STEP", step | creature_fight::k_ScriptAnimationBit);
 }
 
 void GetCreatureFightAction() // 395 GET_CREATURE_FIGHT_ACTION
 {
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushi(0);
+	const auto creature = FightCreature("GET_CREATURE_FIGHT_ACTION", PopObject());
+	Pushi(creature.has_value() ? static_cast<int32_t>(Locator::creatureFightSystem::value().CurrentFightAction(*creature)) : 0);
 }
 
 void CreatureFightQueueHits() // 396 CREATURE_FIGHT_QUEUE_HITS
 {
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto creature = FightCreature("CREATURE_FIGHT_QUEUE_HITS", PopObject());
+	Pushf(creature.has_value() ? static_cast<float>(Locator::creatureFightSystem::value().QueuedBlows(*creature)) : 0.0f);
 }
 
 void SquareRoot() // 397 SQUARE_ROOT
@@ -4948,9 +5513,12 @@ void KeyDown() // 419 KEY_DOWN
 
 void SetFightExit() // 420 SET_FIGHT_EXIT
 {
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Whether the player may zoom out of the fight view, and the view ends by itself after a fight
+	const bool allowed = Pop().intVal != 0;
+	if (Locator::creatureFightSystem::has_value())
+	{
+		Locator::creatureFightSystem::value().SetFightExit(allowed);
+	}
 }
 
 void GetObjectClicked() // 421 GET_OBJECT_CLICKED

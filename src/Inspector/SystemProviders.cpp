@@ -31,7 +31,6 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
-#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Map.h"
@@ -595,32 +594,6 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeWorshipProvider(Wor
 				              item["dance_intensity"] = chants->danceIntensity;
 				              item["strain"] = chants->strain;
 			              }
-			              items.push_back(std::move(item));
-		              });
-		              return QueryResult::Value(std::move(items));
-	              });
-	provider->Add(Query("totems",
-	                    "The town centres' totems: their town centre, icon, the share they stand at and ease to, how fast "
-	                    "they move, the share the hand holds one at, and whether the hand holds it",
-	                    {}, ResultKind::List),
-	              [sources](const QueryContext& /*context*/) {
-		              const auto* registry = Registry(sources);
-		              if (registry == nullptr)
-		              {
-			              return QueryResult::Error(std::string(k_NoRegistry));
-		              }
-		              Json items = Json::array();
-		              registry->Each<const VillageTotem>([&](entt::entity entity, const VillageTotem& totem) {
-			              auto item = Listed(*registry, Info(sources), entity);
-			              item["town_centre"] = Id(totem.townCentre);
-			              item["icon"] = Id(totem.icon);
-			              item["rest_y"] = totem.restY;
-			              item["share"] = totem.ease.share;
-			              item["speed"] = totem.ease.speed;
-			              item["target"] = totem.ease.target;
-			              item["moving"] = totem.ease.moving;
-			              item["held"] = totem.held;
-			              item["gripped"] = totem.gripped;
 			              items.push_back(std::move(item));
 		              });
 		              return QueryResult::Value(std::move(items));

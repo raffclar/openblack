@@ -20,6 +20,7 @@
 #include <fmt/format.h>
 
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Registry.h"
@@ -159,6 +160,5 @@ void MagicSystem::AfterSeedCast(const SpellSeed& seed, MagicType type)
 	}
 	// The announcer names the tribe whose power is behind the miracle
 	const auto sample = k_TribalPowerVoice + static_cast<int>(*tribe);
-	Locator::audio::value().StartSoundEffect(entt::hashed_string(fmt::format("SpellDialogue.sad/{}", sample).c_str()).value(),
-	                                         {});
+	audio::StartGameSoundEffect(entt::hashed_string(fmt::format("SpellDialogue.sad/{}", sample).c_str()).value(), {});
 }

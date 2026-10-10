@@ -61,6 +61,7 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/ClipSounds.h"
 #include "Audio/GameMusic.h"
+#include "Audio/GameSoundEffects.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
@@ -108,6 +109,7 @@
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
@@ -372,6 +374,7 @@ Game::Game(Arguments&& args) noexcept
     , _startTestbed(args.startTestbed || args.scenario.has_value())
     , _scenarioRequest(args.scenario)
     , _inspectPort(args.inspectPort)
+    , _screenshotRoot(args.screenshotRoot)
     , _seed(args.seed)
     , _inspectInputLock(args.inspectInputLock)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
@@ -1633,6 +1636,8 @@ bool Game::Update() noexcept
 		Locator::animalSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
 		// The clips the villagers' states play go on, and the sounds of their frames play
 		Locator::livingActionSystem::value().UpdatePoses(clock.GetTurn(), clock.GetTurnFraction());
+		// The gates and the other scenery the scripts open and close play on, and the plinths' stones sit or sink
+		Locator::animatedStaticSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
 	}
 	{
 		// The creatures are drawn moving between the last two turns
@@ -3209,7 +3214,8 @@ bool Game::Run() noexcept
 				Locator::rendererInterface::value().RequestScreenshot(_requestScreenshot->second);
 			}
 			// A picture without the debug windows: the frame's windows are made as ever but not drawn
-			if (!screenshotThisFrame || !_screenshotHidesDebugGui)
+			const bool hiddenThisFrame = _debugGuiHiddenFrame == _frameCount;
+			if ((!screenshotThisFrame || !_screenshotHidesDebugGui) && !hiddenThisFrame)
 			{
 				Locator::debugGui::value().Draw();
 			}
@@ -3452,6 +3458,10 @@ void Game::PrepareNewLand()
 	Locator::explosionSystem::value().Reset();
 	Locator::magicSystem::value().SetIgnoreInfluence(false);
 	Locator::animalSystem::value().Reset();
+	if (Locator::animatedStaticSystem::has_value())
+	{
+		Locator::animatedStaticSystem::value().Reset();
+	}
 	Locator::magicShieldSystem::value().Reset();
 	Locator::forestSystem::value().Reset();
 	// Nor its fireflies, nor what they give
@@ -4054,7 +4064,6 @@ void Game::PlayHandGrabSound()
 		isLand = landCell != nullptr && landCell->properties.hasWater == 0;
 	}
 
-	auto& audio = Locator::audio::value();
 	if (isLand)
 	{
 		// The game throws up a spot visual where the hand grips the land, as it plays the sound
@@ -4066,7 +4075,7 @@ void Game::PlayHandGrabSound()
 		// One of G_HandGrabLand_01 to _06, centred on the listener
 		const auto sample = 4 + Locator::rng::value().NextValue(0, 5);
 		const auto id = fmt::format("InGame.sad/{}", sample);
-		audio.PlaySoundEffect(entt::hashed_string(id.c_str()), std::nullopt);
+		audio::PlayGameSoundEffect(entt::hashed_string(id.c_str()), std::nullopt);
 	}
 	else
 	{
@@ -4082,6 +4091,6 @@ void Game::PlayHandGrabSound()
 		// G_HandInWater_01 to _10 in turn, on the water's surface where the hand went in
 		const auto id = fmt::format("InGame.sad/{}", 99 + _handInWaterSample);
 		_handInWaterSample = (_handInWaterSample + 1) % 10;
-		audio.PlaySoundEffect(entt::hashed_string(id.c_str()), glm::vec3(position.x, k_HandSplashHeight, position.z));
+		audio::PlayGameSoundEffect(entt::hashed_string(id.c_str()), glm::vec3(position.x, k_HandSplashHeight, position.z));
 	}
 }
