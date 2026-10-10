@@ -3159,11 +3159,10 @@ void Played() // 064 PLAYED
 
 void RandomUlong() // 065 RANDOM_ULONG
 {
-	// const auto max = Pop().intVal;
-	// const auto min = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushi(0);
+	// A whole number from the smallest to the largest, both included, from the game's own random numbers
+	const auto max = Pop().uintVal;
+	const auto min = Pop().uintVal;
+	Pushi(static_cast<int32_t>(min + Locator::gameRandom::value().GameRand(max - min + 1)));
 }
 
 void SetGamespeed() // 066 SET_GAMESPEED
