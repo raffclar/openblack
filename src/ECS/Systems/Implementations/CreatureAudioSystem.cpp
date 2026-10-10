@@ -69,7 +69,7 @@ void Sound(entt::entity entity, const Creature& creature, const Transform& trans
 	const auto bank = event.kind == creature_audio::EventKind::Generic
 	                      ? std::string(creature_audio::k_GenericBank)
 	                      : creature_audio::VoiceBank(rig.soundBankName, creature.species);
-	const auto keys = creature_audio::Keys(creature.size, creature.alignment, rig.soundObject,
+	const auto keys = creature_audio::Keys(ShownSize(creature), creature.alignment, rig.soundObject,
 	                                       creature_audio::SurfaceKey(ecs::sound_ground::At(transform.position)), event.action);
 	CreatureAudio::Heard note {
 	    .atMs = heard.clockMs,

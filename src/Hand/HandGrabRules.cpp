@@ -80,6 +80,35 @@ bool hand_grab::PassesGate(const Gate& gate)
 	return gate.spaceInHand && !gate.alreadyInHand && gate.valid && !gate.cannotBePickedUp && !gate.carried && gate.inInfluence;
 }
 
+std::string_view hand_grab::GateRefusal(const Gate& gate)
+{
+	if (!gate.inInfluence)
+	{
+		return "the hand is outside its player's influence";
+	}
+	if (!gate.spaceInHand)
+	{
+		return "the hand holds something already";
+	}
+	if (gate.alreadyInHand)
+	{
+		return "it is in a hand already";
+	}
+	if (gate.cannotBePickedUp)
+	{
+		return "a script says it can't be picked up";
+	}
+	if (gate.carried)
+	{
+		return "something else carries it";
+	}
+	if (!gate.valid)
+	{
+		return "the hand can't hold that kind of thing";
+	}
+	return {};
+}
+
 uint32_t hand_grab::ElapsedMs(uint32_t nowMs, uint32_t pressMs, uint32_t turn, uint32_t pressTurn)
 {
 	const uint32_t byClock = nowMs - pressMs;

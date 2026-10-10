@@ -42,10 +42,12 @@
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/ScriptSpotVisual.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptSpotVisuals.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -847,6 +849,17 @@ std::optional<entt::id_type> GameCreatorResources::LightMap(std::string_view pat
 ParticleSystem::ParticleSystem()
     : _classes(particles::ParticleClassRegistry::WithAllClasses(&_resources))
 {
+	if (Locator::entitiesRegistry::has_value())
+	{
+		_connections.emplace_back(Locator::entitiesRegistry::value()
+		                              .OnDestroy<ecs::components::ScriptSpotVisual>()
+		                              .connect<&ParticleSystem::OnScriptSpotVisualGone>(*this));
+	}
+}
+
+void ParticleSystem::OnScriptSpotVisualGone(entt::registry& registry, entt::entity thing)
+{
+	Delete(registry.get<ecs::components::ScriptSpotVisual>(thing).effect);
 }
 
 ParticleSystem::~ParticleSystem() = default;
@@ -1149,6 +1162,12 @@ void ParticleSystem::ProcessTurn()
 		{
 			_effects.erase(FindRunning(id));
 		}
+	}
+	// A visual a script holds as a thing takes its thing with it when it ends
+	if (Locator::entitiesRegistry::has_value())
+	{
+		ecs::script_spot_visuals::RemoveEnded(Locator::entitiesRegistry::value(),
+		                                      [this](EffectId effect) { return IsRunning(effect); });
 	}
 	_world.ProcessSounds();
 	_world.ProcessGlows();

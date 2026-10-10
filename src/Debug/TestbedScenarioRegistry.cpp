@@ -701,6 +701,32 @@ void AddGrowth(std::vector<Scenario>& all)
 	    .creatures = parade,
 	    .commands = parading,
 	});
+
+	// A temple well west of the middle, turned as Land 1's, and a tiger standing off to its east
+	constexpr glm::vec2 k_Temple {-300.0f, 100.0f};
+	constexpr float k_TempleTurn = 36.0f;
+	constexpr glm::vec2 k_OutOfThePen {-240.0f, 40.0f};
+	all.push_back({
+	    .id = "growth.temple_pen",
+	    .name = "Shrinking in the temple's pen",
+	    .facet = Facet::Growth,
+	    .description = "A tiger of size 2 belonging to the player, whose temple stands to the west, walks home to the "
+	                   "temple's pen, waits there and walks back out, and again.",
+	    .expected = "Its home is the pen in front of the temple. Walking in between the pen's two walls it shrinks, from its "
+	                "own size 16 units from the middle of the pen to a newborn's size (0.22) 14 units from it; small, it "
+	                "walks more slowly and its animations play faster. Walking out it grows back the same way. Its own "
+	                "size, which the spawner shows, stays 2 throughout.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .creature = 0, .distance = 1.5f},
+	    .creatures = {[&] {
+		    auto tiger = Posed(CreatureType::Tiger, k_OutOfThePen, 90.0f);
+		    tiger.size = 2.0f;
+		    return tiger;
+	    }()},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
+	    .commands = {Act(Kind::WalkHome, 0, 1.0f, true), Go(Kind::WalkTo, 0, k_OutOfThePen, 4.0f)},
+	    .repeatFrom = 0,
+	});
 }
 
 void AddAppearance(std::vector<Scenario>& all)
@@ -2253,8 +2279,11 @@ std::vector<Scenario> Build()
 	AddNatureScenarios(all);
 	AddHandNavigationScenarios(all);
 	AddHandLookScenarios(all);
+	AddGateScenarios(all);
+	AddVillageTotemScenarios(all);
 	AddFishScenarios(all);
 	AddKnockScenarios(all);
+	AddSkyScenarios(all);
 	return all;
 }
 
@@ -2350,7 +2379,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 {
 	return kind == Kind::SetHour || kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed ||
 	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
-	       kind == Kind::HandTapObject || IsPointerCommand(kind);
+	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -2358,7 +2387,7 @@ std::string_view testbed_scenarios::Name(Facet facet)
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
 	    "Idle",       "Expressions", "Senses",    "Needs",         "Growth",  "Appearance", "Light",   "Movement",
 	    "Footprints", "Audio",       "Objects",   "Hand",          "Leash",   "Combat",     "Mind",    "Particles",
-	    "Editor",     "Miracles",    "Benchmark", "Creature Mode", "Physics", "Nature",     "Animals",
+	    "Editor",     "Miracles",    "Benchmark", "Creature Mode", "Physics", "Nature",     "Animals", "Sky",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
@@ -2377,7 +2406,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 89> k_Names {
+	constexpr std::array<std::string_view, 92> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -2463,10 +2492,13 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "move mouse",
 	    "turn wheel",
 	    "set alignment",
+	    "open or close",
+	    "lay gate stone",
 	    "cinema bars",
 	    "set fight lean",
 	    "set miracle sightings",
 	    "hand tap",
+	    "walk home",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
@@ -2670,6 +2702,12 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		if (command.kind == Kind::SetAlignment && !InRange(command.alignment, -1.0f, 1.0f))
 		{
 			problems.push_back(fmt::format("{}: alignment out of range", what));
+		}
+		if ((command.kind == Kind::SetOpenClose && command.object >= scenario.objects.size()) ||
+		    (command.kind == Kind::LayGateStone &&
+		     (command.object >= scenario.objects.size() || command.value >= scenario.objects.size())))
+		{
+			problems.push_back(fmt::format("{}: no such object", what));
 		}
 		if ((command.kind == Kind::Follow || command.kind == Kind::StartFight || command.kind == Kind::TieLeashToCreature) &&
 		    (command.value >= creatures || command.value == command.creature))

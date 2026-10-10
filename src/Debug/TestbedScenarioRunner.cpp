@@ -48,6 +48,7 @@
 #include "Creature/CreatureObjectActions.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
+#include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
@@ -84,6 +85,7 @@
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -111,6 +113,7 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Gestures/GesturePaths.h"
@@ -443,7 +446,7 @@ void Runner::Start(const Scenario& scenario)
 	{
 		const auto at = MapPoint(_middle, *temple);
 		ecs::archetypes::CitadelArchetype::Create({at.x, land.GetHeightAt(at), at.y}, PlayerNames::PLAYER_ONE, 0.0f,
-		                                          glm::mat4(1.0f), glm::vec3(1.0f));
+		                                          glm::vec3(1.0f));
 	}
 	PlaceObjects(scenario, _middle);
 	PlaceBirds(scenario, _middle);
@@ -691,6 +694,10 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    {
 				    return ecs::archetypes::MobileStaticArchetype::Create(position, type, 0.0f, 0.0f, yaw, 0.0f, object.scale);
 			    }
+			    else if constexpr (std::is_same_v<T, AnimatedStaticInfo>)
+			    {
+				    return ecs::archetypes::AnimatedStaticArchetype::Create(position, type, yaw, object.scale);
+			    }
 			    else if constexpr (std::is_same_v<T, FishFarmInfo>)
 			    {
 				    return ecs::archetypes::FishFarmArchetype::Create(position);
@@ -716,8 +723,8 @@ void Runner::PlaceBirds(const Scenario& scenario, glm::vec2 middle)
 	for (const auto& setup : scenario.temples)
 	{
 		const auto point = MapPoint(middle, setup.offset);
-		ecs::archetypes::CitadelArchetype::Create({point.x, land.GetHeightAt(point), point.y}, setup.owner, 0.0f,
-		                                          glm::mat4(1.0f), glm::vec3(1.0f));
+		ecs::archetypes::CitadelArchetype::Create({point.x, land.GetHeightAt(point), point.y}, setup.owner, setup.angle,
+		                                          glm::vec3(1.0f));
 	}
 	if (!Locator::animalSystem::has_value())
 	{
@@ -1341,6 +1348,11 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the hour is {:.1f}", _seconds, command.hour));
 		return;
 	}
+	if (command.kind == Kind::SetOpenClose || command.kind == Kind::LayGateStone)
+	{
+		GiveSceneryCommand(command);
+		return;
+	}
 	if (command.kind == Kind::SetAlignment)
 	{
 		if (Locator::alignmentSystem::has_value())
@@ -1386,10 +1398,22 @@ void Runner::Give(const Command& command)
 		result =
 		    MoveResultName(locomotion.MoveTo(*entity, point, command.kind == Kind::RunTo ? Pace::Run : Pace::Walk, 0.0f, 1.0f));
 		break;
+	case Kind::WalkHome:
+		if (const auto* leash = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeash>(*entity);
+		    leash != nullptr && leash->home.has_value())
+		{
+			result =
+			    MoveResultName(locomotion.MoveTo(*entity, glm::vec2(leash->home->x, leash->home->z), Pace::Walk, 0.0f, 1.0f));
+		}
+		else
+		{
+			result = "it has no home";
+		}
+		break;
 	case Kind::Follow:
 		if (const auto leader = CreatureAt(command.value))
 		{
-			const auto size = Locator::entitiesRegistry::value().Get<Creature>(*entity).size;
+			const auto size = ShownSize(Locator::entitiesRegistry::value().Get<Creature>(*entity));
 			result = MoveResultName(locomotion.Follow(*entity, *leader, k_FollowDistance * std::max(size, 0.5f), Pace::Walk));
 		}
 		break;
@@ -1513,6 +1537,8 @@ void Runner::Give(const Command& command)
 	case Kind::HandTakeFireBall:
 	case Kind::HandTapObject:
 	case Kind::SetAlignment:
+	case Kind::SetOpenClose:
+	case Kind::LayGateStone:
 	case Kind::WideScreen:
 	// The mouse commands are given before a creature is looked for
 	case Kind::PointerTo:
@@ -1562,6 +1588,35 @@ void Runner::Give(const Command& command)
 	}
 	}
 	Log(fmt::format("{:.1f}s: {} {}{}{}", _seconds, who, Name(command.kind), result.empty() ? "" : ": ", result));
+}
+
+void Runner::GiveSceneryCommand(const Command& command)
+{
+	const auto object = ObjectAt(command.object);
+	if (!object.has_value() || !Locator::animatedStaticSystem::has_value())
+	{
+		Log(fmt::format("{:.1f}s: no such object", _seconds));
+		return;
+	}
+	auto& scenery = Locator::animatedStaticSystem::value();
+	if (command.kind == Kind::SetOpenClose)
+	{
+		const bool done = scenery.SetOpenState(*object, static_cast<int32_t>(command.value));
+		Log(fmt::format("{:.1f}s: {} object {}{}", _seconds, command.value == 1 ? "opened" : "closed", command.object,
+		                done ? "" : ", which isn't animated scenery"));
+		return;
+	}
+	// As the hand gives it: laid in the plinth, the stone is used up, leaving its ghost
+	const auto plinth = ObjectAt(command.value);
+	if (plinth.has_value() && scenery.LayGateStone(*plinth, *object))
+	{
+		ecs::world_objects::LeaveGhost(*object);
+		ecs::world_objects::Remove(*object);
+		Log(fmt::format("{:.1f}s: object {} laid in the plinth, now worth {}", _seconds, command.object,
+		                scenery.GateStoneValue(*plinth).value_or(0)));
+		return;
+	}
+	Log(fmt::format("{:.1f}s: object {} isn't taken by object {}", _seconds, command.object, command.value));
 }
 
 std::string Runner::GiveCreatureModeCommand(entt::entity creature, const Command& command)
@@ -1805,7 +1860,7 @@ void Runner::UpdateCamera()
 		if (const auto entity = CreatureAt(_shotCreature))
 		{
 			const auto& transform = registry.Get<Transform>(*entity);
-			const auto height = CreatureHeight(registry.Get<Creature>(*entity).size);
+			const auto height = CreatureHeight(ShownSize(registry.Get<Creature>(*entity)));
 			placement = *_shot == Shot::Follow ? Follow(transform.position, height, _shotDistance)
 			                                   : Head(transform.position, AheadOf(transform), height, _shotDistance);
 		}
