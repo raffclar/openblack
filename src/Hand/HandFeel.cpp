@@ -11,6 +11,8 @@
 
 #include <cmath>
 
+#include <algorithm>
+
 #include <glm/geometric.hpp>
 
 using namespace openblack;
@@ -110,4 +112,20 @@ glm::vec3 hand_feel::RestAtPosition(glm::vec3 camera, glm::vec3 cursorDirection,
 bool hand_feel::TurnsToLand(bool restsOnFace, bool overThing, float aboveLand, float handHeight)
 {
 	return !restsOnFace || (overThing && aboveLand < handHeight * 0.5f);
+}
+
+hand_feel::HoverDistances hand_feel::HoverDistancesOf(const Hover& hover)
+{
+	auto limit = hover.currentDistance;
+	if (hover.land.has_value())
+	{
+		limit = glm::length(*hover.land - hover.camera);
+		if (!hover.landIsSea)
+		{
+			limit -= hover.handHeight;
+		}
+	}
+	limit = limit <= hover.minDistance ? hover.minDistance : std::min(limit, hover.reach);
+	const float target = hover.restOnThing.has_value() ? glm::length(*hover.restOnThing - hover.camera) : limit;
+	return {.target = std::max(target, 1.0f), .limit = limit};
 }

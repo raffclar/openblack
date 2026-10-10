@@ -66,6 +66,12 @@ public:
 	virtual bool ThrowTaking(entt::entity creature, const glm::vec3& target, float flightSeconds) = 0;
 	virtual bool Destroy(entt::entity creature, entt::entity target) = 0;
 	virtual bool PointAt(entt::entity creature, const glm::vec3& point) = 0;
+	/// Points for some seconds at a point, or at a thing wherever it goes
+	virtual bool PointAtFor(entt::entity creature, const glm::vec3& point, float /*seconds*/,
+	                        std::optional<entt::entity> /*thing*/)
+	{
+		return PointAt(creature, point);
+	}
 	/// Catches something flying at it, when it can still reach where it passes
 	virtual bool Catch(entt::entity creature, entt::entity object) = 0;
 	/// Stops what it is doing, keeping hold of whatever it holds

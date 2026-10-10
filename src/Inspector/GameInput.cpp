@@ -172,7 +172,7 @@ std::string GameInput::Apply(const InputEvent& event)
 		button.button.windowID = WindowId();
 		button.button.button = event.button;
 		button.button.state = down ? SDL_PRESSED : SDL_RELEASED;
-		button.button.clicks = 1;
+		button.button.clicks = event.clicks;
 		button.button.x = pointer.position.x;
 		button.button.y = pointer.position.y;
 		input::MarkInjected(button);

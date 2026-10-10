@@ -349,9 +349,10 @@ TOOLS = [
     },
     {
         "name": "input_button",
-        "description": "A mouse button (left, middle, right) where the pointer is: press, release or click.",
+        "description": "A mouse button (left, middle, right) where the pointer is: press, release, click or "
+                       "double_click (a click, then a second press and release counted as a double click).",
         "inputSchema": schema({"button": {"type": "string", "enum": ["left", "middle", "right"]},
-                               "action": {"type": "string", "enum": ["press", "release", "click"]}}),
+                               "action": {"type": "string", "enum": ["press", "release", "click", "double_click"]}}),
         "query": "input.button",
         "params": ["button", "action"],
     },

@@ -190,6 +190,7 @@
 #include "ECS/ScriptHighlightRules.h"
 #include "ECS/TownAggression.h"
 #include "ECS/VillageTotem.h"
+#include "ECS/VillagerEyes.h"
 #include "Enums.h"
 #include "Fire/FireGraphic.h"
 #include "Fire/FireModel.h"
@@ -642,6 +643,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureObjectAction::eventMs>("eventMs")
 	    .Field<&components::CreatureObjectAction::eventDone>("eventDone")
 	    .Field<&components::CreatureObjectAction::holdMs>("holdMs")
+	    .Field<&components::CreatureObjectAction::pointSeconds>("pointSeconds")
 	    .Field<&components::CreatureObjectAction::reach>("reach")
 	    .Field<&components::CreatureObjectAction::maxReach>("maxReach")
 	    .Field<&components::CreatureObjectAction::attempts>("attempts")
@@ -949,7 +951,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::HighDetail::usualModel>("usualModel")
 	    .Field<&components::HighDetail::usualDetailModels>("usualDetailModels")
 	    .Field<&components::HighDetail::face>("face")
-	    .Field<&components::HighDetail::orders>("orders");
+	    .Field<&components::HighDetail::orders>("orders")
+	    .Field<&components::HighDetail::eyes>("eyes")
+	    .Field<&components::HighDetail::drawnEyes>("drawnEyes");
 	Reflect<components::Indestructible> {context};
 	Reflect<components::InfluenceSource>(context)
 	    .Field<&components::InfluenceSource::player>("player")
@@ -1765,6 +1769,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::creature_mind::CastOrder>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::CastOrder::magicType>("magicType")
 	    .Field<&openblack::creature_mind::CastOrder::object>("object");
+	Reflect<openblack::creature_mind::Gaze>(context, ValueOnly {})
+	    .Field<&openblack::creature_mind::Gaze::object>("object")
+	    .Field<&openblack::creature_mind::Gaze::bottom>("bottom")
+	    .Field<&openblack::creature_mind::Gaze::point>("point")
+	    .Field<&openblack::creature_mind::Gaze::camera>("camera");
 	Reflect<openblack::creature_mind::IdleMind>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::IdleMind::activity>("activity")
 	    .Field<&openblack::creature_mind::IdleMind::agenda>("agenda")
@@ -1793,7 +1802,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::ObjectOrder::kind>("kind")
 	    .Field<&openblack::creature_mind::ObjectOrder::object>("object")
 	    .Field<&openblack::creature_mind::ObjectOrder::point>("point")
-	    .Field<&openblack::creature_mind::ObjectOrder::animation>("animation");
+	    .Field<&openblack::creature_mind::ObjectOrder::animation>("animation")
+	    .Field<&openblack::creature_mind::ObjectOrder::pointHeight>("pointHeight")
+	    .Field<&openblack::creature_mind::ObjectOrder::seconds>("seconds");
 	Reflect<openblack::creature_mind::Step>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::Step::kind>("kind")
 	    .Field<&openblack::creature_mind::Step::seconds>("seconds")
@@ -1808,7 +1819,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Step::object>("object")
 	    .Field<&openblack::creature_mind::Step::order>("order")
 	    .Field<&openblack::creature_mind::Step::cast>("cast")
-	    .Field<&openblack::creature_mind::Step::face>("face");
+	    .Field<&openblack::creature_mind::Step::face>("face")
+	    .Field<&openblack::creature_mind::Step::gaze>("gaze");
 	Reflect<openblack::creature_mind_model::Learnt>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind_model::Learnt::opinions>("opinions")
 	    .Field<&openblack::creature_mind_model::Learnt::turnsSinceDone>("turnsSinceDone")
@@ -2067,6 +2079,23 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::village_totem::Ease::jerk>("jerk")
 	    .Field<&openblack::ecs::village_totem::Ease::snap>("snap")
 	    .Field<&openblack::ecs::village_totem::Ease::moving>("moving");
+	Reflect<openblack::ecs::villager_eyes::Blink>(context, ValueOnly {})
+	    .Field<&openblack::ecs::villager_eyes::Blink::blinking>("blinking")
+	    .Field<&openblack::ecs::villager_eyes::Blink::untilNext>("untilNext")
+	    .Field<&openblack::ecs::villager_eyes::Blink::into>("into")
+	    .Field<&openblack::ecs::villager_eyes::Blink::closedFor>("closedFor");
+	Reflect<openblack::ecs::villager_eyes::DrawnEye>(context, ValueOnly {})
+	    .Field<&openblack::ecs::villager_eyes::DrawnEye::eyeball>("eyeball")
+	    .Field<&openblack::ecs::villager_eyes::DrawnEye::upperLid>("upperLid")
+	    .Field<&openblack::ecs::villager_eyes::DrawnEye::lowerLid>("lowerLid")
+	    .Field<&openblack::ecs::villager_eyes::DrawnEye::shade>("shade");
+	Reflect<openblack::ecs::villager_eyes::DrawnEyes>(context, ValueOnly {})
+	    .Field<&openblack::ecs::villager_eyes::DrawnEyes::eyes>("eyes")
+	    .Field<&openblack::ecs::villager_eyes::DrawnEyes::closed>("closed")
+	    .Field<&openblack::ecs::villager_eyes::DrawnEyes::standing>("standing");
+	Reflect<openblack::ecs::villager_eyes::Eyes>(context, ValueOnly {})
+	    .Field<&openblack::ecs::villager_eyes::Eyes::blink>("blink")
+	    .Field<&openblack::ecs::villager_eyes::Eyes::roll>("roll");
 	Reflect<openblack::field_crop::Crop>(context, ValueOnly {})
 	    .Field<&openblack::field_crop::Crop::timesSown>("timesSown")
 	    .Field<&openblack::field_crop::Crop::age>("age")

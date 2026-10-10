@@ -18,6 +18,7 @@
 #include <vector>
 
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 #include "Creature/CreatureIdleMind.h"
 
@@ -95,6 +96,13 @@ enum class Build : uint8_t
 	CastWater,
 	/// Setting a thing alight by tossing a burning thing at it
 	SetFire,
+	/// The actions scripts force to stage scenes: looking at a thing for good, or a little without going up to it;
+	/// looking at the camera; pointing at a thing or at the camera
+	LookForever,
+	LookButDontApproach,
+	LookAtCamera,
+	PointAtThing,
+	PointAtCamera,
 	/// An action whose agenda can never be made
 	Never,
 };
@@ -143,6 +151,13 @@ struct Situation
 	/// its hand holds something already
 	std::optional<uint32_t> instrument;
 	bool handFull {false};
+	/// Where the camera is, whether the creature has a player (whose camera it can look to), whether a script controls
+	/// it, its radius on the ground, and a chance from 0 to 1 for what varies
+	std::optional<glm::vec3> eye;
+	bool hasPlayer {false};
+	bool controlledByScript {false};
+	float radius {0.0f};
+	float chance {0.0f};
 };
 /// What a casting action casts, from its row of the game's table and the creature
 struct CastInfo

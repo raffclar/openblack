@@ -19,8 +19,10 @@
 #include <fstream>
 #include <iterator>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <system_error>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -42,6 +44,7 @@
 #include "Editor/EditorEntities.h"
 #include "EntityDescription.h"
 #include "Game.h"
+#include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
 #include "Gui/GameMenu.h"
 #include "Level.h"
@@ -683,8 +686,19 @@ std::string GameScreenshots::Capture(const std::filesystem::path& path, bool hid
 			return "can't make the folder " + path.parent_path().generic_string() + ": " + error.message();
 		}
 	}
+	// A failure left from an earlier picture at the same path isn't this one's
+	std::ignore = CaptureFailure(path);
 	game->RequestScreenshot(path, hideDebugGui);
 	return {};
+}
+
+std::optional<std::string> GameScreenshots::CaptureFailure(const std::filesystem::path& path)
+{
+	if (!Locator::rendererInterface::has_value())
+	{
+		return std::nullopt;
+	}
+	return Locator::rendererInterface::value().TakeScreenshotFailure(path);
 }
 
 void GameScreenshots::HideDebugGui()

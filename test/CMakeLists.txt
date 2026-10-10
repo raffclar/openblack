@@ -215,6 +215,7 @@ openblack_setup_and_add_test(test_sky_frame test_sky_frame.cpp)
 openblack_setup_and_add_test(test_camera_track test_camera_track.cpp)
 target_link_libraries(test_camera_track PRIVATE edt)
 openblack_setup_and_add_test(test_shark_rules test_shark_rules.cpp)
+openblack_setup_and_add_test(test_villager_eyes test_villager_eyes.cpp)
 openblack_setup_and_add_test(test_script_flocks test_script_flocks.cpp)
 openblack_setup_and_add_test(test_dances test_dances.cpp)
 target_link_libraries(test_dances PRIVATE dance)
@@ -648,3 +649,16 @@ openblack_setup_and_add_test(test_villager_clips test_villager_clips.cpp)
 target_link_libraries(test_villager_clips PRIVATE anm)
 openblack_setup_and_add_test(test_lip_sync test_lip_sync.cpp)
 openblack_setup_and_add_test(test_wave_cue_labels test_wave_cue_labels.cpp)
+openblack_setup_and_add_test(
+  test_creature_script_agendas test_creature_script_agendas.cpp
+)
+openblack_setup_and_add_test(test_lhvm_exceptions lhvm/test_lhvm_exceptions.cpp)
+target_link_libraries(test_lhvm_exceptions PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_screenshot_capture graphics/test_screenshot_capture.cpp
+)
+openblack_setup_and_add_test(test_script_random test_script_random.cpp)
+openblack_setup_and_add_test(
+  test_camera_handback camera/test_camera_handback.cpp
+)
+target_link_libraries(test_camera_handback PRIVATE edt)
