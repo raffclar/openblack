@@ -56,6 +56,14 @@ public:
 
 	void SetScriptedPointer(std::optional<ScriptedPointer> pointer) final;
 	[[nodiscard]] std::optional<ScriptedPointer> GetScriptedPointer() const final;
+	void HoldScriptedKey(int scancode, bool held) final;
+	void SetInputLockMode(LockMode mode) final;
+	[[nodiscard]] LockMode GetInputLockMode() const final { return _lock.Mode(); }
+	void UpdateInputLock(bool clientConnected, float seconds) final;
+	[[nodiscard]] bool IsPlayerInputBlocked() const final { return _lock.Locked(); }
+	[[nodiscard]] bool AdmitEvent(const SDL_Event& event) final;
+	[[nodiscard]] glm::ivec2 GetPointerPosition() const final;
+	[[nodiscard]] uint32_t GetPointerButtons() const final;
 	void WarpCursor(glm::ivec2 position) final;
 	[[nodiscard]] std::optional<glm::ivec2> GetCursorWarp() const final;
 	void SetBlockedActions(BindableActionMap actions) final { _blocked = actions; }
@@ -85,6 +93,8 @@ private:
 	KeyBindingTable _bindings {k_DefaultKeyBindings};
 	/// The keys down, as pressed, so their letting go can be made up when it goes elsewhere
 	std::bitset<SDL_NUM_SCANCODES> _heldKeys;
+	/// The keys a script or the inspector holds down, which the keyboard doesn't
+	std::bitset<SDL_NUM_SCANCODES> _scriptedKeys;
 	std::vector<BindableActionMap> _queuedPresses;
 	/// The events that let go of last frame's queued presses
 	std::vector<SDL_Event> _queuedReleases;
@@ -106,5 +116,9 @@ private:
 	std::optional<ScriptedPointer> _scriptedPointer;
 	std::optional<glm::ivec2> _cursorWarp;
 	BindableActionMap _blocked = BindableActionMap::NONE;
+	/// Keeps the player's mouse and keyboard out while an agent drives the game
+	InputLock _lock;
+	/// Logs the lock opening or closing
+	void LogLock(bool wasLocked) const;
 };
 } // namespace openblack::input

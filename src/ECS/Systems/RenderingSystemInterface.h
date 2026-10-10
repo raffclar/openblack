@@ -156,6 +156,8 @@ struct RenderContext
 		std::optional<uint32_t> scaffoldStatus;
 		uint32_t scaffoldInstance {0};
 		std::optional<float> scaffoldCut;
+		/// How far its inner walls stand in whatever their material, when given: a temple's
+		std::optional<float> innerWallInset;
 	};
 	std::vector<PartialBuildDraw> partialBuilds;
 	std::vector<ObjectInstance> partialBuildInstances;

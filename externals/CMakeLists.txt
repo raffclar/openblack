@@ -23,3 +23,9 @@ target_link_libraries(imgui_user PUBLIC imgui::imgui SDL2::SDL2)
 target_compile_definitions(imgui_user PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 
 set_property(TARGET imgui_user PROPERTY FOLDER "externals")
+
+# https://github.com/nlohmann/json (3.12.0), the single header
+add_library(nlohmann_json INTERFACE)
+target_include_directories(
+  nlohmann_json SYSTEM INTERFACE ${CMAKE_CURRENT_LIST_DIR}/nlohmann/include
+)

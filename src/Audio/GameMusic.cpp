@@ -180,6 +180,18 @@ GameMusic::~GameMusic()
 	}
 }
 
+void GameMusic::RegisterBanks()
+{
+	auto& audio = Locator::audio::value();
+	for (const auto& type : k_MusicTypes)
+	{
+		if (!type.bank.empty())
+		{
+			[[maybe_unused]] const auto info = audio.GetMusicBankInfo(std::string(type.bank));
+		}
+	}
+}
+
 void GameMusic::Reset()
 {
 	Locator::audio::value().MusicStop(false);
@@ -190,6 +202,7 @@ void GameMusic::Reset()
 	_scriptType = MusicType::None;
 	_scriptStarted = false;
 	_alignmentMusicEnabled = true;
+	_landMusicWasAllowed.reset();
 	_rememberedTown.reset();
 	_resumeChunks.clear();
 }
@@ -197,15 +210,27 @@ void GameMusic::Reset()
 void GameMusic::StartScriptMusic(MusicType type)
 {
 	_scriptType = type;
+	// Music a script starts plays from its beginning, even over the script's music already playing
+	if (type != MusicType::None)
+	{
+		_scriptStarted = false;
+	}
 }
 
 void GameMusic::ProcessTurn(const TurnInputs& inputs)
 {
 	const auto before = _playing;
+	if (const auto allowed = LandMusicAllowed(inputs); allowed != _landMusicWasAllowed)
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Land music {} (turn {}, cinema {}, turned on {})",
+		                    allowed ? "may play" : "waits", inputs.turn, inputs.cinema, _alignmentMusicEnabled);
+		_landMusicWasAllowed = allowed;
+	}
 	ProcessMusic(inputs);
 	if (_playing != before)
 	{
-		SPDLOG_LOGGER_INFO(spdlog::get("audio"), "Music Playing {}", GetMusicTypeName(_playing));
+		SPDLOG_LOGGER_INFO(spdlog::get("audio"), "Music Playing {} (alignment at the camera {:.2f}, the player's {:.2f})",
+		                   GetMusicTypeName(_playing), inputs.alignment, inputs.playerAlignment);
 	}
 }
 
@@ -226,6 +251,16 @@ void GameMusic::ProcessMusic(const TurnInputs& inputs)
 	_landType = MusicType::None;
 }
 
+MusicType GameMusic::SelectCitadelType(const TurnInputs& inputs)
+{
+	return Offset(MusicType::CitadelEvil, GetAlignmentIndex(inputs.playerAlignment));
+}
+
+bool GameMusic::LandMusicAllowed(const TurnInputs& inputs) const
+{
+	return !inputs.cinema && _alignmentMusicEnabled && inputs.turn > k_LandMusicFirstTurn;
+}
+
 // Inside the citadel its music plays, of the player's alignment, carrying on from where
 // it was
 bool GameMusic::ProcessCitadel(const TurnInputs& inputs)
@@ -234,7 +269,7 @@ bool GameMusic::ProcessCitadel(const TurnInputs& inputs)
 	{
 		return false;
 	}
-	const auto type = Offset(MusicType::CitadelEvil, GetAlignmentIndex(inputs.alignment));
+	const auto type = SelectCitadelType(inputs);
 	const auto path = std::string(GetMusicBankPath(type));
 	auto& audio = Locator::audio::value();
 	const auto info = audio.GetMusicBankInfo(path);
@@ -253,7 +288,7 @@ bool GameMusic::ProcessCitadel(const TurnInputs& inputs)
 	return true;
 }
 
-// Music a script has started plays from its start until the script stops it
+// Music a script has started plays from its start once through, until it ends or the script stops it
 bool GameMusic::ProcessScript()
 {
 	auto& audio = Locator::audio::value();
@@ -277,18 +312,27 @@ bool GameMusic::ProcessScript()
 		return false;
 	}
 	SaveResumeChunks();
-	audio.MusicPlay(path, MusicPlayOptions {.volume = k_FullVolume, .startChunk = 1});
+	const auto type = _scriptType;
+	audio.MusicPlay(path, MusicPlayOptions {.volume = k_FullVolume, .startChunk = 1, .onFinished = [this, type]() {
+		                                        // Played to its end, the script's music is over unless the script
+		                                        // has since asked for other music
+		                                        if (_scriptType == type)
+		                                        {
+			                                        _scriptType = MusicType::None;
+		                                        }
+	                                        }});
 	_scriptStarted = true;
 	_playing = _scriptType;
 	return true;
 }
 
-// The alignment music: the music of the land under the camera.
-// Changing to another piece of the same music group carries on in time. A piece that plays to its end is left alone
-// until the camera has been elsewhere for a while.
+// The alignment music: the music of the land under the camera, in the version of the alignment of the place it is in.
+// It waits while a script holds the cinema bars and while they slide. Changing to another version, or to another piece
+// of the same music group, carries on in time and crossfades. A piece that plays to its end is left alone until the
+// camera has been elsewhere for a while.
 bool GameMusic::ProcessLand(const TurnInputs& inputs)
 {
-	if (!_alignmentMusicEnabled || inputs.turn <= k_LandMusicFirstTurn)
+	if (!LandMusicAllowed(inputs))
 	{
 		return false;
 	}

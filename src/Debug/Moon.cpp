@@ -20,8 +20,11 @@
 #include <fmt/format.h>
 
 #include "3D/DayNightClock.h"
-#include "3D/SkyInterface.h"
-#include "ECS/Systems/MoonSystemInterface.h"
+#include "3D/SkyFrame.h"
+#include "Common/MachineClock.h"
+#include "ECS/Components/Sky.h"
+#include "ECS/Registry.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "Graphics/Moon.h"
 #include "Locator.h"
 
@@ -117,6 +120,23 @@ void DrawPhasePicture(double fraction)
 	drawList->AddCircle(centre, k_Radius, IM_COL32(120, 125, 140, 255), k_Steps);
 	ImGui::Dummy(ImVec2((k_Radius * 2.0f) + 4.0f, (k_Radius * 2.0f) + 4.0f));
 }
+
+/// The date the moon takes its phase from, or the computer's before it has read one
+int64_t DateInUse(const ecs::components::Moon& theMoon)
+{
+	const auto date = sky_frame::MoonDate(theMoon);
+	return date != 0 ? date : machine_clock::UnixTime();
+}
+
+/// The moon entity's state, none without a sky
+ecs::components::Moon* MoonOfTheSky()
+{
+	if (!Locator::skySystem::has_value() || !Locator::entitiesRegistry::has_value())
+	{
+		return nullptr;
+	}
+	return Locator::entitiesRegistry::value().TryGet<ecs::components::Moon>(Locator::skySystem::value().GetMoon());
+}
 } // namespace
 
 Moon::Moon() noexcept
@@ -126,7 +146,7 @@ Moon::Moon() noexcept
 
 void Moon::Draw() noexcept
 {
-	if (!Locator::moonSystem::has_value() || !Locator::skySystem::has_value())
+	if (MoonOfTheSky() == nullptr)
 	{
 		ImGui::TextUnformatted("No moon: the game has not started.");
 		return;
@@ -142,9 +162,10 @@ void Moon::Draw() noexcept
 
 void Moon::DrawPhase() noexcept
 {
-	const auto& moonSystem = Locator::moonSystem::value();
-	const auto date = moonSystem.GetDate();
+	const auto& theMoon = *MoonOfTheSky();
+	const auto date = DateInUse(theMoon);
 	const double fraction = moon::MonthFraction(date);
+	const float phase = moon::Phase(date);
 
 	ImGui::TextUnformatted("Phase");
 	DrawPhasePicture(fraction);
@@ -152,20 +173,21 @@ void Moon::DrawPhase() noexcept
 	ImGui::BeginGroup();
 	ImGui::Text("%s", std::string(PhaseName(fraction)).c_str());
 	ImGui::Text("Day %.1f of %.2f in the moon month", Wrapped(fraction) * k_MonthDays, k_MonthDays);
-	ImGui::Text("Phase %.4f (%.1f degrees)", static_cast<double>(moonSystem.GetPhase()),
-	            static_cast<double>(moonSystem.GetPhase()) * 180.0 / std::numbers::pi);
+	ImGui::Text("Phase %.4f (%.1f degrees)", static_cast<double>(phase), static_cast<double>(phase) * 180.0 / std::numbers::pi);
 	ImGui::EndGroup();
 	ImGui::ProgressBar(static_cast<float>(Wrapped(fraction)), ImVec2(-1.0f, 0.0f),
 	                   fmt::format("{:.1f}% through the moon month", Wrapped(fraction) * 100.0).c_str());
 
-	ImGui::Text("Date used: %s%s", DateText(date).c_str(), moonSystem.GetDateOverride() ? " (overridden)" : "");
+	const char* source =
+	    theMoon.dateOverride ? " (overridden)" : (theMoon.date == 0 ? " (not read yet: the moon has not shown)" : "");
+	ImGui::Text("Date used: %s%s", DateText(date).c_str(), source);
 	ImGui::Text("Scripts are told %.3f (from the phase it last showed with, %.4f)",
-	            static_cast<double>(moonSystem.GetScriptPercentage()), static_cast<double>(moonSystem.GetShownPhase()));
+	            static_cast<double>(moon::ScriptPercentage(theMoon.phase)), static_cast<double>(theMoon.phase));
 }
 
 void Moon::DrawSky() noexcept
 {
-	const auto& moonSystem = Locator::moonSystem::value();
+	const auto& theMoon = *MoonOfTheSky();
 	const auto& clock = Locator::skySystem::value().GetClock();
 	ImGui::TextUnformatted("In the sky");
 	ImGui::Text("Script hour %.2f, visual hour %.2f, clock %s", static_cast<double>(clock.GetScriptTime()),
@@ -177,11 +199,10 @@ void Moon::DrawSky() noexcept
 	            static_cast<double>(where.z));
 	ImGui::Text("Azimuth %.1f degrees, elevation %.1f degrees", static_cast<double>(angles.azimuth),
 	            static_cast<double>(angles.elevation));
-	const auto placement = moonSystem.GetPlacement();
-	if (placement)
+	if (const auto& placement = theMoon.placement)
 	{
 		ImGui::Text("Showing: strength %.0f of 200, %.0f through the overcast", static_cast<double>(placement->alpha),
-		            static_cast<double>(moonSystem.GetStrength()));
+		            static_cast<double>(theMoon.strength));
 	}
 	else
 	{
@@ -222,41 +243,41 @@ void Moon::DrawTimeControls() noexcept
 
 void Moon::DrawDateControls() noexcept
 {
-	auto& moonSystem = Locator::moonSystem::value();
-	const auto date = moonSystem.GetDate();
+	auto& theMoon = *MoonOfTheSky();
+	const auto date = DateInUse(theMoon);
 	ImGui::TextUnformatted("Date for the phase");
-	bool overridden = moonSystem.GetDateOverride().has_value();
+	bool overridden = theMoon.dateOverride.has_value();
 	if (ImGui::Checkbox("Override the computer's date", &overridden))
 	{
-		moonSystem.SetDateOverride(overridden ? std::optional(date) : std::nullopt);
+		theMoon.dateOverride = overridden ? std::optional(date) : std::nullopt;
 	}
 
 	auto day = static_cast<float>(Wrapped(moon::MonthFraction(date)) * k_MonthDays);
 	if (ImGui::SliderFloat("Day of the moon month", &day, 0.0f, static_cast<float>(k_MonthDays), "%.0f"))
 	{
-		moonSystem.SetDateOverride(moon::DateAtFraction(date, static_cast<double>(day) / k_MonthDays));
+		theMoon.dateOverride = moon::DateAtFraction(date, static_cast<double>(day) / k_MonthDays);
 	}
 	if (ImGui::Button("< Day"))
 	{
-		moonSystem.SetDateOverride(date - moon::k_SecondsPerDay);
+		theMoon.dateOverride = date - moon::k_SecondsPerDay;
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Day >"))
 	{
-		moonSystem.SetDateOverride(date + moon::k_SecondsPerDay);
+		theMoon.dateOverride = date + moon::k_SecondsPerDay;
 	}
 	for (const auto& phase : k_NamedPhases)
 	{
 		ImGui::SameLine();
 		if (ImGui::Button(std::string(phase.name).c_str()))
 		{
-			moonSystem.SetDateOverride(moon::DateAtFraction(date, phase.fraction));
+			theMoon.dateOverride = moon::DateAtFraction(date, phase.fraction);
 		}
 	}
 
 	if (ImGui::Button("Reset to the game's values"))
 	{
-		moonSystem.SetDateOverride(std::nullopt);
+		theMoon.dateOverride.reset();
 		Locator::skySystem::value().GetClock().SetRunning(true);
 	}
 	if (ImGui::IsItemHovered())

@@ -129,8 +129,25 @@ struct Turn
 	float turnsPerSecond {10.0f};
 };
 
+/// What a creature's file keeps of how its body is doing; the rest starts again as a new creature's
+struct Kept
+{
+	uint32_t age {0};
+	uint32_t turns {0};
+	float energy {1.0f};
+	float exhaustion {0.0f};
+
+	bool operator==(const Kept&) const = default;
+};
+
 /// A new creature's body
 [[nodiscard]] Needs Start(const Species& species);
+/// A new creature's body, with what its file kept of how its body was doing
+[[nodiscard]] Needs Start(const Species& species, const Kept& kept);
+/// What a creature's file keeps of how its body is doing
+[[nodiscard]] Kept Keep(const Needs& needs);
+/// A body takes up what a file kept of how it was doing
+void TakeUp(Needs& needs, const Kept& kept);
 
 /// Hunger, from 0 when full of energy
 [[nodiscard]] float Hunger(const Needs& needs);
@@ -178,6 +195,9 @@ enum class Faint : uint8_t
 };
 /// Whether it faints now: only once far enough grown up and owned by a player
 [[nodiscard]] std::optional<Faint> ShouldFaint(const Needs& needs, uint32_t phase, bool ownedByPlayer);
+/// Whether its body can make it faint at all: only a creature of a player the computer doesn't play, and not while a
+/// script controls it
+[[nodiscard]] bool CanFaintFromNeeds(bool ownedByPlayer, bool computerPlayer, bool scriptControlled);
 /// Coming round from a faint: no longer quite exhausted, starved or parched
 void WakeFromFaint(Needs& needs);
 

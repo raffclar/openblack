@@ -11,6 +11,7 @@
 
 #include <random>
 
+#include "Common/RandomNumberManager.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -24,9 +25,11 @@ class CreatureFightSystem final: public CreatureFightSystemInterface
 {
 public:
 	void ProcessTurn() override;
+	void Reset() override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 
 	StartResult StartFight(entt::entity creature, entt::entity opponent) override;
+	void Withdraw(entt::entity creature) override;
 	void AbortFight(entt::entity creature) override;
 	[[nodiscard]] bool IsFighting(entt::entity creature) const override;
 	[[nodiscard]] std::optional<entt::entity> OpponentOf(entt::entity creature) const override;
@@ -36,9 +39,14 @@ public:
 	void SetAutoFighting(entt::entity creature, bool autoFight) override;
 	[[nodiscard]] bool IsAutoFighting(entt::entity creature) const override;
 
-	bool Press(const glm::vec3& rayOrigin, const glm::vec3& rayDirection) override;
-	void Release() override;
+	[[nodiscard]] std::optional<entt::entity> PlayersFighter() const override;
+	bool Press(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, creature_fight::Button button, uint32_t milliseconds,
+	           uint32_t turn) override;
+	void Release(uint32_t milliseconds, uint32_t turn) override;
 	[[nodiscard]] bool IsPressed() const override { return _pressed.has_value(); }
+	[[nodiscard]] std::optional<creature_fight::Tip> HandTip(std::optional<entt::entity> under) const override;
+	bool GestureSpecialMove() override;
+	bool GestureSpell(MagicType type) override;
 
 	[[nodiscard]] bool IsBlocking(entt::entity creature) const override;
 	void Recoil(entt::entity creature) override;
@@ -54,7 +62,9 @@ public:
 	[[nodiscard]] bool GetAngerStartsFights() const override { return _angerStartsFights; }
 	void SetCameraWatches(bool enabled) override { _cameraWatches = enabled; }
 	[[nodiscard]] bool GetCameraWatches() const override { return _cameraWatches; }
-	[[nodiscard]] bool IsCameraOnFight() const final { return _watched.has_value(); }
+	[[nodiscard]] bool IsCameraOnFight() const final { return _view.has_value(); }
+	void SetFightExit(bool allowed) override { _fightExit = allowed; }
+	[[nodiscard]] bool GetFightExit() const override { return _fightExit; }
 
 private:
 	/// The turn's parts: fights picked by angry creatures and started by the leash, the stages before and after the
@@ -79,24 +89,40 @@ private:
 	void MeasureBlows(entt::entity creature);
 	/// Faints and lies out cold, to be taken home later, or back to where it started fighting
 	void Faint(entt::entity creature, std::optional<glm::vec3> start);
-	/// The camera watches a fight, from the side of its arena
-	void Watch(const creature_fight::Arena& arena, glm::vec2 side);
-	void FollowDuel();
+	/// The camera's fight view: started by looking at an arena with a fight on, it follows the fight and lingers a little
+	/// after it, unless the player zooms out of it
+	void UpdateView(float seconds);
+	void TryStartView(entt::entity first, entt::entity second, const creature_fight::Arena& arena);
+	void EndView();
 	/// Leaves the fight for good, its mind taking over again
 	void Leave(entt::entity creature);
+	/// Whether the line from the player's fighter to its opponent meets the opponent's body, as gestures need
+	[[nodiscard]] bool SeesOpponent(entt::entity creature) const;
 
 	bool _angerStartsFights {true};
 	bool _cameraWatches {true};
-	/// The player's creature a press is charging a blow for, and how long it has been held
+	/// The player's creature a press is charging a blow for, and when it was pressed
 	struct Pressed
 	{
 		entt::entity creature;
-		float heldMs;
+		uint32_t milliseconds;
+		uint32_t turn;
 	};
 	std::optional<Pressed> _pressed;
-	/// Where the camera was last sent to look at a fight
-	std::optional<glm::vec2> _watched;
-	std::mt19937 _random {std::random_device {}()};
+	/// The fight the camera watches: the creature that made the arena and the other, and once the fight is over how
+	/// long the view lingers
+	struct Watched
+	{
+		entt::entity first;
+		entt::entity second;
+		std::optional<float> lingerSeconds;
+	};
+	std::optional<Watched> _view;
+	/// How long the camera has looked at an arena from within it
+	float _lookSeconds {0.0f};
+	/// Whether the player may leave the fight view, and it ends by itself (scripts may forbid it)
+	bool _fightExit {true};
+	RandomStreamSource _random {RandomStream::CreatureFight};
 };
 
 } // namespace openblack::ecs::systems
