@@ -47,10 +47,12 @@
 #include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/GameRandom.h"
 #include "Creature/LeashRules.h"
 #include "Creature/TemplePen.h"
 #include "ECS/Archetypes/BallArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -79,6 +81,8 @@
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
+#include "ECS/ScriptPopulate.h"
+#include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -248,6 +252,20 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 	}
 	case ObjectType::Ball:
 		return CreateScriptBall(position);
+	case ObjectType::Animal:
+	case ObjectType::Bird:
+		// Made on its own and held still for the script; openblack makes only the land's birds so far
+		if (Locator::animalSystem::has_value())
+		{
+			const auto animal = Locator::animalSystem::value().CreateScriptAnimal(static_cast<AnimalInfo>(subtype),
+			                                                                      glm::vec2(position.x, position.z));
+			if (animal != entt::null)
+			{
+				return animal;
+			}
+		}
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "CreateScriptObject not implemented for animal kind {}", subtype);
+		return static_cast<entt::entity>(0);
 	case ObjectType::Vortex:
 	{
 		// A vortex of the three kinds; the game makes nothing for any other
@@ -1183,10 +1201,21 @@ void HasCameraArrived() // 035 HAS_CAMERA_ARRIVED
 
 void FlockCreate() // 036 FLOCK_CREATE
 {
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// An empty flock at the point, held by the script that made it: it wanders 80 m about the point, its followers
+	// within 30 m of their leader
+	constexpr float k_FlockReach = 80.0f;
+	constexpr float k_FlockDistance = 30.0f;
+	const auto position = PopVec();
+	if (!Locator::animalSystem::has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Thing not created");
+		Pusho(0);
+		return;
+	}
+	const auto flock =
+	    Locator::animalSystem::value().CreateFlock(glm::vec2(position.x, position.z), k_FlockReach, k_FlockDistance);
+	RegisterCreated(flock);
+	PushObject(flock);
 }
 
 void FlockAttach() // 037 FLOCK_ATTACH
@@ -1420,12 +1449,28 @@ void CallIn() // 055 CALL_IN
 
 void ChangeInnerOuterProperties() // 056 CHANGE_INNER_OUTER_PROPERTIES
 {
-	// const auto calm = Popf();
-	// const auto outer = Popf();
-	// const auto inner = Popf();
-	// const auto obj = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	[[maybe_unused]] const auto calm = Popf();
+	const auto outer = Popf();
+	const auto inner = Popf();
+	const auto obj = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	// A flock: the outer radius is how far it wanders about its home, the inner how far its followers keep from their
+	// leader, each in whole metres and only when given
+	if (auto* flock = registry.Valid(obj) ? registry.TryGet<ecs::components::Flock>(obj) : nullptr)
+	{
+		if (outer != 0.0f)
+		{
+			flock->domainRadius = static_cast<float>(static_cast<int16_t>(static_cast<int32_t>(outer)));
+		}
+		if (inner != 0.0f)
+		{
+			flock->flockDistance = static_cast<float>(static_cast<int16_t>(static_cast<int32_t>(inner)));
+		}
+		// TODO(birds): the flock also keeps the calm, which nothing in openblack reads yet
+		return;
+	}
+	// TODO(Daniels118): shields, storms and influences
+	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "CHLApi Function {}() not implemented.", __func__);
 }
 
 void Snapshot() // 057 SNAPSHOT
@@ -1904,12 +1949,65 @@ void GetMoonPercentage() // 108 GET_MOON_PERCENTAGE
 
 void PopulateContainer() // 109 POPULATE_CONTAINER
 {
-	[[maybe_unused]] const auto subtype = Pop().intVal;
-	[[maybe_unused]] const auto type = Pop().intVal;
-	[[maybe_unused]] const auto quantity = Popf();
-	[[maybe_unused]] const auto obj = PopObject();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	namespace populate = ecs::script_populate;
+	const auto subtype = Pop().intVal;
+	const auto type = Pop().intVal;
+	const auto count = populate::CountOf(Popf());
+	const auto container = PopObject();
+	if (!populate::IsValidType(type))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid type={}", type);
+		// The game leaves a value on the stack here although the statement gives none back
+		Pusho(0);
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(container) || container == static_cast<entt::entity>(0))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Container not valid");
+		return;
+	}
+	// About the container's place: openblack's containers that can be filled are flocks, at their home on the land
+	glm::vec3 centre(0.0f);
+	if (const auto* flock = registry.TryGet<const ecs::components::Flock>(container))
+	{
+		centre = {flock->centre.x, Locator::terrainSystem::value().GetHeightAt(flock->centre), flock->centre.y};
+	}
+	else if (const auto* transform = registry.TryGet<const Transform>(container))
+	{
+		centre = transform->position;
+	}
+	const float spread = populate::SpreadOf(count);
+	const auto floatRand = [](float x) { return Locator::gameRandom::value().GameFloatRand(x); };
+	auto& scriptObjects = Locator::scriptObjects::value();
+	for (uint32_t i = 0; i < count; ++i)
+	{
+		const auto place = populate::PlaceOf(centre, spread, floatRand);
+		const auto thing = CreateScriptObject(static_cast<ObjectType>(type), static_cast<uint32_t>(subtype), place, 0.0f, 0.0f,
+		                                      0.0f, 0.0f, 1.0f);
+		if (thing == static_cast<entt::entity>(0) || !registry.Valid(thing))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Could not create thing for populate");
+			return;
+		}
+		if (!registry.AnyOf<ecs::components::Animal, ecs::components::Villager, ecs::components::Creature>(thing))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Created Thing Not Living");
+			registry.Destroy(thing);
+			return;
+		}
+		RegisterCreated(thing);
+		// A flock takes it as its newest member and it goes about with it
+		if (!registry.AllOf<ecs::components::Flock>(container) || !registry.AllOf<ecs::components::Animal>(thing))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Not implemented - Thing not added to id");
+			return;
+		}
+		auto& animals = Locator::animalSystem::value();
+		animals.JoinFlock(thing, container);
+		animals.SetScriptState(thing, LivingStates::LivingMoveInFlock);
+		scriptObjects.AddReference(thing);
+	}
 }
 
 void AddReference() // 110 ADD_REFERENCE
