@@ -647,6 +647,8 @@ openblack_setup_and_add_test(test_hand_demo test_hand_demo.cpp)
 target_link_libraries(test_hand_demo PRIVATE hnd)
 openblack_setup_and_add_test(test_villager_clips test_villager_clips.cpp)
 target_link_libraries(test_villager_clips PRIVATE anm)
+openblack_setup_and_add_test(test_lip_sync test_lip_sync.cpp)
+openblack_setup_and_add_test(test_wave_cue_labels test_wave_cue_labels.cpp)
 openblack_setup_and_add_test(
   test_creature_script_agendas test_creature_script_agendas.cpp
 )

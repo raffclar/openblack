@@ -9,6 +9,8 @@
 
 #include "GameProviders.h"
 
+#include <cmath>
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -2066,8 +2068,9 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("help");
 	provider->Add(
-	    Query("advisors", "The good and the evil advisor: what each does, where it hovers and whether it is talking", {},
-	          ResultKind::List),
+	    Query("advisors",
+	          "The good and the evil advisor: what each does, where it hovers, whether it is talking and its mouth's lip sync",
+	          {}, ResultKind::List),
 	    Serve<Locator::advisorSystem>(
 	        "the advisors", [](const ecs::systems::AdvisorSystemInterface& advisors, const QueryContext& /*c*/) -> Json {
 		        if (!advisors.IsLoaded())
@@ -2081,7 +2084,28 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 		        for (int dude = 0; dude < 2; ++dude)
 		        {
 			        const auto& spirit = controller.Dude(dude);
+			        // The mouth: the lip sync's three weights and the mouth clips posed this frame (clip, ms)
+			        Json shapes = Json::array();
+			        for (const auto& layer : spirit.Layers())
+			        {
+				        if (layer.kind == help::spirits::AnimLayer::Kind::Add && layer.clip >= help::spirits::anim::k_VowelE &&
+				            layer.clip < help::spirits::anim::k_VowelE + 3)
+				        {
+					        shapes.push_back({{"clip", layer.clip}, {"ms", layer.milliseconds}});
+				        }
+			        }
+			        Json weights = Json::array();
+			        if (voices != nullptr)
+			        {
+				        for (const float w : voices->GetLipSyncKey(dude).weights)
+				        {
+					        // Not a number after a window of pure silence, as in the game
+					        weights.push_back(std::isfinite(w) ? Json(w) : Json(nullptr));
+				        }
+			        }
 			        items.push_back({{"advisor", dude == 0 ? "good" : "evil"},
+			                         {"mouth", {{"weights", weights}, {"shapes", shapes}}},
+			                         {"tags_left", spirit.TagsLeft()},
 			                         {"control_state", static_cast<int>(controller.State(dude))},
 			                         {"state", spirit.State()},
 			                         {"hover", Point(spirit.Hover())},
