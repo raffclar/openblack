@@ -71,6 +71,9 @@ struct SoundRoute
 	Bank bank {Bank::Editor};
 	/// The sound belongs to the villager's home (a home it may not have) rather than to the villager
 	bool fromHome {false};
+	/// The sample picked for it is heard only when its user parameter allows, as for the scripts' sound effects: one
+	/// marked quiet in cut scenes isn't heard while a script holds the widescreen bars, for instance
+	bool bySampleRules {false};
 };
 
 /// What is known of the thing whose clip plays one of its sounds
@@ -93,7 +96,8 @@ struct SoundSource
 
 /// How one of a clip's sounds is played: a person's sounds only while it is alive; the banter from the villagers' bank,
 /// the first of it from a villager's home; a thrown person's scream only early in its flight; anything else from the
-/// editor's bank; and sounds played the ordinary way not while the player is inside the temple
+/// editor's bank; and sounds played the ordinary way not while the player is inside the temple, and otherwise only as
+/// their samples allow
 [[nodiscard]] SoundRoute RouteOf(const SoundSource& source);
 
 /// Which of a clip's sounds play as it plays on from a place by so many milliseconds: those whose time is in the
