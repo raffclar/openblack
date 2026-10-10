@@ -185,16 +185,20 @@ std::optional<uint32_t> GameWorshipSiteWorld::DanceLoops(DanceInfo dance)
 	// The table names the file from the game's folder, without an extension
 	const std::string name(dances.at(row).fileName.data());
 	auto& files = Locator::resources::value().GetDanceFiles();
+	const auto id = entt::hashed_string(name.c_str()).value();
 	try
 	{
-		if (!files.Contains(entt::hashed_string(name.c_str()).value()))
+		if (!files.Contains(id))
 		{
 			std::string path = name;
 			std::ranges::replace(path, '\\', '/');
-			files.Load(entt::hashed_string(name.c_str()), resources::DanceFileLoader::FromDiskTag {},
-			           Locator::filesystem::value().FindPath(path));
+			files.Load(id, resources::DanceFileLoader::FromDiskTag {}, Locator::filesystem::value().FindPath(path));
 		}
-		return files.Handle(entt::hashed_string(name.c_str()))->loops;
+		if (const auto file = files.Handle(id); file)
+		{
+			return file->loops;
+		}
+		return std::nullopt;
 	}
 	catch (const std::exception& e)
 	{
