@@ -771,6 +771,12 @@
   "query": "land.atmosphere"
  },
  {
+  "description": "The village centres' totems: their town centre, the share they are held at, and whether the hand grips one",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.totems"
+ },
+ {
   "description": "A villager's or animal's action states: top, final, previous, and turns in them",
   "kind": "object",
   "parameters": [
