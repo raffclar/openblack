@@ -158,7 +158,7 @@ enum class AnimalLight : uint8_t
 	BrightestLand,
 	/// White: the miracles' wolves
 	White,
-	/// A colour of its own, the land's light left out: the whales' dark blue
+	/// A colour of its own, the land's light left out: the sharks' dark blue
 	Own,
 };
 
@@ -171,7 +171,7 @@ struct AnimalPose
 	/// Its own colour, 0 to 255, for an animal in a light of its own
 	glm::vec3 colour {255.0f, 255.0f, 255.0f};
 	uint8_t alpha {255};
-	/// The height in the world below which nothing of it is drawn, if any: a whale shows only what breaks the sea
+	/// The height in the world below which nothing of it is drawn, if any: a shark shows only what breaks the sea
 	std::optional<float> cutBelow;
 };
 

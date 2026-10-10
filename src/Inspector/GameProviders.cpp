@@ -60,6 +60,7 @@
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/Shark.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Temple.h"
@@ -71,7 +72,6 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WallHug.h"
-#include "ECS/Components/Whale.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
@@ -141,6 +141,7 @@
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/Systems/SharkSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
@@ -162,7 +163,6 @@
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
-#include "ECS/Systems/WhaleSystemInterface.h"
 #include "EditProviders.h"
 #include "Editor/EditorSelection.h"
 #include "EngineConfig.h"
@@ -263,7 +263,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"highDetailSystem", "view.script_control"},
     LocatorCoverage {"walkPathSystem", "living.walk_paths"},
     LocatorCoverage {"danceSystem", "living.dances"},
-    LocatorCoverage {"whaleSystem", "living.whales"},
+    LocatorCoverage {"sharkSystem", "living.sharks"},
     LocatorCoverage {"soundTagSystem", "living.sound_tags"},
     LocatorCoverage {"rainSystem", "land.precipitation"},
     LocatorCoverage {"chimneySmokeSystem", "living.chimneys"},
@@ -845,23 +845,23 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                  }
 		                  return items;
 	                  }));
-	provider->Add(Query("whales", "The whales: where each is this turn and was at its start, the way it faces, its clip "
+	provider->Add(Query("sharks", "The sharks: where each is this turn and was at its start, the way it faces, its clip "
 	                              "and the wake's timer"),
-	              Serve<Locator::whaleSystem>(
-	                  "the whales", [](const ecs::systems::WhaleSystemInterface& whales, const QueryContext& /*c*/) {
+	              Serve<Locator::sharkSystem>(
+	                  "the sharks", [](const ecs::systems::SharkSystemInterface& sharks, const QueryContext& /*c*/) {
 		                  Json items = Json::array();
 		                  if (const auto* registry = Registry(); registry != nullptr)
 		                  {
-			                  registry->Each<const Whale>([&items, registry](entt::entity entity, const Whale& whale) {
+			                  registry->Each<const Shark>([&items, registry](entt::entity entity, const Shark& shark) {
 				                  auto item = Listed(*registry, entity);
-				                  item["at"] = Point(whale.position);
-				                  item["turn_start"] = Point(whale.turnStart);
-				                  item["heading"] = whale.heading;
-				                  item["clip_place"] = whale.clipPlace;
+				                  item["at"] = Point(shark.position);
+				                  item["turn_start"] = Point(shark.turnStart);
+				                  item["heading"] = shark.heading;
+				                  item["clip_place"] = shark.clipPlace;
 				                  items.push_back(std::move(item));
 			                  });
 		                  }
-		                  return Json {{"wake_timer", whales.GetWakeTimer()}, {"whales", std::move(items)}};
+		                  return Json {{"wake_timer", sharks.GetWakeTimer()}, {"sharks", std::move(items)}};
 	                  }));
 	provider->Add(Query("walk_paths", "The things walking the camera editor's tracks: the track, how far and up to where", {},
 	                    ResultKind::List),

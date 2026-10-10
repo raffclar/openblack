@@ -61,8 +61,8 @@
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
+#include "ECS/Archetypes/SharkArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
-#include "ECS/Archetypes/WhaleArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
@@ -93,6 +93,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/ScriptTimer.h"
+#include "ECS/Components/Shark.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellSeed.h"
@@ -104,7 +105,6 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/WallHug.h"
-#include "ECS/Components/Whale.h"
 #include "ECS/CreatureRemoval.h"
 #include "ECS/DanceRules.h"
 #include "ECS/Dances.h"
@@ -485,8 +485,9 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 	case ObjectType::Villager:
 	case ObjectType::VillagerChild:
 		return CreateScriptVillager(type == ObjectType::VillagerChild, subtype, position);
+	// The game's whale object type: the opening's sharks
 	case ObjectType::Whale:
-		return WhaleArchetype::Create(position, scale);
+		return SharkArchetype::Create(position, scale);
 	case ObjectType::Vortex:
 	{
 		// A vortex of the three kinds; the game makes nothing for any other
@@ -1755,10 +1756,10 @@ void GetPosition() // 023 GET_POSITION
 				position = {xz.x, Locator::terrainSystem::value().GetHeightAt(xz) + place.altitude, xz.y};
 			}
 		}
-		else if (const auto* whale = registry.TryGet<const ecs::components::Whale>(static_cast<entt::entity>(objId)))
+		else if (const auto* shark = registry.TryGet<const ecs::components::Shark>(static_cast<entt::entity>(objId)))
 		{
 			// Where it is this turn, not where it is drawn on the way there
-			position = whale->position;
+			position = shark->position;
 		}
 		else if (transform != nullptr)
 		{
@@ -4260,7 +4261,7 @@ void WalkPath() // 177 WALK_PATH
 		return;
 	}
 	// The things that move as the game's mobile objects do walk the track, anything else can't
-	if (!registry.AnyOf<ecs::components::Whale, ecs::components::MobileObject>(object))
+	if (!registry.AnyOf<ecs::components::Shark, ecs::components::MobileObject>(object))
 	{
 		ScriptMessage("Thing is invalid for move path");
 		return;

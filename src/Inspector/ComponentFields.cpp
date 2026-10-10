@@ -149,6 +149,7 @@
 #include "ECS/Components/ScriptSpotVisual.h"
 #include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/SeeThrough.h"
+#include "ECS/Components/Shark.h"
 #include "ECS/Components/SkinOverride.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/SoundTag.h"
@@ -181,7 +182,6 @@
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
-#include "ECS/Components/Whale.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/HighDetailRules.h"
@@ -1172,6 +1172,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::ScriptSpotVisual>(context).Field<&components::ScriptSpotVisual::effect>("effect");
 	Reflect<components::ScriptTimer>(context).Field<&components::ScriptTimer::timer>("timer");
 	Reflect<components::SeeThrough>(context).Field<&components::SeeThrough::alpha>("alpha");
+	Reflect<components::Shark>(context)
+	    .Field<&components::Shark::position>("position")
+	    .Field<&components::Shark::turnStart>("turnStart")
+	    .Field<&components::Shark::heading>("heading")
+	    .Field<&components::Shark::clipPlace>("clipPlace");
 	Reflect<components::SkinOverride>(context)
 	    .Field<&components::SkinOverride::texture>("texture")
 	    .Field<&components::SkinOverride::uvOffset>("uvOffset");
@@ -1536,11 +1541,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Storm::dead>("dead")
 	    .Field<&components::Storm::deadTurns>("deadTurns")
 	    .Field<&components::Storm::climate>("climate");
-	Reflect<components::Whale>(context)
-	    .Field<&components::Whale::position>("position")
-	    .Field<&components::Whale::turnStart>("turnStart")
-	    .Field<&components::Whale::heading>("heading")
-	    .Field<&components::Whale::clipPlace>("clipPlace");
 	Reflect<components::WorshipChants>(context)
 	    .Field<&components::WorshipChants::battery>("battery")
 	    .Field<&components::WorshipChants::available>("available")
