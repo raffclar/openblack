@@ -82,6 +82,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
+#include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
@@ -2944,13 +2945,34 @@ void SwapCreature() // 210 SWAP_CREATURE
 
 void GetArena() // 211 GET_ARENA
 {
-	// const auto unk4 = Pop().intVal;
-	// const auto unk3 = Pop().intVal;
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The nearest arena closer than the distance to the point, or else a new one there for the two creatures, as a fight
+	// makes one: sized for the bigger of them, with room clear for the first
+	const auto second = PopObject();
+	const auto first = PopObject();
+	const auto distance = Popf();
+	const auto position = PopVec();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(first) || !registry.Valid(second))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "GET_ARENA: creature for arena not found!");
+	}
+	else if (!registry.AllOf<ecs::components::Creature>(first) || !registry.AllOf<ecs::components::Creature>(second))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "GET_ARENA: thing not creature");
+	}
+	else if (Locator::creatureFightSystem::has_value())
+	{
+		if (const auto found = Locator::creatureFightSystem::value().FindOrMakeArena(position, first, second, distance))
+		{
+			if (Locator::scriptObjects::has_value())
+			{
+				Locator::scriptObjects::value().Register(found->arena, found->made);
+			}
+			PushObject(found->arena);
+			return;
+		}
+	}
+	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "GET_ARENA: Arena not found or created!");
 	Pusho(0);
 }
 
@@ -3129,12 +3151,35 @@ void SetAttackOwnTown() // 228 SET_ATTACK_OWN_TOWN
 	NotImplemented();
 }
 
+/// The creature a fight native is given, or none (logged) when it is not a creature
+std::optional<entt::entity> FightCreature(const char* native, entt::entity thing)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(thing))
+	{
+		return std::nullopt;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(thing))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "{}: thing not creature", native);
+		return std::nullopt;
+	}
+	if (!Locator::creatureFightSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	return thing;
+}
+
 void IsFighting() // 229 IS_FIGHTING
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto object = PopObject();
+	if (!Locator::entitiesRegistry::value().Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "IS_FIGHTING: thing not found");
+	}
+	const auto creature = FightCreature("IS_FIGHTING", object);
+	Pushb(creature.has_value() && Locator::creatureFightSystem::value().IsFighting(*creature));
 }
 
 void SetMagicRadius() // 230 SET_MAGIC_RADIUS
@@ -4682,58 +4727,61 @@ void ObjectAdultCapacity() // 389 OBJECT_ADULT_CAPACITY
 
 void SetCreatureAutoFighting() // 390 SET_CREATURE_AUTO_FIGHTING
 {
-	// const auto creature = Pop().uintVal;
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// On, the computer fights the creature until the player makes a move for it; off, nobody does and it makes only the
+	// moves queued for it
+	const auto object = PopObject();
+	const bool enable = Pop().intVal != 0;
+	if (const auto creature = FightCreature("SET_CREATURE_AUTO_FIGHTING", object))
+	{
+		Locator::creatureFightSystem::value().SetAutoFighting(*creature, enable);
+	}
 }
 
 void IsAutoFighting() // 391 IS_AUTO_FIGHTING
 {
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto creature = FightCreature("IS_AUTO_FIGHTING", PopObject());
+	Pushb(creature.has_value() && Locator::creatureFightSystem::value().IsAutoFighting(*creature));
+}
+
+/// A move a script adds to the end of a creature's fight queue, numbered as the scripts number them
+void QueueScriptFightMove(const char* native, uint32_t value)
+{
+	const auto creature = FightCreature(native, PopObject());
+	const auto move = creature_fight::ScriptMove(value);
+	if (creature.has_value() && move.has_value())
+	{
+		Locator::creatureFightSystem::value().QueueMove(*creature, *move, false);
+	}
 }
 
 void SetCreatureQueueFightMove() // 392 SET_CREATURE_QUEUE_FIGHT_MOVE
 {
-	// const auto move = Pop().intVal;
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto move = static_cast<uint32_t>(Pop().intVal);
+	QueueScriptFightMove("SET_CREATURE_QUEUE_FIGHT_MOVE", move);
 }
 
 void SetCreatureQueueFightSpell() // 393 SET_CREATURE_QUEUE_FIGHT_SPELL
 {
-	// const auto spell = Pop().intVal;
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto spell = static_cast<uint32_t>(Pop().intVal);
+	QueueScriptFightMove("SET_CREATURE_QUEUE_FIGHT_SPELL", spell | creature_fight::k_ScriptSpellBit);
 }
 
 void SetCreatureQueueFightStep() // 394 SET_CREATURE_QUEUE_FIGHT_STEP
 {
-	// const auto step = Pop().intVal;
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto step = static_cast<uint32_t>(Pop().intVal);
+	QueueScriptFightMove("SET_CREATURE_QUEUE_FIGHT_STEP", step | creature_fight::k_ScriptAnimationBit);
 }
 
 void GetCreatureFightAction() // 395 GET_CREATURE_FIGHT_ACTION
 {
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushi(0);
+	const auto creature = FightCreature("GET_CREATURE_FIGHT_ACTION", PopObject());
+	Pushi(creature.has_value() ? static_cast<int32_t>(Locator::creatureFightSystem::value().CurrentFightAction(*creature)) : 0);
 }
 
 void CreatureFightQueueHits() // 396 CREATURE_FIGHT_QUEUE_HITS
 {
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto creature = FightCreature("CREATURE_FIGHT_QUEUE_HITS", PopObject());
+	Pushf(creature.has_value() ? static_cast<float>(Locator::creatureFightSystem::value().QueuedBlows(*creature)) : 0.0f);
 }
 
 void SquareRoot() // 397 SQUARE_ROOT
@@ -4944,9 +4992,12 @@ void KeyDown() // 419 KEY_DOWN
 
 void SetFightExit() // 420 SET_FIGHT_EXIT
 {
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Whether the player may zoom out of the fight view, and the view ends by itself after a fight
+	const bool allowed = Pop().intVal != 0;
+	if (Locator::creatureFightSystem::has_value())
+	{
+		Locator::creatureFightSystem::value().SetFightExit(allowed);
+	}
 }
 
 void GetObjectClicked() // 421 GET_OBJECT_CLICKED

@@ -337,14 +337,14 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureFighting::faceSeconds>("faceSeconds")
 	    .Field<&components::CreatureFighting::played>("played")
 	    .Field<&components::CreatureFighting::taunted>("taunted")
-	    .Field<&components::CreatureFighting::ended>("ended")
-	    .Field<&components::CreatureFighting::startPosition>("startPosition");
+	    .Field<&components::CreatureFighting::ended>("ended");
 	Reflect<components::CreatureFightRecord>(context)
 	    .Field<&components::CreatureFightRecord::tendency>("tendency")
 	    .Field<&components::CreatureFightRecord::foughtBefore>("foughtBefore")
 	    .Field<&components::CreatureFightRecord::fights>("fights")
 	    .Field<&components::CreatureFightRecord::wins>("wins")
-	    .Field<&components::CreatureFightRecord::secondsSinceFight>("secondsSinceFight");
+	    .Field<&components::CreatureFightRecord::secondsSinceFight>("secondsSinceFight")
+	    .Field<&components::CreatureFightRecord::control>("control");
 	Reflect<components::CreatureKnockedOut>(context)
 	    .Field<&components::CreatureKnockedOut::stage>("stage")
 	    .Field<&components::CreatureKnockedOut::seconds>("seconds")
