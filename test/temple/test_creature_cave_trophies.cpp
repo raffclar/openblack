@@ -8,12 +8,15 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <array>
+#include <optional>
 
 #include <gtest/gtest.h>
 
 #include "3D/CreatureCaveTrophies.h"
 
 using namespace openblack::CreatureCaveTrophies;
+using openblack::SpellSeedType;
 
 namespace
 {
@@ -75,8 +78,8 @@ TEST(CreatureCaveTrophies, MedalsByLearning)
 TEST(CreatureCaveTrophies, BeltsAndMedalsPastWoodShine)
 {
 	MiracleLearning learning;
-	// 20% is the last of wood, 24% the first of bronze
-	learning.overall = 20.0f;
+	// 21% is the last of wood, 24% the first of bronze
+	learning.overall = 21.0f;
 	learning.best = {24.0f, 0.0f, 0.0f, 0.0f};
 	const auto trophies = Choose(0.0f, learning);
 	for (const auto& trophy : trophies)
@@ -98,10 +101,60 @@ TEST(CreatureCaveTrophies, BeltsAndMedalsPastWoodShine)
 	}
 }
 
+TEST(CreatureCaveTrophies, MedalLevelsRoundAsTheGameRoundsThem)
+{
+	// Each step rounded to a float: 20% falls just short of the fifth level, 40% of the tenth, and all of it reaches the
+	// last
+	EXPECT_EQ(MedalLevel(0.0f), 0);
+	EXPECT_EQ(MedalLevel(3.9f), 0);
+	EXPECT_EQ(MedalLevel(4.0f), 1);
+	EXPECT_EQ(MedalLevel(20.0f), 4);
+	EXPECT_EQ(MedalLevel(21.0f), 5);
+	EXPECT_EQ(MedalLevel(40.0f), 9);
+	EXPECT_EQ(MedalLevel(96.0f), 24);
+	EXPECT_EQ(MedalLevel(100.0f), 25);
+	EXPECT_EQ(MedalLevel(250.0f), 25);
+}
+
+TEST(CreatureCaveTrophies, PercentLearntIsCappedAtAll)
+{
+	EXPECT_FLOAT_EQ(PercentLearnt(0, 10.0f), 0.0f);
+	EXPECT_FLOAT_EQ(PercentLearnt(4, 10.0f), 40.0f);
+	EXPECT_FLOAT_EQ(PercentLearnt(25, 10.0f), 100.0f);
+}
+
 TEST(CreatureCaveTrophies, LearningOfTheMiracles)
 {
-	const std::array<int32_t, 5> percents {12, 97, 9, 100, 30};
-	const auto learning = LearningOf(percents);
+	const std::array<MiracleLearnt, 5> miracles {{{.miracle = 1, .percent = 12.0f},
+	                                              {.miracle = 4, .percent = 97.0f},
+	                                              {.miracle = 7, .percent = 9.0f},
+	                                              {.miracle = 9, .percent = 100.0f},
+	                                              {.miracle = 12, .percent = 30.0f}}};
+	const auto learning = LearningOf(miracles);
 	EXPECT_FLOAT_EQ(learning.overall, 248.0f / 42.0f);
 	EXPECT_EQ(learning.best, (std::array<float, 4> {100.0f, 97.0f, 30.0f, 12.0f}));
+	EXPECT_EQ(learning.bestMiracles, (std::array<std::optional<uint32_t>, 4> {9u, 4u, 12u, 1u}));
+}
+
+TEST(CreatureCaveTrophies, TiesKeepTheEarlierMiracleAndNothingLearntTakesNoPlace)
+{
+	const std::array<MiracleLearnt, 4> miracles {{{.miracle = 2, .percent = 50.0f},
+	                                              {.miracle = 3, .percent = 0.0f},
+	                                              {.miracle = 5, .percent = 50.0f},
+	                                              {.miracle = 6, .percent = 20.0f}}};
+	const auto learning = LearningOf(miracles);
+	EXPECT_EQ(learning.bestMiracles, (std::array<std::optional<uint32_t>, 4> {2u, 5u, 6u, std::nullopt}));
+	EXPECT_EQ(learning.best, (std::array<float, 4> {50.0f, 50.0f, 20.0f, 0.0f}));
+}
+
+TEST(CreatureCaveTrophies, SeedsFillOnlyEmptyPlaces)
+{
+	EXPECT_EQ(SeedPoint(0), 7u);
+	EXPECT_EQ(SeedPoint(3), 13u);
+	const auto made = SeedsToMake({true, false, false, false},
+	                              {SpellSeedType::Fire, SpellSeedType::Heal, SpellSeedType::None, SpellSeedType::Water});
+	EXPECT_FALSE(made[0].has_value());
+	EXPECT_EQ(made[1], SpellSeedType::Heal);
+	EXPECT_FALSE(made[2].has_value());
+	EXPECT_EQ(made[3], SpellSeedType::Water);
 }

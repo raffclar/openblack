@@ -57,14 +57,6 @@ namespace visuals = openblack::magic::visuals;
 namespace
 {
 constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
-/// The creature spells' seeds, whose phials pulse
-constexpr auto k_FirstPhial = SpellSeedType::CreatureSpellFreeze;
-constexpr auto k_LastPhial = SpellSeedType::CreatureSpellItchy;
-
-bool IsPhial(SpellSeedType seed)
-{
-	return static_cast<int>(seed) >= static_cast<int>(k_FirstPhial) && static_cast<int>(seed) <= static_cast<int>(k_LastPhial);
-}
 
 /// How a creature takes the spell of a phial, which decides its pulse
 int ReceiveTypeOf(const InfoConstants& info, SpellSeedType seed)
@@ -217,7 +209,7 @@ void MiracleFxSystem::UpdateGlobes(float seconds)
 		transform.rotation = visuals::FacingCamera(globe.middle, eye, visuals::Facing::Globe);
 		transform.position = globe.middle - transform.rotation * (centre * transform.scale);
 		const auto& seed = magic::GetSpellSeedInfo(info, globe.seedType);
-		if (IsPhial(globe.seedType))
+		if (visuals::IsPhialSeed(globe.seedType))
 		{
 			const int receiveType = ReceiveTypeOf(info, globe.seedType);
 			globe.phialFrame = visuals::StepPhialFrame(globe.phialFrame, seconds);
@@ -236,7 +228,7 @@ void MiracleFxSystem::UpdateGlobes(float seconds)
 			const float drawn = transform.scale.x * visuals::k_GlobeSeedScale;
 			float size = 1.0f;
 			glm::vec3 shape(1.0f);
-			if (IsPhial(globe.seedType))
+			if (visuals::IsPhialSeed(globe.seedType))
 			{
 				const int receiveType = ReceiveTypeOf(info, globe.seedType);
 				size = visuals::PhialDraws(receiveType, globe.phialPhase, visuals::PhialPulse(globe.phialPhase),

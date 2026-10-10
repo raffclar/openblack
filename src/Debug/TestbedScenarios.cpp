@@ -163,7 +163,7 @@ void TestbedScenarios::RunRequested() noexcept
 	    .warmUpFrames = request->warmUpFrames,
 	    .frames = request->frames,
 	    // Without a crowd there is nothing to measure, and the game carries on with the scenario
-	    .autoSave = scenario->crowd.has_value()
+	    .autoSave = scenario->crowd.has_value() && request->benchmark
 	                    ? std::optional(request->results.value_or(std::filesystem::path("benchmarks") / scenario->id))
 	                    : std::nullopt,
 	});

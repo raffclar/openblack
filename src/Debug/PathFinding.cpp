@@ -72,7 +72,7 @@ void PathFinding::Draw() noexcept
 			auto& wallHug = registry.Get<WallHug>(_selectedVillager.value());
 			ImGui::DragFloat3("Position", glm::value_ptr(transform.position));
 			ImGui::DragFloat2("Goal", glm::value_ptr(wallHug.goal));
-			ImGui::DragFloat("Speed", &wallHug.speed);
+			ImGui::DragFloat("Speed (m/s)", &wallHug.speed);
 		}
 	}
 	else

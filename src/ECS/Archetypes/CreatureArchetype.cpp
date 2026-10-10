@@ -25,6 +25,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "Enums.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -92,8 +93,14 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 	const auto morph =
 	    creature_morph::FromAttributes(body.alignment, body.fatness, body.strength, SpeciesStrength(creatureType));
 	const auto size = creature_morph::ClampScale(scale);
-	registry.Assign<Creature>(entity, playerName, false, creatureType, creatureMindId, body.alignment, body.fatness,
-	                          body.strength, size);
+	registry.Assign<Creature>(entity, Creature {.owner = playerName,
+	                                            .leashable = false,
+	                                            .species = creatureType,
+	                                            .mind = creatureMindId,
+	                                            .alignment = body.alignment,
+	                                            .fatness = body.fatness,
+	                                            .strength = body.strength,
+	                                            .size = size});
 	// The body is drawn with the base mesh's skins, its shape blended towards the other meshes
 	registry.Assign<Mesh>(entity, creature::GetIdFromType(creatureType, CreatureBody::Appearance::Base));
 	registry.Assign<CreatureMorph>(entity, CreatureMorph {.shownFatness = body.fatness, .drawn = morph, .revision = 0});
@@ -107,6 +114,11 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 	registry.Assign<CreatureSkin>(entity);
 	registry.Assign<CreatureLocomotion>(entity);
 	registry.Assign<Transform>(entity, position, glm::eulerAngleY(yAngleRadians), glm::vec3(DrawnScale(creatureType, size)));
+	// Its owner keeps their creatures in the order they got them, the first being their primary creature
+	if (Locator::playerSystem::has_value())
+	{
+		Locator::playerSystem::value().AddCreature(entity);
+	}
 	// A player's first creature is the one they can lead on the leash
 	if (Locator::leashSystem::has_value())
 	{

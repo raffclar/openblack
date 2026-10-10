@@ -15,12 +15,12 @@
 
 #include "Graphics/HandShadow.h"
 
-using openblack::SkyInterface;
+using openblack::DayNightTimes;
 using openblack::graphics::HandShadow;
 
 namespace
 {
-constexpr SkyInterface::DayNightTimes k_Times {.nightFull = 4.0f, .duskStart = 5.0f, .duskEnd = 6.0f, .dayFull = 7.0f};
+constexpr DayNightTimes k_Times {.nightFull = 4.0f, .duskStart = 5.0f, .duskEnd = 6.0f, .dayFull = 7.0f};
 
 std::vector<glm::mat4> HandAt(glm::vec3 position)
 {

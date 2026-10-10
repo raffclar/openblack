@@ -52,6 +52,8 @@ public:
 	/// How much of a broken or unfinished building is drawn standing over what is left of it, none for one drawn whole
 	/// or not at all
 	[[nodiscard]] virtual std::optional<float> PartialShare(entt::entity building) const = 0;
+	/// Whether the object is drawn whole as any other: not a building drawn only as far up as it is built or repaired
+	[[nodiscard]] virtual bool DrawsWhole(entt::entity object) const = 0;
 	/// A new land: every building whole again
 	virtual void Reset() = 0;
 };

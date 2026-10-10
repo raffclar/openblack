@@ -45,7 +45,7 @@ CapVertex Inner(const CapVertex& outer, float inset)
 }
 } // namespace
 
-bool HasWholeTriangleBelow(std::span<const glm::vec3> positions, std::span<const uint16_t> indices, float height)
+bool DrawsAnythingBelow(std::span<const glm::vec3> positions, std::span<const uint16_t> indices, float height)
 {
 	for (size_t i = 0; i + 2 < indices.size(); i += 3)
 	{
@@ -53,7 +53,7 @@ bool HasWholeTriangleBelow(std::span<const glm::vec3> positions, std::span<const
 			const auto index = indices[i + corner];
 			return index < positions.size() && positions[index].y < height;
 		};
-		if (below(0) && below(1) && below(2))
+		if (below(0) || below(1) || below(2))
 		{
 			return true;
 		}
