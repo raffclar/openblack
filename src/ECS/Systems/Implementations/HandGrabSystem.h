@@ -22,8 +22,9 @@
 
 namespace openblack::ecs::components
 {
+struct HandClicked;
 struct HandGrab;
-}
+} // namespace openblack::ecs::components
 
 namespace openblack::ecs::systems
 {
@@ -39,6 +40,8 @@ public:
 
 	bool Press(uint32_t nowMs, uint32_t turn) override;
 	std::optional<entt::entity> Release(uint32_t nowMs, uint32_t turn) override;
+	void ClickReleased(uint32_t turn) override;
+	void ClickThing(entt::entity object, uint32_t turn) override;
 	glm::vec3 UpdateFrame(const Frame& frame) override;
 	void ProcessTurn() override;
 	void ForceDrop() override;
@@ -65,6 +68,10 @@ private:
 	[[nodiscard]] bool MayTake(entt::entity object) const;
 	/// A press that doesn't take the thing taps it, when the player may touch it
 	void Tap(entt::entity object);
+	/// What the player clicked, made on the hand when first needed; none without a hand
+	[[nodiscard]] components::HandClicked* Clicked();
+	/// Whether a click on a thing marks it as clicked
+	[[nodiscard]] bool MarksThing(entt::entity object) const;
 	/// How a thing hangs in the hand
 	[[nodiscard]] hand_grab::HoldFacts HoldOfObject(entt::entity object) const;
 	/// The hand starts pulling at a thing: its base, the plane of the land the pull works in, and its lean
@@ -81,6 +88,9 @@ private:
 	/// A field gives its food the same way, half of it once ripe
 	bool StartFieldScoop(components::HandGrab& grab, entt::entity field, const FieldFacts& facts);
 	bool ScoopField(components::HandGrab& grab, const FieldFacts& facts);
+	/// A fish farm gives a first handful whatever fish it has, and then its fish as the scoop ramps up
+	bool StartFishFarmScoop(components::HandGrab& grab, entt::entity farm, const fish_farm::Type& type);
+	bool ScoopFishFarm(components::HandGrab& grab, const fish_farm::Type& type);
 	/// The scoop ends: its stream stops, and the hand holds its handful as anything else
 	void EndScoop(components::HandGrab& grab);
 	/// The second press with the pointer on something the held thing is used on (a store, a pile of the same): it is

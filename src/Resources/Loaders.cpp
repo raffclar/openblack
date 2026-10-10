@@ -36,6 +36,7 @@
 #include "3D/Light.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/ClipSounds.h"
+#include "Audio/SoundDecoder.h"
 #include "Common/Bitmap16B.h"
 #include "Common/StringUtils.h"
 #include "Common/Zip.h"
@@ -118,6 +119,11 @@ L3DLoader::result_type L3DLoader::operator()(FromMadeTag, const std::string& deb
 	return mesh;
 }
 
+L3DFileLoader::result_type L3DFileLoader::operator()(FromFileTag, const l3d::L3DFile& file) const
+{
+	return std::make_shared<l3d::L3DFile>(file);
+}
+
 L3DFileLoader::result_type L3DFileLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
 {
 	auto file = std::make_shared<l3d::L3DFile>();
@@ -195,7 +201,7 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromPackTag, const std:
 
 	texture2D->Create(static_cast<uint16_t>(g3dTexture.ddsHeader.width), static_cast<uint16_t>(g3dTexture.ddsHeader.height), 1,
 	                  internalFormat, graphics::Wrapping::Repeat, graphics::Filter::Linear,
-	                  bgfx::makeRef(g3dTexture.ddsData.data(), static_cast<uint32_t>(g3dTexture.ddsData.size())));
+	                  bgfx::copy(g3dTexture.ddsData.data(), static_cast<uint32_t>(g3dTexture.ddsData.size())));
 	return texture2D;
 }
 
@@ -238,8 +244,52 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskTag, const std:
 
 	auto texture = std::make_shared<graphics::Texture2D>(("raw" / rawTexturePath.stem()).string());
 	texture->Create(width, height, 1, format, graphics::Wrapping::Repeat, graphics::Filter::Linear,
-	                bgfx::makeRef(data.data(), static_cast<uint32_t>(data.size())));
+	                bgfx::copy(data.data(), static_cast<uint32_t>(data.size())));
 
+	return texture;
+}
+
+Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskWithAlphaTag, const std::filesystem::path& rawTexturePath,
+                                                         const std::filesystem::path& alphaPath, uint16_t side) const
+{
+	auto& fileSystem = Locator::filesystem::value();
+	const auto colours = rawimage::DecodeRgb(fileSystem.ReadAll(rawTexturePath), side, side);
+	const auto alpha = rawimage::DecodeGrey(fileSystem.ReadAll(alphaPath), side, side);
+	if (!colours || !alpha)
+	{
+		throw std::runtime_error("Unexpected size of " + rawTexturePath.string() + " or its alpha");
+	}
+	std::vector<uint8_t> texels;
+	texels.reserve(colours->pixels.size() * 4);
+	for (size_t i = 0; i < colours->pixels.size(); ++i)
+	{
+		const auto& rgb = colours->pixels.at(i);
+		texels.insert(texels.end(), {rgb[0], rgb[1], rgb[2], alpha->pixels.at(i)});
+	}
+	auto texture = std::make_shared<graphics::Texture2D>(("raw" / rawTexturePath.stem()).string() + "+alpha");
+	texture->Create(side, side, 1, graphics::TextureFormat::RGBA8, graphics::Wrapping::Repeat, graphics::Filter::Linear,
+	                bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size())));
+	return texture;
+}
+
+Texture2DLoader::result_type Texture2DLoader::operator()(FromBitmapLayersTag, const std::string& name,
+                                                         std::span<const std::filesystem::path> layerPaths, uint16_t side) const
+{
+	auto& fileSystem = Locator::filesystem::value();
+	const size_t layerTexels = static_cast<size_t>(side) * side;
+	std::vector<uint16_t> texels(layerTexels * layerPaths.size(), 0);
+	for (size_t layer = 0; layer < layerPaths.size(); ++layer)
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading texture layer: {}", layerPaths[layer].generic_string());
+		const auto data = fileSystem.ReadAll(layerPaths[layer]);
+		Bitmap16B bitmap(data.data());
+		const auto count = std::min(layerTexels, static_cast<size_t>(bitmap.Width()) * bitmap.Height());
+		std::copy_n(bitmap.Data(), count, texels.begin() + static_cast<std::ptrdiff_t>(layer * layerTexels));
+	}
+	auto texture = std::make_shared<graphics::Texture2D>(name);
+	texture->Create(side, side, static_cast<uint16_t>(layerPaths.size()), graphics::TextureFormat::BGR5A1,
+	                graphics::Wrapping::ClampEdge, graphics::Filter::Linear,
+	                bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(texels[0]))));
 	return texture;
 }
 
@@ -653,14 +703,10 @@ CreatureSkinArtLoader::result_type CreatureSkinArtLoader::operator()(FromDiskTag
 		return std::move(image->pixels);
 	};
 	auto art = std::make_shared<creature_skin::Art>();
-	const auto symbols =
-	    fileSystem.Exists(paths.symbols) ? rgb(paths.symbols, k_Size, k_Size) : std::vector<std::array<uint8_t, 3>> {};
-	const auto defaults = rgb(paths.defaultSymbols, k_Size, k_Size);
+	const auto symbols = rgb(paths.symbols, k_Size, k_Size);
 	for (uint32_t design = 0; design < art->designs.size(); ++design)
 	{
-		auto written = creature_tattoo::DesignFromAtlas(symbols, k_Size, design);
-		const bool blank = std::ranges::all_of(written.front().levels, [](uint8_t level) { return level == 0; });
-		art->designs.at(design) = blank ? creature_tattoo::DesignFromAtlas(defaults, k_Size, design) : std::move(written);
+		art->designs.at(design) = creature_tattoo::DesignFromAtlas(symbols, k_Size, design);
 	}
 	art->damage.fresh = {.colours = rgb(paths.freshDamage, k_Size, k_Size),
 	                     .alpha = grey(paths.freshDamageAlpha, k_Size, k_Size)};
@@ -695,6 +741,32 @@ SoundLoader::result_type SoundLoader::operator()(BaseLoader<audio::Sound>::FromB
 	sound->loopEnd = header.lEnd;
 	sound->group = static_cast<uint16_t>(header.group);
 	sound->buffer = buffer;
+	return sound;
+}
+
+SoundLoader::result_type SoundLoader::operator()(FromBankFileTag, const std::filesystem::path& bank, uint64_t waveData,
+                                                 const pack::AudioBankSampleHeader& header, bool decode) const
+{
+	auto stream = Locator::filesystem::value().GetData(bank);
+	std::vector<uint8_t> bytes(header.size);
+	stream->seekg(static_cast<std::streamoff>(waveData + header.offset));
+	stream->read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+	if (!*stream)
+	{
+		throw std::runtime_error(fmt::format("Unable to read sample {} of {}", header.id, bank.string()));
+	}
+	auto sound = (*this)(FromBufferTag {}, header, {});
+	sound->buffer.push_back(std::move(bytes));
+	if (decode)
+	{
+		auto decoded = std::make_shared<std::vector<audio::DecodeResult>>();
+		decoded->reserve(sound->buffer.size());
+		for (const auto& part : sound->buffer)
+		{
+			decoded->push_back(audio::DecodeSound(part, sound->sampleRate));
+		}
+		sound->decoded = std::move(decoded);
+	}
 	return sound;
 }
 

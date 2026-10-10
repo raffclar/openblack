@@ -47,6 +47,26 @@ Needs creature_physiology::Start(const Species& species)
 	        .meals = 0};
 }
 
+Needs creature_physiology::Start(const Species& species, const Kept& kept)
+{
+	auto needs = Start(species);
+	TakeUp(needs, kept);
+	return needs;
+}
+
+void creature_physiology::TakeUp(Needs& needs, const Kept& kept)
+{
+	needs.age = kept.age;
+	needs.turns = kept.turns;
+	needs.energy = kept.energy;
+	needs.exhaustion = kept.exhaustion;
+}
+
+Kept creature_physiology::Keep(const Needs& needs)
+{
+	return {.age = needs.age, .turns = needs.turns, .energy = needs.energy, .exhaustion = needs.exhaustion};
+}
+
 float creature_physiology::Hunger(const Needs& needs)
 {
 	return 1.0f - needs.energy;
@@ -223,6 +243,11 @@ std::optional<Faint> creature_physiology::ShouldFaint(const Needs& needs, uint32
 		return Faint::Exhausted;
 	}
 	return std::nullopt;
+}
+
+bool creature_physiology::CanFaintFromNeeds(bool ownedByPlayer, bool computerPlayer, bool scriptControlled)
+{
+	return ownedByPlayer && !computerPlayer && !scriptControlled;
 }
 
 void creature_physiology::WakeFromFaint(Needs& needs)

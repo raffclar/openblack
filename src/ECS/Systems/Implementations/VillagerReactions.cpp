@@ -26,6 +26,7 @@
 #include "3D/InfluenceCircle.h"
 #include "3D/L3DMesh.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Common/GUtilsAngle.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
@@ -60,8 +61,6 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
-/// A villager's health out of this is its life
-constexpr float k_VillagerHealthScale = 100.0f;
 /// A watching villager turns this much a turn towards what it watches: an eighth of a half turn
 constexpr float k_WatchTurn = std::numbers::pi_v<float> / 8.0f;
 
@@ -174,6 +173,8 @@ void TurnTowards(entt::entity villager, const glm::vec3& point)
 		turn = std::copysign(k_WatchTurn, turn);
 	}
 	wallHug.yAngle += turn;
+	// Turning the walker turns the way its walk faces as well
+	wallHug.gameAngle = static_cast<uint16_t>(gutils::ConvertAngle3DToGame(wallHug.yAngle));
 	transform.rotation = glm::eulerAngleY(-wallHug.yAngle - std::numbers::pi_v<float> * 0.5f);
 }
 /// The awe of a villager's people at a miracle, heard now and then near the hand
@@ -306,8 +307,7 @@ bool villager_reactions::Available(entt::entity villager, Reaction type)
 	// Too weak to react to anything but food
 	// TODO(raffclar): the game also keeps a villager scripts control, one on a structure and two flags whose meaning is
 	// unknown from reacting; none of them is modelled
-	return type == Reaction::ReactToFood ||
-	       static_cast<float>(component->health) / k_VillagerHealthScale > InfoOf(*component).lifeWhenCrawlsWounded;
+	return type == Reaction::ReactToFood || component->life > InfoOf(*component).lifeWhenCrawlsWounded;
 }
 
 void villager_reactions::Start(entt::entity villager, Reaction type, LivingReaction& state, bool wasReacting)

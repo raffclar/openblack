@@ -96,3 +96,42 @@ TEST(CreatureCatch, ReadyItWaitsStepsCatchesOrGivesUp)
 	EXPECT_EQ(step.readiness, Readiness::Step);
 	EXPECT_TRUE(step.mirrored);
 }
+
+TEST(CreatureCatch, ReadyReachOnTheNearSideAlwaysSteps)
+{
+	// The hand closes 1 to the left in the high corner and 1 to the right in the other: the reach, 1 + 1.2 × 2 = 3.4,
+	// comes out on the near side, so even a thing straight ahead is taken a step for
+	const std::array<glm::vec3, 4> hands {glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(-1.0f, 2.0f, 0.0f),
+	                                      glm::vec3(1.0f, 2.0f, 0.0f)};
+	EXPECT_EQ(ReadyToCatch({0.0f, 2.0f, -5.0f}, {0.0f, 0.0f, 10.0f}, hands, 1.0f, 0.5f).readiness, Readiness::Step);
+}
+
+TEST(CreatureCatch, ReadyWithNoClosingSpeed)
+{
+	const std::array<glm::vec3, 4> hands {glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f, 2.0f, 0.0f),
+	                                      glm::vec3(-1.0f, 2.0f, 0.0f)};
+	// Ahead and not coming nearer: it never arrives, so the creature waits
+	EXPECT_EQ(ReadyToCatch({0.0f, 2.0f, -5.0f}, {5.0f, 0.0f, 0.0f}, hands, 1.0f, 0.5f).readiness, Readiness::Wait);
+	// Level with it and not coming nearer: when it arrives can't be told, and it gives up
+	EXPECT_EQ(ReadyToCatch({0.0f, 2.0f, 0.0f}, {5.0f, 0.0f, 0.0f}, hands, 1.0f, 0.5f).readiness, Readiness::GiveUp);
+}
+
+TEST(CreatureCatch, StepMoveCarriesItsShareOfTheTravel)
+{
+	// A step of 4 across and 1 up over 400 ms, a 100 ms frame at a model scale of 2, facing the world's axes
+	const glm::mat3 facing {1.0f};
+	const auto move = StepMove({4.0f, 1.0f, 0.0f}, facing, 2.0f, 100.0f, 400.0f, false);
+	EXPECT_FLOAT_EQ(move.x, 2.0f);
+	EXPECT_FLOAT_EQ(move.y, 0.5f);
+	EXPECT_FLOAT_EQ(move.z, 0.0f);
+	// With the left hand the whole move goes the other way, height included
+	const auto mirrored = StepMove({4.0f, 1.0f, 2.0f}, facing, 2.0f, 100.0f, 400.0f, true);
+	EXPECT_FLOAT_EQ(mirrored.x, -2.0f);
+	EXPECT_FLOAT_EQ(mirrored.y, -0.5f);
+	EXPECT_FLOAT_EQ(mirrored.z, -1.0f);
+	// Turned a quarter round, the step across goes along the other axis
+	const glm::mat3 quarter {glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(-1.0f, 0.0f, 0.0f)};
+	const auto turned = StepMove({4.0f, 0.0f, 0.0f}, quarter, 1.0f, 400.0f, 400.0f, false);
+	EXPECT_NEAR(turned.x, 0.0f, 1e-6f);
+	EXPECT_FLOAT_EQ(turned.z, 4.0f);
+}

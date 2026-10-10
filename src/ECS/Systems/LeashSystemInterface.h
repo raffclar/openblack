@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <array>
 #include <optional>
 
@@ -27,8 +29,9 @@ namespace openblack::ecs::systems
 /// swings between the hand, or what the leash is tied to, and the creature's collar. Once a game turn a rope pulled taut
 /// in the hand makes the creature stop and walk to the hand, a tied leash keeps the creature near what it is tied to,
 /// and the leash's feelings and lessons are passed to the creature's mind. The player picks a leash at the citadel's
-/// leash posts or with the hotkeys, puts it on and takes it off with the leash key, and taps things with the Action
-/// button to tie the leash to them and untie it again.
+/// leash posts or with the hotkeys, and puts it on and takes it off with the leash key. With the leash held, a tap of the
+/// Action button gives the creature an order, which is marked where it was sent, and a double tap ties the leash to a
+/// thing or unties it again.
 ///
 /// Who may lead which creature is decided here and nowhere else (see creature_leash::WhyNot): each player leads only
 /// their one leashable creature, so the hand, the shortcuts, the scripts, the debug windows and the scenarios all go
@@ -50,9 +53,10 @@ public:
 	virtual void ProcessTurn() = 0;
 	/// Once a frame, some seconds of game time on: the ropes swing
 	virtual void Update(float seconds) = 0;
-	/// The leash hotkeys, and the Action button tapping what is along the cursor's ray, unless the hand used the press
-	/// for something else, such as letting go of a miracle
-	virtual void HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, bool actionTaken) = 0;
+	/// The leash hotkeys, and the Action button tapping what is under the cursor (along its ray, where it is on the screen
+	/// and when the press came), unless the hand used the press for something else, such as letting go of a miracle
+	virtual void HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor, uint32_t milliseconds,
+	                         bool actionTaken) = 0;
 
 	/// Whether the creature knows a leash, which it must before it can wear it; the learning leash before any
 	[[nodiscard]] virtual bool Knows(entt::entity creature, LeashType type) const = 0;
@@ -101,7 +105,7 @@ public:
 	/// Where the hand holding a creature's leash is, while a hand holds it rather than a post or a thing
 	[[nodiscard]] virtual std::optional<glm::vec3> HolderPoint(entt::entity creature) const = 0;
 	[[nodiscard]] virtual LeashType TypeOf(entt::entity creature) const = 0;
-	/// The player's creature: the one creature they can lead, if they have one
+	/// The player's primary creature, the earliest they got that is still theirs, if they have one
 	[[nodiscard]] virtual std::optional<entt::entity> PlayersCreature(PlayerNames player) const = 0;
 
 	/// A player presses a leash shortcut, which acts on their creature. Returns whether it did anything.
@@ -112,6 +116,16 @@ public:
 	/// The player shakes the leash off, drawing a scribble with the empty hand (see GestureSystemInterface): a leash held
 	/// in the hand comes off; one tied to something stays. Returns whether it came off.
 	virtual bool Shake(PlayerNames player) = 0;
+
+	/// An order given with the leash held in the hand, as a tap of the Action button gives it: to go to a place on the land
+	/// (or what the creature makes of the place: drinking from the sea, working a field, sleeping at home), or to act on a
+	/// thing. Returns whether the creature took it.
+	virtual bool OrderAt(PlayerNames player, const glm::vec3& place) = 0;
+	virtual bool OrderOn(PlayerNames player, entt::entity object) = 0;
+	/// Where the player's creature was last sent, while it carries the order out
+	[[nodiscard]] virtual std::optional<glm::vec3> OrderTarget(entt::entity creature) const = 0;
+	/// The tooltip the hand shows for the leash over something, or over nothing, by its place among the game's tooltips
+	[[nodiscard]] virtual std::optional<uint32_t> ToolTip(PlayerNames player, std::optional<entt::entity> hovered) const = 0;
 
 	/// Hangs a player's three leash posts at three points, the aggression, learning and compassion leashes in turn
 	virtual void PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& points) = 0;

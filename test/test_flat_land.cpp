@@ -28,6 +28,16 @@ bool NearLake(int x, int z)
 	       z <= flat_land::k_LakeMaxZ + reach;
 }
 
+/// Within the pond or its shore, with a cell to spare
+bool NearPond(int x, int z)
+{
+	const auto reach = flat_land::k_ShoreCells + 1;
+	const auto across = x - z - flat_land::k_PondDiagonal;
+	const auto along = x + z;
+	return across >= -reach - 1 && across <= reach + 2 && along >= flat_land::k_PondFirstSum - (2 * reach) - 2 &&
+	       along <= flat_land::k_PondLastSum + (2 * reach) + 2;
+}
+
 bool SameColour(flat_land::Colour a, flat_land::Colour b)
 {
 	return a.r == b.r && a.g == b.g && a.b == b.b;
@@ -65,7 +75,7 @@ TEST(FlatLand, AwayFromTheLakeEveryCellIsFlatDryLand)
 			{
 				const auto mapX = static_cast<int>(block.blockX) * 16 + x;
 				const auto mapZ = static_cast<int>(block.blockZ) * 16 + z;
-				if (NearLake(mapX, mapZ))
+				if (NearLake(mapX, mapZ) || NearPond(mapX, mapZ))
 				{
 					continue;
 				}
@@ -177,6 +187,33 @@ TEST(FlatLand, RoutesWadeTheShallowsButNotTheOpenWater)
 	// The middle of the near shallows is somewhere to stand
 	const glm::vec2 shallows {flat_land::k_LakeCentre.x, flat_land::k_LakeCentre.y - flat_land::k_LakeHalfExtent.y - 10.0f};
 	EXPECT_TRUE(land.IsValid(shallows, creature_route::k_DestinationClearance));
+}
+
+TEST(FlatLand, ThePondIsAStripOfShallowsWithHalfOfEachCellAtTheSeaBed)
+{
+	// Every cell of the strip has three corners at the sea bed and one a little higher, so none is open water
+	for (int along = flat_land::k_PondFirstSum; along < flat_land::k_PondLastSum; along += 2)
+	{
+		const auto x = (along + flat_land::k_PondDiagonal) / 2;
+		const auto z = along - x;
+		ASSERT_EQ(x - z, flat_land::k_PondDiagonal);
+		EXPECT_EQ(flat_land::Altitude(x, z), 0);
+		EXPECT_EQ(flat_land::Altitude(x + 1, z), 0);
+		EXPECT_EQ(flat_land::Altitude(x + 1, z + 1), 0);
+		EXPECT_GT(flat_land::Altitude(x, z + 1), 0);
+		EXPECT_EQ(flat_land::KindOf(x, z), flat_land::CellKind::Shallows) << x << ", " << z;
+		EXPECT_EQ(flat_land::CellAt(x, z).properties.split, 0);
+	}
+	// It is clear of the lake, the patches and the plain round the middle
+	EXPECT_FALSE(NearLake(224, 292));
+	EXPECT_FALSE(flat_land::k_SandPatch.Contains(224, 287));
+
+	// A creature can stand at its middle, in the water
+	const auto land = creature_route::WalkableLand::Build(
+	    [](int32_t x, int32_t z) { return static_cast<float>(flat_land::Altitude(x, z)) * 0.67f; },
+	    [](int32_t x, int32_t z) -> std::optional<bool> { return flat_land::CellAt(x, z).properties.hasWater != 0; });
+	EXPECT_EQ(land.AtPoint(flat_land::k_PondCentre), creature_route::Ground::Water);
+	EXPECT_TRUE(land.IsValid(flat_land::k_PondCentre, creature_route::k_DestinationClearance));
 }
 
 TEST(FlatLand, BlocksCarryTheLakeAcrossTheirEdges)
