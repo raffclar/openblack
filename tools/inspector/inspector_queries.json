@@ -891,6 +891,12 @@
   "query": "living.town_desires"
  },
  {
+  "description": "How the new game started: whether the tutorial and the creature training are skipped and the old creature kept, and the player profiles",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.new_game"
+ },
+ {
   "description": "The players: their entities, primary creatures and alignment",
   "kind": "list",
   "parameters": [],
