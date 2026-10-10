@@ -98,7 +98,7 @@ protected:
 		{
 			const auto tree = _registry.Create();
 			_registry.Assign<Transform>(tree, glm::vec3(i * 10.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
-			_registry.Assign<Tree>(tree, static_cast<TreeInfo>(i), 2.0f, 1u);
+			_registry.Assign<Tree>(tree, static_cast<TreeInfo>(i), 2.0f);
 			_trees.push_back(tree);
 		}
 		_villager = _registry.Create();

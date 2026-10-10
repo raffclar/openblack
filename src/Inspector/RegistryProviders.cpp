@@ -123,14 +123,15 @@ QueryResult openblack::inspector::FindEntities(const ecs::Registry& registry, co
 		{
 			return true;
 		}
-		const auto* transform = registry.TryGet<ecs::components::Transform>(entity);
-		if (transform == nullptr)
+		// Where it is drawn, as the search afterwards measures it
+		const auto position = DrawnPosition(registry, entity);
+		if (!position.has_value())
 		{
 			return false;
 		}
 		const auto& near = *options.near;
 		const glm::dvec3 point(near.point[0], near.point[1], near.point[2]);
-		glm::dvec3 offset = glm::dvec3(transform->position) - point;
+		glm::dvec3 offset = glm::dvec3(*position) - point;
 		if (near.planar)
 		{
 			offset.y = 0.0;

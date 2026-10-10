@@ -110,7 +110,13 @@ struct Shape
 	float fatness {0.5f};
 	float strength {0.5f};
 	float size {1.0f};
+	/// The smaller size it is shown at while in its temple's pen; none elsewhere
+	std::optional<float> penSize;
 };
+
+/// The size its body is shown at, which sets how fast it uses up its energy and how much it can hold: its own size, or
+/// the smaller one in its pen, kept within the sizes a creature can be drawn at
+[[nodiscard]] float ShownSize(const Shape& shape);
 
 /// What else the body goes through this turn
 struct Turn
@@ -175,7 +181,7 @@ struct ActionCost
 /// is
 void ApplyActionCost(Needs& needs, Shape& shape, const ActionCost& cost, uint32_t phase);
 
-/// Eats something of a food value: fills up (up to its size), fattens by what it overeats and builds up poo. Returns the
+/// Eats something of a food value: fills up (up to its shown size), fattens by what it overeats and builds up poo. Returns the
 /// energy it gained.
 float Eat(Needs& needs, Shape& shape, const Species& species, float foodValue);
 /// Drinks its fill

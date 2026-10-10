@@ -68,7 +68,7 @@ public:
 	/// Flies the camera there as the bookmarks and the shortcuts fly it; why not, if it can't
 	virtual std::string Fly(const CameraPose& pose) = 0;
 	[[nodiscard]] virtual float GroundHeight(glm::vec2 point) const = 0;
-	/// Where an entity is now, for the camera to frame it; none if there is no such entity or it has no place
+	/// Where an entity is drawn now, for the camera to frame it; none if there is no such entity or it has no place
 	[[nodiscard]] virtual std::optional<glm::vec3> EntityPosition(uint32_t id) const = 0;
 };
 

@@ -11,6 +11,10 @@
 
 #include <cstdint>
 
+#include <span>
+
+#include "ECS/Components/WorshipChants.h"
+
 namespace openblack
 {
 struct GWorshipSiteInfo;
@@ -43,17 +47,15 @@ struct WorshipBatteryRules
 [[nodiscard]] WorshipBatteryRules WorshipBatteryRulesFor(const GWorshipSiteInfo& info, float tribalPower);
 
 /// The prayer power state of one worship site
-struct WorshipBattery
+using WorshipBattery = ecs::components::WorshipChants;
+
+/// A spell icon of a worship site, as the site's turn sees it
+struct WorshipIconCharge
 {
-	float battery {0.0f};         ///< stored prayer power
-	float available {0.0f};       ///< what can be drawn this turn: the battery and the dancers' chanting
-	float used {0.0f};            ///< drawn so far this turn
-	float requested {0.0f};       ///< asked for so far this turn, which may be more than was drawn
-	float chantsPerDancer {0.0f}; ///< what each dancer chanted last turn, which tires them
-	float danceIntensity {0.0f};  ///< how fast the dance goes, 0 to 1
-	float strain {0.0f};          ///< how far demand outstrips the dancers: (requested - capacity) / capacity
-	bool infinite {false};        ///< a cheat: the site never runs dry
-	bool freeMaintenance {false}; ///< a cheat: maintaining miracles costs nothing
+	bool charging {false}; ///< it is charging a seed for the hand
+	bool seedOut {false};  ///< its seed is out of it, in the hand or cast
+	float required {0.0f}; ///< what its seed needs to be charged full
+	float store {0.0f};    ///< what it has been charged so far
 };
 
 /// What the dancers chant each turn at full intensity
@@ -90,4 +92,20 @@ void UpdateWorshipStrain(WorshipBattery& site, const WorshipBatteryRules& rules,
 /// The end of the site's turn: sets the dance intensity from what was drawn and how full the battery is, adds what the
 /// dancers chanted at that intensity to the battery less what was drawn, and opens the next turn
 void EndWorshipTurn(WorshipBattery& site, const WorshipBatteryRules& rules, uint32_t dancers);
+
+/// A share of prayer power goes into an icon's store, filling it no higher than it needs. Returns what the site is
+/// charged for it: the whole share, or when the share overfills the icon only the part that overflows, as the game
+/// reckons it.
+float AddToIconStore(WorshipIconCharge& icon, float share);
+
+/// The site's whole turn, before any miracle's upkeep is drawn: how strained it was, its charging icons each given an
+/// even share when the dancers keep up, then the end of the turn. Returns the prayer power drawn, for the player's
+/// statistics.
+float ProcessWorshipTurn(WorshipBattery& site, const WorshipBatteryRules& rules, uint32_t dancers,
+                         std::span<WorshipIconCharge> icons);
+
+/// What the hand acting outside its player's influence may take from the site this turn: only the dancers' chanting not
+/// yet drawn, less the reserve for miracles, never below 0, split among the player's interfaces (hands)
+[[nodiscard]] float WorshipAvailableForVirtualInfluence(const WorshipBattery& site, const WorshipBatteryRules& rules,
+                                                        uint32_t dancers, uint32_t interfaces);
 } // namespace openblack::magic

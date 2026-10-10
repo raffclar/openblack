@@ -298,19 +298,25 @@ TurnResult creature_spells::Step(Spells& spells, std::span<const Timing, k_Spell
 	return result;
 }
 
+float creature_spells::SmallestSizeNow(float smallest, std::optional<float> sizeInFight)
+{
+	return sizeInFight.has_value() ? std::min(smallest, std::min(*sizeInFight * k_SmallFactor, *sizeInFight)) : smallest;
+}
+
+float creature_spells::LargestSizeNow(float largest, std::optional<float> sizeInFight)
+{
+	return sizeInFight.has_value() ? std::min(largest, std::max(*sizeInFight * k_BigFactor, *sizeInFight)) : largest;
+}
+
 float creature_spells::SizeTarget(Spell spell, float before, float smallest, float largest, std::optional<float> sizeInFight)
 {
 	if (spell == Spell::Big)
 	{
-		const float most =
-		    sizeInFight.has_value() ? std::min(largest, std::max(*sizeInFight * k_BigFactor, *sizeInFight)) : largest;
-		return std::max(most, before);
+		return std::max(LargestSizeNow(largest, sizeInFight), before);
 	}
 	if (spell == Spell::Small)
 	{
-		const float least =
-		    sizeInFight.has_value() ? std::min(smallest, std::min(*sizeInFight * k_SmallFactor, *sizeInFight)) : smallest;
-		return std::min(least, before);
+		return std::min(SmallestSizeNow(smallest, sizeInFight), before);
 	}
 	return before;
 }
