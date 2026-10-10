@@ -488,17 +488,17 @@
     "type": "point"
    },
    {
-    "description": "Degrees about the up axis: 0 looks along +z, 90 along +x",
+    "description": "Degrees (not radians) about the up axis: 0 looks along +z, 90 along +x",
     "name": "yaw",
     "type": "number"
    },
    {
-    "description": "Degrees below the horizon",
+    "description": "Degrees (not radians) below the horizon: 0 looks level, 90 straight down",
     "name": "pitch",
     "type": "number"
    },
    {
-    "description": "From the camera to its focus: the zoom",
+    "description": "Metres from the camera to its focus: the zoom",
     "name": "distance",
     "type": "number"
    }
@@ -517,17 +517,17 @@
     "type": "integer"
    },
    {
-    "description": "Degrees about the up axis: 0 looks along +z, 90 along +x",
+    "description": "Degrees (not radians) about the up axis: 0 looks along +z, 90 along +x",
     "name": "yaw",
     "type": "number"
    },
    {
-    "description": "Degrees below the horizon",
+    "description": "Degrees (not radians) below the horizon: 0 looks level, 90 straight down",
     "name": "pitch",
     "type": "number"
    },
    {
-    "description": "From the camera to the entity",
+    "description": "Metres from the camera to the entity",
     "name": "distance",
     "type": "number"
    }
@@ -550,17 +550,17 @@
     "type": "point"
    },
    {
-    "description": "Degrees about the up axis: 0 looks along +z, 90 along +x",
+    "description": "Degrees (not radians) about the up axis: 0 looks along +z, 90 along +x",
     "name": "yaw",
     "type": "number"
    },
    {
-    "description": "Degrees below the horizon",
+    "description": "Degrees (not radians) below the horizon: 0 looks level, 90 straight down",
     "name": "pitch",
     "type": "number"
    },
    {
-    "description": "From the camera to its focus: the zoom",
+    "description": "Metres from the camera to its focus: the zoom",
     "name": "distance",
     "type": "number"
    }
@@ -1315,17 +1315,17 @@
     "type": "integer"
    },
    {
-    "description": "{position?, focus?, yaw?, pitch?, distance?} as camera.set takes",
+    "description": "{position?, focus?, yaw?, pitch?, distance?} as camera.set takes: yaw and pitch in degrees, distance in metres",
     "name": "camera",
     "type": "object"
    },
    {
-    "description": "An entity to look at where it is at the picture's frame: its id, or {id, yaw?, pitch?, distance?}; not with camera",
+    "description": "An entity to look at where it is drawn at the picture's frame: its id, or {id, yaw?, pitch?, distance?} (yaw and pitch in degrees, pitch below the horizon; distance in metres); not with camera",
     "name": "frame",
     "type": "integer|object"
    },
    {
-    "description": "Leave the debug windows and the menu bar out of the picture",
+    "description": "Leave the debug windows, the menu bar and the input lock's notice out of the picture and the frames held around it",
     "name": "hide_gui",
     "type": "boolean"
    }

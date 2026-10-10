@@ -81,10 +81,15 @@ def schema(properties=None, required=None):
     return {"type": "object", "properties": properties or {}, "required": required or []}
 
 
+CAMERA_UNITS = {
+    "yaw": {"type": "number", "description": "Degrees (not radians) about the up axis: 0 looks along +z, 90 along +x"},
+    "pitch": {"type": "number", "description": "Degrees (not radians) below the horizon: 0 level, 90 straight down"},
+    "distance": {"type": "number", "description": "Metres from the camera to its focus"},
+}
 CAMERA_POSE = {
     "position": {"type": "array", "items": {"type": "number"}, "description": "[x, y, z] where the camera stands"},
     "focus": {"type": "array", "items": {"type": "number"}, "description": "[x, z] on the land or [x, y, z]"},
-    "yaw": {"type": "number"}, "pitch": {"type": "number"}, "distance": {"type": "number"},
+    **CAMERA_UNITS,
 }
 POINT_SCHEMA = {"type": "object",
                 "description": "{\"screen\": [x, y]} pixels, or {\"world\": [x, z] or [x, y, z]}"}
@@ -510,8 +515,7 @@ TOOLS = [
         "name": "camera_frame",
         "description": "Puts the camera at once to look at an entity where it is now, from yaw/pitch/distance if "
                        "given, the camera's own otherwise. For a picture of a moving entity use screenshot's frame.",
-        "inputSchema": schema({"id": {"type": "integer"}, "yaw": {"type": "number"}, "pitch": {"type": "number"},
-                               "distance": {"type": "number"}}, ["id"]),
+        "inputSchema": schema({"id": {"type": "integer"}, **CAMERA_UNITS}, ["id"]),
         "query": "camera.frame",
         "params": ["id", "yaw", "pitch", "distance"],
     },

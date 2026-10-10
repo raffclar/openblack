@@ -224,6 +224,8 @@ public:
 
 	/// The frame being made is written to a PNG once drawn, without the debug windows if asked
 	void RequestScreenshot(const std::filesystem::path& path, bool hideDebugGui = false) noexcept;
+	/// The frame being made leaves the debug windows out, as a picture without them does, for the frames around one
+	void HideDebugGuiThisFrame() noexcept { _debugGuiHiddenFrame = _frameCount; }
 	/// The game's own interface (its menu), once it is made
 	[[nodiscard]] gui::GameInterface* GetInterface() noexcept { return _interface.get(); }
 	/// The map script of the land loaded last, or "testbed"; empty before one is
@@ -391,6 +393,8 @@ private:
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> _requestScreenshot;
 	/// The requested screenshot leaves the debug windows out
 	bool _screenshotHidesDebugGui {false};
+	/// A frame drawn without the debug windows though no picture is taken of it
+	std::optional<uint32_t> _debugGuiHiddenFrame;
 	std::unique_ptr<audio::AtmosAudio> _atmosAudio;
 	std::unique_ptr<audio::GameMusic> _gameMusic;
 	std::unique_ptr<HandAnimation> _handAnimation;

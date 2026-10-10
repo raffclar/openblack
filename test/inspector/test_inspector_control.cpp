@@ -410,10 +410,13 @@ public:
 		hidden.push_back(hideDebugGui);
 		return {};
 	}
+	void HideDebugGui() override { ++hiddenFrames; }
 	[[nodiscard]] std::filesystem::path Directory() const override { return "shots"; }
 
 	std::vector<std::string> taken;
 	std::vector<bool> hidden;
+	/// Frames drawn without the debug windows, the picture's own aside
+	int hiddenFrames {0};
 };
 
 } // namespace
@@ -433,7 +436,7 @@ TEST(InspectorLevels, LoadByNameFreshOrAsTheStoryChangesLand)
 	EXPECT_EQ(Ask(inspector, R"({"query": "level.testbed"})")["land"], "testbed");
 }
 
-// A picture at an exact frame, the camera put in place that same frame
+// A picture at an exact frame; one with a camera is held there a few frames first
 TEST(InspectorScreenshot, TakenAtTheFrameAskedWithTheCameraAsked)
 {
 	FakeScreenshots screenshots;
@@ -444,40 +447,44 @@ TEST(InspectorScreenshot, TakenAtTheFrameAskedWithTheCameraAsked)
 	inspector.Add(std::move(owned));
 	provider->Frame(10);
 
-	// This frame
+	// This frame, as it is
 	const auto now = Ask(inspector, R"({"query": "screenshot.take"})");
 	EXPECT_EQ(now["frame"], 11);
 	ASSERT_EQ(screenshots.taken.size(), 1u);
 	EXPECT_EQ(screenshots.taken[0], "shots/frame_11.png");
 
-	// Three frames on, from a camera looking at a point
+	// Three frames on, from a camera looking at a point: the camera goes there at frame 14, and the picture is taken
+	// once it has stayed there a few frames
 	const auto later = Ask(inspector, R"({"query": "screenshot.take", "params": {"in_frames": 3, "path": "a/b.png",
 	                                     "camera": {"focus": [5, 0, 5], "distance": 20}}})");
-	EXPECT_EQ(later["frame"], 14);
+	EXPECT_EQ(later["held_from"], 14);
+	EXPECT_EQ(later["frame"], 14 + ScreenshotProvider::k_SettleFrames);
 	for (uint64_t frame = 11; frame <= 13; ++frame)
 	{
 		provider->Frame(frame);
+		provider->PlaceCamera();
 	}
-	EXPECT_EQ(screenshots.taken.size(), 1u);
 	EXPECT_EQ(camera.sets, 0);
-	provider->Frame(14);
+	for (uint64_t frame = 14; frame < 14 + ScreenshotProvider::k_SettleFrames; ++frame)
+	{
+		provider->Frame(frame);
+		provider->PlaceCamera();
+		EXPECT_EQ(screenshots.taken.size(), 1u) << frame;
+	}
+	EXPECT_EQ(camera.sets, static_cast<int>(ScreenshotProvider::k_SettleFrames));
+	provider->Frame(14 + ScreenshotProvider::k_SettleFrames);
 	ASSERT_EQ(screenshots.taken.size(), 2u);
 	EXPECT_EQ(screenshots.taken[1], "a/b.png");
-	// The camera goes there once the player's camera has moved this frame, just before the frame is drawn
-	EXPECT_EQ(camera.sets, 0);
-	provider->PlaceCamera();
-	EXPECT_EQ(camera.sets, 1);
-	provider->PlaceCamera();
-	EXPECT_EQ(camera.sets, 1);
 	EXPECT_FLOAT_EQ(camera.pose.focus.x, 5.0f);
 
 	EXPECT_FALSE(Refused(inspector, R"({"query": "screenshot.take", "params": {"at_frame": 3}})").empty());
 	EXPECT_FALSE(Refused(inspector, R"({"query": "screenshot.take", "params": {"path": "x.bmp"}})").empty());
 }
 
-// Something moving the camera between the frame's start and its drawing (its own easing, a flight) doesn't spoil the
-// picture: the camera asked for is put in place after it, every time
-TEST(InspectorScreenshot, TheCameraAskedForAlwaysTakesEffect)
+// The camera asked for is put in place after anything else moved it each frame, from the first frame held until a few
+// frames after the picture, so that whichever of those frames the picture is read from shows it: never the view from
+// before, nor the last picture's
+TEST(InspectorScreenshot, TheCameraIsHeldAroundThePicture)
 {
 	FakeScreenshots screenshots;
 	FakeCamera camera;
@@ -486,16 +493,108 @@ TEST(InspectorScreenshot, TheCameraAskedForAlwaysTakesEffect)
 	Inspector inspector;
 	inspector.Add(std::move(owned));
 	provider->Frame(10);
-	Ask(inspector, R"({"query": "screenshot.take", "params": {"camera": {"position": [1, 2, 3], "focus": [4, 5, 6]}}})");
-	// The player's camera moves on this frame
-	camera.pose = {.origin = {9.0f, 9.0f, 9.0f}, .focus = {0.0f, 0.0f, 0.0f}};
-	provider->PlaceCamera();
-	EXPECT_FLOAT_EQ(camera.pose.origin.x, 1.0f);
-	EXPECT_FLOAT_EQ(camera.pose.focus.z, 6.0f);
+	const auto asked =
+	    Ask(inspector, R"({"query": "screenshot.take", "params": {"camera": {"position": [1, 2, 3], "focus": [4, 5, 6]}}})");
+	const auto shot = asked["frame"].get<uint64_t>();
+	EXPECT_EQ(shot, 11 + ScreenshotProvider::k_SettleFrames);
+	// Frame 11 is being made: the request was answered as it started
+	uint64_t frame = 11;
+	for (int each = 0; each < 3 * static_cast<int>(ScreenshotProvider::k_SettleFrames); ++each)
+	{
+		// The player's camera moves on each frame, before the picture's is put back
+		camera.pose = {.origin = {9.0f, 9.0f, 9.0f}, .focus = {0.0f, 0.0f, 0.0f}};
+		provider->PlaceCamera();
+		if (frame <= shot + ScreenshotProvider::k_SettleFrames)
+		{
+			EXPECT_FLOAT_EQ(camera.pose.origin.x, 1.0f) << frame;
+			EXPECT_FLOAT_EQ(camera.pose.focus.z, 6.0f) << frame;
+		}
+		else
+		{
+			// Let go of once the frames around the picture are drawn
+			EXPECT_FLOAT_EQ(camera.pose.origin.x, 9.0f) << frame;
+		}
+		provider->Frame(++frame);
+		EXPECT_EQ(screenshots.taken.size(), frame >= shot ? 1u : 0u) << frame;
+	}
+
+	// A second picture right after framing elsewhere is taken from its own camera
+	Ask(inspector, R"({"query": "screenshot.take", "params": {"path": "c.png", "camera": {"position": [7, 7, 7],
+	                  "focus": [0, 0, 0]}}})");
+	for (uint64_t each = 0; each <= ScreenshotProvider::k_SettleFrames; ++each)
+	{
+		camera.pose = {.origin = {1.0f, 2.0f, 3.0f}, .focus = {4.0f, 5.0f, 6.0f}};
+		provider->PlaceCamera();
+		provider->Frame(++frame);
+	}
+	ASSERT_EQ(screenshots.taken.size(), 2u);
+	EXPECT_FLOAT_EQ(camera.pose.origin.x, 7.0f);
 
 	// Held by a camera path, the picture is refused rather than taken from elsewhere
 	camera.held = true;
 	EXPECT_FALSE(Refused(inspector, R"({"query": "screenshot.take", "params": {"camera": {"yaw": 3}}})").empty());
+}
+
+// Two held pictures asked for at once take turns: the second's camera goes in place once the first's frames are free,
+// and each answer says the frame its picture is taken
+TEST(InspectorScreenshot, HeldPicturesTakeTurns)
+{
+	FakeScreenshots screenshots;
+	FakeCamera camera;
+	auto owned = std::make_unique<ScreenshotProvider>(screenshots, camera);
+	auto* provider = owned.get();
+	Inspector inspector;
+	inspector.Add(std::move(owned));
+	provider->Frame(10);
+	const auto first = Ask(inspector, R"({"query": "screenshot.take", "params": {"path": "1.png", "camera": {"position":
+	                                     [1, 2, 3], "focus": [0, 0, 0]}}})");
+	const auto second = Ask(inspector, R"({"query": "screenshot.take", "params": {"path": "2.png", "camera": {"position":
+	                                      [7, 8, 9], "focus": [0, 0, 0]}}})");
+	const auto firstShot = first["frame"].get<uint64_t>();
+	const auto secondShot = second["frame"].get<uint64_t>();
+	EXPECT_EQ(second["held_from"], firstShot + ScreenshotProvider::k_SettleFrames + 1);
+	EXPECT_TRUE(second.contains("note"));
+	std::vector<glm::vec3> seenAt;
+	for (uint64_t frame = 11; frame <= secondShot; ++frame)
+	{
+		if (frame != 11)
+		{
+			provider->Frame(frame);
+		}
+		provider->PlaceCamera();
+		if (frame == firstShot || frame == secondShot)
+		{
+			seenAt.push_back(camera.pose.origin);
+		}
+	}
+	ASSERT_EQ(screenshots.taken, (std::vector<std::string> {"1.png", "2.png"}));
+	ASSERT_EQ(seenAt.size(), 2u);
+	EXPECT_FLOAT_EQ(seenAt[0].x, 1.0f);
+	EXPECT_FLOAT_EQ(seenAt[1].x, 7.0f);
+}
+
+// Without the debug windows, they (and the input lock's notice) are kept out of every frame held around the picture,
+// not only the picture's own
+TEST(InspectorScreenshot, TheDebugWindowsAreKeptOutAroundThePicture)
+{
+	FakeScreenshots screenshots;
+	FakeCamera camera;
+	auto owned = std::make_unique<ScreenshotProvider>(screenshots, camera);
+	auto* provider = owned.get();
+	Inspector inspector;
+	inspector.Add(std::move(owned));
+	provider->Frame(10);
+	const auto asked = Ask(inspector, R"({"query": "screenshot.take", "params": {"hide_gui": true}})");
+	EXPECT_EQ(asked["frame"], 11 + ScreenshotProvider::k_SettleFrames);
+	EXPECT_EQ(screenshots.hiddenFrames, 1);
+	for (uint64_t frame = 12; frame <= 11 + 4 * ScreenshotProvider::k_SettleFrames; ++frame)
+	{
+		provider->Frame(frame);
+	}
+	ASSERT_EQ(screenshots.hidden.size(), 1u);
+	EXPECT_TRUE(screenshots.hidden[0]);
+	// Every frame from the first held to a few after the picture
+	EXPECT_EQ(screenshots.hiddenFrames, static_cast<int>(2 * ScreenshotProvider::k_SettleFrames + 1));
 }
 
 // A moving entity is framed where it is at the picture's frame, not where it was when the picture was asked for
@@ -514,12 +613,15 @@ TEST(InspectorScreenshot, AFramedEntityIsFramedWhereItIsAtThePicturesFrame)
 	EXPECT_EQ(asked["framing"], 7);
 	EXPECT_EQ(asked["hide_gui"], true);
 	camera.walker = {100.0f, 10.0f, 30.0f};
-	EXPECT_EQ(asked["frame"], 13);
-	provider->Frame(11);
-	provider->Frame(12);
-	provider->PlaceCamera();
+	const auto shot = asked["frame"].get<uint64_t>();
+	EXPECT_EQ(shot, 13 + ScreenshotProvider::k_SettleFrames);
+	for (uint64_t frame = 11; frame < shot; ++frame)
+	{
+		provider->Frame(frame);
+		provider->PlaceCamera();
+	}
 	EXPECT_TRUE(screenshots.hidden.empty());
-	provider->Frame(13);
+	provider->Frame(shot);
 	provider->PlaceCamera();
 	ASSERT_EQ(screenshots.hidden.size(), 1u);
 	EXPECT_TRUE(screenshots.hidden[0]);
@@ -528,10 +630,13 @@ TEST(InspectorScreenshot, AFramedEntityIsFramedWhereItIsAtThePicturesFrame)
 	ExpectNear(Json::array({camera.pose.origin.x, camera.pose.origin.y, camera.pose.origin.z}), {80.0f, 10.0f, 30.0f});
 
 	// An id alone keeps the camera's angles and distance
+	for (uint64_t frame = shot + 1; frame <= shot + 2 * ScreenshotProvider::k_SettleFrames; ++frame)
+	{
+		provider->Frame(frame);
+	}
 	Ask(inspector, R"({"query": "screenshot.take", "params": {"frame": 7}})");
 	provider->PlaceCamera();
 	EXPECT_NEAR(glm::distance(camera.pose.origin, camera.pose.focus), 20.0f, 1e-3f);
-	EXPECT_FALSE(screenshots.hidden.back());
 
 	EXPECT_FALSE(Refused(inspector, R"({"query": "screenshot.take", "params": {"frame": 8}})").empty());
 	EXPECT_FALSE(Refused(inspector, R"({"query": "screenshot.take", "params": {"frame": "x"}})").empty());

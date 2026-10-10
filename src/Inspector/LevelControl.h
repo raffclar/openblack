@@ -69,6 +69,9 @@ public:
 	/// Asks for the frame being made to be written to a file once it is drawn, without the debug windows if asked. The
 	/// file appears whole once written (it is written aside, then renamed).
 	virtual std::string Capture(const std::filesystem::path& path, bool hideDebugGui) = 0;
+	/// Leaves the debug windows (and the input lock's notice) out of the frame being made, for the frames around a
+	/// picture without them
+	virtual void HideDebugGui() = 0;
 	/// Where pictures go when no path is given
 	[[nodiscard]] virtual std::filesystem::path Directory() const = 0;
 };
@@ -84,6 +87,11 @@ public:
 	[[nodiscard]] std::string_view Name() const override { return "screenshot"; }
 	[[nodiscard]] std::vector<QueryDescription> Describe() const override;
 	[[nodiscard]] QueryResult Run(std::string_view query, const QueryContext& context) override;
+
+	/// A picture with a camera, a framing or without the debug windows is taken this many frames after its camera is
+	/// first put in place, the camera kept there and the windows kept out from then until this many frames after it: the
+	/// frame the picture is read from may be one drawn a little before or after it, which must look the same
+	static constexpr uint64_t k_SettleFrames = 3;
 
 	/// Once a frame, as the inspector serves its requests: takes the pictures due this frame
 	void Frame(uint64_t frame);
@@ -101,14 +109,41 @@ private:
 		std::optional<FrameRequest> framing;
 		bool hideGui {false};
 	};
-	/// Places the camera and asks for the picture; why not, if it couldn't
+	/// Whether a picture needs the frames around it held the same
+	[[nodiscard]] static bool Settles(const Pending& pending)
+	{
+		return pending.camera.has_value() || pending.framing.has_value() || pending.hideGui;
+	}
+	/// Asks for the picture; why not, if it couldn't
 	std::string Take(const Pending& pending);
+	/// Starts holding a picture's frames from its frame
+	void Hold(Pending pending);
+	/// Whether the camera is where the held picture put it
+	[[nodiscard]] bool CameraSettled() const;
+	/// Gives up the held picture, saying why
+	void Fail(const std::string& why);
+	/// How many frames past its frame a held picture waits for the camera to stay put before it is given up
+	static constexpr uint64_t k_MostSettleFrames = 30;
 
 	ScreenshotTargetInterface& _target;
 	CameraControlInterface& _camera;
 	std::deque<Pending> _pending;
-	/// The picture of this frame whose camera is still to be put in place
-	std::optional<Pending> _placing;
+	/// The picture being held: its camera put in place and the debug windows kept out each frame, from the frame it is
+	/// due until the frame it is taken (its frame, settled) and a little after
+	struct Holding
+	{
+		Pending pending;
+		/// The first frame it may be taken, once the camera drawn is the one asked for
+		uint64_t captureAt;
+		/// The last frame held
+		uint64_t until;
+		bool taken {false};
+		/// Where the camera was last put
+		std::optional<CameraPose> placed;
+	};
+	std::optional<Holding> _holding;
+	/// The last frame the held pictures asked for so far hold: the next held picture starts after it
+	uint64_t _heldUntil {0};
 	uint64_t _frame {0};
 	std::vector<std::string> _failures;
 };

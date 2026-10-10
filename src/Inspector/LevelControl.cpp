@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <utility>
 
+#include <glm/geometric.hpp>
+
 using namespace openblack::inspector;
 
 namespace
@@ -112,12 +114,19 @@ std::vector<QueryDescription> ScreenshotProvider::Describe() const
 	                {Parameter("path", "string", "Where to write the PNG; a file in the inspector's folder by default", false),
 	                 Parameter("in_frames", "integer", "Frames from now (0 is this frame)", false),
 	                 Parameter("at_frame", "integer", "The frame, as game.state counts them", false),
-	                 Parameter("camera", "object", "{position?, focus?, yaw?, pitch?, distance?} as camera.set takes", false),
-	                 Parameter("frame", "integer|object",
-	                           "An entity to look at where it is at the picture's frame: its id, or {id, yaw?, pitch?, "
-	                           "distance?}; not with camera",
+	                 Parameter("camera", "object",
+	                           "{position?, focus?, yaw?, pitch?, distance?} as camera.set takes: yaw and pitch in degrees, "
+	                           "distance in metres",
 	                           false),
-	                 Parameter("hide_gui", "boolean", "Leave the debug windows and the menu bar out of the picture", false)},
+	                 Parameter("frame", "integer|object",
+	                           "An entity to look at where it is drawn at the picture's frame: its id, or {id, yaw?, pitch?, "
+	                           "distance?} (yaw and pitch in degrees, pitch below the horizon; distance in metres); "
+	                           "not with camera",
+	                           false),
+	                 Parameter("hide_gui", "boolean",
+	                           "Leave the debug windows, the menu bar and the input lock's notice out of the picture and the "
+	                           "frames held around it",
+	                           false)},
 	                true),
 	    Description("pending", "The pictures still to take, and any that failed", {}, false),
 	};
@@ -125,58 +134,121 @@ std::vector<QueryDescription> ScreenshotProvider::Describe() const
 
 std::string ScreenshotProvider::Take(const Pending& pending)
 {
-	if (auto why = _target.Capture(pending.path, pending.hideGui); !why.empty())
+	return _target.Capture(pending.path, pending.hideGui);
+}
+
+void ScreenshotProvider::Hold(Pending pending)
+{
+	const auto captureAt = pending.frame + k_SettleFrames;
+	_holding = Holding {.pending = std::move(pending), .captureAt = captureAt, .until = captureAt + k_SettleFrames};
+	if (_holding->pending.hideGui)
 	{
-		return why;
+		_target.HideDebugGui();
 	}
-	if (pending.camera.has_value() || pending.framing.has_value())
-	{
-		_placing = pending;
-	}
-	return {};
 }
 
 void ScreenshotProvider::PlaceCamera()
 {
-	if (!_placing.has_value())
+	if (!_holding.has_value() || (!_holding->pending.camera.has_value() && !_holding->pending.framing.has_value()))
 	{
 		return;
 	}
-	const auto placing = std::move(*_placing);
-	_placing.reset();
-	const auto fail = [this, &placing](const std::string& why) {
-		_failures.push_back(placing.path.generic_string() + ": " + why);
-	};
-	auto pose = placing.camera;
-	if (placing.framing.has_value())
+	const auto& holding = _holding->pending;
+	auto pose = holding.camera;
+	if (holding.framing.has_value())
 	{
 		const auto now = _camera.State();
-		const auto target = _camera.EntityPosition(placing.framing->id);
+		const auto target = _camera.EntityPosition(holding.framing->id);
 		if (!now.has_value() || !target.has_value())
 		{
-			fail(now.has_value() ? "no entity " + std::to_string(placing.framing->id) + " with a place to frame"
+			Fail(now.has_value() ? "no entity " + std::to_string(holding.framing->id) + " with a place to frame"
 			                     : "there is no camera");
 			return;
 		}
-		pose = FramePose(*target, *placing.framing, *now);
+		pose = FramePose(*target, *holding.framing, *now);
 	}
 	if (auto why = _camera.Set(*pose); !why.empty())
 	{
-		fail(why);
+		Fail(why);
+		return;
 	}
+	_holding->placed = *pose;
+}
+
+bool ScreenshotProvider::CameraSettled() const
+{
+	if (!_holding->pending.camera.has_value() && !_holding->pending.framing.has_value())
+	{
+		return true;
+	}
+	const auto now = _camera.State();
+	if (!_holding->placed.has_value() || !now.has_value())
+	{
+		return false;
+	}
+	constexpr float k_Close = 1e-3f;
+	return glm::distance(now->origin, _holding->placed->origin) <= k_Close &&
+	       glm::distance(now->focus, _holding->placed->focus) <= k_Close;
+}
+
+void ScreenshotProvider::Fail(const std::string& why)
+{
+	_failures.push_back(_holding->pending.path.generic_string() + ": " + why);
+	_holding.reset();
 }
 
 void ScreenshotProvider::Frame(uint64_t frame)
 {
 	_frame = frame;
+	if (_holding.has_value() && frame > _holding->until)
+	{
+		_holding.reset();
+	}
 	while (!_pending.empty() && _pending.front().frame <= frame)
 	{
+		// One held picture at a time: the next waits for its frames to come free
+		if (Settles(_pending.front()) && _holding.has_value())
+		{
+			break;
+		}
 		auto pending = std::move(_pending.front());
 		_pending.pop_front();
+		if (Settles(pending))
+		{
+			Hold(std::move(pending));
+			continue;
+		}
 		if (auto why = Take(pending); !why.empty())
 		{
 			_failures.push_back(pending.path.generic_string() + ": " + why);
 		}
+	}
+	if (!_holding.has_value())
+	{
+		return;
+	}
+	if (_holding->pending.hideGui)
+	{
+		_target.HideDebugGui();
+	}
+	if (!_holding->taken && frame >= _holding->captureAt)
+	{
+		// Only once the camera drawn is the one asked for: something else moving it delays the picture, for a while
+		if (!CameraSettled())
+		{
+			if (frame >= _holding->captureAt + k_MostSettleFrames)
+			{
+				Fail("the camera didn't stay where it was put");
+			}
+			return;
+		}
+		if (auto why = Take(_holding->pending); !why.empty())
+		{
+			Fail(why);
+			return;
+		}
+		_holding->taken = true;
+		_holding->until = frame + k_SettleFrames;
 	}
 }
 
@@ -250,6 +322,15 @@ QueryResult ScreenshotProvider::Run(std::string_view query, const QueryContext& 
 			return QueryResult::Error(error.empty() ? "there is no camera" : "camera: " + error);
 		}
 	}
+	const auto hideParam = params.find("hide_gui");
+	const bool hideGui = hideParam != params.end() && hideParam->is_boolean() && hideParam->get<bool>();
+	const bool settles = camera.has_value() || framing.has_value() || hideGui;
+	const auto asked = frame;
+	if (settles)
+	{
+		// Held pictures take turns: one asked for while another holds its frames starts once they are free
+		frame = std::max(frame, _heldUntil + 1);
+	}
 	const auto pathParam = StringMember(params, "path");
 	const auto path = pathParam.has_value() ? std::filesystem::path(*pathParam)
 	                                        : _target.Directory() / ("frame_" + std::to_string(frame) + ".png");
@@ -264,23 +345,42 @@ QueryResult ScreenshotProvider::Run(std::string_view query, const QueryContext& 
 			return QueryResult::Error("a camera path (a miracle's or a script's) holds the camera");
 		}
 	}
-	const auto hideParam = params.find("hide_gui");
-	const bool hideGui = hideParam != params.end() && hideParam->is_boolean() && hideParam->get<bool>();
 	Pending pending {.frame = frame, .path = path, .camera = camera, .framing = framing, .hideGui = hideGui};
-	if (frame == now)
+	if (settles)
 	{
-		// This frame: the picture is asked for, and the camera put in place before the frame is drawn
+		_heldUntil = frame + 2 * k_SettleFrames;
+	}
+	if (frame == now && !settles)
+	{
+		// This frame, as it is
 		if (auto why = Take(pending); !why.empty())
 		{
 			return QueryResult::Error(why);
 		}
+	}
+	else if (frame == now && !_holding.has_value())
+	{
+		// From this frame: the camera put in place before the frame is drawn, and the picture taken once it has settled
+		Hold(std::move(pending));
 	}
 	else
 	{
 		const auto after = std::ranges::upper_bound(_pending, frame, {}, &Pending::frame);
 		_pending.insert(after, std::move(pending));
 	}
-	Json answer = {{"path", path.generic_string()}, {"frame", frame}, {"now", now}, {"hide_gui", hideGui}};
+	// A held picture is taken a few frames after its camera is first put in place (later still behind another)
+	Json answer = {{"path", path.generic_string()},
+	               {"frame", settles ? frame + k_SettleFrames : frame},
+	               {"now", now},
+	               {"hide_gui", hideGui}};
+	if (settles)
+	{
+		answer["held_from"] = frame;
+		if (frame != asked)
+		{
+			answer["note"] = "another held picture had the frames asked for: this one follows it";
+		}
+	}
 	if (framing.has_value())
 	{
 		answer["framing"] = framing->id;

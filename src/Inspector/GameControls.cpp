@@ -638,6 +638,14 @@ std::string GameScreenshots::Capture(const std::filesystem::path& path, bool hid
 	return {};
 }
 
+void GameScreenshots::HideDebugGui()
+{
+	if (auto* game = Game::Instance(); game != nullptr)
+	{
+		game->HideDebugGuiThisFrame();
+	}
+}
+
 std::filesystem::path GameScreenshots::Directory() const
 {
 	// The game's own folder, so that two games never write the same file; it goes when the game does
