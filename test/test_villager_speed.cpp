@@ -85,3 +85,12 @@ TEST(VillagerSpeed, EachVillagersOwnWayOfGoing)
 	EXPECT_EQ(FinalSpeed(-5, 1.0f), 0);
 	EXPECT_EQ(FinalSpeed(70000, 1.0f), 0xFFFF);
 }
+
+TEST(VillagerSpeed, ScriptedAndDancingVillagersKeepTheirSpeed)
+{
+	EXPECT_TRUE(StateChangeSetsSpeed(false, false));
+	// A script set its speed: a new state doesn't change it
+	EXPECT_FALSE(StateChangeSetsSpeed(true, false));
+	EXPECT_FALSE(StateChangeSetsSpeed(false, true));
+	EXPECT_FALSE(StateChangeSetsSpeed(true, true));
+}

@@ -27,6 +27,7 @@
 #include "ECS/Registry.h"
 #include "ECS/VillagerAnimation.h"
 #include "ECS/VillagerClips.h"
+#include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -125,9 +126,9 @@ AnimId WalkClipOf(entt::entity entity, const Villager& villager)
 	    .lifeWhenCrawlsWounded = info.lifeWhenCrawlsWounded,
 	    .lifeWhenWalksWounded = info.lifeWhenWalksWounded,
 	    .female = IsWoman(villager),
-	    .speed = wallHug != nullptr ? wallHug->speed : 0.0f,
-	    .walkMax = GetSpeedStateSpeed(threshold.speedMaxWalk),
-	    .runMax = GetSpeedStateSpeed(threshold.speedMaxRun),
+	    .speed = wallHug != nullptr ? wall_hug::WholeSpeed(wallHug->speed) : 0,
+	    .walkMax = static_cast<int32_t>(threshold.speedMaxWalk),
+	    .runMax = static_cast<int32_t>(threshold.speedMaxRun),
 	});
 }
 
