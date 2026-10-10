@@ -21,6 +21,8 @@
 
 #include <HelpDudeFile.h>
 
+#include "Common/ModelInverseSquareRoot.h"
+
 namespace openblack::help::spirits
 {
 
@@ -335,38 +337,12 @@ void RotateX(glm::mat3& m, double c, double s)
 	TurnRowPair(m, 1, 2, c, -s);
 }
 
-/// The game's table-driven inverse square root: a guess from a 128-entry table of the mantissa, then one Newton step
-float InverseSquareRoot(float value)
-{
-	static const std::array<uint8_t, 128> k_Table = [] {
-		std::array<uint8_t, 128> table {};
-		for (uint32_t i = 0; i < table.size(); ++i)
-		{
-			const float x = std::bit_cast<float>((i | 0x1F80u) << 17);
-			const float y = 1.0f / std::sqrt(x);
-			table.at(i) = static_cast<uint8_t>((std::bit_cast<uint32_t>(y) + 0x2000u) >> 15);
-		}
-		table[0x40] = 0xFF;
-		return table;
-	}();
-	const auto bits = std::bit_cast<uint32_t>(value);
-	const uint32_t exponent = ((bits >> 23) & 0xFFu) << 22;
-	const uint32_t guess =
-	    ((0x5F000000u - exponent) & 0xFF800000u) | (static_cast<uint32_t>(k_Table.at((bits >> 17) & 0x7Fu)) << 15);
-	const float y = std::bit_cast<float>(guess);
-	float r = value * y;
-	r = r * y;
-	r = 3.0f - r;
-	r = r * y;
-	return r * 0.5f;
-}
-
 /// Each row made unit length with the game's inverse square root
 void NormaliseRows(glm::mat3& m)
 {
 	for (int row = 0; row < 3; ++row)
 	{
-		m[row] *= InverseSquareRoot(glm::dot(m[row], m[row]));
+		m[row] *= gutils::ModelInverseSquareRoot(glm::dot(m[row], m[row]));
 	}
 }
 
