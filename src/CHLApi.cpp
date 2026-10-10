@@ -59,11 +59,14 @@
 #include "Creature/CreatureScriptPlay.h"
 #include "Creature/LeashRules.h"
 #include "Creature/TemplePen.h"
+#include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/BallArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
+#include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
 #include "ECS/Archetypes/SharkArchetype.h"
+#include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -188,12 +191,14 @@
 #include "Help/ScriptSpirits.h"
 #include "Help/Spirits.h"
 #include "InfoConstants.h"
+#include "LHScriptX/Script.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Magic/ScriptCast.h"
 #include "Physics/Body.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptChallengeSnapshots.h"
+#include "ScriptHeaders/ScriptCreateRules.h"
 #include "ScriptHeaders/ScriptEnums.h"
 #include "ScriptHeaders/ScriptInfluence.h"
 #include "ScriptHeaders/ScriptNameLists.h"
@@ -486,6 +491,39 @@ entt::entity CreateScriptVillager(bool child, uint32_t subtype, const glm::vec3&
 	return villager;
 }
 
+/// The point on the ground under where a script asks for a thing
+glm::vec3 OnGround(const glm::vec3& position)
+{
+	return {position.x, Locator::terrainSystem::value().GetHeightAt(glm::vec2(position.x, position.z)), position.z};
+}
+
+/// A one-shot miracle globe a script puts straight into the local player's hand, charged in full and ready, if the hand
+/// is free to take it: the seed, or none
+entt::entity CreateScriptSeedInHand(uint32_t subtype)
+{
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const auto seedType = static_cast<SpellSeedType>(subtype);
+	const auto seed = Locator::magicSystem::value().GiveSeedToHand(player, seedType, magic::k_BasePowerUpLevel, 1.0f);
+	if (seed == entt::null)
+	{
+		return entt::null;
+	}
+	// The player has now had the miracle it casts
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(Locator::infoConstants::value(), seedType),
+	                                                      magic::k_BasePowerUpLevel);
+	if (const auto playerEntity = Locator::playerSystem::value().GetPlayer(player);
+	    registry.Valid(playerEntity) && static_cast<size_t>(type) < ecs::components::Player::k_MagicTypeCount)
+	{
+		if (auto* component = registry.TryGet<ecs::components::Player>(playerEntity))
+		{
+			component->miracles.everEnabled.at(static_cast<size_t>(type)) = true;
+		}
+	}
+	return seed;
+}
+
 entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const glm::vec3& position, float altitude,
                                 float xAngleRadians, float yAngleRadians, const float zAngleRadians, const float scale)
 {
@@ -542,6 +580,57 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		const auto vortex = Locator::vortexSystem::value().Create(position, static_cast<VortexType>(subtype), altitude);
 		return vortex != entt::null ? vortex : static_cast<entt::entity>(0);
 	}
+	case ObjectType::Feature:
+	{
+		const auto& info = Locator::infoConstants::value();
+		if (!script::create_rules::IsRow(subtype, info.feature.size()))
+		{
+			break;
+		}
+		return FeatureArchetype::Create(OnGround(position), static_cast<FeatureInfo>(subtype), yAngleRadians, scale);
+	}
+	case ObjectType::Tree:
+	{
+		// A tree of the land's forests' kinds, in no forest, already as big as it will grow
+		const auto& info = Locator::infoConstants::value();
+		if (!script::create_rules::IsRow(subtype, info.tree.size()))
+		{
+			break;
+		}
+		return TreeArchetype::Create(0, OnGround(position), static_cast<TreeInfo>(subtype), false,
+		                             script::create_rules::TreeAngle(yAngleRadians), scale, scale);
+	}
+	case ObjectType::AnimatedStatic:
+	{
+		const auto& info = Locator::infoConstants::value();
+		if (!script::create_rules::IsRow(subtype, info.animatedStatic.size()))
+		{
+			break;
+		}
+		return AnimatedStaticArchetype::Create(OnGround(position), static_cast<AnimatedStaticInfo>(subtype), yAngleRadians,
+		                                       scale);
+	}
+	case ObjectType::WeatherThing:
+	{
+		// A weather thing of a kind of weather, bringing a small storm of that weather to the place
+		const auto& info = Locator::infoConstants::value();
+		if (!script::create_rules::IsRow(subtype, info.weather.size()) || !Locator::weatherSystem::has_value())
+		{
+			break;
+		}
+		return Locator::weatherSystem::value().CreateWeatherThing(
+		    script::create_rules::WeatherThingStorm(info.weather.at(subtype), OnGround(position)));
+	}
+	case ObjectType::OneShotSpell:
+		// A globe of a seed at its plain miracle, lying on the ground
+		return Locator::magicSystem::value().CreateOneOffSeed(OnGround(position), static_cast<SpellSeedType>(subtype),
+		                                                      magic::k_BasePowerUpLevel, 1.0f);
+	case ObjectType::OneShotSpellInHand:
+		return CreateScriptSeedInHand(subtype);
+	case ObjectType::SpellDispenser:
+		// A dispenser building of the buildings' kinds, holding no miracle and turned off until a script sets it up
+		return Locator::magicSystem::value().CreateScriptDispenser(position, static_cast<AbodeInfo>(subtype), yAngleRadians,
+		                                                           scale);
 	case ObjectType::Animal:
 	case ObjectType::Bird:
 		// Made on its own and held still for the script; openblack makes only the land's birds so far
@@ -2055,16 +2144,36 @@ void Call() // 026 CALL
 	Pusho(found == entt::null ? 0u : static_cast<uint32_t>(found));
 }
 
+/// CREATE and CREATE_WITH_ANGLE_AND_SCALE: a thing of a type the scripts may create, turned and scaled, which the script
+/// then holds; none for any other type, or when nothing could be made
+void CreateForScript(int32_t type, int32_t subtype, const glm::vec3& position, float yAngleRadians, float scale)
+{
+	if (!script::create_rules::IsCreatableType(type))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid type {}", type);
+		PushObject(entt::null);
+		return;
+	}
+	auto object = CreateScriptObject(static_cast<ObjectType>(type), static_cast<uint32_t>(subtype), position, 0.0f, 0.0f,
+	                                 yAngleRadians, 0.0f, scale);
+	if (object == static_cast<entt::entity>(0))
+	{
+		object = entt::null;
+	}
+	if (object == entt::null)
+	{
+		ScriptMessage("Thing not created");
+	}
+	RegisterCreated(object);
+	PushObject(object);
+}
+
 void Create() // 027 CREATE
 {
 	const auto position = PopVec();
 	const auto subtype = Pop().intVal;
-	const auto type = static_cast<ObjectType>(Pop().intVal);
-
-	const auto object = CreateScriptObject(type, subtype, position, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-	RegisterCreated(object);
-
-	PushObject(object);
+	const auto type = Pop().intVal;
+	CreateForScript(type, subtype, position, 0.0f, 1.0f);
 }
 
 void Random() // 028 RANDOM
@@ -5449,16 +5558,13 @@ void ObjectRelativeBelief() // 251 OBJECT_RELATIVE_BELIEF
 
 void CreateWithAngleAndScale() // 252 CREATE_WITH_ANGLE_AND_SCALE
 {
+	// The angle is given in degrees
 	const auto position = PopVec();
 	const auto subtype = Pop().intVal;
-	const auto type = static_cast<ObjectType>(Pop().intVal);
+	const auto type = Pop().intVal;
 	const auto scale = Popf();
-	const auto angle = Popf();
-
-	const entt::entity object = CreateScriptObject(type, subtype, position, 0.0f, 0.0f, angle, 0.0f, scale);
-	RegisterCreated(object);
-
-	PushObject(object);
+	const auto angle = script::create_rules::AngleFromDegrees(Popf());
+	CreateForScript(type, subtype, position, angle, scale);
 }
 
 void SetHelpSystem() // 253 SET_HELP_SYSTEM
@@ -6579,11 +6685,32 @@ void GameSetMana() // 355 GAME_SET_MANA
 
 void SetMagicProperties() // 356 SET_MAGIC_PROPERTIES
 {
-	// const auto duration = Popf();
-	// const auto magicType = Pop().intVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A dispenser is given the miracle it holds and the seconds between its bubbles; for none it keeps its building's
+	// period, and with no turns between them it is turned off
+	const auto seconds = Popf();
+	const auto number = Pop().intVal;
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Thing not valid");
+		return;
+	}
+	const auto* dispenser = registry.TryGet<const ecs::components::SpellDispenser>(object);
+	if (dispenser == nullptr)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Thing must be a dispenser");
+		return;
+	}
+	const auto type = script::create_rules::MagicTypeFromScript(number);
+	if (!type.has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid magic type {}", number);
+		return;
+	}
+	const auto& building = Locator::infoConstants::value().abode.at(static_cast<size_t>(dispenser->building));
+	const auto turns = script::create_rules::DispenserTurns(seconds, building.timeEachMobileObjectTakesToProduce);
+	Locator::magicSystem::value().SetDispenserMagic(object, *type, turns);
 }
 
 void SetGameSound() // 357 SET_GAME_SOUND
@@ -7160,9 +7287,17 @@ void SetInterfaceCitadel() // 414 SET_INTERFACE_CITADEL
 
 void MapScriptFunction() // 415 MAP_SCRIPT_FUNCTION
 {
-	// const auto command = PopString();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A line of a land's script, carried out as the land's script would
+	const auto line = PopString();
+	try
+	{
+		lhscriptx::Script script;
+		script.Load(line);
+	}
+	catch (const std::runtime_error& error)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Map script line \"{}\" failed: {}", line, error.what());
+	}
 }
 
 void WithinRotation() // 416 WITHIN_ROTATION

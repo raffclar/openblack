@@ -137,4 +137,10 @@ struct Storm
 	entt::entity climate;
 };
 
+/// A weather thing a script made, standing where the storm it brought is; none once that storm has ended
+struct WeatherThing
+{
+	entt::entity storm {entt::null};
+};
+
 } // namespace openblack::ecs::components
