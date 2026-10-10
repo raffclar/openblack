@@ -121,6 +121,7 @@
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
+#include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
@@ -2101,35 +2102,70 @@ void MoveGameThing() // 033 MOVE_GAME_THING
 	NotImplemented();
 }
 
+/// A thing a script tells to face a point turns to it: a villager or another living thing at once, with its walk; a
+/// creature is left to its own turning; anything else that stands on the land is turned at once about the upright,
+/// keeping any lean it has
+static void FacePoint(entt::entity object, glm::vec3 point)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (IsDirectableVillager(object))
+	{
+		Locator::livingActionSystem::value().VillagerFace(object, glm::vec2(point.x, point.z));
+		return;
+	}
+	auto* transform = registry.TryGet<Transform>(object);
+	if (transform == nullptr)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Jonty - Thing must be living to face position!");
+		return;
+	}
+	if (registry.AllOf<ecs::components::Creature>(object))
+	{
+		// TODO(creature-scripting): the creature is taken into the script's hands, gives up what it was doing and turns
+		// to face the point as an action of its own; openblack has no script control of a creature's mind yet
+		NotImplemented();
+		return;
+	}
+	const float angle = script::property_rules::FacingAngle(glm::vec2(transform->position.x, transform->position.z),
+	                                                        glm::vec2(point.x, point.z));
+	if (IsLivingThing(object))
+	{
+		TurnLivingThing(object, *transform, angle);
+		return;
+	}
+	auto angles = script::property_rules::PlacedAngles(transform->rotation);
+	if (!CanLean(object))
+	{
+		angles = {.x = 0.0f, .y = angles.y, .z = 0.0f};
+	}
+	angles.y = angle;
+	transform->rotation = script::property_rules::PlacedRotation(angles);
+	registry.SetDirty();
+}
+
 void SetFocus() // 034 SET_FOCUS
 {
 	const auto position = PopVec();
 	const auto object = PopObject();
-	if (!Locator::entitiesRegistry::value().Valid(object))
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
 	{
-		ScriptMessage("Object no longer valid");
+		ScriptMessage("Thing no longer valid");
 		return;
 	}
-	if (IsDirectableVillager(object))
+	if (IsScriptContainer(registry, object))
 	{
-		// It turns at once to face the point
-		Locator::livingActionSystem::value().VillagerFace(object, glm::vec2(position.x, position.z));
-		return;
-	}
-	if (IsScriptContainer(Locator::entitiesRegistry::value(), object))
-	{
-		// Each of its villagers turns to face the point
-		for (const auto member : ContainerMembers(Locator::entitiesRegistry::value(), object))
+		// Each of its members turns to face the point
+		for (const auto member : ContainerMembers(registry, object))
 		{
-			if (IsDirectableVillager(member))
+			if (registry.Valid(member))
 			{
-				Locator::livingActionSystem::value().VillagerFace(member, glm::vec2(position.x, position.z));
+				FacePoint(member, position);
 			}
 		}
 		return;
 	}
-	// TODO(opening): other objects and creatures
-	NotImplemented();
+	FacePoint(object, position);
 }
 
 void HasCameraArrived() // 035 HAS_CAMERA_ARRIVED
@@ -3573,9 +3609,15 @@ void GetRealYear() // 118 GET_REAL_YEAR
 
 void RunCameraPath() // 119 RUN_CAMERA_PATH
 {
-	// const auto cameraEnum = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto track = Pop().intVal;
+	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	if (camera == nullptr)
+	{
+		ScriptMessage("Script camera has been removed! - Exception happened?");
+		return;
+	}
+	// The script's camera runs the camera editor's track of that number; one the file doesn't have runs nothing
+	camera->RunTrack(camera_edits::FindTrack(track));
 }
 
 void StartDialogue() // 120 START_DIALOGUE
@@ -3823,9 +3865,12 @@ void CallInNotNear() // 141 CALL_IN_NOT_NEAR
 
 void SetCameraZone() // 142 SET_CAMERA_ZONE
 {
-	// const auto filename = PopString();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto fileName = PopString();
+	// The world camera is kept inside the file's fence and under its height limits from now on
+	if (!Locator::cameraZoneSystem::value().SetZones(fileName))
+	{
+		ScriptMessage(fmt::format("Couldn't load zone file-.\\Data\\Zones\\{}", fileName));
+	}
 }
 
 void GetObjectState() // 143 GET_OBJECT_STATE

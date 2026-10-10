@@ -92,6 +92,7 @@ class MapInterface;
 namespace ecs::systems
 {
 class CameraBookmarkSystemInterface;
+class CameraZoneSystemInterface;
 class DynamicsSystemInterface;
 class PickingSystemInterface;
 class HandSystemInterface;
@@ -216,6 +217,7 @@ struct Locator
 	using dynamicsSystem = entt::locator<ecs::systems::DynamicsSystemInterface>;
 	using pickingSystem = entt::locator<ecs::systems::PickingSystemInterface>;
 	using cameraBookmarkSystem = entt::locator<ecs::systems::CameraBookmarkSystemInterface>;
+	using cameraZoneSystem = entt::locator<ecs::systems::CameraZoneSystemInterface>;
 	using cameraPathSystem = entt::locator<ecs::systems::CameraPathSystemInterface>;
 	using livingActionSystem = entt::locator<ecs::systems::LivingActionSystemInterface>;
 	using townSystem = entt::locator<ecs::systems::TownSystemInterface>;

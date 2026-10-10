@@ -372,6 +372,9 @@ private:
 	void PlayHandGrabSound();
 	/// What the hand steps by this frame, in seconds
 	[[nodiscard]] float HandStepSeconds() const;
+	/// What the camera and the hand step by this frame: the frame's real time in whole milliseconds, or the game's time
+	/// while a script holds the widescreen
+	[[nodiscard]] std::chrono::milliseconds CameraStepTime() const;
 	/// The miracles hear where the hand and cursor are, and the held miracle follows the hand
 	void UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds);
 	/// The gestures drawn with the cursor this frame, through the gesture system

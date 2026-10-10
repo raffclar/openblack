@@ -33,6 +33,7 @@ using SoundManager = ResourceManager<SoundLoader>;
 using GlowManager = ResourceManager<LightLoader>;
 using CameraPathManager = ResourceManager<CameraPathLoader>;
 using CameraEditManager = ResourceManager<CameraEditLoader>;
+using CameraZoneManager = ResourceManager<CameraZoneLoader>;
 using DanceFileManager = ResourceManager<DanceFileLoader>;
 using ParticleFileManager = ResourceManager<ParticleFileLoader>;
 using GestureTemplatesManager = ResourceManager<GestureTemplatesLoader>;
@@ -65,6 +66,8 @@ public:
 	virtual CameraPathManager& GetCameraPaths() = 0;
 	/// The scripts' numbered cameras and tracks, by camera_edits::k_FileId
 	virtual CameraEditManager& GetCameraEdits() = 0;
+	/// The lands' camera zones, by their file names
+	virtual CameraZoneManager& GetCameraZones() = 0;
 	/// The dances' choreographies, by their names in the dances' table
 	virtual DanceFileManager& GetDanceFiles() = 0;
 	/// The particle effect files, by particles::ParticleFileId of their names
