@@ -20,8 +20,10 @@
 #include "3D/TempleScrolls.h"
 #include "Creature/CreatureCave.h"
 #include "ECS/Components/CreatureSkin.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
+#include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "GameInterface.h"
 #include "Locator.h"
 #include "TextDatabase.h"
@@ -110,7 +112,11 @@ void DrawMiracles(const creature_cave::Snapshot& snapshot)
 	ImGui::SeparatorText("How far it has learnt each miracle");
 	for (const auto& miracle : snapshot.miracles)
 	{
-		ImGui::ProgressBar(static_cast<float>(miracle.percent) / 100.0f, ImVec2(ImGui::GetFontSize() * 6.0f, 0.0f));
+		if (!miracle.knownAbout)
+		{
+			continue;
+		}
+		ImGui::ProgressBar(miracle.learnt / 100.0f, ImVec2(ImGui::GetFontSize() * 6.0f, 0.0f));
 		ImGui::SameLine();
 		ImGui::TextUnformatted(miracle.name.c_str());
 	}
@@ -168,6 +174,14 @@ void DrawTattoos(ecs::systems::CreatureCaveSystemInterface& cave, const GameInte
 	if (ImGui::Button("Remove"))
 	{
 		cave.RemoveTattoo(screen.site);
+	}
+	ImGui::SameLine();
+	// The tattoo editor, as clicking the creature in the cave opens it
+	if (ImGui::Button("Tattoo editor") && Locator::tattooEditorSystem::has_value())
+	{
+		const auto& transform = Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(*creature);
+		Locator::tattooEditorSystem::value().Open(*creature,
+		                                          creature_tattoo_editor::CaveView(transform.position, transform.scale.x));
 	}
 	ImGui::EndDisabled();
 	if (tattoos == nullptr)

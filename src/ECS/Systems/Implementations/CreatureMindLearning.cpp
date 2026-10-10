@@ -13,17 +13,24 @@
 
 #include <algorithm>
 #include <chrono>
+#include <functional>
 #include <limits>
 #include <memory>
+#include <optional>
+#include <span>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include <LHVM.h>
 #include <fmt/format.h>
+#include <glm/geometric.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
 #include "Camera/Camera.h"
+#include "Common/GUtilsDistance.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureLayers.h"
@@ -31,9 +38,15 @@
 #include "Creature/CreatureMind.h"
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureMindTables.h"
+#include "Creature/CreatureMode.h"
+#include "Creature/CreatureObjectActions.h"
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreaturePlanner.h"
+#include "Creature/CreatureRoute.h"
+#include "Creature/CreatureTownCompassion.h"
 #include "Creature/CreatureWatching.h"
+#include "Creature/LeashOrders.h"
+#include "Creature/LeashRules.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
 #include "ECS/Components/Abode.h"
@@ -41,24 +54,33 @@
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Feature.h"
+#include "ECS/Components/FishFarm.h"
+#include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Spell.h"
+#include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/CreatureBodyFile.h"
+#include "ECS/CreatureHome.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/TownDesire.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "MagicLiving.h"
@@ -74,6 +96,7 @@ using creature_plan_actions::Target;
 
 namespace
 {
+namespace town_compassion = openblack::creature_town_compassion;
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 constexpr float k_TurnsPerSecond = 1.0f / k_TurnSeconds;
 
@@ -217,6 +240,14 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		        Locator::animalSystem::value().IsFrighteningToCreature(entity));
 	case Target::Anything:
 		return true;
+	case Target::StoragePit:
+		return registry.AllOf<StoragePit>(entity);
+	case Target::Burning:
+	case Target::Unburnt:
+	{
+		const bool burning = Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(entity);
+		return burning == (target == Target::Burning);
+	}
 	}
 	return false;
 }
@@ -265,15 +296,21 @@ std::vector<Found> Gather(ecs::Registry& registry, Target target, entt::entity s
 		registry.Each<const Pot, const Transform>(
 		    [&](entt::entity entity, const Pot&, const Transform& at) { consider(entity, at); });
 	}
-	if (target == Target::Destroyable || target == Target::Tree || target == Target::Anything)
+	const bool fire = target == Target::Burning || target == Target::Unburnt;
+	if (target == Target::Destroyable || target == Target::Tree || target == Target::Anything || fire)
 	{
 		registry.Each<const Tree, const Transform>(
 		    [&](entt::entity entity, const Tree&, const Transform& at) { consider(entity, at); });
 	}
-	if (target == Target::Destroyable || target == Target::Anything)
+	if (target == Target::Destroyable || target == Target::Anything || fire)
 	{
 		registry.Each<const Abode, const Transform>(
 		    [&](entt::entity entity, const Abode&, const Transform& at) { consider(entity, at); });
+	}
+	if (target == Target::StoragePit)
+	{
+		registry.Each<const StoragePit, const Transform>(
+		    [&](entt::entity entity, const StoragePit&, const Transform& at) { consider(entity, at); });
 	}
 	std::ranges::sort(found, {}, &Found::distance);
 	return found;
@@ -292,6 +329,196 @@ float Usefulness(const creature_mind_model::Learnt& learnt, Desire desire, const
 std::string ObjectName(const std::optional<creature_tree::Belief>& belief)
 {
 	return belief.has_value() ? fmt::format("{}s", creature_tree::BeliefName(belief->type)) : "that";
+}
+/// A creature looks this far, in metres, for a fish farm to fish at
+constexpr float k_FishingReach = 600.0f;
+/// It goes this near the shoal, or as near as it is tall when taller
+constexpr float k_FishingArrival = 15.0f;
+
+/// Where a creature at a point would fish: the shoal of the nearest fish farm (the farm itself without one), going as
+/// near as it is tall but at least 15 m, and where it would stand to fish for itself; none without a farm near
+std::optional<creature_plan_actions::Situation::Fishing> FishingFor(const ecs::Registry& registry, entt::entity creature,
+                                                                    glm::vec2 position)
+{
+	if (!Locator::fishFarmSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto farm = Locator::fishFarmSystem::value().ClosestFarm({position.x, 0.0f, position.y}, k_FishingReach);
+	if (!farm.has_value())
+	{
+		return std::nullopt;
+	}
+	bool putDownFirst = false;
+	bool holdingFood = false;
+	if (Locator::creatureObjectActionSystem::has_value())
+	{
+		const auto& hands = Locator::creatureObjectActionSystem::value();
+		if (const auto held = hands.GetHeld(creature))
+		{
+			holdingFood = hands.FoodValueOf(*held).has_value();
+			putDownFirst = !holdingFood;
+		}
+	}
+	const auto& data = registry.Get<const FishFarm>(*farm);
+	const auto& at = registry.Get<const Transform>(*farm).position;
+	const glm::vec3 shoal = data.shoal.has_value() ? data.shoal->centre : at;
+	const glm::vec2 point {shoal.x, shoal.z};
+	// Fishing for itself, where it can't stand at the shoal it goes to the nearest place it can, if near enough
+	std::optional<glm::vec2> standAt = point;
+	if (Locator::creatureLocomotionSystem::has_value())
+	{
+		const auto& land = Locator::creatureLocomotionSystem::value().GetWalkableLand();
+		if (!land.IsValid(point, creature_route::k_DestinationClearance))
+		{
+			const auto valid =
+			    land.NearestValid(point, creature_route::k_DestinationClearance, creature_route::k_ValidPointSearch);
+			standAt = valid.has_value() &&
+			                  glm::distance(shoal, glm::vec3(valid->x, 0.0f, valid->y)) < creature_route::k_ValidPointReach
+			              ? valid
+			              : std::nullopt;
+		}
+	}
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const float height = creature_mode::CreatureHeight(body != nullptr ? body->size : 1.0f);
+	return creature_plan_actions::Situation::Fishing {.shoal = point,
+	                                                  .standAt = standAt,
+	                                                  .arriveWithin = std::max(height, k_FishingArrival),
+	                                                  .putDownFirst = putDownFirst,
+	                                                  .holdingFood = holdingFood,
+	                                                  .height = height};
+}
+
+/// The town a creature's compassion is about: of the towns and other creatures it knows, the one most worth it for the
+/// distance, the first found winning a tie; none when that is a creature, for which compassion has nothing to do
+std::optional<entt::entity> CompassionTown(ecs::Registry& registry, entt::entity self, glm::vec2 position,
+                                           const creature_mind_model::Learnt& learnt, float distanceWeight)
+{
+	std::optional<entt::entity> best;
+	bool bestIsTown = false;
+	float bestScore = 0.0f;
+	const auto consider = [&](entt::entity entity, const Transform& at, bool town) {
+		if (entity == self)
+		{
+			return;
+		}
+		const auto distance = glm::distance(glm::vec2(at.position.x, at.position.z), position);
+		const auto score = Usefulness(learnt, Desire::Compassion, BeliefOf(registry, entity, self)) *
+		                   creature_planner::DistancePriority(false, distance, distanceWeight);
+		if (score > bestScore)
+		{
+			best = entity;
+			bestIsTown = town;
+			bestScore = score;
+		}
+	};
+	registry.Each<const Town, const Transform>(
+	    [&](entt::entity entity, const Town&, const Transform& at) { consider(entity, at, true); });
+	registry.Each<const Creature, const Transform>(
+	    [&](entt::entity entity, const Creature&, const Transform& at) { consider(entity, at, false); });
+	return bestIsTown ? best : std::nullopt;
+}
+
+/// How much a town feels each of its desires now, and its desires in its own order, most felt first
+struct TownFeelings
+{
+	std::array<float, town_compassion::k_TownDesireCount> felt {};
+	std::vector<uint32_t> order;
+};
+TownFeelings TownFeelingsOf(const ecs::Registry& registry, entt::entity town)
+{
+	TownFeelings feelings;
+	const auto* wants = registry.TryGet<const TownDesire>(town);
+	if (wants == nullptr)
+	{
+		return feelings;
+	}
+	for (size_t d = 0; d < feelings.felt.size(); ++d)
+	{
+		feelings.felt.at(d) = ecs::town_desire::GetRawDesire(*wants, d);
+	}
+	for (const auto& sorted : wants->sortedRaw)
+	{
+		feelings.order.push_back(sorted.index);
+	}
+	return feelings;
+}
+
+/// Whether a thing is part of a town, as the creature knows it: the town's buildings and its people
+bool PartOfTown(const ecs::Registry& registry, entt::entity entity, entt::entity town)
+{
+	if (const auto* villager = registry.TryGet<const Villager>(entity))
+	{
+		return villager->town == town;
+	}
+	const auto* abode = registry.TryGet<const Abode>(entity);
+	const auto* data = registry.TryGet<const Town>(town);
+	return abode != nullptr && data != nullptr && abode->townId == data->id;
+}
+
+/// Whether compassion is what a creature wants most: no desire it feels is stronger
+bool CompassionMostWanted(const creature_desires::Desires& desires)
+{
+	const auto compassion = desires[Desire::Compassion].value;
+	return std::ranges::none_of(desires.desires,
+	                            [compassion](const auto& state) { return state.activated && state.value > compassion; });
+}
+
+/// The action that heals, which hurt people in a town may make a creature think of first
+constexpr std::string_view k_HealAction = "CastHealSpell";
+
+/// The actions a creature's compassion for a town may take now: those for the town desire it helps with, which it may
+/// move on from first, or healing first for a town with hurt people
+std::vector<uint32_t> TownCompassionActions(const ecs::Registry& registry, entt::entity creature, CreatureMindState& mind,
+                                            entt::entity town, const creature_mind_tables::Tables& tables,
+                                            const std::function<uint32_t(uint32_t)>& random)
+{
+	const auto feelings = TownFeelingsOf(registry, town);
+	const auto desires = town_compassion::DesiresToHelp(feelings.order, feelings.felt, tables.townActions);
+	auto& state = mind.townCompassion;
+	const auto before = state.desire;
+	const bool beingCompassionate =
+	    mind.planActive && mind.planner.current.has_value() && mind.planner.current->desire == Desire::Compassion;
+	if (mind.desires.has_value() &&
+	    town_compassion::MovesOnWhilePlanning(state, CompassionMostWanted(*mind.desires), beingCompassionate, mind.turn))
+	{
+		town_compassion::MoveOnWhilePlanning(state, desires, feelings.felt, mind.turn);
+	}
+	std::optional<uint32_t> heal;
+	const auto* data = registry.TryGet<const Town>(town);
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (const auto healAction = creature_mind_tables::FindAction(tables, k_HealAction);
+	    data != nullptr && body != nullptr && healAction.has_value())
+	{
+		// TODO(fish): a town desire shown on the leash holds off the healing; the leash can't show one yet
+		const auto sightings = MiracleSightings(mind, tables, body->species, MagicType::Heal);
+		if (sightings.has_value() &&
+		    town_compassion::HealFirst(data->injured, false, sightings->first, sightings->second, random))
+		{
+			heal = healAction;
+		}
+	}
+	town_compassion::Settle(state, desires, feelings.felt);
+	if (state.desire != before)
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} helps town {} with its desire {} ({} it wants)",
+		                    entt::to_integral(creature), entt::to_integral(town),
+		                    state.desire.has_value() ? static_cast<int>(*state.desire) : -1, desires.size());
+	}
+	return town_compassion::Actions(state, tables.townActions, heal);
+}
+
+/// Having finished helping a town, the creature may move on to another of its desires
+void FinishedHelpingTown(const ecs::Registry& registry, CreatureMindState& mind, entt::entity town,
+                         const creature_mind_tables::Tables& tables, const std::function<uint32_t(uint32_t)>& random)
+{
+	if (!registry.Valid(town) || !registry.AllOf<Town>(town))
+	{
+		return;
+	}
+	const auto feelings = TownFeelingsOf(registry, town);
+	const auto desires = town_compassion::DesiresToHelp(feelings.order, feelings.felt, tables.townActions);
+	town_compassion::FinishedHelping(mind.townCompassion, desires, feelings.felt, mind.turn, random);
 }
 } // namespace
 
@@ -322,7 +549,7 @@ std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& 
 		common(types::k_Villager, k_Neutral, 0, 1, k_NoPlayer);
 		belief.Set(Attribute::Sex, static_cast<uint32_t>(villager->sex));
 		belief.Set(Attribute::VillagerJob, static_cast<uint32_t>(villager->number));
-		belief.Set(Attribute::Life, villager->health > 0 ? 1 : 0);
+		belief.Set(Attribute::Life, villager->life > 0.0f ? 1 : 0);
 		belief.Set(Attribute::OnFire,
 		           Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(entity) ? 1 : 0);
 		belief.Set(Attribute::Tribe, static_cast<uint32_t>(villager->tribe));
@@ -333,9 +560,9 @@ std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& 
 		const bool mine = me != nullptr && me->owner == creature->owner;
 		common(types::k_Creature, mine ? 0 : 2, 0, 1, PlayerNumberOf(creature->owner));
 		belief.Set(Attribute::HarderThanMe,
-		           me != nullptr && creature->strength * creature->size > me->strength * me->size ? 1 : 0);
+		           me != nullptr && creature->strength * ShownSize(*creature) > me->strength * ShownSize(*me) ? 1 : 0);
 		belief.Set(Attribute::CreatureType, static_cast<uint32_t>(creature::InfoRow(creature->species)));
-		belief.Set(Attribute::Height, static_cast<uint32_t>(std::lround(creature->size * 3.0f)));
+		belief.Set(Attribute::Height, static_cast<uint32_t>(std::lround(ShownSize(*creature) * 3.0f)));
 		belief.Set(Attribute::SpellKnowledge, 0);
 		belief.Set(Attribute::Carrying, registry.AllOf<CreatureHeldObject>(entity) ? 1 : 0);
 		uint32_t dominant = 0;
@@ -368,6 +595,28 @@ std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& 
 	if (registry.AllOf<Tree>(entity))
 	{
 		common(types::k_Tree, k_Neutral, 0, 0, k_NoPlayer);
+		return belief;
+	}
+	if (const auto* town = registry.TryGet<const Town>(entity))
+	{
+		// Its own player's town, or another's; made, not living
+		const bool mine = me != nullptr && me->owner == town->owner;
+		common(types::k_Town, mine ? 0 : 1, 1, 0, std::min(PlayerNumberOf(town->owner), k_NoPlayer));
+		float faith = 0.0f;
+		if (const auto* impression = registry.TryGet<const TownImpression>(entity); impression != nullptr && me != nullptr)
+		{
+			faith = impression->belief.belief.at(static_cast<size_t>(me->owner));
+		}
+		belief.Set(Attribute::TownReligiousBelief, town_compassion::ReligiousBelief(faith));
+		const auto* wants = registry.TryGet<const TownDesire>(entity);
+		belief.Set(Attribute::TownNeedsMost,
+		           town_compassion::NeedsMost(wants != nullptr ? ecs::town_desire::GetMostDesired(*wants) : -1));
+		const auto* stats = registry.TryGet<const TownStats>(entity);
+		belief.Set(Attribute::TownSize, town_compassion::TownSize(stats != nullptr ? stats->adults + stats->children : 0));
+		const auto* tribe = registry.TryGet<const Tribe>(entity);
+		// No tribe counts as the last
+		belief.Set(Attribute::Tribe,
+		           tribe != nullptr ? std::min(static_cast<uint32_t>(*tribe), static_cast<uint32_t>(Tribe::TIBETAN)) : 0);
 		return belief;
 	}
 	if (registry.AllOf<Temple>(entity))
@@ -505,14 +754,33 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 	auto& idle = mind.idle;
 	if (mind.planActive && (idle.serial != mind.planSerial || idle.step >= idle.agenda.size()))
 	{
-		// The plan is over. Carried out to its end, the desire it served is less, unless one of its steps saw to that
-		// already; cut short by something else (fainting, a fight, a more pressing plan) or given up, it is still wanted.
+		// The plan is over. Carried out to its end, its body pays for the action and it counts towards satisfying the
+		// urge of the desire it served, unless one of its steps saw to that already; cut short by something else
+		// (fainting, a fight, a more pressing plan) or given up, it is still wanted. Once enough plans have been carried
+		// out, the desire's clearable sources are cleared, and the desire is less if the game's table says the action
+		// lessens it or one of its steps saw to the desire.
 		const auto plan = *mind.planner.current;
 		const bool carriedOut = idle.serial == mind.planSerial && !idle.gaveUp;
 		if (carriedOut && !mind.satisfiedByEffect && tables != nullptr && plan.action < tables->actions.size())
 		{
-			Satisfied(creature, *mind.desires, tables->actions[plan.action].name);
+			const auto& action = tables->actions[plan.action];
+			BodyPaysFor(creature, action.name);
+			auto& served = (*mind.desires)[plan.desire];
+			if (creature_desires::CountTowardsUrge(served))
+			{
+				creature_desires::ClearSourcesAfterSatisfying(served);
+				if (action.alwaysApplies || mind.desireSeenTo)
+				{
+					Lessen(creature, *mind.desires, action.name);
+				}
+			}
 		}
+		if (carriedOut && plan.desire == Desire::Compassion && plan.about.has_value() && tables != nullptr)
+		{
+			FinishedHelpingTown(Locator::entitiesRegistry::value(), mind, static_cast<entt::entity>(*plan.about), *tables,
+			                    [this](uint32_t range) { return Random(range); });
+		}
+		mind.desireSeenTo = false;
 		Abandon(mind);
 		mind.planner.best.at(static_cast<size_t>(plan.desire)).reset();
 	}
@@ -540,6 +808,7 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 	}
 	mind.agendaSeen = idle.serial;
 	mind.satisfiedByEffect = false;
+	mind.desireSeenTo = false;
 	if (mind.planActive || tables == nullptr)
 	{
 		return;
@@ -588,64 +857,125 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 		return false;
 	}
 	const auto& info = tables->actions[plan.action];
-	const auto* executor = creature_plan_actions::For(info.name);
-	if (executor == nullptr)
+	auto built = PlanAgenda(creature, plan.action, plan.object, situation);
+	if (!built.has_value())
 	{
 		return false;
 	}
+	auto& [executor, agenda] = *built;
 	auto& registry = Locator::entitiesRegistry::value();
-	glm::vec2 point {0.0f};
-	if (plan.object.has_value())
-	{
-		const auto at = PointOf(registry, static_cast<entt::entity>(*plan.object));
-		if (!at.has_value())
-		{
-			return false;
-		}
-		point = *at;
-	}
-	const auto cast = creature_plan_actions::IsCast(*executor) ? CastInfoFor(creature, plan.action) : std::nullopt;
-	auto agenda = creature_plan_actions::Agenda(
-	    *executor, plan.object, point, situation, [this](uint32_t range) { return Random(range); }, cast);
-	if (!agenda.has_value())
-	{
-		return false;
-	}
-	// Whatever its hands were doing is given up for the plan
+	// Whatever its hands were doing is given up for the plan, but for a catch, which its body carries on with by itself
 	if (Locator::creatureObjectActionSystem::has_value() &&
-	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
+	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy &&
+	    !Locator::creatureObjectActionSystem::value().IsCatching(creature))
 	{
 		Locator::creatureObjectActionSystem::value().Cancel(creature);
 	}
-	if (!Replan(creature, executor->activity, std::move(*agenda)))
+	if (!Replan(creature, executor->activity, std::move(agenda)))
 	{
 		return false;
 	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} sets about {} on {} ({} steps)", entt::to_integral(creature),
+	                    info.name, plan.object.value_or(0), mind.idle.agenda.size());
 	auto& learnt = *mind.learnt;
 	mind.planner.current = plan;
 	mind.planActive = true;
 	mind.planSerial = mind.idle.serial;
 	mind.agendaSeen = mind.idle.serial;
 	mind.satisfiedByEffect = false;
-	creature_learning::ResetDrives((*mind.desires)[plan.desire]);
-	creature_learning::SuppressOpposed(*mind.desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
+	mind.desireSeenTo = false;
 	learnt.turnsSinceDone.at(plan.action) = 0;
-	creature_learning::Remember(learnt.contexts,
-	                            {
-	                                .action = plan.action,
-	                                .desire = plan.desire,
-	                                .object = plan.object,
-	                                .belief = plan.object.has_value()
-	                                              ? BeliefOf(registry, static_cast<entt::entity>(*plan.object), creature)
-	                                              : std::nullopt,
-	                                .learnable = info.learnable,
-	                                .windowSeconds = info.learningWindowSeconds,
-	                            });
+	// It is remembered for the player's feedback unless nothing says why it wants what the plan serves, as a forced plan
+	// is, and the desires the plan's desire opposes are held back
+	if (creature_learning::TakeUpChosenPlan((*mind.desires)[plan.desire]))
+	{
+		creature_learning::Remember(learnt.contexts,
+		                            {
+		                                .action = plan.action,
+		                                .desire = plan.desire,
+		                                .object = plan.object,
+		                                .belief = plan.object.has_value()
+		                                              ? BeliefOf(registry, static_cast<entt::entity>(*plan.object), creature)
+		                                              : std::nullopt,
+		                                .learnable = info.learnable,
+		                                .windowSeconds = info.learningWindowSeconds,
+		                            });
+	}
+	creature_learning::SuppressOpposed(*mind.desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
 	if (executor->build == creature_plan_actions::Build::ShowDesire)
 	{
 		mind.idle.showDesireSeconds = creature_mind::k_ShowDesireSeconds;
 	}
 	return true;
+}
+
+std::optional<std::pair<const creature_plan_actions::Executor*, std::vector<creature_mind::Step>>>
+CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::optional<uint32_t> object,
+                               const creature_plan_actions::Situation& situation)
+{
+	const auto* tables = GetTables();
+	if (tables == nullptr || action >= tables->actions.size())
+	{
+		return std::nullopt;
+	}
+	const auto* executor = creature_plan_actions::For(tables->actions[action].name);
+	if (executor == nullptr)
+	{
+		return std::nullopt;
+	}
+	glm::vec2 point {0.0f};
+	if (object.has_value())
+	{
+		const auto at = PointOf(Locator::entitiesRegistry::value(), static_cast<entt::entity>(*object));
+		if (!at.has_value())
+		{
+			return std::nullopt;
+		}
+		point = *at;
+	}
+	const auto cast = creature_plan_actions::IsCast(*executor) ? CastInfoFor(creature, action) : std::nullopt;
+	auto agenda = creature_plan_actions::Agenda(
+	    *executor, object, point, situation, [this](uint32_t range) { return Random(range); }, cast);
+	if (!agenda.has_value())
+	{
+		return std::nullopt;
+	}
+	return std::pair {executor, std::move(*agenda)};
+}
+
+float CreatureMindSystem::ActivityUsefulness(entt::entity creature, const CreatureMindState& mind, Desire desire,
+                                             entt::entity object) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!mind.learnt.has_value() || !registry.Valid(object))
+	{
+		return 0.0f;
+	}
+	// The game also counts a thing useless for a few desires when nothing it knows of belongs to it. Nothing reaches
+	// here that way: what a fire belongs to always has the burning thing belonging to it, or is the creature itself.
+	if (const auto* leashes = registry.TryGet<const CreatureLeash>(creature))
+	{
+		// Leashed and tied to a thing, it only acts on what that thing belongs to
+		if (leashes->worn.has_value() && leashes->worn->tiedTo.has_value())
+		{
+			const auto tiedOwner = BelongsTo(*leashes->worn->tiedTo);
+			if (tiedOwner.has_value() && *tiedOwner != object)
+			{
+				return 0.0f;
+			}
+		}
+		// Kept within an area, it doesn't act on what lies farther from it than the area's radius
+		const bool leashed = leashes->worn.has_value();
+		const bool works = !leashed || leashes->worn->works;
+		const auto* at = registry.TryGet<const Transform>(creature);
+		const auto* objectAt = registry.TryGet<const Transform>(object);
+		if (creature_leash::IsConfined(leashes->confinementRadius, leashed, works) && at != nullptr && objectAt != nullptr &&
+		    gutils::GetDistanceInMetres(at->position, objectAt->position) > leashes->confinementRadius)
+		{
+			return 0.0f;
+		}
+	}
+	return Usefulness(*mind.learnt, desire, BeliefOf(registry, object, creature));
 }
 
 void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& mind, bool everyDesire)
@@ -680,9 +1010,23 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			situation.showDesireAnimation = creature_desires::EmoteFor(*strongest);
 		}
 	}
+	const auto random = [this](uint32_t range) { return Random(range); };
 	bool waterLooked = false;
 	bool hurlLooked = false;
+	bool fishingLooked = false;
 	const auto prepare = [&](const creature_plan_actions::Executor& executor) {
+		const bool fishing = executor.build == creature_plan_actions::Build::FishAndEat ||
+		                     executor.build == creature_plan_actions::Build::GiveFishToStore ||
+		                     executor.build == creature_plan_actions::Build::TakeFishHome;
+		if (fishing && !fishingLooked)
+		{
+			fishingLooked = true;
+			situation.fishing = FishingFor(registry, creature, position);
+			if (const auto home = ecs::creature_home::HomeOf(registry, creature))
+			{
+				situation.home = glm::vec2(home->x, home->z);
+			}
+		}
 		if (executor.build == creature_plan_actions::Build::Drink && !waterLooked)
 		{
 			waterLooked = true;
@@ -740,8 +1084,22 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		const auto d = static_cast<size_t>(desire);
 		std::optional<creature_planner::Plan> best;
 		// Actions are weighed in groups by the kind of thing they are done to, so each has a goal it can be done to
-		std::array<std::vector<creature_planner::ActionCandidate>, static_cast<size_t>(Target::Anything) + 1> groups {};
-		for (const auto action : tables->desireActions.at(d))
+		std::array<std::vector<creature_planner::ActionCandidate>, creature_plan_actions::k_TargetCount> groups {};
+		// Compassion is about a town, and what it may do is what the town desire it helps with asks for, done to the
+		// town's own buildings and people
+		std::span<const uint32_t> actions = tables->desireActions.at(d);
+		std::vector<uint32_t> townActions;
+		std::optional<entt::entity> town;
+		if (desire == Desire::Compassion)
+		{
+			town = CompassionTown(registry, creature, position, learnt, tables->rules.at(d).distanceWeight);
+			if (town.has_value())
+			{
+				townActions = TownCompassionActions(registry, creature, mind, *town, *tables, random);
+			}
+			actions = townActions;
+		}
+		for (const auto action : actions)
 		{
 			const auto* executor = creature_plan_actions::For(tables->actions.at(action).name);
 			if (executor == nullptr)
@@ -773,7 +1131,8 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			{
 				if (leashTarget.has_value())
 				{
-					if (Accepts(registry, target, *leashTarget, creature))
+					if (Accepts(registry, target, *leashTarget, creature) &&
+					    (!town.has_value() || PartOfTown(registry, *leashTarget, *town)))
 					{
 						const auto at = PointOf(registry, *leashTarget).value_or(position);
 						objects.push_back(
@@ -786,6 +1145,10 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 				{
 					for (const auto& found : Gather(registry, target, creature, position))
 					{
+						if (town.has_value() && !PartOfTown(registry, found.entity, *town))
+						{
+							continue;
+						}
 						const auto* held = registry.TryGet<const HeldByCreature>(found.entity);
 						objects.push_back({
 						    .id = entt::to_integral(found.entity),
@@ -801,6 +1164,10 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			if (plan.has_value() && (!best.has_value() || plan->priority > best->priority))
 			{
 				best = plan;
+				if (town.has_value())
+				{
+					best->about = entt::to_integral(*town);
+				}
 			}
 		}
 		mind.planner.best.at(d) = best;
@@ -816,6 +1183,135 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	{
 		mind.planner.best.at(static_cast<size_t>(choice->desire)).reset();
 	}
+}
+
+bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	const auto* transform = registry.Valid(creature) ? registry.TryGet<const Transform>(creature) : nullptr;
+	const auto* tables = GetTables();
+	if (mind == nullptr || body == nullptr || transform == nullptr || tables == nullptr || !mind->learnt.has_value() ||
+	    !mind->desires.has_value())
+	{
+		return false;
+	}
+	const glm::vec2 position {transform->position.x, transform->position.z};
+	const auto height = k_HeightOfSizeOne * ShownSize(*body);
+	const auto random = [this](uint32_t range) { return Random(range); };
+	auto activity = creature_mind::Activity::Told;
+	auto agenda = plan.agenda;
+	if (!agenda.has_value())
+	{
+		if (plan.action == creature_leash_orders::k_HoldAction && plan.object.has_value())
+		{
+			// It plays with what it is told to hold only the first times it holds such a thing
+			std::optional<uint32_t> playWith;
+			const auto belief = BeliefOf(registry, *plan.object, creature);
+			auto& held = mind->heldKinds[belief.has_value() ? belief->type : creature_tree::belief_types::k_Other];
+			if (held < creature_leash_orders::k_HoldPlayLimit)
+			{
+				playWith = Random(static_cast<uint32_t>(creature_object_actions::k_KeepAnimationCount));
+				++held;
+			}
+			const bool alreadyHeld = Locator::creatureObjectActionSystem::has_value() &&
+			                         Locator::creatureObjectActionSystem::value().GetHeld(creature) == plan.object;
+			const auto eye = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : transform->position;
+			agenda = creature_leash_orders::Hold(
+			    entt::to_integral(*plan.object), alreadyHeld, glm::vec2(eye.x, eye.z), playWith,
+			    creature_leash_orders::HoldSeconds(Chance() * creature_leash_orders::k_HoldExtraSeconds, k_TurnsPerSecond));
+		}
+		else if (plan.action == creature_leash_orders::k_ReflectionAction)
+		{
+			const auto water = NearestWater(position);
+			if (water.has_value())
+			{
+				agenda = creature_leash_orders::LookAtReflection(water->water, water->shore, height, k_TurnsPerSecond);
+			}
+		}
+		else if (plan.action == creature_leash_orders::k_SleepAction && plan.point.has_value())
+		{
+			activity = creature_mind::Activity::Sleep;
+			agenda = creature_leash_orders::SleepAtHome(*plan.point, height, creature_mind::Sleep(random));
+		}
+		else if (const auto* executor = creature_plan_actions::For(plan.action))
+		{
+			creature_plan_actions::Situation situation;
+			situation.water = NearestWater(position);
+			if (Locator::camera::has_value())
+			{
+				const auto eye = Locator::camera::value().GetOrigin();
+				situation.camera = glm::vec2(eye.x, eye.z);
+			}
+			const auto point =
+			    plan.object.has_value() ? PointOf(registry, *plan.object).value_or(position) : plan.point.value_or(position);
+			agenda = creature_plan_actions::Agenda(
+			    *executor, plan.object.has_value() ? std::optional(entt::to_integral(*plan.object)) : std::nullopt, point,
+			    situation, random);
+			activity = executor->activity;
+		}
+	}
+	if (!agenda.has_value() || !Replan(creature, activity, std::move(*agenda)))
+	{
+		return false;
+	}
+	mind->leash.obeying = false;
+	// Forced, nothing it wants is ever more pressing than the plan until it is done
+	const auto action = creature_mind_tables::FindAction(*tables, plan.action);
+	if (!action.has_value())
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} carries out {}, which the action table hasn't",
+		                    entt::to_integral(creature), plan.action);
+		return true;
+	}
+	const auto object = plan.object.has_value() ? std::optional(entt::to_integral(*plan.object)) : std::nullopt;
+	mind->planner.current = creature_planner::Plan {
+	    .desire = plan.desire, .action = *action, .object = object, .priority = std::numeric_limits<float>::max()};
+	mind->planActive = true;
+	mind->planSerial = mind->idle.serial;
+	mind->agendaSeen = mind->idle.serial;
+	mind->satisfiedByEffect = false;
+	mind->desireSeenTo = false;
+	auto& learnt = *mind->learnt;
+	learnt.turnsSinceDone.at(*action) = 0;
+	const auto& info = tables->actions[*action];
+	creature_learning::Remember(
+	    learnt.contexts, {
+	                         .action = *action,
+	                         .desire = plan.desire,
+	                         .object = object,
+	                         .belief = plan.object.has_value() ? BeliefOf(registry, *plan.object, creature) : std::nullopt,
+	                         .learnable = info.learnable,
+	                         .windowSeconds = info.learningWindowSeconds,
+	                     });
+	creature_learning::SuppressOpposed(*mind->desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
+	return true;
+}
+
+std::optional<creature_desires::Desire> CreatureMindSystem::ForcePlanOn(entt::entity creature, entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	if (mind == nullptr || !mind->desires.has_value() || !mind->learnt.has_value() || !registry.Valid(object))
+	{
+		return std::nullopt;
+	}
+	// What it was doing is given up, so that the thing is planned for at once, whatever it was doing
+	Abandon(*mind);
+	creature_mind::Plan(mind->idle, creature_mind::Activity::None, {});
+	mind->leash.obeying = false;
+	mind->leash.actOn = {entt::to_integral(object)};
+	mind->plannedTurn = mind->turn + 1;
+	PlanCreature(creature, *mind);
+	mind->leash.actOn.clear();
+	if (!mind->planActive || !mind->planner.current.has_value() ||
+	    mind->planner.current->object != std::optional(entt::to_integral(object)))
+	{
+		return std::nullopt;
+	}
+	mind->planner.current->priority = std::numeric_limits<float>::max();
+	return mind->planner.current->desire;
 }
 
 void CreatureMindSystem::PlanTurn()
@@ -1166,9 +1662,12 @@ std::optional<creaturemind::MindFileData> CreatureMindSystem::SaveMind(entt::ent
 			saved.alignment = global("OriginalAlignmentOfMyCreature");
 		}
 	}
-	file.physique.size = saved.size;
-	file.physique.strength = saved.strength;
-	file.alignment = saved.alignment;
+	// Its body is saved with its mind as it is now, but for what the spells changed
+	auto kept = creature_body_file::Capture(registry, creature);
+	kept.size = saved.size;
+	kept.strength = saved.strength;
+	kept.alignment = saved.alignment;
+	creature_mind_body::ToMindFile(kept, file);
 	return file;
 }
 

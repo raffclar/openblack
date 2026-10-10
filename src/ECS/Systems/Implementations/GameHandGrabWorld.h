@@ -28,6 +28,8 @@ public:
 
 	[[nodiscard]] std::optional<entt::entity> ObjectUnderCursor() const override;
 	[[nodiscard]] bool InInfluence(PlayerNames player, glm::vec3 point) const override;
+	[[nodiscard]] bool HandInInfluence(PlayerNames player, glm::vec3 hand) const override;
+	void HeldThingUsedOnLand(PlayerNames player) override;
 	[[nodiscard]] bool InBounds(glm::vec3 point) const override;
 	[[nodiscard]] glm::vec3 LandNormalAt(glm::vec3 point) const override;
 
@@ -47,9 +49,13 @@ public:
 	void CreateReaction(const ReactionRequest& request) override;
 	void RemoveReactions(entt::entity initiator, Reaction type) override;
 	void FireStartedMoving(entt::entity object, bool inHand) override;
+	void CatchFirefly(entt::entity object) override;
 	void HeatHeld(entt::entity object) override;
 	void PlaySample(uint32_t sample, glm::vec3 position) override;
 	bool TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player) override;
+	[[nodiscard]] bool HoldsLooseLeash() const override;
+	/// Whether the player's hand holds their creature's leash, rather than a post or a thing holding it
+	[[nodiscard]] static bool HoldsLeash(PlayerNames player);
 	[[nodiscard]] uint32_t LocalRandom(uint32_t count) override;
 	void VillagerIntoHand(entt::entity villager) override;
 	void AnimalIntoOwnFlock(entt::entity animal) override;
@@ -69,9 +75,12 @@ public:
 	uint32_t TakeFromPile(entt::entity pile, uint32_t amount) override;
 	[[nodiscard]] std::optional<FieldFacts> FieldFactsOf(entt::entity field) const override;
 	void TakeFromField(entt::entity field, uint32_t amount) override;
+	[[nodiscard]] std::optional<fish_farm::Type> FishFarmOf(entt::entity farm) const override;
+	uint32_t TakeFromFishFarm(entt::entity farm, uint32_t amount) override;
 	void ResizePot(entt::entity pot) override;
 	[[nodiscard]] entt::entity MakeHandful(PotInfo type, glm::vec3 position, uint32_t amount, bool poisoned) override;
 	[[nodiscard]] std::optional<uint32_t> StartScoopStream(ResourceType resource, glm::vec3 source, bool poisoned) override;
+	[[nodiscard]] std::optional<uint32_t> StartFishScoopStream(glm::vec3 source) override;
 	void StopScoopStream(uint32_t stream) override;
 	void PinCursor(bool pinned) override;
 	void MoveScoopStream(uint32_t stream, glm::vec3 hand) override;
@@ -80,6 +89,7 @@ public:
 	[[nodiscard]] bool StoresResource(entt::entity store, ResourceType resource) const override;
 	uint32_t AddToStore(entt::entity store, ResourceType resource, uint32_t amount, bool poisoned) override;
 	bool TakeIntoStore(entt::entity store, entt::entity object) override;
+	bool LayGateStone(entt::entity plinth, entt::entity stone) override;
 	void PourAt(ResourceType resource, glm::vec3 point, uint32_t amount, PlayerNames player, bool poisoned) override;
 	void UseUp(entt::entity object) override;
 	FromHandResult LetGoFromHand(entt::entity object, const FromHand& release) override;

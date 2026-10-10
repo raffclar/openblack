@@ -2494,6 +2494,8 @@ enum class FishFarmInfo
 {
 	None = -1,
 	Normal = 0,
+
+	_COUNT
 };
 
 enum class WeatherInfo

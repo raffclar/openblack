@@ -925,7 +925,10 @@ struct GCreatureInfo: GLivingInfo
 	std::array<uint8_t, 0x5c> field0x2dc;
 	/// Each turn the change waiting for its alignment, held between -1 and 1, moves it by that share of this
 	float alignmentChangePerTurn;
-	std::array<uint8_t, 0x28> field0x33c;
+	std::array<uint8_t, 0x8> field0x33c;
+	/// The icon of its species that stands on its player's town totems
+	MeshId totemIcon;
+	std::array<uint8_t, 0x1c> field0x348;
 	/// How long it sleeps for its size, once rested
 	float sleepLength;
 	/// A meal's food value over this, and over its size, is the energy it gains
@@ -941,6 +944,7 @@ static_assert(sizeof(GCreatureInfo) == 0x384);
 static_assert(offsetof(GCreatureInfo, chantsPerEnergy) == 0x284);
 static_assert(offsetof(GCreatureInfo, desireFloor) == 0x264);
 static_assert(offsetof(GCreatureInfo, spellSizeFactor) == 0x380);
+static_assert(offsetof(GCreatureInfo, totemIcon) == 0x344);
 static_assert(offsetof(GCreatureInfo, startEnergy) == 0x1f4);
 static_assert(offsetof(GCreatureInfo, comfortTemperature) == 0x1fc);
 static_assert(offsetof(GCreatureInfo, growUpMinutes) == 0x204);
@@ -1666,7 +1670,7 @@ struct GSpellSeedInfo: GObjectInfo
 	uint32_t iconIndex;          ///< 0x170: icon slot (inferred)
 	HelpText tooltip;            ///< 0x174
 	uint32_t unknown0x178;       ///< (unused by the game)
-	uint32_t unknown0x17C;       ///< 1 for FIRE, LIGHTNING_BOLT, HEAL, WEAK, STRONG (unused by the game)
+	uint32_t unknown0x17C;       ///< 1 for FIRE, LIGHTNING_BOLT, HEAL, WEAK, STRONG: the miracles cast in fights by gesture
 };
 static_assert(offsetof(GSpellSeedInfo, selectionGesture) == 0xf0);
 static_assert(offsetof(GSpellSeedInfo, magicTypes) == 0x114);

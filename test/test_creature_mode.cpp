@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include <numbers>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -274,14 +275,71 @@ TEST(CreatureMode, PassingOutAgreesWithTheBodysFainting)
 	}
 }
 
-TEST(CreatureMode, PenIsTheHomeThenTheTempleThenTheFallback)
+TEST(CreatureMode, PenIsTheTempleThenTheHomeThenTheFallback)
 {
 	const glm::vec3 home {1.0f, 0.0f, 1.0f};
 	const glm::vec3 temple {2.0f, 0.0f, 2.0f};
 	const glm::vec3 none {3.0f, 0.0f, 3.0f};
-	EXPECT_EQ(creature_mode::PenOf(home, temple, none), home);
+	EXPECT_EQ(creature_mode::PenOf(home, temple, none), temple);
 	EXPECT_EQ(creature_mode::PenOf(std::nullopt, temple, none), temple);
+	EXPECT_EQ(creature_mode::PenOf(home, std::nullopt, none), home);
 	EXPECT_EQ(creature_mode::PenOf(std::nullopt, std::nullopt, none), none);
+}
+
+namespace
+{
+/// Marked places of a fake temple mesh, each at its own point, the pen's place among them
+std::vector<glm::mat4> FakeMarkedPlaces(size_t count, glm::vec3 pen)
+{
+	std::vector<glm::mat4> places(count, glm::mat4(1.0f));
+	for (size_t i = 0; i < count; ++i)
+	{
+		places[i][3] = glm::vec4(static_cast<float>(i), 0.0f, -static_cast<float>(i), 1.0f);
+	}
+	if (count > creature_mode::k_TemplePenPlace)
+	{
+		places[creature_mode::k_TemplePenPlace][3] = glm::vec4(pen, 1.0f);
+	}
+	return places;
+}
+} // namespace
+
+TEST(CreatureMode, TemplePenIsTheMeshsSixteenthMarkedPlace)
+{
+	const auto places = FakeMarkedPlaces(20, {10.0f, 2.0f, 5.0f});
+	const auto pen = creature_mode::TemplePen({100.0f, 0.0f, 200.0f}, glm::mat3(1.0f), glm::vec3(1.0f), places);
+	ASSERT_TRUE(pen.has_value());
+	EXPECT_NEAR(pen->x, 110.0f, 1e-3f);
+	EXPECT_FLOAT_EQ(pen->y, 2.0f);
+	EXPECT_NEAR(pen->z, 205.0f, 1e-3f);
+}
+
+TEST(CreatureMode, TemplePenTurnsAndScalesWithTheTemple)
+{
+	const auto places = FakeMarkedPlaces(16, {10.0f, 0.0f, 0.0f});
+	// A quarter turn about the vertical: the mesh's +x goes to the world's -z
+	const glm::mat3 quarter {glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f)};
+	const auto pen = creature_mode::TemplePen({100.0f, 0.0f, 200.0f}, quarter, glm::vec3(2.0f), places);
+	ASSERT_TRUE(pen.has_value());
+	EXPECT_NEAR(pen->x, 100.0f, 1e-3f);
+	EXPECT_NEAR(pen->z, 180.0f, 1e-3f);
+}
+
+TEST(CreatureMode, TemplePenIsKeptAsAMapPosition)
+{
+	const auto places = FakeMarkedPlaces(16, {0.0f, 0.0f, 0.0f});
+	const auto pen = creature_mode::TemplePen({1.00001f, 0.0f, -1.00001f}, glm::mat3(1.0f), glm::vec3(1.0f), places);
+	ASSERT_TRUE(pen.has_value());
+	// Truncated to whole map units (a tenth of a metre over 65536), towards zero on both sides
+	EXPECT_FLOAT_EQ(pen->x, static_cast<float>(6553.0 * 10.0 / 65536.0));
+	EXPECT_FLOAT_EQ(pen->z, static_cast<float>(-6553.0 * 10.0 / 65536.0));
+}
+
+TEST(CreatureMode, NoTemplePenWhenTheMeshMarksTooFewPlaces)
+{
+	const auto places = FakeMarkedPlaces(15, {});
+	EXPECT_FALSE(creature_mode::TemplePen({}, glm::mat3(1.0f), glm::vec3(1.0f), places).has_value());
+	EXPECT_FALSE(creature_mode::TemplePen({}, glm::mat3(1.0f), glm::vec3(1.0f), {}).has_value());
 }
 
 TEST(CreatureMode, CreatureHeightGrowsWithSize)
@@ -346,13 +404,22 @@ TEST(CreatureCave, FactsTellOfSkillsAndMiracles)
 	creature_cave::Snapshot snapshot;
 	// The scroll tells of the skills after building
 	snapshot.skills = {{"build", true}, {"field", true}, {"totem", false}, {"store", true}, {"fish", false}, {"dance", true}};
-	snapshot.miracles = {{"none", 0}, {"fireball", 40}, {"lightning", 0}, {"heal", 100}};
+	// It tells of each miracle the creature knows about that the game has a text for, however little it has learnt it,
+	// its percentage cut short
+	snapshot.miracles = {{.name = "none", .knownAbout = true},
+	                     {.name = "fireball", .knownAbout = true, .learnt = 40.9f},
+	                     {.name = "lightning", .knownAbout = false},
+	                     {.name = "heal", .knownAbout = true, .hasLearntText = false, .learnt = 100.0f},
+	                     {.name = "food", .knownAbout = true, .learnt = 0.0f}};
 	const auto facts = creature_cave::FactsOf(snapshot);
 	EXPECT_EQ(facts.actionsKnown, (std::array<bool, 5> {true, false, true, false, true}));
 	ASSERT_EQ(facts.miracles.size(), 2u);
 	EXPECT_EQ(facts.miracles[0].text, "HELP_TEXT_CREATURE_LESSON_LEARN_MAGIC_ACTION_02");
 	EXPECT_EQ(facts.miracles[0].percent, 40);
-	EXPECT_EQ(facts.miracles[1].text, "HELP_TEXT_CREATURE_LESSON_LEARN_MAGIC_ACTION_04");
+	EXPECT_EQ(facts.miracles[0].miracle, 1u);
+	EXPECT_FLOAT_EQ(facts.miracles[0].learnt, 40.9f);
+	EXPECT_EQ(facts.miracles[1].text, "HELP_TEXT_CREATURE_LESSON_LEARN_MAGIC_ACTION_05");
+	EXPECT_EQ(facts.miracles[1].percent, 0);
 }
 
 TEST(CreatureCave, PagesGoRound)

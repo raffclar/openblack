@@ -42,6 +42,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
@@ -178,7 +179,7 @@ float HeadingOfRotation(const glm::mat3& rotation)
 /// The creature's size and speeds this turn
 void Measure(CreatureLocomotion& self, const Creature& creature, const Transform& transform)
 {
-	self.speeds = locomotion::SpeedsFor(creature.size);
+	self.speeds = locomotion::SpeedsFor(ShownSize(creature));
 	self.scale = std::abs(transform.scale.x);
 	auto& meshes = Locator::resources::value().GetMeshes();
 	const auto meshId = creature::GetIdFromType(creature.species, creature::CreatureBody::Appearance::Base);
@@ -465,10 +466,23 @@ std::vector<route::Circle> GatherObstacles(ecs::Registry& registry, entt::entity
 		{
 			kind = route::Obstacle::Building;
 		}
-		if (route::MustAvoid(kind, height, creatureHeight, false))
+		if (!route::MustAvoid(kind, height, creatureHeight, false))
 		{
-			circles.push_back({.centre = fixed.boundingCenter, .radius = fixed.boundingRadius + radius});
+			return;
 		}
+		// The Norse gate is a row of small circles across its width, with a way through the middle while it stands open
+		const auto gate = Locator::animatedStaticSystem::has_value()
+		                      ? Locator::animatedStaticSystem::value().RouteCircles(entity)
+		                      : std::nullopt;
+		if (gate.has_value())
+		{
+			for (const auto& circle : *gate)
+			{
+				circles.push_back({.centre = circle.centre, .radius = circle.radius + radius});
+			}
+			return;
+		}
+		circles.push_back({.centre = fixed.boundingCenter, .radius = fixed.boundingRadius + radius});
 	});
 	// Another player's shield is walked round; a creature already under one walks out of it
 	if (const auto* owner = registry.TryGet<const Creature>(self); owner != nullptr && Locator::magicShieldSystem::has_value())
@@ -585,7 +599,7 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::StartMove(entt::e
 	self.fidgetMs = k_FidgetMs;
 	self.fidgeted = false;
 
-	const auto creatureHeight = creature_morph::k_HeightAtSizeOne * body->size;
+	const auto creatureHeight = creature_morph::k_HeightAtSizeOne * ShownSize(*body);
 	self.planner.emplace(route::Request {
 	    .start = position,
 	    .destination = point,
@@ -735,6 +749,21 @@ bool CreatureLocomotionSystem::TurnToFace(entt::entity creature, glm::vec2 point
 	return true;
 }
 
+void CreatureLocomotionSystem::Place(entt::entity creature, glm::vec3 position)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* self = registry.TryGet<CreatureLocomotion>(creature))
+	{
+		self->fromPosition = position;
+		self->toPosition = position;
+	}
+	if (auto* transform = registry.TryGet<Transform>(creature))
+	{
+		transform->position = position;
+		registry.SetDirty();
+	}
+}
+
 void CreatureLocomotionSystem::Stop(entt::entity creature)
 {
 	if (auto* self = Locator::entitiesRegistry::value().TryGet<CreatureLocomotion>(creature))
@@ -880,7 +909,7 @@ void CreatureLocomotionSystem::ProcessTurn()
 			    }
 			    break;
 		    case Motion::Turning:
-			    TurnStep(self, moves, creature_layers::PlaybackRate(creature.size));
+			    TurnStep(self, moves, creature_layers::PlaybackRate(ShownSize(creature)));
 			    break;
 		    case Motion::Stepping:
 			    StepOff(self, moves);

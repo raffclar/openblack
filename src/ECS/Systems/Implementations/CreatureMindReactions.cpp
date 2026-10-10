@@ -77,7 +77,7 @@ void CreatureMindSystem::ReactToNastyMagic(entt::entity creature, const glm::vec
 	const bool onRope = Locator::leashSystem::has_value() && Locator::leashSystem::value().IsLeashed(creature) &&
 	                    Locator::leashSystem::value().TypeOf(creature) == LeashType::Rope;
 	const bool curious = onRope || !(desires[creature_desires::Desire::Fear].value > 0.0f);
-	const float height = body->size * k_HeightOfSizeOne;
+	const float height = ShownSize(*body) * k_HeightOfSizeOne;
 	const auto random = [this](uint32_t range) { return Random(range); };
 	const glm::vec2 at(point.x, point.z);
 	Replan(creature, creature_mind::Activity::Planned,
@@ -98,7 +98,7 @@ void CreatureMindSystem::ReactToNiceMagic(entt::entity creature, const glm::vec3
 	}
 	const auto random = [this](uint32_t range) { return Random(range); };
 	Replan(creature, creature_mind::Activity::Planned,
-	       creature_mind::ExamineMiracle({point.x, point.z}, body->size * k_HeightOfSizeOne, random));
+	       creature_mind::ExamineMiracle({point.x, point.z}, ShownSize(*body) * k_HeightOfSizeOne, random));
 	if (learn.has_value())
 	{
 		WatchMiracle(creature, *learn);

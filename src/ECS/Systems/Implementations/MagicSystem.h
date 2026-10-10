@@ -55,6 +55,8 @@ public:
 	[[nodiscard]] bool IsDryLand(glm::vec3 point) const override;
 	[[nodiscard]] bool IsLand(glm::vec3 point) const override;
 	[[nodiscard]] bool InInfluence(PlayerNames player, glm::vec3 point) const override;
+	[[nodiscard]] bool HandInInfluence(PlayerNames player, glm::vec3 hand) const override;
+	void HeldThingUsedOnLand(PlayerNames player) override;
 	[[nodiscard]] std::optional<glm::vec3> PositionOf(entt::entity object) const override;
 	bool ApplyEffect(entt::entity object, const magic::EffectValues& values, const magic::EffectSource& source) override;
 	std::vector<entt::entity> ApplyEffectAt(glm::vec3 point, const magic::EffectValues& values,
@@ -363,8 +365,6 @@ private:
 	uint32_t _turn {0};
 	HandResult _lastHandResult {HandResult::None};
 	bool _ignoreInfluence {false};
-	/// Each player's tribal power multipliers, all 1 until worship raises them (set for now by the testbed)
-	std::array<std::array<float, magic::k_TribeCount>, static_cast<size_t>(PlayerNames::_COUNT)> _tribalPowers {};
 	/// The hand as a testbed scenario puts it, in place of the mouse
 	std::optional<HandFrame> _driven;
 };

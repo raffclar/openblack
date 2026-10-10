@@ -134,8 +134,6 @@ constexpr float k_OrbTapLeeway = 1.3f;
 constexpr float k_DefaultOrbRadius = 2.5f;
 
 // The game's world
-/// A villager's health out of this is its life
-constexpr float k_VillagerHealthScale = 100.0f;
 /// The colours of the rings the water's drops leave on the land, picked at random
 constexpr std::array<uint32_t, 5> k_RippleColours = {0xFF80CBC5u, 0xFF8599C5u, 0xFFBA97B2u, 0xFFB9CA86u, 0xFFBD9C8Au};
 /// A tree rustles as the water grows it, one of these at random
@@ -356,6 +354,19 @@ bool GameMagicWorld::IsLand(glm::vec3 point) const
 bool GameMagicWorld::InInfluence(PlayerNames player, glm::vec3 point) const
 {
 	return Locator::influenceSystem::has_value() && Locator::influenceSystem::value().PlayerInfluence(player, point) > 0.0f;
+}
+
+bool GameMagicWorld::HandInInfluence(PlayerNames player, glm::vec3 hand) const
+{
+	return Locator::influenceSystem::has_value() && Locator::influenceSystem::value().IsHandInInfluence(player, hand);
+}
+
+void GameMagicWorld::HeldThingUsedOnLand(PlayerNames player)
+{
+	if (Locator::influenceSystem::has_value())
+	{
+		Locator::influenceSystem::value().HeldThingUsedOnLand(player);
+	}
 }
 
 std::optional<glm::vec3> GameMagicWorld::PositionOf(entt::entity object) const
@@ -647,9 +658,11 @@ void GameMagicWorld::WaterObject(entt::entity object, const magic::WaterDrop& dr
 	{
 		const auto& type = info.tree.at(static_cast<size_t>(tree->type));
 		auto& transform = registry.Get<Transform>(object);
-		const auto grown = magic::WaterTree(
-		    transform.scale.y, tree->maxSize,
-		    {.growthAmount = type.growthAmount, .waterAccelerator = type.waterSpellAcceleratorMultiplier}, drop.extreme);
+		const auto grown = magic::WaterTree(transform.scale.y, tree->maxSize,
+		                                    {.growthAmount = type.growthAmount,
+		                                     .waterAccelerator = type.waterSpellAcceleratorMultiplier,
+		                                     .madeToGrow = tree->madeToGrow},
+		                                    drop.extreme);
 		if (grown.scale != transform.scale.y)
 		{
 			const float ratio = grown.scale / std::max(transform.scale.y, 1e-4f);
@@ -898,10 +911,6 @@ MagicSystem::MagicSystem()
 		_players.at(p) = std::make_unique<magic::PlayerSpellCaster>(static_cast<PlayerNames>(p),
 		                                                            [this](PlayerNames player) { return PrayerOf(player); });
 	}
-	for (auto& powers : _tribalPowers)
-	{
-		powers.fill(1.0f);
-	}
 }
 
 MagicSystem::~MagicSystem() = default;
@@ -939,18 +948,40 @@ magic::SpellCasterInterface* MagicSystem::CasterOf(const Spell& spell)
 	return nullptr;
 }
 
+namespace
+{
+/// The player's record on the land, if they are on it
+Player* PlayerRecord(PlayerNames player)
+{
+	Player* found = nullptr;
+	EntityRegistry().Each<Player>([player, &found](entt::entity, Player& record) {
+		if (record.name == player)
+		{
+			found = &record;
+		}
+	});
+	return found;
+}
+} // namespace
+
 std::array<float, magic::k_TribeCount> MagicSystem::PlayerTribalMultipliers(PlayerNames player) const
 {
-	// The players' tribal power multipliers come with worship; until then every tribe's is 1 unless the testbed sets it
-	return _tribalPowers.at(static_cast<size_t>(player));
+	// The power each tribe gives the player's miracles is the player's; a player not on the land has the usual
+	const auto* record = PlayerRecord(player);
+	return record != nullptr ? record->miracles.tribalPower : Player::k_UsualTribalPower;
 }
 
 void MagicSystem::SetTribalPower(PlayerNames player, Tribe tribe, float power)
 {
-	if (tribe != Tribe::NONE && static_cast<size_t>(tribe) < magic::k_TribeCount)
+	auto* record = PlayerRecord(player);
+	if (record == nullptr || tribe == Tribe::NONE || static_cast<size_t>(tribe) >= magic::k_TribeCount)
 	{
-		_tribalPowers.at(static_cast<size_t>(player)).at(static_cast<size_t>(tribe)) = power;
+		return;
 	}
+	// The most it has been goes with it, so that the power holds
+	const auto index = static_cast<size_t>(tribe);
+	record->miracles.tribalPower.at(index) = power;
+	record->miracles.maxTribalPower.at(index) = power;
 }
 
 float MagicSystem::PlayerTribalPower(PlayerNames player, MagicType type) const
@@ -1507,10 +1538,6 @@ void MagicSystem::Reset()
 	_handVelocity = glm::vec3(0.0f);
 	_handEffectPoint.reset();
 	_handScale = 1.0f;
-	for (auto& powers : _tribalPowers)
-	{
-		powers.fill(1.0f);
-	}
 	_lastHandResult = HandResult::None;
 	_world.Reset();
 	_grid.Clear();
@@ -1950,7 +1977,7 @@ bool MagicSystem::HandPointValid() const
 	const auto point = *_hand.point;
 	auto& self = const_cast<MagicSystem&>(*this);
 	// Every cast from the hand needs the hand in the player's influence, whatever the miracle's own rule
-	if (!_ignoreInfluence && !_world.InInfluence(seed.player, point))
+	if (!_ignoreInfluence && !_world.HandInInfluence(seed.player, point))
 	{
 		return false;
 	}
@@ -1965,6 +1992,12 @@ entt::entity MagicSystem::CastHeldSeed(magic::CastTarget target)
 		return entt::null;
 	}
 	auto& seed = registry.Get<SpellSeed>(*_held);
+	// Using the held miracle on the land counts as a turn more for what the hand keeps of the player's influence past
+	// the border, before it is known whether it may be used there
+	if (target != magic::CastTarget::Object)
+	{
+		_world.HeldThingUsedOnLand(seed.player);
+	}
 	// A locked miracle still running is applied again where it is: it follows the hand
 	if (const auto* running = FindSpell(seed.spell); running != nullptr && !running->closedDown)
 	{

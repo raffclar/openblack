@@ -66,6 +66,8 @@ public:
 	virtual bool TurnToFace(entt::entity creature, glm::vec2 point) = 0;
 	/// Stops where it is
 	virtual void Stop(entt::entity creature) = 0;
+	/// Puts it at a point at once, as something other than its walking moves it, such as a step towards a catch
+	virtual void Place(entt::entity creature, glm::vec3 position) = 0;
 	/// Whether it is planning a route, turning or on its way
 	[[nodiscard]] virtual bool IsMoving(entt::entity creature) const = 0;
 

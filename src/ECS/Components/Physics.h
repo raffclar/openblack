@@ -27,8 +27,8 @@ struct Immovable
 {
 };
 
-/// How much of a building stands built, 0 to 1: flying things hit a building only once more than a tenth of it is built.
-/// openblack doesn't build buildings up yet, so a building without one counts as built.
+/// How much of a building under construction stands built, 0 to 1: flying things hit a building only once more than a
+/// tenth of it is built. A building has one only while it goes up: one without it is built.
 struct BuildProgress
 {
 	float built {1.0f};

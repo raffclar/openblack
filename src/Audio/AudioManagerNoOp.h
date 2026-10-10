@@ -80,8 +80,10 @@ public:
 	void ReleaseEmitterLoop([[maybe_unused]] entt::entity emitter) override {}
 	[[nodiscard]] bool IsEmitterLooping([[maybe_unused]] entt::entity emitter) override { return false; }
 	void SetEmitterVolume([[maybe_unused]] entt::entity emitter, [[maybe_unused]] uint32_t volume) override {}
+	void SetEmitterPitch([[maybe_unused]] entt::entity emitter, [[maybe_unused]] uint32_t pitchPercent) override {}
 	[[nodiscard]] uint32_t GetEmitterVolume([[maybe_unused]] entt::entity emitter) override { return 0; }
 	void StopOwnedSounds([[maybe_unused]] entt::entity owner) override {}
+	void StopAllSoundEffects() override {}
 	void SetGlobalVolume([[maybe_unused]] float volume) override {}
 	void SetSfxVolume([[maybe_unused]] float volume) override {}
 	void SetMusicVolume([[maybe_unused]] float volume) override {}

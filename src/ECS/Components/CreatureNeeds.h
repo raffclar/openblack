@@ -27,6 +27,8 @@ struct CreatureNeeds
 	/// Set from the species' tables the first turn the body is looked after
 	bool started {false};
 	creature_physiology::Needs needs {};
+	/// What the creature's file kept of how its body was doing, taken up over the species' start when the body starts
+	std::optional<creature_physiology::Kept> kept;
 
 	/// Whether its mind has it asleep, resting, or out cold, and for how many turns
 	enum class Rest : uint8_t

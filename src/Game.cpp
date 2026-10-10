@@ -14,7 +14,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -23,6 +25,7 @@
 #include <MorphFile.h>
 #include <PackFile.h>
 #include <SDL.h>
+#include <bgfx/bgfx.h>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -50,7 +53,7 @@
 #include "3D/LandLightTable.h"
 #include "3D/MapCoords.h"
 #include "3D/OceanInterface.h"
-#include "3D/SkyInterface.h"
+#include "3D/SkyDome.h"
 #include "3D/SnowCover.h"
 #include "3D/TempleInteriorInterface.h"
 #include "3D/WaterRings.h"
@@ -64,6 +67,7 @@
 #include "Camera/NearClipping.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandom.h"
+#include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
 #include "Creature/CreatureHandRules.h"
@@ -71,6 +75,7 @@
 #include "Debug/FrameStatsLog.h"
 #include "Debug/TestbedDispenserGrid.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
+#include "ECS/Archetypes/SkyArchetype.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/CameraBookmark.h"
@@ -78,6 +83,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureHair.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/DeadTree.h"
@@ -94,10 +100,13 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
@@ -107,14 +116,17 @@
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
+#include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
+#include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
+#include "ECS/Systems/CreaturePenSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -122,6 +134,8 @@
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/FireflySystemInterface.h"
+#include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
@@ -130,6 +144,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -139,23 +154,31 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
+#include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TornadoSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/TutorialSkipSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
+#include "ECS/Systems/VillageTotemSystemInterface.h"
+#include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -165,6 +188,7 @@
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
+#include "Gui/LoadingScreen.h"
 #include "Hand/HandFeel.h"
 #include "Input/GameActionMapInterface.h"
 #include "LHScriptX/Script.h"
@@ -186,6 +210,8 @@ using namespace std::chrono_literals;
 
 namespace
 {
+/// The hand's splash, its sound and the scare it gives the fish are this high over the sea
+constexpr float k_HandSplashHeight = 0.2f;
 // Where the camera starts on the testbed: above and behind the middle of the map
 constexpr float k_TestbedCameraHeight = 60.0f;
 /// How far the testbed's player's influence reaches from its middle, and the prayer power their worship has stored
@@ -265,6 +291,69 @@ bool FeelsModel(entt::entity object)
 	const auto* info = ecs::world_objects::InfoOf(object);
 	return info == nullptr || info->type != ObjectType::TotemStatue;
 }
+
+/// How many bytes a game file has, for the loading budget, or none when it isn't there
+std::optional<size_t> GameFileBytes(const std::filesystem::path& path)
+{
+	try
+	{
+		std::error_code error;
+		const auto size = std::filesystem::file_size(Locator::filesystem::value().FindPath(path), error);
+		if (!error)
+		{
+			return static_cast<size_t>(size);
+		}
+	}
+	catch (const std::exception&)
+	{
+		// Not found: there is nothing to load
+	}
+	return std::nullopt;
+}
+
+/// Registers a resource read from a game file, to be loaded by its cache's loader with these arguments when it is first
+/// needed or prefetched. One whose file isn't there is left out, as loading it would fail.
+template <typename Manager, typename Id, typename... Args>
+void RegisterFile(Manager& manager, Id id, const std::filesystem::path& path, Args... args)
+{
+	if (const auto bytes = GameFileBytes(path))
+	{
+		manager.RegisterLoad(id, *bytes, std::move(args)...);
+	}
+	else
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Can't find {}", path.generic_string());
+	}
+}
+
+/// The sound banks whose samples are decoded as soon as they are read, as they are wanted at once and often: the hand's,
+/// the miracles' and the interface's
+constexpr std::array<std::string_view, 1> k_DecodedAheadBanks = {"InGame.sad"};
+/// While a land loads the game serves no frames: the inspector answers meanwhile that it is loading, so that tools
+/// wait for it rather than time out
+class InspectorLoading
+{
+public:
+	explicit InspectorLoading(std::string_view what)
+	{
+		if (Locator::inspector::has_value())
+		{
+			Locator::inspector::value().BeginLoading(what);
+		}
+	}
+	~InspectorLoading()
+	{
+		if (Locator::inspector::has_value())
+		{
+			Locator::inspector::value().EndLoading();
+		}
+	}
+	InspectorLoading(const InspectorLoading&) = delete;
+	InspectorLoading& operator=(const InspectorLoading&) = delete;
+	InspectorLoading(InspectorLoading&&) = delete;
+	InspectorLoading& operator=(InspectorLoading&&) = delete;
+};
+
 } // namespace
 
 const std::string k_WindowTitle = "openblack";
@@ -274,8 +363,16 @@ Game* Game::sInstance = nullptr;
 Game::Game(Arguments&& args) noexcept
     : _gamePath(args.gamePath)
     , _startMap(args.startLevel)
+    , _playVideo(args.playVideo)
+    , _preIntro(args.preIntro)
+    , _skipLogos(args.skipLogos)
     , _startTestbed(args.startTestbed || args.scenario.has_value())
     , _scenarioRequest(args.scenario)
+    , _inspectPort(args.inspectPort)
+    , _screenshotRoot(args.screenshotRoot)
+    , _seed(args.seed)
+    , _inspectInputLock(args.inspectInputLock)
+    , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
     , _requestScreenshot(args.requestScreenshot)
 {
 	Locator::camera::emplace(glm::zero<glm::vec3>());
@@ -341,6 +438,12 @@ Game::~Game() noexcept
 		Locator::miracleFxSystem::value().SetInterface(nullptr);
 	}
 	_interface.reset();
+	_loadingScreen.reset();
+	// What the scripts asked of openblack that it can't do yet, for the natives to write next
+	if (Locator::chlapi::has_value())
+	{
+		Locator::chlapi::value().LogStubCalls();
+	}
 	ShutDownServices();
 	SDL_Quit(); // todo: move to GameWindow
 	spdlog::shutdown();
@@ -393,11 +496,24 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	{
 		magicTookPress = magic.TapAction();
 	}
+	// Letting go of the Action button lets go of a town's totem, leaving it where it was slid
+	if (Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value() &&
+	    (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
+	{
+		Locator::villageTotemSystem::value().LetGo();
+		Locator::gameActionSystem::value().PinCursor(false);
+	}
 	// Letting go of the Action button lets go of what the hand was taking, or puts down or throws what it holds
 	if (handGrab != nullptr && (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
 	{
 		// TODO(hand): a press too short to take the thing taps it
-		[[maybe_unused]] const auto tapped = handGrab->Release(SDL_GetTicks(), Locator::time::value().GetTurn());
+		[[maybe_unused]] const auto tapped = handGrab->Release(machine_clock::Ticks(), Locator::time::value().GetTurn());
+		// Let go with an empty hand that did nothing with the press, it clicks the thing or the place under it, for the
+		// scripts; not while the game is paused
+		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy() && !inTemple && !IsPaused())
+		{
+			handGrab->ClickReleased(Locator::time::value().GetTurn());
+		}
 	}
 	// The action button (the right) casts the miracle in the hand, which comes before the creatures: pressed, it arms,
 	// locks on or casts it, and let go it throws an armed one or lets a locked one go. Without a miracle it takes hold
@@ -414,7 +530,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		// Holding a thing, the hand makes ready to throw it
 		if (!_actionPressTaken && handHoldsThing)
 		{
-			_actionPressTaken = handGrab->Press(SDL_GetTicks(), Locator::time::value().GetTurn());
+			_actionPressTaken = handGrab->Press(machine_clock::Ticks(), Locator::time::value().GetTurn());
 		}
 		if (!_actionPressTaken)
 		{
@@ -424,13 +540,24 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			Locator::camera::value().DeprojectScreenToWorld(glm::vec2(event.button.x, event.button.y) /
 			                                                    static_cast<glm::vec2>(glm::max(screenSize, glm::ivec2(1))),
 			                                                rayOrigin, rayDirection);
+			// While the player's creature duels, the Action button adds a move to its queue
+			if (fights.Press(rayOrigin, rayDirection, creature_fight::Button::Action, machine_clock::Ticks(),
+			                 Locator::time::value().GetTurn()))
+			{
+				_actionPressTaken = true;
+				_fightButton = creature_fight::Button::Action;
+			}
 			const auto& leashes = Locator::leashSystem::value();
 			const auto own = leashes.PlayersCreature(PlayerNames::PLAYER_ONE);
 			const auto under = creatureHand.CreatureUnderCursor();
 			const bool tying = under.has_value() && own.has_value() && *under != *own && leashes.IsLeashed(*own);
-			if (under.has_value() && !tying)
+			if (!_actionPressTaken && under.has_value() && !tying)
 			{
 				_actionPressTaken = true;
+				if (handGrab != nullptr)
+				{
+					handGrab->ClickThing(*under, Locator::time::value().GetTurn());
+				}
 				if (!creatureHand.Grab())
 				{
 					// A creature the hand may not hold: a click on it still asks the leash, which says why not
@@ -438,10 +565,25 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				}
 			}
 		}
+		// A town's totem under the hand is taken hold of, to slide it up and down
+		if (!_actionPressTaken && !magic.IsHandBusy() && !handHoldsThing && Locator::villageTotemSystem::has_value() &&
+		    Locator::pickingSystem::has_value())
+		{
+			auto& totems = Locator::villageTotemSystem::value();
+			if (const auto picked = Locator::pickingSystem::value().GetPick().object; picked.has_value())
+			{
+				if (const auto totem = totems.TotemOf(*picked);
+				    totem.has_value() && totems.Grip(*totem, PlayerNames::PLAYER_ONE))
+				{
+					_actionPressTaken = true;
+					Locator::gameActionSystem::value().PinCursor(true);
+				}
+			}
+		}
 		// Otherwise the hand takes hold of a thing under it
 		if (!_actionPressTaken && !magic.IsHandBusy() && handGrab != nullptr)
 		{
-			_actionPressTaken = handGrab->Press(SDL_GetTicks(), Locator::time::value().GetTurn());
+			_actionPressTaken = handGrab->Press(machine_clock::Ticks(), Locator::time::value().GetTurn());
 		}
 	}
 	if (!magicTookPress && !magic.IsHandBusy() && !inTemple && event.type == SDL_MOUSEBUTTONDOWN &&
@@ -459,14 +601,24 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		    Locator::creatureModeSystem::value().Press({.milliseconds = event.button.timestamp,
 		                                                .screen = glm::vec2(event.button.x, event.button.y),
 		                                                .creature = creatureHand.CreatureUnderCursor()});
-		if (!doubleClicked && !fights.Press(rayOrigin, rayDirection))
+		// While the player's creature duels, the Move button makes a move at once in place of those queued
+		if (!doubleClicked && fights.Press(rayOrigin, rayDirection, creature_fight::Button::Move, machine_clock::Ticks(),
+		                                   Locator::time::value().GetTurn()))
+		{
+			_fightButton = creature_fight::Button::Move;
+		}
+		else if (!doubleClicked)
 		{
 			PlayHandGrabSound();
 		}
 	}
-	if (!leftMouseButton && fights.IsPressed())
+	// Letting go of the button that pressed charges the blow it queued
+	if (_fightButton.has_value() && fights.IsPressed() &&
+	    ((*_fightButton == creature_fight::Button::Move && !leftMouseButton) ||
+	     (*_fightButton == creature_fight::Button::Action && !rightMouseButton)))
 	{
-		fights.Release();
+		fights.Release(machine_clock::Ticks(), Locator::time::value().GetTurn());
+		_fightButton.reset();
 	}
 	// Letting go of the right button lets go of the creature. Let go quickly, having neither stroked nor slapped it, the
 	// press was a click, which puts the leash on the player's creature.
@@ -612,6 +764,11 @@ bool Game::IsPaused() const
 	return Locator::time::value().IsPaused();
 }
 
+bool Game::IsHandDrawn() const
+{
+	return (!_interface || !_interface->IsDialogOpen()) && Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+}
+
 void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds)
 {
 	if (!Locator::gestureSystem::has_value() || screenSize.x <= 0 || screenSize.y <= 0)
@@ -739,7 +896,7 @@ void Game::UpdateHandInterface()
 	// The creature the hand is held to, or else the one it is over, any player's
 	const auto& creatureHand = Locator::creatureHandSystem::value();
 	auto creature = creatureHand.GetCreature();
-	const bool rightButtonHeld = (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_RMASK) != 0;
+	const bool rightButtonHeld = (Locator::gameActionSystem::value().GetPointerButtons() & SDL_BUTTON_RMASK) != 0;
 	if (!creature.has_value() && creature_panel::Triggered(rightButtonHeld))
 	{
 		creature = _creatureUnderHand;
@@ -770,10 +927,31 @@ void Game::ProcessHandToolTipTurn()
 		return;
 	}
 	auto& toolTips = _interface->GetToolTips();
+	// With the leash held, the hand says what a tap of the Action button does with it, before anything else
+	if (!_interface->IsDialogOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive())
+	{
+		const auto hovered = Locator::pickingSystem::value().GetPick().object;
+		if (const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, hovered))
+		{
+			toolTips.Submit(*tip, gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
+			toolTips.ProcessTurn();
+			return;
+		}
+	}
 	// Over the player's own creature, the hand shows that it can take hold of it to stroke or slap it. It can hold other
 	// players' creatures too, but the game only offers it for the player's own.
 	const auto over = _creatureUnderHand.has_value() ? _creatureUnderHand : Locator::creatureHandSystem::value().GetCreature();
-	if (over.has_value() && !_interface->GetMenu().IsOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive())
+	const bool shown = !_interface->IsDialogOpen() && Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+	// While the player's creature duels, the hand offers to block over it, to attack over its opponent, and to manoeuvre
+	// anywhere else, each by the Action button
+	if (const auto tip = Locator::creatureFightSystem::value().HandTip(_creatureUnderHand))
+	{
+		if (shown)
+		{
+			toolTips.Submit(creature_fight::ToolTipIndex(*tip), gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
+		}
+	}
+	else if (over.has_value() && shown)
 	{
 		const auto* creature = Locator::entitiesRegistry::value().TryGet<const ecs::components::Creature>(*over);
 		const auto* mind = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureMindState>(*over);
@@ -791,8 +969,8 @@ bool Game::GameLogicLoop() noexcept
 	using namespace ecs::components;
 	using namespace ecs::systems;
 
-	const auto currentTime = std::chrono::steady_clock::now();
-	const auto delta = currentTime - _lastGameLoopTime;
+	const auto currentTime = machine_clock::Ticks();
+	const auto delta = std::chrono::milliseconds(currentTime - _lastGameLoopTime);
 	auto& clock = Locator::time::value();
 
 	// The game pauses the world while the player is in the temple, whose own turns keep the audio going
@@ -819,10 +997,18 @@ bool Game::GameLogicLoop() noexcept
 		return false;
 	}
 	clock.StartTurn();
+	// The influence asked during the turn is measured from where the hands were at it
+	Locator::influenceSystem::value().SetInGameTurn(true);
 	ProcessHandToolTipTurn();
 
 	// What moved since the last turn goes into its new map cell
 	Locator::entitiesMap::value().Sync();
+
+	// The players' temples take their turn first: one whose heart lost all its life moves on through its destruction
+	if (Locator::templeDestructionSystem::has_value())
+	{
+		Locator::templeDestructionSystem::value().ProcessTurn();
+	}
 
 	auto& profiler = Locator::profiler::value();
 
@@ -832,18 +1018,24 @@ bool Game::GameLogicLoop() noexcept
 	}
 	// The towns work out what they want, then their villagers act on it
 	Locator::townDesireSystem::value().ProcessTurn();
+	// A town's storage pit or village centre on fire calls its people together
+	Locator::townSystem::value().ProcessTurn();
 	Locator::chimneySmokeSystem::value().ProcessTurn();
 	// How far the players' influence reaches, and its border
 	Locator::influenceSystem::value().ProcessTurn(Locator::time::value().GetTurn());
 	// The crops in the fields grow
 	Locator::fieldSystem::value().ProcessTurn(Locator::time::value().GetTurn());
-	// The trees that are still growing grow, faster in the rain
-	Locator::vegetation::value().ProcessTurn();
+	// The fish come back to the fish farms
+	Locator::fishFarmSystem::value().ProcessTurn(Locator::time::value().GetTurn());
+	// The forests' growing trees grow, faster in the rain, and the forests spread
+	Locator::forestSystem::value().GrowForests();
 	{
 		// The creatures age, grow, get hungry, tired and thirsty, and heal while they sleep
 		auto creaturePhysiology = profiler.BeginScoped(Profiler::Stage::CreaturePhysiologyUpdate);
 		Locator::creaturePhysiologySystem::value().ProcessTurn();
 	}
+	// A creature's home is its temple's pen, and in the pen it is shown smaller so that it fits
+	Locator::creaturePenSystem::value().ProcessTurn();
 	// The creatures' bodies follow their fatness, and their marks heal
 	Locator::creatureAnimationSystem::value().ProcessTurn();
 	Locator::creatureSkinSystem::value().ProcessTurn();
@@ -881,6 +1073,8 @@ bool Game::GameLogicLoop() noexcept
 		// Fights start and end, the fighters choose their moves, and creatures knocked out come round
 		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
 		Locator::creatureFightSystem::value().ProcessTurn();
+		// Creatures fizz on out of sight or back in, after they have acted
+		Locator::creatureFizzSystem::value().ProcessTurn();
 	}
 	{
 		auto actions = profiler.BeginScoped(Profiler::Stage::LivingActionUpdate);
@@ -900,8 +1094,14 @@ bool Game::GameLogicLoop() noexcept
 	// The scripts' fade moves on with their turn
 	Locator::cinematicDirectorSystem::value().ProcessTurn();
 
+	// The fireflies come out at nightfall and go home at dawn, by the time of day the turn began at
+	if (Locator::fireflySystem::has_value())
+	{
+		Locator::fireflySystem::value().ProcessTurn();
+	}
+
 	// The time of day moves on
-	Locator::skySystem::value().GetClock().ProcessTurn();
+	Locator::skySystem::value().ProcessTurn();
 
 	// The weather moves on, then the ambience follows the weather at the camera
 	const auto cameraPosition = Locator::camera::value().GetOrigin();
@@ -953,6 +1153,8 @@ bool Game::GameLogicLoop() noexcept
 		auto teleport = profiler.BeginScoped(Profiler::Stage::TeleportUpdate);
 		Locator::teleportSystem::value().ProcessTurn();
 	}
+	// A creature loaded from what a last land kept sparkles into sight
+	Locator::creatureCarryOverSystem::value().ProcessTurn();
 	{
 		// The particle effects not owned by a miracle step, and the spot visuals count down
 		auto particles = profiler.BeginScoped(Profiler::Stage::ParticlesUpdate);
@@ -967,12 +1169,6 @@ bool Game::GameLogicLoop() noexcept
 	if (Locator::rewardSystem::has_value())
 	{
 		Locator::rewardSystem::value().ProcessTurn();
-	}
-	// A temple whose heart lost all its life moves on through its destruction, as the game's objects take their turns
-	// before the physics
-	if (Locator::templeDestructionSystem::has_value())
-	{
-		Locator::templeDestructionSystem::value().ProcessTurn();
 	}
 	// Then the physics, after the living, the fires, the reactions, the miracles and the particles have had their turn,
 	// so a body any of them sets moving this turn flies this turn: what was thrown, dropped, knocked or pushed flies,
@@ -992,9 +1188,19 @@ bool Game::GameLogicLoop() noexcept
 	{
 		Locator::handGrabSystem::value().ProcessTurn();
 	}
+	// At the end of the turn the vortices between the lands open, close and level the ground under them
+	if (Locator::vortexSystem::has_value())
+	{
+		Locator::vortexSystem::value().ProcessTurn();
+	}
+	// Once the whole turn is over, the local player whose temple is being destroyed has lost
+	if (Locator::templeDestructionSystem::has_value())
+	{
+		Locator::templeDestructionSystem::value().EndTurn();
+	}
 
-	// Each turn ends with the camera taking the alignment of the player of most influence where it is
-	Locator::alignmentSystem::value().UpdateTurn();
+	// Each turn ends with the camera taking the alignment of the player of most influence at its eye
+	Locator::alignmentSystem::value().UpdateTurn(cameraPosition);
 	// The temples' outsides follow their players' alignments
 	Locator::templeExteriorSystem::value().UpdateTurn();
 
@@ -1013,11 +1219,12 @@ bool Game::GameLogicLoop() noexcept
 		    .paused = false,
 		    .turn = clock.GetTurn(),
 		    .inCitadel = false,
-		    .videoPlaying = false,
+		    .videoPlaying = Locator::videoSystem::value().IsPlaying(),
 		});
 	}
 
 	ProcessMusicTurn(cameraPosition, false);
+	Locator::influenceSystem::value().SetInGameTurn(false);
 
 	_lastGameLoopTime = currentTime;
 	_turnDeltaTime = delta;
@@ -1032,13 +1239,23 @@ void Game::ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel)
 	{
 		return;
 	}
+	const auto& alignment = Locator::alignmentSystem::value();
+	// The land's music waits while a script holds the cinema bars, and while they slide in or out
+	bool cinema = false;
+	if (Locator::cinematicDirectorSystem::has_value())
+	{
+		const auto& director = Locator::cinematicDirectorSystem::value();
+		cinema =
+		    (director.IsWideScreenOn() && director.GetWideScreenOwner() != 0) || !director.IsWideScreenTransitionFinished();
+	}
 	audio::GameMusic::TurnInputs music {
 	    .turn = GetTurn(),
 	    .camera = cameraPosition,
 	    .groundHeight = Locator::terrainSystem::value().GetHeightAt(glm::xz(cameraPosition)),
 	    .inCitadel = inCitadel,
-	    // TODO(raffclar): the player's alignment once it is simulated
-	    .alignment = 0.0f,
+	    .alignment = alignment.GetCameraAlignment(),
+	    .playerAlignment = alignment.GetPlayerAlignment(Locator::playerSystem::value().GetLocalPlayer()),
+	    .cinema = cinema,
 	    .towns = {},
 	};
 	Locator::entitiesRegistry::value().Each<const ecs::components::Town, const Tribe, const ecs::components::Transform>(
@@ -1094,7 +1311,8 @@ void Game::ProcessTempleAudioTurn()
 	ProcessMusicTurn(Locator::camera::value().GetOrigin(), true);
 	if (_atmosAudio)
 	{
-		_atmosAudio->ContinueTurn({.paused = false, .turn = GetTurn(), .inCitadel = true, .videoPlaying = false});
+		_atmosAudio->ContinueTurn(
+		    {.paused = false, .turn = GetTurn(), .inCitadel = true, .videoPlaying = Locator::videoSystem::value().IsPlaying()});
 	}
 }
 
@@ -1118,6 +1336,17 @@ bool Game::Update() noexcept
 
 	Locator::debugGui::value().SetScale(config.guiScale);
 	Locator::time::value().Update();
+	// The debug inspector answers what was asked since the last frame, and holds or releases the game for stepping,
+	// before the frame's input and turn
+	if (Locator::inspector::has_value())
+	{
+		Locator::inspector::value().Service();
+	}
+	// Stepped deterministically, a frame takes the fixed time the clock gives it, whatever the wall clock says
+	if (const auto fixed = Locator::time::value().GetFixedFrameTime(); fixed.has_value())
+	{
+		deltaTime = std::chrono::duration_cast<std::chrono::microseconds>(*fixed);
+	}
 
 	// The physics world isn't stepped: the game's objects don't move as rigid bodies, and the world only answers the
 	// rays cast for the hand, the camera and the like. Stepping it let the features fall and lose their turn.
@@ -1141,6 +1370,11 @@ bool Game::Update() noexcept
 		SDL_Event e;
 		while (SDL_PollEvent(&e) != 0)
 		{
+			// While an agent drives the game, the player's mouse and keyboard are kept out of it
+			if (!actions.AdmitEvent(e))
+			{
+				continue;
+			}
 			Locator::events::value().Create<SDL_Event>(e);
 		}
 		if (actions.IsCursorFrozen())
@@ -1177,6 +1411,9 @@ bool Game::Update() noexcept
 	// ImGui events + prepare
 	{
 		auto guiLoop = profiler.BeginScoped(Profiler::Stage::GuiLoop);
+		// The debug windows keep off the mouse while the player's input is locked out, and show a notice
+		Locator::debugGui::value().SetInputLock(Locator::gameActionSystem::value().IsPlayerInputBlocked(),
+		                                        Locator::gameActionSystem::value().GetScriptedPointer().has_value());
 		// The debug menu bar comes up with the game's menu, or always without it
 		Locator::debugGui::value().SetMenuBarVisible(!_interface || _interface->GetMenu().IsOpen());
 		if (Locator::debugGui::value().Loop())
@@ -1202,12 +1439,21 @@ bool Game::Update() noexcept
 		auto creatureCave = profiler.BeginScoped(Profiler::Stage::CreatureCaveUpdate);
 		Locator::creatureCaveSystem::value().Update();
 	}
+	if (Locator::tattooEditorSystem::has_value())
+	{
+		Locator::tattooEditorSystem::value().Update(std::chrono::duration<float, std::milli>(deltaTime).count());
+	}
 
 	// While a miracle's camera path has the camera, the player's camera doesn't move it
 	const bool pathHoldsCamera = Locator::cameraPathSystem::value().HoldsCamera();
 	if (!pathHoldsCamera)
 	{
 		camera.Update(deltaTime);
+	}
+	// A picture the inspector takes this frame has the camera where it asked, whatever moved it this frame
+	if (Locator::inspector::has_value())
+	{
+		Locator::inspector::value().PlaceCamera();
 	}
 	// Outside a camera with a lens of its own, the near plane follows the camera's height over the land, but for close
 	// shots: a script's, and a miracle's camera path
@@ -1247,6 +1493,8 @@ bool Game::Update() noexcept
 	// The frame's game time: none while paused, quicker or slower with the game speed
 	auto& clock = Locator::time::value();
 	clock.UpdateFrame();
+	// A full-screen video decodes the frames due by the real clock, fades, and ends
+	Locator::videoSystem::value().Update(std::chrono::steady_clock::now());
 	const auto gameTime = std::chrono::duration<float, std::milli>(clock.GetFrameGameTime());
 	Locator::alignmentSystem::value().Update(gameTime);
 	{
@@ -1257,12 +1505,19 @@ bool Game::Update() noexcept
 	Locator::cloudSystem::value().Update(gameTime);
 	// The rain falls as the storm nearest the camera has it
 	Locator::rainSystem::value().Update(std::chrono::duration<float>(gameTime).count(), camera.GetOrigin());
+	// The static the fizzing creatures are drawn through slides across them
+	Locator::creatureFizzSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	// The rings on the water grow and fade
 	Locator::waterRingSystem::value().Update(gameTime);
 	{
 		// The flames, steam and smoke of what burns move on
 		auto fire = profiler.BeginScoped(Profiler::Stage::FireUpdate);
 		Locator::fireSystem::value().Update(std::chrono::duration<float>(gameTime).count());
+	}
+	// The vortices' swirls and effects step with the frame, and their marks on the ground follow their openness
+	if (Locator::vortexSystem::has_value())
+	{
+		Locator::vortexSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	}
 	// The reward chests from the sky fall and thump down, and their dust fades
 	if (Locator::rewardSystem::has_value())
@@ -1273,6 +1528,12 @@ bool Game::Update() noexcept
 		// The blasts' rubble lies and fades, their dust flies and the camera shakes
 		auto explosions = profiler.BeginScoped(Profiler::Stage::ExplosionUpdate);
 		Locator::explosionSystem::value().Update(std::chrono::duration<float, std::milli>(gameTime).count());
+	}
+	// The fireflies out drift about where they are between their last two turns
+	if (Locator::fireflySystem::has_value())
+	{
+		Locator::fireflySystem::value().Update(std::chrono::duration<float, std::milli>(gameTime).count(),
+		                                       clock.GetTurnFraction());
 	}
 	// The moving bodies are drawn between their last two turns, and the dust their landings threw up flies and fades
 	if (Locator::dynamicsSystem::has_value())
@@ -1288,8 +1549,10 @@ bool Game::Update() noexcept
 		// The animals are drawn between their last two turns, their models posed by their clips
 		auto animals = profiler.BeginScoped(Profiler::Stage::AnimalsUpdate);
 		Locator::animalSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
-		// The villagers are posed by the clips their states play
+		// The clips the villagers' states play go on, and the sounds of their frames play
 		Locator::livingActionSystem::value().UpdatePoses(clock.GetTurn(), clock.GetTurnFraction());
+		// The gates and the other scenery the scripts open and close play on, and the plinths' stones sit or sink
+		Locator::animatedStaticSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
 	}
 	{
 		// The creatures are drawn moving between the last two turns
@@ -1347,9 +1610,19 @@ bool Game::Update() noexcept
 	// The homes' smoke rises while someone is in
 	Locator::chimneySmokeSystem::value().Update(gameTime);
 	Locator::influenceSystem::value().Update(gameTime);
+	// What the hand shows past the border is shown with the hand
+	if (IsHandDrawn())
+	{
+		Locator::influenceSystem::value().ShowHandInfluence(gameTime);
+	}
 	Locator::mistSystem::value().Update(gameTime);
 	Locator::villageLightSystem::value().Update(gameTime);
+	// The town totems ease to their shares
+	Locator::villageTotemSystem::value().Update(gameTime.count());
 	Locator::fieldSystem::value().Update(gameTime);
+	// The shoals near the camera swim, and dart from what scared them
+	Locator::fishFarmSystem::value().Update(std::chrono::duration<float>(gameTime).count(),
+	                                        Locator::camera::value().GetOrigin());
 	Locator::cinematicDirectorSystem::value().Update(gameTime);
 	// The cinema bars coming in hide the game's dialogs
 	if (Locator::cinematicDirectorSystem::value().TakeHideDialogs() && _interface && _interface->GetMenu().IsOpen())
@@ -1399,23 +1672,25 @@ bool Game::Update() noexcept
 				}
 				else if (!glm::any(glm::isnan(rayOrigin) || glm::isnan(rayDirection)))
 				{
-					// The Action button on the player's own temple's entrance takes them inside
-					// TODO(raffclar): in a game of one player, only once a script lets the player use the temple
+					// The Action button on the player's own temple's entrance takes them inside, when the scripts let it
 					const auto& actions = Locator::gameActionSystem::value();
-					if (Locator::cinematicDirectorSystem::value().IsInterfaceActive() &&
+					if (Locator::entitiesRegistry::value().Context().scriptLetsTempleBeEntered &&
+					    Locator::cinematicDirectorSystem::value().IsInterfaceActive() &&
 					    !Locator::magicSystem::value().IsHandBusy() && actions.GetChanged(input::BindableActionMap::ACTION) &&
 					    actions.Get(input::BindableActionMap::ACTION))
 					{
 						enterTemple = Locator::templeExteriorSystem::value().EntranceAt(rayOrigin, rayDirection) ==
 						              PlayerNames::PLAYER_ONE;
 					}
-					// The leash keys, and the Action button tapping leash posts, creatures and things to tie the leash to.
+					// The leash keys, and the Action button tapping leash posts, and with the leash held giving orders and
+					// tying the leash to things.
 					// Not while the debug windows have the keyboard or mouse, as when typing in a text field: the controls
 					// aren't updated then, so a key just pressed would read as pressed again every frame.
 					if (!Locator::debugGui::value().StealsFocus())
 					{
 						auto& leashes = Locator::leashSystem::value();
-						leashes.HandleInput(rayOrigin, rayDirection, _actionPressTaken);
+						leashes.HandleInput(rayOrigin, rayDirection, static_cast<glm::vec2>(_mousePosition),
+						                    machine_clock::Ticks(), _actionPressTaken);
 						_actionPressTaken = false;
 					}
 					// The gestures drawn with the hand: circles and power-ups for the miracles, the leash's gestures, and
@@ -1531,6 +1806,7 @@ bool Game::Update() noexcept
 			                            .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 			auto& handTransform = Locator::entitiesRegistry::value().Get<ecs::components::Transform>(handEntity);
 			UpdateHandNavigation(handTransform);
+			UpdateHandKnock(handTransform);
 			if (Locator::temple::has_value() && Locator::temple::value().Active())
 			{
 				if (!_handGripping)
@@ -1617,9 +1893,21 @@ bool Game::Update() noexcept
 					    .handSize = HandAnimation::SizeAtDistance(glm::distance(camera.GetOrigin(), land)),
 					    .seconds = std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count(),
 					    .gameMs = static_cast<uint32_t>(std::lround(gameTime.count())),
-					    .nowMs = SDL_GetTicks(),
+					    .nowMs = machine_clock::Ticks(),
 					    .turn = Locator::time::value().GetTurn(),
 					});
+				}
+				// Holding a town's totem, the mouse slides it up and down and the hand stays on its icon
+				if (Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value())
+				{
+					auto& totems = Locator::villageTotemSystem::value();
+					const auto screenHeight = Locator::windowing::has_value() ? Locator::windowing::value().GetSize().y : 0;
+					totems.Slide(static_cast<float>(-Locator::gameActionSystem::value().GetMouseDelta().y),
+					             static_cast<float>(screenHeight));
+					if (const auto hold = totems.GetHandHold())
+					{
+						handTransform.position = hold->position;
+					}
 				}
 				UpdateMagicHand(handTransform.position,
 				                std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
@@ -1727,6 +2015,20 @@ bool Game::Update() noexcept
 				                           magic::hand_hold::TugTimeMs(pull->hold, pullClip->duration, pull->reach, handSize),
 				                           _mousePosition);
 			}
+			else if (_handKnocking)
+			{
+				// Knocking on a house, the hand plays its tap once through, without leaning
+				const auto* tap = _handAnimation->GetAnimation(static_cast<size_t>(HandCycle::TapHouse));
+				const auto timeMs =
+				    static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(_handKnock->time).count());
+				_handAnimation->UpdateHeld(deltaTime, HandCycle::TapHouse, timeMs, _mousePosition);
+				_handAnimation->SettleCursor(_mousePosition);
+				_handKnock->time += deltaTime;
+				if (tap == nullptr || _handKnock->time >= std::chrono::milliseconds(tap->duration))
+				{
+					_handKnock.reset();
+				}
+			}
 			else if (!holdingSeed)
 			{
 				_handAnimation->Update(deltaTime, state, cycle, _mousePosition);
@@ -1808,6 +2110,8 @@ bool Game::Update() noexcept
 			auto updateEntities = profiler.BeginScoped(Profiler::Stage::UpdateEntities);
 			if (config.drawEntities)
 			{
+				// The villagers in view are posed for the camera as it now is
+				Locator::livingActionSystem::value().PoseVillagersInView(Locator::camera::value().GetViewProjectionMatrix());
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
 				                                                config.drawStreams);
 				// The interface picks what is under the cursor as the frame is drawn, for the next frame to go by
@@ -1828,6 +2132,8 @@ bool Game::Update() noexcept
 bool Game::Initialize() noexcept
 {
 	auto& config = Locator::config::value();
+	_startupTimer.emplace("startup", _launchTime);
+	_startupTimer->Step("launch");
 
 	if (config.graphicsBackend != GraphicsBackend::Noop)
 	{
@@ -1845,6 +2151,7 @@ bool Game::Initialize() noexcept
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize engine services.");
 		return false;
 	}
+	_startupTimer->Step("window, renderer and audio device");
 	auto& fileSystem = Locator::filesystem::value();
 	auto& events = Locator::events::value();
 
@@ -1852,6 +2159,19 @@ bool Game::Initialize() noexcept
 		// If gui captures this input, do not propagate
 		if (!Locator::debugGui::value().ProcessEvents(event))
 		{
+			// A full-screen video takes Escape: it fades out, unless Shift or Ctrl is held
+			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE && event.key.repeat == 0 &&
+			    Locator::videoSystem::value().Escape((event.key.keysym.mod & KMOD_SHIFT) != 0,
+			                                         (event.key.keysym.mod & KMOD_CTRL) != 0))
+			{
+				return;
+			}
+			// The tattoo editor's dialog takes the keyboard and mouse while it is open, Escape and Enter included
+			if (_interface && _interface->GetTattooEditor().IsOpen() && Locator::windowing::has_value() &&
+			    _interface->ProcessEvent(event, static_cast<glm::u16vec2>(Locator::windowing::value().GetSize())))
+			{
+				return;
+			}
 			// Inside the temple, Escape goes back to its main room and out, as the temple's keys do
 			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE && event.key.repeat == 0 &&
 			    Locator::temple::has_value() && Locator::temple::value().Active())
@@ -1918,6 +2238,31 @@ bool Game::Initialize() noexcept
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize game services.");
 		return false;
 	}
+	_startupTimer->Step("game services and shaders");
+	// A deterministic run: every random number from the seed, the date pinned
+	if (_seed.has_value())
+	{
+		Locator::rng::value().SetRunSeed(*_seed);
+		Locator::time::value().RestartClock(ecs::systems::TimeSystemInterface::k_DeterministicDate);
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Seeded run: seed {}, date pinned", *_seed);
+	}
+	// The debug inspector answers from the first frame; the game carries on without it if it can't listen. Until then,
+	// while the game's data loads, it answers that the game is loading
+	std::optional<InspectorLoading> loadingData;
+	if (_inspectPort.has_value())
+	{
+		// An agent drives it: the player's mouse and keyboard are kept out while a client is connected, so that a knock
+		// of the mouse doesn't spoil its tests; from the start for a headless run, or never when asked
+		if (StartInspector(*_inspectPort))
+		{
+			loadingData.emplace("game data");
+			Locator::gameActionSystem::value().SetInputLockMode(_inspectInputLock);
+		}
+	}
+
+	// The logos, the first run's pre-intro and the tips screen, which stays up while the rest loads. Closing the window
+	// meanwhile ends the game at its first frame
+	PlayStartupScreens();
 
 	auto& resources = Locator::resources::value();
 	auto& meshManager = resources.GetMeshes();
@@ -1940,7 +2285,7 @@ bool Game::Initialize() noexcept
 		const auto path = fileSystem.GetPath<Path::Citadel>() / "icons" / fmt::format("{}.l3d", icon);
 		try
 		{
-			meshManager.Load(fmt::format("temple/icons/{}", icon), resources::L3DLoader::FromDiskTag {}, path);
+			RegisterFile(meshManager, fmt::format("temple/icons/{}", icon), path, resources::L3DLoader::FromDiskTag {}, path);
 		}
 		catch (std::runtime_error& err)
 		{
@@ -1957,19 +2302,20 @@ bool Game::Initialize() noexcept
 			                   if (extension == ".zzz")
 			                   {
 				                   SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading temple mesh: {}", f.stem().string());
-				                   meshManager.Load(name, resources::L3DLoader::FromDiskTag {}, f);
+				                   RegisterFile(meshManager, name, f, resources::L3DLoader::FromDiskTag {}, f);
 				                   // The temple's outside is blended from the temple meshes, into the first temple's,
 				                   // and its entrance is picked under the cursor
 				                   if (name.starts_with("temple/b_temple") || name.starts_with("temple/b_first_temple") ||
 				                       name == "temple/entrance_l3d")
 				                   {
-					                   resources.GetL3DFiles().Load(name, resources::L3DFileLoader::FromDiskTag {}, f);
+					                   RegisterFile(resources.GetL3DFiles(), name, f, resources::L3DFileLoader::FromDiskTag {},
+					                                f);
 				                   }
 			                   }
 			                   else if (extension == ".16b")
 			                   {
 				                   // And its texture from these, from evil to neutral to good
-				                   resources.GetBitmaps().Load(name, resources::Bitmap16BLoader::FromDiskTag {}, f);
+				                   RegisterFile(resources.GetBitmaps(), name, f, resources::Bitmap16BLoader::FromDiskTag {}, f);
 			                   }
 		                   }
 		                   catch (std::runtime_error& err)
@@ -1977,6 +2323,8 @@ bool Game::Initialize() noexcept
 			                   SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
 		                   }
 	                   });
+
+	_startupTimer->Step("temple outside meshes");
 
 	// What things are made of, for the physics; without the file every material is zero, as in the game
 	if (const auto constants = fileSystem.GetPath<filesystem::Path::Data>() / "PhysicsConstants.txt";
@@ -2006,6 +2354,7 @@ bool Game::Initialize() noexcept
 		                                      palette);
 	}
 
+	_startupTimer->Step("physics materials, dust sheets and land palette");
 	fileSystem.Iterate( //
 	    fileSystem.GetPath<filesystem::Path::Citadel>() / "engine", false,
 	    [&meshManager, &glowManager](const std::filesystem::path& f) {
@@ -2021,8 +2370,8 @@ bool Game::Initialize() noexcept
 			    SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading interior temple mesh: {}", f.stem().string());
 			    try
 			    {
-				    meshManager.Load(fmt::format("temple/interior/{}", f.stem().string()), resources::L3DLoader::FromDiskTag {},
-				                     f);
+				    RegisterFile(meshManager, fmt::format("temple/interior/{}", f.stem().string()), f,
+				                 resources::L3DLoader::FromDiskTag {}, f);
 			    }
 			    catch (std::runtime_error& err)
 			    {
@@ -2034,8 +2383,8 @@ bool Game::Initialize() noexcept
 			    SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading interior temple glows: {}", f.stem().string());
 			    try
 			    {
-				    glowManager.Load(fmt::format("temple/interior/glow/{}", f.stem().string()),
-				                     resources::LightLoader::FromDiskTag {}, f);
+				    RegisterFile(glowManager, fmt::format("temple/interior/glow/{}", f.stem().string()), f,
+				                 resources::LightLoader::FromDiskTag {}, f);
 			    }
 			    catch (std::runtime_error& err)
 			    {
@@ -2044,30 +2393,42 @@ bool Game::Initialize() noexcept
 		    }
 	    });
 
-	pack::PackFile pack;
+	_startupTimer->Step("temple interior meshes and glows");
+	// The pack is kept by the loads of its meshes and textures until the last of them has run
+	const auto pack = std::make_shared<pack::PackFile>();
 
-	auto packResult = pack.ReadFile(*fileSystem.GetData(fileSystem.GetPath<Path::Data>() / "AllMeshes.g3d"));
+	auto packResult = pack->ReadFile(*fileSystem.GetData(fileSystem.GetPath<Path::Data>() / "AllMeshes.g3d"));
 	if (packResult != pack::PackResult::Success)
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Unable to load AllMeshes.g3d: {}", pack::ResultToStr(packResult));
 		return false;
 	}
 
-	const auto& meshes = pack.GetMeshes();
-	// TODO (#749) use std::views::enumerate
-	for (size_t i = 0; const auto& mesh : meshes)
+	_startupTimer->Step("mesh pack read");
+	const auto& meshes = pack->GetMeshes();
+	for (uint32_t i = 0; i < meshes.size(); ++i)
 	{
-		const auto meshId = static_cast<MeshId>(i);
-		meshManager.Load(meshId, resources::L3DLoader::FromBufferTag {}, k_MeshNames.at(i), mesh);
-		++i;
+		meshManager.Register(
+		    static_cast<MeshId>(i),
+		    [pack, i] {
+			    return resources::L3DLoader {}(resources::L3DLoader::FromBufferTag {}, std::string(k_MeshNames.at(i)),
+			                                   pack->GetMesh(i));
+		    },
+		    meshes[i].size());
 	}
 
-	const auto& textures = pack.GetTextures();
-	for (auto const& [name, g3dTexture] : textures)
+	_startupTimer->Step("mesh pack meshes");
+	for (const auto& [name, g3dTexture] : pack->GetTextures())
 	{
-		textureManager.Load(g3dTexture.header.id, resources::Texture2DLoader::FromPackTag {}, name, g3dTexture);
+		textureManager.Register(
+		    g3dTexture.header.id,
+		    [pack, name] {
+			    return resources::Texture2DLoader {}(resources::Texture2DLoader::FromPackTag {}, name, pack->GetTexture(name));
+		    },
+		    g3dTexture.ddsData.size());
 	}
 
+	_startupTimer->Step("mesh pack textures");
 	pack::PackFile animationPack;
 	packResult = animationPack.ReadFile(*fileSystem.GetData(fileSystem.GetPath<Path::Data>() / "AllAnims.anm"));
 	if (packResult != pack::PackResult::Success)
@@ -2082,6 +2443,7 @@ bool Game::Initialize() noexcept
 	{
 		animationManager.Load(i, resources::L3DAnimLoader::FromBufferTag {}, animations[i]);
 	}
+	_startupTimer->Step("animation pack");
 	// The game stops one of the packed clips playing round and round as it loads them
 	if (constexpr uint32_t k_HeldOnceClip = 323; animationManager.Contains(resources::HashIdentifier(k_HeldOnceClip)))
 	{
@@ -2109,6 +2471,7 @@ bool Game::Initialize() noexcept
 		resources.GetClipSounds().Handle(audio::clip_sounds::k_TableId.value())->Attach(packNames);
 	}
 
+	_startupTimer->Step("clip sounds");
 	fileSystem.Iterate(fileSystem.GetPath<Path::CreatureMesh>(), false, [&meshManager](const std::filesystem::path& f) {
 		const auto& fileName = f.stem().string();
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading creature mesh: {}", fileName);
@@ -2120,7 +2483,7 @@ bool Game::Initialize() noexcept
 			}
 
 			const auto meshId = creature::GetIdFromMeshName(fileName);
-			meshManager.Load(meshId, resources::L3DLoader::FromDiskTag {}, f);
+			RegisterFile(meshManager, meshId, f, resources::L3DLoader::FromDiskTag {}, f);
 		}
 		catch (std::runtime_error& err)
 		{
@@ -2128,6 +2491,7 @@ bool Game::Initialize() noexcept
 		}
 	});
 
+	_startupTimer->Step("creature meshes");
 	fileSystem.Iterate(fileSystem.GetPath<Path::Symbols>(), false, [&camPathManager](const std::filesystem::path& f) {
 		if (f.extension() != ".cam")
 		{
@@ -2164,6 +2528,7 @@ bool Game::Initialize() noexcept
 		}
 	});
 
+	_startupTimer->Step("camera paths");
 	// Load loose one-off assets
 	{
 		using AFromDiskTag = resources::L3DAnimLoader::FromDiskTag;
@@ -2171,18 +2536,32 @@ bool Game::Initialize() noexcept
 
 		using LFromDiskTag = resources::L3DLoader::FromDiskTag;
 		meshManager.Load("hand", LFromDiskTag {}, fileSystem.GetPath<Path::CreatureMesh>() / "Hand_Boned_Base2.l3d");
+		_startupTimer->Step("hand mesh");
 		LoadHandAnimation();
+		_startupTimer->Step("hand animations");
 		LoadCreatureRigs();
-		meshManager.Load("coffre", LFromDiskTag {}, fileSystem.GetPath<Path::Misc>() / "coffre.l3d");
+		_startupTimer->Step("creature rigs");
+		const auto registerMesh = [&meshManager](auto id, const std::filesystem::path& path) {
+			RegisterFile(meshManager, id, path, LFromDiskTag {}, path);
+		};
+		registerMesh("coffre", fileSystem.GetPath<Path::Misc>() / "coffre.l3d");
 		// The closed reward chest
 		if (const auto path = fileSystem.GetPath<Path::Misc>() / "chest0.l3d"; fileSystem.Exists(path))
 		{
-			meshManager.Load("misc/chest0", LFromDiskTag {}, path);
+			registerMesh("misc/chest0", path);
 		}
 		// The collar the citadel's leash posts are drawn with
 		if (const auto path = fileSystem.GetPath<Path::Misc>() / "leash.l3d"; fileSystem.Exists(path))
 		{
-			meshManager.Load("misc/leash", LFromDiskTag {}, path);
+			registerMesh("misc/leash", path);
+			// Each player's temple hangs one of each leash, each drawn with its own copy of the collar
+			for (uint8_t player = 0; player < static_cast<uint8_t>(PlayerNames::_COUNT); ++player)
+			{
+				for (const auto type : creature_leash::k_Types)
+				{
+					registerMesh(temple_leashes::CollarMeshName(static_cast<PlayerNames>(player), type), path);
+				}
+			}
 		}
 		// The eyes every creature is drawn with
 		for (const auto& [id, file] : {std::pair {ecs::components::CreatureEyes::k_EyeballMeshId, "Eyeball.l3d"},
@@ -2190,25 +2569,36 @@ bool Game::Initialize() noexcept
 		{
 			if (const auto path = fileSystem.GetPath<Path::Data>() / file; fileSystem.Exists(path))
 			{
-				meshManager.Load(id, LFromDiskTag {}, path);
+				registerMesh(id, path);
 			}
 		}
-		meshManager.Load("cone", LFromDiskTag {}, fileSystem.GetPath<Path::Data>() / "cone.l3d");
-		meshManager.Load("marker", LFromDiskTag {}, fileSystem.GetPath<Path::Data>() / "marker.l3d");
-		meshManager.Load("river", LFromDiskTag {}, fileSystem.GetPath<Path::Data>() / "river.l3d");
-		meshManager.Load("river2", LFromDiskTag {}, fileSystem.GetPath<Path::Data>() / "river2.l3d");
-		meshManager.Load("metre_sphere", LFromDiskTag {}, fileSystem.GetPath<Path::Data>() / "metre_sphere.l3d");
-		meshManager.Load(SkyInterface::k_SunMeshId.value(), LFromDiskTag {},
-		                 fileSystem.GetPath<Path::WeatherSystem>() / "sun.l3d");
-		meshManager.Load(SkyInterface::k_MoonMeshId.value(), LFromDiskTag {},
-		                 fileSystem.GetPath<Path::WeatherSystem>() / "moon.l3d");
-		meshManager.Load(ecs::components::Mist::k_MeshId, LFromDiskTag {}, fileSystem.GetPath<Path::Landscape>() / "mist.l3d");
+		registerMesh("cone", fileSystem.GetPath<Path::Data>() / "cone.l3d");
+		registerMesh("marker", fileSystem.GetPath<Path::Data>() / "marker.l3d");
+		registerMesh("river", fileSystem.GetPath<Path::Data>() / "river.l3d");
+		registerMesh("river2", fileSystem.GetPath<Path::Data>() / "river2.l3d");
+		registerMesh("metre_sphere", fileSystem.GetPath<Path::Data>() / "metre_sphere.l3d");
+		// The sky: its dome, with the dome's pictures, the sun and the moon
+		using SkyArchetype = ecs::archetypes::SkyArchetype;
+		registerMesh(SkyArchetype::k_DomeMeshId.value(), fileSystem.GetPath<Path::WeatherSystem>() / "sky.l3d");
+		{
+			std::vector<std::filesystem::path> pictures;
+			for (const auto& file : sky_dome::PictureFiles())
+			{
+				pictures.push_back(fileSystem.GetPath<Path::WeatherSystem>() / file);
+			}
+			textureManager.Load(SkyArchetype::k_DomeTextureId.value(), resources::Texture2DLoader::FromBitmapLayersTag {},
+			                    "Sky", pictures, sky_dome::k_Rows);
+		}
+		registerMesh(SkyArchetype::k_SunMeshId.value(), fileSystem.GetPath<Path::WeatherSystem>() / "sun.l3d");
+		registerMesh(SkyArchetype::k_MoonMeshId.value(), fileSystem.GetPath<Path::WeatherSystem>() / "moon.l3d");
+		registerMesh(ecs::components::Mist::k_MeshId, fileSystem.GetPath<Path::Landscape>() / "mist.l3d");
 
 		using CFromDiskTag = resources::CameraPathLoader::FromDiskTag;
 		camPathManager.Load("cam", CFromDiskTag {}, fileSystem.GetPath<Path::Data>() / "cam.cam");
 		camPathManager.Load("flying", CFromDiskTag {}, fileSystem.GetPath<Path::Data>() / "flying.cam");
 	}
 
+	_startupTimer->Step("one-off meshes");
 	// The game's menu, which greets the player by their profile's name: openblack has no profiles, so by the name
 	// they log in with
 	{
@@ -2242,6 +2632,7 @@ bool Game::Initialize() noexcept
 		}
 	}
 
+	_startupTimer->Step("game interface");
 	// TODO(raffclar): #400: Parse level files within the resource loader
 	// TODO(raffclar): #405: Determine campaign levels from the challenge script file
 	// Load the campaign levels
@@ -2294,6 +2685,7 @@ bool Game::Initialize() noexcept
 		}
 	});
 
+	_startupTimer->Step("level list");
 	// Load all sound packs in the Audio directory
 	auto& audioManager = Locator::audio::value();
 	fileSystem.Iterate(
@@ -2303,24 +2695,37 @@ bool Game::Initialize() noexcept
 			    return;
 		    }
 
+		    // Only the samples' headers are read now: each sample is read from the file when it is wanted
 		    pack::PackFile soundPack;
 		    SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Opening sound pack {}", f.filename().string());
-		    const auto result = soundPack.ReadFile(*fileSystem.GetData(f));
+		    auto result = soundPack.ReadFile(*fileSystem.GetData(f), {"LHAudioWaveData"});
+		    const auto waveData = soundPack.GetUnreadBlock("LHAudioWaveData");
+		    if (result == pack::PackResult::Success && soundPack.HasBlock("LHAudioBankSampleTable") && !waveData.has_value())
+		    {
+			    result = pack::PackResult::ErrMissingAudioWaveDataBlock;
+		    }
+		    const auto& audioHeaders = soundPack.GetAudioSampleHeaders();
+		    // As when the whole pack is read, a sample beyond the wave data spoils the pack
+		    if (result == pack::PackResult::Success && waveData.has_value() &&
+		        std::ranges::any_of(audioHeaders, [&waveData](const pack::AudioBankSampleHeader& header) {
+			        return static_cast<uint64_t>(header.offset) + header.size > waveData->size;
+		        }))
+		    {
+			    result = pack::PackResult::ErrFileTooSmall;
+		    }
 		    if (result != pack::PackResult::Success)
 		    {
 			    SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Unable to load sound pack {}: {}", f.filename().string(),
 			                        pack::ResultToStr(result));
 			    return;
 		    }
-		    const auto& audioHeaders = soundPack.GetAudioSampleHeaders();
-		    const auto& audioData = soundPack.GetAudioSamplesData();
-		    auto soundName = std::filesystem::path(audioHeaders[0].name.data());
 
 		    if (audioHeaders.empty())
 		    {
 			    SPDLOG_LOGGER_WARN(spdlog::get("audio"), "Empty sound pack found for {}. Skipping", f.filename().string());
 			    return;
 		    }
+		    auto soundName = std::filesystem::path(audioHeaders[0].name.data());
 
 		    auto groupName = f.filename().string();
 
@@ -2334,11 +2739,12 @@ bool Game::Initialize() noexcept
 		    else
 		    {
 			    audioManager.CreateSoundGroup(groupName);
+			    const bool decodeAhead = std::ranges::find(k_DecodedAheadBanks, groupName) != k_DecodedAheadBanks.end();
 			    for (size_t i = 0; i < audioHeaders.size(); i++)
 			    {
 				    soundName = std::filesystem::path(audioHeaders[i].name.data());
 				    // Banks have gaps between their samples, which are skipped without skipping the samples after them
-				    if (audioData[i].empty())
+				    if (audioHeaders[i].size == 0)
 				    {
 					    SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Empty sound buffer found for {}/{}. Skipping", groupName,
 					                        audioHeaders[i].id);
@@ -2347,9 +2753,10 @@ bool Game::Initialize() noexcept
 
 				    const auto stringId = fmt::format("{}/{}", groupName, audioHeaders[i].id);
 				    const entt::id_type id = entt::hashed_string(stringId.c_str());
-				    const std::vector<std::vector<uint8_t>> buffer = {audioData[i]};
-				    SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Loading sound {}: {}", stringId, audioHeaders[i].name.data());
-				    soundManager.Load(id, resources::SoundLoader::FromBufferTag {}, audioHeaders[i], buffer);
+				    SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Registering sound {}: {}", stringId,
+				                        audioHeaders[i].name.data());
+				    soundManager.RegisterLoad(id, audioHeaders[i].size, resources::SoundLoader::FromBankFileTag {}, f,
+				                              waveData->offset, audioHeaders[i], decodeAhead);
 				    audioManager.AddToSoundGroup(groupName, id);
 			    }
 
@@ -2370,6 +2777,7 @@ bool Game::Initialize() noexcept
 		    }
 	    });
 
+	_startupTimer->Step("sound and music banks");
 	{
 		InfoFile infoFile;
 		auto result = infoFile.LoadFromFile(Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / "info.dat");
@@ -2381,13 +2789,58 @@ bool Game::Initialize() noexcept
 		Locator::infoConstants::reset(result.release());
 	}
 
+	_startupTimer->Step("info tables");
+	// The temple's leashes are drawn with the leash texture and its alpha
+	if (const auto leash = fileSystem.GetPath<Path::Textures>() / "leash.raw",
+	    alpha = fileSystem.GetPath<Path::Textures>() / "leasha.raw";
+	    fileSystem.Exists(leash) && fileSystem.Exists(alpha))
+	{
+		constexpr uint16_t k_LeashTextureSide = 256;
+		try
+		{
+			textureManager.Load(ecs::components::LeashPost::k_TextureId, resources::Texture2DLoader::FromDiskWithAlphaTag {},
+			                    leash, alpha, k_LeashTextureSide);
+		}
+		catch (std::runtime_error& err)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+		}
+	}
+	// The marks the vortices leave on the ground, with their alphas
+	for (const auto& textures : ecs::components::Vortex::k_GroundTextures)
+	{
+		for (const auto& [id, name] :
+		     {std::pair {textures.hole, textures.holeFile}, std::pair {textures.ring, textures.ringFile}})
+		{
+			const auto colours = fileSystem.GetPath<Path::Textures>() / fmt::format("{}.raw", name);
+			const auto alpha = fileSystem.GetPath<Path::Textures>() / fmt::format("{}a.raw", name);
+			if (!fileSystem.Exists(colours) || !fileSystem.Exists(alpha))
+			{
+				continue;
+			}
+			constexpr uint16_t k_VortexTextureSide = 256;
+			try
+			{
+				textureManager.Load(id, resources::Texture2DLoader::FromDiskWithAlphaTag {}, colours, alpha,
+				                    k_VortexTextureSide);
+			}
+			catch (std::runtime_error& err)
+			{
+				SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+			}
+		}
+	}
 	fileSystem.Iterate(fileSystem.GetPath<Path::Textures>(), false, [&textureManager](const std::filesystem::path& f) {
-		if (string_utils::LowerCase(f.extension().string()) == ".raw")
+		// The game ships a grey ice map it never loads, cut short of a whole texture
+		constexpr std::string_view k_UnusedTexture = "s_iceenvmapgrey.raw";
+		if (string_utils::LowerCase(f.extension().string()) == ".raw" &&
+		    string_utils::LowerCase(f.filename().string()) != k_UnusedTexture)
 		{
 			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading raw texture: {}", f.stem().string());
 			try
 			{
-				textureManager.Load(fmt::format("raw/{}", f.stem().string()), resources::Texture2DLoader::FromDiskTag {}, f);
+				RegisterFile(textureManager, fmt::format("raw/{}", f.stem().string()), f,
+				             resources::Texture2DLoader::FromDiskTag {}, f);
 			}
 			catch (std::runtime_error& err)
 			{
@@ -2396,6 +2849,7 @@ bool Game::Initialize() noexcept
 		}
 	});
 
+	_startupTimer->Step("raw textures");
 	// The texture every creature's hair is drawn with, and its alpha beside it
 	for (const auto& [id, name] : {std::pair {ecs::components::CreatureHair::k_TextureId, "C_Ape_Hair.raw"},
 	                               std::pair {ecs::components::CreatureHair::k_AlphaTextureId, "C_Ape_Haira.raw"}})
@@ -2422,8 +2876,7 @@ bool Game::Initialize() noexcept
 		Locator::resources::value().GetCreatureSkinArt().Load(
 		    creature_skin::k_ArtId, resources::CreatureSkinArtLoader::FromDiskTag {},
 		    resources::CreatureSkinArtLoader::Paths {
-		        .symbols = fileSystem.GetPath<Path::Textures>() / "PlayersSymbols.raw",
-		        .defaultSymbols = fileSystem.GetPath<Path::Textures>() / "I_PLAYER_SYMBOLS_.raw",
+		        .symbols = fileSystem.GetPath<Path::Textures>() / "OriginalChooseSymbol.raw",
 		        .freshDamage = data / "damage_new256.raw",
 		        .freshDamageAlpha = data / "damage_new256A.raw",
 		        .oldDamage = data / "damage_old256.raw",
@@ -2446,6 +2899,13 @@ bool Game::Initialize() noexcept
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
 	}
+	_startupTimer->Step("hair, skin art and snow textures");
+
+	// Everything registered is loaded on the loading threads from now on, while the first land is made: what the land
+	// needs before its turn comes is loaded there and then
+	resources.PrefetchAll();
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "{} resources registered to be loaded", resources.PendingCount());
+	_prefetchTimer.emplace("of every resource");
 
 	return true;
 }
@@ -2462,6 +2922,10 @@ bool Game::Run() noexcept
 	{
 		return false;
 	}
+	if (_startupTimer.has_value())
+	{
+		_startupTimer->Step("first land");
+	}
 
 	auto& fileSystem = Locator::filesystem::value();
 
@@ -2474,9 +2938,14 @@ bool Game::Run() noexcept
 		// The land's scripts start with every place of the scripts' object table free; each native tells the table
 		// whether it takes control of what it is given, and the scripts' variables keep their objects' references
 		Locator::scriptObjects::value().Reset();
+		chlapi.ResetSwitches();
 		lhvm.Initialise(
-		    &chlapi.GetFunctionsTable(), [](uint32_t func) { Locator::scriptObjects::value().EnterNative(func); }, nullptr,
-		    nullptr,
+		    &chlapi.GetFunctionsTable(),
+		    [](uint32_t func) {
+			    Locator::scriptObjects::value().EnterNative(func);
+			    Locator::chlapi::value().EnterNative(func);
+		    },
+		    nullptr, nullptr,
 		    [](lhvm::ErrorCode code, const std::string& text, uint32_t number) {
 			    SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Script error: {} ({} {})",
 			                        lhvm::k_ErrorMsg.at(static_cast<size_t>(code)), text, number);
@@ -2504,7 +2973,15 @@ bool Game::Run() noexcept
 		                    (fileSystem.GetGamePath() / challengePath).generic_string());
 		return false;
 	}
+	if (!_startTestbed)
+	{
+		AskNewGameChoice();
+	}
 
+	if (_startupTimer.has_value())
+	{
+		_startupTimer->Step("story scripts");
+	}
 	// Everything the map made goes into the map's cells, in the order it was made
 	Locator::entitiesMap::value().Sync();
 
@@ -2525,6 +3002,20 @@ bool Game::Run() noexcept
 	Game::SetTime(config.timeOfDay);
 	Locator::time::value().Start();
 
+	if (_playVideo == "intro")
+	{
+		Locator::videoSystem::value().Play("Data/INTRO.bik");
+		Locator::videoSystem::value().ScheduleIntro();
+	}
+	else if (_playVideo == "fall")
+	{
+		Locator::videoSystem::value().StartFallingSpell();
+	}
+	else if (!_playVideo.empty())
+	{
+		Locator::videoSystem::value().Play(_playVideo);
+	}
+
 	_frameCount = 0;
 	auto lastTime = std::chrono::high_resolution_clock::now();
 	auto& profiler = Locator::profiler::value();
@@ -2540,6 +3031,14 @@ bool Game::Run() noexcept
 	auto frameStart = std::chrono::steady_clock::now();
 	while (Update())
 	{
+		// What the loading threads finished goes into the caches, and they're given a little more
+		auto& resources = Locator::resources::value();
+		resources.UpdateLoading(k_FrameLoadBudget, k_FrameUploads);
+		if (_prefetchTimer.has_value() && resources.PendingCount() == 0)
+		{
+			_prefetchTimer.reset();
+		}
+
 		auto duration = std::chrono::high_resolution_clock::now() - lastTime;
 		auto milliseconds = std::chrono::duration_cast<std::chrono::duration<uint32_t, std::milli>>(duration);
 		{
@@ -2562,18 +3061,27 @@ bool Game::Run() noexcept
 			    .drawBoundingBoxes = config.drawBoundingBoxes,
 			    .cullBack = false,
 			    .wireframe = config.wireframe,
-			    .drawHand = (!_interface || !_interface->GetMenu().IsOpen()) &&
-			                Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
+			    .drawHand = IsHandDrawn(),
 			};
-			Locator::rendererInterface::value().DrawScene(drawDesc);
+			// The sun, the moon and the dome's blend of this frame, for drawing it
+			Locator::skySystem::value().UpdateFrame(config.drawSky);
+			// Nothing of the world shows under a video that covers the screen, nor behind the falling spell's film
+			const auto& videos = Locator::videoSystem::value();
+			if (videos.CoversScreen() || videos.HidesWorld())
+			{
+				bgfx::touch(static_cast<bgfx::ViewId>(graphics::RenderPass::Main));
+			}
+			else
+			{
+				Locator::rendererInterface::value().DrawScene(drawDesc);
+			}
 		}
 
 		// The game's interface over the scene
 		if (_interface && Locator::windowing::has_value())
 		{
-			glm::ivec2 mouse;
-			SDL_GetMouseState(&mouse.x, &mouse.y);
-			_interface->Draw(static_cast<glm::u16vec2>(Locator::windowing::value().GetSize()), mouse, SDL_GetTicks(),
+			const auto mouse = Locator::gameActionSystem::value().GetPointerPosition();
+			_interface->Draw(static_cast<glm::u16vec2>(Locator::windowing::value().GetSize()), mouse, machine_clock::Ticks(),
 			                 Locator::debugGui::value().IsMouseOverWindow());
 		}
 
@@ -2584,7 +3092,12 @@ bool Game::Run() noexcept
 			{
 				Locator::rendererInterface::value().RequestScreenshot(_requestScreenshot->second);
 			}
-			Locator::debugGui::value().Draw();
+			// A picture without the debug windows: the frame's windows are made as ever but not drawn
+			const bool hiddenThisFrame = _debugGuiHiddenFrame == _frameCount;
+			if ((!screenshotThisFrame || !_screenshotHidesDebugGui) && !hiddenThisFrame)
+			{
+				Locator::debugGui::value().Draw();
+			}
 		}
 
 		{
@@ -2602,6 +3115,12 @@ bool Game::Run() noexcept
 		}
 
 		_frameCount++;
+		// The game is playable from its first frame drawn
+		if (_startupTimer.has_value())
+		{
+			_startupTimer->Step("first frame");
+			_startupTimer.reset();
+		}
 
 		const auto frameEnd = std::chrono::steady_clock::now();
 		if (frameStats.has_value())
@@ -2614,8 +3133,9 @@ bool Game::Run() noexcept
 	return true;
 }
 
-bool Game::LoadMap(const std::filesystem::path& path) noexcept
+bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mode look) noexcept
 {
+	const InspectorLoading loading(path.filename().generic_string());
 	auto& fileSystem = Locator::filesystem::value();
 
 	if (!fileSystem.Exists(path))
@@ -2624,15 +3144,29 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 		return false;
 	}
 
+	LoadTimer timer(fmt::format("land {}", path.stem().string()));
+	BeginLoadingScreen(look);
 	const auto data = fileSystem.ReadAll(path);
 	const auto source = std::string(reinterpret_cast<const char*>(data.data()), data.size());
 
 	PrepareNewLand();
+	timer.Step("reset");
+	RenderLoadingFrame();
+
+	// A playground land is played as a skirmish, in which losing a temple doesn't end the game
+	bool skirmish = false;
+	Locator::resources::value().GetLevels().Each([&path, &skirmish](entt::id_type /*id*/, const Level& level) {
+		skirmish = skirmish || (level.GetType() == Level::LandType::Skirmish &&
+		                        level.GetScriptPath().lexically_normal() == path.lexically_normal());
+	});
+	Locator::entitiesRegistry::value().Context().skirmish = skirmish;
+	_landPath = path;
 
 	Script script;
 	try
 	{
-		script.Load(source);
+		// The tips screen is drawn again as the map's commands are carried out, when it is due
+		script.Load(source, [this]() { RenderLoadingFrame(); });
 	}
 	catch (const std::exception& e)
 	{
@@ -2640,6 +3174,7 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Error in the map script {}: {}", path.generic_string(), e.what());
 	}
 
+	timer.Step("map script");
 	// Each released map comes with an optional .fot file which contains the footpath information for the map
 	const auto stem = string_utils::LowerCase(path.stem().generic_string());
 	const auto fotPath = fileSystem.GetPath<filesystem::Path::Landscape>() / fmt::format("{}.fot", stem);
@@ -2655,6 +3190,7 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 		                   path.generic_string(), fotPath.generic_string());
 	}
 
+	timer.Step("footpaths");
 	// With the land laid out, each town gathers the lone trees about it into its scenic forest
 	if (Locator::forestSystem::has_value())
 	{
@@ -2663,20 +3199,63 @@ bool Game::LoadMap(const std::filesystem::path& path) noexcept
 		Locator::forestSystem::value().AssignForestsToTowns();
 	}
 
+	timer.Step("forests");
+	RenderLoadingFrame();
 	StartNewLand();
+	timer.Step("start");
+	EndLoadingScreen();
 	return true;
+}
+
+bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path) noexcept
+{
+	// Outside the story, a land is loaded with the challenge's scripts started again from scratch: every task of the
+	// last land stops, the scripts' variables are cleared and the challenge's scripts that start by themselves start
+	// again. None of the last land's scripts go on running on the new land.
+	if (Locator::vm::has_value())
+	{
+		// The program starting again frees every place of the scripts' objects, while the last land's objects are still
+		// there to be let go back into the game
+		if (Locator::scriptObjects::has_value())
+		{
+			Locator::scriptObjects::value().Reset();
+		}
+		if (Locator::chlapi::has_value())
+		{
+			Locator::chlapi::value().ResetSwitches();
+		}
+		auto& fileSystem = Locator::filesystem::value();
+		const auto challengePath = fileSystem.GetPath<filesystem::Path::Quests>() / "challenge.chl";
+		try
+		{
+			Locator::vm::value().LoadBinary(fileSystem.ReadAll(challengePath));
+		}
+		catch (const std::exception& err)
+		{
+			Locator::vm::value().StopAllTasks();
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to read challenge file at {}: {}", challengePath.generic_string(),
+			                    err.what());
+		}
+	}
+	return LoadMap(path);
 }
 
 void Game::LoadTestbed() noexcept
 {
+	const InspectorLoading loading("testbed");
+	_landPath = "testbed";
 	// No script runs on the testbed: the story's would set its time of day and stop its clock a few turns in
 	if (Locator::vm::has_value())
 	{
 		Locator::vm::value().StopAllTasks();
 	}
+	BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
 	PrepareNewLand();
+	RenderLoadingFrame();
 	InitializeLevel(flat_land::Build());
 	SetUpLandscape();
+	RenderLoadingFrame();
+	EndLoadingScreen();
 
 	// Looking down over the middle of the map, from the south
 	const auto& land = Locator::terrainSystem::value();
@@ -2706,7 +3285,7 @@ void Game::LoadTestbed() noexcept
 	testbed_dispensers::PlaceGrid(middle);
 
 	// The testbed comes with its window of scenarios to try out on it
-	if (Locator::debugGui::has_value())
+	if (Locator::debugGui::has_value() && _testbedWindow)
 	{
 		Locator::debugGui::value().OpenWindow(debug::gui::k_TestbedScenariosWindow);
 	}
@@ -2714,10 +3293,22 @@ void Game::LoadTestbed() noexcept
 
 void Game::PrepareNewLand()
 {
-	// The last land's scripts let go of what they held: what they made goes, everything else goes back to the game
+	// The player's creature is kept with its mind and body before anything of the land goes, for a later land's script
+	// to load it again; and the players keep what is theirs rather than the land's, such as their alignment
+	if (Locator::creatureCarryOverSystem::has_value())
+	{
+		Locator::creatureCarryOverSystem::value().KeepPlayersCreature();
+		Locator::creatureCarryOverSystem::value().Reset();
+	}
+	if (Locator::playerSystem::has_value())
+	{
+		Locator::playerSystem::value().KeepForNextLand();
+	}
+	// The last land's scripts forget what they held: the land's objects go with it before anything could be let go back
+	// into the game
 	if (Locator::scriptObjects::has_value())
 	{
-		Locator::scriptObjects::value().Reset();
+		Locator::scriptObjects::value().ClearForNewLand();
 	}
 	// A new land has no weather of the last one, and none of its script's fades, cinema bars or clipping
 	if (Locator::weatherSystem::has_value())
@@ -2729,17 +3320,25 @@ void Game::PrepareNewLand()
 	Locator::cinematicDirectorSystem::value().Reset();
 	Locator::cameraHelpSystem::value().Get().ResetForNewLand();
 	Locator::influenceSystem::value().Reset();
-	// Nor its creatures' footprints
+	// Nor its creatures' footprints, nor a scare of its fish
 	Locator::footprintSystem::value().Reset();
+	Locator::fishFarmSystem::value().Reset();
 	// Nor its miracles, nor their particle effects, nor its fires
 	Locator::magicSystem::value().Reset();
 	Locator::miracleFxSystem::value().Reset();
 	Locator::fireSystem::value().Reset();
+	Locator::creatureFightSystem::value().Reset();
 	Locator::explosionSystem::value().Reset();
 	Locator::magicSystem::value().SetIgnoreInfluence(false);
 	Locator::animalSystem::value().Reset();
+	if (Locator::animatedStaticSystem::has_value())
+	{
+		Locator::animatedStaticSystem::value().Reset();
+	}
 	Locator::magicShieldSystem::value().Reset();
 	Locator::forestSystem::value().Reset();
+	// Nor its fireflies, nor what they give
+	Locator::fireflySystem::value().Reset();
 	Locator::reactionSystem::value().Reset();
 	Locator::teleportSystem::value().Reset();
 	Locator::gestureEvents::value().Reset();
@@ -2760,8 +3359,11 @@ void Game::PrepareNewLand()
 		Locator::handGrabSystem::value().Reset();
 	}
 
+	// The sky goes on as it was: it is kept while every entity goes, and made again after
+	Locator::skySystem::value().KeepForNextLand();
 	// Reset everything. Deletes all entities and their components
 	Locator::entitiesRegistry::value().Reset();
+	Locator::skySystem::value().Initialize();
 	// TODO(#661): split entities that are permanent from map entities and move hand and camera to init
 	// We need a hand for the player
 	Locator::handSystem::value().Initialize();
@@ -2775,7 +3377,7 @@ void Game::PrepareNewLand()
 
 void Game::StartNewLand()
 {
-	_lastGameLoopTime = std::chrono::steady_clock::now();
+	_lastGameLoopTime = machine_clock::Ticks();
 	_turnDeltaTime = 0ns;
 	// The game starts running, as Black & White does
 	Locator::time::value().StartGameClock(false);
@@ -2789,14 +3391,36 @@ void Game::StartNewLand()
 	if (!_gameMusic)
 	{
 		_gameMusic = std::make_unique<audio::GameMusic>();
+		audio::GameMusic::RegisterBanks();
 	}
 	_gameMusic->Reset();
+}
+
+void Game::AskNewGameChoice()
+{
+	// Every new game starts with nothing skipped, and only a returning player is asked
+	Locator::tutorialSkipSystem::value().Set({});
+	const auto& profiles = Locator::playerProfileSystem::value();
+	if (!new_game_choice::AsksAtNewGame(profiles.GetProfileCount(), profiles.CurrentProfileHasCreature()) || !_interface)
+	{
+		return;
+	}
+	// The game waits, paused, for the answer
+	Locator::time::value().SetPaused(true);
+	_interface->ShowSkipBox();
 }
 
 void Game::HandleInterfaceAction()
 {
 	using Action = gui::GameMenu::Action;
 	const auto action = _interface->TakeAction();
+
+	// The answer to the start-of-game question tells the story what to skip, and the game goes on
+	if (const auto answer = _interface->TakeSkipBoxAnswer(); answer.has_value())
+	{
+		Locator::tutorialSkipSystem::value().Set(new_game_choice::SkipFor(*answer));
+		Locator::time::value().SetPaused(false);
+	}
 
 	// The settings the player changes take effect at once
 	if (_interface->TakeSettingsChanged())
@@ -2852,6 +3476,7 @@ void Game::LoadLandscape(const std::filesystem::path& path)
 	{
 		throw std::runtime_error("Could not find landscape " + path.generic_string());
 	}
+	LoadTimer timer(fmt::format("landscape {}", path.stem().string()));
 	InitializeLevel(fixedName);
 	SetUpLandscape();
 }
@@ -2867,9 +3492,6 @@ void Game::SetUpLandscape()
 	// There is always a player active
 	Locator::playerSystem::value().AddPlayer(ecs::archetypes::PlayerArchetype::Create(PlayerNames::PLAYER_ONE));
 
-	// There is always at least one player active.
-	ecs::archetypes::PlayerArchetype::Create(PlayerNames::PLAYER_ONE);
-
 	Locator::cameraBookmarkSystem::value().Initialize();
 	Locator::playerSystem::value().RegisterPlayers();
 	if (Locator::cameraPathSystem::value().IsPathing())
@@ -2883,9 +3505,10 @@ void Game::SetTime(float time) noexcept
 	Locator::skySystem::value().SetTime(time);
 }
 
-void Game::RequestScreenshot(const std::filesystem::path& path) noexcept
+void Game::RequestScreenshot(const std::filesystem::path& path, bool hideDebugGui) noexcept
 {
 	_requestScreenshot = std::make_pair(_frameCount, path);
+	_screenshotHidesDebugGui = hideDebugGui;
 }
 
 void Game::LoadHandAnimation()
@@ -2948,35 +3571,46 @@ void Game::LoadCreatureRigs()
 		{
 			return;
 		}
+		// Only the header of the species' animations is read now, for which species they are; the rest when the species
+		// is first wanted
 		pack::PackFile pack;
-		if (pack.ReadFile(*fileSystem.GetData(path)) != pack::PackResult::Success || !pack.HasBlock("Creature"))
+		const auto stream = fileSystem.GetData(path);
+		const auto block =
+		    pack.ReadFile(*stream, {"Creature"}) == pack::PackResult::Success ? pack.GetUnreadBlock("Creature") : std::nullopt;
+		if (!block.has_value())
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Unable to read the Creature block of {}", path.string());
 			return;
 		}
-		const auto& block = pack.GetBlock("Creature");
-		if (block.size() < sizeof(morph::MorphHeader))
+		if (block->size < sizeof(morph::MorphHeader))
 		{
 			return;
 		}
 		// The species is the one the base mesh named in the header is of
 		morph::MorphHeader header {};
-		std::memcpy(&header, block.data(), sizeof(header));
+		stream->clear();
+		stream->seekg(static_cast<std::streamoff>(block->offset));
+		stream->read(reinterpret_cast<char*>(&header), sizeof(header));
 		const auto species = creature::GetSpeciesFromMeshName(header.baseMeshName.data());
-		if (species == CreatureType::Unknown)
+		if (!*stream || species == CreatureType::Unknown)
 		{
 			return;
 		}
-		try
-		{
-			rigs.Load(creature::GetRigId(species), resources::CreatureRigLoader::FromBufferTag {}, block, specDirectory,
-			          meshDirectory);
-			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loaded the creature animations of {}", path.string());
-		}
-		catch (std::runtime_error& err)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}: {}", path.string(), err.what());
-		}
+		rigs.Register(
+		    creature::GetRigId(species),
+		    [path, block = *block, specDirectory, meshDirectory] {
+			    const auto file = Locator::filesystem::value().GetData(path);
+			    std::vector<uint8_t> bytes(block.size);
+			    file->seekg(static_cast<std::streamoff>(block.offset));
+			    file->read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+			    if (!*file)
+			    {
+				    throw std::runtime_error("Unable to read the Creature block of " + path.string());
+			    }
+			    return resources::CreatureRigLoader {}(resources::CreatureRigLoader::FromBufferTag {}, bytes, specDirectory,
+			                                           meshDirectory);
+		    },
+		    block->size);
 	});
 }
 
@@ -3008,6 +3642,15 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 			_handDistance = _handHoverZoomer.GetValue();
 		}
 		handTransform.position = eye + _handRayDirection * _handDistance;
+		return;
+	}
+
+	// Tapping a house it knocked on, the hand stays where it knocked
+	if (_handKnocking)
+	{
+		_handPosition = _handKnock->point;
+		_handCrossFade.Update(deltaSeconds);
+		handTransform.position = _handCrossFade.Apply(_handPosition);
 		return;
 	}
 
@@ -3095,6 +3738,46 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 	_handPosition = eye + _handRayDirection * _handDistance;
 	_handCrossFade.Update(deltaSeconds);
 	handTransform.position = _handCrossFade.Apply(_handPosition);
+}
+
+void Game::UpdateHandKnock(const ecs::components::Transform& handTransform)
+{
+	if (!Locator::abodeKnockSystem::has_value())
+	{
+		return;
+	}
+	auto& knocks = Locator::abodeKnockSystem::value();
+	// The houses' read-out of their people runs by the frame
+	knocks.Update(Locator::time::value().GetFrameRealTime());
+	// A knock while the tap plays doesn't start it over, the hand already being where it knocked
+	if (knocks.TakeHandKnock())
+	{
+		if (_handKnock.has_value())
+		{
+			_handKnock->point = _handPosition;
+		}
+		else
+		{
+			_handKnock = HandKnock {.point = _handPosition};
+		}
+	}
+	// Holding something comes first; the tap starts over once the hand lets go
+	bool holds = magic::HandHoldPoser::Find().has_value();
+	if (!holds && Locator::handGrabSystem::has_value())
+	{
+		holds = Locator::handGrabSystem::value().GetHeldPose().has_value();
+	}
+	if (holds && _handKnock.has_value())
+	{
+		_handKnock->time = std::chrono::microseconds::zero();
+	}
+	const bool knocking = _handKnock.has_value() && !holds;
+	// Starting and ending the tap, the hand fades from where it was drawn
+	if (knocking != _handKnocking)
+	{
+		_handCrossFade.Start(handTransform.position);
+	}
+	_handKnocking = knocking;
 }
 
 void Game::UpdateHandNavigation(const ecs::components::Transform& handTransform)
@@ -3188,6 +3871,11 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 	}
 	_handUpWasHeld = _handCameraState;
 
+	// Tapping a house, the hand stands straight up
+	if (_handKnocking)
+	{
+		_handUp.Reset(glm::vec3(0.0f, 1.0f, 0.0f));
+	}
 	const auto up = _handUp.GetValue();
 	const auto onLevelLand = TurnToHeading(facingCamera, cameraHeading, _handHeading);
 	handTransform.rotation = glm::length(up) > 0.0f ? StandOnSlope(onLevelLand, _handHeading, up) : onLevelLand;
@@ -3271,10 +3959,12 @@ void Game::PlayHandGrabSound()
 			const auto angle = Locator::gameRandom::value().CrtRandom(0.0f, glm::two_pi<float>());
 			Locator::waterRingSystem::value().Add(
 			    water_rings::HandSplash(glm::vec2(position.x, position.z), angle, FrameLandLight(255)));
+			// The fish near where the hand went in dart away
+			Locator::fishFarmSystem::value().Scare({position.x, k_HandSplashHeight, position.z});
 		}
 		// G_HandInWater_01 to _10 in turn, on the water's surface where the hand went in
 		const auto id = fmt::format("InGame.sad/{}", 99 + _handInWaterSample);
 		_handInWaterSample = (_handInWaterSample + 1) % 10;
-		audio.PlaySoundEffect(entt::hashed_string(id.c_str()), glm::vec3(position.x, 0.2f, position.z));
+		audio.PlaySoundEffect(entt::hashed_string(id.c_str()), glm::vec3(position.x, k_HandSplashHeight, position.z));
 	}
 }

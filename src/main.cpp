@@ -67,12 +67,24 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("screenshot-path", "Path of the request a screenshot of the backbuffer.", cxxopts::value<std::filesystem::path>()->default_value("screenshot.png"))
 		("frame-stats", "Log the average and 95th percentile frame time and the profiler stages every so many frames (0 for never).", cxxopts::value<uint32_t>()->default_value("0"))
 		("frame-stats-views", "With --frame-stats, also profile and log the GPU time of each render view.")
+		("pre-intro", "Play the pre-intro film at start-up, as the game does on a first run.")
+		("skip-logos", "Leave out the logo pictures at start-up.")
+		("play-video", "Play a full-screen video once the land is loaded: intro, fall (the falling spell, which needs the player's creature) or a path such as Data/logo.bik.", cxxopts::value<std::string>()->default_value(""))
 		("scenario", "Start on the testbed and run the testbed scenario of this id, such as benchmark.creatures_100.", cxxopts::value<std::string>())
 		("benchmark-warmup", "With --scenario, the frames a benchmark's crowd settles for once spawned, before it is measured.", cxxopts::value<uint32_t>()->default_value("120"))
 		("benchmark-frames", "With --scenario, the frames of a benchmark measured.", cxxopts::value<uint32_t>()->default_value("600"))
+		("scenario-hide-window", "With --scenario, keep the testbed's window of scenarios closed, so the view is clear.")
 		("benchmark-out", "With --scenario, where a benchmark writes its results (with .json and .csv after it); the game quits once they are written.", cxxopts::value<std::string>())
 		("crash-dialogs", "Show the system's and C runtime's crash dialogs (Abort/Retry/Ignore) instead of writing a crash report to crashes/ and exiting.")
+		("seed", "Start every random number the game draws from this seed and pin the date the game reads (1 January 2001), so that two runs of the same scenario with a fixed frame time and the same input go the same way.", cxxopts::value<uint32_t>())
 	;
+#if defined(OPENBLACK_INSPECTOR)
+	options.add_options()
+		("inspect-port", "Start the debug inspector on this port of 127.0.0.1 (0 for any free port), for agents and tools to query and control the game. The player's mouse and keyboard are kept out while a client is connected; Ctrl+Alt+Shift+F12 takes the game back.", cxxopts::value<uint16_t>())
+		("inspect-lock-input", "With --inspect-port, keep the player's mouse and keyboard out from the start, as for a headless scenario run.")
+		("inspect-allow-player-input", "With --inspect-port, never keep the player's mouse and keyboard out.")
+		("screenshot-root", "Where the inspector keeps pictures by feature, with their catalogue (default OPENBLACK_SCREENSHOT_ROOT, or E:/openblack/screenshots when E: is there).", cxxopts::value<std::string>());
+#endif
 	// clang-format on
 
 	try
@@ -180,6 +192,11 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			args.gamePath = result["game-path"].as<std::string>();
 		}
 
+		if (result.count("seed") != 0)
+		{
+			args.seed = result["seed"].as<uint32_t>();
+		}
+
 		if (result.count("screenshot-frame") != 0)
 		{
 			args.requestScreenshot = std::make_pair(result["screenshot-frame"].as<uint32_t>(),
@@ -200,6 +217,27 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.startTestbed = result.count("testbed") != 0;
 		args.frameStatsInterval = result["frame-stats"].as<uint32_t>();
 		args.frameStatsViews = result.count("frame-stats-views") != 0;
+		args.playVideo = result["play-video"].as<std::string>();
+		args.preIntro = result.count("pre-intro") != 0;
+		args.skipLogos = result.count("skip-logos") != 0;
+#if defined(OPENBLACK_INSPECTOR)
+		if (result.count("inspect-port") != 0)
+		{
+			args.inspectPort = result["inspect-port"].as<uint16_t>();
+		}
+		if (result.count("screenshot-root") != 0)
+		{
+			args.screenshotRoot = std::filesystem::path(result["screenshot-root"].as<std::string>());
+		}
+		if (result.count("inspect-lock-input") != 0)
+		{
+			args.inspectInputLock = openblack::input::LockMode::Locked;
+		}
+		else if (result.count("inspect-allow-player-input") != 0)
+		{
+			args.inspectInputLock = openblack::input::LockMode::Unlocked;
+		}
+#endif
 		if (result.count("scenario") != 0)
 		{
 			args.scenario = openblack::ScenarioRequest {
@@ -207,6 +245,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			    .warmUpFrames = result["benchmark-warmup"].as<uint32_t>(),
 			    .frames = std::max<uint32_t>(result["benchmark-frames"].as<uint32_t>(), 1),
 			};
+			args.scenario->hideWindow = result.count("scenario-hide-window") != 0;
 			if (result.count("benchmark-out") != 0)
 			{
 				args.scenario->results = std::filesystem::path(result["benchmark-out"].as<std::string>());
