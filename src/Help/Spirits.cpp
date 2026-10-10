@@ -21,6 +21,8 @@
 
 #include <HelpDudeFile.h>
 
+#include "Common/ModelInverseSquareRoot.h"
+
 namespace openblack::help::spirits
 {
 
@@ -335,38 +337,12 @@ void RotateX(glm::mat3& m, double c, double s)
 	TurnRowPair(m, 1, 2, c, -s);
 }
 
-/// The game's table-driven inverse square root: a guess from a 128-entry table of the mantissa, then one Newton step
-float InverseSquareRoot(float value)
-{
-	static const std::array<uint8_t, 128> k_Table = [] {
-		std::array<uint8_t, 128> table {};
-		for (uint32_t i = 0; i < table.size(); ++i)
-		{
-			const float x = std::bit_cast<float>((i | 0x1F80u) << 17);
-			const float y = 1.0f / std::sqrt(x);
-			table.at(i) = static_cast<uint8_t>((std::bit_cast<uint32_t>(y) + 0x2000u) >> 15);
-		}
-		table[0x40] = 0xFF;
-		return table;
-	}();
-	const auto bits = std::bit_cast<uint32_t>(value);
-	const uint32_t exponent = ((bits >> 23) & 0xFFu) << 22;
-	const uint32_t guess =
-	    ((0x5F000000u - exponent) & 0xFF800000u) | (static_cast<uint32_t>(k_Table.at((bits >> 17) & 0x7Fu)) << 15);
-	const float y = std::bit_cast<float>(guess);
-	float r = value * y;
-	r = r * y;
-	r = 3.0f - r;
-	r = r * y;
-	return r * 0.5f;
-}
-
 /// Each row made unit length with the game's inverse square root
 void NormaliseRows(glm::mat3& m)
 {
 	for (int row = 0; row < 3; ++row)
 	{
-		m[row] *= InverseSquareRoot(glm::dot(m[row], m[row]));
+		m[row] *= gutils::ModelInverseSquareRoot(glm::dot(m[row], m[row]));
 	}
 }
 
@@ -1624,9 +1600,9 @@ void AdvisorSpirit::UpdateAnimStack(float dt, bool sfx)
 {
 	_gimme = false;
 	const Queries& q = _control.GetQueries();
-	// IsTalking, the sentence check, the times and the lip sync key are audio::advisor's (LipSyncFrame); so is the
-	// stop of a sentence whose position is still < 0 past 0.5 s
-	if (const std::optional<LipSyncFrame> lip = q.lipSync ? q.lipSync(_index) : std::nullopt; lip)
+	// Whether a line is being said, its time and the mouth's weights come from the voice, which also stops a line
+	// that has not started playing half a second after it should have
+	if (const std::optional<LipSyncFrame> lip = q.lipSync ? q.lipSync(_index, dt) : std::nullopt; lip)
 	{
 		if (lip->playing)
 		{
@@ -1841,8 +1817,12 @@ void AdvisorSpirit::UpdateMotion(float dt, bool focus, float zMin, bool sfx)
 		}
 	}
 
-	// 3. how close the spirit comes
+	// 3. its line starts if its delay is over, then how close the spirit comes
 	const Queries& q = _control.GetQueries();
+	if (q.updateSentence)
+	{
+		q.updateSentence(_index);
+	}
 	const bool talked = q.talkedRecently ? q.talkedRecently(_index) : (q.isTalking && q.isTalking(_index));
 	// four rules in order, the last that applies wins
 	if (talked)
@@ -2476,9 +2456,9 @@ std::array<TrailVertex, 2 * Trail::k_Points> AdvisorSpirit::TrailStrip() const
 	return strip;
 }
 
-void AdvisorSpirit::FlushTags()
+void AdvisorSpirit::FlushTags(float before)
 {
-	for (; _nextTag < _tags.size(); ++_nextTag)
+	for (; _nextTag < _tags.size() && _tags[_nextTag].time < before; ++_nextTag)
 	{
 		FireTag(_tags[_nextTag], false, true);
 	}
@@ -3003,9 +2983,9 @@ void AdvisorSpiritController::ProcessTurn()
 	}
 }
 
-void AdvisorSpiritController::StopSentence(int dude)
+void AdvisorSpiritController::StopSentence(int dude, float before)
 {
-	_dudes[dude]->FlushTags();
+	_dudes[dude]->FlushTags(before);
 }
 
 void AdvisorSpiritController::SetSentenceTags(int dude, std::vector<AudioTag> tags)
@@ -3095,7 +3075,11 @@ void AdvisorSpiritController::Process(float dt, float focusBias)
 			d.UpdateMotion(dt, focus == i, 0.0f, true);
 			d.UpdateHead(dt);
 		}
-		// else only the sentence update (audio::advisor)
+		else if (_queries.updateSentence)
+		{
+			// At home hovering, only its line is looked at
+			_queries.updateSentence(i);
+		}
 	}
 	for (int i = 0; i < k_Dudes; ++i)
 	{

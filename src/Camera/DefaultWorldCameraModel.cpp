@@ -34,6 +34,7 @@
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
@@ -442,6 +443,9 @@ void DefaultWorldCameraModel::UpdateModeDragging(const Camera& camera, glm::u16v
 	{
 		return;
 	}
+	// Counted once for each time the controls are handled
+	SendHelpEvents(camera_help::events::LandDragEvents(_helpControls));
+	_helpControls = {};
 
 	// The camera stops short of land in its way, or of the sea
 	auto stopped = *place;
@@ -566,22 +570,27 @@ void DefaultWorldCameraModel::UpdateFocusDistance()
 	        .value_or(glm::max(10.0f, _averageIslandDistance));
 }
 
-bool DefaultWorldCameraModel::ConstrainZones(glm::vec3 originAtFrameStart)
+bool DefaultWorldCameraModel::ConstrainZones(glm::vec3 originAtFrameStart, glm::vec3 listener)
 {
 	if (!Locator::cameraZoneSystem::has_value() || !Locator::terrainSystem::has_value())
 	{
 		return false;
 	}
-	const auto& zones = Locator::cameraZoneSystem::value().GetZones();
+	auto& zoneSystem = Locator::cameraZoneSystem::value();
+	const auto& zones = zoneSystem.GetZones();
 	bool adjusted = false;
-	// Outside the fence it is put back inside, what it looks at moving with it
+	// Outside the fence it is put back inside, what it looks at moving with it; turned by a drag round the edge of the
+	// screen, it is put further in, and goes on turning
+	const bool edgeTurning = _dragging && _drag.GetMode() == camera_drag::DragMode::EdgeRotate;
 	if (const auto pushed = camera_zones::PushInsideFence(zones.fence, zones.fenceOn, originAtFrameStart, _targetOrigin,
-	                                                      _targetFocus, camera_zones::k_SearchRadius);
+	                                                      _targetFocus, camera_zones::SearchRadius(edgeTurning));
 	    pushed.has_value())
 	{
 		_targetOrigin += *pushed;
 		_targetFocus += *pushed;
 		adjusted = true;
+		zoneSystem.FenceHit(_targetOrigin, listener);
+		_heldBack = _heldBack || !edgeTurning;
 	}
 	adjusted |= ConstrainAltitude();
 	// Above its height limit it slides down the line it looks along
@@ -675,7 +684,7 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 		_targetOrigin = origin;
 	}
 
-	originHasBeenAdjusted |= ConstrainZones(originAtFrameStart);
+	originHasBeenAdjusted |= ConstrainZones(originAtFrameStart, camera.GetOrigin());
 
 	return ComputeUpdateReturnInfo(originHasBeenAdjusted, camera.GetInterpolatorTime());
 }
@@ -838,6 +847,36 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 		std::ignore = HandleDrag(false);
 	}
 
+	// The help's profile weighs the controls as they were asked for, before the features take any away
+	const bool gripping = _handPosition.has_value() && actionSystem.Get(input::BindableActionMap::MOVE);
+	_helpControls = {
+	    .features = _features,
+	    .turn = _rotateAroundDelta.y,
+	    .tilt = _rotateAroundDelta.x,
+	    .zoom = _rotateAroundDelta.z,
+	    .move = _keyBoardMoveDelta,
+	    .landGripped = gripping,
+	    .rotateAroundMouse = rotateAroundMouse,
+	    .bothButtons = twoButtons,
+	    .mouseDelta = glm::ivec2(actionSystem.GetMouseDelta()),
+	};
+	_helpEvents = {};
+	// The camera takes a waiting double click once double clicks are allowed: it is counted here and flies the camera
+	// below if the hand is on the land
+	const bool doubleClicked =
+	    (_features & camera_help::feature::k_DoubleClick) != 0 && Locator::gameActionSystem::value().TakeDoubleClick();
+	// A drag of the land given up too far ahead takes every control away until the buttons are let go
+	if (!_dragGivenUp)
+	{
+		_helpEvents.Add(camera_help::events::InputEvents(_helpControls));
+		// A double click flies the camera, unless anything else is asked for
+		if (doubleClicked && !camera_help::events::AnyInput(_helpControls) && Locator::pickingSystem::has_value())
+		{
+			const auto& pick = Locator::pickingSystem::value().GetPick();
+			_helpEvents.Add(camera_help::events::DoubleClickEvents(_features, pick.object.has_value(), pick.land.has_value()));
+		}
+	}
+
 	// Without zooming the zoom does nothing, without turning nothing turns, without tilting nothing tilts unless the
 	// camera tilts itself, and without strafing the movement keys do nothing
 	if ((_features & camera_help::feature::k_Zoom) == 0)
@@ -883,9 +922,7 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	}
 
 	_modePrev = _mode;
-	// The camera takes a waiting double click once double clicks are allowed, and flies if the hand is on the land
-	const bool doubleClicked =
-	    (_features & camera_help::feature::k_DoubleClick) != 0 && Locator::gameActionSystem::value().TakeDoubleClick();
+	// The double click taken above flies the camera if the hand is on the land
 	if (_handPosition.has_value() && doubleClicked)
 	{
 		_mode = Mode::FlyingToPoint;
@@ -906,6 +943,47 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	{
 		_mode = Mode::Cartesian;
 	}
+
+	// Put back inside the fence, nothing the player does moves the camera, or counts towards the help, until every
+	// control is let go
+	if (_heldBack)
+	{
+		if (!AnyControlHeld())
+		{
+			_heldBack = false;
+		}
+		else
+		{
+			_rotateAroundDelta = glm::vec3();
+			_keyBoardMoveDelta = glm::vec2();
+			std::ignore = HandleDrag(false);
+			_mode = Mode::Cartesian;
+			_helpEvents = {};
+		}
+	}
+	SendHelpEvents(_helpEvents);
+}
+
+bool DefaultWorldCameraModel::AnyControlHeld() const
+{
+	using input::BindableActionMap;
+	const auto& actionSystem = Locator::gameActionSystem::value();
+	return actionSystem.GetAny(BindableActionMap::MOVE, BindableActionMap::ROTATE_AROUND_MOUSE_ON,
+	                           BindableActionMap::ROTATE_LEFT, BindableActionMap::ROTATE_RIGHT, BindableActionMap::TILT_UP,
+	                           BindableActionMap::TILT_DOWN, BindableActionMap::MOVE_FORWARDS,
+	                           BindableActionMap::MOVE_BACKWARDS, BindableActionMap::MOVE_LEFT, BindableActionMap::MOVE_RIGHT,
+	                           BindableActionMap::ZOOM_IN, BindableActionMap::ZOOM_OUT) ||
+	       actionSystem.Get(input::UnbindableActionMap::TWO_BUTTON_CLICK) || actionSystem.GetMouseWheelDelta() != 0.0f;
+}
+
+void DefaultWorldCameraModel::SendHelpEvents(camera_help::events::EventSet events)
+{
+	if (events.Empty() || !Locator::helpProfileSystem::has_value())
+	{
+		return;
+	}
+	auto& profile = Locator::helpProfileSystem::value();
+	events.ForEach([&profile](uint32_t event) { profile.Trigger(event); });
 }
 
 DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
@@ -960,6 +1038,7 @@ DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
 		// The cursor is held on the ring, and the camera turns about its focus by the angle swept round the middle
 		const auto step = camera_drag::EdgeRotate(cursor, _ringCursor, screenSize, ViewHeight(screenSize));
 		_ringCursor = step.cursor;
+		_helpEvents.Add(camera_help::events::EdgeTurnEvents(_helpControls, step.angle));
 		if ((_features & camera_help::feature::k_Rotate) != 0)
 		{
 			_rotateAroundDelta.y += step.angle * static_cast<float>(screenSize.x) / glm::pi<float>();
@@ -971,6 +1050,7 @@ DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
 	case DragMode::PitchFromTop:
 	{
 		const auto fov = Locator::camera::has_value() ? Locator::camera::value().GetHorizontalFieldOfView() : 0.0f;
+		_helpEvents.Add(camera_help::events::TiltDragEvents(_helpControls));
 		if ((_features & camera_help::feature::k_Pitch) != 0)
 		{
 			_rotateAroundDelta.x += camera_drag::PitchStep(actionSystem.GetMouseDelta().y, screenSize.y, fov) / k_PitchPerInput;
@@ -1002,6 +1082,12 @@ CameraModel::HandCues DefaultWorldCameraModel::GetHandCues() const
 
 void DefaultWorldCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus)
 {
+	// A flight ending outside the fence ends where the line from there to what it looks at meets the fence
+	if (Locator::cameraZoneSystem::has_value())
+	{
+		const auto& zones = Locator::cameraZoneSystem::value().GetZones();
+		origin = camera_zones::FlightOriginInsideFence(zones.fence, zones.fenceOn, origin, focus);
+	}
 	_flightPath = CharterFlight(origin, focus, _currentOrigin, k_FlightHeightFactor);
 	// One of four wooshes, picked by the clock, centred on the listener
 	static constexpr auto k_WooshingNoiseIds = std::array<audio::SoundId, 4> {

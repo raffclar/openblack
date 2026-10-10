@@ -46,8 +46,7 @@ std::optional<CameraView> ZoomToPlaces::PressTemple(std::chrono::milliseconds no
                                                     glm::vec3 lookedAtGround, std::optional<glm::vec3> templeGround,
                                                     glm::vec3 realmGround) noexcept
 {
-	const bool doubleTap = _lastTap.has_value() && now - *_lastTap <= k_DoubleTapTime;
-	if (!doubleTap)
+	if (!IsDoubleTap(now))
 	{
 		// A single tap keeps the heading and what is looked at, from a pleasing height and angle
 		_lastTap = now;

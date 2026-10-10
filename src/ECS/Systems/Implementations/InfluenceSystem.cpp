@@ -26,6 +26,7 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
+#include "Camera/CameraZones.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Abode.h"
@@ -38,6 +39,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -631,9 +633,15 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 	{
 		return 0.0f;
 	}
+	// The influence the scripts give (and take away) only counts inside the camera's fence
+	const bool scriptsCount = !Locator::cameraZoneSystem::has_value() || [&position]() {
+		const auto& zones = Locator::cameraZoneSystem::value().GetZones();
+		const auto metres = map_coords::ToMetres(position);
+		return camera_zones::ScriptInfluenceCounts(zones.fence, zones.fenceOn, glm::vec3(metres.x, 0.0f, metres.y));
+	}();
 	bool anti = false;
 	registry.Each<const InfluenceSource, const Transform>([&](const InfluenceSource& source, const Transform& transform) {
-		anti = anti || (source.anti && source.player == player &&
+		anti = anti || (scriptsCount && source.anti && source.player == player &&
 		                distanceTo(SourcePosition(registry, source, transform)) <= source.radius);
 	});
 	if (anti)
@@ -661,7 +669,8 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 	    });
 	// And any other source of the player's, where it reaches
 	registry.Each<const InfluenceSource, const Transform>([&](const InfluenceSource& source, const Transform& transform) {
-		if (source.player == player && !source.anti && distanceTo(SourcePosition(registry, source, transform)) < source.radius)
+		if (scriptsCount && source.player == player && !source.anti &&
+		    distanceTo(SourcePosition(registry, source, transform)) < source.radius)
 		{
 			sum += source.radius;
 		}

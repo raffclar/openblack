@@ -33,9 +33,9 @@ struct Rolls
 	}
 };
 
-WalkInputs Walker(float speed, bool female = false)
+WalkInputs Walker(int32_t speed, bool female = false)
 {
-	return {.female = female, .speed = speed, .walkMax = 3.0f, .runMax = 4.0f};
+	return {.female = female, .speed = speed, .walkMax = 1966, .runMax = 2621};
 }
 } // namespace
 
@@ -58,18 +58,20 @@ TEST(VillagerAnimation, StatesChooseTheirClipsAsTheGameDoes)
 
 TEST(VillagerAnimation, VillagersWalkRunOrSprintBySpeedAndSex)
 {
-	EXPECT_EQ(WalkClip(Walker(2.0f)), AnimId::PWalkMan);
-	EXPECT_EQ(WalkClip(Walker(3.0f)), AnimId::PWalkMan);
-	EXPECT_EQ(WalkClip(Walker(3.5f)), AnimId::PRunMan);
-	EXPECT_EQ(WalkClip(Walker(5.0f)), AnimId::PSprintRunMan);
-	EXPECT_EQ(WalkClip(Walker(2.0f, true)), AnimId::PWalkWoman);
-	EXPECT_EQ(WalkClip(Walker(3.5f, true)), AnimId::PRunWoman);
-	EXPECT_EQ(WalkClip(Walker(5.0f, true)), AnimId::PSprintRunWoman);
+	EXPECT_EQ(WalkClip(Walker(1311)), AnimId::PWalkMan);
+	EXPECT_EQ(WalkClip(Walker(1966)), AnimId::PWalkMan);
+	EXPECT_EQ(WalkClip(Walker(1967)), AnimId::PRunMan);
+	// A script's 0.4 metres a turn is right at the men's running limit: still a run
+	EXPECT_EQ(WalkClip(Walker(2621)), AnimId::PRunMan);
+	EXPECT_EQ(WalkClip(Walker(2622)), AnimId::PSprintRunMan);
+	EXPECT_EQ(WalkClip(Walker(1311, true)), AnimId::PWalkWoman);
+	EXPECT_EQ(WalkClip(Walker(2300, true)), AnimId::PRunWoman);
+	EXPECT_EQ(WalkClip(Walker(3277, true)), AnimId::PSprintRunWoman);
 }
 
 TEST(VillagerAnimation, TheHurtCrawlOrLimpUnlessAScriptMovesThem)
 {
-	auto in = Walker(2.0f);
+	auto in = Walker(1311);
 	in.life = 0.1f;
 	EXPECT_EQ(WalkClip(in), AnimId::PCrawlInjured);
 	in.life = 0.3f;
@@ -80,10 +82,10 @@ TEST(VillagerAnimation, TheHurtCrawlOrLimpUnlessAScriptMovesThem)
 
 TEST(VillagerAnimation, ALoadInTheArmsIsCarriedWalkingOrRunning)
 {
-	auto in = Walker(2.0f, true);
+	auto in = Walker(1311, true);
 	in.carried = CarriedObject::Wood;
 	EXPECT_EQ(WalkClip(in), AnimId::PCarryAxe);
-	in.speed = 5.0f;
+	in.speed = 3277;
 	EXPECT_EQ(WalkClip(in), AnimId::PCarryObjectRun);
 	// A saw, the ball and a hammer don't change the walk
 	in.carried = CarriedObject::Hammer;

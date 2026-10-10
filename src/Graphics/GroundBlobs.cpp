@@ -24,6 +24,11 @@ const glm::vec3 k_Offset = glm::normalize(glm::vec3(1.0f, 0.0f, 1.0f)) * 2.0f;
 constexpr float k_Behind = -0.02f;
 } // namespace
 
+std::span<const glm::mat4> FootBones(std::span<const glm::mat4> posed, std::span<const glm::mat4> rest)
+{
+	return !posed.empty() && posed.size() == rest.size() ? posed : rest;
+}
+
 glm::vec3 Fall(const glm::vec3& landNormal, float scale)
 {
 	const auto offset = k_Offset * scale;
