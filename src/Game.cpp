@@ -147,6 +147,7 @@
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
@@ -1221,6 +1222,11 @@ bool Game::GameLogicLoop() noexcept
 	if (Locator::scriptHighlightSystem::has_value())
 	{
 		Locator::scriptHighlightSystem::value().ProcessTurn();
+	}
+	// The help's count of what the player has done moves on a turn
+	if (Locator::helpProfileSystem::has_value())
+	{
+		Locator::helpProfileSystem::value().ProcessTurn();
 	}
 	// Then the physics, after the living, the fires, the reactions, the miracles and the particles have had their turn,
 	// so a body any of them sets moving this turn flies this turn: what was thrown, dropped, knocked or pushed flies,

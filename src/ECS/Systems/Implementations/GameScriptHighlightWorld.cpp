@@ -28,6 +28,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Graphics/Texture2D.h"
@@ -231,10 +232,12 @@ std::optional<Sprite> GameScriptHighlightWorld::GlowLook() const
 	};
 }
 
-void GameScriptHighlightWorld::HelpEvent(uint32_t /*event*/)
+void GameScriptHighlightWorld::HelpEvent(uint32_t event)
 {
-	// TODO(script-natives): the help system's profile of what the player has done and been told isn't in openblack yet;
-	// a tap is one of its events (see docs scripts/highlights.md)
+	if (Locator::helpProfileSystem::has_value())
+	{
+		Locator::helpProfileSystem::value().Trigger(event);
+	}
 }
 
 void GameScriptHighlightWorld::StartHelpScript(std::string_view name)

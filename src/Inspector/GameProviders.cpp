@@ -117,6 +117,7 @@
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
@@ -172,6 +173,7 @@
 #include "Help/AdvisorModel.h"
 #include "Help/AdvisorVoices.h"
 #include "Help/DialogueText.h"
+#include "Help/HelpProfile.h"
 #include "Help/Spirits.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
@@ -303,6 +305,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"tutorialSkipSystem", "players.new_game"},
     LocatorCoverage {"advisorSystem", "help.advisors"},
     LocatorCoverage {"helpTextSystem", "help.dialogue"},
+    LocatorCoverage {"helpProfileSystem", "help.profile"},
     LocatorCoverage {"helpSpeechSystem", "help.dialogue"},
     LocatorCoverage {"dialogueControlSystem", "help.dialogue"},
 };
@@ -1996,6 +1999,32 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 		                  }
 		                  return result;
 	                  }));
+	provider->Add(
+	    Query("profile",
+	          "The help's count of what the player has done: its clock, and each event's total, seconds since "
+	          "and rate, for the events that have happened",
+	          {}, ResultKind::List),
+	    Serve<Locator::helpProfileSystem>(
+	        "the help profile", [](const ecs::systems::HelpProfileSystemInterface& system, const QueryContext& /*c*/) -> Json {
+		        const auto& profile = system.Get();
+		        Json items = Json::array();
+		        for (uint32_t event = 0; event < help::profile::k_EventCount; ++event)
+		        {
+			        // A copy: reading the times may tidy them, and a query changes nothing
+			        auto count = profile.Count(event);
+			        if (count.Total() == 0)
+			        {
+				        continue;
+			        }
+			        items.push_back({{"event", event},
+			                         {"clock", profile.Clock()},
+			                         {"total", count.Total()},
+			                         {"seconds_since", count.SecondsSince(profile.Clock())},
+			                         {"per_second", count.PerSecond(profile.Clock())},
+			                         {"smoothed_rate", count.SmoothedRate()}});
+		        }
+		        return items;
+	        }));
 	return provider;
 }
 

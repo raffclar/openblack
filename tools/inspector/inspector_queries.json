@@ -1267,6 +1267,12 @@
   "query": "help.dialogue"
  },
  {
+  "description": "The help's count of what the player has done: its clock, and each event's total, seconds since and rate, for the events that have happened",
+  "kind": "list",
+  "parameters": [],
+  "query": "help.profile"
+ },
+ {
   "description": "Whether the game is paused, its turn, the frames served, its speed and any stepping",
   "kind": "object",
   "parameters": [],

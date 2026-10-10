@@ -126,6 +126,7 @@
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
@@ -164,6 +165,7 @@
 #include "Game.h"
 #include "Hand/HandClickRules.h"
 #include "Help/DialogueText.h"
+#include "Help/HelpProfile.h"
 #include "Help/ScriptSpirits.h"
 #include "Help/Spirits.h"
 #include "InfoConstants.h"
@@ -4867,28 +4869,34 @@ void GetDesire() // 234 GET_DESIRE
 	Pushf(0.0f);
 }
 
+/// The help profile's count of an event the script asks about, none (with an error) for a number it may not ask about
+help::profile::EventCount* ScriptHelpEvent()
+{
+	const auto event = Pop().intVal;
+	if (!help::profile::HelpProfile::ScriptMayAsk(event))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid event");
+		return nullptr;
+	}
+	return &Locator::helpProfileSystem::value().Get().Count(static_cast<uint32_t>(event));
+}
+
 void GetEventsPerSecond() // 235 GET_EVENTS_PER_SECOND
 {
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	auto* count = ScriptHelpEvent();
+	Pushf(count != nullptr ? count->PerSecond(Locator::helpProfileSystem::value().Get().Clock()) : 0.0f);
 }
 
 void GetTimeSince() // 236 GET_TIME_SINCE
 {
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	auto* count = ScriptHelpEvent();
+	Pushf(count != nullptr ? count->SecondsSince(Locator::helpProfileSystem::value().Get().Clock()) : 0.0f);
 }
 
 void GetTotalEvents() // 237 GET_TOTAL_EVENTS
 {
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto* count = ScriptHelpEvent();
+	Pushf(count != nullptr ? static_cast<float>(count->Total()) : 0.0f);
 }
 
 void UpdateSnapshot() // 238 UPDATE_SNAPSHOT

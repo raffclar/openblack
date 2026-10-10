@@ -135,6 +135,7 @@ class DanceSystemInterface;
 class WhaleSystemInterface;
 class VideoSystemInterface;
 class HelpTextSystemInterface;
+class HelpProfileSystemInterface;
 class AdvisorSystemInterface;
 class SoundTagSystemInterface;
 class RainSystemInterface;
@@ -275,6 +276,7 @@ struct Locator
 	using whaleSystem = entt::locator<ecs::systems::WhaleSystemInterface>;
 	using videoSystem = entt::locator<ecs::systems::VideoSystemInterface>;
 	using helpTextSystem = entt::locator<ecs::systems::HelpTextSystemInterface>;
+	using helpProfileSystem = entt::locator<ecs::systems::HelpProfileSystemInterface>;
 	using advisorSystem = entt::locator<ecs::systems::AdvisorSystemInterface>;
 	using soundTagSystem = entt::locator<ecs::systems::SoundTagSystemInterface>;
 	using rainSystem = entt::locator<ecs::systems::RainSystemInterface>;
