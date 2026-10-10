@@ -58,6 +58,8 @@ public:
 
 	/// The answer to a request: its shaped result, or why there is none
 	[[nodiscard]] QueryResult Answer(const Request& request) const;
+	/// Every query of every provider in full, as describe {"query"} gives each: what tools build their schemas from
+	[[nodiscard]] Json Catalogue() const;
 	/// The answer's line to a request's line, as the server passes them
 	[[nodiscard]] std::string Handle(std::string_view line) const;
 	/// The answer's line while the game is loading (a land, a scenario) and can't answer for its state: "ping" and

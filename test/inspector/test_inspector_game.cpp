@@ -8,10 +8,13 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <array>
+#include <map>
 #include <memory>
 #include <optional>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
@@ -354,6 +357,63 @@ TEST_F(InspectorRegistry, UnknownComponentsAndEntitiesAreExplained)
 	EXPECT_FALSE(_inspector.Answer(std::get<Request>(decoded)).Ok());
 	decoded = DecodeRequest(R"({"query": "ecs.entity", "params": {"id": 123456}})");
 	EXPECT_FALSE(_inspector.Answer(std::get<Request>(decoded)).Ok());
+}
+
+namespace
+{
+struct Cell
+{
+	float height {0.0f};
+	int32_t owner {0};
+};
+struct Holder
+{
+	std::vector<Cell> cells;
+	std::array<Cell, 2> pair {};
+	std::unordered_map<int32_t, float> weights;
+	std::map<std::string, Cell> named;
+	std::vector<std::vector<int32_t>> grid;
+	float scale {0.1f};
+};
+} // namespace
+
+// Containers are written as what they hold, briefly: lists as arrays, maps as their first entries, plain numbers as
+// numbers, floats in their shortest form; never as a type's name
+TEST(InspectorReflection, ContainersAreWrittenAsWhatTheyHold)
+{
+	entt::meta_ctx context;
+	reflection::Reflect<Cell>(context).Field<&Cell::height>("height").Field<&Cell::owner>("owner");
+	reflection::Reflect<Holder>(context)
+	    .Field<&Holder::cells>("cells")
+	    .Field<&Holder::pair>("pair")
+	    .Field<&Holder::weights>("weights")
+	    .Field<&Holder::named>("named")
+	    .Field<&Holder::grid>("grid")
+	    .Field<&Holder::scale>("scale");
+	Holder holder;
+	holder.cells = {{.height = 1.5f, .owner = 2}};
+	holder.pair = {Cell {.height = 0.1f, .owner = 1}, Cell {.height = 2.0f, .owner = 0}};
+	holder.weights = {{3, 0.25f}};
+	holder.named = {{"a", Cell {.height = 4.0f, .owner = 7}}};
+	holder.grid = {{1, 2}, {3}};
+	const auto json = reflection::ComponentToJson(context, entt::type_id<Holder>(), &holder);
+	EXPECT_EQ(json["cells"], Json::parse(R"([{"height": 1.5, "owner": 2}])"));
+	EXPECT_EQ(json["pair"], Json::parse(R"([{"height": 0.1, "owner": 1}, {"height": 2.0, "owner": 0}])"));
+	EXPECT_EQ(json["weights"], Json::parse(R"({"3": 0.25})"));
+	EXPECT_EQ(json["named"], Json::parse(R"({"a": {"height": 4.0, "owner": 7}})"));
+	EXPECT_EQ(json["grid"], Json::parse(R"([[1, 2], [3]])"));
+	// A float's shortest form, not its double's digits
+	EXPECT_EQ(json["scale"].dump(), "0.1");
+	EXPECT_EQ(Dump(json).find('<'), std::string::npos) << Dump(json);
+
+	// Long maps give their size and first entries
+	for (int32_t i = 0; i < 40; ++i)
+	{
+		holder.weights[i] = 1.0f;
+	}
+	const auto many = reflection::ComponentToJson(context, entt::type_id<Holder>(), &holder)["weights"];
+	EXPECT_EQ(many["size"], 40);
+	EXPECT_EQ(many["first"].size(), reflection::k_MostElements);
 }
 
 TEST(InspectorReflection, ShortTypeNames)

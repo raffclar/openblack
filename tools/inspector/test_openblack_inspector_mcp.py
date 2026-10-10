@@ -537,5 +537,52 @@ class ScreenshotTest(SessionBase):
         self.assertIn("older build", answer["error"])
 
 
+class SchemaTest(unittest.TestCase):
+    """Tools' parameters come from the game's own descriptions of its queries"""
+    BUILT_IN = {"describe", "writes"}
+
+    def test_every_tools_query_is_one_the_game_describes(self):
+        self.assertGreater(len(mcp.CATALOGUE), 100)
+        for tool in mcp.TOOLS:
+            if tool.get("query") and tool["query"] not in self.BUILT_IN:
+                self.assertIn(tool["query"], mcp.CATALOGUE, tool["name"])
+
+    def test_required_parameters_are_the_games(self):
+        for tool in mcp.TOOLS:
+            entry = mcp.CATALOGUE.get(tool.get("query"))
+            if entry is None:
+                continue
+            wanted = [parameter["name"] for parameter in entry["parameters"] if parameter.get("required")]
+            if entry.get("needs_near"):
+                wanted += ["near", "radius"]
+            self.assertEqual(sorted(tool["inputSchema"]["required"]), sorted(set(wanted)), tool["name"])
+            for parameter in entry["parameters"]:
+                self.assertIn(parameter["name"], tool["inputSchema"]["properties"], tool["name"])
+                self.assertIn(parameter["name"], tool["params"], tool["name"])
+
+    def test_the_sounds_near_a_point_need_the_point_and_radius(self):
+        self.assertEqual(sorted(mcp.TOOLS_BY_NAME["audio_sounds"]["inputSchema"]["required"]), ["near", "radius"])
+
+    def test_a_schema_from_a_description(self):
+        tool = {"name": "thing", "query": "x.thing", "params": ["legacy"],
+                "inputSchema": mcp.schema({"id": {"type": "integer", "description": "Mine"},
+                                           "wait": {"type": "boolean"}})}
+        entry = {"query": "x.thing", "needs_near": True, "parameters": [
+            {"name": "id", "type": "integer", "required": True, "description": "The game's"},
+            {"name": "at", "type": "point", "description": "Where"},
+            {"name": "frame", "type": "integer|object"}]}
+        mcp.schema_from_catalogue(tool, entry)
+        properties = tool["inputSchema"]["properties"]
+        self.assertEqual(properties["id"]["description"], "Mine")
+        self.assertEqual(properties["at"], {"type": "array", "items": {"type": "number"}, "description": "Where"})
+        self.assertEqual(properties["frame"]["type"], ["integer", "object"])
+        self.assertIn("wait", properties)
+        self.assertEqual(sorted(tool["inputSchema"]["required"]), ["id", "near", "radius"])
+        self.assertEqual(tool["params"], ["id", "at", "frame", "legacy"])
+
+    def test_a_missing_catalogue_is_empty(self):
+        self.assertEqual(mcp.read_catalogue(os.path.join(tempfile.gettempdir(), "no-such-catalogue.json")), {})
+
+
 if __name__ == "__main__":
     unittest.main()

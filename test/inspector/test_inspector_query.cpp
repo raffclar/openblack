@@ -363,3 +363,16 @@ TEST(Inspector, WhileLoadingOnlyWhatReadsNothingOfTheGameIsAnswered)
 
 	EXPECT_EQ(ask("not json")["ok"], false);
 }
+
+// The catalogue is every query in full, as tools build their schemas from it
+TEST(Inspector, TheCatalogueDescribesEveryQueryInFull)
+{
+	Inspector inspector;
+	inspector.Add(std::make_unique<FakeProvider>());
+	const auto catalogue = inspector.Catalogue();
+	ASSERT_EQ(catalogue.size(), 3u);
+	EXPECT_EQ(catalogue[0]["query"], "fake.one");
+	EXPECT_EQ(catalogue[0]["parameters"][0]["name"], "id");
+	EXPECT_EQ(catalogue[0]["parameters"][0]["required"], true);
+	EXPECT_EQ(catalogue[2]["needs_near"], true);
+}

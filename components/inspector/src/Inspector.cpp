@@ -94,6 +94,19 @@ void Inspector::Add(std::unique_ptr<ProviderInterface> provider)
 	_providers.push_back(std::move(provider));
 }
 
+Json Inspector::Catalogue() const
+{
+	Json queries = Json::array();
+	for (const auto& provider : _providers)
+	{
+		for (const auto& description : provider->Describe())
+		{
+			queries.push_back(ToJson(description, provider->Name()));
+		}
+	}
+	return queries;
+}
+
 ProviderInterface* Inspector::Find(std::string_view name) const
 {
 	const auto found = std::ranges::find_if(_providers, [name](const auto& each) { return each->Name() == name; });

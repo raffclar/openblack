@@ -650,6 +650,74 @@ GAME_TOOLS = [
                                "port": {"type": "integer"}}),
     },
 ]
+# The game's own descriptions of its queries (written by ctest's InspectorCoverage test from describe): every tool's
+# parameters, their types and which are required come from them, so that they can't drift from the game
+CATALOGUE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "inspector_queries.json")
+# How the game's parameter types are given to MCP
+PARAMETER_TYPES = {
+    "integer": {"type": "integer"},
+    "number": {"type": "number"},
+    "string": {"type": "string"},
+    "boolean": {"type": "boolean"},
+    "array": {"type": "array"},
+    "object": {"type": "object"},
+    "point": {"type": "array", "items": {"type": "number"}},
+}
+
+
+def read_catalogue(path=CATALOGUE_PATH):
+    """The game's queries by name, as describe gives them; empty if the file isn't there"""
+    try:
+        with open(path, encoding="utf-8") as file:
+            return {entry["query"]: entry for entry in json.load(file) if isinstance(entry, dict) and "query" in entry}
+    except (OSError, ValueError):
+        return {}
+
+
+def parameter_schema(parameter):
+    """A parameter of the game's description as a JSON schema"""
+    types = [PARAMETER_TYPES.get(name.strip(), {}) for name in str(parameter.get("type", "")).split("|")]
+    if len(types) == 1:
+        result = dict(types[0])
+    else:
+        result = {"type": [each["type"] for each in types if "type" in each]}
+    if parameter.get("description"):
+        result["description"] = parameter["description"]
+    return result
+
+
+def schema_from_catalogue(tool, entry):
+    """A tool's input schema from the game's description of its query: its parameters (a tool's own richer schema for
+    one is kept), which are required, and near/radius when the query needs them; with the tool's options for the
+    adapter itself (such as wait) kept"""
+    own = tool["inputSchema"].get("properties", {})
+    properties = {}
+    required = []
+    names = []
+    for parameter in entry.get("parameters", []):
+        name = parameter.get("name")
+        if not name:
+            continue
+        names.append(name)
+        generated = parameter_schema(parameter)
+        properties[name] = {**generated, **own[name]} if name in own else generated
+        if parameter.get("required"):
+            required.append(name)
+    if entry.get("needs_near"):
+        properties.update({key: own.get(key, value) for key, value in NEAR.items()})
+        required += [key for key in NEAR if key not in required]
+    for key, value in own.items():
+        properties.setdefault(key, value)
+    tool["inputSchema"] = schema(properties, required)
+    # Which arguments go to the game as the query's parameters: the game's, and any the tool named itself
+    tool["params"] = names + [name for name in tool.get("params", []) if name not in names]
+
+
+CATALOGUE = read_catalogue()
+for _tool in TOOLS:
+    if _tool.get("query") in CATALOGUE:
+        schema_from_catalogue(_tool, CATALOGUE[_tool["query"]])
+
 # Every game tool names the game it goes to: one MCP session is shared by every agent using it, so a game chosen
 # once for the session (inspector_connect) could be another agent's by the time a call is made. With several games
 # running, a call without one of these is refused.

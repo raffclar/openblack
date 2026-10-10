@@ -443,6 +443,13 @@ if (Python3_Interpreter_FOUND)
     COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_SOURCE_DIR}/tools/inspector/test_openblack_inspector_mcp.py
   )
+  # Every component's fields are registered: the generated file is up to date with src/ECS/Components
+  add_test(
+    NAME test_inspector_component_fields
+    COMMAND
+      ${Python3_EXECUTABLE}
+      ${CMAKE_SOURCE_DIR}/tools/inspector/generate_component_fields.py --check
+  )
 endif ()
 # The game's side of the inspector, built only with it
 if (OPENBLACK_INSPECTOR)
