@@ -25,6 +25,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Creature/CreatureSkin.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
@@ -231,7 +232,7 @@ bool GameInterface::ProcessSkipBoxEvent(const SDL_Event& event)
 			// Every control clicks as it is let go over, the texts too
 			if (result.clicked)
 			{
-				Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+				audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
 			}
 			if (result.answer.has_value())
 			{
@@ -302,7 +303,7 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 			// In the game's dialogs every control clicks as it acts
 			if (_menu->TakeClicked())
 			{
-				Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+				audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
 			}
 			if (_action == GameMenu::Action::Continue)
 			{
@@ -354,7 +355,7 @@ bool GameInterface::ProcessTattooEditorEvent(const SDL_Event& event)
 		    _tattooEditor->MouseUp(_painter.ToDialog({event.button.x, event.button.y}), editor))
 		{
 			// In the game's dialogs every control clicks as it acts
-			Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
 		}
 		return true;
 	case SDL_MOUSEWHEEL:

@@ -26,6 +26,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Components/Abode.h"
@@ -332,8 +333,7 @@ void GameHandGrabWorld::PlaySample(uint32_t sample, glm::vec3 position)
 {
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlaySoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(),
-		                                        position);
+		audio::PlayGameSoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(), position);
 	}
 }
 
@@ -746,8 +746,8 @@ void GameHandGrabWorld::PlayScoopSound(ResourceType resource, glm::vec3 hand, fl
 	// Wood rattles in, anything else pours; its pitch rises as the scoop ramps up
 	const uint32_t sample = resource == ResourceType::Wood ? k_ScoopWoodSample : k_ScoopSample;
 	const auto pitch = static_cast<uint32_t>(ramp * k_ScoopPitchRise + k_ScoopPitchStart);
-	Locator::audio::value().StartSoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(),
-	                                         {.position = hand, .pitchPercent = pitch});
+	audio::StartGameSoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(),
+	                            {.position = hand, .pitchPercent = pitch});
 }
 
 float GameHandGrabWorld::LandHeightAt(glm::vec3 point) const

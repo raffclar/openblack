@@ -61,6 +61,7 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/ClipSounds.h"
 #include "Audio/GameMusic.h"
+#include "Audio/GameSoundEffects.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
@@ -3954,7 +3955,6 @@ void Game::PlayHandGrabSound()
 		isLand = landCell != nullptr && landCell->properties.hasWater == 0;
 	}
 
-	auto& audio = Locator::audio::value();
 	if (isLand)
 	{
 		// The game throws up a spot visual where the hand grips the land, as it plays the sound
@@ -3966,7 +3966,7 @@ void Game::PlayHandGrabSound()
 		// One of G_HandGrabLand_01 to _06, centred on the listener
 		const auto sample = 4 + Locator::rng::value().NextValue(0, 5);
 		const auto id = fmt::format("InGame.sad/{}", sample);
-		audio.PlaySoundEffect(entt::hashed_string(id.c_str()), std::nullopt);
+		audio::PlayGameSoundEffect(entt::hashed_string(id.c_str()), std::nullopt);
 	}
 	else
 	{
@@ -3982,6 +3982,6 @@ void Game::PlayHandGrabSound()
 		// G_HandInWater_01 to _10 in turn, on the water's surface where the hand went in
 		const auto id = fmt::format("InGame.sad/{}", 99 + _handInWaterSample);
 		_handInWaterSample = (_handInWaterSample + 1) % 10;
-		audio.PlaySoundEffect(entt::hashed_string(id.c_str()), glm::vec3(position.x, k_HandSplashHeight, position.z));
+		audio::PlayGameSoundEffect(entt::hashed_string(id.c_str()), glm::vec3(position.x, k_HandSplashHeight, position.z));
 	}
 }

@@ -1186,6 +1186,46 @@ void AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerSweep, .delaySeconds = 5.0f, .point = {0.0f, 0.5f}, .amount = 2.0f}},
 	    .repeatFrom = 1,
 	});
+
+	// Two teleport stones the villagers jump between, the first jumps heard from the land, the later ones while the
+	// camera is in the temple
+	constexpr glm::vec2 k_StoneA {-40.0f, 20.0f};
+	constexpr glm::vec2 k_StoneB {40.0f, 70.0f};
+	all.push_back({
+	    .id = "audio.temple_quiet",
+	    .name = "The land's sound effects while the camera is in the temple",
+	    .facet = Facet::Audio,
+	    .description = "Two teleport stones; a villager beside the first walks to beside the second, through the stones, "
+	                   "and another is put down on the first. Then the temple opens on the creature's room, and the "
+	                   "villager walks back. The audio log gives the sounds started and those not heard.",
+	    .expected = "The first jumps sound where they leave and arrive. In the temple the creature's room's water and "
+	                "fire are heard, but the jumps on the land are not.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_StoneA, k_StoneB}, .distance = 0.8f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -40.0f}, 180.0f, "yours")},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = k_StoneA + glm::vec2(6.0f, 4.0f),
+	                 .walkTo = k_StoneB + glm::vec2(6.0f, 4.0f),
+	                 .walkAfterSeconds = 5.0f,
+	                 .walkRepeatSeconds = 15.0f,
+	                 .walkFinal = VillagerStates::ArrivesHome},
+	                {.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = k_StoneA + glm::vec2(-8.0f, -4.0f),
+	                 .dropOnStoneSeconds = 16.0f}},
+	    .miracles = {{.type = MagicType::Teleport,
+	                  .point = k_StoneA,
+	                  .handOffset = k_StoneA,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 1.0f,
+	                  .byHand = true},
+	                 {.type = MagicType::Teleport,
+	                  .point = k_StoneB,
+	                  .handOffset = k_StoneB,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 3.0f,
+	                  .byHand = true}},
+	    .commands = {{.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 12.0f}},
+	});
 }
 
 void AddObjects(std::vector<Scenario>& all)

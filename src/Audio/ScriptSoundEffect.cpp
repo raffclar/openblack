@@ -9,6 +9,9 @@
 
 #include "ScriptSoundEffect.h"
 
+#include <cctype>
+
+#include <algorithm>
 #include <array>
 
 namespace openblack::audio
@@ -43,6 +46,23 @@ std::optional<std::string_view> ScriptSoundBankFile(int32_t bank)
 		return std::nullopt;
 	}
 	return k_BankFiles.at(static_cast<size_t>(bank));
+}
+
+ScriptSoundBank BankOfFile(std::string_view file)
+{
+	const auto sameName = [file](std::string_view name) {
+		return std::ranges::equal(name, file, [](char a, char b) {
+			return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+		});
+	};
+	for (size_t bank = 1; bank < k_BankFiles.size(); ++bank)
+	{
+		if (sameName(k_BankFiles.at(bank)))
+		{
+			return static_cast<ScriptSoundBank>(bank);
+		}
+	}
+	return ScriptSoundBank::None;
 }
 
 bool SoundEffectHeard(const SoundEffectConditions& conditions, ScriptSoundBank bank, uint16_t userParam)

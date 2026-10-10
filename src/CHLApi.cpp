@@ -41,6 +41,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameMusic.h"
+#include "Audio/GameSoundEffects.h"
 #include "Audio/ScriptSoundEffect.h"
 #include "Audio/Sound.h"
 #include "Camera/Camera.h"
@@ -94,6 +95,7 @@
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -414,6 +416,15 @@ CHLApi::CHLApi()
 	InitFunctionsTable2();
 	InitFunctionsTable3();
 	InitFunctionsTable4();
+}
+
+void CHLApi::ResetSwitches()
+{
+	_gameSoundOn = true;
+	if (Locator::creatureAudioSystem::has_value())
+	{
+		Locator::creatureAudioSystem::value().SetOtherVoicesEnabled(true);
+	}
 }
 
 void CHLApi::NotImplemented(std::optional<int32_t> detail)
@@ -1611,15 +1622,7 @@ void PlaySoundEffect() // 043 PLAY_SOUND_EFFECT
 		return;
 	}
 
-	const auto& director = Locator::cinematicDirectorSystem::value();
-	// TODO(script-natives): the player controlling a creature fight should quieten the samples kept out of fights;
-	// openblack's fights don't say yet when the interface is in those controls
-	const audio::SoundEffectConditions conditions {
-	    .scriptWideScreen = director.IsWideScreenOn() && director.GetWideScreenOwner() != 0,
-	    .insideTemple = PlayerInsideTemple(),
-	    .gameSoundOn = Locator::chlapi::value().IsGameSoundOn(),
-	    .creatureFightControl = false,
-	};
+	const auto conditions = audio::CurrentSoundEffectConditions();
 	if (!audio::SoundEffectHeard(conditions, static_cast<audio::ScriptSoundBank>(bank), sounds.Handle(id)->userParam))
 	{
 		return;
@@ -4493,9 +4496,12 @@ void CallNearInState() // 316 CALL_NEAR_IN_STATE
 
 void SetCreatureSound() // 317 SET_CREATURE_SOUND
 {
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Off, the creatures of players other than this computer's are not heard in their own voices
+	const auto enable = Pop().intVal != 0;
+	if (Locator::creatureAudioSystem::has_value())
+	{
+		Locator::creatureAudioSystem::value().SetOtherVoicesEnabled(enable);
+	}
 }
 
 void CreatureInteractingWith() // 318 CREATURE_INTERACTING_WITH

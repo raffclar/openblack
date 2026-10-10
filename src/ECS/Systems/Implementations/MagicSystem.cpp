@@ -29,6 +29,7 @@
 #include "3D/MapCoords.h"
 #include "3D/WaterRings.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsAngle.h"
@@ -680,8 +681,8 @@ void GameMagicWorld::WaterObject(entt::entity object, const magic::WaterDrop& dr
 			{
 				const auto sample =
 				    k_TreeGrowSounds.at(Locator::gameRandom::value().LocalRand(static_cast<int32_t>(k_TreeGrowSounds.size())));
-				Locator::audio::value().StartSoundEffect(static_cast<entt::id_type>(sample),
-				                                         {.position = transform.position, .owner = object});
+				audio::StartGameSoundEffect(static_cast<entt::id_type>(sample),
+				                            {.position = transform.position, .owner = object});
 			}
 		}
 		else if (!grown.canGrow && !drop.extreme)
@@ -1797,8 +1798,7 @@ bool MagicSystem::TapOrb(entt::entity orb)
 	// The pop is heard where the hand took it
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(audio::SoundId::G_SpellBubblePop_04),
-		                                        _hand.handPosition);
+		audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_SpellBubblePop_04), _hand.handPosition);
 	}
 	DestroyOrb(orb);
 	_lastHandResult = HandResult::TookMiracle;
@@ -1914,9 +1914,9 @@ void MagicSystem::StartHoldLoop()
 	StopHoldLoop();
 	if (Locator::audio::has_value() && _held.has_value())
 	{
-		_holdLoop = Locator::audio::value().StartSoundEffect(
-		    static_cast<entt::id_type>(audio::SoundId::G_HandGesture_02),
-		    {.position = _hand.handPosition, .playType = audio::PlayType::Repeat, .owner = *_held});
+		_holdLoop =
+		    audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_HandGesture_02),
+		                                {.position = _hand.handPosition, .playType = audio::PlayType::Repeat, .owner = *_held});
 	}
 }
 
@@ -2172,7 +2172,7 @@ void MagicSystem::FailCast()
 	}
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(audio::SoundId::G_SpellCastFailure), std::nullopt);
+		audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_SpellCastFailure), std::nullopt);
 	}
 	if (_lastHandResult != HandResult::NoCircle)
 	{
@@ -2392,8 +2392,7 @@ void MagicSystem::DiscardHeldSeed()
 	if (Locator::audio::has_value())
 	{
 		constexpr uint32_t k_ShakeVolume = 35;
-		Locator::audio::value().StartSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_ShakeHand_01),
-		                                         {.volume = k_ShakeVolume});
+		audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_ShakeHand_01), {.volume = k_ShakeVolume});
 	}
 	// A band flies off the hand
 	if (Locator::miracleFxSystem::has_value())

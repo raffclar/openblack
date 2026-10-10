@@ -21,6 +21,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
@@ -96,7 +97,7 @@ void PlaySound(audio::SoundId sound, glm::vec3 point)
 {
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlaySoundEffect(static_cast<entt::id_type>(sound), point);
+		audio::PlayGameSoundEffect(static_cast<entt::id_type>(sound), point);
 	}
 }
 
