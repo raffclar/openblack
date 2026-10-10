@@ -42,6 +42,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
@@ -465,10 +466,23 @@ std::vector<route::Circle> GatherObstacles(ecs::Registry& registry, entt::entity
 		{
 			kind = route::Obstacle::Building;
 		}
-		if (route::MustAvoid(kind, height, creatureHeight, false))
+		if (!route::MustAvoid(kind, height, creatureHeight, false))
 		{
-			circles.push_back({.centre = fixed.boundingCenter, .radius = fixed.boundingRadius + radius});
+			return;
 		}
+		// The Norse gate is a row of small circles across its width, with a way through the middle while it stands open
+		const auto gate = Locator::animatedStaticSystem::has_value()
+		                      ? Locator::animatedStaticSystem::value().RouteCircles(entity)
+		                      : std::nullopt;
+		if (gate.has_value())
+		{
+			for (const auto& circle : *gate)
+			{
+				circles.push_back({.centre = circle.centre, .radius = circle.radius + radius});
+			}
+			return;
+		}
+		circles.push_back({.centre = fixed.boundingCenter, .radius = fixed.boundingRadius + radius});
 	});
 	// Another player's shield is walked round; a creature already under one walks out of it
 	if (const auto* owner = registry.TryGet<const Creature>(self); owner != nullptr && Locator::magicShieldSystem::has_value())

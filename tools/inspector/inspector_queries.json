@@ -788,6 +788,12 @@
   "query": "land.atmosphere"
  },
  {
+  "description": "The scenery the scripts open and close: its open word and its gate stones' value",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.animated_statics"
+ },
+ {
   "description": "The village centres' totems: their town centre, the share they are held at, and whether the hand grips one",
   "kind": "list",
   "parameters": [],
@@ -855,6 +861,12 @@
   "kind": "list",
   "parameters": [],
   "query": "living.fish_farms"
+ },
+ {
+  "description": "The scenery the scripts open and close (gates, the gate stone plinth, the piper's cave, the phone box): its open word, place in its clip and resting place, whether it is in the land's draw list and was on screen, its gate stones' value and the circles a creature's route goes round",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.animated_statics"
  },
  {
   "description": "The chimneys smoking",
