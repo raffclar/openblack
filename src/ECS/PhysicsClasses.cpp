@@ -196,34 +196,10 @@ physics_classes::ClassFacts AnimatedStaticFacts(const AnimatedStatic& still)
 	                                   .row = MaterialRow::DefaultUnmovable,
 	                                   .checksPoints = false,
 	                                   .fixedMass = physics::shapes::k_TempleHeartMass};
-	switch (still.type)
+	if (const auto model = animated_static::CollisionModel(still.type, still.openState, still.gateStones); model.has_value())
 	{
-	case AnimatedStaticInfo::NorseGate:
 		facts.interacts = true;
-		facts.collisionMesh = static_cast<uint32_t>(still.openState == 1 ? MeshId::NorseGatePhys2 : MeshId::NorseGatePhys1);
-		break;
-	case AnimatedStaticInfo::GateStonePlinth:
-		facts.interacts = true;
-		if (still.openState != 1 && still.plinthState != 0)
-		{
-			facts.collisionMesh =
-			    static_cast<uint32_t>(still.plinthFull != 0 ? MeshId::GateTotemPlinthePhys3 : MeshId::GateTotemPlinthePhys2);
-		}
-		else
-		{
-			facts.collisionMesh = static_cast<uint32_t>(MeshId::GateTotemPlinthePhys1);
-		}
-		break;
-	case AnimatedStaticInfo::PhoneBox:
-		facts.interacts = true;
-		facts.collisionMesh = static_cast<uint32_t>(MeshId::GateTotemPlinthePhys1);
-		break;
-	case AnimatedStaticInfo::PiperCaveEntrance:
-		facts.interacts = true;
-		facts.collisionMesh = static_cast<uint32_t>(MeshId::PiperEntrancePhys1);
-		break;
-	default:
-		break;
+		facts.collisionMesh = static_cast<uint32_t>(*model);
 	}
 	return facts;
 }
