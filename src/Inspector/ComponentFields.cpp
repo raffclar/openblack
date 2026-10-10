@@ -46,6 +46,7 @@
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureRoute.h"
+#include "Creature/CreatureScriptPlay.h"
 #include "Creature/CreatureSpellMind.h"
 #include "Creature/CreatureSpells.h"
 #include "Creature/CreatureSway.h"
@@ -583,6 +584,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::CreatureMindState>(context)
 	    .Field<&components::CreatureMindState::desires>("desires")
 	    .Field<&components::CreatureMindState::idle>("idle")
+	    .Field<&components::CreatureMindState::scriptPlay>("scriptPlay")
 	    .Field<&components::CreatureMindState::look>("look")
 	    .Field<&components::CreatureMindState::lookingAbout>("lookingAbout")
 	    .Field<&components::CreatureMindState::secondsAlone>("secondsAlone")
@@ -1862,6 +1864,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_route::Route::points>("points")
 	    .Field<&openblack::creature_route::Route::segment>("segment")
 	    .Field<&openblack::creature_route::Route::travelled>("travelled");
+	Reflect<openblack::creature_script_play::Request>(context, ValueOnly {})
+	    .Field<&openblack::creature_script_play::Request::animation>("animation")
+	    .Field<&openblack::creature_script_play::Request::plays>("plays");
 	Reflect<openblack::creature_spell_mind::Cheat>(context, ValueOnly {})
 	    .Field<&openblack::creature_spell_mind::Cheat::desire>("desire")
 	    .Field<&openblack::creature_spell_mind::Cheat::turns>("turns");

@@ -33,6 +33,7 @@
 #include "3D/OceanInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameMusic.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/EventManager.h"
@@ -167,6 +168,7 @@
 #include "Editor/EditorSelection.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Game.h"
 #include "GameControls.h"
 #include "Graphics/RendererInterface.h"
 #include "Help/AdvisorModel.h"
@@ -2180,10 +2182,19 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 			    return std::nullopt;
 		    }
 		    auto& audio = Locator::audio::value();
-		    return AudioState {.globalVolume = audio.GetGlobalVolume(),
-		                       .sfxVolume = audio.GetSfxVolume(),
-		                       .musicVolume = audio.GetMusicVolume(),
-		                       .musicActive = audio.MusicIsActive()};
+		    AudioState state {.globalVolume = audio.GetGlobalVolume(),
+		                      .sfxVolume = audio.GetSfxVolume(),
+		                      .musicVolume = audio.GetMusicVolume(),
+		                      .musicActive = audio.MusicIsActive()};
+		    if (const auto* game = Game::Instance(); game != nullptr && game->GetGameMusic() != nullptr)
+		    {
+			    const auto& music = *game->GetGameMusic();
+			    state.musicPlaying = audio::GetMusicTypeName(music.GetPlaying());
+			    state.landMusic = audio::GetMusicTypeName(music.GetLandType());
+			    state.scriptMusic = audio::GetMusicTypeName(music.GetScriptType());
+			    state.alignmentMusic = music.IsAlignmentMusicEnabled();
+		    }
+		    return state;
 	    },
 	}));
 

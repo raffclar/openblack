@@ -372,6 +372,7 @@ Game::Game(Arguments&& args) noexcept
     , _playVideo(args.playVideo)
     , _preIntro(args.preIntro)
     , _skipLogos(args.skipLogos)
+    , _newGameStart(args.newGameStart)
     , _startTestbed(args.startTestbed || args.scenario.has_value())
     , _scenarioRequest(args.scenario)
     , _inspectPort(args.inspectPort)
@@ -3179,11 +3180,9 @@ bool Game::Run() noexcept
 		{
 			lhvm.LoadBinary(fileSystem.ReadAll(challengePath));
 			// The story's scripts run the first land; on the testbed they would set its time of day and stop its clock
-			// The story opens on a black screen: its first land comes up at noon, and its scripts set the dawn of the
-			// opening scene and fade the picture in from black some turns later
-			if (!_startTestbed && lhvm.StartScript("LandControlAll", lhvm::ScriptType::All) != 0)
+			if (!_startTestbed)
 			{
-				Locator::cinematicDirectorSystem::value().StartStory();
+				StartStoryScripts();
 			}
 		}
 		catch (const std::runtime_error& err)
@@ -3198,11 +3197,6 @@ bool Game::Run() noexcept
 		                    (fileSystem.GetGamePath() / challengePath).generic_string());
 		return false;
 	}
-	if (!_startTestbed)
-	{
-		AskNewGameChoice();
-	}
-
 	if (_startupTimer.has_value())
 	{
 		_startupTimer->Step("story scripts");
@@ -3653,18 +3647,71 @@ void Game::StartNewLand()
 	_gameMusic->Reset();
 }
 
-void Game::AskNewGameChoice()
+void Game::StartStoryScripts()
+{
+	const bool started = Locator::vm::value().StartScript("LandControlAll", lhvm::ScriptType::All) != 0;
+	// The question comes whether or not the story started
+	const bool asked = AskNewGameChoice();
+	// The story opens on a black screen: its first land comes up at noon, and its scripts set the dawn of the opening
+	// scene and fade the picture in from black some turns later. When the game was held for the question, the land is
+	// left as it is: the scripts that skip the opening fade it themselves.
+	if (started && !asked)
+	{
+		Locator::cinematicDirectorSystem::value().StartStory();
+	}
+}
+
+bool Game::AskNewGameChoice()
 {
 	// Every new game starts with nothing skipped, and only a returning player is asked
-	Locator::tutorialSkipSystem::value().Set({});
-	const auto& profiles = Locator::playerProfileSystem::value();
-	if (!new_game_choice::AsksAtNewGame(profiles.GetProfileCount(), profiles.CurrentProfileHasCreature()) || !_interface)
+	auto& skip = Locator::tutorialSkipSystem::value();
+	skip.Set({});
+	// For developers and agents: the question answered at once, as though the player had answered it before the
+	// story's first turn
+	if (_newGameStart.has_value() && _newGameStart->answer.has_value())
 	{
-		return;
+		skip.Set(new_game_choice::SkipFor(*_newGameStart->answer));
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "New game started with the start-of-game question answered {}",
+		                   static_cast<int>(*_newGameStart->answer));
+		return true;
+	}
+	const auto& profiles = Locator::playerProfileSystem::value();
+	const bool forced = _newGameStart.has_value() && _newGameStart->ask;
+	if ((!forced && !new_game_choice::AsksAtNewGame(profiles.GetProfileCount(), profiles.CurrentProfileHasCreature())) ||
+	    !_interface)
+	{
+		return false;
 	}
 	// The game waits, paused, for the answer
 	Locator::time::value().SetPaused(true);
 	_interface->ShowSkipBox();
+	return true;
+}
+
+bool Game::StartNewGame(std::optional<new_game_choice::NewGameStart> start) noexcept
+{
+	_newGameStart = start;
+	_startTestbed = false;
+	// A new game always begins on the first land
+	const auto land = Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / "Land1.txt";
+	if (!LoadMapWithFreshScripts(land))
+	{
+		return false;
+	}
+	if (!Locator::vm::has_value())
+	{
+		return false;
+	}
+	try
+	{
+		StartStoryScripts();
+	}
+	catch (const std::exception& err)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The story's scripts didn't start: {}", err.what());
+		return false;
+	}
+	return true;
 }
 
 void Game::HandleInterfaceAction()

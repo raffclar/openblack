@@ -432,6 +432,9 @@ target_link_libraries(test_gesture_recognition PRIVATE gestures)
 openblack_setup_and_add_test(test_gesture_system test_gesture_system.cpp)
 target_link_libraries(test_gesture_system PRIVATE gestures)
 openblack_setup_and_add_test(test_creature_spells test_creature_spells.cpp)
+openblack_setup_and_add_test(
+  test_creature_script_play test_creature_script_play.cpp
+)
 openblack_setup_and_add_test(test_particle_miracles test_particle_miracles.cpp)
 target_link_libraries(test_particle_miracles PRIVATE psys)
 openblack_setup_and_add_test(test_storm_miracle test_storm_miracle.cpp)
