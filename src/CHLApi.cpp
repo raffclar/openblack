@@ -3051,7 +3051,7 @@ void SetCreatureHome() // 223 SET_CREATURE_HOME
 	// The creature's home becomes the point, on the ground and kept as precisely as a map position. While its player's
 	// temple stands the temple's pen is its home again from the next game turn.
 	const auto position = PopVec();
-	const auto creature = static_cast<entt::entity>(Pop().uintVal);
+	const auto creature = PopObject();
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(creature))
 	{
