@@ -22,6 +22,7 @@
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/ChimneySmoke.h"
 #include "ECS/Components/Cloud.h"
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureAudio.h"
@@ -244,6 +245,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::ChimneySmoke::ageRemainder>("ageRemainder")
 	    .Field<&components::ChimneySmoke::puffs>("puffs");
 	Reflect<components::Cloud>(context).Field<&components::Cloud::track>("track").Field<&components::Cloud::pinned>("pinned");
+	Reflect<components::PlannedTemple>(context)
+	    .Field<&components::PlannedTemple::townId>("townId")
+	    .Field<&components::PlannedTemple::owner>("owner");
+	Reflect<components::BuildingSite>(context).Field<&components::BuildingSite::desire>("desire");
 	Reflect<components::Creature>(context)
 	    .Field<&components::Creature::owner>("owner")
 	    .Field<&components::Creature::leashable>("leashable")
@@ -993,6 +998,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Temple::destructionClock>("destructionClock")
 	    .Field<&components::Temple::destructionGlow>("destructionGlow")
 	    .Field<&components::Temple::destructionLoops>("destructionLoops")
+	    .Field<&components::Temple::town>("town")
 	    .Field<&components::Temple::destructionBeamClock>("destructionBeamClock")
 	    .Field<&components::Temple::destructionBeamSource>("destructionBeamSource");
 	Reflect<components::TempleEntrance>(context).Field<&components::TempleEntrance::temple>("temple");
@@ -1001,7 +1007,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::TempleExterior::alignmentTarget>("alignmentTarget")
 	    .Field<&components::TempleExterior::size>("size")
 	    .Field<&components::TempleExterior::sizeTarget>("sizeTarget")
-	    .Field<&components::TempleExterior::morphed>("morphed");
+	    .Field<&components::TempleExterior::morphed>("morphed")
+	    .Field<&components::TempleExterior::drawnBuilt>("drawnBuilt");
 	Reflect<components::Town>(context)
 	    .Field<&components::Town::id>("id")
 	    .Field<&components::Town::owner>("owner")
