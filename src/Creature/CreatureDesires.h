@@ -127,6 +127,8 @@ struct Source
 	float multiplier {1.0f};
 	/// How much the source has driven its desire since the creature last decided on it, which says why it wants it
 	float drive {0.0f};
+	/// The source's value is cleared when the urge of its desire is satisfied, as for most kinds of source
+	bool clearedWhenSatisfied {false};
 };
 
 struct DesireState
@@ -140,8 +142,11 @@ struct DesireState
 	float increaseSeconds {1.0f};
 	/// Turns left during which the desire can't grow
 	uint32_t suppressedTurns {0};
-	/// How much the desire matters to the creature, which feedback can change
+	/// How many times plans for the desire must be carried out before its urge is satisfied (its whole part counts),
+	/// which feedback can change
 	float weight {1.0f};
+	/// Plans for the desire carried out since its urge was last satisfied
+	uint32_t carriedOut {0};
 	std::vector<Source> sources;
 };
 
@@ -191,6 +196,15 @@ void UpdateSources(Desires& desires, const SourceReader& read);
 void UpdateDesires(Desires& desires, float turnsPerSecond);
 /// The desire can't grow for some seconds, or longer if it already couldn't
 void Suppress(Desires& desires, Desire desire, float seconds, float turnsPerSecond);
+
+/// A plan for the desire has been carried out: one more towards its urge being satisfied. True when that makes as many
+/// as its weight's whole part, and the count starts again
+[[nodiscard]] bool CountTowardsUrge(DesireState& desire);
+/// The desire's urge is satisfied: the sources whose kind is cleared then have no value left
+void ClearSourcesAfterSatisfying(DesireState& desire);
+/// The desire is lessened after an action that lessens it: an active desire is multiplied by the action's multiplier,
+/// and kept from the creature's floor for desires to its maximum
+void LessenAfterAction(DesireState& desire, float multiplier, float floor);
 
 /// Every source of a type, in all the desires, goes up or down by an amount, staying from 0 to 1, as events push them
 void ChangeSource(Desires& desires, uint32_t type, float amount);

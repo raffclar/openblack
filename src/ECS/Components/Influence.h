@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <entt/entity/entity.hpp>
+
+#include "Common/VirtualInfluence.h"
 #include "Enums.h"
 
 namespace openblack::ecs::components
@@ -37,6 +40,13 @@ struct CitadelInfluence
 {
 	float reach {0.0f};
 	float drawnRadius {0.0f};
+};
+
+/// What the player's hand keeps of their influence past the border, on the player's entity, and the hum it makes there
+struct VirtualInfluence
+{
+	virtual_influence::State state;
+	entt::entity hum {entt::null};
 };
 
 } // namespace openblack::ecs::components

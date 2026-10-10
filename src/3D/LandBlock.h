@@ -61,6 +61,8 @@ public:
 	[[nodiscard]] glm::vec2 GetMapPosition() const;
 	[[nodiscard]] const std::unique_ptr<lnd::LNDBlock>& GetLndBlock() const { return _block; };
 	void SetLndBlock(const lnd::LNDBlock& block);
+	/// Sets the altitude of one of the block's 17 by 17 cells, [x * 17 + z]
+	void SetCellAltitude(size_t index, uint8_t altitude);
 
 private:
 	std::unique_ptr<lnd::LNDBlock> _block;

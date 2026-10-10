@@ -7,6 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstddef>
+
+#include <algorithm>
 #include <array>
 #include <numeric>
 #include <vector>
@@ -153,4 +156,42 @@ TEST(BlockTexture, BuildBlockLeavesTheSeaClear)
 	const auto sea = FlatCells(0);
 	block_texture::BuildBlock(sea, {countries, materials, noise, bump}, rgba);
 	EXPECT_EQ(TexelAt(rgba, 100, 100), (std::array<uint8_t, 4> {0, 0, 0, 0}));
+}
+
+TEST(BlockTexture, PaintCellsPaintsARectangleAsTheWholeBlockWould)
+{
+	const std::array countries = {SingleMaterialCountry(0)};
+	std::vector<uint16_t> materials(k_MapTexels);
+	std::iota(materials.begin(), materials.end(), uint16_t {0});
+	std::vector<uint8_t> noise(k_MapTexels);
+	std::iota(noise.begin(), noise.end(), uint8_t {0});
+	const std::vector<uint8_t> bump(k_MapTexels, 0x80);
+	auto cells = FlatCells(10);
+	// A slope and a cell of open sea, so every texel differs
+	for (size_t i = 0; i < cells.size(); ++i)
+	{
+		cells[i].altitude = static_cast<uint8_t>(2 + (i % 23));
+	}
+	cells[(5 * block_texture::k_CellsPerSide) + 6].flags = 0x02;
+	const block_texture::Sources sources {countries, materials, noise, bump};
+	std::vector<uint8_t> whole(block_texture::k_BlockBytes, 0);
+	block_texture::BuildBlock(cells, sources, whole);
+
+	// Cells x 4 to 6 and z 5 to 8: 48 rows of 64 texels
+	const glm::ivec2 first {4, 5};
+	const glm::ivec2 count {3, 4};
+	std::vector<uint8_t> part(static_cast<size_t>(count.x * count.y) * 16 * 16 * 4, 0xAA);
+	block_texture::PaintCells(cells, sources, first, count, part);
+	for (int x = 0; x < count.x * 16; ++x)
+	{
+		for (int z = 0; z < count.y * 16; ++z)
+		{
+			const auto fromPart = static_cast<size_t>((x * count.y * 16) + z) * 4;
+			const auto fromWhole = static_cast<size_t>(((first.x * 16 + x) * block_texture::k_Side) + (first.y * 16 + z)) * 4;
+			ASSERT_TRUE(std::equal(part.begin() + static_cast<std::ptrdiff_t>(fromPart),
+			                       part.begin() + static_cast<std::ptrdiff_t>(fromPart + 4),
+			                       whole.begin() + static_cast<std::ptrdiff_t>(fromWhole)))
+			    << "texel x " << x << " z " << z;
+		}
+	}
 }

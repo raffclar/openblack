@@ -7,9 +7,12 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstddef>
 #include <cstring>
 
 #include <array>
+#include <sstream>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -84,4 +87,42 @@ TEST(PackBankInfo, IsOptional)
 	PackFile pack;
 	ASSERT_EQ(pack.Open(SoundPack({})), PackResult::Success);
 	EXPECT_FALSE(pack.IsAudioMusicBank());
+}
+
+TEST(PackBankInfo, ASoundPackReadWithoutItsWaveDataKeepsWhereTheSamplesLie)
+{
+	const auto bytes = SoundPack({0, 0, 0});
+	std::string text(bytes.begin(), bytes.end());
+	std::istringstream stream(text);
+	PackFile pack;
+	ASSERT_EQ(pack.ReadFile(stream, {"LHAudioWaveData"}), PackResult::Success);
+
+	// The headers are read, the data is not
+	ASSERT_EQ(pack.GetAudioSampleHeaders().size(), 1);
+	EXPECT_TRUE(pack.GetAudioSamplesData().empty());
+	EXPECT_FALSE(pack.HasBlock("LHAudioWaveData"));
+
+	// And the data can be read from the file where the block was found
+	const auto wave = pack.GetUnreadBlock("LHAudioWaveData");
+	ASSERT_TRUE(wave.has_value());
+	ASSERT_EQ(wave->size, 4);
+	ASSERT_LE(wave->offset + wave->size, bytes.size());
+	EXPECT_EQ(std::vector<uint8_t>(bytes.begin() + static_cast<std::ptrdiff_t>(wave->offset),
+	                               bytes.begin() + static_cast<std::ptrdiff_t>(wave->offset + wave->size)),
+	          (std::vector<uint8_t> {1, 2, 3, 4}));
+	// The rest of the file is read as usual
+	EXPECT_TRUE(pack.HasBlock("LHAudioBankSampleTable"));
+	EXPECT_FALSE(pack.GetUnreadBlock("LHAudioBankSampleTable").has_value());
+}
+
+TEST(PackBankInfo, ASoundPackReadWholeHasItsSamples)
+{
+	const auto bytes = SoundPack({0, 0, 0});
+	std::string text(bytes.begin(), bytes.end());
+	std::istringstream stream(text);
+	PackFile pack;
+	ASSERT_EQ(pack.ReadFile(stream), PackResult::Success);
+	ASSERT_EQ(pack.GetAudioSamplesData().size(), 1);
+	EXPECT_EQ(pack.GetAudioSamplesData().front(), (std::vector<uint8_t> {1, 2, 3, 4}));
+	EXPECT_FALSE(pack.GetUnreadBlock("LHAudioWaveData").has_value());
 }

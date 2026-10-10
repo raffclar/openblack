@@ -780,6 +780,17 @@ std::optional<PlasmaCommand> Effect::TakePlasma()
 	return command;
 }
 
+std::optional<mana_path::Spark> Effect::TakeManaPathSpark()
+{
+	if (_manaPathSparks.empty())
+	{
+		return std::nullopt;
+	}
+	const auto spark = _manaPathSparks.back();
+	_manaPathSparks.pop_back();
+	return spark;
+}
+
 std::optional<glm::vec3> Effect::TakeTargetPosition()
 {
 	if (_targetPositions.empty())

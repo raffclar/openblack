@@ -246,7 +246,7 @@ void Consume(ecs::Registry& registry, entt::entity food)
 	{
 		if (auto* abode = registry.TryGet<Abode>(villager->abode))
 		{
-			abode->inhabitants.erase(food);
+			std::erase(abode->inhabitants, food);
 		}
 		if (auto* town = registry.TryGet<Town>(villager->town))
 		{
@@ -382,7 +382,7 @@ void SetPointing(CreatureObjectAction& action, const Transform& transform, const
 	const auto local = ToLocal(transform, action.point);
 	// The left side is mirrored in the meshes' space: the right is +x
 	const bool right = held != nullptr ? held->mirrored : local.x >= 0.0f;
-	const auto height = creature_throw::k_HeightAtSizeOne * body.size * k_PointFromHeightShare;
+	const auto height = creature_throw::k_HeightAtSizeOne * ShownSize(body) * k_PointFromHeightShare;
 	const auto elevation = std::atan2(local.y - height, std::max(glm::length(glm::vec2(local.x, local.z)), k_Tiny));
 	const auto high = std::clamp(elevation / k_PointHighRadians, 0.0f, 1.0f);
 	const std::array<size_t, 2> animations {
@@ -462,7 +462,8 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		}
 		if (action.kind == Kind::Throw)
 		{
-			action.flightSeconds = creature_throw::FlightTime(glm::distance(transform.position, action.point));
+			action.flightSeconds =
+			    action.givenFlightSeconds.value_or(creature_throw::FlightTime(glm::distance(transform.position, action.point)));
 			const auto weights = ThrowWeights(creature, transform, *points, action.point);
 			const std::array<size_t, 2> animations {creature_throw::k_HurlFlat, creature_throw::k_HurlHigh};
 			SetSlots(action, animations, weights);
@@ -725,7 +726,7 @@ void UpdateReady(ecs::Registry& registry, entt::entity creature, const Creature&
 	{
 		return;
 	}
-	const auto lead = points->catchMs / (1000.0f * creature_layers::PlaybackRate(body.size));
+	const auto lead = points->catchMs / (1000.0f * creature_layers::PlaybackRate(ShownSize(body)));
 	const auto velocity = glm::transpose(transform.rotation) * flight->second;
 	const auto ready =
 	    creature_catch::ReadyToCatch(ToLocal(transform, flight->first), velocity, action.catchHands, transform.scale.x, lead);
@@ -898,7 +899,7 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 	{
 		const auto& transform = registry.Get<const Transform>(creature);
 		const auto ground = glm::distance(glm::xz(transform.position), glm::xz(action.point));
-		if (!creature_throw::FarEnoughToThrow(ground, body.size))
+		if (!creature_throw::FarEnoughToThrow(ground, ShownSize(body)))
 		{
 			Fail(action, "too close to throw at");
 		}
@@ -1047,6 +1048,14 @@ bool CreatureObjectActionSystem::Keep(entt::entity creature, size_t animation)
 bool CreatureObjectActionSystem::Throw(entt::entity creature, const glm::vec3& target)
 {
 	return Start(creature, {.kind = Kind::Throw, .point = target});
+}
+
+bool CreatureObjectActionSystem::ThrowTaking(entt::entity creature, const glm::vec3& target, float flightSeconds)
+{
+	CreatureObjectAction action {.kind = Kind::Throw, .point = target};
+	action.givenFlightSeconds = flightSeconds;
+	action.waitsForLanding = true;
+	return Start(creature, std::move(action));
 }
 
 bool CreatureObjectActionSystem::Destroy(entt::entity creature, entt::entity target)
@@ -1333,7 +1342,7 @@ void CreatureObjectActionSystem::Update(std::chrono::duration<float, std::milli>
 		    {
 			    return;
 		    }
-		    const float step = gameTime.count() * creature_layers::PlaybackRate(body.size);
+		    const float step = gameTime.count() * creature_layers::PlaybackRate(ShownSize(body));
 		    if (action.kind == Kind::Catch)
 		    {
 			    using Catching = CreatureObjectAction::Catching;
@@ -1384,6 +1393,15 @@ void CreatureObjectActionSystem::Update(std::chrono::duration<float, std::milli>
 		    }
 		    else if (action.timeMs >= action.durationMs && (action.eventDone || action.eventMs > action.durationMs))
 		    {
+			    // Thrown into a store, it waits for the thing to come down first
+			    const bool flying = action.thrown.has_value() && registry.Valid(*action.thrown) &&
+			                        Locator::dynamicsSystem::has_value() &&
+			                        Locator::dynamicsSystem::value().IsFlying(*action.thrown);
+			    if (!creature_object_actions::ThrowOver(true, action.waitsForLanding, flying))
+			    {
+				    animation.slots.clear();
+				    return;
+			    }
 			    action.status = Status::Done;
 		    }
 		    if (action.status == Status::Done)
@@ -1493,7 +1511,7 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			{
 				if (Locator::buildingDamageSystem::has_value())
 				{
-					Locator::buildingDamageSystem::value().Smash(target, creature, body.size);
+					Locator::buildingDamageSystem::value().Smash(target, creature, ShownSize(body));
 				}
 			}
 			else if (object_physics::IsRock(target) && Locator::dynamicsSystem::has_value())
@@ -1521,6 +1539,7 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			break;
 		}
 		case Kind::Throw:
+			action.thrown = GetHeld(creature);
 			Release(creature, handPosition,
 			        creature_throw::ReleaseVelocity(action.point, handPosition, std::max(action.flightSeconds, k_Tiny)));
 			break;

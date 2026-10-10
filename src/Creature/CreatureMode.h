@@ -9,11 +9,15 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <optional>
+#include <span>
 
 #include <entt/entity/entity.hpp>
+#include <glm/mat3x3.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -72,8 +76,18 @@ private:
 /// hunger no energy left and 100% tiredness exhaustion. It agrees with the body's own fainting.
 [[nodiscard]] std::optional<creature_physiology::Faint> PassOutFrom(const creature_panel::Values& values);
 
-/// Where a creature that passed out is carried to come round, its pen: where it was given a home, or else by its
-/// player's temple, or for a player without a temple (as on the testbed) the spot given, the middle of the land
+/// Which of the temple mesh's marked places is the pen in front of it, its creature's home
+inline constexpr size_t k_TemplePenPlace = 15;
+
+/// Where the pen of a temple is: its mesh's marked place for it turned, scaled and moved with the temple, kept as
+/// precisely as a map position (the height as the mesh has it; the creature is set on the ground). None when the mesh
+/// marks no such place
+[[nodiscard]] std::optional<glm::vec3> TemplePen(glm::vec3 templePosition, const glm::mat3& templeRotation,
+                                                 glm::vec3 templeScale, std::span<const glm::mat4> markedPlaces);
+
+/// Where a creature that passed out is carried to come round, its home: while its player's temple stands, the temple's
+/// pen, whatever home it was given; else the home it was given, or for a player without either (as on the testbed) the
+/// spot given, the middle of the land
 [[nodiscard]] glm::vec3 PenOf(std::optional<glm::vec3> home, std::optional<glm::vec3> temple, glm::vec3 noPen);
 
 } // namespace openblack::creature_mode

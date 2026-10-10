@@ -90,6 +90,8 @@ enum class Facet : uint8_t
 	Nature,
 	/// The land's animals: its birds and the doves or bats about the temples
 	Animals,
+	/// The sky: the moon and its phases
+	Sky,
 
 	_Count
 };
@@ -129,6 +131,9 @@ struct Environment
 	std::optional<float> playerAlignment;
 	/// Where the cursor, and so the hand, is put, as a share of the window from its top left, until the mouse moves
 	std::optional<glm::vec2> cursor;
+	/// Where the player's temple stands, from the middle of the map, x east and y north in units of the land; with it
+	/// standing their influence border shows, as on a land. The testbed has none when not given.
+	std::optional<glm::vec2> temple;
 };
 
 /// Where the camera looks as the scenario starts
@@ -223,11 +228,11 @@ struct CreatureSetup
 
 /// Something put on the land for the creatures: an object, a tree, a feature such as a pillar of rock, a villager, a pot
 /// or pile of food or wood, a building or field of the scenario's town, which is made with the first of them, or an
-/// animal
+/// animal, or a fish farm (which joins the nearest town)
 struct ObjectSetup
 {
 	std::variant<MobileObjectInfo, TreeInfo, FeatureInfo, VillagerInfo, PotInfo, AbodeInfo, FieldTypeInfo, AnimalInfo,
-	             MobileStaticInfo, AnimatedStaticInfo>
+	             MobileStaticInfo, AnimatedStaticInfo, FishFarmInfo>
 	    type;
 	glm::vec2 offset {0.0f};
 	float scale {1.0f};
@@ -257,6 +262,8 @@ struct ObjectSetup
 	std::optional<float> fullSize;
 	/// A villager or animal that has eaten poison
 	bool poisoned {false};
+	/// A building of the town holds this much food, rather than the scenario town's usual stock
+	std::optional<uint32_t> storedFood;
 	/// A firefly hides exactly where the thing stands, as a land's script places one
 	bool firefly {false};
 };
@@ -278,6 +285,16 @@ struct ParticleSetup
 	int player {0};
 	/// Seconds after which it closes down and starts again, for effects that end; none to run until the scenario stops
 	float restartSeconds {0.0f};
+};
+
+/// A vortex between the lands opened as a script opens one, and later told to fade out
+struct VortexSetup
+{
+	VortexType type {VortexType::In};
+	glm::vec2 offset {0.0f};
+	/// Seconds into the scenario it is made, and after that it is told to fade out; none to stay
+	float delaySeconds {0.0f};
+	std::optional<float> fadeOutAfterSeconds;
 };
 
 /// A miracle dispenser, or a one-shot bubble on its own, put down for the scenario
@@ -453,6 +470,8 @@ struct Command
 		OpenCreatureCave,
 		ApplyTattoo,
 		RemoveTattoo,
+		/// The tattoo editor opened on the player's creature, as clicking it in the Creature Cave does
+		OpenTattooEditor,
 		/// The player's hand is given a seed (value, by the game's seed number) as if from a bubble; a gesture (value, by
 		/// the game's gesture number) is drawn with the hand across the middle of the screen, through the same recogniser
 		/// the cursor goes through. Neither needs a creature.
@@ -487,6 +506,8 @@ struct Command
 		/// place (value). Neither needs a creature.
 		SetOpenClose,
 		LayGateStone,
+		/// A script's cinema bars slide in (value 1) or out (value 0)
+		WideScreen,
 		/// Its history, as the Creature Cave's trophies show it: how it leans in fights (amount, -1 defensive to 1
 		/// aggressive) as if it had fought; how many times it has seen a miracle (value, by its magic type; amount, the
 		/// times), which it then knows about
@@ -495,6 +516,8 @@ struct Command
 		/// The player's hand knocks on the scenario's object, a building, as the Action button pressed on it does, from
 		/// where the hand is
 		HandTapObject,
+		/// The creature walks to its home: its temple's pen while its player has a temple
+		WalkHome,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -554,11 +577,13 @@ struct BirdFlockSetup
 	float flockDistance {10.0f};
 };
 
-/// A temple of a player's, built, at a point from the middle of the map
+/// A temple of a player's, built, at a point from the middle of the map, turned by the angle as a land's script turns
+/// one (radians about the vertical)
 struct TempleSetup
 {
 	glm::vec2 offset {0.0f};
 	PlayerNames owner {PlayerNames::PLAYER_ONE};
+	float angle {0.0f};
 };
 
 /// The player's hand held still over the land for the whole scenario, as a player holds it: from the middle of the map,
@@ -601,6 +626,7 @@ struct Scenario
 	std::vector<BirdFlockSetup> birdFlocks;
 	std::vector<TempleSetup> temples;
 	std::vector<ParticleSetup> particles;
+	std::vector<VortexSetup> vortices;
 	std::vector<DispenserSetup> dispensers;
 	std::vector<MiracleCast> miracles;
 	std::vector<Command> commands;
@@ -623,6 +649,8 @@ struct Scenario
 	std::vector<std::pair<std::string_view, float>> fireflyRewards;
 };
 
+/// A town centre's totem
+void AddVillageTotemScenarios(std::vector<Scenario>& all);
 /// The miracles' scenarios, added to every scenario by the registry
 void AddMiracleScenarios(std::vector<Scenario>& all);
 /// The miracles' globes and dispensers close up, and the hand's miracle effects
@@ -634,6 +662,8 @@ void AddBlastFireScenarios(std::vector<Scenario>& all);
 /// What the blast spares and does on a coast, the water over fields and forests and before the people watching a fire
 /// put out, and the hand catching a fireball or taking one into a fire seed
 void AddFirewaterScenarios(std::vector<Scenario>& all);
+/// A fish farm by a town: its shoal, the hand grabbing, scooping and scaring its fish
+void AddFishScenarios(std::vector<Scenario>& all);
 /// Creatures casting miracles
 void AddCreatureCastingScenarios(std::vector<Scenario>& all);
 /// Creature Mode's and the Creature Cave's scenarios
@@ -648,6 +678,8 @@ void AddFlockScenarios(std::vector<Scenario>& all);
 void AddBirdScenarios(std::vector<Scenario>& all);
 /// The teleport miracle: stones, villagers jumping between them
 void AddTeleportScenarios(std::vector<Scenario>& all);
+/// The vortices between the lands: opening, levelling the ground and closing
+void AddVortexScenarios(std::vector<Scenario>& all);
 /// The tornado's scenarios: through a village and a wood, and meeting a creature
 void AddTornadoScenarios(std::vector<Scenario>& all);
 /// The land's nature: a tree pulled up leaving its roots, and the fireflies at nightfall
@@ -667,6 +699,8 @@ void AddHandLookScenarios(std::vector<Scenario>& all);
 /// The Norse gate of the creatures' glade and the gate stone plinth: opening, closing and laying the stones
 void AddGateScenarios(std::vector<Scenario>& all);
 void AddKnockScenarios(std::vector<Scenario>& all);
+/// The moon at night, seen to the east, for trying its phases and its path with the moon debug window
+void AddSkyScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them
 [[nodiscard]] std::span<const Scenario> All();

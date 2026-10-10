@@ -11,14 +11,43 @@
 
 #include "RandomNumberManagerProduction.h"
 
-#include <ctime>
-
 using namespace openblack;
+
+RandomNumberManagerProduction::RandomNumberManagerProduction()
+{
+	SetRunSeed(std::random_device {}());
+}
+
+void RandomNumberManagerProduction::SetRunSeed(uint32_t seed)
+{
+	_runSeed = seed;
+	_seeding.fetch_add(1);
+	for (size_t i = 0; i < _streams.size(); ++i)
+	{
+		_streams.at(i).seed(run_seed::StreamSeed(seed, static_cast<RandomStream>(i)));
+	}
+}
+
+std::mt19937& RandomNumberManagerProduction::Stream(RandomStream stream)
+{
+	return _streams.at(static_cast<size_t>(stream));
+}
 
 std::mt19937& RandomNumberManagerProduction::Generator()
 {
-	thread_local std::mt19937 tGenerator(static_cast<unsigned int>(time(nullptr)));
-	return tGenerator;
+	// Each thread draws from its own, started from the run's seed again whenever that changes
+	struct Seeded
+	{
+		std::mt19937 generator;
+		std::optional<uint32_t> seeding;
+	};
+	thread_local Seeded tGenerator;
+	if (tGenerator.seeding != _seeding)
+	{
+		tGenerator.generator.seed(run_seed::StreamSeed(_runSeed, RandomStream::General));
+		tGenerator.seeding = _seeding;
+	}
+	return tGenerator.generator;
 }
 
 std::optional<std::reference_wrapper<std::mutex>> RandomNumberManagerProduction::LockAccess()
