@@ -201,6 +201,25 @@ TEST(ScriptObjectsSystem, OnlyAControllingNativeTakesControlOfWhatItIsGiven)
 	EXPECT_TRUE(world->objects.at(object).controlled);
 }
 
+TEST(ScriptObjectsSystem, AnObjectThatHasGoneIsNoObject)
+{
+	auto [world, system] = MakeSystem();
+	const auto object = world->Add(3);
+	world->Delete(object);
+	system->EnterNative(k_MoveNative);
+	EXPECT_TRUE(system->Fetch(object) == entt::null);
+	EXPECT_TRUE(system->Fetch(static_cast<entt::entity>(99999)) == entt::null);
+}
+
+TEST(ScriptObjectsSystem, AnObjectNoLongerToBeDealtWithIsNoObjectAndStaysUncontrolled)
+{
+	auto [world, system] = MakeSystem();
+	const auto villager = world->Add(4, {.kind = Kind::Villager, .available = false});
+	system->EnterNative(k_MoveNative);
+	EXPECT_TRUE(system->Fetch(villager) == entt::null);
+	EXPECT_FALSE(world->objects.at(villager).controlled);
+}
+
 TEST(ScriptObjectsSystem, AReleasedVillagerInTheMapDecidesWhatToDo)
 {
 	auto [world, system] = MakeSystem();
