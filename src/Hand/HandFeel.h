@@ -92,4 +92,34 @@ struct Rest
 /// above the land than half its own height
 [[nodiscard]] bool TurnsToLand(bool restsOnFace, bool overThing, float aboveLand, float handHeight);
 
+/// What sets how far from the camera the hand hovers this frame
+struct Hover
+{
+	glm::vec3 camera;
+	/// The land or sea under the cursor, whatever thing is in front of it; none under the sky
+	std::optional<glm::vec3> land;
+	/// The land under the cursor is the sea, which the hand rests on rather than hanging over
+	bool landIsSea {false};
+	/// Where the hand rests on or before the thing under the cursor; none over the land, or over a thing it doesn't
+	/// rest on
+	std::optional<glm::vec3> restOnThing;
+	/// The hand's height at its size
+	float handHeight {0.0f};
+	/// How far from the camera the hand is now, kept when nothing is under the cursor
+	float currentDistance {0.0f};
+	float minDistance {0.0f};
+	float reach {0.0f};
+};
+/// How far from the camera the hand eases to, and the furthest it may be
+struct HoverDistances
+{
+	float target;
+	float limit;
+};
+/// The furthest the hand may be is the land under the cursor less the hand's height, so its fingers hang down to the
+/// land (on the sea it rests on the water; under the sky it keeps its distance), held between the nearest and the reach.
+/// Over a thing it rests on, it eases to that resting point, so it touches the thing; elsewhere it eases to the
+/// furthest it may be. It never eases nearer than a unit from the camera.
+[[nodiscard]] HoverDistances HoverDistancesOf(const Hover& hover);
+
 } // namespace openblack::hand_feel

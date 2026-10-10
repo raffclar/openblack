@@ -13,7 +13,9 @@
 #include <cstdint>
 
 #include <array>
+#include <span>
 
+#include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -31,6 +33,10 @@ inline constexpr float k_Lift = 0.2f;
 /// How far over the land the blob of a villager too far away to be drawn lies, and how many times as wide it is
 inline constexpr float k_FarLift = 0.5f;
 inline constexpr float k_FarWidening = 3.0f;
+
+/// The bones the feet are taken from: those of the pose the villager is drawn in this frame, so the blobs follow its
+/// feet as its clip moves them, or the model's resting bones while it has no pose of its own
+[[nodiscard]] std::span<const glm::mat4> FootBones(std::span<const glm::mat4> posed, std::span<const glm::mat4> rest);
 
 /// A blob's quad: from just behind the foot, across it, out to its far end
 struct Quad

@@ -84,8 +84,23 @@ struct Crossing
 /// crosses it by `searchRadius`, or the first of the points round there, turning a 64th of a turn at a time either
 /// way, that is inside; onto the crossing itself when none is. Nothing when it is inside.
 inline constexpr float k_SearchRadius = 20.0f;
+/// While the player turns the camera by dragging round the edge of the screen it is put back further in
+inline constexpr float k_EdgeTurnSearchRadius = 50.0f;
+[[nodiscard]] constexpr float SearchRadius(bool edgeTurning)
+{
+	return edgeTurning ? k_EdgeTurnSearchRadius : k_SearchRadius;
+}
 [[nodiscard]] std::optional<glm::vec3> PushInsideFence(std::span<const glm::vec3> fence, bool fenceOn,
                                                        const glm::vec3& originAtStart, const glm::vec3& origin,
                                                        const glm::vec3& focus, float searchRadius);
+
+/// Where a camera flight that would end outside the fence ends instead: where the line from its end towards what it will
+/// look at crosses the fence (or the corner nearer than that); unchanged when the end is inside
+[[nodiscard]] glm::vec3 FlightOriginInsideFence(std::span<const glm::vec3> fence, bool fenceOn, const glm::vec3& origin,
+                                                const glm::vec3& focus);
+
+/// Whether the influence the scripts give the player counts at a point: only inside the fence, tested along the
+/// ground's first axis. The player's temple and towns give influence on both sides of it.
+[[nodiscard]] bool ScriptInfluenceCounts(std::span<const glm::vec3> fence, bool fenceOn, const glm::vec3& point);
 
 } // namespace openblack::camera_zones

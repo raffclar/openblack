@@ -9,6 +9,7 @@
 
 #include "ClipSoundPlayer.h"
 
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -18,6 +19,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/ClipSounds.h"
+#include "Audio/GameSoundEffects.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
@@ -70,9 +72,11 @@ public:
 
 	[[nodiscard]] float LifeOf(entt::entity object) const override { return world_objects::LifeOf(object); }
 
-	void PlaySound(std::string_view bank, std::span<const int32_t> keys, entt::entity owner, const glm::vec3& position) override
+	void PlaySound(std::string_view bank, std::span<const int32_t> keys, entt::entity owner, const glm::vec3& position,
+	               bool bySampleRules) override
 	{
-		Locator::audio::value().PlayAnimEffect(std::string(bank), keys, owner, position);
+		const auto conditions = bySampleRules ? std::optional(audio::CurrentSoundEffectConditions()) : std::nullopt;
+		Locator::audio::value().PlayAnimEffect(std::string(bank), keys, owner, position, conditions);
 	}
 };
 
@@ -138,7 +142,7 @@ void clip_sound_player::Play(World& world, entt::entity entity, AnimId clipId, C
 		// villager is
 		const auto owner = route.fromHome ? villager->abode : entity;
 		const auto bank = route.bank == clip_sounds::Bank::Banter ? k_BanterBank : k_EditorBank;
-		world.PlaySound(bank, keys.ToArray(), owner, position);
+		world.PlaySound(bank, keys.ToArray(), owner, position, route.bySampleRules);
 	}
 }
 

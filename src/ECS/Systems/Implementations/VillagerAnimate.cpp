@@ -23,6 +23,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Dances.h"
 #include "ECS/Registry.h"
 #include "ECS/VillagerAnimation.h"
 #include "ECS/VillagerClips.h"
@@ -255,12 +256,10 @@ void villager_animate::SetAnim(entt::entity villager, int32_t clip, bool restart
 	{
 		return;
 	}
-	if (static_cast<AnimId>(clip) != pose->clip)
-	{
-		pose->clip = static_cast<AnimId>(clip);
-	}
-	// TODO(villagers): a villager dancing in time with others keeps its place in the dance
-	if (restart)
+	const bool sameClip = static_cast<AnimId>(clip) == pose->clip;
+	pose->clip = static_cast<AnimId>(clip);
+	const bool dancing = dances::DanceOf(Entities(), villager) != entt::null;
+	if (villager_clips::PlaceOnSetClip(sameClip, restart, dancing) == villager_clips::ClipPlace::Restart)
 	{
 		pose->place = 0;
 	}

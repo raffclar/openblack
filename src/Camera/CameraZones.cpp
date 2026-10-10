@@ -180,3 +180,20 @@ std::optional<glm::vec3> camera_zones::PushInsideFence(std::span<const glm::vec3
 	}
 	return glm::vec3(target.x - origin.x, 0.0f, target.z - origin.z);
 }
+
+glm::vec3 camera_zones::FlightOriginInsideFence(std::span<const glm::vec3> fence, bool fenceOn, const glm::vec3& origin,
+                                                const glm::vec3& focus)
+{
+	auto direction = focus - origin;
+	if (direction != glm::vec3(0.0f))
+	{
+		direction *= 1.0f / std::sqrt(direction.x * direction.x + direction.y * direction.y + direction.z * direction.z);
+	}
+	const auto crossing = CrossFence(fence, fenceOn, origin, direction);
+	return crossing.inside ? origin : crossing.closest;
+}
+
+bool camera_zones::ScriptInfluenceCounts(std::span<const glm::vec3> fence, bool fenceOn, const glm::vec3& point)
+{
+	return CrossFence(fence, fenceOn, point, glm::vec3(1.0f, 0.0f, 0.0f)).inside;
+}

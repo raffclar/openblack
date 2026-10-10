@@ -16,19 +16,21 @@
 #include <string_view>
 
 // The text splitter of the help text: the word splitter and the character tests and skips it uses. One splitter for
-// the word count of the reading time (HelpSystem CountWords) and for the display (measure and draw,
-// HelpTextDisplay). The escape codes change the display state ($C colour, $F font, $M control icon); the counting
-// caller passes a throwaway state and flag 0.
+// the word count of the reading time and for the display (measure and draw, HelpTextDisplay). The escape codes change
+// the display state ($C colour, $F font, $M control icon); the counting caller passes a throwaway state and flag 0.
 
 namespace openblack::help
 {
 
-/// The fonts of the help text, chosen by DrawState::SetFont
+/// The fonts of the help text, chosen by DrawState::SetFont. The original game really does give each advisor a font of
+/// its own: every dialogue entry starts in its narrator's font and colour, so the good advisor's lines are in f1, the
+/// evil advisor's in f3 and everyone else's in j0 (checked against the executable, see the advisors' research notes).
+/// The three fonts have the same height and are drawn at the same line height.
 enum class TextFont : uint8_t
 {
-	J0, ///< Data\j0 "Ocean Sans MM": font[0], everything that is not 2 or 3
-	F1, ///< Data\f1 "Footlight MT": font[1] (2 = GOOD_SPIRIT), j0 when not loaded
-	F3, ///< Data\f3 "Orange LET": font[3] (3 = EVIL_SPIRIT), j0 when not loaded
+	J0, ///< Data\j0 "Ocean Sans MM": every narrator but the two advisors
+	F1, ///< Data\f1 "Footlight MT": the good advisor (narrator 2), j0 when its files are missing
+	F3, ///< Data\f3 "Orange LET": the evil advisor (narrator 3), j0 when its files are missing
 };
 
 namespace text_splitter

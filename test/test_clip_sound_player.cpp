@@ -47,6 +47,7 @@ public:
 		std::string bank;
 		std::vector<int32_t> keys;
 		entt::entity owner;
+		bool bySampleRules;
 	};
 
 	[[nodiscard]] const Registry& Entities() const override { return registry; }
@@ -61,10 +62,11 @@ public:
 	}
 	[[nodiscard]] bool InsideTemple() const override { return insideTemple; }
 	[[nodiscard]] float LifeOf(entt::entity /*object*/) const override { return life; }
-	void PlaySound(std::string_view bank, std::span<const int32_t> keys, entt::entity owner,
-	               const glm::vec3& /*position*/) override
+	void PlaySound(std::string_view bank, std::span<const int32_t> keys, entt::entity owner, const glm::vec3& /*position*/,
+	               bool bySampleRules) override
 	{
-		played.push_back({.bank = std::string(bank), .keys = {keys.begin(), keys.end()}, .owner = owner});
+		played.push_back(
+		    {.bank = std::string(bank), .keys = {keys.begin(), keys.end()}, .owner = owner, .bySampleRules = bySampleRules});
 	}
 
 	/// A woman with a home, standing still
@@ -170,6 +172,16 @@ TEST(ClipSoundPlayer, InsideTheTempleOnlySoundsNotPlayedTheOrdinaryWayAreHeard)
 	f.Play(k_Walk, 50, 300);
 	ASSERT_EQ(f.world.played.size(), 1U);
 	EXPECT_EQ(f.world.played[0].bank, "VillagersBanter.sad");
+}
+
+TEST(ClipSoundPlayer, OnlySoundsPlayedTheOrdinaryWayAreHeardAsTheirSamplesAllow)
+{
+	Fixture f;
+	f.Play(k_Walk, 50, 300);
+	ASSERT_EQ(f.world.played.size(), 3U);
+	EXPECT_TRUE(f.world.played[0].bySampleRules);
+	EXPECT_FALSE(f.world.played[1].bySampleRules);
+	EXPECT_TRUE(f.world.played[2].bySampleRules);
 }
 
 TEST(ClipSoundPlayer, AClipPlayedOnceIsQuietOnceFinishedAndALoopingOneComesRound)
