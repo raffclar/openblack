@@ -17,19 +17,20 @@
 #   ob-build dir       [options]                       (prints the build folder)
 #   ob-build stats                                     (sccache statistics)
 #   ob-build env       [options]                       (prints the tools and folders ob-build resolved)
+#   ob-build check     [options]                       (checks the build folder's vcpkg packages aren't mixed)
 #   ob-build install   [folder]                        (copies these scripts to C:/projects/obtools or the folder)
 #
 # Options go right after the command. The worktree defaults to the git worktree of the current folder, the build
 # folder to E:/openblack/builds/<worktree folder name> and the config to Debug (or $OB_CONFIG).
 #
 # Builds use Ninja Multi-Config with MSVC from the Visual Studio developer environment, sccache in front of cl.exe
-# (through ob-cc.exe, see ob-cc.c) with /Z7 debug info, the shared vcpkg tree E:/openblack/builds/vcpkg_installed and
-# the vcpkg binary cache E:/openblack/cache/vcpkg-binary. Unchanged sources never recompile, even in a new folder or
+# (through ob-cc.exe, see ob-cc.c) with /Z7 debug info, the build folder's own vcpkg_installed (restored from
+# the shared vcpkg binary cache E:/openblack/cache/vcpkg-binary). Unchanged sources never recompile, even in a new folder or
 # another worktree, because sccache treats every worktree as the same root (see sccache_env).
 #
 # Environment overrides: OB_ROOT (E:/openblack), OB_CONFIG, OB_GAME_PATH (C:/projects/black), OB_VCPKG_ROOT,
 # OB_CMAKE, OB_NINJA, OB_SCCACHE, OB_COMPILE_JOBS (8), OB_LINK_JOBS (4), OB_CTEST_JOBS (8), OB_WERROR (1; 0 turns
-# warnings-as-errors off), OB_CMAKE_ARGS (extra configure arguments).
+# warnings-as-errors off), OB_LINK_FLAGS_DEBUG (/debug /INCREMENTAL), OB_CMAKE_ARGS (extra configure arguments).
 set -uo pipefail
 
 die() {
@@ -42,7 +43,6 @@ OB_SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 OB_ROOT=$(cygpath -m "${OB_ROOT:-E:/openblack}")
 OB_BUILDS="$OB_ROOT/builds"
 OB_CACHE="$OB_ROOT/cache"
-OB_VCPKG_INSTALLED="$OB_BUILDS/vcpkg_installed"
 OB_ROOTS_FILE="$OB_CACHE/ob-build-roots.txt"
 OB_GAME_PATH=${OB_GAME_PATH:-C:/projects/black}
 OB_SCREENSHOT_ROOT=${OB_SCREENSHOT_ROOT:-E:/openblack/screenshots}
@@ -64,25 +64,47 @@ resolve_folders() {
 		B=${OB_BUILD_DIR:-$OB_BUILDS/$(basename "$WT")}
 	fi
 	B=$(cygpath -m "$B")
+	# Each build folder installs its own packages, restored from the shared binary cache: worktrees on different commits
+	# fight over a shared tree
+	OB_VCPKG_INSTALLED="$B/vcpkg_installed"
 	case "$(echo "$B" | tr 'A-Z' 'a-z')" in
 	"$(echo "$WT" | tr 'A-Z' 'a-z')"/*) die "the build folder $B is inside the worktree; build folders live on E:" ;;
 	esac
-	[ "$(basename "$B")" != vcpkg_installed ] || die "$B is the shared vcpkg tree, not a build folder"
+	[ "$(basename "$B")" != vcpkg_installed ] || die "$B is a vcpkg tree, not a build folder"
 }
 
 # ---------------------------------------------------------------------------------------------------- tools
 
-lock() { # lock NAME: a folder lock shared by every ob-build; stale after 10 minutes
-	local dir="$OB_CACHE/locks/$1.lock" waited=0
+lock() { # lock NAME [SECONDS]: a lock shared by every ob-build, held by this process until unlock or exit
+	local dir="$OB_CACHE/locks/$1.lock" limit=${2:-300} waited=0 owner
 	mkdir -p "$OB_CACHE/locks"
 	until mkdir "$dir" 2>/dev/null; do
-		if [ -n "$(find "$dir" -maxdepth 0 -mmin +10 2>/dev/null)" ]; then rmdir "$dir" 2>/dev/null; continue; fi
+		owner=$(cat "$dir/pid" 2>/dev/null)
+		if [ -n "$owner" ] && ! kill -0 "$owner" 2>/dev/null; then
+			rm -rf "$dir" # its owner has gone
+			continue
+		fi
+		if [ -z "$owner" ] && [ -n "$(find "$dir" -maxdepth 0 -mmin +10 2>/dev/null)" ]; then
+			rm -rf "$dir"
+			continue
+		fi
+		[ $waited != 5 ] || note "waiting for ${3:-the lock $1} (held by process ${owner:-?})"
 		sleep 1
 		waited=$((waited + 1))
-		[ $waited -lt 300 ] || die "timed out waiting for the lock $dir"
+		[ $waited -lt "$limit" ] || die "timed out waiting for the lock $dir"
 	done
+	echo $$ >"$dir/pid"
+	OB_HELD_LOCKS="${OB_HELD_LOCKS:-} $1"
 }
-unlock() { rmdir "$OB_CACHE/locks/$1.lock" 2>/dev/null || true; }
+unlock() {
+	rm -rf "$OB_CACHE/locks/$1.lock" 2>/dev/null || true
+	OB_HELD_LOCKS=${OB_HELD_LOCKS/ $1/}
+}
+release_locks() {
+	local name
+	for name in ${OB_HELD_LOCKS:-}; do unlock "$name"; done
+}
+trap release_locks EXIT
 
 find_vs() {
 	local vswhere="/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
@@ -124,13 +146,8 @@ find_tools() {
 		"$VS/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe" "$(command -v ninja 2>/dev/null)") ||
 		die "ninja not found; set OB_NINJA"
 	find_sccache
-	if [ -n "${OB_VCPKG_ROOT:-}" ]; then
-		VCPKG_ROOT_DIR=$(cygpath -m "$OB_VCPKG_ROOT")
-	elif [ -f "$WT/vcpkg/vcpkg.exe" ]; then
-		VCPKG_ROOT_DIR="$WT/vcpkg"
-	else
-		VCPKG_ROOT_DIR="C:/projects/openblack/vcpkg"
-	fi
+	# One vcpkg for every worktree (never a worktree's own copy), so packages' ABI hashes agree in the shared binary cache
+	VCPKG_ROOT_DIR=$(cygpath -m "${OB_VCPKG_ROOT:-C:/projects/openblack/vcpkg}")
 	[ -f "$VCPKG_ROOT_DIR/scripts/buildsystems/vcpkg.cmake" ] || die "no vcpkg at $VCPKG_ROOT_DIR; set OB_VCPKG_ROOT"
 }
 
@@ -227,19 +244,22 @@ sccache_env() {
 	export SCCACHE_IDLE_TIMEOUT=0
 	export VCPKG_DEFAULT_BINARY_CACHE=${VCPKG_DEFAULT_BINARY_CACHE:-$(cygpath -w "$OB_CACHE/vcpkg-binary")}
 	mkdir -p "$(cygpath -u "$VCPKG_DEFAULT_BINARY_CACHE")"
-	# Only worktrees are base directories. A build folder's path must stay in the cache key wherever a source holds it
-	# as text (TEST_BINARY_DIR), so no test runs with another folder's path built in. Elsewhere build folder paths only
-	# appear in include paths, which sccache doesn't hash, so build folders share objects anyway.
+	# The base directories are the worktrees and each build folder's vcpkg packages, not the build folders themselves:
+	# a build folder's path must stay in the cache key wherever a source holds it as text (TEST_BINARY_DIR), so no test
+	# runs with another folder's path built in. Elsewhere build folder paths only appear in include paths, which
+	# sccache doesn't hash, so build folders share objects anyway.
 	local dirs
-	dirs=$(sed -n 's/^S //p' "$OB_ROOTS_FILE" | tr -d '\r' | paste -sd ';')
+	dirs=$(sed -n -e 's/^S //p' -e 's|^B \(.*\)$|\1/vcpkg_installed|p' "$OB_ROOTS_FILE" | tr -d '\r' | paste -sd ';')
 	export SCCACHE_BASEDIRS="$dirs"
 }
 
 server_has_roots() {
 	local json want
 	json=$("$SCCACHE" --show-stats --stats-format json 2>/dev/null | tr 'A-Z' 'a-z') || return 1
-	want=$(echo "$WT/" | tr 'A-Z' 'a-z')
-	case "$json" in *"\"$want\""*) ;; *) return 1 ;; esac
+	for want in "$WT/" "$OB_VCPKG_INSTALLED/"; do
+		want=$(echo "$want" | tr 'A-Z' 'a-z')
+		case "$json" in *"\"$want\""*) ;; *) return 1 ;; esac
+	done
 	# A server started with build folders as base directories (by an older ob-build) must be replaced
 	local folder
 	while read -r folder; do
@@ -262,12 +282,12 @@ ensure_sccache() {
 			unlock sccache-server
 			return 0
 		fi
-		note "restarting the sccache server to add the worktree $WT"
+		note "restarting the sccache server to add $WT and $B to its base directories"
 		"$SCCACHE" --stop-server >/dev/null 2>&1
 		"$SCCACHE" --start-server >/dev/null 2>&1
 	done
 	unlock sccache-server
-	server_has_roots || note "warning: the sccache server doesn't know $WT (fewer cache hits from other worktrees)"
+	server_has_roots || note "warning: the sccache server doesn't know $WT or $B (fewer cache hits from other folders)"
 }
 
 # ---------------------------------------------------------------------------------------------------- commands
@@ -288,20 +308,30 @@ configure_args() {
 		-DOPENBLACK_USE_VCPKG=ON -DVCPKG_TARGET_TRIPLET=x64-windows
 		"-DVCPKG_INSTALLED_DIR=$OB_VCPKG_INSTALLED" -DVCPKG_MANIFEST_INSTALL=ON
 		"-DVCPKG_OVERLAY_PORTS=$WT/vcpkg-overlay-ports"
-		"-DVCPKG_INSTALL_OPTIONS=--x-buildtrees-root=$OB_CACHE/vcpkg-buildtrees;--x-packages-root=$OB_CACHE/vcpkg-packages"
+		# vcpkg's working folders are the build folder's own too: two configures sharing them race
+		"-DVCPKG_INSTALL_OPTIONS=--x-buildtrees-root=$B/vcpkg-buildtrees;--x-packages-root=$B/vcpkg-packages"
 		"-DOPENBLACK_WARNINGS_AS_ERRORS=$werror"
 		"-DOPENBLACK_COMPILE_JOBS=${OB_COMPILE_JOBS:-8}" "-DOPENBLACK_LINK_JOBS=${OB_LINK_JOBS:-4}"
 		-DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 	)
+	# Debug links incrementally: on E: (outside %TEMP%) the incremental state stays right, and a one-file change relinks in
+	# seconds. The game keeps full debug information; the test program links with /DEBUG:FASTLINK (test/CMakeLists.txt)
 	local kind
 	for kind in EXE SHARED MODULE; do
-		ARGS+=("-DCMAKE_${kind}_LINKER_FLAGS_DEBUG=/debug /INCREMENTAL:NO"
+		ARGS+=("-DCMAKE_${kind}_LINKER_FLAGS_DEBUG=${OB_LINK_FLAGS_DEBUG:-/debug /INCREMENTAL}"
 			"-DCMAKE_${kind}_LINKER_FLAGS_RELWITHDEBINFO=/debug /INCREMENTAL:NO")
 	done
 	if [ -n "${OB_CMAKE_ARGS:-}" ]; then
 		# shellcheck disable=SC2206
 		ARGS+=(${OB_CMAKE_ARGS})
 	fi
+}
+
+folder_lock() {
+	local name
+	name="build-$(printf '%s' "$B" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9' '_')"
+	case " ${OB_HELD_LOCKS:-} " in *" $name "*) return 0 ;; esac
+	lock "$name" 10800 "another build in $B"
 }
 
 check_existing_folder() {
@@ -320,6 +350,8 @@ check_existing_folder() {
 
 do_configure() {
 	resolve_folders
+	# Two builds in one folder at once corrupt Ninja's logs: the second waits (up to 3 hours)
+	folder_lock
 	find_tools
 	load_msvc
 	build_ob_cc
@@ -335,13 +367,72 @@ do_configure() {
 	fi
 	mkdir -p "$B"
 	rm -f "$stamp"
+	# A folder moving to another vcpkg tree keeps the old tree's library paths in its cache: start it afresh
+	local arg installed="" cached=""
+	for arg in "${ARGS[@]}"; do
+		case "$arg" in -DVCPKG_INSTALLED_DIR=*) installed=${arg#*=} ;; esac
+	done
+	if [ -f "$B/CMakeCache.txt" ]; then
+		cached=$(grep -i -o '[A-Za-z]:/[^;]*/vcpkg_installed' "$B/CMakeCache.txt" | tr 'A-Z' 'a-z' | sort -u |
+			grep -v -x -F "$(echo "$installed" | tr 'A-Z' 'a-z')" | head -1)
+	fi
+	if [ $FRESH = 0 ] && [ -n "$cached" ]; then
+		note "the folder still refers to the vcpkg tree $cached, not $installed: configuring afresh"
+		FRESH=1
+	fi
 	local fresh=()
 	[ $FRESH = 0 ] || fresh=(--fresh)
-	note "configuring $WT into $B"
+	note "configuring $WT into $B with vcpkg $(vcpkg_commit "$VCPKG_ROOT_DIR") from $VCPKG_ROOT_DIR"
+	vcpkg_pin_warning
 	local t0=$SECONDS
-	"$CMAKE" "${fresh[@]}" "${ARGS[@]}" || die "configure failed"
+	# (no MSYS path conversion: it turns linker flags such as /debug:fastlink into Windows paths)
+	MSYS2_ARG_CONV_EXCL="*" "$CMAKE" "${fresh[@]}" "${ARGS[@]}" || die "configure failed"
+	check_packages
+	# Files earlier builds made that the build no longer makes (such as test programs since merged into one) go, so a
+	# stale program can't be run by mistake
+	"$NINJA" -C "$B" -t cleandead >/dev/null 2>&1 || true
 	printf '%s' "$wanted" >"$stamp"
 	note "configured in $((SECONDS - t0))s"
+}
+
+vcpkg_commit() { git -C "$1" rev-parse --short=9 HEAD 2>/dev/null || echo unknown; }
+
+# Every worktree builds with the main checkout's vcpkg; says so when the worktree's own submodule pin differs
+vcpkg_pin_warning() {
+	local pin used
+	pin=$(git -C "$WT" ls-tree HEAD vcpkg 2>/dev/null | awk '{print substr($3, 1, 9)}')
+	used=$(vcpkg_commit "$VCPKG_ROOT_DIR")
+	if [ -n "$pin" ] && [ "$pin" != "$used" ]; then
+		note "note: the worktree pins vcpkg $pin, but every build uses the shared $VCPKG_ROOT_DIR at $used"
+	fi
+}
+
+# Fails when the installed packages are a mix of versions or of debug and release builds, as a binary cache filled from
+# a mixed tree once gave: fmt's headers and libraries must be one version, spdlog built against that fmt, and every
+# debug DLL linked with the debug C runtime and every release DLL with the release one
+check_packages() {
+	local root="$OB_VCPKG_INSTALLED/x64-windows" bad=() header version dll
+	[ -d "$root" ] || return 0
+	header=$(ls "$root"/include/fmt/base.h "$root"/include/fmt/core.h 2>/dev/null | head -1)
+	if [ -n "$header" ]; then
+		version=$(sed -n 's/^#define FMT_VERSION \([0-9]*\).*/\1/p' "$header" | head -1)
+		version=$((version / 10000))
+		for dll in "$root/debug/bin/fmtd.dll" "$root/bin/fmt.dll" "$root/debug/bin/spdlogd.dll" "$root/bin/spdlog.dll"; do
+			[ -f "$dll" ] || continue
+			grep -a -q "@v$version@fmt" "$dll" || bad+=("$dll isn't built against fmt $version, the version of the headers")
+		done
+	fi
+	for dll in "$root"/debug/bin/*.dll; do
+		[ -f "$dll" ] || continue
+		grep -a -q -i 'vcruntime140d.dll\|ucrtbased.dll' "$dll" || bad+=("$dll is a release build in the debug folder")
+	done
+	for dll in "$root"/bin/*.dll; do
+		[ -f "$dll" ] || continue
+		! grep -a -q -i 'vcruntime140d.dll\|ucrtbased.dll' "$dll" || bad+=("$dll is a debug build in the release folder")
+	done
+	[ ${#bad[@]} = 0 ] && return 0
+	printf 'ob-build: error: %s\n' "${bad[@]}" >&2
+	die "the vcpkg packages in $OB_VCPKG_INSTALLED are mixed; tell the lead (the binary cache may hold bad packages), then 'ob-build clean'"
 }
 
 do_build() {
@@ -359,7 +450,7 @@ do_build() {
 	local t0=$SECONDS
 	local args=(--build "$B" --config "$CONFIG" "${targets[@]}")
 	[ ${#extra[@]} = 0 ] || args+=(-- "${extra[@]}")
-	"$CMAKE" "${args[@]}"
+	MSYS2_ARG_CONV_EXCL="*" "$CMAKE" "${args[@]}"
 	local rc=$?
 	note "build $CONFIG ${targets[*]:-all} rc=$rc in $((SECONDS - t0))s ($B)"
 	return $rc
@@ -369,7 +460,7 @@ do_test() {
 	resolve_folders
 	find_tools
 	[ -f "$B/CTestTestfile.cmake" ] || die "$B has no tests yet; run 'ob-build build' first"
-	"$CTEST" --test-dir "$B" -C "$CONFIG" -j "$TEST_JOBS" --output-on-failure "$@"
+	MSYS2_ARG_CONV_EXCL="*" "$CTEST" --test-dir "$B" -C "$CONFIG" -j "$TEST_JOBS" --output-on-failure "$@"
 }
 
 do_run() {
@@ -398,6 +489,7 @@ do_run() {
 
 do_clean() {
 	resolve_folders
+	folder_lock
 	[ -d "$B" ] || { note "$B doesn't exist"; return 0; }
 	note "deleting $B"
 	rm -rf "$B" || die "could not delete all of $B (is a game or test from it still running?)"
@@ -457,6 +549,13 @@ main() {
 		"$SCCACHE" --show-stats
 		;;
 	env) do_env ;;
+	check)
+		resolve_folders
+		find_tools
+		note "vcpkg $(vcpkg_commit "$VCPKG_ROOT_DIR") from $VCPKG_ROOT_DIR"
+		vcpkg_pin_warning
+		check_packages && note "the packages in $OB_VCPKG_INSTALLED look consistent"
+		;;
 	install)
 		# Copies these scripts to a folder outside every worktree (C:/projects/obtools by default). Each file is
 		# replaced in one rename, so builds running from the old copy carry on.
@@ -469,7 +568,7 @@ main() {
 		done
 		note "installed into $(cygpath -m "$target")"
 		;;
-	*) die "unknown command '$command' (configure, build, test, run, clean, dir, stats, env, install)" ;;
+	*) die "unknown command '$command' (configure, build, test, run, clean, dir, stats, env, check, install)" ;;
 	esac
 }
 
