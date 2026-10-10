@@ -160,12 +160,12 @@ TEST(SpiritPose, FingertipFollowsTheRootsAxes)
 
 namespace
 {
-/// A camera at the origin looking down +z, a quarter turn wide and 4:3, as glm makes it
+/// A camera at the origin looking down +z, a quarter turn wide and 4:3, as glm makes it (left-handed: +x is right)
 SpiritView MakeView()
 {
 	SpiritView view;
 	view.eye = glm::vec3(0.0f);
-	view.right = {-1.0f, 0.0f, 0.0f};
+	view.right = {1.0f, 0.0f, 0.0f};
 	view.up = {0.0f, 1.0f, 0.0f};
 	view.forward = {0.0f, 0.0f, 1.0f};
 	view.nearClip = 1.0f;
