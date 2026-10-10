@@ -251,7 +251,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::Cloud>(context).Field<&components::Cloud::track>("track").Field<&components::Cloud::pinned>("pinned");
 	Reflect<components::PlannedTemple>(context)
 	    .Field<&components::PlannedTemple::townId>("townId")
-	    .Field<&components::PlannedTemple::owner>("owner");
+	    .Field<&components::PlannedTemple::owner>("owner")
+	    .Field<&components::PlannedTemple::yAngle>("yAngle");
 	Reflect<components::BuildingSite>(context).Field<&components::BuildingSite::desire>("desire");
 	Reflect<components::Creature>(context)
 	    .Field<&components::Creature::owner>("owner")
@@ -263,6 +264,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Creature::fatness>("fatness")
 	    .Field<&components::Creature::strength>("strength")
 	    .Field<&components::Creature::size>("size")
+	    .Field<&components::Creature::penSize>("penSize")
 	    .Field<&components::Creature::objectsDestroyed>("objectsDestroyed")
 	    .Field<&components::Creature::canDie>("canDie");
 	Reflect<components::CreatureArena>(context)
@@ -607,7 +609,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::BigForest>(context).Field<&components::BigForest::type>("type").Field<&components::BigForest::worth>(
 	    "worth");
 	Reflect<components::Forest>(context).Field<&components::Forest::type>("type");
-	Reflect<components::ForestMember>(context).Field<&components::ForestMember::forest>("forest");
+	Reflect<components::ForestMember>(context)
+	    .Field<&components::ForestMember::forest>("forest")
+	    .Field<&components::ForestMember::growing>("growing")
+	    .Field<&components::ForestMember::listed>("listed");
 	Reflect<components::GripLandscapeParticle>(context)
 	    .Field<&components::GripLandscapeParticle::centre>("centre")
 	    .Field<&components::GripLandscapeParticle::offset>("offset")
@@ -705,6 +710,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::LandForest::bigForest>("bigForest")
 	    .Field<&components::LandForest::scenic>("scenic")
 	    .Field<&components::LandForest::made>("made");
+	Reflect<components::ForestTurns>(context)
+	    .Field<&components::ForestTurns::id>("id")
+	    .Field<&components::ForestTurns::made>("made")
+	    .Field<&components::ForestTurns::emptyCountdown>("emptyCountdown")
+	    .Field<&components::ForestTurns::spreadCounter>("spreadCounter");
 	Reflect<components::TownForests>(context).Field<&components::TownForests::forests>("forests");
 	Reflect<components::LightBeam>(context).Field<&components::LightBeam::cone>("cone");
 	Reflect<components::LivingAction>(context)
@@ -1016,6 +1026,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::TempleInteriorPart::mesh>("mesh");
 	Reflect<components::Temple>(context)
 	    .Field<&components::Temple::owner>("owner")
+	    .Field<&components::Temple::yAngle>("yAngle")
 	    .Field<&components::Temple::lastHitTurn>("lastHitTurn")
 	    .Field<&components::Temple::beamTarget>("beamTarget")
 	    .Field<&components::Temple::beamTurn>("beamTurn")
@@ -1093,7 +1104,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::Tree>(context)
 	    .Field<&components::Tree::type>("type")
 	    .Field<&components::Tree::maxSize>("maxSize")
-	    .Field<&components::Tree::turnsToGrowth>("turnsToGrowth");
+	    .Field<&components::Tree::growthCountdown>("growthCountdown")
+	    .Field<&components::Tree::madeToGrow>("madeToGrow");
 	Reflect<components::Unlit> {context};
 	Reflect<components::Velocity>(context)
 	    .Field<&components::Velocity::dX>("dX")
