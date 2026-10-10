@@ -134,8 +134,6 @@ constexpr float k_OrbTapLeeway = 1.3f;
 constexpr float k_DefaultOrbRadius = 2.5f;
 
 // The game's world
-/// A villager's health out of this is its life
-constexpr float k_VillagerHealthScale = 100.0f;
 /// The colours of the rings the water's drops leave on the land, picked at random
 constexpr std::array<uint32_t, 5> k_RippleColours = {0xFF80CBC5u, 0xFF8599C5u, 0xFFBA97B2u, 0xFFB9CA86u, 0xFFBD9C8Au};
 /// A tree rustles as the water grows it, one of these at random
@@ -356,6 +354,19 @@ bool GameMagicWorld::IsLand(glm::vec3 point) const
 bool GameMagicWorld::InInfluence(PlayerNames player, glm::vec3 point) const
 {
 	return Locator::influenceSystem::has_value() && Locator::influenceSystem::value().PlayerInfluence(player, point) > 0.0f;
+}
+
+bool GameMagicWorld::HandInInfluence(PlayerNames player, glm::vec3 hand) const
+{
+	return Locator::influenceSystem::has_value() && Locator::influenceSystem::value().IsHandInInfluence(player, hand);
+}
+
+void GameMagicWorld::HeldThingUsedOnLand(PlayerNames player)
+{
+	if (Locator::influenceSystem::has_value())
+	{
+		Locator::influenceSystem::value().HeldThingUsedOnLand(player);
+	}
 }
 
 std::optional<glm::vec3> GameMagicWorld::PositionOf(entt::entity object) const
@@ -1950,7 +1961,7 @@ bool MagicSystem::HandPointValid() const
 	const auto point = *_hand.point;
 	auto& self = const_cast<MagicSystem&>(*this);
 	// Every cast from the hand needs the hand in the player's influence, whatever the miracle's own rule
-	if (!_ignoreInfluence && !_world.InInfluence(seed.player, point))
+	if (!_ignoreInfluence && !_world.HandInInfluence(seed.player, point))
 	{
 		return false;
 	}
@@ -1965,6 +1976,12 @@ entt::entity MagicSystem::CastHeldSeed(magic::CastTarget target)
 		return entt::null;
 	}
 	auto& seed = registry.Get<SpellSeed>(*_held);
+	// Using the held miracle on the land counts as a turn more for what the hand keeps of the player's influence past
+	// the border, before it is known whether it may be used there
+	if (target != magic::CastTarget::Object)
+	{
+		_world.HeldThingUsedOnLand(seed.player);
+	}
 	// A locked miracle still running is applied again where it is: it follows the hand
 	if (const auto* running = FindSpell(seed.spell); running != nullptr && !running->closedDown)
 	{

@@ -159,3 +159,16 @@ TEST(SkyDome, SunAndMoonDimThroughAnOvercast)
 	EXPECT_FLOAT_EQ(sky_dome::ThroughOvercast(200.0f, 2.0f, true), 22.0f);
 	EXPECT_FLOAT_EQ(sky_dome::ThroughOvercast(200.0f, 1.0f, false), 200.0f);
 }
+
+TEST(SkyDome, PicturesAreEachAlignmentAtEachTimeOfDay)
+{
+	const auto files = sky_dome::PictureFiles();
+	EXPECT_EQ(files[0], "sky_evil_night.555");
+	EXPECT_EQ(files[2], "sky_evil_day.555");
+	// The neutral ones are capitalised as the game ships them
+	EXPECT_EQ(files[3], "Sky_Ntrl_Night.555");
+	EXPECT_EQ(files[4], "Sky_Ntrl_Dusk.555");
+	EXPECT_EQ(files[5], "Sky_Ntrl_Day.555");
+	EXPECT_EQ(files[7], "sky_good_dusk.555");
+	EXPECT_EQ(files[8], "sky_good_day.555");
+}

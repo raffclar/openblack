@@ -1,0 +1,1542 @@
+[
+ {
+  "description": "Entities by component, kind or label: ids, kinds, labels and places",
+  "kind": "list",
+  "parameters": [
+   {
+    "description": "Only entities with this component (or all of these), by name, e.g. Tree",
+    "name": "component",
+    "type": "string or array"
+   },
+   {
+    "description": "Only entities of this kind, e.g. Villager, Abode, Tree, Animal, Creature",
+    "name": "kind",
+    "type": "string"
+   },
+   {
+    "description": "Only entities whose label holds this text, in any case",
+    "name": "name",
+    "type": "string"
+   }
+  ],
+  "query": "ecs.entities"
+ },
+ {
+  "description": "One entity: its kind, label, place and component names; their fields on request",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The entity's id",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "The components to write out with their fields, by name",
+    "name": "components",
+    "type": "array or \"all\""
+   }
+  ],
+  "query": "ecs.entity"
+ },
+ {
+  "description": "The component types there are, how many entities have each, and whether their fields are known",
+  "kind": "list",
+  "parameters": [],
+  "query": "ecs.components"
+ },
+ {
+  "description": "A hash of where every entity is (its id and transform), and of a component's fields when one is named, to tell whether two runs ended the same",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "Also hash this component's fields on each entity that has it",
+    "name": "component",
+    "type": "string"
+   },
+   {
+    "description": "Leave out the entities with any of these components, e.g. [\"HandGrab\"]: the hand eases towards the pointer every frame drawn, paused or not",
+    "name": "exclude",
+    "type": "array"
+   }
+  ],
+  "query": "ecs.hash"
+ },
+ {
+  "description": "Every component field that holds an entity (an entity, an optional one or a list of them), gone or not: the holder, its label, the component and the field's path",
+  "kind": "list",
+  "parameters": [
+   {
+    "description": "The entity's id",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "ecs.references"
+ },
+ {
+  "description": "Objects within the radius of a point, nearest first, by component, kind or label",
+  "kind": "list",
+  "needs_near": true,
+  "parameters": [
+   {
+    "description": "Only entities with this component (or all of these), by name, e.g. Tree",
+    "name": "component",
+    "type": "string or array"
+   },
+   {
+    "description": "Only entities of this kind, e.g. Villager, Abode, Tree, Animal, Creature",
+    "name": "kind",
+    "type": "string"
+   },
+   {
+    "description": "Only entities whose label holds this text, in any case",
+    "name": "name",
+    "type": "string"
+   }
+  ],
+  "query": "objects.find"
+ },
+ {
+  "description": "The kinds of thing edit.create makes, or the types of one kind by their numbers",
+  "kind": "list",
+  "parameters": [
+   {
+    "description": "A kind, to list its types",
+    "name": "kind",
+    "type": "string"
+   }
+  ],
+  "query": "edit.kinds"
+ },
+ {
+  "description": "Makes a thing through the archetype the game makes it with; answers it and where it went",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "A kind from edit.kinds",
+    "name": "kind",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The type within the kind, by its number or name (edit.kinds {kind})",
+    "name": "type",
+    "required": true,
+    "type": "integer or string"
+   },
+   {
+    "description": "[x, z] on the land, or [x, y, z]",
+    "name": "position",
+    "required": true,
+    "type": "point"
+   },
+   {
+    "description": "The angle it faces about the up axis, in degrees",
+    "name": "yaw",
+    "type": "number"
+   }
+  ],
+  "query": "edit.create",
+  "writes": true
+ },
+ {
+  "description": "Moves a thing as the game's tools do; answers where it is and its map cell",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The entity's id",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "[x, z] on the land, or [x, y, z]",
+    "name": "position",
+    "required": true,
+    "type": "point"
+   }
+  ],
+  "query": "edit.move",
+  "writes": true
+ },
+ {
+  "description": "Turns a thing about the up axis by an angle",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The entity's id",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "The angle to turn by, in degrees",
+    "name": "yaw",
+    "required": true,
+    "type": "number"
+   }
+  ],
+  "query": "edit.turn",
+  "writes": true
+ },
+ {
+  "description": "Sets one field of a component, its type checked; answers the field as it now is",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The entity's id",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "The component, by name (ecs.components)",
+    "name": "component",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The field, or a dotted path into a nested value",
+    "name": "field",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The new value, of the field's type; an object sets a nested value's fields",
+    "name": "value",
+    "required": true,
+    "type": "any"
+   }
+  ],
+  "query": "edit.set",
+  "writes": true
+ },
+ {
+  "description": "Adds a component, made as it starts, then its fields set; answers the component",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The entity's id",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "The component, by name",
+    "name": "component",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "Fields to set once it is added, by name",
+    "name": "fields",
+    "type": "object"
+   }
+  ],
+  "query": "edit.add",
+  "writes": true
+ },
+ {
+  "description": "Takes a component off an entity; answers the components it has left",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The entity's id",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "The component, by name",
+    "name": "component",
+    "required": true,
+    "type": "string"
+   }
+  ],
+  "query": "edit.remove_component",
+  "writes": true
+ },
+ {
+  "description": "Takes a thing out of the world through the game's own removal: its physics, sounds, map cells, building, town and what it alone owns; answers whether it is gone from each",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The entity's id",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "\"remove\" (gone at once, the default) or \"effect\" (as an effect that destroys things leaves it: a villager dies, a building burns down)",
+    "name": "how",
+    "type": "string"
+   }
+  ],
+  "query": "edit.destroy",
+  "writes": true
+ },
+ {
+  "description": "The moon: its position in the world (null while down), phase, day of its month and whether it is up",
+  "kind": "object",
+  "parameters": [],
+  "query": "sky.moon"
+ },
+ {
+  "description": "The sky: its type, its time, the script clock's hour and the day and night's times",
+  "kind": "object",
+  "parameters": [],
+  "query": "sky.state"
+ },
+ {
+  "description": "The splashes within the radius of a point, nearest first: rings on the water (age, life, growth, alpha) and splash effects (age, particle count, closing)",
+  "kind": "list",
+  "needs_near": true,
+  "parameters": [],
+  "query": "particles.splash"
+ },
+ {
+  "description": "The running particle effects: file, place, age, particle count, closing",
+  "kind": "list",
+  "parameters": [
+   {
+    "description": "Only effects whose file name holds this text, in any case",
+    "name": "file",
+    "type": "string"
+   }
+  ],
+  "query": "particles.effects"
+ },
+ {
+  "description": "The running particle effects that follow an object and end with it",
+  "kind": "list",
+  "parameters": [
+   {
+    "description": "The object's entity id",
+    "name": "owner",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "particles.emitters"
+ },
+ {
+  "description": "How many bodies the physics has: flying, resting and in water",
+  "kind": "object",
+  "parameters": [],
+  "query": "physics.state"
+ },
+ {
+  "description": "One object's body in the physics: place, velocity, mass, resting, who threw it",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The object's entity id",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "physics.body"
+ },
+ {
+  "description": "The bodies about a point, nearest first",
+  "kind": "list",
+  "needs_near": true,
+  "parameters": [],
+  "query": "physics.bodies"
+ },
+ {
+  "description": "The creatures with minds: what each is doing and its strongest desire",
+  "kind": "list",
+  "parameters": [],
+  "query": "creature.list"
+ },
+ {
+  "description": "A creature's strongest desires, strongest first",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "How many desires (5 by default)",
+    "name": "top",
+    "type": "integer"
+   }
+  ],
+  "query": "creature.desires"
+ },
+ {
+  "description": "A creature's plan (desire, action, object, priority), activity and next agenda steps",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   }
+  ],
+  "query": "creature.plan"
+ },
+ {
+  "description": "What stands in a map cell (10 by 10) as a search meets it: the things that stay put, then those that move",
+  "kind": "list",
+  "parameters": [
+   {
+    "description": "A point in the cell, [x, z] or [x, y, z]",
+    "name": "position",
+    "type": "point"
+   },
+   {
+    "description": "The cell's [column, row] instead",
+    "name": "cell",
+    "type": "array"
+   }
+  ],
+  "query": "map.cell"
+ },
+ {
+  "description": "The towns: number, owner, buildings and people without a home",
+  "kind": "list",
+  "parameters": [],
+  "query": "town.list"
+ },
+ {
+  "description": "A town's buildings, newest first, with who lives in each and who is at home",
+  "kind": "list",
+  "parameters": [
+   {
+    "description": "The town's entity id (town.list)",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "town.homes"
+ },
+ {
+  "description": "A town's people without a home, newest first",
+  "kind": "list",
+  "parameters": [
+   {
+    "description": "The town's entity id (town.list)",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "town.homeless"
+ },
+ {
+  "description": "The hand's share: the player's influence where their hand is (with what the hand keeps past the border), at the hand's own place, and their own; whether the hand is inside",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The player's number, 0 (the first) by default",
+    "name": "player",
+    "type": "integer"
+   }
+  ],
+  "query": "influence.hand"
+ },
+ {
+  "description": "A player's influence at a point",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "[x, z] or [x, y, z]",
+    "name": "position",
+    "required": true,
+    "type": "point"
+   },
+   {
+    "description": "The player's number, 0 (the first) by default",
+    "name": "player",
+    "type": "integer"
+   }
+  ],
+  "query": "influence.at"
+ },
+ {
+  "description": "How many circles of influence there are",
+  "kind": "object",
+  "parameters": [],
+  "query": "influence.state"
+ },
+ {
+  "description": "Where the camera is, what it looks at, its yaw, pitch (degrees below the horizon) and distance, its field of view, what moves it, and whether a camera path holds it",
+  "kind": "object",
+  "parameters": [],
+  "query": "camera.state"
+ },
+ {
+  "description": "Puts the camera somewhere at once, as the scripts place it; what isn't given is kept. Refused while a camera path holds the camera",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "Where the camera stands, [x, y, z]",
+    "name": "position",
+    "type": "point"
+   },
+   {
+    "description": "What it looks at, [x, z] on the land or [x, y, z]",
+    "name": "focus",
+    "type": "point"
+   },
+   {
+    "description": "Degrees about the up axis: 0 looks along +z, 90 along +x",
+    "name": "yaw",
+    "type": "number"
+   },
+   {
+    "description": "Degrees below the horizon",
+    "name": "pitch",
+    "type": "number"
+   },
+   {
+    "description": "From the camera to its focus: the zoom",
+    "name": "distance",
+    "type": "number"
+   }
+  ],
+  "query": "camera.set",
+  "writes": true
+ },
+ {
+  "description": "Puts the camera at once to look at an entity where it is now, from the angles and distance given, the camera's own otherwise. For a moving entity in a picture, give screenshot.take's frame instead: it frames it at the picture's frame",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The entity",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "Degrees about the up axis: 0 looks along +z, 90 along +x",
+    "name": "yaw",
+    "type": "number"
+   },
+   {
+    "description": "Degrees below the horizon",
+    "name": "pitch",
+    "type": "number"
+   },
+   {
+    "description": "From the camera to the entity",
+    "name": "distance",
+    "type": "number"
+   }
+  ],
+  "query": "camera.frame",
+  "writes": true
+ },
+ {
+  "description": "Flies the camera somewhere as the bookmarks fly it; read camera.state as it goes",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "Where the camera stands, [x, y, z]",
+    "name": "position",
+    "type": "point"
+   },
+   {
+    "description": "What it looks at, [x, z] on the land or [x, y, z]",
+    "name": "focus",
+    "type": "point"
+   },
+   {
+    "description": "Degrees about the up axis: 0 looks along +z, 90 along +x",
+    "name": "yaw",
+    "type": "number"
+   },
+   {
+    "description": "Degrees below the horizon",
+    "name": "pitch",
+    "type": "number"
+   },
+   {
+    "description": "From the camera to its focus: the zoom",
+    "name": "distance",
+    "type": "number"
+   }
+  ],
+  "query": "camera.fly",
+  "writes": true
+ },
+ {
+  "description": "The debug windows and the game's own (its menu, the Creature Cave): name, kind, open; the menu's page (or question) and the controls on it that can be pressed by name",
+  "kind": "list",
+  "parameters": [],
+  "query": "gui.windows"
+ },
+ {
+  "description": "Opens a window by its name, from gui.windows",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The window's name",
+    "name": "window",
+    "required": true,
+    "type": "string"
+   }
+  ],
+  "query": "gui.open",
+  "writes": true
+ },
+ {
+  "description": "Closes a window by its name",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The window's name",
+    "name": "window",
+    "required": true,
+    "type": "string"
+   }
+  ],
+  "query": "gui.close",
+  "writes": true
+ },
+ {
+  "description": "Presses a button of a window by its label, as a click on it would. The game's menu: any control of the page it shows (buttons, check boxes, sliders in their middle, tabs) or of the question it asks, as gui.windows lists them; path [n] for the n-th of a name. A debug window's button inside a table row or another scope its window pushed needs path: the labels and numbers leading to it. The press is made at the window's next frame; read what it changed after",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The window's name",
+    "name": "window",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The button's label",
+    "name": "button",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The scopes before the button: strings and numbers, e.g. [\"Creatures\", 3]",
+    "name": "path",
+    "type": "array"
+   }
+  ],
+  "query": "gui.press",
+  "writes": true
+ },
+ {
+  "description": "The lands the game can load: the story's and the playgrounds, by name",
+  "kind": "list",
+  "parameters": [],
+  "query": "level.list"
+ },
+ {
+  "description": "The land loaded now",
+  "kind": "object",
+  "parameters": [],
+  "query": "level.current"
+ },
+ {
+  "description": "Loads a land by its name (level.list). how fresh (the default) loads it as the land menu does, the scripts starting again; how story changes land as the story does, through the game's own change of land, the scripts going on. Answers once it has loaded",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The land's name",
+    "name": "name",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "fresh or story",
+    "name": "how",
+    "type": "string"
+   }
+  ],
+  "query": "level.load",
+  "writes": true
+ },
+ {
+  "description": "Loads the empty testbed, as the land menu's Creature Testbed does",
+  "kind": "object",
+  "parameters": [],
+  "query": "level.testbed",
+  "writes": true
+ },
+ {
+  "description": "The volumes, whether music plays, and how many sounds play",
+  "kind": "object",
+  "parameters": [],
+  "query": "audio.state"
+ },
+ {
+  "description": "The sounds about a point, nearest first (sounds without a place are left out)",
+  "kind": "list",
+  "needs_near": true,
+  "parameters": [],
+  "query": "audio.sounds"
+ },
+ {
+  "description": "The engine's settings: what is drawn, the display and the camera's clip",
+  "kind": "object",
+  "parameters": [],
+  "query": "engine.config"
+ },
+ {
+  "description": "The last frame: its time, the window's size, the renderer's flags and how much it draws",
+  "kind": "object",
+  "parameters": [],
+  "query": "engine.frame"
+ },
+ {
+  "description": "How many of each kind of resource the caches hold",
+  "kind": "object",
+  "parameters": [],
+  "query": "engine.resources"
+ },
+ {
+  "description": "Which of the engine's services are there, the game's random seeds, the game's path, the debug windows' focus and the inspector's port",
+  "kind": "object",
+  "parameters": [],
+  "query": "engine.services"
+ },
+ {
+  "description": "The land: its extent, blocks and countries",
+  "kind": "object",
+  "parameters": [],
+  "query": "land.terrain"
+ },
+ {
+  "description": "The land's height and normal under a point",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "[x, z] or [x, y, z]",
+    "name": "position",
+    "required": true,
+    "type": "point"
+   }
+  ],
+  "query": "land.height"
+ },
+ {
+  "description": "The sea's textures",
+  "kind": "object",
+  "parameters": [],
+  "query": "land.ocean"
+ },
+ {
+  "description": "The climate: whether it runs, its storms and the season",
+  "kind": "object",
+  "parameters": [],
+  "query": "land.weather"
+ },
+ {
+  "description": "The weather at a point: temperature, rain, snow, overcast, wind",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "[x, z] or [x, y, z]",
+    "name": "position",
+    "required": true,
+    "type": "point"
+   }
+  ],
+  "query": "land.weather_at"
+ },
+ {
+  "description": "The snow lying on the land: its cells, deepest and revision",
+  "kind": "object",
+  "parameters": [],
+  "query": "land.snow"
+ },
+ {
+  "description": "The rain's streaks and fall, and the falling snow's flakes",
+  "kind": "object",
+  "parameters": [],
+  "query": "land.precipitation"
+ },
+ {
+  "description": "How many trees and fields sway with the wind",
+  "kind": "object",
+  "parameters": [],
+  "query": "land.vegetation"
+ },
+ {
+  "description": "The mists and clouds over the land",
+  "kind": "object",
+  "parameters": [],
+  "query": "land.atmosphere"
+ },
+ {
+  "description": "A villager's or animal's action states: top, final, previous, and turns in them",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The living thing's entity id",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "living.action"
+ },
+ {
+  "description": "An animal: its kind's radius, where it moves to and whether a creature fears it",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The animal's entity id",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "living.animal"
+ },
+ {
+  "description": "Whether it is dark enough for the village lights, and how many there are",
+  "kind": "object",
+  "parameters": [],
+  "query": "living.villages"
+ },
+ {
+  "description": "A field's crop as it is drawn: its tint, height and sway",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The field's entity id",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "living.field"
+ },
+ {
+  "description": "The land's forests: their wood and trees",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.forests"
+ },
+ {
+  "description": "How many fireflies there are",
+  "kind": "object",
+  "parameters": [],
+  "query": "living.fireflies"
+ },
+ {
+  "description": "The chimneys smoking",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.chimneys"
+ },
+ {
+  "description": "The sounds tagged to things: sound, whether active, and its emitter",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.sound_tags"
+ },
+ {
+  "description": "The rewards on their way to the land or lying on it",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.rewards"
+ },
+ {
+  "description": "The obstacles walkers hug, by the map's cells",
+  "kind": "object",
+  "parameters": [],
+  "query": "living.pathfinding"
+ },
+ {
+  "description": "What a thing holds as a resource, and the store a pile belongs to",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The thing's entity id",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "living.resource"
+ },
+ {
+  "description": "How much of a building is drawn while it is built or broken",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The building's entity id",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "living.building"
+ },
+ {
+  "description": "What a town wants most, and how much it wants each thing",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The town's entity id",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "living.town_desires"
+ },
+ {
+  "description": "The players: their entities, primary creatures and alignment",
+  "kind": "list",
+  "parameters": [],
+  "query": "players.list"
+ },
+ {
+  "description": "This computer's hands: where they are, and what the hand holds or takes",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.hand"
+ },
+ {
+  "description": "What the cursor picks: the object, the point and the land under it",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.pick"
+ },
+ {
+  "description": "The mouse and the hands as the game's actions see them",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.input"
+ },
+ {
+  "description": "The gesture being drawn and the last recognised",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.gestures"
+ },
+ {
+  "description": "The hand's miracle, the spells and dispensers there are, and the other miracles' systems: shields, tornadoes, explosions",
+  "kind": "object",
+  "parameters": [],
+  "query": "magic.state"
+ },
+ {
+  "description": "The spells cast, nearest first when searched about a point",
+  "kind": "list",
+  "parameters": [],
+  "query": "magic.spells"
+ },
+ {
+  "description": "The miracle dispensers",
+  "kind": "list",
+  "parameters": [],
+  "query": "magic.dispensers"
+ },
+ {
+  "description": "A player's teleport stones",
+  "kind": "list",
+  "parameters": [
+   {
+    "description": "The player's number, 0 by default",
+    "name": "player",
+    "type": "integer"
+   }
+  ],
+  "query": "magic.teleport"
+ },
+ {
+  "description": "The reactions going on, nearest first when searched about a point",
+  "kind": "list",
+  "parameters": [],
+  "query": "magic.reactions"
+ },
+ {
+  "description": "The fires burning, nearest first when searched about a point",
+  "kind": "list",
+  "parameters": [],
+  "query": "magic.fires"
+ },
+ {
+  "description": "The temples on the land: their owners, and whether they are being destroyed",
+  "kind": "list",
+  "parameters": [],
+  "query": "temple.state"
+ },
+ {
+  "description": "The temple's inside: whether the player is in it, the room and the visits",
+  "kind": "object",
+  "parameters": [],
+  "query": "temple.interior"
+ },
+ {
+  "description": "Whether a camera path holds the camera, the camera's help, and the knock readout",
+  "kind": "object",
+  "parameters": [],
+  "query": "view.state"
+ },
+ {
+  "description": "The camera's bookmarks",
+  "kind": "list",
+  "parameters": [],
+  "query": "view.bookmarks"
+ },
+ {
+  "description": "The fade, the wide screen and whether the interface is shown",
+  "kind": "object",
+  "parameters": [],
+  "query": "view.cinematic"
+ },
+ {
+  "description": "The editor: open, its tool, its camera and what is selected",
+  "kind": "object",
+  "parameters": [],
+  "query": "view.editor"
+ },
+ {
+  "description": "What is drawn of the advisors this frame: near the screen or in the world, alpha, how far out in the world, and how close their posed meshes come to the camera beside its near plane",
+  "kind": "list",
+  "parameters": [],
+  "query": "advisors.draws"
+ },
+ {
+  "description": "The creature systems' own state: the creature followed or in the cave, the hand on a creature, the hair, voices, footprints, physiology and the mind kept between lands",
+  "kind": "object",
+  "parameters": [],
+  "query": "creatures.systems"
+ },
+ {
+  "description": "A creature's body systems: moving, what its hands do, its leash, its fight, its animation and its skin",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "creatures.status"
+ },
+ {
+  "description": "Starts a fight between two creatures as the scripts and the leash start one, the first making the arena; how it went and both creatures' fight state",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature that starts the fight",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "The other creature",
+    "name": "opponent",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "creatures.fight",
+  "writes": true
+ },
+ {
+  "description": "The script machine: its scripts, tasks, globals and the task running",
+  "kind": "object",
+  "parameters": [],
+  "query": "script.vm"
+ },
+ {
+  "description": "The script tasks running: their scripts, where they are and whether they sleep",
+  "kind": "list",
+  "parameters": [],
+  "query": "script.tasks"
+ },
+ {
+  "description": "The script natives called that openblack hasn't written, most called first",
+  "kind": "list",
+  "parameters": [],
+  "query": "script.natives"
+ },
+ {
+  "description": "How many things scripts hold and control",
+  "kind": "object",
+  "parameters": [],
+  "query": "script.objects"
+ },
+ {
+  "description": "The land's scripts whose names or files hold a text (any case): name, file, type (script, help, challenge_help, temple_help, temple_special, multiplayer_help) and parameters",
+  "kind": "list",
+  "parameters": [
+   {
+    "description": "Part of the name or file",
+    "name": "name",
+    "type": "string"
+   }
+  ],
+  "query": "script.scripts"
+ },
+ {
+  "description": "Starts a script by its name, a challenge or any other function the land's scripts have, as the game starts them; the task it runs in",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The script's name",
+    "name": "name",
+    "required": true,
+    "type": "string"
+   }
+  ],
+  "query": "script.run",
+  "writes": true
+ },
+ {
+  "description": "Stops a script task by its number, from script.tasks",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The task's number",
+    "name": "task",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "script.stop",
+  "writes": true
+ },
+ {
+  "description": "The scripts' global variables whose names hold a text (any case): name, type, value",
+  "kind": "list",
+  "parameters": [
+   {
+    "description": "Part of the name",
+    "name": "name",
+    "type": "string"
+   }
+  ],
+  "query": "script.globals"
+ },
+ {
+  "description": "Sets a global variable by its exact name, keeping its type; its value after",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The global's name",
+    "name": "name",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "A number, true or false, or {\"object\": id}",
+    "name": "value",
+    "required": true,
+    "type": "any"
+   }
+  ],
+  "query": "script.set_global",
+  "writes": true
+ },
+ {
+  "description": "The script natives by name (any case): number, name, values taken and given back, and whether openblack has written them",
+  "kind": "list",
+  "parameters": [
+   {
+    "description": "Part of the name",
+    "name": "name",
+    "type": "string"
+   }
+  ],
+  "query": "script.functions"
+ },
+ {
+  "description": "Calls a script native as a script's call to it would, with its arguments in order (a vector is [x, y, z]); what it gave back. Natives that wait for something or run over turns aren't for this",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The native's name or number, from script.functions",
+    "name": "native",
+    "required": true,
+    "type": "string or integer"
+   },
+   {
+    "description": "Numbers, true or false, [x, y, z], {\"object\": id} or {\"int\": n}, as many as it takes",
+    "name": "args",
+    "type": "array"
+   }
+  ],
+  "query": "script.call",
+  "writes": true
+ },
+ {
+  "description": "Whether the game is paused, its turn, the frames served, its speed and any stepping",
+  "kind": "object",
+  "parameters": [],
+  "query": "game.state"
+ },
+ {
+  "description": "Pauses the game, stopping any stepping; the state after",
+  "kind": "object",
+  "parameters": [],
+  "query": "game.pause"
+ },
+ {
+  "description": "Lets the game run, stopping any stepping; the state after",
+  "kind": "object",
+  "parameters": [],
+  "query": "game.resume"
+ },
+ {
+  "description": "Runs the game for some frames or turns from the next frame, then pauses it; poll game.state until stepping is null. With fixed_ms each frame takes that long whatever the wall clock says, so that the same input gives the same frames",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "Frames to run",
+    "name": "frames",
+    "type": "integer"
+   },
+   {
+    "description": "Game turns to run (ten a second)",
+    "name": "turns",
+    "type": "integer"
+   },
+   {
+    "description": "Milliseconds each frame takes while stepping (1 to 1000)",
+    "name": "fixed_ms",
+    "type": "integer"
+   }
+  ],
+  "query": "game.step"
+ },
+ {
+  "description": "Each frame takes a fixed time from now on, whatever the wall clock says, or the wall clock's time again with 0; the state after",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "Milliseconds a frame (1 to 1000), 0 for none",
+    "name": "ms",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "game.frame_time"
+ },
+ {
+  "description": "Sets the game's speed; the state after",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "1 is normal, 2 twice as fast",
+    "name": "speed",
+    "required": true,
+    "type": "number"
+   }
+  ],
+  "query": "game.speed"
+ },
+ {
+  "description": "Loads a testbed scenario on a fresh testbed",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The scenario's id, from game.scenarios",
+    "name": "id",
+    "required": true,
+    "type": "string"
+   }
+  ],
+  "query": "game.scenario"
+ },
+ {
+  "description": "The testbed scenarios: id, name, facet and what each sets up",
+  "kind": "list",
+  "parameters": [],
+  "query": "game.scenarios"
+ },
+ {
+  "description": "The run's seed, the date pinned (null for the wall clock's) and the machine's milliseconds as the game reads them. With seed: every random number the game draws starts again from it, and the clock counts from 0 at a pinned date; each land or scenario loaded afterwards starts them again the same way. For two runs to go the same way: game.pause, game.frame_time, game.seed, load the land or scenario, then step; compare ecs.hash",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The seed, 0 to 4294967295",
+    "name": "seed",
+    "type": "integer"
+   },
+   {
+    "description": "With seed: the date pinned, in seconds since 1970 (1 January 2001 by default)",
+    "name": "date",
+    "type": "integer"
+   },
+   {
+    "description": "With seed: keep reading the wall clock's date and ticks",
+    "name": "wall_clock",
+    "type": "boolean"
+   },
+   {
+    "description": "With seed: each land or scenario loaded afterwards starts paused, before any of its frames (true by default)",
+    "name": "pause_on_load",
+    "type": "boolean"
+   }
+  ],
+  "query": "game.seed",
+  "writes": true
+ },
+ {
+  "description": "Takes a picture of the screen at an exact frame (this one by default), the camera put somewhere or looking at an entity for it if asked. The file is written once the frame is drawn, within a few frames, and appears whole (the adapter waits for it)",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "Where to write the PNG; a file in the inspector's folder by default",
+    "name": "path",
+    "type": "string"
+   },
+   {
+    "description": "Frames from now (0 is this frame)",
+    "name": "in_frames",
+    "type": "integer"
+   },
+   {
+    "description": "The frame, as game.state counts them",
+    "name": "at_frame",
+    "type": "integer"
+   },
+   {
+    "description": "{position?, focus?, yaw?, pitch?, distance?} as camera.set takes",
+    "name": "camera",
+    "type": "object"
+   },
+   {
+    "description": "An entity to look at where it is at the picture's frame: its id, or {id, yaw?, pitch?, distance?}; not with camera",
+    "name": "frame",
+    "type": "integer|object"
+   },
+   {
+    "description": "Leave the debug windows and the menu bar out of the picture",
+    "name": "hide_gui",
+    "type": "boolean"
+   }
+  ],
+  "query": "screenshot.take",
+  "writes": true
+ },
+ {
+  "description": "The pictures still to take, and any that failed",
+  "kind": "object",
+  "parameters": [],
+  "query": "screenshot.pending"
+ },
+ {
+  "description": "The pointer, the buttons held, the hand, what the cursor picks, and the input still to come",
+  "kind": "object",
+  "parameters": [],
+  "query": "input.state"
+ },
+ {
+  "description": "The actions (by the options screen's names) and the gestures there are",
+  "kind": "object",
+  "parameters": [],
+  "query": "input.names"
+ },
+ {
+  "description": "Moves the pointer, as the mouse would, to a pixel or to where a point of the world is on the screen. The hand follows it this frame.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "A pixel of the window, [x, y] from its top left",
+    "name": "screen",
+    "type": "array"
+   },
+   {
+    "description": "A point of the world, [x, z] on the land or [x, y, z]; it must be on the screen",
+    "name": "world",
+    "type": "point"
+   }
+  ],
+  "query": "input.pointer",
+  "writes": true
+ },
+ {
+  "description": "A mouse button where the pointer is: press, release, or click (pressed now, let go of the next frame)",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "left (the default), middle or right",
+    "name": "button",
+    "type": "string"
+   },
+   {
+    "description": "press, release or click (the default)",
+    "name": "action",
+    "type": "string"
+   }
+  ],
+  "query": "input.button",
+  "writes": true
+ },
+ {
+  "description": "A key by its name (\"L\", \"Space\", \"Left Shift\"), or an action by the options screen's name, pressed for a frame",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The key's name, as SDL names it",
+    "name": "key",
+    "type": "string"
+   },
+   {
+    "description": "The action's name, from input.names; pressed for one frame",
+    "name": "action",
+    "type": "string"
+   },
+   {
+    "description": "For a key: press, release or tap (the default: down now, up the next frame)",
+    "name": "how",
+    "type": "string"
+   }
+  ],
+  "query": "input.key",
+  "writes": true
+ },
+ {
+  "description": "Turns the mouse wheel some notches, away from the player positive",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "Notches",
+    "name": "notches",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "input.wheel",
+  "writes": true
+ },
+ {
+  "description": "Holds a button where the pointer is, moves it evenly to a pixel or a point of the world over some frames, then lets go",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "{\"screen\": [x, y]} or {\"world\": [x, z]}",
+    "name": "to",
+    "required": true,
+    "type": "point"
+   },
+   {
+    "description": "left (the default), middle or right",
+    "name": "button",
+    "type": "string"
+   },
+   {
+    "description": "Frames the move takes (30 by default)",
+    "name": "frames",
+    "type": "integer"
+   },
+   {
+    "description": "Where it starts, as to; the pointer's place by default",
+    "name": "from",
+    "type": "point"
+   }
+  ],
+  "query": "input.drag",
+  "writes": true
+ },
+ {
+  "description": "Moves the pointer through pixels, a frame or more each, with a button held throughout or none",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "[[x, y], ...] in pixels",
+    "name": "points",
+    "required": true,
+    "type": "array"
+   },
+   {
+    "description": "left, middle, right, or none (the default)",
+    "name": "button",
+    "type": "string"
+   },
+   {
+    "description": "Frames for each point (1 by default)",
+    "name": "frames",
+    "type": "integer"
+   }
+  ],
+  "query": "input.path",
+  "writes": true
+ },
+ {
+  "description": "Draws a gesture through the recogniser as the hand would draw it, in the middle of the screen",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The gesture's name, from input.names",
+    "name": "name",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The Action button held throughout, as a circle readying a miracle",
+    "name": "hold_action",
+    "type": "boolean"
+   }
+  ],
+  "query": "input.gesture",
+  "writes": true
+ },
+ {
+  "description": "Lets go of every button and hands the mouse back to the player; forgets input still to come",
+  "kind": "object",
+  "parameters": [],
+  "query": "input.release",
+  "writes": true
+ },
+ {
+  "description": "Keeps the player's own mouse and keyboard out of the game, the debug windows and the camera: always (the default), or with mode auto only while an inspector client is connected, as the game starts. Ctrl+Alt+Shift+F12 on the keyboard always takes the game back",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "locked (the default) or auto",
+    "name": "mode",
+    "type": "string"
+   }
+  ],
+  "query": "input.lock",
+  "writes": true
+ },
+ {
+  "description": "Lets the player's own mouse and keyboard into the game",
+  "kind": "object",
+  "parameters": [],
+  "query": "input.unlock",
+  "writes": true
+ },
+ {
+  "description": "Starts recording the input made, by frame, or stops and answers the recording",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "start or stop",
+    "name": "action",
+    "required": true,
+    "type": "string"
+   }
+  ],
+  "query": "input.record",
+  "writes": true
+ },
+ {
+  "description": "Makes recorded input again, frame for frame, from this frame on",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The recording: [{\"frame\": n, \"event\": {...}}, ...] as input.record answers it",
+    "name": "events",
+    "required": true,
+    "type": "array"
+   }
+  ],
+  "query": "input.replay",
+  "writes": true
+ }
+]

@@ -9,7 +9,9 @@
 
 #pragma once
 
-#include <set>
+#include <vector>
+
+#include <entt/entity/entity.hpp>
 
 #include "Enums.h"
 
@@ -24,10 +26,12 @@ struct Abode
 	// by the villagers
 	uint32_t foodAmount;
 	uint32_t woodAmount;
-	/// Villager
-	std::set<entt::entity> inhabitants;
+	/// Its people, the newest first
+	std::vector<entt::entity> inhabitants;
 	/// How many of them are inside now
 	uint32_t presentAtHome {0};
+	/// Its row in the buildings' table
+	AbodeInfo info {AbodeInfo::None};
 };
 
 } // namespace openblack::ecs::components

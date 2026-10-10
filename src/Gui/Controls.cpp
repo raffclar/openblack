@@ -21,6 +21,7 @@
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
 
+#include "Common/MachineClock.h"
 #include "GameFont.h"
 
 using namespace openblack::gui;
@@ -480,8 +481,7 @@ void EditBox::Draw(const DialogPainter& painter, bool hovered, bool focused, boo
 	if (focused)
 	{
 		// A caret blinking twice a second
-		const auto now = std::chrono::steady_clock::now().time_since_epoch();
-		if ((std::chrono::duration_cast<std::chrono::milliseconds>(now).count() / 250) % 2 == 0)
+		if ((machine_clock::Ticks() / 250u) % 2u == 0u)
 		{
 			const auto x =
 			    position.x + static_cast<int>(painter.GetTextWidth(std::u16string_view(_text).substr(0, _caret), k_Size));

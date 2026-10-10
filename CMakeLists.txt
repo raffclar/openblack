@@ -32,6 +32,14 @@ if (OPENBLACK_USE_VCPKG AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
   )
 endif ()
 
+# The repository patches some vcpkg ports, such as bgfx's Vulkan limits, wherever vcpkg is used, presets or not
+if (OPENBLACK_USE_VCPKG AND NOT DEFINED VCPKG_OVERLAY_PORTS)
+  set(VCPKG_OVERLAY_PORTS
+      ${CMAKE_CURRENT_SOURCE_DIR}/vcpkg-overlay-ports
+      CACHE STRING "The repository's patched vcpkg ports"
+  )
+endif ()
+
 project(openblack VERSION 0.1.0)
 
 # Ninja runs a job per core and more, and every link of the many executables reads the whole static library, so many
@@ -85,6 +93,20 @@ option(OPENBLACK_WARNINGS_AS_ERRORS
 )
 option(OPENBLACK_TRACE_TIME
        "Compilation Time analysis (only available with clang)" OFF
+)
+# The debug inspector: a server on 127.0.0.1 that agents and tools query the game's state and control its run through,
+# started with --inspect-port. For debug and development builds; zero cost when off.
+if (EMSCRIPTEN
+    OR ANDROID
+    OR CMAKE_BUILD_TYPE STREQUAL "Release"
+)
+  set(OPENBLACK_INSPECTOR_DEFAULT OFF)
+else ()
+  set(OPENBLACK_INSPECTOR_DEFAULT ON)
+endif ()
+option(OPENBLACK_INSPECTOR
+       "Build the debug inspector into the game (debug and development builds)"
+       ${OPENBLACK_INSPECTOR_DEFAULT}
 )
 
 find_program(
@@ -159,6 +181,7 @@ add_subdirectory(components/ScriptLibrary)
 add_subdirectory(components/lhvmlang)
 add_subdirectory(components/lhvmdecompiler)
 add_subdirectory(components/lhvmcompiler)
+add_subdirectory(components/inspector)
 add_subdirectory(src)
 add_subdirectory(apps/camtool)
 add_subdirectory(apps/l3dtool)

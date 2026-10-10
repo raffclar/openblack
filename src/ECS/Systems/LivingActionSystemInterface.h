@@ -26,6 +26,8 @@ public:
 
 	[[nodiscard]] virtual VillagerStates VillagerGetState(const components::LivingAction& action,
 	                                                      components::LivingAction::Index index) const = 0;
+	/// The state the villager works towards: its top state when that is a final one, else its final state
+	[[nodiscard]] virtual VillagerStates VillagerGetFinalState(const components::LivingAction& action) const = 0;
 	virtual void VillagerSetState(components::LivingAction& action, components::LivingAction::Index index, VillagerStates state,
 	                              bool skipTransition) const = 0;
 	virtual uint32_t VillagerCallState(components::LivingAction& action, components::LivingAction::Index index) const = 0;

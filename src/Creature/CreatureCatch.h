@@ -15,6 +15,7 @@
 #include <array>
 #include <numbers>
 
+#include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -104,4 +105,14 @@ constexpr float k_LateArrival = 0.1f;
 /// catching animation as it closes, the model's scale, and how long after the catch begins the hand closes, in seconds
 [[nodiscard]] Ready ReadyToCatch(glm::vec3 thing, glm::vec3 velocity, const std::array<glm::vec3, 4>& hands, float modelScale,
                                  float leadSeconds);
+
+/// How far a frame of the side step carries the creature: its share of the step clip's whole travel, sized and turned as
+/// the creature is. Stepping with the left hand takes the whole of it back the other way, height and depth too, as the
+/// game does (where the step ends is judged with only the sideways part turned round).
+[[nodiscard]] glm::vec3 StepMove(glm::vec3 travel, const glm::mat3& rotation, float modelScale, float stepMs, float durationMs,
+                                 bool mirrored);
+/// After a frame of the step, a creature that stands too near ground it may not stand on is put at the nearest place it
+/// may, searched for from half a unit out to below a thousand, with a little more room than the test needs
+constexpr float k_StepSearchClearance = 7.1f;
+constexpr float k_StepSearchDistance = 999.5f;
 } // namespace openblack::creature_catch

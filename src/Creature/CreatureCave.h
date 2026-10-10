@@ -71,13 +71,20 @@ struct Snapshot
 		bool known;
 	};
 	std::vector<Skill> skills;
+	/// Each miracle of the game's table, by its place in it
 	struct Miracle
 	{
 		std::string name;
-		/// 0 to 100
-		int32_t percent;
+		/// It has seen the miracle and knows about it
+		bool knownAbout {false};
+		/// The game has a text for having learnt it, without which the creature's room leaves it out
+		bool hasLearntText {true};
+		/// How far it has learnt it, 0 to 100
+		float learnt {0.0f};
 	};
 	std::vector<Miracle> miracles;
+	/// How it leans in its fights, from -1 (defensive) to 1 (aggressive)
+	float fightBalance {0.0f};
 };
 
 /// The god's attention fades over this many seconds of leaving the creature alone

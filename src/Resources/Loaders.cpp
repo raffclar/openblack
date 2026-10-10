@@ -119,6 +119,11 @@ L3DLoader::result_type L3DLoader::operator()(FromMadeTag, const std::string& deb
 	return mesh;
 }
 
+L3DFileLoader::result_type L3DFileLoader::operator()(FromFileTag, const l3d::L3DFile& file) const
+{
+	return std::make_shared<l3d::L3DFile>(file);
+}
+
 L3DFileLoader::result_type L3DFileLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
 {
 	auto file = std::make_shared<l3d::L3DFile>();
@@ -264,6 +269,27 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskWithAlphaTag, c
 	auto texture = std::make_shared<graphics::Texture2D>(("raw" / rawTexturePath.stem()).string() + "+alpha");
 	texture->Create(side, side, 1, graphics::TextureFormat::RGBA8, graphics::Wrapping::Repeat, graphics::Filter::Linear,
 	                bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size())));
+	return texture;
+}
+
+Texture2DLoader::result_type Texture2DLoader::operator()(FromBitmapLayersTag, const std::string& name,
+                                                         std::span<const std::filesystem::path> layerPaths, uint16_t side) const
+{
+	auto& fileSystem = Locator::filesystem::value();
+	const size_t layerTexels = static_cast<size_t>(side) * side;
+	std::vector<uint16_t> texels(layerTexels * layerPaths.size(), 0);
+	for (size_t layer = 0; layer < layerPaths.size(); ++layer)
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading texture layer: {}", layerPaths[layer].generic_string());
+		const auto data = fileSystem.ReadAll(layerPaths[layer]);
+		Bitmap16B bitmap(data.data());
+		const auto count = std::min(layerTexels, static_cast<size_t>(bitmap.Width()) * bitmap.Height());
+		std::copy_n(bitmap.Data(), count, texels.begin() + static_cast<std::ptrdiff_t>(layer * layerTexels));
+	}
+	auto texture = std::make_shared<graphics::Texture2D>(name);
+	texture->Create(side, side, static_cast<uint16_t>(layerPaths.size()), graphics::TextureFormat::BGR5A1,
+	                graphics::Wrapping::ClampEdge, graphics::Filter::Linear,
+	                bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(texels[0]))));
 	return texture;
 }
 

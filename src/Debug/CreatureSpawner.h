@@ -20,6 +20,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/RandomNumberManager.h"
 #include "Creature/CreatureTattoo.h"
 #include "Enums.h"
 #include "FileBrowser.h"
@@ -179,7 +180,7 @@ private:
 	std::string _lastOrder;
 	/// What became of the last need it was told to see to
 	std::string _lastNeed;
-	std::mt19937 _random {std::random_device {}()};
+	RandomStreamSource _random {RandomStream::CreatureSpawner};
 	std::optional<entt::entity> _selected;
 	/// The creature the selected tab was last brought to the front for
 	std::optional<entt::entity> _tabFor;

@@ -11,6 +11,7 @@
 
 #include <random>
 
+#include "Common/RandomNumberManager.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -33,7 +34,7 @@ public:
 
 private:
 	/// The eyes blink at random, apart from the game's own random numbers
-	std::mt19937 _random {std::random_device {}()};
+	RandomStreamSource _random {RandomStream::CreatureAnimation};
 };
 
 } // namespace openblack::ecs::systems
