@@ -41,6 +41,8 @@ struct WaterTreeType
 {
 	float growthAmount {0.01f};
 	float waterAccelerator {1.0f};
+	/// Made smaller than its full size: a tree made full grown never counts as still growing
+	bool madeToGrow {true};
 };
 struct WaterTreeResult
 {

@@ -54,6 +54,14 @@ public:
 	/// One of the land's birds, as a land script or a temple makes it: flying at its kind's height over a point, at an
 	/// age (a random one for none), joining a flock, or one of its own for none
 	virtual entt::entity CreateBird(AnimalInfo type, glm::vec2 position, uint32_t age, entt::entity flock) = 0;
+	/// An animal a challenge script makes: as a land script's animal on its own, at a random age, but in a flock of its own
+	/// that keeps within 2 m of where it was made, and held still for the script. None for a kind openblack can't make yet.
+	virtual entt::entity CreateScriptAnimal(AnimalInfo type, glm::vec2 position) = 0;
+	/// An animal leaves its flock, which goes when it is left empty, and joins another as its newest member
+	virtual void JoinFlock(entt::entity animal, entt::entity flock) = 0;
+	/// A script sets what an animal does: held still, or going about with its flock. False for anything else, which
+	/// openblack's animals can't do yet.
+	virtual bool SetScriptState(entt::entity animal, LivingStates state) = 0;
 	/// A new size for an animal
 	virtual void SetScale(entt::entity animal, float scale) = 0;
 	/// An animal's radius across the ground: the larger half of its model's width and depth, scaled

@@ -55,7 +55,7 @@ public:
 		_registry.Assign<Transform>(entity, position, glm::mat3(1.0f), glm::vec3(1.0f));
 		if (kind == "tree")
 		{
-			_registry.Assign<Tree>(entity, static_cast<TreeInfo>(type), 1.0f, 1u);
+			_registry.Assign<Tree>(entity, static_cast<TreeInfo>(type), 1.0f);
 		}
 		inMap.push_back(entity);
 		return entity;
@@ -169,6 +169,21 @@ TEST_F(InspectorEdit, SetsAFieldAndAnswersItAsItNowIs)
 	EXPECT_EQ(_registry.Get<Transform>(_villager).position, glm::vec3(1.0f, 2.0f, 3.0f));
 }
 
+// A number written as text, as some tools send a value they don't know the type of, is read as the number for a field
+// that takes one; text that isn't a number still isn't
+TEST_F(InspectorEdit, ANumberWrittenAsTextSetsANumberField)
+{
+	Ask(R"({"query": "edit.set", "params": {"id": )" + Id() +
+	    R"(, "component": "Villager", "field": "life", "value": "0.5"}})");
+	EXPECT_FLOAT_EQ(_registry.Get<Villager>(_villager).life, 0.5f);
+	Ask(R"({"query": "edit.set", "params": {"id": )" + Id() + R"(, "component": "Villager", "field": "food", "value": "3"}})");
+	EXPECT_EQ(_registry.Get<Villager>(_villager).food, 3);
+	EXPECT_NE(Refusal(R"({"query": "edit.set", "params": {"id": )" + Id() +
+	                  R"(, "component": "Villager", "field": "life", "value": "6.0 m"}})")
+	              .find("needs a number"),
+	          std::string::npos);
+}
+
 TEST_F(InspectorEdit, SettingChecksTheFieldsType)
 {
 	const auto before = _registry.Get<Villager>(_villager);
@@ -201,10 +216,10 @@ TEST_F(InspectorEdit, SettingChecksTheFieldsType)
 TEST_F(InspectorEdit, AddsAndRemovesComponents)
 {
 	const auto added = Ask(R"({"query": "edit.add", "params": {"id": )" + Id() +
-	                       R"(, "component": "Tree", "fields": {"maxSize": 3.5, "turnsToGrowth": 4}}})");
+	                       R"(, "component": "Tree", "fields": {"maxSize": 3.5, "growthCountdown": 4}}})");
 	ASSERT_TRUE(_registry.AllOf<Tree>(_villager));
 	EXPECT_FLOAT_EQ(_registry.Get<Tree>(_villager).maxSize, 3.5f);
-	EXPECT_EQ(added["value"]["turnsToGrowth"], 4);
+	EXPECT_EQ(added["value"]["growthCountdown"], 4);
 
 	EXPECT_NE(Refusal(R"({"query": "edit.add", "params": {"id": )" + Id() + R"(, "component": "Tree"}})").find("already"),
 	          std::string::npos);

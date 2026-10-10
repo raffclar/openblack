@@ -292,6 +292,42 @@ float world_objects::LifeOf(entt::entity object)
 	return 1.0f;
 }
 
+void world_objects::SetLife(entt::entity object, float life, bool allowed)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		return;
+	}
+	if (auto* needs = registry.TryGet<CreatureNeeds>(object))
+	{
+		if (allowed)
+		{
+			needs->needs.life = life;
+		}
+		return;
+	}
+	if (auto* villager = registry.TryGet<Villager>(object))
+	{
+		// Counted as injured or better before the life is taken, whether it is or not
+		CountInjury(object, villager->life, life);
+		if (allowed)
+		{
+			villager->life = life;
+		}
+		return;
+	}
+	if (registry.AllOf<Tree>(object) && life <= 0.0f)
+	{
+		Remove(object);
+		return;
+	}
+	if (allowed)
+	{
+		registry.AssignOrReplace<ObjectLife>(object, ObjectLife {.life = life});
+	}
+}
+
 float world_objects::ReduceLife(entt::entity object, float damage)
 {
 	auto& registry = Locator::entitiesRegistry::value();
