@@ -46,7 +46,8 @@ public:
 	[[nodiscard]] bool Active() const override { return _active; }
 	[[nodiscard]] glm::vec3 GetPosition() const override { return _templePosition; }
 	[[nodiscard]] TempleRoom GetCurrentRoom() const override { return _currentRoom; }
-	void SetCurrentRoom(TempleRoom room) override { _currentRoom = room; }
+	void SetCurrentRoom(TempleRoom room) override;
+	bool ReleaseOutsideScriptCamera() override;
 	[[nodiscard]] std::optional<TempleRoom> GetTransitionRoom() const override { return _transitionRoom; }
 	void SetTransitionRoom(std::optional<TempleRoom> room) override { _transitionRoom = room; }
 	void GoToRoom(TempleRoom room) override;
@@ -84,6 +85,8 @@ private:
 	void ApplyLens() const;
 
 	bool _active {false};
+	/// The room the player last came into on this visit, whose help was asked for then
+	std::optional<TempleRoom> _enteredRoom;
 	bool _leaveRequested {false};
 	/// The temple starts in the main room unless told of another
 	TempleRoom _currentRoom {TempleRoom::Main};

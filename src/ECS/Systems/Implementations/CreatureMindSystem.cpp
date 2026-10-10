@@ -1300,6 +1300,8 @@ void CreatureMindSystem::UpdateAttitudeFromFeedback(entt::entity creature, float
 	// Good feedback shows it its player wants compassion, bad anger, and it warms or cools to the player
 	creature_perceived_desires::Increase(
 	    mind->perceivedDesires, static_cast<size_t>(feedback > 0.0f ? Desire::Compassion : Desire::Anger), std::abs(feedback));
+	// The scripts read how strongly it was last rewarded or punished
+	mind->interactionMagnitude = feedback;
 	mind->attitudeToPlayer = creature_feedback::AttitudeAfter(mind->attitudeToPlayer, feedback);
 	mind->averageFeedback = creature_feedback::AverageAfter(mind->averageFeedback, feedback);
 }

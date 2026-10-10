@@ -601,7 +601,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* WAIT_FOR_WOOD */ k_TodoEntry,
     /* INSPECT_OBJECT */ k_TodoEntry,
     /* GO_HOME_AND_CHANGE */ k_TodoEntry,
-    /* WAIT_FOR_MATE */ k_TodoEntry,
+    /* WAIT_FOR_MATE */
+    VillagerStateTableEntry {
+        .state = &villager_reactions::WaitForMate,
+    },
     /* GO_AND_HIDE_IN_NEARBY_BUILDING */ k_TodoEntry,
     /* LOOK_TO_SEE_IF_IT_IS_SAFE */ k_TodoEntry,
     /* SLEEP_IN_TENT */

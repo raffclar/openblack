@@ -72,6 +72,19 @@ ecs::Registry& EntityRegistry()
 	return Locator::entitiesRegistry::value();
 }
 
+/// The least a creature's desires are wanted while another is made dominant, by its species
+float DesireFloorOf(entt::entity entity)
+{
+	const auto* creature = EntityRegistry().TryGet<const Creature>(entity);
+	if (creature == nullptr || !Locator::infoConstants::has_value())
+	{
+		return 0.0f;
+	}
+	const auto& species = Locator::infoConstants::value().creature;
+	const auto row = creature::InfoRow(creature->species);
+	return row < species.size() ? species.at(row).desireFloor : 0.0f;
+}
+
 /// The moods' cheat is cleared as they wear off: on a creature of no player at once, but on a player's creature only
 /// while it is on the learning leash, so that one led on the compassion or aggression leash keeps it until its time is up
 void ClearCheat(entt::entity entity, CreatureSpells& component, creature_desires::Desires& desires)
@@ -334,7 +347,8 @@ void MagicSystem::ApplyCreatureSpell(entt::entity entity, const creature_spells:
 		if (desire.has_value() && desires != nullptr)
 		{
 			// It wants this above all else, and most else is held down
-			component.cheat = creature_spell_mind::SetCheatDominant(*desires, *desire, true, k_TurnsPerSecond);
+			component.cheat = creature_spell_mind::SetCheatDominant(
+			    *desires, *desire, {.all = true, .floor = DesireFloorOf(entity)}, k_TurnsPerSecond);
 		}
 		// Nice puts it on the compassion leash, nasty on the aggression leash, if it is on one
 		if ((event.spell == Spell::Nice || event.spell == Spell::Nasty) && leash != nullptr && leash->IsLeashed(entity))
@@ -400,7 +414,8 @@ void MagicSystem::ApplyCreatureSpell(entt::entity entity, const creature_spells:
 			}
 			if (desires != nullptr)
 			{
-				component.cheat = creature_spell_mind::SetCheatDominant(*desires, Desire::Scratch, true, k_TurnsPerSecond);
+				component.cheat = creature_spell_mind::SetCheatDominant(
+				    *desires, Desire::Scratch, {.all = true, .floor = DesireFloorOf(entity)}, k_TurnsPerSecond);
 			}
 		}
 		break;

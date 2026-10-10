@@ -400,6 +400,13 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 			}
 		}
 	}
+	// Only a villager that might become the mate of one of its people held in the hand heeds it; nothing else does
+	if (reaction.source.type == Reaction::ReactToVillagerInHand)
+	{
+		return registry.AllOf<Villager>(living)
+		           ? villager_reactions::ReactToVillagerInHandPriority(living, reaction.source.initiator)
+		           : 0;
+	}
 	// A villager weighs a fire by its own rule: how far the fire reaches of its fiercest, and whether it fights it already
 	if (reaction.source.type == Reaction::ReactToFire && registry.AllOf<Villager>(living))
 	{
@@ -725,10 +732,12 @@ void ReactionSystem::ProcessTurn()
 	{
 		ShutDown(id);
 	}
-	// A reaction to a flying thing is where the thing is now
+	// A reaction to a flying thing, or to a villager held in the hand, is where the thing is now
 	for (auto& reaction : _reactions)
 	{
-		if (reaction.source.type != Reaction::ReactToFlyingObject || !registry.Valid(reaction.source.initiator))
+		const bool follows =
+		    reaction.source.type == Reaction::ReactToFlyingObject || reaction.source.type == Reaction::ReactToVillagerInHand;
+		if (!follows || !registry.Valid(reaction.source.initiator))
 		{
 			continue;
 		}

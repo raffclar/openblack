@@ -302,6 +302,11 @@ bool TempleScrolls::IsWrittenInFront(Content content) const
 	return _focused.has_value() && _focusedText && _scrolls.at(*_focused).content == content;
 }
 
+std::optional<TempleScrolls::Content> TempleScrolls::GetFocusedContent() const
+{
+	return _focused.has_value() ? std::optional(_scrolls.at(*_focused).content) : std::nullopt;
+}
+
 bool TempleScrolls::IsControl(TempleRoom room, uint32_t subMesh) const
 {
 	return std::ranges::any_of(

@@ -601,6 +601,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::averageFeedback>("averageFeedback")
 	    .Field<&components::CreatureMindState::perceivedDesires>("perceivedDesires")
 	    .Field<&components::CreatureMindState::lastFeedback>("lastFeedback")
+	    .Field<&components::CreatureMindState::interactionMagnitude>("interactionMagnitude")
+	    .Field<&components::CreatureMindState::actionCounts>("actionCounts")
+	    .Field<&components::CreatureMindState::underway>("underway")
 	    .Field<&components::CreatureMindState::developmentPhase>("developmentPhase")
 	    .Field<&components::CreatureMindState::desiresPhase>("desiresPhase")
 	    .Field<&components::CreatureMindState::paused>("paused")
@@ -1570,6 +1573,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Storm::dead>("dead")
 	    .Field<&components::Storm::deadTurns>("deadTurns")
 	    .Field<&components::Storm::climate>("climate");
+	Reflect<components::WeatherThing>(context).Field<&components::WeatherThing::storm>("storm");
 	Reflect<components::WorshipChants>(context)
 	    .Field<&components::WorshipChants::battery>("battery")
 	    .Field<&components::WorshipChants::available>("available")
@@ -1904,7 +1908,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_script_play::Request::plays>("plays");
 	Reflect<openblack::creature_spell_mind::Cheat>(context, ValueOnly {})
 	    .Field<&openblack::creature_spell_mind::Cheat::desire>("desire")
-	    .Field<&openblack::creature_spell_mind::Cheat::turns>("turns");
+	    .Field<&openblack::creature_spell_mind::Cheat::turns>("turns")
+	    .Field<&openblack::creature_spell_mind::Cheat::seconds>("seconds");
 	Reflect<openblack::creature_spells::Slot>(context, ValueOnly {})
 	    .Field<&openblack::creature_spells::Slot::phase>("phase")
 	    .Field<&openblack::creature_spells::Slot::turnsLeft>("turnsLeft")
@@ -2028,6 +2033,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::weight>("weight")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::looping>("looping")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::breathing>("breathing");
+	Reflect<openblack::ecs::components::CreatureMindState::ActionUnderway>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::CreatureMindState::ActionUnderway::serial>("serial")
+	    .Field<&openblack::ecs::components::CreatureMindState::ActionUnderway::action>("action");
 	Reflect<openblack::ecs::components::CreatureMindState::Feedback>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureMindState::Feedback::value>("value")
 	    .Field<&openblack::ecs::components::CreatureMindState::Feedback::activity>("activity");

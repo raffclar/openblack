@@ -171,10 +171,13 @@ FromHandResult DynamicsSystem::LetGoFromHand(entt::entity object, const FromHand
 	{
 		Hooks().DropCarriedResource(*this, object, release.velocity);
 	}
+	// Those who watch it fly are impressed by the thing's own impressiveness
+	const auto* info = _world->InfoOf(object);
 	_world->CreateReaction({.initiator = object,
 	                        .type = Reaction::ReactToFlyingObject,
 	                        .player = release.player.value_or(PlayerNames::NEUTRAL),
 	                        .position = centre,
+	                        .impressiveValue = info != nullptr ? info->impressiveValue : 0.0f,
 	                        .playerless = !release.player.has_value()});
 	Hooks().OfferToCatchingCreatures(object, *entry);
 	Hooks().StartFlyingFromHand(*this, *entry);

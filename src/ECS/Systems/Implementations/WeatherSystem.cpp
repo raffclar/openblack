@@ -24,6 +24,8 @@
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
+#include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
@@ -36,7 +38,9 @@ namespace openblack::ecs::systems
 
 using components::Climate;
 using components::Storm;
+using components::Transform;
 using components::WeatherInfo;
+using components::WeatherThing;
 
 namespace
 {
@@ -275,6 +279,7 @@ void WeatherSystem::Reset()
 	auto& registry = Locator::entitiesRegistry::value();
 	registry.Each<Storm>([&registry](entt::entity entity, Storm&) { registry.Destroy(entity); });
 	registry.Each<Climate>([&registry](entt::entity entity, Climate&) { registry.Destroy(entity); });
+	registry.Each<WeatherThing>([&registry](entt::entity entity, WeatherThing&) { registry.Destroy(entity); });
 	_climateSystemEnabled = true;
 	_stormCreationEnabled = true;
 	_forcedStorm = entt::null;
@@ -517,6 +522,36 @@ void WeatherSystem::Update(uint32_t turn)
 	for (const auto entity : climates)
 	{
 		ProcessClimate(entity, newDay);
+	}
+
+	ProcessWeatherThings();
+}
+
+// A weather thing stands where its storm is. Once the storm has ended it has none, and it goes unless a script still
+// holds it.
+void WeatherSystem::ProcessWeatherThings()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> gone;
+	registry.Each<WeatherThing, Transform>([&registry, &gone](entt::entity entity, WeatherThing& thing, Transform& transform) {
+		if (thing.storm != entt::null)
+		{
+			const auto* storm = registry.Valid(thing.storm) ? registry.TryGet<const Storm>(thing.storm) : nullptr;
+			if (storm != nullptr && !storm->dead)
+			{
+				transform.position = storm->position;
+				return;
+			}
+			thing.storm = entt::null;
+		}
+		if (!registry.AllOf<components::InScript>(entity))
+		{
+			gone.push_back(entity);
+		}
+	});
+	for (const auto entity : gone)
+	{
+		registry.Destroy(entity);
 	}
 }
 
@@ -1020,6 +1055,35 @@ void WeatherSystem::RemoveMiracleStorm(entt::entity entity)
 		}
 		_stamp = 1;
 	}
+}
+
+entt::entity WeatherSystem::CreateWeatherThing(const ScriptStorm& script)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto stormEntity = registry.Create();
+	auto& storm = registry.Assign<Storm>(stormEntity);
+	storm.position = script.centre;
+	storm.destination = script.centre;
+	storm.currentPosition = script.centre;
+	storm.speed = 1.0f;
+	storm.arrived = true;
+	storm.innerRadius = script.innerRadius;
+	storm.outerRadius = script.outerRadius;
+	storm.fadeTime = script.fadeSeconds;
+	storm.lastsFor = script.lastsFor;
+	storm.strength = script.strength;
+	storm.cloudHeight = script.cloudHeight;
+	storm.rainSpeed = script.rainSpeed;
+	storm.effect = script.effect;
+	storm.climate = entt::null;
+	storm.serial = _nextStormSerial++;
+
+	const auto entity = registry.Create();
+	registry.Assign<Transform>(entity, script.centre, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<WeatherThing>(entity, WeatherThing {.storm = stormEntity});
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "A script made a weather thing at ({}, {}): rain {} snow {} cloud {}",
+	                    script.centre.x, script.centre.z, script.effect.rain, script.effect.snow, script.effect.overcast);
+	return entity;
 }
 
 void WeatherSystem::EndStorm(entt::entity entity)

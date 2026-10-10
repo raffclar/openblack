@@ -45,6 +45,7 @@
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "Creature/CreatureTownCompassion.h"
+#include "Creature/CreatureTraining.h"
 #include "Creature/CreatureWatching.h"
 #include "Creature/LeashOrders.h"
 #include "Creature/LeashRules.h"
@@ -778,6 +779,11 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 		// lessens it or one of its steps saw to the desire.
 		const auto plan = *mind.planner.current;
 		const bool carriedOut = idle.serial == mind.planSerial && !idle.gaveUp;
+		if (carriedOut)
+		{
+			creature_training::CountCarriedOut(mind.actionCounts, plan.action,
+			                                   Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature));
+		}
 		if (carriedOut && !mind.satisfiedByEffect && tables != nullptr && plan.action < tables->actions.size())
 		{
 			const auto& action = tables->actions[plan.action];
@@ -801,7 +807,20 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 		Abandon(mind);
 		mind.planner.best.at(static_cast<size_t>(plan.desire)).reset();
 	}
-	// What the idle mind started is over once its agenda runs out
+	// What the idle mind started is over once its agenda runs out: carried out to its end, its action counts
+	if (mind.underway.has_value() && (mind.planActive || mind.underway->serial != idle.serial))
+	{
+		mind.underway.reset();
+	}
+	if (mind.underway.has_value() && idle.step >= idle.agenda.size())
+	{
+		if (!idle.gaveUp)
+		{
+			creature_training::CountCarriedOut(mind.actionCounts, mind.underway->action,
+			                                   Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature));
+		}
+		mind.underway.reset();
+	}
 	if (!mind.planActive && idle.serial == mind.agendaSeen && idle.step >= idle.agenda.size() && !mind.learnt->contexts.empty())
 	{
 		mind.learnt->contexts.back().running = false;
@@ -863,6 +882,7 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 	        .windowSeconds = info.learningWindowSeconds,
 	    });
 	mind.learnt->turnsSinceDone.at(*action) = 0;
+	mind.underway = CreatureMindState::ActionUnderway {.serial = idle.serial, .action = *action};
 }
 
 bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, const creature_planner::Plan& plan,
