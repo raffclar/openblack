@@ -10,9 +10,11 @@
 #include <cmath>
 #include <cstdint>
 
+#include <chrono>
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <variant>
 #include <vector>
@@ -412,14 +414,151 @@ public:
 	}
 	void HideDebugGui() override { ++hiddenFrames; }
 	[[nodiscard]] std::filesystem::path Directory() const override { return "shots"; }
+	[[nodiscard]] std::optional<std::filesystem::path> Root() const override { return root; }
+	[[nodiscard]] ShotSource Source() const override
+	{
+		return {.branch = "fix/moon", .commit = "abc123def", .backend = "d3d12", .date = "2026-10-10"};
+	}
+	[[nodiscard]] bool Exists(const std::filesystem::path& path) const override
+	{
+		return written.contains(path.generic_string());
+	}
+	std::string AppendLine(const std::filesystem::path& file, std::string_view line) override
+	{
+		lines.emplace_back(file.generic_string(), std::string(line));
+		return {};
+	}
 
 	std::vector<std::string> taken;
 	std::vector<bool> hidden;
 	/// Frames drawn without the debug windows, the picture's own aside
 	int hiddenFrames {0};
+	std::optional<std::filesystem::path> root {"E:/openblack/screenshots"};
+	/// The files there, as the game writes them a few frames after it is asked
+	std::set<std::string> written;
+	std::vector<std::pair<std::string, std::string>> lines;
 };
 
 } // namespace
+
+// Kept pictures are named by feature, branch, what and renderer, never over another
+TEST(InspectorScreenshot, KeptPicturesAreNamedByFeature)
+{
+	EXPECT_TRUE(ValidShotFeature("story/opening_cinematic"));
+	EXPECT_TRUE(ValidShotFeature("sky/moon"));
+	EXPECT_FALSE(ValidShotFeature("moon"));
+	EXPECT_FALSE(ValidShotFeature("Sky/Moon"));
+	EXPECT_FALSE(ValidShotFeature("sky/"));
+	EXPECT_FALSE(ValidShotFeature("../sky"));
+	EXPECT_TRUE(ValidShotWhat("yogi-face-whole-f30"));
+	EXPECT_FALSE(ValidShotWhat("Yogi Face"));
+	EXPECT_FALSE(ValidShotWhat("-start"));
+	EXPECT_FALSE(ValidShotWhat("a--b"));
+	EXPECT_FALSE(ValidShotWhat(""));
+
+	const ShotSource source {.branch = "moon-2", .commit = "abc", .backend = "vulkan", .date = "2026-10-10"};
+	const auto none = [](const std::filesystem::path&) { return false; };
+	EXPECT_EQ(KeptShotPath("E:/shots", "sky/moon", "full-moon", source, none).generic_string(),
+	          "E:/shots/sky/moon/2026-10-10_moon-2_full-moon_vulkan.png");
+	// Taken already: a number after it
+	std::set<std::string> taken {"E:/shots/sky/moon/2026-10-10_moon-2_full-moon_vulkan.png",
+	                             "E:/shots/sky/moon/2026-10-10_moon-2_full-moon_vulkan_2.png"};
+	EXPECT_EQ(KeptShotPath("E:/shots", "sky/moon", "full-moon", source,
+	                       [&taken](const std::filesystem::path& path) { return taken.contains(path.generic_string()); })
+	              .generic_string(),
+	          "E:/shots/sky/moon/2026-10-10_moon-2_full-moon_vulkan_3.png");
+	// A branch's slashes don't make folders; without a renderer, none is named
+	EXPECT_EQ(KeptShotPath("E:/shots", "sky/moon", "x", {.branch = "fix/moon", .date = "2026-10-10"}, none).generic_string(),
+	          "E:/shots/sky/moon/2026-10-10_fix-moon_x.png");
+
+	EXPECT_EQ(DateOf(std::chrono::system_clock::time_point {}), "1970-01-01");
+	EXPECT_EQ(DateOf(std::chrono::system_clock::time_point {std::chrono::seconds {1791590400}}), "2026-10-10");
+	EXPECT_EQ(DateOf(std::chrono::system_clock::time_point {std::chrono::seconds {951782400}}), "2000-02-29");
+}
+
+// The folder: the one given, else the environment's, else E:'s when the drive is there (on Windows)
+TEST(InspectorScreenshot, TheScreenshotFolder)
+{
+	const auto drive = [](const std::filesystem::path&) { return true; };
+	const auto noDrive = [](const std::filesystem::path&) { return false; };
+	EXPECT_EQ(ResolveShotRoot(std::filesystem::path("D:/given"), "D:/env", drive), std::filesystem::path("D:/given"));
+	EXPECT_EQ(ResolveShotRoot(std::nullopt, "D:/env", drive), std::filesystem::path("D:/env"));
+	EXPECT_EQ(ResolveShotRoot(std::nullopt, "", noDrive), std::nullopt);
+	EXPECT_EQ(ResolveShotRoot(std::nullopt, nullptr, noDrive), std::nullopt);
+#if defined(_WIN32)
+	EXPECT_EQ(ResolveShotRoot(std::nullopt, nullptr, drive), std::filesystem::path("E:/openblack/screenshots"));
+#endif
+}
+
+// A kept picture goes to its feature's folder, and its line goes in the catalogue once the file is whole, with its
+// frame and camera; without a feature it is temporary, and the answer says so
+TEST(InspectorScreenshot, KeptPicturesAreCataloguedOnceWritten)
+{
+	FakeScreenshots screenshots;
+	FakeCamera camera;
+	auto owned = std::make_unique<ScreenshotProvider>(screenshots, camera);
+	auto* provider = owned.get();
+	Inspector inspector;
+	inspector.Add(std::move(owned));
+	provider->Frame(10);
+
+	const auto kept = Ask(inspector, R"({"query": "screenshot.take", "params": {"feature": "sky/moon", "what": "full-moon",
+	                                    "note": "the moon at its fullest"}})");
+	const auto path = kept["path"].get<std::string>();
+	EXPECT_EQ(path, "E:/openblack/screenshots/sky/moon/2026-10-10_fix-moon_full-moon_d3d12.png");
+	EXPECT_EQ(kept["kept"], true);
+	EXPECT_EQ(kept["catalogue"], "E:/openblack/screenshots/catalogue.jsonl");
+	EXPECT_FALSE(kept.contains("temporary"));
+	ASSERT_EQ(screenshots.taken.size(), 1u);
+	// A second one asked for before the first is written doesn't take its name
+	const auto again =
+	    Ask(inspector, R"({"query": "screenshot.take", "params": {"feature": "sky/moon", "what": "full-moon"}})");
+	EXPECT_EQ(again["path"], "E:/openblack/screenshots/sky/moon/2026-10-10_fix-moon_full-moon_d3d12_2.png");
+
+	// Not written yet: no line
+	provider->Frame(11);
+	EXPECT_TRUE(screenshots.lines.empty());
+	screenshots.written.insert(path);
+	provider->Frame(12);
+	ASSERT_EQ(screenshots.lines.size(), 1u);
+	EXPECT_EQ(screenshots.lines[0].first, "E:/openblack/screenshots/catalogue.jsonl");
+	const auto line = Parse(screenshots.lines[0].second);
+	ASSERT_TRUE(line.has_value());
+	EXPECT_EQ((*line)["path"], path);
+	EXPECT_EQ((*line)["feature"], "sky/moon");
+	EXPECT_EQ((*line)["what"], "full-moon");
+	EXPECT_EQ((*line)["branch"], "fix/moon");
+	EXPECT_EQ((*line)["commit"], "abc123def");
+	EXPECT_EQ((*line)["date"], "2026-10-10");
+	EXPECT_EQ((*line)["backend"], "d3d12");
+	EXPECT_EQ((*line)["frame"], 11);
+	EXPECT_EQ((*line)["agent_note"], "the moon at its fullest");
+	ASSERT_TRUE((*line)["camera"].contains("pitch"));
+	ExpectNear((*line)["camera"]["origin"], camera.pose.origin);
+	// The same file is never catalogued twice
+	provider->Frame(13);
+	EXPECT_EQ(screenshots.lines.size(), 1u);
+
+	// Temporary without a feature
+	const auto temporary = Ask(inspector, R"({"query": "screenshot.take"})");
+	EXPECT_EQ(temporary["temporary"], true);
+	EXPECT_EQ(temporary["path"].get<std::string>().rfind("shots/", 0), 0u);
+
+	// What's missing or misnamed is refused, as is keeping one without a folder for it
+	EXPECT_FALSE(Refused(inspector, R"({"query": "screenshot.take", "params": {"feature": "sky/moon"}})").empty());
+	EXPECT_FALSE(Refused(inspector, R"({"query": "screenshot.take", "params": {"feature": "moon", "what": "x"}})").empty());
+	EXPECT_FALSE(
+	    Refused(inspector, R"({"query": "screenshot.take", "params": {"feature": "sky/moon", "what": "Big Moon"}})").empty());
+	screenshots.root.reset();
+	EXPECT_NE(Refused(inspector, R"({"query": "screenshot.take", "params": {"feature": "sky/moon", "what": "x"}})")
+	              .find("--screenshot-root"),
+	          std::string::npos);
+	// Or kept in a folder given for it
+	EXPECT_EQ(
+	    Ask(inspector,
+	        R"({"query": "screenshot.take", "params": {"feature": "sky/moon", "what": "x", "root": "D:/s"}})")["catalogue"],
+	    "D:/s/catalogue.jsonl");
+}
 
 TEST(InspectorLevels, LoadByNameFreshOrAsTheStoryChangesLand)
 {

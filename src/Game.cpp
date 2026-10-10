@@ -364,6 +364,7 @@ Game::Game(Arguments&& args) noexcept
     , _startTestbed(args.startTestbed || args.scenario.has_value())
     , _scenarioRequest(args.scenario)
     , _inspectPort(args.inspectPort)
+    , _screenshotRoot(args.screenshotRoot)
     , _seed(args.seed)
     , _inspectInputLock(args.inspectInputLock)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)

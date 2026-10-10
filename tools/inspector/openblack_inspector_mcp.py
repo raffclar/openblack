@@ -531,8 +531,11 @@ TOOLS = [
         "description": "A PNG of the screen at an exact frame (this one by default; in_frames or at_frame for later), "
                        "the camera put for it if camera is given (as camera_set takes it), or looking at an entity "
                        "where it is at that frame if frame is given (its id, or {id, yaw?, pitch?, distance?}): "
-                       "moving targets aren't missed. hide_gui leaves the debug windows out. Answers once the PNG is "
-                       "written whole (written: true), unless wait is false.",
+                       "moving targets aren't missed. hide_gui leaves the debug windows out. Keep every picture: "
+                       "give feature (\"domain/feature\", as the progress tracker names them) and what (kebab-case), "
+                       "and it is saved by feature under the screenshot folder (E:/openblack/screenshots) and "
+                       "catalogued; without them it is temporary. Answers once the PNG is written whole "
+                       "(written: true), unless wait is false.",
         "inputSchema": schema({"path": {"type": "string"}, "in_frames": {"type": "integer"},
                                "at_frame": {"type": "integer"},
                                "camera": {"type": "object", "properties": CAMERA_POSE},
@@ -540,6 +543,12 @@ TOOLS = [
                                          "description": "An entity to look at: its id, or {id, yaw?, pitch?, "
                                                         "distance?}; not with camera"},
                                "hide_gui": {"type": "boolean", "description": "Leave the debug windows out"},
+                               "feature": {"type": "string",
+                                           "description": "Keep it by feature: \"domain/feature\", e.g. "
+                                                          "\"story/opening_cinematic\""},
+                               "what": {"type": "string",
+                                        "description": "With feature: a short kebab-case description"},
+                               "note": {"type": "string", "description": "With feature: a note for the catalogue"},
                                "wait": {"type": "boolean", "description": "Wait for the file (true by default)"}}),
         "query": "screenshot.take",
         "params": ["path", "in_frames", "at_frame", "camera", "frame", "hide_gui"],
@@ -746,7 +755,7 @@ TOOLS_BY_NAME = {tool["name"]: tool for tool in TOOLS}
 SHAPING_KEYS = set(SHAPING) | set(NEAR)
 # Parameters newer than some games still running: a game whose description of the query lacks one is an older build,
 # and is told so rather than silently ignoring it
-NEWER_PARAMETERS = {"screenshot.take": ["frame", "hide_gui"]}
+NEWER_PARAMETERS = {"screenshot.take": ["frame", "hide_gui", "feature", "what", "note", "root"]}
 OLDER_BUILD = "merge master into its branch and rebuild it for this"
 # How a PNG ends: its IEND chunk, empty, with its CRC
 PNG_END = b"IEND\xaeB`\x82"
@@ -899,6 +908,20 @@ def worktree_matches(game_worktree, wanted):
     return os.path.normcase(os.path.basename(game_path)) == os.path.normcase(wanted.strip("/\\"))
 
 
+def game_matches_worktree(game, wanted):
+    """A game is wanted by its worktree; a game that couldn't tell its worktree (an older build living apart from its
+    worktree) by a folder of its executable's path named as wanted, as E:/openblack/builds/<worktree>/bin/Debug"""
+    if worktree_matches(game.get("worktree") or "", wanted):
+        return True
+    if game.get("worktree") or not game.get("executable") or not wanted:
+        return False
+    name = os.path.normcase(wanted.strip("/\\"))
+    if not name or os.sep in name or "/" in name:
+        return False
+    folders = normalise_path(game["executable"]).split(os.sep)
+    return any(os.path.normcase(folder) == name for folder in folders[:-1])
+
+
 def describe_game(game):
     return f"pid {game.get('pid', '?')} port {game['port']} worktree {game.get('worktree') or '?'} " \
            f"land {game.get('land') or '-'}"
@@ -917,7 +940,7 @@ def select_game(games, port=None, pid=None, worktree=None):
     if pid is not None:
         candidates = [game for game in candidates if game["pid"] == pid]
     if worktree is not None:
-        candidates = [game for game in candidates if worktree_matches(game.get("worktree", ""), worktree)]
+        candidates = [game for game in candidates if game_matches_worktree(game, worktree)]
     wanted = ", ".join(f"{key} {value}" for key, value in (("port", port), ("pid", pid), ("worktree", worktree))
                        if value is not None)
     if not candidates:
@@ -1074,6 +1097,8 @@ class Session:
         self.selection = None
         # Chosen by whoever started the adapter (its command line): it is that caller's own, so always followed
         self.pinned = None
+        # Where kept pictures go, when the adapter was told (--screenshot-root): given to the game with each kept one
+        self.screenshot_root = None
         # Open connections by game, kept so that a game driven call after call stays locked to its agent
         self.connections = {}
 
@@ -1215,6 +1240,10 @@ class Session:
         if game is None:
             return {"ok": False, "error": error}
         connection = self._connection(game)
+        # A kept picture goes to the adapter's screenshot folder when it was given one and the call names none
+        if self.screenshot_root and request.get("query") == "screenshot.take" and \
+                "feature" in request.get("params", {}) and "root" not in request["params"]:
+            request = {**request, "params": {**request["params"], "root": self.screenshot_root}}
         # A game too old for a parameter is told so, rather than leaving it out of what it does
         newer = [name for name in NEWER_PARAMETERS.get(request["query"], []) if name in request.get("params", {})]
         if newer:
@@ -1386,12 +1415,15 @@ def main():
     parser.add_argument("--pid", type=int, help="Talk to the game of this process")
     parser.add_argument("--timeout", type=float, default=10.0, help="Seconds to wait for the game to answer")
     parser.add_argument("--games", action="store_true", help="List the running games and exit")
+    parser.add_argument("--screenshot-root", help="Where kept pictures go (screenshot.take with feature and what); "
+                                                  "the game's own folder by default")
     parser.add_argument("--call", metavar="QUERY", help="Send one query and print the answer, without MCP")
     parser.add_argument("request", nargs="?", default="{}", help="With --call: the rest of the request as JSON")
     args = parser.parse_args()
 
     default_port = args.port if args.port is not None else int(os.environ.get("OPENBLACK_INSPECT_PORT", DEFAULT_PORT))
     session = Session(default_port, args.timeout)
+    session.screenshot_root = args.screenshot_root or os.environ.get("OPENBLACK_SCREENSHOT_ROOT") or None
     # Chosen on the command line, the game is this caller's own: every call goes to it. As an MCP server shared by
     # agents, --port only names the game of builds too old to keep a discovery file.
     pinned = {key: value for key, value in (("worktree", args.worktree), ("pid", args.pid)) if value is not None}

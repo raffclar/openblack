@@ -1300,7 +1300,7 @@
   "kind": "object",
   "parameters": [
    {
-    "description": "Where to write the PNG; a file in the inspector's folder by default",
+    "description": "Where to write the PNG; without it and without feature, a temporary file in this game's own folder, gone with the game",
     "name": "path",
     "type": "string"
    },
@@ -1323,6 +1323,26 @@
     "description": "An entity to look at where it is drawn at the picture's frame: its id, or {id, yaw?, pitch?, distance?} (yaw and pitch in degrees, pitch below the horizon; distance in metres); not with camera",
     "name": "frame",
     "type": "integer|object"
+   },
+   {
+    "description": "Keep it under the screenshot folder by feature, as the progress tracker names them: \"domain/feature\", e.g. \"story/opening_cinematic\"; with what",
+    "name": "feature",
+    "type": "string"
+   },
+   {
+    "description": "With feature: a short kebab-case description, e.g. \"yogi-face-whole-f30\". It is saved as <root>/<domain>/<feature>/<date>_<branch>_<what>_<backend>.png, never over another, and catalogued in <root>/catalogue.jsonl once written",
+    "name": "what",
+    "type": "string"
+   },
+   {
+    "description": "With feature: a note for the catalogue's line",
+    "name": "note",
+    "type": "string"
+   },
+   {
+    "description": "The screenshot folder, for this picture; the game's own (--screenshot-root, OPENBLACK_SCREENSHOT_ROOT or E:/openblack/screenshots) by default",
+    "name": "root",
+    "type": "string"
    },
    {
     "description": "Leave the debug windows, the menu bar and the input lock's notice out of the picture and the frames held around it",

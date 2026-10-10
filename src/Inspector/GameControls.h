@@ -76,6 +76,10 @@ public:
 	std::string Capture(const std::filesystem::path& path, bool hideDebugGui) override;
 	void HideDebugGui() override;
 	[[nodiscard]] std::filesystem::path Directory() const override;
+	[[nodiscard]] std::optional<std::filesystem::path> Root() const override;
+	[[nodiscard]] ShotSource Source() const override;
+	[[nodiscard]] bool Exists(const std::filesystem::path& path) const override;
+	std::string AppendLine(const std::filesystem::path& file, std::string_view line) override;
 };
 
 /// Everything the inspector controls the game through, owned by the inspector's system

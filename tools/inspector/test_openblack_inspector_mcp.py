@@ -202,6 +202,20 @@ class SelectGameTest(unittest.TestCase):
         {"pid": 12, "port": 47803, "worktree": "C:/projects/ob-wt-world"},
     ]
 
+    def test_a_build_apart_from_its_worktree_is_found_by_it(self):
+        # Built from E:/openblack/worktrees/ob-wt-gate into E:/openblack/builds/ob-wt-gate: the game names the worktree
+        games = [{"pid": 1, "port": 1, "worktree": "E:/openblack/worktrees/ob-wt-gate",
+                  "executable": "E:/openblack/builds/ob-wt-gate/bin/Debug/openblack.exe"},
+                 {"pid": 2, "port": 2, "worktree": "C:/projects/ob-wt-fish",
+                  "executable": "C:/projects/ob-wt-fish/cmake-build-debug/bin/Debug/openblack.exe"}]
+        for wanted in ("ob-wt-gate", "E:/openblack/worktrees/ob-wt-gate", "E:\\openblack\\worktrees\\ob-wt-gate\\src"):
+            self.assertEqual(mcp.select_game(games, worktree=wanted)[0]["pid"], 1, wanted)
+        self.assertEqual(mcp.select_game(games, worktree="ob-wt-fish")[0]["pid"], 2)
+        # An older build that couldn't tell its worktree is still found by the build folder named after it
+        games[0]["worktree"] = ""
+        self.assertEqual(mcp.select_game(games, worktree="ob-wt-gate")[0]["pid"], 1)
+        self.assertIsNone(mcp.select_game(games, worktree="ob-wt-none")[0])
+
     def test_by_port_and_pid(self):
         self.assertEqual(mcp.select_game(self.games, port=47802)[0]["pid"], 11)
         self.assertEqual(mcp.select_game(self.games, pid=12)[0]["port"], 47803)
@@ -565,6 +579,23 @@ class ScreenshotTest(SessionBase):
         self.assertTrue(answer["ok"], answer)
         sent = [request for request in self.first.asked() if request["query"] == "screenshot.take"][0]
         self.assertEqual(sent["params"], {"frame": {"id": 12, "distance": 30}, "hide_gui": True})
+
+    def test_a_kept_picture_goes_to_the_adapters_screenshot_folder(self):
+        self.first.handlers["screenshot.take"] = lambda request: {"path": self.path, "frame": 5,
+                                                                  "params": request.get("params", {})}
+        self.describe_screenshot(["path", "frame", "hide_gui", "feature", "what", "note", "root"])
+        self.session.screenshot_root = "E:/openblack/screenshots"
+        answer = self.session.call("screenshot", {"feature": "sky/moon", "what": "full-moon", "wait": False})
+        self.assertTrue(answer["ok"], answer)
+        sent = [request for request in self.first.asked() if request["query"] == "screenshot.take"][-1]
+        self.assertEqual(sent["params"], {"feature": "sky/moon", "what": "full-moon",
+                                          "root": "E:/openblack/screenshots"})
+        # Not for a temporary one, nor over a folder the call names
+        self.session.call("screenshot", {"wait": False})
+        self.assertNotIn("root", [request for request in self.first.asked()
+                                  if request["query"] == "screenshot.take"][-1].get("params", {}))
+        self.session.call("screenshot", {"feature": "sky/moon", "what": "x", "root": "D:/s", "wait": False})
+        self.assertEqual(self.first.asked()[-1]["params"]["root"], "D:/s")
 
     def test_a_query_an_older_game_lacks_says_why(self):
         self.first.handlers["camera.frame"] = lambda request: "no query camera.frame; ask describe"
