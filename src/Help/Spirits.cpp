@@ -618,24 +618,23 @@ AdvisorSpirit::AdvisorSpirit(int index, const DudeData& data, AdvisorSpiritContr
 	SetState(dude_state::k_Hover, false);
 }
 
-ClingPlace PlaceCling(glm::vec2 hover, const Screen& screen)
+ClingPlace PlaceCling(glm::vec2 hover)
 {
 	// The side holds lie 1.04 half widths out; the top and bottom ones 0.78, just beyond a 4:3 screen's edges, and the
 	// test between them weighs the height by 1 / 0.78
 	constexpr float k_SideHold = 1.04f;
 	constexpr float k_EndHold = 0.78f;
 	constexpr float k_EndWeight = 1.2820513f;
-	const float height = std::min(1.0f, 4.0f * static_cast<float>(screen.height) / (3.0f * static_cast<float>(screen.width)));
-	if (std::abs(hover.y * (k_EndWeight / height)) < std::abs(hover.x))
+	if (std::abs(hover.y * k_EndWeight) < std::abs(hover.x))
 	{
 		return {.edge = hover.x > 0.0f ? Edge::Right : Edge::Left,
 		        .hover = {hover.x > 0.0f ? k_SideHold : -k_SideHold, hover.y}};
 	}
 	if (hover.y > 0.0f)
 	{
-		return {.edge = Edge::Bottom, .hover = {hover.x, k_EndHold * height}};
+		return {.edge = Edge::Bottom, .hover = {hover.x, k_EndHold}};
 	}
-	return {.edge = Edge::Top, .hover = {hover.x, -k_EndHold * height}};
+	return {.edge = Edge::Top, .hover = {hover.x, -k_EndHold}};
 }
 
 void AdvisorSpirit::SetPosition(glm::ivec2 pixel)
@@ -720,7 +719,7 @@ void AdvisorSpirit::SnapClingEdge()
 	{
 		return;
 	}
-	const auto place = PlaceCling({_clingX, _clingY}, _control.GetScreen());
+	const auto place = PlaceCling({_clingX, _clingY});
 	_edge = place.edge;
 	_clingX = place.hover.x;
 	_clingY = place.hover.y;
@@ -1433,9 +1432,17 @@ void AdvisorSpirit::UpdateMatrix(float dt)
 	}
 	_rows = rows;
 	_position = HoverTo3D(_hoverX.GetValue(), _hoverY.GetValue(), -_depth.GetValue(), false);
+	// (openblack) On a screen wider than 4:3 the advisor is drawn as a 4:3 screen of the same height shows it: shrunk
+	// across the screen near it, back to its own size out in the world. Its place comes from its hover, which is laid
+	// out on that 4:3 area already
+	const auto shrink = [this, &camera](float sb) {
+		_drawShare = (1.0f - _control.Frame().share) * sb + _control.Frame().share;
+		_rows = ShrinkAcrossScreen(_rows, camera[2], _drawShare);
+	};
 
 	if (_inWorld == 0.0f)
 	{
+		shrink(0.0f);
 		return;
 	}
 	// into the world, next to the target
@@ -1462,6 +1469,7 @@ void AdvisorSpirit::UpdateMatrix(float dt)
 	{
 		_rows[i] *= grow;
 	}
+	shrink(sb);
 }
 
 void AdvisorSpirit::UpdateBasePose(bool stable, float rate, bool sfx)
