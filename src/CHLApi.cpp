@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <functional>
 #include <iterator>
 #include <limits>
 #include <optional>
@@ -126,6 +127,7 @@
 #include "ECS/ScriptFlocks.h"
 #include "ECS/ScriptPopulate.h"
 #include "ECS/ScriptSpotVisuals.h"
+#include "ECS/ScriptWeatherRules.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -3282,7 +3284,13 @@ void ChangeInnerOuterProperties() // 056 CHANGE_INNER_OUTER_PROPERTIES
 		flock.calm = map_coords::FtoL(calm);
 		return;
 	}
-	// TODO(opening): the weather's own inner and outer sizes
+	// A weather thing's storm takes the inner and outer distances as they are; its calm is not used
+	if (object != entt::null && Locator::weatherSystem::has_value() &&
+	    Locator::weatherSystem::value().ChangeWeatherThing(
+	        object, [=](ecs::components::Storm& storm) { ecs::script_weather::SetInnerOuter(storm, inner, outer); }))
+	{
+		return;
+	}
 	ScriptMessage("Invalid thing for Changing Variables");
 }
 
@@ -4098,46 +4106,58 @@ void IsDialogueReady() // 122 IS_DIALOGUE_READY
 	Pushb(!Locator::dialogueControlSystem::value().IsControlled(WideScreenOwner()));
 }
 
+/// A weather native's change to the storm of the weather thing it was given; a thing that is no weather thing is told
+/// of and left alone
+void ChangeWeatherThing(entt::entity thing, const std::function<void(ecs::components::Storm&)>& change)
+{
+	if (thing == entt::null || !Locator::entitiesRegistry::value().Valid(thing))
+	{
+		return;
+	}
+	if (!Locator::weatherSystem::has_value() || !Locator::weatherSystem::value().ChangeWeatherThing(thing, change))
+	{
+		ScriptMessage("Weather properties on non weather thing");
+	}
+}
+
 void ChangeWeatherProperties() // 123 CHANGE_WEATHER_PROPERTIES
 {
-	// const auto fallspeed = Popf();
-	// const auto overcast = Popf();
-	// const auto snowfall = Popf();
-	// const auto rainfall = Popf();
-	// const auto temperature = Popf();
-	// const auto storm = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto fallSpeed = Popf();
+	const auto overcast = Popf();
+	const auto snowfall = Popf();
+	const auto rainfall = Popf();
+	const auto temperature = Popf();
+	ChangeWeatherThing(PopObject(), [=](ecs::components::Storm& storm) {
+		ecs::script_weather::SetWeather(storm, temperature, rainfall, snowfall, overcast, fallSpeed);
+	});
 }
 
 void ChangeLightningProperties() // 124 CHANGE_LIGHTNING_PROPERTIES
 {
-	// const auto forkmax = Popf();
-	// const auto forkmin = Popf();
-	// const auto sheetmax = Popf();
-	// const auto sheetmin = Popf();
-	// const auto storm = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto forkMax = Popf();
+	const auto forkMin = Popf();
+	const auto sheetMax = Popf();
+	const auto sheetMin = Popf();
+	ChangeWeatherThing(PopObject(), [=](ecs::components::Storm& storm) {
+		ecs::script_weather::SetLightning(storm, sheetMin, sheetMax, forkMin, forkMax);
+	});
 }
 
 void ChangeTimeFadeProperties() // 125 CHANGE_TIME_FADE_PROPERTIES
 {
-	// const auto fadeTime = Popf();
-	// const auto duration = Popf();
-	// const auto storm = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto fadeSeconds = Popf();
+	const auto lastsFor = Popf();
+	ChangeWeatherThing(PopObject(),
+	                   [=](ecs::components::Storm& storm) { ecs::script_weather::SetTimeFade(storm, lastsFor, fadeSeconds); });
 }
 
 void ChangeCloudProperties() // 126 CHANGE_CLOUD_PROPERTIES
 {
-	// const auto elevation = Popf();
-	// const auto blackness = Popf();
-	// const auto numClouds = Popf();
-	// const auto storm = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto height = Popf();
+	const auto shade = Popf();
+	const auto count = Popf();
+	ChangeWeatherThing(PopObject(),
+	                   [=](ecs::components::Storm& storm) { ecs::script_weather::SetClouds(storm, count, shade, height); });
 }
 
 void SetHeadingAndSpeed() // 127 SET_HEADING_AND_SPEED
@@ -4176,10 +4196,18 @@ void BuildBuilding() // 130 BUILD_BUILDING
 
 void SetAffectedByWind() // 131 SET_AFFECTED_BY_WIND
 {
-	// const auto object = Pop().uintVal;
-	// const auto enabled = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopObject();
+	const auto affected = static_cast<bool>(Pop().intVal);
+	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
+	{
+		ScriptMessage("Invalid thing");
+		return;
+	}
+	// Only a weather thing's storm can be blown along; anything else takes no notice
+	if (Locator::weatherSystem::has_value())
+	{
+		Locator::weatherSystem::value().SetWeatherThingAffectedByWind(object, affected);
+	}
 }
 
 void WidescreenTransistionFinished() // 132 WIDESCREEN_TRANSISTION_FINISHED

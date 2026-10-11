@@ -1663,6 +1663,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Storm::lastsFor>("lastsFor")
 	    .Field<&components::Storm::strength>("strength")
 	    .Field<&components::Storm::cloudHeight>("cloudHeight")
+	    .Field<&components::Storm::cloudCount>("cloudCount")
+	    .Field<&components::Storm::cloudShade>("cloudShade")
 	    .Field<&components::Storm::rainSpeed>("rainSpeed")
 	    .Field<&components::Storm::age>("age")
 	    .Field<&components::Storm::currentPosition>("currentPosition")
@@ -1679,7 +1681,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Storm::dead>("dead")
 	    .Field<&components::Storm::deadTurns>("deadTurns")
 	    .Field<&components::Storm::climate>("climate");
-	Reflect<components::WeatherThing>(context).Field<&components::WeatherThing::storm>("storm");
+	Reflect<components::WeatherThing>(context)
+	    .Field<&components::WeatherThing::storm>("storm")
+	    .Field<&components::WeatherThing::lastStorm>("lastStorm")
+	    .Field<&components::WeatherThing::affectedByWind>("affectedByWind");
 	Reflect<components::WorshipChants>(context)
 	    .Field<&components::WorshipChants::battery>("battery")
 	    .Field<&components::WorshipChants::available>("available")

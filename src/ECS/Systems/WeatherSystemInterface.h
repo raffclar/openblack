@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <functional>
 #include <span>
 
 #include <entt/entity/fwd.hpp>
@@ -115,6 +116,12 @@ public:
 	/// A weather thing a script makes at a point, with the storm it brings there: the thing, which follows its storm
 	/// each turn and goes once the storm has ended, unless a script still holds it
 	virtual entt::entity CreateWeatherThing(const ScriptStorm& storm) = 0;
+	/// A script changes the storm a weather thing brought: the change is made to the storm as it is, keeping its age, or to
+	/// the storm as it last was, brought back new, once it has ended. Its waits to its next lightning are drawn afresh.
+	/// False when the thing is not a weather thing.
+	virtual bool ChangeWeatherThing(entt::entity thing, const std::function<void(components::Storm&)>& change) = 0;
+	/// Whether the wind blows a weather thing's storm along. False when the thing is not a weather thing.
+	virtual bool SetWeatherThingAffectedByWind(entt::entity thing, bool affected) = 0;
 
 	/// One game turn
 	virtual void Update(uint32_t turn) = 0;

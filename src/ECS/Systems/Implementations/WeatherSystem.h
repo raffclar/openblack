@@ -60,6 +60,8 @@ public:
 	void KillStormsInArea(glm::vec3 position, float radius) override;
 	void RemoveMiracleStorm(entt::entity storm) override;
 	entt::entity CreateWeatherThing(const ScriptStorm& storm) override;
+	bool ChangeWeatherThing(entt::entity thing, const std::function<void(components::Storm&)>& change) override;
+	bool SetWeatherThingAffectedByWind(entt::entity thing, bool affected) override;
 
 	void Update(uint32_t turn) override;
 	[[nodiscard]] std::span<const components::Storm> GetActiveStorms() const override { return _activeStorms; }
