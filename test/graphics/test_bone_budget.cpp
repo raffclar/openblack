@@ -19,6 +19,7 @@
 // The object shaders as the game embeds them, compiled for Vulkan
 #include "generated/shaders/spirv/vs_celestial.sc.bin.h"
 #include "generated/shaders/spirv/vs_footprint_instanced.sc.bin.h"
+#include "generated/shaders/spirv/vs_footprint_paint_instanced.sc.bin.h"
 #include "generated/shaders/spirv/vs_mist.sc.bin.h"
 #include "generated/shaders/spirv/vs_object_few_bones_instanced.sc.bin.h"
 #include "generated/shaders/spirv/vs_object_hm_instanced.sc.bin.h"
@@ -83,7 +84,8 @@ TEST(BoneBudget, ShadersDeclareTheirBudgetsBones)
 TEST(BoneBudget, ShadersUsingOnlyTheModelMatrixDeclareOne)
 {
 	for (const auto binary : {std::span<const uint8_t>(vs_sprite_spv), std::span<const uint8_t>(vs_mist_spv),
-	                          std::span<const uint8_t>(vs_celestial_spv), std::span<const uint8_t>(vs_footprint_instanced_spv)})
+	                          std::span<const uint8_t>(vs_celestial_spv), std::span<const uint8_t>(vs_footprint_instanced_spv),
+	                          std::span<const uint8_t>(vs_footprint_paint_instanced_spv)})
 	{
 		// Less than the 32 bones bgfx declares by default would take alone
 		EXPECT_LT(UniformBytes(binary), bone_budget::k_Few * k_MatrixBytes);

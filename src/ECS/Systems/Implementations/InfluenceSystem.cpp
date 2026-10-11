@@ -33,6 +33,7 @@
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -256,10 +257,12 @@ void InfluenceSystem::ProcessCitadels()
 		{
 			continue;
 		}
-		// A player's border shows once their citadel stands
+		// A player's border shows once their temple stands wholly built, and stays for the rest of the land
 		if (player < _borderShown.size())
 		{
-			_borderShown.at(player) = true;
+			const auto* progress = registry.TryGet<const BuildProgress>(citadel);
+			_borderShown.at(player) =
+			    influence::BorderShows(_borderShown.at(player), progress != nullptr ? progress->built : 1.0f);
 		}
 		const float reach = CitadelReach(citadel);
 		NoteReach(reach, registry.Get<const CitadelInfluence>(citadel).drawnRadius);

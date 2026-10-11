@@ -39,6 +39,7 @@
 #include "3D/ChimneySmoke.h"
 #include "3D/Clouds.h"
 #include "3D/DayNightClock.h"
+#include "3D/FootprintPaint.h"
 #include "3D/HandMorph.h"
 #include "3D/InfluenceCircle.h"
 #include "3D/L3DAnim.h"
@@ -563,6 +564,12 @@ void Renderer::ConfigureView(graphics::RenderPass viewId, glm::u16vec2 resolutio
 	{
 		bgfx::setViewClear(static_cast<bgfx::ViewId>(RenderPass::Advisors), BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
 		bgfx::setViewRect(static_cast<bgfx::ViewId>(RenderPass::Advisors), 0, 0, resolution.x, resolution.y);
+	}
+	// What is under the sea's surface is drawn over the mirrored world, into the same target
+	if (viewId == RenderPass::Reflection)
+	{
+		bgfx::setViewClear(static_cast<bgfx::ViewId>(RenderPass::UnderSea), BGFX_CLEAR_NONE);
+		bgfx::setViewRect(static_cast<bgfx::ViewId>(RenderPass::UnderSea), 0, 0, resolution.x, resolution.y);
 	}
 	// And what blends in it is drawn over it after
 	if (const auto translucentId = TranslucentPassOf(viewId); translucentId != viewId)
@@ -2156,6 +2163,29 @@ void Renderer::DrawMesh(const graphics::L3DMesh& mesh, const L3DMeshSubmitDesc& 
 	}
 }
 
+namespace
+{
+// Footprints are laid over one another premultiplied: the land takes the colour they leave and how much of it they
+// cover, and mixes its own colour with them texel by texel as the game paints them in
+constexpr uint64_t k_FootprintPaintState =
+    BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA);
+
+void SetFootprintTexture(const ShaderProgram& program, const Texture2D& texture)
+{
+	program.SetTextureSampler("s_footprint", 0, texture);
+	const auto size = texture.GetResolution();
+	const glm::vec4 u_footprintSize {size.x, size.y, 0.0f, 0.0f};
+	program.SetUniformValue("u_footprintSize", &u_footprintSize);
+}
+
+// How the footprints are painted into the land's texels
+void SetFootprintPaint(const ShaderProgram& program)
+{
+	const glm::vec4 u_footprintPaint {footprint_paint::k_TexelsPerUnit, 0.0f, 0.0f, 0.0f};
+	program.SetUniformValue("u_footprintPaint", &u_footprintPaint);
+}
+} // namespace
+
 void Renderer::DrawFootprintPass(const DrawSceneDesc& drawDesc) const
 {
 	const auto viewId = graphics::RenderPass::Footprint;
@@ -2192,16 +2222,11 @@ void Renderer::DrawFootprintPass(const DrawSceneDesc& drawDesc) const
 				continue;
 			}
 			const auto& footprint = mesh->GetFootprints()[0];
-			footprintShaderInstanced->SetTextureSampler("s_footprint", 0, *footprint.texture);
+			SetFootprintTexture(*footprintShaderInstanced, *footprint.texture);
+			SetFootprintPaint(*footprintShaderInstanced);
 			footprint.mesh->GetVertexBuffer().Bind();
 			bgfx::setInstanceDataBuffer(toBgfx(renderCtx.instanceUniformBuffer), placers.offset, placers.count);
-			const uint64_t state = 0u                       //
-			                       | BGFX_STATE_WRITE_RGB   //
-			                       | BGFX_STATE_WRITE_A     //
-			                       | BGFX_STATE_BLEND_ALPHA //
-			                       | BGFX_STATE_CULL_CW     //
-			                       | BGFX_STATE_MSAA;
-			bgfx::setState(state);
+			bgfx::setState(k_FootprintPaintState | BGFX_STATE_CULL_CW);
 			footprintShaderInstanced->Submit(static_cast<bgfx::ViewId>(viewId));
 		}
 
@@ -2213,16 +2238,11 @@ void Renderer::DrawFootprintPass(const DrawSceneDesc& drawDesc) const
 				continue;
 			}
 			const auto& footprint = mesh->GetFootprints()[0];
-			footprintShaderInstanced->SetTextureSampler("s_footprint", 0, *footprint.texture);
+			SetFootprintTexture(*footprintShaderInstanced, *footprint.texture);
+			SetFootprintPaint(*footprintShaderInstanced);
 			footprint.mesh->GetVertexBuffer().Bind();
 			bgfx::setInstanceDataBuffer(toBgfx(renderCtx.treeInstanceUniformBuffer), placers.offset, placers.count);
-			const uint64_t state = 0u                       //
-			                       | BGFX_STATE_WRITE_RGB   //
-			                       | BGFX_STATE_WRITE_A     //
-			                       | BGFX_STATE_BLEND_ALPHA //
-			                       | BGFX_STATE_CULL_CW     //
-			                       | BGFX_STATE_MSAA;
-			bgfx::setState(state);
+			bgfx::setState(k_FootprintPaintState | BGFX_STATE_CULL_CW);
 			footprintShaderInstanced->Submit(static_cast<bgfx::ViewId>(viewId));
 		}
 
@@ -2257,19 +2277,17 @@ void Renderer::DrawStreamFootprints(RenderPass viewId, entt::id_type meshId) con
 	const auto& footprint = mesh->GetFootprints()[0];
 	const bool channel = meshId == ecs::components::StreamSegment::k_ChannelMeshId;
 	const auto* program = _shaderManager->GetShader(channel ? "LandAlphaInstanced" : "FootprintInstanced");
-	program->SetTextureSampler("s_footprint", 0, *footprint.texture);
-	if (channel)
+	SetFootprintTexture(*program, *footprint.texture);
+	if (!channel)
 	{
-		const auto size = footprint.texture->GetResolution();
-		const glm::vec4 u_footprintSize {size.x, size.y, 0.0f, 0.0f};
-		program->SetUniformValue("u_footprintSize", &u_footprintSize);
+		SetFootprintPaint(*program);
 	}
 	footprint.mesh->GetVertexBuffer().Bind();
 	bgfx::setInstanceDataBuffer(&instances);
 	// A channel leaves the land's alpha at the lower of the two
 	const uint64_t state = channel ? BGFX_STATE_WRITE_R | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE) |
 	                                     BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_MIN)
-	                               : BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA;
+	                               : k_FootprintPaintState;
 	bgfx::setState(state);
 	program->Submit(static_cast<bgfx::ViewId>(viewId));
 }
@@ -2761,7 +2779,7 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	};
 	// Every villager out of doors and out of the sea casts one from each foot, on the land beneath it; one too far away
 	// to be drawn a wider one from where it stands, as if the land there were flat
-	// A villager a script draws in high detail casts none
+	// A villager a script draws in high detail casts a projected shadow instead (high_detail_rules::ShadowOf)
 	desc.entities.Each<const ecs::components::Villager, const ecs::components::Transform, const ecs::components::Mesh>(
 	    [&](entt::entity entity, const ecs::components::Villager& /*villager*/, const ecs::components::Transform& transform,
 	        const ecs::components::Mesh& mesh) {
@@ -4507,6 +4525,7 @@ void Renderer::DrawCreatureShadowPass(const DrawSceneDesc& drawDesc) const
 	const auto camera = drawDesc.camera->GetOrigin();
 	struct Caster
 	{
+		CreatureShadow::Caster kind;
 		entt::entity entity;
 		const L3DMesh* mesh;
 		glm::mat4 model;
@@ -4515,6 +4534,20 @@ void Renderer::DrawCreatureShadowPass(const DrawSceneDesc& drawDesc) const
 		float distance;
 	};
 	std::vector<Caster> casters;
+	const auto addCaster = [&casters, &camera](CreatureShadow::Caster kind, entt::entity entity, const L3DMesh& body,
+	                                           const glm::mat4& model) {
+		const auto box = body.GetBoundingBox();
+		const auto scale =
+		    std::max({glm::length(glm::vec3(model[0])), glm::length(glm::vec3(model[1])), glm::length(glm::vec3(model[2]))});
+		const auto centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
+		casters.push_back({.kind = kind,
+		                   .entity = entity,
+		                   .mesh = &body,
+		                   .model = model,
+		                   .centre = centre,
+		                   .radius = glm::length(box.Size()) * 0.5f * scale,
+		                   .distance = glm::distance(camera, centre)});
+	};
 	for (const auto& [entity, instance] : renderCtx.entityDraws)
 	{
 		const auto* mesh = drawDesc.entities.TryGet<const ecs::components::Mesh>(entity);
@@ -4529,18 +4562,16 @@ void Renderer::DrawCreatureShadowPass(const DrawSceneDesc& drawDesc) const
 		{
 			continue;
 		}
-		const auto* body = &*meshManager.Handle(mesh->id);
-		const auto& model = renderCtx.instanceUniforms[instance].model;
-		const auto box = body->GetBoundingBox();
-		const auto scale =
-		    std::max({glm::length(glm::vec3(model[0])), glm::length(glm::vec3(model[1])), glm::length(glm::vec3(model[2]))});
-		const auto centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
-		casters.push_back({.entity = entity,
-		                   .mesh = body,
-		                   .model = model,
-		                   .centre = centre,
-		                   .radius = glm::length(box.Size()) * 0.5f * scale,
-		                   .distance = glm::distance(camera, centre)});
+		addCaster(CreatureShadow::Caster::Creature, entity, *meshManager.Handle(mesh->id),
+		          renderCtx.instanceUniforms[instance].model);
+	}
+	// A villager a script draws in high detail casts one too, in the model it wears for it
+	for (const auto& draw : renderCtx.highDetailDraws)
+	{
+		if (meshManager.Contains(draw.mesh))
+		{
+			addCaster(CreatureShadow::Caster::HighDetailVillager, draw.entity, *meshManager.Handle(draw.mesh), draw.model);
+		}
 	}
 	std::ranges::sort(casters, {}, &Caster::distance);
 
@@ -4561,16 +4592,25 @@ void Renderer::DrawCreatureShadowPass(const DrawSceneDesc& drawDesc) const
 		}
 		const auto ground = land.GetHeightAt(glm::vec2(caster.centre.x, caster.centre.z));
 		const auto shadow =
-		    CreatureShadow::Compute(caster.centre, caster.radius, ground, light, camera, _creatureShadowCount,
+		    CreatureShadow::Compute(caster.kind, caster.centre, caster.radius, ground, light, camera, _creatureShadowCount,
 		                            CreatureShadow::k_MaxShadows, caps->originBottomLeft, caps->homogeneousDepth);
 		if (!shadow)
 		{
 			continue;
 		}
-		const auto* animation = drawDesc.entities.TryGet<const ecs::components::CreatureAnimation>(caster.entity);
-		const auto& pose = animation != nullptr && animation->boneMatrices.size() == caster.mesh->GetBoneMatrices().size()
-		                       ? animation->boneMatrices
-		                       : caster.mesh->GetBoneMatrices();
+		// In the pose it is drawn in this frame
+		const auto& rest = caster.mesh->GetBoneMatrices();
+		std::span<const glm::mat4> pose = rest;
+		if (const auto* animation = drawDesc.entities.TryGet<const ecs::components::CreatureAnimation>(caster.entity);
+		    animation != nullptr && animation->boneMatrices.size() == rest.size())
+		{
+			pose = animation->boneMatrices;
+		}
+		else if (const auto* villagerPose = drawDesc.entities.TryGet<const ecs::components::VillagerPose>(caster.entity);
+		         villagerPose != nullptr && villagerPose->bones.size() == rest.size())
+		{
+			pose = villagerPose->bones;
+		}
 		if (pose.empty())
 		{
 			continue;
@@ -4588,7 +4628,7 @@ void Renderer::DrawCreatureShadowPass(const DrawSceneDesc& drawDesc) const
 
 		_creatureShadowMatrices.at(_creatureShadowCount) = shadow->receiverMatrix;
 		_creatureShadowParameters.at(_creatureShadowCount) =
-		    glm::vec4(shadow->strength * HandShadow::k_MaxDarkness, shadow->startDepth, 0.0f, 0.0f);
+		    glm::vec4(shadow->strength * HandShadow::k_MaxDarkness, shadow->startDepth, shadow->onObjects ? 1.0f : 0.0f, 0.0f);
 		++_creatureShadowCount;
 	}
 }
@@ -4803,6 +4843,12 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 			drawPassDesc.smallBumpMapStrength = 0.0f;
 
 			DrawPass(drawPassDesc);
+
+			// Then what is under the sea's surface, seen from the view itself, into the same target and against its
+			// depth: the main pass submits it there (the sharks' bodies) before blending the sea over the target
+			frameBuffer.Bind(RenderPass::UnderSea);
+			_shaderManager->SetCamera(RenderPass::UnderSea, *drawDesc.camera);
+			bgfx::touch(static_cast<bgfx::ViewId>(RenderPass::UnderSea));
 		}
 	}
 
@@ -5449,8 +5495,27 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					return;
 				}
 				const auto placers = renderCtx.instancedDrawDescs.find(mesh->id);
+				// A swimmer drawn under the sea as it is isn't mirrored in it, as the game mirrors only the land
 				if (placers == renderCtx.instancedDrawDescs.end() ||
-				    (desc.viewId == RenderPass::Reflection && placers->second.hiddenFromReflection))
+				    (desc.viewId == RenderPass::Reflection &&
+				     (placers->second.hiddenFromReflection || pose->underSea.has_value())))
+				{
+					return;
+				}
+				const EntityPose entityPose {.bones = pose->bones, .morphTargets = nullptr};
+				// What of a swimmer is under the sea is drawn beneath the sea's surface, which the sea is then blended
+				// over: in its colour under the sea, and nothing of it above the sea's level
+				if (desc.viewId == RenderPass::Main && desc.drawWater && pose->underSea.has_value() && pose->alpha == 255)
+				{
+					submitDesc.viewId = RenderPass::UnderSea;
+					submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = *pose->underSea, .alpha = 1.0f};
+					submitDesc.cutAbove = pose->cutBelow.value_or(0.0f);
+					drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &entityPose);
+					submitDesc.cutAbove.reset();
+					submitDesc.objectLook.reset();
+					submitDesc.viewId = desc.viewId;
+				}
+				if (!pose->aboveCutShown)
 				{
 					return;
 				}
@@ -5473,7 +5538,6 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				// An animal cut by a plane shows nothing below it
 				submitDesc.cutBelow = pose->cutBelow;
-				const EntityPose entityPose {.bones = pose->bones, .morphTargets = nullptr};
 				drawInstances(mesh->id, placers->second, translucent || placers->second.materialBlending, instance, 1,
 				              &entityPose);
 				submitDesc.objectLook.reset();

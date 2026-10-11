@@ -33,7 +33,9 @@ inline constexpr float k_UprightStretch = 3.0f;
 /// A temple being destroyed keeps its column for this long into its destruction
 inline constexpr float k_DestructionSeconds = 21.8f;
 
-/// A column shows only for a player's things, and only once that player's influence border shows
+/// A column shows only for a player's things, and only once that player's influence border shows: from the first time
+/// their temple stands wholly built on the land, so not over a temple still going up for a player who has had none
+/// built
 [[nodiscard]] bool Shown(PlayerNames owner, bool borderShown);
 
 /// The temple's column shows until this far into its destruction

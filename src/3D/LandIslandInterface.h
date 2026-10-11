@@ -46,6 +46,8 @@ public:
 	static constexpr entt::hashed_string k_SmallBumpTextureId = entt::hashed_string("raw/smallbump");
 	static constexpr entt::hashed_string k_SmallBumpAlphaTextureId = entt::hashed_string("raw/smallbumpa");
 
+	/// Whether a land is loaded; before the first one is, nothing else may be asked
+	[[nodiscard]] virtual bool IsLoaded() const { return true; }
 	/// The height of the land at a world position, as the game works it out
 	[[nodiscard]] virtual float GetHeightAt(glm::vec2) const = 0;
 	[[nodiscard]] virtual glm::vec3 GetNormalAt(glm::vec2) const = 0;

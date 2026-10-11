@@ -218,7 +218,9 @@ void LandIsland::Build(const LandData& data)
 	                       bgfx::copy(cellColourMapData.data(), static_cast<uint32_t>(cellColourMapData.size())));
 
 	const auto res = indexSize * glm::u16vec2(lnd::LNDMaterial::k_Width, lnd::LNDMaterial::k_Height);
-	_footprintFrameBuffer = std::make_unique<FrameBuffer>("Footprints", res.x, res.y, graphics::TextureFormat::RGBA8);
+	// The footprints are kept premultiplied at 16 bits a channel, enough for the land to mix them into its 4-bit colour
+	// exactly as the game does
+	_footprintFrameBuffer = std::make_unique<FrameBuffer>("Footprints", res.x, res.y, graphics::TextureFormat::RGBA16);
 	_landAlphaFrameBuffer = std::make_unique<FrameBuffer>("LandAlpha", res.x, res.y, graphics::TextureFormat::R8);
 
 	_proj = glm::ortho(_extentMin.x, _extentMax.x, _extentMin.y, _extentMax.y);
@@ -268,6 +270,7 @@ void LandIsland::Build(const LandData& data)
 	}
 	VertexDecl decl;
 	decl.emplace_back(VertexAttrib::Attribute::Position, static_cast<uint8_t>(3), VertexAttrib::Type::Float);
+	decl.emplace_back(VertexAttrib::Attribute::TexCoord0, static_cast<uint8_t>(1), VertexAttrib::Type::Float);
 	_blockVertices = std::make_unique<VertexBuffer>("LandBlocks", vertexMemory, decl, true);
 	_changedCells.assign(_landBlocks.size(), {});
 	_changedCorners = {};

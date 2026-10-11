@@ -134,6 +134,21 @@ struct Screen
 	[[nodiscard]] int32_t HalfHeight() const { return height >> 1; }
 };
 
+/// Where a clinging advisor holds on: the screen edge and its hover point just beyond it
+struct ClingPlace
+{
+	Edge edge {Edge::Bottom};
+	glm::vec2 hover {0.0f};
+};
+
+/// Where an advisor told to cling at a hover point (both axes in half the screen's width from its middle) holds on:
+/// the side edges unless the point lies more towards the top or bottom, and the hold just beyond that edge, the point's
+/// other axis kept. The holds at the top and bottom are set for a 4:3 screen, where the advisor's head and shoulders
+/// show over the edge; on a wider screen they come in with the edge, by its height against a 4:3 screen's, so that it
+/// still shows as it does on a 4:3 screen instead of hanging wholly below it. Screens 4:3 or taller keep them as they
+/// are.
+[[nodiscard]] ClingPlace PlaceCling(glm::vec2 hover, const Screen& screen);
+
 /// A point projected to the screen
 struct ProjectedPoint
 {

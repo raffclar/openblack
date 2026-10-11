@@ -618,6 +618,26 @@ AdvisorSpirit::AdvisorSpirit(int index, const DudeData& data, AdvisorSpiritContr
 	SetState(dude_state::k_Hover, false);
 }
 
+ClingPlace PlaceCling(glm::vec2 hover, const Screen& screen)
+{
+	// The side holds lie 1.04 half widths out; the top and bottom ones 0.78, just beyond a 4:3 screen's edges, and the
+	// test between them weighs the height by 1 / 0.78
+	constexpr float k_SideHold = 1.04f;
+	constexpr float k_EndHold = 0.78f;
+	constexpr float k_EndWeight = 1.2820513f;
+	const float height = std::min(1.0f, 4.0f * static_cast<float>(screen.height) / (3.0f * static_cast<float>(screen.width)));
+	if (std::abs(hover.y * (k_EndWeight / height)) < std::abs(hover.x))
+	{
+		return {.edge = hover.x > 0.0f ? Edge::Right : Edge::Left,
+		        .hover = {hover.x > 0.0f ? k_SideHold : -k_SideHold, hover.y}};
+	}
+	if (hover.y > 0.0f)
+	{
+		return {.edge = Edge::Bottom, .hover = {hover.x, k_EndHold * height}};
+	}
+	return {.edge = Edge::Top, .hover = {hover.x, -k_EndHold * height}};
+}
+
 void AdvisorSpirit::SetPosition(glm::ivec2 pixel)
 {
 	const Screen& screen = _control.GetScreen();
@@ -700,29 +720,10 @@ void AdvisorSpirit::SnapClingEdge()
 	{
 		return;
 	}
-	if (std::abs(_clingY * 1.2820513f) < std::abs(_clingX))
-	{
-		if (_clingX > 0.0f)
-		{
-			_edge = Edge::Right;
-			_clingX = 1.04f;
-		}
-		else
-		{
-			_edge = Edge::Left;
-			_clingX = -1.04f;
-		}
-	}
-	else if (_clingY > 0.0f)
-	{
-		_edge = Edge::Bottom;
-		_clingY = 0.78f;
-	}
-	else
-	{
-		_edge = Edge::Top;
-		_clingY = -0.78f;
-	}
+	const auto place = PlaceCling({_clingX, _clingY}, _control.GetScreen());
+	_edge = place.edge;
+	_clingX = place.hover.x;
+	_clingY = place.hover.y;
 }
 
 void AdvisorSpirit::Cling(float hx, float hy, bool fromHome)

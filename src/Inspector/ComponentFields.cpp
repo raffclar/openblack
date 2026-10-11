@@ -365,7 +365,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::AnimalPose::light>("light")
 	    .Field<&components::AnimalPose::colour>("colour")
 	    .Field<&components::AnimalPose::alpha>("alpha")
-	    .Field<&components::AnimalPose::cutBelow>("cutBelow");
+	    .Field<&components::AnimalPose::cutBelow>("cutBelow")
+	    .Field<&components::AnimalPose::aboveCutShown>("aboveCutShown")
+	    .Field<&components::AnimalPose::underSea>("underSea");
 	Reflect<components::BeingEaten>(context)
 	    .Field<&components::BeingEaten::hunter>("hunter")
 	    .Field<&components::BeingEaten::turns>("turns")
