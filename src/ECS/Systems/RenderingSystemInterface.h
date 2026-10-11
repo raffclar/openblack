@@ -156,6 +156,15 @@ struct RenderContext
 		glm::mat4 model;
 	};
 	std::vector<DrawnObject> drawnObjects;
+	/// The villagers a script draws in high detail this frame, with the model each wears and the matrix it is drawn by:
+	/// each casts a moving shadow on the land while it is
+	struct HighDetailDraw
+	{
+		entt::entity entity;
+		entt::id_type mesh;
+		glm::mat4 model;
+	};
+	std::vector<HighDetailDraw> highDetailDraws;
 	/// The rivers' stretches, whose beds and channels are laid into the land (see components::StreamSegment)
 	std::vector<glm::mat4> streamSegments;
 	/// The hand is scaled by a negative factor to mirror it, which turns its faces round
