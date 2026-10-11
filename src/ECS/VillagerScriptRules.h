@@ -15,6 +15,7 @@
 #include <array>
 #include <optional>
 
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "Common/GUtilsDistance.h"
@@ -55,6 +56,26 @@ constexpr float k_NoDistance = 0.5f;
 {
 	constexpr float k_WholePerWalkUnit = static_cast<float>(0x10000) * 0.01f;
 	return gutils::ConvertWholeDistanceToMeters(static_cast<int32_t>(walkSpeed * k_WholePerWalkUnit));
+}
+
+/// Whether a walker stands within one turn's step of the goal of its walk, measured along the ground in whole map units
+/// as the walk keeps them: a walker that close has got there
+[[nodiscard]] constexpr bool WithinAStepOfGoal(glm::vec2 position, glm::vec2 goal, float walkSpeed)
+{
+	constexpr float k_WholePerWalkUnit = static_cast<float>(0x10000) * 0.01f;
+	const auto dx =
+	    static_cast<float>(gutils::ConvertMetersToWholeDistance(position.x) - gutils::ConvertMetersToWholeDistance(goal.x));
+	const auto dz =
+	    static_cast<float>(gutils::ConvertMetersToWholeDistance(position.y) - gutils::ConvertMetersToWholeDistance(goal.y));
+	const auto step = static_cast<float>(static_cast<int32_t>(walkSpeed * k_WholePerWalkUnit));
+	return (dx * dx) + (dz * dz) < step * step;
+}
+
+/// Where a script sees a walker on the ground: at the goal of its walk once it is within a turn's step of it, so a
+/// script waiting for it to reach a place sees it there exactly; otherwise where it is
+[[nodiscard]] constexpr glm::vec2 ScriptSeenPlace(glm::vec2 position, glm::vec2 goal, float walkSpeed)
+{
+	return WithinAStepOfGoal(position, goal, walkSpeed) ? goal : position;
 }
 
 /// One turn of playing a script's clip: the plays left after it, and the state to go into once the clip playing ends

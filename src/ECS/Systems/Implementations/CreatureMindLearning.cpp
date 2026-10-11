@@ -893,6 +893,12 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	{
 		return false;
 	}
+	// Under a script's control it takes up nothing of its own choosing, even once the script's orders are carried out:
+	// it stays where the script left it until it is let go
+	if (Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature))
+	{
+		return false;
+	}
 	const auto& info = tables->actions[plan.action];
 	auto built = PlanAgenda(creature, plan.action, plan.object, situation);
 	if (!built.has_value())

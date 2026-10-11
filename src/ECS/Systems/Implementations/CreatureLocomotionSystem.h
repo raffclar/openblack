@@ -48,7 +48,7 @@ public:
 private:
 	/// Starts a move for a fraction of top speed, the creature's state already gathered
 	MoveResult StartMove(entt::entity creature, components::CreatureLocomotion& locomotion, glm::vec2 point, float fraction,
-	                     float minDistance, float maxDistance);
+	                     float minDistance, float maxDistance, bool ontoDestination);
 
 	/// Where creatures can walk, sorted from the land the first time it is wanted. The system is made anew with each
 	/// land.

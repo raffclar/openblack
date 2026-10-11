@@ -37,6 +37,32 @@ TEST(VillagerScriptRules, ScriptSpeedIsKeptInWholeMapUnits)
 	EXPECT_NEAR(rules::WalkSpeedToScriptSpeed(rules::ScriptSpeedToWalkSpeed(0.5f)), 0.5f, 1e-3f);
 }
 
+TEST(VillagerScriptRules, WithinAStepOfTheGoalIsThere)
+{
+	// Two metres a second is a fifth of a metre a turn
+	const auto walkSpeed = rules::ScriptSpeedToWalkSpeed(0.2f);
+	EXPECT_TRUE(rules::WithinAStepOfGoal({100.0f, 100.0f}, {100.0f, 100.0f}, walkSpeed));
+	EXPECT_TRUE(rules::WithinAStepOfGoal({100.15f, 100.0f}, {100.0f, 100.0f}, walkSpeed));
+	EXPECT_TRUE(rules::WithinAStepOfGoal({100.1f, 100.1f}, {100.0f, 100.0f}, walkSpeed));
+	// A whole step away is not there yet
+	EXPECT_FALSE(rules::WithinAStepOfGoal({100.25f, 100.0f}, {100.0f, 100.0f}, walkSpeed));
+	EXPECT_FALSE(rules::WithinAStepOfGoal({100.0f, 99.7f}, {100.0f, 100.0f}, walkSpeed));
+	// Standing still, it is only there on the goal itself
+	EXPECT_FALSE(rules::WithinAStepOfGoal({100.0f, 100.01f}, {100.0f, 100.0f}, 0.0f));
+}
+
+TEST(VillagerScriptRules, ScriptsSeeAWalkerAtItsGoalOnceAStepAway)
+{
+	const auto walkSpeed = rules::ScriptSpeedToWalkSpeed(0.4f);
+	const glm::vec2 goal {1880.0f, 2520.0f};
+	// Short of the goal by less than a step, the script sees it on the goal: within half a metre of it
+	const auto seen = rules::ScriptSeenPlace({1880.3f, 2520.0f}, goal, walkSpeed);
+	EXPECT_EQ(seen, goal);
+	EXPECT_EQ(rules::ScriptDistance({seen.x, 0.0f, seen.y}, {goal.x, 0.0f, goal.y}), 0.0f);
+	// Further off it is seen where it is
+	EXPECT_EQ(rules::ScriptSeenPlace({1881.0f, 2520.0f}, goal, walkSpeed), glm::vec2(1881.0f, 2520.0f));
+}
+
 TEST(VillagerScriptRules, ClipPlaysCountDownThenWait)
 {
 	auto step = rules::StepScriptClip(2);

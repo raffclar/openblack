@@ -138,6 +138,8 @@ struct Request
 	float minDistance;
 	float maxDistance;
 	std::vector<Circle> obstacles;
+	/// Walking to a point, the route ends on the point itself rather than at the near edge of the ring
+	bool ontoDestination {false};
 	/// Corners are rounded at this radius
 	float cornerRadius;
 	/// The most lattice points searched before giving up

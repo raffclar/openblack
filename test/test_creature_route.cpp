@@ -145,6 +145,43 @@ TEST(CreatureRoute, OpenGroundIsAStraightLine)
 	EXPECT_EQ(planner.GetSearched(), 0u);
 }
 
+TEST(CreatureRoute, WalkingToAPointEndsOnThePoint)
+{
+	const auto land = FlatLand();
+	// However wide the ring, a walk to a point ends on it where the way is clear
+	Planner planner({.start = {1000.0f, 1000.0f},
+	                 .destination = {1000.0f, 1100.0f},
+	                 .minDistance = 0.0f,
+	                 .maxDistance = 8.0f,
+	                 .obstacles = {},
+	                 .ontoDestination = true,
+	                 .cornerRadius = 6.0f});
+	ASSERT_EQ(planner.Step(land, 10), Planner::Status::Found);
+	EXPECT_NEAR(glm::distance(planner.GetRoute().back(), glm::vec2(1000.0f, 1100.0f)), 0.0f, k_Tolerance);
+	// Already inside the ring, it still steps onto the point
+	Planner near({.start = {1000.0f, 1095.0f},
+	              .destination = {1000.0f, 1100.0f},
+	              .minDistance = 0.0f,
+	              .maxDistance = 8.0f,
+	              .obstacles = {},
+	              .ontoDestination = true,
+	              .cornerRadius = 6.0f});
+	ASSERT_EQ(near.Step(land, 10), Planner::Status::Found);
+	EXPECT_NEAR(glm::distance(near.GetRoute().back(), glm::vec2(1000.0f, 1100.0f)), 0.0f, k_Tolerance);
+	// Round something in the way, too
+	const Circle cow {.centre = {1000.0f, 1050.0f}, .radius = 12.0f};
+	Planner round({.start = {1000.0f, 1000.0f},
+	               .destination = {1000.0f, 1100.0f},
+	               .minDistance = 0.0f,
+	               .maxDistance = 8.0f,
+	               .obstacles = {cow},
+	               .ontoDestination = true,
+	               .cornerRadius = 6.0f});
+	ASSERT_EQ(PlanAll(round, land), Planner::Status::Found);
+	EXPECT_TRUE(ClearOf(round.GetRoute(), cow));
+	EXPECT_NEAR(glm::distance(round.GetRoute().back(), glm::vec2(1000.0f, 1100.0f)), 0.0f, k_Tolerance);
+}
+
 TEST(CreatureRoute, WalksRoundSomethingInTheWay)
 {
 	const auto land = FlatLand();

@@ -136,9 +136,7 @@ void villager_script::MoveTo(entt::entity villager, glm::vec2 goal)
 	}
 	// Already within a turn's step of the goal: it waits there for the script
 	const auto here = glm::xz(registry.Get<const Transform>(villager).position);
-	const float step = rules::WalkSpeedToScriptSpeed(registry.Get<const WallHug>(villager).speed);
-	const auto offset = goal - here;
-	if (glm::dot(offset, offset) < step * step)
+	if (rules::WithinAStepOfGoal(here, goal, registry.Get<const WallHug>(villager).speed))
 	{
 		SetScriptState(villager, VillagerStates::InScript);
 		return;

@@ -287,7 +287,7 @@ glm::vec2 Planner::ArrivalFrom(glm::vec2 from) const
 {
 	const auto offset = from - _request.destination;
 	const auto distance = glm::length(offset);
-	if (distance <= k_Tiny)
+	if (distance <= k_Tiny || _request.ontoDestination)
 	{
 		return _request.destination;
 	}

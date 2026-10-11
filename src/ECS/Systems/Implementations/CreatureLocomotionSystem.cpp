@@ -559,7 +559,7 @@ const route::WalkableLand& CreatureLocomotionSystem::GetWalkableLand()
 
 CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::StartMove(entt::entity creature, CreatureLocomotion& self,
                                                                          glm::vec2 point, float fraction, float minDistance,
-                                                                         float maxDistance)
+                                                                         float maxDistance, bool ontoDestination)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* body = registry.TryGet<const Creature>(creature);
@@ -594,6 +594,7 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::StartMove(entt::e
 	}
 	const auto distance = glm::distance(position, point);
 	self.ring = locomotion::MoveRing(distance, minDistance, maxDistance);
+	self.ontoDestination = ontoDestination;
 	self.destination = point;
 	self.planningMs = locomotion::TimeLimitMs(distance);
 	self.fidgetMs = k_FidgetMs;
@@ -606,6 +607,7 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::StartMove(entt::e
 	    .minDistance = self.ring.min,
 	    .maxDistance = self.ring.max,
 	    .obstacles = GatherObstacles(registry, creature, position, point, creatureHeight, self.radius),
+	    .ontoDestination = ontoDestination,
 	    .cornerRadius = std::max(self.radius, k_MinCornerRadius),
 	});
 	self.routeReady = false;
@@ -634,7 +636,8 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::MoveTo(entt::enti
 	}
 	self->following.reset();
 	const auto fractions = FractionsOf(body->species);
-	return StartMove(creature, *self, point, pace == Pace::Run ? fractions.run : fractions.walk, minDistance, maxDistance);
+	return StartMove(creature, *self, point, pace == Pace::Run ? fractions.run : fractions.walk, minDistance, maxDistance,
+	                 true);
 }
 
 CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::LeadTo(entt::entity creature, glm::vec2 point, float pull,
@@ -649,7 +652,8 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::LeadTo(entt::enti
 	}
 	self->following.reset();
 	const auto fractions = FractionsOf(body->species);
-	return StartMove(creature, *self, point, locomotion::LeashFraction(fractions.walk, fractions.run, pull), 0.0f, maxDistance);
+	return StartMove(creature, *self, point, locomotion::LeashFraction(fractions.walk, fractions.run, pull), 0.0f, maxDistance,
+	                 true);
 }
 
 CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::MoveToObject(entt::entity creature, entt::entity target,
@@ -663,7 +667,15 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::MoveToObject(entt
 		return MoveResult::Busy;
 	}
 	const auto ring = locomotion::ObjectRing(self->radius, RadiusOf(registry, target), extra);
-	return MoveTo(creature, glm::xz(at->position), pace, ring.min, ring.max);
+	const auto* body = Locator::entitiesRegistry::value().TryGet<const Creature>(creature);
+	if (body == nullptr || !self->started)
+	{
+		return MoveResult::Busy;
+	}
+	self->following.reset();
+	const auto fractions = FractionsOf(body->species);
+	return StartMove(creature, *self, glm::xz(at->position), pace == Pace::Run ? fractions.run : fractions.walk, ring.min,
+	                 ring.max, false);
 }
 
 CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::Follow(entt::entity creature, entt::entity target,
@@ -703,7 +715,7 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::FleeFrom(entt::en
 		point = *valid;
 	}
 	self->following.reset();
-	return StartMove(creature, *self, point, fractions.run, 0.0f, k_RunAwayArrival);
+	return StartMove(creature, *self, point, fractions.run, 0.0f, k_RunAwayArrival, false);
 }
 
 bool CreatureLocomotionSystem::TurnToFace(entt::entity creature, glm::vec2 point)
@@ -930,7 +942,7 @@ void CreatureLocomotionSystem::ProcessTurn()
 				    const auto destination = *self.destination;
 				    const auto ring = self.ring;
 				    SetIdle(self);
-				    StartMove(entity, self, destination, self.fraction, ring.min, ring.max);
+				    StartMove(entity, self, destination, self.fraction, ring.min, ring.max, self.ontoDestination);
 			    }
 		    }
 		    self.toHeading = self.heading;
