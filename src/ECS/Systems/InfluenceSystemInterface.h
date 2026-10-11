@@ -74,7 +74,7 @@ public:
 	virtual void SetInGameTurn(bool inGameTurn) = 0;
 
 	[[nodiscard]] virtual std::span<const influence::Circle> GetCircles() const = 0;
-	/// Whether a player's border shows yet: once their citadel stands
+	/// Whether a player's border shows yet: from the first time their temple stands wholly built on the land
 	[[nodiscard]] virtual bool IsBorderShown(PlayerNames player) const = 0;
 	/// A player's whole power of influence: their citadel's reach, while it stands, with the reach of each of their towns
 	/// and of their other sources of influence

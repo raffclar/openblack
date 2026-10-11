@@ -116,4 +116,11 @@ using Random = std::function<float(float, float)>;
 /// falling from a little less to nothing over the next part, then from a fifth to nothing out to the radius
 [[nodiscard]] float OnRange(float distance, float radius, float fullPart, float fallingPart, float small);
 
+/// Whether a player's border shows after a game turn, from whether it showed before and how much of their temple stands
+/// built (none when they have no temple, a planned one included). It shows from the first turn their temple stands
+/// wholly built on the land, and then for the rest of the land, even once that temple is destroyed. A temple still
+/// going up doesn't show it. The columns of light over the player's temple and village centres and the ripples of the
+/// hand crossing the border show with it.
+[[nodiscard]] bool BorderShows(bool shownBefore, std::optional<float> templeBuilt);
+
 } // namespace openblack::influence

@@ -9,6 +9,7 @@
 
 #include <cmath>
 
+#include <optional>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -166,4 +167,31 @@ TEST(InfluenceCircle, PuffsLieInTheBordersPlane)
 	EXPECT_FLOAT_EQ(corners[2].y, 7.0f);
 	EXPECT_FLOAT_EQ(corners[0].z, -2.0f);
 	EXPECT_FLOAT_EQ(corners[2].z, 2.0f);
+}
+
+TEST(InfluenceCircle, BorderHiddenWithoutATemple)
+{
+	// No temple, or only a planned one: nothing to show the border from
+	EXPECT_FALSE(influence::BorderShows(false, std::nullopt));
+}
+
+TEST(InfluenceCircle, BorderHiddenWhileTheTempleGoesUp)
+{
+	EXPECT_FALSE(influence::BorderShows(false, 0.0f));
+	EXPECT_FALSE(influence::BorderShows(false, 0.375f));
+	EXPECT_FALSE(influence::BorderShows(false, 0.9999f));
+}
+
+TEST(InfluenceCircle, BorderShowsOnceTheTempleStandsBuilt)
+{
+	// Made built, or finished being built
+	EXPECT_TRUE(influence::BorderShows(false, 1.0f));
+	EXPECT_TRUE(influence::BorderShows(false, 1.5f));
+}
+
+TEST(InfluenceCircle, BorderStaysForTheRestOfTheLand)
+{
+	// The temple destroyed, or another going up after it: the border keeps showing
+	EXPECT_TRUE(influence::BorderShows(true, std::nullopt));
+	EXPECT_TRUE(influence::BorderShows(true, 0.2f));
 }

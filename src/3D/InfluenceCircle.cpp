@@ -253,4 +253,9 @@ float OnRange(float distance, float radius, float fullPart, float fallingPart, f
 	return 0.0f;
 }
 
+bool BorderShows(bool shownBefore, std::optional<float> templeBuilt)
+{
+	return shownBefore || (templeBuilt.has_value() && *templeBuilt >= 1.0f);
+}
+
 } // namespace openblack::influence
