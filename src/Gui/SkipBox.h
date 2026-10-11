@@ -23,10 +23,12 @@ namespace openblack::gui
 
 class CheckBox;
 class GameFont;
+class StaticText;
 class TextDatabase;
 
-/// The question a returning player is asked as a new game starts: start the game normally, skip straight to the
-/// creature select, skip all of the creature tutorial or keep the old creature.
+/// The question a player is asked as a new game starts: start the game normally, skip straight to the creature select,
+/// skip all of the creature tutorial or keep the old creature. Keeping the old creature is left out, its radio button
+/// and its answer both hidden in their place, when the current profile has no creature.
 ///
 /// A 400 by 290 box in the middle of the dialog space: the question across its top, four radio buttons each with its
 /// answer beside it, and an arrow button labelled OK that answers. The box fades in over half a second and, once
@@ -60,13 +62,16 @@ public:
 	SkipBox(const SkipBox&) = delete;
 	SkipBox& operator=(const SkipBox&) = delete;
 
-	/// Brings the box up. A mouse button already held down doesn't count as a click.
-	void Show();
+	/// Brings the box up. A mouse button already held down doesn't count as a click. Keeping the old creature is offered
+	/// only when the current profile has one; a selection it can't take moves to the one it stands for.
+	void Show(bool currentProfileHasCreature);
 	/// Up and taking input
 	[[nodiscard]] bool IsActive() const noexcept { return _active; }
 	/// Up, or fading out
 	[[nodiscard]] bool IsVisible() const noexcept { return _active || _fade.GetValue() > 0.0f; }
 	[[nodiscard]] new_game_choice::Choice GetSelection() const noexcept { return _selection; }
+	/// Whether a choice is shown and can be picked
+	[[nodiscard]] bool IsOffered(new_game_choice::Choice choice) const noexcept;
 
 	void MouseMove(glm::ivec2 point);
 	void MouseDown(glm::ivec2 point);
@@ -82,6 +87,7 @@ private:
 
 	Dialog _dialog;
 	std::array<CheckBox*, new_game_choice::k_ChoiceCount> _radios {};
+	std::array<StaticText*, new_game_choice::k_ChoiceCount> _answerTexts {};
 	new_game_choice::Choice _selection {new_game_choice::Choice::StartNormally};
 	std::optional<new_game_choice::Choice> _answer;
 	bool _active {false};
