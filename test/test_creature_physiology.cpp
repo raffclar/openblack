@@ -8,14 +8,17 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstring>
 
 #include <array>
+#include <memory>
 #include <optional>
 
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreaturePhysiology.h"
+#include "InfoConstants.h"
 
 using namespace openblack;
 using namespace openblack::creature_physiology;
@@ -488,4 +491,43 @@ TEST(CreaturePhysiology, AScriptScalesACreatureHalfwayToItsShareOfThePlayersCrea
 	// It shrinks as readily, and never goes above 2
 	EXPECT_FLOAT_EQ(AutoScaledSize(2.0f, 1.0f, 1.0f), 1.5f);
 	EXPECT_FLOAT_EQ(AutoScaledSize(1.9f, 2.0f, 1.5f), 2.0f);
+}
+
+TEST(CreatureBalance, BalanceRowOverridesTheCreatureRow)
+{
+	auto creature = std::make_unique<GCreatureInfo>();
+	std::memset(creature.get(), 0, sizeof(GCreatureInfo));
+	creature->growUpMinutes = 240.0f;
+	creature->startEnergy = 0.75f;
+	creature->comfortTemperature = 0.5f;
+	DifferentCreatureInfo balance {};
+	balance.startScale = 0.22f;
+	balance.growUpMinutes = 1044.0f;
+	balance.energyDrain = 1.164e-4f;
+	balance.strength = 0.31f;
+	balance.walkSpeed = 0.7f;
+	balance.field0x30 = 28.0f;
+	balance.defenceMultiplierHit = 0.11f;
+	balance.secondsPerAgeTick = 3600;
+	balance.pooPerEnergy = 0.6f;
+	balance.field0x54 = 1.03f;
+	balance.field0x58 = 0.2f;
+	ApplyCreatureBalance(*creature, balance);
+	EXPECT_FLOAT_EQ(creature->startScale, 0.22f);
+	EXPECT_FLOAT_EQ(creature->growUpMinutes, 1044.0f);
+	EXPECT_FLOAT_EQ(creature->energyDrain, 1.164e-4f);
+	EXPECT_FLOAT_EQ(creature->strength, 0.31f);
+	EXPECT_FLOAT_EQ(creature->walkSpeed, 0.7f);
+	EXPECT_FLOAT_EQ(creature->defenceMultiplierHit, 0.11f);
+	EXPECT_EQ(creature->secondsPerAgeTick, 3600u);
+	EXPECT_FLOAT_EQ(creature->pooPerEnergy, 0.6f);
+	EXPECT_FLOAT_EQ(creature->field0x36c, 1.03f);
+	float raw = 0.0f;
+	std::memcpy(&raw, creature->field0x24c.data(), sizeof(raw));
+	EXPECT_FLOAT_EQ(raw, 28.0f);
+	std::memcpy(&raw, creature->field0x374.data(), sizeof(raw));
+	EXPECT_FLOAT_EQ(raw, 0.2f);
+	// What the balance row doesn't hold stays as it was
+	EXPECT_FLOAT_EQ(creature->startEnergy, 0.75f);
+	EXPECT_FLOAT_EQ(creature->comfortTemperature, 0.5f);
 }
