@@ -8,6 +8,8 @@
  *******************************************************************************/
 
 #include <array>
+#include <optional>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -168,4 +170,17 @@ TEST(ArtefactRules, AWondersPowerCountsTheThingsInItsPlacesCellOnceForEveryCellO
 	EXPECT_FLOAT_EQ(WonderScale(1.0f), 0.9f);
 	EXPECT_FLOAT_EQ(WonderScale(5.0f), 2.5f);
 	EXPECT_FLOAT_EQ(WonderScale(12.0f), 2.5f);
+}
+
+TEST(ArtefactRules, AnArtefactBroughtAcrossJoinsItsNearestTownOnlyWhenItIsItsPlayers)
+{
+	const std::vector<NearbyTown> towns {
+	    {.index = 0, .owner = PlayerNames::NEUTRAL, .distance = 80.0f},
+	    {.index = 1, .owner = PlayerNames::PLAYER_ONE, .distance = 30.0f},
+	    {.index = 2, .owner = PlayerNames::PLAYER_TWO, .distance = 30.0f},
+	};
+	EXPECT_EQ(TownForMadeArtefact(towns, PlayerNames::PLAYER_ONE), std::optional<size_t>(1));
+	// The first of the nearest decides: another player's town as near isn't taken
+	EXPECT_EQ(TownForMadeArtefact(towns, PlayerNames::PLAYER_TWO), std::nullopt);
+	EXPECT_EQ(TownForMadeArtefact({}, PlayerNames::PLAYER_ONE), std::nullopt);
 }

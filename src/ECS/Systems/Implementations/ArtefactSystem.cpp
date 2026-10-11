@@ -507,6 +507,42 @@ void ArtefactSystem::SetDancersState(entt::entity dance, VillagerStates state) c
 	}
 }
 
+void ArtefactSystem::MakeArtefact(entt::entity object, std::optional<entt::entity> town, PlayerNames player, float worth)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(object) || !registry.AllOf<Transform>(object) || world_objects::InfoOf(object) == nullptr)
+	{
+		return;
+	}
+	if (!town.has_value() || !IsTown(*town))
+	{
+		// Without a town of its own it joins its nearest town when that town is its player's
+		const auto at = glm::xz(PositionOf(object));
+		std::vector<entt::entity> entities;
+		std::vector<rules::NearbyTown> towns;
+		registry.Each<const Town, const Transform>([&](entt::entity entity, const Town& each, const Transform& transform) {
+			towns.push_back(
+			    {.index = entities.size(), .owner = each.owner, .distance = glm::distance(at, glm::xz(transform.position))});
+			entities.push_back(entity);
+		});
+		const auto chosen = rules::TownForMadeArtefact(towns, player);
+		town = chosen.has_value() ? std::optional(entities.at(*chosen)) : std::nullopt;
+	}
+	if (town.has_value())
+	{
+		AddToTown(object, *town, player);
+	}
+	else if (!registry.AllOf<TownArtefact>(object))
+	{
+		const auto* info = world_objects::InfoOf(object);
+		registry.Assign<TownArtefact>(object, TownArtefact {.player = player, .value = info->villagerImpressiveValue});
+	}
+	if (auto* artefact = registry.TryGet<TownArtefact>(object))
+	{
+		SetValue(object, *artefact, worth);
+	}
+}
+
 bool ArtefactSystem::SetWorth(entt::entity object, float worth)
 {
 	auto* artefact = Entities().Valid(object) ? Entities().TryGet<TownArtefact>(object) : nullptr;

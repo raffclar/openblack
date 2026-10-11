@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <optional>
+
 #include <entt/entity/fwd.hpp>
 
 #include "Enums.h"
@@ -48,6 +50,12 @@ public:
 	/// Each frame: the owners' symbols over their towns' worthiest artefacts are drawn, their glows turning by the
 	/// game's milliseconds
 	virtual void UpdateFrame(float gameMilliseconds) = 0;
+	/// A land's script, or a crossing to a new land, makes an object an artefact of a player worth so much: in the town
+	/// given, or else in its nearest town when that town is the player's, or else in none
+	virtual void MakeArtefact(entt::entity /*object*/, std::optional<entt::entity> /*town*/, PlayerNames /*player*/,
+	                          float /*worth*/)
+	{
+	}
 	/// An artefact's worth is set, as dancing would raise it: it starts glowing once worth enough. Whether it is one.
 	virtual bool SetWorth(entt::entity /*object*/, float /*worth*/) { return false; }
 
