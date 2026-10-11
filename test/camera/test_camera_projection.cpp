@@ -33,10 +33,10 @@ bool KeptByDepth(const glm::vec4& clip)
 	return clip.z >= 0.0f && clip.z <= clip.w;
 }
 
-std::unique_ptr<Camera> MakeCamera(float nearClip, float farClip)
+std::unique_ptr<Camera> MakeCamera(float nearClip)
 {
 	auto camera = std::make_unique<Camera>();
-	camera->SetProjectionMatrixPerspective(70.0f, 16.0f / 9.0f, nearClip, farClip);
+	camera->SetProjectionMatrixPerspective(70.0f, 16.0f / 9.0f, nearClip);
 	return camera;
 }
 
@@ -47,30 +47,47 @@ TEST(CameraProjection, ClipsAtTheNearPlane)
 {
 	for (const float nearClip : {0.1f, 0.3f, 1.0f, 3.5f})
 	{
-		const auto camera = MakeCamera(nearClip, 30000.0f);
+		const auto camera = MakeCamera(nearClip);
 		EXPECT_FALSE(KeptByDepth(Clip(*camera, nearClip * 0.99f))) << nearClip;
 		EXPECT_TRUE(KeptByDepth(Clip(*camera, nearClip * 1.01f))) << nearClip;
 		EXPECT_TRUE(KeptByDepth(Clip(*camera, nearClip * 1.9f))) << nearClip;
 	}
 }
 
-// Depth is reversed: the near plane at 1 and the far plane at 0, nearer things deeper
+// Depth is reversed: the near plane at 1, falling towards 0 far away, nearer things deeper
 TEST(CameraProjection, ReversedDepthRunsFromNearToFar)
 {
-	const auto camera = MakeCamera(3.5f, 30000.0f);
+	const auto camera = MakeCamera(3.5f);
 	const auto atNear = Clip(*camera, 3.5f);
 	const auto atFar = Clip(*camera, 30000.0f);
 	EXPECT_NEAR(atNear.z / atNear.w, 1.0f, 1e-5f);
-	EXPECT_NEAR(atFar.z / atFar.w, 0.0f, 1e-5f);
+	EXPECT_NEAR(atFar.z / atFar.w, 3.5f / 30000.0f, 1e-6f);
 	const auto closer = Clip(*camera, 6.0f);
 	const auto further = Clip(*camera, 9.0f);
 	EXPECT_GT(closer.z / closer.w, further.z / further.w);
 }
 
+// The game has no far plane: the sky's dome across the map and the sea to its horizon are drawn from as high as the
+// camera goes, and the depth is the near plane's distance over the depth, as the game's
+TEST(CameraProjection, NothingIsLostFarAway)
+{
+	for (const float nearClip : {0.1f, 1.0f, 3.5f})
+	{
+		const auto camera = MakeCamera(nearClip);
+		for (const float depth : {65536.0f, 80000.0f, 250000.0f, 1.0e7f})
+		{
+			const auto clip = Clip(*camera, depth);
+			EXPECT_TRUE(KeptByDepth(clip)) << nearClip << " " << depth;
+			EXPECT_GT(clip.z, 0.0f) << nearClip << " " << depth;
+			EXPECT_NEAR(clip.z / clip.w, nearClip / depth, 1e-6f * nearClip / depth + 1e-9f) << nearClip << " " << depth;
+		}
+	}
+}
+
 // A projection handed over whole is reversed the same way
 TEST(CameraProjection, AGivenProjectionClipsAtItsNearPlane)
 {
-	const auto source = MakeCamera(3.5f, 30000.0f);
+	const auto source = MakeCamera(3.5f);
 	Camera camera;
 	camera.SetProjectionMatrix(source->GetProjectionMatrix(Camera::Projection::Normal));
 	EXPECT_FALSE(KeptByDepth(Clip(camera, 3.4f)));
@@ -107,7 +124,7 @@ TEST(CameraProjection, ItsMovementIsGivenBackWhole)
 // A resized window changes the camera's shape only: the field of view across the width and the clip planes stay
 TEST(CameraProjection, ANewAspectKeepsTheLensAndTheClipPlanes)
 {
-	const auto camera = MakeCamera(3.5f, 30000.0f);
+	const auto camera = MakeCamera(3.5f);
 	const auto across = camera->GetProjectionMatrix(Camera::Projection::Normal)[0][0];
 	for (const float aspect : {4.0f / 3.0f, 16.0f / 9.0f, 32.0f / 9.0f})
 	{

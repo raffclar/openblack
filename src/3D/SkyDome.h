@@ -17,6 +17,7 @@
 #include <string>
 
 #include <glm/gtc/type_precision.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
 /// The sky's dome: three pictures of the sky for each alignment, by day, at dusk and at night, blended into one for the
@@ -33,6 +34,13 @@ inline constexpr uint16_t k_Rows = 256;
 inline constexpr uint16_t k_RowsPerFrame = 32;
 /// How far the sky moves on before the dome starts following it again
 inline constexpr double k_Hysteresis = static_cast<double>(0.03f);
+
+/// Where the dome's mesh stands: centred on the middle of the map at sea level and five times its own size, a sphere of
+/// about 243000 units around the land, so that it looks the same from the ground and from as high as the camera goes
+inline constexpr glm::vec3 k_Centre {2560.0f, 0.0f, 2560.0f};
+inline constexpr float k_Scale = 5.0f;
+/// The dome mesh's model matrix: its own units scaled up about its middle, then moved to the dome's centre
+[[nodiscard]] glm::mat4 Placement();
 
 /// The pictures of the dome: one for each alignment, evil, neutral and good, at each time of day, night, dusk and day,
 /// in that order

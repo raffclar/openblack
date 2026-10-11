@@ -42,7 +42,7 @@ TEST(ListenerFrame, WhatIsOnTheRightOfTheScreenIsHeardOnTheRight)
 	                                    std::pair {glm::vec3 {500.0f, 80.0f, 900.0f}, glm::vec3 {300.0f, 10.0f, 600.0f}}})
 	{
 		Camera camera;
-		camera.SetProjectionMatrixPerspective(70.0f, k_Screen.x / k_Screen.y, 1.0f, 10000.0f);
+		camera.SetProjectionMatrixPerspective(70.0f, k_Screen.x / k_Screen.y, 1.0f);
 		camera.SetOrigin(origin);
 		camera.SetFocus(focus);
 		// A point a little to the side of where the camera looks

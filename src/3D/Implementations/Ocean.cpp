@@ -51,14 +51,15 @@ void Ocean::CreateMesh()
 	decl.reserve(1);
 	decl.emplace_back(VertexAttrib::Attribute::Position, static_cast<uint8_t>(2), VertexAttrib::Type::Float);
 
-	static constexpr std::array<glm::vec2, 4> k_Points = {
-	    glm::vec2(-70000.0f, 70000.0f),
-	    glm::vec2(70000.0f, 70000.0f),
-	    glm::vec2(70000.0f, -70000.0f),
-	    glm::vec2(-70000.0f, -70000.0f),
+	// One triangle over the whole screen, in clip space: the sea is a plane reaching the horizon, worked out for each
+	// pixel in fs_water, which leaves the sky above the horizon alone
+	static constexpr std::array<glm::vec2, 3> k_Points = {
+	    glm::vec2(-1.0f, -1.0f),
+	    glm::vec2(3.0f, -1.0f),
+	    glm::vec2(-1.0f, 3.0f),
 	};
 
-	static constexpr std::array<uint16_t, 6> k_Indices = {2, 1, 0, 0, 3, 2};
+	static constexpr std::array<uint16_t, 3> k_Indices = {0, 1, 2};
 
 	const auto* mem = bgfx::makeRef(k_Points.data(), static_cast<uint32_t>(k_Points.size() * sizeof(k_Points[0])));
 	auto* vertexBuffer = new VertexBuffer("Water", mem, decl);

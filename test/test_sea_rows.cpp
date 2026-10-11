@@ -7,9 +7,12 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+
 #include <chrono>
 
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/vec4.hpp>
 #include <gtest/gtest.h>
 
 #include "Graphics/SeaRows.h"
@@ -67,6 +70,88 @@ TEST(SeaRows, NoRowsWhenTheSeaIsBehind)
 	EXPECT_FALSE(sea_rows::ComputeScreenRange(ViewProjection({2560.0f, 100.0f, 2560.0f}, {2560.0f, 2000.0f, 2561.0f}),
 	                                          k_Viewport, k_Near)
 	                 .has_value());
+}
+
+namespace
+{
+/// The game's own view: 70 degrees across the width and no far plane, looking from a height along a yaw and a pitch
+/// below the horizon
+glm::mat4 HighViewProjection(glm::vec2 viewport, float height, float yawDegrees, float pitchDegrees)
+{
+	const float yFov = 2.0f * std::atan(std::tan(glm::radians(70.0f) / 2.0f) * viewport.y / viewport.x);
+	const auto projection = glm::infinitePerspective(yFov, viewport.x / viewport.y, 3.5f);
+	const glm::vec3 eye {2560.0f, height, 2560.0f};
+	const float yaw = glm::radians(yawDegrees);
+	const float pitch = glm::radians(pitchDegrees);
+	const glm::vec3 forward {std::cos(pitch) * std::sin(yaw), -std::sin(pitch), std::cos(pitch) * std::cos(yaw)};
+	return projection * glm::lookAt(eye, eye + forward, {0.0f, 1.0f, 0.0f});
+}
+
+/// One over the view depth of the sea under screen row y, straight from the view
+float InverseDepthUnderRow(const glm::mat4& viewProjection, glm::vec2 viewport, float y)
+{
+	const auto inverse = glm::inverse(viewProjection);
+	const float ndcY = 1.0f - ((y / viewport.y) * 2.0f);
+	auto near = inverse * glm::vec4(0.0f, ndcY, -1.0f, 1.0f);
+	auto far = inverse * glm::vec4(0.0f, ndcY, 0.0f, 1.0f);
+	near /= near.w;
+	far /= far.w;
+	const glm::vec3 direction = glm::vec3(far - near);
+	const glm::vec3 point = glm::vec3(near) + direction * (-near.y / direction.y);
+	return 1.0f / (viewProjection * glm::vec4(point, 1.0f)).w;
+}
+} // namespace
+
+// From as high as the camera goes (30000) the square of sea still gives whole rows down to the bottom of the screen,
+// their depths running smoothly from the far edge to the bottom
+TEST(SeaRows, TheRowsHoldFromAsHighAsTheCameraGoes)
+{
+	for (const glm::vec2 viewport : {glm::vec2 {1920.0f, 1080.0f}, glm::vec2 {1280.0f, 1024.0f}, glm::vec2 {5120.0f, 1440.0f}})
+	{
+		for (const float height : {5000.0f, 15000.0f, 30000.0f})
+		{
+			for (const float pitch : {50.0f, 70.0f, 89.0f})
+			{
+				const auto viewProjection = HighViewProjection(viewport, height, 30.0f, pitch);
+				const auto range = sea_rows::ComputeScreenRange(viewProjection, viewport, 3.5f);
+				ASSERT_TRUE(range.has_value()) << height << " " << pitch;
+				EXPECT_GE(range->top, 0.0f);
+				EXPECT_LE(range->bottom, viewport.y - 1.0f);
+				EXPECT_LT(range->top, range->bottom);
+				const auto rows = sea_rows::MakeRows(*range);
+				EXPECT_GT(rows.count, 0);
+				EXPECT_LE(rows.first + (2 * rows.count), static_cast<int>(viewport.y) + 2);
+				// Far but finite, and nearer down the screen
+				EXPECT_GT(rows.inverseDepth, 0.0f);
+				EXPECT_TRUE(std::isfinite(rows.inverseStep));
+				EXPECT_GE(rows.inverseStep, 0.0f);
+				const float last = rows.inverseDepth + (static_cast<float>(rows.count - 1) * rows.inverseStep);
+				EXPECT_NEAR(last, range->inverseDepthBottom, range->inverseDepthBottom * 1e-4f);
+				// The depths are those of the sea under the rows: no more than 30000 units of height away from it
+				EXPECT_LE(1.0f / range->inverseDepthBottom, height * 1.0001f / std::sin(glm::radians(pitch - 25.0f)));
+				if (range->bottom >= viewport.y - 1.0f && range->top > 0.0f)
+				{
+					EXPECT_NEAR(range->inverseDepthBottom, InverseDepthUnderRow(viewProjection, viewport, viewport.y - 1.0f),
+					            range->inverseDepthBottom * 2e-3f)
+					    << height << " " << pitch;
+				}
+			}
+		}
+	}
+}
+
+// Looking out from 30000, the square is far below: it is seen only in the lower part of the screen, its far corner
+// below the middle, and the first row fades in. Nearly level, it is below the screen altogether
+TEST(SeaRows, FromHighLookingOutTheSeaLiesLow)
+{
+	const glm::vec2 viewport {1920.0f, 1080.0f};
+	EXPECT_FALSE(
+	    sea_rows::ComputeScreenRange(HighViewProjection(viewport, 30000.0f, 30.0f, 15.0f), viewport, 3.5f).has_value());
+	const auto range = sea_rows::ComputeScreenRange(HighViewProjection(viewport, 30000.0f, 30.0f, 45.0f), viewport, 3.5f);
+	ASSERT_TRUE(range.has_value());
+	EXPECT_GT(range->top, viewport.y / 2.0f);
+	EXPECT_FLOAT_EQ(range->bottom, viewport.y - 1.0f);
+	EXPECT_TRUE(sea_rows::MakeRows(*range).softTop);
 }
 
 TEST(SeaRows, RowsAreTwoPixelsApart)

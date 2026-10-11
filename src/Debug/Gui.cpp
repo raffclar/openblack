@@ -730,13 +730,12 @@ bool Gui::ShowMenu() noexcept
 				ImGui::Text("Aspect Ratio %.3f", aspect);
 				if (ImGui::MenuItem("Reset"))
 				{
-					camera.SetProjectionMatrixPerspective(config.cameraXFov, aspect, config.cameraNearClip,
-					                                      config.cameraFarClip);
+					camera.SetProjectionMatrixPerspective(config.cameraXFov, aspect, config.cameraNearClip);
 				}
 
 				if (ImGui::SliderFloat("Field of View", &fieldOfView, 30.0f, 179.0f, "%.1f"))
 				{
-					camera.SetProjectionMatrixPerspective(fieldOfView, aspect, config.cameraNearClip, config.cameraFarClip);
+					camera.SetProjectionMatrixPerspective(fieldOfView, aspect, config.cameraNearClip);
 				}
 
 				ImGui::EndMenu();

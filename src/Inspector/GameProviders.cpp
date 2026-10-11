@@ -536,7 +536,6 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 		                  {"vsync", config.vsync},
 		                  {"camera_fov", config.cameraXFov},
 		                  {"camera_near_clip", config.cameraNearClip},
-		                  {"camera_far_clip", config.cameraFarClip},
 		                  {"gui_scale", config.guiScale},
 		                  {"running", config.running},
 		              };
