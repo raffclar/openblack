@@ -431,6 +431,8 @@ private:
 	/// back its own place: the game's own frame (the hand, picking, the sound) goes by its own camera, only the drawing
 	/// by the shown one
 	void ShowInspectorCamera(bool shown);
+	/// The inspector's override, while one is shown, for the pointer's work (the hand's ray, picking under the cursor)
+	void ShowInspectorOverride(bool shown);
 	/// Once a game turn outside the temple: the hand's tooltip for what it is over, "Interact" over the player's own
 	/// creature
 	void ProcessHandToolTipTurn();

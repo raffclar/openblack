@@ -13,6 +13,7 @@
 
 #include <optional>
 
+#include "CameraControl.h"
 #include "InputControl.h"
 
 namespace openblack::inspector
@@ -37,12 +38,16 @@ public:
 	void SetLockMode(std::string_view mode) override;
 	[[nodiscard]] Json LockState() const override;
 
+	/// The camera whose override, while one is shown, is the view points of the world are found on the screen through
+	void SetCamera(CameraControlInterface& camera) { _camera = &camera; }
+
 private:
 	/// Gives the mouse back once the inspector holds nothing
 	void Release();
 
 	/// The keys the inspector holds down, by scancode, for their modifiers and for letting go of them all
 	std::vector<int> _heldKeys;
+	CameraControlInterface* _camera {nullptr};
 };
 
 /// The lock on the player's mouse and keyboard: its mode, and whether it keeps them out now

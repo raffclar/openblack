@@ -276,7 +276,8 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	const ParameterDescription world {.name = "world",
 	                                  .type = "point",
 	                                  .description = "A point of the world, [x, z] on the land or [x, y, z]; it must be "
-	                                                 "on the screen",
+	                                                 "on the screen, as drawn (through camera.set's override while "
+	                                                 "one is shown)",
 	                                  .required = false};
 	const auto button = Optional("button", "string", "left (the default), middle or right");
 	return {
