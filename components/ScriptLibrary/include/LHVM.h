@@ -19,12 +19,17 @@
 #include <span>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "LHVMFile.h"
 
 namespace openblack::lhvm
 {
+
+/// An argument for a native called from outside the scripts: a value of a type, or a text, which the native reads as it
+/// reads a text a script gives it
+using NativeArgument = std::variant<std::pair<VMValue, DataType>, std::string>;
 
 class LHVM
 {
@@ -199,10 +204,10 @@ public:
 	/// Changes a global variable's value, keeping its type
 	void SetVariable(uint32_t id, VMValue value);
 	/// Calls a native between the tasks' turns, as a script's call to it is made: its arguments pushed in order, the
-	/// native run with its entering and leaving told, and what it pushed taken back, the first pushed first. False when
-	/// there is no such native or it isn't written, or a task is running.
-	bool CallNative(uint32_t id, std::span<const std::pair<VMValue, DataType>> arguments,
-	                std::vector<std::pair<VMValue, DataType>>& results);
+	/// native run with its entering and leaving told, and what it pushed taken back, the first pushed first. A text is
+	/// put after the scripts' own data for the length of the call and its place pushed, as a script pushes the place of
+	/// one of its texts. False when there is no such native or it isn't written, or a task is running.
+	bool CallNative(uint32_t id, std::span<const NativeArgument> arguments, std::vector<std::pair<VMValue, DataType>>& results);
 	/// Changes one of a task's local variables, by its place among them, keeping its type
 	void SetTaskVariable(uint32_t taskNumber, size_t index, VMValue value);
 

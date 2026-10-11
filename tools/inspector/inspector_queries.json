@@ -1309,7 +1309,7 @@
   "query": "script.functions"
  },
  {
-  "description": "Calls a script native as a script's call to it would, with its arguments in order (a vector is [x, y, z]); what it gave back. Natives that wait for something or run over turns aren't for this",
+  "description": "Calls a script native as a script's call to it would, with its arguments in order (a vector is [x, y, z], a text such as a file's name \"...\"); what it gave back. Natives that wait for something or run over turns aren't for this",
   "kind": "object",
   "parameters": [
    {
@@ -1319,12 +1319,12 @@
     "type": "string or integer"
    },
    {
-    "description": "Numbers, true or false, [x, y, z], {\"object\": id}, {\"int\": n} or {\"float\": x}, as many as it takes; a plain number goes on the stack as the type the native's slot takes, {\"int\"} and {\"float\"} as given. Each goes on the stack as the type the native takes, as a script's call puts it",
+    "description": "Numbers, true or false, texts, [x, y, z], {\"object\": id}, {\"int\": n}, {\"float\": x} or {\"string\": \"...\"}, as many as it takes; a plain number goes on the stack as the type the native's slot takes, {\"int\"}, {\"float\"} and {\"string\"} as given. A text is kept where the native reads a script's texts for the length of the call. Each goes on the stack as the type the native takes, as a script's call puts it",
     "name": "args",
     "type": "array"
    },
    {
-    "description": "Pushes exactly the values given, past the check of how many the native takes and of their types (for a native that takes a different count than the language's table says, as GET_ARENA does): each number must say its type, {\"int\": n} or {\"float\": x}",
+    "description": "Pushes exactly the values given, past the check of how many the native takes and of their types (for a native that takes a different count than the language's table says, as GET_ARENA does): each number must say its type, {\"int\": n} or {\"float\": x}; a text goes as one",
     "name": "raw",
     "type": "boolean"
    }

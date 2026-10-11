@@ -647,7 +647,8 @@ TOOLS = [
     {
         "name": "script_call",
         "description": "Calls a script native by name or number as a script would, with args in order: numbers, "
-                       "true/false, [x, y, z], {\"object\": id}, {\"int\": n}, {\"float\": x}; checked against the "
+                       "true/false, texts such as a file name (\"Land1Zone2.exc\" or {\"string\": \"...\"}), "
+                       "[x, y, z], {\"object\": id}, {\"int\": n}, {\"float\": x}; checked against the "
                        "count and types the language's table gives the native. raw=true pushes exactly the values given "
                        "(every number typed with int/float) past that check, for a native that takes a different count. "
                        "Answers what it gave back.",

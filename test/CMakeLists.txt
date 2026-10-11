@@ -661,6 +661,10 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_lhvm_exceptions lhvm/test_lhvm_exceptions.cpp)
 target_link_libraries(test_lhvm_exceptions PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(
+  test_lhvm_native_texts lhvm/test_lhvm_native_texts.cpp
+)
+target_link_libraries(test_lhvm_native_texts PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
   test_screenshot_capture graphics/test_screenshot_capture.cpp
 )
 openblack_setup_and_add_test(test_script_random test_script_random.cpp)

@@ -17,6 +17,8 @@
 #include <algorithm>
 #include <fstream>
 #include <stdexcept>
+#include <string>
+#include <variant>
 
 #include "LHVMFile.h"
 
@@ -1636,7 +1638,7 @@ void LHVM::Opcode29Swap(VMTask& /*task*/, const VMInstruction& instruction)
 
 void LHVM::Opcode30Line(VMTask& /*task*/, const VMInstruction& /*instruction*/) {}
 
-bool LHVM::CallNative(uint32_t id, std::span<const std::pair<VMValue, DataType>> arguments,
+bool LHVM::CallNative(uint32_t id, std::span<const NativeArgument> arguments,
                       std::vector<std::pair<VMValue, DataType>>& results)
 {
 	if (_functions == nullptr || id == 0 || id >= _functions->size() || _functions->at(id).impl == nullptr ||
@@ -1646,15 +1648,35 @@ bool LHVM::CallNative(uint32_t id, std::span<const std::pair<VMValue, DataType>>
 	}
 	_currentStack = &_mainStack;
 	const auto before = _mainStack.count;
-	for (const auto& [value, type] : arguments)
+	// The call's texts go after the scripts' own data, where the native's lookup of a text's place finds them, and are
+	// taken off again after it: the scripts' data is as it was, and repeated calls don't make it grow
+	const auto scriptsData = _data.size();
+	for (const auto& argument : arguments)
 	{
-		Push(value, type);
+		if (const auto* text = std::get_if<std::string>(&argument))
+		{
+			const auto offset = static_cast<uint32_t>(_data.size());
+			_data.insert(_data.end(), text->begin(), text->end());
+			_data.push_back('\0');
+			Push(VMValue(offset), DataType::Int);
+		}
+		else
+		{
+			const auto& [value, type] = std::get<std::pair<VMValue, DataType>>(argument);
+			Push(value, type);
+		}
 	}
+	const auto withTexts = _data.size();
 	_mainStack.pushCount = 0;
 	_mainStack.popCount = 0;
 	InvokeNativeCallEnterCallback(id);
 	_functions->at(id).impl();
 	InvokeNativeCallExitCallback(id);
+	// A native that loaded other scripts has replaced the data, texts and all: only the call's own texts are taken off
+	if (_data.size() == withTexts)
+	{
+		_data.resize(scriptsData);
+	}
 	// What it gave back sits on top of what was there before
 	results.clear();
 	const auto pushed = std::min<uint32_t>(_mainStack.pushCount, _mainStack.count);

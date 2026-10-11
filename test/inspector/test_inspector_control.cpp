@@ -302,7 +302,9 @@ public:
 		         .in = 3,
 		         .out = 0,
 		         .implemented = true,
-		         .slots = {ScriptValue::Type::Int, ScriptValue::Type::Float, ScriptValue::Type::Boolean}}};
+		         .slots = {ScriptValue::Type::Int, ScriptValue::Type::Float, ScriptValue::Type::Boolean}},
+		        // Takes a file's name, as SET_CAMERA_ZONE does
+		        {.id = 8, .name = "ZONES", .in = 1, .out = 0, .implemented = true, .slots = {ScriptValue::Type::String}}};
 	}
 	std::variant<std::vector<ScriptValue>, std::string> CallNative(uint32_t id, const std::vector<ScriptValue>& args) override
 	{
@@ -447,6 +449,8 @@ TEST(InspectorScripts, TheNativesTypesComeFromTheLanguage)
 	// Unknown, or not adding up to what the native takes: no types
 	EXPECT_TRUE(NativeSlots("NO_SUCH_NATIVE", 2).empty());
 	EXPECT_TRUE(NativeSlots("RUN_TEXT", 2).empty());
+	// A file's name is a text slot
+	EXPECT_EQ(NativeSlots("SET_CAMERA_ZONE", 1), (std::vector<std::optional<Type>> {Type::String}));
 }
 
 TEST(InspectorScripts, ArgumentsReadAsTheScriptsGiveThem)
@@ -461,7 +465,59 @@ TEST(InspectorScripts, ArgumentsReadAsTheScriptsGiveThem)
 	EXPECT_FLOAT_EQ((*args)[4].number, 3.0f);
 	EXPECT_EQ((*args)[5].object, 9u);
 	EXPECT_EQ((*args)[6].integer, -4);
-	EXPECT_FALSE(ArgumentsFromJson(Json::parse(R"(["text"])"), error).has_value());
+	EXPECT_FALSE(ArgumentsFromJson(Json::parse(R"([{"text": 1}])"), error).has_value());
+	// The refusal lists every form, texts among them
+	EXPECT_NE(error.find("{\"string\": \"...\"}"), std::string::npos);
+}
+
+TEST(InspectorScripts, TextsAreArguments)
+{
+	std::string error;
+	const auto args = ArgumentsFromJson(Json::parse(R"(["Land1Zone2.exc", {"string": "5"}])"), error);
+	ASSERT_TRUE(args.has_value()) << error;
+	ASSERT_EQ(args->size(), 2u);
+	EXPECT_EQ((*args)[0].type, ScriptValue::Type::String);
+	EXPECT_EQ((*args)[0].text, "Land1Zone2.exc");
+	EXPECT_FALSE((*args)[0].typeGiven);
+	EXPECT_EQ((*args)[1].type, ScriptValue::Type::String);
+	EXPECT_EQ((*args)[1].text, "5");
+	EXPECT_TRUE((*args)[1].typeGiven);
+	EXPECT_FALSE(ArgumentsFromJson(Json::parse(R"([{"string": 5}])"), error).has_value());
+}
+
+// A native that takes a file's name is given the text; a number isn't a text, and a text isn't a number unless it
+// reads as one
+TEST(InspectorScripts, ANativeTakingATextIsGivenIt)
+{
+	FakeScripts scripts;
+	auto provider = std::make_unique<FunctionProvider>("script");
+	AddScriptControls(*provider, scripts);
+	Inspector inspector;
+	inspector.Add(std::move(provider));
+
+	Ask(inspector, R"({"query": "script.call", "params": {"native": "ZONES", "args": ["Land1Zone2.exc"]}})");
+	EXPECT_EQ(scripts.called, 8u);
+	ASSERT_EQ(scripts.given.size(), 1u);
+	EXPECT_EQ(scripts.given[0].type, ScriptValue::Type::String);
+	EXPECT_EQ(scripts.given[0].text, "Land1Zone2.exc");
+	Ask(inspector, R"({"query": "script.call", "params": {"native": "ZONES", "args": [{"string": "Land2.exc"}]}})");
+	EXPECT_EQ(scripts.given[0].text, "Land2.exc");
+	EXPECT_NE(Refused(inspector, R"({"query": "script.call", "params": {"native": "ZONES", "args": [3]}})").find("argument 1"),
+	          std::string::npos);
+
+	// A number written as text, as some tools send one, is the number for a slot that isn't text
+	Ask(inspector, R"({"query": "script.call", "params": {"native": "SAY", "args": ["1203", "2", "true"]}})");
+	ASSERT_EQ(scripts.given.size(), 3u);
+	EXPECT_EQ(scripts.given[0].type, ScriptValue::Type::Int);
+	EXPECT_EQ(scripts.given[0].integer, 1203);
+	EXPECT_EQ(scripts.given[2].type, ScriptValue::Type::Boolean);
+	EXPECT_TRUE(scripts.given[2].boolean);
+	EXPECT_NE(Refused(inspector, R"({"query": "script.call", "params": {"native": "SAY", "args": ["hello", 2, true]}})")
+	              .find("argument 1"),
+	          std::string::npos);
+	// raw pushes a text as a text
+	Ask(inspector, R"({"query": "script.call", "params": {"native": "ZONES", "raw": true, "args": ["a.exc"]}})");
+	EXPECT_EQ(scripts.given[0].type, ScriptValue::Type::String);
 }
 
 namespace

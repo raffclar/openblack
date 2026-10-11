@@ -184,6 +184,8 @@ std::pair<lhvm::VMValue, lhvm::DataType> ToVm(const ScriptValue& value)
 	case ScriptValue::Type::Boolean:
 		return {lhvm::VMValue(value.boolean ? 1.0f : 0.0f), lhvm::DataType::Boolean};
 	case ScriptValue::Type::Float:
+	// A text has no value of its own: a native call gives it to the script machine as text, and no global is one
+	case ScriptValue::Type::String:
 		break;
 	}
 	return {lhvm::VMValue(value.number), lhvm::DataType::Float};
@@ -557,9 +559,16 @@ std::vector<ScriptNative> GameScripts::Natives() const
 
 std::variant<std::vector<ScriptValue>, std::string> GameScripts::CallNative(uint32_t id, const std::vector<ScriptValue>& args)
 {
-	std::vector<std::pair<lhvm::VMValue, lhvm::DataType>> arguments;
+	// A text goes as itself: the script machine keeps it where its natives read a script's texts for the call
+	std::vector<lhvm::NativeArgument> arguments;
 	arguments.reserve(args.size());
-	std::ranges::transform(args, std::back_inserter(arguments), ToVm);
+	std::ranges::transform(args, std::back_inserter(arguments), [](const ScriptValue& value) -> lhvm::NativeArgument {
+		if (value.type == ScriptValue::Type::String)
+		{
+			return value.text;
+		}
+		return ToVm(value);
+	});
 	std::vector<std::pair<lhvm::VMValue, lhvm::DataType>> results;
 	if (!Locator::vm::value().CallNative(id, arguments, results))
 	{
