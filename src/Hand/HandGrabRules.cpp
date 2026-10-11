@@ -68,11 +68,17 @@ bool hand_grab::ValidForPlaceInHand(const Holdable& thing)
 	case GrabKind::MobileObject:
 	case GrabKind::Poo:
 	case GrabKind::Tree:
+	case GrabKind::BigForest:
 		return true;
 	case GrabKind::None:
 		break;
 	}
 	return false;
+}
+
+bool hand_grab::Tuggable(GrabKind kind)
+{
+	return kind != GrabKind::BigForest;
 }
 
 bool hand_grab::PassesGate(const Gate& gate)
@@ -163,6 +169,7 @@ HoldFacts hand_grab::HoldOf(GrabKind kind, MobileStaticInfo staticType, MeshId m
 		facts.holdRadius = ObjectHoldRadius(facts.type, height, radius);
 		break;
 	case GrabKind::None:
+	case GrabKind::BigForest:
 		facts.holdRadius = ObjectHoldRadius(facts.type, height, radius);
 		break;
 	}
