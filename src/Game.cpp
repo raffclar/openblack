@@ -152,6 +152,7 @@
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
@@ -1129,6 +1130,11 @@ bool Game::GameLogicLoop() noexcept
 	Locator::chimneySmokeSystem::value().ProcessTurn();
 	// How far the players' influence reaches, and its border
 	Locator::influenceSystem::value().ProcessTurn(Locator::time::value().GetTurn());
+	// The players' hearts beat on, quicker the more their people are in danger
+	if (Locator::heartbeatSystem::has_value())
+	{
+		Locator::heartbeatSystem::value().ProcessTurn(Locator::time::value().GetTurn());
+	}
 	// The crops in the fields grow
 	Locator::fieldSystem::value().ProcessTurn(Locator::time::value().GetTurn());
 	// The fish come back to the fish farms

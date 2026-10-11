@@ -688,3 +688,5 @@ openblack_setup_and_add_test(
   test_creature_action_agendas test_creature_action_agendas.cpp
 )
 openblack_setup_and_add_test(test_villager_draw test_villager_draw.cpp)
+openblack_setup_and_add_test(test_light_column test_light_column.cpp)
+openblack_setup_and_add_test(test_heartbeat test_heartbeat.cpp)

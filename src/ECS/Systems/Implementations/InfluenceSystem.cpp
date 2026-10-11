@@ -336,7 +336,7 @@ bool InfluenceSystem::Shielded(PlayerNames player, const map_coords::MapCoords& 
 	return shielded;
 }
 
-float InfluenceSystem::InfluencePower(PlayerNames player)
+float InfluenceSystem::InfluencePower(PlayerNames player) const
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	float power = 0.0f;
