@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <functional>
+#include <optional>
 
 #include <entt/entity/fwd.hpp>
 
@@ -41,6 +42,18 @@ public:
 	[[nodiscard]] virtual TownDesireInfo GetMostWanted(entt::entity town) const = 0;
 	/// The scripts' boost to a desire; `resort` puts the town's order right at once
 	virtual void SetBoost(entt::entity town, TownDesireInfo desire, float boost, bool resort) = 0;
+
+	/// Once a frame, by the game's time passed in it: each town's store flies a flag for some of its desires, each as
+	/// high as the town wants that thing, turned to the camera, while the store stands built
+	virtual void UpdateFlags(float seconds) = 0;
+	/// What the hand shows over a flag: the flag's own words, among the game's tooltips, and its town's desire in
+	/// hundredths. None for anything not a flag showing.
+	struct FlagToolTip
+	{
+		uint32_t words;
+		float percent;
+	};
+	[[nodiscard]] virtual std::optional<FlagToolTip> GetFlagToolTip(entt::entity flag) const = 0;
 };
 
 } // namespace openblack::ecs::systems
