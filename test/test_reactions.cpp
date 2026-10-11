@@ -145,7 +145,8 @@ protected:
 		        .player = PlayerNames::PLAYER_ONE,
 		        .position = k_Here,
 		        .impressiveValue = 2.0f,
-		        .power = 1.0f};
+		        .power = 1.0f,
+		        .balance = ecs::systems::ReactionSystemInterface::Balance::Miracles};
 	}
 
 	[[nodiscard]] static VillagerStates StateOf(entt::entity villager)
@@ -319,12 +320,28 @@ TEST_F(Reactions, AReactionGoesWithWhatMadeItAndIsFoundWhereItReaches)
 
 TEST_F(Reactions, TheLandsBalanceScalesHowImpressiveMiraclesAre)
 {
-	_reactions.SetLandBalance(2.0f);
+	using Balance = ecs::systems::ReactionSystemInterface::Balance;
+	_reactions.SetLandBalance(Balance::Miracles, 2.0f);
+	_reactions.SetLandBalance(Balance::Things, 3.0f);
 	_reactions.Create(Miracle());
 	EXPECT_FLOAT_EQ(Locator::entitiesRegistry::value().Get<const CreatureImpression>(_creature).byOwnPlayer,
 	                2.0f * 2.0f * 4.0f);
 	_reactions.Reset();
-	EXPECT_FLOAT_EQ(_reactions.GetLandBalance(), 1.0f);
+	EXPECT_FLOAT_EQ(_reactions.GetLandBalance(Balance::Miracles), 1.0f);
+	EXPECT_FLOAT_EQ(_reactions.GetLandBalance(Balance::Things), 1.0f);
+}
+
+TEST_F(Reactions, AThingInTheWorldIsScaledByTheThingsBalanceNotTheMiracles)
+{
+	using Balance = ecs::systems::ReactionSystemInterface::Balance;
+	// Land 2 raises both; a thrown rock or a put-down artefact takes the things' balance
+	_reactions.SetLandBalance(Balance::Miracles, 2.0f);
+	_reactions.SetLandBalance(Balance::Things, 3.0f);
+	auto thing = Miracle();
+	thing.balance = Balance::Things;
+	_reactions.Create(thing);
+	EXPECT_FLOAT_EQ(Locator::entitiesRegistry::value().Get<const CreatureImpression>(_creature).byOwnPlayer,
+	                3.0f * 2.0f * 4.0f);
 }
 
 TEST_F(Reactions, AShieldIsLeftToTheShieldsForVillagersButACreatureTakesItUp)

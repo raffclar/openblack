@@ -870,7 +870,7 @@ void ReactionSystem::Impress(const Active& reaction, entt::entity living, const 
 	                           ? Locator::artefactSystem::value().ImpressiveModifier(source.initiator)
 	                           : 1.0f;
 	const auto value = [&](float boredom, entt::entity town) {
-		return artefact * magic::ImpressiveValue({.landBalance = _landBalance,
+		return artefact * magic::ImpressiveValue({.landBalance = GetLandBalance(source.balance),
 		                                          .impressiveValue = source.impressiveValue,
 		                                          .reactionMultiplier = multiplier(town),
 		                                          .distance = distance,
@@ -963,7 +963,7 @@ void ReactionSystem::Reset()
 	_cursor = 0;
 	_turn = 0;
 	_voice = {};
-	_landBalance = 1.0f;
+	_landBalances = {1.0f, 1.0f};
 }
 
 std::vector<ReactionSystemInterface::Active> ReactionSystem::ReactionsAt(const glm::vec3& point) const

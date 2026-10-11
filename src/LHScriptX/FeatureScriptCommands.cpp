@@ -1000,11 +1000,13 @@ void FeatureScriptCommands::SetGlobalLandBalance(int32_t index, float value)
 	{
 		balances.at(static_cast<size_t>(index)) = value;
 	}
-	// The land's balance of how impressive miracles are goes to the reactions
-	constexpr int32_t k_ImpressivenessBalance = 2;
-	if (index == k_ImpressivenessBalance && Locator::reactionSystem::has_value())
+	// The land's balances of how impressive things in the world and miracles are go to the reactions
+	using Balance = ecs::systems::ReactionSystemInterface::Balance;
+	constexpr int32_t k_ThingsBalance = 1;
+	constexpr int32_t k_MiraclesBalance = 2;
+	if ((index == k_ThingsBalance || index == k_MiraclesBalance) && Locator::reactionSystem::has_value())
 	{
-		Locator::reactionSystem::value().SetLandBalance(value);
+		Locator::reactionSystem::value().SetLandBalance(index == k_ThingsBalance ? Balance::Things : Balance::Miracles, value);
 	}
 }
 
