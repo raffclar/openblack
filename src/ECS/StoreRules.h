@@ -13,6 +13,8 @@
 
 #include <optional>
 
+#include "Enums.h"
+
 /// How much the things a store takes are worth, and what giving to a town's store and taking from it counts for
 namespace openblack::ecs::store_rules
 {
@@ -44,4 +46,6 @@ namespace openblack::ecs::store_rules
 /// other piles
 [[nodiscard]] uint32_t AskedOfPile(uint32_t asked, int64_t overMaximum);
 
+/// A building going up stores only wood on its site, which the builders build with
+[[nodiscard]] bool BuildingSiteStores(ResourceType type);
 } // namespace openblack::ecs::store_rules

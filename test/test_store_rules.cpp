@@ -64,3 +64,11 @@ TEST(StoreRules, AForestCountsItsWoodWithoutTruncating)
 	EXPECT_EQ(store_rules::BigForestWorth(1.5f, 25u), 37u);
 	EXPECT_FLOAT_EQ(store_rules::BigForestWood(0.5f, 37u), 18.5f);
 }
+
+TEST(StoreRules, ABuildingSiteStoresOnlyWood)
+{
+	EXPECT_TRUE(store_rules::BuildingSiteStores(openblack::ResourceType::Wood));
+	EXPECT_TRUE(store_rules::BuildingSiteStores(openblack::ResourceType::Any));
+	EXPECT_FALSE(store_rules::BuildingSiteStores(openblack::ResourceType::Food));
+	EXPECT_FALSE(store_rules::BuildingSiteStores(openblack::ResourceType::None));
+}

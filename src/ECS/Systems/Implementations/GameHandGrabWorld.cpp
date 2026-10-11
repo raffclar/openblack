@@ -575,9 +575,10 @@ std::optional<uint32_t> GameHandGrabWorld::PourPot(entt::entity pot, PlayerNames
 		                                                             : k_PourFood;
 		pour = Locator::particleSystem::value().Start(particles, hand, 1.0f);
 	}
-	// What it holds goes to the stores and piles of it about the point, or makes a pile there; in the water it is lost
-	PourAt(facts->resource, hand, facts->amount, player, facts->poisoned);
+	// The handful is gone from the hand first, so that it can't take back what it pours. What it held goes to the stores
+	// and piles of it about the point, or makes a pile there; in the water it is lost.
 	UseUp(pot);
+	PourAt(facts->resource, hand, facts->amount, player, facts->poisoned);
 	return pour;
 }
 
@@ -788,7 +789,8 @@ bool GameHandGrabWorld::StoresResource(entt::entity store, ResourceType resource
 uint32_t GameHandGrabWorld::AddToStore(entt::entity store, ResourceType resource, uint32_t amount, bool poisoned)
 {
 	return Locator::resourceStoreSystem::has_value()
-	           ? Locator::resourceStoreSystem::value().AddToStore(store, resource, amount, HandPlayer(), poisoned)
+	           ? Locator::resourceStoreSystem::value().AddToStore(store, resource, amount, HandPlayer(), poisoned,
+	                                                              PoseOf(Hand()).origin)
 	           : 0;
 }
 
