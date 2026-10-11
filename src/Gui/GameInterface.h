@@ -83,8 +83,9 @@ public:
 
 	[[nodiscard]] GameMenu& GetMenu() noexcept { return *_menu; }
 
-	/// Asks the returning player how to start the new game. The box takes the mouse and every key until answered.
-	void ShowSkipBox();
+	/// Asks the player how to start the new game, offering to keep the old creature only when the current profile has
+	/// one. The box takes the mouse and every key until answered.
+	void ShowSkipBox(bool currentProfileHasCreature);
 	/// The answer to the start-of-game question, once
 	std::optional<new_game_choice::Choice> TakeSkipBoxAnswer() { return std::exchange(_skipBoxAnswer, std::nullopt); }
 	/// Whether a dialog is up taking the mouse: the menu, or the start-of-game question
