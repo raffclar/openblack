@@ -12,6 +12,7 @@
 #include "ArtefactSystem.h"
 
 #include <algorithm>
+#include <optional>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -22,6 +23,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/ArtefactRules.h"
+#include "ECS/Components/Abode.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
@@ -35,6 +37,7 @@
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
+#include "ECS/RelaxationRules.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -42,6 +45,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
+#include "ECS/VillagerAge.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -53,6 +57,7 @@ using namespace openblack;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 namespace rules = openblack::ecs::artefact_rules;
+namespace relaxation_rules = openblack::ecs::relaxation_rules;
 
 namespace
 {
@@ -109,6 +114,20 @@ uint32_t PopulationOf(entt::entity town)
 {
 	const auto* stats = Entities().TryGet<const TownStats>(town);
 	return stats != nullptr ? stats->adults + stats->children : 0;
+}
+
+/// The town's football pitch, its newest when it has several; none without one
+entt::entity FootballPitchOf(entt::entity town)
+{
+	const auto& registry = Entities();
+	const auto& abodes = registry.Get<const Town>(town).abodes;
+	const auto& table = Locator::infoConstants::value().abode;
+	const auto found = std::ranges::find_if(abodes, [&registry, &table](entt::entity abode) {
+		const auto* building = registry.Valid(abode) ? registry.TryGet<const Abode>(abode) : nullptr;
+		return building != nullptr && building->info != AbodeInfo::None &&
+		       table.at(static_cast<size_t>(building->info)).abodeType == AbodeType::FootballPitch;
+	});
+	return found != abodes.end() ? *found : entt::null;
 }
 
 bool IsTown(entt::entity town)
@@ -377,24 +396,39 @@ bool ArtefactSystem::OfferRelaxation(entt::entity town, entt::entity villager)
 	{
 		return false;
 	}
-	// TODO(football): the town's football pitch is offered first, and the god's own place of the town's player before
-	// the artefacts; openblack has neither yet
-	float best = 0.0f;
-	entt::entity chosen = entt::null;
-	for (const auto object : ArtefactsOf(town))
+	// The town's football pitch is weighed first. Its player's creature comes next, but a creature never draws anyone.
+	std::optional<float> football;
+	if (FootballPitchOf(town) != entt::null)
 	{
-		const float desire = JoiningDesire(object, Entities().Get<const TownArtefact>(object), villager);
-		if (desire > best)
-		{
-			best = desire;
-			chosen = object;
-		}
+		const auto* person = Entities().TryGet<const Villager>(villager);
+		const auto age = person != nullptr ? villager_age::AgeNow(*person) : 0;
+		// TODO(football): openblack plays no football, so no pitch has had a game or has teams yet
+		football = relaxation_rules::FootballDesire(age, relaxation_rules::FootballGame {}, Turn(), [](float range) {
+			return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameFloatRand(range) : 0.0f;
+		});
 	}
-	if (best == 0.0f || chosen == entt::null)
+	const auto artefacts = ArtefactsOf(town);
+	std::vector<float> desires;
+	desires.reserve(artefacts.size());
+	for (const auto object : artefacts)
 	{
-		return false;
+		desires.push_back(JoiningDesire(object, Entities().Get<const TownArtefact>(object), villager));
 	}
-	return JoinDance(chosen, Entities().Get<TownArtefact>(chosen), villager);
+	const auto chosen = relaxation_rules::Choose(football, desires);
+	switch (chosen.choice)
+	{
+	case relaxation_rules::Choice::Artefact:
+	{
+		const auto object = artefacts.at(chosen.index);
+		return JoinDance(object, Entities().Get<TownArtefact>(object), villager);
+	}
+	case relaxation_rules::Choice::Football:
+		// TODO(football): the villager would join the pitch's game, or do nothing when the town has no ball; openblack
+		// plays no football, so it does nothing
+	case relaxation_rules::Choice::None:
+		break;
+	}
+	return false;
 }
 
 float ArtefactSystem::JoiningDesire(entt::entity object, const TownArtefact& artefact, entt::entity villager) const
