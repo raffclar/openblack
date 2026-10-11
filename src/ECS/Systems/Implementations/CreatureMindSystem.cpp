@@ -1300,6 +1300,8 @@ void CreatureMindSystem::UpdateAttitudeFromFeedback(entt::entity creature, float
 	// Good feedback shows it its player wants compassion, bad anger, and it warms or cools to the player
 	creature_perceived_desires::Increase(
 	    mind->perceivedDesires, static_cast<size_t>(feedback > 0.0f ? Desire::Compassion : Desire::Anger), std::abs(feedback));
+	// The scripts read how strongly it was last rewarded or punished
+	mind->interactionMagnitude = feedback;
 	mind->attitudeToPlayer = creature_feedback::AttitudeAfter(mind->attitudeToPlayer, feedback);
 	mind->averageFeedback = creature_feedback::AverageAfter(mind->averageFeedback, feedback);
 }
@@ -1594,10 +1596,11 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 		return entity.has_value() ? std::optional(entt::to_integral(*entity)) : std::nullopt;
 	};
 	const auto actionObject = forced.actionObject != entt::null ? toNumber(forced.actionObject) : std::nullopt;
-	const creature_plan_actions::Situation situation {
+	creature_plan_actions::Situation situation {
 	    .instrument = toNumber(forced.instrument),
 	    .handFull = registry.AllOf<CreatureHeldObject>(creature),
 	};
+	Situate(creature, situation);
 	auto built = PlanAgenda(creature, *action, actionObject, situation);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} is made to {} on {}: {}", entt::to_integral(creature), forced.action,
 	                    actionObject.value_or(0), built.has_value() ? "planned" : "can't be planned");

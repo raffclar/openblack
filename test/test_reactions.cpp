@@ -37,6 +37,7 @@
 #include "ECS/MapProduction.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
 #include "ECS/Systems/Implementations/ReactionSystem.h"
+#include "ECS/Systems/Implementations/VillagerReactions.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -350,6 +351,62 @@ TEST_F(Reactions, VillagersBusyWithAShieldAreLeftToIt)
 	_reactions.Create(Miracle(Reaction::FleeFromSpell));
 	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
 	EXPECT_EQ(StateOf(_villagers[1]), VillagerStates::FleeingFromObjectReaction);
+}
+
+TEST_F(Reactions, OnlyAMateToBeWaitsForAVillagerHeldInTheHandAndOnlyWhileItIsNear)
+{
+	auto& info = *_info;
+	// Women are housewives and men foresters; both of an age to make love
+	for (auto& row : info.villager)
+	{
+		row.villagerNumber = VillagerNumber::Trader;
+	}
+	info.villager.at(0).villagerNumber = VillagerNumber::Housewife;
+	info.villager.at(0).sex = SexType::Female;
+	info.villager.at(1).villagerNumber = VillagerNumber::Forester;
+	info.villager.at(1).sex = SexType::Male;
+	for (const size_t row : {0u, 1u})
+	{
+		info.villager.at(row).startHavingSexAge = 0;
+		info.villager.at(row).stopHavingSexAge = 100;
+	}
+	// The game weighs this reaction by the breeder's row
+	info.reaction.at(static_cast<size_t>(Reaction::ReactToBreeder)).priority = 140;
+	auto& inHand = info.reaction.at(static_cast<size_t>(Reaction::ReactToVillagerInHand));
+	inHand.maxReactionDistance = 20.0f;
+	inHand.numGameTurnsForNormalThingsToReact = 1000;
+	inHand.numGameTurnsForCreatureToReact = 1000;
+	info.villagerStateTable.at(static_cast<size_t>(VillagerStates::InHand)).isFinalState = 1;
+	info.villagerStateTable.at(static_cast<size_t>(VillagerStates::WaitForMate)).isReactionState = 1;
+	Locator::infoConstants::emplace(info);
+
+	auto& registry = Locator::entitiesRegistry::value();
+	// A man of the town held in the hand right by the first two villagers; the second is a man too
+	const auto held = registry.Create();
+	registry.Assign<Transform>(held, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	auto& man = registry.Assign<Villager>(held);
+	man.town = _town;
+	man.number = VillagerNumber::Forester;
+	registry.Assign<LivingAction>(held, VillagerStates::InHand, static_cast<uint16_t>(0));
+	registry.Get<Villager>(_villagers[1]).number = VillagerNumber::Forester;
+
+	const auto id = _reactions.Create(
+	    {.initiator = held, .type = Reaction::ReactToVillagerInHand, .player = PlayerNames::PLAYER_ONE, .position = k_Here});
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::WaitForMate);
+	EXPECT_EQ(StateOf(_villagers[1]), VillagerStates::DecideWhatToDo);
+	EXPECT_EQ(StateOf(_villagers[2]), VillagerStates::DecideWhatToDo);
+	// The creature takes no notice of it
+	const auto* creature = registry.TryGet<const LivingReaction>(_creature);
+	EXPECT_TRUE(creature == nullptr || creature->reaction != id);
+
+	// Carried out of her reach, the reaction follows him and she stops waiting
+	registry.Get<Transform>(held).position = k_Here + glm::vec3(0.0f, 0.0f, 30.0f);
+	_reactions.ProcessTurn();
+	ASSERT_TRUE(_reactions.Find(id).has_value());
+	EXPECT_EQ(_reactions.Find(id)->source.position, k_Here + glm::vec3(0.0f, 0.0f, 30.0f));
+	ecs::systems::villager_reactions::WaitForMate(registry.Get<LivingAction>(_villagers[0]));
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
+	EXPECT_EQ(registry.Get<const LivingReaction>(_villagers[0]).reaction, 0u);
 }
 
 TEST(ReactionRules, MostReactionsTimeOutButNotFleeingNorImpressedByMiracles)

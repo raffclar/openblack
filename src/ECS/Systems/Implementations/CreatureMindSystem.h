@@ -81,6 +81,12 @@ public:
 	bool CarryOutForScript(entt::entity creature, std::vector<creature_mind::Step> agenda) override;
 	bool ScriptDoAction(entt::entity creature, uint32_t action, entt::entity target, std::optional<entt::entity> with) override;
 	[[nodiscard]] bool HasPlayed(entt::entity creature) const override;
+	[[nodiscard]] float GetInteractionMagnitude(entt::entity creature) const override;
+	void ClearInteractionMagnitude(entt::entity creature) override;
+	[[nodiscard]] uint32_t GetActionCount(entt::entity creature, uint32_t action) const override;
+	void SetOnlyDesire(entt::entity creature, creature_desires::Desire desire, float seconds) override;
+	void ClearOnlyDesire(entt::entity creature) override;
+	bool PointOutHighlight(entt::entity creature) override;
 
 private:
 	/// Gives a creature its desires and what it has learnt, if it has none yet: the first time its mind thinks, or
@@ -97,6 +103,9 @@ private:
 	           const creature_plan_actions::Situation& situation);
 	/// Gives up the plan carried out, if any
 	static void Abandon(components::CreatureMindState& mind);
+	/// A script makes a creature pick a fight with another: it asks, and they fight if the other agrees; either way the
+	/// script's order is carried out
+	bool FightForScript(entt::entity creature, entt::entity opponent);
 	/// Learns what feedback teaches, from what the creature did lately
 	void LearnFromFeedback(entt::entity creature, components::CreatureMindState& mind, float feedback);
 	/// Plans the desires due this turn for one creature

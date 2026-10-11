@@ -225,6 +225,7 @@
 #include "Resources/Loaders.h"
 #include "Resources/ResourcesInterface.h"
 #include "Serializer/FotFile.h"
+#include "Temple/TempleHelp.h"
 
 #ifdef __ANDROID__
 #include <spdlog/sinks/android_sink.h>
@@ -1068,13 +1069,16 @@ bool Game::GameLogicLoop() noexcept
 	const auto delta = std::chrono::milliseconds(currentTime - _lastGameLoopTime);
 	auto& clock = Locator::time::value();
 
-	// The game pauses the world while the player is in the temple, whose own turns keep the audio going
+	// The game pauses the world while the player is in the temple. The temple's own turns, by real time whatever the
+	// game's speed, run the temple's scripts and its help scripts, keep the audio going and have the advisors follow
+	// what they point at.
 	if (Locator::temple::has_value() && Locator::temple::value().Active())
 	{
-		// NOLINTNEXTLINE(modernize-use-nullptr): clang-tidy bug
-		if (delta >= k_TurnDuration * GetGameSpeed())
+		if (temple_help::TurnDue(_lastTempleTurnTime, currentTime))
 		{
+			Locator::vm::value().LookIn(lhvm::ScriptType::TempleHelp | lhvm::ScriptType::TempleSpecial);
 			ProcessTempleAudioTurn();
+			Locator::advisorSystem::value().ProcessTurn();
 			_lastGameLoopTime = currentTime;
 		}
 		return false;
@@ -2137,6 +2141,13 @@ bool Game::Update() noexcept
 				}
 				UpdateMagicHand(handTransform.position,
 				                std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
+				// The camera's helper icons by the hand, where it is drawn this frame
+				UpdateHandTricons(handTransform.position,
+				                  std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
+			}
+			else
+			{
+				UpdateHandTricons(std::nullopt, 0.0f);
 			}
 			{
 				// The globes and the hand show their miracles
@@ -4222,6 +4233,89 @@ void Game::UpdateHandNavigation(const ecs::components::Transform& handTransform)
 	}
 	_handCameraState = cameraState;
 	_handPose = pose;
+}
+
+void Game::UpdateHandTricons(std::optional<glm::vec3> handPosition, float seconds)
+{
+	if (!_interface)
+	{
+		return;
+	}
+	// The hand's last point on the screen while it grips the land
+	if (_handCameraState)
+	{
+		_handLastGrip = _mousePosition;
+	}
+	_interface->SetHandTricons(std::nullopt);
+	// Shown from the world camera, or from a tutorial demonstration's recording in any camera, out of the temple
+	const auto& camera = Locator::camera::value();
+	const auto cues = camera.GetModel().GetHandCues();
+	const bool demonstration = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsPlaying(0);
+	if (!handPosition.has_value() || (!demonstration && !cues.icons.has_value()) || !Locator::windowing::has_value() ||
+	    (Locator::temple::has_value() && Locator::temple::value().Active()))
+	{
+		return;
+	}
+	const auto& actions = Locator::gameActionSystem::value();
+	gui::GameInterface::HandTricons tricons {
+	    .handStateShowsIcons = true,
+	    .cinemaBars = Locator::cinematicDirectorSystem::value().IsWideScreenOn(),
+	    .seconds = seconds,
+	};
+	if (demonstration)
+	{
+		const auto& demo = Locator::handDemoSystem::value();
+		const auto held = demo.GetHeldButtons();
+		_triconAngle = demo.GetHintAngle();
+		tricons.icons = demo.GetHints();
+		tricons.demonstration = true;
+		tricons.moveHeld = held.move;
+		tricons.actionHeld = held.action;
+	}
+	else
+	{
+		auto frame = *cues.icons;
+		frame.handInInfluence = !_cursorWorldPosition.has_value() || Locator::influenceSystem::value().PlayerInfluence(
+		                                                                 PlayerNames::PLAYER_ONE, *_cursorWorldPosition) > 0.0f;
+		frame.tickMs = machine_clock::Ticks();
+		const auto icons = hand_tricons::WorldCamera(frame, _triconAngle);
+		_triconAngle = icons.rotateAngle;
+		tricons.icons = icons.icons;
+		tricons.leans = cues.clearView <= hand_tricons::k_ClearViewLeans;
+		tricons.cameraBusy =
+		    frame.gripping || frame.rotatingAroundMouse || frame.turn != 0.0f || frame.tilt != 0.0f || frame.zoom != 0.0f;
+		// The cross brightens with a thing under the hand, and shows at once with the action button
+		if (actions.Get(input::BindableActionMap::ACTION))
+		{
+			tricons.crossNudge = hand_tricons::CrossNudge::Action;
+		}
+		else if (_cursorOnObject)
+		{
+			tricons.crossNudge = hand_tricons::CrossNudge::OverThing;
+		}
+	}
+	tricons.rotateAngle = _triconAngle;
+
+	const auto screen = glm::vec2(Locator::windowing::value().GetSize());
+	const auto clip = camera.GetViewProjectionMatrix() * glm::vec4(*handPosition, 1.0f);
+	// Not with the hand behind the camera
+	if (clip.w < camera.GetNearClip())
+	{
+		return;
+	}
+	tricons.hand = {static_cast<int>((clip.x / clip.w + 1.0f) * screen.x * 0.5f),
+	                static_cast<int>((1.0f - clip.y / clip.w) * screen.y * 0.5f)};
+	tricons.lastGrip = _handLastGrip;
+	// The same size on the screen at any distance: a part of the focal length across
+	tricons.halfSize = camera.GetProjectionMatrix()[0][0] * screen.x * 0.5f / hand_tricons::k_FocalDivisor;
+	// The hand's empty and camera states show them, not while it holds something or is on a creature
+	bool holds = magic::HandHoldPoser::Find().has_value();
+	if (!holds && Locator::handGrabSystem::has_value())
+	{
+		holds = Locator::handGrabSystem::value().GetHeld().has_value();
+	}
+	tricons.handStateShowsIcons = !holds && !_handOnCreature.has_value();
+	_interface->SetHandTricons(tricons);
 }
 
 void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp,

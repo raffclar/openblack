@@ -904,6 +904,37 @@ uint32_t CreatureFightSystem::QueuedBlows(entt::entity creature) const
 	return fighting != nullptr ? fight::QueuedBlows(fighting->fighter.queue.Moves()) : 0;
 }
 
+float CreatureFightSystem::GetFightHealth(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature))
+	{
+		return 1.0f;
+	}
+	if (const auto* fighting = registry.TryGet<const CreatureFighting>(creature))
+	{
+		return fighting->fighter.health;
+	}
+	const auto* record = registry.TryGet<const CreatureFightRecord>(creature);
+	return record != nullptr ? record->health : 1.0f;
+}
+
+void CreatureFightSystem::SetFightHealth(entt::entity creature, float health)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature))
+	{
+		return;
+	}
+	if (auto* fighting = registry.TryGet<CreatureFighting>(creature))
+	{
+		fighting->fighter.health = health;
+	}
+	auto& record = registry.AllOf<CreatureFightRecord>(creature) ? registry.Get<CreatureFightRecord>(creature)
+	                                                             : registry.Assign<CreatureFightRecord>(creature);
+	record.health = health;
+}
+
 std::optional<CreatureFightSystemInterface::FoundArena>
 CreatureFightSystem::FindOrMakeArena(const glm::vec3& point, entt::entity creature, entt::entity other, float within)
 {
@@ -2107,13 +2138,14 @@ void CreatureFightSystem::Leave(entt::entity creature)
 	{
 		return;
 	}
+	auto& record = registry.AllOf<CreatureFightRecord>(creature) ? registry.Get<CreatureFightRecord>(creature)
+	                                                             : registry.Assign<CreatureFightRecord>(creature);
 	if (!fighting->ended)
 	{
-		if (auto* record = registry.TryGet<CreatureFightRecord>(creature))
-		{
-			record->secondsSinceFight = 0.0f;
-		}
+		record.secondsSinceFight = 0.0f;
 	}
+	// Its fight health stays as the fight left it
+	record.health = fighting->fighter.health;
 	if (auto* animation = registry.TryGet<CreatureAnimation>(creature))
 	{
 		if (fighting->fighter.state != fight::State::Idle)

@@ -10,6 +10,7 @@
 #include "CreatureSpellMind.h"
 
 #include <algorithm>
+#include <vector>
 
 #include "CreatureLearning.h"
 
@@ -39,29 +40,40 @@ bool creature_spell_mind::HeldDownByCheat(Desire other, bool all)
 	}
 }
 
-creature_spell_mind::Cheat creature_spell_mind::SetCheatDominant(creature_desires::Desires& desires, Desire desire, bool all,
-                                                                 float turnsPerSecond)
+creature_spell_mind::Cheat creature_spell_mind::SetCheatDominant(creature_desires::Desires& desires, Desire desire,
+                                                                 const CheatSetup& setup, float turnsPerSecond)
 {
 	desires[desire].activated = true;
-	const auto turns = static_cast<uint32_t>(turnsPerSecond * k_CheatSeconds);
+	const auto turns = static_cast<uint32_t>(std::max(turnsPerSecond * setup.seconds, 0.0f));
 	for (size_t i = 0; i < creature_desires::k_DesireCount; ++i)
 	{
 		const auto other = static_cast<Desire>(i);
-		if (other != desire && HeldDownByCheat(other, all))
+		if (other != desire && HeldDownByCheat(other, setup.all))
 		{
 			auto& state = desires.desires.at(i);
 			state.suppressedTurns = std::max(state.suppressedTurns, turns);
 		}
 	}
+	// It is wanted above all, the others as little as any can be, and everything that drives it is full
+	const auto dominate = [&desires, &setup](Desire which) {
+		MakeFullyDominantOverOthers(desires, which, setup.floor);
+		auto& state = desires[which];
+		for (const auto& source : std::vector(state.sources))
+		{
+			if (std::ranges::find(k_SourcesNotMaximised, source.type) == k_SourcesNotMaximised.end())
+			{
+				creature_desires::SetSource(desires, source.type, 1.0f);
+			}
+		}
+		state.activated = true;
+	};
 	// Compassion makes it want to make friends above all too
 	if (desire == Desire::Compassion)
 	{
-		desires[Desire::BeFriends].suppressedTurns = 0;
-		creature_learning::MakeFullyDominant(desires, Desire::BeFriends);
+		dominate(Desire::BeFriends);
 	}
-	desires[desire].suppressedTurns = 0;
-	creature_learning::MakeFullyDominant(desires, desire);
-	return {.desire = desire, .turns = 0};
+	dominate(desire);
+	return {.desire = desire, .turns = 0, .seconds = static_cast<uint32_t>(std::max(setup.seconds, 0.0f))};
 }
 
 bool creature_spell_mind::StepCheat(creature_desires::Desires& desires, Cheat& cheat, float turnsPerSecond)
@@ -70,12 +82,25 @@ bool creature_spell_mind::StepCheat(creature_desires::Desires& desires, Cheat& c
 	++cheat.turns;
 	// The game counts whole seconds by its whole turns a second
 	const auto perSecond = std::max(static_cast<uint32_t>(turnsPerSecond), 1u);
-	if (static_cast<float>(cheat.turns / perSecond) > k_CheatSeconds)
+	if (cheat.turns / perSecond > cheat.seconds)
 	{
 		ClearCheatDominance(desires);
 		return false;
 	}
 	return true;
+}
+
+void creature_spell_mind::ClearOnlyDesire(creature_desires::Desires& desires, std::optional<Cheat>& cheat, bool letGo)
+{
+	if (letGo && cheat.has_value())
+	{
+		ClearCheatDominance(desires);
+	}
+	if (cheat.has_value())
+	{
+		desires[cheat->desire].value = 0.0f;
+	}
+	cheat.reset();
 }
 
 void creature_spell_mind::ClearCheatDominance(creature_desires::Desires& desires)

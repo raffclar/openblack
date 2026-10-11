@@ -66,6 +66,15 @@ public:
 	[[nodiscard]] virtual std::optional<CameraPose> GetCamera() const = 0;
 	/// The camera hints the hand shows, as the demonstration recorded them
 	[[nodiscard]] virtual uint32_t GetHints() const = 0;
+	/// The angle the rotate hint is turned by, as the demonstration recorded it, in radians
+	[[nodiscard]] virtual float GetHintAngle() const = 0;
+	/// The mouse buttons the demonstration holds down: the one that moves the hand and the action button
+	struct HeldButtons
+	{
+		bool move {false};
+		bool action {false};
+	};
+	[[nodiscard]] virtual HeldButtons GetHeldButtons() const = 0;
 	[[nodiscard]] virtual std::optional<Status> GetStatus() const = 0;
 };
 

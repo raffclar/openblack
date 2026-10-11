@@ -517,7 +517,8 @@ public:
 	{
 	}
 
-	[[nodiscard]] bool Creates() const override { return true; }
+	/// It makes atoms only until the effect closes down
+	[[nodiscard]] bool KeepsAlive() const override { return true; }
 
 	bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& slot) const override
 	{
