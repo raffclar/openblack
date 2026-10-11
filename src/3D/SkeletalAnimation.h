@@ -114,6 +114,13 @@ struct FrameSpan
 /// (walking into running, say) are. The weights are expected to add up to 1.
 [[nodiscard]] std::vector<Pose> WeightedSum(std::span<const std::vector<Pose>> poses, std::span<const float> weights);
 
+/// Poses summed by weight in the mesh's space, as the game blends the animations a creature plays together (walking
+/// into running, reaching, catching): each animation's bones are placed in the mesh's space, their matrices summed
+/// element by element by weight, and the sum made relative to the parents again. The weights are expected to add up
+/// to 1.
+[[nodiscard]] std::vector<Pose> WeightedSumInMeshSpace(std::span<const std::vector<Pose>> poses, std::span<const float> weights,
+                                                       std::span<const uint32_t> parents);
+
 /// Plays an animation on top of poses: each bone it moves is turned and moved by how far its keyframes at the time are
 /// from a reference keyframe of the same animation. Turning the head to look about, the face's expressions and
 /// gestures such as nodding are layered this way. A mirror flips the layer as SampleCycle does.

@@ -102,6 +102,9 @@ struct CreatureLocomotion
 	glm::vec3 toPosition {0.0f};
 	float fromHeading {0.0f};
 	float toHeading {0.0f};
+	/// A turn or step ended this turn with its animation turning the body to its new heading: the body is drawn at its
+	/// old heading until the turn ends, and at the new one at once from the next
+	bool headingSnaps {false};
 	/// What its legs play over this turn: each animation's time at the start of the turn, how far it moves on by the
 	/// end, and its weight
 	struct Track
@@ -114,6 +117,9 @@ struct CreatureLocomotion
 		bool looping;
 		/// Played at the breath's point instead, as standing is
 		bool breathing;
+		/// A turn's or step's pair: the animation blended keyframe by keyframe towards this one by blendWeight
+		std::optional<size_t> blendedWith {};
+		float blendWeight {0.0f};
 	};
 	std::vector<Track> tracks;
 };

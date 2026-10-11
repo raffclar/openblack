@@ -1207,6 +1207,31 @@
   "writes": true
  },
  {
+  "description": "Sends a creature walking or running to a point by its own legs (turning and stepping off as it does), or turning on the spot to face it",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "[x, z] on the land",
+    "name": "point",
+    "required": true,
+    "type": "array"
+   },
+   {
+    "description": "walk (the default), run, or face to turn on the spot towards the point",
+    "name": "pace",
+    "type": "string"
+   }
+  ],
+  "query": "creatures.move",
+  "writes": true
+ },
+ {
   "description": "The script machine: its scripts, tasks, globals and the task running",
   "kind": "object",
   "parameters": [],
