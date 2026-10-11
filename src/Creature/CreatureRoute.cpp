@@ -33,6 +33,33 @@ constexpr float k_SearchStep = 0.5f;
 /// Checking the way between two points is clear, every this many units
 constexpr float k_ClearStep = 1.0f;
 constexpr float k_Tiny = 1e-4f;
+/// What is in the way is kept by blocks of 8 by 8 cells
+constexpr float k_BlockSize = 80.0f;
+constexpr int32_t k_BlocksPerSide = 64;
+/// A destination's ring lies inside a circle when it is this much inside its edge
+constexpr float k_RingAllowance = 0.001f;
+
+int32_t BlockKey(int32_t x, int32_t z)
+{
+	return (z * (k_BlocksPerSide + 2)) + x;
+}
+
+glm::ivec2 BlockOf(glm::vec2 point)
+{
+	return {static_cast<int32_t>(std::floor(point.x / k_BlockSize)), static_cast<int32_t>(std::floor(point.y / k_BlockSize))};
+}
+
+/// Whether the whole ring about a destination, out to a distance, lies inside a circle
+bool RingInsideCircle(const Circle& circle, glm::vec2 destination, float ringMax)
+{
+	const auto inside = circle.radius - ringMax - k_RingAllowance;
+	if (inside < 0.0f)
+	{
+		return false;
+	}
+	const auto offset = destination - circle.centre;
+	return glm::dot(offset, offset) < inside * inside;
+}
 
 bool Standable(Ground ground)
 {
@@ -197,25 +224,6 @@ std::optional<glm::vec2> WalkableLand::NearestValid(glm::vec2 point, float radiu
 	return std::nullopt;
 }
 
-bool creature_route::MustAvoid(Obstacle kind, float height, float creatureHeight, bool burning)
-{
-	switch (kind)
-	{
-	case Obstacle::Living:
-		return false;
-	case Obstacle::StandingCreature:
-		return true;
-	case Obstacle::MovingCreature:
-		return burning;
-	case Obstacle::Tree:
-		return burning || height >= k_TreeAvoidHeight * creatureHeight;
-	case Obstacle::Building:
-	case Obstacle::Object:
-	default:
-		return burning || height >= k_ObjectAvoidHeight * creatureHeight;
-	}
-}
-
 float creature_route::DistanceToSegment(glm::vec2 point, glm::vec2 from, glm::vec2 to)
 {
 	const auto along = to - from;
@@ -245,14 +253,75 @@ int64_t Planner::KeyOf(int32_t i, int32_t j) const
 	return (static_cast<int64_t>(i) * k_LatticePerSide) + j;
 }
 
-bool Planner::Passable(const WalkableLand& land, glm::vec2 point) const
+void Planner::Add(Circle circle)
+{
+	// A circle the creature stands in reaches just to it, and one about a point right under it is no use
+	const auto fromCreature = glm::distance(_request.start, circle.centre);
+	if (fromCreature < k_TooCloseToCentre)
+	{
+		return;
+	}
+	circle.radius = std::min(circle.radius, fromCreature);
+	if (RingInsideCircle(circle, _request.destination, _request.maxDistance))
+	{
+		_unreachable = true;
+	}
+	const auto index = static_cast<uint32_t>(_circles.size());
+	_circles.push_back(circle);
+	const auto low = BlockOf(circle.centre - glm::vec2(circle.radius));
+	const auto high = BlockOf(circle.centre + glm::vec2(circle.radius));
+	for (auto z = std::max(low.y, -1); z <= std::min(high.y, k_BlocksPerSide); ++z)
+	{
+		for (auto x = std::max(low.x, -1); x <= std::min(high.x, k_BlocksPerSide); ++x)
+		{
+			_blocks[BlockKey(x + 1, z + 1)].push_back(index);
+		}
+	}
+}
+
+void Planner::Gather(glm::vec2 point)
+{
+	if (!_request.cellObstacles)
+	{
+		return;
+	}
+	const auto cell = glm::ivec2(static_cast<int32_t>(std::floor(point.x / k_CellSize)),
+	                             static_cast<int32_t>(std::floor(point.y / k_CellSize)));
+	if (cell.x < 0 || cell.y < 0 || cell.x >= k_CellsPerSide || cell.y >= k_CellsPerSide ||
+	    !_cellsGathered.insert((cell.y * k_CellsPerSide) + cell.x).second)
+	{
+		return;
+	}
+	std::vector<Circle> found;
+	_request.cellObstacles(cell, found);
+	for (const auto& circle : found)
+	{
+		Add(circle);
+	}
+}
+
+bool Planner::InsideAnyNear(glm::vec2 point) const
+{
+	const auto block = BlockOf(point);
+	const auto found = _blocks.find(BlockKey(block.x + 1, block.y + 1));
+	if (found == _blocks.end())
+	{
+		return false;
+	}
+	return std::ranges::any_of(found->second, [this, point](uint32_t index) {
+		const auto& circle = _circles[index];
+		return glm::distance(point, circle.centre) < circle.radius;
+	});
+}
+
+bool Planner::Passable(const WalkableLand& land, glm::vec2 point)
 {
 	if (!land.IsValid(point, k_Clearance))
 	{
 		return false;
 	}
-	return std::ranges::none_of(_request.obstacles,
-	                            [point](const Circle& circle) { return glm::distance(point, circle.centre) < circle.radius; });
+	Gather(point);
+	return !InsideAnyNear(point);
 }
 
 bool Planner::IsGoal(glm::vec2 point) const
@@ -266,20 +335,32 @@ float Planner::Estimate(glm::vec2 point) const
 	return std::max(glm::distance(point, _request.destination) - _request.maxDistance, 0.0f);
 }
 
-bool Planner::Clear(const WalkableLand& land, glm::vec2 from, glm::vec2 to) const
+bool Planner::Clear(const WalkableLand& land, glm::vec2 from, glm::vec2 to)
 {
 	const auto length = glm::distance(from, to);
-	const auto samples = static_cast<int32_t>(std::ceil(length / k_ClearStep));
-	for (int32_t k = 1; k <= samples; ++k)
+	const auto samples = std::max(static_cast<int32_t>(std::ceil(length / k_ClearStep)), 1);
+	std::vector<int32_t> blocks;
+	for (int32_t k = 0; k <= samples; ++k)
 	{
 		const auto point = from + ((to - from) * (static_cast<float>(k) / static_cast<float>(samples)));
-		if (!land.IsValid(point, k_Clearance))
+		if (k > 0 && !land.IsValid(point, k_Clearance))
 		{
 			return false;
 		}
+		Gather(point);
+		const auto block = BlockOf(point);
+		const auto key = BlockKey(block.x + 1, block.y + 1);
+		if (std::ranges::find(blocks, key) == blocks.end())
+		{
+			blocks.push_back(key);
+		}
 	}
-	return std::ranges::none_of(_request.obstacles, [from, to](const Circle& circle) {
-		return DistanceToSegment(circle.centre, from, to) < circle.radius;
+	return std::ranges::none_of(blocks, [this, from, to](int32_t key) {
+		const auto found = _blocks.find(key);
+		return found != _blocks.end() && std::ranges::any_of(found->second, [this, from, to](uint32_t index) {
+			       const auto& circle = _circles[index];
+			       return DistanceToSegment(circle.centre, from, to) < circle.radius;
+		       });
 	});
 }
 
@@ -320,11 +401,17 @@ Planner::Status Planner::Step(const WalkableLand& land, size_t budget)
 	if (!_started)
 	{
 		_started = true;
-		// Leave out what the creature stands in and what it walks up to
-		std::erase_if(_request.obstacles, [this](const Circle& circle) {
-			return glm::distance(_request.start, circle.centre) < circle.radius ||
-			       glm::distance(_request.destination, circle.centre) < circle.radius;
-		});
+		for (const auto& circle : _request.obstacles)
+		{
+			Add(circle);
+		}
+		Gather(_request.start);
+		Gather(_request.destination);
+		if (_unreachable)
+		{
+			_status = Status::Failed;
+			return _status;
+		}
 		const auto arrival = ArrivalFrom(_request.start);
 		if (glm::distance(_request.start, _request.destination) <= _request.maxDistance || Clear(land, _request.start, arrival))
 		{
@@ -389,12 +476,12 @@ Planner::Status Planner::Step(const WalkableLand& land, size_t budget)
 				_open.push({.estimate = cost + Estimate(nextPoint), .key = nextKey});
 			}
 		}
-		if (_searched >= _request.searchLimit)
+		if (_searched >= _request.searchLimit || _unreachable)
 		{
 			break;
 		}
 	}
-	if (_open.empty() || _searched >= _request.searchLimit)
+	if (_open.empty() || _searched >= _request.searchLimit || _unreachable)
 	{
 		_status = Status::Failed;
 		_nodes.clear();

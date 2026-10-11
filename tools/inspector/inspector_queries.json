@@ -1262,6 +1262,19 @@
   "writes": true
  },
  {
+  "description": "A creature's walk in full: where it is going, the route it follows and the circles that route was planned round (what it walks round, each grown by its own reach)",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "creatures.route"
+ },
+ {
   "description": "The script machine: its scripts, tasks, globals and the task running",
   "kind": "object",
   "parameters": [],
