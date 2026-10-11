@@ -64,6 +64,7 @@ class MockWindowingSystem final: public openblack::windowing::WindowingInterface
 	[[nodiscard]] glm::ivec2 GetSize() const final { return {k_Width, k_Height}; }
 	[[nodiscard]] float GetAspectRatio() const final { return static_cast<float>(k_Width) / static_cast<float>(k_Height); }
 	[[nodiscard]] bool IsMinimised() const final { return false; }
+	[[nodiscard]] bool IsWindowed() const final { return false; }
 	WindowingInterface& SetDisplayMode(openblack::windowing::DisplayMode) final { return *this; }
 };
 
