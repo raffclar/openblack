@@ -52,6 +52,23 @@ public:
 	[[nodiscard]] virtual std::span<const entt::entity> GetFireflies() const = 0;
 	/// As a land closes: no fireflies, the reward weights cleared, and the next nightfall tops them up
 	virtual void Reset() = 0;
+
+	/// What the last frame did with the fireflies out of hiding: how many were in view, how many of those near enough
+	/// to be seen, how many were drawn, and whether their picture could be found
+	struct FrameCount
+	{
+		size_t out {0};
+		size_t inView {0};
+		size_t inReach {0};
+		size_t drawn {0};
+		bool pictureReady {false};
+	};
+	[[nodiscard]] virtual FrameCount GetLastFrame() const = 0;
+	/// Whether the next nightfall tops the fireflies up
+	[[nodiscard]] virtual bool IsTopUpDue() const = 0;
+	/// How many trees, and things standing over several cells (where the rocks are looked for), there are to hide in
+	[[nodiscard]] virtual size_t GetTreeCount() const = 0;
+	[[nodiscard]] virtual size_t GetFixedCount() const = 0;
 };
 
 } // namespace openblack::ecs::systems

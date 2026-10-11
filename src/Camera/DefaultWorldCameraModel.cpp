@@ -939,8 +939,7 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	{
 		const auto& windowing = Locator::windowing::value();
 		const auto screenSize = windowing.GetSize();
-		const auto cursor =
-		    camera_drag::NormalisedCursor(glm::ivec2(actionSystem.GetMousePosition()), screenSize, ViewHeight(screenSize));
+		const auto cursor = camera_drag::AreaCursor(glm::ivec2(actionSystem.GetMousePosition()), EdgeArea(screenSize));
 		_tricons = camera_drag::IdleTricons(cursor, _screenSpaceMouseRaycastHit.has_value(), windowing.IsWindowed());
 		// Watching a fight, the camera offers no tilting
 		if (onFight)
@@ -1013,7 +1012,7 @@ void DefaultWorldCameraModel::UpdateIconFrame(bool onFight)
 	if (Locator::windowing::has_value())
 	{
 		const auto screenSize = Locator::windowing::value().GetSize();
-		cursor = camera_drag::NormalisedCursor(glm::ivec2(actionSystem.GetMousePosition()), screenSize, ViewHeight(screenSize));
+		cursor = camera_drag::AreaCursor(glm::ivec2(actionSystem.GetMousePosition()), EdgeArea(screenSize));
 	}
 	_iconFrame = {
 	    // A drag given up too far ahead shows only that
@@ -1085,15 +1084,15 @@ DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
 	{
 		// The drag takes the hints of the cursor before it was pressed
 		_dragging = true;
-		_drag.Start(_tricons, camera_drag::NormalisedCursor(cursor, screenSize, ViewHeight(screenSize)), milliseconds);
+		_drag.Start(_tricons, camera_drag::AreaCursor(cursor, EdgeArea(screenSize)), milliseconds);
 		_ringCursor = cursor;
 		// The land is gripped as the camera next looks at it
 		_landGrip.reset();
 	}
 	else
 	{
-		_drag.Move(actionSystem.GetMouseDelta(), screenSize, ViewHeight(screenSize), milliseconds,
-		           _screenSpaceMouseRaycastHit.has_value(), _features);
+		_drag.Move(actionSystem.GetMouseDelta(), EdgeArea(screenSize), milliseconds, _screenSpaceMouseRaycastHit.has_value(),
+		           _features);
 	}
 
 	const auto mode = _drag.GetMode();
@@ -1113,7 +1112,7 @@ DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
 		// moved on since, and putting the cursor back on the ring from the older place would undo that movement every
 		// frame and hold the camera still
 		const auto pointer = actionSystem.GetPointerPosition();
-		const auto step = camera_drag::EdgeRotate(pointer, _ringCursor, screenSize, ViewHeight(screenSize));
+		const auto step = camera_drag::EdgeRotate(pointer, _ringCursor, EdgeArea(screenSize));
 		_ringCursor = step.cursor;
 		// The turn feels as it did on the original's default screen, whatever the resolution
 		_helpEvents.Add(camera_help::events::EdgeTurnEvents(_helpControls, step.turn));
@@ -1139,11 +1138,11 @@ DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
 	return Mode::DraggingLandscape;
 }
 
-int DefaultWorldCameraModel::ViewHeight(glm::ivec2 screenSize)
+camera_drag::EdgeArea DefaultWorldCameraModel::EdgeArea(glm::ivec2 screenSize)
 {
 	const bool bars =
 	    Locator::cinematicDirectorSystem::has_value() && Locator::cinematicDirectorSystem::value().IsWideScreenOn();
-	return camera_drag::ViewHeight(screenSize, bars);
+	return camera_drag::EdgeAreaOf(screenSize, bars);
 }
 
 CameraModel::HandCues DefaultWorldCameraModel::GetHandCues() const
