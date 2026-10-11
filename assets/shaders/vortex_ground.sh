@@ -1,8 +1,8 @@
 #ifndef VORTEX_GROUND_SH
 #define VORTEX_GROUND_SH
 
-// An open vortex's marks on the land block under its middle: the texture whose alpha opens its hole in the land (its
-// colour is added under the land), and the ring laid over the land around it
+// An open vortex's marks on the land block under its middle: the texture whose alpha opens its hole in the land (only
+// its alpha is used: the game draws it into the depth alone, never its colour), and the ring laid over the land around it
 SAMPLER2D(s6_vortexHole, 6);
 // xy: the vortex's middle on the ground, x and z; z: one over its textures' span; w: how opaque its hole's texture must
 // be, 0 to 255, for the land to be drawn, below 0 on a block without a vortex
@@ -20,12 +20,6 @@ vec2 VortexGroundUv(vec2 groundXz)
 bool InVortexHole(vec4 hole)
 {
 	return floor(hole.a * 255.0f + 0.5f) < u_vortexGround.w;
-}
-
-// The hole texture's colour lit as the land: the land's light and its haze
-vec3 VortexHoleColour(vec4 hole, vec3 lightColour, vec4 haze)
-{
-	return min(hole.rgb * lightColour * haze.a + haze.rgb, vec3_splat(1.0f));
 }
 
 #endif // VORTEX_GROUND_SH

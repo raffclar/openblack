@@ -26,6 +26,7 @@
 #include "Common/GameRandom.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
+#include "ECS/Components/Breeding.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Physics.h"
@@ -51,6 +52,7 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "VillagerBreeding.h"
 #include "VillagerDisciples.h"
 
 using namespace openblack;
@@ -104,6 +106,23 @@ void TownSystem::OnVillagerGone(entt::registry& registry, entt::entity villager)
 		}
 		std::erase(abode.inhabitants, villager);
 	}
+	// Its children lose their mother, and its lover forgets it
+	for (auto [entity, person] : registry.view<Villager>().each())
+	{
+		if (person.mother == villager)
+		{
+			person.mother = entt::null;
+		}
+	}
+	std::vector<entt::entity> forgetting;
+	for (auto [entity, lover] : registry.view<Lover>().each())
+	{
+		if (lover.partner == villager)
+		{
+			forgetting.push_back(entity);
+		}
+	}
+	registry.remove<Lover>(forgetting.begin(), forgetting.end());
 }
 
 namespace
@@ -247,6 +266,7 @@ bool TownSystem::HasRoomForNewcomer(entt::entity town) const
 void TownSystem::RemoveDeadVillager(entt::entity villager)
 {
 	town_homes::RemoveDeadVillager(Locator::entitiesRegistry::value(), villager);
+	villager_breeding::OrphanChildrenOf(villager);
 }
 
 namespace

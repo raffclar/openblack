@@ -61,6 +61,7 @@
 #include "Resources/ResourcesInterface.h"
 #include "VillagerAnimate.h"
 #include "VillagerFire.h"
+#include "VillagerForester.h"
 #include "VillagerHome.h"
 #include "VillagerPhysics.h"
 
@@ -364,9 +365,24 @@ void villager_reactions::Start(entt::entity villager, Reaction type, LivingReact
 		// It goes to the food
 		SetTop(*action, VillagerStates::GotoFoodReaction);
 		break;
+	case Reaction::ReactToWood:
+		// It goes to the wood, remembering it
+		if (Locator::reactionSystem::has_value())
+		{
+			if (const auto reaction = Locator::reactionSystem::value().Find(state.reaction))
+			{
+				ecs::villager_forester::SetupReactToWood(villager, reaction->source.initiator);
+			}
+		}
+		SetTop(*action, VillagerStates::GotoWoodReaction);
+		break;
 	case Reaction::ReactToVillagerInHand:
 		// It waits for the one held, a mate to be
 		SetTop(*action, VillagerStates::WaitForMate);
+		break;
+	case Reaction::ReactToBreeder:
+		// It goes to the breeder to make love
+		SetTop(*action, VillagerStates::ReactToBreeder);
 		break;
 	case Reaction::ReactToFire:
 		// The fire's own states take over, from the object burning

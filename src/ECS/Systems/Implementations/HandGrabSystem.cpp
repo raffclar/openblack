@@ -869,7 +869,6 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	// The thing's own part of going into the hand
 	if (registry.AllOf<Villager>(object))
 	{
-		// TODO(hand): a villager in the middle of making love lets its partner go (openblack keeps no partners)
 		// One of the hand's player's own people of an age to make love alarms those about it
 		if (_world->IsSexuallyActive(object) && _world->PlayerOf(object) == player)
 		{

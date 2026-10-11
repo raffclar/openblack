@@ -27,8 +27,10 @@ using namespace openblack;
 namespace
 {
 constexpr auto k_DefaultCameraOriginOffset = glm::vec3(0.0f, 0.0f, 120.0f);
-// The normal projection puts depth from -w at the near plane to w at the far plane; reversed, depth runs from w at the
-// near plane down to 0 at the far plane, the range the renderer clips to, so that nothing beyond the near plane is lost
+// The normal projection puts depth from -w at the near plane to w at the far plane, or at infinity without one; reversed,
+// depth runs from w at the near plane down to 0 at the far plane, the range the renderer clips to, so that nothing beyond
+// the near plane is lost. Without a far plane the reversed depth is the near plane's distance over the depth, as the
+// game's
 constexpr auto k_ReverseZMatrix =
     glm::mat4(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, -0.5f, 0.0f, 0.0f, 0.0f, 0.5f, 1.0f);
 } // namespace
@@ -119,11 +121,10 @@ Camera::NearPlanePoint Camera::OnNearPlane(glm::vec2 screenCoord, Interpolation 
 	return {.eye = eye, .point = eye + (rayOrigin - eye) * (_nearClip / depth)};
 }
 
-Camera& Camera::SetProjectionMatrixPerspective(float xFov, float aspect, float nearClip, float farClip)
+Camera& Camera::SetProjectionMatrixPerspective(float xFov, float aspect, float nearClip)
 {
 	_xFov = glm::radians(xFov);
 	_aspect = aspect;
-	_farClip = farClip;
 	return SetNearClip(nearClip);
 }
 
@@ -131,7 +132,7 @@ Camera& Camera::SetNearClip(float nearClip)
 {
 	_nearClip = nearClip;
 	const float yFov = (glm::atan(glm::tan(_xFov / 2.0f) / _aspect)) * 2.0f;
-	_projectionMatrix = glm::perspective(yFov, _aspect, _nearClip, _farClip);
+	_projectionMatrix = glm::infinitePerspective(yFov, _aspect, _nearClip);
 	_projectionMatrixReversedZ = k_ReverseZMatrix * _projectionMatrix;
 
 	return *this;

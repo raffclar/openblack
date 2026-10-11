@@ -43,6 +43,7 @@
 #include "Physics/LivingRules.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerAnimate.h"
+#include "VillagerBreeding.h"
 #include "VillagerDisciples.h"
 #include "VillagerFire.h"
 #include "VillagerReactions.h"
@@ -190,6 +191,8 @@ bool villager_physics::StartFlying(entt::entity villager)
 
 void villager_physics::IntoHand(entt::entity villager)
 {
+	// Taken in the middle of a kiss, its partner lets it go and decides afresh
+	ecs::villager_breeding::LetPartnerGo(villager);
 	auto* action = Entities().TryGet<LivingAction>(villager);
 	if (action == nullptr || !Locator::livingActionSystem::has_value())
 	{

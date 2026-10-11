@@ -66,6 +66,7 @@
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/Breeding.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/CameraBookmark.h"
 #include "ECS/Components/CarriedByTornado.h"
@@ -187,6 +188,7 @@
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/VillagerLabel.h"
 #include "ECS/Components/VillagerPose.h"
+#include "ECS/Components/VillagerWork.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WallHug.h"
@@ -416,6 +418,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::AudioEmitter::bank>("bank")
 	    .Field<&components::AudioEmitter::group>("group");
 	Reflect<components::Ball>(context).Field<&components::Ball::destination>("destination");
+	Reflect<components::Lover>(context).Field<&components::Lover::partner>("partner");
+	Reflect<components::BreederSpot>(context).Field<&components::BreederSpot::spot>("spot");
 	Reflect<components::BuildingDamage>(context)
 	    .Field<&components::BuildingDamage::mesh>("mesh")
 	    .Field<&components::BuildingDamage::lastHitter>("lastHitter")
@@ -1178,6 +1182,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Player::villagersKilled>("villagersKilled")
 	    .Field<&components::Player::sacrifices>("sacrifices")
 	    .Field<&components::Player::foodUsed>("foodUsed")
+	    .Field<&components::Player::births>("births")
 	    .Field<&components::Player::totalChantsUsed>("totalChantsUsed")
 	    .Field<&components::Player::miracles>("miracles");
 	Reflect<components::PlayerCreatures>(context).Field<&components::PlayerCreatures::acquired>("acquired");
@@ -1546,7 +1551,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Villager::buildingSite>("buildingSite")
 	    .Field<&components::Villager::buildPlace>("buildPlace")
 	    .Field<&components::Villager::foodSpeedUp>("foodSpeedUp")
-	    .Field<&components::Villager::creationIndex>("creationIndex");
+	    .Field<&components::Villager::creationIndex>("creationIndex")
+	    .Field<&components::Villager::pregnancy>("pregnancy")
+	    .Field<&components::Villager::mother>("mother");
 	Reflect<components::VillagerDeath>(context)
 	    .Field<&components::VillagerDeath::turnsLeft>("turnsLeft")
 	    .Field<&components::VillagerDeath::skeleton>("skeleton")
@@ -1566,6 +1573,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::VillagerPose::easedHeading>("easedHeading")
 	    .Field<&components::VillagerPose::detailedHeading>("detailedHeading")
 	    .Field<&components::VillagerPose::clipBlend>("clipBlend");
+	Reflect<components::WorkTarget>(context).Field<&components::WorkTarget::thing>("thing");
+	Reflect<components::WoodReactionTarget>(context)
+	    .Field<&components::WoodReactionTarget::wood>("wood")
+	    .Field<&components::WoodReactionTarget::startTurn>("startTurn");
 	Reflect<components::Vortex>(context)
 	    .Field<&components::Vortex::type>("type")
 	    .Field<&components::Vortex::state>("state")

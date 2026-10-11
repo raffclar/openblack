@@ -261,6 +261,17 @@ float TownDesireSystem::GetRawDesire(entt::entity town, TownDesireInfo desire) c
 	return townDesire != nullptr && Valid(desire) ? town_desire::GetRawDesire(*townDesire, Index(desire)) : 0.0f;
 }
 
+float TownDesireSystem::GetSignificanceToVillager(entt::entity town, TownDesireInfo desire) const
+{
+	const auto* townDesire = Locator::entitiesRegistry::value().TryGet<const TownDesire>(town);
+	if (townDesire == nullptr || !Valid(desire) || !Locator::infoConstants::has_value())
+	{
+		return 0.0f;
+	}
+	const auto& info = Locator::infoConstants::value().townDesire.at(Index(desire));
+	return town_desire::GetDesireSignificanceToVillager(*townDesire, info, Index(desire));
+}
+
 float TownDesireSystem::RecomputeDesire(entt::entity town, TownDesireInfo desire)
 {
 	auto& registry = Locator::entitiesRegistry::value();

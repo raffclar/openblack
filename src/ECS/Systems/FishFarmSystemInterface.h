@@ -50,8 +50,16 @@ public:
 
 	// The fishermen, for the villagers' jobs
 
+	/// A farm a fisherman is sent to, and how much it wants him there
+	struct FarmChoice
+	{
+		entt::entity farm {entt::null};
+		float score {0.0f};
+	};
 	/// The farm of a town a fisherman of it at a point is sent to; none when none of them wants one
-	[[nodiscard]] virtual std::optional<entt::entity> BestFarmFor(entt::entity town, glm::vec3 fisherman) const = 0;
+	[[nodiscard]] virtual std::optional<FarmChoice> BestFarmFor(entt::entity town, glm::vec3 fisherman) const = 0;
+	/// A fish farm goes: each of its fishermen stops and decides afresh what to do
+	virtual void RemoveFarm(entt::entity farm) = 0;
 	/// A villager starts fishing a farm, or stops
 	virtual void AddFisherman(entt::entity farm, entt::entity villager) = 0;
 	virtual void RemoveFisherman(entt::entity farm, entt::entity villager) = 0;

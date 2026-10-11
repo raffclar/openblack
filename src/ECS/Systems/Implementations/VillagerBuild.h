@@ -19,7 +19,8 @@
 namespace openblack::ecs::components
 {
 struct LivingAction;
-}
+struct Villager;
+} // namespace openblack::ecs::components
 
 /// A villager building for its town: it takes up the site its town most wants built, fetches wood from the storage pit
 /// when the site lacks it, carries it to one of the places round the building, puts it down there and builds in strokes,
@@ -57,6 +58,12 @@ uint32_t ArrivesAtStoragePitForResource(components::LivingAction& action, Resour
 
 /// Turns the villager towards a point by at most a step of the game's angles; whether it now faces it
 bool FaceTowards(entt::entity villager, glm::vec2 point, int32_t step);
+/// Whether the villager is a builder disciple, offered sites even when no builder is wanted
+[[nodiscard]] bool IsBuilderDisciple(const components::Villager& villager);
+/// The villager walks to a place round a site's building to build there, if it works there already or the site wants
+/// builders. 1 when it went.
+uint32_t GotoBuildingSite(components::LivingAction& action, entt::entity building);
+
 /// The villager takes up building a site, fetching wood first when it lacks it. 1 when it did.
 uint32_t TakeUpSite(components::LivingAction& action, entt::entity building);
 

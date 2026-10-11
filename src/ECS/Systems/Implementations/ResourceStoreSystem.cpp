@@ -41,6 +41,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/DeadTree.h"
+#include "ECS/Components/Forest.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MagicForest.h"
 #include "ECS/Components/MagicPile.h"
@@ -62,12 +63,14 @@
 #include "ECS/Registry.h"
 #include "ECS/StoreRules.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/VillagerCarry.h"
+#include "ECS/VillagerWorkRules.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -938,6 +941,32 @@ uint32_t ResourceStoreSystem::RemoveResource(entt::entity object, ResourceType t
 	{
 		return TakeFromPile(object, type, amount, std::nullopt);
 	}
-	// TODO(temple-builders): dead trees, rocks, big forests and fish farms give up what they hold; not yet
+	if (auto* dead = registry.TryGet<DeadTree>(object))
+	{
+		// A fallen trunk gives its wood: used up it goes, else it shrinks to what is left
+		if (type != ResourceType::Wood)
+		{
+			return 0;
+		}
+		const auto woodValue = Locator::infoConstants::value().tree.at(static_cast<size_t>(dead->type)).woodValue;
+		const auto take = ecs::villager_work::TakeFromFallenTree(GetResource(object, ResourceType::Wood), amount, woodValue,
+		                                                         dead->woodMultiplier);
+		if (!take.scale.has_value())
+		{
+			ecs::world_objects::Remove(object);
+			registry.SetLayoutDirty();
+			return take.taken;
+		}
+		registry.Get<Transform>(object).scale = glm::vec3(*take.scale);
+		registry.SetDirty();
+		return take.taken;
+	}
+	if (registry.AllOf<BigForest>(object))
+	{
+		return type == ResourceType::Wood && Locator::forestSystem::has_value()
+		           ? Locator::forestSystem::value().TakeBigForestWood(object, amount)
+		           : 0u;
+	}
+	// TODO(temple-builders): rocks and fish farms give up what they hold; not yet
 	return 0;
 }

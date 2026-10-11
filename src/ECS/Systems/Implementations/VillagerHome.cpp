@@ -60,11 +60,14 @@
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "VillagerBreeding.h"
 #include "VillagerBuild.h"
 #include "VillagerChecks.h"
 #include "VillagerDisciples.h"
 #include "VillagerFire.h"
+#include "VillagerFisherman.h"
 #include "VillagerFood.h"
+#include "VillagerForester.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -76,6 +79,8 @@ namespace villager_age = openblack::ecs::villager_age;
 namespace world_objects = openblack::ecs::world_objects;
 namespace villager_fire = openblack::ecs::villager_fire;
 namespace villager_build = openblack::ecs::villager_build;
+namespace villager_forester = openblack::ecs::villager_forester;
+namespace villager_fisherman = openblack::ecs::villager_fisherman;
 namespace villager_disciple = openblack::ecs::villager_disciple;
 namespace villager_food = openblack::ecs::villager_food;
 namespace villager_checks = openblack::ecs::villager_checks;
@@ -308,8 +313,7 @@ uint32_t CheckNeededForTownDesire(LivingAction& action)
 	const auto town = TownOf(villager);
 	const auto result = Locator::townDesireSystem::value().OfferVillager(
 	    town, IsChild(villager), OwnDesiresTrigger(villager), [&action](TownDesireInfo desire) -> uint32_t {
-		    // TODO(villagers): villagers take up the town's sleep, building and relaxation yet; the game has them fetch food
-		    // and wood, repair and play for it too (the jobs phase)
+		    // TODO(villagers): the game has villagers repair, play and supply the workshop for their town too
 		    switch (desire)
 		    {
 		    case TownDesireInfo::ForRelaxation:
@@ -318,6 +322,10 @@ uint32_t CheckNeededForTownDesire(LivingAction& action)
 			                   Locator::artefactSystem::value().OfferRelaxation(TownOf(EntityOf(action)), EntityOf(action))
 			               ? 1
 			               : 0;
+		    case TownDesireInfo::ForFood:
+			    return villager_fisherman::CheckSatisfyFoodDesire(action);
+		    case TownDesireInfo::ForWood:
+			    return villager_forester::CheckSatisfyWoodDesire(action);
 		    case TownDesireInfo::ForSleep:
 			    return villager_home::CheckSatisfySleep(action);
 		    case TownDesireInfo::ToBuild:
@@ -387,7 +395,8 @@ bool CheckWhenGoingToBed(entt::entity villager)
 		villager_fire::DieByEffect(villager, villager_fire::DeathCause {.reason = DeathReason::OldAge, .weight = info.life});
 		return false;
 	}
-	// TODO(villagers): when its town wants sleep with all its heart, a couple in bed may make a child (breeding phase)
+	// When its town wants sleep with all its heart, a couple in bed may make a child
+	ecs::villager_breeding::BedTimeConceptions(villager);
 	return true;
 }
 
@@ -425,8 +434,12 @@ bool DoSleeping(LivingAction& action, float multiplier)
 bool CheckNeedsAtHome(LivingAction& action)
 {
 	const auto villager = EntityOf(action);
-	// TODO(villagers): a woman's own business at home and a pregnancy come first, and a child has its own (breeding
-	// phase)
+	// A woman's own business comes first: her time may come, and while she is pregnant she stays in
+	if (WorldRegistry().Get<const Villager>(villager).sex == Villager::Sex::FEMALE && !IsChild(villager) &&
+	    (ecs::villager_breeding::WomanSpecial(action) == 1 || ecs::villager_breeding::IsPregnant(villager)))
+	{
+		return true;
+	}
 	const auto& info = InfoOf(villager);
 	// A disciple at work weighs its needs only at the life it goes home hurt and the food it starves at
 	const auto* role = WorldRegistry().TryGet<const Disciple>(villager);
@@ -435,7 +448,17 @@ bool CheckNeedsAtHome(LivingAction& action)
 	const float hungerMark = working ? info.starvingForFood : info.hungryForFood;
 	const float pressing =
 	    std::max(needs::LifeDesireFromLife(restLife, info.damageThresholdToGoHome), needs::DesireForFood(hungerMark));
-	return CheckSatisfyOwnDesire(action, k_AtHomeNeedShare * pressing);
+	if (CheckSatisfyOwnDesire(action, k_AtHomeNeedShare * pressing))
+	{
+		return true;
+	}
+	// A child has its own things to do
+	if (IsChild(villager))
+	{
+		ecs::villager_breeding::ChildDecideWhatToDo(action);
+		return true;
+	}
+	return false;
 }
 
 /// With nothing to do at home it goes to bed one time in four, otherwise as anywhere
@@ -862,6 +885,11 @@ uint32_t villager_home::CheckSatisfySleep(LivingAction& action)
 	return State(action, LivingAction::Index::Top) == VillagerStates::SleepInTent ? 1 : 0;
 }
 
+uint32_t villager_home::OfferToTownDesires(LivingAction& action)
+{
+	return CheckNeededForTownDesire(action);
+}
+
 uint32_t villager_home::CheckNeededForSomething(LivingAction& action)
 {
 	if (AbodeOf(EntityOf(action)) == entt::null && CheckHomelessMoveIntoAbode(action))
@@ -919,7 +947,18 @@ uint32_t villager_home::HomeDecideWhatToDo(LivingAction& action)
 	{
 		return 1;
 	}
-	// TODO(villagers): a working disciple decides as a disciple (the jobs phase)
+	// A working disciple decides as a disciple; a breeder sleeps first when its town wants sleep most
+	if (const auto* role = WorldRegistry().TryGet<const Disciple>(villager);
+	    role != nullptr && openblack::disciple::KindOf(role->type).waitsWhenIdle)
+	{
+		if (role->type == VillagerDisciple::Breeder && TownOf(villager) != entt::null &&
+		    Locator::townDesireSystem::value().GetMostWanted(TownOf(villager)) == TownDesireInfo::ForSleep &&
+		    CheckSatisfySleep(action) != 0)
+		{
+			return 1;
+		}
+		return DecideWhatToDo(action);
+	}
 	if (CheckNeededForSomething(action) == 1)
 	{
 		return 1;
@@ -942,7 +981,11 @@ uint32_t villager_home::DecideWhatToDo(LivingAction& action)
 		return 1;
 	}
 	SetTopState(action, VillagerStates::DecideWhatToDo);
-	// TODO(villagers): a child has its own things to do (the breeding phase); until then it decides as an adult
+	// A child has its own things to do
+	if (IsChild(villager))
+	{
+		return ecs::villager_breeding::ChildDecideWhatToDo(action);
+	}
 	if (CheckNeededForSomething(action) == 1)
 	{
 		return 1;

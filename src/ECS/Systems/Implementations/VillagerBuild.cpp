@@ -50,6 +50,7 @@
 #include "ObjectMeasures.h"
 #include "VillagerAnimate.h"
 #include "VillagerFood.h"
+#include "VillagerForester.h"
 #include "VillagerHome.h"
 
 using namespace openblack;
@@ -119,7 +120,7 @@ glm::vec2 GroundOf(entt::entity entity)
 }
 
 /// A builder disciple is offered sites even when no builder is wanted
-bool IsBuilderDisciple(const Villager& villager)
+bool BuilderDisciple(const Villager& villager)
 {
 	const auto* disciple = Entities().TryGet<const Disciple>(Entities().ToEntity(villager));
 	return disciple != nullptr && disciple->type == VillagerDisciple::Builder;
@@ -250,7 +251,7 @@ glm::vec2 PlacePosition(entt::entity building, uint32_t place)
 	return glm::xz(Entities().Get<const BuildingSite>(building).places.at(place));
 }
 
-uint32_t GotoBuildingSite(LivingAction& action, entt::entity building)
+uint32_t ToBuildingSite(LivingAction& action, entt::entity building)
 {
 	const auto villager = EntityOf(action);
 	auto& person = VillagerOf(action);
@@ -259,7 +260,7 @@ uint32_t GotoBuildingSite(LivingAction& action, entt::entity building)
 	{
 		return 0;
 	}
-	if (!IsWorker(building, villager) && construction::BuildersNeeded(building) <= 0 && !IsBuilderDisciple(person))
+	if (!IsWorker(building, villager) && construction::BuildersNeeded(building) <= 0 && !BuilderDisciple(person))
 	{
 		return 0;
 	}
@@ -293,7 +294,7 @@ uint32_t GotoStoragePitForBuildingMaterials(LivingAction& action, entt::entity b
 	}
 	if (WoodRoom(person) < 1)
 	{
-		return GotoBuildingSite(action, building);
+		return ToBuildingSite(action, building);
 	}
 	const auto pit = StoragePitOf(person);
 	std::optional<glm::vec2> target;
@@ -312,7 +313,7 @@ uint32_t GotoStoragePitForBuildingMaterials(LivingAction& action, entt::entity b
 	}
 	if (!IsWorker(building, villager))
 	{
-		if (construction::BuildersNeeded(building) <= 0 && !IsBuilderDisciple(person))
+		if (construction::BuildersNeeded(building) <= 0 && !BuilderDisciple(person))
 		{
 			return 0;
 		}
@@ -343,31 +344,19 @@ uint32_t SetupGetBuildingSupplies(LivingAction& action, entt::entity building)
 	}
 	if (!ShouldIGetWood(villager, building))
 	{
-		return GotoBuildingSite(action, building);
+		return ToBuildingSite(action, building);
 	}
-	const auto pit = StoragePitOf(person);
-	const auto& info = InfoOf(person);
-	const auto here = GroundOf(villager);
-	const auto store = DropOffPosition(person);
-	const auto source = building_site::DecideWoodSource({
-	    .forBuilding = true,
-	    .distanceToStore = store.has_value() ? gutils::GetDistanceInMetres(*store, here) : 0.0f,
-	    .storeWood = IsFunctional(pit) ? Locator::resourceStoreSystem::value().GetResource(*pit, ResourceType::Wood) : 0u,
-	    .room = WoodRoom(person),
-	    .maxWoodCarried = static_cast<int32_t>(info.maxWoodCarried),
-	    // TODO(temple-builders): the nearest of the town's forests, which builders fell for wood (the foresters' job)
-	    .distanceToForest = std::nullopt,
-	    .forestHasBigForest = false,
-	    .maxDistance = static_cast<float>(Locator::infoConstants::value().town.maxDistanceForTownForest),
-	});
-	switch (source)
+	const auto plan = villager_forester::DecideHowToGetWood(villager, true);
+	switch (plan.source)
 	{
 	case building_site::WoodSource::Store:
 		return GotoStoragePitForBuildingMaterials(action, building);
 	case building_site::WoodSource::BigForest:
+		person.buildingSite = building;
+		return villager_forester::GotoBigForest(action, plan.bigForest, VillagerStates::ArrivesAtBigForest);
 	case building_site::WoodSource::Forest:
-		// TODO(temple-builders): fetching wood from a forest comes with the foresters' job
-		return 0;
+		person.buildingSite = building;
+		return villager_forester::GotoForest(action, plan.forest, VillagerStates::ForesterArrivesAtForest);
 	case building_site::WoodSource::None:
 		break;
 	}
@@ -472,6 +461,16 @@ bool villager_build::FaceTowards(entt::entity villager, glm::vec2 point, int32_t
 	return LookAtPos(villager, point, step);
 }
 
+bool villager_build::IsBuilderDisciple(const Villager& villager)
+{
+	return BuilderDisciple(villager);
+}
+
+uint32_t villager_build::GotoBuildingSite(LivingAction& action, entt::entity building)
+{
+	return ToBuildingSite(action, building);
+}
+
 uint32_t villager_build::TakeUpSite(LivingAction& action, entt::entity building)
 {
 	return SetupBuildingObject(action, building);
@@ -504,7 +503,7 @@ uint32_t villager_build::CheckSatisfyToBuild(LivingAction& action)
 	{
 		return 0;
 	}
-	const auto site = BestSite(villager, town, IsBuilderDisciple(person));
+	const auto site = BestSite(villager, town, BuilderDisciple(person));
 	return site.has_value() && SetupBuildingObject(action, *site) == 1 ? 1 : 0;
 }
 
@@ -527,7 +526,7 @@ uint32_t villager_build::ArrivesAtStoragePitForBuildingMaterials(LivingAction& a
 		const auto room = WoodRoom(person);
 		if (room == 0)
 		{
-			if (GotoBuildingSite(action, building) == 1)
+			if (ToBuildingSite(action, building) == 1)
 			{
 				return 1;
 			}
