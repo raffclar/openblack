@@ -207,3 +207,35 @@ void HandFade::Step(float seconds, glm::vec3& position, glm::mat3& rotation)
 		rotation[column] = glm::mix(_fromRotation[column], rotation[column], t);
 	}
 }
+
+HandStage hand_hold::StageOf(bool holdsSeed, bool pulling, bool scooping, bool holdsThing)
+{
+	if (holdsSeed)
+	{
+		return HandStage::Holding;
+	}
+	if (pulling)
+	{
+		return HandStage::Pulling;
+	}
+	if (scooping)
+	{
+		return HandStage::Scooping;
+	}
+	return holdsThing ? HandStage::Holding : HandStage::Free;
+}
+
+glm::vec3 StageFade::Step(HandStage stage, float seconds, glm::vec3& position, glm::mat3& rotation)
+{
+	// The fade starts from where the hand was placed, not from where it was drawn part way through an earlier fade
+	if (_stage.has_value() && stage != *_stage && _placed.has_value())
+	{
+		_fade.Start(*_placed, _drawnRotation);
+	}
+	_stage = stage;
+	_placed = position;
+	const auto placed = position;
+	_fade.Step(seconds, position, rotation);
+	_drawnRotation = rotation;
+	return position - placed;
+}

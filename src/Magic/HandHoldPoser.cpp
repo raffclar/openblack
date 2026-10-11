@@ -114,17 +114,19 @@ bool HandHoldPoser::Pose(const std::optional<HeldSeed>& seed, const Frame& frame
 	return true;
 }
 
-void HandHoldPoser::Fade(const std::optional<HeldSeed>& seed, std::chrono::microseconds dt, Transform& hand)
+void HandHoldPoser::Fade(HandStage stage, entt::entity held, std::chrono::microseconds dt, Transform& hand)
 {
-	const auto entity = seed.has_value() ? seed->entity : entt::null;
-	if (entity != _lastSeed && _drawnPosition.has_value())
+	const auto offset = _fade.Step(stage, std::chrono::duration<float>(dt).count(), hand.position, hand.rotation);
+	// What the hand holds hangs from it where it is drawn
+	auto& registry = Locator::entitiesRegistry::value();
+	if (stage != HandStage::Holding || offset == glm::vec3(0.0f) || !registry.Valid(held))
 	{
-		_fade.Start(*_drawnPosition, _drawnRotation);
+		return;
 	}
-	_lastSeed = entity;
-	_fade.Step(std::chrono::duration<float>(dt).count(), hand.position, hand.rotation);
-	_drawnPosition = hand.position;
-	_drawnRotation = hand.rotation;
+	if (auto* transform = registry.TryGet<Transform>(held))
+	{
+		transform->position += offset;
+	}
 }
 
 void HandHoldPoser::PlaceHandEffect(const std::optional<HeldSeed>& seed, const HandAnimation* animation, const Transform& hand,

@@ -75,17 +75,15 @@ public:
 	/// hand isn't animated otherwise.
 	bool Pose(const std::optional<HeldSeed>& seed, const Frame& frame, HandAnimation* animation,
 	          ecs::components::Transform& hand);
-	/// The drawn hand, faded from where it last was drawn while it takes or lets go of a seed
-	void Fade(const std::optional<HeldSeed>& seed, std::chrono::microseconds dt, ecs::components::Transform& hand);
+	/// The drawn hand, faded from where it was placed when it changed stage (see hand_hold::StageFade). A thing it holds is
+	/// drawn hanging from the faded hand.
+	void Fade(hand_hold::HandStage stage, entt::entity held, std::chrono::microseconds dt, ecs::components::Transform& hand);
 	/// Once the hand is drawn at its size: the held seed's in-hand effect is placed in its fingers
 	void PlaceHandEffect(const std::optional<HeldSeed>& seed, const HandAnimation* animation,
 	                     const ecs::components::Transform& hand, float handSize) const;
 
 private:
-	hand_hold::HandFade _fade;
-	entt::entity _lastSeed {entt::null};
-	std::optional<glm::vec3> _drawnPosition;
-	glm::mat3 _drawnRotation {1.0f};
+	hand_hold::StageFade _fade;
 };
 
 } // namespace openblack::magic
