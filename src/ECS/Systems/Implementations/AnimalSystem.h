@@ -35,6 +35,9 @@ public:
 	[[nodiscard]] entt::entity FindScriptFlock(int32_t id) const override;
 	entt::entity CreateBird(AnimalInfo type, glm::vec2 position, uint32_t age, entt::entity flock) override;
 	entt::entity CreateScriptAnimal(AnimalInfo type, glm::vec2 position) override;
+	void SetFlockTown(entt::entity flock, entt::entity town) override;
+	entt::entity CreateGrazer(AnimalInfo type, glm::vec2 position, uint32_t age, entt::entity flock,
+	                          entt::entity town) override;
 	void JoinFlock(entt::entity animal, entt::entity flock) override;
 	bool SetScriptState(entt::entity animal, LivingStates state) override;
 	void SetScale(entt::entity animal, float scale) override;
@@ -87,6 +90,39 @@ private:
 	void StartWander(entt::entity entity, components::Animal& animal);
 	/// A follower near its leader, then in formation
 	void FollowFlock(entt::entity entity, components::Animal& animal);
+
+	// The grazers
+	void GrazerTurn(entt::entity entity, components::Animal& animal, components::Grazer& grazer);
+	void GrazerDecide(entt::entity entity, components::Animal& animal, components::Grazer& grazer);
+	/// Off wandering about its herd's leader, as far as its herd's reach
+	void GrazerStartWander(entt::entity entity, components::Animal& animal);
+	/// A straight step, steered afresh in each new cell; seeing to its needs first
+	void GrazerWander(entt::entity entity, components::Animal& animal, components::Grazer& grazer);
+	/// Its needs: whether it set off to see to one
+	bool ReactToGrazerNeeds(entt::entity entity, components::Animal& animal, components::Grazer& grazer);
+	/// The leader takes the herd somewhere new once out of its reach or there its stay time: whether it did
+	bool KeepLeaderWithinDomain(entt::entity entity, components::Animal& animal);
+	/// A member too far from its leader goes back: whether it is busy with that
+	bool KeepMemberWithinFlockArea(entt::entity entity, components::Animal& animal);
+	/// A new straight step for a wanderer keeping within distances of a centre
+	void SetNewWander(entt::entity entity, components::Animal& animal, std::optional<glm::ivec2> centre, int32_t inner,
+	                  int32_t outer);
+	[[nodiscard]] std::optional<glm::ivec2> LookForGrazeSpot(entt::entity entity, const components::Animal& animal) const;
+	void GivesBirth(entt::entity entity, components::Animal& animal);
+	/// A herd without a town merges with another of its kind nearby, the bigger keeping them all
+	void MergeNearbyHerd(entt::entity entity, components::Animal& animal);
+	/// A grazer's new speed, and its clip at that speed
+	static void SetGrazerSpeed(components::Animal& animal, uint16_t speed);
+	/// A turn's walk on the land towards its goal: whether it arrived
+	static bool GroundMoveTo(components::Animal& animal);
+	/// Where its herd's leader is, or the herd's home with no leader
+	[[nodiscard]] glm::ivec2 HerdPosOf(entt::entity flock) const;
+	/// Whether a point is within the reach of an animal's herd's home: never for an animal with no herd
+	[[nodiscard]] bool WithinDomain(const components::Animal& animal, glm::ivec2 point) const;
+	[[nodiscard]] std::optional<animals::grazers::HerdSize> HerdSizeOf(const components::Animal& animal) const;
+	[[nodiscard]] uint32_t AgeOf(const components::Grazer& grazer) const;
+	/// Whether an animal sees to its needs before it does what its state does
+	[[nodiscard]] static bool SeesToNeedsIn(components::AnimalState state);
 
 	// Fleeing what it reacts to, for any animal on the land
 	/// A turn of its flight or its watching; whether it was fleeing at all

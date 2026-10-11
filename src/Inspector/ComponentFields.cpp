@@ -24,6 +24,7 @@
 #include "3D/SkyDome.h"
 #include "Animals/AnimalMove.h"
 #include "Animals/FishShoal.h"
+#include "Animals/GrazerRules.h"
 #include "Audio/AnimEffectKeys.h"
 #include "Common/VirtualInfluence.h"
 #include "Common/Zoomer.h"
@@ -315,6 +316,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Animal::type>("type")
 	    .Field<&components::Animal::owner>("owner")
 	    .Field<&components::Animal::flock>("flock")
+	    .Field<&components::Animal::town>("town")
 	    .Field<&components::Animal::fleeing>("fleeing")
 	    .Field<&components::Animal::fleeReaction>("fleeReaction")
 	    .Field<&components::Animal::state>("state")
@@ -334,6 +336,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Animal::heading>("heading")
 	    .Field<&components::Animal::life>("life")
 	    .Field<&components::Animal::deadTurns>("deadTurns");
+	Reflect<components::Grazer>(context)
+	    .Field<&components::Grazer::needs>("needs")
+	    .Field<&components::Grazer::sleepingCell>("sleepingCell")
+	    .Field<&components::Grazer::meals>("meals")
+	    .Field<&components::Grazer::birthTurn>("birthTurn");
 	Reflect<components::TempleBirds>(context)
 	    .Field<&components::TempleBirds::flock>("flock")
 	    .Field<&components::TempleBirds::look>("look");
@@ -843,6 +850,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Flock::height>("height")
 	    .Field<&components::Flock::scriptId>("scriptId")
 	    .Field<&components::Flock::made>("made")
+	    .Field<&components::Flock::town>("town")
+	    .Field<&components::Flock::most>("most")
 	    .Field<&components::Flock::temple>("temple");
 	Reflect<components::FlockMember>(context)
 	    .Field<&components::FlockMember::flock>("flock")
@@ -1606,6 +1615,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::animals::Move::angle>("angle")
 	    .Field<&openblack::animals::Move::speed>("speed")
 	    .Field<&openblack::animals::Move::stage>("stage");
+	Reflect<openblack::animals::grazers::Needs>(context, ValueOnly {})
+	    .Field<&openblack::animals::grazers::Needs::hunger>("hunger")
+	    .Field<&openblack::animals::grazers::Needs::sleep>("sleep")
+	    .Field<&openblack::animals::grazers::Needs::breed>("breed");
 	Reflect<openblack::audio::AnimEffectKeys>(context, ValueOnly {})
 	    .Field<&openblack::audio::AnimEffectKeys::size>("size")
 	    .Field<&openblack::audio::AnimEffectKeys::alignment>("alignment")

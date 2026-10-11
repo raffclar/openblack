@@ -446,12 +446,13 @@ private:
 	};
 	mutable std::unordered_map<entt::entity, CreatureSkins> _creatureSkins;
 	/// The animals of a model drawn at once this frame: where their bones start in the texture, how many each has, and
-	/// whether they take the brightest of the land's light or are white
+	/// whether they take the brightest of the land's light, are white, or take the land's light where each stands
 	struct AnimalBoneGroup
 	{
 		uint32_t firstMatrix {0};
 		uint32_t bones {0};
 		bool brightestLand {true};
+		bool landWhereItStands {false};
 	};
 	mutable std::unordered_map<entt::id_type, AnimalBoneGroup> _animalBoneGroups;
 	/// The bones' matrices, four texels each, a row of the texture after another
