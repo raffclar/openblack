@@ -119,7 +119,7 @@ bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 			++i;
 			texture->Create(
 			    static_cast<uint16_t>(footprint.header.width), static_cast<uint16_t>(footprint.header.height), 1,
-			    graphics::TextureFormat::BGRA4, Wrapping::ClampEdge, Filter::Linear,
+			    graphics::TextureFormat::BGRA4, Wrapping::ClampEdge, Filter::Nearest,
 			    bgfx::copy(entry.pixels.data(), static_cast<uint32_t>(entry.pixels.size() * sizeof(entry.pixels[0]))));
 
 			const bgfx::Memory* verticesMem =

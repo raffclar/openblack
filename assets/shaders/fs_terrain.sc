@@ -63,6 +63,55 @@ uniform vec4 u_objectShadows;
 // x: darkness of the hand's shadow where its silhouette fully covers a texel, 0 without a shadow
 // y: how far before the hand along the light the shadow starts
 uniform vec4 u_handShadow;
+// zw: the block's size in units
+uniform vec4 u_blockPositionAndSize;
+// xy: the island's lowest corner, zw: its highest, in units
+uniform vec4 u_islandExtent;
+
+// Texels along a side of a block's texture
+#define BLOCK_TEXELS 256.0f
+
+// A texel of the block's texture with the footprints painted into it, as the game paints them: the footprints' colour
+// mixed into the block's 4-bit colour by how much they cover it, each channel rounded down to 4 bits again. The block
+// keeps its coast alpha. blockTexel is the texel along the block texture's axes (z, then x); islandUv is where the
+// footprints have the same point.
+vec4 PaintedTexel(vec2 blockTexel, vec2 islandUv)
+{
+	vec4 land = texture2DArrayLod(s0_blockTextures, vec3((blockTexel + 0.5f) / BLOCK_TEXELS, u_block.x), 0.0f);
+	vec4 footprints = texture2DLod(s3_footprints, islandUv, 0.0f);
+	// The mix's exact result is a whole number of 255ths of a level: a thousandth of a level absorbs the rounding of
+	// what is stored without lifting any result to the next level
+	vec3 painted = floor((land.rgb * (1.0f - footprints.a) + footprints.rgb) * 15.0f + 0.001f) / 15.0f;
+	return vec4(painted, land.a);
+}
+
+// The block's painted texture filtered across its texels: the four nearest texels, each painted, blended by distance
+// as the block's texture is filtered, each block on its own. blockUv is where the fragment is on the block's texture,
+// islandUv where it is on the footprints.
+vec4 PaintedBlock(vec2 blockUv, vec2 islandUv)
+{
+	vec2 position = blockUv * BLOCK_TEXELS - 0.5f;
+	vec2 first = floor(position);
+	vec2 blend = position - first;
+	// Island texture coordinates a texel of the block's texture moves by. The block's texture runs along z then x, the
+	// island's along x then z, upside down where the island's textures are.
+	vec2 unitsPerTexel = u_blockPositionAndSize.wz / BLOCK_TEXELS;
+	vec2 islandPerUnit = 1.0f / (u_islandExtent.zw - u_islandExtent.xy);
+	#if BGFX_SHADER_LANGUAGE_GLSL
+		vec2 islandPerTexel = unitsPerTexel.yx * islandPerUnit;
+	#else
+		vec2 islandPerTexel = unitsPerTexel.yx * islandPerUnit * vec2(1.0f, -1.0f);
+	#endif
+	vec2 last = vec2_splat(BLOCK_TEXELS - 1.0f);
+	vec2 low = clamp(first, vec2_splat(0.0f), last);
+	vec2 high = clamp(first + 1.0f, vec2_splat(0.0f), last);
+	vec4 texels[4];
+	texels[0] = PaintedTexel(low, islandUv + (low - position).yx * islandPerTexel);
+	texels[1] = PaintedTexel(vec2(high.x, low.y), islandUv + (vec2(high.x, low.y) - position).yx * islandPerTexel);
+	texels[2] = PaintedTexel(vec2(low.x, high.y), islandUv + (vec2(low.x, high.y) - position).yx * islandPerTexel);
+	texels[3] = PaintedTexel(high, islandUv + (high - position).yx * islandPerTexel);
+	return mix(mix(texels[0], texels[1], blend.x), mix(texels[2], texels[3], blend.x), blend.y);
+}
 
 void main()
 {
@@ -70,12 +119,9 @@ void main()
 	float skyType = u_skyAndBump.x;
 	float smallBumpMapStrength = u_skyAndBump.z;
 
-	// The block's texture, filtered across its texels
-	vec4 block = texture2DArray(s0_blockTextures, vec3(v_texcoord0.xy, u_block.x));
+	// The block's texture with the footprints painted into it, filtered across its texels
+	vec4 block = PaintedBlock(v_texcoord0.xy, v_texcoord1.xy);
 	vec4 col = vec4(block.rgb, 1.0f);
-
-	vec4 footprints = texture2D(s3_footprints, v_texcoord1.xy);
-	col.rgb = mix(col.rgb, footprints.rgb, footprints.a);
 
 	// The objects' shadows are baked into the land's textures over the footprints, under the light. The game counts
 	// how many of eight samples in each texel are covered; four filtered taps across a texel soften the edges as much.
