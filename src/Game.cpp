@@ -2333,7 +2333,12 @@ bool Game::Update() noexcept
 			{
 				const float handSize =
 				    HandAnimation::SizeAtDistance(glm::distance(camera.GetOrigin(), handTransform->position));
-				_handHold.Fade(heldThing, deltaTime, *handTransform);
+				// Starting or stopping pulling, holding or scooping, the drawn hand moves over from where it was
+				const auto* grab = Locator::handGrabSystem::has_value() ? &Locator::handGrabSystem::value() : nullptr;
+				const auto stage =
+				    magic::hand_hold::StageOf(heldSeed.has_value(), grab != nullptr && grab->GetPullPose().has_value(),
+				                              grab != nullptr && grab->GetScoopTip().has_value(), heldThing.has_value());
+				_handHold.Fade(stage, heldThing.has_value() ? heldThing->entity : entt::null, deltaTime, *handTransform);
 				_handHold.PlaceHandEffect(heldSeed, _handAnimation.get(), *handTransform, handSize);
 				// The trails' sheets of light and the chain behind the gesturing hand move on every frame
 				Locator::particleSystem::value().UpdateFrame(

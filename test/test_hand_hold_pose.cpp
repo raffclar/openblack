@@ -167,3 +167,41 @@ TEST(HandHoldPose, PullingAThingHeldAboveOpensTheHandByTheHandsHeightAlone)
 	// Every other hold pulls as it holds
 	EXPECT_EQ(TugTimeMs(HoldType::Side, k_HoldSideMs, 0.8f, 1.0f), HoldTimeMs(HoldType::Side, k_HoldSideMs, 0.8f, 1.0f));
 }
+
+TEST(HandHoldPose, TheHandsStageIsWhatItHoldsPullsOrScoops)
+{
+	EXPECT_EQ(StageOf(false, false, false, false), HandStage::Free);
+	EXPECT_EQ(StageOf(true, false, false, false), HandStage::Holding);
+	EXPECT_EQ(StageOf(false, true, false, false), HandStage::Pulling);
+	// A handful still being scooped is scooping, not holding
+	EXPECT_EQ(StageOf(false, false, true, true), HandStage::Scooping);
+	EXPECT_EQ(StageOf(false, false, false, true), HandStage::Holding);
+}
+
+TEST(HandHoldPose, ChangingStageMovesTheDrawnHandOverInAStraightLine)
+{
+	StageFade fade;
+	glm::mat3 rotation {1.0f};
+	// Hovering over a rock, the hand is placed and drawn where it is
+	glm::vec3 position {0.0f, 2.0f, 0.0f};
+	EXPECT_EQ(fade.Step(HandStage::Free, 0.016f, position, rotation), glm::vec3(0.0f));
+	ExpectNear(position, {0.0f, 2.0f, 0.0f});
+	// Pulling it free puts the hand on its grip, 2 lower: halfway through the fade it is drawn halfway down
+	position = {0.0f, 0.0f, 0.0f};
+	fade.Step(HandStage::Pulling, 0.0f, position, rotation);
+	ExpectNear(position, {0.0f, 2.0f, 0.0f});
+	position = {0.0f, 0.0f, 0.0f};
+	fade.Step(HandStage::Pulling, 0.065f, position, rotation);
+	ExpectNear(position, {0.0f, 1.0f, 0.0f});
+	// Taken into the hand, it fades back up from the grip where it was placed, not from where it was drawn, and what it
+	// holds moves with it
+	position = {0.0f, 3.0f, 0.0f};
+	const auto offset = fade.Step(HandStage::Holding, 0.0325f, position, rotation);
+	ExpectNear(position, {0.0f, 0.75f, 0.0f});
+	ExpectNear(offset, {0.0f, -2.25f, 0.0f});
+	EXPECT_TRUE(fade.Fading());
+	position = {0.0f, 3.0f, 0.0f};
+	fade.Step(HandStage::Holding, 0.1f, position, rotation);
+	ExpectNear(position, {0.0f, 3.0f, 0.0f});
+	EXPECT_FALSE(fade.Fading());
+}

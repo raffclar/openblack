@@ -95,6 +95,19 @@ bool piles::Shown(const Rise& rise, float height)
 	return -height < rise.offset;
 }
 
+std::optional<float> piles::DrawnSink(const Rise& rise, float height, bool held)
+{
+	if (held)
+	{
+		return 0.0f;
+	}
+	if (!Shown(rise, height))
+	{
+		return std::nullopt;
+	}
+	return rise.offset;
+}
+
 float piles::GrainFlow(float offset, float height)
 {
 	const float up = std::clamp(offset / height + 1.0f, 0.0f, 1.0f);

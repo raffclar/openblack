@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <array>
+#include <optional>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -141,4 +142,18 @@ TEST(ResourcePiles, APotIsDrawnAtTheSizeOfWhatItHolds)
 	EXPECT_FLOAT_EQ(PotScale(0, 20), 0.25f);
 	EXPECT_FLOAT_EQ(PotScale(30, 20), 1.75f);
 	EXPECT_FLOAT_EQ(PotScale(1000, 20), 5.0f);
+}
+
+TEST(ResourcePiles, AHandfulInTheHandIsDrawnWholeWhereItIsHeld)
+{
+	auto rise = SunkRise(3.6f);
+	// On the land a pile wholly under the ground isn't drawn, and part way up it is drawn as far down as it has sunk
+	EXPECT_FALSE(DrawnSink(rise, 3.6f, false).has_value());
+	RiseTo(rise, -1.0f);
+	StepRise(rise, 1.0f);
+	ASSERT_TRUE(DrawnSink(rise, 3.6f, false).has_value());
+	EXPECT_NEAR(*DrawnSink(rise, 3.6f, false), -1.0f, k_Epsilon);
+	// In the hand it doesn't sink at all, however little it holds
+	EXPECT_EQ(DrawnSink(SunkRise(3.6f), 3.6f, true), std::optional(0.0f));
+	EXPECT_EQ(DrawnSink(rise, 3.6f, true), std::optional(0.0f));
 }
