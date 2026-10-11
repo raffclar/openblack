@@ -709,6 +709,12 @@ class ArgumentsTest(SessionBase):
         request = mcp.call_request("edit.add", '{"id": 7, "fields": {"life": 1}}', self.CATALOGUE)
         self.assertEqual(request, {"query": "edit.add", "params": {"id": 7, "fields": {"life": 1}}})
 
+    def test_tool_a_parameter_named_as_an_option_is_the_parameter(self):
+        tool = next(t for t in mcp.TOOLS if t["name"] == "edit_add_component")
+        request = mcp.build_request(tool, {"id": 101, "component": "BuildProgress", "fields": {"built": 0.5}})
+        self.assertEqual(request, {"query": "edit.add",
+                                   "params": {"id": 101, "component": "BuildProgress", "fields": {"built": 0.5}}})
+
     def test_call_reported_forms_with_the_games_own_catalogue(self):
         # game.frame_time's ms is its parameter, not a request member the game refuses
         self.assertEqual(mcp.call_request("game.frame_time", '{"ms": 100}'),
