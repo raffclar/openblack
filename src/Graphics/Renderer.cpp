@@ -2318,11 +2318,9 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 		const glm::vec2 viewport {stats->width, stats->height};
 		if (const auto range = sea_rows::ComputeScreenRange(camera.GetViewProjectionMatrix(), viewport, config.cameraNearClip))
 		{
-			// The ripple steps on with each frame the game's time moves on in
-			if (Locator::time::value().GetFrameGameTime().count() != 0)
-			{
-				_seaRippleStep = (_seaRippleStep + 1) & 15;
-			}
+			// The ripple steps on with the frames the game's time moves on in, at the screen refresh's pace
+			const auto& time = Locator::time::value();
+			_seaRipple = sea_rows::AdvanceRipple(_seaRipple, time.GetFrameRealTime(), time.GetFrameGameTime().count() != 0);
 			const auto rows = sea_rows::MakeRows(*range);
 			u_seaRows = {static_cast<float>(rows.first), static_cast<float>(rows.count), rows.inverseDepth, rows.inverseStep};
 			u_seaMode.y = rows.softTop ? 1.0f : 0.0f;
@@ -2332,7 +2330,7 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 			// No rows: only what lies under the sea shows
 			u_seaRows = {viewport.y, 0.0f, 0.0f, 0.0f};
 		}
-		u_seaParams.y = static_cast<float>(_seaRippleStep);
+		u_seaParams.y = static_cast<float>(_seaRipple.step);
 	}
 
 	// The sea is coloured by the land's light at full luminosity
