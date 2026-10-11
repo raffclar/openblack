@@ -136,6 +136,9 @@ TEST(HandTricons, KeepSixteenPixelsInsideThePicture)
 	EXPECT_EQ(Place({640, 1024}, {640, 1024}, {1280, 1024}, true, true), glm::ivec2(640, 856));
 	// A 16:9 screen has no bars to keep inside
 	EXPECT_EQ(Place({640, 0}, {640, 0}, {1280, 720}, true, true), glm::ivec2(640, 16));
+	// Nor a wider one: the picture is still the screen's height, not taller
+	EXPECT_EQ(Place({640, 0}, {640, 0}, {5120, 1440}, true, true), glm::ivec2(640, 16));
+	EXPECT_EQ(Place({640, 1440}, {640, 1440}, {5120, 1440}, true, true), glm::ivec2(640, 1424));
 }
 
 TEST(HandTricons, EachIconIsItsFrameOfTheAtmosphereTexture)

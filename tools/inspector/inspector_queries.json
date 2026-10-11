@@ -937,7 +937,7 @@
   "query": "living.flocks"
  },
  {
-  "description": "How many fireflies there are",
+  "description": "How many fireflies there are and how many hide, fly out, hover and fly home; whether the next nightfall tops them up; the trees and the things standing over several cells they can hide in; and what the last frame did with those out: in view, near enough to be seen, drawn, and whether their picture was found",
   "kind": "object",
   "parameters": [],
   "query": "living.fireflies"
@@ -1204,6 +1204,31 @@
    }
   ],
   "query": "creatures.fight",
+  "writes": true
+ },
+ {
+  "description": "Sends a creature walking or running to a point by its own legs (turning and stepping off as it does), or turning on the spot to face it",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "[x, z] on the land",
+    "name": "point",
+    "required": true,
+    "type": "array"
+   },
+   {
+    "description": "walk (the default), run, or face to turn on the spot towards the point",
+    "name": "pace",
+    "type": "string"
+   }
+  ],
+  "query": "creatures.move",
   "writes": true
  },
  {

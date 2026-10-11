@@ -169,8 +169,11 @@ Layout creature_panel::Compute(glm::u16vec2 resolution, bool withReward, float l
 	Layout layout;
 	layout.size = screen.y / k_RowsPerScreen;
 	layout.textSize = layout.size * 0.5f;
-	const float x0 = screen.x * k_BoxInset;
-	const float x1 = (screen.x * k_BoxWidth) + x0;
+	// Shares of a 4:3 screen's width, as tall as this one (of its own width when narrower): on a wider screen the panel
+	// keeps its 4:3 size against the left edge
+	const float width = std::min(screen.x, screen.y * 4.0f / 3.0f);
+	const float x0 = width * k_BoxInset;
+	const float x1 = (width * k_BoxWidth) + x0;
 	// With the reward a quarter of the way down; following a creature near the top, three quarters as high
 	const float y0 = withReward ? screen.y / 4.0f : screen.y * k_BoxInset;
 	const float height = withReward ? screen.y / 3.0f : 0.75f * (screen.y / 3.0f);

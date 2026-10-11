@@ -14,6 +14,9 @@
 #include <algorithm>
 
 #include <fmt/format.h>
+#include <glm/common.hpp>
+
+#include "Gui/ScreenFit.h"
 
 namespace openblack::loading
 {
@@ -139,7 +142,10 @@ std::array<int32_t, 2> Adjust(std::array<int32_t, 2> layout, int32_t screenWidth
 {
 	if (FitsLayout(screenWidth, screenHeight))
 	{
-		return {layout[0] + (screenWidth - k_LayoutWidth) / 2, layout[1] + (screenHeight - k_LayoutHeight) / 2};
+		// Scaled to the screen's 4:3 middle as on the default screen (a pixel a unit there)
+		const auto at = glm::floor(gui::FrontEndSpace(screenWidth, screenHeight)
+		                               .ToScreen({static_cast<float>(layout[0]), static_cast<float>(layout[1])}));
+		return {static_cast<int32_t>(at.x), static_cast<int32_t>(at.y)};
 	}
 	const float scale = LayoutScale(screenWidth, screenHeight);
 	return {
@@ -153,7 +159,9 @@ std::array<int32_t, 2> Unadjust(std::array<int32_t, 2> screen, int32_t screenWid
 {
 	if (FitsLayout(screenWidth, screenHeight))
 	{
-		return {screen[0] - (screenWidth - k_LayoutWidth) / 2, screen[1] - (screenHeight - k_LayoutHeight) / 2};
+		const auto at = glm::floor(gui::FrontEndSpace(screenWidth, screenHeight)
+		                               .ToLayout({static_cast<float>(screen[0]), static_cast<float>(screen[1])}));
+		return {static_cast<int32_t>(at.x), static_cast<int32_t>(at.y)};
 	}
 	const float scale = LayoutScale(screenWidth, screenHeight);
 	const auto x =
@@ -167,7 +175,7 @@ int32_t UnadjustSize(int32_t size, int32_t screenWidth, int32_t screenHeight) no
 {
 	if (FitsLayout(screenWidth, screenHeight))
 	{
-		return size;
+		return static_cast<int32_t>(static_cast<float>(size) / gui::ReferenceScale(screenWidth, screenHeight));
 	}
 	return static_cast<int32_t>(static_cast<float>(size) * LayoutScale(screenWidth, screenHeight));
 }
@@ -270,14 +278,18 @@ uint8_t PleaseWaitAlpha(int32_t loadingTime) noexcept
 
 PleaseWaitBanner PleaseWaitBannerFor(int32_t screenWidth, int32_t screenHeight) noexcept
 {
+	// The game's sizes are in pixels: they take the default screen's share of bigger ones
+	const float scale = gui::ReferenceScale(screenWidth, screenHeight);
+	const int32_t half = gui::ScaledPixels(30, scale);
+	const int32_t shadow = gui::ScaledPixels(15, scale);
 	const int32_t middle = screenHeight >> 1;
-	const int32_t top = middle - 30;
-	const int32_t bottom = middle + 30;
+	const int32_t top = middle - half;
+	const int32_t bottom = middle + half;
 	return {
 	    .band = {.left = -1, .top = top, .right = screenWidth, .bottom = bottom},
 	    .edge = static_cast<int32_t>(static_cast<float>(screenWidth) * 0.4f),
-	    .shadowAbove = {.left = -1, .top = top - 15, .right = screenWidth, .bottom = top},
-	    .shadowBelow = {.left = -1, .top = bottom, .right = screenWidth, .bottom = bottom + 15},
+	    .shadowAbove = {.left = -1, .top = top - shadow, .right = screenWidth, .bottom = top},
+	    .shadowBelow = {.left = -1, .top = bottom, .right = screenWidth, .bottom = bottom + shadow},
 	};
 }
 
@@ -288,12 +300,13 @@ TextBox TextBoxFor(Rect layout, int32_t start, int32_t size, int32_t screenWidth
 	int32_t below = start - layout.top;
 	auto textSize = static_cast<float>(size);
 	const auto topLeft = Adjust({layout.left, layout.top}, screenWidth, screenHeight);
-	// The scale the layout is drawn at: one on screens big enough for it, more than one on smaller ones
-	const float scale = FitsLayout(screenWidth, screenHeight) ? 1.0f : LayoutScale(screenWidth, screenHeight);
-	textSize /= scale;
-	below = static_cast<int32_t>(static_cast<float>(below) / scale);
-	width = static_cast<int32_t>(static_cast<float>(width) / scale);
-	height = static_cast<int32_t>(static_cast<float>(height) / scale);
+	// How many pixels a unit of the layout covers: the default screen's share on bigger screens, less on smaller ones
+	const float grow = FitsLayout(screenWidth, screenHeight) ? gui::ReferenceScale(screenWidth, screenHeight)
+	                                                         : 1.0f / LayoutScale(screenWidth, screenHeight);
+	textSize *= grow;
+	below = static_cast<int32_t>(static_cast<float>(below) * grow);
+	width = static_cast<int32_t>(static_cast<float>(width) * grow);
+	height = static_cast<int32_t>(static_cast<float>(height) * grow);
 	return {
 	    .box = {.left = topLeft[0], .top = topLeft[1], .right = topLeft[0] + width, .bottom = topLeft[1] + height},
 	    .start = topLeft[1] + below,

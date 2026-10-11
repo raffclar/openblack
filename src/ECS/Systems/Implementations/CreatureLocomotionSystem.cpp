@@ -148,13 +148,18 @@ struct Moves
 	}
 	[[nodiscard]] bool CanWalk() const { return Has(locomotion::animations::k_Walk) && Has(locomotion::animations::k_Run); }
 	[[nodiscard]] bool HasAll(size_t first) const { return Has(first) && Has(first + 1) && Has(first + 2); }
+	/// The pair blended into one animation lasts between their lengths, to the nearest millisecond
 	[[nodiscard]] float PairDuration(const locomotion::Pair& pair) const
 	{
-		return Duration(pair.from) + ((Duration(pair.to) - Duration(pair.from)) * pair.weight);
+		return std::nearbyint(Duration(pair.from) + ((Duration(pair.to) - Duration(pair.from)) * pair.weight));
 	}
+	/// The pair blended into one animation moves the way between theirs, as far as between their moves' lengths
 	[[nodiscard]] glm::vec2 PairDisplacement(const locomotion::Pair& pair) const
 	{
-		return Displacement(pair.from) + ((Displacement(pair.to) - Displacement(pair.from)) * pair.weight);
+		const auto from = Displacement(pair.from);
+		const auto to = Displacement(pair.to);
+		const auto move = creature_animation::BlendMoves(glm::vec3(from, 0.0f), glm::vec3(to, 0.0f), pair.weight);
+		return {move.x, move.y};
 	}
 };
 
@@ -219,27 +224,23 @@ void PlaceAt(CreatureLocomotion& self, glm::vec2 point)
 	self.toPosition = glm::vec3(point.x, HeightAt(point), point.y);
 }
 
-/// The two animations of a turn or step, through the same fraction of each
-void TrackPair(CreatureLocomotion& self, const Moves& moves, float fromMs, float advanceMs)
+/// A turn's or step's two animations, blended keyframe by keyframe into one that plays over the move
+void TrackPair(CreatureLocomotion& self, float fromMs, float advanceMs)
 {
 	if (!self.move.has_value() || !self.move->animations.has_value())
 	{
 		return;
 	}
 	const auto& pair = *self.move->animations;
-	const auto duration = self.move->durationMs;
-	for (const auto& [animation, weight] : {std::pair {pair.from, 1.0f - pair.weight}, std::pair {pair.to, pair.weight}})
-	{
-		const auto own = moves.Duration(animation);
-		const auto ratio = duration > 0.0f ? own / duration : 0.0f;
-		self.tracks.push_back({.animation = animation,
-		                       .fromMs = fromMs * ratio,
-		                       .advanceMs = advanceMs * ratio,
-		                       .durationMs = own,
-		                       .weight = weight,
-		                       .looping = false,
-		                       .breathing = false});
-	}
+	self.tracks.push_back({.animation = pair.from,
+	                       .fromMs = fromMs,
+	                       .advanceMs = advanceMs,
+	                       .durationMs = self.move->durationMs,
+	                       .weight = 1.0f,
+	                       .looping = false,
+	                       .breathing = false,
+	                       .blendedWith = pair.to,
+	                       .blendWeight = pair.weight});
 }
 
 /// Turns on the spot or steps off towards the end of the route's segment, or walks straight on, by how far round it is
@@ -314,7 +315,7 @@ void TurnStep(CreatureLocomotion& self, const Moves& moves, float playbackRate)
 	if (move.animations.has_value())
 	{
 		// The spin's own root turns the body; its heading changes once the turn is over
-		TrackPair(self, moves, from, move.timeMs - from);
+		TrackPair(self, from, move.timeMs - from);
 	}
 	else
 	{
@@ -324,15 +325,21 @@ void TurnStep(CreatureLocomotion& self, const Moves& moves, float playbackRate)
 	{
 		return;
 	}
+	// The spin plays out over this turn, ending with the body turned to face the new way, which its heading takes up at
+	// once as the next turn starts
 	self.heading = self.targetHeading;
+	self.headingSnaps = true;
 	self.move.reset();
-	self.tracks.clear();
+	auto lastPart = std::move(self.tracks);
 	if (self.facingOnly || self.route.points.empty())
 	{
 		ClearWalk(self);
-		return;
 	}
-	BeginLeg(self, moves);
+	else
+	{
+		BeginLeg(self, moves);
+	}
+	self.tracks = std::move(lastPart);
 }
 
 void StepOff(CreatureLocomotion& self, const Moves& moves)
@@ -353,7 +360,7 @@ void StepOff(CreatureLocomotion& self, const Moves& moves)
 		return;
 	}
 	// The step's own root turns the body round towards the route as it steps; its heading follows once the step ends
-	TrackPair(self, moves, from, move.timeMs - from);
+	TrackPair(self, from, move.timeMs - from);
 
 	if (std::abs(locomotion::WrapAngle(advanced.heading - move.startRouteHeading)) > locomotion::k_CornerAngle)
 	{
@@ -364,8 +371,10 @@ void StepOff(CreatureLocomotion& self, const Moves& moves)
 	}
 	if (move.timeMs >= move.durationMs)
 	{
-		// It leaves the step already walking, along the route
+		// It leaves the step already walking, along the route: the step plays out over this turn, ending with the body
+		// turned towards the route, which its heading takes up at once as the next turn starts
 		self.heading = advanced.heading;
+		self.headingSnaps = true;
 		self.move.reset();
 		self.motion = Motion::Walking;
 		self.speed = self.speeds.walk;
@@ -839,7 +848,9 @@ void CreatureLocomotionSystem::ProcessTurn()
 			    self.toHeading = self.heading;
 		    }
 		    self.fromPosition = self.toPosition;
-		    self.fromHeading = self.toHeading;
+		    self.fromHeading = self.headingSnaps ? self.heading : self.toHeading;
+		    self.toHeading = self.fromHeading;
+		    self.headingSnaps = false;
 		    self.tracks.clear();
 		    self.distance = 0.0f;
 		    Measure(self, creature, transform);
@@ -945,7 +956,7 @@ void CreatureLocomotionSystem::ProcessTurn()
 				    StartMove(entity, self, destination, self.fraction, ring.min, ring.max, self.ontoDestination);
 			    }
 		    }
-		    self.toHeading = self.heading;
+		    self.toHeading = self.headingSnaps ? self.fromHeading : self.heading;
 	    });
 }
 
@@ -986,8 +997,12 @@ void CreatureLocomotionSystem::Update(float turnFraction)
 			    {
 				    time = std::clamp(time, 0.0f, std::max(track.durationMs - 1.0f, 0.0f));
 			    }
-			    animation.slots.push_back(
-			        {.animation = track.animation, .timeMs = time, .weight = track.weight, .mirrored = false});
+			    animation.slots.push_back({.animation = track.animation,
+			                               .timeMs = time,
+			                               .weight = track.weight,
+			                               .mirrored = false,
+			                               .blendedWith = track.blendedWith,
+			                               .blendWeight = track.blendWeight});
 		    }
 	    });
 	if (moved)

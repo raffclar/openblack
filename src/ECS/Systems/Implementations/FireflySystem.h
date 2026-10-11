@@ -45,6 +45,10 @@ public:
 	[[nodiscard]] const fireflies::RewardTable& GetRewards() const override { return _rewards; }
 	[[nodiscard]] std::span<const entt::entity> GetFireflies() const override { return _order; }
 	void Reset() override;
+	[[nodiscard]] FrameCount GetLastFrame() const override { return _lastFrame; }
+	[[nodiscard]] bool IsTopUpDue() const override { return _topUpDue; }
+	[[nodiscard]] size_t GetTreeCount() const override { return _trees.size(); }
+	[[nodiscard]] size_t GetFixedCount() const override { return _fixed.size(); }
 
 private:
 	/// At nightfall: new fireflies hidden in random trees and rocks until the land holds its most
@@ -79,6 +83,7 @@ private:
 	size_t _most {fireflies::k_DefaultMaximum};
 	/// The next nightfall tops the fireflies up
 	bool _topUpDue {true};
+	FrameCount _lastFrame;
 	fireflies::RewardTable _rewards;
 	std::vector<entt::scoped_connection> _connections;
 };

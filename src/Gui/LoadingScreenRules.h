@@ -100,8 +100,9 @@ struct Fade
 	return static_cast<uint8_t>((static_cast<uint32_t>(colourAlpha) * drawAlpha) >> 8);
 }
 
-/// The front end's mapping between the screen and its 800 by 600 layout: centred a pixel a unit on screens at least
-/// that big, scaled down otherwise
+/// The front end's mapping between the screen and its 800 by 600 layout (gui::FrontEndSpace), in whole pixels and
+/// units: on screens at least that big scaled to fill the 4:3 middle as on the default screen, a pixel a unit there;
+/// shrunk as the game shrinks it on smaller ones
 [[nodiscard]] std::array<int32_t, 2> Adjust(std::array<int32_t, 2> layout, int32_t screenWidth, int32_t screenHeight) noexcept;
 [[nodiscard]] std::array<int32_t, 2> Unadjust(std::array<int32_t, 2> screen, int32_t screenWidth,
                                               int32_t screenHeight) noexcept;
@@ -181,11 +182,11 @@ private:
 /// The "please wait" banner across the middle of a screen
 struct PleaseWaitBanner
 {
-	/// The band, 60 pixels high, from a pixel left of the screen to its right
+	/// The band, 60 pixels high on the default screen (gui::ReferenceScale), from a pixel left of the screen to its right
 	Rect band;
 	/// The band's darker ends reach this far in from each side
 	int32_t edge {0};
-	/// The shadows fading out above and below it, 15 pixels each
+	/// The shadows fading out above and below it, 15 pixels each on the default screen
 	Rect shadowAbove;
 	Rect shadowBelow;
 

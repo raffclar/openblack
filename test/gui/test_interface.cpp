@@ -140,6 +140,32 @@ TEST(GameFont, DecodesTheGlyphsAtHalfSize)
 	EXPECT_TRUE(coverage(u' ').empty());
 }
 
+TEST(GameFont, KeepsTheGlyphsAtFullHeightForScaledUpText)
+{
+	const auto font = LoadFont();
+	const auto bitmap = [&font](char16_t c) {
+		const auto* glyph = font.Find(c);
+		std::vector<std::string> rows;
+		for (auto y = glyph->fullMin.y; y < glyph->fullMax.y; ++y)
+		{
+			std::string row;
+			for (auto x = glyph->fullMin.x; x < glyph->fullMax.x; ++x)
+			{
+				const auto pixel = font.GetFullAtlas()[(static_cast<size_t>(y) * font.GetFullAtlasSize().x) + x];
+				row.push_back(pixel == 0xFF ? '#' : (pixel == 0 ? '.' : '?'));
+			}
+			rows.push_back(row);
+		}
+		return rows;
+	};
+	// A pixel of the bitmap a pixel of the atlas, each set pixel opaque
+	EXPECT_EQ(bitmap(u'B'), (std::vector<std::string> {"#.", ".#", "#.", ".#"}));
+	EXPECT_EQ(bitmap(u'?'), (std::vector<std::string> {"##", "..", "#.", ".."}));
+	EXPECT_EQ(bitmap(u'W'), (std::vector<std::string> {"####", "####", "####", "####"}));
+	EXPECT_EQ(bitmap(u' '), (std::vector<std::string> {"", "", "", ""}));
+	EXPECT_EQ(font.GetFullAtlasSize().x, 2048);
+}
+
 TEST(GameFont, FallsBackToTheQuestionMark)
 {
 	const auto font = LoadFont();

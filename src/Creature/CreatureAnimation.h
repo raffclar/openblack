@@ -45,6 +45,17 @@ struct BlendTerm
 /// blend keeps the base's keyframes and length.
 [[nodiscard]] Animation Blend(const Animation& base, const BlendTerm& evilGood, const BlendTerm& thinFat);
 
+/// Two animations of a move blended into one, keyframe by keyframe, as a turn on the spot or a step off blends its
+/// pair of 0, 90 and 180 degree animations for the angle. Each keyframe's rotations blend on their matrices' elements
+/// and are turned back into angles, so the blend plays as true rotations however far apart the two turn the body; its
+/// translations blend straight. A bone only one of them moves takes the first frame of the stand in the other. The
+/// blend has the first's keyframes and looping, its length rounded between theirs, and its move the way between
+/// theirs, as long as the length between their moves.
+[[nodiscard]] Animation BlendPair(const Animation& from, const Animation& to, const Animation& stand, float weight);
+
+/// A move between two: the direction of the blended move, as long as the blend of their lengths
+[[nodiscard]] glm::vec3 BlendMoves(const glm::vec3& from, const glm::vec3& to, float weight);
+
 /// The rest pose's matrices, in the mesh's space, pulled the same way
 [[nodiscard]] std::vector<glm::mat4> BlendRest(std::span<const glm::mat4> base, std::span<const glm::mat4> evilGood,
                                                float evilGoodWeight, std::span<const glm::mat4> thinFat, float thinFatWeight);

@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include <set>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -92,12 +93,25 @@ TEST(LoadingScreen, FadeBringsInTheBlurThenTheSharpPicture)
 	EXPECT_EQ(BoxAlpha(0xA0, 0), 0);
 }
 
-TEST(LoadingScreen, LayoutSpaceIsCentredOnBigScreensAndScaledOnSmallOnes)
+TEST(LoadingScreen, LayoutSpaceIsTheDefaultScreensOnBigScreensAndScaledDownOnSmallOnes)
 {
-	EXPECT_EQ(Unadjust({112, 84}, 1024, 768), (std::array {0, 0}));
-	EXPECT_EQ(Adjust({0, 0}, 1024, 768), (std::array {112, 84}));
-	EXPECT_EQ(UnadjustSize(20, 1024, 768), 20);
-	// 640 by 480: the scale is 650 / 480, each step rounded towards zero
+	// The default screen: a pixel a unit
+	EXPECT_EQ(Adjust({0, 0}, 800, 600), (std::array {0, 0}));
+	EXPECT_EQ(Adjust({799, 599}, 800, 600), (std::array {799, 599}));
+	EXPECT_EQ(Unadjust({321, 123}, 800, 600), (std::array {321, 123}));
+	EXPECT_EQ(UnadjustSize(20, 800, 600), 20);
+	// As tall as the default screen and wider: a pixel a unit in the middle, as the game drew it
+	EXPECT_EQ(Adjust({0, 0}, 1000, 600), (std::array {100, 0}));
+	EXPECT_EQ(Unadjust({100, 0}, 1000, 600), (std::array {0, 0}));
+	// Bigger 4:3 screens: scaled as on the default screen
+	EXPECT_EQ(Adjust({100, 200}, 1024, 768), (std::array {128, 256}));
+	EXPECT_EQ(Unadjust({128, 256}, 1024, 768), (std::array {100, 200}));
+	EXPECT_EQ(UnadjustSize(32, 1024, 768), 25);
+	// A wide screen: the 4:3 middle as tall as it
+	EXPECT_EQ(Adjust({0, 0}, 1920, 1080), (std::array {240, 0}));
+	EXPECT_EQ(Adjust({800, 600}, 1920, 1080), (std::array {1680, 1080}));
+	EXPECT_EQ(Unadjust({960, 540}, 1920, 1080), (std::array {400, 300}));
+	// 640 by 480: the game's own shrinking, the scale 650 / 480, each step rounded towards zero
 	const auto layout = Unadjust({320, 240}, 640, 480);
 	EXPECT_EQ(layout[0], 399);
 	EXPECT_EQ(layout[1], 299);
@@ -106,29 +120,45 @@ TEST(LoadingScreen, LayoutSpaceIsCentredOnBigScreensAndScaledOnSmallOnes)
 
 TEST(LoadingScreen, BarSweeps)
 {
-	const auto layout = LayoutFor(1024, 768);
-	const auto bar = BarFor(layout, 0.0f, 1024, 768);
+	const auto layout = LayoutFor(800, 600);
+	const auto bar = BarFor(layout, 0.0f, 800, 600);
 	// The picture's frame, in the layout's space
-	EXPECT_EQ(bar.outline, (Rect {.left = 71, .top = -47, .right = 728, .bottom = 446}));
-	EXPECT_EQ(bar.border, 20);
-	EXPECT_EQ(bar.body, (Rect {.left = 71, .top = 476, .right = 728, .bottom = 496}));
+	EXPECT_EQ(bar.outline, (Rect {.left = 143, .top = 29, .right = 657, .bottom = 415}));
+	EXPECT_EQ(bar.border, 16);
+	EXPECT_EQ(bar.body, (Rect {.left = 143, .top = 439, .right = 657, .bottom = 455}));
 	// At the start both sweeps sit at the bar's left
-	EXPECT_EQ(bar.brightStart, 74);
-	EXPECT_EQ(bar.brightEnd, 131);
-	EXPECT_EQ(bar.darkStart, 74);
-	EXPECT_EQ(bar.darkEnd, 74);
-	EXPECT_EQ(bar.sweepTop, 479);
-	EXPECT_EQ(bar.brightBottom, 492);
-	EXPECT_EQ(bar.darkBottom, 493);
-	EXPECT_EQ(bar.topShadow, (Rect {.left = 74, .top = 479, .right = 724, .bottom = 485}));
-	EXPECT_EQ(bar.leftShadow, (Rect {.left = 74, .top = 479, .right = 80, .bottom = 492}));
+	EXPECT_EQ(bar.brightStart, 146);
+	EXPECT_EQ(bar.brightEnd, 203);
+	EXPECT_EQ(bar.darkStart, 146);
+	EXPECT_EQ(bar.darkEnd, 146);
+	EXPECT_EQ(bar.sweepTop, 442);
+	EXPECT_EQ(bar.brightBottom, 451);
+	EXPECT_EQ(bar.darkBottom, 452);
+	EXPECT_EQ(bar.topShadow, (Rect {.left = 146, .top = 442, .right = 653, .bottom = 446}));
+	EXPECT_EQ(bar.leftShadow, (Rect {.left = 146, .top = 442, .right = 150, .bottom = 451}));
 	// Half way, the bright sweep has crossed and the dark one is starting
-	const auto half = BarFor(layout, 0.5f, 1024, 768);
-	EXPECT_EQ(half.brightStart, 725);
-	EXPECT_EQ(half.darkStart, 74);
+	const auto half = BarFor(layout, 0.5f, 800, 600);
+	EXPECT_EQ(half.brightStart, 654);
+	EXPECT_EQ(half.darkStart, 146);
 	// A whole period later it is as at the start
-	EXPECT_EQ(BarFor(layout, 1.0f, 1024, 768), bar);
-	EXPECT_EQ(BarFor(layout, 2.25f, 1024, 768), BarFor(layout, 0.25f, 1024, 768));
+	EXPECT_EQ(BarFor(layout, 1.0f, 800, 600), bar);
+	EXPECT_EQ(BarFor(layout, 2.25f, 800, 600), BarFor(layout, 0.25f, 800, 600));
+}
+
+TEST(LoadingScreen, TheBarIsTheDefaultScreensOnEvery4By3Screen)
+{
+	const auto reference = BarFor(LayoutFor(800, 600), 0.0f, 800, 600);
+	for (const auto [width, height] :
+	     {std::pair {1024, 768}, std::pair {1280, 960}, std::pair {1600, 1200}, std::pair {1920, 1440}})
+	{
+		const auto bar = BarFor(LayoutFor(width, height), 0.0f, width, height);
+		// Within a unit, from the whole pixels the picture is placed on
+		EXPECT_NEAR(bar.outline.left, reference.outline.left, 1) << width;
+		EXPECT_NEAR(bar.outline.top, reference.outline.top, 1) << width;
+		EXPECT_NEAR(bar.outline.right, reference.outline.right, 1) << width;
+		EXPECT_NEAR(bar.outline.bottom, reference.outline.bottom, 1) << width;
+		EXPECT_NEAR(bar.border, reference.border, 1) << width;
+	}
 }
 
 TEST(LoadingScreen, TextShrinksUntilItFits)
@@ -308,18 +338,27 @@ TEST(Startup, PreIntro)
 
 TEST(LoadingScreen, PleaseWaitBannerAcrossTheMiddle)
 {
-	const auto banner = PleaseWaitBannerFor(1024, 768);
-	EXPECT_EQ(banner.band, (Rect {.left = -1, .top = 354, .right = 1024, .bottom = 414}));
-	EXPECT_EQ(banner.edge, 409);
-	EXPECT_EQ(banner.shadowAbove, (Rect {.left = -1, .top = 339, .right = 1024, .bottom = 354}));
-	EXPECT_EQ(banner.shadowBelow, (Rect {.left = -1, .top = 414, .right = 1024, .bottom = 429}));
+	const auto banner = PleaseWaitBannerFor(800, 600);
+	EXPECT_EQ(banner.band, (Rect {.left = -1, .top = 270, .right = 800, .bottom = 330}));
+	EXPECT_EQ(banner.edge, 320);
+	EXPECT_EQ(banner.shadowAbove, (Rect {.left = -1, .top = 255, .right = 800, .bottom = 270}));
+	EXPECT_EQ(banner.shadowBelow, (Rect {.left = -1, .top = 330, .right = 800, .bottom = 345}));
+	// Its heights take the default screen's share of a bigger one; it still runs the screen's width
+	const auto wide = PleaseWaitBannerFor(1920, 1080);
+	EXPECT_EQ(wide.band, (Rect {.left = -1, .top = 486, .right = 1920, .bottom = 594}));
+	EXPECT_EQ(wide.edge, 768);
+	EXPECT_EQ(wide.shadowAbove, (Rect {.left = -1, .top = 459, .right = 1920, .bottom = 486}));
+	EXPECT_EQ(wide.shadowBelow, (Rect {.left = -1, .top = 594, .right = 1920, .bottom = 621}));
 }
 
 TEST(LoadingScreen, LayoutTextBoxes)
 {
-	// A pixel a unit on a big screen, the first line at the box's bottom until it is centred
-	EXPECT_EQ(TextBoxFor(k_PleaseWaitText, 400, k_BigTextSize, 1024, 768),
-	          (TextBox {.box = {.left = 212, .top = 284, .right = 812, .bottom = 484}, .start = 484, .size = 35.0f}));
+	// A pixel a unit on the default screen, the first line at the box's bottom until it is centred
+	EXPECT_EQ(TextBoxFor(k_PleaseWaitText, 400, k_BigTextSize, 800, 600),
+	          (TextBox {.box = {.left = 100, .top = 200, .right = 700, .bottom = 400}, .start = 400, .size = 35.0f}));
+	// Scaled up with the layout on a bigger screen, in its 4:3 middle
+	EXPECT_EQ(TextBoxFor(k_PleaseWaitText, 400, k_BigTextSize, 1920, 1080),
+	          (TextBox {.box = {.left = 420, .top = 360, .right = 1500, .bottom = 720}, .start = 720, .size = 63.0f}));
 	// Scaled down on a small one
 	const auto small = TextBoxFor(k_PleaseWaitText, 400, k_BigTextSize, 640, 480);
 	EXPECT_EQ(small.box, (Rect {.left = 98, .top = 166, .right = 98 + 443, .bottom = 166 + 147}));

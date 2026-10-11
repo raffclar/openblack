@@ -545,40 +545,67 @@ Renderer::~Renderer() noexcept
 	bgfx::shutdown();
 }
 
+namespace
+{
+/// The rectangles of a scene's views over the whole of a target `resolution` pixels big: its sky's, its own, what is
+/// drawn over it and what blends in it
+void SetSceneViewRects(RenderPass viewId, glm::u16vec2 resolution) noexcept
+{
+	const auto setRect = [resolution](RenderPass pass) {
+		bgfx::setViewRect(static_cast<bgfx::ViewId>(pass), 0, 0, resolution.x, resolution.y);
+	};
+	setRect(SkyPassOf(viewId));
+	if (HasSkyPass(viewId))
+	{
+		setRect(viewId);
+	}
+	if (viewId == RenderPass::Main)
+	{
+		setRect(RenderPass::Advisors);
+	}
+	if (viewId == RenderPass::Reflection)
+	{
+		setRect(RenderPass::UnderSea);
+	}
+	if (const auto translucentId = TranslucentPassOf(viewId); translucentId != viewId)
+	{
+		setRect(translucentId);
+	}
+}
+} // namespace
+
 void Renderer::ConfigureView(graphics::RenderPass viewId, glm::u16vec2 resolution, uint32_t clearColor) const noexcept
 {
 	// A scene with a sky of its own is cleared by its sky's pass, which comes first, and drawn over it
-	const auto skyId = static_cast<bgfx::ViewId>(SkyPassOf(viewId));
-	bgfx::setViewClear(skyId, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, clearColor, 0.0f, 0);
-	bgfx::setViewRect(skyId, 0, 0, resolution.x, resolution.y);
+	bgfx::setViewClear(static_cast<bgfx::ViewId>(SkyPassOf(viewId)), BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, clearColor, 0.0f, 0);
 	if (HasSkyPass(viewId))
 	{
 		bgfx::setViewClear(static_cast<bgfx::ViewId>(viewId), BGFX_CLEAR_NONE);
-		bgfx::setViewRect(static_cast<bgfx::ViewId>(viewId), 0, 0, resolution.x, resolution.y);
 	}
 	// The advisors near the screen are drawn over the main view, its depth cleared
 	if (viewId == RenderPass::Main)
 	{
 		bgfx::setViewClear(static_cast<bgfx::ViewId>(RenderPass::Advisors), BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
-		bgfx::setViewRect(static_cast<bgfx::ViewId>(RenderPass::Advisors), 0, 0, resolution.x, resolution.y);
 	}
 	// What is under the sea's surface is drawn over the mirrored world, into the same target
 	if (viewId == RenderPass::Reflection)
 	{
 		bgfx::setViewClear(static_cast<bgfx::ViewId>(RenderPass::UnderSea), BGFX_CLEAR_NONE);
-		bgfx::setViewRect(static_cast<bgfx::ViewId>(RenderPass::UnderSea), 0, 0, resolution.x, resolution.y);
 	}
 	// And what blends in it is drawn over it after
 	if (const auto translucentId = TranslucentPassOf(viewId); translucentId != viewId)
 	{
 		bgfx::setViewClear(static_cast<bgfx::ViewId>(translucentId), BGFX_CLEAR_NONE);
-		bgfx::setViewRect(static_cast<bgfx::ViewId>(translucentId), 0, 0, resolution.x, resolution.y);
 	}
+	SetSceneViewRects(viewId, resolution);
 }
 
 void Renderer::Reset(glm::u16vec2 resolution) const noexcept
 {
 	bgfx::reset(resolution.x, resolution.y, _bgfxReset);
+	// The scene and its mirror in the sea cover the window, each keeping how it is cleared
+	SetSceneViewRects(RenderPass::Main, resolution);
+	SetSceneViewRects(RenderPass::Reflection, resolution);
 }
 
 graphics::ShaderManager& Renderer::GetShaderManager() const noexcept

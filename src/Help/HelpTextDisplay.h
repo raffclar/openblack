@@ -36,7 +36,8 @@ struct TextRegion
 	int bottom;
 };
 
-/// The box, a full-width strip above the bottom cinema bar. barPixels = the height of one cinema bar
+/// The box, a strip above the bottom cinema bar across the screen, or across the 4:3 middle of a wider screen.
+/// barPixels = the height of one cinema bar
 [[nodiscard]] TextRegion ComputeTextRegion(int width, int height, int barPixels);
 /// The vertical centre of the "click to continue" icon, bottom - trunc(ClickCueHeight / 2) + 1
 [[nodiscard]] int ClickCueY(const TextRegion& r);
@@ -64,7 +65,10 @@ struct TextRun
 struct TextFrame
 {
 	bool boxShown {false};
+	/// Where the words, the "Continue" cue and the control icons go: across the screen, or its 4:3 middle when wider
 	TextRegion box {};
+	/// The black band drawn behind them: the box's rows across the whole screen
+	TextRegion band {};
 	uint8_t boxAlpha {0x80};
 	std::vector<TextRun> runs;
 	/// The $M<n> codes of the newest text reached this frame, in order: the actions whose control icons the box shows
@@ -81,8 +85,8 @@ public:
 	/// The ring of entries
 	static constexpr int k_Entries = 6;
 
-	/// Base line height = screenHeight * (1/30), or * (1/28) when the screen needs bigger text; computed once. Ends with
-	/// Reset(true).
+	/// Base line height = screen height * (1/30), or * (1/28) when the screen needs bigger text, of the screen each layout
+	/// is made for (GetBaseLineHeight: of `screenHeight`). Ends with Reset(true).
 	explicit HelpTextDisplay(int screenHeight, bool biggerText = false);
 
 	/// Whether Data\f1 / Data\f3 were loaded; a missing one is replaced by j0
@@ -123,7 +127,7 @@ public:
 	[[nodiscard]] const TextFrame& CachedLayout(int width, int height, int barPixels, int textDraw, bool topToBottom,
 	                                            const WidthFn& widthFn) const;
 
-	/// The line height at rest
+	/// The line height at rest on the screen the display was made for
 	[[nodiscard]] float GetBaseLineHeight() const { return _baseLineHeight; }
 	/// The newest entry has a text
 	[[nodiscard]] bool HasNewestText() const { return _entries.at(static_cast<size_t>(_newest)).used; }
@@ -147,7 +151,6 @@ private:
 		bool topToBottom {false};
 		std::array<Entry, k_Entries> entries {};
 		int newest {0};
-		float baseLineHeight {0.0f};
 		float anim {0.0f};
 		bool hidden {false};
 		bool singleLine {false};
@@ -162,6 +165,8 @@ private:
 	std::array<Entry, k_Entries> _entries {};
 	int _newest {0};
 	float _baseLineHeight {0.0f};
+	/// The line height's share of the screen's height
+	float _lineHeightFraction {0.0f};
 	float _anim {0.0f}; ///< The slide-in of the newest text, 0 to 1
 	bool _hidden {false};
 	bool _singleLine {false};
