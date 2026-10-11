@@ -242,6 +242,7 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* DEAD */
     VillagerStateTableEntry {
         .state = &villager_fire::Dead,
+        .exitState = &villager_fire::ExitDead,
     },
     /* DROWNING */
     VillagerStateTableEntry {

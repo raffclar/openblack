@@ -86,6 +86,27 @@ TEST(VillagerSpeed, EachVillagersOwnWayOfGoing)
 	EXPECT_EQ(FinalSpeed(70000, 1.0f), 0xFFFF);
 }
 
+TEST(VillagerSpeed, TheOldGoSlowerAndHungerOnlySlowsAdultsInTheirPrime)
+{
+	// Past old age: slower by a fiftieth a year, at most four tenths
+	EXPECT_NEAR(PersonalFactor({.creationIndex = 0, .age = 70, .grownUpAge = 13, .oldAge = 60}), 0.84f - 0.2f, 1e-5f);
+	EXPECT_NEAR(PersonalFactor({.creationIndex = 0, .age = 100, .grownUpAge = 13, .oldAge = 60}), 0.84f - 0.4f, 1e-5f);
+	// At old age itself it is still in its prime
+	EXPECT_NEAR(PersonalFactor({.creationIndex = 0, .age = 60, .grownUpAge = 13, .oldAge = 60, .life = 0.0f}), 0.84f, 1e-5f);
+	// Its belly, life and sex count only in its prime: the old are slowed by their years alone
+	EXPECT_NEAR(
+	    PersonalFactor({.creationIndex = 0, .age = 30, .grownUpAge = 13, .oldAge = 60, .desireForFood = 1.0f, .life = 0.0f}),
+	    0.84f - 0.1f, 1e-5f);
+	EXPECT_NEAR(PersonalFactor({.creationIndex = 0,
+	                            .age = 70,
+	                            .grownUpAge = 13,
+	                            .oldAge = 60,
+	                            .desireForFood = 1.0f,
+	                            .life = 1.0f,
+	                            .female = true}),
+	            0.84f - 0.2f, 1e-5f);
+}
+
 TEST(VillagerSpeed, ScriptedAndDancingVillagersKeepTheirSpeed)
 {
 	EXPECT_TRUE(StateChangeSetsSpeed(false, false));

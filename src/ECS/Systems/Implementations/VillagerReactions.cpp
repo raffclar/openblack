@@ -49,6 +49,7 @@
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/TownDesire.h"
 #include "ECS/VillagerAge.h"
+#include "ECS/VillagerNeeds.h"
 #include "ECS/VillagerSpeed.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -627,7 +628,17 @@ void villager_reactions::SetStateSpeed(entt::entity villager, VillagerStates sta
 	const auto speed = villager_speed::StateSpeed(inputs, [](float max) {
 		return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameFloatRand(max) : 0.0f;
 	});
-	wallHug->speed = GetSpeedStateSpeed(static_cast<SpeedState>(villager_speed::FinalSpeed(speed, 1.0f)));
+	// Then its own way of going: when it was made, its age, and as an adult its belly, its life and its sex
+	const auto factor = villager_speed::PersonalFactor({
+	    .creationIndex = component->creationIndex,
+	    .age = villager_age::AgeNow(*component),
+	    .grownUpAge = info.grownUpAge,
+	    .oldAge = info.oldAge,
+	    .desireForFood = villager_needs::DesireForFood(component->food),
+	    .life = inputs.life,
+	    .female = info.sex == SexType::Female,
+	});
+	wallHug->speed = GetSpeedStateSpeed(static_cast<SpeedState>(villager_speed::FinalSpeed(speed, factor)));
 }
 
 void villager_reactions::ShowTownBelief(const glm::vec3& centre, PlayerNames player, float belief)
