@@ -67,9 +67,8 @@ struct TextFrame
 	TextRegion box {};
 	uint8_t boxAlpha {0x80};
 	std::vector<TextRun> runs;
-	/// The last $M<n> of the newest text seen this frame (the BINDABLE_ACTION n whose control icon is shown), -1 when
-	/// none. The control icon itself is not drawn yet.
-	int controlIcon {-1};
+	/// The $M<n> codes of the newest text reached this frame, in order: the actions whose control icons the box shows
+	std::vector<int> controlIcons;
 };
 
 /// The width of a text in a font at that font size
