@@ -758,3 +758,6 @@ openblack_setup_and_add_test(test_tree_shadows graphics/test_tree_shadows.cpp)
 openblack_setup_and_add_test(
   test_descriptor_set_tally graphics/test_descriptor_set_tally.cpp
 )
+openblack_setup_and_add_test(
+  test_graphics_backend_names test_graphics_backend_names.cpp
+)
