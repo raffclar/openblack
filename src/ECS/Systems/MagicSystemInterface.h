@@ -181,6 +181,16 @@ public:
 	/// A dispenser of a magic type standing at a point, turned about the vertical; it floats its first bubble once its
 	/// period has passed
 	virtual entt::entity CreateDispenser(glm::vec3 position, MagicType type, float yAngleRadians) = 0;
+	/// A dispenser a script or a land's script makes: a building of its kind standing on the ground at a point, turned
+	/// and scaled, holding no miracle and turned off until a script gives it one and turns it on, with its building's
+	/// period. None for a building that doesn't exist.
+	virtual entt::entity CreateScriptDispenser(glm::vec3 /*position*/, AbodeInfo /*building*/, float /*yAngleRadians*/,
+	                                           float /*scale*/)
+	{
+		return entt::null;
+	}
+	/// A script gives a dispenser a miracle and the turns between its bubbles; with no turns it is turned off
+	virtual void SetDispenserMagic(entt::entity /*dispenser*/, MagicType /*type*/, uint32_t /*turns*/) {}
 	/// For the testbed: a dispenser that has counted its period, floating its bubble now if it has none
 	virtual void ChargeDispenser(entt::entity /*dispenser*/) {}
 	/// The time from a dispenser's bubble being taken to the next, in seconds

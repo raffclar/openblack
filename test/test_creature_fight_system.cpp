@@ -205,3 +205,23 @@ TEST_F(CreatureFightSystemTest, AScriptControlledWinnerMakesNoReaction)
 	EXPECT_TRUE(reactions.made.empty());
 	Locator::reactionSystem::reset();
 }
+
+TEST_F(CreatureFightSystemTest, AScriptReadsAndSetsTheFightHealthInAndOutOfAFight)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Get<CreatureFighting>(second).fighter.health = 0.6f;
+	EXPECT_FLOAT_EQ(fights.GetFightHealth(second), 0.6f);
+	// Set in a fight, the fighter takes it at once
+	fights.SetFightHealth(second, 1.0f);
+	EXPECT_FLOAT_EQ(registry.Get<const CreatureFighting>(second).fighter.health, 1.0f);
+	registry.Get<CreatureFighting>(second).fighter.health = 0.25f;
+	// Out of the fight it stays as the fight left it
+	fights.Withdraw(second);
+	ASSERT_FALSE(registry.AllOf<CreatureFighting>(second));
+	EXPECT_FLOAT_EQ(fights.GetFightHealth(second), 0.25f);
+	// A creature that never fought has full fight health, and keeps whatever a script gives it
+	const auto other = MakeCreature(registry, PlayerNames::PLAYER_THREE, {200.0f, 0.0f, 0.0f});
+	EXPECT_FLOAT_EQ(fights.GetFightHealth(other), 1.0f);
+	fights.SetFightHealth(other, 1.5f);
+	EXPECT_FLOAT_EQ(fights.GetFightHealth(other), 1.5f);
+}

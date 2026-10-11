@@ -176,6 +176,11 @@ float creature_physiology::ShownSize(const Shape& shape)
 	return creature_morph::ClampScale(shape.penSize.value_or(shape.size));
 }
 
+float creature_physiology::AutoScaledSize(float size, float playersSize, float share)
+{
+	return std::min(((playersSize * share) - size) * k_AutoScaleEasing + size, k_AutoScaleLargest);
+}
+
 void creature_physiology::ModifyStrength(Shape& shape, float amount)
 {
 	shape.strength = Clamp01(shape.strength + amount);

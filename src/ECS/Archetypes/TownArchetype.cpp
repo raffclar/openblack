@@ -34,6 +34,7 @@ entt::entity TownArchetype::Create(int id, const glm::vec3& position, PlayerName
 	// What it wants, worked out each turn from its people and buildings
 	registry.Assign<TownDesire>(entity);
 	registry.Assign<TownStats>(entity);
+	registry.Assign<TownResourceTally>(entity);
 	registry.Assign<Transform>(entity, position, glm::mat3(1.0f), glm::vec3(1.0f));
 	auto& registryContext = registry.Context();
 	registryContext.towns.insert({id, entity});

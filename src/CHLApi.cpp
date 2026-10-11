@@ -55,15 +55,19 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Creature/CreatureDesires.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "Creature/LeashRules.h"
 #include "Creature/TemplePen.h"
+#include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/BallArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
+#include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
 #include "ECS/Archetypes/SharkArchetype.h"
+#include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -83,6 +87,7 @@
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HighDetail.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/LivingAction.h"
@@ -108,6 +113,7 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
+#include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/CreatureRemoval.h"
 #include "ECS/DanceRules.h"
@@ -131,15 +137,18 @@
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
+#include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
+#include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
+#include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
@@ -156,6 +165,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
@@ -188,12 +198,14 @@
 #include "Help/ScriptSpirits.h"
 #include "Help/Spirits.h"
 #include "InfoConstants.h"
+#include "LHScriptX/Script.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Magic/ScriptCast.h"
 #include "Physics/Body.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptChallengeSnapshots.h"
+#include "ScriptHeaders/ScriptCreateRules.h"
 #include "ScriptHeaders/ScriptEnums.h"
 #include "ScriptHeaders/ScriptInfluence.h"
 #include "ScriptHeaders/ScriptNameLists.h"
@@ -310,8 +322,15 @@ ScriptCameraModel::ThingLookup FollowedThing(entt::entity thing)
 			}
 		}
 		const auto* wallHug = registry.TryGet<const ecs::components::WallHug>(thing);
+		// A villager is where its drawing glides to this frame, or in the opening hand's grip while it holds it
+		auto drawnAt =
+		    ecs::components::DrawnPosition(transform->position, registry.TryGet<const ecs::components::VillagerPose>(thing));
+		if (const auto* highDetail = registry.TryGet<const ecs::components::HighDetail>(thing); highDetail != nullptr)
+		{
+			drawnAt = ecs::high_detail_rules::DrawnAt(highDetail->heldAt, drawnAt);
+		}
 		return script_camera::FollowedThing {
-		    .point = transform->position + glm::vec3(0.0f, height * 0.5f, 0.0f),
+		    .point = drawnAt + glm::vec3(0.0f, height * 0.5f, 0.0f),
 		    .gameAngle = wallHug != nullptr ? std::optional(wallHug->gameAngle) : std::nullopt,
 		    .height = height,
 		};
@@ -486,6 +505,39 @@ entt::entity CreateScriptVillager(bool child, uint32_t subtype, const glm::vec3&
 	return villager;
 }
 
+/// The point on the ground under where a script asks for a thing
+glm::vec3 OnGround(const glm::vec3& position)
+{
+	return {position.x, Locator::terrainSystem::value().GetHeightAt(glm::vec2(position.x, position.z)), position.z};
+}
+
+/// A one-shot miracle globe a script puts straight into the local player's hand, charged in full and ready, if the hand
+/// is free to take it: the seed, or none
+entt::entity CreateScriptSeedInHand(uint32_t subtype)
+{
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const auto seedType = static_cast<SpellSeedType>(subtype);
+	const auto seed = Locator::magicSystem::value().GiveSeedToHand(player, seedType, magic::k_BasePowerUpLevel, 1.0f);
+	if (seed == entt::null)
+	{
+		return entt::null;
+	}
+	// The player has now had the miracle it casts
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(Locator::infoConstants::value(), seedType),
+	                                                      magic::k_BasePowerUpLevel);
+	if (const auto playerEntity = Locator::playerSystem::value().GetPlayer(player);
+	    registry.Valid(playerEntity) && static_cast<size_t>(type) < ecs::components::Player::k_MagicTypeCount)
+	{
+		if (auto* component = registry.TryGet<ecs::components::Player>(playerEntity))
+		{
+			component->miracles.everEnabled.at(static_cast<size_t>(type)) = true;
+		}
+	}
+	return seed;
+}
+
 entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const glm::vec3& position, float altitude,
                                 float xAngleRadians, float yAngleRadians, const float zAngleRadians, const float scale)
 {
@@ -542,6 +594,57 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		const auto vortex = Locator::vortexSystem::value().Create(position, static_cast<VortexType>(subtype), altitude);
 		return vortex != entt::null ? vortex : static_cast<entt::entity>(0);
 	}
+	case ObjectType::Feature:
+	{
+		const auto& info = Locator::infoConstants::value();
+		if (!script::create_rules::IsRow(subtype, info.feature.size()))
+		{
+			break;
+		}
+		return FeatureArchetype::Create(OnGround(position), static_cast<FeatureInfo>(subtype), yAngleRadians, scale);
+	}
+	case ObjectType::Tree:
+	{
+		// A tree of the land's forests' kinds, in no forest, already as big as it will grow
+		const auto& info = Locator::infoConstants::value();
+		if (!script::create_rules::IsRow(subtype, info.tree.size()))
+		{
+			break;
+		}
+		return TreeArchetype::Create(0, OnGround(position), static_cast<TreeInfo>(subtype), false,
+		                             script::create_rules::TreeAngle(yAngleRadians), scale, scale);
+	}
+	case ObjectType::AnimatedStatic:
+	{
+		const auto& info = Locator::infoConstants::value();
+		if (!script::create_rules::IsRow(subtype, info.animatedStatic.size()))
+		{
+			break;
+		}
+		return AnimatedStaticArchetype::Create(OnGround(position), static_cast<AnimatedStaticInfo>(subtype), yAngleRadians,
+		                                       scale);
+	}
+	case ObjectType::WeatherThing:
+	{
+		// A weather thing of a kind of weather, bringing a small storm of that weather to the place
+		const auto& info = Locator::infoConstants::value();
+		if (!script::create_rules::IsRow(subtype, info.weather.size()) || !Locator::weatherSystem::has_value())
+		{
+			break;
+		}
+		return Locator::weatherSystem::value().CreateWeatherThing(
+		    script::create_rules::WeatherThingStorm(info.weather.at(subtype), OnGround(position)));
+	}
+	case ObjectType::OneShotSpell:
+		// A globe of a seed at its plain miracle, lying on the ground
+		return Locator::magicSystem::value().CreateOneOffSeed(OnGround(position), static_cast<SpellSeedType>(subtype),
+		                                                      magic::k_BasePowerUpLevel, 1.0f);
+	case ObjectType::OneShotSpellInHand:
+		return CreateScriptSeedInHand(subtype);
+	case ObjectType::SpellDispenser:
+		// A dispenser building of the buildings' kinds, holding no miracle and turned off until a script sets it up
+		return Locator::magicSystem::value().CreateScriptDispenser(position, static_cast<AbodeInfo>(subtype), yAngleRadians,
+		                                                           scale);
 	case ObjectType::Animal:
 	case ObjectType::Bird:
 		// Made on its own and held still for the script; openblack makes only the land's birds so far
@@ -1043,13 +1146,54 @@ void GameThingClicked() // 016 GAME_THING_CLICKED
 	Pushb(clicked != nullptr && hand_click::IsThingClicked(*clicked, object));
 }
 
+static bool IsScriptContainer(const ecs::Registry& registry, entt::entity thing);
+static std::vector<entt::entity> ContainerMembers(const ecs::Registry& registry, entt::entity container);
+
+/// A creature given a state plays what the script last gave it to play
+void CreatureCarriesOutScriptPlay(entt::entity creature)
+{
+	auto& mind = Locator::entitiesRegistry::value().Get<ecs::components::CreatureMindState>(creature);
+	const auto agenda = creature_script_play::Agenda(mind.scriptPlay);
+	if (!agenda.has_value())
+	{
+		NotImplemented(mind.scriptPlay.animation);
+		return;
+	}
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().CarryOutForScript(creature, *agenda);
+	}
+}
+
 void SetScriptState() // 017 SET_SCRIPT_STATE
 {
 	const auto state = Pop().intVal;
 	const auto object = PopObject();
-	if (!Locator::entitiesRegistry::value().Valid(object))
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
 	{
 		ScriptMessage("Object no longer valid");
+		return;
+	}
+	// A group's living members each take the state as one would on its own, with no word of those that can't
+	if (IsScriptContainer(registry, object))
+	{
+		for (const auto member : ContainerMembers(registry, object))
+		{
+			if (IsDirectableVillager(member))
+			{
+				auto& living = Locator::livingActionSystem::value();
+				if (state >= 0 && state < static_cast<int32_t>(VillagerStates::_COUNT))
+				{
+					living.VillagerSetScriptState(member, static_cast<VillagerStates>(state));
+				}
+			}
+			else if (registry.Valid(member) && registry.AllOf<ecs::components::CreatureMindState>(member))
+			{
+				CreatureCarriesOutScriptPlay(member);
+			}
+			// TODO(opening): animals in a group
+		}
 		return;
 	}
 	if (IsDirectableVillager(object))
@@ -1063,22 +1207,13 @@ void SetScriptState() // 017 SET_SCRIPT_STATE
 		living.VillagerSetScriptState(object, static_cast<VillagerStates>(state));
 		return;
 	}
-	if (auto* mind = Locator::entitiesRegistry::value().TryGet<ecs::components::CreatureMindState>(object))
+	if (registry.AllOf<ecs::components::CreatureMindState>(object))
 	{
 		// A creature takes no state: it starts playing what the script last gave it to play
-		const auto agenda = creature_script_play::Agenda(mind->scriptPlay);
-		if (!agenda.has_value())
-		{
-			NotImplemented(mind->scriptPlay.animation);
-			return;
-		}
-		if (Locator::creatureMindSystem::has_value())
-		{
-			Locator::creatureMindSystem::value().CarryOutForScript(object, *agenda);
-		}
+		CreatureCarriesOutScriptPlay(object);
 		return;
 	}
-	// TODO(opening): animals and groups of things
+	// TODO(opening): animals
 	NotImplemented();
 }
 
@@ -1384,6 +1519,15 @@ void GetProperty() // 021 GET_PROPERTY
 	}
 	switch (prop)
 	{
+	case script::ObjectPropertyType::CreatureFightHealth:
+		if (!registry.AllOf<ecs::components::Creature>(object))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object not a creature");
+			Pushf(0.0f);
+			return;
+		}
+		Pushf(Locator::creatureFightSystem::has_value() ? Locator::creatureFightSystem::value().GetFightHealth(object) : 1.0f);
+		return;
 	case script::ObjectPropertyType::Flying:
 		// In the physics, thrown, dropped or knocked and not yet at rest
 		Pushb(registry.AllOf<ecs::components::InPhysics>(object));
@@ -1659,6 +1803,19 @@ void SetProperty() // 022 SET_PROPERTY
 	}
 	switch (prop)
 	{
+	case script::ObjectPropertyType::CreatureFightHealth:
+		// Kept as given, even outside 0 to 1, until a fight starts it afresh
+		if (!registry.AllOf<ecs::components::Creature>(object))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object not a creature");
+			CannotSetProperty(prop);
+			return;
+		}
+		if (Locator::creatureFightSystem::has_value())
+		{
+			Locator::creatureFightSystem::value().SetFightHealth(object, value);
+		}
+		return;
 	case script::ObjectPropertyType::Health:
 		if (!IsWorldObject(object))
 		{
@@ -2055,16 +2212,36 @@ void Call() // 026 CALL
 	Pusho(found == entt::null ? 0u : static_cast<uint32_t>(found));
 }
 
+/// CREATE and CREATE_WITH_ANGLE_AND_SCALE: a thing of a type the scripts may create, turned and scaled, which the script
+/// then holds; none for any other type, or when nothing could be made
+void CreateForScript(int32_t type, int32_t subtype, const glm::vec3& position, float yAngleRadians, float scale)
+{
+	if (!script::create_rules::IsCreatableType(type))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid type {}", type);
+		PushObject(entt::null);
+		return;
+	}
+	auto object = CreateScriptObject(static_cast<ObjectType>(type), static_cast<uint32_t>(subtype), position, 0.0f, 0.0f,
+	                                 yAngleRadians, 0.0f, scale);
+	if (object == static_cast<entt::entity>(0))
+	{
+		object = entt::null;
+	}
+	if (object == entt::null)
+	{
+		ScriptMessage("Thing not created");
+	}
+	RegisterCreated(object);
+	PushObject(object);
+}
+
 void Create() // 027 CREATE
 {
 	const auto position = PopVec();
 	const auto subtype = Pop().intVal;
-	const auto type = static_cast<ObjectType>(Pop().intVal);
-
-	const auto object = CreateScriptObject(type, subtype, position, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-	RegisterCreated(object);
-
-	PushObject(object);
+	const auto type = Pop().intVal;
+	CreateForScript(type, subtype, position, 0.0f, 1.0f);
 }
 
 void Random() // 028 RANDOM
@@ -3963,33 +4140,69 @@ void WidescreenTransistionFinished() // 132 WIDESCREEN_TRANSISTION_FINISHED
 	Pushb(Locator::cinematicDirectorSystem::value().IsWideScreenTransitionFinished());
 }
 
+/// The thing a resource native is given, if it is a thing of the world that can hold resources: an error is told
+/// for none or for a container
+std::optional<entt::entity> ResourceThing(entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("No thing for resource");
+		return std::nullopt;
+	}
+	if (!registry.AllOf<ecs::components::Transform>(object) || IsScriptContainer(registry, object))
+	{
+		ScriptMessage("Not object for resource");
+		return std::nullopt;
+	}
+	return object;
+}
+
+/// A script's quantity, a number made whole towards none and taken as unsigned
+uint32_t ResourceQuantity(float quantity)
+{
+	return static_cast<uint32_t>(static_cast<int32_t>(quantity));
+}
+
 void GetResource() // 133 GET_RESOURCE
 {
-	// const auto container = Pop().uintVal;
-	// const auto resource = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto object = PopObject();
+	const auto type = static_cast<ResourceType>(Pop().intVal);
+	const auto thing = ResourceThing(object);
+	if (!thing.has_value() || !Locator::resourceStoreSystem::has_value())
+	{
+		Pushf(0.0f);
+		return;
+	}
+	Pushf(static_cast<float>(Locator::resourceStoreSystem::value().GetResource(*thing, type)));
 }
 
 void AddResource() // 134 ADD_RESOURCE
 {
-	// const auto container = Pop().uintVal;
-	// const auto quantity = Popf();
-	// const auto resource = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto object = PopObject();
+	const auto quantity = ResourceQuantity(Popf());
+	const auto type = static_cast<ResourceType>(Pop().intVal);
+	const auto thing = ResourceThing(object);
+	if (!thing.has_value() || !Locator::resourceStoreSystem::has_value())
+	{
+		Pushf(0.0f);
+		return;
+	}
+	Pushf(static_cast<float>(Locator::resourceStoreSystem::value().AddResource(*thing, type, quantity, std::nullopt)));
 }
 
 void RemoveResource() // 135 REMOVE_RESOURCE
 {
-	// const auto container = Pop().uintVal;
-	// const auto quantity = Popf();
-	// const auto resource = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto object = PopObject();
+	const auto quantity = ResourceQuantity(Popf());
+	const auto type = static_cast<ResourceType>(Pop().intVal);
+	const auto thing = ResourceThing(object);
+	if (!thing.has_value() || !Locator::resourceStoreSystem::has_value())
+	{
+		Pushf(0.0f);
+		return;
+	}
+	Pushf(static_cast<float>(Locator::resourceStoreSystem::value().RemoveResource(*thing, type, quantity)));
 }
 
 void GetTargetRelativePos() // 136 GET_TARGET_RELATIVE_POS
@@ -4636,20 +4849,47 @@ void DetachObjectLeash() // 187 DETACH_OBJECT_LEASH
 	leashes.TakeOff(creature);
 }
 
+/// The creature a creature native is given, if it is one; else the game's complaint
+std::optional<entt::entity> CreatureForNative(entt::entity thing)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (thing == entt::null || !registry.Valid(thing))
+	{
+		ScriptMessage("Thing not found!");
+		return std::nullopt;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(thing))
+	{
+		ScriptMessage("Thing not creature!");
+		return std::nullopt;
+	}
+	return thing;
+}
+
 void SetCreatureOnlyDesire() // 188 SET_CREATURE_ONLY_DESIRE
 {
-	// const auto value = Popf();
-	// const auto desire = Pop().intVal;
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The desire is wanted above all for the seconds given, and most others are held down as long
+	const auto seconds = Popf();
+	const auto desire = Pop().intVal;
+	const auto creature = CreatureForNative(PopObject());
+	if (desire < 0 || desire >= static_cast<int32_t>(creature_desires::k_DesireCount))
+	{
+		ScriptMessage("Invalid desire");
+		return;
+	}
+	if (creature.has_value() && Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().SetOnlyDesire(*creature, static_cast<creature_desires::Desire>(desire), seconds);
+	}
 }
 
 void SetCreatureOnlyDesireOff() // 189 SET_CREATURE_ONLY_DESIRE_OFF
 {
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto creature = CreatureForNative(PopObject());
+	if (creature.has_value() && Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().ClearOnlyDesire(*creature);
+	}
 }
 
 void RestartMusic() // 190 RESTART_MUSIC
@@ -4793,9 +5033,15 @@ void GetSlowestSpeed() // 198 GET_SLOWEST_SPEED
 
 void GetObjectHeld199() // 199 GET_OBJECT_HELD
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// What the player's hand holds, if anything
+	const auto held = Locator::handGrabSystem::has_value() ? Locator::handGrabSystem::value().GetHeld() : std::nullopt;
+	if (!held.has_value() || !Locator::entitiesRegistry::value().Valid(*held))
+	{
+		PushObject(entt::null);
+		return;
+	}
+	Locator::scriptObjects::value().Register(*held, false);
+	PushObject(*held);
 }
 
 void HelpSystemOn() // 200 HELP_SYSTEM_ON
@@ -4893,6 +5139,20 @@ void DevFunction() // 205 DEV_FUNCTION
 	case 3:
 		leashes.SetKnown(*creature, LeashType::Good, true);
 		leashes.SetKnown(*creature, LeashType::Evil, true);
+		break;
+	case 6:
+		// It points out the lesson highlight about it
+		if (Locator::creatureMindSystem::has_value())
+		{
+			Locator::creatureMindSystem::value().PointOutHighlight(*creature);
+		}
+		break;
+	case 7:
+		// How it was last rewarded or punished is forgotten, so that a script can wait for the next time
+		if (Locator::creatureMindSystem::has_value())
+		{
+			Locator::creatureMindSystem::value().ClearInteractionMagnitude(*creature);
+		}
 		break;
 	case 8:
 	case 9:
@@ -5449,16 +5709,13 @@ void ObjectRelativeBelief() // 251 OBJECT_RELATIVE_BELIEF
 
 void CreateWithAngleAndScale() // 252 CREATE_WITH_ANGLE_AND_SCALE
 {
+	// The angle is given in degrees
 	const auto position = PopVec();
 	const auto subtype = Pop().intVal;
-	const auto type = static_cast<ObjectType>(Pop().intVal);
+	const auto type = Pop().intVal;
 	const auto scale = Popf();
-	const auto angle = Popf();
-
-	const entt::entity object = CreateScriptObject(type, subtype, position, 0.0f, 0.0f, angle, 0.0f, scale);
-	RegisterCreated(object);
-
-	PushObject(object);
+	const auto angle = script::create_rules::AngleFromDegrees(Popf());
+	CreateForScript(type, subtype, position, angle, scale);
 }
 
 void SetHelpSystem() // 253 SET_HELP_SYSTEM
@@ -5660,10 +5917,11 @@ void IsLeashedToObject() // 269 IS_LEASHED_TO_OBJECT
 
 void GetInteractionMagnitude() // 270 GET_INTERACTION_MAGNITUDE
 {
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// How strongly the player last rewarded (above 0) or punished (below 0) the creature
+	const auto creature = CreatureForNative(PopObject());
+	Pushf(creature.has_value() && Locator::creatureMindSystem::has_value()
+	          ? Locator::creatureMindSystem::value().GetInteractionMagnitude(*creature)
+	          : 0.0f);
 }
 
 void IsCreatureAvailable() // 271 IS_CREATURE_AVAILABLE
@@ -5693,19 +5951,54 @@ void CreateHighlight() // 272 CREATE_HIGHLIGHT
 
 void GetObjectHeld273() // 273 GET_OBJECT_HELD
 {
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// What a creature holds in its hand, if anything
+	const auto creature = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (creature == entt::null || !registry.Valid(creature))
+	{
+		ScriptMessage("No creature");
+		PushObject(entt::null);
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(creature))
+	{
+		ScriptMessage("Not creature");
+		PushObject(entt::null);
+		return;
+	}
+	const auto held = Locator::creatureObjectActionSystem::has_value()
+	                      ? Locator::creatureObjectActionSystem::value().GetHeld(creature)
+	                      : std::nullopt;
+	if (!held.has_value())
+	{
+		PushObject(entt::null);
+		return;
+	}
+	Locator::scriptObjects::value().Register(*held, false);
+	PushObject(*held);
 }
 
 void GetActionCount() // 274 GET_ACTION_COUNT
 {
-	// const auto creature = Pop().uintVal;
-	// const auto action = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// How many times a creature has carried out an action (by the game's numbering) to its end
+	const auto creature = PopObject();
+	const auto action = Pop().uintVal;
+	auto& registry = Locator::entitiesRegistry::value();
+	if (creature == entt::null || !registry.Valid(creature))
+	{
+		ScriptMessage("No creature");
+		Pushf(0.0f);
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(creature))
+	{
+		ScriptMessage("Not creature");
+		Pushf(0.0f);
+		return;
+	}
+	Pushf(Locator::creatureMindSystem::has_value()
+	          ? static_cast<float>(Locator::creatureMindSystem::value().GetActionCount(creature, action))
+	          : 0.0f);
 }
 
 void GetObjectLeashType() // 275 GET_OBJECT_LEASH_TYPE
@@ -6430,10 +6723,19 @@ void SetTownDesireBoost() // 341 SET_TOWN_DESIRE_BOOST
 
 void IsLockedInteraction() // 342 IS_LOCKED_INTERACTION
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// Whether the player's hand is locked onto the thing: held to a creature with the button, or gripping a totem
+	const auto object = PopObject();
+	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
+	{
+		ScriptMessage("Object no longer valid");
+		Pushb(false);
+		return;
+	}
+	const bool heldCreature =
+	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == object;
+	const bool grippedTotem =
+	    Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped() == object;
+	Pushb(heldCreature || grippedTotem);
 }
 
 void SetCreatureName() // 343 SET_CREATURE_NAME
@@ -6579,11 +6881,32 @@ void GameSetMana() // 355 GAME_SET_MANA
 
 void SetMagicProperties() // 356 SET_MAGIC_PROPERTIES
 {
-	// const auto duration = Popf();
-	// const auto magicType = Pop().intVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A dispenser is given the miracle it holds and the seconds between its bubbles; for none it keeps its building's
+	// period, and with no turns between them it is turned off
+	const auto seconds = Popf();
+	const auto number = Pop().intVal;
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Thing not valid");
+		return;
+	}
+	const auto* dispenser = registry.TryGet<const ecs::components::SpellDispenser>(object);
+	if (dispenser == nullptr)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Thing must be a dispenser");
+		return;
+	}
+	const auto type = script::create_rules::MagicTypeFromScript(number);
+	if (!type.has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid magic type {}", number);
+		return;
+	}
+	const auto& building = Locator::infoConstants::value().abode.at(static_cast<size_t>(dispenser->building));
+	const auto turns = script::create_rules::DispenserTurns(seconds, building.timeEachMobileObjectTakesToProduce);
+	Locator::magicSystem::value().SetDispenserMagic(object, *type, turns);
 }
 
 void SetGameSound() // 357 SET_GAME_SOUND
@@ -7160,9 +7483,17 @@ void SetInterfaceCitadel() // 414 SET_INTERFACE_CITADEL
 
 void MapScriptFunction() // 415 MAP_SCRIPT_FUNCTION
 {
-	// const auto command = PopString();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A line of a land's script, carried out as the land's script would
+	const auto line = PopString();
+	try
+	{
+		lhscriptx::Script script;
+		script.Load(line);
+	}
+	catch (const std::runtime_error& error)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Map script line \"{}\" failed: {}", line, error.what());
+	}
 }
 
 void WithinRotation() // 416 WITHIN_ROTATION
@@ -7499,11 +7830,19 @@ void GetTemplePosition() // 451 GET_TEMPLE_POSITION
 
 void CreatureAutoscale() // 452 CREATURE_AUTOSCALE
 {
-	// const auto size = Popf();
-	// const auto creature = Pop().uintVal;
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Keeps a creature growing or shrinking towards a share of the player's creature's size, or stops it
+	const auto share = Popf();
+	const auto creature = PopObject();
+	const auto enable = Pop().intVal != 0;
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* body =
+	    creature != entt::null && registry.Valid(creature) ? registry.TryGet<ecs::components::Creature>(creature) : nullptr;
+	if (body == nullptr)
+	{
+		ScriptMessage("Thing should be valid!");
+		return;
+	}
+	body->autoScale = enable ? std::optional(share) : std::nullopt;
 }
 
 void GetSpellIconInTemple() // 453 GET_SPELL_ICON_IN_TEMPLE
