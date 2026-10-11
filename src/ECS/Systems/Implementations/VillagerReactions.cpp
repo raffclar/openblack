@@ -380,6 +380,10 @@ void villager_reactions::Start(entt::entity villager, Reaction type, LivingReact
 		// It waits for the one held, a mate to be
 		SetTop(*action, VillagerStates::WaitForMate);
 		break;
+	case Reaction::ReactToBreeder:
+		// It goes to the breeder to make love
+		SetTop(*action, VillagerStates::ReactToBreeder);
+		break;
 	case Reaction::ReactToFire:
 		// The fire's own states take over, from the object burning
 		if (Locator::reactionSystem::has_value())

@@ -66,6 +66,7 @@
 #include "ObjectMeasures.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerAnimate.h"
+#include "VillagerBreeding.h"
 #include "VillagerBuild.h"
 #include "VillagerFisherman.h"
 #include "VillagerForester.h"
@@ -552,9 +553,11 @@ bool SetAboutWork(LivingAction& action, VillagerDisciple type)
 		return villager_forester::CheckSatisfyWoodDesire(action) == 1;
 	case Fisherman:
 		return villager_fisherman::FishermanLookForWater(action) == 1;
-	// TODO(disciples): the other kinds' work isn't in openblack yet (see the handover): farming for farmers, breeding,
-	// supplying workshops, trading and worship. Until it is they find none and wait by the town centre; a missionary
-	// lives as an ordinary villager of its town.
+	case Breeder:
+		return villager_breeding::SetupBreederDisciple(action);
+	// TODO(disciples): the other kinds' work isn't in openblack yet (see the handover): farming for farmers, supplying
+	// workshops, trading and worship. Until it is they find none and wait by the town centre; a missionary lives as an ordinary
+	// villager of its town.
 	default:
 		return false;
 	}
@@ -569,6 +572,7 @@ bool LandingStateIsThere(VillagerStates state)
 	case VillagerStates::DecideWhatToDo:
 	case VillagerStates::ScriptInCrowd:
 	case VillagerStates::ForesterArrivesAtForest:
+	case VillagerStates::BreederJustLanded:
 		return true;
 	default:
 		return false;
