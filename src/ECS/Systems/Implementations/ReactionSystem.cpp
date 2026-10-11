@@ -67,6 +67,7 @@
 #include "VillagerFire.h"
 #include "VillagerFood.h"
 #include "VillagerForester.h"
+#include "VillagerMourning.h"
 #include "VillagerPhysics.h"
 #include "VillagerReactions.h"
 
@@ -447,6 +448,13 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 		const auto kind = ecs::villager_forester::ReactToWoodPriority(living, reaction.source.initiator, info->priority);
 		return villager_reaction::Priority(static_cast<uint8_t>(std::min<uint32_t>(kind, 255)),
 		                                   Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
+	}
+	// A villager heeds a death unless its town has a working graveyard, or enough heed it already
+	if (reaction.source.type == Reaction::ReactToDeath && registry.AllOf<Villager>(living))
+	{
+		const auto kind = ecs::villager_mourning::Priority(living, reaction.source.initiator, reaction.id,
+		                                                   static_cast<uint8_t>(std::min<uint32_t>(info->priority, 255)));
+		return villager_reaction::Priority(kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
 	}
 	// A villager weighs a fire by its own rule: how far the fire reaches of its fiercest, and whether it fights it already
 	if (reaction.source.type == Reaction::ReactToFire && registry.AllOf<Villager>(living))

@@ -48,6 +48,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
+#include "ECS/Components/RisingSoul.h"
 #include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/SkinOverride.h"
 #include "ECS/Components/StoragePit.h"
@@ -803,7 +804,54 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	UploadBonePalette();
 	UploadPartialBuilds();
 	UploadHeldObjects();
+	UploadSouls();
 	return fits;
+}
+
+void RenderingSystem::UploadSouls()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	_renderContext.soulDraws.clear();
+	_renderContext.soulInstances.clear();
+	registry.Each<const RisingSoul, const Transform>([this](const RisingSoul& soul, const Transform& transform) {
+		if (soul.bones.empty())
+		{
+			return;
+		}
+		_renderContext.soulDraws.push_back({.meshId = soul.mesh,
+		                                    .instance = static_cast<uint32_t>(_renderContext.soulInstances.size()),
+		                                    .bones = soul.bones,
+		                                    .alpha = static_cast<float>(soul.alpha) / 255.0f});
+		const auto model = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
+		_renderContext.soulInstances.push_back({.model = model, .look = glm::vec4(0.0f)});
+	});
+	const auto count = static_cast<uint32_t>(_renderContext.soulInstances.size());
+	if (count == 0)
+	{
+		return;
+	}
+	if (_renderContext.soulCapacity < count)
+	{
+		if (bgfx::isValid(toBgfx(_renderContext.soulInstanceBuffer)))
+		{
+			bgfx::destroy(toBgfx(_renderContext.soulInstanceBuffer));
+		}
+		bgfx::VertexLayout layout;
+		layout.begin()
+		    .add(bgfx::Attrib::TexCoord7, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord6, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord5, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord4, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord3, 4, bgfx::AttribType::Float)
+		    .end();
+		// Room for a few more dying at once without making it again
+		const uint32_t capacity = count + 8;
+		_renderContext.soulInstanceBuffer = graphics::fromBgfx(bgfx::createDynamicVertexBuffer(capacity, layout));
+		_renderContext.soulCapacity = capacity;
+	}
+	bgfx::update(
+	    toBgfx(_renderContext.soulInstanceBuffer), 0,
+	    bgfx::copy(_renderContext.soulInstances.data(), static_cast<uint32_t>(count * sizeof(RenderContext::ObjectInstance))));
 }
 
 void RenderingSystem::UploadHeldObjects()

@@ -33,6 +33,7 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
+#include "ECS/VillagerAfterDeath.h"
 #include "ECS/VillagerDrawRules.h"
 #include "Graphics/ViewFrustum.h"
 #include "InfoConstants.h"
@@ -138,6 +139,8 @@ void LivingActionSystem::UpdatePoses(uint32_t turn, float turnFraction)
 	const auto& animations = Locator::resources::value().GetAnimations();
 	auto& meshes = Locator::resources::value().GetMeshes();
 	const auto& states = Locator::infoConstants::value().villagerStateTable;
+	// The souls of the dead rise by the same clock
+	ecs::villager_after_death::MoveSouls(elapsed);
 
 	registry.Each<const Villager, const LivingAction, const Mesh, const Transform, VillagerPose>(
 	    [&](entt::entity entity, const Villager& /*unused*/, const LivingAction& action, const Mesh& mesh,
