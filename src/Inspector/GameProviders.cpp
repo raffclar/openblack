@@ -1756,12 +1756,64 @@ std::optional<AdvisorDepths> MeasureAdvisorDepths(const help::spirits::AdvisorMo
 	return depths.vertices > 0 ? std::optional(depths) : std::nullopt;
 }
 
+/// Where an advisor hovers and clings on the screen, and where its bones are drawn there, even off the screen
+void AddAdvisorPlacement(Json& item, const ecs::systems::AdvisorSystemInterface& advisors,
+                         const ecs::systems::AdvisorSystemInterface::Draw& draw, const Camera* camera)
+{
+	const auto& controller = advisors.GetController();
+	const auto& dude = controller.Dude(draw.advisor);
+	const auto& screen = controller.GetScreen();
+	const auto halfWidth = static_cast<float>(screen.HalfWidth());
+	const auto hover = dude.Hover();
+	item["state"] = dude.State();
+	item["hover"] = {hover.x, hover.y};
+	// Both of the hover's axes are measured in half the screen's width from its middle
+	item["hover_pixel"] = {(hover.x + 1.0f) * halfWidth, hover.y * halfWidth + static_cast<float>(screen.HalfHeight())};
+	item["cling_edge"] = static_cast<int>(dude.ClingEdge());
+	item["cling_target"] = {dude.ClingTarget().x, dude.ClingTarget().y};
+	if (camera == nullptr || draw.bones.empty())
+	{
+		return;
+	}
+	const auto viewProjection = camera->GetViewProjectionMatrix();
+	const auto toPixel = [&viewProjection, &screen](const glm::mat4& bone) -> std::optional<glm::vec2> {
+		const auto clip = viewProjection * bone[3];
+		if (clip.w <= 0.0f)
+		{
+			return std::nullopt;
+		}
+		const auto ndc = glm::vec2(clip) / clip.w;
+		return glm::vec2((ndc.x + 1.0f) * 0.5f * static_cast<float>(screen.width),
+		                 (1.0f - ndc.y) * 0.5f * static_cast<float>(screen.height));
+	};
+	if (const auto root = toPixel(draw.bones.front()))
+	{
+		item["root_pixel"] = {root->x, root->y};
+	}
+	// How far up and down the screen its bones reach
+	float top = std::numeric_limits<float>::max();
+	float bottom = std::numeric_limits<float>::lowest();
+	for (const auto& bone : draw.bones)
+	{
+		if (const auto pixel = toPixel(bone))
+		{
+			top = std::min(top, pixel->y);
+			bottom = std::max(bottom, pixel->y);
+		}
+	}
+	if (top <= bottom)
+	{
+		item["bones_pixel_y"] = {top, bottom};
+	}
+}
+
 std::unique_ptr<ProviderInterface> AdvisorsProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("advisors");
 	provider->Add(Query("draws",
 	                    "What is drawn of the advisors this frame: near the screen or in the world, alpha, how far out in "
-	                    "the world, and how close their posed meshes come to the camera beside its near plane",
+	                    "the world, where they hover and cling on the screen and where their bones are drawn, and how "
+	                    "close their posed meshes come to the camera beside its near plane",
 	                    {}, ResultKind::List),
 	              Serve<Locator::advisorSystem>(
 	                  "the advisors", [](const ecs::systems::AdvisorSystemInterface& advisors, const QueryContext& /*c*/) {
@@ -1776,6 +1828,7 @@ std::unique_ptr<ProviderInterface> AdvisorsProvider()
 			                  {
 				                  item["root"] = Point(glm::vec3(draw.bones.front()[3]));
 			                  }
+			                  AddAdvisorPlacement(item, advisors, draw, camera);
 			                  const auto* model = advisors.GetModel(draw.advisor);
 			                  if (camera != nullptr && model != nullptr)
 			                  {
