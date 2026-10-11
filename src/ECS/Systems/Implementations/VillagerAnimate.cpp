@@ -21,6 +21,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Dances.h"
@@ -187,10 +188,18 @@ int32_t villager_animate::StateClip(entt::entity entity)
 		// Chosen by the physics as it puts the villager in these states
 		return -1;
 	case animation::ClipChoice::Dying:
-		// TODO(villagers): the way it landed decides whether it falls on its back
-		return Clip(animation::DyingClip(villager_clips::IsOnWater(registry.Get<const Transform>(entity).position), false));
+	{
+		// One a fall killed lies as it landed, on its back or not
+		const auto* death = registry.TryGet<const VillagerDeath>(entity);
+		return Clip(animation::DyingClip(villager_clips::IsOnWater(registry.Get<const Transform>(entity).position),
+		                                 death != nullptr && death->onBack));
+	}
 	case animation::ClipChoice::Dead:
-		return Clip(animation::DeadClip(villager_clips::IsOnWater(registry.Get<const Transform>(entity).position), false));
+	{
+		const auto* death = registry.TryGet<const VillagerDeath>(entity);
+		return Clip(animation::DeadClip(villager_clips::IsOnWater(registry.Get<const Transform>(entity).position),
+		                                death != nullptr && death->onBack));
+	}
 	case animation::ClipChoice::Kissing:
 		return Clip(animation::KissingClip(IsWoman(villager)));
 	case animation::ClipChoice::Forestering:
