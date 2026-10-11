@@ -33,6 +33,7 @@
 #include "3D/SkyDome.h"
 #include "Enums.h"
 #include "Graphics/CreatureShadow.h"
+#include "Graphics/GroundShadow.h"
 #include "Graphics/HandShadow.h"
 #include "Graphics/PartialBuildCap.h"
 #include "Graphics/RenderPass.h"
@@ -228,6 +229,11 @@ private:
 	void DrawCreatureShadowPass(const DrawSceneDesc& drawDesc) const;
 	/// Hands the creatures' shadows to a program that takes them, or none where it isn't to receive them
 	void SetCreatureShadowUniforms(const ShaderProgram& program, bool receives) const;
+	/// Draws the coverage of the silhouettes of the villagers a script draws in high detail, flattened onto the ground,
+	/// for their shadows (see GroundShadow)
+	void DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const;
+	/// Hands the high-detail villagers' shadows to the land's program, or none where it isn't to receive them
+	void SetGroundShadowUniforms(const ShaderProgram& program, bool receives) const;
 	/// The uniforms the draws of meshes set, in the order of their names in the renderer
 	enum class MeshUniform : uint8_t
 	{
@@ -397,6 +403,18 @@ private:
 	/// x: how much a fully covered texel darkens, y: where along the light the shadow starts
 	mutable std::array<glm::vec4, CreatureShadow::k_MaxShadows> _creatureShadowParameters {};
 	mutable uint8_t _creatureShadowCount {0};
+	/// The high-detail villagers' coverage samples, a slot each, and the shadows of the frame being drawn: where the land
+	/// falls on each, its opacity (x, 0 to 255), how far along the sun's way the land starts taking it (y) and its slot
+	/// (z), and the extent of its silhouette across x and z (low in xy, high in zw)
+	std::unique_ptr<FrameBuffer> _groundShadowFrameBuffer;
+	mutable std::array<glm::mat4, GroundShadow::k_MaxShadows> _groundShadowMatrices {};
+	mutable std::array<glm::vec4, GroundShadow::k_MaxShadows> _groundShadowParameters {};
+	mutable std::array<glm::vec4, GroundShadow::k_MaxShadows> _groundShadowBounds {};
+	mutable uint8_t _groundShadowCount {0};
+	/// The points of a high-detail villager's body in the world, and their sample points, made afresh for each
+	mutable std::vector<glm::vec3> _groundShadowPoints;
+	mutable std::vector<glm::vec2> _groundShadowSamples;
+	mutable std::vector<uint16_t> _groundShadowIndices;
 	/// The caps over the broken buildings' cut walls, by primitive and cut height; made afresh when a cut moves
 	mutable std::map<std::pair<const void*, float>, Cap> _caps;
 	/// The land's light this frame, and the 256 by 1 texture the terrain reads it from

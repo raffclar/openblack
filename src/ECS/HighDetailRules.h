@@ -134,9 +134,9 @@ enum class Shadow : uint8_t
 {
 	/// A blob under each foot, as every villager has
 	FootBlobs,
-	/// While a script draws it in high detail: its silhouette, in the pose it is drawn in, cast from the game's fixed
-	/// far sun onto the land, as a creature's shadow is, and no foot blobs. Once the script lets it go it casts foot
-	/// blobs again.
+	/// While a script draws it in high detail: its silhouette, in the pose of the clip it plays, flattened onto the
+	/// land from the game's fixed far sun (graphics::GroundShadow), and no foot blobs. Once the script lets it go it
+	/// casts foot blobs again.
 	Projected,
 };
 

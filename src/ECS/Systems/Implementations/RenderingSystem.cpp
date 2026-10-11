@@ -53,6 +53,7 @@
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Swayable.h"
 #include "ECS/Components/Temple.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Translucent.h"
 #include "ECS/Components/Tree.h"
@@ -66,6 +67,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
+#include "ECS/TownDesireFlags.h"
 #include "Game.h"
 #include "Graphics/BonePalette.h"
 #include "Graphics/DebugLines.h"
@@ -597,6 +599,17 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 
+		    // A flag over a town's store carries little snow, and isn't there at all while it doesn't show
+		    if (const auto* flag = registry.TryGet<const TownDesireFlag>(entity); flag != nullptr)
+		    {
+			    look.w = openblack::ecs::town_desire_flags::k_SnowCap;
+			    if (!flag->shown)
+			    {
+				    look.z = 1.0f;
+				    modelMatrix = glm::mat4(0.0f);
+			    }
+		    }
+
 		    // A body sunk wholly under the sea isn't drawn in any pass, its shadow included
 		    if (!placed.has_value())
 		    {
@@ -648,7 +661,16 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		            openblack::ecs::high_detail_rules::Shadow::Projected &&
 		        look.z != 1.0f)
 		    {
-			    _renderContext.highDetailDraws.push_back({.entity = entity, .mesh = drawnMesh, .model = modelMatrix});
+			    // Its shadow is cast by its model as the villager itself turns, before the body's own easing
+			    auto castModel = modelMatrix;
+			    if (villagerPose != nullptr && villagerPose->drawnHeading.has_value() &&
+			        villagerPose->easedHeading.has_value() && drawn == nullptr)
+			    {
+				    const auto turned = glm::mat4(openblack::ecs::villager_draw::RotationOf(*villagerPose->easedHeading));
+				    castModel = glm::scale(glm::translate(turned, drawnAt * glm::mat3(turned)), transform.scale);
+			    }
+			    _renderContext.highDetailDraws.push_back(
+			        {.entity = entity, .mesh = drawnMesh, .model = modelMatrix, .castModel = castModel});
 		    }
 		    if (slots->second.perEntity && placed.has_value())
 		    {

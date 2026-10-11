@@ -87,6 +87,9 @@ public:
 	/// A tooltip forced to show at once, with a number written into its words (as the share of a town's people
 	/// worshipping): a tooltip that has one shows the latest number given
 	void Force(uint32_t index, float number);
+	/// A tooltip of words only, shown in another tooltip's words with a number written into them (as a town's flag shows
+	/// its own desire under the tooltip for a need)
+	void SubmitInWords(uint32_t index, uint32_t words, float number);
 	/// Ends the turn: keeps the tooltip submitted, or one lingering after it was, and ends any other
 	void ProcessTurn();
 	/// Fades the shown tooltip in or out
@@ -101,6 +104,8 @@ public:
 		float alpha;
 		/// The number its words show, for one given a number
 		std::optional<float> number;
+		/// The tooltip whose words it shows instead of its own, for one given other words
+		std::optional<uint32_t> words;
 	};
 	[[nodiscard]] std::optional<Shown> GetShown() const;
 
@@ -138,8 +143,14 @@ private:
 	/// How many times each tooltip has been shown afresh, which is how many seconds it takes to fade in
 	std::array<uint32_t, k_Count> _timesShown {};
 	std::optional<Icon> _icon;
-	/// The tooltip given a number, and the latest number
-	std::optional<std::pair<uint32_t, float>> _number;
+	/// The tooltip given a number, the latest number, and the words it is shown in when not its own
+	struct Numbered
+	{
+		uint32_t index;
+		float number;
+		std::optional<uint32_t> words;
+	};
+	std::optional<Numbered> _number;
 };
 
 } // namespace openblack::gui

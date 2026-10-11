@@ -29,6 +29,8 @@ public:
 	float RecomputeDesire(entt::entity town, TownDesireInfo desire) override;
 	[[nodiscard]] TownDesireInfo GetMostWanted(entt::entity town) const override;
 	void SetBoost(entt::entity town, TownDesireInfo desire, float boost, bool resort) override;
+	void UpdateFlags(float seconds) override;
+	[[nodiscard]] std::optional<FlagToolTip> GetFlagToolTip(entt::entity flag) const override;
 };
 
 } // namespace openblack::ecs::systems

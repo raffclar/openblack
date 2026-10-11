@@ -37,6 +37,8 @@ enum class RenderPass : uint8_t
 	HandShadow,
 	/// The creatures' silhouettes from the light, side by side, for their shadows
 	CreatureShadow,
+	/// The coverage of the silhouettes of the villagers a script draws in high detail, flattened onto the ground
+	GroundShadow,
 	/// The sky of the sea's reflection, drawn first into its target
 	ReflectionSky,
 	Reflection,
@@ -74,6 +76,7 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Temple Map Pass",             //
     "Hand Shadow Pass",            //
     "Creature Shadow Pass",        //
+    "Ground Shadow Pass",          //
     "Reflection Sky Pass",         //
     "Reflection Pass",             //
     "Reflection Translucent Pass", //
