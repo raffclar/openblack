@@ -44,6 +44,8 @@ enum class SoundObject : int32_t
 	PolarBear = 11,
 	Buffalo = 12,
 	Cow = 13,
+	/// A building: a crèche's children at play
+	Abode = 19,
 	Tree = 20,
 	Tortoise = 28,
 	Sheep = 29,

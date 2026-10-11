@@ -1426,7 +1426,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Town::cannotHaveWorshipSite>("cannotHaveWorshipSite")
 	    .Field<&components::Town::congregationPos>("congregationPos")
 	    .Field<&components::Town::emergencyTurn>("emergencyTurn")
-	    .Field<&components::Town::graveyard>("graveyard");
+	    .Field<&components::Town::graveyard>("graveyard")
+	    .Field<&components::Town::creche>("creche");
 	Reflect<components::TownAggression>(context).Field<&components::TownAggression::record>("record");
 	Reflect<components::TownArtefact>(context)
 	    .Field<&components::TownArtefact::town>("town")
@@ -1553,7 +1554,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Villager::foodSpeedUp>("foodSpeedUp")
 	    .Field<&components::Villager::creationIndex>("creationIndex")
 	    .Field<&components::Villager::pregnancy>("pregnancy")
-	    .Field<&components::Villager::mother>("mother");
+	    .Field<&components::Villager::mother>("mother")
+	    .Field<&components::Villager::crechePath>("crechePath")
+	    .Field<&components::Villager::crecheLeg>("crecheLeg");
 	Reflect<components::VillagerDeath>(context)
 	    .Field<&components::VillagerDeath::turnsLeft>("turnsLeft")
 	    .Field<&components::VillagerDeath::skeleton>("skeleton")

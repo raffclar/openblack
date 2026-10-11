@@ -41,8 +41,9 @@ uint32_t WomanSpecial(components::LivingAction& action);
 /// Going to bed: when the town feels sleep with all its heart, a woman at home with a male of her home in, or the women
 /// at home with a man going to bed, may conceive
 void BedTimeConceptions(entt::entity villager);
-/// A villager dies or goes: the children whose mother it was lose her
-void OrphanChildrenOf(entt::entity villager);
+/// A villager dies or leaves its town: the children of the town whose mother it was lose her, those about mourning her
+/// first
+void OrphanChildrenOf(entt::entity villager, entt::entity town);
 
 /// What a child does: home when it has grown or is hungry, what its town wants of a child, or follow its mother
 uint32_t ChildDecideWhatToDo(components::LivingAction& action);
@@ -65,6 +66,11 @@ uint32_t StartsGivingBirth(components::LivingAction& action);
 uint32_t GivingBirth(components::LivingAction& action);
 uint32_t GivenBirth(components::LivingAction& action);
 uint32_t ChildFollowsMother(components::LivingAction& action);
+/// A child at its town's crèche: by day it strolls along the crèche's paths, at night it goes home once its home is
+/// lived in again
+uint32_t ChildAtCreche(components::LivingAction& action);
+/// A child mourns its mother, then goes home
+uint32_t MournMother(components::LivingAction& action);
 
 uint32_t BreederDisciple(components::LivingAction& action);
 bool EnterBreeder(components::LivingAction& action, VillagerStates previous, VillagerStates next);
