@@ -102,7 +102,7 @@ struct WorldCameraFrame
 	/// The camera takes nothing from the player, or waits for every input to be let go
 	bool inputOff {false};
 	bool blocked {false};
-	/// The cursor from the screen's middle, as camera_drag::NormalisedCursor
+	/// The cursor from the middle of the edge controls' area, as camera_drag::AreaCursor
 	glm::vec2 cursor {0.0f};
 	/// The computer's clock, for the cross's blink
 	uint32_t tickMs {0};

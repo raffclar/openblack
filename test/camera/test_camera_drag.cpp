@@ -76,9 +76,9 @@ TEST(CameraDrag, NothingIsDecidedUntilTheMouseMovesFarEnough)
 	EXPECT_FALSE(drag.GetMode().has_value());
 	EXPECT_EQ(drag.GetTricons(), tricon::k_Rotate | tricon::k_Turning);
 	// 20 pixels down a 1280 wide screen is under a fiftieth
-	drag.Move({0, 20}, k_Screen, k_Screen.y, 1100, true);
+	drag.Move({0, 20}, EdgeAreaOf(k_Screen, false), 1100, true);
 	EXPECT_FALSE(drag.GetMode().has_value());
-	drag.Move({0, 10}, k_Screen, k_Screen.y, 1150, true);
+	drag.Move({0, 10}, EdgeAreaOf(k_Screen, false), 1150, true);
 	ASSERT_TRUE(drag.GetMode().has_value());
 	EXPECT_EQ(*drag.GetMode(), DragMode::EdgeRotate);
 	EXPECT_EQ(drag.GetTricons(), tricon::k_Rotate);
@@ -88,17 +88,17 @@ TEST(CameraDrag, AQuickDragFromTheSideTowardsTheMiddlePans)
 {
 	DragClassifier quick;
 	quick.Start(IdleTricons({0.47f, 0.0f}, true, false), {0.47f, 0.0f}, 1000);
-	quick.Move({-40, 0}, k_Screen, k_Screen.y, 1100, true);
+	quick.Move({-40, 0}, EdgeAreaOf(k_Screen, false), 1100, true);
 	EXPECT_EQ(quick.GetMode(), DragMode::Pan);
 
 	DragClassifier slow;
 	slow.Start(IdleTricons({0.47f, 0.0f}, true, false), {0.47f, 0.0f}, 1000);
-	slow.Move({-40, 0}, k_Screen, k_Screen.y, 1301, true);
+	slow.Move({-40, 0}, EdgeAreaOf(k_Screen, false), 1301, true);
 	EXPECT_EQ(slow.GetMode(), DragMode::EdgeRotate);
 
 	DragClassifier outwards;
 	outwards.Start(IdleTricons({-0.47f, 0.0f}, true, false), {-0.47f, 0.0f}, 1000);
-	outwards.Move({-40, 0}, k_Screen, k_Screen.y, 1100, true);
+	outwards.Move({-40, 0}, EdgeAreaOf(k_Screen, false), 1100, true);
 	EXPECT_EQ(outwards.GetMode(), DragMode::EdgeRotate);
 }
 
@@ -107,13 +107,13 @@ TEST(CameraDrag, AtTheTopUpAndDownTiltsAndAcrossTurns)
 	const auto top = IdleTricons({0.0f, -0.495f}, true, false);
 	DragClassifier upDown;
 	upDown.Start(top, {0.0f, -0.495f}, 0);
-	upDown.Move({0, -40}, k_Screen, k_Screen.y, 500, true);
+	upDown.Move({0, -40}, EdgeAreaOf(k_Screen, false), 500, true);
 	EXPECT_EQ(upDown.GetMode(), DragMode::PitchFromTop);
 	EXPECT_EQ(upDown.GetTricons(), tricon::k_Pitch);
 
 	DragClassifier acrossTop;
 	acrossTop.Start(top, {0.0f, -0.495f}, 0);
-	acrossTop.Move({40, 0}, k_Screen, k_Screen.y, 500, true);
+	acrossTop.Move({40, 0}, EdgeAreaOf(k_Screen, false), 500, true);
 	EXPECT_EQ(acrossTop.GetMode(), DragMode::EdgeRotate);
 }
 
@@ -122,24 +122,24 @@ TEST(CameraDrag, AQuickTiltDownOverLandPans)
 	const auto bottom = IdleTricons({0.0f, 0.495f}, true, false);
 	DragClassifier quick;
 	quick.Start(bottom, {0.0f, 0.495f}, 0);
-	quick.Move({0, 40}, k_Screen, k_Screen.y, 50, true);
+	quick.Move({0, 40}, EdgeAreaOf(k_Screen, false), 50, true);
 	EXPECT_EQ(quick.GetMode(), DragMode::Pan);
 
 	DragClassifier slow;
 	slow.Start(bottom, {0.0f, 0.495f}, 0);
-	slow.Move({0, 40}, k_Screen, k_Screen.y, 80, true);
+	slow.Move({0, 40}, EdgeAreaOf(k_Screen, false), 80, true);
 	EXPECT_EQ(slow.GetMode(), DragMode::Pitch);
 }
 
 TEST(CameraDrag, EdgeRotateHoldsTheCursorOnTheRing)
 {
 	// From the middle of the right side, straight in to the middle of the screen
-	const auto step = EdgeRotate({640, 512}, {1216, 512}, k_Screen, k_Screen.y);
+	const auto step = EdgeRotate({640, 512}, {1216, 512}, EdgeAreaOf(k_Screen, false));
 	// A cursor right on the middle has no direction, and stays in the middle
 	EXPECT_EQ(step.cursor, glm::ivec2(640, 512));
 
 	// Far out to the right, it comes in to nine tenths of the half width
-	const auto out = EdgeRotate({1280, 512}, {1216, 512}, k_Screen, k_Screen.y);
+	const auto out = EdgeRotate({1280, 512}, {1216, 512}, EdgeAreaOf(k_Screen, false));
 	EXPECT_EQ(out.cursor, glm::ivec2(1216, 512));
 	EXPECT_NEAR(out.angle, 0.0f, 1e-6f);
 }
@@ -147,11 +147,11 @@ TEST(CameraDrag, EdgeRotateHoldsTheCursorOnTheRing)
 TEST(CameraDrag, EdgeRotateTurnsByTheAngleSweptRoundTheMiddle)
 {
 	// A quarter of the way round, from the right to the bottom, clockwise on the screen
-	const auto step = EdgeRotate({640, 1024}, {1216, 512}, k_Screen, k_Screen.y);
+	const auto step = EdgeRotate({640, 1024}, {1216, 512}, EdgeAreaOf(k_Screen, false));
 	EXPECT_EQ(step.cursor, glm::ivec2(640, 973));
 	EXPECT_NEAR(step.angle, -glm::half_pi<float>(), 1e-5f);
 	// Across the top, the turn takes the short way round
-	const auto across = EdgeRotate({600, 51}, {680, 51}, k_Screen, k_Screen.y);
+	const auto across = EdgeRotate({600, 51}, {680, 51}, EdgeAreaOf(k_Screen, false));
 	EXPECT_LT(std::abs(across.angle), 0.2f);
 }
 
@@ -200,7 +200,7 @@ constexpr std::array<glm::ivec2, 6> k_Resolutions {
 /// The hints with nothing dragged at a pixel of a screen without the cinema bars, over land
 uint32_t HintsAt(glm::ivec2 pixel, glm::ivec2 screen, bool windowed)
 {
-	return IdleTricons(NormalisedCursor(pixel, screen, screen.y), true, windowed);
+	return IdleTricons(AreaCursor(pixel, EdgeAreaOf(screen, false)), true, windowed);
 }
 } // namespace
 
@@ -220,18 +220,20 @@ TEST(CameraDrag, InAWindowTheVeryTopAndBottomReachFurtherIn)
 	EXPECT_EQ(IdleTricons({0.0f, 0.42f}, true, true), tricon::k_Idle);
 }
 
-TEST(CameraDrag, TheEdgesAreTheSameShareOfTheScreenAtEveryResolution)
+TEST(CameraDrag, TheEdgesAreTheSameShareOfA4By3ScreenAtEveryResolution)
 {
 	for (const auto screen : k_Resolutions)
 	{
 		SCOPED_TRACE(testing::Message() << screen.x << "x" << screen.y);
 		const auto middle = screen / 2;
-		const auto width = static_cast<float>(screen.x);
+		// The sides are measured by the width of a 4:3 screen of the same height on wider screens
+		const auto width = static_cast<float>(EdgeAreaOf(screen, false).width);
 		const auto height = static_cast<float>(screen.y);
-		// 4% of the width from a side turns, 6% doesn't
+		// 4% of that width from a side turns, 6% doesn't
 		EXPECT_NE(HintsAt({static_cast<int>(width * 0.04f), middle.y}, screen, false) & tricon::k_Rotate, 0U);
 		EXPECT_EQ(HintsAt({static_cast<int>(width * 0.06f), middle.y}, screen, false), tricon::k_Idle);
-		EXPECT_NE(HintsAt({static_cast<int>(width * 0.96f), middle.y}, screen, false) & tricon::k_Rotate, 0U);
+		EXPECT_NE(HintsAt({screen.x - static_cast<int>(width * 0.04f), middle.y}, screen, false) & tricon::k_Rotate, 0U);
+		EXPECT_EQ(HintsAt({screen.x - static_cast<int>(width * 0.06f), middle.y}, screen, false), tricon::k_Idle);
 		// The bottom 6% of the height turns, the bottom 3% in a window tilts as well, full screen only the last 1%
 		const auto bottom = [&](float share) { return glm::ivec2(middle.x, static_cast<int>(height * (1.0f - share))); };
 		EXPECT_NE(HintsAt(bottom(0.06f), screen, false) & tricon::k_Rotate, 0U);
@@ -246,30 +248,23 @@ TEST(CameraDrag, AQuarterOfTheRingSweepsAQuarterTurnRoundTheMiddleAtEveryResolut
 	for (const auto screen : k_Resolutions)
 	{
 		SCOPED_TRACE(testing::Message() << screen.x << "x" << screen.y);
+		// Screens wider than 4:3 draw the ring out straight across the middle (test_camera_edge_area)
+		if (EdgeAreaOf(screen, false).Folded() > 0)
+		{
+			continue;
+		}
 		const auto centre = glm::vec2(screen) * 0.5f;
 		const auto radius = glm::vec2(screen) * 0.45f;
 		// A quarter of the way round the ring, from the right of the screen to its bottom
 		const auto right = glm::ivec2(centre + glm::vec2(radius.x, 0.0f));
-		const auto start = EdgeRotate(right, right, screen, screen.y);
-		const auto step = EdgeRotate(glm::ivec2(centre + glm::vec2(0.0f, radius.y)), start.cursor, screen, screen.y);
+		const auto start = EdgeRotate(right, right, EdgeAreaOf(screen, false));
+		const auto step = EdgeRotate(glm::ivec2(centre + glm::vec2(0.0f, radius.y)), start.cursor, EdgeAreaOf(screen, false));
 		EXPECT_NEAR(std::abs(step.angle), glm::half_pi<float>(), 0.01f);
 	}
 }
 
 namespace
 {
-/// The camera's turn, in degrees, for each pixel the mouse moves along the ring, from the ring's place `from` (on this
-/// screen's ring, as a share of its half axes) by `pixels` along the screen's x or y
-float DegreesPerPixel(glm::ivec2 screen, glm::vec2 from, glm::ivec2 pixels)
-{
-	const auto centre = glm::vec2(screen / 2);
-	const auto axes = glm::vec2(screen) * 0.45f;
-	const auto start = EdgeRotate(glm::ivec2(centre + from * axes), glm::ivec2(centre + from * axes), screen, screen.y);
-	const auto step = EdgeRotate(start.cursor + pixels, start.cursor, screen, screen.y);
-	const auto moved = std::sqrt(static_cast<float>(pixels.x * pixels.x + pixels.y * pixels.y));
-	return std::abs(glm::degrees(step.turn)) / moved;
-}
-
 constexpr std::array k_EdgeTurnScreens {k_ReferenceScreen, glm::ivec2(1920, 1080), glm::ivec2(2560, 1440),
                                         glm::ivec2(3440, 1440)};
 } // namespace
@@ -281,40 +276,13 @@ TEST(CameraDrag, OnTheDefaultScreenTheEdgeTurnIsTheAngleTheCursorSweeps)
 	         std::pair {glm::ivec2(400, 600), glm::ivec2(760, 300)}, std::pair {glm::ivec2(770, 330), glm::ivec2(760, 300)},
 	         std::pair {glm::ivec2(390, 30), glm::ivec2(410, 30)}, std::pair {glm::ivec2(100, 500), glm::ivec2(500, 100)}})
 	{
-		const auto step = EdgeRotate(cursor, previous, k_ReferenceScreen, k_ReferenceScreen.y);
+		const auto step = EdgeRotate(cursor, previous, EdgeAreaOf(k_ReferenceScreen, false));
 		EXPECT_EQ(step.turn, step.angle);
 	}
 	EXPECT_EQ(ReferenceTurnScale({400, 570}, {760, 300}, k_ReferenceScreen, k_ReferenceScreen.y), 1.0f);
 	// With the cinema bars in too
 	const auto bars = ViewHeight(k_ReferenceScreen, true);
 	EXPECT_EQ(ReferenceTurnScale({400, 500}, {760, 300}, k_ReferenceScreen, bars), 1.0f);
-}
-
-TEST(CameraDrag, TheEdgeTurnsDegreesPerPixelAreThoseOfTheDefaultScreenAtEveryResolution)
-{
-	// On the original's 800x600 screen the ring is 360 pixels out at the sides and 270 at the top and bottom, so moving
-	// the mouse along it turns 1/360 of a radian a pixel down the sides and 1/270 across the top and bottom
-	const float sides = glm::degrees(1.0f / 360.0f);
-	const float ends = glm::degrees(1.0f / 270.0f);
-	for (const auto screen : k_EdgeTurnScreens)
-	{
-		SCOPED_TRACE(testing::Message() << screen.x << "x" << screen.y);
-		EXPECT_NEAR(DegreesPerPixel(screen, {1.0f, 0.0f}, {0, 8}), sides, sides * 0.01f);
-		EXPECT_NEAR(DegreesPerPixel(screen, {-1.0f, 0.0f}, {0, -8}), sides, sides * 0.01f);
-		EXPECT_NEAR(DegreesPerPixel(screen, {0.0f, 1.0f}, {-8, 0}), ends, ends * 0.01f);
-		EXPECT_NEAR(DegreesPerPixel(screen, {0.0f, -1.0f}, {8, 0}), ends, ends * 0.01f);
-	}
-	// Exactly the default screen's at its own size, and the same at a slant round the ring: a diagonal move from the
-	// lower right part of the ring turns as far as it would there on the default screen
-	const auto diagonal = DegreesPerPixel(k_ReferenceScreen, {0.7071f, 0.7071f}, {-6, 6});
-	for (const auto screen : k_EdgeTurnScreens)
-	{
-		SCOPED_TRACE(testing::Message() << screen.x << "x" << screen.y);
-		if (screen.x * 3 == screen.y * 4)
-		{
-			EXPECT_NEAR(DegreesPerPixel(screen, {0.7071f, 0.7071f}, {-6, 6}), diagonal, diagonal * 0.02f);
-		}
-	}
 }
 
 TEST(CameraDrag, TheEdgeTurnKeepsItsDirection)
@@ -324,8 +292,8 @@ TEST(CameraDrag, TheEdgeTurnKeepsItsDirection)
 		SCOPED_TRACE(testing::Message() << screen.x << "x" << screen.y);
 		const auto centre = screen / 2;
 		const auto right = glm::ivec2(centre.x + screen.x * 45 / 100, centre.y);
-		const auto down = EdgeRotate(right + glm::ivec2(0, 20), right, screen, screen.y);
-		const auto up = EdgeRotate(right - glm::ivec2(0, 20), right, screen, screen.y);
+		const auto down = EdgeRotate(right + glm::ivec2(0, 20), right, EdgeAreaOf(screen, false));
+		const auto up = EdgeRotate(right - glm::ivec2(0, 20), right, EdgeAreaOf(screen, false));
 		EXPECT_GT(down.turn * down.angle, 0.0f);
 		EXPECT_GT(up.turn * up.angle, 0.0f);
 		EXPECT_LT(down.turn * up.turn, 0.0f);
