@@ -190,6 +190,7 @@ TextDatabase MenuTexts()
 	    {u"HELP_TEXT_DIALOG_OPTIONS", u"Options"},
 	    {u"HELP_TEXT_DIALOG_QUIT", u"Quit"},
 	    {u"HELP_TEXT_DIALOG_ADDITION_88", u"Main"},
+	    {u"HELP_TEXT_ROOM_WORLD_TITLE", u"World Room"},
 	    {u"HELP_TEXT_PAUSE_STATS_151", u"Stats"},
 	    {u"HELP_TEXT_DIALOG_PLAYERLIST", u"Players"},
 	    {u"HELP_TEXT_FRONT_END_06", u"Advanced"},
@@ -585,6 +586,53 @@ TEST(GameMenu, EveryPagesControlsArePressedByName)
 	EXPECT_FALSE(f.menu.IsAskingToQuit());
 	Press(f.menu, u"Quit");
 	EXPECT_EQ(Press(f.menu, u"Yes."), Action::Quit);
+}
+
+// Inside the temple the options room shows the options on their own: going back from any of their pages, by Back,
+// the World Room tab or Escape, closes them (and the room goes back to the main hall), and there is no Quit arrow
+TEST(GameMenu, InsideTheTempleGoingBackClosesTheOptions)
+{
+	const auto openOn = [](GameMenu& menu, Page page) {
+		menu.Open();
+		menu.ShowPage(page);
+	};
+	for (const auto page : {Page::Options, Page::Players, Page::Advanced, Page::Controls})
+	{
+		MenuFixture f;
+		f.menu.SetInsideTemple(true);
+
+		openOn(f.menu, page);
+		EXPECT_EQ(Click(f.menu, k_Back), Action::None);
+		EXPECT_FALSE(f.menu.IsOpen());
+		// Back clicks as any control does
+		EXPECT_TRUE(f.menu.TakeClicked());
+
+		openOn(f.menu, page);
+		Click(f.menu, TabCentre(0));
+		EXPECT_FALSE(f.menu.IsOpen());
+
+		openOn(f.menu, page);
+		EXPECT_EQ(f.menu.Escape(), Action::Continue);
+	}
+
+	MenuFixture f;
+	f.menu.SetInsideTemple(true);
+	openOn(f.menu, Page::Options);
+	EXPECT_FALSE(Has(Names(f.menu), u"Quit"));
+	EXPECT_EQ(Click(f.menu, k_OptionsQuit), Action::None);
+	EXPECT_FALSE(f.menu.IsAskingToQuit());
+	EXPECT_TRUE(f.menu.IsOpen());
+	// The other tabs still move between the pages
+	Click(f.menu, TabCentre(3));
+	EXPECT_EQ(f.menu.GetPage(), Page::Advanced);
+
+	// Out of the temple again, the options go back to the main menu and have their Quit arrow
+	f.menu.SetInsideTemple(false);
+	Click(f.menu, TabCentre(1));
+	EXPECT_TRUE(Has(Names(f.menu), u"Quit"));
+	Click(f.menu, k_Back);
+	EXPECT_TRUE(f.menu.IsOpen());
+	EXPECT_EQ(f.menu.GetPage(), Page::Main);
 }
 
 TEST(GameMenu, ListsTheControls)

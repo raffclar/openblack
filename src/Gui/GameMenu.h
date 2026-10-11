@@ -56,7 +56,7 @@ struct MenuSettings
 /// Online Game, Options and Quit Black & White, with a Main Menu and a Statistics tab. Options opens the options'
 /// pages, each a tab of the same box: Options for sound, detail, autosave and push scrolling, Players for the player's
 /// profile, Advanced for help, the hand and text and Controls for the keys and buttons of the game's actions. Their
-/// Main Menu tab, or Back, goes back to the first page.
+/// Main Menu tab, or Back, goes back to the first page (inside the temple, see SetInsideTemple).
 ///
 /// The menu fades in over half a second and out over a fifth. Quitting first asks whether the player is sure, in a
 /// smaller opaque box over the menu with a Yes and a No arrow.
@@ -103,7 +103,9 @@ public:
 	[[nodiscard]] bool IsVisible() const noexcept { return _open || _fade.GetValue() > 0.0f; }
 	[[nodiscard]] bool IsAskingToQuit() const noexcept { return _question.has_value(); }
 	[[nodiscard]] Page GetPage() const noexcept { return _page; }
-	/// Inside the temple the options' first tab is the World Room, which closes them, rather than the Main Menu
+	/// Inside the temple the options are shown on their own, by the options room: their first tab is the World Room
+	/// rather than the Main Menu, Back and that tab close them rather than go back to the main menu, Escape closes them
+	/// too, and there is no Quit arrow
 	void SetInsideTemple(bool inside);
 	void ShowPage(Page page);
 
@@ -117,7 +119,8 @@ public:
 	void Wheel(glm::ivec2 point, int steps);
 	void TextInput(std::u16string_view text);
 	void KeyDown(int key);
-	/// Escape backs out of the question, then out of the options, then continues the game
+	/// Escape backs out of the question, then out of the options, then continues the game. Inside the temple it
+	/// continues from any page.
 	Action Escape();
 
 	/// Whether a control was clicked since last asked, which the game's dialogs answer with the menu button sound
@@ -157,6 +160,8 @@ private:
 	std::vector<Dialog::Tab> OptionsTabs(const TextDatabase& texts, Page selected);
 	void Ask(std::u16string text);
 	void Settle(Action action);
+	/// Back from an options page, or their first tab
+	void Back();
 	void SettingsChanged() { _settingsChanged = true; }
 	[[nodiscard]] Dialog& CurrentDialog() const { return *_pages.at(static_cast<size_t>(_page)); }
 
@@ -179,6 +184,8 @@ private:
 	std::u16string _mainMenuTab;
 	std::u16string _worldRoomTab;
 	bool _insideTemple {false};
+	/// The options page's Quit arrow, hidden inside the temple
+	BigButton* _optionsQuit {nullptr};
 	List* _controls {nullptr};
 	/// The wheel's mice on the Controls page turn over
 	std::vector<std::pair<size_t, bool>> _wheelMice;

@@ -244,21 +244,10 @@ DialogRect GameMenu::GetButtonRect(size_t index)
 std::vector<Dialog::Tab> GameMenu::OptionsTabs(const TextDatabase& texts, Page selected)
 {
 	// The options' tabs: Main Menu, Options, Players, Advanced and Controls. Inside the temple the first is the World
-	// Room, which hides the options without showing the main menu.
+	// Room, which goes back as Back does.
 	(void)selected;
 	return {
-	    {.label = _insideTemple ? _worldRoomTab : _mainMenuTab,
-	     .onSelect =
-	         [this] {
-		         if (_insideTemple)
-		         {
-			         Close();
-		         }
-		         else
-		         {
-			         ShowPage(Page::Main);
-		         }
-	         }},
+	    {.label = _insideTemple ? _worldRoomTab : _mainMenuTab, .onSelect = [this] { Back(); }},
 	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_OPTIONS")), .onSelect = [this] { ShowPage(Page::Options); }},
 	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_PLAYERLIST")), .onSelect = [this] { ShowPage(Page::Players); }},
 	    {.label = std::u16string(texts.Get("HELP_TEXT_FRONT_END_06")), .onSelect = [this] { ShowPage(Page::Advanced); }},
@@ -362,10 +351,11 @@ void GameMenu::BuildOptions(const TextDatabase& texts)
 
 	page.Add<BigButton>(_font, k_BackPosition, k_BackSize, std::u16string(texts.Get("HELP_TEXT_DIALOG_BACK")), LabelSide::Right,
 	                    Look::LeftArrow)
-	    .onClick = [this] { ShowPage(Page::Main); };
-	page.Add<BigButton>(_font, glm::ivec2(730, 530), k_BackSize, std::u16string(texts.Get("HELP_TEXT_DIALOG_QUIT")),
-	                    LabelSide::Left, Look::RightArrow)
-	    .onClick = [this] { Ask(_quitGameQuestion); };
+	    .onClick = [this] { Back(); };
+	// Inside the temple there is no Quit arrow: the player leaves the options by Back or the World Room tab
+	_optionsQuit = &page.Add<BigButton>(_font, glm::ivec2(730, 530), k_BackSize,
+	                                    std::u16string(texts.Get("HELP_TEXT_DIALOG_QUIT")), LabelSide::Left, Look::RightArrow);
+	_optionsQuit->onClick = [this] { Ask(_quitGameQuestion); };
 }
 
 void GameMenu::BuildPlayers(const TextDatabase& texts)
@@ -416,7 +406,7 @@ void GameMenu::BuildPlayers(const TextDatabase& texts)
 
 	page.Add<BigButton>(_font, k_BackPosition, k_BackSize, std::u16string(texts.Get("HELP_TEXT_DIALOG_BACK")), LabelSide::Right,
 	                    Look::LeftArrow)
-	    .onClick = [this] { ShowPage(Page::Main); };
+	    .onClick = [this] { Back(); };
 }
 
 void GameMenu::BuildAdvanced(const TextDatabase& texts)
@@ -467,7 +457,7 @@ void GameMenu::BuildAdvanced(const TextDatabase& texts)
 
 	page.Add<BigButton>(_font, k_BackPosition, k_BackSize, std::u16string(texts.Get("HELP_TEXT_DIALOG_BACK")), LabelSide::Right,
 	                    Look::LeftArrow)
-	    .onClick = [this] { ShowPage(Page::Main); };
+	    .onClick = [this] { Back(); };
 }
 
 void GameMenu::BuildControls(const TextDatabase& texts)
@@ -537,7 +527,7 @@ void GameMenu::BuildControls(const TextDatabase& texts)
 
 	page.Add<BigButton>(_font, k_BackPosition, k_BackSize, std::u16string(texts.Get("HELP_TEXT_DIALOG_BACK")), LabelSide::Right,
 	                    Look::LeftArrow)
-	    .onClick = [this] { ShowPage(Page::Main); };
+	    .onClick = [this] { Back(); };
 }
 
 void GameMenu::Ask(std::u16string text)
@@ -569,6 +559,20 @@ void GameMenu::ShowPage(Page page)
 	CurrentDialog().Reset();
 }
 
+void GameMenu::Back()
+{
+	// The options' pages are shown over the main menu, and going back leaves them for it. Inside the temple the options
+	// room shows them on their own, so going back closes them and the room goes back to the temple's main hall.
+	if (_insideTemple)
+	{
+		Close();
+	}
+	else
+	{
+		ShowPage(Page::Main);
+	}
+}
+
 void GameMenu::SetInsideTemple(bool inside)
 {
 	if (_insideTemple == inside)
@@ -576,6 +580,7 @@ void GameMenu::SetInsideTemple(bool inside)
 		return;
 	}
 	_insideTemple = inside;
+	_optionsQuit->visible = !inside;
 	for (const auto page : {Page::Options, Page::Players, Page::Advanced, Page::Controls})
 	{
 		_pages.at(static_cast<size_t>(page))->SetTabLabel(0, inside ? _worldRoomTab : _mainMenuTab);
@@ -702,11 +707,12 @@ GameMenu::Action GameMenu::Escape()
 		_question.reset();
 		return Action::None;
 	}
-	if (_page != Page::Main)
+	if (_page != Page::Main && !_insideTemple)
 	{
 		ShowPage(Page::Main);
 		return Action::None;
 	}
+	// The first page, or inside the temple any page: there is nothing under the menu to go back to
 	return Action::Continue;
 }
 
