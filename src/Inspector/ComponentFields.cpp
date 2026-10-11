@@ -1528,6 +1528,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::VillagerPose::clip>("clip")
 	    .Field<&components::VillagerPose::place>("place")
 	    .Field<&components::VillagerPose::bones>("bones")
+	    .Field<&components::VillagerPose::clipBones>("clipBones")
 	    .Field<&components::VillagerPose::turnStart>("turnStart")
 	    .Field<&components::VillagerPose::drawnAt>("drawnAt")
 	    .Field<&components::VillagerPose::drawnHeading>("drawnHeading")

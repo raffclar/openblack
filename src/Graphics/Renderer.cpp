@@ -489,6 +489,10 @@ Renderer::Renderer(uint32_t bgfxReset, std::unique_ptr<BgfxCallback>&& bgfxCallb
 	_creatureShadowFrameBuffer = std::make_unique<FrameBuffer>(
 	    "Creature Shadows", static_cast<uint16_t>(CreatureShadow::k_CellSize * CreatureShadow::k_MaxShadows),
 	    CreatureShadow::k_CellSize, TextureFormat::R8, std::nullopt, static_cast<uint8_t>(8), Wrapping::ClampEdge);
+	// The high-detail villagers' coverage samples side by side, a texel each, so each is counted on its own
+	_groundShadowFrameBuffer = std::make_unique<FrameBuffer>(
+	    "Ground Shadows", static_cast<uint16_t>(GroundShadow::k_SampleColumns * GroundShadow::k_MaxShadows),
+	    GroundShadow::k_SampleRows, TextureFormat::R8, std::nullopt, static_cast<uint8_t>(1), Wrapping::ClampEdge);
 
 	// give debug names to views
 	// TODO (#749) use std::views::enumerate
@@ -513,6 +517,7 @@ Renderer::~Renderer() noexcept
 	_handShadowFrameBuffer.reset();
 	_handFlowTexture.reset();
 	_creatureShadowFrameBuffer.reset();
+	_groundShadowFrameBuffer.reset();
 	_objectShadowFrameBuffer.reset();
 	_templeMapFrameBuffer.reset();
 	if (_landLightTexture)
@@ -2779,7 +2784,7 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	};
 	// Every villager out of doors and out of the sea casts one from each foot, on the land beneath it; one too far away
 	// to be drawn a wider one from where it stands, as if the land there were flat
-	// A villager a script draws in high detail casts a projected shadow instead (high_detail_rules::ShadowOf)
+	// A villager a script draws in high detail casts none: it lays its shadow on the land instead (GroundShadow)
 	desc.entities.Each<const ecs::components::Villager, const ecs::components::Transform, const ecs::components::Mesh>(
 	    [&](entt::entity entity, const ecs::components::Villager& /*villager*/, const ecs::components::Transform& transform,
 	        const ecs::components::Mesh& mesh) {
@@ -4525,7 +4530,6 @@ void Renderer::DrawCreatureShadowPass(const DrawSceneDesc& drawDesc) const
 	const auto camera = drawDesc.camera->GetOrigin();
 	struct Caster
 	{
-		CreatureShadow::Caster kind;
 		entt::entity entity;
 		const L3DMesh* mesh;
 		glm::mat4 model;
@@ -4534,20 +4538,6 @@ void Renderer::DrawCreatureShadowPass(const DrawSceneDesc& drawDesc) const
 		float distance;
 	};
 	std::vector<Caster> casters;
-	const auto addCaster = [&casters, &camera](CreatureShadow::Caster kind, entt::entity entity, const L3DMesh& body,
-	                                           const glm::mat4& model) {
-		const auto box = body.GetBoundingBox();
-		const auto scale =
-		    std::max({glm::length(glm::vec3(model[0])), glm::length(glm::vec3(model[1])), glm::length(glm::vec3(model[2]))});
-		const auto centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
-		casters.push_back({.kind = kind,
-		                   .entity = entity,
-		                   .mesh = &body,
-		                   .model = model,
-		                   .centre = centre,
-		                   .radius = glm::length(box.Size()) * 0.5f * scale,
-		                   .distance = glm::distance(camera, centre)});
-	};
 	for (const auto& [entity, instance] : renderCtx.entityDraws)
 	{
 		const auto* mesh = drawDesc.entities.TryGet<const ecs::components::Mesh>(entity);
@@ -4562,16 +4552,18 @@ void Renderer::DrawCreatureShadowPass(const DrawSceneDesc& drawDesc) const
 		{
 			continue;
 		}
-		addCaster(CreatureShadow::Caster::Creature, entity, *meshManager.Handle(mesh->id),
-		          renderCtx.instanceUniforms[instance].model);
-	}
-	// A villager a script draws in high detail casts one too, in the model it wears for it
-	for (const auto& draw : renderCtx.highDetailDraws)
-	{
-		if (meshManager.Contains(draw.mesh))
-		{
-			addCaster(CreatureShadow::Caster::HighDetailVillager, draw.entity, *meshManager.Handle(draw.mesh), draw.model);
-		}
+		const auto* body = &*meshManager.Handle(mesh->id);
+		const auto& model = renderCtx.instanceUniforms[instance].model;
+		const auto box = body->GetBoundingBox();
+		const auto scale =
+		    std::max({glm::length(glm::vec3(model[0])), glm::length(glm::vec3(model[1])), glm::length(glm::vec3(model[2]))});
+		const auto centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
+		casters.push_back({.entity = entity,
+		                   .mesh = body,
+		                   .model = model,
+		                   .centre = centre,
+		                   .radius = glm::length(box.Size()) * 0.5f * scale,
+		                   .distance = glm::distance(camera, centre)});
 	}
 	std::ranges::sort(casters, {}, &Caster::distance);
 
@@ -4592,25 +4584,16 @@ void Renderer::DrawCreatureShadowPass(const DrawSceneDesc& drawDesc) const
 		}
 		const auto ground = land.GetHeightAt(glm::vec2(caster.centre.x, caster.centre.z));
 		const auto shadow =
-		    CreatureShadow::Compute(caster.kind, caster.centre, caster.radius, ground, light, camera, _creatureShadowCount,
+		    CreatureShadow::Compute(caster.centre, caster.radius, ground, light, camera, _creatureShadowCount,
 		                            CreatureShadow::k_MaxShadows, caps->originBottomLeft, caps->homogeneousDepth);
 		if (!shadow)
 		{
 			continue;
 		}
-		// In the pose it is drawn in this frame
-		const auto& rest = caster.mesh->GetBoneMatrices();
-		std::span<const glm::mat4> pose = rest;
-		if (const auto* animation = drawDesc.entities.TryGet<const ecs::components::CreatureAnimation>(caster.entity);
-		    animation != nullptr && animation->boneMatrices.size() == rest.size())
-		{
-			pose = animation->boneMatrices;
-		}
-		else if (const auto* villagerPose = drawDesc.entities.TryGet<const ecs::components::VillagerPose>(caster.entity);
-		         villagerPose != nullptr && villagerPose->bones.size() == rest.size())
-		{
-			pose = villagerPose->bones;
-		}
+		const auto* animation = drawDesc.entities.TryGet<const ecs::components::CreatureAnimation>(caster.entity);
+		const auto& pose = animation != nullptr && animation->boneMatrices.size() == caster.mesh->GetBoneMatrices().size()
+		                       ? animation->boneMatrices
+		                       : caster.mesh->GetBoneMatrices();
 		if (pose.empty())
 		{
 			continue;
@@ -4628,7 +4611,7 @@ void Renderer::DrawCreatureShadowPass(const DrawSceneDesc& drawDesc) const
 
 		_creatureShadowMatrices.at(_creatureShadowCount) = shadow->receiverMatrix;
 		_creatureShadowParameters.at(_creatureShadowCount) =
-		    glm::vec4(shadow->strength * HandShadow::k_MaxDarkness, shadow->startDepth, shadow->onObjects ? 1.0f : 0.0f, 0.0f);
+		    glm::vec4(shadow->strength * HandShadow::k_MaxDarkness, shadow->startDepth, 0.0f, 0.0f);
 		++_creatureShadowCount;
 	}
 }
@@ -4732,6 +4715,214 @@ void Renderer::SetCreatureShadowUniforms(const ShaderProgram& program, bool rece
 	}
 }
 
+void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
+{
+	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::GroundShadowPass);
+	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::GroundShadow);
+	_groundShadowCount = 0;
+	uint16_t width = 0;
+	uint16_t height = 0;
+	_groundShadowFrameBuffer->GetSize(width, height);
+	_groundShadowFrameBuffer->Bind(RenderPass::GroundShadow);
+	bgfx::setViewRect(viewId, 0, 0, width, height);
+	bgfx::setViewClear(viewId, BGFX_CLEAR_COLOR, 0x00000000);
+	bgfx::touch(viewId);
+
+	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	if (renderCtx.highDetailDraws.empty() || !Locator::config::value().drawCreatureShadows || !drawDesc.drawEntities ||
+	    !drawDesc.drawIsland || inTemple || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	// The corners are placed in the target's clip space already
+	const auto identity = glm::mat4(1.0f);
+	bgfx::setViewTransform(viewId, &identity, &identity);
+
+	const auto& meshManager = Locator::resources::value().GetMeshes();
+	const auto& land = Locator::terrainSystem::value();
+	const auto camera = drawDesc.camera->GetOrigin();
+	struct Caster
+	{
+		entt::entity entity;
+		const L3DMesh* mesh;
+		glm::mat4 model;
+		glm::vec3 standsAt;
+		float ground;
+		uint8_t alpha;
+		float distance;
+	};
+	std::vector<Caster> casters;
+	for (const auto& draw : renderCtx.highDetailDraws)
+	{
+		if (!meshManager.Contains(draw.mesh))
+		{
+			continue;
+		}
+		const auto* mesh = &*meshManager.Handle(draw.mesh);
+		const auto& model = draw.castModel;
+		const auto standsAt = glm::vec3(model[3]);
+		const auto ground = land.GetHeightAt(glm::vec2(standsAt.x, standsAt.z));
+		const auto scale =
+		    std::max({glm::length(glm::vec3(model[0])), glm::length(glm::vec3(model[1])), glm::length(glm::vec3(model[2]))});
+		const auto radius = glm::length(mesh->GetBoundingBox().Size()) * 0.5f * scale;
+		const auto distance = glm::distance(camera, glm::vec3(standsAt.x, ground, standsAt.z));
+		const auto alpha = GroundShadow::Alpha(distance, radius);
+		if (alpha == 0)
+		{
+			continue;
+		}
+		casters.push_back({.entity = draw.entity,
+		                   .mesh = mesh,
+		                   .model = model,
+		                   .standsAt = standsAt,
+		                   .ground = ground,
+		                   .alpha = alpha,
+		                   .distance = distance});
+	}
+	std::ranges::sort(casters, {}, &Caster::distance);
+
+	bgfx::VertexLayout layout;
+	layout.begin()
+	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+	    .end();
+	struct Vertex
+	{
+		glm::vec3 position;
+		uint32_t colour;
+	};
+	const auto* program = _shaderManager->GetShader("Silhouette");
+	const auto* caps = bgfx::getCaps();
+	for (const auto& caster : casters)
+	{
+		if (_groundShadowCount >= GroundShadow::k_MaxShadows)
+		{
+			break;
+		}
+		// The body in the pose of the clip it plays, every vertex moved by its own bone alone
+		const auto& rest = caster.mesh->GetBoneMatrices();
+		std::span<const glm::mat4> pose = rest;
+		if (const auto* villagerPose = drawDesc.entities.TryGet<const ecs::components::VillagerPose>(caster.entity))
+		{
+			if (!rest.empty() && villagerPose->clipBones.size() == rest.size())
+			{
+				pose = villagerPose->clipBones;
+			}
+			else if (villagerPose->bones.size() == rest.size())
+			{
+				pose = villagerPose->bones;
+			}
+		}
+		_groundShadowPoints.clear();
+		for (const auto& subMesh : caster.mesh->GetSubMeshes())
+		{
+			if ((subMesh->GetFlags().lodMask & 1U) == 0)
+			{
+				continue;
+			}
+			const auto& body = subMesh->GetBodyGeometry();
+			for (size_t i = 0; i < body.positions.size(); ++i)
+			{
+				const auto bone = i < body.bones.size() ? body.bones[i] : L3DSubMesh::k_NoBone;
+				const auto local = glm::vec4(body.positions[i], 1.0f);
+				const auto world = bone < pose.size() ? caster.model * (pose[bone] * local) : caster.model * local;
+				_groundShadowPoints.emplace_back(world);
+			}
+		}
+		const auto footprint = GroundShadow::Measure(_groundShadowPoints, caster.standsAt);
+		if (!footprint)
+		{
+			continue;
+		}
+		_groundShadowSamples.clear();
+		for (const auto& point : _groundShadowPoints)
+		{
+			_groundShadowSamples.push_back(GroundShadow::Sample(GroundShadow::OnGround(point, caster.standsAt.y), *footprint));
+		}
+		// The triangles counted: those facing the counted way, and all of those drawn from both sides
+		_groundShadowIndices.clear();
+		size_t first = 0;
+		for (const auto& subMesh : caster.mesh->GetSubMeshes())
+		{
+			if ((subMesh->GetFlags().lodMask & 1U) == 0)
+			{
+				continue;
+			}
+			const auto& body = subMesh->GetBodyGeometry();
+			for (const auto& primitive : subMesh->GetPrimitives())
+			{
+				const auto end = std::min<size_t>(primitive.indicesOffset + primitive.indicesCount, body.indices.size());
+				for (size_t i = primitive.indicesOffset; i + 2 < end; i += 3)
+				{
+					const std::array<size_t, 3> corners {first + body.indices[i], first + body.indices[i + 1],
+					                                     first + body.indices[i + 2]};
+					if (std::ranges::any_of(corners, [this](size_t corner) { return corner >= _groundShadowSamples.size(); }))
+					{
+						continue;
+					}
+					if (!primitive.twoSided &&
+					    !GroundShadow::Counted({_groundShadowSamples[corners[0]], _groundShadowSamples[corners[1]],
+					                            _groundShadowSamples[corners[2]]}))
+					{
+						continue;
+					}
+					for (const auto corner : corners)
+					{
+						_groundShadowIndices.push_back(static_cast<uint16_t>(corner));
+					}
+				}
+			}
+			first += body.positions.size();
+		}
+		const auto vertexCount = static_cast<uint32_t>(_groundShadowSamples.size());
+		const auto indexCount = static_cast<uint32_t>(_groundShadowIndices.size());
+		if (indexCount == 0 || vertexCount > std::numeric_limits<uint16_t>::max() ||
+		    bgfx::getAvailTransientVertexBuffer(vertexCount, layout) < vertexCount ||
+		    bgfx::getAvailTransientIndexBuffer(indexCount) < indexCount)
+		{
+			continue;
+		}
+		const auto slot = _groundShadowCount;
+		bgfx::TransientVertexBuffer vertices;
+		bgfx::allocTransientVertexBuffer(&vertices, vertexCount, layout);
+		std::span<Vertex> written(reinterpret_cast<Vertex*>(vertices.data), vertexCount);
+		std::ranges::transform(_groundShadowSamples, written.begin(), [slot, caps](const glm::vec2& sample) {
+			const auto clip = GroundShadow::SlotClip(sample, slot, GroundShadow::k_MaxShadows, caps->originBottomLeft);
+			return Vertex {.position = glm::vec3(clip, 0.5f), .colour = 0xFFFFFFFF};
+		});
+		bgfx::TransientIndexBuffer indices;
+		bgfx::allocTransientIndexBuffer(&indices, indexCount);
+		std::ranges::copy(_groundShadowIndices, reinterpret_cast<uint16_t*>(indices.data));
+		bgfx::setTransform(&identity);
+		bgfx::setVertexBuffer(0, &vertices);
+		bgfx::setIndexBuffer(&indices);
+		// Every covered sample counts once, whichever way the triangle faces on the target
+		bgfx::setState(BGFX_STATE_WRITE_R);
+		bgfx::submit(viewId, toBgfx(program->GetRawHandle()));
+
+		_groundShadowMatrices.at(slot) = GroundShadow::ReceiverMatrix(*footprint, caster.standsAt, caster.ground);
+		_groundShadowParameters.at(slot) =
+		    glm::vec4(static_cast<float>(caster.alpha), footprint->nearest, static_cast<float>(slot), 0.0f);
+		_groundShadowBounds.at(slot) = glm::vec4(footprint->low, footprint->high);
+		++_groundShadowCount;
+	}
+}
+
+void Renderer::SetGroundShadowUniforms(const ShaderProgram& program, bool receives) const
+{
+	const auto count = receives ? _groundShadowCount : uint8_t {0};
+	const glm::vec4 info {static_cast<float>(count), static_cast<float>(GroundShadow::k_MaxShadows), 0.0f, 0.0f};
+	program.SetUniformValue("u_groundShadowInfo", &info);
+	program.SetTextureSampler("s15_groundShadows", 15, _groundShadowFrameBuffer->GetColorAttachment());
+	if (count > 0)
+	{
+		program.SetUniformArray("u_groundShadowMatrix", _groundShadowMatrices.data(), count);
+		program.SetUniformArray("u_groundShadow", _groundShadowParameters.data(), count);
+		program.SetUniformArray("u_groundShadowBounds", _groundShadowBounds.data(), count);
+	}
+}
+
 void Renderer::SelectDrawnCreatures(const DrawSceneDesc& drawDesc) const
 {
 	const auto& draws = Locator::rendereringSystem::value().GetContext().entityDraws;
@@ -4818,6 +5009,7 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 		}
 	}
 	DrawCreatureShadowPass(drawDesc);
+	DrawGroundShadowPass(drawDesc);
 	// Reflection Pass
 	{
 		auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::ReflectionPass);
@@ -5128,6 +5320,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				terrainShader->SetUniformValue("u_handShadow", &u_handShadow);
 				// The creatures' shadows fall on the land, not on its reflection
 				SetCreatureShadowUniforms(*terrainShader, desc.viewId == RenderPass::Main);
+				// So do the high-detail villagers'
+				SetGroundShadowUniforms(*terrainShader, desc.viewId == RenderPass::Main);
 				setTerrainSnow();
 			};
 

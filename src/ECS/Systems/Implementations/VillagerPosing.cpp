@@ -87,6 +87,7 @@ void PlaceDrawing(ecs::Registry& registry, entt::entity entity, const Transform&
 /// The pose of a high-detail villager that just changed clip, with the old clip's pose held where it was mixed in
 void MixInOldClip(VillagerPose& pose, bool turnAtOnce, std::span<const uint32_t> parents, std::vector<glm::mat4>& scratch)
 {
+	pose.clipBones.clear();
 	const auto& blend = pose.clipBlend.blend;
 	if (!ecs::villager_draw::ShowsClipBlend(blend, turnAtOnce))
 	{
@@ -108,6 +109,8 @@ void MixInOldClip(VillagerPose& pose, bool turnAtOnce, std::span<const uint32_t>
 	}
 	scratch.resize(parents.size());
 	animals::PoseBetween(frames[span.from].bones, frames[span.to].bones, span.t, parents, scratch);
+	// Its shadow keeps to the clip it plays
+	pose.clipBones.assign(pose.bones.begin(), pose.bones.end());
 	ecs::villager_draw::BlendPoses(pose.bones, scratch, blend.weight);
 }
 } // namespace
