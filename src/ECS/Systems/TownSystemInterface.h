@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <vector>
 
 #include <entt/fwd.hpp>
 #include <glm/fwd.hpp>
@@ -51,8 +52,10 @@ public:
 	virtual town_homes::NewHome LookForBetterHome(entt::entity villager) = 0;
 	/// Whether a town has room for another adult in its homes
 	[[nodiscard]] virtual bool HasRoomForNewcomer(entt::entity town) const = 0;
-	/// A villager has died: it leaves its home and its town
+	/// A villager has died: the children of its town whose mother it was lose her, and it leaves its home and its town
 	virtual void RemoveDeadVillager(entt::entity villager) = 0;
+	/// The people of a town whose mother a villager is, in the town's order
+	[[nodiscard]] virtual std::vector<entt::entity> ChildrenOf(entt::entity town, entt::entity mother) const = 0;
 
 	/// What stands in the way of ground kept clear: for a town's gathering place, anything fixed but a tree; for a villager
 	/// to sit down, anything at all

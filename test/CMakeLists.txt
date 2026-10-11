@@ -766,3 +766,4 @@ openblack_setup_and_add_test(
   test_graphics_backend_names test_graphics_backend_names.cpp
 )
 openblack_setup_and_add_test(test_villager_breeding test_villager_breeding.cpp)
+openblack_setup_and_add_test(test_creche_rules test_creche_rules.cpp)

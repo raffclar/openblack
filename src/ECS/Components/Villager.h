@@ -102,5 +102,8 @@ struct Villager
 	int16_t pregnancy {0};
 	/// A child's mother, while she is about
 	entt::entity mother {entt::null};
+	/// A child's stroll at the crèche: the path of the crèche's model it walks, and the legs it has gone along it
+	int16_t crechePath {0};
+	int16_t crecheLeg {0};
 };
 } // namespace openblack::ecs::components
