@@ -334,6 +334,31 @@ TEST(Inspector, RefusesParametersAQueryDoesNotTake)
 	EXPECT_EQ(Ask(inspector, R"({"query": "fake.one", "params": {"id": 3}})")["ok"], true);
 }
 
+// near and radius belong beside params, but put inside them, as tools put a query's parameters, they are taken the same
+TEST(Inspector, NearAndRadiusInsideParamsAreTakenAsBesideThem)
+{
+	Inspector inspector;
+	inspector.Add(std::make_unique<FakeProvider>());
+
+	const auto beside = Ask(inspector, R"({"query": "fake.near", "near": [0, 0, 0], "radius": 25})");
+	ASSERT_EQ(beside["ok"], true) << beside;
+	const auto inside = Ask(inspector, R"({"query": "fake.near", "params": {"near": [0, 0, 0], "radius": 25}})");
+	ASSERT_EQ(inside["ok"], true) << inside;
+	EXPECT_EQ(inside["result"]["total"], beside["result"]["total"]);
+	EXPECT_EQ(inside["result"]["items"], beside["result"]["items"]);
+
+	// A radius without near, or both places at once, is refused saying where they go
+	const auto noRadius = Ask(inspector, R"({"query": "fake.near", "params": {"near": [0, 0, 0]}})");
+	EXPECT_EQ(noRadius["ok"], false);
+	EXPECT_NE(noRadius["error"].get<std::string>().find("beside params"), std::string::npos) << noRadius;
+	const auto twice =
+	    Ask(inspector, R"({"query": "fake.near", "near": [0, 0, 0], "radius": 5, "params": {"near": [0, 0], "radius": 9}})");
+	EXPECT_EQ(twice["ok"], false);
+	EXPECT_NE(twice["error"].get<std::string>().find("twice"), std::string::npos) << twice;
+	// Without near anywhere, the query says to give it beside params
+	EXPECT_NE(Ask(inspector, R"({"query": "fake.near"})")["error"].get<std::string>().find("beside params"), std::string::npos);
+}
+
 TEST(Inspector, Ping)
 {
 	const Inspector inspector;

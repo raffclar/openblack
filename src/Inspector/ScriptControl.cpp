@@ -51,6 +51,8 @@ std::string_view TypeName(ScriptValue::Type type)
 		return "object";
 	case ScriptValue::Type::Boolean:
 		return "boolean";
+	case ScriptValue::Type::String:
+		return "string";
 	}
 	return "unknown";
 }
@@ -132,6 +134,8 @@ Json openblack::inspector::ToJson(const ScriptValue& value)
 		return {{"object", value.object}};
 	case ScriptValue::Type::Boolean:
 		return value.boolean;
+	case ScriptValue::Type::String:
+		return value.text;
 	}
 	return nullptr;
 }
@@ -191,6 +195,9 @@ std::optional<ScriptValue> openblack::inspector::ValueOfType(ScriptValue::Type t
 		}
 		value.boolean = json.get<bool>();
 		return value;
+	case ScriptValue::Type::String:
+		error = "no global is text";
+		return std::nullopt;
 	}
 	error = "unknown type";
 	return std::nullopt;
@@ -218,6 +225,15 @@ std::optional<std::vector<ScriptValue>> openblack::inspector::ArgumentsFromJson(
 		{
 			values.push_back({.type = ScriptValue::Type::Float, .number = static_cast<float>(arg.get<double>())});
 		}
+		else if (arg.is_string())
+		{
+			values.push_back({.type = ScriptValue::Type::String, .text = arg.get<std::string>()});
+		}
+		else if (arg.is_object() && arg.contains("string") && arg.find("string")->is_string())
+		{
+			values.push_back(
+			    {.type = ScriptValue::Type::String, .text = arg.find("string")->get<std::string>(), .typeGiven = true});
+		}
 		else if (arg.is_array() && arg.size() == 3 && std::ranges::all_of(arg, [](const Json& c) { return c.is_number(); }))
 		{
 			for (const auto& component : arg)
@@ -244,7 +260,8 @@ std::optional<std::vector<ScriptValue>> openblack::inspector::ArgumentsFromJson(
 		}
 		else
 		{
-			error = "an argument is a number, true or false, [x, y, z], {\"object\": id}, {\"int\": n} or {\"float\": x}";
+			error = "an argument is a number, true or false, a text, [x, y, z], {\"object\": id}, {\"int\": n}, "
+			        "{\"float\": x} or {\"string\": \"...\"}";
 			return std::nullopt;
 		}
 		if (values.size() > k_MostArguments)
@@ -286,8 +303,10 @@ std::vector<std::optional<ScriptValue::Type>> openblack::inspector::NativeSlots(
 			break;
 		case openblack::lhvm::ArgType::VarArgs:
 			return {};
-		case openblack::lhvm::ArgType::None:
 		case openblack::lhvm::ArgType::String:
+			slots.emplace_back(ScriptValue::Type::String);
+			break;
+		case openblack::lhvm::ArgType::None:
 		case openblack::lhvm::ArgType::Any:
 			slots.emplace_back(std::nullopt);
 			break;
@@ -324,6 +343,18 @@ bool openblack::inspector::TypeArguments(std::vector<ScriptValue>& values,
 		if (value.type == wanted || value.typeGiven)
 		{
 			continue;
+		}
+		// A number or a truth written as text, as some tools send them, is that for a slot that isn't text
+		if (value.type == ScriptValue::Type::String)
+		{
+			if (const auto parsed = Parse(value.text); parsed.has_value() && parsed->is_number())
+			{
+				value = {.type = ScriptValue::Type::Float, .number = static_cast<float>(parsed->get<double>())};
+			}
+			else if (parsed.has_value() && parsed->is_boolean())
+			{
+				value = {.type = ScriptValue::Type::Boolean, .boolean = parsed->get<bool>()};
+			}
 		}
 		const bool number = value.type == ScriptValue::Type::Float || value.type == ScriptValue::Type::Int;
 		const float asFloat = value.type == ScriptValue::Type::Int ? static_cast<float>(value.integer) : value.number;
@@ -372,6 +403,12 @@ bool openblack::inspector::TypeArguments(std::vector<ScriptValue>& values,
 			if (value.type != ScriptValue::Type::Vector)
 			{
 				return refuse("part of a position [x, y, z]");
+			}
+			break;
+		case ScriptValue::Type::String:
+			if (value.type != ScriptValue::Type::String)
+			{
+				return refuse("a text: \"...\" or {\"string\": \"...\"}");
 			}
 			break;
 		}
@@ -503,19 +540,20 @@ void openblack::inspector::AddScriptControls(FunctionProvider& provider, ScriptT
 	    Description(
 	        "call",
 	        "Calls a script native as a script's call to it would, with its arguments in order (a vector is "
-	        "[x, y, z]); what it gave back. Natives that wait for something or run over turns aren't for this",
+	        "[x, y, z], a text such as a file's name \"...\"); what it gave back. Natives that wait for something or "
+	        "run over turns aren't for this",
 	        {Parameter("native", "string or integer", "The native's name or number, from script.functions", true),
-	         Parameter(
-	             "args", "array",
-	             "Numbers, true or false, [x, y, z], {\"object\": id}, {\"int\": n} or {\"float\": x}, as many as it takes; a "
-	             "plain number goes on the stack as the type the native's slot takes, {\"int\"} and {\"float\"} as "
-	             "given. Each goes on "
-	             "the stack as the type the native takes, as a script's call puts it",
-	             false),
+	         Parameter("args", "array",
+	                   "Numbers, true or false, texts, [x, y, z], {\"object\": id}, {\"int\": n}, {\"float\": x} or "
+	                   "{\"string\": \"...\"}, as many as it takes; a plain number goes on the stack as the type the "
+	                   "native's slot takes, {\"int\"}, {\"float\"} and {\"string\"} as given. A text is kept where the "
+	                   "native reads a script's texts for the length of the call. Each goes on the stack as the type "
+	                   "the native takes, as a script's call puts it",
+	                   false),
 	         Parameter("raw", "boolean",
 	                   "Pushes exactly the values given, past the check of how many the native takes and of their "
 	                   "types (for a native that takes a different count than the language's table says, as GET_ARENA "
-	                   "does): each number must say its type, {\"int\": n} or {\"float\": x}",
+	                   "does): each number must say its type, {\"int\": n} or {\"float\": x}; a text goes as one",
 	                   false)},
 	        true),
 	    [&scripts, notLoaded](const QueryContext& context) {

@@ -181,6 +181,8 @@ struct AudioState
 		std::optional<glm::vec3> position;
 	};
 	std::vector<MusicChannel> musicChannels;
+	/// Where the placed sounds are heard from: the camera, or the inspector's view shown over it while it is shown
+	glm::vec3 listener {0.0f};
 };
 
 struct AudioSources
@@ -189,7 +191,7 @@ struct AudioSources
 	std::function<std::optional<AudioState>()> state;
 };
 
-///   audio.state                          the volumes, the music and how many sounds play
+///   audio.state                          the volumes, the music, how many sounds play and where they're heard from
 ///   audio.sounds near, radius            the sounds playing about a point, nearest first
 [[nodiscard]] std::unique_ptr<ProviderInterface> MakeAudioProvider(AudioSources sources);
 

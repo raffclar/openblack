@@ -31,7 +31,8 @@ public:
 	std::string Pin(const CameraPose& pose) override;
 	void Unpin() override;
 	[[nodiscard]] bool Pinned() const override { return _own.has_value(); }
-	void SetOverride(std::optional<CameraPose> pose) override { _override = pose; }
+	/// The sounds are heard from the view shown while it is shown, and from the camera again once it is let go
+	void SetOverride(std::optional<CameraPose> pose) override;
 	[[nodiscard]] std::optional<CameraPose> Override() const override { return _override; }
 	[[nodiscard]] float GroundHeight(glm::vec2 point) const override;
 	[[nodiscard]] std::optional<glm::vec3> EntityPosition(uint32_t id) const override;

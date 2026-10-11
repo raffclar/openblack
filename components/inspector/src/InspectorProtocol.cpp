@@ -13,9 +13,11 @@
 
 #include <algorithm>
 #include <array>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 
 #include "InspectorQuery.h"
 
@@ -143,25 +145,12 @@ std::optional<std::string> ReadOptions(const Json& object, QueryOptions& options
 			options.where.push_back({.field = *field, .op = *op, .value = value == each.end() ? Json() : *value});
 		}
 	}
-	if (const auto it = object.find("near"); it != object.end())
+	auto near = ReadNear(object);
+	if (auto* why = std::get_if<std::string>(&near))
 	{
-		bool planar = false;
-		const auto point = ReadPoint(*it, &planar);
-		if (!point.has_value())
-		{
-			return "near must be [x, y, z] or [x, z]";
-		}
-		const auto radius = NumberMember(object, "radius");
-		if (!radius.has_value() || *radius < 0.0)
-		{
-			return "near needs a radius of zero or more";
-		}
-		options.near = Near {.point = *point, .planar = planar, .radius = *radius};
+		return *std::move(why);
 	}
-	else if (object.contains("radius"))
-	{
-		return "radius is how far from near to search: give near too";
-	}
+	options.near = std::get<std::optional<Near>>(near);
 	if (const auto it = object.find("limit"); it != object.end())
 	{
 		const auto limit = ReadCount(*it);
@@ -224,6 +213,30 @@ std::string_view openblack::inspector::Name(FilterOp op)
 {
 	const auto found = std::ranges::find(k_OpNames, op, &OpName::op);
 	return found == k_OpNames.end() ? std::string_view("?") : found->name;
+}
+
+std::variant<std::optional<Near>, std::string> openblack::inspector::ReadNear(const Json& object)
+{
+	if (const auto it = object.find("near"); it != object.end())
+	{
+		bool planar = false;
+		const auto point = ReadPoint(*it, &planar);
+		if (!point.has_value())
+		{
+			return std::string("near must be [x, y, z] or [x, z]");
+		}
+		const auto radius = NumberMember(object, "radius");
+		if (!radius.has_value() || *radius < 0.0)
+		{
+			return std::string("near needs a radius of zero or more");
+		}
+		return std::optional(Near {.point = *point, .planar = planar, .radius = *radius});
+	}
+	if (object.contains("radius"))
+	{
+		return std::string("radius is how far from near to search: give near too");
+	}
+	return std::optional<Near> {};
 }
 
 std::variant<Request, std::string> openblack::inspector::DecodeRequest(std::string_view line)

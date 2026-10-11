@@ -90,6 +90,8 @@ public:
 	[[nodiscard]] float GetMusicVolume() override { return _musicVolume; }
 	void Stop() override;
 	void Update() override;
+	[[nodiscard]] Listener GetListener() const override { return _listenerOverride.value_or(CameraListener()); }
+	void SetListenerOverride(std::optional<Listener> listener) override { _listenerOverride = listener; }
 	void CreateSoundGroup(const std::string& name) override;
 	void AddMusicEntry(const std::string& name) override;
 	[[nodiscard]] const std::vector<std::string>& GetMusicTracks() const override { return _music; }
@@ -133,6 +135,8 @@ private:
 	[[nodiscard]] static glm::vec3 ToListenerFrame(glm::vec3 worldPosition);
 
 	std::unique_ptr<AudioPlayerInterface> _audioPlayer;
+	/// The listener while it is put somewhere other than the camera
+	std::optional<Listener> _listenerOverride;
 	/// All sounds are loaded
 	std::map<std::string, SoundGroup> _soundGroups;
 	/// Animation effects of the sound banks, by bank name

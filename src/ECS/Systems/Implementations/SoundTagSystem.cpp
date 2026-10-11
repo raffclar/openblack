@@ -191,9 +191,9 @@ entt::entity SoundTagSystem::CreatePointSound(entt::id_type sound, const glm::ve
 	                                                  .turns = 0,
 	                                              });
 	// One not delayed sounds at once, where it is made
-	if (!delayed && Locator::audio::has_value() && Locator::resources::has_value() && Locator::camera::has_value())
+	if (!delayed && Locator::audio::has_value() && Locator::resources::has_value())
 	{
-		StartPointSound(tag, position, Locator::camera::value().GetOrigin());
+		StartPointSound(tag, position, Locator::audio::value().GetListener().origin);
 	}
 	return entity;
 }

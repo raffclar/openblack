@@ -33,6 +33,8 @@ struct ScriptValue
 		Vector,
 		Object,
 		Boolean,
+		/// A text, such as a file's name: it goes on the stack as a script's text does, as the place it is kept
+		String,
 	};
 	Type type {Type::Float};
 	/// A number, an object's id, a vector's component, or 0 or 1
@@ -40,23 +42,27 @@ struct ScriptValue
 	uint32_t object {0};
 	int32_t integer {0};
 	bool boolean {false};
-	/// Given with its type ({"int": n}, {"float": x}): it goes on the stack as that, whatever the native's slot says
+	std::string text;
+	/// Given with its type ({"int": n}, {"float": x}, {"string": "..."}): it goes on the stack as that, whatever the
+	/// native's slot says
 	bool typeGiven {false};
 };
 
-/// A value as JSON: a number, true or false, or {"object": id}
+/// A value as JSON: a number, true or false, a text, or {"object": id}
 [[nodiscard]] Json ToJson(const ScriptValue& value);
 /// The values a native is given: a number is a float, true or false a boolean, [x, y, z] a vector (three values),
-/// {"object": id} an object, {"int": n} a whole number and {"float": x} a float, the last two kept as given. None, with why
-/// not, when one doesn't read.
+/// {"object": id} an object, a text or {"string": "..."} a text, {"int": n} a whole number and {"float": x} a float, the
+/// last three kept as given. None, with why not, when one doesn't read.
 [[nodiscard]] std::optional<std::vector<ScriptValue>> ArgumentsFromJson(const Json& args, std::string& error);
 /// The types a native's stack slots take, from the language's table of natives' arguments (a position is three vector
-/// slots; a string or a value of any type is none); empty when the table doesn't know them or they don't add up to the
+/// slots; a value of any type is none); empty when the table doesn't know them or they don't add up to the
 /// slots the native takes
 [[nodiscard]] std::vector<std::optional<ScriptValue::Type>> NativeSlots(std::string_view name, int32_t stackIn);
 /// The values made the types a native's slots take, as a script's call gives them: a whole number is an integer for an
 /// integer slot (a text's number, a constant), any number a float for a float slot, 0 or 1 a truth for a truth slot, a
-/// whole number an object for an object slot. False, with why not, when a value can't be the slot's type.
+/// whole number an object for an object slot, and only a text for a text slot; a plain text that reads as a number or
+/// truth, as some tools send them, is that for the other slots. False, with why not, when a value can't be the slot's
+/// type.
 [[nodiscard]] bool TypeArguments(std::vector<ScriptValue>& values, std::span<const std::optional<ScriptValue::Type>> slots,
                                  std::string& error);
 /// A value of a type from JSON, for a global

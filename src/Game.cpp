@@ -1225,8 +1225,8 @@ bool Game::GameLogicLoop() noexcept
 		weather = weatherSystem.GetWeatherSmooth(cameraPosition);
 	}
 
-	// The objects' looping sounds start again where they have stopped
-	Locator::soundTagSystem::value().ProcessTurn(cameraPosition);
+	// The objects' looping sounds start again where they have stopped, within reach of where they are heard from
+	Locator::soundTagSystem::value().ProcessTurn(Locator::audio::value().GetListener().origin);
 	// The worship sites charge their icons and store what their dancers chant, before the miracles draw their upkeep
 	if (Locator::worshipSiteSystem::has_value())
 	{

@@ -2410,7 +2410,8 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		    AudioState state {.globalVolume = audio.GetGlobalVolume(),
 		                      .sfxVolume = audio.GetSfxVolume(),
 		                      .musicVolume = audio.GetMusicVolume(),
-		                      .musicActive = audio.MusicIsActive()};
+		                      .musicActive = audio.MusicIsActive(),
+		                      .listener = audio.GetListener().origin};
 		    if (const auto* game = Game::Instance(); game != nullptr && game->GetGameMusic() != nullptr)
 		    {
 			    const auto& music = *game->GetGameMusic();
