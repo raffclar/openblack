@@ -533,3 +533,136 @@ TEST(EdgeArea, TheTrackerStartsAgainWhenTheScreenChanges)
 	EXPECT_EQ(resized.cursor, EdgeRotate({2500, 720}, {2500, 720}, bigger).cursor);
 	EXPECT_NEAR(resized.angle, 0.0f, 1e-3f);
 }
+
+namespace
+{
+/// Windows the window-fit rule shrinks to fit the desktop, as the real window it gives, and a big window that fits as
+/// asked: everything is measured by the real window's size
+struct FittedWindow
+{
+	glm::ivec2 requested;
+	glm::ivec2 window;
+};
+constexpr std::array k_FittedWindows {
+    FittedWindow {{2560, 1440}, {2419, 1361}},
+    FittedWindow {{3440, 1440}, {3251, 1361}},
+    FittedWindow {{5120, 1440}, {4839, 1361}},
+    FittedWindow {{3840, 1080}, {3840, 1080}},
+};
+
+/// A drag on the edge of the screen frame by frame as the game takes it: pressed and held past the quick-pan time,
+/// then the mouse moved the same pixels every frame. Nothing turns until the drag is decided; from then on the cursor
+/// is held on the ring and the camera turns.
+struct FramedDrag
+{
+	/// How many pixels the mouse moved before the drag was decided, the deciding frame's included
+	int decidedAfter {0};
+	/// The turn of the deciding frame, in radians
+	float decidingTurn {0.0f};
+	/// The turns of every frame after it
+	std::vector<float> turns;
+};
+FramedDrag DragFrameByFrame(const EdgeArea& area, glm::ivec2 press, glm::ivec2 move, int frames)
+{
+	DragClassifier drag;
+	RingTracker ring;
+	drag.Start(IdleTricons(AreaCursor(press, area), true, false), AreaCursor(press, area), 0);
+	ring.Start(press, area);
+	FramedDrag result;
+	auto pointer = press;
+	uint32_t milliseconds = 400;
+	for (int frame = 0; frame < frames; ++frame)
+	{
+		pointer += move;
+		milliseconds += 16;
+		const bool decided = drag.GetMode().has_value();
+		drag.Move(move, area, milliseconds, true);
+		if (!drag.GetMode().has_value())
+		{
+			continue;
+		}
+		const auto step = ring.Step(pointer, area);
+		pointer = step.cursor;
+		if (decided)
+		{
+			result.turns.push_back(step.turn);
+		}
+		else
+		{
+			result.decidedAfter = (frame + 1) * std::abs(move.x + move.y);
+			result.decidingTurn = step.turn;
+		}
+	}
+	return result;
+}
+} // namespace
+
+TEST(EdgeArea, AFittedWindowTurnsAsTheModelDoesAtItsRealSize)
+{
+	const auto reference = EdgeAreaOf(k_ReferenceScreen, false);
+	const float sides = glm::degrees(1.0f / 360.0f);
+	const float ends = glm::degrees(1.0f / 270.0f);
+	for (const auto& [requested, window] : k_FittedWindows)
+	{
+		SCOPED_TRACE(testing::Message() << requested.x << "x" << requested.y << " as " << window.x << "x" << window.y);
+		const auto area = EdgeAreaOf(window, false);
+		// Down the sides and across the top and bottom: 800x600's turn for each pixel
+		EXPECT_NEAR(DegreesPerPixel(area, 0.0f, {0, 8}), sides, sides * 0.01f);
+		EXPECT_NEAR(DegreesPerPixel(area, glm::pi<float>(), {0, -8}), sides, sides * 0.01f);
+		EXPECT_NEAR(DegreesPerPixel(area, glm::half_pi<float>(), {-8, 0}), ends, ends * 0.01f);
+		EXPECT_NEAR(DegreesPerPixel(area, -glm::half_pi<float>(), {8, 0}), ends, ends * 0.01f);
+		// At the four corners, both ways, as at the same place on 800x600's ring
+		for (const auto place : {0.25f, 0.75f, -0.25f, -0.75f})
+		{
+			for (const auto move : k_Moves)
+			{
+				SCOPED_TRACE(testing::Message() << "corner " << place << " pi, move " << move.x << "," << move.y);
+				const auto expected = DegreesPerPixel(reference, place * glm::pi<float>(), move);
+				EXPECT_NEAR(DegreesPerPixel(area, place * glm::pi<float>(), move), expected, 0.08f * expected + 0.01f);
+			}
+		}
+	}
+}
+
+TEST(EdgeArea, OnAFittedWindowEveryFrameOfADecidedDragTurnsAsTheModel)
+{
+	const float sides = 1.0f / 360.0f;
+	const float ends = 1.0f / 270.0f;
+	struct Spot
+	{
+		const char* name;
+		glm::ivec2 press;
+		glm::ivec2 move;
+		float perPixel;
+		/// Pixels moved before the drag is decided: 2% of the 4:3 width down the side, of the height across
+		int decide;
+	};
+	for (const auto& [requested, window] : k_FittedWindows)
+	{
+		SCOPED_TRACE(testing::Message() << requested.x << "x" << requested.y << " as " << window.x << "x" << window.y);
+		const auto area = EdgeAreaOf(window, false);
+		const std::array spots {
+		    Spot {"right side, down", {window.x - 20, window.y / 2 - 40}, {0, 1}, sides, area.width / 50 + 1},
+		    Spot {"left side, up", {20, window.y / 2 + 40}, {0, -1}, sides, area.width / 50 + 1},
+		    Spot {"bottom middle, left", {window.x / 2 + 40, window.y * 94 / 100}, {-1, 0}, ends, area.viewHeight / 50 + 1},
+		    Spot {"top middle, right", {window.x / 2 - 40, 3}, {1, 0}, ends, area.viewHeight / 50 + 1},
+		};
+		for (const auto& spot : spots)
+		{
+			SCOPED_TRACE(spot.name);
+			const auto drag = DragFrameByFrame(area, spot.press, spot.move, 120);
+			EXPECT_EQ(drag.decidedAfter, spot.decide);
+			ASSERT_FALSE(drag.turns.empty());
+			// Each frame after the decision turns the pixel moved by the model's turn
+			for (const auto turn : drag.turns)
+			{
+				EXPECT_NEAR(std::abs(turn), spot.perPixel, spot.perPixel * 0.03f);
+			}
+			// The deciding frame turns all the way from where the drag was pressed, as the game does: the pixels
+			// moved while the drag was undecided all turn the camera at once. A measure that starts after too short
+			// a decision sees this as a faster turn (37 pixels down the side of a 1361-high window, 28 across).
+			EXPECT_NEAR(std::abs(drag.decidingTurn), spot.perPixel * static_cast<float>(spot.decide),
+			            spot.perPixel * static_cast<float>(spot.decide) * 0.1f);
+		}
+	}
+}

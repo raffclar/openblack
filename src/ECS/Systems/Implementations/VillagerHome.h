@@ -100,4 +100,14 @@ uint32_t CongregateInTownAfterEmergency(components::LivingAction& action);
 /// Leaving a home state: the villager comes out unless the next state keeps it inside
 bool ExitAtHome(components::LivingAction& action, VillagerStates next);
 
+/// An adult whose home is too crowded, or who has none, moves into a better building of its town and goes home; finding
+/// none it starts out homeless, and with no town it wanders as a vagrant. 1 when it did any of that.
+uint32_t LookForBetterHome(components::LivingAction& action);
+/// A villager takes on another tribe's look: the same kind of villager of that tribe, unless its kind keeps its look
+/// whatever town it lives in
+void TakeOnTribe(entt::entity villager, Tribe tribe, bool showEffect);
+/// Going to a new home: it walks to its door and goes in. On to its next state, it takes on its town's tribe.
+uint32_t GoHomeAndChange(components::LivingAction& action);
+bool ExitGoHomeAndChange(components::LivingAction& action, VillagerStates next);
+
 } // namespace openblack::ecs::villager_home

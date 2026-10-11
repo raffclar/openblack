@@ -26,12 +26,15 @@ namespace openblack::inspector
 struct WindowInfo
 {
 	std::string name;
-	/// "debug" for the debug windows, "game" for the game's own: its menu and the Creature Cave
+	/// "debug" for the debug windows, "game" for the game's own: its menu, the start-of-game question, the tattoo
+	/// editor and the Creature Cave
 	std::string kind;
 	bool open {false};
-	/// For the game's menu, the page it shows, and the buttons that can be pressed by name
+	/// For the game's menu, the page it shows; for the game's dialogs, the controls that can be pressed by name
 	std::string page;
 	std::vector<std::string> buttons;
+	/// For the start-of-game question, the answer picked now
+	std::string selected;
 };
 
 /// A step of the way to a button inside a debug window: a label, or a number its window pushed (a row of a table)

@@ -398,6 +398,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	_renderContext.entityDraws.clear();
 	_renderContext.drawnObjects.clear();
 	_renderContext.highDetailDraws.clear();
+	_renderContext.inHandDraws.clear();
 	_renderContext.bonePalette.clear();
 	_heldThings.clear();
 	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
@@ -723,6 +724,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 			    _renderContext.highDetailDraws.push_back(
 			        {.entity = entity, .mesh = drawnMesh, .model = modelMatrix, .castModel = castModel});
+		    }
+		    if (registry.AllOf<InHand>(entity) && look.z != 1.0f)
+		    {
+			    // What a hand holds joins the hand's shadow
+			    _renderContext.inHandDraws.push_back(
+			        {.entity = entity, .mesh = drawnMesh, .model = modelMatrix, .castModel = modelMatrix});
 		    }
 		    if (slots->second.perEntity && placed.has_value())
 		    {

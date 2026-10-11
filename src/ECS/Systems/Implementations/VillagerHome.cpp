@@ -28,6 +28,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/CarriedByTornado.h"
+#include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/HandGrab.h"
@@ -57,6 +58,7 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerBuild.h"
 #include "VillagerDisciples.h"
@@ -263,6 +265,11 @@ std::optional<MoveState> WalkStateOf(entt::entity villager)
 
 const GAbodeInfo& AbodeInfoOf(entt::entity abode)
 {
+	// Its own row, its tribe's kind of building; the first row of its kind should its model not be known
+	if (const auto* info = world_objects::AbodeInfoOf(abode); info != nullptr)
+	{
+		return *info;
+	}
 	return Locator::infoConstants::value().abode.at(static_cast<size_t>(WorldRegistry().Get<const Abode>(abode).type));
 }
 
@@ -1279,5 +1286,106 @@ bool villager_home::ExitAtHome(LivingAction& action, VillagerStates next)
 		LeaveHome(EntityOf(action));
 	}
 	// Leaving is never held up
+	return false;
+}
+
+uint32_t villager_home::LookForBetterHome(LivingAction& action)
+{
+	const auto villager = EntityOf(action);
+	switch (Locator::townSystem::value().LookForBetterHome(villager))
+	{
+	case town_homes::NewHome::Stays:
+		return 0;
+	case town_homes::NewHome::Moved:
+		if (IsAvailable(villager))
+		{
+			SetTopState(action, VillagerStates::GoHome);
+		}
+		return 1;
+	case town_homes::NewHome::MadeHomeless:
+		SetTopState(action, VillagerStates::HomelessStart);
+		return 1;
+	case town_homes::NewHome::AlreadyHomeless:
+		return 1;
+	case town_homes::NewHome::NoTown:
+		VagrantStart(action);
+		return 1;
+	}
+	return 0;
+}
+
+void villager_home::TakeOnTribe(entt::entity villager, Tribe tribe, [[maybe_unused]] bool showEffect)
+{
+	auto& registry = WorldRegistry();
+	auto& person = registry.Get<Villager>(villager);
+	if (InfoOf(person).keepMeshWhenChangeTown != 0)
+	{
+		return;
+	}
+	const auto& infos = Locator::infoConstants::value().villager;
+	const auto row = static_cast<size_t>(GVillagerInfo::Find(tribe, person.number));
+	if (row >= infos.size())
+	{
+		return;
+	}
+	// It becomes the same kind of villager of the new tribe, wearing that tribe's models: a child its child model at
+	// every distance, an adult its kind's model for each distance
+	// TODO(villager-life-cycle): a white puff of smoke goes up as it changes when `showEffect` (the game's smoke puff isn't
+	// in openblack yet; the dying villager's skeleton swap needs the same)
+	const auto& info = infos.at(row);
+	person.tribe = tribe;
+	const bool child = person.lifeStage == Villager::LifeStage::Child;
+	const auto high = resources::HashIdentifier(child ? info.childMeshHigh : info.highDetail);
+	if (auto* mesh = registry.TryGet<Mesh>(villager); mesh != nullptr)
+	{
+		mesh->id = high;
+	}
+	if (auto* detail = registry.TryGet<DetailMeshes>(villager); detail != nullptr)
+	{
+		detail->meshes =
+		    child ? std::array {high, high, high}
+		          : std::array {high, resources::HashIdentifier(info.stdDetail), resources::HashIdentifier(info.lowDetail)};
+	}
+	registry.SetDirty();
+}
+
+uint32_t villager_home::GoHomeAndChange(LivingAction& action)
+{
+	const auto villager = EntityOf(action);
+	auto next = VillagerStates::DecideWhatToDo;
+	if (const auto abode = AbodeOf(villager); abode != entt::null)
+	{
+		const auto door = ArrivePosition(abode);
+		if (!AreWeThere(villager, door))
+		{
+			// TODO(villagers): hugging round what stands in the way, as the game's walk home does
+			SetupMoveTo(action, door, VillagerStates::GoHomeAndChange);
+			return 1;
+		}
+		next = IsAtHome(villager) ? VillagerStates::AtHome : VillagerStates::ArrivesHome;
+	}
+	SetTopState(action, next);
+	// TODO(villager-life-cycle): one still small for its age (a child just grown up) is sized for its age
+	return 1;
+}
+
+bool villager_home::ExitGoHomeAndChange(LivingAction& action, VillagerStates next)
+{
+	const auto villager = EntityOf(action);
+	const auto& table = Locator::infoConstants::value().villagerStateTable;
+	const auto& nextInfo = table.at(static_cast<size_t>(next));
+	// Going on to a state of its own (not a walk, nor this state again) it takes on its town's tribe, in a puff of smoke
+	// unless it goes indoors
+	if (next != VillagerStates::GoHomeAndChange && nextInfo.isFinalState != 0)
+	{
+		const auto town = TownOf(villager);
+		const auto* tribe = town != entt::null ? WorldRegistry().TryGet<const Tribe>(town) : nullptr;
+		TakeOnTribe(villager, tribe != nullptr ? *tribe : WorldRegistry().Get<const Villager>(villager).tribe,
+		            nextInfo.staysAtHomeOnExit == 0);
+	}
+	if (villager_disciple::TypeOf(villager) == VillagerDisciple::ChangeHouse)
+	{
+		villager_disciple::SetType(villager, VillagerDisciple::None);
+	}
 	return false;
 }

@@ -860,6 +860,47 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		    }
 		    return QueryResult::Value(Json {{"artefacts", std::move(items)}, {"count_by_player", std::move(counts)}});
 	    }));
+	provider->Add({.name = "artefact_worth",
+	               .description = "Sets an artefact's worth as its dances would raise it: it starts glowing once worth more "
+	                              "than 1, and shows its owner's symbol once worth more than 2",
+	               .parameters = {IdParameter("The artefact's entity id"),
+	                              {.name = "worth", .type = "number", .description = "Its new worth", .required = true},
+	                              {.name = "town",
+	                               .type = "integer",
+	                               .description = "A town to make it an artefact of first, as if put there by the player",
+	                               .required = false},
+	                              {.name = "player",
+	                               .type = "integer",
+	                               .description = "The player who puts it in the town (0 by default)",
+	                               .required = false}},
+	               .kind = ResultKind::Object,
+	               .needsNear = false,
+	               .writes = true},
+	              [](const QueryContext& context) {
+		              const auto entity = EntityParam(context.params);
+		              const auto worth = context.params.find("worth");
+		              if (!entity.has_value() || worth == context.params.end() || !worth->is_number() ||
+		                  !Locator::artefactSystem::has_value())
+		              {
+			              return QueryResult::Error("give an artefact's id and a worth");
+		              }
+		              // Made an artefact of a town first, when one is named, as if its player had put it there
+		              if (const auto town = context.params.find("town"); town != context.params.end())
+		              {
+			              const auto townEntity = FromId(*town);
+			              const auto player = context.params.value("player", 0);
+			              if (!townEntity.has_value() || player < 0 || player >= static_cast<int>(PlayerNames::_COUNT))
+			              {
+				              return QueryResult::Error("give a town's id and a player number");
+			              }
+			              Locator::artefactSystem::value().AddToTown(*entity, *townEntity, static_cast<PlayerNames>(player));
+		              }
+		              if (!Locator::artefactSystem::value().SetWorth(*entity, worth->get<float>()))
+		              {
+			              return QueryResult::Error("it isn't an artefact");
+		              }
+		              return QueryResult::Value(Json {{"id", Id(*entity)}, {"worth", worth->get<float>()}});
+	              });
 	provider->Add(Query("action", "A villager's or animal's action states: top, final, previous, and turns in them",
 	                    {IdParameter("The living thing's entity id")}),
 	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& context) {

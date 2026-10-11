@@ -50,8 +50,8 @@ void creature_learning::LearnDesireLesson(creature_desires::Desires& desires, De
 		auto& driver = state.sources.at(*source);
 		driver.threshold = std::clamp(driver.threshold - k_ThresholdStep * feedback, k_MinThreshold, k_MaxThreshold);
 	}
-	const auto lowest = std::max(rule.initialMax - k_MaxStep, 0.0f);
-	const auto highest = std::min(rule.initialMax + k_MaxStep, k_MaxMax);
+	const auto lowest = std::max(rule.initialMax - k_MaxReach, 0.0f);
+	const auto highest = std::min(rule.initialMax + k_MaxReach, k_MaxMax);
 	state.max = std::clamp(state.max + k_MaxStep * feedback, std::min(lowest, highest), highest);
 	if (rule.learnsWeight)
 	{
@@ -123,7 +123,8 @@ std::optional<size_t> creature_learning::BestContext(std::span<const Context> co
 {
 	std::optional<size_t> best;
 	float bestPriority = 0.0f;
-	for (size_t i = 0; i < contexts.size(); ++i)
+	// From the newest back, so that a tie goes to the newer
+	for (size_t i = contexts.size(); i-- > 0;)
 	{
 		const auto priority = LearningPriority(contexts[i]);
 		if (priority > bestPriority)

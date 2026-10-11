@@ -35,6 +35,14 @@ class ReactionSystemInterface
 {
 public:
 	/// A reaction as it is made
+	/// Which of the land's balances scales how impressive a reaction is: that of the things in the world (an object, a
+	/// creature) or that of the miracles. Each land's script sets them apart.
+	enum class Balance : uint8_t
+	{
+		Things,
+		Miracles,
+	};
+
 	struct Source
 	{
 		/// What it comes from, which takes it away again: a miracle, a crushed thing
@@ -57,6 +65,8 @@ public:
 		bool playerless {false};
 		/// Made as its miracle was cast: its time starts at once rather than when someone first takes it up
 		bool onCast {false};
+		/// The land's balance its impressiveness is scaled by
+		Balance balance {Balance::Things};
 	};
 
 	/// A reaction going on
@@ -106,9 +116,9 @@ public:
 	                            GuidanceAlignment /*alignment*/)
 	{
 	}
-	/// The balance of impressiveness the land sets, 1 unless a script changes it
-	virtual void SetLandBalance(float balance) = 0;
-	[[nodiscard]] virtual float GetLandBalance() const = 0;
+	/// A balance of impressiveness the land sets, 1 unless a script changes it
+	virtual void SetLandBalance(Balance which, float balance) = 0;
+	[[nodiscard]] virtual float GetLandBalance(Balance which) const = 0;
 
 	[[nodiscard]] virtual std::span<const Active> GetReactions() const = 0;
 	/// The reactions whose reach takes in a point

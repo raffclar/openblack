@@ -104,9 +104,6 @@ namespace town_compassion = openblack::creature_town_compassion;
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 constexpr float k_TurnsPerSecond = 1.0f / k_TurnSeconds;
 
-/// The weakest plan worth carrying out instead of what the creature does with nothing better to do: a desire of 0.3
-/// acted on with nothing learnt. The game weighs its idle activities through its planner too; this stands in for that.
-constexpr float k_MinPlanPriority = 15.0f;
 /// Feedback teaches lessons only once the creature has grown up this far; before, it only stirs its feelings
 constexpr uint32_t k_MinLessonPhase = 2;
 /// A stroke holds back sadness this long
@@ -1118,7 +1115,9 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		mind.leash.actOn.clear();
 	}
 	auto goals =
-	    leashTarget.has_value() || everyDesire ? std::vector<Desire> {} : creature_planner::NextGoals(mind.planner, eligible);
+	    leashTarget.has_value() || everyDesire
+	        ? std::vector<Desire> {}
+	        : creature_planner::NextGoals(mind.planner, eligible, creature_planner::GoalsPerTurn(registry.Size<Creature>()));
 	if (leashTarget.has_value() || everyDesire)
 	{
 		for (size_t d = 0; d < eligible.size(); ++d)
@@ -1234,7 +1233,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	{
 		return;
 	}
-	const auto choice = creature_planner::Choose(mind.planner, k_MinPlanPriority);
+	const auto choice = creature_planner::Choose(mind.planner);
 	if (choice.has_value() && !Adopt(creature, mind, *choice, situation))
 	{
 		mind.planner.best.at(static_cast<size_t>(choice->desire)).reset();
@@ -1897,8 +1896,7 @@ void CreatureMindSystem::PlayerDid(size_t deed, const glm::vec3& point, std::opt
 		        .canSee = glm::distance(at.position, point) <= k_ViewDistance,
 		    };
 		    const auto target = object.has_value() ? std::optional(entt::to_integral(*object)) : std::nullopt;
-		    if (creature_watching::StartMimicry(mind.learnt->mimicry, deed, tables->mimics, conditions, target,
-		                                        [this] { return Chance(); }))
+		    if (creature_watching::StartMimicry(mind.learnt->mimicry, deed, tables->mimics, conditions, target))
 		    {
 			    noticed.push_back(entity);
 		    }
