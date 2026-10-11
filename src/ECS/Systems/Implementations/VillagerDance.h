@@ -11,7 +11,10 @@
 
 #include <cstdint>
 
+#include <optional>
+
 #include <entt/entity/fwd.hpp>
+#include <glm/vec2.hpp>
 
 #include "Enums.h"
 
@@ -30,6 +33,10 @@ namespace openblack::ecs::villager_dance
 /// Each turn in a dance: it faces as its group's move has it, and walks to its place in its group's shape when it isn't
 /// there, to dance on there
 uint32_t InDance(components::LivingAction& action);
+/// Where a dancer's place in its group's shape is now, as walks reach it; none for one in no group
+[[nodiscard]] std::optional<glm::vec2> SlotOf(entt::entity villager);
+/// The same in any dance state: walking off, it comes back to that state at its place
+uint32_t PerformDance(components::LivingAction& action, VillagerStates danceState);
 /// Walking to its place in a dance: a place that moves this turn is walked to where it is now
 uint32_t MoveToDancePos(components::LivingAction& action);
 /// The clip a villager plays in its place in a dance, `walkClip` when its group's move has it walk

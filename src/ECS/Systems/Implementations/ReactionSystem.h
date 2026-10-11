@@ -38,6 +38,8 @@ public:
 	[[nodiscard]] bool HasReaction(entt::entity initiator) const override;
 	void ProcessTurn() override;
 	void Reset() override;
+	void GiveTownBelief(entt::entity town, PlayerNames player, float amount, entt::entity from,
+	                    GuidanceAlignment alignment) override;
 	void SetLandBalance(float balance) override { _landBalance = balance; }
 	[[nodiscard]] float GetLandBalance() const override { return _landBalance; }
 	[[nodiscard]] std::span<const Active> GetReactions() const override { return _reactions; }

@@ -58,6 +58,8 @@ public:
 	[[nodiscard]] virtual uint32_t Turn() const = 0;
 	/// A site's food pot, empty, standing at a point and turned to an angle (radians)
 	virtual entt::entity MakeFoodPot(glm::vec3 position, float yAngle) = 0;
+	/// The site's turn powers up the artefacts put down by it, every so many turns, by how many dance at it
+	virtual void PowerUpArtefacts(entt::entity /*site*/, uint32_t /*dancers*/) {}
 };
 
 } // namespace openblack::ecs::worship_site

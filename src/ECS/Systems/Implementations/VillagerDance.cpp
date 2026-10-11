@@ -124,7 +124,24 @@ uint32_t villager_dance::DanceSex(entt::entity villager)
 	return info.sex == SexType::Male ? ecs::components::DanceGroup::k_Men : ecs::components::DanceGroup::k_Women;
 }
 
+std::optional<glm::vec2> villager_dance::SlotOf(entt::entity villager)
+{
+	const auto placed = PlaceOf(villager);
+	if (!placed.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto place = moves::SlotPosition(*placed->dance, placed->group, placed->slot, moves::Shapes());
+	const auto whole = ecs::wall_hug::ToWhole(map_coords::ToMetres(place));
+	return map_coords::ToMetres(MapCoords {.x = whole.x, .z = whole.y});
+}
+
 uint32_t villager_dance::InDance(LivingAction& action)
+{
+	return PerformDance(action, VillagerStates::InDance);
+}
+
+uint32_t villager_dance::PerformDance(LivingAction& action, VillagerStates danceState)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto villager = registry.ToEntity(action);
@@ -165,9 +182,9 @@ uint32_t villager_dance::InDance(LivingAction& action)
 		// TODO(opening): the game's walk round things for places more than 4 m off, and the walk's first step taken this
 		// turn rather than on the next
 		auto& living = Locator::livingActionSystem::value();
-		if (living.VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, VillagerStates::InDance))
+		if (living.VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, danceState))
 		{
-			villager_home::SetupMobileMoveTo(action, map_coords::ToMetres(slot), VillagerStates::InDance);
+			villager_home::SetupMobileMoveTo(action, map_coords::ToMetres(slot), danceState);
 		}
 		living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::MoveToDancePos, true);
 	}

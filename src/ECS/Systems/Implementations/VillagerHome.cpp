@@ -43,6 +43,7 @@
 #include "ECS/Map.h"
 #include "ECS/NearestSearch.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
@@ -306,10 +307,16 @@ uint32_t CheckNeededForTownDesire(LivingAction& action)
 	const auto town = TownOf(villager);
 	const auto result = Locator::townDesireSystem::value().OfferVillager(
 	    town, IsChild(villager), OwnDesiresTrigger(villager), [&action](TownDesireInfo desire) -> uint32_t {
-		    // TODO(villagers): villagers take up the town's sleep and building yet; the game has them fetch food and wood,
-		    // repair, play and relax for it too (the jobs phase)
+		    // TODO(villagers): villagers take up the town's sleep, building and relaxation yet; the game has them fetch food
+		    // and wood, repair and play for it too (the jobs phase)
 		    switch (desire)
 		    {
+		    case TownDesireInfo::ForRelaxation:
+			    // The town offers the villager something to relax at: its artefacts' dances
+			    return Locator::artefactSystem::has_value() &&
+			                   Locator::artefactSystem::value().OfferRelaxation(TownOf(EntityOf(action)), EntityOf(action))
+			               ? 1
+			               : 0;
 		    case TownDesireInfo::ForSleep:
 			    return villager_home::CheckSatisfySleep(action);
 		    case TownDesireInfo::ToBuild:

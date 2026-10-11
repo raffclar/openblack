@@ -1418,8 +1418,20 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::TownAggression>(context).Field<&components::TownAggression::record>("record");
 	Reflect<components::TownArtefact>(context)
 	    .Field<&components::TownArtefact::town>("town")
+	    .Field<&components::TownArtefact::site>("site")
+	    .Field<&components::TownArtefact::inTown>("inTown")
+	    .Field<&components::TownArtefact::inSite>("inSite")
+	    .Field<&components::TownArtefact::joined>("joined")
 	    .Field<&components::TownArtefact::player>("player")
-	    .Field<&components::TownArtefact::value>("value");
+	    .Field<&components::TownArtefact::value>("value")
+	    .Field<&components::TownArtefact::dance>("dance")
+	    .Field<&components::TownArtefact::dancing>("dancing")
+	    .Field<&components::TownArtefact::danceStarted>("danceStarted")
+	    .Field<&components::TownArtefact::effect>("effect")
+	    .Field<&components::TownArtefact::symbol>("symbol")
+	    .Field<&components::TownArtefact::symbolMilliseconds>("symbolMilliseconds");
+	Reflect<components::TownArtefactGifts>(context).Field<&components::TownArtefactGifts::lastGift>("lastGift",
+	                                                                                                {k_PlayerNamesNames});
 	Reflect<components::DesireSort>(context)
 	    .Field<&components::DesireSort::boosts>("boosts")
 	    .Field<&components::DesireSort::value>("value")
