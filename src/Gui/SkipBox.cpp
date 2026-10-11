@@ -10,6 +10,7 @@
 #include "SkipBox.h"
 
 #include <algorithm>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -72,8 +73,8 @@ SkipBox::SkipBox(const TextDatabase& texts, const GameFont& font, int textSize)
 		_radios.at(i) = &radio;
 
 		const auto top = k_FirstAnswer + glm::ivec2(0, k_RadioStep * static_cast<int>(i));
-		auto& answer = _dialog.Add<StaticText>(DialogRect {.min = top, .max = top + k_AnswerSize},
-		                                       Text(texts, k_AnswerTexts.at(i), k_MissingPatchText),
+		_answers.at(i) = Text(texts, k_AnswerTexts.at(i), k_MissingPatchText);
+		auto& answer = _dialog.Add<StaticText>(DialogRect {.min = top, .max = top + k_AnswerSize}, _answers.at(i),
 		                                       StaticText::Layout::WrappedLeft, textSize);
 		answer.takesClicks = true;
 	}
@@ -83,6 +84,19 @@ DialogRect SkipBox::GetRadioRect(size_t index)
 {
 	const auto min = k_FirstRadio + glm::ivec2(0, k_RadioStep * static_cast<int>(index));
 	return {.min = min, .max = min + k_RadioSize};
+}
+
+std::vector<Dialog::NamedControl> SkipBox::GetNamedControls() const
+{
+	// The radio buttons' own label is a single space: they go by their answers instead
+	std::vector<Dialog::NamedControl> named;
+	std::ranges::copy_if(_dialog.GetNamedControls(), std::back_inserter(named),
+	                     [](const Dialog::NamedControl& control) { return control.name != k_RadioLabel; });
+	for (size_t i = 0; i < _answers.size(); ++i)
+	{
+		named.push_back({.name = _answers.at(i), .kind = "radio", .rect = GetRadioRect(i)});
+	}
+	return named;
 }
 
 void SkipBox::ShowSelection()

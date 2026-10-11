@@ -11,6 +11,8 @@
 
 #include <array>
 #include <optional>
+#include <string>
+#include <vector>
 
 #include <glm/vec2.hpp>
 
@@ -76,12 +78,18 @@ public:
 
 	[[nodiscard]] static DialogRect GetRadioRect(size_t index);
 
+	/// The controls that act, for tools pressing them by name: the OK button by its label, then each radio button by
+	/// the answer beside it (kind "radio"), in the order of the answers
+	[[nodiscard]] std::vector<Dialog::NamedControl> GetNamedControls() const;
+
 private:
 	/// Ticks the radio button of the selected answer and no other
 	void ShowSelection();
 
 	Dialog _dialog;
 	std::array<CheckBox*, new_game_choice::k_ChoiceCount> _radios {};
+	/// The answers' texts, which name their radio buttons for tools
+	std::array<std::u16string, new_game_choice::k_ChoiceCount> _answers;
 	new_game_choice::Choice _selection {new_game_choice::Choice::StartNormally};
 	std::optional<new_game_choice::Choice> _answer;
 	bool _active {false};
