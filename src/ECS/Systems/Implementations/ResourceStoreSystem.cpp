@@ -58,6 +58,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/Registry.h"
@@ -254,6 +255,38 @@ glm::vec2 HalfExtentOf(const Mesh& mesh)
 	const auto size = meshes.Handle(mesh.id)->GetBoundingBox().Size();
 	return glm::vec2(size.x, size.z) * 0.5f;
 }
+
+/// A worship site's food pot, the store of its food; none for anything else or a site without one
+Pot* WorshipSitePot(entt::entity site)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* data = registry.Valid(site) ? registry.TryGet<const WorshipSite>(site) : nullptr;
+	if (data == nullptr || data->foodPot == entt::null || !registry.Valid(data->foodPot))
+	{
+		return nullptr;
+	}
+	return registry.TryGet<Pot>(data->foodPot);
+}
+
+bool IsWorshipSite(entt::entity thing)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	return registry.Valid(thing) && registry.AllOf<WorshipSite>(thing);
+}
+
+/// A worship site takes food into its pot, as much as it is given
+uint32_t AddToWorshipSite(entt::entity site, ResourceType type, uint32_t amount, bool poisoned)
+{
+	auto* pot = WorshipSitePot(site);
+	if (pot == nullptr || (type != ResourceType::Food && type != ResourceType::Any))
+	{
+		// TODO(worship): a site still going up takes wood onto its building site
+		return 0;
+	}
+	pot->amount += amount;
+	pot->poisoned = pot->poisoned || poisoned;
+	return amount;
+}
 } // namespace
 
 ResourceStoreSystemInterface::ObjectResource ResourceStoreSystem::ResourceOf(entt::entity object) const
@@ -323,6 +356,13 @@ std::optional<entt::entity> ResourceStoreSystem::StoreOf(entt::entity pile) cons
 			store = pit;
 		}
 	});
+	// A worship site's food pot is its store
+	Entities().Each<const WorshipSite>([pile, &store](entt::entity site, const WorshipSite& data) {
+		if (data.foodPot == pile)
+		{
+			store = site;
+		}
+	});
 	return store;
 }
 
@@ -337,13 +377,18 @@ bool ResourceStoreSystem::IsStore(entt::entity store, ResourceType type) const
 	{
 		return true;
 	}
+	// A worship site stores food in its pot
+	if (IsWorshipSite(store))
+	{
+		return type == ResourceType::Food || type == ResourceType::Any;
+	}
 	// A building going up stores wood on its site
 	if (IsBuildingSite(store))
 	{
 		return ecs::store_rules::BuildingSiteStores(type);
 	}
 	// A pile stores only its own resource, and only through the store it is part of
-	// TODO(stores): worship sites store food and workshops wood; openblack has neither store yet
+	// TODO(stores): workshops store wood; openblack has no workshops yet
 	if (const auto* pot = registry.TryGet<const Pot>(store))
 	{
 		const auto own = PotInfoOf(pot->type).resourceType;
@@ -419,6 +464,10 @@ uint32_t ResourceStoreSystem::AddToStore(entt::entity store, ResourceType type, 
 	if (const auto structure = registry.AllOf<Pot>(store) ? StoreOf(store) : std::nullopt)
 	{
 		return AddToStore(*structure, type, amount, giver, poisoned, at);
+	}
+	if (IsWorshipSite(store))
+	{
+		return AddToWorshipSite(store, type, amount, poisoned);
 	}
 	// A building going up takes wood onto its site, where the builders take it from
 	if (IsBuildingSite(store))
@@ -759,6 +808,11 @@ uint32_t ResourceStoreSystem::GetResource(entt::entity object, ResourceType type
 	{
 		return 0;
 	}
+	if (IsWorshipSite(object))
+	{
+		const auto* pot = WorshipSitePot(object);
+		return pot != nullptr && type == ResourceType::Food ? pot->amount : 0u;
+	}
 	if (auto* abode = registry.TryGet<Abode>(object))
 	{
 		// A building keeps a count of each, and nothing of anything else
@@ -806,6 +860,10 @@ uint32_t ResourceStoreSystem::AddResource(entt::entity object, ResourceType type
 			}
 		}
 		return 0;
+	}
+	if (IsWorshipSite(object))
+	{
+		return AddToWorshipSite(object, type, amount, false);
 	}
 	if (auto* site = PiledSite(object))
 	{
@@ -888,6 +946,17 @@ uint32_t ResourceStoreSystem::RemoveResource(entt::entity object, ResourceType t
 	if (!registry.Valid(object))
 	{
 		return 0;
+	}
+	if (IsWorshipSite(object))
+	{
+		auto* pot = WorshipSitePot(object);
+		if (pot == nullptr || (type != ResourceType::Food && type != ResourceType::Any))
+		{
+			return 0;
+		}
+		const auto taken = std::min(amount, pot->amount);
+		pot->amount -= taken;
+		return taken;
 	}
 	if (auto* site = PiledSite(object))
 	{

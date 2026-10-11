@@ -58,6 +58,8 @@ public:
 	virtual void EmpathiseWithPlayer(PlayerNames player, glm::vec3 position) = 0;
 	/// A number floats up from a point, in a colour (0xAARRGGBB)
 	virtual void FloatNumber(glm::vec3 position, float value, uint32_t colour) = 0;
+	/// A town's worship share has just been set: it sends people to worship, or calls them back, to match it
+	virtual void ShareSet(entt::entity /*town*/) {}
 };
 
 } // namespace openblack::ecs::village_totem

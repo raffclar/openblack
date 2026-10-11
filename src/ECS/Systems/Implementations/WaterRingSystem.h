@@ -23,13 +23,18 @@ namespace openblack::ecs::systems
 class WaterRingSystem final: public WaterRingSystemInterface
 {
 public:
-	void Reset() override { _rings.clear(); }
+	void Reset() override
+	{
+		_rings.clear();
+		_pace = {};
+	}
 	bool Add(const water_rings::Ring& ring) override;
-	void Update(std::chrono::duration<float, std::milli> gameTime) override;
+	void Update(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime) override;
 	[[nodiscard]] std::span<const water_rings::Ring> GetRings() const override { return _rings; }
 
 private:
 	std::vector<water_rings::Ring> _rings;
+	water_rings::Pace _pace;
 };
 
 } // namespace openblack::ecs::systems

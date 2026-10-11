@@ -262,15 +262,22 @@ void villager_physics::Land(PhysicsEntry* entry, entt::entity villager)
 	}
 	if (!alive)
 	{
+		const bool onBack = pose == living::LandingPose::Back;
 		if (IsDead(villager))
 		{
+			// A body lies as it came down
+			if (auto* death = registry.TryGet<VillagerDeath>(villager))
+			{
+				death->onBack = onBack;
+			}
 			SetTopState(*action, VillagerStates::Dead);
 		}
 		else
 		{
 			// Killed in the air, it dies of the fall where it lands, put down to the thrower's player
-			villager_fire::DieByEffect(villager,
-			                           villager_fire::DeathCause {.reason = DeathReason::PlayerInteraction, .killer = player});
+			villager_fire::DieByEffect(
+			    villager,
+			    villager_fire::DeathCause {.reason = DeathReason::PlayerInteraction, .killer = player, .onBack = onBack});
 		}
 		return;
 	}

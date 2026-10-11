@@ -32,6 +32,7 @@ public:
 	void RingBell(glm::vec3 position) override;
 	void ReactToHandUsingTotem(entt::entity totem, PlayerNames player, glm::vec3 position) override;
 	void EmpathiseWithPlayer(PlayerNames player, glm::vec3 position) override;
+	void ShareSet(entt::entity town) override;
 	void FloatNumber(glm::vec3 position, float value, uint32_t colour) override;
 };
 

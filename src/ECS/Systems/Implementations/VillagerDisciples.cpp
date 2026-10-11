@@ -555,8 +555,11 @@ bool SetAboutWork(LivingAction& action, VillagerDisciple type)
 		return villager_fisherman::FishermanLookForWater(action) == 1;
 	case Breeder:
 		return villager_breeding::SetupBreederDisciple(action);
+	case Worship:
+		SetTopState(action, VillagerStates::GotoWorshipSiteForWorship);
+		return true;
 	// TODO(disciples): the other kinds' work isn't in openblack yet (see the handover): farming for farmers, supplying
-	// workshops, trading and worship. Until it is they find none and wait by the town centre; a missionary lives as an ordinary
+	// workshops and trading. Until it is they find none and wait by the town centre; a missionary lives as an ordinary
 	// villager of its town.
 	default:
 		return false;
@@ -573,6 +576,7 @@ bool LandingStateIsThere(VillagerStates state)
 	case VillagerStates::ScriptInCrowd:
 	case VillagerStates::ForesterArrivesAtForest:
 	case VillagerStates::BreederJustLanded:
+	case VillagerStates::GotoWorshipSiteForWorship:
 		return true;
 	default:
 		return false;

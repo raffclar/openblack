@@ -232,6 +232,20 @@ struct RenderContext
 	graphics::DynamicVertexBufferHandle heldInstanceBuffer;
 	uint32_t heldCapacity {0};
 
+	/// The souls of the dead rising this frame, each drawn alone with its own bones, white and blended by its alpha over
+	/// the rest. Their instances are in soulInstanceBuffer.
+	struct SoulDraw
+	{
+		entt::id_type meshId {0};
+		uint32_t instance {0};
+		std::vector<glm::mat4> bones;
+		float alpha {1.0f};
+	};
+	std::vector<SoulDraw> soulDraws;
+	std::vector<ObjectInstance> soulInstances;
+	graphics::DynamicVertexBufferHandle soulInstanceBuffer;
+	uint32_t soulCapacity {0};
+
 	/// Kept for backward compatibility, will be removed once shader is updated
 	std::vector<glm::mat4> treeInstanceUniforms;
 	std::vector<glm::vec4> treeSwayParams;

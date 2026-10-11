@@ -189,6 +189,7 @@
 #include "ECS/TempleConstruction.h"
 #include "ECS/TownDesire.h"
 #include "ECS/TownPlaythings.h"
+#include "ECS/VillagerAfterDeath.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerScriptRules.h"
 #include "ECS/VillagerSkeletons.h"
@@ -7624,10 +7625,17 @@ void SoundExists() // 409 SOUND_EXISTS
 
 void GetTownWorshipDeaths() // 410 GET_TOWN_WORSHIP_DEATHS
 {
-	// const auto town = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// How many of the town's people have died of chanting at worship; 0, with an error, for what isn't a town
+	const auto object = PopObject();
+	const auto* town =
+	    object != entt::null ? Locator::entitiesRegistry::value().TryGet<const ecs::components::Town>(object) : nullptr;
+	if (town == nullptr)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "GET_TOWN_WORSHIP_DEATHS: town invalid");
+		Pushf(0.0f);
+		return;
+	}
+	Pushf(static_cast<float>(ecs::villager_after_death::DeathsOf(object, DeathReason::Chant)));
 }
 
 void GameClearDialogue() // 411 GAME_CLEAR_DIALOGUE
