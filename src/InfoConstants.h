@@ -1180,7 +1180,8 @@ struct GVillagerStateTableInfo
 	uint32_t field0xf4;
 	/// The life a villager in the state loses each turn
 	float lifeDrain;
-	uint32_t field0xfc;
+	/// The help text telling what a villager in the state is doing, as its details show it
+	uint32_t helpText;
 	uint32_t field0x100;
 };
 
