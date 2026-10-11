@@ -107,11 +107,9 @@ constexpr auto k_PourPoisonedFood = ParticleType::FoodPutdownPoisoned;
 constexpr auto k_ScoopFood = ParticleType::FoodPickup;
 constexpr auto k_ScoopWood = ParticleType::WoodPickup;
 constexpr auto k_ScoopPoisonedFood = ParticleType::FoodPickupPoisoned;
-/// The scooping sound of the in-game bank, for food and for wood, played each game turn at a pitch rising with the scoop
-constexpr uint32_t k_ScoopSample = 44;
-constexpr uint32_t k_ScoopWoodSample = 98;
-constexpr float k_ScoopPitchStart = 60.0f;
-constexpr float k_ScoopPitchRise = 180.0f;
+/// The scooping sounds of the in-game bank, for food and for wood: loops that play until stopped
+constexpr auto k_ScoopSound = audio::SoundId::G_PickUpFood;
+constexpr auto k_ScoopWoodSound = audio::SoundId::G_PickUpWood;
 
 const graphics::L3DMesh* MeshOf(const Registry& registry, entt::entity object)
 {
@@ -746,17 +744,35 @@ void GameHandGrabWorld::MoveScoopStream(uint32_t stream, glm::vec3 hand)
 	}
 }
 
-void GameHandGrabWorld::PlayScoopSound(ResourceType resource, glm::vec3 hand, float ramp)
+entt::entity GameHandGrabWorld::PlayScoopSound(entt::entity playing, ResourceType resource, glm::vec3 hand, float ramp)
+{
+	if (!Locator::audio::has_value())
+	{
+		return entt::null;
+	}
+	auto& audio = Locator::audio::value();
+	// Its pitch rises as the scoop ramps up
+	const auto pitch = hand_grab::ScoopSoundPitch(ramp);
+	// Already playing, it goes on where it started and only follows the ramp
+	if (playing != entt::null && audio.EmitterExists(playing))
+	{
+		audio.SetEmitterPitch(playing, pitch);
+		return playing;
+	}
+	// Wood rattles in, anything else pours
+	const auto sound = static_cast<entt::id_type>(resource == ResourceType::Wood ? k_ScoopWoodSound : k_ScoopSound);
+	return audio::StartGameSoundEffect(sound, {.position = hand, .pitchPercent = pitch, .playType = audio::PlayType::Repeat});
+}
+
+void GameHandGrabWorld::StopScoopSound()
 {
 	if (!Locator::audio::has_value())
 	{
 		return;
 	}
-	// Wood rattles in, anything else pours; its pitch rises as the scoop ramps up
-	const uint32_t sample = resource == ResourceType::Wood ? k_ScoopWoodSample : k_ScoopSample;
-	const auto pitch = static_cast<uint32_t>(ramp * k_ScoopPitchRise + k_ScoopPitchStart);
-	audio::StartGameSoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(),
-	                            {.position = hand, .pitchPercent = pitch});
+	auto& audio = Locator::audio::value();
+	audio.StopSoundEffect(static_cast<entt::id_type>(k_ScoopSound));
+	audio.StopSoundEffect(static_cast<entt::id_type>(k_ScoopWoodSound));
 }
 
 float GameHandGrabWorld::LandHeightAt(glm::vec3 point) const
