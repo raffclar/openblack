@@ -151,6 +151,14 @@ struct BeliefSprite
 	uint32_t colour {0xFFFFFF};
 };
 
+/// A village centre as its symbols of belief see it: the top of its totem and how much the village believes in each
+/// player, by number
+struct TownCentreBelief
+{
+	glm::vec3 totemTop {0.0f};
+	std::array<float, 8> beliefs {};
+};
+
 /// A creature's body as the creature spells' particles see it: where it stands, how big it is, where each of its bones
 /// is in the world and which bone mirrors each, and the bones of its right foot and right eye
 struct CreatureSpellBody
@@ -286,6 +294,13 @@ public:
 	[[nodiscard]] virtual std::shared_ptr<const void> HoldArc() const { return nullptr; }
 	/// The next symbol of belief waiting to rise, the last queued first
 	[[nodiscard]] virtual std::optional<BeliefSprite> TakeBeliefSprite() { return std::nullopt; }
+	/// A village centre's totem and belief, none for a centre that has gone or has no totem
+	[[nodiscard]] virtual std::optional<TownCentreBelief> TownCentreBeliefOf(entt::entity /*centre*/) const
+	{
+		return std::nullopt;
+	}
+	/// The players taking part in the game, by number, the neutral player left out
+	[[nodiscard]] virtual std::vector<int> PlayersInGame() const { return {}; }
 	/// A strike no miracle is behind, as a script calls one down, burns what is within reach of where it lands by the
 	/// weather's lightning
 	virtual void StrikeWithoutMiracle(glm::vec3 /*point*/) {}
@@ -564,6 +579,8 @@ struct Atom
 	glm::vec2 creatorValue {0.0f};
 	/// A number of its own in 0..255, drawn when it is made
 	uint32_t random {0};
+	/// The player it shows the symbol or colour of, when not its effect's player; -1 for its effect's
+	int player {-1};
 	/// Turned away by a shield, or cooled, so that it no longer acts on what it meets
 	bool deflected {false};
 	/// How much of its effect's draw offset it takes, as the start of a bolt from the hand keeps up with the hand between
@@ -616,6 +633,8 @@ struct Collection
 	float birth {0.0f};
 	/// The whole collection's alpha, 0..255
 	float alpha {255.0f};
+	/// Whether its emitters may let atoms out, which a rule over it can stop
+	bool emitting {true};
 	/// Its atoms are drawn between the last two steps; the lightning's forks are drawn as last stepped
 	bool interpolated {true};
 	/// In the frame of an ancestor atom whose group is a hierarchy
@@ -798,6 +817,8 @@ public:
 		float offsetWeight {1.0f};
 		/// The triangles of a piece of a broken model
 		std::shared_ptr<const blast::MeshFragment> fragment;
+		/// The player it shows, when not its effect's (Atom::player); -1 for its effect's
+		int player {-1};
 	};
 	/// The ribbon through the joints of one collection
 	struct DrawChain

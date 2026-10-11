@@ -81,6 +81,9 @@ public:
 	virtual std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) = 0;
 	virtual void HandleActions(std::chrono::microseconds dt) = 0;
 	virtual void SetFlight(glm::vec3 origin, glm::vec3 focus) = 0;
+	/// The camera has been put here from outside (a debug tool): whatever it was doing (a flight, a drag of the land,
+	/// easing towards somewhere else) is forgotten, so that it stays here until the player or a script moves it
+	virtual void PlaceAt(glm::vec3 /*origin*/, glm::vec3 /*focus*/) {}
 	[[nodiscard]] virtual glm::vec3 GetTargetOrigin() const = 0;
 	[[nodiscard]] virtual glm::vec3 GetTargetFocus() const = 0;
 	[[nodiscard]] virtual std::chrono::seconds GetIdleTime() const = 0;

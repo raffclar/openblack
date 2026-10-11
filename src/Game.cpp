@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <chrono>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -152,6 +153,7 @@
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
@@ -1129,6 +1131,11 @@ bool Game::GameLogicLoop() noexcept
 	Locator::chimneySmokeSystem::value().ProcessTurn();
 	// How far the players' influence reaches, and its border
 	Locator::influenceSystem::value().ProcessTurn(Locator::time::value().GetTurn());
+	// The players' hearts beat on, quicker the more their people are in danger
+	if (Locator::heartbeatSystem::has_value())
+	{
+		Locator::heartbeatSystem::value().ProcessTurn(Locator::time::value().GetTurn());
+	}
 	// The crops in the fields grow
 	Locator::fieldSystem::value().ProcessTurn(Locator::time::value().GetTurn());
 	// The fish come back to the fish farms
@@ -1786,6 +1793,8 @@ bool Game::Update() noexcept
 	Locator::villageLightSystem::value().Update(gameTime);
 	// The town totems ease to their shares
 	Locator::villageTotemSystem::value().Update(gameTime.count());
+	// The players' symbols of belief over the village centres move on
+	Locator::townSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	Locator::fieldSystem::value().Update(gameTime);
 	// The shoals near the camera swim, and dart from what scared them
 	Locator::fishFarmSystem::value().Update(std::chrono::duration<float>(gameTime).count(),
@@ -2152,13 +2161,6 @@ bool Game::Update() noexcept
 				}
 				UpdateMagicHand(handTransform.position,
 				                std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
-				// The camera's helper icons by the hand, where it is drawn this frame
-				UpdateHandTricons(handTransform.position,
-				                  std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
-			}
-			else
-			{
-				UpdateHandTricons(std::nullopt, 0.0f);
 			}
 			{
 				// The globes and the hand show their miracles
@@ -2325,6 +2327,8 @@ bool Game::Update() noexcept
 				}
 			}
 		}
+		// The camera's helper icons by the hand, where it is drawn this frame, now that it is posed
+		UpdateHandTricons(IsHandDrawn(), std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 		// Taking or letting go of a seed cross-fades the drawn hand, and the seed's in-hand effect sits in its fingers
 		{
 			const auto handEntity = Locator::handSystem::value()
@@ -4274,23 +4278,18 @@ void Game::UpdateHandNavigation(const ecs::components::Transform& handTransform)
 	_handPose = pose;
 }
 
-void Game::UpdateHandTricons(std::optional<glm::vec3> handPosition, float seconds)
+void Game::UpdateHandTricons(bool handDrawn, float seconds)
 {
 	if (!_interface)
 	{
 		return;
-	}
-	// The hand's last point on the screen while it grips the land
-	if (_handCameraState)
-	{
-		_handLastGrip = _mousePosition;
 	}
 	_interface->SetHandTricons(std::nullopt);
 	// Shown from the world camera, or from a tutorial demonstration's recording in any camera, out of the temple
 	const auto& camera = Locator::camera::value();
 	const auto cues = camera.GetModel().GetHandCues();
 	const bool demonstration = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsPlaying(0);
-	if (!handPosition.has_value() || (!demonstration && !cues.icons.has_value()) || !Locator::windowing::has_value() ||
+	if (!handDrawn || (!demonstration && !cues.icons.has_value()) || !Locator::windowing::has_value() ||
 	    (Locator::temple::has_value() && Locator::temple::value().Active()))
 	{
 		return;
@@ -4336,7 +4335,20 @@ void Game::UpdateHandTricons(std::optional<glm::vec3> handPosition, float second
 	tricons.rotateAngle = _triconAngle;
 
 	const auto screen = glm::vec2(Locator::windowing::value().GetSize());
-	const auto clip = camera.GetViewProjectionMatrix() * glm::vec4(*handPosition, 1.0f);
+	// Where the posed hand is drawn: by its first bone, at the wrist
+	const auto handEntity =
+	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* handTransform = registry.TryGet<ecs::components::Transform>(handEntity);
+	if (handTransform == nullptr)
+	{
+		return;
+	}
+	const auto* hand = registry.TryGet<ecs::components::Hand>(handEntity);
+	const auto anchor = hand_tricons::AnchorPoint(handTransform->position, handTransform->rotation, handTransform->scale,
+	                                              hand != nullptr ? std::span<const glm::mat4>(hand->boneMatrices)
+	                                                              : std::span<const glm::mat4>());
+	const auto clip = camera.GetViewProjectionMatrix() * glm::vec4(anchor, 1.0f);
 	// Not with the hand behind the camera
 	if (clip.w < camera.GetNearClip())
 	{
@@ -4344,7 +4356,8 @@ void Game::UpdateHandTricons(std::optional<glm::vec3> handPosition, float second
 	}
 	tricons.hand = {static_cast<int>((clip.x / clip.w + 1.0f) * screen.x * 0.5f),
 	                static_cast<int>((1.0f - clip.y / clip.w) * screen.y * 0.5f)};
-	tricons.lastGrip = _handLastGrip;
+	// They lean towards the cursor the hand follows this frame, after any warp onto the edge's turning ring
+	tricons.cursor = _mousePosition;
 	// The same size on the screen at any distance: a part of the focal length across
 	tricons.halfSize = camera.GetProjectionMatrix()[0][0] * screen.x * 0.5f / hand_tricons::k_FocalDivisor;
 	// The hand's empty and camera states show them, not while it holds something or is on a creature

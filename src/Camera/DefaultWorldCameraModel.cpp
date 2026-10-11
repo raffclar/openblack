@@ -907,14 +907,17 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	{
 		_rotateAroundDelta.x = 0.0f;
 	}
-	// The hints follow the cursor while nothing is dragged and the camera isn't being turned, moved or zoomed
-	if (!_dragging && !rotateAroundMouse && _rotateAroundDelta == glm::vec3() && _keyBoardMoveDelta == glm::vec2() &&
+	// The hints follow the cursor while no button holds the camera and the player isn't turning, moving or zooming it;
+	// the camera tilting itself doesn't stop them
+	const bool playerMovesCamera = _rotateAroundDelta != glm::vec3() || _keyBoardMoveDelta != glm::vec2();
+	if (camera_drag::HintsFollowCursor(_dragging || rotateAroundMouse, playerMovesCamera, autoTilting) &&
 	    Locator::windowing::has_value())
 	{
-		const auto screenSize = Locator::windowing::value().GetSize();
+		const auto& windowing = Locator::windowing::value();
+		const auto screenSize = windowing.GetSize();
 		const auto cursor =
 		    camera_drag::NormalisedCursor(glm::ivec2(actionSystem.GetMousePosition()), screenSize, ViewHeight(screenSize));
-		_tricons = camera_drag::IdleTricons(cursor, _screenSpaceMouseRaycastHit.has_value());
+		_tricons = camera_drag::IdleTricons(cursor, _screenSpaceMouseRaycastHit.has_value(), windowing.IsWindowed());
 		// Watching a fight, the camera offers no tilting
 		if (onFight)
 		{
@@ -1146,6 +1149,29 @@ void DefaultWorldCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus)
 	};
 	const auto woosh = k_WooshingNoiseIds.at(static_cast<size_t>(machine_clock::Ticks() & 3));
 	audio::PlayGameSoundEffect(static_cast<entt::id_type>(woosh), std::nullopt);
+}
+
+void DefaultWorldCameraModel::PlaceAt(glm::vec3 origin, glm::vec3 focus)
+{
+	_currentOrigin = origin;
+	_currentFocus = focus;
+	_targetOrigin = origin;
+	_targetFocus = focus;
+	// Turning, tilting and zooming start again from here
+	_originAtClick = origin;
+	_focusAtClick = focus;
+	_originFocusDistanceAtInteractionStart = glm::distance(origin, focus);
+	_arcBallRadius = 0.0f;
+	_screenSpaceMouseRaycastHitAtClick.reset();
+	// No flight carries it off, and a drag of the land held meanwhile grips the land again as the camera now looks at it
+	_flightPath.reset();
+	_mode = Mode::Cartesian;
+	_modePrev = Mode::Cartesian;
+	_dragging = false;
+	_dragGivenUp = false;
+	_landGrip.reset();
+	_heldBack = false;
+	_twoButtonTurn = {};
 }
 
 glm::vec3 DefaultWorldCameraModel::GetTargetOrigin() const

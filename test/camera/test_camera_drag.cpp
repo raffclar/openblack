@@ -9,6 +9,8 @@
 
 #include <cmath>
 
+#include <array>
+
 #include <glm/gtc/constants.hpp>
 #include <gtest/gtest.h>
 
@@ -33,27 +35,27 @@ TEST(CameraDrag, CursorIsMeasuredFromTheMiddle)
 
 TEST(CameraDrag, TheMiddleOffersNoHints)
 {
-	EXPECT_EQ(IdleTricons({0.0f, 0.0f}, true), tricon::k_Idle);
-	EXPECT_EQ(IdleTricons({0.45f, 0.43f}, true), tricon::k_Idle);
+	EXPECT_EQ(IdleTricons({0.0f, 0.0f}, true, false), tricon::k_Idle);
+	EXPECT_EQ(IdleTricons({0.45f, 0.43f}, true, false), tricon::k_Idle);
 }
 
 TEST(CameraDrag, TheSidesAndBottomOfferTurning)
 {
 	const auto turning = tricon::k_Idle | tricon::k_Rotate | tricon::k_Turning;
-	EXPECT_EQ(IdleTricons({0.46f, 0.0f}, true), turning);
-	EXPECT_EQ(IdleTricons({-0.46f, 0.0f}, true), turning);
-	EXPECT_EQ(IdleTricons({0.0f, 0.44f}, true), turning);
+	EXPECT_EQ(IdleTricons({0.46f, 0.0f}, true, false), turning);
+	EXPECT_EQ(IdleTricons({-0.46f, 0.0f}, true, false), turning);
+	EXPECT_EQ(IdleTricons({0.0f, 0.44f}, true, false), turning);
 	// The very bottom tilts too
-	EXPECT_EQ(IdleTricons({0.0f, 0.495f}, true), turning | tricon::k_Pitch);
+	EXPECT_EQ(IdleTricons({0.0f, 0.495f}, true, false), turning | tricon::k_Pitch);
 }
 
 TEST(CameraDrag, TheTopOffersEverything)
 {
 	const auto all = tricon::k_Idle | tricon::k_Rotate | tricon::k_Pitch | tricon::k_Top | tricon::k_Turning;
-	EXPECT_EQ(IdleTricons({0.0f, -0.495f}, true), all);
+	EXPECT_EQ(IdleTricons({0.0f, -0.495f}, true, false), all);
 	// Over no land the top starts lower down
-	EXPECT_EQ(IdleTricons({0.0f, -0.45f}, false), all);
-	EXPECT_EQ(IdleTricons({0.0f, -0.45f}, true), tricon::k_Idle);
+	EXPECT_EQ(IdleTricons({0.0f, -0.45f}, false, false), all);
+	EXPECT_EQ(IdleTricons({0.0f, -0.45f}, true, false), tricon::k_Idle);
 }
 
 TEST(CameraDrag, PressingAwayFromTheEdgesGripsAtOnce)
@@ -68,7 +70,7 @@ TEST(CameraDrag, PressingAwayFromTheEdgesGripsAtOnce)
 TEST(CameraDrag, NothingIsDecidedUntilTheMouseMovesFarEnough)
 {
 	DragClassifier drag;
-	drag.Start(IdleTricons({0.47f, 0.0f}, true), {0.47f, 0.0f}, 1000);
+	drag.Start(IdleTricons({0.47f, 0.0f}, true, false), {0.47f, 0.0f}, 1000);
 	EXPECT_FALSE(drag.GetMode().has_value());
 	EXPECT_EQ(drag.GetTricons(), tricon::k_Rotate | tricon::k_Turning);
 	// 20 pixels down a 1280 wide screen is under a fiftieth
@@ -83,24 +85,24 @@ TEST(CameraDrag, NothingIsDecidedUntilTheMouseMovesFarEnough)
 TEST(CameraDrag, AQuickDragFromTheSideTowardsTheMiddlePans)
 {
 	DragClassifier quick;
-	quick.Start(IdleTricons({0.47f, 0.0f}, true), {0.47f, 0.0f}, 1000);
+	quick.Start(IdleTricons({0.47f, 0.0f}, true, false), {0.47f, 0.0f}, 1000);
 	quick.Move({-40, 0}, k_Screen, k_Screen.y, 1100, true);
 	EXPECT_EQ(quick.GetMode(), DragMode::Pan);
 
 	DragClassifier slow;
-	slow.Start(IdleTricons({0.47f, 0.0f}, true), {0.47f, 0.0f}, 1000);
+	slow.Start(IdleTricons({0.47f, 0.0f}, true, false), {0.47f, 0.0f}, 1000);
 	slow.Move({-40, 0}, k_Screen, k_Screen.y, 1301, true);
 	EXPECT_EQ(slow.GetMode(), DragMode::EdgeRotate);
 
 	DragClassifier outwards;
-	outwards.Start(IdleTricons({-0.47f, 0.0f}, true), {-0.47f, 0.0f}, 1000);
+	outwards.Start(IdleTricons({-0.47f, 0.0f}, true, false), {-0.47f, 0.0f}, 1000);
 	outwards.Move({-40, 0}, k_Screen, k_Screen.y, 1100, true);
 	EXPECT_EQ(outwards.GetMode(), DragMode::EdgeRotate);
 }
 
 TEST(CameraDrag, AtTheTopUpAndDownTiltsAndAcrossTurns)
 {
-	const auto top = IdleTricons({0.0f, -0.495f}, true);
+	const auto top = IdleTricons({0.0f, -0.495f}, true, false);
 	DragClassifier upDown;
 	upDown.Start(top, {0.0f, -0.495f}, 0);
 	upDown.Move({0, -40}, k_Screen, k_Screen.y, 500, true);
@@ -115,7 +117,7 @@ TEST(CameraDrag, AtTheTopUpAndDownTiltsAndAcrossTurns)
 
 TEST(CameraDrag, AQuickTiltDownOverLandPans)
 {
-	const auto bottom = IdleTricons({0.0f, 0.495f}, true);
+	const auto bottom = IdleTricons({0.0f, 0.495f}, true, false);
 	DragClassifier quick;
 	quick.Start(bottom, {0.0f, 0.495f}, 0);
 	quick.Move({0, 40}, k_Screen, k_Screen.y, 50, true);
@@ -183,4 +185,91 @@ TEST(CameraDrag, TheCinemaBarsMeasureByA16To9Picture)
 	EXPECT_FLOAT_EQ(NormalisedCursor({640, 512 + 360}, {1280, 1024}, 720).y, 0.5f);
 	// On a screen as wide as 16:9 or wider the bars take nothing
 	EXPECT_EQ(ViewHeight({1920, 1080}, true), 1080);
+}
+
+namespace
+{
+/// The resolutions the game is played at, from the original's smallest to today's wide screens
+constexpr std::array<glm::ivec2, 6> k_Resolutions {
+    glm::ivec2 {640, 480},   glm::ivec2 {1280, 1024}, glm::ivec2 {1600, 1200},
+    glm::ivec2 {1920, 1080}, glm::ivec2 {2560, 1440}, glm::ivec2 {3440, 1440},
+};
+
+/// The hints with nothing dragged at a pixel of a screen without the cinema bars, over land
+uint32_t HintsAt(glm::ivec2 pixel, glm::ivec2 screen, bool windowed)
+{
+	return IdleTricons(NormalisedCursor(pixel, screen, screen.y), true, windowed);
+}
+} // namespace
+
+TEST(CameraDrag, InAWindowTheVeryTopAndBottomReachFurtherIn)
+{
+	const auto turning = tricon::k_Idle | tricon::k_Rotate | tricon::k_Turning;
+	const auto all = turning | tricon::k_Pitch | tricon::k_Top;
+	// Full screen the bottom tilts only beyond 0.49 of the height from the middle, in a window beyond 0.45
+	EXPECT_EQ(IdleTricons({0.0f, 0.46f}, true, false), turning);
+	EXPECT_EQ(IdleTricons({0.0f, 0.46f}, true, true), turning | tricon::k_Pitch);
+	EXPECT_EQ(IdleTricons({0.0f, 0.45f}, true, true), turning);
+	// The top likewise
+	EXPECT_EQ(IdleTricons({0.0f, -0.46f}, true, false), tricon::k_Idle);
+	EXPECT_EQ(IdleTricons({0.0f, -0.46f}, true, true), all);
+	// The sides and the turning band along the bottom stay where they are
+	EXPECT_EQ(IdleTricons({0.44f, 0.0f}, true, true), tricon::k_Idle);
+	EXPECT_EQ(IdleTricons({0.0f, 0.42f}, true, true), tricon::k_Idle);
+}
+
+TEST(CameraDrag, TheEdgesAreTheSameShareOfTheScreenAtEveryResolution)
+{
+	for (const auto screen : k_Resolutions)
+	{
+		SCOPED_TRACE(testing::Message() << screen.x << "x" << screen.y);
+		const auto middle = screen / 2;
+		const auto width = static_cast<float>(screen.x);
+		const auto height = static_cast<float>(screen.y);
+		// 4% of the width from a side turns, 6% doesn't
+		EXPECT_NE(HintsAt({static_cast<int>(width * 0.04f), middle.y}, screen, false) & tricon::k_Rotate, 0U);
+		EXPECT_EQ(HintsAt({static_cast<int>(width * 0.06f), middle.y}, screen, false), tricon::k_Idle);
+		EXPECT_NE(HintsAt({static_cast<int>(width * 0.96f), middle.y}, screen, false) & tricon::k_Rotate, 0U);
+		// The bottom 6% of the height turns, the bottom 3% in a window tilts as well, full screen only the last 1%
+		const auto bottom = [&](float share) { return glm::ivec2(middle.x, static_cast<int>(height * (1.0f - share))); };
+		EXPECT_NE(HintsAt(bottom(0.06f), screen, false) & tricon::k_Rotate, 0U);
+		EXPECT_EQ(HintsAt(bottom(0.03f), screen, false) & tricon::k_Pitch, 0U);
+		EXPECT_NE(HintsAt(bottom(0.03f), screen, true) & tricon::k_Pitch, 0U);
+		EXPECT_NE(HintsAt({middle.x, screen.y - 1}, screen, false) & tricon::k_Pitch, 0U);
+	}
+}
+
+TEST(CameraDrag, TurningRoundTheEdgeTurnsAsMuchAtEveryResolutionAndShape)
+{
+	for (const auto screen : k_Resolutions)
+	{
+		SCOPED_TRACE(testing::Message() << screen.x << "x" << screen.y);
+		const auto centre = glm::vec2(screen) * 0.5f;
+		const auto radius = glm::vec2(screen) * 0.45f;
+		// A quarter of the way round the ring, from the right of the screen to its bottom
+		const auto right = glm::ivec2(centre + glm::vec2(radius.x, 0.0f));
+		const auto start = EdgeRotate(right, right, screen, screen.y);
+		const auto step = EdgeRotate(glm::ivec2(centre + glm::vec2(0.0f, radius.y)), start.cursor, screen, screen.y);
+		EXPECT_NEAR(std::abs(step.angle), glm::half_pi<float>(), 0.01f);
+	}
+}
+
+TEST(CameraDrag, TiltingByTheSameShareOfTheScreenTiltsAsMuchAtEveryResolution)
+{
+	constexpr float fov = 1.2217305f;
+	for (const auto screen : k_Resolutions)
+	{
+		SCOPED_TRACE(testing::Message() << screen.x << "x" << screen.y);
+		EXPECT_NEAR(PitchStep(screen.y / 10, screen.y, fov), 0.233333f * fov, 0.002f);
+	}
+}
+
+TEST(CameraDrag, TheHintsFollowTheCursorUnlessAButtonOrThePlayerMovesTheCamera)
+{
+	EXPECT_TRUE(HintsFollowCursor(false, false, false));
+	EXPECT_FALSE(HintsFollowCursor(true, false, false));
+	EXPECT_FALSE(HintsFollowCursor(false, true, false));
+	// The camera tilting itself doesn't hold them, but a button still does
+	EXPECT_TRUE(HintsFollowCursor(false, true, true));
+	EXPECT_FALSE(HintsFollowCursor(true, true, true));
 }

@@ -55,8 +55,13 @@ constexpr uint32_t k_Strafe = 0x08;
 [[nodiscard]] glm::vec2 NormalisedCursor(glm::ivec2 cursor, glm::ivec2 screenSize, int viewHeight);
 
 /// The hints offered with nothing dragged: the sides and the bottom offer turning, the very bottom tilting too, and the
-/// top (or a cursor over no land in the upper part of the screen) all of them
-[[nodiscard]] uint32_t IdleTricons(glm::vec2 normalisedCursor, bool landUnderCursor);
+/// top (or a cursor over no land in the upper part of the screen) all of them. In a window the very top and bottom
+/// reach further in (to 0.45 of the view's height from the middle rather than 0.49), as their edges are harder to reach.
+[[nodiscard]] uint32_t IdleTricons(glm::vec2 normalisedCursor, bool landUnderCursor, bool windowed);
+
+/// Whether the hints follow the cursor this frame: only with no mouse button holding the camera, and then while the
+/// player isn't turning, tilting, zooming or moving it, or whenever the camera is tilting itself
+[[nodiscard]] bool HintsFollowCursor(bool buttonHeld, bool playerMovesCamera, bool selfTilting);
 
 /// What a drag of the land is
 enum class DragMode : uint8_t

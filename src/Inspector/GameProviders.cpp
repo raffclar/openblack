@@ -123,6 +123,7 @@
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
@@ -312,6 +313,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"vm", "script.vm"},
     LocatorCoverage {"chlapi", "script.natives"},
     LocatorCoverage {"villageTotemSystem", "living.totems"},
+    LocatorCoverage {"heartbeatSystem", "players.heartbeat"},
     LocatorCoverage {"videoSystem", "view.video"},
     LocatorCoverage {"playerProfileSystem", "players.new_game"},
     LocatorCoverage {"tutorialSkipSystem", "players.new_game"},
@@ -1227,6 +1229,33 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 				                  item["pending_alignment"] = Locator::alignmentSystem::value().GetPendingAlignment(name);
 			                  }
 			                  items.push_back(std::move(item));
+		                  });
+		                  return items;
+	                  }));
+	provider->Add(Query("heartbeat", "Each player's heartbeat: danger, rate, beat and pulse", {}, ResultKind::List),
+	              Serve<Locator::heartbeatSystem>(
+	                  "the heartbeats", [](const ecs::systems::HeartbeatSystemInterface& hearts, const QueryContext& /*c*/) {
+		                  Json items = Json::array();
+		                  const auto* registry = Registry();
+		                  if (registry == nullptr)
+		                  {
+			                  return items;
+		                  }
+		                  registry->Each<const Player>([&](const Player& player) {
+			                  const auto state = hearts.StateOf(player.name);
+			                  if (!state.has_value())
+			                  {
+				                  return;
+			                  }
+			                  items.push_back({{"player", static_cast<int>(player.name)},
+			                                   {"stress", state->stress},
+			                                   {"rate", state->rate},
+			                                   {"beats_per_second", state->rate * ecs::heartbeat::k_BeatsPerRate},
+			                                   {"phase", state->phase},
+			                                   {"pulse", state->pulse},
+			                                   {"believer_share", state->believerShare},
+			                                   {"influence_share", state->influenceShare},
+			                                   {"destruction_beats", state->destructionBeats}});
 		                  });
 		                  return items;
 	                  }));

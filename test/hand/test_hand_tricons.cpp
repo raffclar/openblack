@@ -7,6 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <array>
+
+#include <glm/gtc/constants.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/trigonometric.hpp>
 #include <gtest/gtest.h>
 
@@ -84,12 +88,41 @@ TEST(HandTricons, TheCrossNeverShowsInADemonstration)
 	EXPECT_FLOAT_EQ(fades[3], 0.2f);
 }
 
-TEST(HandTricons, SitThreeQuartersOfTheWayFromTheLastGripToTheHand)
+TEST(HandTricons, SitThreeQuartersOfTheWayFromTheCursorToTheHand)
 {
 	EXPECT_EQ(Place({400, 300}, {0, 0}, {1280, 720}, false, true), glm::ivec2(300, 225));
 	EXPECT_EQ(Place({400, 300}, {400, 300}, {1280, 720}, false, true), glm::ivec2(400, 300));
 	// Whole pixels, rounded towards zero
 	EXPECT_EQ(Place({401, 301}, {0, 0}, {1280, 720}, false, true), glm::ivec2(300, 225));
+}
+
+TEST(HandTricons, SitOnTheHandWhereItFollowsTheCursor)
+{
+	// The hand is drawn where the cursor is, so the icons sit on it at any resolution: never pulled a quarter of the
+	// way back towards the top-left corner or towards where the land was last gripped
+	EXPECT_EQ(Place({899, 1010}, {900, 1010}, {1280, 1024}, false, true), glm::ivec2(899, 1008));
+	EXPECT_EQ(Place({1800, 1420}, {1800, 1420}, {2560, 1440}, false, true), glm::ivec2(1800, 1420));
+	EXPECT_EQ(Place({40, 700}, {40, 700}, {2560, 1440}, false, true), glm::ivec2(40, 700));
+}
+
+TEST(HandTricons, AnchorAtTheHandsFirstBoneNotWhereItHovers)
+{
+	// A model 100 units below its origin in its first bone, turned upside down about x and drawn at a hundredth of
+	// its size, mirrored across like a right hand
+	const std::array bones {glm::translate(glm::mat4(1.0f), glm::vec3(10.0f, -100.0f, 0.0f)), glm::mat4(1.0f)};
+	const auto upsideDown = glm::mat3(glm::rotate(glm::mat4(1.0f), glm::pi<float>(), glm::vec3(1.0f, 0.0f, 0.0f)));
+	const auto anchor = AnchorPoint({5.0f, 20.0f, 7.0f}, upsideDown, {-0.01f, 0.01f, 0.01f}, bones);
+	EXPECT_NEAR(anchor.x, 4.9f, 1e-5f);
+	EXPECT_NEAR(anchor.y, 21.0f, 1e-5f);
+	EXPECT_NEAR(anchor.z, 7.0f, 1e-5f);
+	// Without a pose, the hand's own place
+	const auto unposed = AnchorPoint({5.0f, 20.0f, 7.0f}, glm::mat3(1.0f), glm::vec3(1.0f), {});
+	EXPECT_EQ(unposed, glm::vec3(5.0f, 20.0f, 7.0f));
+}
+
+TEST(HandTricons, WithoutLeaningSitExactlyOnTheHand)
+{
+	EXPECT_EQ(Place({400, 300}, {0, 0}, {1280, 720}, false, false), glm::ivec2(400, 300));
 }
 
 TEST(HandTricons, KeepSixteenPixelsInsideThePicture)
