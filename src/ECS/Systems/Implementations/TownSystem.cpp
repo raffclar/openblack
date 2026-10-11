@@ -35,6 +35,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/DiscipleWorkRules.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -53,6 +54,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "VillagerBreeding.h"
+#include "VillagerDiscipleWork.h"
 #include "VillagerDisciples.h"
 #include "VillagerWorship.h"
 
@@ -271,7 +273,10 @@ bool TownSystem::HasRoomForNewcomer(entt::entity town) const
 void TownSystem::RemoveDeadVillager(entt::entity villager)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	villager_breeding::OrphanChildrenOf(villager, registry.Get<const Villager>(villager).town);
+	const auto town = registry.Get<const Villager>(villager).town;
+	villager_breeding::OrphanChildrenOf(villager, town);
+	// A death changes what its town wants
+	MarkDesiresChanged(town);
 	town_homes::RemoveDeadVillager(registry, villager);
 }
 
@@ -525,6 +530,34 @@ void TownSystem::ProcessTurn()
 			town_homes::EvenOutHomes(registry, homes, townEntity);
 		}
 	}
+	// The missionaries preaching in the towns follow their villagers, or stop; then a mark of changed wants that has
+	// been up a whole turn comes down
+	villager_disciple_work::ProcessMissionaries();
+	for (const auto townEntity : towns)
+	{
+		if (!registry.Valid(townEntity))
+		{
+			continue;
+		}
+		auto& town = registry.Get<Town>(townEntity);
+		disciple_work::EndTownTurn(town.desiresChanged, town.desiresChangedLastTurn);
+	}
+}
+
+void TownSystem::MarkDesiresChanged(entt::entity town)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* component = registry.Valid(town) ? registry.TryGet<Town>(town) : nullptr)
+	{
+		disciple_work::MarkDesiresChanged(component->desiresChanged, component->desiresChangedLastTurn);
+	}
+}
+
+bool TownSystem::DesiresChanged(entt::entity town) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* component = registry.Valid(town) ? registry.TryGet<const Town>(town) : nullptr;
+	return component != nullptr && component->desiresChanged;
 }
 
 void TownSystem::ClaimTown(entt::entity town, PlayerNames player)

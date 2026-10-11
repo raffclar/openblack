@@ -70,6 +70,11 @@ public:
 	virtual void VillagerScriptMoveTo(entt::entity villager, glm::vec2 goal) const = 0;
 	/// The clip a script asks the villager to play in the playing state, and how many times
 	virtual void VillagerSetScriptAnimation(entt::entity villager, AnimId clip, uint32_t plays) const = 0;
+	/// What a script gives the villager for the script states it puts it in: a place on the ground, a number and a pair of
+	/// whole numbers, each read by those states their own way
+	virtual void VillagerSetScriptPlace(entt::entity villager, glm::vec2 place) const = 0;
+	virtual void VillagerSetScriptNumber(entt::entity villager, float number) const = 0;
+	virtual void VillagerSetScriptNumbers(entt::entity villager, uint32_t first, uint32_t second) const = 0;
 	/// Whether the villager has played the clip a script asked for
 	[[nodiscard]] virtual bool VillagerHasPlayedScriptAnimation(entt::entity villager) const = 0;
 	/// The villager turns at once to face a point

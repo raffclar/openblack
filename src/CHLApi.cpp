@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <functional>
 #include <iterator>
 #include <limits>
 #include <optional>
@@ -69,6 +70,7 @@
 #include "ECS/Archetypes/SharkArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
+#include "ECS/ChallengeRecords.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
@@ -126,6 +128,7 @@
 #include "ECS/ScriptFlocks.h"
 #include "ECS/ScriptPopulate.h"
 #include "ECS/ScriptSpotVisuals.h"
+#include "ECS/ScriptWeatherRules.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -1214,18 +1217,38 @@ void SetScriptState() // 017 SET_SCRIPT_STATE
 
 void SetScriptStatePos() // 018 SET_SCRIPT_STATE_POS
 {
-	[[maybe_unused]] const auto position = PopVec();
-	[[maybe_unused]] const auto object = PopObject();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto position = PopVec();
+	const auto object = PopObject();
+	if (!Locator::entitiesRegistry::value().Valid(object))
+	{
+		ScriptMessage("Object no longer valid");
+		return;
+	}
+	if (!IsDirectableVillager(object))
+	{
+		// TODO(opening): groups of things
+		ScriptMessage("Object not villager for state data");
+		return;
+	}
+	Locator::livingActionSystem::value().VillagerSetScriptPlace(object, {position.x, position.z});
 }
 
 void SetScriptFloat() // 019 SET_SCRIPT_FLOAT
 {
-	[[maybe_unused]] const auto value = Popf();
-	[[maybe_unused]] const auto object = PopObject();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto value = Popf();
+	const auto object = PopObject();
+	if (!Locator::entitiesRegistry::value().Valid(object))
+	{
+		ScriptMessage("Object no longer valid");
+		return;
+	}
+	if (!IsDirectableVillager(object))
+	{
+		// TODO(opening): groups of things
+		ScriptMessage("Object not villager for state data");
+		return;
+	}
+	Locator::livingActionSystem::value().VillagerSetScriptNumber(object, value);
 }
 
 void SetScriptUlong() // 020 SET_SCRIPT_ULONG
@@ -1241,7 +1264,11 @@ void SetScriptUlong() // 020 SET_SCRIPT_ULONG
 	}
 	if (IsDirectableVillager(object))
 	{
-		Locator::livingActionSystem::value().VillagerSetScriptAnimation(object, static_cast<AnimId>(animation), plays);
+		// The pair serves whichever script state it goes into next: a clip and its plays for playing, the fewest and most
+		// turns to stand at each stop for wandering round a place
+		auto& living = Locator::livingActionSystem::value();
+		living.VillagerSetScriptNumbers(object, static_cast<uint32_t>(animation), plays);
+		living.VillagerSetScriptAnimation(object, static_cast<AnimId>(animation), plays);
 		return;
 	}
 	if (auto* mind = Locator::entitiesRegistry::value().TryGet<ecs::components::CreatureMindState>(object))
@@ -3259,7 +3286,13 @@ void ChangeInnerOuterProperties() // 056 CHANGE_INNER_OUTER_PROPERTIES
 		flock.calm = map_coords::FtoL(calm);
 		return;
 	}
-	// TODO(opening): the weather's own inner and outer sizes
+	// A weather thing's storm takes the inner and outer distances as they are; its calm is not used
+	if (object != entt::null && Locator::weatherSystem::has_value() &&
+	    Locator::weatherSystem::value().ChangeWeatherThing(
+	        object, [=](ecs::components::Storm& storm) { ecs::script_weather::SetInnerOuter(storm, inner, outer); }))
+	{
+		return;
+	}
 	ScriptMessage("Invalid thing for Changing Variables");
 }
 
@@ -3286,11 +3319,46 @@ script::challenge_snapshots::Snapshot PopChallengeSnapshot(script::challenge_sna
 	return snapshot;
 }
 
+/// The player's record of a challenge is kept up to date from a script's snapshot, and a snapshot of a challenge already
+/// recorded moves the player at this computer's alignment
+void KeepChallengeRecord(const script::challenge_snapshots::Snapshot& snapshot, script::challenge_snapshots::Call call)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	const ecs::challenge_records::References references {
+	    .add =
+	        [](entt::entity thing) {
+		        if (Locator::scriptObjects::has_value())
+		        {
+			        Locator::scriptObjects::value().AddReference(thing);
+		        }
+	        },
+	    .remove =
+	        [](entt::entity thing) {
+		        if (Locator::scriptObjects::has_value())
+		        {
+			        Locator::scriptObjects::value().RemoveReference(thing);
+		        }
+	        },
+	};
+	const auto outcome = ecs::challenge_records::Record(registry, snapshot, call, turn, references);
+	if (!outcome.alignment.has_value() || !Locator::alignmentSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	auto& alignment = Locator::alignmentSystem::value();
+	const auto change =
+	    ecs::challenge_records::AlignmentChange(alignment.GetPlayerAlignment(player), *outcome.alignment,
+	                                            Locator::infoConstants::value().player.maxScriptAlignmentChange);
+	alignment.AddPlayerAlignment(player, change);
+}
+
 void Snapshot() // 057 SNAPSHOT
 {
-	[[maybe_unused]] const auto snapshot = PopChallengeSnapshot(script::challenge_snapshots::Call::Start);
-	// TODO(raffclar): keep the challenge's record (Land 1 milestone #46)
-	NotImplemented();
+	KeepChallengeRecord(PopChallengeSnapshot(script::challenge_snapshots::Call::Start),
+	                    script::challenge_snapshots::Call::Start);
 }
 
 void GetAlignment() // 058 GET_ALIGNMENT
@@ -4075,46 +4143,58 @@ void IsDialogueReady() // 122 IS_DIALOGUE_READY
 	Pushb(!Locator::dialogueControlSystem::value().IsControlled(WideScreenOwner()));
 }
 
+/// A weather native's change to the storm of the weather thing it was given; a thing that is no weather thing is told
+/// of and left alone
+void ChangeWeatherThing(entt::entity thing, const std::function<void(ecs::components::Storm&)>& change)
+{
+	if (thing == entt::null || !Locator::entitiesRegistry::value().Valid(thing))
+	{
+		return;
+	}
+	if (!Locator::weatherSystem::has_value() || !Locator::weatherSystem::value().ChangeWeatherThing(thing, change))
+	{
+		ScriptMessage("Weather properties on non weather thing");
+	}
+}
+
 void ChangeWeatherProperties() // 123 CHANGE_WEATHER_PROPERTIES
 {
-	// const auto fallspeed = Popf();
-	// const auto overcast = Popf();
-	// const auto snowfall = Popf();
-	// const auto rainfall = Popf();
-	// const auto temperature = Popf();
-	// const auto storm = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto fallSpeed = Popf();
+	const auto overcast = Popf();
+	const auto snowfall = Popf();
+	const auto rainfall = Popf();
+	const auto temperature = Popf();
+	ChangeWeatherThing(PopObject(), [=](ecs::components::Storm& storm) {
+		ecs::script_weather::SetWeather(storm, temperature, rainfall, snowfall, overcast, fallSpeed);
+	});
 }
 
 void ChangeLightningProperties() // 124 CHANGE_LIGHTNING_PROPERTIES
 {
-	// const auto forkmax = Popf();
-	// const auto forkmin = Popf();
-	// const auto sheetmax = Popf();
-	// const auto sheetmin = Popf();
-	// const auto storm = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto forkMax = Popf();
+	const auto forkMin = Popf();
+	const auto sheetMax = Popf();
+	const auto sheetMin = Popf();
+	ChangeWeatherThing(PopObject(), [=](ecs::components::Storm& storm) {
+		ecs::script_weather::SetLightning(storm, sheetMin, sheetMax, forkMin, forkMax);
+	});
 }
 
 void ChangeTimeFadeProperties() // 125 CHANGE_TIME_FADE_PROPERTIES
 {
-	// const auto fadeTime = Popf();
-	// const auto duration = Popf();
-	// const auto storm = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto fadeSeconds = Popf();
+	const auto lastsFor = Popf();
+	ChangeWeatherThing(PopObject(),
+	                   [=](ecs::components::Storm& storm) { ecs::script_weather::SetTimeFade(storm, lastsFor, fadeSeconds); });
 }
 
 void ChangeCloudProperties() // 126 CHANGE_CLOUD_PROPERTIES
 {
-	// const auto elevation = Popf();
-	// const auto blackness = Popf();
-	// const auto numClouds = Popf();
-	// const auto storm = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto height = Popf();
+	const auto shade = Popf();
+	const auto count = Popf();
+	ChangeWeatherThing(PopObject(),
+	                   [=](ecs::components::Storm& storm) { ecs::script_weather::SetClouds(storm, count, shade, height); });
 }
 
 void SetHeadingAndSpeed() // 127 SET_HEADING_AND_SPEED
@@ -4153,10 +4233,18 @@ void BuildBuilding() // 130 BUILD_BUILDING
 
 void SetAffectedByWind() // 131 SET_AFFECTED_BY_WIND
 {
-	// const auto object = Pop().uintVal;
-	// const auto enabled = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopObject();
+	const auto affected = static_cast<bool>(Pop().intVal);
+	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
+	{
+		ScriptMessage("Invalid thing");
+		return;
+	}
+	// Only a weather thing's storm can be blown along; anything else takes no notice
+	if (Locator::weatherSystem::has_value())
+	{
+		Locator::weatherSystem::value().SetWeatherThingAffectedByWind(object, affected);
+	}
 }
 
 void WidescreenTransistionFinished() // 132 WIDESCREEN_TRANSISTION_FINISHED
@@ -5573,9 +5661,8 @@ void GetTotalEvents() // 237 GET_TOTAL_EVENTS
 
 void UpdateSnapshot() // 238 UPDATE_SNAPSHOT
 {
-	[[maybe_unused]] const auto snapshot = PopChallengeSnapshot(script::challenge_snapshots::Call::Update);
-	// TODO(raffclar): bring the challenge's record up to date (Land 1 milestone #46)
-	NotImplemented();
+	KeepChallengeRecord(PopChallengeSnapshot(script::challenge_snapshots::Call::Update),
+	                    script::challenge_snapshots::Call::Update);
 }
 
 /// The kinds of reward a script can give are numbered 1 to 60

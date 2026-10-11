@@ -59,6 +59,8 @@ public:
 	[[nodiscard]] bool IsInStateOfEmergency(entt::entity town) const override;
 	void SetInStateOfEmergency(entt::entity town) override;
 	void ProcessTurn() override;
+	void MarkDesiresChanged(entt::entity town) override;
+	[[nodiscard]] bool DesiresChanged(entt::entity town) const override;
 	void ClaimTown(entt::entity town, PlayerNames player) override;
 	void UpdateFrame(float gameSeconds) override;
 

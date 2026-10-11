@@ -64,6 +64,10 @@ struct Town
 	/// Its crèche, where its children spend their days: the first of its crèches to work, none until then. When it goes
 	/// another of the town's working civic buildings may stand in for it.
 	entt::entity creche {entt::null};
+	/// Its wants have just changed (a store stocked from empty, a building site added, a death): its waiting disciples
+	/// look for work again soon. Up for the rest of the turn it is raised in and the whole of the next.
+	bool desiresChanged {false};
+	bool desiresChangedLastTurn {false};
 };
 
 } // namespace openblack::ecs::components

@@ -36,11 +36,12 @@ class ReactionSystemInterface
 public:
 	/// A reaction as it is made
 	/// Which of the land's balances scales how impressive a reaction is: that of the things in the world (an object, a
-	/// creature) or that of the miracles. Each land's script sets them apart.
+	/// creature), that of the miracles or that of the missionaries. Each land's script sets them apart.
 	enum class Balance : uint8_t
 	{
 		Things,
 		Miracles,
+		Missionaries,
 	};
 
 	struct Source

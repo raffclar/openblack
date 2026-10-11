@@ -53,6 +53,9 @@ public:
 	void VillagerSetScriptState(entt::entity villager, VillagerStates state) const override;
 	void VillagerScriptMoveTo(entt::entity villager, glm::vec2 goal) const override;
 	void VillagerSetScriptAnimation(entt::entity villager, AnimId clip, uint32_t plays) const override;
+	void VillagerSetScriptPlace(entt::entity villager, glm::vec2 place) const override;
+	void VillagerSetScriptNumber(entt::entity villager, float number) const override;
+	void VillagerSetScriptNumbers(entt::entity villager, uint32_t first, uint32_t second) const override;
 	[[nodiscard]] bool VillagerHasPlayedScriptAnimation(entt::entity villager) const override;
 	void VillagerFace(entt::entity villager, glm::vec2 point) const override;
 	[[nodiscard]] std::optional<float> VillagerYAngle(entt::entity villager) const override;
