@@ -1173,6 +1173,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Player::villagersLost>("villagersLost")
 	    .Field<&components::Player::villagersKilled>("villagersKilled")
 	    .Field<&components::Player::sacrifices>("sacrifices")
+	    .Field<&components::Player::foodUsed>("foodUsed")
 	    .Field<&components::Player::totalChantsUsed>("totalChantsUsed")
 	    .Field<&components::Player::miracles>("miracles");
 	Reflect<components::PlayerCreatures>(context).Field<&components::PlayerCreatures::acquired>("acquired");
@@ -1442,7 +1443,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::TownResourceTally::foodCarried>("foodCarried")
 	    .Field<&components::TownResourceTally::woodCarried>("woodCarried")
 	    .Field<&components::TownResourceTally::woodAtSites>("woodAtSites")
-	    .Field<&components::TownResourceTally::woodUsed>("woodUsed");
+	    .Field<&components::TownResourceTally::woodUsed>("woodUsed")
+	    .Field<&components::TownResourceTally::foodUsed>("foodUsed");
 	Reflect<components::TownStats>(context)
 	    .Field<&components::TownStats::adults>("adults")
 	    .Field<&components::TownStats::children>("children")
@@ -1534,7 +1536,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Villager::woodHeld>("woodHeld")
 	    .Field<&components::Villager::woodGraphic>("woodGraphic")
 	    .Field<&components::Villager::buildingSite>("buildingSite")
-	    .Field<&components::Villager::buildPlace>("buildPlace");
+	    .Field<&components::Villager::buildPlace>("buildPlace")
+	    .Field<&components::Villager::foodSpeedUp>("foodSpeedUp");
 	Reflect<components::VillagerDeath>(context)
 	    .Field<&components::VillagerDeath::turnsLeft>("turnsLeft")
 	    .Field<&components::VillagerDeath::skeleton>("skeleton")

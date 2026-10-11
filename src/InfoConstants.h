@@ -1164,7 +1164,8 @@ struct GVillagerStateTableInfo
 	int staysAtHomeOnExit;
 	/// A villager going into the state may pause for a second first
 	int canPauseForASecond;
-	float field0xc8;
+	/// How much a villager whose state this is cares for food it finds lying about
+	float foodInterest;
 	float field0xcc;
 	/// A hungry villager in the state goes to find food
 	uint32_t hungerInterrupts;

@@ -39,6 +39,8 @@ struct TownResourceTally
 	float woodAtSites {0.0f};
 	/// The wood its builders have built with
 	float woodUsed {0.0f};
+	/// The food its people have eaten
+	float foodUsed {0.0f};
 };
 
 /// What a town knows of its people and buildings, counted afresh each game turn for its desires

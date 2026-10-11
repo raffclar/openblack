@@ -39,12 +39,15 @@
 #include "VillagerAnimate.h"
 #include "VillagerArtefactDance.h"
 #include "VillagerBuild.h"
+#include "VillagerChecks.h"
 #include "VillagerDance.h"
 #include "VillagerDisciples.h"
 #include "VillagerEaten.h"
 #include "VillagerFire.h"
 #include "VillagerFlock.h"
+#include "VillagerFood.h"
 #include "VillagerHome.h"
+#include "VillagerHousewife.h"
 #include "VillagerPhysics.h"
 #include "VillagerReactions.h"
 #include "VillagerScript.h"
@@ -67,6 +70,9 @@ namespace villager_animate = openblack::ecs::villager_animate;
 namespace villager_script = openblack::ecs::villager_script;
 namespace villager_build = openblack::ecs::villager_build;
 namespace villager_disciple = openblack::ecs::villager_disciple;
+namespace villager_food = openblack::ecs::villager_food;
+namespace villager_housewife = openblack::ecs::villager_housewife;
+namespace villager_checks = openblack::ecs::villager_checks;
 
 /// A villager with no state does nothing
 uint32_t VillagerInvalidState(LivingAction& /*action*/)
@@ -249,8 +255,16 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_eaten::LiesStill,
     },
-    /* GOTO_FOOD_REACTION */ k_TodoEntry,
-    /* ARRIVES_AT_FOOD_REACTION */ k_TodoEntry,
+    /* GOTO_FOOD_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_food::GotoFoodReaction,
+        .exitState = &villager_food::ExitFoodReaction,
+    },
+    /* ARRIVES_AT_FOOD_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_food::ArrivesAtFoodReaction,
+        .exitState = &villager_food::ExitFoodReaction,
+    },
     /* GOTO_WOOD_REACTION */ k_TodoEntry,
     /* ARRIVES_AT_WOOD_REACTION */ k_TodoEntry,
     /* WAIT_FOR_ANIMATION */
@@ -285,8 +299,14 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_build::ArrivesAtStoragePitForDropOff,
     },
-    /* GOTO_STORAGE_PIT_FOR_FOOD */ k_TodoEntry,
-    /* ARRIVES_AT_STORAGE_PIT_FOR_FOOD */ k_TodoEntry,
+    /* GOTO_STORAGE_PIT_FOR_FOOD */
+    VillagerStateTableEntry {
+        .state = &villager_food::GotoStoragePitForFood,
+    },
+    /* ARRIVES_AT_STORAGE_PIT_FOR_FOOD */
+    VillagerStateTableEntry {
+        .state = &villager_food::ArrivesAtStoragePitForFood,
+    },
     /* ARRIVES_AT_HOME_WITH_FOOD */ k_TodoEntry,
     /* GO_HOME */
     VillagerStateTableEntry {
@@ -386,25 +406,66 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* SHEPHERD_SLAUGHTER_ANIMAL */ k_TodoEntry,
     /* SHEPHERD_FETCH_STRAY */ k_TodoEntry,
     /* SHEPHERD_GOTO_FLOCK */ k_TodoEntry,
-    /* HOUSEWIFE_AT_HOME */ k_TodoEntry,
-    /* HOUSEWIFE_GOTO_STORAGE_PIT */ k_TodoEntry,
-    /* HOUSEWIFE_ARRIVES_AT_STORAGE_PIT */ k_TodoEntry,
-    /* HOUSEWIFE_PICKUP_FROM_STORAGE_PIT */ k_TodoEntry,
-    /* HOUSEWIFE_RETURN_HOME_WITH_FOOD */ k_TodoEntry,
-    /* HOUSEWIFE_MAKE_DINNER */ k_TodoEntry,
-    /* HOUSEWIFE_SERVES_DINNER */ k_TodoEntry,
-    /* HOUSEWIFE_CLEARS_AWAY_DINNER */ k_TodoEntry,
-    /* HOUSEWIFE_DOES_HOUSEWORK */ k_TodoEntry,
-    /* HOUSEWIFE_GOSSIPS_AROUND_STORAGE_PIT */ k_TodoEntry,
+    /* HOUSEWIFE_AT_HOME */
+    VillagerStateTableEntry {
+        .state = &villager_housewife::AtHome,
+        .exitState = &villager_home::ExitAtHome,
+    },
+    /* HOUSEWIFE_GOTO_STORAGE_PIT */
+    VillagerStateTableEntry {
+        .state = &villager_housewife::GotoStoragePit,
+    },
+    /* HOUSEWIFE_ARRIVES_AT_STORAGE_PIT */
+    VillagerStateTableEntry {
+        .state = &villager_housewife::ArrivesAtStoragePit,
+    },
+    /* HOUSEWIFE_PICKUP_FROM_STORAGE_PIT */
+    VillagerStateTableEntry {
+        .state = &villager_housewife::PickupFromStoragePit,
+    },
+    /* HOUSEWIFE_RETURN_HOME_WITH_FOOD */
+    VillagerStateTableEntry {
+        .state = &villager_housewife::ReturnHomeWithFood,
+    },
+    /* HOUSEWIFE_MAKE_DINNER */
+    VillagerStateTableEntry {
+        .state = &villager_housewife::MakeDinner,
+    },
+    /* HOUSEWIFE_SERVES_DINNER */
+    VillagerStateTableEntry {
+        .state = &villager_housewife::ServesDinner,
+    },
+    /* HOUSEWIFE_CLEARS_AWAY_DINNER */
+    VillagerStateTableEntry {
+        .state = &villager_housewife::ClearsAwayDinner,
+    },
+    /* HOUSEWIFE_DOES_HOUSEWORK */
+    VillagerStateTableEntry {
+        .state = &villager_housewife::DoesHousework,
+    },
+    /* HOUSEWIFE_GOSSIPS_AROUND_STORAGE_PIT */
+    VillagerStateTableEntry {
+        .state = &villager_housewife::GossipsAroundStoragePit,
+    },
     /* HOUSEWIFE_STARTS_GIVING_BIRTH */ k_TodoEntry,
     /* HOUSEWIFE_GIVING_BIRTH */ k_TodoEntry,
     /* HOUSEWIFE_GIVEN_BIRTH */ k_TodoEntry,
     /* CHILD_AT_CRECHE */ k_TodoEntry,
     /* CHILD_FOLLOWS_MOTHER */ k_TodoEntry,
     /* CHILD_BECOMES_ADULT */ k_TodoEntry,
-    /* SITS_DOWN_TO_DINNER */ k_TodoEntry,
-    /* EAT_FOOD */ k_TodoEntry,
-    /* EAT_FOOD_AT_HOME */ k_TodoEntry,
+    /* SITS_DOWN_TO_DINNER */
+    VillagerStateTableEntry {
+        .state = &villager_food::DoesNothing,
+    },
+    /* EAT_FOOD */
+    VillagerStateTableEntry {
+        .state = &villager_food::EatFood,
+    },
+    /* EAT_FOOD_AT_HOME */
+    VillagerStateTableEntry {
+        .state = &villager_food::EatFoodAtHome,
+        .exitState = &villager_home::ExitAtHome,
+    },
     /* GOTO_BED_AT_HOME */
     VillagerStateTableEntry {
         .state = &villager_home::GotoBedAtHome,
@@ -426,7 +487,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* START_HAVING_SEX_AT_HOME */ k_TodoEntry,
     /* HAVING_SEX_AT_HOME */ k_TodoEntry,
     /* STOP_HAVING_SEX_AT_HOME */ k_TodoEntry,
-    /* WAIT_FOR_DINNER */ k_TodoEntry,
+    /* WAIT_FOR_DINNER */
+    VillagerStateTableEntry {
+        .state = &villager_food::DoesNothing,
+    },
     /* HOMELESS_START */
     VillagerStateTableEntry {
         .state = &villager_home::HomelessStart,
@@ -449,7 +513,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* PERFORM_IMPRESSED_REACTION */ k_TodoEntry,
     /* INITIALISE_FIGHT_REACTION */ k_TodoEntry,
     /* PERFORM_FIGHT_REACTION */ k_TodoEntry,
-    /* HOMELESS_EAT_DINNER */ k_TodoEntry,
+    /* HOMELESS_EAT_DINNER */
+    VillagerStateTableEntry {
+        .state = &villager_food::DoesNothing,
+    },
     /* INSPECT_CREATURE_REACTION */ k_TodoEntry,
     /* PERFORM_INSPECT_CREATURE_REACTION */ k_TodoEntry,
     /* APPROACH_CREATURE_REACTION */ k_TodoEntry,
@@ -478,7 +545,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .state = &villager_home::DecideWhatToDo,
     },
     /* INTERACT_DECIDE_WHAT_TO_DO */ k_TodoEntry,
-    /* EAT_OUTSIDE */ k_TodoEntry,
+    /* EAT_OUTSIDE */
+    VillagerStateTableEntry {
+        .state = &villager_food::DoesNothing,
+    },
     /* RUN_AWAY_FROM_OBJECT_REACTION */ k_TodoEntry,
     /* MOVE_TOWARDS_CREATURE_REACTION */ k_TodoEntry,
     /* AMAZED_BY_MAGIC_SHIELD_REACTION */
@@ -522,7 +592,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_home::AfterTapOnAbode,
     },
-    /* WEAK_ON_GROUND */ k_TodoEntry,
+    /* WEAK_ON_GROUND */
+    VillagerStateTableEntry {
+        .state = &villager_food::DoesNothing,
+    },
     /* SCRIPT_WANDER_AROUND_POSITION */ k_TodoEntry,
     /* SCRIPT_PLAY_ANIM */
     VillagerStateTableEntry {
@@ -549,7 +622,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     },
     /* ARRIVES_AT_WORKSHOP_FOR_DROP_OFF */ k_TodoEntry,
     /* ARRIVES_AT_STORAGE_PIT_FOR_WORKSHOP_MATERIALS */ k_TodoEntry,
-    /* SHOW_POISONED */ k_TodoEntry,
+    /* SHOW_POISONED */
+    VillagerStateTableEntry {
+        .state = &villager_food::ShowPoisoned,
+    },
     /* HIDING_AT_WORSHIP_SITE */ k_TodoEntry,
     /* CROWD_REACTION */ k_TodoEntry,
     /* REACT_TO_FIRE */
@@ -688,7 +764,8 @@ void LivingActionSystem::Update()
 	// its states still hold, then, unless a clip into or out of a state holds it, looks at its needs and acts.
 	registry.Each<Villager, LivingAction>(
 	    [this, &registry](entt::entity entity, Villager& villager, LivingAction& action) {
-		    // TODO(#475): process food speedup
+		    // Magic food wears off
+		    villager_food::ProcessFoodSpeedUp(entity);
 		    VillagerCallValidate(action, LivingAction::Index::Top);
 		    VillagerCallValidate(action, LivingAction::Index::Final);
 		    // A villager carried off by a tornado does nothing of its own
@@ -704,6 +781,8 @@ void LivingActionSystem::Update()
 			    }
 			    return;
 		    }
+		    // The life its state costs and the checks on its needs come before its state does its part
+		    villager_checks::CheckEveryTime(action);
 		    VillagerCallState(action, LivingAction::Index::Top);
 	    },
 	    entt::exclude<InHand, InPhysics>);
