@@ -66,6 +66,7 @@
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/VillagerWorkRules.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -945,6 +946,113 @@ void ForestSystem::AssignForestsToTowns()
 			}
 		}
 	});
+}
+
+std::optional<entt::entity> ForestSystem::NearestTownForest(entt::entity town, glm::vec3 point) const
+{
+	const auto& registry = EntityRegistry();
+	const auto* listed = town != entt::null && registry.Valid(town) ? registry.TryGet<const TownForests>(town) : nullptr;
+	if (listed == nullptr || !Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	std::vector<entt::entity> forests;
+	std::vector<ecs::villager_work::ForestCandidate> candidates;
+	for (const auto forest : listed->forests)
+	{
+		const auto* record = registry.Valid(forest) ? registry.TryGet<const LandForest>(forest) : nullptr;
+		if (record == nullptr)
+		{
+			continue;
+		}
+		// Inside a big forest the forest is right there; outside it, at its edge
+		float distance = 0.0f;
+		if (record->bigForest != entt::null && registry.Valid(record->bigForest))
+		{
+			const auto& at = registry.Get<const Transform>(record->bigForest).position;
+			if (glm::length(glm::xz(at) - glm::xz(point)) > ecs::world_objects::SizeOf(record->bigForest).radius)
+			{
+				distance = glm::length(glm::xz(NearestPointOf(forest, point)) - glm::xz(point));
+			}
+		}
+		else
+		{
+			distance = glm::length(glm::xz(NearestPointOf(forest, point)) - glm::xz(point));
+		}
+		forests.push_back(forest);
+		candidates.push_back({.distance = distance, .scenic = record->scenic});
+	}
+	const auto best = ecs::villager_work::NearestTownForest(
+	    candidates, static_cast<float>(Locator::infoConstants::value().town.maxDistanceForTownForest));
+	return best.has_value() ? std::optional(forests.at(*best)) : std::nullopt;
+}
+
+std::optional<entt::entity> ForestSystem::NearestForestWithTrees(glm::vec3 point, float reach) const
+{
+	const auto& registry = EntityRegistry();
+	std::optional<entt::entity> nearest;
+	float best = reach;
+	for (const auto forest : LandForests())
+	{
+		const float distance = glm::length(glm::xz(registry.Get<const Transform>(forest).position) - glm::xz(point));
+		if (distance < best && (!TreesOf(forest, false).empty() || !TreesOf(forest, true).empty()))
+		{
+			best = distance;
+			nearest = forest;
+		}
+	}
+	return nearest;
+}
+
+bool ForestSystem::RemoveEmptyForestNear(glm::vec3 point, float reach)
+{
+	auto& registry = EntityRegistry();
+	std::optional<entt::entity> nearest;
+	float best = reach;
+	for (const auto forest : LandForests())
+	{
+		const auto& record = registry.Get<const LandForest>(forest);
+		const float distance = glm::length(glm::xz(registry.Get<const Transform>(forest).position) - glm::xz(point));
+		const bool hasBigForest = record.bigForest != entt::null && registry.Valid(record.bigForest);
+		if (distance < best && !hasBigForest && TreesOf(forest, false).empty() && TreesOf(forest, true).empty())
+		{
+			best = distance;
+			nearest = forest;
+		}
+	}
+	if (!nearest.has_value())
+	{
+		return false;
+	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Forest: empty forest {} removed by a forester",
+	                    registry.Get<const LandForest>(*nearest).id);
+	registry.Destroy(*nearest);
+	return true;
+}
+
+std::optional<entt::entity> ForestSystem::CentreTreeOf(entt::entity forest) const
+{
+	const auto& registry = EntityRegistry();
+	if (!registry.Valid(forest) || !registry.AllOf<LandForest>(forest))
+	{
+		return std::nullopt;
+	}
+	const auto grown = TreesOf(forest, false);
+	const auto growing = TreesOf(forest, true);
+	const auto centre = glm::xz(registry.Get<const Transform>(forest).position);
+	const auto distanceTo = [&](const std::vector<entt::entity>& trees) -> std::optional<float> {
+		if (trees.empty())
+		{
+			return std::nullopt;
+		}
+		return glm::length(glm::xz(registry.Get<const Transform>(trees.front()).position) - centre);
+	};
+	const auto pick = ecs::villager_work::CentreTree(distanceTo(grown), distanceTo(growing));
+	if (!pick.has_value())
+	{
+		return std::nullopt;
+	}
+	return *pick == 0 ? grown.front() : growing.front();
 }
 
 std::optional<glm::vec3> ForestSystem::ForestLair(AnimalInfo kind, glm::vec3 from) const

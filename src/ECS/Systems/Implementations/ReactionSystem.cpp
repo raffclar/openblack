@@ -65,6 +65,7 @@
 #include "Physics/LivingRules.h"
 #include "VillagerFire.h"
 #include "VillagerFood.h"
+#include "VillagerForester.h"
 #include "VillagerPhysics.h"
 #include "VillagerReactions.h"
 
@@ -432,6 +433,13 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 		return villager_reaction::Priority(static_cast<uint8_t>(std::min<uint32_t>(kind, 255)),
 		                                   Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
 	}
+	// A villager heeds wood lying about only when it catches its eye
+	if (reaction.source.type == Reaction::ReactToWood && registry.AllOf<Villager>(living))
+	{
+		const auto kind = ecs::villager_forester::ReactToWoodPriority(living, reaction.source.initiator, info->priority);
+		return villager_reaction::Priority(static_cast<uint8_t>(std::min<uint32_t>(kind, 255)),
+		                                   Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
+	}
 	// A villager weighs a fire by its own rule: how far the fire reaches of its fiercest, and whether it fights it already
 	if (reaction.source.type == Reaction::ReactToFire && registry.AllOf<Villager>(living))
 	{
@@ -529,8 +537,12 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 		}
 		auto& memory = MemoryOf(registry, entity, *state);
 		const bool creature = registry.AllOf<Creature>(entity);
-		const auto again =
-		    creature ? info->numGameTurnsForCreatureBeforeReactingAgain : info->numGameTurnsForNormalThingsBeforeReactingAgain;
+		// A forester at work goes for wood again straight away
+		const auto again = creature ? info->numGameTurnsForCreatureBeforeReactingAgain
+		                   : reaction.source.type == Reaction::ReactToWood && registry.AllOf<Villager>(entity) &&
+		                           ecs::villager_forester::ReactsToWoodAgainAtOnce(entity)
+		                       ? 0u
+		                       : info->numGameTurnsForNormalThingsBeforeReactingAgain;
 		// Impressed without reacting, it is the last in the cell the reaction reaches
 		if (BelievesWithoutReacting(registry, entity, reaction.source.type))
 		{

@@ -666,4 +666,13 @@ float TownNeedsSum(const TownDesire& desire)
 	return std::clamp(sum, 0.0f, 1.0f);
 }
 
+std::optional<DoingNowStep> DoingNowChange(StateCount state, float sign)
+{
+	if (state.desire < 0 || static_cast<size_t>(state.desire) >= k_Count)
+	{
+		return std::nullopt;
+	}
+	return DoingNowStep {.desire = static_cast<size_t>(state.desire), .amount = sign * state.weight, .count = sign};
+}
+
 } // namespace openblack::ecs::town_desire
