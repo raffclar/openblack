@@ -1792,6 +1792,8 @@ bool Game::Update() noexcept
 	Locator::villageLightSystem::value().Update(gameTime);
 	// The town totems ease to their shares
 	Locator::villageTotemSystem::value().Update(gameTime.count());
+	// The players' symbols of belief over the village centres move on
+	Locator::townSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	Locator::fieldSystem::value().Update(gameTime);
 	// The shoals near the camera swim, and dart from what scared them
 	Locator::fishFarmSystem::value().Update(std::chrono::duration<float>(gameTime).count(),

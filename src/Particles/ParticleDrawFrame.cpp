@@ -239,8 +239,10 @@ void AddAtom(Frame& frame, GroupBuilder& builder, const Effect::DrawAtom& atom, 
 		break;
 	case Creator::Kind::Symbol:
 	{
-		const uint32_t rgb = sources.playerColour ? sources.playerColour(player) : 0xFFFFFFu;
-		const auto symbol = SymbolOf(atom, rgb, player);
+		// An atom may show a player of its own, as each of a village's symbols of belief does
+		const int shown = atom.player >= 0 ? atom.player : player;
+		const uint32_t rgb = sources.playerColour ? sources.playerColour(shown) : 0xFFFFFFu;
+		const auto symbol = SymbolOf(atom, rgb, shown);
 		// Added to what is behind, writing no depth
 		const auto additive = Mode::AlphaTexturedAlphaAdditiveNz;
 		builder.Sprite(symbol.instances[0], k_GlowTexture, additive);

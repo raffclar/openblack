@@ -690,3 +690,6 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_villager_draw test_villager_draw.cpp)
 openblack_setup_and_add_test(test_light_column test_light_column.cpp)
 openblack_setup_and_add_test(test_heartbeat test_heartbeat.cpp)
+openblack_setup_and_add_test(
+  test_town_belief_symbols test_town_belief_symbols.cpp
+)

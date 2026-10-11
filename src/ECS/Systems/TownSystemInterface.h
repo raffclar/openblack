@@ -67,5 +67,8 @@ public:
 	/// and for any player but the neutral one fireworks and a fountain of the player's symbols rise from its centre.
 	/// The player at this machine hears the town won. Nothing happens if the town is theirs already.
 	virtual void ClaimTown(entt::entity town, PlayerNames player) = 0;
+	/// Each frame, gameSeconds on: every village centre shows its players' symbols of belief over its totem, made with
+	/// the centre and stepped as it is drawn
+	virtual void UpdateFrame(float /*gameSeconds*/) {}
 };
 } // namespace openblack::ecs::systems
