@@ -50,6 +50,8 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/VillagerAfterDeath.h"
+#include "ECS/VillagerAnimation.h"
 #include "ECS/VillagerCarry.h"
 #include "ECS/VillagerCheckRules.h"
 #include "ECS/VillagerClips.h"
@@ -62,6 +64,7 @@
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "VillagerDisciples.h"
 #include "VillagerHome.h"
 #include "VillagerReactions.h"
 
@@ -1005,10 +1008,6 @@ void RememberDeath(entt::entity villager, const villager_fire::DeathCause& cause
 		{
 			town->deathsByKiller.at(killerIndex).at(reasonIndex) += cause.weight;
 		}
-		if (reasonIndex < town->deaths.size())
-		{
-			++town->deaths.at(reasonIndex);
-		}
 		const auto owner = town->owner;
 		registry.Each<Player>([owner, killer](entt::entity, Player& player) {
 			if (player.name == owner)
@@ -1042,6 +1041,11 @@ void villager_fire::DieByEffect(entt::entity villager, std::optional<DeathCause>
 	{
 		return;
 	}
+	// The player here hears of a death with a cause
+	if (cause.has_value())
+	{
+		villager_after_death::Hear(villager, cause->reason, cause->killer);
+	}
 	// The wood it shows falls where it dies as a log; the rest of what it carries, food and wood, is lost
 	if (Locator::dynamicsSystem::has_value())
 	{
@@ -1058,6 +1062,18 @@ void villager_fire::DieByEffect(entt::entity villager, std::optional<DeathCause>
 			tally->foodCarried -= static_cast<float>(food);
 		}
 	}
+	// A disciple's work ends with it
+	villager_disciple::SetType(villager, VillagerDisciple::None);
+	const auto town = registry.Get<const Villager>(villager).town;
+	if (cause.has_value())
+	{
+		// Its player's alignment moves for the death, and its town counts it
+		villager_after_death::MoveOwnersAlignment(villager, cause->reason);
+		RememberDeath(villager, *cause);
+		villager_after_death::CountInTown(town, cause->killer, cause->reason);
+	}
+	// Its town's graveyard counts it among its burials
+	graveyards::TownPersonDied(town);
 	// It dies: no life left, falling, then lying dead as long as its town has no graveyard to take it to
 	if (auto* person = registry.TryGet<Villager>(villager))
 	{
@@ -1069,7 +1085,6 @@ void villager_fire::DieByEffect(entt::entity villager, std::optional<DeathCause>
 		life->life = 0.0f;
 	}
 	// Its body lies less long when the town it belonged to as it died had a working graveyard
-	const auto town = registry.Get<const Villager>(villager).town;
 	const auto* info = InfoOf(villager);
 	const auto corpseTurns = info != nullptr
 	                             ? graveyard::CorpseTurns(graveyards::HasWorkingGraveyard(town), info->dyingTimeWithGraveyard,
@@ -1079,29 +1094,16 @@ void villager_fire::DieByEffect(entt::entity villager, std::optional<DeathCause>
 	                                             .turnsLeft = corpseTurns,
 	                                             .reason = cause.has_value() ? std::optional(cause->reason) : std::nullopt,
 	                                             .killer = cause.has_value() ? cause->killer : std::nullopt,
+	                                             .onBack = cause.has_value() && cause->onBack,
+	                                             // Nobody is told of a death at home
+	                                             .noticed = registry.AllOf<AtHome>(villager),
 	                                         });
-	if (cause.has_value())
-	{
-		RememberDeath(villager, *cause);
-	}
-	// Its town's graveyard counts it among its burials
-	// TODO(villager-death-aftermath): the town's death counts and the death messages join here
-	graveyards::TownPersonDied(town);
 	villager_home::LeaveHome(villager);
 	// It falls where it is: whatever walk it was on ends
 	walker_placement::Stop(registry, villager);
 	SetTopState(*action, VillagerStates::Dying);
-	// The people round it react to the death
-	if (Locator::reactionSystem::has_value())
-	{
-		const auto& person = registry.Get<const Villager>(villager);
-		const auto* ownTown = registry.Valid(person.town) ? registry.TryGet<const Town>(person.town) : nullptr;
-		Locator::reactionSystem::value().Create({.initiator = villager,
-		                                         .type = Reaction::ReactToDeath,
-		                                         .player = ownTown != nullptr ? ownTown->owner : PlayerNames::NEUTRAL,
-		                                         .position = PositionOf(villager)});
-	}
-	// Dying, it leaves its home, ending the couple it was one of, and its town
+	// Dying, it leaves its town's worship site, its home, ending the couple it was one of, and its town
+	villager_after_death::LeaveWorship(villager, town);
 	if (Locator::townSystem::has_value())
 	{
 		Locator::townSystem::value().RemoveDeadVillager(villager);
@@ -1115,8 +1117,15 @@ uint32_t villager_fire::Dying(LivingAction& action)
 	{
 		return 0;
 	}
-	// It falls, into the water on water, and lies dead once the fall has played
-	const auto fall = IsOnWater(PositionOf(villager)) ? AnimId::PIntoDeadDrowned : AnimId::PDying;
+	// As it begins to fall the people about it are told, unless it died at home
+	auto& death = Entities().Get<VillagerDeath>(villager);
+	if (!death.noticed)
+	{
+		death.noticed = true;
+		villager_after_death::TellThoseAbout(villager);
+	}
+	// It falls, into the water on water, on its back when a fall left it so, and lies dead once the fall has played
+	const auto fall = ecs::villager_animation::DyingClip(IsOnWater(PositionOf(villager)), death.onBack);
 	if (IsReadyForNewAnimation(action, fall, 1))
 	{
 		SetTopState(action, VillagerStates::Dead);
@@ -1154,7 +1163,9 @@ uint32_t villager_fire::Dead(LivingAction& action)
 		auto* mesh = registry.TryGet<Mesh>(villager);
 		if (mesh != nullptr && mesh->id != skeletonModel)
 		{
-			// TODO(villager-death-aftermath): the flesh going is where the smoke puff and the rising soul start
+			// The flesh goes in a puff of smoke, and the soul rises
+			villager_after_death::SmokePuff(villager);
+			villager_after_death::SoulRises(villager);
 			mesh->id = skeletonModel;
 			if (auto* detail = registry.TryGet<DetailMeshes>(villager))
 			{
@@ -1166,6 +1177,8 @@ uint32_t villager_fire::Dead(LivingAction& action)
 		// It lies there its time, and one turn more, and goes
 		if (death->turnsLeft-- == 0)
 		{
+			// It goes in a puff of smoke
+			villager_after_death::SmokePuff(villager);
 			world_objects::Remove(villager);
 			return 5;
 		}

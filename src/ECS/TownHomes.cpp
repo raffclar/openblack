@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <iterator>
 #include <numeric>
 #include <vector>
 
@@ -344,10 +345,36 @@ bool town_homes::IsTooCrowded(uint32_t adults, uint32_t maxAdults, float tooCrow
 	return static_cast<float>(adults) / static_cast<float>(maxAdults) >= tooCrowded;
 }
 
+std::vector<entt::entity> town_homes::ChildrenOf(const Registry& registry, entt::entity town, entt::entity mother)
+{
+	std::vector<entt::entity> children;
+	const auto* data = TownData(registry, town);
+	if (data == nullptr)
+	{
+		return children;
+	}
+	const auto isChildOf = [&registry, mother](entt::entity person) {
+		const auto* villager = registry.Valid(person) ? registry.TryGet<const Villager>(person) : nullptr;
+		return villager != nullptr && villager->mother == mother;
+	};
+	for (const auto building : data->abodes)
+	{
+		if (const auto* abode = registry.Valid(building) ? registry.TryGet<const Abode>(building) : nullptr; abode != nullptr)
+		{
+			std::ranges::copy_if(abode->inhabitants, std::back_inserter(children), isChildOf);
+		}
+	}
+	std::ranges::copy_if(data->homelessVillagers, std::back_inserter(children), isChildOf);
+	return children;
+}
+
 void town_homes::RemoveVillagerFromTown(Registry& registry, const Homes& homes, entt::entity villager)
 {
-	// TODO(villager-life-cycle): its children lose their mother; it leaves its town's worshippers as it leaves its
-	// worship states
+	// TODO(villager-life-cycle): it leaves its town's worshippers
+	if (homes.leavingTown)
+	{
+		homes.leavingTown(villager, registry.Get<const Villager>(villager).town);
+	}
 	auto& person = registry.Get<Villager>(villager);
 	if (person.abode != entt::null)
 	{

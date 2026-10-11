@@ -39,8 +39,6 @@ struct Town
 	uint32_t injured {0};
 	/// What its people's deaths came to, by the player put down for each (by player number) and what killed them
 	std::array<std::array<float, static_cast<size_t>(DeathReason::_COUNT)>, 8> deathsByKiller {};
-	/// How many of its people have died of each cause
-	std::array<uint32_t, static_cast<size_t>(DeathReason::_COUNT)> deaths {};
 	/// The forest of the lone trees about it, made as the land is laid out; a tree replanted near the town joins it
 	std::optional<uint32_t> scenicForest;
 	/// Where its scenic forest was made: the town's centre then
@@ -63,6 +61,9 @@ struct Town
 	uint32_t emergencyTurn {0};
 	/// Its own graveyard, where its dead are counted: the first of its graveyards to work, none until then
 	entt::entity graveyard {entt::null};
+	/// Its crèche, where its children spend their days: the first of its crèches to work, none until then. When it goes
+	/// another of the town's working civic buildings may stand in for it.
+	entt::entity creche {entt::null};
 };
 
 } // namespace openblack::ecs::components

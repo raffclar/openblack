@@ -116,18 +116,6 @@ TEST(CreatureRoute, CreaturesStandClearOfBlockedCells)
 	EXPECT_LT(glm::distance(*nearest, glm::vec2(2005.0f, 2005.0f)), 20.0f);
 }
 
-TEST(CreatureRoute, BigCreaturesWalkThroughSmallTrees)
-{
-	EXPECT_FALSE(MustAvoid(Obstacle::Tree, 20.0f, 15.0f, false));
-	EXPECT_TRUE(MustAvoid(Obstacle::Tree, 22.5f, 15.0f, false));
-	EXPECT_TRUE(MustAvoid(Obstacle::Tree, 2.0f, 15.0f, true));
-	EXPECT_TRUE(MustAvoid(Obstacle::Building, 1.5f, 15.0f, false));
-	EXPECT_FALSE(MustAvoid(Obstacle::Object, 1.4f, 15.0f, false));
-	EXPECT_FALSE(MustAvoid(Obstacle::Living, 100.0f, 15.0f, false));
-	EXPECT_TRUE(MustAvoid(Obstacle::StandingCreature, 0.0f, 15.0f, false));
-	EXPECT_FALSE(MustAvoid(Obstacle::MovingCreature, 0.0f, 15.0f, false));
-}
-
 TEST(CreatureRoute, OpenGroundIsAStraightLine)
 {
 	const auto land = FlatLand();

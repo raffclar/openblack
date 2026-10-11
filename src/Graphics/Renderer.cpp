@@ -10,6 +10,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <initializer_list>
@@ -19,6 +20,7 @@
 #include <optional>
 #include <ranges>
 #include <span>
+#include <string_view>
 #include <system_error>
 #include <utility>
 #define LOCATOR_IMPLEMENTATIONS
@@ -30,6 +32,7 @@
 #include <bgfx/platform.h>
 #include <bimg/bimg.h>
 #include <bx/file.h>
+#include <fmt/format.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/norm.hpp>
 #include <glm/gtx/transform.hpp>
@@ -296,11 +299,21 @@ struct BgfxCallback: public bgfx::CallbackI
 		          str);
 #endif
 
+		// Vulkan aborts when its pool of descriptor sets runs dry: say so, with what the last frame took
+		std::string message = str;
+		if (std::string_view(str).find("VK_ERROR_OUT_OF_POOL_MEMORY") != std::string_view::npos)
+		{
+			message +=
+			    fmt::format(" (Vulkan ran out of descriptor sets: the last frame counted took {} of the {} a frame "
+			                "has, warned of from {})",
+			                recentDescriptorSets.load(), graphics::k_DescriptorSetsPerFrame, graphics::k_DescriptorSetsNear);
+		}
+
 		// Must terminate, continuing will cause crash anyway. This can come from bgfx's render thread, where nothing
 		// would catch an exception, so it is reported and the game exits from here.
 		if (crash_handler::IsInstalled())
 		{
-			crash_handler::ReportFatal(crash_report::CrashKind::GraphicsFatal, str, filePath, line,
+			crash_handler::ReportFatal(crash_report::CrashKind::GraphicsFatal, message, filePath, line,
 			                           std::string("bgfx ") + codeStr);
 		}
 		throw std::runtime_error(std::string("bgfx: ") + filePath + ":" + std::to_string(line) + ": FATAL (" + codeStr +
@@ -399,6 +412,8 @@ struct BgfxCallback: public bgfx::CallbackI
 
 	/// The pictures bgfx gave up or couldn't write, told from its render thread
 	graphics::ScreenshotFailures failures;
+	/// The descriptor sets the last frame counted took under Vulkan, for the report if the renderer runs out of them
+	std::atomic<uint32_t> recentDescriptorSets {0};
 };
 
 } // namespace openblack
@@ -4978,7 +4993,8 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 		const bool showsReflection = drawDesc.drawEntities && std::ranges::any_of(instancedDrawDescs, [](const auto& entry) {
 			                             return entry.second.showsReflection;
 		                             });
-		if (drawDesc.drawWater || showsReflection)
+		// Left as it was last drawn while frames come too near Vulkan's descriptor sets
+		if ((drawDesc.drawWater || showsReflection) && _reflectionSkips == 0)
 		{
 			DrawSceneDesc drawPassDesc = drawDesc;
 
@@ -5029,13 +5045,15 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	// other draw calls are submitted to view
 	bgfx::touch(static_cast<bgfx::ViewId>(skyViewId));
 	bgfx::touch(static_cast<bgfx::ViewId>(desc.viewId));
-	bgfx::setViewMode(static_cast<bgfx::ViewId>(skyViewId), bgfx::ViewMode::Sequential);
+	_shaderManager->SetViewOrder(skyViewId, ViewOrder::Sequential);
 	// bgfx sorts a view's blended draws by their programs unless told to keep them in order. The game draws the temple
 	// in the order it is submitted, and its blended parts must be too: the pool's water, drawn with the lightmap
 	// program, would otherwise land after the hand, whose faded wrist writes depth, and leave a hole in the water
 	// where the wrist should show it through.
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	bgfx::setViewMode(static_cast<bgfx::ViewId>(desc.viewId), inTemple ? bgfx::ViewMode::Sequential : bgfx::ViewMode::Default);
+	// So is a view whose sorted draws came too near Vulkan's descriptor sets of late
+	const bool inOrder = inTemple || _inOrderViews.at(static_cast<size_t>(desc.viewId)) > 0;
+	_shaderManager->SetViewOrder(desc.viewId, inOrder ? ViewOrder::Sequential : ViewOrder::ByProgram);
 	// Outside the temple, what blends in the world is drawn after the rest of the scene in a pass of its own, all of it
 	// together and the farthest first, as the game sorts it
 	const auto translucentViewId = TranslucentView(desc.viewId);
@@ -5045,7 +5063,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 		{
 			desc.frameBuffer->Bind(translucentViewId);
 		}
-		bgfx::setViewMode(static_cast<bgfx::ViewId>(translucentViewId), bgfx::ViewMode::DepthDescending);
+		_shaderManager->SetViewOrder(translucentViewId, ViewOrder::DepthDescending);
 		_shaderManager->SetCamera(translucentViewId, *desc.camera);
 	}
 	const auto cameraOrigin = desc.camera->GetOrigin();
@@ -5278,6 +5296,20 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			const std::span<const ecs::systems::VortexSystemInterface::GroundMark> groundMarks =
 			    Locator::vortexSystem::has_value() ? Locator::vortexSystem::value().GetGroundMarks()
 			                                       : std::span<const ecs::systems::VortexSystemInterface::GroundMark> {};
+			using GroundTextures = ecs::components::Vortex::GroundTextures;
+			const auto groundTexturesLoaded = [&](const GroundTextures& ground) {
+				return textures.Contains(ground.hole) && textures.Contains(ground.ring);
+			};
+			// Every block binds the same hole and ring textures, whether a vortex marks it or not: its u_vortexGround
+			// alone says whether it shows them. bgfx draws the blocks by their distance, not in the order they were
+			// submitted, so a binding left over from the block submitted before would split the blocks into two sets
+			// of bindings that alternate down the sorted list, and Vulkan needs a descriptor set at every change. Only
+			// a block marked by a vortex of another kind (the volcano's beside a land vortex) binds its own textures.
+			const auto sharedMark = std::ranges::find_if(groundMarks, [&](const auto& mark) {
+				return groundTexturesLoaded(ecs::components::Vortex::GroundTexturesOf(mark.type));
+			});
+			const GroundTextures* sharedGround =
+			    sharedMark != groundMarks.end() ? &ecs::components::Vortex::GroundTexturesOf(sharedMark->type) : nullptr;
 			const auto submitBlock = [&](size_t index) {
 				const auto& block = blocks[index];
 				const glm::vec4 mapPositionAndSize = glm::vec4(block.GetMapPosition(), 160.0f, 160.0f);
@@ -5285,18 +5317,23 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				const glm::vec4 u_block {static_cast<float>(index), 0.0f, 0.0f, 0.0f};
 				blockUniform.Set(&u_block);
 				glm::vec4 vortexGround {0.0f, 0.0f, 0.0f, -1.0f};
+				const GroundTextures* blockGround = sharedGround;
 				const auto mark = std::ranges::find(groundMarks | std::views::reverse, block.GetBlockPosition(),
 				                                    &ecs::systems::VortexSystemInterface::GroundMark::block);
 				if (mark != (groundMarks | std::views::reverse).end())
 				{
 					const auto& marked = ecs::components::Vortex::GroundTexturesOf(mark->type);
-					if (textures.Contains(marked.hole) && textures.Contains(marked.ring))
+					if (groundTexturesLoaded(marked))
 					{
 						vortexGround = {mark->centre, 1.0f / (vortex::k_GroundTextureSpan * mark->baseScale),
 						                static_cast<float>(mark->holeThreshold)};
-						terrainShader->SetTextureSampler("s6_vortexHole", 6, *textures.Handle(marked.hole));
-						terrainShader->SetTextureSampler("s13_vortexRing", 13, *textures.Handle(marked.ring));
+						blockGround = &marked;
 					}
+				}
+				if (blockGround != nullptr)
+				{
+					terrainShader->SetTextureSampler("s6_vortexHole", 6, *textures.Handle(blockGround->hole));
+					terrainShader->SetTextureSampler("s13_vortexRing", 13, *textures.Handle(blockGround->ring));
 				}
 				vortexGroundUniform.Set(&vortexGround);
 				// The moving shadows reaching the block
@@ -5866,6 +5903,26 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 			}
 			drawHeld(true);
+			// The souls of the dead rising or sinking, each white and see-through, posed by its own clip; the sea doesn't
+			// reflect them
+			if (desc.viewId != RenderPass::Reflection)
+			{
+				for (const auto& soul : renderCtx.soulDraws)
+				{
+					if (!meshManager.Contains(soul.meshId) || soul.instance >= renderCtx.soulInstances.size())
+					{
+						continue;
+					}
+					RenderContext::InstancedDrawDesc placers {soul.instance, 1, false, false};
+					const EntityPose soulPose {.bones = soul.bones, .morphTargets = nullptr};
+					submitDesc.sortDepth =
+					    zsort::Depth(glm::vec3(renderCtx.soulInstances.at(soul.instance).model[3]), cameraOrigin);
+					submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = glm::vec3(255.0f), .alpha = soul.alpha};
+					drawInstances(soul.meshId, placers, true, soul.instance, 1, &soulPose, nullptr,
+					              renderCtx.soulInstanceBuffer);
+					submitDesc.objectLook.reset();
+				}
+			}
 			for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
 			{
 				if (placers.translucent && !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
@@ -6149,8 +6206,71 @@ void Renderer::Frame() noexcept
 {
 	// Advance to next frame. Process submitted rendering primitives.
 	const auto frame = bgfx::frame();
-	_shaderManager->FrameEnded();
+	if (const auto sets = _shaderManager->FrameEnded())
+	{
+		WatchDescriptorSets(*sets);
+	}
 	_offscreenShots->FrameEnded(frame, _bgfxCallback->failures);
+}
+
+void Renderer::WatchDescriptorSets(const FrameDescriptorSets& sets) noexcept
+{
+	_bgfxCallback->recentDescriptorSets = sets.sets;
+	const auto budget = JudgeDescriptorSets(sets.sets);
+	// The frames in flight share one pool, so a frame over its share passes, but not several. For a while after one,
+	// the scene's views are drawn in the order their draws come where that takes far fewer sets (a run of draws that
+	// leaves some textures bound part way alternates when sorted), and the sea's reflection, the one pass the scene can
+	// do without, is left as it was last drawn if that isn't enough.
+	constexpr uint32_t k_ReliefFrames = 60;
+	const bool relieved =
+	    _reflectionSkips > 0 || std::ranges::any_of(_inOrderViews, [](uint32_t frames) { return frames > 0; });
+	const auto countDown = [](uint32_t& frames) { frames = frames > 0 ? frames - 1 : 0; };
+	countDown(_reflectionSkips);
+	std::ranges::for_each(_inOrderViews, countDown);
+	std::string relief;
+	if (budget == DescriptorBudget::Over)
+	{
+		constexpr std::array k_Reorderable = {static_cast<uint16_t>(RenderPass::Main),
+		                                      static_cast<uint16_t>(RenderPass::Reflection)};
+		const auto plan = PlanDescriptorSetRelief(sets, k_Reorderable);
+		for (const auto view : plan.inOrder)
+		{
+			_inOrderViews.at(view) = k_ReliefFrames;
+			relief += fmt::format("; the {} is drawn in the order it comes", k_RenderPassNames.at(view));
+		}
+		if (plan.skipOptional)
+		{
+			_reflectionSkips = k_ReliefFrames;
+			relief += "; the sea's reflection is skipped";
+		}
+		// A relief starting is said at once, whatever the last warning
+		if (!relieved)
+		{
+			_descriptorSetWarningPause = 0;
+		}
+	}
+
+	if (_descriptorSetWarningPause > 0)
+	{
+		--_descriptorSetWarningPause;
+	}
+	if (budget == DescriptorBudget::Fine || _descriptorSetWarningPause > 0)
+	{
+		return;
+	}
+	constexpr uint32_t k_WarningPauseFrames = 600;
+	_descriptorSetWarningPause = k_WarningPauseFrames;
+	std::string views;
+	for (const auto& view : sets.views)
+	{
+		const auto name = view.view < k_RenderPassNames.size() ? std::string(k_RenderPassNames.at(view.view))
+		                                                       : "view " + std::to_string(view.view);
+		views += fmt::format("{}{}: {} sets ({} in order), {} draws", views.empty() ? "" : "; ", name, view.sets,
+		                     view.setsInOrder, view.draws);
+	}
+	SPDLOG_LOGGER_WARN(spdlog::get("graphics"),
+	                   "A frame took {} of the {} Vulkan descriptor sets a frame has ({} draws){}. By view: {}", sets.sets,
+	                   k_DescriptorSetsPerFrame, sets.draws, relief.empty() ? "" : relief + " for a while", views);
 }
 
 void Renderer::RequestScreenshot(const std::filesystem::path& filepath) noexcept

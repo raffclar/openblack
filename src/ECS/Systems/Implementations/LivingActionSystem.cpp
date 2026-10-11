@@ -53,6 +53,7 @@
 #include "VillagerForester.h"
 #include "VillagerHome.h"
 #include "VillagerHousewife.h"
+#include "VillagerMourning.h"
 #include "VillagerPhysics.h"
 #include "VillagerReactions.h"
 #include "VillagerScript.h"
@@ -80,6 +81,7 @@ namespace villager_food = openblack::ecs::villager_food;
 namespace villager_forester = openblack::ecs::villager_forester;
 namespace villager_fisherman = openblack::ecs::villager_fisherman;
 namespace villager_housewife = openblack::ecs::villager_housewife;
+namespace villager_mourning = openblack::ecs::villager_mourning;
 namespace villager_checks = openblack::ecs::villager_checks;
 namespace villager_breeding = openblack::ecs::villager_breeding;
 namespace villager_worship = openblack::ecs::villager_worship;
@@ -569,7 +571,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_breeding::GivenBirth,
     },
-    /* CHILD_AT_CRECHE */ k_TodoEntry,
+    /* CHILD_AT_CRECHE */
+    VillagerStateTableEntry {
+        .state = &villager_breeding::ChildAtCreche,
+    },
     /* CHILD_FOLLOWS_MOTHER */
     VillagerStateTableEntry {
         .state = &villager_breeding::ChildFollowsMother,
@@ -646,7 +651,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_home::VagrantStart,
     },
-    /* MORN_DEATH */ k_TodoEntry,
+    /* MORN_DEATH */
+    VillagerStateTableEntry {
+        .state = &villager_breeding::MournMother,
+    },
     /* PERFORM_INSPECTION_REACTION */ k_TodoEntry,
     /* APPROACH_OBJECT_REACTION */ k_TodoEntry,
     /* INITIALISE_TELL_OTHERS_ABOUT_OBJECT */ k_TodoEntry,
@@ -759,10 +767,30 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     },
     /* DANCE_WHILE_REACTING */ k_TodoEntry,
     /* CONTROLLED_BY_CREATURE */ k_TodoEntry,
-    /* POINT_AT_DEAD_PERSON */ k_TodoEntry,
-    /* GO_TOWARDS_DEAD_PERSON */ k_TodoEntry,
-    /* LOOK_AT_DEAD_PERSON */ k_TodoEntry,
-    /* MOURN_DEAD_PERSON */ k_TodoEntry,
+    /* POINT_AT_DEAD_PERSON */
+    VillagerStateTableEntry {
+        .state = &villager_mourning::PointAtDeadPerson,
+        .exitState = &villager_mourning::ExitMourning,
+        .validate = &villager_mourning::ValidateMourning,
+    },
+    /* GO_TOWARDS_DEAD_PERSON */
+    VillagerStateTableEntry {
+        .state = &villager_mourning::GoTowardsDeadPerson,
+        .exitState = &villager_mourning::ExitMourning,
+        .validate = &villager_mourning::ValidateMourning,
+    },
+    /* LOOK_AT_DEAD_PERSON */
+    VillagerStateTableEntry {
+        .state = &villager_mourning::LookAtDeadPerson,
+        .exitState = &villager_mourning::ExitMourning,
+        .validate = &villager_mourning::ValidateMourning,
+    },
+    /* MOURN_DEAD_PERSON */
+    VillagerStateTableEntry {
+        .state = &villager_mourning::MournDeadPerson,
+        .exitState = &villager_mourning::ExitMourning,
+        .validate = &villager_mourning::ValidateMourning,
+    },
     /* NOTHING_TO_DO */
     VillagerStateTableEntry {
         .state = &villager_home::NothingToDo,

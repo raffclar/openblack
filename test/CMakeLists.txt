@@ -289,6 +289,9 @@ openblack_setup_and_add_test(test_upload_pacer test_upload_pacer.cpp)
 openblack_setup_and_add_test(test_map_cells test_map_cells.cpp)
 openblack_setup_and_add_test(test_script_cast test_script_cast.cpp)
 openblack_setup_and_add_test(test_creature_route test_creature_route.cpp)
+openblack_setup_and_add_test(
+  test_creature_obstacles test_creature_obstacles.cpp
+)
 openblack_setup_and_add_test(test_creature_audio test_creature_audio.cpp)
 openblack_setup_and_add_test(
   test_creature_interaction test_creature_interaction.cpp
@@ -756,5 +759,13 @@ openblack_setup_and_add_test(test_relaxation_rules test_relaxation_rules.cpp)
 openblack_setup_and_add_test(test_villager_tools test_villager_tools.cpp)
 openblack_setup_and_add_test(test_tree_shadows graphics/test_tree_shadows.cpp)
 openblack_setup_and_add_test(test_villager_work test_villager_work.cpp)
+openblack_setup_and_add_test(
+  test_descriptor_set_tally graphics/test_descriptor_set_tally.cpp
+)
+openblack_setup_and_add_test(
+  test_graphics_backend_names test_graphics_backend_names.cpp
+)
 openblack_setup_and_add_test(test_villager_breeding test_villager_breeding.cpp)
 openblack_setup_and_add_test(test_worshipper_rules test_worshipper_rules.cpp)
+openblack_setup_and_add_test(test_villager_death test_villager_death.cpp)
+openblack_setup_and_add_test(test_creche_rules test_creche_rules.cpp)

@@ -58,7 +58,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("V,vsync", "Enable Vertical Sync.")
 		("detail-level", "Graphics detail level of the original game, 0 to 6 (4 by default, 5 custom, 6 the highest).", cxxopts::value<uint16_t>()->default_value("4"))
 		("m,window-mode", "Which mode to run window.", cxxopts::value<std::string>()->default_value("windowed"))
-		("b,backend-type", "Which backend to use for rendering.", cxxopts::value<std::string>())
+		("b,backend-type", "Which backend to use for rendering: Vulkan (VK), Direct3D12 (D3D12, DX12), Metal or Noop.", cxxopts::value<std::string>())
 		("n,num-frames-to-simulate", "Number of frames to simulate before quitting.", cxxopts::value<uint32_t>()->default_value("0"))
 		("l,log-file", "Output file for logs, 'stdout'/'logcat' for terminal output.", cxxopts::value<std::string>()->default_value(defaultLogFile))
 		("L,log-level", "Level (trace, debug, info, warning, error, critical, off) of logging per subsystem (" + loggingSubsystems + ").",
@@ -110,14 +110,15 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		// allow user to specify a renderer
 		if (result.count("backend-type") != 0)
 		{
-			auto rendererIter = openblack::k_GraphicsBackendStringLookup.find(result["backend-type"].as<std::string>());
-			if (rendererIter != openblack::k_GraphicsBackendStringLookup.cend())
+			const auto name = result["backend-type"].as<std::string>();
+			if (const auto backend = openblack::ParseGraphicsBackend(name))
 			{
-				graphicsBackend = rendererIter->second;
+				graphicsBackend = *backend;
 			}
 			else
 			{
-				throw cxxopts::exceptions::no_such_option(result["backend-type"].as<std::string>());
+				throw cxxopts::exceptions::parsing("Unknown backend '" + name +
+				                                   "': use Vulkan (VK), Direct3D12 (D3D12, DX12), Metal or Noop");
 			}
 		}
 

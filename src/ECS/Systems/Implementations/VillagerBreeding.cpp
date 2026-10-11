@@ -15,12 +15,16 @@
 #include <limits>
 #include <optional>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include <glm/geometric.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 
 #include "3D/MapCoords.h"
+#include "Audio/AnimEffectKeys.h"
+#include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Common/GameRandom.h"
@@ -41,16 +45,21 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
+#include "ECS/Components/WallHug.h"
+#include "ECS/CrecheRules.h"
+#include "ECS/Creches.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerBreedingRules.h"
 #include "ECS/VillagerSkeletons.h"
+#include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -66,6 +75,8 @@ namespace villager_home = openblack::ecs::villager_home;
 namespace villager_age = openblack::ecs::villager_age;
 namespace villager_food = openblack::ecs::villager_food;
 namespace world_objects = openblack::ecs::world_objects;
+namespace creche = openblack::creche;
+namespace creches = openblack::creches;
 
 namespace
 {
@@ -276,12 +287,61 @@ uint32_t CheckChild(LivingAction& action)
 	return 0;
 }
 
-/// A child goes to its town's crèche, by day, when the town has one that works
-bool ChildGotoCreche(LivingAction& /*action*/)
+/// The sound bank and keys of the children at play at a crèche
+constexpr std::string_view k_CrecheSoundBank = "editor.sad";
+constexpr audio::AnimEffectKeys k_CrecheSound {.object = audio::SoundObject::Abode, .action = audio::SoundAction::PlayfulGrunt};
+/// How close a homeless child must be to the crèche, edge to edge, to stroll on there at night
+constexpr float k_CrecheTouch = 0.001f;
+
+/// A child goes to its town's crèche when the town has one that works, walking to its door
+bool ChildGotoCreche(LivingAction& action)
 {
-	// TODO(villager-children-creche): openblack's towns have no crèche yet; a child of a town with a working one walks
-	// to its door and promenades there by day
-	return false;
+	const auto creche = creches::CrecheOf(TownOf(EntityOf(action)));
+	if (creche == entt::null || !villager_home::IsFunctional(creche))
+	{
+		return false;
+	}
+	// TODO(villagers): along the town's footpaths where there are any; openblack has no footpath walking yet
+	villager_home::SetupMoveTo(action, villager_home::ArrivePosition(creche), VillagerStates::ChildAtCreche);
+	return true;
+}
+
+/// A child at the crèche goes on to the next point of its stroll along the crèche's paths, from its door when it
+/// stands there
+void StrollOn(LivingAction& action, entt::entity creche)
+{
+	const auto child = EntityOf(action);
+	auto& person = Entities().Get<Villager>(child);
+	const auto door = villager_home::ArrivePosition(creche);
+	const auto* walk = Entities().TryGet<const WallHug>(child);
+	const auto here = walk != nullptr ? walk->position : ecs::wall_hug::ToWhole(PositionOf(child));
+	const auto leg = creche::NextStrollLeg({.path = person.crechePath, .leg = person.crecheLeg}, creches::PathsOf(creche),
+	                                       here == ecs::wall_hug::ToWhole(door), GameInt());
+	person.crechePath = static_cast<int16_t>(leg.stroll.path);
+	person.crecheLeg = static_cast<int16_t>(leg.stroll.leg);
+	glm::vec2 goal = door;
+	if (leg.point.has_value())
+	{
+		goal = creche::Strayed(creches::PathPoint(creche, *leg.point).value_or(door), GameFloat());
+	}
+	villager_home::SetupMoveTo(action, goal, VillagerStates::ChildAtCreche);
+}
+
+/// The sound of children at play at the crèche
+void PlayCrecheSound(entt::entity creche)
+{
+	if (Locator::audio::has_value())
+	{
+		Locator::audio::value().PlayAnimEffect(std::string(k_CrecheSoundBank), k_CrecheSound.ToArray(), creche,
+		                                       Entities().Get<const Transform>(creche).position);
+	}
+}
+
+/// Whether the first of a home's people is in it
+bool FirstOfHomeIsIn(entt::entity abode)
+{
+	const auto& people = Entities().Get<const Abode>(abode).inhabitants;
+	return !people.empty() && IsVillager(people.front()) && IsAtHome(people.front());
 }
 
 /// Whether a child, by its checks, has something to do other than follow its mother
@@ -519,15 +579,65 @@ void villager_breeding::BedTimeConceptions(entt::entity villager)
 	}
 }
 
-void villager_breeding::OrphanChildrenOf(entt::entity villager)
+void villager_breeding::OrphanChildrenOf(entt::entity villager, entt::entity town)
 {
-	// TODO(villager-children-creche): a child that is about mourns its mother first
-	Entities().Each<Villager>([villager](entt::entity, Villager& person) {
-		if (person.mother == villager)
+	for (const auto child : Locator::townSystem::value().ChildrenOf(town, villager))
+	{
+		// One that is about mourns her first, then goes home
+		if (IsAvailable(child))
 		{
-			person.mother = entt::null;
+			SetTopState(Entities().Get<LivingAction>(child), VillagerStates::MornDeath);
 		}
-	});
+		Entities().Get<Villager>(child).mother = entt::null;
+	}
+}
+
+uint32_t villager_breeding::MournMother(LivingAction& action)
+{
+	return villager_home::GoHome(action);
+}
+
+uint32_t villager_breeding::ChildAtCreche(LivingAction& action)
+{
+	if (CheckChild(action) == 1)
+	{
+		return 1;
+	}
+	const auto child = EntityOf(action);
+	const auto town = TownOf(child);
+	if (town == entt::null)
+	{
+		return 0;
+	}
+	if (villager_home::OfferToTownDesires(action) == 1)
+	{
+		return 1;
+	}
+	const auto creche = creches::CrecheOf(town);
+	if (creche == entt::null)
+	{
+		return 0;
+	}
+	const bool daytime = Locator::skySystem::has_value() && creche::IsDaytime(Locator::skySystem::value().GetCurrentSkyType());
+	const auto abode = AbodeOf(child);
+	const bool firstIn = abode != entt::null && FirstOfHomeIsIn(abode);
+	const bool touching = abode == entt::null && AreTouching(child, creche, k_CrecheTouch);
+	switch (creche::AtTheCreche(daytime, villager_home::IsFunctional(creche), abode != entt::null, firstIn, touching))
+	{
+	case creche::AtCreche::Stroll:
+		PlayCrecheSound(creche);
+		StrollOn(action, creche);
+		return 1;
+	case creche::AtCreche::StrollQuietly:
+		StrollOn(action, creche);
+		return 0;
+	case creche::AtCreche::GoHome:
+		villager_home::GoHome(action);
+		return 0;
+	case creche::AtCreche::Wait:
+		break;
+	}
+	return 0;
 }
 
 uint32_t villager_breeding::ChildDecideWhatToDo(LivingAction& action)
