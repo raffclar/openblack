@@ -153,6 +153,7 @@
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
@@ -1130,6 +1131,11 @@ bool Game::GameLogicLoop() noexcept
 	Locator::chimneySmokeSystem::value().ProcessTurn();
 	// How far the players' influence reaches, and its border
 	Locator::influenceSystem::value().ProcessTurn(Locator::time::value().GetTurn());
+	// The players' hearts beat on, quicker the more their people are in danger
+	if (Locator::heartbeatSystem::has_value())
+	{
+		Locator::heartbeatSystem::value().ProcessTurn(Locator::time::value().GetTurn());
+	}
 	// The crops in the fields grow
 	Locator::fieldSystem::value().ProcessTurn(Locator::time::value().GetTurn());
 	// The fish come back to the fish farms
@@ -1787,6 +1793,8 @@ bool Game::Update() noexcept
 	Locator::villageLightSystem::value().Update(gameTime);
 	// The town totems ease to their shares
 	Locator::villageTotemSystem::value().Update(gameTime.count());
+	// The players' symbols of belief over the village centres move on
+	Locator::townSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	Locator::fieldSystem::value().Update(gameTime);
 	// The shoals near the camera swim, and dart from what scared them
 	Locator::fishFarmSystem::value().Update(std::chrono::duration<float>(gameTime).count(),

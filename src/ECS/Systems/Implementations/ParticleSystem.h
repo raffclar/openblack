@@ -70,6 +70,8 @@ public:
 	void QueueArcs(entt::entity object) override;
 	void StrikeWithoutMiracle(glm::vec3 point) override;
 	[[nodiscard]] std::optional<particles::BeliefSprite> TakeBeliefSprite() override;
+	[[nodiscard]] std::optional<particles::TownCentreBelief> TownCentreBeliefOf(entt::entity centre) const override;
+	[[nodiscard]] std::vector<int> PlayersInGame() const override;
 	/// A symbol of belief waits to rise; whether there was room
 	bool QueueBeliefSprite(const particles::BeliefSprite& sprite);
 	[[nodiscard]] std::optional<entt::entity> TakeArcs() override;

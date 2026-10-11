@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <unordered_map>
 #include <vector>
 
 #include <entt/signal/sigh.hpp>
@@ -51,6 +52,7 @@ public:
 	void SetInStateOfEmergency(entt::entity town) override;
 	void ProcessTurn() override;
 	void ClaimTown(entt::entity town, PlayerNames player) override;
+	void UpdateFrame(float gameSeconds) override;
 
 private:
 	/// A building or a person gone from the world leaves its town's lists
@@ -59,5 +61,7 @@ private:
 
 	Registry* _registry {nullptr};
 	std::vector<entt::connection> _connections;
+	/// Each village centre's effect of its symbols of belief
+	std::unordered_map<entt::entity, uint32_t> _beliefSymbols;
 };
 } // namespace openblack::ecs::systems
