@@ -25,7 +25,7 @@ constexpr float k_Parallel = 1e-4f;
 /// The camera has hardly moved this frame when it is this near, squared, across the ground to where it started
 constexpr float k_HardlyMoved = 1e-4f;
 /// The line between the camera and what it looks at must rise or fall more than this for the camera to slide down it
-constexpr float k_SteepEnough = 2.0f;
+constexpr float k_SteepEnough = 0.01f;
 /// The search round the crossing turns by a 64th of a turn, up to 31 of them either way
 constexpr float k_SearchStep = 0.0981747732f;
 constexpr int k_SearchSteps = 32;
