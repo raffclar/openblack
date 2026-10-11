@@ -1003,7 +1003,7 @@ void ReactionSystem::Reset()
 	_cursor = 0;
 	_turn = 0;
 	_voice = {};
-	_landBalances = {1.0f, 1.0f};
+	_landBalances = {1.0f, 1.0f, 1.0f};
 }
 
 std::vector<ReactionSystemInterface::Active> ReactionSystem::ReactionsAt(const glm::vec3& point) const

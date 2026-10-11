@@ -80,8 +80,15 @@ public:
 	[[nodiscard]] virtual bool IsInStateOfEmergency(entt::entity town) const = 0;
 	/// Calls an emergency in a town: the first call has its people gather
 	virtual void SetInStateOfEmergency(entt::entity town) = 0;
-	/// Once a game turn: a burning store or village centre calls an emergency, and one that has run its time ends
+	/// Once a game turn: a burning store or village centre calls an emergency, and one that has run its time ends; the
+	/// missionaries preaching in each town follow their villagers or stop; a town's mark of changed wants comes down once
+	/// it has been up a whole turn
 	virtual void ProcessTurn() = 0;
+	/// A town's wants have changed: a store stocked from empty, a building site added, a death. Its disciples waiting for
+	/// work look again soon.
+	virtual void MarkDesiresChanged(entt::entity town) = 0;
+	/// Whether a town's wants have just changed
+	[[nodiscard]] virtual bool DesiresChanged(entt::entity town) const = 0;
 
 	/// A player takes a town. Its people stop worshipping and it leaves its worship site; it becomes the player's, after
 	/// their other towns, joining their worship site and influence, its totem turning to them; its people celebrate,

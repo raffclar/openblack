@@ -41,6 +41,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "Game.h"
@@ -339,6 +340,16 @@ void construction::OpenSite(entt::entity building, float desire)
 	auto& site = registry.AssignOrReplace<BuildingSite>(building);
 	site.desire = desire;
 	site.places = PlacesRound(building);
+	// A site added to a town changes what it wants
+	if (const auto town = TownOf(building); town.has_value() && *town >= 0 && Locator::townSystem::has_value())
+	{
+		registry.Each<const Town>([town](entt::entity entity, const Town& each) {
+			if (each.id == static_cast<uint32_t>(*town))
+			{
+				Locator::townSystem::value().MarkDesiresChanged(entity);
+			}
+		});
+	}
 	if (registry.AllOf<Temple>(building))
 	{
 		MakeSitePiles(building);

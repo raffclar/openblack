@@ -46,6 +46,7 @@
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/DiscipleRules.h"
+#include "ECS/DiscipleWorkRules.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -68,6 +69,7 @@
 #include "VillagerAnimate.h"
 #include "VillagerBreeding.h"
 #include "VillagerBuild.h"
+#include "VillagerDiscipleWork.h"
 #include "VillagerFisherman.h"
 #include "VillagerForester.h"
 #include "VillagerHome.h"
@@ -482,10 +484,9 @@ void SetupInspectObject(LivingAction& action, entt::entity thing)
 	SetTopState(action, VillagerStates::InspectObject);
 }
 
-/// Where an idle disciple of a town waits, none for one of no town
-std::optional<glm::vec2> WaitPosition(entt::entity villager)
+/// Where an idle disciple waits by a town, none for no town
+std::optional<glm::vec2> WaitPosition(entt::entity villager, std::optional<entt::entity> town)
 {
-	const auto town = TownOfVillager(villager);
 	if (!town.has_value())
 	{
 		return std::nullopt;
@@ -507,19 +508,6 @@ std::optional<glm::vec2> WaitPosition(entt::entity villager)
 		return centre + glm::vec2(map_coords::ToMetres(offset.x), map_coords::ToMetres(offset.z));
 	}
 	return glm::xz(PositionOf(*town));
-}
-
-/// With no work to be had, it walks to where idle disciples wait
-bool SetDiscipleNothingToDo(LivingAction& action)
-{
-	const auto place = WaitPosition(EntityOf(action));
-	if (!place.has_value())
-	{
-		return false;
-	}
-	action.turnsUntilStateChange = 0;
-	villager_home::SetupMoveTo(action, *place, VillagerStates::DiscipleNothingToDo);
-	return true;
 }
 
 /// The disciple's own work, when there is some to be had now
@@ -555,9 +543,13 @@ bool SetAboutWork(LivingAction& action, VillagerDisciple type)
 		return villager_fisherman::FishermanLookForWater(action) == 1;
 	case Breeder:
 		return villager_breeding::SetupBreederDisciple(action);
-	// TODO(disciples): the other kinds' work isn't in openblack yet (see the handover): farming for farmers, supplying
-	// workshops, trading and worship. Until it is they find none and wait by the town centre; a missionary lives as an ordinary
-	// villager of its town.
+	case Craftsman:
+		return villager_disciple_work::CheckSupplyWorkshop(action) == 1;
+	case Trader:
+		return villager_disciple_work::CheckTrader(action) == 1;
+	// TODO(disciples): farming isn't in openblack yet, so a farmer finds none and waits by the town centre; worship is
+	// the villager-worship lane's. A missionary has no work of its own once preaching: it lives as a villager of its new
+	// town.
 	default:
 		return false;
 	}
@@ -573,6 +565,7 @@ bool LandingStateIsThere(VillagerStates state)
 	case VillagerStates::ScriptInCrowd:
 	case VillagerStates::ForesterArrivesAtForest:
 	case VillagerStates::BreederJustLanded:
+	case VillagerStates::MissionaryDisciple:
 		return true;
 	default:
 		return false;
@@ -760,9 +753,20 @@ bool villager_disciple::SetAboutWorkOnLanding(LivingAction& action)
 	{
 		return false;
 	}
-	// TODO(disciples): a farmer, builder, breeder or craftsman put by a thing of another town moves into that town;
-	// villagers don't change towns yet
+	// TODO(disciples): the player's statistics count a disciple made of a new kind (only a statistics screen would show
+	// them)
 	const auto kind = disciple::KindOf(type);
+	// A farmer, builder, breeder or craftsman put by a thing of another town moves into that town, taking on its tribe
+	if (kind.movesIntoTown)
+	{
+		const auto town = TownOfThing(things.front());
+		if (town.has_value() && town != TownOfVillager(villager) && Locator::townSystem::value().MoveIntoTown(*town, villager))
+		{
+			const auto* tribe = registry.TryGet<const Tribe>(*town);
+			villager_home::TakeOnTribe(villager, tribe != nullptr ? *tribe : registry.Get<const Villager>(villager).tribe,
+			                           true);
+		}
+	}
 	if (kind.landingState == VillagerStates::InvalidState)
 	{
 		SetupInspectObject(action, things.front());
@@ -798,7 +802,7 @@ uint32_t villager_disciple::DecideAsDisciple(LivingAction& action)
 	}
 	const auto final = Locator::livingActionSystem::value().VillagerGetFinalState(action);
 	if (final != VillagerStates::DiscipleNothingToDo && TypeOf(villager) != None && disciple::KindOf(type).waitsWhenIdle &&
-	    SetDiscipleNothingToDo(action))
+	    SetDiscipleNothingToDo(action, TownOfVillager(villager)))
 	{
 		return 1;
 	}
@@ -830,12 +834,14 @@ uint32_t villager_disciple::InspectObject(LivingAction& action)
 
 uint32_t villager_disciple::DiscipleNothingToDo(LivingAction& action)
 {
-	// TODO(disciples): when its town's wants change it looks again within ten turns; openblack keeps no such change
-	if (action.turnsUntilStateChange > 0)
-	{
-		--action.turnsUntilStateChange;
-	}
-	if (action.turnsUntilStateChange > 0)
+	// When its own town's wants have just changed it looks again soon
+	const auto town = TownOfVillager(EntityOf(action));
+	const bool changed = town.has_value() && Locator::townSystem::value().DesiresChanged(*town);
+	// The count is a signed one: it may run below nothing
+	const auto left = disciple_work::IdleTurnsLeft(static_cast<int16_t>(action.turnsUntilStateChange), changed,
+	                                               [](uint32_t limit) { return Locator::gameRandom::value().GameRand(limit); });
+	action.turnsUntilStateChange = static_cast<uint16_t>(static_cast<int16_t>(left));
+	if (left >= 1)
 	{
 		return 1;
 	}
@@ -895,6 +901,20 @@ void villager_disciple::TownClaimed(entt::entity town)
 			}
 		}
 	}
+	// The missionaries preaching in it stop and are freed
+	villager_disciple_work::StopMissionariesIn(town);
+}
+
+bool villager_disciple::SetDiscipleNothingToDo(LivingAction& action, std::optional<entt::entity> town)
+{
+	const auto place = WaitPosition(EntityOf(action), town.has_value() ? ValidTown(*town) : std::nullopt);
+	if (!place.has_value())
+	{
+		return false;
+	}
+	action.turnsUntilStateChange = 0;
+	villager_home::SetupMoveTo(action, *place, VillagerStates::DiscipleNothingToDo);
+	return true;
 }
 
 void villager_disciple::UpdateMarks()

@@ -767,3 +767,4 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_villager_breeding test_villager_breeding.cpp)
 openblack_setup_and_add_test(test_creche_rules test_creche_rules.cpp)
+openblack_setup_and_add_test(test_disciple_work test_disciple_work.cpp)

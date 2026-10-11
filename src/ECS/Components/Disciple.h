@@ -22,6 +22,21 @@ struct Disciple
 	VillagerDisciple type {VillagerDisciple::None};
 	/// A trader's: the town whose storage pit it trades with
 	entt::entity tradeTown {entt::null};
+	/// A trader's: what it is carrying to that town this trip
+	ResourceType tradeResource {ResourceType::Food};
+};
+
+/// A missionary preaching in a town: it follows the missionary about, and the villagers of the town near it come to
+/// believe in the player who sent it. It goes when the missionary stops preaching.
+struct MissionaryControl
+{
+	entt::entity villager {entt::null};
+	/// The town it preaches in
+	entt::entity town {entt::null};
+	/// The player it wins belief for: the one whose villager it was
+	PlayerNames player {PlayerNames::NEUTRAL};
+	/// Its reaction, which impresses the villagers about it
+	uint32_t reaction {0};
 };
 
 /// A villager picked up by the player's hand, until it has landed and set about its work

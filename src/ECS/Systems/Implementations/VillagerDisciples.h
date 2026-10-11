@@ -56,8 +56,12 @@ uint32_t InspectObject(components::LivingAction& action);
 /// Waiting by the town centre, looking for work again now and then
 uint32_t DiscipleNothingToDo(components::LivingAction& action);
 bool EnterDiscipleNothingToDo(components::LivingAction& action, VillagerStates previous, VillagerStates next);
+/// With no work to be had, it walks to wait by a town's centre (or the town itself without one), as its own town's
+/// disciples do; a trader waits by the town it trades with. Whether it went.
+bool SetDiscipleNothingToDo(components::LivingAction& action, std::optional<entt::entity> town);
 
-/// A town changed hands: its disciples living in its homes that work for it give up their work
+/// A town changed hands: its disciples living in its homes that work for it give up their work, and the missionaries
+/// preaching in it stop
 void TownClaimed(entt::entity town);
 
 /// Every frame: the disciples' glows, and the symbol of the one in the hand or under it
