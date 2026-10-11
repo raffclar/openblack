@@ -1558,7 +1558,7 @@
   "query": "input.names"
  },
  {
-  "description": "Moves the pointer, as the mouse would, to a pixel or to where a point of the world is on the screen. The hand follows it this frame.",
+  "description": "Moves the pointer, as the mouse would, to a pixel or to where a point of the world is on the screen. With the mouse's timing (the default) the move's event reaches the game this frame and the action map reads the pointer there from the next, as with a real mouse",
   "kind": "object",
   "parameters": [
    {
@@ -1570,6 +1570,11 @@
     "description": "A point of the world, [x, z] on the land or [x, y, z]; it must be on the screen, as drawn (through camera.set's override while one is shown)",
     "name": "world",
     "type": "point"
+   },
+   {
+    "description": "mouse (the default): a real mouse's timing, the move's event this frame and the pointer read there by the action map the next, steps of a drag or path going on from wherever the game put the cursor; immediate: seen the same frame, as before",
+    "name": "timing",
+    "type": "string"
    }
   ],
   "query": "input.pointer",
@@ -1587,6 +1592,11 @@
    {
     "description": "press, release, click (the default) or double_click",
     "name": "action",
+    "type": "string"
+   },
+   {
+    "description": "mouse (the default): a real mouse's timing, the move's event this frame and the pointer read there by the action map the next, steps of a drag or path going on from wherever the game put the cursor; immediate: seen the same frame, as before",
+    "name": "timing",
     "type": "string"
    }
   ],
@@ -1654,6 +1664,11 @@
     "description": "Where it starts, as to; the pointer's place by default",
     "name": "from",
     "type": "point"
+   },
+   {
+    "description": "mouse (the default): a real mouse's timing, the move's event this frame and the pointer read there by the action map the next, steps of a drag or path going on from wherever the game put the cursor; immediate: seen the same frame, as before",
+    "name": "timing",
+    "type": "string"
    }
   ],
   "query": "input.drag",
@@ -1678,6 +1693,11 @@
     "description": "Frames for each point (1 by default)",
     "name": "frames",
     "type": "integer"
+   },
+   {
+    "description": "mouse (the default): a real mouse's timing, the move's event this frame and the pointer read there by the action map the next, steps of a drag or path going on from wherever the game put the cursor; immediate: seen the same frame, as before",
+    "name": "timing",
+    "type": "string"
    }
   ],
   "query": "input.path",
@@ -1752,6 +1772,11 @@
     "name": "events",
     "required": true,
     "type": "array"
+   },
+   {
+    "description": "The timing of the pointer's events that don't say theirs, as recordings made before the mouse's timing: immediate for those, else mouse (the default)",
+    "name": "timing",
+    "type": "string"
    }
   ],
   "query": "input.replay",

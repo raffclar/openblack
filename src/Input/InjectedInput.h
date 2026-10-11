@@ -20,6 +20,12 @@ namespace openblack::input
 void MarkInjected(SDL_Event& event);
 /// Whether a mouse or keyboard event was made by the game itself
 [[nodiscard]] bool IsInjected(const SDL_Event& event);
+/// Marks a mouse move or button made by the game itself whose state (where the pointer is, the buttons held) the game
+/// takes only as the event is pumped from the window's queue, as SDL takes a real mouse's. Such an event is injected too.
+/// Other events are marked injected only.
+void MarkPumped(SDL_Event& event);
+/// Whether a mouse event carries the pointer's state to take as it is pumped
+[[nodiscard]] bool IsPumped(const SDL_Event& event);
 /// Whether an event is the player's mouse or keyboard at work: moving, buttons, the wheel, keys and typing
 [[nodiscard]] bool IsPlayerDeviceEvent(const SDL_Event& event);
 

@@ -96,6 +96,13 @@ CAMERA_POSE = {
     "focus": {"type": "array", "items": {"type": "number"}, "description": "[x, z] on the land or [x, y, z]"},
     **CAMERA_UNITS,
 }
+# When the game sees the pointer's moves and buttons: as a real mouse's (the default) or set the same frame
+TIMING_SCHEMA = {"type": "string", "enum": ["mouse", "immediate"],
+                 "description": "mouse (the default): a real mouse's timing. The move's or button's event reaches the "
+                                "game this frame, but the action map (and so the camera) reads the pointer there only "
+                                "from the next frame, and a drag's or path's steps go on from wherever the game put the "
+                                "cursor. immediate: the old timing, read the same frame (for recordings made before)."}
+
 POINT_SCHEMA = {"type": "object",
                 "description": "{\"screen\": [x, y]} pixels, or {\"world\": [x, z] or [x, y, z]}"}
 
@@ -340,21 +347,24 @@ TOOLS = [
     },
     {
         "name": "input_pointer",
-        "description": "Moves the pointer to a pixel, or to where a point of the world is on the screen; the hand "
-                       "follows it this frame.",
+        "description": "Moves the pointer to a pixel, or to where a point of the world is on the screen, with a "
+                       "real mouse's timing: the motion event reaches the game this frame, the action map reads the "
+                       "pointer there from the next frame (timing=immediate for the old same-frame timing).",
         "inputSchema": schema({"screen": {"type": "array", "items": {"type": "number"}},
-                               "world": {"type": "array", "items": {"type": "number"}}}),
+                               "world": {"type": "array", "items": {"type": "number"}},
+                               "timing": TIMING_SCHEMA}),
         "query": "input.pointer",
-        "params": ["screen", "world"],
+        "params": ["screen", "world", "timing"],
     },
     {
         "name": "input_button",
         "description": "A mouse button (left, middle, right) where the pointer is: press, release, click or "
                        "double_click (a click, then a second press and release counted as a double click).",
         "inputSchema": schema({"button": {"type": "string", "enum": ["left", "middle", "right"]},
-                               "action": {"type": "string", "enum": ["press", "release", "click", "double_click"]}}),
+                               "action": {"type": "string", "enum": ["press", "release", "click", "double_click"]},
+                               "timing": TIMING_SCHEMA}),
         "query": "input.button",
-        "params": ["button", "action"],
+        "params": ["button", "action", "timing"],
     },
     {
         "name": "input_key",
@@ -375,19 +385,21 @@ TOOLS = [
     {
         "name": "input_drag",
         "description": "Holds a button and moves the pointer evenly to a point over some frames (30 by default), then "
-                       "lets go.",
+                       "lets go. With the mouse's timing (default) each step moves on from wherever the game put the "
+                       "cursor, as a hand on a real mouse would.",
         "inputSchema": schema({"to": POINT_SCHEMA, "from": POINT_SCHEMA, "button": {"type": "string"},
-                               "frames": {"type": "integer"}}, ["to"]),
+                               "frames": {"type": "integer"}, "timing": TIMING_SCHEMA}, ["to"]),
         "query": "input.drag",
-        "params": ["to", "from", "button", "frames"],
+        "params": ["to", "from", "button", "frames", "timing"],
     },
     {
         "name": "input_path",
-        "description": "Moves the pointer through pixels, frames each, with a button held throughout or none.",
+        "description": "Moves the pointer through pixels, frames each, with a button held throughout or none. With "
+                       "the mouse's timing (default) each step moves on from wherever the game put the cursor.",
         "inputSchema": schema({"points": {"type": "array", "items": {"type": "array"}}, "button": {"type": "string"},
-                               "frames": {"type": "integer"}}, ["points"]),
+                               "frames": {"type": "integer"}, "timing": TIMING_SCHEMA}, ["points"]),
         "query": "input.path",
-        "params": ["points", "button", "frames"],
+        "params": ["points", "button", "frames", "timing"],
     },
     {
         "name": "input_gesture",
@@ -426,10 +438,12 @@ TOOLS = [
     },
     {
         "name": "input_replay",
-        "description": "Makes a recording (input_record's events) again, frame for frame, from this frame on.",
-        "inputSchema": schema({"events": {"type": "array", "items": {"type": "object"}}}, ["events"]),
+        "description": "Makes a recording (input_record's events) again, frame for frame, from this frame on. Pass "
+                       "timing=immediate for recordings made before the mouse's timing (their events say no timing).",
+        "inputSchema": schema({"events": {"type": "array", "items": {"type": "object"}}, "timing": TIMING_SCHEMA},
+                              ["events"]),
         "query": "input.replay",
-        "params": ["events"],
+        "params": ["events", "timing"],
     },
     {
         "name": "inspector_writes",

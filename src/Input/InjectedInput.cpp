@@ -17,8 +17,15 @@ namespace
 {
 /// The device the game's own mouse events come from: no mouse SDL knows has this number, and it isn't the touch mouse
 constexpr uint32_t k_InjectedMouse = 0x0B1A0B1Au;
+/// The device the game's own mouse events come from when it takes their state as they are pumped, as from a real mouse
+constexpr uint32_t k_PumpedMouse = 0x0B1A0B1Bu;
 /// Kept in a key event's spare field
 constexpr uint32_t k_InjectedKey = 0x0B1A0B1Au;
+
+bool IsInjectedMouse(uint32_t which)
+{
+	return which == k_InjectedMouse || which == k_PumpedMouse;
+}
 } // namespace
 
 void openblack::input::MarkInjected(SDL_Event& event)
@@ -49,15 +56,46 @@ bool openblack::input::IsInjected(const SDL_Event& event)
 	switch (event.type)
 	{
 	case SDL_MOUSEMOTION:
-		return event.motion.which == k_InjectedMouse;
+		return IsInjectedMouse(event.motion.which);
 	case SDL_MOUSEBUTTONDOWN:
 	case SDL_MOUSEBUTTONUP:
-		return event.button.which == k_InjectedMouse;
+		return IsInjectedMouse(event.button.which);
 	case SDL_MOUSEWHEEL:
-		return event.wheel.which == k_InjectedMouse;
+		return IsInjectedMouse(event.wheel.which);
 	case SDL_KEYDOWN:
 	case SDL_KEYUP:
 		return event.key.keysym.unused == k_InjectedKey;
+	default:
+		return false;
+	}
+}
+
+void openblack::input::MarkPumped(SDL_Event& event)
+{
+	switch (event.type)
+	{
+	case SDL_MOUSEMOTION:
+		event.motion.which = k_PumpedMouse;
+		break;
+	case SDL_MOUSEBUTTONDOWN:
+	case SDL_MOUSEBUTTONUP:
+		event.button.which = k_PumpedMouse;
+		break;
+	default:
+		MarkInjected(event);
+		break;
+	}
+}
+
+bool openblack::input::IsPumped(const SDL_Event& event)
+{
+	switch (event.type)
+	{
+	case SDL_MOUSEMOTION:
+		return event.motion.which == k_PumpedMouse;
+	case SDL_MOUSEBUTTONDOWN:
+	case SDL_MOUSEBUTTONUP:
+		return event.button.which == k_PumpedMouse;
 	default:
 		return false;
 	}
