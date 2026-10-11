@@ -509,6 +509,31 @@ void draw::AddEffect(Frame& frame, const Effect::DrawWalk& walk, DrawPath path, 
 	}
 }
 
+void draw::AddPlayerSymbol(Frame& frame, const PlayerSymbol& symbol, const Sources& sources)
+{
+	const auto firstItem = static_cast<uint32_t>(frame.items.size());
+	Effect::DrawAtom atom {};
+	atom.position = symbol.position;
+	atom.scale = symbol.scale;
+	atom.alpha = k_ByteMax;
+	atom.rgb = {0xFF, 0xFF, 0xFF};
+	atom.age = symbol.milliseconds / k_MillisecondsPerSecond;
+	const uint32_t rgb = sources.playerColour ? sources.playerColour(symbol.player) : 0xFFFFFFu;
+	const auto sprites = SymbolOf(atom, rgb, symbol.player);
+	GroupBuilder builder(frame, sources);
+	// Added to what is behind, writing no depth, all three at once where the symbol stands
+	const auto additive = Mode::AlphaTexturedAlphaAdditiveNz;
+	builder.Sprite(sprites.instances[0], k_GlowTexture, additive);
+	builder.Sprite(sprites.instances[1], k_GlowTexture, additive);
+	builder.Sprite(sprites.instances[2], k_SymbolTexture, additive);
+	const auto count = static_cast<uint32_t>(frame.items.size()) - firstItem;
+	if (count > 0)
+	{
+		frame.groups.push_back(
+		    {.path = DrawPath::Queued, .origin = symbol.position, .firstItem = firstItem, .itemCount = count});
+	}
+}
+
 void draw::AddLightSheet(Frame& frame, std::span<const LightSheet::Vertex> vertices, std::span<const uint32_t> triangles,
                          const glm::vec3& sortPoint, LightSheet::Look look)
 {

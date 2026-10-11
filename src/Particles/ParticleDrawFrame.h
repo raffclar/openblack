@@ -247,6 +247,18 @@ struct SymbolSprites
 };
 [[nodiscard]] SymbolSprites SymbolOf(const Effect::DrawAtom& atom, uint32_t playerRgb, int player);
 
+/// A player's symbol drawn by itself, between its two glows, as over a worthy artefact
+struct PlayerSymbol
+{
+	glm::vec3 position {0.0f};
+	float scale {1.0f};
+	/// The game milliseconds it has been drawn for, which turn its glows
+	float milliseconds {0.0f};
+	int player {k_NeutralPlayer};
+};
+/// Adds a player's symbol to the frame, its three sprites drawn together at its place among what blends
+void AddPlayerSymbol(Frame& frame, const PlayerSymbol& symbol, const Sources& sources);
+
 /// The corners of a ribbon through its joints, four to a segment, its texture coordinates from its creator, slid along it
 /// by a scroll in sheet heights
 void AppendChain(std::vector<ChainVertex>& out, const Creator& creator, std::span<const Effect::DrawAtom> joints,

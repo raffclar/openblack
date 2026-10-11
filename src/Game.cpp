@@ -115,6 +115,8 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
+#include "ECS/Systems/AppleBarrelSystemInterface.h"
+#include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
@@ -1147,6 +1149,10 @@ bool Game::GameLogicLoop() noexcept
 	}
 	// The sharks' turns start where they are, then the things the scripts walk along tracks go on, before the living
 	Locator::sharkSystem::value().ProcessTurn();
+	// The towns work out what they want and look after their artefacts as their players take their turns, before the
+	// dances go on
+	Locator::townDesireSystem::value().ProcessTurn();
+	Locator::artefactSystem::value().ProcessTurn();
 	// The dances go on after the players and before the things walking tracks and the living
 	Locator::danceSystem::value().ProcessTurn();
 	Locator::walkPathSystem::value().ProcessTurn();
@@ -1157,8 +1163,6 @@ bool Game::GameLogicLoop() noexcept
 		auto pathfinding = profiler.BeginScoped(Profiler::Stage::PathfindingUpdate);
 		Locator::pathfindingSystem::value().Update();
 	}
-	// The towns work out what they want, then their villagers act on it
-	Locator::townDesireSystem::value().ProcessTurn();
 	// A town's storage pit or village centre on fire calls its people together
 	Locator::townSystem::value().ProcessTurn();
 	Locator::chimneySmokeSystem::value().ProcessTurn();
@@ -1763,6 +1767,8 @@ bool Game::Update() noexcept
 		Locator::introSystem::value().Update(static_cast<uint32_t>(clock.GetFrameGameTime().count()));
 		// The gates and the other scenery the scripts open and close play on, and the plinths' stones sit or sink
 		Locator::animatedStaticSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
+		// The apple barrel goes to the local player's storage pit nearest their temple and its worm wriggles on
+		Locator::appleBarrelSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
 	}
 	{
 		// The creatures are drawn moving between the last two turns
@@ -1831,6 +1837,8 @@ bool Game::Update() noexcept
 	ecs::villager_disciple::UpdateMarks();
 	// The town totems ease to their shares
 	Locator::villageTotemSystem::value().Update(gameTime.count());
+	// The owners' symbols float over their worthiest artefacts
+	Locator::artefactSystem::value().UpdateFrame(static_cast<float>(gameTime.count()));
 	// The flags over the towns' stores ease to their desires and turn to the camera
 	Locator::townDesireSystem::value().UpdateFlags(std::chrono::duration<float>(gameTime).count());
 	// The players' symbols of belief over the village centres move on
@@ -3728,6 +3736,10 @@ void Game::PrepareNewLand()
 	if (Locator::animatedStaticSystem::has_value())
 	{
 		Locator::animatedStaticSystem::value().Reset();
+	}
+	if (Locator::appleBarrelSystem::has_value())
+	{
+		Locator::appleBarrelSystem::value().Reset();
 	}
 	Locator::magicShieldSystem::value().Reset();
 	Locator::forestSystem::value().Reset();

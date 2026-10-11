@@ -188,13 +188,11 @@ bool TurnTowards(entt::entity villager, const glm::vec3& point)
 	return faces;
 }
 /// The awe of a villager's people at a miracle, heard now and then near the hand
-void BeliefVoiceOf(entt::entity villager, PlayerNames player, GuidanceAlignment alignment,
+void BeliefVoiceOf(entt::entity source, entt::entity town, PlayerNames player, GuidanceAlignment alignment,
                    villager_reactions::BeliefVoice& voice, uint32_t turn)
 {
 	auto& registry = EntityRegistry();
-	const auto& component = registry.Get<const Villager>(villager);
-	if (!Locator::gameRandom::has_value() || !Locator::audio::has_value() || component.town == entt::null ||
-	    !registry.Valid(component.town))
+	if (!Locator::gameRandom::has_value() || !Locator::audio::has_value() || town == entt::null || !registry.Valid(town))
 	{
 		return;
 	}
@@ -206,7 +204,7 @@ void BeliefVoiceOf(entt::entity villager, PlayerNames player, GuidanceAlignment 
 		voice.lastGuidance = turn - random.LocalRand(static_cast<int32_t>(k_GuidanceLeastGap));
 	}
 	// Only where the player doesn't lead the town's belief already
-	const auto* impression = registry.TryGet<const TownImpression>(component.town);
+	const auto* impression = registry.TryGet<const TownImpression>(town);
 	if (impression == nullptr)
 	{
 		return;
@@ -254,7 +252,7 @@ void BeliefVoiceOf(entt::entity villager, PlayerNames player, GuidanceAlignment 
 		return;
 	}
 	// Heard near enough the hand, and not straight after the guidance has spoken
-	const auto& at = registry.Get<const Transform>(villager).position;
+	const auto& at = registry.Get<const Transform>(source).position;
 	float distance = k_VoiceReach;
 	if (Locator::handSystem::has_value())
 	{
@@ -625,14 +623,20 @@ void villager_reactions::ShowTownBelief(const glm::vec3& centre, PlayerNames pla
 void villager_reactions::ShowBelief(entt::entity villager, PlayerNames player, float belief, GuidanceAlignment alignment,
                                     BeliefVoice& voice, uint32_t turn)
 {
+	ShowObjectBelief(villager, EntityRegistry().Get<const Villager>(villager).town, player, belief, alignment, voice, turn);
+}
+
+void villager_reactions::ShowObjectBelief(entt::entity object, entt::entity town, PlayerNames player, float belief,
+                                          GuidanceAlignment alignment, BeliefVoice& voice, uint32_t turn)
+{
 	auto& registry = EntityRegistry();
-	const auto& transform = registry.Get<const Transform>(villager);
-	// A symbol worth at least one ten thousandth rises from the top of the villager, in the player's colour
+	const auto& transform = registry.Get<const Transform>(object);
+	// A symbol worth at least one ten thousandth rises from the top of the thing, in the player's colour
 	const auto amount = static_cast<int32_t>(belief * k_BeliefSpriteScale);
 	if (amount >= 1 && Locator::particleSystem::has_value())
 	{
 		float height = 0.0f;
-		if (const auto* mesh = registry.TryGet<const Mesh>(villager);
+		if (const auto* mesh = registry.TryGet<const Mesh>(object);
 		    mesh != nullptr && Locator::resources::value().GetMeshes().Contains(mesh->id))
 		{
 			height = Locator::resources::value().GetMeshes().Handle(mesh->id)->GetBoundingBox().Size().y * transform.scale.y;
@@ -642,5 +646,5 @@ void villager_reactions::ShowBelief(entt::entity villager, PlayerNames player, f
 		Locator::particleSystem::value().AddBeliefSprite(
 		    {.position = transform.position + glm::vec3(0.0f, height, 0.0f), .amount = amount, .colour = colour});
 	}
-	BeliefVoiceOf(villager, player, alignment, voice, turn);
+	BeliefVoiceOf(object, town, player, alignment, voice, turn);
 }

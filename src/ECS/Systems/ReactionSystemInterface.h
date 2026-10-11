@@ -100,6 +100,12 @@ public:
 	virtual void ProcessTurn() = 0;
 	/// A new land: none going
 	virtual void Reset() = 0;
+	/// A town is given belief in a player by a thing, as by an artefact its people dance round: the symbol of it rises
+	/// from the thing, and the town's awe may be heard there
+	virtual void GiveTownBelief(entt::entity /*town*/, PlayerNames /*player*/, float /*amount*/, entt::entity /*from*/,
+	                            GuidanceAlignment /*alignment*/)
+	{
+	}
 	/// The balance of impressiveness the land sets, 1 unless a script changes it
 	virtual void SetLandBalance(float balance) = 0;
 	[[nodiscard]] virtual float GetLandBalance() const = 0;

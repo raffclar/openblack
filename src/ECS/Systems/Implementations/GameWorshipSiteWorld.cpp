@@ -30,6 +30,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
+#include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -172,4 +173,12 @@ entt::entity GameWorshipSiteWorld::MakeFoodPot(glm::vec3 position, float yAngle)
 		Locator::entitiesRegistry::value().Get<Transform>(pot).scale = glm::vec3(worship_site::k_FoodPotScale);
 	}
 	return pot;
+}
+
+void GameWorshipSiteWorld::PowerUpArtefacts(entt::entity site, uint32_t dancers)
+{
+	if (Locator::artefactSystem::has_value())
+	{
+		Locator::artefactSystem::value().PowerUpSite(site, dancers);
+	}
 }
