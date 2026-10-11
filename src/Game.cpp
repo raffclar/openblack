@@ -4365,7 +4365,7 @@ void Game::UpdateHandTricons(bool handDrawn, float seconds)
 	// They lean towards the cursor the hand follows this frame, after any warp onto the edge's turning ring
 	tricons.cursor = _mousePosition;
 	// The same size on the screen at any distance: a part of the focal length across
-	tricons.halfSize = camera.GetProjectionMatrix()[0][0] * screen.x * 0.5f / hand_tricons::k_FocalDivisor;
+	tricons.halfSize = hand_tricons::IconHalfSize(camera.GetProjectionMatrix()[0][0], glm::ivec2(screen));
 	// The hand's empty and camera states show them, not while it holds something or is on a creature
 	bool holds = magic::HandHoldPoser::Find().has_value();
 	if (!holds && Locator::handGrabSystem::has_value())
