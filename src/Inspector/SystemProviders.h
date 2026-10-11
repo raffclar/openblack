@@ -15,6 +15,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <InspectorProvider.h>
@@ -169,6 +170,16 @@ struct AudioState
 	std::string landMusic;
 	std::string scriptMusic;
 	bool alignmentMusic {false};
+	/// Music scripts have attached to objects, the most recently attached first: the music's name and the object
+	std::vector<std::pair<std::string, uint32_t>> attachedMusic;
+	/// The music channels playing: their bank, volume out of 127, and where a positional one is heard from
+	struct MusicChannel
+	{
+		std::string bank;
+		int32_t volume {0};
+		std::optional<glm::vec3> position;
+	};
+	std::vector<MusicChannel> musicChannels;
 };
 
 struct AudioSources

@@ -9,9 +9,12 @@
 
 // LHAudioDLL's music player against a backend that plays a chunk per Advance()
 
+#include <array>
 #include <chrono>
 #include <map>
 #include <memory>
+#include <optional>
+#include <span>
 #include <vector>
 
 #include <Audio/GameMusic.h>
@@ -33,6 +36,7 @@ public:
 		uint32_t firstSkip {0};
 		bool playing {false};
 		float volume {0.0f};
+		std::optional<MusicPlacement> placement;
 	};
 
 	Stream CreateStream([[maybe_unused]] int32_t pitchPercent) override
@@ -70,6 +74,10 @@ public:
 		return streams.contains(stream) && streams.at(stream).playing;
 	}
 	void SetVolume(Stream stream, float volume) override { streams.at(stream).volume = volume; }
+	void SetPlacement(Stream stream, const std::optional<MusicPlacement>& placement) override
+	{
+		streams.at(stream).placement = placement;
+	}
 	void Destroy(Stream stream) override { streams.erase(stream); }
 
 	/// Every stream finishes the chunk it is playing
@@ -212,6 +220,7 @@ TEST(GameMusic, TheLandsMusicFollowsTheAlignmentOfThePlace)
 	    .playerAlignment = 1.0f,
 	    .cinema = false,
 	    .towns = {{.position = {1100.0f, 0.0f, 1000.0f}, .tribe = 6, .id = 1}},
+	    .thingPosition = {},
 	};
 	EXPECT_EQ(music.SelectLandType(inputs), MusicType::GreekTownEvil);
 	inputs.alignment = 0.9f;
@@ -234,6 +243,7 @@ TEST(GameMusic, TheTemplesMusicFollowsThePlayersOwnAlignment)
 	    .playerAlignment = -0.9f,
 	    .cinema = false,
 	    .towns = {},
+	    .thingPosition = {},
 	};
 	EXPECT_EQ(GameMusic::SelectCitadelType(inputs), MusicType::CitadelEvil);
 	inputs.playerAlignment = 0.0f;
@@ -254,6 +264,7 @@ TEST(GameMusic, TheLandsMusicWaitsForTheFirstTurnsAndTheCinemaBars)
 	    .playerAlignment = 0.0f,
 	    .cinema = false,
 	    .towns = {},
+	    .thingPosition = {},
 	};
 	EXPECT_TRUE(music.LandMusicAllowed(inputs));
 	inputs.cinema = true;
@@ -309,6 +320,7 @@ TEST(GameMusic, TownsNearTheCameraPlayTheirTribesMusic)
 	    .cinema = false,
 	    .towns = {{.position = {1200.0f, 0.0f, 1000.0f}, .tribe = 5, .id = 1},
 	              {.position = {560.0f, 0.0f, 1000.0f}, .tribe = 2, .id = 2}},
+	    .thingPosition = {},
 	};
 	EXPECT_EQ(music.SelectLandType(inputs), MusicType::EgyptianTownNeutral);
 	// Another town is nearer but not within 300: the town heard last carries on while within 400
@@ -322,4 +334,108 @@ TEST(GameMusic, TownsNearTheCameraPlayTheirTribesMusic)
 	EXPECT_EQ(music.SelectLandType(inputs), MusicType::GenericNeutral);
 	inputs.camera = {1000.0f, 500.0f, 1000.0f};
 	EXPECT_EQ(music.SelectLandType(inputs), MusicType::GenericNeutral);
+}
+
+TEST(GameMusic, AttachedMusicIsHeardAsFarAsItsBankCarries)
+{
+	// The celtic chant's bank carries 120
+	EXPECT_FLOAT_EQ(GameMusic::AttachedMusicRange(120.0f), 120.0f);
+	// A bank without samples says nothing: 100
+	EXPECT_FLOAT_EQ(GameMusic::AttachedMusicRange(-1.0f), 100.0f);
+	// A bank that carries nowhere is never heard
+	EXPECT_FLOAT_EQ(GameMusic::AttachedMusicRange(0.0f), 0.0f);
+}
+
+TEST(GameMusic, TheMostRecentlyAttachedMusicInRangeIsHeard)
+{
+	using Candidate = GameMusic::AttachedMusicCandidate;
+	const std::array<Candidate, 4> candidates {{
+	    // Out of range: right at its range is too far
+	    {.hasBank = true, .distance = 120.0f, .range = 120.0f},
+	    // In range, but its bank is not in the game's data
+	    {.hasBank = false, .distance = 10.0f, .range = 120.0f},
+	    {.hasBank = true, .distance = 119.0f, .range = 120.0f},
+	    {.hasBank = true, .distance = 5.0f, .range = 100.0f},
+	}};
+	EXPECT_EQ(GameMusic::SelectAttachedMusic(candidates), std::optional<size_t>(2));
+	EXPECT_EQ(GameMusic::SelectAttachedMusic(std::span(candidates).first(2)), std::nullopt);
+	EXPECT_EQ(GameMusic::SelectAttachedMusic({}), std::nullopt);
+}
+
+TEST(GameMusic, ScriptsAttachChangeMoveAndDetachMusic)
+{
+	GameMusic music;
+	music.AttachMusic(7, MusicType::CelticChantVox);
+	music.AttachMusic(9, MusicType::ScriptPiperTune);
+	// The most recently attached comes first
+	ASSERT_EQ(music.GetAttachedMusic().size(), 2u);
+	EXPECT_EQ(music.GetAttachedMusic()[0].thing, 9u);
+	EXPECT_EQ(music.GetAttachedMusic()[1].thing, 7u);
+	// Attaching to an object that has music changes its music in its place
+	music.AttachMusic(7, MusicType::NorseChant);
+	ASSERT_EQ(music.GetAttachedMusic().size(), 2u);
+	EXPECT_EQ(music.GetAttachedMusic()[1].type, MusicType::NorseChant);
+	music.MoveMusic(7, 11);
+	EXPECT_EQ(music.GetAttachedMusic()[1].thing, 11u);
+	music.DetachMusic(9);
+	ASSERT_EQ(music.GetAttachedMusic().size(), 1u);
+	EXPECT_EQ(music.GetAttachedMusic()[0].thing, 11u);
+	music.DetachMusic(11);
+	EXPECT_TRUE(music.GetAttachedMusic().empty());
+}
+
+TEST(MusicPlayer, PositionalMusicTakesItsBanksDistancesAndFollowsItsObject)
+{
+	FakeMusicBackend backend;
+	MusicPlayer music(backend);
+	auto chant = MakeBank(8, 7);
+	// The chant banks' headers give 30, 120 and a scale of 2
+	chant->minDistance = 30.0f;
+	chant->maxDistance = 120.0f;
+	chant->distanceScale = 2.0f;
+	music.Play({.bank = chant, .volume = 127, .sync = true, .fadeIn = true, .position = glm::vec3(1.0f, 2.0f, 3.0f)});
+	const auto& placed = backend.streams.at(music.GetChannels()[0].stream).placement;
+	ASSERT_TRUE(placed.has_value());
+	EXPECT_EQ(placed->position, glm::vec3(1.0f, 2.0f, 3.0f));
+	EXPECT_FLOAT_EQ(placed->minDistance, 30.0f);
+	EXPECT_FLOAT_EQ(placed->maxDistance, 120.0f);
+	EXPECT_FLOAT_EQ(placed->distanceScale, 2.0f);
+	// Played again from where the object has moved to, the same channel follows it
+	music.Play({.bank = chant, .volume = 127, .sync = true, .fadeIn = true, .position = glm::vec3(4.0f, 5.0f, 6.0f)});
+	EXPECT_FALSE(music.GetChannels()[1].active);
+	EXPECT_EQ(backend.streams.at(music.GetChannels()[0].stream).placement->position, glm::vec3(4.0f, 5.0f, 6.0f));
+
+	// A bank that overrides nothing keeps the player's distances, 10 and 100 unscaled
+	auto plain = MakeBank(8, 0);
+	music.Play({.bank = plain, .volume = 127, .position = glm::vec3(0.0f)});
+	const auto& defaults = backend.streams.at(music.GetChannels()[1].stream).placement;
+	ASSERT_TRUE(defaults.has_value());
+	EXPECT_FLOAT_EQ(defaults->minDistance, 10.0f);
+	EXPECT_FLOAT_EQ(defaults->maxDistance, 100.0f);
+	EXPECT_FLOAT_EQ(defaults->distanceScale, 1.0f);
+
+	// Music that is not positional is centred on the listener
+	auto land = MakeBank(8, 3);
+	music.Play({.bank = land, .volume = 80});
+	EXPECT_FALSE(backend.streams.at(music.GetChannels()[2].stream).placement.has_value());
+}
+
+TEST(MusicPlayer, StoppingOneBank)
+{
+	FakeMusicBackend backend;
+	MusicPlayer music(backend);
+	auto first = MakeBank(8, 1);
+	auto second = MakeBank(8, 2);
+	music.Play({.bank = first, .volume = 127});
+	music.Play({.bank = second, .volume = 127});
+	// A bank that is not the one heard is left be when asked to fade, and stops at once otherwise
+	music.StopBank(first, true);
+	EXPECT_TRUE(music.GetChannels()[0].active);
+	music.StopBank(first, false);
+	EXPECT_FALSE(music.GetChannels()[0].active);
+	EXPECT_TRUE(music.GetChannels()[1].active);
+	// Stopping the bank heard stops all the music
+	music.Play({.bank = first, .volume = 127});
+	music.StopBank(first, false);
+	EXPECT_FALSE(music.IsActive());
 }

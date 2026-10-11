@@ -85,6 +85,7 @@ public:
 	void StopMusic() override {}
 	bool MusicPlay(const std::string&, const audio::MusicPlayOptions&) override { return false; }
 	void MusicStop(bool) override {}
+	void MusicStopBank(const std::string&, bool) override {}
 	[[nodiscard]] bool MusicIsActive() const override { return false; }
 	[[nodiscard]] std::optional<audio::MusicBankInfo> GetMusicBankInfo(const std::string&) override { return std::nullopt; }
 	[[nodiscard]] const audio::MusicPlayer* GetMusic() const override { return nullptr; }

@@ -82,11 +82,13 @@ struct SoundEffectOptions
 	std::optional<float> maxDistance;
 };
 
-/// A music bank's group and its number of samples
+/// A music bank's group, its number of samples and how far it carries
 struct MusicBankInfo
 {
 	int32_t groupId;
 	uint32_t chunkCount;
+	/// The first sample's far distance in its header, -1 for a bank without samples
+	float maxDistance {-1.0f};
 };
 
 class AudioManagerInterface
@@ -120,6 +122,8 @@ public:
 	virtual bool MusicPlay(const std::string& bankPath, const MusicPlayOptions& options) = 0;
 	/// Stops the music, fading it out if asked
 	virtual void MusicStop(bool fadeOut) = 0;
+	/// Stops the music bank at a path: at once, or when it is the music heard all the music fades out if asked to fade
+	virtual void MusicStopBank(const std::string& bankPath, bool fadeOut) = 0;
 	/// Whether music is playing
 	[[nodiscard]] virtual bool MusicIsActive() const = 0;
 	/// The music group and length of a bank, null if there is no such bank

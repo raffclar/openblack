@@ -173,6 +173,10 @@ void AudioManager::Update()
 	_musicStreams->SetOutputVolume(_globalVolume * _musicVolume);
 	_musicPlayer->Update(std::chrono::duration_cast<std::chrono::microseconds>(now - _lastMusicUpdate));
 	_lastMusicUpdate = now;
+	// Positional music, like 3D emitters, is heard from where it is placed as the listener moves
+	_musicStreams->ForEachPlaced([this](SourceId source, const MusicPlacement& placement) {
+		PositionSource(source, ToListenerFrame(placement.position), placement.distanceScale);
+	});
 
 	// Atmosphere voices are positioned relative to the listener and only follow the volume settings here
 	for (const auto& [handle, voice] : _atmosVoices)
@@ -776,6 +780,19 @@ std::shared_ptr<const MusicBank> AudioManager::LoadMusicBank(const std::string& 
 	{
 		bank->loopOverride = first.loop;
 	}
+	if (overrides(pack::AudioBankOverride::MinDist))
+	{
+		bank->minDistance = first.minDist;
+	}
+	if (overrides(pack::AudioBankOverride::MaxDist))
+	{
+		bank->maxDistance = first.maxDist;
+	}
+	if (overrides(pack::AudioBankOverride::Scale))
+	{
+		bank->distanceScale = first.scale;
+	}
+	bank->musicMaxDistance = first.maxDist;
 	bank->chunkCount = static_cast<uint32_t>(headers.size());
 	bank->chunkSampleRates.reserve(headers.size());
 	std::vector<std::pair<uint64_t, uint32_t>> spans;
@@ -820,6 +837,14 @@ void AudioManager::MusicStop(bool fadeOut)
 	_musicPlayer->Stop(fadeOut);
 }
 
+void AudioManager::MusicStopBank(const std::string& bankPath, bool fadeOut)
+{
+	if (const auto bank = LoadMusicBank(bankPath))
+	{
+		_musicPlayer->StopBank(bank, fadeOut);
+	}
+}
+
 bool AudioManager::MusicIsActive() const
 {
 	return _musicPlayer->IsActive();
@@ -832,7 +857,7 @@ std::optional<MusicBankInfo> AudioManager::GetMusicBankInfo(const std::string& b
 	{
 		return std::nullopt;
 	}
-	return MusicBankInfo {.groupId = bank->groupId, .chunkCount = bank->GetChunkCount()};
+	return MusicBankInfo {.groupId = bank->groupId, .chunkCount = bank->GetChunkCount(), .maxDistance = bank->musicMaxDistance};
 }
 
 uint32_t AudioManager::AtmosRegisterBank(const std::string& bankName, const std::vector<pack::AudioBankSampleHeader>& headers,

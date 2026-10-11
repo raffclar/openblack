@@ -2824,19 +2824,40 @@ void StopMusic() // 045 STOP_MUSIC
 	}
 }
 
+/// The object a music native is given, if it is still in the world
+std::optional<uint32_t> PopMusicObject(std::string_view native)
+{
+	const auto object = PopObject();
+	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "{}: thing not valid", native);
+		return std::nullopt;
+	}
+	return entt::to_integral(object);
+}
+
 void AttachMusic() // 046 ATTACH_MUSIC
 {
-	// const auto target = Pop().uintVal;
-	// const auto music = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopMusicObject("ATTACH_MUSIC");
+	const auto music = Pop().intVal;
+	if (music < 1 || music >= static_cast<int32_t>(audio::MusicType::_COUNT))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "ATTACH_MUSIC: no music type {}", music);
+	}
+	auto* gameMusic = Game::Instance()->GetGameMusic();
+	if (object && gameMusic != nullptr)
+	{
+		gameMusic->AttachMusic(*object, static_cast<audio::MusicType>(music));
+	}
 }
 
 void DetachMusic() // 047 DETACH_MUSIC
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopMusicObject("DETACH_MUSIC");
+	if (auto* gameMusic = Game::Instance()->GetGameMusic(); object && gameMusic != nullptr)
+	{
+		gameMusic->DetachMusic(*object);
+	}
 }
 
 /// A thing a script deletes goes at once: a creature leaves the game, a dance's dancers go back to deciding what to do,
@@ -4175,10 +4196,12 @@ void GetTimerTimeSinceSet() // 148 GET_TIMER_TIME_SINCE_SET
 
 void MoveMusic() // 149 MOVE_MUSIC
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto to = PopMusicObject("MOVE_MUSIC");
+	const auto from = PopMusicObject("MOVE_MUSIC");
+	if (auto* gameMusic = Game::Instance()->GetGameMusic(); from && to && gameMusic != nullptr)
+	{
+		gameMusic->MoveMusic(*from, *to);
+	}
 }
 
 void GetInclusionDistance() // 150 GET_INCLUSION_DISTANCE
