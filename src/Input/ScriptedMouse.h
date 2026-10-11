@@ -33,6 +33,13 @@ namespace openblack::input
 
 using ScriptedPointer = GameActionInterface::ScriptedPointer;
 
+/// Where the pointer stands while nothing has put it anywhere: the middle of the window. Until the window has had the
+/// player's cursor over it, SDL reports the pointer in the top left corner, and whenever an agent takes the game the
+/// player's cursor is kept out wherever it is; a pointer left on an edge or in a corner would offer the camera's edge
+/// turning and tilting and start them on the next press. The middle offers neither, and is the same whatever the
+/// player's own mouse is doing, so an agent's runs start alike.
+[[nodiscard]] glm::ivec2 RestingPointer(glm::ivec2 windowSize);
+
 /// A move of the scripted mouse by so much, in pixels, for the window's queue; where it ends is reported as it is pumped
 [[nodiscard]] SDL_Event PumpedMotion(glm::ivec2 by, uint32_t windowId);
 /// A press or a letting go of the scripted mouse's button, with its click count, for the window's queue

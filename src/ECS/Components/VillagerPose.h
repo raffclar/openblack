@@ -31,6 +31,9 @@ struct VillagerPose
 	AnimId clip {AnimId::Invalid};
 	uint32_t place {0};
 	std::vector<glm::mat4> bones;
+	/// Drawn in high detail and changing clip: its clip's own pose, before the old clip's is mixed in, which its shadow
+	/// is cast in. Empty when the bones are the clip's own.
+	std::vector<glm::mat4> clipBones;
 	/// Where it stood when the last turn began, from where its drawing glides while it walks
 	std::optional<glm::vec3> turnStart;
 	/// Where it is drawn this frame and the heading it is drawn with (the game's angle), once its drawing has worked

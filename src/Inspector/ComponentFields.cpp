@@ -174,6 +174,7 @@
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/TownArtefact.h"
 #include "ECS/Components/TownDesire.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Translucent.h"
 #include "ECS/Components/Tree.h"
@@ -1461,6 +1462,17 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::TownDesire::doingNowCount>("doingNowCount")
 	    .Field<&components::TownDesire::doingNowAtStart>("doingNowAtStart")
 	    .Field<&components::TownDesire::doingNowCountAtStart>("doingNowCountAtStart");
+	Reflect<components::TownDesireFlag>(context)
+	    .Field<&components::TownDesireFlag::town>("town")
+	    .Field<&components::TownDesireFlag::desire>("desire")
+	    .Field<&components::TownDesireFlag::point>("point")
+	    .Field<&components::TownDesireFlag::store>("store")
+	    .Field<&components::TownDesireFlag::place>("place")
+	    .Field<&components::TownDesireFlag::overGround>("overGround")
+	    .Field<&components::TownDesireFlag::level>("level")
+	    .Field<&components::TownDesireFlag::speed>("speed")
+	    .Field<&components::TownDesireFlag::shown>("shown");
+	Reflect<components::TownDesireFlags>(context).Field<&components::TownDesireFlags::flags>("flags");
 	Reflect<components::Transform>(context)
 	    .Field<&components::Transform::position>("position")
 	    .Field<&components::Transform::rotation>("rotation")
@@ -1528,6 +1540,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::VillagerPose::clip>("clip")
 	    .Field<&components::VillagerPose::place>("place")
 	    .Field<&components::VillagerPose::bones>("bones")
+	    .Field<&components::VillagerPose::clipBones>("clipBones")
 	    .Field<&components::VillagerPose::turnStart>("turnStart")
 	    .Field<&components::VillagerPose::drawnAt>("drawnAt")
 	    .Field<&components::VillagerPose::drawnHeading>("drawnHeading")

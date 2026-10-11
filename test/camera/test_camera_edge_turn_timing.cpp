@@ -222,3 +222,53 @@ TEST_P(EdgeTurnTiming, ALongDragDownTheSideOfTheScreenKeepsTurningTheCamera)
 }
 
 INSTANTIATE_TEST_SUITE_P(Timings, EdgeTurnTiming, testing::Values("mouse", "immediate"));
+
+namespace
+{
+/// The camera's hints of turning or tilting where the cursor is, which only the edges and corners of the screen offer
+constexpr uint32_t k_EdgeHints = camera_drag::tricon::k_Rotate | camera_drag::tricon::k_Pitch | camera_drag::tricon::k_Top;
+
+using InspectorDrivenStart = EdgeTurnTiming;
+} // namespace
+
+// A game an agent drives starts with the pointer in the middle of the window, not in the top left corner where SDL has
+// it until the window first has the player's cursor: left idle, the camera offers no edge turn or tilt and stays put,
+// and a press before any move grips the land there rather than starting a turn at the corner
+TEST_F(InspectorDrivenStart, IdleStartLeavesThePointerInTheMiddleAndTheCameraStill)
+{
+	_actions->SetInputLockMode(input::LockMode::Locked);
+	const auto origin = _camera.GetModel().GetTargetOrigin();
+	const auto heading = Heading(_camera.GetModel());
+	for (int frame = 0; frame < 60; ++frame)
+	{
+		Step();
+		ASSERT_EQ(_actions->GetPointerPosition(), glm::ivec2(k_Width / 2, k_Height / 2)) << "frame " << frame;
+		EXPECT_EQ(_camera.GetModel().GetHandCues().tricons & k_EdgeHints, 0U) << "frame " << frame;
+	}
+	EXPECT_LT(glm::distance(_camera.GetModel().GetTargetOrigin(), origin), 0.01f);
+	EXPECT_NEAR(Difference(Heading(_camera.GetModel()), heading), 0.0f, 1e-4f);
+
+	Ask(R"({"query": "input.button", "params": {"button": "left", "action": "press"}})");
+	for (int frame = 0; frame < 30; ++frame)
+	{
+		Step();
+		const auto cues = _camera.GetModel().GetHandCues();
+		EXPECT_NE(cues.dragMode, std::optional(camera_drag::DragMode::EdgeRotate)) << "frame " << frame;
+		EXPECT_NE(cues.dragMode, std::optional(camera_drag::DragMode::Pitch)) << "frame " << frame;
+	}
+	EXPECT_EQ(_actions->GetPointerPosition(), glm::ivec2(k_Width / 2, k_Height / 2));
+	EXPECT_NEAR(Difference(Heading(_camera.GetModel()), heading), 0.0f, 1e-4f);
+	Ask(R"({"query": "input.release", "params": {}})");
+}
+
+// What the middle of the window spares the camera: the top left corner offers turning and tilting
+TEST_F(InspectorDrivenStart, TheCornerOffersEdgeHints)
+{
+	_actions->SetInputLockMode(input::LockMode::Locked);
+	Ask(R"({"query": "input.pointer", "params": {"screen": [0, 0]}})");
+	for (int frame = 0; frame < 5; ++frame)
+	{
+		Step();
+	}
+	EXPECT_NE(_camera.GetModel().GetHandCues().tricons & k_EdgeHints, 0U);
+}

@@ -241,3 +241,31 @@ TEST(ScriptedMouseEvents, PumpedEventsAreInjected)
 	const auto pointer = input::ScriptedPointer {.position = {5, 5}, .buttons = 0};
 	EXPECT_EQ(input::Pump(pointer, old, k_Window).position, glm::ivec2(5, 5));
 }
+
+// Until the window has had the player's cursor over it, SDL has the pointer in the top left corner; the game has it in
+// the middle of the window instead, as when an agent takes the game, so it never starts on an edge
+TEST_F(ScriptedMouse, ThePointerStartsInTheMiddleOfTheWindow)
+{
+	EXPECT_EQ(input::RestingPointer(k_Window), k_Window / 2);
+	EXPECT_EQ(input::RestingPointer({1, 1}), glm::ivec2(0, 0));
+	const auto seen = Frame();
+	EXPECT_EQ(seen.readAtFrameStart, k_Window / 2);
+	EXPECT_EQ(seen.pointerAfterEvents, k_Window / 2);
+	_actions->SetInputLockMode(input::LockMode::Locked);
+	EXPECT_EQ(Frame().readAtFrameStart, k_Window / 2);
+}
+
+// The inspector's first press, before any move, lands where the pointer rests, and a step goes on from there
+TEST_F(ScriptedMouse, TheInspectorTakesThePointerWhereItRests)
+{
+	_actions->SetInputLockMode(input::LockMode::Locked);
+	Frame();
+	Ask(R"({"query": "input.button", "params": {"button": "left", "action": "press"}})");
+	const auto pressed = Frame();
+	ASSERT_EQ(pressed.pressesAt.size(), 1U);
+	EXPECT_EQ(pressed.pressesAt.front(), k_Window / 2);
+	Ask(R"({"query": "input.release", "params": {}})");
+	Frame();
+	// Handed back, it stays where the inspector left it
+	EXPECT_EQ(Frame().readAtFrameStart, k_Window / 2);
+}

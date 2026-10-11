@@ -19,6 +19,7 @@
 #include <glm/geometric.hpp>
 #include <glm/trigonometric.hpp>
 
+using namespace openblack;
 using namespace openblack::inspector;
 
 namespace
@@ -172,12 +173,54 @@ std::string MoveUnlessHeld(CameraControlInterface& camera, const CameraState& no
 	return fly ? camera.Fly(pose) : camera.Set(pose);
 }
 
+/// Why the camera won't stay where it is put, as camera.set and camera.frame answer it
+std::vector<std::string> WarningsFor(const CameraControlInterface& camera, const CameraPose& pose)
+{
+	const auto keepers = camera.Keepers(pose);
+	return keepers.has_value() ? CameraSetWarnings(pose, *keepers) : std::vector<std::string> {};
+}
+
 ParameterDescription Optional(std::string name, std::string type, std::string description)
 {
 	return {.name = std::move(name), .type = std::move(type), .description = std::move(description), .required = false};
 }
 
 } // namespace
+
+std::vector<std::string> openblack::inspector::CameraSetWarnings(const CameraPose& pose, const CameraKeepers& keepers)
+{
+	constexpr std::string_view k_Override = "; override: true shows it there every frame until camera.release";
+	std::vector<std::string> warnings;
+	// The editor's free camera stays wherever it is put
+	if (keepers.model == "editor")
+	{
+		return warnings;
+	}
+	if (keepers.model != "world")
+	{
+		warnings.push_back("the " + keepers.model + " camera moves the camera itself, so it won't stay there" +
+		                   std::string(k_Override));
+		return warnings;
+	}
+	const auto zoneFile = keepers.zoneFile.empty() ? std::string() : " (" + keepers.zoneFile + ")";
+	// The world camera keeps to the land's camera zones every frame, by the same rules
+	const auto& zones = keepers.zones;
+	if (camera_zones::PushInsideFence(zones.fence, zones.fenceOn, pose.origin, pose.origin, pose.focus,
+	                                  camera_zones::k_SearchRadius)
+	        .has_value())
+	{
+		warnings.push_back("outside the camera fence the land's script set" + zoneFile +
+		                   ": the world camera is pushed back inside it on the next frame" + std::string(k_Override));
+	}
+	if (zones.exclusionsOn &&
+	    camera_zones::SlideUnderLimit(pose.origin, pose.focus, camera_zones::HeightLimit(zones, keepers.groundUnderOrigin))
+	        .has_value())
+	{
+		warnings.push_back("above the camera's height limit the land's script set" + zoneFile +
+		                   ": the world camera slides down along its view on the next frame" + std::string(k_Override));
+	}
+	return warnings;
+}
 
 bool openblack::inspector::ShowOverrideToPointer(CameraControlInterface& camera)
 {
@@ -297,10 +340,12 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCameraProvider(Came
 	    Optional("pitch", "number", "Degrees (not radians) below the horizon: 0 looks level, 90 straight down"),
 	    Optional("distance", "number", "Metres from the camera to its focus: the zoom"),
 	};
-	const auto overrideParameter = Optional("override", "boolean",
-	                                        "Show the camera there every frame over whatever holds it (a script's camera "
-	                                        "in a cinematic, a camera path) until camera.release, without changing that "
-	                                        "camera, which carries on beneath");
+	const auto overrideParameter =
+	    Optional("override", "boolean",
+	             "Show the camera there every frame over whatever holds it or moves it on (a script's camera in a cinematic, a "
+	             "camera path, the creature's or the temple's camera, the land script's camera fence and height limit) until "
+	             "camera.release, without changing that camera, which carries on beneath. Without it, the camera itself is "
+	             "moved and those take it on from there: the answer's warnings say which will");
 	auto setParameters = pose;
 	setParameters.push_back(overrideParameter);
 	const auto move = [&camera](bool fly) {
@@ -317,6 +362,8 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCameraProvider(Came
 				return QueryResult::Error(error);
 			}
 			const bool overriding = !fly && BoolMember(context.params, "override").value_or(false);
+			// Asked before it moves: what may take it on from there
+			const auto warnings = overriding || fly ? std::vector<std::string> {} : WarningsFor(camera, *pose);
 			if (overriding)
 			{
 				camera.SetOverride(*pose);
@@ -326,7 +373,7 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCameraProvider(Came
 				return QueryResult::Error(why + (fly ? "" : "; override: true shows the camera there over it"));
 			}
 			const auto angles = AnglesOf(*pose);
-			return QueryResult::Value({
+			Json answer = {
 			    {fly ? "flying_to" : "set_to",
 			     {{"origin", Point(pose->origin)},
 			      {"focus", Point(pose->focus)},
@@ -335,7 +382,12 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCameraProvider(Came
 			      {"distance", angles.distance}}},
 			    {"model", now->model},
 			    {"override", overriding},
-			});
+			};
+			if (!fly)
+			{
+				answer["warnings"] = warnings;
+			}
+			return QueryResult::Value(std::move(answer));
 		};
 	};
 	provider->Add({.name = "set",
@@ -344,7 +396,10 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCameraProvider(Came
 	                              "under way is forgotten (the world camera's own rules still apply: what it looks at "
 	                              "slides onto the land ahead, it keeps its height over the land, the fence and the "
 	                              "self-tilting camera). Refused while a script or a camera path holds the camera, "
-	                              "unless override, which shows it there every frame over any camera until camera.release",
+	                              "unless override, which shows it there every frame over any camera until camera.release. "
+	                              "warnings (without override) say what will move it on at once: another camera than the "
+	                              "world's (creature, temple...), or the camera fence or height limit the land's script "
+	                              "set, which the world camera keeps to every frame",
 	               .parameters = setParameters,
 	               .kind = ResultKind::Object,
 	               .needsNear = false,
@@ -382,6 +437,7 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCameraProvider(Came
 		    }
 		    const auto pose = FramePose(*target, *request, *now);
 		    const bool overriding = BoolMember(context.params, "override").value_or(false);
+		    const auto warnings = overriding ? std::vector<std::string> {} : WarningsFor(camera, pose);
 		    if (overriding)
 		    {
 			    camera.SetOverride(pose);
@@ -401,6 +457,7 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCameraProvider(Came
 		        {"entity", request->id},
 		        {"model", now->model},
 		        {"override", overriding},
+		        {"warnings", warnings},
 		    });
 	    });
 	provider->Add({.name = "release",

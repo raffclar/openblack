@@ -528,7 +528,11 @@ TOOLS = [
         "name": "camera_set",
         "description": "Puts the camera somewhere at once. Give position and focus, or a focus ([x, z] on the land) "
                        "with any of yaw/pitch/distance, or angles alone to turn about the focus; what isn't given is "
-                       "kept. Yaw 0 looks along +z, 90 along +x.",
+                       "kept. Yaw 0 looks along +z, 90 along +x. Without override it moves the camera itself and is "
+                       "refused while a script or a camera path holds it; even when it succeeds, the answer's "
+                       "warnings say what will move it on at once (the camera fence or height limit the land's script "
+                       "set, or the creature's/temple's camera). Read warnings: if any, pass override: true to show "
+                       "the view there every frame until camera_release.",
         "inputSchema": schema(CAMERA_POSE),
         "query": "camera.set",
         "params": list(CAMERA_POSE),
@@ -536,7 +540,8 @@ TOOLS = [
     {
         "name": "camera_frame",
         "description": "Puts the camera at once to look at an entity where it is now, from yaw/pitch/distance if "
-                       "given, the camera's own otherwise. For a picture of a moving entity use screenshot's frame.",
+                       "given, the camera's own otherwise. For a picture of a moving entity use screenshot's frame. "
+                       "Like camera_set, answers warnings when something will move it on; override: true holds it.",
         "inputSchema": schema({"id": {"type": "integer"}, **CAMERA_UNITS}, ["id"]),
         "query": "camera.frame",
         "params": ["id", "yaw", "pitch", "distance"],
