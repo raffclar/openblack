@@ -185,8 +185,8 @@ void main()
 	                          1.0f - (1.0f - landAlpha) * (1.0f - bumpAlpha));
 	if (vortex)
 	{
-		// The hole texture's colour was added under the land before it (where the land lets the sea through, it shows).
-		// The ring, lit as the land, is blended over all of it by its alpha.
+		// The ring, lit as the land, is blended over all of it by its alpha. The hole texture adds no colour of its own:
+		// outside the hole the land and what shows through its coast alpha are drawn as on any other block.
 		vec3 ringColour = min(ring.rgb * v_lightColour * v_haze.a + v_haze.rgb, vec3_splat(1.0f));
 		premultiplied = vec4(ringColour * ring.a + premultiplied.rgb * (1.0f - ring.a),
 		                     1.0f - (1.0f - premultiplied.a) * (1.0f - ring.a));

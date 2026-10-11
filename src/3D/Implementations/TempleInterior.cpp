@@ -709,7 +709,7 @@ void TempleInterior::ApplyLens() const
 	const auto aspect = Locator::windowing::has_value() ? Locator::windowing::value().GetAspectRatio() : 1.0f;
 	const auto lens = camera.GetModel().GetLens();
 	camera.SetProjectionMatrixPerspective(lens.has_value() ? lens->horizontalFieldOfView : config.cameraXFov, aspect,
-	                                      lens.has_value() ? lens->nearClip : config.cameraNearClip, config.cameraFarClip);
+	                                      lens.has_value() ? lens->nearClip : config.cameraNearClip);
 }
 
 bool TempleInterior::IsRoomDrawn(TempleRoom room) const

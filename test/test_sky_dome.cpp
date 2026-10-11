@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <glm/vec4.hpp>
 #include <gtest/gtest.h>
 
 #include "3D/SkyDome.h"
@@ -171,4 +172,19 @@ TEST(SkyDome, PicturesAreEachAlignmentAtEachTimeOfDay)
 	EXPECT_EQ(files[5], "Sky_Ntrl_Day.555");
 	EXPECT_EQ(files[7], "sky_good_dusk.555");
 	EXPECT_EQ(files[8], "sky_good_day.555");
+}
+
+// The dome stands round the middle of the map at five times its mesh's size: its top, 48549 units up in the mesh, is
+// about 243000 units above the sea, far above the highest the camera goes
+TEST(SkyDome, StandsRoundTheMiddleOfTheMapAtFiveTimesItsSize)
+{
+	const auto placement = openblack::sky_dome::Placement();
+	const auto centre = placement * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+	EXPECT_EQ(glm::vec3(centre), glm::vec3(2560.0f, 0.0f, 2560.0f));
+	const auto top = placement * glm::vec4(0.0f, 48549.0f, 0.0f, 1.0f);
+	EXPECT_FLOAT_EQ(top.x, 2560.0f);
+	EXPECT_FLOAT_EQ(top.y, 242745.0f);
+	EXPECT_FLOAT_EQ(top.z, 2560.0f);
+	const auto side = placement * glm::vec4(-18578.9f, 0.0f, 0.0f, 1.0f);
+	EXPECT_FLOAT_EQ(side.x, 2560.0f - (5.0f * 18578.9f));
 }

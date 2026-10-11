@@ -3769,8 +3769,7 @@ void Game::PrepareNewLand()
 	// create our camera
 	auto& config = Locator::config::value();
 	const auto aspect = Locator::windowing::has_value() ? Locator::windowing::value().GetAspectRatio() : 1.0f;
-	Locator::camera::value().SetProjectionMatrixPerspective(config.cameraXFov, aspect, config.cameraNearClip,
-	                                                        config.cameraFarClip);
+	Locator::camera::value().SetProjectionMatrixPerspective(config.cameraXFov, aspect, config.cameraNearClip);
 }
 
 void Game::StartNewLand()
