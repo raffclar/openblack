@@ -601,11 +601,13 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureLocomotion::speeds>("speeds")
 	    .Field<&components::CreatureLocomotion::scale>("scale")
 	    .Field<&components::CreatureLocomotion::radius>("radius")
+	    .Field<&components::CreatureLocomotion::shownRadius>("shownRadius")
 	    .Field<&components::CreatureLocomotion::destination>("destination")
 	    .Field<&components::CreatureLocomotion::ring>("ring")
 	    .Field<&components::CreatureLocomotion::ontoDestination>("ontoDestination")
 	    .Field<&components::CreatureLocomotion::planner>("planner")
 	    .Field<&components::CreatureLocomotion::route>("route")
+	    .Field<&components::CreatureLocomotion::plannedRound>("plannedRound")
 	    .Field<&components::CreatureLocomotion::routeReady>("routeReady")
 	    .Field<&components::CreatureLocomotion::planningMs>("planningMs")
 	    .Field<&components::CreatureLocomotion::failed>("failed")
@@ -1435,7 +1437,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Town::cannotHaveWorshipSite>("cannotHaveWorshipSite")
 	    .Field<&components::Town::congregationPos>("congregationPos")
 	    .Field<&components::Town::emergencyTurn>("emergencyTurn")
-	    .Field<&components::Town::graveyard>("graveyard");
+	    .Field<&components::Town::graveyard>("graveyard")
+	    .Field<&components::Town::creche>("creche");
 	Reflect<components::TownAggression>(context).Field<&components::TownAggression::record>("record");
 	Reflect<components::TownArtefact>(context)
 	    .Field<&components::TownArtefact::town>("town")
@@ -1563,7 +1566,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Villager::foodSpeedUp>("foodSpeedUp")
 	    .Field<&components::Villager::creationIndex>("creationIndex")
 	    .Field<&components::Villager::pregnancy>("pregnancy")
-	    .Field<&components::Villager::mother>("mother");
+	    .Field<&components::Villager::mother>("mother")
+	    .Field<&components::Villager::crechePath>("crechePath")
+	    .Field<&components::Villager::crecheLeg>("crecheLeg");
 	Reflect<components::VillagerDeath>(context)
 	    .Field<&components::VillagerDeath::turnsLeft>("turnsLeft")
 	    .Field<&components::VillagerDeath::skeleton>("skeleton")
@@ -2013,6 +2018,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_planner::PlannerState::best>("best", {k_CreatureDesiresDesireNames})
 	    .Field<&openblack::creature_planner::PlannerState::nextGoal>("nextGoal")
 	    .Field<&openblack::creature_planner::PlannerState::current>("current");
+	Reflect<openblack::creature_route::Circle>(context, ValueOnly {})
+	    .Field<&openblack::creature_route::Circle::centre>("centre")
+	    .Field<&openblack::creature_route::Circle::radius>("radius");
 	Reflect<openblack::creature_route::Route>(context, ValueOnly {})
 	    .Field<&openblack::creature_route::Route::points>("points")
 	    .Field<&openblack::creature_route::Route::segment>("segment")

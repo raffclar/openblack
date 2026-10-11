@@ -31,6 +31,7 @@
 #include <bgfx/bgfx.h>
 #include <glm/trigonometric.hpp>
 
+#include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraDrag.h"
@@ -42,9 +43,11 @@
 #include "Camera/TempleCameraModel.h"
 #include "Debug/DebugGuiInterface.h"
 #include "DialogControls.h"
+#include "ECS/Components/VillagerLabel.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "Editor/EditorEntities.h"
 #include "EntityDescription.h"
@@ -52,6 +55,7 @@
 #include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
 #include "Gui/GameMenu.h"
+#include "Gui/VillagerLabels.h"
 #include "Level.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -499,6 +503,54 @@ std::string GameGui::Close(std::string_view window)
 		return "no window " + std::string(window) + "; ask gui.windows";
 	}
 	Locator::debugGui::value().CloseWindow(*name);
+	return {};
+}
+
+OverlayInfo GameGui::Overlays() const
+{
+	OverlayInfo info;
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return info;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	info.names = registry.Context().villagerNamesShown;
+	info.details = registry.Context().villagerDetailsShown;
+	info.detailsForOne = registry.Size<const ecs::components::DetailsShown>();
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const bool cinema =
+	    Locator::cinematicDirectorSystem::has_value() && Locator::cinematicDirectorSystem::value().IsWideScreenOn();
+	const bool interfaceActive =
+	    !Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+	info.keysAct = gui::villager_labels::KeysAct(!interfaceActive, inTemple);
+	if (cinema)
+	{
+		info.hiddenBy.emplace_back("cinema bars");
+	}
+	if (inTemple)
+	{
+		info.hiddenBy.emplace_back("temple");
+	}
+	if (auto* game = Game::Instance(); game != nullptr)
+	{
+		info.nameFade = game->GetVillagerNameFade();
+		if (const auto* face = game->GetInterface(); face != nullptr)
+		{
+			info.labels = face->GetVillagerLabels().size();
+		}
+	}
+	return info;
+}
+
+std::string GameGui::SetOverlays(std::optional<bool> names, std::optional<bool> details)
+{
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return "there is no game";
+	}
+	auto& context = Locator::entitiesRegistry::value().Context();
+	context.villagerNamesShown = names.value_or(context.villagerNamesShown);
+	context.villagerDetailsShown = details.value_or(context.villagerDetailsShown);
 	return {};
 }
 

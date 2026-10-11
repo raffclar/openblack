@@ -521,7 +521,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_breeding::GivenBirth,
     },
-    /* CHILD_AT_CRECHE */ k_TodoEntry,
+    /* CHILD_AT_CRECHE */
+    VillagerStateTableEntry {
+        .state = &villager_breeding::ChildAtCreche,
+    },
     /* CHILD_FOLLOWS_MOTHER */
     VillagerStateTableEntry {
         .state = &villager_breeding::ChildFollowsMother,
@@ -598,7 +601,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_home::VagrantStart,
     },
-    /* MORN_DEATH */ k_TodoEntry,
+    /* MORN_DEATH */
+    VillagerStateTableEntry {
+        .state = &villager_breeding::MournMother,
+    },
     /* PERFORM_INSPECTION_REACTION */ k_TodoEntry,
     /* APPROACH_OBJECT_REACTION */ k_TodoEntry,
     /* INITIALISE_TELL_OTHERS_ABOUT_OBJECT */ k_TodoEntry,

@@ -343,8 +343,16 @@ public:
 		pressed = {std::string(window), path};
 		return moonOpen ? std::string {} : "not open";
 	}
+	[[nodiscard]] OverlayInfo Overlays() const override { return overlays; }
+	std::string SetOverlays(std::optional<bool> names, std::optional<bool> details) override
+	{
+		overlays.names = names.value_or(overlays.names);
+		overlays.details = details.value_or(overlays.details);
+		return {};
+	}
 
 	bool moonOpen {false};
+	OverlayInfo overlays {.hiddenBy = {"cinema bars"}};
 	std::pair<std::string, std::vector<ButtonPathStep>> pressed;
 };
 
@@ -367,6 +375,26 @@ TEST(InspectorGui, WindowsOpenCloseAndPressByName)
 	EXPECT_EQ(Ask(inspector, R"({"query": "gui.close", "params": {"window": "Moon"}})")["open"], false);
 	EXPECT_FALSE(Refused(inspector, R"({"query": "gui.press", "params": {"window": "Moon", "button": "Go"}})").empty());
 	EXPECT_FALSE(Refused(inspector, R"({"query": "gui.press", "params": {"window": "Moon"}})").empty());
+}
+
+TEST(InspectorGui, VillagerOverlaysAreReadAndSetDirectly)
+{
+	FakeGui gui;
+	Inspector inspector;
+	inspector.Add(MakeGuiProvider(gui));
+	const auto read = Ask(inspector, R"({"query": "gui.overlays"})");
+	EXPECT_EQ(read["names"], false);
+	EXPECT_EQ(read["details"], false);
+	EXPECT_EQ(read["hidden_by"], Json::array({"cinema bars"}));
+
+	// Only what is given changes
+	const auto named = Ask(inspector, R"({"query": "gui.set_overlays", "params": {"names": true}})");
+	EXPECT_EQ(named["names"], true);
+	EXPECT_EQ(named["details"], false);
+	const auto detailed = Ask(inspector, R"({"query": "gui.set_overlays", "params": {"details": true, "names": false}})");
+	EXPECT_EQ(detailed["names"], false);
+	EXPECT_EQ(detailed["details"], true);
+	EXPECT_FALSE(Refused(inspector, R"({"query": "gui.set_overlays", "params": {}})").empty());
 }
 
 namespace

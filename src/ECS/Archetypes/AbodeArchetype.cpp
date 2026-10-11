@@ -28,6 +28,7 @@
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Creches.h"
 #include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
@@ -209,6 +210,10 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 	case AbodeType::Graveyard:
 		// A graveyard standing built works at once, its first grave shown
 		graveyards::Made(entity);
+		break;
+	case AbodeType::Creche:
+		// A crèche standing built works at once, its town sending its children there
+		creches::Made(entity);
 		break;
 	default:
 		break;

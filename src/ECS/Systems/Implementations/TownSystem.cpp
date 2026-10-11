@@ -137,20 +137,22 @@ bool IsBuilt(entt::entity abode)
 
 town_homes::Homes GameHomes()
 {
-	return {.room = [](entt::entity abode) -> std::optional<town_homes::AbodeRoom> {
-		        const auto* info = world_objects::AbodeInfoOf(abode);
-		        if (info == nullptr)
-		        {
-			        return std::nullopt;
-		        }
-		        return town_homes::AbodeRoom {.maxAdults = info->maxVillagersInAbode,
-		                                      .maxChildren = info->maxChildrenInAbode,
-		                                      .functional = villager_home::IsFunctional(abode),
-		                                      .built = IsBuilt(abode),
-		                                      .tooCrowded = info->percentTooCrowded};
-	        },
-	        .leaving = [](entt::entity villager) { villager_home::LeavingHome(villager); },
-	        .atHome = [](entt::entity villager) { return Locator::entitiesRegistry::value().AllOf<AtHome>(villager); }};
+	return {
+	    .room = [](entt::entity abode) -> std::optional<town_homes::AbodeRoom> {
+		    const auto* info = world_objects::AbodeInfoOf(abode);
+		    if (info == nullptr)
+		    {
+			    return std::nullopt;
+		    }
+		    return town_homes::AbodeRoom {.maxAdults = info->maxVillagersInAbode,
+		                                  .maxChildren = info->maxChildrenInAbode,
+		                                  .functional = villager_home::IsFunctional(abode),
+		                                  .built = IsBuilt(abode),
+		                                  .tooCrowded = info->percentTooCrowded};
+	    },
+	    .leaving = [](entt::entity villager) { villager_home::LeavingHome(villager); },
+	    .atHome = [](entt::entity villager) { return Locator::entitiesRegistry::value().AllOf<AtHome>(villager); },
+	    .leavingTown = [](entt::entity villager, entt::entity town) { villager_breeding::OrphanChildrenOf(villager, town); }};
 }
 
 /// Buildings further off than this are never the nearest
@@ -265,8 +267,14 @@ bool TownSystem::HasRoomForNewcomer(entt::entity town) const
 
 void TownSystem::RemoveDeadVillager(entt::entity villager)
 {
-	town_homes::RemoveDeadVillager(Locator::entitiesRegistry::value(), villager);
-	villager_breeding::OrphanChildrenOf(villager);
+	auto& registry = Locator::entitiesRegistry::value();
+	villager_breeding::OrphanChildrenOf(villager, registry.Get<const Villager>(villager).town);
+	town_homes::RemoveDeadVillager(registry, villager);
+}
+
+std::vector<entt::entity> TownSystem::ChildrenOf(entt::entity town, entt::entity mother) const
+{
+	return town_homes::ChildrenOf(Locator::entitiesRegistry::value(), town, mother);
 }
 
 namespace
