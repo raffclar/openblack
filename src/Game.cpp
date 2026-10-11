@@ -1523,6 +1523,9 @@ bool Game::Update() noexcept
 		{
 			Locator::handDemoSystem::value().Update();
 		}
+		// The scripted mouse's moves and buttons take effect as they are pumped, as a real mouse's do in SDL: after the
+		// action map's frame has read the pointer
+		actions.PumpScriptedPointer();
 		SDL_Event e;
 		while (SDL_PollEvent(&e) != 0)
 		{

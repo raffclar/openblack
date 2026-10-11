@@ -60,6 +60,7 @@ public:
 	void SetPlayerMouseBlocked(bool blocked) final { _playerMouseBlocked = blocked; }
 	[[nodiscard]] bool IsPlayerMouseBlocked() const final { return _playerMouseBlocked; }
 	[[nodiscard]] std::optional<ScriptedPointer> GetScriptedPointer() const final;
+	void PumpScriptedPointer() final;
 	void HoldScriptedKey(int scancode, bool held) final;
 	void SetInputLockMode(LockMode mode) final;
 	[[nodiscard]] LockMode GetInputLockMode() const final { return _lock.Mode(); }

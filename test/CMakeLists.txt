@@ -542,6 +542,8 @@ target_include_directories(
 openblack_setup_and_add_test(
   test_loading_screen_rules gui/test_loading_screen_rules.cpp
 )
+# Full-screen pictures kept to their own shape on any screen
+openblack_setup_and_add_test(test_screen_fit gui/test_screen_fit.cpp)
 openblack_setup_and_add_test(test_story_land_change test_story_land_change.cpp)
 openblack_setup_and_add_test(test_dance_file test_dance_file.cpp)
 target_link_libraries(test_dance_file PRIVATE dance)
@@ -616,6 +618,15 @@ if (OPENBLACK_INSPECTOR)
     test_inspector_control inspector/test_inspector_control.cpp
   )
   target_link_libraries(test_inspector_control PRIVATE inspector)
+  # The inspector's pointer with a real mouse's timing, through the action map and the window's event queue
+  openblack_setup_and_add_test(
+    test_scripted_mouse input/test_scripted_mouse.cpp
+  )
+  target_link_libraries(test_scripted_mouse PRIVATE inspector)
+  openblack_setup_and_add_test(
+    test_camera_edge_turn_timing camera/test_camera_edge_turn_timing.cpp
+  )
+  target_link_libraries(test_camera_edge_turn_timing PRIVATE inspector)
   # The coverage test reads the locator's header for its services. ctest also passes the folder when the test runs,
   # since a compiler cache shared between worktrees can give the test an object built in another worktree.
   target_compile_definitions(

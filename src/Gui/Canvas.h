@@ -48,6 +48,9 @@ public:
 
 	/// Starts a frame of the interface for a window of a size, blending by alpha
 	void Begin(glm::u16vec2 resolution);
+	/// Where what is drawn from now on is placed on the window: its positions are taken from this corner rather than
+	/// the window's. Back to the window's corner with each frame
+	void SetOrigin(glm::vec2 origin) noexcept { _origin = origin; }
 	/// How what is drawn from now on blends
 	void SetBlend(Blend blend) noexcept { _blend = blend; }
 	/// A rectangle of a texture, tinted by colour (red, green, blue and alpha from 0 to 1). Without a texture it is
@@ -86,6 +89,7 @@ private:
 	graphics::RenderPass _view;
 	glm::u16vec2 _resolution {0, 0};
 	Blend _blend {Blend::Alpha};
+	glm::vec2 _origin {0.0f, 0.0f};
 	std::vector<Vertex> _vertices;
 	std::vector<Batch> _batches;
 	std::unique_ptr<graphics::Texture2D> _white;
