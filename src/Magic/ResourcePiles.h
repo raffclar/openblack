@@ -12,6 +12,8 @@
 #include <cstdint>
 
 #include <array>
+#include <span>
+#include <vector>
 
 #include <glm/vec2.hpp>
 
@@ -105,6 +107,16 @@ inline constexpr float k_StoreReachMultiplier = 1.2f;
 [[nodiscard]] bool IsCapped(PotInfo nextPotForResource);
 /// What a pile takes of what it is given
 [[nodiscard]] uint32_t AmountTaken(uint32_t holds, uint32_t given, uint32_t maximum, bool capped);
+
+/// One of a store's piles as it is filled: what it is drawn full at and whether it holds no more than that
+struct PileRoom
+{
+	uint32_t maximum {0};
+	bool capped {true};
+};
+/// What each of a store's empty piles holds once an amount is shared out among them in turn: each takes what it can,
+/// the rest going on to the next, so only the last uncapped pile holds more than it is drawn full at
+[[nodiscard]] std::vector<uint32_t> ShareAmongPiles(uint32_t amount, std::span<const PileRoom> piles);
 
 /// The models a miracle's piles are drawn at: food three tenths of its size, wood seven
 inline constexpr float k_MagicFoodScale = 0.3f;

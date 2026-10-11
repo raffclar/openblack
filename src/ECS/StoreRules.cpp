@@ -86,3 +86,8 @@ uint32_t store_rules::AskedOfPile(uint32_t asked, int64_t overMaximum)
 	}
 	return asked - static_cast<uint32_t>(std::min<int64_t>(asked, overMaximum));
 }
+
+bool store_rules::BuildingSiteStores(ResourceType type)
+{
+	return type == ResourceType::Wood || type == ResourceType::Any;
+}

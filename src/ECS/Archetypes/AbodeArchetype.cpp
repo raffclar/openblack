@@ -9,6 +9,9 @@
 
 #include "AbodeArchetype.h"
 
+#include <array>
+#include <tuple>
+
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include <spdlog/spdlog.h>
@@ -19,6 +22,7 @@
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -27,6 +31,7 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/ResourcePiles.h"
 #include "PotArchetype.h"
 #include "Resources/ResourcesInterface.h"
 #include "Utils.h"
@@ -48,19 +53,36 @@ void AddStoragePitComponents(entt::entity entity, const Mesh& pitMesh, const GAb
 
 	auto& pit = registry.Assign<StoragePit>(entity);
 
+	// The pit is made with all its piles, empty: five of wood and one of food where its model says
+	const auto makePile = [&](size_t place, PotInfo type) {
+		const auto& m = extraMetrics.at(place);
+		const auto translation = static_cast<glm::vec3>(glm::eulerAngleY(-yAngleRadians) * m[3]);
+		return PotArchetype::CreateEmpty(position + translation, yAngleRadians, type);
+	};
+	std::array<magic::piles::PileRoom, std::tuple_size_v<decltype(StoragePit::woodPiles)>> woodRoom {};
 	size_t i = 0;
 	for (auto type = info.potForResourceWood; type != PotInfo::_COUNT;
 	     type = potInfoConstants.at(static_cast<size_t>(type)).nextPotForResource)
 	{
-		const auto& m = extraMetrics.at(i);
-		auto translation = static_cast<glm::vec3>(glm::eulerAngleY(-yAngleRadians) * m[3]);
-		pit.woodPiles.at(i) = PotArchetype::Create(position + translation, yAngleRadians, type, woodAmount);
+		const auto& potInfo = potInfoConstants.at(static_cast<size_t>(type));
+		pit.woodPiles.at(i) = makePile(i, type);
+		woodRoom.at(i) = {.maximum = potInfo.maxAmountInPot, .capped = magic::piles::IsCapped(potInfo.nextPotForResource)};
 		++i;
 	}
 	assert(i == pit.woodPiles.size());
-	const auto& m = extraMetrics.at(5);
-	auto translation = static_cast<glm::vec3>(glm::eulerAngleY(-yAngleRadians) * m[3]);
-	pit.foodPile = PotArchetype::Create(position + translation, yAngleRadians, info.potForResourceFood, foodAmount);
+	pit.foodPile = makePile(5, info.potForResourceFood);
+
+	// Then it is given its food and wood, which fill its piles in turn: each pile that leads on to another takes no
+	// more than it is drawn full at, the last takes the rest
+	const auto& foodInfo = potInfoConstants.at(static_cast<size_t>(info.potForResourceFood));
+	const std::array foodRoom {magic::piles::PileRoom {.maximum = foodInfo.maxAmountInPot,
+	                                                   .capped = magic::piles::IsCapped(foodInfo.nextPotForResource)}};
+	registry.Get<Pot>(pit.foodPile).amount = magic::piles::ShareAmongPiles(foodAmount, foodRoom).front();
+	const auto woodShares = magic::piles::ShareAmongPiles(woodAmount, woodRoom);
+	for (size_t place = 0; place < pit.woodPiles.size(); ++place)
+	{
+		registry.Get<Pot>(pit.woodPiles.at(place)).amount = woodShares.at(place);
+	}
 }
 
 entt::entity AbodeArchetype::CreatePlan(uint32_t townId, const glm::vec3& position, AbodeInfo type, float yAngleRadians,

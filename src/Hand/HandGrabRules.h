@@ -346,6 +346,8 @@ struct ScoopFacts
 [[nodiscard]] float ScoopRamp(uint32_t turns, const ScoopFacts& facts);
 /// What a game turn of scooping takes, after some turns of it
 [[nodiscard]] uint32_t ScoopAmount(uint32_t turns, const ScoopFacts& facts);
+/// The scooping sound's playback rate in percent, rising from 60 to 240 as the scoop ramps up
+[[nodiscard]] uint32_t ScoopSoundPitch(float ramp);
 /// What a scoop takes, no more than the source has nor than the handful has room for
 [[nodiscard]] uint32_t ScoopTaken(uint32_t wanted, uint32_t sourceHas, uint32_t held, const ScoopFacts& facts);
 

@@ -933,6 +933,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::HandGrab::scoopSource>("scoopSource")
 	    .Field<&components::HandGrab::scoopTurns>("scoopTurns")
 	    .Field<&components::HandGrab::scoopStream>("scoopStream")
+	    .Field<&components::HandGrab::scoopSound>("scoopSound")
 	    .Field<&components::HandGrab::scoopAnchor>("scoopAnchor")
 	    .Field<&components::HandGrab::released>("released")
 	    .Field<&components::HandGrab::releaseSpinMs>("releaseSpinMs")
