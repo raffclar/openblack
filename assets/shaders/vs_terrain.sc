@@ -15,8 +15,6 @@ SAMPLER2D(s10_landColour, 10);
 SAMPLER2D(s7_landLight, 7);
 // y: how bright the land's light is, a half for the land mirrored under the sea
 uniform vec4 u_skyAndBump;
-// World position to hand shadow texture coordinates in xy and distance past the hand along the light in z
-uniform mat4 u_handShadowMatrix;
 // xy: the camera's x and z, zw: the direction it faces along the ground
 uniform vec4 u_smallBumpLine;
 // x: how far ahead of the camera along the ground the small bump detail fades out
@@ -49,7 +47,7 @@ void main()
 	vec3 light = texture2DLod(s7_landLight, vec2((luminosity + 0.5f) / 256.0f, 0.5f), 0.0f).rgb;
 	v_lightColour = floor(light * 255.0f * u_skyAndBump.y + 0.001f) / 255.0f;
 
-	v_shadowCoord = mul(u_handShadowMatrix, vec4(transformedPosition, 1.0f));
+	v_shadowCoord = vec4_splat(0.0f);
 	v_world = transformedPosition;
 	// The game gives the land's vertices below altitude 2 no alpha, so shadows fade out towards the water's edge. It goes
 	// by the corner's own altitude: the land of altitudes 2 and 3 is drawn flat at sea level but keeps them.
