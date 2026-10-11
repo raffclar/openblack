@@ -58,6 +58,12 @@ TEST(DiscipleWork, EmptyTraderFetchesFullTraderDelivers)
 	EXPECT_EQ(ChooseTradeLeg(0, 500, 6000.0f, 6000.0f), TradeLeg::Fetch);
 }
 
+TEST(DiscipleWork, EmptyTraderFetchesTheWantedResource)
+{
+	EXPECT_EQ(TradeFetchResource(ResourceType::None, ResourceType::Wood), ResourceType::Wood);
+	EXPECT_EQ(TradeFetchResource(ResourceType::Food, ResourceType::Wood), ResourceType::Food);
+}
+
 TEST(DiscipleWork, TraderFetchesUpToItsLimit)
 {
 	EXPECT_EQ(TradeFetchAmount(500, 0), 500u);
