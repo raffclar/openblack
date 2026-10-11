@@ -753,3 +753,4 @@ openblack_setup_and_add_test(test_villager_food_rules test_villager_food_rules.c
 openblack_setup_and_add_test(test_volume_glow test_volume_glow.cpp)
 target_link_libraries(test_volume_glow PRIVATE psys)
 openblack_setup_and_add_test(test_relaxation_rules test_relaxation_rules.cpp)
+openblack_setup_and_add_test(test_villager_tools test_villager_tools.cpp)

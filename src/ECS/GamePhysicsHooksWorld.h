@@ -72,6 +72,8 @@ public:
 	[[nodiscard]] bool CanPickUp(entt::entity object) const override;
 	void Catch(entt::entity creature, entt::entity object) override;
 	void StopCreature(entt::entity creature) override;
+	void DropCarriedLog(systems::DynamicsSystemInterface& dynamics, entt::entity villager,
+	                    const systems::DroppedLogStart& start) override;
 };
 
 } // namespace openblack::ecs

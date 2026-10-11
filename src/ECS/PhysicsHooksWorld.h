@@ -43,7 +43,8 @@ struct ImpactInfo;
 namespace systems
 {
 class DynamicsSystemInterface;
-}
+struct DroppedLogStart;
+} // namespace systems
 } // namespace ecs
 } // namespace openblack
 
@@ -156,6 +157,11 @@ public:
 	virtual void Catch(entt::entity creature, entt::entity object) = 0;
 	/// The creature stops where it is
 	virtual void StopCreature(entt::entity creature) = 0;
+
+	// Villagers
+	/// A villager lets the wood it shows fall as a log, which starts to fly as given
+	virtual void DropCarriedLog(systems::DynamicsSystemInterface& dynamics, entt::entity villager,
+	                            const systems::DroppedLogStart& start) = 0;
 };
 
 } // namespace openblack::ecs::physics_hooks

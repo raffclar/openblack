@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <optional>
+
+#include "3D/AllMeshes.h"
 #include "Enums.h"
 
 namespace openblack::ecs::components
@@ -22,6 +25,8 @@ struct DeadTree
 	float woodMultiplier {1.0f};
 	/// A forester felled it: it falls as a tree whatever its model, and calls nobody to its wood when it comes down
 	bool felled {false};
+	/// The model it is drawn with in place of its tree's own: the log a villager let fall is drawn as what it held
+	std::optional<MeshId> model;
 };
 
 } // namespace openblack::ecs::components
