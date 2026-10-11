@@ -74,7 +74,13 @@ struct Candidate
 };
 /// The farm a town sends a fisherman to: the best by its wish to be fished times how near it is (least from 500 m), the
 /// first of equals; none when no farm wants one
-[[nodiscard]] std::optional<size_t> BestFarm(std::span<const Candidate> farms, uint32_t maxFishermen);
+/// The farm chosen and how much it is wanted for him
+struct Choice
+{
+	size_t index {0};
+	float score {0.0f};
+};
+[[nodiscard]] std::optional<Choice> BestFarm(std::span<const Candidate> farms, uint32_t maxFishermen);
 
 /// Where a fisherman stands to fish, in 16.16 map units: the farm's place moved by an offset in metres along x and z
 [[nodiscard]] glm::ivec2 FishingSpot(glm::ivec2 farm, glm::vec2 offset);

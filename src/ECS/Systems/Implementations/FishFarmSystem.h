@@ -29,7 +29,8 @@ public:
 	uint32_t TakeFish(entt::entity farm, uint32_t wanted) override;
 	[[nodiscard]] float FishLeft(entt::entity farm) const override;
 	[[nodiscard]] std::optional<entt::entity> ClosestFarm(glm::vec3 point, float maxDistance) const override;
-	[[nodiscard]] std::optional<entt::entity> BestFarmFor(entt::entity town, glm::vec3 fisherman) const override;
+	[[nodiscard]] std::optional<FarmChoice> BestFarmFor(entt::entity town, glm::vec3 fisherman) const override;
+	void RemoveFarm(entt::entity farm) override;
 	void AddFisherman(entt::entity farm, entt::entity villager) override;
 	void RemoveFisherman(entt::entity farm, entt::entity villager) override;
 	[[nodiscard]] glm::vec3 FishingSpot(entt::entity farm) override;
