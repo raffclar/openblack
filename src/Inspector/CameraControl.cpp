@@ -149,6 +149,14 @@ Json StateJson(const CameraState& state)
 	    {"near_clip", state.nearClip},
 	    {"model", state.model},
 	    {"held_by_path", state.heldByPath},
+	    {"mouse_hints",
+	     {
+	         {"rotate", state.mouseHints.rotate},
+	         {"pitch", state.mouseHints.pitch},
+	         {"top", state.mouseHints.top},
+	         {"idle", state.mouseHints.idle},
+	     }},
+	    {"drag", state.drag},
 	};
 }
 
@@ -253,7 +261,8 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCameraProvider(Came
 	auto provider = std::make_unique<FunctionProvider>("camera");
 	provider->Add({.name = "state",
 	               .description = "Where the camera is, what it looks at, its yaw, pitch (degrees below the horizon) and "
-	                              "distance, its field of view, what moves it, and whether a camera path holds it",
+	                              "distance, its field of view, what moves it, whether a camera path holds it, the mouse "
+	                              "hints (rotate, pitch, top) the cursor's place offers and what a drag has turned into",
 	               .parameters = {},
 	               .kind = ResultKind::Object,
 	               .needsNear = false},

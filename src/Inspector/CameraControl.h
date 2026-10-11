@@ -35,6 +35,17 @@ struct CameraState
 	std::string model;
 	/// A miracle's or a script's camera path has it, and the player's controls do nothing meanwhile
 	bool heldByPath {false};
+	/// What the camera offers the mouse where the cursor is: turning, tilting, the top's tilting and turning, and
+	/// whether nothing is dragged
+	struct MouseHints
+	{
+		bool rotate {false};
+		bool pitch {false};
+		bool top {false};
+		bool idle {false};
+	} mouseHints;
+	/// What a drag of the land has turned into: none, undecided, pan, edge_rotate, pitch or pitch_from_top
+	std::string drag {"none"};
 };
 
 /// Where a camera is put: where it is and what it looks at
