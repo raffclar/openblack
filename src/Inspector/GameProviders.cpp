@@ -194,6 +194,7 @@
 #include "Resources/ResourcesInterface.h"
 #include "RunControl.h"
 #include "SystemProviders.h"
+#include "Temple/TemplePeople.h"
 #include "Windowing/WindowingInterface.h"
 #include "WorldProviders.h"
 
@@ -1474,10 +1475,18 @@ std::unique_ptr<ProviderInterface> TempleProvider()
 		    });
 		    return items;
 	    }));
-	provider->Add(Query("interior", "The temple's inside: whether the player is in it, the room and the visits"),
+	provider->Add(Query("interior", "The temple's inside: whether the player is in it, the room, the visits, and the "
+	                                "worshippers walking about it (how many came in, and where those drawn are)"),
 	              Serve<Locator::temple>("the temple", [](const TempleInteriorInterface& temple, const QueryContext& /*c*/) {
 		              const auto transition = temple.GetTransitionRoom();
+		              Json drawn = Json::array();
+		              for (const auto& person : temple.GetPeople())
+		              {
+			              drawn.push_back(Point(glm::vec3(person.model[3])));
+		              }
 		              return Json {
+		                  {"people_inside", temple.GetPeopleInside()},
+		                  {"people_drawn", std::move(drawn)},
 		                  {"active", temple.Active()},
 		                  {"position", Point(temple.GetPosition())},
 		                  {"room", static_cast<int>(temple.GetCurrentRoom())},
@@ -1791,13 +1800,19 @@ void AddAdvisorPlacement(Json& item, const ecs::systems::AdvisorSystemInterface&
 {
 	const auto& controller = advisors.GetController();
 	const auto& dude = controller.Dude(draw.advisor);
-	const auto& screen = controller.GetScreen();
-	const auto halfWidth = static_cast<float>(screen.HalfWidth());
+	const auto& layout = controller.GetScreen();
+	const auto& stage = advisors.GetStage();
+	const auto& screen = stage.screen;
+	const auto halfWidth = static_cast<float>(layout.HalfWidth());
 	const auto hover = dude.Hover();
 	item["state"] = dude.State();
 	item["hover"] = {hover.x, hover.y};
-	// Both of the hover's axes are measured in half the screen's width from its middle
-	item["hover_pixel"] = {(hover.x + 1.0f) * halfWidth, hover.y * halfWidth + static_cast<float>(screen.HalfHeight())};
+	// Both of the hover's axes are measured in half the advisors' area's width from its middle; the pixel is the screen's
+	const auto hoverPixel =
+	    stage.ToScreen({(hover.x + 1.0f) * halfWidth, hover.y * halfWidth + static_cast<float>(layout.HalfHeight())});
+	item["hover_pixel"] = {hoverPixel.x, hoverPixel.y};
+	item["stage"] = {{"left", stage.left}, {"width", layout.width}, {"share", stage.share}};
+	item["draw_share"] = dude.DrawShare();
 	item["cling_edge"] = static_cast<int>(dude.ClingEdge());
 	item["cling_target"] = {dude.ClingTarget().x, dude.ClingTarget().y};
 	if (camera == nullptr || draw.bones.empty())
@@ -1841,7 +1856,8 @@ std::unique_ptr<ProviderInterface> AdvisorsProvider()
 	auto provider = std::make_unique<FunctionProvider>("advisors");
 	provider->Add(Query("draws",
 	                    "What is drawn of the advisors this frame: near the screen or in the world, alpha, how far out in "
-	                    "the world, where they hover and cling on the screen and where their bones are drawn, and how "
+	                    "the world, where they hover and cling on the screen (and the 4:3 area they are laid out in and the "
+	                    "share of their size they are drawn at) and where their bones are drawn, and how "
 	                    "close their posed meshes come to the camera beside its near plane",
 	                    {}, ResultKind::List),
 	              Serve<Locator::advisorSystem>(

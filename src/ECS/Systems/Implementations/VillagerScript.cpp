@@ -39,6 +39,7 @@
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/VillagerScriptRules.h"
+#include "ECS/VillagerSkeletons.h"
 #include "ECS/WalkerPlacement.h"
 #include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
@@ -189,13 +190,8 @@ void villager_script::SetAge(entt::entity villager, uint32_t age)
 	if (setting.childModel.has_value())
 	{
 		// A grown villager made young wears its kind's child models at their three distances; a child made grown its
-		// kind's adult models
-		// TODO(opening): a skeleton keeps its skeleton's model either way
-		const auto meshes = villager_age::ModelsForAge(*setting.childModel,
-		                                               std::array {info.childMeshHigh, info.childMeshMedium, info.childMeshLow},
-		                                               std::array {info.highDetail, info.stdDetail, info.lowDetail});
-		const std::array models {resources::HashIdentifier(meshes[0]), resources::HashIdentifier(meshes[1]),
-		                         resources::HashIdentifier(meshes[2])};
+		// kind's adult models. A skeleton keeps the skeleton's model either way.
+		const auto models = villager_skeleton::ModelsFor(villager, *setting.childModel);
 		if (auto* mesh = registry.TryGet<Mesh>(villager); mesh != nullptr)
 		{
 			mesh->id = models[0];

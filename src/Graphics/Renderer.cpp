@@ -842,8 +842,10 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 	// A lit window is a faint glow, blended by its texture's alpha as its material says, over the wall behind it
 	const bool materialBlending = desc.useMaterialBlending || window;
 	const auto viewId = window ? TranslucentView(desc.viewId) : desc.viewId;
-	if (!desc.drawAll && (subMesh.IsPhysics() || subMesh.GetFlags().status != desc.onlyStatus.value_or(0) ||
-	                      (!window && (subMesh.GetFlags().lodMask & 1) != 1)))
+	const auto status = subMesh.GetFlags().status;
+	const bool statusDrawn =
+	    desc.statusesUpTo.has_value() ? status >= 1 && status <= *desc.statusesUpTo : status == desc.onlyStatus.value_or(0);
+	if (!desc.drawAll && (subMesh.IsPhysics() || !statusDrawn || (!window && (subMesh.GetFlags().lodMask & 1) != 1)))
 	{
 		return;
 	}
@@ -2316,11 +2318,9 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 		const glm::vec2 viewport {stats->width, stats->height};
 		if (const auto range = sea_rows::ComputeScreenRange(camera.GetViewProjectionMatrix(), viewport, config.cameraNearClip))
 		{
-			// The ripple steps on with each frame the game's time moves on in
-			if (Locator::time::value().GetFrameGameTime().count() != 0)
-			{
-				_seaRippleStep = (_seaRippleStep + 1) & 15;
-			}
+			// The ripple steps on with the frames the game's time moves on in, at the screen refresh's pace
+			const auto& time = Locator::time::value();
+			_seaRipple = sea_rows::AdvanceRipple(_seaRipple, time.GetFrameRealTime(), time.GetFrameGameTime().count() != 0);
 			const auto rows = sea_rows::MakeRows(*range);
 			u_seaRows = {static_cast<float>(rows.first), static_cast<float>(rows.count), rows.inverseDepth, rows.inverseStep};
 			u_seaMode.y = rows.softTop ? 1.0f : 0.0f;
@@ -2330,7 +2330,7 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 			// No rows: only what lies under the sea shows
 			u_seaRows = {viewport.y, 0.0f, 0.0f, 0.0f};
 		}
-		u_seaParams.y = static_cast<float>(_seaRippleStep);
+		u_seaParams.y = static_cast<float>(_seaRipple.step);
 	}
 
 	// The sea is coloured by the land's light at full luminosity
@@ -5230,6 +5230,12 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				                       meshId != ecs::components::Hand::k_MeshId;
 				const auto light = templeLit ? Locator::temple::value().GetLight() : TempleLight {};
 				submitDesc.tint = glm::vec4(light.multiply, 0.0f);
+				// The temple's walking worshippers are drawn in a grey of their own, darker in the reflection
+				if (placers.templeGrey.has_value())
+				{
+					const float grey = desc.viewId == RenderPass::Reflection ? placers.templeGrey->y : placers.templeGrey->x;
+					submitDesc.tint = glm::vec4(light.Colour(glm::vec3(grey)), 0.0f);
+				}
 				submitDesc.lightMultiply = light.multiply;
 				// The hand glows as a recognised gesture flashes
 				submitDesc.lightAdd =
@@ -5387,6 +5393,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				if (build.scaffoldStatus.has_value())
 				{
 					drawPart(build.scaffoldInstance, build.scaffoldCut, build.scaffoldStatus, false);
+				}
+				// A graveyard's graves, as many as its burials show, over its model drawn with the others
+				if (build.gravesShown.has_value())
+				{
+					submitDesc.statusesUpTo = build.gravesShown;
+					drawInstances(build.meshId, placers, false, build.instance, 1, nullptr, nullptr,
+					              renderCtx.partialBuildInstanceBuffer);
+					submitDesc.statusesUpTo.reset();
 				}
 			}
 			// The creatures, each posed and shaped as it is, then its eyes

@@ -31,6 +31,8 @@ public:
 	[[nodiscard]] std::vector<entt::entity> TreesOf(entt::entity forest, bool growing) const override;
 	[[nodiscard]] float WoodOf(entt::entity forest) const override;
 	[[nodiscard]] glm::vec3 NearestPointOf(entt::entity forest, glm::vec3 to) const override;
+	uint32_t TakeBigForestWood(entt::entity bigForest, uint32_t amount) override;
+	std::optional<entt::entity> TreeFromBigForest(entt::entity bigForest) override;
 	void AssignForestsToTowns() override;
 	[[nodiscard]] std::optional<glm::vec3> ForestLair(AnimalInfo kind, glm::vec3 from) const override;
 	void MakeScenicForests() override;
@@ -45,6 +47,11 @@ private:
 	/// A young tree of a tree's kind is planted at the first free spot of up to 160 tried round it, in its forest; none
 	/// when no spot is free
 	std::optional<entt::entity> PlantBeside(entt::entity tree);
+	/// A shrunk big forest plants a young pine in its forest, at the first of ten random spots round its edge that is on
+	/// land and clear of what stands there; none when no spot is
+	std::optional<entt::entity> PlantPineAround(entt::entity bigForest);
+	/// The number of a big forest's own forest, 0 when it has none
+	[[nodiscard]] uint32_t ForestNumberOf(entt::entity bigForest) const;
 
 	/// The turn a forest last gained a tree planted near another, 0 on a new land
 	uint32_t _lastTreeAddedTurn {0};

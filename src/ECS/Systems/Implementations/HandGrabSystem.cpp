@@ -21,6 +21,7 @@
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/DeadTree.h"
+#include "ECS/Components/Forest.h"
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
@@ -149,6 +150,10 @@ GrabKind HandGrabSystem::KindOf(entt::entity object) const
 	if (registry.AllOf<DeadTree>(object))
 	{
 		return GrabKind::DeadTree;
+	}
+	if (registry.AllOf<BigForest>(object))
+	{
+		return GrabKind::BigForest;
 	}
 	// A one-shot miracle's bubble is the magic's to take
 	if (registry.AnyOf<OneOffSpellSeed, StreetLantern, TeleportStone>(object))
@@ -364,9 +369,9 @@ bool HandGrabSystem::Press(uint32_t nowMs, uint32_t turn)
 	grab->pressTurn = turn;
 	grab->pullSeconds = 0.0f;
 	grab->tug.reset();
-	// Something in flight isn't pulled: it is caught once the button has been held a while. Anything else is pulled at,
-	// until it comes free.
-	grab->pulling = !_world->IsFlying(*object);
+	// Something in flight isn't pulled: it is caught once the button has been held a while, as is a thing the hand can't
+	// pull at (a big forest). Anything else is pulled at, until it comes free.
+	grab->pulling = !_world->IsFlying(*object) && hand_grab::Tuggable(KindOf(*object));
 	// The first frame of the pull never pulls
 	grab->waits = true;
 	return true;
@@ -808,6 +813,24 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 		Empty(grab);
 		return;
 	}
+	// A big forest is never held itself: it gives the hand one of its trees, which the hand takes as it takes a tree from
+	// the ground. Then the big forest's own fire, if it burns, starts moving as a held thing's does.
+	if (KindOf(object) == GrabKind::BigForest)
+	{
+		if (const auto tree = _world->TreeFromBigForest(object); tree.has_value() && Exists(*tree))
+		{
+			Take(grab, *tree, true);
+		}
+		else
+		{
+			Empty(grab);
+		}
+		if (Exists(object))
+		{
+			_world->FireStartedMoving(object, true);
+		}
+		return;
+	}
 	const bool wasFlying = _world->IsFlying(object);
 	const auto kind = KindOf(object);
 	const auto player = _world->HandPlayer();
@@ -1045,9 +1068,9 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 			Empty(*grab);
 			return frame.target;
 		}
-		// A thing in flight is caught once the button has been held a while; anything else is taken as soon as the hand
-		// has pulled it free
-		if (_world->IsFlying(grab->object))
+		// A thing in flight, or one the hand can't pull at, is taken once the button has been held a while; anything else
+		// is taken as soon as the hand has pulled it free
+		if (_world->IsFlying(grab->object) || !hand_grab::Tuggable(KindOf(grab->object)))
 		{
 			if (hand_grab::ElapsedMs(frame.nowMs, grab->pressMs, frame.turn, grab->pressTurn) >= hand_grab::k_GrabWaitMs)
 			{

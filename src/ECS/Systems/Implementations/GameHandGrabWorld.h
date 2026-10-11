@@ -61,6 +61,7 @@ public:
 	void AnimalIntoOwnFlock(entt::entity animal) override;
 	void ArtefactTaken(entt::entity object, PlayerNames player) override;
 	void TreeUprooted(PlayerNames player, entt::entity tree) override;
+	std::optional<entt::entity> TreeFromBigForest(entt::entity bigForest) override;
 	void LeaveRootsHole(entt::entity tree) override;
 	void RemovePotReaction(entt::entity pot) override;
 	void SetUpPotReaction(entt::entity pot, PlayerNames player) override;

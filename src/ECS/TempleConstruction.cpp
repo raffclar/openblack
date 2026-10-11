@@ -36,6 +36,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -175,6 +176,8 @@ void Finish(entt::entity building)
 	}
 	else
 	{
+		// A finished graveyard starts working
+		graveyards::StartsWorking(building);
 		// TODO(villager-life): a finished house takes its people in and its town reacts to the new building
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "A building other than a temple was finished without its town's reaction");
 	}

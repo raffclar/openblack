@@ -20,13 +20,18 @@
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
 #include "Common/MachineClock.h"
+#include "ECS/Components/Animal.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Villager.h"
+#include "ECS/Components/VillagerLabel.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
-#include "EngineConfig.h"
+#include "ECS/Systems/PickingSystemInterface.h"
 #include "GameActionMapInterface.h"
+#include "Gui/VillagerLabels.h"
 #include "Help/HelpProfile.h"
 #include "Locator.h"
 
@@ -52,6 +57,52 @@ namespace
 		    }
 	    });
 	return position;
+}
+
+/// The Show Villager Names key puts the named villagers' names up or down; the Show Villager Details key the details
+/// of the living thing under the hand, or else every villager's
+void ToggleVillagerLabels(bool names, bool details)
+{
+	using namespace ecs::components;
+	if (!names && !details)
+	{
+		return;
+	}
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	if (!gui::villager_labels::KeysAct(!Locator::cinematicDirectorSystem::value().IsInterfaceActive(), inTemple))
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& context = registry.Context();
+	if (names)
+	{
+		context.villagerNamesShown = !context.villagerNamesShown;
+	}
+	if (!details)
+	{
+		return;
+	}
+	std::optional<entt::entity> pointed;
+	if (Locator::pickingSystem::has_value())
+	{
+		pointed = Locator::pickingSystem::value().GetPick().object;
+	}
+	const bool overLiving =
+	    pointed.has_value() && registry.Valid(*pointed) && registry.AnyOf<Villager, Animal, Creature>(*pointed);
+	if (gui::villager_labels::DetailsKeyToggles(overLiving) == gui::villager_labels::DetailsToggle::Pointed)
+	{
+		if (registry.AllOf<DetailsShown>(*pointed))
+		{
+			registry.Remove<DetailsShown>(*pointed);
+		}
+		else
+		{
+			registry.Assign<DetailsShown>(*pointed);
+		}
+		return;
+	}
+	context.villagerDetailsShown = !context.villagerDetailsShown;
 }
 } // namespace
 
@@ -79,15 +130,7 @@ void ShortcutKeys::Update()
 	// to the leash work, which read them themselves.
 
 	// The villagers' names and details are toggled, as the game does
-	auto& config = Locator::config::value();
-	if (pressed(BindableActionMap::SHOW_VILLAGER_NAMES))
-	{
-		config.showVillagerNames = !config.showVillagerNames;
-	}
-	if (pressed(BindableActionMap::SHOW_VILLAGER_DETAILS))
-	{
-		config.showVillagerDetails = !config.showVillagerDetails;
-	}
+	ToggleVillagerLabels(pressed(BindableActionMap::SHOW_VILLAGER_NAMES), pressed(BindableActionMap::SHOW_VILLAGER_DETAILS));
 
 	const bool temple = pressed(BindableActionMap::ZOOM_TO_TEMPLE);
 	const bool realm = pressed(BindableActionMap::ZOOM_TO_REALM);

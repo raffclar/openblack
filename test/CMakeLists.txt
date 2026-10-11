@@ -515,6 +515,7 @@ target_link_libraries(test_model_surface PRIVATE l3d)
 openblack_setup_and_add_test(test_fireflies test_fireflies.cpp)
 openblack_setup_and_add_test(test_forest_growth test_forest_growth.cpp)
 openblack_setup_and_add_test(test_store_rules test_store_rules.cpp)
+openblack_setup_and_add_test(test_big_forest_rules test_big_forest_rules.cpp)
 openblack_setup_and_add_test(test_clip_sounds test_clip_sounds.cpp)
 target_link_libraries(test_clip_sounds PRIVATE sas)
 
@@ -542,6 +543,8 @@ target_include_directories(
 openblack_setup_and_add_test(
   test_loading_screen_rules gui/test_loading_screen_rules.cpp
 )
+# Full-screen pictures kept to their own shape on any screen
+openblack_setup_and_add_test(test_screen_fit gui/test_screen_fit.cpp)
 openblack_setup_and_add_test(test_story_land_change test_story_land_change.cpp)
 openblack_setup_and_add_test(test_dance_file test_dance_file.cpp)
 target_link_libraries(test_dance_file PRIVATE dance)
@@ -643,6 +646,8 @@ openblack_setup_and_add_test(test_spirit_pose test_spirit_pose.cpp)
 target_link_libraries(test_spirit_pose PRIVATE helpdude)
 openblack_setup_and_add_test(test_spirit_cling test_spirit_cling.cpp)
 target_link_libraries(test_spirit_cling PRIVATE helpdude)
+openblack_setup_and_add_test(test_spirit_stage test_spirit_stage.cpp)
+target_link_libraries(test_spirit_stage PRIVATE helpdude)
 openblack_setup_and_add_test(test_text_splitter test_text_splitter.cpp)
 openblack_setup_and_add_test(test_help_text_display test_help_text_display.cpp)
 openblack_setup_and_add_test(test_dialogue_text test_dialogue_text.cpp)
@@ -727,4 +732,10 @@ openblack_setup_and_add_test(
   test_camera_edge_turn camera/test_camera_edge_turn.cpp
 )
 openblack_setup_and_add_test(test_mouse_motion input/test_mouse_motion.cpp)
+openblack_setup_and_add_test(test_graveyard_rules test_graveyard_rules.cpp)
+openblack_setup_and_add_test(test_villager_labels test_villager_labels.cpp)
+openblack_setup_and_add_test(test_special_villagers test_special_villagers.cpp)
+openblack_setup_and_add_test(
+  test_temple_people_rules temple/test_temple_people_rules.cpp
+)
 openblack_setup_and_add_test(test_camera_limits camera/test_camera_limits.cpp)

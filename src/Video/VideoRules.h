@@ -16,6 +16,8 @@
 #include <optional>
 #include <vector>
 
+#include "Gui/ScreenFit.h"
+
 /// The rules of the game's full-screen videos (the intro and the falling spell's film): when a video fades and ends, how
 /// strongly and where it is drawn, when its frames are due, and the falling spell's timeline. Free of any game state, so
 /// that the video system and the tests share them.
@@ -34,8 +36,6 @@ inline constexpr int32_t k_IntroEndSeconds = 60;
 /// How opaque a video is at full strength: the falling spell's film is drawn faintly over the scene
 inline constexpr uint8_t k_OpaqueStrength = 0xFF;
 inline constexpr uint8_t k_FallingSpellStrength = 0x50;
-/// The height of a 16:9 picture over its width
-inline constexpr float k_SixteenByNine = 0.5625f;
 
 /// From which frame a video fades and at which it ends
 struct Schedule
@@ -93,18 +93,11 @@ enum class Phase : uint8_t
 [[nodiscard]] uint8_t DrawAlpha(float alpha, bool fallingSpell) noexcept;
 
 /// Where on the screen a video is drawn, in pixels
-struct ScreenRect
-{
-	int32_t x {0};
-	int32_t y {0};
-	int32_t width {0};
-	int32_t height {0};
+using ScreenRect = gui::ScreenRect;
 
-	bool operator==(const ScreenRect&) const = default;
-};
-
-/// The screen between bars as tall as a 16:9 picture leaves, one pixel larger each way. The bars aren't clamped: on a
-/// screen wider than 16:9 they are negative and the picture runs over the top and bottom of the screen
+/// The film's 16:9 picture as big as fits the screen, centred, one pixel larger each way as the game draws it. On a 4:3
+/// screen it sits between bars above and below; on a screen wider than 16:9 it is as tall as the screen with bars at
+/// its sides
 [[nodiscard]] ScreenRect LetterboxRect(int32_t screenWidth, int32_t screenHeight) noexcept;
 
 /// How many frames are due `elapsed` after a video's first frame: frame i is due at i / fps seconds, the file's exact

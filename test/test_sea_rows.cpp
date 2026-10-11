@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <chrono>
+
 #include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
 
@@ -80,4 +82,52 @@ TEST(SeaRows, RowsAreTwoPixelsApart)
 	// From the top of the screen the first row isn't faded
 	EXPECT_FALSE(
 	    sea_rows::MakeRows({.top = 0.0f, .bottom = 719.0f, .inverseDepthTop = 0.001f, .inverseDepthBottom = 0.1f}).softTop);
+}
+
+TEST(SeaRows, TheRippleStepsOnAtTheScreenRefreshWhateverTheFrameRate)
+{
+	using std::chrono::milliseconds;
+	// A second of frames (and a little more) at 500 frames a second steps 60 times, as at a 60 Hz refresh
+	sea_rows::Ripple fast;
+	int fastSteps = 0;
+	for (int frame = 0; frame < 505; ++frame)
+	{
+		const auto before = fast.step;
+		fast = sea_rows::AdvanceRipple(fast, milliseconds(2), true);
+		fastSteps += fast.step != before ? 1 : 0;
+	}
+	EXPECT_EQ(fastSteps, 60);
+
+	// At 100 frames a second also 60 steps
+	sea_rows::Ripple hundred;
+	int hundredSteps = 0;
+	for (int frame = 0; frame < 101; ++frame)
+	{
+		const auto before = hundred.step;
+		hundred = sea_rows::AdvanceRipple(hundred, milliseconds(10), true);
+		hundredSteps += hundred.step != before ? 1 : 0;
+	}
+	EXPECT_EQ(hundredSteps, 60);
+}
+
+TEST(SeaRows, SlowFramesStepTheRippleOnceEach)
+{
+	// At 20 frames a second the game stepped once a frame, never twice
+	sea_rows::Ripple ripple;
+	for (int frame = 1; frame <= 20; ++frame)
+	{
+		ripple = sea_rows::AdvanceRipple(ripple, std::chrono::milliseconds(50), true);
+		EXPECT_EQ(ripple.step, frame % sea_rows::Ripple::k_Steps);
+		EXPECT_LT(ripple.sinceStep, sea_rows::Ripple::k_StepInterval);
+	}
+}
+
+TEST(SeaRows, TheRippleStaysWhileTheGamesTimeIsStopped)
+{
+	sea_rows::Ripple ripple {.step = 15};
+	ripple = sea_rows::AdvanceRipple(ripple, std::chrono::milliseconds(100), false);
+	EXPECT_EQ(ripple.step, 15);
+	// And goes round from 15 to 0
+	ripple = sea_rows::AdvanceRipple(ripple, std::chrono::milliseconds(100), true);
+	EXPECT_EQ(ripple.step, 0);
 }

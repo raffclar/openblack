@@ -35,6 +35,7 @@
 #include "ECS/Components/FallingRoots.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/Graveyard.h"
 #include "ECS/Components/GroundMark.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HiddenByState.h"
@@ -57,6 +58,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Unlit.h"
 #include "ECS/Components/VillagerPose.h"
+#include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
@@ -722,30 +724,6 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	return fits;
 }
 
-void RenderingSystem::UploadBonePalette()
-{
-	auto& texels = _renderContext.bonePalette;
-	if (texels.empty())
-	{
-		return;
-	}
-	// Whole rows are sent, the last one filled out
-	const auto rows = graphics::bone_palette::RowsFor(texels.size());
-	texels.resize(static_cast<size_t>(rows) * graphics::bone_palette::k_Width, glm::vec4(0.0f));
-	auto& texture = _renderContext.bonePaletteTexture;
-	// The texture grows to twice the rows it needs, so that a growing crowd doesn't make it again every frame
-	if (!texture || texture->GetResolution().y < rows)
-	{
-		texture = std::make_unique<graphics::Texture2D>("BonePalette");
-		texture->CreateWithinFrame(graphics::bone_palette::k_Width, static_cast<uint16_t>(rows * 2), 1,
-		                           graphics::TextureFormat::RGBA32F, graphics::Wrapping::ClampEdge, graphics::Filter::Nearest,
-		                           nullptr);
-	}
-	const auto bytes = static_cast<uint32_t>(texels.size() * sizeof(glm::vec4));
-	bgfx::updateTexture2D(toBgfx(texture->GetNativeHandle()), 0, 0, 0, 0, graphics::bone_palette::k_Width, rows,
-	                      bgfx::copy(texels.data(), bytes));
-}
-
 void RenderingSystem::UploadPartialBuilds()
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -800,6 +778,25 @@ void RenderingSystem::UploadPartialBuilds()
 		    {.model = glm::translate(glm::mat4(1.0f), -up * build.scaffoldSink) * matrix});
 		_renderContext.partialBuilds.push_back(draw);
 	});
+	// A standing graveyard shows the graves of its burials over its model drawn with the others; one going up or broken
+	// shows none
+	registry.Each<const Graveyard, const Mesh, const Transform>(
+	    [&](entt::entity entity, const Graveyard&, const Mesh& mesh, const Transform& transform) {
+		    const auto graves = graveyards::GravesShown(entity);
+		    if (graves == 0 || buildings.PartialShare(entity).has_value() || !DrawnWhole(entity) || !meshes.Contains(mesh.id))
+		    {
+			    return;
+		    }
+		    _renderContext.partialBuilds.push_back({
+		        .meshId = mesh.id,
+		        .morphWithTerrain = registry.AllOf<MorphWithTerrain>(entity),
+		        .instance = static_cast<uint32_t>(_renderContext.partialBuildInstances.size()),
+		        .gravesShown = graves,
+		    });
+		    _renderContext.partialBuildInstances.push_back(
+		        {.model = glm::translate(glm::mat4(1.0f), transform.position) * glm::mat4(transform.rotation) *
+		                  glm::scale(glm::mat4(1.0f), transform.scale)});
+	    });
 	const auto count = static_cast<uint32_t>(_renderContext.partialBuildInstances.size());
 	if (count == 0)
 	{

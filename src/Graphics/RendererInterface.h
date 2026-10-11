@@ -169,6 +169,8 @@ public:
 		std::optional<float> innerWallInset;
 		/// Only the submeshes of this status are drawn, in place of those of status 0: a building's scaffold
 		std::optional<uint32_t> onlyStatus;
+		/// Only the submeshes of status one up to this are drawn, in place of those of status 0: a graveyard's graves
+		std::optional<uint32_t> statusesUpTo;
 		/// Where a building's model is cut, in its own space: its inner walls and the cap over them are drawn only for a
 		/// primitive with a whole triangle below it
 		std::optional<float> modelCutHeight;

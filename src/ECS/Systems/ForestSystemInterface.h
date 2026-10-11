@@ -63,6 +63,13 @@ public:
 	[[nodiscard]] virtual float WoodOf(entt::entity forest) const = 0;
 	/// The point of a forest nearest a point: on its big forest's edge towards it, or else the forest's place
 	[[nodiscard]] virtual glm::vec3 NearestPointOf(entt::entity forest, glm::vec3 to) const = 0;
+	/// Wood taken from a big forest: it comes off divided by the forest's life; a forest left with none goes from the
+	/// land (its forest stays), and one whose wood has drifted far enough from its size shrinks to fit and plants a young
+	/// pine round its new edge. How much was taken.
+	virtual uint32_t TakeBigForestWood(entt::entity bigForest, uint32_t amount) = 0;
+	/// A tree taken from a big forest: a full grown conifer's wood taken from it, then the conifer made at its place, one
+	/// of its forest's trees. The tree, none when there is no such big forest.
+	virtual std::optional<entt::entity> TreeFromBigForest(entt::entity bigForest) = 0;
 	/// Each town lists the forests near enough its storage pit with wood in them
 	virtual void AssignForestsToTowns() = 0;
 	/// Where a tiger's or a wolf's flock makes its home, choosing among the forests from a point; none to keep it

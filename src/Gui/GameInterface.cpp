@@ -468,7 +468,9 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	_canvas.Begin(resolution);
 	_pointerCanvas.Begin(resolution);
 	_painter.Begin(resolution);
-	// The tip bubble is part of the world's picture: under the interface, the cinema bars and the fades
+	// The villagers' labels and the tip bubble are part of the world's picture: under the interface, the cinema bars
+	// and the fades
+	DrawVillagerLabels(resolution);
 	DrawTipBubble(resolution, mouse);
 	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen();
 	DrawFloatingNumbers();
@@ -506,35 +508,38 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	{
 		_painter.DrawPointer(_pointerCanvas, mouse, milliseconds);
 	}
-	DrawVideo(resolution);
+	// A video on a screen wider than its picture has black bars at its sides, which go with the cinema bars
+	const auto sides = static_cast<float>(DrawVideo(resolution));
 	// The scripts' fade covers the picture between the cinema bars, which are black
 	const auto& director = Locator::cinematicDirectorSystem::value();
 	const auto bars = static_cast<float>(CinemaBars::BarHeight(resolution.x, resolution.y, director.GetWideScreenFraction()));
 	const auto screen = glm::vec2(resolution);
-	const auto drawBars = [&screen, bars](Canvas& canvas) {
+	const auto drawBars = [&screen, bars, sides](Canvas& canvas) {
 		const auto black = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-		canvas.DrawQuad(glm::vec2(0.0f), {screen.x, bars}, glm::vec2(0.0f), glm::vec2(1.0f), black, nullptr);
-		canvas.DrawQuad({0.0f, screen.y - bars}, screen, glm::vec2(0.0f), glm::vec2(1.0f), black, nullptr);
+		if (bars > 0.0f)
+		{
+			canvas.DrawQuad(glm::vec2(0.0f), {screen.x, bars}, glm::vec2(0.0f), glm::vec2(1.0f), black, nullptr);
+			canvas.DrawQuad({0.0f, screen.y - bars}, screen, glm::vec2(0.0f), glm::vec2(1.0f), black, nullptr);
+		}
+		if (sides > 0.0f)
+		{
+			canvas.DrawQuad(glm::vec2(0.0f), {sides, screen.y}, glm::vec2(0.0f), glm::vec2(1.0f), black, nullptr);
+			canvas.DrawQuad({screen.x - sides, 0.0f}, screen, glm::vec2(0.0f), glm::vec2(1.0f), black, nullptr);
+		}
 	};
 	// The bars cover the scene in a view of their own, which the advisors near the screen are drawn over: clinging to
 	// the bottom of the screen during a cut scene, an advisor shows over the bottom bar
 	_cinemaBarsCanvas.Begin(resolution);
-	if (bars > 0.0f)
-	{
-		drawBars(_cinemaBarsCanvas);
-	}
+	drawBars(_cinemaBarsCanvas);
 	_cinemaBarsCanvas.End();
 	if (const auto fade = director.GetFadeColour(); (fade >> 24u) != 0)
 	{
 		const auto colour = glm::vec4(static_cast<float>((fade >> 16u) & 0xFFu), static_cast<float>((fade >> 8u) & 0xFFu),
 		                              static_cast<float>(fade & 0xFFu), static_cast<float>(fade >> 24u)) /
 		                    255.0f;
-		_canvas.DrawQuad({0.0f, bars}, {screen.x, screen.y - bars}, glm::vec2(0.0f), glm::vec2(1.0f), colour, nullptr);
+		_canvas.DrawQuad({sides, bars}, {screen.x - sides, screen.y - bars}, glm::vec2(0.0f), glm::vec2(1.0f), colour, nullptr);
 		// While a fade shows, the bars are drawn again over it and over the advisors
-		if (bars > 0.0f)
-		{
-			drawBars(_canvas);
-		}
+		drawBars(_canvas);
 	}
 	DrawDialogue(resolution, static_cast<int>(bars));
 	// The game covers the frame with the fade's colour last of all
@@ -546,18 +551,19 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	_pointerCanvas.End();
 }
 
-void GameInterface::DrawVideo(glm::u16vec2 resolution)
+int GameInterface::DrawVideo(glm::u16vec2 resolution)
 {
 	if (!Locator::videoSystem::has_value())
 	{
-		return;
+		return 0;
 	}
 	const auto& videos = Locator::videoSystem::value();
 	const auto picture = videos.GetPicture();
 	if (!picture.has_value())
 	{
-		return;
+		return 0;
 	}
+	const auto rect = video::LetterboxRect(resolution.x, resolution.y);
 	// Over the interface, under the scripts' fade and the cinema bars: what has been drawn so far goes first
 	_canvas.End();
 	if (!_video)
@@ -575,8 +581,9 @@ void GameInterface::DrawVideo(glm::u16vec2 resolution)
 	                 .height = picture->height,
 	                 .serial = picture->serial,
 	             },
-	             video::LetterboxRect(resolution.x, resolution.y), picture->alpha, videos.IsSixteenBitColour());
+	             rect, picture->alpha, videos.IsSixteenBitColour());
 	_canvas.Begin(resolution);
+	return rect.x;
 }
 
 void GameInterface::DrawGlow(glm::vec2 min, glm::vec2 max, glm::vec4 colour)
@@ -804,6 +811,55 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 	for (const auto& line : words.lines)
 	{
 		DrawBubbleLine(line, glm::vec3(1.0f));
+	}
+}
+
+void GameInterface::DrawVillagerLabels(glm::u16vec2 resolution)
+{
+	namespace labels = villager_labels;
+	if (_villagerLabels.empty() || _gatheringText == nullptr)
+	{
+		return;
+	}
+	labels::Board board;
+	const labels::WidthFn width = [this](std::u16string_view text, float size) { return BubbleTextWidth(text, size); };
+	const auto pixelScale = labels::PixelScale(glm::vec2(resolution));
+	for (const auto& request : _villagerLabels)
+	{
+		board.Add(request, static_cast<float>(resolution.x), width, pixelScale);
+	}
+	const auto draw = [this](const labels::Quad& quad, glm::vec4 colour) {
+		_canvas.DrawShape({quad[0].position, quad[1].position, quad[2].position, quad[3].position},
+		                  {quad[0].uv, quad[1].uv, quad[2].uv, quad[3].uv}, {colour, colour, colour, colour},
+		                  _gatheringText.get());
+	};
+	for (const auto* label : board.DrawOrder())
+	{
+		// The see-through black box, then the black pointer down to the head, then the words
+		const auto boxColour = glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(label->boxAlpha) / 255.0f);
+		for (const auto& quad : labels::BoxShape(*label))
+		{
+			draw(quad, boxColour);
+		}
+		for (const auto& quad : labels::PointerShape(*label))
+		{
+			draw(quad, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+		}
+		const float alpha = static_cast<float>(label->wordsAlpha) / 255.0f;
+		const auto colour = glm::vec3(label->colour) / 255.0f;
+		for (size_t i = 0; i < label->lines.size(); ++i)
+		{
+			const help::tip_bubble::Line line {
+			    .text = label->lines[i],
+			    .at = {label->left + label->inset, label->top + label->inset + (static_cast<float>(i) * label->lineHeight)},
+			    .size = label->lineHeight,
+			    .topAlpha = alpha,
+			    .bottomAlpha = alpha,
+			    .clipTop = 0.0f,
+			    .clipBottom = static_cast<float>(resolution.y),
+			};
+			DrawBubbleLine(line, colour);
+		}
 	}
 }
 

@@ -92,9 +92,10 @@ TEST(VideoRules, Letterbox)
 	EXPECT_EQ(LetterboxRect(1920, 1080), (ScreenRect {.x = 0, .y = 0, .width = 1921, .height = 1081}));
 	// An odd loss rounds towards zero
 	EXPECT_EQ(LetterboxRect(1280, 1023), (ScreenRect {.x = 0, .y = 151, .width = 1281, .height = 722}));
-	// Wider than 16:9: the bars are negative and the picture runs over the screen
-	EXPECT_EQ(LetterboxRect(2560, 1080), (ScreenRect {.x = 0, .y = -180, .width = 2561, .height = 1441}));
-	EXPECT_EQ(LetterboxRect(2561, 1080), (ScreenRect {.x = 0, .y = -180, .width = 2562, .height = 1441}));
+	// Wider than 16:9: as tall as the screen, with bars at its sides
+	EXPECT_EQ(LetterboxRect(2560, 1080), (ScreenRect {.x = 320, .y = 0, .width = 1921, .height = 1081}));
+	EXPECT_EQ(LetterboxRect(2561, 1080), (ScreenRect {.x = 320, .y = 0, .width = 1922, .height = 1081}));
+	EXPECT_EQ(LetterboxRect(5120, 1440), (ScreenRect {.x = 1280, .y = 0, .width = 2561, .height = 1441}));
 }
 
 TEST(VideoRules, FramesDueByTheRealClock)

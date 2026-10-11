@@ -58,10 +58,8 @@ uint8_t openblack::video::DrawAlpha(float alpha, bool fallingSpell) noexcept
 
 ScreenRect openblack::video::LetterboxRect(int32_t screenWidth, int32_t screenHeight) noexcept
 {
-	const auto lost =
-	    static_cast<int32_t>(static_cast<float>(screenHeight) - static_cast<float>(screenWidth) * k_SixteenByNine);
-	const int32_t bar = lost / 2;
-	return {.x = 0, .y = bar, .width = screenWidth + 1, .height = screenHeight - 2 * bar + 1};
+	const auto fit = gui::FitInside(gui::k_SixteenByNine, screenWidth, screenHeight);
+	return {.x = fit.x, .y = fit.y, .width = fit.width + 1, .height = fit.height + 1};
 }
 
 uint32_t openblack::video::FramesDue(std::chrono::microseconds elapsed, uint32_t fpsNumerator, uint32_t fpsDenominator) noexcept

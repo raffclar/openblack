@@ -44,6 +44,7 @@ public:
 
 	[[nodiscard]] std::span<const Draw> GetDraws() const override { return _draws; }
 	[[nodiscard]] std::span<const TrailVertex> GetTrails() const override { return _trails; }
+	[[nodiscard]] const help::spirits::Stage& GetStage() const override { return _stage; }
 
 private:
 	/// The advisors' logic over the models' data, asking this system what it needs of the game
@@ -60,6 +61,7 @@ private:
 	std::array<help::spirits::DudeData, help::spirits::k_Dudes> _emptyData;
 	std::unique_ptr<help::spirits::AdvisorSpiritController> _controller;
 	help::spirits::SpiritView _view;
+	help::spirits::Stage _stage;
 	/// One clock for both halos, moved on by the frame's step each time a halo is drawn
 	int32_t _haloClockMs {0};
 	std::vector<Draw> _draws;
