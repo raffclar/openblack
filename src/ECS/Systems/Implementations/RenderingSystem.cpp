@@ -53,6 +53,7 @@
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Swayable.h"
 #include "ECS/Components/Temple.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Translucent.h"
 #include "ECS/Components/Tree.h"
@@ -66,6 +67,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
+#include "ECS/TownDesireFlags.h"
 #include "Game.h"
 #include "Graphics/BonePalette.h"
 #include "Graphics/DebugLines.h"
@@ -594,6 +596,17 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 					    }
 					    look.x = -static_cast<float>(sum);
 				    }
+			    }
+		    }
+
+		    // A flag over a town's store carries little snow, and isn't there at all while it doesn't show
+		    if (const auto* flag = registry.TryGet<const TownDesireFlag>(entity); flag != nullptr)
+		    {
+			    look.w = openblack::ecs::town_desire_flags::k_SnowCap;
+			    if (!flag->shown)
+			    {
+				    look.z = 1.0f;
+				    modelMatrix = glm::mat4(0.0f);
 			    }
 		    }
 

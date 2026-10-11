@@ -13,28 +13,43 @@
 
 #include <algorithm>
 #include <ranges>
+#include <vector>
+
+#include <glm/gtx/euler_angles.hpp>
 
 #include "3D/DayNightClock.h"
+#include "3D/L3DMesh.h"
+#include "3D/LandIslandInterface.h"
+#include "Camera/Camera.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Disciple.h"
+#include "ECS/Components/Mesh.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/TownDesire.h"
+#include "ECS/Components/TownDesireFlag.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TownDesire.h"
+#include "ECS/TownDesireFlags.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
 namespace town_desire = openblack::ecs::town_desire;
 namespace construction = openblack::ecs::construction;
+namespace town_desire_flags = openblack::ecs::town_desire_flags;
+namespace villager_home = openblack::ecs::villager_home;
 
 namespace
 {
@@ -278,4 +293,139 @@ void TownDesireSystem::SetBoost(entt::entity town, TownDesireInfo desire, float 
 	{
 		town_desire::SortDesires(*townDesire);
 	}
+}
+
+namespace
+{
+
+/// A town's flags are made with it, unseen until it has a store standing built
+void MakeFlags(entt::entity town)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& info = Locator::infoConstants::value().townDesire;
+	TownDesireFlags made;
+	made.flags.fill(entt::null);
+	for (size_t i = 0; i < info.size(); ++i)
+	{
+		const auto point = town_desire_flags::PointOf(info.at(i).worshipSiteSlot);
+		if (!point.has_value())
+		{
+			continue;
+		}
+		const auto flag = registry.Create();
+		registry.Assign<TownDesireFlag>(
+		    flag, TownDesireFlag {.town = town, .desire = static_cast<TownDesireInfo>(i), .point = *point});
+		registry.Assign<Mesh>(flag, resources::HashIdentifier(info.at(i).worshipSiteMesh), static_cast<int8_t>(0),
+		                      static_cast<int8_t>(0));
+		registry.Assign<Transform>(flag, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+		made.flags.at(i) = flag;
+	}
+	registry.Assign<TownDesireFlags>(town, made);
+}
+
+/// Each new store of its town takes the flag to its own place for it, from the store's model, over the ground
+void PlaceOnStore(TownDesireFlag& flag, entt::entity store)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	flag.store = store;
+	const auto& transform = registry.Get<const Transform>(store);
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto meshId = registry.Get<const Mesh>(store).id;
+	glm::vec3 local {0.0f};
+	if (meshes.Contains(meshId))
+	{
+		if (const auto& points = meshes.Handle(meshId)->GetExtraMetrics(); flag.point < points.size())
+		{
+			local = glm::vec3(points.at(flag.point)[3]);
+		}
+	}
+	flag.place = transform.position + (transform.rotation * (local * transform.scale));
+	const float ground =
+	    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt({flag.place.x, flag.place.z}) : 0.0f;
+	flag.overGround = flag.place.y - ground;
+}
+
+} // namespace
+
+void TownDesireSystem::UpdateFlags(float seconds)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& info = Locator::infoConstants::value().townDesire;
+
+	std::vector<entt::entity> towns;
+	registry.Each<const Town, const TownDesire>([&](entt::entity town, const Town&, const TownDesire&) {
+		if (!registry.AllOf<TownDesireFlags>(town))
+		{
+			towns.push_back(town);
+		}
+	});
+	for (const auto town : towns)
+	{
+		MakeFlags(town);
+	}
+
+	// A flag holds still while it is out of view, as the game moves it only as it draws it
+	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
+	const auto viewProjection = camera != nullptr ? camera->GetViewProjectionMatrix() : glm::mat4(1.0f);
+	const auto eye = camera != nullptr ? camera->GetOrigin() : glm::vec3(0.0f);
+
+	std::vector<entt::entity> orphans;
+	registry.Each<TownDesireFlag, Transform>([&](entt::entity entity, TownDesireFlag& flag, Transform& transform) {
+		if (!registry.Valid(flag.town) || !registry.AllOf<Town>(flag.town))
+		{
+			orphans.push_back(entity);
+			return;
+		}
+		const auto store = construction::StoragePitOf(flag.town);
+		if (store.has_value() && *store != flag.store)
+		{
+			PlaceOnStore(flag, *store);
+		}
+		// A store works while built and not hurt down to the share at which it stops working
+		const bool working = store.has_value() && villager_home::IsFunctional(*store);
+		const float desire = GetRawDesire(flag.town, flag.desire);
+		const float showsAfter = info.at(static_cast<size_t>(flag.desire)).showsAfterPercent;
+		const bool shows = town_desire_flags::Shows(working, flag.level, showsAfter);
+		if (shows && flag.shown && camera != nullptr &&
+		    !town_desire_flags::InView(viewProjection * glm::vec4(transform.position, 1.0f)))
+		{
+			return;
+		}
+		const auto next = town_desire_flags::Step({.position = flag.level, .speed = flag.speed}, shows, desire, seconds);
+		flag.level = next.position;
+		flag.speed = next.speed;
+		flag.shown = shows;
+		if (!shows)
+		{
+			return;
+		}
+		auto position = flag.place;
+		const float ground =
+		    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt({position.x, position.z}) : 0.0f;
+		position.y = ground + flag.overGround + town_desire_flags::Rise(flag.level);
+		transform.position = position;
+		transform.rotation = glm::mat3(glm::eulerAngleY(-town_desire_flags::FacingAngle(position, eye)));
+		transform.scale = glm::vec3(town_desire_flags::DrawnScale(flag.level, showsAfter));
+	});
+	for (const auto orphan : orphans)
+	{
+		registry.Destroy(orphan);
+	}
+}
+
+std::optional<TownDesireSystemInterface::FlagToolTip> TownDesireSystem::GetFlagToolTip(entt::entity flag) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* component = registry.Valid(flag) ? registry.TryGet<const TownDesireFlag>(flag) : nullptr;
+	if (component == nullptr || !component->shown || !registry.Valid(component->town))
+	{
+		return std::nullopt;
+	}
+	const auto words = town_desire_flags::ToolTipWords(component->desire);
+	if (!words.has_value())
+	{
+		return std::nullopt;
+	}
+	return FlagToolTip {.words = *words,
+	                    .percent = town_desire_flags::NeedPercent(GetRawDesire(component->town, component->desire))};
 }
