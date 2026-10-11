@@ -40,12 +40,15 @@
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptSpotVisual.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptSpotVisuals.h"
@@ -54,6 +57,7 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -137,6 +141,51 @@ uint32_t GameParticleWorld::PlayerColour(int player) const
 	return ecs::components::Player::k_Colours.at(static_cast<size_t>(player) &
 	                                             (ecs::components::Player::k_Colours.size() - 1)) &
 	       0xFFFFFFu;
+}
+
+std::optional<particles::TownCentreBelief> GameParticleWorld::TownCentreBeliefOf(entt::entity centre) const
+{
+	using namespace ecs::components;
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* abode = registry.Valid(centre) ? registry.TryGet<const Abode>(centre) : nullptr;
+	if (abode == nullptr)
+	{
+		return std::nullopt;
+	}
+	// Its totem, where it stands as it rises with the worship, and its top
+	std::optional<glm::vec3> totemTop;
+	registry.Each<const VillageTotem, const Transform>(
+	    [&totemTop, centre](entt::entity totem, const VillageTotem& standing, const Transform& transform) {
+		    if (!totemTop.has_value() && standing.townCentre == centre)
+		    {
+			    totemTop = transform.position + glm::vec3(0.0f, ecs::world_objects::SizeOf(totem).height, 0.0f);
+		    }
+	    });
+	if (!totemTop.has_value())
+	{
+		return std::nullopt;
+	}
+	particles::TownCentreBelief belief {.totemTop = *totemTop};
+	registry.Each<const Town, const TownImpression>([&belief, abode](const Town& town, const TownImpression& impression) {
+		if (town.id == abode->townId)
+		{
+			std::ranges::copy(impression.belief.belief, belief.beliefs.begin());
+		}
+	});
+	return belief;
+}
+
+std::vector<int> GameParticleWorld::PlayersInGame() const
+{
+	std::vector<int> players;
+	Locator::entitiesRegistry::value().Each<const ecs::components::Player>([&players](const ecs::components::Player& player) {
+		if (player.name != PlayerNames::NEUTRAL)
+		{
+			players.push_back(static_cast<int>(player.name));
+		}
+	});
+	std::ranges::sort(players);
+	return players;
 }
 
 glm::vec3 GameParticleWorld::CameraRight() const
@@ -1227,6 +1276,11 @@ void ParticleSystem::ResolveTextures(const particles::Effect& effect)
 		if (object.className == "ZR_SurfRevol")
 		{
 			resolve(particles::TextureBaseName(object.String("TextureFileName")));
+		}
+		// A village's symbols of belief are drawn by the rule that makes them
+		if (object.className == "UR_TownCentreBelief")
+		{
+			std::ranges::for_each(k_SymbolTextures, resolve);
 		}
 		const auto* creator = effect.FindCreator(object.name);
 		if (creator == nullptr)

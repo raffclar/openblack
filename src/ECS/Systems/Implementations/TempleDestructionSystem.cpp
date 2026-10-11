@@ -131,8 +131,9 @@ void TempleDestructionSystem::Step(entt::entity entity, Temple& temple)
 	{
 		temple.destructionBeamSource.reset();
 	}
-	// TODO(physics): the local player's heartbeat quickens with the clock, and the heart fades out from fourteen seconds
-	// under a shell drawn over it; openblack has no heartbeat, and draws no heart fade or shell yet
+	// The local player's heartbeat quickens with the clock (the heartbeat system reads it)
+	// TODO(physics): the heart fades out from fourteen seconds under a shell drawn over it; openblack draws no heart fade
+	// or shell yet
 	// A clock started again while the loop still plays starts another loop, sounding over the first, as the game makes a
 	// new sound each time
 	if (events.loopStarts)

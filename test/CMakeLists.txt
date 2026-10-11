@@ -697,3 +697,8 @@ openblack_setup_and_add_test(
 )
 target_link_libraries(test_script_hit_natives PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_window_fit windowing/test_window_fit.cpp)
+openblack_setup_and_add_test(test_light_column test_light_column.cpp)
+openblack_setup_and_add_test(test_heartbeat test_heartbeat.cpp)
+openblack_setup_and_add_test(
+  test_town_belief_symbols test_town_belief_symbols.cpp
+)

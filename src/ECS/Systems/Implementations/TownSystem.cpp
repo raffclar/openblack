@@ -462,3 +462,39 @@ void TownSystem::ClaimTown(entt::entity town, PlayerNames player)
 		}
 	}
 }
+
+void TownSystem::UpdateFrame(float gameSeconds)
+{
+	if (!Locator::particleSystem::has_value() || _registry == nullptr)
+	{
+		return;
+	}
+	auto& particles = Locator::particleSystem::value();
+	// A centre gone takes its symbols with it
+	std::erase_if(_beliefSymbols, [this, &particles](const auto& entry) {
+		if (_registry->Valid(entry.first))
+		{
+			return false;
+		}
+		particles.Delete(entry.second);
+		return true;
+	});
+	_registry->Each<const Abode>([&](entt::entity entity, const Abode& abode) {
+		if (abode.type != AbodeNumber::TownCentre)
+		{
+			return;
+		}
+		auto found = _beliefSymbols.find(entity);
+		if (found == _beliefSymbols.end() || !particles.IsRunning(found->second))
+		{
+			const auto effect = particles.Start(ParticleType::TownBelief, glm::vec3(0.0f), 1.0f);
+			if (effect == ParticleSystemInterface::k_NoEffect)
+			{
+				return;
+			}
+			particles.AddTarget(effect, entity);
+			found = _beliefSymbols.insert_or_assign(entity, effect).first;
+		}
+		particles.ProcessByFrame(found->second, gameSeconds);
+	});
+}

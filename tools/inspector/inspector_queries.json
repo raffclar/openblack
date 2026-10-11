@@ -1018,6 +1018,12 @@
   "query": "players.list"
  },
  {
+  "description": "Each player's heartbeat: danger, rate, beat and pulse",
+  "kind": "list",
+  "parameters": [],
+  "query": "players.heartbeat"
+ },
+ {
   "description": "This computer's hands: where they are, and what the hand holds or takes",
   "kind": "object",
   "parameters": [],

@@ -5660,6 +5660,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawGlobes(desc);
 			DrawHandMiracleBands(desc);
 			DrawTribalPower(desc);
+			DrawLightColumns(desc);
 			DrawLeashes(desc);
 			DrawWaterRings(desc);
 			DrawRain(desc);
