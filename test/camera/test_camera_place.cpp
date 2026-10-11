@@ -60,7 +60,7 @@ protected:
 		Locator::pickingSystem::reset<MockPickingSystem>(_picking);
 		Locator::gameActionSystem::reset<MockAction>(new MockAction());
 
-		_camera.SetProjectionMatrixPerspective(70.0f, Locator::windowing::value().GetAspectRatio(), 1.0f, 65536.0f);
+		_camera.SetProjectionMatrixPerspective(70.0f, Locator::windowing::value().GetAspectRatio(), 1.0f);
 		std::ignore = _camera.SetModel(std::make_unique<DefaultWorldCameraModel>(k_StartOrigin, k_StartFocus));
 		_camera.SetOrigin(k_StartOrigin).SetFocus(k_StartFocus);
 	}

@@ -676,6 +676,30 @@
   "writes": true
  },
  {
+  "description": "The labels over the villagers' heads: names (the N key's named villagers' names), details (the S key's details of every villager), name_fade (the names' size, 0 to 1), details_for_one (villagers whose details S put up on their own), labels (how many were drawn last frame), keys_act (whether N and S act now) and hidden_by (what keeps every label off the screen now: cinema bars, temple)",
+  "kind": "object",
+  "parameters": [],
+  "query": "gui.overlays"
+ },
+ {
+  "description": "Puts the villagers' names (N) or every villager's details (S) up or down directly, even while the keys don't act; they show once nothing hides them (gui.overlays hidden_by). Answers as gui.overlays; labels counts the next drawn frame's",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The named villagers' names up",
+    "name": "names",
+    "type": "boolean"
+   },
+   {
+    "description": "Every villager's details up",
+    "name": "details",
+    "type": "boolean"
+   }
+  ],
+  "query": "gui.set_overlays",
+  "writes": true
+ },
+ {
   "description": "The lands the game can load: the story's and the playgrounds, by name",
   "kind": "list",
   "parameters": [],
@@ -1260,6 +1284,19 @@
   ],
   "query": "creatures.move",
   "writes": true
+ },
+ {
+  "description": "A creature's walk in full: where it is going, the route it follows and the circles that route was planned round (what it walks round, each grown by its own reach)",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "creatures.route"
  },
  {
   "description": "The script machine: its scripts, tasks, globals and the task running",

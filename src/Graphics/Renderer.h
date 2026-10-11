@@ -33,6 +33,7 @@
 
 #include "3D/SkyDome.h"
 #include "Enums.h"
+#include "Graphics/DescriptorSetTally.h"
 #include "Graphics/GroundShadow.h"
 #include "Graphics/HandShadow.h"
 #include "Graphics/PartialBuildCap.h"
@@ -119,9 +120,6 @@ private:
 	/// Each vortex's walls, from the sea down under its middle, leaving only their depth: what is drawn after them is
 	/// hidden beyond them, which keeps its funnel to the shaft under its hole in the land
 	void DrawVortexDepthWalls(const DrawSceneDesc& desc, graphics::RenderPass viewId) const;
-	/// On the land block under each open vortex, its hole texture's colour added to what was drawn before the land, after
-	/// the swirl and before the land is drawn over it
-	void DrawVortexHoleColours(const DrawSceneDesc& desc, const glm::vec4& skyAndBump) const;
 	/// The puffs of mist, blended over the scene, the farthest first
 	void DrawMists(const DrawSceneDesc& desc) const;
 	/// The moon and its glow in the sky, after the sky's dome
@@ -390,6 +388,9 @@ private:
 	void UploadAnimalBones(const DrawSceneDesc& drawDesc) const;
 	/// What the hand's base mesh is pulled towards for its player's alignment, none while it shows the base
 	[[nodiscard]] std::optional<L3DMeshSubmitDesc::MorphTargets> HandMorphTargets() const;
+	/// Warns when a frame's draws near the descriptor sets Vulkan has for a frame, and skips the sea's reflection for
+	/// a while when they come too near
+	void WatchDescriptorSets(const FrameDescriptorSets& sets) noexcept;
 
 	std::unique_ptr<ShaderManager> _shaderManager;
 	std::unique_ptr<BgfxCallback> _bgfxCallback;
@@ -398,6 +399,12 @@ private:
 	std::unique_ptr<OffscreenScreenshots> _offscreenShots;
 	bool _bgfxDebug = false;
 	bool _bgfxProfile = false;
+	/// Frames left drawing without the sea's reflection, the last frames having come too near Vulkan's descriptor sets
+	uint32_t _reflectionSkips {0};
+	/// Frames left drawing each view in the order its draws come, for the same reason
+	std::array<uint32_t, static_cast<size_t>(RenderPass::_count)> _inOrderViews {};
+	/// Frames left before the next warning about the descriptor sets
+	uint32_t _descriptorSetWarningPause {0};
 
 	/// How a creature's variant meshes are read to blend its body
 	std::unique_ptr<MorphStreamLayouts> _morphStreamLayouts;

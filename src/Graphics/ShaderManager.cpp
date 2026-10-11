@@ -46,6 +46,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Camera/Camera.h"
+#include "DescriptorSetTally.h"
 #include "GraphicsHandleBgfx.h"
 #include "SamplerDefaults.h"
 
@@ -97,8 +98,6 @@
 #define SHADER_NAME vs_terrain
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_terrain
-#include "ShaderIncluder.h"
-#define SHADER_NAME fs_terrain_vortex_hole
 #include "ShaderIncluder.h"
 
 #define SHADER_NAME vs_water
@@ -213,7 +212,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 72> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 71> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
@@ -237,7 +236,6 @@ const std::array<bgfx::EmbeddedShader, 72> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(fs_sky), //
     BGFX_EMBEDDED_SHADER(vs_terrain),
     BGFX_EMBEDDED_SHADER(fs_terrain), //
-    BGFX_EMBEDDED_SHADER(fs_terrain_vortex_hole),
     BGFX_EMBEDDED_SHADER(vs_water),
     BGFX_EMBEDDED_SHADER(fs_water), //
     BGFX_EMBEDDED_SHADER(vs_sprite),
@@ -292,7 +290,6 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"DebugLine", "vs_line", "fs_line"},
     ShaderDefinition {"DebugLineInstanced", "vs_line_instanced", "fs_line"},
     ShaderDefinition {"Terrain", "vs_terrain", "fs_terrain"},
-    ShaderDefinition {"TerrainVortexHole", "vs_terrain", "fs_terrain_vortex_hole"},
     ShaderDefinition {"Object", "vs_object", "fs_object"},
     ShaderDefinition {"ObjectEnvironment", "vs_object_environment", "fs_object_environment"},
     ShaderDefinition {"ObjectInstanced", "vs_object_instanced", "fs_object"},
@@ -394,6 +391,10 @@ ShaderManager::~ShaderManager()
 void ShaderManager::LoadShaders()
 {
 	_samplerDefaults = std::make_unique<SamplerDefaults>();
+	if (bgfx::getRendererType() == bgfx::RendererType::Vulkan)
+	{
+		_descriptorSets = std::make_unique<DescriptorSetTally>();
+	}
 	for (const auto& shader : k_Shaders)
 	{
 		bgfx::RendererType::Enum type = bgfx::getRendererType();
@@ -401,8 +402,8 @@ void ShaderManager::LoadShaders()
 		assert(bgfx::isValid(vs));
 		auto fs = bgfx::createEmbeddedShader(k_EmbeddedShaders.data(), type, shader.fragmentShaderName.data());
 		assert(bgfx::isValid(fs));
-		_shaderPrograms[shader.name.data()] =
-		    new ShaderProgram(shader.name.data(), fromBgfx(vs), fromBgfx(fs), SamplersOf(shader), *_samplerDefaults);
+		_shaderPrograms[shader.name.data()] = new ShaderProgram(shader.name.data(), fromBgfx(vs), fromBgfx(fs),
+		                                                        SamplersOf(shader), *_samplerDefaults, _descriptorSets.get());
 	}
 }
 
@@ -433,11 +434,40 @@ void ShaderManager::DiscardBindings() const
 {
 	bgfx::discard(BGFX_DISCARD_BINDINGS);
 	_samplerDefaults->Discarded(BGFX_DISCARD_BINDINGS);
+	if (_descriptorSets)
+	{
+		_descriptorSets->DiscardBindings();
+	}
 }
 
-void ShaderManager::FrameEnded() const
+std::optional<FrameDescriptorSets> ShaderManager::FrameEnded() const
 {
 	_samplerDefaults->FrameEnded();
+	if (!_descriptorSets)
+	{
+		return std::nullopt;
+	}
+	return _descriptorSets->EndFrame();
+}
+
+void ShaderManager::SetViewOrder(RenderPass viewId, ViewOrder order) const
+{
+	SetViewOrder(static_cast<uint16_t>(viewId), order);
+}
+
+void ShaderManager::SetViewOrder(uint16_t viewId, ViewOrder order) const
+{
+	constexpr std::array k_Modes = {
+	    bgfx::ViewMode::Default,
+	    bgfx::ViewMode::Sequential,
+	    bgfx::ViewMode::DepthAscending,
+	    bgfx::ViewMode::DepthDescending,
+	};
+	bgfx::setViewMode(static_cast<bgfx::ViewId>(viewId), k_Modes.at(static_cast<size_t>(order)));
+	if (_descriptorSets)
+	{
+		_descriptorSets->SetViewOrder(viewId, order);
+	}
 }
 
 void ShaderManager::SetCamera(graphics::RenderPass viewId, const Camera& camera)

@@ -11,6 +11,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "DescriptorSetTally.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "SamplerDefaults.h"
@@ -22,11 +23,13 @@ namespace openblack::graphics
 static_assert(ShaderProgram::k_DiscardAll == BGFX_DISCARD_ALL);
 
 ShaderProgram::ShaderProgram(const std::string& name, ShaderHandle vertexShader, ShaderHandle fragmentShader,
-                             std::vector<shader_samplers::Sampler> samplers, SamplerDefaults& samplerDefaults)
+                             std::vector<shader_samplers::Sampler> samplers, SamplerDefaults& samplerDefaults,
+                             DescriptorSetTally* tally)
     : _name(name)
     , _program(BGFX_INVALID_HANDLE)
     , _samplers(std::move(samplers))
     , _samplerDefaults(samplerDefaults)
+    , _tally(tally)
 {
 	uint16_t numShaderUniforms = 0;
 	bgfx::UniformInfo info = {};
@@ -77,25 +80,26 @@ ShaderProgram::~ShaderProgram()
 	}
 }
 
+void ShaderProgram::Bind(uint8_t bindPoint, UniformHandle sampler, TextureHandle texture) const
+{
+	bgfx::setTexture(bindPoint, toBgfx(sampler), toBgfx(texture));
+	_samplerDefaults.Set(bindPoint);
+	if (_tally != nullptr)
+	{
+		_tally->SetTexture(bindPoint, toBgfx(texture).idx);
+	}
+}
+
 void ShaderProgram::SetTextureSampler(const char* samplerName, uint8_t bindPoint, const Texture2D& texture) const
 {
-	if (const auto uniform = _uniforms.Find(samplerName))
-	{
-		bgfx::setTexture(bindPoint, toBgfx(*uniform), toBgfx(texture.GetNativeHandle()));
-		_samplerDefaults.Set(bindPoint);
-	}
-	else
-	{
-		WarnMissing(samplerName);
-	}
+	SetTextureSampler(samplerName, bindPoint, texture.GetNativeHandle());
 }
 
 void ShaderProgram::SetTextureSampler(const char* samplerName, uint8_t bindPoint, const graphics::TextureHandle& texture) const
 {
 	if (const auto uniform = _uniforms.Find(samplerName))
 	{
-		bgfx::setTexture(bindPoint, toBgfx(*uniform), toBgfx(texture));
-		_samplerDefaults.Set(bindPoint);
+		Bind(bindPoint, *uniform, texture);
 	}
 	else
 	{
@@ -105,14 +109,12 @@ void ShaderProgram::SetTextureSampler(const char* samplerName, uint8_t bindPoint
 
 void ShaderProgram::SetTextureSampler(UniformHandle sampler, uint8_t bindPoint, const Texture2D& texture) const
 {
-	bgfx::setTexture(bindPoint, toBgfx(sampler), toBgfx(texture.GetNativeHandle()));
-	_samplerDefaults.Set(bindPoint);
+	Bind(bindPoint, sampler, texture.GetNativeHandle());
 }
 
 void ShaderProgram::SetTextureSampler(UniformHandle sampler, uint8_t bindPoint, const graphics::TextureHandle& texture) const
 {
-	bgfx::setTexture(bindPoint, toBgfx(sampler), toBgfx(texture));
-	_samplerDefaults.Set(bindPoint);
+	Bind(bindPoint, sampler, texture);
 }
 
 void ShaderProgram::SetUniformValue(UniformHandle uniform, const void* value) const
@@ -127,10 +129,13 @@ void ShaderProgram::Submit(uint16_t viewId, uint32_t depth, uint8_t discardFlags
 		if (!_samplerDefaults.IsSet(sampler.stage))
 		{
 			const auto texture = _samplerDefaults.Texture(shader_samplers::DefaultTextureFor(sampler.dimension));
-			bgfx::setTexture(sampler.stage, toBgfx(*_uniforms.Find(sampler.name)), toBgfx(texture));
 			// Kept for the next draw as well when this one keeps its bindings
-			_samplerDefaults.Set(sampler.stage);
+			Bind(sampler.stage, *_uniforms.Find(sampler.name), texture);
 		}
+	}
+	if (_tally != nullptr)
+	{
+		_tally->Submit(viewId, toBgfx(_program).idx, depth, (discardFlags & BGFX_DISCARD_BINDINGS) != 0);
 	}
 	bgfx::submit(viewId, toBgfx(_program), depth, discardFlags);
 	_samplerDefaults.Discarded(discardFlags);

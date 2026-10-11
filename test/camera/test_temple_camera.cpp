@@ -169,7 +169,7 @@ TEST(TempleCamera, ClickingADoorOnScreenFindsIt)
 	constexpr glm::vec2 k_Screen {1280.0f, 720.0f};
 	const auto pose = TempleCameraModel::OrbitPose(0.0f, 0.7f);
 	Camera camera;
-	camera.SetProjectionMatrixPerspective(90.0f, k_Screen.x / k_Screen.y, 0.2f, 1000.0f);
+	camera.SetProjectionMatrixPerspective(90.0f, k_Screen.x / k_Screen.y, 0.2f);
 	camera.SetOrigin(pose.origin);
 	camera.SetFocus(pose.focus);
 

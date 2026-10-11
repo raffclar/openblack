@@ -11,10 +11,12 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "DescriptorSetTally.h"
 #include "RenderPass.h"
 #include "ShaderProgram.h"
 
@@ -39,8 +41,11 @@ public:
 
 	/// Drops the textures bound for the next draws, which a run of draws that kept them leaves bound
 	void DiscardBindings() const;
-	/// bgfx dropped every binding with the frame
-	void FrameEnded() const;
+	/// bgfx dropped every binding with the frame. Under Vulkan, the descriptor sets the frame's draws took.
+	[[nodiscard]] std::optional<FrameDescriptorSets> FrameEnded() const;
+	/// Sets how a view orders its draws, through bgfx and for the descriptor set tally
+	void SetViewOrder(RenderPass viewId, ViewOrder order) const;
+	void SetViewOrder(uint16_t viewId, ViewOrder order) const;
 
 	void SetCamera(RenderPass viewId, const Camera& camera);
 
@@ -53,6 +58,8 @@ private:
 	ShaderMap _shaderPrograms;
 	/// The textures bound to the samplers draws leave unset, shared by every program
 	std::unique_ptr<SamplerDefaults> _samplerDefaults;
+	/// Under Vulkan, which runs out of descriptor sets where the other renderers don't: the sets each frame takes
+	std::unique_ptr<DescriptorSetTally> _descriptorSets;
 };
 
 } // namespace graphics

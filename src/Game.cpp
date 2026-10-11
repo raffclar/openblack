@@ -964,12 +964,16 @@ std::optional<glm::vec2> Game::OnScreen(glm::vec3 point) const
 
 void Game::UpdateFloatingNumbers(float seconds)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	ecs::floating_number::StepAll(registry, seconds);
+	ecs::floating_number::StepAll(Locator::entitiesRegistry::value(), seconds);
+}
+
+void Game::PlaceScreenLabels()
+{
 	if (!_interface)
 	{
 		return;
 	}
+	auto& registry = Locator::entitiesRegistry::value();
 	// Those on the screen, the furthest first so the nearer are drawn over them
 	struct Placed
 	{
@@ -998,14 +1002,8 @@ void Game::UpdateFloatingNumbers(float seconds)
 		numbers.push_back(std::move(each.number));
 	}
 	_interface->SetFloatingNumbers(std::move(numbers));
-}
 
-void Game::UpdateVillagerLabels(float milliseconds)
-{
-	auto& registry = Locator::entitiesRegistry::value();
-	_villagerNameFade =
-	    gui::villager_labels::StepNameFade(_villagerNameFade, registry.Context().villagerNamesShown, milliseconds);
-	if (!_interface || !Locator::windowing::has_value())
+	if (!Locator::windowing::has_value())
 	{
 		return;
 	}
@@ -1020,6 +1018,12 @@ void Game::UpdateVillagerLabels(float milliseconds)
 	    .nameFade = _villagerNameFade,
 	    .texts = &_interface->GetTexts(),
 	}));
+}
+
+void Game::UpdateVillagerLabels(float milliseconds)
+{
+	_villagerNameFade = gui::villager_labels::StepNameFade(
+	    _villagerNameFade, Locator::entitiesRegistry::value().Context().villagerNamesShown, milliseconds);
 }
 
 void Game::ProcessHandToolTipTurn()
@@ -1584,7 +1588,7 @@ bool Game::Update() noexcept
 		_shortcutKeys.Update();
 	}
 	Locator::cameraPathSystem::value().Update(deltaTime);
-	// The numbers floating up from things rise and fade, and are shown where they are on the screen
+	// The numbers floating up from things rise and fade
 	UpdateFloatingNumbers(std::chrono::duration<float>(deltaTime).count());
 
 	if (!config.running || _quitRequested)
@@ -1868,7 +1872,7 @@ bool Game::Update() noexcept
 	}
 	// The tip bubble's time to show runs down by the game's time while it is up
 	Locator::tipBubbleSystem::value().UpdateFrame(static_cast<float>(clock.GetFrameGameTime().count()));
-	// The names display grows in and out by the game's time, and the villagers' labels are given to the interface
+	// The names display grows in and out by the game's time
 	UpdateVillagerLabels(static_cast<float>(clock.GetFrameGameTime().count()));
 	// The cinema bars coming in hide the game's dialogs
 	if (Locator::cinematicDirectorSystem::value().TakeHideDialogs() && _interface && _interface->GetMenu().IsOpen())
@@ -3437,7 +3441,8 @@ bool Game::Run() noexcept
 			}
 		}
 
-		// The game's interface over the scene
+		// The game's interface over the scene, its labels over things placed from the camera the scene was drawn from
+		PlaceScreenLabels();
 		if (_interface && Locator::windowing::has_value())
 		{
 			const auto mouse = Locator::gameActionSystem::value().GetPointerPosition();
@@ -3769,8 +3774,7 @@ void Game::PrepareNewLand()
 	// create our camera
 	auto& config = Locator::config::value();
 	const auto aspect = Locator::windowing::has_value() ? Locator::windowing::value().GetAspectRatio() : 1.0f;
-	Locator::camera::value().SetProjectionMatrixPerspective(config.cameraXFov, aspect, config.cameraNearClip,
-	                                                        config.cameraFarClip);
+	Locator::camera::value().SetProjectionMatrixPerspective(config.cameraXFov, aspect, config.cameraNearClip);
 }
 
 void Game::StartNewLand()
