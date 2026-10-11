@@ -683,6 +683,9 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 		const auto origin = glm::vec3(originAtFrameStart.x, ground + height, originAtFrameStart.z);
 		_targetFocus += origin - _targetOrigin;
 		_targetOrigin = origin;
+		// The point it turns and tilts about is what it now looks at, so that the next frame measures the way it faces
+		// from there rather than towards a point left off its line of sight
+		_focusAtClick = _targetFocus;
 	}
 
 	originHasBeenAdjusted |= ConstrainZones(originAtFrameStart, camera.GetOrigin());
@@ -843,13 +846,17 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	_handPosition = handPositions[0].or_else([handPositions] { return handPositions[1]; });
 
 	_controlsTime += dt;
-	if (!(_handPosition.has_value() && actionSystem.Get(input::BindableActionMap::MOVE)) || rotateAroundMouse)
+	// A drag starts with the hand on the land, and goes on for as long as the button is held, even once the cursor has
+	// gone past the land (over the sky, or the land far off): the land isn't dragged meanwhile, but the drag doesn't end
+	// and hand the camera back to the controls that turn or tilt it
+	const bool gripping =
+	    actionSystem.Get(input::BindableActionMap::MOVE) && (_handPosition.has_value() || (_dragging && !rotateAroundMouse));
+	if (!gripping || rotateAroundMouse)
 	{
 		std::ignore = HandleDrag(false);
 	}
 
 	// The help's profile weighs the controls as they were asked for, before the features take any away
-	const bool gripping = _handPosition.has_value() && actionSystem.Get(input::BindableActionMap::MOVE);
 	_helpControls = {
 	    .features = _features,
 	    .turn = _rotateAroundDelta.y,
@@ -935,7 +942,7 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	{
 		_mode = Mode::ArcBall;
 	}
-	else if (_handPosition.has_value() && actionSystem.Get(input::BindableActionMap::MOVE))
+	else if (gripping)
 	{
 		_mode = HandleDrag(true);
 	}
