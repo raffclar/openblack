@@ -27,6 +27,7 @@
 
 #include "3D/SkeletalAnimation.h"
 #include "Common/Zoomer.h"
+#include "Help/SpiritStage.h"
 #include "Help/SpiritVoice.h"
 
 // The two advisor spirits as pure logic: AdvisorSpiritController, the two help spirits that hold the targets (good and evil)
@@ -125,15 +126,6 @@ enum class Edge : int32_t
 /// An emotion's name
 [[nodiscard]] std::string_view EmotionName(uint32_t emotion);
 
-/// The screen size in pixels
-struct Screen
-{
-	uint16_t width {640};
-	uint16_t height {480};
-	[[nodiscard]] int32_t HalfWidth() const { return width >> 1; }
-	[[nodiscard]] int32_t HalfHeight() const { return height >> 1; }
-};
-
 /// Where a clinging advisor holds on: the screen edge and its hover point just beyond it
 struct ClingPlace
 {
@@ -144,10 +136,8 @@ struct ClingPlace
 /// Where an advisor told to cling at a hover point (both axes in half the screen's width from its middle) holds on:
 /// the side edges unless the point lies more towards the top or bottom, and the hold just beyond that edge, the point's
 /// other axis kept. The holds at the top and bottom are set for a 4:3 screen, where the advisor's head and shoulders
-/// show over the edge; on a wider screen they come in with the edge, by its height against a 4:3 screen's, so that it
-/// still shows as it does on a 4:3 screen instead of hanging wholly below it. Screens 4:3 or taller keep them as they
-/// are.
-[[nodiscard]] ClingPlace PlaceCling(glm::vec2 hover, const Screen& screen);
+/// show over the edge. The advisors are laid out on a screen 4:3 or taller (their Stage's layout), so they always do.
+[[nodiscard]] ClingPlace PlaceCling(glm::vec2 hover);
 
 /// A point projected to the screen
 struct ProjectedPoint
@@ -291,8 +281,11 @@ struct FrameInput
 	float dt {0.0f};      ///< The frame time x 0.001
 	float trailDt {0.0f}; ///< The whole frame time in ms x 0.01, which the trails move on by
 	int32_t frameMs {0};  ///< For the alpha fade and the puff: the frame time (<= 500) / the game time step
-	Screen screen {};
-	glm::ivec2 mouse {0};    ///< The mouse position in pixels
+	Screen screen {};     ///< The screen the advisors are laid out on: their Stage's layout
+	glm::ivec2 mouse {0}; ///< The mouse position in pixels of that layout
+	/// How much smaller across the screen than the camera alone would draw them the advisors are drawn near the screen:
+	/// their Stage's share
+	float share {1.0f};
 	uint32_t tickMs {0};     ///< GetTickCount (the GoInvisible flicker)
 	bool wideScreen {false}; ///< Read by Feel and the mouse zone
 };
@@ -430,6 +423,9 @@ public:
 	[[nodiscard]] const Zoomer& DepthChannel() const { return _depth; }
 	[[nodiscard]] float Closeness() const { return _closeness; }
 	[[nodiscard]] float ModelScale() const { return _modelScale; }
+	/// How much smaller across the screen it is drawn this frame: the stage's share near the screen, growing to 1 as
+	/// it goes out into the world
+	[[nodiscard]] float DrawShare() const { return _drawShare; }
 	void SetModelScale(float scale) { _modelScale = scale; }
 	[[nodiscard]] float Alpha() const { return _alpha; }
 	[[nodiscard]] float AlphaTarget() const { return _alphaTarget; }
@@ -559,6 +555,7 @@ private:
 	float _closenessTarget {1.0f};
 	float _closenessRate {1.0f};
 	float _modelScale {1.0f};
+	float _drawShare {1.0f};
 	bool _gimme {false};
 	float _alpha {1.0f};
 	float _alphaTarget {1.0f};

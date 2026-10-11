@@ -24,6 +24,7 @@
 #include "3D/TempleMap.h"
 #include "3D/TempleToggles.h"
 #include "3D/TempleToolTips.h"
+#include "Temple/TemplePeople.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
@@ -69,6 +70,8 @@ public:
 	[[nodiscard]] const std::vector<TempleCaveTrophy>& GetCaveTrophies() const override { return _caveTrophies; }
 	[[nodiscard]] const std::vector<TempleCaveSeed>& GetCaveSeeds() const override { return _caveSeeds; }
 	[[nodiscard]] const TempleLight& GetLight() const override { return _light; }
+	[[nodiscard]] const std::vector<TemplePerson>& GetPeople() const override;
+	[[nodiscard]] size_t GetPeopleInside() const override { return _people != nullptr ? _people->GetCount() : 0; }
 	[[nodiscard]] float GetMapMarkerTurn() const override { return _mapMarkerTurn; }
 	[[nodiscard]] float GetPoolTime() const override { return _poolTime; }
 	void Escape() override;
@@ -148,6 +151,8 @@ private:
 	bool _soundsOfCreatureCave {false};
 	/// The flames, smoke, spray and mist of the creature's room
 	std::unique_ptr<CreatureCaveEffects> _creatureCaveEffects;
+	/// The player's worshippers walking about the temple, who come in with the player and go as the player leaves
+	std::unique_ptr<TemplePeople> _people;
 	/// The game's interface, whose text and font the scrolls and signs are written with
 	gui::GameInterface* _interface {nullptr};
 	/// The rooms' scrolls, written as the temple opens, and the labels of their signs

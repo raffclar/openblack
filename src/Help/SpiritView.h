@@ -39,6 +39,10 @@ struct SpiritView
 	Screen screen {};
 };
 
+/// The camera as the advisors' area (their Stage) sees it: the pixels it takes and gives are the area's, which lies on
+/// the real screen where the stage puts it, so that the advisors laid out on the area come out there
+[[nodiscard]] SpiritView OnStage(SpiritView view, const Stage& stage);
+
 /// The world point under a pixel at a depth in front of the camera, at the near plane for a depth of 0. A negative
 /// depth is behind the camera, the point mirrored through the eye.
 [[nodiscard]] glm::vec3 PointFromScreen(const SpiritView& view, glm::vec2 pixel, float depth);

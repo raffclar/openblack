@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <cstdint>
+
+#include <chrono>
 #include <optional>
 
 #include <glm/mat4x4.hpp>
@@ -60,5 +63,25 @@ struct Rows
 	bool softTop;
 };
 [[nodiscard]] Rows MakeRows(const ScreenRange& range);
+
+/// The rows' ripple: a step of 16 round a sine. The game moves it on by one with each frame it draws the sea while its
+/// time goes on, and its frames came at the screen's refresh: it waits for the vertical sync by default, at the display's
+/// default refresh rate. Here the step moves on at most once a frame and no more often than that refresh, 60 times a
+/// second, so the ripple runs at the same speed whatever the frame rate. Slower frames step once each, as the game's did.
+struct Ripple
+{
+	static constexpr uint8_t k_Steps = 16;
+	/// The time between steps at the screen's refresh
+	static constexpr std::chrono::duration<float, std::milli> k_StepInterval {1000.0f / 60.0f};
+
+	uint8_t step {0};
+	/// The time since the last step that counts towards the next
+	std::chrono::duration<float, std::milli> sinceStep {0.0f};
+};
+
+/// The ripple after a frame of the sea drawn
+/// @param frameTime the frame's real time
+/// @param gameTimeMoves whether the game's time moved on in the frame: no step while it is paused
+[[nodiscard]] Ripple AdvanceRipple(Ripple ripple, std::chrono::milliseconds frameTime, bool gameTimeMoves);
 
 } // namespace openblack::graphics::sea_rows

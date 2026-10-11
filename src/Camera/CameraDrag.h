@@ -100,16 +100,27 @@ private:
 	std::optional<DragMode> _mode;
 };
 
+/// The original's default screen. Mouse controls measured in pixels feel at any resolution as they did on it.
+constexpr glm::ivec2 k_ReferenceScreen {800, 600};
+
 /// Dragging round the edge: the cursor is held on a ring around the middle of the screen, and the camera turns by the
 /// angle the cursor swept round the middle
 struct RingStep
 {
 	/// Where the cursor is put, on the ring
 	glm::ivec2 cursor;
-	/// The turn, in radians
+	/// The angle the cursor swept round the middle of the screen, in radians
 	float angle;
+	/// The camera's turn, in radians: the swept angle scaled so a movement of the mouse along the ring turns the camera
+	/// as far as the same movement in pixels at the same place on the ring of the original's default screen. On that
+	/// screen it is the swept angle itself; on bigger ones, whose ring is longer in pixels, it is more.
+	float turn;
 };
 [[nodiscard]] RingStep EdgeRotate(glm::ivec2 cursor, glm::ivec2 previousOnRing, glm::ivec2 screenSize, int viewHeight);
+
+/// The scale from the angle swept round the ring of this screen, from one place to another, to the turn the same
+/// movement in pixels would give on the ring of the original's default screen
+[[nodiscard]] float ReferenceTurnScale(glm::ivec2 from, glm::ivec2 to, glm::ivec2 screenSize, int viewHeight);
 
 /// How far a drag down the screen tilts the camera up, in radians, through the camera's field of view across
 [[nodiscard]] float PitchStep(int deltaY, int screenHeight, float horizontalFieldOfView);
