@@ -282,8 +282,7 @@ void Game::RenderLoadingFrame()
 		return;
 	}
 	// Nothing is drawn while the window is minimised, but the time still counts
-	auto* window = static_cast<SDL_Window*>(Locator::windowing::value().GetHandle());
-	if (window == nullptr || (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED) == 0)
+	if (!Locator::windowing::value().IsMinimised())
 	{
 		const float progress = clock.Progress();
 		const auto time = clock.Time();

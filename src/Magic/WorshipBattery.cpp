@@ -128,7 +128,8 @@ void magic::EndWorshipTurn(WorshipBattery& site, const WorshipBatteryRules& rule
 	const float intensity = drawn + boost;
 	site.danceIntensity = intensity < 1.0f ? intensity : 1.0f;
 
-	// Artifacts placed at the site are also powered up every thousand turns; openblack has no artifacts yet
+	// The artefacts put down by the site are powered up here every thousand turns (the artefact system's, from the
+	// site's turn)
 	const float chanted = capacity * site.danceIntensity;
 	site.chantsPerDancer = dancers != 0 ? chanted / static_cast<float>(dancers) : 0.0f;
 	const float battery = site.battery - (site.used - chanted);

@@ -62,10 +62,18 @@ Matrix RotationYXZ(const glm::vec3& euler)
 
 glm::vec3 EulerYXZ(const Matrix& m)
 {
-	// The third row is (-sin y cos x, sin x, cos y cos x) and the second column (-sin z cos x, cos x cos z, ...)
-	const auto x = std::asin(std::clamp(m[2][1], -1.0f, 1.0f));
+	// The angles are taken off one at a time, as the game does: y from the third row (-sin y cos x, sin x, cos y cos x),
+	// then x from that row turned back by y, then z from the first row turned back by y and x. For a true rotation this
+	// is exact; for one blended on its elements, which is not quite a rotation, it gives the game's angles.
 	const auto y = std::atan2(-m[2][0], m[2][2]);
-	const auto z = std::atan2(-m[0][1], m[1][1]);
+	const auto cy = std::cos(-y);
+	const auto sy = std::sin(-y);
+	const auto x = std::atan2(m[2][1], (sy * m[2][0]) + (cy * m[2][2]));
+	const auto first = (cy * m[0][0]) - (sy * m[0][2]);
+	const auto third = (cy * m[0][2]) + (sy * m[0][0]);
+	const auto cx = std::cos(-x);
+	const auto sx = std::sin(-x);
+	const auto z = std::atan2(-((cx * m[0][1]) + (sx * third)), first);
 	return {x, y, z};
 }
 
@@ -468,6 +476,26 @@ std::vector<Pose> WeightedSum(std::span<const std::vector<Pose>> poses, std::spa
 		}
 	}
 	return sum;
+}
+
+std::vector<Pose> WeightedSumInMeshSpace(std::span<const std::vector<Pose>> poses, std::span<const float> weights,
+                                         std::span<const uint32_t> parents)
+{
+	if (poses.empty())
+	{
+		return {};
+	}
+	// Each animation's bones placed in the mesh's space, summed there by weight, then made relative to their parents
+	std::vector<glm::mat4> sum(poses.front().size(), glm::mat4(0.0f));
+	for (size_t i = 0; i < poses.size() && i < weights.size(); ++i)
+	{
+		const auto placed = ComposeBoneMatrices(poses[i], parents);
+		for (size_t bone = 0; bone < sum.size() && bone < placed.size(); ++bone)
+		{
+			sum[bone] += weights[i] * placed[bone];
+		}
+	}
+	return PosesFromBoneMatrices(sum, parents);
 }
 
 void AddLayer(std::vector<Pose>& poses, const Animation& layer, uint32_t timeMs, size_t referenceFrame,

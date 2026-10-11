@@ -37,6 +37,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "VillagerAnimate.h"
+#include "VillagerArtefactDance.h"
 #include "VillagerBuild.h"
 #include "VillagerDance.h"
 #include "VillagerDisciples.h"
@@ -60,6 +61,7 @@ namespace villager_shield = openblack::ecs::villager_shield;
 namespace villager_fire = openblack::ecs::villager_fire;
 namespace villager_flock = openblack::ecs::villager_flock;
 namespace villager_dance = openblack::ecs::villager_dance;
+namespace villager_artefact_dance = openblack::ecs::villager_artefact_dance;
 namespace villager_physics = openblack::ecs::villager_physics;
 namespace villager_animate = openblack::ecs::villager_animate;
 namespace villager_script = openblack::ecs::villager_script;
@@ -603,7 +605,11 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* REACT_TO_BREEDER */ k_TodoEntry,
     /* SHEPHERD_CHECK_ANIMAL_FOR_SLAUGHTER */ k_TodoEntry,
     /* INTERACT_DECIDE_WHAT_TO_DO_FOR_OTHER_VILLAGER */ k_TodoEntry,
-    /* ARTIFACT_DANCE */ k_TodoEntry,
+    /* ARTIFACT_DANCE */
+    VillagerStateTableEntry {
+        .state = &villager_artefact_dance::ArtefactDance,
+        .exitState = &villager_artefact_dance::ExitDance,
+    },
     /* FLEEING_FROM_PREDATOR_REACTION */ k_TodoEntry,
     /* WAIT_FOR_WOOD */ k_TodoEntry,
     /* INSPECT_OBJECT */
@@ -663,7 +669,12 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_home::GoAndChilloutInTown,
     },
-    /* WAIT_FOR_ARTIFACT_DANCE */ k_TodoEntry,
+    /* WAIT_FOR_ARTIFACT_DANCE */
+    VillagerStateTableEntry {
+        .state = &villager_artefact_dance::WaitForArtefactDance,
+        .entryState = &villager_artefact_dance::EnterWaitForArtefactDance,
+        .exitState = &villager_artefact_dance::ExitDance,
+    },
     /* BREEDER_JUST_LANDED */ k_TodoEntry,
 };
 
