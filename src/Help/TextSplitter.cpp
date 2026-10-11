@@ -196,10 +196,10 @@ Piece Splitter::Code(DrawState& state, bool flag) const
 		return Piece::Word;
 	case u'M':
 	case u'm':
-		// With the flag, the help system shows control icon n at the right of the box. Only recorded for now
+		// With the flag, the help system shows control icon n at the right of the box
 		if (flag)
 		{
-			state.controlIcon = ParseNumberAt(_pos + 2);
+			state.controlIcons.push_back(ParseNumberAt(_pos + 2));
 		}
 		return Piece::Word;
 	case u'N':

@@ -370,7 +370,11 @@ std::vector<uint8_t> FrameBytes(const TextFrame& frame)
 	put(frame.box.right);
 	put(frame.box.bottom);
 	put(frame.boxAlpha);
-	put(frame.controlIcon);
+	put(frame.controlIcons.size());
+	for (const auto code : frame.controlIcons)
+	{
+		put(code);
+	}
 	put(frame.runs.size());
 	for (const auto& run : frame.runs)
 	{

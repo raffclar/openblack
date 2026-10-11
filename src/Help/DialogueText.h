@@ -130,6 +130,15 @@ public:
 	/// How far the "Continue" cue has faded in, from 0 to 1; none while no text waits for a click
 	[[nodiscard]] std::optional<float> GetClickCueShare() const;
 
+	/// Once a frame, with the frame's real seconds: the control icons the newest text asks for fade in
+	/// (help::control_icons). Both start again with a new text; the key cap also when the text's wait ends early.
+	void AdvanceControlIcons(float realSeconds);
+	/// How far the key cap of the newest text's camera keys has faded in, from 0 to 1
+	[[nodiscard]] float GetKeyIconShare() const;
+	/// How far the newest text's bottom control icon has faded in, from 0 to 1; none while the "Continue" cue is in
+	/// its place
+	[[nodiscard]] std::optional<float> GetActionIconShare() const;
+
 	/// Once a frame: the newest text slides in by the frame's game milliseconds (inside the temple its real ones)
 	void Update(float frameMs);
 
@@ -167,6 +176,9 @@ private:
 	bool _noClick {false};
 	/// How long the "Continue" cue has been fading in
 	float _clickCueSeconds {0.0f};
+	/// How long the control icons have been fading in
+	float _keyIconSeconds {0.0f};
+	float _actionIconSeconds {0.0f};
 	uint32_t _startTurn {0};
 	uint32_t _endTurn {0};
 	int32_t _startMs {0};

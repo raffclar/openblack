@@ -13,6 +13,7 @@
 #include <utility>
 
 #include "ClickCue.h"
+#include "ControlIcons.h"
 #include "TextSplitter.h"
 
 namespace openblack::help
@@ -97,6 +98,8 @@ void DialogueText::AddText(const Text& text, uint32_t number, int32_t withIntera
 	_waitClick = withInteraction == 1;
 	_noClick = withInteraction == 2;
 	_clickCueSeconds = 0.0f;
+	_keyIconSeconds = 0.0f;
+	_actionIconSeconds = 0.0f;
 	std::shift_right(_texts.begin(), _texts.end(), 1);
 	_texts[0] = number;
 }
@@ -151,6 +154,7 @@ void DialogueText::ClearTextDisplayed()
 	_noClick = false;
 	_waitClick = false;
 	_clickCueSeconds = 0.0f;
+	_keyIconSeconds = 0.0f;
 	_endTurn = 0;
 	_endMs = 0;
 }
@@ -234,6 +238,32 @@ std::optional<float> DialogueText::GetClickCueShare() const
 		return std::nullopt;
 	}
 	return _clickCueSeconds / click_cue::k_FadeSeconds;
+}
+
+void DialogueText::AdvanceControlIcons(float realSeconds)
+{
+	_keyIconSeconds = std::clamp(_keyIconSeconds + realSeconds, 0.0f, control_icons::k_FadeSeconds);
+	// The bottom icon's place is the "Continue" cue's while the text waits for a click
+	if (_waitClick)
+	{
+		_actionIconSeconds = 0.0f;
+		return;
+	}
+	_actionIconSeconds = std::clamp(_actionIconSeconds + realSeconds, 0.0f, control_icons::k_FadeSeconds);
+}
+
+float DialogueText::GetKeyIconShare() const
+{
+	return _keyIconSeconds / control_icons::k_FadeSeconds;
+}
+
+std::optional<float> DialogueText::GetActionIconShare() const
+{
+	if (_waitClick)
+	{
+		return std::nullopt;
+	}
+	return _actionIconSeconds / control_icons::k_FadeSeconds;
 }
 
 bool DialogueText::IsDrawn() const
