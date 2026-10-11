@@ -857,7 +857,7 @@
   "query": "living.action"
  },
  {
-  "description": "An animal: its kind's radius, where it moves to and whether a creature fears it",
+  "description": "An animal: its kind, state, clip, flock and town, its kind's radius, where it moves to, whether a creature fears it, and a grazer's needs",
   "kind": "object",
   "parameters": [
    {

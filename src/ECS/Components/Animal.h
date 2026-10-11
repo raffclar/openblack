@@ -21,6 +21,7 @@
 
 #include "3D/AllMeshes.h"
 #include "Animals/AnimalMove.h"
+#include "Animals/GrazerRules.h"
 #include "Animals/Zoomer.h"
 #include "Enums.h"
 #include "Magic/FlockMiracleRules.h"
@@ -69,6 +70,16 @@ enum class AnimalState : uint8_t
 	InScript,
 	/// Set by a script to go about with its flock: a bird picks its next leg as its leader would, about its flock's home
 	MoveInFlock,
+	/// A grazer raising its head from grazing
+	FinishEating,
+	/// A grazer going to its herd's sleeping place
+	SeekSleep,
+	/// A grazer asleep, standing, until its need to sleep runs out
+	Sleeps,
+	/// A grazer giving birth to a young one that joins its herd
+	GivesBirth,
+	/// Up again after landing from the hand or the physics: it joins a herd nearby if it can, then wanders off
+	InteractDecideWhatToDo,
 };
 
 /// A living animal: a kind of the tables, flying or on the land
@@ -78,6 +89,8 @@ struct Animal
 	PlayerNames owner {PlayerNames::NEUTRAL};
 	/// The flock it belongs to, none for an animal on its own
 	entt::entity flock {entt::null};
+	/// The town it belongs to, none for none
+	entt::entity town {entt::null};
 	/// The thing it flees, none when fleeing nothing
 	entt::entity fleeing {entt::null};
 	/// The kind of reaction it flees: the reaction's own table row says how far it runs from the thing
@@ -112,6 +125,18 @@ struct Animal
 	int32_t deadTurns {0};
 
 	[[nodiscard]] bool Dead() const { return !(life > 0.0f); }
+};
+
+/// A grazing animal's own life: its needs, its herd's sleeping place, what is left of its meal and when it was born
+struct Grazer
+{
+	animals::grazers::Needs needs;
+	/// The cell its herd's home was in when it was made, which it goes back to sleep at; none for none
+	std::optional<glm::ivec2> sleepingCell;
+	/// The grazing clips left of its meal
+	int16_t meals {0};
+	/// The game turn it was born on: its age counts in years from it
+	uint32_t birthTurn {0};
 };
 
 /// The doves or bats about a temple: its flock, made the first time it is seen to, and the look of the temple's model
@@ -160,6 +185,8 @@ enum class AnimalLight : uint8_t
 	White,
 	/// A colour of its own, the land's light left out: the sharks' dark blue
 	Own,
+	/// The land's light where it stands, as other things are lit: the grazers
+	Land,
 };
 
 /// How an animal is drawn this frame: its bones as its clip poses it, its light, and its alpha (0..255), less than

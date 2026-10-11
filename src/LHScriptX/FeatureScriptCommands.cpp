@@ -20,6 +20,7 @@
 #include "3D/DayNightClock.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Animals/GrazerRules.h"
 #include "Camera/Camera.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
@@ -454,24 +455,50 @@ void FeatureScriptCommands::CreatePlannedWorshipSite(glm::vec3 /*position*/, int
 	// tribe once the temple stands
 }
 
+namespace
+{
+/// The town a land script numbers, none for none
+entt::entity TownWithId(int32_t townId)
+{
+	if (townId < 0)
+	{
+		return entt::null;
+	}
+	const auto& towns = Locator::entitiesRegistry::value().Context().towns;
+	const auto town = towns.find(static_cast<uint32_t>(townId));
+	return town != towns.end() ? town->second : entt::null;
+}
+} // namespace
+
 void FeatureScriptCommands::CreateAnimal(glm::vec3 position, int32_t type, int32_t flockId, int32_t townId)
 {
 	// As a new animal at no age, which takes a random one
 	CreateNewAnimal(position, type, flockId, townId, 0);
 }
 
-void FeatureScriptCommands::CreateNewAnimal(glm::vec3 position, int32_t type, int32_t flockId, int32_t /*townId*/, int32_t age)
+void FeatureScriptCommands::CreateNewAnimal(glm::vec3 position, int32_t type, int32_t flockId, int32_t townId, int32_t age)
 {
 	if (!Locator::animalSystem::has_value() || type < 0 || type >= static_cast<int32_t>(AnimalInfo::_COUNT))
 	{
 		return;
 	}
 	// The type is the row of the animals' table; the animal joins the latest flock made with the number, or is a flock
-	// of its own when there is none. A bird never belongs to a town.
-	// TODO: the land's other animals, which openblack doesn't make yet
+	// of its own when there is none. A grazer belongs to the town with the number, if any; a bird never belongs to one.
 	auto& animals = Locator::animalSystem::value();
-	animals.CreateBird(static_cast<AnimalInfo>(type), glm::vec2(position.x, position.z),
-	                   static_cast<uint32_t>(std::max(age, 0)), animals.FindScriptFlock(flockId));
+	const auto kind = static_cast<AnimalInfo>(type);
+	const auto xz = glm::vec2(position.x, position.z);
+	const auto flock = animals.FindScriptFlock(flockId);
+	const auto years = static_cast<uint32_t>(std::max(age, 0));
+	if (animals::grazers::IsGrazer(kind))
+	{
+		animals.CreateGrazer(kind, xz, years, flock, TownWithId(townId));
+		return;
+	}
+	if (animals.CreateBird(kind, xz, years, flock) == entt::null)
+	{
+		// TODO(land-animals): the hunters (lions, tigers, leopards, wolves), which openblack doesn't make yet
+		SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "LHScriptX: animal kind {} isn't made yet", type);
+	}
 }
 
 void FeatureScriptCommands::CreateForest(int32_t forestId, glm::vec3 position)
@@ -629,15 +656,17 @@ void FeatureScriptCommands::CreateCreatureFromFile(const std::string& playerName
 }
 
 void FeatureScriptCommands::CreateFlock(int32_t id, glm::vec3 position, glm::vec3 home, int32_t reach, int32_t flockDistance,
-                                        int32_t /*townId*/)
+                                        int32_t townId)
 {
-	// A flock of the land's, numbered for its animals to join, made where the script says with its home where it says.
-	// Every land of the game's is of a version that gives the flock distance and then the town. A flock with a bird in it
-	// keeps no town, and birds are the only animals openblack makes so far.
+	// A flock of the land's, numbered for its animals to join, made where the script says with its home where it says,
+	// belonging to the town with the number, if any. Every land of the game's is of a version that gives the flock
+	// distance and then the town. A flock a bird joins loses its town.
 	if (Locator::animalSystem::has_value())
 	{
-		Locator::animalSystem::value().CreateScriptFlock(id, glm::vec2(position.x, position.z), glm::vec2(home.x, home.z),
-		                                                 static_cast<float>(reach), static_cast<float>(flockDistance));
+		auto& animals = Locator::animalSystem::value();
+		const auto flock = animals.CreateScriptFlock(id, glm::vec2(position.x, position.z), glm::vec2(home.x, home.z),
+		                                             static_cast<float>(reach), static_cast<float>(flockDistance));
+		animals.SetFlockTown(flock, TownWithId(townId));
 	}
 }
 

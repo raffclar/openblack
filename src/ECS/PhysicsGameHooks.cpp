@@ -24,6 +24,7 @@
 
 #include "3D/MapCoords.h"
 #include "3D/ModelSurface.h"
+#include "Animals/GrazerRules.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Creature/CreatureCatch.h"
@@ -493,7 +494,9 @@ void LandAnimal(World& world, PhysicsEntry* entry, entt::entity entity)
 		animal->animation = *clip;
 		animal->clipPlace = 0;
 	}
-	animal->afterClip = AnimalState::DecideWhatToDo;
+	// A grazer, once up, joins a herd nearby if it can and wanders off
+	animal->afterClip =
+	    animals::grazers::IsGrazer(animal->type) ? AnimalState::InteractDecideWhatToDo : AnimalState::DecideWhatToDo;
 	animal->state = AnimalState::WaitForClip;
 	animal->turnsInState = 0;
 }
