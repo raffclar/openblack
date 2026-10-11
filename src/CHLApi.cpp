@@ -7537,10 +7537,17 @@ void SoundExists() // 409 SOUND_EXISTS
 
 void GetTownWorshipDeaths() // 410 GET_TOWN_WORSHIP_DEATHS
 {
-	// const auto town = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// How many of a town's people have died of their chanting at worship
+	const auto object = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* town = registry.Valid(object) ? registry.TryGet<const ecs::components::Town>(object) : nullptr;
+	if (town == nullptr)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Town invalid!");
+		Pushf(0.0f);
+		return;
+	}
+	Pushf(static_cast<float>(town->deaths.at(static_cast<size_t>(DeathReason::Chant))));
 }
 
 void GameClearDialogue() // 411 GAME_CLEAR_DIALOGUE

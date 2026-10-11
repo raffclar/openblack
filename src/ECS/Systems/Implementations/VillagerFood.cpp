@@ -257,6 +257,11 @@ uint16_t villager_food::GetResourceFrom(entt::entity villager, entt::entity sour
 	return taken;
 }
 
+uint32_t villager_food::FoodRequiredForMeal(entt::entity villager)
+{
+	return AmountOfFoodRequiredForMeal(Entities().Get<const Villager>(villager));
+}
+
 float villager_food::EatFoodHeld(entt::entity villager)
 {
 	auto& registry = Entities();
@@ -376,7 +381,7 @@ bool villager_food::CheckHungry(LivingAction& action)
 		                        person.food, info.starvingForFood, [&action] { return ChangeStateToFindFoodToEat(action); });
 		if (world_objects::LifeOf(villager) <= 0.0f)
 		{
-			// TODO(villager-hunger-health): a worshipper at its worship site dies of chanting too, once villagers worship
+			// A worshipper at its site dies of its chanting there, in its worship turn
 			const auto reason = rules::HungerDeath(ecs::villager_check_rules::ChantedLast(FinalState(action)));
 			villager_fire::DieByEffect(villager, villager_fire::DeathCause {.reason = reason,
 			                                                                .killer = world_objects::PlayerOf(villager),

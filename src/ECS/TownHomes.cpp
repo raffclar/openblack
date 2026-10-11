@@ -346,7 +346,8 @@ bool town_homes::IsTooCrowded(uint32_t adults, uint32_t maxAdults, float tooCrow
 
 void town_homes::RemoveVillagerFromTown(Registry& registry, const Homes& homes, entt::entity villager)
 {
-	// TODO(villager-life-cycle): its children lose their mother, and it leaves its town's worshippers
+	// TODO(villager-life-cycle): its children lose their mother; it leaves its town's worshippers as it leaves its
+	// worship states
 	auto& person = registry.Get<Villager>(villager);
 	if (person.abode != entt::null)
 	{

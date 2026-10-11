@@ -58,6 +58,7 @@
 #include "VillagerScript.h"
 #include "VillagerShieldShelter.h"
 #include "VillagerTeleport.h"
+#include "VillagerWorship.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -81,6 +82,7 @@ namespace villager_fisherman = openblack::ecs::villager_fisherman;
 namespace villager_housewife = openblack::ecs::villager_housewife;
 namespace villager_checks = openblack::ecs::villager_checks;
 namespace villager_breeding = openblack::ecs::villager_breeding;
+namespace villager_worship = openblack::ecs::villager_worship;
 
 /// A villager with no state does nothing
 uint32_t VillagerInvalidState(LivingAction& /*action*/)
@@ -358,11 +360,31 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .entryState = &villager_build::EnterBuilding,
         .exitState = &villager_build::ExitBuilding,
     },
-    /* GOTO_STORAGE_PIT_FOR_WORSHIP_SUPPLIES */ k_TodoEntry,
-    /* ARRIVES_AT_STORAGE_PIT_FOR_WORSHIP_SUPPLIES */ k_TodoEntry,
-    /* GOTO_WORSHIP_SITE_WITH_SUPPLIES */ k_TodoEntry,
-    /* MOVE_TO_WORSHIP_SITE_WITH_SUPPLIES */ k_TodoEntry,
-    /* ARRIVES_AT_WORSHIP_SITE_WITH_SUPPLIES */ k_TodoEntry,
+    /* GOTO_STORAGE_PIT_FOR_WORSHIP_SUPPLIES */
+    VillagerStateTableEntry {
+        .state = &villager_worship::GotoStoragePitForWorshipSupplies,
+        .exitState = &villager_worship::ExitMoveToWorshipSiteWithSupplies,
+    },
+    /* ARRIVES_AT_STORAGE_PIT_FOR_WORSHIP_SUPPLIES */
+    VillagerStateTableEntry {
+        .state = &villager_worship::ArrivesAtStoragePitForWorshipSupplies,
+        .exitState = &villager_worship::ExitMoveToWorshipSiteWithSupplies,
+    },
+    /* GOTO_WORSHIP_SITE_WITH_SUPPLIES */
+    VillagerStateTableEntry {
+        .state = &villager_worship::GotoWorshipSiteWithSupplies,
+        .exitState = &villager_worship::ExitMoveToWorshipSiteWithSupplies,
+    },
+    /* MOVE_TO_WORSHIP_SITE_WITH_SUPPLIES */
+    VillagerStateTableEntry {
+        .state = &villager_worship::MoveToWorshipSiteWithSupplies,
+        .exitState = &villager_worship::ExitMoveToWorshipSiteWithSupplies,
+    },
+    /* ARRIVES_AT_WORSHIP_SITE_WITH_SUPPLIES */
+    VillagerStateTableEntry {
+        .state = &villager_worship::ArrivesAtWorshipSiteWithSupplies,
+        .exitState = &villager_worship::ExitMoveToWorshipSiteWithSupplies,
+    },
     /* FORESTER_MOVE_TO_FOREST */
     VillagerStateTableEntry {
         .state = &villager_forester::ForesterMoveToForest,
@@ -420,14 +442,42 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_shield::WaitForCounter,
     },
-    /* GOTO_WORSHIP_SITE_FOR_WORSHIP */ k_TodoEntry,
-    /* ARRIVES_AT_WORSHIP_SITE_FOR_WORSHIP */ k_TodoEntry,
-    /* WORSHIPPING_AT_WORSHIP_SITE */ k_TodoEntry,
-    /* GOTO_ALTAR_FOR_REST */ k_TodoEntry,
-    /* ARRIVES_AT_ALTAR_FOR_REST */ k_TodoEntry,
-    /* AT_ALTAR_REST */ k_TodoEntry,
-    /* AT_ALTAR_FINISHED_REST */ k_TodoEntry,
-    /* RESTART_WORSHIPPING_AT_WORSHIP_SITE */ k_TodoEntry,
+    /* GOTO_WORSHIP_SITE_FOR_WORSHIP */
+    VillagerStateTableEntry {
+        .state = &villager_worship::GotoWorshipSiteForWorship,
+        .exitState = &villager_worship::ExitMoveToWorshipSite,
+    },
+    /* ARRIVES_AT_WORSHIP_SITE_FOR_WORSHIP */
+    VillagerStateTableEntry {
+        .state = &villager_worship::ArrivesAtWorshipSiteForWorship,
+        .exitState = &villager_worship::ExitMoveToWorshipSite,
+    },
+    /* WORSHIPPING_AT_WORSHIP_SITE */
+    VillagerStateTableEntry {
+        .state = &villager_worship::WorshippingAtWorshipSite,
+        .exitState = &villager_worship::ExitAtWorshipSite,
+    },
+    /* GOTO_ALTAR_FOR_REST */
+    VillagerStateTableEntry {
+        .state = &villager_worship::GotoAltarForRest,
+    },
+    /* ARRIVES_AT_ALTAR_FOR_REST */
+    VillagerStateTableEntry {
+        .state = &villager_worship::ArrivesAtAltarForRest,
+    },
+    /* AT_ALTAR_REST */
+    VillagerStateTableEntry {
+        .state = &villager_worship::AtAltarRest,
+    },
+    /* AT_ALTAR_FINISHED_REST */
+    VillagerStateTableEntry {
+        .state = &villager_worship::AtAltarFinishedRest,
+    },
+    /* RESTART_WORSHIPPING_AT_WORSHIP_SITE */
+    VillagerStateTableEntry {
+        .state = &villager_worship::RestartWorshippingAtWorshipSite,
+        .exitState = &villager_worship::ExitGetFoodAtWorship,
+    },
     /* RESTART_WORSHIPPING_CREATURE */ k_TodoEntry,
     /* FARMER_ARRIVES_AT_FARM */ k_TodoEntry,
     /* FARMER_PLANTS_CROP */ k_TodoEntry,
@@ -723,7 +773,11 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_food::ShowPoisoned,
     },
-    /* HIDING_AT_WORSHIP_SITE */ k_TodoEntry,
+    /* HIDING_AT_WORSHIP_SITE */
+    VillagerStateTableEntry {
+        .state = &villager_worship::HidingAtWorshipSite,
+        .exitState = &villager_worship::ExitAtWorshipSite,
+    },
     /* CROWD_REACTION */ k_TodoEntry,
     /* REACT_TO_FIRE */
     VillagerStateTableEntry {
@@ -818,7 +872,11 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .state = &VillagerPauseForASecond,
     },
     /* PANIC_REACTION */ k_TodoEntry,
-    /* GET_FOOD_AT_WORSHIP_SITE */ k_TodoEntry,
+    /* GET_FOOD_AT_WORSHIP_SITE */
+    VillagerStateTableEntry {
+        .state = &villager_worship::GetFoodAtWorshipSite,
+        .exitState = &villager_worship::ExitGetFoodAtWorship,
+    },
     /* GOTO_CONGREGATE_IN_TOWN_AFTER_EMERGENCY */
     VillagerStateTableEntry {
         .state = &villager_home::GotoCongregateInTownAfterEmergency,
@@ -841,8 +899,16 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .entryState = &villager_home::EnterSitAndChillOut,
     },
     /* SCRIPT_GO_AND_MOVE_ALONG_PATH */ k_TodoEntry,
-    /* GO_HOME_FROM_WORSHIP */ k_TodoEntry,
-    /* ARRIVES_HOME_FROM_WORSHIP */ k_TodoEntry,
+    /* GO_HOME_FROM_WORSHIP */
+    VillagerStateTableEntry {
+        .state = &villager_worship::GoHomeFromWorship,
+        .exitState = &villager_home::ExitAtHome,
+    },
+    /* ARRIVES_HOME_FROM_WORSHIP */
+    VillagerStateTableEntry {
+        .state = &villager_home::ArrivesHome,
+        .exitState = &villager_home::ExitAtHome,
+    },
     /* SLEEP_IN_TENT_FROM_WORSHIP */
     VillagerStateTableEntry {
         .state = &villager_home::SleepInTent,

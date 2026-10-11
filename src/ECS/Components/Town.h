@@ -39,6 +39,8 @@ struct Town
 	uint32_t injured {0};
 	/// What its people's deaths came to, by the player put down for each (by player number) and what killed them
 	std::array<std::array<float, static_cast<size_t>(DeathReason::_COUNT)>, 8> deathsByKiller {};
+	/// How many of its people have died of each cause
+	std::array<uint32_t, static_cast<size_t>(DeathReason::_COUNT)> deaths {};
 	/// The forest of the lone trees about it, made as the land is laid out; a tree replanted near the town joins it
 	std::optional<uint32_t> scenicForest;
 	/// Where its scenic forest was made: the town's centre then
@@ -51,6 +53,10 @@ struct Town
 	entt::entity worshipSite {entt::null};
 	/// A script has stopped a worship site being made for it
 	bool cannotHaveWorshipSite {false};
+	/// Its people counted at worship (dancing, hiding, eating or resting at its site), and those on their way there,
+	/// each counted once
+	std::vector<entt::entity> worshippers;
+	std::vector<entt::entity> onWayToWorship;
 	/// Where its people gather, worked out the first time it is wanted and again once a new building stands on it
 	std::optional<glm::vec2> congregationPos;
 	/// The turn its latest emergency was called, 0 when it is in none

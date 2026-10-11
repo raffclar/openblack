@@ -37,6 +37,10 @@ inline constexpr uint32_t k_DancePoint = k_AltarPoint;
 inline constexpr glm::vec3 k_FoodPotPoint {9.0f, 0.0f, -38.0f};
 /// The food pot is turned this much further than the site, in radians
 inline constexpr float k_FoodPotTurn = 1.5f;
+/// The point hungry worshippers rest at, by the altar
+inline constexpr uint32_t k_RestPoint = 7;
+/// The site's middle, which villagers are judged near or far from, in the model's own space
+inline constexpr glm::vec3 k_CentrePoint {12.55f, 0.0f, -26.1f};
 /// The food pot is made smaller than its kind, until the food in it sets its size
 inline constexpr float k_FoodPotScale = 0.7f;
 /// Each place's dance, the first place's first: the citadel dances of the info table

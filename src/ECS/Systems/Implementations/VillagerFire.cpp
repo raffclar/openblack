@@ -1005,6 +1005,10 @@ void RememberDeath(entt::entity villager, const villager_fire::DeathCause& cause
 		{
 			town->deathsByKiller.at(killerIndex).at(reasonIndex) += cause.weight;
 		}
+		if (reasonIndex < town->deaths.size())
+		{
+			++town->deaths.at(reasonIndex);
+		}
 		const auto owner = town->owner;
 		registry.Each<Player>([owner, killer](entt::entity, Player& player) {
 			if (player.name == owner)

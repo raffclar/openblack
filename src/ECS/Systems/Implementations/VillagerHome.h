@@ -84,6 +84,9 @@ uint32_t HomeDecideWhatToDo(components::LivingAction& action);
 uint32_t DecideWhatToDo(components::LivingAction& action);
 uint32_t MoveToPos(components::LivingAction& action);
 uint32_t GoHome(components::LivingAction& action);
+/// Going home, arriving in one state, or lying down in the open in another when it has no home: a dancer leaves its
+/// dance first
+uint32_t DoGoingHome(components::LivingAction& action, VillagerStates arrive, VillagerStates sleepInTent);
 uint32_t ArrivesHome(components::LivingAction& action);
 uint32_t AtHome(components::LivingAction& action);
 uint32_t GotoBedAtHome(components::LivingAction& action);
