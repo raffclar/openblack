@@ -564,6 +564,12 @@ void Renderer::ConfigureView(graphics::RenderPass viewId, glm::u16vec2 resolutio
 		bgfx::setViewClear(static_cast<bgfx::ViewId>(RenderPass::Advisors), BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
 		bgfx::setViewRect(static_cast<bgfx::ViewId>(RenderPass::Advisors), 0, 0, resolution.x, resolution.y);
 	}
+	// What is under the sea's surface is drawn over the mirrored world, into the same target
+	if (viewId == RenderPass::Reflection)
+	{
+		bgfx::setViewClear(static_cast<bgfx::ViewId>(RenderPass::UnderSea), BGFX_CLEAR_NONE);
+		bgfx::setViewRect(static_cast<bgfx::ViewId>(RenderPass::UnderSea), 0, 0, resolution.x, resolution.y);
+	}
 	// And what blends in it is drawn over it after
 	if (const auto translucentId = TranslucentPassOf(viewId); translucentId != viewId)
 	{
@@ -4803,6 +4809,12 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 			drawPassDesc.smallBumpMapStrength = 0.0f;
 
 			DrawPass(drawPassDesc);
+
+			// Then what is under the sea's surface, seen from the view itself, into the same target and against its
+			// depth: the main pass submits it there (the sharks' bodies) before blending the sea over the target
+			frameBuffer.Bind(RenderPass::UnderSea);
+			_shaderManager->SetCamera(RenderPass::UnderSea, *drawDesc.camera);
+			bgfx::touch(static_cast<bgfx::ViewId>(RenderPass::UnderSea));
 		}
 	}
 
@@ -5449,8 +5461,27 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					return;
 				}
 				const auto placers = renderCtx.instancedDrawDescs.find(mesh->id);
+				// A swimmer drawn under the sea as it is isn't mirrored in it, as the game mirrors only the land
 				if (placers == renderCtx.instancedDrawDescs.end() ||
-				    (desc.viewId == RenderPass::Reflection && placers->second.hiddenFromReflection))
+				    (desc.viewId == RenderPass::Reflection &&
+				     (placers->second.hiddenFromReflection || pose->underSea.has_value())))
+				{
+					return;
+				}
+				const EntityPose entityPose {.bones = pose->bones, .morphTargets = nullptr};
+				// What of a swimmer is under the sea is drawn beneath the sea's surface, which the sea is then blended
+				// over: in its colour under the sea, and nothing of it above the sea's level
+				if (desc.viewId == RenderPass::Main && desc.drawWater && pose->underSea.has_value() && pose->alpha == 255)
+				{
+					submitDesc.viewId = RenderPass::UnderSea;
+					submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = *pose->underSea, .alpha = 1.0f};
+					submitDesc.cutAbove = pose->cutBelow.value_or(0.0f);
+					drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &entityPose);
+					submitDesc.cutAbove.reset();
+					submitDesc.objectLook.reset();
+					submitDesc.viewId = desc.viewId;
+				}
+				if (!pose->aboveCutShown)
 				{
 					return;
 				}
@@ -5473,7 +5504,6 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				// An animal cut by a plane shows nothing below it
 				submitDesc.cutBelow = pose->cutBelow;
-				const EntityPose entityPose {.bones = pose->bones, .morphTargets = nullptr};
 				drawInstances(mesh->id, placers->second, translucent || placers->second.materialBlending, instance, 1,
 				              &entityPose);
 				submitDesc.objectLook.reset();
