@@ -14,10 +14,13 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <InspectorProvider.h>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+
+#include "Camera/CameraZones.h"
 
 namespace openblack::inspector
 {
@@ -70,6 +73,22 @@ struct CameraAngles
 /// Where the camera stands to look at a point from these angles
 [[nodiscard]] glm::vec3 OriginFor(glm::vec3 focus, const CameraAngles& angles);
 
+/// What may move the camera on from where it is put, short of a script holding it: the camera that moves it (world,
+/// creature, fight, temple, editor) and the camera zones the land's scripts set
+struct CameraKeepers
+{
+	std::string model;
+	camera_zones::Zones zones;
+	/// The zone file the scripts set them from, empty for none
+	std::string zoneFile;
+	/// The land's height under where the camera is put
+	float groundUnderOrigin {0.0f};
+};
+
+/// Why a camera put there won't stay, each in a sentence: another camera than the world's moves it itself, the world
+/// camera is pushed back inside the scripts' fence, or slides down under their height limit. Empty when it stays
+[[nodiscard]] std::vector<std::string> CameraSetWarnings(const CameraPose& pose, const CameraKeepers& keepers);
+
 /// What the inspector moves the camera through
 class CameraControlInterface
 {
@@ -93,6 +112,11 @@ public:
 	[[nodiscard]] virtual float GroundHeight(glm::vec2 point) const = 0;
 	/// Where an entity is drawn now, for the camera to frame it; none if there is no such entity or it has no place
 	[[nodiscard]] virtual std::optional<glm::vec3> EntityPosition(uint32_t id) const = 0;
+	/// What may move the camera on from a pose it is put at; none when nothing is known of it
+	[[nodiscard]] virtual std::optional<CameraKeepers> Keepers([[maybe_unused]] const CameraPose& pose) const
+	{
+		return std::nullopt;
+	}
 };
 
 /// The game's pointer (the hand's ray, picking under the cursor, where a point of the world is on the screen) goes

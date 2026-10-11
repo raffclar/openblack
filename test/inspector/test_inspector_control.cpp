@@ -17,6 +17,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -120,6 +121,7 @@ public:
 	{
 		return id == 7 ? std::optional(walker) : std::nullopt;
 	}
+	[[nodiscard]] std::optional<CameraKeepers> Keepers(const CameraPose& /*pose*/) const override { return keepers; }
 
 	CameraPose pose {.origin = {0.0f, 100.0f, -100.0f}, .focus = {0.0f, 0.0f, 0.0f}};
 	/// Entity 7, which may walk about
@@ -134,7 +136,22 @@ public:
 	int pins {0};
 	std::optional<CameraPose> own;
 	std::optional<CameraPose> overridden;
+	std::optional<CameraKeepers> keepers;
 };
+
+/// The world camera kept inside a fence round the square from 0 to 100 that a land's script set
+CameraKeepers FencedWorldCamera()
+{
+	CameraKeepers keepers {.model = "world", .zoneFile = "Land1Choose.exc"};
+	keepers.zones.fenceOn = true;
+	keepers.zones.fence = {{0.0f, 0.0f, 0.0f}, {100.0f, 0.0f, 0.0f}, {100.0f, 0.0f, 100.0f}, {0.0f, 0.0f, 100.0f}};
+	return keepers;
+}
+
+bool Mentions(const std::vector<std::string>& warnings, std::string_view text)
+{
+	return std::ranges::any_of(warnings, [text](const auto& warning) { return warning.find(text) != std::string::npos; });
+}
 
 void ExpectNear(const Json& point, glm::vec3 expected)
 {
@@ -228,6 +245,62 @@ TEST(InspectorCamera, AScriptHoldingTheCameraRefusesAPlainSet)
 	Ask(inspector, R"({"query": "camera.set", "params": {"position": [1, 2, 3], "focus": [4, 5, 6], "override": true}})");
 	ASSERT_TRUE(camera.overridden.has_value());
 	EXPECT_EQ(camera.overridden->origin, glm::vec3(1.0f, 2.0f, 3.0f));
+}
+
+// What keeps the camera from staying where it is put: the camera fence and height limit the land's script set, which the
+// world camera keeps to every frame, or another camera that moves it itself
+TEST(InspectorCamera, WarningsSayWhatWillMoveTheCameraOn)
+{
+	const CameraPose inside {.origin = {50.0f, 40.0f, 50.0f}, .focus = {60.0f, 0.0f, 60.0f}};
+	const CameraPose outside {.origin = {300.0f, 40.0f, 300.0f}, .focus = {310.0f, 0.0f, 310.0f}};
+	auto keepers = FencedWorldCamera();
+	EXPECT_TRUE(CameraSetWarnings(inside, keepers).empty());
+	const auto fenced = CameraSetWarnings(outside, keepers);
+	ASSERT_EQ(fenced.size(), 1U);
+	EXPECT_TRUE(Mentions(fenced, "camera fence"));
+	EXPECT_TRUE(Mentions(fenced, "Land1Choose.exc"));
+	EXPECT_TRUE(Mentions(fenced, "override: true"));
+
+	keepers.zones.fenceOn = false;
+	EXPECT_TRUE(CameraSetWarnings(outside, keepers).empty());
+
+	keepers.zones.useMaxAltitude = true;
+	keepers.zones.maxAltitude = 30.0f;
+	EXPECT_TRUE(Mentions(CameraSetWarnings(inside, keepers), "height limit"));
+	keepers.zones.exclusionsOn = false;
+	EXPECT_TRUE(CameraSetWarnings(inside, keepers).empty());
+
+	keepers.model = "creature";
+	EXPECT_TRUE(Mentions(CameraSetWarnings(inside, keepers), "creature camera"));
+	keepers.model = "editor";
+	EXPECT_TRUE(CameraSetWarnings(outside, keepers).empty());
+}
+
+// A plain camera.set still moves the camera but warns when the land's fence will put it back; an override never warns
+TEST(InspectorCamera, SetWarnsWhenTheFenceWillPutItBack)
+{
+	FakeCamera camera;
+	camera.keepers = FencedWorldCamera();
+	Inspector inspector;
+	inspector.Add(MakeCameraProvider(camera));
+	const auto kept = Ask(inspector, R"({"query": "camera.set", "params": {"position": [50, 40, 50], "focus": [60, 0, 60]}})");
+	ASSERT_TRUE(kept["warnings"].is_array());
+	EXPECT_TRUE(kept["warnings"].empty());
+
+	const auto pushed =
+	    Ask(inspector, R"({"query": "camera.set", "params": {"position": [300, 40, 300], "focus": [310, 0, 310]}})");
+	ASSERT_EQ(pushed["warnings"].size(), 1U);
+	EXPECT_NE(pushed["warnings"][0].get<std::string>().find("camera fence"), std::string::npos);
+	EXPECT_EQ(camera.sets, 2);
+
+	const auto overridden =
+	    Ask(inspector,
+	        R"({"query": "camera.set", "params": {"position": [300, 40, 300], "focus": [310, 0, 310], "override": true}})");
+	EXPECT_TRUE(overridden["warnings"].empty());
+	EXPECT_EQ(camera.sets, 2);
+
+	const auto framed = Ask(inspector, R"({"query": "camera.frame", "params": {"id": 7}})");
+	ASSERT_TRUE(framed["warnings"].is_array());
 }
 
 TEST(InspectorCamera, AnglesRoundTrip)
