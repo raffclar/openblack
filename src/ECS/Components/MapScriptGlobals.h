@@ -13,6 +13,8 @@
 
 #include <array>
 
+#include <entt/entity/entity.hpp>
+
 namespace openblack::ecs::components
 {
 
@@ -30,6 +32,8 @@ struct MapScriptGlobals
 	/// How much of a town's boredom with each kind of reaction wears off at each of its turns, 1 unless the land's script
 	/// sets it
 	float lostTownScale {1.0f};
+	/// The object the land's script made last, which the script can make an artefact
+	entt::entity lastObject {entt::null};
 };
 
 } // namespace openblack::ecs::components

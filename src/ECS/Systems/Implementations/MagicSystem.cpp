@@ -2667,6 +2667,7 @@ void MagicSystem::ReactToSpell(Spell& spell, bool onCast)
 	    .magicType = spell.magicType,
 	    .casterCreature = spell.caster.kind == SpellCaster::Kind::Creature ? spell.caster.entity : entt::null,
 	    .onCast = onCast,
+	    .balance = ecs::systems::ReactionSystemInterface::Balance::Miracles,
 	});
 }
 

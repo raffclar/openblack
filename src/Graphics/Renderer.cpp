@@ -505,6 +505,7 @@ Renderer::~Renderer() noexcept
 	_handSkins.clear();
 	_handSkinTextures.clear();
 	_particleLightMaps.clear();
+	_glowShells.clear();
 	_snowDepth.reset();
 	_plane.reset();
 	_morphStreamLayouts.reset();

@@ -50,8 +50,8 @@ public:
 	[[nodiscard]] bool HasReaction(entt::entity) const override { return false; }
 	void ProcessTurn() override {}
 	void Reset() override {}
-	void SetLandBalance(float) override {}
-	[[nodiscard]] float GetLandBalance() const override { return 1.0f; }
+	void SetLandBalance(Balance /*which*/, float /*balance*/) override {}
+	[[nodiscard]] float GetLandBalance(Balance /*which*/) const override { return 1.0f; }
 	[[nodiscard]] std::span<const Active> GetReactions() const override { return {}; }
 	[[nodiscard]] std::vector<Active> ReactionsAt(const glm::vec3&) const override { return {}; }
 

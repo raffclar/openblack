@@ -856,6 +856,36 @@
   "query": "living.artefacts"
  },
  {
+  "description": "Sets an artefact's worth as its dances would raise it: it starts glowing once worth more than 1, and shows its owner's symbol once worth more than 2",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The artefact's entity id",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "Its new worth",
+    "name": "worth",
+    "required": true,
+    "type": "number"
+   },
+   {
+    "description": "A town to make it an artefact of first, as if put there by the player",
+    "name": "town",
+    "type": "integer"
+   },
+   {
+    "description": "The player who puts it in the town (0 by default)",
+    "name": "player",
+    "type": "integer"
+   }
+  ],
+  "query": "living.artefact_worth",
+  "writes": true
+ },
+ {
   "description": "A villager's or animal's action states: top, final, previous, and turns in them",
   "kind": "object",
   "parameters": [

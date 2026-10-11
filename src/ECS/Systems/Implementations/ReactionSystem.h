@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <array>
+
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "VillagerReactions.h"
 
@@ -40,8 +42,8 @@ public:
 	void Reset() override;
 	void GiveTownBelief(entt::entity town, PlayerNames player, float amount, entt::entity from,
 	                    GuidanceAlignment alignment) override;
-	void SetLandBalance(float balance) override { _landBalance = balance; }
-	[[nodiscard]] float GetLandBalance() const override { return _landBalance; }
+	void SetLandBalance(Balance which, float balance) override { _landBalances.at(static_cast<size_t>(which)) = balance; }
+	[[nodiscard]] float GetLandBalance(Balance which) const override { return _landBalances.at(static_cast<size_t>(which)); }
 	[[nodiscard]] std::span<const Active> GetReactions() const override { return _reactions; }
 	[[nodiscard]] std::vector<Active> ReactionsAt(const glm::vec3& point) const override;
 
@@ -72,7 +74,8 @@ private:
 	/// The next reaction spread again, in turn
 	size_t _cursor {0};
 	uint32_t _turn {0};
-	float _landBalance {1.0f};
+	/// The things' and the miracles' balances of impressiveness
+	std::array<float, 2> _landBalances {1.0f, 1.0f};
 	/// When the villagers' voices of belief were last heard
 	villager_reactions::BeliefVoice _voice;
 };

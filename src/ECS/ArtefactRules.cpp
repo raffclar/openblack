@@ -194,3 +194,20 @@ uint32_t artefact_rules::GiftRandomLimit(uint32_t gap)
 {
 	return gap / k_GiftRandomDivisor;
 }
+
+std::optional<size_t> artefact_rules::TownForMadeArtefact(std::span<const artefact_rules::NearbyTown> towns, PlayerNames player)
+{
+	const artefact_rules::NearbyTown* nearest = nullptr;
+	for (const auto& town : towns)
+	{
+		if (nearest == nullptr || town.distance < nearest->distance)
+		{
+			nearest = &town;
+		}
+	}
+	if (nearest == nullptr || nearest->owner != player)
+	{
+		return std::nullopt;
+	}
+	return nearest->index;
+}

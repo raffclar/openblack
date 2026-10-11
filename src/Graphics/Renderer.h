@@ -39,6 +39,7 @@
 #include "Graphics/RenderPass.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/SeaRows.h"
+#include "Graphics/VolumeGlowShell.h"
 #include "Particles/ParticleDrawFrame.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -198,6 +199,10 @@ private:
 	void DrawTribalPower(const DrawSceneDesc& desc) const;
 	/// A piece of a broken model: its triangles placed by its atom, a draw for each skin
 	void DrawParticleFragment(const DrawSceneDesc& desc, const particles::draw::FragmentDraw& fragment, uint32_t depth) const;
+	/// A glowing shell over an object's model, by the object as it is drawn this frame
+	void DrawParticleShell(const DrawSceneDesc& desc, const particles::draw::ShellDraw& shell, uint32_t depth) const;
+	/// The band of a glowing shell over a part of a model, made when first drawn; nullptr for a part without one
+	[[nodiscard]] const VolumeGlowShell* GlowShellOf(entt::id_type mesh, uint32_t subMesh) const;
 	/// A frame of a particle light map as a texture of its colours, made when first stamped
 	[[nodiscard]] const Texture2D* ParticleLightMap(entt::id_type bitmap, int frame) const;
 	/// The border of the players' influence, in the main view
@@ -530,6 +535,8 @@ private:
 	mutable std::vector<uint32_t> _particleBeforeLandSprites;
 	/// The particle light maps' frames stamped so far, by light map and frame
 	mutable std::unordered_map<uint64_t, std::unique_ptr<Texture2D>> _particleLightMaps;
+	/// The glowing shells' bands made so far, by model and part; none for a part that has no triangles to glow
+	mutable std::unordered_map<uint64_t, std::unique_ptr<VolumeGlowShell>> _glowShells;
 };
 } // namespace graphics
 } // namespace openblack
