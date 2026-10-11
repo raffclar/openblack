@@ -546,20 +546,11 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 	// TODO(Daniels118): handle all types
 	switch (type)
 	{
+	// Asking for a mobile static or for a rock makes the same thing: whether it is a rock is up to its kind
 	case ObjectType::MobileStatic:
+	case ObjectType::Rock:
 		return MobileStaticArchetype::Create(position, static_cast<MobileStaticInfo>(subtype), altitude, xAngleRadians,
 		                                     yAngleRadians, zAngleRadians, scale);
-	case ObjectType::Rock:
-	{
-		// A rock is a mobile static the scripts know as a rock
-		const auto rock = MobileStaticArchetype::Create(position, static_cast<MobileStaticInfo>(subtype), altitude,
-		                                                xAngleRadians, yAngleRadians, zAngleRadians, scale);
-		if (rock != entt::null)
-		{
-			Locator::entitiesRegistry::value().Assign<ecs::components::Rock>(rock);
-		}
-		return rock;
-	}
 	case ObjectType::Ball:
 		return CreateScriptBall(position);
 	case ObjectType::Marker:
