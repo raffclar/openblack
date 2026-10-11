@@ -12,6 +12,8 @@
 #include <cmath>
 #include <cstdlib>
 
+#include <algorithm>
+
 #include <glm/gtc/constants.hpp>
 
 namespace openblack::camera_drag
@@ -60,6 +62,13 @@ float RingPlace(glm::ivec2 point, glm::ivec2 screenSize, int viewHeight)
 	return std::atan2(y, x);
 }
 
+/// The same for a point given from the middle of a screen of the area's width
+float RingPlace(glm::vec2 fromMiddle, const EdgeArea& area)
+{
+	return std::atan2(fromMiddle.y / (static_cast<float>(area.viewHeight) * 0.5f),
+	                  fromMiddle.x / (static_cast<float>(area.width) * 0.5f));
+}
+
 /// The ring of a screen in pixels, the ellipse's half axes
 glm::vec2 RingAxes(glm::ivec2 screenSize, int viewHeight)
 {
@@ -86,6 +95,124 @@ float AnglePerPixel(glm::vec2 axes, float place)
 /// The ring is measured in this many pieces between two places
 constexpr int k_RingPieces = 16;
 
+/// The scale from the angle swept round a ring between two of its places to the turn the same pixels give on the
+/// default screen's ring
+float ReferenceTurnScaleBetween(float start, float end, glm::vec2 axes, glm::vec2 referenceAxes)
+{
+	auto swept = end - start;
+	if (swept > glm::pi<float>())
+	{
+		swept -= glm::two_pi<float>();
+	}
+	if (swept < -glm::pi<float>())
+	{
+		swept += glm::two_pi<float>();
+	}
+	// Along the way, the pixels moved at each place turn the camera as they would at that place on the default
+	// screen's ring, against the angle they sweep on this one. Both are added the same way, so on the default screen
+	// the scale is exactly one.
+	float reference = 0.0f;
+	float here = 0.0f;
+	for (int piece = 0; piece < k_RingPieces; ++piece)
+	{
+		const auto place = start + swept * (static_cast<float>(piece) + 0.5f) / static_cast<float>(k_RingPieces);
+		const auto pixels = RingSpeed(axes, place);
+		reference += AnglePerPixel(referenceAxes, place) * pixels;
+		here += AnglePerPixel(axes, place) * pixels;
+	}
+	return here > 0.0f ? reference / here : 1.0f;
+}
+
+/// The default screen's ring, with or without the cinema bars as the area has them
+glm::vec2 ReferenceRingAxes(const EdgeArea& area)
+{
+	return RingAxes(k_ReferenceScreen, ViewHeight(k_ReferenceScreen, area.viewHeight != area.screen.y));
+}
+
+/// A point of a wide screen measured for the edge controls: from the middle of the area with the folded strip taken
+/// out across, whether it is over that strip, and which side of it it is on (1 right, -1 left, 0 over it)
+struct FoldedPoint
+{
+	glm::vec2 fromMiddle;
+	bool overStrip;
+	float side;
+};
+
+FoldedPoint Fold(glm::ivec2 point, const EdgeArea& area)
+{
+	const auto halfStrip = static_cast<float>(area.Folded()) * 0.5f;
+	const auto across = static_cast<float>(point.x) - static_cast<float>(area.screen.x) * 0.5f;
+	const auto down = static_cast<float>(point.y) - static_cast<float>(area.screen.y) * 0.5f;
+	if (std::abs(across) <= halfStrip)
+	{
+		return {.fromMiddle = {0.0f, down}, .overStrip = true, .side = 0.0f};
+	}
+	const auto side = across > 0.0f ? 1.0f : -1.0f;
+	return {.fromMiddle = {across - side * halfStrip, down}, .overStrip = false, .side = side};
+}
+
+/// How far the 4:3 ring is from the middle at its top and bottom: a pixel across there sweeps one over this
+float RingEndRadius(const EdgeArea& area)
+{
+	return k_RingRadius * 0.5f * static_cast<float>(area.viewHeight);
+}
+
+/// Where a point of a wide screen is along the ring, as an angle: round the 4:3 ring's halves by the angle about the
+/// area's middle, and along the straight top and bottom by the angle the same pixels sweep at the 4:3 ring's top or
+/// bottom. Right round it adds up to a whole turn and the two straight runs.
+float TrackPlace(glm::ivec2 point, const EdgeArea& area)
+{
+	const auto strip = static_cast<float>(area.Folded());
+	const auto endRadius = RingEndRadius(area);
+	const auto straight = strip / endRadius;
+	const auto down = static_cast<float>(point.y - (area.screen.y >> 1));
+	const auto across = static_cast<float>(point.x) - static_cast<float>(area.screen.x) * 0.5f;
+	if (std::abs(across) <= strip * 0.5f)
+	{
+		// The bottom runs left to right through no angle, the top right to left from half a turn on
+		return down >= 0.0f ? across / endRadius : straight * 0.5f + glm::pi<float>() + (strip * 0.5f - across) / endRadius;
+	}
+	const auto side = across > 0.0f ? 1.0f : -1.0f;
+	return std::atan2(across - side * strip * 0.5f, down) + side * straight * 0.5f;
+}
+
+/// Dragging round the edge of a wide screen, as EdgeRotate does on a screen 4:3 or taller
+RingStep FoldedEdgeRotate(glm::ivec2 cursor, glm::ivec2 previousOnRing, const EdgeArea& area)
+{
+	const auto width = static_cast<float>(area.width);
+	const auto height = static_cast<float>(area.screen.y);
+	const auto view = static_cast<float>(area.viewHeight);
+	const auto strip = static_cast<float>(area.Folded());
+	const auto folded = Fold(cursor, area);
+	const auto x = folded.fromMiddle.x / (width * 0.5f);
+	const auto y = folded.fromMiddle.y / (view * 0.5f);
+	auto onRing = cursor;
+	const auto squared = x * x + y * y;
+	if (squared < k_RingBandMin || k_RingBandMax < squared)
+	{
+		const auto scale = squared != 0.0f ? k_RingRadius / std::sqrt(squared) : 0.0f;
+		// Over the strip the cursor only goes up or down onto the straight part; elsewhere onto the 4:3 ring and back
+		// out to its side of the strip
+		const auto across = static_cast<float>(area.screen.x) * 0.5f + scale * x * width * 0.5f + folded.side * strip * 0.5f;
+		onRing = {folded.overStrip ? cursor.x : static_cast<int>(across + 0.5f),
+		          static_cast<int>((scale * y * view + height + 1.0f) * 0.5f)};
+	}
+	const auto loop = glm::two_pi<float>() + 2.0f * strip / RingEndRadius(area);
+	auto angle = TrackPlace(onRing, area) - TrackPlace(previousOnRing, area);
+	if (angle > loop * 0.5f)
+	{
+		angle -= loop;
+	}
+	if (angle < -loop * 0.5f)
+	{
+		angle += loop;
+	}
+	const auto scale = ReferenceTurnScaleBetween(
+	    RingPlace(Fold(previousOnRing, area).fromMiddle, area), RingPlace(Fold(onRing, area).fromMiddle, area),
+	    RingAxes({area.width, area.screen.y}, area.viewHeight), ReferenceRingAxes(area));
+	return {.cursor = onRing, .angle = angle, .turn = angle * scale};
+}
+
 glm::vec2 Direction(glm::vec2 vector)
 {
 	const auto length = std::sqrt(vector.x * vector.x + vector.y * vector.y);
@@ -99,7 +226,22 @@ int ViewHeight(glm::ivec2 screenSize, bool cinemaBars)
 	{
 		return screenSize.y;
 	}
-	return screenSize.y - static_cast<int>(static_cast<float>(screenSize.y) - static_cast<float>(screenSize.x) * k_WideScreen);
+	// The game only had 4:3 screens; on screens as wide as 16:9 or wider there are no bars, and the picture is the
+	// screen's height
+	return std::min(screenSize.y, screenSize.y - static_cast<int>(static_cast<float>(screenSize.y) -
+	                                                              static_cast<float>(screenSize.x) * k_WideScreen));
+}
+
+EdgeArea EdgeAreaOf(glm::ivec2 screenSize, bool cinemaBars)
+{
+	return {.screen = screenSize,
+	        .width = std::min(screenSize.x, screenSize.y * 4 / 3),
+	        .viewHeight = ViewHeight(screenSize, cinemaBars)};
+}
+
+EdgeArea WholeScreenArea(glm::ivec2 screenSize, int viewHeight)
+{
+	return {.screen = screenSize, .width = screenSize.x, .viewHeight = viewHeight};
 }
 
 glm::vec2 NormalisedCursor(glm::ivec2 cursor, glm::ivec2 screenSize, int viewHeight)
@@ -107,6 +249,18 @@ glm::vec2 NormalisedCursor(glm::ivec2 cursor, glm::ivec2 screenSize, int viewHei
 	const auto width = static_cast<float>(screenSize.x);
 	const auto height = static_cast<float>(viewHeight);
 	return {static_cast<float>(cursor.x) / width - 0.5f, static_cast<float>(cursor.y - (screenSize.y >> 1)) / height};
+}
+
+glm::vec2 AreaCursor(glm::ivec2 cursor, const EdgeArea& area)
+{
+	if (area.Folded() <= 0)
+	{
+		return NormalisedCursor(cursor, area.screen, area.viewHeight);
+	}
+	// Measured from the area's left edge as the game measures a screen, so each side reads exactly as on a 4:3 screen
+	const auto width = static_cast<float>(area.width);
+	const auto fromLeft = Fold(cursor, area).fromMiddle.x + width * 0.5f;
+	return {fromLeft / width - 0.5f, static_cast<float>(cursor.y - (area.screen.y >> 1)) / static_cast<float>(area.viewHeight)};
 }
 
 uint32_t IdleTricons(glm::vec2 normalisedCursor, bool landUnderCursor, bool windowed)
@@ -160,12 +314,12 @@ void DragClassifier::Start(uint32_t tricons, glm::vec2 normalisedCursor, uint32_
 	}
 }
 
-void DragClassifier::Move(glm::ivec2 delta, glm::ivec2 screenSize, int viewHeight, uint32_t milliseconds, bool landUnderCursor,
+void DragClassifier::Move(glm::ivec2 delta, const EdgeArea& area, uint32_t milliseconds, bool landUnderCursor,
                           uint32_t features)
 {
 	// Across by the height and down by the width, as the game adds them up
-	_moved += glm::vec2(static_cast<float>(delta.x) / static_cast<float>(viewHeight),
-	                    static_cast<float>(delta.y) / static_cast<float>(screenSize.x));
+	_moved += glm::vec2(static_cast<float>(delta.x) / static_cast<float>(area.viewHeight),
+	                    static_cast<float>(delta.y) / static_cast<float>(area.width));
 	if (!_mode.has_value() && k_DecideDistance * k_DecideDistance < _moved.x * _moved.x + _moved.y * _moved.y)
 	{
 		Decide(milliseconds, landUnderCursor, features);
@@ -233,8 +387,14 @@ void DragClassifier::Decide(uint32_t milliseconds, bool landUnderCursor, uint32_
 	}
 }
 
-RingStep EdgeRotate(glm::ivec2 cursor, glm::ivec2 previousOnRing, glm::ivec2 screenSize, int viewHeight)
+RingStep EdgeRotate(glm::ivec2 cursor, glm::ivec2 previousOnRing, const EdgeArea& area)
 {
+	if (area.Folded() > 0)
+	{
+		return FoldedEdgeRotate(cursor, previousOnRing, area);
+	}
+	const auto screenSize = area.screen;
+	const auto viewHeight = area.viewHeight;
 	const auto width = static_cast<float>(screenSize.x);
 	const auto height = static_cast<float>(screenSize.y);
 	const auto view = static_cast<float>(viewHeight);
@@ -268,31 +428,9 @@ RingStep EdgeRotate(glm::ivec2 cursor, glm::ivec2 previousOnRing, glm::ivec2 scr
 
 float ReferenceTurnScale(glm::ivec2 from, glm::ivec2 to, glm::ivec2 screenSize, int viewHeight)
 {
-	const auto start = RingPlace(from, screenSize, viewHeight);
-	auto swept = RingPlace(to, screenSize, viewHeight) - start;
-	if (swept > glm::pi<float>())
-	{
-		swept -= glm::two_pi<float>();
-	}
-	if (swept < -glm::pi<float>())
-	{
-		swept += glm::two_pi<float>();
-	}
-	const auto axes = RingAxes(screenSize, viewHeight);
-	const auto referenceAxes = RingAxes(k_ReferenceScreen, ViewHeight(k_ReferenceScreen, viewHeight != screenSize.y));
-	// Along the way, the pixels moved at each place turn the camera as they would at that place on the default
-	// screen's ring, against the angle they sweep on this one. Both are added the same way, so on the default screen
-	// the scale is exactly one.
-	float reference = 0.0f;
-	float here = 0.0f;
-	for (int piece = 0; piece < k_RingPieces; ++piece)
-	{
-		const auto place = start + swept * (static_cast<float>(piece) + 0.5f) / static_cast<float>(k_RingPieces);
-		const auto pixels = RingSpeed(axes, place);
-		reference += AnglePerPixel(referenceAxes, place) * pixels;
-		here += AnglePerPixel(axes, place) * pixels;
-	}
-	return here > 0.0f ? reference / here : 1.0f;
+	return ReferenceTurnScaleBetween(RingPlace(from, screenSize, viewHeight), RingPlace(to, screenSize, viewHeight),
+	                                 RingAxes(screenSize, viewHeight),
+	                                 ReferenceRingAxes(WholeScreenArea(screenSize, viewHeight)));
 }
 
 float PitchStep(int deltaY, int screenHeight, float horizontalFieldOfView)

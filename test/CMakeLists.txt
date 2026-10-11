@@ -745,4 +745,5 @@ openblack_setup_and_add_test(test_camera_limits camera/test_camera_limits.cpp)
 openblack_setup_and_add_test(test_ground_shadow graphics/test_ground_shadow.cpp)
 openblack_setup_and_add_test(
   test_size_follower windowing/test_size_follower.cpp
+  test_camera_edge_area camera/test_camera_edge_area.cpp
 )
