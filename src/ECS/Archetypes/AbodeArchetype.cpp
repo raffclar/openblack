@@ -17,6 +17,8 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/L3DMesh.h"
+#include "3D/LandIslandInterface.h"
+#include "ECS/AbodeFoundation.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Fixed.h"
@@ -41,6 +43,7 @@ using namespace openblack;
 using namespace openblack::ecs::archetypes;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
+namespace abode_foundation = openblack::ecs::abode_foundation;
 
 void AddStoragePitComponents(entt::entity entity, const Mesh& pitMesh, const GAbodeInfo& info, const glm::vec3& position,
                              float yAngleRadians, uint32_t foodAmount, uint32_t woodAmount)
@@ -171,6 +174,22 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 	{
 		Locator::chimneySmokeSystem::value().Attach(entity, *meshes.Handle(resourceId), transform,
 		                                            info.abodeType == AbodeType::Workshop);
+	}
+
+	// A building that does not bend with the land settles into a slope: it is lowered so that the low side of its
+	// foundations reaches the land. The chimney's smoke above was placed before, where the building first stood.
+	if (!morphsWithTerrain && Locator::terrainSystem::has_value() && Locator::terrainSystem::value().IsLoaded())
+	{
+		if (const auto& meshes = Locator::resources::value().GetMeshes(); meshes.Contains(resourceId))
+		{
+			const auto& bounds = meshes.Handle(resourceId)->GetBoundingBox();
+			const auto box = abode_foundation::GroundBoxOf(bounds.minima, bounds.maxima);
+			const auto& land = Locator::terrainSystem::value();
+			auto& placed = registry.Get<Transform>(entity);
+			placed.position.y +=
+			    abode_foundation::FoundationSink(box, placed.rotation, placed.scale.x, {placed.position.x, placed.position.z},
+			                                     [&land](glm::vec2 point) { return land.GetHeightAt(point); });
+		}
 	}
 
 	// Create Fixed component with a 2d bounding circle

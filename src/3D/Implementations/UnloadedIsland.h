@@ -17,6 +17,8 @@ namespace openblack
 class UnloadedIsland final: public LandIslandInterface
 {
 public:
+	[[nodiscard]] bool IsLoaded() const override { return false; }
+
 	[[nodiscard]] float GetHeightAt(glm::vec2) const override
 	{
 		throw std::runtime_error("Cannot get landscape before any are loaded");
