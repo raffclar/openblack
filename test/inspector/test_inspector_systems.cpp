@@ -386,6 +386,8 @@ TEST(InspectorCoverage, EveryQueryAnswersWithNoGame)
 
 	const auto described = AskAny(inspector, R"({"query": "describe"})");
 	ASSERT_TRUE(described.Ok());
+	// The whole catalogue comes back, however many queries it holds
+	ASSERT_TRUE(described.value.contains("providers")) << described.value.dump().substr(0, 200);
 	size_t queries = 0;
 	for (const auto& [provider, list] : described.value["providers"].items())
 	{
