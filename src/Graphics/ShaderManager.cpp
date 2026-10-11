@@ -98,8 +98,6 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_terrain
 #include "ShaderIncluder.h"
-#define SHADER_NAME fs_terrain_vortex_hole
-#include "ShaderIncluder.h"
 
 #define SHADER_NAME vs_water
 #include "ShaderIncluder.h"
@@ -213,7 +211,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 72> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 71> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
@@ -237,7 +235,6 @@ const std::array<bgfx::EmbeddedShader, 72> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(fs_sky), //
     BGFX_EMBEDDED_SHADER(vs_terrain),
     BGFX_EMBEDDED_SHADER(fs_terrain), //
-    BGFX_EMBEDDED_SHADER(fs_terrain_vortex_hole),
     BGFX_EMBEDDED_SHADER(vs_water),
     BGFX_EMBEDDED_SHADER(fs_water), //
     BGFX_EMBEDDED_SHADER(vs_sprite),
@@ -292,7 +289,6 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"DebugLine", "vs_line", "fs_line"},
     ShaderDefinition {"DebugLineInstanced", "vs_line_instanced", "fs_line"},
     ShaderDefinition {"Terrain", "vs_terrain", "fs_terrain"},
-    ShaderDefinition {"TerrainVortexHole", "vs_terrain", "fs_terrain_vortex_hole"},
     ShaderDefinition {"Object", "vs_object", "fs_object"},
     ShaderDefinition {"ObjectEnvironment", "vs_object_environment", "fs_object_environment"},
     ShaderDefinition {"ObjectInstanced", "vs_object_instanced", "fs_object"},
