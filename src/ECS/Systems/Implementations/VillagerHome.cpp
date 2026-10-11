@@ -56,6 +56,7 @@
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerBuild.h"
+#include "VillagerDisciples.h"
 #include "VillagerFire.h"
 
 using namespace openblack;
@@ -68,6 +69,7 @@ namespace villager_age = openblack::ecs::villager_age;
 namespace world_objects = openblack::ecs::world_objects;
 namespace villager_fire = openblack::ecs::villager_fire;
 namespace villager_build = openblack::ecs::villager_build;
+namespace villager_disciple = openblack::ecs::villager_disciple;
 namespace wall_hug = openblack::ecs::wall_hug;
 namespace walk_arrival = openblack::ecs::walk_arrival;
 using ClearAreaFilter = openblack::ecs::systems::TownSystemInterface::ClearAreaFilter;
@@ -901,7 +903,11 @@ uint32_t villager_home::DecideWhatToDo(LivingAction& action)
 		SetTopState(action, VillagerStates::GotoCongregateInTownAfterEmergency);
 		return 1;
 	}
-	// TODO(villagers): disciples decide as disciples (the jobs phase)
+	// A disciple sets about its work first, or waits by the town centre for some
+	if (villager_disciple::DecideAsDisciple(action) == 1)
+	{
+		return 1;
+	}
 	SetTopState(action, VillagerStates::DecideWhatToDo);
 	// TODO(villagers): a child has its own things to do (the breeding phase); until then it decides as an adult
 	if (CheckNeededForSomething(action) == 1)

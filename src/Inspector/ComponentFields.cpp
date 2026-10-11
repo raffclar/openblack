@@ -90,6 +90,7 @@
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/DestructionGhost.h"
 #include "ECS/Components/DetailMeshes.h"
+#include "ECS/Components/Disciple.h"
 #include "ECS/Components/FallingRoots.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
@@ -781,6 +782,15 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::DetailMeshes>(context)
 	    .Field<&components::DetailMeshes::meshes>("meshes")
 	    .Field<&components::DetailMeshes::importance>("importance");
+	Reflect<components::Disciple>(context).Field<&components::Disciple::type>("type").Field<&components::Disciple::tradeTown>(
+	    "tradeTown");
+	Reflect<components::DiscipleHeld>(context)
+	    .Field<&components::DiscipleHeld::atPickUp>("atPickUp")
+	    .Field<&components::DiscipleHeld::touchedDown>("touchedDown");
+	Reflect<components::DiscipleInspect>(context).Field<&components::DiscipleInspect::thing>("thing");
+	Reflect<components::DiscipleMark>(context)
+	    .Field<&components::DiscipleMark::villager>("villager")
+	    .Field<&components::DiscipleMark::symbol>("symbol");
 	Reflect<components::DropsRoots> {context};
 	Reflect<components::FallingRoots>(context)
 	    .Field<&components::FallingRoots::seconds>("seconds")

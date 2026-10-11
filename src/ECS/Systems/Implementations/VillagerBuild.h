@@ -11,6 +11,9 @@
 
 #include <cstdint>
 
+#include <entt/entity/entity.hpp>
+#include <glm/vec2.hpp>
+
 #include "Enums.h"
 
 namespace openblack::ecs::components
@@ -46,6 +49,11 @@ bool ExitBuilding(components::LivingAction& action, VillagerStates next);
 uint32_t CheckTakeResourcesToStoragePit(components::LivingAction& action);
 uint32_t GotoStoragePitForDropOff(components::LivingAction& action);
 uint32_t ArrivesAtStoragePitForDropOff(components::LivingAction& action);
+
+/// Turns the villager towards a point by at most a step of the game's angles; whether it now faces it
+bool FaceTowards(entt::entity villager, glm::vec2 point, int32_t step);
+/// The villager takes up building a site, fetching wood first when it lacks it. 1 when it did.
+uint32_t TakeUpSite(components::LivingAction& action, entt::entity building);
 
 /// In a script's crowd: a fresh crowd clip each time the last has played
 uint32_t ScriptInCrowd(components::LivingAction& action);

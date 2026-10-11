@@ -44,6 +44,7 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "VillagerDisciples.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -404,6 +405,8 @@ void TownSystem::ClaimTown(entt::entity town, PlayerNames player)
 	{
 		Locator::villageTotemSystem::value().SetTownShare(town, 0.0f);
 	}
+	// Its people living in its homes give up the work the old player set them to
+	villager_disciple::TownClaimed(town);
 	// It becomes the player's, gained after the towns they have already
 	component->owner = player;
 	component->gained = registry.Context().nextTownGained++;

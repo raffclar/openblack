@@ -29,6 +29,7 @@
 #include "ECS/BuildingSiteRules.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Construction.h"
+#include "ECS/Components/Disciple.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
@@ -117,10 +118,10 @@ glm::vec2 GroundOf(entt::entity entity)
 }
 
 /// A builder disciple is offered sites even when no builder is wanted
-bool IsBuilderDisciple(const Villager&)
+bool IsBuilderDisciple(const Villager& villager)
 {
-	// TODO(temple-builders): disciples aren't kept on villagers yet
-	return false;
+	const auto* disciple = Entities().TryGet<const Disciple>(Entities().ToEntity(villager));
+	return disciple != nullptr && disciple->type == VillagerDisciple::Builder;
 }
 
 /// Walks the villager to a point round what is in the way, then on into a state, as long as the states let it
@@ -464,6 +465,16 @@ uint32_t ArrivesAtStoragePitForResource(LivingAction& action, ResourceType type,
 	return 0;
 }
 } // namespace
+
+bool villager_build::FaceTowards(entt::entity villager, glm::vec2 point, int32_t step)
+{
+	return LookAtPos(villager, point, step);
+}
+
+uint32_t villager_build::TakeUpSite(LivingAction& action, entt::entity building)
+{
+	return SetupBuildingObject(action, building);
+}
 
 bool villager_build::IsBuildingState(VillagerStates state)
 {
