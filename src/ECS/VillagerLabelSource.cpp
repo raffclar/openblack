@@ -31,6 +31,7 @@
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/VillagerAge.h"
+#include "ECS/VillagerBreedingRules.h"
 #include "Gui/TextDatabase.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -160,13 +161,13 @@ std::vector<labels::Request> Gather(const Frame& frame)
 			    {
 				    shownName = *name;
 			    }
-			    labels::Details details {.name = shownName,
-			                             .age = villager_age::AgeNow(villager),
-			                             .life = villager.life,
-			                             .food = villager.food,
-			                             // Pregnancy isn't simulated yet
-			                             .pregnant = false,
-			                             .poisoned = registry.AllOf<Poisoned>(entity)};
+			    labels::Details details {
+			        .name = shownName,
+			        .age = villager_age::AgeNow(villager),
+			        .life = villager.life,
+			        .food = villager.food,
+			        .pregnant = villager_breeding::IsPregnant(villager.sex == Villager::Sex::FEMALE, villager.pregnancy),
+			        .poisoned = registry.AllOf<Poisoned>(entity)};
 			    if (stateInfo.helpText != 0)
 			    {
 				    details.doing = texts.GetHelpText(stateInfo.helpText).text;
