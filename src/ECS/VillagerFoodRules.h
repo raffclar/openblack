@@ -117,10 +117,16 @@ struct MealInputs
 	bool dropOffElsewhere {false};
 };
 
-/// Where it gets its meal: what it carries when that is enough; else home when home has enough with what it carries
-/// (what it carries counted twice, as in the game); else the storage pit when that has enough; else, with no working pit,
-/// where its town leaves food; else what it carries, if anything
+/// Where it gets its meal: what it carries when that is enough; else home when home has the rest; else the storage pit when
+/// that has enough; else, with no working pit, where its town leaves food; else what it carries, if anything
 [[nodiscard]] MealPlan PlanMeal(const MealInputs& in);
+
+/// What a villager eating at home takes from its home's store into its hands: what it needs beyond what it carries, at
+/// most what the home holds, once
+[[nodiscard]] constexpr uint32_t TakenFromHome(uint32_t required, uint32_t homeFood)
+{
+	return required < homeFood ? required : homeFood;
+}
 
 /// What eating from its hands did
 struct Meal
@@ -132,7 +138,7 @@ struct Meal
 };
 
 /// It eats as much of its meal as it carries, which fills it by the share of the meal eaten, times how nourishing its
-/// tribe finds food. A meal of nothing empties it, as it does in the game.
+/// tribe finds food. A meal of nothing leaves it as it is.
 [[nodiscard]] Meal EatHeld(uint32_t amountToEat, int16_t carried, float food, float nourishment);
 
 /// The food a household wants for its dinner: each of its people's dinner, children and all

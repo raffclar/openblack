@@ -188,12 +188,10 @@ void GetFoodFromHome(entt::entity villager, uint32_t amount)
 	{
 		return;
 	}
-	auto& stores = Locator::resourceStoreSystem::value();
-	const auto held = stores.GetResource(abode, ResourceType::Food);
-	const auto taken = villager_food::GetResourceFrom(villager, abode, ResourceType::Food,
-	                                                  static_cast<uint16_t>(amount < held ? amount : held));
-	// As in the game, what it took comes into its hands a second time
-	stores.AddResource(villager, ResourceType::Food, taken, std::nullopt);
+	const auto held = Locator::resourceStoreSystem::value().GetResource(abode, ResourceType::Food);
+	// What it takes comes into its hands once (the game took it into its hands twice: deviations register)
+	villager_food::GetResourceFrom(villager, abode, ResourceType::Food,
+	                               static_cast<uint16_t>(rules::TakenFromHome(amount, held)));
 }
 
 /// Whether what it takes from is sped-up food: a pile or pot of it. A store never passes its speed-up on.
