@@ -14,6 +14,8 @@
 #include <SDL_syswm.h>
 #include <spdlog/spdlog.h>
 
+#include "WindowFit.h"
+
 #if defined(SDL_VIDEO_DRIVER_WAYLAND)
 #include <wayland-egl.h>
 #endif // defined(SDL_VIDEO_DRIVER_WAYLAND)
@@ -91,6 +93,39 @@ Sdl2WindowingSystem::Sdl2WindowingSystem(const std::string& title, int width, in
 	}
 
 	_window = std::move(window);
+	if (displayMode == DisplayMode::Windowed)
+	{
+		KeepInsideDesktop();
+	}
+}
+
+void Sdl2WindowingSystem::KeepInsideDesktop()
+{
+	auto* window = _window.get();
+	const int display = SDL_GetWindowDisplayIndex(window);
+	SDL_Rect usable;
+	WindowBorders borders {};
+	if (display < 0 || SDL_GetDisplayUsableBounds(display, &usable) != 0 ||
+	    SDL_GetWindowBordersSize(window, &borders.top, &borders.left, &borders.bottom, &borders.right) != 0)
+	{
+		return;
+	}
+	DesktopRect picture {};
+	SDL_GetWindowPosition(window, &picture.position.x, &picture.position.y);
+	SDL_GetWindowSize(window, &picture.size.x, &picture.size.y);
+	const auto fitted = FitWindow(picture, borders, {.position = {usable.x, usable.y}, .size = {usable.w, usable.h}});
+	if (!fitted.has_value())
+	{
+		return;
+	}
+	if (fitted->size != picture.size)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("graphics"),
+		                   "The window's {}x{} picture doesn't fit on the desktop with its frame ({}x{} usable): made {}x{}",
+		                   picture.size.x, picture.size.y, usable.w, usable.h, fitted->size.x, fitted->size.y);
+		SDL_SetWindowSize(window, fitted->size.x, fitted->size.y);
+	}
+	SDL_SetWindowPosition(window, fitted->position.x, fitted->position.y);
 }
 
 void* Sdl2WindowingSystem::GetHandle() const
@@ -309,6 +344,12 @@ Sdl2WindowingSystem& Sdl2WindowingSystem::SetSize(glm::ivec2 size)
 bool Sdl2WindowingSystem::IsMinimised() const
 {
 	return (SDL_GetWindowFlags(_window.get()) & SDL_WINDOW_MINIMIZED) != 0;
+}
+
+bool Sdl2WindowingSystem::IsWindowed() const
+{
+	// Full screen on the desktop's own resolution has the full screen flag too
+	return (SDL_GetWindowFlags(_window.get()) & SDL_WINDOW_FULLSCREEN) == 0;
 }
 
 glm::ivec2 Sdl2WindowingSystem::GetSize() const

@@ -22,9 +22,10 @@ namespace
 // The hints by the cursor's place
 constexpr float k_SideEdge = 0.45f;
 constexpr float k_BottomEdge = 0.43f;
-constexpr float k_VeryBottomEdge = 0.49f;
+/// The very top and bottom of the screen, nearer the middle in a window, whose edges are harder to reach
+constexpr float k_VeryEdge = 0.49f;
+constexpr float k_VeryEdgeWindowed = 0.45f;
 constexpr float k_TopEdgeWithoutLand = -0.4f;
-constexpr float k_TopEdge = -0.49f;
 
 /// The mouse must move this far, in shares of the screen, before a drag is decided
 constexpr float k_DecideDistance = 0.02f;
@@ -73,8 +74,9 @@ glm::vec2 NormalisedCursor(glm::ivec2 cursor, glm::ivec2 screenSize, int viewHei
 	return {static_cast<float>(cursor.x) / width - 0.5f, static_cast<float>(cursor.y - (screenSize.y >> 1)) / height};
 }
 
-uint32_t IdleTricons(glm::vec2 normalisedCursor, bool landUnderCursor)
+uint32_t IdleTricons(glm::vec2 normalisedCursor, bool landUnderCursor, bool windowed)
 {
+	const auto veryEdge = windowed ? k_VeryEdgeWindowed : k_VeryEdge;
 	uint32_t tricons = tricon::k_Idle;
 	if (std::abs(normalisedCursor.x) > k_SideEdge)
 	{
@@ -84,11 +86,11 @@ uint32_t IdleTricons(glm::vec2 normalisedCursor, bool landUnderCursor)
 	{
 		tricons |= tricon::k_Rotate;
 	}
-	if (normalisedCursor.y > k_VeryBottomEdge)
+	if (normalisedCursor.y > veryEdge)
 	{
 		tricons |= tricon::k_Pitch;
 	}
-	if ((!landUnderCursor && normalisedCursor.y < k_TopEdgeWithoutLand) || normalisedCursor.y < k_TopEdge)
+	if ((!landUnderCursor && normalisedCursor.y < k_TopEdgeWithoutLand) || normalisedCursor.y < -veryEdge)
 	{
 		tricons |= tricon::k_Rotate | tricon::k_Pitch | tricon::k_Top;
 	}
@@ -97,6 +99,11 @@ uint32_t IdleTricons(glm::vec2 normalisedCursor, bool landUnderCursor)
 		tricons |= tricon::k_Turning;
 	}
 	return tricons;
+}
+
+bool HintsFollowCursor(bool buttonHeld, bool playerMovesCamera, bool selfTilting)
+{
+	return !buttonHeld && (selfTilting || !playerMovesCamera);
 }
 
 void DragClassifier::Start(uint32_t tricons, glm::vec2 normalisedCursor, uint32_t milliseconds)

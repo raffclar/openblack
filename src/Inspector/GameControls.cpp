@@ -33,6 +33,7 @@
 
 #include "Audio/AudioManagerInterface.h"
 #include "Camera/Camera.h"
+#include "Camera/CameraDrag.h"
 #include "Camera/CreatureCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/EditorCameraModel.h"
@@ -203,6 +204,29 @@ std::optional<CameraState> GameCamera::State() const
 		return std::nullopt;
 	}
 	const auto& camera = Locator::camera::value();
+	const auto cues = camera.GetModel().GetHandCues();
+	const auto drag = [&cues]() -> std::string {
+		if (!cues.dragging)
+		{
+			return "none";
+		}
+		if (!cues.dragMode.has_value())
+		{
+			return "undecided";
+		}
+		switch (*cues.dragMode)
+		{
+		case camera_drag::DragMode::Pan:
+			return "pan";
+		case camera_drag::DragMode::EdgeRotate:
+			return "edge_rotate";
+		case camera_drag::DragMode::Pitch:
+			return "pitch";
+		case camera_drag::DragMode::PitchFromTop:
+			return "pitch_from_top";
+		}
+		return "none";
+	};
 	return CameraState {
 	    .origin = camera.GetOrigin(),
 	    .focus = camera.GetFocus(),
@@ -212,6 +236,11 @@ std::optional<CameraState> GameCamera::State() const
 	    .nearClip = camera.GetNearClip(),
 	    .model = std::string(ModelName(camera.GetModel())),
 	    .heldByPath = PathHoldsCamera(),
+	    .mouseHints = {.rotate = (cues.tricons & camera_drag::tricon::k_Rotate) != 0,
+	                   .pitch = (cues.tricons & camera_drag::tricon::k_Pitch) != 0,
+	                   .top = (cues.tricons & camera_drag::tricon::k_Top) != 0,
+	                   .idle = (cues.tricons & camera_drag::tricon::k_Idle) != 0},
+	    .drag = drag(),
 	};
 }
 
