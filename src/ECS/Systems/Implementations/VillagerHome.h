@@ -28,10 +28,20 @@ struct LivingAction;
 namespace openblack::ecs::villager_home
 {
 
+/// How a villager's walk to its goal goes about the things in its way
+enum class WalkWay : uint8_t
+{
+	/// It heads for its goal and goes round whatever stands in its way: villagers going about their lives
+	RoundThings,
+	/// It walks straight to its goal, through whatever stands in the way: a script sending it somewhere
+	StraightThrough,
+};
+
 /// Walks the villager to a point, then on into a state
 void SetupMoveTo(components::LivingAction& action, glm::vec2 goal, VillagerStates final);
 /// The villager's walk to a goal starts afresh, ending in a final state, whatever state it is in meanwhile
-void SetupMobileMoveTo(components::LivingAction& action, glm::vec2 goal, VillagerStates final);
+void SetupMobileMoveTo(components::LivingAction& action, glm::vec2 goal, VillagerStates final,
+                       WalkWay way = WalkWay::RoundThings);
 
 /// The villager goes into its abode, and isn't drawn while there
 void ArriveHome(entt::entity villager);
