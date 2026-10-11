@@ -37,4 +37,11 @@ void SetBuilt(entt::entity building, float built);
 /// Builders add to how much of a building under construction is built, finishing it at all of it
 void BuildBy(entt::entity building, float amount);
 
+/// A building going up gets a site for its builders, with a desire, its builders' places worked out round its model and,
+/// for a temple, its six piles of wood
+void OpenSite(entt::entity building, float desire);
+
+/// A temple's site makes again those of its six piles of wood that have gone
+void MakeSitePiles(entt::entity building);
+
 } // namespace openblack::ecs::construction

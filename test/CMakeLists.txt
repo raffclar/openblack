@@ -679,3 +679,6 @@ openblack_setup_and_add_test(test_intro_rules test_intro_rules.cpp)
 openblack_setup_and_add_test(test_temple_help test_temple_help.cpp)
 openblack_setup_and_add_test(test_script_create test_script_create.cpp)
 openblack_setup_and_add_test(test_creature_training test_creature_training.cpp)
+openblack_setup_and_add_test(
+  test_building_site_rules test_building_site_rules.cpp
+)

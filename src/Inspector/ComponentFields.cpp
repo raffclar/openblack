@@ -425,7 +425,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::PlannedAbode>(context)
 	    .Field<&components::PlannedAbode::townId>("townId")
 	    .Field<&components::PlannedAbode::info>("info");
-	Reflect<components::BuildingSite>(context).Field<&components::BuildingSite::desire>("desire");
+	Reflect<components::BuildingSite>(context)
+	    .Field<&components::BuildingSite::desire>("desire")
+	    .Field<&components::BuildingSite::workers>("workers")
+	    .Field<&components::BuildingSite::workerCount>("workerCount")
+	    .Field<&components::BuildingSite::places>("places")
+	    .Field<&components::BuildingSite::piles>("piles");
 	Reflect<components::Creature>(context)
 	    .Field<&components::Creature::owner>("owner")
 	    .Field<&components::Creature::leashable>("leashable")
@@ -1380,6 +1385,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::DesireSort::boosts>("boosts")
 	    .Field<&components::DesireSort::value>("value")
 	    .Field<&components::DesireSort::index>("index");
+	Reflect<components::TownResourceTally>(context)
+	    .Field<&components::TownResourceTally::foodCarried>("foodCarried")
+	    .Field<&components::TownResourceTally::woodCarried>("woodCarried")
+	    .Field<&components::TownResourceTally::woodAtSites>("woodAtSites")
+	    .Field<&components::TownResourceTally::woodUsed>("woodUsed");
 	Reflect<components::TownStats>(context)
 	    .Field<&components::TownStats::adults>("adults")
 	    .Field<&components::TownStats::children>("children")
@@ -1455,7 +1465,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Villager::carried>("carried")
 	    .Field<&components::Villager::transitionPlaying>("transitionPlaying")
 	    .Field<&components::Villager::intoClipDue>("intoClipDue")
-	    .Field<&components::Villager::woken>("woken");
+	    .Field<&components::Villager::woken>("woken")
+	    .Field<&components::Villager::foodHeld>("foodHeld")
+	    .Field<&components::Villager::woodHeld>("woodHeld")
+	    .Field<&components::Villager::woodGraphic>("woodGraphic")
+	    .Field<&components::Villager::buildingSite>("buildingSite")
+	    .Field<&components::Villager::buildPlace>("buildPlace");
 	Reflect<components::VillagerDeath>(context)
 	    .Field<&components::VillagerDeath::turnsLeft>("turnsLeft")
 	    .Field<&components::VillagerDeath::skeleton>("skeleton")

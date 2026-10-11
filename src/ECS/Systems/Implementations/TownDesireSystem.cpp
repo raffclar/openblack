@@ -15,7 +15,9 @@
 #include <ranges>
 
 #include "3D/DayNightClock.h"
+#include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/TownDesire.h"
@@ -31,6 +33,7 @@ using namespace openblack;
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
 namespace town_desire = openblack::ecs::town_desire;
+namespace construction = openblack::ecs::construction;
 
 namespace
 {
@@ -136,6 +139,21 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 		}
 	}
 	in.homeless = static_cast<uint32_t>(town.homelessVillagers.size());
+
+	// Its building sites: how much each wants villagers, the builders at it and the most it takes
+	for (const auto building : construction::SitesOfTown(townEntity))
+	{
+		in.siteDesires.push_back(construction::DesireForVillagers(building));
+		in.siteBuilders.push_back(static_cast<uint32_t>(registry.Get<const BuildingSite>(building).workerCount));
+		in.sitePlaces.push_back(construction::MaxBuilders(building));
+	}
+	// What its people carry and the wood at its sites, as it has kept count
+	if (const auto* tally = registry.TryGet<const TownResourceTally>(townEntity))
+	{
+		stats.foodCarried = tally->foodCarried;
+		stats.woodCarried = tally->woodCarried;
+		stats.woodAtSites = tally->woodAtSites;
+	}
 
 	// The game counts the sky from 2 at night to 0 by day
 	if (Locator::skySystem::has_value())

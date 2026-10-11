@@ -163,6 +163,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
@@ -1136,13 +1137,54 @@ void GameThingClicked() // 016 GAME_THING_CLICKED
 	Pushb(clicked != nullptr && hand_click::IsThingClicked(*clicked, object));
 }
 
+static bool IsScriptContainer(const ecs::Registry& registry, entt::entity thing);
+static std::vector<entt::entity> ContainerMembers(const ecs::Registry& registry, entt::entity container);
+
+/// A creature given a state plays what the script last gave it to play
+void CreatureCarriesOutScriptPlay(entt::entity creature)
+{
+	auto& mind = Locator::entitiesRegistry::value().Get<ecs::components::CreatureMindState>(creature);
+	const auto agenda = creature_script_play::Agenda(mind.scriptPlay);
+	if (!agenda.has_value())
+	{
+		NotImplemented(mind.scriptPlay.animation);
+		return;
+	}
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().CarryOutForScript(creature, *agenda);
+	}
+}
+
 void SetScriptState() // 017 SET_SCRIPT_STATE
 {
 	const auto state = Pop().intVal;
 	const auto object = PopObject();
-	if (!Locator::entitiesRegistry::value().Valid(object))
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
 	{
 		ScriptMessage("Object no longer valid");
+		return;
+	}
+	// A group's living members each take the state as one would on its own, with no word of those that can't
+	if (IsScriptContainer(registry, object))
+	{
+		for (const auto member : ContainerMembers(registry, object))
+		{
+			if (IsDirectableVillager(member))
+			{
+				auto& living = Locator::livingActionSystem::value();
+				if (state >= 0 && state < static_cast<int32_t>(VillagerStates::_COUNT))
+				{
+					living.VillagerSetScriptState(member, static_cast<VillagerStates>(state));
+				}
+			}
+			else if (registry.Valid(member) && registry.AllOf<ecs::components::CreatureMindState>(member))
+			{
+				CreatureCarriesOutScriptPlay(member);
+			}
+			// TODO(opening): animals in a group
+		}
 		return;
 	}
 	if (IsDirectableVillager(object))
@@ -1156,22 +1198,13 @@ void SetScriptState() // 017 SET_SCRIPT_STATE
 		living.VillagerSetScriptState(object, static_cast<VillagerStates>(state));
 		return;
 	}
-	if (auto* mind = Locator::entitiesRegistry::value().TryGet<ecs::components::CreatureMindState>(object))
+	if (registry.AllOf<ecs::components::CreatureMindState>(object))
 	{
 		// A creature takes no state: it starts playing what the script last gave it to play
-		const auto agenda = creature_script_play::Agenda(mind->scriptPlay);
-		if (!agenda.has_value())
-		{
-			NotImplemented(mind->scriptPlay.animation);
-			return;
-		}
-		if (Locator::creatureMindSystem::has_value())
-		{
-			Locator::creatureMindSystem::value().CarryOutForScript(object, *agenda);
-		}
+		CreatureCarriesOutScriptPlay(object);
 		return;
 	}
-	// TODO(opening): animals and groups of things
+	// TODO(opening): animals
 	NotImplemented();
 }
 
@@ -4076,33 +4109,69 @@ void WidescreenTransistionFinished() // 132 WIDESCREEN_TRANSISTION_FINISHED
 	Pushb(Locator::cinematicDirectorSystem::value().IsWideScreenTransitionFinished());
 }
 
+/// The thing a resource native is given, if it is a thing of the world that can hold resources: an error is told
+/// for none or for a container
+std::optional<entt::entity> ResourceThing(entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("No thing for resource");
+		return std::nullopt;
+	}
+	if (!registry.AllOf<ecs::components::Transform>(object) || IsScriptContainer(registry, object))
+	{
+		ScriptMessage("Not object for resource");
+		return std::nullopt;
+	}
+	return object;
+}
+
+/// A script's quantity, a number made whole towards none and taken as unsigned
+uint32_t ResourceQuantity(float quantity)
+{
+	return static_cast<uint32_t>(static_cast<int32_t>(quantity));
+}
+
 void GetResource() // 133 GET_RESOURCE
 {
-	// const auto container = Pop().uintVal;
-	// const auto resource = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto object = PopObject();
+	const auto type = static_cast<ResourceType>(Pop().intVal);
+	const auto thing = ResourceThing(object);
+	if (!thing.has_value() || !Locator::resourceStoreSystem::has_value())
+	{
+		Pushf(0.0f);
+		return;
+	}
+	Pushf(static_cast<float>(Locator::resourceStoreSystem::value().GetResource(*thing, type)));
 }
 
 void AddResource() // 134 ADD_RESOURCE
 {
-	// const auto container = Pop().uintVal;
-	// const auto quantity = Popf();
-	// const auto resource = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto object = PopObject();
+	const auto quantity = ResourceQuantity(Popf());
+	const auto type = static_cast<ResourceType>(Pop().intVal);
+	const auto thing = ResourceThing(object);
+	if (!thing.has_value() || !Locator::resourceStoreSystem::has_value())
+	{
+		Pushf(0.0f);
+		return;
+	}
+	Pushf(static_cast<float>(Locator::resourceStoreSystem::value().AddResource(*thing, type, quantity, std::nullopt)));
 }
 
 void RemoveResource() // 135 REMOVE_RESOURCE
 {
-	// const auto container = Pop().uintVal;
-	// const auto quantity = Popf();
-	// const auto resource = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto object = PopObject();
+	const auto quantity = ResourceQuantity(Popf());
+	const auto type = static_cast<ResourceType>(Pop().intVal);
+	const auto thing = ResourceThing(object);
+	if (!thing.has_value() || !Locator::resourceStoreSystem::has_value())
+	{
+		Pushf(0.0f);
+		return;
+	}
+	Pushf(static_cast<float>(Locator::resourceStoreSystem::value().RemoveResource(*thing, type, quantity)));
 }
 
 void GetTargetRelativePos() // 136 GET_TARGET_RELATIVE_POS

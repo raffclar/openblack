@@ -16,7 +16,7 @@
 #include <string_view>
 #include <tuple>
 
-#include <entt/fwd.hpp>
+#include <entt/entity/entity.hpp>
 
 #include "Enums.h"
 
@@ -87,5 +87,12 @@ struct Villager
 	bool intoClipDue {false};
 	/// A knock on its home woke it: its own needs leave it be, and it won't go back to bed, for its next decision
 	bool woken {false};
+	/// The food and wood it carries, and which log its wood shows as (0 to 3)
+	int16_t foodHeld {0};
+	int16_t woodHeld {0};
+	uint8_t woodGraphic {0};
+	/// The building site it works for, if any, and which of the site's places round the building it makes for
+	entt::entity buildingSite {entt::null};
+	int32_t buildPlace {0};
 };
 } // namespace openblack::ecs::components
