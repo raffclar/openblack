@@ -9,6 +9,7 @@
 
 #include "SeaRows.h"
 
+#include <cmath>
 #include <cstdint>
 
 #include <algorithm>
@@ -310,4 +311,21 @@ sea_rows::Rows sea_rows::MakeRows(const ScreenRange& range)
 	    rows.count > 1 ? (range.inverseDepthBottom - range.inverseDepthTop) / static_cast<float>(rows.count - 1) : 0.0f;
 	rows.softTop = static_cast<float>(rows.first) > 0.5f;
 	return rows;
+}
+
+sea_rows::Ripple sea_rows::AdvanceRipple(Ripple ripple, std::chrono::milliseconds frameTime, bool gameTimeMoves)
+{
+	if (!gameTimeMoves)
+	{
+		return ripple;
+	}
+	ripple.sinceStep += frameTime;
+	if (ripple.sinceStep >= Ripple::k_StepInterval)
+	{
+		ripple.step = static_cast<uint8_t>((ripple.step + 1) % Ripple::k_Steps);
+		// One step a frame at most: a long frame leaves no steps owed, only its share of the next
+		ripple.sinceStep = std::chrono::duration<float, std::milli>(
+		    std::fmod((ripple.sinceStep - Ripple::k_StepInterval).count(), Ripple::k_StepInterval.count()));
+	}
+	return ripple;
 }
