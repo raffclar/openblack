@@ -54,4 +54,10 @@ struct BuildingSite
 	std::array<entt::entity, 6> piles {entt::null, entt::null, entt::null, entt::null, entt::null, entt::null};
 };
 
+/// A pile made to hold a building site's wood. It stays one after its building is finished: the villagers always come
+/// for what is left in it, where a pile the hand made draws them only when their town wants wood.
+struct SitePile
+{
+};
+
 } // namespace openblack::ecs::components

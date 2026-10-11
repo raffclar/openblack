@@ -41,10 +41,12 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "Game.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -132,6 +134,29 @@ void PlayFinishedMusic(PlayerNames owner)
 	}
 }
 
+/// A site's pile left with wood calls the villagers to come for it, as a pile belonging to no player. It is still a site's
+/// pile, so they come whether or not their town wants wood.
+void CallForLeftoverWood(entt::entity pile)
+{
+	auto& registry = Entities();
+	if (!Locator::reactionSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	auto& reactions = Locator::reactionSystem::value();
+	const auto type =
+	    Locator::infoConstants::value().pot.at(static_cast<size_t>(registry.Get<const Pot>(pile).type)).associatedReaction;
+	if (type == Reaction::None || reactions.HasReaction(pile))
+	{
+		return;
+	}
+	reactions.Create({.initiator = pile,
+	                  .type = type,
+	                  .player = PlayerNames::NEUTRAL,
+	                  .position = registry.Get<const Transform>(pile).position,
+	                  .playerless = true});
+}
+
 /// A building's site goes: its builders are let go of it, and of a temple's piles of wood, those with wood in them stay
 /// on as piles of their own for anyone to take from, and the empty ones go
 void CloseSite(entt::entity building)
@@ -148,11 +173,15 @@ void CloseSite(entt::entity building)
 		{
 			continue;
 		}
-		if (registry.Get<const Pot>(pile).amount == 0)
+		switch (building_site::WhenSiteCloses(registry.Get<const Pot>(pile).amount))
 		{
+		case building_site::LeftoverPile::Remove:
 			world_objects::Remove(pile);
+			break;
+		case building_site::LeftoverPile::CallForWood:
+			CallForLeftoverWood(pile);
+			break;
 		}
-		// TODO(temple-builders): a pile left with wood calls the villagers to it; piles' reactions aren't kept yet
 	}
 	registry.Remove<BuildingSite>(building);
 }
@@ -380,5 +409,6 @@ void construction::MakeSitePiles(entt::entity building)
 			position.y = Locator::terrainSystem::value().GetHeightAt({position.x, position.z});
 		}
 		pile = archetypes::PotArchetype::CreateEmpty(position, 0.0f, PotInfo::MagicWood);
+		registry.Assign<SitePile>(pile);
 	}
 }

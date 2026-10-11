@@ -228,3 +228,10 @@ TEST(VillagerCarry, PickingUpAndPuttingDown)
 	EXPECT_EQ(ecs::villager_carry::PutDown(villager, ResourceType::Food, 0), 0);
 	EXPECT_EQ(ecs::villager_carry::HeldResource(villager), ResourceType::None);
 }
+
+TEST(BuildingSiteRules, AFinishedTemplesEmptyPilesGoAndThoseWithWoodCallTheVillagers)
+{
+	EXPECT_EQ(WhenSiteCloses(0), LeftoverPile::Remove);
+	EXPECT_EQ(WhenSiteCloses(1), LeftoverPile::CallForWood);
+	EXPECT_EQ(WhenSiteCloses(600), LeftoverPile::CallForWood);
+}

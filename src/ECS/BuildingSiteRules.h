@@ -115,6 +115,15 @@ inline constexpr size_t k_TemplePiles = 6;
 inline constexpr float k_TemplePileDistance = 22.0f;
 [[nodiscard]] float TemplePileAngle(float heartYAngle, size_t pile);
 
+/// What becomes of one of a temple site's piles when the temple is finished: an empty one goes, one with wood left in it
+/// stays on as a pile of its own and calls the villagers to come for its wood
+enum class LeftoverPile : uint8_t
+{
+	Remove,
+	CallForWood,
+};
+[[nodiscard]] LeftoverPile WhenSiteCloses(uint32_t woodInPile);
+
 /// Of the sites wanting builders (or all of them for a builder disciple), the one whose building's nearest edge is
 /// nearest, each distance weighed by how much the site wants villagers. The earlier one on a tie.
 struct SiteCandidate
