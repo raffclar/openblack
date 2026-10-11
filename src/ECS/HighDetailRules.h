@@ -129,6 +129,22 @@ constexpr float k_QuarterTurn = std::numbers::pi_v<float> / 2.0f;
 	return wideScreenOn && wideScreenOwner != 0;
 }
 
+/// The shadow a villager casts
+enum class Shadow : uint8_t
+{
+	/// A blob under each foot, as every villager has
+	FootBlobs,
+	/// While a script draws it in high detail: its silhouette, in the pose it is drawn in, cast from the game's fixed
+	/// far sun onto the land, as a creature's shadow is, and no foot blobs. Once the script lets it go it casts foot
+	/// blobs again.
+	Projected,
+};
+
+[[nodiscard]] constexpr Shadow ShadowOf(bool highDetail)
+{
+	return highDetail ? Shadow::Projected : Shadow::FootBlobs;
+}
+
 /// Where a high-detail villager's body, and so its eyes, are drawn: in the opening hand's grip while it holds the
 /// villager, otherwise where the villager stands
 [[nodiscard]] constexpr glm::vec3 DrawnAt(const std::optional<glm::vec3>& heldAt, const glm::vec3& standsAt)

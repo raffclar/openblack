@@ -511,18 +511,30 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	const auto& director = Locator::cinematicDirectorSystem::value();
 	const auto bars = static_cast<float>(CinemaBars::BarHeight(resolution.x, resolution.y, director.GetWideScreenFraction()));
 	const auto screen = glm::vec2(resolution);
+	const auto drawBars = [&screen, bars](Canvas& canvas) {
+		const auto black = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+		canvas.DrawQuad(glm::vec2(0.0f), {screen.x, bars}, glm::vec2(0.0f), glm::vec2(1.0f), black, nullptr);
+		canvas.DrawQuad({0.0f, screen.y - bars}, screen, glm::vec2(0.0f), glm::vec2(1.0f), black, nullptr);
+	};
+	// The bars cover the scene in a view of their own, which the advisors near the screen are drawn over: clinging to
+	// the bottom of the screen during a cut scene, an advisor shows over the bottom bar
+	_cinemaBarsCanvas.Begin(resolution);
+	if (bars > 0.0f)
+	{
+		drawBars(_cinemaBarsCanvas);
+	}
+	_cinemaBarsCanvas.End();
 	if (const auto fade = director.GetFadeColour(); (fade >> 24u) != 0)
 	{
 		const auto colour = glm::vec4(static_cast<float>((fade >> 16u) & 0xFFu), static_cast<float>((fade >> 8u) & 0xFFu),
 		                              static_cast<float>(fade & 0xFFu), static_cast<float>(fade >> 24u)) /
 		                    255.0f;
 		_canvas.DrawQuad({0.0f, bars}, {screen.x, screen.y - bars}, glm::vec2(0.0f), glm::vec2(1.0f), colour, nullptr);
-	}
-	if (bars > 0.0f)
-	{
-		const auto black = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-		_canvas.DrawQuad(glm::vec2(0.0f), {screen.x, bars}, glm::vec2(0.0f), glm::vec2(1.0f), black, nullptr);
-		_canvas.DrawQuad({0.0f, screen.y - bars}, screen, glm::vec2(0.0f), glm::vec2(1.0f), black, nullptr);
+		// While a fade shows, the bars are drawn again over it and over the advisors
+		if (bars > 0.0f)
+		{
+			drawBars(_canvas);
+		}
 	}
 	DrawDialogue(resolution, static_cast<int>(bars));
 	// The game covers the frame with the fade's colour last of all

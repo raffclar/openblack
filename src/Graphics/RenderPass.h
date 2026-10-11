@@ -42,11 +42,16 @@ enum class RenderPass : uint8_t
 	Reflection,
 	/// What blends in the sea's reflection, the farthest first
 	ReflectionTranslucent,
+	/// What is under the sea's surface, seen from the view as it is (not mirrored), drawn into the reflection's target
+	/// over the mirrored world: the sea is then blended over it all. The sharks' bodies.
+	UnderSea,
 	/// The sky, drawn first into the view: everything in the scene is drawn over it and in front of it
 	Sky,
 	Main,
 	/// What blends in the world, drawn after the rest of the scene, the farthest first
 	Translucent,
+	/// The cinema bars over the scene: the advisors near the screen are drawn over them
+	CinemaBars,
 	/// The advisors near the screen, drawn over the whole scene with its depth cleared
 	Advisors,
 	Interface,
@@ -72,9 +77,11 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Reflection Sky Pass",         //
     "Reflection Pass",             //
     "Reflection Translucent Pass", //
+    "Under Sea Pass",              //
     "Sky Pass",                    //
     "Main Pass",                   //
     "Translucent Pass",            //
+    "Cinema Bars Pass",            //
     "Advisors Pass",               //
     "Interface Pass",              //
     "ImGui Pass",                  //

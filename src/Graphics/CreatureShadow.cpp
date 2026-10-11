@@ -62,6 +62,23 @@ glm::vec3 CreatureShadow::LightPoint(const glm::vec3& light, const glm::vec3& ce
 	return centre + towards;
 }
 
+glm::vec3 CreatureShadow::CastFrom(Caster caster, const glm::vec3& light, const glm::vec3& centre, float radius)
+{
+	switch (caster)
+	{
+	case Caster::HighDetailVillager:
+		return k_FixedSun;
+	case Caster::Creature:
+		break;
+	}
+	return LightPoint(light, centre, radius);
+}
+
+bool CreatureShadow::FallsOnObjects(Caster caster)
+{
+	return caster == Caster::Creature;
+}
+
 glm::mat4 CreatureShadow::CellMatrix(uint8_t cell, uint8_t cells)
 {
 	const auto count = static_cast<float>(std::max<uint8_t>(cells, 1));
@@ -73,7 +90,7 @@ glm::mat4 CreatureShadow::CellMatrix(uint8_t cell, uint8_t cells)
 	return matrix;
 }
 
-std::optional<CreatureShadow> CreatureShadow::Compute(const glm::vec3& centre, float radius, float groundHeight,
+std::optional<CreatureShadow> CreatureShadow::Compute(Caster caster, const glm::vec3& centre, float radius, float groundHeight,
                                                       const glm::vec3& light, const glm::vec3& camera, uint8_t cell,
                                                       uint8_t cells, bool originBottomLeft, bool homogeneousDepth)
 {
@@ -83,12 +100,13 @@ std::optional<CreatureShadow> CreatureShadow::Compute(const glm::vec3& centre, f
 	{
 		return std::nullopt;
 	}
-	const auto from = LightPoint(light, centre, radius);
+	const auto from = CastFrom(caster, light, centre, radius);
 	const auto direction = glm::normalize(centre - from);
 
 	CreatureShadow shadow {};
 	shadow.strength = static_cast<float>(alpha) / 255.0f;
 	shadow.startDepth = -0.5f * radius;
+	shadow.onObjects = FallsOnObjects(caster);
 	const auto up = std::abs(direction.y) > 0.99f ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
 	shadow.view = glm::lookAtRH(centre - (direction * (radius * 2.0f)), centre, up);
 	shadow.projection = homogeneousDepth ? glm::orthoRH_NO(-radius, radius, -radius, radius, 0.0f, radius * 4.0f)

@@ -172,7 +172,7 @@ void main()
 	// The creatures' shadows, which fade out towards the water's edge as the hand's does
 	if (u_creatureShadowInfo.x > 0.0f && v_shadowCoord.w > 0.0f)
 	{
-		col.rgb = col.rgb * CreatureShadowLight(v_world);
+		col.rgb = col.rgb * CreatureShadowLight(v_world, 0.0f);
 	}
 
 	// The small bump detail is a second layer over the lit land, its colour unlit, blended by its alpha whatever the

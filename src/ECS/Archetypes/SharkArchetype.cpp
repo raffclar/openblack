@@ -14,7 +14,6 @@
 #include "3D/AllMeshes.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Animals/AnimalRules.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Shark.h"
@@ -36,13 +35,17 @@ entt::entity SharkArchetype::Create(const glm::vec3& position, float scale)
 	const float height = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(xz) : 0.0f;
 	const glm::vec3 at(xz.x, height, xz.y);
 	// Twice the size it is made at, facing +x
-	registry.Assign<Transform>(entity, at, animals::Orientation(0.0f, 0.0f), glm::vec3(scale * 2.0f));
+	registry.Assign<Transform>(entity, at, shark_rules::Facing(0.0f), glm::vec3(scale * 2.0f));
 	// The boned shark, not the mobile object table's model for a shark
 	registry.Assign<Mesh>(entity, resources::HashIdentifier(MeshId::SharkBoned), static_cast<int8_t>(0),
 	                      static_cast<int8_t>(0));
 	registry.Assign<Shark>(entity, Shark {.position = at, .turnStart = at});
-	// Posed by its swimming clip as the animals are, in its own dark blue lit by the game's light, and cut at the sea
-	registry.Assign<AnimalPose>(
-	    entity, AnimalPose {.light = AnimalLight::Own, .colour = shark_rules::k_Colour, .cutBelow = shark_rules::k_SeaLevel});
+	// Posed by its swimming clip as the animals are and cut at the sea: what breaks the surface in the land's brightest
+	// light, what is under it in its own dark blue beneath the sea's surface (see shark_rules::LookOf)
+	const auto look = shark_rules::LookOf(false);
+	registry.Assign<AnimalPose>(entity, AnimalPose {.light = AnimalLight::BrightestLand,
+	                                                .cutBelow = shark_rules::k_SeaLevel,
+	                                                .aboveCutShown = look.aboveSea,
+	                                                .underSea = look.underSea});
 	return entity;
 }

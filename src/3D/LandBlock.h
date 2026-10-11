@@ -34,10 +34,18 @@ namespace graphics
 class VertexBuffer;
 }
 
+/// A corner of a land cell as it is drawn
 struct LandVertex
 {
+	/// Where the corner is drawn in its block: the land at sea level is drawn flat at height 0
 	glm::vec3 position;
+	/// The corner's own altitude, 0 to 255, before the land at sea level is flattened. The small bump detail and the
+	/// shadows on the land go by it: they show on the flattened land of altitudes 2 and 3 but not below.
+	float altitude;
 };
+
+/// The vertex of a cell corner at cornerPosition (x and z in its block) of the given altitude
+[[nodiscard]] LandVertex MakeLandVertex(glm::vec2 cornerPosition, uint8_t altitude);
 
 class LandIslandInterface;
 

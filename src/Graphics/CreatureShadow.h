@@ -23,8 +23,19 @@ namespace openblack::graphics
 /// soft 32 by 32 texture projected onto the land and what stands on it. The light is kept at least 45 degrees up, and
 /// never closer than three of the creature's radii. The shadow fades out as the camera pulls away, between 50 and 80
 /// of the creature's radii from the ground beneath it. The hair casts none.
+///
+/// A villager a script draws in high detail, as the opening's family is, casts the same kind of shadow while it is
+/// drawn so (in place of its foot blobs), but from the game's fixed far sun, and only onto the land.
 struct CreatureShadow
 {
+	/// What casts a moving shadow
+	enum class Caster : uint8_t
+	{
+		Creature,
+		HighDetailVillager,
+	};
+	/// The game's fixed sun, a point so far off that every shadow cast from it falls the same way
+	static constexpr glm::vec3 k_FixedSun {-500000.0f, 500000.0f, -500000.0f};
 	/// The shadows are drawn side by side in one texture, each in a cell of this many texels, twice the game's 32 so
 	/// that four filtered samples across a texel soften the edges as its box filter does. A texel of the game's border
 	/// is left clear.
@@ -46,6 +57,11 @@ struct CreatureShadow
 	/// Where the shadow is cast from: the scene's light, brought round to at least 45 degrees above the creature and,
 	/// when it is nearer than k_LightDistance radii across the ground, out to that distance
 	[[nodiscard]] static glm::vec3 LightPoint(const glm::vec3& light, const glm::vec3& centre, float radius);
+	/// Where a caster's shadow is cast from: a creature's from the scene's light as LightPoint brings it round, a
+	/// high-detail villager's from the fixed sun whatever the scene's light
+	[[nodiscard]] static glm::vec3 CastFrom(Caster caster, const glm::vec3& light, const glm::vec3& centre, float radius);
+	/// Whether a caster's shadow falls on the objects standing on the land as well as on the land itself
+	[[nodiscard]] static bool FallsOnObjects(Caster caster);
 
 	/// View and projection of the silhouette, fitted to the creature's bounding sphere, looking from the light
 	glm::mat4 view;
@@ -57,13 +73,16 @@ struct CreatureShadow
 	float strength;
 	/// Receivers this far along the light past the creature's centre or further are shaded
 	float startDepth;
+	/// Whether it falls on the objects standing on the land too, or only on the land
+	bool onObjects;
 
-	/// The shadow of a creature with a bounding sphere about centre, from the scene's light, seen from the camera, in
-	/// cell `cell` of a texture `cells` wide. originBottomLeft and homogeneousDepth are those of bgfx::Caps. None when the
-	/// shadow has faded out.
-	[[nodiscard]] static std::optional<CreatureShadow> Compute(const glm::vec3& centre, float radius, float groundHeight,
-	                                                           const glm::vec3& light, const glm::vec3& camera, uint8_t cell,
-	                                                           uint8_t cells, bool originBottomLeft, bool homogeneousDepth);
+	/// The shadow of a caster with a bounding sphere about centre, cast from where CastFrom says with the scene's light,
+	/// seen from the camera, in cell `cell` of a texture `cells` wide. originBottomLeft and homogeneousDepth are those of
+	/// bgfx::Caps. None when the shadow has faded out.
+	[[nodiscard]] static std::optional<CreatureShadow> Compute(Caster caster, const glm::vec3& centre, float radius,
+	                                                           float groundHeight, const glm::vec3& light,
+	                                                           const glm::vec3& camera, uint8_t cell, uint8_t cells,
+	                                                           bool originBottomLeft, bool homogeneousDepth);
 	/// The matrix that takes the silhouette's clip space into its cell's part of the shared texture's
 	[[nodiscard]] static glm::mat4 CellMatrix(uint8_t cell, uint8_t cells);
 };

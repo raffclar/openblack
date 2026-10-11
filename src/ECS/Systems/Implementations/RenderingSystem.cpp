@@ -390,6 +390,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	// Set transforms for instanced draw at offsets
 	_renderContext.entityDraws.clear();
 	_renderContext.drawnObjects.clear();
+	_renderContext.highDetailDraws.clear();
 	_renderContext.bonePalette.clear();
 	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
 	bool fits = true;
@@ -640,6 +641,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    if (look.z != 1.0f || (goingUp && progress->built > 0.0f))
 		    {
 			    _renderContext.drawnObjects.push_back({.entity = entity, .model = modelMatrix});
+		    }
+		    if (openblack::ecs::high_detail_rules::ShadowOf(highDetail != nullptr) ==
+		            openblack::ecs::high_detail_rules::Shadow::Projected &&
+		        look.z != 1.0f)
+		    {
+			    _renderContext.highDetailDraws.push_back({.entity = entity, .mesh = drawnMesh, .model = modelMatrix});
 		    }
 		    if (slots->second.perEntity && placed.has_value())
 		    {

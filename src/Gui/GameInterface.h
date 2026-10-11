@@ -226,6 +226,8 @@ private:
 	std::optional<FontFace> _evilAdvisorFont;
 	Canvas _canvas;
 	Canvas _pointerCanvas {graphics::RenderPass::Cursor};
+	/// The cinema bars, under the advisors near the screen
+	Canvas _cinemaBarsCanvas {graphics::RenderPass::CinemaBars};
 	DialogPainter _painter;
 	std::unique_ptr<GameMenu> _menu;
 	/// Made once and kept, so that the answer picked stays picked

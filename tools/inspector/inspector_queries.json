@@ -1150,7 +1150,7 @@
   "query": "view.editor"
  },
  {
-  "description": "What is drawn of the advisors this frame: near the screen or in the world, alpha, how far out in the world, and how close their posed meshes come to the camera beside its near plane",
+  "description": "What is drawn of the advisors this frame: near the screen or in the world, alpha, how far out in the world, where they hover and cling on the screen and where their bones are drawn, and how close their posed meshes come to the camera beside its near plane",
   "kind": "list",
   "parameters": [],
   "query": "advisors.draws"
