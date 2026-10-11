@@ -16,6 +16,8 @@
 #include <bit>
 #include <utility>
 
+#include "Gui/ScreenFit.h"
+
 namespace openblack::help
 {
 
@@ -216,11 +218,14 @@ TextRegion ComputeTextRegion(int width, int height, int barPixels)
 {
 	const int margin = static_cast<int>(static_cast<float>(height - 2 * barPixels) * k_BoxMarginFraction);
 	const int boxHeight = static_cast<int>(static_cast<float>(height) * k_BoxHeightFraction);
+	// The game's strip runs the width of its 4:3 screen; on a wider screen it runs the width of the 4:3 screen as tall
+	// in the middle, so the lines wrap and the cue sits as they do on 4:3
+	const auto middle = gui::FitInside(gui::k_FourByThree, width, height);
 	TextRegion region {};
-	region.left = 0;
+	region.left = middle.width < width ? middle.x : 0;
 	region.bottom = height - margin - barPixels - 1;
 	region.top = region.bottom - boxHeight;
-	region.right = width;
+	region.right = middle.width < width ? middle.x + middle.width : width;
 	return region;
 }
 
@@ -237,8 +242,8 @@ int ClickCueY(const TextRegion& r)
 HelpTextDisplay::HelpTextDisplay(int screenHeight, bool biggerText)
 {
 	// Base line height = screen height * (1/28 or 1/30); the alpha is rewritten per entry
-	const float fraction = biggerText ? k_BiggerLineHeightFraction : k_LineHeightFraction;
-	_baseLineHeight = static_cast<float>(screenHeight) * fraction;
+	_lineHeightFraction = biggerText ? k_BiggerLineHeightFraction : k_LineHeightFraction;
+	_baseLineHeight = static_cast<float>(screenHeight) * _lineHeightFraction;
 	Reset(true);
 }
 
@@ -337,6 +342,10 @@ TextFrame HelpTextDisplay::Layout(int width, int height, int barPixels, int text
 	// The region is recomputed every frame
 	const TextRegion region = ComputeTextRegion(width, height, barPixels);
 	frame.box = region;
+	// The see-through band runs the screen's whole width, as on 4:3, whatever the area its contents use
+	frame.band = region;
+	frame.band.left = 0;
+	frame.band.right = width;
 	// The box only needs the draw gate, not the hidden flag (Close clears the box flag anyway). Skipping the
 	// whole draw in some game modes is the caller's job.
 	bool gate = true;
@@ -356,7 +365,9 @@ TextFrame HelpTextDisplay::Layout(int width, int height, int barPixels, int text
 	{
 		return frame;
 	}
-	const float base = _baseLineHeight;
+	// The game works the line height out once, from the screen it starts on; the window can change size here, so it
+	// follows the screen's height as the box does
+	const float base = static_cast<float>(height) * _lineHeightFraction;
 	const float anim = _anim;
 	// y0 = trunc(base * (topToBottom ? -1/3 : 1/3)); scale 1
 	int yCur = static_cast<int>(base * (topToBottom ? -k_SlotThird : k_SlotThird));
@@ -463,9 +474,8 @@ bool HelpTextDisplay::SameLayoutInputs(int width, int height, int barPixels, int
 	};
 	return kept.width == width && kept.height == height && kept.barPixels == barPixels && kept.textDraw == textDraw &&
 	       kept.topToBottom == topToBottom && std::ranges::equal(kept.entries, _entries, sameEntry) && kept.newest == _newest &&
-	       SameBits(kept.baseLineHeight, _baseLineHeight) && SameBits(kept.anim, _anim) && kept.hidden == _hidden &&
-	       kept.singleLine == _singleLine && kept.boxShown == _boxShown && kept.drawable == _drawable &&
-	       kept.f1Loaded == _f1Loaded && kept.f3Loaded == _f3Loaded;
+	       SameBits(kept.anim, _anim) && kept.hidden == _hidden && kept.singleLine == _singleLine &&
+	       kept.boxShown == _boxShown && kept.drawable == _drawable && kept.f1Loaded == _f1Loaded && kept.f3Loaded == _f3Loaded;
 }
 
 void HelpTextDisplay::KeepLayoutInputs(int width, int height, int barPixels, int textDraw, bool topToBottom) const
@@ -478,7 +488,6 @@ void HelpTextDisplay::KeepLayoutInputs(int width, int height, int barPixels, int
 	kept.topToBottom = topToBottom;
 	kept.entries = _entries; // element by element, reusing the kept strings' storage
 	kept.newest = _newest;
-	kept.baseLineHeight = _baseLineHeight;
 	kept.anim = _anim;
 	kept.hidden = _hidden;
 	kept.singleLine = _singleLine;

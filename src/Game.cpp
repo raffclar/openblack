@@ -683,22 +683,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		{
 			return false;
 		}
-		else if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
-		{
-			const auto resolution = glm::u16vec2(event.window.data1, event.window.data2);
-			Locator::rendererInterface::value().Reset(resolution);
-			Locator::rendererInterface::value().ConfigureView(graphics::RenderPass::Main, resolution, 0x274659ff);
-			Locator::oceanSystem::value().ResizeReflectionFramebuffer(resolution);
-			Locator::rendererInterface::value().ConfigureView(graphics::RenderPass::Reflection, resolution, 0x274659ff);
-
-			auto aspect = window.GetAspectRatio();
-			const auto& config = Locator::config::value();
-			// A camera model, as the temple's, can look through its own lens
-			const auto lens = camera.GetModel().GetLens();
-			camera.SetProjectionMatrixPerspective(lens.has_value() ? lens->horizontalFieldOfView : config.cameraXFov, aspect,
-			                                      lens.has_value() ? lens->nearClip : config.cameraNearClip,
-			                                      config.cameraFarClip);
-		}
+		// A window resized, maximised or restored is followed by the next frame drawn (FollowWindowSize)
 		break;
 	case SDL_KEYDOWN:
 		switch (event.key.keysym.sym)
@@ -1572,6 +1557,7 @@ bool Game::Update() noexcept
 			}
 			Locator::events::value().Create<SDL_Event>(e);
 		}
+		FollowWindowSize();
 		if (actions.IsCursorFrozen())
 		{
 			_mousePosition = glm::ivec2(actions.GetMousePosition());
@@ -2480,6 +2466,11 @@ bool Game::Initialize() noexcept
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize engine services.");
 		return false;
+	}
+	// The renderer starts at the window's size
+	if (Locator::windowing::has_value())
+	{
+		_windowSize = windowing::SizeFollower(glm::u16vec2(Locator::windowing::value().GetSize()));
 	}
 	_startupTimer->Step("window, renderer and audio device");
 	auto& fileSystem = Locator::filesystem::value();
@@ -3962,6 +3953,29 @@ void Game::SetUpLandscape()
 void Game::SetTime(float time) noexcept
 {
 	Locator::skySystem::value().SetTime(time);
+}
+
+void Game::FollowWindowSize()
+{
+	if (!Locator::windowing::has_value() || !Locator::rendererInterface::has_value())
+	{
+		return;
+	}
+	const auto size = _windowSize.Follow(Locator::windowing::value().GetSize());
+	if (!size.has_value())
+	{
+		return;
+	}
+	Locator::rendererInterface::value().Reset(*size);
+	if (Locator::oceanSystem::has_value())
+	{
+		Locator::oceanSystem::value().ResizeReflectionFramebuffer(*size);
+	}
+	// The camera keeps its lens (the world's, the temple's) and its clip planes, only its shape changes
+	if (Locator::camera::has_value())
+	{
+		Locator::camera::value().SetAspect(_windowSize.Aspect());
+	}
 }
 
 void Game::FitNearClip()

@@ -937,7 +937,7 @@
   "query": "living.flocks"
  },
  {
-  "description": "How many fireflies there are",
+  "description": "How many fireflies there are and how many hide, fly out, hover and fly home; whether the next nightfall tops them up; the trees and the things standing over several cells they can hide in; and what the last frame did with those out: in view, near enough to be seen, drawn, and whether their picture was found",
   "kind": "object",
   "parameters": [],
   "query": "living.fireflies"

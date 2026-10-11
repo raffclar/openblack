@@ -464,9 +464,13 @@ TEST(CreatureFight, OutcomesAndStarting)
 
 TEST(CreatureFightHud, LayoutAndColours)
 {
-	const auto layout = creature_fight_hud::Compute({1400, 700});
+	const auto layout = creature_fight_hud::Compute({1400, 1050});
 	EXPECT_NEAR(layout.box.max.x - layout.box.min.x, 660.0f, 1e-3f);
-	EXPECT_NEAR(layout.box.max.y - layout.box.min.y, 90.0f, 1e-3f);
+	EXPECT_NEAR(layout.box.max.y - layout.box.min.y, 135.0f, 1e-3f);
+	// A wider screen as tall: the box keeps its 4:3 size in the corner
+	const auto wide = creature_fight_hud::Compute({2800, 1050});
+	EXPECT_NEAR(wide.box.max.x - wide.box.min.x, 660.0f, 1e-3f);
+	EXPECT_EQ(wide.box.min, layout.box.min);
 	for (const auto& row : layout.rows)
 	{
 		EXPECT_GT(row.health.max.y - row.health.min.y, row.stamina.max.y - row.stamina.min.y);

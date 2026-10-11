@@ -251,7 +251,8 @@ void FireflySystem::ToTheBack()
 
 void FireflySystem::Fly(entt::entity entity)
 {
-	auto& firefly = _world->Entities().Get<Firefly>(entity);
+	auto& registry = _world->Entities();
+	auto& firefly = registry.Get<Firefly>(entity);
 	const bool out = firefly.state == fireflies::State::FlyingOut;
 	const auto step = fireflies::Advance(firefly, _world->TurnSeconds());
 	if (step.moveTo.has_value())
@@ -264,6 +265,11 @@ void FireflySystem::Fly(entt::entity entity)
 		const auto from = _world->ToWorld(out ? firefly.home : firefly.hover);
 		const auto to = _world->ToWorld(out ? firefly.hover : firefly.home);
 		firefly.at = _world->FromWorld((to - from) * *step.along + from);
+	}
+	// One not drawn stands where it is on the map; one drawn stands where it was drawn, until the next frame draws it
+	if (!registry.AllOf<Sprite>(entity))
+	{
+		registry.Get<Transform>(entity).position = _world->ToWorld(firefly.at);
 	}
 }
 
@@ -312,15 +318,22 @@ void FireflySystem::Update(float milliseconds, float turnFraction)
 	auto& registry = _world->Entities();
 	const auto look = _world->Look();
 	const auto camera = _world->CameraPosition();
+	_lastFrame = {.pictureReady = look.has_value()};
 	for (const auto entity : _order)
 	{
 		auto& firefly = registry.Get<Firefly>(entity);
 		std::optional<uint8_t> opacity;
 		// Only one out of hiding and in view is drawn; how far it is from the camera is taken from where it was last drawn
-		if (firefly.state != fireflies::State::Resting && _world->InView(_world->ToWorld(firefly.at)))
+		if (firefly.state != fireflies::State::Resting)
 		{
-			const auto away = camera - firefly.drawn;
-			opacity = fireflies::OpacityAt(glm::dot(away, away));
+			++_lastFrame.out;
+			if (_world->InView(_world->ToWorld(firefly.at)))
+			{
+				++_lastFrame.inView;
+				const auto away = camera - firefly.drawn;
+				opacity = fireflies::OpacityAt(glm::dot(away, away));
+				_lastFrame.inReach += opacity.has_value() ? 1 : 0;
+			}
 		}
 		if (!opacity.has_value() || !look.has_value())
 		{
@@ -344,6 +357,7 @@ void FireflySystem::Update(float milliseconds, float turnFraction)
 			sprite = &registry.Assign<Sprite>(entity, *look);
 		}
 		sprite->tint.a = static_cast<float>(*opacity) / 255.0f;
+		++_lastFrame.drawn;
 	}
 }
 

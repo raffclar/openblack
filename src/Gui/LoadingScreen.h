@@ -89,7 +89,8 @@ private:
 	/// taken down by the screen's
 	void DrawColourBox(loading::Rect rect, const std::array<uint32_t, 4>& colours, uint8_t drawAlpha);
 	/// The text broken into lines `size` high centred in a box, from `top`; returns the height it takes
-	float DrawText(std::u16string_view text, const loading::Rect& box, float top, float size, glm::vec4 colour, bool draw);
+	float DrawText(std::u16string_view text, const loading::Rect& box, float top, float size, glm::vec4 colour, bool draw,
+	               bool sharp = false);
 	/// Text centred both ways in a box of the 800 by 600 layout
 	void DrawLayoutText(std::u16string_view text, loading::Rect layout, glm::vec4 colour);
 	/// A rectangle of the 800 by 600 layout on the screen
@@ -102,6 +103,7 @@ private:
 	std::vector<uint8_t> _atlasPixels;
 	std::unique_ptr<graphics::Texture2D> _atlas;
 	std::unique_ptr<graphics::Texture2D> _fontTexture;
+	std::unique_ptr<graphics::Texture2D> _fullFontTexture;
 	std::unique_ptr<graphics::VideoOverlay> _overlay;
 	Canvas _canvas;
 	std::unique_ptr<DialogPainter> _painter;
