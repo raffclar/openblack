@@ -54,6 +54,8 @@ struct RegistryContext
 	std::optional<land_avoid::Map> landAvoid;
 	/// The names of the game's table of named people already given to a villager on this land
 	std::array<bool, 0x30> namedVillagersUsed {};
+	/// How many things have been made so far, the next one's place in the order they were made
+	uint32_t thingsMade {0};
 	/// The Show Villager Names key has the named villagers' names up, and the Show Villager Details key every villager's
 	/// details; a new land starts with both down
 	bool villagerNamesShown {false};

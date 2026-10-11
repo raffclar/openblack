@@ -128,6 +128,37 @@ template <typename Model>
 	return turn % k_GrowthTurns == 0;
 }
 
+/// The age a child is made when it grows up: the age of growing up, and never under the youngest adult's
+[[nodiscard]] constexpr uint32_t GrownUpAge(uint32_t grownUp)
+{
+	return GivenAge(grownUp, grownUp);
+}
+
+/// One smaller than this when it arrives home to change is sized again for its age
+constexpr float k_FullGrownScale = 0.95f;
+
+/// What a child's checks do to it
+enum class ChildGrowth : uint8_t
+{
+	/// Nothing this time
+	None,
+	/// It grows a little towards its age's size
+	Grows,
+	/// It is old enough and becomes an adult
+	GrowsUp,
+};
+
+/// What a child's checks on a turn do: one of the age of growing up becomes an adult; a younger one grows only when
+/// its checks fall on a growth turn, which they meet only now and then, the checks coming every nine turns
+[[nodiscard]] constexpr ChildGrowth CheckChild(uint32_t age, uint32_t grownUp, uint32_t turn)
+{
+	if (!IsChildAge(age, grownUp))
+	{
+		return ChildGrowth::GrowsUp;
+	}
+	return IsGrowthTurn(turn) ? ChildGrowth::Grows : ChildGrowth::None;
+}
+
 /// Whether a villager is looked at for dying of old age in the checks it has now: its own turn of the eight hundred
 /// came in the turns since its last checks. Its own turn is set by its number.
 [[nodiscard]] constexpr bool IsOldAgeCheckDue(uint32_t turn, uint32_t number, uint32_t turnsSinceChecked)

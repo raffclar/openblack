@@ -228,3 +228,50 @@ TEST(VillagerAge, AVillagerGivenAnAgeWearsItsKindsModelsForItAtEveryDistance)
 	EXPECT_EQ(openblack::ecs::villager_age::ModelsForAge(true, child, adult), child);
 	EXPECT_EQ(openblack::ecs::villager_age::ModelsForAge(false, child, adult), adult);
 }
+
+TEST(VillagerAge, AChildGrowsOnGrowthTurnsAndGrowsUpAtTheAgeOfGrowingUp)
+{
+	// Younger than growing up: only on a growth turn
+	EXPECT_EQ(CheckChild(5, k_GrownUp, 375), ChildGrowth::Grows);
+	EXPECT_EQ(CheckChild(5, k_GrownUp, 750), ChildGrowth::Grows);
+	EXPECT_EQ(CheckChild(5, k_GrownUp, 376), ChildGrowth::None);
+	EXPECT_EQ(CheckChild(12, k_GrownUp, 374), ChildGrowth::None);
+	// Old enough, on any turn
+	EXPECT_EQ(CheckChild(13, k_GrownUp, 376), ChildGrowth::GrowsUp);
+	EXPECT_EQ(CheckChild(13, k_GrownUp, 375), ChildGrowth::GrowsUp);
+	// It is made the youngest adult's age
+	EXPECT_EQ(GrownUpAge(k_GrownUp), 18u);
+	EXPECT_EQ(GrownUpAge(25), 25u);
+}
+
+TEST(VillagerAge, ChecksEveryNineTurnsMeetGrowthTurnsOnlyOnSomePhases)
+{
+	// Checks fall every nine turns at a phase of their own; the growth turns, every 375, fall on phases 0, 3 and 6 only
+	const auto growths = [](uint32_t phase) {
+		uint32_t count = 0;
+		for (uint32_t turn = phase; turn < 375 * 9; turn += 9)
+		{
+			count += CheckChild(5, k_GrownUp, turn) == ChildGrowth::Grows ? 1 : 0;
+		}
+		return count;
+	};
+	EXPECT_EQ(growths(0), 3u);
+	EXPECT_EQ(growths(3), 3u);
+	EXPECT_EQ(growths(6), 3u);
+	EXPECT_EQ(growths(1), 0u);
+	EXPECT_EQ(growths(8), 0u);
+}
+
+TEST(VillagerAge, AGrownChildTakesAnAdultsSizeAndIsNotSizedAgainAtHome)
+{
+	// Grown up it starts at the adult start size and draws twice, since the first draw is always above it
+	Draws draws {.values = {0.02f, 0.06f}};
+	const auto start = StartScale(GrownUpAge(k_GrownUp), k_GrownUp, k_AgeToScale);
+	EXPECT_FLOAT_EQ(start, 0.9f);
+	const auto scale = GrownScale(GrownUpAge(k_GrownUp), k_GrownUp, k_AgeToScale, start, draws.Float());
+	EXPECT_FLOAT_EQ(scale, 1.05f - 0.06f);
+	EXPECT_EQ(draws.limits.size(), 2u);
+	// Even the smallest adult size drawn (a draw is always under its limit) is full grown, so it isn't sized again
+	// arriving home
+	EXPECT_GE(1.05f - 0.0999f, k_FullGrownScale);
+}

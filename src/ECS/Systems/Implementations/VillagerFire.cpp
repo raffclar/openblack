@@ -59,6 +59,7 @@
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerHome.h"
+#include "VillagerReactions.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -690,7 +691,8 @@ uint32_t villager_fire::MoveAroundFire(LivingAction& action)
 		target = ToCoords(state.walkTarget);
 	}
 	villager_home::SetupMoveTo(action, CoordsToMetres(target), VillagerStates::MoveAroundFire);
-	SetStateSpeed(villager, State(action, LivingAction::Index::Previous));
+	// The full speed of its state, wounds, town and its own way of going included
+	ecs::systems::villager_reactions::SetStateSpeed(villager, State(action, LivingAction::Index::Previous));
 	return 1;
 }
 

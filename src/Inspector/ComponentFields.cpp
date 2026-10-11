@@ -1542,7 +1542,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Villager::woodGraphic>("woodGraphic")
 	    .Field<&components::Villager::buildingSite>("buildingSite")
 	    .Field<&components::Villager::buildPlace>("buildPlace")
-	    .Field<&components::Villager::foodSpeedUp>("foodSpeedUp");
+	    .Field<&components::Villager::foodSpeedUp>("foodSpeedUp")
+	    .Field<&components::Villager::creationIndex>("creationIndex");
 	Reflect<components::VillagerDeath>(context)
 	    .Field<&components::VillagerDeath::turnsLeft>("turnsLeft")
 	    .Field<&components::VillagerDeath::skeleton>("skeleton")
