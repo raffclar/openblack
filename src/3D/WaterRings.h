@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <array>
+#include <chrono>
 
 #include <entt/core/hashed_string.hpp>
 #include <glm/vec2.hpp>
@@ -54,8 +55,30 @@ struct Ring
 /// `angle`, its colour the land's brightest light of the moment, 0xRRGGBB
 [[nodiscard]] Ring HandSplash(glm::vec2 xz, float angle, uint32_t landLight);
 
-/// A ring after `milliseconds` more of game time; false once it has gone
+/// A ring after `milliseconds` more of game time; false once it has gone. It ages by the whole milliseconds times its
+/// rate, the fraction dropped, as the game did once a frame
 [[nodiscard]] bool Advance(Ring& ring, float milliseconds);
+
+/// When the rings age. The game aged every ring once a frame, by that frame's game time times the ring's rate with the
+/// fraction dropped, and its frames came at the screen's refresh: it waits for the vertical sync by default, at the
+/// display's default refresh rate. Done every frame at hundreds of frames a second, that dropped fraction would be most
+/// of each step, and a ring with a slow rate (a big body's) would hardly grow at all. So the rings step no more often
+/// than that refresh, 60 times a second, each step taking all the game time since the last; slower frames step once
+/// each, as the game's did.
+struct Pace
+{
+	/// The time between steps at the screen's refresh
+	static constexpr std::chrono::duration<float, std::milli> k_StepInterval {1000.0f / 60.0f};
+
+	/// The real time since the last step that counts towards the next
+	std::chrono::duration<float, std::milli> sinceStep {0.0f};
+	/// The game time since the last step, which the next step ages the rings by
+	std::chrono::milliseconds gameSinceStep {0};
+};
+
+/// The game time the rings age by after a frame of this real and game time: nothing on a frame they don't step
+[[nodiscard]] std::chrono::milliseconds Step(Pace& pace, std::chrono::milliseconds frameRealTime,
+                                             std::chrono::milliseconds frameGameTime);
 
 /// Half the ring's width, and its opacity, 0 to 255: it fades out as it grows
 [[nodiscard]] float HalfWidth(const Ring& ring);

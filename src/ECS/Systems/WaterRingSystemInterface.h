@@ -27,8 +27,9 @@ public:
 	virtual void Reset() = 0;
 	/// A new ring, unless there are as many as there can be; false then
 	virtual bool Add(const water_rings::Ring& ring) = 0;
-	/// Once a frame: the rings grow and fade with the game time, which stops while the game is paused, and go
-	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
+	/// Once a frame, with the frame's real and game time: the rings grow and fade with the game time, which stops while
+	/// the game is paused, at the pace of water_rings::Step, and go
+	virtual void Update(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime) = 0;
 	[[nodiscard]] virtual std::span<const water_rings::Ring> GetRings() const = 0;
 };
 

@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <utility>
 
 namespace openblack::water_rings
 {
@@ -46,6 +47,20 @@ bool Advance(Ring& ring, float milliseconds)
 {
 	ring.age += static_cast<uint32_t>(milliseconds * ring.rate);
 	return ring.age < k_Life;
+}
+
+std::chrono::milliseconds Step(Pace& pace, std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime)
+{
+	pace.gameSinceStep += frameGameTime;
+	pace.sinceStep += frameRealTime;
+	if (pace.sinceStep < Pace::k_StepInterval)
+	{
+		return std::chrono::milliseconds {0};
+	}
+	// One step a frame at most: a long frame leaves no steps owed, only its share of the next
+	pace.sinceStep = std::chrono::duration<float, std::milli>(
+	    std::fmod((pace.sinceStep - Pace::k_StepInterval).count(), Pace::k_StepInterval.count()));
+	return std::exchange(pace.gameSinceStep, std::chrono::milliseconds {0});
 }
 
 float HalfWidth(const Ring& ring)
