@@ -130,9 +130,9 @@ public:
 	/// they aren't drawn, when their fades hold where they are
 	struct HandTricons
 	{
-		/// The hand on the screen, and the last point it gripped the land at, in whole pixels
+		/// The hand on the screen, and the cursor it follows this frame, in whole pixels
 		glm::ivec2 hand {0};
-		glm::ivec2 lastGrip {0};
+		glm::ivec2 cursor {0};
 		/// An icon's half-width in pixels
 		float halfSize {0.0f};
 		/// The icons wanted, as hand_tricons::icon, and the rotate arrow's turn in radians
@@ -141,7 +141,7 @@ public:
 		/// The hand's state shows the camera icons: it holds nothing
 		bool handStateShowsIcons {true};
 		bool cinemaBars {false};
-		/// They lean from the last grip towards the hand
+		/// They lean a quarter of the way from the hand towards the cursor
 		bool leans {true};
 		/// A demonstration plays: no cross, and its mouse by the icons lighting the buttons it holds
 		bool demonstration {false};

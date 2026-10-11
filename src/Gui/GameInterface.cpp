@@ -665,7 +665,7 @@ void GameInterface::DrawHandTricons(glm::u16vec2 resolution)
 	                            .crossNudge = in.crossNudge,
 	                        });
 	const auto screen = glm::ivec2(resolution);
-	const auto centre = tricons::Place(in.hand, in.lastGrip, screen, in.cinemaBars, in.leans);
+	const auto centre = tricons::Place(in.hand, in.cursor, screen, in.cinemaBars, in.leans);
 	for (const auto& sprite : tricons::Sprites(glm::vec2(centre), in.halfSize, _tricons, in.rotateAngle))
 	{
 		if (sprite.has_value())
