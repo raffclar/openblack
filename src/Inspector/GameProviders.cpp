@@ -55,6 +55,7 @@
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/Firefly.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/HiddenByState.h"
@@ -1046,11 +1047,41 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		              });
 		              return items;
 	              }));
-	provider->Add(Query("fireflies", "How many fireflies there are"),
-	              Serve<Locator::fireflySystem>(
-	                  "the fireflies", [](const ecs::systems::FireflySystemInterface& fireflies, const QueryContext& /*c*/) {
-		                  return Json {{"fireflies", fireflies.GetFireflies().size()}};
-	                  }));
+	provider->Add(
+	    Query("fireflies",
+	          "How many fireflies there are and how many hide, fly out, hover and fly home; whether the next nightfall "
+	          "tops them up; the trees and the things standing over several cells they can hide in; and what the last "
+	          "frame did with those out: in view, near enough to be seen, drawn, and whether their picture was found"),
+	    Serve<Locator::fireflySystem>(
+	        "the fireflies", [](const ecs::systems::FireflySystemInterface& fireflies, const QueryContext& /*c*/) {
+		        std::array<size_t, 4> states {};
+		        size_t hidden = 0;
+		        if (const auto* registry = Registry(); registry != nullptr)
+		        {
+			        for (const auto entity : fireflies.GetFireflies())
+			        {
+				        const auto& firefly = registry->Get<const Firefly>(entity);
+				        ++states.at(static_cast<size_t>(firefly.state));
+				        hidden += firefly.hidden ? 1 : 0;
+			        }
+		        }
+		        const auto frame = fireflies.GetLastFrame();
+		        return Json {{"fireflies", fireflies.GetFireflies().size()},
+		                     {"resting", states.at(static_cast<size_t>(Firefly::State::Resting))},
+		                     {"flying_out", states.at(static_cast<size_t>(Firefly::State::FlyingOut))},
+		                     {"hovering", states.at(static_cast<size_t>(Firefly::State::Hovering))},
+		                     {"flying_home", states.at(static_cast<size_t>(Firefly::State::FlyingHome))},
+		                     {"hidden", hidden},
+		                     {"top_up_due", fireflies.IsTopUpDue()},
+		                     {"trees", fireflies.GetTreeCount()},
+		                     {"fixed", fireflies.GetFixedCount()},
+		                     {"last_frame",
+		                      {{"out", frame.out},
+		                       {"in_view", frame.inView},
+		                       {"in_reach", frame.inReach},
+		                       {"drawn", frame.drawn},
+		                       {"picture_ready", frame.pictureReady}}}};
+	        }));
 	provider->Add(Query("fish_farms", "The fish farms: their town, fish left, fishermen and shoal", {}, ResultKind::List),
 	              Serve<Locator::fishFarmSystem>(
 	                  "the fish farms", [](const ecs::systems::FishFarmSystemInterface& farms, const QueryContext& /*c*/) {
