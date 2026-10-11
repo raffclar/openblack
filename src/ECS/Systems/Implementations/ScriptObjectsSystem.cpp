@@ -26,6 +26,7 @@
 #include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/VillagerLabel.h"
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFlocks.h"
@@ -101,6 +102,7 @@ public:
 
 	[[nodiscard]] bool IsInScript(entt::entity object) const override { return Registry().AllOf<InScript>(object); }
 	void SetInScript(entt::entity object, bool inScript) override { SetTag<InScript>(Registry(), object, inScript); }
+	void HideName(entt::entity object) override { SetTag<NameHidden>(Registry(), object, true); }
 	[[nodiscard]] bool IsControlled(entt::entity object) const override { return Registry().AllOf<ScriptControlled>(object); }
 	void SetControlled(entt::entity object, bool controlled) override
 	{
@@ -271,6 +273,11 @@ bool ScriptObjectsSystem::Register(entt::entity object, bool createdByScript)
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Adding null script thing");
 		return false;
+	}
+	// What a script makes keeps its name hidden, even when there is no room left for it
+	if (createdByScript)
+	{
+		_world->HideName(object);
 	}
 	if (!_table.Register(Key(object), createdByScript))
 	{

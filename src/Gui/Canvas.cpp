@@ -71,6 +71,7 @@ void Canvas::Begin(glm::u16vec2 resolution)
 	_vertices.clear();
 	_batches.clear();
 	_blend = Blend::Alpha;
+	_origin = glm::vec2(0.0f);
 }
 
 void Canvas::DrawQuad(glm::vec2 min, glm::vec2 max, glm::vec2 uvMin, glm::vec2 uvMax, glm::vec4 colour,
@@ -88,6 +89,8 @@ void Canvas::DrawQuad(glm::vec2 min, glm::vec2 max, glm::vec2 uvMin, glm::vec2 u
 		    {.texture = drawn, .blend = _blend, .firstVertex = static_cast<uint32_t>(_vertices.size()), .vertexCount = 0});
 	}
 	const auto abgr = ToAbgr(colour);
+	min += _origin;
+	max += _origin;
 	const Vertex topLeft {.x = min.x, .y = min.y, .u = uvMin.x, .v = uvMin.y, .abgr = abgr};
 	const Vertex topRight {.x = max.x, .y = min.y, .u = uvMax.x, .v = uvMin.y, .abgr = abgr};
 	const Vertex bottomLeft {.x = min.x, .y = max.y, .u = uvMin.x, .v = uvMax.y, .abgr = abgr};
@@ -115,8 +118,11 @@ void Canvas::DrawShape(const std::array<glm::vec2, 4>& corners, const std::array
 	std::array<Vertex, 4> vertices {};
 	for (size_t i = 0; i < 4; ++i)
 	{
-		vertices.at(i) = {
-		    .x = corners.at(i).x, .y = corners.at(i).y, .u = uvs.at(i).x, .v = uvs.at(i).y, .abgr = ToAbgr(colours.at(i))};
+		vertices.at(i) = {.x = corners.at(i).x + _origin.x,
+		                  .y = corners.at(i).y + _origin.y,
+		                  .u = uvs.at(i).x,
+		                  .v = uvs.at(i).y,
+		                  .abgr = ToAbgr(colours.at(i))};
 	}
 	_vertices.insert(_vertices.end(), {vertices[0], vertices[1], vertices[2], vertices[0], vertices[2], vertices[3]});
 	_batches.back().vertexCount += 6;

@@ -28,17 +28,21 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/AtHome.h"
+#include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/GraveyardRules.h"
+#include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -46,6 +50,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/VillagerClips.h"
 #include "ECS/VillagerMemory.h"
+#include "ECS/WalkerPlacement.h"
 #include "ECS/WorldObjects.h"
 #include "Fire/ViaPoint.h"
 #include "InfoConstants.h"
@@ -91,8 +96,6 @@ constexpr int k_MostDetours = 1000;
 /// The game's angles: a whole turn in 2048, and a villager turning towards something by a quarter of 1024 a turn
 constexpr int32_t k_AngleUnits = 2048;
 constexpr int32_t k_LookStep = 0x100;
-/// A dead villager lies as a skeleton for this many turns, or less with a working graveyard
-constexpr uint32_t k_CorpseTurnsWithoutGraveyard = 600;
 
 ecs::Registry& Entities()
 {
@@ -1038,8 +1041,15 @@ void villager_fire::DieByEffect(entt::entity villager, std::optional<DeathCause>
 	{
 		life->life = 0.0f;
 	}
+	// Its body lies less long when the town it belonged to as it died had a working graveyard
+	const auto town = registry.Get<const Villager>(villager).town;
+	const auto* info = InfoOf(villager);
+	const auto corpseTurns = info != nullptr
+	                             ? graveyard::CorpseTurns(graveyards::HasWorkingGraveyard(town), info->dyingTimeWithGraveyard,
+	                                                      info->dyingTimeWithoutGraveyard)
+	                             : 0u;
 	registry.Assign<VillagerDeath>(villager, VillagerDeath {
-	                                             .turnsLeft = k_CorpseTurnsWithoutGraveyard,
+	                                             .turnsLeft = corpseTurns,
 	                                             .reason = cause.has_value() ? std::optional(cause->reason) : std::nullopt,
 	                                             .killer = cause.has_value() ? cause->killer : std::nullopt,
 	                                         });
@@ -1047,16 +1057,21 @@ void villager_fire::DieByEffect(entt::entity villager, std::optional<DeathCause>
 	{
 		RememberDeath(villager, *cause);
 	}
+	// Its town's graveyard counts it among its burials
+	// TODO(villager-death-aftermath): the town's death counts and the death messages join here
+	graveyards::TownPersonDied(town);
 	villager_home::LeaveHome(villager);
+	// It falls where it is: whatever walk it was on ends
+	walker_placement::Stop(registry, villager);
 	SetTopState(*action, VillagerStates::Dying);
 	// The people round it react to the death
 	if (Locator::reactionSystem::has_value())
 	{
 		const auto& person = registry.Get<const Villager>(villager);
-		const auto* town = registry.Valid(person.town) ? registry.TryGet<const Town>(person.town) : nullptr;
+		const auto* ownTown = registry.Valid(person.town) ? registry.TryGet<const Town>(person.town) : nullptr;
 		Locator::reactionSystem::value().Create({.initiator = villager,
 		                                         .type = Reaction::ReactToDeath,
-		                                         .player = town != nullptr ? town->owner : PlayerNames::NEUTRAL,
+		                                         .player = ownTown != nullptr ? ownTown->owner : PlayerNames::NEUTRAL,
 		                                         .position = PositionOf(villager)});
 	}
 }
@@ -1092,20 +1107,31 @@ uint32_t villager_fire::Dead(LivingAction& action)
 	{
 		Locator::fireSystem::value().Forget(villager);
 	}
-	if (!death->skeleton)
+	// A body a script controls is left to the script: it keeps its flesh and lies on until the script lets it go
+	const bool scripted = registry.AllOf<ScriptControlled>(villager);
+	if (!scripted)
 	{
-		death->skeleton = true;
-		if (auto* mesh = registry.TryGet<Mesh>(villager))
+		// Every body, man, woman or child, becomes the man's skeleton once its flesh goes. One already wearing the
+		// skeleton (a skeleton villager that died, or a body a script made bones) has nothing left to lose.
+		const auto skeletonModel = resources::HashIdentifier(MeshId::PersonSkeletonMale);
+		auto* mesh = registry.TryGet<Mesh>(villager);
+		if (mesh != nullptr && mesh->id != skeletonModel)
 		{
-			mesh->id = resources::HashIdentifier(MeshId::PersonSkeletonMale);
+			// TODO(villager-death-aftermath): the flesh going is where the smoke puff and the rising soul start
+			mesh->id = skeletonModel;
+			if (auto* detail = registry.TryGet<DetailMeshes>(villager))
+			{
+				detail->meshes = {skeletonModel, skeletonModel, skeletonModel};
+			}
 			registry.SetDirty();
 		}
-	}
-	// It lies there its time, and one turn more, and goes
-	if (death->turnsLeft-- == 0)
-	{
-		world_objects::Remove(villager);
-		return 5;
+		death->skeleton = true;
+		// It lies there its time, and one turn more, and goes
+		if (death->turnsLeft-- == 0)
+		{
+			world_objects::Remove(villager);
+			return 5;
+		}
 	}
 	return 1;
 }

@@ -32,6 +32,7 @@
 #include "TattooEditorDialog.h"
 #include "TextDatabase.h"
 #include "ToolTips.h"
+#include "VillagerLabels.h"
 
 union SDL_Event;
 
@@ -158,6 +159,8 @@ public:
 	void SetHandTricons(std::optional<HandTricons> tricons) { _handTricons = tricons; }
 	/// The numbers floating up this frame, drawn the furthest first, under the interface
 	void SetFloatingNumbers(std::vector<FloatingNumber> numbers) { _floatingNumbers = std::move(numbers); }
+	/// The villagers' name and details labels wanted this frame, in the order they are placed
+	void SetVillagerLabels(std::vector<villager_labels::Request> labels) { _villagerLabels = std::move(labels); }
 
 private:
 	/// A font with its glyphs, white with their coverage in alpha
@@ -186,8 +189,9 @@ private:
 	void DrawCreaturePanel(glm::u16vec2 resolution);
 	/// The fight's panel, at the top left of the screen
 	void DrawFightPanel(glm::u16vec2 resolution);
-	/// The full-screen video playing, between the interface and the scripts' fade
-	void DrawVideo(glm::u16vec2 resolution);
+	/// The full-screen video playing, between the interface and the scripts' fade. Returns how wide the black bars at
+	/// its sides are, on a screen wider than its 16:9 picture (none otherwise, and none without a video)
+	int DrawVideo(glm::u16vec2 resolution);
 	/// The tooltip's glow: a soft box of atmos.raw added round a rectangle
 	void DrawGlow(glm::vec2 min, glm::vec2 max, glm::vec4 colour);
 	/// The scripts' dialogue: its see-through box above the bottom cinema bar with the "Continue" cue, then the hand's
@@ -197,6 +201,8 @@ private:
 	void DrawHandTricons(glm::u16vec2 resolution);
 	/// One word of the dialogue, cut to the box's top and bottom
 	void DrawDialogueRun(const help::TextRun& run);
+	/// The villagers' labels: placed in turn so none covers another, then drawn the furthest first
+	void DrawVillagerLabels(glm::u16vec2 resolution);
 	/// The tip bubble over the "did you know" sign tapped last, with the pointer over it keeping it up
 	void DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse);
 	/// A run of the bubble's words' width as the bubble measures it
@@ -237,6 +243,7 @@ private:
 	/// Whether the left mouse button is down, as the tattoo editor's dialog has seen it
 	bool _leftButtonDown {false};
 	std::optional<Message> _message;
+	std::vector<villager_labels::Request> _villagerLabels;
 	ToolTips _toolTips;
 	ScreenFade _screenFade;
 	std::unique_ptr<graphics::VideoOverlay> _video;

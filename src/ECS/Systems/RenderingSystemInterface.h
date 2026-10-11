@@ -11,10 +11,12 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include <entt/fwd.hpp>
 #include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
@@ -78,6 +80,9 @@ struct RenderContext
 		bool bonePalette {false};
 		/// How many of the instances are placed this frame, from the first
 		uint32_t filled {0};
+		/// The grey the instances are drawn in, in the temple's light: in the main pass, then in the reflection. The
+		/// temple's walking worshippers.
+		std::optional<glm::vec2> templeGrey;
 		/// How far the instances' textures have slid across them
 		glm::vec2 uvOffset {0.0f};
 		/// Textures some of the submeshes are drawn with in place of their skins, by submesh: the temple's scrolls
@@ -199,6 +204,8 @@ struct RenderContext
 		std::optional<float> scaffoldCut;
 		/// How far its inner walls stand in whatever their material, when given: a temple's
 		std::optional<float> innerWallInset;
+		/// A standing graveyard's graves: those of its model's parts numbered one up to this are drawn over the rest
+		std::optional<uint32_t> gravesShown;
 	};
 	std::vector<PartialBuildDraw> partialBuilds;
 	std::vector<ObjectInstance> partialBuildInstances;

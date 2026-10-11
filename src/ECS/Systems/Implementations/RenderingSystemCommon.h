@@ -42,6 +42,9 @@ private:
 	virtual bool UploadUniformsKeepingDescs([[maybe_unused]] bool drawBoundingBox) { return false; }
 
 protected:
+	/// The bones of the villagers placed with the instances, for the vertex shader to read
+	void UploadBonePalette();
+
 	RenderContext _renderContext;
 };
 } // namespace openblack::ecs::systems
