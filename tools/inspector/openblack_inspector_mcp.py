@@ -1425,8 +1425,10 @@ def build_request(tool, arguments):
         params = {key: arguments[key] for key in tool.get("params", []) if key in arguments}
         if params:
             request["params"] = params
+    # A tool parameter named as a shaping option (edit_add_component's fields) is the parameter, not the option
+    own = set(tool.get("params", []))
     for key in SHAPING_KEYS:
-        if key in arguments:
+        if key in arguments and key not in own:
             request[key] = arguments[key]
     return request
 
