@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <string>
 
 #include <entt/fwd.hpp>
@@ -21,7 +23,14 @@ namespace openblack::ecs::archetypes
 class VillagerArchetype
 {
 public:
-	static entt::entity Create(const glm::vec3& abodePosition, const glm::vec3& position, VillagerInfo type, uint32_t age);
+	/// Who a new villager joins: the town nearest its abode, or nobody yet (a newborn joins its mother's home)
+	enum class Joins : uint8_t
+	{
+		NearestTown,
+		Nobody,
+	};
+	static entt::entity Create(const glm::vec3& abodePosition, const glm::vec3& position, VillagerInfo type, uint32_t age,
+	                           Joins joins = Joins::NearestTown);
 	VillagerArchetype() = delete;
 };
 } // namespace openblack::ecs::archetypes

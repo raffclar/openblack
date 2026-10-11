@@ -98,5 +98,9 @@ struct Villager
 	uint8_t foodSpeedUp {0};
 	/// Its place in the order things were made in the game, which gives it its own small difference in speed
 	uint32_t creationIndex {0};
+	/// The turns left until a pregnant woman's time comes; none when she isn't pregnant
+	int16_t pregnancy {0};
+	/// A child's mother, while she is about
+	entt::entity mother {entt::null};
 };
 } // namespace openblack::ecs::components

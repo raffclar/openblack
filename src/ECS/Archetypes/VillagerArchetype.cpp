@@ -44,7 +44,7 @@ using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 
 entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePosition, const glm::vec3& position,
-                                       VillagerInfo type, uint32_t age)
+                                       VillagerInfo type, uint32_t age, Joins joins)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
@@ -94,7 +94,8 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 	const auto sex = info.sex == SexType::Female ? Villager::Sex::FEMALE : Villager::Sex::MALE;
 	const auto task = Villager::Task::IDLE;
 
-	const entt::entity town = Locator::townSystem::value().FindClosestTown(abodePosition);
+	const entt::entity town =
+	    joins == Joins::NearestTown ? Locator::townSystem::value().FindClosestTown(abodePosition) : entt::null;
 
 	auto& person =
 	    registry.Assign<Villager>(entity, life, villager_age::BirthTurnFor(turn, born.age), born.food, lifeStage, sex,

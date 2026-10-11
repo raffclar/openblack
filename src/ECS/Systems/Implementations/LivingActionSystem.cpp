@@ -40,6 +40,7 @@
 #include "Locator.h"
 #include "VillagerAnimate.h"
 #include "VillagerArtefactDance.h"
+#include "VillagerBreeding.h"
 #include "VillagerBuild.h"
 #include "VillagerChecks.h"
 #include "VillagerDance.h"
@@ -79,6 +80,7 @@ namespace villager_forester = openblack::ecs::villager_forester;
 namespace villager_fisherman = openblack::ecs::villager_fisherman;
 namespace villager_housewife = openblack::ecs::villager_housewife;
 namespace villager_checks = openblack::ecs::villager_checks;
+namespace villager_breeding = openblack::ecs::villager_breeding;
 
 /// A villager with no state does nothing
 uint32_t VillagerInvalidState(LivingAction& /*action*/)
@@ -505,11 +507,23 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_housewife::GossipsAroundStoragePit,
     },
-    /* HOUSEWIFE_STARTS_GIVING_BIRTH */ k_TodoEntry,
-    /* HOUSEWIFE_GIVING_BIRTH */ k_TodoEntry,
-    /* HOUSEWIFE_GIVEN_BIRTH */ k_TodoEntry,
+    /* HOUSEWIFE_STARTS_GIVING_BIRTH */
+    VillagerStateTableEntry {
+        .state = &villager_breeding::StartsGivingBirth,
+    },
+    /* HOUSEWIFE_GIVING_BIRTH */
+    VillagerStateTableEntry {
+        .state = &villager_breeding::GivingBirth,
+    },
+    /* HOUSEWIFE_GIVEN_BIRTH */
+    VillagerStateTableEntry {
+        .state = &villager_breeding::GivenBirth,
+    },
     /* CHILD_AT_CRECHE */ k_TodoEntry,
-    /* CHILD_FOLLOWS_MOTHER */ k_TodoEntry,
+    /* CHILD_FOLLOWS_MOTHER */
+    VillagerStateTableEntry {
+        .state = &villager_breeding::ChildFollowsMother,
+    },
     /* CHILD_BECOMES_ADULT */ k_TodoEntry,
     /* SITS_DOWN_TO_DINNER */
     VillagerStateTableEntry {
@@ -539,12 +553,37 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .state = &villager_home::GoHome,
         .exitState = &villager_home::ExitAtHome,
     },
-    /* START_HAVING_SEX */ k_TodoEntry,
-    /* HAVING_SEX */ k_TodoEntry,
-    /* STOP_HAVING_SEX */ k_TodoEntry,
-    /* START_HAVING_SEX_AT_HOME */ k_TodoEntry,
-    /* HAVING_SEX_AT_HOME */ k_TodoEntry,
-    /* STOP_HAVING_SEX_AT_HOME */ k_TodoEntry,
+    /* START_HAVING_SEX */
+    VillagerStateTableEntry {
+        .state = &villager_breeding::StartHavingSex,
+        .exitState = &villager_breeding::ExitSex,
+        .validate = &villager_breeding::SexValidate,
+    },
+    /* HAVING_SEX */
+    VillagerStateTableEntry {
+        .state = &villager_breeding::HavingSex,
+        .exitState = &villager_breeding::ExitSex,
+    },
+    /* STOP_HAVING_SEX */
+    VillagerStateTableEntry {
+        .state = &villager_breeding::StopHavingSex,
+        .exitState = &villager_breeding::ExitSex,
+    },
+    /* START_HAVING_SEX_AT_HOME: nothing ever goes into the states of love at home; they do nothing, as in the game */
+    VillagerStateTableEntry {
+        .state = &VillagerInvalidState,
+        .exitState = &villager_home::ExitAtHome,
+    },
+    /* HAVING_SEX_AT_HOME */
+    VillagerStateTableEntry {
+        .state = &VillagerInvalidState,
+        .exitState = &villager_home::ExitAtHome,
+    },
+    /* STOP_HAVING_SEX_AT_HOME */
+    VillagerStateTableEntry {
+        .state = &VillagerInvalidState,
+        .exitState = &villager_home::ExitAtHome,
+    },
     /* WAIT_FOR_DINNER */
     VillagerStateTableEntry {
         .state = &villager_food::DoesNothing,
@@ -734,9 +773,18 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* FOOTBALL_MOVE_TO_BALL */ k_TodoEntry,
     /* ARRIVES_AT_STORAGE_PIT_FOR_TRADER_PICK_UP */ k_TodoEntry,
     /* ARRIVES_AT_STORAGE_PIT_FOR_TRADER_DROP_OFF */ k_TodoEntry,
-    /* BREEDER_DISCIPLE */ k_TodoEntry,
+    /* BREEDER_DISCIPLE */
+    VillagerStateTableEntry {
+        .state = &villager_breeding::BreederDisciple,
+        .entryState = &villager_breeding::EnterBreeder,
+        .exitState = &villager_breeding::ExitBreeder,
+        .validate = &villager_breeding::SexValidate,
+    },
     /* MISSIONARY_DISCIPLE */ k_TodoEntry,
-    /* REACT_TO_BREEDER */ k_TodoEntry,
+    /* REACT_TO_BREEDER */
+    VillagerStateTableEntry {
+        .state = &villager_breeding::ReactToBreeder,
+    },
     /* SHEPHERD_CHECK_ANIMAL_FOR_SLAUGHTER */ k_TodoEntry,
     /* INTERACT_DECIDE_WHAT_TO_DO_FOR_OTHER_VILLAGER */ k_TodoEntry,
     /* ARTIFACT_DANCE */
@@ -813,7 +861,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .entryState = &villager_artefact_dance::EnterWaitForArtefactDance,
         .exitState = &villager_artefact_dance::ExitDance,
     },
-    /* BREEDER_JUST_LANDED */ k_TodoEntry,
+    /* BREEDER_JUST_LANDED */
+    VillagerStateTableEntry {
+        .state = &villager_breeding::BreederJustLanded,
+    },
 };
 
 void LivingActionSystem::Update()
