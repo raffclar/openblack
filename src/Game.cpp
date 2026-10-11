@@ -206,6 +206,7 @@
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TownDesireFlags.h"
 #include "ECS/TreeRoots.h"
 #include "ECS/VillageTotem.h"
 #include "ECS/VillagerLabelSource.h"
@@ -1073,6 +1074,14 @@ void Game::ProcessHandToolTipTurn()
 			toolTips.Submit(creature_fight::ToolTipIndex(*tip), gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
 		}
 	}
+	else if (const auto flagTip = shown ? Locator::townDesireSystem::value().GetFlagToolTip(
+	                                          Locator::pickingSystem::value().GetPick().object.value_or(entt::null))
+	                                    : std::nullopt;
+	         flagTip.has_value() && !over.has_value())
+	{
+		// Over a flag of a town's store, the hand shows how much the town wants its thing, in the flag's own words
+		toolTips.SubmitInWords(ecs::town_desire_flags::k_NeedToolTip, flagTip->words, flagTip->percent);
+	}
 	else if (over.has_value() && shown)
 	{
 		const auto* creature = Locator::entitiesRegistry::value().TryGet<const ecs::components::Creature>(*over);
@@ -1822,6 +1831,8 @@ bool Game::Update() noexcept
 	ecs::villager_disciple::UpdateMarks();
 	// The town totems ease to their shares
 	Locator::villageTotemSystem::value().Update(gameTime.count());
+	// The flags over the towns' stores ease to their desires and turn to the camera
+	Locator::townDesireSystem::value().UpdateFlags(std::chrono::duration<float>(gameTime).count());
 	// The players' symbols of belief over the village centres move on
 	Locator::townSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	Locator::fieldSystem::value().Update(gameTime);
