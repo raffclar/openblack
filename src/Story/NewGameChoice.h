@@ -118,4 +118,21 @@ struct NewGameStart
 	return std::nullopt;
 }
 
+/// The name ParseNewGameStart reads a choice's answer by: "normal", "creature", "story" or "old"
+[[nodiscard]] constexpr std::string_view StartName(Choice choice) noexcept
+{
+	switch (choice)
+	{
+	case Choice::SkipToCreatureSelect:
+		return "creature";
+	case Choice::SkipCreatureTutorial:
+		return "story";
+	case Choice::KeepOldCreature:
+		return "old";
+	case Choice::StartNormally:
+	default:
+		return "normal";
+	}
+}
+
 } // namespace openblack::new_game_choice

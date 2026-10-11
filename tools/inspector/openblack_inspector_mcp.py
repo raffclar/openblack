@@ -349,7 +349,9 @@ TOOLS = [
         "name": "input_pointer",
         "description": "Moves the pointer to a pixel, or to where a point of the world is on the screen, with a "
                        "real mouse's timing: the motion event reaches the game this frame, the action map reads the "
-                       "pointer there from the next frame (timing=immediate for the old same-frame timing).",
+                       "pointer there from the next frame (timing=immediate for the old same-frame timing). Input "
+                       "reaches the game in the order asked for: asked while earlier input is still to come (a "
+                       "click's release, a drag), it starts the frame after it (answer: starts_frame).",
         "inputSchema": schema({"screen": {"type": "array", "items": {"type": "number"}},
                                "world": {"type": "array", "items": {"type": "number"}},
                                "timing": TIMING_SCHEMA}),
@@ -359,7 +361,8 @@ TOOLS = [
     {
         "name": "input_button",
         "description": "A mouse button (left, middle, right) where the pointer is: press, release, click or "
-                       "double_click (a click, then a second press and release counted as a double click).",
+                       "double_click (a click, then a second press and release counted as a double click). Waits "
+                       "behind input still to come, so a pointer move asked for next comes after the release.",
         "inputSchema": schema({"button": {"type": "string", "enum": ["left", "middle", "right"]},
                                "action": {"type": "string", "enum": ["press", "release", "click", "double_click"]},
                                "timing": TIMING_SCHEMA}),
@@ -582,7 +585,9 @@ TOOLS = [
     },
     {
         "name": "gui_windows",
-        "description": "The debug windows and the game's own (menu with its page and buttons, cave): name, open.",
+        "description": "The debug windows and the game's own (menu with its page and buttons, skip_box: the "
+                       "start-of-game question with its OK, answers and the answer selected, tattoo_editor, cave): "
+                       "name, open.",
         "inputSchema": schema(SHAPING),
         "query": "gui.windows",
     },
@@ -603,8 +608,11 @@ TOOLS = [
     {
         "name": "gui_press",
         "description": "Presses a button by its label: a debug window's (made at its next frame), or any control "
-                       "of the page the game's menu shows, or of its question (buttons, tabs, check boxes, sliders; "
-                       "clicked through the game's input; gui_windows lists them; path [n] for the n-th of a name). A "
+                       "of the page the game's menu shows, or of its question (buttons, tabs, check boxes, sliders), "
+                       "of the start-of-game question skip_box (OK; an answer's radio by its text or normal, "
+                       "creature, story, old) or of the tattoo_editor (OK, Cancel); the game's dialogs are clicked "
+                       "through the game's input, behind any input still to come; gui_windows lists them; path [n] "
+                       "for the n-th of a name. A "
                        "debug button inside a table row or other scope needs path: the labels and numbers its window "
                        "pushed before it.",
         "inputSchema": schema({"window": {"type": "string"}, "button": {"type": "string"},
