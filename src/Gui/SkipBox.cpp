@@ -95,7 +95,11 @@ std::vector<Dialog::NamedControl> SkipBox::GetNamedControls() const
 	                     [](const Dialog::NamedControl& control) { return control.name != k_RadioLabel; });
 	for (size_t i = 0; i < _answers.size(); ++i)
 	{
-		named.push_back({.name = _answers.at(i), .kind = "radio", .rect = GetRadioRect(i)});
+		// A hidden choice can't be pressed by tools either
+		if (_radios.at(i)->visible)
+		{
+			named.push_back({.name = _answers.at(i), .kind = "radio", .rect = GetRadioRect(i)});
+		}
 	}
 	return named;
 }
