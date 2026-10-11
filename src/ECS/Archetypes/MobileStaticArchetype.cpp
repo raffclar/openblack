@@ -15,6 +15,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/MobileStaticRules.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "InfoConstants.h"
@@ -39,6 +40,10 @@ entt::entity MobileStaticArchetype::Create(const glm::vec3& position, MobileStat
 	                           glm::vec3(scale));
 	registry.Assign<Mobile>(entity);
 	registry.Assign<MobileStatic>(entity, type);
+	if (mobile_static_rules::IsScriptRock(type, info.mobileType))
+	{
+		registry.Assign<Rock>(entity);
+	}
 	const auto resourceId = resources::HashIdentifier(info.meshId);
 	registry.Assign<Mesh>(entity, resourceId, static_cast<int8_t>(0), static_cast<int8_t>(1));
 

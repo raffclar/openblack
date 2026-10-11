@@ -40,9 +40,24 @@ struct InputEvent
 		Gesture,
 		Release,
 	};
+	/// When the game sees the pointer's moves and buttons
+	enum class Timing : uint8_t
+	{
+		/// As a real mouse's: sent as events, whose state the game takes as they are pumped from the window's queue, after
+		/// the action map has read the pointer for the frame. The game's events see a move that frame and the pointer's
+		/// position the next, and a move goes on from wherever the game has put the cursor meanwhile
+		Mouse,
+		/// Set before the frame reads its input, so the action map sees the pointer there that same frame (the timing of
+		/// recordings made before the mouse's timing came in)
+		Immediate,
+	};
+
 	Kind kind {Kind::PointerTo};
 	/// Where the pointer goes, in the window's pixels from its top left
 	glm::ivec2 position {0, 0};
+	/// A step of a drag or a path from this point: with the mouse's timing the pointer moves on by the step from wherever
+	/// it is, as a hand moving the mouse would; without, it goes to position
+	std::optional<glm::ivec2> stepFrom;
 	/// The mouse button: 1 left, 2 middle, 3 right
 	uint8_t button {0};
 	/// The button's click count, as the mouse tells it: 2 for the second press of a double click and its letting go
@@ -55,11 +70,15 @@ struct InputEvent
 	std::string name;
 	/// A gesture drawn with the Action button held throughout, as a circle readying a miracle is
 	bool holdAction {false};
+	/// When the game sees the pointer's moves and buttons
+	Timing timing {Timing::Mouse};
 
 	bool operator==(const InputEvent& other) const = default;
 };
 
 [[nodiscard]] std::string_view KindName(InputEvent::Kind kind);
+/// The timing's name: mouse or immediate
+[[nodiscard]] std::string_view TimingName(InputEvent::Timing timing);
 [[nodiscard]] Json ToJson(const InputEvent& event);
 /// An event from its JSON, as ToJson writes it; none, with why not, when it doesn't read
 [[nodiscard]] std::optional<InputEvent> InputEventFromJson(const Json& json, std::string& error);
@@ -137,22 +156,27 @@ private:
 	std::vector<RecordedInput> _recorded;
 };
 
-///   input.state                                   the pointer, buttons, hand and pick, and the input still to come
-///   input.names                                   the actions and gestures that can be pressed and drawn
-///   input.pointer {screen | world}                moves the pointer to a pixel, or to where a point of the land is
-///   input.button  {button, action}                presses, lets go of, clicks or double-clicks a mouse button where
-///                                                 the pointer is
-///   input.key     {key | action, how}             presses, lets go of or taps a key, or presses an action for a frame
-///   input.wheel   {notches}                       turns the wheel
-///   input.drag    {to, button, frames}            holds a button and moves the pointer there over some frames
-///   input.path    {points, button?, frames}       moves the pointer along pixels, a button held throughout or not
-///   input.gesture {name, hold_action?}            draws a gesture through the recogniser, as the hand would
-///   input.release                                 hands the mouse back to the player
-///   input.lock    {mode?}                         keeps the player's mouse and keyboard out: always, or while connected
-///   input.unlock                                  lets the player's mouse and keyboard in
-///   input.record  {action: start | stop}          records the input made, by frame, for replaying
-///   input.replay  {events}                        makes recorded input again from the next frame on
-/// All of it is made at the frame's start, before the game reads its input, so it acts that same frame.
+///   input.state                                       the pointer, buttons, hand and pick, and the input still to come
+///   input.names                                       the actions and gestures that can be pressed and drawn
+///   input.pointer {screen | world, timing?}           moves the pointer to a pixel, or to where a point of the land is
+///   input.button  {button, action, timing?}           presses, lets go of, clicks or double-clicks a mouse button where
+///                                                     the pointer is
+///   input.key     {key | action, how}                 presses, lets go of or taps a key, or presses an action
+///                                                     for a frame
+///   input.wheel   {notches}                           turns the wheel
+///   input.drag    {to, button, frames, timing?}       holds a button and moves the pointer there over some frames
+///   input.path    {points, button?, frames, timing?}  moves the pointer along pixels, a button held throughout
+///                                                     or not
+///   input.gesture {name, hold_action?}                draws a gesture through the recogniser, as the hand would
+///   input.release                                     hands the mouse back to the player
+///   input.lock    {mode?}                             keeps the player's mouse and keyboard out: always, or while
+///                                                     connected
+///   input.unlock                                      lets the player's mouse and keyboard in
+///   input.record  {action: start | stop}              records the input made, by frame, for replaying
+///   input.replay  {events, timing?}                   makes recorded input again from the next frame on
+/// All of it is made at the frame's start, before the game reads its input. The pointer's moves and buttons have a real
+/// mouse's timing unless timing "immediate" is asked for (see InputEvent::Timing); keys, the wheel, actions and gestures
+/// act that same frame.
 class InputProvider final: public ProviderInterface
 {
 public:

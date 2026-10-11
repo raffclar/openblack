@@ -618,6 +618,15 @@ if (OPENBLACK_INSPECTOR)
     test_inspector_control inspector/test_inspector_control.cpp
   )
   target_link_libraries(test_inspector_control PRIVATE inspector)
+  # The inspector's pointer with a real mouse's timing, through the action map and the window's event queue
+  openblack_setup_and_add_test(
+    test_scripted_mouse input/test_scripted_mouse.cpp
+  )
+  target_link_libraries(test_scripted_mouse PRIVATE inspector)
+  openblack_setup_and_add_test(
+    test_camera_edge_turn_timing camera/test_camera_edge_turn_timing.cpp
+  )
+  target_link_libraries(test_camera_edge_turn_timing PRIVATE inspector)
   # The coverage test reads the locator's header for its services. ctest also passes the folder when the test runs,
   # since a compiler cache shared between worktrees can give the test an object built in another worktree.
   target_compile_definitions(
@@ -712,3 +721,11 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_camera_place camera/test_camera_place.cpp)
 openblack_setup_and_add_test(test_control_icons test_control_icons.cpp)
+openblack_setup_and_add_test(test_disciple_rules test_disciple_rules.cpp)
+openblack_setup_and_add_test(
+  test_mobile_static_rules test_mobile_static_rules.cpp
+)
+openblack_setup_and_add_test(
+  test_camera_edge_turn camera/test_camera_edge_turn.cpp
+)
+openblack_setup_and_add_test(test_mouse_motion input/test_mouse_motion.cpp)

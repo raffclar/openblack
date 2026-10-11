@@ -1084,8 +1084,12 @@ DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
 		return Mode::DraggingLandscape;
 	case DragMode::EdgeRotate:
 	{
-		// The cursor is held on the ring, and the camera turns about its focus by the angle swept round the middle
-		const auto step = camera_drag::EdgeRotate(cursor, _ringCursor, screenSize, ViewHeight(screenSize));
+		// The cursor is held on the ring, and the camera turns about its focus by the angle swept round the middle. The
+		// ring is measured from where the pointer is now rather than where it was as the frame began: the mouse has
+		// moved on since, and putting the cursor back on the ring from the older place would undo that movement every
+		// frame and hold the camera still
+		const auto pointer = actionSystem.GetPointerPosition();
+		const auto step = camera_drag::EdgeRotate(pointer, _ringCursor, screenSize, ViewHeight(screenSize));
 		_ringCursor = step.cursor;
 		_helpEvents.Add(camera_help::events::EdgeTurnEvents(_helpControls, step.angle));
 		if ((_features & camera_help::feature::k_Rotate) != 0)

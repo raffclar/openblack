@@ -22,6 +22,7 @@
 
 #include "CursorFreeze.h"
 #include "GameActionMapInterface.h"
+#include "MouseMotion.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp"
@@ -59,6 +60,7 @@ public:
 	void SetPlayerMouseBlocked(bool blocked) final { _playerMouseBlocked = blocked; }
 	[[nodiscard]] bool IsPlayerMouseBlocked() const final { return _playerMouseBlocked; }
 	[[nodiscard]] std::optional<ScriptedPointer> GetScriptedPointer() const final;
+	void PumpScriptedPointer() final;
 	void HoldScriptedKey(int scancode, bool held) final;
 	void SetInputLockMode(LockMode mode) final;
 	[[nodiscard]] LockMode GetInputLockMode() const final { return _lock.Mode(); }
@@ -108,7 +110,8 @@ private:
 	uint8_t _currentMouseButtons = 0;
 	std::array<std::optional<BindableActionMap>, 2> _mouseWheelBinding; // up, down
 	glm::uvec2 _mousePosition;
-	glm::ivec2 _mouseDelta {0};
+	/// The mouse's own movement this frame, without the cursor's jumps when the game puts it somewhere
+	MouseMotion _mouseMotion;
 	float _mouseWheelDelta = 0.0f;
 	/// Holds the cursor while the mouse turns the camera
 	CursorFreeze _cursorFreeze;
@@ -124,5 +127,7 @@ private:
 	InputLock _lock;
 	/// Logs the lock opening or closing
 	void LogLock(bool wasLocked) const;
+	/// Puts the player's own cursor somewhere in the window, noting the jump so it isn't taken for the mouse moving
+	void WarpPlayerCursor(glm::ivec2 position);
 };
 } // namespace openblack::input

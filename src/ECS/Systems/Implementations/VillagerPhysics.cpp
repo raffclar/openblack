@@ -43,6 +43,7 @@
 #include "Physics/LivingRules.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerAnimate.h"
+#include "VillagerDisciples.h"
 #include "VillagerFire.h"
 #include "VillagerReactions.h"
 
@@ -195,6 +196,7 @@ void villager_physics::IntoHand(entt::entity villager)
 		return;
 	}
 	villager_memory::StorePreviousState(*action);
+	villager_disciple::PickedUp(villager);
 	SetTopState(*action, VillagerStates::InHand);
 }
 
@@ -403,15 +405,19 @@ uint32_t villager_physics::Landed(LivingAction& action)
 {
 	auto& registry = Entities();
 	const auto villager = registry.ToEntity(action);
-	// As it starts to get up it stops calling others to it from the hand; it plays its landing once, and decides what to
-	// do
-	// TODO(physics): a villager put down as a disciple goes to its job; openblack has no disciples yet
+	// As it starts to get up it stops calling others to it from the hand; it plays its landing once, and sets about its
+	// work as a disciple or decides what to do
+	villager_disciple::TouchDown(action);
 	if (action.turnsSinceStateChange == 0 && Locator::reactionSystem::has_value())
 	{
 		Locator::reactionSystem::value().RemoveFrom(villager, Reaction::ReactToVillagerInHand);
 	}
 	const auto* clip = registry.TryGet<const VillagerClip>(villager);
 	if (clip != nullptr && clip->state == VillagerStates::Landed && !ClipPlayed(action, clip->clip))
+	{
+		return 1;
+	}
+	if (villager_disciple::SetAboutWorkOnLanding(action))
 	{
 		return 1;
 	}

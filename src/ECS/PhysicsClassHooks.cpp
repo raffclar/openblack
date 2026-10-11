@@ -107,4 +107,13 @@ void PhysicsClassHooks::ConsiderMimickingLanding([[maybe_unused]] entt::entity o
 {
 }
 
+void PhysicsClassHooks::LetGoByHand([[maybe_unused]] entt::entity object, [[maybe_unused]] std::optional<PlayerNames> player,
+                                    [[maybe_unused]] bool forced)
+{
+}
+
+void PhysicsClassHooks::PutDownByHand([[maybe_unused]] entt::entity object, [[maybe_unused]] std::optional<PlayerNames> player)
+{
+}
+
 void PhysicsClassHooks::ConsiderMimickingToyPlay([[maybe_unused]] entt::entity toy, [[maybe_unused]] PlayerNames player) {}
