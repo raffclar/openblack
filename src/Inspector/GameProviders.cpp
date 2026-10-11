@@ -43,6 +43,7 @@
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
 #include "Debug/DebugGuiInterface.h"
+#include "ECS/ArtefactRules.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AudioEmitter.h"
@@ -69,6 +70,7 @@
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/TempleExterior.h"
+#include "ECS/Components/TownArtefact.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageLight.h"
@@ -84,6 +86,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
+#include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
@@ -314,6 +317,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"vm", "script.vm"},
     LocatorCoverage {"chlapi", "script.natives"},
     LocatorCoverage {"villageTotemSystem", "living.totems"},
+    LocatorCoverage {"artefactSystem", "living.artefacts"},
     LocatorCoverage {"heartbeatSystem", "players.heartbeat"},
     LocatorCoverage {"videoSystem", "view.video"},
     LocatorCoverage {"playerProfileSystem", "players.new_game"},
@@ -785,6 +789,48 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 			    items.push_back(std::move(item));
 		    });
 		    return items;
+	    }));
+	provider->Add(
+	    Query("artefacts",
+	          "The artefacts: the town and worship site each last joined and whether it is among their artefacts now, its "
+	          "owner and worth, its dance (started or not, its state, dancers and turns since it started), whether it "
+	          "glows and shows its owner's symbol, and how many each player owns",
+	          {}, ResultKind::Object),
+	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
+		    Json items = Json::array();
+		    registry.Each<const TownArtefact>([&items, &registry](entt::entity entity, const TownArtefact& artefact) {
+			    auto item = Listed(registry, entity);
+			    item["town"] = Id(artefact.town);
+			    item["site"] = Id(artefact.site);
+			    item["in_town"] = artefact.inTown;
+			    item["in_site"] = artefact.inSite;
+			    item["player"] = artefact.player.has_value() ? Json(static_cast<int>(*artefact.player)) : Json(nullptr);
+			    item["value"] = artefact.value;
+			    item["dance"] = Id(artefact.dance);
+			    item["dancing"] = artefact.dancing;
+			    item["dance_started"] = artefact.danceStarted;
+			    if (const auto* dance = registry.Valid(artefact.dance) ? registry.TryGet<const Dance>(artefact.dance) : nullptr)
+			    {
+				    item["dance_type"] = static_cast<int>(dance->type);
+				    item["dance_state"] = dance->state == Dance::State::Dancing ? "dancing" : "stopped";
+				    item["dancers"] = dance->dancers;
+				    item["dance_duration"] = dance->duration;
+				    item["dance_start_turn"] = dance->startTurn;
+			    }
+			    item["effect"] = artefact.effect;
+			    item["glows"] = ecs::artefact_rules::Glows(artefact.value);
+			    item["symbol"] = artefact.symbol && ecs::artefact_rules::ShowsSymbol(artefact.value);
+			    items.push_back(std::move(item));
+		    });
+		    Json counts = Json::object();
+		    if (Locator::artefactSystem::has_value())
+		    {
+			    for (int p = 0; p < static_cast<int>(PlayerNames::_COUNT); ++p)
+			    {
+				    counts[std::to_string(p)] = Locator::artefactSystem::value().CountFor(static_cast<PlayerNames>(p));
+			    }
+		    }
+		    return QueryResult::Value(Json {{"artefacts", std::move(items)}, {"count_by_player", std::move(counts)}});
 	    }));
 	provider->Add(Query("action", "A villager's or animal's action states: top, final, previous, and turns in them",
 	                    {IdParameter("The living thing's entity id")}),

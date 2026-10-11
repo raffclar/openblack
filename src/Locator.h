@@ -103,6 +103,7 @@ class MistSystemInterface;
 class CloudSystemInterface;
 class VillageLightSystemInterface;
 class VillageTotemSystemInterface;
+class ArtefactSystemInterface;
 class HeartbeatSystemInterface;
 class FieldSystemInterface;
 class FishFarmSystemInterface;
@@ -249,6 +250,7 @@ struct Locator
 	using cloudSystem = entt::locator<ecs::systems::CloudSystemInterface>;
 	using villageLightSystem = entt::locator<ecs::systems::VillageLightSystemInterface>;
 	using villageTotemSystem = entt::locator<ecs::systems::VillageTotemSystemInterface>;
+	using artefactSystem = entt::locator<ecs::systems::ArtefactSystemInterface>;
 	using heartbeatSystem = entt::locator<ecs::systems::HeartbeatSystemInterface>;
 	using fieldSystem = entt::locator<ecs::systems::FieldSystemInterface>;
 	using fishFarmSystem = entt::locator<ecs::systems::FishFarmSystemInterface>;

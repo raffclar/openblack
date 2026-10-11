@@ -33,6 +33,7 @@ public:
 	entt::entity MakeDance(DanceInfo dance, glm::vec3 position, entt::entity site) override;
 	[[nodiscard]] uint32_t Turn() const override;
 	entt::entity MakeFoodPot(glm::vec3 position, float yAngle) override;
+	void PowerUpArtefacts(entt::entity site, uint32_t dancers) override;
 };
 
 } // namespace openblack::ecs::systems

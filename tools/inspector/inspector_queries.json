@@ -844,6 +844,12 @@
   "query": "living.totems"
  },
  {
+  "description": "The artefacts: the town and worship site each last joined and whether it is among their artefacts now, its owner and worth, its dance (started or not, its state, dancers and turns since it started), whether it glows and shows its owner's symbol, and how many each player owns",
+  "kind": "object",
+  "parameters": [],
+  "query": "living.artefacts"
+ },
+ {
   "description": "A villager's or animal's action states: top, final, previous, and turns in them",
   "kind": "object",
   "parameters": [

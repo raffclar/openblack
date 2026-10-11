@@ -44,6 +44,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -57,6 +58,7 @@
 #include "Magic/AreaEffect.h"
 #include "Magic/Impressiveness.h"
 #include "Magic/ReactionRules.h"
+#include "Magic/TownBelief.h"
 #include "Magic/VillagerReactionRules.h"
 #include "ObjectMeasures.h"
 #include "Physics/LivingRules.h"
@@ -863,14 +865,18 @@ void ReactionSystem::Impress(const Active& reaction, entt::entity living, const 
 		}
 		return magic::ReactionMultiplier(source.type, info->defaultReactionImpressiveMultiplier, desire);
 	};
+	// An artefact worth enough makes the thing it is more impressive to whoever sees it, as long as it is worth so much
+	const float artefact = Locator::artefactSystem::has_value() && source.initiator != entt::null
+	                           ? Locator::artefactSystem::value().ImpressiveModifier(source.initiator)
+	                           : 1.0f;
 	const auto value = [&](float boredom, entt::entity town) {
-		return magic::ImpressiveValue({.landBalance = _landBalance,
-		                               .impressiveValue = source.impressiveValue,
-		                               .reactionMultiplier = multiplier(town),
-		                               .distance = distance,
-		                               .maxDistance = info->maxReactionDistance,
-		                               .power = source.power,
-		                               .boredom = boredom});
+		return artefact * magic::ImpressiveValue({.landBalance = _landBalance,
+		                                          .impressiveValue = source.impressiveValue,
+		                                          .reactionMultiplier = multiplier(town),
+		                                          .distance = distance,
+		                                          .maxDistance = info->maxReactionDistance,
+		                                          .power = source.power,
+		                                          .boredom = boredom});
 	};
 	if (const auto* villager = registry.TryGet<const Villager>(living))
 	{
@@ -933,6 +939,21 @@ void ReactionSystem::Impress(const Active& reaction, entt::entity living, const 
 		{
 			impression->byOtherCreatures += base * magic::k_CreatureImpressedByOtherCreature;
 		}
+	}
+}
+
+void ReactionSystem::GiveTownBelief(entt::entity town, PlayerNames player, float amount, entt::entity from,
+                                    GuidanceAlignment alignment)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (town == entt::null || !registry.Valid(town) || !registry.AllOf<Town>(town))
+	{
+		return;
+	}
+	magic::town_belief::Add(villager_reactions::ImpressionOf(town).belief, player, amount);
+	if (from != entt::null && registry.Valid(from) && registry.AllOf<Transform>(from))
+	{
+		villager_reactions::ShowObjectBelief(from, town, player, amount, alignment, _voice, _turn);
 	}
 }
 

@@ -738,3 +738,4 @@ openblack_setup_and_add_test(test_special_villagers test_special_villagers.cpp)
 openblack_setup_and_add_test(
   test_temple_people_rules temple/test_temple_people_rules.cpp
 )
+openblack_setup_and_add_test(test_artefact_rules test_artefact_rules.cpp)
