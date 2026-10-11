@@ -47,6 +47,8 @@ enum class RenderPass : uint8_t
 	Main,
 	/// What blends in the world, drawn after the rest of the scene, the farthest first
 	Translucent,
+	/// The cinema bars over the scene: the advisors near the screen are drawn over them
+	CinemaBars,
 	/// The advisors near the screen, drawn over the whole scene with its depth cleared
 	Advisors,
 	Interface,
@@ -75,6 +77,7 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Sky Pass",                    //
     "Main Pass",                   //
     "Translucent Pass",            //
+    "Cinema Bars Pass",            //
     "Advisors Pass",               //
     "Interface Pass",              //
     "ImGui Pass",                  //
