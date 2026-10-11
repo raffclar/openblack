@@ -94,6 +94,13 @@ TEST(HelpTextDisplay, TheLinesFollowTheScreensHeight)
 	EXPECT_FLOAT_EQ(frame.runs.front().size, 48.0f);
 	// and the words are centred in the 4:3 middle, 320 to 2240
 	EXPECT_FLOAT_EQ(frame.runs.front().x, 320.0f + std::floor((1921.0f - 50.0f) * 0.5f));
+	// while the black band behind them runs the whole width, on the box's rows
+	EXPECT_EQ(frame.box.left, 320);
+	EXPECT_EQ(frame.box.right, 2240);
+	EXPECT_EQ(frame.band.left, 0);
+	EXPECT_EQ(frame.band.right, 2560);
+	EXPECT_EQ(frame.band.top, frame.box.top);
+	EXPECT_EQ(frame.band.bottom, frame.box.bottom);
 }
 
 TEST(HelpTextDisplay, LineHeight)

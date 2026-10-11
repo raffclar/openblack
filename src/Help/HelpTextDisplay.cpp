@@ -342,6 +342,10 @@ TextFrame HelpTextDisplay::Layout(int width, int height, int barPixels, int text
 	// The region is recomputed every frame
 	const TextRegion region = ComputeTextRegion(width, height, barPixels);
 	frame.box = region;
+	// The see-through band runs the screen's whole width, as on 4:3, whatever the area its contents use
+	frame.band = region;
+	frame.band.left = 0;
+	frame.band.right = width;
 	// The box only needs the draw gate, not the hidden flag (Close clears the box flag anyway). Skipping the
 	// whole draw in some game modes is the caller's job.
 	bool gate = true;

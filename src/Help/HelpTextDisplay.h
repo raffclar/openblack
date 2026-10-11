@@ -65,7 +65,10 @@ struct TextRun
 struct TextFrame
 {
 	bool boxShown {false};
+	/// Where the words, the "Continue" cue and the control icons go: across the screen, or its 4:3 middle when wider
 	TextRegion box {};
+	/// The black band drawn behind them: the box's rows across the whole screen
+	TextRegion band {};
 	uint8_t boxAlpha {0x80};
 	std::vector<TextRun> runs;
 	/// The $M<n> codes of the newest text reached this frame, in order: the actions whose control icons the box shows

@@ -633,7 +633,7 @@ void GameInterface::DrawDialogue(glm::u16vec2 resolution, int barPixels)
 		// The box covers whole pixels, its right and bottom ones included
 		if (frame->boxShown)
 		{
-			const auto& box = frame->box;
+			const auto& box = frame->band;
 			const auto colour = glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(frame->boxAlpha) / 255.0f);
 			_canvas.DrawQuad({static_cast<float>(box.left), static_cast<float>(box.top)},
 			                 {static_cast<float>(box.right + 1), static_cast<float>(box.bottom + 1)}, glm::vec2(0.0f),
