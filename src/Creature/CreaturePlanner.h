@@ -31,16 +31,20 @@ namespace openblack::creature_planner
 /// The farthest a goal counts as being, and how much a held thing is preferred
 constexpr float k_MaxGoalDistance = 200.0f;
 constexpr float k_HeldPriority = 1.6f;
-/// How much a thing nothing is known about is worth, and the floor of an action's priority in a plan
+/// How much a thing nothing is known about is worth, and the most an action's priority counts for in a plan. Every
+/// action's priority is above that cap, so in a plan they all count the same.
 constexpr float k_DefaultUsefulness = 0.1f;
-constexpr float k_MinActionPriority = 0.01f;
+constexpr float k_MaxActionPriority = 0.01f;
 /// Scales priorities to readable numbers; it doesn't change which plan wins
 constexpr float k_PriorityScale = 1e5f;
 /// How long since an action was done before it is fully new again, in game turns, and the most novelty adds
 constexpr uint32_t k_NoveltyTurns = 36000;
 constexpr float k_MaxNovelty = 0.01f;
-/// Desires planned each game turn
+/// Desires planned each game turn: two, or one once there are this many creatures in the world
 constexpr size_t k_GoalsPerTurn = 2;
+constexpr size_t k_CreaturesForFewerGoals = 3;
+/// The desires each creature plans each game turn, by how many creatures there are
+[[nodiscard]] size_t GoalsPerTurn(size_t creatureCount);
 
 /// How the distance to a goal weighs against it: 1.6 for something held, else less the further it is, by the desire's
 /// distance weight, up to 200 away
@@ -123,7 +127,6 @@ struct PlannerState
 /// The most pressing plan of all the desires', if any
 [[nodiscard]] std::optional<Plan> Best(const PlannerState& state);
 /// The plan to change to now, if the best is pressing enough against what the creature carries out (nothing counts as 0)
-/// and at least a minimum priority
-[[nodiscard]] std::optional<Plan> Choose(const PlannerState& state, float minimum);
+[[nodiscard]] std::optional<Plan> Choose(const PlannerState& state);
 
 } // namespace openblack::creature_planner
