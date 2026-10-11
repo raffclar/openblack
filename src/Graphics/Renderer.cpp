@@ -39,6 +39,7 @@
 #include "3D/ChimneySmoke.h"
 #include "3D/Clouds.h"
 #include "3D/DayNightClock.h"
+#include "3D/FootprintPaint.h"
 #include "3D/HandMorph.h"
 #include "3D/InfluenceCircle.h"
 #include "3D/L3DAnim.h"
@@ -2156,6 +2157,29 @@ void Renderer::DrawMesh(const graphics::L3DMesh& mesh, const L3DMeshSubmitDesc& 
 	}
 }
 
+namespace
+{
+// Footprints are laid over one another premultiplied: the land takes the colour they leave and how much of it they
+// cover, and mixes its own colour with them texel by texel as the game paints them in
+constexpr uint64_t k_FootprintPaintState =
+    BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA);
+
+void SetFootprintTexture(const ShaderProgram& program, const Texture2D& texture)
+{
+	program.SetTextureSampler("s_footprint", 0, texture);
+	const auto size = texture.GetResolution();
+	const glm::vec4 u_footprintSize {size.x, size.y, 0.0f, 0.0f};
+	program.SetUniformValue("u_footprintSize", &u_footprintSize);
+}
+
+// How the footprints are painted into the land's texels
+void SetFootprintPaint(const ShaderProgram& program)
+{
+	const glm::vec4 u_footprintPaint {footprint_paint::k_TexelsPerUnit, 0.0f, 0.0f, 0.0f};
+	program.SetUniformValue("u_footprintPaint", &u_footprintPaint);
+}
+} // namespace
+
 void Renderer::DrawFootprintPass(const DrawSceneDesc& drawDesc) const
 {
 	const auto viewId = graphics::RenderPass::Footprint;
@@ -2192,16 +2216,11 @@ void Renderer::DrawFootprintPass(const DrawSceneDesc& drawDesc) const
 				continue;
 			}
 			const auto& footprint = mesh->GetFootprints()[0];
-			footprintShaderInstanced->SetTextureSampler("s_footprint", 0, *footprint.texture);
+			SetFootprintTexture(*footprintShaderInstanced, *footprint.texture);
+			SetFootprintPaint(*footprintShaderInstanced);
 			footprint.mesh->GetVertexBuffer().Bind();
 			bgfx::setInstanceDataBuffer(toBgfx(renderCtx.instanceUniformBuffer), placers.offset, placers.count);
-			const uint64_t state = 0u                       //
-			                       | BGFX_STATE_WRITE_RGB   //
-			                       | BGFX_STATE_WRITE_A     //
-			                       | BGFX_STATE_BLEND_ALPHA //
-			                       | BGFX_STATE_CULL_CW     //
-			                       | BGFX_STATE_MSAA;
-			bgfx::setState(state);
+			bgfx::setState(k_FootprintPaintState | BGFX_STATE_CULL_CW);
 			footprintShaderInstanced->Submit(static_cast<bgfx::ViewId>(viewId));
 		}
 
@@ -2213,16 +2232,11 @@ void Renderer::DrawFootprintPass(const DrawSceneDesc& drawDesc) const
 				continue;
 			}
 			const auto& footprint = mesh->GetFootprints()[0];
-			footprintShaderInstanced->SetTextureSampler("s_footprint", 0, *footprint.texture);
+			SetFootprintTexture(*footprintShaderInstanced, *footprint.texture);
+			SetFootprintPaint(*footprintShaderInstanced);
 			footprint.mesh->GetVertexBuffer().Bind();
 			bgfx::setInstanceDataBuffer(toBgfx(renderCtx.treeInstanceUniformBuffer), placers.offset, placers.count);
-			const uint64_t state = 0u                       //
-			                       | BGFX_STATE_WRITE_RGB   //
-			                       | BGFX_STATE_WRITE_A     //
-			                       | BGFX_STATE_BLEND_ALPHA //
-			                       | BGFX_STATE_CULL_CW     //
-			                       | BGFX_STATE_MSAA;
-			bgfx::setState(state);
+			bgfx::setState(k_FootprintPaintState | BGFX_STATE_CULL_CW);
 			footprintShaderInstanced->Submit(static_cast<bgfx::ViewId>(viewId));
 		}
 
@@ -2257,19 +2271,17 @@ void Renderer::DrawStreamFootprints(RenderPass viewId, entt::id_type meshId) con
 	const auto& footprint = mesh->GetFootprints()[0];
 	const bool channel = meshId == ecs::components::StreamSegment::k_ChannelMeshId;
 	const auto* program = _shaderManager->GetShader(channel ? "LandAlphaInstanced" : "FootprintInstanced");
-	program->SetTextureSampler("s_footprint", 0, *footprint.texture);
-	if (channel)
+	SetFootprintTexture(*program, *footprint.texture);
+	if (!channel)
 	{
-		const auto size = footprint.texture->GetResolution();
-		const glm::vec4 u_footprintSize {size.x, size.y, 0.0f, 0.0f};
-		program->SetUniformValue("u_footprintSize", &u_footprintSize);
+		SetFootprintPaint(*program);
 	}
 	footprint.mesh->GetVertexBuffer().Bind();
 	bgfx::setInstanceDataBuffer(&instances);
 	// A channel leaves the land's alpha at the lower of the two
 	const uint64_t state = channel ? BGFX_STATE_WRITE_R | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE) |
 	                                     BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_MIN)
-	                               : BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA;
+	                               : k_FootprintPaintState;
 	bgfx::setState(state);
 	program->Submit(static_cast<bgfx::ViewId>(viewId));
 }
