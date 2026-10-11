@@ -692,7 +692,11 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_disciple::InspectObject,
     },
-    /* GO_HOME_AND_CHANGE */ k_TodoEntry,
+    /* GO_HOME_AND_CHANGE */
+    VillagerStateTableEntry {
+        .state = &villager_home::GoHomeAndChange,
+        .exitState = &villager_home::ExitGoHomeAndChange,
+    },
     /* WAIT_FOR_MATE */
     VillagerStateTableEntry {
         .state = &villager_reactions::WaitForMate,

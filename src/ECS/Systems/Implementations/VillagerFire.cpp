@@ -48,6 +48,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/VillagerClips.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/WalkerPlacement.h"
@@ -1073,6 +1074,11 @@ void villager_fire::DieByEffect(entt::entity villager, std::optional<DeathCause>
 		                                         .type = Reaction::ReactToDeath,
 		                                         .player = ownTown != nullptr ? ownTown->owner : PlayerNames::NEUTRAL,
 		                                         .position = PositionOf(villager)});
+	}
+	// Dying, it leaves its home, ending the couple it was one of, and its town
+	if (Locator::townSystem::has_value())
+	{
+		Locator::townSystem::value().RemoveDeadVillager(villager);
 	}
 }
 

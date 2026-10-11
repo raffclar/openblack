@@ -418,7 +418,7 @@
   "query": "town.list"
  },
  {
-  "description": "A town's buildings, newest first, with who lives in each and who is at home",
+  "description": "A town's buildings, newest first, with who lives in each, its couple and who is at home",
   "kind": "list",
   "parameters": [
    {
