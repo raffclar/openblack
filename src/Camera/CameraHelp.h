@@ -79,4 +79,12 @@ struct CameraHelp
 /// of the way there
 [[nodiscard]] std::optional<float> AutoPitchInput(float targetPitch, float pitch, float deltaSeconds);
 
+/// Whether the self-tilting camera goes back over the place it stood at the start of the frame, at its height over the
+/// land, keeping the way it now looks: when it tilted itself this frame, or when the land isn't gripped and nothing is
+/// asked of the camera (no moving, turning, tilting or zooming, and no turning round the mouse)
+[[nodiscard]] constexpr bool KeepsToItsPlace(bool tiltedItself, bool landGripped, bool asked)
+{
+	return tiltedItself || (!landGripped && !asked);
+}
+
 } // namespace openblack::camera_help

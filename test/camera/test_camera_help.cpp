@@ -77,16 +77,32 @@ TEST(CameraHelp, WatchingAFightTheCameraCantBeSentToFights)
 	EXPECT_EQ(DuringFight(0x1BF), 0x1AFu);
 }
 
-TEST(CameraHelp, TheSelfTiltingCameraTiltsATenthOfTheWayAtMostTheFramesSeconds)
+TEST(CameraHelp, TheSelfTiltingCameraTiltsAFifthOfTheWayAtMostTheFramesSeconds)
 {
-	// Within a hundredth (after the tenth), nothing
-	EXPECT_FALSE(AutoPitchInput(0.5f, 0.45f, 0.02f).has_value());
-	// A tenth of 0.3 is 0.03, more than the frame's 0.02 seconds
+	// Within a hundredth (after the fifth), nothing
+	EXPECT_FALSE(AutoPitchInput(0.5f, 0.46f, 0.02f).has_value());
+	// Its old tenth of the way would have been within the hundredth: a fifth isn't
+	ASSERT_TRUE(AutoPitchInput(0.5f, 0.42f, 0.1f).has_value());
+	EXPECT_NEAR(*AutoPitchInput(0.5f, 0.42f, 0.1f), 0.016f * -150.0f, 1e-4f);
+	// A fifth of 0.3 is 0.06, more than the frame's 0.02 seconds
 	ASSERT_TRUE(AutoPitchInput(0.5f, 0.2f, 0.02f).has_value());
 	EXPECT_NEAR(*AutoPitchInput(0.5f, 0.2f, 0.02f), 0.02f * -150.0f, 1e-4f);
 	EXPECT_NEAR(*AutoPitchInput(0.2f, 0.5f, 0.02f), -0.02f * -150.0f, 1e-4f);
-	// A slow frame leaves the tenth
-	EXPECT_NEAR(*AutoPitchInput(0.5f, 0.2f, 0.1f), 0.03f * -150.0f, 1e-4f);
+	// A slow frame leaves the fifth
+	EXPECT_NEAR(*AutoPitchInput(0.5f, 0.2f, 0.1f), 0.06f * -150.0f, 1e-4f);
+}
+
+TEST(CameraHelp, TheSelfTiltingCameraKeepsToItsPlaceUnlessTheCameraIsAskedToMove)
+{
+	// Left alone, it keeps to its place and height
+	EXPECT_TRUE(KeepsToItsPlace(false, false, false));
+	// Moved, turned, tilted or zoomed by the player, it goes where it is asked
+	EXPECT_FALSE(KeepsToItsPlace(false, false, true));
+	// Dragging the land moves it
+	EXPECT_FALSE(KeepsToItsPlace(false, true, false));
+	EXPECT_FALSE(KeepsToItsPlace(false, true, true));
+	// Tilting itself, it keeps to its place whatever is asked
+	EXPECT_TRUE(KeepsToItsPlace(true, false, true));
 }
 
 TEST(CameraHelp, TheInterfaceLevelsSetTheKeysAndTheHandsReach)

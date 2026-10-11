@@ -643,6 +643,8 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 	{
 		UpdateFocusPointInteractionParameters(camera.GetOrigin(Camera::Interpolation::Target),
 		                                      camera.GetFocus(Camera::Interpolation::Target), eulerAngles, camera);
+		// The camera turns and tilts about the point it now looks at, not the one it looked at before the change
+		eulerAngles = EulerFromPoints(_targetOrigin, _focusAtClick);
 	}
 
 	ComputeDistanceFromBoundY();
@@ -670,9 +672,8 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 	bool originHasBeenAdjusted = ConstrainCamera(dt, mouseMovementDistance, eulerAngles, camera);
 
 	// The self-tilting camera keeps to its height over the land, where it was at the start of the frame, looking the way
-	// it now does, unless the land is dragged without turning or zooming
-	if ((_features & camera_help::feature::k_AutoPitch) != 0 &&
-	    (!_dragging || _rotateAroundDelta != glm::vec3() || _mode == Mode::ArcBall))
+	// it now does, while it tilts itself or nothing is asked of it
+	if ((_features & camera_help::feature::k_AutoPitch) != 0 && _keepsToItsPlace)
 	{
 		const auto height = Locator::cameraHelpSystem::has_value() ? Locator::cameraHelpSystem::value().Get().autoPitchHeight
 		                                                           : camera_help::k_DefaultAutoPitchHeight;
@@ -960,6 +961,15 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 			_mode = Mode::Cartesian;
 			_helpEvents = {};
 		}
+	}
+	// Whether the self-tilting camera keeps to its place this frame: held back, the controls count for nothing and the
+	// camera doesn't tilt itself
+	{
+		const auto& asked = _helpControls;
+		const bool anythingAsked = asked.turn != 0.0f || asked.tilt != 0.0f || asked.zoom != 0.0f ||
+		                           asked.move != glm::vec2() || asked.rotateAroundMouse;
+		_keepsToItsPlace =
+		    camera_help::KeepsToItsPlace(autoTilting && !_heldBack, _dragging && !_heldBack, anythingAsked && !_heldBack);
 	}
 	SendHelpEvents(_helpEvents);
 	UpdateIconFrame(onFight);
