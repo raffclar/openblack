@@ -459,3 +459,57 @@ TEST_F(Fireflies, OutTheyAreDrawnBetweenTheirLastTwoTurnsAndFadeWithDistance)
 	EXPECT_FALSE(_world->registry.AllOf<ecs::components::Sprite>(entity));
 	EXPECT_FLOAT_EQ(firefly.clock, clock);
 }
+
+TEST_F(Fireflies, UndrawnTheyStandWhereTheyAreOnTheMap)
+{
+	_world->Add(FakeWorld::Kind::Building, k_Here + glm::vec2(30.0f, 0.0f), 3.0f);
+	_world->Add(FakeWorld::Kind::Rock, k_Here);
+	const auto entity = _system->Create(map_coords::FromMetres(k_Here));
+	Turns(50);
+	const auto& firefly = _world->registry.Get<const Firefly>(entity);
+	EXPECT_EQ(firefly.state, State::FlyingOut);
+	const auto& position = _world->registry.Get<const ecs::components::Transform>(entity).position;
+	const auto at = _world->ToWorld(firefly.at);
+	EXPECT_NEAR(position.x, at.x, 1e-3f);
+	EXPECT_NEAR(position.y, at.y, 1e-3f);
+	EXPECT_NEAR(position.z, at.z, 1e-3f);
+}
+
+TEST_F(Fireflies, EachFrameCountsThoseOutInViewInReachAndDrawn)
+{
+	_world->look = ecs::components::Sprite {.tint = glm::vec4(1.0f)};
+	_world->Add(FakeWorld::Kind::Building, k_Here + glm::vec2(30.0f, 0.0f), 3.0f);
+	_world->Add(FakeWorld::Kind::Rock, k_Here);
+	_world->Add(FakeWorld::Kind::Rock, k_Here + glm::vec2(0.0f, 5.0f));
+	_system->Create(map_coords::FromMetres(k_Here));
+	_system->Create(map_coords::FromMetres(k_Here + glm::vec2(0.0f, 5.0f)));
+	_system->Update(16.0f, 0.0f);
+	auto frame = _system->GetLastFrame();
+	EXPECT_EQ(frame.out, 0u);
+	EXPECT_EQ(frame.drawn, 0u);
+	EXPECT_TRUE(frame.pictureReady);
+	// One out, near the camera
+	Turns(1);
+	_world->camera = _world->ToWorld(map_coords::FromMetres(k_Here));
+	_system->Update(16.0f, 0.0f);
+	frame = _system->GetLastFrame();
+	EXPECT_EQ(frame.out, 1u);
+	EXPECT_EQ(frame.inView, 1u);
+	EXPECT_EQ(frame.inReach, 1u);
+	EXPECT_EQ(frame.drawn, 1u);
+	// Too far away to be seen
+	_world->camera += glm::vec3(0.0f, 0.0f, 400.0f);
+	_system->Update(16.0f, 0.0f);
+	frame = _system->GetLastFrame();
+	EXPECT_EQ(frame.out, 1u);
+	EXPECT_EQ(frame.inView, 1u);
+	EXPECT_EQ(frame.inReach, 0u);
+	EXPECT_EQ(frame.drawn, 0u);
+	// Without its picture none is drawn
+	_world->look.reset();
+	_world->camera = _world->ToWorld(map_coords::FromMetres(k_Here));
+	_system->Update(16.0f, 0.0f);
+	frame = _system->GetLastFrame();
+	EXPECT_FALSE(frame.pictureReady);
+	EXPECT_EQ(frame.drawn, 0u);
+}
