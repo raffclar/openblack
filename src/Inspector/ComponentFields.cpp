@@ -565,6 +565,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureLocomotion::radius>("radius")
 	    .Field<&components::CreatureLocomotion::destination>("destination")
 	    .Field<&components::CreatureLocomotion::ring>("ring")
+	    .Field<&components::CreatureLocomotion::ontoDestination>("ontoDestination")
 	    .Field<&components::CreatureLocomotion::planner>("planner")
 	    .Field<&components::CreatureLocomotion::route>("route")
 	    .Field<&components::CreatureLocomotion::routeReady>("routeReady")

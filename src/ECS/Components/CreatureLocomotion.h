@@ -60,6 +60,8 @@ struct CreatureLocomotion
 	/// Where it is going, and how close counts as arriving
 	std::optional<glm::vec2> destination;
 	creature_locomotion::Ring ring {};
+	/// Whether it walks onto the destination itself, as to a point, rather than to the edge of the ring
+	bool ontoDestination {false};
 	/// The route being planned, and the route it follows
 	std::optional<creature_route::Planner> planner;
 	creature_route::Route route;
