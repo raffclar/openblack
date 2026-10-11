@@ -164,6 +164,7 @@ public:
 	void SetFloatingNumbers(std::vector<FloatingNumber> numbers) { _floatingNumbers = std::move(numbers); }
 	/// The villagers' name and details labels wanted this frame, in the order they are placed
 	void SetVillagerLabels(std::vector<villager_labels::Request> labels) { _villagerLabels = std::move(labels); }
+	[[nodiscard]] const std::vector<villager_labels::Request>& GetVillagerLabels() const noexcept { return _villagerLabels; }
 
 private:
 	/// A font with its glyphs, white with their coverage in alpha

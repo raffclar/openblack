@@ -244,6 +244,8 @@ public:
 	[[nodiscard]] const std::optional<std::filesystem::path>& GetScreenshotRoot() const noexcept { return _screenshotRoot; }
 	/// The game's own interface (its menu), once it is made
 	[[nodiscard]] gui::GameInterface* GetInterface() noexcept { return _interface.get(); }
+	/// The size of the villagers' names display, 0 to 1
+	[[nodiscard]] float GetVillagerNameFade() const noexcept { return _villagerNameFade; }
 	/// The map script of the land loaded last, or "testbed"; empty before one is
 	[[nodiscard]] const std::filesystem::path& GetLandPath() const noexcept { return _landPath; }
 
@@ -445,11 +447,13 @@ private:
 	void ProcessHandToolTipTurn();
 	/// Where a point of the world is on the screen, in whole pixels, when it is on it
 	[[nodiscard]] std::optional<glm::vec2> OnScreen(glm::vec3 point) const;
-	/// The floating numbers move on by some seconds and are given to the interface where they show
+	/// The floating numbers move on by some seconds
 	void UpdateFloatingNumbers(float seconds);
-	/// The names display grows in or out over a frame of so many milliseconds of game time, and the villagers' labels
-	/// are given to the interface
+	/// The names display grows in or out over a frame of so many milliseconds of game time
 	void UpdateVillagerLabels(float milliseconds);
+	/// The floating numbers and the villagers' labels are given to the interface where they show from the camera the
+	/// frame is drawn from, which is the inspector's while it shows one (a held camera, a picture's)
+	void PlaceScreenLabels();
 
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> _requestScreenshot;
 	/// The requested screenshot leaves the debug windows out
