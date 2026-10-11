@@ -92,8 +92,8 @@ protected:
 	/// Asks a script's question of an object: whether it is the thing hit
 	[[nodiscard]] bool IsHit(entt::entity object)
 	{
-		const std::vector<std::pair<lhvm::VMValue, lhvm::DataType>> arguments {
-		    {lhvm::VMValue(static_cast<uint32_t>(object)), lhvm::DataType::Object}};
+		const std::vector<lhvm::NativeArgument> arguments {
+		    std::pair(lhvm::VMValue(static_cast<uint32_t>(object)), lhvm::DataType::Object)};
 		std::vector<std::pair<lhvm::VMValue, lhvm::DataType>> results;
 		EXPECT_TRUE(Locator::vm::value().CallNative(Native("GAME_THING_HIT"), arguments, results));
 		EXPECT_EQ(results.size(), 1u);
