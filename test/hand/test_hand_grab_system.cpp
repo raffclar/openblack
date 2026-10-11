@@ -223,7 +223,23 @@ public:
 	void StopScoopStream(uint32_t stream) override { stopped.push_back(stream); }
 	void MoveScoopStream(uint32_t, glm::vec3 hand) override { streamPoints.push_back(hand); }
 	void PinCursor(bool pinned) override { cursorPinned = pinned; }
-	void PlayScoopSound(ResourceType, glm::vec3, float ramp) override { scoopSounds.push_back(ramp); }
+	[[nodiscard]] entt::entity PlayScoopSound(entt::entity playing, ResourceType resource, glm::vec3, float ramp) override
+	{
+		scoopSounds.push_back(ramp);
+		scoopSoundResources.push_back(resource);
+		// The loop starts once and goes on while it plays
+		if (playing == entt::null || !scoopSoundPlaying)
+		{
+			++scoopSoundStarts;
+			scoopSoundPlaying = true;
+		}
+		return k_ScoopSoundLoop;
+	}
+	void StopScoopSound() override
+	{
+		++scoopSoundStops;
+		scoopSoundPlaying = false;
+	}
 	[[nodiscard]] float LandHeightAt(glm::vec3) const override { return 0.0f; }
 	[[nodiscard]] bool StoresResource(entt::entity store, ResourceType) const override { return stores.contains(store); }
 	uint32_t AddToStore(entt::entity store, ResourceType, uint32_t amount, bool /*poisoned*/) override
@@ -305,6 +321,11 @@ public:
 	std::vector<glm::vec3> streamPoints;
 	std::vector<entt::entity> resized;
 	std::vector<float> scoopSounds;
+	std::vector<ResourceType> scoopSoundResources;
+	static constexpr auto k_ScoopSoundLoop = static_cast<entt::entity>(4242);
+	uint32_t scoopSoundStarts {0};
+	uint32_t scoopSoundStops {0};
+	bool scoopSoundPlaying {false};
 	bool cursorPinned {false};
 	std::set<entt::entity> stores;
 	std::set<entt::entity> plinths;
@@ -769,6 +790,9 @@ TEST_F(HandGrabSystemWithWorld, APileIsScoopedIntoAHandfulThatGrowsWhileTheButto
 	system->ProcessTurn();
 	EXPECT_GT(world->registry.Get<const Pot>(*handful).amount, 33u);
 	EXPECT_EQ(world->scoopSounds.size(), 2u);
+	// The scooping sound is asked for every turn but its loop starts only once
+	EXPECT_EQ(world->scoopSoundStarts, 1u);
+	EXPECT_EQ(world->scoopSoundStops, 0u);
 	// The hand hovers over the pile, three above its height
 	const auto hovering = Frame(10, {30.0f, 0.0f, 0.0f});
 	EXPECT_FLOAT_EQ(hovering.x, 0.0f);
@@ -777,6 +801,9 @@ TEST_F(HandGrabSystemWithWorld, APileIsScoopedIntoAHandfulThatGrowsWhileTheButto
 	Release();
 	EXPECT_EQ(world->stopped, std::vector<uint32_t> {1u});
 	EXPECT_FALSE(world->cursorPinned);
+	// Its sound stops with it, and isn't asked for again
+	EXPECT_EQ(world->scoopSoundStops, 1u);
+	EXPECT_FALSE(world->scoopSoundPlaying);
 	system->ProcessTurn();
 	EXPECT_EQ(world->scoopSounds.size(), 2u);
 	EXPECT_TRUE(system->GetHeld().has_value());
@@ -893,6 +920,46 @@ TEST_F(HandGrabSystemWithWorld, AThingLetGoBeforeItIsTakenIsStillTheLastLetGo)
 	EXPECT_FALSE(system->GetHeld().has_value());
 	Release();
 	EXPECT_EQ(world->registry.Get<const HandGrab>(world->hand).released, rock);
+}
+
+TEST_F(HandGrabSystemWithWorld, AScoopThatGetsNothingMoreStopsItsSoundButKeepsTheHandful)
+{
+	const auto pile = world->registry.Create();
+	world->registry.Assign<Transform>(pile, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Pot>(pile, Pot {.amount = 30, .maxAmount = 2000, .type = PotInfo::FoodPile});
+	world->underCursor = pile;
+	EXPECT_TRUE(Press());
+	const auto handful = system->GetHeld();
+	ASSERT_TRUE(handful.has_value());
+	// The pile gives its last 5 the next turn, then has nothing more
+	system->ProcessTurn();
+	EXPECT_EQ(world->scoopSoundStarts, 1u);
+	system->ProcessTurn();
+	// Still holding the button, the sound has stopped and the hand keeps what it took
+	EXPECT_FALSE(world->scoopSoundPlaying);
+	EXPECT_GE(world->scoopSoundStops, 1u);
+	const auto stops = world->scoopSoundStops;
+	const auto asked = world->scoopSounds.size();
+	system->ProcessTurn();
+	system->ProcessTurn();
+	EXPECT_EQ(world->scoopSounds.size(), asked);
+	EXPECT_EQ(world->scoopSoundStops, stops);
+	EXPECT_EQ(system->GetHeld(), handful);
+}
+
+TEST_F(HandGrabSystemWithWorld, AFieldAndAFishFarmSoundAsFoodWhileTheyAreScooped)
+{
+	const auto field = world->registry.Create();
+	world->registry.Assign<Transform>(field, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->fields[field] = {.food = 1000, .ripe = false};
+	world->underCursor = field;
+	EXPECT_TRUE(Press());
+	system->ProcessTurn();
+	system->ProcessTurn();
+	EXPECT_EQ(world->scoopSoundStarts, 1u);
+	EXPECT_EQ(world->scoopSoundResources, (std::vector<ResourceType> {ResourceType::Food, ResourceType::Food}));
+	Release();
+	EXPECT_FALSE(world->scoopSoundPlaying);
 }
 
 TEST_F(HandGrabSystemWithWorld, ARipeFieldGivesHalfOfEachScoop)

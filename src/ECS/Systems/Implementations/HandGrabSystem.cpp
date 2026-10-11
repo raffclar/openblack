@@ -533,6 +533,9 @@ bool HandGrabSystem::ScoopField(HandGrab& grab, const FieldFacts& facts)
 		return false;
 	}
 	const auto scoop = _world->ScoopFactsOf(PotInfo::HandFood);
+	// It sounds as food pours, before anything is taken
+	grab.scoopSound = _world->PlayScoopSound(grab.scoopSound, ResourceType::Food, _world->PoseOf(_world->Hand()).origin,
+	                                         hand_grab::ScoopRamp(grab.scoopTurns, scoop));
 	// As much as the ramp gives, no more than the field has, within what one handful holds, and half once ripe
 	auto taken = std::min(hand_grab::ScoopAmount(grab.scoopTurns, scoop), facts.food);
 	if (scoop.maxPickedUp != 0)
@@ -546,11 +549,7 @@ bool HandGrabSystem::ScoopField(HandGrab& grab, const FieldFacts& facts)
 	}
 	if (taken == 0)
 	{
-		if (grab.scoopStream.has_value())
-		{
-			_world->StopScoopStream(*grab.scoopStream);
-			grab.scoopStream.reset();
-		}
+		StopScoopEffects(grab);
 		return false;
 	}
 	_world->TakeFromField(grab.scoopSource, taken);
@@ -602,16 +601,15 @@ bool HandGrabSystem::ScoopFishFarm(HandGrab& grab, const fish_farm::Type& type)
 		return false;
 	}
 	const auto scoop = _world->ScoopFactsOf(PotInfo::HandFood);
+	// It sounds as food pours, before anything is taken
+	grab.scoopSound = _world->PlayScoopSound(grab.scoopSound, ResourceType::Food, _world->PoseOf(_world->Hand()).origin,
+	                                         hand_grab::ScoopRamp(grab.scoopTurns, scoop));
 	const auto wanted =
 	    fish_farm::ScoopWanted(hand_grab::ScoopAmount(grab.scoopTurns, scoop), type, handful->amount, scoop.maxPickedUp);
 	// Once the farm gives nothing the scoop ends; while it gives any, the hand gets all it wanted
 	if (_world->TakeFromFishFarm(grab.scoopSource, wanted) == 0)
 	{
-		if (grab.scoopStream.has_value())
-		{
-			_world->StopScoopStream(*grab.scoopStream);
-			grab.scoopStream.reset();
-		}
+		StopScoopEffects(grab);
 		return false;
 	}
 	handful->amount += wanted;
@@ -639,37 +637,43 @@ bool HandGrabSystem::Scoop(HandGrab& grab)
 	}
 	const auto scoop = _world->ScoopFactsOf(source->handful);
 	const auto wanted = hand_grab::ScoopAmount(grab.scoopTurns, scoop);
-	_world->PlayScoopSound(source->resource, _world->PoseOf(_world->Hand()).origin,
-	                       hand_grab::ScoopRamp(grab.scoopTurns, scoop));
+	// It sounds before anything is taken
+	grab.scoopSound = _world->PlayScoopSound(grab.scoopSound, source->resource, _world->PoseOf(_world->Hand()).origin,
+	                                         hand_grab::ScoopRamp(grab.scoopTurns, scoop));
 	const auto taken = hand_grab::ScoopTaken(wanted, source->amount, handful->amount, scoop);
 	if (taken == 0)
 	{
-		if (grab.scoopStream.has_value())
-		{
-			_world->StopScoopStream(*grab.scoopStream);
-			grab.scoopStream.reset();
-		}
+		StopScoopEffects(grab);
 		return false;
 	}
 	const auto took = _world->TakeFromPile(grab.scoopSource, taken);
 	registry.Get<Pot>(grab.object).amount += took;
 	_world->ResizePot(grab.object);
-	// A pile scooped empty stops streaming; the scoop ends with the next turn
-	if (!Exists(grab.scoopSource) && grab.scoopStream.has_value())
+	// A pile scooped empty stops streaming and sounding; the scoop ends with the next turn
+	if (!Exists(grab.scoopSource))
 	{
-		_world->StopScoopStream(*grab.scoopStream);
-		grab.scoopStream.reset();
+		StopScoopEffects(grab);
 	}
 	return true;
 }
 
-void HandGrabSystem::EndScoop(HandGrab& grab)
+void HandGrabSystem::StopScoopEffects(HandGrab& grab)
 {
 	if (grab.scoopStream.has_value())
 	{
 		_world->StopScoopStream(*grab.scoopStream);
 		grab.scoopStream.reset();
 	}
+	if (grab.scoopSound != entt::null)
+	{
+		_world->StopScoopSound();
+		grab.scoopSound = entt::null;
+	}
+}
+
+void HandGrabSystem::EndScoop(HandGrab& grab)
+{
+	StopScoopEffects(grab);
 	if (grab.scoopSource != entt::null)
 	{
 		_world->PinCursor(false);

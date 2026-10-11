@@ -144,6 +144,19 @@ uint32_t piles::AmountTaken(uint32_t holds, uint32_t given, uint32_t maximum, bo
 	return given;
 }
 
+std::vector<uint32_t> piles::ShareAmongPiles(uint32_t amount, std::span<const PileRoom> piles)
+{
+	std::vector<uint32_t> shares;
+	shares.reserve(piles.size());
+	for (const auto& pile : piles)
+	{
+		const auto share = AmountTaken(0, amount, pile.maximum, pile.capped);
+		shares.push_back(share);
+		amount -= share;
+	}
+	return shares;
+}
+
 float magic::piles::PotScale(uint32_t amount, uint32_t scaleEvery)
 {
 	constexpr float k_Least = 0.25f;

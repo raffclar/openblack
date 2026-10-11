@@ -23,8 +23,8 @@ class ResourceStoreSystem final: public ResourceStoreSystemInterface
 public:
 	[[nodiscard]] ObjectResource ResourceOf(entt::entity object) const override;
 	[[nodiscard]] bool IsStore(entt::entity store, ResourceType type) const override;
-	uint32_t AddToStore(entt::entity store, ResourceType type, uint32_t amount, std::optional<PlayerNames> giver,
-	                    bool poisoned) override;
+	uint32_t AddToStore(entt::entity store, ResourceType type, uint32_t amount, std::optional<PlayerNames> giver, bool poisoned,
+	                    std::optional<glm::vec3> at) override;
 	uint32_t AddToPile(entt::entity pile, ResourceType type, uint32_t amount, bool poisoned) override;
 	uint32_t TakeFromPile(entt::entity pile, ResourceType type, uint32_t amount, std::optional<PlayerNames> taker) override;
 	bool TakeObject(entt::entity store, entt::entity object, std::optional<PlayerNames> giver) override;
