@@ -157,3 +157,106 @@ TEST_P(CameraHandback, ThePlayersCameraLooksTheWayTheScriptLeftIt)
 
 // With and without the player turning from the first frame, and with and without the camera tilting itself
 INSTANTIATE_TEST_SUITE_P(TurningAndTilting, CameraHandback, testing::Combine(testing::Bool(), testing::Bool()));
+
+namespace
+{
+/// The player holds one camera key throughout
+class HoldingAction final: public MockAction
+{
+public:
+	explicit HoldingAction(input::BindableActionMap held)
+	    : _held(held)
+	{
+	}
+
+	// Asked about several actions at once, it answers whether any of them is held
+	[[nodiscard]] bool GetBindable(input::BindableActionMap actions) const override
+	{
+		return (static_cast<uint64_t>(actions) & static_cast<uint64_t>(_held)) != 0;
+	}
+
+private:
+	input::BindableActionMap _held;
+};
+
+/// The land-dragging lesson's help: the land can be dragged and the keys move the camera over it, and the camera tilts
+/// itself and keeps to its height over the land
+class LessonCameraHelp final: public ecs::systems::CameraHelpSystemInterface
+{
+public:
+	LessonCameraHelp() { _help.SetInterfaceLevel(1); }
+
+	[[nodiscard]] const camera_help::CameraHelp& Get() const override { return _help; }
+	[[nodiscard]] camera_help::CameraHelp& Get() override { return _help; }
+
+private:
+	camera_help::CameraHelp _help;
+};
+
+class MovingAfterHandback: public testing::TestWithParam<input::BindableActionMap>
+{
+protected:
+	void SetUp() override
+	{
+		Locator::entitiesRegistry::emplace<ecs::Registry>();
+		Locator::audio::emplace<audio::AudioManagerNoOp>();
+		Locator::terrainSystem::emplace<MockTerrain>();
+		Locator::windowing::emplace<MockWindowingSystem>();
+		_picking = new NoLandPicking();
+		_picking->camera = &_camera;
+		Locator::pickingSystem::reset<MockPickingSystem>(_picking);
+		Locator::gameActionSystem::reset<MockAction>(new HoldingAction(GetParam()));
+		Locator::cameraHelpSystem::emplace<LessonCameraHelp>();
+
+		_camera.SetProjectionMatrixPerspective(70.0f, Locator::windowing::value().GetAspectRatio(), 1.0f, 65536.0f);
+		_camera.SetOrigin(k_LessonOrigin).SetFocus(k_LessonFocus);
+	}
+
+	void TearDown() override
+	{
+		Locator::cameraHelpSystem::reset();
+		Locator::gameActionSystem::reset();
+		Locator::pickingSystem::reset();
+		Locator::windowing::reset();
+		Locator::terrainSystem::reset();
+		Locator::audio::reset();
+		Locator::entitiesRegistry::reset();
+	}
+
+	Camera _camera;
+	NoLandPicking* _picking = nullptr;
+};
+} // namespace
+
+TEST_P(MovingAfterHandback, TheKeysMoveTheCameraWithoutTurningIt)
+{
+	ScriptControlSystem control;
+	ASSERT_TRUE(control.StartCameraControl(_camera, {.task = 7, .templeScript = false, .insideTemple = false}, FlatLand));
+	ASSERT_TRUE(control.EndCameraControl(_camera, 7));
+	const auto& model = _camera.GetModel();
+
+	// The camera first settles to its pitch and height with nothing held, as when the lesson's text is read
+	Locator::gameActionSystem::reset<MockAction>(new MockAction());
+	for (int frame = 0; frame < 120; ++frame)
+	{
+		_camera.HandleActions(k_Frame);
+		_camera.Update(k_Frame);
+	}
+	Locator::gameActionSystem::reset<MockAction>(new HoldingAction(GetParam()));
+	const auto origin = model.GetTargetOrigin();
+	const auto heading = Heading(origin, model.GetTargetFocus());
+
+	for (int frame = 0; frame < 60; ++frame)
+	{
+		_camera.HandleActions(k_Frame);
+		_camera.Update(k_Frame);
+		const auto now = Heading(model.GetTargetOrigin(), model.GetTargetFocus());
+		EXPECT_GT(glm::dot(now, heading), std::cos(glm::radians(2.0f))) << "frame " << frame;
+	}
+	// A second of holding a movement key carries the camera several metres over the land
+	EXPECT_GT(glm::distance(glm::xz(model.GetTargetOrigin()), glm::xz(origin)), 5.0f);
+}
+
+INSTANTIATE_TEST_SUITE_P(MovementKeys, MovingAfterHandback,
+                         testing::Values(input::BindableActionMap::MOVE_LEFT, input::BindableActionMap::MOVE_RIGHT,
+                                         input::BindableActionMap::MOVE_FORWARDS, input::BindableActionMap::MOVE_BACKWARDS));

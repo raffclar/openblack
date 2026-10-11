@@ -174,6 +174,9 @@ private:
 	bool _dragGivenUp {false};
 	/// Put back inside the fence, the camera ignores its controls until every one of them is let go
 	bool _heldBack {false};
+	/// The self-tilting camera goes back over where it stood at the start of the frame: it tilted itself, or nothing was
+	/// asked of it
+	bool _keepsToItsPlace {true};
 	camera_drag::TwoButtonTurn _twoButtonTurn;
 	/// How far the clear view of Ctrl and Shift held together has come, easing in and out over half a second
 	Zoomer _clearView;
