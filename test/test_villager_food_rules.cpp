@@ -318,3 +318,14 @@ TEST(VillagerFoodRules, PickedUpFoodGoesToTheStoreWhenTheTownIsShort)
 	EXPECT_FALSE(CarriesFoodToStore(1.0f, 15, 150, 0.9f));
 	EXPECT_FALSE(CarriesFoodToStore(0.0f, 150, 150, 1.0f));
 }
+
+TEST(VillagerChecks, ABodyStaysDeadUnlessPickedUpOrThrown)
+{
+	EXPECT_TRUE(checks::BodyMayLeaveDeath(VillagerStates::Dead));
+	EXPECT_TRUE(checks::BodyMayLeaveDeath(VillagerStates::InHand));
+	EXPECT_TRUE(checks::BodyMayLeaveDeath(VillagerStates::Flying));
+	// A reaction it had when it died ending, or anything sending it home, leaves it lying there
+	EXPECT_FALSE(checks::BodyMayLeaveDeath(VillagerStates::DecideWhatToDo));
+	EXPECT_FALSE(checks::BodyMayLeaveDeath(VillagerStates::GoHome));
+	EXPECT_FALSE(checks::BodyMayLeaveDeath(VillagerStates::Dying));
+}

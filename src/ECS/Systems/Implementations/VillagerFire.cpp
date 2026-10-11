@@ -49,6 +49,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/VillagerCheckRules.h"
 #include "ECS/VillagerClips.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/WalkerPlacement.h"
@@ -1098,6 +1099,11 @@ uint32_t villager_fire::Dying(LivingAction& action)
 		SetTopState(action, VillagerStates::Dead);
 	}
 	return 1;
+}
+
+bool villager_fire::ExitDead(LivingAction&, VillagerStates next)
+{
+	return !ecs::villager_check_rules::BodyMayLeaveDeath(next);
 }
 
 uint32_t villager_fire::Dead(LivingAction& action)
