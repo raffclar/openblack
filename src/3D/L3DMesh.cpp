@@ -73,9 +73,9 @@ bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 	for (const auto& skin : l3d.GetSkins())
 	{
 		_skinOrder.push_back(skin.id);
-		_skinMasks[skin.id] =
-		    screen_pick::MaskOf(std::span(reinterpret_cast<const uint16_t*>(skin.texels.data()), skin.texels.size()),
-		                        l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height);
+		const auto texels = std::span(reinterpret_cast<const uint16_t*>(skin.texels.data()), skin.texels.size());
+		_skinMasks[skin.id] = screen_pick::MaskOf(texels, l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height);
+		_skinAlpha[skin.id] = tree_shadows::MaskOf(texels, l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height);
 		_skins[skin.id] = std::make_unique<Texture2D>(_debugName.c_str());
 		const auto size = static_cast<uint32_t>(skin.texels.size() * sizeof(skin.texels[0]));
 		// bgfx only lets a texture created without texels have them changed
@@ -349,6 +349,10 @@ void L3DMesh::UpdateSkin(SkinId skin, std::span<const uint16_t> texels) noexcept
 	if (const auto found = _skins.find(skin); found != _skins.end())
 	{
 		found->second->Update(texels.data(), static_cast<uint32_t>(texels.size_bytes()));
+	}
+	if (const auto found = _skinAlpha.find(skin); found != _skinAlpha.end())
+	{
+		found->second = tree_shadows::MaskOf(texels, l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height);
 	}
 }
 

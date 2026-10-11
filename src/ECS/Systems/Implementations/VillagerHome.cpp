@@ -61,9 +61,12 @@
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerBuild.h"
+#include "VillagerChecks.h"
 #include "VillagerDisciples.h"
 #include "VillagerFire.h"
+#include "VillagerFisherman.h"
 #include "VillagerFood.h"
+#include "VillagerForester.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -75,8 +78,11 @@ namespace villager_age = openblack::ecs::villager_age;
 namespace world_objects = openblack::ecs::world_objects;
 namespace villager_fire = openblack::ecs::villager_fire;
 namespace villager_build = openblack::ecs::villager_build;
+namespace villager_forester = openblack::ecs::villager_forester;
+namespace villager_fisherman = openblack::ecs::villager_fisherman;
 namespace villager_disciple = openblack::ecs::villager_disciple;
 namespace villager_food = openblack::ecs::villager_food;
+namespace villager_checks = openblack::ecs::villager_checks;
 namespace wall_hug = openblack::ecs::wall_hug;
 namespace walk_arrival = openblack::ecs::walk_arrival;
 using ClearAreaFilter = openblack::ecs::systems::TownSystemInterface::ClearAreaFilter;
@@ -306,8 +312,7 @@ uint32_t CheckNeededForTownDesire(LivingAction& action)
 	const auto town = TownOf(villager);
 	const auto result = Locator::townDesireSystem::value().OfferVillager(
 	    town, IsChild(villager), OwnDesiresTrigger(villager), [&action](TownDesireInfo desire) -> uint32_t {
-		    // TODO(villagers): villagers take up the town's sleep, building and relaxation yet; the game has them fetch food
-		    // and wood, repair and play for it too (the jobs phase)
+		    // TODO(villagers): the game has villagers repair, play and supply the workshop for their town too
 		    switch (desire)
 		    {
 		    case TownDesireInfo::ForRelaxation:
@@ -316,6 +321,10 @@ uint32_t CheckNeededForTownDesire(LivingAction& action)
 			                   Locator::artefactSystem::value().OfferRelaxation(TownOf(EntityOf(action)), EntityOf(action))
 			               ? 1
 			               : 0;
+		    case TownDesireInfo::ForFood:
+			    return villager_fisherman::CheckSatisfyFoodDesire(action);
+		    case TownDesireInfo::ForWood:
+			    return villager_forester::CheckSatisfyWoodDesire(action);
 		    case TownDesireInfo::ForSleep:
 			    return villager_home::CheckSatisfySleep(action);
 		    case TownDesireInfo::ToBuild:
@@ -1365,7 +1374,11 @@ uint32_t villager_home::GoHomeAndChange(LivingAction& action)
 		next = IsAtHome(villager) ? VillagerStates::AtHome : VillagerStates::ArrivesHome;
 	}
 	SetTopState(action, next);
-	// TODO(villager-life-cycle): one still small for its age (a child just grown up) is sized for its age
+	// One still small arriving is sized for its age
+	if (WorldRegistry().Get<const Transform>(villager).scale.x < villager_age::k_FullGrownScale)
+	{
+		villager_checks::GrowForAge(villager);
+	}
 	return 1;
 }
 

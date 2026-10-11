@@ -73,6 +73,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/TempleExterior.h"
 #include "ECS/Components/TownArtefact.h"
+#include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageLight.h"
@@ -519,27 +520,29 @@ std::string_view KindName(ecs::PhysicsEntry::Kind kind)
 std::unique_ptr<ProviderInterface> EngineProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("engine");
-	provider->Add(Query("config", "The engine's settings: what is drawn, the display and the camera's clip"),
-	              Serve<Locator::config>("the config", [](const EngineConfig& config, const QueryContext& /*context*/) {
-		              return Json {
-		                  {"draw",
-		                   {{"sky", config.drawSky},
-		                    {"water", config.drawWater},
-		                    {"island", config.drawIsland},
-		                    {"entities", config.drawEntities},
-		                    {"vegetation", config.drawVegetation},
-		                    {"sprites", config.drawSprites},
-		                    {"bounding_boxes", config.drawBoundingBoxes}}},
-		                  {"wireframe", config.wireframe},
-		                  {"time_of_day", config.timeOfDay},
-		                  {"resolution", {config.resolution.x, config.resolution.y}},
-		                  {"vsync", config.vsync},
-		                  {"camera_fov", config.cameraXFov},
-		                  {"camera_near_clip", config.cameraNearClip},
-		                  {"gui_scale", config.guiScale},
-		                  {"running", config.running},
-		              };
-	              }));
+	provider->Add(
+	    Query("config", "The engine's settings: what is drawn, the display and the camera's clip"),
+	    Serve<Locator::config>("the config", [](const EngineConfig& config, const QueryContext& /*context*/) {
+		    return Json {
+		        {"draw",
+		         {{"sky", config.drawSky},
+		          {"water", config.drawWater},
+		          {"island", config.drawIsland},
+		          {"entities", config.drawEntities},
+		          {"vegetation", config.drawVegetation},
+		          {"sprites", config.drawSprites},
+		          {"bounding_boxes", config.drawBoundingBoxes}}},
+		        {"shadows", {{"creatures", config.drawCreatureShadows}, {"dynamic_trees", config.dynamicTreeShadows}}},
+		        {"wireframe", config.wireframe},
+		        {"time_of_day", config.timeOfDay},
+		        {"resolution", {config.resolution.x, config.resolution.y}},
+		        {"vsync", config.vsync},
+		        {"camera_fov", config.cameraXFov},
+		        {"camera_near_clip", config.cameraNearClip},
+		        {"gui_scale", config.guiScale},
+		        {"running", config.running},
+		    };
+	    }));
 	provider->Add(Query("frame", "The last frame: its time, the window's size, the renderer's flags and how much it draws"),
 	              [](const QueryContext& /*context*/) {
 		              Json result = Json::object();
@@ -1307,23 +1310,49 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 	provider->Add(
 	    Query("town_desires", "What a town wants most, and how much it wants each thing",
 	          {IdParameter("The town's entity id")}),
-	    Serve<Locator::townDesireSystem>(
-	        "the town desires", [](const ecs::systems::TownDesireSystemInterface& desires, const QueryContext& context) {
-		        const auto entity = EntityParam(context.params);
-		        if (!entity.has_value())
-		        {
-			        return QueryResult::Error("no entity with that id");
-		        }
-		        Json each = Json::object();
-		        for (int i = 0; i <= static_cast<int>(TownDesireInfo::ForSleep); ++i)
-		        {
-			        const auto desire = static_cast<TownDesireInfo>(i);
-			        each[std::to_string(i)] = desires.GetDesire(*entity, desire);
-		        }
-		        return QueryResult::Value({{"id", ToId(*entity)},
-		                                   {"most_wanted", static_cast<int>(desires.GetMostWanted(*entity))},
-		                                   {"desires", std::move(each)}});
-	        }));
+	    Serve<Locator::townDesireSystem>("the town desires", [](const ecs::systems::TownDesireSystemInterface& desires,
+	                                                            const QueryContext& context) {
+		    const auto entity = EntityParam(context.params);
+		    if (!entity.has_value())
+		    {
+			    return QueryResult::Error("no entity with that id");
+		    }
+		    Json each = Json::object();
+		    for (int i = 0; i <= static_cast<int>(TownDesireInfo::ForSleep); ++i)
+		    {
+			    const auto desire = static_cast<TownDesireInfo>(i);
+			    each[std::to_string(i)] = desires.GetDesire(*entity, desire);
+		    }
+		    Json raw = Json::object();
+		    Json doing = Json::object();
+		    const auto* townDesire = Locator::entitiesRegistry::value().TryGet<const ecs::components::TownDesire>(*entity);
+		    for (int i = 0; i <= static_cast<int>(TownDesireInfo::ForSleep); ++i)
+		    {
+			    raw[std::to_string(i)] = desires.GetRawDesire(*entity, static_cast<TownDesireInfo>(i));
+			    if (townDesire != nullptr)
+			    {
+				    doing[std::to_string(i)] = townDesire->doingNow.at(static_cast<size_t>(i));
+			    }
+		    }
+		    // The wood the town wants before it sends villagers for more: the targets grow past a number of abodes
+		    Json wood = Json::object();
+		    if (Locator::infoConstants::has_value())
+		    {
+			    const auto& town = Locator::infoConstants::value().town;
+			    const auto& multipliers =
+			        Locator::infoConstants::value().townDesire.at(static_cast<size_t>(TownDesireInfo::ForWood)).tribeMultiplier;
+			    wood = {{"minimum_for_desire", town.minimumWoodForDesire},
+			            {"maximum_for_desire", town.maximumWoodForDesire},
+			            {"buildings_for_desired_wood", town.numOfBuildingsForDesiredWood},
+			            {"tribe_multipliers", std::vector<float>(multipliers.begin(), multipliers.end())}};
+		    }
+		    return QueryResult::Value({{"id", ToId(*entity)},
+		                               {"most_wanted", static_cast<int>(desires.GetMostWanted(*entity))},
+		                               {"desires", std::move(each)},
+		                               {"raw", std::move(raw)},
+		                               {"doing_now", std::move(doing)},
+		                               {"wood_targets", std::move(wood)}});
+	    }));
 	return provider;
 }
 

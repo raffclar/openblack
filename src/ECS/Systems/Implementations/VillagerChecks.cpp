@@ -15,6 +15,7 @@
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -26,6 +27,7 @@
 #include "Locator.h"
 #include "VillagerFire.h"
 #include "VillagerFood.h"
+#include "VillagerHome.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -68,7 +70,59 @@ bool CheckDeathFromOldAge(entt::entity villager)
 	villager_fire::DieByEffect(villager, villager_fire::DeathCause {.reason = DeathReason::OldAge, .weight = info.life});
 	return true;
 }
+
+float GrownScaleFor(const Villager& person, uint32_t age, float scale)
+{
+	const auto& info = InfoOf(person);
+	auto& random = Locator::gameRandom::value();
+	return villager_age::GrownScale(age, info.grownUpAge, info.ageToScale.values, scale,
+	                                [&random](float limit) { return random.GameFloatRand(limit); });
+}
+
+void SetScale(entt::entity villager, float scale)
+{
+	Entities().Get<Transform>(villager).scale = glm::vec3(scale);
+	Entities().SetDirty();
+}
+
+/// A child grows on the growth turns its checks fall on, and once old enough becomes an adult: the youngest adult's
+/// age and an adult's size, counted among the adults of its home and town, and off home to change into its adult self
+void CheckChildGrownUp(LivingAction& action, uint32_t turn)
+{
+	auto& registry = Entities();
+	const auto villager = registry.ToEntity(action);
+	auto& person = registry.Get<Villager>(villager);
+	const auto& info = InfoOf(person);
+	const auto age = villager_age::AgeNow(person);
+	switch (villager_age::CheckChild(age, info.grownUpAge, turn))
+	{
+	case villager_age::ChildGrowth::None:
+		return;
+	case villager_age::ChildGrowth::Grows:
+		ecs::villager_checks::GrowForAge(villager);
+		return;
+	case villager_age::ChildGrowth::GrowsUp:
+		break;
+	}
+	// Its home's and town's counts of children and adults follow from its life stage. Its model stays the child's
+	// until it changes at home.
+	person.lifeStage = Villager::LifeStage::Adult;
+	const auto grownUpAge = villager_age::GrownUpAge(info.grownUpAge);
+	villager_age::SetBirthTurnForAge(person, grownUpAge);
+	SetScale(villager,
+	         GrownScaleFor(person, grownUpAge, villager_age::StartScale(grownUpAge, info.grownUpAge, info.ageToScale.values)));
+	// TODO(villager-life-cycle): it stops following its mother here, once villagers have mothers (births)
+	ecs::villager_home::LookForBetterHome(action);
+	Locator::livingActionSystem::value().VillagerSetState(action, LivingAction::Index::Top, VillagerStates::GoHomeAndChange,
+	                                                      false);
+}
 } // namespace
+
+void ecs::villager_checks::GrowForAge(entt::entity villager)
+{
+	const auto& person = Entities().Get<const Villager>(villager);
+	SetScale(villager, GrownScaleFor(person, villager_age::AgeNow(person), Entities().Get<const Transform>(villager).scale.x));
+}
 
 void ecs::villager_checks::CheckEveryTime(LivingAction& action)
 {
@@ -124,6 +178,10 @@ void ecs::villager_checks::CheckEveryTime(LivingAction& action)
 	{
 		living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::GoHome, false);
 	}
-	// TODO(villager-life-cycle): a child grows, and a pregnant woman comes nearer her time, at these checks
+	if (person.lifeStage == Villager::LifeStage::Child)
+	{
+		CheckChildGrownUp(action, turn);
+	}
+	// TODO(villager-life-cycle): a grown woman not with child may become so, and one with child comes nearer her time
 	ecs::villager_food::CheckHungry(action);
 }

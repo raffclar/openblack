@@ -35,11 +35,17 @@ constexpr std::array<Kind, 13> k_Kinds {{
      .leadsFollowers = true,
      .glows = true,
      .waitsWhenIdle = true,
-     .desire = TownDesireInfo::ForWood},
+     .desire = TownDesireInfo::ForWood,
+     .goesForAnyWood = true},
     /* Fisherman */
     {.leadsFollowers = true, .glows = true, .waitsWhenIdle = true, .desire = TownDesireInfo::ForFood},
     /* Builder */
-    {.leadsFollowers = true, .glows = true, .waitsWhenIdle = true, .desire = TownDesireInfo::ToBuild, .movesIntoTown = true},
+    {.leadsFollowers = true,
+     .glows = true,
+     .waitsWhenIdle = true,
+     .desire = TownDesireInfo::ToBuild,
+     .movesIntoTown = true,
+     .goesForAnyWood = true},
     /* Breeder */
     {.landingState = VillagerStates::BreederJustLanded,
      .glows = true,
@@ -51,7 +57,7 @@ constexpr std::array<Kind, 13> k_Kinds {{
     /* Missionary */
     {.landingState = VillagerStates::MissionaryDisciple, .glows = true},
     /* Craftsman */
-    {.leadsFollowers = true, .glows = true, .waitsWhenIdle = true, .movesIntoTown = true},
+    {.leadsFollowers = true, .glows = true, .waitsWhenIdle = true, .movesIntoTown = true, .goesForAnyWood = true},
     /* Trader */
     {.landingState = VillagerStates::DecideWhatToDo, .glows = true, .waitsWhenIdle = true},
     /* ChangeHouse */

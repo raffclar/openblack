@@ -12,11 +12,13 @@
 #include <cstdint>
 
 #include <array>
+#include <optional>
 #include <string>
 
 #include <glm/ext/vector_uint2_sized.hpp>
 
 #include "GraphicsHandle.h"
+#include "TreeShadows.h"
 
 namespace openblack::graphics
 {
@@ -186,6 +188,14 @@ public:
 
 	void DumpTexture() const;
 
+	/// The texture's alpha at 64 by 64 places, kept for a texture whose texels aren't kept, such as one from a pack:
+	/// trees' shadows on the land are cut out by it (see tree_shadows)
+	void SetAlphaMask(const tree_shadows::AlphaMask& mask) { _alphaMask = mask; }
+	[[nodiscard]] const tree_shadows::AlphaMask* GetAlphaMask() const
+	{
+		return _alphaMask.has_value() ? &*_alphaMask : nullptr;
+	}
+
 protected:
 	std::string _name;
 	TextureHandle _handle;
@@ -194,6 +204,7 @@ protected:
 	uint16_t _numLayers;
 	TextureFormat _format;
 	uint32_t _storageSize;
+	std::optional<tree_shadows::AlphaMask> _alphaMask;
 
 	friend FrameBuffer;
 };

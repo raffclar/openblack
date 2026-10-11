@@ -12,6 +12,7 @@
 #include "FishFarmSystem.h"
 
 #include <algorithm>
+#include <utility>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -20,10 +21,13 @@
 #include "3D/MapCoords.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/FishFarm.h"
+#include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 
@@ -122,7 +126,7 @@ std::optional<entt::entity> FishFarmSystem::ClosestFarm(glm::vec3 point, float m
 	return closest;
 }
 
-std::optional<entt::entity> FishFarmSystem::BestFarmFor(entt::entity town, glm::vec3 fisherman) const
+std::optional<FishFarmSystemInterface::FarmChoice> FishFarmSystem::BestFarmFor(entt::entity town, glm::vec3 fisherman) const
 {
 	std::vector<entt::entity> farms;
 	std::vector<fish_farm::Candidate> candidates;
@@ -137,7 +141,32 @@ std::optional<entt::entity> FishFarmSystem::BestFarmFor(entt::entity town, glm::
 		                          .fishermen = farm.fishermen.size()});
 	    });
 	const auto best = fish_farm::BestFarm(candidates, GetType().maxFishermen);
-	return best.has_value() ? std::optional(farms.at(*best)) : std::nullopt;
+	if (!best.has_value())
+	{
+		return std::nullopt;
+	}
+	return FarmChoice {.farm = farms.at(best->index), .score = best->score};
+}
+
+void FishFarmSystem::RemoveFarm(entt::entity farm)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* data = registry.Valid(farm) ? registry.TryGet<FishFarm>(farm) : nullptr;
+	if (data == nullptr)
+	{
+		return;
+	}
+	// Its fishermen stop at once and decide afresh, then it goes from the land
+	const auto fishermen = std::exchange(data->fishermen, {});
+	for (const auto villager : fishermen)
+	{
+		if (auto* action = registry.Valid(villager) ? registry.TryGet<LivingAction>(villager) : nullptr)
+		{
+			Locator::livingActionSystem::value().VillagerSetState(*action, LivingAction::Index::Top,
+			                                                      VillagerStates::DecideWhatToDo, false);
+		}
+	}
+	ecs::world_objects::Remove(farm);
 }
 
 void FishFarmSystem::AddFisherman(entt::entity farm, entt::entity villager)

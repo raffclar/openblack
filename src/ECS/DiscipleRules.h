@@ -133,6 +133,8 @@ struct Kind
 	std::optional<TownDesireInfo> desire;
 	/// Put by a thing of another town, it moves into that town
 	bool movesIntoTown {false};
+	/// It goes for any wood it sees lying about that it has room for
+	bool goesForAnyWood {false};
 };
 [[nodiscard]] Kind KindOf(VillagerDisciple type);
 

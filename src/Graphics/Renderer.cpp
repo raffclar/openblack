@@ -148,6 +148,7 @@
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Sun.h"
 #include "Graphics/TreeBrightness.h"
+#include "Graphics/TreeShadowBake.h"
 #include "Graphics/VertexBuffer.h"
 #include "Graphics/ZSort.h"
 #include "InfoConstants.h"
@@ -512,6 +513,7 @@ Renderer::~Renderer() noexcept
 	_handFlowTexture.reset();
 	_groundShadowData.reset();
 	_objectShadowFrameBuffer.reset();
+	_treeShadowBake.reset();
 	_templeMapFrameBuffer.reset();
 	if (_landLightTexture)
 	{
@@ -1489,23 +1491,12 @@ void Renderer::DrawTempleMapPass() const
 	auto smallBump = Locator::resources::value().GetTextures().Handle(LandIslandInterface::k_SmallBumpTextureId);
 	// The land's own textures, bumped, with the footprints and the objects' shadows on them
 	const glm::vec4 u_skyAndBump = {0.0f, 0.0f, 0.0f, 1.0f};
-	auto u_objectShadows = glm::vec4(0.0f);
-	if (_objectShadowFrameBuffer)
-	{
-		uint16_t width = 0;
-		uint16_t height = 0;
-		_objectShadowFrameBuffer->GetSize(width, height);
-		u_objectShadows = glm::vec4(ObjectShadows::k_MaxDarkness, 1.0f / static_cast<float>(std::max<uint16_t>(width, 1)),
-		                            1.0f / static_cast<float>(std::max<uint16_t>(height, 1)), 0.0f);
-	}
 	terrainShader->SetTextureSampler("s0_blockTextures", 0, island.GetBlockTextures());
 	terrainShader->SetTextureSampler("s9_landLuminosity", 9, GetLandLuminosity());
 	terrainShader->SetTextureSampler("s10_landColour", 10, GetLandColour());
 	terrainShader->SetTextureSampler("s2_smallBump", 2, *smallBump);
 	terrainShader->SetTextureSampler("s3_footprints", 3, island.GetFootprintFramebuffer().GetColorAttachment());
-	terrainShader->SetTextureSampler("s5_objectShadows", 5,
-	                                 _objectShadowFrameBuffer ? _objectShadowFrameBuffer->GetColorAttachment()
-	                                                          : island.GetFootprintFramebuffer().GetColorAttachment());
+	SetObjectShadowUniforms(*terrainShader);
 	terrainShader->SetTextureSampler("s7_landLight", 7, GetLandLightTexture());
 	// Nor any moving shadow
 	SetGroundShadowUniforms(*terrainShader, false);
@@ -1514,7 +1505,6 @@ void Renderer::DrawTempleMapPass() const
 	terrainShader->SetUniformValue("u_haze", &noHaze);
 	terrainShader->SetUniformValue("u_hazeColour", &noHaze);
 	terrainShader->SetUniformValue("u_skyAndBump", &u_skyAndBump);
-	terrainShader->SetUniformValue("u_objectShadows", &u_objectShadows);
 	terrainShader->SetUniformValue("u_islandExtent", &islandExtent);
 	// The map shows no vortex's hole
 	const glm::vec4 noVortex {0.0f, 0.0f, 0.0f, -1.0f};
@@ -4333,6 +4323,7 @@ void Renderer::DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const
 	bgfx::setViewRect(viewId, 0, 0, width, height);
 	bgfx::setViewClear(viewId, BGFX_CLEAR_COLOR, 0x00000000);
 	bgfx::touch(viewId);
+	_treeShadowsBaked = false;
 	if (!drawDesc.drawEntities)
 	{
 		return;
@@ -4380,10 +4371,51 @@ void Renderer::DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const
 		}
 	};
 	drawCasters(renderCtx.instancedDrawDescs, renderCtx.instanceUniformBuffer);
-	if (drawDesc.drawVegetation)
+	if (!drawDesc.drawVegetation)
 	{
-		drawCasters(renderCtx.treeInstancedDrawDescs, renderCtx.treeInstanceUniformBuffer);
+		return;
 	}
+	if (Locator::config::value().dynamicTreeShadows)
+	{
+		// The trees' shadows drawn as they are this frame, swaying with them and bent away from the hand
+		drawCasters(renderCtx.treeInstancedDrawDescs, renderCtx.treeInstanceUniformBuffer);
+		return;
+	}
+	// The game bakes the trees' and big forests' shadows into the land as it paints it
+	if (!_treeShadowBake)
+	{
+		_treeShadowBake = std::make_unique<TreeShadowBake>();
+	}
+	_treeShadowBake->Update(!bgfx::getCaps()->originBottomLeft);
+	_treeShadowsBaked = _treeShadowBake->GetTexture() != nullptr;
+}
+
+void Renderer::SetObjectShadowUniforms(const ShaderProgram& program) const
+{
+	const auto& island = Locator::terrainSystem::value();
+	auto u_objectShadows = glm::vec4(0.0f);
+	if (_objectShadowFrameBuffer)
+	{
+		uint16_t width = 0;
+		uint16_t height = 0;
+		_objectShadowFrameBuffer->GetSize(width, height);
+		u_objectShadows = glm::vec4(ObjectShadows::k_MaxDarkness, 1.0f / static_cast<float>(std::max<uint16_t>(width, 1)),
+		                            1.0f / static_cast<float>(std::max<uint16_t>(height, 1)), 0.0f);
+	}
+	program.SetTextureSampler("s5_objectShadows", 5,
+	                          _objectShadowFrameBuffer ? _objectShadowFrameBuffer->GetColorAttachment()
+	                                                   : island.GetFootprintFramebuffer().GetColorAttachment());
+	const auto* baked = _treeShadowsBaked && _treeShadowBake ? _treeShadowBake->GetTexture() : nullptr;
+	if (baked != nullptr && _objectShadowFrameBuffer)
+	{
+		u_objectShadows.w = 1.0f;
+		program.SetTextureSampler("s14_treeShadows", 14, *baked);
+	}
+	else
+	{
+		program.SetTextureSampler("s14_treeShadows", 14, island.GetFootprintFramebuffer().GetColorAttachment());
+	}
+	program.SetUniformValue("u_objectShadows", &u_objectShadows);
 }
 
 TextureHandle Renderer::UpdateLandLight() const
@@ -5224,16 +5256,6 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			    forwardLength;
 			const glm::vec4 u_smallBumpLine {cameraOrigin.x, cameraOrigin.z, forwardAlongGround / forwardLength};
 			const glm::vec4 u_smallBump {lineDistance, 0.0f, 0.0f, 0.0f};
-			auto u_objectShadows = glm::vec4(0.0f);
-			if (_objectShadowFrameBuffer)
-			{
-				uint16_t width = 0;
-				uint16_t height = 0;
-				_objectShadowFrameBuffer->GetSize(width, height);
-				u_objectShadows =
-				    glm::vec4(ObjectShadows::k_MaxDarkness, 1.0f / static_cast<float>(std::max<uint16_t>(width, 1)),
-				              1.0f / static_cast<float>(std::max<uint16_t>(height, 1)), 0.0f);
-			}
 
 			// The hand's light is in the land's own lighting, so the reflection shows it too
 
@@ -5284,15 +5306,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				terrainShader->SetUniformValue("u_smallBumpLine", &u_smallBumpLine);
 				terrainShader->SetUniformValue("u_smallBump", &u_smallBump);
 				terrainShader->SetTextureSampler("s3_footprints", 3, island.GetFootprintFramebuffer().GetColorAttachment());
-				terrainShader->SetTextureSampler("s5_objectShadows", 5,
-				                                 _objectShadowFrameBuffer
-				                                     ? _objectShadowFrameBuffer->GetColorAttachment()
-				                                     : island.GetFootprintFramebuffer().GetColorAttachment());
+				SetObjectShadowUniforms(*terrainShader);
 				terrainShader->SetTextureSampler("s7_landLight", 7, GetLandLightTexture());
 				terrainShader->SetUniformValue("u_haze", &_haze[0]);
 				terrainShader->SetUniformValue("u_hazeColour", &_haze[1]);
 				terrainShader->SetUniformValue("u_skyAndBump", &u_skyAndBump);
-				terrainShader->SetUniformValue("u_objectShadows", &u_objectShadows);
 				terrainShader->SetUniformValue("u_islandExtent", &islandExtent);
 				// The moving shadows fall on the land, not on its reflection
 				SetGroundShadowUniforms(*terrainShader, desc.viewId == RenderPass::Main);

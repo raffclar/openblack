@@ -715,6 +715,14 @@ bool Gui::ShowMenu() noexcept
 				ImGui::EndMenu();
 			}
 
+			if (ImGui::BeginMenu("Shadows"))
+			{
+				ImGui::Checkbox("Creature Shadows", &config.drawCreatureShadows);
+				ImGui::Checkbox("Dynamic Tree Shadows", &config.dynamicTreeShadows);
+
+				ImGui::EndMenu();
+			}
+
 			if (ImGui::BeginMenu("Hand"))
 			{
 				ImGui::Checkbox("Right Handed", &config.rightHandedHand);

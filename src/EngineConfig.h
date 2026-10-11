@@ -62,6 +62,9 @@ struct EngineConfig
 	/// Creatures cast their shadows onto the land and what stands on it, and villagers a script draws in high detail
 	/// onto the land
 	bool drawCreatureShadows {true};
+	/// Trees cast their shadows as they are drawn each frame, swaying with them and bent away from the hand, rather than
+	/// baked into the land once as the game does (off: as the game does)
+	bool dynamicTreeShadows {false};
 
 	bool vsync {false};
 	bool running {false};
