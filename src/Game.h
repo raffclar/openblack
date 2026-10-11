@@ -420,10 +420,10 @@ private:
 	/// What moves each species' body, from Data/CTR's .cbn files, by the species their base mesh names
 	static void LoadCreatureRigs();
 	/// Acts on what the player chose in the game's menu: continuing restores the pause it had before it opened
-	/// Starts the story's scripts of a new game on the first land, and asks a returning player what to skip
+	/// Starts the story's scripts of a new game on the first land, and asks the player what to skip
 	void StartStoryScripts();
-	/// As a new game starts: whether to ask a returning player what to skip, and asking. Whether the question was put
-	/// (or answered at once by the developers' start), which leaves the land as it is rather than black at its start
+	/// As a new game starts: asks the player what to skip. Whether the question was put (or answered at once by the
+	/// developers' start), which leaves the land as it is rather than black at its start
 	bool AskNewGameChoice();
 	void HandleInterfaceAction();
 	/// Once a frame outside the temple: where the hand's tooltip is drawn, and the status panel of the creature the hand
