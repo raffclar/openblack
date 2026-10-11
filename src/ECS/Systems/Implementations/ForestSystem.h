@@ -34,6 +34,10 @@ public:
 	uint32_t TakeBigForestWood(entt::entity bigForest, uint32_t amount) override;
 	std::optional<entt::entity> TreeFromBigForest(entt::entity bigForest) override;
 	void AssignForestsToTowns() override;
+	[[nodiscard]] std::optional<entt::entity> NearestTownForest(entt::entity town, glm::vec3 point) const override;
+	[[nodiscard]] std::optional<entt::entity> NearestForestWithTrees(glm::vec3 point, float reach) const override;
+	bool RemoveEmptyForestNear(glm::vec3 point, float reach) override;
+	[[nodiscard]] std::optional<entt::entity> CentreTreeOf(entt::entity forest) const override;
 	[[nodiscard]] std::optional<glm::vec3> ForestLair(AnimalInfo kind, glm::vec3 from) const override;
 	void MakeScenicForests() override;
 	void JoinForest(entt::entity tree, uint32_t forest) override;

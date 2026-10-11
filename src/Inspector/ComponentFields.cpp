@@ -187,6 +187,7 @@
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/VillagerLabel.h"
 #include "ECS/Components/VillagerPose.h"
+#include "ECS/Components/VillagerWork.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WallHug.h"
@@ -1558,6 +1559,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::VillagerPose::easedHeading>("easedHeading")
 	    .Field<&components::VillagerPose::detailedHeading>("detailedHeading")
 	    .Field<&components::VillagerPose::clipBlend>("clipBlend");
+	Reflect<components::WorkTarget>(context).Field<&components::WorkTarget::thing>("thing");
+	Reflect<components::WoodReactionTarget>(context)
+	    .Field<&components::WoodReactionTarget::wood>("wood")
+	    .Field<&components::WoodReactionTarget::startTurn>("startTurn");
 	Reflect<components::Vortex>(context)
 	    .Field<&components::Vortex::type>("type")
 	    .Field<&components::Vortex::state>("state")

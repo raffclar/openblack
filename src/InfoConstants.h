@@ -1160,7 +1160,8 @@ struct GVillagerStateTableInfo
 	int canPauseForASecond;
 	/// How much a villager whose state this is cares for food it finds lying about
 	float foodInterest;
-	float field0xcc;
+	/// How much a villager whose state this is cares for wood it finds lying about
+	float woodInterest;
 	/// A hungry villager in the state goes to find food
 	uint32_t hungerInterrupts;
 	/// A starving villager in the state goes to find food

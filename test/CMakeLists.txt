@@ -749,3 +749,4 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_villager_food_rules test_villager_food_rules.cpp)
 openblack_setup_and_add_test(test_villager_tools test_villager_tools.cpp)
+openblack_setup_and_add_test(test_villager_work test_villager_work.cpp)
