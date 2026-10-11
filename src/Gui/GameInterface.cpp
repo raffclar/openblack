@@ -40,6 +40,8 @@
 #include "Graphics/Texture2D.h"
 #include "Graphics/VideoOverlay.h"
 #include "Gui/CinemaBars.h"
+#include "Gui/GlyphTexture.h"
+#include "Gui/ScreenFit.h"
 #include "Help/ClickCue.h"
 #include "Help/ControlIcons.h"
 #include "Help/DialogueText.h"
@@ -95,19 +97,7 @@ std::optional<GameFont> LoadFont(std::string_view name)
 /// A font's glyphs, white with their coverage in alpha
 std::unique_ptr<openblack::graphics::Texture2D> MakeFontTexture(const GameFont& font, std::string_view name)
 {
-	const auto& coverage = font.GetAtlas();
-	const auto* fontData = bgfx::alloc(static_cast<uint32_t>(coverage.size() * 4));
-	for (size_t i = 0; i < coverage.size(); ++i)
-	{
-		fontData->data[(i * 4) + 0] = 0xFF;
-		fontData->data[(i * 4) + 1] = 0xFF;
-		fontData->data[(i * 4) + 2] = 0xFF;
-		fontData->data[(i * 4) + 3] = coverage[i];
-	}
-	auto texture = std::make_unique<openblack::graphics::Texture2D>(std::string("Font ") + std::string(name));
-	texture->Create(font.GetAtlasSize().x, font.GetAtlasSize().y, 1, openblack::graphics::TextureFormat::RGBA8,
-	                openblack::graphics::Wrapping::ClampEdge, openblack::graphics::Filter::Linear, fontData);
-	return texture;
+	return openblack::gui::MakeGlyphTexture(font.GetAtlas(), font.GetAtlasSize(), std::string("Font ") + std::string(name));
 }
 } // namespace
 
@@ -254,6 +244,8 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _toolTips(ReadToolTipsInfo())
 {
 	_painter.SetPictures(_symbols.get(), _mice.get());
+	_fullFontTexture = MakeGlyphTexture(_font.GetFullAtlas(), _font.GetFullAtlasSize(), "Font full height");
+	_painter.SetFullGlyphs(_fullFontTexture.get());
 }
 
 GameInterface::~GameInterface() = default;
@@ -473,7 +465,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	DrawVillagerLabels(resolution);
 	DrawTipBubble(resolution, mouse);
 	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen();
-	DrawFloatingNumbers();
+	DrawFloatingNumbers(resolution);
 	if (_message.has_value())
 	{
 		_painter.DrawTextWrapped(DialogRect {{0, 0}, DialogPainter::k_Size}, true, _message->text, 60,
@@ -641,7 +633,7 @@ void GameInterface::DrawDialogue(glm::u16vec2 resolution, int barPixels)
 		// The box covers whole pixels, its right and bottom ones included
 		if (frame->boxShown)
 		{
-			const auto& box = frame->box;
+			const auto& box = frame->band;
 			const auto colour = glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(frame->boxAlpha) / 255.0f);
 			_canvas.DrawQuad({static_cast<float>(box.left), static_cast<float>(box.top)},
 			                 {static_cast<float>(box.right + 1), static_cast<float>(box.bottom + 1)}, glm::vec2(0.0f),
@@ -653,9 +645,9 @@ void GameInterface::DrawDialogue(glm::u16vec2 resolution, int barPixels)
 		{
 			if (const auto share = dialogue->GetClickCueShare(); share.has_value())
 			{
-				DrawClickCue(resolution, frame->box, *share);
+				DrawClickCue(frame->box, *share);
 			}
-			DrawControlIcons(resolution, *frame, *dialogue);
+			DrawControlIcons(*frame, *dialogue);
 		}
 	}
 	// The hand's helper icons go over the box and under the words
@@ -747,7 +739,7 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 	}
 	const auto screen = glm::vec2(resolution);
 	const glm::vec2 pixel {(clip.x / clip.w + 1.0f) * screen.x * 0.5f, (1.0f - clip.y / clip.w) * screen.y * 0.5f};
-	const auto placement = tip::Place(pixel, clip.w, screen.x);
+	const auto placement = tip::Place(pixel, clip.w, screen.x, ReferenceScale(resolution.x, resolution.y));
 	if (!placement.has_value())
 	{
 		return;
@@ -931,13 +923,14 @@ void GameInterface::DrawBubbleLine(const help::tip_bubble::Line& line, glm::vec3
 	}
 }
 
-void GameInterface::DrawClickCue(glm::u16vec2 resolution, const help::TextRegion& box, float share)
+void GameInterface::DrawClickCue(const help::TextRegion& box, float share)
 {
 	// The languages that need bigger text aren't chosen in openblack yet
 	constexpr bool k_BiggerText = false;
 	const auto& label = _texts.GetHelpText(help::click_cue::k_LabelText).text;
 	const auto labelSize = static_cast<float>(help::click_cue::LabelSize(box.top, box.bottom, k_BiggerText));
-	const auto cue = help::click_cue::Layout(resolution.x, box.top, box.bottom, share, _font.GetWidth(label, labelSize),
+	// Inset from the strip's right end, which is the screen's on 4:3
+	const auto cue = help::click_cue::Layout(box.right, box.top, box.bottom, share, _font.GetWidth(label, labelSize),
 	                                         k_BiggerText, machine_clock::Ticks());
 	if (!cue.has_value())
 	{
@@ -957,7 +950,7 @@ void GameInterface::DrawClickCue(glm::u16vec2 resolution, const help::TextRegion
 	_painter.DrawString(cue->labelAt, label, cue->labelSize, cue->labelColour);
 }
 
-void GameInterface::DrawControlIcons(glm::u16vec2 resolution, const help::TextFrame& frame, const help::DialogueText& dialogue)
+void GameInterface::DrawControlIcons(const help::TextFrame& frame, const help::DialogueText& dialogue)
 {
 	namespace icons = help::control_icons;
 	if (frame.controlIcons.empty() || !Locator::gameActionSystem::has_value())
@@ -968,9 +961,10 @@ void GameInterface::DrawControlIcons(glm::u16vec2 resolution, const help::TextFr
 	const icons::KeyNameFn keyName = [](SDL_Scancode key) { return ToUtf16(input::KeyChordName({.key = key})); };
 	const auto& box = frame.box;
 	const int size = icons::IconSize(box.top, box.bottom);
-	const auto drawKeyCap = [this, &resolution, size](int top, std::u16string_view text, float share) {
+	// Inset from the strip's right end, which is the screen's on 4:3
+	const auto drawKeyCap = [this, &box, size](int top, std::u16string_view text, float share) {
 		const float textWidth = _font.GetWidth(text, icons::KeyTextSize(size));
-		const auto placed = icons::Place(resolution.x, top, size, icons::KeyCapWidth(size, textWidth), share);
+		const auto placed = icons::Place(box.right, top, size, icons::KeyCapWidth(size, textWidth), share);
 		if (!placed.has_value())
 		{
 			return;
@@ -1011,7 +1005,7 @@ void GameInterface::DrawControlIcons(glm::u16vec2 resolution, const help::TextFr
 		drawKeyCap(top, *text, *share);
 		return;
 	}
-	const auto placed = icons::Place(resolution.x, top, size, static_cast<float>(size), *share);
+	const auto placed = icons::Place(box.right, top, size, static_cast<float>(size), *share);
 	if (!placed.has_value())
 	{
 		return;
@@ -1101,9 +1095,10 @@ void GameInterface::DrawCreaturePanel(glm::u16vec2 resolution)
 
 	const glm::vec4 white {1.0f, 1.0f, 1.0f, 1.0f};
 	const glm::vec4 black {0.0f, 0.0f, 0.0f, 1.0f};
-	// Each text in white over its black shadow, two pixels down and right
+	// Each text in white over its black shadow, two pixels of the default screen down and right
+	const float shadow = 2.0f * ReferenceScale(resolution.x, resolution.y);
 	const auto drawText = [&](glm::vec2 at, std::u16string_view text) {
-		_painter.DrawString(at + 2.0f, text, layout.textSize, black);
+		_painter.DrawString(at + shadow, text, layout.textSize, black);
 		_painter.DrawString(at, text, layout.textSize, white);
 	};
 	for (const auto& row : layout.Rows())
@@ -1162,8 +1157,8 @@ void GameInterface::DrawFightPanel(glm::u16vec2 resolution)
 	{
 		const auto& row = layout.rows.at(i);
 		const auto& side = _fightPanel->sides.at(i);
-		// The name in white over its black shadow
-		_painter.DrawString(row.name + 2.0f, side.name, layout.textSize, black);
+		// The name in white over its black shadow, two pixels of the default screen down and right
+		_painter.DrawString(row.name + (2.0f * ReferenceScale(resolution.x, resolution.y)), side.name, layout.textSize, black);
 		_painter.DrawString(row.name, side.name, layout.textSize, white);
 		for (const auto& [bar, value] : {std::pair(row.health, side.health), std::pair(row.stamina, side.stamina)})
 		{
@@ -1173,20 +1168,22 @@ void GameInterface::DrawFightPanel(glm::u16vec2 resolution)
 	}
 }
 
-void GameInterface::DrawFloatingNumbers()
+void GameInterface::DrawFloatingNumbers(glm::u16vec2 resolution)
 {
+	// The numbers' sizes are pixels of the default screen
+	const float scale = ReferenceScale(resolution.x, resolution.y);
+	const float textSize = ecs::floating_number::k_TextSize * scale;
+	const float shadow = ecs::floating_number::k_ShadowOffset * scale;
 	for (const auto& number : _floatingNumbers)
 	{
-		const float width = _font.GetWidth(number.text, ecs::floating_number::k_TextSize);
+		const float width = _font.GetWidth(number.text, textSize);
 		const auto at = ecs::floating_number::TextPlace(number.screen, width);
 		const float alpha = static_cast<float>(number.alpha) / 255.0f;
 		const glm::vec4 colour {static_cast<float>((number.colour >> 16u) & 0xFFu) / 255.0f,
 		                        static_cast<float>((number.colour >> 8u) & 0xFFu) / 255.0f,
 		                        static_cast<float>(number.colour & 0xFFu) / 255.0f, alpha};
-		constexpr float k_Shadow = ecs::floating_number::k_ShadowOffset;
-		_painter.DrawString({at.x - k_Shadow, at.y + k_Shadow}, number.text, ecs::floating_number::k_TextSize,
-		                    glm::vec4(0.0f, 0.0f, 0.0f, alpha));
-		_painter.DrawString(at, number.text, ecs::floating_number::k_TextSize, colour);
+		_painter.DrawString({at.x - shadow, at.y + shadow}, number.text, textSize, glm::vec4(0.0f, 0.0f, 0.0f, alpha));
+		_painter.DrawString(at, number.text, textSize, colour);
 	}
 }
 
@@ -1224,7 +1221,10 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	const int iconsWidth = iconWidth + (left ? size / 2 : 0) + (right ? size / 2 : 0);
 	const int textSize = size * 2 / 3;
 	const float textWidth = _font.GetWidth(text, static_cast<float>(textSize));
-	const float total = textWidth + static_cast<float>(iconsWidth) + 2.0f;
+	// The gap after the words and the shadows' offset are pixels of the default screen
+	const float pixel = ReferenceScale(width, height);
+	const float gap = 2.0f * pixel;
+	const float total = textWidth + static_cast<float>(iconsWidth) + gap;
 
 	// Right of the hand, or left of it in the right third of the screen, until it reaches the left third
 	if (handX > width * 2 / 3)
@@ -1237,7 +1237,7 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	}
 	const float x = _toolTipOnLeft ? static_cast<float>(handX + (size / 2)) - total : static_cast<float>(handX - (size / 2));
 	const float textX = x;
-	const float iconX = std::trunc(x + textWidth + 2.0f) + (left ? static_cast<float>(size / 2) : 0.0f);
+	const float iconX = std::trunc(x + textWidth + gap) + (left ? static_cast<float>(size / 2) : 0.0f);
 	const auto y = static_cast<float>(handY);
 	const auto sizeF = static_cast<float>(size);
 	const auto textOffset = static_cast<float>((size - textSize) / 2);
@@ -1304,7 +1304,7 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 
 	// The words, in yellow over two black shadows
 	const auto textSizeF = static_cast<float>(textSize);
-	_painter.DrawString({textX - 1.0f, y - 1.0f + textOffset}, text, textSizeF, shadow);
-	_painter.DrawString({textX + 1.0f, y + 1.0f + textOffset}, text, textSizeF, shadow);
+	_painter.DrawString({textX - pixel, y - pixel + textOffset}, text, textSizeF, shadow);
+	_painter.DrawString({textX + pixel, y + pixel + textOffset}, text, textSizeF, shadow);
 	_painter.DrawString({textX, y + textOffset}, text, textSizeF, yellow);
 }

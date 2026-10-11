@@ -28,7 +28,19 @@ constexpr size_t k_GlyphsOffset = k_CountOffset + 4;
 constexpr size_t k_GlyphSize = 0x1C;
 /// Width of the atlas and the clear pixels around each glyph in it
 constexpr uint16_t k_AtlasWidth = 1024;
+constexpr uint16_t k_FullAtlasWidth = 2048;
 constexpr uint16_t k_Padding = 1;
+
+/// The smallest power of two at least as big
+uint16_t PowerOfTwoAtLeast(uint32_t value)
+{
+	uint16_t power = 1;
+	while (power < value)
+	{
+		power = static_cast<uint16_t>(power * 2);
+	}
+	return power;
+}
 
 template <typename T>
 T Read(std::span<const uint8_t> data, size_t offset)
@@ -149,7 +161,9 @@ std::optional<GameFont> GameFont::Load(std::span<const uint8_t> met, std::span<c
 	// The glyphs at half height, each pixel the average of four, packed in rows into the atlas
 	const auto cellHeight = static_cast<uint16_t>((font._height + 1) / 2);
 	std::vector<std::vector<uint8_t>> cells;
+	std::vector<std::vector<uint8_t>> bitmaps;
 	glm::u16vec2 pen {0, 0};
+	glm::u16vec2 fullPen {0, 0};
 	for (uint32_t g = 0; g < count; ++g)
 	{
 		const auto record = k_GlyphsOffset + (g * k_GlyphSize);
@@ -161,6 +175,8 @@ std::optional<GameFont> GameFont::Load(std::span<const uint8_t> met, std::span<c
 		    .right = Read<float>(met, record + 0x10),
 		    .atlasMin = {},
 		    .atlasMax = {},
+		    .fullMin = {},
+		    .fullMax = {},
 		    .smallGlyph = static_cast<uint32_t>(font._smallGlyphs.size()),
 		};
 		const auto offset = Read<uint32_t>(met, record + 0x14);
@@ -202,17 +218,22 @@ std::optional<GameFont> GameFont::Load(std::span<const uint8_t> met, std::span<c
 		glyph.atlasMin = {pen.x + k_Padding, pen.y + k_Padding};
 		glyph.atlasMax = {glyph.atlasMin.x + cellWidth, glyph.atlasMin.y + cellHeight};
 		pen.x += cellWidth + (k_Padding * 2);
+
+		if (fullPen.x + glyph.width + (k_Padding * 2) > k_FullAtlasWidth)
+		{
+			fullPen = {0, fullPen.y + font._height + (k_Padding * 2)};
+		}
+		glyph.fullMin = {fullPen.x + k_Padding, fullPen.y + k_Padding};
+		glyph.fullMax = {glyph.fullMin.x + glyph.width, glyph.fullMin.y + font._height};
+		fullPen.x += glyph.width + (k_Padding * 2);
+
 		font._glyphs.push_back(glyph);
 		cells.push_back(std::move(cell));
+		bitmaps.push_back(*bitmap);
 	}
 
 	// Power of two heights keep every backend happy
-	const auto usedHeight = static_cast<uint32_t>(pen.y + cellHeight + (k_Padding * 2));
-	uint16_t atlasHeight = 1;
-	while (atlasHeight < usedHeight)
-	{
-		atlasHeight = static_cast<uint16_t>(atlasHeight * 2);
-	}
+	const auto atlasHeight = PowerOfTwoAtLeast(static_cast<uint32_t>(pen.y + cellHeight + (k_Padding * 2)));
 	font._atlasSize = {k_AtlasWidth, atlasHeight};
 	font._atlas.assign(static_cast<size_t>(k_AtlasWidth) * atlasHeight, 0);
 	for (size_t g = 0; g < font._glyphs.size(); ++g)
@@ -224,6 +245,25 @@ std::optional<GameFont> GameFont::Load(std::span<const uint8_t> met, std::span<c
 		{
 			std::memcpy(font._atlas.data() + (static_cast<size_t>(glyph.atlasMin.y + y) * k_AtlasWidth) + glyph.atlasMin.x,
 			            cells[g].data() + (y * cellWidth), cellWidth);
+		}
+	}
+
+	// The full height glyphs: each set pixel of a bitmap opaque
+	const auto fullHeight = PowerOfTwoAtLeast(static_cast<uint32_t>(fullPen.y + font._height + (k_Padding * 2)));
+	font._fullAtlasSize = {k_FullAtlasWidth, fullHeight};
+	font._fullAtlas.assign(static_cast<size_t>(k_FullAtlasWidth) * fullHeight, 0);
+	for (size_t g = 0; g < font._glyphs.size(); ++g)
+	{
+		const auto& glyph = font._glyphs[g];
+		for (uint16_t y = 0; y < font._height; ++y)
+		{
+			for (uint16_t x = 0; x < glyph.width; ++x)
+			{
+				if (bitmaps[g][(static_cast<size_t>(y) * glyph.width) + x] != 0)
+				{
+					font._fullAtlas[(static_cast<size_t>(glyph.fullMin.y + y) * k_FullAtlasWidth) + glyph.fullMin.x + x] = 0xFF;
+				}
+			}
 		}
 	}
 

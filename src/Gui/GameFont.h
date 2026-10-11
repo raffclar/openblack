@@ -48,6 +48,9 @@ public:
 		/// Where the glyph is in the atlas, in pixels
 		glm::u16vec2 atlasMin;
 		glm::u16vec2 atlasMax;
+		/// Where the glyph is at its full height in the full atlas, in pixels
+		glm::u16vec2 fullMin;
+		glm::u16vec2 fullMax;
 		/// Its glyph in GetSmallGlyph's cache
 		uint32_t smallGlyph;
 	};
@@ -88,6 +91,10 @@ public:
 	/// Coverage of the glyphs, one byte a pixel
 	[[nodiscard]] const std::vector<uint8_t>& GetAtlas() const noexcept { return _atlas; }
 	[[nodiscard]] glm::u16vec2 GetAtlasSize() const noexcept { return _atlasSize; }
+	/// The glyphs at their full height, a pixel of the bitmap a pixel: for text drawn bigger than the game ever drew it
+	/// on its default screen, so that scaled up text stays sharp
+	[[nodiscard]] const std::vector<uint8_t>& GetFullAtlas() const noexcept { return _fullAtlas; }
+	[[nodiscard]] glm::u16vec2 GetFullAtlasSize() const noexcept { return _fullAtlasSize; }
 	[[nodiscard]] const SmallGlyph& GetSmallGlyph(const Glyph& glyph) const { return _smallGlyphs[glyph.smallGlyph]; }
 
 private:
@@ -97,6 +104,8 @@ private:
 	std::vector<Glyph> _glyphs;
 	std::vector<uint8_t> _atlas;
 	glm::u16vec2 _atlasSize {0, 0};
+	std::vector<uint8_t> _fullAtlas;
+	glm::u16vec2 _fullAtlasSize {0, 0};
 	std::vector<SmallGlyph> _smallGlyphs;
 };
 

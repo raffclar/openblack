@@ -20,6 +20,7 @@
 #include "Canvas.h"
 #include "GameFont.h"
 #include "Graphics/Texture2D.h"
+#include "ScreenFit.h"
 
 using namespace openblack::gui;
 
@@ -82,19 +83,9 @@ DialogPainter::DialogPainter(Canvas& canvas, const GameFont& font, const graphic
 
 void DialogPainter::Begin(glm::u16vec2 resolution)
 {
-	const auto screen = glm::vec2(resolution);
-	const auto size = glm::vec2(k_Size);
-	if (screen.x >= size.x && screen.y >= size.y)
-	{
-		// A pixel a unit, in the middle of the screen
-		_scale = 1.0f;
-		_offset = glm::vec2((glm::ivec2(resolution) - k_Size) / 2);
-	}
-	else
-	{
-		_scale = std::min(screen.x / size.x, screen.y / size.y);
-		_offset = glm::floor((screen - size * _scale) * 0.5f);
-	}
+	const auto space = FrontEndSpace(resolution.x, resolution.y);
+	_scale = space.scale;
+	_offset = space.offset;
 	_alpha = 1.0f;
 }
 
@@ -115,8 +106,10 @@ void DialogPainter::DrawBox(const DialogRect& rect, glm::vec2 uvMin, glm::vec2 u
 
 void DialogPainter::DrawLine(glm::ivec2 from, glm::ivec2 to, glm::vec4 colour) const
 {
-	_canvas.DrawLine(glm::ivec2(glm::floor(ToScreen(from))), glm::ivec2(glm::floor(ToScreen(to))),
-	                 glm::vec4(glm::vec3(colour), colour.a * _alpha));
+	// A line covers whole pixels of the layout, which grow with it on a bigger screen; at least a pixel of the screen
+	const auto min = glm::floor(ToScreen(glm::vec2(glm::min(from, to))));
+	const auto max = glm::max(glm::floor(ToScreen(glm::vec2(glm::max(from, to) + 1))), min + 1.0f);
+	_canvas.DrawQuad(min, max, {0.0f, 0.0f}, {1.0f, 1.0f}, glm::vec4(glm::vec3(colour), colour.a * _alpha), nullptr);
 }
 
 void DialogPainter::DrawBevelBox(const DialogRect& rect, int style, uint8_t edges, glm::vec4 tint, int cellsToARow) const
@@ -358,8 +351,10 @@ void DialogPainter::DrawPointer(Canvas& canvas, glm::ivec2 screen, uint32_t mill
 {
 	const auto frame = k_PointerFrames.at((milliseconds >> 5) & 7);
 	const auto cell = glm::vec2(static_cast<float>(frame & 7), static_cast<float>(frame >> 3)) * k_PointerCell;
+	// A 32 pixel arrow on the default screen, grown with the layout on bigger ones
+	const auto size = 32.0f * std::max(_scale, 1.0f);
 	const auto min = glm::vec2(screen.x - 2, screen.y);
-	canvas.DrawQuad(min, min + 32.0f, cell + k_HalfTexel, cell + k_PointerExtent, glm::vec4(1.0f), &_atlas);
+	canvas.DrawQuad(min, min + size, cell + k_HalfTexel, cell + k_PointerExtent, glm::vec4(1.0f), &_atlas);
 }
 
 float DialogPainter::GetTextWidth(std::u16string_view text, int size) const
@@ -402,7 +397,8 @@ float DialogPainter::DrawText(glm::ivec2 position, int width, Justify justify, s
 	{
 		x -= std::floor(shownWidth);
 	}
-	DrawString(ToScreen({x, static_cast<float>(position.y)}), shown, static_cast<float>(size) * _scale, colour);
+	DrawGlyphs(ToScreen({x, static_cast<float>(position.y)}), shown, static_cast<float>(size) * _scale, colour,
+	           UseFullGlyphs(static_cast<float>(size) * _scale));
 	return shownWidth;
 }
 
@@ -418,7 +414,8 @@ float DialogPainter::DrawTextWrapped(const DialogRect& rect, bool centred, std::
 		{
 			x += std::floor((static_cast<float>(rect.Width()) - GetTextWidth(line, size)) * 0.5f);
 		}
-		DrawString(ToScreen({x, y}), line, static_cast<float>(size) * _scale, colour);
+		DrawGlyphs(ToScreen({x, y}), line, static_cast<float>(size) * _scale, colour,
+		           UseFullGlyphs(static_cast<float>(size) * _scale));
 		y += static_cast<float>(size);
 	}
 	return y - static_cast<float>(rect.min.y);
@@ -426,8 +423,28 @@ float DialogPainter::DrawTextWrapped(const DialogRect& rect, bool centred, std::
 
 void DialogPainter::DrawString(glm::vec2 screen, std::u16string_view text, float size, glm::vec4 colour) const
 {
+	DrawGlyphs(screen, text, size, colour, false);
+}
+
+void DialogPainter::DrawString(glm::vec2 screen, std::u16string_view text, float size, glm::vec4 colour, bool sharp) const
+{
+	DrawGlyphs(screen, text, size, colour,
+	           sharp && _fullFontTexture != nullptr && size > static_cast<float>(_font.GetHeight()) * 0.5f);
+}
+
+bool DialogPainter::UseFullGlyphs(float drawnSize) const noexcept
+{
+	// The game draws every text from its glyphs at half height, also when it scales them up. Text the layout scales
+	// past what the default screen shows is drawn from the full height glyphs once the half height ones would be
+	// scaled up, so that it stays sharp
+	return _fullFontTexture != nullptr && _scale > 1.0f && drawnSize > static_cast<float>(_font.GetHeight()) * 0.5f;
+}
+
+void DialogPainter::DrawGlyphs(glm::vec2 screen, std::u16string_view text, float size, glm::vec4 colour, bool full) const
+{
 	const auto scale = size / static_cast<float>(_font.GetHeight());
-	const auto atlasSize = glm::vec2(_font.GetAtlasSize());
+	const auto atlasSize = glm::vec2(full ? _font.GetFullAtlasSize() : _font.GetAtlasSize());
+	const auto* texture = full ? _fullFontTexture : &_fontTexture;
 	auto pen = glm::floor(screen);
 	for (const auto c : text)
 	{
@@ -436,11 +453,13 @@ void DialogPainter::DrawString(glm::vec2 screen, std::u16string_view text, float
 		{
 			continue;
 		}
-		// The atlas holds the glyph at half size
-		const auto cellSize = glm::vec2(glyph->atlasMax - glyph->atlasMin) * 2.0f * scale;
+		const auto atlasMin = glm::vec2(full ? glyph->fullMin : glyph->atlasMin);
+		const auto atlasMax = glm::vec2(full ? glyph->fullMax : glyph->atlasMax);
+		// The half height atlas holds the glyph at half size
+		const auto cellSize = (atlasMax - atlasMin) * (full ? 1.0f : 2.0f) * scale;
 		const auto min = glm::vec2(pen.x + (glyph->left * scale), pen.y);
-		_canvas.DrawQuad(min, min + cellSize, glm::vec2(glyph->atlasMin) / atlasSize, glm::vec2(glyph->atlasMax) / atlasSize,
-		                 glm::vec4(glm::vec3(colour), colour.a * _alpha), &_fontTexture);
+		_canvas.DrawQuad(min, min + cellSize, atlasMin / atlasSize, atlasMax / atlasSize,
+		                 glm::vec4(glm::vec3(colour), colour.a * _alpha), texture);
 		pen.x += (glyph->left + glyph->ink + glyph->right) * scale;
 	}
 }

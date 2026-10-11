@@ -182,7 +182,7 @@ private:
 	/// Opens the tattoo editor's dialog as the editor opens, and moves it on
 	void UpdateTattooEditor(float deltaSeconds);
 	/// The floating numbers, each ending at its point over its shadow
-	void DrawFloatingNumbers();
+	void DrawFloatingNumbers(glm::u16vec2 resolution);
 	/// The tooltip by the hand, its words and then its mouse
 	void DrawToolTip(glm::u16vec2 resolution);
 	/// The creature's status panel, at the left of the screen
@@ -210,10 +210,10 @@ private:
 	/// A line of the bubble's words in a colour, fading from its top to its bottom
 	void DrawBubbleLine(const help::tip_bubble::Line& line, glm::vec3 colour);
 	/// The "Continue" cue at the right of the dialogue box, so far through its fade
-	void DrawClickCue(glm::u16vec2 resolution, const help::TextRegion& box, float share);
+	void DrawClickCue(const help::TextRegion& box, float share);
 	/// The control icons the newest text asks for at the right of the dialogue box: the camera keys' cap in its top
 	/// third, any other action's mouse or key in its bottom third
-	void DrawControlIcons(glm::u16vec2 resolution, const help::TextFrame& frame, const help::DialogueText& dialogue);
+	void DrawControlIcons(const help::TextFrame& frame, const help::DialogueText& dialogue);
 	/// The font of the dialogue's words: the advisors each have their own, and j0 stands in for one that is missing
 	[[nodiscard]] std::pair<const GameFont*, const graphics::Texture2D*> DialogueFont(help::TextFont font) const;
 
@@ -221,6 +221,8 @@ private:
 	GameFont _font;
 	std::unique_ptr<graphics::Texture2D> _atlas;
 	std::unique_ptr<graphics::Texture2D> _fontTexture;
+	/// The font's glyphs at full height, for text scaled up past the default screen's size
+	std::unique_ptr<graphics::Texture2D> _fullFontTexture;
 	std::unique_ptr<graphics::Texture2D> _symbols;
 	std::unique_ptr<graphics::Texture2D> _mice;
 	/// The atmosphere texture of glows and arrows
