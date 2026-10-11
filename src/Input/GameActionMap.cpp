@@ -334,9 +334,28 @@ void GameActionMap::WarpCursor(glm::ivec2 position)
 		SDL_PushEvent(&event);
 		return;
 	}
-	if (Locator::windowing::has_value() && !_lock.Locked())
+	if (!_lock.Locked())
 	{
-		SDL_WarpMouseInWindow(static_cast<SDL_Window*>(Locator::windowing::value().GetHandle()), position.x, position.y);
+		WarpPlayerCursor(position);
+	}
+}
+
+void GameActionMap::WarpPlayerCursor(glm::ivec2 position)
+{
+	if (!Locator::windowing::has_value())
+	{
+		return;
+	}
+	// The window reports the jump as the pointer moving, with the next events; it isn't the mouse moving. While a hand
+	// demonstration keeps the player's mouse out, those events never arrive
+	glm::ivec2 before {0, 0};
+	SDL_GetMouseState(&before.x, &before.y);
+	SDL_WarpMouseInWindow(static_cast<SDL_Window*>(Locator::windowing::value().GetHandle()), position.x, position.y);
+	glm::ivec2 after {0, 0};
+	SDL_GetMouseState(&after.x, &after.y);
+	if (!_playerMouseBlocked)
+	{
+		_mouseMotion.Put(after - before);
 	}
 }
 
@@ -371,7 +390,7 @@ bool GameActionMap::IsCursorFrozen() const
 
 glm::ivec2 GameActionMap::GetMouseDelta() const
 {
-	return _mouseDelta;
+	return _mouseMotion.Delta();
 }
 
 float GameActionMap::GetMouseWheelDelta() const
@@ -460,11 +479,7 @@ void GameActionMap::Frame()
 		else if (cursor.warpTo.has_value())
 		{
 			SDL_SetRelativeMouseMode(SDL_FALSE);
-			if (Locator::windowing::has_value())
-			{
-				SDL_WarpMouseInWindow(static_cast<SDL_Window*>(Locator::windowing::value().GetHandle()), cursor.warpTo->x,
-				                      cursor.warpTo->y);
-			}
+			WarpPlayerCursor(*cursor.warpTo);
 		}
 		_mousePosition = glm::clamp(cursor.cursor, glm::zero<decltype(screenSize)>(), screenSize);
 		// A pinned cursor's image stays where it was pinned; the pointer itself is still followed
@@ -473,7 +488,7 @@ void GameActionMap::Frame()
 			_cursorPinnedAt = glm::ivec2(_mousePosition);
 		}
 	}
-	_mouseDelta = glm::ivec2(0, 0);
+	_mouseMotion.NewFrame();
 	_mouseWheelDelta = 0.0f;
 	_bindableMapPrevious = _bindableMap;
 	_bindableMap =
@@ -611,7 +626,7 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 	else if (event.type == SDL_MOUSEMOTION)
 	{
 		// Several moves can come in a frame, and the frame's delta is all of them
-		_mouseDelta += glm::ivec2(event.motion.xrel, event.motion.yrel);
+		_mouseMotion.Moved({event.motion.xrel, event.motion.yrel});
 	}
 }
 
