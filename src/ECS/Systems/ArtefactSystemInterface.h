@@ -48,6 +48,8 @@ public:
 	/// Each frame: the owners' symbols over their towns' worthiest artefacts are drawn, their glows turning by the
 	/// game's milliseconds
 	virtual void UpdateFrame(float gameMilliseconds) = 0;
+	/// An artefact's worth is set, as dancing would raise it: it starts glowing once worth enough. Whether it is one.
+	virtual bool SetWorth(entt::entity /*object*/, float /*worth*/) { return false; }
 
 	/// How many of its towns' artefacts a player owns, for the statistics
 	[[nodiscard]] virtual uint32_t CountFor(PlayerNames player) const = 0;

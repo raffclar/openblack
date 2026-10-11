@@ -543,6 +543,21 @@ struct AtomRuleData
 	glm::vec4 b {0.0f};
 };
 
+/// The glowing shell an atom lays over the model of an object it is kept on (see volume_glow), as the rule set it this
+/// step
+struct ObjectGlow
+{
+	entt::entity object {entt::null};
+	/// How far out the shell reaches, in parts of the model's half diagonal
+	float zoom {0.0f};
+	/// 0xAARRGGBB
+	uint32_t argb {0};
+	/// Which of the shell textures it is drawn with
+	int texture {0};
+	glm::vec2 animSpeed {0.0f};
+	glm::vec2 textureFraction {0.0f};
+};
+
 /// A particle
 struct Atom
 {
@@ -606,6 +621,8 @@ struct Atom
 	float drawOffsetFrom {0.0f};
 	/// The surface it is drawn as, its own, when a rule draws it as a surface of revolution
 	std::shared_ptr<SurfaceInstance> surface;
+	/// The shell it lays over an object's model, when a rule keeps it on one
+	std::optional<ObjectGlow> objectGlow;
 	std::vector<std::unique_ptr<Collection>> subCollections;
 	std::unordered_map<const Modifier*, AtomRuleData> data;
 };
@@ -819,6 +836,8 @@ public:
 		std::shared_ptr<const blast::MeshFragment> fragment;
 		/// The player it shows, when not its effect's (Atom::player); -1 for its effect's
 		int player {-1};
+		/// The shell it lays over an object's model (Atom::objectGlow)
+		std::optional<ObjectGlow> objectGlow;
 	};
 	/// The ribbon through the joints of one collection
 	struct DrawChain

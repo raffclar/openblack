@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <numbers>
+#include <string>
 
 #include <entt/core/hashed_string.hpp>
 #include <glm/geometric.hpp>
@@ -21,6 +22,7 @@
 #include "Graphics/ZSort.h"
 #include "ParticleCreators.h"
 #include "ParticleSurfaces.h"
+#include "VolumeGlow.h"
 
 using namespace openblack;
 using namespace openblack::particles;
@@ -228,9 +230,33 @@ void AddSurface(Frame& frame, const SurfaceCreator& creator, const Effect::DrawA
 	});
 }
 
+/// The shell an atom lays over an object's model, its texture slid on by the atom's age
+void AddShell(Frame& frame, const Effect::DrawAtom& atom, const ObjectGlow& glow, const Sources& sources)
+{
+	const auto name = std::string("raw/") + std::string(volume_glow::k_Textures.at(static_cast<size_t>(glow.texture)));
+	const auto position = sources.objectPosition ? sources.objectPosition(glow.object) : std::nullopt;
+	frame.items.push_back({.kind = ItemKind::Shell,
+	                       .index = static_cast<uint32_t>(frame.shells.size()),
+	                       .sortPoint = position.value_or(atom.position)});
+	frame.shells.push_back({
+	    .object = glow.object,
+	    .zoom = glow.zoom,
+	    .argb = glow.argb,
+	    .texture = entt::hashed_string(name.c_str()).value(),
+	    .alphaTexture = entt::hashed_string((name + "a").c_str()).value(),
+	    .uvOffset = volume_glow::UvOffset(glow.animSpeed, atom.age),
+	    .textureFraction = glow.textureFraction,
+	});
+}
+
 void AddAtom(Frame& frame, GroupBuilder& builder, const Effect::DrawAtom& atom, int player, const Sources& sources,
              const glm::vec3& origin)
 {
+	if (atom.objectGlow.has_value())
+	{
+		AddShell(frame, atom, *atom.objectGlow, sources);
+		return;
+	}
 	const auto& creator = *atom.creator;
 	switch (creator.kind)
 	{
@@ -380,6 +406,7 @@ void Frame::Clear()
 	surfaceNormals.clear();
 	surfaces.clear();
 	fragments.clear();
+	shells.clear();
 	lightStamps.clear();
 	items.clear();
 	groups.clear();

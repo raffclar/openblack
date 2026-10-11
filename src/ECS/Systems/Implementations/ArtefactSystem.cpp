@@ -473,6 +473,17 @@ void ArtefactSystem::SetDancersState(entt::entity dance, VillagerStates state) c
 	}
 }
 
+bool ArtefactSystem::SetWorth(entt::entity object, float worth)
+{
+	auto* artefact = Entities().Valid(object) ? Entities().TryGet<TownArtefact>(object) : nullptr;
+	if (artefact == nullptr)
+	{
+		return false;
+	}
+	SetValue(object, *artefact, worth);
+	return true;
+}
+
 void ArtefactSystem::SetValue(entt::entity object, TownArtefact& artefact, float value)
 {
 	artefact.value = value;

@@ -39,6 +39,7 @@ public:
 	bool OfferRelaxation(entt::entity town, entt::entity villager) override;
 	void PowerUpSite(entt::entity site, uint32_t dancers) override;
 	void UpdateFrame(float gameMilliseconds) override;
+	bool SetWorth(entt::entity object, float worth) override;
 	[[nodiscard]] uint32_t CountFor(PlayerNames player) const override;
 	[[nodiscard]] float ImpressiveModifier(entt::entity object) const override;
 

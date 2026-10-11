@@ -1332,6 +1332,7 @@ void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame
 		        return Locator::gameRandom::has_value() ? Locator::gameRandom::value().LocalFloatRand(range) : 0.0f;
 	        },
 	    .landHeight = [this](glm::vec2 xz) { return _world.LandHeight(xz); },
+	    .objectPosition = [this](entt::entity object) { return _world.ObjectPosition(object); },
 	};
 	for (const auto& running : _effects)
 	{

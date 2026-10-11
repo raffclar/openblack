@@ -34,7 +34,9 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "ECS/Components/Hand.h"
+#include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
+#include "ECS/Registry.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -57,6 +59,7 @@
 #include "Particles/ParticleCreators.h"
 #include "Particles/ParticleMaths.h"
 #include "Particles/SurfaceOfRevolution.h"
+#include "Particles/VolumeGlow.h"
 #include "Profiler.h"
 #include "Renderer.h"
 #include "Resources/ResourcesInterface.h"
@@ -448,6 +451,98 @@ void Renderer::DrawParticleFragment(const DrawSceneDesc& desc, const particles::
 	}
 }
 
+const VolumeGlowShell* Renderer::GlowShellOf(entt::id_type meshId, uint32_t subMeshIndex) const
+{
+	const uint64_t key = (static_cast<uint64_t>(meshId) << 8u) | static_cast<uint64_t>(subMeshIndex & 0xFFu);
+	if (const auto found = _glowShells.find(key); found != _glowShells.end())
+	{
+		return found->second.get();
+	}
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	std::unique_ptr<VolumeGlowShell> shell;
+	if (meshes.Contains(meshId))
+	{
+		const auto mesh = meshes.Handle(meshId);
+		const auto& subMeshes = mesh->GetSubMeshes();
+		if (subMeshIndex < subMeshes.size())
+		{
+			// A part moved by bones keeps no corners of its own, and has no shell
+			const auto& surface = subMeshes[subMeshIndex]->GetSurface();
+			const auto triangles = particles::volume_glow::ShellTriangles(surface.indices);
+			if (!triangles.empty() && !surface.positions.empty())
+			{
+				const auto vertices = VolumeGlowShell::Vertices(surface.positions, surface.normals);
+				shell = std::make_unique<VolumeGlowShell>(vertices, triangles);
+			}
+		}
+	}
+	return _glowShells.emplace(key, std::move(shell)).first->second.get();
+}
+
+void Renderer::DrawParticleShell(const DrawSceneDesc& desc, const particles::draw::ShellDraw& shell, uint32_t depth) const
+{
+	if (!Locator::entitiesRegistry::has_value() || !Locator::rendereringSystem::has_value())
+	{
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* meshComponent = registry.TryGet<const ecs::components::Mesh>(shell.object);
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto& textures = Locator::resources::value().GetTextures();
+	if (meshComponent == nullptr || !meshes.Contains(meshComponent->id) || !textures.Contains(shell.texture))
+	{
+		return;
+	}
+	// The object as it is drawn this frame: none while it isn't
+	const auto& drawn = Locator::rendereringSystem::value().GetContext().drawnObjects;
+	const auto placed = std::ranges::find(drawn, shell.object, &ecs::systems::RenderContext::DrawnObject::entity);
+	if (placed == drawn.end())
+	{
+		return;
+	}
+	const auto mesh = meshes.Handle(meshComponent->id);
+	// The band reaches out by the model's half diagonal, scaled
+	const float reach = glm::length(mesh->GetBoundingBox().Size()) * 0.5f * shell.zoom;
+	const bool reflection = desc.viewId == RenderPass::Reflection;
+	const auto texture = textures.Handle(shell.texture);
+	const auto alpha = textures.Contains(shell.alphaTexture) ? textures.Handle(shell.alphaTexture) : texture;
+	const glm::vec4 colour {static_cast<float>((shell.argb >> 16u) & 0xFFu), static_cast<float>((shell.argb >> 8u) & 0xFFu),
+	                        static_cast<float>(shell.argb & 0xFFu), static_cast<float>(shell.argb >> 24u)};
+	const glm::vec4 look {shell.uvOffset, shell.textureFraction};
+	const auto* program = _shaderManager->GetShader("VolumeGlow");
+	const auto viewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
+	// How much the projection widens the camera's frame across and up, which weighs how side on the shell is seen
+	const auto& projection = desc.camera->GetProjectionMatrix();
+	const auto& subMeshes = mesh->GetSubMeshes();
+	for (uint32_t i = 0; i < subMeshes.size(); ++i)
+	{
+		// Only the nearest detail's parts in their first state glow
+		const auto flags = subMeshes[i]->GetFlags();
+		if ((flags.lodMask & 1u) == 0 || flags.status != 0)
+		{
+			continue;
+		}
+		const auto* band = GlowShellOf(meshComponent->id, i);
+		if (band == nullptr || band->indexCount == 0)
+		{
+			continue;
+		}
+		const glm::vec4 shape {reach, flags.hasBones != 0 ? 1.0f : 0.0f, projection[0][0], projection[1][1]};
+		program->SetUniformValue("u_glowShape", &shape);
+		program->SetUniformValue("u_glowColour", &colour);
+		program->SetUniformValue("u_glowTexture", &look);
+		program->SetTextureSampler("s_diffuse", 0, *texture);
+		program->SetTextureSampler("s_alpha", 1, *alpha);
+		bgfx::setTransform(glm::value_ptr(placed->model));
+		band->vertices->Bind();
+		band->triangles->Bind(band->indexCount);
+		// Added to what is behind without writing depth; each band is seen from its front only, as the model is
+		bgfx::setState(BlendState(render_modes::Mode::AlphaTexturedAlphaAdditiveNz) | BGFX_STATE_MSAA |
+		               (reflection ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW));
+		program->Submit(viewId, depth);
+	}
+}
+
 void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 {
 	const bool reflection = desc.viewId == RenderPass::Reflection;
@@ -645,6 +740,9 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 		}
 		case ItemKind::Fragment:
 			DrawParticleFragment(desc, frame.fragments[command.first], command.depth);
+			break;
+		case ItemKind::Shell:
+			DrawParticleShell(desc, frame.shells[command.first], command.depth);
 			break;
 		}
 	};

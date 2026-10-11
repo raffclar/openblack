@@ -747,3 +747,5 @@ openblack_setup_and_add_test(
   test_size_follower windowing/test_size_follower.cpp
   test_camera_edge_area camera/test_camera_edge_area.cpp
 )
+openblack_setup_and_add_test(test_volume_glow test_volume_glow.cpp)
+target_link_libraries(test_volume_glow PRIVATE psys)
