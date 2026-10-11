@@ -39,6 +39,7 @@
 #include "VillagerAnimate.h"
 #include "VillagerBuild.h"
 #include "VillagerDance.h"
+#include "VillagerDisciples.h"
 #include "VillagerEaten.h"
 #include "VillagerFire.h"
 #include "VillagerFlock.h"
@@ -63,6 +64,7 @@ namespace villager_physics = openblack::ecs::villager_physics;
 namespace villager_animate = openblack::ecs::villager_animate;
 namespace villager_script = openblack::ecs::villager_script;
 namespace villager_build = openblack::ecs::villager_build;
+namespace villager_disciple = openblack::ecs::villager_disciple;
 
 /// A villager with no state does nothing
 uint32_t VillagerInvalidState(LivingAction& /*action*/)
@@ -255,6 +257,7 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     },
     /* IN_HAND */
     VillagerStateTableEntry {
+        .state = &villager_disciple::InHand,
         .exitState = &villager_physics::ExitInHand,
     },
     /* GOTO_PICKUP_BALL_REACTION */ k_TodoEntry,
@@ -587,7 +590,11 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .exitState = &villager_fire::ExitPutOutFire,
         .validate = &villager_fire::ReactionValidate,
     },
-    /* DISCIPLE_NOTHING_TO_DO */ k_TodoEntry,
+    /* DISCIPLE_NOTHING_TO_DO */
+    VillagerStateTableEntry {
+        .state = &villager_disciple::DiscipleNothingToDo,
+        .entryState = &villager_disciple::EnterDiscipleNothingToDo,
+    },
     /* FOOTBALL_MOVE_TO_BALL */ k_TodoEntry,
     /* ARRIVES_AT_STORAGE_PIT_FOR_TRADER_PICK_UP */ k_TodoEntry,
     /* ARRIVES_AT_STORAGE_PIT_FOR_TRADER_DROP_OFF */ k_TodoEntry,
@@ -599,7 +606,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* ARTIFACT_DANCE */ k_TodoEntry,
     /* FLEEING_FROM_PREDATOR_REACTION */ k_TodoEntry,
     /* WAIT_FOR_WOOD */ k_TodoEntry,
-    /* INSPECT_OBJECT */ k_TodoEntry,
+    /* INSPECT_OBJECT */
+    VillagerStateTableEntry {
+        .state = &villager_disciple::InspectObject,
+    },
     /* GO_HOME_AND_CHANGE */ k_TodoEntry,
     /* WAIT_FOR_MATE */
     VillagerStateTableEntry {
@@ -686,6 +696,13 @@ void LivingActionSystem::Update()
 		    VillagerCallState(action, LivingAction::Index::Top);
 	    },
 	    entt::exclude<InHand, InPhysics>);
+	// A villager in the hand has only its hand state to do: taking up the work of what it is held near
+	registry.Each<Villager, LivingAction, InHand>([this](Villager&, LivingAction& action, InHand&) {
+		if (VillagerGetState(action, LivingAction::Index::Top) == VillagerStates::InHand)
+		{
+			VillagerCallState(action, LivingAction::Index::Top);
+		}
+	});
 	// TODO(#476): same calls but for other types of living
 }
 

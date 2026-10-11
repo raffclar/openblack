@@ -719,6 +719,10 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_camera_place camera/test_camera_place.cpp)
 openblack_setup_and_add_test(test_control_icons test_control_icons.cpp)
+openblack_setup_and_add_test(test_disciple_rules test_disciple_rules.cpp)
+openblack_setup_and_add_test(
+  test_mobile_static_rules test_mobile_static_rules.cpp
+)
 openblack_setup_and_add_test(
   test_camera_edge_turn camera/test_camera_edge_turn.cpp
 )
