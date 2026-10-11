@@ -143,12 +143,36 @@ struct RingStep
 	/// as far as the same movement in pixels at the same place on the ring of the original's default screen. On that
 	/// screen it is the swept angle itself; on bigger ones, whose ring is longer in pixels, it is more.
 	float turn;
+	/// The cursor's place on the ring, to a fraction of a pixel; `cursor` is its nearest whole pixel
+	glm::vec2 place;
 };
+/// One step as the game took it, the cursor held on whole pixels: from the pixel it was last put on to the cursor's
+/// pixel now
 [[nodiscard]] RingStep EdgeRotate(glm::ivec2 cursor, glm::ivec2 previousOnRing, const EdgeArea& area);
+
+/// Holds the cursor on the ring through a turn, keeping its place there to a fraction of a pixel between frames. Only
+/// the cursor put back on the screen is a whole pixel; each frame's mouse movement is added to the fractional place
+/// and the angle is swept from there, so slow movements of a pixel or two a frame turn the camera as fast ones do
+/// (the game held the place on whole pixels, which near the corners rounds such small movements away). The place never
+/// strays more than half a pixel from the cursor put back on the screen.
+class RingTracker
+{
+public:
+	/// The turn starts with the cursor here
+	void Start(glm::ivec2 cursor, const EdgeArea& area);
+	/// Once a frame: where the pointer is now. Gives where to put the cursor back and the angle and turn swept.
+	[[nodiscard]] RingStep Step(glm::ivec2 pointer, const EdgeArea& area);
+
+private:
+	glm::vec2 _place {0.0f};
+	/// The whole pixel the cursor was last put on
+	glm::ivec2 _putOn {0};
+	EdgeArea _area;
+};
 
 /// The scale from the angle swept round the ring of this screen, from one place to another, to the turn the same
 /// movement in pixels would give on the ring of the original's default screen
-[[nodiscard]] float ReferenceTurnScale(glm::ivec2 from, glm::ivec2 to, glm::ivec2 screenSize, int viewHeight);
+[[nodiscard]] float ReferenceTurnScale(glm::vec2 from, glm::vec2 to, glm::ivec2 screenSize, int viewHeight);
 
 /// How far a drag down the screen tilts the camera up, in radians, through the camera's field of view across
 [[nodiscard]] float PitchStep(int deltaY, int screenHeight, float horizontalFieldOfView);

@@ -401,3 +401,135 @@ TEST(EdgeArea, TheTurnCarriesOnSmoothlyRoundTheCornerOntoTheStraight)
 		EXPECT_LT(previousTurn, 0.0f);
 	}
 }
+
+namespace
+{
+/// The camera's turn, in degrees, for each pixel a hand moves the mouse from a place on the ring, the same few pixels
+/// every frame for so many frames, the cursor put back on the ring after each: either held on whole pixels between
+/// frames as the game held it, or to a fraction of a pixel (deviation 17)
+float DegreesPerPixelOverFrames(const EdgeArea& area, float place, glm::ivec2 move, int frames, bool fractional)
+{
+	const auto at = RingPixel(area, place);
+	RingTracker tracker;
+	tracker.Start(at, area);
+	auto cursor = tracker.Step(at, area).cursor;
+	auto whole = cursor;
+	float turned = 0.0f;
+	for (int frame = 0; frame < frames; ++frame)
+	{
+		if (fractional)
+		{
+			const auto step = tracker.Step(cursor + move, area);
+			turned += step.turn;
+			cursor = step.cursor;
+		}
+		else
+		{
+			const auto step = EdgeRotate(whole + move, whole, area);
+			turned += step.turn;
+			whole = step.cursor;
+		}
+	}
+	const auto moved = std::sqrt(static_cast<float>(move.x * move.x + move.y * move.y)) * static_cast<float>(frames);
+	return std::abs(glm::degrees(turned)) / moved;
+}
+
+/// The screens the slow movements are checked on: 5:4, 16:9 and 32:9
+constexpr std::array k_SlowScreens {glm::ivec2(1280, 1024), glm::ivec2(1920, 1080), glm::ivec2(5120, 1440)};
+
+/// Places round the ring, and a movement there that runs along it: down the sides, across the top and bottom, and
+/// both ways at the four corners
+struct SlowMove
+{
+	float place;
+	glm::ivec2 direction;
+};
+constexpr std::array k_SlowMoves {
+    SlowMove {0.0f, {0, 1}},   SlowMove {1.0f, {0, -1}},  SlowMove {0.5f, {-1, 0}},  SlowMove {-0.5f, {1, 0}},
+    SlowMove {0.25f, {-1, 0}}, SlowMove {0.25f, {0, -1}}, SlowMove {0.75f, {-1, 0}}, SlowMove {0.75f, {0, -1}},
+    SlowMove {-0.25f, {1, 0}}, SlowMove {-0.25f, {0, 1}}, SlowMove {-0.75f, {1, 0}}, SlowMove {-0.75f, {0, 1}},
+};
+} // namespace
+
+TEST(EdgeArea, SlowMovementsTurnAsFastOnesDo)
+{
+	for (const auto screen : k_SlowScreens)
+	{
+		const auto area = EdgeAreaOf(screen, false);
+		for (const auto& slow : k_SlowMoves)
+		{
+			SCOPED_TRACE(testing::Message() << screen.x << "x" << screen.y << " place " << slow.place << " pi, move "
+			                                << slow.direction.x << "," << slow.direction.y);
+			// The same 36 pixels, one a frame and three a frame
+			const auto fast = DegreesPerPixelOverFrames(area, slow.place * glm::pi<float>(), slow.direction * 3, 12, true);
+			const auto slowRate = DegreesPerPixelOverFrames(area, slow.place * glm::pi<float>(), slow.direction, 36, true);
+			EXPECT_GT(fast, 0.03f);
+			EXPECT_NEAR(slowRate, fast, 0.05f * fast);
+			// Big movements turn as the game turned them with the cursor held on whole pixels, where the rounding to
+			// whole pixels hardly matters
+			const auto big = DegreesPerPixelOverFrames(area, slow.place * glm::pi<float>(), slow.direction * 12, 6, true);
+			const auto bigGame = DegreesPerPixelOverFrames(area, slow.place * glm::pi<float>(), slow.direction * 12, 6, false);
+			EXPECT_NEAR(big, bigGame, 0.03f * bigGame);
+			// Down the sides and across the top and bottom, where whole pixels lose nothing, so do three-pixel movements;
+			// at the corners the game's rounding made those up to a sixth faster or slower, place by place
+			const auto game = DegreesPerPixelOverFrames(area, slow.place * glm::pi<float>(), slow.direction * 3, 12, false);
+			const bool corner = slow.direction.x != 0 ? std::abs(std::abs(slow.place) - 0.5f) > 0.1f
+			                                          : std::abs(slow.place) > 0.1f && std::abs(slow.place) < 0.9f;
+			EXPECT_NEAR(fast, game, (corner ? 0.2f : 0.03f) * game);
+		}
+	}
+}
+
+TEST(EdgeArea, TheFractionalPlaceNeverDriftsFromTheCursor)
+{
+	for (const auto screen : k_SlowScreens)
+	{
+		SCOPED_TRACE(testing::Message() << screen.x << "x" << screen.y);
+		const auto area = EdgeAreaOf(screen, false);
+		const auto loop =
+		    glm::two_pi<float>() + 2.0f * static_cast<float>(area.Folded()) / (0.45f * static_cast<float>(area.viewHeight));
+		const auto start = RingPixel(area, 0.0f);
+		RingTracker tracker;
+		tracker.Start(start, area);
+		auto step = tracker.Step(start, area);
+		const auto first = step.cursor;
+		float swept = step.angle;
+		const glm::vec2 middle {static_cast<float>(screen.x) * 0.5f, static_cast<float>(screen.y) * 0.5f};
+		// A slow drag right round the screen and more, one pixel a frame along the ring, clockwise on the screen
+		for (int frame = 0; frame < 12000; ++frame)
+		{
+			const auto out = step.place - middle;
+			const auto move = std::abs(out.x) * static_cast<float>(screen.y) > std::abs(out.y) * static_cast<float>(screen.x)
+			                      ? glm::ivec2(0, out.x > 0.0f ? 1 : -1)
+			                      : glm::ivec2(out.y > 0.0f ? -1 : 1, 0);
+			step = tracker.Step(step.cursor + move, area);
+			swept += step.angle;
+			// The place is always within half a pixel of the cursor put back on the screen
+			ASSERT_LE(std::abs(step.place.x - static_cast<float>(step.cursor.x)), 0.5f) << frame;
+			ASSERT_LE(std::abs(step.place.y - static_cast<float>(step.cursor.y)), 0.5f) << frame;
+			if (frame % 100 == 99)
+			{
+				// What was swept, frame by frame, is where the cursor now is on the ring from where it started
+				auto expected = EdgeRotate(step.cursor, first, area).angle;
+				auto difference = std::remainder(swept - expected, loop);
+				ASSERT_LT(std::abs(difference), 0.01f) << frame;
+			}
+		}
+		// It has gone right round at least once
+		EXPECT_GT(std::abs(swept), loop);
+	}
+}
+
+TEST(EdgeArea, TheTrackerStartsAgainWhenTheScreenChanges)
+{
+	const auto area = EdgeAreaOf({1920, 1080}, false);
+	RingTracker tracker;
+	tracker.Start({1900, 540}, area);
+	const auto step = tracker.Step({1900, 540}, area);
+	EXPECT_EQ(step.cursor, EdgeRotate({1900, 540}, {1900, 540}, area).cursor);
+	// The window is resized: the cursor is put on the new ring from where it really is, sweeping nothing
+	const auto bigger = EdgeAreaOf({2560, 1440}, false);
+	const auto resized = tracker.Step({2500, 720}, bigger);
+	EXPECT_EQ(resized.cursor, EdgeRotate({2500, 720}, {2500, 720}, bigger).cursor);
+	EXPECT_NEAR(resized.angle, 0.0f, 1e-3f);
+}

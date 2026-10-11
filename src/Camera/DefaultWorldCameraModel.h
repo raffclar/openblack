@@ -157,7 +157,7 @@ private:
 	/// A drag of the land, and where the cursor is held dragging round the edge
 	bool _dragging {false};
 	camera_drag::DragClassifier _drag;
-	glm::ivec2 _ringCursor {0, 0};
+	camera_drag::RingTracker _ring;
 	/// Where the land was gripped as the drag was pressed: the camera then, the cursor, the plane the land is dragged
 	/// across, whether there was land under the cursor and how far ahead it was
 	struct LandGrip
