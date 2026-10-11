@@ -87,6 +87,7 @@
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HighDetail.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/LivingAction.h"
@@ -112,6 +113,7 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
+#include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/CreatureRemoval.h"
 #include "ECS/DanceRules.h"
@@ -320,8 +322,15 @@ ScriptCameraModel::ThingLookup FollowedThing(entt::entity thing)
 			}
 		}
 		const auto* wallHug = registry.TryGet<const ecs::components::WallHug>(thing);
+		// A villager is where its drawing glides to this frame, or in the opening hand's grip while it holds it
+		auto drawnAt =
+		    ecs::components::DrawnPosition(transform->position, registry.TryGet<const ecs::components::VillagerPose>(thing));
+		if (const auto* highDetail = registry.TryGet<const ecs::components::HighDetail>(thing); highDetail != nullptr)
+		{
+			drawnAt = ecs::high_detail_rules::DrawnAt(highDetail->heldAt, drawnAt);
+		}
 		return script_camera::FollowedThing {
-		    .point = transform->position + glm::vec3(0.0f, height * 0.5f, 0.0f),
+		    .point = drawnAt + glm::vec3(0.0f, height * 0.5f, 0.0f),
 		    .gameAngle = wallHug != nullptr ? std::optional(wallHug->gameAngle) : std::nullopt,
 		    .height = height,
 		};

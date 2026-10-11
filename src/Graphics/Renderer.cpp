@@ -2778,7 +2778,10 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 		    {
 			    return;
 		    }
-		    const auto model = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
+		    // Where its body is drawn this frame, gliding between its turns
+		    const auto model = glm::translate(ecs::components::DrawnPosition(transform.position, pose)) *
+		                       glm::mat4(ecs::components::DrawnRotation(transform.rotation, pose)) *
+		                       glm::scale(transform.scale);
 		    const auto foot = [&](size_t bone) {
 			    auto position = glm::vec3(model * bones[bone] * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
 			    position.y = island.GetHeightAt(glm::vec2(position.x, position.z)) + ground_blobs::k_Lift;

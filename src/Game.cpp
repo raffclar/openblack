@@ -1096,6 +1096,8 @@ bool Game::GameLogicLoop() noexcept
 		return false;
 	}
 	clock.StartTurn();
+	// The villagers are drawn gliding through the turn from where they stand as it begins
+	Locator::livingActionSystem::value().StartTurnPlaces();
 	// The influence asked during the turn is measured from where the hands were at it
 	Locator::influenceSystem::value().SetInGameTurn(true);
 	ProcessHandToolTipTurn();

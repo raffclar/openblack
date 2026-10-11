@@ -191,6 +191,7 @@
 #include "ECS/ScriptHighlightRules.h"
 #include "ECS/TownAggression.h"
 #include "ECS/VillageTotem.h"
+#include "ECS/VillagerDrawRules.h"
 #include "ECS/VillagerEyes.h"
 #include "Enums.h"
 #include "Fire/FireGraphic.h"
@@ -1481,7 +1482,13 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::VillagerPose>(context)
 	    .Field<&components::VillagerPose::clip>("clip")
 	    .Field<&components::VillagerPose::place>("place")
-	    .Field<&components::VillagerPose::bones>("bones");
+	    .Field<&components::VillagerPose::bones>("bones")
+	    .Field<&components::VillagerPose::turnStart>("turnStart")
+	    .Field<&components::VillagerPose::drawnAt>("drawnAt")
+	    .Field<&components::VillagerPose::drawnHeading>("drawnHeading")
+	    .Field<&components::VillagerPose::easedHeading>("easedHeading")
+	    .Field<&components::VillagerPose::detailedHeading>("detailedHeading")
+	    .Field<&components::VillagerPose::clipBlend>("clipBlend");
 	Reflect<components::Vortex>(context)
 	    .Field<&components::Vortex::type>("type")
 	    .Field<&components::Vortex::state>("state")
@@ -2111,6 +2118,15 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::village_totem::Ease::jerk>("jerk")
 	    .Field<&openblack::ecs::village_totem::Ease::snap>("snap")
 	    .Field<&openblack::ecs::village_totem::Ease::moving>("moving");
+	Reflect<openblack::ecs::villager_draw::ClipBlend>(context, ValueOnly {})
+	    .Field<&openblack::ecs::villager_draw::ClipBlend::from>("from")
+	    .Field<&openblack::ecs::villager_draw::ClipBlend::fromPlace>("fromPlace")
+	    .Field<&openblack::ecs::villager_draw::ClipBlend::remaining>("remaining")
+	    .Field<&openblack::ecs::villager_draw::ClipBlend::weight>("weight");
+	Reflect<openblack::ecs::villager_draw::ClipBlendTrack>(context, ValueOnly {})
+	    .Field<&openblack::ecs::villager_draw::ClipBlendTrack::lastClip>("lastClip")
+	    .Field<&openblack::ecs::villager_draw::ClipBlendTrack::lastPlace>("lastPlace")
+	    .Field<&openblack::ecs::villager_draw::ClipBlendTrack::blend>("blend");
 	Reflect<openblack::ecs::villager_eyes::Blink>(context, ValueOnly {})
 	    .Field<&openblack::ecs::villager_eyes::Blink::blinking>("blinking")
 	    .Field<&openblack::ecs::villager_eyes::Blink::untilNext>("untilNext")
