@@ -237,12 +237,14 @@ void AdvisorSystem::Update(const Frame& frame)
 		return;
 	}
 	const Screen screen {.width = frame.screen.x, .height = frame.screen.y};
-	_view = ViewOf(*frame.camera, screen);
+	// Laid out on a 4:3 area of the screen as tall as it, in its middle, as on the game's 4:3 screens
+	_stage = StageOf(screen);
+	_view = OnStage(ViewOf(*frame.camera, screen), _stage);
 	// The advisors' homes are worked out on the screen they start on: set up before the screen was known, or with both
 	// at home when its size changes, they are set up again on it
 	const auto& known = _controller->GetScreen();
-	if ((known.width != screen.width || known.height != screen.height) &&
-	    _controller->State(k_GoodDude) == ControlState::Home && _controller->State(k_EvilDude) == ControlState::Home)
+	if (known != _stage.layout && _controller->State(k_GoodDude) == ControlState::Home &&
+	    _controller->State(k_EvilDude) == ControlState::Home)
 	{
 		MakeController();
 	}
@@ -251,8 +253,9 @@ void AdvisorSystem::Update(const Frame& frame)
 	input.dt = static_cast<float>(frame.frameMs) * 0.001f;
 	input.trailDt = static_cast<float>(static_cast<int32_t>(frame.frameMs)) * 0.01f;
 	input.frameMs = frame.stepMs;
-	input.screen = screen;
-	input.mouse = frame.mouse;
+	input.screen = _stage.layout;
+	input.mouse = _stage.ToLayout(frame.mouse);
+	input.share = _stage.share;
 	input.tickMs = frame.tickMs;
 	input.wideScreen = frame.wideScreen;
 	_controller->Update(input);
@@ -310,8 +313,9 @@ void AdvisorSystem::MakeDraws(int32_t stepMs)
 			// The halo's clock moves on only as a halo is drawn
 			_haloClockMs += stepMs;
 			const glm::vec3 offset(model->file.haloOffset[0], model->file.haloOffset[1], model->file.haloOffset[2]);
-			const float size = model->data.scale * model->file.haloScale * dude.ModelScale() * 100.0f;
-			const Sprite halo {.position = anchor + offset,
+			// Shrunk across the screen as the advisor is
+			const float size = model->data.scale * model->file.haloScale * dude.ModelScale() * 100.0f * dude.DrawShare();
+			const Sprite halo {.position = anchor + ShrinkAcrossScreen(offset, _view.forward, dude.DrawShare()),
 			                   .halfWidth = size,
 			                   .halfHeight = size * 0.3f,
 			                   .angle = 0.0f,
@@ -341,6 +345,7 @@ void AdvisorSystem::MakeDraws(int32_t stepMs)
 				{
 					size = 0.0001f;
 				}
+				size *= dude.DrawShare();
 				const Sprite smoke {.position = dude.HoverTo3D(hover.x + p.velocity.x * 0.1f, hover.y + p.drawVelocityY * 0.1f,
 				                                               -dude.DepthChannel().GetValue() - 0.6f, false),
 				                    .halfWidth = size,
