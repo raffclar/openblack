@@ -62,6 +62,7 @@
 #include "ECS/Components/Alignment.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
+#include "ECS/Components/AppleBarrel.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/Ball.h"
@@ -389,6 +390,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::PlinthStone>(context)
 	    .Field<&components::PlinthStone::plinth>("plinth")
 	    .Field<&components::PlinthStone::pickable>("pickable");
+	Reflect<components::AppleBarrel>(context)
+	    .Field<&components::AppleBarrel::store>("store")
+	    .Field<&components::AppleBarrel::worm>("worm");
+	Reflect<components::AppleBarrelWorm>(context).Field<&components::AppleBarrelWorm::place>("place");
 	Reflect<components::AtHome>(context).Field<&components::AtHome::beenToBed>("beenToBed");
 	Reflect<components::AudioEmitter>(context)
 	    .Field<&components::AudioEmitter::sourceId>("sourceId")

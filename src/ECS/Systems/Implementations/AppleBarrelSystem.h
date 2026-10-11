@@ -1,0 +1,42 @@
+/******************************************************************************
+ * Copyright (c) 2018-2026 openblack developers
+ *
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
+ *
+ * openblack is licensed under the GNU General Public License version 3.
+ *******************************************************************************/
+
+#pragma once
+
+#ifndef LOCATOR_IMPLEMENTATIONS
+#error "Locator interface implementations should only be included in Locator.cpp"
+#endif
+
+#include <cstdint>
+
+#include <optional>
+
+#include "ECS/Systems/AppleBarrelSystemInterface.h"
+
+namespace openblack::ecs::systems
+{
+
+class AppleBarrelSystem final: public AppleBarrelSystemInterface
+{
+public:
+	void Update(uint32_t turn, float turnFraction) override;
+	[[nodiscard]] entt::entity GetBarrel() const override { return _barrel; }
+	void Reset() override;
+
+private:
+	/// The storage pit that carries the barrel now, none while none does
+	[[nodiscard]] std::optional<entt::entity> CarryingStore() const;
+	void Remove();
+
+	entt::entity _barrel {entt::null};
+	/// The game's clock at the last frame, none before the first
+	std::optional<uint32_t> _drawTime;
+};
+
+} // namespace openblack::ecs::systems
