@@ -70,6 +70,7 @@
 #include "ECS/Archetypes/SharkArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
+#include "ECS/ChallengeRecords.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
@@ -3317,11 +3318,46 @@ script::challenge_snapshots::Snapshot PopChallengeSnapshot(script::challenge_sna
 	return snapshot;
 }
 
+/// The player's record of a challenge is kept up to date from a script's snapshot, and a snapshot of a challenge already
+/// recorded moves the player at this computer's alignment
+void KeepChallengeRecord(const script::challenge_snapshots::Snapshot& snapshot, script::challenge_snapshots::Call call)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	const ecs::challenge_records::References references {
+	    .add =
+	        [](entt::entity thing) {
+		        if (Locator::scriptObjects::has_value())
+		        {
+			        Locator::scriptObjects::value().AddReference(thing);
+		        }
+	        },
+	    .remove =
+	        [](entt::entity thing) {
+		        if (Locator::scriptObjects::has_value())
+		        {
+			        Locator::scriptObjects::value().RemoveReference(thing);
+		        }
+	        },
+	};
+	const auto outcome = ecs::challenge_records::Record(registry, snapshot, call, turn, references);
+	if (!outcome.alignment.has_value() || !Locator::alignmentSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	auto& alignment = Locator::alignmentSystem::value();
+	const auto change =
+	    ecs::challenge_records::AlignmentChange(alignment.GetPlayerAlignment(player), *outcome.alignment,
+	                                            Locator::infoConstants::value().player.maxScriptAlignmentChange);
+	alignment.AddPlayerAlignment(player, change);
+}
+
 void Snapshot() // 057 SNAPSHOT
 {
-	[[maybe_unused]] const auto snapshot = PopChallengeSnapshot(script::challenge_snapshots::Call::Start);
-	// TODO(raffclar): keep the challenge's record (Land 1 milestone #46)
-	NotImplemented();
+	KeepChallengeRecord(PopChallengeSnapshot(script::challenge_snapshots::Call::Start),
+	                    script::challenge_snapshots::Call::Start);
 }
 
 void GetAlignment() // 058 GET_ALIGNMENT
@@ -5624,9 +5660,8 @@ void GetTotalEvents() // 237 GET_TOTAL_EVENTS
 
 void UpdateSnapshot() // 238 UPDATE_SNAPSHOT
 {
-	[[maybe_unused]] const auto snapshot = PopChallengeSnapshot(script::challenge_snapshots::Call::Update);
-	// TODO(raffclar): bring the challenge's record up to date (Land 1 milestone #46)
-	NotImplemented();
+	KeepChallengeRecord(PopChallengeSnapshot(script::challenge_snapshots::Call::Update),
+	                    script::challenge_snapshots::Call::Update);
 }
 
 /// The kinds of reward a script can give are numbered 1 to 60

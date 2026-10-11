@@ -70,6 +70,7 @@
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/CameraBookmark.h"
 #include "ECS/Components/CarriedByTornado.h"
+#include "ECS/Components/ChallengeRecord.h"
 #include "ECS/Components/ChimneySmoke.h"
 #include "ECS/Components/Cloud.h"
 #include "ECS/Components/Construction.h"
@@ -220,6 +221,7 @@
 #include "Magic/TownBelief.h"
 #include "Particles/ParticleSpellLink.h"
 #include "Physics/DamageMesh.h"
+#include "ScriptHeaders/ScriptChallengeSnapshots.h"
 #include "ScriptHeaders/ScriptTimers.h"
 
 namespace components = openblack::ecs::components;
@@ -438,6 +440,19 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CameraBookmark::savedOrigin>("savedOrigin");
 	Reflect<components::CarriedByTornado>(context).Field<&components::CarriedByTornado::carried>("carried");
 	Reflect<components::CaughtByTornado> {context};
+	Reflect<components::ChallengeRecord>(context)
+	    .Field<&components::ChallengeRecord::challenge>("challenge")
+	    .Field<&components::ChallengeRecord::order>("order")
+	    .Field<&components::ChallengeRecord::reminderScript>("reminderScript")
+	    .Field<&components::ChallengeRecord::arguments>("arguments")
+	    .Field<&components::ChallengeRecord::title>("title")
+	    .Field<&components::ChallengeRecord::success>("success")
+	    .Field<&components::ChallengeRecord::alignment>("alignment")
+	    .Field<&components::ChallengeRecord::position>("position")
+	    .Field<&components::ChallengeRecord::focus>("focus")
+	    .Field<&components::ChallengeRecord::quest>("quest")
+	    .Field<&components::ChallengeRecord::startedTurn>("startedTurn")
+	    .Field<&components::ChallengeRecord::doneTurn>("doneTurn");
 	Reflect<components::ChimneySmoke>(context)
 	    .Field<&components::ChimneySmoke::chimney>("chimney")
 	    .Field<&components::ChimneySmoke::rgb>("rgb")
@@ -2468,6 +2483,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::physics::damage::Triangle::group>("group")
 	    .Field<&openblack::physics::damage::Triangle::sizeClass>("sizeClass")
 	    .Field<&openblack::physics::damage::Triangle::countedClass>("countedClass");
+	Reflect<openblack::script::challenge_snapshots::Value>(context, ValueOnly {})
+	    .Field<&openblack::script::challenge_snapshots::Value::value>("value")
+	    .Field<&openblack::script::challenge_snapshots::Value::type>("type");
 	Reflect<openblack::script::timers::Timer>(context, ValueOnly {})
 	    .Field<&openblack::script::timers::Timer::setTurn>("setTurn")
 	    .Field<&openblack::script::timers::Timer::turns>("turns");
