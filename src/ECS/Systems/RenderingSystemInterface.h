@@ -171,6 +171,9 @@ struct RenderContext
 		glm::mat4 castModel;
 	};
 	std::vector<HighDetailDraw> highDetailDraws;
+	/// The things held in a hand this frame, with the model each is drawn with and its matrix (as castModel too): each
+	/// joins the shadow of the hand holding it
+	std::vector<HighDetailDraw> inHandDraws;
 	/// The rivers' stretches, whose beds and channels are laid into the land (see components::StreamSegment)
 	std::vector<glm::mat4> streamSegments;
 	/// The hand is scaled by a negative factor to mirror it, which turns its faces round
