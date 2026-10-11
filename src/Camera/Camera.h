@@ -97,6 +97,9 @@ public:
 	/// Moves the near plane of the perspective, keeping its field of view, aspect and far plane
 	Camera& SetNearClip(float nearClip);
 	[[nodiscard]] float GetNearClip() const { return _nearClip; }
+	/// Gives the perspective the screen's new shape, keeping its field of view across the width and its clip planes
+	Camera& SetAspect(float aspect);
+	[[nodiscard]] float GetAspect() const { return _aspect; }
 	Camera& SetProjectionMatrix(const glm::mat4& projection);
 
 	[[nodiscard]] glm::vec3 GetForward() const;

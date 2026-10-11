@@ -103,3 +103,21 @@ TEST(CameraProjection, ItsMovementIsGivenBackWhole)
 	camera.SetInterpolatorT(1.0f);
 	EXPECT_NEAR(camera.GetOrigin().x, 100.0f, 1e-3f);
 }
+
+// A resized window changes the camera's shape only: the field of view across the width and the clip planes stay
+TEST(CameraProjection, ANewAspectKeepsTheLensAndTheClipPlanes)
+{
+	const auto camera = MakeCamera(3.5f, 30000.0f);
+	const auto across = camera->GetProjectionMatrix(Camera::Projection::Normal)[0][0];
+	for (const float aspect : {4.0f / 3.0f, 16.0f / 9.0f, 32.0f / 9.0f})
+	{
+		camera->SetAspect(aspect);
+		const auto projection = camera->GetProjectionMatrix(Camera::Projection::Normal);
+		EXPECT_FLOAT_EQ(projection[0][0], across) << aspect;
+		EXPECT_FLOAT_EQ(projection[1][1], across * aspect) << aspect;
+		EXPECT_FLOAT_EQ(camera->GetNearClip(), 3.5f) << aspect;
+		EXPECT_FLOAT_EQ(camera->GetAspect(), aspect) << aspect;
+		EXPECT_FALSE(KeptByDepth(Clip(*camera, 3.5f * 0.99f))) << aspect;
+		EXPECT_TRUE(KeptByDepth(Clip(*camera, 3.5f * 1.01f))) << aspect;
+	}
+}
