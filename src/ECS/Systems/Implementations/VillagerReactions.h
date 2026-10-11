@@ -75,5 +75,9 @@ components::TownImpression& ImpressionOf(entt::entity town);
 void ShowTownBelief(const glm::vec3& centre, PlayerNames player, float belief);
 void ShowBelief(entt::entity villager, PlayerNames player, float belief, GuidanceAlignment alignment, BeliefVoice& voice,
                 uint32_t turn);
+/// The same for belief a town gained from a thing, such as an artefact its people dance round: the symbol rises from
+/// the top of the thing, and the town's awe may be heard there
+void ShowObjectBelief(entt::entity object, entt::entity town, PlayerNames player, float belief, GuidanceAlignment alignment,
+                      BeliefVoice& voice, uint32_t turn);
 
 } // namespace openblack::ecs::systems::villager_reactions

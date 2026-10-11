@@ -10,18 +10,21 @@
 #include <cstdint>
 
 #include <filesystem>
+#include <optional>
 #include <system_error>
 #include <vector>
 
 #include <gtest/gtest.h>
 
 #include "Graphics/ScreenshotCapture.h"
+#include "Windowing/WindowState.h"
 
 using openblack::graphics::PlanScreenshot;
 using openblack::graphics::ScreenshotFailures;
 using openblack::graphics::ScreenshotRoute;
 using openblack::graphics::UncapturedScreenshotPath;
 using openblack::graphics::WriteScreenshotPng;
+using openblack::windowing::WindowMinimised;
 
 namespace
 {
@@ -35,6 +38,20 @@ TEST(ScreenshotCapture, AMinimisedVulkanWindowIsDrawnAside)
 	EXPECT_EQ(PlanScreenshot(false, true, true, k_WindowSize).route, ScreenshotRoute::Screen);
 	EXPECT_EQ(PlanScreenshot(false, true, false, k_WindowSize).route, ScreenshotRoute::Screen);
 	EXPECT_EQ(PlanScreenshot(true, true, true, k_WindowSize).route, ScreenshotRoute::Offscreen);
+}
+
+// A game launched minimised: SDL still says the window is shown, but the system says it is minimised and Vulkan has a
+// screen of no size to read, so the picture is drawn aside rather than read from it
+TEST(ScreenshotCapture, AWindowStartedMinimisedIsDrawnAside)
+{
+	EXPECT_TRUE(WindowMinimised(false, true));
+	EXPECT_TRUE(WindowMinimised(true, false));
+	EXPECT_TRUE(WindowMinimised(true, std::nullopt));
+	EXPECT_FALSE(WindowMinimised(false, false));
+	EXPECT_FALSE(WindowMinimised(false, std::nullopt));
+	EXPECT_EQ(PlanScreenshot(true, WindowMinimised(false, true), true, k_WindowSize).route, ScreenshotRoute::Offscreen);
+	// Restored, the screen is read again
+	EXPECT_EQ(PlanScreenshot(true, WindowMinimised(false, false), true, k_WindowSize).route, ScreenshotRoute::Screen);
 }
 
 // Drawn aside or not at all: without reading back, or without a size, the picture is refused with why

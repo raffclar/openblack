@@ -62,6 +62,7 @@
 #include "ECS/Components/Alignment.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
+#include "ECS/Components/AppleBarrel.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/Ball.h"
@@ -390,6 +391,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::PlinthStone>(context)
 	    .Field<&components::PlinthStone::plinth>("plinth")
 	    .Field<&components::PlinthStone::pickable>("pickable");
+	Reflect<components::AppleBarrel>(context)
+	    .Field<&components::AppleBarrel::store>("store")
+	    .Field<&components::AppleBarrel::worm>("worm");
+	Reflect<components::AppleBarrelWorm>(context).Field<&components::AppleBarrelWorm::place>("place");
 	Reflect<components::AtHome>(context).Field<&components::AtHome::beenToBed>("beenToBed");
 	Reflect<components::AudioEmitter>(context)
 	    .Field<&components::AudioEmitter::sourceId>("sourceId")
@@ -493,6 +498,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureAnimation::builtRevision>("builtRevision")
 	    .Field<&components::CreatureAnimation::skeleton>("skeleton")
 	    .Field<&components::CreatureAnimation::animations>("animations")
+	    .Field<&components::CreatureAnimation::pair>("pair")
 	    .Field<&components::CreatureAnimation::mirror>("mirror")
 	    .Field<&components::CreatureAnimation::boneMatrices>("boneMatrices");
 	Reflect<components::CreatureEyes>(context)
@@ -606,6 +612,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureLocomotion::toPosition>("toPosition")
 	    .Field<&components::CreatureLocomotion::fromHeading>("fromHeading")
 	    .Field<&components::CreatureLocomotion::toHeading>("toHeading")
+	    .Field<&components::CreatureLocomotion::headingSnaps>("headingSnaps")
 	    .Field<&components::CreatureLocomotion::tracks>("tracks");
 	Reflect<components::CreatureMindState>(context)
 	    .Field<&components::CreatureMindState::desires>("desires")
@@ -1413,8 +1420,20 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::TownAggression>(context).Field<&components::TownAggression::record>("record");
 	Reflect<components::TownArtefact>(context)
 	    .Field<&components::TownArtefact::town>("town")
+	    .Field<&components::TownArtefact::site>("site")
+	    .Field<&components::TownArtefact::inTown>("inTown")
+	    .Field<&components::TownArtefact::inSite>("inSite")
+	    .Field<&components::TownArtefact::joined>("joined")
 	    .Field<&components::TownArtefact::player>("player")
-	    .Field<&components::TownArtefact::value>("value");
+	    .Field<&components::TownArtefact::value>("value")
+	    .Field<&components::TownArtefact::dance>("dance")
+	    .Field<&components::TownArtefact::dancing>("dancing")
+	    .Field<&components::TownArtefact::danceStarted>("danceStarted")
+	    .Field<&components::TownArtefact::effect>("effect")
+	    .Field<&components::TownArtefact::symbol>("symbol")
+	    .Field<&components::TownArtefact::symbolMilliseconds>("symbolMilliseconds");
+	Reflect<components::TownArtefactGifts>(context).Field<&components::TownArtefactGifts::lastGift>("lastGift",
+	                                                                                                {k_PlayerNamesNames});
 	Reflect<components::DesireSort>(context)
 	    .Field<&components::DesireSort::boosts>("boosts")
 	    .Field<&components::DesireSort::value>("value")
@@ -2038,11 +2057,18 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::components::ChimneySmoke::Puff::angle>("angle")
 	    .Field<&openblack::ecs::components::ChimneySmoke::Puff::clockwise>("clockwise")
 	    .Field<&openblack::ecs::components::ChimneySmoke::Puff::hidden>("hidden");
+	Reflect<openblack::ecs::components::CreatureAnimation::PairBlend>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::CreatureAnimation::PairBlend::from>("from")
+	    .Field<&openblack::ecs::components::CreatureAnimation::PairBlend::to>("to")
+	    .Field<&openblack::ecs::components::CreatureAnimation::PairBlend::weight>("weight")
+	    .Field<&openblack::ecs::components::CreatureAnimation::PairBlend::animation>("animation");
 	Reflect<openblack::ecs::components::CreatureAnimation::Slot>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureAnimation::Slot::animation>("animation")
 	    .Field<&openblack::ecs::components::CreatureAnimation::Slot::timeMs>("timeMs")
 	    .Field<&openblack::ecs::components::CreatureAnimation::Slot::weight>("weight")
-	    .Field<&openblack::ecs::components::CreatureAnimation::Slot::mirrored>("mirrored");
+	    .Field<&openblack::ecs::components::CreatureAnimation::Slot::mirrored>("mirrored")
+	    .Field<&openblack::ecs::components::CreatureAnimation::Slot::blendedWith>("blendedWith")
+	    .Field<&openblack::ecs::components::CreatureAnimation::Slot::blendWeight>("blendWeight");
 	Reflect<openblack::ecs::components::CreatureAudio::Heard>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureAudio::Heard::atMs>("atMs")
 	    .Field<&openblack::ecs::components::CreatureAudio::Heard::kind>("kind")
@@ -2092,7 +2118,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::durationMs>("durationMs")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::weight>("weight")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::looping>("looping")
-	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::breathing>("breathing");
+	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::breathing>("breathing")
+	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::blendedWith>("blendedWith")
+	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::blendWeight>("blendWeight");
 	Reflect<openblack::ecs::components::CreatureMindState::ActionUnderway>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureMindState::ActionUnderway::serial>("serial")
 	    .Field<&openblack::ecs::components::CreatureMindState::ActionUnderway::action>("action");

@@ -56,6 +56,9 @@ struct CreatureAnimation
 		float timeMs;
 		float weight;
 		bool mirrored;
+		/// A turn's or step's pair: the animation blended keyframe by keyframe towards this one by blendWeight
+		std::optional<size_t> blendedWith {};
+		float blendWeight {0.0f};
 	};
 	std::vector<Slot> slots;
 	/// The face's expression and a gesture such as a nod, played on top of the body
@@ -81,6 +84,15 @@ struct CreatureAnimation
 	/// The rest pose, blended as the body is, and the animations blended so far, by their index in the creature spec
 	skeletal_animation::Skeleton skeleton;
 	std::unordered_map<size_t, skeletal_animation::Animation> animations;
+	/// The pair a turn or step plays, blended from the animations above, kept while the same pair plays
+	struct PairBlend
+	{
+		size_t from;
+		size_t to;
+		float weight;
+		skeletal_animation::Animation animation;
+	};
+	std::optional<PairBlend> pair;
 	/// Each bone's mirror bone, for playing actions left to right
 	std::vector<uint32_t> mirror;
 

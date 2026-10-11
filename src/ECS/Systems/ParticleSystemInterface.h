@@ -103,6 +103,12 @@ public:
 
 	virtual void SetOrigin(EffectId id, glm::vec3 origin) = 0;
 	virtual void SetPlayer(EffectId id, int player) = 0;
+	/// How strong an effect is drawn from now on, which the strength its rules read follows: a glowing artefact's magic
+	/// is as strong as the artefact is worth
+	virtual void SetPower(EffectId /*id*/, float /*power*/) {}
+	/// The players' symbols to draw by themselves from now on, as each worthy artefact shows its owner's; each frame's
+	/// list replaces the last
+	virtual void SetPlayerSymbols(std::vector<particles::draw::PlayerSymbol> /*symbols*/) {}
 	/// How the effect is drawn: sorted with everything else that blends unless told otherwise
 	virtual void SetDrawPath(EffectId id, particles::draw::DrawPath path) = 0;
 	/// Everything the effect draws is moved by this from where its last step left it, as the miracle in the hand follows

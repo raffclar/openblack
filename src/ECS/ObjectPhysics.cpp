@@ -28,6 +28,7 @@
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/DeadTreeArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
+#include "ECS/ArtefactRules.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/CarriedByTornado.h"
@@ -51,6 +52,7 @@
 #include "ECS/Components/TownArtefact.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureSight.h"
 #include "ECS/Map.h"
 #include "ECS/NearestSearch.h"
@@ -58,6 +60,7 @@
 #include "ECS/PhysicsGround.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
@@ -551,8 +554,8 @@ entt::entity object_physics::FellTree(systems::DynamicsSystemInterface& dynamics
 namespace
 {
 /// The nearest thing of a kind within a reach of a point, as the game finds one (nearest_search::FindNearest)
-template <typename Kind>
-entt::entity FindNearest(const map_coords::MapCoords& from, float reach, entt::entity except, Kind isKind)
+template <typename Kind, typename Extra>
+entt::entity FindNearest(const map_coords::MapCoords& from, float reach, entt::entity except, Kind isKind, Extra extra)
 {
 	if (!Locator::entitiesMap::has_value())
 	{
@@ -562,7 +565,9 @@ entt::entity FindNearest(const map_coords::MapCoords& from, float reach, entt::e
 	auto& registry = Entities();
 	return nearest_search::FindNearest(from, reach, [&](glm::ivec2 cell) {
 		std::vector<nearest_search::Candidate> found;
-		for (const auto thing : map.GetAllInCell(cell))
+		auto things = map.GetAllInCell(cell);
+		extra(cell, things);
+		for (const auto thing : things)
 		{
 			if (thing == except || !registry.Valid(thing) || !isKind(thing))
 			{
@@ -590,18 +595,50 @@ void object_physics::ConsiderArtefact(const PhysicsEntry* entry, entt::entity ob
 	const auto* info = world_objects::InfoOf(object);
 	const auto* transform = registry.TryGet<const Transform>(object);
 	// Nor a thing a script holds
-	if (info == nullptr || transform == nullptr || !(info->artifactMultiplier > 0.0f) || registry.AllOf<InScript>(object))
+	if (info == nullptr || transform == nullptr || !(info->artifactMultiplier > 0.0f) || registry.AllOf<InScript>(object) ||
+	    !Locator::artefactSystem::has_value())
 	{
 		return;
 	}
-	// The nearest building within reach, found as the game finds the nearest of a kind of thing: a spiral of cells out
-	// from its own, nearest strictly first, until the cells lie well beyond the nearest found
-	// TODO(worship): a worship site is suitable as well, and a nearer one takes the artefact; openblack has none yet
+	// The nearest building or worship site within reach, found as the game finds the nearest of a kind of thing: a
+	// spiral of cells out from its own, nearest strictly first, until the cells lie well beyond the nearest found
 	const auto own = map_coords::FromMetres({transform->position.x, transform->position.z});
-	const auto nearest = FindNearest(own, physics::objects::k_ArtefactReach, object,
-	                                 [&registry](entt::entity thing) { return registry.AnyOf<Abode, SpellDispenser>(thing); });
+	const auto nearest = FindNearest(
+	    own, physics::objects::k_ArtefactReach, object,
+	    [&registry](entt::entity thing) { return registry.AnyOf<Abode, SpellDispenser, WorshipSite>(thing); },
+	    [&registry](glm::ivec2 cell, std::vector<entt::entity>& extra) {
+		    // The worship sites aren't kept in the map's cells: each is looked for in the cell it stands in
+		    registry.Each<const WorshipSite, const Transform>(
+		        [&extra, cell](entt::entity site, const WorshipSite&, const Transform& place) {
+			        if (map_coords::CellOf(glm::vec2(place.position.x, place.position.z)) == cell)
+			        {
+				        extra.push_back(site);
+			        }
+		        });
+	    });
 	if (nearest == entt::null)
 	{
+		return;
+	}
+	const auto player = *entry->player;
+	auto& artefacts = Locator::artefactSystem::value();
+	// An artefact already made, worth enough, impresses a town or site it didn't last belong to: its people look at it
+	const auto impress = [&](bool sameAsLast) {
+		if (const auto* record = registry.TryGet<const TownArtefact>(object);
+		    record != nullptr && artefact_rules::WillImpress(record->value, sameAsLast) && Locator::reactionSystem::has_value())
+		{
+			Locator::reactionSystem::value().Create({.initiator = object,
+			                                         .type = Reaction::LookAtObject,
+			                                         .player = player,
+			                                         .position = transform->position,
+			                                         .impressiveValue = info->impressiveValue});
+		}
+	};
+	if (registry.AllOf<WorshipSite>(nearest))
+	{
+		const auto* record = registry.TryGet<const TownArtefact>(object);
+		impress(record != nullptr && record->site == nearest);
+		artefacts.AddToSite(object, nearest, player);
 		return;
 	}
 	// TODO(dispensers): a spell dispenser belongs to its town in the game; openblack's keep no town, so none takes it
@@ -622,38 +659,17 @@ void object_physics::ConsiderArtefact(const PhysicsEntry* entry, entt::entity ob
 	{
 		return;
 	}
-	const auto player = *entry->player;
-	// An artefact already made, worth enough, impresses another town: its people look at it
-	if (const auto* record = registry.TryGet<const TownArtefact>(object);
-	    record != nullptr && physics::objects::ArtefactWillImpress(record->value, record->town == town) &&
-	    Locator::reactionSystem::has_value())
-	{
-		Locator::reactionSystem::value().Create(
-		    {.initiator = object, .type = Reaction::LookAtObject, .player = player, .position = transform->position});
-	}
+	const auto* record = registry.TryGet<const TownArtefact>(object);
+	impress(record != nullptr && record->town == town);
 	// It becomes the town's artefact, worth what it impresses villagers when it is new
-	if (auto* record = registry.TryGet<TownArtefact>(object))
-	{
-		record->town = town;
-	}
-	else
-	{
-		registry.Assign<TownArtefact>(object,
-		                              TownArtefact {.town = town, .player = player, .value = info->villagerImpressiveValue});
-	}
-	if (Locator::creatureMindSystem::has_value())
-	{
-		Locator::creatureMindSystem::value().PlayerDid(physics::objects::k_DeedMakeArtefact, transform->position, object,
-		                                               player);
-	}
+	artefacts.AddToTown(object, town, player);
 }
 
 void object_physics::ArtefactTaken(entt::entity object, PlayerNames player)
 {
-	if (auto* record = Entities().TryGet<TownArtefact>(object))
+	if (Locator::artefactSystem::has_value())
 	{
-		record->town = entt::null;
-		record->player = player;
+		Locator::artefactSystem::value().Taken(object, player);
 	}
 }
 

@@ -251,6 +251,29 @@ const Animation* AnimationOf(CreatureAnimation& animation, const CreatureRig& ri
 	return found->second.frames.empty() ? nullptr : &found->second;
 }
 
+/// A turn's or step's pair of the creature's animations blended into one, kept while the same pair plays, or nothing
+/// when the species lacks either
+const Animation* PairAnimationOf(CreatureAnimation& animation, const CreatureRig& rig, const creature_morph::Morph& morph,
+                                 size_t from, size_t to, float weight)
+{
+	auto& pair = animation.pair;
+	if (!pair.has_value() || pair->from != from || pair->to != to || pair->weight != weight)
+	{
+		const auto* first = AnimationOf(animation, rig, morph, from);
+		const auto* second = AnimationOf(animation, rig, morph, to);
+		const auto* stand = AnimationOf(animation, rig, morph, creature_layers::animations::k_Stand);
+		if (first == nullptr || second == nullptr || stand == nullptr)
+		{
+			return first;
+		}
+		pair = CreatureAnimation::PairBlend {.from = from,
+		                                     .to = to,
+		                                     .weight = weight,
+		                                     .animation = creature_animation::BlendPair(*first, *second, *stand, weight)};
+	}
+	return &pair->animation;
+}
+
 std::optional<uint32_t> DurationOf(const Animation* animation)
 {
 	return animation != nullptr ? std::optional(animation->duration) : std::nullopt;
@@ -343,13 +366,15 @@ void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creatu
 		std::vector<float> weights;
 		for (const auto& slot : animation.slots)
 		{
-			const auto* played = animationOf(slot.animation);
+			const auto* played = slot.blendedWith.has_value() ? PairAnimationOf(animation, rig, morph, slot.animation,
+			                                                                    *slot.blendedWith, slot.blendWeight)
+			                                                  : animationOf(slot.animation);
 			sampled.push_back(skeletal_animation::SampleCycle(
 			    played != nullptr ? *played : *stand, *stand, static_cast<uint32_t>(std::max(slot.timeMs, 0.0f)),
 			    animation.skeleton, slot.mirrored ? animation.mirror : std::span<const uint32_t> {}));
 			weights.push_back(slot.weight);
 		}
-		poses = skeletal_animation::WeightedSum(sampled, weights);
+		poses = skeletal_animation::WeightedSumInMeshSpace(sampled, weights, animation.skeleton.parents);
 	}
 	else if (const auto* played = creature_layers::IsPlaying(animation.body)
 	                                  ? animationOf(creature_layers::CurrentAnimation(animation.body))
@@ -460,6 +485,7 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 			                                         std::abs(morph.drawn.thinFat));
 			    animation.skeleton = skeletal_animation::Skeleton::FromRestMatrices(base->GetBoneParents(), rest);
 			    animation.animations.clear();
+			    animation.pair.reset();
 			    animation.builtRevision = morph.revision;
 			    animation.boneMatrices = rest;
 			    // Each bone's mirror as the species' file has it

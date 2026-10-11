@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <optional>
 
+#include <glm/geometric.hpp>
+
 using namespace openblack;
 using namespace openblack::skeletal_animation;
 
@@ -194,6 +196,83 @@ Animation creature_animation::Blend(const Animation& base, const BlendTerm& evil
 			const auto translation = frame.translations[i];
 			frame.translations[i] = translation + (a.weight * (a.Translation(joint, f, translation) - translation)) +
 			                        (b.weight * (b.Translation(joint, f, translation) - translation));
+		}
+	}
+	return blended;
+}
+
+glm::vec3 creature_animation::BlendMoves(const glm::vec3& from, const glm::vec3& to, float weight)
+{
+	const auto length = glm::length(from) + ((glm::length(to) - glm::length(from)) * weight);
+	const auto move = from + ((to - from) * weight);
+	return move == glm::vec3(0.0f) ? move : move * (length / glm::length(move));
+}
+
+Animation creature_animation::BlendPair(const Animation& from, const Animation& to, const Animation& stand, float weight)
+{
+	if (from.frames.empty() || to.frames.empty())
+	{
+		return from;
+	}
+	const StandPose standPose(&stand);
+	const auto fromRotated = JointSlots(from.rotatedJoints);
+	const auto toRotated = JointSlots(to.rotatedJoints);
+	const auto fromTranslated = JointSlots(from.translatedJoints);
+	const auto toTranslated = JointSlots(to.translatedJoints);
+
+	// The bones either moves, in order
+	const auto joined = [](std::vector<uint32_t> a, const std::vector<uint32_t>& b) {
+		a.insert(a.end(), b.begin(), b.end());
+		std::ranges::sort(a);
+		const auto [first, last] = std::ranges::unique(a);
+		a.erase(first, last);
+		return a;
+	};
+
+	Animation blended {
+	    .duration = static_cast<uint32_t>(
+	        std::nearbyint(static_cast<float>(from.duration) +
+	                       ((static_cast<float>(to.duration) - static_cast<float>(from.duration)) * weight))),
+	    .looping = from.looping,
+	    .rotatedJoints = joined(from.rotatedJoints, to.rotatedJoints),
+	    .translatedJoints = joined(from.translatedJoints, to.translatedJoints),
+	    .frames = {},
+	    .displacement = BlendMoves(from.displacement, to.displacement, weight),
+	};
+	const auto rotationOf = [&standPose](const Animation& animation, const std::vector<std::optional<size_t>>& slots,
+	                                     size_t frame, uint32_t joint) {
+		if (const auto slot = SlotOf(slots, joint))
+		{
+			return RotationYXZ(animation.frames[frame].eulerAngles[*slot]);
+		}
+		return RotationYXZ(standPose.Euler(joint).value_or(glm::vec3(0.0f)));
+	};
+	const auto translationOf = [&standPose](const Animation& animation, const std::vector<std::optional<size_t>>& slots,
+	                                        size_t frame, uint32_t joint) {
+		if (const auto slot = SlotOf(slots, joint))
+		{
+			return animation.frames[frame].translations[*slot];
+		}
+		return standPose.Translation(joint).value_or(glm::vec3(0.0f));
+	};
+
+	blended.frames.resize(from.frames.size());
+	for (size_t f = 0; f < from.frames.size(); ++f)
+	{
+		const auto g = std::min(f, to.frames.size() - 1);
+		auto& frame = blended.frames[f];
+		frame.eulerAngles.reserve(blended.rotatedJoints.size());
+		for (const auto joint : blended.rotatedJoints)
+		{
+			frame.eulerAngles.push_back(
+			    EulerYXZ(Lerp(rotationOf(from, fromRotated, f, joint), rotationOf(to, toRotated, g, joint), weight)));
+		}
+		frame.translations.reserve(blended.translatedJoints.size());
+		for (const auto joint : blended.translatedJoints)
+		{
+			const auto a = translationOf(from, fromTranslated, f, joint);
+			const auto b = translationOf(to, toTranslated, g, joint);
+			frame.translations.push_back(((b - a) * weight) + a);
 		}
 	}
 	return blended;
