@@ -44,6 +44,7 @@
 #include "VillagerBuild.h"
 #include "VillagerChecks.h"
 #include "VillagerDance.h"
+#include "VillagerDiscipleWork.h"
 #include "VillagerDisciples.h"
 #include "VillagerEaten.h"
 #include "VillagerFire.h"
@@ -77,6 +78,7 @@ namespace villager_animate = openblack::ecs::villager_animate;
 namespace villager_script = openblack::ecs::villager_script;
 namespace villager_build = openblack::ecs::villager_build;
 namespace villager_disciple = openblack::ecs::villager_disciple;
+namespace villager_disciple_work = openblack::ecs::villager_disciple_work;
 namespace villager_food = openblack::ecs::villager_food;
 namespace villager_forester = openblack::ecs::villager_forester;
 namespace villager_fisherman = openblack::ecs::villager_fisherman;
@@ -799,8 +801,14 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_home::NothingToDo,
     },
-    /* ARRIVES_AT_WORKSHOP_FOR_DROP_OFF */ k_TodoEntry,
-    /* ARRIVES_AT_STORAGE_PIT_FOR_WORKSHOP_MATERIALS */ k_TodoEntry,
+    /* ARRIVES_AT_WORKSHOP_FOR_DROP_OFF */
+    VillagerStateTableEntry {
+        .state = &villager_disciple_work::ArrivesAtWorkshopForDropOff,
+    },
+    /* ARRIVES_AT_STORAGE_PIT_FOR_WORKSHOP_MATERIALS */
+    VillagerStateTableEntry {
+        .state = &villager_disciple_work::ArrivesAtStoragePitForWorkshopMaterials,
+    },
     /* SHOW_POISONED */
     VillagerStateTableEntry {
         .state = &villager_food::ShowPoisoned,
@@ -857,8 +865,14 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .entryState = &villager_disciple::EnterDiscipleNothingToDo,
     },
     /* FOOTBALL_MOVE_TO_BALL */ k_TodoEntry,
-    /* ARRIVES_AT_STORAGE_PIT_FOR_TRADER_PICK_UP */ k_TodoEntry,
-    /* ARRIVES_AT_STORAGE_PIT_FOR_TRADER_DROP_OFF */ k_TodoEntry,
+    /* ARRIVES_AT_STORAGE_PIT_FOR_TRADER_PICK_UP */
+    VillagerStateTableEntry {
+        .state = &villager_disciple_work::TraderFetch,
+    },
+    /* ARRIVES_AT_STORAGE_PIT_FOR_TRADER_DROP_OFF */
+    VillagerStateTableEntry {
+        .state = &villager_disciple_work::TraderDeliver,
+    },
     /* BREEDER_DISCIPLE */
     VillagerStateTableEntry {
         .state = &villager_breeding::BreederDisciple,
@@ -866,7 +880,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .exitState = &villager_breeding::ExitBreeder,
         .validate = &villager_breeding::SexValidate,
     },
-    /* MISSIONARY_DISCIPLE */ k_TodoEntry,
+    /* MISSIONARY_DISCIPLE */
+    VillagerStateTableEntry {
+        .state = &villager_disciple_work::MissionaryDisciple,
+    },
     /* REACT_TO_BREEDER */
     VillagerStateTableEntry {
         .state = &villager_breeding::ReactToBreeder,

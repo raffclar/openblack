@@ -822,8 +822,15 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::DetailMeshes>(context)
 	    .Field<&components::DetailMeshes::meshes>("meshes")
 	    .Field<&components::DetailMeshes::importance>("importance");
-	Reflect<components::Disciple>(context).Field<&components::Disciple::type>("type").Field<&components::Disciple::tradeTown>(
-	    "tradeTown");
+	Reflect<components::Disciple>(context)
+	    .Field<&components::Disciple::type>("type")
+	    .Field<&components::Disciple::tradeTown>("tradeTown")
+	    .Field<&components::Disciple::tradeResource>("tradeResource");
+	Reflect<components::MissionaryControl>(context)
+	    .Field<&components::MissionaryControl::villager>("villager")
+	    .Field<&components::MissionaryControl::town>("town")
+	    .Field<&components::MissionaryControl::player>("player")
+	    .Field<&components::MissionaryControl::reaction>("reaction");
 	Reflect<components::DiscipleHeld>(context)
 	    .Field<&components::DiscipleHeld::atPickUp>("atPickUp")
 	    .Field<&components::DiscipleHeld::touchedDown>("touchedDown");
@@ -1461,7 +1468,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Town::congregationPos>("congregationPos")
 	    .Field<&components::Town::emergencyTurn>("emergencyTurn")
 	    .Field<&components::Town::graveyard>("graveyard")
-	    .Field<&components::Town::creche>("creche");
+	    .Field<&components::Town::creche>("creche")
+	    .Field<&components::Town::desiresChanged>("desiresChanged")
+	    .Field<&components::Town::desiresChangedLastTurn>("desiresChangedLastTurn");
 	Reflect<components::TownAggression>(context).Field<&components::TownAggression::record>("record");
 	Reflect<components::TownArtefact>(context)
 	    .Field<&components::TownArtefact::town>("town")

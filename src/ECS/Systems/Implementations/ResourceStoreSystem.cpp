@@ -69,6 +69,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/VillagerCarry.h"
 #include "ECS/VillagerWorkRules.h"
@@ -479,8 +480,13 @@ uint32_t ResourceStoreSystem::AddToStore(entt::entity store, ResourceType type, 
 	{
 		return 0;
 	}
-	const auto added = FillPit(store, type, amount, poisoned);
 	const auto town = TownOf(store);
+	// A store stocked from empty changes what its town wants
+	if (CountOf(*abode, type) == 0 && amount != 0 && town != entt::null && Locator::townSystem::has_value())
+	{
+		Locator::townSystem::value().MarkDesiresChanged(town);
+	}
+	const auto added = FillPit(store, type, amount, poisoned);
 	if (!giver.has_value() || town == entt::null)
 	{
 		CountOf(*abode, type) += added;
@@ -925,6 +931,11 @@ uint32_t ResourceStoreSystem::AddResource(entt::entity object, ResourceType type
 		if (type != ResourceType::Food && type != ResourceType::Wood)
 		{
 			return 0;
+		}
+		// A workshop given wood when it had none changes what its town wants
+		if (abode->type == AbodeNumber::Workshop && CountOf(*abode, type) == 0 && Locator::townSystem::has_value())
+		{
+			Locator::townSystem::value().MarkDesiresChanged(TownOf(object));
 		}
 		CountOf(*abode, type) += amount;
 		return amount;

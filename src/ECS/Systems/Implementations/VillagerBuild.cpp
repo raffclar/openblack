@@ -752,13 +752,17 @@ uint32_t villager_build::GotoStoragePitForDropOff(LivingAction& action)
 
 uint32_t villager_build::ArrivesAtStoragePitForDropOff(LivingAction& action)
 {
+	return DropOffAtStoragePit(action, StoragePitOf(VillagerOf(action)));
+}
+
+uint32_t villager_build::DropOffAtStoragePit(LivingAction& action, std::optional<entt::entity> pit)
+{
 	const auto villager = EntityOf(action);
 	auto& person = VillagerOf(action);
 	const auto type = villager_carry::HeldResource(person);
 	const auto held = type == ResourceType::Food ? person.foodHeld : person.woodHeld;
 	if (type != ResourceType::None && held != 0)
 	{
-		const auto pit = StoragePitOf(person);
 		if (IsFunctional(pit))
 		{
 			// It walks to the pit's door, then gives the larger of its loads; the pit counts what it took

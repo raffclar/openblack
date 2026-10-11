@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <optional>
+
 #include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 
@@ -50,6 +52,8 @@ bool ExitBuilding(components::LivingAction& action, VillagerStates next);
 uint32_t CheckTakeResourcesToStoragePit(components::LivingAction& action);
 uint32_t GotoStoragePitForDropOff(components::LivingAction& action);
 uint32_t ArrivesAtStoragePitForDropOff(components::LivingAction& action);
+/// The same at a given storage pit, which may be another town's: the load still counts off its own town's carried
+uint32_t DropOffAtStoragePit(components::LivingAction& action, std::optional<entt::entity> pit);
 
 /// At its town's storage pit the villager takes what it can of up to an amount of a resource, walking to the pit
 /// first, then walks off into a state; with none to take, it goes into another state
