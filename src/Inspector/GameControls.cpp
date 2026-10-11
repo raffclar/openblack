@@ -38,6 +38,7 @@
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/EditorCameraModel.h"
 #include "Camera/FightCameraModel.h"
+#include "Camera/ScriptCameraModel.h"
 #include "Camera/TempleCameraModel.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Registry.h"
@@ -102,12 +103,22 @@ std::string_view ModelName(const CameraModel& model)
 	{
 		return "editor";
 	}
+	if (dynamic_cast<const ScriptCameraModel*>(&model) != nullptr)
+	{
+		return "script";
+	}
 	return "other";
 }
 
 bool PathHoldsCamera()
 {
 	return Locator::cameraPathSystem::has_value() && Locator::cameraPathSystem::value().HoldsCamera();
+}
+
+/// A script has taken the camera and moves it itself until it gives it back
+bool ScriptHoldsCamera(const Camera& camera)
+{
+	return dynamic_cast<const ScriptCameraModel*>(&camera.GetModel()) != nullptr;
 }
 
 std::string_view PageName(gui::GameMenu::Page page)
@@ -241,6 +252,7 @@ std::optional<CameraState> GameCamera::State() const
 	                   .top = (cues.tricons & camera_drag::tricon::k_Top) != 0,
 	                   .idle = (cues.tricons & camera_drag::tricon::k_Idle) != 0},
 	    .drag = drag(),
+	    .heldByScript = ScriptHoldsCamera(camera),
 	};
 }
 
@@ -254,7 +266,13 @@ std::string GameCamera::Set(const CameraPose& pose)
 	{
 		return "a camera path (a miracle's or a script's) holds the camera";
 	}
-	Locator::camera::value().SetOrigin(pose.origin).SetFocus(pose.focus);
+	auto& camera = Locator::camera::value();
+	if (ScriptHoldsCamera(camera))
+	{
+		return "a script holds the camera and moves it itself";
+	}
+	// Still, with any flight, drag or easing under way forgotten, so that it stays until the player or a script moves it
+	camera.Place(pose.origin, pose.focus);
 	return {};
 }
 
@@ -302,6 +320,10 @@ std::string GameCamera::Fly(const CameraPose& pose)
 	if (PathHoldsCamera())
 	{
 		return "a camera path (a miracle's or a script's) holds the camera";
+	}
+	if (ScriptHoldsCamera(Locator::camera::value()))
+	{
+		return "a script holds the camera and moves it itself";
 	}
 	Locator::camera::value().GetModel().SetFlight(pose.origin, pose.focus);
 	return {};
