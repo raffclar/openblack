@@ -51,6 +51,8 @@ std::unique_ptr<const InfoConstants> InfoFile::LoadFromFile(const std::filesyste
 		                       data.size(), sizeof(v100::InfoConstants), sizeof(v120::InfoConstants));
 		return nullptr;
 	}
+	// Each species' balance row overrides its creature row
+	ApplyCreatureBalance(*infos);
 
 	return infos;
 }

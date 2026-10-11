@@ -201,7 +201,7 @@ void creature_tree::AddEpisode(std::vector<Episode>& episodes, Episode episode)
 {
 	if (episodes.size() >= k_MaxEpisodes)
 	{
-		episodes.erase(episodes.begin(), episodes.begin() + static_cast<std::ptrdiff_t>(episodes.size() - k_MaxEpisodes + 1));
+		episodes.resize(k_MaxEpisodes - 1);
 	}
 	episodes.push_back(std::move(episode));
 }

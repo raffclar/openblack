@@ -2039,9 +2039,9 @@ void AddMind(std::vector<Scenario>& all)
 	    .facet = Facet::Mind,
 	    .description = "A grown-up tiger with balls about it. Every 20 seconds the player plays with a toy near it, the "
 	                   "one deed creatures copy without the learning leash.",
-	    .expected = "Nine times in ten it notices: it turns to look where the player played; a few seconds later it "
-	                "picks up a ball and throws it about, copying the player; then for a while it wants to play. The "
-	                "Mind panel shows the stage of copying.",
+	    .expected = "Every time, unless it is still copying the action of the last time, it notices: it turns to look "
+	                "where the player played; a few seconds later it picks up a ball and throws it about, copying the "
+	                "player; then for a while it wants to play. The Mind panel shows the stage of copying.",
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = Content()}},
 	    .objects = {{.type = MobileObjectInfo::Ball, .offset = {25.0f, -25.0f}},
