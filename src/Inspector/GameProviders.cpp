@@ -2052,6 +2052,48 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		    {"opponent_of_id", Id(fights.OpponentOf(*creature))},
 		});
 	});
+	auto move = Query("move",
+	                  "Sends a creature walking or running to a point by its own legs (turning and stepping off as it "
+	                  "does), or turning on the spot to face it",
+	                  {IdParameter("The creature"),
+	                   {.name = "point", .type = "array", .description = "[x, z] on the land", .required = true},
+	                   {.name = "pace",
+	                    .type = "string",
+	                    .description = "walk (the default), run, or face to turn on the spot towards the point",
+	                    .required = false}});
+	move.writes = true;
+	provider->Add(std::move(move), [](const QueryContext& context) {
+		const auto* registry = Registry();
+		if (registry == nullptr || !Locator::creatureLocomotionSystem::has_value())
+		{
+			return QueryResult::Error("no creatures move without a land");
+		}
+		const auto creature = EntityParam(context.params);
+		const auto point = context.params.find("point");
+		if (!creature.has_value() || !registry->AllOf<Creature>(*creature) || point == context.params.end() ||
+		    !point->is_array() || point->size() != 2 || !(*point)[0].is_number() || !(*point)[1].is_number())
+		{
+			return QueryResult::Error("creatures.move needs a creature's id and a point [x, z]");
+		}
+		const glm::vec2 target((*point)[0].get<float>(), (*point)[1].get<float>());
+		const auto paceParam = context.params.find("pace");
+		const auto pace =
+		    paceParam != context.params.end() && paceParam->is_string() ? paceParam->get<std::string>() : std::string("walk");
+		auto& locomotion = Locator::creatureLocomotionSystem::value();
+		if (pace == "face")
+		{
+			return QueryResult::Value({{"result", locomotion.TurnToFace(*creature, target) ? "started" : "refused"}});
+		}
+		if (pace != "walk" && pace != "run")
+		{
+			return QueryResult::Error("pace is walk, run or face");
+		}
+		using Locomotion = ecs::systems::CreatureLocomotionSystemInterface;
+		constexpr std::array<std::string_view, 3> k_Results {"invalid_destination", "busy", "started"};
+		const auto result =
+		    locomotion.MoveTo(*creature, target, pace == "run" ? Locomotion::Pace::Run : Locomotion::Pace::Walk, 0.0f, 1.0f);
+		return QueryResult::Value({{"result", k_Results.at(static_cast<size_t>(result))}});
+	});
 	return provider;
 }
 
