@@ -39,12 +39,13 @@ public:
 	};
 	[[nodiscard]] virtual ObjectResource ResourceOf(entt::entity object) const = 0;
 
-	/// Whether something stores a resource: a storage pit stores anything; a pile only through the store it is part of
+	/// Whether something stores a resource: a storage pit stores anything; a building going up stores wood on its site;
+	/// a pile only through the store it is part of
 	[[nodiscard]] virtual bool IsStore(entt::entity store, ResourceType type) const = 0;
-	/// The store, or the pile's store, takes what it will of an amount; giving it counts for the giver in its town. What
-	/// it took.
+	/// The store, or the pile's store, takes what it will of an amount; giving it counts for the giver in its town. A
+	/// building site takes wood into its pile nearest where it is given. What it took.
 	virtual uint32_t AddToStore(entt::entity store, ResourceType type, uint32_t amount, std::optional<PlayerNames> giver,
-	                            bool poisoned) = 0;
+	                            bool poisoned, std::optional<glm::vec3> at) = 0;
 	/// A pile takes what it will of an amount of its own resource, with its thud; a poisoned gift poisons it. What it took.
 	virtual uint32_t AddToPile(entt::entity pile, ResourceType type, uint32_t amount, bool poisoned) = 0;
 	/// What is taken from a pile: a store's pile gives what its store can spare, the rest coming from the store's other

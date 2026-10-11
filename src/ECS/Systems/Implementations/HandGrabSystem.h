@@ -95,6 +95,8 @@ private:
 	bool StartFishFarmScoop(components::HandGrab& grab, entt::entity farm, const fish_farm::Type& type);
 	bool ScoopFishFarm(components::HandGrab& grab, const fish_farm::Type& type);
 	/// The scoop ends: its stream stops, and the hand holds its handful as anything else
+	/// The scoop's stream and sound stop
+	void StopScoopEffects(components::HandGrab& grab);
 	void EndScoop(components::HandGrab& grab);
 	/// The second press with the pointer on something the held thing is used on (a store, a pile of the same): it is
 	/// given to it at once, without being thrown. Whether it was.

@@ -386,6 +386,13 @@ uint32_t hand_grab::ScoopAmount(uint32_t turns, const ScoopFacts& facts)
 	return static_cast<uint32_t>(static_cast<double>(facts.perTurn) + rise * static_cast<double>(ramp));
 }
 
+uint32_t hand_grab::ScoopSoundPitch(float ramp)
+{
+	constexpr float k_Start = 60.0f;
+	constexpr float k_Rise = 180.0f;
+	return static_cast<uint32_t>(ramp * k_Rise + k_Start);
+}
+
 uint32_t hand_grab::ScoopTaken(uint32_t wanted, uint32_t sourceHas, uint32_t held, const ScoopFacts& facts)
 {
 	uint32_t taken = std::min(wanted, sourceHas);

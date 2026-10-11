@@ -360,20 +360,21 @@ entt::entity object_physics::EndPot(systems::DynamicsSystemInterface& dynamics, 
 	{
 		return dynamics.EndPhysicsAsObject(pot, insert, entry != nullptr);
 	}
-	const auto& position = registry.Get<const Transform>(pot).position;
+	const auto position = registry.Get<const Transform>(pot).position;
 	const PhysicsGround ground(Locator::terrainSystem::value());
 	if (!ground.IsLand({position.x, position.z}))
 	{
 		// In the water it floats on as a thing
 		return dynamics.EndPhysicsAsObject(pot, insert, entry != nullptr);
 	}
-	// On the land it spills into the stores and piles round it, or makes a pile, and flickers out
+	// On the land it flickers out and spills into the stores and piles round it, or makes a pile; it goes first, so
+	// that it can't take back what it spills
 	auto& stores = Locator::resourceStoreSystem::value();
 	const auto resource = stores.ResourceOf(pot);
-	stores.PourAt(resource.type, position, resource.amount, false,
-	              entry != nullptr ? entry->player.value_or(PlayerNames::NEUTRAL) : PlayerNames::NEUTRAL, resource.poisoned);
+	const auto player = entry != nullptr ? entry->player.value_or(PlayerNames::NEUTRAL) : PlayerNames::NEUTRAL;
 	world_objects::LeaveGhost(pot);
 	world_objects::Remove(pot);
+	stores.PourAt(resource.type, position, resource.amount, false, player, resource.poisoned);
 	return pot;
 }
 

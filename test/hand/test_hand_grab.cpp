@@ -350,6 +350,15 @@ TEST(HandGrab, AScoopRampsUpOverItsTimeAsASquare)
 	EXPECT_EQ(ScoopTaken(70, 1000, 30000, facts), 0u);
 }
 
+TEST(HandGrab, TheScoopingSoundRisesInPitchWithTheRamp)
+{
+	// From 60% at the start to 240% once fully ramped, truncated
+	EXPECT_EQ(ScoopSoundPitch(0.0f), 60u);
+	EXPECT_EQ(ScoopSoundPitch(0.25f), 105u);
+	EXPECT_EQ(ScoopSoundPitch(0.999f), 239u);
+	EXPECT_EQ(ScoopSoundPitch(1.0f), 240u);
+}
+
 TEST(HandGrabRules, AScoopingHandTipsFurtherDownWhenLow)
 {
 	EXPECT_FLOAT_EQ(hand_grab::ScoopTip(3.0f, 3.2f), hand_grab::k_ScoopTip);

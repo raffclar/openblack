@@ -41,6 +41,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/DeadTree.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MagicForest.h"
 #include "ECS/Components/MagicPile.h"
 #include "ECS/Components/Mesh.h"
@@ -145,6 +146,12 @@ entt::entity StorePile(entt::entity pit, entt::entity& slot, PotInfo type, size_
 	const auto offset = glm::vec3(glm::mat4(transform.rotation) * metrics.at(place)[3]);
 	slot = ecs::archetypes::PotArchetype::CreateEmpty(transform.position + offset, yaw, type);
 	return slot;
+}
+
+/// A building going up whose site keeps its wood in piles: a temple's
+bool IsBuildingSite(entt::entity object)
+{
+	return Entities().AllOf<Temple, BuildingSite>(object);
 }
 
 /// The town an abode belongs to
@@ -327,9 +334,13 @@ bool ResourceStoreSystem::IsStore(entt::entity store, ResourceType type) const
 	{
 		return true;
 	}
+	// A building going up stores wood on its site
+	if (IsBuildingSite(store))
+	{
+		return ecs::store_rules::BuildingSiteStores(type);
+	}
 	// A pile stores only its own resource, and only through the store it is part of
-	// TODO(stores): worship sites store food, workshops wood, and a building wood while it has a building site; openblack
-	// has none of those stores yet
+	// TODO(stores): worship sites store food and workshops wood; openblack has neither store yet
 	if (const auto* pot = registry.TryGet<const Pot>(store))
 	{
 		const auto own = PotInfoOf(pot->type).resourceType;
@@ -398,13 +409,18 @@ uint32_t ResourceStoreSystem::FillPit(entt::entity store, ResourceType type, uin
 }
 
 uint32_t ResourceStoreSystem::AddToStore(entt::entity store, ResourceType type, uint32_t amount,
-                                         std::optional<PlayerNames> giver, bool poisoned)
+                                         std::optional<PlayerNames> giver, bool poisoned, std::optional<glm::vec3> at)
 {
 	auto& registry = Entities();
 	// A store's pile passes what it is given to its store
 	if (const auto structure = registry.AllOf<Pot>(store) ? StoreOf(store) : std::nullopt)
 	{
-		return AddToStore(*structure, type, amount, giver, poisoned);
+		return AddToStore(*structure, type, amount, giver, poisoned, at);
+	}
+	// A building going up takes wood onto its site, where the builders take it from
+	if (IsBuildingSite(store))
+	{
+		return ecs::store_rules::BuildingSiteStores(type) ? AddResource(store, ResourceType::Wood, amount, at) : 0u;
 	}
 	auto* abode = registry.TryGet<Abode>(store);
 	if (abode == nullptr || !registry.AllOf<StoragePit>(store) || (type != ResourceType::Food && type != ResourceType::Wood))
@@ -576,9 +592,9 @@ bool ResourceStoreSystem::TakeObject(entt::entity store, entt::entity object, st
 	}
 	// TODO(stores): a thing thrown into a storage pit by the local player shows the help for giving; openblack has no
 	// help system yet
-	const auto added = AddToStore(store, resource.type, resource.amount, giver, resource.poisoned);
 	const auto* transform = registry.TryGet<const Transform>(object);
 	const auto at = transform != nullptr ? transform->position : glm::vec3(0.0f);
+	const auto added = AddToStore(store, resource.type, resource.amount, giver, resource.poisoned, at);
 	// TODO(stores): the advisor's resource-drop sound for the local player; openblack has no advisor yet
 	static_cast<void>(added);
 	// Wood that isn't a pot mulches as it goes in
@@ -637,15 +653,17 @@ bool ResourceStoreSystem::PourAt(ResourceType type, glm::vec3 point, uint32_t am
 			{
 				break;
 			}
-			if (!registry.Valid(entity))
+			// What a hand holds isn't on the land
+			if (!registry.Valid(entity) || registry.AllOf<InHand>(entity))
 			{
 				continue;
 			}
-			if (registry.AllOf<StoragePit, Abode>(entity))
+			if (registry.AllOf<StoragePit, Abode>(entity) ||
+			    (IsBuildingSite(entity) && ecs::store_rules::BuildingSiteStores(type)))
 			{
 				if (near(entity, piles::k_StoreReachMultiplier))
 				{
-					left -= AddToStore(entity, type, left, giver, poisoned);
+					left -= AddToStore(entity, type, left, giver, poisoned, point);
 				}
 			}
 			else if (const auto* pot = registry.TryGet<const Pot>(entity);
@@ -840,7 +858,7 @@ uint32_t ResourceStoreSystem::AddResource(entt::entity object, ResourceType type
 		// TODO(temple-builders): an abode going up takes wood into its site's pile; openblack's abodes have no sites yet
 		if (registry.AllOf<StoragePit>(object))
 		{
-			return AddToStore(object, type, amount, std::nullopt, false);
+			return AddToStore(object, type, amount, std::nullopt, false, at);
 		}
 		// TODO(temple-builders): a workshop keeps its wood in a pile of its own; openblack has no workshop store yet
 		if (type != ResourceType::Food && type != ResourceType::Wood)

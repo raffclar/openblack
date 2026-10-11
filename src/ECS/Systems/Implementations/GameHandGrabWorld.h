@@ -84,7 +84,8 @@ public:
 	void StopScoopStream(uint32_t stream) override;
 	void PinCursor(bool pinned) override;
 	void MoveScoopStream(uint32_t stream, glm::vec3 hand) override;
-	void PlayScoopSound(ResourceType resource, glm::vec3 hand, float ramp) override;
+	[[nodiscard]] entt::entity PlayScoopSound(entt::entity playing, ResourceType resource, glm::vec3 hand, float ramp) override;
+	void StopScoopSound() override;
 	[[nodiscard]] float LandHeightAt(glm::vec3 point) const override;
 	[[nodiscard]] bool StoresResource(entt::entity store, ResourceType resource) const override;
 	uint32_t AddToStore(entt::entity store, ResourceType resource, uint32_t amount, bool poisoned) override;

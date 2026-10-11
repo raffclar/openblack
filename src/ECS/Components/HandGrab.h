@@ -91,6 +91,8 @@ struct HandGrab
 	entt::entity scoopSource {entt::null};
 	uint32_t scoopTurns {0};
 	std::optional<uint32_t> scoopStream;
+	/// The scooping sound's loop while it plays
+	entt::entity scoopSound {entt::null};
 	glm::vec3 scoopAnchor {0.0f};
 
 	/// What it last let go, which gets a twist once the hand has moved on a little, and how long until it does
