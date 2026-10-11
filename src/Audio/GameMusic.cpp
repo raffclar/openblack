@@ -142,6 +142,9 @@ constexpr uint32_t k_LandMusicFirstTurn = 20;
 // The land's music played to its end only comes back after this many turns away
 constexpr uint32_t k_BlockedTurns = 3500;
 
+// Music attached to an object whose bank says nothing of how far it carries is heard within this of the camera
+constexpr float k_AttachedMusicDefaultRange = 100.0f;
+
 constexpr int32_t k_FullVolume = 127;
 constexpr int32_t k_LandVolume = 80;
 // A music group carries on two chunks past where it was when it stopped, beyond the fade
@@ -205,6 +208,56 @@ void GameMusic::Reset()
 	_landMusicWasAllowed.reset();
 	_rememberedTown.reset();
 	_resumeChunks.clear();
+	_attached.clear();
+}
+
+float GameMusic::AttachedMusicRange(float bankMaxDistance)
+{
+	return bankMaxDistance < 0.0f ? k_AttachedMusicDefaultRange : bankMaxDistance;
+}
+
+std::optional<size_t> GameMusic::SelectAttachedMusic(std::span<const AttachedMusicCandidate> candidates)
+{
+	const auto heard = std::ranges::find_if(candidates, [](const AttachedMusicCandidate& candidate) {
+		return candidate.hasBank && candidate.distance < candidate.range;
+	});
+	if (heard == candidates.end())
+	{
+		return std::nullopt;
+	}
+	return static_cast<size_t>(heard - candidates.begin());
+}
+
+void GameMusic::AttachMusic(uint32_t thing, MusicType type)
+{
+	const auto found = std::ranges::find(_attached, thing, &AttachedMusic::thing);
+	if (found != _attached.end())
+	{
+		found->type = type;
+		return;
+	}
+	if (Locator::audio::has_value())
+	{
+		if (const auto path = GetMusicBankPath(type); !path.empty())
+		{
+			Locator::audio::value().MusicStopBank(std::string(path), false);
+		}
+	}
+	_attached.insert(_attached.begin(), AttachedMusic {.thing = thing, .type = type});
+}
+
+void GameMusic::DetachMusic(uint32_t thing)
+{
+	std::erase_if(_attached, [thing](const AttachedMusic& music) { return music.thing == thing; });
+}
+
+void GameMusic::MoveMusic(uint32_t from, uint32_t to)
+{
+	const auto found = std::ranges::find(_attached, from, &AttachedMusic::thing);
+	if (found != _attached.end())
+	{
+		found->thing = to;
+	}
 }
 
 void GameMusic::StartScriptMusic(MusicType type)
@@ -227,6 +280,11 @@ void GameMusic::ProcessTurn(const TurnInputs& inputs)
 		_landMusicWasAllowed = allowed;
 	}
 	ProcessMusic(inputs);
+	// Music attached to an object that has gone goes with it
+	if (inputs.thingPosition)
+	{
+		std::erase_if(_attached, [&inputs](const AttachedMusic& music) { return !inputs.thingPosition(music.thing); });
+	}
 	if (_playing != before)
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("audio"), "Music Playing {} (alignment at the camera {:.2f}, the player's {:.2f})",
@@ -237,6 +295,11 @@ void GameMusic::ProcessTurn(const TurnInputs& inputs)
 void GameMusic::ProcessMusic(const TurnInputs& inputs)
 {
 	if (ProcessCitadel(inputs) || ProcessScript())
+	{
+		_landType = MusicType::None;
+		return;
+	}
+	if (ProcessAttached(inputs))
 	{
 		_landType = MusicType::None;
 		return;
@@ -323,6 +386,57 @@ bool GameMusic::ProcessScript()
 	                                        }});
 	_scriptStarted = true;
 	_playing = _scriptType;
+	return true;
+}
+
+// Music attached to an object plays, heard from the object, while the camera is in its range. Of several in range the
+// one attached most recently plays. It joins its music group in time, fades in and loops; out of range, other music
+// takes over.
+bool GameMusic::ProcessAttached(const TurnInputs& inputs)
+{
+	if (_attached.empty() || !inputs.thingPosition)
+	{
+		return false;
+	}
+	auto& audio = Locator::audio::value();
+	struct Heard
+	{
+		std::string path;
+		std::optional<MusicBankInfo> info;
+		glm::vec3 position;
+	};
+	std::vector<Heard> heard;
+	std::vector<AttachedMusicCandidate> candidates;
+	heard.reserve(_attached.size());
+	candidates.reserve(_attached.size());
+	for (const auto& music : _attached)
+	{
+		auto path = std::string(GetMusicBankPath(music.type));
+		auto info = path.empty() ? std::nullopt : audio.GetMusicBankInfo(path);
+		const auto position = inputs.thingPosition(music.thing);
+		candidates.push_back({
+		    .hasBank = info.has_value() && position.has_value(),
+		    .distance = position ? glm::distance(inputs.camera, *position) : 0.0f,
+		    .range = info ? AttachedMusicRange(info->maxDistance) : 0.0f,
+		});
+		heard.push_back({.path = std::move(path), .info = info, .position = position.value_or(glm::vec3(0.0f))});
+	}
+	const auto selected = SelectAttachedMusic(candidates);
+	if (!selected)
+	{
+		return false;
+	}
+	const auto& music = heard.at(*selected);
+	const auto groupId = music.info->groupId;
+	SaveResumeChunks();
+	audio.MusicPlay(music.path, MusicPlayOptions {
+	                                .volume = k_FullVolume,
+	                                .startChunk = GetResumeChunk(groupId),
+	                                .sync = groupId > 0,
+	                                .fadeIn = groupId > 0,
+	                                .position = music.position,
+	                            });
+	_playing = _attached.at(*selected).type;
 	return true;
 }
 

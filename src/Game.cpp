@@ -1391,6 +1391,15 @@ void Game::ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel)
 	    .playerAlignment = alignment.GetPlayerAlignment(Locator::playerSystem::value().GetLocalPlayer()),
 	    .cinema = cinema,
 	    .towns = {},
+	    .thingPosition = [](uint32_t thing) -> std::optional<glm::vec3> {
+		    const auto& registry = Locator::entitiesRegistry::value();
+		    const auto entity = static_cast<entt::entity>(thing);
+		    if (!registry.Valid(entity) || !registry.AllOf<ecs::components::Transform>(entity))
+		    {
+			    return std::nullopt;
+		    }
+		    return registry.Get<const ecs::components::Transform>(entity).position;
+	    },
 	};
 	Locator::entitiesRegistry::value().Each<const ecs::components::Town, const Tribe, const ecs::components::Transform>(
 	    [&music](const ecs::components::Town& town, const Tribe tribe, const ecs::components::Transform& transform) {

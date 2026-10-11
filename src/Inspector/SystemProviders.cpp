@@ -756,6 +756,21 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeAudioProvider(Audio
 				              playing += emitter.state == audio::AudioStatus::Playing ? 1 : 0;
 			              });
 		              }
+		              Json attached = Json::array();
+		              for (const auto& [music, thing] : state->attachedMusic)
+		              {
+			              attached.push_back({{"music", music}, {"thing", thing}});
+		              }
+		              Json channels = Json::array();
+		              for (const auto& channel : state->musicChannels)
+		              {
+			              Json item = {{"bank", channel.bank}, {"volume", channel.volume}};
+			              if (channel.position)
+			              {
+				              item["position"] = {channel.position->x, channel.position->y, channel.position->z};
+			              }
+			              channels.push_back(std::move(item));
+		              }
 		              return QueryResult::Value({{"global_volume", state->globalVolume},
 		                                         {"sfx_volume", state->sfxVolume},
 		                                         {"music_volume", state->musicVolume},
@@ -764,6 +779,8 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeAudioProvider(Audio
 		                                         {"land_music", state->landMusic},
 		                                         {"script_music", state->scriptMusic},
 		                                         {"alignment_music", state->alignmentMusic},
+		                                         {"attached_music", std::move(attached)},
+		                                         {"music_channels", std::move(channels)},
 		                                         {"sounds_playing", playing}});
 	              });
 	provider->Add(Query("sounds", "The sounds about a point, nearest first (sounds without a place are left out)", {},

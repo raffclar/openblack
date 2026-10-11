@@ -2418,6 +2418,24 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 			    state.landMusic = audio::GetMusicTypeName(music.GetLandType());
 			    state.scriptMusic = audio::GetMusicTypeName(music.GetScriptType());
 			    state.alignmentMusic = music.IsAlignmentMusicEnabled();
+			    for (const auto& attached : music.GetAttachedMusic())
+			    {
+				    state.attachedMusic.emplace_back(audio::GetMusicTypeName(attached.type), attached.thing);
+			    }
+		    }
+		    if (const auto* player = audio.GetMusic(); player != nullptr)
+		    {
+			    for (const auto& channel : player->GetChannels())
+			    {
+				    if (channel.active && channel.bank)
+				    {
+					    state.musicChannels.push_back({
+					        .bank = channel.bank->path,
+					        .volume = channel.volume,
+					        .position = channel.placement ? std::optional(channel.placement->position) : std::nullopt,
+					    });
+				    }
+			    }
 		    }
 		    return state;
 	    },

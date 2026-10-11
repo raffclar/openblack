@@ -61,6 +61,7 @@ public:
 	void StopMusic() override;
 	bool MusicPlay(const std::string& bankPath, const MusicPlayOptions& options) override;
 	void MusicStop(bool fadeOut) override;
+	void MusicStopBank(const std::string& bankPath, bool fadeOut) override;
 	[[nodiscard]] bool MusicIsActive() const override;
 	[[nodiscard]] std::optional<MusicBankInfo> GetMusicBankInfo(const std::string& bankPath) override;
 	[[nodiscard]] const MusicPlayer* GetMusic() const override { return _musicPlayer.get(); }

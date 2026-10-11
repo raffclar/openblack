@@ -42,10 +42,13 @@ public:
 	void Play(Stream stream) override;
 	[[nodiscard]] bool IsPlaying(Stream stream) const override;
 	void SetVolume(Stream stream, float volume) override;
+	void SetPlacement(Stream stream, const std::optional<MusicPlacement>& placement) override;
 	void Destroy(Stream stream) override;
 
 	/// The music and master volumes, applied on top of each stream's own
 	void SetOutputVolume(float volume);
+	/// Each placed stream's source and placement, for positioning it relative to the listener as the camera moves
+	void ForEachPlaced(const std::function<void(SourceId source, const MusicPlacement& placement)>& place) const;
 
 private:
 	struct StreamState
@@ -53,6 +56,7 @@ private:
 		SourceId source;
 		std::deque<BufferId> buffers;
 		float volume {0.0f};
+		std::optional<MusicPlacement> placement;
 		/// The chunk queued last and its length in frames, which the next chunk is decoded after
 		std::optional<uint32_t> lastChunk;
 		uint64_t lastChunkFrames {0};

@@ -12,8 +12,10 @@
 #include <cstdint>
 
 #include <array>
+#include <functional>
 #include <map>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -121,13 +123,40 @@ enum class MusicType : int32_t
 /// The game's music: once a game turn, picks what music plays and hands it to the audio library's music player.
 ///
 /// In order, the first that wants to play wins: the citadel's music while inside the citadel, music a script has
-/// started, and the music of the land under the camera. Over land the music follows the player's alignment, and near a
-/// town that of its tribe too. Each music group remembers where it got to, so the land's music carries on in time when
-/// it changes and picks up where it left off when it comes back.
-// TODO(raffclar): the game also plays creature fight, chant, creature dance and object music before the land's music
+/// started, music a script has attached to an object while the camera is near it, and the music of the land under the
+/// camera. Over land the music follows the player's alignment, and near a town that of its tribe too. Each music group
+/// remembers where it got to, so the land's music carries on in time when it changes and picks up where it left off when
+/// it comes back.
+// TODO(raffclar): the game also plays creature fight, chant and creature dance music before the attached music
 class GameMusic
 {
 public:
+	/// Music a script has attached to an object: heard from the object while the camera is near it
+	struct AttachedMusic
+	{
+		/// The object's entity
+		uint32_t thing;
+		MusicType type;
+	};
+
+	/// How an attached piece stands this turn, for choosing the one heard
+	struct AttachedMusicCandidate
+	{
+		/// Its bank is in the game's data
+		bool hasBank;
+		/// From the camera to its object
+		float distance;
+		/// How near the camera must be to hear it
+		float range;
+	};
+
+	/// How near the camera must be to an object to hear the music attached to it: as far as its bank says it carries,
+	/// or 100 for a bank that says nothing
+	[[nodiscard]] static float AttachedMusicRange(float bankMaxDistance);
+	/// The attached piece heard, if any: the first, from the most recently attached, whose bank is there and whose
+	/// object is in range
+	[[nodiscard]] static std::optional<size_t> SelectAttachedMusic(std::span<const AttachedMusicCandidate> candidates);
+
 	struct Town
 	{
 		glm::vec3 position;
@@ -152,6 +181,8 @@ public:
 		/// A script holds the cinema bars, or they are sliding in or out: the land's music waits
 		bool cinema;
 		std::vector<Town> towns;
+		/// Where an object with attached music is, none once it has gone
+		std::function<std::optional<glm::vec3>(uint32_t thing)> thingPosition;
 	};
 
 	GameMusic() = default;
@@ -172,6 +203,14 @@ public:
 	void StartScriptMusic(MusicType type);
 	/// The script command that turns the alignment music on or off
 	void SetAlignmentMusicEnabled(bool enabled) { _alignmentMusicEnabled = enabled; }
+	/// A script attaches music to an object, or changes the music already attached to it. Music attached afresh stops
+	/// its bank at once if it is playing.
+	void AttachMusic(uint32_t thing, MusicType type);
+	/// A script takes the music off an object
+	void DetachMusic(uint32_t thing);
+	/// A script moves an object's music to another object
+	void MoveMusic(uint32_t from, uint32_t to);
+	[[nodiscard]] const std::vector<AttachedMusic>& GetAttachedMusic() const { return _attached; }
 
 	// Debug introspection
 	[[nodiscard]] MusicType GetPlaying() const { return _playing; }
@@ -196,6 +235,7 @@ private:
 	void ProcessMusic(const TurnInputs& inputs);
 	bool ProcessCitadel(const TurnInputs& inputs);
 	bool ProcessScript();
+	bool ProcessAttached(const TurnInputs& inputs);
 	bool ProcessLand(const TurnInputs& inputs);
 	/// Remembers where each playing music group has got to
 	void SaveResumeChunks();
@@ -216,6 +256,8 @@ private:
 	std::optional<uint32_t> _rememberedTown;
 	/// 1-based chunk each music group carries on from
 	std::map<int32_t, uint32_t> _resumeChunks;
+	/// Music attached to objects, the most recently attached first
+	std::vector<AttachedMusic> _attached;
 };
 
 } // namespace openblack::audio

@@ -20,6 +20,8 @@
 #include <string>
 #include <vector>
 
+#include <glm/vec3.hpp>
+
 namespace openblack::audio
 {
 
@@ -35,6 +37,14 @@ struct MusicBank
 	uint32_t bankVolume {127};
 	/// Loop count from the first sample's header where it overrides the caller's
 	std::optional<int32_t> loopOverride;
+	/// A positional piece's distances from the first sample's header, where it overrides the player's (see
+	/// MusicPlacement)
+	std::optional<float> minDistance;
+	std::optional<float> maxDistance;
+	std::optional<float> distanceScale;
+	/// How far the music carries: the first sample's far distance whether or not its header overrides it, -1 for a bank
+	/// without samples
+	float musicMaxDistance {-1.0f};
 	/// How many chunks the bank's music is cut into
 	uint32_t chunkCount {0};
 	std::vector<uint32_t> chunkSampleRates;
@@ -47,6 +57,17 @@ struct MusicBank
 	{
 		return readChunk && chunk < chunkCount ? readChunk(chunk) : std::vector<uint8_t> {};
 	}
+};
+
+/// Where a positional piece is heard from in the world, and how it fades with its distance from the listener, as QSound
+/// maps it: every distance is first stretched by distanceScale; the piece is heard fully up to minDistance, beyond it at
+/// minDistance over the distance, and no quieter past maxDistance
+struct MusicPlacement
+{
+	glm::vec3 position;
+	float minDistance;
+	float maxDistance;
+	float distanceScale;
 };
 
 /// Where LHAudioDLL's music channels are streamed
@@ -71,6 +92,8 @@ public:
 	[[nodiscard]] virtual bool IsPlaying(Stream stream) const = 0;
 	/// Volume from 0 to 1, before the music and master volumes
 	virtual void SetVolume(Stream stream, float volume) = 0;
+	/// Places the stream in the world, or centres it on the listener when there is no placement
+	virtual void SetPlacement(Stream stream, const std::optional<MusicPlacement>& placement) = 0;
 	/// Stops the stream and releases it, the handle is invalid afterwards
 	virtual void Destroy(Stream stream) = 0;
 };
@@ -90,6 +113,12 @@ struct MusicPlayOptions
 	/// Fade in from silence rather than starting at full volume
 	bool fadeIn {false};
 	int32_t pitchPercent {100};
+	/// Positional music is heard from here in the world; otherwise it is centred on the listener
+	std::optional<glm::vec3> position;
+	/// A positional piece's distances, unless the bank's header overrides them
+	float minDistance {10.0f};
+	float maxDistance {100.0f};
+	float distanceScale {1.0f};
 	/// Called when the bank has played to its end
 	std::function<void()> onFinished;
 };
@@ -124,6 +153,8 @@ public:
 		bool sync {false};
 		int32_t pitchPercent {100};
 		std::function<void()> onFinished;
+		/// Where a positional channel is heard from
+		std::optional<MusicPlacement> placement;
 		MusicBackend::Stream stream {MusicBackend::k_InvalidStream};
 		/// 0-based chunks queued on the stream, oldest first
 		std::deque<uint32_t> queued;
@@ -140,8 +171,12 @@ public:
 	MusicPlayer(const MusicPlayer&) = delete;
 	MusicPlayer& operator=(const MusicPlayer&) = delete;
 
-	/// LHMusicPlay: plays a bank, or retargets the channel already playing it. Without a bank, fades all music out.
+	/// LHMusicPlay: plays a bank, or retargets the channel already playing it. Without a bank, fades all music out. A
+	/// positional channel already playing it is moved to the new position.
 	bool Play(const MusicPlayOptions& options);
+	/// Stops one bank: the channel playing it stops at once, unless asked to fade, which leaves it be. When
+	/// it is the channel heard, all the music stops as Stop does.
+	void StopBank(const std::shared_ptr<const MusicBank>& bank, bool fadeOut);
 	/// LHMusicStop: fades every channel out, or stops them at once
 	void Stop(bool fadeOut);
 	/// LHMusicIsActive
