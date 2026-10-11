@@ -3,6 +3,7 @@ $input v_texcoord0, v_texcoord1, v_lightColour, v_smallBumpFade, v_shadowCoord, 
 #include <bgfx_shader.sh>
 
 #include "creature_shadow.sh"
+#include "ground_shadow.sh"
 #include "snow.sh"
 #include "vortex_ground.sh"
 
@@ -172,7 +173,7 @@ void main()
 	// The creatures' shadows, which fade out towards the water's edge as the hand's does
 	if (u_creatureShadowInfo.x > 0.0f && v_shadowCoord.w > 0.0f)
 	{
-		col.rgb = col.rgb * CreatureShadowLight(v_world, 0.0f);
+		col.rgb = col.rgb * CreatureShadowLight(v_world);
 	}
 
 	// The small bump detail is a second layer over the lit land, its colour unlit, blended by its alpha whatever the
@@ -195,6 +196,11 @@ void main()
 		vec3 ringColour = min(ring.rgb * v_lightColour * v_haze.a + v_haze.rgb, vec3_splat(1.0f));
 		premultiplied = vec4(ringColour * ring.a + premultiplied.rgb * (1.0f - ring.a),
 		                     1.0f - (1.0f - premultiplied.a) * (1.0f - ring.a));
+	}
+	// The high-detail villagers' shadows are laid over all of it in black, after the land is drawn
+	if (u_groundShadowInfo.x > 0.0f && v_shadowCoord.w > 0.0f)
+	{
+		premultiplied.rgb = premultiplied.rgb * GroundShadowsLight(v_world, v_shadowCoord.w);
 	}
 	gl_FragColor = premultiplied;
 }

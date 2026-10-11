@@ -648,7 +648,16 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		            openblack::ecs::high_detail_rules::Shadow::Projected &&
 		        look.z != 1.0f)
 		    {
-			    _renderContext.highDetailDraws.push_back({.entity = entity, .mesh = drawnMesh, .model = modelMatrix});
+			    // Its shadow is cast by its model as the villager itself turns, before the body's own easing
+			    auto castModel = modelMatrix;
+			    if (villagerPose != nullptr && villagerPose->drawnHeading.has_value() &&
+			        villagerPose->easedHeading.has_value() && drawn == nullptr)
+			    {
+				    const auto turned = glm::mat4(openblack::ecs::villager_draw::RotationOf(*villagerPose->easedHeading));
+				    castModel = glm::scale(glm::translate(turned, drawnAt * glm::mat3(turned)), transform.scale);
+			    }
+			    _renderContext.highDetailDraws.push_back(
+			        {.entity = entity, .mesh = drawnMesh, .model = modelMatrix, .castModel = castModel});
 		    }
 		    if (slots->second.perEntity && placed.has_value())
 		    {

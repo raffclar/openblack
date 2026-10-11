@@ -739,3 +739,4 @@ openblack_setup_and_add_test(
   test_temple_people_rules temple/test_temple_people_rules.cpp
 )
 openblack_setup_and_add_test(test_camera_limits camera/test_camera_limits.cpp)
+openblack_setup_and_add_test(test_ground_shadow graphics/test_ground_shadow.cpp)

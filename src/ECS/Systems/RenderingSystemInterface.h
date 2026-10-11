@@ -162,12 +162,13 @@ struct RenderContext
 	};
 	std::vector<DrawnObject> drawnObjects;
 	/// The villagers a script draws in high detail this frame, with the model each wears and the matrix it is drawn by:
-	/// each casts a moving shadow on the land while it is
+	/// each casts a shadow on the land while it is, by the matrix of the villager as it turns before its body's easing
 	struct HighDetailDraw
 	{
 		entt::entity entity;
 		entt::id_type mesh;
 		glm::mat4 model;
+		glm::mat4 castModel;
 	};
 	std::vector<HighDetailDraw> highDetailDraws;
 	/// The rivers' stretches, whose beds and channels are laid into the land (see components::StreamSegment)
