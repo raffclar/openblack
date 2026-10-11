@@ -1213,18 +1213,38 @@ void SetScriptState() // 017 SET_SCRIPT_STATE
 
 void SetScriptStatePos() // 018 SET_SCRIPT_STATE_POS
 {
-	[[maybe_unused]] const auto position = PopVec();
-	[[maybe_unused]] const auto object = PopObject();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto position = PopVec();
+	const auto object = PopObject();
+	if (!Locator::entitiesRegistry::value().Valid(object))
+	{
+		ScriptMessage("Object no longer valid");
+		return;
+	}
+	if (!IsDirectableVillager(object))
+	{
+		// TODO(opening): groups of things
+		ScriptMessage("Object not villager for state data");
+		return;
+	}
+	Locator::livingActionSystem::value().VillagerSetScriptPlace(object, {position.x, position.z});
 }
 
 void SetScriptFloat() // 019 SET_SCRIPT_FLOAT
 {
-	[[maybe_unused]] const auto value = Popf();
-	[[maybe_unused]] const auto object = PopObject();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto value = Popf();
+	const auto object = PopObject();
+	if (!Locator::entitiesRegistry::value().Valid(object))
+	{
+		ScriptMessage("Object no longer valid");
+		return;
+	}
+	if (!IsDirectableVillager(object))
+	{
+		// TODO(opening): groups of things
+		ScriptMessage("Object not villager for state data");
+		return;
+	}
+	Locator::livingActionSystem::value().VillagerSetScriptNumber(object, value);
 }
 
 void SetScriptUlong() // 020 SET_SCRIPT_ULONG
@@ -1240,7 +1260,11 @@ void SetScriptUlong() // 020 SET_SCRIPT_ULONG
 	}
 	if (IsDirectableVillager(object))
 	{
-		Locator::livingActionSystem::value().VillagerSetScriptAnimation(object, static_cast<AnimId>(animation), plays);
+		// The pair serves whichever script state it goes into next: a clip and its plays for playing, the fewest and most
+		// turns to stand at each stop for wandering round a place
+		auto& living = Locator::livingActionSystem::value();
+		living.VillagerSetScriptNumbers(object, static_cast<uint32_t>(animation), plays);
+		living.VillagerSetScriptAnimation(object, static_cast<AnimId>(animation), plays);
 		return;
 	}
 	if (auto* mind = Locator::entitiesRegistry::value().TryGet<ecs::components::CreatureMindState>(object))

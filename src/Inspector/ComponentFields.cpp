@@ -155,6 +155,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/ScriptSpotVisual.h"
+#include "ECS/Components/ScriptStateArguments.h"
 #include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/Shark.h"
@@ -1243,6 +1244,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::ScriptHighlight::sparkSprites>("sparkSprites");
 	Reflect<components::ScriptHighlightGlow>(context).Field<&components::ScriptHighlightGlow::highlight>("highlight");
 	Reflect<components::ScriptSpotVisual>(context).Field<&components::ScriptSpotVisual::effect>("effect");
+	Reflect<components::ScriptStateArguments>(context)
+	    .Field<&components::ScriptStateArguments::place>("place")
+	    .Field<&components::ScriptStateArguments::number>("number")
+	    .Field<&components::ScriptStateArguments::first>("first")
+	    .Field<&components::ScriptStateArguments::second>("second");
 	Reflect<components::ScriptTimer>(context).Field<&components::ScriptTimer::timer>("timer");
 	Reflect<components::SeeThrough>(context).Field<&components::SeeThrough::alpha>("alpha");
 	Reflect<components::Shark>(context)
