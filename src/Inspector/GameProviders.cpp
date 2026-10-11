@@ -53,6 +53,7 @@
 #include "ECS/Components/Cloud.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Field.h"
@@ -2241,6 +2242,40 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		    locomotion.MoveTo(*creature, target, pace == "run" ? Locomotion::Pace::Run : Locomotion::Pace::Walk, 0.0f, 1.0f);
 		return QueryResult::Value({{"result", k_Results.at(static_cast<size_t>(result))}});
 	});
+	provider->Add(Query("route",
+	                    "A creature's walk in full: where it is going, the route it follows and the circles that route was "
+	                    "planned round (what it walks round, each grown by its own reach)",
+	                    {IdParameter("The creature")}),
+	              [](const QueryContext& context) {
+		              const auto* registry = Registry();
+		              const auto creature = EntityParam(context.params);
+		              if (registry == nullptr || !creature.has_value())
+		              {
+			              return QueryResult::Error("creatures.route needs a creature's id");
+		              }
+		              const auto* locomotion = registry->TryGet<const CreatureLocomotion>(*creature);
+		              if (locomotion == nullptr)
+		              {
+			              return QueryResult::Error("that isn't a creature that walks");
+		              }
+		              Json points = Json::array();
+		              for (const auto& point : locomotion->route.points)
+		              {
+			              points.push_back({point.x, point.y});
+		              }
+		              Json circles = Json::array();
+		              for (const auto& circle : locomotion->plannedRound)
+		              {
+			              circles.push_back({{"centre", {circle.centre.x, circle.centre.y}}, {"radius", circle.radius}});
+		              }
+		              return QueryResult::Value({{"destination", Optional(locomotion->destination)},
+		                                         {"motion", static_cast<int>(locomotion->motion)},
+		                                         {"radius", locomotion->radius},
+		                                         {"failed", locomotion->failed},
+		                                         {"segment", locomotion->route.segment},
+		                                         {"points", std::move(points)},
+		                                         {"circles", std::move(circles)}});
+	              });
 	return provider;
 }
 

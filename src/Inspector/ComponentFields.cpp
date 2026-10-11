@@ -593,11 +593,13 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureLocomotion::speeds>("speeds")
 	    .Field<&components::CreatureLocomotion::scale>("scale")
 	    .Field<&components::CreatureLocomotion::radius>("radius")
+	    .Field<&components::CreatureLocomotion::shownRadius>("shownRadius")
 	    .Field<&components::CreatureLocomotion::destination>("destination")
 	    .Field<&components::CreatureLocomotion::ring>("ring")
 	    .Field<&components::CreatureLocomotion::ontoDestination>("ontoDestination")
 	    .Field<&components::CreatureLocomotion::planner>("planner")
 	    .Field<&components::CreatureLocomotion::route>("route")
+	    .Field<&components::CreatureLocomotion::plannedRound>("plannedRound")
 	    .Field<&components::CreatureLocomotion::routeReady>("routeReady")
 	    .Field<&components::CreatureLocomotion::planningMs>("planningMs")
 	    .Field<&components::CreatureLocomotion::failed>("failed")
@@ -1988,6 +1990,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_planner::PlannerState::best>("best", {k_CreatureDesiresDesireNames})
 	    .Field<&openblack::creature_planner::PlannerState::nextGoal>("nextGoal")
 	    .Field<&openblack::creature_planner::PlannerState::current>("current");
+	Reflect<openblack::creature_route::Circle>(context, ValueOnly {})
+	    .Field<&openblack::creature_route::Circle::centre>("centre")
+	    .Field<&openblack::creature_route::Circle::radius>("radius");
 	Reflect<openblack::creature_route::Route>(context, ValueOnly {})
 	    .Field<&openblack::creature_route::Route::points>("points")
 	    .Field<&openblack::creature_route::Route::segment>("segment")
