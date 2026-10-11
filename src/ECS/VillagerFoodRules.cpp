@@ -87,8 +87,9 @@ villager_food_rules::MealPlan villager_food_rules::PlanMeal(const MealInputs& in
 	{
 		return eatHere;
 	}
-	// What it carries is already taken off what it needs, and counted again with its home's food
-	if (in.homeFood.has_value() && in.required <= *in.homeFood + static_cast<uint32_t>(static_cast<int32_t>(in.carried)))
+	// What it carries is already taken off what it needs, so only its home's food is counted (the game counted what it
+	// carries again: deviations register)
+	if (in.homeFood.has_value() && in.required <= *in.homeFood)
 	{
 		return in.atHome ? MealPlan::EatAtHome : MealPlan::GoHome;
 	}
@@ -108,11 +109,15 @@ villager_food_rules::MealPlan villager_food_rules::PlanMeal(const MealInputs& in
 
 villager_food_rules::Meal villager_food_rules::EatHeld(uint32_t amountToEat, int16_t carried, float food, float nourishment)
 {
+	// A meal of nothing leaves it as it is (the game emptied its belly: deviations register)
+	if (amountToEat == 0)
+	{
+		return {.eaten = 0, .food = food};
+	}
 	const auto meal = static_cast<float>(amountToEat);
 	const auto held = static_cast<float>(carried);
 	const float eaten = meal < held ? meal : held;
 	float full = food + eaten / meal * nourishment;
-	// A meal of nothing leaves nothing to compare, which the game takes as under empty
 	if (!(full >= 0.0f))
 	{
 		full = 0.0f;
