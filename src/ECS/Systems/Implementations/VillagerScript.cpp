@@ -145,7 +145,8 @@ void villager_script::MoveTo(entt::entity villager, glm::vec2 goal)
 	if (Locator::livingActionSystem::value().VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos,
 	                                                                               VillagerStates::InScript))
 	{
-		villager_home::SetupMobileMoveTo(action, goal, VillagerStates::InScript);
+		// A script's walk goes straight to the point, through anything in the way: buildings, gates, rocks
+		villager_home::SetupMobileMoveTo(action, goal, VillagerStates::InScript, villager_home::WalkWay::StraightThrough);
 	}
 }
 
