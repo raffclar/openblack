@@ -188,8 +188,9 @@ public:
 		std::optional<ObjectLook> objectLook;
 		/// The snow lying where the mesh stands shows on it
 		bool snow {false};
-		/// The creatures' shadows fall on the mesh, where its program takes them: not on the creatures themselves
-		bool creatureShadows {true};
+		/// The creatures' and the hand's moving shadows fall on the mesh, where its program takes them: not on the
+		/// creatures themselves, the hand or the villagers a script draws in high detail
+		bool groundShadows {true};
 		glm::vec3 lightAdd {0.0f};
 		/// A creature's body, blended from its base mesh, which is drawn, towards other meshes of the same shape: the
 		/// mesh each of the evil to good, thin to fat and weak to strong axes pulls towards, and how far

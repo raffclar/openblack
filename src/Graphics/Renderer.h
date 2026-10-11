@@ -17,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -32,7 +33,6 @@
 
 #include "3D/SkyDome.h"
 #include "Enums.h"
-#include "Graphics/CreatureShadow.h"
 #include "Graphics/GroundShadow.h"
 #include "Graphics/HandShadow.h"
 #include "Graphics/PartialBuildCap.h"
@@ -223,17 +223,25 @@ private:
 	void SetSeaUniforms(const ShaderProgram& waterShader, const Camera& camera) const;
 	/// Casts the shadows of the island's trees, rocks and buildings onto it (see ObjectShadows)
 	void DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const;
-	/// Draws the hand's silhouette for its shadow, or clears the shadow when there is none
-	void DrawHandShadowPass(const DrawSceneDesc& drawDesc) const;
-	/// Draws the silhouettes of the creatures nearest the camera from the light, for their shadows
-	void DrawCreatureShadowPass(const DrawSceneDesc& drawDesc) const;
-	/// Hands the creatures' shadows to a program that takes them, or none where it isn't to receive them
-	void SetCreatureShadowUniforms(const ShaderProgram& program, bool receives) const;
-	/// Draws the coverage of the silhouettes of the villagers a script draws in high detail, flattened onto the ground,
-	/// for their shadows (see GroundShadow)
+	/// Draws the coverage of the flattened silhouettes of the creatures, the hand and the villagers a script draws in
+	/// high detail, for their moving shadows on the land (see GroundShadow)
 	void DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const;
-	/// Hands the high-detail villagers' shadows to the land's program, or none where it isn't to receive them
+	/// One body of a moving shadow: a mesh in its pose, blended towards morph targets when given them
+	struct GroundShadowBody
+	{
+		const L3DMesh* mesh;
+		glm::mat4 model;
+		std::span<const glm::mat4> pose;
+		const L3DMeshSubmitDesc::MorphTargets* morph;
+		/// It covers only the second row of each texel's pair of sample rows, as the hand itself does
+		bool secondRowsOnly;
+	};
+	/// Adds a body's points in the world, its counted parts and what it writes, to those of the shadow being made
+	void AddGroundShadowBody(const GroundShadowBody& body) const;
+	/// Hands the moving shadows to the land's program, or none where it isn't to receive them
 	void SetGroundShadowUniforms(const ShaderProgram& program, bool receives) const;
+	/// Hands the moving shadows that fall on objects to an object's program, or none where it isn't to receive them
+	void SetObjectGroundShadowUniforms(const ShaderProgram& program, bool receives) const;
 	/// The uniforms the draws of meshes set, in the order of their names in the renderer
 	enum class MeshUniform : uint8_t
 	{
@@ -262,10 +270,8 @@ private:
 		Haze,
 		HazeColour,
 		ModelLight,
-		CreatureShadowInfo,
-		CreatureShadows,
-		CreatureShadowMatrix,
-		CreatureShadow,
+		GroundShadowInfo,
+		GroundShadowData,
 		SkyAlphaThreshold,
 		ObjectLook,
 		KeepBelow,
@@ -277,42 +283,40 @@ private:
 		_count
 	};
 	static constexpr std::array<std::string_view, static_cast<size_t>(MeshUniform::_count)> k_MeshUniformNames {
-	    "u_depthBias",            //
-	    "u_tint",                 //
-	    "u_glow",                 //
-	    "u_darkening",            //
-	    "u_morphWeights",         //
-	    "u_vertexBlend",          //
-	    "u_uvOffset",             //
-	    "u_seaClip",              //
-	    "u_snow",                 //
-	    "s_snowDepth",            //
-	    "s_snow",                 //
-	    "s_snowAlpha",            //
-	    "u_window",               //
-	    "s_diffuse",              //
-	    "s_lightmap",             //
-	    "s_environment",          //
-	    "s_heightmap",            //
-	    "u_islandExtent",         //
-	    "u_landLight",            //
-	    "s_landLuminosity",       //
-	    "s_landLight",            //
-	    "s_landColour",           //
-	    "u_haze",                 //
-	    "u_hazeColour",           //
-	    "u_modelLight",           //
-	    "u_creatureShadowInfo",   //
-	    "s_creatureShadows",      //
-	    "u_creatureShadowMatrix", //
-	    "u_creatureShadow",       //
-	    "u_skyAlphaThreshold",    //
-	    "u_objectLook",           //
-	    "u_keepBelow",            //
-	    "u_inset",                //
-	    "s_bonePalette",          //
-	    "u_creatureSpellLook",    //
-	    "u_shadeAt",              //
+	    "u_depthBias",         //
+	    "u_tint",              //
+	    "u_glow",              //
+	    "u_darkening",         //
+	    "u_morphWeights",      //
+	    "u_vertexBlend",       //
+	    "u_uvOffset",          //
+	    "u_seaClip",           //
+	    "u_snow",              //
+	    "s_snowDepth",         //
+	    "s_snow",              //
+	    "s_snowAlpha",         //
+	    "u_window",            //
+	    "s_diffuse",           //
+	    "s_lightmap",          //
+	    "s_environment",       //
+	    "s_heightmap",         //
+	    "u_islandExtent",      //
+	    "u_landLight",         //
+	    "s_landLuminosity",    //
+	    "s_landLight",         //
+	    "s_landColour",        //
+	    "u_haze",              //
+	    "u_hazeColour",        //
+	    "u_modelLight",        //
+	    "u_groundShadowInfo",  //
+	    "s_groundShadowData",  //
+	    "u_skyAlphaThreshold", //
+	    "u_objectLook",        //
+	    "u_keepBelow",         //
+	    "u_inset",             //
+	    "s_bonePalette",       //
+	    "u_creatureSpellLook", //
+	    "u_shadeAt",           //
 	};
 	using MeshUniforms = std::array<std::optional<UniformHandle>, static_cast<size_t>(MeshUniform::_count)>;
 	/// A program's handles of the mesh uniforms it has, looked up by name the first time it draws a mesh
@@ -387,7 +391,6 @@ private:
 	bool _bgfxDebug = false;
 	bool _bgfxProfile = false;
 
-	std::unique_ptr<FrameBuffer> _handShadowFrameBuffer;
 	/// How a creature's variant meshes are read to blend its body
 	std::unique_ptr<MorphStreamLayouts> _morphStreamLayouts;
 	/// Where the objects' shadows cover the island, laid out as its footprints are and made for the island's size
@@ -395,26 +398,32 @@ private:
 	/// The land seen from above for the temple's map, and the visit to the temple it was drawn for
 	mutable std::unique_ptr<FrameBuffer> _templeMapFrameBuffer;
 	mutable std::optional<uint32_t> _templeMapVisit;
-	/// The hand's shadow of the frame being drawn
-	mutable std::optional<HandShadow> _handShadow;
-	/// The creatures' silhouettes, a cell each, and the shadows of the frame being drawn
-	std::unique_ptr<FrameBuffer> _creatureShadowFrameBuffer;
-	mutable std::array<glm::mat4, CreatureShadow::k_MaxShadows> _creatureShadowMatrices {};
-	/// x: how much a fully covered texel darkens, y: where along the light the shadow starts
-	mutable std::array<glm::vec4, CreatureShadow::k_MaxShadows> _creatureShadowParameters {};
-	mutable uint8_t _creatureShadowCount {0};
-	/// The high-detail villagers' coverage samples, a slot each, and the shadows of the frame being drawn: where the land
-	/// falls on each, its opacity (x, 0 to 255), how far along the sun's way the land starts taking it (y) and its slot
-	/// (z), and the extent of its silhouette across x and z (low in xy, high in zw)
-	std::unique_ptr<FrameBuffer> _groundShadowFrameBuffer;
-	mutable std::array<glm::mat4, GroundShadow::k_MaxShadows> _groundShadowMatrices {};
-	mutable std::array<glm::vec4, GroundShadow::k_MaxShadows> _groundShadowParameters {};
-	mutable std::array<glm::vec4, GroundShadow::k_MaxShadows> _groundShadowBounds {};
-	mutable uint8_t _groundShadowCount {0};
-	/// The points of a high-detail villager's body in the world, and their sample points, made afresh for each
-	mutable std::vector<glm::vec3> _groundShadowPoints;
+	/// What the land and the objects read the shadows by, GroundShadow::k_DataTexels texels a shadow (see
+	/// ground_shadow.sh), then each land block's list of the shadows reaching it; grown by rows as needed
+	mutable std::unique_ptr<Texture2D> _groundShadowData;
+	mutable std::vector<glm::vec4> _groundShadowTexels;
+	/// The shadows of the frame being drawn, of which the first fall on objects too
+	mutable uint32_t _groundShadowCount {0};
+	mutable uint32_t _groundShadowsOnObjects {0};
+	/// Each land block's first entry in the lists, and how many shadows reach it, by the block's index
+	mutable std::vector<glm::vec2> _groundShadowBlocks;
+	/// A counted part of a shadow's bodies: a submesh, its first point and whether it covers only every second row of
+	/// samples
+	struct GroundShadowPart
+	{
+		const L3DSubMesh* subMesh;
+		uint32_t first;
+		bool secondRowsOnly;
+	};
+	/// The bodies of the shadow being made: their points in the world, their counted parts, their points on the grid of
+	/// samples and the samples covered, made afresh for each
+	mutable std::vector<GroundShadow::Point> _groundShadowPoints;
+	mutable std::vector<GroundShadowPart> _groundShadowParts;
+	mutable std::vector<glm::vec2> _groundShadowFlattened;
 	mutable std::vector<glm::vec2> _groundShadowSamples;
-	mutable std::vector<uint16_t> _groundShadowIndices;
+	mutable GroundShadow::Coverage _groundShadowCoverage;
+	/// The bones of the body being added, in the world
+	mutable std::vector<glm::mat4> _groundShadowBones;
 	/// The caps over the broken buildings' cut walls, by primitive and cut height; made afresh when a cut moves
 	mutable std::map<std::pair<const void*, float>, Cap> _caps;
 	/// The land's light this frame, and the 256 by 1 texture the terrain reads it from

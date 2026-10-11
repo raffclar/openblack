@@ -278,9 +278,6 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_vertex_blend test_vertex_blend.cpp)
 openblack_setup_and_add_test(
-  test_creature_shadow graphics/test_creature_shadow.cpp
-)
-openblack_setup_and_add_test(
   test_creature_locomotion test_creature_locomotion.cpp
 )
 openblack_setup_and_add_test(test_miracle_surfaces test_miracle_surfaces.cpp)
