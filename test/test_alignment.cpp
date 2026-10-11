@@ -36,6 +36,7 @@ class FakeInfluence final: public systems::InfluenceSystemInterface
 public:
 	void Reset() override {}
 	void ProcessTurn(uint32_t) override {}
+	void BordersChanged() override {}
 	void Update(std::chrono::duration<float, std::milli>) override {}
 	void ShowHandInfluence(std::chrono::duration<float, std::milli>) override {}
 	[[nodiscard]] float PlayerInfluence(PlayerNames player, const map_coords::MapCoords&) const override

@@ -203,6 +203,7 @@ enum class SoundId : entt::id_type
 	G_SpriteKnockGlass = entt::hashed_string("InGame.sad/162").value(),
 	G_SpriteSlapHead = entt::hashed_string("InGame.sad/163").value(),
 	G_SpriteFart = entt::hashed_string("InGame.sad/164").value(),
+	G_TakeOverTown_01 = entt::hashed_string("InGame.sad/205").value(),
 };
 
 enum class AudioStatus

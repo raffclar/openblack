@@ -28,7 +28,6 @@ struct Town
 	uint32_t id;
 	/// The player whose town it is
 	PlayerNames owner {PlayerNames::NEUTRAL};
-	std::unordered_map<std::string, float> beliefs;
 	bool uninhabitable = false;
 	/// Its people without a home, the newest first
 	std::vector<entt::entity> homelessVillagers;

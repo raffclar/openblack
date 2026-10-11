@@ -9,10 +9,12 @@
 
 #include "TownArchetype.h"
 
+#include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -28,12 +30,18 @@ entt::entity TownArchetype::Create(int id, const glm::vec3& position, PlayerName
 
 	auto& town = registry.Assign<Town>(entity, static_cast<uint32_t>(id), playerOwner);
 	// Its player gains it as it is made, after the towns it already has
-	// TODO(physics): a town that changes hands goes after the new player's other towns; nothing changes a town's player yet
 	town.gained = registry.Context().nextTownGained++;
 	registry.Assign<Tribe>(entity, tribe);
 	// What it wants, worked out each turn from its people and buildings
 	registry.Assign<TownDesire>(entity);
 	registry.Assign<TownStats>(entity);
+	// It believes in nobody yet; from its first turn it believes in the neutral player as the town tables say, until the
+	// land's script sets another belief
+	auto& impression = registry.Assign<TownImpression>(entity);
+	if (Locator::infoConstants::has_value())
+	{
+		impression.belief.neutral = Locator::infoConstants::value().town.beliefInNeutralPlayer;
+	}
 	registry.Assign<Transform>(entity, position, glm::mat3(1.0f), glm::vec3(1.0f));
 	auto& registryContext = registry.Context();
 	registryContext.towns.insert({id, entity});

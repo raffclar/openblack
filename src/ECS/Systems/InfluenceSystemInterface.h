@@ -32,6 +32,8 @@ public:
 	virtual void Reset() = 0;
 	/// Once a game turn: the towns' and citadels' reach, and the border drawn again every ten turns once one has moved
 	virtual void ProcessTurn(uint32_t turn) = 0;
+	/// A town has changed hands: the border is drawn again at its next turn for drawing
+	virtual void BordersChanged() = 0;
 	/// Once a frame: the border's texture scrolls with the game time, and while the game runs the hand crossing a border
 	/// sends out a ripple and a sound, and the ripples grow and fade
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;

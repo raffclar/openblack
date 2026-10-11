@@ -16,6 +16,8 @@
 #include <algorithm>
 #include <array>
 #include <optional>
+#include <utility>
+#include <vector>
 
 #include <glm/geometric.hpp>
 
@@ -48,6 +50,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/TownDesire.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -774,34 +777,66 @@ void ReactionSystem::ProcessTurn()
 void ReactionSystem::BelieveInTowns()
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const float decay = Locator::infoConstants::value().player.computerPlayerBeliefChangeDecay;
+	const auto& info = Locator::infoConstants::value();
+	const float decay = info.player.computerPlayerBeliefChangeDecay;
 	const float lostTownScale = registry.Context().mapScriptGlobals.lostTownScale;
+	// Towns that change hands this turn, given to their new players once every town has had its turn
+	std::vector<std::pair<entt::entity, PlayerNames>> claimed;
 	registry.Each<TownImpression>([&](entt::entity entity, TownImpression& impression) {
 		// Its boredom with each kind of reaction wears off, as long as it is still bored
 		for (auto& [type, boredom] : impression.boredom)
 		{
-			if (const auto* info = InfoOf(type))
+			if (const auto* reactionInfo = InfoOf(type))
 			{
-				boredom = magic::BoredomAtTownTurn(boredom, info->additionToTownBoredomMultipliers, lostTownScale);
+				boredom = magic::BoredomAtTownTurn(boredom, reactionInfo->additionToTownBoredomMultipliers, lostTownScale);
 			}
 		}
 		const auto gained = magic::town_belief::Turn(impression.belief, decay);
 		const auto* town = registry.TryGet<const Town>(entity);
-		if (gained.empty() || town == nullptr || !Locator::particleSystem::has_value())
+		if (town == nullptr)
 		{
 			return;
 		}
 		// The belief gained rises as a symbol from the town centre's foot, in the believer's colour
-		const auto centre = TownCentreOf(registry, town->id);
-		if (!centre.has_value())
+		if (!gained.empty() && Locator::particleSystem::has_value())
+		{
+			if (const auto centre = TownCentreOf(registry, town->id); centre.has_value())
+			{
+				for (const auto& [player, amount] : gained)
+				{
+					villager_reactions::ShowTownBelief(*centre, player, amount);
+				}
+			}
+		}
+		// The player it believes in most takes it; a player losing it believes less in every town they hold
+		const auto taker =
+		    magic::town_belief::Ownership(impression.belief, town->owner, info.belief.claimedTownBeliefMultiplier);
+		if (!taker.has_value())
 		{
 			return;
 		}
-		for (const auto& [player, amount] : gained)
+		const auto loser = town->owner;
+		if (loser != PlayerNames::NEUTRAL)
 		{
-			villager_reactions::ShowTownBelief(*centre, player, amount);
+			registry.Each<const Town>([&](entt::entity held, const Town& heldTown) {
+				auto* heldImpression = heldTown.owner == loser ? registry.TryGet<TownImpression>(held) : nullptr;
+				if (heldImpression != nullptr)
+				{
+					magic::town_belief::LostTown(heldImpression->belief, loser, info.belief.lostATownBeliefInPlayerMultiplier,
+					                             lostTownScale);
+				}
+			});
 		}
+		claimed.emplace_back(entity, *taker);
 	});
+	if (!Locator::townSystem::has_value())
+	{
+		return;
+	}
+	for (const auto& [town, player] : claimed)
+	{
+		Locator::townSystem::value().ClaimTown(town, player);
+	}
 }
 
 void ReactionSystem::Impress(const Active& reaction, entt::entity living, const glm::vec3& at)
