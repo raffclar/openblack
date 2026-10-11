@@ -250,10 +250,10 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
 
 GameInterface::~GameInterface() = default;
 
-void GameInterface::ShowSkipBox()
+void GameInterface::ShowSkipBox(bool currentProfileHasCreature)
 {
 	_skipBoxAnswer.reset();
-	_skipBox->Show();
+	_skipBox->Show(currentProfileHasCreature);
 	// The control under the pointer lights up at once
 	glm::ivec2 mouse;
 	SDL_GetMouseState(&mouse.x, &mouse.y);

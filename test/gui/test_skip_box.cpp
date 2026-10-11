@@ -7,8 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-// The start-of-game question a returning player is asked, and what each answer skips
+// The start-of-game question every new game asks, and what each answer skips
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -22,9 +23,11 @@
 
 using namespace openblack::gui;
 using namespace openblack::gui::test;
-using openblack::new_game_choice::AsksAtNewGame;
+using openblack::new_game_choice::AnswerAtOnce;
+using openblack::new_game_choice::AvailableChoice;
 using openblack::new_game_choice::Choice;
 using openblack::new_game_choice::ClampChoice;
+using openblack::new_game_choice::IsAvailable;
 using openblack::new_game_choice::NewGameStart;
 using openblack::new_game_choice::ParseNewGameStart;
 using openblack::new_game_choice::SkipFor;
@@ -59,7 +62,8 @@ struct SkipFixture
 	GameFont font = LoadFont();
 	SkipBox box {texts, font, DialogPainter::k_MidTextSize};
 
-	SkipFixture() { box.Show(); }
+	/// A returning player's profile, with a creature to keep
+	SkipFixture() { box.Show(true); }
 
 	SkipBox::MouseUpResult Click(glm::ivec2 point)
 	{
@@ -82,13 +86,47 @@ TEST(NewGameChoice, EachAnswerSkipsMoreThanTheOneBefore)
 	          (TutorialSkip {.skipTutorial = true, .skipCreatureTraining = true, .keepOldCreature = true}));
 }
 
-TEST(NewGameChoice, OnlyAReturningPlayerIsAsked)
+// Without the developers' start answering it, the question is put at every new game, a new player's too
+TEST(NewGameChoice, EveryNewGameIsAsked)
 {
-	EXPECT_FALSE(AsksAtNewGame(0, false));
-	EXPECT_FALSE(AsksAtNewGame(1, false));
-	EXPECT_TRUE(AsksAtNewGame(1, true));
-	EXPECT_TRUE(AsksAtNewGame(2, false));
-	EXPECT_TRUE(AsksAtNewGame(0, true));
+	for (const bool hasCreature : {false, true})
+	{
+		EXPECT_FALSE(AnswerAtOnce(std::nullopt, hasCreature).has_value());
+		EXPECT_FALSE(AnswerAtOnce(NewGameStart {}, hasCreature).has_value());
+		EXPECT_FALSE(AnswerAtOnce(NewGameStart {.ask = true}, hasCreature).has_value());
+	}
+}
+
+// Keeping the old creature needs one; nothing else depends on the profile
+TEST(NewGameChoice, KeepingTheOldCreatureNeedsOne)
+{
+	EXPECT_TRUE(IsAvailable(Choice::StartNormally, false));
+	EXPECT_TRUE(IsAvailable(Choice::SkipToCreatureSelect, false));
+	EXPECT_TRUE(IsAvailable(Choice::SkipCreatureTutorial, false));
+	EXPECT_FALSE(IsAvailable(Choice::KeepOldCreature, false));
+	EXPECT_TRUE(IsAvailable(Choice::KeepOldCreature, true));
+	EXPECT_EQ(AvailableChoice(Choice::KeepOldCreature, false), Choice::SkipCreatureTutorial);
+	EXPECT_EQ(AvailableChoice(Choice::KeepOldCreature, true), Choice::KeepOldCreature);
+	EXPECT_EQ(AvailableChoice(Choice::SkipToCreatureSelect, false), Choice::SkipToCreatureSelect);
+	// So the scripts are never told to keep a creature there isn't
+	for (int i = 0; i < 4; ++i)
+	{
+		EXPECT_FALSE(SkipFor(AvailableChoice(ClampChoice(i), false)).keepOldCreature);
+	}
+}
+
+// The developers' start answers at once exactly as before; only keeping a creature the profile hasn't got becomes
+// skipping all of the creature tutorial
+TEST(NewGameChoice, TheDevelopersStartAnswersAtOnce)
+{
+	for (const bool hasCreature : {false, true})
+	{
+		EXPECT_EQ(AnswerAtOnce(ParseNewGameStart("normal"), hasCreature), Choice::StartNormally);
+		EXPECT_EQ(AnswerAtOnce(ParseNewGameStart("creature"), hasCreature), Choice::SkipToCreatureSelect);
+		EXPECT_EQ(AnswerAtOnce(ParseNewGameStart("story"), hasCreature), Choice::SkipCreatureTutorial);
+	}
+	EXPECT_EQ(AnswerAtOnce(ParseNewGameStart("old"), true), Choice::KeepOldCreature);
+	EXPECT_EQ(AnswerAtOnce(ParseNewGameStart("old"), false), Choice::SkipCreatureTutorial);
 }
 
 TEST(NewGameChoice, SelectionsAreBroughtIntoRange)
@@ -184,7 +222,7 @@ TEST(SkipBox, AnswersOnlyWhenLetGoOverTheButton)
 	f.box.MouseMove({400, 300});
 	EXPECT_FALSE(f.box.MouseUp({400, 300}).answer.has_value());
 	// A button already held as the box came up isn't a click
-	f.box.Show();
+	f.box.Show(true);
 	EXPECT_FALSE(f.box.MouseUp(k_Ok).clicked);
 	EXPECT_TRUE(f.box.IsActive());
 }
@@ -203,6 +241,46 @@ TEST(SkipBox, FadesInAndOutAndKeepsTheAnswerPicked)
 	f.box.Update(0.11f);
 	EXPECT_FALSE(f.box.IsVisible());
 
-	f.box.Show();
+	f.box.Show(true);
 	EXPECT_EQ(f.box.GetSelection(), Choice::KeepOldCreature);
+}
+
+// A profile with no creature isn't offered to keep one: its radio button and answer are hidden in their places and
+// take no clicks, the other three answers staying where they are
+TEST(SkipBox, KeepingTheOldCreatureIsHiddenWithoutOne)
+{
+	SkipFixture f;
+	f.box.Show(false);
+	EXPECT_TRUE(f.box.IsActive());
+	EXPECT_TRUE(f.box.IsOffered(Choice::StartNormally));
+	EXPECT_TRUE(f.box.IsOffered(Choice::SkipToCreatureSelect));
+	EXPECT_TRUE(f.box.IsOffered(Choice::SkipCreatureTutorial));
+	EXPECT_FALSE(f.box.IsOffered(Choice::KeepOldCreature));
+	EXPECT_FALSE(f.Click(SkipBox::GetRadioRect(3).Centre()).clicked);
+	EXPECT_FALSE(f.Click(SkipBox::k_FirstAnswer + glm::ivec2(100, 44 * 3 + 5)).clicked);
+	EXPECT_EQ(f.box.GetSelection(), Choice::StartNormally);
+	f.Click(SkipBox::GetRadioRect(2).Centre());
+	EXPECT_EQ(f.box.GetSelection(), Choice::SkipCreatureTutorial);
+	const auto answered = f.Click(k_Ok);
+	ASSERT_TRUE(answered.answer.has_value());
+	EXPECT_EQ(*answered.answer, Choice::SkipCreatureTutorial);
+
+	// With a creature again it is offered once more
+	f.box.Show(true);
+	EXPECT_TRUE(f.box.IsOffered(Choice::KeepOldCreature));
+	EXPECT_TRUE(f.Click(SkipBox::GetRadioRect(3).Centre()).clicked);
+	EXPECT_EQ(f.box.GetSelection(), Choice::KeepOldCreature);
+}
+
+// Keeping the old creature picked last time, then a profile without one: the selection moves to what it stands for
+TEST(SkipBox, AKeptPickTheProfileCantTakeMoves)
+{
+	SkipFixture f;
+	f.Click(SkipBox::GetRadioRect(3).Centre());
+	f.Click(k_Ok);
+	f.box.Show(false);
+	EXPECT_EQ(f.box.GetSelection(), Choice::SkipCreatureTutorial);
+	const auto answered = f.Click(k_Ok);
+	ASSERT_TRUE(answered.answer.has_value());
+	EXPECT_FALSE(SkipFor(*answered.answer).keepOldCreature);
 }

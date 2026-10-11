@@ -19,7 +19,7 @@
 namespace openblack::new_game_choice
 {
 
-/// The four ways a returning player can start a new game, in the order the start-of-game question lists them
+/// The four ways a player can start a new game, in the order the start-of-game question lists them
 enum class Choice : uint8_t
 {
 	StartNormally,
@@ -48,11 +48,18 @@ struct TutorialSkip
 	return {.skipTutorial = level >= 1, .skipCreatureTraining = level >= 2, .keepOldCreature = level >= 3};
 }
 
-/// The question is only put to a player who has played before: when there are at least two player profiles, or the
-/// current profile already has a creature
-[[nodiscard]] constexpr bool AsksAtNewGame(size_t profileCount, bool currentProfileHasCreature) noexcept
+/// Whether a choice can be taken: keeping the old creature needs a creature the current profile has kept. The question
+/// itself is put at every new game (the original only asked a player with two or more profiles or a kept creature).
+[[nodiscard]] constexpr bool IsAvailable(Choice choice, bool currentProfileHasCreature) noexcept
 {
-	return profileCount >= 2 || currentProfileHasCreature;
+	return choice != Choice::KeepOldCreature || currentProfileHasCreature;
+}
+
+/// A choice brought to one that can be taken. Keeping the old creature with none kept becomes skipping all of the
+/// creature tutorial, which is what the first land's scripts do with that answer when there is no creature to keep.
+[[nodiscard]] constexpr Choice AvailableChoice(Choice choice, bool currentProfileHasCreature) noexcept
+{
+	return IsAvailable(choice, currentProfileHasCreature) ? choice : Choice::SkipCreatureTutorial;
 }
 
 /// A selection brought into the range of the choices
@@ -61,9 +68,9 @@ struct TutorialSkip
 	return static_cast<Choice>(std::clamp(selection, 0, static_cast<int>(k_ChoiceCount) - 1));
 }
 
-/// How a developer or an agent starts a new game from the command line or the inspector (not in the original game,
-/// which only asks a returning player): asked the start-of-game question whatever the profiles, or with the question
-/// answered at once, the story then going exactly as it does after the player answers it
+/// How a developer or an agent starts a new game from the command line or the inspector (not in the original game):
+/// with the start-of-game question answered at once, the story then going exactly as it does after the player answers
+/// it, or asked it as every new game is
 struct NewGameStart
 {
 	bool ask {false};
@@ -71,6 +78,18 @@ struct NewGameStart
 
 	[[nodiscard]] constexpr bool operator==(const NewGameStart&) const = default;
 };
+
+/// How a new game's start-of-game question is answered: at once with the developers' start's answer (one the box would
+/// offer), or, with nothing, put to the player, as every new game puts it
+[[nodiscard]] constexpr std::optional<Choice> AnswerAtOnce(const std::optional<NewGameStart>& start,
+                                                           bool currentProfileHasCreature) noexcept
+{
+	if (!start.has_value() || !start->answer.has_value())
+	{
+		return std::nullopt;
+	}
+	return AvailableChoice(*start->answer, currentProfileHasCreature);
+}
 
 /// "ask", "normal", "creature" (straight to choosing a creature), "story" (skip all of the creature's tutorial too)
 /// or "old" (keep the old creature); nothing for anything else

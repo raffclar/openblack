@@ -77,6 +77,7 @@ SkipBox::SkipBox(const TextDatabase& texts, const GameFont& font, int textSize)
 		auto& answer = _dialog.Add<StaticText>(DialogRect {.min = top, .max = top + k_AnswerSize}, _answers.at(i),
 		                                       StaticText::Layout::WrappedLeft, textSize);
 		answer.takesClicks = true;
+		_answerTexts.at(i) = &answer;
 	}
 }
 
@@ -107,8 +108,21 @@ void SkipBox::ShowSelection()
 	}
 }
 
-void SkipBox::Show()
+bool SkipBox::IsOffered(Choice choice) const noexcept
 {
+	return _radios.at(static_cast<size_t>(choice))->visible;
+}
+
+void SkipBox::Show(bool currentProfileHasCreature)
+{
+	// A choice that can't be taken is hidden, the others keeping their places
+	for (size_t i = 0; i < new_game_choice::k_ChoiceCount; ++i)
+	{
+		const bool offered = new_game_choice::IsAvailable(static_cast<Choice>(i), currentProfileHasCreature);
+		_radios.at(i)->visible = offered;
+		_answerTexts.at(i)->visible = offered;
+	}
+	_selection = new_game_choice::AvailableChoice(_selection, currentProfileHasCreature);
 	_active = true;
 	_answer.reset();
 	_dialog.Reset();
