@@ -155,6 +155,8 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
     , _inputTarget(std::make_unique<inspector::GameInput>())
     , _controls(std::make_unique<inspector::GameControlSet>(*_inputTarget))
 {
+	// Points of the world are found on the screen through the view drawn, an override's while one is shown
+	_inputTarget->SetCamera(_controls->camera);
 	inspector::reflection::RegisterComponents(*_reflection);
 	_inspector.SetWriteLog([](const inspector::Request& request, const inspector::QueryResult& answer) {
 		if (answer.Ok())
@@ -325,6 +327,12 @@ void InspectorSystem::PlaceCamera()
 void InspectorSystem::GiveCameraBack()
 {
 	_controls->camera.Unpin();
+}
+
+void InspectorSystem::ShowOverrideToPointer()
+{
+	// Given back by GiveCameraBack
+	static_cast<void>(inspector::ShowOverrideToPointer(_controls->camera));
 }
 
 uint16_t InspectorSystem::GetPort() const

@@ -38,9 +38,12 @@ public:
 	/// Once a frame, just before it is drawn, after everything the game does with its camera: the frame is drawn from
 	/// where the inspector shows the camera (an override, a picture's camera or framing), over whatever holds it
 	virtual void PlaceCamera() = 0;
-	/// Once the frame is drawn: the camera gets its own place back, so that the rest of the game (the hand, picking,
-	/// the sound) goes by the game's own camera, never by the one shown
+	/// Once the frame is drawn, and after the pointer's work: the camera gets its own place back, so that the rest of
+	/// the game (the sound, the scripts, the camera's own movement) goes by the game's own camera, never by the one shown
 	virtual void GiveCameraBack() = 0;
+	/// While the game goes by its pointer (the hand's ray, picking under the cursor): an override is the view that is
+	/// seen, so the pointer goes through it, until GiveCameraBack. A picture's camera is never shown here.
+	virtual void ShowOverrideToPointer() = 0;
 };
 
 } // namespace openblack::ecs::systems

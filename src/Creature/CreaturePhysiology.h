@@ -167,6 +167,12 @@ void TakeUp(Needs& needs, const Kept& kept);
 /// One game turn of the body as time passes, before the stage of growing up from which the body changes nothing
 void TickTurn(Needs& needs, Shape& shape, const Species& species, const Turn& turn);
 
+/// A creature a script scales to the player's creature: each turn its size goes halfway to that creature's size times
+/// the share the script gave, never above 2
+constexpr float k_AutoScaleEasing = 0.5f;
+constexpr float k_AutoScaleLargest = 2.0f;
+[[nodiscard]] float AutoScaledSize(float size, float playersSize, float share);
+
 /// Gains strength, within 0 and 1
 void ModifyStrength(Shape& shape, float amount);
 

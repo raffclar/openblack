@@ -302,6 +302,11 @@ constexpr float k_LifeLostShare = 0.25f;
 /// A creature this healthy or less won't start a fight
 constexpr float k_MinLifeToFight = 0.1f;
 [[nodiscard]] bool HealthyEnoughToFight(float life);
+/// A creature asked to fight agrees only to one between half and twice its own height, not while it lies dead, and only
+/// when both or neither of them are under a script's control
+constexpr float k_SmallestOpponentShare = 0.5f;
+constexpr float k_BiggestOpponentShare = 2.0f;
+[[nodiscard]] bool AgreesToFight(float height, float askerHeight, bool dead, bool scripted, bool askerScripted);
 /// Knocked out, a creature lies 8 seconds and 4 more for each of its size
 [[nodiscard]] float FaintSeconds(float size);
 /// Taken home (fizzing out and back in, see creature_fizz), it waits this long before resting

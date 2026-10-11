@@ -32,6 +32,7 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Transform.h"
@@ -200,6 +201,19 @@ void CreaturePhysiologySystem::ProcessTurn()
 	_owedTurns -= static_cast<float>(turns);
 	const bool night = IsNight();
 	bool resized = false;
+	// The player's creature, whose size the creatures scripts scale to follow
+	std::optional<float> playersSize;
+	if (Locator::playerSystem::has_value())
+	{
+		if (const auto players = Locator::playerSystem::value().GetPrimaryCreature(PlayerNames::PLAYER_ONE);
+		    players.has_value() && registry.Valid(*players))
+		{
+			if (const auto* body = registry.TryGet<const Creature>(*players))
+			{
+				playersSize = body->size;
+			}
+		}
+	}
 
 	registry.Each<Creature, CreatureNeeds>([&](entt::entity entity, Creature& creature, CreatureNeeds& needs) {
 		const auto species = SpeciesOf(creature.species);
@@ -223,8 +237,14 @@ void CreaturePhysiologySystem::ProcessTurn()
 		    .turnsPerSecond = k_TurnsPerSecond,
 		};
 		auto shape = ShapeOf(creature);
+		// Not while a hand holds it
+		const bool autoScaled = creature.autoScale.has_value() && playersSize.has_value() && !registry.AllOf<InHand>(entity);
 		for (uint32_t i = 0; i < turns; ++i)
 		{
+			if (autoScaled)
+			{
+				shape.size = physiology::AutoScaledSize(shape.size, *playersSize, *creature.autoScale);
+			}
 			physiology::TickTurn(needs.needs, shape, species, turn);
 			// Asleep or resting, it heals and rests, and may be ready to wake
 			if (turn.asleep || turn.resting)

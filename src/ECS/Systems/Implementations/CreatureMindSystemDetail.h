@@ -61,6 +61,9 @@ namespace openblack::ecs::systems::mind_detail
 /// Having done an action, the desire it satisfies is less, by the game's action table: multiplied by the action's
 /// multiplier, no lower than the species' floor for desires
 void Lessen(entt::entity creature, creature_desires::Desires& desires, std::string_view action);
+/// The least a creature's desires are lessened to by its actions, or wanted while another is made dominant, by its
+/// species
+[[nodiscard]] float DesireFloorOf(entt::entity creature);
 /// Having done an action, its body pays for it
 void BodyPaysFor(entt::entity creature, std::string_view action);
 /// Both, as a step that takes effect at once does
