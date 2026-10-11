@@ -36,6 +36,7 @@
 #include "Input/ShortcutKeys.h"
 #include "Magic/HandHoldPoser.h"
 #include "Story/NewGameChoice.h"
+#include "Windowing/SizeFollower.h"
 #include "Windowing/WindowingInterface.h" // For DisplayMode
 
 union SDL_Event;
@@ -267,6 +268,9 @@ private:
 	void EndLoadingScreen();
 	/// Draws one frame outside the game's loop over a black screen and shows it
 	void PresentStartupFrame(const std::function<void(glm::u16vec2 resolution)>& draw);
+	/// Draws at the window's size from this frame on if it changed: the back buffer, the views over the whole screen,
+	/// the sea's reflection and the camera's shape follow it, on whichever screen is up
+	void FollowWindowSize();
 	/// Whether the player has a profile: openblack keeps none yet, so it counts as having one
 	[[nodiscard]] static bool HasPlayerProfiles() noexcept { return true; }
 
@@ -281,6 +285,8 @@ private:
 	const LoadTimer::Clock::time_point _launchTime {LoadTimer::Clock::now()};
 	/// Times the start of the game, from its launch to the first frame drawn on the first land
 	std::optional<LoadTimer> _startupTimer;
+	/// The size drawn at, following the window's
+	windowing::SizeFollower _windowSize;
 	/// Times the loading of every resource registered at the start, on the loading threads or where first wanted
 	std::optional<LoadTimer> _prefetchTimer;
 

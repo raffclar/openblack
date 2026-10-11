@@ -99,6 +99,8 @@ uint32_t Milliseconds()
 void Game::PresentStartupFrame(const std::function<void(glm::u16vec2 resolution)>& draw)
 {
 	auto& renderer = Locator::rendererInterface::value();
+	// The window may have been resized, maximised or restored since the last frame, whose events these screens take
+	FollowWindowSize();
 	const auto resolution = static_cast<glm::u16vec2>(Locator::windowing::value().GetSize());
 	// Each frame starts from black
 	renderer.ConfigureView(graphics::RenderPass::Main, resolution, k_StartupClearColour);

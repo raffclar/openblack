@@ -137,6 +137,12 @@ Camera& Camera::SetNearClip(float nearClip)
 	return *this;
 }
 
+Camera& Camera::SetAspect(float aspect)
+{
+	_aspect = aspect;
+	return SetNearClip(_nearClip);
+}
+
 Camera& Camera::SetInterpolatorTime(std::chrono::microseconds t)
 {
 	_interpolatorTime = t;
