@@ -13,8 +13,12 @@
 
 #include <array>
 #include <optional>
+#include <span>
 
+#include <glm/mat3x3.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
 /// The camera's helper icons by the hand: the pitch arrow, the rotate arrow, the zoom glass and the red cross, cut from
@@ -109,7 +113,7 @@ struct WorldCameraIcons
 };
 [[nodiscard]] WorldCameraIcons WorldCamera(const WorldCameraFrame& frame, float rotateAngle);
 /// Once the clear view has come in further than this, the world camera's icons sit at the hand without leaning towards
-/// its last grip
+/// the cursor
 constexpr float k_ClearViewLeans = 0.01f;
 
 /// How the cross is nudged this frame in the world camera: brighter with a thing under the hand, full at once with the
@@ -137,9 +141,16 @@ struct FadeFrame
 /// faint mark)
 void Fade(Fades& fades, const FadeFrame& frame);
 
-/// Where the icons go on the screen: three quarters of the way from the hand's last gripping point to the hand (at the
-/// hand when they don't lean), kept inside the picture between the cinema bars when they are on
-[[nodiscard]] glm::ivec2 Place(glm::ivec2 hand, glm::ivec2 lastGrip, glm::ivec2 screen, bool cinemaBars, bool leans);
+/// The point of the world the icons are anchored to: the posed hand's first bone, at its wrist, rather than the point
+/// the hand hovers at (which its fingertips reach). `position`, `rotation` and `scale` place the hand's model, `bones`
+/// are its posed bones in model space. Without bones, the hand's own position.
+[[nodiscard]] glm::vec3 AnchorPoint(const glm::vec3& position, const glm::mat3& rotation, const glm::vec3& scale,
+                                    std::span<const glm::mat4> bones);
+
+/// Where the icons go on the screen: three quarters of the way from the cursor to where the hand is drawn (at the hand
+/// when they don't lean), kept inside the picture between the cinema bars when they are on. The cursor is the one the
+/// hand follows this frame, held on the turning ring while the edge of the screen turns the camera.
+[[nodiscard]] glm::ivec2 Place(glm::ivec2 hand, glm::ivec2 cursor, glm::ivec2 screen, bool cinemaBars, bool leans);
 
 /// One icon to draw: its corners on the screen (top left, top right, bottom right, bottom left), the matching places on
 /// atmos.raw, and its white's alpha
