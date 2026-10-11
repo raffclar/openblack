@@ -1854,6 +1854,14 @@ void GetPosition() // 023 GET_POSITION
 			// Where it is this turn, not where it is drawn on the way there
 			position = shark->position;
 		}
+		else if (const auto* wallHug = registry.TryGet<const ecs::components::WallHug>(object);
+		         wallHug != nullptr && transform != nullptr && !registry.AllOf<ecs::components::Creature>(object) &&
+		         ecs::villager_script_rules::WithinAStepOfGoal(glm::vec2(transform->position.x, transform->position.z),
+		                                                       wallHug->goal, wallHug->speed))
+		{
+			// A walker within a turn's step of where it is walking to is seen there, on the ground
+			position = {wallHug->goal.x, Locator::terrainSystem::value().GetHeightAt(wallHug->goal), wallHug->goal.y};
+		}
 		else if (transform != nullptr)
 		{
 			position = transform->position;
