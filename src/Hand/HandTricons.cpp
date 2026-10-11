@@ -263,11 +263,13 @@ glm::ivec2 Place(glm::ivec2 hand, glm::ivec2 cursor, glm::ivec2 screen, bool cin
 {
 	int x = leans ? ((hand.x * 3) + cursor.x) / 4 : hand.x;
 	int y = leans ? ((hand.y * 3) + cursor.y) / 4 : hand.y;
-	// With the cinema bars on, the picture is 16:9 across the screen's width, whatever the bars' slide
+	// With the cinema bars on, the picture is 16:9 across the screen's width, whatever the bars' slide; screens as wide
+	// as 16:9 or wider have no bars
 	int visibleHeight = screen.y;
 	if (cinemaBars)
 	{
-		visibleHeight -= static_cast<int>(static_cast<float>(screen.y) - (static_cast<float>(screen.x) * (9.0f / 16.0f)));
+		visibleHeight = std::min(screen.y, visibleHeight - static_cast<int>(static_cast<float>(screen.y) -
+		                                                                    (static_cast<float>(screen.x) * (9.0f / 16.0f))));
 	}
 	x = x > k_EdgeMargin ? std::min(x, screen.x - k_EdgeMargin) : k_EdgeMargin;
 	const int top = (screen.y - visibleHeight) / 2;
