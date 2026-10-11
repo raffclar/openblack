@@ -76,6 +76,27 @@ public:
 	int asked {0};
 };
 
+/// A provider with so many long-described queries that its catalogue is larger than an ordinary answer may be
+class ManyQueriesProvider final: public ProviderInterface
+{
+public:
+	[[nodiscard]] std::string_view Name() const override { return "many"; }
+	[[nodiscard]] std::vector<QueryDescription> Describe() const override
+	{
+		std::vector<QueryDescription> queries;
+		for (int i = 0; i < 40; ++i)
+		{
+			queries.push_back({.name = "query" + std::to_string(i),
+			                   .description = std::string(600, 'd'),
+			                   .parameters = {},
+			                   .kind = ResultKind::Object,
+			                   .needsNear = false});
+		}
+		return queries;
+	}
+	[[nodiscard]] QueryResult Run(std::string_view, const QueryContext&) override { return QueryResult::Value(Json()); }
+};
+
 Json Ask(const Inspector& inspector, const std::string& line)
 {
 	const auto answer = Parse(inspector.Handle(line));
@@ -232,6 +253,22 @@ TEST(Inspector, DescribeListsProvidersAndQueries)
 
 	const auto provider = Ask(inspector, R"({"query": "describe", "params": {"provider": "fake"}})");
 	EXPECT_EQ(provider["result"]["queries"].size(), 3u);
+}
+
+TEST(Inspector, DescribeAnswersTheWholeCataloguePastAnOrdinaryAnswersSize)
+{
+	Inspector inspector;
+	inspector.Add(std::make_unique<ManyQueriesProvider>());
+
+	const auto all = Ask(inspector, R"({"query": "describe"})");
+	ASSERT_EQ(all["ok"], true);
+	ASSERT_TRUE(all["result"].contains("providers"));
+	EXPECT_EQ(all["result"]["providers"]["many"].size(), 40u);
+	EXPECT_GT(Dump(all["result"]).size(), k_DefaultMaxBytes);
+
+	// A caller's own max_bytes still holds
+	const auto small = Ask(inspector, R"({"query": "describe", "max_bytes": 1000})");
+	EXPECT_EQ(small["result"]["truncated"], true);
 }
 
 TEST(Inspector, RunsQueriesAndShapesThem)
