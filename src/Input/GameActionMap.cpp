@@ -15,6 +15,7 @@
 #include <utility>
 
 #include <SDL_events.h>
+#include <SDL_mouse.h>
 #include <glm/common.hpp>
 #include <glm/gtc/constants.hpp>
 #include <spdlog/spdlog.h>
@@ -28,6 +29,17 @@
 #include "Windowing/WindowingInterface.h"
 
 using namespace openblack::input;
+
+namespace
+{
+
+glm::ivec2 WindowSize()
+{
+	using openblack::Locator;
+	return Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::ivec2(1, 1);
+}
+
+} // namespace
 
 GameActionMap::GameActionMap()
 {
@@ -245,11 +257,50 @@ uint32_t GameActionMap::PointerState(glm::ivec2* position) const
 		}
 		return 0;
 	}
+	// Until the window has had the player's cursor, SDL has it in the top left corner; it rests in the middle instead
+	if (!_playerCursorSeen)
+	{
+		if (position != nullptr)
+		{
+			*position = RestingPointer(WindowSize());
+		}
+		return SDL_GetMouseState(nullptr, nullptr);
+	}
 	if (position != nullptr)
 	{
 		return SDL_GetMouseState(&position->x, &position->y);
 	}
 	return SDL_GetMouseState(nullptr, nullptr);
+}
+
+void GameActionMap::RestPointerUntilCursorSeen()
+{
+	if (_playerCursorSeen)
+	{
+		return;
+	}
+	// SDL knows where the cursor is from the first time the window has it under it
+	if (Locator::windowing::has_value())
+	{
+		const auto* window = Locator::windowing::value().GetHandle();
+		_playerCursorSeen = window != nullptr && SDL_GetMouseFocus() == window;
+	}
+	if (!_playerCursorSeen && !_scriptedPointer.has_value())
+	{
+		_mousePosition = glm::uvec2(RestingPointer(WindowSize()));
+	}
+}
+
+void GameActionMap::LockChanged(bool wasLocked)
+{
+	// The player's cursor is kept out wherever it was, maybe on an edge of the window, which would turn or tilt the
+	// camera; the agent's pointer starts in the middle, unless it has already taken the pointer
+	if (!wasLocked && _lock.Locked() && !_scriptedPointer.has_value())
+	{
+		_mousePosition = glm::uvec2(RestingPointer(WindowSize()));
+		_cursorPinnedAt.reset();
+	}
+	LogLock(wasLocked);
 }
 
 void GameActionMap::LogLock(bool wasLocked) const
@@ -274,14 +325,14 @@ void GameActionMap::SetInputLockMode(LockMode mode)
 {
 	const bool was = _lock.Locked();
 	_lock.SetMode(mode);
-	LogLock(was);
+	LockChanged(was);
 }
 
 void GameActionMap::UpdateInputLock(bool clientConnected, float seconds)
 {
 	const bool was = _lock.Locked();
 	_lock.Update(clientConnected, seconds);
-	LogLock(was);
+	LockChanged(was);
 }
 
 bool GameActionMap::AdmitEvent(const SDL_Event& event)
@@ -408,6 +459,7 @@ void GameActionMap::Frame()
 {
 	_cursorWarp.reset();
 	ReleaseKeysNoLongerHeld();
+	RestPointerUntilCursorSeen();
 
 	// Lets go of the buttons whose letting go went elsewhere, as to the menu or the debug windows
 	const auto heldButtons = PointerState(nullptr);

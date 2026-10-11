@@ -36,6 +36,7 @@ public:
 	[[nodiscard]] std::optional<CameraPose> Override() const override { return _override; }
 	[[nodiscard]] float GroundHeight(glm::vec2 point) const override;
 	[[nodiscard]] std::optional<glm::vec3> EntityPosition(uint32_t id) const override;
+	[[nodiscard]] std::optional<CameraKeepers> Keepers(const CameraPose& pose) const override;
 
 private:
 	/// The camera's own state while it is shown elsewhere for a frame
