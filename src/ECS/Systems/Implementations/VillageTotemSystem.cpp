@@ -91,19 +91,38 @@ void VillageTotemSystem::AddToPlayer(entt::entity totem)
 			iconTransform->rotation = transform.rotation;
 		}
 	}
-	// The player's creature stands on top, or the hand, on the second totem too. It is drawn afresh where it stands, which
-	// shows no tooltip.
-	const auto iconMesh = _world->IconMeshFor(townComponent.owner);
-	for (const auto icon : {totemComponent->icon, totemComponent->ghostIcon})
+	ShowIcon(*totemComponent, _world->IconMeshFor(townComponent.owner));
+	totemComponent->lastShownRise.reset();
+	totemComponent->quietOnce = true;
+	SetTownShare(town, 0.0f);
+}
+
+void VillageTotemSystem::ShowIcon(const VillageTotem& totem, entt::id_type iconMesh)
+{
+	// The player's creature stands on top, or the hand, on the second totem too. It is drawn afresh where it stands,
+	// which shows no tooltip.
+	auto& registry = _world->Entities();
+	for (const auto icon : {totem.icon, totem.ghostIcon})
 	{
 		if (auto* mesh = registry.Valid(icon) ? registry.TryGet<Mesh>(icon) : nullptr)
 		{
 			mesh->id = iconMesh;
 		}
 	}
-	totemComponent->lastShownRise.reset();
-	totemComponent->quietOnce = true;
-	SetTownShare(town, 0.0f);
+}
+
+void VillageTotemSystem::RefreshIcons(PlayerNames player)
+{
+	auto& registry = _world->Entities();
+	const auto iconMesh = _world->IconMeshFor(player);
+	registry.Each<const VillageTotem>([&](entt::entity totem, const VillageTotem& totemComponent) {
+		const auto town = TownOf(totem);
+		const auto* townComponent = town != entt::null ? registry.TryGet<const Town>(town) : nullptr;
+		if (townComponent != nullptr && townComponent->owner == player)
+		{
+			ShowIcon(totemComponent, iconMesh);
+		}
+	});
 }
 
 void VillageTotemSystem::SetTotemShare(entt::entity totem, float share)
