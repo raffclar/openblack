@@ -7,6 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <array>
+#include <vector>
+
 #include <gtest/gtest.h>
 
 #include "Magic/ResourcePiles.h"
@@ -115,6 +118,21 @@ TEST(ResourcePiles, OnlyPilesLeadingOnHoldNoMoreThanFull)
 	EXPECT_EQ(AmountTaken(900, 300, 1000, true), 100u);
 	EXPECT_EQ(AmountTaken(900, 300, 1000, false), 300u);
 	EXPECT_EQ(AmountTaken(1000, 300, 1000, true), 0u);
+}
+
+TEST(ResourcePiles, AStoresAmountIsSharedOutAmongItsPilesInTurn)
+{
+	// Five wood piles drawn full at 5000, only the last holding more: Land 1's pit with 30000 wood
+	const std::array<PileRoom, 5> wood {{{5000, true}, {5000, true}, {5000, true}, {5000, true}, {5000, false}}};
+	EXPECT_EQ(ShareAmongPiles(30000, wood), (std::vector<uint32_t> {5000, 5000, 5000, 5000, 10000}));
+	EXPECT_EQ(ShareAmongPiles(7500, wood), (std::vector<uint32_t> {5000, 2500, 0, 0, 0}));
+	EXPECT_EQ(ShareAmongPiles(0, wood), (std::vector<uint32_t> {0, 0, 0, 0, 0}));
+	// The one food pile holds all it is given
+	const std::array<PileRoom, 1> food {{{15000, false}}};
+	EXPECT_EQ(ShareAmongPiles(20000, food), (std::vector<uint32_t> {20000}));
+	// Piles that are all capped leave the rest unshared
+	const std::array<PileRoom, 2> capped {{{100, true}, {100, true}}};
+	EXPECT_EQ(ShareAmongPiles(500, capped), (std::vector<uint32_t> {100, 100}));
 }
 
 TEST(ResourcePiles, APotIsDrawnAtTheSizeOfWhatItHolds)
