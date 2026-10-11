@@ -544,39 +544,40 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeTownProvider(WorldS
 		              });
 		              return QueryResult::Value(std::move(items));
 	              });
-	provider->Add(
-	    Query("homes", "A town's buildings, newest first, with who lives in each and who is at home", {id}, ResultKind::List),
-	    [sources](const QueryContext& context) {
-		    const auto* registry = Registry(sources);
-		    if (registry == nullptr)
-		    {
-			    return QueryResult::Error(std::string(k_NoRegistry));
-		    }
-		    const auto town = TownParam(*registry, context.params);
-		    if (const auto* problem = std::get_if<std::string>(&town); problem != nullptr)
-		    {
-			    return QueryResult::Error(*problem);
-		    }
-		    Json items = Json::array();
-		    for (const auto abode : std::get<0>(town).second->abodes)
-		    {
-			    auto item = Listed(*registry, Info(sources), abode);
-			    if (const auto* home = registry->Valid(abode) ? registry->TryGet<const Abode>(abode) : nullptr)
-			    {
-				    Json people = Json::array();
-				    for (const auto villager : home->inhabitants)
-				    {
-					    people.push_back(ToId(villager));
-				    }
-				    item["inhabitants"] = std::move(people);
-				    item["present_at_home"] = home->presentAtHome;
-				    item["food"] = home->foodAmount;
-				    item["wood"] = home->woodAmount;
-			    }
-			    items.push_back(std::move(item));
-		    }
-		    return QueryResult::Value(std::move(items));
-	    });
+	provider->Add(Query("homes", "A town's buildings, newest first, with who lives in each, its couple and who is at home",
+	                    {id}, ResultKind::List),
+	              [sources](const QueryContext& context) {
+		              const auto* registry = Registry(sources);
+		              if (registry == nullptr)
+		              {
+			              return QueryResult::Error(std::string(k_NoRegistry));
+		              }
+		              const auto town = TownParam(*registry, context.params);
+		              if (const auto* problem = std::get_if<std::string>(&town); problem != nullptr)
+		              {
+			              return QueryResult::Error(*problem);
+		              }
+		              Json items = Json::array();
+		              for (const auto abode : std::get<0>(town).second->abodes)
+		              {
+			              auto item = Listed(*registry, Info(sources), abode);
+			              if (const auto* home = registry->Valid(abode) ? registry->TryGet<const Abode>(abode) : nullptr)
+			              {
+				              Json people = Json::array();
+				              for (const auto villager : home->inhabitants)
+				              {
+					              people.push_back(ToId(villager));
+				              }
+				              item["inhabitants"] = std::move(people);
+				              item["couple"] = Json::array({Id(home->couple[0]), Id(home->couple[1])});
+				              item["present_at_home"] = home->presentAtHome;
+				              item["food"] = home->foodAmount;
+				              item["wood"] = home->woodAmount;
+			              }
+			              items.push_back(std::move(item));
+		              }
+		              return QueryResult::Value(std::move(items));
+	              });
 	provider->Add(Query("belief", "A town's owner and its belief in each player", {id}),
 	              [sources](const QueryContext& context) {
 		              const auto* registry = Registry(sources);

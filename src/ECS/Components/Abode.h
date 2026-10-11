@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <array>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -28,6 +29,9 @@ struct Abode
 	uint32_t woodAmount;
 	/// Its people, the newest first
 	std::vector<entt::entity> inhabitants;
+	/// Its couple, the man then the woman: the first adult of each sex to move in. A member who moves out alive keeps
+	/// the place; the couple ends when one of them dies.
+	std::array<entt::entity, 2> couple {entt::null, entt::null};
 	/// How many of them are inside now
 	uint32_t presentAtHome {0};
 	/// Its row in the buildings' table
