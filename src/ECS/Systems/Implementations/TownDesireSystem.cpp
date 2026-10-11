@@ -34,6 +34,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TownDesire.h"
@@ -48,6 +49,7 @@ using namespace openblack::ecs::components;
 namespace town_desire = openblack::ecs::town_desire;
 namespace construction = openblack::ecs::construction;
 namespace town_desire_flags = openblack::ecs::town_desire_flags;
+namespace villager_home = openblack::ecs::villager_home;
 
 namespace
 {
@@ -343,13 +345,6 @@ void PlaceOnStore(TownDesireFlag& flag, entt::entity store)
 	flag.overGround = flag.place.y - ground;
 }
 
-/// A store working: standing and built
-bool Working(entt::entity store)
-{
-	const auto* progress = Locator::entitiesRegistry::value().TryGet<const BuildProgress>(store);
-	return progress == nullptr || progress->built >= 1.0f;
-}
-
 } // namespace
 
 void TownDesireSystem::UpdateFlags(float seconds)
@@ -386,7 +381,8 @@ void TownDesireSystem::UpdateFlags(float seconds)
 		{
 			PlaceOnStore(flag, *store);
 		}
-		const bool working = store.has_value() && Working(*store);
+		// A store works while built and not hurt down to the share at which it stops working
+		const bool working = store.has_value() && villager_home::IsFunctional(*store);
 		const float desire = GetRawDesire(flag.town, flag.desire);
 		const float showsAfter = info.at(static_cast<size_t>(flag.desire)).showsAfterPercent;
 		const bool shows = town_desire_flags::Shows(working, flag.level, showsAfter);
