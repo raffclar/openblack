@@ -181,6 +181,7 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
+#include "ECS/Components/VillagerLabel.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WalkPath.h"
@@ -1494,6 +1495,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::VillagerDeath::skeleton>("skeleton")
 	    .Field<&components::VillagerDeath::reason>("reason")
 	    .Field<&components::VillagerDeath::killer>("killer");
+	Reflect<components::NamedVillager>(context).Field<&components::NamedVillager::row>("row");
+	Reflect<components::DetailsShown>(context).Field<&components::DetailsShown::dummy>("dummy");
+	Reflect<components::NameHidden>(context).Field<&components::NameHidden::dummy>("dummy");
 	Reflect<components::VillagerPose>(context)
 	    .Field<&components::VillagerPose::clip>("clip")
 	    .Field<&components::VillagerPose::place>("place")

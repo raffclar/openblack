@@ -367,6 +367,8 @@ private:
 	bool _handUpWasHeld {false};
 	/// Whether the cursor is on a thing rather than the land or the sea
 	bool _cursorOnObject {false};
+	/// How far the villagers' names display has grown in, 0 to 1
+	float _villagerNameFade {0.0f};
 	/// The up of the face of a model the hand rests on, none over the land or what the hand doesn't feel
 	std::optional<glm::vec3> _handSurfaceUp;
 	/// The hand rests over a thing picked under the cursor
@@ -438,6 +440,9 @@ private:
 	[[nodiscard]] std::optional<glm::vec2> OnScreen(glm::vec3 point) const;
 	/// The floating numbers move on by some seconds and are given to the interface where they show
 	void UpdateFloatingNumbers(float seconds);
+	/// The names display grows in or out over a frame of so many milliseconds of game time, and the villagers' labels
+	/// are given to the interface
+	void UpdateVillagerLabels(float milliseconds);
 
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> _requestScreenshot;
 	/// The requested screenshot leaves the debug windows out

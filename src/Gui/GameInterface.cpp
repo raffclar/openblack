@@ -468,7 +468,9 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	_canvas.Begin(resolution);
 	_pointerCanvas.Begin(resolution);
 	_painter.Begin(resolution);
-	// The tip bubble is part of the world's picture: under the interface, the cinema bars and the fades
+	// The villagers' labels and the tip bubble are part of the world's picture: under the interface, the cinema bars
+	// and the fades
+	DrawVillagerLabels(resolution);
 	DrawTipBubble(resolution, mouse);
 	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen();
 	DrawFloatingNumbers();
@@ -801,6 +803,55 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 	for (const auto& line : words.lines)
 	{
 		DrawBubbleLine(line, glm::vec3(1.0f));
+	}
+}
+
+void GameInterface::DrawVillagerLabels(glm::u16vec2 resolution)
+{
+	namespace labels = villager_labels;
+	if (_villagerLabels.empty() || _gatheringText == nullptr)
+	{
+		return;
+	}
+	labels::Board board;
+	const labels::WidthFn width = [this](std::u16string_view text, float size) { return BubbleTextWidth(text, size); };
+	const auto pixelScale = labels::PixelScale(glm::vec2(resolution));
+	for (const auto& request : _villagerLabels)
+	{
+		board.Add(request, static_cast<float>(resolution.x), width, pixelScale);
+	}
+	const auto draw = [this](const labels::Quad& quad, glm::vec4 colour) {
+		_canvas.DrawShape({quad[0].position, quad[1].position, quad[2].position, quad[3].position},
+		                  {quad[0].uv, quad[1].uv, quad[2].uv, quad[3].uv}, {colour, colour, colour, colour},
+		                  _gatheringText.get());
+	};
+	for (const auto* label : board.DrawOrder())
+	{
+		// The see-through black box, then the black pointer down to the head, then the words
+		const auto boxColour = glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(label->boxAlpha) / 255.0f);
+		for (const auto& quad : labels::BoxShape(*label))
+		{
+			draw(quad, boxColour);
+		}
+		for (const auto& quad : labels::PointerShape(*label))
+		{
+			draw(quad, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+		}
+		const float alpha = static_cast<float>(label->wordsAlpha) / 255.0f;
+		const auto colour = glm::vec3(label->colour) / 255.0f;
+		for (size_t i = 0; i < label->lines.size(); ++i)
+		{
+			const help::tip_bubble::Line line {
+			    .text = label->lines[i],
+			    .at = {label->left + label->inset, label->top + label->inset + (static_cast<float>(i) * label->lineHeight)},
+			    .size = label->lineHeight,
+			    .topAlpha = alpha,
+			    .bottomAlpha = alpha,
+			    .clipTop = 0.0f,
+			    .clipBottom = static_cast<float>(resolution.y),
+			};
+			DrawBubbleLine(line, colour);
+		}
 	}
 }
 

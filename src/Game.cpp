@@ -207,6 +207,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TreeRoots.h"
 #include "ECS/VillageTotem.h"
+#include "ECS/VillagerLabelSource.h"
 #include "ECS/WorldObjects.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -1007,6 +1008,28 @@ void Game::UpdateFloatingNumbers(float seconds)
 		numbers.push_back(std::move(each.number));
 	}
 	_interface->SetFloatingNumbers(std::move(numbers));
+}
+
+void Game::UpdateVillagerLabels(float milliseconds)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	_villagerNameFade =
+	    gui::villager_labels::StepNameFade(_villagerNameFade, registry.Context().villagerNamesShown, milliseconds);
+	if (!_interface || !Locator::windowing::has_value())
+	{
+		return;
+	}
+	// Inside the temple the land's villagers aren't drawn, nor their labels
+	if (Locator::temple::has_value() && Locator::temple::value().Active())
+	{
+		_interface->SetVillagerLabels({});
+		return;
+	}
+	_interface->SetVillagerLabels(ecs::villager_label_source::Gather({
+	    .screen = Locator::windowing::value().GetSize(),
+	    .nameFade = _villagerNameFade,
+	    .texts = &_interface->GetTexts(),
+	}));
 }
 
 void Game::ProcessHandToolTipTurn()
@@ -1833,6 +1856,8 @@ bool Game::Update() noexcept
 	}
 	// The tip bubble's time to show runs down by the game's time while it is up
 	Locator::tipBubbleSystem::value().UpdateFrame(static_cast<float>(clock.GetFrameGameTime().count()));
+	// The names display grows in and out by the game's time, and the villagers' labels are given to the interface
+	UpdateVillagerLabels(static_cast<float>(clock.GetFrameGameTime().count()));
 	// The cinema bars coming in hide the game's dialogs
 	if (Locator::cinematicDirectorSystem::value().TakeHideDialogs() && _interface && _interface->GetMenu().IsOpen())
 	{

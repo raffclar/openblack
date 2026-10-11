@@ -710,3 +710,5 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_camera_place camera/test_camera_place.cpp)
 openblack_setup_and_add_test(test_control_icons test_control_icons.cpp)
+openblack_setup_and_add_test(test_villager_labels test_villager_labels.cpp)
+openblack_setup_and_add_test(test_special_villagers test_special_villagers.cpp)
