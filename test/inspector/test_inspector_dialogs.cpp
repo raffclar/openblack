@@ -63,7 +63,7 @@ struct InspectedSkipBox
 	glm::ivec2 pointer {400, 300};
 	std::optional<Choice> answer;
 
-	InspectedSkipBox() { box.Show(); }
+	InspectedSkipBox() { box.Show(true); } // a returning profile with a creature: every choice is on offer
 
 	void Send(std::span<const InputEvent> events)
 	{
