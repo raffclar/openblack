@@ -128,6 +128,10 @@ public:
 	virtual void DropCarriedResource(DynamicsSystemInterface& dynamics, entt::entity villager, glm::vec3 velocity);
 	/// A thing a player's hand put down: the player's creature may copy what the player did with it
 	virtual void ConsiderMimickingLanding(entt::entity object, std::optional<PlayerNames> player);
+	/// A thing a hand lets go, before it is put down or thrown; `forced` when the hand dropped it by force
+	virtual void LetGoByHand(entt::entity object, std::optional<PlayerNames> player, bool forced);
+	/// A thing a hand put down where it stood rather than threw
+	virtual void PutDownByHand(entt::entity object, std::optional<PlayerNames> player);
 	/// A toy a player's hand let go: the player's creature may think of playing with it
 	virtual void ConsiderMimickingToyPlay(entt::entity toy, PlayerNames player);
 };

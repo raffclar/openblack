@@ -60,6 +60,7 @@
 #include "ECS/GamePhysicsHooksWorld.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/Implementations/VillagerPhysics.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -721,6 +722,17 @@ void PhysicsGameHooks::OfferToCatchingCreatures(entt::entity object, PhysicsEntr
 			world.Catch(creature, object);
 		}
 	}
+}
+
+void PhysicsGameHooks::LetGoByHand(entt::entity object, std::optional<PlayerNames> player, bool forced)
+{
+	// A villager dropped by force by its own player's hand stops being a disciple
+	villager_disciple::LetGo(object, player, forced);
+}
+
+void PhysicsGameHooks::PutDownByHand(entt::entity object, std::optional<PlayerNames> player)
+{
+	villager_disciple::PutDown(object, player);
 }
 
 void PhysicsGameHooks::StartFlyingFromHand([[maybe_unused]] DynamicsSystemInterface& dynamics, PhysicsEntry& entry)

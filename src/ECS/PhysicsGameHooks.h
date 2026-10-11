@@ -35,6 +35,8 @@ public:
 	entt::entity EndPhysics(systems::DynamicsSystemInterface& dynamics, PhysicsEntry* entry, entt::entity object,
 	                        bool insert) override;
 	void StartFlyingFromHand(systems::DynamicsSystemInterface& dynamics, PhysicsEntry& entry) override;
+	void LetGoByHand(entt::entity object, std::optional<PlayerNames> player, bool forced) override;
+	void PutDownByHand(entt::entity object, std::optional<PlayerNames> player) override;
 	void ReactToImpact(systems::DynamicsSystemInterface& dynamics, PhysicsEntry& entry, const ImpactInfo& impact) override;
 	void ImpactFeedback(systems::DynamicsSystemInterface& dynamics, PhysicsEntry& entry, bool hit) override;
 	bool HasSunk(systems::DynamicsSystemInterface& dynamics, PhysicsEntry& entry) override;

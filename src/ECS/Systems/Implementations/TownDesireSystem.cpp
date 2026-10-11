@@ -18,6 +18,7 @@
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Construction.h"
+#include "ECS/Components/Disciple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/TownDesire.h"
@@ -86,6 +87,10 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 		else
 		{
 			++stats.adults;
+		}
+		if (const auto* disciple = registry.TryGet<const Disciple>(registry.ToEntity(villager)); disciple != nullptr)
+		{
+			++stats.disciples.at(static_cast<size_t>(disciple->type));
 		}
 		if (const auto* info = FindVillagerInfo(villager.tribe, villager.number); info != nullptr)
 		{
