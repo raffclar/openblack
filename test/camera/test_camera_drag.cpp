@@ -10,8 +10,10 @@
 #include <cmath>
 
 #include <array>
+#include <utility>
 
 #include <glm/gtc/constants.hpp>
+#include <glm/trigonometric.hpp>
 #include <gtest/gtest.h>
 
 #include "Camera/CameraDrag.h"
@@ -239,7 +241,7 @@ TEST(CameraDrag, TheEdgesAreTheSameShareOfTheScreenAtEveryResolution)
 	}
 }
 
-TEST(CameraDrag, TurningRoundTheEdgeTurnsAsMuchAtEveryResolutionAndShape)
+TEST(CameraDrag, AQuarterOfTheRingSweepsAQuarterTurnRoundTheMiddleAtEveryResolutionAndShape)
 {
 	for (const auto screen : k_Resolutions)
 	{
@@ -251,6 +253,84 @@ TEST(CameraDrag, TurningRoundTheEdgeTurnsAsMuchAtEveryResolutionAndShape)
 		const auto start = EdgeRotate(right, right, screen, screen.y);
 		const auto step = EdgeRotate(glm::ivec2(centre + glm::vec2(0.0f, radius.y)), start.cursor, screen, screen.y);
 		EXPECT_NEAR(std::abs(step.angle), glm::half_pi<float>(), 0.01f);
+	}
+}
+
+namespace
+{
+/// The camera's turn, in degrees, for each pixel the mouse moves along the ring, from the ring's place `from` (on this
+/// screen's ring, as a share of its half axes) by `pixels` along the screen's x or y
+float DegreesPerPixel(glm::ivec2 screen, glm::vec2 from, glm::ivec2 pixels)
+{
+	const auto centre = glm::vec2(screen / 2);
+	const auto axes = glm::vec2(screen) * 0.45f;
+	const auto start = EdgeRotate(glm::ivec2(centre + from * axes), glm::ivec2(centre + from * axes), screen, screen.y);
+	const auto step = EdgeRotate(start.cursor + pixels, start.cursor, screen, screen.y);
+	const auto moved = std::sqrt(static_cast<float>(pixels.x * pixels.x + pixels.y * pixels.y));
+	return std::abs(glm::degrees(step.turn)) / moved;
+}
+
+constexpr std::array k_EdgeTurnScreens {k_ReferenceScreen, glm::ivec2(1920, 1080), glm::ivec2(2560, 1440),
+                                        glm::ivec2(3440, 1440)};
+} // namespace
+
+TEST(CameraDrag, OnTheDefaultScreenTheEdgeTurnIsTheAngleTheCursorSweeps)
+{
+	// The original's own screen: the turn is exactly the swept angle
+	for (const auto& [cursor, previous] : std::array {
+	         std::pair {glm::ivec2(400, 600), glm::ivec2(760, 300)}, std::pair {glm::ivec2(770, 330), glm::ivec2(760, 300)},
+	         std::pair {glm::ivec2(390, 30), glm::ivec2(410, 30)}, std::pair {glm::ivec2(100, 500), glm::ivec2(500, 100)}})
+	{
+		const auto step = EdgeRotate(cursor, previous, k_ReferenceScreen, k_ReferenceScreen.y);
+		EXPECT_EQ(step.turn, step.angle);
+	}
+	EXPECT_EQ(ReferenceTurnScale({400, 570}, {760, 300}, k_ReferenceScreen, k_ReferenceScreen.y), 1.0f);
+	// With the cinema bars in too
+	const auto bars = ViewHeight(k_ReferenceScreen, true);
+	EXPECT_EQ(ReferenceTurnScale({400, 500}, {760, 300}, k_ReferenceScreen, bars), 1.0f);
+}
+
+TEST(CameraDrag, TheEdgeTurnsDegreesPerPixelAreThoseOfTheDefaultScreenAtEveryResolution)
+{
+	// On the original's 800x600 screen the ring is 360 pixels out at the sides and 270 at the top and bottom, so moving
+	// the mouse along it turns 1/360 of a radian a pixel down the sides and 1/270 across the top and bottom
+	const float sides = glm::degrees(1.0f / 360.0f);
+	const float ends = glm::degrees(1.0f / 270.0f);
+	for (const auto screen : k_EdgeTurnScreens)
+	{
+		SCOPED_TRACE(testing::Message() << screen.x << "x" << screen.y);
+		EXPECT_NEAR(DegreesPerPixel(screen, {1.0f, 0.0f}, {0, 8}), sides, sides * 0.01f);
+		EXPECT_NEAR(DegreesPerPixel(screen, {-1.0f, 0.0f}, {0, -8}), sides, sides * 0.01f);
+		EXPECT_NEAR(DegreesPerPixel(screen, {0.0f, 1.0f}, {-8, 0}), ends, ends * 0.01f);
+		EXPECT_NEAR(DegreesPerPixel(screen, {0.0f, -1.0f}, {8, 0}), ends, ends * 0.01f);
+	}
+	// Exactly the default screen's at its own size, and the same at a slant round the ring: a diagonal move from the
+	// lower right part of the ring turns as far as it would there on the default screen
+	const auto diagonal = DegreesPerPixel(k_ReferenceScreen, {0.7071f, 0.7071f}, {-6, 6});
+	for (const auto screen : k_EdgeTurnScreens)
+	{
+		SCOPED_TRACE(testing::Message() << screen.x << "x" << screen.y);
+		if (screen.x * 3 == screen.y * 4)
+		{
+			EXPECT_NEAR(DegreesPerPixel(screen, {0.7071f, 0.7071f}, {-6, 6}), diagonal, diagonal * 0.02f);
+		}
+	}
+}
+
+TEST(CameraDrag, TheEdgeTurnKeepsItsDirection)
+{
+	for (const auto screen : k_EdgeTurnScreens)
+	{
+		SCOPED_TRACE(testing::Message() << screen.x << "x" << screen.y);
+		const auto centre = screen / 2;
+		const auto right = glm::ivec2(centre.x + screen.x * 45 / 100, centre.y);
+		const auto down = EdgeRotate(right + glm::ivec2(0, 20), right, screen, screen.y);
+		const auto up = EdgeRotate(right - glm::ivec2(0, 20), right, screen, screen.y);
+		EXPECT_GT(down.turn * down.angle, 0.0f);
+		EXPECT_GT(up.turn * up.angle, 0.0f);
+		EXPECT_LT(down.turn * up.turn, 0.0f);
+		// Bigger screens have longer rings in pixels, so the same pixels sweep less of them but turn as far
+		EXPECT_GE(std::abs(down.turn), std::abs(down.angle) * 0.999f);
 	}
 }
 

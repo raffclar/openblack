@@ -36,6 +36,7 @@ class GameInterface;
 } // namespace gui
 struct OrientedTextVertex;
 class TempleDoors;
+struct TemplePerson;
 
 enum class TempleRoom
 {
@@ -153,6 +154,10 @@ public:
 	[[nodiscard]] virtual const std::vector<TempleCaveTrophy>& GetCaveTrophies() const = 0;
 	/// The seeds of the creature's best-learnt miracles hovering in the creature's room, drawn while it is drawn
 	[[nodiscard]] virtual const std::vector<TempleCaveSeed>& GetCaveSeeds() const = 0;
+	/// The player's worshippers walking about the temple drawn this frame, which came in with the player
+	[[nodiscard]] virtual const std::vector<TemplePerson>& GetPeople() const = 0;
+	/// How many of the player's worshippers came in with the player, seen or not
+	[[nodiscard]] virtual size_t GetPeopleInside() const = 0;
 	/// How far the markers have turned, in radians
 	[[nodiscard]] virtual float GetMapMarkerTurn() const = 0;
 	/// How long the main room's pool has shimmered, in seconds, which its two layers' alpha and texture follow

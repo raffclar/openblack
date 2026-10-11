@@ -9,6 +9,7 @@
 
 #include <cmath>
 
+#include <array>
 #include <chrono>
 #include <memory>
 #include <optional>
@@ -260,3 +261,176 @@ TEST_P(MovingAfterHandback, TheKeysMoveTheCameraWithoutTurningIt)
 INSTANTIATE_TEST_SUITE_P(MovementKeys, MovingAfterHandback,
                          testing::Values(input::BindableActionMap::MOVE_LEFT, input::BindableActionMap::MOVE_RIGHT,
                                          input::BindableActionMap::MOVE_FORWARDS, input::BindableActionMap::MOVE_BACKWARDS));
+
+namespace
+{
+/// Flat land at the sea's level under every pixel looking down, or under none once the cursor is over the sky
+class FlatLandPicking final: public MockPickingSystem
+{
+public:
+	[[nodiscard]] std::optional<glm::vec2> LandAtPixel(glm::u16vec2 /*screenCoord*/) const override { return std::nullopt; }
+	[[nodiscard]] std::optional<glm::vec3> LandUnderPixel(glm::vec3 eye, glm::vec3 nearPoint, bool /*withSea*/) const override
+	{
+		const auto direction = nearPoint - eye;
+		if (overSky || direction.y >= 0.0f)
+		{
+			return std::nullopt;
+		}
+		return eye + direction * (-eye.y / direction.y);
+	}
+
+	bool overSky {false};
+};
+
+/// The player holds the button that drags the land and moves the mouse steadily up the screen, the hand on the land
+/// under the cursor until the cursor passes over the sky
+class DragUpAction final: public MockAction
+{
+public:
+	explicit DragUpAction(const FlatLandPicking& picking)
+	    : _picking(picking)
+	{
+	}
+
+	[[nodiscard]] bool GetBindable(input::BindableActionMap actions) const override
+	{
+		return held && (static_cast<uint64_t>(actions) & static_cast<uint64_t>(input::BindableActionMap::MOVE)) != 0;
+	}
+	[[nodiscard]] glm::uvec2 GetMousePosition() const override { return cursor; }
+	[[nodiscard]] glm::ivec2 GetMouseDelta() const override { return delta; }
+	[[nodiscard]] std::array<std::optional<glm::vec3>, 2> GetHandPositions() const override
+	{
+		if (_picking.overSky)
+		{
+			return {};
+		}
+		return {glm::vec3(1500.0f, 0.0f, 2100.0f), std::nullopt};
+	}
+
+	bool held {false};
+	// Near the right of the screen, where the land is dragged without turning when the camera can't turn
+	glm::uvec2 cursor {k_Width * 19 / 20, k_Height * 4 / 5};
+	glm::ivec2 delta {0, 0};
+
+private:
+	const FlatLandPicking& _picking;
+};
+
+class DragOffTheLand: public testing::Test
+{
+protected:
+	void SetUp() override
+	{
+		Locator::entitiesRegistry::emplace<ecs::Registry>();
+		Locator::audio::emplace<audio::AudioManagerNoOp>();
+		Locator::terrainSystem::emplace<MockTerrain>();
+		Locator::windowing::emplace<MockWindowingSystem>();
+		_picking = new FlatLandPicking();
+		_picking->camera = &_camera;
+		Locator::pickingSystem::reset<MockPickingSystem>(_picking);
+		_action = new DragUpAction(*_picking);
+		Locator::gameActionSystem::reset<MockAction>(_action);
+		Locator::cameraHelpSystem::emplace<LessonCameraHelp>();
+
+		_camera.SetProjectionMatrixPerspective(70.0f, Locator::windowing::value().GetAspectRatio(), 1.0f, 65536.0f);
+		_camera.SetOrigin(k_LessonOrigin).SetFocus(k_LessonFocus);
+	}
+
+	void TearDown() override
+	{
+		Locator::cameraHelpSystem::reset();
+		Locator::gameActionSystem::reset();
+		Locator::pickingSystem::reset();
+		Locator::windowing::reset();
+		Locator::terrainSystem::reset();
+		Locator::audio::reset();
+		Locator::entitiesRegistry::reset();
+	}
+
+	Camera _camera;
+	FlatLandPicking* _picking = nullptr;
+	DragUpAction* _action = nullptr;
+};
+} // namespace
+
+// Dragging the land up the beach after the handback, the player can't turn the camera: dragging on past where the land
+// is (the cursor over the sky or far off) neither ends the drag nor lets the camera turn itself while it tilts back
+TEST_F(DragOffTheLand, DraggingOnPastTheLandDoesNotTurnTheCamera)
+{
+	ScriptControlSystem control;
+	ASSERT_TRUE(control.StartCameraControl(_camera, {.task = 7, .templeScript = false, .insideTemple = false}, FlatLand));
+	ASSERT_TRUE(control.EndCameraControl(_camera, 7));
+	const auto& model = _camera.GetModel();
+	const auto step = [this](int frames) {
+		for (int frame = 0; frame < frames; ++frame)
+		{
+			_camera.HandleActions(k_Frame);
+			_camera.Update(k_Frame);
+			if (_action->held && _action->cursor.y > 10)
+			{
+				_action->cursor.y -= 6;
+			}
+		}
+	};
+	// The camera first settles to its pitch and height
+	step(120);
+	const auto heading = Heading(model.GetTargetOrigin(), model.GetTargetFocus());
+	const auto expectHeading = [&model, heading](const char* when, int frame) {
+		const auto now = Heading(model.GetTargetOrigin(), model.GetTargetFocus());
+		EXPECT_GT(glm::dot(now, heading), std::cos(glm::radians(1.0f))) << when << " frame " << frame;
+	};
+
+	// Gripping the land and dragging it towards the top of the screen
+	_action->held = true;
+	_action->delta = {0, -6};
+	for (int frame = 0; frame < 40; ++frame)
+	{
+		step(1);
+		expectHeading("on the land", frame);
+	}
+	// The cursor goes on over the sky with the button still held
+	_picking->overSky = true;
+	for (int frame = 0; frame < 60; ++frame)
+	{
+		step(1);
+		expectHeading("over the sky", frame);
+	}
+	// Let go, and the camera settles again
+	_action->held = false;
+	_action->delta = {0, 0};
+	for (int frame = 0; frame < 120; ++frame)
+	{
+		step(1);
+		expectHeading("let go", frame);
+	}
+}
+
+// Pressed with the cursor already over the sky, the button grips nothing, and moving the mouse doesn't turn the camera
+// either
+TEST_F(DragOffTheLand, HoldingTheButtonOverTheSkyDoesNotTurnTheCamera)
+{
+	ScriptControlSystem control;
+	ASSERT_TRUE(control.StartCameraControl(_camera, {.task = 7, .templeScript = false, .insideTemple = false}, FlatLand));
+	ASSERT_TRUE(control.EndCameraControl(_camera, 7));
+	const auto& model = _camera.GetModel();
+	for (int frame = 0; frame < 120; ++frame)
+	{
+		_camera.HandleActions(k_Frame);
+		_camera.Update(k_Frame);
+	}
+	const auto heading = Heading(model.GetTargetOrigin(), model.GetTargetFocus());
+	_picking->overSky = true;
+	_action->held = true;
+	_action->delta = {0, -6};
+	for (int frame = 0; frame < 120; ++frame)
+	{
+		_camera.HandleActions(k_Frame);
+		_camera.Update(k_Frame);
+		if (_action->cursor.y > 10)
+		{
+			_action->cursor.y -= 6;
+		}
+		const auto now = Heading(model.GetTargetOrigin(), model.GetTargetFocus());
+		EXPECT_GT(glm::dot(now, heading), std::cos(glm::radians(1.0f))) << "frame " << frame;
+	}
+}
