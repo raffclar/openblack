@@ -551,8 +551,7 @@ ecs::components::TownImpression& villager_reactions::ImpressionOf(entt::entity t
 		return *impression;
 	}
 	auto& impression = registry.Assign<TownImpression>(town);
-	impression.belief.belief.at(static_cast<size_t>(PlayerNames::NEUTRAL)) =
-	    Locator::infoConstants::value().town.beliefInNeutralPlayer;
+	impression.belief.neutral = Locator::infoConstants::value().town.beliefInNeutralPlayer;
 	return impression;
 }
 

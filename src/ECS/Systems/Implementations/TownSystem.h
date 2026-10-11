@@ -50,6 +50,7 @@ public:
 	[[nodiscard]] bool IsInStateOfEmergency(entt::entity town) const override;
 	void SetInStateOfEmergency(entt::entity town) override;
 	void ProcessTurn() override;
+	void ClaimTown(entt::entity town, PlayerNames player) override;
 
 private:
 	/// A building or a person gone from the world leaves its town's lists

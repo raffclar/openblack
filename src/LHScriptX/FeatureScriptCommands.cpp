@@ -43,6 +43,7 @@
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Footpath.h"
+#include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -281,14 +282,24 @@ void FeatureScriptCommands::SetTownBelief(int32_t townId, const std::string& pla
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& registryContext = registry.Context();
 
-	Town& town = registry.Get<Town>(registryContext.towns.at(townId));
-	town.beliefs.insert({playerOwner, belief});
+	const auto town = registryContext.towns.at(townId);
+	auto& impression =
+	    registry.AnyOf<TownImpression>(town) ? registry.Get<TownImpression>(town) : registry.Assign<TownImpression>(town);
+	magic::town_belief::SetInPlayer(impression.belief, GetPlayerName(playerOwner), belief);
 }
 
 void FeatureScriptCommands::SetTownBeliefCap(int32_t townId, const std::string& playerOwner, float belief)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}, {}) not implemented.", __FILE__,
-	                    __LINE__, __func__, townId, playerOwner, belief);
+	// TODO(town-ownership): in a multiplayer game the cap of a player in a town of one tribe is raised to 2 on one map
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto town = registry.Context().towns.at(townId);
+	auto& impression =
+	    registry.AnyOf<TownImpression>(town) ? registry.Get<TownImpression>(town) : registry.Assign<TownImpression>(town);
+	const auto player = static_cast<size_t>(GetPlayerName(playerOwner));
+	if (player < impression.belief.cap.size())
+	{
+		impression.belief.cap.at(player) = belief;
+	}
 }
 
 void FeatureScriptCommands::SetTownUninhabitable(int32_t townId)

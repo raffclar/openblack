@@ -1364,7 +1364,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::Town>(context)
 	    .Field<&components::Town::id>("id")
 	    .Field<&components::Town::owner>("owner")
-	    .Field<&components::Town::beliefs>("beliefs")
 	    .Field<&components::Town::uninhabitable>("uninhabitable")
 	    .Field<&components::Town::homelessVillagers>("homelessVillagers")
 	    .Field<&components::Town::abodes>("abodes")
@@ -2296,7 +2295,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::magic::town_belief::Belief::pending>("pending", {k_PlayerNamesNames})
 	    .Field<&openblack::magic::town_belief::Belief::recent>("recent", {k_PlayerNamesNames})
 	    .Field<&openblack::magic::town_belief::Belief::cap>("cap", {k_PlayerNamesNames})
-	    .Field<&openblack::magic::town_belief::Belief::scale>("scale");
+	    .Field<&openblack::magic::town_belief::Belief::scale>("scale")
+	    .Field<&openblack::magic::town_belief::Belief::neutral>("neutral");
 	Reflect<openblack::magic::visuals::HandBand>(context, ValueOnly {})
 	    .Field<&openblack::magic::visuals::HandBand::kind>("kind")
 	    .Field<&openblack::magic::visuals::HandBand::index>("index")

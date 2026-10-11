@@ -18,6 +18,7 @@
 #include <ranges>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <glm/geometric.hpp>
 #include <glm/gtx/euler_angles.hpp>
@@ -98,6 +99,22 @@ void WorshipSiteSystem::PersonJoinedTown(entt::entity town)
 	{
 		CheckAddSite(town);
 	}
+}
+
+void WorshipSiteSystem::TownChangedHands(entt::entity town)
+{
+	auto& registry = _world->Entities();
+	auto& component = registry.Get<Town>(town);
+	if (registry.Valid(component.worshipSite))
+	{
+		if (auto* site = registry.TryGet<WorshipSite>(component.worshipSite))
+		{
+			std::erase(site->towns, town);
+			std::erase_if(site->buildRequests, [town](const WorshipSite::BuildRequest& asked) { return asked.town == town; });
+		}
+	}
+	component.worshipSite = entt::null;
+	CheckAddSite(town);
 }
 
 void WorshipSiteSystem::CheckAddSite(entt::entity town)

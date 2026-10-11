@@ -13,8 +13,11 @@
 
 #include <algorithm>
 #include <optional>
+#include <vector>
 
 #include "3D/MapCoords.h"
+#include "Audio/GameSoundEffects.h"
+#include "Audio/Sound.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Fixed.h"
@@ -22,13 +25,20 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
+#include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/VillageTotemSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TownHomes.h"
 #include "ECS/VillagerRoutine.h"
 #include "ECS/WorldObjects.h"
@@ -368,5 +378,87 @@ void TownSystem::ProcessTurn()
 			continue;
 		}
 		registry.Get<Town>(townEntity).emergencyTurn = 0;
+	}
+}
+
+void TownSystem::ClaimTown(entt::entity town, PlayerNames player)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* component = registry.Valid(town) ? registry.TryGet<Town>(town) : nullptr;
+	if (component == nullptr || component->owner == player)
+	{
+		return;
+	}
+	const auto previous = component->owner;
+	// The player at this machine hears a town won from someone else
+	if (Locator::playerSystem::has_value())
+	{
+		const auto local = Locator::playerSystem::value().GetLocalPlayer();
+		if (player == local && previous != local)
+		{
+			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_TakeOverTown_01), std::nullopt);
+		}
+	}
+	// Its people stop worshipping
+	if (Locator::villageTotemSystem::has_value())
+	{
+		Locator::villageTotemSystem::value().SetTownShare(town, 0.0f);
+	}
+	// It becomes the player's, gained after the towns they have already
+	component->owner = player;
+	component->gained = registry.Context().nextTownGained++;
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().TownChangedHands(town);
+	}
+	// Its centre's totem turns to its new player
+	entt::entity centre = entt::null;
+	registry.Each<const Abode>([&](entt::entity entity, const Abode& abode) {
+		if (centre == entt::null && abode.type == AbodeNumber::TownCentre && abode.townId == component->id)
+		{
+			centre = entity;
+		}
+	});
+	if (centre != entt::null && Locator::villageTotemSystem::has_value())
+	{
+		std::vector<entt::entity> totems;
+		registry.Each<const VillageTotem>([&](entt::entity totem, const VillageTotem& standing) {
+			if (standing.townCentre == centre)
+			{
+				totems.push_back(totem);
+			}
+		});
+		for (const auto totem : totems)
+		{
+			Locator::villageTotemSystem::value().AddToPlayer(totem);
+		}
+	}
+	if (Locator::influenceSystem::has_value())
+	{
+		Locator::influenceSystem::value().BordersChanged();
+	}
+	// Its people celebrate at its centre, or about the town without one, impressed by the centre itself
+	const auto initiator = centre != entt::null ? centre : town;
+	const auto* at = registry.TryGet<const Transform>(initiator);
+	const glm::vec3 position = at != nullptr ? at->position : glm::vec3(0.0f);
+	if (Locator::reactionSystem::has_value())
+	{
+		const auto* info = centre != entt::null ? world_objects::InfoOf(centre) : nullptr;
+		Locator::reactionSystem::value().Create({.initiator = initiator,
+		                                         .type = Reaction::ReactToTownCelebration,
+		                                         .player = player,
+		                                         .position = position,
+		                                         .impressiveValue = info != nullptr ? info->impressiveValue : 0.0f});
+	}
+	// Fireworks and a fountain of the new player's symbols rise from its centre
+	if (player != PlayerNames::NEUTRAL && Locator::particleSystem::has_value())
+	{
+		auto& particles = Locator::particleSystem::value();
+		particles.StartSpotVisual(SpotVisualType::TownFireworks, position, std::nullopt, entt::null);
+		const auto fountain = particles.StartSpotVisual(SpotVisualType::PlayerIconFountain, position, std::nullopt, entt::null);
+		if (fountain != ParticleSystemInterface::k_NoEffect)
+		{
+			particles.SetPlayer(fountain, static_cast<int>(player));
+		}
 	}
 }
