@@ -27,6 +27,7 @@ public:
 	[[nodiscard]] float GetDesire(entt::entity town, TownDesireInfo desire) const override;
 	[[nodiscard]] float GetRawDesire(entt::entity town, TownDesireInfo desire) const override;
 	float RecomputeDesire(entt::entity town, TownDesireInfo desire) override;
+	[[nodiscard]] float FoodShortage(entt::entity town) const override;
 	[[nodiscard]] TownDesireInfo GetMostWanted(entt::entity town) const override;
 	void SetBoost(entt::entity town, TownDesireInfo desire, float boost, bool resort) override;
 	void UpdateFlags(float seconds) override;

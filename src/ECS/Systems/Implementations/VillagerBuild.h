@@ -50,6 +50,11 @@ uint32_t CheckTakeResourcesToStoragePit(components::LivingAction& action);
 uint32_t GotoStoragePitForDropOff(components::LivingAction& action);
 uint32_t ArrivesAtStoragePitForDropOff(components::LivingAction& action);
 
+/// At its town's storage pit the villager takes what it can of up to an amount of a resource, walking to the pit
+/// first, then walks off into a state; with none to take, it goes into another state
+uint32_t ArrivesAtStoragePitForResource(components::LivingAction& action, ResourceType type, uint32_t amount,
+                                        VillagerStates arrive, VillagerStates fail);
+
 /// Turns the villager towards a point by at most a step of the game's angles; whether it now faces it
 bool FaceTowards(entt::entity villager, glm::vec2 point, int32_t step);
 /// The villager takes up building a site, fetching wood first when it lacks it. 1 when it did.

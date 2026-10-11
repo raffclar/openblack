@@ -359,6 +359,10 @@ void villager_reactions::Start(entt::entity villager, Reaction type, LivingReact
 			}
 		}
 		break;
+	case Reaction::ReactToFood:
+		// It goes to the food
+		SetTop(*action, VillagerStates::GotoFoodReaction);
+		break;
 	case Reaction::ReactToVillagerInHand:
 		// It waits for the one held, a mate to be
 		SetTop(*action, VillagerStates::WaitForMate);
@@ -445,6 +449,22 @@ uint32_t villager_reactions::Fleeing(LivingAction& action)
 	villager_home::SetupMoveTo(action, glm::xz(to), VillagerStates::FleeingAndLookingAtObjectReaction);
 	SetStateSpeed(villager, FinalStateOf(action));
 	return 0;
+}
+
+uint32_t villager_reactions::StopReacting(LivingAction& action)
+{
+	return GiveUp(action);
+}
+
+std::optional<entt::entity> villager_reactions::ReactingTo(entt::entity villager)
+{
+	const auto reaction = ReactionOf(villager);
+	if (!reaction.has_value() || reaction->source.initiator == entt::null ||
+	    !EntityRegistry().Valid(reaction->source.initiator))
+	{
+		return std::nullopt;
+	}
+	return reaction->source.initiator;
 }
 
 void villager_reactions::LookAt(entt::entity villager, const glm::vec3& point)
@@ -585,6 +605,7 @@ void villager_reactions::SetStateSpeed(entt::entity villager, VillagerStates sta
 	    .maxFood = static_cast<float>(info.maxFoodCarried),
 	    .speedModWhenFullLoadOfWood = info.speedModWhenFullLoadOfWood,
 	    .speedModWhenFullLoadOfFood = info.speedModWhenFullLoadOfFood,
+	    .foodSpeedUp = component->foodSpeedUp != 0,
 	    .foodPowerupIncrease = info.foodPowerupIncrease,
 	};
 	const auto* town = registry.Valid(component->town) ? registry.TryGet<const Town>(component->town) : nullptr;
