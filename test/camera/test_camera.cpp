@@ -74,8 +74,7 @@ protected:
 		const auto aspect = Locator::windowing::value().GetAspectRatio();
 		constexpr float k_CameraXFov {70.0f};
 		constexpr float k_CameraNearClip {1.0f};
-		constexpr float k_CameraFarClip {static_cast<float>(0x10000)};
-		_camera->SetProjectionMatrixPerspective(k_CameraXFov, aspect, k_CameraNearClip, k_CameraFarClip);
+		_camera->SetProjectionMatrixPerspective(k_CameraXFov, aspect, k_CameraNearClip);
 		// Camera has a model, but we want to test in isolation, so we create a model here
 		_model = CameraModel::CreateModel(CameraModel::Model::DefaultWorld);
 	}

@@ -190,4 +190,21 @@ uint32_t CheckVillagerNeeded(const components::TownDesire& desire, const std::ar
 /// How much the town needs, 0 to 1: a fifth of its practical desires as it feels them
 [[nodiscard]] float TownNeedsSum(const components::TownDesire& desire);
 
+/// What a villager's state does for its town: which desire it counts towards, none below 0, and by how much
+struct StateCount
+{
+	int32_t desire {-1};
+	float weight {0.0f};
+};
+/// A change to the town's count of what its people are doing for a desire
+struct DoingNowStep
+{
+	size_t desire {0};
+	float amount {0.0f};
+	float count {0.0f};
+};
+/// A villager going into a state (sign 1) or leaving one (sign -1): the desire it counts towards gains or loses the
+/// state's weight and one in its count; none for a state that counts towards no desire
+[[nodiscard]] std::optional<DoingNowStep> DoingNowChange(StateCount state, float sign);
+
 } // namespace openblack::ecs::town_desire

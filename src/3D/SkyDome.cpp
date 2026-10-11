@@ -15,6 +15,8 @@
 #include <algorithm>
 #include <string_view>
 
+#include <glm/gtc/matrix_transform.hpp>
+
 namespace openblack::sky_dome
 {
 
@@ -161,6 +163,11 @@ Tint TintOf(const TintInputs& inputs)
 		tint.add[c] = static_cast<uint8_t>(add);
 	}
 	return tint;
+}
+
+glm::mat4 Placement()
+{
+	return glm::scale(glm::translate(glm::mat4(1.0f), k_Centre), glm::vec3(k_Scale));
 }
 
 } // namespace openblack::sky_dome

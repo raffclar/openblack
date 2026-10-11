@@ -27,10 +27,12 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
+#include "ECS/TownDesire.h"
 #include "ECS/VillagerNeeds.h"
 #include "ECS/WorldObjects.h"
 #include "Enums.h"
@@ -44,8 +46,10 @@
 #include "VillagerDisciples.h"
 #include "VillagerEaten.h"
 #include "VillagerFire.h"
+#include "VillagerFisherman.h"
 #include "VillagerFlock.h"
 #include "VillagerFood.h"
+#include "VillagerForester.h"
 #include "VillagerHome.h"
 #include "VillagerHousewife.h"
 #include "VillagerPhysics.h"
@@ -71,6 +75,8 @@ namespace villager_script = openblack::ecs::villager_script;
 namespace villager_build = openblack::ecs::villager_build;
 namespace villager_disciple = openblack::ecs::villager_disciple;
 namespace villager_food = openblack::ecs::villager_food;
+namespace villager_forester = openblack::ecs::villager_forester;
+namespace villager_fisherman = openblack::ecs::villager_fisherman;
 namespace villager_housewife = openblack::ecs::villager_housewife;
 namespace villager_checks = openblack::ecs::villager_checks;
 
@@ -266,8 +272,16 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .state = &villager_food::ArrivesAtFoodReaction,
         .exitState = &villager_food::ExitFoodReaction,
     },
-    /* GOTO_WOOD_REACTION */ k_TodoEntry,
-    /* ARRIVES_AT_WOOD_REACTION */ k_TodoEntry,
+    /* GOTO_WOOD_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_forester::GotoWoodReaction,
+        .exitState = &villager_food::ExitFoodReaction,
+    },
+    /* ARRIVES_AT_WOOD_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_forester::ArrivesAtWoodReaction,
+        .exitState = &villager_food::ExitFoodReaction,
+    },
     /* WAIT_FOR_ANIMATION */
     VillagerStateTableEntry {
         .state = &VillagerWaitForAnimation,
@@ -347,16 +361,59 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* GOTO_WORSHIP_SITE_WITH_SUPPLIES */ k_TodoEntry,
     /* MOVE_TO_WORSHIP_SITE_WITH_SUPPLIES */ k_TodoEntry,
     /* ARRIVES_AT_WORSHIP_SITE_WITH_SUPPLIES */ k_TodoEntry,
-    /* FORESTER_MOVE_TO_FOREST */ k_TodoEntry,
-    /* FORESTER_GOTO_FOREST */ k_TodoEntry,
-    /* FORESTER_ARRIVES_AT_FOREST */ k_TodoEntry,
-    /* FORESTER_CHOPS_TREE */ k_TodoEntry,
-    /* FORESTER_CHOPS_TREE_FOR_BUILDING */ k_TodoEntry,
-    /* FORESTER_FINISHED_FORESTERING */ k_TodoEntry,
-    /* ARRIVES_AT_BIG_FOREST */ k_TodoEntry,
-    /* ARRIVES_AT_BIG_FOREST_FOR_BUILDING */ k_TodoEntry,
-    /* FISHERMAN_ARRIVES_AT_FISHING */ k_TodoEntry,
-    /* FISHING */ k_TodoEntry,
+    /* FORESTER_MOVE_TO_FOREST */
+    VillagerStateTableEntry {
+        .state = &villager_forester::ForesterMoveToForest,
+        .exitState = &villager_forester::ExitForesting,
+    },
+    /* FORESTER_GOTO_FOREST */
+    VillagerStateTableEntry {
+        .state = &villager_forester::ForesterGotoForest,
+        .exitState = &villager_forester::ExitForesting,
+    },
+    /* FORESTER_ARRIVES_AT_FOREST */
+    VillagerStateTableEntry {
+        .state = &villager_forester::ForesterArrivesAtForest,
+        .exitState = &villager_forester::ExitForesting,
+    },
+    /* FORESTER_CHOPS_TREE */
+    VillagerStateTableEntry {
+        .state = &villager_forester::ForesterChopsTree,
+        .exitState = &villager_forester::ExitForesting,
+    },
+    /* FORESTER_CHOPS_TREE_FOR_BUILDING */
+    VillagerStateTableEntry {
+        .state = &villager_forester::ForesterChopsTreeForBuilding,
+        .entryState = &villager_build::EnterBuilding,
+        .exitState = &villager_build::ExitBuilding,
+    },
+    /* FORESTER_FINISHED_FORESTERING */
+    VillagerStateTableEntry {
+        .state = &villager_forester::ForesterFinishedForestering,
+        .exitState = &villager_forester::ExitForesting,
+    },
+    /* ARRIVES_AT_BIG_FOREST */
+    VillagerStateTableEntry {
+        .state = &villager_forester::ArrivesAtBigForest,
+    },
+    /* ARRIVES_AT_BIG_FOREST_FOR_BUILDING */
+    VillagerStateTableEntry {
+        .state = &villager_forester::ArrivesAtBigForestForBuilding,
+        .entryState = &villager_build::EnterBuilding,
+        .exitState = &villager_build::ExitBuilding,
+    },
+    /* FISHERMAN_ARRIVES_AT_FISHING */
+    VillagerStateTableEntry {
+        .state = &villager_fisherman::FishermanArrivesAtFishing,
+        .entryState = &villager_fisherman::EnterFishing,
+        .exitState = &villager_fisherman::ExitFishing,
+    },
+    /* FISHING */
+    VillagerStateTableEntry {
+        .state = &villager_fisherman::Fishing,
+        .entryState = &villager_fisherman::EnterFishing,
+        .exitState = &villager_fisherman::ExitFishing,
+    },
     /* WAIT_FOR_COUNTER */
     VillagerStateTableEntry {
         .state = &villager_shield::WaitForCounter,
@@ -831,6 +888,44 @@ void UpdateHiddenByState(entt::entity villager, VillagerStates state)
 	}
 }
 
+/// A villager's town counts what its people are doing for it: a villager leaving a state that counts towards one of the
+/// town's desires is taken off that desire's count, and one going into such a state is added, by the state's weight
+void CountWhatTownIsDoing(entt::entity villager, VillagerStates previous, VillagerStates next)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* person = registry.TryGet<const Villager>(villager);
+	if (person == nullptr || !Locator::infoConstants::has_value() || person->town == entt::null ||
+	    !registry.Valid(person->town))
+	{
+		return;
+	}
+	auto* desire = registry.TryGet<TownDesire>(person->town);
+	if (desire == nullptr)
+	{
+		return;
+	}
+	const auto& table = Locator::infoConstants::value().villagerStateTable;
+	const auto count = [&](VillagerStates state, float sign) {
+		if (state == VillagerStates::InvalidState)
+		{
+			return;
+		}
+		const auto& row = table.at(static_cast<size_t>(state));
+		if (row.isFinalState == 0)
+		{
+			return;
+		}
+		const auto change = ecs::town_desire::DoingNowChange({.desire = row.field0x4, .weight = row.field0x8}, sign);
+		if (change.has_value())
+		{
+			desire->doingNow.at(change->desire) += change->amount;
+			desire->doingNowCount.at(change->desire) += change->count;
+		}
+	};
+	count(previous, -1.0f);
+	count(next, 1.0f);
+}
+
 /// The state a villager's top state works towards: the top state itself when that is a final one
 VillagerStates FinalStateOf(const LivingAction& action)
 {
@@ -855,7 +950,9 @@ void LivingActionSystem::SetStateDirectly(LivingAction& action, LivingAction::In
 	{
 		action.turnsSinceStateChange = 0;
 	}
+	const auto previous = static_cast<VillagerStates>(action.states.at(static_cast<size_t>(index)));
 	action.states.at(static_cast<size_t>(index)) = static_cast<uint8_t>(state);
+	CountWhatTownIsDoing(Locator::entitiesRegistry::value().ToEntity(action), previous, state);
 	if (index == LivingAction::Index::Top)
 	{
 		UpdateHiddenByState(Locator::entitiesRegistry::value().ToEntity(action), state);

@@ -113,7 +113,7 @@ protected:
 		Locator::gameActionSystem::reset<MockAction>(new TurningAction(turning));
 		Locator::cameraHelpSystem::emplace<FakeCameraHelp>(autoPitch);
 
-		_camera.SetProjectionMatrixPerspective(70.0f, Locator::windowing::value().GetAspectRatio(), 1.0f, 65536.0f);
+		_camera.SetProjectionMatrixPerspective(70.0f, Locator::windowing::value().GetAspectRatio(), 1.0f);
 		_camera.SetOrigin(k_LessonOrigin).SetFocus(k_LessonFocus);
 	}
 
@@ -209,7 +209,7 @@ protected:
 		Locator::gameActionSystem::reset<MockAction>(new HoldingAction(GetParam()));
 		Locator::cameraHelpSystem::emplace<LessonCameraHelp>();
 
-		_camera.SetProjectionMatrixPerspective(70.0f, Locator::windowing::value().GetAspectRatio(), 1.0f, 65536.0f);
+		_camera.SetProjectionMatrixPerspective(70.0f, Locator::windowing::value().GetAspectRatio(), 1.0f);
 		_camera.SetOrigin(k_LessonOrigin).SetFocus(k_LessonFocus);
 	}
 
@@ -332,7 +332,7 @@ protected:
 		Locator::gameActionSystem::reset<MockAction>(_action);
 		Locator::cameraHelpSystem::emplace<LessonCameraHelp>();
 
-		_camera.SetProjectionMatrixPerspective(70.0f, Locator::windowing::value().GetAspectRatio(), 1.0f, 65536.0f);
+		_camera.SetProjectionMatrixPerspective(70.0f, Locator::windowing::value().GetAspectRatio(), 1.0f);
 		_camera.SetOrigin(k_LessonOrigin).SetFocus(k_LessonFocus);
 	}
 

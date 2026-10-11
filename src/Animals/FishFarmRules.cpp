@@ -83,9 +83,9 @@ uint32_t DesireToBeFished(size_t fishermen, uint32_t maxFishermen)
 	return static_cast<uint32_t>(map_coords::FtoL(k_PercentFull * (1.0f - lacking)));
 }
 
-std::optional<size_t> BestFarm(std::span<const Candidate> farms, uint32_t maxFishermen)
+std::optional<Choice> BestFarm(std::span<const Candidate> farms, uint32_t maxFishermen)
 {
-	std::optional<size_t> best;
+	std::optional<Choice> best;
 	float bestScore = 0.0f;
 	for (size_t i = 0; i < farms.size(); ++i)
 	{
@@ -95,7 +95,7 @@ std::optional<size_t> BestFarm(std::span<const Candidate> farms, uint32_t maxFis
 		if (score > bestScore)
 		{
 			bestScore = score;
-			best = i;
+			best = Choice {.index = i, .score = score};
 		}
 	}
 	return best;

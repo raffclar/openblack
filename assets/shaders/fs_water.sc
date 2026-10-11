@@ -67,22 +67,36 @@ void main()
 {
 	vec2 reflectionUv = (gl_FragCoord.xy - u_viewRect.xy) / u_viewRect.zw;
 
+	// The pixel, counted from the top of the view
+	float px = floor(gl_FragCoord.x - u_viewRect.x);
+#if BGFX_SHADER_LANGUAGE_GLSL
+	float py = floor(u_viewRect.w - (gl_FragCoord.y - u_viewRect.y));
+#else
+	float py = floor(gl_FragCoord.y - u_viewRect.y);
+#endif
+	// The sea reaches the horizon; above it the sky is left as it is
+	vec4 under = PlanePoint(px, py);
+	if (under.w < 0.5f)
+	{
+		discard;
+	}
+
 	vec2 uv;
 	float rowAlpha;
 	if (u_seaMode.x > 0.5f)
 	{
-		// The still sea: the texture repeats 50 times across the 140000 unit square, wholly opaque
-		uv = vec2(v_texcoord0.x + 70000.0f, 70000.0f - v_texcoord0.y) / u_seaParams.x;
+		// The still sea: the texture repeats 50 times across the 140000 unit square, wholly opaque; beyond it only what
+		// lies under the sea
+		if (abs(under.x) > 70000.0f || abs(under.z) > 70000.0f)
+		{
+			gl_FragColor = vec4(texture2D(s_reflection, reflectionUv).rgb, 1.0f);
+			return;
+		}
+		uv = vec2(under.x + 70000.0f, 70000.0f - under.z) / u_seaParams.x;
 		rowAlpha = 1.0f;
 	}
 	else
 	{
-		float px = floor(gl_FragCoord.x - u_viewRect.x);
-#if BGFX_SHADER_LANGUAGE_GLSL
-		float py = floor(u_viewRect.w - (gl_FragCoord.y - u_viewRect.y));
-#else
-		float py = floor(gl_FragCoord.y - u_viewRect.y);
-#endif
 		// Outside the rows there is no sea, only what lies under it
 		float k = py - u_seaRows.x;
 		if (k < 0.0f || k >= 2.0f * u_seaRows.y)
@@ -108,7 +122,7 @@ void main()
 
 	// The sea's texture in the sea's colour, blended by its alpha over what lies under the sea
 	vec3 sea = u_seaColour.rgb * texture2D(s_diffuse, uv).rgb;
-	vec3 under = texture2D(s_reflection, reflectionUv).rgb;
+	vec3 beneath = texture2D(s_reflection, reflectionUv).rgb;
 	float alpha = texture2D(s_alpha, uv).r * rowAlpha;
-	gl_FragColor = vec4(mix(under, sea, alpha), 1.0f);
+	gl_FragColor = vec4(mix(beneath, sea, alpha), 1.0f);
 }

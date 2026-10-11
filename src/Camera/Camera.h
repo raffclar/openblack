@@ -93,8 +93,10 @@ public:
 	}
 	Camera& SetInterpolatorDuration(std::chrono::microseconds duration);
 
-	Camera& SetProjectionMatrixPerspective(float xFov, float aspect, float nearClip, float farClip);
-	/// Moves the near plane of the perspective, keeping its field of view, aspect and far plane
+	/// A perspective with a near plane and no far one, as the game's: nothing is lost however far away it is, the sky's
+	/// dome across the map and the sea to its horizon from as high as the camera goes
+	Camera& SetProjectionMatrixPerspective(float xFov, float aspect, float nearClip);
+	/// Moves the near plane of the perspective, keeping its field of view and aspect
 	Camera& SetNearClip(float nearClip);
 	[[nodiscard]] float GetNearClip() const { return _nearClip; }
 	/// Gives the perspective the screen's new shape, keeping its field of view across the width and its clip planes
@@ -169,7 +171,6 @@ protected:
 	float _xFov = 0.0f; // TODO(#707): This should be a zoomer for animations
 	float _aspect = 1.0f;
 	float _nearClip = 1.0f;
-	float _farClip = 1.0f;
 	glm::mat4 _projectionMatrix = glm::mat4 {1.0f};
 	glm::mat4 _projectionMatrixReversedZ = glm::mat4 {1.0f};
 	std::unique_ptr<CameraModel> _model;

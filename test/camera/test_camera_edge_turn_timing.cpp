@@ -132,7 +132,7 @@ protected:
 		_provider = provider.get();
 		_inspector.Add(std::move(provider));
 
-		_camera.SetProjectionMatrixPerspective(70.0f, Locator::windowing::value().GetAspectRatio(), 1.0f, 65536.0f);
+		_camera.SetProjectionMatrixPerspective(70.0f, Locator::windowing::value().GetAspectRatio(), 1.0f);
 		_camera.SetOrigin(k_Origin).SetFocus(k_Focus);
 		_camera.SetModel(std::make_unique<DefaultWorldCameraModel>(k_Origin, k_Focus));
 	}

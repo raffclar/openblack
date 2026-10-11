@@ -755,6 +755,7 @@ target_link_libraries(test_volume_glow PRIVATE psys)
 openblack_setup_and_add_test(test_relaxation_rules test_relaxation_rules.cpp)
 openblack_setup_and_add_test(test_villager_tools test_villager_tools.cpp)
 openblack_setup_and_add_test(test_tree_shadows graphics/test_tree_shadows.cpp)
+openblack_setup_and_add_test(test_villager_work test_villager_work.cpp)
 openblack_setup_and_add_test(
   test_descriptor_set_tally graphics/test_descriptor_set_tally.cpp
 )

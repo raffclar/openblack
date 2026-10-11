@@ -91,7 +91,8 @@ TEST(FishFarm, ATownSendsAFishermanToTheNearestFarmWithoutOne)
 	    {.distance = 100.0f, .fishermen = 0},
 	    {.distance = 100.0f, .fishermen = 0},
 	};
-	EXPECT_EQ(fish_farm::BestFarm(farms, 4), std::optional<size_t>(2));
+	ASSERT_TRUE(fish_farm::BestFarm(farms, 4).has_value());
+	EXPECT_EQ(fish_farm::BestFarm(farms, 4)->index, 2u);
 	// None that has its fisherman, however near
 	const std::vector<fish_farm::Candidate> none {{.distance = 5.0f, .fishermen = 1}, {.distance = 50.0f, .fishermen = 2}};
 	EXPECT_FALSE(fish_farm::BestFarm(none, 4).has_value());
