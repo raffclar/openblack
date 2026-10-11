@@ -63,6 +63,7 @@
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
+#include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -397,6 +398,15 @@ void GameHandGrabWorld::TreeUprooted(PlayerNames player, entt::entity /*tree*/)
 	auto& alignment = Locator::alignmentSystem::value();
 	alignment.AddPendingAlignment(
 	    player, magic::DampAlignmentChange(-Info()->player.treePullPutAlignmentChange, alignment.GetPlayerAlignment(player)));
+}
+
+std::optional<entt::entity> GameHandGrabWorld::TreeFromBigForest(entt::entity bigForest)
+{
+	if (!Locator::forestSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	return Locator::forestSystem::value().TreeFromBigForest(bigForest);
 }
 
 bool GameHandGrabWorld::HoldsLeash(PlayerNames player)

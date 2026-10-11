@@ -123,6 +123,9 @@ public:
 	virtual void ArtefactTaken(entt::entity object, PlayerNames player) = 0;
 	/// Pulling up a tree moves the player's alignment
 	virtual void TreeUprooted(PlayerNames player, entt::entity tree) = 0;
+	/// A big forest gives a tree for the hand, taking a tree's wood from it (which may shrink it or use it up): a full
+	/// grown conifer made at its place. None when it gives none.
+	virtual std::optional<entt::entity> TreeFromBigForest(entt::entity /*bigForest*/) { return std::nullopt; }
 	/// A tree pulled out of the ground leaves its roots in a hole, with a puff of smoke
 	virtual void LeaveRootsHole(entt::entity tree) = 0;
 	/// A pot taken stops calling the people to it
