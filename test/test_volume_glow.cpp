@@ -82,7 +82,7 @@ TEST(VolumeGlowRules, ColourIsThePlayersWhenAskedAndFadesWithItsCollection)
 	EXPECT_EQ(volume_glow::Argb(white, 207, 255, 0xFF4646u), 0xCFFFFFFFu);
 }
 
-TEST(VolumeGlowRules, TheTextureSlidesByRealMillisecondsAndWraps)
+TEST(VolumeGlowRules, TheTextureSlidesByTheGamesMillisecondsAndWraps)
 {
 	const auto offset = volume_glow::UvOffset({0.3f, 0.31f}, 5000);
 	EXPECT_NEAR(offset.x, 0.5f, 1e-4f);
@@ -91,6 +91,15 @@ TEST(VolumeGlowRules, TheTextureSlidesByRealMillisecondsAndWraps)
 	EXPECT_NEAR(back.x, -0.5f, 1e-4f);
 	EXPECT_EQ(volume_glow::SinceStarted(7000, 2000), 5000u);
 	EXPECT_EQ(volume_glow::SinceStarted(1000, 2000), 0u);
+}
+
+TEST(VolumeGlowRules, TheGamesTimeIsATenthOfASecondATurnAndTheMillisecondsIntoTheNext)
+{
+	EXPECT_EQ(volume_glow::GameMilliseconds(0, 0.0f), 0u);
+	EXPECT_EQ(volume_glow::GameMilliseconds(25, 0.0f), 2500u);
+	EXPECT_EQ(volume_glow::GameMilliseconds(25, 0.456f), 2545u);
+	// Never past 99 into a turn
+	EXPECT_EQ(volume_glow::GameMilliseconds(25, 1.0f), 2599u);
 }
 
 TEST(VolumeGlowRules, TheViewNormalIsWidenedByTheProjectionThenEachAxisMadeOneLong)
@@ -159,7 +168,7 @@ public:
 	[[nodiscard]] glm::vec3 CameraRight() const override { return {1.0f, 0.0f, 0.0f}; }
 	[[nodiscard]] glm::vec3 CameraUp() const override { return {0.0f, 1.0f, 0.0f}; }
 	void StartSound(const Effect& /*effect*/, const std::shared_ptr<ParticleSoundLink>& /*sound*/) override {}
-	[[nodiscard]] uint64_t RealMilliseconds() const override { return realMilliseconds; }
+	[[nodiscard]] uint64_t GameMilliseconds() const override { return gameMilliseconds; }
 	[[nodiscard]] std::optional<glm::vec3> ObjectPosition(entt::entity object) const override
 	{
 		if (const auto found = objects.find(object); found != objects.end())
@@ -170,7 +179,7 @@ public:
 	}
 
 	std::map<entt::entity, glm::vec3> objects;
-	uint64_t realMilliseconds {0};
+	uint64_t gameMilliseconds {0};
 };
 
 class GlowRandom final: public GameRandomInterface
@@ -301,32 +310,32 @@ TEST_F(VolumeGlowEffectTest, AWeakerEffectReachesLessAndATargetThatIsntThereMake
 	// Without a player it is white
 	EXPECT_EQ(walk.atoms[0].objectGlow->argb, 0xCFFFFFFFu);
 }
-TEST_F(VolumeGlowEffectTest, TheShellsTextureSlidesByTheFramesRealTimeNotTheGamesSteps)
+TEST_F(VolumeGlowEffectTest, TheShellsTextureSlidesByTheGamesTimeAndStandsStillWhilePaused)
 {
 	const auto rock = static_cast<entt::entity>(7);
 	world.objects[rock] = {0.0f, 0.0f, 0.0f};
-	world.realMilliseconds = 10000;
+	world.gameMilliseconds = 10000;
 	auto effect = Make();
 	effect->AddTarget(rock);
-	// Many game steps in no real time (a fast game): it hasn't slid
-	for (int i = 0; i < 20; ++i)
+	for (int i = 0; i < 3; ++i)
 	{
 		effect->Step(k_Step);
 	}
-	draw::Sources sources;
-	sources.realMilliseconds = 10000;
 	Effect::DrawWalk walk;
 	effect->Walk(1.0f, walk);
-	draw::Frame frame;
-	draw::AddEffect(frame, walk, draw::DrawPath::Sorted, glm::vec3(0.0f), -1, sources);
-	ASSERT_EQ(frame.shells.size(), 1u);
-	EXPECT_EQ(frame.shells[0].uvOffset, glm::vec2(0.0f));
-	// Two real seconds of frames later with no game step (paused): it has slid by its speeds
-	sources.realMilliseconds = 12000;
-	frame.Clear();
-	draw::AddEffect(frame, walk, draw::DrawPath::Sorted, glm::vec3(0.0f), -1, sources);
-	ASSERT_EQ(frame.shells.size(), 1u);
-	EXPECT_NEAR(frame.shells[0].uvOffset.x, 0.6f, 1e-4f);
-	EXPECT_NEAR(frame.shells[0].uvOffset.y, 0.62f, 1e-4f);
+	const auto offsetAt = [&walk](uint64_t gameMilliseconds) {
+		draw::Sources sources;
+		sources.gameMilliseconds = gameMilliseconds;
+		draw::Frame frame;
+		draw::AddEffect(frame, walk, draw::DrawPath::Sorted, glm::vec3(0.0f), -1, sources);
+		return frame.shells.empty() ? glm::vec2(-1.0f) : frame.shells[0].uvOffset;
+	};
+	EXPECT_EQ(offsetAt(10000), glm::vec2(0.0f));
+	// Two seconds of the game's time later it has slid by its speeds
+	const auto slid = offsetAt(12000);
+	EXPECT_NEAR(slid.x, 0.6f, 1e-4f);
+	EXPECT_NEAR(slid.y, 0.62f, 1e-4f);
+	// Paused, the game's time stands still, and so does the texture, however long the frames take
+	EXPECT_EQ(offsetAt(12000), slid);
 }
 } // namespace

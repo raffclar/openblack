@@ -377,8 +377,9 @@ public:
 	[[nodiscard]] virtual std::vector<glm::vec3> TargetExtraPoints(entt::entity /*target*/) const { return {}; }
 	/// Where an object a rule follows stands, none once it is no longer there
 	[[nodiscard]] virtual std::optional<glm::vec3> ObjectPosition(entt::entity /*object*/) const { return std::nullopt; }
-	/// The real milliseconds the game's frames have taken so far, whatever the game's speed and while it is paused
-	[[nodiscard]] virtual uint64_t RealMilliseconds() const { return 0; }
+	/// The game's time in milliseconds now: a tenth of a second for each turn played, and the milliseconds into the next
+	/// turn (at most 99); it follows the game's speed and stands still while the game is paused
+	[[nodiscard]] virtual uint64_t GameMilliseconds() const { return 0; }
 	/// A point picked on an object's model, placed in the world as the object stands: a submesh, one of its primitives
 	/// and one of its triangles, each by the effect's random numbers, then a point evenly within the triangle
 	struct SurfacePoint
@@ -558,7 +559,7 @@ struct ObjectGlow
 	int texture {0};
 	glm::vec2 animSpeed {0.0f};
 	glm::vec2 textureFraction {0.0f};
-	/// The real milliseconds of the frames when its shell was made, from which its texture slides
+	/// The game's milliseconds when its shell was made, from which its texture slides
 	uint64_t startedAt {0};
 };
 

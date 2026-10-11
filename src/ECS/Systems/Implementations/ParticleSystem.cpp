@@ -64,6 +64,7 @@
 #include "Particles/ParticleClassRegistry.h"
 #include "Particles/ParticleSoundRelease.h"
 #include "Particles/ParticleTypes.h"
+#include "Particles/VolumeGlow.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
@@ -674,9 +675,14 @@ std::vector<glm::vec3> GameParticleWorld::TargetExtraPoints(entt::entity target)
 	return points;
 }
 
-uint64_t GameParticleWorld::RealMilliseconds() const
+uint64_t GameParticleWorld::GameMilliseconds() const
 {
-	return Locator::time::has_value() ? static_cast<uint64_t>(Locator::time::value().GetElapsedTime().count()) : 0;
+	if (!Locator::time::has_value())
+	{
+		return 0;
+	}
+	const auto& time = Locator::time::value();
+	return particles::volume_glow::GameMilliseconds(time.GetTurn(), time.GetTurnFraction());
 }
 
 std::optional<glm::vec3> GameParticleWorld::ObjectPosition(entt::entity object) const
@@ -1338,7 +1344,7 @@ void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame
 	        },
 	    .landHeight = [this](glm::vec2 xz) { return _world.LandHeight(xz); },
 	    .objectPosition = [this](entt::entity object) { return _world.ObjectPosition(object); },
-	    .realMilliseconds = _world.RealMilliseconds(),
+	    .gameMilliseconds = _world.GameMilliseconds(),
 	};
 	for (const auto& running : _effects)
 	{

@@ -69,6 +69,14 @@ glm::vec2 volume_glow::UvOffset(glm::vec2 animSpeed, uint64_t milliseconds)
 	return {std::fmod(animSpeed.x * seconds, 1.0f), std::fmod(animSpeed.y * seconds, 1.0f)};
 }
 
+uint64_t volume_glow::GameMilliseconds(uint32_t turn, float turnFraction)
+{
+	constexpr uint64_t k_TurnMilliseconds = 100;
+	constexpr float k_MostIntoATurn = 99.0f;
+	const float into = std::clamp(std::floor(turnFraction * static_cast<float>(k_TurnMilliseconds)), 0.0f, k_MostIntoATurn);
+	return static_cast<uint64_t>(turn) * k_TurnMilliseconds + static_cast<uint64_t>(into);
+}
+
 uint64_t volume_glow::SinceStarted(uint64_t now, uint64_t startedAt)
 {
 	return now > startedAt ? now - startedAt : 0;

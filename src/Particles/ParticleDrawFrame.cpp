@@ -230,7 +230,7 @@ void AddSurface(Frame& frame, const SurfaceCreator& creator, const Effect::DrawA
 	});
 }
 
-/// The shell an atom lays over an object's model, its texture slid on by the frames' real time since it was made
+/// The shell an atom lays over an object's model, its texture slid on by the game's time since it was made
 void AddShell(Frame& frame, const Effect::DrawAtom& atom, const ObjectGlow& glow, const Sources& sources)
 {
 	const auto name = std::string("raw/") + std::string(volume_glow::k_Textures.at(static_cast<size_t>(glow.texture)));
@@ -244,7 +244,7 @@ void AddShell(Frame& frame, const Effect::DrawAtom& atom, const ObjectGlow& glow
 	    .argb = glow.argb,
 	    .texture = entt::hashed_string(name.c_str()).value(),
 	    .alphaTexture = entt::hashed_string((name + "a").c_str()).value(),
-	    .uvOffset = volume_glow::UvOffset(glow.animSpeed, volume_glow::SinceStarted(sources.realMilliseconds, glow.startedAt)),
+	    .uvOffset = volume_glow::UvOffset(glow.animSpeed, volume_glow::SinceStarted(sources.gameMilliseconds, glow.startedAt)),
 	    .textureFraction = glow.textureFraction,
 	});
 }
