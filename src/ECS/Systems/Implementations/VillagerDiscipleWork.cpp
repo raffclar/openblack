@@ -289,15 +289,13 @@ uint32_t villager_disciple_work::TraderFetch(LivingAction& action)
 		return 0;
 	}
 	const auto limit = disciple->tradeResource == ResourceType::Food ? info->maxTraderFoodCarried : info->maxTraderWoodCarried;
-	// As in the game, it asks the store for what it already carries, not what it set out to fetch: one carrying nothing
-	// gets nothing and waits (see the disciple notes)
 	const auto [carried, held] = LargerLoad(person);
 	const auto amount = disciple_work::TradeFetchAmount(limit, held);
 	const auto tradeTown = disciple->tradeTown;
-	const auto result = carried == ResourceType::None
-	                        ? 0u
-	                        : villager_build::ArrivesAtStoragePitForResource(
-	                              action, carried, amount, VillagerStates::DecideWhatToDo, VillagerStates::DecideWhatToDo);
+	// Deviation #30: vanilla asked for the resource already carried
+	const auto result = villager_build::ArrivesAtStoragePitForResource(
+	    action, disciple_work::TradeFetchResource(carried, disciple->tradeResource), amount, VillagerStates::DecideWhatToDo,
+	    VillagerStates::DecideWhatToDo);
 	if (result == 0)
 	{
 		return SetTraderNothingToDo(action, tradeTown);

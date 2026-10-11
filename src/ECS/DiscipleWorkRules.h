@@ -41,6 +41,9 @@ enum class TradeLeg : uint8_t
 /// How much a trader fetches: what it can still carry of its limit, none when its load is already that much
 [[nodiscard]] uint32_t TradeFetchAmount(uint32_t carryLimit, uint32_t held);
 
+/// What a trader asks its own store for: what it already carries, or the wanted resource when it carries nothing
+[[nodiscard]] ResourceType TradeFetchResource(ResourceType carried, ResourceType wanted);
+
 /// A town's wants having changed (a store going from empty to stocked, a site added, a death): the mark stays up for
 /// the rest of this town turn and all of the next, then comes down. `lastTurn` says it was already up a turn ago.
 void MarkDesiresChanged(bool& changed, bool& lastTurn);

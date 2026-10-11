@@ -47,6 +47,12 @@ TradeLeg ChooseTradeLeg(uint32_t held, uint32_t carryLimit, float metresToOwnSto
 	return fetch <= deliver ? TradeLeg::Deliver : TradeLeg::Fetch;
 }
 
+ResourceType TradeFetchResource(ResourceType carried, ResourceType wanted)
+{
+	// Deviation #30: vanilla asked for the resource already carried
+	return carried == ResourceType::None ? wanted : carried;
+}
+
 uint32_t TradeFetchAmount(uint32_t carryLimit, uint32_t held)
 {
 	return held < carryLimit ? carryLimit - held : 0;
