@@ -55,6 +55,15 @@ public:
 	void BuildBy(entt::entity site, float share) override;
 	[[nodiscard]] bool IsBuilt(entt::entity site) const override;
 	[[nodiscard]] entt::entity TempleOf(PlayerNames player) const override;
+	[[nodiscard]] std::optional<glm::vec2> PlaceAt(entt::entity site, SitePlace place) const override;
+	void AddWorshipper(entt::entity site, entt::entity villager) override;
+	void RemoveWorshipper(entt::entity site, entt::entity villager) override;
+	[[nodiscard]] bool IsWorshipper(entt::entity site, entt::entity villager) const override;
+	[[nodiscard]] float WorshipSpeed(entt::entity site) const override;
+	[[nodiscard]] float ChantsPerDancer(entt::entity site) const override;
+	[[nodiscard]] uint32_t FoodInPot(entt::entity site) const override;
+	[[nodiscard]] int32_t FoodNeededFromTown(entt::entity site) const override;
+	void RemoveFoodOnTheWay(entt::entity site, int32_t amount) override;
 
 private:
 	/// A town of a player with a temple is given its tribe's site, if it may have one

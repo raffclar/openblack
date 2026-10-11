@@ -29,16 +29,22 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/DanceRules.h"
+#include "ECS/Dances.h"
 #include "ECS/Registry.h"
 #include "ECS/WorshipSites.h"
+#include "ECS/WorshipperRules.h"
 #include "GameWorshipSiteWorld.h"
+#include "InfoConstants.h"
+#include "Locator.h"
 #include "Magic/WorshipBattery.h"
 
 using namespace openblack;
@@ -277,7 +283,8 @@ void WorshipSiteSystem::ProcessChants()
 
 void WorshipSiteSystem::SetDancers(entt::entity site, uint32_t dancers)
 {
-	// TODO(worship): once the worshippers join the dance's groups as they arrive, the count follows them
+	// The worshippers joining and leaving the dance's groups keep the count; this sets it outright, for tests and the
+	// debug tools
 	if (auto* dance = DanceOf(site); dance != nullptr)
 	{
 		dance->dancers = dancers;
@@ -644,4 +651,126 @@ std::vector<entt::entity> WorshipSiteSystem::TownsOf(PlayerNames player) const
 	towns.reserve(owned.size());
 	std::ranges::transform(owned, std::back_inserter(towns), [](const auto& pair) { return pair.second; });
 	return towns;
+}
+
+std::optional<glm::vec2> WorshipSiteSystem::PlaceAt(entt::entity site, SitePlace place) const
+{
+	auto& registry = _world->Entities();
+	if (!registry.Valid(site) || !registry.AllOf<WorshipSite, Transform>(site))
+	{
+		return std::nullopt;
+	}
+	const auto& component = registry.Get<const WorshipSite>(site);
+	const auto at = Across(registry.Get<const Transform>(site).position);
+	std::optional<glm::vec3> point;
+	switch (place)
+	{
+	case SitePlace::Gate:
+		point = _world->SitePoint(ws::k_PlacePoint);
+		break;
+	case SitePlace::Rest:
+		point = _world->SitePoint(ws::k_RestPoint);
+		break;
+	case SitePlace::Altar:
+		point = _world->SitePoint(ws::k_AltarPoint);
+		break;
+	case SitePlace::Door:
+		point = _world->SiteDoor();
+		break;
+	case SitePlace::Centre:
+		point = ws::k_CentrePoint;
+		break;
+	}
+	if (!point.has_value())
+	{
+		return std::nullopt;
+	}
+	return ws::TurnedPoint(at, component.facing, *point);
+}
+
+void WorshipSiteSystem::AddWorshipper(entt::entity site, entt::entity villager)
+{
+	auto& registry = _world->Entities();
+	if (!registry.Valid(site) || villager == entt::null)
+	{
+		return;
+	}
+	auto& worshippers = registry.Get<WorshipSite>(site).worshippers;
+	if (std::ranges::find(worshippers, villager) == worshippers.end())
+	{
+		worshippers.insert(worshippers.begin(), villager);
+	}
+}
+
+void WorshipSiteSystem::RemoveWorshipper(entt::entity site, entt::entity villager)
+{
+	auto& registry = _world->Entities();
+	if (registry.Valid(site))
+	{
+		std::erase(registry.Get<WorshipSite>(site).worshippers, villager);
+	}
+}
+
+bool WorshipSiteSystem::IsWorshipper(entt::entity site, entt::entity villager) const
+{
+	auto& registry = _world->Entities();
+	if (!registry.Valid(site))
+	{
+		return false;
+	}
+	const auto& worshippers = registry.Get<const WorshipSite>(site).worshippers;
+	return std::ranges::find(worshippers, villager) != worshippers.end();
+}
+
+float WorshipSiteSystem::WorshipSpeed(entt::entity site) const
+{
+	const auto* dance = DanceOf(site);
+	return dance != nullptr ? dance->speed : 0.0f;
+}
+
+float WorshipSiteSystem::ChantsPerDancer(entt::entity site) const
+{
+	const auto* chants = _world->Entities().TryGet<const WorshipChants>(site);
+	return chants != nullptr ? chants->chantsPerDancer : 0.0f;
+}
+
+uint32_t WorshipSiteSystem::FoodInPot(entt::entity site) const
+{
+	auto& registry = _world->Entities();
+	const auto pot = registry.Get<const WorshipSite>(site).foodPot;
+	const auto* data = registry.Valid(pot) ? registry.TryGet<const Pot>(pot) : nullptr;
+	return data != nullptr ? data->amount : 0u;
+}
+
+int32_t WorshipSiteSystem::FoodNeededFromTown(entt::entity site) const
+{
+	auto& registry = _world->Entities();
+	const auto& component = registry.Get<const WorshipSite>(site);
+	// Each villager dancing wants what its belly lacks of its dinner
+	std::vector<float> bellies;
+	std::vector<int32_t> dinners;
+	if (Locator::infoConstants::has_value() && ecs::dances::IsDance(registry, component.dance))
+	{
+		const auto& info = Locator::infoConstants::value().villager;
+		for (const auto dancer : ecs::dances::Dancers(registry, component.dance))
+		{
+			if (const auto* person = registry.TryGet<const Villager>(dancer))
+			{
+				bellies.push_back(person->food);
+				const auto& row = info.at(static_cast<size_t>(GVillagerInfo::Find(person->tribe, person->number)));
+				dinners.push_back(static_cast<int32_t>(row.foodReqiredForDinner));
+			}
+		}
+	}
+	return ecs::worshipper_rules::FoodNeededFromTown(ecs::worshipper_rules::DancersFoodNeed(bellies, dinners), FoodInPot(site),
+	                                                 component.foodOnTheWay);
+}
+
+void WorshipSiteSystem::RemoveFoodOnTheWay(entt::entity site, int32_t amount)
+{
+	auto& registry = _world->Entities();
+	if (registry.Valid(site))
+	{
+		registry.Get<WorshipSite>(site).foodOnTheWay -= amount;
+	}
 }

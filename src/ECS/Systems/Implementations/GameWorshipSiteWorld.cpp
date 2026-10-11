@@ -80,6 +80,20 @@ std::optional<glm::vec3> GameWorshipSiteWorld::SitePoint(uint32_t index) const
 	return glm::vec3(points.at(index)[3]);
 }
 
+std::optional<glm::vec3> GameWorshipSiteWorld::SiteDoor() const
+{
+	if (!Locator::resources::has_value())
+	{
+		return std::nullopt;
+	}
+	auto& meshes = Locator::resources::value().GetMeshes();
+	if (!meshes.Contains(k_SiteMesh.value()))
+	{
+		return std::nullopt;
+	}
+	return meshes.Handle(k_SiteMesh.value())->GetDoorPos();
+}
+
 entt::id_type GameWorshipSiteWorld::SiteMesh(entt::entity temple)
 {
 	// Every part of the site's model is drawn with the first skin of the temple's model, so the site takes on the

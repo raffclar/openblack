@@ -30,6 +30,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
+#include "VillagerWorship.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -139,4 +140,9 @@ void GameVillageTotemWorld::EmpathiseWithPlayer(PlayerNames player, glm::vec3 po
 void GameVillageTotemWorld::FloatNumber(glm::vec3 position, float value, uint32_t colour)
 {
 	archetypes::FloatingNumberArchetype::Create(position, value, colour);
+}
+
+void GameVillageTotemWorld::ShareSet(entt::entity town)
+{
+	ecs::villager_worship::ShareSet(town);
 }

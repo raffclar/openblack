@@ -169,6 +169,8 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 		}
 	}
 	in.homeless = static_cast<uint32_t>(town.homelessVillagers.size());
+	in.worshipping = static_cast<int32_t>(town.worshippers.size());
+	in.onWayToWorship = static_cast<int32_t>(town.onWayToWorship.size());
 
 	// Its building sites: how much each wants villagers, the builders at it and the most it takes
 	for (const auto building : construction::SitesOfTown(townEntity))

@@ -51,6 +51,10 @@ struct Town
 	entt::entity worshipSite {entt::null};
 	/// A script has stopped a worship site being made for it
 	bool cannotHaveWorshipSite {false};
+	/// Its people counted at worship (dancing, hiding, eating or resting at its site), and those on their way there,
+	/// each counted once
+	std::vector<entt::entity> worshippers;
+	std::vector<entt::entity> onWayToWorship;
 	/// Where its people gather, worked out the first time it is wanted and again once a new building stands on it
 	std::optional<glm::vec2> congregationPos;
 	/// The turn its latest emergency was called, 0 when it is in none

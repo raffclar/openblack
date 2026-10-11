@@ -135,6 +135,8 @@ void VillageTotemSystem::SetTownShare(entt::entity town, float share)
 			totemComponent.held = totemComponent.ease.target;
 		}
 	});
+	// The town sends people to worship, or calls them back, to match its new share
+	_world->ShareSet(town);
 }
 
 void VillageTotemSystem::Place(entt::entity totem)

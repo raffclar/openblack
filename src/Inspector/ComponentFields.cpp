@@ -1435,6 +1435,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Town::worshipShare>("worshipShare")
 	    .Field<&components::Town::worshipSite>("worshipSite")
 	    .Field<&components::Town::cannotHaveWorshipSite>("cannotHaveWorshipSite")
+	    .Field<&components::Town::worshippers>("worshippers")
+	    .Field<&components::Town::onWayToWorship>("onWayToWorship")
 	    .Field<&components::Town::congregationPos>("congregationPos")
 	    .Field<&components::Town::emergencyTurn>("emergencyTurn")
 	    .Field<&components::Town::graveyard>("graveyard")
@@ -1713,8 +1715,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::WorshipSite::altar>("altar")
 	    .Field<&components::WorshipSite::dance>("dance")
 	    .Field<&components::WorshipSite::foodPot>("foodPot")
+	    .Field<&components::WorshipSite::foodOnTheWay>("foodOnTheWay")
 	    .Field<&components::WorshipSite::worshippers>("worshippers")
 	    .Field<&components::WorshipSite::buildRequests>("buildRequests");
+	Reflect<components::Worshipper>(context)
+	    .Field<&components::Worshipper::atWorship>("atWorship")
+	    .Field<&components::Worshipper::onTheWay>("onTheWay");
 	Reflect<components::WorshipAltar>(context).Field<&components::WorshipAltar::site>("site");
 
 	// The values the components' fields hold
