@@ -31,6 +31,7 @@
 
 namespace openblack::inspector
 {
+class GameInput;
 class GameProvider;
 struct GameControlSet;
 class InputProvider;
@@ -59,6 +60,7 @@ public:
 	void EndLoading() override;
 	void PlaceCamera() override;
 	void GiveCameraBack() override;
+	void ShowOverrideToPointer() override;
 
 private:
 	/// The helper answering while the game loads: until told to stop
@@ -69,7 +71,7 @@ private:
 	std::unique_ptr<entt::meta_ctx> _reflection;
 	std::unique_ptr<inspector::RunTargetInterface> _runTarget;
 	std::unique_ptr<inspector::WorldEditInterface> _worldEdit;
-	std::unique_ptr<inspector::InputTargetInterface> _inputTarget;
+	std::unique_ptr<inspector::GameInput> _inputTarget;
 	/// The camera, the windows, the scripts, the lands and the pictures of the screen, through the game
 	std::unique_ptr<inspector::GameControlSet> _controls;
 	inspector::Inspector _inspector;

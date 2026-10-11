@@ -1825,6 +1825,8 @@ bool Game::Update() noexcept
 	{
 		auto profilerScopedUpdateUniforms = profiler.BeginScoped(Profiler::Stage::UpdateUniforms);
 
+		// The hand follows the pointer through the view that is seen: an inspector's override while one is shown
+		ShowInspectorOverride(true);
 		// Update Hand and intersection point
 		// Upright where nothing is under the cursor
 		ecs::components::Transform intersectionTransform {
@@ -2353,6 +2355,8 @@ bool Game::Update() noexcept
 			vegetation.Rustle(gameTime);
 		}
 
+		ShowInspectorOverride(false);
+
 		// Update Entities
 		{
 			auto updateEntities = profiler.BeginScoped(Profiler::Stage::UpdateEntities);
@@ -2369,8 +2373,11 @@ bool Game::Update() noexcept
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
 				                                                config.drawStreams);
 				ShowInspectorCamera(false);
-				// The interface picks what is under the cursor as the frame is drawn, for the next frame to go by
+				// The interface picks what is under the cursor as the frame is drawn, for the next frame to go by: through
+				// an inspector's override while one is shown, as the frame is seen
+				ShowInspectorOverride(true);
 				PickUnderCursor(std::chrono::duration<float>(deltaTime).count());
+				ShowInspectorOverride(false);
 			}
 		}
 	} // Update Uniforms
@@ -3914,6 +3921,24 @@ void Game::ShowInspectorCamera(bool shown)
 	if (shown)
 	{
 		inspector.PlaceCamera();
+	}
+	else
+	{
+		inspector.GiveCameraBack();
+	}
+	FitNearClip();
+}
+
+void Game::ShowInspectorOverride(bool shown)
+{
+	if (!Locator::inspector::has_value())
+	{
+		return;
+	}
+	auto& inspector = Locator::inspector::value();
+	if (shown)
+	{
+		inspector.ShowOverrideToPointer();
 	}
 	else
 	{
