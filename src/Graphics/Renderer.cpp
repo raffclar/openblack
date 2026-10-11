@@ -5232,6 +5232,12 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				                       meshId != ecs::components::Hand::k_MeshId;
 				const auto light = templeLit ? Locator::temple::value().GetLight() : TempleLight {};
 				submitDesc.tint = glm::vec4(light.multiply, 0.0f);
+				// The temple's walking worshippers are drawn in a grey of their own, darker in the reflection
+				if (placers.templeGrey.has_value())
+				{
+					const float grey = desc.viewId == RenderPass::Reflection ? placers.templeGrey->y : placers.templeGrey->x;
+					submitDesc.tint = glm::vec4(light.Colour(glm::vec3(grey)), 0.0f);
+				}
 				submitDesc.lightMultiply = light.multiply;
 				// The hand glows as a recognised gesture flashes
 				submitDesc.lightAdd =

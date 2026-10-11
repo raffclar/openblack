@@ -228,6 +228,12 @@ TempleScrolls::Facts GatherScrollFacts()
 }
 } // namespace
 
+const std::vector<TemplePerson>& TempleInterior::GetPeople() const
+{
+	static const std::vector<TemplePerson> k_Nobody;
+	return _people != nullptr ? _people->GetDrawn() : k_Nobody;
+}
+
 void TempleInterior::SetInterface(gui::GameInterface* interface)
 {
 	_interface = interface;
@@ -956,6 +962,19 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 			}
 		}
 
+		// The player's worshippers walk on about the floors, and those the camera sees are posed
+		if (_people != nullptr)
+		{
+			const auto& camera = Locator::camera::value();
+			const auto temple = glm::translate(glm::mat4(1.0f), _templePosition) * glm::eulerAngleY(_templeRotation.y);
+			_people->Update(milliseconds, temple, camera.GetViewProjectionMatrix(), camera.GetNearClip());
+			// They move every frame, so the draw lists are made again
+			if (_people->GetCount() > 0)
+			{
+				Locator::entitiesRegistry::value().SetDirty();
+			}
+		}
+
 		// The creature's room moves its effects on while the room is drawn
 		if (_creatureCaveEffects != nullptr && IsRoomDrawn(TempleRoom::CreatureCave))
 		{
@@ -1027,6 +1046,8 @@ void TempleInterior::Activate(TempleRoom room)
 	{
 		_creatureCaveEffects = std::make_unique<CreatureCaveEffects>(*fire);
 	}
+	// The player's worshippers come in with the player, set down about the floors
+	_people = TemplePeople::Gather();
 	_currentRoom = room;
 	_enteredRoom.reset();
 	auto model = std::make_unique<TempleCameraModel>(LoadCameraPaths(), _currentRoom);
@@ -1051,6 +1072,7 @@ void TempleInterior::Deactivate()
 		_soundsOfCreatureCave = false;
 	}
 	_creatureCaveEffects.reset();
+	_people.reset();
 	_scrolls.reset();
 	_signs.reset();
 	_text.clear();

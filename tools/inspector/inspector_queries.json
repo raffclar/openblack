@@ -1102,7 +1102,7 @@
   "query": "temple.state"
  },
  {
-  "description": "The temple's inside: whether the player is in it, the room and the visits",
+  "description": "The temple's inside: whether the player is in it, the room, the visits, and the worshippers walking about it (how many came in, and where those drawn are)",
   "kind": "object",
   "parameters": [],
   "query": "temple.interior"

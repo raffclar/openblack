@@ -60,6 +60,9 @@ struct WorshipSite
 	entt::entity dance {entt::null};
 	/// The pot its worshippers eat from
 	entt::entity foodPot {entt::null};
+	/// Its worshippers, the newest first: the villagers on their way to dance at it or dancing there, and those hiding
+	/// in it. The player's come into the temple with the player.
+	std::vector<entt::entity> worshippers;
 	/// A town asked to build it while it isn't built, and how much more than its other building the town wants to
 	struct BuildRequest
 	{

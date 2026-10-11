@@ -21,6 +21,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "Graphics/BonePalette.h"
 #include "Graphics/DebugLines.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/ShaderManager.h"
@@ -162,4 +163,28 @@ void RenderingSystemCommon::PrepareDraw(bool drawBoundingBox, bool drawFootpaths
 		_renderContext.layoutDirty = false;
 		_renderContext.hasBoundingBoxes = drawBoundingBox;
 	}
+}
+
+void RenderingSystemCommon::UploadBonePalette()
+{
+	auto& texels = _renderContext.bonePalette;
+	if (texels.empty())
+	{
+		return;
+	}
+	// Whole rows are sent, the last one filled out
+	const auto rows = graphics::bone_palette::RowsFor(texels.size());
+	texels.resize(static_cast<size_t>(rows) * graphics::bone_palette::k_Width, glm::vec4(0.0f));
+	auto& texture = _renderContext.bonePaletteTexture;
+	// The texture grows to twice the rows it needs, so that a growing crowd doesn't make it again every frame
+	if (!texture || texture->GetResolution().y < rows)
+	{
+		texture = std::make_unique<graphics::Texture2D>("BonePalette");
+		texture->CreateWithinFrame(graphics::bone_palette::k_Width, static_cast<uint16_t>(rows * 2), 1,
+		                           graphics::TextureFormat::RGBA32F, graphics::Wrapping::ClampEdge, graphics::Filter::Nearest,
+		                           nullptr);
+	}
+	const auto bytes = static_cast<uint32_t>(texels.size() * sizeof(glm::vec4));
+	bgfx::updateTexture2D(toBgfx(texture->GetNativeHandle()), 0, 0, 0, 0, graphics::bone_palette::k_Width, rows,
+	                      bgfx::copy(texels.data(), bytes));
 }
