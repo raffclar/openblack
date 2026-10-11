@@ -376,12 +376,13 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	    Write("pointer",
 	          "Moves the pointer, as the mouse would, to a pixel or to where a point of the world is on the "
 	          "screen. With the mouse's timing (the default) the move's event reaches the game this frame and the "
-	          "action map reads the pointer there from the next, as with a real mouse",
+	          "action map reads the pointer there from the next, as with a real mouse. Asked for while earlier input "
+	          "is still to come (a click's letting go, a drag), it waits for the frame after the last of it",
 	          {screen, world, timing}),
 	    Write("button",
 	          "A mouse button where the pointer is: press, release, click (pressed now, let go of the next "
 	          "frame) or double_click (a click, then pressed and let go of again as the second click of a double "
-	          "click, a frame apart)",
+	          "click, a frame apart). Like all input, it waits behind input asked for earlier that is still to come",
 	          {button, Optional("action", "string", "press, release, click (the default) or double_click"), timing}),
 	    Write("key",
 	          "A key by its name (\"L\", \"Space\", \"Left Shift\"), or an action by the options screen's name, "
@@ -476,19 +477,50 @@ std::optional<glm::ivec2> InputProvider::ScreenPoint(const Json& params, std::st
 	return std::nullopt;
 }
 
-std::string InputProvider::Now(const InputEvent& event)
+uint64_t InputProvider::StartFrame() const
+{
+	// Requests are answered as a frame starts, before its input is read: the coming frame is the soonest
+	const auto last = _timeline.LastScheduled();
+	return last.has_value() ? std::max(*last + 1, _frame + 1) : _frame + 1;
+}
+
+std::string InputProvider::At(uint64_t frame, const InputEvent& event)
 {
 	if (event.kind == InputEvent::Kind::PointerTo)
 	{
 		_pointer = event.position;
 	}
-	// Requests are answered as a frame starts, before its input is read: what is made now is part of that frame
+	if (frame <= _frame + 1 && _timeline.Pending() == 0)
+	{
+		return _timeline.MakeNow(_frame + 1, event, _target);
+	}
+	// Behind what is still to come, made when its frame comes, in the order it was asked for
+	_timeline.Schedule(frame, event);
+	return {};
+}
+
+std::string InputProvider::Now(const InputEvent& event)
+{
 	return _timeline.MakeNow(_frame + 1, event, _target);
 }
 
-Json InputProvider::Answer(Json made) const
+std::string InputProvider::Send(std::span<const InputEvent> events)
+{
+	const auto start = StartFrame();
+	for (const auto& event : events)
+	{
+		if (auto why = At(start, event); !why.empty())
+		{
+			return why;
+		}
+	}
+	return {};
+}
+
+Json InputProvider::Answer(Json made, uint64_t start) const
 {
 	made["pending"] = _timeline.Pending();
+	made["starts_frame"] = start;
 	return made;
 }
 
@@ -526,11 +558,12 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 		{
 			return failed(error.empty() ? "input.pointer needs screen [x, y] or world [x, z]" : error);
 		}
-		if (auto why = Now({.kind = InputEvent::Kind::PointerTo, .position = *at, .timing = *timing}); !why.empty())
+		const auto start = StartFrame();
+		if (auto why = At(start, {.kind = InputEvent::Kind::PointerTo, .position = *at, .timing = *timing}); !why.empty())
 		{
 			return failed(why);
 		}
-		return QueryResult::Value(Answer({{"pointer", Point(*at)}, {"timing", TimingName(*timing)}}));
+		return QueryResult::Value(Answer({{"pointer", Point(*at)}, {"timing", TimingName(*timing)}}, start));
 	}
 	if (query == "button")
 	{
@@ -543,23 +576,24 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 			return failed(error.empty() ? "action is press, release, click or double_click" : error);
 		}
 		const auto kind = action == "release" ? InputEvent::Kind::ButtonUp : InputEvent::Kind::ButtonDown;
-		if (auto why = Now({.kind = kind, .button = *button, .timing = *timing}); !why.empty())
+		const auto start = StartFrame();
+		if (auto why = At(start, {.kind = kind, .button = *button, .timing = *timing}); !why.empty())
 		{
 			return failed(why);
 		}
 		if (action == "click" || action == "double_click")
 		{
-			_timeline.Schedule(_frame + 2, {.kind = InputEvent::Kind::ButtonUp, .button = *button, .timing = *timing});
+			_timeline.Schedule(start + 1, {.kind = InputEvent::Kind::ButtonUp, .button = *button, .timing = *timing});
 		}
 		if (action == "double_click")
 		{
 			// The second press and its letting go count two clicks, as the mouse tells a double click
-			_timeline.Schedule(_frame + 3,
+			_timeline.Schedule(start + 2,
 			                   {.kind = InputEvent::Kind::ButtonDown, .button = *button, .clicks = 2, .timing = *timing});
-			_timeline.Schedule(_frame + 4,
+			_timeline.Schedule(start + 3,
 			                   {.kind = InputEvent::Kind::ButtonUp, .button = *button, .clicks = 2, .timing = *timing});
 		}
-		auto answer = Answer({{"button", *button}, {"action", action}, {"timing", TimingName(*timing)}});
+		auto answer = Answer({{"button", *button}, {"action", action}, {"timing", TimingName(*timing)}}, start);
 		if (action != "release" && StringMember(params, "button").value_or("left") == "left")
 		{
 			// The commonest surprise: the left button never picks things up
@@ -582,11 +616,12 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 			{
 				return failed("no action " + *action + "; ask input.names");
 			}
-			if (auto why = Now({.kind = InputEvent::Kind::Action, .name = *action}); !why.empty())
+			const auto start = StartFrame();
+			if (auto why = At(start, {.kind = InputEvent::Kind::Action, .name = *action}); !why.empty())
 			{
 				return failed(why);
 			}
-			return QueryResult::Value(Answer({{"action", *action}}));
+			return QueryResult::Value(Answer({{"action", *action}}, start));
 		}
 		if (!_target.HasKey(*key))
 		{
@@ -598,15 +633,16 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 			return failed("how is press, release or tap");
 		}
 		const auto kind = how == "release" ? InputEvent::Kind::KeyUp : InputEvent::Kind::KeyDown;
-		if (auto why = Now({.kind = kind, .key = *key}); !why.empty())
+		const auto start = StartFrame();
+		if (auto why = At(start, {.kind = kind, .key = *key}); !why.empty())
 		{
 			return failed(why);
 		}
 		if (how == "tap")
 		{
-			_timeline.Schedule(_frame + 2, {.kind = InputEvent::Kind::KeyUp, .key = *key});
+			_timeline.Schedule(start + 1, {.kind = InputEvent::Kind::KeyUp, .key = *key});
 		}
-		return QueryResult::Value(Answer({{"key", *key}, {"how", how}}));
+		return QueryResult::Value(Answer({{"key", *key}, {"how", how}}, start));
 	}
 	if (query == "wheel")
 	{
@@ -615,11 +651,12 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 		{
 			return failed("notches is a whole number, not 0, up to 100 either way");
 		}
-		if (auto why = Now({.kind = InputEvent::Kind::Wheel, .notches = static_cast<int32_t>(*notches)}); !why.empty())
+		const auto start = StartFrame();
+		if (auto why = At(start, {.kind = InputEvent::Kind::Wheel, .notches = static_cast<int32_t>(*notches)}); !why.empty())
 		{
 			return failed(why);
 		}
-		return QueryResult::Value(Answer({{"notches", *notches}}));
+		return QueryResult::Value(Answer({{"notches", *notches}}, start));
 	}
 	if (query == "drag")
 	{
@@ -637,24 +674,25 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 			return failed(error.empty() ? "input.drag needs to: {screen} or {world}" : error);
 		}
 		// Down where it starts, then evenly to the end a step a frame, and let go there the frame after
-		if (auto why = Now({.kind = InputEvent::Kind::PointerTo, .position = *from, .timing = *timing}); !why.empty())
+		const auto start = StartFrame();
+		if (auto why = At(start, {.kind = InputEvent::Kind::PointerTo, .position = *from, .timing = *timing}); !why.empty())
 		{
 			return failed(why);
 		}
-		Now({.kind = InputEvent::Kind::ButtonDown, .button = *button, .timing = *timing});
+		At(start, {.kind = InputEvent::Kind::ButtonDown, .button = *button, .timing = *timing});
 		auto last = *from;
 		for (uint32_t step = 1; step <= *frames; ++step)
 		{
 			const auto t = static_cast<float>(step) / static_cast<float>(*frames);
 			const auto at = glm::ivec2(glm::round(glm::mix(glm::vec2(*from), glm::vec2(*to), t)));
-			_timeline.Schedule(_frame + 1 + step,
+			_timeline.Schedule(start + step,
 			                   {.kind = InputEvent::Kind::PointerTo, .position = at, .stepFrom = last, .timing = *timing});
 			last = at;
 		}
-		_timeline.Schedule(_frame + 2 + *frames, {.kind = InputEvent::Kind::ButtonUp, .button = *button, .timing = *timing});
+		_timeline.Schedule(start + 1 + *frames, {.kind = InputEvent::Kind::ButtonUp, .button = *button, .timing = *timing});
 		_pointer = to;
 		return QueryResult::Value(
-		    Answer({{"from", Point(*from)}, {"to", Point(*to)}, {"frames", *frames}, {"timing", TimingName(*timing)}}));
+		    Answer({{"from", Point(*from)}, {"to", Point(*to)}, {"frames", *frames}, {"timing", TimingName(*timing)}}, start));
 	}
 	if (query == "path")
 	{
@@ -682,12 +720,13 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 		{
 			return failed(error.empty() ? "the path would take too many frames" : error);
 		}
-		Now({.kind = InputEvent::Kind::PointerTo, .position = pixels.front(), .timing = *timing});
+		const auto start = StartFrame();
+		At(start, {.kind = InputEvent::Kind::PointerTo, .position = pixels.front(), .timing = *timing});
 		if (held)
 		{
-			Now({.kind = InputEvent::Kind::ButtonDown, .button = *button, .timing = *timing});
+			At(start, {.kind = InputEvent::Kind::ButtonDown, .button = *button, .timing = *timing});
 		}
-		uint64_t due = _frame + 1;
+		uint64_t due = start;
 		for (size_t i = 1; i < pixels.size(); ++i)
 		{
 			due += *frames;
@@ -700,8 +739,8 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 			_timeline.Schedule(due + 1, {.kind = InputEvent::Kind::ButtonUp, .button = *button, .timing = *timing});
 		}
 		_pointer = pixels.back();
-		return QueryResult::Value(
-		    Answer({{"points", pixels.size()}, {"frames", due + (held ? 1 : 0) - _frame}, {"timing", TimingName(*timing)}}));
+		return QueryResult::Value(Answer(
+		    {{"points", pixels.size()}, {"frames", due + (held ? 1 : 0) + 1 - start}, {"timing", TimingName(*timing)}}, start));
 	}
 	if (query == "gesture")
 	{
@@ -712,18 +751,19 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 		}
 		const auto hold = params.find("hold_action");
 		const bool holdAction = hold != params.end() && hold->is_boolean() && hold->get<bool>();
-		if (auto why = Now({.kind = InputEvent::Kind::Gesture, .name = name, .holdAction = holdAction}); !why.empty())
+		const auto start = StartFrame();
+		if (auto why = At(start, {.kind = InputEvent::Kind::Gesture, .name = name, .holdAction = holdAction}); !why.empty())
 		{
 			return failed(why);
 		}
-		return QueryResult::Value(Answer({{"gesture", name}, {"hold_action", holdAction}}));
+		return QueryResult::Value(Answer({{"gesture", name}, {"hold_action", holdAction}}, start));
 	}
 	if (query == "release")
 	{
 		_timeline.Clear();
 		Now({.kind = InputEvent::Kind::Release});
 		_pointer.reset();
-		return QueryResult::Value(Answer({{"released", true}}));
+		return QueryResult::Value(Answer({{"released", true}}, _frame + 1));
 	}
 	if (query == "lock" || query == "unlock")
 	{
@@ -782,11 +822,13 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 			}
 			recording.push_back({.frame = static_cast<uint64_t>(*frame), .event = *event});
 		}
+		// Behind any input still to come, as every request's
+		const auto start = StartFrame();
 		for (auto& each : recording)
 		{
-			_timeline.Schedule(_frame + 1 + each.frame, std::move(each.event));
+			_timeline.Schedule(start + each.frame, std::move(each.event));
 		}
-		return QueryResult::Value(Answer({{"scheduled", recording.size()}, {"from_frame", _frame + 1}}));
+		return QueryResult::Value(Answer({{"scheduled", recording.size()}, {"from_frame", start}}, start));
 	}
 	return failed("no query input." + std::string(query));
 }

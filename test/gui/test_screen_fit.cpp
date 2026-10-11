@@ -12,6 +12,7 @@
 #include <array>
 #include <utility>
 
+#include <glm/common.hpp>
 #include <gtest/gtest.h>
 
 #include "Gui/ScreenFit.h"
@@ -106,4 +107,61 @@ TEST(ScreenFit, EmptyShapesOrScreensFillTheScreen)
 	EXPECT_EQ(FitInside(Aspect {.width = 0, .height = 3}, 800, 600),
 	          (ScreenRect {.x = 0, .y = 0, .width = 800, .height = 600}));
 	EXPECT_EQ(FitInside(k_FourByThree, 0, 0), (ScreenRect {}));
+}
+
+TEST(ScreenFit, TheReferenceScaleIsTheDefaultScreensShareOfThe4By3Middle)
+{
+	EXPECT_FLOAT_EQ(ReferenceScale(800, 600), 1.0f);
+	EXPECT_FLOAT_EQ(ReferenceScale(1600, 1200), 2.0f);
+	// Taller than 4:3: by the width
+	EXPECT_FLOAT_EQ(ReferenceScale(1280, 1024), 1.6f);
+	// Wider: by the 4:3 width as tall as the screen
+	EXPECT_FLOAT_EQ(ReferenceScale(1920, 1080), 1.8f);
+	EXPECT_FLOAT_EQ(ReferenceScale(2560, 1440), 2.4f);
+	EXPECT_FLOAT_EQ(ReferenceScale(3440, 1440), 2.4f);
+	EXPECT_FLOAT_EQ(ReferenceScale(5120, 1440), 2.4f);
+	EXPECT_EQ(ScaledPixels(30, 1.0f), 30);
+	EXPECT_EQ(ScaledPixels(15, 1.8f), 27);
+	EXPECT_EQ(ScaledPixels(1, 2.4f), 2);
+	// Never less than a pixel
+	EXPECT_EQ(ScaledPixels(1, 0.3f), 1);
+}
+
+TEST(ScreenFit, TheFrontEndIsAPixelAUnitOnTheDefaultScreen)
+{
+	EXPECT_EQ(FrontEndSpace(800, 600), (LayoutSpace {.scale = 1.0f, .offset = {0.0f, 0.0f}}));
+	// As the game: a pixel a unit, centred, on screens as tall or as wide as the default one and bigger the other way
+	EXPECT_EQ(FrontEndSpace(1000, 600), (LayoutSpace {.scale = 1.0f, .offset = {100.0f, 0.0f}}));
+	EXPECT_EQ(FrontEndSpace(800, 801), (LayoutSpace {.scale = 1.0f, .offset = {0.0f, 100.0f}}));
+}
+
+TEST(ScreenFit, TheFrontEndFillsTheSame4By3ShareOfBiggerScreens)
+{
+	for (const auto [width, height] : {std::pair {1280, 1024}, std::pair {1600, 1200}, std::pair {1920, 1080},
+	                                   std::pair {2560, 1440}, std::pair {3440, 1440}, std::pair {5120, 1440}})
+	{
+		const auto space = FrontEndSpace(width, height);
+		const auto middle = FitInside(k_FourByThree, width, height);
+		const auto topLeft = space.ToScreen({0.0f, 0.0f});
+		const auto bottomRight = space.ToScreen({800.0f, 600.0f});
+		// The layout covers the 4:3 middle to within a pixel, from whole pixels
+		EXPECT_EQ(topLeft, glm::floor(topLeft)) << width << "x" << height;
+		EXPECT_NEAR(topLeft.x, static_cast<float>(middle.x), 1.0f) << width << "x" << height;
+		EXPECT_NEAR(topLeft.y, static_cast<float>(middle.y), 1.0f) << width << "x" << height;
+		EXPECT_NEAR(bottomRight.x, static_cast<float>(middle.x + middle.width), 1.0f) << width << "x" << height;
+		EXPECT_NEAR(bottomRight.y, static_cast<float>(middle.y + middle.height), 1.0f) << width << "x" << height;
+		// and back
+		const auto back = space.ToLayout(space.ToScreen({123.0f, 456.0f}));
+		EXPECT_NEAR(back.x, 123.0f, 1e-3f);
+		EXPECT_NEAR(back.y, 456.0f, 1e-3f);
+	}
+}
+
+TEST(ScreenFit, TheFrontEndShrinksAsTheGameShrinksItOnSmallScreens)
+{
+	// The game: min(W / 850, H / 650), centred, so a margin is left round the layout
+	const auto space = FrontEndSpace(640, 480);
+	EXPECT_FLOAT_EQ(space.scale, 480.0f / 650.0f);
+	EXPECT_NEAR(space.offset.x, (640.0f - (800.0f * 480.0f / 650.0f)) * 0.5f, 1e-3f);
+	EXPECT_NEAR(space.offset.y, (480.0f - (600.0f * 480.0f / 650.0f)) * 0.5f, 1e-3f);
 }

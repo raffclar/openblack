@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <optional>
+
 #include <entt/entity/fwd.hpp>
 #include <glm/vec2.hpp>
 
@@ -65,6 +67,13 @@ void HomeDeleted(entt::entity villager);
 uint32_t CheckSatisfySleep(components::LivingAction& action);
 /// Whether the villager is wanted for something: a home if it has none, its town's desires, its own needs
 uint32_t CheckNeededForSomething(components::LivingAction& action);
+/// What the villager is needed for besides a home: worship, its town's desires, then its own hunger and rest. 1 when it
+/// took something up.
+uint32_t CheckNeededForSpecial(components::LivingAction& action);
+/// A spot just outside the villager's home, none without a home
+[[nodiscard]] std::optional<glm::vec2> PosOutsideAbode(entt::entity villager);
+/// Whether a point is somewhere a villager can't stand or lie: off the map's edge, in water or in something fixed
+[[nodiscard]] bool Collides(glm::vec2 point);
 /// What a villager with nothing to do does: goes home, sits outside it, or sits about its town
 uint32_t SetupNothingToDo(components::LivingAction& action);
 /// What a villager in its home does next: bed in an emergency, its own needs, its town's, or nothing much
@@ -90,5 +99,15 @@ uint32_t GotoCongregateInTownAfterEmergency(components::LivingAction& action);
 uint32_t CongregateInTownAfterEmergency(components::LivingAction& action);
 /// Leaving a home state: the villager comes out unless the next state keeps it inside
 bool ExitAtHome(components::LivingAction& action, VillagerStates next);
+
+/// An adult whose home is too crowded, or who has none, moves into a better building of its town and goes home; finding
+/// none it starts out homeless, and with no town it wanders as a vagrant. 1 when it did any of that.
+uint32_t LookForBetterHome(components::LivingAction& action);
+/// A villager takes on another tribe's look: the same kind of villager of that tribe, unless its kind keeps its look
+/// whatever town it lives in
+void TakeOnTribe(entt::entity villager, Tribe tribe, bool showEffect);
+/// Going to a new home: it walks to its door and goes in. On to its next state, it takes on its town's tribe.
+uint32_t GoHomeAndChange(components::LivingAction& action);
+bool ExitGoHomeAndChange(components::LivingAction& action, VillagerStates next);
 
 } // namespace openblack::ecs::villager_home

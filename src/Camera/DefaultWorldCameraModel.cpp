@@ -1085,7 +1085,7 @@ DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
 		// The drag takes the hints of the cursor before it was pressed
 		_dragging = true;
 		_drag.Start(_tricons, camera_drag::AreaCursor(cursor, EdgeArea(screenSize)), milliseconds);
-		_ringCursor = cursor;
+		_ring.Start(cursor, EdgeArea(screenSize));
 		// The land is gripped as the camera next looks at it
 		_landGrip.reset();
 	}
@@ -1110,10 +1110,10 @@ DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
 		// The cursor is held on the ring, and the camera turns about its focus by the angle swept round the middle. The
 		// ring is measured from where the pointer is now rather than where it was as the frame began: the mouse has
 		// moved on since, and putting the cursor back on the ring from the older place would undo that movement every
-		// frame and hold the camera still
+		// frame and hold the camera still. Its place on the ring is kept to a fraction of a pixel, so slow movements of a
+		// pixel or two a frame still turn the camera
 		const auto pointer = actionSystem.GetPointerPosition();
-		const auto step = camera_drag::EdgeRotate(pointer, _ringCursor, EdgeArea(screenSize));
-		_ringCursor = step.cursor;
+		const auto step = _ring.Step(pointer, EdgeArea(screenSize));
 		// The turn feels as it did on the original's default screen, whatever the resolution
 		_helpEvents.Add(camera_help::events::EdgeTurnEvents(_helpControls, step.turn));
 		if ((_features & camera_help::feature::k_Rotate) != 0)

@@ -17,6 +17,7 @@
 #include <glm/fwd.hpp>
 #include <glm/vec2.hpp>
 
+#include "ECS/TownHomes.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -27,6 +28,9 @@ public:
 	/// The functional building of a town that suits a villager best, scoring above a least score; none if none does
 	[[nodiscard]] virtual entt::entity FindAbodeWithSpace(entt::entity town, entt::entity villager, float leastScore) const = 0;
 	[[nodiscard]] virtual entt::entity FindClosestTown(const glm::vec3& point) const = 0;
+	/// The building of any town, any player's or none, nearest a point on the ground; the first of equals by player, the
+	/// players' towns before the neutral ones
+	[[nodiscard]] virtual entt::entity NearestBuilding(glm::vec2 point) const = 0;
 	/// A villager joins a town, moving into the building that suits it best or joining the homeless; false for a town
 	/// nobody can live in
 	virtual bool AddVillagerToTown(entt::entity town, entt::entity villager) = 0;
@@ -35,6 +39,20 @@ public:
 	/// A villager leaves its home, keeping its town, and joins the town's homeless; false with no town or when it
 	/// already is one of them
 	virtual bool MakeHomeless(entt::entity villager) = 0;
+	/// A villager moves into a building whatever its room, from another town too: there, into a full building, it only
+	/// joins the town
+	virtual void MoveInAnyway(entt::entity abode, entt::entity villager) = 0;
+	/// A villager put down by a building moves in when there is room for its age, else tries the building's town. Whether
+	/// it moved.
+	virtual bool MoveInByBuilding(entt::entity abode, entt::entity villager) = 0;
+	/// A villager moves into another town's best building, or with room in the town, its village centre. Whether it did.
+	virtual bool MoveIntoTown(entt::entity town, entt::entity villager) = 0;
+	/// An adult whose home is too crowded, or who has none, moves into a better building of its town or is homeless
+	virtual town_homes::NewHome LookForBetterHome(entt::entity villager) = 0;
+	/// Whether a town has room for another adult in its homes
+	[[nodiscard]] virtual bool HasRoomForNewcomer(entt::entity town) const = 0;
+	/// A villager has died: it leaves its home and its town
+	virtual void RemoveDeadVillager(entt::entity villager) = 0;
 
 	/// What stands in the way of ground kept clear: for a town's gathering place, anything fixed but a tree; for a villager
 	/// to sit down, anything at all

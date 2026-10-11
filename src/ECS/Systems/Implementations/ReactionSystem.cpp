@@ -64,6 +64,7 @@
 #include "ObjectMeasures.h"
 #include "Physics/LivingRules.h"
 #include "VillagerFire.h"
+#include "VillagerFood.h"
 #include "VillagerPhysics.h"
 #include "VillagerReactions.h"
 
@@ -423,6 +424,13 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 		return registry.AllOf<Villager>(living)
 		           ? villager_reactions::ReactToVillagerInHandPriority(living, reaction.source.initiator)
 		           : 0;
+	}
+	// A villager heeds food lying about only when it catches its eye
+	if (reaction.source.type == Reaction::ReactToFood && registry.AllOf<Villager>(living))
+	{
+		const auto kind = ecs::villager_food::ReactToFoodPriority(living, reaction.source.initiator, info->priority);
+		return villager_reaction::Priority(static_cast<uint8_t>(std::min<uint32_t>(kind, 255)),
+		                                   Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
 	}
 	// A villager weighs a fire by its own rule: how far the fire reaches of its fiercest, and whether it fights it already
 	if (reaction.source.type == Reaction::ReactToFire && registry.AllOf<Villager>(living))

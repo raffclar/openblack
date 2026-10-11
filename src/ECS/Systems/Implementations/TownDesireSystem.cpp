@@ -39,6 +39,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TownDesire.h"
 #include "ECS/TownDesireFlags.h"
+#include "ECS/TownHomes.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -95,6 +96,7 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 		{
 			return;
 		}
+		++(villager.sex == Villager::Sex::MALE ? stats.men : stats.women);
 		if (villager.lifeStage == Villager::LifeStage::Child)
 		{
 			++stats.children;
@@ -113,24 +115,32 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 		}
 	});
 
-	registry.Each<const Abode>([&](const Abode& abode) {
+	registry.Each<const Abode>([&](entt::entity entity, const Abode& abode) {
 		if (abode.townId != town.id)
 		{
 			return;
 		}
-		++in.abodeCount;
-		const auto number = static_cast<size_t>(abode.type);
-		if (number < stats.abodesByNumber.size())
-		{
-			++stats.abodesByNumber.at(number);
-		}
 		const auto* info = FindAbodeInfo(tribe, abode.type);
-		if (info != nullptr && info->maxVillagersInAbode + info->maxChildrenInAbode != 0)
+		// A building counts among the town's buildings and their places once it is built
+		const auto* progress = registry.TryGet<const BuildProgress>(entity);
+		if (progress == nullptr || progress->built >= 1.0f)
 		{
-			++stats.abodesWithPlaces;
-			stats.adultPlaces += info->maxVillagersInAbode;
-			stats.childPlaces += info->maxChildrenInAbode;
-			stats.totalPlaces += info->maxVillagersInAbode + info->maxChildrenInAbode;
+			++in.abodeCount;
+			const auto number = static_cast<size_t>(abode.type);
+			if (number < stats.abodesByNumber.size())
+			{
+				++stats.abodesByNumber.at(number);
+			}
+			if (info != nullptr && info->maxVillagersInAbode + info->maxChildrenInAbode != 0)
+			{
+				++stats.abodesWithPlaces;
+				stats.adultPlaces += info->maxVillagersInAbode;
+				stats.childPlaces += info->maxChildrenInAbode;
+				stats.totalPlaces += info->maxVillagersInAbode + info->maxChildrenInAbode;
+				const auto household = openblack::ecs::town_homes::HouseholdOf(registry, entity);
+				stats.adultRoom += static_cast<int32_t>(info->maxVillagersInAbode) - static_cast<int32_t>(household.adults);
+				stats.childRoom += static_cast<int32_t>(info->maxChildrenInAbode) - static_cast<int32_t>(household.children);
+			}
 		}
 		// Abodes don't wear down yet, so none wants repairing
 		in.abodes.push_back({
@@ -273,6 +283,30 @@ float TownDesireSystem::RecomputeDesire(entt::entity town, TownDesireInfo desire
 	    .farmerMaxWood = farmer.maxWoodCarried,
 	};
 	return town_desire::CallDesireFunction(*townDesire, context, Index(desire));
+}
+
+float TownDesireSystem::FoodShortage(entt::entity town) const
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* townDesire = registry.TryGet<const TownDesire>(town);
+	const auto* data = registry.TryGet<const Town>(town);
+	const auto* tribe = registry.TryGet<const Tribe>(town);
+	if (townDesire == nullptr || data == nullptr || tribe == nullptr)
+	{
+		return 0.0f;
+	}
+	// TODO(villager-hunger-health): a town of the player's running this low (0.95 or more) shows the low-on-food help
+	const auto& info = Locator::infoConstants::value();
+	const auto& farmer = info.villager.at(10);
+	const auto inputs = GatherInputs(town, *data, *tribe);
+	return town_desire::DesireForFood({
+	    .desire = *townDesire,
+	    .in = inputs,
+	    .town = info.town,
+	    .info = info.townDesire,
+	    .farmerMaxFood = farmer.maxFoodCarried,
+	    .farmerMaxWood = farmer.maxWoodCarried,
+	});
 }
 
 TownDesireInfo TownDesireSystem::GetMostWanted(entt::entity town) const

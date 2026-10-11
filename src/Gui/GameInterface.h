@@ -83,10 +83,13 @@ public:
 
 	[[nodiscard]] GameMenu& GetMenu() noexcept { return *_menu; }
 
-	/// Asks the returning player how to start the new game. The box takes the mouse and every key until answered.
-	void ShowSkipBox();
+	/// Asks the player how to start the new game, offering to keep the old creature only when the current profile has
+	/// one. The box takes the mouse and every key until answered.
+	void ShowSkipBox(bool currentProfileHasCreature);
 	/// The answer to the start-of-game question, once
 	std::optional<new_game_choice::Choice> TakeSkipBoxAnswer() { return std::exchange(_skipBoxAnswer, std::nullopt); }
+	/// The start-of-game question's box, up or not
+	[[nodiscard]] const SkipBox& GetSkipBox() const noexcept { return *_skipBox; }
 	/// Whether a dialog is up taking the mouse: the menu, or the start-of-game question
 	[[nodiscard]] bool IsDialogOpen() const noexcept { return _menu->IsOpen() || _skipBox->IsActive(); }
 
@@ -182,7 +185,7 @@ private:
 	/// Opens the tattoo editor's dialog as the editor opens, and moves it on
 	void UpdateTattooEditor(float deltaSeconds);
 	/// The floating numbers, each ending at its point over its shadow
-	void DrawFloatingNumbers();
+	void DrawFloatingNumbers(glm::u16vec2 resolution);
 	/// The tooltip by the hand, its words and then its mouse
 	void DrawToolTip(glm::u16vec2 resolution);
 	/// The creature's status panel, at the left of the screen
@@ -210,10 +213,10 @@ private:
 	/// A line of the bubble's words in a colour, fading from its top to its bottom
 	void DrawBubbleLine(const help::tip_bubble::Line& line, glm::vec3 colour);
 	/// The "Continue" cue at the right of the dialogue box, so far through its fade
-	void DrawClickCue(glm::u16vec2 resolution, const help::TextRegion& box, float share);
+	void DrawClickCue(const help::TextRegion& box, float share);
 	/// The control icons the newest text asks for at the right of the dialogue box: the camera keys' cap in its top
 	/// third, any other action's mouse or key in its bottom third
-	void DrawControlIcons(glm::u16vec2 resolution, const help::TextFrame& frame, const help::DialogueText& dialogue);
+	void DrawControlIcons(const help::TextFrame& frame, const help::DialogueText& dialogue);
 	/// The font of the dialogue's words: the advisors each have their own, and j0 stands in for one that is missing
 	[[nodiscard]] std::pair<const GameFont*, const graphics::Texture2D*> DialogueFont(help::TextFont font) const;
 
@@ -221,6 +224,8 @@ private:
 	GameFont _font;
 	std::unique_ptr<graphics::Texture2D> _atlas;
 	std::unique_ptr<graphics::Texture2D> _fontTexture;
+	/// The font's glyphs at full height, for text scaled up past the default screen's size
+	std::unique_ptr<graphics::Texture2D> _fullFontTexture;
 	std::unique_ptr<graphics::Texture2D> _symbols;
 	std::unique_ptr<graphics::Texture2D> _mice;
 	/// The atmosphere texture of glows and arrows

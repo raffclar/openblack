@@ -80,7 +80,7 @@ void Renderer::DrawVillagerEyes(const DrawSceneDesc& desc) const
 	submitDesc.state = BGFX_STATE_WRITE_MASK | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA;
 	submitDesc.useMaterialCulling = true;
 	submitDesc.matrixCount = 1;
-	submitDesc.creatureShadows = false;
+	submitDesc.groundShadows = false;
 	// Lit as the villager's body is, by the land's light and colour where it stands and the haze there, but shaded by the
 	// sun only once for each eye
 	submitDesc.tint = glm::vec4(1.0f, 1.0f, 1.0f, 0.0f);

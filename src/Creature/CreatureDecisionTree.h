@@ -115,9 +115,10 @@ struct Episode
 	/// thing was
 	std::array<int32_t, 4> saved {};
 };
-/// A tree keeps its newest examples, at most this many
+/// A tree keeps at most this many examples
 constexpr size_t k_MaxEpisodes = 16;
-/// Adds an example, the oldest going when there are too many
+/// Adds an example, the newest last. When the list is full, the newest example so far gives way to it, so the oldest
+/// ones are kept and only the latest keeps changing.
 void AddEpisode(std::vector<Episode>& episodes, Episode episode);
 
 /// The feedback is sorted into 11 steps from -1 to 1, each the first whose middle is within a quarter of it

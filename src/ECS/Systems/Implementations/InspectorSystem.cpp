@@ -16,6 +16,7 @@
 #include <chrono>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -177,6 +178,9 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
 	auto input = std::make_unique<inspector::InputProvider>(*_inputTarget);
 	_input = input.get();
 	_inspector.Add(std::move(input));
+	// The game's dialogs are clicked through the input's queue, behind any input asked for before
+	_controls->gui.SetInputSender(
+	    [input = _input](std::span<const inspector::InputEvent> events) { return input->Send(events); });
 
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Inspector listening on 127.0.0.1:{}", _server->Port());
 

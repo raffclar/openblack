@@ -47,8 +47,13 @@ float creature_planner::Novelty(uint32_t turnsSinceDone, bool servesFirstDesire)
 float creature_planner::Priority(float desire, std::optional<float> goalUsefulness, float actionPriority,
                                  float objectUsefulness, std::optional<float> usedUsefulness)
 {
-	return desire * goalUsefulness.value_or(k_DefaultUsefulness) * std::max(actionPriority, k_MinActionPriority) *
+	return desire * goalUsefulness.value_or(k_DefaultUsefulness) * std::min(actionPriority, k_MaxActionPriority) *
 	       objectUsefulness * usedUsefulness.value_or(k_DefaultUsefulness) * k_PriorityScale;
+}
+
+size_t creature_planner::GoalsPerTurn(size_t creatureCount)
+{
+	return creatureCount < k_CreaturesForFewerGoals ? k_GoalsPerTurn : 1;
 }
 
 bool creature_planner::ShouldSwitch(float best, float current)
@@ -140,10 +145,10 @@ std::optional<Plan> creature_planner::Best(const PlannerState& state)
 	return best;
 }
 
-std::optional<Plan> creature_planner::Choose(const PlannerState& state, float minimum)
+std::optional<Plan> creature_planner::Choose(const PlannerState& state)
 {
 	const auto best = Best(state);
-	if (!best.has_value() || best->priority < minimum)
+	if (!best.has_value())
 	{
 		return std::nullopt;
 	}

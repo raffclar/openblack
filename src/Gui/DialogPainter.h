@@ -47,10 +47,10 @@ struct DialogRect
 
 /// Draws dialogs the way the game's front end does.
 ///
-/// Dialogs are laid out in an 800 by 600 space. On a screen at least that big it is drawn a pixel a unit in the middle
-/// of the screen, on a smaller screen it is scaled down to fit. They are drawn with the front end
-/// atlas (data/textures/Front_end_buttons.raw): boxes are filled with the colour at the centre of one of its 16 by 16
-/// cells and edged with lines, and soft shadows come from its frame. Text is in the font j0.
+/// Dialogs are laid out in an 800 by 600 space, placed on the screen by FrontEndSpace: scaled to fill a bigger screen's
+/// 4:3 middle as it fills the default 800 by 600 screen, or shrunk as the game shrinks it on a smaller one. They are drawn with
+/// the front end atlas (data/textures/Front_end_buttons.raw): boxes are filled with the colour at the centre of one of its 16
+/// by 16 cells and edged with lines, and soft shadows come from its frame. Text is in the font j0.
 class DialogPainter
 {
 public:
@@ -160,9 +160,19 @@ public:
 
 	/// A line of text a size high in pixels, from its top left in pixels
 	void DrawString(glm::vec2 screen, std::u16string_view text, float size, glm::vec4 colour) const;
+	/// The same, drawn from the full height glyphs when `sharp` and the size is more than half their height: for text
+	/// scaled up past the size the game drew it at on its default screen
+	void DrawString(glm::vec2 screen, std::u16string_view text, float size, glm::vec4 colour, bool sharp) const;
+	/// The font's glyphs at their full height (GameFont::GetFullAtlas), which text the layout scales up is drawn from;
+	/// without, all text is drawn from the half height glyphs
+	void SetFullGlyphs(const graphics::Texture2D* texture) noexcept { _fullFontTexture = texture; }
+	/// How many pixels a unit of the layout covers
+	[[nodiscard]] float GetScale() const noexcept { return _scale; }
 
 private:
 	[[nodiscard]] glm::vec2 ToScreen(glm::vec2 dialog) const;
+	[[nodiscard]] bool UseFullGlyphs(float drawnSize) const noexcept;
+	void DrawGlyphs(glm::vec2 screen, std::u16string_view text, float size, glm::vec4 colour, bool full) const;
 
 	Canvas& _canvas;
 	const GameFont& _font;
@@ -170,6 +180,7 @@ private:
 	const graphics::Texture2D& _fontTexture;
 	const graphics::Texture2D* _symbols {nullptr};
 	const graphics::Texture2D* _mice {nullptr};
+	const graphics::Texture2D* _fullFontTexture {nullptr};
 	glm::vec2 _offset {0.0f, 0.0f};
 	float _scale {1.0f};
 	mutable float _alpha {1.0f};

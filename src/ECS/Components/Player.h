@@ -70,6 +70,8 @@ struct Player
 	uint32_t villagersLost {0};
 	uint32_t villagersKilled {0};
 	uint32_t sacrifices {0};
+	/// The food the player's people have eaten
+	uint32_t foodUsed {0};
 	/// All the prayer power the player's worship sites have given
 	float totalChantsUsed {0.0f};
 	Miracles miracles;

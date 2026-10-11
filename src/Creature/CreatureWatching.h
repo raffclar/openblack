@@ -143,7 +143,8 @@ struct ActionNeeds
 struct MimicRule
 {
 	std::string name;
-	/// The chance, 0 to 1, that the creature copies it, which also ranks it
+	/// How readily the creature copies it, from the game's table. Never rolled: nothing at or below 0 is copied, and a
+	/// deed is copied over the one being copied only if it ranks at least as high
 	float chance {0.0f};
 	/// Only on the learning leash
 	bool needsLearningLeash {true};
@@ -182,11 +183,10 @@ struct MimicConditions
 	float reactionPriority {0.0f};
 	bool canSee {true};
 };
-/// Starts copying a player's action, if the creature can and the chance comes up, and anything it already copies ranks
-/// no higher; random() is from 0 to 1
+/// Starts copying a player's action, if the creature can. Copying nothing, it copies anything that ranks above 0; copying
+/// another deed's action, only a different deed that ranks at least as high; already copying a desire, any deed at all.
 [[nodiscard]] bool StartMimicry(std::optional<Mimicry>& mimicry, size_t rule, std::span<const MimicRule> rules,
-                                const MimicConditions& conditions, std::optional<uint32_t> object,
-                                const std::function<float()>& random);
+                                const MimicConditions& conditions, std::optional<uint32_t> object);
 /// One step of copying: when a stage's steps run out it moves to the next, the desire stage only for rules that have
 /// it, then ends; random(n) is from 0 to n - 1
 void StepMimicry(std::optional<Mimicry>& mimicry, std::span<const MimicRule> rules,

@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <optional>
+
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
@@ -39,6 +41,11 @@ namespace openblack::ecs::systems::villager_reactions
 void Start(entt::entity villager, Reaction type, components::LivingReaction& state, bool wasReacting);
 /// A villager stops reacting; when asked, it goes back to what it was doing
 void Stop(entt::entity villager, components::LivingReaction& state, bool resetState);
+
+/// The villager stops reacting and goes back to what it was doing
+uint32_t StopReacting(components::LivingAction& action);
+/// What the villager reacts to: the reaction's thing, while it is there
+[[nodiscard]] std::optional<entt::entity> ReactingTo(entt::entity villager);
 
 /// A villager turns towards a point, a step a turn, as one watching something does
 void LookAt(entt::entity villager, const glm::vec3& point);

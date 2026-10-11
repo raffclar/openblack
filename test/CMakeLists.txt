@@ -278,9 +278,6 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_vertex_blend test_vertex_blend.cpp)
 openblack_setup_and_add_test(
-  test_creature_shadow graphics/test_creature_shadow.cpp
-)
-openblack_setup_and_add_test(
   test_creature_locomotion test_creature_locomotion.cpp
 )
 openblack_setup_and_add_test(test_miracle_surfaces test_miracle_surfaces.cpp)
@@ -621,6 +618,11 @@ if (OPENBLACK_INSPECTOR)
     test_inspector_control inspector/test_inspector_control.cpp
   )
   target_link_libraries(test_inspector_control PRIVATE inspector)
+  # gui.press on the game's own dialogs, as the start-of-game question
+  openblack_setup_and_add_test(
+    test_inspector_dialogs inspector/test_inspector_dialogs.cpp
+  )
+  target_link_libraries(test_inspector_dialogs PRIVATE inspector)
   # The inspector's pointer with a real mouse's timing, through the action map and the window's event queue
   openblack_setup_and_add_test(
     test_scripted_mouse input/test_scripted_mouse.cpp
@@ -747,6 +749,7 @@ openblack_setup_and_add_test(
   test_size_follower windowing/test_size_follower.cpp
   test_camera_edge_area camera/test_camera_edge_area.cpp
 )
+openblack_setup_and_add_test(test_villager_food_rules test_villager_food_rules.cpp)
 openblack_setup_and_add_test(test_volume_glow test_volume_glow.cpp)
 target_link_libraries(test_volume_glow PRIVATE psys)
 openblack_setup_and_add_test(test_relaxation_rules test_relaxation_rules.cpp)

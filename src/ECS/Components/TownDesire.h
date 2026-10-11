@@ -39,6 +39,8 @@ struct TownResourceTally
 	float woodAtSites {0.0f};
 	/// The wood its builders have built with
 	float woodUsed {0.0f};
+	/// The food its people have eaten
+	float foodUsed {0.0f};
 };
 
 /// What a town knows of its people and buildings, counted afresh each game turn for its desires
@@ -46,11 +48,17 @@ struct TownStats
 {
 	uint32_t adults {0};
 	uint32_t children {0};
-	/// Abodes with room for anyone, and the room in them for adults, children and both
+	/// Its people of each sex, any age
+	uint32_t men {0};
+	uint32_t women {0};
+	/// Its built abodes with room for anyone, and the room in them for adults, children and both
 	uint32_t abodesWithPlaces {0};
 	uint32_t adultPlaces {0};
 	uint32_t childPlaces {0};
 	uint32_t totalPlaces {0};
+	/// The places left in them for adults and for children, below nothing when they are over full
+	int32_t adultRoom {0};
+	int32_t childRoom {0};
 	uint32_t civicBuildings {0};
 	/// Villagers of each discipline
 	std::array<uint8_t, 13> disciples {};

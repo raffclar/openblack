@@ -28,6 +28,8 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/CarriedByTornado.h"
+#include "ECS/Components/DetailMeshes.h"
+#include "ECS/Components/Disciple.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
@@ -40,6 +42,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/DiscipleRules.h"
 #include "ECS/Map.h"
 #include "ECS/NearestSearch.h"
 #include "ECS/Registry.h"
@@ -55,10 +58,12 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerBuild.h"
 #include "VillagerDisciples.h"
 #include "VillagerFire.h"
+#include "VillagerFood.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -71,24 +76,13 @@ namespace world_objects = openblack::ecs::world_objects;
 namespace villager_fire = openblack::ecs::villager_fire;
 namespace villager_build = openblack::ecs::villager_build;
 namespace villager_disciple = openblack::ecs::villager_disciple;
+namespace villager_food = openblack::ecs::villager_food;
 namespace wall_hug = openblack::ecs::wall_hug;
 namespace walk_arrival = openblack::ecs::walk_arrival;
 using ClearAreaFilter = openblack::ecs::systems::TownSystemInterface::ClearAreaFilter;
 
 namespace
 {
-// TODO(villagers): hunger and eating come with the food phase (food.md); until then no villager is hungry
-namespace villager_food
-{
-bool CheckHungry(const LivingAction&)
-{
-	return false;
-}
-bool CheckSatisfyOwnFoodDesire(const LivingAction&)
-{
-	return false;
-}
-} // namespace villager_food
 
 /// At home a villager sees to its needs when they come to this share of the more pressing of: rest at the life it
 /// sleeps on to, and food at the hungry mark
@@ -271,6 +265,11 @@ std::optional<MoveState> WalkStateOf(entt::entity villager)
 
 const GAbodeInfo& AbodeInfoOf(entt::entity abode)
 {
+	// Its own row, its tribe's kind of building; the first row of its kind should its model not be known
+	if (const auto* info = world_objects::AbodeInfoOf(abode); info != nullptr)
+	{
+		return *info;
+	}
 	return Locator::infoConstants::value().abode.at(static_cast<size_t>(WorldRegistry().Get<const Abode>(abode).type));
 }
 
@@ -425,10 +424,15 @@ bool CheckNeedsAtHome(LivingAction& action)
 {
 	const auto villager = EntityOf(action);
 	// TODO(villagers): a woman's own business at home and a pregnancy come first, and a child has its own (breeding
-	// phase); a breeding disciple weighs its needs at the go-home and starving marks
+	// phase)
 	const auto& info = InfoOf(villager);
-	const float pressing = std::max(needs::LifeDesireFromLife(info.damageThresholdToSleepUntil, info.damageThresholdToGoHome),
-	                                needs::DesireForFood(info.hungryForFood));
+	// A disciple at work weighs its needs only at the life it goes home hurt and the food it starves at
+	const auto* role = WorldRegistry().TryGet<const Disciple>(villager);
+	const bool working = role != nullptr && openblack::disciple::KindOf(role->type).waitsWhenIdle;
+	const float restLife = working ? info.damageThresholdToGoHome : info.damageThresholdToSleepUntil;
+	const float hungerMark = working ? info.starvingForFood : info.hungryForFood;
+	const float pressing =
+	    std::max(needs::LifeDesireFromLife(restLife, info.damageThresholdToGoHome), needs::DesireForFood(hungerMark));
 	return CheckSatisfyOwnDesire(action, k_AtHomeNeedShare * pressing);
 }
 
@@ -493,8 +497,20 @@ std::optional<glm::vec2> TreeTentPos(entt::entity tree)
 	return routine::Polar(at, angle, routine::k_TentTreeGap);
 }
 
-/// Whether a point is somewhere a villager can't lie: off the map's edge, in water or in something fixed
-bool Collides(glm::vec2 point)
+} // namespace
+
+std::optional<glm::vec2> villager_home::PosOutsideAbode(entt::entity villager)
+{
+	const auto abode = AbodeOf(villager);
+	if (abode == entt::null)
+	{
+		return std::nullopt;
+	}
+	// Out from its door, about an eighth of a half turn either side, a step or two from it
+	return routine::PosOutsideDoor(PositionOf(abode), ArrivePosition(abode), FloatRandom());
+}
+
+bool villager_home::Collides(glm::vec2 point)
 {
 	if (!map_coords::InBounds(map_coords::CellOf(point)))
 	{
@@ -517,6 +533,9 @@ bool Collides(glm::vec2 point)
 	}
 	return false;
 }
+
+namespace
+{
 
 /// Whether a villager lies down in the open within reach of a spiral point
 bool SleeperNear(glm::ivec2 cell, glm::vec2 point)
@@ -565,7 +584,7 @@ std::optional<glm::vec2> GetTentPos(entt::entity villager, glm::vec2 spot)
 	}
 	for (uint32_t tries = 0; tries < routine::k_TentTries; ++tries)
 	{
-		if (!Collides(spot))
+		if (!villager_home::Collides(spot))
 		{
 			// The spot is taken if a sleeper lies near any point of a spiral walked from it; it ends where the walk does
 			bool free = true;
@@ -843,11 +862,16 @@ uint32_t villager_home::CheckSatisfySleep(LivingAction& action)
 
 uint32_t villager_home::CheckNeededForSomething(LivingAction& action)
 {
-	const auto villager = EntityOf(action);
-	if (AbodeOf(villager) == entt::null && CheckHomelessMoveIntoAbode(action))
+	if (AbodeOf(EntityOf(action)) == entt::null && CheckHomelessMoveIntoAbode(action))
 	{
 		return 1;
 	}
+	return CheckNeededForSpecial(action);
+}
+
+uint32_t villager_home::CheckNeededForSpecial(LivingAction& action)
+{
+	const auto villager = EntityOf(action);
 	// TODO(villagers): worshippers are wanted at the worship site first (the jobs phase)
 	if (TownOf(villager) != entt::null && CheckNeededForTownDesire(action) == 1)
 	{
@@ -1262,5 +1286,106 @@ bool villager_home::ExitAtHome(LivingAction& action, VillagerStates next)
 		LeaveHome(EntityOf(action));
 	}
 	// Leaving is never held up
+	return false;
+}
+
+uint32_t villager_home::LookForBetterHome(LivingAction& action)
+{
+	const auto villager = EntityOf(action);
+	switch (Locator::townSystem::value().LookForBetterHome(villager))
+	{
+	case town_homes::NewHome::Stays:
+		return 0;
+	case town_homes::NewHome::Moved:
+		if (IsAvailable(villager))
+		{
+			SetTopState(action, VillagerStates::GoHome);
+		}
+		return 1;
+	case town_homes::NewHome::MadeHomeless:
+		SetTopState(action, VillagerStates::HomelessStart);
+		return 1;
+	case town_homes::NewHome::AlreadyHomeless:
+		return 1;
+	case town_homes::NewHome::NoTown:
+		VagrantStart(action);
+		return 1;
+	}
+	return 0;
+}
+
+void villager_home::TakeOnTribe(entt::entity villager, Tribe tribe, [[maybe_unused]] bool showEffect)
+{
+	auto& registry = WorldRegistry();
+	auto& person = registry.Get<Villager>(villager);
+	if (InfoOf(person).keepMeshWhenChangeTown != 0)
+	{
+		return;
+	}
+	const auto& infos = Locator::infoConstants::value().villager;
+	const auto row = static_cast<size_t>(GVillagerInfo::Find(tribe, person.number));
+	if (row >= infos.size())
+	{
+		return;
+	}
+	// It becomes the same kind of villager of the new tribe, wearing that tribe's models: a child its child model at
+	// every distance, an adult its kind's model for each distance
+	// TODO(villager-life-cycle): a white puff of smoke goes up as it changes when `showEffect` (the game's smoke puff isn't
+	// in openblack yet; the dying villager's skeleton swap needs the same)
+	const auto& info = infos.at(row);
+	person.tribe = tribe;
+	const bool child = person.lifeStage == Villager::LifeStage::Child;
+	const auto high = resources::HashIdentifier(child ? info.childMeshHigh : info.highDetail);
+	if (auto* mesh = registry.TryGet<Mesh>(villager); mesh != nullptr)
+	{
+		mesh->id = high;
+	}
+	if (auto* detail = registry.TryGet<DetailMeshes>(villager); detail != nullptr)
+	{
+		detail->meshes =
+		    child ? std::array {high, high, high}
+		          : std::array {high, resources::HashIdentifier(info.stdDetail), resources::HashIdentifier(info.lowDetail)};
+	}
+	registry.SetDirty();
+}
+
+uint32_t villager_home::GoHomeAndChange(LivingAction& action)
+{
+	const auto villager = EntityOf(action);
+	auto next = VillagerStates::DecideWhatToDo;
+	if (const auto abode = AbodeOf(villager); abode != entt::null)
+	{
+		const auto door = ArrivePosition(abode);
+		if (!AreWeThere(villager, door))
+		{
+			// TODO(villagers): hugging round what stands in the way, as the game's walk home does
+			SetupMoveTo(action, door, VillagerStates::GoHomeAndChange);
+			return 1;
+		}
+		next = IsAtHome(villager) ? VillagerStates::AtHome : VillagerStates::ArrivesHome;
+	}
+	SetTopState(action, next);
+	// TODO(villager-life-cycle): one still small for its age (a child just grown up) is sized for its age
+	return 1;
+}
+
+bool villager_home::ExitGoHomeAndChange(LivingAction& action, VillagerStates next)
+{
+	const auto villager = EntityOf(action);
+	const auto& table = Locator::infoConstants::value().villagerStateTable;
+	const auto& nextInfo = table.at(static_cast<size_t>(next));
+	// Going on to a state of its own (not a walk, nor this state again) it takes on its town's tribe, in a puff of smoke
+	// unless it goes indoors
+	if (next != VillagerStates::GoHomeAndChange && nextInfo.isFinalState != 0)
+	{
+		const auto town = TownOf(villager);
+		const auto* tribe = town != entt::null ? WorldRegistry().TryGet<const Tribe>(town) : nullptr;
+		TakeOnTribe(villager, tribe != nullptr ? *tribe : WorldRegistry().Get<const Villager>(villager).tribe,
+		            nextInfo.staysAtHomeOnExit == 0);
+	}
+	if (villager_disciple::TypeOf(villager) == VillagerDisciple::ChangeHouse)
+	{
+		villager_disciple::SetType(villager, VillagerDisciple::None);
+	}
 	return false;
 }
