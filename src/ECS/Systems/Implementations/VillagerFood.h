@@ -41,6 +41,8 @@ bool CheckSatisfyOwnFoodDesire(components::LivingAction& action);
 /// Takes up to an amount of a resource from a thing into the villager's hands. Taken from sped-up food it is sped up;
 /// from poisoned food, poisoned. What it took.
 uint16_t GetResourceFrom(entt::entity villager, entt::entity source, ResourceType type, uint16_t amount);
+/// How much food the villager must take for a meal, beyond what it carries
+[[nodiscard]] uint32_t FoodRequiredForMeal(entt::entity villager);
 /// It eats as much of its meal as it carries; its town counts the food used. How full it is after.
 float EatFoodHeld(entt::entity villager);
 /// The magic food speed-up wears off, a tick every tenth turn

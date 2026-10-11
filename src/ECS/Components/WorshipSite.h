@@ -60,8 +60,11 @@ struct WorshipSite
 	entt::entity dance {entt::null};
 	/// The pot its worshippers eat from
 	entt::entity foodPot {entt::null};
-	/// Its worshippers, the newest first: the villagers on their way to dance at it or dancing there, and those hiding
-	/// in it. The player's come into the temple with the player.
+	/// Food counted as on its way to it from its towns. Nothing adds to it; food taken off it for supplies that never
+	/// came can leave it below none.
+	int32_t foodOnTheWay {0};
+	/// Its worshippers, the newest first: the villagers dancing at it (from setting off to their places in the dance)
+	/// and those worshipping hidden in it. The player's come into the temple with the player.
 	std::vector<entt::entity> worshippers;
 	/// A town asked to build it while it isn't built, and how much more than its other building the town wants to
 	struct BuildRequest
@@ -71,6 +74,15 @@ struct WorshipSite
 	};
 	/// The towns asked to build it, the newest first; none once it is built
 	std::vector<BuildRequest> buildRequests;
+};
+
+/// A villager going to worship, or worshipping, at its town's worship site
+struct Worshipper
+{
+	/// Counted among its town's worshippers: it dances, hides, eats or rests at the site
+	bool atWorship {false};
+	/// Set off for the site and not there yet: counted among those the site's dance waits for
+	bool onTheWay {false};
 };
 
 /// A worship site's altar, the tribe's own, made with the site and built with it

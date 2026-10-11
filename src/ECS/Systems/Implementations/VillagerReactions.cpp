@@ -63,6 +63,7 @@
 #include "VillagerFire.h"
 #include "VillagerForester.h"
 #include "VillagerHome.h"
+#include "VillagerMourning.h"
 #include "VillagerPhysics.h"
 
 using namespace openblack;
@@ -384,6 +385,13 @@ void villager_reactions::Start(entt::entity villager, Reaction type, LivingReact
 		// It goes to the breeder to make love
 		SetTop(*action, VillagerStates::ReactToBreeder);
 		break;
+	case Reaction::ReactToDeath:
+		// It points at the dead, goes to look or, at a dead creature, watches it
+		if (const auto dead = ReactingTo(villager); dead.has_value())
+		{
+			ecs::villager_mourning::Setup(*action, *dead);
+		}
+		break;
 	case Reaction::ReactToFire:
 		// The fire's own states take over, from the object burning
 		if (Locator::reactionSystem::has_value())
@@ -484,9 +492,9 @@ std::optional<entt::entity> villager_reactions::ReactingTo(entt::entity villager
 	return reaction->source.initiator;
 }
 
-void villager_reactions::LookAt(entt::entity villager, const glm::vec3& point)
+bool villager_reactions::LookAt(entt::entity villager, const glm::vec3& point)
 {
-	TurnTowards(villager, point);
+	return TurnTowards(villager, point);
 }
 
 uint32_t villager_reactions::Watching(LivingAction& action)

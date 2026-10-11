@@ -547,9 +547,11 @@ bool SetAboutWork(LivingAction& action, VillagerDisciple type)
 		return villager_disciple_work::CheckSupplyWorkshop(action) == 1;
 	case Trader:
 		return villager_disciple_work::CheckTrader(action) == 1;
-	// TODO(disciples): farming isn't in openblack yet, so a farmer finds none and waits by the town centre; worship is
-	// the villager-worship lane's. A missionary has no work of its own once preaching: it lives as a villager of its new
-	// town.
+	case Worship:
+		SetTopState(action, VillagerStates::GotoWorshipSiteForWorship);
+		return true;
+	// TODO(disciples): farming isn't in openblack yet, so a farmer finds none and waits by the town centre. A missionary
+	// has no work of its own once preaching: it lives as a villager of its new town.
 	default:
 		return false;
 	}
@@ -566,6 +568,7 @@ bool LandingStateIsThere(VillagerStates state)
 	case VillagerStates::ForesterArrivesAtForest:
 	case VillagerStates::BreederJustLanded:
 	case VillagerStates::MissionaryDisciple:
+	case VillagerStates::GotoWorshipSiteForWorship:
 		return true;
 	default:
 		return false;

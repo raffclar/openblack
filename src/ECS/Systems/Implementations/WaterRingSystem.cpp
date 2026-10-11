@@ -25,7 +25,13 @@ bool WaterRingSystem::Add(const water_rings::Ring& ring)
 	return true;
 }
 
-void WaterRingSystem::Update(std::chrono::duration<float, std::milli> gameTime)
+void WaterRingSystem::Update(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime)
 {
-	std::erase_if(_rings, [gameTime](water_rings::Ring& ring) { return !water_rings::Advance(ring, gameTime.count()); });
+	const auto step = water_rings::Step(_pace, frameRealTime, frameGameTime);
+	if (step.count() == 0)
+	{
+		return;
+	}
+	const auto milliseconds = static_cast<float>(step.count());
+	std::erase_if(_rings, [milliseconds](water_rings::Ring& ring) { return !water_rings::Advance(ring, milliseconds); });
 }

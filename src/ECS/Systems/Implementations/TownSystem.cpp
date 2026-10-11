@@ -56,6 +56,7 @@
 #include "VillagerBreeding.h"
 #include "VillagerDiscipleWork.h"
 #include "VillagerDisciples.h"
+#include "VillagerWorship.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -108,6 +109,8 @@ void TownSystem::OnVillagerGone(entt::registry& registry, entt::entity villager)
 		}
 		std::erase(abode.inhabitants, villager);
 	}
+	// The towns and worship sites counting it at worship forget it
+	ecs::villager_worship::Forget(villager);
 	// Its children lose their mother, and its lover forgets it
 	for (auto [entity, person] : registry.view<Villager>().each())
 	{
@@ -505,8 +508,19 @@ void TownSystem::ProcessTurn()
 		}
 		registry.Get<Town>(townEntity).emergencyTurn = 0;
 	}
-	// Now and then each town evens out its homes, moving a man for a woman between two, or one villager
 	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	// Every tenth turn each town short of worshippers sends more
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		for (const auto townEntity : towns)
+		{
+			if (registry.Valid(townEntity))
+			{
+				ecs::villager_worship::TownTurn(townEntity, turn);
+			}
+		}
+	}
+	// Now and then each town evens out its homes, moving a man for a woman between two, or one villager
 	const auto every = Locator::infoConstants::value().town.shuffleVillagersEvery;
 	const auto homes = GameHomes();
 	for (const auto townEntity : towns)

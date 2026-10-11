@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
 #include <chrono>
 
 #include <glm/geometric.hpp>
@@ -84,17 +86,70 @@ TEST(WaterRings, CellsOfTheSmokeTexture)
 	EXPECT_EQ(water_rings::CellUvs(0x7F)[0], water_rings::CellUvs(0x3F)[0]);
 }
 
+TEST(WaterRings, StepAtTheScreensRefreshWhateverTheFrameRate)
+{
+	using std::chrono::milliseconds;
+	// 1000 frames a second: a step every 16th or 17th frame, with all the game time since the last
+	water_rings::Pace pace;
+	int32_t steps = 0;
+	milliseconds aged {0};
+	for (int32_t frame = 0; frame < 1000; ++frame)
+	{
+		const auto step = water_rings::Step(pace, milliseconds(1), milliseconds(1));
+		if (step.count() != 0)
+		{
+			++steps;
+			aged += step;
+			EXPECT_TRUE(step == milliseconds(16) || step == milliseconds(17));
+		}
+	}
+	EXPECT_EQ(steps, 60);
+	EXPECT_EQ(aged + pace.gameSinceStep, milliseconds(1000));
+}
+
+TEST(WaterRings, SlowFramesStepOnceEachWithTheirGameTime)
+{
+	using std::chrono::milliseconds;
+	water_rings::Pace pace;
+	EXPECT_EQ(water_rings::Step(pace, milliseconds(33), milliseconds(33)), milliseconds(33));
+	EXPECT_EQ(water_rings::Step(pace, milliseconds(40), milliseconds(80)), milliseconds(80));
+	// A long frame steps once and leaves no steps owed, only part of an interval towards the next
+	EXPECT_EQ(water_rings::Step(pace, milliseconds(500), milliseconds(500)), milliseconds(500));
+	EXPECT_LT(pace.sinceStep, water_rings::Pace::k_StepInterval);
+	EXPECT_EQ(water_rings::Step(pace, milliseconds(1), milliseconds(1)), milliseconds(0));
+	// The next step takes the game time owed; while the game is paused the frames bring none
+	EXPECT_EQ(water_rings::Step(pace, milliseconds(50), milliseconds(0)), milliseconds(1));
+	EXPECT_EQ(water_rings::Step(pace, milliseconds(50), milliseconds(0)), milliseconds(0));
+}
+
+TEST(WaterRingSystem, ABigBodysRingGrowsAtHighFrameRates)
+{
+	using std::chrono::milliseconds;
+	// A body of radius 2.23 makes a ring aging at 1/2.23: every frame on its own, 2 ms frames would never age it
+	ecs::systems::WaterRingSystem rings;
+	ASSERT_TRUE(rings.Add({.growth = 4.46f, .rate = 1.0f / 2.23f}));
+	for (int32_t frame = 0; frame < 250; ++frame)
+	{
+		rings.Update(milliseconds(2), milliseconds(2));
+	}
+	// Half a second: 29 steps of 17 or 18 ms, each 7 or 8 ms of the ring's age, as at 60 frames a second
+	ASSERT_EQ(rings.GetRings().size(), 1u);
+	EXPECT_GT(rings.GetRings()[0].age, 200u);
+	EXPECT_LT(rings.GetRings()[0].age, 230u);
+}
+
 TEST(WaterRingSystem, HoldsAtMostItsRingsAndLetsThemGo)
 {
+	using std::chrono::milliseconds;
 	ecs::systems::WaterRingSystem rings;
 	for (size_t i = 0; i < water_rings::k_MostRings; ++i)
 	{
 		ASSERT_TRUE(rings.Add({}));
 	}
 	EXPECT_FALSE(rings.Add({}));
-	rings.Update(std::chrono::duration<float, std::milli>(699.0f));
+	rings.Update(milliseconds(699), milliseconds(699));
 	EXPECT_EQ(rings.GetRings().size(), water_rings::k_MostRings);
-	rings.Update(std::chrono::duration<float, std::milli>(1.0f));
+	rings.Update(milliseconds(20), milliseconds(1));
 	EXPECT_TRUE(rings.GetRings().empty());
 	ASSERT_TRUE(rings.Add({}));
 	rings.Reset();

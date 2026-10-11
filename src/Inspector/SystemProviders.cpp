@@ -636,8 +636,9 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeWorshipProvider(Wor
 	auto provider = std::make_unique<FunctionProvider>("worship");
 	provider->Add(Query("sites",
 	                    "The worship sites: their temple, player, tribe, place round the temple, towns, altar, how far "
-	                    "they are built, and their prayer power: dancers, battery, what can be drawn this turn and what "
-	                    "has been, the dance's intensity and the strain",
+	                    "they are built, their worshippers (newest first) and food on its way, and their prayer power: "
+	                    "dancers, battery, what can be drawn this turn and what has been, the dance's intensity and the "
+	                    "strain",
 	                    {}, ResultKind::List),
 	              [sources](const QueryContext& /*context*/) {
 		              const auto* registry = Registry(sources);
@@ -662,6 +663,13 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeWorshipProvider(Wor
 			              item["altar"] = Id(site.altar);
 			              item["dance"] = Id(site.dance);
 			              item["food_pot"] = Id(site.foodPot);
+			              Json worshippers = Json::array();
+			              for (const auto villager : site.worshippers)
+			              {
+				              worshippers.push_back(Id(villager));
+			              }
+			              item["worshippers"] = std::move(worshippers);
+			              item["food_on_the_way"] = site.foodOnTheWay;
 			              const auto* dance = registry->Valid(site.dance) ? registry->TryGet<const Dance>(site.dance) : nullptr;
 			              item["dancers"] = dance != nullptr ? dance->dancers : 0;
 			              item["dancing"] = dance != nullptr && dance->state == Dance::State::Dancing;

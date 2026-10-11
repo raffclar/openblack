@@ -52,6 +52,8 @@ struct DeathCause
 	DeathReason reason {DeathReason::None};
 	std::optional<PlayerNames> killer;
 	float weight {0.0f};
+	/// A fatal fall left it on its back
+	bool onBack {false};
 };
 /// How a death by an effect is remembered: killed by a spell, whatever the effect, put down to the effect's player and
 /// weighing with the town the life the effect took

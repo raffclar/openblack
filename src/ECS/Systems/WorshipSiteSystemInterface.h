@@ -11,7 +11,10 @@
 
 #include <cstdint>
 
+#include <optional>
+
 #include <entt/entity/entity.hpp>
+#include <glm/vec2.hpp>
 
 #include "Enums.h"
 
@@ -78,6 +81,41 @@ public:
 	[[nodiscard]] virtual bool IsBuilt(entt::entity site) const = 0;
 	/// The temple of a player, none without one
 	[[nodiscard]] virtual entt::entity TempleOf(PlayerNames player) const = 0;
+
+	// Worshippers
+
+	/// The places at a site its worshippers go to
+	enum class SitePlace : uint8_t
+	{
+		/// Where they arrive, and where the footpath from their town ends
+		Gate,
+		/// Where the hungry rest by the altar
+		Rest,
+		/// The middle of the dance, at the altar
+		Altar,
+		/// Its door, where those who can't be seen dancing worship hidden
+		Door,
+		/// Its middle, which villagers are judged near or far from
+		Centre,
+	};
+	/// Where a place of a site is on the land, none without the site's model
+	[[nodiscard]] virtual std::optional<glm::vec2> PlaceAt(entt::entity site, SitePlace place) const = 0;
+	/// A villager is counted among a site's worshippers, newest first, unless it is already
+	virtual void AddWorshipper(entt::entity site, entt::entity villager) = 0;
+	/// A villager is no longer counted among a site's worshippers
+	virtual void RemoveWorshipper(entt::entity site, entt::entity villager) = 0;
+	[[nodiscard]] virtual bool IsWorshipper(entt::entity site, entt::entity villager) const = 0;
+	/// How fast the site's dance is asked to go, 0 to 1; 0 without a dance
+	[[nodiscard]] virtual float WorshipSpeed(entt::entity site) const = 0;
+	/// What each dancer chanted at the site last turn
+	[[nodiscard]] virtual float ChantsPerDancer(entt::entity site) const = 0;
+	/// The food in the site's pot
+	[[nodiscard]] virtual uint32_t FoodInPot(entt::entity site) const = 0;
+	/// The food the site wants its towns to bring: what its dancers want for dinner, less what it has and what is on its
+	/// way
+	[[nodiscard]] virtual int32_t FoodNeededFromTown(entt::entity site) const = 0;
+	/// Food counted as on its way to the site is no longer, whether or not it came
+	virtual void RemoveFoodOnTheWay(entt::entity site, int32_t amount) = 0;
 };
 
 } // namespace openblack::ecs::systems

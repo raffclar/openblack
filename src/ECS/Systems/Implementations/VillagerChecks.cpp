@@ -147,7 +147,7 @@ void ecs::villager_checks::CheckEveryTime(LivingAction& action)
 	}
 	if (world_objects::LifeOf(villager) == 0.0f)
 	{
-		// TODO(villager-hunger-health): a worshipper at its worship site dies of chanting too, once villagers worship
+		// A worshipper at its site dies of its chanting there, in its worship turn
 		const auto reason = rules::ExhaustionDeath(rules::ChantedLast(living.VillagerGetFinalState(action)));
 		villager_fire::DieByEffect(villager,
 		                           villager_fire::DeathCause {.reason = reason, .killer = world_objects::PlayerOf(villager)});

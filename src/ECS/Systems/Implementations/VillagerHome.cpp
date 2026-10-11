@@ -42,6 +42,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Dances.h"
 #include "ECS/DiscipleRules.h"
 #include "ECS/Map.h"
 #include "ECS/NearestSearch.h"
@@ -68,6 +69,7 @@
 #include "VillagerFisherman.h"
 #include "VillagerFood.h"
 #include "VillagerForester.h"
+#include "VillagerWorship.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -84,6 +86,7 @@ namespace villager_fisherman = openblack::ecs::villager_fisherman;
 namespace villager_disciple = openblack::ecs::villager_disciple;
 namespace villager_food = openblack::ecs::villager_food;
 namespace villager_checks = openblack::ecs::villager_checks;
+namespace villager_worship = openblack::ecs::villager_worship;
 namespace wall_hug = openblack::ecs::wall_hug;
 namespace walk_arrival = openblack::ecs::walk_arrival;
 using ClearAreaFilter = openblack::ecs::systems::TownSystemInterface::ClearAreaFilter;
@@ -328,6 +331,8 @@ uint32_t CheckNeededForTownDesire(LivingAction& action)
 			    return villager_forester::CheckSatisfyWoodDesire(action);
 		    case TownDesireInfo::ForSleep:
 			    return villager_home::CheckSatisfySleep(action);
+		    case TownDesireInfo::ForSupplyWorship:
+			    return villager_worship::CheckSatisfySupplyWorship(action);
 		    case TownDesireInfo::ToBuild:
 			    return villager_build::CheckSatisfyToBuild(action);
 		    case TownDesireInfo::ForAbodes:
@@ -902,7 +907,11 @@ uint32_t villager_home::CheckNeededForSomething(LivingAction& action)
 uint32_t villager_home::CheckNeededForSpecial(LivingAction& action)
 {
 	const auto villager = EntityOf(action);
-	// TODO(villagers): worshippers are wanted at the worship site first (the jobs phase)
+	// Worship first, then the town's desires, then its own needs
+	if (villager_worship::CheckNeededForWorship(action) == 1)
+	{
+		return 1;
+	}
 	if (TownOf(villager) != entt::null && CheckNeededForTownDesire(action) == 1)
 	{
 		return 1;
@@ -1022,18 +1031,24 @@ uint32_t villager_home::MoveToPos(LivingAction& action)
 
 uint32_t villager_home::GoHome(LivingAction& action)
 {
+	return DoGoingHome(action, VillagerStates::ArrivesHome, VillagerStates::SleepInTent);
+}
+
+uint32_t villager_home::DoGoingHome(LivingAction& action, VillagerStates arrive, VillagerStates sleepInTent)
+{
 	const auto villager = EntityOf(action);
-	// TODO(villagers): a dancer leaves its dance first
+	// A dancer leaves its dance first
+	ecs::dances::RemoveDancer(WorldRegistry(), villager);
 	if (const auto abode = AbodeOf(villager); abode != entt::null)
 	{
 		if (IsAtHome(villager))
 		{
 			SetTopState(action, VillagerStates::AtHome);
 		}
-		else if (FinalState(action) != VillagerStates::ArrivesHome)
+		else if (FinalState(action) != arrive)
 		{
 			// TODO(villagers): along the town's footpaths where there are any
-			SetupMoveTo(action, ArrivePosition(abode), VillagerStates::ArrivesHome);
+			SetupMoveTo(action, ArrivePosition(abode), arrive);
 		}
 		return 1;
 	}
@@ -1059,7 +1074,7 @@ uint32_t villager_home::GoHome(LivingAction& action)
 		if (const auto tent = GetTentPos(villager, goal); tent.has_value())
 		{
 			goal = *tent;
-			end = VillagerStates::SleepInTent;
+			end = sleepInTent;
 		}
 		else
 		{
