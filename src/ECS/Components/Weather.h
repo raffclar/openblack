@@ -104,6 +104,9 @@ struct Storm
 	float lastsFor;
 	float strength;
 	float cloudHeight;
+	/// How many clouds of its own it gathers (at most 16 are drawn) and how dark they are, 0 to 1
+	int32_t cloudCount {8};
+	float cloudShade {0.5f};
 	/// How fast its rain falls: how quickly the streaks' texture scrolls down them
 	float rainSpeed {1.0f};
 	float age;
@@ -141,6 +144,11 @@ struct Storm
 struct WeatherThing
 {
 	entt::entity storm {entt::null};
+	/// Its storm as it was last turn: a script changing the weather thing after its storm has ended brings the storm back
+	/// from this
+	Storm lastStorm {};
+	/// Whether the wind blows its storm along, as a script sets it
+	bool affectedByWind {false};
 };
 
 } // namespace openblack::ecs::components

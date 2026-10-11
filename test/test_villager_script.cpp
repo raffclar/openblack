@@ -179,3 +179,33 @@ TEST(HighDetail, DrawnAndItsEyesPlacedInTheHandsGripWhileHeld)
 	EXPECT_EQ(hd::DrawnAt(std::nullopt, standsAt), standsAt);
 	EXPECT_EQ(hd::DrawnAt(grip, standsAt), grip);
 }
+
+TEST(VillagerScriptRules, AWandererSetsOffOnceItsTurnsAtAStopHaveRunOut)
+{
+	namespace rules = openblack::ecs::villager_script_rules;
+	// Put into the wandering state it has no turns to stand, so it sets off on its first turn
+	EXPECT_TRUE(rules::StepWander(0).setsOff);
+	// With turns left it stands, one fewer each turn, and sets off on the turn after the last
+	auto step = rules::StepWander(2);
+	EXPECT_FALSE(step.setsOff);
+	EXPECT_EQ(step.turnsLeft, 1);
+	step = rules::StepWander(step.turnsLeft);
+	EXPECT_FALSE(step.setsOff);
+	EXPECT_EQ(step.turnsLeft, 0);
+	EXPECT_TRUE(rules::StepWander(step.turnsLeft).setsOff);
+}
+
+TEST(VillagerScriptRules, AWandererStandsFromTheFewestToOneUnderTheMostTurns)
+{
+	namespace rules = openblack::ecs::villager_script_rules;
+	uint32_t asked = 99;
+	const auto lowest = [&asked](uint32_t limit) {
+		asked = limit;
+		return 0u;
+	};
+	const auto highest = [](uint32_t limit) { return limit - 1; };
+	// The Lost Brother's sister stands 4 to 19 turns at each stop round her soapbox
+	EXPECT_EQ(rules::WanderPause(4, 20, lowest), 4);
+	EXPECT_EQ(asked, 16u);
+	EXPECT_EQ(rules::WanderPause(4, 20, highest), 19);
+}

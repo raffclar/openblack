@@ -753,7 +753,11 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     VillagerStateTableEntry {
         .state = &villager_food::DoesNothing,
     },
-    /* SCRIPT_WANDER_AROUND_POSITION */ k_TodoEntry,
+    /* SCRIPT_WANDER_AROUND_POSITION */
+    VillagerStateTableEntry {
+        .state = &villager_script::ScriptWanderAroundPosition,
+        .exitState = &villager_script::ExitInScript,
+    },
     /* SCRIPT_PLAY_ANIM */
     VillagerStateTableEntry {
         .state = &villager_script::ScriptPlayAnim,
@@ -1299,6 +1303,21 @@ void LivingActionSystem::VillagerScriptMoveTo(entt::entity villager, glm::vec2 g
 void LivingActionSystem::VillagerSetScriptAnimation(entt::entity villager, AnimId clip, uint32_t plays) const
 {
 	villager_script::SetScriptAnimation(villager, clip, plays);
+}
+
+void LivingActionSystem::VillagerSetScriptPlace(entt::entity villager, glm::vec2 place) const
+{
+	villager_script::SetScriptPlace(villager, place);
+}
+
+void LivingActionSystem::VillagerSetScriptNumber(entt::entity villager, float number) const
+{
+	villager_script::SetScriptNumber(villager, number);
+}
+
+void LivingActionSystem::VillagerSetScriptNumbers(entt::entity villager, uint32_t first, uint32_t second) const
+{
+	villager_script::SetScriptNumbers(villager, first, second);
 }
 
 bool LivingActionSystem::VillagerHasPlayedScriptAnimation(entt::entity villager) const

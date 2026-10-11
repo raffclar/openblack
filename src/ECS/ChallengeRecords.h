@@ -1,0 +1,58 @@
+/******************************************************************************
+ * Copyright (c) 2018-2026 openblack developers
+ *
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
+ *
+ * openblack is licensed under the GNU General Public License version 3.
+ *******************************************************************************/
+
+#pragma once
+
+#include <cstdint>
+
+#include <functional>
+#include <optional>
+
+#include <entt/entity/fwd.hpp>
+
+#include "ScriptHeaders/ScriptChallengeSnapshots.h"
+
+namespace openblack::ecs
+{
+class Registry;
+}
+
+/// The player's records of their challenges (components::ChallengeRecord), kept by the scripts' snapshot commands
+namespace openblack::ecs::challenge_records
+{
+
+/// What keeps a thing alive while a record holds it as an argument of its reminder script
+struct References
+{
+	std::function<void(entt::entity)> add;
+	std::function<void(entt::entity)> remove;
+};
+
+/// What a snapshot did
+struct Outcome
+{
+	entt::entity record;
+	/// A snapshot of a challenge already recorded moves the player's alignment by its alignment; the first one doesn't
+	std::optional<float> alignment;
+};
+
+/// A script's snapshot of a challenge. The first starts its record. Later ones replace the record's reminder script,
+/// arguments, title, alignment and how far it has got (once done it stays done); a start or a picture being taken also
+/// replaces where the camera was, an update keeps it. The record's things are kept alive while it holds them.
+Outcome Record(Registry& registry, const script::challenge_snapshots::Snapshot& snapshot,
+               script::challenge_snapshots::Call call, uint32_t turn, const References& references);
+
+/// The record of a challenge, none before it has started
+[[nodiscard]] std::optional<entt::entity> Find(const Registry& registry, uint32_t challenge);
+
+/// How far a snapshot's alignment moves the player's: scaled by the game's most a script may move it, then damped by
+/// the player's own alignment (a change the way they already lean counts for less, the other way for more)
+[[nodiscard]] float AlignmentChange(float playerAlignment, float snapshotAlignment, float scriptScale);
+
+} // namespace openblack::ecs::challenge_records

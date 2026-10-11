@@ -70,6 +70,7 @@
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/CameraBookmark.h"
 #include "ECS/Components/CarriedByTornado.h"
+#include "ECS/Components/ChallengeRecord.h"
 #include "ECS/Components/ChimneySmoke.h"
 #include "ECS/Components/Cloud.h"
 #include "ECS/Components/Construction.h"
@@ -157,6 +158,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/ScriptSpotVisual.h"
+#include "ECS/Components/ScriptStateArguments.h"
 #include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/Shark.h"
@@ -223,6 +225,7 @@
 #include "Magic/TownBelief.h"
 #include "Particles/ParticleSpellLink.h"
 #include "Physics/DamageMesh.h"
+#include "ScriptHeaders/ScriptChallengeSnapshots.h"
 #include "ScriptHeaders/ScriptTimers.h"
 
 namespace components = openblack::ecs::components;
@@ -441,6 +444,19 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CameraBookmark::savedOrigin>("savedOrigin");
 	Reflect<components::CarriedByTornado>(context).Field<&components::CarriedByTornado::carried>("carried");
 	Reflect<components::CaughtByTornado> {context};
+	Reflect<components::ChallengeRecord>(context)
+	    .Field<&components::ChallengeRecord::challenge>("challenge")
+	    .Field<&components::ChallengeRecord::order>("order")
+	    .Field<&components::ChallengeRecord::reminderScript>("reminderScript")
+	    .Field<&components::ChallengeRecord::arguments>("arguments")
+	    .Field<&components::ChallengeRecord::title>("title")
+	    .Field<&components::ChallengeRecord::success>("success")
+	    .Field<&components::ChallengeRecord::alignment>("alignment")
+	    .Field<&components::ChallengeRecord::position>("position")
+	    .Field<&components::ChallengeRecord::focus>("focus")
+	    .Field<&components::ChallengeRecord::quest>("quest")
+	    .Field<&components::ChallengeRecord::startedTurn>("startedTurn")
+	    .Field<&components::ChallengeRecord::doneTurn>("doneTurn");
 	Reflect<components::ChimneySmoke>(context)
 	    .Field<&components::ChimneySmoke::chimney>("chimney")
 	    .Field<&components::ChimneySmoke::rgb>("rgb")
@@ -1261,6 +1277,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::ScriptHighlight::sparkSprites>("sparkSprites");
 	Reflect<components::ScriptHighlightGlow>(context).Field<&components::ScriptHighlightGlow::highlight>("highlight");
 	Reflect<components::ScriptSpotVisual>(context).Field<&components::ScriptSpotVisual::effect>("effect");
+	Reflect<components::ScriptStateArguments>(context)
+	    .Field<&components::ScriptStateArguments::place>("place")
+	    .Field<&components::ScriptStateArguments::number>("number")
+	    .Field<&components::ScriptStateArguments::first>("first")
+	    .Field<&components::ScriptStateArguments::second>("second");
 	Reflect<components::ScriptTimer>(context).Field<&components::ScriptTimer::timer>("timer");
 	Reflect<components::SeeThrough>(context).Field<&components::SeeThrough::alpha>("alpha");
 	Reflect<components::Shark>(context)
@@ -1682,6 +1703,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Storm::lastsFor>("lastsFor")
 	    .Field<&components::Storm::strength>("strength")
 	    .Field<&components::Storm::cloudHeight>("cloudHeight")
+	    .Field<&components::Storm::cloudCount>("cloudCount")
+	    .Field<&components::Storm::cloudShade>("cloudShade")
 	    .Field<&components::Storm::rainSpeed>("rainSpeed")
 	    .Field<&components::Storm::age>("age")
 	    .Field<&components::Storm::currentPosition>("currentPosition")
@@ -1698,7 +1721,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Storm::dead>("dead")
 	    .Field<&components::Storm::deadTurns>("deadTurns")
 	    .Field<&components::Storm::climate>("climate");
-	Reflect<components::WeatherThing>(context).Field<&components::WeatherThing::storm>("storm");
+	Reflect<components::WeatherThing>(context)
+	    .Field<&components::WeatherThing::storm>("storm")
+	    .Field<&components::WeatherThing::lastStorm>("lastStorm")
+	    .Field<&components::WeatherThing::affectedByWind>("affectedByWind");
 	Reflect<components::WorshipChants>(context)
 	    .Field<&components::WorshipChants::battery>("battery")
 	    .Field<&components::WorshipChants::available>("available")
@@ -2486,6 +2512,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::physics::damage::Triangle::group>("group")
 	    .Field<&openblack::physics::damage::Triangle::sizeClass>("sizeClass")
 	    .Field<&openblack::physics::damage::Triangle::countedClass>("countedClass");
+	Reflect<openblack::script::challenge_snapshots::Value>(context, ValueOnly {})
+	    .Field<&openblack::script::challenge_snapshots::Value::value>("value")
+	    .Field<&openblack::script::challenge_snapshots::Value::type>("type");
 	Reflect<openblack::script::timers::Timer>(context, ValueOnly {})
 	    .Field<&openblack::script::timers::Timer::setTurn>("setTurn")
 	    .Field<&openblack::script::timers::Timer::turns>("turns");
