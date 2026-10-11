@@ -61,6 +61,7 @@
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerBuild.h"
+#include "VillagerChecks.h"
 #include "VillagerDisciples.h"
 #include "VillagerFire.h"
 #include "VillagerFood.h"
@@ -77,6 +78,7 @@ namespace villager_fire = openblack::ecs::villager_fire;
 namespace villager_build = openblack::ecs::villager_build;
 namespace villager_disciple = openblack::ecs::villager_disciple;
 namespace villager_food = openblack::ecs::villager_food;
+namespace villager_checks = openblack::ecs::villager_checks;
 namespace wall_hug = openblack::ecs::wall_hug;
 namespace walk_arrival = openblack::ecs::walk_arrival;
 using ClearAreaFilter = openblack::ecs::systems::TownSystemInterface::ClearAreaFilter;
@@ -1365,7 +1367,11 @@ uint32_t villager_home::GoHomeAndChange(LivingAction& action)
 		next = IsAtHome(villager) ? VillagerStates::AtHome : VillagerStates::ArrivesHome;
 	}
 	SetTopState(action, next);
-	// TODO(villager-life-cycle): one still small for its age (a child just grown up) is sized for its age
+	// One still small arriving is sized for its age
+	if (WorldRegistry().Get<const Transform>(villager).scale.x < villager_age::k_FullGrownScale)
+	{
+		villager_checks::GrowForAge(villager);
+	}
 	return 1;
 }
 

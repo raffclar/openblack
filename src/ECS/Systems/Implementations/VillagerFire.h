@@ -72,6 +72,8 @@ uint32_t MoveAroundFire(components::LivingAction& action);
 uint32_t PutOutFireWithWater(components::LivingAction& action);
 uint32_t Dying(components::LivingAction& action);
 uint32_t Dead(components::LivingAction& action);
+/// A body lies dead for good: nothing takes it out of being dead but the hand picking it up or a throw (true holds it)
+bool ExitDead(components::LivingAction& action, VillagerStates next);
 
 bool EnterPutOutFire(components::LivingAction& action, VillagerStates from, VillagerStates to);
 bool ExitPutOutFire(components::LivingAction& action, VillagerStates next);

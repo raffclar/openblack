@@ -83,4 +83,11 @@ struct WoundedInputs
 	return chanted ? DeathReason::Chant : DeathReason::Exhaustion;
 }
 
+/// Whether a body may go from lying dead to a state: only the hand picking it up or a throw takes it out of being dead,
+/// so nothing that would send a living villager about its day (a reaction ending, a call home) wakes it
+[[nodiscard]] constexpr bool BodyMayLeaveDeath(VillagerStates next)
+{
+	return next == VillagerStates::Dead || next == VillagerStates::InHand || next == VillagerStates::Flying;
+}
+
 } // namespace openblack::ecs::villager_check_rules
