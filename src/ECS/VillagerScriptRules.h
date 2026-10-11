@@ -152,4 +152,31 @@ struct StateRules
 	       LeaveTheSameWay(finalState, next);
 }
 
+/// A whole turn in radians, the most bearing a wandering villager draws (as a single-precision float)
+constexpr float k_FullTurn = 6.2831855f;
+
+/// Turns a villager wandering round a script's place stands at each stop: the fewest the script gave and up to one
+/// fewer than its most, drawn from the game's numbers (which draw nothing for a range of none)
+[[nodiscard]] constexpr uint16_t WanderPause(uint32_t fewest, uint32_t most, const auto& gameRand)
+{
+	return static_cast<uint16_t>(fewest + gameRand(most - fewest));
+}
+
+/// One turn of wandering round a script's place, with the turns it still had to stand: whether it sets off for a new
+/// stop this turn, once those turns have run out, and the turns left after it
+struct WanderTurn
+{
+	bool setsOff;
+	uint16_t turnsLeft;
+};
+
+[[nodiscard]] constexpr WanderTurn StepWander(uint16_t turnsLeft)
+{
+	if (turnsLeft == 0)
+	{
+		return {.setsOff = true, .turnsLeft = 0};
+	}
+	return {.setsOff = false, .turnsLeft = static_cast<uint16_t>(turnsLeft - 1)};
+}
+
 } // namespace openblack::ecs::villager_script_rules

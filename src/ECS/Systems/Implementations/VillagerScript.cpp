@@ -21,6 +21,7 @@
 #include "3D/CameraEdits.h"
 #include "3D/CameraTrack.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/CarriedByTornado.h"
@@ -30,6 +31,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptAnimation.h"
+#include "ECS/Components/ScriptStateArguments.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WalkPath.h"
@@ -123,9 +125,10 @@ void villager_script::SetScriptState(entt::entity villager, VillagerStates state
 	// TODO(opening): a state whose entry sets the villager off somewhere else first (a script's remembered walk) is not
 	// gone into directly; none of the states the scripts put villagers in has one yet
 	living.VillagerSetState(action, LivingAction::Index::Top, state, true);
-	// Its clip starts from the beginning
+	// Its clip starts from the beginning, and the new state has no turns to wait before it acts
 	villager_animate::SetAnim(villager, villager_animate::StateClip(villager), true);
 	action.turnsSinceStateChange = 0;
+	action.turnsUntilStateChange = 0;
 }
 
 void villager_script::MoveTo(entt::entity villager, glm::vec2 goal)
@@ -154,6 +157,36 @@ void villager_script::MoveTo(entt::entity villager, glm::vec2 goal)
 void villager_script::SetScriptAnimation(entt::entity villager, AnimId clip, uint32_t plays)
 {
 	Entities().AssignOrReplace<ScriptAnimation>(villager, clip, plays);
+}
+
+namespace
+{
+ScriptStateArguments& ArgumentsOf(entt::entity villager)
+{
+	auto& registry = Entities();
+	if (auto* arguments = registry.TryGet<ScriptStateArguments>(villager); arguments != nullptr)
+	{
+		return *arguments;
+	}
+	return registry.Assign<ScriptStateArguments>(villager);
+}
+} // namespace
+
+void villager_script::SetScriptPlace(entt::entity villager, glm::vec2 place)
+{
+	ArgumentsOf(villager).place = place;
+}
+
+void villager_script::SetScriptNumber(entt::entity villager, float number)
+{
+	ArgumentsOf(villager).number = number;
+}
+
+void villager_script::SetScriptNumbers(entt::entity villager, uint32_t first, uint32_t second)
+{
+	auto& arguments = ArgumentsOf(villager);
+	arguments.first = first;
+	arguments.second = second;
 }
 
 bool villager_script::HasPlayedScriptAnimation(entt::entity villager)
@@ -358,6 +391,30 @@ uint32_t villager_script::ScriptPlayAnim(LivingAction& action)
 	{
 		Locator::livingActionSystem::value().VillagerPlayAnimThenSetState(action, *step.then);
 	}
+	return 1;
+}
+
+uint32_t villager_script::ScriptWanderAroundPosition(LivingAction& action)
+{
+	const auto step = rules::StepWander(action.turnsUntilStateChange);
+	action.turnsUntilStateChange = step.turnsLeft;
+	if (!step.setsOff)
+	{
+		return 1;
+	}
+	auto& registry = Entities();
+	const auto villager = registry.ToEntity(action);
+	const auto* found = registry.TryGet<const ScriptStateArguments>(villager);
+	const auto arguments = found != nullptr ? *found : ScriptStateArguments {};
+	// A stop at a random bearing from the place, up to the script's distance away
+	auto& random = Locator::gameRandom::value();
+	auto stop = map_coords::FromMetres(arguments.place);
+	const float bearing = random.GameFloatRand(rules::k_FullTurn);
+	const float distance = random.GameFloatRand(arguments.number);
+	gutils::AddDistanceFromAngle(stop, bearing, distance);
+	villager_home::SetupMoveTo(action, map_coords::ToMetres(stop), VillagerStates::ScriptWanderAroundPosition);
+	action.turnsUntilStateChange =
+	    rules::WanderPause(arguments.first, arguments.second, [&random](uint32_t limit) { return random.GameRand(limit); });
 	return 1;
 }
 

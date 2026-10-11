@@ -27,6 +27,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptWeatherRules.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -540,6 +541,7 @@ void WeatherSystem::ProcessWeatherThings()
 			if (storm != nullptr && !storm->dead)
 			{
 				transform.position = storm->position;
+				thing.lastStorm = *storm;
 				return;
 			}
 			thing.storm = entt::null;
@@ -1080,10 +1082,52 @@ entt::entity WeatherSystem::CreateWeatherThing(const ScriptStorm& script)
 
 	const auto entity = registry.Create();
 	registry.Assign<Transform>(entity, script.centre, glm::mat3(1.0f), glm::vec3(1.0f));
-	registry.Assign<WeatherThing>(entity, WeatherThing {.storm = stormEntity});
+	registry.Assign<WeatherThing>(entity, WeatherThing {.storm = stormEntity, .lastStorm = storm});
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "A script made a weather thing at ({}, {}): rain {} snow {} cloud {}",
 	                    script.centre.x, script.centre.z, script.effect.rain, script.effect.snow, script.effect.overcast);
 	return entity;
+}
+
+bool WeatherSystem::ChangeWeatherThing(entt::entity thing, const std::function<void(Storm&)>& change)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* weatherThing = registry.Valid(thing) ? registry.TryGet<WeatherThing>(thing) : nullptr;
+	if (weatherThing == nullptr)
+	{
+		return false;
+	}
+	auto* storm = registry.Valid(weatherThing->storm) ? registry.TryGet<Storm>(weatherThing->storm) : nullptr;
+	if (storm == nullptr || storm->dead)
+	{
+		// Its storm has ended: it comes back, new, as it last was
+		const auto stormEntity = registry.Create();
+		storm = &registry.Assign<Storm>(stormEntity, weatherThing->lastStorm);
+		storm->age = 0.0f;
+		storm->dead = false;
+		storm->deadTurns = 0;
+		storm->flash = {};
+		storm->serial = _nextStormSerial++;
+		weatherThing->storm = stormEntity;
+	}
+	change(*storm);
+	auto& random = Locator::gameRandom::value();
+	script_weather::DrawLightningWaits(*storm, [&random](float range) { return random.GameFloatRand(range); });
+	weatherThing->lastStorm = *storm;
+	return true;
+}
+
+bool WeatherSystem::SetWeatherThingAffectedByWind(entt::entity thing, bool affected)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* weatherThing = registry.Valid(thing) ? registry.TryGet<WeatherThing>(thing) : nullptr;
+	if (weatherThing == nullptr)
+	{
+		return false;
+	}
+	// TODO(scripted-weather): a weather thing the wind blows drifts with its storm on the wind; no script on the first
+	// land lets the wind take one
+	weatherThing->affectedByWind = affected;
+	return true;
 }
 
 void WeatherSystem::EndStorm(entt::entity entity)

@@ -38,6 +38,12 @@ void SetScriptState(entt::entity villager, VillagerStates state);
 void MoveTo(entt::entity villager, glm::vec2 goal);
 /// The clip the villager plays when a script puts it in the playing state, and how many times
 void SetScriptAnimation(entt::entity villager, AnimId clip, uint32_t plays);
+/// The place a script gives the villager for its script states, on the ground
+void SetScriptPlace(entt::entity villager, glm::vec2 place);
+/// The number a script gives the villager for its script states
+void SetScriptNumber(entt::entity villager, float number);
+/// The pair of whole numbers a script gives the villager for its script states
+void SetScriptNumbers(entt::entity villager, uint32_t first, uint32_t second);
 /// Whether the villager has finished the plays of the clip a script asked for
 [[nodiscard]] bool HasPlayedScriptAnimation(entt::entity villager);
 /// The clip a script asked the villager to play, none when it asked for none
@@ -64,6 +70,9 @@ bool StartPathWalk(entt::entity villager, int32_t number, bool forward, float fr
 uint32_t InScript(components::LivingAction& action);
 /// Playing a script's clip: one more play starts, and after it the villager plays again or stands waiting
 uint32_t ScriptPlayAnim(components::LivingAction& action);
+/// Wandering round a script's place: once it has stood its turns at a stop it sets off for another at random within
+/// the script's distance of the place, going round what is in its way, and stands there a random number of turns
+uint32_t ScriptWanderAroundPosition(components::LivingAction& action);
 /// Walking a script's track: on along it, facing the way it goes, and waiting for the script at its end
 uint32_t MoveAlongPath(components::LivingAction& action);
 /// Leaving a script's hands: only for the states a script lets take it away. True refuses.
