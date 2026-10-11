@@ -66,6 +66,7 @@ class Registry;
 namespace graphics
 {
 class FrameBuffer;
+class TreeShadowBake;
 class L3DSubMesh;
 class OffscreenScreenshots;
 class MorphStreamLayouts;
@@ -245,6 +246,8 @@ private:
 	void AddGroundShadowBody(const GroundShadowBody& body) const;
 	/// Hands the moving shadows to the land's program, or none where it isn't to receive them
 	void SetGroundShadowUniforms(const ShaderProgram& program, bool receives) const;
+	/// The objects' shadows on the land: those drawn each frame and the trees' baked ones
+	void SetObjectShadowUniforms(const ShaderProgram& program) const;
 	/// Hands the moving shadows that fall on objects to an object's program, or none where it isn't to receive them
 	void SetObjectGroundShadowUniforms(const ShaderProgram& program, bool receives) const;
 	/// The uniforms the draws of meshes set, in the order of their names in the renderer
@@ -400,6 +403,10 @@ private:
 	std::unique_ptr<MorphStreamLayouts> _morphStreamLayouts;
 	/// Where the objects' shadows cover the island, laid out as its footprints are and made for the island's size
 	mutable std::unique_ptr<FrameBuffer> _objectShadowFrameBuffer;
+	/// The trees' and big forests' shadows baked into the land, as the game bakes them (unless they are drawn moving)
+	mutable std::unique_ptr<TreeShadowBake> _treeShadowBake;
+	/// Whether this frame's land takes the baked tree shadows
+	mutable bool _treeShadowsBaked {false};
 	/// The land seen from above for the temple's map, and the visit to the temple it was drawn for
 	mutable std::unique_ptr<FrameBuffer> _templeMapFrameBuffer;
 	mutable std::optional<uint32_t> _templeMapVisit;

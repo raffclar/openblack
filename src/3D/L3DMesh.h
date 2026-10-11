@@ -24,6 +24,7 @@
 #include "Graphics/LightBeams.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/ShaderProgram.h"
+#include "Graphics/TreeShadows.h"
 #include "L3DSubMesh.h"
 #include "ScreenPick.h"
 
@@ -138,6 +139,16 @@ public:
 		const auto found = _skinMasks.find(skin);
 		return found != _skinMasks.end() ? &found->second : nullptr;
 	}
+	/// Each skin's alpha at 64 by 64 places over it, which a tree's shadow on the land is cut out by
+	[[nodiscard]] const graphics::tree_shadows::AlphaMask* GetSkinAlpha(SkinId skin) const
+	{
+		if (_skinSource != nullptr)
+		{
+			return _skinSource->GetSkinAlpha(skin);
+		}
+		const auto found = _skinAlpha.find(skin);
+		return found != _skinAlpha.end() ? &found->second : nullptr;
+	}
 	[[nodiscard]] const std::vector<Footprint>& GetFootprints() const { return _footprints; }
 	[[nodiscard]] const std::vector<VolumeLight>& GetVolumeLights() const { return _volumeLights; }
 	[[nodiscard]] const std::vector<uint32_t>& GetBoneParents() const { return _bonesParents; }
@@ -203,6 +214,7 @@ private:
 	/// level's life, as long as the made model's
 	const L3DMesh* _skinSource {nullptr};
 	std::unordered_map<SkinId, screen_pick::AlphaMask> _skinMasks;
+	std::unordered_map<SkinId, graphics::tree_shadows::AlphaMask> _skinAlpha;
 	std::vector<Footprint> _footprints; ///< If ContainsLandscapeFeature() is true
 	std::optional<BonePoint> _firstBonePoint;
 	std::vector<BoneFrame> _boneFrames;
