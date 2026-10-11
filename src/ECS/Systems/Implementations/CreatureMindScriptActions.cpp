@@ -115,7 +115,7 @@ bool CreatureMindSystem::FightForScript(entt::entity creature, entt::entity oppo
 		                    entt::to_integral(creature));
 		return true;
 	}
-	const auto started = Locator::creatureFightSystem::value().StartFight(creature, opponent);
+	[[maybe_unused]] const auto started = Locator::creatureFightSystem::value().StartFight(creature, opponent);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} picks a fight with creature {}: {}", entt::to_integral(creature),
 	                    entt::to_integral(opponent), static_cast<int>(started));
 	return true;
