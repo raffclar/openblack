@@ -750,3 +750,4 @@ openblack_setup_and_add_test(
   test_camera_edge_area camera/test_camera_edge_area.cpp
 )
 openblack_setup_and_add_test(test_villager_food_rules test_villager_food_rules.cpp)
+openblack_setup_and_add_test(test_tree_shadows graphics/test_tree_shadows.cpp)

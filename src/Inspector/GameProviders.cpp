@@ -519,28 +519,30 @@ std::string_view KindName(ecs::PhysicsEntry::Kind kind)
 std::unique_ptr<ProviderInterface> EngineProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("engine");
-	provider->Add(Query("config", "The engine's settings: what is drawn, the display and the camera's clip"),
-	              Serve<Locator::config>("the config", [](const EngineConfig& config, const QueryContext& /*context*/) {
-		              return Json {
-		                  {"draw",
-		                   {{"sky", config.drawSky},
-		                    {"water", config.drawWater},
-		                    {"island", config.drawIsland},
-		                    {"entities", config.drawEntities},
-		                    {"vegetation", config.drawVegetation},
-		                    {"sprites", config.drawSprites},
-		                    {"bounding_boxes", config.drawBoundingBoxes}}},
-		                  {"wireframe", config.wireframe},
-		                  {"time_of_day", config.timeOfDay},
-		                  {"resolution", {config.resolution.x, config.resolution.y}},
-		                  {"vsync", config.vsync},
-		                  {"camera_fov", config.cameraXFov},
-		                  {"camera_near_clip", config.cameraNearClip},
-		                  {"camera_far_clip", config.cameraFarClip},
-		                  {"gui_scale", config.guiScale},
-		                  {"running", config.running},
-		              };
-	              }));
+	provider->Add(
+	    Query("config", "The engine's settings: what is drawn, the display and the camera's clip"),
+	    Serve<Locator::config>("the config", [](const EngineConfig& config, const QueryContext& /*context*/) {
+		    return Json {
+		        {"draw",
+		         {{"sky", config.drawSky},
+		          {"water", config.drawWater},
+		          {"island", config.drawIsland},
+		          {"entities", config.drawEntities},
+		          {"vegetation", config.drawVegetation},
+		          {"sprites", config.drawSprites},
+		          {"bounding_boxes", config.drawBoundingBoxes}}},
+		        {"shadows", {{"creatures", config.drawCreatureShadows}, {"dynamic_trees", config.dynamicTreeShadows}}},
+		        {"wireframe", config.wireframe},
+		        {"time_of_day", config.timeOfDay},
+		        {"resolution", {config.resolution.x, config.resolution.y}},
+		        {"vsync", config.vsync},
+		        {"camera_fov", config.cameraXFov},
+		        {"camera_near_clip", config.cameraNearClip},
+		        {"camera_far_clip", config.cameraFarClip},
+		        {"gui_scale", config.guiScale},
+		        {"running", config.running},
+		    };
+	    }));
 	provider->Add(Query("frame", "The last frame: its time, the window's size, the renderer's flags and how much it draws"),
 	              [](const QueryContext& /*context*/) {
 		              Json result = Json::object();
