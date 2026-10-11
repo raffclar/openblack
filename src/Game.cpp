@@ -1703,7 +1703,7 @@ bool Game::Update() noexcept
 	// The static the fizzing creatures are drawn through slides across them
 	Locator::creatureFizzSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	// The rings on the water grow and fade
-	Locator::waterRingSystem::value().Update(gameTime);
+	Locator::waterRingSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
 	{
 		// The flames, steam and smoke of what burns move on
 		auto fire = profiler.BeginScoped(Profiler::Stage::FireUpdate);
