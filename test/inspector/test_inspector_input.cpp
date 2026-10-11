@@ -202,19 +202,112 @@ TEST(InspectorInput, KeysAndActionsByName)
 {
 	Rig rig;
 	EXPECT_EQ(rig.Ask(R"({"query": "input.key", "params": {"key": "L"}})")["how"], "tap");
+	// Asked for after the tap, the action comes after the key is let go of
 	rig.Ask(R"({"query": "input.key", "params": {"action": "Zoom In"}})");
+	rig.Frame();
 	rig.Frame();
 	rig.Frame();
 	ASSERT_EQ(rig.target.made.size(), 3u);
 	EXPECT_EQ(rig.target.made[0].event.kind, InputEvent::Kind::KeyDown);
-	EXPECT_EQ(rig.target.made[1].event.kind, InputEvent::Kind::Action);
-	EXPECT_EQ(rig.target.made[2].event.kind, InputEvent::Kind::KeyUp);
+	EXPECT_EQ(rig.target.made[1].event.kind, InputEvent::Kind::KeyUp);
+	EXPECT_EQ(rig.target.made[2].event.kind, InputEvent::Kind::Action);
 
 	EXPECT_FALSE(rig.Refused(R"({"query": "input.key", "params": {"key": "Nope"}})").empty());
 	EXPECT_FALSE(rig.Refused(R"({"query": "input.key", "params": {"action": "Nope"}})").empty());
 	EXPECT_FALSE(rig.Refused(R"({"query": "input.key", "params": {"key": "L", "action": "Zoom In"}})").empty());
 	EXPECT_FALSE(rig.Refused(R"({"query": "input.gesture", "params": {"name": "Nope"}})").empty());
 	EXPECT_EQ(rig.Ask(R"({"query": "input.names"})")["gestures"], Json({"Spiral"}));
+}
+
+// A move asked for right after a click, in the same frame or the next, reaches the game after the click is let go
+// of, never between the press and the letting go, where it would drag the click off what it pressed
+TEST(InspectorInput, AClickThenAMoveReachTheGameInTheOrderAskedFor)
+{
+	for (const bool frameBetween : {false, true})
+	{
+		Rig rig;
+		rig.Ask(R"({"query": "input.pointer", "params": {"screen": [10, 10]}})");
+		rig.Ask(R"({"query": "input.button", "params": {"action": "click"}})");
+		if (frameBetween)
+		{
+			rig.Frame();
+		}
+		const auto moved = rig.Ask(R"({"query": "input.pointer", "params": {"screen": [300, 200]}})");
+		EXPECT_EQ(moved["starts_frame"], 3) << frameBetween;
+		for (int frame = 0; frame < 4; ++frame)
+		{
+			rig.Frame();
+		}
+		ASSERT_EQ(rig.target.made.size(), 4u) << frameBetween;
+		const std::vector<InputEvent::Kind> expected {InputEvent::Kind::PointerTo, InputEvent::Kind::ButtonDown,
+		                                              InputEvent::Kind::ButtonUp, InputEvent::Kind::PointerTo};
+		for (size_t i = 0; i < expected.size(); ++i)
+		{
+			EXPECT_EQ(rig.target.made[i].event.kind, expected[i]) << frameBetween << " " << i;
+		}
+		// Pressed, let go of and moved away a frame apart, as a hand on a mouse would
+		EXPECT_EQ(rig.target.made[1].frame, 1u) << frameBetween;
+		EXPECT_EQ(rig.target.made[2].frame, 2u) << frameBetween;
+		EXPECT_EQ(rig.target.made[3].frame, 3u) << frameBetween;
+		EXPECT_EQ(rig.target.made[3].event.position, glm::ivec2(300, 200)) << frameBetween;
+		EXPECT_EQ(rig.target.buttons, 0u) << frameBetween;
+	}
+}
+
+// Requests queue up behind each other: a drag, then a click, then a key, each starting once the one before is done
+TEST(InspectorInput, RequestsWaitBehindInputStillToCome)
+{
+	Rig rig;
+	rig.Ask(R"({"query": "input.drag", "params": {"from": {"screen": [0, 0]}, "to": {"screen": [20, 0]}, "frames": 2}})");
+	rig.Ask(R"({"query": "input.button", "params": {"button": "right"}})");
+	rig.Ask(R"({"query": "input.key", "params": {"key": "L"}})");
+	for (int frame = 0; frame < 8; ++frame)
+	{
+		rig.Frame();
+	}
+	std::vector<std::pair<uint64_t, InputEvent::Kind>> made;
+	for (const auto& each : rig.target.made)
+	{
+		made.emplace_back(each.frame, each.event.kind);
+	}
+	const std::vector<std::pair<uint64_t, InputEvent::Kind>> expected {
+	    {1, InputEvent::Kind::PointerTo}, {1, InputEvent::Kind::ButtonDown}, {2, InputEvent::Kind::PointerTo},
+	    {3, InputEvent::Kind::PointerTo}, {4, InputEvent::Kind::ButtonUp},   {5, InputEvent::Kind::ButtonDown},
+	    {6, InputEvent::Kind::ButtonUp},  {7, InputEvent::Kind::KeyDown},    {8, InputEvent::Kind::KeyUp},
+	};
+	EXPECT_EQ(made, expected);
+	// Release alone cuts in, forgetting what waits
+	rig.Ask(R"({"query": "input.button", "params": {"action": "double_click"}})");
+	rig.Ask(R"({"query": "input.release"})");
+	EXPECT_EQ(rig.provider->Timeline().Pending(), 0u);
+}
+
+// The game's dialogs pressed by name are clicked through the same queue, after input asked for before
+TEST(InspectorInput, InputSentForOtherRequestsWaitsItsTurn)
+{
+	Rig rig;
+	rig.Ask(R"({"query": "input.button", "params": {"action": "click"}})");
+	const std::vector<InputEvent> click {
+	    {.kind = InputEvent::Kind::PointerTo, .position = {40, 50}},
+	    {.kind = InputEvent::Kind::ButtonDown, .button = 1},
+	    {.kind = InputEvent::Kind::ButtonUp, .button = 1},
+	};
+	EXPECT_TRUE(rig.provider->Send(click).empty());
+	EXPECT_EQ(rig.target.made.size(), 1u);
+	rig.Frame();
+	rig.Frame();
+	rig.Frame();
+	ASSERT_EQ(rig.target.made.size(), 5u);
+	EXPECT_EQ(rig.target.made[1].event.kind, InputEvent::Kind::ButtonUp);
+	EXPECT_EQ(rig.target.made[1].frame, 2u);
+	for (size_t i = 0; i < click.size(); ++i)
+	{
+		EXPECT_EQ(rig.target.made[2 + i].event, click[i]) << i;
+		EXPECT_EQ(rig.target.made[2 + i].frame, 3u) << i;
+	}
+	// With nothing waiting, it is made at once
+	EXPECT_TRUE(rig.provider->Send(click).empty());
+	EXPECT_EQ(rig.target.made.size(), 8u);
 }
 
 TEST(InspectorInput, ADragHoldsTheButtonAndMovesEvenlyAFrameAStep)

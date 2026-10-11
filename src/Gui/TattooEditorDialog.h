@@ -14,6 +14,7 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <vector>
 
 #include <glm/vec2.hpp>
 
@@ -82,6 +83,9 @@ public:
 	static constexpr int k_ArrowSize = 40;
 	static constexpr int k_RotationSize = 96;
 	[[nodiscard]] static glm::ivec2 GetSymbolPosition(size_t index);
+
+	/// The controls that act and have a name (OK and Cancel), for tools pressing them by name
+	[[nodiscard]] std::vector<Dialog::NamedControl> GetNamedControls() const { return _dialog.GetNamedControls(); }
 
 private:
 	void ApplyTint();

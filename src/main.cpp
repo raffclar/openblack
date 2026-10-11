@@ -69,7 +69,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("frame-stats-views", "With --frame-stats, also profile and log the GPU time of each render view.")
 		("pre-intro", "Play the pre-intro film at start-up, as the game does on a first run.")
 		("skip-logos", "Leave out the logo pictures at start-up.")
-		("skip-opening", "For developers: start the new game with the start-of-game question answered, the story then going as it does for that answer: creature (straight to choosing a creature, the opening skipped), story (all of the first land's creature tutorial skipped too), old (keep the old creature), normal; or ask, to be asked it whatever the player profiles.", cxxopts::value<std::string>())
+		("skip-opening", "For developers: start the new game with the start-of-game question answered, the story then going as it does for that answer: creature (straight to choosing a creature, the opening skipped), story (all of the first land's creature tutorial skipped too), old (keep the old creature; story when the profile has none), normal; or ask, to be asked it as every new game is.", cxxopts::value<std::string>())
 		("play-video", "Play a full-screen video once the land is loaded: intro, fall (the falling spell, which needs the player's creature) or a path such as Data/logo.bik.", cxxopts::value<std::string>()->default_value(""))
 		("scenario", "Start on the testbed and run the testbed scenario of this id, such as benchmark.creatures_100.", cxxopts::value<std::string>())
 		("benchmark-warmup", "With --scenario, the frames a benchmark's crowd settles for once spawned, before it is measured.", cxxopts::value<uint32_t>()->default_value("120"))
