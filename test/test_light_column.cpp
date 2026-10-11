@@ -48,15 +48,15 @@ TEST(LightColumn, TintIsTheOwnersColourAtItsStrength)
 	EXPECT_FLOAT_EQ(tint.a, 20.0f / 255.0f);
 }
 
-TEST(LightColumn, ItStandsAtItsPointFacingTheEyeThreeTimesItsSizeAndStretchedUpright)
+TEST(LightColumn, ItStandsAtItsPointFacingTheEyeAsWideAsItsModelAndThreeTimesTaller)
 {
 	const glm::vec3 position {100.0f, 20.0f, 200.0f};
 	const glm::vec3 eye {100.0f, 50.0f, 100.0f};
 	const auto model = Model(position, eye);
 	EXPECT_EQ(glm::vec3(model[3]), position);
-	EXPECT_NEAR(glm::length(glm::vec3(model[0])), 3.0f, 1e-5f);
-	EXPECT_NEAR(glm::length(glm::vec3(model[1])), 9.0f, 1e-5f);
-	EXPECT_NEAR(glm::length(glm::vec3(model[2])), 3.0f, 1e-5f);
+	EXPECT_NEAR(glm::length(glm::vec3(model[0])), 1.0f, 1e-5f);
+	EXPECT_NEAR(glm::length(glm::vec3(model[1])), 3.0f, 1e-5f);
+	EXPECT_NEAR(glm::length(glm::vec3(model[2])), 1.0f, 1e-5f);
 	// Its depth points away from the eye, across the ground, and its side is square to that
 	const auto away = glm::normalize(glm::vec3(model[2]));
 	EXPECT_NEAR(away.x, 0.0f, 1e-5f);
