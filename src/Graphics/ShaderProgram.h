@@ -23,6 +23,7 @@
 
 namespace openblack::graphics
 {
+class DescriptorSetTally;
 class SamplerDefaults;
 class Texture2D;
 
@@ -37,9 +38,11 @@ public:
 	};
 
 	ShaderProgram() = delete;
-	/// The samplers are those the program's shaders declare, which it keeps bound on every submit with the defaults
+	/// The samplers are those the program's shaders declare, which it keeps bound on every submit with the defaults.
+	/// The tally, when there is one, counts the descriptor sets its draws take.
 	ShaderProgram(const std::string& name, ShaderHandle vertexShader, ShaderHandle fragmentShader,
-	              std::vector<shader_samplers::Sampler> samplers, SamplerDefaults& samplerDefaults);
+	              std::vector<shader_samplers::Sampler> samplers, SamplerDefaults& samplerDefaults,
+	              DescriptorSetTally* tally = nullptr);
 	~ShaderProgram();
 	ShaderProgram(const ShaderProgram&) = delete;
 	ShaderProgram& operator=(const ShaderProgram&) = delete;
@@ -71,12 +74,14 @@ public:
 
 private:
 	void WarnMissing(std::string_view name) const;
+	void Bind(uint8_t bindPoint, UniformHandle sampler, TextureHandle texture) const;
 
 	std::string _name;
 	ProgramHandle _program;
 	UniformTable _uniforms;
 	std::vector<shader_samplers::Sampler> _samplers;
 	SamplerDefaults& _samplerDefaults;
+	DescriptorSetTally* _tally;
 	/// The uniforms set on this shader that it doesn't have, already warned about
 	mutable std::set<std::string, std::less<>> _warnedMissing;
 };

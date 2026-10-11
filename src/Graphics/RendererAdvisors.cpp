@@ -180,7 +180,7 @@ void Renderer::DrawAdvisors(const DrawSceneDesc& desc) const
 		desc.frameBuffer->Bind(RenderPass::Advisors);
 	}
 	bgfx::touch(static_cast<bgfx::ViewId>(RenderPass::Advisors));
-	bgfx::setViewMode(static_cast<bgfx::ViewId>(RenderPass::Advisors), bgfx::ViewMode::Sequential);
+	_shaderManager->SetViewOrder(RenderPass::Advisors, ViewOrder::Sequential);
 	_shaderManager->SetCamera(RenderPass::Advisors, camera);
 
 	const auto* program = _shaderManager->GetShader("Advisor");
