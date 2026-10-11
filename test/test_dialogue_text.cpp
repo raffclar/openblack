@@ -183,6 +183,36 @@ TEST(DialogueText, TheContinueCueFadesInWhileTheTextWaits)
 	EXPECT_FALSE(dialogue.GetClickCueShare().has_value());
 }
 
+TEST(DialogueText, TheControlIconsFadeInOverAThirdOfASecond)
+{
+	Fixture f;
+	f.texts[10] = {.text = u"click me $m2"};
+	f.texts[11] = {.text = u"keys $m15 $m7 $m8"};
+	auto dialogue = f.Make();
+	dialogue.RunText(false, 11, 0);
+	EXPECT_FLOAT_EQ(dialogue.GetKeyIconShare(), 0.0f);
+	dialogue.AdvanceControlIcons(0.15f);
+	EXPECT_FLOAT_EQ(dialogue.GetKeyIconShare(), 0.5f);
+	EXPECT_FLOAT_EQ(dialogue.GetActionIconShare().value_or(-1.0f), 0.5f);
+	dialogue.AdvanceControlIcons(1.0f);
+	EXPECT_FLOAT_EQ(dialogue.GetKeyIconShare(), 1.0f);
+	// A new text starts them again; the bottom one waits while the "Continue" cue has its place
+	dialogue.RunText(false, 10, 1);
+	EXPECT_FLOAT_EQ(dialogue.GetKeyIconShare(), 0.0f);
+	dialogue.AdvanceControlIcons(0.3f);
+	EXPECT_FALSE(dialogue.GetActionIconShare().has_value());
+	EXPECT_FLOAT_EQ(dialogue.GetKeyIconShare(), 1.0f);
+	// The click ends the wait: the bottom icon fades in from nothing
+	f.turn += 1000;
+	dialogue.ProcessClick(true, false);
+	EXPECT_FLOAT_EQ(dialogue.GetActionIconShare().value_or(-1.0f), 0.0f);
+	dialogue.AdvanceControlIcons(0.1f);
+	EXPECT_NEAR(dialogue.GetActionIconShare().value_or(-1.0f), 1.0f / 3.0f, 1e-6f);
+	// Taking the texts away starts the key cap again
+	dialogue.ClearAllText();
+	EXPECT_FLOAT_EQ(dialogue.GetKeyIconShare(), 0.0f);
+}
+
 TEST(DialogueText, AClickTooSoonDoesNothing)
 {
 	Fixture f;

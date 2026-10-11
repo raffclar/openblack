@@ -14,6 +14,7 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 // The text splitter of the help text: the word splitter and the character tests and skips it uses. One splitter for
 // the word count of the reading time and for the display (measure and draw, HelpTextDisplay). The escape codes change
@@ -73,8 +74,9 @@ struct DrawState
 	int32_t narrator {0};
 	bool f1Loaded {true};
 	bool f3Loaded {true};
-	/// The last $M<n> seen with the flag set; -1 when none. The control icon is not drawn yet
-	int controlIcon {-1};
+	/// Every $M<n> seen with the flag set, in the text's order: the control icons the help system shows at the right of
+	/// the box (help::control_icons)
+	std::vector<int> controlIcons;
 
 	/// 2 -> f1 (or j0 when not loaded), 3 -> f3 (or j0), else j0
 	void SetFont(int32_t n);

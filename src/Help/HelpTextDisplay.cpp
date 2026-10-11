@@ -429,7 +429,7 @@ TextFrame HelpTextDisplay::Layout(int width, int height, int barPixels, int text
 		                                       entry.number, state, widthFn, frame.runs);
 		if (i == 0)
 		{
-			frame.controlIcon = state.controlIcon;
+			frame.controlIcons = std::move(state.controlIcons);
 		}
 		// The next slot
 		scalePrev = scaleCur;

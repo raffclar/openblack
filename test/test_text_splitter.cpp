@@ -355,7 +355,11 @@ TEST(TextSplitter, StateCodes)
 
 	// $M only with the flag
 	static_cast<void>(Pieces(u"$m2", state, false));
-	EXPECT_EQ(state.controlIcon, -1);
+	EXPECT_TRUE(state.controlIcons.empty());
 	static_cast<void>(Pieces(u"$m2", state, true));
-	EXPECT_EQ(state.controlIcon, 2);
+	EXPECT_EQ(state.controlIcons, std::vector<int> {2});
+	// every code, in order, and $M as well as $m
+	state.controlIcons.clear();
+	static_cast<void>(Pieces(u"Rotate. $m15 $M7 \\m8", state, true));
+	EXPECT_EQ(state.controlIcons, (std::vector<int> {15, 7, 8}));
 }

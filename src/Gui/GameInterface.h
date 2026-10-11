@@ -43,7 +43,9 @@ class VideoOverlay;
 
 namespace openblack::help
 {
+class DialogueText;
 enum class TextFont : uint8_t;
+struct TextFrame;
 struct TextRegion;
 namespace tip_bubble
 {
@@ -203,6 +205,9 @@ private:
 	void DrawBubbleLine(const help::tip_bubble::Line& line, glm::vec3 colour);
 	/// The "Continue" cue at the right of the dialogue box, so far through its fade
 	void DrawClickCue(glm::u16vec2 resolution, const help::TextRegion& box, float share);
+	/// The control icons the newest text asks for at the right of the dialogue box: the camera keys' cap in its top
+	/// third, any other action's mouse or key in its bottom third
+	void DrawControlIcons(glm::u16vec2 resolution, const help::TextFrame& frame, const help::DialogueText& dialogue);
 	/// The font of the dialogue's words: the advisors each have their own, and j0 stands in for one that is missing
 	[[nodiscard]] std::pair<const GameFont*, const graphics::Texture2D*> DialogueFont(help::TextFont font) const;
 
