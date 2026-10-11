@@ -115,6 +115,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
+#include "ECS/Systems/AppleBarrelSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
@@ -1763,6 +1764,8 @@ bool Game::Update() noexcept
 		Locator::introSystem::value().Update(static_cast<uint32_t>(clock.GetFrameGameTime().count()));
 		// The gates and the other scenery the scripts open and close play on, and the plinths' stones sit or sink
 		Locator::animatedStaticSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
+		// The apple barrel goes to the local player's storage pit nearest their temple and its worm wriggles on
+		Locator::appleBarrelSystem::value().Update(clock.GetTurn(), clock.GetTurnFraction());
 	}
 	{
 		// The creatures are drawn moving between the last two turns
@@ -3728,6 +3731,10 @@ void Game::PrepareNewLand()
 	if (Locator::animatedStaticSystem::has_value())
 	{
 		Locator::animatedStaticSystem::value().Reset();
+	}
+	if (Locator::appleBarrelSystem::has_value())
+	{
+		Locator::appleBarrelSystem::value().Reset();
 	}
 	Locator::magicShieldSystem::value().Reset();
 	Locator::forestSystem::value().Reset();

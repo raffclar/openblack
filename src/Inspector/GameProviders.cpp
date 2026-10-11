@@ -45,6 +45,7 @@
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
+#include "ECS/Components/AppleBarrel.h"
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/CameraBookmark.h"
 #include "ECS/Components/ChimneySmoke.h"
@@ -84,6 +85,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
+#include "ECS/Systems/AppleBarrelSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
@@ -302,6 +304,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"fireflySystem", "living.fireflies"},
     LocatorCoverage {"fishFarmSystem", "living.fish_farms"},
     LocatorCoverage {"animatedStaticSystem", "living.animated_statics"},
+    LocatorCoverage {"appleBarrelSystem", "living.apple_barrel"},
     LocatorCoverage {"gestureSystem", "players.gestures"},
     LocatorCoverage {"miracleFxSystem", "magic.state"},
     LocatorCoverage {"fireSystem", "magic.fires"},
@@ -760,6 +763,30 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 			    items.push_back(std::move(item));
 		    });
 		    return items;
+	    }));
+	provider->Add(
+	    Query("apple_barrel",
+	          "The apple barrel beside the local player's storage pit nearest their temple: the pit, the barrel and its "
+	          "worm, where they stand and the worm's place in its clip; none while no pit carries it",
+	          {}),
+	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
+		    const auto barrel =
+		        Locator::appleBarrelSystem::has_value() ? Locator::appleBarrelSystem::value().GetBarrel() : entt::null;
+		    if (barrel == entt::null || !registry.Valid(barrel) || !registry.AllOf<AppleBarrel, Transform>(barrel))
+		    {
+			    return Json(nullptr);
+		    }
+		    const auto& found = registry.Get<const AppleBarrel>(barrel);
+		    Json result = {{"barrel", Id(barrel)},
+		                   {"store", Id(found.store)},
+		                   {"worm", Id(found.worm)},
+		                   {"position", Point(registry.Get<const Transform>(barrel).position)}};
+		    if (registry.Valid(found.worm) && registry.AllOf<AppleBarrelWorm, Transform>(found.worm))
+		    {
+			    result["worm_position"] = Point(registry.Get<const Transform>(found.worm).position);
+			    result["worm_place"] = registry.Get<const AppleBarrelWorm>(found.worm).place;
+		    }
+		    return result;
 	    }));
 	provider->Add(
 	    Query("totems",

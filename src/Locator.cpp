@@ -35,6 +35,7 @@
 #include "ECS/Systems/Implementations/AlignmentSystem.h"
 #include "ECS/Systems/Implementations/AnimalSystem.h"
 #include "ECS/Systems/Implementations/AnimatedStaticSystem.h"
+#include "ECS/Systems/Implementations/AppleBarrelSystem.h"
 #include "ECS/Systems/Implementations/BuildingDamageSystem.h"
 #include "ECS/Systems/Implementations/CameraBookmarkSystem.h"
 #include "ECS/Systems/Implementations/CameraHelpSystem.h"
@@ -155,6 +156,7 @@ using openblack::ecs::systems::AdvisorSystem;
 using openblack::ecs::systems::AlignmentSystem;
 using openblack::ecs::systems::AnimalSystem;
 using openblack::ecs::systems::AnimatedStaticSystem;
+using openblack::ecs::systems::AppleBarrelSystem;
 using openblack::ecs::systems::CameraBookmarkSystem;
 using openblack::ecs::systems::CameraHelpSystem;
 using openblack::ecs::systems::CameraPathSystem;
@@ -413,6 +415,8 @@ void InitializeLevelWith(const LandSource& land)
 	Locator::worshipSiteSystem::emplace<WorshipSiteSystem>();
 	Locator::resourceStoreSystem::emplace<ResourceStoreSystem>();
 	Locator::animatedStaticSystem::emplace<AnimatedStaticSystem>();
+	// The apple barrel with its worm beside the local player's storage pit
+	Locator::appleBarrelSystem::emplace<AppleBarrelSystem>();
 	Locator::weatherSystem::emplace<WeatherSystem>();
 	Locator::pathfindingSystem::emplace<PathfindingSystem>();
 	// Where creatures can walk is sorted anew for each land
@@ -479,6 +483,7 @@ void openblack::ShutDownServices()
 	Locator::worshipSiteSystem::reset();
 	Locator::resourceStoreSystem::reset();
 	Locator::animatedStaticSystem::reset();
+	Locator::appleBarrelSystem::reset();
 	Locator::weatherSystem::reset();
 	Locator::handGrabSystem::reset();
 	Locator::handSystem::reset();
