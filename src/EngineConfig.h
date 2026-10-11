@@ -9,8 +9,12 @@
 
 #pragma once
 
+#include <algorithm>
+#include <array>
 #include <map>
+#include <optional>
 #include <string_view>
+#include <utility>
 
 #include "Windowing/WindowingInterface.h"
 
@@ -25,12 +29,28 @@ enum class GraphicsBackend : uint8_t
 	Vulkan,
 };
 
-static const std::map<std::string_view, GraphicsBackend> k_GraphicsBackendStringLookup {
-    std::pair {"Noop", GraphicsBackend::Noop},
-    std::pair {"Direct3D12", GraphicsBackend::Direct3D12},
-    std::pair {"Metal", GraphicsBackend::Metal},
-    std::pair {"Vulkan", GraphicsBackend::Vulkan},
-};
+/// The names a backend is given by on the command line, in any case: its own and the common short ones
+static constexpr std::array<std::pair<std::string_view, GraphicsBackend>, 10> k_GraphicsBackendNames {{
+    {"Noop", GraphicsBackend::Noop},
+    {"Null", GraphicsBackend::Noop},
+    {"Direct3D12", GraphicsBackend::Direct3D12},
+    {"D3D12", GraphicsBackend::Direct3D12},
+    {"DX12", GraphicsBackend::Direct3D12},
+    {"DirectX12", GraphicsBackend::Direct3D12},
+    {"Metal", GraphicsBackend::Metal},
+    {"MTL", GraphicsBackend::Metal},
+    {"Vulkan", GraphicsBackend::Vulkan},
+    {"VK", GraphicsBackend::Vulkan},
+}};
+
+/// The backend a command line names, by any of its names in any case
+[[nodiscard]] constexpr std::optional<GraphicsBackend> ParseGraphicsBackend(std::string_view name) noexcept
+{
+	const auto lower = [](char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c; };
+	const auto found = std::ranges::find_if(
+	    k_GraphicsBackendNames, [&](const auto& entry) { return std::ranges::equal(entry.first, name, {}, lower, lower); });
+	return found != k_GraphicsBackendNames.end() ? std::optional {found->second} : std::nullopt;
+}
 
 struct EngineConfig
 {
