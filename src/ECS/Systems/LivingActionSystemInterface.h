@@ -27,8 +27,13 @@ class LivingActionSystemInterface
 {
 public:
 	virtual void Update() = 0;
+	/// As a turn begins, before anything moves: where each villager stands, from where its drawing glides through the
+	/// turn
+	virtual void StartTurnPlaces() = 0;
 	/// Every frame: the clip each villager's state plays is advanced by the game's clock since the last frame, the
-	/// sounds of the clip's frames it passed are played, and the keyframes it has reached are kept for posing it
+	/// sounds of the clip's frames it passed are played, and the keyframes it has reached are kept for posing it. Its
+	/// drawing glides between its last two turns' places while it walks, and its drawn heading turns after the way it
+	/// faces.
 	virtual void UpdatePoses(uint32_t turn, float turnFraction) = 0;
 	/// Every frame, once the camera has moved: the villagers the camera sees, and those flying in the physics or held
 	/// in the hand that it sees reflected in the sea, are posed between the keyframes their clips have reached

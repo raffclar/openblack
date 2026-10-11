@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <limits>
 
 #include <LNDFile.h>
 #include <entt/core/hashed_string.hpp>
@@ -32,10 +33,13 @@
 #include "3D/MapCoords.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/MachineClock.h"
 #include "ECS/Archetypes/PotArchetype.h"
+#include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/MagicForest.h"
 #include "ECS/Components/MagicPile.h"
@@ -46,9 +50,12 @@
 #include "ECS/Components/ResourceLastTaken.h"
 #include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/StoragePit.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/Registry.h"
@@ -58,6 +65,8 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
+#include "ECS/TempleConstruction.h"
+#include "ECS/VillagerCarry.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -692,4 +701,225 @@ bool ResourceStoreSystem::PourAt(ResourceType type, glm::vec3 point, uint32_t am
 		                                         .casterCreature = entt::null});
 	}
 	return true;
+}
+
+namespace
+{
+uint32_t PileHolds(const Pot& pot, ResourceType type)
+{
+	return PotInfoOf(pot.type).resourceType == type ? pot.amount : 0u;
+}
+
+/// A pile of a building site that is still there
+Pot* LivePile(entt::entity pile)
+{
+	auto& registry = Entities();
+	return registry.Valid(pile) ? registry.TryGet<Pot>(pile) : nullptr;
+}
+
+/// A building going up whose site keeps its wood in piles: a temple's
+BuildingSite* PiledSite(entt::entity object)
+{
+	auto& registry = Entities();
+	return registry.AllOf<Temple>(object) ? registry.TryGet<BuildingSite>(object) : nullptr;
+}
+
+TownResourceTally* TallyOf(entt::entity town)
+{
+	auto& registry = Entities();
+	return town != entt::null && registry.Valid(town) ? registry.TryGet<TownResourceTally>(town) : nullptr;
+}
+} // namespace
+
+uint32_t ResourceStoreSystem::GetResource(entt::entity object, ResourceType type) const
+{
+	auto& registry = Entities();
+	if (!registry.Valid(object))
+	{
+		return 0;
+	}
+	if (auto* abode = registry.TryGet<Abode>(object))
+	{
+		// A building keeps a count of each, and nothing of anything else
+		return type == ResourceType::Food || type == ResourceType::Wood ? CountOf(*abode, type) : 0u;
+	}
+	if (const auto* pot = registry.TryGet<const Pot>(object))
+	{
+		// A pile of a store answers for its store
+		if (const auto store = StoreOf(object))
+		{
+			return GetResource(*store, type);
+		}
+		return PileHolds(*pot, type);
+	}
+	if (registry.AllOf<Villager>(object))
+	{
+		return 0;
+	}
+	// A temple, built or going up, holds nothing itself
+	if (registry.AllOf<Temple>(object))
+	{
+		return 0;
+	}
+	const auto resource = ResourceOf(object);
+	return resource.type == type ? resource.amount : 0u;
+}
+
+uint32_t ResourceStoreSystem::AddResource(entt::entity object, ResourceType type, uint32_t amount, std::optional<glm::vec3> at)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(object))
+	{
+		return 0;
+	}
+	if (auto* villager = registry.TryGet<Villager>(object))
+	{
+		// Food or wood goes into its load, the wood showing as the plain log; it says it took none
+		if (type == ResourceType::Food || type == ResourceType::Wood)
+		{
+			const auto picked = ecs::villager_carry::PickUp(*villager, type, static_cast<int16_t>(amount), 0);
+			if (auto* tally = TallyOf(villager->town))
+			{
+				auto& carried = type == ResourceType::Food ? tally->foodCarried : tally->woodCarried;
+				carried += static_cast<float>(picked);
+			}
+		}
+		return 0;
+	}
+	if (auto* site = PiledSite(object))
+	{
+		if (type != ResourceType::Wood && type != ResourceType::Any)
+		{
+			return 0;
+		}
+		uint32_t added = 0;
+		if (at.has_value())
+		{
+			const auto nearest = [&]() -> entt::entity {
+				entt::entity best = entt::null;
+				float bestDistance = std::numeric_limits<float>::max();
+				for (const auto pile : site->piles)
+				{
+					if (LivePile(pile) == nullptr)
+					{
+						continue;
+					}
+					const auto& position = registry.Get<const Transform>(pile).position;
+					const float distance = gutils::GetDistanceInMetres(*at, position);
+					if (distance < bestDistance)
+					{
+						bestDistance = distance;
+						best = pile;
+					}
+				}
+				return best;
+			};
+			auto pile = nearest();
+			if (pile == entt::null)
+			{
+				construction::MakeSitePiles(object);
+				pile = nearest();
+			}
+			if (pile != entt::null)
+			{
+				added = AddToPile(pile, type, amount, false);
+			}
+		}
+		if (auto* tally = TallyOf(construction::TownOfSite(object)))
+		{
+			tally->woodAtSites += static_cast<float>(added);
+		}
+		return added;
+	}
+	if (registry.AllOf<Temple>(object))
+	{
+		return 0;
+	}
+	if (auto* abode = registry.TryGet<Abode>(object))
+	{
+		// TODO(temple-builders): an abode going up takes wood into its site's pile; openblack's abodes have no sites yet
+		if (registry.AllOf<StoragePit>(object))
+		{
+			return AddToStore(object, type, amount, std::nullopt, false);
+		}
+		// TODO(temple-builders): a workshop keeps its wood in a pile of its own; openblack has no workshop store yet
+		if (type != ResourceType::Food && type != ResourceType::Wood)
+		{
+			return 0;
+		}
+		CountOf(*abode, type) += amount;
+		return amount;
+	}
+	if (registry.AllOf<Pot>(object))
+	{
+		if (const auto store = StoreOf(object))
+		{
+			return AddResource(*store, type, amount, at);
+		}
+		return AddToPile(object, type, amount, false);
+	}
+	return 0;
+}
+
+uint32_t ResourceStoreSystem::RemoveResource(entt::entity object, ResourceType type, uint32_t amount)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(object))
+	{
+		return 0;
+	}
+	if (auto* site = PiledSite(object))
+	{
+		if (type != ResourceType::Wood && type != ResourceType::Any)
+		{
+			return 0;
+		}
+		// Its piles in turn, each giving what it has; an emptied pile stays where it is
+		uint32_t removed = 0;
+		for (const auto pile : site->piles)
+		{
+			if (amount == 0)
+			{
+				break;
+			}
+			if (auto* pot = LivePile(pile))
+			{
+				const auto taken = std::min(amount, pot->amount);
+				pot->amount -= taken;
+				if (pot->amount == 0)
+				{
+					pot->poisoned = false;
+				}
+				removed += taken;
+				amount -= taken;
+			}
+		}
+		return removed;
+	}
+	if (registry.AllOf<Temple>(object))
+	{
+		return 0;
+	}
+	if (auto* abode = registry.TryGet<Abode>(object))
+	{
+		if (registry.AllOf<StoragePit>(object))
+		{
+			return type == ResourceType::Food || type == ResourceType::Wood ? TakeFromPit(object, type, amount, std::nullopt)
+			                                                                : 0u;
+		}
+		if (type != ResourceType::Food && type != ResourceType::Wood)
+		{
+			return 0;
+		}
+		auto& count = CountOf(*abode, type);
+		const auto removed = std::min(count, amount);
+		count -= removed;
+		return removed;
+	}
+	if (registry.AllOf<Pot>(object))
+	{
+		return TakeFromPile(object, type, amount, std::nullopt);
+	}
+	// TODO(temple-builders): dead trees, rocks, big forests and fish farms give up what they hold; not yet
+	return 0;
 }

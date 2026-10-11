@@ -12,6 +12,7 @@
 #include <cctype>
 
 #include <algorithm>
+#include <optional>
 #include <string>
 
 #include <SDL_events.h>
@@ -317,6 +318,12 @@ std::optional<glm::ivec2> GameInput::WorldToScreen(glm::vec3 point) const
 	if (!Locator::camera::has_value())
 	{
 		return std::nullopt;
+	}
+	// Through the view drawn: an override's while one is shown, so that the pointer goes where the point is seen
+	std::optional<OverrideForPointer> shown;
+	if (_camera != nullptr)
+	{
+		shown.emplace(*_camera);
 	}
 	const auto size = glm::vec2(ScreenSize());
 	glm::vec3 screen {0.0f};

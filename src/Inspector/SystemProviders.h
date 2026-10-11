@@ -123,6 +123,7 @@ struct MapSources
 ///   town.list                           the towns: owner, buildings, people without a home
 ///   town.homes    {id}                  a town's buildings and who lives in each
 ///   town.homeless {id}                  a town's people without a home
+///   town.belief   {id}                  a town's owner and its belief in each player
 [[nodiscard]] std::unique_ptr<ProviderInterface> MakeTownProvider(WorldSources sources);
 
 // The worship sites

@@ -129,6 +129,7 @@
 #include "Graphics/BoneBudget.h"
 #include "Graphics/DebugLines.h"
 #include "Graphics/DetailLevel.h"
+#include "Graphics/DrawOrder.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/GroundBlobs.h"
@@ -920,6 +921,9 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 	};
 
 	bool lastPreserveState = false;
+	// The textures and render state of the draw, which a primitive drawn with the last one's state keeps
+	draw_order::Bindings bindings {};
+	uint64_t drawState = 0;
 	const auto& primitives = subMesh.GetPrimitives();
 	// Each primitive's skin is looked up once, as the next one's and then as its own
 	const Texture2D* nextTexture = primitives.empty() ? nullptr : skinOf(primitives.front().skinID);
@@ -1055,6 +1059,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				const auto* depth = desc.snow ? SnowDepth(_snowDepth, _snowRevision) : nullptr;
 				const bool snowed =
 				    depth != nullptr && prim.depthWrite && _snowTexture != nullptr && _snowAlphaTexture != nullptr;
+				bindings.snowed = snowed;
 				const glm::vec4 u_snow {snowed ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
 				setUniform(MeshUniform::Snow, &u_snow);
 				if (snowed)
@@ -1081,26 +1086,33 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			{
 				// A primitive without a skin would otherwise sample whichever texture the draw before it left bound,
 				// changing as bgfx orders the draws. The sky has none either, but binds the sky's texture for it.
+				bindings.diffuse = UINT16_MAX;
 				if (subMeshTexture != nullptr)
 				{
 					program->SetTextureSampler("s_diffuse", 0, *subMeshTexture);
+					bindings.diffuse = toBgfx(*subMeshTexture).idx;
 				}
 				else if (desc.skinTexture != nullptr && prim.skinID != 0xFFFFFFFF)
 				{
 					setSampler(MeshUniform::Diffuse, 0, *desc.skinTexture);
+					bindings.diffuse = toBgfx(*desc.skinTexture).idx;
 				}
 				else if (texture != nullptr)
 				{
 					setSampler(MeshUniform::Diffuse, 0, *texture);
+					bindings.diffuse = toBgfx(texture->GetNativeHandle()).idx;
 				}
 				else if (!desc.isSky && _whiteTexture)
 				{
 					program->SetTextureSampler("s_diffuse", 0, *_whiteTexture);
+					bindings.diffuse = toBgfx(*_whiteTexture).idx;
 				}
 			}
+			bindings.lightmap = UINT16_MAX;
 			if (program == desc.lightmapProgram)
 			{
 				setSampler(MeshUniform::Lightmap, 3, *lightmap);
+				bindings.lightmap = toBgfx(lightmap->GetNativeHandle()).idx;
 			}
 			if (desc.environment != nullptr && has(MeshUniform::Environment))
 			{
@@ -1270,9 +1282,13 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 					rgba = (byte << 24) | (byte << 16) | (byte << 8) | byte;
 				}
 				bgfx::setState(state, rgba);
+				drawState = state;
 			}
 
-			program->Submit(static_cast<bgfx::ViewId>(viewId), desc.sortDepth,
+			// Opaque draws whose order doesn't show are gathered by the textures they bind
+			const auto sortDepth =
+			    draw_order::Reorderable(viewId, drawState, desc.sortDepth) ? draw_order::GroupKey(bindings) : desc.sortDepth;
+			program->Submit(static_cast<bgfx::ViewId>(viewId), sortDepth,
 			                primitivePreserveState ? BGFX_DISCARD_NONE : BGFX_DISCARD_ALL);
 		}
 		lastPreserveState = primitivePreserveState;
@@ -2762,7 +2778,10 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 		    {
 			    return;
 		    }
-		    const auto model = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
+		    // Where its body is drawn this frame, gliding between its turns
+		    const auto model = glm::translate(ecs::components::DrawnPosition(transform.position, pose)) *
+		                       glm::mat4(ecs::components::DrawnRotation(transform.rotation, pose)) *
+		                       glm::scale(transform.scale);
 		    const auto foot = [&](size_t bone) {
 			    auto position = glm::vec3(model * bones[bone] * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
 			    position.y = island.GetHeightAt(glm::vec2(position.x, position.z)) + ground_blobs::k_Lift;
@@ -3987,7 +4006,8 @@ void Renderer::UploadAnimalBones(const DrawSceneDesc& drawDesc) const
 		_animalBoneGroups.emplace(meshId,
 		                          AnimalBoneGroup {.firstMatrix = first,
 		                                           .bones = bones,
-		                                           .brightestLand = light == ecs::components::AnimalLight::BrightestLand});
+		                                           .brightestLand = light == ecs::components::AnimalLight::BrightestLand,
+		                                           .landWhereItStands = light == ecs::components::AnimalLight::Land});
 	}
 	if (_animalBones.empty())
 	{
@@ -5445,8 +5465,12 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					colour = pose->colour;
 				}
-				submitDesc.objectLook =
-				    L3DMeshSubmitDesc::ObjectLook {.colour = colour, .alpha = static_cast<float>(pose->alpha) / 255.0f};
+				// One lit by the land where it stands takes no colour of its own, only its alpha when it fades
+				if (pose->light != ecs::components::AnimalLight::Land || pose->alpha < 255)
+				{
+					submitDesc.objectLook =
+					    L3DMeshSubmitDesc::ObjectLook {.colour = colour, .alpha = static_cast<float>(pose->alpha) / 255.0f};
+				}
 				// An animal cut by a plane shows nothing below it
 				submitDesc.cutBelow = pose->cutBelow;
 				const EntityPose entityPose {.bones = pose->bones, .morphTargets = nullptr};
@@ -5547,7 +5571,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					colour = glm::vec3(static_cast<float>(texel & 0xFFu), static_cast<float>((texel >> 8) & 0xFFu),
 					                   static_cast<float>((texel >> 16) & 0xFFu));
 				}
-				submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = colour, .alpha = 1.0f};
+				// Lit by the land where each stands, as other things are, they take no colour of their own
+				if (!group.landWhereItStands)
+				{
+					submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = colour, .alpha = 1.0f};
+				}
 				drawInstances(meshId, placers->second, placers->second.materialBlending, placers->second.offset,
 				              placers->second.count, nullptr, nullptr, std::nullopt, &group);
 				submitDesc.objectLook.reset();

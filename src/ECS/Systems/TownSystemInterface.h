@@ -17,6 +17,8 @@
 #include <glm/fwd.hpp>
 #include <glm/vec2.hpp>
 
+#include "Enums.h"
+
 namespace openblack::ecs::systems
 {
 class TownSystemInterface
@@ -59,5 +61,11 @@ public:
 	virtual void SetInStateOfEmergency(entt::entity town) = 0;
 	/// Once a game turn: a burning store or village centre calls an emergency, and one that has run its time ends
 	virtual void ProcessTurn() = 0;
+
+	/// A player takes a town. Its people stop worshipping and it leaves its worship site; it becomes the player's, after
+	/// their other towns, joining their worship site and influence, its totem turning to them; its people celebrate,
+	/// and for any player but the neutral one fireworks and a fountain of the player's symbols rise from its centre.
+	/// The player at this machine hears the town won. Nothing happens if the town is theirs already.
+	virtual void ClaimTown(entt::entity town, PlayerNames player) = 0;
 };
 } // namespace openblack::ecs::systems

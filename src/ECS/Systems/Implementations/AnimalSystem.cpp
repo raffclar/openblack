@@ -26,6 +26,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "AnimalSystemDetail.h"
 #include "Animals/AnimalAnimation.h"
 #include "Animals/AnimalRules.h"
 #include "Animals/BirdRules.h"
@@ -69,6 +70,7 @@ using namespace openblack::ecs::systems;
 namespace living = openblack::physics::living;
 // Not "flock": on Linux that is also a function from <sys/file.h>
 namespace flock_rules = openblack::magic::flock;
+using namespace openblack::ecs::systems::animal_detail;
 
 namespace
 {
@@ -106,211 +108,20 @@ constexpr int k_FollowInFormation = 3;
 /// A challenge script's animal on its own keeps within 2 m of where it was made, its flock's followers within 1 m
 constexpr float k_ScriptAnimalFlockReach = 2.0f;
 constexpr float k_ScriptAnimalFlockDistance = 1.0f;
+/// It belongs to the nearest town within this many metres
+constexpr float k_ScriptAnimalTownReach = 500.0f;
 /// The prey brought down plays its fall the turn after, and waits for it from the turn after that
 constexpr int k_FallStartsAfter = 2;
-/// The game's numbers for the animals' states whose table says whether an animal sees to its needs in them first
-constexpr size_t k_TableMoveToPos = 1;
-constexpr size_t k_TableInScript = 4;
-constexpr size_t k_TableMoveInFlock = 27;
-constexpr size_t k_TableStartWander = 31;
-constexpr size_t k_TableDecideWhatToDo = 43;
-constexpr size_t k_TableSpecialMoveToPos = 44;
-constexpr size_t k_TableFollowFlock = 45;
 /// The clip a villager brought down plays before it is eaten
 constexpr auto k_VillagerAttacked = static_cast<AnimId>(206);
 
-ecs::Registry& EntityRegistry()
-{
-	return Locator::entitiesRegistry::value();
-}
-
-const GAnimalInfo& InfoOf(AnimalInfo type)
-{
-	return Locator::infoConstants::value().animal.at(static_cast<size_t>(type));
-}
-
-float Ground(glm::vec2 xz)
-{
-	return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(xz) : 0.0f;
-}
-
-float Random(float max)
-{
-	return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameFloatRand(max) : 0.0f;
-}
-
-uint32_t RandomWhole(uint32_t n)
-{
-	return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameRand(n) : 0;
-}
-
-bool IsBird(AnimalInfo type)
-{
-	return animals::birds::IsBird(type);
-}
-
-uint16_t SpeedStateOf(const GAnimalInfo& info, size_t index)
-{
-	const auto& group = info.speedGroup;
-	const std::array speeds {group.speedDefault, group.speedFleeing, group.speed2, group.speed3, group.speed4, group.speed5};
-	return static_cast<uint16_t>(speeds.at(index));
-}
-
-uint16_t TurnAngleOf(const Animal& animal)
-{
-	return static_cast<uint16_t>(InfoOf(animal.type).turnAngle);
-}
-
-glm::vec2 Metres(glm::ivec2 fixed)
-{
-	return {map_coords::ToMetres(fixed.x), map_coords::ToMetres(fixed.y)};
-}
-
-glm::ivec2 Fixed(glm::vec2 metres)
-{
-	return {map_coords::ToFixed(metres.x), map_coords::ToFixed(metres.y)};
-}
-
-glm::vec2 Xz(const glm::vec3& point)
-{
-	return {point.x, point.z};
-}
-
-bool OnMap(glm::vec2 point)
-{
-	return map_coords::InBounds(map_coords::FromMetres(point));
-}
-
-/// The clip of a state: the miracle's doves always flap their clip and its bats theirs; its wolves stand to decide,
-/// leap, settle down to eat and eat, and run otherwise; the land's birds choose a flying clip afresh
-AnimId ClipFor(AnimalInfo type, AnimalState state)
-{
-	if (animals::birds::IsLandBird(type))
-	{
-		return animals::birds::FlyingClip(type, RandomWhole);
-	}
-	switch (type)
-	{
-	case AnimalInfo::SpellDove:
-		return AnimId::SpellDoveFlap;
-	case AnimalInfo::SpellBat:
-		return AnimId::BatFlap;
-	case AnimalInfo::SpellWolf:
-		switch (state)
-		{
-		case AnimalState::DecideWhatToDo:
-			return AnimId::AWolfStand;
-		case AnimalState::Pounce:
-			return AnimId::AWolfPounce;
-		case AnimalState::StartToEat:
-			return AnimId::AWolfGotoEat;
-		case AnimalState::Eat:
-			return AnimId::AWolfEat;
-		default:
-			return AnimId::AWolfRun;
-		}
-	default:
-		return InfoOf(type).defaultAnim;
-	}
-}
-
-/// A state the animal takes, with the clip of that state: a new clip starts from its beginning
-void SetTopState(Animal& animal, AnimalState state)
-{
-	animal.state = state;
-	animal.turnsInState = 0;
-	const auto clip = ClipFor(animal.type, state);
-	if (animal.animation != clip)
-	{
-		animal.animation = clip;
-		animal.clipPlace = 0;
-	}
-}
-
-/// A state the animal takes keeping its clip
-void SetState(Animal& animal, AnimalState state)
-{
-	animal.state = state;
-	animal.turnsInState = 0;
-}
-
-const L3DAnim* ClipOf(AnimId clip)
-{
-	const auto& animations = Locator::resources::value().GetAnimations();
-	const auto id = resources::HashIdentifier(static_cast<uint32_t>(clip));
-	return animations.Contains(id) ? &*animations.Handle(id) : nullptr;
-}
-
-/// A clip's play time in milliseconds, 0 for none
-uint32_t PlayTimeOf(AnimId clip)
-{
-	const auto* anim = ClipOf(clip);
-	return anim != nullptr ? anim->GetPlayTime() : 0;
-}
-
-/// How far a clip carries its animal each play, in the model's units
-float StrideOf(AnimId clip)
-{
-	const auto* anim = ClipOf(clip);
-	return anim != nullptr ? anim->GetStride() : 0.0f;
-}
-
-/// An object's radius across the land: its model's widest half, across or along, times its scale
-float RadiusOf(entt::entity entity)
-{
-	const auto& registry = EntityRegistry();
-	const auto* mesh = registry.TryGet<const Mesh>(entity);
-	const auto* transform = registry.TryGet<const Transform>(entity);
-	const auto& meshes = Locator::resources::value().GetMeshes();
-	if (mesh == nullptr || transform == nullptr || !meshes.Contains(mesh->id))
-	{
-		return 0.0f;
-	}
-	const auto half = meshes.Handle(mesh->id)->GetBoundingBox().Size() * 0.5f;
-	return std::max(half.x, half.z) * transform->scale.x;
-}
-
-/// Where the animal is in the world and the way it faces, from its move and height
-void SyncWorld(Animal& animal)
-{
-	const auto xz = Metres(animal.move.position);
-	animal.position = {xz.x, Ground(xz) + animal.height, xz.y};
-	animal.heading = gutils::ConvertGameAngleTo3D(animal.move.angle);
-}
-
-/// Whether an animal sees to its needs before it does what its state does, by the game's table of the animals' states
-bool SeesToNeedsIn(AnimalState state)
-{
-	size_t row = 0;
-	switch (state)
-	{
-	case AnimalState::DecideWhatToDo:
-		row = k_TableDecideWhatToDo;
-		break;
-	case AnimalState::SpecialMoveToPos:
-		row = k_TableSpecialMoveToPos;
-		break;
-	case AnimalState::FollowFlock:
-		row = k_TableFollowFlock;
-		break;
-	case AnimalState::StartWander:
-		row = k_TableStartWander;
-		break;
-	case AnimalState::MoveToPos:
-		row = k_TableMoveToPos;
-		break;
-	case AnimalState::InScript:
-		row = k_TableInScript;
-		break;
-	case AnimalState::MoveInFlock:
-		row = k_TableMoveInFlock;
-		break;
-	default:
-		return false;
-	}
-	return Locator::infoConstants::value().animalStateTable.at(row).field0xa4 != 0;
-}
 } // namespace
+
+/// By the game's table of the animals' states
+bool AnimalSystem::SeesToNeedsIn(AnimalState state)
+{
+	return Locator::infoConstants::value().animalStateTable.at(GameStateOf(state)).field0xa4 != 0;
+}
 
 namespace
 {
@@ -395,14 +206,19 @@ entt::entity AnimalSystem::CreateBird(AnimalInfo type, glm::vec2 position, uint3
 		                          static_cast<float>(static_cast<int32_t>(info.flockDistance)));
 	}
 	animal.flock = flockEntity;
-	JoinLine(registry.Get<Flock>(flockEntity), entity);
+	// A flock a bird joins belongs to no town, and keeps the most it has had
+	auto& joined = registry.Get<Flock>(flockEntity);
+	joined.town = entt::null;
+	JoinLine(joined, entity);
+	joined.most = std::max(joined.most, static_cast<uint32_t>(joined.members.size()));
 	return entity;
 }
 
 entt::entity AnimalSystem::CreateScriptAnimal(AnimalInfo type, glm::vec2 position)
 {
 	// Made as a land script makes an animal with no flock, at a random age
-	const auto entity = CreateBird(type, position, 0, entt::null);
+	const auto entity = animals::grazers::IsGrazer(type) ? CreateGrazer(type, position, 0, entt::null, entt::null)
+	                                                     : CreateBird(type, position, 0, entt::null);
 	if (entity == entt::null)
 	{
 		return entt::null;
@@ -412,6 +228,8 @@ entt::entity AnimalSystem::CreateScriptAnimal(AnimalInfo type, glm::vec2 positio
 	auto& flockData = registry.Get<Flock>(registry.Get<const Animal>(entity).flock);
 	flockData.domainRadius = static_cast<uint16_t>(k_ScriptAnimalFlockReach);
 	flockData.flockDistance = static_cast<uint16_t>(k_ScriptAnimalFlockDistance);
+	// It belongs to the nearest town within 500 m
+	registry.Get<Animal>(entity).town = NearestTown(position, k_ScriptAnimalTownReach);
 	// The script holds it still until it says otherwise
 	SetScriptState(entity, LivingStates::LivingInScript);
 	return entity;
@@ -596,10 +414,11 @@ glm::vec2 AnimalSystem::RandomPos(const Animal& animal, glm::vec2 centre, float 
 		return Locator::terrainSystem::has_value() &&
 		       Locator::terrainSystem::value().FindCell(glm::u16vec2(map_coords::CellOf(point))) != nullptr;
 	};
-	// A point it may go to: on the map, one it can reach without circling, and for a bird, over the land all the way. (The game
-	// also turns down a point the map's walls block; openblack's map has none of them.)
+	// A point it may go to: on the map, where its kind can stand, one it can reach without circling, and for a bird, over
+	// the land all the way. (The game also turns down a point the map's walls block; openblack's map has none of them.)
+	const auto mask = static_cast<uint32_t>(InfoOf(animal.type).collideType);
 	const auto valid = [&](glm::vec2 point) {
-		return OnMap(point) &&
+		return OnMap(point) && !CellCollides(point, mask) &&
 		       animals::OutsideTurningCircles(here, animal.move.angle, animal.move.speed, TurnAngleOf(animal), point) &&
 		       (!overLandOnly || animals::OverLandAllTheWay(here, point, [&hasLand](glm::ivec2 cell) {
 			       return hasLand(glm::vec2(cell) * 10.0f + 5.0f);
@@ -661,6 +480,12 @@ void AnimalSystem::ProcessTurn()
 		if (animal.state == AnimalState::Dying || animal.state == AnimalState::Dead)
 		{
 			ProcessDeath(entity, animal);
+			continue;
+		}
+		// A grazer sees to its own needs as it goes
+		if (auto* grazer = registry.TryGet<Grazer>(entity))
+		{
+			GrazerTurn(entity, animal, *grazer);
 			continue;
 		}
 		// Hungrier each turn, up to its kind's hunger
@@ -794,7 +619,7 @@ void AnimalSystem::SetSpeed(Animal& animal, size_t speed)
 	// A land bird chooses its flying clip afresh, starting a new one from its beginning
 	if (animals::birds::IsLandBird(animal.type))
 	{
-		const auto clip = ClipFor(animal.type, animal.state);
+		const auto clip = ClipFor(animal, animal.state);
 		if (clip != animal.animation)
 		{
 			animal.animation = clip;
@@ -881,7 +706,7 @@ void AnimalSystem::FollowFlock(entt::entity entity, Animal& animal)
 		// A land bird following chooses its flying clip afresh once it has been following as long as its clip plays
 		if (animals::birds::IsLandBird(animal.type) && animal.turnsInState * k_TurnMilliseconds >= PlayTimeOf(animal.animation))
 		{
-			const auto clip = ClipFor(animal.type, animal.state);
+			const auto clip = ClipFor(animal, animal.state);
 			if (clip != animal.animation)
 			{
 				animal.animation = clip;
@@ -1778,9 +1603,13 @@ bool AnimalSystem::Flee(entt::entity entity, Animal& animal)
 			    static_cast<size_t>(VillagerStates::FleeingFromObjectReaction));
 			animal.move.speed = SpeedStateOf(InfoOf(animal.type), std::min<size_t>(row.speedIndex, 5));
 			SetupMoveTo(animal, Xz(to), 0.0f, AnimalState::FleeingAndLookingAtObject);
-			// An animal has no clip of its own for moving: it keeps the one it had
-			animal.animation = clip;
-			animal.clipPlace = place;
+			// A grazer runs in its moving clip at its fleeing speed; the other animals have no clip of their own for
+			// moving and keep the one they had
+			if (!animals::grazers::IsGrazer(animal.type))
+			{
+				animal.animation = clip;
+				animal.clipPlace = place;
+			}
 		}
 		break;
 	}
@@ -1904,9 +1733,10 @@ void AnimalSystem::Update(uint32_t turn, float turnFraction)
 		                                  .looping = clip->IsLooping(),
 		                                  .playedByTime = clip->IsPlayedByTime(),
 		                                  .stride = clip->GetStride()};
-		const bool moving = animal.move.stage != animals::MoveStage::AtGoal &&
-		                    (animal.state == AnimalState::MoveToPos || animal.state == AnimalState::SpecialMoveToPos ||
-		                     animal.state == AnimalState::FollowFlock || animal.state == AnimalState::Chase);
+		const bool moving = (animal.state == AnimalState::Wander && animal.move.step != glm::ivec2(0)) ||
+		                    (animal.move.stage != animals::MoveStage::AtGoal &&
+		                     (animal.state == AnimalState::MoveToPos || animal.state == AnimalState::SpecialMoveToPos ||
+		                      animal.state == AnimalState::FollowFlock || animal.state == AnimalState::Chase));
 		const auto played = moving && !timing.playedByTime
 		                        ? animals::MovingPlay(timing, animal.move.speed, elapsed, transform.scale.x)
 		                        : static_cast<int32_t>(elapsed);

@@ -157,6 +157,7 @@ openblack_setup_and_add_test(test_sun graphics/test_sun.cpp)
 openblack_setup_and_add_test(test_moon graphics/test_moon.cpp)
 openblack_setup_and_add_test(test_bone_budget graphics/test_bone_budget.cpp)
 openblack_setup_and_add_test(test_bone_palette graphics/test_bone_palette.cpp)
+openblack_setup_and_add_test(test_draw_order graphics/test_draw_order.cpp)
 openblack_setup_and_add_test(test_view_frustum graphics/test_view_frustum.cpp)
 openblack_setup_and_add_test(test_mesh_detail graphics/test_mesh_detail.cpp)
 openblack_setup_and_add_test(
@@ -403,6 +404,7 @@ openblack_setup_and_add_test(
   test_creature_spell_casting test_creature_spell_casting.cpp
 )
 openblack_setup_and_add_test(test_town_belief test_town_belief.cpp)
+openblack_setup_and_add_test(test_town_owner test_town_owner.cpp)
 openblack_setup_and_add_test(test_villager_speed test_villager_speed.cpp)
 openblack_setup_and_add_test(test_wall_hug_rules test_wall_hug_rules.cpp)
 openblack_setup_and_add_test(test_walker_placement test_walker_placement.cpp)
@@ -675,4 +677,14 @@ openblack_setup_and_add_test(test_hand_tricons hand/test_hand_tricons.cpp)
 openblack_setup_and_add_test(test_double_click input/test_double_click.cpp)
 openblack_setup_and_add_test(test_force_field camera/test_force_field.cpp)
 openblack_setup_and_add_test(test_intro_rules test_intro_rules.cpp)
+openblack_setup_and_add_test(test_grazer_rules test_grazer_rules.cpp)
 openblack_setup_and_add_test(test_temple_help test_temple_help.cpp)
+openblack_setup_and_add_test(test_script_create test_script_create.cpp)
+openblack_setup_and_add_test(test_creature_training test_creature_training.cpp)
+openblack_setup_and_add_test(
+  test_building_site_rules test_building_site_rules.cpp
+)
+openblack_setup_and_add_test(
+  test_creature_action_agendas test_creature_action_agendas.cpp
+)
+openblack_setup_and_add_test(test_villager_draw test_villager_draw.cpp)

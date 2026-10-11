@@ -55,6 +55,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "VillagerBuild.h"
 #include "VillagerFire.h"
 
 using namespace openblack;
@@ -66,6 +67,7 @@ namespace needs = openblack::ecs::villager_needs;
 namespace villager_age = openblack::ecs::villager_age;
 namespace world_objects = openblack::ecs::world_objects;
 namespace villager_fire = openblack::ecs::villager_fire;
+namespace villager_build = openblack::ecs::villager_build;
 namespace wall_hug = openblack::ecs::wall_hug;
 namespace walk_arrival = openblack::ecs::walk_arrival;
 using ClearAreaFilter = openblack::ecs::systems::TownSystemInterface::ClearAreaFilter;
@@ -302,9 +304,22 @@ uint32_t CheckNeededForTownDesire(LivingAction& action)
 	const auto town = TownOf(villager);
 	const auto result = Locator::townDesireSystem::value().OfferVillager(
 	    town, IsChild(villager), OwnDesiresTrigger(villager), [&action](TownDesireInfo desire) -> uint32_t {
-		    // TODO(villagers): villagers only take up the town's sleep yet; the game has them fetch food and wood,
-		    // build, repair, play and relax for it too (the jobs phase)
-		    return desire == TownDesireInfo::ForSleep ? villager_home::CheckSatisfySleep(action) : 0;
+		    // TODO(villagers): villagers take up the town's sleep and building yet; the game has them fetch food and wood,
+		    // repair, play and relax for it too (the jobs phase)
+		    switch (desire)
+		    {
+		    case TownDesireInfo::ForSleep:
+			    return villager_home::CheckSatisfySleep(action);
+		    case TownDesireInfo::ToBuild:
+			    return villager_build::CheckSatisfyToBuild(action);
+		    case TownDesireInfo::ForAbodes:
+		    case TownDesireInfo::ForCivicBuilding:
+			    // TODO(temple-builders): with no site to work at, the town asks for a new abode or its best planned
+			    // building and the villager tries again; towns don't plan their buildings yet
+			    return villager_build::CheckNeededForBuilding(action);
+		    default:
+			    return 0;
+		    }
 	    });
 	WorldRegistry().Get<Villager>(villager).woken = false;
 	return result;
@@ -884,7 +899,11 @@ uint32_t villager_home::DecideWhatToDo(LivingAction& action)
 	{
 		return 1;
 	}
-	// TODO(villagers): one carrying wood or food takes it to the storage pit (the jobs phase)
+	// One carrying enough wood or food to show takes it to the storage pit
+	if (villager_build::CheckTakeResourcesToStoragePit(action) == 1)
+	{
+		return 1;
+	}
 	return SetupNothingToDo(action);
 }
 

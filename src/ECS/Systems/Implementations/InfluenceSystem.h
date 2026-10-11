@@ -30,6 +30,7 @@ class InfluenceSystem final: public InfluenceSystemInterface
 public:
 	void Reset() override;
 	void ProcessTurn(uint32_t turn) override;
+	void BordersChanged() override { _bordersDirty = true; }
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 	void ShowHandInfluence(std::chrono::duration<float, std::milli> gameTime) override;
 

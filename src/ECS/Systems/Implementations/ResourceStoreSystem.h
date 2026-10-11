@@ -30,6 +30,9 @@ public:
 	bool TakeObject(entt::entity store, entt::entity object, std::optional<PlayerNames> giver) override;
 	bool PourAt(ResourceType type, glm::vec3 point, uint32_t amount, bool speedUp, PlayerNames player, bool poisoned) override;
 	[[nodiscard]] std::optional<entt::entity> StoreOf(entt::entity pile) const override;
+	[[nodiscard]] uint32_t GetResource(entt::entity object, ResourceType type) const override;
+	uint32_t AddResource(entt::entity object, ResourceType type, uint32_t amount, std::optional<glm::vec3> at) override;
+	uint32_t RemoveResource(entt::entity object, ResourceType type, uint32_t amount) override;
 
 private:
 	/// A storage pit takes what it will into its piles, without the giving's count in its town

@@ -222,7 +222,14 @@ QueryResult Inspector::Answer(const Request& request) const
 		{
 			return error(std::move(described.error));
 		}
-		return QueryResult::Value(ShapeObject(described.value, request.options));
+		// The catalogue of every query outgrows the size an ordinary answer is held to, so describe is held only to the
+		// largest size unless the caller set its own
+		auto options = request.options;
+		if (options.maxBytes == k_DefaultMaxBytes)
+		{
+			options.maxBytes = k_MostBytes;
+		}
+		return QueryResult::Value(ShapeObject(described.value, options));
 	}
 
 	const auto [providerName, queryName] = Split(request.query);

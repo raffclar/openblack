@@ -22,9 +22,9 @@
 namespace openblack::ecs::systems
 {
 
-/// The animals: the land's birds, the doves or bats about each temple, and the flocks of doves and bats and the packs of
-/// wolves the miracles make. A bird flock's leader flies legs about its home or where it is sent and its followers keep
-/// a formation behind it; a wolf runs where it is sent, hunting what crosses its way. The miracle's animals fade out
+/// The animals: the land's birds and grazers, the doves or bats about each temple, and the flocks of doves and bats and the
+/// packs of wolves the miracles make. A bird flock's leader flies legs about its home or where it is sent and its followers
+/// keep a formation behind it; a wolf runs where it is sent, hunting what crosses its way. The miracle's animals fade out
 /// rather than die.
 class AnimalSystemInterface
 {
@@ -54,6 +54,13 @@ public:
 	/// One of the land's birds, as a land script or a temple makes it: flying at its kind's height over a point, at an
 	/// age (a random one for none), joining a flock, or one of its own for none
 	virtual entt::entity CreateBird(AnimalInfo type, glm::vec2 position, uint32_t age, entt::entity flock) = 0;
+	/// The town a flock belongs to, as a land script gives it; none for none
+	virtual void SetFlockTown(entt::entity flock, entt::entity town) = 0;
+	/// One of the land's grazers (sheep, cows, horses, pigs and tortoises), as a land script makes it: on the land at a
+	/// point facing along +x, at an age (a random one for none), joining a flock, or one of its own for none, and
+	/// belonging to a town, none for none. None for a kind that doesn't graze.
+	virtual entt::entity CreateGrazer(AnimalInfo type, glm::vec2 position, uint32_t age, entt::entity flock,
+	                                  entt::entity town) = 0;
 	/// An animal a challenge script makes: as a land script's animal on its own, at a random age, but in a flock of its own
 	/// that keeps within 2 m of where it was made, and held still for the script. None for a kind openblack can't make yet.
 	virtual entt::entity CreateScriptAnimal(AnimalInfo type, glm::vec2 position) = 0;

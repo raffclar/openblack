@@ -10,6 +10,9 @@
 #pragma once
 
 #include <optional>
+#include <vector>
+
+#include <glm/mat4x4.hpp>
 
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -25,6 +28,7 @@ class LivingActionSystem final: public LivingActionSystemInterface
 {
 public:
 	void Update() override;
+	void StartTurnPlaces() override;
 	void UpdatePoses(uint32_t turn, float turnFraction) override;
 	void PoseVillagersInView(const glm::mat4& viewProjection) override;
 
@@ -82,5 +86,7 @@ private:
 
 	/// The game's clock in milliseconds at the last frame the villagers were posed
 	uint32_t _poseDrawTime {0};
+	/// The old clip's pose of a high-detail villager changing clip, reused from frame to frame
+	std::vector<glm::mat4> _blendBones;
 };
 } // namespace openblack::ecs::systems

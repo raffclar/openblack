@@ -20,6 +20,7 @@
 #include "3D/DayNightClock.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Animals/GrazerRules.h"
 #include "Camera/Camera.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
@@ -43,11 +44,13 @@
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Footpath.h"
+#include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
@@ -57,6 +60,7 @@
 #include "Game.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/MagicTables.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptingBindingUtils.h"
 
@@ -279,14 +283,24 @@ void FeatureScriptCommands::SetTownBelief(int32_t townId, const std::string& pla
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& registryContext = registry.Context();
 
-	Town& town = registry.Get<Town>(registryContext.towns.at(townId));
-	town.beliefs.insert({playerOwner, belief});
+	const auto town = registryContext.towns.at(townId);
+	auto& impression =
+	    registry.AnyOf<TownImpression>(town) ? registry.Get<TownImpression>(town) : registry.Assign<TownImpression>(town);
+	magic::town_belief::SetInPlayer(impression.belief, GetPlayerName(playerOwner), belief);
 }
 
 void FeatureScriptCommands::SetTownBeliefCap(int32_t townId, const std::string& playerOwner, float belief)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}, {}) not implemented.", __FILE__,
-	                    __LINE__, __func__, townId, playerOwner, belief);
+	// TODO(town-ownership): in a multiplayer game the cap of a player in a town of one tribe is raised to 2 on one map
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto town = registry.Context().towns.at(townId);
+	auto& impression =
+	    registry.AnyOf<TownImpression>(town) ? registry.Get<TownImpression>(town) : registry.Assign<TownImpression>(town);
+	const auto player = static_cast<size_t>(GetPlayerName(playerOwner));
+	if (player < impression.belief.cap.size())
+	{
+		impression.belief.cap.at(player) = belief;
+	}
 }
 
 void FeatureScriptCommands::SetTownUninhabitable(int32_t townId)
@@ -441,24 +455,50 @@ void FeatureScriptCommands::CreatePlannedWorshipSite(glm::vec3 /*position*/, int
 	// tribe once the temple stands
 }
 
+namespace
+{
+/// The town a land script numbers, none for none
+entt::entity TownWithId(int32_t townId)
+{
+	if (townId < 0)
+	{
+		return entt::null;
+	}
+	const auto& towns = Locator::entitiesRegistry::value().Context().towns;
+	const auto town = towns.find(static_cast<uint32_t>(townId));
+	return town != towns.end() ? town->second : entt::null;
+}
+} // namespace
+
 void FeatureScriptCommands::CreateAnimal(glm::vec3 position, int32_t type, int32_t flockId, int32_t townId)
 {
 	// As a new animal at no age, which takes a random one
 	CreateNewAnimal(position, type, flockId, townId, 0);
 }
 
-void FeatureScriptCommands::CreateNewAnimal(glm::vec3 position, int32_t type, int32_t flockId, int32_t /*townId*/, int32_t age)
+void FeatureScriptCommands::CreateNewAnimal(glm::vec3 position, int32_t type, int32_t flockId, int32_t townId, int32_t age)
 {
 	if (!Locator::animalSystem::has_value() || type < 0 || type >= static_cast<int32_t>(AnimalInfo::_COUNT))
 	{
 		return;
 	}
 	// The type is the row of the animals' table; the animal joins the latest flock made with the number, or is a flock
-	// of its own when there is none. A bird never belongs to a town.
-	// TODO: the land's other animals, which openblack doesn't make yet
+	// of its own when there is none. A grazer belongs to the town with the number, if any; a bird never belongs to one.
 	auto& animals = Locator::animalSystem::value();
-	animals.CreateBird(static_cast<AnimalInfo>(type), glm::vec2(position.x, position.z),
-	                   static_cast<uint32_t>(std::max(age, 0)), animals.FindScriptFlock(flockId));
+	const auto kind = static_cast<AnimalInfo>(type);
+	const auto xz = glm::vec2(position.x, position.z);
+	const auto flock = animals.FindScriptFlock(flockId);
+	const auto years = static_cast<uint32_t>(std::max(age, 0));
+	if (animals::grazers::IsGrazer(kind))
+	{
+		animals.CreateGrazer(kind, xz, years, flock, TownWithId(townId));
+		return;
+	}
+	if (animals.CreateBird(kind, xz, years, flock) == entt::null)
+	{
+		// TODO(land-animals): the hunters (lions, tigers, leopards, wolves), which openblack doesn't make yet
+		SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "LHScriptX: animal kind {} isn't made yet", type);
+	}
 }
 
 void FeatureScriptCommands::CreateForest(int32_t forestId, glm::vec3 position)
@@ -616,15 +656,17 @@ void FeatureScriptCommands::CreateCreatureFromFile(const std::string& playerName
 }
 
 void FeatureScriptCommands::CreateFlock(int32_t id, glm::vec3 position, glm::vec3 home, int32_t reach, int32_t flockDistance,
-                                        int32_t /*townId*/)
+                                        int32_t townId)
 {
-	// A flock of the land's, numbered for its animals to join, made where the script says with its home where it says.
-	// Every land of the game's is of a version that gives the flock distance and then the town. A flock with a bird in it
-	// keeps no town, and birds are the only animals openblack makes so far.
+	// A flock of the land's, numbered for its animals to join, made where the script says with its home where it says,
+	// belonging to the town with the number, if any. Every land of the game's is of a version that gives the flock
+	// distance and then the town. A flock a bird joins loses its town.
 	if (Locator::animalSystem::has_value())
 	{
-		Locator::animalSystem::value().CreateScriptFlock(id, glm::vec2(position.x, position.z), glm::vec2(home.x, home.z),
-		                                                 static_cast<float>(reach), static_cast<float>(flockDistance));
+		auto& animals = Locator::animalSystem::value();
+		const auto flock = animals.CreateScriptFlock(id, glm::vec2(position.x, position.z), glm::vec2(home.x, home.z),
+		                                             static_cast<float>(reach), static_cast<float>(flockDistance));
+		animals.SetFlockTown(flock, TownWithId(townId));
 	}
 }
 
@@ -844,16 +886,33 @@ void FeatureScriptCommands::SetLandNumber(int32_t number)
 	Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber = number;
 }
 
-void FeatureScriptCommands::CreateOneShotSpell([[maybe_unused]] glm::vec3 position, const std::string&)
+void FeatureScriptCommands::CreateOneShotSpell(glm::vec3 position, const std::string& seedName)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// A globe of the seed of that name, at its plain miracle, on the ground; nothing for a name no seed has
+	const auto seed = magic::FindSpellSeedByName(Locator::infoConstants::value(), seedName);
+	if (!seed.has_value() || !Locator::magicSystem::has_value())
+	{
+		return;
+	}
+	Locator::magicSystem::value().CreateOneOffSeed(position, *seed, magic::k_BasePowerUpLevel, 1.0f);
 }
 
-void FeatureScriptCommands::CreateOneShotSpellPu([[maybe_unused]] glm::vec3 position, const std::string&)
+void FeatureScriptCommands::CreateOneShotSpellPu(glm::vec3 position, const std::string& magicName)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// A globe of the miracle of that name, held by the first seed that casts it at the power-up that casts it
+	const auto& info = Locator::infoConstants::value();
+	const auto type = magic::FindMagicTypeByName(info, magicName);
+	if (!type.has_value() || *type == MagicType::None || !Locator::magicSystem::has_value())
+	{
+		return;
+	}
+	const auto seed = magic::FindFirstSpellSeedForMagicType(info, *type);
+	if (!seed.has_value())
+	{
+		return;
+	}
+	const auto powerUp = magic::GetPowerUpFromMagicType(magic::GetSpellSeedInfo(info, *seed), *type);
+	Locator::magicSystem::value().CreateOneOffSeed(position, *seed, powerUp, 1.0f);
 }
 
 void FeatureScriptCommands::CreateFireFly(glm::vec3 position)
@@ -896,11 +955,30 @@ void FeatureScriptCommands::CreateNewTownField(int32_t townId, glm::vec3 positio
 	FieldArchetype::Create(townId, position, townFieldType, rotation);
 }
 
-void FeatureScriptCommands::CreateSpellDispenser(int32_t, [[maybe_unused]] glm::vec3 position, const std::string&,
-                                                 const std::string&, float, float, float)
+void FeatureScriptCommands::CreateSpellDispenser(int32_t, glm::vec3 position, const std::string& building,
+                                                 const std::string& magicName, float rotation, float scale, float turns)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// A dispenser building of that name holding the miracle of that name, turned on at once so it floats its first
+	// bubble now, then one every so many turns after each is taken; with no turns it floats only the first.
+	// TODO(script-create-objects): the game also gives it to the town of the number, or the nearest town
+	const auto type = GAbodeInfo::Find(building);
+	if (type == AbodeInfo::None || !Locator::magicSystem::has_value())
+	{
+		return;
+	}
+	auto& magicSystem = Locator::magicSystem::value();
+	const auto dispenser = magicSystem.CreateScriptDispenser(position, type, rotation, scale);
+	if (dispenser == entt::null)
+	{
+		return;
+	}
+	const auto magicType = magic::FindMagicTypeByName(Locator::infoConstants::value(), magicName).value_or(MagicType::None);
+	magicSystem.SetDispenserMagic(dispenser, magicType, static_cast<uint32_t>(turns));
+	magicSystem.SetDispenserActive(dispenser, true);
+	if (static_cast<uint32_t>(turns) == 0)
+	{
+		magicSystem.SetDispenserActive(dispenser, false);
+	}
 }
 
 void FeatureScriptCommands::LoadComputerPlayerPersonality(int32_t, glm::vec3)

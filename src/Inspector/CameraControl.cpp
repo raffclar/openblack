@@ -159,6 +159,30 @@ ParameterDescription Optional(std::string name, std::string type, std::string de
 
 } // namespace
 
+bool openblack::inspector::ShowOverrideToPointer(CameraControlInterface& camera)
+{
+	const auto overridden = camera.Override();
+	if (!overridden.has_value() || camera.Pinned())
+	{
+		return false;
+	}
+	return camera.Pin(*overridden).empty();
+}
+
+OverrideForPointer::OverrideForPointer(CameraControlInterface& camera)
+    : _camera(camera)
+    , _shown(ShowOverrideToPointer(camera))
+{
+}
+
+OverrideForPointer::~OverrideForPointer()
+{
+	if (_shown)
+	{
+		_camera.Unpin();
+	}
+}
+
 CameraAngles openblack::inspector::AnglesOf(const CameraPose& pose)
 {
 	const auto towards = pose.focus - pose.origin;

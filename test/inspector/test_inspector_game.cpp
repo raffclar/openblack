@@ -301,6 +301,11 @@ TEST_F(InspectorRegistry, ComponentsAndFieldsOnRequest)
 	EXPECT_EQ(Keys(field), std::set<std::string> {"data"});
 	EXPECT_EQ(Keys(field["data"]), std::set<std::string> {"Tree"});
 
+	// "all" sent as a list still asks for every component
+	const auto listed = Ask(_inspector, R"({"query": "ecs.entity", "params": {"id": )" + id + R"(, "components": ["all"]}})");
+	EXPECT_EQ(listed["data"].size(), listed["components"].size());
+	EXPECT_EQ(listed["data"]["Tree"]["type"], 1);
+
 	const auto components = Ask(_inspector, R"({"query": "ecs.components", "where": [{"field": "name", "value": "Tree"}]})");
 	ASSERT_EQ(components["total"], 1);
 	EXPECT_EQ(components["items"][0]["count"], 5);

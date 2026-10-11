@@ -56,6 +56,10 @@ struct Flock
 	std::optional<int32_t> scriptId;
 	/// The order the animals' flocks were made in
 	uint32_t made {0};
+	/// The town it belongs to, none for none: a herd of a town never merges into another
+	entt::entity town {entt::null};
+	/// The most members it has had: a herd that has lost members has young to make them up
+	uint32_t most {0};
 	/// The temple it circles, none for a flock of the land
 	entt::entity temple {entt::null};
 };
