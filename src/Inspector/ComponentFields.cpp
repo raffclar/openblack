@@ -1637,6 +1637,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::WorshipSite::altar>("altar")
 	    .Field<&components::WorshipSite::dance>("dance")
 	    .Field<&components::WorshipSite::foodPot>("foodPot")
+	    .Field<&components::WorshipSite::worshippers>("worshippers")
 	    .Field<&components::WorshipSite::buildRequests>("buildRequests");
 	Reflect<components::WorshipAltar>(context).Field<&components::WorshipAltar::site>("site");
 

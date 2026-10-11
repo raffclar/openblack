@@ -194,6 +194,7 @@
 #include "Resources/ResourcesInterface.h"
 #include "RunControl.h"
 #include "SystemProviders.h"
+#include "Temple/TemplePeople.h"
 #include "Windowing/WindowingInterface.h"
 #include "WorldProviders.h"
 
@@ -1474,10 +1475,18 @@ std::unique_ptr<ProviderInterface> TempleProvider()
 		    });
 		    return items;
 	    }));
-	provider->Add(Query("interior", "The temple's inside: whether the player is in it, the room and the visits"),
+	provider->Add(Query("interior", "The temple's inside: whether the player is in it, the room, the visits, and the "
+	                                "worshippers walking about it (how many came in, and where those drawn are)"),
 	              Serve<Locator::temple>("the temple", [](const TempleInteriorInterface& temple, const QueryContext& /*c*/) {
 		              const auto transition = temple.GetTransitionRoom();
+		              Json drawn = Json::array();
+		              for (const auto& person : temple.GetPeople())
+		              {
+			              drawn.push_back(Point(glm::vec3(person.model[3])));
+		              }
 		              return Json {
+		                  {"people_inside", temple.GetPeopleInside()},
+		                  {"people_drawn", std::move(drawn)},
 		                  {"active", temple.Active()},
 		                  {"position", Point(temple.GetPosition())},
 		                  {"room", static_cast<int>(temple.GetCurrentRoom())},

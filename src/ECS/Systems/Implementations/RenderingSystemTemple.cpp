@@ -11,6 +11,8 @@
 
 #include "RenderingSystemTemple.h"
 
+#include <map>
+#include <span>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -27,17 +29,22 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "Graphics/BonePalette.h"
 #include "Graphics/DebugLines.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/ShaderManager.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Temple/TemplePeople.h"
 
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
 
 namespace
 {
+/// The temple's walking worshippers are drawn a light grey, and darker in the reflection
+constexpr glm::vec2 k_PeopleGrey {224.0f / 255.0f, 96.0f / 255.0f};
+
 /// The hand of the player, whose hand alone is in the temple. The other hand waits at the world's origin, where the
 /// temple's rooms are.
 entt::entity PlayerHand()
@@ -154,6 +161,14 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 		    }
 	    });
 
+	// The player's worshippers walking about the temple, those of a model drawn together, each posed by its own bones
+	std::map<entt::id_type, uint32_t> peopleCounts;
+	for (const auto& person : temple.GetPeople())
+	{
+		++peopleCounts[person.mesh];
+		++instanceCount;
+	}
+
 	if (drawBoundingBox)
 	{
 		instanceCount *= 2;
@@ -241,6 +256,16 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 		}
 		offset += desc.first;
 	}
+	for (const auto& [meshId, count] : peopleCounts)
+	{
+		auto [drawDesc, _] = _renderContext.instancedDrawDescs.emplace(std::piecewise_construct, std::forward_as_tuple(meshId),
+		                                                               std::forward_as_tuple(offset, count, false, false));
+		drawDesc->second.perEntity = true;
+		drawDesc->second.bonePalette = true;
+		drawDesc->second.filled = count;
+		drawDesc->second.templeGrey = k_PeopleGrey;
+		offset += count;
+	}
 }
 
 void RenderingSystemTemple::PrepareDrawUploadUniforms(bool drawBoundingBox)
@@ -292,6 +317,28 @@ void RenderingSystemTemple::PrepareDrawUploadUniforms(bool drawBoundingBox)
 		    _renderContext.instanceUniforms[desc->second.offset + offset.first->second] = {.model = modelMatrix};
 		    offset.first->second++;
 	    });
+
+	// The worshippers' bones go into the palette, and each one's instance says where they start
+	_renderContext.bonePalette.clear();
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	for (const auto& person : Locator::temple::value().GetPeople())
+	{
+		const auto desc = _renderContext.instancedDrawDescs.find(person.mesh);
+		if (desc == _renderContext.instancedDrawDescs.end() || !desc->second.bonePalette)
+		{
+			continue;
+		}
+		auto offset = uniformOffsets.insert(std::make_pair(person.mesh, 0));
+		const uint32_t idx = desc->second.offset + offset.first->second;
+		auto model = person.model;
+		const auto& rest = meshes.Handle(person.mesh)->GetBoneMatrices();
+		const auto bones =
+		    person.bones.size() == rest.size() ? std::span<const glm::mat4>(person.bones) : std::span<const glm::mat4>(rest);
+		graphics::bone_palette::SetFirstBone(model, graphics::bone_palette::Append(_renderContext.bonePalette, bones));
+		_renderContext.instanceUniforms[idx] = {.model = model};
+		offset.first->second++;
+	}
+	UploadBonePalette();
 
 	if (!_renderContext.instanceUniforms.empty())
 	{
