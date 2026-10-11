@@ -1,4 +1,4 @@
-$input a_position
+$input a_position, a_texcoord0
 $output v_texcoord0, v_texcoord1, v_lightColour, v_smallBumpFade, v_shadowCoord, v_haze, v_world
 
 #include <bgfx_shader.sh>
@@ -51,9 +51,11 @@ void main()
 
 	v_shadowCoord = mul(u_handShadowMatrix, vec4(transformedPosition, 1.0f));
 	v_world = transformedPosition;
-	// The game gives the land's shadow vertices no alpha below altitude 2 (1.34 units), so shadows fade out towards the
-	// water's edge
-	v_shadowCoord.w = a_position.y > 1.0f ? 1.0f : 0.0f;
+	// The game gives the land's vertices below altitude 2 no alpha, so shadows fade out towards the water's edge. It goes
+	// by the corner's own altitude: the land of altitudes 2 and 3 is drawn flat at sea level but keeps them.
+	float altitude = a_texcoord0.x;
+	float aboveWater = altitude >= 2.0f ? 1.0f : 0.0f;
+	v_shadowCoord.w = aboveWater;
 
 	vec4 cs_position = mul(u_view, vec4(transformedPosition, 1.0f));
 	// The distance haze, per vertex: rgb the haze's colour added, a what the land's light is scaled by
@@ -67,7 +69,6 @@ void main()
 	// ground ahead of the camera, and gone 20 units past it. It is never drawn at the water's edge, below altitude 2,
 	// and fades out towards it from the vertices around. x: the detail's colour is kept, or black; y: its alpha.
 	float lineOffset = u_smallBump.x - dot(transformedPosition.xz - u_smallBumpLine.xy, u_smallBumpLine.zw);
-	float aboveWater = a_position.y > 1.0f ? 1.0f : 0.0f;
 	if (lineOffset >= 20.0f)
 	{
 		v_smallBumpFade = vec2(1.0f, aboveWater);

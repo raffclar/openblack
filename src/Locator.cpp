@@ -84,6 +84,7 @@
 #include "ECS/Systems/Implementations/InspectorSystem.h"
 #endif
 #include "ECS/Systems/Implementations/DanceSystem.h"
+#include "ECS/Systems/Implementations/HeartbeatSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
 #include "ECS/Systems/Implementations/MagicShieldSystem.h"
@@ -190,6 +191,7 @@ using openblack::ecs::systems::GestureSystem;
 using openblack::ecs::systems::HandDemoSystem;
 using openblack::ecs::systems::HandGrabSystem;
 using openblack::ecs::systems::HandSystem;
+using openblack::ecs::systems::HeartbeatSystem;
 using openblack::ecs::systems::HelpProfileSystem;
 using openblack::ecs::systems::HelpSpeechSystem;
 using openblack::ecs::systems::HelpTextSystem;
@@ -310,6 +312,7 @@ bool openblack::InitializeGame() noexcept
 	Locator::cloudSystem::emplace<CloudSystem>();
 	Locator::villageLightSystem::emplace<VillageLightSystem>();
 	Locator::villageTotemSystem::emplace<VillageTotemSystem>();
+	Locator::heartbeatSystem::emplace<HeartbeatSystem>();
 	Locator::fieldSystem::emplace<FieldSystem>();
 	Locator::fishFarmSystem::emplace<FishFarmSystem>();
 	Locator::animalSystem::emplace<AnimalSystem>();
@@ -522,6 +525,7 @@ void openblack::ShutDownServices()
 	Locator::animalSystem::reset();
 	Locator::soundTagSystem::reset();
 	Locator::villageTotemSystem::reset();
+	Locator::heartbeatSystem::reset();
 	Locator::townDesireSystem::reset();
 	Locator::miracleFxSystem::reset();
 	Locator::fireSystem::reset();

@@ -38,9 +38,9 @@ struct Ring
 	uint32_t age {0};
 	/// How big it grows: its half width is its age times this over its life
 	float growth {1.0f};
-	/// How it is turned about the vertical
+	/// How it is turned about the vertical, radians from +x towards +z: its width lies that way
 	float angle {0.0f};
-	/// Its depth over its width
+	/// Its depth, across its angle, over its width
 	float aspect {1.0f};
 	/// How fast it ages
 	float rate {1.0f};

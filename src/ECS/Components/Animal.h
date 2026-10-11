@@ -183,7 +183,7 @@ enum class AnimalLight : uint8_t
 	BrightestLand,
 	/// White: the miracles' wolves
 	White,
-	/// A colour of its own, the land's light left out: the sharks' dark blue
+	/// A colour of its own (AnimalPose::colour), the land's light left out
 	Own,
 	/// The land's light where it stands, as other things are lit: the grazers
 	Land,
@@ -200,6 +200,11 @@ struct AnimalPose
 	uint8_t alpha {255};
 	/// The height in the world below which nothing of it is drawn, if any: a shark shows only what breaks the sea
 	std::optional<float> cutBelow;
+	/// Whether it is drawn above its cut: a shark's fins show only while a script walks it along a path
+	bool aboveCutShown {true};
+	/// For a swimmer, its colour (0 to 255, shaded by the game's light) under the sea: what of it is below the sea's
+	/// level is drawn beneath the sea's surface, as seen from above, and the sea is blended over it
+	std::optional<glm::vec3> underSea;
 };
 
 /// A villager or animal a hunter brought down: it falls, then is eaten over the turns, then dies

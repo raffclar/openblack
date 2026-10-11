@@ -76,6 +76,9 @@ public:
 	[[nodiscard]] virtual std::span<const influence::Circle> GetCircles() const = 0;
 	/// Whether a player's border shows yet: once their citadel stands
 	[[nodiscard]] virtual bool IsBorderShown(PlayerNames player) const = 0;
+	/// A player's whole power of influence: their citadel's reach, while it stands, with the reach of each of their towns
+	/// and of their other sources of influence
+	[[nodiscard]] virtual float InfluencePower(PlayerNames /*player*/) const { return 0.0f; }
 	[[nodiscard]] virtual glm::vec2 GetScrollOffset() const = 0;
 	[[nodiscard]] virtual std::span<const influence::Ripple> GetRipples() const = 0;
 };

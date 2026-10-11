@@ -113,6 +113,7 @@
 #include "ECS/Components/HandMiracleFx.h"
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/HandOnCreature.h"
+#include "ECS/Components/Heartbeat.h"
 #include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/Indestructible.h"
@@ -187,6 +188,7 @@
 #include "ECS/Components/Weather.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/Heartbeat.h"
 #include "ECS/HighDetailRules.h"
 #include "ECS/RewardRules.h"
 #include "ECS/ScriptHighlightRules.h"
@@ -362,7 +364,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::AnimalPose::light>("light")
 	    .Field<&components::AnimalPose::colour>("colour")
 	    .Field<&components::AnimalPose::alpha>("alpha")
-	    .Field<&components::AnimalPose::cutBelow>("cutBelow");
+	    .Field<&components::AnimalPose::cutBelow>("cutBelow")
+	    .Field<&components::AnimalPose::aboveCutShown>("aboveCutShown")
+	    .Field<&components::AnimalPose::underSea>("underSea");
 	Reflect<components::BeingEaten>(context)
 	    .Field<&components::BeingEaten::hunter>("hunter")
 	    .Field<&components::BeingEaten::turns>("turns")
@@ -969,6 +973,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::HandOnCreature::heldMs>("heldMs")
 	    .Field<&components::HandOnCreature::strokedOrSlapped>("strokedOrSlapped");
 	Reflect<components::HandLastFeedback>(context).Field<&components::HandLastFeedback::sum>("sum");
+	Reflect<components::Heartbeat>(context).Field<&components::Heartbeat::state>("state");
 	Reflect<components::HiddenByState> {context};
 	Reflect<components::HighDetail>(context)
 	    .Field<&components::HighDetail::usualModel>("usualModel")
@@ -2098,6 +2103,15 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::ecs::components::WorshipSite::BuildRequest>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::WorshipSite::BuildRequest::town>("town")
 	    .Field<&openblack::ecs::components::WorshipSite::BuildRequest::desireBoost>("desireBoost");
+	Reflect<openblack::ecs::heartbeat::State>(context, ValueOnly {})
+	    .Field<&openblack::ecs::heartbeat::State::stress>("stress")
+	    .Field<&openblack::ecs::heartbeat::State::rate>("rate")
+	    .Field<&openblack::ecs::heartbeat::State::phase>("phase")
+	    .Field<&openblack::ecs::heartbeat::State::pulse>("pulse")
+	    .Field<&openblack::ecs::heartbeat::State::previousPulse>("previousPulse")
+	    .Field<&openblack::ecs::heartbeat::State::believerShare>("believerShare")
+	    .Field<&openblack::ecs::heartbeat::State::influenceShare>("influenceShare")
+	    .Field<&openblack::ecs::heartbeat::State::destructionBeats>("destructionBeats");
 	Reflect<openblack::ecs::high_detail_rules::DrawOrders>(context, ValueOnly {})
 	    .Field<&openblack::ecs::high_detail_rules::DrawOrders::followIntroHand>("followIntroHand")
 	    .Field<&openblack::ecs::high_detail_rules::DrawOrders::turnAtOnce>("turnAtOnce");

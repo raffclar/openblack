@@ -196,9 +196,10 @@ void openblack::particles::RegisterConditions(ParticleClassRegistry& registry)
 	registry.AddCollectionCondition(
 	    "EventConditionTrueWhenEnabled",
 	    [](const Effect& effect, const psys::ParticleObject&, const Collection&) { return effect.GetProcessInfo().enabled; });
-	// Approximated: always emitting, until the rules that stop a collection emitting are ported
-	registry.AddCollectionCondition("EC_CollectionShouldBeEmitting",
-	                                [](const Effect&, const psys::ParticleObject&, const Collection&) { return true; });
+	// Emitting unless a rule over the collection has stopped it
+	registry.AddCollectionCondition(
+	    "EC_CollectionShouldBeEmitting",
+	    [](const Effect&, const psys::ParticleObject&, const Collection& collection) { return collection.emitting; });
 
 	registry.AddAtomCondition("EventConditionAtomDelay",
 	                          [](const Effect& effect, const psys::ParticleObject& object, const Atom& atom) {

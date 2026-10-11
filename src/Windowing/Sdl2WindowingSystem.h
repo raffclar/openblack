@@ -45,10 +45,13 @@ public:
 	[[nodiscard]] glm::ivec2 GetSize() const final;
 	[[nodiscard]] float GetAspectRatio() const final;
 	[[nodiscard]] bool IsMinimised() const final;
+	[[nodiscard]] bool IsWindowed() const final;
 
 	WindowingInterface& SetDisplayMode(DisplayMode mode) final { return SetFullscreen(mode != DisplayMode::Windowed); }
 
 private:
+	/// Moves a window hanging off the desktop or under the taskbar back onto it, making it smaller if it must
+	void KeepInsideDesktop();
 	[[nodiscard]] bool IsOpen() const;
 	[[nodiscard]] float GetBrightness() const;
 	Sdl2WindowingSystem& SetBrightness(float bright);

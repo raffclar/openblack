@@ -43,7 +43,9 @@ class VideoOverlay;
 
 namespace openblack::help
 {
+class DialogueText;
 enum class TextFont : uint8_t;
+struct TextFrame;
 struct TextRegion;
 namespace tip_bubble
 {
@@ -130,9 +132,9 @@ public:
 	/// they aren't drawn, when their fades hold where they are
 	struct HandTricons
 	{
-		/// The hand on the screen, and the last point it gripped the land at, in whole pixels
+		/// The hand on the screen, and the cursor it follows this frame, in whole pixels
 		glm::ivec2 hand {0};
-		glm::ivec2 lastGrip {0};
+		glm::ivec2 cursor {0};
 		/// An icon's half-width in pixels
 		float halfSize {0.0f};
 		/// The icons wanted, as hand_tricons::icon, and the rotate arrow's turn in radians
@@ -141,7 +143,7 @@ public:
 		/// The hand's state shows the camera icons: it holds nothing
 		bool handStateShowsIcons {true};
 		bool cinemaBars {false};
-		/// They lean from the last grip towards the hand
+		/// They lean a quarter of the way from the hand towards the cursor
 		bool leans {true};
 		/// A demonstration plays: no cross, and its mouse by the icons lighting the buttons it holds
 		bool demonstration {false};
@@ -203,6 +205,9 @@ private:
 	void DrawBubbleLine(const help::tip_bubble::Line& line, glm::vec3 colour);
 	/// The "Continue" cue at the right of the dialogue box, so far through its fade
 	void DrawClickCue(glm::u16vec2 resolution, const help::TextRegion& box, float share);
+	/// The control icons the newest text asks for at the right of the dialogue box: the camera keys' cap in its top
+	/// third, any other action's mouse or key in its bottom third
+	void DrawControlIcons(glm::u16vec2 resolution, const help::TextFrame& frame, const help::DialogueText& dialogue);
 	/// The font of the dialogue's words: the advisors each have their own, and j0 stands in for one that is missing
 	[[nodiscard]] std::pair<const GameFont*, const graphics::Texture2D*> DialogueFont(help::TextFont font) const;
 

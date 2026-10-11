@@ -66,6 +66,9 @@ public:
 
 	Camera& SetOrigin(const glm::vec3& position);
 	Camera& SetFocus(const glm::vec3& position);
+	/// Puts the camera here, still, and has what moves it forget where it was going, so that it stays here until the
+	/// player or a script moves it
+	Camera& Place(const glm::vec3& origin, const glm::vec3& focus);
 	/// The eye and what it looks at jump up by these as the camera shakes, as it is drawn
 	Camera& SetShake(const glm::vec3& eye, const glm::vec3& focus);
 

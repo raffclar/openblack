@@ -63,12 +63,13 @@ uint8_t Alpha(const Ring& ring)
 std::array<glm::vec3, 4> Corners(const Ring& ring)
 {
 	const float half = HalfWidth(ring);
-	const glm::vec2 across = glm::vec2(std::cos(ring.angle), -std::sin(ring.angle)) * half;
-	const glm::vec2 along = glm::vec2(std::sin(ring.angle), std::cos(ring.angle)) * (half * ring.aspect);
+	// Its width lies along its angle, radians from +x towards +z, and its depth across that
+	const glm::vec2 wide = glm::vec2(std::cos(ring.angle), std::sin(ring.angle)) * half;
+	const glm::vec2 deep = glm::vec2(-std::sin(ring.angle), std::cos(ring.angle)) * (half * ring.aspect);
 	const auto at = [&ring](glm::vec2 offset) {
 		return glm::vec3(ring.position.x + offset.x, ring.position.y, ring.position.z + offset.y);
 	};
-	return {at(-across - along), at(across - along), at(across + along), at(-across + along)};
+	return {at(-wide - deep), at(wide - deep), at(wide + deep), at(-wide + deep)};
 }
 
 std::array<glm::vec2, 4> CellUvs(uint8_t cell)

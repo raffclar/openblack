@@ -59,7 +59,8 @@ struct EngineConfig
 	bool rightHandedHand {true};
 	/// Creatures' vertices at the seams between their bones are blended towards their partners, as the game draws them
 	bool blendCreatureSeams {true};
-	/// Creatures cast their shadows onto the land and what stands on it
+	/// Creatures cast their shadows onto the land and what stands on it, and villagers a script draws in high detail
+	/// onto the land
 	bool drawCreatureShadows {true};
 
 	bool vsync {false};

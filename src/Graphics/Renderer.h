@@ -356,6 +356,8 @@ private:
 	                      float freeze, uint32_t fizzSortDepth) const;
 	/// A creature's strands of hair, as ribbons facing the camera blended over the scene
 	void DrawCreatureHair(const DrawSceneDesc& desc, entt::entity entity) const;
+	/// The columns of light over the village centres and temples of the players whose borders show
+	void DrawLightColumns(const DrawSceneDesc& desc) const;
 	/// The leashes' ropes, each a ribbon lit by the land beneath it, and their shadows on the land
 	void DrawLeashes(const DrawSceneDesc& desc) const;
 	/// Takes up the creatures' skins where they have been painted again, before their bodies are drawn with them; drops

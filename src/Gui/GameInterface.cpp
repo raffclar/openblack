@@ -41,10 +41,13 @@
 #include "Graphics/VideoOverlay.h"
 #include "Gui/CinemaBars.h"
 #include "Help/ClickCue.h"
+#include "Help/ControlIcons.h"
 #include "Help/DialogueText.h"
 #include "Help/HelpTextDisplay.h"
 #include "Help/TipBubble.h"
 #include "InfoConstants.h"
+#include "Input/GameActionMapInterface.h"
+#include "Input/KeyBindings.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -633,6 +636,7 @@ void GameInterface::DrawDialogue(glm::u16vec2 resolution, int barPixels)
 			{
 				DrawClickCue(resolution, frame->box, *share);
 			}
+			DrawControlIcons(resolution, *frame, *dialogue);
 		}
 	}
 	// The hand's helper icons go over the box and under the words
@@ -665,7 +669,7 @@ void GameInterface::DrawHandTricons(glm::u16vec2 resolution)
 	                            .crossNudge = in.crossNudge,
 	                        });
 	const auto screen = glm::ivec2(resolution);
-	const auto centre = tricons::Place(in.hand, in.lastGrip, screen, in.cinemaBars, in.leans);
+	const auto centre = tricons::Place(in.hand, in.cursor, screen, in.cinemaBars, in.leans);
 	for (const auto& sprite : tricons::Sprites(glm::vec2(centre), in.halfSize, _tricons, in.rotateAngle))
 	{
 		if (sprite.has_value())
@@ -880,6 +884,75 @@ void GameInterface::DrawClickCue(glm::u16vec2 resolution, const help::TextRegion
 	_painter.DrawString(cue->labelAt - 1.0f, label, cue->labelSize, cue->shadowColour);
 	_painter.DrawString(cue->labelAt + 1.0f, label, cue->labelSize, cue->shadowColour);
 	_painter.DrawString(cue->labelAt, label, cue->labelSize, cue->labelColour);
+}
+
+void GameInterface::DrawControlIcons(glm::u16vec2 resolution, const help::TextFrame& frame, const help::DialogueText& dialogue)
+{
+	namespace icons = help::control_icons;
+	if (frame.controlIcons.empty() || !Locator::gameActionSystem::has_value())
+	{
+		return;
+	}
+	const auto bindings = Locator::gameActionSystem::value().GetKeyBindings();
+	const icons::KeyNameFn keyName = [](SDL_Scancode key) { return ToUtf16(input::KeyChordName({.key = key})); };
+	const auto& box = frame.box;
+	const int size = icons::IconSize(box.top, box.bottom);
+	const auto drawKeyCap = [this, &resolution, size](int top, std::u16string_view text, float share) {
+		const float textWidth = _font.GetWidth(text, icons::KeyTextSize(size));
+		const auto placed = icons::Place(resolution.x, top, size, icons::KeyCapWidth(size, textWidth), share);
+		if (!placed.has_value())
+		{
+			return;
+		}
+		DrawGlow(placed->icon.min, placed->icon.max, placed->glowColour);
+		const auto cap = icons::LayoutKeyCap(*placed);
+		if (_atmos != nullptr)
+		{
+			const auto colour = glm::vec4(1.0f, 1.0f, 1.0f, placed->alpha);
+			for (size_t i = 0; i < cap.slices.size(); ++i)
+			{
+				_canvas.DrawQuad(cap.slices.at(i).min, cap.slices.at(i).max, cap.uvs.at(i).min, cap.uvs.at(i).max, colour,
+				                 _atmos.get());
+			}
+		}
+		_painter.DrawString(cap.textAt, text, cap.textSize, cap.textColour);
+	};
+
+	// The camera keys' cap in the box's top third
+	if (const auto text = icons::KeyIconText(frame.controlIcons, bindings, keyName); text.has_value())
+	{
+		drawKeyCap(icons::KeyIconTop(box.top, box.bottom), *text, dialogue.GetKeyIconShare());
+	}
+	// Any other action's mouse or key in the bottom third, unless the "Continue" cue is there
+	const auto share = dialogue.GetActionIconShare();
+	if (!share.has_value())
+	{
+		return;
+	}
+	const auto picture = icons::ActionIcon(frame.controlIcons, bindings, keyName);
+	if (!picture.has_value())
+	{
+		return;
+	}
+	const int top = icons::ActionIconTop(box.top, box.bottom);
+	if (const auto* text = std::get_if<std::u16string>(&*picture); text != nullptr)
+	{
+		drawKeyCap(top, *text, *share);
+		return;
+	}
+	const auto placed = icons::Place(resolution.x, top, size, static_cast<float>(size), *share);
+	if (!placed.has_value())
+	{
+		return;
+	}
+	DrawGlow(placed->icon.min, placed->icon.max, placed->glowColour);
+	if (_mice != nullptr)
+	{
+		const auto cell =
+		    icons::CellFor(std::get<icons::MouseClick>(*picture), help::click_cue::k_WheelMouseRow, machine_clock::Ticks());
+		_canvas.DrawQuad(placed->icon.min, placed->icon.max, cell.uvMin, cell.uvMax, glm::vec4(1.0f, 1.0f, 1.0f, placed->alpha),
+		                 _mice.get());
+	}
 }
 
 void GameInterface::DrawDialogueRun(const help::TextRun& run)

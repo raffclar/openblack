@@ -240,10 +240,20 @@ WorldCameraIcons WorldCamera(const WorldCameraFrame& frame, float rotateAngle)
 	return {.icons = icons, .rotateAngle = rotateAngle};
 }
 
-glm::ivec2 Place(glm::ivec2 hand, glm::ivec2 lastGrip, glm::ivec2 screen, bool cinemaBars, bool leans)
+glm::vec3 AnchorPoint(const glm::vec3& position, const glm::mat3& rotation, const glm::vec3& scale,
+                      std::span<const glm::mat4> bones)
 {
-	int x = leans ? ((hand.x * 3) + lastGrip.x) / 4 : hand.x;
-	int y = leans ? ((hand.y * 3) + lastGrip.y) / 4 : hand.y;
+	if (bones.empty())
+	{
+		return position;
+	}
+	return position + (rotation * (scale * glm::vec3(bones.front()[3])));
+}
+
+glm::ivec2 Place(glm::ivec2 hand, glm::ivec2 cursor, glm::ivec2 screen, bool cinemaBars, bool leans)
+{
+	int x = leans ? ((hand.x * 3) + cursor.x) / 4 : hand.x;
+	int y = leans ? ((hand.y * 3) + cursor.y) / 4 : hand.y;
 	// With the cinema bars on, the picture is 16:9 across the screen's width, whatever the bars' slide
 	int visibleHeight = screen.y;
 	if (cinemaBars)

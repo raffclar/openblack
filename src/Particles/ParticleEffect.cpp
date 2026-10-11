@@ -666,6 +666,7 @@ std::optional<Effect::DrawAtom> Effect::Interpolate(const Atom& atom, float t, b
 	    .surface = atom.surface.get(),
 	    .offsetWeight = atom.drawWeight,
 	    .fragment = atom.fragment,
+	    .player = atom.player,
 	};
 }
 

@@ -161,6 +161,16 @@ TEST(HighDetail, KeptOnlyWhileAScriptHoldsTheBars)
 	EXPECT_FALSE(hd::KeepsHighDetail(false, 12));
 }
 
+TEST(HighDetail, CastsAProjectedShadowInPlaceOfFootBlobsUntilTheScriptLetsGo)
+{
+	namespace hd = openblack::ecs::high_detail_rules;
+	EXPECT_EQ(hd::ShadowOf(true), hd::Shadow::Projected);
+	EXPECT_EQ(hd::ShadowOf(false), hd::Shadow::FootBlobs);
+	// While the cinema bars are held the family keeps its projected shadow; when control comes back it has blobs again
+	EXPECT_EQ(hd::ShadowOf(hd::KeepsHighDetail(true, 12)), hd::Shadow::Projected);
+	EXPECT_EQ(hd::ShadowOf(hd::KeepsHighDetail(false, 12)), hd::Shadow::FootBlobs);
+}
+
 TEST(HighDetail, DrawnAndItsEyesPlacedInTheHandsGripWhileHeld)
 {
 	namespace hd = openblack::ecs::high_detail_rules;

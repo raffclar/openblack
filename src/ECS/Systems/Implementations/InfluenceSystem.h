@@ -44,6 +44,7 @@ public:
 
 	[[nodiscard]] std::span<const influence::Circle> GetCircles() const override { return _circles; }
 	[[nodiscard]] bool IsBorderShown(PlayerNames player) const override;
+	[[nodiscard]] float InfluencePower(PlayerNames player) const override;
 	[[nodiscard]] glm::vec2 GetScrollOffset() const override { return influence::ScrollOffset(_scrollClock); }
 	[[nodiscard]] std::span<const influence::Ripple> GetRipples() const override { return _ripples; }
 
@@ -60,8 +61,6 @@ private:
 	/// Whether another player's shield keeps a player out of a place
 	[[nodiscard]] static bool Shielded(PlayerNames player, const glm::vec3& point);
 	[[nodiscard]] static bool Shielded(PlayerNames player, const map_coords::MapCoords& position);
-	/// The sum of the reach of a player's citadel, towns and other sources of influence
-	[[nodiscard]] static float InfluencePower(PlayerNames player);
 	/// What each player's hand keeps of their influence past the border, once a turn
 	void ProcessVirtualInfluence(uint32_t turn);
 	/// One turn of what a player's hand keeps past the border, with the hand where it is

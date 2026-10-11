@@ -22,6 +22,14 @@
 using namespace openblack;
 using namespace openblack::graphics;
 
+LandVertex openblack::MakeLandVertex(glm::vec2 cornerPosition, uint8_t altitude)
+{
+	return {
+	    .position = glm::vec3(cornerPosition.x, LandIslandInterface::GetDrawnAltitude(altitude), cornerPosition.y),
+	    .altitude = static_cast<float>(altitude),
+	};
+}
+
 void LandBlock::BuildMesh(LandIslandInterface& island, std::span<LandVertex> vertices)
 {
 	assert(vertices.size() == k_VertexCount);
@@ -38,11 +46,7 @@ void LandBlock::BuildMesh(LandIslandInterface& island, std::span<LandVertex> ver
 		if ((_block->cells.at(x * 17 + z).flags & k_OpenSeaFlag) != 0)
 		{
 			const auto cellVertices = vertices.subspan(cell * k_VerticesPerCell, k_VerticesPerCell);
-			const auto point = cellVertices.front().position;
-			for (auto& vertex : cellVertices)
-			{
-				vertex.position = point;
-			}
+			std::ranges::fill(cellVertices, cellVertices.front());
 		}
 	}
 }
@@ -64,7 +68,7 @@ void LandBlock::BindVertices() const
 void LandBlock::BuildVertexList(std::span<LandVertex> vertices, LandIslandInterface& island)
 {
 	// The land is coloured by its block texture (see block_texture) and lit by its luminosity of the frame: its vertices
-	// carry only where they are
+	// carry only where they are and their altitude
 	const auto blockOffset = static_cast<glm::u16vec2>(GetBlockPosition() * 16);
 
 	uint16_t index = 0;
@@ -89,19 +93,17 @@ void LandBlock::BuildVertexList(std::span<LandVertex> vertices, LandIslandInterf
 			offsets[static_cast<size_t>(Corner::BottomRight)] = glm::u16vec2(x + 1, z + 1);
 
 			std::array<const lnd::LNDCell*, static_cast<size_t>(Corner::_COUNT)> cells;
-			// construct positions from cell altitudes
-			std::array<glm::vec3, static_cast<size_t>(Corner::_COUNT)> pos;
-			for (auto [position, cell, offset] : std::views::zip(pos, cells, offsets))
+			// The corners' vertices from the cells' altitudes
+			std::array<LandVertex, static_cast<size_t>(Corner::_COUNT)> corners;
+			for (auto [corner, cell, offset] : std::views::zip(corners, cells, offsets))
 			{
 				cell = &island.GetCell(blockOffset + offset);
-				position =
-				    glm::vec3(offset.x * LandIslandInterface::k_CellSize, LandIslandInterface::GetDrawnAltitude(cell->altitude),
-				              offset.y * LandIslandInterface::k_CellSize);
+				corner = MakeLandVertex(glm::vec2(offset) * LandIslandInterface::k_CellSize, cell->altitude);
 			}
 
-			auto makeVert = [&pos](Corner corner) -> LandVertex {
+			auto makeVert = [&corners](Corner corner) -> LandVertex {
 				// NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
-				return {pos[static_cast<size_t>(corner)]};
+				return corners[static_cast<size_t>(corner)];
 			};
 
 			auto makeTriangle = [&makeVert, &vertices, &index](const std::array<Corner, 3>& corners, bool forward) {
